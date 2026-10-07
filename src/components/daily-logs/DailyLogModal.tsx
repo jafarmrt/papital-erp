@@ -3,7 +3,8 @@ import { Clock, X, Building2, Laptop, AtSign, Eye, Lock } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { DailyWorkLog, User, ProductionProject } from '../../types';
+import { DailyWorkLog, User } from '../../types';
+import type { ProjectPick } from '../../lib/permissions/pickLists';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
 import { formatPersianNumber, getTodayJalaliDate, extractDateString } from '../../utils';
 import { MentionTextarea } from '../MentionTextarea';
@@ -37,7 +38,7 @@ interface DailyLogModalProps {
   isSaving: boolean;
   user: User;
   systemUsers: SimpleUserOption[];
-  projects: ProductionProject[];
+  projects: ProjectPick[];
   onAddTag: () => void;
   onRemoveTag: (tag: string) => void;
   onToggleMentionUser: (userId: number) => void;

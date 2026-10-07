@@ -40,7 +40,6 @@ export default defineConfig({
       DATABASE_URL: process.env.E2E_DATABASE_URL || '',
       JWT_SECRET: process.env.E2E_JWT_SECRET || 'e2e-jwt-secret-at-least-32-characters-long-123',
       ERP_SETUP_TOKEN: process.env.E2E_SETUP_TOKEN || 'e2e_setup_token_at_least_16_chars',
-      ALLOW_SEED_IN_PRODUCTION: 'true',
     },
   },
 });

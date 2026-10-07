@@ -97,14 +97,15 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     }
 
     // 2. Role matching checks
-    // v9.0.34 (TD-444، تصمیم ت۱): workflow.admin و workflow.manage مجوز طراحی‌اند و گام دیگران را امضا نمی‌کنند؛ فقط مدیر سیستم
-    const adminCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'finance_manager', ['workflow.admin']);
-    const manageCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'finance_manager', ['workflow.manage']);
-    const systemAdminCheck = WorkflowTransitionExecutor.checkUserRoleMatch('admin', 'finance_manager', []);
-    const warehouseCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'warehouse', ['warehouse.in']);
-    const rejectCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'finance_manager', ['items.view']);
+    // v9.0.34 (TD-444، تصمیم ت۱): workflow.admin و workflow.manage مجوز طراحی‌اند و گام دیگران را امضا نمی‌کنند؛ فقط مدیر سیستم.
+    // v9.0.128 (TD-542): نقش گام فقط همان نقش است؛ مجوز ثبت بخش (warehouse.in) گام نقش انبار را دیگر باز نمی‌کند
+    const ownRoleCheck = WorkflowTransitionExecutor.checkUserRoleMatch('finance_manager', 'finance_manager');
+    const otherRoleCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'finance_manager');
+    const systemAdminCheck = WorkflowTransitionExecutor.checkUserRoleMatch('admin', 'finance_manager');
+    const openStepCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', '');
+    const allStepCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'ALL');
 
-    if (!adminCheck && !manageCheck && systemAdminCheck && warehouseCheck && !rejectCheck) {
+    if (ownRoleCheck && !otherRoleCheck && systemAdminCheck && openStepCheck && allStepCheck) {
       results.push(makeTestCase({
         id: 'sec_workflow_granular_permissions',
         name: 'ماتریس اعتبارسنجی مجوزهای ۵ گانه امنیتی فرآیندهای کاری (Workflow Authorization Matrix)',
@@ -1179,7 +1180,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     }
 
     // Test Case C: Valid JWT with non-admin role ('personnel') -> 403 Forbidden
-    // v9.0.128 (TD-599): the guard checks the session live, so C and D use real users
+    // v9.0.146 (TD-599): the guard checks the session live, so C and D use real users
     const secret = getJwtSecret();
     const { ensureAdminTestUser } = await import('../fixtures/httpTestHelper.js');
     const { orm: metricsOrm } = await import('../../db/drizzle.js');
@@ -1404,6 +1405,23 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۲ (از v9.0.75، TD-524 به بعد): کاربران، دسترسی و سجل
   const { runAccessPackageTwoTests } = await import('../security/accessPackageTwoTests.js');
   results.push(...await runAccessPackageTwoTests(shouldRunAccess));
+  const { runAccessPackageTwoDocumentTests } = await import('../security/accessPackageTwoDocumentTests.js');
+  results.push(...await runAccessPackageTwoDocumentTests(shouldRunAccess));
+  const { runAccessPackageTwoSensitiveTests } = await import('../security/accessPackageTwoSensitiveTests.js');
+  results.push(...await runAccessPackageTwoSensitiveTests(shouldRunAccess));
+  const { runAccessPackageTwoNotificationTests } = await import('../security/accessPackageTwoNotificationTests.js');
+  results.push(...await runAccessPackageTwoNotificationTests(shouldRunAccess));
+  const { runAccessPackageTwoWorkflowTests } = await import('../security/accessPackageTwoWorkflowTests.js');
+  results.push(...await runAccessPackageTwoWorkflowTests(shouldRunAccess));
+  const { runAccessPackageTwoUserTests } = await import('../security/accessPackageTwoUserTests.js');
+  results.push(...await runAccessPackageTwoUserTests(shouldRunAccess));
+  const { runAccessPackageTwoPageTests } = await import('../security/accessPackageTwoPageTests.js');
+  results.push(...await runAccessPackageTwoPageTests(shouldRunAccess));
+  const { runAccessPackageTwoInstallTests } = await import('../security/accessPackageTwoInstallTests.js');
+  results.push(...await runAccessPackageTwoInstallTests(shouldRunAccess));
+  // Package 2 M6 (from TD-887): pick lists for forms, full lists by the section's own permission
+  const { runAccessPackageTwoPickListTests } = await import('../security/accessPackageTwoPickListTests.js');
+  results.push(...await runAccessPackageTwoPickListTests(shouldRunAccess));
   // Package 14, PR د (from TD-462): approval inbox rows
   const { runWorkflowInboxTests } = await import('../security/workflowInboxTests.js');
   results.push(...await runWorkflowInboxTests(shouldRunAccess));

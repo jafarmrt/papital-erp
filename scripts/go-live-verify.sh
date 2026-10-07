@@ -48,13 +48,12 @@ if [ "$(env_val JWT_SECRET | wc -c)" -ge 33 ]; then ok "JWT_SECRET present (>= 3
 env_has DATABASE_URL || bad "DATABASE_URL missing"
 env_has ERP_SETUP_TOKEN || warnc "ERP_SETUP_TOKEN missing (only acceptable if /setup is fully consumed AND token disabled)"
 
+# v9.0.134 (TD-526): the boot seed only inserts missing base data and creates no role, so its gate is retired
+env_has ALLOW_SEED_IN_PRODUCTION \
+  && warnc "ALLOW_SEED_IN_PRODUCTION is retired since v9.0.117 and has no effect; remove it from .env" \
+  || ok "ALLOW_SEED_IN_PRODUCTION not set (retired)"
+
 # Danger flags must be OFF
-SEED_FLAG="$(env_val ALLOW_SEED_IN_PRODUCTION)"
-if [ "$SEED_FLAG" = "false" ] || [ -z "$SEED_FLAG" ]; then
-  ok "ALLOW_SEED_IN_PRODUCTION is off"
-else
-  bad "ALLOW_SEED_IN_PRODUCTION must be false/absent in production"
-fi
 grep -qE '^ERP_ALLOW_TEST_CLEANUP=1' "$APP_DIR/.env" \
   && bad "ERP_ALLOW_TEST_CLEANUP=1 detected — MUST NOT be enabled in production" \
   || ok "ERP_ALLOW_TEST_CLEANUP off"

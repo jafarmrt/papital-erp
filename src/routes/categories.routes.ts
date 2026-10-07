@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { eq, and } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { categories, items } from '../db/schema.js';
+import { DEFAULT_CATEGORIES } from '../data/defaultCategories.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, requireSystemAdmin } from '../middleware/authorize.js';
 import { z } from 'zod';
@@ -43,40 +44,9 @@ const formatCategory = (cat: Partial<typeof categories.$inferSelect> & Record<st
   };
 };
 
-export const defaultCategories = [
-  // محصولات نهایی (product)
-  { name: 'گردنبند', prefix: 'N', type: 'product', defaultUnit: 'عدد' },
-  { name: 'گوشواره میخی', prefix: 'S', type: 'product', defaultUnit: 'جفت' },
-  { name: 'گوشواره آویز', prefix: 'E', type: 'product', defaultUnit: 'جفت' },
-  { name: 'انگشتر', prefix: 'R', type: 'product', defaultUnit: 'عدد' },
-  { name: 'دستبند', prefix: 'B', type: 'product', defaultUnit: 'عدد' },
-  { name: 'گوشواره آویز بزرگ', prefix: 'N', type: 'product', defaultUnit: 'جفت' },
-  { name: 'گردنبند بزرگ', prefix: 'N', type: 'product', defaultUnit: 'عدد' },
-  { name: 'گوشواره دو تکه', prefix: 'N', type: 'product', defaultUnit: 'عدد' },
-  { name: 'گردنبند دو تکه', prefix: 'N', type: 'product', defaultUnit: 'عدد' },
-
-  // مواد اولیه (raw_material)
-  { name: 'ترنسفر', prefix: 'T-', type: 'raw_material', defaultUnit: 'برگ' },
-  { name: 'مهره', prefix: 'B-', type: 'raw_material', defaultUnit: 'ریسه' },
-  { name: 'مهره کریستالی', prefix: 'B-C-', type: 'raw_material', defaultUnit: 'ریسه' },
-  { name: 'سنگ', prefix: 'S-', type: 'raw_material', defaultUnit: 'ریسه' },
-  { name: 'مهره حدید', prefix: 'B-H-', type: 'raw_material', defaultUnit: 'ریسه' },
-  { name: 'مهره چوبی', prefix: 'B-W-', type: 'raw_material', defaultUnit: 'ریسه' },
-  { name: 'خرج کار', prefix: 'M-', type: 'raw_material', defaultUnit: 'عدد' },
-  { name: 'خرج کار طلایی', prefix: 'M-G-', type: 'raw_material', defaultUnit: 'عدد' },
-  { name: 'خرج کار برنزی', prefix: 'M-B-', type: 'raw_material', defaultUnit: 'عدد' },
-  { name: 'خرج کار استیل', prefix: 'M-M-', type: 'raw_material', defaultUnit: 'عدد' },
-  { name: 'بند چرمی و زنجیر', prefix: 'C-', type: 'raw_material', defaultUnit: 'متر' },
-  { name: 'کیلر، رنگ، گلیز', prefix: 'G-', type: 'raw_material', defaultUnit: 'عدد' },
-  { name: 'سایر اقلام', prefix: 'O-', type: 'raw_material', defaultUnit: 'عدد' }
-];
-
+// v9.0.134 (TD-526، A02-19): خواندن فهرست دیگر چیزی نمی‌نویسد؛ نصب تازه دسته‌های استاندارد را در بوت می‌گیرد (seed)
 router.get('/categories', asyncHandler(async (req, res) => {
-  let data = await orm.select().from(categories).orderBy(categories.type, categories.id);
-  if (data.length === 0) {
-    await orm.insert(categories).values(defaultCategories);
-    data = await orm.select().from(categories).orderBy(categories.type, categories.id);
-  }
+  const data = await orm.select().from(categories).orderBy(categories.type, categories.id);
   res.json(data.map(formatCategory));
 }));
 
@@ -84,7 +54,8 @@ router.post('/categories/reset-defaults', requireSystemAdmin, asyncHandler(async
   const existingCatRows = await orm.select().from(categories);
   const existingCatMap = new Map(existingCatRows.map(c => [c.name, c]));
 
-  for (const cat of defaultCategories) {
+  // v9.0.134 (TD-526): همان فهرست یکتای seed (`src/data/defaultCategories.ts`)
+  for (const cat of DEFAULT_CATEGORIES) {
     const existing = existingCatMap.get(cat.name);
     if (existing) {
       await orm.update(categories).set({

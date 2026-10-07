@@ -1,5 +1,5 @@
 /**
- * Content-Security-Policy directives of the app (helmet), v9.0.127 (TD-597, owner decision t3 «الف»).
+ * Content-Security-Policy directives of the app (helmet), v9.0.145 (TD-597, owner decision t3 «الف»).
  *
  * In production the app may be framed only by itself, plus the origins listed in `FRAME_ANCESTORS`
  * (comma separated; for the AI Studio preview deployments that also need `EXPOSE_TOKEN_IN_BODY`), and the

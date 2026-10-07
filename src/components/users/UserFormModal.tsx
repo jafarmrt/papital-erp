@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { User, Role } from '../../types';
+import { isSystemAdminRole, SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog';
+import { roleWithinGrant, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -9,6 +11,9 @@ interface UserFormModalProps {
   editingUser: User | null;
   rolesList: Role[];
   onSuccess: () => void;
+  /** v9.0.130 (TD-525، ت۳): مجوزهای کاربر جاری؛ فقط نقش‌هایی که همه مجوزهایشان را دارد پیشنهاد می‌شوند */
+  grantor?: GrantorPermissions;
+  currentUserId?: number;
 }
 
 export const UserFormModal: React.FC<UserFormModalProps> = ({
@@ -17,6 +22,8 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   editingUser,
   rolesList,
   onSuccess,
+  grantor = 'all',
+  currentUserId,
 }) => {
   // v9.0.73 (TD-517): کاربر تازه نقش پیش‌گزیده ندارد؛ پیش‌تر نقش اول فهرست (مدیر سیستم) انتخاب می‌شد
   const [userForm, setUserForm] = useState({
@@ -28,6 +35,11 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
 
   const isEditing = editingUser !== null;
+  // v9.0.130 (TD-525، ت۳): کاربر غیرمدیر نقش حساب خودش را عوض نمی‌کند و فقط نقشی را می‌دهد که همه مجوزهایش را دارد
+  const ownAccount = isEditing && grantor !== 'all' && currentUserId !== undefined && editingUser?.id === currentUserId;
+  const assignableRoles = rolesList.filter((r) => !isSystemAdminRole(r.code) && roleWithinGrant(grantor, r));
+  const currentRoleOutside = isEditing && userForm.role !== '' && !isSystemAdminRole(userForm.role)
+    && !assignableRoles.some((r) => r.code === userForm.role);
 
   useEffect(() => {
     if (editingUser) {
@@ -140,22 +152,38 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
               <select
                 required
                 value={userForm.role}
+                disabled={ownAccount}
                 onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
               >
                 <option value="" disabled>
                   نقش را انتخاب کنید
                 </option>
-                {rolesList
-                  .filter((r) => r.code !== 'admin')
-                  .map((r) => (
-                    <option key={r.id} value={r.code}>
-                      {r.name}
-                    </option>
-                  ))}
-                <option value="admin">مدیر سیستم (دسترسی کامل)</option>
+                {assignableRoles.map((r) => (
+                  <option key={r.id} value={r.code}>
+                    {r.name}
+                  </option>
+                ))}
+                {currentRoleOutside && (
+                  <option value={userForm.role} disabled>
+                    {rolesList.find((r) => r.code === userForm.role)?.name ?? userForm.role}
+                  </option>
+                )}
+                {(grantor === 'all' || isSystemAdminRole(userForm.role)) && (
+                  <option value={SYSTEM_ADMIN_ROLE} disabled={grantor !== 'all'}>مدیر سیستم (دسترسی کامل)</option>
+                )}
               </select>
-              {userForm.role === 'admin' && (
+              {ownAccount && (
+                <p className="mt-1 text-xs text-slate-500">
+                  نقش حساب خودتان را کاربر دیگری که «مدیریت کاربران» دارد عوض می‌کند.
+                </p>
+              )}
+              {!ownAccount && grantor !== 'all' && (
+                <p className="mt-1 text-xs text-slate-500">
+                  فقط نقش‌هایی آمده‌اند که همه مجوزهایشان را خودتان دارید.
+                </p>
+              )}
+              {isSystemAdminRole(userForm.role) && (
                 <p className="mt-1 text-xs text-amber-700">
                   مدیر سیستم به همه بخش‌ها و تنظیمات دسترسی کامل دارد.
                 </p>

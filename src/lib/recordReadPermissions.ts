@@ -9,31 +9,103 @@ export const READ_PERMISSIONS = {
   journalVouchers: ['accounting.vouchers', 'accounting.reports', 'accounting.view'],
   treasuryTransactions: ['accounting.treasury', 'accounting.reports', 'accounting.view'],
   cheques: ['accounting.cheques', 'accounting.treasury', 'accounting.reports', 'accounting.view'],
-  projects: [
-    'projects.view', 'projects.create', 'projects.edit', 'documents.view', 'documents.create',
-    'warehouse.in', 'warehouse.out', 'warehouse.view'
+  /**
+   * فهرست کامل پروژه‌ها (با محصولات، کنترل موجودی و رزرو، مراحل و پیوست‌ها) فقط با مجوز بخش پروژه (v9.0.139، TD-889،
+   * ت۱۰ الف؛ پیش‌تر کلیدهای سند و انبار هم آن را باز می‌کردند)
+   */
+  projects: ['projects.view'],
+  /**
+   * پرونده یک پروژه (`GET /projects/:id`) و پیوست‌های آن: بخش پروژه و صفحه «انبار پروژه» (`warehouse.view`، کنترل
+   * موجودی پروژه)
+   */
+  projectRecord: ['projects.view', 'warehouse.view'],
+  /**
+   * فهرست انتخاب پروژه (`GET /projects/options`، شناسه، کد، عنوان، وضعیت و نام مشتری): سند ورود و خروج انبار
+   * (documents.view، documents.create، warehouse.in)، انبار پروژه و تخصیص مواد اولیه (warehouse.view، warehouse.out)،
+   * کارکرد کارمزدی (piecework.view، piecework.log) و گزارش روزانه (daily_logs.view، daily_logs.create)
+   */
+  projectOptions: [
+    'projects.view', 'documents.view', 'documents.create', 'warehouse.view', 'warehouse.in', 'warehouse.out',
+    'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create',
   ],
-  // documents.view و warehouse.in: صفحه «ورود و خروج انبار» فهرست تأمین‌کنندگان را می‌خواند
-  customers: ['customers.view', 'documents.view', 'documents.create', 'warehouse.in', 'crm.view', 'projects.view', 'procurement.view'],
+  /** فهرست کامل طرف حساب‌ها (با یادداشت و نسخه رکورد) فقط با مجوز مشاهده همان بخش (v9.0.137، TD-887، ت۱۰ الف) */
+  customers: ['customers.view'],
+  /**
+   * فهرست انتخاب طرف حساب (`GET /customers/options`): فاکتور و حواله (documents.create)، رسید انبار (warehouse.in،
+   * documents.view)، ارتباط با مشتری، پروژه، خرید، نقطه سفارش (products.view، warehouse.view) و فرم‌های حسابداری.
+   */
+  customerOptions: [
+    'customers.view', 'documents.view', 'documents.create', 'warehouse.in', 'warehouse.view', 'products.view', 'crm.view',
+    'projects.view', 'procurement.view', 'accounting.view', 'accounting.reports', 'accounting.vouchers', 'accounting.treasury',
+    'accounting.cheques',
+  ],
   customersExport: ['customers.view'],
   /** کارت حساب و مانده طرف حساب (همان مجوزهای کارت حساب گزارش‌های مالی؛ v9.0.4، TD-416) */
-  partyAccountCard: ['accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'documents.view'],
-  documents: [
-    'documents.view', 'documents.create', 'documents.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out',
-    'audit.view', 'crm.view', 'workflow.view'
+  partyAccountCard: ['accounting.reports', 'accounting.view', 'customers.view', 'customers.manage'],
+  /**
+   * فهرست کامل اسناد (با مبالغ و طرف حساب) فقط با مجوز بخش اسناد: فهرست فاکتورها و فرم فاکتور (v9.0.140، TD-890، ت۱۰ الف؛
+   * پیش‌تر کلیدهای انبار، انبارگردانی، ارتباط با مشتری و گردش کار هم آن را باز می‌کردند)
+   */
+  documents: ['documents.view', 'documents.create', 'documents.edit'],
+  /**
+   * صفحه انبارگردانی: فهرست و پرونده فقط سندهای شمارش و انتقال (`STOCK_COUNT_PAGE_DOCUMENT_TYPES` در
+   * `src/services/documents/documentReadScope.ts`)
+   */
+  stockCountDocuments: ['audit.view'],
+  /** پرونده یک سند و پیوست‌هایش: بخش اسناد و کارتابل تأیید (`workflow.view`) */
+  documentRecord: ['documents.view', 'documents.create', 'documents.edit', 'workflow.view'],
+  /**
+   * شماره بعدی سند (`/documents/next-ref`): فرم‌هایی که سند ثبت می‌کنند — فاکتور و حواله، رسید و حواله انبار، انبارگردانی
+   * و انتقال بین انبارها
+   */
+  documentNextRef: [
+    'documents.view', 'documents.create', 'documents.edit', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'audit.view',
   ],
-  // صفحه‌های «ورود و خروج انبار» (documents.view، warehouse.in)، قیمت‌گذاری (products.edit_price) و انبارگردانی (audit.view)
-  items: [
-    'products.view', 'products.edit_price', 'documents.view', 'documents.create', 'warehouse.view', 'warehouse.in',
-    'audit.view', 'projects.view', 'crm.view', 'procurement.view'
+  /** برگه شمارش انبارگردانی (`/documents/audit-items`، موجودی دفتری هر کالا) */
+  stockCountSheet: ['audit.view'],
+  /** اسناد فروش یک طرف حساب در پرونده او (`/customers/:id/documents`): صفحه اسناد، طرف حساب‌ها و ارتباط با مشتری */
+  partyDocuments: ['documents.view', 'customers.view', 'crm.view'],
+  /**
+   * فهرست کامل کالاها (با میانگین بها، نقطه سفارش، رزروها و نسخه رکورد) فقط با مجوزهای بخش کالا: صفحه کالاها، گالری و
+   * قیمت‌گذاری (v9.0.138، TD-888، ت۱۰ الف)
+   */
+  items: ['products.view', 'products.edit_price'],
+  /**
+   * فهرست انتخاب کالا (`GET /items/options`، بی نقطه سفارش، رزرو و نسخه؛ میانگین بها فقط با products.view): فاکتور و حواله
+   * (documents.create)، ورود و خروج انبار (documents.view، warehouse.in)، انبارگردانی (audit.view)، پروژه و انبار پروژه
+   * (projects.view، warehouse.view)، خرید، ارتباط با مشتری و انتقال (products.view)
+   */
+  itemOptions: [
+    'products.view', 'documents.view', 'documents.create', 'warehouse.view', 'warehouse.in', 'audit.view', 'projects.view',
+    'crm.view', 'procurement.view',
   ],
-  itemPrices: ['products.view', 'products.edit_price', 'projects.view'],
+  /** صفحه هشدار نقطه سفارش (همان کلیدهای صفحه در `PAGE_ACCESS`) */
+  itemReorderAlerts: ['products.view', 'warehouse.view'],
+  /**
+   * همه قیمت‌های همه کالاها و تاریخچه قیمت فقط با مجوز بخش کالا: صفحه قیمت‌گذاری (v9.0.141، TD-891؛ پیش‌تر مشاهده پروژه هم
+   * آن را باز می‌کرد، برای فهرستی که پنجره پروژه می‌خواند و به کار نمی‌برد)
+   */
+  itemPrices: ['products.view', 'products.edit_price'],
+  /** فهرست قیمت فروش یک کالا (`/items/:id/prices`): صفحه قیمت‌گذاری و فرم فاکتور و حواله که قیمت را از آن پیشنهاد می‌کند */
+  itemSalePrices: ['products.view', 'products.edit_price', 'documents.create', 'documents.edit'],
   personnel: [
     'personnel.view', 'personnel.manage', 'piecework.view', 'projects.view', 'accounting.view', 'crm.view',
     'documents.view', 'documents.create', 'warehouse.in'
   ],
-  /** کارکرد، تعرفه‌ها، عناوین و دسته‌های کارمزدی */
-  pieceworkReference: ['piecework.view', 'piecework.log', 'piecework.manage_tasks', 'projects.view', 'settings.manage'],
+  /**
+   * کارکرد، تعرفه‌ها، عناوین و دسته‌های کارمزدی. `personnel.manage` همین‌ها را می‌نویسد (عناوین کاری در زبانه تنظیمات،
+   * ثبت کارکرد) و پیش‌تر فهرستی را که ذخیره می‌کرد نمی‌خواند (v9.0.131، TD-668).
+   */
+  pieceworkReference: ['piecework.view', 'piecework.log', 'piecework.manage_tasks', 'projects.view', 'settings.manage', 'personnel.manage'],
+  /**
+   * کارکرد همه پرسنل با نرخ و مبلغ (`GET /piecework/logs`) فقط برای صفحه کارمزدی و مدیر کارکرد (`personnel.manage`، ویرایش
+   * و حذف کارکرد) (v9.0.142، TD-892؛ پیش‌تر مشاهده پروژه و مدیریت تنظیمات هم کارکرد همه پرسنل را می‌خواندند)
+   */
+  pieceworkLogs: ['piecework.view', 'piecework.log', 'personnel.manage'],
+  /** کارکردهای یک پروژه (`GET /piecework/logs?projectId=`، زبانه زمان‌بندی پروژه) */
+  projectPieceworkLogs: ['projects.view'],
+  /** نرخ‌های اختصاصی یک پرسنل: فرم ثبت کارکرد و پنجره نرخ‌های پرسنل */
+  pieceworkRates: ['piecework.view', 'piecework.log', 'personnel.manage'],
   /** فیش‌های حقوق و کارمزد با مبالغ (فیش خود کاربر از /piecework/payrolls/mine) */
   payrolls: ['piecework.payroll', 'personnel.manage', 'accounting.treasury'],
   transfers: ['products.view'],
@@ -65,7 +137,7 @@ export const READ_PERMISSIONS = {
  * آزمایشی طراح) مجوز دیگری نمی‌خواهد.
  */
 export const WORKFLOW_ENTITY_READ_PERMISSIONS: Readonly<Record<string, readonly string[]>> = {
-  document: READ_PERMISSIONS.documents,
+  document: READ_PERMISSIONS.documentRecord,
   journal_voucher: READ_PERMISSIONS.journalVouchers,
   voucher: READ_PERMISSIONS.journalVouchers,
   item: READ_PERMISSIONS.items,
@@ -78,8 +150,8 @@ export const RECORD_READ_PERMISSIONS = {
   journal_voucher: READ_PERMISSIONS.journalVouchers,
   treasury_transaction: READ_PERMISSIONS.treasuryTransactions,
   cheque: READ_PERMISSIONS.cheques,
-  production_project: READ_PERMISSIONS.projects,
-  document: READ_PERMISSIONS.documents,
+  production_project: READ_PERMISSIONS.projectRecord,
+  document: READ_PERMISSIONS.documentRecord,
   piecework_payroll: READ_PERMISSIONS.payrolls,
 } as const satisfies Record<string, readonly string[] | null>;
 

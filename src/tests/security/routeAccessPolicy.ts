@@ -28,7 +28,7 @@ export const PUBLIC_ROUTES = new Set([
 export const LOGIN_ONLY_ROUTES = new Set([
   'GET /api/auth/me', 'GET /api/me', 'GET /api/auth/csrf', 'GET /api/csrf',
   'GET /api/users/my-permissions', 'GET /api/users/profile', 'PUT /api/users/profile', 'GET /api/users/list-simple',
-  'GET /api/system/business-date', 'GET /api/settings', 'GET /api/menu-visibility', 'GET /api/global-search',
+  'GET /api/system/business-date', 'GET /api/settings', 'GET /api/global-search',
   'GET /api/categories', 'GET /api/warehouses',
   'PUT /api/daily-logs/:id/review',
   'GET /api/notifications', 'GET /api/notifications/unread-count', 'PUT /api/notifications/:id/read',
@@ -134,7 +134,8 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       return 'هر دو 403';
     }),
     record('sec_user_manager_cannot_grant_admin_td_299', 'حوزه H: دارنده users.manage نقش مدیر سیستم نمی‌دهد و حساب مدیر را تغییر یا حذف نمی‌کند (TD-299)', 'real_database', async () => {
-      const manager = await userWith(['users.manage']);
+      // از v9.0.129 (TD-520) مدیر کاربران فقط نقشی را می‌دهد که همه کلیدهایش را دارد
+      const manager = await userWith(['users.manage', 'daily_logs.view']);
       const admin = await createTestUser({ role: 'admin' });
       createdUserIds.push(admin.id);
       const plainRole = await createTestRole({ permissions: ['daily_logs.view'] });
@@ -235,7 +236,8 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       return 'personnel.view ← 403، piecework.payroll مجاز';
     }),
     record('sec_role_permissions_from_catalog_td_304', 'حوزه H: نقش فقط مجوزهای کاتالوگ را می‌گیرد، نه «*» یا کلید ناشناخته (TD-304)', 'real_database', async () => {
-      const roleAdmin = await userWith(['roles.manage']);
+      // از v9.0.129 (TD-520) مدیر نقش‌ها فقط کلیدی را به نقش می‌دهد که خودش دارد
+      const roleAdmin = await userWith(['roles.manage', 'daily_logs.view']);
       const suffix = Date.now();
       const star = await send(roleAdmin.session, 'post', '/api/roles', { name: 'td304', code: `td304_star_${suffix}`, permissions: ['*'] });
       const unknown = await send(roleAdmin.session, 'post', '/api/roles', { name: 'td304', code: `td304_unk_${suffix}`, permissions: ['sales.view'] });

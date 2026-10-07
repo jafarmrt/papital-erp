@@ -192,7 +192,7 @@ export const errorHandler = (err: any, req: any, res: any, next: any) => {
   const normalized = normalizeError(err);
 
   // 3. Extract traceId
-  // v9.0.129 (TD-602): never the raw client header; requestContextMiddleware accepted or replaced it
+  // v9.0.147 (TD-602): never the raw client header; requestContextMiddleware accepted or replaced it
   const traceId = req.requestId || getRequestContext()?.requestId || acceptedTraceId(req.headers?.['x-request-id']);
 
   // 4. Log error with trace context

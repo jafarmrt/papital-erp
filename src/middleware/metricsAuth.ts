@@ -16,7 +16,7 @@ export { safeCompareTokens };
  * - Operators/Admins can authenticate via valid JWT session (cookie auth_token or Authorization: Bearer <jwt>) with role === 'admin'.
  * - Arbitrary or unverified Bearer tokens (e.g. 'Bearer foo') are strictly rejected with 401.
  * - Authenticated non-admin users receive 403 Forbidden.
- * - v9.0.128 (TD-599): the session is checked live like `authenticateToken` (deleted user, stale tokenVersion, current role).
+ * - v9.0.146 (TD-599): the session is checked live like `authenticateToken` (deleted user, stale tokenVersion, current role).
  */
 export const metricsAuthMiddleware = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   const configuredMetricsToken = process.env.METRICS_TOKEN?.trim();

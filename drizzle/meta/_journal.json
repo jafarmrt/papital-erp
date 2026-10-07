@@ -442,6 +442,41 @@
       "when": 1792820000000,
       "tag": "0062_role_code_guards_to_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792830000000,
+      "tag": "0063_documents_finalize_permission",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1792840000000,
+      "tag": "0064_sensitive_personnel_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792900000000,
+      "tag": "0065_workflow_roles_without_equivalence",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792960000000,
+      "tag": "0066_system_admin_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1793020000000,
+      "tag": "0067_only_admin_role_is_system",
+      "breakpoints": true
     }
   ]
 }

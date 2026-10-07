@@ -34,7 +34,7 @@ export function acceptedTraceId(value: string | string[] | undefined): string | 
 }
 
 export const requestContextMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  // v9.0.129 (TD-602): a client-sent id is used only when it matches the trace id pattern; otherwise a new one
+  // v9.0.147 (TD-602): a client-sent id is used only when it matches the trace id pattern; otherwise a new one
   // is issued, so support never searches the logs for an id the client chose or padded to thousands of characters
   const headerReqId = acceptedTraceId(req.headers['x-request-id']);
   const headerCorrId = acceptedTraceId(req.headers['x-correlation-id']);

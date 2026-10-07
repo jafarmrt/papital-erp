@@ -102,7 +102,7 @@ export async function createApp(): Promise<express.Express> {
   // V1.3.7: upgrade-insecure-requests / HSTS فقط روی اتصال HTTPS فعال می‌شوند —
   // در دسترسی HTTP (مثل http://SERVER_IP:3000 قبل از تنظیم دامنه) این هدرها باعث
   // ارتقای مرورگر به HTTPS و صفحه سفید می‌شدند.
-  // v9.0.127 (TD-597): production frames and connects only to itself plus explicit origins (src/lib/cspDirectives.ts)
+  // v9.0.145 (TD-597): production frames and connects only to itself plus explicit origins (src/lib/cspDirectives.ts)
   const secureCspDirectives = buildCspDirectives();
 
   const helmetForHttps = helmet({
@@ -190,7 +190,7 @@ export async function createApp(): Promise<express.Express> {
       const p = req.path || req.url || '';
       return p.includes('/health') || p.includes('/metrics');
     },
-    // v9.0.126 (TD-595): the key is the client address only. This limiter runs before authentication, so
+    // v9.0.144 (TD-595): the key is the client address only. This limiter runs before authentication, so
     // req.user is always empty here, and a cookie value is unverified: every forged cookie was a new bucket.
     keyGenerator: (req: express.Request) => {
       // v7.0.41 (TD-182): req.ip بر پایه TRUST_PROXY؛ X-Forwarded-For خام قابل جعل است

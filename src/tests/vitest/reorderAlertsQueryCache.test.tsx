@@ -23,7 +23,7 @@ interface RequestInitLike { method?: string; body?: string; signal?: AbortSignal
 
 const keeper: User = { id: 2, username: 'keeper', full_name: 'انباردار تست', role: 'admin' };
 const REORDER_URL = '/items/reorder-alerts';
-const SUPPLIERS_URL = '/customers?limit=1000';
+const SUPPLIERS_URL = '/customers/options';
 const wire = {
   id: 7, code: 'R-7', name: 'سیم نقره', type: 'raw_material', unit: 'متر', category: 'سیم',
   current_stock: 2, reorder_point: 10, weighted_average_cost: 1000, deficit: 8, deficit_value: 8000, is_zero_stock: false,

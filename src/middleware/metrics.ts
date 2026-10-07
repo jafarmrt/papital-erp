@@ -49,7 +49,7 @@ export const outboxProcessingDuration = new promClient.Histogram({
 });
 
 /**
- * v9.0.125 (TD-582): the route label is bounded by the route table: the mount prefix plus the matched
+ * v9.0.143 (TD-582): the route label is bounded by the route table: the mount prefix plus the matched
  * route pattern; a request that matched no route (404, 401 before a router, static files) never
  * carries its raw path, or every unknown path would add series that are never freed.
  */

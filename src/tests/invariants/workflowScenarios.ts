@@ -174,39 +174,42 @@ export async function checkSignaturesResetOnReentry(): Promise<string[]> {
 
 /**
  * TD-374: مجوز «مشاهده» (warehouse.view، accounting.view) یا مجوز خزانه گام نقش انبار یا حسابداری را اجرا نمی‌کند و
- * نقش تولید گام «مدیر» را؛ نقش خود و مجوز ثبت همان بخش کافی است.
+ * نقش تولید گام «مدیر» را. v9.0.128 (TD-542): گام نقش‌دار فقط برای همان نقش و مدیر سیستم است؛ نقش هم‌ارز بخش و مجوز
+ * ثبت بخش هم دیگر آن را باز نمی‌کنند (چه کسی را مجوز لازم انتقال می‌گوید).
  */
 export async function checkViewPermissionCannotApprove(): Promise<string[]> {
   const problems: string[] = [];
   const match = WorkflowTransitionExecutor.checkUserRoleMatch.bind(WorkflowTransitionExecutor);
-  const refused: Array<[string, string, string[], string]> = [
-    ['sales_manager', 'warehouse', ['warehouse.view', 'workflow.approve'], 'مدیر فروش با warehouse.view گام انبار'],
-    ['viewer', 'warehouse_keeper', ['warehouse.view', 'workflow.view'], 'بیننده با warehouse.view گام انباردار'],
-    ['treasurer', 'accountant', ['accounting.view', 'accounting.treasury', 'accounting.cheques', 'workflow.approve'], 'خزانه‌دار گام حسابدار'],
-    ['production_manager', 'manager', ['projects.edit', 'workflow.approve'], 'مدیر تولید گام مدیر'],
-    ['sales_manager', 'manager', ['documents.create', 'workflow.approve'], 'مدیر فروش گام مدیر'],
+  const refused: Array<[string, string, string]> = [
+    ['sales_manager', 'warehouse', 'مدیر فروش گام انبار'],
+    ['viewer', 'warehouse_keeper', 'بیننده گام انباردار'],
+    ['treasurer', 'accountant', 'خزانه‌دار گام حسابدار'],
+    ['production_manager', 'manager', 'مدیر تولید گام مدیر'],
+    ['sales_manager', 'manager', 'مدیر فروش گام مدیر'],
+    ['production_manager', 'warehouse', 'نقش دیگر گام انبار'],
+    ['cfo_accountant', 'accounting', 'مدیر مالی گام نقش «accounting»'],
+    ['cfo_accountant', 'accountant', 'مدیر مالی گام حسابدار'],
+    ['wfg_any', 'accountant', 'نقش سفارشی گام حسابدار'],
   ];
-  for (const [role, required, perms, label] of refused) {
-    if (match(role, required, perms)) problems.push(`${label} را اجرا می‌کند`);
+  for (const [role, required, label] of refused) {
+    if (match(role, required)) problems.push(`${label} را اجرا می‌کند`);
   }
-  const allowed: Array<[string, string, string[], string]> = [
-    ['warehouse_keeper', 'warehouse', ['warehouse.in', 'warehouse.out'], 'انباردار گام انبار'],
-    ['production_manager', 'warehouse', ['warehouse.in', 'warehouse.out'], 'دارنده warehouse.in گام انبار'],
-    ['accountant', 'accountant', ['accounting.view'], 'حسابدار گام حسابدار'],
-    ['cfo_accountant', 'accounting', [], 'مدیر مالی گام حسابداری'],
-    ['wfg_any', 'accountant', ['accounting.vouchers'], 'دارنده accounting.vouchers گام حسابدار'],
-    ['manager', 'manager', [], 'مدیر گام مدیر'],
-    ['admin', 'manager', [], 'ادمین گام مدیر'],
+  const allowed: Array<[string, string, string]> = [
+    ['warehouse_keeper', 'warehouse_keeper', 'انباردار گام انباردار'],
+    ['accountant', 'accountant', 'حسابدار گام حسابدار'],
+    ['manager', 'manager', 'مدیر گام مدیر'],
+    ['admin', 'manager', 'مدیر سیستم گام مدیر'],
+    ['wfg_any', '', 'هر نقش گام بی‌نقش'],
   ];
-  for (const [role, required, perms, label] of allowed) {
-    if (!match(role, required, perms)) problems.push(`${label} را اجرا نمی‌کند`);
+  for (const [role, required, label] of allowed) {
+    if (!match(role, required)) problems.push(`${label} را اجرا نمی‌کند`);
   }
 
   // سرتاسری: مدیر فروش با warehouse.view گام انبار را از API انتقال اجرا نمی‌کند
   const sales = await wfUser('sales_manager', ['warehouse.view', 'workflow.approve']);
   const wf = await defineWorkflow({
     states: [{ key: 'draft', type: 'initial' }, { key: 'done', type: 'terminal' }],
-    transitions: [{ from: 'draft', to: 'done', action: 'approve_warehouse', role: 'warehouse' }],
+    transitions: [{ from: 'draft', to: 'done', action: 'approve_warehouse', role: 'warehouse_keeper' }],
   });
   const instanceId = await startWf(wf);
   const error = await refusal(() => transit(instanceId, wf.transitionId.approve_warehouse, sales));

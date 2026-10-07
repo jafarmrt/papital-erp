@@ -13,7 +13,7 @@ import {
   withRequiredPermissions,
   withoutPermission,
 } from '../../lib/permissions/permissionCatalog';
-import { ROLE_PRESETS } from '../../components/users/RoleFormModal';
+import { ROLE_TEMPLATES } from '../../lib/permissions/roleTemplates';
 
 describe('permission catalog (TD-880)', () => {
   it('has unique dotted keys whose requirements are catalog keys without cycles', () => {
@@ -52,7 +52,10 @@ describe('permission catalog (TD-880)', () => {
     expect(withoutPermission(keys, 'accounting.treasury_no_voucher')).toEqual(['accounting.reports', 'crm.view', 'accounting.view', 'accounting.treasury']);
   });
 
-  it('keeps the role form templates closed under the dependencies', () => {
-    for (const preset of ROLE_PRESETS) expect(missingRequiredPermissions(preset.permissions), preset.code).toEqual([]);
+  it('keeps the role templates closed under the dependencies and inside the catalog', () => {
+    for (const t of ROLE_TEMPLATES) {
+      expect(missingRequiredPermissions(t.permissions), t.code).toEqual([]);
+      expect(t.permissions.filter(k => !isCatalogPermission(k)), t.code).toEqual([]);
+    }
   });
 });

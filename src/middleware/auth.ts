@@ -159,7 +159,7 @@ export type LiveSessionResult =
 /**
  * Live check of a verified JWT payload against the users table (30 s cache): a deleted user or a token
  * whose tokenVersion no longer matches is refused; role and full name come from the database.
- * Shared by `authenticateToken` and the metrics guard (v9.0.128, TD-599).
+ * Shared by `authenticateToken` and the metrics guard (v9.0.146, TD-599).
  */
 export async function resolveLiveSession(payload: AuthUserPayload): Promise<LiveSessionResult> {
   try {
