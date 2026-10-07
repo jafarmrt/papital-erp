@@ -32,7 +32,7 @@ router.get('/stats', authorizePermission('reports.view', 'warehouse.view'), asyn
     const [{ count: totalProducts }] = await orm.select({ count: sql<number>`count(*)` }).from(items).where(and(eq(items.type, 'product'), eq(items.isDeleted, 0)));
     const [{ count: totalMaterials }] = await orm.select({ count: sql<number>`count(*)` }).from(items).where(and(eq(items.type, 'raw_material'), eq(items.isDeleted, 0)));
     const [{ count: lowStock }] = await orm.select({ count: sql<number>`count(*)` }).from(items).where(and(eq(items.isDeleted, 0), sql`${items.currentStock} <= COALESCE(${items.reorderPoint}, 5)`));
-    // v9.0.279 (TD-671): شمار سند، نه ردیف کاردکس؛ بی ردیف ابطال‌شده و معکوس آن؛ هفت روز تا امروزِ ساعت توافقی
+    // v9.0.289 (TD-671): شمار سند، نه ردیف کاردکس؛ بی ردیف ابطال‌شده و معکوس آن؛ هفت روز تا امروزِ ساعت توافقی
     const recentTx = await recentDocumentCount(7);
     // V9-2.2: شمارش فقط کاربران فعال (حذف‌شده‌های نرم مستثنی)
     const [{ count: userCount }] = await orm.select({ count: sql<number>`count(*)` }).from(users).where(eq(users.isDeleted, 0));
@@ -69,7 +69,7 @@ router.get('/dashboard-bi-stats', authorizePermission('reports.view', 'warehouse
       id: items.id, name: items.name, code: items.code, current_stock: items.currentStock, reorder_point: items.reorderPoint, unit: items.unit, type: items.type
     }).from(items).where(and(eq(items.isDeleted, 0), sql`${items.currentStock} <= ${items.reorderPoint}`, gt(items.reorderPoint, 0))).orderBy(items.currentStock);
 
-    // v9.0.279 (TD-671): خروج‌های واقعی دفتر کاردکس، بی معکوس ابطال و انتقال بین انبارها، با بازه ساعت توافقی
+    // v9.0.289 (TD-671): خروج‌های واقعی دفتر کاردکس، بی معکوس ابطال و انتقال بین انبارها، با بازه ساعت توافقی
     const { fastMoving, slowMoving, deadStock } = await dashboardMovementRows({ fastDays, slowDays, deadDays });
 
     const valResult = await orm.execute(sql`

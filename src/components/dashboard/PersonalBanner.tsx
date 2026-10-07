@@ -91,7 +91,7 @@ export function PersonalBanner({ user }: PersonalBannerProps) {
   });
 
   useEffect(() => {
-    // v9.0.283 (TD-683): ساعت منطقه زمانی نمایش، نه ساعت دستگاه
+    // v9.0.293 (TD-683): ساعت منطقه زمانی نمایش، نه ساعت دستگاه
     const updateTime = () => {
       setCurrentTime(displayClockNow().time);
     };

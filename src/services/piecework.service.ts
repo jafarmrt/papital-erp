@@ -1,12 +1,16 @@
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, taskCategories } from '../db/schema.js';
-import { NotFoundError, BadRequestError, ConflictError } from '../errors/customErrors.js';
-import { parseQuantityOrTime } from '../utils.js';
+import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkLogs, pieceworkPayrolls, taskCategories } from '../db/schema.js';
+import { NotFoundError, BadRequestError, ConflictError, ValidationError } from '../errors/customErrors.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
 import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workLogPayrollLink.js';
+import { auditWorkLogCreated, auditWorkLogDeleted, auditWorkLogUpdated, type AuditActor } from './piecework/pieceworkAudit.js';
+import { activePersonnelRate, savePersonnelRate, type PersonnelRateInput, type RateActor } from './piecework/personnelRate.js';
+import { assertScheduleRowsFree, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
+import type { ScheduleRowRef } from '../lib/projects/scheduleWorkLog.js';
+import { assertWorkLogParentsLive, normalizeWorkLogEntries, workLogId, workLogManualRate, workLogQuantity, type WorkLogEntryInput } from './piecework/workLogEntry.js';
 import {
   allocatePieceworkTaskCode,
   assertPieceworkTaskCodeAvailable,
@@ -16,8 +20,9 @@ import {
   pieceworkTaskCodeKey,
   toPieceworkTaskCodeError,
 } from './piecework/taskCode.js';
-import { money, moneyOr } from '../lib/money.js';
+import { money } from '../lib/money.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../lib/financialDecimal.js';
+import { parsePieceworkRate } from '../lib/piecework/pieceworkRate.js';
 
 // خواندن‌ها و چرخه فیش حقوقی در src/services/piecework/ (لایه سرویس روت piecework.routes.ts)
 export { PieceworkReadService, type TaskListFilters, type WorkLogListFilters } from './piecework/pieceworkRead.service.js';
@@ -49,16 +54,23 @@ export interface UpdatePieceworkTaskInput {
   username?: string;
 }
 
-export interface CreatePieceworkLogInput {
-  personnelId: number | string;
-  taskId: number | string;
-  projectId?: number | string | null;
-  date: string;
-  quantity: number | string;
-  unitRate?: number | string;
-  notes?: string;
+export interface CreatePieceworkLogInput extends WorkLogEntryInput {
   createdById?: number;
   createdByUsername?: string;
+}
+
+/** v9.0.279 (TD-813): نرخ پایه نامعتبر یا منفی ۴۲۲ است (سرویس هم بی طرح route آن را می‌سنجد)؛ خالی یعنی «داده نشده» */
+function requireTaskRate(raw: unknown): string | undefined {
+  const parsed = parsePieceworkRate(raw, 'نرخ پایه');
+  if (!parsed.ok) throw new ValidationError(parsed.message, undefined, 'PIECEWORK_RATE_INVALID');
+  return parsed.value;
+}
+
+/** ردیفی از فایل اکسل که ثبت نشد، با شماره ردیف (از ۱) و دلیل فارسی */
+export interface TaskImportRowError {
+  row: number;
+  title: string;
+  message: string;
 }
 
 async function inTransaction<T>(externalTx: DbExecutor | undefined, fn: (tx: DbExecutor) => Promise<T>): Promise<T> {
@@ -126,7 +138,7 @@ export class PieceworkService {
         code: taskCode,
         title: input.title.trim(),
         category: input.category ? String(input.category).trim() : 'سایر',
-        defaultRate: moneyOr(input.defaultRate, 0),
+        defaultRate: money(requireTaskRate(input.defaultRate) ?? 0),
         unit: input.unit ? String(input.unit).trim() : 'عدد',
         description: input.description ? String(input.description).trim() : '',
         isActive: 1,
@@ -164,8 +176,9 @@ export class PieceworkService {
       throw new NotFoundError('عنوان کاری یافت نشد');
     }
 
-    const oldRate = moneyOr(existing.defaultRate, 0);
-    const newRate = input.defaultRate !== undefined ? money(input.defaultRate) : oldRate;
+    const oldRate = money(existing.defaultRate ?? 0);
+    const requestedRate = requireTaskRate(input.defaultRate);
+    const newRate = requestedRate !== undefined ? money(requestedRate) : oldRate;
     const newTitle = input.title !== undefined ? String(input.title).trim() : existing.title;
     const requestedCode = input.code !== undefined ? String(input.code).trim() : '';
     const newCode = requestedCode || existing.code;
@@ -248,63 +261,62 @@ export class PieceworkService {
 
   /**
    * Logs piecework work entries with rate auto-resolution
+   * v9.0.280 (TD-812): every row is checked before anything is written (`normalizeWorkLogEntries`: positive ids, quantity above
+   * zero or «hh:mm», non-negative manual rate, valid date) and personnel, task and project must be live; the whole batch is one
+   * transaction, so a bad third row no longer leaves the first two saved.
    */
   static async logWorkEntries(
     items: CreatePieceworkLogInput[],
-    executor: DbExecutor = orm
+    executor?: DbExecutor,
+    actor: AuditActor = {}
   ): Promise<number[]> {
-    const insertedIds: number[] = [];
+    const entries = normalizeWorkLogEntries(items);
+    return inTransaction(executor, async (tx) => {
+      // v9.0.282 (TD-736): نخست ردیف پروژه‌های ردیف‌های برنامه FOR UPDATE، سپس والدها FOR SHARE
+      const schedules = await lockScheduleProjects(tx, entries);
+      const names = await assertWorkLogParentsLive(tx, entries);
+      await assertScheduleRowsFree(tx, entries, schedules);
+      const insertedIds: number[] = [];
+      const links: Array<{ projectId: number; ref: ScheduleRowRef; logId: number }> = [];
+      for (const [index, entry] of entries.entries()) {
+        const { createdById, createdByUsername } = items[index];
+        const finalRate: DecimalValue = entry.unitRate ?? await PieceworkService.serverRate(tx, entry.personnelId, entry.taskId);
+        const totalAmt = fin(entry.quantity).multiply(finalRate);
 
-    for (const item of items) {
-      const { personnelId, taskId, projectId, date, quantity, unitRate, notes, createdById, createdByUsername } = item;
-      if (!personnelId || !taskId || !date || quantity === undefined) continue;
+        const [inserted] = await tx.insert(pieceworkLogs).values({
+          personnelId: entry.personnelId,
+          taskId: entry.taskId,
+          projectId: entry.projectId,
+          // v7.0.134 (TD-232): تاریخ کارکرد میلادی ISO در هر دو ستون
+          date: entry.isoDate,
+          dateIso: entry.isoDate,
+          quantity: entry.quantity,
+          unitRate: money(finalRate),
+          totalAmount: money(totalAmt),
+          notes: entry.notes,
+          status: 'pending',
+          createdById: createdById || null,
+          createdByUsername: createdByUsername || 'سیستم',
+          isDeleted: 0
+        }).returning();
 
-      const parsedRate = Number(unitRate);
-      let finalRate: DecimalValue = unitRate;
-      if (isNaN(parsedRate) || parsedRate < 0) {
-        const [custom] = await executor.select()
-          .from(pieceworkPersonnelRates)
-          .where(and(
-            eq(pieceworkPersonnelRates.personnelId, Number(personnelId)),
-            eq(pieceworkPersonnelRates.taskId, Number(taskId)),
-            eq(pieceworkPersonnelRates.isDeleted, 0)
-          ));
-
-        if (custom) {
-          finalRate = custom.customRate;
-        } else {
-          const [taskDef] = await executor.select()
-            .from(pieceworkTasks)
-            .where(eq(pieceworkTasks.id, Number(taskId)));
-          finalRate = (taskDef && taskDef.defaultRate != null) ? taskDef.defaultRate : 0;
-        }
+        insertedIds.push(inserted.id);
+        // v9.0.285 (TD-810): یک ردیف ممیزی برای هر کارکرد، در همان تراکنش
+        await auditWorkLogCreated(tx, inserted, { personnel: names.personnel.get(entry.personnelId), task: names.tasks.get(entry.taskId) }, actor);
+        if (entry.scheduleRef && entry.projectId !== null) links.push({ projectId: entry.projectId, ref: entry.scheduleRef, logId: inserted.id });
       }
+      await linkScheduleRows(tx, links, schedules);
+      return insertedIds;
+    });
+  }
 
-      const qty = parseQuantityOrTime(quantity);
-      const totalAmt = fin(qty).multiply(finalRate);
-      // v7.0.134 (TD-232): تاریخ کارکرد میلادی ISO در هر دو ستون؛ تاریخ نامعتبر 422 (پیش‌تر امروز UTC جایگزین می‌شد)
-      const isoDate = requireStorageDate(date, 'تاریخ کارکرد');
-
-      const [inserted] = await executor.insert(pieceworkLogs).values({
-        personnelId: Number(personnelId),
-        taskId: Number(taskId),
-        projectId: projectId ? Number(projectId) : null,
-        date: isoDate,
-        dateIso: isoDate,
-        quantity: qty,
-        unitRate: money(finalRate),
-        totalAmount: money(totalAmt),
-        notes: notes ? String(notes).trim() : '',
-        status: 'pending',
-        createdById: createdById || null,
-        createdByUsername: createdByUsername || 'سیستم',
-        isDeleted: 0
-      }).returning({ id: pieceworkLogs.id });
-
-      insertedIds.push(inserted.id);
-    }
-
-    return insertedIds;
+  /** نرخ سرور برای کارکرد بی نرخ دستی: نرخ اختصاصی پرسنل برای آن کار، وگرنه نرخ پایه عنوان کار */
+  static async serverRate(executor: DbExecutor, personnelId: number, taskId: number): Promise<DecimalValue> {
+    // v9.0.284 (TD-809): تازه‌ترین نرخ فعال، همان که صفحه نرخ‌ها نشان می‌دهد (پیش‌تر نخستین ردیف بی ترتیب)
+    const custom = await activePersonnelRate(executor, personnelId, taskId);
+    if (custom) return custom.customRate;
+    const [taskDef] = await executor.select().from(pieceworkTasks).where(eq(pieceworkTasks.id, taskId));
+    return (taskDef && taskDef.defaultRate != null) ? taskDef.defaultRate : 0;
   }
 
   /**
@@ -322,6 +334,7 @@ export class PieceworkService {
     createdCount: number;
     updatedCount: number;
     totalProcessed: number;
+    errors: TaskImportRowError[];
   }> {
     const { rows, mode = 'upsert', userId, username } = data;
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -350,6 +363,7 @@ export class PieceworkService {
     createdCount: number;
     updatedCount: number;
     totalProcessed: number;
+    errors: TaskImportRowError[];
   }> {
     if (mode === 'replace') {
       await executor.update(pieceworkTasks).set({ isDeleted: 1 }).where(eq(pieceworkTasks.isDeleted, 0));
@@ -362,6 +376,7 @@ export class PieceworkService {
 
     let createdCount = 0;
     let updatedCount = 0;
+    const errors: TaskImportRowError[] = [];
     const addedCategories = new Set<string>();
 
     // TD-243: کد خودکار از توالی اتمیک؛ شماره‌های گرفته‌شده شامل عناوین حذف‌شده هم هست
@@ -374,7 +389,13 @@ export class PieceworkService {
 
       let code = String(row.code || row['کد'] || row['کد کار'] || row['کد کاری'] || '').trim();
       const category = String(row.category || row['دسته'] || row['دسته‌بندی'] || row['گروه'] || 'سایر').trim();
-      const defaultRate = Number(row.defaultRate || row['نرخ'] || row['نرخ پایه'] || row['نرخ پیش‌فرض'] || row['دستمزد'] || 0) || 0;
+      // v9.0.279 (TD-813): نرخ متن یا منفی ردیف را ثبت نمی‌کند و در خطاهای ورود فهرست می‌شود (پیش‌تر «abc» صفر و «-1000» منفی ذخیره می‌شد)
+      const parsedRate = parsePieceworkRate(row.defaultRate || row['نرخ'] || row['نرخ پایه'] || row['نرخ پیش‌فرض'] || row['دستمزد'], 'نرخ پایه');
+      if (!parsedRate.ok) {
+        errors.push({ row: i + 1, title, message: parsedRate.message });
+        continue;
+      }
+      const defaultRate = money(parsedRate.value ?? 0);
       const unit = String(row.unit || row['واحد'] || row['واحد سنجش'] || 'عدد').trim();
       const description = String(row.description || row['توضیحات'] || '').trim();
 
@@ -391,11 +412,11 @@ export class PieceworkService {
       const existing = codeOwner || taskByTitle.get(title.toLowerCase());
 
       if (existing && mode !== 'append') {
-        const oldRate = Number(existing.defaultRate) || 0;
+        const oldRate = money(existing.defaultRate ?? 0);
         await executor.update(pieceworkTasks).set({
           title,
           category,
-          defaultRate: money(defaultRate),
+          defaultRate,
           unit,
           description: description || existing.description,
           isActive: 1,
@@ -403,7 +424,8 @@ export class PieceworkService {
         }).where(eq(pieceworkTasks.id, existing.id));
         updatedCount++;
 
-        if (oldRate !== defaultRate || existing.title !== title) {
+        const rateChanged = !oldRate.equals(defaultRate);
+        if (rateChanged || existing.title !== title) {
           await PieceworkService.recordTaskRateHistory({
             taskId: existing.id,
             taskCode: existing.code,
@@ -411,7 +433,7 @@ export class PieceworkService {
             oldRate,
             newRate: defaultRate,
             changeType: 'excel_import',
-            reason: oldRate !== defaultRate ? `تغییر نرخ پایه از اکسل (${oldRate.toLocaleString()} -> ${defaultRate.toLocaleString()})` : 'به‌روزرسانی عنوان از اکسل',
+            reason: rateChanged ? `تغییر نرخ پایه از اکسل (${oldRate.toLocaleString()} -> ${defaultRate.toLocaleString()})` : 'به‌روزرسانی عنوان از اکسل',
             userId,
             username
           }, executor);
@@ -428,7 +450,7 @@ export class PieceworkService {
             code,
             title,
             category,
-            defaultRate: money(defaultRate),
+            defaultRate,
             unit,
             description,
             isActive: 1,
@@ -469,7 +491,8 @@ export class PieceworkService {
     return {
       createdCount,
       updatedCount,
-      totalProcessed: createdCount + updatedCount
+      totalProcessed: createdCount + updatedCount,
+      errors
     };
   }
 
@@ -659,37 +682,12 @@ export class PieceworkService {
    * Sets or updates custom personnel piecework rate
    */
   static async setPersonnelRate(
-    data: {
-      personnelId: number | string;
-      taskId: number | string;
-      customRate: number | string;
-    },
-    executor: DbExecutor = orm
-  ): Promise<void> {
-    const pId = Number(data.personnelId);
-    const tId = Number(data.taskId);
-    const rate = money(data.customRate);
-
-    const [existing] = await executor.select()
-      .from(pieceworkPersonnelRates)
-      .where(and(
-        eq(pieceworkPersonnelRates.personnelId, pId),
-        eq(pieceworkPersonnelRates.taskId, tId),
-        eq(pieceworkPersonnelRates.isDeleted, 0)
-      ));
-
-    if (existing) {
-      await executor.update(pieceworkPersonnelRates)
-        .set({ customRate: rate, updatedAt: sql`NOW()` })
-        .where(eq(pieceworkPersonnelRates.id, existing.id));
-    } else {
-      await executor.insert(pieceworkPersonnelRates).values({
-        personnelId: pId,
-        taskId: tId,
-        customRate: rate,
-        isDeleted: 0
-      });
-    }
+    data: PersonnelRateInput,
+    actor: RateActor = {},
+    executor?: DbExecutor
+  ): Promise<{ id: number; changed: boolean }> {
+    // v9.0.284 (TD-809): در تراکنش با قفل پرسنل، نرخ نامنفی، پرسنل و کار زنده، تاریخچه و ممیزی با همان tx
+    return inTransaction(executor, tx => savePersonnelRate(tx, data, actor));
   }
 
   /**
@@ -704,16 +702,26 @@ export class PieceworkService {
       notes?: string;
       projectId?: number | string | null;
     },
-    executor?: DbExecutor
+    executor?: DbExecutor,
+    actor: AuditActor = {}
   ): Promise<typeof pieceworkLogs.$inferSelect> {
     return inTransaction(executor, async (tx) => {
       // v8.0.76 (TD-328): قفل ردیف و گارد «در فیش است» در همان تراکنش (کارکرد فیش حذف‌شده آزاد است، مانند صدور فیش)
       const existing = await lockEditableWorkLog(tx, id, 'کارکردی که در فیش حقوقی درج شده قابل تغییر نیست');
 
       const isoDate = data.date !== undefined ? requireStorageDate(data.date, 'تاریخ کارکرد') || existing.date : existing.date;
-      const newQty = data.quantity !== undefined ? parseQuantityOrTime(data.quantity) : existing.quantity;
-      const newRate: FinancialDecimal = data.unitRate !== undefined ? fin(data.unitRate) : existing.unitRate;
+      // v9.0.280 (TD-812): مقدار بزرگ‌تر از صفر، نرخ نامنفی و پروژه زنده، مانند ثبت کارکرد
+      const newQty = data.quantity !== undefined ? workLogQuantity(data.quantity, '') : existing.quantity;
+      const manualRate = data.unitRate !== undefined ? workLogManualRate(data.unitRate, '') : undefined;
+      const newRate: FinancialDecimal = manualRate !== undefined ? fin(manualRate) : existing.unitRate;
       const newTotal = fin(newQty).multiply(newRate);
+      const newProjectId = data.projectId !== undefined ? workLogId(data.projectId, 'شناسه پروژه', '', true) : existing.projectId;
+      const projectMoved = newProjectId !== existing.projectId;
+      // v9.0.282 (TD-736): کارکرد ردیف برنامه که به پروژه دیگر می‌رود پیوند ردیف پروژه پیشین را برمی‌دارد
+      if (projectMoved) await lockProjectsOfLogMove(tx, existing.projectId, newProjectId);
+      if (newProjectId !== null && projectMoved) {
+        await assertWorkLogParentsLive(tx, [{ personnelId: existing.personnelId, taskId: existing.taskId, projectId: newProjectId }]);
+      }
 
       const [updated] = await tx.update(pieceworkLogs).set({
         date: isoDate,
@@ -721,12 +729,15 @@ export class PieceworkService {
         quantity: newQty,
         unitRate: money(newRate),
         totalAmount: money(newTotal),
-        projectId: data.projectId !== undefined ? (data.projectId ? Number(data.projectId) : null) : existing.projectId,
+        projectId: newProjectId,
         notes: data.notes !== undefined ? String(data.notes).trim() : existing.notes
       }).where(and(eq(pieceworkLogs.id, id), eq(pieceworkLogs.isDeleted, 0), workLogFreeOfLivePayroll())).returning();
       if (!updated) {
         throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');
       }
+      if (projectMoved) await unlinkScheduleRow(tx, existing.projectId, id);
+      // v9.0.285 (TD-810): فقط فیلدهای تغییرکرده با قبل و بعد
+      await auditWorkLogUpdated(tx, existing, updated, actor);
       return updated;
     });
   }
@@ -736,7 +747,8 @@ export class PieceworkService {
    */
   static async deleteWorkLog(
     id: number,
-    executor?: DbExecutor
+    executor?: DbExecutor,
+    actor: AuditActor = {}
   ): Promise<typeof pieceworkLogs.$inferSelect> {
     return inTransaction(executor, async (tx) => {
       // v8.0.76 (TD-328): همان قفل و گارد ویرایش
@@ -747,6 +759,9 @@ export class PieceworkService {
       if (!deleted) {
         throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');
       }
+      // v9.0.282 (TD-736): ردیف برنامه کارکرد حذف‌شده دوباره ثبت‌شدنی است
+      await unlinkScheduleRow(tx, existing.projectId, id);
+      await auditWorkLogDeleted(tx, existing, actor);
       return existing;
     });
   }

@@ -15,7 +15,7 @@ export async function runDashboardMovementStatsTests(shouldRun: (id: string, ...
   const id = 'reg_dashboard_movement_stats_td_671';
   if (!shouldRun(id, 'td671', 'b16-07', 'dashboard', 'package16')) return results;
 
-  const name = 'v9.0.279: dashboard counts documents and real outflows of the ledger, without voids or transfers (TD-671)';
+  const name = 'v9.0.284: dashboard counts documents and real outflows of the ledger, without voids or transfers (TD-671)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   try {

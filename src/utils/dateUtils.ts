@@ -152,7 +152,7 @@ function getShiftedJalaliDate(dayOffset: number, fallback: string = ''): string 
 }
 
 /**
- * v9.0.283 (TD-683، B16-19): ساعت و تاریخ امروز در منطقه زمانی نمایش (`display_timezone`)، نه ساعت دستگاه. پیش‌تر بنر
+ * v9.0.293 (TD-683، B16-19): ساعت و تاریخ امروز در منطقه زمانی نمایش (`display_timezone`)، نه ساعت دستگاه. پیش‌تر بنر
  * پیشخوان روی دستگاهی با منطقه زمانی UTC در ۰۰:۳۰ نوروز تهران «جمعه، ۲۹ اسفند» و «۲۱:۰۰» نشان می‌داد.
  */
 export function displayClockNow(now: Date = new Date()): { hour: number; time: string; dateLabel: string } {

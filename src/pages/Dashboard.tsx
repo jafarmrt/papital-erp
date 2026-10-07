@@ -30,7 +30,7 @@ export default function Dashboard() {
     Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('crm.view')
   );
 
-  // v9.0.280 (TD-674): پرونده‌ها و اقدام‌ها فقط برای دارنده crm.view و بی داده‌های صفحه ارتباط با مشتری که پیشخوان نشان نمی‌دهد
+  // v9.0.290 (TD-674): پرونده‌ها و اقدام‌ها فقط برای دارنده crm.view و بی داده‌های صفحه ارتباط با مشتری که پیشخوان نشان نمی‌دهد
   const {
     leads,
     activities,

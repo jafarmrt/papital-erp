@@ -4,7 +4,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { LEDGER_ROW_FILTER } from './stockMovementDate.js';
 
 /**
- * v9.0.279 (TD-671، B16-07): شاخص‌های پیشخوان انبار روی دفتر کاردکس (AGENTS §12). ردیف ابطال‌شده و معکوس آن
+ * v9.0.289 (TD-671، B16-07): شاخص‌های پیشخوان انبار روی دفتر کاردکس (AGENTS §12). ردیف ابطال‌شده و معکوس آن
  * (`LEDGER_ROW_FILTER`) و انتقال بین انبارها (`document_type = 'transfer'`) مصرف نیستند؛ «سند» یک سند است، نه یک ردیف کاردکس؛
  * و «N روز اخیر» امروزِ ساعت توافقی (`businessTodayIsoDate`) و N − ۱ روز پیش از آن است، نه `current_date` نشست UTC.
  * پیش‌تر رسید ۱۰۰ واحدیِ ابطال‌شده با ردیف معکوسش نفر اول «تند گردش» می‌شد و سه سند با پنج ردیف «۵ سند» شمرده می‌شد.

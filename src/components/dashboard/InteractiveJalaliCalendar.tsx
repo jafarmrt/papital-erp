@@ -48,7 +48,7 @@ export function InteractiveJalaliCalendar({ events = [], onSelectDate, onEventCl
     return jalaliMonthLength(currentYear, currentMonth);
   }, [currentYear, currentMonth]);
 
-  // v9.0.282 (TD-681): روز هفته آغاز ماه از تبدیل تقویم، برای هر ماهی؛ پیش‌تر جست‌وجوی ±۴۰۰ روزه دور امروز بود
+  // v9.0.292 (TD-681): روز هفته آغاز ماه از تبدیل تقویم، برای هر ماهی؛ پیش‌تر جست‌وجوی ±۴۰۰ روزه دور امروز بود
   const firstDayOffset = useMemo(() => {
     return jalaliMonthFirstWeekday(currentYear, currentMonth);
   }, [currentYear, currentMonth]);

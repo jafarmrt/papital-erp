@@ -4,7 +4,7 @@ import { PersonalBanner } from '../../components/dashboard/PersonalBanner';
 import { getTodayJalaliDate, setDisplayTimezone } from '../../utils';
 import type { User } from '../../types';
 
-// v9.0.283 (TD-683، B16-19): بنر پیشخوان تاریخ و ساعت منطقه زمانی نمایش را نشان می‌دهد، نه ساعت دستگاه
+// v9.0.293 (TD-683، B16-19): بنر پیشخوان تاریخ و ساعت منطقه زمانی نمایش را نشان می‌دهد، نه ساعت دستگاه
 const deviceTz = process.env.TZ;
 
 beforeEach(() => {

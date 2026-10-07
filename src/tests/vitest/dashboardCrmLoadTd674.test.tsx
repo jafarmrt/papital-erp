@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-// v9.0.280 (TD-674، B16-10): پیشخوان داده ارتباط با مشتری را فقط برای دارنده crm.view و فقط پرونده‌ها و اقدام‌ها را می‌خواند
+// v9.0.290 (TD-674، B16-10): پیشخوان داده ارتباط با مشتری را فقط برای دارنده crm.view و فقط پرونده‌ها و اقدام‌ها را می‌خواند
 const granted = new Set<string>();
 const requested: string[] = [];
 const toastError = vi.fn();

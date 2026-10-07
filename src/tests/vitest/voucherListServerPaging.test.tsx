@@ -74,7 +74,7 @@ describe('voucher list is paged and filtered on the server (TD-565)', () => {
     await screen.findByText('سند آزمون 21');
     expect(paramsOf(listCalls().at(-1)!)).toMatchObject({ page: '2', limit: '20' });
 
-    fireEvent.change(screen.getByPlaceholderText('جستجو در شماره سند، شرح یا عطف...'), { target: { value: '12' } });
+    fireEvent.change(screen.getByPlaceholderText('جست‌وجو در شماره سند، شرح یا عطف...'), { target: { value: '12' } });
     await waitFor(() => expect(paramsOf(listCalls().at(-1)!)).toEqual({ search: '12', page: '1', limit: '20' }));
 
     fireEvent.change(screen.getByLabelText('نوع سند'), { target: { value: 'opening' } });

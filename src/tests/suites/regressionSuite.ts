@@ -10590,6 +10590,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 12 payroll PR a (v9.0.266 on): payslip integrity (TD-804 ...)
   const { runPayrollIntegrityTests } = await import('../regression/payrollIntegrityTests.js');
   results.push(...await runPayrollIntegrityTests(shouldRun));
+  // Package 12 payroll PR b (v9.0.279 on): work logs, piecework rates and their audit (TD-813 ...)
+  const { runPieceworkEntryTests } = await import('../regression/pieceworkEntryTests.js');
+  results.push(...await runPieceworkEntryTests(shouldRun));
+  // Package 3 PR z (v9.0.286 on): payslip deductions account 3205 (TD-554)
+  const { runPayrollDeductionAccountTests } = await import('../regression/payrollDeductionAccountTests.js');
+  results.push(...await runPayrollDeductionAccountTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
@@ -10625,10 +10631,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runWarehouseItemCountTests(shouldRun));
   const { runSettingValuesTests } = await import('../regression/settingValuesTests.js');
   results.push(...await runSettingValuesTests(shouldRun));
-  // Package 16 (v9.0.279, TD-671): the warehouse dashboard counts documents and real outflows of the Kardex ledger
+  // Package 16 (v9.0.289, TD-671): the warehouse dashboard counts documents and real outflows of the Kardex ledger
   const { runDashboardMovementStatsTests } = await import('../regression/dashboardMovementStatsTests.js');
   results.push(...await runDashboardMovementStatsTests(shouldRun));
-  // Package 16 (v9.0.281, TD-675): global search ranks the exact name first and folds Arabic letters and digits
+  // Package 16 (v9.0.291, TD-675): global search ranks the exact name first and folds Arabic letters and digits
   const { runGlobalSearchRankTests } = await import('../regression/globalSearchRankTests.js');
   results.push(...await runGlobalSearchRankTests(shouldRun));
   // Package 6 (v9.0.110, TD-482): a warehouse code «default» is refused and reversals name a real warehouse

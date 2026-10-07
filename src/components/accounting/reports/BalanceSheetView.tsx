@@ -53,7 +53,7 @@ export function BalanceSheetView({
         <div className="flex items-center gap-2">
           <FileSpreadsheet className="w-5 h-5 text-blue-600" />
           <div>
-            <h4 className="font-bold text-slate-900 dark:text-white text-sm">ترازنامه اساسی (Balance Sheet)</h4>
+            <h4 className="font-bold text-slate-900 dark:text-white text-sm">ترازنامه</h4>
             <p className="text-xs text-slate-500">وضعیت دارایی‌ها، بدهی‌ها و حقوق صاحبان سهام شرکت</p>
             <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 mt-0.5">{asOfCaption(asOfDate)}</p>
           </div>
@@ -74,7 +74,7 @@ export function BalanceSheetView({
         {/* Right Column: Assets */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
-            <h5 className="font-bold text-slate-900 dark:text-white text-sm">دارایی‌ها (Assets)</h5>
+            <h5 className="font-bold text-slate-900 dark:text-white text-sm">دارایی‌ها</h5>
             <span className="font-mono font-bold text-emerald-600">{formatPersianPrice(balanceSheet?.totalAssets || 0)}</span>
           </div>
 

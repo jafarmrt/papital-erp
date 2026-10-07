@@ -5,7 +5,7 @@ import { customers, items } from '../../db/schema.js';
 
 /**
  * Package 16 (dashboard and shell), TD-675 / B16-11: global search puts the exact name first, then names that start
- * with the text, then the rest, and folds Arabic «ي» / «ك» and Persian digits on both sides. On v9.0.280 five parties
+ * with the text, then the rest, and folds Arabic «ي» / «ك» and Persian digits on both sides. On v9.0.290 five parties
  * «<name> …» hid the party «<name>» itself, an Arabic «كيان» found no «کیان», and a Persian «یاقوت» found no item
  * stored with an Arabic «ياقوت».
  */
@@ -14,7 +14,7 @@ export async function runGlobalSearchRankTests(shouldRun: (id: string, ...extra:
   const id = 'reg_global_search_rank_fold_td_675';
   if (!shouldRun(id, 'td675', 'b16-11', 'search', 'package16')) return results;
 
-  const name = 'v9.0.281: global search ranks the exact name first and folds Arabic letters and Persian digits (TD-675)';
+  const name = 'v9.0.286: global search ranks the exact name first and folds Arabic letters and Persian digits (TD-675)';
   const tStart = Date.now();
   const customerIds: number[] = [];
   const itemIds: number[] = [];

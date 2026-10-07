@@ -45,7 +45,7 @@ export const FinancialAttachmentUploader: React.FC<Props> = ({
         <div>
           <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">{title}</h4>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            {description || helperText || 'تصاویر به صورت خودکار بهینه‌سازی و فشرده می‌شوند (حداکثر ۳۰۰KB). امکان درج با Ctrl+V نیز فراهم است.'}
+            {description || helperText || 'تصاویر خودکار بهینه و فشرده می‌شوند (حداکثر ۳۰۰ کیلوبایت). با Ctrl+V هم می‌توانید تصویر را بچسبانید.'}
           </p>
         </div>
       </div>

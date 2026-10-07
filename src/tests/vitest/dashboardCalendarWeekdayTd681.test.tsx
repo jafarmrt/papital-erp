@@ -5,7 +5,7 @@ import { getTodayJalaliDate } from '../../utils';
 
 afterEach(cleanup);
 
-// v9.0.282 (TD-681، B16-17): روز هفته آغاز ماه برای ماه‌های دور هم درست است (۰ = شنبه)
+// v9.0.292 (TD-681، B16-17): روز هفته آغاز ماه برای ماه‌های دور هم درست است (۰ = شنبه)
 const EXPECTED: Array<[number, number, number]> = [[1406, 9, 2], [1406, 10, 4], [1406, 11, 6], [1406, 12, 1], [1407, 1, 2]];
 
 function leadingBlankCells(): number {

@@ -19,20 +19,50 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.283 — v9.0.283 — Dashboard Banner Uses the Display Time Zone
+### v9.0.293 — v9.0.293 — Dashboard Banner Uses the Display Time Zone
 - **Dashboard banner clock (TD-683):** the banner's date, clock and greeting follow the display time zone setting, so a device set to another zone no longer shows yesterday's date around midnight in Tehran.
 
-### v9.0.282 — v9.0.282 — Dashboard Calendar Weekdays for Far Months
+### v9.0.292 — v9.0.292 — Dashboard Calendar Weekdays for Far Months
 - **Dashboard calendar (TD-681):** the weekday of a month's first day comes from the calendar conversion, so months more than about 13 months away no longer start on Saturday.
 
-### v9.0.281 — v9.0.281 — Global Search Finds the Exact Name and Arabic Letters
+### v9.0.291 — v9.0.291 — Global Search Finds the Exact Name and Arabic Letters
 - **Global search (TD-675):** results come exact match first, then names that start with the text, then the rest; Arabic «ي» / «ك» and Persian digits match their Persian and Latin forms in both the search text and the stored names.
 
-### v9.0.280 — v9.0.280 — Dashboard Reads Sales Data Only With Its Permission
+### v9.0.290 — v9.0.290 — Dashboard Reads Sales Data Only With Its Permission
 - **Dashboard sales data (TD-674):** the dashboard reads sales files and recent activities only for holders of `crm.view`, and no longer loads parties, personnel, users or sales statistics it never shows.
 
-### v9.0.279 — v9.0.279 — Warehouse Dashboard Counts the Kardex Ledger
+### v9.0.289 — v9.0.289 — Warehouse Dashboard Counts the Kardex Ledger
 - **Dashboard movement figures (TD-671):** recent documents count documents, not Kardex rows; a voided document and its reversal and warehouse transfers no longer count as consumption; the day windows follow the business time zone.
+
+### v9.0.288 — Report Digits, Currency Names and Today
+- **Accounting Report Digits (P3):** the journal book and the ratios show Persian digits, currencies are named, and the party statement and account explorer take today from the business time zone (TD-580).
+
+### v9.0.287 — Persian Wording in the Accounting UI
+- **Accounting UI Wording (P3):** the accounting screens have no English words or loanwords («دوبل», «آرتیکل», «داشبورد») and the voucher form button says it saves a draft (TD-579).
+
+### v9.0.286 — Payslip Deductions Get Their Own Account
+- **Payslip Deductions Account (P2):** payslip deductions credit the new standard account 3205 «employee deductions payable» instead of 3202 «customer prepayments»; migration 0077 adds it to existing charts, past vouchers stay and the health check lists what is left on 3202 (TD-554).
+
+### v9.0.285 — Work Log and Payslip Writes Are Audited
+- **Work Log and Payslip Writes Are Audited (TD-810):** editing a work log from 400,000 to 20,000,000 rials or deleting it left no trace, a batch wrote one «ثبت N ردیف» row without ids, and payslip rows were written after commit with no details, no IP and the raw status code; every log create, edit and delete and every payslip issue, status change and delete now writes its own audit row in its transaction with the request IP, before / after (changed fields on edit) and Persian status labels.
+
+### v9.0.284 — Personnel Custom Rates Are Unique, Checked and Audited
+- **Personnel Custom Rates Are Unique, Checked and Audited (TD-809):** a personnel custom rate was saved without a transaction, so concurrent saves made two active rows and the rates page and a work log read different rates; it is now saved under the personnel row lock with one active row per personnel and task (migration 0076), a negative rate or a missing personnel or task is refused, and every change writes a rate history row and an audit row with before and after.
+
+### v9.0.283 — Workshop Schedule Logs Are Dated by the Work Day
+- **Workshop Schedule Logs Are Dated by the Work Day (TD-747):** «ثبت کارمزد» in the project workshop schedule dated a work log by the row or project start date, so today's work landed in another payroll month; the tab now has a Jalali work-date picker defaulting to today in the display time zone, and both the row and the stage batch log use it.
+
+### v9.0.282 — A Workshop Schedule Row Is Logged Once
+- **A Workshop Schedule Row Is Logged Once (TD-736):** the «logged» flag of a workshop schedule row lived only in the browser, so reopening the tab logged and paid the same work twice; the server now writes the log id into the schedule row under the project row lock, refuses a second or concurrent log of the row with 409, and frees the row when its log is deleted or moved.
+
+### v9.0.281 — Workshop Schedule Logs Take the Server Rate
+- **Workshop Schedule Logs Take the Server Rate (TD-735):** the project workshop schedule read the task rate from a key the server never sends and posted work logs at rate 0; it now sends no rate, and the server gives a log posted from a schedule row the personnel custom rate, else the task base rate.
+
+### v9.0.280 — Work Logs Are Checked Before They Are Saved
+- **Work Logs Are Checked Before They Are Saved (TD-812):** a work log needs positive ids, a quantity above zero or hh:mm, a non-negative manual rate and live personnel, task and project; a batch is one transaction, so a bad row saves nothing, and editing a log follows the same rules.
+
+### v9.0.279 — Piecework Base Rate Is Non-Negative
+- **Piecework Base Rate Is Non-Negative (TD-813):** a task's base rate is a non-negative number in the task form, the API and the Excel import; a text or negative rate is refused and an Excel row with one is listed in the import errors instead of being saved as 0 or below zero.
 
 ### v9.0.278 — v9.0.278 — Approved Persian Words in the Shell and Settings
 - **Shell wording (TD-686):** the sidebar, top bar, dashboard, settings, setup and connection error messages use the owner's Persian glossary instead of transliterations and English words; only «کاردکس», «ترنسفر» and «وبهوک» stay transliterated.
