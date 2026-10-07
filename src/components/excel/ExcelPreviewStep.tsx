@@ -43,7 +43,7 @@ export const ExcelPreviewStep: React.FC<ExcelPreviewStepProps> = ({
         
         <div className={`p-3 rounded-xl border text-center ${mismatchCount > 0 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
           <span className={`text-xs block font-bold mb-0.5 ${mismatchCount > 0 ? 'text-amber-800' : 'text-slate-500'}`}>
-            مغایرت کدینگ / پیشوند
+            مغایرت کدگذاری / پیشوند
           </span>
           <span className={`text-lg font-extrabold ${mismatchCount > 0 ? 'text-amber-700' : 'text-slate-700'}`}>
             {formatPersianNumber(mismatchCount)}
@@ -104,7 +104,7 @@ export const ExcelPreviewStep: React.FC<ExcelPreviewStepProps> = ({
               <th className="p-2.5 font-bold min-w-[140px]">کد کالا (قابل ویرایش)</th>
               <th className="p-2.5 font-bold min-w-[120px]">دسته‌بندی</th>
               <th className="p-2.5 font-bold w-24 text-center">پیشوند متناظر</th>
-              <th className="p-2.5 font-bold min-w-[240px]">بررسی و وضعیت کدینگ</th>
+              <th className="p-2.5 font-bold min-w-[240px]">بررسی و وضعیت کدگذاری</th>
               <th className="p-2.5 font-bold w-20 text-center">عملیات</th>
             </tr>
           </thead>
@@ -185,7 +185,7 @@ export const ExcelPreviewStep: React.FC<ExcelPreviewStepProps> = ({
                       {r.issues.length === 0 ? (
                         <span className="inline-flex items-center gap-1 text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded-md text-2xs border border-emerald-200">
                           <CheckCircle2 size={12} />
-                          کدینگ صحیح
+                          کدگذاری درست
                         </span>
                       ) : (
                         <div className="space-y-1">

@@ -72,7 +72,7 @@ export default function UnifiedExcelModal({
               <h3 className="font-bold text-base">{title}</h3>
               <p className="text-xs text-slate-300">
                 {step === 'upload' && 'مدیریت ورود و خروجی جامع کالاها، موجودی انبارها و قیمت‌گذاری‌ها'}
-                {step === 'preview' && 'بررسی صحت سیستم کدینگ، پیشوند دسته‌بندی‌ها و عدم وجود نام‌های تکراری'}
+                {step === 'preview' && 'بررسی کدگذاری، پیشوند دسته‌بندی‌ها و نبود نام‌های تکراری'}
                 {step === 'result' && 'نتیجه نهایی پردازش و ثبت داده‌ها در سیستم'}
               </p>
             </div>

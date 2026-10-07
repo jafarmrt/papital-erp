@@ -180,11 +180,11 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
             <div className="flex items-start gap-1.5 text-center select-none">
               <span className="flex-1 w-16 text-[9px] leading-tight text-slate-500 font-medium" title="سال طراحی جلالی — از تاریخ امروز پر می‌شود">سال طراحی</span>
               <span className="w-2"></span>
-              <span className="flex-1 w-12 text-[9px] leading-tight text-indigo-600 font-bold" title="حرف اختصاری دسته‌بندی — با انتخاب دسته خودکار پر می‌شود">حرف کتگوری</span>
+              <span className="flex-1 w-12 text-[9px] leading-tight text-indigo-600 font-bold" title="حرف اختصاری دسته‌بندی — با انتخاب دسته خودکار پر می‌شود">حرف دسته‌بندی</span>
               <span className="w-2"></span>
               <span className="flex-1 w-16 text-[9px] leading-tight text-slate-500 font-medium" title="کد ترنسفر مرتبط با طرح (سه‌رقمی)">کد ترنسفر</span>
               <span className="w-2"></span>
-              <span className="flex-1 w-14 text-[9px] leading-tight text-emerald-700 font-bold" title="شماره سری تکرار این طرح — با دکمه «رزرو شماره بعدی» به‌صورت اتمیک اختصاص می‌یابد">شماره سری</span>
+              <span className="flex-1 w-14 text-[9px] leading-tight text-emerald-700 font-bold" title="شماره سری تکرار این طرح — با دکمه «رزرو شماره بعدی» بی‌تداخل اختصاص می‌یابد">شماره سری</span>
             </div>
             <button
               type="button"
@@ -196,10 +196,10 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
                   : 'bg-white hover:bg-blue-50 text-blue-700 border border-blue-300 shadow-2xs'
               }`}
               dir="rtl"
-              title="شماره سری بعدیِ آزاد را به‌صورت اتمیک از سرور دریافت و رزرو می‌کند (بدون تداخل با سایر کاربران)"
+              title="شماره سری بعدیِ آزاد را از سرور می‌گیرد و رزرو می‌کند، بی‌تداخل با کاربران دیگر"
             >
               <RefreshCw size={12} />
-              {productSerialReserved ? `سری «${productDesignVar}» رزرو شد` : 'رزرو شماره سری بعدی (اتمیک)'}
+              {productSerialReserved ? `سری «${productDesignVar}» رزرو شد` : 'رزرو بی‌تداخل شماره سری بعدی'}
             </button>
           </div>
         ) : (
@@ -222,9 +222,9 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
               />
             </div>
             <div className="flex items-start select-none">
-              <span className="w-24 text-[9px] leading-tight text-indigo-600 font-bold text-center" title="پیشوند اختصاصی دسته‌بندی ماده اولیه — با انتخاب دسته خودکار پر می‌شود">پیشوند کتگوری</span>
+              <span className="w-24 text-[9px] leading-tight text-indigo-600 font-bold text-center" title="پیشوند اختصاصی دسته‌بندی ماده اولیه — با انتخاب دسته خودکار پر می‌شود">پیشوند دسته‌بندی</span>
               <span className="w-2"></span>
-              <span className="w-20 text-[9px] leading-tight text-emerald-700 font-bold text-center" title="شماره سری ماده اولیه — با دکمه «رزرو شماره بعدی» به‌صورت اتمیک اختصاص می‌یابد">شماره سری</span>
+              <span className="w-20 text-[9px] leading-tight text-emerald-700 font-bold text-center" title="شماره سری ماده اولیه — با دکمه «رزرو شماره بعدی» بی‌تداخل اختصاص می‌یابد">شماره سری</span>
             </div>
             <button
               type="button"
@@ -236,10 +236,10 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
                   : 'bg-white hover:bg-blue-50 text-blue-700 border border-blue-300 shadow-2xs'
               }`}
               dir="rtl"
-              title="شماره سری بعدیِ آزاد را به‌صورت اتمیک از سرور دریافت و رزرو می‌کند (بدون تداخل با سایر کاربران)"
+              title="شماره سری بعدیِ آزاد را از سرور می‌گیرد و رزرو می‌کند، بی‌تداخل با کاربران دیگر"
             >
               <RefreshCw size={12} />
-              {rawSerialReserved ? `سری «${rawNum}» رزرو شد` : 'رزرو شماره سری بعدی (اتمیک)'}
+              {rawSerialReserved ? `سری «${rawNum}» رزرو شد` : 'رزرو بی‌تداخل شماره سری بعدی'}
             </button>
           </div>
         )}
@@ -264,7 +264,7 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
           />
         </div>
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">حد آستانه سفارش (آلارم)</label>
+          <label className="block text-xs font-bold text-slate-700 mb-1">حد آستانه سفارش (هشدار)</label>
           <input
             type="number"
             min="0"

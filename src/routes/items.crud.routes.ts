@@ -380,7 +380,7 @@ router.post('/items/next-code', authorizePermission('products.create', 'products
     req,
     action: 'CREATE',
     entity: 'کد کالا',
-    description: `تخصیص اتمیک شماره سری بعدی کد «${result.code}» (نوع: ${result.type})`,
+    description: `تخصیص بی‌تداخل شماره سری بعدی کد «${result.code}» (نوع: ${result.type})`,
     details: { reserved: result }
   });
   res.json(result);

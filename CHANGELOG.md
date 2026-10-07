@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.183 — Item and Pricing UI Wording
+- **Item and Pricing UI Wording:** item, Excel import and pricing text and item server messages use the decided Persian words (no «WAC», «Template», «استراتژی», «اتمیک», «آرشیو» …; «ترنسفر» stays); the Excel reorder header is «حد نقطه سفارش (هشدار کسری)» and the old header is still read (TD-664, `itemsWording.test.ts`).
+
 ### v9.0.182 — Item Page Actions by Permission
 - **Item Page Actions by Permission:** the items and pricing pages show buttons and price fields by the permission of the server route (`products.create` / `edit` / `delete`, `woocommerce.manage`, `products.edit_price`) instead of the role code «viewer»; the average cost is shown in rials and the margin badge and markup buttons use rial prices only (TD-840, `itemActionsByPermission.test.tsx`).
 

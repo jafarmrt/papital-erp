@@ -667,8 +667,8 @@ export class ItemCatalogService {
       const wacChanged = !requestedWac.subtract(prevWac).abs().lessThan(EXCEL_WAC_TOLERANCE);
       if (stockBefore.total > 0 && wacChanged) {
         throw new ValidationError(
-          `بهای میانگین (WAC) کالای «${prevItem.name}» که ${stockBefore.total} موجودی دارد با ویرایش کالا تغییر نمی‌کند ` +
-          `(فعلی ${prevWac.toString()}، درخواستی ${requestedWac.toString()}). WAC فقط با ورود کالا عوض می‌شود.`
+          `میانگین موزون بهای کالای «${prevItem.name}» که ${stockBefore.total} موجودی دارد با ویرایش کالا تغییر نمی‌کند ` +
+          `(فعلی ${prevWac.toString()}، درخواستی ${requestedWac.toString()}). میانگین موزون بها فقط با ورود کالا عوض می‌شود.`
         );
       }
       const effectiveWac = stockBefore.total > 0 ? prevWac : requestedWac;

@@ -16,7 +16,7 @@ router.use(authenticateToken);
 
 export const unifiedImportSchema = z.object({
   body: z.object({
-    rows: z.array(z.record(z.string(), z.unknown())).min(1, 'لیست ردیف‌های فایل اکسل خالی است'),
+    rows: z.array(z.record(z.string(), z.unknown())).min(1, 'فهرست ردیف‌های فایل اکسل خالی است'),
     typeFilter: z.string().optional()
   })
 });

@@ -5,6 +5,7 @@ import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js'
 import { DocumentService } from '../document.service.js';
 import { money, Money } from '../../lib/money.js';
 import { WAC_COLUMNS, extractRowPriceColumns, unknownPriceColumnMessage } from '../../lib/items/excelPriceColumns.js';
+import { REORDER_POINT_COLUMNS } from '../../lib/items/itemExcelColumns.js';
 import { parsePriceAmount, priceCurrencyOf } from '../../lib/items/priceInput.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 export { codeFormatError } from '../../lib/items/itemCodeFormat.js';
@@ -74,7 +75,7 @@ export function readRowFields(row: Row): RowFields {
     itemType: typeCell(row),
     category: textCell(row, ['دسته‌بندی', 'دسته', 'category']),
     unit: textCell(row, ['واحد', 'واحد اندازه‌گیری', 'unit']),
-    reorderPoint: numberCell(row, ['حد نقطه سفارش (آلارم کسری)', 'حد نقطه سفارش', 'نقطه سفارش', 'reorder_point']),
+    reorderPoint: numberCell(row, [...REORDER_POINT_COLUMNS]),
     weightedAverageCost: numberCell(row, [...WAC_COLUMNS]) ?? 0,
     image: textCell(row, ['تصویر', 'آدرس عکس', 'image']),
     color: textCell(row, ['رنگ', 'color']),

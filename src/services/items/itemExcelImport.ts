@@ -170,8 +170,8 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
   // خروجی بی‌خطا برگردد.
   if (fileWac && existingSnapshot.total > 0 && !fileWac.subtract(currentWac).abs().lessThan(EXCEL_WAC_TOLERANCE)) {
     push(
-      `بهای میانگین (WAC) کالای «${matchedItem.name}» (${matchedItem.code}) که ${existingSnapshot.total} موجودی دارد از اکسل تغییر نمی‌کند ` +
-      `(فعلی ${currentWac.toString()}، فایل ${fileWac.toString()}). WAC فقط با ورود کالا عوض می‌شود؛ این ردیف ثبت نشد. ` +
+      `میانگین موزون بهای کالای «${matchedItem.name}» (${matchedItem.code}) که ${existingSnapshot.total} موجودی دارد از اکسل تغییر نمی‌کند ` +
+      `(فعلی ${currentWac.toString()}، فایل ${fileWac.toString()}). میانگین موزون بها فقط با ورود کالا عوض می‌شود؛ این ردیف ثبت نشد. ` +
       'ستون «میانگین موزون بها» را خالی بگذارید یا همان مقدار فعلی را بنویسید.',
     );
     return null;
