@@ -21,7 +21,7 @@ import { computeInvoiceTotals } from '../lib/invoiceTotals';
 import { currencyChangeError, lineDiscountError, pricesForCurrency } from '../lib/invoices/invoiceLine';
 import { printLineAmounts } from '../lib/invoices/invoicePrintTotals';
 import { amountDecimalsOf } from '../lib/invoices/invoiceListDocuments';
-import { customerLocationLabel, invoiceFormFromDocument, isSalesFormDocType, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
+import { addInvoiceLine, customerLocationLabel, invoiceFormFromDocument, invoiceLineLocations, isSalesFormDocType, lineLocationOf, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
 import type { InvoiceListDocument } from '../lib/invoices/invoiceListDocuments';
 import { Sparkles } from 'lucide-react';
 import { ExchangeRateField, exchangeRateError } from '../components/documents/ExchangeRateField';
@@ -49,6 +49,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   // انبار پیش‌فرض = اولین انبار برگشتی (مثل قبل) تا وقتی کاربر، پیش‌نویس یا سند ویرایشی انبار دیگری انتخاب نکرده باشد
   const [locationOverride, setLocation] = useState<string | null>(null);
   const location = locationOverride ?? warehouses[0]?.code ?? '';
+  // v9.0.249 (TD-790): پیش‌فاکتور چندانباره در ویرایش؛ هر ردیف انبار خودش را نگه می‌دارد
+  const [multiWarehouseEdit, setMultiWarehouseEdit] = useState(false);
 
   // شماره سند = شماره بعدی سرور تا وقتی کاربر یا پیش‌فاکتور ویرایشی شماره دیگری نگذاشته باشد (null = شماره سرور)
   const [refOverride, setRefNumber] = useState<string | null>(null);
@@ -157,8 +159,12 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       setExchangeRate(form.exchangeRate);
       setApplyVat(form.vatPercent > 0);
       if (form.vatPercent > 0) setVatRate(form.vatPercent);
-      if (form.location) setLocation(form.location);
-      if (form.docItems) setDocItems(form.docItems);
+      if (form.docItems) {
+        const located = invoiceLineLocations(form.docItems, warehouses.map(w => w.code));
+        if (located.header) setLocation(located.header);
+        setMultiWarehouseEdit(located.multiWarehouse);
+        setDocItems(located.lines);
+      }
       toast.success(`پیش‌فاکتور شماره ${p.ref_number} جهت ویرایش بارگذاری شد.`);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
@@ -183,6 +189,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     setDocType('invoice');
     setStatus(initialStatus);
     setLocation(null);
+    setMultiWarehouseEdit(false);
     setRefNumber(null);
     setDate(getTodayJalaliDate());
     buyer.setBuyer({ buyerName: '', buyerCity: '', buyerPhone: '', buyerAddress: '' });
@@ -257,7 +264,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
 
     if (status === 'final' && docType === 'invoice') {
       const { loc, reserved, sellable } = getSellableStock(it, location);
-      const existingInList = docItems.find(p => p.item.id === it.id);
+      const existingInList = docItems.find(p => p.item.id === it.id && lineLocationOf(p, location) === location);
       const currentListQty = existingInList ? existingInList.quantity : 0;
       const totalRequestedQty = currentListQty + Number(quantity);
 
@@ -268,13 +275,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       }
     }
 
-    setDocItems(prev => {
-      const existing = prev.find(p => p.item.id === it.id);
-      if (existing) {
-        return prev.map(p => p.item.id === it.id ? { ...p, quantity: p.quantity + Number(quantity) } : p);
-      }
-      return [...prev, { item: it, quantity: Number(quantity), unitPrice: Number(unitPrice || 0), discount: Number(discount || 0) }];
-    });
+    const newLine = { item: it, quantity: Number(quantity), unitPrice: Number(unitPrice || 0), discount: Number(discount || 0) };
+    setDocItems(prev => addInvoiceLine(prev, newLine, location));
     setSelectedItem('');
     setSelectedItemObj(null);
     setQuantity('');
@@ -292,8 +294,15 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     setCurrency(next);
   };
 
-  const handleRemove = (id: number) => {
-    setDocItems(prev => prev.filter(p => p.item.id !== id));
+  const handleRemove = (index: number) => {
+    setDocItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // v9.0.249 (TD-790): تغییر انبار بالای فرم همه ردیف‌ها را به همان انبار می‌برد
+  const handleLocationChange = (next: string) => {
+    setLocation(next);
+    setMultiWarehouseEdit(false);
+    setDocItems(prev => prev.map(d => ({ ...d, location: undefined })));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -330,7 +339,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
 
       for (const d of docItems) {
         const it = d.item;
-        const { loc, reserved, sellable } = getSellableStock(it, location);
+        const { loc, reserved, sellable } = getSellableStock(it, lineLocationOf(d, location));
 
         if (sellable < d.quantity) {
           toast.error(`موجودی قابل فروش کالا «${it.name}» (${it.code}) در «${whName}» کافی نیست! موجودی انبار: ${loc}، رزرو سایر مصارف: ${reserved}، قابل فروش: ${sellable} ${it.unit}، درخواستی: ${d.quantity} ${it.unit}`);
@@ -361,7 +370,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       crmLeadId: !editingDocId && crmLeadId ? Number(crmLeadId) : undefined,
       // v8.0.104 (TD-381): فقط درصد؛ مبلغ مالیات را سرور با همان قاعده جمع‌های فرم حساب می‌کند
       vatPercent: applyVat ? vatRate : 0,
-      items: docItems.map(d => ({ itemId: d.item.id, quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount }))
+      items: docItems.map(d => ({ itemId: d.item.id, quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount, location: lineLocationOf(d, location) }))
     };
 
     // ثبت/ویرایش، شروع گردش‌کار پیش‌فاکتور تازه، بارگذاری سند برای چاپ و ابطال کش صفحات دیگر در useInvoiceSave
@@ -462,7 +471,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
             <div>
               <label className="block text-xs font-medium mb-1 text-slate-500">محل خروج قلم کالا (انبار مبدا)</label>
               {warehouses.length > 0 ? (
-                <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white font-bold text-slate-700" value={location} onChange={e => setLocation(e.target.value)}>
+                <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white font-bold text-slate-700" value={location} onChange={e => handleLocationChange(e.target.value)}>
                   {warehouses.map(w => (
                     <option key={w.code} value={w.code}>📦 {w.name}</option>
                   ))}
@@ -471,6 +480,11 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded font-medium">
                   ⚠️ هیچ انباری تعریف نشده است (تنظیمات &gt; انبارها)
                 </div>
+              )}
+              {multiWarehouseEdit && (
+                <p className="mt-1 text-[11px] text-amber-800">
+                  ردیف‌های این پیش‌فاکتور از چند انبار است و هر ردیف از انبار خودش ذخیره می‌شود. تغییر این انبار همه ردیف‌ها را به آن می‌برد.
+                </p>
               )}
             </div>
             <div>
@@ -642,7 +656,10 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                     return (
                     <tr key={i} className="hover:bg-slate-50">
                       <td className="p-3 font-mono text-slate-500" dir="ltr">{formatPersianCode(d.item.code)}</td>
-                      <td className="p-3 font-bold text-slate-800">{d.item.name}</td>
+                      <td className="p-3 font-bold text-slate-800">
+                        {d.item.name}
+                        {d.location && <span className="block text-[11px] font-normal text-slate-500">انبار: {warehouses.find(w => w.code === d.location)?.name || d.location}</span>}
+                      </td>
                       <td className="p-3 text-center">
                         <span className="font-bold">{formatPersianNumber(d.quantity)}</span> <span className="text-slate-500 text-xs">{d.item.unit}</span>
                       </td>
@@ -651,7 +668,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                       <td className="p-3 text-center text-rose-600">{d.discount > 0 ? formatPersianPrice(d.discount, undefined, amountDecimals) : '-'}</td>
                       <td className="p-3 text-center font-bold text-indigo-700">{formatPersianPrice(rowFinal, undefined, amountDecimals)}</td>
                       <td className="p-3 text-center">
-                        <button type="button" onClick={() => handleRemove(d.item.id)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded transition-colors inline-block">
+                        <button type="button" onClick={() => handleRemove(i)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded transition-colors inline-block">
                           <Trash2 size={16} />
                         </button>
                       </td>
