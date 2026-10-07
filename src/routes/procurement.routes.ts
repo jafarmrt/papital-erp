@@ -150,7 +150,8 @@ router.post('/requisitions/:id/convert-to-orders', authorizePermission('procurem
   }, {
     id: req.user!.id,
     username: req.user!.username,
-    role: req.user!.role
+    role: req.user!.role,
+    permissions: req.user!.permissions || []
   });
 
   res.json({

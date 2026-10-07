@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.267 — Requisition Orders Need Approval
+- **Fix (TD-689, B10-02, decision t1):** a purchase requisition is ordered only from its approved step; for an unapproved one, a holder of the approval right first runs the approval transition in their own name, others get 409 REQUISITION_NOT_APPROVED; the workflow step moves only through executeTransition (the direct step writes of the conversion, A02-15, are gone).
+
 ### v9.0.266 — Purchase Requisition Contract
 - **Fix (TD-688, B10-01):** the procurement desk, project shortage and reorder alert forms record purchase requisitions again; one contract for create and edit (requested quantity above zero, catalog item or item name, priority urgent/high/normal/low), and a body without a quantity is refused instead of storing zero.
 
