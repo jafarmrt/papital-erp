@@ -22,6 +22,9 @@ export async function runDocumentDataTests(shouldRun: ShouldRun): Promise<TestCa
     ['reg_document_check_constraints_td_786',
       'v9.0.289: the database refuses an unknown document type or status and a negative line quantity, unit price or discount (a counted zero stays possible), the service refuses an unknown type or status, a legacy row leaves its constraint NOT VALID and is listed by the health check, and documents.project_id has one index (TD-786)',
       ['td786', 'documents', 'constraint', 'package8'], documentCheckConstraintsCase],
+    ['reg_document_list_paged_td_787',
+      'v9.0.290: GET /documents always answers one page (50 documents by default, also for limit=0) with its total, and only export=true returns the whole list (TD-787)',
+      ['td787', 'documents', 'pagination', 'performance', 'package8'], documentListPagedCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -398,4 +401,39 @@ async function documentCheckConstraintsCase(h: Harness, wrong: string[]): Promis
     if (err !== rollback) wrong.push(`the legacy rerun failed: ${String(err).slice(0, 200)}`);
   }
   return `constraints validated, one project_id index; type, status and negative line values refused (23514); a counted zero stored; the service refuses quote and pending; legacy rerun lists ${legacyReport}`;
+}
+
+/** B08-18: a list request without page or limit returned every document with its lines and settlements (20,050 documents: 27.9 MB) */
+async function documentListPagedCase(h: Harness, wrong: string[]): Promise<string> {
+  const COUNT = 55;
+  const prefix = `P8E-787-${h.tag}-`;
+  await h.q(
+    `INSERT INTO documents (type, ref_number, date, status, notes)
+     SELECT 'waste', $1 || lpad(n::text, 3, '0'), now(), 'final', 'TD-787 list paging' FROM generate_series(1, $2::int) AS n`,
+    [prefix, COUNT],
+  );
+  try {
+    const base = `/api/documents?type=waste&search=${encodeURIComponent(prefix)}`;
+    const page = async (label: string, query: string, expected: { rows: number; page: number; totalPages: number }) => {
+      const res = await h.get(`${base}${query}`);
+      const body = res.body as { data?: unknown[]; total?: number; page?: number; limit?: number; totalPages?: number } | unknown[];
+      if (res.status !== 200) { wrong.push(`${label}: status ${res.status}`); return; }
+      if (Array.isArray(body)) { wrong.push(`${label}: returned the whole list as an array of ${body.length} documents, expected one page`); return; }
+      const rows = Array.isArray(body.data) ? body.data.length : -1;
+      if (rows !== expected.rows || body.total !== COUNT || body.page !== expected.page || body.limit !== 50 || body.totalPages !== expected.totalPages) {
+        wrong.push(`${label}: rows ${rows}, total ${body.total}, page ${body.page}, limit ${body.limit}, pages ${body.totalPages}; expected rows ${expected.rows}, total ${COUNT}, page ${expected.page}, limit 50, pages ${expected.totalPages}`);
+      }
+    };
+    await page('no page or limit', '', { rows: 50, page: 1, totalPages: 2 });
+    await page('limit=0', '&limit=0', { rows: 50, page: 1, totalPages: 2 });
+    await page('page=2', '&page=2', { rows: COUNT - 50, page: 2, totalPages: 2 });
+
+    const exported = await h.get(`${base}&export=true`);
+    if (exported.status !== 200 || !Array.isArray(exported.body) || exported.body.length !== COUNT) {
+      wrong.push(`export=true returned ${exported.status} with ${Array.isArray(exported.body) ? `${exported.body.length} documents` : 'no array'}, expected all ${COUNT}`);
+    }
+  } finally {
+    await h.q(`DELETE FROM documents WHERE ref_number LIKE $1`, [`${prefix}%`]).catch(() => undefined);
+  }
+  return `${COUNT} documents: one page of 50 without page or limit and with limit=0, 5 on page 2, all ${COUNT} only with export=true`;
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
@@ -7,6 +7,7 @@ import { listFromResponse } from '../../lib/invoices/invoiceForm';
 import { normalizeAuditItems, type AuditItemRow } from '../../lib/inventoryAudit/auditSheet';
 import type { InventoryIntegrityReport } from '../../types';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { DOCUMENT_LIST_PAGE_SIZE, documentListPage, typedDocumentListUrl } from '../../lib/documents/documentListPage';
 
 /**
  * صفحه انبارگردانی: خواندنی‌های صفحه با React Query (FE-005) به‌جای fetchJson/useState دستی.
@@ -23,8 +24,8 @@ const NEXT_REF_KEY = QUERY_KEYS.documents.nextRef('audit');
 const INTEGRITY_KEY = QUERY_KEYS.inventory.integrityAudit();
 // فهرست کالاهای مودال بازسازی موجودی (GET /items?limit=1000)؛ کلید جدا از فهرست‌های صفحه‌بندی‌شده کالا
 const REBUILD_ITEMS_KEY = QUERY_KEYS.items.list({ scope: 'inventory-rebuild', limit: 1000 });
-const AUDIT_DOCS_FILTER = { type: 'audit' };
-const TRANSFER_DOCS_FILTER = { type: 'transfer' };
+// v9.0.290 (TD-787): سوابق انبارگردانی و حواله‌ها صفحه‌به‌صفحه (۵۰ سند)؛ کلید کش هر صفحه همان پارامترهای درخواست است
+const typedDocsFilter = (type: string, page: number) => ({ type, page, limit: DOCUMENT_LIST_PAGE_SIZE });
 // آرایه‌های خالی ثابت تا محاسبات وابسته به لیست‌ها با هر رندر دوباره اجرا نشوند
 const NO_ROWS: AuditItemRow[] = [];
 const NO_ITEMS: Array<Record<string, unknown>> = [];
@@ -34,24 +35,38 @@ function logUnlessAborted(signal: AbortSignal, label: string, err: unknown): voi
 }
 
 /**
- * سوابق انبارگردانی / حواله‌های انتقال (GET /documents?type=…): همان کلید و همان پاسخ خام useDocumentsQuery
- * ({ type }) تا کش با فهرست اسناد مشترک بماند، به‌علاوه سیگنال لغو و بارگذاری فقط با باز بودن زبانه.
+ * سوابق انبارگردانی / حواله‌های انتقال (GET /documents?type=…&page=…&limit=50): یک صفحه با سیگنال لغو و بارگذاری فقط
+ * با باز بودن زبانه؛ تا رسیدن صفحه تازه، صفحه قبلی نمایش داده می‌شود.
  */
-function useTypedDocumentsQuery(filter: { type: string }, enabled: boolean, logLabel: string) {
+function useTypedDocumentsQuery(type: string, page: number, enabled: boolean, logLabel: string) {
   return useQuery<unknown>({
-    queryKey: QUERY_KEYS.documents.list(filter),
+    queryKey: QUERY_KEYS.documents.list(typedDocsFilter(type, page)),
     enabled,
     queryFn: async ({ signal }) => {
       try {
-        return (await fetchJson<unknown>(`/documents?type=${filter.type}`, { signal })) ?? null;
+        return (await fetchJson<unknown>(typedDocumentListUrl(type, page), { signal })) ?? null;
       } catch (err: unknown) {
         logUnlessAborted(signal, logLabel, err);
         throw err;
       }
     },
+    placeholderData: keepPreviousData,
     staleTime: FIVE_MINUTES,
     refetchOnWindowFocus: false,
   });
+}
+
+/** صفحه جاری یک فهرست اسناد برای نوار صفحه‌بندی زبانه */
+export interface DocumentListPager {
+  page: number;
+  total: number;
+  totalPages: number;
+  pageSize: number;
+  setPage: (page: number) => void;
+}
+
+function listPager(page: number, total: number, totalPages: number, setPage: (page: number) => void): DocumentListPager {
+  return { page, total, totalPages, pageSize: DOCUMENT_LIST_PAGE_SIZE, setPage };
 }
 
 export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedLocation: string) {
@@ -120,8 +135,10 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
     refetchOnWindowFocus: false,
   });
 
-  const auditDocsQuery = useTypedDocumentsQuery(AUDIT_DOCS_FILTER, activeTab === 'reports', 'Error loading past audits:');
-  const transfersQuery = useTypedDocumentsQuery(TRANSFER_DOCS_FILTER, activeTab === 'transfers', 'Error loading transfers:');
+  const [auditDocsPage, setAuditDocsPage] = useState(1);
+  const [transfersPage, setTransfersPage] = useState(1);
+  const auditDocsQuery = useTypedDocumentsQuery('audit', auditDocsPage, activeTab === 'reports', 'Error loading past audits:');
+  const transfersQuery = useTypedDocumentsQuery('transfer', transfersPage, activeTab === 'transfers', 'Error loading transfers:');
 
   // باز شدن صفحه، رفتن به یک زبانه یا تغییر انبار شمارش: داده همان زبانه دوباره خوانده می‌شود.
   // cancelRefetch: false — اگر همان کوئری همین حالا در حال دریافت است، درخواست دوم فرستاده نمی‌شود.
@@ -134,20 +151,20 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
     }
     if (activeTab === 'integrity') keys.push(INTEGRITY_KEY);
     if (activeTab === 'new_audit') keys.push(QUERY_KEYS.inventory.auditItems(selectedLocation), NEXT_REF_KEY);
-    if (activeTab === 'reports') keys.push(QUERY_KEYS.documents.list(AUDIT_DOCS_FILTER));
-    if (activeTab === 'transfers') keys.push(QUERY_KEYS.documents.list(TRANSFER_DOCS_FILTER));
+    if (activeTab === 'reports') keys.push(QUERY_KEYS.documents.list(typedDocsFilter('audit', auditDocsPage)));
+    if (activeTab === 'transfers') keys.push(QUERY_KEYS.documents.list(typedDocsFilter('transfer', transfersPage)));
     keys.forEach(queryKey => {
       void queryClient.refetchQueries({ queryKey, exact: true, type: 'active' }, { cancelRefetch: false });
     });
-  }, [activeTab, selectedLocation, queryClient]);
+  }, [activeTab, selectedLocation, auditDocsPage, transfersPage, queryClient]);
 
   const { refetch: refetchIntegrity } = integrityQuery;
   const refreshIntegrity = useCallback(() => { void refetchIntegrity(); }, [refetchIntegrity]);
   const { refetch: refetchAuditItems } = auditItemsQuery;
   const refreshAuditItems = useCallback(() => { void refetchAuditItems(); }, [refetchAuditItems]);
 
-  const auditDocs = useMemo(() => listFromResponse<Record<string, unknown>>(auditDocsQuery.data), [auditDocsQuery.data]);
-  const transfers = useMemo(() => listFromResponse<Record<string, unknown>>(transfersQuery.data), [transfersQuery.data]);
+  const auditDocsList = useMemo(() => documentListPage<Record<string, unknown>>(auditDocsQuery.data), [auditDocsQuery.data]);
+  const transfersList = useMemo(() => documentListPage<Record<string, unknown>>(transfersQuery.data), [transfersQuery.data]);
 
   return {
     integrityReport: integrityQuery.data ?? null,
@@ -157,10 +174,12 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
     nextRef: nextRefQuery.data ?? DEFAULT_NEXT_REF,
     auditItems: auditItemsQuery.data ?? NO_ROWS,
     refreshAuditItems,
-    auditDocs,
+    auditDocs: auditDocsList.rows,
     auditDocsLoading: auditDocsQuery.isFetching,
-    transfers,
+    auditDocsPager: listPager(auditDocsPage, auditDocsList.total, auditDocsList.totalPages, setAuditDocsPage),
+    transfers: transfersList.rows,
     transfersLoading: transfersQuery.isFetching,
+    transfersPager: listPager(transfersPage, transfersList.total, transfersList.totalPages, setTransfersPage),
   };
 }
 

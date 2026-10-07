@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.290 — v9.0.290 — Paged Document List
+- **Document list:** a list request without paging now answers one page of 50 documents with its total instead of the whole table, the full list comes only with `export=true`, and the stock count history and transfer tabs page through it (TD-787).
+
 ### v9.0.289 — v9.0.289 — Database Rules for Documents
 - **Document constraints:** the database now refuses an unknown document type or status and a negative line quantity, price or discount; the document service refuses an unknown type or status even without lines, legacy rows are listed by the health check and a duplicate index on the project link was removed (TD-786).
 

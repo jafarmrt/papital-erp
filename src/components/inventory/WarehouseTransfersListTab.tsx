@@ -1,5 +1,7 @@
 import { ArrowLeftRight, Ban, Eye } from 'lucide-react';
 import { formatPersianNumber, formatPersianDate } from '../../utils';
+import type { DocumentListPager as Pager } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
+import { DocumentListPager } from './DocumentListPager';
 
 interface WarehouseTransfersListTabProps {
   transfersLoading: boolean;
@@ -9,6 +11,8 @@ interface WarehouseTransfersListTabProps {
   /** v9.0.80 (TD-489): ابطال حواله با مسیر ابطال اسناد */
   onVoidTransfer: (transfer: { id: number; refNumber?: string }) => void;
   voidingId: number | null;
+  /** v9.0.290 (TD-787): صفحه جاری حواله‌ها (۵۰ سند در هر صفحه) */
+  pager?: Pager;
 }
 
 export function WarehouseTransfersListTab({
@@ -17,8 +21,10 @@ export function WarehouseTransfersListTab({
   handleViewTransfer,
   onOpenTransferModal,
   onVoidTransfer,
-  voidingId
+  voidingId,
+  pager
 }: WarehouseTransfersListTabProps) {
+  const rowOffset = pager ? (pager.page - 1) * pager.pageSize : 0;
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
       <div className="p-4 border-b border-slate-100 flex items-center justify-between">
@@ -64,7 +70,7 @@ export function WarehouseTransfersListTab({
             ) : (
               transfers.map((t, idx) => (
                 <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="py-3 px-3 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
+                  <td className="py-3 px-3 text-center font-mono text-slate-400">{formatPersianNumber(rowOffset + idx + 1)}</td>
                   <td className="py-3 px-3 font-mono font-bold text-blue-600">{t.refNumber || `#${t.id}`}</td>
                   <td className="py-3 px-3 font-mono">{formatPersianDate(t.date)}</td>
                   <td className="py-3 px-3 font-bold text-slate-700">{t.sourceLocation || '-'}</td>
@@ -94,6 +100,7 @@ export function WarehouseTransfersListTab({
           </tbody>
         </table>
       </div>
+      {pager && <DocumentListPager pager={pager} shown={transfers.length} loading={transfersLoading} noun="حواله انتقال" />}
     </div>
   );
 }

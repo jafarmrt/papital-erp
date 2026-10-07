@@ -7,6 +7,7 @@ import { findFinalDocumentIdByRef } from '../services/documents/documentRefLooku
 import { documentAuditDetails, documentAuditSnapshot, documentLineSummary } from '../services/documents/documentAudit.js';
 import { DOCUMENT_TYPE_TITLES } from '../lib/documents/documentTypeTitles.js';
 import { isAutoRefNumber } from '../lib/documents/documentRefRules.js';
+import { DOCUMENT_LIST_PAGE_SIZE } from '../lib/documents/documentListPage.js';
 import { assertManualRefAllowed, assertNotProjectDelivery, assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
@@ -369,9 +370,12 @@ router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...R
   const endDate = req.query.endDate as string;
   // V3.1.46 (TD-070): فیلتر پروژه‌محور اسناد
   // V9-1.3: صفحه‌بندی NaN-safe با سقف — جلوگیری از dump کل جدول با limit نامعتبر/عظیم
-  const isPaginated = req.query.page !== undefined || req.query.limit !== undefined;
-  const { page, limit } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
+  // v9.0.290 (TD-787، یافته B08-18): فهرست همیشه صفحه‌بندی می‌شود (پیش‌فرض صفحه ۱ با ۵۰ سند، `limit=0` هم همان) و کل
+  // فهرست فقط با `export=true`؛ پیش‌تر درخواست بی `page` و `limit` همه اسناد را با ردیف‌ها و تسویه‌هایشان برمی‌گرداند
   const isExport = String(req.query.export) === 'true';
+  const parsed = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: DOCUMENT_LIST_PAGE_SIZE });
+  const page = parsed.page;
+  const limit = parsed.limit > 0 ? parsed.limit : DOCUMENT_LIST_PAGE_SIZE;
 
   const result = await DocumentService.getDocuments({
     type,
@@ -381,8 +385,8 @@ router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...R
     startDate,
     endDate,
     projectId: req.query.projectId as string | undefined,
-    page: isPaginated ? page : undefined,
-    limit: isPaginated ? limit : undefined,
+    page: isExport ? undefined : page,
+    limit: isExport ? undefined : limit,
     isExport
   });
 
