@@ -19,7 +19,8 @@ describe('reorder direct purchase receipt (TD-387)', () => {
     if (!parsed.success) return;
     expect(parsed.data.body.buyer_name).toBe('تأمین‌کننده نمونه');
     expect(parsed.data.body.refNumber).toBe('auto');
-    expect(parsed.data.body.items.map(i => [i.itemId, i.quantity, i.unit_price])).toEqual([[7, 12, 250000], [8, 3, 0]]);
+    // v9.0.240 (TD-784): عددهای ردیف با decimalInput به رشته اعشاری لاتین خوانده می‌شوند
+    expect(parsed.data.body.items.map(i => [i.itemId, i.quantity, i.unit_price])).toEqual([[7, '12', '250000'], [8, '3', '0']]);
   });
 
   it('leaves the warehouse to the server when none is chosen', () => {

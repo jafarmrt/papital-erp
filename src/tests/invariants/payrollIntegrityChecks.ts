@@ -15,7 +15,7 @@ import { watermarks } from './scenarioHelpers.js';
 const PERIOD = { startDate: '2026-04-01', endDate: '2026-04-30', username: 'inv' };
 let seq = 0;
 
-/** A payslip row written straight to the table, the way versions before v9.0.231 could leave one */
+/** A payslip row written straight to the table, the way versions before v9.0.266 could leave one */
 async function legacyPayroll(personnelId: number, amounts: { piecework: number; deductions: number; net: number }): Promise<{ id: number; payrollNumber: string }> {
   const payrollNumber = `PAY-I10-${Date.now().toString().slice(-7)}${++seq}`;
   const [row] = await orm.insert(pieceworkPayrolls).values({
@@ -27,7 +27,7 @@ async function legacyPayroll(personnelId: number, amounts: { piecework: number; 
 }
 
 /**
- * v9.0.231 (TD-804, decision t1 «الف»): a payslip with bonuses, deductions and an advance deduction gets a voucher whose
+ * v9.0.266 (TD-804, decision t1 «الف»): a payslip with bonuses, deductions and an advance deduction gets a voucher whose
  * wages payable credit is exactly its net (I10); negative bonuses or deductions are refused; I10 flags a legacy payslip with
  * negative deductions or a positive net without a voucher, and such a payslip is not paid until its voucher is issued.
  */
@@ -77,7 +77,7 @@ export async function checkPayrollNetEqualsVoucher(): Promise<string[]> {
 }
 
 /**
- * v9.0.232 (TD-807, B12P-04): the outstanding advance comes only from the advance ledger account (mapped 1301); a
+ * v9.0.267 (TD-807, B12P-04): the outstanding advance comes only from the advance ledger account (mapped 1301); a
  * personnel without such rows has none. A settlement payment used to count as an advance, so an advance deduction of the
  * same amount passed the TD-282 guard and turned 1301 negative.
  */
@@ -102,8 +102,8 @@ export async function checkAdvanceBalanceFromLedgerOnly(): Promise<string[]> {
 }
 
 export const PAYROLL_INTEGRITY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
-  ['inv_td_804_payroll_net_equals_voucher', 'v9.0.231: a payslip voucher credits wages payable with exactly the net (I10); negative bonuses, deductions or advance deductions are refused and a payslip without a voucher is not paid (TD-804)',
+  ['inv_td_804_payroll_net_equals_voucher', 'v9.0.266: a payslip voucher credits wages payable with exactly the net (I10); negative bonuses, deductions or advance deductions are refused and a payslip without a voucher is not paid (TD-804)',
     () => checkPayrollNetEqualsVoucher(), 'net 700,000 matched the voucher; three negative parts refused; I10 flagged both legacy payslips; the unvouchered one was paid after its voucher was issued'],
-  ['inv_td_807_advance_balance_from_ledger_only', 'v9.0.232: the outstanding advance is read only from the advance ledger account; a settlement payment is no advance and an advance deduction against it is refused (TD-807)',
+  ['inv_td_807_advance_balance_from_ledger_only', 'v9.0.267: the outstanding advance is read only from the advance ledger account; a settlement payment is no advance and an advance deduction against it is refused (TD-807)',
     () => checkAdvanceBalanceFromLedgerOnly(), 'balance 0 after a settlement payment of 2,000,000; the advance deduction refused; 1301 stayed 0'],
 ];

@@ -1,12 +1,14 @@
-import React, { useId, useMemo, useRef, useImperativeHandle } from 'react';
+import React, { useId, useMemo, useRef, useImperativeHandle, useState } from 'react';
 import { Coins, Copy, Check } from 'lucide-react';
 import {
-  toEnglishDigits,
   formatCurrencyLabel,
   financialAmountToPersianWords,
   parseCleanNumber
 } from '../../utils';
 import { copyToClipboard } from '../../utils/clipboard';
+import { currencyScale } from '../../lib/currencyScale';
+import { amountTextOf, groupAmountText, readAmountText } from '../../lib/amountText';
+import { toLatinDigits } from '../../lib/numericInput';
 
 export interface FinancialAmountInputProps {
   /** مقدار عددی مبلغ به واحد پولی مشخص‌شده (مثلاً ریال یا دلار) */
@@ -102,17 +104,15 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
     return parseCleanNumber(value, 0);
   }, [value]);
 
-  // رشته نمایشی فرمت‌شده با کامای استاندارد
-  const displayFormatted = useMemo(() => {
-    if (value === null || value === undefined || value === '') return '';
-    const clean = toEnglishDigits(String(value)).replace(/[,\s]/g, '');
-    if (clean === '' || clean === '0') return clean;
-    const isNegative = clean.startsWith('-');
-    const digits = isNegative ? clean.slice(1) : clean;
-    const parts = digits.split('.');
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return (isNegative ? '-' : '') + parts.join('.');
-  }, [value]);
+  // v9.0.244 (TD-665): متن خام کادر تا پایان ویرایش جدا از عدد نگه داشته می‌شود («12.» و «12.5» از دست نمی‌روند)؛
+  // اعشار مجاز از ارز می‌آید (ریال ۰، ارز ۲) و قالب از مقدار فقط وقتی ساخته می‌شود که متن با مقدار والد نخواند.
+  const scale = currencyScale(currency);
+  const allowNegative = min !== undefined && min < 0;
+  const [draft, setDraft] = useState<string | null>(null);
+  const [inputError, setInputError] = useState<string | null>(null);
+  const draftValue = draft === null ? null : readAmountText(draft, { scale, allowNegative });
+  const draftMatchesValue = draftValue?.ok === true && draftValue.value === numericValue;
+  const displayFormatted = draftMatchesValue && draft !== null ? groupAmountText(draft) : groupAmountText(amountTextOf(value));
 
   // تبدیل مبلغ به حروف فارسی
   const wordsResult = useMemo(() => {
@@ -123,45 +123,43 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
   const curLabel = useMemo(() => formatCurrencyLabel(currency), [currency]);
   const isRial = (currency?.toUpperCase() === 'IRR' || currency === 'ریال');
 
+  const significantCount = (text: string) => toLatinDigits(text).replace(/[^\d.٫-]/g, '').length;
+
+  const placeCaret = (significantBefore: number) => {
+    requestAnimationFrame(() => {
+      const el = internalInputRef.current;
+      if (!el) return;
+      const shown = el.value;
+      let caret = significantBefore === 0 ? 0 : shown.length;
+      let count = 0;
+      for (let i = 0; i < shown.length && significantBefore > 0; i++) {
+        if (/[\d.-]/.test(shown[i])) count++;
+        if (count === significantBefore) { caret = i + 1; break; }
+      }
+      el.setSelectionRange(caret, caret);
+    });
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target;
-    const currentCursor = input.selectionStart || 0;
-
-    // شمارش تعداد ارقام تا قبل از مکان‌نما
-    const rawBeforeCursor = input.value.slice(0, currentCursor);
-    const digitsBeforeCursor = toEnglishDigits(rawBeforeCursor).replace(/[^\d.-]/g, '').length;
-
-    // استخراج رقم تمیز
-    const cleanStr = toEnglishDigits(input.value).replace(/,/g, '').trim();
-    if (cleanStr === '' || cleanStr === '-') {
-      onChange(0);
+    const cursor = input.selectionStart ?? input.value.length;
+    // v9.0.244 (TD-666): ورودی نامعتبر (حرف، نویسه ناآشنا، اعشار بیش از ارز) مقدار قبلی را نگه می‌دارد و پیام می‌دهد؛
+    // جداکننده‌های فارسی «٬» «٫» «،»، فاصله و برچسب ارزی که از خود برنامه کپی شده پذیرفته می‌شوند.
+    const result = readAmountText(input.value, { scale, allowNegative });
+    if (!result.ok) {
+      setInputError(result.error);
+      placeCaret(Math.max(0, significantCount(input.value.slice(0, cursor)) - 1));
       return;
     }
+    setInputError(null);
+    setDraft(result.text);
+    onChange(result.value);
+    placeCaret(Math.min(significantCount(input.value.slice(0, cursor)), result.text.length));
+  };
 
-    const safeNum = parseCleanNumber(cleanStr, 0);
-    onChange(safeNum);
-
-    // تنظیم مجدد موقعیت مکان‌نما پس از درج کاماها
-    requestAnimationFrame(() => {
-      if (!internalInputRef.current) return;
-      const newDisplay = internalInputRef.current.value;
-      let newCursor = 0;
-      let digitsCount = 0;
-
-      for (let i = 0; i < newDisplay.length; i++) {
-        if (/[\d.-]/.test(newDisplay[i])) {
-          digitsCount++;
-        }
-        if (digitsCount === digitsBeforeCursor) {
-          newCursor = i + 1;
-          break;
-        }
-      }
-      if (digitsBeforeCursor === 0) newCursor = 0;
-      if (digitsBeforeCursor >= cleanStr.length) newCursor = newDisplay.length;
-
-      internalInputRef.current.setSelectionRange(newCursor, newCursor);
-    });
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    setDraft(null);
+    if (onBlur) onBlur(e);
   };
 
   const handleCopyWords = (e: React.MouseEvent) => {
@@ -207,7 +205,8 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
           id={inputId}
           name={name}
           type="text"
-          inputMode="numeric"
+          inputMode={scale > 0 ? 'decimal' : 'numeric'}
+          aria-invalid={inputError ? true : undefined}
           dir="ltr"
           required={required}
           disabled={disabled}
@@ -218,7 +217,7 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
           step={step}
           value={displayFormatted}
           onChange={handleChange}
-          onBlur={onBlur}
+          onBlur={handleBlur}
           onFocus={onFocus}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
@@ -257,6 +256,12 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           )}
+        </div>
+      )}
+
+      {inputError && (
+        <div role="alert" className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
+          {inputError}
         </div>
       )}
 

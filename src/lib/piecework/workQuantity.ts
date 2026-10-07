@@ -1,7 +1,7 @@
 import { DECIMAL_PATTERN, normalizeDecimalString, toLatinDigits } from '../numericInput.js';
 
 /**
- * v9.0.236 (TD-812، B12P-09): مقدار کارکرد عدد بزرگ‌تر از صفر یا زمان «ساعت:دقیقه» است. پیش‌تر «-5» با مبلغ منفی ذخیره و
+ * v9.0.271 (TD-812، B12P-09): مقدار کارکرد عدد بزرگ‌تر از صفر یا زمان «ساعت:دقیقه» است. پیش‌تر «-5» با مبلغ منفی ذخیره و
  * «۰» نشان داده می‌شد (کسری پنهان در فیش) و «abc» صفر ذخیره می‌شد. خروجی عدد است (ساعت با کسر دقیقه، مانند ۱:۳۰ = ۱٫۵).
  */
 export type WorkQuantityParse = { ok: true; value: number } | { ok: false; message: string };

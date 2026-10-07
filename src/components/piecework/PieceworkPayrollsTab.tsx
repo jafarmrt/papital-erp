@@ -153,7 +153,7 @@ export function PieceworkPayrollsTab({
                             </button>
                           </div>
                         ) : !isPayablePayrollStatus(payroll.status) ? (
-                          // v9.0.234 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود
+                          // v9.0.269 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود
                           <button
                             onClick={() => onUpdateStatus(payroll.id, 'approved')}
                             className="px-2.5 py-1 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-200 rounded-lg text-[10px] inline-flex items-center gap-1 cursor-pointer transition-all font-bold"

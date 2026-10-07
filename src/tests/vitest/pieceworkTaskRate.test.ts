@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parsePieceworkRate } from '../../lib/piecework/pieceworkRate';
 import { parsePieceworkTaskRows } from '../../components/piecework/pieceworkExcelUtils';
 
-// v9.0.235 (TD-813): a piecework base rate is a non-negative number; the Excel preview uses the server's rule
+// v9.0.270 (TD-813): a piecework base rate is a non-negative number; the Excel preview uses the server's rule
 describe('piecework task base rate (TD-813)', () => {
   it('reads Persian digits and separators and refuses text or negative rates', () => {
     expect(parsePieceworkRate('۲۵۰٬۰۰۰', 'نرخ پایه')).toEqual({ ok: true, value: '250000' });

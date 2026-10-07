@@ -3,10 +3,10 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog.js';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
-import { createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
+import { assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, storageDateParam, decimalInput } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { DocumentService } from '../services/document.service.js';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
@@ -39,15 +39,24 @@ router.use(authenticateToken);
 const nonNegativeMoney = (label: string) => (val: unknown): boolean =>
   val === undefined || val === null || (Number.isFinite(Number(val)) && Number(val) >= 0);
 
+/**
+ * v9.0.240 (TD-784، یافته B08-15): عددهای ردیف سند با `decimalInput` خوانده می‌شوند (AGENTS §6، TD-385): ارقام فارسی و عربی و
+ * جداکننده هزارگان پذیرفته می‌شوند و «0x10»، «1e3» یا متن خطای اعتبارسنجی است. پیش‌تر مقدار خام به `Number()` می‌رسید:
+ * «0x10» شانزده و «1e3» هزار ثبت می‌شد و «۲» رد. قیمت فرستاده‌شده‌ی خالی خطاست، نه صفر؛ قیمتی که فرستاده نشود مثل پیش است.
+ */
+const sentPrice = (label: string) => decimalInput(label)
+  .refine(v => v !== undefined, { message: `${label} خالی است؛ عدد آن را وارد کنید (برای کالای رایگان ۰)` })
+  .optional();
+
 export const documentItemInputSchema = z.object({
   itemId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/)]).transform(v => Number(v)),
-  quantity: z.union([z.number(), z.string()]).optional(),
-  unit_price: z.union([z.number(), z.string()]).optional(),
-  unitPrice: z.union([z.number(), z.string()]).optional(),
-  price: z.union([z.number(), z.string()]).optional(),
-  discount: z.union([z.number(), z.string()]).optional(),
-  system_stock: z.union([z.number(), z.string()]).optional(),
-  physical_stock: z.union([z.number(), z.string()]).optional(),
+  quantity: decimalInput('تعداد').optional(),
+  unit_price: sentPrice('قیمت واحد'),
+  unitPrice: sentPrice('قیمت واحد'),
+  price: sentPrice('قیمت واحد'),
+  discount: decimalInput('تخفیف').optional(),
+  system_stock: decimalInput('موجودی دفتری').optional(),
+  physical_stock: decimalInput('موجودی شمارش‌شده').optional(),
   location: z.string().max(100).optional(),
   targetLoc: z.string().max(100).optional(),
   unit: z.string().max(50).optional()
@@ -92,8 +101,11 @@ const exchangeRateInput = z.union([
 
 export const documentCreateSchema = z.object({
   body: z.object({
-    docType: z.enum(['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste'], {
-      message: 'نوع سند نامعتبر است'
+    // v9.0.238 (TD-770، تصمیم ت۲ الف): انتقال بین انبارها فقط از transfers.routes.ts (TD-489)
+    docType: z.enum(['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'remittance', 'waste'], {
+      error: (issue) => issue.input === 'transfer'
+        ? 'انتقال بین انبارها فقط از صفحه «انتقال بین انبارها» ثبت می‌شود'
+        : 'نوع سند نامعتبر است'
     }),
     refNumber: z.union([z.string().min(1, 'شماره مرجع الزامی است'), z.number().int().positive()]),
     date: z.string().min(1, 'تاریخ سند الزامی است'),
@@ -255,6 +267,8 @@ async function assertMayRecordDocument(user: AuthUserPayload | undefined, permis
 // خوانده می‌شود. پیش‌تر هر نقشی جز چهار کد ثابت «کاربر فروش» بود: سند قطعی نمی‌زد و پیش‌نویسش پیش‌فاکتور می‌شد
 router.post('/documents', authorizePermission('documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'audit.apply'), idempotency({ scope: 'documents' }), validate(documentCreateSchema), asyncHandler(async (req, res) => {
   const requestedType = String(req.body.docType);
+  // v9.0.238 (TD-770): جهت گردش از نوع سند؛ `inOut` ناسازگار پیش از سنجش مجوز ۴۲۲ می‌گیرد
+  assertRecordableDocument(requestedType, req.body.inOut);
   const recordStatus = createdDocumentStatus(requestedType, req.body.status);
   await assertMayRecordDocument(req.user, permissionToCreateDocument(req.body),
     `ثبت ${docTypeTitles[requestedType] ?? 'سند'}${recordStatus === 'final' ? ' به‌صورت قطعی' : ''}`);

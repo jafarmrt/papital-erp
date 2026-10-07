@@ -11,7 +11,7 @@ import { validate, paramsIdSchema, numericIdString } from '../middleware/validat
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { NotFoundError, ForbiddenError, BadRequestError, ValidationError, ConflictError } from '../errors/customErrors.js';
 import { lockSystemAdminSet, assertAnotherActiveAdmin, SYSTEM_ADMIN_ROLE } from '../services/users/lastAdminGuard.js';
-import { uploadBase64ToStorage } from '../lib/storage.js';
+import { isDataUrl, uploadBase64ToStorage } from '../lib/storage.js';
 import { AVATAR_INVALID_MESSAGE, FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE, isAcceptableAvatar, isStoredAvatarPath } from '../lib/users/profileFields.js';
 import { invalidateRoleCache } from '../lib/memoryCache.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
@@ -143,7 +143,7 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
     }
 
     if (avatar) {
-      if (avatar.startsWith('data:image')) {
+      if (isDataUrl(avatar)) {
         const avatarPath = await uploadBase64ToStorage(avatar);
         if (!isStoredAvatarPath(avatarPath)) {
           return res.status(400).json({ error: AVATAR_INVALID_MESSAGE });

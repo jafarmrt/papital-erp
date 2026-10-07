@@ -50,7 +50,7 @@ export default function ProjectScheduleTab({
   const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
   const [loggingTaskId, setLoggingTaskId] = useState<string | null>(null);
   const [batchLoggingStageId, setBatchLoggingStageId] = useState<number | null>(null);
-  // v9.0.239 (TD-747، تصمیم ت۶ الف بسته ۱۱): روز کارکرد «ثبت کارمزد»، پیش‌فرض امروز در منطقه زمانی نمایش؛ نه تاریخ شروع کار یا پروژه
+  // v9.0.274 (TD-747، تصمیم ت۶ الف بسته ۱۱): روز کارکرد «ثبت کارمزد»، پیش‌فرض امروز در منطقه زمانی نمایش؛ نه تاریخ شروع کار یا پروژه
   const [logDate, setLogDate] = useState<string>(() => getTodayIsoDate());
 
   // Load latest presets and personnel if missing
@@ -302,7 +302,7 @@ export default function ProjectScheduleTab({
 
       if (field === 'taskId') {
         const found = pieceworkTasksList.find(pt => pt.id === Number(val));
-        // v9.0.237 (TD-735): نرخ پایه از `defaultRate` سرور (پیش‌تر `default_rate` که سرور نمی‌فرستد، پس نرخ ۰ می‌شد)
+        // v9.0.272 (TD-735): نرخ پایه از `defaultRate` سرور (پیش‌تر `default_rate` که سرور نمی‌فرستد، پس نرخ ۰ می‌شد)
         if (found) Object.assign(t, withPieceworkTask(t, found));
       }
 
@@ -368,7 +368,7 @@ export default function ProjectScheduleTab({
     void fetchProjectPieceworkLogs();
   }, [project.id]);
 
-  // v9.0.238 (TD-736، تصمیم ت۵ الف): پیش از ثبت کارکرد، برنامه (با شناسه هر ردیف) ذخیره می‌شود تا سرور ردیف را بسنجد و
+  // v9.0.273 (TD-736، تصمیم ت۵ الف): پیش از ثبت کارکرد، برنامه (با شناسه هر ردیف) ذخیره می‌شود تا سرور ردیف را بسنجد و
   // شناسه کارکرد را در همان ردیف بنویسد؛ ردیف ثبت‌شده دوباره ثبت نمی‌شود (۴۰۹) و وضعیت دکمه از همان شناسه خوانده می‌شود
   const saveSchedulesForLogging = async (): Promise<ProjectStageSchedulesMap | null> => {
     const withIds = withScheduleRowIds(schedulesMap, () => `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
@@ -427,7 +427,7 @@ export default function ProjectScheduleTab({
       const row = saved?.[stageId]?.[productId]?.tasks?.[taskIdx];
       if (!row?.id) return;
       const ref: ScheduleRowRef = { stageId, productId, rowId: row.id };
-      // v9.0.237 (TD-735): بی نرخ؛ سرور نرخ اختصاصی پرسنل یا نرخ پایه عنوان کار را می‌گذارد
+      // v9.0.272 (TD-735): بی نرخ؛ سرور نرخ اختصاصی پرسنل یا نرخ پایه عنوان کار را می‌گذارد
       const [logId] = await postScheduleLogs([scheduleLogItem({
         projectId: project.id,
         ref,
@@ -576,7 +576,7 @@ export default function ProjectScheduleTab({
         </div>
       </div>
 
-      {/* v9.0.239 (TD-747): تاریخ کارکردهایی که این زبانه به حقوق می‌فرستد */}
+      {/* v9.0.274 (TD-747): تاریخ کارکردهایی که این زبانه به حقوق می‌فرستد */}
       <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 flex flex-wrap items-center gap-2">
         <Calendar className="w-4 h-4 text-emerald-700 shrink-0" />
         <span className="font-bold text-emerald-900 text-[11px]">تاریخ کارکرد برای «ثبت کارمزد»:</span>
@@ -830,7 +830,7 @@ export default function ProjectScheduleTab({
                                     )}
                                   </div>
 
-                                  {/* Delete (v9.0.238، TD-736: ردیف ثبت‌شده حذف نمی‌شود تا پیوند کارکردش نماند) */}
+                                  {/* Delete (v9.0.273، TD-736: ردیف ثبت‌شده حذف نمی‌شود تا پیوند کارکردش نماند) */}
                                   <div className="sm:col-span-1 text-center">
                                     {!isScheduleRowLogged(task) && <button
                                       type="button"

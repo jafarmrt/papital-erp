@@ -6643,7 +6643,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         netPayable: money(500000), status: 'approved', isDeleted: 0
       }).returning({ id: pieceworkPayrolls.id });
       created.payrollId = payroll.id;
-      // v9.0.231 (TD-804): a payslip is paid only with its own voucher, so this test issues it first
+      // v9.0.266 (TD-804): a payslip is paid only with its own voucher, so this test issues it first
       const { PieceworkPayrollService } = await import('../../services/piecework/payroll.service.js');
       const issued = await PieceworkPayrollService.syncPayrollVoucher(payroll.id, { username: 'test-agent' });
       created.payrollVoucherId = issued.voucher?.id ?? null;
@@ -7551,7 +7551,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (ranged.length !== 1 || ranged[0].date !== toStorageDate('1405/06/05')) violations.push(`فیلتر بازه شمسی کارکرد: ${JSON.stringify(ranged.map(r => r.date))}`);
 
       // ۳) حقوق ثابت: دو فیش در یک ماه شمسی (شهریور ۱۴۰۵ = ۲۳ اوت تا ۲۲ سپتامبر، ۳۱ روز) روی هم فقط یک ماه حقوق ثابت می‌گیرند.
-      // v9.0.233 (TD-808): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود، پس این آزمون از مهر به شهریور آمد
+      // v9.0.268 (TD-808): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود، پس این آزمون از مهر به شهریور آمد
       const audit = { username: 'ERP-TEST-MARKER' };
       const first = await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/06/01', endDate: '1405/06/15', ...audit });
       if (first.status !== 201 || !('payroll' in first) || !first.payroll) throw new Error(`فیش اول: ${JSON.stringify(first)}`);
@@ -10587,10 +10587,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR d: accounting report access, party statements and the journal book (TD-547 ...)
   const { runAccountingReportAccessTests } = await import('../regression/accountingReportAccessTests.js');
   results.push(...await runAccountingReportAccessTests(shouldRun));
-  // Package 12 payroll PR a (v9.0.231 on): payslip integrity (TD-804 ...)
+  // Package 12 payroll PR a (v9.0.266 on): payslip integrity (TD-804 ...)
   const { runPayrollIntegrityTests } = await import('../regression/payrollIntegrityTests.js');
   results.push(...await runPayrollIntegrityTests(shouldRun));
-  // Package 12 payroll PR b (v9.0.235 on): work logs, piecework rates and their audit (TD-813 ...)
+  // Package 12 payroll PR b (v9.0.270 on): work logs, piecework rates and their audit (TD-813 ...)
   const { runPieceworkEntryTests } = await import('../regression/pieceworkEntryTests.js');
   results.push(...await runPieceworkEntryTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
@@ -10651,6 +10651,26 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runItemPerformanceTests(shouldRun));
   const { runItemExcelExportTests } = await import('../regression/itemExcelExportTests.js');
   results.push(...await runItemExcelExportTests(shouldRun));
+
+  // Package 13 PR A (v9.0.231+): access and privacy of daily work logs
+  const { runDailyLogAccessTests } = await import('../regression/dailyLogAccessTests.js');
+  results.push(...await runDailyLogAccessTests(shouldRun));
+
+  // Package 8 PR A (v9.0.238+): stock direction, sellable gate and line numbers of POST /documents
+  const { runDocumentEntryTests } = await import('../regression/documentEntryTests.js');
+  results.push(...await runDocumentEntryTests(shouldRun));
+
+  // Package 13 PR B (v9.0.249+): reading daily work logs (list, statistics, timestamps)
+  const { runDailyLogReadTests } = await import('../regression/dailyLogReadTests.js');
+  results.push(...await runDailyLogReadTests(shouldRun));
+
+  // Package 13 PR C (v9.0.254+): attachment download, body limits, image uploads, orphan cleanup, log length caps
+  const { runAttachmentUploadTests } = await import('../regression/attachmentUploadTests.js');
+  results.push(...await runAttachmentUploadTests(shouldRun));
+
+  // Package 13 PR D (v9.0.259+): work time and work mode of a daily log
+  const { runDailyLogWorkTimeTests } = await import('../regression/dailyLogWorkTimeTests.js');
+  results.push(...await runDailyLogWorkTimeTests(shouldRun));
 
   return results;
 }

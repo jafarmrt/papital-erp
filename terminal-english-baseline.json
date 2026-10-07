@@ -102,7 +102,7 @@
   "src/tests/suites/recoverySuite.ts": 5,
   "src/tests/suites/regressionSuite.ts": 658,
   "src/tests/suites/securitySuite.ts": 120,
-  "src/tests/suites/unitSuite.ts": 147,
+  "src/tests/suites/unitSuite.ts": 146,
   "src/tests/suites/workflowSuite.ts": 43,
   "src/tests/vitest/accountMappingPage.test.tsx": 1,
   "src/tests/vitest/accountSearchDigits.test.tsx": 1,

@@ -104,7 +104,7 @@ export function PieceworkRatesTab({
                           onClick={() => {
                             const input = document.getElementById(`custom-rate-${task.id}`) as HTMLInputElement;
                             if (input) {
-                              // v9.0.240 (TD-809): متن خام به سرور می‌رود تا خالی یا منفی رد شود، نه صفر
+                              // v9.0.275 (TD-809): متن خام به سرور می‌رود تا خالی یا منفی رد شود، نه صفر
                               onSaveCustomRate(task.id, input.value);
                             }
                           }}

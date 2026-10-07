@@ -37,7 +37,7 @@ interface PieceworkPayrollModalProps {
   isSaving?: boolean;
 }
 
-/** v9.0.231 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده منفی نمی‌شوند (سرور هم رد می‌کند) */
+/** v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده منفی نمی‌شوند (سرور هم رد می‌کند) */
 const nonNegativeInput = (raw: string): number => Math.max(0, Number(raw) || 0);
 
 export function PieceworkPayrollModal({

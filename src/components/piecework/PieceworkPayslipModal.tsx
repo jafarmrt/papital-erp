@@ -40,7 +40,7 @@ export function PieceworkPayslipModal({
             <span className="font-bold text-sm">فیش حقوقی رسمی پرسنل ({viewingPayroll.payrollNumber})</span>
           </div>
           <div className="flex items-center gap-2">
-            {/* v9.0.234 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود */}
+            {/* v9.0.269 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود */}
             {!readOnly && viewingPayroll.status === 'draft' && (
               <button
                 onClick={() => onUpdateStatus(viewingPayroll.id, 'approved')}

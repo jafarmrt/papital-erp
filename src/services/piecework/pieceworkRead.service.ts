@@ -59,7 +59,7 @@ export class PieceworkReadService {
 
   /** تاریخچه سراسری تغییر نرخ‌ها (جدیدترین اول). */
   static async listRateHistory(limit: number) {
-    // v9.0.240 (TD-809): تاریخچه نرخ اختصاصی پرسنل (personnel_id) داده حقوق شخص است و در تاریخچه نرخ پایه نمی‌آید
+    // v9.0.275 (TD-809): تاریخچه نرخ اختصاصی پرسنل (personnel_id) داده حقوق شخص است و در تاریخچه نرخ پایه نمی‌آید
     return orm.select()
       .from(pieceworkTaskRateHistory)
       .where(isNull(pieceworkTaskRateHistory.personnelId))
@@ -122,7 +122,7 @@ export class PieceworkReadService {
     return orm.select()
       .from(pieceworkPersonnelRates)
       .where(and(eq(pieceworkPersonnelRates.personnelId, personnelId), eq(pieceworkPersonnelRates.isDeleted, 0)))
-      // v9.0.240 (TD-809): ترتیب شناسه؛ صفحه نرخ‌ها آخرین ردیف هر کار را نشان می‌دهد، همان که کارکرد می‌گیرد
+      // v9.0.275 (TD-809): ترتیب شناسه؛ صفحه نرخ‌ها آخرین ردیف هر کار را نشان می‌دهد، همان که کارکرد می‌گیرد
       .orderBy(asc(pieceworkPersonnelRates.id));
   }
 

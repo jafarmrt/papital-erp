@@ -47,7 +47,7 @@ const renderTab = () => render(
   <ProjectScheduleTab project={PROJECT} personnelList={[{ id: 7, fullName: 'پرسنل آزمون' }]} pieceworkTasksList={[{ id: 3, title: 'برش', defaultRate: 1000 }]} onUpdate={vi.fn()} />,
 );
 
-// v9.0.239 (TD-747, package 11 decision t6 «الف»): a schedule work log is dated by the picker (default today), never the row or project start
+// v9.0.274 (TD-747, package 11 decision t6 «الف»): a schedule work log is dated by the picker (default today), never the row or project start
 describe('work date of workshop schedule logs (TD-747)', () => {
   it('logs a row on today, not on the row or project start date', async () => {
     renderTab();

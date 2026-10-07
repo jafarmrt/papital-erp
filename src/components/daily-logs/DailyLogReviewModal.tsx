@@ -1,6 +1,6 @@
 import { MessageSquare, X, Send } from 'lucide-react';
 import { DailyWorkLog } from '../../types';
-import { MentionTextarea } from '../MentionTextarea';
+import { DAILY_LOG_MANAGER_NOTES_MAX } from '../../lib/dailyLogs/dailyLogLimits';
 
 interface DailyLogReviewModalProps {
   reviewModalLog: DailyWorkLog | null;
@@ -9,9 +9,12 @@ interface DailyLogReviewModalProps {
   setReviewNotes: (notes: string) => void;
   isSubmittingReview: boolean;
   onSaveReview: () => void;
-  systemUsers?: any[];
 }
 
+/**
+ * v9.0.261 (TD-637, finding B13-12): the review notes reach only the log's author, so the form offers no «@» and says
+ * so; it never promises a notification to anyone else.
+ */
 export function DailyLogReviewModal({
   reviewModalLog,
   onClose,
@@ -19,7 +22,6 @@ export function DailyLogReviewModal({
   setReviewNotes,
   isSubmittingReview,
   onSaveReview,
-  systemUsers = []
 }: DailyLogReviewModalProps) {
   if (!reviewModalLog) return null;
 
@@ -49,14 +51,15 @@ export function DailyLogReviewModal({
             <label className="block text-xs font-bold text-slate-700 mb-1">
               یادداشت و دستور مدیریتی:
             </label>
-            <MentionTextarea
+            <textarea
               rows={3}
-              placeholder="بازخورد، راهنمایی یا دستورات لازم را اینجا تایپ کنید... (تایپ @ جهت منشن همکاران)"
+              placeholder="بازخورد، راهنمایی یا دستورات لازم را اینجا بنویسید..."
               value={reviewNotes}
-              onChange={setReviewNotes}
-              users={systemUsers}
+              onChange={(e) => setReviewNotes(e.target.value)}
+              maxLength={DAILY_LOG_MANAGER_NOTES_MAX}
               className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden"
             />
+            <p className="text-[10px] text-slate-400 mt-1">اعلان بازخورد فقط برای نویسنده گزارش فرستاده می‌شود.</p>
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
@@ -74,7 +77,7 @@ export function DailyLogReviewModal({
               className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center gap-1 cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
-              {isSubmittingReview ? 'در حال ثبت...' : 'ثبت و ارسال نوتیفیکیشن'}
+              {isSubmittingReview ? 'در حال ثبت...' : 'ثبت و ارسال اعلان به نویسنده'}
             </button>
           </div>
         </div>

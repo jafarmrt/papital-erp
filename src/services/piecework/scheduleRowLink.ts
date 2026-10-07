@@ -6,7 +6,7 @@ import { findScheduleRow, withScheduleLogLink, withoutScheduleLogLink, type Sche
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
- * v9.0.238 (TD-736، تصمیم ت۵ الف بسته ۱۱): پیوند کارکرد و ردیف برنامه کارگاه پروژه (`production_projects.stage_schedules`).
+ * v9.0.273 (TD-736، تصمیم ت۵ الف بسته ۱۱): پیوند کارکرد و ردیف برنامه کارگاه پروژه (`production_projects.stage_schedules`).
  * ثبت کارکردی که `scheduleRef` دارد ردیف پروژه را `FOR UPDATE` قفل می‌کند، ردیف برنامه را می‌خواهد (همان پرسنل و همان عنوان
  * کار)، ردیفی را که کارکرد زنده دارد با ۴۰۹ `PIECEWORK_SCHEDULE_ROW_LOGGED` رد می‌کند و شناسه کارکرد تازه را در همان ردیف
  * می‌نویسد؛ حذف کارکرد پیوند را برمی‌دارد تا ردیف دوباره ثبت‌شدنی باشد. دو ثبت هم‌زمان یک ردیف پشت قفل پروژه می‌مانند.

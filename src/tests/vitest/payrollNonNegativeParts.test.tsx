@@ -26,7 +26,7 @@ function renderModal() {
 
 const inputUnder = (label: RegExp) => screen.getByText(label).parentElement?.querySelector('input') as HTMLInputElement;
 
-// v9.0.231 (TD-804, decision t1 «الف»): bonuses, deductions and the advance deduction of a payslip are never negative
+// v9.0.266 (TD-804, decision t1 «الف»): bonuses, deductions and the advance deduction of a payslip are never negative
 describe('payslip parts are non-negative (TD-804)', () => {
   it('turns a negative bonus, deduction or advance deduction into zero and marks the fields min 0', () => {
     const setters = renderModal();

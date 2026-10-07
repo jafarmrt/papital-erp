@@ -58,7 +58,7 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
 
   const rateId = 'reg_piecework_task_rate_non_negative_td_813';
   if (shouldRun(rateId, 'td813', 'piecework', 'package12')) {
-    await runCase(results, rateId, 'v9.0.235: a piecework task base rate is a non-negative number in the form, the API, the service and the Excel import; a text or negative rate is refused (400 / 422 PIECEWORK_RATE_INVALID) and an Excel row with one is listed in the import errors (TD-813)', async () => inFiscalSandbox(async () => {
+    await runCase(results, rateId, 'v9.0.270: a piecework task base rate is a non-negative number in the form, the API, the service and the Excel import; a text or negative rate is refused (400 / 422 PIECEWORK_RATE_INVALID) and an Excel row with one is listed in the import errors (TD-813)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
 
@@ -112,7 +112,7 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
 
   const entryId = 'reg_piecework_log_entry_checked_td_812';
   if (shouldRun(entryId, 'td812', 'piecework', 'worklog', 'package12')) {
-    await runCase(results, entryId, 'v9.0.236: a work log needs positive ids, a quantity above zero or hh:mm, a non-negative manual rate and live personnel, task and project, and a batch is saved whole or not at all (400 / 422 PIECEWORK_LOG_*) (TD-812)', async () => inFiscalSandbox(async () => {
+    await runCase(results, entryId, 'v9.0.271: a work log needs positive ids, a quantity above zero or hh:mm, a non-negative manual rate and live personnel, task and project, and a batch is saved whole or not at all (400 / 422 PIECEWORK_LOG_*) (TD-812)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const worker = await newWorker('TD-812 worker');
@@ -174,7 +174,7 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
 
   const scheduleRateId = 'reg_schedule_log_rate_from_server_td_735';
   if (shouldRun(scheduleRateId, 'td735', 'piecework', 'schedule', 'package11', 'package12')) {
-    await runCase(results, scheduleRateId, 'v9.0.237: a work log posted from the project workshop schedule takes its rate from the server (the personnel custom rate, else the task base rate) and ignores the rate it sends, even for a user who may set rates (TD-735)', async () => inFiscalSandbox(async () => {
+    await runCase(results, scheduleRateId, 'v9.0.272: a work log posted from the project workshop schedule takes its rate from the server (the personnel custom rate, else the task base rate) and ignores the rate it sends, even for a user who may set rates (TD-735)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const task = await rateTask(50_000);
@@ -212,7 +212,7 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
 
   const scheduleOnceId = 'reg_schedule_row_logged_once_td_736';
   if (shouldRun(scheduleOnceId, 'td736', 'piecework', 'schedule', 'package11', 'package12')) {
-    await runCase(results, scheduleOnceId, 'v9.0.238: a workshop schedule row is logged to piecework once; the server writes the log id into the row, refuses a second or concurrent log of it with 409, refuses a missing or mismatched row with 422, keeps the link when the browser saves the schedule, and frees the row when its log is deleted or moved (TD-736)', async () => inFiscalSandbox(async () => {
+    await runCase(results, scheduleOnceId, 'v9.0.273: a workshop schedule row is logged to piecework once; the server writes the log id into the row, refuses a second or concurrent log of it with 409, refuses a missing or mismatched row with 422, keeps the link when the browser saves the schedule, and frees the row when its log is deleted or moved (TD-736)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const task = await rateTask(40_000);
@@ -293,7 +293,7 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
 
   const personnelRateId = 'reg_piecework_personnel_rate_td_809';
   if (shouldRun(personnelRateId, 'td809', 'piecework', 'package12')) {
-    await runCase(results, personnelRateId, 'v9.0.240: a personnel custom rate is saved in one transaction under the personnel lock with one active row per personnel and task, the rates page and a work log read the same rate, a negative rate or a missing personnel or task is refused, and each change writes a rate history row and an audit row with before and after; legacy duplicates are listed by the health check (TD-809)', async () => inFiscalSandbox(async () => {
+    await runCase(results, personnelRateId, 'v9.0.275: a personnel custom rate is saved in one transaction under the personnel lock with one active row per personnel and task, the rates page and a work log read the same rate, a negative rate or a missing personnel or task is refused, and each change writes a rate history row and an audit row with before and after; legacy duplicates are listed by the health check (TD-809)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const task = await rateTask(100_000);
@@ -371,7 +371,7 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
 
   const auditId = 'reg_piecework_payroll_audit_td_810';
   if (shouldRun(auditId, 'td810', 'piecework', 'payroll', 'package12')) {
-    await runCase(results, auditId, 'v9.0.241: every work log create, edit and delete and every payslip issue, status change and delete writes its own audit row inside its transaction with the request IP and before / after details, and payslip statuses are written with Persian labels (TD-810)', async () => inFiscalSandbox(async () => {
+    await runCase(results, auditId, 'v9.0.276: every work log create, edit and delete and every payslip issue, status change and delete writes its own audit row inside its transaction with the request IP and before / after details, and payslip statuses are written with Persian labels (TD-810)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       type AuditRow = { action: string; entity_id: string; description: string; ip_address: string; details: Record<string, Record<string, unknown> | unknown> };

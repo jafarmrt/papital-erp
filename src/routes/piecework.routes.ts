@@ -21,9 +21,9 @@ const router = Router();
 router.use(authenticateToken);
 
 /**
- * v9.0.231 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده فیش نامنفی‌اند. پیش‌تر `decimalInput` منفی را می‌پذیرفت و
+ * v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده فیش نامنفی‌اند. پیش‌تر `decimalInput` منفی را می‌پذیرفت و
  * کسورات «-100000» خالص فیش را بالا می‌برد بی آنکه سند حسابداری آن را ببیند.
- * v9.0.235 (TD-813): نرخ پایه عنوان کار هم (پیش‌تر «abc» صفر و «-1000» منفی ذخیره می‌شد).
+ * v9.0.270 (TD-813): نرخ پایه عنوان کار هم (پیش‌تر «abc» صفر و «-1000» منفی ذخیره می‌شد).
  */
 const nonNegativeAmount = (label: string) =>
   decimalInput(label).refine(v => v === undefined || !fin(v).isNegative(), `${label} نمی‌تواند منفی باشد`);
@@ -76,12 +76,12 @@ const paramsPersonnelIdSchema = z.object({
 });
 
 /**
- * v9.0.236 (TD-812): شناسه‌ها عدد صحیح مثبت (عدد یا رشته)، مقدار بزرگ‌تر از صفر یا «ساعت:دقیقه» و نرخ دستی نامنفی است.
+ * v9.0.271 (TD-812): شناسه‌ها عدد صحیح مثبت (عدد یا رشته)، مقدار بزرگ‌تر از صفر یا «ساعت:دقیقه» و نرخ دستی نامنفی است.
  * پیش‌تر «-5» با مبلغ منفی و «abc» صفر ذخیره می‌شد. سرویس همین را دوباره می‌سنجد (۴۲۲) و پرسنل، کار و پروژه زنده را می‌خواهد.
  */
 const bodyId = (label: string) => z.union([z.number(), z.string()]).refine(v => /^[1-9]\d*$/.test(String(v).trim()), `${label} باید عدد صحیح مثبت باشد`);
 
-// v9.0.240 (TD-809): شناسه‌ها عدد صحیح مثبت و نرخ اختصاصی نامنفی و الزامی (پیش‌تر «-50000» و پرسنل ۹۸۷۶۵۴ پذیرفته شد)
+// v9.0.275 (TD-809): شناسه‌ها عدد صحیح مثبت و نرخ اختصاصی نامنفی و الزامی (پیش‌تر «-50000» و پرسنل ۹۸۷۶۵۴ پذیرفته شد)
 const setPersonnelRateSchema = z.object({
   body: z.object({
     personnelId: bodyId('شناسه پرسنل'),
@@ -108,7 +108,7 @@ const pieceworkLogItemSchema = z.object({
   quantity: workQuantityInput,
   unitRate: nonNegativeAmount('نرخ کارکرد').optional(),
   notes: z.string().optional(),
-  // v9.0.237 (TD-735): ردیف برنامه کارگاه پروژه؛ نرخ چنین کارکردی را سرور می‌دهد
+  // v9.0.272 (TD-735): ردیف برنامه کارگاه پروژه؛ نرخ چنین کارکردی را سرور می‌دهد
   scheduleRef: z.object({
     stageId: bodyId('شناسه مرحله').transform(Number),
     productId: z.string().trim().min(1, 'شناسه محصول ردیف برنامه الزامی است').max(200),
@@ -155,7 +155,7 @@ const generatePieceworkPayrollSchema = z.object({
   })
 });
 
-// v9.0.234 (TD-816): تاریخ، روش و شماره پیگیری پرداخت فقط از «ثبت پرداخت» (register-payment) نوشته می‌شود
+// v9.0.269 (TD-816): تاریخ، روش و شماره پیگیری پرداخت فقط از «ثبت پرداخت» (register-payment) نوشته می‌شود
 const PAYMENT_FIELDS_OF_PAYROLL = ['paymentDate', 'paymentMethod', 'paymentReference'] as const;
 const updatePieceworkPayrollStatusSchema = z.object({
   body: z.object({
@@ -297,7 +297,7 @@ router.post('/piecework/tasks/import-excel', authorizePermission('personnel.mana
       description: `واردات اکسل عناوین کاری پرکیسی (${result.createdCount} عنوان جدید، ${result.updatedCount} عنوان ویرایش‌شده، شیوه: ${mode})`
     });
 
-    // v9.0.235 (TD-813): ردیف‌های ثبت‌نشده (نرخ متن یا منفی) با شماره ردیف و دلیل در `errors`
+    // v9.0.270 (TD-813): ردیف‌های ثبت‌نشده (نرخ متن یا منفی) با شماره ردیف و دلیل در `errors`
     const skipped = result.errors.length > 0 ? ` ${result.errors.length} ردیف ثبت نشد.` : '';
     res.json({
       status: 'ok',
@@ -586,7 +586,7 @@ router.post('/piecework/logs', authorizePermission('personnel.manage', 'piecewor
         createdByUsername: currentUsername
       })),
       undefined,
-      // v9.0.241 (TD-810): یک ردیف ممیزی برای هر کارکرد در تراکنش ثبت، با کاربر و IP
+      // v9.0.276 (TD-810): یک ردیف ممیزی برای هر کارکرد در تراکنش ثبت، با کاربر و IP
       { req }
     );
 
@@ -707,7 +707,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorizePe
       notes,
       userId: currentUserId,
       username: currentUsername,
-      // v9.0.241 (TD-810): ردیف ممیزی با جزئیات و IP در تراکنش صدور نوشته می‌شود
+      // v9.0.276 (TD-810): ردیف ممیزی با جزئیات و IP در تراکنش صدور نوشته می‌شود
       req
     });
 

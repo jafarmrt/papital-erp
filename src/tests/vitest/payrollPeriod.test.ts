@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fixedSalaryPeriodEnd, payrollPeriodFutureError, serviceEndOf } from '../../lib/payroll/payrollPeriod';
 
-// v9.0.233 (TD-808, decision t4 «الف»): fixed salary up to the end of service; no payslip for a period that has not ended
+// v9.0.268 (TD-808, decision t4 «الف»): fixed salary up to the end of service; no payslip for a period that has not ended
 describe('payroll period rules shared by the server and the payslip form (TD-808)', () => {
   it('reads the end of service only for a terminated personnel', () => {
     expect(serviceEndOf({ employmentStatus: 'قطع همکاری', endDate: '2026-08-22' })).toEqual({ kind: 'ended', endIso: '2026-08-22' });

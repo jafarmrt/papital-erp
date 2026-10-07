@@ -1183,9 +1183,9 @@ export class FinancialHealthService {
     const categoryIntegrityTest = buildCategoryIntegrityHealthTest(await findCategoryIntegrityIssues(), await hasCategoryNameUniqueIndex());
     overallScore += categoryIntegrityTest.scoreImpact;
     tests.push(categoryIntegrityTest);
-    // آزمون ۳۷: v9.0.231 (TD-804) فیش حقوقی با پاداش یا کسورات منفی، بی سند یا ناهمخوان با سند (فقط فهرست، بی بازنویسی)
+    // آزمون ۳۷: v9.0.266 (TD-804) فیش حقوقی با پاداش یا کسورات منفی، بی سند یا ناهمخوان با سند (فقط فهرست، بی بازنویسی)
     tests.push(buildPayrollVoucherHealthTest(await findPayrollVoucherMismatches()));
-    // آزمون ۳۸: v9.0.240 (TD-809) بیش از یک نرخ اختصاصی فعال برای یک پرسنل و عنوان کار (مهاجرت 0075؛ فقط فهرست)
+    // آزمون ۳۸: v9.0.275 (TD-809) بیش از یک نرخ اختصاصی فعال برای یک پرسنل و عنوان کار (مهاجرت 0076؛ فقط فهرست)
     const [duplicatePersonnelRates, personnelRateIndexPresent] = await Promise.all([findDuplicatePersonnelRates(), hasPersonnelRateUniqueIndex()]);
     const personnelRateTest = buildPersonnelRateHealthTest(duplicatePersonnelRates, personnelRateIndexPresent);
     overallScore += personnelRateTest.scoreImpact;

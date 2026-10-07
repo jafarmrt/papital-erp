@@ -458,7 +458,7 @@ export function PieceworkExcelModal({
                 </div>
               </div>
 
-              {/* v9.0.235 (TD-813): ردیف‌هایی که سرور ثبت نکرد، با دلیل */}
+              {/* v9.0.270 (TD-813): ردیف‌هایی که سرور ثبت نکرد، با دلیل */}
               {importResult && importResult.errors.length > 0 && (
                 <ul className="w-full max-w-lg text-right text-xs bg-rose-50 border border-rose-200 rounded-2xl px-4 py-3 space-y-1">
                   {importResult.errors.map(e => (

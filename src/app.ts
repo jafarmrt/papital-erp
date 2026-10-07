@@ -1,4 +1,5 @@
 import express from 'express';
+import { ATTACHMENT_BODY_LIMIT, DEFAULT_BODY_LIMIT, acceptsAttachmentBody } from './lib/attachments/attachmentBodyLimit.js';
 import 'express-async-errors';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -159,15 +160,19 @@ export async function createApp(): Promise<express.Express> {
   }));
   app.use(cookieParser());
   app.use(requestContextMiddleware);
-  app.use(express.json({
-    limit: '5mb',
+  // v9.0.255 (TD-641, decision ت۴): the save routes of records with attachments take 14 MB, every other route 5 MB
+  const jsonBody = (limit: string) => express.json({
+    limit,
     verify: (req: any, _res, buf) => {
       req.rawBody = buf;
     }
-  }));
+  });
+  const defaultJson = jsonBody(DEFAULT_BODY_LIMIT);
+  const attachmentJson = jsonBody(ATTACHMENT_BODY_LIMIT);
+  app.use((req, res, next) => (acceptsAttachmentBody(req.method, req.originalUrl) ? attachmentJson : defaultJson)(req, res, next));
   app.use(express.urlencoded({
     extended: true,
-    limit: '5mb',
+    limit: DEFAULT_BODY_LIMIT,
     verify: (req: any, _res, buf) => {
       if (!req.rawBody) req.rawBody = buf;
     }

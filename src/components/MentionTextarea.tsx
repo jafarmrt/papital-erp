@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from 'react';
 import { AtSign, UserCheck } from 'lucide-react';
+import { detectMentionedUserIds, mentionDisplayName, sameIdSet } from '../lib/mentions/mentionDetection';
 
 export interface MentionUser {
   id: number;
@@ -25,11 +26,11 @@ interface MentionTextareaProps {
   id?: string;
   name?: string;
   hintText?: string;
+  maxLength?: number;
 }
 
 export function getUserDisplayName(u: MentionUser): string {
-  if (!u) return '';
-  return (u.fullName || u.full_name || u.username || '').trim();
+  return mentionDisplayName(u);
 }
 
 export function MentionTextarea({
@@ -46,7 +47,8 @@ export function MentionTextarea({
   disabled = false,
   id,
   name,
-  hintText = 'برای منشن همکاران، کلید @ را تایپ کنید.'
+  hintText = 'برای اشاره به همکاران، کلید @ را تایپ کنید.',
+  maxLength,
 }: MentionTextareaProps) {
   const [showPopover, setShowPopover] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,28 +59,12 @@ export function MentionTextarea({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Sync mentions array with @mentions present in text
+  // v9.0.232 (TD-628): the mentions are exactly the users the text names with «@» (longest name at a word boundary),
+  // so «@علی رضایی» never mentions «علی» too and a mention deleted from the text leaves the list
   useEffect(() => {
     if (!onMentionsChange || !users.length) return;
-    const detectedIds = new Set<number>(mentions);
-    let changed = false;
-
-    users.forEach((u) => {
-      const name = getUserDisplayName(u);
-      const uname = u.username;
-      const isMentioned =
-        (name && value.includes(`@${name}`)) ||
-        (uname && value.includes(`@${uname}`));
-
-      if (isMentioned && !detectedIds.has(u.id)) {
-        detectedIds.add(u.id);
-        changed = true;
-      }
-    });
-
-    if (changed) {
-      onMentionsChange(Array.from(detectedIds));
-    }
+    const detected = detectMentionedUserIds(value, users);
+    if (!sameIdSet(detected, mentions)) onMentionsChange(detected);
   }, [value, users]);
 
   // Filter users based on query
@@ -195,6 +181,7 @@ export function MentionTextarea({
         rows={rows}
         required={required}
         disabled={disabled}
+        maxLength={maxLength}
         className={className}
       />
 
@@ -206,7 +193,7 @@ export function MentionTextarea({
           </span>
           {mentions.length > 0 && (
             <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-              {mentions.length} منشن فعال
+              {mentions.length} اشاره
             </span>
           )}
         </div>
@@ -221,7 +208,7 @@ export function MentionTextarea({
           <div className="px-3 py-1.5 bg-slate-900 text-white text-[10px] font-bold flex items-center justify-between">
             <span className="flex items-center gap-1">
               <AtSign size={12} className="text-amber-400" />
-              منشن همکاران (کلید Enter یا کلیک جهت درج):
+              اشاره به همکاران (کلید Enter یا کلیک جهت درج):
             </span>
             <span className="text-[9px] text-slate-300 font-normal">
               {filteredUsers.length} همکار یافت شد

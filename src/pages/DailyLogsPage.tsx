@@ -6,13 +6,15 @@ import persian_fa from "react-date-object/locales/persian_fa";
 
 import { User } from '../types';
 import { formatPersianNumber, getTodayJalaliDate, extractDateString } from '../utils';
-import { useAuth } from '../contexts/AuthContext';
+import { useHasPermission } from '../contexts/AuthContext';
 import { useDailyLogs } from '../hooks/useDailyLogs';
 import { DailyLogStatsCards } from '../components/daily-logs/DailyLogStatsCards';
 import { DailyLogsList } from '../components/daily-logs/DailyLogsList';
 import { DailyLogSummaryView } from '../components/daily-logs/DailyLogSummaryView';
 import { DailyLogModal } from '../components/daily-logs/DailyLogModal';
 import { DailyLogReviewModal } from '../components/daily-logs/DailyLogReviewModal';
+import { DailyLogDetailModal } from '../components/daily-logs/DailyLogDetailModal';
+import { useDailyLogFocus } from '../hooks/useDailyLogFocus';
 
 interface DailyLogsPageProps {
   user: User;
@@ -20,14 +22,9 @@ interface DailyLogsPageProps {
 
 export default function DailyLogsPage({ user }: DailyLogsPageProps) {
   const dl = useDailyLogs(user);
-  const { userPermissions } = useAuth();
-
-  // گزارش تجمیعی مدیریت: فقط ادمین یا دارای مجوز daily_logs.manage_all
-  const canViewSummary = Boolean(
-    user.role === 'admin' ||
-    userPermissions?.isAdmin ||
-    (Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('daily_logs.manage_all'))
-  );
+  const { focusedLog, closeFocusedLog } = useDailyLogFocus();
+  // گزارش تجمیعی مدیریت فقط با مجوز daily_logs.manage_all (مدیر سیستم همه مجوزها را دارد؛ v9.0.231، TD-626)
+  const canViewSummary = useHasPermission('daily_logs.manage_all');
 
   // اگر تب تجمیعی فعال بود ولی دسترسی وجود نداشت، به تب همه برگرد
   useEffect(() => {
@@ -48,7 +45,7 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
           <div className="text-left text-xs font-semibold text-slate-700">
             <p>کاربر / همکار: {user.full_name || user.username}</p>
             <p>تاریخ خروجی: {getTodayJalaliDate()}</p>
-            <p>تعداد گزارش‌ها: {formatPersianNumber(dl.logs.length)} مورد</p>
+            <p>تعداد گزارش‌ها: {formatPersianNumber(dl.total)} مورد</p>
           </div>
         </div>
       </div>
@@ -93,7 +90,7 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              منشن‌شده‌های من ({formatPersianNumber(dl.stats.my_mentions_count)})
+              اشاره‌شده به من ({formatPersianNumber(dl.stats.my_mentions_count)})
             </button>
             {canViewSummary && (
               <button
@@ -103,7 +100,7 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
                     ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-xs'
                     : 'text-indigo-600 hover:bg-indigo-50 border border-indigo-200/60'
                 }`}
-                title="فقط مدیر سیستم یا کاربران دارای مجوز daily_logs.manage_all"
+                title="فقط برای دارندگان مجوز «مدیریت و نظارت کامل گزارش‌ها»"
               >
                 <BarChart3 className="w-3.5 h-3.5" />
                 گزارش تجمیعی مدیریت
@@ -198,6 +195,7 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
           logs={dl.logs}
           loading={dl.loading}
           page={dl.page}
+          total={dl.total}
           setPage={dl.setPage}
           limit={dl.limit}
           user={user}
@@ -254,8 +252,9 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
         setReviewNotes={dl.setReviewNotes}
         isSubmittingReview={dl.isSubmittingReview}
         onSaveReview={dl.handleSaveReview}
-        systemUsers={dl.systemUsers}
       />
+
+      <DailyLogDetailModal log={focusedLog} onClose={closeFocusedLog} />
     </div>
   );
 }

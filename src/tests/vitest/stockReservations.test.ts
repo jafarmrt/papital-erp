@@ -103,6 +103,21 @@ describe('itemReservationSummary', () => {
     expect(s.maxAllowedForExit).toBe(0);
   });
 
+  it('caps the exit by the stock of the selected warehouse, like computeSellable on the server (TD-799)', () => {
+    // v9.0.242 (B08-30): انبار WH1 صفر و WH2 ده عدد؛ پیش‌تر سقف حواله از WH1 هم ده بود و سرور سند را رد می‌کرد
+    const split = { ...stone, current_stock: 10, stocks: { WH1: 0, WH2: 10 }, stock_WH1: 0, stock_WH2: 10 };
+    expect(itemReservationSummary([], split, '', 'WH1').maxAllowedForExit).toBe(0);
+    expect(itemReservationSummary([], split, '', 'WH1').locationStock).toBe(0);
+    expect(itemReservationSummary([], split, '', 'WH2').maxAllowedForExit).toBe(10);
+    // both limits apply: min(warehouse stock, total − other reservations)
+    expect(itemReservationSummary(reservations, split, '7', 'WH2').maxAllowedForExit).toBe(6);
+    const threeAndSeven = { ...split, stocks: { WH1: 3, WH2: 7 }, stock_WH1: 3, stock_WH2: 7 };
+    expect(itemReservationSummary(reservations, threeAndSeven, '7', 'WH1').maxAllowedForExit).toBe(3);
+    // a warehouse the item has no row in holds nothing; no warehouse means the whole stock
+    expect(itemReservationSummary([], split, '', 'WH9').maxAllowedForExit).toBe(0);
+    expect(itemReservationSummary([], split, '').maxAllowedForExit).toBe(10);
+  });
+
   it('allows the whole stock for an item without reservations', () => {
     const s = itemReservationSummary(reservations, { id: 20, code: 'P-20', name: 'گوشواره', current_stock: 6 }, '7');
     expect(s.matchingReservations).toEqual([]);

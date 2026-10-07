@@ -1,4 +1,4 @@
--- Drizzle Migration 0075: one active custom piecework rate per personnel and task (v9.0.240 / TD-809, package 12 payroll)
+-- Drizzle Migration 0076: one active custom piecework rate per personnel and task (v9.0.275 / TD-809, package 12 payroll)
 --
 -- A personnel custom rate was saved with "read, then insert or update" outside any transaction, so concurrent saves
 -- created two active rows for one personnel and task: the rates page showed one of them and a work log took the
