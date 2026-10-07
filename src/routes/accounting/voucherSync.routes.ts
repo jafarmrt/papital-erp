@@ -39,7 +39,7 @@ router.post('/accounting/quick-fix/sync-all-vouchers', authorizePermission('acco
   res.json({ success: summary.failed === 0, message: parts.join('؛ '), syncedCount: summary.created, ...summary });
 }));
 
-// V10-6.1: وضعیت صدور خودکار اسناد حسابداری به تفکیک نوع سند. v9.0.281 (TD-560): شمارش در سرویس، فقط اسناد نهایی،
+// V10-6.1: وضعیت صدور خودکار اسناد حسابداری به تفکیک نوع سند. v9.0.292 (TD-560): شمارش در سرویس، فقط اسناد نهایی،
 // انبارگردانی پشتیبانی‌شده و انتقال بی اثر مالی (src/lib/accounting/automationStatus.ts)
 router.get('/accounting/automation-status', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (_req, res) => {
   res.json(await getAutomationStatus());

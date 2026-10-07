@@ -9953,7 +9953,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const base = { date: '1405/01/15', description: 'ERP-TEST-MARKER سند TD-247' };
       for (const [debit, want] of [[100.005, true], [100.01, true], [100.02, false]] as Array<[number, boolean]>) {
         const c = createVoucherSchema.safeParse({ body: { ...base, items: items(debit) } }).success;
-        const u = updateVoucherSchema.safeParse({ params: { id: '1' }, body: { version: 1, items: items(debit) } }).success; // v9.0.279 (TD-555): ویرایش نسخه می‌خواهد
+        const u = updateVoucherSchema.safeParse({ params: { id: '1' }, body: { version: 1, items: items(debit) } }).success; // v9.0.290 (TD-555): ویرایش نسخه می‌خواهد
         const k = correctVoucherSchema.safeParse({ params: { id: '1' }, body: { reason: 'اصلاح آزمون', newItems: items(debit) } }).success;
         check(c === want && u === want && k === want, `طرح سند با بدهکار ${debit} و بستانکار 100 باید ${want ? 'پذیرفته' : 'رد'} شود (ایجاد ${c}، ویرایش ${u}، اصلاحی ${k})`);
       }
@@ -10596,7 +10596,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR z (v9.0.286 on): payslip deductions account 3205 (TD-554)
   const { runPayrollDeductionAccountTests } = await import('../regression/payrollDeductionAccountTests.js');
   results.push(...await runPayrollDeductionAccountTests(shouldRun));
-  // Package 3 PR v (v9.0.278 on): automatic vouchers and the journal voucher page (TD-552 ...)
+  // Package 3 PR v (v9.0.289 on): automatic vouchers and the journal voucher page (TD-552 ...)
   const { runVoucherPageTests } = await import('../regression/voucherPageTests.js');
   results.push(...await runVoucherPageTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check

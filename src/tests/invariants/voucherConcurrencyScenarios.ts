@@ -119,7 +119,7 @@ export async function checkReversalLifecycle(wh: string): Promise<string[]> {
   await VoucherService.setVoucherStatus(invoiceVoucher, 'approved');
   await DocumentService.deleteDocument(invoiceId, 'inv');
   const invoiceToDraft = await rejection(() => VoucherService.setVoucherStatus(invoiceVoucher, 'draft'));
-  // v9.0.278 (TD-552): سند منشأدار پیش از سنجش سند برگشت با قفل منشأ رد می‌شود؛ هر دو رد همان تضمین TD-323 است
+  // v9.0.289 (TD-552): سند منشأدار پیش از سنجش سند برگشت با قفل منشأ رد می‌شود؛ هر دو رد همان تضمین TD-323 است
   const refusedToDraft = invoiceToDraft?.includes('سند برگشت فعال') || invoiceToDraft?.includes('سند انبار یا فاکتور را ابطال');
   if (!refusedToDraft) problems.push(`سند فاکتور ابطال‌شده به پیش‌نویس برگشت (${invoiceToDraft ?? 'پذیرفته شد'})`);
   const deleteVoucher = await rejection(() => VoucherService.deleteJournalVoucher(invoiceVoucher));

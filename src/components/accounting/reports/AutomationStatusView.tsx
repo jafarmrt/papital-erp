@@ -3,7 +3,7 @@ import { Factory, RefreshCw, MinusCircle, CheckCircle2, AlertTriangle } from 'lu
 import { formatPersianNumber } from '../../../utils';
 import { useAutomationStatusQuery } from '../../../hooks/accounting/useAccountingAuditQueries';
 
-// V10-6.1: پنل وضعیت صدور خودکار اسناد حسابداری به تفکیک نوع سند. v9.0.281 (TD-560): فقط اسناد نهایی، انبارگردانی
+// V10-6.1: پنل وضعیت صدور خودکار اسناد حسابداری به تفکیک نوع سند. v9.0.292 (TD-560): فقط اسناد نهایی، انبارگردانی
 // خودکار و انتقال بی اثر مالی؛ هشدار فقط برای نوعی که سند نهایی بی سند حسابداری دارد
 export const AutomationStatusView: React.FC = () => {
   // React Query: با بسته شدن زیرتب درخواست لغو می‌شود؛ خطا مثل قبل پیام جداگانه ندارد

@@ -98,9 +98,9 @@ export interface JournalVoucher {
   sourcePayrollId?: number | null;
   /** v9.0.159 (TD-545): سال مالی‌ای که «بستن سال مالی» این سند اختتامیه یا افتتاحیه را برایش صادر کرده است */
   sourceFiscalYear?: number | null;
-  /** v9.0.278 (TD-552، ت۸): منشأ سند خودکار (یا منشأ سندی که این سند برگشت آن است)؛ null برای سند دستی */
+  /** v9.0.289 (TD-552، ت۸): منشأ سند خودکار (یا منشأ سندی که این سند برگشت آن است)؛ null برای سند دستی */
   sourceKind?: VoucherSourceKind | null;
-  /** v9.0.279 (TD-555): نسخه سند برای ویرایش هم‌زمان (۴۰۹ OCC_CONFLICT) */
+  /** v9.0.290 (TD-555): نسخه سند برای ویرایش هم‌زمان (۴۰۹ OCC_CONFLICT) */
   version?: number;
   currency?: string | null;
   createdById?: number | null;

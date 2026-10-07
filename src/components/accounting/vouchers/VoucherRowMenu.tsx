@@ -4,7 +4,7 @@ import type { JournalVoucher } from '../../../types';
 import { voucherLockNote, voucherRowActions, type VoucherRowAction } from '../../../lib/accounting/voucherRowActions';
 
 /**
- * v9.0.282 (TD-568، B03-26): منوی «...» ردیف سند حسابداری؛ کارها از `voucherRowActions` می‌آیند، همان قاعده‌های سرور.
+ * v9.0.293 (TD-568، B03-26): منوی «...» ردیف سند حسابداری؛ کارها از `voucherRowActions` می‌آیند، همان قاعده‌های سرور.
  * سند منشأدار یا سند بستن سال به‌جای کارهای تغییر، دلیل قفل را نشان می‌دهد.
  */
 interface VoucherRowMenuProps {

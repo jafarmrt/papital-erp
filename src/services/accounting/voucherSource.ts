@@ -5,7 +5,7 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 import { VOUCHER_SOURCE_KINDS, VOUCHER_SOURCE_LABELS, type VoucherSourceKind } from '../../lib/accounting/voucherSource.js';
 
 /**
- * v9.0.278 (TD-552، B03-10، تصمیم ت۸ الف): منشأ هر سند حسابداری. پیوندها همان ستون‌هایی‌اند که ابطال منشأ با آن‌ها سند را
+ * v9.0.289 (TD-552، B03-10، تصمیم ت۸ الف): منشأ هر سند حسابداری. پیوندها همان ستون‌هایی‌اند که ابطال منشأ با آن‌ها سند را
  * می‌یابد: `source_document_id` (سند انبار، فاکتور، انبارگردانی)، `source_payroll_id`، `source_cheque_id` یا `cheques.voucher_id`،
  * `source_bom_allocation_id` و `treasury_transactions.voucher_id` (دریافت، پرداخت، انتقال، پرداخت فیش). سند برگشت
  * (`REV-V…`، `VOID-REPOST-V…`، `RE-REV-V…`) منشأ سند اصلی‌اش را دارد. پیوند قدیمی (`reference_module`، `reference_id`)
