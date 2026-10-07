@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.123 — Document Read Scope
+- **Document Read Scope:** the full document list needs a document permission; the stock count page reads only its own documents (TD-890).
+
 ### v9.0.122 — Project Pick List for Forms
 - **Project Pick List for Forms:** forms of other sections pick projects from a short list; the full project list needs the projects permission (TD-889).
 

@@ -43,6 +43,14 @@ const SECTIONS: Record<string, Section> = {
     fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/projects(?:\?|['"`])/g,
     ownPages: ['hooks/queries/useProjectQueries.ts'],
   },
+  // v9.0.123 (TD-890): فهرست اسناد پیش‌فاکتورها برای فرم فاکتور هم از خود بخش است؛ صفحه انبارگردانی با audit.view فقط
+  // نوع‌های شمارش و انتقال را می‌گیرد (READ_PERMISSIONS.stockCountDocuments، آزمون sec_document_read_scope_td_890)
+  documents: {
+    fullList: 'documents',
+    ownGroups: ['documents.'],
+    fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/documents(?:\?|['"`])/g,
+    ownPages: ['hooks/queries/useDocumentQueries.ts', 'hooks/invoices/useInvoiceReferenceData.ts', 'hooks/inventoryAudit/useInventoryAuditQueries.ts'],
+  },
 };
 
 /** درخواست خواندن فهرست کامل در متن فایل؛ فراخوانی‌ای که در همان چند خط `method` نوشتن دارد (POST و …) خواندن نیست */

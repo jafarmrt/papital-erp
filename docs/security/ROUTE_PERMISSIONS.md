@@ -113,7 +113,7 @@
 | DELETE | `/api/customers/:id` | customers.manage |
 | PUT | `/api/customers/:id` | customers.manage |
 | GET | `/api/customers/:id/account-card` | accounting.reports \| accounting.view \| customers.view \| customers.manage |
-| GET | `/api/customers/:id/documents` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
+| GET | `/api/customers/:id/documents` | documents.view \| customers.view \| crm.view |
 | POST | `/api/customers/bulk-import` | customers.manage |
 | GET | `/api/customers/export-excel` | customers.view |
 | GET | `/api/customers/options` | customers.view \| documents.view \| documents.create \| warehouse.in \| warehouse.view \| products.view \| crm.view \| projects.view \| procurement.view \| accounting.view \| accounting.reports \| accounting.vouchers \| accounting.treasury \| accounting.cheques |
@@ -126,16 +126,16 @@
 | GET | `/api/daily-logs/stats` | daily_logs.view |
 | GET | `/api/daily-logs/summary-report` | daily_logs.manage_all |
 | GET | `/api/dashboard-bi-stats` | reports.view \| warehouse.view |
-| GET | `/api/documents` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
+| GET | `/api/documents` | documents.view \| documents.create \| documents.edit \| audit.view |
 | POST | `/api/documents` | documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| audit.apply |
 | DELETE | `/api/documents/:id` | documents.delete |
-| GET | `/api/documents/:id` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
+| GET | `/api/documents/:id` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
 | PUT | `/api/documents/:id` | documents.edit |
 | PUT | `/api/documents/:id/finalize` | documents.finalize \| warehouse.in \| warehouse.out |
 | PUT | `/api/documents/:id/notes` | documents.edit |
-| GET | `/api/documents/audit-items` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
-| GET | `/api/documents/by-ref/:ref` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
-| GET | `/api/documents/next-ref` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
+| GET | `/api/documents/audit-items` | audit.view |
+| GET | `/api/documents/by-ref/:ref` | documents.view \| documents.create \| documents.edit \| workflow.view \| audit.view |
+| GET | `/api/documents/next-ref` | documents.view \| documents.create \| documents.edit \| warehouse.in \| warehouse.out \| warehouse.transfer \| audit.view |
 | GET | `/api/drafts` | login-only |
 | POST | `/api/drafts` | login-only |
 | DELETE | `/api/drafts/:entityType` | login-only |

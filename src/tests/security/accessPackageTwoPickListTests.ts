@@ -1,7 +1,7 @@
 import { inArray } from 'drizzle-orm';
 import { TestCaseResult } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { customers, items, itemWarehouseStocks, productionProjects } from '../../db/schema.js';
+import { customers, documents, items, itemWarehouseStocks, productionProjects } from '../../db/schema.js';
 import { runCase, type Row, type ShouldRun } from './workflowTestHarness.js';
 
 /**
@@ -208,6 +208,56 @@ export async function runAccessPackageTwoPickListTests(shouldRun: ShouldRun): Pr
         }
       } finally {
         await orm.delete(productionProjects).where(inArray(productionProjects.id, [project.id])).catch(() => undefined);
+      }
+    });
+  }
+
+  if (shouldRun('sec_document_read_scope_td_890', 'security', 'td890', 'documents', 'pick', 'permissions', 'package2')) {
+    await runCase(results, {
+      id: 'sec_document_read_scope_td_890',
+      name: 'v9.0.123: the full document list opens only with document keys; the stock count page reads only stock count and transfer documents (TD-890)',
+      details: 'GET /api/documents is 403 for warehouse.view, warehouse.in, warehouse.out, crm.view, workflow.view and for audit.view outside the audit and transfer types; documents.view lists the invoice; audit.view lists and opens the stock count document (by id and by reference) but not the invoice; workflow.view opens a document record; the stock count sheet needs audit.view; the next number opens for warehouse.in and warehouse.transfer and not for crm.view; the party dossier documents open for customers.view and crm.view and not for warehouse.view',
+    }, async (h, wrong) => {
+      const { createTestCustomer, createTestDocument } = await import('../fixtures/factories.js');
+      const party = await createTestCustomer({ name: `ERP-TEST-MARKER party ${h.tag}` });
+      const invoice = (await createTestDocument({ type: 'invoice', status: 'final', refNumber: `INVD${h.tag}`, buyerName: party.name })).document;
+      const stockCount = (await createTestDocument({ type: 'audit', status: 'final', refNumber: `AUDD${h.tag}` })).document;
+      try {
+        const ids = (body: unknown): number[] => {
+          const list = Array.isArray((body as { data?: unknown })?.data) ? (body as { data: Row[] }).data : (Array.isArray(body) ? body as Row[] : []);
+          return list.map(r => Number(r.id));
+        };
+        const expect = async (label: string, url: string, keys: readonly string[], status: number, contains?: number) => {
+          for (const key of keys) {
+            const res = await h.get(url, await h.sessionWith([key]));
+            if (res.status !== status) wrong.push(`${key}: ${label} returned ${res.status}, not ${status}`);
+            else if (contains !== undefined && !ids(res.body).includes(contains)) wrong.push(`${key}: ${label} does not list document ${contains}`);
+          }
+        };
+
+        await expect('GET /api/documents?type=invoice', '/api/documents?type=invoice&limit=500', ['warehouse.view', 'warehouse.in', 'warehouse.out', 'crm.view', 'workflow.view', 'audit.view'], 403);
+        await expect('GET /api/documents?type=invoice', '/api/documents?type=invoice&limit=500', ['documents.view'], 200, invoice.id);
+        await expect('GET /api/documents?type=audit', '/api/documents?type=audit&limit=500', ['audit.view'], 200, stockCount.id);
+        await expect('GET /api/documents without a type', '/api/documents', ['audit.view'], 403);
+
+        await expect('GET /api/documents/:id (stock count)', `/api/documents/${stockCount.id}`, ['audit.view', 'documents.view'], 200);
+        await expect('GET /api/documents/:id (invoice)', `/api/documents/${invoice.id}`, ['audit.view', 'warehouse.view', 'warehouse.in', 'crm.view'], 403);
+        await expect('GET /api/documents/:id (invoice)', `/api/documents/${invoice.id}`, ['documents.view', 'workflow.view'], 200);
+        await expect('GET /api/documents/by-ref (stock count)', `/api/documents/by-ref/${stockCount.refNumber}?type=audit`, ['audit.view'], 200);
+        await expect('GET /api/documents/by-ref (invoice)', `/api/documents/by-ref/${invoice.refNumber}?type=invoice`, ['audit.view'], 403);
+
+        await expect('GET /api/documents/audit-items', '/api/documents/audit-items', ['audit.view'], 200);
+        await expect('GET /api/documents/audit-items', '/api/documents/audit-items', ['documents.view', 'warehouse.view', 'crm.view'], 403);
+
+        await expect('GET /api/documents/next-ref?type=receipt', '/api/documents/next-ref?type=receipt', ['warehouse.in'], 200);
+        await expect('GET /api/documents/next-ref?type=transfer', '/api/documents/next-ref?type=transfer', ['warehouse.transfer', 'audit.view'], 200);
+        await expect('GET /api/documents/next-ref?type=invoice', '/api/documents/next-ref?type=invoice', ['crm.view', 'workflow.view'], 403);
+
+        await expect('GET /api/customers/:id/documents', `/api/customers/${party.id}/documents`, ['customers.view', 'crm.view', 'documents.view'], 200, invoice.id);
+        await expect('GET /api/customers/:id/documents', `/api/customers/${party.id}/documents`, ['warehouse.view', 'workflow.view'], 403);
+      } finally {
+        await orm.delete(documents).where(inArray(documents.id, [invoice.id, stockCount.id])).catch(() => undefined);
+        await orm.delete(customers).where(inArray(customers.id, [party.id])).catch(() => undefined);
       }
     });
   }

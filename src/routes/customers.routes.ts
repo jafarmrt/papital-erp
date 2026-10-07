@@ -230,7 +230,7 @@ const customerDocumentsValidation = z.object({
 });
 
 // v9.0.6 (TD-417): اسناد فروش پرونده مشتری با نام خریدار برابر، نه جست‌وجوی متنی (همان مجوزهای فهرست اسناد)
-router.get('/customers/:id/documents', authorizePermission(...READ_PERMISSIONS.documents), validate(customerDocumentsValidation), asyncHandler(async (req, res) => {
+router.get('/customers/:id/documents', authorizePermission(...READ_PERMISSIONS.partyDocuments), validate(customerDocumentsValidation), asyncHandler(async (req, res) => {
   const { page, limit } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
   res.json(await getCustomerSalesDocuments(Number(req.params.id), page, limit));
 }));

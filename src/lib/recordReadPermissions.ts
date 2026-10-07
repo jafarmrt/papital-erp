@@ -42,10 +42,29 @@ export const READ_PERMISSIONS = {
   customersExport: ['customers.view'],
   /** کارت حساب و مانده طرف حساب (همان مجوزهای کارت حساب گزارش‌های مالی؛ v9.0.4، TD-416) */
   partyAccountCard: ['accounting.reports', 'accounting.view', 'customers.view', 'customers.manage'],
-  documents: [
-    'documents.view', 'documents.create', 'documents.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out',
-    'audit.view', 'crm.view', 'workflow.view'
+  /**
+   * فهرست کامل اسناد (با مبالغ و طرف حساب) فقط با مجوز بخش اسناد: فهرست فاکتورها و فرم فاکتور (v9.0.123، TD-890، ت۱۰ الف؛
+   * پیش‌تر کلیدهای انبار، انبارگردانی، ارتباط با مشتری و گردش کار هم آن را باز می‌کردند)
+   */
+  documents: ['documents.view', 'documents.create', 'documents.edit'],
+  /**
+   * صفحه انبارگردانی: فهرست و پرونده فقط سندهای شمارش و انتقال (`STOCK_COUNT_PAGE_DOCUMENT_TYPES` در
+   * `src/services/documents/documentReadScope.ts`)
+   */
+  stockCountDocuments: ['audit.view'],
+  /** پرونده یک سند و پیوست‌هایش: بخش اسناد و کارتابل تأیید (`workflow.view`) */
+  documentRecord: ['documents.view', 'documents.create', 'documents.edit', 'workflow.view'],
+  /**
+   * شماره بعدی سند (`/documents/next-ref`): فرم‌هایی که سند ثبت می‌کنند — فاکتور و حواله، رسید و حواله انبار، انبارگردانی
+   * و انتقال بین انبارها
+   */
+  documentNextRef: [
+    'documents.view', 'documents.create', 'documents.edit', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'audit.view',
   ],
+  /** برگه شمارش انبارگردانی (`/documents/audit-items`، موجودی دفتری هر کالا) */
+  stockCountSheet: ['audit.view'],
+  /** اسناد فروش یک طرف حساب در پرونده او (`/customers/:id/documents`): صفحه اسناد، طرف حساب‌ها و ارتباط با مشتری */
+  partyDocuments: ['documents.view', 'customers.view', 'crm.view'],
   /**
    * فهرست کامل کالاها (با میانگین بها، نقطه سفارش، رزروها و نسخه رکورد) فقط با مجوزهای بخش کالا: صفحه کالاها، گالری و
    * قیمت‌گذاری (v9.0.121، TD-888، ت۱۰ الف)
@@ -103,7 +122,7 @@ export const READ_PERMISSIONS = {
  * آزمایشی طراح) مجوز دیگری نمی‌خواهد.
  */
 export const WORKFLOW_ENTITY_READ_PERMISSIONS: Readonly<Record<string, readonly string[]>> = {
-  document: READ_PERMISSIONS.documents,
+  document: READ_PERMISSIONS.documentRecord,
   journal_voucher: READ_PERMISSIONS.journalVouchers,
   voucher: READ_PERMISSIONS.journalVouchers,
   item: READ_PERMISSIONS.items,
@@ -117,7 +136,7 @@ export const RECORD_READ_PERMISSIONS = {
   treasury_transaction: READ_PERMISSIONS.treasuryTransactions,
   cheque: READ_PERMISSIONS.cheques,
   production_project: READ_PERMISSIONS.projectRecord,
-  document: READ_PERMISSIONS.documents,
+  document: READ_PERMISSIONS.documentRecord,
   piecework_payroll: READ_PERMISSIONS.payrolls,
 } as const satisfies Record<string, readonly string[] | null>;
 

@@ -22,6 +22,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { getStockCountSheetItems } from '../services/inventory/stockCountSheet.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { assertDocumentTypeReadable, readableDocumentTypes } from '../services/documents/documentReadScope.js';
 import type { AuthUserPayload } from '../types.js';
 
 const router = Router();
@@ -227,7 +228,7 @@ export const auditItemsQuerySchema = z.object({
 
 // V9-1.2: نگاه غیرمخرب (Peek) — شماره بعدی را بدون افزایش شمارنده برمی‌گرداند تا
 // بارگذاری فرم‌ها و فرم‌های رهاشده هرگز شماره سند نسوزانند.
-router.get('/documents/next-ref', authorizePermission(...READ_PERMISSIONS.documents), validate(nextRefQuerySchema), asyncHandler(async (req, res) => {
+router.get('/documents/next-ref', authorizePermission(...READ_PERMISSIONS.documentNextRef), validate(nextRefQuerySchema), asyncHandler(async (req, res) => {
   const nextRef = await DocumentService.peekNextRef(String(req.query.type));
   res.json({ nextRef });
 }));
@@ -338,8 +339,10 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   res.json({ success: true, docId: newDocId, projectReservation });
 }));
 
-router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents), validate(documentsQuerySchema), asyncHandler(async (req, res) => {
+// v9.0.123 (TD-890، ت۱۰ الف): فهرست کامل با مجوز بخش اسناد؛ مجوز انبارگردانی فقط فهرست سندهای شمارش و انتقال
+router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...READ_PERMISSIONS.stockCountDocuments), validate(documentsQuerySchema), asyncHandler(async (req, res) => {
   const type = req.query.type as string;
+  assertDocumentTypeReadable(await readableDocumentTypes(req.user, READ_PERMISSIONS.documents), type);
   const status = req.query.status as string;
   const search = req.query.search as string;
   const startDate = req.query.startDate as string;
@@ -365,8 +368,10 @@ router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents), val
   res.json(result);
 }));
 
-router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.documents), validate(paramsRefSchema), asyncHandler(async (req, res) => {
+router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.documentRecord, ...READ_PERMISSIONS.stockCountDocuments), validate(paramsRefSchema), asyncHandler(async (req, res) => {
   const type = req.query.type as string;
+  const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documentRecord);
+  assertDocumentTypeReadable(readable, type);
   const ref = req.params.ref;
   const docsResult = await DocumentService.getDocuments(type);
   const docList = Array.isArray(docsResult) ? docsResult : (docsResult?.data || []);
@@ -375,19 +380,22 @@ router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.doc
     throw new NotFoundError('سند یافت نشد');
   }
   const doc = await DocumentService.getDocumentById(docSummary.id);
+  assertDocumentTypeReadable(readable, doc?.type);
   res.json(doc);
 }));
 
-router.get('/documents/audit-items', authorizePermission(...READ_PERMISSIONS.documents), validate(auditItemsQuerySchema), asyncHandler(async (req, res) => {
+router.get('/documents/audit-items', authorizePermission(...READ_PERMISSIONS.stockCountSheet), validate(auditItemsQuerySchema), asyncHandler(async (req, res) => {
   // v9.0.55 (TD-480): موقعیت با کد یا نام انبار (خالی = انبار پیش‌فرض)؛ موقعیت ناشناخته ۴۲۲. پیش‌تر موجودی با کلید خام
   // خوانده می‌شد و نام انبار (که برگه می‌فرستاد) ستون موجودی را برای همه کالاها ۰ می‌کرد
   res.json(await getStockCountSheetItems(orm, req.query.location));
 }));
 
-router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documents), validate(paramsDocIdOrRefSchema), asyncHandler(async (req, res) => {
+router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documentRecord, ...READ_PERMISSIONS.stockCountDocuments), validate(paramsDocIdOrRefSchema), asyncHandler(async (req, res) => {
   const rawId = req.params.id;
+  const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documentRecord);
   const doc = await DocumentService.getDocumentByIdOrRef(rawId);
   if (!doc) throw new NotFoundError(`سند با شناسه یا عطف ${rawId} یافت نشد`);
+  assertDocumentTypeReadable(readable, doc.type);
   res.json(doc);
 }));
 
