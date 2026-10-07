@@ -10559,6 +10559,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runFiscalClosingTests(shouldRun));
   const { runFiscalYearOrderTests } = await import('../regression/fiscalYearOrderTests.js');
   results.push(...await runFiscalYearOrderTests(shouldRun));
+  const { runManualVoucherCurrencyTests } = await import('../regression/manualVoucherCurrencyTests.js');
+  results.push(...await runManualVoucherCurrencyTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));

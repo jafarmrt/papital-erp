@@ -11,10 +11,11 @@ import { WorkflowStepperWidget } from '../workflow/WorkflowStepperWidget';
 import ConfirmModal from '../ConfirmModal';
 import toast from 'react-hot-toast';
 import { VoucherAttachmentThumbnails } from './VoucherAttachmentThumbnails';
-import { VoucherListPager, VoucherListToolbar } from './vouchers/VoucherListToolbar';
+import { VoucherListPager, VoucherListToolbar, voucherTypeBadge } from './vouchers/VoucherListToolbar';
 import { useVoucherPageQuery } from '../../hooks/accounting/useVoucherQueries';
 import { useDebounce } from '../../hooks/useDebounce';
 import { EMPTY_VOUCHER_STATUS_COUNTS, VOUCHER_PAGE_SIZE, type VoucherListFilters } from '../../lib/accounting/voucherList';
+import { voucherTypeLabel } from '../../lib/accounting/voucherTypes';
 
 interface JournalVouchersTabProps {
   accounts?: Account[];
@@ -221,17 +222,6 @@ export function JournalVouchersTab({
     setConfirmAction({ kind: 'revert_to_draft', voucher });
   };
 
-  const voucherTypeLabels: Record<string, { label: string; badge: string }> = {
-    general: { label: 'عمومی', badge: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200' },
-    sales: { label: 'فروش و درآمد', badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' },
-    purchase: { label: 'خرید و انبار', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' },
-    treasury: { label: 'خزانه‌داری / دریافت-پرداخت', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' },
-    payroll: { label: 'حقوق و دستمزد', badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' },
-    opening: { label: 'افتتاحیه', badge: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300' },
-    closing: { label: 'اختتامیه', badge: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300' },
-    adjustment: { label: 'اصلاحی / معکوس', badge: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300' },
-  };
-
   const statusBadge = (status?: string) => {
     switch (status) {
       case 'permanent':
@@ -368,7 +358,6 @@ export function JournalVouchersTab({
               ) : (
                 filteredVouchers.map(voucher => {
                   const isExpanded = !!expandedVoucherIds[voucher.id];
-                  const typeInfo = voucherTypeLabels[voucher.voucherType] || voucherTypeLabels.general;
                   const isPermanent = voucher.status === 'permanent';
 
                   return (
@@ -405,8 +394,8 @@ export function JournalVouchersTab({
                         </td>
 
                         <td className="py-3 px-3">
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${typeInfo.badge}`}>
-                            {typeInfo.label}
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${voucherTypeBadge(voucher.voucherType)}`}>
+                            {voucherTypeLabel(voucher.voucherType)}
                           </span>
                         </td>
 

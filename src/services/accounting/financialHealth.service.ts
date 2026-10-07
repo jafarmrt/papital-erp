@@ -15,6 +15,7 @@ import {
   findEarlyClosedYears, findManualClosingTypeVouchers, findOutOfOrderClosedYears,
 } from './fiscalClosingHealth.js';
 import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
+import { buildForeignRateHealthTest, findVouchersWithoutForeignRate } from './voucherForeignRateHealth.js';
 import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
 import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
@@ -145,25 +146,39 @@ export class FinancialHealthService {
           (SELECT COUNT(*)::int FROM items WHERE is_deleted = 0) AS total_items
       `),
 
-      // ب: آزمون تراز اسناد دوبل (Voucher Balance)
+      // ب: آزمون تراز اسناد دوبل (Voucher Balance) — v9.0.190 (TD-551، ت۷): سند تک‌ارزی روی مبلغ خام و سند چندارزی به
+      // ریال با قاعده TD-260 (ردیف ارزی × نرخ همان ردیف، گرد به ریال)؛ پیش‌تر «۱۰۰ دلار / ۱۰۰ ریال» تراز شمرده می‌شد
       orm.execute(sql`
-        SELECT 
-          v.id,
-          v.voucher_number,
-          v.date,
-          v.status,
-          v.description,
-          COALESCE(SUM(vi.debit), 0)::float AS calc_debit,
-          COALESCE(SUM(vi.credit), 0)::float AS calc_credit,
-          ABS(COALESCE(SUM(vi.debit), 0) - COALESCE(SUM(vi.credit), 0))::float AS discrepancy
-        FROM journal_vouchers v
-        -- v8.0.15 (TD-270): ردیف‌های حذف نرم‌شده (همگام‌سازی دوباره سند پیش‌نویس) در هیچ آزمونی شمرده نمی‌شوند
-        LEFT JOIN journal_voucher_items vi ON vi.voucher_id = v.id AND vi.is_deleted = 0
-        WHERE v.is_deleted = 0
-        GROUP BY v.id, v.voucher_number, v.date, v.status, v.description
-        HAVING ABS(COALESCE(SUM(vi.debit), 0) - COALESCE(SUM(vi.credit), 0)) > 0.05
-        ORDER BY v.voucher_number DESC
-        LIMIT 50;
+        WITH rows AS (
+          SELECT vi.voucher_id, vi.debit, vi.credit,
+                 UPPER(COALESCE(NULLIF(vi.currency, ''), NULLIF(v.currency, ''), 'IRR')) AS cur,
+                 COALESCE(NULLIF(vi.exchange_rate, 0), 1) AS rate
+            FROM journal_voucher_items vi
+            JOIN journal_vouchers v ON v.id = vi.voucher_id
+           -- v8.0.15 (TD-270): ردیف‌های حذف نرم‌شده (همگام‌سازی دوباره سند پیش‌نویس) در هیچ آزمونی شمرده نمی‌شوند
+           WHERE vi.is_deleted = 0
+        ), sums AS (
+          SELECT voucher_id,
+                 COUNT(DISTINCT cur) AS currency_count,
+                 SUM(debit) AS raw_debit, SUM(credit) AS raw_credit,
+                 SUM(CASE WHEN cur = 'IRR' THEN debit ELSE ROUND(debit * rate, 0) END) AS irr_debit,
+                 SUM(CASE WHEN cur = 'IRR' THEN credit ELSE ROUND(credit * rate, 0) END) AS irr_credit
+            FROM rows GROUP BY voucher_id
+        ), checked AS (
+          SELECT v.id, v.voucher_number, v.date, v.status, v.description,
+                 COALESCE(CASE WHEN s.currency_count > 1 THEN s.irr_debit ELSE s.raw_debit END, 0) AS calc_debit,
+                 COALESCE(CASE WHEN s.currency_count > 1 THEN s.irr_credit ELSE s.raw_credit END, 0) AS calc_credit
+            FROM journal_vouchers v
+            LEFT JOIN sums s ON s.voucher_id = v.id
+           WHERE v.is_deleted = 0
+        )
+        SELECT id, voucher_number, date, status, description,
+               calc_debit::float AS calc_debit, calc_credit::float AS calc_credit,
+               ABS(calc_debit - calc_credit)::float AS discrepancy
+          FROM checked
+         WHERE ABS(calc_debit - calc_credit) > 0.05
+         ORDER BY voucher_number DESC
+         LIMIT 50;
       `),
 
       // ج: آزمون حساب‌های با مانده خلاف ماهیت (Unnatural Balances)
@@ -1123,6 +1138,7 @@ export class FinancialHealthService {
 
     // آزمون ۲۵: v9.0.160 (TD-559) اسناد دستی با نوع اختتامیه که بستن سال صادر نکرده (فقط فهرست، بی بازنویسی)
     tests.push(buildManualClosingTypeHealthTest(await findManualClosingTypeVouchers()));
+    tests.push(buildForeignRateHealthTest(await findVouchersWithoutForeignRate())); // v9.0.190 (TD-551)
 
     // آزمون ۲۶: v9.0.161 (TD-543) سال مالی بسته‌شده پیش از پایانش (فقط فهرست؛ آخرین سال بسته با بازگشایی باز می‌شود)
     tests.push(buildEarlyClosedYearsHealthTest(await findEarlyClosedYears()));

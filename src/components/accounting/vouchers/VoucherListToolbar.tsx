@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Clock, FileCheck, Lock, Search } from 'lucid
 import { formatPersianNumber } from '../../../utils';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import type { VoucherListFilters, VoucherStatusCounts } from '../../../lib/accounting/voucherList';
+import { VOUCHER_TYPES, VOUCHER_TYPE_LABELS, isVoucherTypeCode, type VoucherTypeCode } from '../../../lib/accounting/voucherTypes';
 
 /**
  * v9.0.115 (TD-565): برگه‌های وضعیت و صافی‌های فهرست اسناد حسابداری (استخراج‌شده از JournalVouchersTab).
@@ -50,17 +51,28 @@ const STATUS_TABS: StatusTab[] = [
   },
 ];
 
+// v9.0.195 (TD-573): صافی نوع از فهرست مشترک نوع‌ها (تسویه هم)
 const VOUCHER_TYPE_OPTIONS: Array<[string, string]> = [
   ['all', 'همه انواع اسناد'],
-  ['general', 'عمومی / عادی'],
-  ['sales', 'فروش و درآمد'],
-  ['purchase', 'خرید و انبار'],
-  ['treasury', 'دریافت و پرداخت'],
-  ['payroll', 'حقوق و دستمزد'],
-  ['opening', 'افتتاحیه'],
-  ['closing', 'اختتامیه'],
-  ['adjustment', 'اصلاحی / برگشت'],
+  ...VOUCHER_TYPES.map((type): [string, string] => [type, VOUCHER_TYPE_LABELS[type]]),
 ];
+
+const VOUCHER_TYPE_BADGES: Record<VoucherTypeCode, string> = {
+  general: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+  sales: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+  purchase: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+  treasury: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+  payroll: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
+  opening: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
+  closing: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
+  adjustment: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300',
+  settlement: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',
+};
+
+/** رنگ نشان نوع سند در فهرست اسناد */
+export function voucherTypeBadge(type: unknown): string {
+  return isVoucherTypeCode(type) ? VOUCHER_TYPE_BADGES[type] : VOUCHER_TYPE_BADGES.general;
+}
 
 interface VoucherListToolbarProps {
   filters: VoucherListFilters;
