@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.291 — v9.0.291 — Document List Buttons by Permission
+- **Document list buttons:** settlement, notes edit, workflow and void are shown only to users holding the permission of the action they call, and a refused notes edit shows the server's reason (TD-795).
+
 ### v9.0.290 — v9.0.290 — Paged Document List
 - **Document list:** a list request without paging now answers one page of 50 documents with its total instead of the whole table, the full list comes only with `export=true`, and the stock count history and transfer tabs page through it (TD-787).
 

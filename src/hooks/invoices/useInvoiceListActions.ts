@@ -4,6 +4,7 @@ import { confirmAction } from '../../components/ConfirmDialogHost';
 import { fetchJson } from '../../api';
 import { errorMessageOf } from '../../utils';
 import type { InvoiceListDocument } from '../../lib/invoices/invoiceListDocuments';
+import { useInvoiceRowAccess } from './useInvoiceRowAccess';
 
 /**
  * TD-080 (بخش ۳): ویرایش درجای توضیحات، چاپ، جزئیات، گردش‌کار، تسویه و ابطال سند —
@@ -20,6 +21,8 @@ export function useInvoiceListActions(loadData: () => void) {
   const [, setDetailsLoading] = useState(false);
   const [, setPrintLoading] = useState(false);
   const detailsRequestRef = useRef<AbortController | null>(null);
+  // v9.0.291 (TD-795): دکمه‌های ردیف و پنجره جزئیات با مجوز API خودشان
+  const access = useInvoiceRowAccess();
 
   const handleUpdateNotes = async (id: number) => {
     try {
@@ -32,7 +35,8 @@ export function useInvoiceListActions(loadData: () => void) {
       setEditingNotesId(null);
     } catch (err) {
       console.error(err);
-      toast.error('خطا در بروزرسانی توضیحات');
+      // v9.0.291 (TD-795): دلیل سرور (مثلاً نداشتن مجوز ویرایش سند) نمایش داده می‌شود، نه پیام کلی
+      toast.error(errorMessageOf(err) || 'خطا در به‌روزرسانی توضیحات');
     }
   };
 
@@ -104,6 +108,7 @@ export function useInvoiceListActions(loadData: () => void) {
   };
 
   return {
+    access,
     editingNotesId, setEditingNotesId,
     tempNotes, setTempNotes,
     printedDoc, setPrintedDoc,

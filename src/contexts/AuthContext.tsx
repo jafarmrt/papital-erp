@@ -183,6 +183,15 @@ export function useHasPermission(permission: string): boolean {
 }
 
 /**
+ * v9.0.291 (TD-795): آیا کاربر جاری یکی از این مجوزها را دارد (گارد «یکی کافی است» سرور، مانند ویجت گردش کار)؛ همان
+ * قاعده `useHasPermission` و بیرون از AuthProvider false.
+ */
+export function useHasAnyPermission(permissions: readonly string[]): boolean {
+  const ctx = useContext(AuthContext);
+  return permissions.some(permission => userHoldsPermission(ctx?.userPermissions, permission));
+}
+
+/**
  * v9.0.228 (TD-567، B03-25): آیا کاربر جاری مدیر سیستم است (همان گارد `requireSystemAdmin`)؛ بیرون از AuthProvider false.
  * فقط برای نمایش دکمه‌های نگهداری سیستم است؛ سرور خودش می‌سنجد.
  */

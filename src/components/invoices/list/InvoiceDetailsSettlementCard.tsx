@@ -5,10 +5,12 @@ import { detailsRemainingOf, detailsSettlementViewOf, type InvoiceListDocument }
 interface InvoiceDetailsSettlementCardProps {
   selectedDocDetails: InvoiceListDocument;
   setSettlementDoc: (doc: InvoiceListDocument | null) => void;
+  /** v9.0.291 (TD-795): دکمه تسویه فقط با مجوز خزانه */
+  canSettle: boolean;
 }
 
 /** TD-080 (بخش ۳): کارت وضعیت تسویه مالی در مودال جزئیات (فقط فاکتور فروش و رسید خرید) */
-export function InvoiceDetailsSettlementCard({ selectedDocDetails, setSettlementDoc }: InvoiceDetailsSettlementCardProps) {
+export function InvoiceDetailsSettlementCard({ selectedDocDetails, setSettlementDoc, canSettle }: InvoiceDetailsSettlementCardProps) {
   const settlementView = detailsSettlementViewOf(selectedDocDetails.settlementStatus);
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -31,7 +33,7 @@ export function InvoiceDetailsSettlementCard({ selectedDocDetails, setSettlement
         </div>
       </div>
 
-      {selectedDocDetails.status === 'final' && (
+      {selectedDocDetails.status === 'final' && canSettle && (
         <button
           type="button"
           onClick={() => setSettlementDoc(selectedDocDetails)}

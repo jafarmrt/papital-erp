@@ -133,6 +133,12 @@ export const READ_PERMISSIONS = {
 } as const satisfies Record<string, readonly string[]>;
 
 /**
+ * v9.0.291 (TD-795): گارد ویجت گردش کار یک موجودیت (`GET /workflow/instance/:entityType/:entityId`)؛ دکمه «چرخه تأییدات و
+ * گردش کار» فهرست اسناد با همین کلیدها نمایش داده می‌شود.
+ */
+export const WORKFLOW_WIDGET_PERMISSIONS = ['workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'] as const;
+
+/**
  * v9.0.38 (TD-458، تصمیم مالک محصول ت۹ الف): ویجت گردش کار (`GET /workflow/instance/:entityType/:entityId`) داده و
  * تاریخچه موجودیت را برمی‌گرداند، پس افزون بر مجوز گردش کار مجوز خواندن همان موجودیت را می‌خواهد؛ نوع بی دامنه (طرح
  * آزمایشی طراح) مجوز دیگری نمی‌خواهد.

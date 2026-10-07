@@ -58,6 +58,7 @@ export default function InvoicesListPage() {
           setSettlementDoc={actions.setSettlementDoc}
           printFromDetails={actions.printFromDetails}
           loadData={loadData}
+          canSettle={actions.access.settle}
         />
       )}
 

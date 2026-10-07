@@ -13,10 +13,12 @@ interface InvoiceDetailsModalProps {
   setSettlementDoc: (doc: InvoiceListDocument | null) => void;
   printFromDetails: (docId: number) => void;
   loadData: () => void;
+  /** v9.0.291 (TD-795): دکمه تسویه فقط با مجوز خزانه */
+  canSettle: boolean;
 }
 
 /** TD-080 (بخش ۳): مودال سریع جزئیات سند (طرف حساب، گردش‌کار، ریز اقلام، جمع‌ها و تسویه) */
-export function InvoiceDetailsModal({ selectedDocDetails, setSelectedDocDetails, setSettlementDoc, printFromDetails, loadData }: InvoiceDetailsModalProps) {
+export function InvoiceDetailsModal({ selectedDocDetails, setSelectedDocDetails, setSettlementDoc, printFromDetails, loadData, canSettle }: InvoiceDetailsModalProps) {
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -86,7 +88,7 @@ export function InvoiceDetailsModal({ selectedDocDetails, setSelectedDocDetails,
 
           {/* Settlement Status Card in Document Details */}
           {(selectedDocDetails.type === 'invoice' || selectedDocDetails.type === 'receipt') && (
-            <InvoiceDetailsSettlementCard selectedDocDetails={selectedDocDetails} setSettlementDoc={setSettlementDoc} />
+            <InvoiceDetailsSettlementCard selectedDocDetails={selectedDocDetails} setSettlementDoc={setSettlementDoc} canSettle={canSettle} />
           )}
         </div>
 
