@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.265 — Package 10 Procurement Audit
+- **Audit (package 10):** purchasing and procurement section of the stability audit report: 15 proven findings opened as TD-688..TD-702 plus TD-901 (decision t5) with the product-owner decisions t1-t5; documentation only.
+
 ### v9.0.264 — بسته ۱۳ د: «اشاره» و «اعلان» در رابط گزارش کار
 - «منشن» و «نوتیفیکیشن» در رابط گزارش کار جای خود را به «اشاره» و «اعلان» دادند (TD-646، تصمیم ت۶).
 
