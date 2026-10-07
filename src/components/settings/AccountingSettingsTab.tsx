@@ -1,43 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { RefreshCw, Save, ShieldCheck, Info, Check } from 'lucide-react';
 import { AccountSearchSelect } from '../accounting/AccountSearchSelect';
 import type { Account } from '../../types';
 import { formatPersianNumber } from '../../utils';
+import { postingAccountsOf } from '../../lib/accounting/postingAccount';
+import {
+  ACCOUNT_MAPPING_CONCEPTS, accountTypeFitsConcept, conceptAccountTypesText, type AccountMappingConcept,
+} from '../../lib/accounting/accountMappingConcepts';
 
-// V1.7.0 — تب «تنظیمات حسابداری»: مپینگ سندهای اتوماتیک دوبل + همگام‌سازی کدینگ پیش‌فرض
-interface MappingRowMeta {
-  key: string;
-  label: string;
-  description: string;
+// V1.7.0 — تب «تنظیمات حسابداری»: نگاشت سندهای خودکار دوبل + همگام‌سازی کدینگ پیش‌فرض.
+// v9.0.199 (TD-550، B03-08): همه ۲۶ مفهوم سرور از فهرست مشترک (پیش‌تر ۲۳ ردیف؛ کالای در جریان ساخت، حقوق ثابت و
+// کسورات نبودند) و انتخابگر هر مفهوم فقط حساب قابل ثبت با نوع همان مفهوم را نشان می‌دهد (پیش‌تر «۱ دارایی‌ها» هم بود).
+function mappingAccountsFor(concept: AccountMappingConcept, postingAccounts: Account[]): Account[] {
+  return postingAccounts.filter(a => accountTypeFitsConcept(concept, a.accountType));
 }
-
-const MAPPING_ROWS: MappingRowMeta[] = [
-  { key: 'tradeReceivablesAccountCode', label: 'حساب‌های دریافتنی تجاری', description: 'طرف حساب دریافت وجه از مشتری (خزانه) و بستانکاری در ثبت چک دریافتی' },
-  { key: 'tradePayablesAccountCode', label: 'حساب‌های پرداختنی تجاری', description: 'طرف حساب پرداخت وجه به تامین‌کننده (خزانه) و بدهکار شدن در صدور چک پرداختی' },
-  { key: 'wagesPayableAccountCode', label: 'حقوق و دستمزد پرداختنی', description: 'سند تسویه پرداخت حقوق و طرف حساب دریافت وجه از پرسنل' },
-  { key: 'chequeReceivableAccountCode', label: 'اسناد دریافتنی نزد صندوق (1101)', description: 'ثبت اولیه چک دریافتی و بازگشت از جریان وصول' },
-  { key: 'chequeInCollectionAccountCode', label: 'اسناد در جریان وصول (1102)', description: 'ارسال چک به بانک برای وصول و کسر هنگام پاس/برگشت' },
-  { key: 'chequeProtestAccountCode', label: 'اسناد واخواستی (1103)', description: 'برگشت چک دریافتی (واخواست)' },
-  { key: 'chequePayableAccountCode', label: 'اسناد پرداختنی تجاری (3101)', description: 'صدور چک پرداختی و پاس شدن آن' },
-  { key: 'employeeAdvanceAccountCode', label: 'مساعده و وام پرسنل (1301)', description: 'پرداخت مساعده/وام به پرسنل (مطالبات از کارکنان) تا کسر از حقوق' },
-  { key: 'salesRevenueAccountCode', label: 'درآمد فروش', description: 'سند خودکار فروش (فاکتور نهایی)' },
-  { key: 'salesDiscountAccountCode', label: 'تخفیف فروش', description: 'سند خودکار تخفیفات فاکتور' },
-  { key: 'serviceRevenueAccountCode', label: 'درآمد حمل و خدمات', description: 'هزینه ارسال و کارمزد سفارش ووکامرس' },
-  { key: 'salesVatPayableAccountCode', label: 'مالیات بر ارزش افزوده', description: 'بستانکاری VAT در سند فروش' },
-  { key: 'inventoryRawMaterialsCode', label: 'موجودی مواد اولیه (1401)', description: 'اسناد رسید مواد اولیه و حواله تولید' },
-  { key: 'inventoryFinishedGoodsCode', label: 'موجودی کالای تولیدشده (1403)', description: 'اسناد رسید تولید نهایی' },
-  { key: 'inventoryCountDifferenceAccountCode', label: 'کسری و اضافات انبار (7012)', description: 'سند خودکار انبارگردانی و اصلاح موجودی از اکسل' },
-  { key: 'donatedGoodsIncomeAccountCode', label: 'درآمد کالای اهدایی (5204)', description: 'کالای رایگان رسید و فاکتور خرید که به میانگین موزون وارد انبار می‌شود' },
-  { key: 'costOfGoodsSoldCode', label: 'بهای تمام‌شده کالای فروش‌رفته (6001)', description: 'سند خودکار بهای تمام‌شده در فروش' },
-  { key: 'wasteExpenseAccountCode', label: 'ضایعات و افت کیفی (6004)', description: 'سند خودکار ضایعات انبار به بهای کاردکس' },
-  { key: 'directProductionWagesAccountCode', label: 'حقوق مستقیم تولید (6002)', description: 'سند تجمیع کارکرد پرکیسی تولید' },
-  { key: 'summaryProfitLossCode', label: 'خلاصه سود و زیان', description: 'بستن حساب‌های موقت در پایان سال مالی' },
-  { key: 'retainedEarningsCode', label: 'سود (زیان) انباشته', description: 'انتقال نتیجه سال مالی' },
-  { key: 'closingBalanceAccountCode', label: 'حساب ترازClosing', description: 'سند افتتاحیه/اختتامیه ترازنامه' },
-  { key: 'openingCapitalAccountCode', label: 'سرمایه اولیه (4001)', description: 'طرف حساب اسناد افتتاحیه موجودی اولیه خزانه و انبار' },
-];
 
 // v9.0.131 (TD-668): استقرار کدینگ پیش‌فرض فقط برای مدیر سیستم است (همان گارد API)؛ دیگران فقط پیام آن را می‌بینند
 export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: { currentUser: any; canSeedDefaults?: boolean }) {
@@ -48,6 +26,7 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+  const postingAccounts = useMemo(() => postingAccountsOf(accounts), [accounts]);
 
   const loadData = async (signal?: AbortSignal) => {
     setLoading(true);
@@ -83,7 +62,7 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
         method: 'POST',
         body: JSON.stringify({ ...mappings, disabled }),
       });
-      toast.success('تنظیمات مپینگ حسابداری ذخیره شد');
+      toast.success('نگاشت حساب‌ها ذخیره شد');
     } catch (err: any) {
       toast.error(err?.message || 'خطا در ذخیره تنظیمات');
     } finally {
@@ -146,12 +125,12 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
         )}
       </div>
 
-      {/* Section 2: مپینگ سندهای اتوماتیک */}
+      {/* Section 2: نگاشت سندهای خودکار */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
             <Info size={18} className="text-blue-600" />
-            <h3 className="font-black text-slate-900 dark:text-white text-sm">مپینگ سندهای اتوماتیک دوبل</h3>
+            <h3 className="font-black text-slate-900 dark:text-white text-sm">نگاشت حساب سندهای خودکار</h3>
           </div>
           <button
             onClick={handleSave}
@@ -163,15 +142,15 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
           </button>
         </div>
         <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-6 mb-4">
-          این حساب‌ها توسط موتور سند اتوماتیک (فروش، خرید، خزانه، چک صیادی، حقوق، تولید و بستن سال مالی) استفاده می‌شوند.
-          برای هر مفهوم می‌توانید حساب معین دلخواه انتخاب کنید؛ با خاموش کردن سوییچ، مفهوم به کدینگ پیش‌فرض برمی‌گردد.
+          سندهای خودکار فروش، خرید، خزانه، چک صیادی، حقوق، تولید و بستن سال مالی این حساب‌ها را می‌گیرند.
+          برای هر مفهوم حساب معین یا تفصیلی با نوع همان مفهوم انتخاب کنید؛ با خاموش کردن کلید، مفهوم به کدینگ پیش‌فرض برمی‌گردد.
         </p>
 
         {loading ? (
           <div className="py-10 text-center text-slate-400 text-sm">در حال بارگذاری...</div>
         ) : (
           <div className="space-y-2.5">
-            {MAPPING_ROWS.map(row => {
+            {ACCOUNT_MAPPING_CONCEPTS.map(row => {
               const isDisabled = disabled.includes(row.key);
               const currentCode = mappings[row.key] || '';
               return (
@@ -187,11 +166,11 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
                           <span className="text-[10px] font-bold text-slate-500 bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded">کدینگ پیش‌فرض</span>
                         )}
                       </div>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-5">{row.description}</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-5">{row.description} (نوع حساب: {conceptAccountTypesText(row)})</p>
                       {!isDisabled && (
                         <div className="mt-2">
                           <AccountSearchSelect
-                            accounts={accounts}
+                            accounts={mappingAccountsFor(row, postingAccounts)}
                             value={(() => {
                               const acc = accounts.find(a => a.code === currentCode);
                               return acc ? acc.id : '';
@@ -200,7 +179,7 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
                               const acc = accounts.find(a => a.id === accountId);
                               setMappings(prev => ({ ...prev, [row.key]: acc ? acc.code : currentCode }));
                             }}
-                            placeholder="انتخاب حساب معین از چارت حساب‌ها..."
+                            placeholder="انتخاب حساب معین یا تفصیلی..."
                             className="max-w-md"
                           />
                         </div>

@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { roles, users, dailyWorkLogs, pendingMaterials, personnel, pieceworkTasks, pieceworkLogs, items, documents, accounts, journalVouchers, journalVoucherItems, crmLeads, crmActivities, productionProjects } from '../../db/schema.js';
@@ -294,7 +294,11 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
     }),
     record('sec_voucher_approved_on_create_td_308', 'حوزه H: سند حسابداری که تأییدشده ساخته می‌شود تأییدکننده دارد (TD-308)', 'real_database', async () => {
       const accountant = await userWith(['accounting.view', 'accounting.vouchers']);
-      const accountRows = await orm.select({ id: accounts.id }).from(accounts).where(eq(accounts.isDeleted, 0)).orderBy(asc(accounts.id)).limit(2);
+      // v9.0.198 (TD-549): a manual voucher row goes only on a posting account (active subsidiary or detailed, no active sub-account)
+      const accountRows = await orm.select({ id: accounts.id }).from(accounts)
+        .where(and(eq(accounts.isDeleted, 0), eq(accounts.isActive, 1), inArray(accounts.level, ['subsidiary', 'detailed']),
+          sql`NOT EXISTS (SELECT 1 FROM accounts c WHERE c.parent_id = ${accounts.id} AND c.is_deleted = 0 AND c.is_active = 1)`))
+        .orderBy(asc(accounts.id)).limit(2);
       if (accountRows.length < 2) throw new Error('حداقل دو سرفصل لازم است');
       const res = await send(accountant.session, 'post', '/api/accounting/vouchers', {
         date: new Date().toISOString().split('T')[0], voucherType: 'general', status: 'approved', description: `TD308-${Date.now()}`,

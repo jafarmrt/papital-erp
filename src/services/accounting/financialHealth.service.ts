@@ -18,6 +18,11 @@ import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../ite
 import { buildForeignRateHealthTest, findVouchersWithoutForeignRate } from './voucherForeignRateHealth.js';
 import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
 import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
+import {
+  buildAccountMappingHealthTest, buildDeletedAccountRowsHealthTest, buildNonLatinAccountCodeHealthTest, buildNonPostingRowsHealthTest,
+  findAccountMappingIssues, findDeletedAccountsWithVoucherRows, findNonLatinAccountCodes, findVouchersOnNonPostingAccounts,
+} from './chartOfAccountsHealth.js';
+import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1160,6 +1165,17 @@ export class FinancialHealthService {
     const invalidPriceTest = buildInvalidActivePriceHealthTest(await findInvalidActivePrices());
     overallScore += invalidPriceTest.scoreImpact;
     tests.push(invalidPriceTest);
+
+    // آزمون ۳۱: v9.0.197 (TD-546) حساب حذف‌شده‌ای که ردیف سند دارد (فقط فهرست، بی احیای خودکار)
+    tests.push(buildDeletedAccountRowsHealthTest(await findDeletedAccountsWithVoucherRows()));
+    // آزمون ۳۲: v9.0.198 (TD-549) ردیف سند روی حساب گروه، کل یا دارای زیرحساب (فقط فهرست، بی بازنویسی)
+    tests.push(buildNonPostingRowsHealthTest(await findVouchersOnNonPostingAccounts()));
+    // آزمون ۳۳: v9.0.199 (TD-550) نگاشت حساب سندهای خودکار به حساب ناموجود، غیرقابل ثبت یا ناسازگار (فقط فهرست)
+    tests.push(buildAccountMappingHealthTest(await findAccountMappingIssues()));
+    // آزمون ۳۴: v9.0.201 (TD-558) کد حساب با رقم فارسی یا نویسه غیررقمی (فقط فهرست، بی بازنویسی)
+    tests.push(buildNonLatinAccountCodeHealthTest(await findNonLatinAccountCodes()));
+    // آزمون ۳۵: v9.0.202 (TD-562) قید پایگاه‌داده سند و سرفصل اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)
+    tests.push(buildAccountingIntegrityHealthTest(await findAccountingIntegrityGaps()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

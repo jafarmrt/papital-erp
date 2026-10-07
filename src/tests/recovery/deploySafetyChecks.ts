@@ -68,9 +68,9 @@ async function insertDeletableMarkers(url: string): Promise<void> {
     line AS (INSERT INTO document_items (document_id, item_id, quantity) SELECT doc.id, item.id, 1 FROM doc, item RETURNING id),
     dv AS (INSERT INTO journal_vouchers (voucher_number, date, description, source_document_id)
       SELECT 990001, '2026-01-05', 'draft voucher of a marked invoice', id FROM doc RETURNING id),
-    dvi AS (INSERT INTO journal_voucher_items (voucher_id, account_id) SELECT dv.id, acc.id FROM dv, acc RETURNING id),
+    dvi AS (INSERT INTO journal_voucher_items (voucher_id, account_id, debit) SELECT dv.id, acc.id, 1 FROM dv, acc RETURNING id),
     v AS (INSERT INTO journal_vouchers (voucher_number, date, description) VALUES (990002, '2026-01-05', $1 || ' voucher') RETURNING id),
-    vi AS (INSERT INTO journal_voucher_items (voucher_id, account_id) SELECT v.id, acc.id FROM v, acc RETURNING id),
+    vi AS (INSERT INTO journal_voucher_items (voucher_id, account_id, debit) SELECT v.id, acc.id, 1 FROM v, acc RETURNING id),
     cust AS (INSERT INTO customers (name) VALUES ($1 || ' customer') RETURNING id),
     lead AS (INSERT INTO crm_leads (title) VALUES ($1 || ' lead') RETURNING id),
     act AS (INSERT INTO crm_activities (type, title, lead_id) SELECT 'call', 'call', id FROM lead RETURNING id),

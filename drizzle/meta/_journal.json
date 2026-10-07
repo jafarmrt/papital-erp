@@ -498,6 +498,13 @@
       "when": 1793050000000,
       "tag": "0070_item_code_name_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1793060000000,
+      "tag": "0071_accounting_check_constraints",
+      "breakpoints": true
     }
   ]
 }
