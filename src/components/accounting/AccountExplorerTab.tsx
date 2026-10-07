@@ -163,7 +163,7 @@ export function AccountExplorerTab({
   // Export CSV function
   const handleExportCSV = () => {
     if (!transactions.length) return;
-    const headers = ["شماره سند", "تاریخ", "کد حساب", "نام حساب", "تفصیلی", "شرح آرتیکل", "بدهکار", "بستانکار", "مانده"];
+    const headers = ["شماره سند", "تاریخ", "کد حساب", "نام حساب", "تفصیلی", "شرح ردیف", "بدهکار", "بستانکار", "مانده"];
     const rows = transactions.map(t => [
       t.voucherNumber,
       formatPersianDate(t.date, { englishDigits: true }),
@@ -194,7 +194,7 @@ export function AccountExplorerTab({
           <div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Layers className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              <span>مرور حساب‌ها و کاوشگر اسناد دوبل مالی</span>
+              <span>مرور حساب‌ها و کاوشگر اسناد حسابداری</span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               کاوش سلسله‌مراتبی از گروه و کل تا معین، تفصیلی و ریز ردیف‌های اسناد حسابداری
@@ -260,7 +260,7 @@ export function AccountExplorerTab({
                   value={selectedDetailedEntityId}
                   onChange={(val) => setSelectedDetailedEntityId(val)}
                   className="w-64"
-                  placeholder="جستجو یا انتخاب مشتری..."
+                  placeholder="جست‌وجو یا انتخاب مشتری..."
                   options={((customerEntities.length > 0 ? customerEntities : customers)).map((c) => ({
                     value: String(c.id),
                     label: `${c.name} ${c.city ? `(${c.city})` : ''}`
@@ -273,7 +273,7 @@ export function AccountExplorerTab({
                   value={selectedDetailedEntityId}
                   onChange={(val) => setSelectedDetailedEntityId(val)}
                   className="w-64"
-                  placeholder="جستجو یا انتخاب تامین‌کننده..."
+                  placeholder="جست‌وجو یا انتخاب تامین‌کننده..."
                   options={((supplierEntities.length > 0 ? supplierEntities : customers)).map((c) => ({
                     value: String(c.id),
                     label: `${c.name} ${c.city ? `(${c.city})` : ''} ${c.supplierCategory ? `[${c.supplierCategory}]` : ''}`
@@ -286,7 +286,7 @@ export function AccountExplorerTab({
                   value={selectedDetailedEntityId}
                   onChange={(val) => setSelectedDetailedEntityId(val)}
                   className="w-64"
-                  placeholder="جستجو یا انتخاب پرسنل..."
+                  placeholder="جست‌وجو یا انتخاب پرسنل..."
                   options={(Array.isArray(personnelList) ? personnelList : []).map((p) => ({
                     value: String(p.id),
                     label: `${p.fullName} (${p.jobTitle || 'پرسنل'})`
@@ -299,7 +299,7 @@ export function AccountExplorerTab({
                   value={selectedDetailedEntityId}
                   onChange={(val) => setSelectedDetailedEntityId(val)}
                   className="w-64"
-                  placeholder="جستجو یا انتخاب حساب بانکی..."
+                  placeholder="جست‌وجو یا انتخاب حساب بانکی..."
                   options={(Array.isArray(bankAccounts) ? bankAccounts : []).map((b) => ({
                     value: String(b.id),
                     label: `${b.bankName} - ${b.accountNumber}`
@@ -326,7 +326,7 @@ export function AccountExplorerTab({
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="جستجوی نام تفصیلی..."
+                  placeholder="جست‌وجوی نام تفصیلی..."
                   value={detailedSearchName}
                   onChange={(e) => setDetailedSearchName(e.target.value)}
                   className="pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white w-48"
@@ -339,7 +339,7 @@ export function AccountExplorerTab({
             <div className="relative flex-1 max-w-sm">
               <input
                 type="text"
-                placeholder="جستجو در کد یا عنوان حساب..."
+                placeholder="جست‌وجو در کد یا عنوان حساب..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-8 pr-3.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-700/80 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
@@ -611,7 +611,7 @@ export function AccountExplorerTab({
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-indigo-500" />
             <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">
-              کاردکس و ریز آرتیکل‌های اسناد حسابداری ({formatPersianNumber(transactions.length)} ردیف)
+              کاردکس و ریز ردیف‌های اسناد حسابداری ({formatPersianNumber(transactions.length)} ردیف)
             </h3>
           </div>
           {isLoadingTransactions && (
@@ -631,7 +631,7 @@ export function AccountExplorerTab({
                 <th className="py-3 px-3 w-24 text-center">تاریخ</th>
                 <th className="py-3 px-3 min-w-[140px]">کد و نام حساب</th>
                 <th className="py-3 px-3 min-w-[130px]">طرف حساب / تفصیلی</th>
-                <th className="py-3 px-3 min-w-[200px]">شرح آرتیکل سند</th>
+                <th className="py-3 px-3 min-w-[200px]">شرح ردیف سند</th>
                 <th className="py-3 px-3 w-28 text-left">{`بدهکار (${curLbl})`}</th>
                 <th className="py-3 px-3 w-28 text-left">{`بستانکار (${curLbl})`}</th>
                 <th className="py-3 px-3 w-32 text-left">مانده لحظه‌ای</th>
@@ -745,7 +745,7 @@ export function AccountExplorerTab({
                       <th className="p-2.5 w-10 text-center">ردیف</th>
                       <th className="p-2.5">کد و عنوان حساب</th>
                       <th className="p-2.5">طرف حساب / تفصیلی</th>
-                      <th className="p-2.5">شرح آرتیکل</th>
+                      <th className="p-2.5">شرح ردیف</th>
                       <th className="p-2.5 text-left">{`بدهکار (${curLbl})`}</th>
                       <th className="p-2.5 text-left">{`بستانکار (${curLbl})`}</th>
                     </tr>

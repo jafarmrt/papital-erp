@@ -42,10 +42,10 @@ export function AccountingDashboard({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <Wallet className="w-6 h-6 text-indigo-300" />
-            <h2 className="text-xl font-bold text-white">داشبورد یکپارچه مالی و حسابداری</h2>
+            <h2 className="text-xl font-bold text-white">پیشخوان یکپارچه مالی و حسابداری</h2>
           </div>
           <p className="text-sm text-indigo-200">
-            مدیریت اسناد دوبل، تراز لحظه‌ای دارایی‌ها و بدهی‌ها، خزانه‌داری، چک‌های صیادی و صورت‌های مالی
+            مدیریت اسناد حسابداری، تراز لحظه‌ای دارایی‌ها و بدهی‌ها، خزانه‌داری، چک‌های صیادی و صورت‌های مالی
           </p>
         </div>
 
@@ -56,7 +56,7 @@ export function AccountingDashboard({
               className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-emerald-900/30"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>ثبت سند دوبل جدید</span>
+              <span>ثبت سند حسابداری جدید</span>
             </button>
           )}
           {canRecordTreasury && (

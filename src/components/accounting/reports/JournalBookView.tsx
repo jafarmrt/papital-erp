@@ -67,7 +67,7 @@ export function JournalBookView({
           <BookOpen className="w-5 h-5 text-indigo-600" />
           <div>
             <h4 className="font-bold text-slate-900 dark:text-white text-sm">دفتر روزنامه قانونی و رسمی</h4>
-            <p className="text-xs text-slate-500">ثبت متوالی آرتیکل‌های اسناد حسابداری تاییدشده به ترتیب تاریخ و شماره سند</p>
+            <p className="text-xs text-slate-500">ثبت متوالی ردیف‌های اسناد حسابداری تاییدشده به ترتیب تاریخ و شماره سند</p>
             {journalBookData?.reportCurrency && (
               <p className="text-[11px] text-slate-500">
                 مبالغ به {formatCurrencyLabel(journalBookData.reportCurrency)}
@@ -97,7 +97,7 @@ export function JournalBookView({
                 <th className="py-2.5 px-3 w-20 text-center border-l border-slate-200 dark:border-slate-700">شماره سند</th>
                 <th className="py-2.5 px-3 w-28 text-center border-l border-slate-200 dark:border-slate-700">کد حساب</th>
                 <th className="py-2.5 px-4 border-l border-slate-200 dark:border-slate-700">عنوان حساب و تفصیلی</th>
-                <th className="py-2.5 px-4 border-l border-slate-200 dark:border-slate-700">شرح آرتیکل</th>
+                <th className="py-2.5 px-4 border-l border-slate-200 dark:border-slate-700">شرح ردیف</th>
                 <th className="py-2.5 px-3 w-32 text-left border-l border-slate-200 dark:border-slate-700">بدهکار</th>
                 <th className="py-2.5 px-3 w-32 text-left border-l border-slate-200 dark:border-slate-700">بستانکار</th>
                 <th className="py-2.5 px-3 w-32 text-left">مانده تجمعی</th>

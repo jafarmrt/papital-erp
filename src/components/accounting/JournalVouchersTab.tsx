@@ -592,7 +592,7 @@ export function JournalVouchersTab({
                                     className="w-full flex items-center gap-2 px-3 py-2 text-xs text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition cursor-pointer"
                                   >
                                     <GitFork className="w-3.5 h-3.5 text-indigo-500" />
-                                    <span>چرخه تاییدات سند (ورکفلو)</span>
+                                    <span>گردش کار تأیید سند</span>
                                   </button>
                                 </div>
                               )}
@@ -607,7 +607,7 @@ export function JournalVouchersTab({
                           <td colSpan={10} className="p-3 pr-12">
                             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-3 shadow-inner">
                               <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
-                                آرتیکل‌های تفکیکی سند شماره #{formatPersianNumber(voucher.voucherNumber)}:
+                                ردیف‌های سند شماره #{formatPersianNumber(voucher.voucherNumber)}:
                               </div>
                               <table className="w-full text-right border-collapse text-xs">
                                 <thead>

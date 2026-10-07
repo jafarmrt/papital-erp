@@ -61,7 +61,7 @@ export function ChartOfAccountsSettingsTab() {
         <div>
           <h2 className="text-base font-black text-slate-800">کدینگ و ساختار سلسله‌مراتبی حساب‌ها</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            مدیریت درخت حساب‌های گروه، کل، معین و تفصیلی مطابق با استانداردهای حسابداری دوبل ایران
+            مدیریت درخت حساب‌های گروه، کل، معین و تفصیلی مطابق با استانداردهای حسابداری ایران
           </p>
         </div>
       </div>

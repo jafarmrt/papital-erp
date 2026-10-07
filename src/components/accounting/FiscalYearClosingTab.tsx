@@ -504,7 +504,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
               <div className="p-5">
                 <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 space-y-3">
                   <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-200 dark:border-slate-700">
-                    <span className="text-slate-500 dark:text-slate-400">شرح سند دوبل:</span>
+                    <span className="text-slate-500 dark:text-slate-400">شرح سند حسابداری:</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200">
                       بستن حساب خلاصه سود و زیان سال مالی {toPersianDigits(selectedYear)} به سود (زیان) انباشته
                     </span>

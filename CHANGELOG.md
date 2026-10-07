@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.271 — Persian Wording in the Accounting UI
+- **Accounting UI Wording (P3):** the accounting screens have no English words or loanwords («دوبل», «آرتیکل», «داشبورد») and the voucher form button says it saves a draft (TD-579).
+
 ### v9.0.270 — Payslip Deductions Get Their Own Account
 - **Payslip Deductions Account (P2):** payslip deductions credit the new standard account 3205 «employee deductions payable» instead of 3202 «customer prepayments»; migration 0076 adds it to existing charts, past vouchers stay and the health check lists what is left on 3202 (TD-554).
 

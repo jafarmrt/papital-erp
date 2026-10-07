@@ -283,7 +283,7 @@ export function PartyLedgerReportView({
                       )}
                     </>
                   ) : (
-                    <span className="text-slate-400">جستجو و انتخاب طرف‌حساب...</span>
+                    <span className="text-slate-400">جست‌وجو و انتخاب طرف‌حساب...</span>
                   )}
                 </div>
                 <div className="flex items-center gap-1">
@@ -352,7 +352,7 @@ export function PartyLedgerReportView({
                     <Search className="w-3.5 h-3.5 absolute right-3 top-2.5 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="جستجوی نام یا شماره تماس..."
+                      placeholder="جست‌وجوی نام یا شماره تماس..."
                       value={partySearchQuery}
                       onChange={(e) => setPartySearchQuery(e.target.value)}
                       className="w-full pr-8 pl-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500"
@@ -513,7 +513,7 @@ export function PartyLedgerReportView({
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-700 pb-4">
               <div>
                 <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 block mb-1">
-                  سامانه مدیریت منابع سازمانی و حسابداری (ERP)
+                  سامانه مدیریت منابع سازمانی و حسابداری
                 </span>
                 <h2 className="text-xl font-black text-slate-900 dark:text-white">
                   صورت‌حساب مالی طرف‌حساب

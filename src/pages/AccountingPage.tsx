@@ -133,9 +133,9 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-              {currentTab === 'dashboard' && 'داشبورد جامع مالی'}
+              {currentTab === 'dashboard' && 'پیشخوان جامع مالی'}
               {currentTab === 'coa' && 'کدینگ و درخت حساب‌ها'}
-              {currentTab === 'vouchers' && 'اسناد دوبل حسابداری'}
+              {currentTab === 'vouchers' && 'اسناد حسابداری'}
               {currentTab === 'explorer' && 'مرور حساب‌ها (درخت و کاردکس)'}
               {currentTab === 'treasury' && 'خزانه‌داری و حساب‌های بانکی'}
               {currentTab === 'cheques' && 'مدیریت چک‌های صیادی'}
@@ -145,7 +145,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
               {currentTab === 'fiscal-closing'
                 ? 'فرایند بستن حساب‌های موقت، انتقال سود/زیان ویژه، صدور سند اختتامیه و افتتاحیه سال مالی جدید'
-                : 'سیستم حسابداری دوبل استاندارد ایران، دفاتر مالی، خزانه‌داری، چک‌های صیادی و تراز آزمایشی'}
+                : 'سامانه حسابداری دوطرفه بر پایه استاندارد ایران، دفاتر مالی، خزانه‌داری، چک‌های صیادی و تراز آزمایشی'}
             </p>
           </div>
         </div>
@@ -183,14 +183,14 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
           </div>
           <h2 className="text-lg font-bold text-slate-800 dark:text-white">دسترسی محدود شده است</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-            نقش کاربری شما مجوز لازم برای مشاهده این بخش از سیستم مالی ({permissionTitles(tabRule && typeof tabRule.gate === 'object' ? tabRule.gate.anyOf : [])}) را ندارد. برای کسب دسترسی با مدیر سیستم تماس بگیرید.
+            نقش کاربری شما مجوز لازم برای مشاهده این بخش مالی ({permissionTitles(tabRule && typeof tabRule.gate === 'object' ? tabRule.gate.anyOf : [])}) را ندارد. برای کسب دسترسی با مدیر سیستم تماس بگیرید.
           </p>
         </div>
       ) : (
         <SectionErrorBoundary
           resetKeys={[currentTab]}
           onReset={refreshAll}
-          title="خطا در بارگذاری محتوای این تب مالی"
+          title="خطا در بارگذاری محتوای این بخش مالی"
           description="در پردازش یا نمایش اطلاعات این بخش خطایی رخ داده است. می‌توانید با استفاده از دکمه زیر مجدداً تلاش نمایید."
         >
           {/* Main Content Area */}

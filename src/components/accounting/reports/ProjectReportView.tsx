@@ -35,7 +35,7 @@ export const ProjectReportView: React.FC = () => {
           </div>
           <div>
             <h4 className="font-bold text-slate-900 dark:text-white text-sm">گزارش حسابداری پروژه‌ها</h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400">گردش بدهکار/بستانکار اسناد دوبل مرتبط با هر پروژه و ریز تراکنش‌ها با تراز جاری</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">گردش بدهکار/بستانکار اسناد حسابداری مرتبط با هر پروژه و ریز تراکنش‌ها با تراز جاری</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -68,7 +68,7 @@ export const ProjectReportView: React.FC = () => {
             <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-black">
               <th className="p-3">کد پروژه</th>
               <th className="p-3">عنوان پروژه</th>
-              <th className="p-3 text-center">تعداد آرتیکل</th>
+              <th className="p-3 text-center">تعداد ردیف</th>
               <th className="p-3 text-center">{`گردش بدهکار (${curLbl})`}</th>
               <th className="p-3 text-center">{`گردش بستانکار (${curLbl})`}</th>
               <th className="p-3 text-center">تراز</th>
@@ -79,7 +79,7 @@ export const ProjectReportView: React.FC = () => {
             {loading ? (
               <tr><td colSpan={7} className="p-8 text-center text-slate-400 animate-pulse">در حال محاسبه...</td></tr>
             ) : summary.length === 0 ? (
-              <tr><td colSpan={7} className="p-8 text-center text-slate-400">هنوز آرتیکلی با تفصیلی پروژه در اسناد دوبل ثبت نشده است.</td></tr>
+              <tr><td colSpan={7} className="p-8 text-center text-slate-400">هنوز ردیفی با تفصیلی پروژه در اسناد حسابداری ثبت نشده است.</td></tr>
             ) : (
               summary.map(s => (
                 <tr
