@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.216 — v9.0.216 — Stock Document Page by Record Permission
+- **Documents (UI):** the stock document page offers each direction, document type and its submit button by the permission the server asks to record that type final, instead of the `viewer` role code, and names the missing permission (TD-791).
+
 ### v9.0.215 — v9.0.215 — Document Line Numbers Read as Decimals
 - **Documents:** quantity, price, discount and stock-count numbers of a document line are read with `decimalInput`: Persian digits and thousands separators are accepted, hex and exponent text is refused, and a price sent empty is an error instead of zero (TD-784).
 

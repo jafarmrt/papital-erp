@@ -9,8 +9,9 @@ import type { User } from '../../types';
 // TD-234: باقی‌مانده‌های فرم «ورود و خروج به انبار».
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
+// v9.0.216 (TD-791): نوع سند و دکمه ثبت با مجوز ثبت همان نوع؛ انباردار آزمون مجوزهای ثبت این صفحه را دارد
 vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: () => ({ userPermissions: { permissions: [], isAdmin: false } }),
+  useAuth: () => ({ userPermissions: { permissions: ['warehouse.in', 'warehouse.out', 'documents.finalize'], isAdmin: false } }),
   useHasPermission: () => false,
 }));
 vi.mock('react-hot-toast', () => ({

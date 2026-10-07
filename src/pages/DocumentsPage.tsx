@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { User } from '../types';
 import GlobalReservationsPanel from '../components/documents/GlobalReservationsPanel';
 import DocItemsTable from '../components/documents/DocItemsTable';
@@ -13,6 +14,8 @@ import { useStockDocumentReferenceData } from '../hooks/documents/useStockDocume
 import { useStockDocumentForm } from '../hooks/documents/useStockDocumentForm';
 import { useStockDocumentSubmit } from '../hooks/documents/useStockDocumentSubmit';
 import { createStockDocumentItemActions } from '../hooks/documents/stockDocumentItemActions';
+import { useStockPageAccess } from '../hooks/documents/useStockPageAccess';
+import { stockPageBlockedReason, stockPageNoAccessNotice, stockPageTypeOptions } from '../lib/documents/stockDocumentAccess';
 
 /**
  * فرم «ورود و خروج به انبار» (رسید و حواله). TD-080 (بخش ۳): فقط ترکیب بخش‌ها؛ لیست‌های مرجع،
@@ -24,7 +27,19 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
   const actions = createStockDocumentItemActions(form, refData.itemsList);
   const { handleSubmit } = useStockDocumentSubmit(form, refData, currentUser);
   const { warehouses, personnelList, projectsList, suppliersList, categories } = refData;
-  const { actionType, docItems } = form;
+  const { actionType, docItems, docType, setActionType, setDocType } = form;
+  // v9.0.216 (TD-791، تصمیم ت۱ «الف» بسته ۸): جهت، نوع سند و دکمه ثبت با همان مجوزی که سرور برای ثبت قطعی آن نوع می‌سنجد،
+  // نه با کد نقش؛ نوع یا جهتی که ثبتش از کاربر برنمی‌آید پیشنهاد نمی‌شود
+  const access = useStockPageAccess();
+  useEffect(() => {
+    if (access.directions.length > 0 && !access.directions.includes(actionType)) {
+      setActionType(access.directions[0]);
+      return;
+    }
+    const allowed = access.types[actionType];
+    if (allowed.length > 0 && !allowed.includes(docType)) setDocType(allowed[0]);
+  }, [access, actionType, docType, setActionType, setDocType]);
+  const blockedReason = stockPageBlockedReason(access, actionType, docType);
 
   return (
     <div className="space-y-6">
@@ -45,7 +60,17 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
       {/* Main Card Container */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
         {/* Action Type Toggle Header */}
-        <StockActionToggle actionType={actionType} onChange={form.setActionType} />
+        <StockActionToggle
+          actionType={actionType}
+          onChange={setActionType}
+          isEnabled={dir => access.directions.length === 0 || access.directions.includes(dir)}
+        />
+
+        {access.directions.length === 0 && (
+          <div role="alert" className="mx-5 sm:mx-6 mt-5 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold rounded-xl px-4 py-3">
+            {stockPageNoAccessNotice()}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-6">
           <StockDocumentDetailsFields
@@ -55,6 +80,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
             projectsList={projectsList}
             personnelList={personnelList}
             suppliersList={suppliersList}
+            typeOptions={stockPageTypeOptions(access, actionType)}
           />
 
           {/* Selected Project Reserved Items Info Card */}
@@ -111,8 +137,9 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
             actionType={actionType}
             itemCount={docItems.length}
             totalQuantitySum={form.totalQuantitySum}
-            disabled={docItems.length === 0 || currentUser.role === 'viewer' || form.isSaving}
+            disabled={docItems.length === 0 || blockedReason !== null || form.isSaving}
             isSaving={form.isSaving}
+            blockedReason={blockedReason}
           />
         </form>
       </div>
