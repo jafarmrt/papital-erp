@@ -136,7 +136,7 @@ export const itemPrices = pgTable('item_prices', {
   idx_item_id: index('item_prices_item_id').on(table.itemId),
 }));
 
-// v9.0.144 (TD-647، مهاجرت 0068): قیمت‌هایی که فهرست قیمت نبودند («میانگین خرید (WAC)»، «موجودی کل»، «میانگین بهای خرید»)
+// v9.0.152 (TD-647، مهاجرت 0068): قیمت‌هایی که فهرست قیمت نبودند («میانگین خرید (WAC)»، «موجودی کل»، «میانگین بهای خرید»)
 // با مقدار پیشین ثبت و نرم حذف شدند
 export const itemPriceTitleCleanup = pgTable('item_price_title_cleanup', {
   id: serial('id').primaryKey(),

@@ -18,6 +18,7 @@ import { JalaliDateInput } from '../components/common/JalaliDateInput';
 
 export default function CRMPage({ user }: { user: any }) {
   const crm = useCRMData(user);
+  const deleteLead = crm.canDeleteLead ? crm.handleDeleteLead : undefined;
   const navigate = useNavigate();
   const [selectedCustomerDossier, setSelectedCustomerDossier] = useState<Customer | null>(null);
 
@@ -272,7 +273,7 @@ export default function CRMPage({ user }: { user: any }) {
             onOpenLeadDrawer={crm.openLeadDrawer}
             onOpenActivityModal={crm.openActivityModal}
             onOpenLeadModal={crm.openLeadModal}
-            onDeleteLead={crm.handleDeleteLead}
+            onDeleteLead={deleteLead}
             onStageChange={crm.handleStageChange}
             onConvertToInvoice={handleConvertToInvoice}
           />
@@ -285,7 +286,7 @@ export default function CRMPage({ user }: { user: any }) {
             onOpenLeadDrawer={crm.openLeadDrawer}
             onOpenActivityModal={crm.openActivityModal}
             onOpenLeadModal={crm.openLeadModal}
-            onDeleteLead={crm.handleDeleteLead}
+            onDeleteLead={deleteLead}
             onConvertToInvoice={handleConvertToInvoice}
             onOpenCustomerDossier={handleOpenCustomerDossierByName}
           />
@@ -315,12 +316,11 @@ export default function CRMPage({ user }: { user: any }) {
         setLeadForm={crm.setLeadForm}
         isSavingLead={crm.isSavingLead}
         onSaveLead={crm.handleSaveLead}
-        onDeleteLead={crm.handleDeleteLead}
+        onDeleteLead={deleteLead}
         customersList={crm.customersList}
         personnelList={crm.personnelList}
         currentPersonnelId={crm.currentPersonnelId}
         currentLoggedInUser={crm.currentLoggedInUser}
-        isAdminOrManager={crm.isAdminOrManager}
       />
 
       {/* Drawer: Lead Detail Timeline */}
@@ -330,11 +330,10 @@ export default function CRMPage({ user }: { user: any }) {
         drawerActivities={crm.drawerActivities}
         onOpenActivityModal={crm.openActivityModal}
         onOpenLeadModal={crm.openLeadModal}
-        onDeleteLead={crm.handleDeleteLead}
+        onDeleteLead={deleteLead}
         onToggleFollowup={crm.handleToggleFollowup}
         onConvertToInvoice={handleConvertToInvoice}
         onOpenCustomerDossier={handleOpenCustomerDossierByName}
-        isAdminOrManager={crm.isAdminOrManager}
       />
 
       {/* Drawer: Full Customer Dossier */}

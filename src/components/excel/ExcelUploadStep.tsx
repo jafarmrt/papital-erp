@@ -2,7 +2,7 @@ import React from 'react';
 import { Download, Upload, Loader2, Info } from 'lucide-react';
 
 interface ExcelUploadStepProps {
-  /** v9.0.146 (TD-648): ورود فقط برای دارنده «تعریف کالای جدید» یا «ویرایش اطلاعات کالا» */
+  /** v9.0.154 (TD-648): ورود فقط برای دارنده «تعریف کالای جدید» یا «ویرایش اطلاعات کالا» */
   canImport: boolean;
   /** بخش‌هایی از ورود که کاربر مجوزشان را ندارد */
   permissionNotices: string[];

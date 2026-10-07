@@ -4,7 +4,7 @@ import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { Item, User, Customer, FinancialAttachment } from '../../types';
 import { getTodayJalaliDate } from '../../utils';
-import { useAuth } from '../../contexts/AuthContext';
+import { useHasPermission } from '../../contexts/AuthContext';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { DocItemRow } from '../../components/documents/DocItemsTable';
 import {
@@ -57,20 +57,13 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const [showGlobalReservationsModal, setShowGlobalReservationsModal] = useState(false);
   const [attachments, setAttachments] = useState<FinancialAttachment[]>([]);
 
-  const { userPermissions } = useAuth();
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [modalItemToEdit, setModalItemToEdit] = useState<Item | null>(null);
 
-  const canCreateOrEditItem = useMemo(() => {
-    return !!(
-      userPermissions?.isAdmin ||
-      currentUser?.role === 'admin' ||
-      currentUser?.role === 'manager' ||
-      userPermissions?.permissions?.includes('*') ||
-      userPermissions?.permissions?.includes('products.create') ||
-      userPermissions?.permissions?.includes('products.edit')
-    );
-  }, [userPermissions, currentUser]);
+  // v9.0.148 (TD-893): تعریف و ویرایش کالا از فرم سند با همان مجوزهای API کالا، نه با کد نقش یا «*»
+  const canCreateItem = useHasPermission('products.create');
+  const canEditItem = useHasPermission('products.edit');
+  const canCreateOrEditItem = canCreateItem || canEditItem;
 
   const handleItemModalSuccess = () => {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.items.all });

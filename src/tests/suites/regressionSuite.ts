@@ -1151,9 +1151,18 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
 
     // 5. Clean up test vouchers
+    // v9.0.150 (TD-895): نخست ردیف سال آزمون در fiscal_periods برداشته می‌شود؛ پیش‌تر کلید خارجی closing_voucher_id حذف
+    // سند اختتامیه را رد می‌کرد، سال بسته می‌ماند و آزمون دیگری که در همان سال سند می‌زد (TD-324، سال ۱۴۲۰) رد می‌شد.
+    const { fiscalPeriods } = await import('../../db/schema.js');
     const testVoucherIds = [initialVoucher.id, ...closingResult.closingVouchers.map(v => v.id)];
+    await orm.delete(fiscalPeriods).where(eq(fiscalPeriods.fiscalYear, testYear));
     await cleanTestTableData('journal_voucher_items', 'voucher_id', testVoucherIds);
     await cleanTestTableData('journal_vouchers', 'id', testVoucherIds);
+    const [leftPeriod] = await orm.select({ status: fiscalPeriods.status }).from(fiscalPeriods).where(eq(fiscalPeriods.fiscalYear, testYear));
+    const leftVouchers = await orm.select({ id: journalVouchers.id }).from(journalVouchers).where(inArray(journalVouchers.id, testVoucherIds));
+    if (leftPeriod?.status === 'closed' || leftVouchers.length > 0) {
+      throw new Error(`cleanup left fiscal year ${testYear} ${leftPeriod?.status ?? 'without a row'} and ${leftVouchers.length} of its test vouchers`);
+    }
 
     results.push(makeTestCase({
       id: 'reg_fiscal_year_isolation_and_calendar_td_141_142',
@@ -10584,7 +10593,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runWarehouseDeactivationTests } = await import('../regression/warehouseDeactivationTests.js');
   results.push(...await runWarehouseDeactivationTests(shouldRun));
 
-  // Package 5 PR A (v9.0.144+): Excel import / export of items and the pricing quick import
+  // Package 5 PR A (v9.0.152+): Excel import / export of items and the pricing quick import
   const { runItemExcelImportTests } = await import('../regression/itemExcelImportTests.js');
   results.push(...await runItemExcelImportTests(shouldRun));
 

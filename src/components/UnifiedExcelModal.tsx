@@ -45,7 +45,7 @@ export default function UnifiedExcelModal({
     onClose
   });
 
-  // v9.0.146 (TD-648): بخش‌هایی از ورود که کاربر مجوزشان را ندارد پیش از بارگذاری گفته می‌شود؛ سرور همان را می‌سنجد
+  // v9.0.154 (TD-648): بخش‌هایی از ورود که کاربر مجوزشان را ندارد پیش از بارگذاری گفته می‌شود؛ سرور همان را می‌سنجد
   const importPerms: ItemImportPermissions = {
     createItems: useHasPermission(ITEM_IMPORT_PERMISSION_KEYS.createItems),
     editItems: useHasPermission(ITEM_IMPORT_PERMISSION_KEYS.editItems),

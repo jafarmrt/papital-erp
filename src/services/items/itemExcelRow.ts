@@ -9,7 +9,7 @@ import type { ItemImportPermissions } from '../../lib/items/itemImportPermission
 export { codeFormatError } from '../../lib/items/itemCodeFormat.js';
 
 /**
- * v9.0.146 (TD-648): خواندن یک ردیف اکسل کالا و گام‌های موجودی و قیمت آن؛ گردش ردیف در `itemExcelImport.ts` است.
+ * v9.0.154 (TD-648): خواندن یک ردیف اکسل کالا و گام‌های موجودی و قیمت آن؛ گردش ردیف در `itemExcelImport.ts` است.
  */
 
 export const EXCEL_DOCUMENT_REF = 'درون‌ریزی اکسل';
@@ -19,7 +19,7 @@ export type ItemRow = typeof items.$inferSelect;
 export type Warehouse = typeof warehouses.$inferSelect;
 
 /**
- * v9.0.147 (TD-650، تصمیم ت۳ الف): مشخصات یک ردیف؛ ستونِ نبود یا سلول خالی `undefined` است و برای کالای موجود یعنی
+ * v9.0.155 (TD-650، تصمیم ت۳ الف): مشخصات یک ردیف؛ ستونِ نبود یا سلول خالی `undefined` است و برای کالای موجود یعنی
  * «بی‌تغییر». پیش‌تر نبود ستون واحد «عدد»، نقطه سفارش ۰ و نوع «محصول» می‌شد و فایل ناقص مشخصات کالا را بازنویسی می‌کرد.
  */
 export interface RowFields {
@@ -89,7 +89,7 @@ export function newItemType(fields: RowFields, typeFilter: string | undefined): 
 }
 
 /**
- * v9.0.149 (TD-649، تصمیم ت۳ الف): ستون‌های موجودی یک ردیف. `byWarehouse` فقط انبارهایی که سلولشان پر است؛ `total` ستون
+ * v9.0.157 (TD-649، تصمیم ت۳ الف): ستون‌های موجودی یک ردیف. `byWarehouse` فقط انبارهایی که سلولشان پر است؛ `total` ستون
  * «موجودی کل» اگر پر است. پیش‌تر «موجودی کل» بی ستون انبار در انبار پیش‌فرض گذاشته و اختلاف همان انبار اعمال می‌شد:
  * کالای ۱۰ واحدی «انبار دوم» با فایل «موجودی کل = 10» به ۲۰ می‌رسید.
  */
@@ -179,7 +179,7 @@ export async function applyStockChange(tx: DbExecutor, ctx: MovementContext, cha
   return movement.transactionId;
 }
 
-/** v9.0.146 (TD-648): بخش‌هایی از تغییر موجودی که کاربر مجوزش را ندارد */
+/** v9.0.154 (TD-648): بخش‌هایی از تغییر موجودی که کاربر مجوزش را ندارد */
 export function deniedStockPermissions(changes: StockChange[], perms: ItemImportPermissions): Array<keyof ItemImportPermissions> {
   const denied: Array<keyof ItemImportPermissions> = [];
   if (!perms.stockIn && changes.some(c => c.diff > 0)) denied.push('stockIn');
@@ -197,7 +197,7 @@ export function sameFieldValue(a: unknown, b: unknown): boolean {
 export type RowPrice = { price: number; currency: string };
 
 export function readRowPrices(row: Row, strategies: string[], push: (message: string) => void): Map<string, RowPrice> {
-  // v9.0.144 (TD-647، ت۱ الف): فقط فهرست‌های قیمت تنظیم‌شده قیمت‌اند؛ ستون دیگرِ «قیمت …» خطای ردیف می‌گیرد و
+  // v9.0.152 (TD-647، ت۱ الف): فقط فهرست‌های قیمت تنظیم‌شده قیمت‌اند؛ ستون دیگرِ «قیمت …» خطای ردیف می‌گیرد و
   // نادیده گرفته می‌شود (پیش‌تر «قیمت میانگین خرید (WAC)» فایل خروجی فهرست قیمت فروش می‌شد)
   const extracted = new Map<string, RowPrice>();
   const priceColumns = extractRowPriceColumns(row, strategies);
@@ -221,7 +221,7 @@ export async function changedRowPrices(tx: DbExecutor, itemId: number, prices: M
     const cleanTitle = normalizeStrategyTitle(normKey);
     const canKey = getStrategyCanonicalKey(cleanTitle);
     const matchingActive = existingList.filter(p => getStrategyCanonicalKey(p.title) === canKey);
-    // v9.0.145 (TD-662): قیمت بی‌تغییر (همان مبلغ و ارز) دوباره نوشته نمی‌شود؛ پیش‌تر هر ورود همان فایل هر قیمت را نرم
+    // v9.0.153 (TD-662): قیمت بی‌تغییر (همان مبلغ و ارز) دوباره نوشته نمی‌شود؛ پیش‌تر هر ورود همان فایل هر قیمت را نرم
     // حذف و دوباره درج می‌کرد و تاریخچه قیمت با ردیف‌های تکراری پر می‌شد
     if (matchingActive.length === 1 && matchingActive[0].price.equals(money(pObj.price)) && (matchingActive[0].currency || 'IRR') === pObj.currency) {
       continue;
@@ -251,7 +251,7 @@ export async function saveRowPrices(tx: DbExecutor, itemId: number, changed: Awa
 }
 
 /**
- * v9.0.148 (TD-651): کالای ردیف فقط با کد، قفل‌شده `FOR UPDATE`: کد دقیق، وگرنه تنها کالایی که کدش جز در بزرگی و کوچکی
+ * v9.0.156 (TD-651): کالای ردیف فقط با کد، قفل‌شده `FOR UPDATE`: کد دقیق، وگرنه تنها کالایی که کدش جز در بزرگی و کوچکی
  * حروف برابر است. چند کالای هم‌حرف `ambiguous` است (کدهای پیشین؛ ایندکس یکتای ت۴ جلوی کد تازه را می‌گیرد).
  */
 export async function findItemByCode(tx: DbExecutor, code: string): Promise<{ item: ItemRow | null; ambiguous: string[] }> {

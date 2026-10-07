@@ -43,7 +43,7 @@ export class ItemPricingService {
 
   /**
    * Filters price records keeping only active prices and the latest price entry per canonical strategy for each item.
-   * v9.0.144 (TD-647، ت۱ الف): با فهرست‌های فعال، فقط قیمت فهرست‌های تنظیم‌شده برمی‌گردد؛ پیش‌تر هر عنوانی (از جمله
+   * v9.0.152 (TD-647، ت۱ الف): با فهرست‌های فعال، فقط قیمت فهرست‌های تنظیم‌شده برمی‌گردد؛ پیش‌تر هر عنوانی (از جمله
    * «میانگین خرید (WAC)» و «موجودی کل» از ورود اکسل، یا فهرستی که از تنظیمات حذف شده) به کشوی قیمت فاکتور فروش می‌رفت.
    */
   static filterActivePrices(allPricesList: PriceItemRecord[], activeStrategies?: string[]): PriceItemRecord[] {

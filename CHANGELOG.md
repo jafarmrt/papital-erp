@@ -19,29 +19,53 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.150 — Excel Import Audits Each Item With Before and After
+### v9.0.158 — Excel Import Audits Each Item With Before and After
 - **Item Excel Audit:** every item the Excel import creates or changes gets an audit row with its fields, stock per warehouse and prices before and after, plus one summary row, inside the import transaction (TD-655, `reg_excel_import_audit_snapshots_td_655`).
 
-### v9.0.149 — Excel Total Stock Column No Longer Adds Phantom Surplus
+### v9.0.157 — Excel Total Stock Column No Longer Adds Phantom Surplus
 - **Item Excel Stock:** «موجودی کل» alone changes only an item whose stock is all in the default warehouse, otherwise per-warehouse columns are required and must add up, so an unchanged file no longer doubles stock with a surplus voucher (TD-649, `inv_excel_total_stock_column_no_phantom_surplus_td_649`).
 
-### v9.0.148 — Excel Import Finds Items by Code and Never Changes the Code
+### v9.0.156 — Excel Import Finds Items by Code and Never Changes the Code
 - **Item Excel Matching:** the item Excel import finds items by code only, refuses a name already held by another item and never changes an item's code, which is also its WooCommerce SKU (TD-651, `reg_excel_name_match_never_changes_code_td_651`).
 
-### v9.0.147 — A Partial Excel File Leaves Item Fields Unchanged
+### v9.0.155 — A Partial Excel File Leaves Item Fields Unchanged
 - **Item Excel Partial Rows:** a missing column or blank cell leaves an existing item's field unchanged and its type comes from the item, so a price-only file no longer resets unit and reorder point or refuses raw materials (TD-650, `reg_excel_partial_row_keeps_fields_td_650`).
 
-### v9.0.146 — Excel Import Follows Price and Stock Permissions
+### v9.0.154 — Excel Import Follows Price and Stock Permissions
 - **Item Excel Permissions:** the item Excel import changes prices only with the price permission, stock only with the warehouse in / out permissions and creates items only with the item creation permission; other parts are reported and skipped (TD-648, `sec_item_import_respects_price_and_stock_permissions_td_648`).
 
-### v9.0.145 — Re-Importing an Unchanged Excel File Keeps the Price History
+### v9.0.153 — Re-Importing an Unchanged Excel File Keeps the Price History
 - **Item Price History:** importing the same Excel file again no longer rewrites unchanged prices, so the price history keeps only real changes, and the history shows when each price was recorded (TD-662, `reg_excel_reimport_keeps_price_history_td_662`).
 
-### v9.0.144 — Excel Prices Come From Configured Price Lists Only
+### v9.0.152 — Excel Prices Come From Configured Price Lists Only
 - **Item Excel and Price Lists:** an unchanged Excel round trip no longer turns the cost column into a sale price list, the pricing page quick import ignores stock and cost columns, the invoice price list shows configured price lists only and migration 0068 cleans the three mistaken titles (TD-647, `reg_excel_roundtrip_no_cost_price_list_td_647`).
 
-### v9.0.143 — Package 5 Items and Pricing Audit Documentation
+### v9.0.151 — Package 5 Items and Pricing Audit Documentation
 - **Package 5 Audit:** section 7 of the V9 stability audit records the items and pricing package: 18 proven findings (two P1: an unchanged Excel round trip turns the cost column into a sale price list, and Excel import bypasses the price and warehouse permissions) opened as TD-647..TD-664, with the product-owner decisions. Documentation only.
+
+### v9.0.150 — Fiscal-Year Test Cleanup
+- **Fiscal-Year Test Cleanup:** the fiscal-year closing test reopens its year so another test posting in that year is not refused (TD-895).
+
+### v9.0.149 — Role Label From the Role Name
+- **Role Label From the Role Name:** the top bar and the profile show the stored name of the user's role, the system admin's too (TD-894).
+
+### v9.0.148 — Action Buttons by Permission
+- **Action Buttons by Permission:** the customers page, sales file delete and the stock form item button follow the API permission, not the role code (TD-893).
+
+### v9.0.147 — Client Trace IDs Validated
+- **Trace IDs:** a client `X-Request-ID` / `X-Correlation-ID` becomes the trace id only when it matches `^[A-Za-z0-9_-]{8,64}$` (`acceptedTraceId` in `src/lib/requestContext.ts`); otherwise a new id is issued, and the error handler never reads the raw header. Before, a 4,000-character id was repeated in the response and every log line.
+
+### v9.0.146 — Metrics Guard Checks the Admin Session Live
+- **Metrics Guard:** `/metrics` and `/api/metrics` check a session token live like every other route (`resolveLiveSession` in `src/middleware/auth.ts`, shared with `authenticateToken`): a deleted user or a stale `tokenVersion` gets 401 and the role is read from the database (non-admin 403). `METRICS_TOKEN` scraping is unchanged. Before, a deleted or demoted admin still read the metrics.
+
+### v9.0.145 — Production CSP Frames and Connects Only to Itself
+- **Production CSP (owner decision t3):** in production `frame-ancestors` and `connect-src` are `'self'` only, plus the origins listed in the new `FRAME_ANCESTORS` and the existing `EXTERNAL_API_ORIGINS` (`buildCspDirectives` in `src/lib/cspDirectives.ts`); the Google preview hosts and the dev server connections stay allowed outside production. Before, any page on `*.run.app` or `*.googleusercontent.com` could frame the app with the user's `SameSite=None` session (clickjacking), and the browser could connect to every HTTPS origin.
+
+### v9.0.144 — Global Rate Limit Keyed by Client Address
+- **Global Rate Limit:** the general limiter (10,000 requests per minute in production) is keyed by the client address only (`req.ip`, honouring `TRUST_PROXY`). It runs before authentication, so the old key, the last 16 characters of an unverified cookie, gave every forged cookie a fresh bucket.
+
+### v9.0.143 — Bounded HTTP Metric Labels
+- **Metric Labels (P1):** the HTTP request metrics label a request by its mount prefix and route pattern (`metricsRouteLabel`); a request that matched no route (404, 401 before a router, static files) is counted under `unmatched_api` or `unmatched`. Before, every unknown path, even without login, added series that were never freed (about 10 KB each), so random paths could exhaust the single server process.
 
 ### v9.0.142 — Piecework Read Scope
 - **Piecework Read Scope:** every personnel's work logs and special rates need a piecework permission; a project reads only its own logs (TD-892).

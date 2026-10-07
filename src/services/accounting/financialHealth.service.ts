@@ -1110,7 +1110,7 @@ export class FinancialHealthService {
     overallScore += reservedWarehouseCodeTest.scoreImpact;
     tests.push(reservedWarehouseCodeTest);
 
-    // آزمون ۲۴: v9.0.144 (TD-647) قیمت فعال کالا با عنوانی بیرون از فهرست‌های قیمت تنظیم‌شده (فقط فهرست، بی پاک‌سازی)
+    // آزمون ۲۴: v9.0.152 (TD-647) قیمت فعال کالا با عنوانی بیرون از فهرست‌های قیمت تنظیم‌شده (فقط فهرست، بی پاک‌سازی)
     const unknownPriceTitleTest = buildUnknownPriceTitleHealthTest(await findUnknownPriceTitles());
     overallScore += unknownPriceTitleTest.scoreImpact;
     tests.push(unknownPriceTitleTest);
