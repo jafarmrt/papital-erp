@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
-import { personnel, pieceworkLogs, pieceworkTasks } from '../../db/schema.js';
+import { personnel, pieceworkLogs, pieceworkPersonnelRates, pieceworkTasks, productionProjects } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { PieceworkService } from '../../services/piecework.service.js';
@@ -31,6 +31,21 @@ async function refusal(fn: () => Promise<unknown>): Promise<string> {
   } catch (err) {
     return `${statusOf(err)} ${codeOf(err)}`;
   }
+}
+
+/** A project whose workshop schedule (stage 1, product «prod-main») holds the given rows */
+async function scheduledProject(rows: Array<{ id: string; taskId: number; personnelId: number; quantity: number }>): Promise<number> {
+  const tasks = rows.map(r => ({ id: r.id, taskId: r.taskId, taskTitle: 'schedule row', assignedPersonnelId: r.personnelId, quantity: r.quantity, status: 'pending' }));
+  const [row] = await orm.insert(productionProjects).values({
+    projectCode: tag('PRJ-PW'), title: tag('piecework schedule project '),
+    stageSchedules: { 1: { 'prod-main': { productId: 'prod-main', assignedPersonnel: [], tasks } } },
+  }).returning({ id: productionProjects.id });
+  return row.id;
+}
+
+async function rateTask(rate: number): Promise<number> {
+  const [row] = await orm.insert(pieceworkTasks).values({ code: tag('PTR'), title: tag('rated task '), defaultRate: money(rate) }).returning({ id: pieceworkTasks.id });
+  return row.id;
 }
 
 async function taskByTitle(title: string) {
@@ -154,6 +169,44 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
 
       assertNoProblems(problems);
       return 'bad quantities, rates, ids and dead parents are refused, a bad row refuses its whole batch, and edits follow the same rules';
+    }));
+  }
+
+  const scheduleRateId = 'reg_schedule_log_rate_from_server_td_735';
+  if (shouldRun(scheduleRateId, 'td735', 'piecework', 'schedule', 'package11', 'package12')) {
+    await runCase(results, scheduleRateId, 'v9.0.237: a work log posted from the project workshop schedule takes its rate from the server (the personnel custom rate, else the task base rate) and ignores the rate it sends, even for a user who may set rates (TD-735)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const task = await rateTask(50_000);
+      const [plain, special] = [await newWorker('TD-735 plain'), await newWorker('TD-735 special')];
+      await orm.insert(pieceworkPersonnelRates).values({ personnelId: special, taskId: task, customRate: money(60_000) });
+      const project = await scheduledProject([
+        { id: 'row-plain', taskId: task, personnelId: plain, quantity: 10 },
+        { id: 'row-special', taskId: task, personnelId: special, quantity: 10 },
+      ]);
+      const item = (personnelId: number, rowId: string) => ({
+        personnelId, taskId: task, projectId: project, date: '1405/06/10', quantity: 10, unitRate: 0,
+        scheduleRef: { stageId: 1, productId: 'prod-main', rowId },
+      });
+
+      // the schedule tab sent rate 0 (it read `default_rate`, which the server never sends) and the admin's rate was kept
+      const res = await admin.post('/api/piecework/logs', { items: [item(plain, 'row-plain'), item(special, 'row-special')] });
+      if (res.status !== 201) problems.push(`the schedule logs answered ${res.status} ${brief(res.body)}`);
+      for (const [personnelId, rate] of [[plain, 50_000], [special, 60_000]] as const) {
+        const [log] = await orm.select().from(pieceworkLogs).where(and(eq(pieceworkLogs.personnelId, personnelId), eq(pieceworkLogs.isDeleted, 0)));
+        if (!log || !fin(log.unitRate).equals(rate) || !fin(log.totalAmount).equals(rate * 10)) {
+          problems.push(`a schedule log stored rate ${log?.unitRate} and amount ${log?.totalAmount}, expected ${rate} and ${rate * 10}`);
+        }
+      }
+
+      // a manual log outside the schedule still takes the rate a rate manager gives (TD-300)
+      const manual = await newWorker('TD-735 manual');
+      const man = await admin.post('/api/piecework/logs', { personnelId: manual, taskId: task, date: '1405/06/10', quantity: 2, unitRate: 70_000 });
+      const [manLog] = await orm.select().from(pieceworkLogs).where(and(eq(pieceworkLogs.personnelId, manual), eq(pieceworkLogs.isDeleted, 0)));
+      if (man.status !== 201 || !manLog || !fin(manLog.unitRate).equals(70_000)) problems.push(`a manual log with rate 70,000 answered ${man.status} and stored ${manLog?.unitRate}`);
+
+      assertNoProblems(problems);
+      return 'schedule logs take the custom or base rate from the server; manual logs keep a rate manager\'s rate';
     }));
   }
 

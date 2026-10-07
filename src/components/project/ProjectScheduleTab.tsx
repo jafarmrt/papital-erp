@@ -11,6 +11,7 @@ import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
 import { extractDateString, formatPersianPrice, errorMessageOf, isoToJalaliDate, formatPersianDate } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { scheduleLogItem, withPieceworkTask } from '../../lib/projects/scheduleWorkLog';
 import toast from 'react-hot-toast';
 
 interface ProjectScheduleTabProps {
@@ -295,13 +296,8 @@ export default function ProjectScheduleTab({
 
       if (field === 'taskId') {
         const found = pieceworkTasksList.find(pt => pt.id === Number(val));
-        if (found) {
-          t.taskId = found.id;
-          t.taskTitle = found.title;
-          t.defaultRate = found.default_rate || 0;
-          t.unit = found.unit || 'عدد';
-          t.estimatedCost = (t.quantity || 0) * (t.defaultRate || 0);
-        }
+        // v9.0.237 (TD-735): نرخ پایه از `defaultRate` سرور (پیش‌تر `default_rate` که سرور نمی‌فرستد، پس نرخ ۰ می‌شد)
+        if (found) Object.assign(t, withPieceworkTask(t, found));
       }
 
       if (field === 'assignedPersonnelId') {
@@ -390,17 +386,16 @@ export default function ProjectScheduleTab({
     setLoggingTaskId(taskKey);
 
     try {
+      // v9.0.237 (TD-735): بی نرخ؛ سرور نرخ اختصاصی پرسنل یا نرخ پایه عنوان کار را می‌گذارد
       const payload = {
         items: [
-          {
-            personnelId: task.assignedPersonnelId,
-            taskId: task.taskId,
+          scheduleLogItem({
             projectId: project.id,
+            ref: { stageId, productId, rowId: taskKey },
+            row: task,
             date: task.startDate || new Date().toLocaleDateString('fa-IR'),
-            quantity: Number(task.quantity),
-            unitRate: Number(task.defaultRate) || 0,
             notes: `کارکرد پروژه ${project.project_code || project.title} - ${task.taskTitle}`
-          }
+          })
         ]
       };
 
@@ -441,15 +436,13 @@ export default function ProjectScheduleTab({
       const schedule = pSched as ProductStageSchedule;
       (schedule?.tasks || []).forEach((t, idx) => {
         if (t.assignedPersonnelId && t.taskId && Number(t.quantity) > 0 && !t.isLoggedToPiecework) {
-          itemsToLog.push({
-            personnelId: t.assignedPersonnelId,
-            taskId: t.taskId,
+          itemsToLog.push(scheduleLogItem({
             projectId: project.id,
+            ref: { stageId, productId: prodId, rowId: t.id || `${stageId}-${prodId}-${idx}` },
+            row: t,
             date: t.startDate || new Date().toLocaleDateString('fa-IR'),
-            quantity: Number(t.quantity),
-            unitRate: Number(t.defaultRate) || 0,
             notes: `کارکرد مرحله «${stageTitle}» پروژه ${project.project_code || project.title} - ${t.taskTitle}`
-          });
+          }));
           targetsToUpdate.push({ productId: prodId, taskIdx: idx });
         }
       });

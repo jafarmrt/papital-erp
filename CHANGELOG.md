@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.237 — Workshop Schedule Logs Take the Server Rate
+- **Workshop Schedule Logs Take the Server Rate (TD-735):** the project workshop schedule read the task rate from a key the server never sends and posted work logs at rate 0; it now sends no rate, and the server gives a log posted from a schedule row the personnel custom rate, else the task base rate.
+
 ### v9.0.236 — Work Logs Are Checked Before They Are Saved
 - **Work Logs Are Checked Before They Are Saved (TD-812):** a work log needs positive ids, a quantity above zero or hh:mm, a non-negative manual rate and live personnel, task and project; a batch is one transaction, so a bad row saves nothing, and editing a log follows the same rules.
 

@@ -5,6 +5,7 @@ import { ValidationError } from '../../errors/customErrors.js';
 import { parsePieceworkRate } from '../../lib/piecework/pieceworkRate.js';
 import { parseWorkQuantity } from '../../lib/piecework/workQuantity.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
+import type { ScheduleRowRef } from '../../lib/projects/scheduleWorkLog.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
@@ -23,6 +24,8 @@ export interface WorkLogEntryInput {
   quantity: number | string;
   unitRate?: number | string;
   notes?: string;
+  /** ردیف برنامه کارگاه پروژه که این کارکرد از آن ثبت می‌شود */
+  scheduleRef?: ScheduleRowRef | null;
 }
 
 export interface NormalizedWorkLogEntry {
@@ -34,6 +37,7 @@ export interface NormalizedWorkLogEntry {
   /** نرخ دستی (رشته اعشاری لاتین)؛ undefined یعنی نرخ را سرور برمی‌گزیند */
   unitRate: string | undefined;
   notes: string;
+  scheduleRef: ScheduleRowRef | null;
 }
 
 const INVALID = 'PIECEWORK_LOG_INVALID';
@@ -73,8 +77,10 @@ export function normalizeWorkLogEntries(items: readonly WorkLogEntryInput[]): No
       projectId: workLogId(item.projectId, 'شناسه پروژه', prefix, true),
       isoDate: requireStorageDate(item.date, items.length > 1 ? `تاریخ کارکرد ردیف ${toPersianDigits(index + 1)}` : 'تاریخ کارکرد'),
       quantity: workLogQuantity(item.quantity, prefix),
-      unitRate: workLogManualRate(item.unitRate, prefix),
+      // v9.0.237 (TD-735، تصمیم ت۴ الف): کارکرد ردیف برنامه کارگاه نرخ را همیشه از سرور می‌گیرد؛ نرخ ارسالی آن نادیده گرفته می‌شود
+      unitRate: item.scheduleRef ? undefined : workLogManualRate(item.unitRate, prefix),
       notes: item.notes ? String(item.notes).trim() : '',
+      scheduleRef: item.scheduleRef ?? null,
     };
   });
 }

@@ -6,7 +6,7 @@ import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
 import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workLogPayrollLink.js';
-import { assertWorkLogParentsLive, normalizeWorkLogEntries, workLogId, workLogManualRate, workLogQuantity } from './piecework/workLogEntry.js';
+import { assertWorkLogParentsLive, normalizeWorkLogEntries, workLogId, workLogManualRate, workLogQuantity, type WorkLogEntryInput } from './piecework/workLogEntry.js';
 import {
   allocatePieceworkTaskCode,
   assertPieceworkTaskCodeAvailable,
@@ -50,14 +50,7 @@ export interface UpdatePieceworkTaskInput {
   username?: string;
 }
 
-export interface CreatePieceworkLogInput {
-  personnelId: number | string;
-  taskId: number | string;
-  projectId?: number | string | null;
-  date: string;
-  quantity: number | string;
-  unitRate?: number | string;
-  notes?: string;
+export interface CreatePieceworkLogInput extends WorkLogEntryInput {
   createdById?: number;
   createdByUsername?: string;
 }

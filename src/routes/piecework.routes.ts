@@ -106,6 +106,12 @@ const pieceworkLogItemSchema = z.object({
   quantity: workQuantityInput,
   unitRate: nonNegativeAmount('نرخ کارکرد').optional(),
   notes: z.string().optional(),
+  // v9.0.237 (TD-735): ردیف برنامه کارگاه پروژه؛ نرخ چنین کارکردی را سرور می‌دهد
+  scheduleRef: z.object({
+    stageId: bodyId('شناسه مرحله').transform(Number),
+    productId: z.string().trim().min(1, 'شناسه محصول ردیف برنامه الزامی است').max(200),
+    rowId: z.string().trim().min(1, 'شناسه ردیف برنامه الزامی است').max(200),
+  }).optional(),
 });
 
 type PieceworkLogItemInput = z.infer<typeof pieceworkLogItemSchema>;
