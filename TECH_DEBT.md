@@ -34,7 +34,6 @@
 | TD-540 | دسترسی (بسته ۲) | P3 (B02-25) — واژه انگلیسی و آوانویسی در رابط بسته ۲: «(RBAC)»، «(Audit Trail)»، «Snapshot»، کدهای `LOGIN`، «داشبورد»، «پروفایل»، «ماژول»، «آواتار»، «سایدبار»، «لاگ»، «کلاینت»، «ویزارد»، «کانبان» و ارقام لاتین | UsersPage.tsx، ActivityLogsPage.tsx، AuditDiffViewer.tsx، SystemOperationsTab.tsx، UserProfileModal.tsx، RoleFormModal.tsx، MenuVisibilityPanel.tsx، LoginPage.tsx، ProtectedRoute.tsx | open (P3، تصمیم ت۸ الف) |
 | TD-541 | دسترسی (بسته ۲)؛ اثر روی ۸ | P2 (B02-26) — ثبت سند هر نقشی جز `admin`، `manager`، `warehouse_keeper` و `accountant` را «کاربر فروش» می‌داند و برای هر نوع سند فقط پیش‌فاکتور می‌پذیرد: نقش سفارشی با `warehouse.in` رسید قطعی را ۴۰۳ گرفت و «مدیر ارشد مالی» هم | documents.routes.ts، CreateInvoicePage.tsx | open (P2، مدل مجوز) |
 | TD-542 | دسترسی (بسته ۲)؛ اثر روی ۱۴ | P2 (B02-27) — گردش‌کار تأییدکننده را با کد نقش و جدول هم‌ارزی ثابت کدها می‌سنجد (پیاده‌سازی دوم در `workflowAuthorizationPolicy.ts`، گردش اسناد حسابداری با کد `accountant`، پنج کد ثابت در طراح): نقش سفارشی با `accounting.vouchers` سند حسابداری را تأیید نمی‌کند | workflowTransitionExecutor.ts، workflowAuthorizationPolicy.ts، workflowDefinitionService.ts، WorkflowDesignerCanvas.tsx | open (P2، مدل مجوز) |
-| TD-652 | کالا و قیمت‌گذاری (بسته ۵) | P2 (B05-06) — `POST /items` سند افتتاحیه کالای تازه را بیرون از تراکنش ثبت صادر می‌کند و شکستش را با `logger.warn` می‌بلعد: با نگاشت «سرمایه اولیه» نامعتبر کالا با ۱۰ × ۱٬۰۰۰٬۰۰۰ موجودی و بی سند ثبت شد | items.crud.routes.ts، itemCatalog.service.ts | open (P2، تصمیم ت۶ الف) |
 | TD-653 | کالا و قیمت‌گذاری (بسته ۵) | P2 (B05-07) — کد و نام کالا یکتا نیستند (فقط `SELECT` پیش از `INSERT`): درخواست هم‌زمان ۳ کالای هم‌کد و ۵ کالای هم‌نام ساخت و `b-h-905` و `B-H-905` هر دو پذیرفته شدند | itemCatalog.service.ts، items.crud.routes.ts، schema/inventory.ts | open (P2، تصمیم ت۴ الف) |
 | TD-654 | کالا و قیمت‌گذاری (بسته ۵) | P2 (B05-08) — ویرایش کالا قفل خوش‌بینانه ندارد: نسخه فقط افزایش می‌یابد، فرم کهنه و درخواست بی نسخه ۲۰۰ می‌گیرند و تغییر کاربر دیگر گم می‌شود | itemCatalog.service.ts، items.crud.routes.ts، useItemForm.ts | open (P2، تصمیم ت۷ الف) |
 | TD-656 | کالا و قیمت‌گذاری (بسته ۵) | P3 (B05-10) — پیشنهاد کد کالا پس از نخستین «رزرو» `lastNumber + 1` می‌ماند، چون ثبت کالا شمارنده را جلو نمی‌برد، و کالای بعدی ۴۰۹ «کد تکراری» می‌گیرد | itemCatalog.service.ts، useItemForm.ts | open (P3، تصمیم ت۴ الف) |
@@ -116,8 +115,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۹۵ ردیف
-- **آرشیو شده (resolved):** ۵۱۶ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۹۴ ردیف
+- **آرشیو شده (resolved):** ۵۱۷ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -126,4 +125,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.158 — TD-655 (ممیزی قبل و بعد ورود اکسل کالا، P2) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.159 — TD-652 (سند افتتاحیه کالای تازه درون تراکنش ثبت، P2) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

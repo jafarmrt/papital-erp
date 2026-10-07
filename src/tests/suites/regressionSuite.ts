@@ -10596,6 +10596,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 5 PR A (v9.0.152+): Excel import / export of items and the pricing quick import
   const { runItemExcelImportTests } = await import('../regression/itemExcelImportTests.js');
   results.push(...await runItemExcelImportTests(shouldRun));
+  const { runItemIntegrityTests } = await import('../regression/itemIntegrityTests.js');
+  results.push(...await runItemIntegrityTests(shouldRun));
 
   return results;
 }
