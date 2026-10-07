@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.200 — Account Edits Keep the Tree and Posted Accounts Intact
+- **Account Edits (P2):** an account's parent must be exactly one level up and may not close a cycle; a system account takes only a new name and description and an account with voucher rows keeps its type, nature, level and parent; the tree and trial balance survive a legacy cycle (TD-553).
+
 ### v9.0.199 — Account Mapping Validated on Save
 - **Account Mapping (P2):** each mapped code must be a posting account of the concept's account types (422 `ACCOUNT_MAPPING_INVALID`); resolution falls back only to the concept's default subsidiary code, never a group or general account, and the page lists all 26 concepts (TD-550).
 

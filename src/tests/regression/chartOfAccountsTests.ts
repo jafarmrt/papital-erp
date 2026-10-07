@@ -28,7 +28,7 @@ async function createSubsidiary(admin: AdminClient, code: string, name: string, 
 }
 
 async function accountRow(id: number) {
-  const [row] = await orm.select({ id: accounts.id, isDeleted: accounts.isDeleted, name: accounts.name, accountType: accounts.accountType })
+  const [row] = await orm.select({ id: accounts.id, isDeleted: accounts.isDeleted, name: accounts.name, accountType: accounts.accountType, level: accounts.level, parentId: accounts.parentId })
     .from(accounts).where(eq(accounts.id, id));
   return row;
 }
@@ -125,7 +125,7 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
     await runCase(results, postingId, 'v9.0.198: manual, edited and correction voucher rows go only on an active subsidiary or detailed account without an active sub-account (422 VOUCHER_ACCOUNT_NOT_POSTABLE), and the health check lists vouchers already on such accounts (TD-549)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
-      const acc = await accountIdsByCode('7', '14', '1001', '1201', '5001', '7002', '7009');
+      const acc = await accountIdsByCode('7', '14', '70', '1001', '1201', '5001', '7002');
       const today = await businessTodayIsoDate();
       const base = { date: today, status: 'approved', description: 'TD-549 manual voucher' };
       const pair = (debitAccountId: number, creditAccountId: number, amount: number) => [
@@ -139,10 +139,11 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
       // 1) B03-07 S04: «Dr 14 (general) 300,000» and «Dr 7 (group) 200,000» were stored (201) and the subsidiary trial balance lost the debits
       refused('a row on general account 14', await admin.post('/api/accounting/vouchers', { ...base, items: pair(acc['14'], acc['1001'], 300_000) }));
       refused('a row on group account 7', await admin.post('/api/accounting/vouchers', { ...base, items: pair(acc['7'], acc['1001'], 200_000) }));
-      // 2) a deactivated account (was 201)
-      const deactivate = await admin.put(`/api/accounting/accounts/${acc['7009']}`, { isActive: false });
-      if (deactivate.status !== 200) problems.push(`deactivating 7009 answered ${deactivate.status}`);
-      refused('a row on deactivated 7009', await admin.post('/api/accounting/vouchers', { ...base, items: pair(acc['7009'], acc['1001'], 100_000) }));
+      // 2) a deactivated account (was 201); a system account is not deactivated (TD-553), so a custom one is
+      const inactive = await createSubsidiary(admin, '7095', 'TD-549 deactivated', acc['70']);
+      const deactivate = await admin.put(`/api/accounting/accounts/${inactive}`, { isActive: false });
+      if (deactivate.status !== 200) problems.push(`deactivating 7095 answered ${deactivate.status}`);
+      refused('a row on deactivated 7095', await admin.post('/api/accounting/vouchers', { ...base, items: pair(inactive, acc['1001'], 100_000) }));
       // 3) a subsidiary with an active detailed account under it takes no row; the detailed account does
       const detail = await admin.post('/api/accounting/accounts', { code: '700201', name: 'TD-549 rent of the workshop', level: 'detailed', parentId: acc['7002'], accountType: 'expense', nature: 'debit' });
       if (detail.status !== 201) problems.push(`creating detailed account 700201 answered ${detail.status}`);
@@ -170,8 +171,8 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
       // 5) vouchers stored before the rule: on a general account (approved), on an inactive account (draft); an approved
       //    voucher on an account deactivated later is history and is not listed
       const onGeneral = await insertLegacyVoucher(today, 'approved', 'TD-549 legacy general', pair(acc['14'], acc['1001'], 300_000));
-      const draftInactive = await insertLegacyVoucher(today, 'draft', 'TD-549 legacy draft on inactive', pair(acc['7009'], acc['1001'], 50_000));
-      const history = await insertLegacyVoucher(today, 'approved', 'TD-549 history on inactive', pair(acc['7009'], acc['1001'], 20_000));
+      const draftInactive = await insertLegacyVoucher(today, 'draft', 'TD-549 legacy draft on inactive', pair(inactive, acc['1001'], 50_000));
+      const history = await insertLegacyVoucher(today, 'approved', 'TD-549 history on inactive', pair(inactive, acc['1001'], 20_000));
       const report = await FinancialHealthService.runHealthCheck();
       const health = report.tests.find(t => t.id === 'voucher_rows_on_non_posting_accounts');
       const listed = (health?.items ?? []).map(i => Number(i.id)).sort((a, b) => a - b);
@@ -239,6 +240,66 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
 
       assertNoProblems(problems);
       return 'Missing, revenue, general and group codes refused (422), a posting asset account saved with Latin digits, disabled concepts skipped, legacy mappings resolved to 1401 and listed, and no automatic row on general account 14.';
+    }));
+  }
+
+  const editId = 'reg_account_edit_guards_td_553';
+  if (shouldRun(editId, 'td553', 'account', 'chart', 'package3')) {
+    await runCase(results, editId, 'v9.0.200: an account edit keeps the tree acyclic with the parent one level up, a system account takes only a new name and description, an account with voucher rows keeps its type, nature, level and parent, and the tree and the trial balance survive a legacy cycle (TD-553)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const acc = await accountIdsByCode('7', '70', '1001', '1201', '5001');
+      const today = await businessTodayIsoDate();
+      const expect = (label: string, res: { status: number; body?: { code?: string } }, status: number, code?: string) => {
+        if (res.status !== status || (code && res.body?.code !== code)) problems.push(`${label} answered ${res.status} ${JSON.stringify(res.body).slice(0, 180)}, expected ${status}${code ? ` ${code}` : ''}`);
+      };
+
+      // 1) B03-11 S12: 7093's parent set to its own sub-account 709301 (200) and the tree answered 500
+      const parent = await createSubsidiary(admin, '7093', 'TD-553 parent', acc['70']);
+      const child = await admin.post('/api/accounting/accounts', { code: '709301', name: 'TD-553 child', level: 'detailed', parentId: parent, accountType: 'expense', nature: 'debit' });
+      expect('creating detailed 709301 under 7093', child, 201);
+      expect('making 709301 the parent of 7093', await admin.put(`/api/accounting/accounts/${parent}`, { parentId: child.body?.id }), 422, 'ACCOUNT_PARENT_INVALID');
+      expect('making 7093 a detailed account under 709301', await admin.put(`/api/accounting/accounts/${parent}`, { level: 'detailed', parentId: child.body?.id }), 422);
+      expect('a subsidiary under group 7', await admin.post('/api/accounting/accounts', { code: '7096', name: 'TD-553 wrong level', level: 'subsidiary', parentId: acc['7'], accountType: 'expense', nature: 'debit' }), 422, 'ACCOUNT_PARENT_INVALID');
+      expect('moving 7093 under group 7', await admin.put(`/api/accounting/accounts/${parent}`, { parentId: acc['7'] }), 422, 'ACCOUNT_PARENT_INVALID');
+      expect('7093 becoming a group with a detailed child', await admin.put(`/api/accounting/accounts/${parent}`, { level: 'group', parentId: null }), 422, 'ACCOUNT_LEVEL_INVALID');
+      expect('the tree', await admin.get('/api/accounting/accounts/tree'), 200);
+
+      // 2) B03-11 S17: system account 5001 became an asset and then a group (200) and the income statement lost its revenue
+      await postApproved(today, acc['1201'], acc['5001'], 1_000_000, 'TD-553 sale');
+      expect('5001 as an asset', await admin.put(`/api/accounting/accounts/${acc['5001']}`, { accountType: 'asset' }), 409, 'ACCOUNT_IS_SYSTEM');
+      expect('5001 as a group', await admin.put(`/api/accounting/accounts/${acc['5001']}`, { level: 'group' }), 409, 'ACCOUNT_IS_SYSTEM');
+      expect('5001 deactivated', await admin.put(`/api/accounting/accounts/${acc['5001']}`, { isActive: false }), 409, 'ACCOUNT_IS_SYSTEM');
+      expect('renaming 5001 with the form body', await admin.put(`/api/accounting/accounts/${acc['5001']}`, {
+        code: '5001', name: 'TD-553 sales', level: 'subsidiary', parentId: (await accountIdsByCode('50'))['50'], accountType: 'revenue', nature: 'credit', description: 'TD-553',
+      }), 200);
+      const income = await AccountingReportService.getIncomeStatement({ endDate: today });
+      if (amountOf(income.totalRevenue) !== 1_000_000) problems.push(`income statement revenue ${income.totalRevenue}, expected 1,000,000`);
+
+      // 3) a custom account with rows keeps its type, nature, level and parent; its name and active flag change
+      const posted = await createSubsidiary(admin, '7094', 'TD-553 posted', acc['70']);
+      await postApproved(today, posted, acc['1001'], 200_000, 'TD-553 expense');
+      expect('7094 with rows as revenue', await admin.put(`/api/accounting/accounts/${posted}`, { accountType: 'revenue' }), 409, 'ACCOUNT_HAS_VOUCHER_ROWS');
+      expect('7094 with rows as credit nature', await admin.put(`/api/accounting/accounts/${posted}`, { nature: 'credit' }), 409, 'ACCOUNT_HAS_VOUCHER_ROWS');
+      expect('renaming and deactivating 7094', await admin.put(`/api/accounting/accounts/${posted}`, { name: 'TD-553 renamed', isActive: false }), 200);
+      const row = await accountRow(posted);
+      if (row?.accountType !== 'expense' || row?.name !== 'TD-553 renamed') problems.push(`7094 after the edits: ${JSON.stringify(row)}`);
+      // an account without rows still changes its type
+      expect('7093 without rows as cost of sales', await admin.put(`/api/accounting/accounts/${parent}`, { accountType: 'cost_of_sales' }), 200);
+
+      // 4) a cycle stored by an earlier version: the tree answers and the trial balance finishes
+      await orm.update(accounts).set({ parentId: Number(child.body?.id) }).where(eq(accounts.id, parent));
+      const tree = await admin.get('/api/accounting/accounts/tree');
+      if (tree.status !== 200) problems.push(`the tree with a legacy cycle answered ${tree.status} ${JSON.stringify(tree.body).slice(0, 160)}`);
+      // the roll-up climbed the parents with no stop: on the previous version this call never returns
+      await postApproved(today, Number(child.body?.id), acc['1001'], 50_000, 'TD-553 row under a cycle');
+      const cyclic = await AccountingReportService.getTrialBalance({ level: 'subsidiary', endDate: today });
+      const row7093 = cyclic.find(r => r.code === '7093');
+      // 709301's row rolls up into 7093 once, not once per turn of the cycle
+      if (row7093?.debitTurnover !== 50_000) problems.push(`7093 in the trial balance with a legacy cycle: ${JSON.stringify(row7093)}`);
+
+      assertNoProblems(problems);
+      return 'Cycles and wrong parent levels refused (422), system account 5001 kept its type, level and active flag (409) and took a new name, an account with rows kept its type and nature (409), and a legacy cycle left the tree and the trial balance working.';
     }));
   }
 

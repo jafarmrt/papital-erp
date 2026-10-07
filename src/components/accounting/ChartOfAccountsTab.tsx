@@ -48,6 +48,8 @@ export function ChartOfAccountsTab({
     description: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  // v9.0.200 (TD-553، تصمیم ت۴ الف): حساب سیستمی فقط عنوان و توضیح می‌گیرد؛ سرور جز این را ۴۰۹ پاسخ می‌دهد
+  const systemLocked = editingAccount?.isSystem === 1;
 
   const toggleExpand = (id: number) => {
     setExpandedNodes(prev => ({ ...prev, [id]: !prev[id] }));
@@ -459,6 +461,7 @@ export function ChartOfAccountsTab({
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => openEditModal(acc)}
+                            title="ویرایش"
                             className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -466,6 +469,7 @@ export function ChartOfAccountsTab({
                           {acc.isSystem !== 1 && (
                             <button
                               onClick={() => handleDelete(acc)}
+                              title="حذف"
                               className="p-1 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -491,6 +495,11 @@ export function ChartOfAccountsTab({
             </h3>
 
             <form onSubmit={handleSave} className="space-y-4">
+              {systemLocked && (
+                <p className="text-[11px] leading-5 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded-xl px-3 py-2">
+                  این حساب سیستمی است؛ فقط عنوان و توضیحات آن ویرایش می‌شود.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
@@ -544,7 +553,9 @@ export function ChartOfAccountsTab({
                     حساب بالادست (والد)
                   </label>
                   <select
+                    aria-label="حساب بالادست"
                     value={formData.parentId || ''}
+                    disabled={systemLocked}
                     onChange={e => setFormData({ ...formData, parentId: e.target.value ? Number(e.target.value) : null })}
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                   >
@@ -571,7 +582,9 @@ export function ChartOfAccountsTab({
                     نوع / طبقه‌بندی
                   </label>
                   <select
+                    aria-label="نوع حساب"
                     value={formData.accountType}
+                    disabled={systemLocked}
                     onChange={e => setFormData({ ...formData, accountType: e.target.value as AccountType })}
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                   >
@@ -589,7 +602,9 @@ export function ChartOfAccountsTab({
                     ماهیت حساب
                   </label>
                   <select
+                    aria-label="ماهیت حساب"
                     value={formData.nature}
+                    disabled={systemLocked}
                     onChange={e => setFormData({ ...formData, nature: e.target.value as AccountNature })}
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                   >

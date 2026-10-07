@@ -7,6 +7,7 @@ import type { Account, AccountLevel, AccountType, AccountNature } from '../../ty
 import { ConflictError, NotFoundError } from '../../errors/customErrors.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 import { countAccountVoucherRows } from './accountPostings.js';
+import { assertAccountPlacement } from './accountPlacement.js';
 
 export class ChartOfAccountsService {
   /**
@@ -209,19 +210,32 @@ export class ChartOfAccountsService {
       }
     });
 
+    // v9.0.200 (TD-553، B03-11): حساب‌های یک حلقه بالادست (داده قدیمی) ریشه می‌شوند و پیوند حلقه بریده می‌شود؛ پیش‌تر
+    // فرزندانشان به خودشان برمی‌گشتند و JSON درخت با خطای ۵۰۰ «Converting circular structure to JSON» می‌شکست
     const reachable = new Set<number>();
-    const stack = [...roots];
-    while (stack.length > 0) {
-      const node = stack.pop()!;
-      if (reachable.has(node.id)) continue;
-      reachable.add(node.id);
-      (node.children || []).forEach(child => stack.push(child));
-    }
+    const visit = (start: Account & { children?: Account[] }) => {
+      const stack = [start];
+      while (stack.length > 0) {
+        const node = stack.pop()!;
+        if (reachable.has(node.id)) continue;
+        reachable.add(node.id);
+        (node.children || []).forEach(child => stack.push(child as Account & { children?: Account[] }));
+      }
+    };
+    roots.forEach(visit);
 
-    const orphans = all.filter(acc => !reachable.has(acc.id)).map(acc => map.get(acc.id)!);
+    const orphans: (Account & { children?: Account[] })[] = [];
+    for (const acc of all) {
+      if (reachable.has(acc.id)) continue;
+      const node = map.get(acc.id)!;
+      const parent = acc.parentId ? map.get(acc.parentId) : undefined;
+      if (parent) parent.children = (parent.children || []).filter(child => child.id !== node.id);
+      orphans.push(node);
+      roots.push(node);
+      visit(node);
+    }
     const orphanCount = orphans.length;
     const orphanCodes = orphans.map(o => o.code);
-    orphans.forEach(orphan => roots.push(orphan));
 
     return { roots, orphanCount, orphanCodes };
   }
@@ -241,31 +255,40 @@ export class ChartOfAccountsService {
     description?: string;
   }): Promise<Account> {
     const code = data.code.trim();
-    const existingActive = await orm.select().from(accounts)
-      .where(and(eq(accounts.code, code), eq(accounts.isDeleted, 0)));
-    if (existingActive.length > 0) {
-      throw new Error(`حساب با کد ${data.code} قبلاً تعریف شده است.`);
-    }
+    const insertedId = await orm.transaction(async (tx) => {
+      const existingActive = await tx.select().from(accounts)
+        .where(and(eq(accounts.code, code), eq(accounts.isDeleted, 0)));
+      if (existingActive.length > 0) {
+        throw new Error(`حساب با کد ${data.code} قبلاً تعریف شده است.`);
+      }
+      // v9.0.200 (TD-553، B03-11): بالادست یک سطح بالاتر و حذف‌نشده
+      await assertAccountPlacement(tx, { level: data.level, parentId: data.parentId || null });
 
-    const [inserted] = await orm.insert(accounts).values({
-      code,
-      name: data.name.trim(),
-      level: data.level,
-      parentId: data.parentId || null,
-      accountType: data.accountType,
-      nature: data.nature,
-      description: data.description?.trim() || null,
-      isSystem: 0,
-      isActive: 1,
-      isDeleted: 0,
-    }).returning();
+      const [inserted] = await tx.insert(accounts).values({
+        code,
+        name: data.name.trim(),
+        level: data.level,
+        parentId: data.parentId || null,
+        accountType: data.accountType,
+        nature: data.nature,
+        description: data.description?.trim() || null,
+        isSystem: 0,
+        isActive: 1,
+        isDeleted: 0,
+      }).returning({ id: accounts.id });
+      return inserted.id;
+    });
 
     const all = await this.getAllAccounts();
-    return all.find(a => a.id === inserted.id)!;
+    return all.find(a => a.id === insertedId)!;
   }
 
   /**
-   * Update an existing account
+   * Update an existing account.
+   * v9.0.200 (TD-553، B03-11، تصمیم ت۴ الف): ردیف حساب با `FOR UPDATE` قفل و فقط فیلدهای تغییرکرده سنجیده می‌شوند.
+   * حساب سیستمی فقط نام و توضیح می‌پذیرد (۴۰۹ `ACCOUNT_IS_SYSTEM`)؛ حسابی که ردیف سند دارد نوع، ماهیت، سطح و بالادستش
+   * عوض نمی‌شود (۴۰۹ `ACCOUNT_HAS_VOUCHER_ROWS`) و نام، توضیح و فعال بودنش عوض می‌شود؛ جای تازه در درخت با
+   * `assertAccountPlacement`. پیش‌تر نوع ۵۰۰۱ (درآمد) به دارایی عوض شد و درآمد سال‌های گذشته از صورت سود و زیان افتاد.
    */
   static async updateAccount(id: number, data: Partial<{
     name: string;
@@ -276,21 +299,51 @@ export class ChartOfAccountsService {
     description?: string;
     isActive?: boolean;
   }>): Promise<Account> {
-    const [existing] = await orm.select().from(accounts).where(eq(accounts.id, id));
-    if (!existing) {
-      throw new Error('حساب مورد نظر یافت نشد.');
-    }
+    await orm.transaction(async (tx) => {
+      const [existing] = await tx.select().from(accounts).where(eq(accounts.id, id)).for('update');
+      if (!existing || existing.isDeleted === 1) {
+        throw new NotFoundError('حساب مورد نظر یافت نشد.', undefined, 'ACCOUNT_NOT_FOUND');
+      }
 
-    const updateData: Partial<typeof accounts.$inferInsert> = {};
-    if (data.name !== undefined) updateData.name = data.name.trim();
-    if (data.level !== undefined) updateData.level = data.level;
-    if (data.parentId !== undefined) updateData.parentId = data.parentId;
-    if (data.accountType !== undefined) updateData.accountType = data.accountType;
-    if (data.nature !== undefined) updateData.nature = data.nature;
-    if (data.description !== undefined) updateData.description = data.description?.trim() || null;
-    if (data.isActive !== undefined) updateData.isActive = data.isActive ? 1 : 0;
+      const updateData: Partial<typeof accounts.$inferInsert> = {};
+      if (data.name !== undefined && data.name.trim() !== existing.name) updateData.name = data.name.trim();
+      if (data.description !== undefined && (data.description?.trim() || null) !== (existing.description || null)) updateData.description = data.description?.trim() || null;
+      if (data.level !== undefined && data.level !== existing.level) updateData.level = data.level;
+      if (data.parentId !== undefined && (data.parentId || null) !== (existing.parentId || null)) updateData.parentId = data.parentId || null;
+      if (data.accountType !== undefined && data.accountType !== existing.accountType) updateData.accountType = data.accountType;
+      if (data.nature !== undefined && data.nature !== existing.nature) updateData.nature = data.nature;
+      if (data.isActive !== undefined && (data.isActive ? 1 : 0) !== (existing.isActive ?? 1)) updateData.isActive = data.isActive ? 1 : 0;
 
-    await orm.update(accounts).set(updateData).where(eq(accounts.id, id));
+      const structural = (['level', 'parentId', 'accountType', 'nature'] as const).filter(field => field in updateData);
+      if (existing.isSystem === 1 && (structural.length > 0 || 'isActive' in updateData)) {
+        throw new ConflictError(
+          `حساب «${existing.name}» (کد ${toPersianDigits(existing.code)}) حساب سیستمی است و فقط نام و توضیح آن عوض می‌شود.`,
+          { fields: [...structural, ...('isActive' in updateData ? ['isActive'] : [])] },
+          'ACCOUNT_IS_SYSTEM',
+        );
+      }
+      if (structural.length > 0) {
+        const voucherRows = await countAccountVoucherRows(tx, id);
+        if (voucherRows > 0) {
+          throw new ConflictError(
+            `حساب «${existing.name}» (کد ${toPersianDigits(existing.code)}) در ${toPersianDigits(String(voucherRows))} ردیف سند به کار رفته؛ نوع، ماهیت، سطح و حساب بالادست آن عوض نمی‌شود و فقط نام، توضیح و فعال بودنش تغییر می‌کند.`,
+            { fields: structural, voucherRowCount: voucherRows },
+            'ACCOUNT_HAS_VOUCHER_ROWS',
+          );
+        }
+        if ('level' in updateData || 'parentId' in updateData) {
+          await assertAccountPlacement(tx, {
+            id,
+            level: updateData.level ?? existing.level,
+            parentId: 'parentId' in updateData ? (updateData.parentId ?? null) : (existing.parentId ?? null),
+          });
+        }
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await tx.update(accounts).set(updateData).where(eq(accounts.id, id));
+      }
+    });
 
     const all = await this.getAllAccounts();
     return all.find(a => a.id === id)!;
