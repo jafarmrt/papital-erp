@@ -81,5 +81,25 @@ export async function runAccessPackageTwoQualityTests(shouldRun: ShouldRun): Pro
     });
   }
 
+  if (shouldRun('sec_login_event_role_name_td_540', 'security', 'td540', 'audit', 'package2')) {
+    await runCase(results, {
+      id: 'sec_login_event_role_name_td_540',
+      name: 'v9.0.167: the login event and the test-user health check name the role, not its code (TD-540)',
+      details: 'B02-25: the audit page showed the role code stored in a login event and the synthetic_test_users health check listed «نقش: <code>» with «(TD-521)»; now the login event stores roleName, the stored name of the role, beside the code, and the health check shows that name',
+    }, async (h, wrong) => {
+      const member = await h.sessionWith(['documents.view']);
+      const [role] = await h.q('SELECT name FROM roles WHERE code = $1', [member.role]);
+      const [event] = await h.q("SELECT details FROM activity_logs WHERE user_id = $1 AND action = 'LOGIN' ORDER BY id DESC LIMIT 1", [member.userId]);
+      const details = (typeof event?.details === 'string' ? JSON.parse(event.details) : event?.details) as Record<string, unknown> | undefined;
+      if (!details) wrong.push('the login wrote no event');
+      else if (details.roleName !== role?.name) wrong.push(`the login event names the role «${String(details.roleName)}», not «${String(role?.name)}»`);
+
+      const { buildSyntheticUsersHealthTest } = await import('../../services/users/syntheticUserHealth.js');
+      const item = buildSyntheticUsersHealthTest([{ id: 7, username: 'test_legacy', fullName: 'کاربر قدیمی', role: 'branch_sales', roleName: 'کارمند فروش' }]).items?.[0];
+      const shown = `${String(item?.subtitle ?? '')} ${String(item?.details ?? '')}`;
+      if (!shown.includes('کارمند فروش') || shown.includes('branch_sales') || shown.includes('TD-')) wrong.push(`the health check item says «${shown}»`);
+    });
+  }
+
   return results;
 }

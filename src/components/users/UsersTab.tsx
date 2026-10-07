@@ -12,6 +12,7 @@ import {
 import { ActionMenu } from '../ActionMenu';
 import toast from 'react-hot-toast';
 import { copyToClipboard } from '../../utils/clipboard';
+import { formatPersianNumber } from '../../utils';
 import { isSystemAdminRole, SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog';
 import { roleWithinGrant, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
 
@@ -96,7 +97,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
             onChange={(e) => setUserRoleFilter(e.target.value)}
             className="text-xs border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
-            <option value="ALL">همه نقش‌ها ({users.length})</option>
+            <option value="ALL">همه نقش‌ها ({formatPersianNumber(users.length)})</option>
             <option value={SYSTEM_ADMIN_ROLE}>مدیر سیستم</option>
             {rolesList.map((r) => (
               <option key={r.id} value={r.code}>

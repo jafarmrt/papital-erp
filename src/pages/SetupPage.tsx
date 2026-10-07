@@ -193,7 +193,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  توکن امنیتی راه‌اندازی (ERP_SETUP_TOKEN) <span className="text-red-500">*</span>
+                  رمز راه‌اندازی (ERP_SETUP_TOKEN) <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <KeyRound className="absolute right-3 top-3 text-slate-400" size={18} />
@@ -203,11 +203,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     value={setupToken}
                     onChange={e => setSetupToken(e.target.value)}
                     dir="ltr"
-                    placeholder="توکن امنیتی تعریف شده در متغیر محیطی ERP_SETUP_TOKEN"
+                    placeholder="مقدار متغیر محیطی ERP_SETUP_TOKEN"
                     className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   />
                 </div>
-                <p className="text-xs text-slate-500 mt-1">جهت حفاظت امنیتی از راه‌اندازی اولیه، توکن تعیین‌شده در سرور را وارد نمایید.</p>
+                <p className="text-xs text-slate-500 mt-1">برای حفاظت از راه‌اندازی اولیه، رمزی را که در سرور تعیین شده است وارد کنید.</p>
               </div>
 
               <div>
@@ -389,7 +389,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                       className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     >
                       <option value="IRR">ریال (IRR)</option>
-                      <option value="TOMAN">تومان (Toman)</option>
+                      <option value="TOMAN">تومان</option>
                       <option value="USD">دلار ($)</option>
                       <option value="EUR">یورو (€)</option>
                       <option value="AED">درهم (AED)</option>

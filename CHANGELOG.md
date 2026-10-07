@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.167 — Users, Roles and Audit Screens in Plain Persian
+- **Users, Roles and Audit Screens in Plain Persian:** the users, roles, audit log, login, setup and profile screens and the permission list drop English words and transliterations, show counts in Persian digits and name roles instead of showing their codes (TD-540).
+
 ### v9.0.166 — The Simple User List Gives the Role Name, Not Its Code
 - **The Simple User List Gives the Role Name, Not Its Code:** the user list every signed-in user reads for mentions carries each role's Persian name instead of its code (TD-534).
 

@@ -9,7 +9,7 @@ import {
   ChevronUp,
   Info,
 } from 'lucide-react';
-import { errorMessageOf } from '../../utils';
+import { errorMessageOf, formatPersianNumber } from '../../utils';
 import {
   isSystemAdminRole,
   missingRequiredPermissions,
@@ -285,7 +285,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                 onChange={(e) => setPermCategoryFilter(e.target.value)}
                 className="text-xs border rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
               >
-                <option value="ALL">همه بخش‌ها ({permCatalog.length})</option>
+                <option value="ALL">همه بخش‌ها ({formatPersianNumber(permCatalog.length)})</option>
                 {permCatalog.map((c, i) => (
                   <option key={i} value={c.category}>
                     {c.category}
@@ -308,7 +308,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                   onClick={selectViewOnlyPermissions}
                   className="text-xs text-emerald-700 hover:text-emerald-900 bg-emerald-50 px-2.5 py-1 rounded font-medium border border-emerald-200"
                 >
-                  فقط مشاهده (.view)
+                  فقط مشاهده
                 </button>
                 <button
                   type="button"
@@ -358,7 +358,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                       >
                         {isCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                         <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
-                        {cat.category} ({cat.permissions.length} کلید)
+                        {cat.category} ({formatPersianNumber(cat.permissions.length)} کلید)
                       </button>
                       {!isFixedAdmin && (
                       <button
@@ -432,8 +432,8 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
               تعداد مجوزهای فعال:{' '}
               <strong className="text-slate-800 font-bold">
                 {isFixedAdmin
-                  ? `همه ${allCatalogKeys.length} مجوز`
-                  : `${roleForm.permissions.length} کلید`}
+                  ? `همه ${formatPersianNumber(allCatalogKeys.length)} مجوز`
+                  : `${formatPersianNumber(roleForm.permissions.length)} کلید`}
               </strong>
             </span>
             <div className="flex gap-2">

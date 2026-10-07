@@ -63,7 +63,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error('لطفاً یک فایل تصویری انتخاب کنید (PNG, JPG, WebP)');
+      toast.error('یک فایل تصویری انتخاب کنید (PNG، JPG، WEBP یا GIF).');
       return;
     }
 
@@ -111,11 +111,11 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
       });
 
       if (res && res.user) {
-        toast.success('پروفایل با موفقیت بروزرسانی شد');
+        toast.success('نمایه ذخیره شد');
         onUserUpdate(res.user);
         onClose();
       } else {
-        toast.error(res?.error || 'خطا در بروزرسانی پروفایل');
+        toast.error(res?.error || 'ذخیره نمایه انجام نشد؛ دوباره تلاش کنید.');
       }
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در برقراری ارتباط با سرور');
@@ -190,7 +190,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               </div>
               <div>
                 <h2 className="text-lg font-bold">تنظیمات حساب کاربری</h2>
-                <p className="text-xs text-slate-400">ویرایش مشخصات، تصویر آواتار و کلمه عبور شخصی</p>
+                <p className="text-xs text-slate-400">ویرایش مشخصات، تصویر نمایه و کلمه عبور</p>
               </div>
             </div>
             {!requiresPasswordReset && (
@@ -216,7 +216,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               }`}
             >
               <UserIcon className="w-4 h-4" />
-              مشخصات و آواتار
+              مشخصات و تصویر نمایه
             </button>
             <button
               onClick={() => setActiveTab('password')}
@@ -258,7 +258,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-slate-900 hover:bg-slate-800 text-amber-400 border-2 border-white flex items-center justify-center shadow-md transition-all hover:scale-110"
-                    title="تغییر تصویر آواتار"
+                    title="تغییر تصویر نمایه"
                   >
                     <Camera className="w-4 h-4" />
                   </button>
@@ -288,11 +288,11 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                       className="text-xs text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 border-r border-slate-200 pr-2 mr-2"
                     >
                       <X className="w-3.5 h-3.5" />
-                      حذف آواتار
+                      حذف تصویر نمایه
                     </button>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-400">فرمت‌های مجاز: PNG, JPG, WebP (حداکثر ۵ مگابایت)</p>
+                <p className="text-[11px] text-slate-400">قالب‌های مجاز: PNG، JPG، WEBP و GIF (حداکثر ۵ مگابایت)</p>
               </div>
 
               {/* Form Inputs */}

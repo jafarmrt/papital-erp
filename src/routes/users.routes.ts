@@ -22,6 +22,7 @@ import {
 } from '../services/users/grantBoundary.js';
 import { isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 import { USERNAME_OF_DELETED_USER, deletedUsernameMessage } from '../lib/users/userRestore.js';
+import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
 
 const router = Router();
@@ -184,7 +185,7 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
       action: 'UPDATE',
       entity: 'پروفایل کاربر',
       entityId: userId,
-      description: `بروزرسانی اطلاعات پروفایل شخصی ${passwordChanged ? 'و تغییر کلمه عبور' : ''}`,
+      description: `به‌روزرسانی اطلاعات نمایه شخصی ${passwordChanged ? 'و تغییر کلمه عبور' : ''}`,
       details: {
         userId,
         username: u.username,
@@ -478,7 +479,7 @@ router.get('/users/list-simple', asyncHandler(async (req, res) => {
     id: u.id,
     username: u.username,
     full_name: u.fullName || u.username,
-    role_name: u.roleName || (isSystemAdminRole(u.role) ? 'مدیر سیستم' : ''),
+    role_name: roleDisplayName(u.role, u.roleName),
     avatar_url: u.avatarUrl || ''
   })));
 }));

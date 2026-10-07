@@ -31,15 +31,15 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
       });
 
       if (res?.success) {
-        toast.success(res.message || 'پاکسازی لاگ‌های ممیزی با موفقیت انجام شد.');
+        toast.success(res.message || 'پاک‌سازی رویدادهای کهنه سجل انجام شد.');
         setShowPurgeModal(false);
         void refetchIntegrity();
         invalidateActivityLogs();
       } else {
-        toast.error(res?.message || 'خطا در اجرای پاکسازی لاگ‌ها');
+        toast.error(res?.message || 'پاک‌سازی سجل انجام نشد؛ دوباره تلاش کنید.');
       }
     } catch (err: any) {
-      toast.error(err?.message || 'خطا در ارتباط با سرور جهت پاکسازی لاگ‌ها');
+      toast.error(err?.message || 'ارتباط با سرور برای پاک‌سازی سجل برقرار نشد؛ دوباره تلاش کنید.');
     } finally {
       setIsPurging(false);
     }
@@ -52,7 +52,7 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2 text-slate-800">
             <ShieldCheck className="w-6 h-6 text-indigo-600" />
-            <h3 className="font-bold text-lg m-0 p-0 border-0">مدیریت نگه‌داشت و پاکسازی ایمن لاگ‌های ممیزی</h3>
+            <h3 className="font-bold text-lg m-0 p-0 border-0">نگه‌داشت و پاک‌سازی ایمن سجل رویدادها</h3>
           </div>
           <button
             onClick={() => refetchIntegrity()}
@@ -67,7 +67,7 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
         {/* Stats Summary */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
-            <div className="text-[11px] text-slate-500 font-medium">کل لاگ‌های ثبت‌شده</div>
+            <div className="text-[11px] text-slate-500 font-medium">کل رویدادهای ثبت‌شده</div>
             <div className="text-lg font-black text-slate-800 mt-1">
               {integrity ? formatPersianNumber(integrity.totalLogs) : '...'}
             </div>
@@ -139,7 +139,7 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
             <h4>پاکسازی کامل سیستم، حذف کاربران و بازنشانی به سناریوی شروع اولیه</h4>
           </div>
           <p className="text-xs text-red-700 leading-relaxed">
-            این عملیات تمامی اطلاعات عملیاتی سامانه (کالاها، انبارها، فاکتورها، اسناد دوبل مالی، چک‌ها، پروژه‌ها، ارتباط با مشتری، کارکرد و کلیه حساب‌های کاربری) را به‌طور کامل پاک کرده و ساختارهای استاندارد پایه (۲۲ دسته‌بندی اصلی، نقش‌های سیستمی، کدینگ حسابداری و گردش‌کارها) را بازنشانی می‌کند. پس از اتمام، سیستم فوراً به صفحه راه‌اندازی و شروع به کار اولیه (Setup Wizard) هدایت می‌شود. این عملیات غیرقابل بازگشت است.
+            این عملیات تمامی اطلاعات عملیاتی سامانه (کالاها، انبارها، فاکتورها، اسناد دوبل مالی، چک‌ها، پروژه‌ها، ارتباط با مشتری، کارکرد و کلیه حساب‌های کاربری) را به‌طور کامل پاک کرده و ساختارهای استاندارد پایه (۲۲ دسته‌بندی اصلی، نقش‌های سیستمی، کدینگ حسابداری و گردش‌کارها) را بازنشانی می‌کند. پس از اتمام، سیستم فوراً به صفحه راه‌اندازی و شروع به کار اولیه هدایت می‌شود. این عملیات غیرقابل بازگشت است.
           </p>
           <div className="pt-2">
             <button
@@ -159,7 +159,7 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-slate-100 bg-indigo-50 text-indigo-900 flex items-center gap-2.5">
               <ShieldCheck size={20} className="text-indigo-600 shrink-0" />
-              <h3 className="font-bold text-sm m-0">تایید پاکسازی ایمن لاگ‌های ممیزی</h3>
+              <h3 className="font-bold text-sm m-0">تأیید پاک‌سازی ایمن سجل رویدادها</h3>
             </div>
             <div className="p-6 space-y-4 text-xs">
               <p className="text-slate-600 leading-relaxed">
@@ -235,7 +235,7 @@ export function ClearDataModal({
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
             <div className="font-bold text-slate-800 flex items-center gap-1.5">
               <Trash2 size={14} className="text-red-500" />
-              <span>ماژول‌ها و اطلاعاتی که به‌طور کامل حذف خواهند شد:</span>
+              <span>بخش‌ها و اطلاعاتی که به‌طور کامل حذف خواهند شد:</span>
             </div>
             <ul className="text-slate-600 list-disc list-inside space-y-1 text-[11px] pr-1 leading-relaxed">
               <li>کلیه حساب‌های کاربری و دسترسی‌های کاربران (سامانه بدون کاربر خواهد شد)</li>
@@ -243,9 +243,9 @@ export function ClearDataModal({
               <li>کلیه فاکتورها، اسناد انبارداری و پیش‌فاکتورها</li>
               <li>اسناد حسابداری دوبل روزنامه، خزانه‌داری، دریافت/پرداخت‌ها و چک‌های صیادی</li>
               <li>پروژه‌ها و مراحل تولید کارگاهی، کنترل موجودی پروژه و قطعات</li>
-              <li>پرونده‌های پرسنل، کارمزدها، لاگ‌های کارمزدی و تسویه‌حساب‌ها</li>
+              <li>پرونده‌های پرسنل، کارمزدها، کارکردهای ثبت‌شده و تسویه‌حساب‌ها</li>
               <li>مشتریان، پرونده‌های فروش، اقدام‌ها و پیگیری‌ها</li>
-              <li>گزارش‌های روزانه ثبت کارکرد، لاگ‌های رویدادها و کارتابل تاییدات</li>
+              <li>گزارش‌های روزانه ثبت کارکرد، سجل رویدادها و کارتابل تأییدات</li>
             </ul>
           </div>
 
@@ -255,7 +255,7 @@ export function ClearDataModal({
               <span>ساختارهای اولیه‌ای که خودکار بازنشانی و آماده‌سازی می‌شوند:</span>
             </div>
             <p className="text-[11px] text-emerald-700 leading-relaxed pr-1">
-              ۲۲ دسته‌بندی استاندارد کارگاه، انبار اصلی، کدینگ استاندارد حسابداری و نقش‌های سیستمی بازنشانی شده و سامانه بلافاصله شما را به ویزارد راه‌اندازی اولیه جهت تعریف حساب مدیر ارشد هدایت می‌کند.
+              ۲۲ دسته‌بندی استاندارد کارگاه، انبار اصلی، کدینگ استاندارد حسابداری و نقش‌های سیستمی بازنشانی شده و سامانه بلافاصله شما را به صفحه راه‌اندازی اولیه برای تعریف حساب مدیر ارشد هدایت می‌کند.
             </p>
           </div>
 

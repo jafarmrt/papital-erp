@@ -35,7 +35,7 @@ export async function exportAuditLogsToExcel(logs: AuditExportRow[], total: numb
       const parsedUA = parseUserAgent(log.details?.userAgent);
       return {
         'ردیف': index + 1,
-        'شناسه لاگ': log.id,
+        'شناسه رویداد': log.id,
         'تاریخ و زمان (شمسی)': formatPersianDateTime(log.timestamp),
         'نام کاربری': log.username,
         'نام کامل کاربر': log.userFullName || '—',
@@ -43,7 +43,7 @@ export async function exportAuditLogsToExcel(logs: AuditExportRow[], total: numb
         'بخش / موجودیت': log.entity,
         'شناسه موجودیت': log.entityId || '—',
         'شرح رویداد': log.description,
-        'آدرس IP': log.ipAddress || '—',
+        'نشانی IP': log.ipAddress || '—',
         'دستگاه': parsedUA.deviceLabel,
         'سیستم‌عامل': parsedUA.os,
         'مرورگر': parsedUA.browser

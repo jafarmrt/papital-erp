@@ -48,7 +48,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, o
               <Printer className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-900 text-sm">پیش‌نمایش چاپ رسمی گزارش سجل تغییرات (Audit Report)</h3>
+              <h3 className="font-bold text-slate-900 text-sm">پیش‌نمایش چاپ رسمی گزارش سجل تغییرات</h3>
               <p className="text-2xs text-slate-500">طراحی استاندارد جهت ارائه در ممیزی‌های داخلی و حسابرسی‌های قانونی</p>
             </div>
           </div>
@@ -78,8 +78,8 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, o
                 <ShieldAlert className="w-7 h-7" />
               </div>
               <div>
-                <h1 className="text-lg font-black text-slate-900">سامانه جامع مدیریت کارگاه و ERP صنعتی</h1>
-                <h2 className="text-sm font-bold text-slate-700">گزارش ممیزی امنیتی و سجل رویدادهای سیستمی (Audit Trail)</h2>
+                <h1 className="text-lg font-black text-slate-900">سامانه جامع مدیریت کارگاه</h1>
+                <h2 className="text-sm font-bold text-slate-700">گزارش ممیزی امنیتی و سجل رویدادهای سامانه</h2>
               </div>
             </div>
 
@@ -150,7 +150,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, o
                   <th className="py-2.5 px-3 border-l border-slate-300 text-center w-20">اقدام</th>
                   <th className="py-2.5 px-3 border-l border-slate-300 w-24">موجودیت</th>
                   <th className="py-2.5 px-3 border-l border-slate-300">شرح رویداد</th>
-                  <th className="py-2.5 px-3 border-l border-slate-300 w-24 text-center">آدرس IP</th>
+                  <th className="py-2.5 px-3 border-l border-slate-300 w-24 text-center">نشانی IP</th>
                   <th className="py-2.5 px-3 w-28 text-center">دستگاه / مرورگر</th>
                 </tr>
               </thead>
@@ -210,7 +210,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, o
               <p className="text-2xs text-slate-500">امضا و تاریخ</p>
             </div>
             <div className="space-y-12">
-              <p className="font-bold">مدیر فناوری اطلاعات و امنیت (IT)</p>
+              <p className="font-bold">مدیر فناوری اطلاعات و امنیت</p>
               <div className="border-b border-dashed border-slate-400 w-36 mx-auto"></div>
               <p className="text-2xs text-slate-500">امضا و تایید سیستمی</p>
             </div>

@@ -87,7 +87,8 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     const { PERMISSION_CATALOG } = await import('../../routes/users.routes.js');
 
     // 1. Verify all 5 workflow permissions exist in PERMISSION_CATALOG
-    const wfCat = PERMISSION_CATALOG.find(c => c.category.includes('Workflow'));
+    // v9.0.167 (TD-540): the category is found by its keys, not by its title, which is Persian only now
+    const wfCat = PERMISSION_CATALOG.find(c => c.permissions.some(p => p.key.startsWith('workflow.')));
     const requiredKeys = ['workflow.view', 'workflow.execute', 'workflow.approve', 'workflow.manage', 'workflow.admin'];
     const catalogKeys = wfCat ? wfCat.permissions.map(p => p.key) : [];
     const missingKeys = requiredKeys.filter(k => !catalogKeys.includes(k));

@@ -169,7 +169,7 @@ export default function ActivityLogsPage() {
             <ShieldAlert className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">سجل تغییرات و لاگ فعالیت کاربران (Audit Trail)</h1>
+            <h1 className="text-xl font-bold text-slate-900">سجل تغییرات و رویدادهای کاربران</h1>
             <p className="text-xs text-slate-500 mt-1">
               ثبت جامع و ممیزی امنیتی از تمامی ورود و خروج‌ها، تغییرات اسناد مالی، انبار و تنظیمات مالکیتی
             </p>
@@ -188,10 +188,10 @@ export default function ActivityLogsPage() {
             onClick={() => { void handleExportExcel(); }}
             disabled={preparingReport !== null || logs.length === 0}
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors disabled:opacity-50"
-            title="دریافت فایل اکسل XLSX"
+            title="دریافت فایل اکسل"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            {preparingReport === 'excel' ? 'در حال آماده‌سازی…' : 'خروجی اکسل (XLSX)'}
+            {preparingReport === 'excel' ? 'در حال آماده‌سازی…' : 'خروجی اکسل'}
           </button>
           <button
             onClick={() => { void handlePrintPreview(); }}
@@ -388,7 +388,7 @@ export default function ActivityLogsPage() {
                 <th className="py-3 px-4">نوع اقدام</th>
                 <th className="py-3 px-4">بخش / موجودیت</th>
                 <th className="py-3 px-4">شرح کامل فعالیت</th>
-                <th className="py-3 px-4 text-center">دستگاه و IP</th>
+                <th className="py-3 px-4 text-center">دستگاه و نشانی IP</th>
                 <th className="py-3 px-4 text-center">عملیات</th>
               </tr>
             </thead>
@@ -397,7 +397,7 @@ export default function ActivityLogsPage() {
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
-                    در حال بارگذاری لاگ‌های امنیتی سیستم...
+                    در حال بارگذاری رویدادهای سجل…
                   </td>
                 </tr>
               ) : loadError ? (
@@ -534,7 +534,7 @@ export default function ActivityLogsPage() {
                   <span className="font-bold text-slate-800">{selectedLog.entity} {selectedLog.entityId ? `(#${selectedLog.entityId})` : ''}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block mb-0.5">آدرس IP:</span>
+                  <span className="text-slate-400 block mb-0.5">نشانی IP:</span>
                   <span className="font-mono font-bold text-slate-700 bg-slate-200/60 px-2 py-0.5 rounded text-2xs inline-block">
                     {selectedLog.ipAddress || '127.0.0.1 (محلی)'}
                   </span>
@@ -556,7 +556,7 @@ export default function ActivityLogsPage() {
                   <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                     <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
                       <Laptop className="w-4 h-4 text-indigo-600" />
-                      <span>مشخصات دستگاه، سیستم‌عامل و مرورگر کلاینت:</span>
+                      <span>مشخصات دستگاه کاربر، سیستم‌عامل و مرورگر:</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-2xs">
                       <div className="bg-white p-2.5 rounded-lg border border-slate-200">
@@ -572,7 +572,7 @@ export default function ActivityLogsPage() {
                         <span className="font-bold text-slate-800">{ua.browser}</span>
                       </div>
                       <div className="bg-white p-2.5 rounded-lg border border-slate-200 sm:col-span-3">
-                        <span className="text-slate-400 block mb-1">شناسه خام هدر مرورگر (User-Agent):</span>
+                        <span className="text-slate-400 block mb-1">شناسه خام مرورگر:</span>
                         <span className="font-mono text-3xs text-slate-600 break-all block ltr text-left bg-slate-50 p-2 rounded border border-slate-100">
                           {selectedLog.details.userAgent}
                         </span>
@@ -596,7 +596,7 @@ export default function ActivityLogsPage() {
                         }`}
                       >
                         <ArrowRightLeft className="w-3.5 h-3.5" />
-                        نمایش بصری تفاوت‌ها و تغییرات (Diff)
+                        نمایش تفاوت‌ها و تغییرات
                       </button>
                       <button
                         onClick={() => setModalTab('json')}
@@ -607,7 +607,7 @@ export default function ActivityLogsPage() {
                         }`}
                       >
                         <FileCode className="w-3.5 h-3.5" />
-                        داده خام سیستمی (JSON)
+                        داده خام رویداد
                       </button>
                     </div>
                   </div>
@@ -667,7 +667,7 @@ export default function ActivityLogsPage() {
                             {selectedLog.details.role && (
                               <div className="bg-white p-3 rounded-lg border border-slate-200">
                                 <span className="text-slate-400 block mb-0.5 text-2xs">نقش کاربری در زمان ورود:</span>
-                                <span className="font-semibold text-slate-800">{selectedLog.details.role}</span>
+                                <span className="font-semibold text-slate-800">{selectedLog.details.roleName || selectedLog.details.role}</span>
                               </div>
                             )}
                           </div>

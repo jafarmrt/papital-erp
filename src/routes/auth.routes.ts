@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { users, appSettings } from '../db/schema.js';
+import { users, roles, appSettings } from '../db/schema.js';
 import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken, getJwtSecret, JWT_VERIFY_OPTIONS, invalidateUserAuthCache, shouldExposeTokenInBody } from '../middleware/auth.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
@@ -24,6 +24,7 @@ import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_R
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
 import { FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE } from '../lib/users/profileFields.js';
+import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 
 const router = Router();
 
@@ -128,7 +129,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
 
   if (!providedToken || !safeCompareTokens(providedToken, effectiveSetupToken)) {
     logger.warn(`[Setup] Unauthorized setup attempt with invalid or missing token from IP: ${req.ip}`);
-    throw new UnauthorizedError('توکن راه‌اندازی نامعتبر است');
+    throw new UnauthorizedError('رمز راه‌اندازی نادرست است');
   }
 
   // 2. PostgreSQL advisory lock (79234) to prevent race conditions (SEC-012)
@@ -274,6 +275,8 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
     // Set secure HttpOnly cookie
     res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
 
+    // v9.0.167 (TD-540): سجل ورود نام نقش را هم نگه می‌دارد تا جزئیات رویداد کد نقش نشان ندهد
+    const [roleRow] = await orm.select({ name: roles.name }).from(roles).where(eq(roles.code, activeUser.role)).limit(1);
     await logActivity({
       userId: activeUser.id,
       username: activeUser.username,
@@ -283,7 +286,7 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
       entityId: activeUser.id,
       description: `ورود موفق کاربر ${activeUser.fullName || activeUser.username} به سامانه`,
       ipAddress: clientIp,
-      details: { role: activeUser.role, method: 'نام کاربری و رمز عبور', status: 'success', userAgent },
+      details: { role: activeUser.role, roleName: roleDisplayName(activeUser.role, roleRow?.name), method: 'نام کاربری و رمز عبور', status: 'success', userAgent },
       req
     });
 

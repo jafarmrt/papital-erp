@@ -19,10 +19,10 @@ export const AuditDiffViewer: React.FC<AuditDiffViewerProps> = ({ details, actio
   // Helper to format any value cleanly
   const renderValue = (val: any) => {
     if (val === null || val === undefined) {
-      return <span className="text-slate-400 italic">خالی (null)</span>;
+      return <span className="text-slate-400 italic">خالی</span>;
     }
     if (typeof val === 'boolean') {
-      return val ? 'بله (True)' : 'خیر (False)';
+      return val ? 'بله' : 'خیر';
     }
     if (typeof val === 'number') {
       return formatPersianNumber(val);
@@ -95,11 +95,11 @@ export const AuditDiffViewer: React.FC<AuditDiffViewerProps> = ({ details, actio
             <div className="flex items-center gap-3 text-2xs font-medium">
               <span className="flex items-center gap-1 text-rose-700">
                 <span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>
-                مقدار قبلی (Before)
+                مقدار قبلی
               </span>
               <span className="flex items-center gap-1 text-emerald-700">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                مقدار جدید (After)
+                مقدار جدید
               </span>
             </div>
           </div>
@@ -198,7 +198,7 @@ export const AuditDiffViewer: React.FC<AuditDiffViewerProps> = ({ details, actio
         <div className="p-3.5 bg-rose-50/50 border border-rose-200 rounded-xl space-y-2">
           <span className="font-bold text-rose-900 flex items-center gap-1.5 text-xs">
             <Trash2 className="w-4 h-4 text-rose-600" />
-            اسنپ‌شات وضعیت رکورد قبل از حذف (Before Snapshot):
+            تصویر داده رکورد پیش از حذف:
           </span>
           <div className="bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto text-2xs font-mono ltr text-left max-h-56">
             <pre>{JSON.stringify(details.before, null, 2)}</pre>
@@ -211,7 +211,7 @@ export const AuditDiffViewer: React.FC<AuditDiffViewerProps> = ({ details, actio
         <div className="p-3.5 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-2">
           <span className="font-bold text-emerald-900 flex items-center gap-1.5 text-xs">
             <Check className="w-4 h-4 text-emerald-600" />
-            اطلاعات ثبت‌شده رکورد جدید (After Snapshot):
+            تصویر داده رکورد تازه:
           </span>
           <div className="bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto text-2xs font-mono ltr text-left max-h-56">
             <pre>{JSON.stringify(details.after, null, 2)}</pre>
