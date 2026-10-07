@@ -5,11 +5,12 @@
  * پنهان» در P02_PERMISSION_MODEL.md §۲.۷). سرور و مرورگر نشانی و فیلدهای هر فهرست را از همین پرونده می‌خوانند؛ مجوزها در
  * `READ_PERMISSIONS` (`src/lib/recordReadPermissions.ts`) و آزمون Vitest `pickLists.test.ts` نگه‌شان می‌دارد.
  *
- * v9.0.120 (TD-887): طرف حساب‌ها.
+ * v9.0.120 (TD-887): طرف حساب‌ها. v9.0.121 (TD-888): کالاها.
  */
 
 export const PICK_LIST_URLS = {
   customers: '/customers/options',
+  items: '/items/options',
 } as const;
 
 /**
@@ -42,4 +43,44 @@ export interface CustomerPick {
   contacts: CustomerPickContact[] | null;
   /** فقط برای دارندگان customers.view، customers.manage و مجوزهای accounting.* (TD-433) */
   bankInfo?: { bankName?: string; accountNumber?: string; shaba?: string; cardNumber?: string } | null;
+}
+
+/**
+ * فیلدهای فهرست انتخاب کالا: شناسه، کد، نام، واحد، دسته و ویژگی‌ها برای انتخاب در سند، پروژه، خرید، انبارگردانی و
+ * ارتباط با مشتری، و موجودی هر انبار (`stocks` و `stock_<کد انبار>`) برای بررسی مقدار خروج و انتقال. نقطه سفارش، رزروها،
+ * نسخه رکورد و امکان ثبت افتتاحیه فقط در فهرست کامل (`products.view`) است. نام‌ها همان نام‌های فهرست کامل‌اند (هر دو شکل
+ * camelCase و snake_case) تا فرم‌ها بی تغییر از آن بخوانند.
+ */
+export const ITEM_PICK_FIELDS = [
+  'id', 'type', 'name', 'code', 'unit', 'category', 'image', 'thumbnail', 'color', 'weight', 'material', 'size',
+  'currentStock', 'current_stock', 'stocks',
+] as const;
+
+/** میانگین بهای کالا (بهای تمام‌شده) فقط برای دارندگان `products.view`؛ فرم‌های دیگر قیمت پیش‌فرض را خالی می‌گذارند */
+export const ITEM_COST_FIELDS = ['weightedAverageCost', 'weighted_average_cost'] as const;
+
+/** کلید موجودی یک انبار در ردیف کالا */
+export const ITEM_WAREHOUSE_STOCK_FIELD = /^stock_.+$/;
+
+export interface ItemPick {
+  id: number;
+  type: string;
+  name: string;
+  code: string;
+  unit: string;
+  category: string | null;
+  image: string | null;
+  thumbnail: string | null;
+  color: string | null;
+  weight: number | null;
+  material: string | null;
+  size: string | null;
+  currentStock: number;
+  current_stock: number;
+  /** موجودی هر انبار با کد انبار */
+  stocks: Record<string, number>;
+  /** فقط برای دارندگان products.view */
+  weightedAverageCost?: number;
+  weighted_average_cost?: number;
+  [warehouseStock: `stock_${string}`]: number;
 }

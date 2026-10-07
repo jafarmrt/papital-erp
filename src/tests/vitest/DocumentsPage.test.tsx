@@ -20,7 +20,7 @@ function apiResponse(url: string): unknown {
   if (url === '/projects') return [{ id: 7, project_code: 'PRJ-7', title: 'گردنبند سفارشی' }];
   if (url === '/projects/7') return { id: 7, project_code: 'PRJ-7', title: 'گردنبند سفارشی', inventory_control: {} };
   if (url === '/customers?limit=1000') return { data: [] };
-  if (url === '/items?limit=2500') return { data: [reservedItem] };
+  if (url === '/items/options') return { data: [reservedItem] };
   if (url === '/inventory/reserved-items') {
     return {
       allReservationEntries: [
@@ -31,7 +31,7 @@ function apiResponse(url: string): unknown {
   if (url === '/categories') return [];
   if (url === '/documents/next-ref?type=receipt') return { nextRef: 'RC-1001' };
   if (url === '/documents/next-ref?type=remittance') return { nextRef: 'RM-2001' };
-  if (url.startsWith('/items?search=')) return { data: [] };
+  if (url.startsWith('/items/options?search=')) return { data: [] };
   return [];
 }
 

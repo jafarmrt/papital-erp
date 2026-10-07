@@ -39,7 +39,7 @@ export function useStockDocumentReferenceData() {
   const itemsQuery = useQuery<Item[]>({
     queryKey: QUERY_KEYS.items.list({ scope: 'doc-items-all' }),
     queryFn: async () => {
-      const res = await fetchJson('/items?limit=2500');
+      const res = await fetchJson(PICK_LIST_URLS.items);
       return Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
     },
     staleTime: 2 * 60 * 1000,

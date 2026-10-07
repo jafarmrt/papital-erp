@@ -31,11 +31,22 @@ export const READ_PERMISSIONS = {
     'documents.view', 'documents.create', 'documents.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out',
     'audit.view', 'crm.view', 'workflow.view'
   ],
-  // صفحه‌های «ورود و خروج انبار» (documents.view، warehouse.in)، قیمت‌گذاری (products.edit_price) و انبارگردانی (audit.view)
-  items: [
-    'products.view', 'products.edit_price', 'documents.view', 'documents.create', 'warehouse.view', 'warehouse.in',
-    'audit.view', 'projects.view', 'crm.view', 'procurement.view'
+  /**
+   * فهرست کامل کالاها (با میانگین بها، نقطه سفارش، رزروها و نسخه رکورد) فقط با مجوزهای بخش کالا: صفحه کالاها، گالری و
+   * قیمت‌گذاری (v9.0.121، TD-888، ت۱۰ الف)
+   */
+  items: ['products.view', 'products.edit_price'],
+  /**
+   * فهرست انتخاب کالا (`GET /items/options`، بی نقطه سفارش، رزرو و نسخه؛ میانگین بها فقط با products.view): فاکتور و حواله
+   * (documents.create)، ورود و خروج انبار (documents.view، warehouse.in)، انبارگردانی (audit.view)، پروژه و انبار پروژه
+   * (projects.view، warehouse.view)، خرید، ارتباط با مشتری و انتقال (products.view)
+   */
+  itemOptions: [
+    'products.view', 'documents.view', 'documents.create', 'warehouse.view', 'warehouse.in', 'audit.view', 'projects.view',
+    'crm.view', 'procurement.view',
   ],
+  /** صفحه هشدار نقطه سفارش (همان کلیدهای صفحه در `PAGE_ACCESS`) */
+  itemReorderAlerts: ['products.view', 'warehouse.view'],
   itemPrices: ['products.view', 'products.edit_price', 'projects.view'],
   personnel: [
     'personnel.view', 'personnel.manage', 'piecework.view', 'projects.view', 'accounting.view', 'crm.view',

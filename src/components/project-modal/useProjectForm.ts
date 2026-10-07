@@ -64,7 +64,7 @@ export function useProjectForm({
         toast.error('خطا در دریافت لیست مشتریان');
       });
 
-    fetchJson('/items?limit=1000', { signal: controller.signal })
+    fetchJson(PICK_LIST_URLS.items, { signal: controller.signal })
       .then(res => setLocalItems(Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])))
       .catch(err => {
         if (err?.name === 'AbortError') return;

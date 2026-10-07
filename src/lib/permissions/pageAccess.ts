@@ -60,7 +60,7 @@ const ACCOUNTING_TABS = {
 
 const ACCOUNTING_KEYS = [...new Set(Object.values(ACCOUNTING_TABS).flatMap(r => r.gate.anyOf))];
 
-const DOCUMENT_ENTRY = ['GET /api/customers/options', 'GET /api/documents/next-ref', 'POST /api/documents'];
+const DOCUMENT_ENTRY = ['GET /api/customers/options', 'GET /api/items/options', 'GET /api/documents/next-ref', 'POST /api/documents'];
 
 export const PAGE_ACCESS = {
   '/': { gate: 'login', api: [] },
@@ -69,19 +69,19 @@ export const PAGE_ACCESS = {
   '/inventory-status': { gate: anyOf('reports.view', 'warehouse.view'), api: ['GET /api/stats', 'GET /api/dashboard-bi-stats'] },
   '/products': { gate: anyOf('products.view'), api: ['GET /api/items'] },
   '/gallery': { gate: anyOf('products.view'), api: ['GET /api/items'] },
-  '/receipts': { gate: anyOf('warehouse.in', 'documents.view', 'documents.create'), api: ['GET /api/documents', 'GET /api/items'] },
+  '/receipts': { gate: anyOf('warehouse.in', 'documents.view', 'documents.create'), api: ['GET /api/documents', 'GET /api/items/options'] },
   '/pending-materials': { gate: anyOf('pending_materials.view', 'products.view'), api: ['GET /api/pending-materials'] },
-  '/transfers': { gate: anyOf('products.view'), api: ['GET /api/transfers'] },
+  '/transfers': { gate: anyOf('products.view'), api: ['GET /api/transfers', 'GET /api/items/options'] },
   '/reorder-alerts': { gate: anyOf('products.view', 'warehouse.view'), api: ['GET /api/items/reorder-alerts'] },
   '/pricing': { gate: anyOf('products.edit_price', 'products.view'), api: ['GET /api/items', 'GET /api/items/prices/all'] },
-  '/audit': { gate: anyOf('audit.view'), api: ['GET /api/documents/audit-items'] },
-  '/crm': { gate: anyOf('crm.view'), api: ['GET /api/crm/leads'] },
+  '/audit': { gate: anyOf('audit.view'), api: ['GET /api/documents/audit-items', 'GET /api/items/options'] },
+  '/crm': { gate: anyOf('crm.view'), api: ['GET /api/crm/leads', 'GET /api/items/options'] },
   '/customers': { gate: anyOf('customers.view'), api: ['GET /api/customers'] },
   '/invoices/create': { gate: anyOf('documents.create'), api: DOCUMENT_ENTRY },
   '/remittances': { gate: anyOf('documents.create'), api: DOCUMENT_ENTRY },
-  '/projects': { gate: anyOf('projects.view'), api: ['GET /api/projects'] },
-  '/project-inventory': { gate: anyOf('projects.view', 'warehouse.view'), api: ['GET /api/projects', 'GET /api/items'] },
-  '/procurement': { gate: anyOf('procurement.view', 'projects.view'), api: ['GET /api/procurement/requisitions', 'GET /api/procurement/orders'] },
+  '/projects': { gate: anyOf('projects.view'), api: ['GET /api/projects', 'GET /api/items/options'] },
+  '/project-inventory': { gate: anyOf('projects.view', 'warehouse.view'), api: ['GET /api/projects', 'GET /api/items/options'] },
+  '/procurement': { gate: anyOf('procurement.view', 'projects.view'), api: ['GET /api/procurement/requisitions', 'GET /api/procurement/orders', 'GET /api/items/options'] },
   '/personnel': { gate: anyOf('personnel.view'), api: ['GET /api/personnel'] },
   '/daily-logs': { gate: anyOf('daily_logs.view'), api: ['GET /api/daily-logs'] },
   '/piecework': { gate: anyOf('piecework.view'), api: ['GET /api/piecework/logs'] },

@@ -5114,9 +5114,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         ['production', production, '/api/items', 200],
         ['production', production, '/api/piecework/payrolls', 403],
         ['production', production, '/api/users', 403],
-        // خزانه‌دار: فیش‌ها (پرداخت) و فهرست کالا برای صفحه ورود و خروج انبار بله، قیمت‌ها نه
+        // خزانه‌دار: فیش‌ها (پرداخت) و فهرست انتخاب کالا برای صفحه ورود و خروج انبار بله، قیمت‌ها نه؛ فهرست کامل کالا از
+        // v9.0.121 (TD-888، ت۱۰ الف) فقط با مجوزهای بخش کالا
         ['treasurer', treasurer, '/api/piecework/payrolls', 200],
-        ['treasurer', treasurer, '/api/items', 200],
+        ['treasurer', treasurer, '/api/items/options', 200],
+        ['treasurer', treasurer, '/api/items', 403],
         ['treasurer', treasurer, '/api/items/prices/all', 403],
         ['treasurer', treasurer, '/api/customers/export-excel', 200],
         // دارنده مجوز فیش و مدیر کاربران

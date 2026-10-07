@@ -15,7 +15,7 @@ interface Section {
   fullList: keyof typeof READ_PERMISSIONS;
   /** پیشوند کلیدهای خود بخش */
   ownGroups: readonly string[];
-  /** درخواست فهرست کامل در کد مرورگر */
+  /** درخواست فهرست کامل در کد مرورگر (پرچم g؛ درخواست نوشتن با `method` به همان نشانی شمرده نمی‌شود) */
   fullListFetch: RegExp;
   /** فایل‌های صفحه خود بخش که فهرست کامل را می‌خوانند */
   ownPages: readonly string[];
@@ -26,10 +26,26 @@ const SECTIONS: Record<string, Section> = {
   customers: {
     fullList: 'customers',
     ownGroups: ['customers.'],
-    fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/customers(?:\?|['"`])/,
+    fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/customers(?:\?|['"`])/g,
     ownPages: ['hooks/queries/useCustomerQueries.ts'],
   },
+  // v9.0.121 (TD-888)
+  items: {
+    fullList: 'items',
+    ownGroups: ['products.'],
+    fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/items(?:\?|['"`])/g,
+    ownPages: ['hooks/queries/useItemQueries.ts', 'pages/GalleryPage.tsx', 'pages/PricingPage.tsx', 'components/excel/useUnifiedExcelImport.ts'],
+  },
 };
+
+/** درخواست خواندن فهرست کامل در متن فایل؛ فراخوانی‌ای که در همان چند خط `method` نوشتن دارد (POST و …) خواندن نیست */
+function readsFullList(source: string, pattern: RegExp): boolean {
+  for (const match of source.matchAll(pattern)) {
+    const call = source.slice(match.index, match.index + 200);
+    if (!/method:\s*['"`](POST|PUT|PATCH|DELETE)['"`]/.test(call)) return true;
+  }
+  return false;
+}
 
 function browserFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -50,7 +66,7 @@ describe('pick lists for forms, full lists by the section\'s own permission (t10
   it.each(Object.entries(SECTIONS))('browser code outside the %s pages reads only the pick list', (_name, section) => {
     const readers = browserFiles(ROOT)
       .filter(file => !section.ownPages.includes(file))
-      .filter(file => section.fullListFetch.test(readFileSync(join(ROOT, file), 'utf8')));
+      .filter(file => readsFullList(readFileSync(join(ROOT, file), 'utf8'), section.fullListFetch));
     expect(readers).toEqual([]);
   });
 

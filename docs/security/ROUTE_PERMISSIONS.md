@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 365
+تعداد مسیرها: 366
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -216,18 +216,19 @@
 | POST | `/api/inventory/transfer` | warehouse.transfer |
 | GET | `/api/inventory/warehouse-stock-reconciliation` | warehouse.view \| inventory.reconcile \| audit.view |
 | POST | `/api/inventory/warehouse-stock-reconciliation/repair` | inventory.reconcile |
-| GET | `/api/items` | products.view \| products.edit_price \| documents.view \| documents.create \| warehouse.view \| warehouse.in \| audit.view \| projects.view \| crm.view \| procurement.view |
+| GET | `/api/items` | products.view \| products.edit_price |
 | POST | `/api/items` | products.create |
 | DELETE | `/api/items/:id` | products.delete |
 | PUT | `/api/items/:id` | products.edit |
 | GET | `/api/items/:id/prices` | products.view \| products.edit_price \| projects.view |
 | POST | `/api/items/:id/prices` | products.edit_price |
 | GET | `/api/items/:id/prices/history` | products.view \| products.edit_price \| projects.view |
-| GET | `/api/items/next-code` | products.view \| products.edit_price \| documents.view \| documents.create \| warehouse.view \| warehouse.in \| audit.view \| projects.view \| crm.view \| procurement.view |
+| GET | `/api/items/next-code` | products.view \| products.edit_price |
 | POST | `/api/items/next-code` | products.create \| products.edit |
+| GET | `/api/items/options` | products.view \| documents.view \| documents.create \| warehouse.view \| warehouse.in \| audit.view \| projects.view \| crm.view \| procurement.view |
 | GET | `/api/items/prices/all` | products.view \| products.edit_price \| projects.view |
 | POST | `/api/items/prices/batch-update` | products.edit_price |
-| GET | `/api/items/reorder-alerts` | products.view \| products.edit_price \| documents.view \| documents.create \| warehouse.view \| warehouse.in \| audit.view \| projects.view \| crm.view \| procurement.view |
+| GET | `/api/items/reorder-alerts` | products.view \| warehouse.view |
 | GET | `/api/items/unified-export` | products.view |
 | POST | `/api/items/unified-import` | products.create \| products.edit |
 | POST | `/api/login` | public |

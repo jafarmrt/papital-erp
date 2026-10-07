@@ -7,6 +7,7 @@ import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { copyToClipboard } from '../../utils/clipboard';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 
 interface CRMLeadDrawerProps {
   selectedLeadDrawer: CRMLead | null;
@@ -44,7 +45,7 @@ export function CRMLeadDrawer({
     if (activeTab === 'stock' && items.length === 0) {
       setIsLoadingStock(true);
       Promise.all([
-        fetchJson('/items'),
+        fetchJson(PICK_LIST_URLS.items),
         fetchJson('/warehouses')
       ]).then(([itemsData, whData]) => {
         const rawItems = Array.isArray(itemsData) ? itemsData : (Array.isArray(itemsData?.data) ? itemsData.data : []);

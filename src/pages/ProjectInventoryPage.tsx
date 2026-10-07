@@ -10,6 +10,7 @@ import { fetchJson } from '../api';
 import { formatPersianNumber, formatPersianDate } from '../utils';
 import toast from 'react-hot-toast';
 import ProjectInventoryTab from '../components/project/ProjectInventoryTab';
+import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 
 export default function ProjectInventoryPage({ user }: { user?: User }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -55,7 +56,7 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
     try {
       const [projData, itemsData] = await Promise.all([
         fetchJson(`/projects/${id}`, { signal }),
-        fetchJson('/items', { signal }).catch((err) => {
+        fetchJson(PICK_LIST_URLS.items, { signal }).catch((err) => {
           if (err?.name === 'AbortError') throw err;
           console.error('Failed to load items in project inventory:', err);
           toast.error('خطا در دریافت لیست اقلام کالا');

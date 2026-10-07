@@ -13,6 +13,7 @@ import ProjectGanttTab from './project/ProjectGanttTab';
 import ProjectStockEntryTab from './project/ProjectStockEntryTab';
 import ProjectProductProgressTab from './project/ProjectProductProgressTab';
 import { WorkflowStepperWidget } from './workflow/WorkflowStepperWidget';
+import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 
 interface ProjectDetailModalProps {
   projectId: number | null;
@@ -105,7 +106,7 @@ export default function ProjectDetailModal({
   const loadAuxiliaryData = async (signal?: AbortSignal) => {
     try {
       const [items, personnel, tasks, prices, logs] = await Promise.all([
-        fetchJson('/items', { signal }).catch((err) => {
+        fetchJson(PICK_LIST_URLS.items, { signal }).catch((err) => {
           if (err?.name === 'AbortError') throw err;
           console.error('Failed to load items in project detail modal:', err);
           toast.error('خطا در دریافت لیست کالاها و مواد اولیه');

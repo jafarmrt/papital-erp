@@ -1,7 +1,7 @@
 import { inArray } from 'drizzle-orm';
 import { TestCaseResult } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { customers } from '../../db/schema.js';
+import { customers, items, itemWarehouseStocks } from '../../db/schema.js';
 import { runCase, type Row, type ShouldRun } from './workflowTestHarness.js';
 
 /**
@@ -72,6 +72,74 @@ export async function runAccessPackageTwoPickListTests(shouldRun: ShouldRun): Pr
         if (card.status !== 403) wrong.push(`documents.view alone: account card returned ${card.status}, not 403`);
       } finally {
         await orm.delete(customers).where(inArray(customers.id, [party.id])).catch(() => undefined);
+      }
+    });
+  }
+
+  if (shouldRun('sec_item_options_td_888', 'security', 'td888', 'items', 'pick', 'permissions', 'package2')) {
+    await runCase(results, {
+      id: 'sec_item_options_td_888',
+      name: 'v9.0.121: forms of other sections read the item pick list; the full item list and the average cost need products.view (TD-888)',
+      details: 'for each form key of another section (documents.view, documents.create, warehouse.view, warehouse.in, audit.view, projects.view, crm.view, procurement.view): GET /api/items is 403 and GET /api/items/options returns the item with exactly the pick fields and its warehouse stock, without the average cost; products.view reads the full list with reorder point and the pick list with the average cost; the type filter and limit work; a key of no picking form gets 403; the reorder alerts page opens only with its page keys',
+    }, async (h, wrong) => {
+      const { ITEM_PICK_FIELDS, ITEM_COST_FIELDS, ITEM_WAREHOUSE_STOCK_FIELD } = await import('../../lib/permissions/pickLists.js');
+      const { createTestItem, createTestWarehouse } = await import('../fixtures/factories.js');
+      const warehouse = await createTestWarehouse({ code: `WHP${h.tag}` });
+      const item = await createTestItem({ type: 'raw_material', code: `PICK${h.tag}`, weightedAverageCost: 73000, reorderPoint: 500, stocks: { [warehouse.code]: 12 } });
+      try {
+        const search = `search=${encodeURIComponent(item.code)}`;
+        const rowOf = (body: unknown): Row | undefined => {
+          const list = Array.isArray((body as { data?: unknown })?.data) ? (body as { data: Row[] }).data : (Array.isArray(body) ? body as Row[] : []);
+          return list.find(r => r.id === item.id);
+        };
+        const costFields = new Set<string>(ITEM_COST_FIELDS);
+        const checkPick = (label: string, row: Row | undefined, withCost: boolean) => {
+          if (!row) { wrong.push(`${label}: the item is missing from the pick list`); return; }
+          const expected = new Set<string>([...ITEM_PICK_FIELDS, ...(withCost ? ITEM_COST_FIELDS : [])]);
+          const extra = Object.keys(row).filter(k => !expected.has(k) && !ITEM_WAREHOUSE_STOCK_FIELD.test(k));
+          const missing = [...expected].filter(k => !(k in row));
+          if (extra.length > 0) wrong.push(`${label}: pick row carries ${extra.join(', ')}`);
+          if (missing.length > 0) wrong.push(`${label}: pick row lacks ${missing.join(', ')}`);
+          if (Number(row[`stock_${warehouse.code}`]) !== 12 || Number((row.stocks as Record<string, number> | undefined)?.[warehouse.code]) !== 12) {
+            wrong.push(`${label}: pick row stock in ${warehouse.code} is ${String(row[`stock_${warehouse.code}`])}`);
+          }
+          if (withCost && Number(row.weighted_average_cost) !== 73000) wrong.push(`${label}: pick row average cost is ${String(row.weighted_average_cost)}`);
+          if (!withCost && Object.keys(row).some(k => costFields.has(k))) wrong.push(`${label}: pick row carries the average cost`);
+        };
+
+        for (const key of ['documents.view', 'documents.create', 'warehouse.view', 'warehouse.in', 'audit.view', 'projects.view', 'crm.view', 'procurement.view']) {
+          const s = await h.sessionWith([key]);
+          const full = await h.get(`/api/items?${search}`, s);
+          if (full.status !== 403) wrong.push(`${key}: GET /api/items returned ${full.status}, not 403`);
+          const options = await h.get(`/api/items/options?${search}`, s);
+          if (options.status !== 200) { wrong.push(`${key}: GET /api/items/options returned ${options.status}, not 200`); continue; }
+          checkPick(key, rowOf(options.body), false);
+        }
+
+        const viewer = await h.sessionWith(['products.view']);
+        const fullList = await h.get(`/api/items?${search}`, viewer);
+        const fullRow = rowOf(fullList.body);
+        if (fullList.status !== 200 || Number(fullRow?.reorder_point) !== 500 || Number(fullRow?.weighted_average_cost) !== 73000) {
+          wrong.push(`products.view: full list returned ${fullList.status} with reorder point ${String(fullRow?.reorder_point)} and cost ${String(fullRow?.weighted_average_cost)}`);
+        }
+        checkPick('products.view', rowOf((await h.get(`/api/items/options?${search}`, viewer)).body), true);
+
+        const products = rowOf((await h.get(`/api/items/options?type=product&${search}`, viewer)).body);
+        if (products) wrong.push('type=product: the raw material is in the pick list');
+        const limited = await h.get(`/api/items/options?limit=1`, viewer);
+        const limitedRows = (limited.body as { data?: unknown[] })?.data;
+        if (limited.status !== 200 || !Array.isArray(limitedRows) || limitedRows.length !== 1) wrong.push(`limit=1 returned ${limited.status} with ${Array.isArray(limitedRows) ? limitedRows.length : 'no'} rows`);
+
+        const refused = await h.get(`/api/items/options?${search}`, await h.sessionWith(['piecework.view']));
+        if (refused.status !== 403) wrong.push(`piecework.view: GET /api/items/options returned ${refused.status}, not 403`);
+
+        const alertsByWarehouse = await h.get('/api/items/reorder-alerts', await h.sessionWith(['warehouse.view']));
+        if (alertsByWarehouse.status !== 200) wrong.push(`warehouse.view: reorder alerts returned ${alertsByWarehouse.status}, not 200`);
+        const alertsByDocuments = await h.get('/api/items/reorder-alerts', await h.sessionWith(['documents.view']));
+        if (alertsByDocuments.status !== 403) wrong.push(`documents.view: reorder alerts returned ${alertsByDocuments.status}, not 403`);
+      } finally {
+        await orm.delete(itemWarehouseStocks).where(inArray(itemWarehouseStocks.itemId, [item.id])).catch(() => undefined);
+        await orm.delete(items).where(inArray(items.id, [item.id])).catch(() => undefined);
       }
     });
   }
