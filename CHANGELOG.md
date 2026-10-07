@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.145 — Fiscal-Year Test Cleanup
+- **Fiscal-Year Test Cleanup:** the fiscal-year closing test reopens its year so another test posting in that year is not refused (TD-895).
+
 ### v9.0.144 — Role Label From the Role Name
 - **Role Label From the Role Name:** the top bar and the profile show the stored name of the user's role, the system admin's too (TD-894).
 
