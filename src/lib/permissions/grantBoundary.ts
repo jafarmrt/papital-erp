@@ -24,3 +24,19 @@ export function permissionsBeyond(grantor: GrantorPermissions, keys: readonly st
 export function permissionTitles(keys: readonly string[]): string {
   return keys.map(k => `«${permissionDefinition(k)?.title ?? k}»`).join('، ');
 }
+
+/** کلیدی که واگذارکننده می‌تواند به نقشی بیفزاید */
+export function canGrantPermission(grantor: GrantorPermissions, key: string): boolean {
+  return grantor === 'all' || grantor.includes(key);
+}
+
+/**
+ * نقشی که واگذارکننده می‌تواند به کاربری بدهد، و حسابی با این نقش که می‌تواند ویرایش یا حذف کند: همه مجوزهای نقش را
+ * دارد. نقش مدیر سیستم فقط برای مدیر سیستم (TD-299).
+ */
+export function roleWithinGrant(grantor: GrantorPermissions, role: { code?: string | null; permissions?: unknown }): boolean {
+  if (grantor === 'all') return true;
+  if (isSystemAdminRole(role.code)) return false;
+  const permissions = Array.isArray(role.permissions) ? (role.permissions as string[]) : [];
+  return permissionsBeyond(grantor, permissions).length === 0;
+}

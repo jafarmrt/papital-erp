@@ -206,7 +206,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         } />
         <Route path="/users" element={
           <ProtectedRoute requiredPerm={['users.manage', 'roles.manage']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
-            <UsersPage currentUser={user} />
+            <UsersPage currentUser={user} userPermissions={userPermissions} />
           </ProtectedRoute>
         } />
         <Route path="/personnel" element={

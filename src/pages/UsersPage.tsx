@@ -5,7 +5,6 @@ import {
   Users,
   ShieldCheck,
   KeyRound,
-  Lock,
   UserCheck,
 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
@@ -21,9 +20,26 @@ import {
   useDeleteRoleMutation,
 } from '../hooks/queries';
 import { QUERY_KEYS } from '../lib/queryKeys';
+import { isSystemAdminRole } from '../lib/permissions/permissionCatalog';
+import { canGrantPermission, grantorPermissionsOf, type GrantorPermissions } from '../lib/permissions/grantBoundary';
 
-export default function UsersPage({ currentUser }: { currentUser: User }) {
-  const [activeTab, setActiveTab] = React.useState<'users' | 'roles'>('users');
+interface UsersPageProps {
+  currentUser: User;
+  userPermissions?: { permissions?: string[]; isAdmin?: boolean } | null;
+}
+
+/**
+ * v9.0.113 (TD-525، یافته B02-10، تصمیم ت۳ الف): صفحه برای دارندگان «مدیریت کاربران» و «مدیریت نقش‌ها» باز است (همان
+ * مجوزهای مسیر و API)، نه فقط برای کد مدیر سیستم. هر دکمه همان مجوز API خودش را می‌پرسد و فرم‌ها فقط آنچه کاربر جاری
+ * می‌تواند بدهد پیشنهاد می‌کنند (قاعده مشترک `grantBoundary`).
+ */
+export default function UsersPage({ currentUser, userPermissions }: UsersPageProps) {
+  const fullGrantor: GrantorPermissions = userPermissions?.isAdmin
+    ? 'all'
+    : grantorPermissionsOf(currentUser.role, userPermissions?.permissions);
+  const canManageUsers = canGrantPermission(fullGrantor, 'users.manage');
+  const canManageRoles = canGrantPermission(fullGrantor, 'roles.manage');
+  const [activeTab, setActiveTab] = React.useState<'users' | 'roles'>(canManageUsers || !canManageRoles ? 'users' : 'roles');
 
   // V9 Phase 5.1: مهاجرت به React Query — کش مشترک، حذف fetch دستی و AbortController تکراری
   const queryClient = useQueryClient();
@@ -80,18 +96,6 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
       // Handled in mutation onError
     }
   };
-
-  if (currentUser.role !== 'admin') {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-500">
-        <Lock size={56} className="mb-4 text-slate-400" />
-        <h2 className="text-xl font-bold mb-2 text-slate-800">دسترسی محدود</h2>
-        <p className="text-sm">
-          تنها مدیران ارشد سیستم به مدیریت کاربران و ماتریس نقش‌ها دسترسی دارند.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -177,7 +181,7 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
                 مدیران ارشد (Admin)
               </span>
               <strong className="text-base text-slate-800 font-bold">
-                {users.filter((u: any) => u.role === 'admin').length} کاربر
+                {users.filter((u: any) => isSystemAdminRole(u.role)).length} کاربر
               </strong>
             </div>
           </div>
@@ -201,6 +205,8 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
           onDeleteUser={(userId) => {
             setConfirmUserState({ isOpen: true, userId });
           }}
+          canManage={canManageUsers}
+          grantor={fullGrantor}
         />
       )}
 
@@ -221,6 +227,8 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
           onDeleteRole={(roleId, roleName) => {
             setConfirmRoleState({ isOpen: true, roleId, roleName });
           }}
+          canManage={canManageRoles}
+          ownRoleCode={currentUser.role}
         />
       )}
 
@@ -234,6 +242,8 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
         editingUser={editingUser}
         rolesList={rolesList}
         onSuccess={loadData}
+        grantor={fullGrantor}
+        currentUserId={currentUser.id}
       />
 
       {/* ROLE & PERMISSION MATRIX MODAL */}
@@ -246,6 +256,7 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
         editingRole={editingRole}
         permCatalog={permCatalog}
         onSuccess={loadData}
+        grantor={fullGrantor}
       />
 
       {/* CONFIRM DELETE USER */}

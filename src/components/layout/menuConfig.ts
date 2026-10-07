@@ -164,7 +164,8 @@ export function getMenuGroups(
         // V10-5.2: هم‌راستا با API — events.view (admin از طریق isAdmin عبور می‌کند)
         { name: 'رویدادها و اتوماسیون سازمانی', path: '/domain-events', icon: Zap, visible: hasPerm('events.view') },
         { name: 'طراح فرایند و گردش کار', path: '/workflow-designer', icon: Workflow, visible: user?.role === 'admin' },
-        { name: 'مدیریت کاربران و نقش‌ها', path: '/users', icon: Users, visible: user?.role === 'admin' },
+        // v9.0.113 (TD-525، ت۳): همان مجوزهای مسیر و API صفحه
+        { name: 'مدیریت کاربران و نقش‌ها', path: '/users', icon: Users, visible: hasPerm('users.manage') || hasPerm('roles.manage') },
         { name: 'تنظیمات سامانه', path: '/settings', icon: Settings, visible: user?.role === 'admin' || user?.role === 'manager' || hasPerm('settings.manage') || hasPerm('accounting.coa') },
         { name: 'سجل تغییرات', path: '/activity-logs', icon: ShieldAlert, visible: hasPerm('audit_logs.view') || hasPerm('reports.view') },
         { name: 'معرفی و به‌روزرسانی‌ها', path: '/changelog', icon: FileCode2, visible: user?.role === 'admin' },

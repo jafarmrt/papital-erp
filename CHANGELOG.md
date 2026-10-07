@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.113 — Users and Roles Page by Permission
+- **Users and Roles Page by Permission:** the page and menu open for user and role managers, and the forms offer only what the user may grant (TD-525).
+
 ### v9.0.112 — No Self-Escalation by User and Role Managers
 - **No Self-Escalation:** a non-admin user or role manager no longer edits its own role, grants keys it lacks, or takes over an account stronger than its own (TD-520).
 

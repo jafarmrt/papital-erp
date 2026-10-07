@@ -19,6 +19,7 @@ import {
   withRequiredPermissions,
   withoutPermission,
 } from '../../lib/permissions/permissionCatalog';
+import { canGrantPermission, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
 
 /** عنوان فارسی یک کلید مجوز از کاتالوگ مشترک، وگرنه خود کلید */
 const permissionTitle = (key: string) => permissionDefinition(key)?.title ?? key;
@@ -98,6 +99,8 @@ interface RoleFormModalProps {
   editingRole: Role | null;
   permCatalog: PermissionCategory[];
   onSuccess: () => void;
+  /** v9.0.113 (TD-525، ت۳): کاربر غیرمدیر فقط مجوزهایی را تیک می‌زند که خودش دارد (همان قاعده سرور) */
+  grantor?: GrantorPermissions;
 }
 
 export const RoleFormModal: React.FC<RoleFormModalProps> = ({
@@ -106,6 +109,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   editingRole,
   permCatalog,
   onSuccess,
+  grantor = 'all',
 }) => {
   const [roleForm, setRoleForm] = useState<{
     name: string;
@@ -214,10 +218,13 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       name: prev.name || preset.name,
       code: prev.code || preset.code,
       description: prev.description || preset.description,
-      permissions: withRequiredPermissions(preset.permissions),
+      permissions: withRequiredPermissions(grantable(preset.permissions, prev.permissions)),
     }));
     toast.success(`قالب نقش "${preset.name}" با موفقیت جاگذاری شد`);
   };
+
+  // v9.0.113 (TD-525، ت۳): از فهرست‌های گروهی فقط کلیدهایی افزوده می‌شوند که کاربر جاری دارد
+  const grantable = (keys: string[], current: string[]) => keys.filter((k) => current.includes(k) || canGrantPermission(grantor, k));
 
   // v9.0.86 (TD-880): تیک یک مجوز نیازهایش را هم می‌زند و برداشتن آن مجوزهای وابسته را هم برمی‌دارد، همان قاعده‌ای که سرور در ذخیره اعمال می‌کند
   const togglePermission = (permKey: string) => {
@@ -225,6 +232,8 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       const exists = prev.permissions.includes(permKey);
       if (exists) {
         return { ...prev, permissions: withoutPermission(prev.permissions, permKey) };
+      } else if (!canGrantPermission(grantor, permKey)) {
+        return prev;
       } else {
         return { ...prev, permissions: withRequiredPermissions([...prev.permissions, permKey]) };
       }
@@ -237,21 +246,21 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       if (allSelected) {
         return { ...prev, permissions: categoryPerms.reduce((acc, k) => withoutPermission(acc, k), prev.permissions) };
       } else {
-        return { ...prev, permissions: withRequiredPermissions([...prev.permissions, ...categoryPerms]) };
+        return { ...prev, permissions: withRequiredPermissions([...prev.permissions, ...grantable(categoryPerms, prev.permissions)]) };
       }
     });
   };
 
   const selectAllPermissions = () => {
     const allKeys = permCatalog.flatMap((c) => c.permissions.map((p) => p.key));
-    setRoleForm((prev) => ({ ...prev, permissions: allKeys }));
+    setRoleForm((prev) => ({ ...prev, permissions: grantable(allKeys, prev.permissions) }));
   };
 
   const selectViewOnlyPermissions = () => {
     const viewKeys = permCatalog.flatMap((c) =>
       c.permissions.filter((p) => p.key.endsWith('.view')).map((p) => p.key)
     );
-    setRoleForm((prev) => ({ ...prev, permissions: viewKeys }));
+    setRoleForm((prev) => ({ ...prev, permissions: grantable(viewKeys, prev.permissions) }));
   };
 
   const clearAllPermissions = () => {
@@ -329,7 +338,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
             </div>
 
             {/* Quick Presets row */}
-            {roleForm.code !== 'admin' && (
+            {roleForm.code !== SYSTEM_ADMIN_ROLE && (
               <div className="pt-2 border-t">
                 <span className="text-[11px] font-bold text-slate-600 block mb-1.5 flex items-center gap-1">
                   <Sparkles size={13} className="text-amber-500" />
@@ -379,7 +388,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
               </select>
             </div>
 
-            {roleForm.code !== 'admin' && (
+            {roleForm.code !== SYSTEM_ADMIN_ROLE && (
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
@@ -413,7 +422,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                 با ذخیره، این مجوزهای لازم هم به نقش افزوده می‌شوند: {addedOnOpen.map((k) => `«${permissionTitle(k)}»`).join('، ')}
               </div>
             )}
-            {roleForm.code === 'admin' ? (
+            {roleForm.code === SYSTEM_ADMIN_ROLE ? (
               <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 text-xs text-purple-800 flex items-center gap-2">
                 <Info size={18} className="shrink-0 text-purple-600" />
                 <span>
@@ -461,11 +470,13 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                       <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         {cat.permissions.map((p) => {
                           const isChecked = roleForm.permissions.includes(p.key);
+                          const locked = !isChecked && !canGrantPermission(grantor, p.key);
                           return (
                             <label
                               key={p.key}
                               onClick={() => togglePermission(p.key)}
-                              className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                              title={locked ? 'این مجوز را خودتان ندارید و نمی‌توانید آن را بدهید' : undefined}
+                              className={`flex items-start gap-2.5 p-2.5 rounded-lg border transition-all ${locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${
                                 isChecked
                                   ? 'bg-blue-50/80 border-blue-300 text-slate-800 shadow-xs'
                                   : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -474,6 +485,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                               <input
                                 type="checkbox"
                                 checked={isChecked}
+                                disabled={locked}
                                 onChange={() => {}} // handled by label onClick
                                 className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
                               />
@@ -509,7 +521,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
             <span className="text-xs text-slate-600">
               تعداد مجوزهای فعال:{' '}
               <strong className="text-slate-800 font-bold">
-                {roleForm.code === 'admin'
+                {roleForm.code === SYSTEM_ADMIN_ROLE
                   ? 'تمامی مجوزهای سیستم'
                   : `${roleForm.permissions.length} کلید`}
               </strong>
