@@ -1,19 +1,23 @@
 import React from 'react';
 import { Plus, Edit2, Trash2, Building2 } from 'lucide-react';
 import { Warehouse } from '../../hooks/useSettings';
+import { InactiveWarehousesPanel } from './InactiveWarehousesPanel';
 
 interface WarehousesTabProps {
   warehouses: Warehouse[];
   onOpenCreateModal: () => void;
   onOpenEditModal: (wh: Warehouse) => void;
   onDeleteWarehouse: (id: number) => void;
+  /** v9.0.112 (TD-490): فقط مدیر سیستم انبار غیرفعال را دوباره فعال می‌کند */
+  canReactivate?: boolean;
 }
 
 export function WarehousesTab({
   warehouses,
   onOpenCreateModal,
   onOpenEditModal,
-  onDeleteWarehouse
+  onDeleteWarehouse,
+  canReactivate = false
 }: WarehousesTabProps) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-xs flex flex-col min-h-[400px] max-w-4xl mx-auto text-right font-farsi">
@@ -71,7 +75,7 @@ export function WarehousesTab({
                       <button
                         onClick={() => onDeleteWarehouse(w.id)}
                         className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg transition-colors cursor-pointer"
-                        title="حذف"
+                        title="غیرفعال‌سازی"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -82,6 +86,7 @@ export function WarehousesTab({
             </tbody>
           </table>
         )}
+        <InactiveWarehousesPanel enabled={canReactivate} />
       </div>
     </div>
   );

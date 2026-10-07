@@ -55,12 +55,12 @@ done
 log "=== Papital ERP Updater — log file: $LOG_FILE ==="
 cd "$APP_DIR" || die "Application directory not found: $APP_DIR"
 [ -f .env ] || die ".env not found in $APP_DIR"
-# v9.0.114 (TD-587): the service listens on PORT from .env (install.sh writes it there); the startup check watches it
+# v9.0.124 (TD-587): the service listens on PORT from .env (install.sh writes it there); the startup check watches it
 [ -n "$APP_PORT" ] || APP_PORT="$(env_file_value PORT)"
 APP_PORT="${APP_PORT:-3000}"
 UPDATE_STARTED="$(date '+%Y-%m-%d %H:%M:%S')"
 
-# v9.0.113 (TD-586): from the moment the source changes, any failure prints the rollback steps
+# v9.0.123 (TD-586): from the moment the source changes, any failure prints the rollback steps
 SOURCE_CHANGED=0
 HINT_SHOWN=0
 rollback_hint() {
@@ -193,7 +193,7 @@ NODE_ENV=development npm ci --include=dev || {
   NODE_ENV=development npm ci --include=dev || die "npm ci failed even after lockfile regeneration."
 }
 log "[4/6] Building application..."
-# v9.0.113 (TD-586): vite empties dist/ before esbuild writes dist/server.cjs; a failed build puts the previous
+# v9.0.123 (TD-586): vite empties dist/ before esbuild writes dist/server.cjs; a failed build puts the previous
 # build back so the next restart of the service still finds it
 rm -rf dist.prev
 [ ! -d dist ] || cp -a dist dist.prev

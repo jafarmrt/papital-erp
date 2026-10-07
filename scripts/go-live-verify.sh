@@ -141,7 +141,7 @@ echo "[5] Backup infrastructure"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/erp}"
 if [ -d "$BACKUP_DIR" ]; then
   ok "Backup directory exists: $BACKUP_DIR"
-  # v9.0.112 (TD-585): backups hold the whole database and all attachments; only their owner may read them
+  # v9.0.122 (TD-585): backups hold the whole database and all attachments; only their owner may read them
   BACKUP_MODE="$(stat -c '%a' "$BACKUP_DIR" 2>/dev/null || echo '?')"
   if [ "$BACKUP_MODE" = "700" ]; then
     ok "Backup directory is private (mode 700)"

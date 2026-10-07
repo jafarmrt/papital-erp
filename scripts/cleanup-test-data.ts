@@ -3,7 +3,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import { TEST_MARKER } from '../src/tests/fixtures/testMarker.js';
 
 /**
- * Test data cleanup (TD-036, TD-107; v9.0.111, TD-581, owner decision t1 «الف»).
+ * Test data cleanup (TD-036, TD-107; v9.0.121, TD-581, owner decision t1 «الف»).
  *
  *   NODE_ENV=development ERP_ALLOW_TEST_CLEANUP=1 npm run db:cleanup-test            preview (default)
  *   NODE_ENV=development ERP_ALLOW_TEST_CLEANUP=1 npm run db:cleanup-test -- --force  delete

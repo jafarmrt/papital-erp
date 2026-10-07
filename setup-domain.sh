@@ -40,7 +40,7 @@ if [ -z "$EMAIL" ]; then
   [ -n "$EMAIL" ] || die "Email is required."
 fi
 [ -f "$APP_DIR/.env" ] || die ".env not found in $APP_DIR — run install.sh first."
-# v9.0.114 (TD-587): the app listens on PORT from .env (install.sh writes it); Nginx must proxy to that port
+# v9.0.124 (TD-587): the app listens on PORT from .env (install.sh writes it); Nginx must proxy to that port
 if [ -z "$APP_PORT" ]; then
   APP_PORT="$(grep -E '^PORT=' "$APP_DIR/.env" | head -1 | cut -d= -f2- | tr -d "\"'" || true)"
 fi

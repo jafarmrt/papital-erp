@@ -9,7 +9,7 @@ import type { RecoveryCheckOutcome } from './backupRestoreChecks.js';
 import { clientToolsMissing, createScratchCluster, makeAppDir, querySql, REPO_ROOT, runCommand, scriptEnv, type ScratchCluster } from './scratchDatabase.js';
 
 /**
- * Package 1, PR «الف» (v9.0.111 to v9.0.114): deployment safety, proven by running the real scripts.
+ * Package 1, PR «الف» (v9.0.121 to v9.0.124): deployment safety, proven by running the real scripts.
  * - TD-581: `npm run db:cleanup-test` on a database with a simulated business year.
  * - TD-585: `scripts/backup.sh` output modes and the `go-live-verify.sh` check.
  * - TD-586 / TD-587: `update.sh` in git mode on a throwaway clone, with fake npm, systemctl and sudo on PATH.

@@ -19,20 +19,50 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.114 — Update Checks Startup on the Configured Port
+### v9.0.124 — Update Checks Startup on the Configured Port
 - **Update Port:** `update.sh` waits for `/health/startup` on `PORT` from `.env` (written by `install.sh`, read by the server; an `APP_PORT` environment variable still wins, default 3000). Before, a server installed on another port reported "Update NOT completed" after a good update and was offered a backup restore. `setup-domain.sh` reads the port the same way (not covered by a test: it needs root, apt and certbot).
 
-### v9.0.113 — Failed Build During Update Keeps the Previous Build
+### v9.0.123 — Failed Build During Update Keeps the Previous Build
 - **Update Build Failure:** `update.sh` keeps a copy of `dist/` before `npm run build` and puts it back when the build fails, then stops without restarting the service. From the moment the source changes, any failure prints the rollback steps once (an `EXIT` trap), and the backup step warns that restoring it erases every change made after it, so it is only for a version that has accepted no writes. Before, a failed build left `dist/server.cjs` missing and printed no rollback steps.
 
-### v9.0.112 — Private Backup Files
+### v9.0.122 — Private Backup Files
 - **Private Backups:** `scripts/backup.sh` writes under `umask 077` and makes the backup directory `0700`, so the dump, manifest and uploads archive are `0600` whatever the caller's umask; `scripts/go-live-verify.sh` fails a backup directory or any backup file other users can read (older backups are listed there to `chmod` by hand). Before, every local user could read payslips and attachments from the backups.
 
-### v9.0.111 — Test Data Cleanup Guarded and Marker-Only
+### v9.0.121 — Test Data Cleanup Guarded and Marker-Only
 - **Test Data Cleanup (P1):** `npm run db:cleanup-test` runs only with `NODE_ENV` set to `test` or `development` and `ERP_ALLOW_TEST_CLEANUP=1` (checked before connecting), previews by default inside a rolled-back transaction and deletes only with `--force`, and then only `ERP-TEST-MARKER` rows that nothing else refers to. Kardex, treasury, users, audit logs, counters and sequences are never touched. Before, it deleted real payslips, reversal vouchers, items and users on a production database.
 
-### v9.0.110 — Package 1 Data Infrastructure and Deployment Documentation
+### v9.0.120 — Package 1 Data Infrastructure and Deployment Documentation
 - **Stability Audit, Package 1 (Data Infrastructure, Startup, Deployment and Tooling):** `docs/audit/STABILITY_AUDIT_V9.md` gets the package 1 section with the owner decisions t1 to t9 (t9: all terminal output in English); its proven findings are registered as open rows TD-581 to TD-625 (TD-583 unused, B01-03 was fixed as TD-472; TD-591 and TD-594 are opened by package 2 M5 and package 16). Two P1: the test-data cleanup script deletes real data without an environment guard, and unknown paths grow the `/metrics` label set without bound. Documentation only; no behaviour change.
+
+### v9.0.119 — Financial Ratios Show No Made-Up Score Before Data
+- **Ratios Score (P3):** before any data arrived, or after an error, the ratios page showed a health score of 75 out of 100 and «critical» statuses; it now shows no score, status or value until the server answers (TD-575, `financialRatiosNoScore.test.tsx`).
+
+### v9.0.118 — Account Card Prints the Opening Row Once and Names the Account
+- **Account Card View (P3):** the account card printed the «opening balance» row twice (its own and the server's) and its title lacked the account name; the card now shares one contract with the server, prints the opening row once and names the account (TD-574, `ledgerViewOpeningRow.test.tsx`).
+
+### v9.0.117 — Group and General Account Cards Roll Up Their Sub-Accounts
+- **Account Card Roll-Up (P2):** clicking a group or general row of the trial balance opened an empty account card with a zero balance, because the card read only that account's own rows; the card of a group or general account now carries the rows and balances of all its sub-accounts (TD-570, `reg_account_card_rolls_up_sub_accounts_td_570`).
+
+### v9.0.116 — Balance Sheet and Ratios Take a Date, the Income Statement Its Own Period
+- **Statement Dates (P2):** the balance sheet and the financial ratios were always as of today and the income statement silently took the trial balance dates; each statement now has its own date fields in its header and shows its date or period (TD-566, `financialStatementDates.test.tsx`).
+
+### v9.0.115 — The Voucher List Pages Through Every Voucher
+- **Voucher List (P1):** the accounting voucher list loaded only the newest 20 vouchers and ran its counters, search, filters and batch approval on those 20; page, search and filters now run on the server, which also returns each status count (TD-565, `reg_voucher_list_paging_and_status_counts_td_565`, `voucherListServerPaging.test.tsx`).
+
+### v9.0.114 — Income Statement and Balance Sheet Show the Server Figures
+- **Financial Statements (P1):** the income statement showed a revenue total of 0, a 0% margin and no expense rows, and the balance sheet showed no asset, liability or period-profit rows, because the views read keys the server never sends; both now share one contract with the server (TD-563, `financialStatementsView.test.tsx`).
+
+### v9.0.113 — Package 3 Accounting and Money Core Audit Documentation
+- **Stability Audit, Package 3 (Accounting and Money Core):** `docs/audit/STABILITY_AUDIT_V9.md` gets the accounting section; its 38 proven findings are registered as open rows TD-543 to TD-580 (nine P1: closing the running or next year and closing years out of order, statements of a closed year showing zero, deleting an account that has postings, ledger reports open to document and customer viewers, the party ledger matching any id or a contained name, the income statement and balance sheet reading keys the server never sends, the manual voucher form dropping the row currency, and the voucher list showing only the newest 20). Documentation only; no behaviour change.
+
+### v9.0.112 — Warehouse Deactivation Lock and Reactivation
+- **Warehouse deactivation:** it waits for in-flight movements and refuses a warehouse that got stock, the last active warehouse stays active, and the system admin can reactivate an inactive warehouse (TD-490, `reg_warehouse_deactivation_td_490`).
+
+### v9.0.111 — Inventory Layer in the System Reconciliation Scan
+- **System reconciliation scan:** the inventory layer check warns when the stock integrity report finds discrepancies or negative Kardex balances instead of always reporting healthy (TD-495, `reg_system_inventory_check_td_495`).
+
+### v9.0.110 — Reserved Warehouse Code
+- **Warehouse code `default`:** a new warehouse can no longer take a code the Kardex reads as the default warehouse, a void reversal writes the real default code, and a legacy one is listed by the health check (TD-482, `reg_warehouse_reserved_code_td_482`).
 
 ### v9.0.109 — Merge-Time Renumbering Tool for Parallel Lanes
 - **Release Renumbering:** `npm run release:renumber -- origin/master` (`scripts/release-renumber.ts`) merges the base without committing, resolves the conflicts of the release files, moves the branch's own versions, migrations (file, journal idx, tag and a later `when`) and audit report sections after those of the base, rewrites only lines the branch added, sorts the active changelog, sets the four version locations, recounts TECH_DEBT.md and runs `check:version` and the migration plan test (TD-473, `releaseRenumber.test.ts`).

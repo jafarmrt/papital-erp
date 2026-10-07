@@ -15,7 +15,7 @@
 # Cron example (/etc/cron.d/papital-erp-backup):
 #   0 2 * * * papital /opt/papital-erp/scripts/backup.sh >> /var/log/papital-backup.log 2>&1
 set -euo pipefail
-# v9.0.112 (TD-585): a backup holds every financial row, password hashes, salaries and all attachment files; it is
+# v9.0.122 (TD-585): a backup holds every financial row, password hashes, salaries and all attachment files; it is
 # readable by its owner only (directory 0700, files 0600), like .env
 umask 077
 
