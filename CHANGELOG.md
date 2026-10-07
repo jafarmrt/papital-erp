@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.114 — Update Checks Startup on the Configured Port
+- **Update Port:** `update.sh` waits for `/health/startup` on `PORT` from `.env` (written by `install.sh`, read by the server; an `APP_PORT` environment variable still wins, default 3000). Before, a server installed on another port reported "Update NOT completed" after a good update and was offered a backup restore. `setup-domain.sh` reads the port the same way (not covered by a test: it needs root, apt and certbot).
+
 ### v9.0.113 — Failed Build During Update Keeps the Previous Build
 - **Update Build Failure:** `update.sh` keeps a copy of `dist/` before `npm run build` and puts it back when the build fails, then stops without restarting the service. From the moment the source changes, any failure prints the rollback steps once (an `EXIT` trap), and the backup step warns that restoring it erases every change made after it, so it is only for a version that has accepted no writes. Before, a failed build left `dist/server.cjs` missing and printed no rollback steps.
 
