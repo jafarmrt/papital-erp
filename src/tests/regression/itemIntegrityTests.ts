@@ -216,7 +216,15 @@ async function numericInputCase(ctx: Ctx): Promise<string> {
   if (Number(row.reorderPoint) !== 12 || Number(row.weight) !== 2.5) throw new Error(`Persian digits stored as ${JSON.stringify(row)}`);
   const alerts = await q(`SELECT count(*)::int AS n FROM items WHERE code LIKE $1 AND reorder_point::text = 'NaN'`, [`N-${ctx.tag}%`]);
   if (Number(alerts[0].n) !== 0) throw new Error('an item was stored with reorder point NaN');
-  return `invalid ${refused.join(',')}; Persian digits stored ${JSON.stringify(row)}`;
+  const [current] = await orm.select({ version: items.version }).from(items).where(eq(items.id, persian.body.id));
+  const cleared = await ctx.put(`/api/items/${persian.body.id}`, {
+    type: 'raw_material', code: `N-${ctx.tag}6`, name: `کالای عددی ${ctx.tag} 6`, unit: 'عدد', weight: null, version: current.version,
+  });
+  const [afterClear] = await orm.select({ weight: items.weight, reorderPoint: items.reorderPoint }).from(items).where(eq(items.id, persian.body.id));
+  if (cleared.status !== 200 || afterClear.weight !== null || Number(afterClear.reorderPoint) !== 12) {
+    throw new Error(`clearing the weight answered ${cleared.status} and left ${JSON.stringify(afterClear)}`);
+  }
+  return `invalid ${refused.join(',')}; Persian digits stored ${JSON.stringify(row)}; weight cleared with null`;
 }
 
 async function deleteVsReceiptCase(ctx: Ctx): Promise<string> {

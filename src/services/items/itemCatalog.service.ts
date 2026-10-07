@@ -60,7 +60,7 @@ export interface ItemWriteBody {
   current_stock?: string | number;
   stocks?: Record<string, unknown>;
   color?: string;
-  weight?: string | number;
+  weight?: string | number | null;
   material?: string;
   size?: string;
   /** v9.0.161 (TD-654): نسخه کالایی که فرم ویرایش از آن ساخته شده است؛ ویرایش بی آن رد می‌شود */

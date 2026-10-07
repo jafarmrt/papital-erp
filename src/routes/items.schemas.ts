@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { numericIdString } from '../middleware/validate.js';
+import { decimalInput, numericIdString } from '../middleware/validate.js';
+import { fin } from '../lib/financialDecimal.js';
+import { normalizeDecimalString } from '../lib/numericInput.js';
 
 /** بدنه ثبت و ویرایش کالا (مسیرهای `POST /items` و `PUT /items/:id`) */
 function itemBodyAliases(val: unknown): unknown {
@@ -13,7 +15,8 @@ function itemBodyAliases(val: unknown): unknown {
     // به کلیدهای stock_<warehouseId> تبدیل می‌شود (همان قرارداد قبلی بک‌اند)
     if (copy.stocks && typeof copy.stocks === 'object' && !Array.isArray(copy.stocks)) {
       for (const [whKey, val] of Object.entries(copy.stocks)) {
-        const num = Number(val) || 0;
+        // v9.0.163 (TD-657): ارقام فارسی خوانده می‌شوند؛ مقدار نامعتبر را اعتبارسنجی `stocks` با ۴۰۰ رد می‌کند
+        const num = Number(normalizeDecimalString(String(val ?? ''))) || 0;
         if (num !== 0) {
           copy[`stock_${whKey}`] = num;
         }
@@ -24,6 +27,13 @@ function itemBodyAliases(val: unknown): unknown {
   return val;
 }
 
+/**
+ * v9.0.163 (TD-657، بخش کالا): عددهای کالا با `decimalInput` خوانده می‌شوند (ارقام فارسی و جداکننده هزارگان پذیرفته، متن
+ * خطای ۴۰۰) و نامنفی‌اند. پیش‌تر «abc» نقطه سفارش NaN و وزن «سبک» خطای ۵۰۰ می‌داد و «-۵» منفی ذخیره می‌شد.
+ */
+const nonNegativeDecimal = (label: string) =>
+  decimalInput(label).refine(v => v === undefined || !fin(v).isNegative(), `${label} نمی‌تواند منفی باشد`);
+
 const itemBodyFields = z.object({
   type: z.enum(['product', 'raw_material']).optional(),
   name: z.string().min(2, 'نام کالا باید حداقل ۲ کاراکتر باشد'),
@@ -32,13 +42,14 @@ const itemBodyFields = z.object({
   category: z.string().optional(),
   image: z.string().optional(),
   thumbnail: z.string().optional(),
-  reorder_point: z.union([z.string(), z.number()]).optional(),
-  weighted_average_cost: z.union([z.string(), z.number()]).optional(),
-  initial_cost: z.union([z.string(), z.number()]).optional(),
-  current_stock: z.union([z.string(), z.number()]).optional(),
-  stocks: z.record(z.string(), z.any()).optional(),
+  reorder_point: nonNegativeDecimal('نقطه سفارش').optional(),
+  weighted_average_cost: nonNegativeDecimal('میانگین موزون بها').optional(),
+  initial_cost: nonNegativeDecimal('بهای اولیه').optional(),
+  current_stock: nonNegativeDecimal('موجودی').optional(),
+  stocks: z.record(z.string(), nonNegativeDecimal('موجودی اولیه انبار').optional()).optional(),
   color: z.string().optional(),
-  weight: z.union([z.string(), z.number()]).optional(),
+  // null وزن را پاک می‌کند؛ نیامدن آن در ویرایش وزن فعلی را نگه می‌دارد
+  weight: nonNegativeDecimal('وزن').nullable().optional(),
   material: z.string().optional(),
   size: z.string().optional()
 }).passthrough();

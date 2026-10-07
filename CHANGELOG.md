@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.163 — Item Numbers Through decimalInput
+- **Item Numeric Input:** reorder point, cost, opening stock and weight go through `decimalInput` and are non-negative; text is 400 and Persian digits are read (TD-657 item part, `reg_item_numeric_input_validation_td_657`).
+
 ### v9.0.162 — Item Code Counter Moves on Save
 - **Item Code Suggestion:** saving an item moves its code series counter in the same transaction, so the next suggested code is free (TD-656, `reg_item_code_peek_after_save_td_656`).
 

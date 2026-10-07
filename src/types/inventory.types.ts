@@ -19,7 +19,7 @@ export interface Item {
   cost_price?: number;
   stocks?: any;
   color?: string;
-  weight?: number;
+  weight?: number | null;
   material?: string;
   size?: string;
   canSetOpeningBalance?: boolean;
