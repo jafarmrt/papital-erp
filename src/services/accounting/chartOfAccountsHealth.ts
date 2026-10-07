@@ -7,6 +7,7 @@ import { accountHasActiveChildSql } from './postingAccounts.js';
 import { ACCOUNT_MAPPING_CONCEPTS, type AccountMappingKey } from '../../lib/accounting/accountMappingConcepts.js';
 import { AccountMappingService, DEFAULT_ACCOUNT_MAPPINGS, accountMappingIssues, type AccountMappingIssue } from './accountMapping.service.js';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
+import { accountCodeKeySql } from './accountCodeGuard.js';
 
 const VOUCHER_STATUS_TEXT: Record<string, string> = { draft: 'پیش‌نویس', approved: 'تأییدشده', permanent: 'دائم' };
 
@@ -165,5 +166,66 @@ export function buildAccountMappingHealthTest(entries: AccountMappingHealthEntry
         : 'سند خودکار این مفهوم حساب درستی ندارد (TD-550).',
     })),
     metrics: { invalidAccountMappings: entries.length },
+  };
+}
+
+export interface AccountCodeIssue {
+  id: number;
+  code: string;
+  name: string;
+  /** کد لاتین همان حساب */
+  latinCode: string;
+  /** حساب‌های فعال دیگری که کد لاتینشان همین است */
+  sameCodeAs: string[];
+}
+
+/**
+ * v9.0.201 (TD-558، B03-16): حساب فعالی که کدش جز رقم لاتین دارد. گزارش‌ها حساب را با پیشوند کد دسته می‌کنند،
+ * پس صندوق «۱۱۰۵» دارایی جاری و نقد شمرده نمی‌شد. کد خودکار عوض نمی‌شود؛ ذخیره همان حساب در سرفصل کد رقم فارسی را
+ * لاتین می‌کند، مگر حساب دیگری همان کد لاتین را داشته باشد.
+ */
+export async function findNonLatinAccountCodes(): Promise<AccountCodeIssue[]> {
+  const key = accountCodeKeySql(sql`a.code`);
+  const otherKey = accountCodeKeySql(sql`o.code`);
+  const res = await orm.execute(sql`
+    SELECT a.id, a.code, a.name, ${key} AS latin_code,
+           COALESCE((SELECT array_agg(o.code || ' ' || o.name ORDER BY o.code)
+                       FROM accounts o
+                      WHERE o.is_deleted = 0 AND o.id <> a.id AND ${otherKey} = ${key}), ARRAY[]::text[]) AS same_code_as
+      FROM accounts a
+     WHERE a.is_deleted = 0 AND a.code !~ '^[0-9]+$'
+     ORDER BY a.code, a.id
+     LIMIT 200`);
+  return (res.rows as Array<Record<string, unknown>>).map(r => ({
+    id: Number(r.id),
+    code: String(r.code ?? ''),
+    name: String(r.name ?? ''),
+    latinCode: String(r.latin_code ?? ''),
+    sameCodeAs: Array.isArray(r.same_code_as) ? r.same_code_as.map(String) : [],
+  }));
+}
+
+export function buildNonLatinAccountCodeHealthTest(entries: AccountCodeIssue[]): HealthCheckTestResult {
+  return {
+    id: 'account_code_not_latin',
+    category: 'accounts',
+    title: 'کد حساب با رقم فارسی یا نویسه غیررقمی',
+    description: 'کد سرفصل فقط رقم لاتین است؛ گزارش‌ها حساب را با پیشوند کد دسته می‌کنند و حساب با کد «۱۱۰۵» دارایی جاری و نقد شمرده نمی‌شود. کدها خودکار عوض نمی‌شوند',
+    status: entries.length > 0 ? 'warning' : 'healthy',
+    scoreImpact: 0,
+    count: entries.length,
+    message: entries.length === 0
+      ? 'کد همه حساب‌ها رقم لاتین است.'
+      : `${toPersianDigits(String(entries.length))} حساب کد غیرلاتین دارد. حساب را در «سرفصل حساب‌ها» باز و ذخیره کنید تا کد رقم فارسی آن لاتین شود؛ کد غیررقمی را با حساب تازه جایگزین کنید.`,
+    items: entries.map(e => ({
+      id: e.id,
+      code: e.code,
+      title: e.name,
+      subtitle: /^[0-9]+$/.test(e.latinCode) ? `کد لاتین: ${e.latinCode}` : 'کد جز رقم نویسه دارد',
+      details: e.sameCodeAs.length > 0
+        ? `همان کد را حساب ${e.sameCodeAs.map(a => `«${a}»`).join('، ')} دارد؛ پیش از لاتین کردن، یکی را کنار بگذارید (TD-558).`
+        : 'کد حساب لاتین نیست (TD-558).',
+    })),
+    metrics: { nonLatinAccountCodes: entries.length },
   };
 }

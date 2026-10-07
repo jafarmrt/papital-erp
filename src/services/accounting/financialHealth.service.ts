@@ -19,8 +19,8 @@ import { buildForeignRateHealthTest, findVouchersWithoutForeignRate } from './vo
 import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
 import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
 import {
-  buildAccountMappingHealthTest, buildDeletedAccountRowsHealthTest, buildNonPostingRowsHealthTest, findAccountMappingIssues,
-  findDeletedAccountsWithVoucherRows, findVouchersOnNonPostingAccounts,
+  buildAccountMappingHealthTest, buildDeletedAccountRowsHealthTest, buildNonLatinAccountCodeHealthTest, buildNonPostingRowsHealthTest,
+  findAccountMappingIssues, findDeletedAccountsWithVoucherRows, findNonLatinAccountCodes, findVouchersOnNonPostingAccounts,
 } from './chartOfAccountsHealth.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
@@ -1171,6 +1171,8 @@ export class FinancialHealthService {
     tests.push(buildNonPostingRowsHealthTest(await findVouchersOnNonPostingAccounts()));
     // آزمون ۳۳: v9.0.199 (TD-550) نگاشت حساب سندهای خودکار به حساب ناموجود، غیرقابل ثبت یا ناسازگار (فقط فهرست)
     tests.push(buildAccountMappingHealthTest(await findAccountMappingIssues()));
+    // آزمون ۳۴: v9.0.201 (TD-558) کد حساب با رقم فارسی یا نویسه غیررقمی (فقط فهرست، بی بازنویسی)
+    tests.push(buildNonLatinAccountCodeHealthTest(await findNonLatinAccountCodes()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

@@ -10,6 +10,7 @@ import { decimalInput, latinDigitsString, storageDateParam } from '../../middlew
 import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../../lib/treasury/treasuryCurrency.js';
 import { VOUCHER_DETAILED_TYPES } from '../../lib/accounting/voucherDetailedTypes.js';
 import { isReservedVoucherReference, MANUAL_CLOSING_TYPE_MESSAGE, RESERVED_REFERENCE_MESSAGE } from '../../lib/accounting/manualVoucherRules.js';
+import { ACCOUNT_CODE_FORMAT_MESSAGE, ACCOUNT_CODE_PATTERN } from '../../lib/accounting/accountCode.js';
 
 /** query پس از validate: میدل‌ور validate مقدار req.query را با خروجی parse شده Zod جایگزین می‌کند. */
 export type ValidatedQuery<S extends z.ZodTypeAny> = z.infer<S> extends { query?: infer Q } ? Partial<NonNullable<Q>> : never;
@@ -17,9 +18,10 @@ export type ValidatedQuery<S extends z.ZodTypeAny> = z.infer<S> extends { query?
 // ==========================================
 // CHART OF ACCOUNTS (کدینگ حساب‌ها)
 // ==========================================
+// v9.0.201 (TD-558، B03-16): کد با رقم لاتین و فقط رقم
 export const createAccountSchema = z.object({
   body: z.object({
-    code: z.string().min(1, 'کد حساب الزامی است'),
+    code: latinDigitsString.pipe(z.string().min(1, 'کد حساب الزامی است').regex(ACCOUNT_CODE_PATTERN, ACCOUNT_CODE_FORMAT_MESSAGE)),
     name: z.string().min(1, 'عنوان حساب الزامی است'),
     level: z.enum(['group', 'general', 'subsidiary', 'detailed']),
     parentId: z.number().nullable().optional(),
@@ -31,14 +33,14 @@ export const createAccountSchema = z.object({
 
 /**
  * v7.0.127 (TD-247): ویرایش حساب — فقط فیلدهایی که ChartOfAccountsService.updateAccount می‌پذیرد (همه اختیاری).
- * `code` را فرم کدینگ هم می‌فرستد ولی سرویس آن را تغییر نمی‌دهد؛ مانند پیش پذیرفته و نادیده گرفته می‌شود.
+ * v9.0.201 (TD-558): `code` را فرم کدینگ می‌فرستد؛ کد دیگری جز کد خود حساب ۴۲۲ است (`ACCOUNT_CODE_IMMUTABLE`).
  */
 export const updateAccountSchema = z.object({
   params: z.object({
     id: z.string().regex(/^[1-9]\d*$/, 'شناسه حساب باید عدد صحیح مثبت باشد')
   }),
   body: z.object({
-    code: z.string().optional(),
+    code: latinDigitsString.optional(),
     name: z.string().trim().min(1, 'عنوان حساب الزامی است').optional(),
     level: z.enum(['group', 'general', 'subsidiary', 'detailed']).optional(),
     parentId: z.number().int().positive().nullable().optional(),

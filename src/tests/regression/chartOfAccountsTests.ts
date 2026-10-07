@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { accounts, appSettings, journalVoucherItems, journalVouchers } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
@@ -300,6 +300,61 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
 
       assertNoProblems(problems);
       return 'Cycles and wrong parent levels refused (422), system account 5001 kept its type, level and active flag (409) and took a new name, an account with rows kept its type and nature (409), and a legacy cycle left the tree and the trial balance working.';
+    }));
+  }
+
+  const codeId = 'reg_account_code_latin_digits_td_558';
+  if (shouldRun(codeId, 'td558', 'account', 'chart', 'package3')) {
+    await runCase(results, codeId, 'v9.0.201: an account code is stored with Latin digits and digits only, a duplicate code (Persian digits included, concurrent requests too) is 409, a new code on edit is 422, a legacy Persian code turns Latin when its account is saved, and the health check lists the codes still not Latin (TD-558)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const acc = await accountIdsByCode('70');
+      const expect = (label: string, res: { status: number; body?: { code?: string } }, status: number, code?: string) => {
+        if (res.status !== status || (code && res.body?.code !== code)) problems.push(`${label} answered ${res.status} ${JSON.stringify(res.body).slice(0, 180)}, expected ${status}${code ? ` ${code}` : ''}`);
+      };
+      const body = (code: string, name: string) => ({ code, name, level: 'subsidiary', parentId: acc['70'], accountType: 'expense', nature: 'debit' });
+      const codeOf = async (id: number) => (await orm.select({ code: accounts.code }).from(accounts).where(eq(accounts.id, id)))[0]?.code;
+
+      // 1) B03-16 S12: «۷۰۹۶» and «7096» became two accounts
+      const persian = await admin.post('/api/accounting/accounts', body('۷۰۹۶', 'TD-558 Persian digits'));
+      expect('creating «۷۰۹۶»', persian, 201);
+      const id7096 = Number(persian.body?.id);
+      if (await codeOf(id7096) !== '7096') problems.push(`«۷۰۹۶» was stored as ${await codeOf(id7096)}`);
+      expect('creating 7096 again', await admin.post('/api/accounting/accounts', body('7096', 'TD-558 duplicate')), 409, 'ACCOUNT_CODE_TAKEN');
+      expect('creating «70-96»', await admin.post('/api/accounting/accounts', body('70-96', 'TD-558 dash')), 400);
+
+      // 2) five concurrent requests with one code answered [201, 409, 500, 500, 500]. Migration 0012 looks for the index in
+      // every schema, so this sandbox schema, made beside the suite's own, lacks it; production has it.
+      await orm.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_code_active ON accounts (code) WHERE is_deleted = 0`);
+      const burst = await Promise.all([1, 2, 3, 4, 5].map(i => admin.post('/api/accounting/accounts', body('7097', `TD-558 burst ${i}`))));
+      const statuses = burst.map(r => r.status).sort();
+      if (statuses.join(',') !== '201,409,409,409,409') problems.push(`five concurrent creates of 7097 answered ${statuses.join(',')}`);
+
+      // 3) a new code on edit was ignored and the form said «ویرایش شد»
+      expect('changing the code of 7096', await admin.put(`/api/accounting/accounts/${id7096}`, { code: '7098', name: 'TD-558 renamed' }), 422, 'ACCOUNT_CODE_IMMUTABLE');
+      if (await codeOf(id7096) !== '7096') problems.push('the refused code change still changed the code');
+      expect('saving 7096 with its own code in Persian digits', await admin.put(`/api/accounting/accounts/${id7096}`, { code: '۷۰۹۶', name: 'TD-558 renamed' }), 200);
+
+      // 4) legacy codes written by earlier versions
+      const [legacy] = await orm.insert(accounts).values({ code: '۷۰۹۹', name: 'TD-558 legacy', level: 'subsidiary', parentId: acc['70'], accountType: 'expense', nature: 'debit', isSystem: 0, isActive: 1, isDeleted: 0 }).returning({ id: accounts.id });
+      const [twin] = await orm.insert(accounts).values({ code: '۷۰۹۶', name: 'TD-558 legacy twin', level: 'subsidiary', parentId: acc['70'], accountType: 'expense', nature: 'debit', isSystem: 0, isActive: 1, isDeleted: 0 }).returning({ id: accounts.id });
+      const before = (await FinancialHealthService.runHealthCheck()).tests.find(t => t.id === 'account_code_not_latin');
+      const listed = (before?.items ?? []).map(i => Number(i.id)).sort();
+      if (before?.status !== 'warning' || listed.join(',') !== [legacy.id, twin.id].sort().join(',')) problems.push(`health check before the repair: ${JSON.stringify(before).slice(0, 300)}`);
+      if (!before?.items?.find(i => Number(i.id) === twin.id)?.details?.includes('7096')) problems.push('the health check did not name the account that holds the twin code');
+      expect('creating 7099 beside legacy «۷۰۹۹»', await admin.post('/api/accounting/accounts', body('7099', 'TD-558 beside legacy')), 409, 'ACCOUNT_CODE_TAKEN');
+      expect('saving legacy «۷۰۹۹»', await admin.put(`/api/accounting/accounts/${legacy.id}`, { code: '۷۰۹۹', name: 'TD-558 legacy saved' }), 200);
+      if (await codeOf(legacy.id) !== '7099') problems.push(`legacy «۷۰۹۹» after saving: ${await codeOf(legacy.id)}`);
+      expect('saving legacy «۷۰۹۶» while 7096 exists', await admin.put(`/api/accounting/accounts/${twin.id}`, { code: '۷۰۹۶', name: 'TD-558 twin saved' }), 409, 'ACCOUNT_CODE_TAKEN');
+      const after = (await FinancialHealthService.runHealthCheck()).tests.find(t => t.id === 'account_code_not_latin');
+      if ((after?.items ?? []).map(i => Number(i.id)).join(',') !== String(twin.id)) problems.push(`health check after the repair: ${JSON.stringify(after?.items)}`);
+
+      // 5) restoring a deleted account whose code is taken answered 500
+      expect('deleting the legacy twin', await admin.del(`/api/accounting/accounts/${twin.id}`), 200);
+      expect('restoring the twin while 7096 exists', await admin.post(`/api/accounting/accounts/${twin.id}/restore`, {}), 409, 'ACCOUNT_CODE_TAKEN');
+
+      assertNoProblems(problems);
+      return '«۷۰۹۶» stored as 7096, duplicates 409 (five concurrent creates: one 201, four 409), a code change 422, a legacy Persian code turned Latin on save, its taken twin 409 and listed by the health check, and its restore 409.';
     }));
   }
 

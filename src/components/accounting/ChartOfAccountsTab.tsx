@@ -4,6 +4,7 @@ import { FolderTree, Plus, Search, ChevronRight, ChevronDown, Edit3, Trash2, Ref
 import { formatPersianPrice, errorMessageOf } from '../../utils';
 import type { Account, AccountLevel, AccountType, AccountNature } from '../../types';
 import toast from 'react-hot-toast';
+import { ACCOUNT_CODE_FORMAT_MESSAGE, isValidAccountCode, normalizeAccountCode } from '../../lib/accounting/accountCode';
 
 interface ChartOfAccountsTabProps {
   accounts: Account[];
@@ -107,6 +108,11 @@ export function ChartOfAccountsTab({
     e.preventDefault();
     if (!formData.code.trim() || !formData.name.trim()) {
       toast.error('کد و نام حساب الزامی است');
+      return;
+    }
+    // v9.0.201 (TD-558): کد حساب تازه فقط رقم؛ کد حساب موجود در ویرایش فقط‌خواندنی است
+    if (!editingAccount && !isValidAccountCode(normalizeAccountCode(formData.code))) {
+      toast.error(ACCOUNT_CODE_FORMAT_MESSAGE);
       return;
     }
 
@@ -508,10 +514,15 @@ export function ChartOfAccountsTab({
                   <input
                     type="text"
                     required
+                    aria-label="کد حساب"
+                    inputMode="numeric"
+                    dir="ltr"
                     value={formData.code}
-                    onChange={e => setFormData({ ...formData, code: e.target.value })}
+                    readOnly={!!editingAccount}
+                    title={editingAccount ? 'کد حساب پس از ساخت عوض نمی‌شود' : undefined}
+                    onChange={e => setFormData({ ...formData, code: normalizeAccountCode(e.target.value) })}
                     placeholder="مثال: 1001"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono read-only:opacity-60"
                   />
                 </div>
 

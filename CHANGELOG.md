@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.201 — Account Codes Are Latin Digits, Unique and Fixed
+- **Account Codes (P2):** an account code is stored as Latin digits only (Persian and Arabic digits converted), is unique among active accounts also against legacy Persian-digit codes and concurrent requests (409 `ACCOUNT_CODE_TAKEN`), and cannot change after creation (422 `ACCOUNT_CODE_IMMUTABLE`) (TD-558).
+
 ### v9.0.200 — Account Edits Keep the Tree and Posted Accounts Intact
 - **Account Edits (P2):** an account's parent must be exactly one level up and may not close a cycle; a system account takes only a new name and description and an account with voucher rows keeps its type, nature, level and parent; the tree and trial balance survive a legacy cycle (TD-553).
 

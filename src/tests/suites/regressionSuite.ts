@@ -9872,7 +9872,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         .set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send(body);
 
       const account = await AccountingService.createAccount({
-        code: `T247${suffix}`, name: `ERP-TEST-MARKER حساب TD-247 ${suffix}`, level: 'detailed', parentId: null,
+        code: `9247${suffix}`, name: `ERP-TEST-MARKER حساب TD-247 ${suffix}`, level: 'detailed', parentId: null,
         accountType: 'asset', nature: 'debit', description: '',
       });
       createdAccountIds.push(account.id);
@@ -10168,7 +10168,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const baseUnbalanced = scanNumber(baseScan.body, 'accounting_vouchers', /تعداد (\d+) سند/);
       const baseTotal = baseHealth.body.accounting?.totalVouchers ?? -1;
       const account = await AccountingService.createAccount({
-        code: `T245${suffix}`, name: `ERP-TEST-MARKER حساب TD-245 ${suffix}`, level: 'detailed', parentId: null,
+        code: `9245${suffix}`, name: `ERP-TEST-MARKER حساب TD-245 ${suffix}`, level: 'detailed', parentId: null,
         accountType: 'asset', nature: 'debit', description: '',
       });
       createdAccountIds.push(account.id);
