@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { sql, eq, and, gt, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { items, transactions, users, appSettings, warehouses, itemWarehouseStocks } from '../db/schema.js';
+import { resolveMovementDays } from '../lib/settings/settingValues.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
@@ -57,13 +58,10 @@ router.get('/dashboard-bi-stats', authorizePermission('reports.view', 'warehouse
     const settings = await orm.select().from(appSettings)
       .where(inArray(appSettings.key, ['fast_moving_days', 'slow_moving_days', 'dead_stock_days']));
     
-    const fastSetting = settings.find(s => s.key === 'fast_moving_days');
-    const slowSetting = settings.find(s => s.key === 'slow_moving_days');
-    const deadSetting = settings.find(s => s.key === 'dead_stock_days');
-    
-    const fastDays = fastSetting ? parseInt(fastSetting.value, 10) : 30;
-    const slowDays = slowSetting ? parseInt(slowSetting.value, 10) : 90;
-    const deadDays = deadSetting ? parseInt(deadSetting.value, 10) : 180;
+    // v9.0.250 (TD-672، تصمیم ت۴): مقدار نامعتبرِ ذخیره‌شده (خالی، متن، منفی، ترتیب نادرست) پیش‌فرض‌ها را می‌گیرد، نه خطای ۵۰۰
+    const { fastDays, slowDays, deadDays } = resolveMovementDays(
+      Object.fromEntries(settings.map(s => [s.key, s.value]))
+    );
 
     const alarms = await orm.select({
       id: items.id, name: items.name, code: items.code, current_stock: items.currentStock, reorder_point: items.reorderPoint, unit: items.unit, type: items.type

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
 import { normalizeRialDisplayUnit } from '../lib/rialDisplay';
+import { movementDaysError } from '../lib/settings/settingValues';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset } from '../constants/presets';
 import { DEFAULT_INVENTORY_CONTROL_SECTIONS, InventoryControlPresetSection } from '../constants/inventoryControlPresets';
 import {
@@ -303,6 +304,14 @@ export function useSettings() {
         { key: 'wc_webhook_secret', value: wcWebhookSecret },
         { key: 'wc_shop_warehouse', value: wcShopWarehouse }
     ];
+    // v9.0.250 (TD-672، تصمیم ت۴): روزهای گردش پیش از ارسال با همان قاعده کارساز سنجیده می‌شوند
+    const daysError = movementDaysError({
+      fast_moving_days: fastMovingDays, slow_moving_days: slowMovingDays, dead_stock_days: deadStockDays
+    });
+    if (daysError) {
+      toast.error(daysError);
+      return;
+    }
     const changedSettings = candidateSettings.filter(
       (item) => item.value !== MASKED_SETTING_VALUE && (!serverValues.has(item.key) || serverValues.get(item.key) !== item.value)
     );

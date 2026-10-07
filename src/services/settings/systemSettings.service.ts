@@ -6,6 +6,9 @@ import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { SYSTEM_ADMIN_SETTING_KEYS } from '../../lib/settings/settingKeyAccess.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { invalidateSettingsCache, appSettingsCache } from '../../lib/memoryCache.js';
+import {
+  MOVEMENT_DAY_KEYS, currencySettingError, isMovementDayKey, movementDaysError, readMovementDays
+} from '../../lib/settings/settingValues.js';
 
 /**
  * v7.0.26 (TD-184 / audit P1-3) — ذخیره امن تنظیمات سیستم با مجوز سطح کلید
@@ -67,13 +70,23 @@ export interface SaveSettingsResult {
 }
 
 function normalizeSettingValue(key: string, raw: string): string {
-  if (key === 'display_timezone') {
+  if (key === 'display_timezone' || key === 'currency') {
     return String(raw).trim();
+  }
+  // v9.0.250 (TD-672): روزهای گردش با ارقام لاتین ذخیره می‌شوند؛ مقدار نادرست دست‌نخورده می‌ماند تا بررسی آن را رد کند
+  if (isMovementDayKey(key)) {
+    const days = readMovementDays(raw);
+    return days === null ? String(raw) : String(days);
   }
   return raw;
 }
 
 async function validateSettingValue(key: string, value: string): Promise<void> {
+  // v9.0.250 (TD-667 / TD-672، تصمیم‌های ت۱ و ت۴): واحد نمایش فقط ریال یا تومان
+  if (key === 'currency') {
+    const error = currencySettingError(value);
+    if (error) throw new ValidationError(error, { key, value }, 'SETTING_CURRENCY_INVALID');
+  }
   if (key === 'wc_shop_warehouse' && value.trim() !== '') {
     const [wh] = await orm.select({ id: warehouses.id }).from(warehouses)
       .where(and(eq(warehouses.code, value.trim()), eq(warehouses.isActive, 1)));
@@ -159,10 +172,22 @@ export class SystemSettingsService {
 
         await assertKeyPermission(item.key, actor);
         await validateSettingValue(item.key, value);
-
-        await tx.insert(appSettings).values({ key: item.key, value })
-          .onConflictDoUpdate({ target: appSettings.key, set: { value } });
         changes.push({ key: item.key, before, after: value });
+      }
+
+      // v9.0.250 (TD-672، تصمیم ت۴): سه روز گردش با هم سنجیده می‌شوند (مقدار تازه، وگرنه ذخیره‌شده) و هیچ‌چیز نوشته نمی‌شود اگر نادرست باشند
+      if (changes.some(c => isMovementDayKey(c.key))) {
+        const merged = Object.fromEntries(MOVEMENT_DAY_KEYS.map(key => [
+          key,
+          changes.find(c => c.key === key)?.after ?? current.get(key) ?? ''
+        ])) as Record<typeof MOVEMENT_DAY_KEYS[number], string>;
+        const error = movementDaysError(merged);
+        if (error) throw new ValidationError(error, merged, 'SETTING_MOVEMENT_DAYS_INVALID');
+      }
+
+      for (const change of changes) {
+        await tx.insert(appSettings).values({ key: change.key, value: change.after })
+          .onConflictDoUpdate({ target: appSettings.key, set: { value: change.after } });
       }
     });
 

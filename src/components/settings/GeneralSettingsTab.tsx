@@ -175,6 +175,8 @@ export function GeneralSettingsTab({
             <input
               type="number"
               min="1"
+              max="3650"
+              step="1"
               value={fastMovingDays}
               onChange={(e) => setFastMovingDays(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 font-mono text-left bg-white border-slate-300 text-sm"
@@ -187,6 +189,8 @@ export function GeneralSettingsTab({
             <input
               type="number"
               min="1"
+              max="3650"
+              step="1"
               value={slowMovingDays}
               onChange={(e) => setSlowMovingDays(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 font-mono text-left bg-white border-slate-300 text-sm"
@@ -199,6 +203,8 @@ export function GeneralSettingsTab({
             <input
               type="number"
               min="1"
+              max="3650"
+              step="1"
               value={deadStockDays}
               onChange={(e) => setDeadStockDays(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 font-mono text-left bg-white border-slate-300 text-sm"

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.250 — v9.0.250 — Settings Values Are Validated
+- **Settings validation (TD-672):** movement days must be whole numbers from 1 to 3650 with fast < slow < dead and the currency setting is rial or toman (422 otherwise); the dashboard falls back to the defaults 30 / 90 / 180 when a stored value is invalid.
+
 ### v9.0.249 — v9.0.249 — Currency Setting Is the Rial Display Unit
 - **Rial display unit (TD-667):** the currency setting is now only the display unit of rial amounts, rial or toman (toman = rial ÷ 10); a record with its own foreign currency keeps it, and amount inputs and Excel exports stay in rial.
 
