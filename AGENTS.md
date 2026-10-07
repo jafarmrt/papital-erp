@@ -104,7 +104,7 @@
 - **Every Claim Has a Test (v7.0.64, audit P3-13):** Every fix or behaviour change recorded in the changelog is backed by at least one automated test that fails on the previous version and passes on the new one. The test id is named in the commit message and in the `TECH_DEBT.md` / `TECH_DEBT_ARCHIVE.md` row (never in the changelog file, per the rule above). A claim without such a test (e.g. a refactor or a documentation change) is worded as such and never as a fix.
 
 ## 8. Server Startup & Background Seed Execution
-- **Port 3000 Ingress:** In AI Studio preview / Cloud Run, `server.ts` MUST bind and listen on port 3000 immediately.
+- **Port 3000 Ingress:** In AI Studio preview / Cloud Run, `server.ts` MUST bind and listen on port 3000 immediately. Until migrations, seed and the engines finish, every `/api` request except `/api/health/*` and the WooCommerce webhook answers 503 `SYSTEM_STARTING` with `Retry-After` and `/health/ready` is 503 (`startupGate` in `src/middleware/startupGate.ts`, turned on only by `server.ts` with `beginStartup`); the browser shows a waiting page and resends the request (`fetchThroughStartup` in `src/lib/systemStarting.ts`, `SystemStartingOverlay`) (v9.0.164, TD-584, product-owner decision t2).
 - **Background Seeding:** Seeding (`runSeed()`) must run asynchronously in background IIFE without blocking server startup.
 
 ## 9. Standard 22 Categories & Default Units
@@ -212,7 +212,7 @@
 - **AsyncHandler & Global Error Handler (OBS-002):** Routes wrapped in `asyncHandler` return uniform error schema with `traceId`. Every async route handler and every async middleware factory (`authorizePermission`, `validate`, `idempotency`) MUST go through `asyncHandler` (v7.0.66, TD-229); `express-async-errors` is only a safety net, never the mechanism. Enforced by unit test `unit_route_async_handler_td_229`.
 - **Structured Logging (OBS-001, OBS-006):** Winston logger with daily rotation into `logs/application-%DATE%.log` and `logs/error-%DATE%.log`.
 - **Recursive Sanitization (OBS-009):** Sensitive fields scrubbed with `[REDACTED]`.
-- **Lifecycle Probes (OBS-007):** Kubernetes probes at `/health/live`, `/health/ready`, `/health/startup`.
+- **Lifecycle Probes (OBS-007):** Kubernetes probes at `/health/live`, `/health/ready`, `/health/startup`. `/health` gives everyone only `version`; its `buildInfo` (commit and build time from `dist/build-info.json`, written by `npm run build`) goes only to the `METRICS_TOKEN` or a live system-admin session (`metricsReaderStatus`; v9.0.168, TD-601).
 - **Prometheus Metrics (OBS-008):** System metrics exposed at `/metrics` and `/api/metrics`.
 - **Graceful Shutdown (OBS-004, OBS-005):** Handles `SIGTERM`/`SIGINT` with a 10s force-exit timeout.
 

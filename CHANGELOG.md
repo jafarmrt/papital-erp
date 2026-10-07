@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.168 — Build Details of /health Scoped and Real
+- **Build Details:** `/health` returns `version` to everyone (`verify-startup.sh` reads it) and `buildInfo` only to the `METRICS_TOKEN` or a live system-admin session (`metricsReaderStatus` in `src/middleware/metricsAuth.ts`). `npm run build` writes `dist/build-info.json` with the commit and build time (`scripts/write-build-info.mjs`; the Docker build takes `--build-arg GIT_COMMIT_SHA`); without it they are `unknown`, never the old fixed `v4-master` and date.
+
+### v9.0.167 — Logger Safe on Circular Values
+- **Circular Log Values:** the log sanitizer marks an object already on its path `[Circular]` and cuts nesting deeper than 12 levels (`sanitizeObject` in `src/middleware/logger.ts`). Before, logging a circular object or an error whose `cause` points back threw `RangeError` from inside the caller's `catch`.
+
+### v9.0.166 — HTTP Access Log Kept in Production
+- **Access Log:** morgan writes access lines at `info` (`ACCESS_LOG_LEVEL` in `src/middleware/logger.ts`), the production default and the `LOG_LEVEL` written by `install.sh`. At `http` they were below it and production kept no access log.
+
+### v9.0.165 — Pool Readiness and Gauges Read the Real Pool
+- **Pool Stats:** `/health/ready` and the `db_pool_*` gauges read the pool exported by `src/db/drizzle.ts` (`dbPoolStats` in `src/middleware/metrics.ts`). drizzle-orm 0.45 exposes no `orm.pool` / `orm.client.pool`, so both always reported 0 and the «pool saturated» 503 never fired.
+
+### v9.0.164 — API Waits for Migrations
+- **Startup Gate (owner decision t2):** the port still opens at once, but until migrations, seed and the engines finish every `/api` request except `/api/health/*` and the WooCommerce webhook answers 503 `SYSTEM_STARTING` with `Retry-After: 5` (`src/middleware/startupGate.ts`, turned on only by `server.ts`), and `/health/ready` is 503. The browser shows a waiting page (`SystemStartingOverlay`) and resends the same request (`fetchThroughStartup`). Before, a Linux update served the new code on the old schema until migrations finished.
+
 ### v9.0.163 — Closing Without an Opening Voucher Says So
 - **Fiscal Closing Opening-Voucher Text (P3):** with «صدور خودکار سند افتتاحیه» unticked, step 4 still said the opening voucher would be issued; step 4, the execution note and the confirm dialog now say none is issued and the next year starts without opening balances (TD-577, Vitest `fiscalOpeningVoucherText.test.tsx`).
 
