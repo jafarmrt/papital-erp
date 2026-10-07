@@ -1,5 +1,6 @@
 import { History, Filter, X, RefreshCw, Clock, Tag } from 'lucide-react';
 import { cn, formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
+import { priceHistoryRegisteredAt } from '../../lib/items/priceHistory';
 
 interface PriceHistoryModalProps {
   historyItem: { id: number; name: string; code: string } | null;
@@ -155,7 +156,7 @@ export function PriceHistoryModal({
                     </div>
                     <div className="text-[11px] text-slate-500 flex items-center gap-1">
                       <Clock size={12} className="text-slate-400" />
-                      <span>زمان ثبت: <strong className="font-sans text-slate-700">{formatPersianDateTime(h.updated_at || h.updatedAt || h.created_at || h.createdAt)}</strong></span>
+                      <span>زمان ثبت: <strong className="font-sans text-slate-700">{formatPersianDateTime(priceHistoryRegisteredAt(h))}</strong></span>
                     </div>
                   </div>
                   <div className="text-left shrink-0">

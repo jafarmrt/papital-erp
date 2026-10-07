@@ -731,6 +731,11 @@ export class ItemCatalogService {
             .for('update');
 
           const matchingActive = existingList.filter(p => getStrategyCanonicalKey(p.title) === canKey);
+          // v9.0.115 (TD-662): قیمت بی‌تغییر (همان مبلغ و ارز) دوباره نوشته نمی‌شود؛ پیش‌تر هر ورود همان فایل هر قیمت را نرم
+          // حذف و دوباره درج می‌کرد و تاریخچه قیمت با ردیف‌های تکراری پر می‌شد
+          if (matchingActive.length === 1 && matchingActive[0].price.equals(money(pObj.price)) && (matchingActive[0].currency || 'IRR') === pObj.currency) {
+            continue;
+          }
 
           for (const m of matchingActive) {
             await tx.update(itemPrices)

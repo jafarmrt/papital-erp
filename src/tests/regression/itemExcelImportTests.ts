@@ -21,6 +21,9 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_excel_roundtrip_no_cost_price_list_td_647',
       'v9.0.114: only configured price lists are prices in Excel import, the pricing quick import and the invoice price list; migration 0063 cleans the three non-price titles (TD-647)',
       ['td647', 'excel', 'price', 'package5'], priceListColumnsCase],
+    ['reg_excel_reimport_keeps_price_history_td_662',
+      'v9.0.115: re-importing an unchanged Excel file rewrites no price row (TD-662)',
+      ['td662', 'excel', 'price', 'package5'], unchangedPriceCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -64,6 +67,35 @@ async function activeTitles(itemId: number): Promise<string[]> {
   const rows = await orm.select({ title: itemPrices.title }).from(itemPrices)
     .where(and(eq(itemPrices.itemId, itemId), eq(itemPrices.isDeleted, 0)));
   return rows.map(r => r.title).sort();
+}
+
+async function priceRowCount(itemId: number): Promise<number> {
+  return (await orm.select({ id: itemPrices.id }).from(itemPrices).where(eq(itemPrices.itemId, itemId))).length;
+}
+
+/** TD-662 / B05-16: on v9.0.114 each import of the same file soft-deleted and re-inserted every price (history 2 → 6). */
+async function unchangedPriceCase(ctx: Ctx): Promise<string> {
+  const { createTestItem } = await import('../fixtures/factories.js');
+  const it = await createTestItem({ code: `1404-B-${ctx.serial()}-02`, name: withTestMarker('دستبند تاریخچه td662'), category: 'دستبند', stocks: { '': 2 } });
+  ctx.itemIds.push(it.id);
+  const seed = await ctx.post('/api/items/prices/batch-update', { updates: [
+    { itemId: it.id, title: 'عمده', price: 300000 }, { itemId: it.id, title: 'فروشگاه', price: 420000 }] });
+  if (seed.status !== 200) throw new Error(`seed prices ${seed.status}`);
+  const before = await priceRowCount(it.id);
+  const row = { 'کد کالا': it.code, 'نام محصول': it.name, 'قیمت عمده': 300000, 'قیمت فروشگاه': 420000, 'واحد ارز': 'IRR' };
+  const counts: number[] = [];
+  for (let i = 0; i < 2; i++) {
+    const imp = await ctx.post('/api/items/unified-import', { rows: [row] });
+    if (imp.status !== 200) throw new Error(`import ${imp.status} ${JSON.stringify(imp.body)}`);
+    counts.push(Number(imp.body.pricesCount));
+  }
+  const after = await priceRowCount(it.id);
+  const changed = await ctx.post('/api/items/unified-import', { rows: [{ ...row, 'قیمت عمده': 310000 }] });
+  const afterChange = await priceRowCount(it.id);
+  if (after !== before || counts.some(c => c !== 0) || changed.body.pricesCount !== 1 || afterChange !== before + 1) {
+    throw new Error(`price rows ${before} → ${after} after two unchanged imports (pricesCount ${counts.join(',')}); a changed price → ${afterChange} (pricesCount ${changed.body.pricesCount})`);
+  }
+  return `price rows stayed ${before} after two unchanged imports; one changed price added one row`;
 }
 
 /** TD-647 / B05-01: on v9.0.113 the unchanged export round trip added the price list «میانگین خرید (WAC)» and the quick import «موجودی کل». */

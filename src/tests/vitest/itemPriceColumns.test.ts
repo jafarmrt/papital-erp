@@ -25,3 +25,12 @@ describe('Excel price columns', () => {
     expect(r.unmatchedRows).toBe(1);
   });
 });
+
+// v9.0.115 (TD-662): the price history shows when a row was created, as a UTC server timestamp
+describe('price history registration time', () => {
+  it('prefers created_at and marks it as UTC', async () => {
+    const { priceHistoryRegisteredAt } = await import('../../lib/items/priceHistory');
+    expect(priceHistoryRegisteredAt({ created_at: '2026-10-01 08:00:00', updated_at: '2026-10-07 09:30:00' })).toBe('2026-10-01T08:00:00Z');
+    expect(priceHistoryRegisteredAt({ updatedAt: '2026-10-07T09:30:00' })).toBe('2026-10-07T09:30:00Z');
+  });
+});
