@@ -3,6 +3,7 @@ import { Printer, X, ShieldAlert } from 'lucide-react';
 import { formatPersianDateTime, formatPersianNumber, formatPersianDate } from '../../utils';
 import { parseUserAgent } from '../../utils/userAgentParser';
 import type { ActivityLogItem } from '../../hooks/queries/useActivityLogQueries';
+import { auditActionLabel } from '../../lib/audit/auditActionLabels';
 
 interface AuditPrintModalProps {
   logs: ActivityLogItem[];
@@ -178,7 +179,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, o
                           log.action === 'DELETE' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
                           'bg-slate-100 text-slate-700'
                         }`}>
-                          {log.action}
+                          {auditActionLabel(log.action)}
                         </span>
                       </td>
                       <td className="py-2 px-3 border-l border-slate-200 font-medium text-slate-800">

@@ -24,6 +24,7 @@ import { AuditPrintModal } from '../components/audit/AuditPrintModal';
 import { exportAuditLogsToExcel } from '../components/audit/auditExportUtils';
 import { parseUserAgent } from '../utils/userAgentParser';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog';
+import { auditActionLabel, auditActionOptions } from '../lib/audit/auditActionLabels';
 
 /** v9.0.156 (TD-537): خطای خواندن سجل، با پیام فارسی ۴۰۳ به‌جای «هیچ رکوردی یافت نشد» */
 function logsLoadErrorMessage(error: unknown): string {
@@ -34,6 +35,24 @@ function logsLoadErrorMessage(error: unknown): string {
 }
 
 type LogCategory = 'all' | 'auth_security' | 'financial_docs' | 'inventory_items' | 'settings_system';
+
+const DEFAULT_ACTION_BADGE = { className: 'bg-slate-100 text-slate-700 border-slate-200', icon: History };
+const ACTION_BADGE_STYLES: Record<string, { className: string; icon: typeof History }> = {
+  CREATE: { className: 'bg-blue-50 text-blue-700 border-blue-200', icon: PlusCircle },
+  UPDATE: { className: 'bg-amber-50 text-amber-700 border-amber-200', icon: Edit3 },
+  DELETE: { className: 'bg-rose-50 text-rose-700 border-rose-200', icon: Trash2 },
+  LOGIN: { className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: KeyRound },
+  LOGIN_FAILED: { className: 'bg-rose-50 text-rose-700 border-rose-300', icon: AlertCircle },
+  LOGOUT: { className: 'bg-slate-100 text-slate-700 border-slate-300', icon: LogOut },
+  SETTING_CHANGE: { className: 'bg-purple-50 text-purple-700 border-purple-200', icon: SettingsIcon },
+  PURGE: { className: 'bg-orange-50 text-orange-700 border-orange-300', icon: Trash2 },
+  AUDIT_APPLY: { className: 'bg-teal-50 text-teal-700 border-teal-200', icon: ShieldCheck },
+  RECONCILIATION_EXECUTE: { className: 'bg-teal-50 text-teal-700 border-teal-200', icon: ShieldCheck },
+  SEED: { className: 'bg-cyan-50 text-cyan-700 border-cyan-200', icon: Layers },
+  IMPORT: { className: 'bg-cyan-50 text-cyan-700 border-cyan-200', icon: Layers },
+  EXPORT: { className: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: Download },
+  RESTORE: { className: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: Download },
+};
 
 export default function ActivityLogsPage() {
   const limit = 25;
@@ -121,96 +140,16 @@ export default function ActivityLogsPage() {
     if (report) await exportAuditLogsToExcel(report.rows, report.total);
   };
 
+  // v9.0.158 (TD-538): متن نشان از جدول مشترک برچسب اقدام؛ رنگ و نماد به ازای اقدام
   const getActionBadge = (action: string) => {
-    switch (action) {
-      case 'CREATE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-            <PlusCircle className="w-3.5 h-3.5" />
-            ثبت / ایجاد
-          </span>
-        );
-      case 'UPDATE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-            <Edit3 className="w-3.5 h-3.5" />
-            ویرایش
-          </span>
-        );
-      case 'DELETE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
-            <Trash2 className="w-3.5 h-3.5" />
-            حذف رکورد
-          </span>
-        );
-      case 'LOGIN':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-            <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-            ورود موفق
-          </span>
-        );
-      case 'LOGIN_FAILED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-300 shadow-2xs">
-            <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-            ورود ناموفق
-          </span>
-        );
-      case 'LOGOUT':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300">
-            <LogOut className="w-3.5 h-3.5 text-slate-600" />
-            خروج از سیستم
-          </span>
-        );
-      case 'SETTING_CHANGE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-            <SettingsIcon className="w-3.5 h-3.5 text-purple-600" />
-            تغییر تنظیمات
-          </span>
-        );
-      case 'PURGE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-orange-700 border border-orange-300">
-            <Trash2 className="w-3.5 h-3.5 text-orange-600" />
-            پاکسازی ممیزی
-          </span>
-        );
-      case 'AUDIT_APPLY':
-      case 'RECONCILIATION_EXECUTE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200">
-            <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
-            اصلاح و تطبیق
-          </span>
-        );
-      case 'SEED':
-      case 'IMPORT':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-cyan-50 text-cyan-700 border border-cyan-200">
-            <Layers className="w-3.5 h-3.5 text-cyan-600" />
-            بارگذاری پایه
-          </span>
-        );
-      case 'EXPORT':
-      case 'RESTORE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-            <Download className="w-3.5 h-3.5 text-indigo-600" />
-            پشتیبان / بازیابی
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-            <History className="w-3.5 h-3.5" />
-            {action}
-          </span>
-        );
-    }
+    const style = ACTION_BADGE_STYLES[action] ?? DEFAULT_ACTION_BADGE;
+    const Icon = style.icon;
+    return (
+      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${style.className}`}>
+        <Icon className="w-3.5 h-3.5" />
+        {auditActionLabel(action)}
+      </span>
+    );
   };
 
   const categories: { id: LogCategory; label: string; icon: any; countNote?: string }[] = [
@@ -372,19 +311,10 @@ export default function ActivityLogsPage() {
               onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
               className="px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
-              <option value="">همه اقدامات (نوع)</option>
-              <option value="LOGIN">ورود موفق (LOGIN)</option>
-              <option value="LOGIN_FAILED">ورود ناموفق (LOGIN_FAILED)</option>
-              <option value="LOGOUT">خروج از سیستم (LOGOUT)</option>
-              <option value="CREATE">ایجاد / ثبت (CREATE)</option>
-              <option value="UPDATE">ویرایش (UPDATE)</option>
-              <option value="DELETE">حذف (DELETE)</option>
-              <option value="SETTING_CHANGE">تغییر تنظیمات (SETTING_CHANGE)</option>
-              {filterOptions.actions
-                .filter((a: any) => !['LOGIN', 'LOGIN_FAILED', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'SETTING_CHANGE'].includes(a))
-                .map((a: any) => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
+              <option value="">همه اقدامات</option>
+              {auditActionOptions(filterOptions.actions).map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
 
             <select
@@ -779,7 +709,7 @@ export default function ActivityLogsPage() {
           filterSummary={{
             categoryLabel: categories.find(c => c.id === categoryFilter)?.label,
             userFilter,
-            actionFilter,
+            actionFilter: actionFilter ? auditActionLabel(actionFilter) : '',
             entityFilter,
             searchText: debouncedSearchQuery.trim(),
             startDate,

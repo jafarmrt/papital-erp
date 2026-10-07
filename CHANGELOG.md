@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.158 — Audit Actions in Persian and Jalali Excel File Name
+- **Audit Actions in Persian and Jalali Excel File Name:** one table gives the Persian label of every audit action on the page, the filter, the print and Excel; the Excel file is named with today's Jalali date (TD-538).
+
 ### v9.0.157 — Audit Print and Excel Cover the Whole Filter
 - **Audit Print and Excel Cover the Whole Filter:** the official print and the Excel export come from one server request with every filter and the search, up to 1000 rows; the print shows the server total and all filters (TD-527).
 

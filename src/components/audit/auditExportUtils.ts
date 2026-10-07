@@ -1,6 +1,12 @@
 import toast from 'react-hot-toast';
-import { formatPersianDateTime, formatPersianNumber } from '../../utils';
+import { formatPersianDateTime, formatPersianNumber, getTodayJalaliDate } from '../../utils';
+import { auditActionLabel } from '../../lib/audit/auditActionLabels';
 import { parseUserAgent } from '../../utils/userAgentParser';
+
+/** v9.0.158 (TD-538): نام فایل با تاریخ شمسی امروزِ منطقه زمانی توافقی، نه روز میلادی UTC */
+export function auditExportFileName(jalaliDate: string): string {
+  return `گزارش-سجل-رویدادها-${jalaliDate.replace(/\//g, '-')}.xlsx`;
+}
 
 export interface AuditExportRow {
   id: number;
@@ -33,7 +39,7 @@ export async function exportAuditLogsToExcel(logs: AuditExportRow[], total: numb
         'تاریخ و زمان (شمسی)': formatPersianDateTime(log.timestamp),
         'نام کاربری': log.username,
         'نام کامل کاربر': log.userFullName || '—',
-        'نوع اقدام': log.action,
+        'نوع اقدام': auditActionLabel(log.action),
         'بخش / موجودیت': log.entity,
         'شناسه موجودیت': log.entityId || '—',
         'شرح رویداد': log.description,
@@ -67,9 +73,7 @@ export async function exportAuditLogsToExcel(logs: AuditExportRow[], total: numb
     const sheetName = 'سجل_تغییرات_سیستم';
     xlsx.utils.book_append_sheet(workbook, worksheet, sheetName);
 
-    const now = new Date().toISOString().slice(0, 10);
-    const fileName = `گزارش_سجل_تغییرات_ERP_${now}.xlsx`;
-    xlsx.writeFile(workbook, fileName);
+    xlsx.writeFile(workbook, auditExportFileName(getTodayJalaliDate()));
 
     if (logs.length < total) {
       toast(`فقط ${formatPersianNumber(logs.length)} ردیف اول از ${formatPersianNumber(total)} ردیف در فایل اکسل آمده است؛ برای همه ردیف‌ها پالایه را محدودتر کنید.`, { duration: 8000 });
