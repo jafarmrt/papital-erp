@@ -18,13 +18,8 @@ export function TopBar({
   isSidebarCollapsed,
   onOpenProfile
 }: TopBarProps) {
-  const roleTitle = userPermissions.roleName || (
-    user.role === 'admin' 
-      ? 'مدیر ارشد سیستم' 
-      : user.role === 'manager' 
-        ? 'سرپرست انبار' 
-        : 'کاربر تماشاگر'
-  );
+  // v9.0.144 (TD-894): برچسب نقش نام ذخیره‌شده خود نقش است (`/users/my-permissions`)، نه برچسب ثابتی از روی کد نقش.
+  const roleTitle = userPermissions.roleName ?? '';
 
   return (
     <header className="h-16 bg-white border-b flex items-center justify-between px-3 sm:px-4 lg:px-6 shrink-0 print:hidden z-30">

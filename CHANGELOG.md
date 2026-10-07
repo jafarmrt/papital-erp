@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.144 — Role Label From the Role Name
+- **Role Label From the Role Name:** the top bar and the profile show the stored name of the user's role, the system admin's too (TD-894).
+
 ### v9.0.143 — Action Buttons by Permission
 - **Action Buttons by Permission:** the customers page, sales file delete and the stock form item button follow the API permission, not the role code (TD-893).
 

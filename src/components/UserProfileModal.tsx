@@ -14,9 +14,11 @@ interface UserProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUserUpdate: (updatedUser: User) => void;
+  /** v9.0.144 (TD-894): نام ذخیره‌شده نقش کاربر از `/users/my-permissions`، نه برچسبی از روی کد نقش */
+  roleName?: string;
 }
 
-export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate }: UserProfileModalProps) {
+export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, roleName }: UserProfileModalProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
   const [fullName, setFullName] = useState<string>(user.full_name || '');
   const [avatarPreview, setAvatarPreview] = useState<string>(user.avatar_url || '');
@@ -306,7 +308,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate }
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">نقش و سطح دسترسی:</label>
                   <div className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-slate-700 font-semibold">
-                    <span>{user.role === 'admin' ? 'مدیر ارشد سیستم' : user.role === 'manager' ? 'سرپرست انبار' : user.role}</span>
+                    <span>{roleName ?? ''}</span>
                     <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-bold text-[10px]">
                       فعال
                     </span>
