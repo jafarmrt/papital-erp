@@ -11,6 +11,8 @@ import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { idempotency } from '../../middleware/idempotency.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { NotFoundError } from '../../errors/customErrors.js';
+import { voucherAuditChanges, voucherAuditSnapshot } from '../../services/accounting/accountingAudit.js';
+import { batchFinalizeMessage } from '../../lib/accounting/voucherBatch.js';
 import {
   type ValidatedQuery,
   vouchersQuerySchema,
@@ -73,7 +75,10 @@ router.post('/accounting/vouchers', authorizePermission('accounting.vouchers'), 
 
 router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(updateVoucherSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const voucher = await AccountingService.updateJournalVoucher(id, { ...req.body, manualEntry: true }); // v9.0.190 (TD-551)
+  const { version, ...changes } = req.body;
+  // v9.0.279 (TD-555، B03-13): پیش از ویرایش خوانده می‌شود؛ ویرایش با نسخه خوانده‌شده فقط همین حالت را تغییر می‌دهد (نسخه دیگر ۴۰۹)
+  const before = await AccountingService.getJournalVoucherById(id);
+  const voucher = await AccountingService.updateJournalVoucher(id, { ...changes, manualEntry: true, expectedVersion: version }); // v9.0.190 (TD-551)
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'system',
@@ -82,7 +87,7 @@ router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'
     entity: 'journal_voucher',
     entityId: String(id),
     description: `ویرایش سند حسابداری شماره ${voucher.voucherNumber}`,
-    details: { changes: req.body },
+    details: voucherAuditChanges(before, voucher),
     ipAddress: req.ip || '',
   });
   res.json(voucher);
@@ -90,6 +95,7 @@ router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'
 
 router.delete('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
+  const before = await AccountingService.getJournalVoucherById(id); // v9.0.279 (TD-555): ممیزی حذف کل سند را دارد
   const result = await AccountingService.deleteJournalVoucher(id);
   await logActivity({
     userId: req.user?.id,
@@ -98,8 +104,8 @@ router.delete('/accounting/vouchers/:id', authorizePermission('accounting.vouche
     action: 'DELETE',
     entity: 'journal_voucher',
     entityId: String(id),
-    description: `حذف سند حسابداری با شناسه ${id}`,
-    details: { id },
+    description: `حذف سند حسابداری شماره ${before.voucherNumber}`,
+    details: { before: voucherAuditSnapshot(before) },
     ipAddress: req.ip || '',
   });
   res.json(result);
@@ -114,6 +120,7 @@ router.post('/accounting/vouchers/:id/reverse', authorizePermission('accounting.
     reason,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
+    manualEntry: true, // v9.0.278 (TD-552، ت۸): سند منشأدار فقط با ابطال منشأ برمی‌گردد
   });
 
   await logActivity({
@@ -210,11 +217,12 @@ router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounti
     entity: 'journal_voucher',
     entityId: ids.join(','),
     description: `قطعی‌سازی گروهی ${result.finalizedCount} سند حسابداری`,
-    details: { ids, count: result.finalizedCount },
+    // v9.0.280 (TD-556): شناسه‌های قطعی‌شده و ردشده‌ها جدا؛ پیش‌تر همه شناسه‌های فرستاده‌شده «قطعی‌شده» ثبت می‌شد
+    details: { requestedIds: ids, finalizedIds: result.ids, refused: result.refused },
     ipAddress: req.ip || '',
   });
 
-  res.json({ message: `${result.finalizedCount} سند با موفقیت قطعی و دائم شدند.`, ...result });
+  res.json({ message: batchFinalizeMessage(result), ...result });
 }));
 
 router.post('/accounting/vouchers/batch-approve', authorizePermission('accounting.vouchers'), validate(batchApproveVouchersSchema), asyncHandler(async (req, res) => {

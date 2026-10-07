@@ -167,6 +167,10 @@ export const updateVoucherSchema = z.object({
     currency: manualVoucherCurrency,
     attachments: z.array(z.any()).optional(),
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است').optional(),
+    // v9.0.279 (TD-555، B03-13): نسخه‌ای که ویرایشگر خوانده است؛ نسخه کهنه ۴۰۹ OCC_CONFLICT. پیش‌تر ذخیره دوم دو حسابدار
+    // ذخیره اول را بی‌صدا پاک می‌کرد
+    version: z.coerce.number({ message: 'نسخه سند حسابداری ارسال نشده است؛ صفحه را بازخوانی کنید و دوباره ویرایش کنید.' })
+      .int('نسخه سند باید عدد صحیح باشد').positive('نسخه سند باید مثبت باشد'),
   }).refine((data) => !data.items || isVoucherBalanced(data.items, undefined, false), {
     message: 'سند حسابداری تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
     path: ['items']

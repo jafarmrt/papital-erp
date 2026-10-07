@@ -7,6 +7,7 @@ import type { JournalVoucher } from '../../types';
 import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError } from './accountingQueryConfig';
 import { invalidateAfterVoucherChange } from './accountingInvalidation';
 import { toVoucherPage, voucherListParams, type JournalVoucherPage, type VoucherListFilters } from '../../lib/accounting/voucherList';
+import { batchFinalizeMessage, type BatchFinalizeResult } from '../../lib/accounting/voucherBatch';
 
 /**
  * اسناد حسابداری: فهرست اسناد با useQuery و همه ذخیره‌ها (ثبت/ویرایش/حذف/معکوس/اصلاحی/تایید/قطعی) با useMutation —
@@ -129,10 +130,13 @@ export function useVoucherMutations() {
     onError: silentMutationError,
   });
 
-  const batchFinalizeVouchers = useMutation<VoucherActionResult | null, unknown, number[]>({
+  const batchFinalizeVouchers = useMutation<(BatchFinalizeResult & { message?: string }) | null, unknown, number[]>({
     mutationFn: (ids) => fetchJson('/accounting/vouchers/batch-finalize', { method: 'POST', body: JSON.stringify({ ids }) }),
     onSuccess: (res) => {
-      toast.success(res?.message || 'اسناد با موفقیت قطعی و دائم شدند');
+      // v9.0.280 (TD-556): سندی که قطعی نشد با دلیلش گفته می‌شود و پیام موفقیت ساده نمی‌گیرد
+      const message = res?.message || (res ? batchFinalizeMessage(res) : 'اسناد با موفقیت قطعی و دائم شدند');
+      if (Array.isArray(res?.refused) && res.refused.length > 0) toast.error(message, { duration: 8000 });
+      else toast.success(message);
       onSuccess();
     },
     onError: silentMutationError,

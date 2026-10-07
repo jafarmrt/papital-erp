@@ -10596,6 +10596,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR z (v9.0.286 on): payslip deductions account 3205 (TD-554)
   const { runPayrollDeductionAccountTests } = await import('../regression/payrollDeductionAccountTests.js');
   results.push(...await runPayrollDeductionAccountTests(shouldRun));
+  // Package 3 PR v (v9.0.278 on): automatic vouchers and the journal voucher page (TD-552 ...)
+  const { runVoucherPageTests } = await import('../regression/voucherPageTests.js');
+  results.push(...await runVoucherPageTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
