@@ -11,6 +11,7 @@ import { logger, morganMiddleware, errorHandler } from './middleware/logger.js';
 import { metricsMiddleware, updateDbPoolMetrics, updateOutboxMetrics } from './middleware/metrics.js';
 import { metricsAuthMiddleware } from './middleware/metricsAuth.js';
 import { asyncHandler } from './middleware/asyncHandler.js';
+import { buildCspDirectives } from './lib/cspDirectives.js';
 import promClient from 'prom-client';
 import { requestContextMiddleware } from './lib/requestContext.js';
 import { validateCorsOrigin } from './lib/corsValidator.js';
@@ -101,34 +102,8 @@ export async function createApp(): Promise<express.Express> {
   // V1.3.7: upgrade-insecure-requests / HSTS فقط روی اتصال HTTPS فعال می‌شوند —
   // در دسترسی HTTP (مثل http://SERVER_IP:3000 قبل از تنظیم دامنه) این هدرها باعث
   // ارتقای مرورگر به HTTPS و صفحه سفید می‌شدند.
-  const secureCspDirectives = {
-    defaultSrc: ["'self'"],
-    scriptSrc: [
-      "'self'",
-      // Support Vite dev server and dynamic inline scripts
-      ...(process.env.NODE_ENV !== 'production' ? ["'unsafe-inline'", "'unsafe-eval'"] : [])
-    ],
-    styleSrc: ["'self'", "'unsafe-inline'"],  // Tailwind / inline style tags
-    imgSrc: ["'self'", "data:", "blob:", "https:"],
-    connectSrc: [
-      "'self'",
-      "https:",
-      "wss:",
-      "ws:",
-      ...(process.env.EXTERNAL_API_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean) || [])
-    ],
-    fontSrc: ["'self'", "data:", "https:"],
-    objectSrc: ["'none'"],
-    baseUri: ["'self'"],
-    formAction: ["'self'"],
-    frameAncestors: [
-      "'self'",
-      "https://*.google.com",
-      "https://*.run.app",
-      "https://*.googleusercontent.com",
-      "https://*.aistudio.google.com"
-    ],
-  };
+  // v9.0.127 (TD-597): production frames and connects only to itself plus explicit origins (src/lib/cspDirectives.ts)
+  const secureCspDirectives = buildCspDirectives();
 
   const helmetForHttps = helmet({
     contentSecurityPolicy: {
@@ -215,12 +190,9 @@ export async function createApp(): Promise<express.Express> {
       const p = req.path || req.url || '';
       return p.includes('/health') || p.includes('/metrics');
     },
-    keyGenerator: (req: any) => {
-      if (req.user?.id) return `user:${req.user.id}`;
-      const token = req.cookies?.auth_token || req.cookies?.token || (req.headers?.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
-      if (token && typeof token === 'string' && token.length >= 10) {
-        return `session:${token.slice(-16)}`;
-      }
+    // v9.0.126 (TD-595): the key is the client address only. This limiter runs before authentication, so
+    // req.user is always empty here, and a cookie value is unverified: every forged cookie was a new bucket.
+    keyGenerator: (req: express.Request) => {
       // v7.0.41 (TD-182): req.ip بر پایه TRUST_PROXY؛ X-Forwarded-For خام قابل جعل است
       const rawIp = req.ip || req.socket?.remoteAddress || '127.0.0.1';
       return `ip:${ipKeyGenerator(rawIp)}`;
