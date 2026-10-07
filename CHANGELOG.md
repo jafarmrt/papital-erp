@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.203 — Chart of Accounts Messages Shown Once
+- **Chart of Accounts Page (P3):** each save, delete and error message is shown once, a refused seed is handled, and the delete confirmation says an account used in vouchers or with sub-accounts is not deleted (TD-576).
+
 ### v9.0.202 — Database Constraints on Vouchers and Accounts
 - **Accounting Constraints (P3):** migration 0071 adds NOT VALID CHECK constraints on voucher row amounts, voucher status and type and account level, type and nature, and a parent foreign key on accounts, each validated only on clean data; the health check lists what is left (TD-562).
 

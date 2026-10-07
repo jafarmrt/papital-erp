@@ -5,6 +5,7 @@ import { formatPersianPrice, errorMessageOf } from '../../utils';
 import type { Account, AccountLevel, AccountType, AccountNature } from '../../types';
 import toast from 'react-hot-toast';
 import { ACCOUNT_CODE_FORMAT_MESSAGE, isValidAccountCode, normalizeAccountCode } from '../../lib/accounting/accountCode';
+import { accountDeleteConfirmText } from '../../lib/accounting/accountDeleteText';
 
 interface ChartOfAccountsTabProps {
   accounts: Account[];
@@ -138,7 +139,8 @@ export function ChartOfAccountsTab({
       toast.error('حساب‌های سیستمی و پایه قابل حذف نیستند');
       return;
     }
-    if (!(await confirmAction({ title: 'حذف حساب', message: `آیا از حذف حساب "${acc.name}" (کد: ${acc.code}) اطمینان دارید؟` }))) return;
+    // v9.0.203 (TD-576، B03-34): تأیید حذف می‌گوید حساب سندخورده حذف نمی‌شود و راه کنار گذاشتن آن غیرفعال کردن است
+    if (!(await confirmAction({ title: 'حذف حساب', message: accountDeleteConfirmText(acc) }))) return;
 
     try {
       await onDeleteAccount(acc.id);
@@ -293,7 +295,7 @@ export function ChartOfAccountsTab({
 
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => onSeedStandardAccounts()}
+            onClick={() => { void onSeedStandardAccounts().catch(() => undefined); }}
             disabled={loading}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition disabled:opacity-50"
           >
