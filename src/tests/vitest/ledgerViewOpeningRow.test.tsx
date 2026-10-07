@@ -23,7 +23,7 @@ function renderLedger(selected: number) {
     onApplyLedgerFilter={() => {}} onFetchLedger={() => {}} startDate="2026-03-21" endDate="" />);
 }
 
-// v9.0.113 (TD-574, B03-32): the ledger printed «مانده ابتدای دوره» twice (its own row and the server's) and its title read
+// v9.0.118 (TD-574, B03-32): the ledger printed «مانده ابتدای دوره» twice (its own row and the server's) and its title read
 // `accountName`, which the server never sends, so it said only «دفتر معین حساب».
 describe('account card view (TD-574)', () => {
   it('prints the server opening row once, numbers the first voucher row ۱ and names the account in the title', () => {

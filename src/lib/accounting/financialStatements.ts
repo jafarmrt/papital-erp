@@ -1,5 +1,5 @@
 /**
- * v9.0.109 (TD-563، B03-21): قرارداد مشترک سرور و مرورگر برای صورت سود و زیان و ترازنامه.
+ * v9.0.114 (TD-563، B03-21): قرارداد مشترک سرور و مرورگر برای صورت سود و زیان و ترازنامه.
  * `AccountingReportService.getIncomeStatement` / `getBalanceSheet` همین شکل را برمی‌گردانند و نماهای
  * `IncomeStatementView` / `BalanceSheetView` همین کلیدها را می‌خوانند؛ پیش‌تر نوع مرورگر کلیدهای دیگری
  * (`totalRevenues`، `expenses`، `assets`، `liabilities`) اعلام می‌کرد و صفحه سرجمع درآمد ۰ و ردیف‌های خالی نشان می‌داد.

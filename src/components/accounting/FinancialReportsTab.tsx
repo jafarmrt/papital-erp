@@ -84,7 +84,7 @@ export function FinancialReportsTab({
   const [trialCols, setTrialCols] = useState<'2' | '4' | '6' | '8'>('4');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  // v9.0.111 (TD-566): هر صورت تاریخ خودش را دارد (ISO)؛ ترازنامه و نسبت‌ها «تا تاریخ»، سود و زیان دوره خودش را
+  // v9.0.116 (TD-566): هر صورت تاریخ خودش را دارد (ISO)؛ ترازنامه و نسبت‌ها «تا تاریخ»، سود و زیان دوره خودش را
   const [balanceAsOfDate, setBalanceAsOfDate] = useState('');
   const [ratiosAsOfDate, setRatiosAsOfDate] = useState('');
   const [incomePeriod, setIncomePeriod] = useState({ startDate: '', endDate: '' });

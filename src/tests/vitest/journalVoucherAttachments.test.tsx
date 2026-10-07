@@ -5,7 +5,7 @@ import { JournalVouchersTab } from '../../components/accounting/JournalVouchersT
 import type { JournalVoucher } from '../../types';
 
 // TD-236: پیش‌نمایش پیوست‌های سند حسابداری فیلدهای قدیمی fileName/dataUrl/fileType را می‌خواند و تصویر و نامی نشان نمی‌داد.
-// v9.0.110 (TD-565): برگه فهرست اسناد صفحه خود را از سرور می‌خواند
+// v9.0.115 (TD-565): برگه فهرست اسناد صفحه خود را از سرور می‌خواند
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args), getAuthToken: () => null, isAbortError: () => false }));
 

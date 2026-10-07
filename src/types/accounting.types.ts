@@ -339,7 +339,7 @@ export interface TrialBalanceReport {
   sumClosingCredit?: number;
 }
 
-// v9.0.109 (TD-563، B03-21): صورت سود و زیان و ترازنامه قرارداد مشترک سرور و مرورگر دارند
+// v9.0.114 (TD-563، B03-21): صورت سود و زیان و ترازنامه قرارداد مشترک سرور و مرورگر دارند
 export type {
   StatementRow as IncomeStatementRow,
   StatementRow as BalanceSheetRow,
@@ -347,7 +347,7 @@ export type {
   BalanceSheetReport,
 } from '../lib/accounting/financialStatements';
 
-// v9.0.113 (TD-574، B03-32): کارت حساب قرارداد مشترک سرور و مرورگر دارد
+// v9.0.118 (TD-574، B03-32): کارت حساب قرارداد مشترک سرور و مرورگر دارد
 export type { AccountCardRow as AccountLedgerRow, AccountCardReport as AccountLedgerReport } from '../lib/accounting/accountCard';
 
 /** v8.0.16 (TD-260): ردیف ارزی که در نمای «همه ارزها» به ریال تبدیل شده است — ارز، مبلغ و نرخ اصلی آن */

@@ -43,7 +43,7 @@ const NEUTRAL = 'text-slate-900 dark:text-white';
 const INDIGO = 'text-indigo-600 dark:text-indigo-400';
 const EMERALD = 'text-emerald-600 dark:text-emerald-400';
 
-/** v9.0.114 (TD-575): پیش از رسیدن داده یا پس از خطا هیچ عدد، امتیاز یا وضعیتی ساخته نمی‌شود */
+/** v9.0.119 (TD-575): پیش از رسیدن داده یا پس از خطا هیچ عدد، امتیاز یا وضعیتی ساخته نمی‌شود */
 const NO_VALUE = '—';
 
 function buildRatioSections(r: FinancialRatiosReport | null): RatioSectionSpec[] {
@@ -113,7 +113,7 @@ interface FinancialRatiosViewProps {
   ratiosData: FinancialRatiosReport | null;
   /** ارز (خالی = همه ارزها) و تاریخ نسبت‌ها (ISO، خالی = تا امروز) */
   onFetchFinancialRatios: (currency?: string, asOfDate?: string) => void;
-  /** v9.0.111 (TD-566): تاریخ نسبت‌ها در سرآیند همین صفحه */
+  /** v9.0.116 (TD-566): تاریخ نسبت‌ها در سرآیند همین صفحه */
   asOfDate?: string;
   onAsOfDateChange?: (iso: string) => void;
   /** درخواست نسبت‌ها در جریان است */
@@ -140,7 +140,7 @@ export function FinancialRatiosView({
     onFetchFinancialRatios(currencyParam(selectedCurrency), iso);
   };
 
-  // v9.0.114 (TD-575): امتیاز فقط از پاسخ سرور؛ پیش‌تر بی داده یا پس از خطا «۷۵ از ۱۰۰» نشان داده می‌شد
+  // v9.0.119 (TD-575): امتیاز فقط از پاسخ سرور؛ پیش‌تر بی داده یا پس از خطا «۷۵ از ۱۰۰» نشان داده می‌شد
   const overallScore = ratiosData?.status?.overallScore;
   const hasScore = typeof overallScore === 'number' && Number.isFinite(overallScore);
 

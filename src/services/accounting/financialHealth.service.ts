@@ -9,6 +9,7 @@ import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } f
 import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } from './treasury/chequePartyAccount.js';
 import { buildFutureStockMovementHealthTest, findFutureStockMovements } from '../inventory/futureStockMovements.js';
 import { buildOpeningVoucherHealthTest, findOpeningVoucherMismatches } from '../inventory/itemOpeningValue.js';
+import { buildReservedWarehouseCodeHealthTest, findReservedCodeWarehouses } from '../inventory/reservedWarehouseCode.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1096,6 +1097,11 @@ export class FinancialHealthService {
     const openingVoucherTest = buildOpeningVoucherHealthTest(await findOpeningVoucherMismatches());
     overallScore += openingVoucherTest.scoreImpact;
     tests.push(openingVoucherTest);
+
+    // آزمون ۲۳: v9.0.110 (TD-482) انبار با کد رزرو کاردکس «default» (فقط فهرست، بی تغییر خودکار)
+    const reservedWarehouseCodeTest = buildReservedWarehouseCodeHealthTest(await findReservedCodeWarehouses());
+    overallScore += reservedWarehouseCodeTest.scoreImpact;
+    tests.push(reservedWarehouseCodeTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

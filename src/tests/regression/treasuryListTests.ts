@@ -181,6 +181,59 @@ export async function runTreasuryListTests(shouldRun: ShouldRun): Promise<TestCa
     });
   }
 
+  const runningId = 'reg_treasury_running_balance_void_td_860';
+  if (shouldRun(runningId, 'td860', 'treasury', 'running', 'package4')) {
+    await runCase(results, runningId, 'v9.0.108: the treasury running balance counts the same rows as the bank balance: a voided row on its own date and its reversal on the void date, never a legacy cheque-method row, so after a void the last row equals the bank balance (TD-860)', async () => {
+      const admin = await adminClient();
+      const problems: string[] = [];
+      const today = await businessTodayIsoDate();
+      const shift = (days: number) => new Date(Date.parse(`${today}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+      const bank = await createBank('Running balance bank');
+      const contra = await accountId('4101');
+      const base = { method: 'bank_transfer', bankAccountId: bank.id, partyType: 'other', contraAccountId: contra };
+      const ids: number[] = [];
+      for (const [type, amount, days, partyName] of [
+        ['receipt', 1_000_000, -5, `Owner deposit ${tagOf()}`],
+        ['receipt', 250_000, -3, `Entered twice ${tagOf()}`],
+        ['payment', 100_000, -1, `Rent ${tagOf()}`],
+      ] as const) {
+        const res = await admin.post('/api/accounting/treasury', { ...base, type, amount, date: shift(days), partyName });
+        if (res.status !== 201) throw new Error(`${type} ${amount} returned ${res.status}: ${JSON.stringify(res.body).slice(0, 200)}`);
+        ids.push(Number(res.body.id));
+      }
+      // a legacy cheque-method receipt (refused since v8.0.26): it never moved the bank balance
+      const [legacy] = await orm.insert(treasuryTransactions).values({
+        transactionNumber: `LEGACY-CHQ-${tagOf()}`, type: 'receipt', date: shift(-2), method: 'cheque', amount: money(70_000),
+        currency: 'IRR', bankAccountId: bank.id, partyType: 'other', partyName: `Legacy cheque ${tagOf()}`, status: 'completed',
+      }).returning({ id: treasuryTransactions.id });
+      const voided = await admin.post(`/api/accounting/treasury/${ids[1]}/void`, { reason: 'Entered twice' });
+      if (voided.status !== 200) throw new Error(`void returned ${voided.status}: ${JSON.stringify(voided.body).slice(0, 200)}`);
+      const reversalId = Number(voided.body?.id ?? voided.body?.data?.id);
+
+      const page = await admin.get(`/api/accounting/treasury?bankAccountId=${bank.id}&page=1&limit=10`);
+      if (page.status !== 200 || !Array.isArray(page.body?.data)) throw new Error(`page returned ${page.status}: ${JSON.stringify(page.body).slice(0, 200)}`);
+      const shown = new Map<number, number | undefined>(page.body.data.map((t: { id: number; runningBalance?: number }) => [t.id, t.runningBalance]));
+      // 1,000,000 → +250,000 (voided later, still in the bank on its date) → −100,000 → −250,000 reversal today
+      const expected: Array<[string, number, number | undefined]> = [
+        ['first receipt', ids[0], 1_000_000],
+        ['voided receipt', ids[1], 1_250_000],
+        ['rent payment', ids[2], 1_150_000],
+        ['reversal of the voided receipt', reversalId, 900_000],
+        ['legacy cheque-method receipt', legacy.id, undefined],
+      ];
+      for (const [label, id, want] of expected) {
+        if (shown.get(id) !== want) problems.push(`${label} shows ${shown.get(id)}, expected ${want}`);
+      }
+      const { AccountingService } = await import('../../services/accounting.service.js');
+      const mine = (await AccountingService.getBankAccounts()).find(b => b.id === bank.id);
+      if (mine?.treasuryBalance !== 900_000 || shown.get(reversalId) !== mine?.treasuryBalance) {
+        problems.push(`bank treasury balance ${mine?.treasuryBalance}, last running balance ${shown.get(reversalId)}; both should be 900000`);
+      }
+      assertNoProblems(problems);
+      return `running balances ${JSON.stringify(expected.map(([, id]) => shown.get(id) ?? null))}`;
+    });
+  }
+
   const reconcileId = 'reg_treasury_reconcile_rows_td_511';
   if (shouldRun(reconcileId, 'td511', 'treasury', 'reconcile', 'package4')) {
     await runCase(results, reconcileId, 'v9.0.103: bank reconciliation refuses a row of another bank or a voided row with 422 and the list, audits only the rows it changed and stamps reconciled_at with the server UTC time (TD-511)', async () => {

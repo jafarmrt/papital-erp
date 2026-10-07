@@ -49,6 +49,8 @@ export const SYSTEM_ADMIN_ONLY_ROUTES = new Set([
   'POST /api/accounting/accounts/seed-default', 'POST /api/accounting/accounts/seed-standard',
   'GET /api/system/health', 'GET /api/system/env', 'GET /api/system/date-calendar-report',
   'GET /api/system/reconciliation-check', 'POST /api/system/reconciliation-fix',
+  // v9.0.112 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال فقط با مدیر سیستم
+  'POST /api/warehouses/:id/reactivate',
 ]);
 
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
