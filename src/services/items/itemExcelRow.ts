@@ -3,7 +3,6 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { items, itemPrices, warehouses } from '../../db/schema.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { DocumentService } from '../document.service.js';
-import { resolveWarehouseCode } from '../inventory/warehouseResolver.js';
 import { money, Money } from '../../lib/money.js';
 import { WAC_COLUMNS, extractRowPriceColumns, unknownPriceColumnMessage } from '../../lib/items/excelPriceColumns.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
@@ -89,31 +88,23 @@ export function newItemType(fields: RowFields, typeFilter: string | undefined): 
   return fields.itemType ?? (typeFilter === 'raw_material' ? 'raw_material' : 'product');
 }
 
+/**
+ * v9.0.119 (TD-649، تصمیم ت۳ الف): ستون‌های موجودی یک ردیف. `byWarehouse` فقط انبارهایی که سلولشان پر است؛ `total` ستون
+ * «موجودی کل» اگر پر است. پیش‌تر «موجودی کل» بی ستون انبار در انبار پیش‌فرض گذاشته و اختلاف همان انبار اعمال می‌شد:
+ * کالای ۱۰ واحدی «انبار دوم» با فایل «موجودی کل = 10» به ۲۰ می‌رسید.
+ */
 export interface RowStock {
-  stockValues: Record<string, number>;
-  currentStock: number;
-  hasCustomStockInRow: boolean;
+  byWarehouse: Record<string, number>;
+  total?: number;
 }
 
-export function readRowStock(row: Row, whs: Warehouse[], defaultWhCode: string): RowStock {
-  const stockValues: Record<string, number> = {};
-  let computedStock = 0;
-  let hasCustomStockInRow = false;
+export function readRowStock(row: Row, whs: Warehouse[]): RowStock {
+  const byWarehouse: Record<string, number> = {};
   for (const w of whs) {
-    const val = row[`موجودی انبار ${w.name}`] ?? row[`موجودی ${w.name}`] ?? row[w.name] ?? row[`stock_${w.code}`];
-    if (val !== undefined && val !== '' && !isNaN(Number(val))) {
-      stockValues[w.code] = Number(val);
-      computedStock += Number(val);
-      hasCustomStockInRow = true;
-    }
+    const v = numberCell(row, [`موجودی انبار ${w.name}`, `موجودی ${w.name}`, w.name, `stock_${w.code}`]);
+    if (v !== undefined) byWarehouse[w.code] = v;
   }
-  const currentStock = Number(row['موجودی کل'] || row['موجودی فعلی'] || row['موجودی']) || computedStock;
-  const totalWhStock = Object.values(stockValues).reduce((a, b) => a + Number(b || 0), 0);
-  if (totalWhStock === 0 && currentStock > 0) {
-    stockValues[defaultWhCode] = currentStock;
-    hasCustomStockInRow = true;
-  }
-  return { stockValues, currentStock, hasCustomStockInRow };
+  return { byWarehouse, total: numberCell(row, ['موجودی کل', 'موجودی فعلی', 'موجودی']) };
 }
 
 /** اختلاف موجودی هر انبار که ورود باید ثبت کند */
@@ -122,15 +113,47 @@ export interface StockChange {
   diff: number;
 }
 
-export async function plannedStockChanges(tx: DbExecutor, stock: RowStock, existingStocks: Record<string, number>, existingTotal: number): Promise<StockChange[]> {
-  if (stock.hasCustomStockInRow && Object.keys(stock.stockValues).length > 0) {
-    return Object.keys(stock.stockValues)
-      .map(whCode => ({ whCode, diff: Number(stock.stockValues[whCode] || 0) - Number(existingStocks[whCode] || 0) }))
-      .filter(c => c.diff !== 0);
+const QTY_EPSILON = 1e-6;
+const sameQty = (a: number, b: number) => Math.abs(a - b) < QTY_EPSILON;
+
+/**
+ * گردش‌های موجودی ردیف، یا پیام خطای ردیف (آن‌گاه هیچ بخشی از ردیف ثبت نمی‌شود):
+ * - ستون انبار: موجودی همان انبارها؛ انبارهای دیگر بی‌تغییر؛ «موجودی کل» پر باید با جمع همه انبارها برابر باشد.
+ * - فقط «موجودی کل»: کالای تازه در انبار پیش‌فرض؛ کالای موجود اگر کل برابر است بی‌تغییر، اگر همه موجودی‌اش در انبار
+ *   پیش‌فرض است همان انبار، وگرنه خطای «موجودی هر انبار لازم است».
+ * - موجودی منفی و تغییر موجودی انبار غیرفعال خطای ردیف است (پیش‌تر کل ورود با خطای پایگاه‌داده برمی‌گشت).
+ */
+export function planStockChanges(
+  stock: RowStock,
+  existing: { byCode: Record<string, number>; total: number },
+  whs: Warehouse[],
+  defaultWhCode: string,
+): { changes: StockChange[] } | { error: string } {
+  const targets: Record<string, number> = { ...existing.byCode };
+  const explicit = Object.keys(stock.byWarehouse);
+  if (explicit.length > 0) {
+    for (const code of explicit) targets[code] = stock.byWarehouse[code];
+    const sum = Object.values(targets).reduce((a, b) => a + b, 0);
+    if (stock.total !== undefined && !sameQty(sum, stock.total)) {
+      return { error: `«موجودی کل» (${stock.total}) با جمع موجودی انبارها (${sum}) برابر نیست. ردیف ثبت نشد.` };
+    }
+  } else if (stock.total !== undefined && !sameQty(stock.total, existing.total)) {
+    const inDefault = existing.byCode[defaultWhCode] ?? 0;
+    if (!sameQty(inDefault, existing.total)) {
+      return { error: 'این کالا در چند انبار موجودی دارد؛ ستون موجودی هر انبار لازم است و «موجودی کل» تنها پذیرفته نمی‌شود. ردیف ثبت نشد.' };
+    }
+    targets[defaultWhCode] = stock.total;
   }
-  const finalStock = (stock.hasCustomStockInRow ? stock.currentStock : existingTotal) ?? 0;
-  const diff = finalStock - existingTotal;
-  return diff === 0 ? [] : [{ whCode: await resolveWarehouseCode(tx, ''), diff }];
+  const changes: StockChange[] = [];
+  for (const [whCode, qty] of Object.entries(targets)) {
+    const diff = qty - (existing.byCode[whCode] ?? 0);
+    if (sameQty(diff, 0)) continue;
+    if (qty < 0) return { error: `موجودی منفی (${qty}) پذیرفته نیست. ردیف ثبت نشد.` };
+    const wh = whs.find(w => w.code === whCode);
+    if (wh && wh.isActive !== 1) return { error: `انبار «${wh.name}» غیرفعال است و موجودی آن از اکسل تغییر نمی‌کند. ردیف ثبت نشد.` };
+    changes.push({ whCode, diff });
+  }
+  return { changes };
 }
 
 export interface MovementContext {

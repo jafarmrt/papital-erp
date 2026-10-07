@@ -4,7 +4,7 @@ import request from 'supertest';
 import { and, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm, pool } from '../../db/drizzle.js';
-import { itemPrices, items, roles, users } from '../../db/schema.js';
+import { itemPrices, items, roles, users, warehouses } from '../../db/schema.js';
 import { withTestMarker } from '../fixtures/testMarker.js';
 import { money } from '../../lib/money.js';
 
@@ -33,6 +33,9 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_excel_name_match_never_changes_code_td_651',
       'v9.0.118: the Excel import finds items by code only; a name used by another item is refused and the code never changes (TD-651)',
       ['td651', 'excel', 'package5'], codeOnlyMatchCase],
+    ['inv_excel_total_stock_column_no_phantom_surplus_td_649',
+      'v9.0.119: «موجودی کل» alone changes only an item whose stock is all in the default warehouse; otherwise per-warehouse columns are required and must add up (TD-649)',
+      ['td649', 'excel', 'stock', 'inventory', 'package5'], totalStockCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -49,6 +52,7 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
     } finally {
       if (ctx.itemIds.length > 0) await orm.update(items).set({ isDeleted: 1 }).where(inArray(items.id, ctx.itemIds)).catch(() => undefined);
       if (ctx.userIds.length > 0) await orm.update(users).set({ isDeleted: 1 }).where(inArray(users.id, ctx.userIds)).catch(() => undefined);
+      if (ctx.warehouseIds.length > 0) await orm.update(warehouses).set({ isActive: 0 }).where(inArray(warehouses.id, ctx.warehouseIds)).catch(() => undefined);
       if (ctx.roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, ctx.roleIds)).catch(() => undefined);
     }
   }
@@ -59,6 +63,7 @@ interface Ctx {
   itemIds: number[];
   userIds: number[];
   roleIds: number[];
+  warehouseIds: number[];
   post(url: string, body: unknown): Promise<request.Response>;
   /** a session of a new user whose role holds exactly these permissions */
   as(permissions: string[]): Promise<(url: string, body: unknown) => Promise<request.Response>>;
@@ -77,6 +82,7 @@ async function makeCtx(): Promise<Ctx> {
     itemIds: [],
     userIds,
     roleIds,
+    warehouseIds: [],
     as: async (permissions) => {
       const role = await createTestRole({ permissions });
       roleIds.push(role.id);
@@ -227,6 +233,42 @@ async function codeOnlyMatchCase(ctx: Ctx): Promise<string> {
   if (after.name !== renamed || after.code !== it.code) wrong.push(`rename ${JSON.stringify(after)}`);
   if (wrong.length > 0) throw new Error(wrong.join('; '));
   return 'matched by code only; duplicate name refused; code kept in every case';
+}
+
+async function stockByWarehouse(itemId: number): Promise<Record<string, number>> {
+  const { ItemWarehouseStockService } = await import('../../services/inventory/itemWarehouseStock.service.js');
+  return (await ItemWarehouseStockService.getStockSnapshot(orm, itemId)).byCode;
+}
+
+/**
+ * TD-649 / B05-03: on v9.0.118 an item with 10 units only in a second warehouse and a «موجودی کل = 10» row (unchanged) got
+ * 10 more units in the default warehouse (total 20) and a 3,000,000 surplus voucher, with no error.
+ */
+async function totalStockCase(ctx: Ctx): Promise<string> {
+  const { createTestItem, createTestWarehouse } = await import('../fixtures/factories.js');
+  const { getDefaultWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
+  const main = (await getDefaultWarehouseCode(orm)) as string;
+  const wrong: string[] = [];
+  const w2 = await createTestWarehouse();
+  ctx.warehouseIds.push(w2.id);
+  const split = await createTestItem({ code: `1404-B-${ctx.serial()}-06`, name: withTestMarker('دستبند دو انبار td649'), category: 'دستبند', weightedAverageCost: 300000, stocks: { [w2.code]: 10 } });
+  const single = await createTestItem({ code: `1404-B-${ctx.serial()}-07`, name: withTestMarker('دستبند یک انبار td649'), category: 'دستبند', weightedAverageCost: 300000, stocks: { '': 4 } });
+  ctx.itemIds.push(split.id, single.id);
+  const run = (row: Row) => ctx.post('/api/items/unified-import', { rows: [{ 'کد کالا': split.code, 'نام محصول': split.name, ...row }] });
+
+  const same = await run({ 'موجودی کل': 10 });
+  if (errorText(same) || JSON.stringify(await stockByWarehouse(split.id)) !== JSON.stringify({ [w2.code]: 10 })) wrong.push(`unchanged total: ${errorText(same)} ${JSON.stringify(await stockByWarehouse(split.id))}`);
+  const more = await run({ 'موجودی کل': 12 });
+  if (!errorText(more).includes('موجودی هر انبار لازم است') || (await itemState(split.id)).stock !== 10) wrong.push(`total alone on a second-warehouse item: ${errorText(more)} stock ${(await itemState(split.id)).stock}`);
+  const mismatch = await run({ [`موجودی انبار ${w2.name}`]: 8, 'موجودی کل': 9 });
+  if (!errorText(mismatch).includes('برابر نیست') || (await itemState(split.id)).stock !== 10) wrong.push(`mismatched total: ${errorText(mismatch)}`);
+  const perWarehouse = await run({ [`موجودی انبار ${w2.name}`]: 8 });
+  if (errorText(perWarehouse) || JSON.stringify(await stockByWarehouse(split.id)) !== JSON.stringify({ [w2.code]: 8 })) wrong.push(`per-warehouse column: ${errorText(perWarehouse)} ${JSON.stringify(await stockByWarehouse(split.id))}`);
+
+  const singleRes = await ctx.post('/api/items/unified-import', { rows: [{ 'کد کالا': single.code, 'نام محصول': single.name, 'موجودی کل': 6 }] });
+  if (errorText(singleRes) || (await stockByWarehouse(single.id))[main] !== 6) wrong.push(`default-only item: ${errorText(singleRes)} ${JSON.stringify(await stockByWarehouse(single.id))}`);
+  if (wrong.length > 0) throw new Error(wrong.join('; '));
+  return 'unchanged total kept; total alone refused for a second-warehouse item; mismatch refused; per-warehouse and default-only rows applied';
 }
 
 /** TD-662 / B05-16: on v9.0.114 each import of the same file soft-deleted and re-inserted every price (history 2 → 6). */

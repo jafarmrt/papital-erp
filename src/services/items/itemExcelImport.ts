@@ -4,7 +4,7 @@ import { items, warehouses } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { ItemPricingService } from './itemPricing.service.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
-import { resolveWarehouseCode, getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
+import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
@@ -12,7 +12,7 @@ import { money } from '../../lib/money.js';
 import { ITEM_IMPORT_DENIED_MESSAGES, type ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import {
   EXCEL_DOCUMENT_REF, ITEM_FIELD_KEYS, applyStockChange, changedRowPrices, codeFormatError, findItemByCode, deniedStockPermissions,
-  newItemType, plannedStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue,
+  newItemType, planStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue,
   type ItemRow, type Row, type RowFields, type RowStock, type Warehouse,
 } from './itemExcelRow.js';
 
@@ -72,7 +72,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
   const name = String(rawName || '').trim();
   const push = (message: string) => state.errors.push({ row: rowNum, name, code, message });
   const fields = readRowFields(row);
-  const stock = readRowStock(row, ctx.whs, ctx.defaultWhCode);
+  const stock = readRowStock(row, ctx.whs);
 
   if (!code) {
     push('کد کالا نامعتبر است (خالی می‌باشد).');
@@ -110,7 +110,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
   const currentUser = ctx.actor.username || 'مدیر سیستم';
   const targetItemId = matchedItem
     ? await updateExistingItem(ctx, matchedItem, { code, name, fields, stock, todayStr, currentUser, push })
-    : await createNewItem(ctx, { code, name, fields, stock, todayStr, currentUser });
+    : await createNewItem(ctx, { code, name, fields, stock, todayStr, currentUser, push });
   if (targetItemId === null) return;
 
   const changedPrices = await changedRowPrices(tx, targetItemId, readRowPrices(row, ctx.strategies, push));
@@ -128,9 +128,10 @@ interface RowInput {
   stock: RowStock;
   todayStr: string;
   currentUser: string;
+  push: (message: string) => void;
 }
 
-async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, input: RowInput & { push: (m: string) => void }): Promise<number | null> {
+async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, input: RowInput): Promise<number | null> {
   const { tx, state, perms } = ctx;
   const { name, fields, stock, push } = input;
   const targetItemId = matchedItem.id;
@@ -150,6 +151,12 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
     return null;
   }
   const itemWac = fileWac && existingSnapshot.total <= 0 ? fileWac : currentWac;
+  // v9.0.119 (TD-649): موجودی پیش از هر نوشتن سنجیده می‌شود؛ ناسازگاری ستون‌های موجودی کل ردیف را رد می‌کند
+  const plan = planStockChanges(stock, existingSnapshot, ctx.whs, ctx.defaultWhCode);
+  if ('error' in plan) {
+    push(plan.error);
+    return null;
+  }
 
   const updateSet = {
     name: name || matchedItem.name,
@@ -172,7 +179,7 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
     await tx.update(items).set(updateSet).where(eq(items.id, targetItemId));
   }
 
-  const changes = await plannedStockChanges(tx, stock, existingSnapshot.byCode, existingSnapshot.total);
+  const changes = plan.changes;
   const denied = deniedStockPermissions(changes, perms);
   if (denied.length > 0) {
     denied.forEach(k => push(ITEM_IMPORT_DENIED_MESSAGES[k]));
@@ -189,9 +196,14 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
   return targetItemId;
 }
 
-async function createNewItem(ctx: ImportContext, input: RowInput): Promise<number> {
+async function createNewItem(ctx: ImportContext, input: RowInput): Promise<number | null> {
   const { tx, state } = ctx;
   const { code, name, fields, stock } = input;
+  const plan = planStockChanges(stock, { byCode: {}, total: 0 }, ctx.whs, ctx.defaultWhCode);
+  if ('error' in plan) {
+    input.push(plan.error);
+    return null;
+  }
   const itemWac = money(fields.weightedAverageCost);
   const [newItem] = await tx.insert(items).values({
     name: name || 'کالای بدون نام',
@@ -212,15 +224,13 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
   const targetItemId = newItem.id;
 
   const movement = { itemId: targetItemId, price: itemWac, date: input.todayStr, user: input.currentUser };
-  const opening = stock.hasCustomStockInRow && Object.keys(stock.stockValues).length > 0
-    ? Object.entries(stock.stockValues).map(([whCode, qty]) => ({ whCode, diff: Number(qty || 0) }))
-    : [{ whCode: await resolveWarehouseCode(tx, ''), diff: stock.currentStock }];
-  for (const change of opening.filter(c => c.diff > 0)) {
+  const opening = plan.changes;
+  for (const change of opening) {
     await applyStockChange(tx, movement, change, { in: 'موجودی اولیه از فایل اکسل', out: '' });
   }
   // v8.0.3 (TD-262): کالای تازه با موجودی، همان سند افتتاحیه فرم کالا را می‌گیرد (موجودی × WAC / سرمایه اولیه)؛
   // همین‌جا صادر می‌شود تا ردیف بعدی همین فایل برای همین کد فقط اختلاف را به سند اصلاح موجودی ببرد
-  if (opening.some(c => c.diff > 0)) {
+  if (opening.length > 0) {
     await ItemOpeningService.issueItemOpeningVoucher(targetItemId, { userId: ctx.actor.id, username: input.currentUser, tx });
   }
   state.createdCount++;
