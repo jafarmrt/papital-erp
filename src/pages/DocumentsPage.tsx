@@ -115,6 +115,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
             onUpdateItemQty={actions.handleUpdateItemQty}
             onUpdateItemPrice={actions.handleUpdateItemPrice}
             onRemove={actions.handleRemove}
+            priceLocked={form.returnTermsLocked}
             canEditItem={form.canCreateOrEditItem}
             onEditItem={(item) => {
               form.setModalItemToEdit(item);

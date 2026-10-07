@@ -30,7 +30,7 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
   const {
     actionType, docType, setDocType, refNumber, setRefNumber, currency, setCurrency, exchangeRate, setExchangeRate,
     selectedProjectId, setSelectedProjectId, returnInvoiceRef, setReturnInvoiceRef, returnInvoiceId, setReturnInvoiceId,
-    handleFetchReturnInvoice, location, setLocation, date, setDate, notes, setNotes,
+    returnTermsLocked, handleFetchReturnInvoice, location, setLocation, date, setDate, notes, setNotes,
   } = form;
 
   return (
@@ -76,6 +76,7 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
               className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
               value={currency} 
               onChange={e => setCurrency(e.target.value)}
+              disabled={returnTermsLocked}
             >
               <option value="IRR">ریال (IRR)</option>
               <option value="USD">دلار (USD)</option>
@@ -83,7 +84,7 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
               <option value="AED">درهم (AED)</option>
               <option value="GBP">پوند (GBP)</option>
             </select>
-            <ExchangeRateField currency={currency} value={exchangeRate} onChange={setExchangeRate} />
+            <ExchangeRateField currency={currency} value={exchangeRate} onChange={setExchangeRate} disabled={returnTermsLocked} />
           </div>
         )}
 
@@ -130,7 +131,7 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
             </div>
             <p className="text-[10px] text-slate-500 mt-1">
               {returnInvoiceId !== null
-                ? 'کالاها با بهای تمام‌شده خروج همین فاکتور وارد انبار می‌شوند.'
+                ? 'ارز، نرخ و قیمت خالص هر کالا از همین فاکتور است و کالاها با بهای تمام‌شده خروج همین فاکتور وارد انبار می‌شوند.'
                 : 'بدون فاکتور مرجع، کالا با میانگین موزون فعلی وارد انبار می‌شود.'}
             </p>
           </div>

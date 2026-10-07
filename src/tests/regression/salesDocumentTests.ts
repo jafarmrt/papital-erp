@@ -19,6 +19,9 @@ export async function runSalesDocumentTests(shouldRun: ShouldRun): Promise<TestC
     ['reg_void_invoice_with_receipts_td_779',
       'v9.0.245: a document with a live treasury receipt is not voided (409 naming it); the receipt is moved on account or to another document of the same party, then the void goes through (TD-779)',
       ['td779', 'documents', 'void', 'treasury', 'package8'], voidWithReceiptsCase],
+    ['reg_return_price_from_invoice_td_788',
+      'v9.0.246: a sales return of an invoice takes its currency, rate and net unit price from that invoice; another price, currency, rate or a line discount is 422, also on draft edit and finalize (TD-788)',
+      ['td788', 'documents', 'return', 'currency', 'package8'], returnPriceFromInvoiceCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -201,4 +204,105 @@ async function voidWithReceiptsCase(h: Harness, wrong: string[]): Promise<string
   const movedVoided = await h.put(`/api/accounting/treasury/${receiptId}/document`, { documentId: null });
   if (movedVoided.status !== 409 || codeOf(movedVoided) !== 'TREASURY_ROW_NOT_RELINKABLE') wrong.push(`moving a voided receipt answered ${brief(movedVoided)}, expected 409 TREASURY_ROW_NOT_RELINKABLE`);
   return 'a settled invoice is not voided (409 naming the receipt); accounting.view cannot move it; the treasury user moves it on account with its voucher unchanged and the void goes through; it moves to another invoice of the party but not to a voided invoice or another party\'s; a voided receipt does not hold the invoice and is not moved';
+}
+
+interface ReturnVoucherRow { code: string; debit: number; credit: number; currency: string; rate: number | null }
+
+/** B08-19 (TD-788): the amount, currency and rate of a sales return came from the request body, not from its invoice */
+async function returnPriceFromInvoiceCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const { AccountMappingService } = await import('../../services/accounting/accountMapping.service.js');
+  const receivable = await AccountMappingService.getTradeReceivablesAccount();
+  if (!receivable) throw new Error('the trade receivables account is not mapped');
+  const codeOf = (res: { body?: unknown }) => (res.body as { code?: string })?.code;
+  const returnsOf = async (invoiceId: number) => Number((await h.q(`SELECT COUNT(*)::int AS n FROM documents WHERE return_of_document_id = $1`, [invoiceId]))[0]?.n);
+  const linesOf = async (docId: number) => (await h.q(
+    `SELECT unit_price::float8 AS price, discount::float8 AS discount FROM document_items WHERE document_id = $1 AND is_deleted = 0 ORDER BY id`, [docId],
+  )) as Array<{ price: number; discount: number }>;
+  const headOf = async (docId: number) => (await h.q(`SELECT currency, exchange_rate::float8 AS rate, status FROM documents WHERE id = $1`, [docId]))[0];
+  const customerCredit = async (docId: number) => {
+    const rows = (await h.q(
+      `SELECT a.code, i.debit::float8 AS debit, i.credit::float8 AS credit, COALESCE(i.currency, v.currency, 'IRR') AS currency,
+              i.exchange_rate::float8 AS rate
+         FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
+        WHERE v.source_document_id = $1 AND v.is_deleted = 0 AND i.is_deleted = 0 AND i.account_id = $2`,
+      [docId, receivable.id],
+    )) as unknown as ReturnVoucherRow[];
+    return rows;
+  };
+  const expectRefused = async (label: string, res: { status: number; body?: unknown }, code: string, invoiceId: number, before: number) => {
+    if (res.status !== 422 || codeOf(res) !== code) wrong.push(`${label} answered ${brief(res)}, expected 422 ${code}`);
+    if (await returnsOf(invoiceId) !== before) wrong.push(`${label} still recorded a return`);
+  };
+  const expectCredit = async (label: string, docId: number, amount: number, currency: string, rate: number | null) => {
+    const rows = await customerCredit(docId);
+    const credit = rows.reduce((s, r) => s + r.credit, 0);
+    const okRows = rows.length > 0 && rows.every(r => r.currency === currency && (rate === null || Math.abs(Number(r.rate) - rate) < 0.001));
+    if (Math.abs(credit - amount) > 0.0001 || !okRows) {
+      wrong.push(`${label}: the customer was credited ${JSON.stringify(rows)}, expected ${amount} ${currency}${rate ? ` at rate ${rate}` : ''}`);
+    }
+  };
+
+  // 1) rial invoice 2 x 1,000,000 with a line discount of 200,000: the customer owes 1,800,000, 900,000 per unit
+  const a = await f.item(10, 400_000);
+  const invoice = await h.post('/api/documents', f.doc('invoice', 'final', [{ itemId: a, quantity: 2, unit_price: 1_000_000, discount: 200_000, location: f.wh }]));
+  const invoiceId = docIdOf(invoice);
+  if (invoice.status !== 200) throw new Error(`setup: invoice ${brief(invoice)}`);
+  const ret = (lines: Array<Record<string, unknown>>, extra: Record<string, unknown> = {}, status = 'final', of = invoiceId) =>
+    h.post('/api/documents', f.doc('return', status, lines.map(l => ({ itemId: a, quantity: 1, location: f.wh, ...l })), { returnOfDocumentId: of, ...extra }));
+
+  await expectRefused('a return of 1 at 5,000,000', await ret([{ unit_price: 5_000_000 }]), 'RETURN_PRICE_MISMATCH', invoiceId, 0);
+  await expectRefused('a return at the gross price with its own discount', await ret([{ unit_price: 1_000_000, discount: 100_000 }]), 'RETURN_PRICE_MISMATCH', invoiceId, 0);
+  await expectRefused('a rial return of the rial invoice in USD', await ret([{ unit_price: 900_000 }], { currency: 'USD', exchangeRate: 600_000 }), 'RETURN_CURRENCY_MISMATCH', invoiceId, 0);
+  const filled = await ret([{}]);
+  if (filled.status !== 200) wrong.push(`a return of 1 without a price answered ${brief(filled)}, expected 200`);
+  else {
+    const lines = await linesOf(docIdOf(filled));
+    if (lines.length !== 1 || lines[0].price !== 900_000 || lines[0].discount !== 0) wrong.push(`the return line was stored as ${JSON.stringify(lines)}, expected price 900,000 and no discount`);
+    await expectCredit('the return of 1 without a price', docIdOf(filled), 900_000, 'IRR', null);
+  }
+  const net = await ret([{ unit_price: 900_000 }]);
+  if (net.status !== 200) wrong.push(`a return of 1 at the net price 900,000 answered ${brief(net)}, expected 200`);
+  else await expectCredit('the return of 1 at the net price', docIdOf(net), 900_000, 'IRR', null);
+
+  // 2) USD invoice 2 x 100 with a discount of 20 at rate 600,000: the customer owes 180 USD
+  const b = await f.item(10, 400_000);
+  const usd = await h.post('/api/documents', f.doc('invoice', 'final', [{ itemId: b, quantity: 2, unit_price: 100, discount: 20, location: f.wh }], { currency: 'USD', exchangeRate: 600_000 }));
+  const usdId = docIdOf(usd);
+  if (usd.status !== 200) throw new Error(`setup: USD invoice ${brief(usd)}`);
+  const usdRet = (extra: Record<string, unknown>, line: Record<string, unknown> = {}, status = 'final') =>
+    h.post('/api/documents', f.doc('return', status, [{ itemId: b, quantity: 2, location: f.wh, ...line }], { returnOfDocumentId: usdId, ...extra }));
+  // the stock page sent IRR, the gross price and no discount: 200 rials instead of 180 USD
+  await expectRefused('a return of the USD invoice in IRR at price 100', await usdRet({ currency: 'IRR' }, { unit_price: 100 }), 'RETURN_CURRENCY_MISMATCH', usdId, 0);
+  await expectRefused('a USD return at rate 500,000', await usdRet({ currency: 'USD', exchangeRate: 500_000 }, { unit_price: 90 }), 'RETURN_EXCHANGE_RATE_MISMATCH', usdId, 0);
+  await expectRefused('a USD return at the gross price 100', await usdRet({ currency: 'USD', exchangeRate: 600_000 }, { unit_price: 100 }), 'RETURN_PRICE_MISMATCH', usdId, 0);
+
+  // 3) a draft takes the invoice terms, an edit cannot change them, and it finalizes into 180 USD at 600,000
+  const draft = await usdRet({}, {}, 'draft');
+  const draftId = docIdOf(draft);
+  const draftHead = await headOf(draftId);
+  const draftLines = await linesOf(draftId);
+  if (draft.status !== 200 || draftHead?.currency !== 'USD' || Number(draftHead?.rate) !== 600_000 || draftLines[0]?.price !== 90) {
+    wrong.push(`a draft return without currency or price answered ${brief(draft)} and stored ${JSON.stringify({ head: draftHead, lines: draftLines })}, expected USD at 600,000 and price 90`);
+  }
+  const edited = await h.put(`/api/documents/${draftId}`, { currency: 'IRR', items: [{ itemId: b, quantity: 2, unit_price: 100, location: f.wh }] });
+  if (edited.status !== 422 || codeOf(edited) !== 'RETURN_CURRENCY_MISMATCH') wrong.push(`editing the draft return to IRR answered ${brief(edited)}, expected 422 RETURN_CURRENCY_MISMATCH`);
+  const editedPrice = await h.put(`/api/documents/${draftId}`, { items: [{ itemId: b, quantity: 1, unit_price: 100, location: f.wh }] });
+  if (editedPrice.status !== 422 || codeOf(editedPrice) !== 'RETURN_PRICE_MISMATCH') wrong.push(`editing the draft return price answered ${brief(editedPrice)}, expected 422 RETURN_PRICE_MISMATCH`);
+  // a draft stored before this version with the gross price is not finalized until it is edited
+  await h.q(`UPDATE document_items SET unit_price = 100 WHERE document_id = $1 AND is_deleted = 0`, [draftId]);
+  const legacyFinalize = await h.put(`/api/documents/${draftId}/finalize`, {});
+  if (legacyFinalize.status !== 422 || codeOf(legacyFinalize) !== 'RETURN_PRICE_MISMATCH' || (await headOf(draftId))?.status !== 'draft') {
+    wrong.push(`finalizing a draft return stored at the gross price answered ${brief(legacyFinalize)}, expected 422 RETURN_PRICE_MISMATCH and a draft`);
+  }
+  const fixed = await h.put(`/api/documents/${draftId}`, { items: [{ itemId: b, quantity: 2, location: f.wh }] });
+  const finalized = await h.put(`/api/documents/${draftId}/finalize`, {});
+  if (fixed.status !== 200 || finalized.status !== 200) wrong.push(`editing and finalizing the draft return answered ${brief(fixed)} and ${brief(finalized)}, expected 200 and 200`);
+  else await expectCredit('the finalized USD return', draftId, 180, 'USD', 600_000);
+
+  // 4) a return without an invoice still takes the user's price
+  const free = await h.post('/api/documents', f.doc('return', 'final', [{ itemId: a, quantity: 1, unit_price: 5_000_000, location: f.wh }]));
+  if (free.status !== 200) wrong.push(`a return without an invoice answered ${brief(free)}, expected 200`);
+  else await expectCredit('the return without an invoice', docIdOf(free), 5_000_000, 'IRR', null);
+  return 'a rial invoice 2 x 1,000,000 less 200,000: returns at 5,000,000, with a discount or in USD are 422, a return of 1 is 900,000 with or without the price; a USD invoice 2 x 100 less 20 at 600,000: IRR, another rate or the gross price are 422, a draft takes USD, 600,000 and 90, is not edited away from them, a legacy gross-price draft is not finalized, and the fixed draft credits 180 USD at 600,000; a return without an invoice keeps its price';
 }

@@ -24,6 +24,8 @@ interface DocItemsTableProps {
   onRemove: (itemId: number) => void;
   onEditItem?: (item: Item) => void;
   canEditItem?: boolean;
+  /** v9.0.246 (TD-788): قیمت برگشتِ دارای فاکتور مرجع قیمت خالص همان فاکتور است و ویرایش نمی‌شود */
+  priceLocked?: boolean;
 }
 
 /**
@@ -40,7 +42,8 @@ export function DocItemsTable({
   onUpdateItemPrice,
   onRemove,
   onEditItem,
-  canEditItem = false
+  canEditItem = false,
+  priceLocked = false
 }: DocItemsTableProps) {
   if (docItems.length === 0) {
     return (
@@ -140,15 +143,21 @@ export function DocItemsTable({
                     <>
                       <td className="p-3">
                         <div className="flex items-center justify-center gap-1">
-                          <input 
-                            type="number" 
-                            min="0" 
-                            step="any"
-                            value={d.unitPrice} 
-                            onChange={(e) => onUpdateItemPrice(i, Number(e.target.value))} 
-                            className="w-32 border border-slate-200 rounded-xl px-2.5 py-1 text-left font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" 
-                            dir="ltr"
-                          />
+                          {priceLocked ? (
+                            <span className="font-mono font-bold text-slate-900" title="قیمت خالص هر واحد در فاکتور مرجع">
+                              {formatPersianPrice(d.unitPrice, currencyLabel, 4)}
+                            </span>
+                          ) : (
+                            <input 
+                              type="number" 
+                              min="0" 
+                              step="any"
+                              value={d.unitPrice} 
+                              onChange={(e) => onUpdateItemPrice(i, Number(e.target.value))} 
+                              className="w-32 border border-slate-200 rounded-xl px-2.5 py-1 text-left font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" 
+                              dir="ltr"
+                            />
+                          )}
                         </div>
                       </td>
                       <td className="p-3 text-center font-mono font-bold text-slate-900">

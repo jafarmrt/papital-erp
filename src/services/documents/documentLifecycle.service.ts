@@ -7,6 +7,7 @@ import { resolveDocumentVat } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { netLineUnitPrice } from './purchaseLineCost.js';
 import { assertReturnWithinSold, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
+import { enforceReturnInvoiceTerms } from './salesReturnPrice.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -143,10 +144,21 @@ export class DocumentLifecycleService {
             });
           }
 
+          // v9.0.246 (TD-788، تصمیم ت۱۰ الف): پیش‌نویس برگشتِ دارای فاکتور مرجع فقط با ارز، نرخ و قیمت خالص همان فاکتور نهایی
+          // می‌شود؛ پیش‌نویس قدیمی که با آن نمی‌خواند ۴۲۲ می‌گیرد و باید ویرایش شود
+          const returnTerms = targetType === 'return' && doc.returnOfDocumentId
+            ? await enforceReturnInvoiceTerms(tx, Number(doc.returnOfDocumentId), {
+              currency: doc.currency,
+              rate: { exchangeRate: options?.exchangeRate ?? doc.exchangeRate?.toString() },
+              lines: docLines.map(l => ({ itemId: l.itemId, quantity: l.quantity, unit_price: fin(l.unitPrice).toString(), discount: fin(l.discount).toString() })),
+              stage: 'finalize',
+            })
+            : null;
+
           // v7.0.63 (TD-198): سند ارزی بدون نرخ تسعیر نهایی نمی‌شود (پیش از گردش انبار، چون قیمت ورود با آن به ریال می‌رود)؛ نرخ ارسالی روی خود سند ذخیره می‌شود
           const finalExchangeRate = resolveDocumentExchangeRate({
             currency: doc.currency,
-            input: { exchangeRate: options?.exchangeRate },
+            input: { exchangeRate: returnTerms ? returnTerms.exchangeRate : options?.exchangeRate },
             existing: doc.exchangeRate,
           });
 

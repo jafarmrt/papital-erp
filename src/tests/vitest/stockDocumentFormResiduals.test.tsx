@@ -34,7 +34,10 @@ function apiResponse(url: string, init?: { method?: string }): unknown {
   if (url === '/documents/next-ref?type=return') return { nextRef: 'RT-1001' };
   if (url === '/documents/next-ref?type=remittance') return { nextRef: 'RM-2001' };
   if (url === `/documents/by-ref/${encodeURIComponent(RETURN_REF)}?type=invoice`) {
-    return { id: 9, buyer_name: 'نگار کریمی', items: [{ item_id: 5, name: 'گردنبند نقره', code: 'P-5', unit: 'عدد', quantity: 1, unit_price: 1000 }] };
+    return {
+      id: 9, buyer_name: 'نگار کریمی', currency: 'USD', exchangeRate: 600000,
+      items: [{ item_id: 5, name: 'گردنبند نقره', code: 'P-5', unit: 'عدد', quantity: 1, unit_price: 1000 }],
+    };
   }
   if (url === '/documents' && init?.method === 'POST') return { id: 10 };
   if (url.startsWith('/items?search=') || url.startsWith('/items/options?search=')) return { data: [] };
@@ -101,8 +104,8 @@ describe('stock document form residuals (TD-234)', () => {
     fireEvent.click(screen.getByText('جستجو'));
     expect(await screen.findByText('گردنبند نقره')).toBeTruthy();
 
-    fireEvent.change(currencySelect(), { target: { value: 'USD' } });
-    fireEvent.change(screen.getByLabelText(/نرخ تسعیر/), { target: { value: '600000' } });
+    // v9.0.246 (TD-788): ارز و نرخ برگشت از فاکتور مرجع می‌آید (پیش‌تر کاربر آن را در فرم انتخاب می‌کرد)
+    expect(currencySelect().value).toBe('USD');
     fireEvent.change(screen.getByLabelText('تاریخ سند'), { target: { value: '' } });
 
     const submit = screen.getAllByRole('button').find(b => b.textContent?.includes('ثبت نهایی'))!;
@@ -110,6 +113,7 @@ describe('stock document form residuals (TD-234)', () => {
     await waitFor(() => expect(postedDocument().date).toBeDefined());
     expect(postedDocument().date).toBe('1405/07/10');
     expect(postedDocument().currency).toBe('USD');
+    expect(postedDocument().exchangeRate).toBe(600000);
     await waitFor(() => expect(currencySelect().value).toBe('IRR'));
     expect(screen.queryByLabelText(/نرخ تسعیر/)).toBeNull();
   });

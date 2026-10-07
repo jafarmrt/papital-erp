@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.246 — v9.0.246 — A Sales Return Takes Its Invoice's Currency, Rate and Net Price
+- **Documents:** a sales return of an invoice takes that invoice's currency, exchange rate and net unit price after line discounts; any other price, currency or rate is refused with 422, also on draft edit and finalize, and the stock page fills and locks them; before, one unit sold at 900,000 was credited 5,000,000 and a full return of a 180 USD invoice credited 200 rials (TD-788).
+
 ### v9.0.245 — v9.0.245 — Settled Invoice Is Not Voided; Receipts Move On Account
 - **Documents and treasury:** voiding a document with a live treasury receipt or payment is refused with 409 naming them; the treasury table can move such a row on account or to another invoice of the same party, so the void can follow; before, the receipt stayed on the voided invoice and the replacement showed as unpaid (TD-779).
 
