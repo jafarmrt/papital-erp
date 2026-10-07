@@ -4,115 +4,84 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { FormDraftService } from '../services/drafts/formDraft.service.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
-import { logger } from '../middleware/logger.js';
+import { DRAFT_DEFAULT_KEY, DRAFT_ENTITY_TYPE_PATTERN, DRAFT_KEY_PATTERN } from '../lib/drafts/draftRules.js';
 
 const router = Router();
 router.use(authenticateToken);
 
+// v9.0.294 (TD-677، B16-13): نوع و کلید پیش‌نویس با الگو و سقف طول؛ خطای پایگاه‌داده به errorHandler می‌رسد و متن SQL
+// را به مرورگر نمی‌دهد (پیش‌تر هر خطا با پیام خامش و وضعیت ۴۰۰ برمی‌گشت)
+const entityTypeField = z.string().regex(DRAFT_ENTITY_TYPE_PATTERN, 'نوع پیش‌نویس فقط حروف کوچک لاتین، رقم، «_» و «-» تا ۴۰ نویسه است');
+const draftKeyField = z.string().regex(DRAFT_KEY_PATTERN, 'کلید پیش‌نویس فقط حروف لاتین، رقم، «_» و «-» تا ۶۴ نویسه است');
+
 const saveDraftSchema = z.object({
   body: z.object({
-    entityType: z.string().min(1, 'نوع موجودیت (entityType) الزامی است'),
-    draftKey: z.string().optional().default('default'),
+    entityType: entityTypeField,
+    draftKey: draftKeyField.optional().default(DRAFT_DEFAULT_KEY),
     payload: z.record(z.string(), z.unknown()),
-    summary: z.string().optional().default(''),
+    summary: z.string().max(500, 'خلاصه پیش‌نویس حداکثر ۵۰۰ نویسه است').optional().default(''),
     expiresInDays: z.number().optional().default(30)
   })
 });
 
 const entityTypeParamSchema = z.object({
-  params: z.object({
-    entityType: z.string().min(1, 'نوع موجودیت الزامی است')
-  })
+  params: z.object({ entityType: entityTypeField }),
+  query: z.object({ draftKey: draftKeyField.optional() }).passthrough(),
 });
+
+const listDraftsSchema = z.object({
+  query: z.object({ entityType: entityTypeField.optional() }).passthrough(),
+});
+
+const draftIdParamSchema = z.object({
+  params: z.object({ id: z.coerce.number().int().positive('شناسه پیش‌نویس نامعتبر است') }),
+});
+
+const sessionIdOf = (header: unknown): string => (typeof header === 'string' ? header.slice(0, 128) : '');
+const draftKeyOf = (value: unknown): string => (typeof value === 'string' && value ? value : DRAFT_DEFAULT_KEY);
 
 // Save or update a server-backed draft
 router.post('/drafts', validate(saveDraftSchema), asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user?.id || null;
-    const username = req.user?.username || '';
-    const sessionId = (req.headers['x-session-id'] as string) || '';
-
-    const result = await FormDraftService.saveDraft({
-      userId,
-      username,
-      sessionId,
-      entityType: req.body.entityType,
-      draftKey: req.body.draftKey || 'default',
-      payload: req.body.payload,
-      summary: req.body.summary,
-      expiresInDays: req.body.expiresInDays
-    });
-
-    res.status(200).json(result);
-  } catch (error) {
-    logger.error('Error saving form draft:', error);
-    const errMsg = error instanceof Error ? error.message : String(error);
-    res.status(400).json({ error: errMsg || 'خطا در ذخیره پیش‌نویس سرور' });
-  }
+  const result = await FormDraftService.saveDraft({
+    userId: req.user?.id || null,
+    username: req.user?.username || '',
+    sessionId: sessionIdOf(req.headers['x-session-id']),
+    entityType: req.body.entityType,
+    draftKey: req.body.draftKey || DRAFT_DEFAULT_KEY,
+    payload: req.body.payload,
+    summary: req.body.summary,
+    expiresInDays: req.body.expiresInDays
+  });
+  res.status(200).json(result);
 }));
 
 // Get a specific draft by entityType and draftKey
 router.get('/drafts/:entityType', validate(entityTypeParamSchema), asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user?.id || null;
-    const sessionId = (req.headers['x-session-id'] as string) || '';
-    const entityType = req.params.entityType;
-    const draftKey = (req.query.draftKey as string) || 'default';
-
-    const draft = await FormDraftService.getDraft(entityType, draftKey, userId, sessionId);
-    res.json({ draft });
-  } catch (error) {
-    logger.error('Error fetching form draft:', error);
-    throw error;
-  }
+  const draft = await FormDraftService.getDraft(
+    req.params.entityType, draftKeyOf(req.query.draftKey), req.user?.id || null, sessionIdOf(req.headers['x-session-id']),
+  );
+  res.json({ draft });
 }));
 
 // List all drafts for current user
-router.get('/drafts', asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user?.id || null;
-    const sessionId = (req.headers['x-session-id'] as string) || '';
-    const entityType = req.query.entityType as string | undefined;
-
-    const drafts = await FormDraftService.listUserDrafts(userId, sessionId, entityType);
-    res.json({ drafts, data: drafts });
-  } catch (error) {
-    logger.error('Error listing form drafts:', error);
-    throw error;
-  }
+router.get('/drafts', validate(listDraftsSchema), asyncHandler(async (req, res) => {
+  const entityType = typeof req.query.entityType === 'string' ? req.query.entityType : undefined;
+  const drafts = await FormDraftService.listUserDrafts(req.user?.id || null, sessionIdOf(req.headers['x-session-id']), entityType);
+  res.json({ drafts, data: drafts });
 }));
 
 // Delete / discard a specific draft by entityType and optional draftKey
 router.delete('/drafts/:entityType', validate(entityTypeParamSchema), asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user?.id || null;
-    const sessionId = (req.headers['x-session-id'] as string) || '';
-    const entityType = req.params.entityType;
-    const draftKey = (req.query.draftKey as string) || 'default';
-
-    const result = await FormDraftService.deleteDraft(entityType, draftKey, userId, sessionId);
-    res.json(result);
-  } catch (error) {
-    logger.error('Error deleting form draft:', error);
-    throw error;
-  }
+  const result = await FormDraftService.deleteDraft(
+    req.params.entityType, draftKeyOf(req.query.draftKey), req.user?.id || null, sessionIdOf(req.headers['x-session-id']),
+  );
+  res.json(result);
 }));
 
 // Delete a draft by specific numeric ID
-router.delete('/drafts/id/:id', asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user?.id || null;
-    const id = Number(req.params.id);
-    if (!id || isNaN(id)) {
-      return res.status(400).json({ error: 'شناسه پیش‌نویس نامعتبر است' });
-    }
-
-    const result = await FormDraftService.deleteDraftById(id, userId);
-    res.json(result);
-  } catch (error) {
-    logger.error('Error deleting form draft by id:', error);
-    throw error;
-  }
+router.delete('/drafts/id/:id', validate(draftIdParamSchema), asyncHandler(async (req, res) => {
+  const result = await FormDraftService.deleteDraftById(Number(req.params.id), req.user?.id || null);
+  res.json(result);
 }));
 
 export default router;

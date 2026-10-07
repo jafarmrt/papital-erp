@@ -2,6 +2,7 @@ import { orm } from '../../db/drizzle.js';
 import { formDrafts } from '../../db/schema.js';
 import { eq, and, sql, desc, lt } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
+import { ValidationError } from '../../errors/customErrors.js';
 
 export interface SaveDraftInput {
   userId?: number | null;
@@ -45,11 +46,11 @@ export class FormDraftService {
     } = input;
 
     if (!entityType) {
-      throw new Error('entityType الزامی است');
+      throw new ValidationError('نوع پیش‌نویس الزامی است', undefined, 'DRAFT_ENTITY_TYPE_REQUIRED');
     }
 
     if (!payload || typeof payload !== 'object') {
-      throw new Error('محتوای پیش‌نویس (payload) معتبر نیست');
+      throw new ValidationError('محتوای پیش‌نویس معتبر نیست', undefined, 'DRAFT_PAYLOAD_INVALID');
     }
 
     // Calculate expiry date

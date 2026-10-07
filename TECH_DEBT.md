@@ -47,7 +47,6 @@
 | TD-594 | زیرساخت (بسته ۱)؛ رفع در بسته ۱۶ | P2 (B01-14) — در تولید، پاسخ خطا `details` را دور می‌ریزد؛ کادر «تحویل بیش از برنامه» فهرست کالاها را نمی‌گیرد؛ پیام خطای قالب بدنه انگلیسی است: همان ۴۲۲ با `NODE_ENV=test` فهرست `overDeliveries` دارد و با `production` `details=undefined`؛ JSON ناقص ← ۴۰۰ `"Unexpected end of JSON input"` با کد `INTERNAL_ERROR`؛ بدنه ۶ مگابایتی ← ۴۱۳ `"request entity too large"` | middleware/logger.ts، customErrors.ts | open (P2، با PR د بسته ۱۶) |
 | TD-670 | پوسته (بسته ۱۶) | P2 (B16-06) — تکرار خودکار درخواست تغییردهنده پس از قطع ارتباط، روی routeهای بی idempotency ثبت تکراری یا خطای کاذب می‌سازد: `fetchJson` پس از `TypeError('Failed to fetch')` همان `POST /crm/activities` را با همان کلید دوباره فرستاد؛ روی سرور واقعی `POST /crm/activities` ← ۲۰۱، ۲۰۱ و ۲ ردیف، `POST /customers` ← ۲۰۰ و سپس ۴۰۰ «طرف حساب با این نام قبلاً ثبت شده است.»؛ فقط ۲۵ route کلید idempotency را می‌خوانند | api.ts | open (P2، تصمیم ت۳ الف) |
 | TD-676 | پیش‌نویس (بسته ۱۶) | P3 (B16-12) — پیش‌نویس فرم هرگز منقضی نمی‌شود: پیش‌نویس با `expiresInDays: -10` ذخیره و با `GET /drafts/invoice` برگردانده شد؛ پیش‌نویس ۳۱ روزه با `expires_at` گذشته هم برگشت و بنر «بازیابی» نشان داده شد؛ `cleanupExpiredDrafts` فراخواننده ندارد؛ `expiresInDays: 1e9` ← ۴۰۰ با پیام انگلیسی `Invalid time value` | formDraft.service.ts، drafts.routes.ts | open (P3، تصمیم ت۶ الف) |
-| TD-677 | پیش‌نویس (بسته ۱۶) | P3 (B16-13) — `POST /drafts` خطای خام پایگاه‌داده را با متن SQL و پارامترها برمی‌گرداند، حتی در تولید: `entityType` شامل نویسه `\u0000` ← ۴۰۰ با `"Failed query: select "id", "user_id", … from "form_drafts" where … params: 1,invoice…"`؛ خطای سرور هم ۴۰۰ نام می‌گیرد | drafts.routes.ts | open (P3) |
 | TD-679 | پوسته (بسته ۱۶) | P3 (B16-15) — کلید idempotency پس از ۳۰ ثانیه «در حال پردازش» رها می‌شود: پس از ۱۵ انتظار ۲ ثانیه‌ای ۴۰۹ «درخواست تکراری در حال پردازش است» پرتاب و کلید آزاد شد؛ ۱۶ فراخوان با یک کلید و سپس `submissionKeyFor` برای همان بدنه کلید تازه داد | api.ts | open (P3) |
 | TD-680 | پوسته (بسته ۱۶) | P3 (B16-16) — انتخابگر جست‌وجوپذیر برای مقدار ازپیش‌انتخاب‌شده برچسب خالی نشان می‌دهد و درخواستش `limit` دوگانه دارد: با `value="7"` و `fetchUrl` متن دکمه `""` بود؛ درخواست `/customers?limit=1000&search=&limit=50` ساخته شد | SearchableSelect.tsx | open (P3) |
 | TD-682 | پوسته (بسته ۱۶) | P3 (B16-18) — کادر شماره کارت و شبا پس از Backspace روی جداکننده، مکان‌نما را به آخر می‌برد: از `6037 - |9918…` مقدار `6039 - 9181 - 2345 - 678` شد و مکان‌نما در ۲۴ بود، به‌جای ۳ | groupedDigitsField.tsx | open (P3) |
@@ -80,8 +79,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۵۹ ردیف
-- **آرشیو شده (resolved):** ۶۴۵ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۵۸ ردیف
+- **آرشیو شده (resolved):** ۶۴۶ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
