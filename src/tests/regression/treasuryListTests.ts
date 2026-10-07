@@ -284,5 +284,32 @@ export async function runTreasuryListTests(shouldRun: ShouldRun): Promise<TestCa
     });
   }
 
+  const chequeWordingId = 'reg_cheque_status_messages_persian_td_513';
+  if (shouldRun(chequeWordingId, 'td513', 'cheque', 'wording', 'package4')) {
+    await runCase(results, chequeWordingId, 'v9.0.105: the default cheque history note and the refused-transition message name the statuses in Persian, never their English codes (TD-513)', async () => {
+      const admin = await adminClient();
+      const problems: string[] = [];
+      const bank = await createBank('Cheque wording bank');
+      const today = await businessTodayIsoDate();
+      const dueDate = new Date(Date.parse(`${today}T00:00:00Z`) + 60 * 86_400_000).toISOString().slice(0, 10);
+      const created = await admin.post('/api/accounting/cheques', { type: 'received', bankName: 'ملت', amount: 2_000_000, partyType: 'other', partyName: 'misc drawer', contraAccountId: await accountId('4101'), issueDate: today, dueDate, chequeNumber: `W${tagOf()}` });
+      if (created.status !== 201) throw new Error(`cheque create returned ${created.status}: ${JSON.stringify(created.body).slice(0, 200)}`);
+      const id = Number(created.body.id);
+      const moved = await admin.patch(`/api/accounting/cheques/${id}/status`, { status: 'in_collection', bankAccountId: bank.id });
+      const note = (moved.body?.statusHistory ?? []).at(-1)?.notes;
+      if (note !== 'تغییر وضعیت به «در جریان وصول (خوابانده به حساب)»') problems.push(`default history note «${note}», expected «تغییر وضعیت به «در جریان وصول (خوابانده به حساب)»» (before: «تغییر وضعیت به in_collection»)`);
+      const bounced = await admin.patch(`/api/accounting/cheques/${id}/status`, { status: 'bounced' });
+      if (bounced.status !== 200) throw new Error(`bounce returned ${bounced.status}: ${JSON.stringify(bounced.body).slice(0, 200)}`);
+      const refused = await admin.patch(`/api/accounting/cheques/${id}/status`, { status: 'passed', bankAccountId: bank.id });
+      const message = String(refused.body?.message ?? '');
+      if (refused.status !== 422) problems.push(`bounced → passed returned ${refused.status}, expected 422`);
+      if (/[a-z]+_?[a-z]+/.test(message) || !message.includes('«واخواست / برگشت خورده» به «وصول شده (پاس شده)»') || !message.includes('عودت داده شده به مشتری')) {
+        problems.push(`refused-transition message «${message}», expected Persian status names (before: «bounced» به «passed» … returned)`);
+      }
+      assertNoProblems(problems);
+      return `note «${note}»; message «${message}»`;
+    });
+  }
+
   return results;
 }

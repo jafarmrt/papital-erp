@@ -6,7 +6,7 @@ import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { validateLockOrder, LockHierarchyLevel, LockableResource } from '../../../lib/lockOrder.js';
 import type { Cheque, ChequeStatus } from '../../../types.js';
-import { CHEQUE_TRANSITIONS } from '../../../lib/treasury/chequeTransitions.js';
+import { CHEQUE_TRANSITIONS, chequeStatusLabel } from '../../../lib/treasury/chequeTransitions.js';
 import { NotFoundError, ValidationError, BusinessLogicError, ConflictError } from '../../../errors/customErrors.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
@@ -26,17 +26,18 @@ import { activeChequeVoucherIds, auditChequeDelete, auditChequeStatusChange, typ
 // v9.0.69: جدول انتقال وضعیت چک در `src/lib/treasury/chequeTransitions.ts` است و مرورگر هم همان را می‌خواند
 export { CHEQUE_TRANSITIONS };
 
+// v9.0.105 (TD-513، B04-17): پیام‌ها نام فارسی وضعیت را دارند (`chequeStatusLabel`)، نه کد انگلیسی
 export function assertChequeTransition(current: string, next: ChequeStatus): void {
   if (current === next) {
-    throw new ConflictError(`چک هم‌اکنون در وضعیت «${next}» است — تکرار همان وضعیت مجاز نیست`);
+    throw new ConflictError(`چک هم‌اکنون در وضعیت «${chequeStatusLabel(next)}» است — تکرار همان وضعیت مجاز نیست`);
   }
   const allowed = CHEQUE_TRANSITIONS[current];
   if (!allowed) {
-    throw new ConflictError(`وضعیت فعلی چک («${current}») نامعتبر است`);
+    throw new ConflictError(`وضعیت فعلی چک («${chequeStatusLabel(current)}») نامعتبر است`);
   }
   if (!allowed.includes(next)) {
     throw new BusinessLogicError(
-      `انتقال وضعیت «${current}» به «${next}» مجاز نیست — انتقال‌های مجاز: ${allowed.join('، ') || 'هیچ'}`
+      `انتقال وضعیت «${chequeStatusLabel(current)}» به «${chequeStatusLabel(next)}» مجاز نیست — انتقال‌های مجاز: ${allowed.map(chequeStatusLabel).join('، ') || 'هیچ'}`
     );
   }
 }
@@ -704,7 +705,7 @@ export class ChequeLifecycleService {
         date: voucherIsoDate,
         status: data.status,
         user: data.username || 'سیستم',
-        notes: effectiveNotes || `تغییر وضعیت به ${data.status}`
+        notes: effectiveNotes || `تغییر وضعیت به «${chequeStatusLabel(data.status)}»`
       });
 
       const [updated] = await txEngine.update(cheques).set({

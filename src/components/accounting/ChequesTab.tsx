@@ -18,7 +18,7 @@ import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQueries';
 import { copyToClipboard } from '../../utils/clipboard';
-import { CHEQUE_TRANSITIONS, chequeHasNextStep } from '../../lib/treasury/chequeTransitions';
+import { CHEQUE_STATUS_LABELS, CHEQUE_TRANSITIONS, chequeHasNextStep, chequeStatusLabel } from '../../lib/treasury/chequeTransitions';
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../lib/treasury/partyPurpose';
 import { PartyPurposeFields } from './treasury/PartyPurposeFields';
 
@@ -114,15 +114,16 @@ export function ChequesTab({
 
   const [historyModalCheque, setHistoryModalCheque] = useState<Cheque | null>(null);
 
+  // v9.0.105 (TD-513): برچسب‌ها همان نگاشت مشترک سرور و رابط است
   const statusLabels: Record<ChequeStatus, { label: string; badge: string }> = {
-    received: { label: 'دریافت شده', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' },
-    in_treasury: { label: 'در خزانه / صندوق', badge: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300' },
-    in_safe: { label: 'نزد صندوق', badge: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200' },
-    in_collection: { label: 'در جریان وصول (خوابانده به حساب)', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' },
-    passed: { label: 'وصول شده (پاس شده)', badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' },
-    bounced: { label: 'واخواست / برگشت خورده', badge: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300' },
-    returned: { label: 'عودت داده شده به مشتری', badge: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' },
-    spent: { label: 'خرج شده / واگذار به غیر', badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' },
+    received: { label: CHEQUE_STATUS_LABELS.received, badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' },
+    in_treasury: { label: CHEQUE_STATUS_LABELS.in_treasury, badge: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300' },
+    in_safe: { label: CHEQUE_STATUS_LABELS.in_safe, badge: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200' },
+    in_collection: { label: CHEQUE_STATUS_LABELS.in_collection, badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' },
+    passed: { label: CHEQUE_STATUS_LABELS.passed, badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' },
+    bounced: { label: CHEQUE_STATUS_LABELS.bounced, badge: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300' },
+    returned: { label: CHEQUE_STATUS_LABELS.returned, badge: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' },
+    spent: { label: CHEQUE_STATUS_LABELS.spent, badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' },
   };
 
   const STATUS_OPTIONS: Record<string, { value: ChequeStatus; label: string }[]> = {
@@ -330,7 +331,7 @@ export function ChequesTab({
           'طرف حساب': c.partyName,
           'تاریخ صدور': isoToJalaliDate(c.issueDate) || c.issueDate,
           'سررسید': isoToJalaliDate(c.dueDate) || c.dueDate,
-          'وضعیت': statusLabels[c.status as ChequeStatus]?.label || c.status,
+          'وضعیت': chequeStatusLabel(c.status),
           'وضعیت سررسید': days === null ? '' : days < 0 ? `گذشته ${Math.abs(days)} روز` : `${days} روز مانده`,
           'مبلغ': Number(c.amount) || 0,
           'ارز': c.currency || 'IRR',
@@ -472,12 +473,10 @@ export function ChequesTab({
             className="px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
           >
             <option value="all">همه وضعیت‌ها</option>
-            <option value="received">دریافت شده</option>
-            <option value="in_collection">در جریان وصول</option>
-            <option value="passed">وصول شده (پاس)</option>
-            <option value="bounced">برگشت خورده</option>
-            <option value="returned">عودت داده شده</option>
-            <option value="spent">خرج شده</option>
+            {/* v9.0.105 (TD-513): همه وضعیت‌ها، از جمله «در خزانه / صندوق» (چک پرداختی پاس‌نشده) */}
+            {(Object.keys(CHEQUE_STATUS_LABELS) as ChequeStatus[]).map(status => (
+              <option key={status} value={status}>{CHEQUE_STATUS_LABELS[status]}</option>
+            ))}
           </select>
 
           {/* V1.5.0: بازه سررسید + اکسل */}
@@ -655,7 +654,7 @@ export function ChequesTab({
                                       onClick: () => {
                                         void copyToClipboard(String(c.sayadNumber)).then(ok => {
                                           if (ok) toast.success('شناسه صیاد کپی شد');
-                                          else toast.error('کپی در کلیپ‌بورد ممکن نشد');
+                                          else toast.error('کپی نشد؛ متن را دستی انتخاب و کپی کنید');
                                         });
                                       },
                                     },
@@ -667,7 +666,7 @@ export function ChequesTab({
                                 onClick: () => {
                                   void copyToClipboard(c.chequeNumber).then(ok => {
                                     if (ok) toast.success('شماره چک کپی شد');
-                                    else toast.error('کپی در کلیپ‌بورد ممکن نشد');
+                                    else toast.error('کپی نشد؛ متن را دستی انتخاب و کپی کنید');
                                   });
                                 },
                               },
@@ -998,7 +997,7 @@ export function ChequesTab({
                 </label>
                 {allowedStatusOptions.length === 0 ? (
                   <div className="text-[11px] font-bold text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-700 rounded-xl p-3">
-                    این چک در وضعیت پایانی «{String(statusModalCheque.status)}» است و تغییر وضعیت بیشتری ندارد.
+                    این چک در وضعیت پایانی «{chequeStatusLabel(statusModalCheque.status)}» است و تغییر وضعیت بیشتری ندارد.
                   </div>
                 ) : (
                   <select
@@ -1117,11 +1116,12 @@ export function ChequesTab({
                   <div key={i} className="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-100 dark:border-slate-700/60 text-xs">
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                        {statusLabels[h.status as ChequeStatus]?.label || h.status}
+                        {chequeStatusLabel(h.status)}
                       </span>
                       <span className="text-slate-400 font-mono text-[10px]">{formatPersianDate(h.date)}</span>
                     </div>
-                    {h.description && <p className="text-slate-600 dark:text-slate-300">{h.description}</p>}
+                    {/* v9.0.105 (TD-513): سرور یادداشت را در notes می‌نویسد؛ description فقط برای تاریخچه‌های قدیمی */}
+                    {(h.notes || h.description) && <p className="text-slate-600 dark:text-slate-300">{h.notes || h.description}</p>}
                   </div>
                 ))
               )}
