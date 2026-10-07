@@ -102,10 +102,12 @@ export async function receiveRequisitionItems(
   }
   const requisitionDocIds = new Set(orderDocs.map(doc => doc.id));
 
-  // v9.0.268 (TD-690): ردیفی که هنگام صدور سفارش بسته شد بی سفارش وارد انبار نمی‌شود
+  // v9.0.268 (TD-690): ردیفی که هنگام صدور سفارش بسته شد بی سفارش وارد انبار نمی‌شود. v9.0.269 (TD-692): ردیفی هم که
+  // سفارش ردیف دیگری از همان کالا پرش کرده است (applyDeliveredLines) دوباره دریافت نمی‌شود؛ تحویل اکنون همین اقدام را
+  // در تراکنش خود اجرا می‌کند
   const neverOrdered = rows.filter(row =>
     !(Array.isArray(row.linkedDocumentIds) && row.linkedDocumentIds.length > 0) && row.itemId && Number(row.requestedQty || 0) > 0
-    && !isClosedRequisitionRow(row));
+    && !isClosedRequisitionRow(row) && Number(row.receivedQty || 0) < Number(row.requestedQty));
   if (neverOrdered.length > 0) {
     const receiptId = await DocumentService.createDocument({
       docType: 'receipt',
