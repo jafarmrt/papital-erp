@@ -3,7 +3,7 @@ import { sql, ilike, or, and, eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { customers } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorize, authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
@@ -246,7 +246,7 @@ router.get('/customers/:id/documents', authorizePermission(...READ_PERMISSIONS.d
 }));
 
 // POST /api/customers/bulk-import - Bulk import and update counterparties from Excel
-router.post('/customers/bulk-import', authorize('admin', 'manager', 'sales_manager', 'customers.manage'), asyncHandler(async (req, res) => {
+router.post('/customers/bulk-import', authorizePermission('customers.manage'), asyncHandler(async (req, res) => {
   const { rows = [], updateIfExists = true } = req.body;
 
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -286,7 +286,7 @@ router.post('/customers/bulk-import', authorize('admin', 'manager', 'sales_manag
   });
 }));
 
-router.post('/customers', authorize('admin', 'manager', 'sales_manager', 'customers.manage'), validate(createCustomerValidation), asyncHandler(async (req, res) => {
+router.post('/customers', authorizePermission('customers.manage'), validate(createCustomerValidation), asyncHandler(async (req, res) => {
   req.body = sanitizeCustomerPayload(req.body);
   const { name, country, province, city, address, notes, contacts } = req.body;
   const { contactName, phone } = req.body;
@@ -323,7 +323,7 @@ router.post('/customers', authorize('admin', 'manager', 'sales_manager', 'custom
   res.json(created);
 }));
 
-router.put('/customers/:id', authorize('admin', 'manager', 'sales_manager', 'customers.manage'), validate(updateCustomerValidation), asyncHandler(async (req, res) => {
+router.put('/customers/:id', authorizePermission('customers.manage'), validate(updateCustomerValidation), asyncHandler(async (req, res) => {
   req.body = sanitizeCustomerPayload(req.body);
   const customerId = Number(req.params.id);
   const { name, country, province, city, address, notes, contacts } = req.body;
@@ -368,7 +368,7 @@ router.put('/customers/:id', authorize('admin', 'manager', 'sales_manager', 'cus
   res.json({ success: true });
 }));
 
-router.delete('/customers/:id', authorize('admin', 'manager', 'sales_manager', 'customers.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/customers/:id', authorizePermission('customers.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const customerId = Number(req.params.id);
   const delCust = await CustomerService.deleteCustomer(customerId);
 

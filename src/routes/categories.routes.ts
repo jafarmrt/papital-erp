@@ -3,7 +3,7 @@ import { eq, and } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { categories, items } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorize } from '../middleware/authorize.js';
+import { authorizePermission, requireSystemAdmin } from '../middleware/authorize.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -80,7 +80,7 @@ router.get('/categories', asyncHandler(async (req, res) => {
   res.json(data.map(formatCategory));
 }));
 
-router.post('/categories/reset-defaults', authorize('admin'), asyncHandler(async (req, res) => {
+router.post('/categories/reset-defaults', requireSystemAdmin, asyncHandler(async (req, res) => {
   const existingCatRows = await orm.select().from(categories);
   const existingCatMap = new Map(existingCatRows.map(c => [c.name, c]));
 
@@ -101,19 +101,19 @@ router.post('/categories/reset-defaults', authorize('admin'), asyncHandler(async
   res.json(updated.map(formatCategory));
 }));
 
-router.post('/categories', authorize('admin', 'manager', 'products.create', 'products.edit'), validate(createCategoryValidation), asyncHandler(async (req, res) => {
+router.post('/categories', authorizePermission('products.create', 'products.edit'), validate(createCategoryValidation), asyncHandler(async (req, res) => {
   const { name, prefix, type, defaultUnit } = req.body;
   const [info] = await orm.insert(categories).values({ name, prefix, type, defaultUnit: defaultUnit || 'عدد' }).returning({ id: categories.id });
   res.json(formatCategory({ id: info.id, name, prefix, type, defaultUnit: defaultUnit || 'عدد' }));
 }));
 
-router.put('/categories/:id', authorize('admin', 'manager', 'products.edit'), validate(updateCategoryValidation), asyncHandler(async (req, res) => {
+router.put('/categories/:id', authorizePermission('products.edit'), validate(updateCategoryValidation), asyncHandler(async (req, res) => {
   const { name, prefix, type, defaultUnit } = req.body;
   await orm.update(categories).set({ name, prefix, type, defaultUnit: defaultUnit || 'عدد' }).where(eq(categories.id, Number(req.params.id)));
   res.json({ success: true });
 }));
 
-router.delete('/categories/:id', authorize('admin', 'products.delete'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/categories/:id', authorizePermission('products.delete'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const catId = Number(req.params.id);
   const [cat] = await orm.select().from(categories).where(eq(categories.id, catId));
   if (!cat) {
