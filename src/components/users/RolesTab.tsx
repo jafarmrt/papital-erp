@@ -1,7 +1,6 @@
 import React from 'react';
 import { Role, User } from '../../types';
 import { Plus, Trash2, Edit2, Users, Check, ShieldCheck } from 'lucide-react';
-import { MenuVisibilityPanel } from './MenuVisibilityPanel';
 import { isSystemAdminRole } from '../../lib/permissions/permissionCatalog';
 
 interface RolesTabProps {
@@ -29,9 +28,6 @@ export const RolesTab: React.FC<RolesTabProps> = ({
   const isOwnRole = (code: string) => Boolean(ownRoleCode) && !isSystemAdminRole(ownRoleCode) && code === ownRoleCode;
   return (
     <div className="space-y-6">
-      {/* کنترل نمایش منو برای هر نقش */}
-      <MenuVisibilityPanel />
-
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border rounded-xl p-4 shadow-sm">
         <div>
           <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">

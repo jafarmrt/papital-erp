@@ -33,7 +33,7 @@ import {
   Calculator
 } from 'lucide-react';
 import { User } from '../../types';
-import { canOpenPage, isSystemAdminViewer } from '../../lib/permissions/pageAccess';
+import { canOpenPage } from '../../lib/permissions/pageAccess';
 
 export interface MenuItem {
   name: string;
@@ -49,13 +49,9 @@ export interface MenuGroup {
   items: MenuItem[];
 }
 
-// V10-5.3: نقشه دید منو per-role — roleCode → فهرست pathهای «مخفی‌شده» (deny-list wins)
-export type MenuVisibilityMap = Record<string, string[]>;
-
 export function getMenuGroups(
   user?: User | null,
-  userPermissions?: { permissions?: string[]; isAdmin?: boolean; roleName?: string } | null,
-  menuVisibility?: MenuVisibilityMap | null
+  userPermissions?: { permissions?: string[]; isAdmin?: boolean; roleName?: string } | null
 ): MenuGroup[] {
   // v9.0.114 (TD-668، ت۲ بسته ۱۶): دید هر پیوند همان دسترسی صفحه در جدول یکتای pageAccess است (همان مسیر و API صفحه)
   const viewer = { permissions: userPermissions?.permissions, isAdmin: userPermissions?.isAdmin, role: user?.role };
@@ -164,12 +160,5 @@ export function getMenuGroups(
         { name: 'معرفی و به‌روزرسانی‌ها', path: '/changelog', icon: FileCode2, visible: open('/changelog') },
       ]
     }
-  ].map(group => ({
-    ...group,
-    items: group.items.map(item => ({
-      ...item,
-      // V10-5.3: اعمال deny-list دید منو — admin همیشه همه را می‌بیند
-      visible: item.visible && !(menuVisibility && user?.role && !isSystemAdminViewer(viewer) && Array.isArray(menuVisibility[user.role]) && menuVisibility[user.role].includes(item.path))
-    }))
-  }));
+  ];
 }

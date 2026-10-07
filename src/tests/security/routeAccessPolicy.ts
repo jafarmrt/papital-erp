@@ -28,7 +28,7 @@ export const PUBLIC_ROUTES = new Set([
 export const LOGIN_ONLY_ROUTES = new Set([
   'GET /api/auth/me', 'GET /api/me', 'GET /api/auth/csrf', 'GET /api/csrf',
   'GET /api/users/my-permissions', 'GET /api/users/profile', 'PUT /api/users/profile', 'GET /api/users/list-simple',
-  'GET /api/system/business-date', 'GET /api/settings', 'GET /api/menu-visibility', 'GET /api/global-search',
+  'GET /api/system/business-date', 'GET /api/settings', 'GET /api/global-search',
   'GET /api/categories', 'GET /api/warehouses',
   'PUT /api/daily-logs/:id/review',
   'GET /api/notifications', 'GET /api/notifications/unread-count', 'PUT /api/notifications/:id/read',

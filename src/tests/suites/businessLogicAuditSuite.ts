@@ -11,7 +11,6 @@ import { ConflictError, ValidationError, NotFoundError, InsufficientStockError }
 import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
 import { VoucherSyncService } from '../../services/accounting/voucherSync.service.js';
 import { DocumentService } from '../../services/document.service.js';
-import { getMenuGroups } from '../../components/layout/menuConfig.js';
 import { cleanupAllTestFixtures } from '../fixtures/dbTestHelper.js';
 import { jalaliToIsoDate } from '../../utils.js';
 import { seedFixtureItemStocks } from '../fixtures/factories.js';
@@ -23,7 +22,6 @@ import { ItemWarehouseStockService } from '../../services/inventory/itemWarehous
  *  ۱. ساختار کاردکس کالا
  *  ۲. شماره‌گذاری اتمیک کد کالا تحت همروندی
  *  ۳. محدودیت تسویه فیش حقوقی منحصراً از خزانه‌داری
- *  ۴. ماتریس دسترسی به منوها (menu_visibility)
  *  ۵. پاکسازی امن داده‌های آزمایشی
  *  ۶. اعتبارسنجی و تبدیل تاریخ‌ها به ISO
  */
@@ -223,48 +221,6 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
     if (tempBankAccountId !== null) {
       try { await orm.delete(bankAccounts).where(eq(bankAccounts.id, tempBankAccountId)); } catch { /* non-blocking */ }
     }
-  }
-
-  // ── 4. menu_visibility deny-list + admin bypass (pure unit) ──────────────
-  const t4 = Date.now();
-  try {
-    const fakeUser: any = { role: 'warehouse_keeper' };
-    const fakePerms: any = { permissions: ['products.view'], isAdmin: false };
-
-    const base = getMenuGroups(fakeUser, fakePerms, null);
-    const productsBase = base.flatMap(g => g.items).find(i => i.path === '/products');
-    if (!productsBase || !productsBase.visible) throw new Error('Baseline: /products should be visible without visibility map');
-
-    const hidden = getMenuGroups(fakeUser, fakePerms, { warehouse_keeper: ['/products'] });
-    const productsHidden = hidden.flatMap(g => g.items).find(i => i.path === '/products');
-    if (!productsHidden || productsHidden.visible) throw new Error('Deny-list failed: /products still visible for warehouse_keeper');
-
-    const adminUser: any = { role: 'admin' };
-    const adminView = getMenuGroups(adminUser, { isAdmin: true } as any, { admin: ['/products', '/crm'] });
-    const adminProducts = adminView.flatMap(g => g.items).find(i => i.path === '/products');
-    if (!adminProducts || !adminProducts.visible) throw new Error('Admin bypass failed: admin must always see /products');
-
-    results.push(makeTestCase({
-      id: 'v10_menu_visibility_deny_list',
-      scenarioId: 'v10_menu_visibility_deny_list',
-      name: 'V10 Regression: menu_visibility Deny-List & Admin Bypass',
-      layer: 'regression',
-      executionType: 'simulation_logic',
-      passed: true,
-      durationMs: Date.now() - t4,
-      details: 'deny-list نقش‌محور مخفی‌سازی کرد، بدون override رفتار permission-محور حفظ شد و مدیر ارشد همیشه bypass است.'
-    }));
-  } catch (err: any) {
-    results.push(makeTestCase({
-      id: 'v10_menu_visibility_deny_list',
-      scenarioId: 'v10_menu_visibility_deny_list',
-      name: 'V10 Regression: menu_visibility Deny-List & Admin Bypass',
-      layer: 'regression',
-      executionType: 'simulation_logic',
-      passed: false,
-      durationMs: Date.now() - t4,
-      error: err.message
-    }));
   }
 
   // ── 5. Cleanup refusal بدون پرچم ایمنی (silent no-op) ────────────────────

@@ -2,7 +2,6 @@ import { and, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { appSettings, warehouses } from '../../db/schema.js';
 import { ValidationError, ForbiddenError } from '../../errors/customErrors.js';
-import { userHasRoleOrPermission } from '../../middleware/authorize.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { SYSTEM_ADMIN_SETTING_KEYS } from '../../lib/settings/settingKeyAccess.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -44,14 +43,16 @@ const BUSINESS_SETTING_KEYS = new Set([
 /** کلیدهای محرمانه یکپارچه‌سازی — فقط مدیر سیستم؛ فهرست مشترک با زبانه ووکامرس (v9.0.114، TD-668) */
 const ADMIN_ONLY_SETTING_KEYS = new Set(SYSTEM_ADMIN_SETTING_KEYS);
 
-/** پیکربندی دسترسی نقش‌ها — admin یا دارنده مجوز roles.manage (هم‌راستا با مدیریت نقش‌ها) */
-const ROLE_CONFIG_SETTING_KEYS = new Set(['menu_visibility']);
-
 /**
  * v7.0.85 (TD-109): کلیدهای بازنشسته — فلگ `runtime_enable_test_endpoints` پس از حذف روت‌های تست هیچ اثری نداشت و
  * حذف شد. فرم تنظیمات نسخه قبلی (تب بازمانده در مرورگر) هنوز آن را می‌فرستد؛ بی‌صدا نادیده گرفته می‌شود تا ذخیره شکست نخورد.
  */
-const RETIRED_SETTING_KEYS = new Set(['runtime_enable_test_endpoints']);
+const RETIRED_SETTING_KEYS = new Set([
+  'runtime_enable_test_endpoints',
+  // v9.0.115 (TD-884، تصمیم ت۱۱): پنهان کردن منو برای هر نقش حذف شد؛ منو فقط از مجوزها ساخته می‌شود. مقدار ذخیره‌شده دست نخورده
+  // می‌ماند ولی دیگر خوانده یا نوشته نمی‌شود
+  'menu_visibility',
+]);
 
 export interface SettingsActor {
   id?: number;
@@ -95,11 +96,6 @@ async function assertKeyPermission(key: string, actor: SettingsActor): Promise<v
     }
     return;
   }
-  if (ROLE_CONFIG_SETTING_KEYS.has(key)) {
-    if (!(await userHasRoleOrPermission(actor, 'roles.manage'))) {
-      throw new ForbiddenError('تغییر نمایش منو برای نقش‌ها نیازمند مجوز مدیریت نقش‌ها است.');
-    }
-  }
 }
 
 function redactForAudit(key: string, value: string | undefined): string | undefined {
@@ -125,22 +121,8 @@ export class SystemSettingsService {
     );
   }
 
-  /** V10-5.3: نقشه دید منو per-role (کش ۶۰ ثانیه‌ای)؛ مقدار نامعتبر یا غیرشیء به {} تبدیل می‌شود. */
-  static async getMenuVisibility(): Promise<Record<string, unknown>> {
-    return appSettingsCache.getOrSet('menu_visibility', async () => {
-      const [row] = await orm.select().from(appSettings).where(eq(appSettings.key, 'menu_visibility'));
-      if (!row?.value) return {};
-      try {
-        const parsed = JSON.parse(row.value);
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-      } catch {
-        return {};
-      }
-    }, 60_000);
-  }
-
   static isKnownSettingKey(key: string): boolean {
-    return BUSINESS_SETTING_KEYS.has(key) || ADMIN_ONLY_SETTING_KEYS.has(key) || ROLE_CONFIG_SETTING_KEYS.has(key);
+    return BUSINESS_SETTING_KEYS.has(key) || ADMIN_ONLY_SETTING_KEYS.has(key);
   }
 
   /**

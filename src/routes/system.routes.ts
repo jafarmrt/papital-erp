@@ -129,12 +129,6 @@ router.get('/settings', asyncHandler(async (req, res) => {
   res.json(SystemSettingsService.maskSensitiveSettings(safeSettings));
 }));
 
-// V10-5.3: نقشه دید منو per-role — خواندنی برای همه کاربران احراز هویت‌شده (سایدبار)
-router.get('/menu-visibility', asyncHandler(async (req, res) => {
-  const result = await SystemSettingsService.getMenuVisibility();
-  return res.json(result);
-}));
-
 // v7.0.26 (TD-184 / audit P1-3): ذخیره فقط کلیدهای تغییرکرده با مجوز سطح کلید در SystemSettingsService
 // (RULE 01: روت فقط اعتبارسنجی و فراخوانی سرویس). مجوز settings.manage هم‌راستا با نمایش منوی تنظیمات است.
 router.post('/settings', authorizePermission('settings.manage'), validate(settingsSchema), asyncHandler(async (req, res) => {

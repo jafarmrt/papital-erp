@@ -84,30 +84,11 @@ export function useSaveSettingsMutation() {
     onSuccess: () => {
       void invalidatePreset(queryClient, 'settingsChange');
       void queryClient.invalidateQueries({ queryKey: settingsKeys.all });
-      // V10-5.3: سایدبار بلافاصله به‌روز شود
-      void queryClient.invalidateQueries({ queryKey: ['menu_visibility'] });
       toast.success('تنظیمات با موفقیت ذخیره شدند');
     },
     onError: (err: any) => {
       toast.error(err?.message || 'خطا در ذخیره تنظیمات');
     },
-  });
-}
-
-/**
- * V10-5.3: نقشه دید منو per-role — endpoint اختصاصی، کش کوتاه و بدون refetch روی focus
- * تا ویرایش در پنل مدیریت با focus تغییر پنجره پاک نشود.
- */
-export function useMenuVisibilityQuery() {
-  return useQuery<Record<string, string[]>>({
-    queryKey: ['menu_visibility'],
-    queryFn: async () => {
-      const res = await fetchJson('/menu-visibility');
-      return res && typeof res === 'object' && !Array.isArray(res) ? res : {};
-    },
-    staleTime: Infinity,
-    gcTime: 30 * 60 * 1000,
-    refetchOnWindowFocus: false,
   });
 }
 

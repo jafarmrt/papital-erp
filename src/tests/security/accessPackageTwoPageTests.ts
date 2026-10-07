@@ -55,5 +55,22 @@ export async function runAccessPackageTwoPageTests(shouldRun: ShouldRun): Promis
     });
   }
 
+  if (shouldRun('sec_menu_visibility_removed_td_884', 'security', 'td884', 'menu', 'permissions', 'package2')) {
+    await runCase(results, {
+      id: 'sec_menu_visibility_removed_td_884',
+      name: 'v9.0.115: the per-role menu hiding is gone; a saved menu_visibility is ignored (TD-884)',
+      details: 'GET /api/menu-visibility is no longer a route (404); POST /api/settings with menu_visibility from a holder of settings.manage and roles.manage returns 200 and changes nothing, like the other retired keys',
+    }, async (h, wrong) => {
+      const read = await h.get('/api/menu-visibility');
+      if (read.status !== 404) wrong.push(`GET /api/menu-visibility returned ${read.status}, not 404`);
+      const [before] = await h.q("SELECT value FROM app_settings WHERE key = 'menu_visibility'");
+      const holder = await h.sessionWith(['settings.manage', 'roles.manage']);
+      const save = await h.post('/api/settings', { settings: [{ key: 'menu_visibility', value: JSON.stringify({ [holder.role]: ['/products'] }) }] }, holder);
+      if (save.status !== 200) wrong.push(`saving menu_visibility returned ${save.status}, not 200 (ignored)`);
+      const [after] = await h.q("SELECT value FROM app_settings WHERE key = 'menu_visibility'");
+      if ((after?.value ?? null) !== (before?.value ?? null)) wrong.push(`menu_visibility changed to ${String(after?.value)}`);
+    });
+  }
+
   return results;
 }

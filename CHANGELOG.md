@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.115 — Menu From Permissions Only
+- **Menu From Permissions Only:** the per-role menu hiding is removed; a role sees exactly the pages its permissions open (TD-884).
+
 ### v9.0.114 — One Page-Access Table
 - **One Page-Access Table:** menu, page routes, dashboard shortcuts and settings tabs read one table checked against the API guards (TD-668).
 
