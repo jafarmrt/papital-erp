@@ -1,6 +1,6 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { journalVouchers } from '../../db/schema.js';
-import { inArray, sql, and, eq } from 'drizzle-orm';
+import { sql, and, eq } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { VoucherService } from './voucher.service.js';
 import { FiscalPeriodService } from './fiscalPeriod.service.js';
@@ -330,27 +330,6 @@ export class FiscalYearService {
       });
     }
 
-    // V3.0.6 (BUG-03): گارد Double-Close اولیه
-    const closingRefNumbers = [
-      `CLOSE-TEMP-${year}`,
-      `CLOSE-PROFIT-${year}`,
-      `CLOSING-${year}`,
-      `OPENING-${year + 1}`
-    ];
-    const existingClosing = await orm
-      .select({ id: journalVouchers.id, referenceNumber: journalVouchers.referenceNumber })
-      .from(journalVouchers)
-      .where(and(
-        inArray(journalVouchers.referenceNumber, closingRefNumbers),
-        eq(journalVouchers.isDeleted, 0)
-      ));
-    if (existingClosing.length > 0) {
-      throw new ConflictError(
-        `سال مالی ${year} قبلاً بسته شده است (سند شماره ${existingClosing.map(v => `#${v.id}`).join('، ')} موجود است). بستن مجدد سال مجاز نیست.`,
-        'FISCAL_YEAR_ALREADY_CLOSED'
-      );
-    }
-
     const createdVouchers: JournalVoucher[] = [];
     let finalNetProfit = 0;
     type VoucherItemInput = Parameters<typeof VoucherService.createJournalVoucher>[0]['items'][number];
@@ -369,23 +348,10 @@ export class FiscalYearService {
         );
       }
 
-      // C-02 & P0-05: اعتبارسنجی مجدد و قطعی عدم بسته‌شدن سال مالی بلافاصله پس از اخذ قفل Advisory در همان تراکنش
-      const existingClosingInTx = await tx
-        .select({ id: journalVouchers.id, referenceNumber: journalVouchers.referenceNumber })
-        .from(journalVouchers)
-        .where(and(
-          inArray(journalVouchers.referenceNumber, closingRefNumbers),
-          eq(journalVouchers.isDeleted, 0)
-        ));
-      if (existingClosingInTx.length > 0) {
-        throw new ConflictError(
-          `سال مالی ${year} قبلاً بسته شده است (سند شماره ${existingClosingInTx.map(v => `#${v.id}`).join('، ')} موجود است). بستن مجدد سال مجاز نیست.`,
-          'FISCAL_YEAR_ALREADY_CLOSED'
-        );
-      }
-
       // v7.0.49 (audit P2-5): قفل انحصاری ردیف سال در fiscal_periods — منتظر اسنادی می‌ماند که هم‌اکنون در این سال
-      // ثبت می‌شوند و تا پایان این تراکنش هیچ سند تازه‌ای وارد سال نمی‌شود؛ مانده‌ها پس از این قفل محاسبه می‌شوند
+      // ثبت می‌شوند و تا پایان این تراکنش هیچ سند تازه‌ای وارد سال نمی‌شود؛ مانده‌ها پس از این قفل محاسبه می‌شوند.
+      // v9.0.121 (TD-559): بسته بودن سال فقط از همین ردیف خوانده می‌شود؛ پیش‌تر سندی با مرجع «CLOSING-<سال>» (حتی دستی)
+      // بستن سال باز را با «قبلاً بسته شده است» رد می‌کرد
       await FiscalPeriodService.lockForClosing(tx, year);
 
       // C-02 & P0-05: محاسبه تراز اختتامیه و ارقام به صورت تازه در داخل تراکنش و زیر چتر قفل

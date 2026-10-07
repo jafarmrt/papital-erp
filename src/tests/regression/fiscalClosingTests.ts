@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import request from 'supertest';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
 import { journalVouchers } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
@@ -182,6 +182,96 @@ export async function runFiscalClosingTests(shouldRun: ShouldRun): Promise<TestC
 
       assertNoProblems(problems);
       return `closed ${year}; reports up to ${lastDay}: revenue ${expectDefault.revenue}, assets ${expectDefault.assets}; with closing vouchers 0`;
+    }));
+  }
+
+  const manualId = 'reg_manual_voucher_cannot_be_closing_td_559';
+  if (shouldRun(manualId, 'td559', 'fiscal', 'closing', 'vouchers', 'package3')) {
+    await runCase(results, manualId, 'v9.0.121: a manual voucher takes neither the closing type nor a reserved reference, a manual «CLOSING-<year>» no longer blocks closing that year and legacy manual closing-type vouchers reverse and are listed by the health check (TD-559)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const year = 1395;
+      const { firstDay, lastDay } = yearBounds(year);
+      const acc = await accountIdsByCode('1001', '4001', '5001');
+      const admin = await sandboxAdminClient();
+      const body = (extra: Record<string, unknown>) => ({
+        date: '2016-05-01', description: 'TD-559 manual voucher', status: 'approved',
+        items: [{ accountId: acc['1001'], debit: 1000, credit: 0 }, { accountId: acc['4001'], debit: 0, credit: 1000 }],
+        ...extra,
+      });
+      const refused = async (label: string, res: request.Response, status: number, needle: string) => {
+        if (res.status !== status || !JSON.stringify(res.body).includes(needle)) {
+          problems.push(`${label}: ${res.status} ${JSON.stringify(res.body).slice(0, 200)}, expected ${status} with «${needle}»`);
+        }
+      };
+
+      await refused('manual closing type', await admin.post('/api/accounting/vouchers', body({ voucherType: 'closing' })), 400, 'بستن سال مالی');
+      for (const ref of [' closing-1395', 'REV-V77', 'Corr-V5', 'OPENING-1396']) {
+        await refused(`reserved reference «${ref}»`, await admin.post('/api/accounting/vouchers', body({ referenceNumber: ref })), 400, 'رزروشده');
+      }
+      const opening = await admin.post('/api/accounting/vouchers', body({ voucherType: 'opening', referenceNumber: 'OPEN-BAL-1395', date: firstDay }));
+      if (opening.status !== 201 || opening.body?.voucherType !== 'opening') problems.push(`manual opening voucher: ${opening.status} ${opening.body?.voucherType}`);
+      const draft = await admin.post('/api/accounting/vouchers', body({ status: 'draft' }));
+      await refused('edit a draft to closing type', await admin.put(`/api/accounting/vouchers/${draft.body?.id}`, { voucherType: 'closing' }), 400, 'بستن سال مالی');
+      await VoucherService.deleteJournalVoucher(Number(draft.body?.id));
+
+      // legacy rows the old form saved: a manual «CLOSING-1395» and a manual opening saved as closing type
+      const legacyClosingRef = await VoucherService.createJournalVoucher({
+        date: '2016-06-01', voucherType: 'general', status: 'approved', description: 'TD-559 legacy manual CLOSING ref', referenceModule: 'manual', referenceNumber: `CLOSING-${year}`,
+        items: [{ accountId: acc['1001'], debit: 2000, credit: 0 }, { accountId: acc['5001'], debit: 0, credit: 2000 }],
+      });
+      const legacyOpening = await postApproved(firstDay, acc['1001'], acc['4001'], 3000, 'TD-559 legacy opening saved as closing');
+      await orm.update(journalVouchers).set({ voucherType: 'closing' }).where(inArray(journalVouchers.id, [legacyClosingRef.id, legacyOpening]));
+
+      try {
+        await FiscalYearService.executeFiscalYearClosing({ year, createOpeningVoucher: true, username: 'reg' });
+      } catch (err) {
+        problems.push(`closing ${year} with a manual «CLOSING-${year}» voucher was refused: ${err instanceof Error ? err.message : String(err)}`);
+      }
+
+      const reversed = await admin.post(`/api/accounting/vouchers/${legacyOpening}/reverse`, { reason: 'TD-559' });
+      if (reversed.status !== 201) problems.push(`reversing a legacy manual closing-type voucher: ${reversed.status} ${JSON.stringify(reversed.body).slice(0, 200)}`);
+
+      // the health check lists the legacy manual closing-type vouchers, not the closing run's
+      const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
+      const health = await FinancialHealthService.runHealthCheck();
+      const listed = health.tests.find(t => t.id === 'manual_closing_type_vouchers');
+      const listedIds = (listed?.items ?? []).map(i => Number(i.linkId)).sort((a, b) => a - b);
+      const expectedIds = [legacyClosingRef.id, legacyOpening].sort((a, b) => a - b);
+      if (JSON.stringify(listedIds) !== JSON.stringify(expectedIds)) problems.push(`health check lists ${JSON.stringify(listedIds)}, expected the legacy vouchers ${JSON.stringify(expectedIds)}`);
+      assertNoProblems(problems);
+      return `manual closing type and reserved references refused; ${year} closed up to ${lastDay} despite a manual CLOSING-${year}`;
+    }));
+  }
+
+  const lockedId = 'reg_closing_run_vouchers_locked_td_559';
+  if (shouldRun(lockedId, 'td559', 'fiscal', 'closing', 'vouchers', 'package3')) {
+    await runCase(results, lockedId, 'v9.0.121: the vouchers a fiscal-year closing issued, its opening voucher included, are neither reversed, corrected nor put back to draft; only reopening the year undoes them (TD-559)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const year = 1395;
+      const acc = await accountIdsByCode('1001', '4001', '5001');
+      const admin = await sandboxAdminClient();
+      await postApproved('2016-05-01', acc['1001'], acc['4001'], 10_000, 'TD-559 capital');
+      await postApproved('2016-06-01', acc['1001'], acc['5001'], 4_000, 'TD-559 cash sale');
+      const closed = await FiscalYearService.executeFiscalYearClosing({ year, createOpeningVoucher: true, username: 'reg' });
+      const refused = async (label: string, res: request.Response) => {
+        if (res.status !== 409 || res.body?.code !== 'FISCAL_CLOSING_VOUCHER_LOCKED') {
+          problems.push(`${label}: ${res.status} ${JSON.stringify(res.body).slice(0, 200)}, expected 409 FISCAL_CLOSING_VOUCHER_LOCKED`);
+        }
+      };
+      const runTemp = closed.closingVouchers.find(v => v.referenceNumber === `CLOSE-TEMP-${year}`);
+      const runOpening = closed.closingVouchers.find(v => v.referenceNumber === `OPENING-${year + 1}`);
+      await refused('reversing the closing run\'s voucher', await admin.post(`/api/accounting/vouchers/${runTemp?.id}/reverse`, { reason: 'TD-559' }));
+      await refused('the closing run\'s opening voucher back to draft', await admin.put(`/api/accounting/vouchers/${runOpening?.id}/status`, { status: 'draft' }));
+      await refused('correcting the closing run\'s opening voucher', await admin.post(`/api/accounting/vouchers/${runOpening?.id}/correct`, {
+        reason: 'TD-559', newItems: [{ accountId: acc['1001'], debit: 1, credit: 0 }, { accountId: acc['4001'], debit: 0, credit: 1 }],
+      }));
+      const [opening] = await orm.select({ status: journalVouchers.status }).from(journalVouchers).where(eq(journalVouchers.id, runOpening?.id ?? 0));
+      if (opening?.status !== 'approved') problems.push(`the closing run's opening voucher is ${opening?.status}, expected approved`);
+      const reversalRows = await orm.select({ id: journalVouchers.id }).from(journalVouchers)
+        .where(and(eq(journalVouchers.isDeleted, 0), inArray(journalVouchers.referenceId, [runTemp?.id ?? 0, runOpening?.id ?? 0])));
+      if (reversalRows.length > 0) problems.push(`the closing run's vouchers got ${reversalRows.length} reversal or correction vouchers`);
+      assertNoProblems(problems);
+      return `the closing run of ${year} stays as issued`;
     }));
   }
 

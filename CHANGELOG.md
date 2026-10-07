@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.121 — A Manual Voucher Is an Opening Voucher, Never a Closing One
+- **Manual Closing Vouchers (P2):** the voucher form saved opening balances as type closing and a manual reference «CLOSING-1400» blocked closing 1400; a manual voucher now takes neither the closing type nor a reserved reference, closing reads only `fiscal_periods`, and only the closing run's vouchers are locked until the year is reopened (TD-559, `reg_manual_voucher_cannot_be_closing_td_559`).
+
 ### v9.0.120 — Reports of a Closed Year Show Its Real Figures
 - **Closed-Year Reports (P1):** after a year was closed, its income statement, balance sheet, trial balance and ratios showed zero because they counted the closing vouchers; the closing run's vouchers are now linked to the year (`source_fiscal_year`, migration 0063) and left out by default, with an «include closing vouchers» box (TD-545, `reg_reports_exclude_year_end_closing_td_545`).
 

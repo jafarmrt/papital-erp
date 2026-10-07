@@ -503,6 +503,8 @@ export class VoucherService {
     username?: string;
     externalTx: DbExecutor;
     allowReversalOfReversal?: boolean;
+    /** فقط بازگشایی سال مالی (v9.0.121، TD-559) */
+    allowYearEndClosing?: boolean;
   }): Promise<{ action: 'deleted' | 'reversed'; reversalVoucherId: number | null }> {
     const tx = params.externalTx;
     const [existing] = await tx.select({ id: journalVouchers.id, status: journalVouchers.status, date: journalVouchers.date })
@@ -528,6 +530,7 @@ export class VoucherService {
       username: params.username,
       externalTx: tx,
       allowReversalOfReversal: params.allowReversalOfReversal,
+      allowYearEndClosing: params.allowYearEndClosing,
     });
     return { action: 'reversed', reversalVoucherId: reversal?.id ?? null };
   }
@@ -560,6 +563,20 @@ export class VoucherService {
   }
 
   /**
+   * v9.0.121 (TD-559، B03-17): سندی که بستن سال مالی صادر کرده (پیوند `source_fiscal_year`، TD-545) فقط با بازگشایی همان
+   * سال برمی‌گردد. پیش‌تر نگهبان نوع `closing` را می‌سنجید: افتتاحیه دستی‌ای که فرم با نوع اختتامیه ذخیره کرده بود دیگر
+   * معکوس و اصلاح نمی‌شد، و سند افتتاحیه بستن سال (نوع `opening`) به پیش‌نویس برمی‌گشت و حذف می‌شد.
+   */
+  private static assertNotYearEndClosing(voucher: { voucherNumber: string | number; sourceFiscalYear?: number | null }, action: string): void {
+    if (voucher.sourceFiscalYear === null || voucher.sourceFiscalYear === undefined) return;
+    throw new ConflictError(
+      `سند شماره «${voucher.voucherNumber}» را بستن سال مالی ${voucher.sourceFiscalYear} صادر کرده است و ${action}؛ برای تغییر آن، سال ${voucher.sourceFiscalYear} را بازگشایی کنید.`,
+      { sourceFiscalYear: voucher.sourceFiscalYear },
+      'FISCAL_CLOSING_VOUCHER_LOCKED'
+    );
+  }
+
+  /**
    * Reverse Voucher Pattern (صدور سند عکس / عطف / برگشت)
    * Inverts all debit and credit rows to completely neutralize the financial impact of a voucher.
    */
@@ -572,6 +589,8 @@ export class VoucherService {
       username?: string;
       externalTx?: DbExecutor;
       allowReversalOfReversal?: boolean;
+      /** فقط بازگشایی سال مالی: سند بستن سال را برمی‌گرداند (برگشت نوع و پیوند همان سال را می‌گیرد) */
+      allowYearEndClosing?: boolean;
     }
   ): Promise<JournalVoucher> {
 
@@ -583,10 +602,8 @@ export class VoucherService {
 
       if (!original) throw new NotFoundError('سند مبدا یافت نشد یا قبلاً حذف شده است');
 
-      // ممانعت از ابطال اسناد اختتامیه
-      if (original.voucherType === 'closing') {
-        throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل ابطال مستقیم نیست.`);
-      }
+      // v9.0.121 (TD-559): سند بستن سال فقط با بازگشایی همان سال برمی‌گردد (پیوند، نه نوع سند)
+      if (!params.allowYearEndClosing) this.assertNotYearEndClosing(original, 'مستقیم ابطال نمی‌شود');
       // v8.0.70 (TD-323، قاعده TD-251): سند پیش‌نویس سند معکوس تأییدشده نمی‌گیرد؛ پیش‌تر می‌گرفت و دفاتر تأییدشده فقط
       // سند معکوس را می‌دیدند
       if (original.status === 'draft') {
@@ -647,7 +664,9 @@ export class VoucherService {
         voucherNumber: nextNumber,
         manualVoucherNumber: '',
         date: reversalDate,
-        voucherType: 'adjustment',
+        // v9.0.121 (TD-559): برگشت سند بستن سال (بازگشایی) نوع و پیوند همان سال را می‌گیرد تا گزارش‌ها جفت را با هم بشمارند
+        voucherType: original.sourceFiscalYear != null ? original.voucherType : 'adjustment',
+        sourceFiscalYear: original.sourceFiscalYear ?? null,
         status: 'approved',
         totalDebit: money(original.totalCredit),
         totalCredit: money(original.totalDebit),
@@ -735,9 +754,7 @@ export class VoucherService {
         throw new BusinessLogicError(`سند قطعی شماره «${original.voucherNumber}» غیرقابل اصلاح یا ابطال است.`);
       }
 
-      if (original.voucherType === 'closing') {
-        throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل اصلاح مستقیم نیست.`);
-      }
+      this.assertNotYearEndClosing(original, 'مستقیم اصلاح نمی‌شود'); // v9.0.121 (TD-559)
       if (original.status === 'draft') { // v8.0.70 (TD-323)
         throw new BusinessLogicError(`سند پیش‌نویس شماره «${original.voucherNumber}» در دفاتر نیامده است و برگشت نمی‌خورد؛ آن را ویرایش یا حذف کنید.`);
       }
@@ -911,9 +928,7 @@ export class VoucherService {
         throw new BusinessLogicError(`سند قطعی شماره «${original.voucherNumber}» از نظر قانونی و مالی غیرقابل ابطال یا بازثبت است.`);
       }
 
-      if (original.voucherType === 'closing') {
-        throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل ابطال یا بازثبت نیست.`);
-      }
+      this.assertNotYearEndClosing(original, 'ابطال و بازثبت نمی‌شود'); // v9.0.121 (TD-559)
       if (original.status === 'draft') { // v8.0.70 (TD-323)
         throw new BusinessLogicError(`سند پیش‌نویس شماره «${original.voucherNumber}» در دفاتر نیامده است و برگشت نمی‌خورد؛ آن را ویرایش یا حذف کنید.`);
       }
@@ -1129,7 +1144,10 @@ export class VoucherService {
   static async applyVoucherStatus(tx: DbExecutor, id: number, status: 'draft' | 'approved' | 'permanent', userId?: number): Promise<void> {
     const [existing] = await tx.select().from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
     if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
-    if (status === 'draft' && existing.status !== 'draft') await this.assertNoActiveReversal(tx, existing, 'به پیش‌نویس برنمی‌گردد');
+    if (status === 'draft' && existing.status !== 'draft') {
+      this.assertNotYearEndClosing(existing, 'به پیش‌نویس برنمی‌گردد'); // v9.0.121 (TD-559)
+      await this.assertNoActiveReversal(tx, existing, 'به پیش‌نویس برنمی‌گردد');
+    }
     if (existing.status === 'permanent' && status !== 'permanent') {
       throw new BusinessLogicError('اسناد دائم و قطعی‌شده قابل تغییر وضعیت به پیش‌نویس یا تایید نشده نیستند. لطفاً از گزینه «صدور سند برگشتی (ابطال سند)» یا «سند اصلاحی» استفاده فرمایید.');
     }

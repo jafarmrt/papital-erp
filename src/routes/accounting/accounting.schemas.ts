@@ -8,6 +8,7 @@ import { computeVoucherBalance, VOUCHER_BALANCE_TOLERANCE, type VoucherBalanceRo
 import { DEFAULT_ACCOUNT_MAPPINGS, type ConceptualAccountMappingConfig } from '../../services/accounting/accountMapping.service.js';
 import { decimalInput, latinDigitsString, storageDateParam } from '../../middleware/validate.js';
 import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../../lib/treasury/treasuryCurrency.js';
+import { isReservedVoucherReference, MANUAL_CLOSING_TYPE_MESSAGE, RESERVED_REFERENCE_MESSAGE } from '../../lib/accounting/manualVoucherRules.js';
 
 /** query پس از validate: میدل‌ور validate مقدار req.query را با خروجی parse شده Zod جایگزین می‌کند. */
 export type ValidatedQuery<S extends z.ZodTypeAny> = z.infer<S> extends { query?: infer Q } ? Partial<NonNullable<Q>> : never;
@@ -103,16 +104,22 @@ const isVoucherBalanced = (rows: readonly VoucherBalanceRow[]): boolean => {
   return balance.totalDebit > 0 && balance.difference <= VOUCHER_BALANCE_TOLERANCE;
 };
 
+/**
+ * v9.0.121 (TD-559، B03-17): نوع سند دستی؛ «اختتامیه» را فقط بستن سال مالی صادر می‌کند (مانده‌های اول دوره «افتتاحیه» است)
+ */
+const manualVoucherType = z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement'])
+  .refine(type => type !== 'closing', MANUAL_CLOSING_TYPE_MESSAGE);
+
 export const createVoucherSchema = z.object({
   body: z.object({
     date: z.string().min(1, 'تاریخ سند الزامی است'),
-    voucherType: z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement']).optional().default('general'),
+    voucherType: manualVoucherType.optional().default('general'),
     status: z.enum(['draft', 'approved']).optional(),
     manualVoucherNumber: z.string().optional(),
     description: z.string().min(1, 'شرح کلی سند الزامی است'),
     referenceModule: z.enum(['manual', 'invoice', 'payroll', 'cheque', 'treasury', 'inventory']).optional().default('manual'),
     referenceId: z.coerce.number().int().positive().nullable().optional(),
-    referenceNumber: z.string().optional(),
+    referenceNumber: z.string().optional().refine(ref => !isReservedVoucherReference(ref), RESERVED_REFERENCE_MESSAGE),
     currency: z.string().optional(),
     attachments: z.array(z.any()).optional(),
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است')
@@ -130,7 +137,7 @@ export const updateVoucherSchema = z.object({
     date: z.string().min(1, 'تاریخ سند الزامی است').optional(),
     description: z.string().min(1, 'شرح کلی سند الزامی است').optional(),
     manualVoucherNumber: z.string().optional(),
-    voucherType: z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement']).optional(),
+    voucherType: manualVoucherType.optional(),
     currency: z.string().optional(),
     attachments: z.array(z.any()).optional(),
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است').optional(),
