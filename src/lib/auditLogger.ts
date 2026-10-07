@@ -5,64 +5,13 @@ import { systemNowUtcIso } from '../lib/businessClock.js';
 import { sql, lt, and, inArray, notInArray, count, not, type SQL } from 'drizzle-orm';
 import type { Request } from 'express';
 import { ValidationError } from '../errors/customErrors.js';
-import { FinancialDecimal } from './financialDecimal.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
 import { CRITICAL_AUDIT_ACTIONS, MIN_AUDIT_RETENTION_DAYS, PURGEABLE_AUDIT_ENTITIES } from './audit/auditRetention.js';
+import { sanitizeAuditValue, sanitizeSensitiveData } from './audit/auditSanitizer.js';
 
-// Regex patterns to identify sensitive keys that MUST NEVER be stored in audit logs
-const SENSITIVE_KEY_REGEX = /^(password|pass|new_password|current_password|newpassword|currentpassword|old_password|oldpassword|confirmpassword|confirm_password|token|access_token|accesstoken|refresh_token|refreshtoken|auth_token|authtoken|secret|jwt|apikey|api_key|authorization|cookie|card_number|credit_card|cvv|ssn)$/i;
-
-/**
- * Recursively sanitizes any sensitive credentials (passwords, tokens, secrets) from objects or arrays.
- * Replaces sensitive values with '[PROTECTED]' or boolean flags.
- */
-export function sanitizeSensitiveData<T = unknown>(obj: T, depth = 0, seen = new WeakSet()): T {
-  if (obj === null || obj === undefined) return obj;
-  if (depth > 6) return '[MAX_DEPTH_REACHED]' as unknown as T;
-
-  if (typeof obj === 'string') {
-    // If string contains JWT-like token (eyJh...) mask it
-    if (/^Bearer\s+[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/i.test(obj.trim())) {
-      return 'Bearer [PROTECTED_JWT]' as unknown as T;
-    }
-    if (/^eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/i.test(obj.trim())) {
-      return '[PROTECTED_JWT]' as unknown as T;
-    }
-    return obj;
-  }
-
-  if (typeof obj !== 'object') {
-    return obj;
-  }
-
-  // v7.0.67 (P2-6): مبلغ Decimal/Money در اسنپ‌شات ممیزی عدد است (نه ساختار داخلی Decimal)
-  if (obj instanceof FinancialDecimal) {
-    return obj.toNumber() as unknown as T;
-  }
-
-  // Prevent circular references
-  if (seen.has(obj as object)) {
-    return '[CIRCULAR]' as unknown as T;
-  }
-  seen.add(obj as object);
-
-  if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeSensitiveData(item, depth + 1, seen)) as unknown as T;
-  }
-
-  const sanitized: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-    if (SENSITIVE_KEY_REGEX.test(key)) {
-      sanitized[key] = '[PROTECTED]';
-    } else if (typeof value === 'object' && value !== null) {
-      sanitized[key] = sanitizeSensitiveData(value, depth + 1, seen);
-    } else {
-      sanitized[key] = value;
-    }
-  }
-
-  return sanitized as T;
-}
+// v9.0.155 (TD-530، تصمیم ت۷ الف): پاک‌کننده در `src/lib/audit/auditSanitizer.ts`؛ کلید رمز با «شامل‌بودن» و شماره کارت،
+// حساب و شبا تا ۴ رقم آخر
+export { sanitizeSensitiveData } from './audit/auditSanitizer.js';
 
 /**
  * آدرس IP کلاینت برای لاگ ممیزی.
@@ -97,8 +46,8 @@ export function computeAuditDiff(
 
     if (strBefore !== strAfter) {
       diff[key] = {
-        before: sanitizeSensitiveData(valBefore),
-        after: sanitizeSensitiveData(valAfter)
+        before: sanitizeAuditValue(key, valBefore),
+        after: sanitizeAuditValue(key, valAfter)
       };
     }
   }

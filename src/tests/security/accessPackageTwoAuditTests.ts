@@ -67,5 +67,50 @@ export async function runAccessPackageTwoAuditTests(shouldRun: ShouldRun): Promi
     });
   }
 
+  if (shouldRun('sec_audit_masks_bank_numbers_td_530', 'security', 'td530', 'audit', 'sanitize', 'package2')) {
+    await runCase(results, {
+      id: 'sec_audit_masks_bank_numbers_td_530',
+      name: 'v9.0.155: the audit snapshot of a party keeps only the last four digits of its card, account and Sheba numbers (TD-530)',
+      details: 'R08 of the package 2 review: POST /customers with bank details used to store the card 6104337812345678 and the account in clear in activity_logs and GET /activity-logs; now the snapshot and the field change hold ****5678 style values, so a Sheba change stays visible without the full number',
+    }, async (h, wrong) => {
+      const name = `طرف حساب سجل ${h.tag}`;
+      const card = '6104337812345678';
+      const account = '1234567890';
+      const sheba = 'IR820540102680020817909002';
+      const newSheba = 'IR820540102680020817905678';
+      let partyId = 0;
+      try {
+        const created = await h.post('/api/customers', { name, bankInfo: { bankName: 'ملت', accountNumber: account, shaba: sheba, cardNumber: card } });
+        if (created.status !== 200) throw new Error(`creating the party returned ${created.status}`);
+        partyId = Number(created.body?.id);
+        const version = Number(created.body?.version ?? 1);
+        const updated = await h.put(`/api/customers/${partyId}`, { name, version, bankInfo: { bankName: 'ملت', accountNumber: account, shaba: newSheba, cardNumber: card } });
+        if (updated.status !== 200) throw new Error(`updating the party returned ${updated.status}`);
+
+        const rows = await h.q(`SELECT action, details FROM activity_logs WHERE entity_id = $1 AND entity IN ('طرف حساب', 'تامین‌کننده') ORDER BY id`, [String(partyId)]);
+        const text = JSON.stringify(rows);
+        for (const [label, raw] of [['card', card], ['account', account], ['Sheba', '0540102680020817909002'], ['new Sheba', '0540102680020817905678']]) {
+          if (text.includes(raw)) wrong.push(`the audit row holds the ${label} number in clear`);
+        }
+        const createdRow = rows.find(r => r.action === 'CREATE')?.details as { after?: { bankInfo?: Record<string, unknown> } } | undefined;
+        const bank = createdRow?.after?.bankInfo;
+        if (bank?.cardNumber !== '****5678' || bank?.accountNumber !== '****7890' || bank?.shaba !== '****9002' || bank?.bankName !== 'ملت') {
+          wrong.push(`the created snapshot holds ${JSON.stringify(bank)}`);
+        }
+        const change = (rows.find(r => r.action === 'UPDATE')?.details as { changes?: { bankInfo?: { before?: { shaba?: unknown }; after?: { shaba?: unknown } } } } | undefined)?.changes?.bankInfo;
+        if (change?.before?.shaba !== '****9002' || change?.after?.shaba !== '****5678') wrong.push(`the Sheba change reads ${JSON.stringify(change)}`);
+
+        const listed = await h.get(`/api/activity-logs?search=${encodeURIComponent(name)}`);
+        if (listed.status !== 200) wrong.push(`GET /activity-logs returned ${listed.status}`);
+        else if (JSON.stringify(listed.body).includes(card)) wrong.push('GET /activity-logs returns the card number in clear');
+      } finally {
+        if (partyId) {
+          await h.q('DELETE FROM activity_logs WHERE entity_id = $1 AND entity IN ($2, $3)', [String(partyId), 'طرف حساب', 'تامین‌کننده']);
+          await h.q('DELETE FROM customers WHERE id = $1', [partyId]).catch(() => undefined);
+        }
+      }
+    });
+  }
+
   return results;
 }

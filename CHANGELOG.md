@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.155 — Audit Log Masks Bank Numbers and Secret Keys in Any Spelling
+- **Audit Log Masks Bank Numbers and Secret Keys in Any Spelling:** card, account and Sheba numbers keep only their last four digits in audit snapshots; secret keys are found by "contains" in any spelling (TD-530).
+
 ### v9.0.154 — Audit Purge Keeps Financial, Security, Role and User Events
 - **Audit Purge Keeps Financial, Security, Role and User Events:** the purge deletes only operational sections after the fixed 90 days; the options that turned protection off are gone (TD-522).
 
