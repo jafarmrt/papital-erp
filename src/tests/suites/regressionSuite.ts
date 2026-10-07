@@ -10641,5 +10641,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runDailyLogAccessTests } = await import('../regression/dailyLogAccessTests.js');
   results.push(...await runDailyLogAccessTests(shouldRun));
 
+  // Package 8 PR A (v9.0.238+): stock direction, sellable gate and line numbers of POST /documents
+  const { runDocumentEntryTests } = await import('../regression/documentEntryTests.js');
+  results.push(...await runDocumentEntryTests(shouldRun));
+
   return results;
 }

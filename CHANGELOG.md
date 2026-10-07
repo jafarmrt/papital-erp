@@ -19,6 +19,24 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.242 — v9.0.242 — Stock Page Exit Cap by Source Warehouse
+- **Documents (UI):** the stock document page caps an exit at min(source warehouse stock, total stock − other reservations), the server rule, so a remittance from an empty warehouse is stopped in the form instead of failing on save (TD-799).
+
+### v9.0.241 — v9.0.241 — Stock Document Page by Record Permission
+- **Documents (UI):** the stock document page offers each direction, document type and its submit button by the permission the server asks to record that type final, instead of the `viewer` role code, and names the missing permission (TD-791).
+
+### v9.0.240 — v9.0.240 — Document Line Numbers Read as Decimals
+- **Documents:** quantity, price, discount and stock-count numbers of a document line are read with `decimalInput`: Persian digits and thousands separators are accepted, hex and exponent text is refused, and a price sent empty is an error instead of zero (TD-784).
+
+### v9.0.239 — v9.0.239 — One Sellable Gate for Create and Finalize
+- **Documents:** every outgoing document recorded or finalized as final passes one sellable gate that sums each item and warehouse, with or without `inOut`, so a second line or a missing field no longer sells stock reserved for another customer (TD-775).
+
+### v9.0.238 — v9.0.238 — Stock Direction From the Document Type
+- **Documents (P1):** a document moves stock only in the direction of its type; an `inOut` against the type is refused with 422 `DOCUMENT_DIRECTION_MISMATCH` and a transfer is no longer recorded through `POST /documents`, so a receipt can no longer take goods out while its voucher adds them (TD-770, decision ت۲).
+
+### v9.0.237 — v9.0.237 — Package 8 Documents and Invoices Audit Documentation
+- **Package 8 Audit:** section 10 of the V9 stability audit records the documents and invoices package: 34 proven findings (seven P1, among them stock direction taken from the request body, a zero-price invoice without a voucher, voiding an invoice that has a return, and sales returns without VAT or tied price) opened as TD-770 and TD-772..TD-803 (TD-771 was closed in v9.0.125), with the product-owner decisions. Documentation only.
+
 ### v9.0.236 — بسته ۱۳ الف: حالت دید «عمومی» گزارش کار برداشته شد
 - فرم دو حالت دید دارد؛ مهاجرت ۰۰۷۵ گزارش‌های عمومی را به «اشاره‌شده‌ها و خودم» برد و مقدار پیشین را نگه داشت (TD-900، تصمیم ت۷).
 
