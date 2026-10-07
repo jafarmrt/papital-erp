@@ -210,5 +210,86 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
     }));
   }
 
+  const scheduleOnceId = 'reg_schedule_row_logged_once_td_736';
+  if (shouldRun(scheduleOnceId, 'td736', 'piecework', 'schedule', 'package11', 'package12')) {
+    await runCase(results, scheduleOnceId, 'v9.0.238: a workshop schedule row is logged to piecework once; the server writes the log id into the row, refuses a second or concurrent log of it with 409, refuses a missing or mismatched row with 422, keeps the link when the browser saves the schedule, and frees the row when its log is deleted or moved (TD-736)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const task = await rateTask(40_000);
+      const [w1, w2, w3, w4] = [await newWorker('TD-736 one'), await newWorker('TD-736 two'), await newWorker('TD-736 three'), await newWorker('TD-736 four')];
+      const project = await scheduledProject([
+        { id: 'row-a', taskId: task, personnelId: w1, quantity: 5 },
+        { id: 'row-b', taskId: task, personnelId: w2, quantity: 5 },
+        { id: 'row-c', taskId: task, personnelId: w3, quantity: 5 },
+      ]);
+      const item = (personnelId: number, rowId: string) => ({
+        personnelId, taskId: task, projectId: project, date: '1405/06/12', quantity: 5,
+        scheduleRef: { stageId: 1, productId: 'prod-main', rowId },
+      });
+      const rowOf = async (rowId: string) => {
+        const [p] = await orm.select({ s: productionProjects.stageSchedules }).from(productionProjects).where(eq(productionProjects.id, project));
+        const tasks = ((p?.s as Record<string, Record<string, { tasks?: Array<Record<string, unknown>> }>> | null)?.['1']?.['prod-main']?.tasks) ?? [];
+        return tasks.find(t => t.id === rowId);
+      };
+
+      // 1) the first log of row A is saved and its id is written into the row (the flag used to live only in the browser)
+      const first = await admin.post('/api/piecework/logs', { items: [item(w1, 'row-a')] });
+      const firstId = Number(first.body?.insertedIds?.[0]);
+      if (first.status !== 201 || !Number.isInteger(firstId)) problems.push(`the first log of row A answered ${first.status} ${brief(first.body)}, expected 201 with insertedIds`);
+      const linked = await rowOf('row-a');
+      if (Number(linked?.pieceworkLogId) !== firstId) problems.push(`row A holds log id ${String(linked?.pieceworkLogId)}, expected ${firstId}`);
+
+      // 2) logging row A again (the tab reopened) is refused and pays nothing twice
+      const again = await admin.post('/api/piecework/logs', { items: [item(w1, 'row-a')] });
+      if (again.status !== 409 || again.body?.code !== 'PIECEWORK_SCHEDULE_ROW_LOGGED') problems.push(`a second log of row A answered ${again.status} ${brief(again.body)}, expected 409 PIECEWORK_SCHEDULE_ROW_LOGGED`);
+      if (await logCount(w1) !== 1) problems.push(`row A has ${await logCount(w1)} logs, expected 1`);
+
+      // 3) two concurrent logs of row B: exactly one is saved
+      const outcomes = await Promise.allSettled([PieceworkService.logWorkEntries([item(w2, 'row-b')]), PieceworkService.logWorkEntries([item(w2, 'row-b')])]);
+      const saved = outcomes.filter(o => o.status === 'fulfilled').length;
+      const refused = outcomes.filter(o => o.status === 'rejected' && codeOf(o.reason) === 'PIECEWORK_SCHEDULE_ROW_LOGGED').length;
+      if (saved !== 1 || refused !== 1 || await logCount(w2) !== 1) problems.push(`two concurrent logs of row B: ${saved} saved, ${refused} refused, ${await logCount(w2)} logs, expected 1 / 1 / 1`);
+
+      // 4) a row the saved schedule does not hold, or one with another personnel, is refused (422) and saves nothing
+      const missing = await admin.post('/api/piecework/logs', { items: [item(w4, 'row-z')] });
+      if (missing.status !== 422 || missing.body?.code !== 'PIECEWORK_SCHEDULE_ROW_NOT_FOUND') problems.push(`a missing row answered ${missing.status} ${brief(missing.body)}, expected 422 PIECEWORK_SCHEDULE_ROW_NOT_FOUND`);
+      const mismatch = await admin.post('/api/piecework/logs', { items: [item(w4, 'row-c')] });
+      if (mismatch.status !== 422 || mismatch.body?.code !== 'PIECEWORK_SCHEDULE_ROW_MISMATCH') problems.push(`row C with another personnel answered ${mismatch.status} ${brief(mismatch.body)}, expected 422 PIECEWORK_SCHEDULE_ROW_MISMATCH`);
+      if (await logCount(w4) !== 0) problems.push(`refused schedule rows saved ${await logCount(w4)} logs`);
+
+      // 5) saving the schedule from the browser neither drops nor forges a link
+      const [before] = await orm.select({ s: productionProjects.stageSchedules }).from(productionProjects).where(eq(productionProjects.id, project));
+      const sent = JSON.parse(JSON.stringify(before?.s ?? {})) as Record<string, Record<string, { tasks: Array<Record<string, unknown>> }>>;
+      for (const t of sent['1']['prod-main'].tasks) {
+        if (t.id === 'row-a') delete t.pieceworkLogId;
+        if (t.id === 'row-c') t.pieceworkLogId = firstId;
+      }
+      sent['1']['prod-main'].tasks.push({ id: 'row-d', taskId: task, taskTitle: 'schedule row', assignedPersonnelId: w4, quantity: 1, isLoggedToPiecework: true });
+      const put = await admin.put(`/api/projects/${project}`, { stage_schedules: sent });
+      if (put.status !== 200) problems.push(`saving the schedule answered ${put.status} ${brief(put.body)}`);
+      const [rowA, rowC, rowD] = [await rowOf('row-a'), await rowOf('row-c'), await rowOf('row-d')];
+      if (Number(rowA?.pieceworkLogId) !== firstId) problems.push(`saving the schedule without row A's link left ${String(rowA?.pieceworkLogId)}, expected ${firstId}`);
+      if (rowC?.pieceworkLogId !== undefined || rowD?.isLoggedToPiecework !== undefined) problems.push(`the browser forged links: row C ${String(rowC?.pieceworkLogId)}, row D ${String(rowD?.isLoggedToPiecework)}`);
+      const rowCLog = await admin.post('/api/piecework/logs', { items: [item(w3, 'row-c')] });
+      if (rowCLog.status !== 201) problems.push(`row C after a forged link answered ${rowCLog.status} ${brief(rowCLog.body)}, expected 201`);
+
+      // 6) deleting row A's log frees the row; moving row C's log to another project frees row C
+      const del = await admin.del(`/api/piecework/logs/${firstId}`);
+      if (del.status !== 200) problems.push(`deleting row A's log answered ${del.status} ${brief(del.body)}`);
+      if ((await rowOf('row-a'))?.pieceworkLogId !== undefined) problems.push('row A kept the link of its deleted log');
+      const relog = await admin.post('/api/piecework/logs', { items: [item(w1, 'row-a')] });
+      if (relog.status !== 201) problems.push(`row A after its log was deleted answered ${relog.status} ${brief(relog.body)}, expected 201`);
+      const rowCLogId = Number(rowCLog.body?.insertedIds?.[0]);
+      if (Number.isInteger(rowCLogId)) {
+        const other = await scheduledProject([]);
+        await PieceworkService.updateWorkLog(rowCLogId, { projectId: other });
+        if ((await rowOf('row-c'))?.pieceworkLogId !== undefined) problems.push('row C kept the link of a log moved to another project');
+      }
+
+      assertNoProblems(problems);
+      return 'each schedule row holds its log id from the server, is logged once (also concurrently), and is free again when its log is deleted or moved';
+    }));
+  }
+
   return results;
 }

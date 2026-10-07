@@ -11,7 +11,10 @@ import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
 import { extractDateString, formatPersianPrice, errorMessageOf, isoToJalaliDate, formatPersianDate } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
-import { scheduleLogItem, withPieceworkTask } from '../../lib/projects/scheduleWorkLog';
+import {
+  isScheduleRowLogged, scheduleLogItem, withPieceworkTask, withScheduleLogLink, withScheduleRowIds,
+  type ScheduleLogItem, type ScheduleRowRef
+} from '../../lib/projects/scheduleWorkLog';
 import toast from 'react-hot-toast';
 
 interface ProjectScheduleTabProps {
@@ -362,6 +365,36 @@ export default function ProjectScheduleTab({
     void fetchProjectPieceworkLogs();
   }, [project.id]);
 
+  // v9.0.238 (TD-736، تصمیم ت۵ الف): پیش از ثبت کارکرد، برنامه (با شناسه هر ردیف) ذخیره می‌شود تا سرور ردیف را بسنجد و
+  // شناسه کارکرد را در همان ردیف بنویسد؛ ردیف ثبت‌شده دوباره ثبت نمی‌شود (۴۰۹) و وضعیت دکمه از همان شناسه خوانده می‌شود
+  const saveSchedulesForLogging = async (): Promise<ProjectStageSchedulesMap | null> => {
+    const withIds = withScheduleRowIds(schedulesMap, () => `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+    setSchedulesMap(withIds);
+    const res = await fetchJson<{ id?: number }>(`/projects/${project.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage_schedules: withIds })
+    });
+    if (!res?.id) {
+      toast.error('برنامه کارگاه پیش از ثبت کارکرد ذخیره نشد.');
+      return null;
+    }
+    return withIds;
+  };
+
+  const postScheduleLogs = async (items: ScheduleLogItem[]): Promise<number[]> => {
+    const res = await fetchJson<{ insertedIds?: number[] }>('/piecework/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    });
+    return Array.isArray(res?.insertedIds) ? res.insertedIds : [];
+  };
+
+  const markRowsLogged = (links: Array<{ ref: ScheduleRowRef; logId: number }>) => {
+    setSchedulesMap(prev => links.reduce((map, l) => withScheduleLogLink(map, l.ref, l.logId), prev));
+  };
+
   // Log single task to Piecework Logs
   const handleLogSingleTaskToPiecework = async (
     stageId: number,
@@ -385,107 +418,72 @@ export default function ProjectScheduleTab({
     const taskKey = task.id || `${stageId}-${productId}-${taskIdx}`;
     setLoggingTaskId(taskKey);
 
+    let saved: ProjectStageSchedulesMap | null = null;
     try {
+      saved = await saveSchedulesForLogging();
+      const row = saved?.[stageId]?.[productId]?.tasks?.[taskIdx];
+      if (!row?.id) return;
+      const ref: ScheduleRowRef = { stageId, productId, rowId: row.id };
       // v9.0.237 (TD-735): بی نرخ؛ سرور نرخ اختصاصی پرسنل یا نرخ پایه عنوان کار را می‌گذارد
-      const payload = {
-        items: [
-          scheduleLogItem({
-            projectId: project.id,
-            ref: { stageId, productId, rowId: taskKey },
-            row: task,
-            date: task.startDate || new Date().toLocaleDateString('fa-IR'),
-            notes: `کارکرد پروژه ${project.project_code || project.title} - ${task.taskTitle}`
-          })
-        ]
-      };
-
-      const res = await fetchJson<{ status: string; insertedCount?: number }>('/piecework/logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res?.status === 'ok' || (res as any)?.insertedCount) {
-        toast.success(`کارکرد «${task.taskTitle}» برای ${task.assignedPersonnelName || 'پرسنل'} در ماژول کارمزدی ثبت شد.`);
-
-        // Mark task as logged
-        updateProductSchedule(stageId, productId, prev => {
-          const tasks = [...(prev.tasks || [])];
-          if (tasks[taskIdx]) {
-            tasks[taskIdx] = { ...tasks[taskIdx], isLoggedToPiecework: true };
-          }
-          return { ...prev, tasks };
-        });
-
-        void fetchProjectPieceworkLogs();
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در ثبت کارکرد کارمزدی');
+      const [logId] = await postScheduleLogs([scheduleLogItem({
+        projectId: project.id,
+        ref,
+        row,
+        date: row.startDate || new Date().toLocaleDateString('fa-IR'),
+        notes: `کارکرد پروژه ${project.project_code || project.title} - ${row.taskTitle}`
+      })]);
+      toast.success(`کارکرد «${row.taskTitle}» برای ${row.assignedPersonnelName || 'پرسنل'} در ماژول کارمزدی ثبت شد.`);
+      if (logId) markRowsLogged([{ ref, logId }]);
+      void fetchProjectPieceworkLogs();
+    } catch (err) {
+      toast.error(errorMessageOf(err) || 'خطا در ثبت کارکرد کارمزدی');
     } finally {
       setLoggingTaskId(null);
+      // برنامه ذخیره‌نشده با بارگذاری دوباره از دست نمی‌رود
+      if (saved) onUpdate();
     }
   };
 
   // Batch log all unlogged tasks in a stage
   const handleBatchLogStageTasks = async (stageId: number, stageTitle: string) => {
-    const stageSchedules = schedulesMap[stageId] || {};
-    const itemsToLog: any[] = [];
-    const targetsToUpdate: { productId: string; taskIdx: number }[] = [];
-
-    Object.entries(stageSchedules).forEach(([prodId, pSched]) => {
-      const schedule = pSched as ProductStageSchedule;
-      (schedule?.tasks || []).forEach((t, idx) => {
-        if (t.assignedPersonnelId && t.taskId && Number(t.quantity) > 0 && !t.isLoggedToPiecework) {
-          itemsToLog.push(scheduleLogItem({
-            projectId: project.id,
-            ref: { stageId, productId: prodId, rowId: t.id || `${stageId}-${prodId}-${idx}` },
-            row: t,
-            date: t.startDate || new Date().toLocaleDateString('fa-IR'),
-            notes: `کارکرد مرحله «${stageTitle}» پروژه ${project.project_code || project.title} - ${t.taskTitle}`
-          }));
-          targetsToUpdate.push({ productId: prodId, taskIdx: idx });
-        }
-      });
-    });
-
-    if (itemsToLog.length === 0) {
+    const loggable = (t: TaskAssignmentItem) => Boolean(t.assignedPersonnelId && t.taskId && Number(t.quantity) > 0 && !isScheduleRowLogged(t));
+    const hasLoggable = Object.values(schedulesMap[stageId] || {}).some(sched => (sched?.tasks || []).some(loggable));
+    if (!hasLoggable) {
       toast.error('هیچ وظیفه ثبت‌نشده‌ای با پرسنل و عنوان کارمزدی معتبر در این مرحله یافت نشد.');
       return;
     }
 
     setBatchLoggingStageId(stageId);
+    let saved: ProjectStageSchedulesMap | null = null;
     try {
-      const res = await fetchJson<{ status: string; insertedCount?: number }>('/piecework/logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: itemsToLog })
+      saved = await saveSchedulesForLogging();
+      if (!saved) return;
+      const refs: ScheduleRowRef[] = [];
+      const itemsToLog: ScheduleLogItem[] = [];
+      Object.entries(saved[stageId] || {}).forEach(([prodId, sched]) => {
+        ((sched?.tasks || []) as TaskAssignmentItem[]).forEach(t => {
+          if (!t.id || !loggable(t)) return;
+          const ref: ScheduleRowRef = { stageId, productId: prodId, rowId: t.id };
+          refs.push(ref);
+          itemsToLog.push(scheduleLogItem({
+            projectId: project.id,
+            ref,
+            row: t,
+            date: t.startDate || new Date().toLocaleDateString('fa-IR'),
+            notes: `کارکرد مرحله «${stageTitle}» پروژه ${project.project_code || project.title} - ${t.taskTitle}`
+          }));
+        });
       });
 
-      if (res?.status === 'ok' || (res as any)?.insertedCount) {
-        toast.success(`تعداد ${itemsToLog.length} رکورد کارکرد برای مرحله «${stageTitle}» با موفقیت ثبت شد.`);
-
-        // Mark all these tasks as logged
-        setSchedulesMap(prev => {
-          const next = { ...prev };
-          const stg = { ...(next[stageId] || {}) };
-          targetsToUpdate.forEach(({ productId, taskIdx }) => {
-            if (stg[productId]) {
-              stg[productId] = {
-                ...stg[productId],
-                tasks: ((stg[productId] as any).tasks || []).map((tk: any, i: number) => i === taskIdx ? { ...tk, isLoggedToPiecework: true } : tk)
-              };
-            }
-          });
-          next[stageId] = stg;
-          return next;
-        });
-
-        void fetchProjectPieceworkLogs();
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در ثبت گروهی کارکردها');
+      const ids = await postScheduleLogs(itemsToLog);
+      toast.success(`تعداد ${itemsToLog.length} رکورد کارکرد برای مرحله «${stageTitle}» با موفقیت ثبت شد.`);
+      markRowsLogged(refs.map((ref, i) => ({ ref, logId: ids[i] })).filter(l => Boolean(l.logId)));
+      void fetchProjectPieceworkLogs();
+    } catch (err) {
+      toast.error(errorMessageOf(err) || 'خطا در ثبت گروهی کارکردها');
     } finally {
       setBatchLoggingStageId(null);
+      if (saved) onUpdate();
     }
   };
 
@@ -793,7 +791,7 @@ export default function ProjectScheduleTab({
                                     </span>
                                     
                                     {/* Action to log to piecework */}
-                                    {task.isLoggedToPiecework ? (
+                                    {isScheduleRowLogged(task) ? (
                                       <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-bold flex items-center gap-0.5" title="در کارکرد کارمزدی ثبت شده است">
                                         <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                                         <span>ثبت‌شده</span>
@@ -816,16 +814,16 @@ export default function ProjectScheduleTab({
                                     )}
                                   </div>
 
-                                  {/* Delete */}
+                                  {/* Delete (v9.0.238، TD-736: ردیف ثبت‌شده حذف نمی‌شود تا پیوند کارکردش نماند) */}
                                   <div className="sm:col-span-1 text-center">
-                                    <button
+                                    {!isScheduleRowLogged(task) && <button
                                       type="button"
                                       onClick={() => handleRemoveTask(stg.id, p.id, tIdx)}
                                       className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
                                       title="حذف این وظیفه"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                    </button>}
                                   </div>
                                 </div>
                               );

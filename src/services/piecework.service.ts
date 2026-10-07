@@ -6,6 +6,8 @@ import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
 import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workLogPayrollLink.js';
+import { assertScheduleRowsFree, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
+import type { ScheduleRowRef } from '../lib/projects/scheduleWorkLog.js';
 import { assertWorkLogParentsLive, normalizeWorkLogEntries, workLogId, workLogManualRate, workLogQuantity, type WorkLogEntryInput } from './piecework/workLogEntry.js';
 import {
   allocatePieceworkTaskCode,
@@ -267,8 +269,12 @@ export class PieceworkService {
   ): Promise<number[]> {
     const entries = normalizeWorkLogEntries(items);
     return inTransaction(executor, async (tx) => {
+      // v9.0.238 (TD-736): نخست ردیف پروژه‌های ردیف‌های برنامه FOR UPDATE، سپس والدها FOR SHARE
+      const schedules = await lockScheduleProjects(tx, entries);
       await assertWorkLogParentsLive(tx, entries);
+      await assertScheduleRowsFree(tx, entries, schedules);
       const insertedIds: number[] = [];
+      const links: Array<{ projectId: number; ref: ScheduleRowRef; logId: number }> = [];
       for (const [index, entry] of entries.entries()) {
         const { createdById, createdByUsername } = items[index];
         const finalRate: DecimalValue = entry.unitRate ?? await PieceworkService.serverRate(tx, entry.personnelId, entry.taskId);
@@ -292,7 +298,9 @@ export class PieceworkService {
         }).returning({ id: pieceworkLogs.id });
 
         insertedIds.push(inserted.id);
+        if (entry.scheduleRef && entry.projectId !== null) links.push({ projectId: entry.projectId, ref: entry.scheduleRef, logId: inserted.id });
       }
+      await linkScheduleRows(tx, links, schedules);
       return insertedIds;
     });
   }
@@ -732,7 +740,10 @@ export class PieceworkService {
       const newRate: FinancialDecimal = manualRate !== undefined ? fin(manualRate) : existing.unitRate;
       const newTotal = fin(newQty).multiply(newRate);
       const newProjectId = data.projectId !== undefined ? workLogId(data.projectId, 'شناسه پروژه', '', true) : existing.projectId;
-      if (newProjectId !== null && newProjectId !== existing.projectId) {
+      const projectMoved = newProjectId !== existing.projectId;
+      // v9.0.238 (TD-736): کارکرد ردیف برنامه که به پروژه دیگر می‌رود پیوند ردیف پروژه پیشین را برمی‌دارد
+      if (projectMoved) await lockProjectsOfLogMove(tx, existing.projectId, newProjectId);
+      if (newProjectId !== null && projectMoved) {
         await assertWorkLogParentsLive(tx, [{ personnelId: existing.personnelId, taskId: existing.taskId, projectId: newProjectId }]);
       }
 
@@ -748,6 +759,7 @@ export class PieceworkService {
       if (!updated) {
         throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');
       }
+      if (projectMoved) await unlinkScheduleRow(tx, existing.projectId, id);
       return updated;
     });
   }
@@ -768,6 +780,8 @@ export class PieceworkService {
       if (!deleted) {
         throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');
       }
+      // v9.0.238 (TD-736): ردیف برنامه کارکرد حذف‌شده دوباره ثبت‌شدنی است
+      await unlinkScheduleRow(tx, existing.projectId, id);
       return existing;
     });
   }

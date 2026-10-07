@@ -10,6 +10,7 @@ import { requireStorageDate, optionalStorageDate } from '../lib/storageDate.js';
 import { AttachmentStorageService } from './attachments/attachmentStorage.service.js';
 import { resolveServerInventoryControl } from './projects/serverInventoryControl.js';
 import { assignProjectCode } from './projects/projectCode.js';
+import { keepScheduleLogLinks } from '../lib/projects/scheduleWorkLog.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -132,7 +133,8 @@ export class ProjectService {
       products: Array.isArray(input.products) ? input.products : [],
       // v8.0.58 (TD-306): رزرو پروژه را فقط سرور می‌سازد
       inventoryControl: await resolveServerInventoryControl(input.inventoryControl, {}, input.products, executor),
-      stageSchedules: input.stageSchedules || {},
+      // v9.0.238 (TD-736): پروژه تازه کارکردی ندارد؛ پیوند کارکرد ارسالی ردیف‌ها نوشته نمی‌شود
+      stageSchedules: keepScheduleLogLinks(input.stageSchedules || {}, null),
       customStages: input.customStages || [],
       attachments: [],
       isDeleted: 0
@@ -225,7 +227,8 @@ export class ProjectService {
       const products = input.products !== undefined ? updateData.products : existing.products;
       updateData.inventoryControl = await resolveServerInventoryControl(input.inventoryControl, existing.inventoryControl, products, executor);
     }
-    if (input.stageSchedules !== undefined) updateData.stageSchedules = input.stageSchedules;
+    // v9.0.238 (TD-736): پیوند کارکرد هر ردیف برنامه را فقط سرور (ثبت و حذف کارکرد) می‌نویسد
+    if (input.stageSchedules !== undefined) updateData.stageSchedules = keepScheduleLogLinks(input.stageSchedules, existing.stageSchedules);
     if (input.customStages !== undefined) updateData.customStages = input.customStages;
     if (input.attachments !== undefined) {
       // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده

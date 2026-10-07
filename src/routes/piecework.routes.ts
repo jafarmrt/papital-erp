@@ -593,7 +593,7 @@ router.post('/piecework/logs', authorizePermission('personnel.manage', 'piecewor
       description: `ثبت ${insertedIds.length} ردیف کارکرد پرکیسی جدید`
     });
 
-    res.status(201).json({ status: 'ok', insertedCount: insertedIds.length });
+    res.status(201).json({ status: 'ok', insertedCount: insertedIds.length, insertedIds });
   } catch (err) {
     logger.error({ message: 'Error logging piecework', error: err });
     throw err;
