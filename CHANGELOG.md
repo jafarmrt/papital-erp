@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.298 — v9.0.298 — Searchable Select Shows the Label of a Preselected Value
+- **Preselected picker label (TD-680):** a searchable picker filled from a draft, a sales file or a name match shows the chosen buyer instead of an empty box, and its search request no longer sends `limit` twice.
+
 ### v9.0.297 — v9.0.297 — Idempotency Key Kept While the Server Still Runs a Save
 - **Idempotency key kept (TD-679):** when the browser stops waiting for a save the server is still running, it keeps the key, so a resend gets that save's result instead of starting a second, unguarded one.
 

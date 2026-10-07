@@ -484,6 +484,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                     };
                   }}
                   value={selectedCustomerId}
+                  valueLabel={buyerName ? `👤 ${buyerName}` : undefined}
                   onChange={handleCustomerSelect}
                   placeholder="-- جهت انتخاب خریدار، کلیک کرده یا نام/تلفن وی را تایپ کنید --"
                 />
