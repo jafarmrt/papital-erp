@@ -15,6 +15,9 @@
 # Cron example (/etc/cron.d/papital-erp-backup):
 #   0 2 * * * papital /opt/papital-erp/scripts/backup.sh >> /var/log/papital-backup.log 2>&1
 set -euo pipefail
+# v9.0.112 (TD-585): a backup holds every financial row, password hashes, salaries and all attachment files; it is
+# readable by its owner only (directory 0700, files 0600), like .env
+umask 077
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -45,6 +48,7 @@ ATTACHMENTS_ROOT="${ATTACHMENTS_DIR:-$UPLOADS_DIR/.attachments}"
 case "$ATTACHMENTS_ROOT" in /*) ;; *) ATTACHMENTS_ROOT="$APP_DIR/$ATTACHMENTS_ROOT" ;; esac
 
 mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR" 2>/dev/null || log "WARNING: could not make $BACKUP_DIR private (chmod 700); other users may read the backups"
 BASE="$BACKUP_DIR/erp_${BACKUP_KIND}_${TIMESTAMP}"
 DUMP_FILE="$BASE.dump"
 MANIFEST_FILE="$BASE.manifest"

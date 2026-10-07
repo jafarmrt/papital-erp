@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.112 — Private Backup Files
+- **Private Backups:** `scripts/backup.sh` writes under `umask 077` and makes the backup directory `0700`, so the dump, manifest and uploads archive are `0600` whatever the caller's umask; `scripts/go-live-verify.sh` fails a backup directory or any backup file other users can read (older backups are listed there to `chmod` by hand). Before, every local user could read payslips and attachments from the backups.
+
 ### v9.0.111 — Test Data Cleanup Guarded and Marker-Only
 - **Test Data Cleanup (P1):** `npm run db:cleanup-test` runs only with `NODE_ENV` set to `test` or `development` and `ERP_ALLOW_TEST_CLEANUP=1` (checked before connecting), previews by default inside a rolled-back transaction and deletes only with `--force`, and then only `ERP-TEST-MARKER` rows that nothing else refers to. Kardex, treasury, users, audit logs, counters and sequences are never touched. Before, it deleted real payslips, reversal vouchers, items and users on a production database.
 
