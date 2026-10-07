@@ -20,7 +20,7 @@ import {
   voucherBalancingAmount, voucherFormCurrency, voucherHeaderRateFromRows, voucherRowDraftFromStored, withVoucherRowCurrency,
 } from '../../lib/accounting/voucherFormCurrency';
 
-// v9.0.181 (TD-564, B03-22, decision t7): the manual voucher form, its edit and the correction form send each row's currency and
+// v9.0.191 (TD-564, B03-22, decision t7): the manual voucher form, its edit and the correction form send each row's currency and
 // rate; «تومان» is no longer offered.
 
 const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });

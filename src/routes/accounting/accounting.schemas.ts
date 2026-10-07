@@ -83,7 +83,7 @@ export const vouchersQuerySchema = z.object({
 });
 
 /**
- * v9.0.181 (TD-564، B03-22، تصمیم ت۷): ارز سند و ردیف سند دستی فقط از فهرست ارزهای خزانه (کد کوچک بزرگ می‌شود، «ریال» ← IRR).
+ * v9.0.191 (TD-564، B03-22، تصمیم ت۷): ارز سند و ردیف سند دستی فقط از فهرست ارزهای خزانه (کد کوچک بزرگ می‌شود، «ریال» ← IRR).
  * خالی یعنی «ارز بالادست» (ردیف ← ارز سند). «تومان» پذیرفته نیست: مبلغ تومانی را به ریال وارد کنید.
  */
 const manualVoucherCurrency = z.preprocess(
@@ -97,11 +97,11 @@ const voucherRowAmount = (label: string) => decimalInput(label).optional()
 
 export const voucherItemSchema = z.object({
   accountId: z.coerce.number().int().positive('شناسه حساب الزامی و باید عدد مثبت باشد'),
-  // v9.0.183 (TD-569): فهرست نوع‌ها مشترک با فرم‌های سند (`voucherDetailedTypes.ts`)
+  // v9.0.193 (TD-569): فهرست نوع‌ها مشترک با فرم‌های سند (`voucherDetailedTypes.ts`)
   detailedType: z.enum(VOUCHER_DETAILED_TYPES).optional().default('none'),
   detailedId: z.coerce.number().int().positive().nullable().optional(),
   detailedName: z.string().optional(),
-  // v9.0.182 (TD-557، B03-15): مبلغ و نرخ ردیف با `decimalInput` (رقم فارسی و جداکننده هزارگان پذیرفته؛ «0x10» و «1e3» رد)،
+  // v9.0.192 (TD-557، B03-15): مبلغ و نرخ ردیف با `decimalInput` (رقم فارسی و جداکننده هزارگان پذیرفته؛ «0x10» و «1e3» رد)،
   // نه `z.coerce.number` که «0x10» را ۱۶ و «1e3» را ۱٬۰۰۰ می‌خواند و «۱۰۰۰» را با پیام انگلیسی NaN رد می‌کرد
   debit: voucherRowAmount('مبلغ بدهکار'),
   credit: voucherRowAmount('مبلغ بستانکار'),
@@ -115,7 +115,7 @@ export const voucherItemSchema = z.object({
 
 /**
  * v7.0.127 (TD-247): تراز سند در طرح Zod با جمع اعشاری و همان آستانه سرویس (VOUCHER_BALANCE_TOLERANCE).
- * v9.0.180 (TD-551، ت۷): با قاعده ارز سند دستی (computeVoucherCurrencyBalance): سند چندارزی یا چندنرخی به ریال.
+ * v9.0.190 (TD-551، ت۷): با قاعده ارز سند دستی (computeVoucherCurrencyBalance): سند چندارزی یا چندنرخی به ریال.
  * ردیف ارزی بی نرخ به سرویس سپرده می‌شود تا ۴۲۲ روشن بدهد؛ در ویرایش و اصلاح ارز سند ذخیره‌شده است و در بدنه نیست،
  * پس ردیف بی ارز (جز سند ساده بی ارز و نرخ) هم به سرویس سپرده می‌شود.
  */

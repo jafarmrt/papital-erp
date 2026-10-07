@@ -146,7 +146,7 @@ export class FinancialHealthService {
           (SELECT COUNT(*)::int FROM items WHERE is_deleted = 0) AS total_items
       `),
 
-      // ب: آزمون تراز اسناد دوبل (Voucher Balance) — v9.0.180 (TD-551، ت۷): سند تک‌ارزی روی مبلغ خام و سند چندارزی به
+      // ب: آزمون تراز اسناد دوبل (Voucher Balance) — v9.0.190 (TD-551، ت۷): سند تک‌ارزی روی مبلغ خام و سند چندارزی به
       // ریال با قاعده TD-260 (ردیف ارزی × نرخ همان ردیف، گرد به ریال)؛ پیش‌تر «۱۰۰ دلار / ۱۰۰ ریال» تراز شمرده می‌شد
       orm.execute(sql`
         WITH rows AS (
@@ -1138,7 +1138,7 @@ export class FinancialHealthService {
 
     // آزمون ۲۵: v9.0.160 (TD-559) اسناد دستی با نوع اختتامیه که بستن سال صادر نکرده (فقط فهرست، بی بازنویسی)
     tests.push(buildManualClosingTypeHealthTest(await findManualClosingTypeVouchers()));
-    tests.push(buildForeignRateHealthTest(await findVouchersWithoutForeignRate())); // v9.0.180 (TD-551)
+    tests.push(buildForeignRateHealthTest(await findVouchersWithoutForeignRate())); // v9.0.190 (TD-551)
 
     // آزمون ۲۶: v9.0.161 (TD-543) سال مالی بسته‌شده پیش از پایانش (فقط فهرست؛ آخرین سال بسته با بازگشایی باز می‌شود)
     tests.push(buildEarlyClosedYearsHealthTest(await findEarlyClosedYears()));

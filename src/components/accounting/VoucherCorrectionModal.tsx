@@ -26,7 +26,7 @@ interface VoucherCorrectionModalProps {
 interface VoucherItemDraft extends VoucherRowCurrencyDraft {
   id?: number;
   accountId: number | '';
-  /** v9.0.183 (TD-569): همان نوع‌های سرور، تأمین‌کننده هم */
+  /** v9.0.193 (TD-569): همان نوع‌های سرور، تأمین‌کننده هم */
   detailedType: VoucherDetailedType;
   detailedId: number | null;
   detailedName: string;
@@ -61,7 +61,7 @@ export function VoucherCorrectionModal({
   const [newDescription, setNewDescription] = useState('');
   const [items, setItems] = useState<VoucherItemDraft[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // v9.0.181 (TD-564): ارز سند اصلاحی همان ارز سند اصلی است؛ نرخ سند از ردیف‌های اصلی و قابل تغییر
+  // v9.0.191 (TD-564): ارز سند اصلاحی همان ارز سند اصلی است؛ نرخ سند از ردیف‌های اصلی و قابل تغییر
   const [headerRate, setHeaderRate] = useState<number | string | ''>('');
   const voucherCurrency = useMemo(() => voucherFormCurrency(voucher?.currency), [voucher?.currency]);
   const header = useMemo<VoucherHeaderCurrency>(() => ({ currency: voucherCurrency.currency, rate: headerRate }), [voucherCurrency.currency, headerRate]);
@@ -99,7 +99,7 @@ export function VoucherCorrectionModal({
     return safeAccounts.filter(a => a.level === 'subsidiary' || a.level === 'detailed' || a.level === 'general');
   }, [safeAccounts]);
 
-  // v7.0.76 (P3-6): جمع اعشاری دقیق و تلورانس یگانه سرور. v9.0.181 (TD-564): با ارز و نرخ هر ردیف (سند چندارزی به ریال)
+  // v7.0.76 (P3-6): جمع اعشاری دقیق و تلورانس یگانه سرور. v9.0.191 (TD-564): با ارز و نرخ هر ردیف (سند چندارزی به ریال)
   const balance = useMemo(() => voucherFormBalance(items, header), [items, header]);
   const { totalDebit, totalCredit, difference: balanceDifference, isBalanced } = balance;
   const rowsWithoutRateText = toPersianDigits(balance.rowsWithoutRate.join('، '));
@@ -177,7 +177,7 @@ export function VoucherCorrectionModal({
         date: date.trim(),
         reason: reason.trim(),
         newDescription: newDescription.trim(),
-        // v9.0.181 (TD-564): ردیف‌های جایگزین با ارز و نرخ قطعی خود (پیش‌تر ۱۰۰ دلار ۱۰۰ ریال می‌شد)
+        // v9.0.191 (TD-564): ردیف‌های جایگزین با ارز و نرخ قطعی خود (پیش‌تر ۱۰۰ دلار ۱۰۰ ریال می‌شد)
         newItems: withVoucherRowCurrency(items, header).map(it => ({
           accountId: Number(it.accountId),
           detailedType: it.detailedType,
@@ -311,7 +311,7 @@ export function VoucherCorrectionModal({
             />
           </div>
 
-          {/* v9.0.181 (TD-564): ارز سند اصلی (ثابت) و نرخ آن */}
+          {/* v9.0.191 (TD-564): ارز سند اصلی (ثابت) و نرخ آن */}
           <VoucherHeaderCurrencyFields value={header} onChange={next => setHeaderRate(next.rate ?? '')} currencyLocked />
 
           {/* New Items Editor */}
@@ -356,7 +356,7 @@ export function VoucherCorrectionModal({
                             onChange={(accId) => handleItemChange(idx, 'accountId', accId)}
                             placeholder="انتخاب حساب..."
                           />
-                          {/* Detailed Selector — v9.0.183 (TD-569): همان نوع‌های سرور با تأمین‌کننده، پروژه و حساب بانکی */}
+                          {/* Detailed Selector — v9.0.193 (TD-569): همان نوع‌های سرور با تأمین‌کننده، پروژه و حساب بانکی */}
                           <VoucherDetailedPicker
                             size="compact"
                             value={item}

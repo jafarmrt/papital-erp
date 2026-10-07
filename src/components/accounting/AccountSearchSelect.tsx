@@ -48,7 +48,7 @@ export function AccountSearchSelect({
   }, [accounts, value]);
 
   // Filter selectable accounts (primarily subsidiary and detailed, but allow general too)
-  // v9.0.184 (TD-571، B03-29): رقم فارسی و عربی هر دو سو لاتین می‌شود؛ پیش‌تر «۱۱۰۱» با صفحه‌کلید فارسی حسابی پیدا نمی‌کرد
+  // v9.0.194 (TD-571، B03-29): رقم فارسی و عربی هر دو سو لاتین می‌شود؛ پیش‌تر «۱۱۰۱» با صفحه‌کلید فارسی حسابی پیدا نمی‌کرد
   const filteredAccounts = useMemo(() => {
     const query = accountSearchText(searchQuery);
     if (!query) {

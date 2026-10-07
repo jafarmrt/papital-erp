@@ -24,7 +24,7 @@ async function storedRows(voucherId: number) {
   return rows.map(r => `${r.currency}@${amountOf(r.rate)}`);
 }
 
-/** A voucher written straight into the tables, as versions before v9.0.180 could store it */
+/** A voucher written straight into the tables, as versions before v9.0.190 could store it */
 async function insertLegacyVoucher(description: string, rows: Array<{ accountId: number; debit: number; credit: number; currency: string; rate: number }>): Promise<number> {
   const voucherNumber = await VoucherService.getNextVoucherNumber();
   const [v] = await orm.insert(journalVouchers).values({
@@ -44,7 +44,7 @@ export async function runManualVoucherCurrencyTests(shouldRun: ShouldRun): Promi
 
   const rateId = 'reg_manual_voucher_foreign_rate_and_rial_balance_td_551';
   if (shouldRun(rateId, 'td551', 'voucher', 'currency', 'package3')) {
-    await runCase(results, rateId, 'v9.0.180: a manual voucher needs a rate on every non-rial row, a row without a currency takes the voucher currency, a multi-currency voucher balances in rials, and the journal book and the health check use the same rule (TD-551)', async () => inFiscalSandbox(async () => {
+    await runCase(results, rateId, 'v9.0.190: a manual voucher needs a rate on every non-rial row, a row without a currency takes the voucher currency, a multi-currency voucher balances in rials, and the journal book and the health check use the same rule (TD-551)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const acc = await accountIdsByCode('1001', '4001');
       const admin = await sandboxAdminClient();
@@ -121,7 +121,7 @@ export async function runManualVoucherCurrencyTests(shouldRun: ShouldRun): Promi
 
   const listId = 'reg_manual_voucher_currency_list_td_564';
   if (shouldRun(listId, 'td564', 'voucher', 'currency', 'package3')) {
-    await runCase(results, listId, 'v9.0.181: a manual voucher and its rows take only the treasury currencies; «TOMAN» is refused, a lowercase code is read as the code and an empty row currency follows the voucher (TD-564)', async () => inFiscalSandbox(async () => {
+    await runCase(results, listId, 'v9.0.191: a manual voucher and its rows take only the treasury currencies; «TOMAN» is refused, a lowercase code is read as the code and an empty row currency follows the voucher (TD-564)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const acc = await accountIdsByCode('1001', '4001');
       const admin = await sandboxAdminClient();
@@ -154,7 +154,7 @@ export async function runManualVoucherCurrencyTests(shouldRun: ShouldRun): Promi
 
   const amountId = 'reg_manual_voucher_row_amount_decimal_input_td_557';
   if (shouldRun(amountId, 'td557', 'voucher', 'amount', 'package3')) {
-    await runCase(results, amountId, 'v9.0.182: manual voucher row amounts and rates are read as decimals: Persian digits and thousands separators are accepted, «0x10» and «1e3» are refused (TD-557)', async () => inFiscalSandbox(async () => {
+    await runCase(results, amountId, 'v9.0.192: manual voucher row amounts and rates are read as decimals: Persian digits and thousands separators are accepted, «0x10» and «1e3» are refused (TD-557)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const acc = await accountIdsByCode('1001', '4001');
       const admin = await sandboxAdminClient();
@@ -191,7 +191,7 @@ export async function runManualVoucherCurrencyTests(shouldRun: ShouldRun): Promi
 
   const detailId = 'reg_manual_voucher_detailed_types_td_569';
   if (shouldRun(detailId, 'td569', 'voucher', 'detailed', 'package3')) {
-    await runCase(results, detailId, 'v9.0.183: a manual voucher row takes a project, bank account or «other» detail, the voucher form reads the project pick list with accounting.vouchers, and the legacy «custom» type is refused (TD-569)', async () => inFiscalSandbox(async () => {
+    await runCase(results, detailId, 'v9.0.193: a manual voucher row takes a project, bank account or «other» detail, the voucher form reads the project pick list with accounting.vouchers, and the legacy «custom» type is refused (TD-569)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const acc = await accountIdsByCode('1001', '4001');
       const admin = await sandboxAdminClient();

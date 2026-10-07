@@ -51,7 +51,7 @@ const STATUS_TABS: StatusTab[] = [
   },
 ];
 
-// v9.0.185 (TD-573): صافی نوع از فهرست مشترک نوع‌ها (تسویه هم)
+// v9.0.195 (TD-573): صافی نوع از فهرست مشترک نوع‌ها (تسویه هم)
 const VOUCHER_TYPE_OPTIONS: Array<[string, string]> = [
   ['all', 'همه انواع اسناد'],
   ...VOUCHER_TYPES.map((type): [string, string] => [type, VOUCHER_TYPE_LABELS[type]]),

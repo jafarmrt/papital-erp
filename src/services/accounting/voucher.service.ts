@@ -269,7 +269,7 @@ export class VoucherService {
     attachments?: unknown[];
     userId?: number;
     username?: string;
-    /** v9.0.180 (TD-551، ت۷): سند دستی از مسیر اسناد؛ فقط مسیر آن را می‌گذارد، هرگز از بدنه درخواست */
+    /** v9.0.190 (TD-551، ت۷): سند دستی از مسیر اسناد؛ فقط مسیر آن را می‌گذارد، هرگز از بدنه درخواست */
     manualEntry?: boolean;
     items: {
       accountId: number;
@@ -288,7 +288,7 @@ export class VoucherService {
     }
 
     // Verify double-entry balance — v7.0.49 (audit P2-5): آستانه واحد VOUCHER_BALANCE_TOLERANCE در ثبت و قطعی‌سازی؛
-    // v9.0.180 (TD-551، ت۷): سند چندارزی به ریال و سند دستی با ارز و نرخ قطعی هر ردیف
+    // v9.0.190 (TD-551، ت۷): سند چندارزی به ریال و سند دستی با ارز و نرخ قطعی هر ردیف
     const manualRows = data.manualEntry ? resolveManualVoucherRows(data.items, data.currency) : null;
     const items = manualRows?.rows ?? data.items;
     const { sumDebit, sumCredit } = manualRows?.totals ?? assertVoucherRowsBalanced(data.items, data.currency);
@@ -362,7 +362,7 @@ export class VoucherService {
     description?: string;
     status?: 'draft' | 'approved' | 'permanent';
     attachments?: unknown[];
-    /** v9.0.180 (TD-551، ت۷): ویرایش سند دستی از مسیر اسناد؛ فقط مسیر آن را می‌گذارد */
+    /** v9.0.190 (TD-551، ت۷): ویرایش سند دستی از مسیر اسناد؛ فقط مسیر آن را می‌گذارد */
     manualEntry?: boolean;
     items?: {
       accountId: number;
@@ -399,7 +399,7 @@ export class VoucherService {
       let sumCredit = fin(existing.totalCredit);
 
       if (data.items && data.items.length >= 2) {
-        // v9.0.180 (TD-551، ت۷): ارز ردیف بی ارز، ارز ذخیره‌شده سند است (سرآیند در ویرایش عوض نمی‌شود)
+        // v9.0.190 (TD-551، ت۷): ارز ردیف بی ارز، ارز ذخیره‌شده سند است (سرآیند در ویرایش عوض نمی‌شود)
         const manualRows = data.manualEntry ? resolveManualVoucherRows(data.items, existing.currency) : null;
         const items = manualRows?.rows ?? data.items;
         ({ sumDebit, sumCredit } = manualRows?.totals ?? assertVoucherRowsBalanced(data.items, existing.currency));
@@ -792,7 +792,7 @@ export class VoucherService {
         description: `برگشت ردیف ${item.rowOrder || idx + 1}: ${item.description || original.description}`,
       })));
 
-      // 2. Validate new items — v9.0.180 (TD-551، ت۷): ردیف‌های جایگزین قاعده سند دستی را دارند (ارز بی ارز = ارز
+      // 2. Validate new items — v9.0.190 (TD-551، ت۷): ردیف‌های جایگزین قاعده سند دستی را دارند (ارز بی ارز = ارز
       // سند اصلی، نرخ ردیف غیرریالی الزامی، تراز چندارزی به ریال)؛ پیش‌تر ردیف بی ارز ریالی با نرخ ۱ ذخیره می‌شد
       const { rows: newItems, totals: { sumDebit, sumCredit } } = resolveManualVoucherRows(params.newItems, original.currency);
 
@@ -1035,7 +1035,7 @@ export class VoucherService {
 
       await this.checkFiscalPeriodOpen(existing.date, tx);
 
-      if (!(await isVoucherBalancedForFinalize(tx, existing))) { // v9.0.180 (TD-551): سند چندارزی به ریال
+      if (!(await isVoucherBalancedForFinalize(tx, existing))) { // v9.0.190 (TD-551): سند چندارزی به ریال
         throw new UnbalancedVoucherError('امکان قطعی‌سازی سند نامتراز وجود ندارد');
       }
 
@@ -1126,7 +1126,7 @@ export class VoucherService {
     await this.checkFiscalPeriodOpen(existing.date, tx);
 
     if (status === 'permanent') {
-      if (!(await isVoucherBalancedForFinalize(tx, existing))) { // v9.0.180 (TD-551): سند چندارزی به ریال
+      if (!(await isVoucherBalancedForFinalize(tx, existing))) { // v9.0.190 (TD-551): سند چندارزی به ریال
         throw new UnbalancedVoucherError('امکان قطعی‌سازی سند نامتراز وجود ندارد');
       }
     }
