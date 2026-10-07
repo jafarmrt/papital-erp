@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Plus, Printer, Trash2, CheckCircle2, Clock, BookOpen, RefreshCw, Wallet, Info } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
-import { formatPersianPrice, formatCurrencyLabel, formatPersianDate } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianDate } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { PayrollPaymentModal } from './PayrollPaymentModal';
 import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable';
@@ -25,8 +25,8 @@ export function PieceworkPayrollsTab({
   onDeletePayroll,
   onReload
 }: PieceworkPayrollsTabProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
   const [syncingId, setSyncingId] = useState<number | null>(null);
   // V10-4.4: پرداخت فقط از مودال خزانه‌ای
   const [paymentTarget, setPaymentTarget] = useState<PieceworkPayroll | null>(null);
@@ -116,16 +116,16 @@ export function PieceworkPayrollsTab({
                         {formatPersianDate(payroll.startDate)} تا {formatPersianDate(payroll.endDate)}
                       </td>
                       <td className="p-3 text-center font-mono text-slate-700">
-                        {formatPersianPrice(payroll.totalPieceworkAmount)}
+                        {rial.number(payroll.totalPieceworkAmount)}
                       </td>
                       <td className="p-3 text-center font-mono text-emerald-600">
-                        +{formatPersianPrice(payroll.totalBonuses || 0)}
+                        +{rial.number(payroll.totalBonuses || 0)}
                       </td>
                       <td className="p-3 text-center font-mono text-rose-600">
-                        -{formatPersianPrice(payroll.totalDeductions || 0)}
+                        -{rial.number(payroll.totalDeductions || 0)}
                       </td>
                       <td className="p-3 text-center font-mono text-blue-700 font-black text-sm">
-                        {formatPersianPrice(payroll.netPayable)}
+                        {rial.number(payroll.netPayable)}
                       </td>
                       <td className="p-3 text-center">
                         {isPaid ? (
@@ -142,12 +142,12 @@ export function PieceworkPayrollsTab({
                           <div className="flex flex-col items-center gap-1">
                             <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-md text-[10px] inline-flex items-center gap-1 font-bold font-mono">
                               <Clock size={11} className="text-amber-600" />
-                              جزئی: {formatPersianPrice(paidAmount)}
+                              جزئی: {rial.amount(paidAmount)}
                             </span>
                             <button
                               onClick={() => setPaymentTarget(payroll)}
                               className="px-2 py-0.5 bg-amber-600 hover:bg-emerald-600 text-white rounded-md text-[10px] font-bold cursor-pointer transition-all shadow-xs"
-                              title={`مانده: ${formatPersianPrice(remainingAmount)} ریال — ثبت قسط بعدی`}
+                              title={`مانده: ${rial.amount(remainingAmount)} — ثبت قسط بعدی`}
                             >
                               پرداخت مانده
                             </button>
@@ -222,7 +222,7 @@ export function PieceworkPayrollsTab({
                               <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-800">
                                 <Wallet size={12} className="shrink-0" />
                                 <span>
-                                  سهم حقوق ثابت ماهانه این فیش: <span className="font-mono">+{formatPersianPrice(fixedAmount)}</span> — بابت حقوق پایه ثبت‌شده در پرونده پرسنلی
+                                  سهم حقوق ثابت ماهانه این فیش: <span className="font-mono">+{rial.amount(fixedAmount)}</span> — بابت حقوق پایه ثبت‌شده در پرونده پرسنلی
                                 </span>
                               </div>
                             )}

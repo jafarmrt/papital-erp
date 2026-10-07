@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ArrowDownLeft, ArrowUpRight, X, ShieldCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { SearchableSelect } from '../../SearchableSelect';
 import { FinancialAttachmentUploader } from '../FinancialAttachmentUploader';
 import { FinancialAmountInput } from '../../common/FinancialAmountInput';
 import { HelpBadge } from '../../common/HelpBadge';
-import { formatPersianPrice, formatCurrencyLabel, getTodayIsoDate } from '../../../utils';
+import { getTodayIsoDate } from '../../../utils';
+import { rialDisplayOf } from '../../../lib/rialDisplay';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { fetchJson } from '../../../api';
 import { useHasPermission } from '../../../contexts/AuthContext';
@@ -35,6 +36,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   appCurrency,
   onSave,
 }) => {
+  const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
   const canSkipVoucher = useHasPermission(NO_VOUCHER_TREASURY_PERMISSION);
   const [formData, setFormData] = useState({
     type,
@@ -207,7 +209,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   // v9.0.106 (TD-515): سرور ثبت با حساب بی سرفصل را رد می‌کند (۴۲۲)، پس فرم هم ثبت را نمی‌پذیرد
   const bankWithoutLedger = Boolean(formData.bankAccountId) && !selectedBank?.accountId;
   const isForeignBank = (selectedBank?.currency || 'IRR').toUpperCase() !== 'IRR';
-  const curLbl = formatCurrencyLabel(isForeignBank ? (selectedBank?.currency || appCurrency) : appCurrency);
+  // مبلغ به ارز خود حساب (ریال برای حساب ریالی) وارد و ذخیره می‌شود
+  const inputCurrency = isForeignBank ? String(selectedBank?.currency).toUpperCase() : 'IRR';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 backdrop-blur-xs">
@@ -291,7 +294,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 <option value="">انتخاب حساب...</option>
                 {safeBankAccounts.map(b => (
                   <option key={b.id} value={b.id}>
-                    {b.title} (موجودی: {formatPersianPrice(b.currentBalance)} {b.currency})
+                    {b.title} (موجودی: {rial.money(b.currentBalance, b.currency)})
                   </option>
                 ))}
               </select>
@@ -421,7 +424,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                   required
                   min={1}
                   value={formData.amount}
-                  currency={curLbl}
+                  currency={inputCurrency}
                   onChange={val => setFormData({ ...formData, amount: val })}
                   placeholder="1000000"
                   showWordsBadge={true}
@@ -430,7 +433,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 {/* Overdraft warning */}
                 {!isReceipt && selectedBank && formData.amount > Number(selectedBank.currentBalance) && (
                   <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 mt-1">
-                    ⚠️ مبلغ بیشتر از مانده «{selectedBank.title}» ({formatPersianPrice(selectedBank.currentBalance)}) است — ثبت با خطا مواجه خواهد شد.
+                    ⚠️ مبلغ بیشتر از مانده «{selectedBank.title}» ({rial.money(selectedBank.currentBalance, selectedBank.currency)}) است — ثبت با خطا مواجه خواهد شد.
                   </p>
                 )}
               </div>
@@ -513,14 +516,14 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                       <tr className="border-b border-indigo-100 dark:border-indigo-900/50">
                         <td className="py-1.5 font-sans font-bold text-slate-800 dark:text-slate-200">{voucherPreview.debit.detailedName}</td>
                         <td className="py-1.5 text-slate-600 dark:text-slate-300">{voucherPreview.debit.accountCode} — {voucherPreview.debit.accountName}</td>
-                        <td className="py-1.5 text-left font-bold text-slate-900 dark:text-white">{formatPersianPrice(voucherPreview.debit.amount)}</td>
+                        <td className="py-1.5 text-left font-bold text-slate-900 dark:text-white">{rial.money(voucherPreview.debit.amount, selectedBank?.currency)}</td>
                         <td className="py-1.5 text-left text-slate-300">—</td>
                       </tr>
                       <tr>
                         <td className="py-1.5 font-sans font-bold text-slate-800 dark:text-slate-200">{voucherPreview.credit.detailedName}</td>
                         <td className="py-1.5 text-slate-600 dark:text-slate-300">{voucherPreview.credit.accountCode} — {voucherPreview.credit.accountName}</td>
                         <td className="py-1.5 text-left text-slate-300">—</td>
-                        <td className="py-1.5 text-left font-bold text-slate-900 dark:text-white">{formatPersianPrice(voucherPreview.credit.amount)}</td>
+                        <td className="py-1.5 text-left font-bold text-slate-900 dark:text-white">{rial.money(voucherPreview.credit.amount, selectedBank?.currency)}</td>
                       </tr>
                     </tbody>
                   </table>

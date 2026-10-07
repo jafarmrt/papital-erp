@@ -46,7 +46,7 @@ describe('کلید تکرار درخواست از محتوای ارسال (TD-32
 
   it('ارسال دوباره پس از خطای شبکه همان کلید را دارد و پس از پاسخ موفق کلید تازه', async () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
-    await expect(fetchJson('/accounting/treasury', pay(500))).rejects.toThrow('ارتباط با سرور برقرار نشد');
+    await expect(fetchJson('/accounting/treasury', pay(500))).rejects.toThrow('ارتباط با کارساز برقرار نشد');
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(sentKey(1)).toBe(sentKey(0));
 

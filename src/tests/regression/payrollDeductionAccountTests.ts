@@ -19,7 +19,7 @@ import { type ShouldRun, accountIdsByCode, assertNoProblems, inFiscalSandbox, ru
 
 const PERIOD = { startDate: '2026-04-01', endDate: '2026-04-30' };
 const MAPPINGS_KEY = 'accounting_account_mappings';
-const MIGRATION = '0076_payroll_deductions_account.sql';
+const MIGRATION = '0077_payroll_deductions_account.sql';
 
 const brief = (body: unknown) => JSON.stringify(body).slice(0, 200);
 
@@ -56,7 +56,7 @@ export async function runPayrollDeductionAccountTests(shouldRun: ShouldRun): Pro
 
   const id = 'reg_payroll_deductions_own_account_td_554';
   if (shouldRun(id, 'td554', 'payroll', 'deductions', 'package3')) {
-    await runCase(results, id, 'v9.0.275: payslip deductions credit the new standard account 3205 «employee deductions payable» instead of 3202 «customer prepayments», migration 0076 adds 3205 to an existing chart and moves a stored default mapping, past vouchers are not moved and the health check lists the personnel deductions left on 3202 until a correction voucher moves them (TD-554)', async () => inFiscalSandbox(async () => {
+    await runCase(results, id, 'v9.0.286: payslip deductions credit the new standard account 3205 «employee deductions payable» instead of 3202 «customer prepayments», migration 0077 adds 3205 to an existing chart and moves a stored default mapping, past vouchers are not moved and the health check lists the personnel deductions left on 3202 until a correction voucher moves them (TD-554)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const general = await accountIdsByCode('32');
@@ -71,24 +71,24 @@ export async function runPayrollDeductionAccountTests(shouldRun: ShouldRun): Pro
         problems.push(`the default deductions mapping is ${DEFAULT_ACCOUNT_MAPPINGS.employeeDeductionsPayableAccountCode}, expected 3205`);
       }
 
-      // 2) migration 0076 on an older install: no 3205 yet and a mapping saved with the old default 3202
+      // 2) migration 0077 on an older install: no 3205 yet and a mapping saved with the old default 3202
       if (standard) await orm.update(accounts).set({ isDeleted: 1 }).where(eq(accounts.id, standard.id));
       const saved = { ...DEFAULT_ACCOUNT_MAPPINGS, employeeDeductionsPayableAccountCode: '3202' };
       await storeMappings(saved);
       await runMigration();
       const added = await activeAccount('3205');
-      if (!added || added.parentId !== general['32'] || added.accountType !== 'liability' || added.nature !== 'credit') problems.push(`migration 0076 left 3205 as ${brief(added)}`);
+      if (!added || added.parentId !== general['32'] || added.accountType !== 'liability' || added.nature !== 'credit') problems.push(`migration 0077 left 3205 as ${brief(added)}`);
       const afterMigration = await storedMappings();
-      if (afterMigration.employeeDeductionsPayableAccountCode !== '3205') problems.push(`migration 0076 left the stored deductions mapping at ${afterMigration.employeeDeductionsPayableAccountCode}`);
-      if (afterMigration.salesRevenueAccountCode !== saved.salesRevenueAccountCode || afterMigration.wagesPayableAccountCode !== saved.wagesPayableAccountCode) problems.push('migration 0076 changed another stored mapping');
-      const logged = await pool.query<{ n: string }>(`SELECT COUNT(*)::text AS n FROM activity_logs WHERE details->>'migration' = '0076_payroll_deductions_account'`);
-      if (Number(logged.rows[0]?.n) !== 1) problems.push(`migration 0076 wrote ${logged.rows[0]?.n} audit rows, expected 1`);
+      if (afterMigration.employeeDeductionsPayableAccountCode !== '3205') problems.push(`migration 0077 left the stored deductions mapping at ${afterMigration.employeeDeductionsPayableAccountCode}`);
+      if (afterMigration.salesRevenueAccountCode !== saved.salesRevenueAccountCode || afterMigration.wagesPayableAccountCode !== saved.wagesPayableAccountCode) problems.push('migration 0077 changed another stored mapping');
+      const logged = await pool.query<{ n: string }>(`SELECT COUNT(*)::text AS n FROM activity_logs WHERE details->>'migration' = '0077_payroll_deductions_account'`);
+      if (Number(logged.rows[0]?.n) !== 1) problems.push(`migration 0077 wrote ${logged.rows[0]?.n} audit rows, expected 1`);
       // a second run adds nothing, and a mapping the user chose (not the old default) is kept
       await storeMappings({ ...saved, employeeDeductionsPayableAccountCode: '3204' });
       await runMigration();
       const count3205 = await pool.query<{ n: string }>(`SELECT COUNT(*)::text AS n FROM accounts WHERE code = '3205' AND is_deleted = 0`);
       if (Number(count3205.rows[0]?.n) !== 1) problems.push(`after a second run there are ${count3205.rows[0]?.n} active 3205 accounts`);
-      if ((await storedMappings()).employeeDeductionsPayableAccountCode !== '3204') problems.push('migration 0076 overwrote a chosen deductions mapping 3204');
+      if ((await storedMappings()).employeeDeductionsPayableAccountCode !== '3204') problems.push('migration 0077 overwrote a chosen deductions mapping 3204');
       await storeMappings({ ...saved, employeeDeductionsPayableAccountCode: '3205' });
 
       // 3) B03-12 S15: a payslip of 1,000,000 with deductions 150,000 credits 3205, not 3202

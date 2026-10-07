@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
 import { Layers, ChevronLeft, Search, Printer, Download, Eye, ArrowUpRight, ArrowDownLeft, User, Users, FolderKanban, RotateCcw, FileText, X } from 'lucide-react';
 import { JalaliDateInput } from '../common/JalaliDateInput';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatCurrencyLabel, getTodayJalaliDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate, getTodayJalaliDate } from '../../utils';
 import { accountExplorerFileName } from '../../lib/accounting/accountingExport';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { SearchableSelect } from '../SearchableSelect';
 import { useExplorerLedgerQuery, type ExplorerLedgerParams, type ExplorerLedgerRow } from '../../hooks/accounting/useAccountExplorerQueries';
 import { useVoucherDetailLoader } from '../../hooks/accounting/useVoucherQueries';
@@ -30,8 +30,8 @@ export function AccountExplorerTab({
   onRefresh,
   onViewVoucher
 }: AccountExplorerTabProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
   const safeAccounts = useMemo(() => Array.isArray(accounts) ? accounts : [], [accounts]);
   
   // Navigation State
@@ -164,7 +164,7 @@ export function AccountExplorerTab({
   // Export CSV function
   const handleExportCSV = () => {
     if (!transactions.length) return;
-    const headers = ["شماره سند", "تاریخ", "کد حساب", "نام حساب", "تفصیلی", "شرح ردیف", "بدهکار", "بستانکار", "مانده"];
+    const headers = ["شماره سند", "تاریخ", "کد حساب", "نام حساب", "تفصیلی", "شرح ردیف", "بدهکار (ریال)", "بستانکار (ریال)", "مانده (ریال)"];
     const rows = transactions.map(t => [
       t.voucherNumber,
       formatPersianDate(t.date, { englishDigits: true }),
@@ -567,7 +567,7 @@ export function AccountExplorerTab({
             <span>جمع گردش بدهکار (دریافت‌ها)</span>
           </div>
           <div className="text-lg font-black text-slate-900 dark:text-white font-mono">
-            {formatPersianPrice(summaryStats.totalDebit, appCurrency)}
+            {rial.amount(summaryStats.totalDebit)}
           </div>
         </div>
 
@@ -577,7 +577,7 @@ export function AccountExplorerTab({
             <span>جمع گردش بستانکار (پرداخت‌ها)</span>
           </div>
           <div className="text-lg font-black text-slate-900 dark:text-white font-mono">
-            {formatPersianPrice(summaryStats.totalCredit, appCurrency)}
+            {rial.amount(summaryStats.totalCredit)}
           </div>
         </div>
 
@@ -601,7 +601,7 @@ export function AccountExplorerTab({
               ? 'text-rose-600 dark:text-rose-400'
               : 'text-slate-900 dark:text-white'
           }`}>
-            {formatPersianPrice(Math.abs(summaryStats.finalBalance), appCurrency)}
+            {rial.amount(Math.abs(summaryStats.finalBalance))}
           </div>
         </div>
       </div>
@@ -635,7 +635,7 @@ export function AccountExplorerTab({
                 <th className="py-3 px-3 min-w-[200px]">شرح ردیف سند</th>
                 <th className="py-3 px-3 w-28 text-left">{`بدهکار (${curLbl})`}</th>
                 <th className="py-3 px-3 w-28 text-left">{`بستانکار (${curLbl})`}</th>
-                <th className="py-3 px-3 w-32 text-left">مانده لحظه‌ای</th>
+                <th className="py-3 px-3 w-32 text-left">{`مانده لحظه‌ای (${curLbl})`}</th>
                 <th className="py-3 px-3 w-16 text-center no-print">عملیات</th>
               </tr>
             </thead>
@@ -679,15 +679,15 @@ export function AccountExplorerTab({
                       {item.description || '-'}
                     </td>
                     <td className="py-3 px-3 text-left font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                      {item.debit ? formatPersianPrice(item.debit) : '-'}
+                      {item.debit ? rial.number(item.debit) : '-'}
                     </td>
                     <td className="py-3 px-3 text-left font-mono font-bold text-rose-600 dark:text-rose-400">
-                      {item.credit ? formatPersianPrice(item.credit) : '-'}
+                      {item.credit ? rial.number(item.credit) : '-'}
                     </td>
                     <td className={`py-3 px-3 text-left font-mono font-bold ${
                       item.runningBalance > 0 ? 'text-emerald-600 dark:text-emerald-400' : item.runningBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600'
                     }`}>
-                      {formatPersianPrice(Math.abs(item.runningBalance))}
+                      {rial.number(Math.abs(item.runningBalance))}
                       <span className="text-[10px] text-slate-400 mr-1 font-farsi font-normal">
                         {item.runningBalance > 0 ? 'بد' : item.runningBalance < 0 ? 'بس' : 'تسویه'}
                       </span>
@@ -762,10 +762,10 @@ export function AccountExplorerTab({
                         <td className="p-2.5">{it.detailedName || '-'}</td>
                         <td className="p-2.5 text-slate-600 dark:text-slate-300">{it.description || '-'}</td>
                         <td className="p-2.5 text-left font-mono font-bold text-emerald-600">
-                          {it.debit ? formatPersianPrice(it.debit) : '-'}
+                          {it.debit ? rial.number(it.debit) : '-'}
                         </td>
                         <td className="p-2.5 text-left font-mono font-bold text-rose-600">
-                          {it.credit ? formatPersianPrice(it.credit) : '-'}
+                          {it.credit ? rial.number(it.credit) : '-'}
                         </td>
                       </tr>
                     ))}

@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { FolderKanban, RefreshCw } from 'lucide-react';
-import { formatPersianNumber, formatPersianPrice, formatPersianDate, formatCurrencyLabel } from '../../../utils';
-import { useAppCurrency } from '../../../hooks/useAppCurrency';
+import { formatPersianNumber, formatPersianDate } from '../../../utils';
+import { useRialDisplay } from '../../../hooks/useAppCurrency';
 import { useProjectDetailQuery, useProjectSummaryQuery } from '../../../hooks/accounting/usePartyProjectReportQueries';
 
 // V10-6.1: گزارش حسابداری per-project — خلاصه گردش + ریز با تراز جاری (فیلتر پروژه)
 export const ProjectReportView: React.FC = () => {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
 
   const [selectedProjectId, setSelectedProjectId] = useState<number | ''>('');
   // React Query: پروژه انتخاب‌شده بخشی از کلید است؛ پاسخ دیررس پروژه قبلی جای ریز پروژه تازه را نمی‌گیرد
@@ -90,10 +90,10 @@ export const ProjectReportView: React.FC = () => {
                   <td className="p-3 font-mono text-slate-600 dark:text-slate-300">{s.projectCode || '-'}</td>
                   <td className="p-3 text-slate-800 dark:text-slate-200">{s.projectTitle}</td>
                   <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-300">{formatPersianNumber(s.entriesCount)}</td>
-                  <td className="p-3 text-center font-mono text-slate-700 dark:text-slate-300">{formatPersianPrice(s.totalDebit, appCurrency)}</td>
-                  <td className="p-3 text-center font-mono text-slate-700 dark:text-slate-300">{formatPersianPrice(s.totalCredit, appCurrency)}</td>
+                  <td className="p-3 text-center font-mono text-slate-700 dark:text-slate-300">{rial.number(s.totalDebit)}</td>
+                  <td className="p-3 text-center font-mono text-slate-700 dark:text-slate-300">{rial.number(s.totalCredit)}</td>
                   <td className={`p-3 text-center font-mono font-black ${s.balance >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-rose-600'}`}>
-                    {formatPersianPrice(s.balance, appCurrency)}
+                    {rial.amount(s.balance)}
                   </td>
                   <td className="p-3 text-center no-print">
                     <span className="text-indigo-600 dark:text-indigo-400 text-[10px]">مشاهده ←</span>
@@ -141,10 +141,10 @@ export const ProjectReportView: React.FC = () => {
                     <td className="p-2.5 text-slate-600 dark:text-slate-400 max-w-[200px] truncate" title={d.lineDescription || d.voucherDescription}>
                       {d.lineDescription || d.voucherDescription || '-'}
                     </td>
-                    <td className="p-2.5 text-center font-mono text-slate-700 dark:text-slate-300">{d.debit > 0 ? formatPersianPrice(d.debit, appCurrency) : '-'}</td>
-                    <td className="p-2.5 text-center font-mono text-slate-700 dark:text-slate-300">{d.credit > 0 ? formatPersianPrice(d.credit, appCurrency) : '-'}</td>
+                    <td className="p-2.5 text-center font-mono text-slate-700 dark:text-slate-300">{d.debit > 0 ? rial.number(d.debit) : '-'}</td>
+                    <td className="p-2.5 text-center font-mono text-slate-700 dark:text-slate-300">{d.credit > 0 ? rial.number(d.credit) : '-'}</td>
                     <td className={`p-2.5 text-center font-mono font-black ${d.runningBalance >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-rose-600'}`}>
-                      {formatPersianPrice(d.runningBalance, appCurrency)}
+                      {rial.amount(d.runningBalance)}
                     </td>
                   </tr>
                 ))

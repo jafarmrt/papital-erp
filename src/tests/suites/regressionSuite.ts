@@ -10590,7 +10590,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 12 payroll PR a (v9.0.266 on): payslip integrity (TD-804 ...)
   const { runPayrollIntegrityTests } = await import('../regression/payrollIntegrityTests.js');
   results.push(...await runPayrollIntegrityTests(shouldRun));
-  // Package 3 PR z (v9.0.275 on): payslip deductions account 3205 (TD-554)
+  // Package 12 payroll PR b (v9.0.279 on): work logs, piecework rates and their audit (TD-813 ...)
+  const { runPieceworkEntryTests } = await import('../regression/pieceworkEntryTests.js');
+  results.push(...await runPieceworkEntryTests(shouldRun));
+  // Package 3 PR z (v9.0.286 on): payslip deductions account 3205 (TD-554)
   const { runPayrollDeductionAccountTests } = await import('../regression/payrollDeductionAccountTests.js');
   results.push(...await runPayrollDeductionAccountTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
@@ -10626,6 +10629,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.96, TD-496): the warehouse chart counts items with stock, not quantities of different units
   const { runWarehouseItemCountTests } = await import('../regression/warehouseItemCountTests.js');
   results.push(...await runWarehouseItemCountTests(shouldRun));
+  const { runSettingValuesTests } = await import('../regression/settingValuesTests.js');
+  results.push(...await runSettingValuesTests(shouldRun));
   // Package 6 (v9.0.110, TD-482): a warehouse code «default» is refused and reversals name a real warehouse
   const { runWarehouseReservedCodeTests } = await import('../regression/warehouseReservedCodeTests.js');
   results.push(...await runWarehouseReservedCodeTests(shouldRun));

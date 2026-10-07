@@ -22,7 +22,7 @@ import { FinancialRatiosView } from '../../components/accounting/reports/Financi
 import type { FinancialRatiosReport } from '../../types';
 import type { JournalBookReport } from '../../lib/accounting/journalBook';
 
-// v9.0.277 (TD-580, B03-38): accounting reports showed Latin digits («#11», «2 سند»), raw currency codes («USD»,
+// v9.0.288 (TD-580, B03-38): accounting reports showed Latin digits («#11», «2 سند»), raw currency codes («USD»,
 // «ریال (IRR)») and took today from the browser's UTC day (`new Date().toISOString()` /
 // `toLocaleDateString('fa-IR')`), so a statement printed at 01:00 Tehran carried yesterday's date.
 

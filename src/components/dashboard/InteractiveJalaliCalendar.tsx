@@ -310,7 +310,7 @@ export function InteractiveJalaliCalendar({ events = [], onSelectDate, onEventCl
                 </div>
 
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 shrink-0 font-medium">
-                  {ev.type === 'crm_followup' ? 'پیگیری' : 'تسک'}
+                  {ev.type === 'crm_followup' ? 'پیگیری' : 'کار'}
                 </span>
               </div>
             ))}

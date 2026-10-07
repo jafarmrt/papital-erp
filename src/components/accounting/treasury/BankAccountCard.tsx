@@ -13,6 +13,7 @@ import {
   Layers 
 } from 'lucide-react';
 import { formatPersianPrice, formatCurrencyLabel, formatBankCard, formatIranianSheba } from '../../../utils';
+import { isRialCurrency, rialDisplayOf } from '../../../lib/rialDisplay';
 import { ActionMenu } from '../../ActionMenu';
 import type { BankAccount } from '../../../types';
 
@@ -39,6 +40,9 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
   const isPos = bank.type === 'pos';
   const isSynced = bank.syncStatus === 'synced';
   const isDiscrepant = bank.syncStatus === 'discrepant';
+  const rial = rialDisplayOf(appCurrency);
+  const isRialBank = isRialCurrency(bank.currency);
+  const bankNumber = (value: number) => (isRialBank ? rial.number(value) : formatPersianPrice(value));
 
   return (
     <div
@@ -133,7 +137,7 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
           {isDiscrepant && (
             <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-lg border border-amber-200/60 dark:border-amber-800/40">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              <span>مغایرت دفتری: {formatPersianPrice(bank.discrepancy || 0, bank.currency || appCurrency)}</span>
+              <span>مغایرت دفتری: {rial.money(bank.discrepancy || 0, bank.currency)}</span>
             </div>
           )}
           {bank.syncStatus === 'unlinked' && (
@@ -153,7 +157,7 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
             </span>
           </div>
           <div className="text-xl font-black text-slate-900 dark:text-white font-mono mt-1">
-            {formatPersianPrice(bank.currentBalance || 0)} <span className="text-xs font-normal text-slate-500">{formatCurrencyLabel(bank.currency || appCurrency)}</span>
+            {bankNumber(bank.currentBalance || 0)} <span className="text-xs font-normal text-slate-500">{isRialBank ? rial.label : formatCurrencyLabel(bank.currency ?? undefined)}</span>
           </div>
         </div>
 
@@ -162,21 +166,21 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
           <div className="p-2 bg-slate-50/70 dark:bg-slate-700/20 rounded-lg">
             <span className="text-slate-400 block text-[10px]">مانده اسناد دوبل:</span>
             <span className="font-bold text-slate-700 dark:text-slate-200 font-mono">
-              {formatPersianPrice(bank.ledgerBalance ?? bank.currentBalance ?? 0)}
+              {bankNumber(bank.ledgerBalance ?? bank.currentBalance ?? 0)}
             </span>
           </div>
           <div className="p-2 bg-slate-50/70 dark:bg-slate-700/20 rounded-lg">
             <span className="text-slate-400 block text-[10px]">گردش خزانه‌داری:</span>
             <span className="font-bold text-slate-700 dark:text-slate-200 font-mono">
-              {formatPersianPrice(bank.treasuryBalance ?? bank.currentBalance ?? 0)}
+              {bankNumber(bank.treasuryBalance ?? bank.currentBalance ?? 0)}
             </span>
           </div>
         </div>
 
         {/* Turnover Details */}
         <div className="flex items-center justify-between text-[10px] text-slate-500 px-1 py-1 border-t border-slate-100 dark:border-slate-700/60">
-          <span>گردش بدهکار اسناد: <strong className="text-emerald-600 font-mono">{formatPersianPrice(bank.totalDebit || 0)}</strong></span>
-          <span>گردش بستانکار اسناد: <strong className="text-rose-600 font-mono">{formatPersianPrice(bank.totalCredit || 0)}</strong></span>
+          <span>گردش بدهکار اسناد: <strong className="text-emerald-600 font-mono">{bankNumber(bank.totalDebit || 0)}</strong></span>
+          <span>گردش بستانکار اسناد: <strong className="text-rose-600 font-mono">{bankNumber(bank.totalCredit || 0)}</strong></span>
         </div>
 
         {/* Bank Card / Sheba Info */}

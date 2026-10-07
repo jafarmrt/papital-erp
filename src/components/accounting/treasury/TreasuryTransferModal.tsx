@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ArrowLeftRight, X } from 'lucide-react';
-import { formatPersianPrice, getTodayIsoDate } from '../../../utils';
+import { getTodayIsoDate } from '../../../utils';
+import { rialDisplayOf } from '../../../lib/rialDisplay';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { FinancialAmountInput } from '../../common/FinancialAmountInput';
 import { HelpBadge } from '../../common/HelpBadge';
@@ -22,6 +23,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
   appCurrency,
   onSave,
 }) => {
+  const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
   const [formData, setFormData] = useState({
     fromBankAccountId: null as number | null,
     toBankAccountId: null as number | null,
@@ -127,7 +129,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
               <option value="">انتخاب مبدأ...</option>
               {safeBankAccounts.map(b => (
                 <option key={b.id} value={b.id}>
-                  {b.title} — مانده: {formatPersianPrice(b.currentBalance)}
+                  {b.title} — مانده: {rial.money(b.currentBalance, b.currency)}
                 </option>
               ))}
             </select>
@@ -149,7 +151,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
                 .filter(b => b.id !== formData.fromBankAccountId)
                 .map(b => (
                   <option key={b.id} value={b.id}>
-                    {b.title} — مانده: {formatPersianPrice(b.currentBalance)}
+                    {b.title} — مانده: {rial.money(b.currentBalance, b.currency)}
                   </option>
                 ))}
             </select>
@@ -162,7 +164,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
                 required
                 min={1}
                 value={formData.amount}
-                currency={selectedFrom?.currency || appCurrency || 'IRR'}
+                currency={selectedFrom?.currency || 'IRR'}
                 onChange={val => setFormData(p => ({ ...p, amount: val }))}
                 placeholder="1000000"
                 showWordsBadge={true}

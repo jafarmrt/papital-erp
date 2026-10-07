@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3 } from 'lucide-react';
 import * as xlsx from 'xlsx';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, formatCurrencyLabel, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { isRialCurrency } from '../../lib/rialDisplay';
 import type { Cheque, ChequeType, ChequeStatus, BankAccountOption, Customer, Personnel, FinancialAttachment } from '../../types';
 import toast from 'react-hot-toast';
 import { JalaliDateInput } from '../common/JalaliDateInput';
@@ -43,8 +44,7 @@ export function ChequesTab({
   onUpdateStatus,
   onDeleteCheque,
 }: ChequesTabProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
   const safeCheques = Array.isArray(cheques) ? cheques : [];
   const safeBankAccounts = Array.isArray(bankAccounts) ? bankAccounts : [];
   const safeCustomers = Array.isArray(customers) ? customers : [];
@@ -424,10 +424,10 @@ export function ChequesTab({
                 <tr key={r.code}>
                   <td className="p-2 font-mono font-bold">{r.code}</td>
                   <td className="p-2 font-bold">{r.title}</td>
-                  <td className="p-2 text-left font-mono">{formatPersianPrice(r.ledgerBalance)}</td>
-                  <td className="p-2 text-left font-mono">{formatPersianPrice(r.expectedBalance)}</td>
+                  <td className="p-2 text-left font-mono">{rial.amount(r.ledgerBalance)}</td>
+                  <td className="p-2 text-left font-mono">{rial.amount(r.expectedBalance)}</td>
                   <td className={`p-2 text-left font-mono font-black ${Math.abs(r.discrepancy) < 0.01 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>
-                    {Math.abs(r.discrepancy) < 0.01 ? '✓ بدون مغایرت' : formatPersianPrice(r.discrepancy)}
+                    {Math.abs(r.discrepancy) < 0.01 ? '✓ بدون مغایرت' : rial.amount(r.discrepancy)}
                   </td>
                   <td className="p-2 text-center font-mono">{formatPersianNumber(r.counts.cheques)}</td>
                 </tr>
@@ -517,7 +517,7 @@ export function ChequesTab({
                 <th className="py-3 px-4">بانک و شعبه</th>
                 <th className="py-3 px-4">طرف حساب</th>
                 <th className="py-3 px-3 w-28 text-center">سررسید</th>
-                <th className="py-3 px-4 w-36 text-left">{`مبلغ (${formatCurrencyLabel(cheques[0]?.currency || appCurrency)})`}</th>
+                <th className="py-3 px-4 w-36 text-left">{`مبلغ (${rial.label})`}</th>
                 <th className="py-3 px-4 w-36 text-center">وضعیت</th>
                 <th className="py-3 px-4 w-28 text-center">عملیات</th>
               </tr>
@@ -591,7 +591,7 @@ export function ChequesTab({
                       </td>
 
                       <td className="py-3 px-4 text-left font-mono font-black text-slate-900 dark:text-white">
-                        {formatPersianPrice(c.amount)}
+                        {isRialCurrency(c.currency) ? rial.number(c.amount) : formatPersianPrice(c.amount, c.currency ?? undefined)}
                       </td>
 
                       <td className="py-3 px-4 text-center">
@@ -907,7 +907,7 @@ export function ChequesTab({
                     required
                     min={1}
                     value={newFormData.amount}
-                    currency={curLbl}
+                    currency="IRR"
                     onChange={val => setNewFormData({ ...newFormData, amount: val })}
                     placeholder="50000000"
                     showWordsBadge={true}
@@ -969,7 +969,7 @@ export function ChequesTab({
               تغییر وضعیت چک شماره {statusModalCheque.chequeNumber}
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              مبلغ: {formatPersianPrice(statusModalCheque.amount)} {statusModalCheque.currency} • سررسید: {formatPersianDate(statusModalCheque.dueDate)}
+              مبلغ: {rial.money(statusModalCheque.amount, statusModalCheque.currency)} • سررسید: {formatPersianDate(statusModalCheque.dueDate)}
             </p>
 
             <form onSubmit={handleUpdateStatusSubmit} className="space-y-4">

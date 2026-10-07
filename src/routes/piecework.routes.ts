@@ -14,17 +14,26 @@ import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/pii
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { ForbiddenError } from '../errors/customErrors.js';
 import { fin } from '../lib/financialDecimal.js';
+import { parseWorkQuantity } from '../lib/piecework/workQuantity.js';
 
 const router = Router();
 
 router.use(authenticateToken);
+
+/**
+ * v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده فیش نامنفی‌اند. پیش‌تر `decimalInput` منفی را می‌پذیرفت و
+ * کسورات «-100000» خالص فیش را بالا می‌برد بی آنکه سند حسابداری آن را ببیند.
+ * v9.0.279 (TD-813): نرخ پایه عنوان کار هم (پیش‌تر «abc» صفر و «-1000» منفی ذخیره می‌شد).
+ */
+const nonNegativeAmount = (label: string) =>
+  decimalInput(label).refine(v => v === undefined || !fin(v).isNegative(), `${label} نمی‌تواند منفی باشد`);
 
 const createPieceworkTaskSchema = z.object({
   body: z.object({
     code: z.string().optional(),
     title: z.string().min(1, 'عنوان کاری پرکیسی الزامی است'),
     category: z.string().optional(),
-    defaultRate: z.union([z.number(), z.string()]).optional(),
+    defaultRate: nonNegativeAmount('نرخ پایه').optional(),
     unit: z.string().optional(),
     description: z.string().optional(),
   })
@@ -36,7 +45,7 @@ const updatePieceworkTaskSchema = z.object({
     code: z.string().optional(),
     title: z.string().min(1, 'عنوان کاری پرکیسی الزامی است').optional(),
     category: z.string().optional(),
-    defaultRate: z.union([z.number(), z.string()]).optional(),
+    defaultRate: nonNegativeAmount('نرخ پایه').optional(),
     unit: z.string().optional(),
     description: z.string().optional(),
     isActive: z.boolean().optional(),
@@ -66,22 +75,45 @@ const paramsPersonnelIdSchema = z.object({
   })
 });
 
+/**
+ * v9.0.280 (TD-812): شناسه‌ها عدد صحیح مثبت (عدد یا رشته)، مقدار بزرگ‌تر از صفر یا «ساعت:دقیقه» و نرخ دستی نامنفی است.
+ * پیش‌تر «-5» با مبلغ منفی و «abc» صفر ذخیره می‌شد. سرویس همین را دوباره می‌سنجد (۴۲۲) و پرسنل، کار و پروژه زنده را می‌خواهد.
+ */
+const bodyId = (label: string) => z.union([z.number(), z.string()]).refine(v => /^[1-9]\d*$/.test(String(v).trim()), `${label} باید عدد صحیح مثبت باشد`);
+
+// v9.0.284 (TD-809): شناسه‌ها عدد صحیح مثبت و نرخ اختصاصی نامنفی و الزامی (پیش‌تر «-50000» و پرسنل ۹۸۷۶۵۴ پذیرفته شد)
 const setPersonnelRateSchema = z.object({
   body: z.object({
-    personnelId: z.union([z.number(), z.string()]),
-    taskId: z.union([z.number(), z.string()]),
-    customRate: decimalInput('نرخ اختصاصی').refine(v => v !== undefined, 'نرخ اختصاصی الزامی است'),
+    personnelId: bodyId('شناسه پرسنل'),
+    taskId: bodyId('شناسه عنوان کار'),
+    customRate: nonNegativeAmount('نرخ اختصاصی').refine(v => v !== undefined, 'نرخ اختصاصی الزامی است'),
   })
 });
 
+const optionalProjectId = z.union([bodyId('شناسه پروژه'), z.null(), z.literal('')]).optional();
+const workQuantityInput = z.union([z.number(), z.string()]).transform((v, ctx): number => {
+  const parsed = parseWorkQuantity(v);
+  if (!parsed.ok) {
+    ctx.addIssue({ code: 'custom', message: parsed.message });
+    return z.NEVER;
+  }
+  return parsed.value;
+});
+
 const pieceworkLogItemSchema = z.object({
-  personnelId: z.union([z.number(), z.string()]),
-  taskId: z.union([z.number(), z.string()]),
-  projectId: z.union([z.number(), z.string(), z.null()]).optional(),
+  personnelId: bodyId('شناسه پرسنل'),
+  taskId: bodyId('شناسه عنوان کار'),
+  projectId: optionalProjectId,
   date: z.string().min(1, 'تاریخ کارکرد الزامی است'),
-  quantity: z.union([z.number(), z.string()]),
-  unitRate: decimalInput('نرخ کارکرد').optional(),
+  quantity: workQuantityInput,
+  unitRate: nonNegativeAmount('نرخ کارکرد').optional(),
   notes: z.string().optional(),
+  // v9.0.281 (TD-735): ردیف برنامه کارگاه پروژه؛ نرخ چنین کارکردی را سرور می‌دهد
+  scheduleRef: z.object({
+    stageId: bodyId('شناسه مرحله').transform(Number),
+    productId: z.string().trim().min(1, 'شناسه محصول ردیف برنامه الزامی است').max(200),
+    rowId: z.string().trim().min(1, 'شناسه ردیف برنامه الزامی است').max(200),
+  }).optional(),
 });
 
 type PieceworkLogItemInput = z.infer<typeof pieceworkLogItemSchema>;
@@ -98,22 +130,15 @@ const createPieceworkLogsSchema = z.object({
 const updatePieceworkLogSchema = z.object({
   body: z.object({
     date: z.string().optional(),
-    quantity: z.union([z.number(), z.string()]).optional(),
-    unitRate: decimalInput('نرخ کارکرد').optional(),
+    quantity: workQuantityInput.optional(),
+    unitRate: nonNegativeAmount('نرخ کارکرد').optional(),
     notes: z.string().optional(),
-    projectId: z.union([z.number(), z.string(), z.null()]).optional(),
+    projectId: optionalProjectId,
   }),
   params: z.object({
     id: numericIdString
   })
 });
-
-/**
- * v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده فیش نامنفی‌اند. پیش‌تر `decimalInput` منفی را می‌پذیرفت و
- * کسورات «-100000» خالص فیش را بالا می‌برد بی آنکه سند حسابداری آن را ببیند.
- */
-const nonNegativeAmount = (label: string) =>
-  decimalInput(label).refine(v => v === undefined || !fin(v).isNegative(), `${label} نمی‌تواند منفی باشد`);
 
 const generatePieceworkPayrollSchema = z.object({
   body: z.object({
@@ -272,12 +297,15 @@ router.post('/piecework/tasks/import-excel', authorizePermission('personnel.mana
       description: `واردات اکسل عناوین کاری پرکیسی (${result.createdCount} عنوان جدید، ${result.updatedCount} عنوان ویرایش‌شده، شیوه: ${mode})`
     });
 
+    // v9.0.279 (TD-813): ردیف‌های ثبت‌نشده (نرخ متن یا منفی) با شماره ردیف و دلیل در `errors`
+    const skipped = result.errors.length > 0 ? ` ${result.errors.length} ردیف ثبت نشد.` : '';
     res.json({
       status: 'ok',
-      message: `عملیات واردات با موفقیت انجام شد: ${result.createdCount} عنوان جدید ایجاد و ${result.updatedCount} عنوان به‌روزرسانی شدند.`,
+      message: `عملیات واردات با موفقیت انجام شد: ${result.createdCount} عنوان جدید ایجاد و ${result.updatedCount} عنوان به‌روزرسانی شدند.${skipped}`,
       createdCount: result.createdCount,
       updatedCount: result.updatedCount,
-      totalProcessed: result.totalProcessed
+      totalProcessed: result.totalProcessed,
+      errors: result.errors
     });
   } catch (err) {
     logger.error({ message: 'Error importing piecework tasks from excel', error: err });
@@ -502,8 +530,8 @@ router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:person
 router.post(['/piecework/personnel-rates', '/piecework/rates'], authorizePermission('personnel.manage'), validate(setPersonnelRateSchema), asyncHandler(async (req, res) => {
   try {
     const { personnelId, taskId, customRate } = req.body;
-    await PieceworkService.setPersonnelRate({ personnelId, taskId, customRate });
-    res.json({ status: 'ok', message: 'نرخ اختصاصی ثبت شد' });
+    const saved = await PieceworkService.setPersonnelRate({ personnelId, taskId, customRate }, { req });
+    res.json({ status: 'ok', message: saved.changed ? 'نرخ اختصاصی ثبت شد' : 'نرخ اختصاصی تغییری نکرد', id: saved.id, changed: saved.changed });
   } catch (err) {
     logger.error({ message: 'Error setting custom rate', error: err });
     throw err;
@@ -556,18 +584,13 @@ router.post('/piecework/logs', authorizePermission('personnel.manage', 'piecewor
         unitRate: canSetRate ? item.unitRate : undefined,
         createdById: currentUserId,
         createdByUsername: currentUsername
-      }))
+      })),
+      undefined,
+      // v9.0.285 (TD-810): یک ردیف ممیزی برای هر کارکرد در تراکنش ثبت، با کاربر و IP
+      { req }
     );
 
-    await logActivity({
-      userId: currentUserId,
-      username: currentUsername,
-      action: 'CREATE',
-      entity: 'کارکرد پرکیسی',
-      description: `ثبت ${insertedIds.length} ردیف کارکرد پرکیسی جدید`
-    });
-
-    res.status(201).json({ status: 'ok', insertedCount: insertedIds.length });
+    res.status(201).json({ status: 'ok', insertedCount: insertedIds.length, insertedIds });
   } catch (err) {
     logger.error({ message: 'Error logging piecework', error: err });
     throw err;
@@ -580,7 +603,7 @@ router.put('/piecework/logs/:id', authorizePermission('personnel.manage'), valid
     const id = Number(req.params.id);
     const { date, quantity, unitRate, notes, projectId } = req.body;
 
-    await PieceworkService.updateWorkLog(id, { date, quantity, unitRate, notes, projectId });
+    await PieceworkService.updateWorkLog(id, { date, quantity, unitRate, notes, projectId }, undefined, { req });
 
     res.json({ status: 'ok', message: 'کارکرد ویرایش شد' });
   } catch (err) {
@@ -593,7 +616,7 @@ router.put('/piecework/logs/:id', authorizePermission('personnel.manage'), valid
 router.delete('/piecework/logs/:id', authorizePermission('personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
-    await PieceworkService.deleteWorkLog(id);
+    await PieceworkService.deleteWorkLog(id, undefined, { req });
 
     res.json({ status: 'ok', message: 'کارکرد حذف شد' });
   } catch (err) {
@@ -683,23 +706,16 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorizePe
       advanceDeduction: reqAdvanceDeduction,
       notes,
       userId: currentUserId,
-      username: currentUsername
+      username: currentUsername,
+      // v9.0.285 (TD-810): ردیف ممیزی با جزئیات و IP در تراکنش صدور نوشته می‌شود
+      req
     });
 
     if (result.error || !result.payroll) {
       return res.status(result.status || 400).json({ error: result.error || 'خطا در صدور فیش حقوقی' });
     }
 
-    const { payroll, personnelName, voucher } = result;
-
-    await logActivity({
-      userId: currentUserId,
-      username: currentUsername,
-      action: 'CREATE',
-      entity: 'فیش حقوقی',
-      entityId: payroll.id,
-      description: `صدور فیش حقوقی پرکیسی ${payroll.payrollNumber} برای ${personnelName} (سند حسابداری: ${voucher ? voucher.voucherNumber : 'بدون سند'})`
-    });
+    const { payroll, voucher } = result;
 
     res.status(201).json({
       ...payroll,
@@ -726,21 +742,13 @@ router.put('/piecework/payrolls/:id/status', authorizePermission('personnel.mana
       status,
       notes,
       userId: currentUserId,
-      username: currentUsername
+      username: currentUsername,
+      req
     });
 
     if (result.error || !result.payroll) {
       return res.status(result.status || 400).json({ error: result.error || 'خطا در ویرایش وضعیت فیش حقوقی' });
     }
-
-    await logActivity({
-      userId: currentUserId,
-      username: currentUsername,
-      action: 'UPDATE',
-      entity: 'فیش حقوقی',
-      entityId: id,
-      description: `تغییر وضعیت فیش حقوقی ${result.payroll.payrollNumber} به «${status}»`
-    });
 
     res.json({
       status: 'ok',
@@ -886,16 +894,8 @@ router.delete('/piecework/payrolls/:id', authorizePermission('personnel.manage')
   const deletedPayroll = await PieceworkPayrollService.deletePayroll(id, {
     userId: req.user?.id,
     username: req.user?.username || 'سیستم',
-    reason: `ابطال و حذف فیش حقوقی توسط کاربر`
-  });
-
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'سیستم',
-    action: 'DELETE',
-    entity: 'فیش حقوقی',
-    entityId: id,
-    description: `ابطال و حذف فیش حقوقی ${deletedPayroll?.payrollNumber || id}`
+    reason: `ابطال و حذف فیش حقوقی توسط کاربر`,
+    req
   });
 
   res.json({ status: 'ok', message: 'فیش حقوقی با موفقیت باطل شد', payroll: deletedPayroll });

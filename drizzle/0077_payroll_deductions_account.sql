@@ -1,4 +1,4 @@
--- Drizzle Migration 0076: the «کسورات حقوق پرداختنی» account for payslip deductions (v9.0.275 / TD-554)
+-- Drizzle Migration 0077: the «کسورات حقوق پرداختنی» account for payslip deductions (v9.0.286 / TD-554)
 --
 -- Product-owner decision t6 (option a, package 3): the employee share of insurance and income tax withheld on a payslip
 -- is owed to the social security organisation and the tax office, so it gets its own standard subsidiary account
@@ -29,7 +29,7 @@ BEGIN
   BEGIN
     SELECT value::jsonb INTO stored FROM app_settings WHERE key = 'accounting_account_mappings';
   EXCEPTION WHEN others THEN
-    RAISE NOTICE 'migration 0076: the stored account mapping is not JSON and was left unchanged';
+    RAISE NOTICE 'migration 0077: the stored account mapping is not JSON and was left unchanged';
     RETURN;
   END;
   IF stored IS NULL OR jsonb_typeof(stored) <> 'object' OR stored->>'employeeDeductionsPayableAccountCode' IS DISTINCT FROM '3202' THEN
@@ -49,6 +49,6 @@ BEGIN
   VALUES ('system', 'سیستم', 'UPDATE', 'حسابداری:نگاشت_مفهومی_سرفصل‌ها', 'employeeDeductionsPayableAccountCode',
     'مهاجرت کسورات حقوق: نگاشت «کسورات حقوق پرداختنی» از پیش‌فرض پیشین ۳۲۰۲ (پیش‌دریافت‌ها از مشتریان) به ۳۲۰۵ رفت؛ سندهای گذشته جابه‌جا نشد',
     jsonb_build_object('key', 'employeeDeductionsPayableAccountCode', 'before', '3202', 'after', '3205',
-      'migration', '0076_payroll_deductions_account'),
+      'migration', '0077_payroll_deductions_account'),
     '', now() AT TIME ZONE 'UTC');
 END $$;
