@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { RotateCcw, AlertTriangle, ArrowRightLeft, Calendar, FileText, CheckCircle2, Sparkles } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDateString } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayIsoDate } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { Modal } from '../common/Modal';
 import type { JournalVoucher } from '../../types';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import toast from 'react-hot-toast';
 
 interface VoucherReversalModalProps {
@@ -31,7 +29,7 @@ export function VoucherReversalModal({
   onConfirm,
 }: VoucherReversalModalProps) {
   const appCurrency = useAppCurrency();
-  const [date, setDate] = useState(() => getTodayJalaliDate());
+  const [date, setDate] = useState(() => getTodayIsoDate());
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -88,15 +86,10 @@ export function VoucherReversalModal({
                 <Calendar className="w-3.5 h-3.5 text-indigo-500" />
                 <span>تاریخ ثبت سند برگشتی</span>
               </label>
-              <DatePicker
+              <JalaliDateInput
                 value={date}
-                onChange={(dateObj: any) => {
-                  setDate(extractDateString(dateObj));
-                }}
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
-                inputClass="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                onChange={setDate}
+                className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
                 containerClassName="w-full"
               />
             </div>

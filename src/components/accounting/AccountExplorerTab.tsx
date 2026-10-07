@@ -1,9 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Layers, ChevronLeft, Search, Printer, Download, Eye, ArrowUpRight, ArrowDownLeft, User, Users, FolderKanban, RotateCcw, FileText, X } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { SearchableSelect } from '../SearchableSelect';
 import { useExplorerLedgerQuery, type ExplorerLedgerParams, type ExplorerLedgerRow } from '../../hooks/accounting/useAccountExplorerQueries';
@@ -353,24 +351,20 @@ export function AccountExplorerTab({
           {/* Date Range Pickers & Export Actions */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
-              <DatePicker
+              <JalaliDateInput
                 value={startDate}
-                onChange={(date) => setStartDate(extractDateString(date))}
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
+                onChange={setStartDate}
                 placeholder="از تاریخ..."
-                inputClass="w-28 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-center text-slate-800 dark:text-white outline-none"
+                className="w-28 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-center text-slate-800 dark:text-white outline-none"
+                containerClassName="inline-block"
               />
               <span className="text-slate-400 text-xs">تا</span>
-              <DatePicker
+              <JalaliDateInput
                 value={endDate}
-                onChange={(date) => setEndDate(extractDateString(date))}
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
+                onChange={setEndDate}
                 placeholder="تا تاریخ..."
-                inputClass="w-28 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-center text-slate-800 dark:text-white outline-none"
+                className="w-28 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-center text-slate-800 dark:text-white outline-none"
+                containerClassName="inline-block"
               />
             </div>
 

@@ -63,7 +63,7 @@ const batchPriceUpdate = z.object({
 
 export const batchPriceUpdateSchema = z.object({
   body: z.object({
-    updates: z.array(batchPriceUpdate).min(1, 'لیست تغییرات قیمت خالی است')
+    updates: z.array(batchPriceUpdate).min(1, 'فهرست تغییرات قیمت خالی است')
   })
 });
 

@@ -3,7 +3,8 @@ import {
   type ReservedItemDetail,
   type ItemReservedReportSummary,
   type ReservedItemsFullReport,
-  type ReservedStockInfo
+  type ReservedStockInfo,
+  type ReservationScope
 } from './items/itemStockReservation.service.js';
 import { ItemPricingService, type PriceItemRecord } from './items/itemPricing.service.js';
 import { ItemCatalogService } from './items/itemCatalog.service.js';
@@ -23,8 +24,8 @@ export class ItemsService {
     return ItemStockReservationService.getReservedStockDetails();
   }
 
-  static async getReservedStocksMap(): Promise<Record<string, ReservedStockInfo>> {
-    return ItemStockReservationService.getReservedStocksMap();
+  static async getReservedStocksMap(scope?: ReservationScope): Promise<Record<string, ReservedStockInfo>> {
+    return ItemStockReservationService.getReservedStocksMap(scope);
   }
 
   static async getPricingStrategies(): Promise<string[]> {

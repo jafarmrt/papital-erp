@@ -1,5 +1,15 @@
 import { BookOpen } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatCurrencyLabel } from '../../../utils';
+
+/** v9.0.190 (TD-551): ردیف ارزی در نمای همه ارزها به ریال می‌آید و مبلغ خودش با نرخ زیر آن دیده می‌شود */
+function OriginalAmount({ amount, currency, rate }: { amount?: number; currency?: string; rate?: number }) {
+  if (!amount || !currency || currency === 'IRR' || rate === undefined) return null;
+  return (
+    <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
+      {formatPersianPrice(amount, currency)} × {formatPersianNumber(rate, 4)}
+    </div>
+  );
+}
 
 interface JournalBookViewProps {
   journalLoading: boolean;
@@ -20,6 +30,12 @@ export function JournalBookView({
           <div>
             <h4 className="font-bold text-slate-900 dark:text-white text-sm">دفتر روزنامه قانونی و رسمی</h4>
             <p className="text-xs text-slate-500">ثبت متوالی آرتیکل‌های اسناد حسابداری تاییدشده به ترتیب تاریخ و شماره سند</p>
+            {journalBookData?.reportCurrency && (
+              <p className="text-[11px] text-slate-500">
+                مبالغ به {formatCurrencyLabel(journalBookData.reportCurrency)}
+                {journalBookData.reportCurrency === 'IRR' ? '؛ ردیف ارزی با نرخ همان ردیف به ریال آمده است' : ''}
+              </p>
+            )}
           </div>
         </div>
 
@@ -84,9 +100,11 @@ export function JournalBookView({
                     </td>
                     <td className="py-2 px-3 text-left border-l border-slate-200 dark:border-slate-700 font-mono font-bold text-emerald-600">
                       {item.debit ? formatPersianPrice(item.debit) : '-'}
+                      <OriginalAmount amount={item.originalDebit} currency={item.currency} rate={item.exchangeRate} />
                     </td>
                     <td className="py-2 px-3 text-left border-l border-slate-200 dark:border-slate-700 font-mono font-bold text-rose-600">
                       {item.credit ? formatPersianPrice(item.credit) : '-'}
+                      <OriginalAmount amount={item.originalCredit} currency={item.currency} rate={item.exchangeRate} />
                     </td>
                     <td className="py-2 px-3 text-left font-mono font-bold text-slate-700 dark:text-slate-300">
                       {formatPersianPrice(item.runningBalance)}

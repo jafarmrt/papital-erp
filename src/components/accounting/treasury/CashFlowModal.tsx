@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, X, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react';
-import DatePicker from 'react-multi-date-picker';
-import persian from 'react-date-object/calendars/persian';
-import persian_fa from 'react-date-object/locales/persian_fa';
-import { formatPersianPrice, extractDateString } from '../../../utils';
+import { JalaliDateInput } from '../../common/JalaliDateInput';
+import { formatPersianPrice } from '../../../utils';
 import { useCashFlowReport } from '../../../hooks/accounting/useTreasuryQueries';
 
 interface CashFlowModalProps {
@@ -54,24 +52,20 @@ export const CashFlowModal: React.FC<CashFlowModalProps> = ({
         <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-200 dark:border-slate-600">
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-600 dark:text-slate-400">از تاریخ:</span>
-            <DatePicker
+            <JalaliDateInput
               value={dateFrom}
-              onChange={(d) => setDateFrom(extractDateString(d))}
-              calendar={persian}
-              locale={persian_fa}
-              calendarPosition="bottom-right"
-              inputClass="px-2 py-1 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-center"
+              onChange={setDateFrom}
+              className="px-2 py-1 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-center"
+              containerClassName="inline-block"
             />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-600 dark:text-slate-400">تا تاریخ:</span>
-            <DatePicker
+            <JalaliDateInput
               value={dateTo}
-              onChange={(d) => setDateTo(extractDateString(d))}
-              calendar={persian}
-              locale={persian_fa}
-              calendarPosition="bottom-right"
-              inputClass="px-2 py-1 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-center"
+              onChange={setDateTo}
+              className="px-2 py-1 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-center"
+              containerClassName="inline-block"
             />
           </div>
           <button

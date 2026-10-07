@@ -19,8 +19,71 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.190 — Terminal Output Is English
+### v9.0.211 — Terminal Output Is English
 - **Terminal English (owner rule t9):** AGENTS.md §6 records that everything a terminal shows is English (scripts, hooks, server logs, test names, commits), while UI text, user error messages and documents stay Persian. `npm run ratchet:terminal-english` (`scripts/terminal-english-ratchet.ts`, run by Vitest `terminalEnglishRatchet.test.ts`) counts the places that still print Persian per file and fails when a file gains one; translating them is the next step of TD-625.
+
+### v9.0.210 — Item and Pricing UI Wording
+- **Item and Pricing UI Wording:** item, Excel import and pricing text and item server messages use the decided Persian words (no «WAC», «Template», «استراتژی», «اتمیک», «آرشیو» …; «ترنسفر» stays); the Excel reorder header is «حد نقطه سفارش (هشدار کسری)» and the old header is still read (TD-664, `itemsWording.test.ts`).
+
+### v9.0.209 — Item Page Actions by Permission
+- **Item Page Actions by Permission:** the items and pricing pages show buttons and price fields by the permission of the server route (`products.create` / `edit` / `delete`, `woocommerce.manage`, `products.edit_price`) instead of the role code «viewer»; the average cost is shown in rials and the margin badge and markup buttons use rial prices only (TD-840, `itemActionsByPermission.test.tsx`).
+
+### v9.0.208 — Excel Template From the Server
+- **Excel Template From the Server:** `GET /items/excel-template` builds the import template with the columns the import reads (active warehouses with a matching total, every price list with its currency) without reading items or writing an export audit row (TD-842, `reg_excel_template_from_server_td_842`).
+
+### v9.0.207 — Excel Currency per Price List
+- **Excel Currency per Price List:** the item export and the pricing page export write «ارز - قیمت <title>» for each price list instead of one row-wide «واحد ارز», and the imports read it first, so an unchanged round trip keeps a rial price in rials (TD-841, `reg_excel_export_currency_per_price_list_td_841`).
+
+### v9.0.206 — Item List and Excel Import Performance
+- **Item List and Excel Import:** the item list builds reservations for its own page only; an Excel import reads its items once and its new items with stock share one opening voucher, recorded in `item_opening_voucher_items` (migration 0074) (TD-663, `perf_item_list_and_excel_opening_td_663`).
+
+### v9.0.205 — Unique Category Names and Rename
+- **Category Names:** a live category name is unique (partial index, migration 0073, only on clean data); a rename moves its items in the same transaction and a type change of a category with items is refused (TD-658, `reg_category_rename_keeps_items_td_658`).
+
+### v9.0.204 — Category Soft Delete and Audit
+- **Item Categories:** a category is soft-deleted and every create, edit, delete and default reset writes an audit row in its own transaction; the reset restores a deleted default instead of duplicating it (TD-659, `reg_category_soft_delete_and_audit_td_659`).
+
+### v9.0.203 — Chart of Accounts Messages Shown Once
+- **Chart of Accounts Page (P3):** each save, delete and error message is shown once, a refused seed is handled, and the delete confirmation says an account used in vouchers or with sub-accounts is not deleted (TD-576).
+
+### v9.0.202 — Database Constraints on Vouchers and Accounts
+- **Accounting Constraints (P3):** migration 0071 adds NOT VALID CHECK constraints on voucher row amounts, voucher status and type and account level, type and nature, and a parent foreign key on accounts, each validated only on clean data; the health check lists what is left (TD-562).
+
+### v9.0.201 — Account Codes Are Latin Digits, Unique and Fixed
+- **Account Codes (P2):** an account code is stored as Latin digits only (Persian and Arabic digits converted), is unique among active accounts also against legacy Persian-digit codes and concurrent requests (409 `ACCOUNT_CODE_TAKEN`), and cannot change after creation (422 `ACCOUNT_CODE_IMMUTABLE`) (TD-558).
+
+### v9.0.200 — Account Edits Keep the Tree and Posted Accounts Intact
+- **Account Edits (P2):** an account's parent must be exactly one level up and may not close a cycle; a system account takes only a new name and description and an account with voucher rows keeps its type, nature, level and parent; the tree and trial balance survive a legacy cycle (TD-553).
+
+### v9.0.199 — Account Mapping Validated on Save
+- **Account Mapping (P2):** each mapped code must be a posting account of the concept's account types (422 `ACCOUNT_MAPPING_INVALID`); resolution falls back only to the concept's default subsidiary code, never a group or general account, and the page lists all 26 concepts (TD-550).
+
+### v9.0.198 — Voucher Rows Only on Posting Accounts
+- **Posting Accounts (P2):** a manual, edited or correction voucher row goes only on an active subsidiary or detailed account without an active sub-account (422 `VOUCHER_ACCOUNT_NOT_POSTABLE`); the forms offer only those and the health check lists legacy rows elsewhere (TD-549).
+
+### v9.0.197 — Accounts With Voucher Rows Are Not Deleted
+- **Chart of Accounts (P1):** deleting an account that an active voucher row uses is refused with 409 `ACCOUNT_HAS_VOUCHER_ROWS`; the code of a deleted account always makes a new account, and deleted accounts that still carry rows are listed by the health check (TD-546, decision ت۴).
+
+### v9.0.196 — Voucher Date Shown in Jalali
+- **Accounting Date Inputs (P3):** the voucher, correction and reversal forms and the trial balance, account explorer and cash flow filters keep ISO dates and use `JalaliDateInput`; editing a voucher no longer shows its ISO date as a Jalali year 2026 (TD-578, Vitest `voucherDateInput.test.tsx`).
+
+### v9.0.195 — Voucher Print Currency and Types
+- **Voucher Print Currency (P2):** the voucher print follows the TD-551 balance rule (single-currency vouchers in their currency with the rate, multi-currency ones in rials with each row amount and rate) and names every voucher type from one shared list, settlement included (TD-573, Vitest `voucherPrintCurrency.test.tsx`).
+
+### v9.0.194 — Account Picker Reads Persian Digits
+- **Account Picker Digits (P2):** the account picker turns Persian and Arabic digits of the search and of account code, name, type and description to Latin before matching (TD-571, Vitest `accountSearchDigits.test.tsx`).
+
+### v9.0.193 — Voucher Forms Offer Every Detailed Type
+- **Voucher Detailed Types (P2):** the voucher and correction forms take the detailed types from the server schema list: «متفرقه» is `other`, project and bank account are offered and the correction form has the supplier; `accounting.vouchers` reads the project pick list (TD-569, `reg_manual_voucher_detailed_types_td_569`).
+
+### v9.0.192 — Voucher Row Amounts Read as Decimals
+- **Voucher Row Amounts (P3):** manual and correction voucher row debit, credit and rate go through `decimalInput`: Persian digits and separators are accepted, «0x10» and «1e3» are refused (TD-557, `reg_manual_voucher_row_amount_decimal_input_td_557`).
+
+### v9.0.191 — Voucher Forms Send Each Row Currency and Rate
+- **Voucher Form Row Currency (P1, decision t7):** the manual voucher form, its edit and the correction form send and keep each row's currency and rate, take the voucher rate, balance by the server rule and offer only the treasury currencies; the routes refuse «TOMAN» (TD-564, `reg_manual_voucher_currency_list_td_564`).
+
+### v9.0.190 — Manual Vouchers Need a Rate on Foreign Rows and Balance in Rials
+- **Manual Voucher Currency (P2, decision t7):** a manual or correction voucher row without a currency takes the voucher currency, every non-rial row needs a positive rate (422 `VOUCHER_ROW_RATE_REQUIRED`), and a multi-currency voucher balances in rials at each row rate; the journal book and the health check follow the same rule (TD-551, `reg_manual_voucher_foreign_rate_and_rial_balance_td_551`).
 
 ### v9.0.189 — Lock Order Behaves the Same Everywhere
 - **Lock Order:** `withOrderedLocks` sorts resources by `LOCK_ORDER_MAP` in every environment and refuses a table without a lock level (pass `level` or add the table); `validateLockOrder` refuses an out-of-order declared sequence everywhere. Before, tests threw on input order while production sorted silently, and an unmapped table (`piecework_payrolls`, `crm_leads`, `journal_voucher_items`) was locked last at level 999.

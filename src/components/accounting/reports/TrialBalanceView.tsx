@@ -6,10 +6,8 @@ import {
   FolderOpen, 
   Layers 
 } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, extractDateString } from '../../../utils';
+import { JalaliDateInput } from '../../common/JalaliDateInput';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../../utils';
 import type { TrialBalanceRow } from '../../../types';
 
 interface TrialBalanceViewProps {
@@ -145,24 +143,20 @@ export function TrialBalanceView({
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-700">
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
-              <DatePicker
+              <JalaliDateInput
                 value={startDate}
-                onChange={(dateObj: any) => setStartDate(extractDateString(dateObj))}
+                onChange={setStartDate}
                 placeholder="از تاریخ..."
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
-                inputClass="w-28 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-28 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                containerClassName="inline-block"
               />
               <span className="text-xs text-slate-400">تا</span>
-              <DatePicker
+              <JalaliDateInput
                 value={endDate}
-                onChange={(dateObj: any) => setEndDate(extractDateString(dateObj))}
+                onChange={setEndDate}
                 placeholder="تا تاریخ..."
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
-                inputClass="w-28 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-28 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                containerClassName="inline-block"
               />
               {(startDate || endDate) && (
                 <button

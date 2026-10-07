@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex, primaryKey } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
@@ -137,6 +137,21 @@ export const journalVoucherItems = pgTable('journal_voucher_items', {
   idx_jvi_account: index('idx_jvi_account').on(table.accountId),
   idx_jvi_detailed: index('idx_jvi_detailed').on(table.detailedType, table.detailedId),
   idx_jvi_deleted: index('idx_jvi_deleted').on(table.isDeleted),
+}));
+
+/**
+ * v9.0.206 (TD-663، B05-17، تصمیم ت۱۰ بند ۳): کالاهای هر سند افتتاحیه موجودی و سهم هر کالا (مهاجرت 0074). سند افتتاحیه
+ * یک کالا (فرم کالا، گردش کار) یک ردیف دارد و سند ورود اکسل یک ردیف برای هر کالای تازه آن فایل؛ سندهای پیشین با
+ * `reference_id` = کالا در مهاجرت پر شدند. «سند افتتاحیه این کالا» فقط از همین جدول خوانده می‌شود.
+ */
+export const itemOpeningVoucherItems = pgTable('item_opening_voucher_items', {
+  voucherId: integer('voucher_id').notNull().references(() => journalVouchers.id, { onDelete: 'cascade' }),
+  itemId: integer('item_id').notNull().references(baseRelations.itemsId, { onDelete: 'cascade' }),
+  amount: moneyNumeric('amount').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.voucherId, table.itemId] }),
+  idx_iovi_item: index('idx_iovi_item').on(table.itemId),
 }));
 
 export const bankAccounts = pgTable('bank_accounts', {

@@ -1,7 +1,7 @@
 import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
 import { eq, and, desc, ilike, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions, journalVouchers } from '../../db/schema.js';
+import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions } from '../../db/schema.js';
 import { uploadBase64ToStorage } from '../../lib/storage.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { ItemPricingService } from './itemPricing.service.js';
@@ -12,12 +12,13 @@ import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
 import { advanceItemCodeCounter } from './itemCodeCounter.js';
 import { assertItemCodeAvailable, assertItemNameAvailable, guardItemIdentity } from './itemIdentity.js';
-import { ItemOpeningService } from '../inventory/itemOpening.service.js';
+import { ItemOpeningService, itemIdsWithOpeningVoucher } from '../inventory/itemOpening.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { startsWithLikePattern } from '../../lib/sqlLike.js';
 import { money } from '../../lib/money.js';
-import { ITEM_WAC_COLUMN } from '../../lib/items/excelPriceColumns.js';
+import { ITEM_WAC_COLUMN, priceExportCells } from '../../lib/items/excelPriceColumns.js';
+import { ITEM_REORDER_POINT_COLUMN } from '../../lib/items/itemExcelColumns.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import { EXCEL_WAC_TOLERANCE, importItemsFromExcel, type ItemImportActor, type ItemImportResult } from './itemExcelImport.js';
 
@@ -376,21 +377,15 @@ export class ItemCatalogService {
         row[`موجودی انبار ${w.name}`] = Number(st[w.code] || 0);
       }
 
-      row['حد نقطه سفارش (آلارم کسری)'] = Number(it.reorderPoint || 0);
+      row[ITEM_REORDER_POINT_COLUMN] = Number(it.reorderPoint || 0);
       row[ITEM_WAC_COLUMN] = Number(it.weightedAverageCost || 0);
 
-      let itemCurrency = 'IRR';
-      for (const normStrat of normalizedStrategies) {
+      // v9.0.207 (O12): ارز هر فهرست در ستون خودش، نه یک «واحد ارز» برای کل ردیف
+      Object.assign(row, priceExportCells(normalizedStrategies, (normStrat) => {
         const canKey = getStrategyCanonicalKey(normStrat);
-        const prVal = itemPriceObj?.get(normStrat) || (canKey ? itemPriceObj?.get(canKey) : undefined);
-        const numPrice = prVal && prVal.price !== undefined && prVal.price !== null && !isNaN(Number(prVal.price)) && Number(prVal.price) > 0 ? Number(prVal.price) : '';
-        row[`قیمت ${normStrat}`] = numPrice;
-        if (prVal?.currency && prVal.currency !== 'IRR') {
-          itemCurrency = prVal.currency;
-        }
-      }
+        return itemPriceObj?.get(normStrat) || (canKey ? itemPriceObj?.get(canKey) : undefined);
+      }));
 
-      row['واحد ارز'] = itemCurrency;
       row['تصویر'] = it.image || '';
       row['رنگ'] = it.color || '';
       row['سایز'] = it.size || '';
@@ -628,14 +623,8 @@ export class ItemCatalogService {
         .from(documentItems)
         .where(and(eq(documentItems.itemId, itemId), eq(documentItems.isDeleted, 0)))
         .limit(1);
-      const [voucherRow] = await tx.select({ id: journalVouchers.id })
-        .from(journalVouchers)
-        .where(and(
-          eq(journalVouchers.referenceModule, 'item_opening'),
-          eq(journalVouchers.referenceId, itemId),
-          eq(journalVouchers.isDeleted, 0)
-        ))
-        .limit(1);
+      // v9.0.206 (TD-663): سند افتتاحیه این کالا، سند خودش یا سند ورود اکسل
+      const voucherRow = (await itemIdsWithOpeningVoucher(tx, [itemId])).has(itemId);
 
       // v7.0.45 (audit P2-1): موجودی فعلی از جدول موجودی انبارها (منبع حقیقت)
       const stockBefore = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
@@ -678,8 +667,8 @@ export class ItemCatalogService {
       const wacChanged = !requestedWac.subtract(prevWac).abs().lessThan(EXCEL_WAC_TOLERANCE);
       if (stockBefore.total > 0 && wacChanged) {
         throw new ValidationError(
-          `بهای میانگین (WAC) کالای «${prevItem.name}» که ${stockBefore.total} موجودی دارد با ویرایش کالا تغییر نمی‌کند ` +
-          `(فعلی ${prevWac.toString()}، درخواستی ${requestedWac.toString()}). WAC فقط با ورود کالا عوض می‌شود.`
+          `میانگین موزون بهای کالای «${prevItem.name}» که ${stockBefore.total} موجودی دارد با ویرایش کالا تغییر نمی‌کند ` +
+          `(فعلی ${prevWac.toString()}، درخواستی ${requestedWac.toString()}). میانگین موزون بها فقط با ورود کالا عوض می‌شود.`
         );
       }
       const effectiveWac = stockBefore.total > 0 ? prevWac : requestedWac;

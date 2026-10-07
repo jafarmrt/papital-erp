@@ -2,18 +2,19 @@ import React from 'react';
 import { History, RefreshCw, Save } from 'lucide-react';
 import { cn, formatPersianPrice, formatPersianNumber } from '../../utils';
 import { Item } from '../../types';
+import { COST_CURRENCY, markupPrice } from '../../lib/items/priceMargin';
 
 interface PricingViewsShared {
   items: Item[];
   strategies: string[];
-  appCurrency: string;
   localEdits: Record<number, Record<string, { title: string; price: string; currency: string }>>;
   savingId: number | null;
-  userRole: string;
+  /** v9.0.209 (O14): فیلدهای قیمت، پیشنهاد سود و ذخیره فقط با `products.edit_price` (مسیرهای ذخیره قیمت سرور) */
+  canEditPrices: boolean;
   getFieldValue: (itemId: number, strategyTitle: string) => { price: string; currency: string };
   handlePriceChange: (itemId: number, strategyTitle: string, newPrice: string, currentCurrency?: string) => void;
   handleCurrencyChange: (itemId: number, strategyTitle: string, newCurrency: string, currentPrice?: string) => void;
-  getMarginBadge: (priceStr: string, wacNum?: number) => React.ReactNode;
+  getMarginBadge: (priceStr: string, currency: string, wacNum?: number) => React.ReactNode;
   handleSaveItemPrices: (itemId: number) => void;
   handleOpenHistory: (item: Item) => void;
   formatStrategyDisplayTitle: (title: string) => string;
@@ -23,7 +24,7 @@ interface PricingViewsShared {
 /** نمای کارتی قیمت‌گذاری */
 export function PricingGridView(props: PricingViewsShared) {
   const {
-    items, strategies, appCurrency, localEdits, savingId, userRole,
+    items, strategies, localEdits, savingId, canEditPrices,
     getFieldValue, handlePriceChange, handleCurrencyChange, getMarginBadge,
     handleSaveItemPrices, handleOpenHistory, formatStrategyDisplayTitle, getStrategyCanonicalKey
   } = props;
@@ -61,9 +62,9 @@ export function PricingGridView(props: PricingViewsShared) {
 
             {/* Weighted Average Cost info */}
             <div className="px-4 py-2 bg-slate-100/60 border-b flex justify-between items-center text-[11px]">
-               <span className="text-slate-500">میانگین بهای خرید:</span>
+               <span className="text-slate-500">میانگین موزون بها:</span>
                <span className="font-bold font-mono text-slate-700">
-                 {(item as any).weighted_average_cost ? formatPersianPrice((item as any).weighted_average_cost, appCurrency) : 'تعریف‌نشده'}
+                 {(item as any).weighted_average_cost ? formatPersianPrice((item as any).weighted_average_cost, COST_CURRENCY) : 'تعریف‌نشده'}
                </span>
             </div>
 
@@ -74,7 +75,7 @@ export function PricingGridView(props: PricingViewsShared) {
                 const canKey = getStrategyCanonicalKey(cleanTitle);
                 const fieldVal = getFieldValue(item.id, cleanTitle);
                 const isFieldEditing = (item.id && canKey) ? (localEdits[item.id]?.[canKey] !== undefined) : false;
-                const marginBadge = getMarginBadge(fieldVal.price, (item as any).weighted_average_cost);
+                const marginBadge = getMarginBadge(fieldVal.price, fieldVal.currency, (item as any).weighted_average_cost);
 
                 return (
                   <div key={st} className="flex flex-col gap-1">
@@ -87,6 +88,7 @@ export function PricingGridView(props: PricingViewsShared) {
                           step="any"
                           dir="ltr"
                           placeholder="مبلغ"
+                          disabled={!canEditPrices}
                           value={fieldVal.price}
                           onChange={(e) => handlePriceChange(item.id, cleanTitle, e.target.value, fieldVal.currency)}
                           className={cn(
@@ -95,6 +97,7 @@ export function PricingGridView(props: PricingViewsShared) {
                           )}
                         />
                         <select
+                          disabled={!canEditPrices}
                           value={fieldVal.currency}
                           onChange={(e) => handleCurrencyChange(item.id, cleanTitle, e.target.value, fieldVal.price)}
                           className="border border-slate-200 rounded-xl text-xs px-2 py-1.5 bg-slate-50 hover:bg-white text-slate-700 font-bold shrink-0 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -111,11 +114,17 @@ export function PricingGridView(props: PricingViewsShared) {
                     {/* Markup Suggestions & Margin Badge */}
                     <div className="flex items-center justify-between gap-1 pr-26 text-[10px]">
                       {marginBadge}
-                      {Boolean((item as any).weighted_average_cost && (item as any).weighted_average_cost > 0) && (
-                        <div className="flex gap-1">
-                          <button onClick={() => handlePriceChange(item.id, cleanTitle, Math.round((item as any).weighted_average_cost * 1.1).toString(), fieldVal.currency)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded transition-colors cursor-pointer">+۱۰٪</button>
-                          <button onClick={() => handlePriceChange(item.id, cleanTitle, Math.round((item as any).weighted_average_cost * 1.2).toString(), fieldVal.currency)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded transition-colors cursor-pointer">+۲۰٪</button>
-                          <button onClick={() => handlePriceChange(item.id, cleanTitle, Math.round((item as any).weighted_average_cost * 1.3).toString(), fieldVal.currency)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded transition-colors cursor-pointer">+۳۰٪</button>
+                      {canEditPrices && Boolean((item as any).weighted_average_cost && (item as any).weighted_average_cost > 0) && (
+                        <div className="flex gap-1" title="قیمت ریالی با این درصد سود روی میانگین موزون بها">
+                          {[10, 20, 30].map(percent => (
+                            <button
+                              key={percent}
+                              onClick={() => handlePriceChange(item.id, cleanTitle, markupPrice(Number((item as any).weighted_average_cost), percent), COST_CURRENCY)}
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                            >
+                              +{formatPersianNumber(percent)}٪
+                            </button>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -125,7 +134,7 @@ export function PricingGridView(props: PricingViewsShared) {
             </div>
 
             {/* Item Save Action */}
-            {userRole !== 'viewer' && (
+            {canEditPrices && (
               <div className="p-3 bg-slate-50 border-t flex justify-end">
                 <button
                   onClick={() => handleSaveItemPrices(item.id)}
@@ -140,7 +149,7 @@ export function PricingGridView(props: PricingViewsShared) {
                   ) : (
                     <Save size={13} />
                   )}
-                  {isEdited ? 'ذخیره تغییرات این کالا' : 'بروزرسانی قیمت‌ها'}
+                  {isEdited ? 'ذخیره تغییرات این کالا' : 'به‌روزرسانی قیمت‌ها'}
                 </button>
               </div>
             )}
@@ -154,7 +163,7 @@ export function PricingGridView(props: PricingViewsShared) {
 /** نمای جدولی قیمت‌گذاری */
 export function PricingTableView(props: PricingViewsShared) {
   const {
-    items, strategies, appCurrency, localEdits, savingId, userRole,
+    items, strategies, localEdits, savingId, canEditPrices,
     getFieldValue, handlePriceChange, handleCurrencyChange, getMarginBadge,
     handleSaveItemPrices, handleOpenHistory, formatStrategyDisplayTitle, getStrategyCanonicalKey
   } = props;
@@ -167,11 +176,11 @@ export function PricingTableView(props: PricingViewsShared) {
             <th className="p-3">کد کالا</th>
             <th className="p-3">نام کالا</th>
             <th className="p-3">دسته</th>
-            <th className="p-3">میانگین بهای خرید</th>
+            <th className="p-3">میانگین موزون بها</th>
             {strategies.map(st => (
               <th key={st} className="p-3">{formatStrategyDisplayTitle(st)}</th>
             ))}
-            {userRole !== 'viewer' && <th className="p-3 text-center">عملیات</th>}
+            <th className="p-3 text-center">عملیات</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -184,14 +193,14 @@ export function PricingTableView(props: PricingViewsShared) {
                 <td className="p-3 font-bold text-slate-800">{item.name}</td>
                 <td className="p-3 text-slate-500">{item.category || '-'}</td>
                 <td className="p-3 font-mono text-slate-600">
-                  {(item as any).weighted_average_cost ? formatPersianPrice((item as any).weighted_average_cost, appCurrency) : '-'}
+                  {(item as any).weighted_average_cost ? formatPersianPrice((item as any).weighted_average_cost, COST_CURRENCY) : '-'}
                 </td>
                 {strategies.map(st => {
                   const cleanTitle = formatStrategyDisplayTitle(st);
                   const canKey = getStrategyCanonicalKey(cleanTitle);
                   const fieldVal = getFieldValue(item.id, cleanTitle);
                   const isFieldEditing = (item.id && canKey) ? (localEdits[item.id]?.[canKey] !== undefined) : false;
-                  const marginBadge = getMarginBadge(fieldVal.price, (item as any).weighted_average_cost);
+                  const marginBadge = getMarginBadge(fieldVal.price, fieldVal.currency, (item as any).weighted_average_cost);
                   
                   return (
                     <td key={st} className="p-3 align-top min-w-[180px]">
@@ -203,6 +212,7 @@ export function PricingTableView(props: PricingViewsShared) {
                             step="any"
                             dir="ltr"
                             placeholder="مبلغ"
+                            disabled={!canEditPrices}
                             value={fieldVal.price}
                             onChange={(e) => handlePriceChange(item.id, cleanTitle, e.target.value, fieldVal.currency)}
                             className={cn(
@@ -211,6 +221,7 @@ export function PricingTableView(props: PricingViewsShared) {
                             )}
                           />
                           <select
+                            disabled={!canEditPrices}
                             value={fieldVal.currency}
                             onChange={(e) => handleCurrencyChange(item.id, cleanTitle, e.target.value, fieldVal.price)}
                             className="border border-slate-200 rounded-xl text-[11px] px-1.5 py-1.5 bg-slate-50 hover:bg-white text-slate-700 font-bold shrink-0 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -227,9 +238,9 @@ export function PricingTableView(props: PricingViewsShared) {
                     </td>
                   );
                 })}
-                {userRole !== 'viewer' && (
-                  <td className="p-3 align-top text-center">
-                    <div className="flex items-center justify-center gap-1">
+                <td className="p-3 align-top text-center">
+                  <div className="flex items-center justify-center gap-1">
+                    {canEditPrices && (
                       <button
                         onClick={() => handleSaveItemPrices(item.id)}
                         disabled={savingId === item.id}
@@ -241,16 +252,16 @@ export function PricingTableView(props: PricingViewsShared) {
                       >
                         {savingId === item.id ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
                       </button>
-                      <button 
-                        onClick={() => handleOpenHistory(item)}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
-                        title="تاریخچه سوابق قیمت"
-                      >
-                        <History size={14} />
-                      </button>
-                    </div>
-                  </td>
-                )}
+                    )}
+                    <button
+                      onClick={() => handleOpenHistory(item)}
+                      className="p-1.5 text-slate-500 hover:text-blue-600 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
+                      title="تاریخچه سوابق قیمت"
+                    >
+                      <History size={14} />
+                    </button>
+                  </div>
+                </td>
               </tr>
             );
           })}

@@ -1,6 +1,6 @@
 import { Category, Item } from '../../types';
 import { PreviewRow } from './types';
-import { PRODUCT_CODE_PATTERN, RAW_MATERIAL_CODE_PATTERN } from '../../lib/items/itemCodeFormat';
+import { PRODUCT_CODE_FORMAT_HINT, PRODUCT_CODE_PATTERN, RAW_MATERIAL_CODE_FORMAT_HINT, RAW_MATERIAL_CODE_PATTERN } from '../../lib/items/itemCodeFormat';
 
 export interface ParsedExcelItem {
   index: number;
@@ -63,12 +63,12 @@ export function validateExcelRows(
       if (itemType === 'product') {
         if (!PRODUCT_CODE_PATTERN.test(cleanCode)) {
           hasPrefixMismatch = true;
-          issues.push(`فرمت کد محصول نهایی نامعتبر است (الگوی صحیح: nnnn-x-nnn-nn).`);
+          issues.push(`قالب کد درست نیست؛ ${PRODUCT_CODE_FORMAT_HINT}.`);
         }
       } else {
         if (!RAW_MATERIAL_CODE_PATTERN.test(cleanCode)) {
           hasPrefixMismatch = true;
-          issues.push(`فرمت کد ماده اولیه نامعتبر است (الگوی صحیح: PREFIX-NNN مانند B-H-101).`);
+          issues.push(`قالب کد درست نیست؛ ${RAW_MATERIAL_CODE_FORMAT_HINT}.`);
         }
       }
 

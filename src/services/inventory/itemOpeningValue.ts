@@ -28,6 +28,22 @@ export async function openingKardexValue(executor: DbExecutor, itemId: number): 
   return { quantity: fin(row.quantity ?? 0), value: fin(row.value ?? 0).round(4) };
 }
 
+/** v9.0.206 (TD-663): ارزش افتتاحیه چند کالا با یک پرس‌وجو (سند افتتاحیه یک ورود اکسل) */
+export async function openingKardexValues(executor: DbExecutor, itemIds: number[]): Promise<Map<number, OpeningKardexValue>> {
+  const result = new Map<number, OpeningKardexValue>();
+  const ids = [...new Set(itemIds.filter(id => Number.isInteger(id) && id > 0))];
+  if (ids.length === 0) return result;
+  const res = await executor.execute(sql`
+    SELECT t.item_id AS "itemId", SUM(t.quantity)::text AS quantity, SUM(t.quantity * t.unit_price)::text AS value
+      FROM transactions t
+     WHERE t.item_id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)}) AND ${OPENING_KARDEX_ROW}
+     GROUP BY t.item_id`);
+  for (const row of (res.rows ?? []) as Array<{ itemId: number; quantity: string; value: string }>) {
+    result.set(Number(row.itemId), { quantity: fin(row.quantity), value: fin(row.value).round(4) });
+  }
+  return result;
+}
+
 /** اختلاف مجاز سند افتتاحیه و ردیف‌های افتتاحیه (یک صدم ریال، مثل تراز سند) */
 export const OPENING_VALUE_TOLERANCE = 0.01;
 
@@ -44,14 +60,24 @@ export interface OpeningVoucherMismatchRow {
 /**
  * سندهای افتتاحیه فعالی که مبلغشان با ارزش ردیف‌های افتتاحیه کاردکس کالا نمی‌خواند. سندهای صادرشده دست نمی‌خورند و فقط
  * در بررسی سلامت مالی فهرست می‌شوند (تصمیم ت۴).
+ *
+ * v9.0.206 (TD-663): کالای هر سند از `item_opening_voucher_items` خوانده می‌شود. مبلغ سند یک کالا جمع بدهکار ردیف‌های
+ * زنده آن است (ویرایش دستی سند پیش‌نویس دیده می‌شود)؛ سند ورود اکسل چند کالا دارد و مبلغ هر کالا همان است که هنگام صدور
+ * در ردیف پیوند ثبت شد.
  */
 export async function findOpeningVoucherMismatches(executor: DbExecutor = orm): Promise<OpeningVoucherMismatchRow[]> {
   const res = await executor.execute(sql`
-    WITH v AS (
-      SELECT jv.id, jv.voucher_number, jv.reference_id AS item_id,
-             COALESCE((SELECT SUM(jvi.debit) FROM journal_voucher_items jvi WHERE jvi.voucher_id = jv.id AND jvi.is_deleted = 0), 0) AS amount
-        FROM journal_vouchers jv
-       WHERE jv.is_deleted = 0 AND jv.reference_module = 'item_opening'
+    WITH links AS (
+      SELECT l.voucher_id, l.item_id, l.amount, COUNT(*) OVER (PARTITION BY l.voucher_id) AS item_count
+        FROM item_opening_voucher_items l
+        JOIN journal_vouchers jv ON jv.id = l.voucher_id AND jv.is_deleted = 0
+    ), v AS (
+      SELECT jv.id, jv.voucher_number, links.item_id,
+             CASE WHEN links.item_count = 1
+                  THEN COALESCE((SELECT SUM(jvi.debit) FROM journal_voucher_items jvi WHERE jvi.voucher_id = jv.id AND jvi.is_deleted = 0), 0)
+                  ELSE links.amount END AS amount
+        FROM links
+        JOIN journal_vouchers jv ON jv.id = links.voucher_id
     ), k AS (
       SELECT t.item_id, SUM(t.quantity * t.unit_price) AS value
         FROM transactions t
@@ -64,7 +90,7 @@ export async function findOpeningVoucherMismatches(executor: DbExecutor = orm): 
       LEFT JOIN k ON k.item_id = v.item_id
       LEFT JOIN items i ON i.id = v.item_id
      WHERE abs(v.amount - COALESCE(k.value, 0)) > ${OPENING_VALUE_TOLERANCE}
-     ORDER BY v.id`);
+     ORDER BY v.id, v.item_id`);
   return (res.rows ?? []) as unknown as OpeningVoucherMismatchRow[];
 }
 

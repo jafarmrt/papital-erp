@@ -128,10 +128,8 @@ router.get('/accounting/mappings', authorizePermission('accounting.coa', 'accoun
 
 router.post('/accounting/mappings', authorizePermission('accounting.coa'), validate(saveAccountMappingsSchema), asyncHandler(async (req, res) => {
   const { disabled, ...mappings } = (req.body || {}) as z.infer<typeof saveAccountMappingsSchema>['body'];
-  const updated = await AccountingService.saveAccountMappings(mappings);
-  if (Array.isArray(disabled)) {
-    await AccountMappingService.setDisabledMappings(disabled);
-  }
+  // v9.0.199 (TD-550): نگاشت و فهرست مفهوم‌های خاموش در یک تراکنش، پس از اعتبارسنجی هر کد
+  const updated = await AccountingService.saveAccountMappings(mappings, Array.isArray(disabled) ? disabled : undefined);
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username,
