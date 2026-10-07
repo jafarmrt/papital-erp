@@ -1,39 +1,54 @@
-import { useState, useMemo } from 'react';
-import { ShoppingBag, ShoppingCart, Search, Plus, Layers, RefreshCw, Eye, Trash2, Building2, Check, FileText, Truck, PackageCheck, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { ShoppingBag, Plus, Layers, RefreshCw, Trash2, FileText, Truck, PackageCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianNumber, getErrorMessage } from '../../utils';
 import { RequisitionDetailModal } from './RequisitionDetailModal';
 import { SplitOrderModal } from './SplitOrderModal';
 import { CreateRequisitionModal } from './CreateRequisitionModal';
 import { ConsolidateRequisitionsModal } from './ConsolidateRequisitionsModal';
 import { ProcurementOrderList } from './ProcurementOrderList';
-import { PillBadge } from '../common/PillBadge';
-import { REQUISITION_PRIORITY_BADGES, REQUISITION_PRIORITY_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
-import { canConsolidateRequisition, canDeleteRequisition, canOrderRequisition } from '../../lib/procurement/requisitionFields';
+import { RequisitionListPanel, type RequisitionListFilters } from './RequisitionListPanel';
+import { canConsolidateRequisition } from '../../lib/procurement/requisitionFields';
+import { PROCUREMENT_DESK_PAGE_SIZE } from '../../lib/procurement/procurementLists';
 import { useProcurementDeskData } from '../../hooks/procurement/useProcurementDeskData';
 import { useProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
+import { useProcurementPage } from '../../hooks/procurement/useProcurementPage';
+import { useDebounce } from '../../hooks/useDebounce';
 
 /** شمار خلاصه، یا «—» وقتی خلاصه بارگذاری نشد */
 const countText = (n: number | undefined): string => (n === undefined ? '—' : formatPersianNumber(n));
 
+type DeskTab = 'requisitions' | 'active_orders' | 'delivered_receipts';
+
 export function ProcurementDesk() {
   // v9.0.277 (TD-702، B10-15): هر بخش جدا بارگذاری می‌شود و هر دکمه با مجوز API خودش نشان داده می‌شود
-  const { requisitions, orders, warehouseItems, summary, errors, isLoading, reload: loadData } = useProcurementDeskData();
+  const { warehouseItems, summary, version, reload: loadData } = useProcurementDeskData();
   const access = useProcurementAccess();
-  const [activeMainTab, setActiveMainTab] = useState<'requisitions' | 'active_orders' | 'delivered_receipts'>('requisitions');
+  const [activeMainTab, setActiveMainTab] = useState<DeskTab>('requisitions');
   const [deliveringOrderId, setDeliveringOrderId] = useState<number | null>(null);
   const [deliveryModalOrder, setDeliveryModalOrder] = useState<ProcurementOrder | null>(null);
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
   const [requisitionToDelete, setRequisitionToDelete] = useState<{ id: number; code: string } | null>(null);
   const [isDeletingRequisition, setIsDeletingRequisition] = useState(false);
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  // v9.0.278 (TD-697، B10-10): فیلترها، جست‌وجو و صفحه در سرور؛ هر تغییر فیلتر به صفحه ۱ برمی‌گردد
+  const [filters, setFilters] = useState<RequisitionListFilters>({ status: 'all', priority: 'all', search: '', page: 1 });
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderPage, setOrderPage] = useState(1);
+  const requisitionSearch = useDebounce(filters.search.trim());
+  const debouncedOrderSearch = useDebounce(orderSearch.trim());
+  const requisitionList = useProcurementPage<PurchaseRequisition>('/api/procurement/requisitions', {
+    status: filters.status, priority: filters.priority, search: requisitionSearch, page: filters.page, limit: PROCUREMENT_DESK_PAGE_SIZE,
+  }, version);
+  const orderList = useProcurementPage<ProcurementOrder>(activeMainTab === 'requisitions' ? null : '/api/procurement/orders', {
+    status: activeMainTab === 'active_orders' ? 'pending_delivery' : 'final', search: debouncedOrderSearch, page: orderPage, limit: PROCUREMENT_DESK_PAGE_SIZE,
+  }, version);
+  // درخواست‌های انتخاب‌شده برای تجمیع، از هر صفحه‌ای
+  const [selected, setSelected] = useState<PurchaseRequisition[]>([]);
+  const selectedIds = selected.map(r => r.id);
 
   // Modal States
   const [selectedRequisitionForDetail, setSelectedRequisitionForDetail] = useState<PurchaseRequisition | null>(null);
@@ -41,10 +56,35 @@ export function ProcurementDesk() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isConsolidateModalOpen, setIsConsolidateModalOpen] = useState(false);
 
+  const openTab = (tab: DeskTab) => {
+    if (tab !== activeMainTab) {
+      setOrderPage(1);
+      setOrderSearch('');
+    }
+    setActiveMainTab(tab);
+  };
+
+  const changeFilters = (change: Partial<RequisitionListFilters>) => setFilters(prev => ({ ...prev, ...change }));
+
   // v9.0.276 (TD-701): فقط سفارشی که سرور فرستاده تأیید می‌شود؛ پیش‌تر سفارش پیدانشده با تأمین‌کننده و انبار ساختگی نمایش داده می‌شد
   const handleDeliverOrder = (orderId: number) => {
-    const found = orders.find(o => o.id === orderId);
+    const found = orderList.rows.find(o => o.id === orderId);
     if (found) setDeliveryModalOrder(found);
+  };
+
+  // درخواست سفارش ممکن است در صفحه جاری فهرست درخواست‌ها نباشد؛ از سرور خوانده می‌شود
+  const handleViewRequisition = async (requisitionId: number) => {
+    const onPage = requisitionList.rows.find(r => r.id === requisitionId);
+    if (onPage) {
+      setSelectedRequisitionForDetail(onPage);
+      return;
+    }
+    try {
+      const res = await fetchJson<{ data?: PurchaseRequisition }>(`/api/procurement/requisitions/${requisitionId}`);
+      if (res?.data) setSelectedRequisitionForDetail(res.data);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err));
+    }
   };
 
   const handleConfirmDelivery = async () => {
@@ -58,68 +98,25 @@ export function ProcurementDesk() {
       toast.success(res.message || 'فاکتور خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
       setDeliveryModalOrder(null);
       await loadData();
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در تحویل فاکتور خرید به انبار');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err));
     } finally {
       setIsSubmittingDelivery(false);
       setDeliveringOrderId(null);
     }
   };
 
-  // Filtering
-  const filteredRequisitions = useMemo(() => {
-    return requisitions.filter(r => {
-      // Status
-      if (statusFilter !== 'all') {
-        if (statusFilter === 'pending' || statusFilter === 'in_progress') {
-          if (r.status !== 'pending' && r.status !== 'under_review' && r.status !== 'manager_approval') return false;
-        } else if (statusFilter === 'ordered') {
-          if (r.status !== 'ordered' && r.status !== 'approved') return false;
-        } else if (statusFilter === 'received') {
-          if (r.status !== 'received' && r.status !== 'completed') return false;
-        } else if (statusFilter === 'rejected') {
-          if (r.status !== 'rejected' && r.status !== 'cancelled') return false;
-        } else if (r.status !== statusFilter) {
-          return false;
-        }
-      }
-
-      // Priority
-      if (priorityFilter !== 'all' && r.priority !== priorityFilter) {
-        return false;
-      }
-
-      // Search
-      if (searchTerm.trim()) {
-        const q = searchTerm.trim().toLowerCase();
-        const matchCode = (r.code || '').toLowerCase().includes(q);
-        const matchTitle = (r.title || '').toLowerCase().includes(q);
-        const matchProject = (r.projectCode || '').toLowerCase().includes(q) || (r.projectName || '').toLowerCase().includes(q);
-        const matchItems = Array.isArray(r.items) && r.items.some(i => 
-          (i.itemName || '').toLowerCase().includes(q) || (i.itemCode || '').toLowerCase().includes(q)
-        );
-        if (!matchCode && !matchTitle && !matchProject && !matchItems) return false;
-      }
-
-      return true;
-    });
-  }, [requisitions, statusFilter, priorityFilter, searchTerm]);
-
-  const handleToggleSelect = (id: number) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  const handleToggleSelect = (req: PurchaseRequisition) => {
+    setSelected(prev => prev.some(r => r.id === req.id) ? prev.filter(r => r.id !== req.id) : [...prev, req]);
   };
 
   const handleSelectAll = (select: boolean) => {
     if (select) {
-      // v9.0.274 (TD-694): فقط درخواست تأییدنشده و بی سفارش تجمیع می‌شود
-      setSelectedIds(filteredRequisitions.filter(canConsolidateRequisition).map(r => r.id));
+      // v9.0.274 (TD-694): فقط درخواست تأییدنشده و بی سفارش تجمیع می‌شود؛ انتخاب صفحه‌های دیگر می‌ماند
+      setSelected(prev => [...prev, ...requisitionList.rows.filter(r => canConsolidateRequisition(r) && !prev.some(p => p.id === r.id))]);
     } else {
-      setSelectedIds([]);
+      setSelected([]);
     }
-  };
-
-  const handleDeleteRequisition = (id: number, code: string) => {
-    setRequisitionToDelete({ id, code });
   };
 
   const handleConfirmDeleteRequisition = async () => {
@@ -128,18 +125,15 @@ export function ProcurementDesk() {
     try {
       await fetchJson(`/api/procurement/requisitions/${requisitionToDelete.id}`, { method: 'DELETE' });
       toast.success(`درخواست خرید ${requisitionToDelete.code} با موفقیت حذف شد.`);
+      setSelected(prev => prev.filter(r => r.id !== requisitionToDelete.id));
       setRequisitionToDelete(null);
       await loadData();
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در حذف درخواست خرید');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err));
     } finally {
       setIsDeletingRequisition(false);
     }
   };
-
-  const selectedRequisitionsForConsolidate = useMemo(() => {
-    return requisitions.filter(r => selectedIds.includes(r.id));
-  }, [requisitions, selectedIds]);
 
   return (
     <div className="space-y-6 font-farsi">
@@ -167,17 +161,17 @@ export function ProcurementDesk() {
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer"
             >
               <Layers className="w-4 h-4" />
-              تجمیع ({selectedIds.length} درخواست انتخابی)
+              تجمیع ({formatPersianNumber(selectedIds.length)} درخواست انتخابی)
             </button>
           )}
 
           <button
             type="button"
-            onClick={loadData}
+            onClick={() => void loadData()}
             className="p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer border border-slate-200"
             title="تازه‌سازی"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${requisitionList.isLoading || orderList.isLoading ? 'animate-spin' : ''}`} />
           </button>
 
           {access.canCreate && (
@@ -218,7 +212,7 @@ export function ProcurementDesk() {
           {/* Stage 1 */}
           <button
             type="button"
-            onClick={() => setActiveMainTab('requisitions')}
+            onClick={() => openTab('requisitions')}
             className={`p-4 rounded-2xl border text-right transition-all cursor-pointer relative flex flex-col justify-between ${
               activeMainTab === 'requisitions'
                 ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-xs'
@@ -252,7 +246,7 @@ export function ProcurementDesk() {
           {/* Stage 2 */}
           <button
             type="button"
-            onClick={() => setActiveMainTab('active_orders')}
+            onClick={() => openTab('active_orders')}
             className={`p-4 rounded-2xl border text-right transition-all cursor-pointer relative flex flex-col justify-between ${
               activeMainTab === 'active_orders'
                 ? 'bg-sky-500/10 border-sky-500 ring-2 ring-sky-500/20 shadow-xs'
@@ -266,7 +260,7 @@ export function ProcurementDesk() {
                   فاکتورهای خرید (در انتظار تحویل انبار)
                 </span>
                 <span className="text-xl font-black font-mono text-sky-700">
-                  {formatPersianNumber(summary?.pendingDeliveryOrdersCount ?? orders.filter(o => o.status !== 'final').length)}
+                  {countText(summary?.pendingDeliveryOrdersCount)}
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 leading-relaxed">
@@ -286,7 +280,7 @@ export function ProcurementDesk() {
           {/* Stage 3 */}
           <button
             type="button"
-            onClick={() => setActiveMainTab('delivered_receipts')}
+            onClick={() => openTab('delivered_receipts')}
             className={`p-4 rounded-2xl border text-right transition-all cursor-pointer relative flex flex-col justify-between ${
               activeMainTab === 'delivered_receipts'
                 ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
@@ -300,7 +294,7 @@ export function ProcurementDesk() {
                   رسیدهای قطعی انبار (تحویل‌شده)
                 </span>
                 <span className="text-xl font-black font-mono text-emerald-700">
-                  {formatPersianNumber(summary?.deliveredOrdersCount ?? orders.filter(o => o.status === 'final').length)}
+                  {countText(summary?.deliveredOrdersCount)}
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 leading-relaxed">
@@ -321,338 +315,60 @@ export function ProcurementDesk() {
 
       {/* Main Mode Navigation Tabs */}
       <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl">
-        <button
-          type="button"
-          onClick={() => setActiveMainTab('requisitions')}
-          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 ${
-            activeMainTab === 'requisitions'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <FileText className="w-4 h-4 text-amber-600" />
-          <span>۱. کارتابل درخواست‌های خرید</span>
-          <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-full font-mono text-[11px]">
-            {formatPersianNumber(requisitions.length)}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveMainTab('active_orders')}
-          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 ${
-            activeMainTab === 'active_orders'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Truck className="w-4 h-4 text-sky-600" />
-          <span>۲. فاکتورهای خرید (در انتظار تحویل انبار)</span>
-          <span className="px-2 py-0.5 bg-sky-100 text-sky-900 rounded-full font-mono text-[11px]">
-            {formatPersianNumber(summary?.pendingDeliveryOrdersCount ?? orders.filter(o => o.status !== 'final').length)}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveMainTab('delivered_receipts')}
-          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 ${
-            activeMainTab === 'delivered_receipts'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <PackageCheck className="w-4 h-4 text-emerald-600" />
-          <span>۳. رسیدهای قطعی انبار (تحویل‌شده)</span>
-          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded-full font-mono text-[11px]">
-            {formatPersianNumber(summary?.deliveredOrdersCount ?? orders.filter(o => o.status === 'final').length)}
-          </span>
-        </button>
+        {([
+          { id: 'requisitions', icon: <FileText className="w-4 h-4 text-amber-600" />, label: '۱. کارتابل درخواست‌های خرید', badge: 'bg-amber-100 text-amber-900', count: summary ? summary.totalRequisitions : requisitionList.total },
+          { id: 'active_orders', icon: <Truck className="w-4 h-4 text-sky-600" />, label: '۲. فاکتورهای خرید (در انتظار تحویل انبار)', badge: 'bg-sky-100 text-sky-900', count: summary?.pendingDeliveryOrdersCount },
+          { id: 'delivered_receipts', icon: <PackageCheck className="w-4 h-4 text-emerald-600" />, label: '۳. رسیدهای قطعی انبار (تحویل‌شده)', badge: 'bg-emerald-100 text-emerald-900', count: summary?.deliveredOrdersCount },
+        ] as const).map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => openTab(tab.id)}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 ${
+              activeMainTab === tab.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+            <span className={`px-2 py-0.5 rounded-full text-[11px] ${tab.badge}`}>{countText(tab.count)}</span>
+          </button>
+        ))}
       </div>
 
       {/* Main Content Area Based on Active Tab */}
-      {activeMainTab === 'active_orders' ? (
-        <ProcurementOrderList
-          orders={orders}
-          isLoading={isLoading}
-          type="active"
-          error={errors.orders}
-          onDeliverOrder={access.canDeliver ? handleDeliverOrder : undefined}
-          deliveringOrderId={deliveringOrderId}
-          onViewRequisition={(reqId) => {
-            const req = requisitions.find(r => r.id === reqId);
-            if (req) setSelectedRequisitionForDetail(req);
-          }}
-        />
-      ) : activeMainTab === 'delivered_receipts' ? (
-        <ProcurementOrderList
-          orders={orders}
-          isLoading={isLoading}
-          type="delivered"
-          error={errors.orders}
-          onViewRequisition={(reqId) => {
-            const req = requisitions.find(r => r.id === reqId);
-            if (req) setSelectedRequisitionForDetail(req);
-          }}
+      {activeMainTab === 'requisitions' ? (
+        <RequisitionListPanel
+          list={requisitionList}
+          filters={filters}
+          pageSize={PROCUREMENT_DESK_PAGE_SIZE}
+          onFiltersChange={changeFilters}
+          access={access}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          onSelectAll={handleSelectAll}
+          onView={setSelectedRequisitionForDetail}
+          onSplit={setSelectedRequisitionForSplit}
+          onDelete={req => setRequisitionToDelete({ id: req.id, code: req.code })}
+          onShowOrders={() => openTab('active_orders')}
+          onRetry={() => void loadData()}
         />
       ) : (
-        <>
-          {/* Filters & Tabs Section */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
-            {/* Status Tabs - Streamlined Workshop Stages */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-100">
-              {[
-                { id: 'all', label: 'همه درخواست‌ها' },
-                { id: 'pending', label: 'در انتظار بررسی و تایید' },
-                { id: 'ordered', label: 'تایید شده (در حال خرید)' },
-                { id: 'received', label: 'خرید و تحویل انبار شده (تکمیل)' },
-                { id: 'rejected', label: 'رد شده / لغو' },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setStatusFilter(tab.id)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                    statusFilter === tab.id
-                      ? 'bg-amber-500 text-slate-950 shadow-xs'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Search and Priority Controls */}
-            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="relative flex-1 min-w-[260px]">
-                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
-                <input
-                  type="text"
-                  placeholder="جستجو در کد درخواست، عنوان، پروژه یا کالاهای درخواستی..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-slate-500 font-bold">اولویت:</span>
-                <select
-                  value={priorityFilter}
-                  onChange={e => setPriorityFilter(e.target.value)}
-                  className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-bold focus:bg-white focus:outline-none cursor-pointer"
-                >
-                  <option value="all">همه اولویت‌ها</option>
-                  <option value="urgent">فوری / اضطراری</option>
-                  <option value="high">بالا</option>
-                  <option value="normal">عادی</option>
-                  <option value="low">پایین</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Requisitions List Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="font-bold text-slate-800">
-                  لیست درخواست‌های خرید ({formatPersianNumber(filteredRequisitions.length)} مورد)
-                </span>
-                {selectedIds.length > 0 && (
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded font-mono font-bold">
-                    {selectedIds.length} مورد انتخاب شده
-                  </span>
-                )}
-              </div>
-              {access.canManage && (
-                <div className="flex items-center gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => handleSelectAll(true)}
-                    className="text-blue-600 hover:text-blue-800 font-bold cursor-pointer"
-                  >
-                    انتخاب همه
-                  </button>
-                  <span className="text-slate-300">|</span>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectAll(false)}
-                    className="text-slate-500 hover:text-slate-700 font-bold cursor-pointer"
-                  >
-                    لغو انتخاب
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {isLoading ? (
-              <div className="p-12 text-center text-slate-500 text-xs">
-                در حال بارگذاری کارتابل تدارکات...
-              </div>
-            ) : errors.requisitions ? (
-              <div className="p-8 flex flex-col items-center gap-3 text-xs text-rose-800">
-                <div className="flex items-center gap-2 font-bold">
-                  <AlertTriangle className="w-4 h-4 text-rose-600" />
-                  درخواست‌های خرید بارگذاری نشد: {errors.requisitions}
-                </div>
-                <button type="button" onClick={() => void loadData()} className="px-3 py-1.5 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg font-bold cursor-pointer">
-                  تلاش دوباره
-                </button>
-              </div>
-            ) : filteredRequisitions.length === 0 ? (
-              <div className="p-12 text-center text-slate-400 text-xs">
-                هیچ درخواست خریدی با فیلترهای انتخابی یافت نشد.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-right">
-                  <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                    <tr>
-                      {access.canManage && <th className="p-3 text-center w-12">انتخاب</th>}
-                      <th className="p-3">شماره و اولویت</th>
-                      <th className="p-3">عنوان و پروژه</th>
-                      <th className="p-3 text-center">اقلام</th>
-                      <th className="p-3 text-center">تاریخ نیاز</th>
-                      <th className="p-3 text-center">برآورد مبلغ</th>
-                      <th className="p-3 text-center">وضعیت گردش کار</th>
-                      <th className="p-3 text-center">فاکتورهای خرید مرتبط</th>
-                      <th className="p-3 text-center">عملیات تدارکات</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredRequisitions.map(req => {
-                      const itemsCount = Array.isArray(req.items) ? req.items.length : 0;
-                      const isSelected = selectedIds.includes(req.id);
-                      const linkedOrders = orders.filter(o => o.requisitionId === req.id || o.requisitionCode === req.code);
-                      const pendingOrdersCount = linkedOrders.filter(o => o.status !== 'final').length;
-
-                      return (
-                        <tr key={req.id} className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-amber-50/40' : ''}`}>
-                          {access.canManage && (
-                            <td className="p-3 text-center">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                disabled={!isSelected && !canConsolidateRequisition(req)}
-                                title={canConsolidateRequisition(req) ? 'انتخاب برای تجمیع' : 'فقط درخواست تأییدنشده و بی سفارش تجمیع می‌شود'}
-                                onChange={() => handleToggleSelect(req.id)}
-                                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                              />
-                            </td>
-                          )}
-
-                          <td className="p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-mono font-black text-slate-900 text-sm">{req.code}</span>
-                              <PillBadge variants={REQUISITION_PRIORITY_BADGES} value={req.priority} fallback={REQUISITION_PRIORITY_FALLBACK} />
-                            </div>
-                            <span className="text-[11px] text-slate-400">ثبت: {req.requestedByName || 'نامشخص'}</span>
-                          </td>
-
-                          <td className="p-3">
-                            <div className="font-bold text-slate-900 mb-0.5">{req.title}</div>
-                            {req.projectName ? (
-                              <div className="flex items-center gap-1 text-[11px] text-blue-700">
-                                <Building2 className="w-3 h-3" />
-                                <span>{req.projectName} ({req.projectCode || ''})</span>
-                              </div>
-                            ) : (
-                              <span className="text-[11px] text-slate-400">خرید عمومی سازمان</span>
-                            )}
-                          </td>
-
-                          <td className="p-3 text-center">
-                            <span className="px-2.5 py-1 bg-slate-100 text-slate-800 rounded-lg font-mono font-bold">
-                              {formatPersianNumber(itemsCount)} قلم
-                            </span>
-                          </td>
-
-                          <td className="p-3 text-center font-mono font-bold text-slate-700">
-                            {req.requiredDate ? formatPersianDate(req.requiredDate) : '---'}
-                          </td>
-
-                          <td className="p-3 text-center font-mono font-black text-amber-800">
-                            {formatPersianPrice(req.totalEstimatedAmount || 0)}
-                          </td>
-
-                          <td className="p-3 text-center">
-                            <PillBadge variants={REQUISITION_STATUS_BADGES} value={req.status} fallback={REQUISITION_STATUS_FALLBACK} />
-                          </td>
-
-                          <td className="p-3 text-center">
-                            {linkedOrders.length > 0 ? (
-                              <div className="flex flex-col items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setActiveMainTab('active_orders')}
-                                  className="px-2 py-0.5 bg-sky-50 hover:bg-sky-100 text-sky-800 rounded-md font-bold text-[11px] border border-sky-200 transition-colors cursor-pointer"
-                                  title="مشاهده فاکتورهای این درخواست در تب فاکتورهای خرید"
-                                >
-                                  {formatPersianNumber(linkedOrders.length)} فاکتور خرید
-                                </button>
-                                {pendingOrdersCount > 0 ? (
-                                  <span className="text-[10px] text-amber-800 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                                    {formatPersianNumber(pendingOrdersCount)} در انتظار تحویل
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-0.5">
-                                    <Check className="w-3 h-3" /> تحویل کامل به انبار
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-slate-400 text-[11px]">بدون فاکتور</span>
-                            )}
-                          </td>
-
-                          <td className="p-3 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              {/* Details Modal */}
-                              <button
-                                type="button"
-                                onClick={() => setSelectedRequisitionForDetail(req)}
-                                className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                                title="مشاهده جزئیات و تاییدات"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-
-                              {/* v9.0.277 (TD-702): صدور سفارش با procurement.order، و پیش از تأیید فقط با حق تأیید (TD-689) */}
-                              {canOrderRequisition(req, access) && (
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedRequisitionForSplit(req)}
-                                  className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
-                                  title="تفکیک تامین‌کنندگان و صدور فاکتور خرید"
-                                >
-                                  <ShoppingCart className="w-3.5 h-3.5" />
-                                  <span>تفکیک و صدور فاکتور</span>
-                                </button>
-                              )}
-
-                              {/* v9.0.270 (TD-695): حذف فقط برای درخواستی که سفارش یا دریافت نشده است */}
-                              {access.canManage && canDeleteRequisition(req) && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteRequisition(req.id, req.code)}
-                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                                  title="حذف درخواست"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </>
+        <ProcurementOrderList
+          key={activeMainTab}
+          orders={orderList.rows}
+          total={orderList.total}
+          page={orderPage}
+          pageSize={PROCUREMENT_DESK_PAGE_SIZE}
+          onPageChange={setOrderPage}
+          search={orderSearch}
+          onSearchChange={value => { setOrderSearch(value); setOrderPage(1); }}
+          isLoading={orderList.isLoading}
+          type={activeMainTab === 'active_orders' ? 'active' : 'delivered'}
+          error={orderList.error}
+          onDeliverOrder={activeMainTab === 'active_orders' && access.canDeliver ? handleDeliverOrder : undefined}
+          deliveringOrderId={deliveringOrderId}
+          onViewRequisition={reqId => void handleViewRequisition(reqId)}
+        />
       )}
 
       {/* Detail Modal */}
@@ -695,10 +411,10 @@ export function ProcurementDesk() {
       {isConsolidateModalOpen && (
         <ConsolidateRequisitionsModal
           isOpen={isConsolidateModalOpen}
-          selectedRequisitions={selectedRequisitionsForConsolidate}
+          selectedRequisitions={selected}
           onClose={() => {
             setIsConsolidateModalOpen(false);
-            setSelectedIds([]);
+            setSelected([]);
           }}
           onSuccess={loadData}
         />

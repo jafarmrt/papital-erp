@@ -77,6 +77,9 @@ export interface PurchaseRequisition {
   /** v9.0.274 (TD-694): درخواستی که این درخواست در آن تجمیع شد (وضعیت `consolidated`) و کد آن */
   consolidatedIntoId?: number | null;
   consolidatedIntoCode?: string | null;
+  /** v9.0.278 (TD-697): شمار سفارش‌های زنده درخواست و سفارش‌های در انتظار تحویل (از سرور، شمرده در SQL) */
+  ordersCount?: number;
+  pendingDeliveryOrdersCount?: number;
   isDeleted?: number;
   is_deleted?: number;
   createdAt?: string;

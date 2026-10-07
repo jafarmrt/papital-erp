@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.278 — Procurement Desk Pages and Server Filters
+- **Fix (TD-697, B10-10):** the requisition list takes the statuses it writes and their groups (`REQUISITION_STATUS_FILTERS`: open, ordered, received, rejected, consolidated), the form priorities, item-name search in SQL and one shared limit (`PROCUREMENT_LIST_MAX_LIMIT`, answered as used); each requisition carries its order counts; the desk pages requisitions and orders on the server.
+
 ### v9.0.277 — Procurement Desk Sections and Buttons by Permission
 - **Fix (TD-702, B10-15):** the procurement desk loads its summary, requisitions, orders and items one by one (`useProcurementDeskData`), so one refused or failed section shows its own error and the others still show; `GET /procurement/inbox/summary` opens for both page keys (`READ_PERMISSIONS.purchaseRequisitions`) and is listed among the page's APIs; each button follows the permission of its API (`useProcurementAccess`).
 

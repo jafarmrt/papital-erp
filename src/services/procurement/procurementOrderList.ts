@@ -3,6 +3,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents, items, purchaseRequisitions } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { procurementListPage } from '../../lib/procurement/procurementLists.js';
 import type { ProcurementOrder } from '../../types.js';
 
 export interface ProcurementOrderListParams {
@@ -48,8 +49,7 @@ export async function listProcurementOrders(
   params: ProcurementOrderListParams,
   db: DbExecutor = orm,
 ): Promise<{ data: ProcurementOrder[]; total: number; page: number; limit: number }> {
-  const page = params.page ?? 1;
-  const limit = params.limit ?? 50;
+  const { page, limit } = procurementListPage(params.page, params.limit);
   const where = orderListConditions(params);
   const [{ total }] = await db.select({ total: sql<number>`count(*)::int` })
     .from(documents)

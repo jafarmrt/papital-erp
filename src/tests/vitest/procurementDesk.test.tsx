@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ProcurementOrder, PurchaseRequisition } from '../../types';
 
 const fetchJson = vi.fn();
@@ -141,5 +141,62 @@ describe('procurement desk sections and buttons (TD-702)', () => {
     granted.add('procurement.approve');
     render(<RequisitionDetailModal isOpen requisition={pending} warehouseItems={[]} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
     expect(screen.queryByText('رد درخواست خرید')).not.toBeNull();
+  });
+});
+
+/** the URLs the desk asked for, as `URLSearchParams` of the given path */
+const requestsTo = (path: string): URLSearchParams[] => fetchJson.mock.calls
+  .map(call => String(call[0] ?? ''))
+  .filter(url => url.startsWith(`${path}?`))
+  .map(url => new URLSearchParams(url.slice(path.length + 1)));
+
+/**
+ * v9.0.278 (TD-697، B10-10): میز درخواست‌ها و سفارش‌ها را صفحه‌به‌صفحه از سرور می‌خواند، با وضعیت، اولویت و جست‌وجوی
+ * سرور، و شمار سفارش‌های هر درخواست را از پاسخ سرور نشان می‌دهد. پیش‌تر ۱۰۰ درخواست و ۲۰۰ سفارش آخر خوانده و در
+ * مرورگر فیلتر می‌شد، پس درخواست‌های قدیمی‌تر هرگز دیده نمی‌شدند.
+ */
+describe('procurement desk pages and server filters (TD-697)', () => {
+  it('reads one page of requisitions with the status, priority and search of the desk and pages forward', async () => {
+    granted.add('procurement.view');
+    deskApi();
+    fetchJson.mockImplementation(async (u: unknown) => {
+      const url = String(u ?? '');
+      if (url.startsWith('/api/procurement/requisitions')) return { success: true, data: [requisition, pending], total: 45, page: 1, limit: 20 };
+      return { success: true, data: [] };
+    });
+    await deskRendered();
+    const first = requestsTo('/api/procurement/requisitions')[0];
+    expect(first?.get('page')).toBe('1');
+    expect(first?.get('limit')).toBe('20');
+    screen.getByTitle('صفحه بعدی').click();
+    await waitFor(() => expect(requestsTo('/api/procurement/requisitions').some(q => q.get('page') === '2')).toBe(true));
+    screen.getByText('خرید و تحویل انبار شده (تکمیل)').click();
+    await waitFor(() => expect(requestsTo('/api/procurement/requisitions').some(q => q.get('status') === 'received' && q.get('page') === '1')).toBe(true));
+    const search = screen.getByPlaceholderText(/جستجو در کد درخواست/);
+    fireEvent.change(search, { target: { value: 'فیروزه' } });
+    await waitFor(() => expect(requestsTo('/api/procurement/requisitions').some(q => q.get('search') === 'فیروزه')).toBe(true));
+  });
+
+  it('shows the order counts the server sends for each requisition', async () => {
+    granted.add('procurement.view');
+    fetchJson.mockImplementation(async (u: unknown) => {
+      const url = String(u ?? '');
+      if (url.startsWith('/api/procurement/requisitions')) return { success: true, data: [{ ...requisition, ordersCount: 2, pendingDeliveryOrdersCount: 1 }], total: 1, page: 1, limit: 20 };
+      return { success: true, data: [] };
+    });
+    await deskRendered();
+    expect(screen.queryByText('۲ فاکتور خرید')).not.toBeNull();
+    expect(screen.queryByText('۱ در انتظار تحویل')).not.toBeNull();
+  });
+
+  it('reads each order tab with its own status filter, one page at a time', async () => {
+    granted.add('procurement.view');
+    deskApi();
+    await deskRendered();
+    expect(requestsTo('/api/procurement/orders')).toHaveLength(0);
+    screen.getByText('۲. فاکتورهای خرید (در انتظار تحویل انبار)').click();
+    await waitFor(() => expect(requestsTo('/api/procurement/orders').some(q => q.get('status') === 'pending_delivery' && q.get('limit') === '20')).toBe(true));
+    screen.getByText('۳. رسیدهای قطعی انبار (تحویل‌شده)').click();
+    await waitFor(() => expect(requestsTo('/api/procurement/orders').some(q => q.get('status') === 'final')).toBe(true));
   });
 });

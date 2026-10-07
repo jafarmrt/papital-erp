@@ -1,5 +1,5 @@
 import { terminateOpenWorkflows } from './workflow/workflowTermination.js';
-import { sql, eq, and, desc, or, ilike } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { purchaseRequisitions, documentRefCounters, documents, documentItems, workflowInstances } from '../db/schema.js';
 import { businessFiscalYear, businessTodayIsoDate } from '../lib/businessClock.js';
@@ -18,7 +18,6 @@ const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve', 'procurement.man
 /** v8.0.71 (TD-326): درخواست ردشده دریافت یا سفارش داده نمی‌شود، مگر پس از بازگشایی */
 const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
 import type { PurchaseRequisition, ProcurementOrder } from '../types.js';
-import { containsLikePattern } from '../lib/sqlLike.js';
 import { applyDeliveredLines, isSettledRequisitionRow, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
 import { assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES, requisitionOrderDocuments } from './procurement/requisitionReceiveAction.js';
 import { describeOverOrders, findOverOrders } from './procurement/requisitionOrder.js';
@@ -30,8 +29,11 @@ import {
 } from './procurement/requisitionApproval.js';
 import { buildRequisitionRows, resolveRequisitionProject, type RequisitionRowFields } from './procurement/requisitionRows.js';
 import { listProcurementOrders, procurementOrderCounts, type ProcurementOrderListParams } from './procurement/procurementOrderList.js';
+import { listRequisitions, requisitionDtos, toRequisitionDto, type GetRequisitionsFilter } from './procurement/requisitionList.js';
+
+export type { GetRequisitionsFilter };
 import {
-  assertRequisitionNotConsolidated, closeConsolidationSources, consolidatedIntoCodes, consolidationHeader, lockConsolidationSources,
+  assertRequisitionNotConsolidated, closeConsolidationSources, consolidationHeader, lockConsolidationSources,
   mergeConsolidationRows,
 } from './procurement/requisitionConsolidation.js';
 
@@ -63,15 +65,6 @@ export interface UpdateRequisitionInput {
   items?: RequisitionRowFields[];
 }
 
-export interface GetRequisitionsFilter {
-  status?: string;
-  projectId?: number;
-  priority?: string;
-  search?: string;
-  page?: number;
-  limit?: number;
-}
-
 export interface SplitOrderGroup {
   supplierId?: number | null;
   supplierName: string;
@@ -100,10 +93,6 @@ export interface ConvertToOrdersInput {
 }
 
 
-/** v7.0.68 (P2-6): مبلغ برآوردی در پاسخ سرویس عدد است (ستون Decimal). */
-function toRequisitionDto(row: typeof purchaseRequisitions.$inferSelect): PurchaseRequisition {
-  return { ...row, totalEstimatedAmount: row.totalEstimatedAmount?.toNumber() ?? 0 } as unknown as PurchaseRequisition;
-}
 export class ProcurementService {
   /**
    * Atomic sequential code generation for Purchase Requisitions (e.g. PR-1405-0001)
@@ -271,58 +260,11 @@ export class ProcurementService {
   }
 
   /**
-   * List purchase requisitions with filtering and pagination
+   * List purchase requisitions with filtering and pagination (v9.0.278, TD-697: status groups, item search and order
+   * counts in SQL, the page and limit actually used)
    */
-  static async getRequisitions(filter: GetRequisitionsFilter = {}): Promise<{ data: PurchaseRequisition[]; total: number }> {
-    const conditions = [eq(purchaseRequisitions.isDeleted, 0)];
-
-    if (filter.status && filter.status !== 'all') {
-      conditions.push(eq(purchaseRequisitions.status, filter.status));
-    }
-
-    if (filter.projectId) {
-      conditions.push(eq(purchaseRequisitions.projectId, filter.projectId));
-    }
-
-    if (filter.priority && filter.priority !== 'all') {
-      conditions.push(eq(purchaseRequisitions.priority, filter.priority));
-    }
-
-    if (filter.search && filter.search.trim()) {
-      const q = containsLikePattern(filter.search.trim());
-      conditions.push(
-        or(
-          ilike(purchaseRequisitions.code, q),
-          ilike(purchaseRequisitions.title, q),
-          ilike(purchaseRequisitions.projectCode, q),
-          ilike(purchaseRequisitions.projectName, q)
-        )!
-      );
-    }
-
-    const whereClause = and(...conditions);
-    const limit = Math.min(filter.limit || 50, 100);
-    const page = Math.max(filter.page || 1, 1);
-    const offset = (page - 1) * limit;
-
-    const [countRes] = await orm
-      .select({ count: sql<number>`count(*)::int` })
-      .from(purchaseRequisitions)
-      .where(whereClause);
-
-    const rows = await orm
-      .select()
-      .from(purchaseRequisitions)
-      .where(whereClause)
-      .orderBy(desc(purchaseRequisitions.id))
-      .limit(limit)
-      .offset(offset);
-
-    const targetCodes = await consolidatedIntoCodes(orm, rows);
-    return {
-      data: rows.map(row => ({ ...toRequisitionDto(row), consolidatedIntoCode: targetCodes.get(Number(row.consolidatedIntoId)) ?? null })),
-      total: countRes?.count || 0
-    };
+  static async getRequisitions(filter: GetRequisitionsFilter = {}): Promise<{ data: PurchaseRequisition[]; total: number; page: number; limit: number }> {
+    return listRequisitions(filter);
   }
 
   /**
@@ -338,8 +280,8 @@ export class ProcurementService {
       throw new NotFoundError(`درخواست خرید با شناسه #${id} یافت نشد.`);
     }
 
-    const targetCodes = await consolidatedIntoCodes(orm, [req]);
-    return { ...toRequisitionDto(req), consolidatedIntoCode: targetCodes.get(Number(req.consolidatedIntoId)) ?? null };
+    const [dto] = await requisitionDtos(orm, [req]);
+    return dto;
   }
 
   /**

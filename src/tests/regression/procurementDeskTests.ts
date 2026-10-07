@@ -1,6 +1,8 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
 import { PAGE_ACCESS } from '../../lib/permissions/pageAccess.js';
+import { legacyRequisitionOrder } from '../invariants/workflowScenarioHelpers.js';
+import { createTestItem } from '../fixtures/factories.js';
 
 /**
  * Package 10 (purchasing and procurement), PR C: what the procurement desk reads, through the real Express routes with
@@ -12,6 +14,9 @@ export async function runProcurementDeskTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_procurement_desk_reads_td_702',
       'v9.0.277: every API the procurement desk reads opens for each permission that opens the page (procurement.view, projects.view); the summary refused projects.view and emptied the desk (TD-702)',
       ['td702', 'procurement', 'permissions', 'security', 'package10'], deskReadsCase],
+    ['reg_procurement_list_filters_td_697',
+      'v9.0.278: the requisition list filters by the statuses it writes and their groups, searches item names, counts each requisition\'s orders in SQL and answers with the limit it used; the order list takes only its own status filters (TD-697)',
+      ['td697', 'procurement', 'pagination', 'package10'], listFiltersCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -52,4 +57,68 @@ async function deskReadsCase(h: Harness, wrong: string[]): Promise<string> {
   const summary = await h.get('/api/procurement/inbox/summary', outsider);
   if (summary.status !== 403) wrong.push(`documents.view (does not open the page): summary answered ${summary.status}`);
   return `${keys.join(' and ')} each read the summary, the requisitions and the orders; documents.view reads none`;
+}
+
+type ListBody = { data?: Array<Record<string, unknown>>; total?: number; limit?: number; page?: number };
+
+/** v9.0.278 (TD-697, B10-10): status groups, item search, order counts and the limit actually used */
+async function listFiltersCase(h: Harness, wrong: string[]): Promise<string> {
+  const prefix = `P10L-${h.tag}-${Math.floor(Math.random() * 1e5)}`;
+  const itemName = `فیروزه فهرست ${prefix}`;
+  const rows = JSON.stringify([{ id: 'item-1', itemId: null, itemName, itemCode: `${prefix}-ITEM`, unit: 'عدد', requestedQty: 1, orderedQty: 0, remainingQty: 1 }]);
+  // 105 requisitions of this case: more than the old service cap of 100
+  await h.q(
+    `INSERT INTO purchase_requisitions (code, title, status, priority, items)
+     SELECT $1 || '-' || lpad(g::text, 3, '0'), 'فهرست آزمون', 'pending', 'normal', $2::jsonb FROM generate_series(1, 105) AS g`,
+    [prefix, rows],
+  );
+  const statusOf: Record<string, string> = {
+    '001': 'under_review', '002': 'manager_approval', '003': 'ordered', '004': 'approved', '005': 'received', '006': 'completed',
+    '007': 'rejected', '008': 'cancelled', '009': 'consolidated',
+  };
+  for (const [serial, status] of Object.entries(statusOf)) {
+    await h.q(`UPDATE purchase_requisitions SET status = $2, priority = 'urgent' WHERE code = $1`, [`${prefix}-${serial}`, status]);
+  }
+  const list = async (query: string): Promise<{ status: number; body: ListBody }> => {
+    const res = await h.get(`/api/procurement/requisitions?search=${encodeURIComponent(prefix)}&${query}`);
+    return { status: res.status, body: (res.body ?? {}) as ListBody };
+  };
+  const expectTotal = async (query: string, total: number) => {
+    const res = await list(query);
+    if (res.status !== 200) wrong.push(`${query}: answered ${res.status}`);
+    else if (res.body.total !== total) wrong.push(`${query}: total ${res.body.total}, expected ${total}`);
+  };
+  await expectTotal('status=received', 2);
+  await expectTotal('status=under_review', 1);
+  await expectTotal('status=open', 98);
+  await expectTotal('status=ordered', 2);
+  await expectTotal('status=rejected', 2);
+  await expectTotal('status=consolidated', 1);
+  await expectTotal('priority=urgent', 9);
+  await expectTotal('status=all&priority=all', 105);
+
+  const page = await list('limit=200');
+  if (page.body.data?.length !== 105 || page.body.limit !== 200) {
+    wrong.push(`limit=200 returned ${page.body.data?.length} rows with limit ${page.body.limit} (total ${page.body.total})`);
+  }
+  const tooMany = await list('limit=500');
+  if (tooMany.status !== 400) wrong.push(`limit=500 answered ${tooMany.status}`);
+
+  const byItem = await h.get(`/api/procurement/requisitions?search=${encodeURIComponent(itemName)}`);
+  if ((byItem.body as ListBody)?.total !== 105) wrong.push(`search by item name found ${(byItem.body as ListBody)?.total} requisitions`);
+
+  const item = await createTestItem({ type: 'raw_material', code: `${prefix}-RM`, name: `مواد ${prefix}`, stocks: {}, weightedAverageCost: 0 } as never);
+  const [ordered] = await h.q(`SELECT id FROM purchase_requisitions WHERE code = $1`, [`${prefix}-003`]);
+  await legacyRequisitionOrder(Number(ordered.id), Number(item.id), 1);
+  const withOrder = await list('status=ordered');
+  const counted = withOrder.body.data?.find(row => row.code === `${prefix}-003`);
+  if (counted?.ordersCount !== 1 || counted?.pendingDeliveryOrdersCount !== 1) {
+    wrong.push(`ordered requisition carries ordersCount ${counted?.ordersCount} and pendingDeliveryOrdersCount ${counted?.pendingDeliveryOrdersCount}`);
+  }
+
+  const badOrderStatus = await h.get('/api/procurement/orders?status=whatever');
+  if (badOrderStatus.status !== 400) wrong.push(`orders?status=whatever answered ${badOrderStatus.status}`);
+  const orders = await h.get('/api/procurement/orders?status=pending_delivery&limit=200');
+  if (orders.status !== 200 || (orders.body as ListBody)?.limit !== 200) wrong.push(`orders limit=200 answered ${orders.status} with limit ${(orders.body as ListBody)?.limit}`);
+  return 'status groups (received, open, ordered, rejected, consolidated), priority urgent, item-name search, order counts and limit 200 over 105 requisitions';
 }

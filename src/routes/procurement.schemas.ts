@@ -2,19 +2,27 @@ import { z } from 'zod';
 import { decimalInput } from '../middleware/validate.js';
 import { fin } from '../lib/financialDecimal.js';
 import { REQUISITION_MAX_ROWS, REQUISITION_PRIORITIES } from '../lib/procurement/requisitionFields.js';
+import {
+  PROCUREMENT_LIST_DEFAULT_LIMIT, PROCUREMENT_LIST_MAX_LIMIT, PROCUREMENT_ORDER_STATUS_FILTERS, REQUISITION_STATUS_FILTER_KEYS,
+} from '../lib/procurement/procurementLists.js';
 
 // ==========================================
 // Zod Validation Schemas (TD-161 Remediation)
 // ==========================================
 
+/**
+ * v9.0.278 (TD-697، B10-10): وضعیت از فیلترهای `REQUISITION_STATUS_FILTERS` (وضعیت‌هایی که نوشته می‌شوند و گروه‌ها)، اولویت
+ * از `REQUISITION_PRIORITIES` و سقف صفحه `PROCUREMENT_LIST_MAX_LIMIT`، همان که سرویس به کار می‌برد. پیش‌تر وضعیت‌های
+ * نوشته‌نشده پذیرفته و `under_review` / `received` رد می‌شدند، و اولویت‌های فرم (`urgent`، `normal`) ۴۰۰ می‌گرفتند.
+ */
 export const listRequisitionsSchema = z.object({
   query: z.object({
-    status: z.enum(['draft', 'pending', 'approved', 'rejected', 'ordered', 'delivered', 'cancelled', 'consolidated', 'all']).optional(),
+    status: z.enum(REQUISITION_STATUS_FILTER_KEYS).optional(),
     projectId: z.coerce.number().int().positive().optional(),
-    priority: z.enum(['low', 'medium', 'high', 'emergency']).optional(),
+    priority: z.enum([...REQUISITION_PRIORITIES, 'all']).optional(),
     search: z.string().max(120).optional(),
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(200).default(50),
+    limit: z.coerce.number().int().min(1).max(PROCUREMENT_LIST_MAX_LIMIT).default(PROCUREMENT_LIST_DEFAULT_LIMIT),
   }).passthrough(),
 }).passthrough();
 
@@ -138,10 +146,10 @@ export const consolidateRequisitionsSchema = z.object({
 
 export const listProcurementOrdersSchema = z.object({
   query: z.object({
-    status: z.string().optional(),
+    status: z.enum(PROCUREMENT_ORDER_STATUS_FILTERS).optional(),
     requisitionId: z.coerce.number().int().positive().optional(),
     search: z.string().max(120).optional(),
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(200).default(50)
+    limit: z.coerce.number().int().min(1).max(PROCUREMENT_LIST_MAX_LIMIT).default(PROCUREMENT_LIST_DEFAULT_LIMIT)
   }).passthrough()
 }).passthrough();
