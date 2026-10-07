@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { User } from '../../types';
 import { extractDateString, errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { exchangeRateError } from '../../components/documents/ExchangeRateField';
-import { QUERY_KEYS } from '../../lib/queryKeys';
+import { invalidatePreset } from '../../lib/queryInvalidation';
 import { refNumberToSend } from '../../lib/documents/documentRefRules';
 import { selectedPartyId } from '../../lib/documents/partySelection';
 import type { StockDocumentForm } from './useStockDocumentForm';
@@ -32,12 +32,10 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
     setSelectedProjectObj, setAttachments, setCurrency, setExchangeRate,
   } = form;
 
-  // بازخوانی لیست پروژه‌ها پس از عملیات تخصیص
+  // v9.0.292 (TD-796، یافته B08-27): همان فهرست‌هایی که ثبت فاکتور باطل می‌کند (اسناد، کاردکس، سند حسابداری، کالاها، پیشخوان،
+  // رزروها، پروژه، پرونده فروش و طرف حساب)؛ پیش‌تر فقط پروژه، طرف حساب، کالا و رزرو تازه می‌شدند
   const reloadReferenceLists = () => {
-    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
-    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.customers.all });
-    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.items.all });
-    void queryClient.invalidateQueries({ queryKey: ['inventory', 'reserved-items'] });
+    void invalidatePreset(queryClient, 'documentChange');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

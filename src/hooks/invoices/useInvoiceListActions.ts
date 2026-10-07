@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { confirmAction } from '../../components/ConfirmDialogHost';
 import { fetchJson } from '../../api';
 import { errorMessageOf } from '../../utils';
+import { invalidatePreset } from '../../lib/queryInvalidation';
 import type { InvoiceListDocument } from '../../lib/invoices/invoiceListDocuments';
 import { useInvoiceRowAccess } from './useInvoiceRowAccess';
 
@@ -23,6 +25,7 @@ export function useInvoiceListActions(loadData: () => void) {
   const detailsRequestRef = useRef<AbortController | null>(null);
   // v9.0.291 (TD-795): دکمه‌های ردیف و پنجره جزئیات با مجوز API خودشان
   const access = useInvoiceRowAccess();
+  const queryClient = useQueryClient();
 
   const handleUpdateNotes = async (id: number) => {
     try {
@@ -83,7 +86,9 @@ export function useInvoiceListActions(loadData: () => void) {
     try {
       await fetchJson(`/documents/${id}`, { method: 'DELETE' });
       toast.success('سند / پیش‌فاکتور با موفقیت ابطال و حذف گردید.');
+      // v9.0.292 (TD-796): ابطال کاردکس، سند حسابداری، کالاها، رزرو، پروژه و پرونده فروش را هم عوض می‌کند
       loadData();
+      void invalidatePreset(queryClient, 'documentChange');
     } catch (err) {
       console.error(err);
       toast.error(errorMessageOf(err) || 'خطا در ابطال سند');
@@ -101,7 +106,9 @@ export function useInvoiceListActions(loadData: () => void) {
   };
 
   const handleSettlementSuccess = () => {
+    // v9.0.292 (TD-796): تسویه حساب‌های بانکی، خزانه، سند حسابداری و کارت حساب طرف حساب را هم عوض می‌کند
     loadData();
+    void invalidatePreset(queryClient, 'settlementChange');
     if (selectedDocDetails && settlementDoc && selectedDocDetails.id === settlementDoc.id) {
       void handleOpenDetails(settlementDoc);
     }

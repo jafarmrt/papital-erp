@@ -62,6 +62,16 @@ export const INVALIDATION_PRESETS = {
   // Triggered when a workflow state transition is executed. TD-469 (یافته B14-27): اقدام گردش کار سند را قطعی، وضعیت سند
   // حسابداری را عوض، درخواست خرید را دریافت و سند افتتاحیه صادر می‌کند؛ پیش‌تر این فهرست‌ها تا پنج دقیقه کهنه می‌ماندند
   workflowChange: ['workflow', 'dashboard', 'notifications', 'items', 'documents', 'procurement', 'accounting', 'inventory'] as QueryDomain[],
+
+  // v9.0.292 (TD-796، یافته B08-27): ثبت، ویرایش و ابطال هر سند (فاکتور، پیش‌فاکتور، سند انبار): کاردکس، سند حسابداری،
+  // کالاها، پیشخوان، رزروها، پروژه (کسر و بازگشت رزرو)، پرونده فروش (آزاد شدن پرونده با ابطال، TD-423) و طرف حساب.
+  // پیش‌تر ثبت سند انبار و ابطال فقط بخشی از این‌ها را باطل می‌کردند و بقیه تا پنج دقیقه کهنه می‌ماندند
+  documentChange: [
+    'documents', 'transactions', 'accounting', 'inventory', 'items', 'dashboard', 'transfers', 'pendingMaterials', 'crm', 'projects', 'customers',
+  ] as QueryDomain[],
+
+  // v9.0.292 (TD-796): تسویه فاکتور: حساب‌های بانکی، خزانه و سند حسابداری، مانده و وضعیت سند، کارت حساب طرف حساب و پیشخوان
+  settlementChange: ['documents', 'accounting', 'customers', 'dashboard'] as QueryDomain[],
 } as const;
 
 /**

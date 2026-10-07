@@ -230,7 +230,7 @@
 ## 21. Frontend Optimization & Component Architecture
 - **Code Splitting (FE-001):** Lazy-load heavy views with `React.lazy` and `Suspense`. Vite vendor chunks isolated.
 - **Modular Components (FE-003, FE-004):** Keep components <300 lines; extract subcomponents and hooks.
-- **React Query Cache (FE-005):** Use `@tanstack/react-query` with `staleTime: 5 * 60 * 1000` and invalidate on mutations.
+- **React Query Cache (FE-005):** Use `@tanstack/react-query` with `staleTime: 5 * 60 * 1000` and invalidate on mutations. Saving, editing or voiding any document (invoice, proforma, stock document) invalidates the `documentChange` preset and a settlement the `settlementChange` preset (`INVALIDATION_PRESETS` in `src/lib/queryInvalidation.ts`; v9.0.292, TD-796).
 - **Auth Security (FE-006):** Centralized in `AuthContext.tsx`. NEVER store user objects or tokens in `localStorage`.
 - **DatePicker Protection (FE-010):** Pass dates through `extractDateString()` before assigning to string state.
 - **AbortController (FE-008):** Asynchronous fetch loops in `useEffect` must pass abort signal and abort on cleanup.
