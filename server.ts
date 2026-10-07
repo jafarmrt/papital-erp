@@ -6,7 +6,7 @@ import fs from 'fs';
 import 'dotenv/config';
 
 import { logger } from './src/middleware/logger.js';
-import { createApp, markStartupComplete } from './src/app.js';
+import { createApp, beginStartup, markStartupComplete } from './src/app.js';
 import { prepareDatabaseAtBoot } from './src/services/system/bootData.js';
 import { registerWorkflowDomainActions } from './src/services/system/workflowDomainActions.js';
 import { registerDomainEventHandlers } from './src/services/events/domainEventHandlers.js';
@@ -37,6 +37,8 @@ async function startServer() {
 
   const PORT = parseInt(process.env.PORT || '3000', 10);
 
+  // v9.0.164 (TD-584, decision ت۲): /api answers 503 until the background startup below finishes
+  beginStartup();
   // Build the shared Express application (security middleware + API routes)
   const app = await createApp();
 

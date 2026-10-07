@@ -3,6 +3,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { fiscalPeriods } from '../../db/schema.js';
 import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import { BusinessLogicError, ConflictError } from '../../errors/customErrors.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
  * v7.0.49 (audit P2-5): وضعیت باز/بسته سال‌های مالی در جدول fiscal_periods.
@@ -94,6 +95,29 @@ export class FiscalPeriodService {
         'FISCAL_YEAR_ALREADY_CLOSED'
       );
     }
+  }
+
+  /**
+   * v9.0.161 (TD-543): شروع بازگشایی سال: ردیف سال را FOR UPDATE قفل می‌کند؛ سالی که بسته نیست ۴۰۹ می‌گیرد. وضعیت پیش از
+   * بازگشایی برای ممیزی برمی‌گردد.
+   */
+  static async lockForReopen(tx: DbExecutor, year: number): Promise<{ closedAt: string | null; closedBy: string | null; closingVoucherId: number | null }> {
+    const [row] = await tx
+      .select({ status: fiscalPeriods.status, closedAt: fiscalPeriods.closedAt, closedBy: fiscalPeriods.closedBy, closingVoucherId: fiscalPeriods.closingVoucherId })
+      .from(fiscalPeriods)
+      .where(eq(fiscalPeriods.fiscalYear, year))
+      .for('update');
+    if (row?.status !== 'closed') {
+      throw new ConflictError(`سال مالی ${toPersianDigits(year)} بسته نیست و بازگشایی لازم ندارد.`, { year }, 'FISCAL_YEAR_NOT_CLOSED');
+    }
+    return { closedAt: row.closedAt ?? null, closedBy: row.closedBy ?? null, closingVoucherId: row.closingVoucherId ?? null };
+  }
+
+  /** v9.0.161 (TD-543): پایان بازگشایی سال (در همان تراکنش lockForReopen) */
+  static async markOpen(tx: DbExecutor, year: number): Promise<void> {
+    await tx.update(fiscalPeriods)
+      .set({ status: 'open', closedAt: null, closedBy: null, closingVoucherId: null })
+      .where(eq(fiscalPeriods.fiscalYear, year));
   }
 
   /** پایان بستن سال (در همان تراکنش lockForClosing) */

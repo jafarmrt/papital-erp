@@ -359,7 +359,7 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
       return res.status(400).json({ error: 'نقش «مدیر سیستم» حذف نمی‌شود' });
     }
 
-    // v9.0.153 (TD-535، یافته B02-20): فقط کاربران حذف‌نشده نقش را نگه می‌دارند؛ کاربر حذف‌شده با بازگرداندن نقش تازه می‌گیرد
+    // v9.0.171 (TD-535، یافته B02-20): فقط کاربران حذف‌نشده نقش را نگه می‌دارند؛ کاربر حذف‌شده با بازگرداندن نقش تازه می‌گیرد
     const assignedUsers = await orm.select({ id: users.id }).from(users)
       .where(and(eq(users.role, targetRole.code), eq(users.isDeleted, 0)));
     if (assignedUsers.length > 0) {
@@ -419,7 +419,7 @@ const userUpdateSchema = z.object({
   })
 });
 
-// v9.0.152 (TD-519، تصمیم ت۲ الف): بازگرداندن کاربر حذف‌شده نقش تازه و رمز موقت می‌خواهد
+// v9.0.170 (TD-519، تصمیم ت۲ الف): بازگرداندن کاربر حذف‌شده نقش تازه و رمز موقت می‌خواهد
 const userRestoreSchema = z.object({
   body: z.object({
     password: userPasswordField,
@@ -508,7 +508,7 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     // ۱. بررسی تکراری نبودن نام کاربری در دیتابیس
     const [existingUser] = await orm.select().from(users).where(eq(users.username, tUsername)).limit(1);
     if (existingUser) {
-      // v9.0.152 (TD-519، یافته B02-04، تصمیم ت۲ الف): کاربر تازه همیشه شناسه تازه می‌گیرد. پیش‌تر همان ردیف کاربر حذف‌شده
+      // v9.0.170 (TD-519، یافته B02-04، تصمیم ت۲ الف): کاربر تازه همیشه شناسه تازه می‌گیرد. پیش‌تر همان ردیف کاربر حذف‌شده
       // با رمز و نقش تازه زنده می‌شد و فرد تازه اعلان‌ها، فیش و اطلاعات بانکی فرد قبلی را می‌دید؛ بازگرداندن همان شخص
       // اقدامی جداست (`POST /users/:id/restore`). پاسخ مستقیم است، چون گرداننده خطا `details` را در تولید نمی‌فرستد.
       if (existingUser.isDeleted === 1) {
@@ -675,7 +675,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
 }));
 
 /**
- * v9.0.152 (TD-519، یافته B02-04، تصمیم ت۲ الف): بازگرداندن کاربر حذف‌شده، همان شخص با همان شناسه و نام، با نقش تازه و
+ * v9.0.170 (TD-519، یافته B02-04، تصمیم ت۲ الف): بازگرداندن کاربر حذف‌شده، همان شخص با همان شناسه و نام، با نقش تازه و
  * رمز موقت که در ورود بعدی باید عوض شود. قاعده‌های ویرایش کاربر برقرار است: حساب مدیر سیستم فقط با مدیر سیستم،
  * و نقش تازه و حساب در مرز مجوزهای بازگرداننده (TD-520).
  */

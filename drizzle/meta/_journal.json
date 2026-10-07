@@ -477,6 +477,20 @@
       "when": 1793020000000,
       "tag": "0067_only_admin_role_is_system",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1793030000000,
+      "tag": "0068_item_price_non_list_titles",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1793040000000,
+      "tag": "0069_journal_voucher_source_fiscal_year",
+      "breakpoints": true
     }
   ]
 }
