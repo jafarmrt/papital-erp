@@ -3,7 +3,7 @@ import morgan from 'morgan';
 import fs from 'fs';
 import path from 'path';
 import DailyRotateFile from 'winston-daily-rotate-file';
-import { getRequestContext } from '../lib/requestContext.js';
+import { getRequestContext, acceptedTraceId } from '../lib/requestContext.js';
 import { FinancialDecimal } from '../lib/financialDecimal.js';
 
 const { combine, timestamp, printf, colorize } = winston.format;
@@ -192,7 +192,8 @@ export const errorHandler = (err: any, req: any, res: any, next: any) => {
   const normalized = normalizeError(err);
 
   // 3. Extract traceId
-  const traceId = req.requestId || req.headers?.['x-request-id'] || req.headers?.['x-correlation-id'] || getRequestContext()?.requestId;
+  // v9.0.147 (TD-602): never the raw client header; requestContextMiddleware accepted or replaced it
+  const traceId = req.requestId || getRequestContext()?.requestId || acceptedTraceId(req.headers?.['x-request-id']);
 
   // 4. Log error with trace context
   logger.error({
