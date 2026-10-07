@@ -456,30 +456,31 @@ const userParamsSchema = z.object({
   })
 });
 
+/**
+ * v9.0.166 (TD-534، یافته B02-19): فهرست ساده برای انتخابگر اشاره و فهرست‌های نام است و به هر کاربر واردشده می‌رسد؛ پس
+ * کد نقش ندارد. نام کاربری برای اشاره (@نام‌کاربری) می‌ماند و به‌جای کد نقش، نام فارسی ذخیره‌شده نقش می‌آید.
+ */
 router.get('/users/list-simple', asyncHandler(async (req, res) => {
-  try {
-    const allUsers = await orm.select({
-      id: users.id,
-      username: users.username,
-      fullName: users.fullName,
-      role: users.role,
-      avatarUrl: users.avatarUrl
-    })
-    .from(users)
-    .where(eq(users.isDeleted, 0))
-    .orderBy(desc(users.id));
-    
-    const mapped = allUsers.map(u => ({
-      id: u.id,
-      username: u.username,
-      full_name: u.fullName || u.username,
-      role: u.role,
-      avatar_url: u.avatarUrl || ''
-    }));
-    res.json(mapped);
-  } catch (err) {
-    throw err;
-  }
+  const allUsers = await orm.select({
+    id: users.id,
+    username: users.username,
+    fullName: users.fullName,
+    role: users.role,
+    roleName: roles.name,
+    avatarUrl: users.avatarUrl
+  })
+  .from(users)
+  .leftJoin(roles, eq(roles.code, users.role))
+  .where(eq(users.isDeleted, 0))
+  .orderBy(desc(users.id));
+
+  res.json(allUsers.map(u => ({
+    id: u.id,
+    username: u.username,
+    full_name: u.fullName || u.username,
+    role_name: u.roleName || (isSystemAdminRole(u.role) ? 'مدیر سیستم' : ''),
+    avatar_url: u.avatarUrl || ''
+  })));
 }));
 
 router.get('/users', authorizePermission(...READ_PERMISSIONS.userDirectory), asyncHandler(async (req, res) => {

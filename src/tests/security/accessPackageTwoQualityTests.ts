@@ -3,6 +3,7 @@ import path from 'path';
 import { TestCaseResult } from '../types.js';
 import { runCase, type ShouldRun } from './workflowTestHarness.js';
 import { AVATAR_INVALID_MESSAGE, FULL_NAME_TOO_LONG_MESSAGE } from '../../lib/users/profileFields.js';
+import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 
 /**
  * Package 2 (permission model), quality group: user profile fields and the user pick list through the real Express
@@ -47,6 +48,35 @@ export async function runAccessPackageTwoQualityTests(shouldRun: ShouldRun): Pro
       } finally {
         await h.q('DELETE FROM users WHERE username = $1', [`td533_${h.tag}`]).catch(() => undefined);
         if (/^\/uploads\/[\w-]+\.png$/.test(uploaded)) fs.rmSync(path.join(process.cwd(), 'public', uploaded), { force: true });
+      }
+    });
+  }
+
+  if (shouldRun('sec_list_simple_role_name_td_534', 'security', 'td534', 'list-simple', 'package2')) {
+    await runCase(results, {
+      id: 'sec_list_simple_role_name_td_534',
+      name: 'v9.0.166: the simple user list gives the role\'s Persian name, never its code (TD-534)',
+      details: 'B02-19: GET /users/list-simple, open to every signed-in user, sent each user\'s role code (for example cfo_accountant) while GET /users was 403 for the same reader; now no row has a role code, each row carries the stored name of its role (the system admin «مدیر سیستم» when its role row has no name) and the user name stays for mentions',
+    }, async (h, wrong) => {
+      const reader = await h.sessionWith(['daily_logs.create']);
+      const res = await h.get('/api/users/list-simple', reader);
+      if (res.status !== 200 || !Array.isArray(res.body)) throw new Error(`GET /users/list-simple returned ${res.status}`);
+      const rows = res.body as Array<Record<string, unknown>>;
+      const roleCodes = new Set((await h.q('SELECT DISTINCT role FROM users WHERE is_deleted = 0')).map(r => String(r.role)));
+      const withCode = rows.filter(r => 'role' in r || Object.values(r).some(v => typeof v === 'string' && roleCodes.has(v) && v !== r.username));
+      if (withCode.length > 0) wrong.push(`${withCode.length} rows still carry a role code, e.g. ${JSON.stringify(withCode[0])}`);
+
+      const own = rows.find(r => Number(r.id) === reader.userId);
+      const [role] = await h.q('SELECT name FROM roles WHERE code = $1', [reader.role]);
+      if (!own) wrong.push('the reader is missing from the list');
+      else {
+        if (own.role_name !== role?.name) wrong.push(`the reader's row says role «${String(own.role_name)}», not its role's name «${String(role?.name)}»`);
+        if (typeof own.username !== 'string' || own.username === '') wrong.push('the user name needed for mentions is missing');
+      }
+      const [admin] = await h.q('SELECT id FROM users WHERE role = $1 AND is_deleted = 0 ORDER BY id LIMIT 1', [SYSTEM_ADMIN_ROLE]);
+      const adminRow = rows.find(r => Number(r.id) === Number(admin?.id));
+      if (admin && (!adminRow || typeof adminRow.role_name !== 'string' || adminRow.role_name === '')) {
+        wrong.push(`the system admin's row has no role name: ${JSON.stringify(adminRow)}`);
       }
     });
   }

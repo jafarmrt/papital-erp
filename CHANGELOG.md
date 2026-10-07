@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.166 — The Simple User List Gives the Role Name, Not Its Code
+- **The Simple User List Gives the Role Name, Not Its Code:** the user list every signed-in user reads for mentions carries each role's Persian name instead of its code (TD-534).
+
 ### v9.0.165 — Profile Picture Only From This System, Name Up to 100 Characters
 - **Profile Picture Only From This System, Name Up to 100 Characters:** the profile refuses an outside image address or any other text as the picture, and a user name is at most 100 characters (TD-533).
 
