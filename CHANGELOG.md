@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.113 — Package 5 Items and Pricing Audit Documentation
+- **Package 5 Audit:** section 7 of the V9 stability audit records the items and pricing package: 18 proven findings (two P1: an unchanged Excel round trip turns the cost column into a sale price list, and Excel import bypasses the price and warehouse permissions) opened as TD-647..TD-664, with the product-owner decisions. Documentation only.
+
 ### v9.0.112 — Warehouse Deactivation Lock and Reactivation
 - **Warehouse deactivation:** it waits for in-flight movements and refuses a warehouse that got stock, the last active warehouse stays active, and the system admin can reactivate an inactive warehouse (TD-490, `reg_warehouse_deactivation_td_490`).
 
