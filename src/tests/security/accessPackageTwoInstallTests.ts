@@ -170,5 +170,48 @@ export async function runAccessPackageTwoInstallTests(shouldRun: ShouldRun): Pro
     });
   }
 
+  if (shouldRun('sec_former_seed_roles_ordinary_td_885', 'security', 'td885', 'roles', 'migration', 'package2')) {
+    await runCase(results, {
+      id: 'sec_former_seed_roles_ordinary_td_885',
+      name: 'v9.0.118: only the system admin role is a system role; a former seed role is deleted like any other (TD-885)',
+      details: 'migration 0067 on an install with a seed role flagged system, a role with no flag and an admin row not flagged: the first two become 0, the admin 1, one activity_logs row each and no other row; DELETE /api/roles/:id of a role flagged system without users returns 200 and removes it; DELETE of the system admin role returns 400 with a Persian message',
+    }, async (h, wrong) => {
+      const { runMigrationRolledBack } = await import('./workflowLifecycleTests.js');
+      const seedCode = `td885_seed_${h.tag}`;
+      const nullCode = `td885_null_${h.tag}`;
+      const outcome = await runMigrationRolledBack('0067_only_admin_role_is_system.sql', async (q) => {
+        await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES ('نقش پیش‌فرض قدیمی', $1, '["customers.view"]'::jsonb, 1)`, [seedCode]);
+        await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES ('نقش بی پرچم', $1, '[]'::jsonb, NULL)`, [nullCode]);
+        await q(`UPDATE roles SET is_system = 0 WHERE code = 'admin'`);
+      }, async (q) => ({
+        flags: await q('SELECT id, code, is_system FROM roles ORDER BY id'),
+        logs: await q(`SELECT entity_id, details FROM activity_logs WHERE details->>'migration' = '0067_only_admin_role_is_system' ORDER BY id`),
+      }));
+      const flagOf = (code: string) => outcome.flags.find(r => r.code === code)?.is_system;
+      if (Number(flagOf(seedCode)) !== 0) wrong.push(`the former seed role kept is_system ${flagOf(seedCode)}`);
+      if (Number(flagOf(nullCode)) !== 0) wrong.push(`the role without a flag has is_system ${flagOf(nullCode)}`);
+      if (Number(flagOf('admin')) !== 1) wrong.push(`the system admin role has is_system ${flagOf('admin')}`);
+      const others = outcome.flags.filter(r => r.code !== 'admin' && Number(r.is_system) !== 0);
+      if (others.length > 0) wrong.push(`roles still flagged system: ${others.map(r => r.code).join(', ')}`);
+      const idOf = (code: string) => String(outcome.flags.find(r => r.code === code)?.id);
+      const logged = outcome.logs.map(l => String(l.entity_id)).sort();
+      const expected = [idOf(seedCode), idOf(nullCode), idOf('admin')].sort();
+      if (JSON.stringify(logged) !== JSON.stringify(expected)) wrong.push(`activity_logs rows for roles ${logged.join(', ')}, expected ${expected.join(', ')}`);
+
+      const [former] = await h.q(`INSERT INTO roles (name, code, permissions, is_system) VALUES ('نقش پیش‌فرض قدیمی', $1, '["customers.view"]'::jsonb, 1) RETURNING id`, [seedCode]);
+      const removed = await h.del(`/api/roles/${former.id}`);
+      if (removed.status !== 200) wrong.push(`deleting a former seed role without users returned ${removed.status}, not 200`);
+      const [left] = await h.q('SELECT COUNT(*)::int AS n FROM roles WHERE id = $1', [former.id]);
+      if (Number(left.n) !== 0) {
+        wrong.push('the former seed role is still there');
+        await h.q('DELETE FROM roles WHERE id = $1', [former.id]);
+      }
+      const [admin] = await h.q(`SELECT id FROM roles WHERE code = 'admin'`);
+      const refused = await h.del(`/api/roles/${admin.id}`);
+      if (refused.status !== 400) wrong.push(`deleting the system admin role returned ${refused.status}, not 400`);
+      else if (!/[؀-ۿ]/.test(String(refused.body?.error ?? ''))) wrong.push('the refusal to delete the system admin role is not Persian');
+    });
+  }
+
   return results;
 }

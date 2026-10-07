@@ -5,7 +5,6 @@ import {
   Trash2,
   Edit2,
   ShieldCheck,
-  Shield,
   KeyRound,
   Search,
   Copy,
@@ -66,13 +65,6 @@ export const UsersTab: React.FC<UsersTabProps> = ({
       return (
         <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2.5 py-1 rounded-lg text-xs font-semibold inline-flex items-center gap-1">
           <ShieldCheck size={14} /> {roleTitle}
-        </span>
-      );
-    }
-    if (roleObj?.isSystem === 1) {
-      return (
-        <span className="bg-blue-100 text-blue-800 border border-blue-200 px-2.5 py-1 rounded-lg text-xs font-semibold inline-flex items-center gap-1">
-          <Shield size={14} /> {roleTitle}
         </span>
       );
     }

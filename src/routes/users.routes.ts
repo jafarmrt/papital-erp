@@ -343,8 +343,9 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
       return res.status(404).json({ error: 'نقش یافت نشد' });
     }
 
-    if (targetRole.isSystem === 1 || isSystemAdminRole(targetRole.code)) {
-      return res.status(400).json({ error: 'نقش‌های پایه و سیستمی قابل حذف نیستند' });
+    // v9.0.118 (TD-885، تصمیم ت۹ الف): فقط نقش ثابت «مدیر سیستم» حذف نمی‌شود؛ نقش‌های پیش‌فرض قدیمی نقش عادی‌اند
+    if (isSystemAdminRole(targetRole.code)) {
+      return res.status(400).json({ error: 'نقش «مدیر سیستم» حذف نمی‌شود' });
     }
 
     // Check if any user is currently assigned this role

@@ -110,7 +110,8 @@ export const RolesTab: React.FC<RolesTabProps> = ({
         )}
         {rolesList.map((r) => {
           const permCount = Array.isArray(r.permissions) ? r.permissions.length : 0;
-          const isSys = r.isSystem === 1 || isSystemAdminRole(r.code);
+          // v9.0.118 (TD-885، ت۹ الف): فقط «مدیر سیستم» ثابت است؛ هر نقش دیگر ویرایش و حذف می‌شود
+          const isSys = isSystemAdminRole(r.code);
           const userCountWithRole = users.filter((u) => u.role === r.code).length;
 
           return (

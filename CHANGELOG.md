@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.118 — Only the System Admin Role Is Fixed
+- **Only the System Admin Role Is Fixed:** former default roles are ordinary roles that the admin edits and deletes (TD-885).
+
 ### v9.0.117 — Fresh Install With the System Admin Only
 - **Fresh Install With the System Admin Only:** a fresh production install gets its base data at boot and only the system admin role; other roles come from role templates (TD-526).
 
