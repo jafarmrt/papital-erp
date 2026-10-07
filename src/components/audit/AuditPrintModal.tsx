@@ -2,21 +2,25 @@ import React from 'react';
 import { Printer, X, ShieldAlert } from 'lucide-react';
 import { formatPersianDateTime, formatPersianNumber, formatPersianDate } from '../../utils';
 import { parseUserAgent } from '../../utils/userAgentParser';
+import type { ActivityLogItem } from '../../hooks/queries/useActivityLogQueries';
 
 interface AuditPrintModalProps {
-  logs: any[];
+  logs: ActivityLogItem[];
+  /** v9.0.157 (TD-527): شمار کل ردیف‌های پالایه از سرور؛ برگه وقتی کمتر از آن ردیف دارد می‌گوید فقط ردیف‌های اول آمده‌اند */
+  total: number;
   onClose: () => void;
   filterSummary?: {
     categoryLabel?: string;
     userFilter?: string;
     actionFilter?: string;
     entityFilter?: string;
+    searchText?: string;
     startDate?: string;
     endDate?: string;
   };
 }
 
-export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose, filterSummary }) => {
+export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, onClose, filterSummary }) => {
   React.useEffect(() => {
     document.body.classList.add('printing-doc');
     return () => {
@@ -85,7 +89,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose,
               </p>
               <p className="flex items-center gap-1 sm:justify-end">
                 <span className="font-bold">تعداد کل رکوردها:</span>
-                <span>{formatPersianNumber(logs.length)} مورد</span>
+                <span>{formatPersianNumber(total)} مورد</span>
               </p>
               <p className="flex items-center gap-1 sm:justify-end">
                 <span className="font-bold">سطح دسترسی:</span>
@@ -94,9 +98,15 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose,
             </div>
           </div>
 
+          {logs.length < total && (
+            <p role="note" className="p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-2xs font-bold text-amber-900">
+              فقط {formatPersianNumber(logs.length)} ردیف اول از {formatPersianNumber(total)} ردیف در این برگه آمده است؛ برای چاپ همه ردیف‌ها پالایه را محدودتر کنید.
+            </p>
+          )}
+
           {/* Filter Criteria Details */}
           {filterSummary && (
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-2xs grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-700">
+            <div data-testid="audit-print-filters" className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-2xs grid grid-cols-2 sm:grid-cols-3 gap-2 text-slate-700">
               <div>
                 <span className="text-slate-400 block mb-0.5">دسته‌بندی موضوعی:</span>
                 <span className="font-bold text-slate-900">{filterSummary.categoryLabel || 'همه موضوعات'}</span>
@@ -108,6 +118,14 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose,
               <div>
                 <span className="text-slate-400 block mb-0.5">نوع اقدام:</span>
                 <span className="font-bold text-slate-900">{filterSummary.actionFilter || 'همه اقدامات'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">بخش:</span>
+                <span className="font-bold text-slate-900">{filterSummary.entityFilter || 'همه بخش‌ها'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">متن جست‌وجو:</span>
+                <span className="font-bold text-slate-900">{filterSummary.searchText ? `«${filterSummary.searchText}»` : 'بدون جست‌وجو'}</span>
               </div>
               <div>
                 <span className="text-slate-400 block mb-0.5">بازه تاریخی:</span>

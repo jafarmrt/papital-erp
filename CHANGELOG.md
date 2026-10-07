@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.157 — Audit Print and Excel Cover the Whole Filter
+- **Audit Print and Excel Cover the Whole Filter:** the official print and the Excel export come from one server request with every filter and the search, up to 1000 rows; the print shows the server total and all filters (TD-527).
+
 ### v9.0.156 — Audit Log Page Shows Refusals and Searches After Typing Pauses
 - **Audit Log Page Shows Refusals and Searches After Typing Pauses:** a refused request shows a Persian permission message instead of an empty list; the search is sent once, from page 1 (TD-537).
 

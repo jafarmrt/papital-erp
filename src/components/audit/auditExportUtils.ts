@@ -1,10 +1,10 @@
 import toast from 'react-hot-toast';
-import { formatPersianDateTime } from '../../utils';
+import { formatPersianDateTime, formatPersianNumber } from '../../utils';
 import { parseUserAgent } from '../../utils/userAgentParser';
 
 export interface AuditExportRow {
   id: number;
-  timestamp: string | number;
+  timestamp?: string | number;
   username: string;
   userFullName?: string | null;
   action: string;
@@ -15,7 +15,8 @@ export interface AuditExportRow {
   details?: any;
 }
 
-export async function exportAuditLogsToExcel(logs: AuditExportRow[], filterSummary?: string): Promise<void> {
+/** v9.0.157 (TD-527): `total` شمار کل ردیف‌های پالایه از سرور است؛ وقتی فایل کمتر از آن دارد، پیام همین را می‌گوید */
+export async function exportAuditLogsToExcel(logs: AuditExportRow[], total: number = logs.length): Promise<void> {
   if (!logs || logs.length === 0) {
     toast.error('هیچ لاگی برای دریافت خروجی اکسل موجود نیست.');
     return;
@@ -70,7 +71,11 @@ export async function exportAuditLogsToExcel(logs: AuditExportRow[], filterSumma
     const fileName = `گزارش_سجل_تغییرات_ERP_${now}.xlsx`;
     xlsx.writeFile(workbook, fileName);
 
-    toast.success(`فایل اکسل با موفقیت ایجاد شد (${logs.length} رکورد)`);
+    if (logs.length < total) {
+      toast(`فقط ${formatPersianNumber(logs.length)} ردیف اول از ${formatPersianNumber(total)} ردیف در فایل اکسل آمده است؛ برای همه ردیف‌ها پالایه را محدودتر کنید.`, { duration: 8000 });
+    } else {
+      toast.success(`فایل اکسل با موفقیت ایجاد شد (${formatPersianNumber(logs.length)} رکورد)`);
+    }
   } catch (error) {
     console.error('Failed to export audit logs to Excel:', error);
     toast.error('خطا در ایجاد فایل اکسل سجل تغییرات');

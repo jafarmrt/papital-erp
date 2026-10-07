@@ -11,9 +11,12 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { ActivityLog } from '../types';
 import { formatPersianNumber, formatPersianDateTime, extractDateString, errorMessageOf } from '../utils';
 import { useSearch } from '../SearchContext';
+import toast from 'react-hot-toast';
 import {
   useActivityLogsQuery,
-  useActivityLogFilterOptionsQuery
+  useActivityLogFilterOptionsQuery,
+  fetchAuditReportRows,
+  type AuditReportRows
 } from '../hooks/queries';
 import { DeviceBadge } from '../components/audit/DeviceBadge';
 import { AuditDiffViewer } from '../components/audit/AuditDiffViewer';
@@ -52,8 +55,8 @@ export default function ActivityLogsPage() {
   // Modals
   const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null);
   const [modalTab, setModalTab] = useState<'visual' | 'json'>('visual');
-  const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
-  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [printReport, setPrintReport] = useState<AuditReportRows | null>(null);
+  const [preparingReport, setPreparingReport] = useState<'print' | 'excel' | null>(null);
 
   const formatToGregorian = (d: any): string => {
     return extractDateString(d);
@@ -62,9 +65,7 @@ export default function ActivityLogsPage() {
   const filterOptionsQuery = useActivityLogFilterOptionsQuery();
   const filterOptions = filterOptionsQuery.data ?? { users: [], actions: [], entities: [] };
 
-  const logsQuery = useActivityLogsQuery({
-    page,
-    limit,
+  const reportFilters = {
     search: debouncedSearchQuery,
     category: categoryFilter !== 'all' ? categoryFilter : undefined,
     user: userFilter || undefined,
@@ -72,7 +73,8 @@ export default function ActivityLogsPage() {
     entity: entityFilter || undefined,
     startDate: formatToGregorian(startDate) || undefined,
     endDate: formatToGregorian(endDate) || undefined,
-  });
+  };
+  const logsQuery = useActivityLogsQuery({ page, limit, ...reportFilters });
 
   const loadError = logsQuery.isError ? logsLoadErrorMessage(logsQuery.error) : null;
   const logs = loadError ? [] : (logsQuery.data?.logs ?? []);
@@ -96,13 +98,27 @@ export default function ActivityLogsPage() {
     setPage(1);
   };
 
-  const handleExportExcel = async () => {
+  // v9.0.157 (TD-527): چاپ و Excel همه ردیف‌های پالایه را از یک درخواست سروری می‌گیرند، نه ۲۵ ردیف صفحه جاری
+  const prepareReport = async (kind: 'print' | 'excel'): Promise<AuditReportRows | null> => {
     try {
-      setIsExporting(true);
-      await exportAuditLogsToExcel(logs as any, categoryFilter);
+      setPreparingReport(kind);
+      return await fetchAuditReportRows(reportFilters);
+    } catch (error) {
+      toast.error(logsLoadErrorMessage(error));
+      return null;
     } finally {
-      setIsExporting(false);
+      setPreparingReport(null);
     }
+  };
+
+  const handlePrintPreview = async () => {
+    const report = await prepareReport('print');
+    if (report) setPrintReport(report);
+  };
+
+  const handleExportExcel = async () => {
+    const report = await prepareReport('excel');
+    if (report) await exportAuditLogsToExcel(report.rows, report.total);
   };
 
   const getActionBadge = (action: string) => {
@@ -230,21 +246,21 @@ export default function ActivityLogsPage() {
             بروزرسانی
           </button>
           <button
-            onClick={handleExportExcel}
-            disabled={isExporting || logs.length === 0}
+            onClick={() => { void handleExportExcel(); }}
+            disabled={preparingReport !== null || logs.length === 0}
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors disabled:opacity-50"
             title="دریافت فایل اکسل XLSX"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            خروجی اکسل (XLSX)
+            {preparingReport === 'excel' ? 'در حال آماده‌سازی…' : 'خروجی اکسل (XLSX)'}
           </button>
           <button
-            onClick={() => setShowPrintModal(true)}
-            disabled={logs.length === 0}
+            onClick={() => { void handlePrintPreview(); }}
+            disabled={preparingReport !== null || logs.length === 0}
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
           >
             <Printer className="w-4 h-4" />
-            پیش‌نمایش چاپ امنیتی
+            {preparingReport === 'print' ? 'در حال آماده‌سازی…' : 'پیش‌نمایش چاپ امنیتی'}
           </button>
         </div>
       </div>
@@ -755,15 +771,17 @@ export default function ActivityLogsPage() {
       )}
 
       {/* Audit Print Preview Modal */}
-      {showPrintModal && (
+      {printReport && (
         <AuditPrintModal
-          logs={logs}
-          onClose={() => setShowPrintModal(false)}
+          logs={printReport.rows}
+          total={printReport.total}
+          onClose={() => setPrintReport(null)}
           filterSummary={{
             categoryLabel: categories.find(c => c.id === categoryFilter)?.label,
             userFilter,
             actionFilter,
             entityFilter,
+            searchText: debouncedSearchQuery.trim(),
             startDate,
             endDate
           }}
