@@ -193,5 +193,27 @@ export async function runAccountingReportAccessTests(shouldRun: ShouldRun): Prom
       }));
   }
 
+  const periodId = 'reg_party_statement_echoes_period_td_572';
+  if (shouldRun(periodId, 'td572', 'accounting', 'party', 'report', 'package3')) {
+    await runCase(results, periodId,
+      'v9.0.208: a party statement answers with the range and currency it was computed for, so the print header reads them from the data (TD-572)',
+      () => inFiscalSandbox(async () => {
+        const problems: string[] = [];
+        const today = await businessTodayIsoDate();
+        const [c] = await orm.insert(customers).values({ name: 'TD-572 customer', partyType: 'customer' }).returning({ id: customers.id });
+        const admin = await sandboxAdminClient();
+        const ranged = await admin.get(`/api/accounting/reports/party-ledger?partyId=${c.id}&partyType=customer&startDate=${today}&endDate=${today}&currency=USD`);
+        if (ranged.status !== 200 || ranged.body?.startDate !== today || ranged.body?.endDate !== today || ranged.body?.currency !== 'USD') {
+          problems.push(`a ranged USD statement answered ${ranged.status} ${JSON.stringify({ s: ranged.body?.startDate, e: ranged.body?.endDate, c: ranged.body?.currency })}, expected ${today}/${today}/USD`);
+        }
+        const open = await admin.get(`/api/accounting/reports/party-ledger?partyId=${c.id}&partyType=customer`);
+        if (open.status !== 200 || open.body?.startDate !== null || open.body?.endDate !== null || open.body?.currency !== 'IRR') {
+          problems.push(`an all-time statement answered ${open.status} ${JSON.stringify({ s: open.body?.startDate, e: open.body?.endDate, c: open.body?.currency })}, expected null/null/IRR`);
+        }
+        assertNoProblems(problems);
+        return 'ranged USD statement echoes its dates and USD; all-time statement null dates and IRR';
+      }));
+  }
+
   return results;
 }

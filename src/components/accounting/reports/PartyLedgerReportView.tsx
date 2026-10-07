@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Users, Search, Calendar, Printer, Download, RefreshCw, CheckCircle2, AlertCircle, User, Building, Briefcase, ChevronDown, X } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatPersianCode, toStorageDate, getTodayJalaliDate, getPastJalaliDate } from '../../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatPersianCode, formatCurrencyLabel, toStorageDate, getTodayIsoDate, getPastJalaliDate, isoToJalaliDate, jalaliMonthStart, jalaliYearBounds } from '../../../utils';
 import toast from 'react-hot-toast';
 import type { PartyOption } from '../../../types';
-import { usePartiesQuery, usePartyLedgerReport } from '../../../hooks/accounting/usePartyProjectReportQueries';
+import { usePartiesQuery, usePartyLedgerReport, type PartyLedgerParams } from '../../../hooks/accounting/usePartyProjectReportQueries';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 
 type PartyTypeFilter = 'all' | 'customer' | 'supplier' | 'personnel';
@@ -83,50 +83,52 @@ export function PartyLedgerReportView({
   const handleApplyDatePreset = (preset: 'all' | 'month' | 'three_months' | 'year') => {
     setActiveDatePreset(preset);
     // v7.0.136 (TD-232): بازه‌های آماده از امروز منطقه زمانی کسب‌وکار (ISO) و نمایش شمسی در JalaliDateInput
-    const todayIso = toStorageDate(getTodayJalaliDate()) || '';
-    const daysAgoIso = (days: number) => toStorageDate(getPastJalaliDate(days)) || '';
+    // v9.0.208 (TD-572، B03-30): «ماه جاری» و «سال جاری» از نخستین روز ماه و سال شمسی امروز؛ پیش‌تر ۳۰ و ۳۶۵ روز پیش
+    const todayIso = getTodayIsoDate();
+    const jalaliYear = Number((isoToJalaliDate(todayIso) || '').split('/')[0]);
 
     if (preset === 'all') {
       setStartDate('');
       setEndDate('');
     } else if (preset === 'month') {
-      setStartDate(daysAgoIso(30));
+      setStartDate(jalaliMonthStart(todayIso) || '');
       setEndDate(todayIso);
     } else if (preset === 'three_months') {
-      setStartDate(daysAgoIso(90));
+      setStartDate(toStorageDate(getPastJalaliDate(90)) || '');
       setEndDate(todayIso);
     } else if (preset === 'year') {
-      setStartDate(daysAgoIso(365));
+      setStartDate(jalaliYearBounds(jalaliYear)?.firstDay || '');
       setEndDate(todayIso);
     }
   };
 
   // Fetch report for selected party (P3-8: پارامترها بخشی از کلید کش‌اند و فقط نتیجه آخرین پارامترها نمایش داده می‌شود)
   const { run: runPartyLedger } = partyLedger;
+  const ledgerParams = useCallback((party: PartyOption | null, typedName: string): PartyLedgerParams => ({
+    partyId: party?.id || undefined,
+    partyType: party?.partyType || undefined,
+    partyName: party?.name || typedName.trim() || undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+    currency: currency !== 'all' ? currency : undefined,
+    includeDrafts: includeDrafts || undefined,
+  }), [startDate, endDate, currency, includeDrafts]);
+
   const fetchLedger = useCallback(async () => {
     if (!selectedParty && !partySearchQuery.trim()) {
       toast('لطفاً یک طرف‌حساب انتخاب کنید', { icon: 'ℹ️' });
       return;
     }
+    await runPartyLedger(ledgerParams(selectedParty, partySearchQuery));
+  }, [selectedParty, partySearchQuery, ledgerParams, runPartyLedger]);
 
-    const partyName = selectedParty?.name || partySearchQuery.trim();
-    await runPartyLedger({
-      partyId: selectedParty?.id || undefined,
-      partyType: selectedParty?.partyType || undefined,
-      partyName: partyName || undefined,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
-      currency: currency !== 'all' ? currency : undefined,
-      includeDrafts: includeDrafts || undefined,
-    });
-  }, [selectedParty, partySearchQuery, startDate, endDate, currency, includeDrafts, runPartyLedger]);
-
-  // Auto-fetch when selectedParty changes
+  // v9.0.208 (TD-572): با تغییر طرف حساب، بازه یا ارز صورت‌حساب دوباره خوانده می‌شود؛ پیش‌تر فقط با تغییر طرف حساب، و
+  // سرآیند چاپ بازه و ارز تازه را روی داده قبلی می‌نوشت
   useEffect(() => {
     if (selectedParty) {
-      void fetchLedger();
+      void runPartyLedger(ledgerParams(selectedParty, ''));
     }
-  }, [selectedParty]);
+  }, [selectedParty, ledgerParams, runPartyLedger]);
 
   // Filtered party list for dropdown
   const filteredParties = useMemo(() => {
@@ -522,8 +524,11 @@ export function PartyLedgerReportView({
                 <div>تاریخ صدور گزارش: <span className="font-bold text-slate-800 dark:text-slate-200">{new Date().toLocaleDateString('fa-IR')}</span></div>
                 <div>
                   بازه زمانی: <span className="font-bold text-slate-800 dark:text-slate-200">
-                    {startDate ? formatPersianDate(startDate) : 'ابتدای دوره'} الی {endDate ? formatPersianDate(endDate) : 'امروز'}
+                    {reportData.startDate ? formatPersianDate(reportData.startDate) : 'ابتدای دوره'} الی {reportData.endDate ? formatPersianDate(reportData.endDate) : 'امروز'}
                   </span>
+                </div>
+                <div>
+                  مبالغ به: <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrencyLabel(reportData.currency)}</span>
                 </div>
               </div>
             </div>
@@ -585,7 +590,7 @@ export function PartyLedgerReportView({
               <div className="text-left sm:text-right">
                 <span className="text-[11px] opacity-75 block">مانده خالص قطعی:</span>
                 <span className="text-lg font-black font-mono">
-                  {formatPersianPrice(Math.abs(reportData.finalBalance), currency !== 'all' ? currency : 'ریال')}
+                  {formatPersianPrice(Math.abs(reportData.finalBalance), reportData.currency || 'IRR')}
                 </span>
               </div>
             </div>

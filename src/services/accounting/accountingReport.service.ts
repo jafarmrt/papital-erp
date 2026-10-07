@@ -1073,6 +1073,9 @@ export class AccountingReportService {
       finalBalanceType,
       netStatusText,
       currency: reportCurrency,
+      // v9.0.208 (TD-572، B03-30): بازه همین گزارش؛ سرآیند چاپ آن را از پاسخ می‌خواند، نه از فرم
+      startDate: params.startDate || null,
+      endDate: params.endDate || null,
       items,
     };
   }

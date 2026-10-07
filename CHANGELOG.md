@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.208 — Party Statement Print Follows the Data
+- **Party Statement Print (P2):** the header and final balance read the range and currency from the response, a filter change reloads, and «this month» / «this year» start on the Jalali month and year (TD-572).
+
 ### v9.0.207 — Accounting Buttons Only for Their Key Holders
 - **Accounting Buttons (P2):** the dashboard voucher, treasury and cheque buttons, the year-closing execute button and the chart-of-accounts seed button show only for holders of their API key (TD-567).
 
