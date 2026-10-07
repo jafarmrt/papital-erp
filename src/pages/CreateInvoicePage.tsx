@@ -44,7 +44,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   const [status, setStatus] = useState(initialStatus); // 'proforma' or 'final'
 
   // خواندنی‌های صفحه با React Query (انبارها، مشتریان، پیش‌فاکتورهای باز، شماره بعدی سند)
-  const { warehouses, customersList, proformas, nextRef, loadDocument, refreshProformas, refetchNextRef } = useInvoiceReferenceData(docType);
+  const { warehouses, customersList, proformas, proformasTotal, proformasPage, setProformasPage, nextRef, loadDocument, refreshProformas, refetchNextRef } = useInvoiceReferenceData(docType);
 
   // انبار پیش‌فرض = اولین انبار برگشتی (مثل قبل) تا وقتی کاربر، پیش‌نویس یا سند ویرایشی انبار دیگری انتخاب نکرده باشد
   const [locationOverride, setLocation] = useState<string | null>(null);
@@ -758,6 +758,9 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
 
       <OpenProformasPanel
         proformas={proformas}
+        total={proformasTotal}
+        page={proformasPage}
+        onPageChange={setProformasPage}
         editingDocId={editingDocId}
         onPrint={handlePrintProforma}
         onEdit={handleEditProforma}

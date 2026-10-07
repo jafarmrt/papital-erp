@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.250 — v9.0.250 — Sales Form Lists Only Sales Proformas, Page by Page
+- **Sales:** the open proformas of the sales invoice form are now only sales proformas (`GET /documents` takes `types=invoice,proforma`), read twenty at a time with a count and paging; before, purchase proformas were listed and edited there and the list was cut at 1,000 without notice (TD-792).
+
 ### v9.0.249 — v9.0.249 — Proforma Edit Keeps the Warehouse of Its Lines
 - **Sales:** editing a proforma now reads each line's warehouse and saves the line there; before, every edit silently moved all lines (and their reservation) to the first warehouse (TD-790).
 
