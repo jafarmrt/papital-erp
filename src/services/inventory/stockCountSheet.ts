@@ -1,6 +1,6 @@
 import { asc, eq } from 'drizzle-orm';
 import { items } from '../../db/schema.js';
-import { AppError } from '../../errors/customErrors.js';
+import { AppError, ValidationError } from '../../errors/customErrors.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { createWarehouseResolver, type DbClient } from './warehouseResolver.js';
@@ -74,4 +74,65 @@ export function assertBookStocksUnchanged(lines: BookStockLine[]): void {
     STALE_BOOK_STOCK_CODE,
     { items: changed.map(l => ({ itemId: l.itemId, code: l.code, name: l.name, shown: fin(l.shown as string | number).toNumber(), current: l.current })) },
   );
+}
+
+export interface StockCountLine {
+  itemId: number;
+  code: string;
+  name: string;
+  /** کد انبار ردیف پس از `createWarehouseResolver` */
+  location: string;
+  /** مقدار شمارش‌شده‌ای که ردیف فرستاده است */
+  physical: unknown;
+}
+
+const isBlank = (value: unknown) => value === undefined || value === null || String(value).trim() === '';
+const lineLabel = (l: Pick<StockCountLine, 'name' | 'code' | 'location'>) => `«${l.name}» (${l.code}) در انبار ${l.location}`;
+
+/**
+ * v9.0.255 (TD-777): هر ردیف انبارگردانی شمارش دارد و هر (کالا، انبار) یک ردیف. ردیف بی شمارش ۴۲۲ `AUDIT_COUNT_MISSING`
+ * (پیش‌تر شمارش‌نشده صفر حساب می‌شد و همه موجودی آن انبار کسری می‌خورد) و ردیف تکراری ۴۲۲ `AUDIT_DUPLICATE_LINE` (پیش‌تر
+ * هر ردیف با همان موجودی دفتری سنجیده و دو بار اصلاح می‌شد: دو شمارش ۶ از موجودی ۱۰، موجودی را ۲ می‌کرد).
+ */
+export function assertStockCountLines(lines: StockCountLine[]): void {
+  const missing = lines.filter(l => isBlank(l.physical));
+  if (missing.length > 0) {
+    throw new ValidationError(
+      `شمارش این کالاها وارد نشده است: ${missing.map(lineLabel).join('؛ ')}. شمارش هر ردیف را بنویسید یا کالای شمارش‌نشده را از سند بردارید.`,
+      { items: missing.map(l => ({ itemId: l.itemId, code: l.code, location: l.location })) },
+      'AUDIT_COUNT_MISSING',
+    );
+  }
+  const seen = new Set<string>();
+  const duplicates: StockCountLine[] = [];
+  for (const l of lines) {
+    const key = `${l.itemId}|${l.location}`;
+    if (seen.has(key) && !duplicates.some(d => `${d.itemId}|${d.location}` === key)) duplicates.push(l);
+    seen.add(key);
+  }
+  if (duplicates.length > 0) {
+    throw new ValidationError(
+      `هر کالا در هر انبار فقط یک ردیف شمارش دارد؛ این کالاها بیش از یک ردیف دارند: ${duplicates.map(lineLabel).join('؛ ')}.`,
+      { items: duplicates.map(l => ({ itemId: l.itemId, code: l.code, location: l.location })) },
+      'AUDIT_DUPLICATE_LINE',
+    );
+  }
+}
+
+/**
+ * v9.0.255 (TD-777): انحراف هر ردیف سند انبارگردانی از ردیف‌های فعال و غیرمعکوس کاردکس همان سند، با کلید (کالا، انبار).
+ * `resolveKey` محل کاردکس یا ردیف را به یک کلید انبار برمی‌گرداند. پیش‌تر هر ردیف با نخستین ردیف کاردکس همان کالا، بی انبار
+ * و با ردیف‌های حذف‌شده، جور می‌شد و کالای دو انباره در انبار درست «انحراف ۳−» نشان می‌داد.
+ */
+export function stockCountVariances(
+  ledgerRows: Array<{ itemId: number; type: string; quantity: number; location: string | null }>,
+  resolveKey: (location: string | null) => string,
+): Map<string, number> {
+  const variances = new Map<string, number>();
+  for (const row of ledgerRows) {
+    const key = `${row.itemId}|${resolveKey(row.location)}`;
+    const signed = row.type === 'in' ? Number(row.quantity) : -Number(row.quantity);
+    variances.set(key, fin(variances.get(key) ?? 0).add(signed).toNumber());
+  }
+  return variances;
 }

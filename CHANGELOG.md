@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.255 — v9.0.255 — Stock Count Lines Need a Count and One Line per Item and Warehouse
+- **Inventory:** a stock count line without a count is now refused instead of being counted as zero, a repeated item in the same warehouse is refused instead of being adjusted twice, and the count document shows each warehouse's own variance and book stock (TD-777).
+
 ### v9.0.254 — v9.0.254 — A Document Edit Links Its Sales Lead Under the Lead Lock
 - **Sales:** `PUT /documents/:id` with `crmLeadId` now links or unlinks the sales lead inside the edit transaction under the lead lock: a missing lead or a lead with another proforma is 422 before anything is saved, and an unlinked lead is released for a new proforma; before, the link was written after the edit, without the one-proforma rule (TD-776).
 

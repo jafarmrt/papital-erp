@@ -11,7 +11,7 @@ import { OutboxService } from '../events/outboxService.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
 import { createWarehouseResolver } from '../inventory/warehouseResolver.js';
-import { assertBookStocksUnchanged } from '../inventory/stockCountSheet.js';
+import { assertBookStocksUnchanged, assertStockCountLines } from '../inventory/stockCountSheet.js';
 import { sortIdsForLocking } from '../../lib/lockOrder.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { DocumentRefNumberService } from './documentRefNumber.service.js';
@@ -421,6 +421,18 @@ export class DocumentCreationService {
 
         // TD-164: حذف کوئری‌های تکراری N+1 انبار در حلقه انبارگردانی
         const resolveWh = await createWarehouseResolver(tx);
+
+        // v9.0.255 (TD-777): هر ردیف شمارش دارد و هر (کالا، انبار) یک ردیف؛ پیش از هر گردش انبار
+        assertStockCountLines(docLines.map(line => {
+          const target = auditItemMap.get(Number(line.itemId));
+          return {
+            itemId: Number(line.itemId),
+            code: target?.code ?? String(line.itemId),
+            name: target?.name ?? String(line.itemId),
+            location: resolveWh(line.location || docLocation || ''),
+            physical: line.physical_stock,
+          };
+        }));
 
         // v9.0.55 (TD-480، تصمیم ت۷ الف): موجودی دفتری‌ای که برگه نشان داده (`system_stock`) زیر قفل کالاها با موجودی
         // همین لحظه سنجیده می‌شود؛ اگر فرق کند ثبت ۴۰۹ می‌گیرد و هیچ گردشی ثبت نمی‌شود
