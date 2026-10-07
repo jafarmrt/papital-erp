@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.289 — Vouchers of a Source Change Only Through Their Source
+- **Source Vouchers Locked on the Voucher Page (P2, decision t8):** a voucher issued by a document, treasury transaction, cheque, payroll or BOM allocation, and its reversal, is only approved and finalized from the voucher page; delete, edit, back to draft, reverse and correct answer 409 `VOUCHER_HAS_SOURCE` and the list shows each voucher's source (TD-552).
+
 ### v9.0.288 — Report Digits, Currency Names and Today
 - **Accounting Report Digits (P3):** the journal book and the ratios show Persian digits, currencies are named, and the party statement and account explorer take today from the business time zone (TD-580).
 
