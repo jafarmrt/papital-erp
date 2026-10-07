@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.128 — Metrics Guard Checks the Admin Session Live
+- **Metrics Guard:** `/metrics` and `/api/metrics` check a session token live like every other route (`resolveLiveSession` in `src/middleware/auth.ts`, shared with `authenticateToken`): a deleted user or a stale `tokenVersion` gets 401 and the role is read from the database (non-admin 403). `METRICS_TOKEN` scraping is unchanged. Before, a deleted or demoted admin still read the metrics.
+
 ### v9.0.127 — Production CSP Frames and Connects Only to Itself
 - **Production CSP (owner decision t3):** in production `frame-ancestors` and `connect-src` are `'self'` only, plus the origins listed in the new `FRAME_ANCESTORS` and the existing `EXTERNAL_API_ORIGINS` (`buildCspDirectives` in `src/lib/cspDirectives.ts`); the Google preview hosts and the dev server connections stay allowed outside production. Before, any page on `*.run.app` or `*.googleusercontent.com` could frame the app with the user's `SameSite=None` session (clickjacking), and the browser could connect to every HTTPS origin.
 

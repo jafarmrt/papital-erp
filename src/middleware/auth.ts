@@ -152,6 +152,69 @@ export function getUserAuthCacheStats(): { size: number; maxSize: number } {
   return { size: userAuthCache.size, maxSize: MAX_USER_AUTH_CACHE_SIZE };
 }
 
+export type LiveSessionResult =
+  | { ok: true; user: AuthUserPayload }
+  | { ok: false; status: 401 | 500; error: string };
+
+/**
+ * Live check of a verified JWT payload against the users table (30 s cache): a deleted user or a token
+ * whose tokenVersion no longer matches is refused; role and full name come from the database.
+ * Shared by `authenticateToken` and the metrics guard (v9.0.128, TD-599).
+ */
+export async function resolveLiveSession(payload: AuthUserPayload): Promise<LiveSessionResult> {
+  try {
+    const userIdNum = Number(payload.id);
+    const now = Date.now();
+    let liveUser: CachedUserAuth | undefined;
+
+    const cached = userAuthCache.get(userIdNum);
+    if (cached && (now - cached.cachedAt < USER_AUTH_CACHE_TTL_MS)) {
+      liveUser = cached;
+    } else {
+      const [dbUser] = await orm
+        .select({ id: users.id, role: users.role, isDeleted: users.isDeleted, tokenVersion: users.tokenVersion, fullName: users.fullName })
+        .from(users)
+        .where(eq(users.id, userIdNum))
+        .limit(1);
+
+      if (dbUser) {
+        liveUser = {
+          id: dbUser.id,
+          role: dbUser.role,
+          isDeleted: dbUser.isDeleted ?? 0,
+          tokenVersion: dbUser.tokenVersion ?? 0,
+          fullName: dbUser.fullName,
+          cachedAt: now,
+        };
+        if (userAuthCache.size >= MAX_USER_AUTH_CACHE_SIZE) {
+          const firstKey = userAuthCache.keys().next().value;
+          if (firstKey !== undefined) userAuthCache.delete(firstKey);
+        }
+        userAuthCache.set(userIdNum, liveUser);
+      }
+    }
+
+    if (!liveUser || liveUser.isDeleted === 1) {
+      userAuthCache.delete(userIdNum);
+      return { ok: false, status: 401, error: 'حساب کاربری حذف یا غیرفعال شده است. لطفاً مجدداً وارد شوید.' };
+    }
+
+    const claimVersion = Number((payload as any).tokenVersion ?? 0);
+    const dbVersion = Number(liveUser.tokenVersion ?? 0);
+    if (claimVersion !== dbVersion) {
+      userAuthCache.delete(userIdNum);
+      return { ok: false, status: 401, error: 'نشست شما به دلیل تغییر نقش یا اطلاعات کاربری منقضی شده است. لطفاً مجدداً وارد شوید.' };
+    }
+
+    // نقش، نام کامل و توکن CSRF همیشه از وضعیت معتبر دیتابیس/کش بازخوانی می‌شوند
+    // یک موجودیت هویت کاربر: full_name همیشه در req.user موجود است
+    return { ok: true, user: { ...payload, role: liveUser.role, full_name: liveUser.fullName || (payload as any).full_name || payload.username } };
+  } catch {
+    // در صورت خطای موقت دیتابیس، اعتبارسنجی DB را نقض نکنیم
+    return { ok: false, status: 500, error: 'خطا در اعتبارسنجی نشست کاربر' };
+  }
+}
+
 export const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
   const normalizedPath = req.path.replace(/\/+$/, '');
   const originalPath = (req.originalUrl || '').split('?')[0].replace(/\/+$/, '');
@@ -184,57 +247,11 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     const payload = decoded as AuthUserPayload;
 
     // V9-2.2 & Phase 5.3 (A-2): اعتبارسنجی زنده وضعیت کاربر با لایه کش سبک TTL (30s) جهت پیشگیری از N+1 در هر درخواست
-    try {
-      const userIdNum = Number(payload.id);
-      const now = Date.now();
-      let liveUser: CachedUserAuth | undefined;
-
-      const cached = userAuthCache.get(userIdNum);
-      if (cached && (now - cached.cachedAt < USER_AUTH_CACHE_TTL_MS)) {
-        liveUser = cached;
-      } else {
-        const [dbUser] = await orm
-          .select({ id: users.id, role: users.role, isDeleted: users.isDeleted, tokenVersion: users.tokenVersion, fullName: users.fullName })
-          .from(users)
-          .where(eq(users.id, userIdNum))
-          .limit(1);
-
-        if (dbUser) {
-          liveUser = {
-            id: dbUser.id,
-            role: dbUser.role,
-            isDeleted: dbUser.isDeleted ?? 0,
-            tokenVersion: dbUser.tokenVersion ?? 0,
-            fullName: dbUser.fullName,
-            cachedAt: now,
-          };
-          if (userAuthCache.size >= MAX_USER_AUTH_CACHE_SIZE) {
-            const firstKey = userAuthCache.keys().next().value;
-            if (firstKey !== undefined) userAuthCache.delete(firstKey);
-          }
-          userAuthCache.set(userIdNum, liveUser);
-        }
-      }
-
-      if (!liveUser || liveUser.isDeleted === 1) {
-        userAuthCache.delete(userIdNum);
-        return res.status(401).json({ error: 'حساب کاربری حذف یا غیرفعال شده است. لطفاً مجدداً وارد شوید.' });
-      }
-
-      const claimVersion = Number((payload as any).tokenVersion ?? 0);
-      const dbVersion = Number(liveUser.tokenVersion ?? 0);
-      if (claimVersion !== dbVersion) {
-        userAuthCache.delete(userIdNum);
-        return res.status(401).json({ error: 'نشست شما به دلیل تغییر نقش یا اطلاعات کاربری منقضی شده است. لطفاً مجدداً وارد شوید.' });
-      }
-
-      // نقش، نام کامل و توکن CSRF همیشه از وضعیت معتبر دیتابیس/کش بازخوانی می‌شوند
-      // یک موجودیت هویت کاربر: full_name همیشه در req.user موجود است
-      req.user = { ...payload, role: liveUser.role, full_name: liveUser.fullName || (payload as any).full_name || payload.username };
-    } catch (dbErr) {
-      // در صورت خطای موقت دیتابیس، اعتبارسنجی DB را نقض نکنیم اما لاگ ثبت شود
-      return res.status(500).json({ error: 'خطا در اعتبارسنجی نشست کاربر' });
+    const live = await resolveLiveSession(payload);
+    if (!live.ok) {
+      return res.status(live.status).json({ error: live.error });
     }
+    req.user = live.user;
 
     if (req.user?.csrfToken) {
       req.csrfToken = req.user.csrfToken;
