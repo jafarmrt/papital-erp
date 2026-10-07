@@ -55,6 +55,7 @@ router.post('/accounting/vouchers', authorizePermission('accounting.vouchers'), 
     ...req.body,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
+    manualEntry: true, // v9.0.153 (TD-551، ت۷): ارز و نرخ هر ردیف و تراز ریالی سند دستی
   });
   await logActivity({
     userId: req.user?.id,
@@ -72,7 +73,7 @@ router.post('/accounting/vouchers', authorizePermission('accounting.vouchers'), 
 
 router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(updateVoucherSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const voucher = await AccountingService.updateJournalVoucher(id, req.body);
+  const voucher = await AccountingService.updateJournalVoucher(id, { ...req.body, manualEntry: true }); // v9.0.153 (TD-551)
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'system',

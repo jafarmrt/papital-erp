@@ -4,7 +4,7 @@
  * طرح‌های کوئری گزارش‌ها و بستن سال مالی در reports.schemas.ts هستند و از همین فایل دوباره صادر می‌شوند.
  */
 import { z } from 'zod';
-import { computeVoucherBalance, VOUCHER_BALANCE_TOLERANCE, type VoucherBalanceRow } from '../../lib/voucherBalance.js';
+import { computeVoucherCurrencyBalance, type CurrencyBalanceRow } from '../../lib/accounting/voucherCurrencyBalance.js';
 import { DEFAULT_ACCOUNT_MAPPINGS, type ConceptualAccountMappingConfig } from '../../services/accounting/accountMapping.service.js';
 import { decimalInput, latinDigitsString, storageDateParam } from '../../middleware/validate.js';
 import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../../lib/treasury/treasuryCurrency.js';
@@ -96,12 +96,18 @@ export const voucherItemSchema = z.object({
 });
 
 /**
- * v7.0.127 (TD-247): تراز سند در طرح Zod با جمع اعشاری (computeVoucherBalance) و همان آستانه سرویس
- * (VOUCHER_BALANCE_TOLERANCE؛ VoucherService اختلاف بیشتر از آن را رد می‌کند).
+ * v7.0.127 (TD-247): تراز سند در طرح Zod با جمع اعشاری و همان آستانه سرویس (VOUCHER_BALANCE_TOLERANCE).
+ * v9.0.153 (TD-551، ت۷): با قاعده ارز سند دستی (computeVoucherCurrencyBalance): سند چندارزی یا چندنرخی به ریال.
+ * ردیف ارزی بی نرخ به سرویس سپرده می‌شود تا ۴۲۲ روشن بدهد؛ در ویرایش و اصلاح ارز سند ذخیره‌شده است و در بدنه نیست،
+ * پس ردیف بی ارز (جز سند ساده بی ارز و نرخ) هم به سرویس سپرده می‌شود.
  */
-const isVoucherBalanced = (rows: readonly VoucherBalanceRow[]): boolean => {
-  const balance = computeVoucherBalance(rows);
-  return balance.totalDebit > 0 && balance.difference <= VOUCHER_BALANCE_TOLERANCE;
+const isVoucherBalanced = (rows: readonly CurrencyBalanceRow[], voucherCurrency?: string, headerKnown = true): boolean => {
+  const filled = (value: unknown) => value !== undefined && value !== null && String(value).trim() !== '';
+  const allHaveCurrency = rows.every(row => filled(row.currency));
+  const plainRows = rows.every(row => !filled(row.currency) && !filled(row.exchangeRate));
+  if (!headerKnown && !allHaveCurrency && !plainRows) return true;
+  const balance = computeVoucherCurrencyBalance(rows, voucherCurrency);
+  return balance.rowsWithoutRate.length > 0 || balance.isBalanced;
 };
 
 /**
@@ -123,7 +129,7 @@ export const createVoucherSchema = z.object({
     currency: z.string().optional(),
     attachments: z.array(z.any()).optional(),
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است')
-  }).refine((data) => isVoucherBalanced(data.items), {
+  }).refine((data) => isVoucherBalanced(data.items, data.currency), {
     message: 'سند حسابداری تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
     path: ['items']
   })
@@ -141,7 +147,7 @@ export const updateVoucherSchema = z.object({
     currency: z.string().optional(),
     attachments: z.array(z.any()).optional(),
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است').optional(),
-  }).refine((data) => !data.items || isVoucherBalanced(data.items), {
+  }).refine((data) => !data.items || isVoucherBalanced(data.items, undefined, false), {
     message: 'سند حسابداری تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
     path: ['items']
   })
@@ -168,7 +174,7 @@ export const correctVoucherSchema = z.object({
     reason: z.string().min(1, 'علت اصلاح سند الزامی است'),
     newDescription: z.string().optional(),
     newItems: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند اصلاحی الزامی است')
-  }).refine((data) => isVoucherBalanced(data.newItems), {
+  }).refine((data) => isVoucherBalanced(data.newItems, undefined, false), {
     message: 'سند اصلاحی تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
     path: ['newItems']
   })

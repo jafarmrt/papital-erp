@@ -339,10 +339,16 @@ export class AccountingReportService {
       description: string;
       debit: number;
       credit: number;
+      /** v9.0.153 (TD-551): مبلغ خود ردیف ارزی و نرخ آن، وقتی بدهکار و بستانکار به ریال آمده است */
+      originalDebit?: number;
+      originalCredit?: number;
+      exchangeRate?: number;
       runningBalance: number;
     }[];
     totalDebit: number;
     totalCredit: number;
+    /** v9.0.153 (TD-551): ارز جمع‌ها؛ نمای همه ارزها به ریال */
+    reportCurrency: string;
     vouchersCount: number;
     isBalanced: boolean;
   }> {
@@ -358,19 +364,20 @@ export class AccountingReportService {
     if (params.endDate) {
       conditions.push(lte(journalVouchers.date, params.endDate));
     }
-    if (params.currency && params.currency !== 'all') {
-      conditions.push(or(
-        eq(journalVoucherItems.currency, params.currency),
-        eq(journalVouchers.currency, params.currency)
-      ));
-    }
+    // v9.0.153 (TD-551، ت۷): قاعده ارز TD-260؛ پیش‌تر صافی «ارز ردیف یا ارز سند» ردیف دلاری سند ریالی را در نمای ریال
+    // می‌آورد و نمای همه ارزها دلار را با ریال جمع می‌زد
+    const currencyCondition = voucherItemCurrencyCondition(params.currency);
+    if (currencyCondition) conditions.push(currencyCondition);
+    const allCurrencies = isAllCurrenciesView(params.currency);
 
     const rawRows = await orm.select({
       voucherId: journalVouchers.id,
       voucherNumber: journalVouchers.voucherNumber,
       manualVoucherNumber: journalVouchers.manualVoucherNumber,
-      voucherCurrency: journalVouchers.currency,
-      itemCurrency: journalVoucherItems.currency,
+      rowCurrency: voucherItemCurrencySql,
+      rowRate: voucherItemRateSql,
+      reportDebit: voucherItemReportAmountSql(journalVoucherItems.debit, params.currency),
+      reportCredit: voucherItemReportAmountSql(journalVoucherItems.credit, params.currency),
       date: journalVouchers.date,
       voucherType: journalVouchers.voucherType,
       voucherDescription: journalVouchers.description,
@@ -398,8 +405,9 @@ export class AccountingReportService {
 
     const items = rawRows.map((r, idx) => {
       uniqueVoucherIds.add(r.voucherId);
-      const d = fin(r.debit);
-      const c = fin(r.credit);
+      const d = fin(r.reportDebit);
+      const c = fin(r.reportCredit);
+      const converted = allCurrencies && r.rowCurrency !== 'IRR';
       totalDebitDec = totalDebitDec.add(d);
       totalCreditDec = totalCreditDec.add(c);
       runningDec = runningDec.add(d).subtract(c);
@@ -416,10 +424,11 @@ export class AccountingReportService {
         accountLevel: r.accountLevel,
         detailedName: r.detailedName || undefined,
         detailedType: r.detailedType || undefined,
-        currency: r.itemCurrency || r.voucherCurrency || 'IRR',
+        currency: r.rowCurrency,
         description: r.itemDescription || r.voucherDescription || '',
         debit: d.toNumber(),
         credit: c.toNumber(),
+        ...(converted ? { originalDebit: fin(r.debit).toNumber(), originalCredit: fin(r.credit).toNumber(), exchangeRate: fin(r.rowRate).toNumber() } : {}),
         runningBalance: runningDec.toNumber(),
       };
     });
@@ -428,6 +437,7 @@ export class AccountingReportService {
       items,
       totalDebit: totalDebitDec.toNumber(),
       totalCredit: totalCreditDec.toNumber(),
+      reportCurrency: allCurrencies ? 'IRR' : String(params.currency).toUpperCase(),
       vouchersCount: uniqueVoucherIds.size,
       isBalanced: totalDebitDec.subtract(totalCreditDec).abs().lessThan(0.01),
     };
