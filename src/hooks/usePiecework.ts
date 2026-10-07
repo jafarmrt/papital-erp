@@ -513,7 +513,7 @@ export function usePiecework() {
     }
   };
 
-  const handleSaveCustomRate = async (taskId: number, customRate: number) => {
+  const handleSaveCustomRate = async (taskId: number, customRate: string) => {
     if (!selectedPersonnelForRates) return;
     try {
       await fetchJson('/piecework/personnel-rates', {
@@ -525,7 +525,8 @@ export function usePiecework() {
           customRate
         })
       });
-      setCustomRatesMap(prev => ({ ...prev, [taskId]: customRate }));
+      // v9.0.284 (TD-809): نرخ نمایش‌داده همان است که سرور ذخیره کرد و کارکرد می‌گیرد
+      await loadCustomRates(Number(selectedPersonnelForRates));
       hotToast.success('نرخ اختصاصی ثبت شد');
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در ذخیره نرخ اختصاصی');

@@ -10,7 +10,7 @@ interface PieceworkRatesTabProps {
   onSelectPersonnel: (id: number | '') => void;
   tasksList: PieceworkTask[];
   customRatesMap: Record<number, number>;
-  onSaveCustomRate: (taskId: number, rate: number) => void;
+  onSaveCustomRate: (taskId: number, rate: string) => void;
 }
 
 export function PieceworkRatesTab({
@@ -105,7 +105,8 @@ export function PieceworkRatesTab({
                           onClick={() => {
                             const input = document.getElementById(`custom-rate-${task.id}`) as HTMLInputElement;
                             if (input) {
-                              onSaveCustomRate(task.id, Number(input.value));
+                              // v9.0.284 (TD-809): متن خام به سرور می‌رود تا خالی یا منفی رد شود، نه صفر
+                              onSaveCustomRate(task.id, input.value);
                             }
                           }}
                           className="px-3 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition-all"

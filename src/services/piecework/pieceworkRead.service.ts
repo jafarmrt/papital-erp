@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, asc, desc, isNull, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, personnel, taskCategories, productionProjects } from '../../db/schema.js';
 import { logger } from '../../middleware/logger.js';
@@ -59,8 +59,10 @@ export class PieceworkReadService {
 
   /** تاریخچه سراسری تغییر نرخ‌ها (جدیدترین اول). */
   static async listRateHistory(limit: number) {
+    // v9.0.284 (TD-809): تاریخچه نرخ اختصاصی پرسنل (personnel_id) داده حقوق شخص است و در تاریخچه نرخ پایه نمی‌آید
     return orm.select()
       .from(pieceworkTaskRateHistory)
+      .where(isNull(pieceworkTaskRateHistory.personnelId))
       .orderBy(desc(pieceworkTaskRateHistory.id))
       .limit(limit);
   }
@@ -69,7 +71,7 @@ export class PieceworkReadService {
   static async listTaskRateHistory(taskId: number) {
     return orm.select()
       .from(pieceworkTaskRateHistory)
-      .where(eq(pieceworkTaskRateHistory.taskId, taskId))
+      .where(and(eq(pieceworkTaskRateHistory.taskId, taskId), isNull(pieceworkTaskRateHistory.personnelId)))
       .orderBy(desc(pieceworkTaskRateHistory.id));
   }
 
@@ -119,7 +121,9 @@ export class PieceworkReadService {
   static async listPersonnelRates(personnelId: number) {
     return orm.select()
       .from(pieceworkPersonnelRates)
-      .where(and(eq(pieceworkPersonnelRates.personnelId, personnelId), eq(pieceworkPersonnelRates.isDeleted, 0)));
+      .where(and(eq(pieceworkPersonnelRates.personnelId, personnelId), eq(pieceworkPersonnelRates.isDeleted, 0)))
+      // v9.0.284 (TD-809): ترتیب شناسه؛ صفحه نرخ‌ها آخرین ردیف هر کار را نشان می‌دهد، همان که کارکرد می‌گیرد
+      .orderBy(asc(pieceworkPersonnelRates.id));
   }
 
   /** کارکردهای روزانه با نام پرسنل، عنوان کار و پروژه، و فیلتر پرسنل/پروژه/بازه تاریخ/وضعیت. */
