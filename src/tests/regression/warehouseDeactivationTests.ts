@@ -7,7 +7,7 @@ import { activityLogs, items, roles, users, warehouses } from '../../db/schema.j
 /**
  * Package 6 (inventory and Kardex), TD-490 / B06-11 (decision t5 «الف»): deactivating a warehouse checked «no stock»
  * without a lock on the warehouse row and without a last-active-warehouse rule, and nothing could reactivate it. On
- * v9.0.109 a deactivation during an uncommitted receipt answered 200 and left 7 units in an inactive warehouse, the last
+ * v9.0.111 a deactivation during an uncommitted receipt answered 200 and left 7 units in an inactive warehouse, the last
  * active warehouse was deactivated, a movement with a resolved inactive warehouse still moved stock and there was no
  * reactivation route.
  */
@@ -16,7 +16,7 @@ export async function runWarehouseDeactivationTests(shouldRun: (id: string, ...e
   const id = 'reg_warehouse_deactivation_td_490';
   if (!shouldRun(id, 'td490', 'warehouse', 'deactivate', 'reactivate', 'package6')) return results;
 
-  const name = 'v9.0.110: warehouse deactivation waits for in-flight movements, keeps the last active warehouse and can be undone by the system admin (TD-490)';
+  const name = 'v9.0.112: warehouse deactivation waits for in-flight movements, keeps the last active warehouse and can be undone by the system admin (TD-490)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   const warehouseIds: number[] = [];

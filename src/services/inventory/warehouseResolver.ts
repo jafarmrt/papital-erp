@@ -79,7 +79,7 @@ export async function resolveWarehouseCode(tx: DbClient, raw: unknown): Promise<
 export interface LedgerWarehouseRef { id: number; code: string; name: string; isActive: number | null }
 
 /**
- * v9.0.108 (TD-482 / B06-03): the Kardex ledger reads '' and 'default' as the default warehouse, so neither may be a
+ * v9.0.110 (TD-482 / B06-03): the Kardex ledger reads '' and 'default' as the default warehouse, so neither may be a
  * warehouse code; a warehouse that already has one is only listed by the financial health check.
  */
 export const LEDGER_RESERVED_WAREHOUSE_CODES: ReadonlySet<string> = new Set(['', 'default']);

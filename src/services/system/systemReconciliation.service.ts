@@ -36,7 +36,7 @@ export interface ReconciliationActor {
 }
 
 /**
- * v9.0.109 (TD-495): بررسی لایه موجودی از خلاصه گزارش سلامت انبار؛ مغایرت میان موجودی انبارها، موجودی کل و
+ * v9.0.111 (TD-495): بررسی لایه موجودی از خلاصه گزارش سلامت انبار؛ مغایرت میان موجودی انبارها، موجودی کل و
  * دفتر کاردکس، یا مانده منفی کاردکس، هشدار است.
  */
 export function inventoryKardexCheck(
@@ -99,7 +99,7 @@ export class SystemReconciliationService {
     });
 
     // Check 4: Inventory Items Count & Stock Consistency
-    // v9.0.109 (TD-495): وضعیت از خلاصه همان گزارش سلامت انبار (مغایرت سه‌طرفه یا مانده منفی کاردکس ← هشدار)، نه «سالم» ثابت
+    // v9.0.111 (TD-495): وضعیت از خلاصه همان گزارش سلامت انبار (مغایرت سه‌طرفه یا مانده منفی کاردکس ← هشدار)، نه «سالم» ثابت
     const [itemsCountRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(items).where(eq(items.isDeleted, 0));
     checks.push(inventoryKardexCheck(itemsCountRes?.count || 0, (await StockReconciliationService.getIntegrityReport()).summary));
 

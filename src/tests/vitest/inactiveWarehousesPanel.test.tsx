@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { InactiveWarehousesPanel } from '../../components/settings/InactiveWarehousesPanel';
 
-// Package 6 (TD-490 / B06-11, decision t5 «الف»): on v9.0.109 «مدیریت انبارها» listed only active warehouses and had no
+// Package 6 (TD-490 / B06-11, decision t5 «الف»): on v9.0.111 «مدیریت انبارها» listed only active warehouses and had no
 // way back for a deactivated one; the system admin now sees inactive warehouses and reactivates them after a confirmation.
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));

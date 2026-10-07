@@ -64,7 +64,7 @@ export class ItemWarehouseStockService {
       throw new ValidationError(`مقدار گردش انبار باید عددی مثبت باشد: ${quantity}`);
     }
 
-    // v9.0.110 (TD-490): ردیف انبار FOR KEY SHARE و فقط اگر فعال است؛ با قفل FOR UPDATE غیرفعال‌سازی ناسازگار است، پس
+    // v9.0.112 (TD-490): ردیف انبار FOR KEY SHARE و فقط اگر فعال است؛ با قفل FOR UPDATE غیرفعال‌سازی ناسازگار است، پس
     // غیرفعال‌سازی پس از commit این گردش موجودی آن را می‌بیند و گردشی که پس از آن برسد انبار غیرفعال را نمی‌پذیرد
     const [activeWarehouse] = await tx
       .select({ id: warehouses.id })

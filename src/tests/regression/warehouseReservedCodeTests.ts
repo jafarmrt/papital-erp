@@ -7,7 +7,7 @@ import { items, transactions, warehouses } from '../../db/schema.js';
 /**
  * Package 6 (inventory and Kardex), TD-482 / B06-03: the Kardex ledger reads '' and 'default' as the default warehouse,
  * so a warehouse coded «default» shared its rows with the default warehouse and reconciliation, repair and rebuild moved
- * its stock there. On v9.0.107 `POST /warehouses {code:"default"}` answered 200, a void of a row without a warehouse
+ * its stock there. On v9.0.109 `POST /warehouses {code:"default"}` answered 200, a void of a row without a warehouse
  * wrote the alias 'default' on its reversal, and the health check did not list such a warehouse.
  */
 export async function runWarehouseReservedCodeTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -15,7 +15,7 @@ export async function runWarehouseReservedCodeTests(shouldRun: (id: string, ...e
   const id = 'reg_warehouse_reserved_code_td_482';
   if (!shouldRun(id, 'td482', 'warehouse', 'default', 'package6')) return results;
 
-  const name = 'v9.0.108: a warehouse code «default» is refused, a reversal names a real warehouse and a legacy «default» warehouse is listed by the health check (TD-482)';
+  const name = 'v9.0.110: a warehouse code «default» is refused, a reversal names a real warehouse and a legacy «default» warehouse is listed by the health check (TD-482)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   const legacyWarehouseIds: number[] = [];

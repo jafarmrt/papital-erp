@@ -15,7 +15,7 @@ export interface WarehouseItem {
   name: string;
   code: string;
   is_active?: number;
-  /** v9.0.110 (TD-490): فهرست سرور ستون Drizzle را با نام camelCase می‌فرستد */
+  /** v9.0.112 (TD-490): فهرست سرور ستون Drizzle را با نام camelCase می‌فرستد */
   isActive?: number;
 }
 
@@ -71,7 +71,7 @@ export function useWarehousesQuery() {
 }
 
 /**
- * v9.0.110 (TD-490): انبارهای غیرفعال برای فعال‌سازی دوباره در «مدیریت انبارها» (فقط مدیر سیستم)
+ * v9.0.112 (TD-490): انبارهای غیرفعال برای فعال‌سازی دوباره در «مدیریت انبارها» (فقط مدیر سیستم)
  */
 export function useInactiveWarehousesQuery(enabled: boolean) {
   return useQuery<WarehouseItem[]>({

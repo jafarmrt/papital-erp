@@ -1098,7 +1098,7 @@ export class FinancialHealthService {
     overallScore += openingVoucherTest.scoreImpact;
     tests.push(openingVoucherTest);
 
-    // آزمون ۲۳: v9.0.108 (TD-482) انبار با کد رزرو کاردکس «default» (فقط فهرست، بی تغییر خودکار)
+    // آزمون ۲۳: v9.0.110 (TD-482) انبار با کد رزرو کاردکس «default» (فقط فهرست، بی تغییر خودکار)
     const reservedWarehouseCodeTest = buildReservedWarehouseCodeHealthTest(await findReservedCodeWarehouses());
     overallScore += reservedWarehouseCodeTest.scoreImpact;
     tests.push(reservedWarehouseCodeTest);

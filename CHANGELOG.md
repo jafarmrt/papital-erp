@@ -19,14 +19,20 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.110 — Warehouse Deactivation Lock and Reactivation
+### v9.0.112 — Warehouse Deactivation Lock and Reactivation
 - **Warehouse deactivation:** it waits for in-flight movements and refuses a warehouse that got stock, the last active warehouse stays active, and the system admin can reactivate an inactive warehouse (TD-490, `reg_warehouse_deactivation_td_490`).
 
-### v9.0.109 — Inventory Layer in the System Reconciliation Scan
+### v9.0.111 — Inventory Layer in the System Reconciliation Scan
 - **System reconciliation scan:** the inventory layer check warns when the stock integrity report finds discrepancies or negative Kardex balances instead of always reporting healthy (TD-495, `reg_system_inventory_check_td_495`).
 
-### v9.0.108 — Reserved Warehouse Code
+### v9.0.110 — Reserved Warehouse Code
 - **Warehouse code `default`:** a new warehouse can no longer take a code the Kardex reads as the default warehouse, a void reversal writes the real default code, and a legacy one is listed by the health check (TD-482, `reg_warehouse_reserved_code_td_482`).
+
+### v9.0.109 — Merge-Time Renumbering Tool for Parallel Lanes
+- **Release Renumbering:** `npm run release:renumber -- origin/master` (`scripts/release-renumber.ts`) merges the base without committing, resolves the conflicts of the release files, moves the branch's own versions, migrations (file, journal idx, tag and a later `when`) and audit report sections after those of the base, rewrites only lines the branch added, sorts the active changelog, sets the four version locations, recounts TECH_DEBT.md and runs `check:version` and the migration plan test (TD-473, `releaseRenumber.test.ts`).
+
+### v9.0.108 — Treasury Running Balance After a Void
+- **Treasury Running Balance After a Void (P3, product-owner decision):** the treasury list's running balance counts a voided row on its date and its reversal on the void date, and no legacy cheque-method row, so the last row equals the bank balance. Before, after voiding a receipt of 250,000 every later row showed 250,000 less (TD-860, `reg_treasury_running_balance_void_td_860`).
 
 ### v9.0.107 — Route Guards Ask Permissions Only
 - **Route Guards:** no route guard takes a role code any more; system maintenance is for the system admin only, warehouses and the fiscal-year close get their own permissions, and migration 0062 turns access seed roles had only by their code into logged ticks (TD-516).

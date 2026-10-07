@@ -7,14 +7,14 @@ import { items } from '../../db/schema.js';
 /**
  * Package 6 (inventory and Kardex), TD-495 / B06-16: the system reconciliation scan reported the inventory layer with a
  * constant `status: 'ok'` (category misspelled «کالاهها») even when the stock integrity report had discrepancies.
- * On v9.0.108 an item whose warehouse stock has no Kardex rows still left `inventory_kardex` «ok».
+ * On v9.0.110 an item whose warehouse stock has no Kardex rows still left `inventory_kardex` «ok».
  */
 export async function runSystemInventoryCheckTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const id = 'reg_system_inventory_check_td_495';
   if (!shouldRun(id, 'td495', 'reconciliation', 'inventory', 'package6')) return results;
 
-  const name = 'v9.0.109: the system reconciliation scan warns on stock integrity discrepancies instead of a constant ok (TD-495)';
+  const name = 'v9.0.111: the system reconciliation scan warns on stock integrity discrepancies instead of a constant ok (TD-495)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   try {
