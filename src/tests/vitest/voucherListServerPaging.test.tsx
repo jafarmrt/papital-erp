@@ -41,7 +41,7 @@ function serveVoucherPages() {
   });
 }
 
-// v9.0.109 (TD-565, B03-23): the voucher list read only the newest 20 vouchers (no page or limit, the type filter sent as
+// v9.0.110 (TD-565, B03-23): the voucher list read only the newest 20 vouchers (no page or limit, the type filter sent as
 // `type`), and its counters, search and filters worked on those 20 in the browser.
 describe('voucher list is paged and filtered on the server (TD-565)', () => {
   it('asks for one page with status, voucherType, search and ISO dates and returns the server total and counts', async () => {

@@ -596,7 +596,7 @@ export class AccountingReportService {
       or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
     ];
 
-    // v9.0.111 (TD-570): حساب گروه یا کل با همه زیرحساب‌هایش (کلیک ردیف تراز آزمایشی، «مرور حساب‌ها»)
+    // v9.0.112 (TD-570): حساب گروه یا کل با همه زیرحساب‌هایش (کلیک ردیف تراز آزمایشی، «مرور حساب‌ها»)
     if (params.accountId) {
       periodConditions.push(accountSubtreeCondition(journalVoucherItems.accountId, params.accountId));
     }

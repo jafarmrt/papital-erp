@@ -72,7 +72,7 @@ export class VoucherService {
     const limit = Math.max(1, Math.min(100, Number(params.limit) || 20));
     const offset = (page - 1) * limit;
 
-    // v9.0.109 (TD-565): شمارنده‌های وضعیت با همه صافی‌ها جز خود وضعیت شمرده می‌شوند (برگه‌های وضعیت فهرست اسناد)
+    // v9.0.110 (TD-565): شمارنده‌های وضعیت با همه صافی‌ها جز خود وضعیت شمرده می‌شوند (برگه‌های وضعیت فهرست اسناد)
     const conditions = [eq(journalVouchers.isDeleted, 0)];
     const status = params.status && params.status !== 'all' ? params.status : null;
 

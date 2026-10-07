@@ -57,7 +57,7 @@ export function useVouchersQuery(filters: VoucherFilters = {}) {
 }
 
 /**
- * v9.0.109 (TD-565): یک صفحه از فهرست اسناد با صافی‌ها، `total` و شمار هر وضعیت از سرور (برگه «اسناد حسابداری»).
+ * v9.0.110 (TD-565): یک صفحه از فهرست اسناد با صافی‌ها، `total` و شمار هر وضعیت از سرور (برگه «اسناد حسابداری»).
  * کلید زیر `vouchers()` است تا هر ذخیره سند همین صفحه را هم باطل کند.
  */
 export function useVoucherPageQuery(filters: VoucherListFilters, page: number, limit: number) {

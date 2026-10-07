@@ -6,7 +6,7 @@ import { PeriodFields, periodCaption } from './ReportDateFields';
 
 interface IncomeStatementViewProps {
   incomeStatement: IncomeStatementReport | null;
-  /** v9.0.110 (TD-566): دوره خود صورت سود و زیان (ISO)، نه تاریخ‌های تراز آزمایشی */
+  /** v9.0.111 (TD-566): دوره خود صورت سود و زیان (ISO)، نه تاریخ‌های تراز آزمایشی */
   startDate: string;
   endDate: string;
   onPeriodChange: (period: { startDate: string; endDate: string }) => void;
@@ -20,7 +20,7 @@ export function IncomeStatementView({
   onPeriodChange,
   onApplyIncomeFilter
 }: IncomeStatementViewProps) {
-  // v9.0.108 (TD-563): همان کلیدهای پاسخ سرور (`totalRevenue`، `operatingExpenses`)، نه `totalRevenues` و `expenses`
+  // v9.0.109 (TD-563): همان کلیدهای پاسخ سرور (`totalRevenue`، `operatingExpenses`)، نه `totalRevenues` و `expenses`
   const safeRevenues = statementRows(incomeStatement?.revenues);
   const safeCostOfSales = statementRows(incomeStatement?.costOfSales);
   const safeExpenses = statementRows(incomeStatement?.operatingExpenses);

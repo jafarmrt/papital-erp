@@ -52,7 +52,7 @@ export function JournalVouchersTab({
   onBatchApproveVouchers,
 }: JournalVouchersTabProps) {
   const appCurrency = useAppCurrency();
-  // v9.0.109 (TD-565): صفحه، جست‌وجو، نوع، وضعیت و تاریخ به سرور می‌روند و شمارنده‌ها و `total` از سرورند؛
+  // v9.0.110 (TD-565): صفحه، جست‌وجو، نوع، وضعیت و تاریخ به سرور می‌روند و شمارنده‌ها و `total` از سرورند؛
   // پیش‌تر صفحه فقط ۲۰ سند آخر را داشت و همه صافی‌ها و شمارنده‌ها روی همان ۲۰ کار می‌کردند
   const [filters, setFilters] = useState<VoucherListFilters>({ status: 'all', voucherType: 'all', search: '', startDate: '', endDate: '' });
   const [page, setPage] = useState(1);

@@ -5,9 +5,9 @@ import { BalanceSheetView } from '../../components/accounting/reports/BalanceShe
 import type { BalanceSheetReport, IncomeStatementReport } from '../../lib/accounting/financialStatements';
 
 /**
- * v9.0.108 (TD-563، B03-21): صورت سود و زیان و ترازنامه کلیدهای پاسخ سرور را می‌خوانند.
+ * v9.0.109 (TD-563، B03-21): صورت سود و زیان و ترازنامه کلیدهای پاسخ سرور را می‌خوانند.
  * پاسخ‌ها با نوع مشترک سرور (`getIncomeStatement` / `getBalanceSheet` همین نوع را برمی‌گردانند) ساخته می‌شوند.
- * روی v9.0.107 سرجمع درآمد ۰، حاشیه ۰٪، ردیف هزینه خالی و ترازنامه بی ردیف دارایی و بدهی بود.
+ * روی v9.0.108 سرجمع درآمد ۰، حاشیه ۰٪، ردیف هزینه خالی و ترازنامه بی ردیف دارایی و بدهی بود.
  */
 
 afterEach(cleanup);

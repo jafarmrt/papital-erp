@@ -7,7 +7,7 @@ afterEach(cleanup);
 
 const banner = () => screen.getByText('امتیاز سلامت و پایداری مالی شرکت').closest('div.space-y-1\\.5') as HTMLElement;
 
-// v9.0.113 (TD-575, B03-33): before any data arrived (or after an error) the ratios page showed a health score of «۷۵ از ۱۰۰»
+// v9.0.114 (TD-575, B03-33): before any data arrived (or after an error) the ratios page showed a health score of «۷۵ از ۱۰۰»
 // and «بحرانی» on every status, numbers the server never sent.
 describe('financial ratios without data show no score (TD-575)', () => {
   it('no data: no score, no «از ۱۰۰», no status badge and no ratio values', () => {

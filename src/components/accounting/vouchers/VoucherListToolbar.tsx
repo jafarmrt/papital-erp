@@ -5,7 +5,7 @@ import { JalaliDateInput } from '../../common/JalaliDateInput';
 import type { VoucherListFilters, VoucherStatusCounts } from '../../../lib/accounting/voucherList';
 
 /**
- * v9.0.109 (TD-565): برگه‌های وضعیت و صافی‌های فهرست اسناد حسابداری (استخراج‌شده از JournalVouchersTab).
+ * v9.0.110 (TD-565): برگه‌های وضعیت و صافی‌های فهرست اسناد حسابداری (استخراج‌شده از JournalVouchersTab).
  * شمارنده‌ها شمار سرور با صافی‌های فعلی‌اند، نه شمار صفحه‌ای که مرورگر دارد؛ تاریخ‌ها ISO نگه داشته می‌شوند.
  */
 

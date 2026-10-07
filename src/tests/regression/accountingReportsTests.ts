@@ -70,7 +70,7 @@ export async function runAccountingReportsTests(shouldRun: ShouldRun): Promise<T
 
   const pagingId = 'reg_voucher_list_paging_and_status_counts_td_565';
   if (shouldRun(pagingId, 'td565', 'vouchers', 'accounting', 'package3')) {
-    await runCase(results, pagingId, 'v9.0.109: GET /accounting/vouchers pages and filters on the server, counts every status under the other filters and searches case-insensitively (TD-565)', async () => {
+    await runCase(results, pagingId, 'v9.0.110: GET /accounting/vouchers pages and filters on the server, counts every status under the other filters and searches case-insensitively (TD-565)', async () => {
       const admin = await adminClient();
       const problems: string[] = [];
       const today = await businessTodayIsoDate();
@@ -117,7 +117,7 @@ export async function runAccountingReportsTests(shouldRun: ShouldRun): Promise<T
 
   const subtreeId = 'reg_account_card_rolls_up_sub_accounts_td_570';
   if (shouldRun(subtreeId, 'td570', 'ledger', 'accounting', 'package3')) {
-    await runCase(results, subtreeId, 'v9.0.111: the account card of a group or general account carries the rows, opening balance and final balance of all its sub-accounts, as the trial balance shows them (TD-570)', async () => {
+    await runCase(results, subtreeId, 'v9.0.112: the account card of a group or general account carries the rows, opening balance and final balance of all its sub-accounts, as the trial balance shows them (TD-570)', async () => {
       const admin = await adminClient();
       const problems: string[] = [];
       const today = await businessTodayIsoDate();

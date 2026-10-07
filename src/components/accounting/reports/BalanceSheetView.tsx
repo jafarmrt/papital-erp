@@ -6,7 +6,7 @@ import { AsOfDateField, asOfCaption } from './ReportDateFields';
 
 interface BalanceSheetViewProps {
   balanceSheet: BalanceSheetReport | null;
-  /** v9.0.110 (TD-566): تاریخ ترازنامه (ISO)؛ خالی یعنی تا امروز */
+  /** v9.0.111 (TD-566): تاریخ ترازنامه (ISO)؛ خالی یعنی تا امروز */
   asOfDate: string;
   onAsOfDateChange: (iso: string) => void;
   onApplyBalanceSheetFilter: () => void;
@@ -40,7 +40,7 @@ export function BalanceSheetView({
   onAsOfDateChange,
   onApplyBalanceSheetFilter
 }: BalanceSheetViewProps) {
-  // v9.0.108 (TD-563): بخش‌های پاسخ سرور (دارایی جاری و غیرجاری، بدهی جاری، حقوق صاحبان سهام، سود دوره)،
+  // v9.0.109 (TD-563): بخش‌های پاسخ سرور (دارایی جاری و غیرجاری، بدهی جاری، حقوق صاحبان سهام، سود دوره)،
   // نه `assets` و `liabilities` که سرور هرگز نمی‌فرستد
   const currentAssets = statementRows(balanceSheet?.currentAssets);
   const nonCurrentAssets = statementRows(balanceSheet?.nonCurrentAssets);

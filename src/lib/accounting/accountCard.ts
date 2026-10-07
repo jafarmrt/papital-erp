@@ -1,7 +1,7 @@
 import type { ForeignAmountOrigin } from '../../types/accounting.types';
 
 /**
- * v9.0.112 (TD-574، B03-32): قرارداد مشترک سرور و مرورگر برای کارت حساب (`GET /accounting/reports/ledger`).
+ * v9.0.113 (TD-574، B03-32): قرارداد مشترک سرور و مرورگر برای کارت حساب (`GET /accounting/reports/ledger`).
  * `AccountingReportService.getDetailedAccountCard` همین شکل را برمی‌گرداند و `LedgerView` همین کلیدها را می‌خواند.
  * ردیف «مانده ابتدای دوره» را سرور می‌فرستد (`isOpening`)؛ نام حساب در پاسخ نیست و نما آن را از فهرست حساب‌ها می‌خواند.
  * پیش‌تر نوع مرورگر (`rows`، `accountName`، `closingBalance`) با پاسخ سرور نمی‌خواند و نما ردیف افتتاحیه را دوباره می‌افزود.

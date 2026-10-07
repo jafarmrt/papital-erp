@@ -26,7 +26,7 @@ export function LedgerView({
   endDate
 }: LedgerViewProps) {
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
-  // v9.0.112 (TD-574): ردیف «مانده ابتدای دوره» را سرور می‌فرستد (`isOpening`)؛ نما آن را دوباره نمی‌افزاید
+  // v9.0.113 (TD-574): ردیف «مانده ابتدای دوره» را سرور می‌فرستد (`isOpening`)؛ نما آن را دوباره نمی‌افزاید
   const safeLedgerItems = accountCardRows(ledgerReport);
   const openingRows = safeLedgerItems.filter(item => item.isOpening).length;
   // نام حساب در پاسخ کارت نیست؛ از فهرست حساب‌ها، و گروه و کل با همه زیرحساب‌هایشان (TD-570)
