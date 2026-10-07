@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowDownLeft, ArrowUpRight, X, ShieldCheck } from 'lucide-react';
-import DatePicker from 'react-multi-date-picker';
-import persian from 'react-date-object/calendars/persian';
-import persian_fa from 'react-date-object/locales/persian_fa';
+import { toast } from 'react-hot-toast';
 import { SearchableSelect } from '../../SearchableSelect';
 import { FinancialAttachmentUploader } from '../FinancialAttachmentUploader';
 import { FinancialAmountInput } from '../../common/FinancialAmountInput';
 import { HelpBadge } from '../../common/HelpBadge';
-import { formatPersianPrice, formatCurrencyLabel, extractDateString, getTodayIsoDate } from '../../../utils';
+import { formatPersianPrice, formatCurrencyLabel, getTodayIsoDate } from '../../../utils';
+import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { fetchJson } from '../../../api';
 import { useHasPermission } from '../../../contexts/AuthContext';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../../lib/noVoucherPermission';
+import { needsChosenContraAccount, type PersonnelPurpose } from '../../../lib/treasury/partyPurpose';
+import { PartyPurposeFields } from './PartyPurposeFields';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 
 interface TreasuryTransactionModalProps {
@@ -42,7 +43,9 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     partyType: 'customer' as 'customer' | 'supplier' | 'personnel' | 'other',
     partyId: null as number | null,
     partyName: '',
-    purpose: 'settlement' as 'settlement' | 'advance' | 'other',
+    // v9.0.82 (TD-507، ت۴ الف): هدف پرسنل پیش‌فرض ندارد و الزامی است؛ «متفرقه» و «سایر» سرفصل طرف مقابل می‌خواهند
+    purpose: '' as PersonnelPurpose | '',
+    contraAccountId: null as number | null,
     // v8.0.26 (TD-278، تصمیم مالک محصول): روش «چک» حذف شد؛ چک فقط از «مدیریت چک‌های صیادی» ثبت می‌شود
     method: 'bank_transfer' as 'bank_transfer' | 'pos' | 'cash',
     amount: 0,
@@ -115,7 +118,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               partyType: formData.partyType,
               partyId: formData.partyId,
               partyName: formData.partyName,
-              purpose: formData.purpose,
+              purpose: formData.partyType === 'personnel' ? (formData.purpose || undefined) : undefined,
+              contraAccountId: needsChosenContraAccount(formData.partyType, formData.purpose) ? formData.contraAccountId : null,
             }),
             signal: controller.signal,
           }
@@ -149,18 +153,27 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     formData.partyId,
     formData.partyName,
     formData.purpose,
+    formData.contraAccountId,
   ]);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (bankWithoutLedger) return;
+    const needsContra = needsChosenContraAccount(formData.partyType, formData.purpose);
+    if (needsContra && !formData.contraAccountId) {
+      toast.error('سرفصل طرف مقابل را انتخاب کنید.');
+      return;
+    }
     setIsSaving(true);
     try {
       // v8.0.20 (TD-274): ارز تراکنش همان ارز حساب انتخاب‌شده است و تراکنش ارزی نرخ تسعیر می‌فرستد
       const bankCurrency = (safeBankAccounts.find(b => b.id === formData.bankAccountId)?.currency || 'IRR').toUpperCase();
       await onSave({
         ...formData,
+        purpose: formData.partyType === 'personnel' ? formData.purpose : undefined,
+        contraAccountId: needsContra ? formData.contraAccountId : null,
         currency: bankCurrency,
         exchangeRate: bankCurrency !== 'IRR' && formData.exchangeRate > 0 ? formData.exchangeRate : undefined,
         createVoucher: canSkipVoucher ? formData.createVoucher : true,
@@ -186,10 +199,13 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     const pt = c.partyType || (c as any).party_type;
     return pt === 'supplier' || pt === 'both';
   });
-  const actualSupplierList = supplierList.length > 0 ? supplierList : safeCustomers;
+  // v9.0.83 (TD-501): سرور فقط تأمین‌کننده (یا «هر دو») را برای این نوع می‌پذیرد؛ پیش‌تر نبود تأمین‌کننده همه مشتریان را فهرست می‌کرد
+  const actualSupplierList = supplierList;
 
   const isReceipt = formData.type === 'receipt';
   const selectedBank = safeBankAccounts.find(b => b.id === formData.bankAccountId);
+  // v9.0.106 (TD-515): سرور ثبت با حساب بی سرفصل را رد می‌کند (۴۲۲)، پس فرم هم ثبت را نمی‌پذیرد
+  const bankWithoutLedger = Boolean(formData.bankAccountId) && !selectedBank?.accountId;
   const isForeignBank = (selectedBank?.currency || 'IRR').toUpperCase() !== 'IRR';
   const curLbl = formatCurrencyLabel(isForeignBank ? (selectedBank?.currency || appCurrency) : appCurrency);
 
@@ -214,7 +230,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               </h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 {isReceipt
-                  ? 'دریافت نقدی / حواله / پایا / چک از مشتریان یا متفرقه'
+                  ? 'دریافت نقدی / حواله / پایا / کارتخوان از مشتریان یا متفرقه'
                   : 'پرداخت وجه به تامین‌کنندگان، پرسنل یا تسویه هزینه‌ها'}
               </p>
             </div>
@@ -235,15 +251,11 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   تاریخ تراکنش *
                 </label>
-                <DatePicker
+                <JalaliDateInput
                   value={formData.date}
-                  onChange={(dateObj: any) => {
-                    setFormData({ ...formData, date: extractDateString(dateObj) });
-                  }}
-                  calendar={persian}
-                  locale={persian_fa}
+                  onChange={iso => setFormData({ ...formData, date: iso })}
                   calendarPosition="bottom-right"
-                  inputClass="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
                   containerClassName="w-full"
                 />
               </div>
@@ -283,9 +295,9 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                   </option>
                 ))}
               </select>
-              {formData.bankAccountId && !selectedBank?.accountId && (
+              {bankWithoutLedger && (
                 <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 mt-1 leading-5">
-                  ⚠️ این حساب به چارت حساب‌ها متصل نیست — سند دوبل صادر نخواهد شد. از ویرایش حساب، «اتصال به حساب معین» را تکمیل کنید.
+                  ⚠️ این حساب به چارت حساب‌ها متصل نیست و ثبت دریافت یا پرداخت با آن ممکن نیست. از ویرایش حساب، «اتصال به حساب معین» را تکمیل کنید.
                 </p>
               )}
             </div>
@@ -320,6 +332,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                     partyType: e.target.value as any,
                     partyId: null,
                     partyName: '',
+                    contraAccountId: null,
                   })}
                   className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                 >
@@ -392,23 +405,14 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               </div>
             </div>
 
-            {/* Purpose for personnel payment */}
-            {formData.partyType === 'personnel' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  نوع پرداخت به پرسنل *
-                </label>
-                <select
-                  value={formData.purpose}
-                  onChange={e => setFormData({ ...formData, purpose: e.target.value as any })}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
-                >
-                  <option value="settlement">تسویه حقوق و دستمزد → بدهکار «حقوق پرداختنی»</option>
-                  <option value="advance">مساعده / وام → بدهکار «مساعده و وام پرسنل»</option>
-                  <option value="other">سایر</option>
-                </select>
-              </div>
-            )}
+            {/* Purpose for personnel payment; counter account for «other» (TD-507) */}
+            <PartyPurposeFields
+              partyType={formData.partyType}
+              purpose={formData.purpose}
+              contraAccountId={formData.contraAccountId}
+              isReceipt={isReceipt}
+              onChange={patch => setFormData(prev => ({ ...prev, ...patch }))}
+            />
 
             <div className="grid grid-cols-2 gap-3 items-start">
               <div>
@@ -545,7 +549,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
             </button>
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || bankWithoutLedger}
               className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm disabled:opacity-50 transition cursor-pointer"
             >
               {isSaving ? 'در حال ثبت...' : 'ثبت قطعی تراکنش'}

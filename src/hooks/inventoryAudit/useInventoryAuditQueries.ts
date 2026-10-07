@@ -4,7 +4,8 @@ import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { listFromResponse } from '../../lib/invoices/invoiceForm';
-import { normalizeAuditItems, type AuditItemRow, type IntegrityReport } from '../../lib/inventoryAudit/auditSheet';
+import { normalizeAuditItems, type AuditItemRow } from '../../lib/inventoryAudit/auditSheet';
+import type { InventoryIntegrityReport } from '../../types';
 
 /**
  * صفحه انبارگردانی: خواندنی‌های صفحه با React Query (FE-005) به‌جای fetchJson/useState دستی.
@@ -55,12 +56,12 @@ function useTypedDocumentsQuery(filter: { type: string }, enabled: boolean, logL
 export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedLocation: string) {
   const queryClient = useQueryClient();
 
-  const integrityQuery = useQuery<IntegrityReport | null>({
+  const integrityQuery = useQuery<InventoryIntegrityReport | null>({
     queryKey: INTEGRITY_KEY,
     queryFn: async ({ signal }) => {
       try {
-        const res = await fetchJson<(IntegrityReport & { report?: IntegrityReport }) | null>('/inventory/integrity-audit', { signal });
-        return res?.report || res || null;
+        // v9.0.89 (TD-485): پاسخ سرور خودِ گزارش است ({ summary, audits, warehouses })
+        return (await fetchJson<InventoryIntegrityReport | null>('/inventory/integrity-audit', { signal })) ?? null;
       } catch (err: unknown) {
         logUnlessAborted(signal, 'Error loading integrity report:', err);
         throw err;
@@ -101,7 +102,8 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
 
   const auditItemsQuery = useQuery<AuditItemRow[]>({
     queryKey: QUERY_KEYS.inventory.auditItems(selectedLocation),
-    enabled: activeTab === 'new_audit',
+    // selectedLocation کد انبار است (TD-480)؛ تا فهرست انبارها نرسیده، برگه درخواستی نمی‌فرستد
+    enabled: activeTab === 'new_audit' && selectedLocation !== '',
     queryFn: async ({ signal }) => {
       try {
         const res = await fetchJson<unknown>(`/documents/audit-items?location=${encodeURIComponent(selectedLocation)}`, { signal });
@@ -140,6 +142,8 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
 
   const { refetch: refetchIntegrity } = integrityQuery;
   const refreshIntegrity = useCallback(() => { void refetchIntegrity(); }, [refetchIntegrity]);
+  const { refetch: refetchAuditItems } = auditItemsQuery;
+  const refreshAuditItems = useCallback(() => { void refetchAuditItems(); }, [refetchAuditItems]);
 
   const auditDocs = useMemo(() => listFromResponse<Record<string, unknown>>(auditDocsQuery.data), [auditDocsQuery.data]);
   const transfers = useMemo(() => listFromResponse<Record<string, unknown>>(transfersQuery.data), [transfersQuery.data]);
@@ -151,6 +155,7 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
     rebuildItems: rebuildItemsQuery.data ?? NO_ITEMS,
     nextRef: nextRefQuery.data ?? DEFAULT_NEXT_REF,
     auditItems: auditItemsQuery.data ?? NO_ROWS,
+    refreshAuditItems,
     auditDocs,
     auditDocsLoading: auditDocsQuery.isFetching,
     transfers,
@@ -169,11 +174,16 @@ export interface InventoryDocumentLine {
 }
 
 export interface InventoryDocumentDetail {
+  id?: number;
   ref_number?: string;
   refNumber?: string;
   date?: string;
   location?: string;
   user?: string;
+  notes?: string | null;
+  /** v9.0.80 (TD-489): انبار مبدأ و مقصد حواله انتقال */
+  sourceLocation?: string;
+  destinationLocation?: string;
   items?: InventoryDocumentLine[];
 }
 

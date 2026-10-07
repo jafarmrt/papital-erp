@@ -113,7 +113,7 @@ export class WorkflowSlaReminderService {
           await tx.insert(notifications).values([...recipients].map((userId) => ({
             userId,
             senderId: null,
-            senderName: 'موتور ورکفلو',
+            senderName: 'گردش کار',
             type: 'system',
             title: 'مهلت کار تاییدی گذشت',
             message,

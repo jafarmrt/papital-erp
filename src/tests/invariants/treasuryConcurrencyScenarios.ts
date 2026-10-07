@@ -5,6 +5,7 @@ import { TreasuryTransactionService } from '../../services/accounting/treasury/t
 import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 import { accountIdByCode, outcomeProblems, raceBehindRowLock } from './concurrencyHarness.js';
+import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 
 /**
  * v8.0.69 — سناریوهای سخت‌گیرانه خزانه و چک حوزه J برای سوئیت business_invariants.
@@ -178,8 +179,9 @@ export async function checkBankSyncFromTransactions(): Promise<string[]> {
   const newBank = (initialBalance: number) => BankAccountService.createBankAccount({
     title: `بانک آزمون همگام‌سازی ${tag('S')}`, type: 'bank', accountId: ledgerAccount, initialBalance, currency: 'IRR',
   });
+  const contraAccountId = await miscContraAccountId();
   const move = (bankAccountId: number, type: 'receipt' | 'payment', amount: number) => TreasuryTransactionService.createTreasuryTransaction({
-    type, method: 'bank_transfer', amount, bankAccountId, partyType: 'other', partyName: 'طرف آزمون همگام‌سازی', username: 'inv',
+    type, method: 'bank_transfer', amount, bankAccountId, partyType: 'other', contraAccountId, partyName: 'طرف آزمون همگام‌سازی', username: 'inv',
   });
   const sync = () => BankAccountService.recalculateAndSyncBankBalances();
 

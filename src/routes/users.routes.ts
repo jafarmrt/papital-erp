@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
 import { authenticateToken, invalidateUserAuthCache } from '../middleware/auth.js';
@@ -9,11 +9,13 @@ import { authorizePermission, ROLE_CODE_PATTERN } from '../middleware/authorize.
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
-import { NotFoundError, ConflictError, ForbiddenError } from '../errors/customErrors.js';
+import { NotFoundError, ForbiddenError, BadRequestError, ValidationError } from '../errors/customErrors.js';
+import { lockSystemAdminSet, assertAnotherActiveAdmin, SYSTEM_ADMIN_ROLE } from '../services/users/lastAdminGuard.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
 import { invalidateRoleCache } from '../lib/memoryCache.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
+import { PERMISSION_CATALOG, PERMISSION_KEYS, isCatalogPermission, missingRequiredPermissions, withRequiredPermissions } from '../lib/permissions/permissionCatalog.js';
+import { isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
@@ -59,174 +61,15 @@ const updateRoleSchema = z.object({
   })
 });
 
-// System Permissions Definition Catalog
-export const PERMISSION_CATALOG = [
-  {
-    category: 'مدیریت کالا و محصولات',
-    permissions: [
-      { key: 'products.view', title: 'مشاهده کالاها و موجودی', description: 'دسترسی به لیست کالاها، جزئیات و قیمت‌ها' },
-      { key: 'products.create', title: 'تعریف کالای جدید', description: 'امکان اضافه کردن کالا و محصول جدید به انبار' },
-      { key: 'products.edit', title: 'ویرایش اطلاعات کالا', description: 'تغییر عنوان، کد، وزن، رنگ و تصویر کالاها' },
-      { key: 'products.edit_price', title: 'ویرایش قیمت‌ها', description: 'تغییر قیمت‌های خرید و فروش کالا' },
-      { key: 'products.delete', title: 'حذف کالا', description: 'امکان حذف نرم کالا از سیستم' },
-    ]
-  },
-  {
-    category: 'انبارداری و جابجایی',
-    permissions: [
-      { key: 'warehouse.view', title: 'مشاهده انبارها', description: 'مشاهده لیست انبارها و موجودی تفکیکی' },
-      { key: 'warehouse.in', title: 'ثبت ورود کالا (رسید)', description: 'افزایش موجودی و ثبت رسیدهای ورودی' },
-      { key: 'warehouse.out', title: 'ثبت خروج کالا (حواله)', description: 'کاهش موجودی و ثبت حواله‌های خروجی' },
-      { key: 'warehouse.transfer', title: 'جابجایی بین انبارها', description: 'انتقال کالا از یک انبار به انبار دیگر' },
-      // v8.0.4 (TD-257، تصمیم مالک محصول): استثنای قاعده تاریخ سند انبار؛ پیش‌فرض به هیچ نقشی داده نمی‌شود
-      { key: 'warehouse.backdate', title: 'ثبت سند انبار با تاریخ گذشته', description: 'ثبت گردش با تاریخی پیش از آخرین گردش کالا، فقط وقتی موجودی انبار در آن تاریخ و پس از آن منفی نشود' },
-      { key: 'inventory.reconcile', title: 'ممیزی کاردکس و بازسازی انبار', description: 'اجرای بازسازی انبار و تطبیق تراکنش‌ها با لاگ کاردکس' },
-    ]
-  },
-  {
-    category: 'اسناد و فاکتورها',
-    permissions: [
-      { key: 'documents.view', title: 'مشاهده فاکتورها', description: 'مشاهده لیست فاکتورهای فروش و پیش‌فاکتورها' },
-      { key: 'documents.create', title: 'صدور فاکتور و پیش‌فاکتور', description: 'ایجاد فاکتور جدید و صدور قبض' },
-      { key: 'documents.edit', title: 'ویرایش فاکتورها', description: 'اصلاح اقلام و مشخصات فاکتورهای صادرشده' },
-      { key: 'documents.delete', title: 'حذف فاکتور', description: 'حذف فاکتور و برگشت خودکار موجودی کالاها' },
-    ]
-  },
-  {
-    category: 'انبارگردانی',
-    permissions: [
-      { key: 'audit.view', title: 'مشاهده انبارگردانی', description: 'مشاهده دوره‌ها و لاگ‌های انبارگردانی' },
-      { key: 'audit.create', title: 'شروع دوره انبارگردانی', description: 'ثبت شمارش واقعی فیزیکی کالاها' },
-      { key: 'audit.apply', title: 'اعمال و تسویه مغایرت', description: 'تأیید نهایی و اصلاح خودکار موجودی انبار' },
-    ]
-  },
-  {
-    category: 'مدیریت مشتریان',
-    permissions: [
-      { key: 'customers.view', title: 'مشاهده لیست مشتریان', description: 'مشاهده اطلاعات تماس و سوابق خریداران' },
-      { key: 'customers.manage', title: 'مدیریت کامل مشتریان', description: 'افزودن، ویرایش و حذف خریداران' },
-    ]
-  },
-  {
-    category: 'کنترل پروژه‌های تولید',
-    permissions: [
-      { key: 'projects.view', title: 'مشاهده پروژه‌ها و مراحل', description: 'دسترسی به لیست پروژه‌ها، گانت چارت، تخته کانبان و مراحل تولید' },
-      { key: 'projects.create', title: 'تعریف پروژه تولید جدید', description: 'ایجاد پروژه، تعیین کد مشتری و کد کالا و مراحل پیش‌فرض' },
-      { key: 'projects.edit', title: 'ویرایش پروژه و مراحل تولید', description: 'تغییر وضعیت، پیشرفت، زمان‌بندی، تخصیص پرسنل و منابع هر مرحله' },
-      { key: 'projects.delete', title: 'حذف پروژه تولید', description: 'حذف پروژه و مراحل مرتبط با آن' },
-    ]
-  },
-  {
-    category: 'جریان‌های کاری و کارتابل تاییدات (Workflow)',
-    permissions: [
-      { key: 'workflow.view', title: 'مشاهده فرآیندها و کارتابل تاییدات', description: 'دسترسی به کارتابل وظایف، مشاهده وضعیت فرآیندها و سوابق امضاها' },
-      { key: 'workflow.execute', title: 'شروع و اجرای فرآیندها', description: 'امکان شروع نمونه فرآیند کاری جدید بر روی اسناد و موجودیت‌ها' },
-      { key: 'workflow.approve', title: 'تایید و رد درخواست‌ها در کارتابل', description: 'امکان امضا، تایید یا رد درخواست‌ها در کارتابل و فرآیندهای مجاز' },
-      { key: 'workflow.manage', title: 'مدیریت و طراحی جریان‌های کاری', description: 'طراحی گرافیکی فرآیندها، نسخه‌بندی DSL، قوانین Rule Engine و تحلیل SLA' },
-      { key: 'workflow.admin', title: 'مدیریت ارشد و همگام‌سازی فرآیندها', description: 'همگام‌سازی الگوهای پیش‌فرض و مدیریت تنظیمات ساختاری فرآیندها' },
-    ]
-  },
-  {
-    category: 'گذرگاه رویدادها، صف Outbox و وب‌هوک‌ها',
-    permissions: [
-      { key: 'events.view', title: 'مشاهده رویدادها و صف Outbox', description: 'مشاهده لاگ رویدادهای دامنه، پیام‌های Outbox و پیام‌های قرنطینه (DLQ)' },
-      { key: 'events.manage', title: 'مدیریت قوانین رویدادها و وب‌هوک‌ها', description: 'تعریف اکشن‌های خودکار، تنظیم اشتراک‌های وب‌هوک و Replay پیام‌های DLQ' },
-    ]
-  },
-  {
-    category: 'گزارش کار روزانه و اعلان‌ها',
-    permissions: [
-      { key: 'daily_logs.view', title: 'مشاهده گزارش کارهای روزانه', description: 'مشاهده گزارش کارهای عمومی، منشن‌شده و مجاز' },
-      { key: 'daily_logs.create', title: 'ثبت و ویرایش گزارش کار روزانه', description: 'امکان ثبت، ویرایش و حذف گزارش کار روزانه خود' },
-      { key: 'daily_logs.manage_all', title: 'مدیریت و نظارت کامل گزارش‌ها', description: 'مشاهده تمامی گزارش کارهای محرمانه و ثبت بازخورد و یادداشت مدیریتی' },
-    ]
-  },
-  {
-    category: 'ارتباط با مشتری و فروش',
-    permissions: [
-      { key: 'crm.view', title: 'مشاهده ارتباط با مشتری و قیف فروش', description: 'دسترسی به پرونده‌های فروش، قیف فروش، دفترچه تماس‌ها و پیگیری‌ها' },
-      { key: 'crm.manage', title: 'مدیریت پرونده‌ها و تماس‌های ارتباط با مشتری', description: 'امکان ثبت، ویرایش، تغییر مراحل فروش و ثبت تماس‌ها و پیگیری‌ها' },
-      { key: 'crm.delete', title: 'حذف پرونده‌های فروش', description: 'امکان حذف پرونده‌های فروش و سوابق آن‌ها' },
-    ]
-  },
-  {
-    category: 'مدیریت پرسنل و منابع انسانی',
-    permissions: [
-      { key: 'personnel.view', title: 'مشاهده لیست و پرونده پرسنل', description: 'دسترسی به مشاهده مشخصات فردی، شغلی، حساب‌های بانکی و مهارت‌های پرسنل' },
-      { key: 'personnel.manage', title: 'مدیریت کامل پرسنل', description: 'امکان ثبت، ویرایش، قطع همکاری و حذف مشخصات پرسنل' },
-    ]
-  },
-  {
-    category: 'دستمرزد و کارهای پرکیسی (Piecework)',
-    permissions: [
-      { key: 'piecework.view', title: 'مشاهده تعرفه‌ها و گزارش‌های پرکیسی', description: 'مشاهده لیست عناوین کاری، نرخ‌ها، ثبت کارکردها و فیش‌های حقوقی' },
-      { key: 'piecework.manage_tasks', title: 'مدیریت عناوین کاری و نرخ‌های پایه', description: 'تعریف و ویرایش کارهای پرکیسی، دسته‌بندی‌ها و نرخ پایه' },
-      { key: 'piecework.log', title: 'ثبت و ویرایش کارکرد پرسنل', description: 'ثبت کارکرد روزانه پرسنل و تخصیص به پروژه‌ها' },
-      { key: 'piecework.payroll', title: 'محاسبه و صدور فیش حقوقی', description: 'محاسبه کارکرد، کسر مساعده/مساعده و صدور تسویه‌حساب پرکیسی' },
-    ]
-  },
-  {
-    category: 'مواد اولیه در انتظار تایید',
-    permissions: [
-      { key: 'pending_materials.view', title: 'مشاهده درخواست‌های مواد اولیه', description: 'مشاهده پیشنهادها و ثبت مواد اولیه توسط کاربران' },
-      { key: 'pending_materials.approve', title: 'تایید و تبدیل به کالا/انبار', description: 'تایید درخواست‌های مواد اولیه و انتقال به انبار اصلی یا رد درخواست' },
-    ]
-  },
-  {
-    category: 'خرید و تدارکات (Procurement)',
-    permissions: [
-      { key: 'procurement.view', title: 'مشاهده درخواست‌های خرید و کارتابل تدارکات', description: 'مشاهده لیست درخواست‌های خرید، نیازمندی‌های پروژه‌ها و وضعیت تامین' },
-      { key: 'procurement.create', title: 'ثبت درخواست خرید جدید', description: 'ثبت درخواست خرید دستی یا کسری کالا مستقل از پروژه‌ها' },
-      { key: 'procurement.manage', title: 'مدیریت و استعلام تدارکات', description: 'بررسی درخواست‌ها، ثبت برآورد قیمت، تفکیک اقلام و تخصیص تامین‌کننده' },
-      { key: 'procurement.order', title: 'صدور سفارش خرید قطعی و فاکتور خرید', description: 'تبدیل درخواست‌های خرید تاییدشده به اسناد و فاکتورهای خرید رسمی انبار' },
-      { key: 'procurement.approve', title: 'تایید کارتابلی درخواست‌های خرید', description: 'تایید مراحل گردش کار درخواست‌های خرید جهت صدور سفارش قطعی' },
-    ]
-  },
-  {
-    category: 'حسابداری، اسناد مالی و خزانه‌داری',
-    permissions: [
-      { key: 'accounting.view', title: 'مشاهده اسناد و دفاتر حسابداری', description: 'دسترسی به اسناد دوبل، دفتر روزنامه، کل، معین و گزارش‌ها' },
-      { key: 'accounting.vouchers', title: 'صدور و ویرایش اسناد حسابداری', description: 'امکان ثبت اسناد دوبل مالی، اصلاح و تأیید اسناد' },
-      { key: 'accounting.coa', title: 'مدیریت کدینگ حساب‌ها (COA)', description: 'تعریف، ویرایش و حذف حساب‌های گروه، کل، معین و تفصیلی' },
-      { key: 'accounting.treasury', title: 'عملیات خزانه‌داری (دریافت و پرداخت)', description: 'ثبت و پیگیری نقدینگی، حساب‌های بانکی، پوز و حواله‌ها' },
-      { key: 'accounting.cheques', title: 'مدیریت دفتر چک صیادی', description: 'ثبت چک‌های دریافتی/پرداختی، تغییر وضعیت وصول، برگشت و واگذاری' },
-      // v8.0.118 (TD-409، تصمیم مالک محصول): برای مانده‌های افتتاحیه؛ پیش‌فرض به هیچ نقشی داده نمی‌شود
-      { key: 'accounting.treasury_no_voucher', title: 'ثبت خزانه و چک بدون سند حسابداری', description: 'ثبت دریافت، پرداخت، انتقال وجه یا چک بدون صدور سند حسابداری (مثلاً مانده افتتاحیه)؛ این موارد در بررسی سلامت مالی فهرست می‌شوند' },
-      { key: 'accounting.reports', title: 'مشاهده تراز آزمایشی و صورت‌های مالی', description: 'مشاهده تراز آزمایشی، ترازنامه، صورت سود و زیان و کارت حساب' },
-    ]
-  },
-  {
-    category: 'یکپارچه‌سازی فروشگاه آنلاین (WooCommerce)',
-    permissions: [
-      { key: 'woocommerce.view', title: 'مشاهده وضعیت اتصال و سفارشات ووکامرس', description: 'مشاهده همگام‌سازی محصولات، کدهای SKU و لاگ سفارشات واردشده' },
-      { key: 'woocommerce.manage', title: 'تنظیمات API و همگام‌سازی دستی', description: 'تنظیم کلیدهای API ووکامرس، وب‌هوک‌ها و اجرای همگام‌سازی خودکار' },
-    ]
-  },
-  {
-    category: 'گزارش‌ها و لاگ فعالیت سیستم (Audit Trail)',
-    permissions: [
-      { key: 'reports.view', title: 'مشاهده گزارش‌ها و آمار', description: 'دسترسی به نمودارها، گزارش تراکنش‌ها و داشبورد' },
-      { key: 'audit_logs.view', title: 'مشاهده دفترچه سوابق تغییرات', description: 'مشاهده لاگ ثبت، ویرایش، حذف و فعالیت‌های تمامی کاربران سیستم' },
-    ]
-  },
-  {
-    category: 'مدیریت سیستم و دسترسی‌ها',
-    permissions: [
-      { key: 'users.manage', title: 'مدیریت کاربران', description: 'تعریف کاربران جدید و تغییر رمز عبور' },
-      { key: 'roles.manage', title: 'مدیریت نقش‌ها و ماتریس دسترسی', description: 'تعریف نقش‌های جدید و تنظیم مجوزهای تفکیکی' },
-      { key: 'settings.manage', title: 'مدیریت تنظیمات عمومی', description: 'تنظیمات شرکت، لوگو و عیب‌یابی سلامت سرور' },
-    ]
-  }
-];
-
-const CATALOG_PERMISSION_KEYS = new Set(PERMISSION_CATALOG.flatMap(c => c.permissions.map(p => p.key)));
+// v9.0.86 (TD-880): کاتالوگ مجوز در فایل مشترک سرور و مرورگر است؛ این بازصادر برای مصرف‌کنندگان قدیمی می‌ماند
+export { PERMISSION_CATALOG };
 
 /**
  * حوزه H (TD-304): مجوز تازه نقش فقط از کاتالوگ است (نه «*» و نه کلید ناشناخته). کلیدی که نقش از پیش داشت
  * با ویرایش نقش حذف نمی‌شود و ذخیره را رد نمی‌کند.
  */
 function unknownNewPermissions(requested: string[], existing: string[] = []): string[] {
-  return requested.filter(p => !CATALOG_PERMISSION_KEYS.has(p) && !existing.includes(p));
+  return requested.filter(p => !isCatalogPermission(p) && !existing.includes(p));
 }
 
 const UNKNOWN_PERMISSIONS_ERROR = (keys: string[]) => `مجوز ناشناخته: ${keys.join('، ')}`;
@@ -238,8 +81,7 @@ router.get('/users/my-permissions', asyncHandler(async (req, res) => {
     if (!user) return res.status(401).json({ error: 'غیر مجاز' });
 
     if (user.role === 'admin') {
-      const allPermKeys = PERMISSION_CATALOG.flatMap(c => c.permissions.map(p => p.key));
-      return res.json({ role: 'admin', permissions: allPermKeys, isAdmin: true });
+      return res.json({ role: 'admin', permissions: [...PERMISSION_KEYS], isAdmin: true });
     }
 
     const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, user.role));
@@ -373,10 +215,13 @@ router.get('/roles', authorizePermission(...READ_PERMISSIONS.userDirectory), asy
 router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSchema), asyncHandler(async (req, res) => {
   try {
     const { name, code, description, permissions } = req.body;
-    const unknownKeys = unknownNewPermissions(Array.isArray(permissions) ? permissions : []);
+    const requested: string[] = Array.isArray(permissions) ? permissions : [];
+    const unknownKeys = unknownNewPermissions(requested);
     if (unknownKeys.length > 0) {
       return res.status(400).json({ error: UNKNOWN_PERMISSIONS_ERROR(unknownKeys) });
     }
+    // v9.0.86 (TD-880): هر مجوز با نیازهایش ذخیره می‌شود (مثلاً «ویرایش فاکتورها» با «مشاهده فاکتورها»)
+    const addedByRequirement = missingRequiredPermissions(requested);
 
     const slugCode = code.trim().toLowerCase().replace(/\s+/g, '_');
     // v7.0.51 (audit P2-10): کد نقش نقطه ندارد تا با کلید مجوز (مثل customers.manage) اشتباه گرفته نشود
@@ -394,7 +239,7 @@ router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSc
       name,
       code: slugCode,
       description: description || '',
-      permissions: Array.isArray(permissions) ? permissions : [],
+      permissions: withRequiredPermissions(requested),
       isSystem: 0
     }).returning();
 
@@ -411,7 +256,8 @@ router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSc
           code: newRole.code,
           description: newRole.description,
           permissions: newRole.permissions
-        }
+        },
+        addedByRequirement
       }
     });
 
@@ -434,11 +280,14 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
     }
 
     const prevPermissions: string[] = (targetRole.permissions as string[]) || [];
-    const newPermissions: string[] = Array.isArray(permissions) ? permissions : prevPermissions;
-    const unknownKeys = unknownNewPermissions(newPermissions, prevPermissions);
+    const requested: string[] = Array.isArray(permissions) ? permissions : prevPermissions;
+    const unknownKeys = unknownNewPermissions(requested, prevPermissions);
     if (unknownKeys.length > 0) {
       return res.status(400).json({ error: UNKNOWN_PERMISSIONS_ERROR(unknownKeys) });
     }
+    // v9.0.86 (TD-880): فهرست تازه با نیازهایش ذخیره می‌شود؛ ویرایش بی فهرست مجوز، فهرست قبلی را دست نمی‌زند
+    const addedByRequirement = Array.isArray(permissions) ? missingRequiredPermissions(requested) : [];
+    const newPermissions: string[] = Array.isArray(permissions) ? withRequiredPermissions(requested) : prevPermissions;
 
     const addedPermissions = newPermissions.filter(p => !prevPermissions.includes(p));
     const removedPermissions = prevPermissions.filter(p => !newPermissions.includes(p));
@@ -465,7 +314,8 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
         beforePermissions: prevPermissions,
         afterPermissions: newPermissions,
         addedPermissions,
-        removedPermissions
+        removedPermissions,
+        addedByRequirement
       }
     });
 
@@ -551,7 +401,7 @@ router.get('/users/list-simple', asyncHandler(async (req, res) => {
       avatarUrl: users.avatarUrl
     })
     .from(users)
-    .where(sql`${users.isDeleted} = 0 AND ${notSyntheticTestUsername(users.username)}`)
+    .where(eq(users.isDeleted, 0))
     .orderBy(desc(users.id));
     
     const mapped = allUsers.map(u => ({
@@ -577,7 +427,7 @@ router.get('/users', authorizePermission(...READ_PERMISSIONS.userDirectory), asy
       avatarUrl: users.avatarUrl
     })
     .from(users)
-    .where(sql`${users.isDeleted} = 0 AND ${notSyntheticTestUsername(users.username)}`)
+    .where(eq(users.isDeleted, 0))
     .orderBy(desc(users.id));
     
     const mapped = allUsers.map(u => ({
@@ -602,6 +452,10 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
       return res.status(403).json({ error: ONLY_ADMIN_MANAGES_ADMINS });
     }
     const tUsername = (username || '').trim();
+    // v9.0.76 (TD-521): پیشوند کاربران آزمون رد می‌شود؛ چنین کاربری پیش‌تر در فهرست‌ها پنهان می‌ماند
+    if (isSyntheticTestUsername(tUsername)) {
+      throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
+    }
     const tFullName = (full_name && String(full_name).trim()) ? String(full_name).trim() : tUsername;
 
     // ۱. بررسی تکراری نبودن نام کاربری در دیتابیس
@@ -711,66 +565,74 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
   try {
     const { password, full_name, role } = req.body;
     const targetUserId = Number(req.params.id);
-
-    const [prevUser] = await orm.select().from(users).where(eq(users.id, targetUserId));
-    if (!prevUser || prevUser.isDeleted === 1) {
-      return res.status(404).json({ error: 'کاربر یافت نشد' });
-    }
-    if (touchesAdminAccount(req.user?.role, [prevUser.role, role])) {
-      return res.status(403).json({ error: ONLY_ADMIN_MANAGES_ADMINS });
-    }
-
-    const tFullName = (full_name !== undefined && full_name !== null && String(full_name).trim())
-      ? String(full_name).trim()
-      : (prevUser.fullName || prevUser.username);
-
-    // اعتبارسنجی نقش
-    if (role && role !== 'admin') {
-      const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, role)).limit(1);
-      if (!roleRecord) {
-        return res.status(400).json({ error: 'نقش انتخاب‌شده در سیستم معتبر نیست' });
-      }
-    }
-
-    const updateData: Partial<typeof users.$inferInsert> = { fullName: tFullName, role };
     const passwordChanged = Boolean(password && password.trim());
-    const roleChanged = Boolean(role && role !== prevUser.role);
+    const passwordHash = passwordChanged ? await bcrypt.hash(password, await bcrypt.genSalt(10)) : null;
 
-    if (passwordChanged) {
-      const salt = await bcrypt.genSalt(10);
-      updateData.password = await bcrypt.hash(password, salt);
-      updateData.mustResetPassword = 0;
-    }
-
-    // V9-2.2: تغییر نقش یا رمز عبور نشست‌های فعال کاربر هدف را باطل می‌کند (tokenVersion)
-    if (passwordChanged || roleChanged) {
-      updateData.tokenVersion = (prevUser.tokenVersion || 0) + 1;
-    }
-
-    await orm.update(users).set(updateData).where(eq(users.id, targetUserId));
-    invalidateUserAuthCache(targetUserId);
-
-    const { diff, hasChanges } = computeAuditDiff(
-      { fullName: prevUser.fullName, role: prevUser.role },
-      { fullName: tFullName, role: role }
-    );
-
-    await logActivity({
-      req,
-      action: 'UPDATE',
-      entity: 'کاربران سیستم',
-      entityId: targetUserId,
-      description: `ویرایش مشخصات کاربر شناسه #${targetUserId} (${prevUser.username})${passwordChanged ? ' (شامل بازنشانی کلمه عبور)' : ''}`,
-      details: {
-        userId: targetUserId,
-        username: prevUser.username,
-        before: { fullName: prevUser.fullName, role: prevUser.role },
-        after: { fullName: tFullName, role: role },
-        changes: diff,
-        hasChanges,
-        passwordChanged
+    // v9.0.75 (TD-524): ویرایش زیر قفل مجموعه مدیران و قفل ردیف کاربر؛ آخرین مدیر سیستم از نقش خود بیرون نمی‌رود
+    await orm.transaction(async (tx) => {
+      await lockSystemAdminSet(tx);
+      const [prevUser] = await tx.select().from(users).where(eq(users.id, targetUserId)).for('update');
+      if (!prevUser || prevUser.isDeleted === 1) {
+        throw new NotFoundError('کاربر یافت نشد');
       }
+      if (touchesAdminAccount(req.user?.role, [prevUser.role, role])) {
+        throw new ForbiddenError(ONLY_ADMIN_MANAGES_ADMINS);
+      }
+
+      // اعتبارسنجی نقش
+      if (role && role !== SYSTEM_ADMIN_ROLE) {
+        const [roleRecord] = await tx.select().from(roles).where(eq(roles.code, role)).limit(1);
+        if (!roleRecord) {
+          throw new BadRequestError('نقش انتخاب‌شده در سیستم معتبر نیست');
+        }
+      }
+
+      const roleChanged = Boolean(role && role !== prevUser.role);
+      if (roleChanged && prevUser.role === SYSTEM_ADMIN_ROLE) {
+        await assertAnotherActiveAdmin(tx, targetUserId, 'demote');
+      }
+
+      const tFullName = (full_name !== undefined && full_name !== null && String(full_name).trim())
+        ? String(full_name).trim()
+        : (prevUser.fullName || prevUser.username);
+
+      const updateData: Partial<typeof users.$inferInsert> = { fullName: tFullName, role };
+      if (passwordHash) {
+        updateData.password = passwordHash;
+        updateData.mustResetPassword = 0;
+      }
+
+      // V9-2.2: تغییر نقش یا رمز عبور نشست‌های فعال کاربر هدف را باطل می‌کند (tokenVersion)
+      if (passwordChanged || roleChanged) {
+        updateData.tokenVersion = (prevUser.tokenVersion || 0) + 1;
+      }
+
+      await tx.update(users).set(updateData).where(eq(users.id, targetUserId));
+
+      const { diff, hasChanges } = computeAuditDiff(
+        { fullName: prevUser.fullName, role: prevUser.role },
+        { fullName: tFullName, role: role }
+      );
+
+      await logActivity({
+        req,
+        tx,
+        action: 'UPDATE',
+        entity: 'کاربران سیستم',
+        entityId: targetUserId,
+        description: `ویرایش مشخصات کاربر شناسه #${targetUserId} (${prevUser.username})${passwordChanged ? ' (شامل بازنشانی کلمه عبور)' : ''}`,
+        details: {
+          userId: targetUserId,
+          username: prevUser.username,
+          before: { fullName: prevUser.fullName, role: prevUser.role },
+          after: { fullName: tFullName, role: role },
+          changes: diff,
+          hasChanges,
+          passwordChanged
+        }
+      });
     });
+    invalidateUserAuthCache(targetUserId);
 
     res.json({ success: true });
   } catch (err: any) {
@@ -802,6 +664,8 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
     let deletedUserInfo: { fullName: string | null; username: string; role: string } | undefined = undefined;
 
     await orm.transaction(async (tx) => {
+      // v9.0.75 (TD-524): همان قفل مجموعه مدیران ویرایش، پیش از قفل ردیف
+      await lockSystemAdminSet(tx);
       const [delUser] = await tx.select().from(users).where(eq(users.id, targetUserId)).for('update');
       if (!delUser || delUser.isDeleted === 1) {
         throw new NotFoundError('کاربر یافت نشد');
@@ -810,16 +674,9 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
         throw new ForbiddenError(ONLY_ADMIN_MANAGES_ADMINS);
       }
 
-      // ممنوعیت حذف آخرین مدیر فعال سیستم (قفل‌شدن سامانه) — با قفل سطری ردیف‌های ادمین‌ها
-      if (delUser.role === 'admin') {
-        const adminRows = await tx
-          .select({ id: users.id })
-          .from(users)
-          .where(and(eq(users.role, 'admin'), eq(users.isDeleted, 0)))
-          .for('update');
-        if (adminRows.length <= 1) {
-          throw new ConflictError('آخرین مدیر سیستم قابل حذف نیست؛ ابتدا باید مدیر دیگری تعریف شود.');
-        }
+      // ممنوعیت حذف آخرین مدیر فعال سیستم (قفل‌شدن سامانه)
+      if (delUser.role === SYSTEM_ADMIN_ROLE) {
+        await assertAnotherActiveAdmin(tx, targetUserId, 'delete');
       }
 
       // Soft-Delete + ابطال فوری تمام نشست‌های فعال (افزایش tokenVersion)

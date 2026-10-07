@@ -20,7 +20,7 @@ import {
   lockoutMessage,
   GENERIC_LOGIN_FAILURE_MESSAGE
 } from '../services/auth/loginSecurity.service.js';
-import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
+import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 
 const router = Router();
 
@@ -163,6 +163,10 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
       throw new ValidationError('رمز عبور مدیر در محیط عملیاتی باید حداقل ۸ کاراکتر بوده و نمی‌تواند رمزهای پیش‌فرض باشد');
     }
     const tUsername = (username || '').trim();
+    // v9.0.76 (TD-521): مدیر نخست با پیشوند کاربران آزمون شمرده نمی‌شد و راه‌اندازی دوباره باز می‌ماند
+    if (isSyntheticTestUsername(tUsername)) {
+      throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
+    }
     const hash = await bcrypt.hash(password, 10);
 
     let logoPath = logo || '';
@@ -338,10 +342,27 @@ const logoutHandler = asyncHandler(async (req, res) => {
   // authenticateToken روی آن اجرا نمی‌شود، بنابراین توکن را مستقیم از کوکی
   // راستی‌آزمایی و tokenVersion کاربر افزایش می‌دهیم تا توکن سرقت‌شده/کپی‌شده
   // حتی تا پایان اعتبار ۲۴ ساعته خود نیز پذیرفته نشود.
+  // v9.0.77 (TD-528): نشست معتبر فقط با سرآیند CSRF همان نشست بسته می‌شود؛ پیش‌تر فرمی از سایت دیگر همه نشست‌های کاربر
+  // را باطل می‌کرد. کوکی نامعتبر یا منقضی فقط پاک می‌شود.
+  const rawToken = req.cookies?.[AUTH_COOKIE_NAME] || req.cookies?.['token'];
+  type LogoutTokenPayload = { id?: number; username?: string; role?: string; csrfToken?: string };
+  let payload: LogoutTokenPayload | null = null;
+  if (rawToken) {
+    try {
+      payload = jwt.verify(rawToken, getJwtSecret(), JWT_VERIFY_OPTIONS) as LogoutTokenPayload;
+    } catch (err) {
+      logger.debug(`[Logout] Session cookie not verified: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  if (payload?.csrfToken) {
+    const provided = String(req.headers['x-csrf-token'] || req.headers['x-xsrf-token'] || '');
+    if (!provided || !safeCompareTokens(provided, payload.csrfToken)) {
+      return res.status(403).json({ error: 'CSRF token invalid', message: 'توکن امنیتی CSRF نامعتبر است یا ارسال نشده است' });
+    }
+  }
+
   try {
-    const rawToken = req.cookies?.[AUTH_COOKIE_NAME] || req.cookies?.['token'];
-    if (rawToken) {
-      const payload = jwt.verify(rawToken, getJwtSecret(), JWT_VERIFY_OPTIONS) as { id?: number; username?: string; role?: string };
+    if (payload) {
       targetUserId = targetUserId || payload?.id;
       targetUsername = targetUsername || payload?.username;
 

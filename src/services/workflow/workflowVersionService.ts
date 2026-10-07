@@ -41,7 +41,7 @@ export class WorkflowVersionService {
       ));
 
     if (!versionEntry) {
-      throw new NotFoundError(`نسخه شماره ${versionNumber} برای این فرآیند کاری یافت نشد (WF_VER_NOT_FOUND)`);
+      throw new NotFoundError(`نسخه شماره ${versionNumber} برای این فرآیند کاری یافت نشد`, undefined, 'WF_VER_NOT_FOUND');
     }
 
     return {

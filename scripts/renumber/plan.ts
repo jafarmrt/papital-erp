@@ -1,6 +1,6 @@
 
 /**
- * v9.0.54 (TD-473) — the renumbering plan of `npm run release:renumber` (scripts/release-renumber.ts), in memory.
+ * v9.0.107 (TD-473) — the renumbering plan of `npm run release:renumber` (scripts/release-renumber.ts), in memory.
  *
  * Only text the branch itself added (lines not in <ref>, found with a line diff) is renumbered:
  *  - versions: active changelog entries that are not in <ref> move, in order, to the free versions after the
@@ -230,10 +230,13 @@ export function sortChangelogMd(src: string, series: number): string {
   const body = src.slice(bodyStart, end < 0 ? src.length : end + 1);
   const first = body.indexOf('\n### v');
   if (first < 0) return src;
-  const blocks = body.slice(first + 1).split(/\n(?=### v)/).map(b => b.replace(/\n+$/, ''));
+  // each slot keeps its own trailing blank lines, so an already sorted section is returned unchanged
+  const raw = body.slice(first + 1).split(/(?<=\n)(?=### v)/);
+  const texts = raw.map(b => b.replace(/\n+$/, ''));
+  const tails = raw.map((b, i) => b.slice(texts[i].length));
   const versionOf = (b: string) => b.match(/^### (v\d+\.\d+\.\d+)/)?.[1] ?? 'v0.0.0';
-  blocks.sort((a, b) => compareVersions(versionOf(b), versionOf(a)));
-  return src.slice(0, bodyStart) + body.slice(0, first + 1) + blocks.join('\n\n') + '\n' + src.slice(bodyStart + body.length);
+  texts.sort((a, b) => compareVersions(versionOf(b), versionOf(a)));
+  return src.slice(0, bodyStart) + body.slice(0, first + 1) + texts.map((t, i) => t + tails[i]).join('') + src.slice(bodyStart + body.length);
 }
 
 function setVersionLocations(input: RenumberInput, writes: Map<string, string>, top: string): void {

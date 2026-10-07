@@ -1,10 +1,12 @@
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
-import { bankAccounts, treasuryTransactions, users, accounts } from '../../../db/schema.js';
-import { eq, desc, and, sql, gte, lte, inArray, asc } from 'drizzle-orm';
+import { bankAccounts, treasuryTransactions, accounts } from '../../../db/schema.js';
+import { eq, and, sql, inArray, asc } from 'drizzle-orm';
 import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { resolveTreasuryExchangeRate } from './treasuryExchangeRate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
+import { needsChosenContraAccount, normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
+import { assertTreasuryDocumentLink, resolveTreasuryPartyName } from './treasuryLinks.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../../lib/lockOrder.js';
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType } from '../../events/domainEvents.js';
@@ -15,44 +17,17 @@ import type { TreasuryTransaction, Account } from '../../../types.js';
 import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } from '../../../errors/customErrors.js';
 import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
-import { jalaliToIsoDate } from '../../../utils.js';
-
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const JALALI_DATE_PATTERN = /^(1[345]\d{2})[-/](\d{1,2})[-/](\d{1,2})$/;
+import { resolveTreasuryWriteDate } from './treasuryDate.js';
+import { reconcileTreasuryRows, type ReconcileParams, type ReconcileResult } from './bankReconciliation.js';
+import { listTreasuryTransactions, pageTreasuryTransactions, type TreasuryListFilters, type TreasuryTransactionPage } from './treasuryTransactionList.js';
 
 /**
- * TD-105 (v4.0.31): تاریخ تراکنش‌های خزانه «سرور authoritative» است.
- * - مقدار خالی → پیش‌فرض businessTodayIsoDate (ساعت توافقی، نه ساعت مرورگر کلاینت)
- * - ورودی جلالی → نرمال‌سازی به ISO ذخیره‌سازی
- * - فرمت/روز نامعتبر یا تاریخ آینده → ValidationError (بازه مجاز: گذشته تا امروز کسب‌وکار)
+ * TD-105 (v4.0.31): تاریخ تراکنش‌های خزانه «سرور authoritative» است: خالی ← امروز کسب‌وکار، تاریخ آینده ← 422.
+ * v9.0.98 (TD-669، B16-05): ورودی با `requireStorageDate` خوانده می‌شود (`resolveTreasuryWriteDate`)؛ روز ناموجود دیگر به
+ * روز بعد نمی‌رود.
  */
 export async function resolveTreasuryBusinessDate(rawDate?: string | null): Promise<string> {
-  const trimmed = String(rawDate || '').trim();
-  if (!trimmed) {
-    return await businessTodayIsoDate();
-  }
-
-  let isoDate = trimmed;
-  const jalaliMatch = trimmed.match(JALALI_DATE_PATTERN);
-  if (jalaliMatch) {
-    isoDate = jalaliToIsoDate(trimmed);
-    if (!isoDate) {
-      throw new ValidationError(`تاریخ جلالی «${trimmed}» قابل تبدیل به تقویم معتبر نیست`);
-    }
-  } else if (ISO_DATE_PATTERN.test(trimmed)) {
-    const parsed = new Date(`${trimmed}T00:00:00Z`);
-    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== trimmed) {
-      throw new ValidationError(`تاریخ «${trimmed}» یک روز تقویمی معتبر نیست`);
-    }
-  } else {
-    throw new ValidationError(`فرمت تاریخ تراکنش نامعتبر است («${trimmed}»). فرمت‌های مجاز: YYYY-MM-DD میلادی یا 14xx/xx/xx جلالی`);
-  }
-
-  const businessToday = await businessTodayIsoDate();
-  if (isoDate > businessToday) {
-    throw new ValidationError(`تاریخ تراکنش («${trimmed}») نمی‌تواند در آینده باشد؛ تاریخ امروز کسب‌وکار «${businessToday}» است`);
-  }
-  return isoDate;
+  return resolveTreasuryWriteDate(rawDate, 'تاریخ تراکنش');
 }
 
 export class TreasuryTransactionService {
@@ -67,14 +42,23 @@ export class TreasuryTransactionService {
   /**
    * V1.8.0: انتخاب طرف حساب متقابل — منطق مشترک بین ثبت و پیش‌نمایش سند
    * purpose برای پرسنل: 'settlement' (تسویه حقوق → 3201) | 'advance' (مساعده → 1301)
+   * v9.0.82 (TD-507، ت۴ الف): «متفرقه» و «سایر» پرسنل سرفصلی را می‌گیرند که کاربر انتخاب کرده است (`contraAccountId`)؛
+   * پیش‌تر «متفرقه» به دریافتنی تجاری و «سایر» به حقوق پرداختنی می‌رفت.
    */
   static async resolveContraAccount(
     partyType: string,
-    purpose: string | undefined,
-    tx?: DbExecutor
+    purpose: string | null | undefined,
+    tx?: DbExecutor,
+    contraAccountId?: number | null
   ): Promise<{ account: Account | null; fallbackGeneralId: number | null; conceptLabel: string }> {
     let account: Account | null = null;
     let conceptLabel = '';
+
+    if (needsChosenContraAccount(partyType, purpose)) {
+      if (!contraAccountId) return { account: null, fallbackGeneralId: null, conceptLabel: 'سرفصل طرف مقابل' };
+      account = await requireChoosableContraAccount(tx, contraAccountId);
+      return { account, fallbackGeneralId: null, conceptLabel: account.name };
+    }
 
     if (partyType === 'customer') {
       account = await AccountMappingService.getTradeReceivablesAccount(tx);
@@ -127,6 +111,7 @@ export class TreasuryTransactionService {
     purpose?: string;
     partyId?: number | null;
     partyName?: string;
+    contraAccountId?: number | null;
   }): Promise<{
     debit: { accountId: number; accountCode: string; accountName: string; detailedName: string; amount: number } | null;
     credit: { accountId: number; accountCode: string; accountName: string; detailedName: string; amount: number } | null;
@@ -152,9 +137,18 @@ export class TreasuryTransactionService {
       warnings.push(`ارز تراکنش با ارز حساب «${bank.title}» (${bank.currency}) هم‌خوانی ندارد`);
     }
 
-    const contra = await this.resolveContraAccount(data.partyType || 'other', data.purpose);
+    let contra: Awaited<ReturnType<typeof TreasuryTransactionService.resolveContraAccount>>;
+    try {
+      contra = await this.resolveContraAccount(data.partyType || 'other', data.purpose, undefined, data.contraAccountId);
+    } catch (err) {
+      if (!(err instanceof ValidationError)) throw err;
+      warnings.push(err.message);
+      contra = { account: null, fallbackGeneralId: null, conceptLabel: 'سرفصل طرف مقابل' };
+    }
     const contraAccountId = contra?.account?.id || contra?.fallbackGeneralId || null;
-    if (!contraAccountId) {
+    if (!contraAccountId && needsChosenContraAccount(data.partyType || 'other', data.purpose)) {
+      warnings.push('سرفصل طرف مقابل را انتخاب کنید؛ تا انتخاب نشود سند صادر نمی‌شود.');
+    } else if (!contraAccountId) {
       warnings.push(`حساب معین «${contra.conceptLabel}» در چارت یافت نشد — سند صادر نخواهد شد (از تنظیمات ← تنظیمات حسابداری پیکربندی کنید)`);
     }
 
@@ -199,84 +193,13 @@ export class TreasuryTransactionService {
     return { debit, credit, warnings, contraConceptLabel: contra.conceptLabel };
   }
 
-  static async getTreasuryTransactions(params: {
-    // v7.0.110 (TD-240): «all» یعنی بدون فیلتر نوع (مانند فهرست اسناد حسابداری)
-    type?: 'receipt' | 'payment' | 'all';
-    bankAccountId?: number;
-    startDate?: string;
-    endDate?: string;
-  }): Promise<TreasuryTransaction[]> {
-    const conditions = [eq(treasuryTransactions.isDeleted, 0)];
+  static async getTreasuryTransactions(params: TreasuryListFilters): Promise<TreasuryTransaction[]> {
+    return listTreasuryTransactions(params);
+  }
 
-    if (params.type && params.type !== 'all') {
-      conditions.push(eq(treasuryTransactions.type, params.type));
-    }
-    if (params.bankAccountId) {
-      conditions.push(eq(treasuryTransactions.bankAccountId, params.bankAccountId));
-    }
-    if (params.startDate) {
-      conditions.push(gte(treasuryTransactions.date, params.startDate));
-    }
-    if (params.endDate) {
-      conditions.push(lte(treasuryTransactions.date, params.endDate));
-    }
-
-    const rawList = await orm.select({
-      id: treasuryTransactions.id,
-      transactionNumber: treasuryTransactions.transactionNumber,
-      type: treasuryTransactions.type,
-      date: treasuryTransactions.date,
-      method: treasuryTransactions.method,
-      amount: treasuryTransactions.amount,
-      currency: treasuryTransactions.currency,
-      exchangeRate: treasuryTransactions.exchangeRate,
-      bankAccountId: treasuryTransactions.bankAccountId,
-      bankAccountTitle: bankAccounts.title,
-      partyType: treasuryTransactions.partyType,
-      partyId: treasuryTransactions.partyId,
-      partyName: treasuryTransactions.partyName,
-      trackingNumber: treasuryTransactions.trackingNumber,
-      voucherId: treasuryTransactions.voucherId,
-      chequeId: treasuryTransactions.chequeId,
-      documentId: treasuryTransactions.documentId,
-      payrollId: treasuryTransactions.payrollId,
-      reversalOfId: treasuryTransactions.reversalOfId,
-      // V1.6.0: وضعیت آشتی‌سنجی بانکی
-      reconciled: treasuryTransactions.reconciled,
-      reconciledAt: treasuryTransactions.reconciledAt,
-      reconciledBatch: treasuryTransactions.reconciledBatch,
-      // V1.5.0: هویت ثبت‌کننده (یک موجودیت کاربر)
-      createdById: treasuryTransactions.createdById,
-      creatorName: users.fullName,
-      description: treasuryTransactions.description,
-      status: treasuryTransactions.status,
-      attachments: treasuryTransactions.attachments,
-      createdAt: treasuryTransactions.createdAt,
-    })
-    .from(treasuryTransactions)
-    .leftJoin(bankAccounts, eq(bankAccounts.id, treasuryTransactions.bankAccountId))
-    .leftJoin(users, eq(users.id, treasuryTransactions.createdById))
-    .where(and(...conditions))
-    .orderBy(desc(treasuryTransactions.date), desc(treasuryTransactions.id));
-
-    return rawList.map(t => ({
-      ...t,
-      amount: t.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
-      exchangeRate: t.exchangeRate?.toNumber() ?? null,
-      type: t.type as 'receipt' | 'payment',
-      method: t.method as TreasuryTransaction['method'],
-      partyType: t.partyType as TreasuryTransaction['partyType'],
-      status: t.status as TreasuryTransaction['status'],
-      transaction_number: t.transactionNumber,
-      bank_account_id: t.bankAccountId || undefined,
-      party_type: t.partyType as TreasuryTransaction['partyType'],
-      party_id: t.partyId,
-      party_name: t.partyName,
-      tracking_number: t.trackingNumber || '',
-      voucher_id: t.voucherId,
-      cheque_id: t.chequeId,
-      document_id: t.documentId,
-    } as TreasuryTransaction));
+  /** v9.0.102 (TD-509): صفحه‌ای از فهرست خزانه با شمار کل و مانده جاری (صفحه خزانه) */
+  static async getTreasuryTransactionPage(params: TreasuryListFilters, page: number, limit: number): Promise<TreasuryTransactionPage> {
+    return pageTreasuryTransactions(params, page, limit);
   }
 
   static async createTreasuryTransaction(data: {
@@ -299,8 +222,10 @@ export class TreasuryTransactionService {
     /** v8.0.118 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد، نه بدنه درخواست) */
     allowNoVoucher?: boolean;
     attachments?: unknown[];
-    // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده)
+    // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده) | 'other' (v9.0.82)
     purpose?: string;
+    /** v9.0.82 (TD-507): سرفصل طرف مقابلی که کاربر برای «متفرقه» و «سایر» پرسنل انتخاب کرده است */
+    contraAccountId?: number | null;
   }): Promise<TreasuryTransaction> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
@@ -312,18 +237,31 @@ export class TreasuryTransactionService {
     }
     // v8.0.118 (TD-409، تصمیم مالک محصول — گزینه الف): بدون سند حسابداری فقط با مجوز جدا
     assertNoVoucherAllowed(data.createVoucher, data.allowNoVoucher, data.type === 'receipt' ? 'دریافت' : 'پرداخت');
+    // v9.0.82 (TD-507، ت۴ الف): پرسنل هدف می‌خواهد و «متفرقه» و «سایر» سرفصل طرف مقابل؛ هر دو روی ردیف ذخیره می‌شوند
+    const partyType = data.partyType || 'other';
+    const party = normalizePartyPurpose(partyType, data.purpose, data.contraAccountId);
     // TD-105: تاریخ سرور-authoritative — پیش‌فرض business clock + اعتبارسنجی بازه
     const resolvedDate = await resolveTreasuryBusinessDate(data.date);
 
     return await orm.transaction(async (txEngine) => {
       validateLockOrder([
         { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
+        ...(data.documentId ? [{ name: 'document', hierarchyLevel: LockHierarchyLevel.DOCUMENTS }] : []),
       ]);
+      // سرفصل انتخابی حتی در ثبت بی‌سند سنجیده می‌شود تا ردیف به حساب نامجاز اشاره نکند
+      if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
       // V1.4.0: قفل حساب با فیلتر isDeleted — ثبت وجه در حساب حذف‌شده ممنوع
       const [bank] = await txEngine.select().from(bankAccounts)
         .where(and(eq(bankAccounts.id, data.bankAccountId), eq(bankAccounts.isDeleted, 0)))
         .for('update');
       if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
+      // v9.0.83 (TD-501، B04-05): شناسه طرف حساب در جدول همان نوع، و سند پیوسته فعال، هم‌سو و با همان طرف حساب
+      const partyCurrentName = await resolveTreasuryPartyName(txEngine, partyType, data.partyId);
+      if (data.documentId) {
+        await assertTreasuryDocumentLink(txEngine, {
+          type: data.type, documentId: data.documentId, partyType, partyName: partyCurrentName ?? data.partyName,
+        });
+      }
 
       // V1.4.0: گارد هم‌ارزی ارز — تراکنش باید هم‌ارز با حساب باشد تا مانده‌ها معنادار بمانند
       const txCurrency = data.currency || bank.currency || 'IRR';
@@ -353,7 +291,7 @@ export class TreasuryTransactionService {
         }
 
         // V1.8.0: طرف حساب متقابل از منطق مشترک (مپینگ + purpose)
-        const contra = await this.resolveContraAccount(data.partyType || 'other', data.purpose, txEngine);
+        const contra = await this.resolveContraAccount(partyType, party.purpose, txEngine, party.contraAccountId);
         const contraAccountId = contra?.account?.id || contra?.fallbackGeneralId || null;
 
         if (!contraAccountId) {
@@ -416,9 +354,11 @@ export class TreasuryTransactionService {
         currency: txCurrency,
         exchangeRate: money(txExchangeRate),
         bankAccountId: data.bankAccountId,
-        partyType: data.partyType || 'other',
+        partyType,
         partyId: data.partyId || null,
         partyName: data.partyName.trim(),
+        purpose: party.purpose,
+        contraAccountId: party.contraAccountId,
         trackingNumber: data.trackingNumber?.trim() || '',
         voucherId,
         documentId: data.documentId || null,
@@ -511,27 +451,28 @@ export class TreasuryTransactionService {
       if (original.payrollId) {
         throw new BusinessLogicError('این تراکنش یک پرداخت حقوق ثبت‌شده است و از این مسیر قابل ابطال نیست؛ آن را از پنجره پرداخت همان فیش («ابطال پرداخت») ابطال کنید.');
       }
+      // v9.0.67 (TD-499، تصمیم مالک محصول ت۱ الف): ردیف معکوس («ابطال تراکنش دیگر») ابطال نمی‌شود. پیش‌تر ابطال آن اثر اصل
+      // را «احیا» می‌کرد؛ وقتی سند پیش‌نویس اصل در ابطال اول حذف نرم شده بود، پول بی هیچ سندی به بانک برمی‌گشت (دور زدن TD-409).
+      if (original.reversalOfId !== null) {
+        throw new ConflictError('این ردیف ابطالِ تراکنش دیگری است و ابطال نمی‌شود؛ برای ثبت دوباره، تراکنش تازه ثبت کنید.');
+      }
       // طرفی که پیش‌تر جدا باطل شده (پیش از v8.0.73) سند مشترک را هم باطل کرده است؛ این طرف فقط مانده و ردیف خودش را برمی‌گرداند
       const partner = sides.find(t => t.id !== id && t.status !== 'voided');
       const isTransfer = sideIds.length > 1;
 
       // سند معکوس اتوماتیک (اگر اصل سند دارد و طرف دیگر انتقال آن را پیش‌تر باطل نکرده است)
       let reversalVoucherId: number | null = null;
-      const isReversalOfReversal = original.reversalOfId !== null;
       const sharedVoucherVoided = isTransfer && !partner;
       if (original.voucherId && !sharedVoucherVoided) {
         // v8.0.2 (TD-251، تصمیم مالک محصول): سند پیش‌نویس حذف نرم می‌شود و سند معکوس نمی‌گیرد
         const rv = await VoucherService.voidSourceVoucher({
           voucherId: original.voucherId,
-          reason: isReversalOfReversal
-            ? `ابطال تراکنش معکوس ${original.transactionNumber} (احیا و اصلاح تراکنش اصلی #${original.reversalOfId}) — ${reason}`
-            : partner
-              ? `ابطال انتقال ${original.transactionNumber} و ${partner.transactionNumber} — ${reason}`
-              : `ابطال تراکنش ${original.transactionNumber} — ${reason}`,
+          reason: partner
+            ? `ابطال انتقال ${original.transactionNumber} و ${partner.transactionNumber} — ${reason}`
+            : `ابطال تراکنش ${original.transactionNumber} — ${reason}`,
           userId: params.userId,
           username: params.username,
           externalTx: txEngine,
-          allowReversalOfReversal: true,
         });
         reversalVoucherId = rv.reversalVoucherId;
       }
@@ -603,7 +544,6 @@ export class TreasuryTransactionService {
     // تراکنش معکوس با شماره سری جدید
     const reversalType = original.type === 'receipt' ? 'payment' : 'receipt';
     const reversalNum = await this.generateTransactionNumber(reversalType, txEngine);
-    const isReversalOfReversal = original.reversalOfId !== null;
 
     const [reversalTx] = await txEngine.insert(treasuryTransactions).values({
       transactionNumber: reversalNum,
@@ -617,14 +557,14 @@ export class TreasuryTransactionService {
       partyType: original.partyType,
       partyId: original.partyId,
       partyName: original.partyName,
+      purpose: original.purpose,
+      contraAccountId: original.contraAccountId,
       trackingNumber: original.trackingNumber || '',
       voucherId: reversalVoucherId,
       chequeId: original.chequeId || null,
       documentId: original.documentId || null,
       reversalOfId: original.id,
-      description: isReversalOfReversal
-        ? `ابطال تراکنش معکوس ${original.transactionNumber} (احیا و اصلاح تراکنش اصلی #${original.reversalOfId})${pairNote} — دلیل: ${reason}`
-        : `ابطال تراکنش ${original.transactionNumber}${pairNote} — دلیل: ${reason}`,
+      description: `ابطال تراکنش ${original.transactionNumber}${pairNote} — دلیل: ${reason}`,
       status: 'completed',
       createdById: params.userId || null,
     }).returning();
@@ -844,49 +784,10 @@ export class TreasuryTransactionService {
 
   /**
    * V1.6.0: آشتی‌سنجی بانکی — علامت‌گذاری گروهی تراکنش‌های تطبیق‌یافته با صورت‌حساب بانک
-   * (matching سمت کلاینت انجام می‌شود؛ این متد فقط ثبت وضعیت گروهی اتمیک است)
+   * (matching سمت کلاینت انجام می‌شود). v9.0.103 (TD-511): قواعد و ممیزی در `reconcileTreasuryRows`.
    */
-  static async reconcileTransactions(params: {
-    bankAccountId: number;
-    txIds: number[];
-    batch: string;
-    reconciled: boolean;
-    userId?: number;
-    username?: string;
-  }): Promise<{ success: boolean; updated: number }> {
-    if (!params.txIds.length) return { success: true, updated: 0 };
-
-    return await orm.transaction(async (txEngine) => {
-      const rows = await txEngine.select().from(treasuryTransactions)
-        .where(and(
-          inArray(treasuryTransactions.id, params.txIds),
-          eq(treasuryTransactions.bankAccountId, params.bankAccountId),
-          eq(treasuryTransactions.isDeleted, 0)
-        ))
-        .for('update');
-
-      const nowIso = await businessTodayIsoDate();
-
-      // P2-05: گارد ممانعت از ثبت مجدد تراکنش‌های قبلاً تطبیق‌یافته در سرور
-      if (params.reconciled) {
-        const alreadyReconciledRow = rows.find(r => r.reconciled === 1);
-        if (alreadyReconciledRow) {
-          throw new BusinessLogicError(
-            `تراکنش شماره «${alreadyReconciledRow.transactionNumber}» قبلاً در دسته «${alreadyReconciledRow.reconciledBatch || 'نامشخص'}» تطبیق داده شده است و امکان تطبیق مجدد ندارد.`
-          );
-        }
-      }
-
-      for (const row of rows) {
-        await txEngine.update(treasuryTransactions).set({
-          reconciled: params.reconciled ? 1 : 0,
-          reconciledAt: params.reconciled ? nowIso : '',
-          reconciledBatch: params.reconciled ? (params.batch || '') : '',
-        }).where(eq(treasuryTransactions.id, row.id));
-      }
-
-      return { success: true, updated: rows.length };
-    });
+  static async reconcileTransactions(params: ReconcileParams): Promise<ReconcileResult> {
+    return reconcileTreasuryRows(params);
   }
 }
 

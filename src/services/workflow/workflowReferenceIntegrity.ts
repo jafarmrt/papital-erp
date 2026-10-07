@@ -94,14 +94,14 @@ export function buildWorkflowReferenceHealthTest(integrity: WorkflowReferenceInt
         code: g.name,
         title: `${g.table}.${g.column} ← ${g.ref}`,
         subtitle: g.state === 'missing' ? 'کلید خارجی ساخته نشده است' : 'کلید خارجی اعتبارسنجی نشده است',
-        details: `${g.orphanRows} ردیف به ردیف ناموجود اشاره می‌کند (TD-461).`,
+        details: `${g.orphanRows} ردیف به ردیف ناموجود اشاره می‌کند.`,
       })),
       ...duplicateVersions.map(d => ({
         id: `${d.definitionId}:${d.version}`,
         code: `گردش کار ${d.definitionId}`,
         title: `نسخه ${d.version}`,
         subtitle: 'شماره نسخه تکراری',
-        details: `${d.rows} نسخه با یک شماره (TD-461).`,
+        details: `${d.rows} نسخه با یک شماره.`,
       })),
     ],
     metrics: {

@@ -59,8 +59,9 @@ export const INVALIDATION_PRESETS = {
   // Triggered when notifications are updated
   notificationChange: ['notifications'] as QueryDomain[],
 
-  // Triggered when a workflow state transition is executed
-  workflowChange: ['workflow', 'dashboard', 'notifications', 'items'] as QueryDomain[],
+  // Triggered when a workflow state transition is executed. TD-469 (یافته B14-27): اقدام گردش کار سند را قطعی، وضعیت سند
+  // حسابداری را عوض، درخواست خرید را دریافت و سند افتتاحیه صادر می‌کند؛ پیش‌تر این فهرست‌ها تا پنج دقیقه کهنه می‌ماندند
+  workflowChange: ['workflow', 'dashboard', 'notifications', 'items', 'documents', 'procurement', 'accounting', 'inventory'] as QueryDomain[],
 } as const;
 
 /**

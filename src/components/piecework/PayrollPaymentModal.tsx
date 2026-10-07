@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Landmark, BanknoteArrowUp, CheckCircle2, AlertCircle } from 'lucide-react';
 import { fetchJson } from '../../api';
+import type { BankAccountOption } from '../../types';
 import { getTodayJalaliDate, extractDateString, formatPersianPrice } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
 import { PayrollPaymentHistory } from './PayrollPaymentHistory';
@@ -32,7 +33,7 @@ const METHOD_OPTIONS = [
 ] as const;
 
 export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPaymentModalProps) {
-  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccountOption[]>([]);
   const [previousPayments, setPreviousPayments] = useState<any[]>([]);
   const [loadingBanks, setLoadingBanks] = useState(false);
   const [loadingPayments, setLoadingPayments] = useState(false);
@@ -57,10 +58,10 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
     if (!payroll) return;
     let controller = new AbortController();
     setLoadingBanks(true);
-    fetchJson('/accounting/bank-accounts', { signal: controller.signal })
-      .then((res: any) => {
-        const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-        setBankAccounts(list.filter((b: any) => !b.isDeleted));
+    // v9.0.97 (TD-505، ت۷): فهرست انتخاب، بی شماره حساب و مانده
+    fetchJson<{ data?: BankAccountOption[] } | BankAccountOption[]>('/accounting/bank-accounts/options', { signal: controller.signal })
+      .then((res) => {
+        setBankAccounts(Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []));
       })
       .catch(() => toast.error('خطا در دریافت فهرست حساب‌های خزانه'))
       .finally(() => setLoadingBanks(false));
@@ -87,7 +88,7 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
   }, [payroll]);
 
   const selectedBank = useMemo(
-    () => bankAccounts.find((b: any) => String(b.id) === bankAccountId),
+    () => bankAccounts.find(b => String(b.id) === bankAccountId),
     [bankAccounts, bankAccountId]
   );
 
@@ -255,9 +256,9 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
                 className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">{loadingBanks ? 'در حال بارگذاری...' : '-- انتخاب حساب --'}</option>
-                {bankAccounts.map((b: any) => (
+                {bankAccounts.map(b => (
                   <option key={b.id} value={b.id}>
-                    {b.title}{b.currentBalance != null ? ` — مانده: ${Number(b.currentBalance).toLocaleString('fa-IR')}` : ''}
+                    {b.title}{b.bankName ? ` (${b.bankName})` : ''}
                   </option>
                 ))}
               </select>

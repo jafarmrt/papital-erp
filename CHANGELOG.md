@@ -19,8 +19,165 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.54 — Merge-Time Renumbering Tool for Parallel Lanes
+### v9.0.107 — Merge-Time Renumbering Tool for Parallel Lanes
 - **Release Renumbering:** `npm run release:renumber -- origin/master` (`scripts/release-renumber.ts`) merges the base without committing, resolves the conflicts of the release files, moves the branch's own versions, migrations (file, journal idx, tag and a later `when`) and audit report sections after those of the base, rewrites only lines the branch added, sorts the active changelog, sets the four version locations, recounts TECH_DEBT.md and runs `check:version` and the migration plan test (TD-473, `releaseRenumber.test.ts`).
+
+### v9.0.106 — Treasury Forms and Export
+- **Treasury Forms and Export (P3):** a receipt or payment for an account without a ledger account is stopped in the form, treasury and cheque dates use the Jalali date input, and the treasury Excel export has Persian labels and a Jalali file date. Before, the form promised a voucherless save the server refused, and the date field showed «2026/10/07» in the Jalali calendar (TD-515, Vitest `treasuryFormWording.test.tsx`).
+
+### v9.0.105 — Cheque History and Status Wording
+- **Cheque History and Status Wording (P3):** the cheque history window shows the stored step notes, messages name statuses in Persian, and the status filter offers «در خزانه / صندوق». Before, notes never showed and messages said «bounced» / «passed» (TD-513, `reg_cheque_status_messages_persian_td_513`).
+
+### v9.0.104 — Cheque Audit Before and After
+- **Cheque Audit Before and After (P3):** a cheque status change or delete records the previous and new status in Persian, the bank account and the vouchers it issued or voided. Before, the audit held only `{"status":"in_collection"}` or `{"chequeId":6}` (TD-512, `reg_cheque_audit_before_after_td_512`).
+
+### v9.0.103 — Bank Reconciliation Rows
+- **Bank Reconciliation Rows (P3):** reconciling a row of another bank or a voided row is refused with the list, only changed rows are written and audited, and the reconciliation time is the server UTC time. Before, three ids (bank A, bank B, voided) gave `{"updated": 2}` and the voided row was reconciled (TD-511, `reg_treasury_reconcile_rows_td_511`).
+
+### v9.0.102 — Paged Treasury List
+- **Paged Treasury List (P2):** bank balances are summed in SQL and the treasury page reads one server page with its total and running balance. Before, every request read all approved ledger rows (200,000 rows, 1,639 ms for 15 banks) and the page loaded all 20,000 transactions (15.88 MB) (TD-509, `reg_treasury_list_paging_and_bank_balances_td_509`).
+
+### v9.0.101 — Treasury Amount Input
+- **Treasury Amount Input (P3):** treasury, transfer and cheque amounts, opening balances and exchange rates accept Persian digits and thousands separators, text gets a Persian message, and the currency must be a supported one. Before, «۲۵۰۰۰۰۰» and «2,500,000» were refused with an English NaN message (TD-514, `reg_treasury_decimal_inputs_td_514`).
+
+### v9.0.100 — Bank Ledger and Cheque Bank Links
+- **Bank Ledger and Cheque Bank Links (P3):** a bank account links only to an active subsidiary account under cash and bank (general 10), and a cheque only to an active bank account. Before, a bank on a missing account or on trade receivables 1201 and a cheque on a missing bank were saved (TD-510, `reg_bank_ledger_and_cheque_bank_td_510`).
+
+### v9.0.99 — Bank Account Currency
+- **Bank Account Currency (P2):** the bank account form takes a currency (rial, dollar, euro, dirham, pound) and the currency is fixed after the account's first transaction, cheque or opening balance. Before, a currency edit returned success and was silently ignored, so a foreign account could be made only through the API (TD-508, `reg_bank_account_currency_td_508`).
+
+### v9.0.98 — Cheque and Treasury Dates
+- **Cheque and Treasury Dates (P2):** a cheque issue or action date after today and a non-existent day such as 1404/12/30 in a receipt, payment, transfer or cheque action are refused; the cheque status form sends the action date. Before, 1404/12/30 was posted on 1 Farvardin 1405 in the next fiscal year (TD-506, TD-669, `reg_cheque_and_treasury_dates_td_506`).
+
+### v9.0.97 — Bank Pick List for Forms
+- **Bank Account Readers (P2):** forms that only pick a bank account read a pick list without account, card or Sheba numbers or balances; the full list goes only to treasury readers. Before, warehouse and document users read every number and balance (TD-505, `reg_bank_account_options_td_505`).
+### v9.0.96 — Warehouse UI Wording, Export Names and Warehouse Chart
+- **Warehouse UI:** decided Persian terms, Persian digits and surplus/shortage labels on the count sheet, Persian export file names with a failure message, and a warehouse chart that counts items instead of adding units (TD-496, `reg_warehouse_item_count_td_496`).
+
+### v9.0.95 — Deleted Transfer Codes Are Gone and Can Be Saved Again
+- **Transfer Codes:** a deleted design answers 404, saving its code again revives it instead of a 409, and the page lists every code (TD-493, `reg_transfer_code_lifecycle_td_493`).
+
+### v9.0.94 — Stock Movement Chart Counts the Kardex Ledger
+- **Stock Movement Chart:** transfers between warehouses, voided documents and rows dated after the current month no longer enter the in/out chart (TD-492, `reg_movement_trend_ledger_td_492`).
+
+### v9.0.93 — Item Opening Voucher From Opening Kardex Rows
+- **Item Opening Voucher:** the opening voucher is worth the item's opening Kardex rows with or without the item workflow, no Kardex row is repriced, and mismatched opening vouchers are listed by the health check (TD-481, `reg_item_opening_voucher_value_td_481`).
+
+### v9.0.92 — Initial Kardex Backfill Never Reprices Its Rows
+- **Kardex Backfill:** a second run of the initial Kardex backfill no longer reprices its earlier zero-cost rows with the WAC of the day, so the Kardex replay keeps the live WAC (TD-488, `reg_kardex_backfill_no_rewrite_td_488`).
+
+### v9.0.91 — Kardex Rebuild Writes Only for Changed Items
+- **Kardex Rebuild:** an item whose warehouse stock already matches its Kardex gets no version bump, outbox event or audit row; only changed items do (TD-491, `reg_kardex_rebuild_quiet_td_491`).
+
+### v9.0.90 — Kardex Rebuild Keeps WAC; WAC Correction Posts a Voucher
+- **Kardex Rebuild and WAC Correction:** the rebuild only rebuilds quantities and lists items whose WAC differs from the Kardex; correcting the WAC is a separate action with its own permission that issues a draft voucher for the value difference against 7012 (TD-487, `reg_kardex_wac_correction_td_487`).
+
+### v9.0.89 — Inventory Integrity Table Reads the Server Report
+- **Inventory Integrity Tab:** the table and Excel export read the report the server sends (one shared type), so discrepant items are listed and exported instead of an always-empty table (TD-485, Vitest `inventoryIntegrityReport.test.tsx`).
+
+### v9.0.88 — Integrity Report WAC Uses the Kardex Replay
+- **Inventory Integrity Report:** the WAC check compares the live WAC with the same Kardex replay the rebuild and invariant I13 use, so an item that ran out and was bought again at another price is no longer reported as mismatched (TD-486, `reg_integrity_report_replay_wac_td_486`).
+
+### v9.0.87 — One Permission Check and Permission Ratchets
+- **Permission Check:** `can()` and `requirePermission` ask catalog permission keys only (an unknown key or a role code fails when the router is built); `npm run ratchet:permissions` keeps role-code literals and stray permission keys from growing (TD-881).
+
+### v9.0.86 — Role Permissions Carry Their Requirements
+- **Permission Dependencies:** the permission catalog is one shared file where every action requires its section's view; saving a role adds the missing requirements and the role form ticks them (TD-880).
+
+### v9.0.85 — Spent Cheques Need a Supplier
+- **Spent Cheque Supplier (P1):** spending a cheque needs a supplier picked from the list and posts to that supplier's detail; before, the form sent only a typed name and the voucher missed the supplier's account card (TD-498, `reg_cheque_spent_needs_supplier_td_498`).
+
+### v9.0.84 — Cheque Vouchers Follow the Party Type
+- **Cheque Party Account (P1):** a cheque voucher posts to the account and detail of its party type (personnel by purpose, misc to a chosen account) and its bounce and return follow it; before, a personnel cheque landed on the customer with the same id (TD-497, `reg_cheque_voucher_follows_party_type_td_497`).
+
+### v9.0.83 — Treasury Links Are Checked
+- **Treasury Links (P2):** a receipt or payment is refused when its document is missing, voided, of the other direction or of another party, or its party id is not in the table of its type; before, a receipt from one customer settled another customer's invoice (TD-501, `reg_treasury_document_and_party_links_td_501`).
+
+### v9.0.82 — Misc Receipts and Payments Take a Chosen Account
+- **Misc Counter Account (P2):** a misc receipt or payment and a personnel «other» payment post to the counter account the user chooses, and a personnel payment requires its purpose; before, they went to trade receivables and wages payable (TD-507, `reg_treasury_misc_contra_account_td_507`).
+### v9.0.81 — Clear Errors for Transfers and Kardex Rebuild
+- **Inventory Errors:** a transfer accepts a warehouse code or name in any case, and transfer and Kardex rebuild errors answer 422 or 404 with Persian messages instead of 500; the running Kardex of a missing item is 404 (TD-494, `reg_inventory_business_errors_td_494`).
+
+### v9.0.80 — Warehouse Transfers Are Documents
+- **Transfer Document:** every warehouse transfer is a numbered «حواله انتقال» document with its lines and linked Kardex rows, listed with source and destination, printable and voidable without changing WAC (TD-489, `reg_warehouse_transfer_document_td_489`).
+
+### v9.0.79 — No Future-Dated Stock Movements
+- **Future Stock Dates:** a stock movement dated after the business today is refused for every user, a transfer date is normalized (Jalali accepted, text 422), and earlier future-dated Kardex rows are listed by the financial health check (TD-483, `reg_stock_movement_future_date_td_483`).
+
+### v9.0.78 — Persian Validation Messages
+- **Validation Messages:** every 400 validation message is a Persian sentence naming the field and what to change, with Persian digits; schema-written messages are kept (TD-529, `persianValidationMessages.test.ts`).
+
+### v9.0.77 — Login and Logout Only From the Application Itself
+- **Session Endpoints:** login, logout and setup accept only the application's own origin, and logout of a valid session needs its CSRF header, so a forged form on another site can no longer log a user out or into another account (TD-528, `sec_session_endpoints_same_origin_td_528`).
+
+### v9.0.76 — Test-Prefixed Usernames Are Refused and Listed
+- **Synthetic Usernames:** `POST /users` and `/setup` refuse usernames starting with `test_`, `e2e_` or `testuser_` (422); user lists show every active user and the financial health check lists existing ones (TD-521, `sec_synthetic_username_refused_td_521`).
+
+### v9.0.75 — Last System Admin Keeps the Admin Role
+- **Last Admin:** editing a user can no longer move the last active system admin out of the admin role (409); edits and deletes of users run under one admin-set lock, so two concurrent changes cannot both remove an admin (TD-524, `sec_last_admin_role_change_td_524`).
+
+### v9.0.74 — Session End Clears the Browser Cache
+- **Session Cache:** logout and a 401 clear the React Query cache, so the next user of the same browser never sees the previous user's cached data (TD-518, `sessionCacheClear.test.tsx`).
+
+### v9.0.73 — New-User Form Preselects No Role
+- **New-User Role:** the new-user form opens with an empty «choose a role» option and sends nothing until a role is picked; the system admin is listed last with a full-access warning (TD-517, `userFormRole.test.tsx`).
+
+### v9.0.72 — Package 2 Access and Audit Log Documentation
+- **Stability Audit, Package 2 (Authentication, Access and Audit Log):** `docs/audit/STABILITY_AUDIT_V9.md` gets the package 2 section with the approved permission model; its 27 proven findings are registered as open rows TD-516 to TD-542 (four P1: role codes in route guards, the new-user form preselecting the system admin, the browser cache surviving logout, and a deleted username reviving the old account). Documentation only; no behaviour change.
+
+### v9.0.71 — Opening Balance Edit Waits for Approval
+- **Opening Balance Approval (P2):** editing the opening balance of a treasury account whose approval workflow is still open is refused with 409; before, the edit issued the opening voucher at once, bypassing the approval (TD-504, `reg_opening_balance_edit_refused_while_approval_pending_td_504`).
+
+### v9.0.70 — Deleting a Bank Account Voids Its Opening Voucher
+- **Bank Account Delete (P2):** deleting a treasury account now voids its opening and opening-adjustment vouchers in the same transaction (draft removed, approved reversed) and is refused with 409 when one is permanent; before, the opening voucher stayed and the bank ledger kept a balance no account explained (TD-503, `reg_bank_delete_voids_opening_voucher_td_503`).
+
+### v9.0.69 — Cheques With a Permanent Voucher Are Not Deleted
+- **Cheque Delete (P2):** deleting a cheque whose voucher is permanent is refused with 409 naming the voucher; before, the cheque was deleted and the permanent voucher stayed in the ledger with no cheque behind it. The cheque menu no longer offers status change or delete in a terminal status (TD-502, `reg_cheque_with_permanent_voucher_not_deleted_td_502`, Vitest `chequeTerminalActions.test.tsx`).
+
+### v9.0.68 — Invoice Settlement After a Voided Receipt
+- **Invoice Settlement (P1):** an invoice whose receipt was voided and then received again now shows the new receipt as paid; before, the void was subtracted twice and the invoice stayed «unpaid» while the customer's ledger was settled (TD-500, `reg_invoice_settled_after_void_and_rereceipt_td_500`).
+
+### v9.0.67 — Treasury Reversal Rows Can No Longer Be Voided
+- **Treasury Void (P0):** voiding the reversal row of a voided receipt or payment is refused with 409 and the button is gone; before, it put the money back in the bank with no voucher and without the no-voucher permission. Legacy revived rows are listed by the financial health check, and new bank invariants I15/I16 compare each bank with its ledger (TD-499, `reg_treasury_reversal_void_refused_td_499`, `inv_td_499_bank_invariants_hold`).
+
+### v9.0.66 — Package 4 Treasury and Cheques Audit Documentation
+- **Stability Audit, Package 4 (Treasury and Cheques):** `docs/audit/STABILITY_AUDIT_V9.md` gets the treasury section; its 19 proven findings are registered as open rows TD-497 to TD-515 (one P0: voiding the reversal row of a voided receipt put the money back in the bank with no voucher). Documentation only; no behaviour change.
+
+### v9.0.65 — Workflow UI and Messages Fully Persian
+- **Workflow Wording:** workflow UI and messages follow the owner glossary (decision t10), with Persian role and entity names and digits; `WF_*` codes go only into the error `code` field (TD-470, Vitest `workflowWording.test.ts`, `sec_workflow_error_code_td_470`).
+
+### v9.0.64 — Workflow Approvals Refresh Domain Lists
+- **Workflow Cache Refresh:** an approval invalidates documents, procurement, accounting and inventory queries, and design and position saves refetch the definition detail (TD-469, Vitest `workflowQueryInvalidation.test.tsx`).
+
+### v9.0.63 — Workflow Times in UTC, Delegations Cover Whole Days
+- **Workflow Timestamps and Delegation Days:** workflow API responses send server timestamps with `Z` (`withUtcTimestamps`), and a day-only delegation covers whole business days (TD-468, `sec_workflow_utc_timestamps_td_468`).
+
+### v9.0.62 — Delegation Scope Is All or a Defined Workflow
+- **Delegation Scope:** a delegation scope is `ALL` / `*` or a defined workflow code, else 422; the form offers only these (TD-467, decision t6, `sec_workflow_delegation_scope_td_467`).
+
+### v9.0.61 — Workflow Stepper Shows the Rial Amount
+- **Stepper Amount Currency:** the workflow stepper shows the context amount in IRR and a foreign document's own amount beside it (TD-466, Vitest `WorkflowStepperWidget.test.tsx`).
+
+### v9.0.60 — Inbox Card Shows Amount, Delegation, Step and Starter
+- **Inbox Card Fields:** inbox rows carry `currentStepTitle` from the instance snapshot, `instance.startedByName` and a numeric IRR `amount`; the card reads them and `delegationInfo` (TD-465, `sec_workflow_inbox_card_fields_td_465`).
+
+### v9.0.59 — Inbox Ignores Late Responses of Another Task
+- **Task Preview Belongs to Its Task:** the inbox reads the task's document or requisition through `useApprovalTaskEntity`, aborting the previous request and ignoring late responses (TD-464, Vitest `approvalInboxPage.test.tsx`).
+
+### v9.0.58 — Inbox Chooses Among Several Reject Actions
+- **Reject Choice in the Inbox:** inbox rows carry the reject actions of the current step and the task modal sends the chosen `transitionId` when there are several (TD-463, `sec_workflow_inbox_reject_choice_td_463`).
+
+### v9.0.57 — Inbox Clears a Cancelled Decision
+- **Approval Inbox Decision Reset:** closing the task modal or opening another task resets the decision, comment and chosen reject action (TD-462, Vitest `approvalInboxPage.test.tsx`).
+
+### v9.0.56 — Changing the Stock-Count Warehouse Clears the Counts
+- **Stock-Count Warehouse Change:** switching the warehouse after entering counts asks first and clears the counts on confirmation, so counts of one warehouse are never posted for another (TD-484, Vitest `stockCountSheet.test.tsx`).
+
+### v9.0.55 — The Stock-Count Sheet Reads the Real Book Stock
+- **Stock-Count Sheet:** the sheet selects warehouses by code and reads each item's book stock of that warehouse (code or name accepted, unknown 422), so «copy + submit» can no longer zero a warehouse; a count whose shown book stock changed before posting is refused with 409 and the sheet reloads (TD-480, `reg_stock_count_sheet_book_stock_td_480`).
+
+### v9.0.54 — Package 6 Inventory and Kardex Audit Documentation
+- **Stability Audit, Package 6 (Inventory and Kardex):** `docs/audit/STABILITY_AUDIT_V9.md` gets the inventory section; its 17 proven findings are registered as open rows TD-480 to TD-496 (one P0: the stock-count sheet can zero the whole stock of a warehouse). Documentation only; no behaviour change.
 
 ### v9.0.53 — node_modules No Longer Tracked by Git
 - **Deployment:** the `node_modules` symlink committed in v9.0.25 is removed, `.gitignore` uses `/node_modules` (also matches a symlink), and `update.sh` untracks a leftover symlink entry before `git pull`; servers on v9.0.25+ run `git rm -q --cached node_modules` once before updating (TD-472, B01-03, `node_modules_never_tracked_td_472`).
@@ -185,6 +342,7 @@ going forward.
 - **Version 8 Closure:** Concluded and archived the v8.x series (`v8.0.0` through `v8.0.128`). `V8_MASTER_ROADMAP.md` is archived with a closing report; 129 debt rows (TD-250 – TD-413) were recorded and all are resolved or closed by product-owner decision (TD-369 closed as an accepted risk); `src/data/changelogs/8.ts` is frozen.
 - **Version 9 Mission:** `V9_MASTER_ROADMAP.md` — package-by-package stability audit (architecture and layering, data integrity, concurrency, security, error handling, performance, code quality, tests, UI) of the modules V8 did not cover as areas; stability over rewrites. New debt rows start at TD-414.
 - **Governance:** `npm run check:version` now also rejects any change to the closed 8.x series; release paperwork moved to the generic `npm run release` (`scripts/release.ts`, reads the active series), and changes land only through a branch and a draft pull request (`AGENTS.md` §24).
+
 ---
 
 ## Version 8.x Series (Archived at v8.0.128)

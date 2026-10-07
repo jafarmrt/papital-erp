@@ -65,6 +65,7 @@ export class AccountingService {
   static updateBankAccount = TreasuryService.updateBankAccount.bind(TreasuryService);
   static deleteBankAccount = TreasuryService.deleteBankAccount.bind(TreasuryService);
   static getTreasuryTransactions = TreasuryService.getTreasuryTransactions.bind(TreasuryService);
+  static getTreasuryTransactionPage = TreasuryService.getTreasuryTransactionPage.bind(TreasuryService);
   static generateTransactionNumber = TreasuryService.generateTransactionNumber.bind(TreasuryService);
   static createTreasuryTransaction = TreasuryService.createTreasuryTransaction.bind(TreasuryService);
   static voidTreasuryTransaction = TreasuryService.voidTreasuryTransaction.bind(TreasuryService);

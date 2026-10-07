@@ -25,7 +25,10 @@ export interface ChequeStatusVariables {
   status: string;
   description?: string;
   bankAccountId?: number;
-  transfereePartyName?: string;
+  /** v9.0.85 (TD-498): خرج چک فقط با شناسه تأمین‌کننده */
+  transfereePartyId?: number;
+  /** v9.0.98 (TD-506): تاریخ اقدام (ISO)؛ خالی ← امروز کسب‌وکار در سرور */
+  actionDate?: string;
 }
 
 function chequesUrl(filters: ChequeFilters): string {
@@ -57,9 +60,9 @@ export function useChequeMutations() {
   });
 
   const updateChequeStatus = useMutation<unknown, unknown, ChequeStatusVariables>({
-    mutationFn: ({ id, status, description, bankAccountId, transfereePartyName }) => fetchJson(`/accounting/cheques/${id}/status`, {
+    mutationFn: ({ id, status, description, bankAccountId, transfereePartyId, actionDate }) => fetchJson(`/accounting/cheques/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status, description, notes: description, bankAccountId, transfereePartyName }),
+      body: JSON.stringify({ status, description, notes: description, bankAccountId, transfereePartyId, actionDate }),
     }),
     ...common,
   });

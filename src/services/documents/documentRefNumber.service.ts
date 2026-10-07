@@ -195,4 +195,88 @@ export class DocumentRefNumberService {
     }
     return await orm.transaction(async (tx) => execute(tx));
   }
+
+  /**
+   * شماره عطف سند تازه و سال مالی پارتیشن شماره‌گذاری آن (زیر تراکنش فراخواننده). شماره خالی یا «auto» شماره بعدی سری
+   * همان نوع و سال را می‌گیرد؛ شماره دستی تکراری (همان نوع و سال) به شماره بعدی می‌رود و شمارنده با پسوند عددی شماره دستی
+   * همگام می‌شود (P3-10). v9.0.80 (TD-489): از createDocument جدا شد تا حواله انتقال بین انبارها همان قاعده را بگیرد.
+   */
+  static async assignDocumentRefNumber(
+    tx: DbClient,
+    docType: string,
+    normalizedDocDate: string,
+    requested: string | number | null | undefined,
+  ): Promise<{ refNumber: string; refFiscalYear: number }> {
+    // v7.0.21 (TD-178 / audit P0-2): سال مالی پارتیشن شماره‌گذاری — دقیقاً همان مقداری که
+    // DocumentRefNumberService.getNextRef برای همین تاریخ استفاده می‌کند؛ یکتایی شماره عطف در این دامنه است.
+    const refFiscalYear = resolveJalaliFiscalYear(normalizedDocDate);
+    let finalRefNumber: string | number | undefined | null = requested;
+    if (!finalRefNumber || finalRefNumber === 'auto' || String(finalRefNumber).trim() === '') {
+      finalRefNumber = await DocumentRefNumberService.getNextRef(docType, normalizedDocDate, tx);
+    } else {
+      // V7 Collision Prevention: If custom refNumber already exists in documents, auto-resolve to next valid atomic number
+      // v7.0.21 (TD-178): بررسی تکرار فقط در دامنه یکتایی واقعی (نوع سند + سال مالی شماره‌گذاری)
+      const [existingDoc] = await tx
+        .select({ id: documents.id })
+        .from(documents)
+        .where(and(
+          eq(documents.type, docType),
+          eq(documents.refFiscalYear, refFiscalYear),
+          eq(documents.refNumber, String(finalRefNumber)),
+          eq(documents.isDeleted, 0)
+        ));
+      if (existingDoc) {
+        finalRefNumber = await DocumentRefNumberService.getNextRef(docType, normalizedDocDate, tx);
+        if (docType === 'audit' && !String(finalRefNumber).startsWith('AUD-')) {
+          finalRefNumber = `AUD-${finalRefNumber}`;
+        }
+      }
+
+      // Sync document_ref_counters with the numeric suffix of a custom refNumber (P3-10)
+      const val = extractRefSerial(finalRefNumber);
+      if (val !== null) {
+        if (val > 0 && val <= MAX_REF_COUNTER_VALUE) {
+          // V3.0.6 (BUG-07): کلید شمارنده دستی نیز باید «سال جلالی» باشد؛
+          // قبلاً سال میلادی (new Date().getFullYear) استفاده می‌شد و شمارنده
+          // دستی روی ردیفی متفاوت از شماره‌گذاری خودکار sync می‌شد.
+          const year = refFiscalYear;
+          const [existingCounter] = await tx
+            .select()
+            .from(documentRefCounters)
+            .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)))
+            .for('update');
+          if (existingCounter) {
+            if (val > existingCounter.lastRefNumber) {
+              await tx
+                .update(documentRefCounters)
+                .set({ lastRefNumber: val })
+                .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)));
+            }
+          } else {
+            const inserted = await tx
+              .insert(documentRefCounters)
+              .values({ docType, fiscalYear: year, lastRefNumber: val })
+              .onConflictDoNothing({
+                target: [documentRefCounters.docType, documentRefCounters.fiscalYear]
+              })
+              .returning({ lastRefNumber: documentRefCounters.lastRefNumber });
+            if (inserted.length === 0) {
+              const [retryCounter] = await tx
+                .select()
+                .from(documentRefCounters)
+                .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)))
+                .for('update');
+              if (retryCounter && val > retryCounter.lastRefNumber) {
+                await tx
+                  .update(documentRefCounters)
+                  .set({ lastRefNumber: val })
+                  .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)));
+              }
+            }
+          }
+        }
+      }
+    }
+    return { refNumber: String(finalRefNumber), refFiscalYear };
+  }
 }

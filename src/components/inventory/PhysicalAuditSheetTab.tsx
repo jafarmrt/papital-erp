@@ -2,9 +2,7 @@ import { useEffect } from 'react';
 import { ClipboardCheck, Search } from 'lucide-react';
 import { formatPersianNumber, parseCleanNumber } from '../../utils';
 import toast from 'react-hot-toast';
-import { useWarehousesQuery, type WarehouseItem } from '../../hooks/queries/useSettingsQueries';
-
-const NO_WAREHOUSES: WarehouseItem[] = [];
+import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 
 interface AuditItemInput {
   id: number;
@@ -17,8 +15,13 @@ interface AuditItemInput {
 }
 
 interface PhysicalAuditSheetTabProps {
+  /** کد انبار شمارش (TD-480) */
   selectedLocation: string;
-  setSelectedLocation: (loc: string) => void;
+  /** نام انبار شمارش */
+  locationLabel: string;
+  warehouses: WarehouseItem[];
+  warehousesFailed: boolean;
+  onRequestLocationChange: (code: string) => void;
   nextRef: string;
   notes: string;
   setNotes: (val: string) => void;
@@ -39,7 +42,10 @@ interface PhysicalAuditSheetTabProps {
 
 export function PhysicalAuditSheetTab({
   selectedLocation,
-  setSelectedLocation,
+  locationLabel,
+  warehouses,
+  warehousesFailed,
+  onRequestLocationChange,
   nextRef,
   notes,
   setNotes,
@@ -58,17 +64,11 @@ export function PhysicalAuditSheetTab({
   handleSubmitAudit
 }: PhysicalAuditSheetTabProps) {
   const auditedCount = Object.keys(auditedItemsMap).length;
-  // فهرست انبارها از کش مشترک React Query (همان GET /warehouses)؛ با بستن صفحه درخواست در جریان لغو می‌شود
-  const warehousesQuery = useWarehousesQuery();
-  const warehouses = Array.isArray(warehousesQuery.data) ? warehousesQuery.data : NO_WAREHOUSES;
-  const warehousesFailed = warehousesQuery.isError;
-  const warehousesError = warehousesQuery.error;
-
+  // فهرست انبارها از کش مشترک React Query (همان GET /warehouses، در صفحه خوانده می‌شود)
   useEffect(() => {
     if (!warehousesFailed) return;
-    console.error('Failed to load warehouses in audit sheet:', warehousesError);
     toast.error('خطا در دریافت لیست انبارها');
-  }, [warehousesFailed, warehousesError]);
+  }, [warehousesFailed]);
 
   return (
     <div className="space-y-6">
@@ -98,14 +98,15 @@ export function PhysicalAuditSheetTab({
           </div>
 
           <div>
-            <label className="block text-slate-500 font-bold mb-1">موقعیت انبار جهت شمارش:</label>
+            <label htmlFor="audit-sheet-location" className="block text-slate-500 font-bold mb-1">موقعیت انبار جهت شمارش:</label>
             <select
+              id="audit-sheet-location"
               value={selectedLocation}
-              onChange={(e) => setSelectedLocation(e.target.value)}
+              onChange={(e) => onRequestLocationChange(e.target.value)}
               className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500"
             >
               {warehouses.map((w) => (
-                <option key={w.id || w.code || w.name} value={w.name}>
+                <option key={w.id || w.code} value={w.code}>
                   {w.name}
                 </option>
               ))}
@@ -156,7 +157,7 @@ export function PhysicalAuditSheetTab({
               onClick={handleApplyCurrentStockAsPhysical}
               className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
             >
-              کپی موجودی اسمی به موجودی فیزیکی برای تمام اقلام
+              کپی موجودی دفتری به موجودی فیزیکی برای همه اقلام
             </button>
 
             <button
@@ -166,7 +167,7 @@ export function PhysicalAuditSheetTab({
               className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
             >
               <ClipboardCheck size={16} />
-              <span>{submitting ? 'در حال ثبت...' : `ثبت نهایی سند انبارگردانی (${auditedCount} کالا)`}</span>
+              <span>{submitting ? 'در حال ثبت...' : `ثبت نهایی سند انبارگردانی (${formatPersianNumber(auditedCount)} کالا)`}</span>
             </button>
           </div>
         </div>
@@ -183,7 +184,7 @@ export function PhysicalAuditSheetTab({
                 <th className="py-3 px-4">نام کالا و دسته‌بندی</th>
                 <th className="py-3 px-3 text-center">واحد</th>
                 <th className="py-3 px-3 text-center bg-blue-50 text-blue-900 border-x border-blue-100">
-                  موجودی سیستمی (موقعیت {selectedLocation})
+                  موجودی دفتری (موقعیت {locationLabel})
                 </th>
                 <th className="py-3 px-3 text-center bg-emerald-50 text-emerald-900 border-x border-emerald-100 w-48">
                   موجودی فیزیکی واقعی (شمارش‌شده)
@@ -233,9 +234,9 @@ export function PhysicalAuditSheetTab({
                         ) : diff === 0 ? (
                           <span className="text-emerald-600">بدون مغایرت (۰)</span>
                         ) : diff > 0 ? (
-                          <span className="text-blue-600 font-bold dir-ltr inline-block">+{diff} (کسری سیستمی)</span>
+                          <span className="text-blue-600 font-bold dir-ltr inline-block">+{formatPersianNumber(diff)} (اضافی)</span>
                         ) : (
-                          <span className="text-rose-600 font-bold dir-ltr inline-block">{diff} (کسری فیزیکی)</span>
+                          <span className="text-rose-600 font-bold dir-ltr inline-block">−{formatPersianNumber(Math.abs(diff))} (کسری)</span>
                         )}
                       </td>
                     </tr>

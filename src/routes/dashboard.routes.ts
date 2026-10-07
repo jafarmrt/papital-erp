@@ -136,17 +136,23 @@ router.get('/dashboard-bi-stats', authorize('reports.view', 'warehouse.view'), a
     const warehouseDistribution = await orm
       .select({
         location: warehouses.code,
-        totalStock: sql<string>`SUM(${itemWarehouseStocks.currentStock})`
+        totalStock: sql<string>`SUM(${itemWarehouseStocks.currentStock})`,
+        itemCount: sql<string>`COUNT(*) FILTER (WHERE ${itemWarehouseStocks.currentStock} > 0)`
       })
       .from(itemWarehouseStocks)
       .innerJoin(warehouses, eq(warehouses.id, itemWarehouseStocks.warehouseId))
       .innerJoin(items, eq(items.id, itemWarehouseStocks.itemId))
       .where(eq(items.isDeleted, 0))
       .groupBy(warehouses.code);
+    // v9.0.96 (TD-496, decision t6): the warehouse chart counts the items with stock in each warehouse; quantities of
+    // different units (pairs, metres, pieces) are never added together
+    const itemCountObj: Record<string, number> = {};
+    for (const w of activeWarehouses) itemCountObj[w.code] = 0;
     for (const row of warehouseDistribution) {
       const loc = row.location;
       if (loc in distributionObj) {
         distributionObj[loc] = Number(row.totalStock);
+        itemCountObj[loc] = Number(row.itemCount);
       }
     }
 
@@ -160,6 +166,7 @@ router.get('/dashboard-bi-stats', authorize('reports.view', 'warehouse.view'), a
       deadStock: deadStock,
       totalValuation: total_value || 0,
       locations: distributionObj,
+      locationItemCounts: itemCountObj,
       warehouses: activeWarehouses,
       monthlyTrends: trends,
       fastDays,

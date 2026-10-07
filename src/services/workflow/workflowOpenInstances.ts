@@ -65,7 +65,7 @@ export function buildOpenInstanceHealthTest(duplicates: DuplicateOpenInstanceRow
       code: `فرایند ${r.id}`,
       title: `${r.entityType} ${r.entityId}`,
       subtitle: `گردش کار ${r.workflowDefinitionId}`,
-      details: `فرایندهای در جریان همین موجودیت: ${(entities.get(`${r.entityType}:${r.entityId}`) ?? [r.id]).map(id => `#${id}`).join('، ')} (TD-455).`,
+      details: `فرایندهای در جریان همین موجودیت: ${(entities.get(`${r.entityType}:${r.entityId}`) ?? [r.id]).map(id => `#${id}`).join('، ')}.`,
     })),
     metrics: { duplicateEntities: entityCount, duplicateInstances: duplicates.length, uniqueIndexPresent: uniqueIndexPresent ? 1 : 0 },
   };

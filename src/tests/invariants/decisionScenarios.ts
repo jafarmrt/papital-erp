@@ -15,6 +15,7 @@ import { getErrorMessage } from '../../utils/formatters.js';
 import { checkProformaInvoiceTakesFinalizeDate } from './dateBoundaryScenarios.js';
 import { checkPayrollChequeMethodRefused } from './payrollScenarios.js';
 import { checkProjectDeleteNeedsReleasedAllocations } from './projectScenarios.js';
+import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 
 /**
  * v8.0.118 — سناریوهای تصمیم‌های مالک محصول بر مشاهده‌های ممیزی (TD-409) برای سوئیت business_invariants. هر تابع
@@ -69,7 +70,8 @@ export async function checkNoVoucherTreasuryNeedsPermission(): Promise<string[]>
   const problems: string[] = [];
   const bankId = await bankWithLedger('بانک آزمون بی‌سند');
   const otherBankId = await bankWithLedger('بانک آزمون بی‌سند مقصد');
-  const base = { method: 'bank_transfer' as const, bankAccountId: bankId, partyType: 'other' as const, date: '2026-04-02', username: 'inv' };
+  const contraAccountId = await miscContraAccountId();
+  const base = { method: 'bank_transfer' as const, bankAccountId: bankId, partyType: 'other' as const, contraAccountId, date: '2026-04-02', username: 'inv' };
 
   const receipt = await refusalOf(() => TreasuryTransactionService.createTreasuryTransaction({ ...base, type: 'receipt', amount: 800000, partyName: 'مانده آزمون بی‌مجوز', createVoucher: false }));
   if (!receipt?.includes('مجوز')) problems.push(`دریافت بی‌سند بی‌مجوز رد نشد (${receipt ?? 'پذیرفته شد'})`);
@@ -85,7 +87,7 @@ export async function checkNoVoucherTreasuryNeedsPermission(): Promise<string[]>
 
   // روت: کاربر خزانه بی‌مجوز جدا ۴۰۳ می‌گیرد؛ با مجوز جدا دریافت بی‌سند ثبت می‌شود
   const app = await getTestApp();
-  const body = { type: 'receipt', method: 'bank_transfer', amount: 800000, bankAccountId: bankId, partyType: 'other', partyName: 'مانده افتتاحیه آزمون', date: '2026-04-02', createVoucher: false };
+  const body = { type: 'receipt', method: 'bank_transfer', amount: 800000, bankAccountId: bankId, partyType: 'other', contraAccountId, partyName: 'مانده افتتاحیه آزمون', date: '2026-04-02', createVoucher: false };
   const plain = await sessionWith(['accounting.treasury']);
   const denied = await request(app).post('/api/accounting/treasury').set('Cookie', plain.cookie).set('x-csrf-token', plain.csrfToken).send(body);
   if (denied.status !== 403) problems.push(`روت به کاربر خزانه بی‌مجوز جدا ${denied.status} داد، انتظار ۴۰۳`);

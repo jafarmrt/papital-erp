@@ -7,6 +7,8 @@ import { authorizePermission, userHasRoleOrPermission } from '../../middleware/a
 import { READ_PERMISSIONS, RECORD_READ_PERMISSIONS } from '../../lib/recordReadPermissions.js';
 import { AccountingService } from '../../services/accounting.service.js';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../services/accounting/treasury/noVoucherTreasury.js';
+import { getBankAccountOptions } from '../../services/accounting/treasury/bankAccountOptions.js';
+import { choosableContraAccounts } from '../../services/accounting/treasury/partyContraAccount.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { idempotency } from '../../middleware/idempotency.js';
@@ -36,8 +38,12 @@ const getBanksHandler = asyncHandler(async (req, res) => {
   const list = await AccountingService.getBankAccounts();
   res.json(list);
 });
-router.get('/accounting/banks', authorizePermission('accounting.treasury', 'accounting.cheques', 'accounting.vouchers', 'accounting.reports', 'accounting.view', 'warehouse.in', 'warehouse.out', 'documents.view', 'documents.create'), getBanksHandler);
+router.get('/accounting/banks', authorizePermission(...READ_PERMISSIONS.bankAccounts), getBanksHandler);
 router.get('/accounting/bank-accounts', authorizePermission(...READ_PERMISSIONS.bankAccounts), getBanksHandler);
+// v9.0.97 (TD-505، ت۷): فهرست انتخاب کمینه برای فرم‌ها؛ فهرست کامل با شماره‌ها و مانده‌ها فقط برای خوانندگان خزانه
+router.get('/accounting/bank-accounts/options', authorizePermission(...READ_PERMISSIONS.bankAccountOptions), asyncHandler(async (_req, res) => {
+  res.json({ success: true, data: await getBankAccountOptions() });
+}));
 
 // Dynamic Bank & Ledger Synchronization and Reconciliation
 const syncBanksHandler = asyncHandler(async (req, res) => {
@@ -127,7 +133,7 @@ router.put('/accounting/bank-accounts/:id', authorizePermission('accounting.trea
 const deleteBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const before = (await AccountingService.getBankAccounts()).find((b) => b.id === id) || null;
-  const result = await AccountingService.deleteBankAccount(id);
+  const result = await AccountingService.deleteBankAccount(id, { userId: req.user?.id, username: req.user?.fullName || req.user?.username });
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'system',
@@ -147,14 +153,21 @@ router.delete('/accounting/bank-accounts/:id', authorizePermission('accounting.t
 // Treasury Transactions (دریافت و پرداخت)
 
 router.get('/accounting/treasury', authorizePermission(...RECORD_READ_PERMISSIONS.treasury_transaction), validate(treasuryQuerySchema), asyncHandler(async (req, res) => {
-  const { type, bankAccountId, startDate, endDate } = (req.query as ValidatedQuery<typeof treasuryQuerySchema>) || {};
-  const list = await AccountingService.getTreasuryTransactions({
+  const { type, bankAccountId, startDate, endDate, method, q, page, limit } = (req.query as ValidatedQuery<typeof treasuryQuerySchema>) || {};
+  const filters = {
     type,
     bankAccountId: bankAccountId ? Number(bankAccountId) : undefined,
     startDate: startDate as string,
     endDate: endDate as string,
-  });
-  res.json(list);
+    method,
+    q,
+  };
+  // v9.0.102 (TD-509، B04-13): با page یا limit فقط همان صفحه و شمار کل برمی‌گردد (`{ data, total, page, limit }`)
+  if (page !== undefined || limit !== undefined) {
+    res.json(await AccountingService.getTreasuryTransactionPage(filters, page ?? 1, limit ?? 20));
+    return;
+  }
+  res.json(await AccountingService.getTreasuryTransactions(filters));
 }));
 
 // V1.4.0: Idempotency — retry همین درخواست هرگز دوبار وجه ثبت نمی‌کند
@@ -180,6 +193,11 @@ router.post('/accounting/treasury', authorizePermission('accounting.treasury'), 
   res.status(201).json(tx);
 }));
 
+// v9.0.82 (TD-507، ت۴ الف): سرفصل‌هایی که فرم خزانه و دفتر چک برای «متفرقه» و «سایر» پرسنل پیشنهاد می‌دهند
+router.get('/accounting/treasury/contra-accounts', authorizePermission('accounting.treasury', 'accounting.cheques'), asyncHandler(async (_req, res) => {
+  res.json({ success: true, data: await choosableContraAccounts() });
+}));
+
 router.post('/accounting/treasury/preview-voucher', authorizePermission('accounting.treasury'), validate(previewTreasurySchema), asyncHandler(async (req, res) => {
   const preview = await AccountingService.previewTreasuryVoucher(req.body);
   res.json(preview);
@@ -200,7 +218,7 @@ router.post('/accounting/treasury/transfer', authorizePermission('accounting.tre
     action: 'CREATE',
     entity: 'treasury_transfer',
     entityId: `${result.payment.id}/${result.receipt.id}`,
-    description: `انتقال وجه ${req.body.amount.toLocaleString('fa-IR')} بین حساب‌ها (سند ${result.voucherId || 'بدون سند'})`,
+    description: `انتقال وجه ${Number(req.body.amount).toLocaleString('fa-IR')} بین حساب‌ها (سند ${result.voucherId || 'بدون سند'})`,
     details: { paymentId: result.payment.id, receiptId: result.receipt.id, voucherId: result.voucherId },
     ipAddress: req.ip || '',
   });
@@ -209,24 +227,14 @@ router.post('/accounting/treasury/transfer', authorizePermission('accounting.tre
 
 router.post('/accounting/treasury/reconcile', authorizePermission('accounting.treasury'), validate(reconcileSchema), asyncHandler(async (req, res) => {
   const { bankAccountId, txIds, batch, reconciled } = req.body;
+  // v9.0.103 (TD-511): ممیزی فقط ردیف‌های تغییرکرده، درون همان تراکنش
   const result = await AccountingService.reconcileTransactions({
     bankAccountId,
     txIds,
     batch: batch || `stmt-${Date.now()}`,
     reconciled,
-    userId: req.user?.id,
-    username: req.user?.fullName || req.user?.username,
-  });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: reconciled ? 'UPDATE' : 'UPDATE',
-    entity: 'treasury_reconciliation',
-    entityId: String(bankAccountId),
-    description: `${reconciled ? 'آشتی‌سنجی' : 'لغو آشتی‌سنجی'} ${txIds.length} تراکنش حساب بانکی شناسه ${bankAccountId}`,
-    details: { bankAccountId, txIds, batch, reconciled },
-    ipAddress: req.ip || '',
+    req,
+    userFullName: req.user?.fullName,
   });
   res.json(result);
 }));
@@ -298,22 +306,12 @@ const updateChequeStatusHandler = asyncHandler(async (req, res) => {
     actionDate: req.body.actionDate,
     bankAccountId: req.body.bankAccountId,
     transfereePartyId: req.body.transfereePartyId,
-    transfereePartyName: req.body.transfereePartyName,
     notes,
     description: req.body.description,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
-  });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'UPDATE',
-    entity: 'cheque',
-    entityId: String(id),
-    description: `تغییر وضعیت چک شماره ${chq.chequeNumber} به ${chq.status}`,
-    details: { status: chq.status },
-    ipAddress: req.ip || '',
+    // v9.0.104 (TD-512): ممیزی با قبل و بعد و سندهای صادرشده، درون تراکنش تغییر وضعیت
+    audit: { req, userFullName: req.user?.fullName },
   });
   res.json(chq);
 });
@@ -322,20 +320,11 @@ router.patch('/accounting/cheques/:id/status', authorizePermission('accounting.c
 
 router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
+  // v9.0.104 (TD-512): ممیزی با وضعیت پیش از حذف و سندهای حذف یا باطل‌شده، درون تراکنش حذف
   const result = await AccountingService.deleteCheque(id, {
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
-  });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'DELETE',
-    entity: 'cheque',
-    entityId: String(id),
-    description: `حذف چک شناسه ${id}`,
-    details: { chequeId: id },
-    ipAddress: req.ip || '',
+    audit: { req, userFullName: req.user?.fullName },
   });
   res.json(result);
 }));

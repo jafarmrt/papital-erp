@@ -92,7 +92,11 @@ export const QUERY_KEYS = {
     // پیشوند حساب‌های بانکی و تراکنش‌های خزانه
     treasury: () => ['accounting', 'treasury'] as const,
     bankAccounts: () => ['accounting', 'treasury', 'bank-accounts'] as const,
+    /** v9.0.97 (TD-505): زیر کلید فهرست کامل، پس هر باطل‌سازی آن این را هم تازه می‌کند */
+    bankAccountOptions: () => ['accounting', 'treasury', 'bank-accounts', 'options'] as const,
     treasuryTransactions: () => ['accounting', 'treasury', 'transactions'] as const,
+    // v9.0.82 (TD-507): سرفصل‌های مجاز طرف مقابل «متفرقه» و «سایر» (زیر پیشوند خزانه، چون سرفصل بانک‌ها کنار می‌رود)
+    contraAccounts: () => ['accounting', 'treasury', 'contra-accounts'] as const,
     // گزارش‌های مالی (تراز آزمایشی، دفتر کل، صورت‌ها، جریان نقد، ...): پارامترها بخشی از کلیدند
     reports: () => ['accounting', 'reports'] as const,
     report: (kind: string, params?: Record<string, unknown> | object) => ['accounting', 'reports', kind, params ?? {}] as const,
@@ -135,6 +139,10 @@ export const QUERY_KEYS = {
     all: ['workflow'] as const,
     inbox: (params?: Record<string, unknown> | object) => ['workflow', 'inbox', params ?? {}] as const,
     instance: (entityType: string, entityId: string | number) => ['workflow', 'instance', entityType, String(entityId)] as const,
+    // TD-469: فهرست، جزئیات و نسخه‌های تعریف زیر یک پیشوند، تا ذخیره طرح یا مختصات همه را تازه کند
+    definitions: () => ['workflow', 'definitions'] as const,
+    definition: (id: number | undefined) => ['workflow', 'definitions', 'detail', id ?? 0] as const,
+    definitionVersions: (id: number | undefined) => ['workflow', 'definitions', 'versions', id ?? 0] as const,
   },
 
   // V9 Phase 5.1 — Documents & Invoices

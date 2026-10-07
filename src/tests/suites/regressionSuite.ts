@@ -39,6 +39,7 @@ import { LockHierarchyLevel, sortIdsForLocking, validateLockOrder } from '../../
 import { seedFixtureItemStocks } from '../fixtures/factories.js';
 import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
 import type { CreateDocumentInput } from '../../services/documents/types.js';
+import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 
 export async function runRegressionTests(filter?: string): Promise<TestCaseResult[]> {
   const normalizedFilter = filter?.toLowerCase().replace(/[-_]/g, "").trim();
@@ -1321,7 +1322,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }).returning();
 
     // Execute Kardex Rebuild on item
-    await KardexWacRecalculatorService.rebuildItemFromLedger(testItem.id);
+    const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(testItem.id);
 
     // Fetch updated item from DB
     const [refreshedItem] = await orm.select().from(items).where(eq(items.id, testItem.id));
@@ -1330,9 +1331,13 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       throw new Error(`موجودی کالا پس از خروج کامل باید صفر باشد، اما مقدار ${refreshedItem.currentStock} است.`);
     }
 
-    // TD-136 assertion: WAC must NOT be reset to 0; it must preserve 750000
-    if (Number(refreshedItem.weightedAverageCost) !== 750000) {
-      throw new Error(`بهای تمام‌شده میانگین موزون (WAC) پس از تخلیه موجودی باید نرخ ۷۵۰,۰۰۰ را حفظ می‌کرد، اما مقدار ${refreshedItem.weightedAverageCost} ثبت شد.`);
+    // TD-136 assertion: the Kardex replay must NOT reset WAC to 0 after depletion; it keeps 750000. Since v9.0.90 (TD-487,
+    // decision t3) the rebuild reports that replay WAC and keeps the item's WAC; «اصلاح بها» is the separate action.
+    if (rebuilt.replayWac !== 750000) {
+      throw new Error(`بهای تمام‌شده میانگین موزون (WAC) پس از تخلیه موجودی باید نرخ ۷۵۰,۰۰۰ را حفظ می‌کرد، اما مقدار ${rebuilt.replayWac} ثبت شد.`);
+    }
+    if (Number(refreshedItem.weightedAverageCost) !== 500000) {
+      throw new Error(`بازسازی کاردکس نباید WAC کالا را تغییر دهد (v9.0.90، TD-487)، اما مقدار ${refreshedItem.weightedAverageCost} ثبت شد.`);
     }
 
     // Clean up test data
@@ -2189,9 +2194,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }
 
       // 2. Transition received cheque to 'spent' (واگذاری و خرج چک به تامین‌کننده)
+      // v9.0.85 (TD-498): spending a cheque needs the supplier's id; the payee name comes from the supplier row
+      const { createTestCustomer: createSpendSupplier } = await import('../fixtures/factories.js');
+      const spendSupplier = await createSpendSupplier({ name: `بازرگانی فلزات البرز ${Date.now()}`, partyType: 'supplier' });
       const spentChq = await AccountingService.updateChequeStatus(recChq.id, {
         status: 'spent',
-        transfereePartyName: 'بازرگانی فلزات البرز',
+        transfereePartyId: spendSupplier.id,
         notes: 'واگذاری به تامین‌کننده بابت تسویه شمش طلا'
       });
 
@@ -2199,7 +2207,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error(`وضعیت چک پس از واگذاری باید spent باشد اما ${spentChq.status} است`);
       }
 
-      if (spentChq.payeeName !== 'بازرگانی فلزات البرز') {
+      if (spentChq.payeeName !== spendSupplier.name) {
         throw new Error(`نام تحویل‌گیرنده در payeeName چک درج نشد: ${spentChq.payeeName}`);
       }
 
@@ -2253,7 +2261,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       try {
         await AccountingService.updateChequeStatus(paidChq.id, {
           status: 'spent',
-          transfereePartyName: 'شخص ثالث'
+          transfereePartyId: spendSupplier.id
         });
       } catch (err: any) {
         if (err.message?.includes('تنها چک‌های دریافتی') || err.message?.includes('مجاز نیست')) {
@@ -6140,7 +6148,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }).returning();
       createdBankId = bank.id;
       const receipt = await TreasuryTransactionService.createTreasuryTransaction({
-        type: 'receipt', method: 'cash', amount: 0.0001, bankAccountId: bank.id,
+        type: 'receipt', method: 'cash', amount: 0.0001, bankAccountId: bank.id, contraAccountId: await miscContraAccountId(),
         partyName: 'ERP-TEST-MARKER', createVoucher: false, allowNoVoucher: true,
       });
       createdTxIds.push(receipt.id);
@@ -6753,28 +6761,36 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
-  // Test: v7.0.78: نام کاربری «tester…» کاربر واقعی است (الگوی test_% با escape؛ `_` در LIKE هر نویسه‌ای را تطبیق می‌دهد)
+  // Test: v7.0.78: نام کاربری «tester…» کاربر واقعی است (الگوی test_% با escape؛ `_` در LIKE هر نویسه‌ای را تطبیق می‌دهد).
+  // از v9.0.76 (TD-521) فهرست کاربران همه کاربران را نشان می‌دهد و این شرط فقط «راه‌اندازی شده» و بررسی سلامت را می‌سازد.
   if (shouldRun('reg_synthetic_username_like_escape', 'synthetic', 'tester', 'like')) {
     const tStart = Date.now();
-    const testName = 'v7.0.78: کاربر tester و e2eadmin در فهرست کاربران دیده می‌شوند و فقط test_ / e2e_ / testuser_ کاربر ساختگی تست است';
+    const testName = 'v7.0.78: only test_ / e2e_ / testuser_ usernames are synthetic test users; tester and e2eadmin are real, and since v9.0.76 (TD-521) the user lists show both kinds';
     const { users } = await import('../../db/schema.js');
+    const { notSyntheticTestUsername, syntheticTestUsername } = await import('../../lib/syntheticUsers.js');
     const suffix = Date.now().toString(36);
     const realNames = [`tester${suffix}`, `e2eadmin${suffix}`];
     const syntheticNames = [`test_${suffix}`, `e2e_${suffix}`];
+    const allNames = [...realNames, ...syntheticNames];
     try {
       const request = (await import('supertest')).default;
       const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
       const app = await getTestApp();
       const session = await getAdminSession();
-      await orm.insert(users).values([...realNames, ...syntheticNames].map(username => ({
+      await orm.insert(users).values(allNames.map(username => ({
         username, password: '$2b$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinva', fullName: `کاربر آزمون ${username}`, role: 'viewer',
       })));
+      const namesWhere = async (cond: ReturnType<typeof notSyntheticTestUsername>) => new Set((await orm.select({ username: users.username }).from(users)
+        .where(and(inArray(users.username, allNames), cond))).map(r => r.username));
+      const real = await namesWhere(notSyntheticTestUsername(users.username));
+      const synthetic = await namesWhere(syntheticTestUsername(users.username));
       const res = await request(app).get('/api/users/list-simple').set('Cookie', session.cookie);
       const listed = new Set((Array.isArray(res.body) ? res.body : []).map((u: { username: string }) => u.username));
       const violations: string[] = [];
-      if (res.status !== 200) violations.push(`HTTP ${res.status}`);
-      for (const n of realNames) if (!listed.has(n)) violations.push(`«${n}» در فهرست نیست`);
-      for (const n of syntheticNames) if (listed.has(n)) violations.push(`«${n}» (ساختگی) در فهرست است`);
+      if (res.status !== 200) violations.push(`list-simple HTTP ${res.status}`);
+      for (const n of realNames) if (!real.has(n) || synthetic.has(n)) violations.push(`${n} is classified as synthetic`);
+      for (const n of syntheticNames) if (real.has(n) || !synthetic.has(n)) violations.push(`${n} is not classified as synthetic`);
+      for (const n of allNames) if (!listed.has(n)) violations.push(`${n} is missing from list-simple`);
       if (violations.length > 0) throw new Error(violations.join(' | '));
       results.push(makeTestCase({
         id: 'reg_synthetic_username_like_escape',
@@ -6784,7 +6800,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         executionType: 'real_api',
         passed: true,
         durationMs: Date.now() - tStart,
-        details: 'tester و e2eadmin فهرست شدند؛ test_ و e2e_ کنار گذاشته شدند.'
+        details: 'tester and e2eadmin are real, test_ and e2e_ are synthetic; list-simple shows all four.'
       }));
     } catch (err) {
       results.push(makeTestCase({
@@ -6798,7 +6814,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         error: err instanceof Error ? err.message : String(err)
       }));
     } finally {
-      await orm.delete(users).where(inArray(users.username, [...realNames, ...syntheticNames]));
+      await orm.delete(users).where(inArray(users.username, allNames));
     }
   }
 
@@ -10498,6 +10514,54 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.19، TD-430): «انجام» و «بازگشایی» صریح پیگیری
   const { runCrmFollowupActionTests } = await import('../regression/crmFollowupActionTests.js');
   results.push(...await runCrmFollowupActionTests(shouldRun));
+  // Package 6 (v9.0.55, TD-480): stock-count sheet book stock by warehouse code or name, stale book stock 409
+  const { runStockCountSheetTests } = await import('../regression/stockCountSheetTests.js');
+  results.push(...await runStockCountSheetTests(shouldRun));
+  // Package 4 (v9.0.67 on): treasury money and vouchers (TD-499..TD-504)
+  const { runTreasuryMoneyVoucherTests } = await import('../regression/treasuryMoneyVoucherTests.js');
+  results.push(...await runTreasuryMoneyVoucherTests(shouldRun));
+  // Package 4 (v9.0.82 on): treasury and cheque party accounts (TD-507, TD-501, TD-497, TD-498)
+  const { runTreasuryPartyTests } = await import('../regression/treasuryPartyTests.js');
+  results.push(...await runTreasuryPartyTests(shouldRun));
+  // Package 4 PR c (v9.0.97 on): treasury input and access (TD-505, TD-506, TD-508, TD-510, TD-514, TD-669)
+  const { runTreasuryInputTests } = await import('../regression/treasuryInputTests.js');
+  results.push(...await runTreasuryInputTests(shouldRun));
+  // Package 4 PR d: treasury lists, reconciliation, cheque audit and wording (TD-509, TD-511, TD-512, TD-513, TD-515)
+  const { runTreasuryListTests } = await import('../regression/treasuryListTests.js');
+  results.push(...await runTreasuryListTests(shouldRun));
+  // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
+  const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
+  results.push(...await runStockMovementFutureDateTests(shouldRun));
+  // Package 6 (v9.0.80, TD-489): a warehouse transfer is a numbered transfer document, voidable without changing WAC
+  const { runWarehouseTransferDocumentTests } = await import('../regression/warehouseTransferDocumentTests.js');
+  results.push(...await runWarehouseTransferDocumentTests(shouldRun));
+  // Package 6 (v9.0.81, TD-494): typed transfer and rebuild errors, shared warehouse resolver, missing item Kardex 404
+  const { runInventoryBusinessErrorsTests } = await import('../regression/inventoryBusinessErrorsTests.js');
+  results.push(...await runInventoryBusinessErrorsTests(shouldRun));
+  // Package 6 (v9.0.88, TD-486): the integrity report checks WAC against the Kardex replay
+  const { runIntegrityReportReplayWacTests } = await import('../regression/integrityReportReplayWacTests.js');
+  results.push(...await runIntegrityReportReplayWacTests(shouldRun));
+  // Package 6 (v9.0.90, TD-487): the Kardex rebuild keeps WAC; WAC correction is a separate permission with a draft voucher
+  const { runKardexWacCorrectionTests } = await import('../regression/kardexWacCorrectionTests.js');
+  results.push(...await runKardexWacCorrectionTests(shouldRun));
+  // Package 6 (v9.0.91, TD-491): an unchanged item gets no version bump, outbox event or audit row from the rebuild
+  const { runKardexRebuildQuietTests } = await import('../regression/kardexRebuildQuietTests.js');
+  results.push(...await runKardexRebuildQuietTests(shouldRun));
+  // Package 6 (v9.0.92, TD-488): the initial Kardex backfill never reprices its earlier rows
+  const { runKardexBackfillNoRewriteTests } = await import('../regression/kardexBackfillNoRewriteTests.js');
+  results.push(...await runKardexBackfillNoRewriteTests(shouldRun));
+  // Package 6 (v9.0.93, TD-481): the item opening voucher is worth its opening Kardex rows and rewrites no row
+  const { runItemOpeningVoucherValueTests } = await import('../regression/itemOpeningVoucherValueTests.js');
+  results.push(...await runItemOpeningVoucherValueTests(shouldRun));
+  // Package 6 (v9.0.94, TD-492): the stock movement chart counts ledger rows only, within the window
+  const { runMovementTrendLedgerTests } = await import('../regression/movementTrendLedgerTests.js');
+  results.push(...await runMovementTrendLedgerTests(shouldRun));
+  // Package 6 (v9.0.95, TD-493): a deleted transfer design answers 404 and its code can be saved again
+  const { runTransferCodeLifecycleTests } = await import('../regression/transferCodeLifecycleTests.js');
+  results.push(...await runTransferCodeLifecycleTests(shouldRun));
+  // Package 6 (v9.0.96, TD-496): the warehouse chart counts items with stock, not quantities of different units
+  const { runWarehouseItemCountTests } = await import('../regression/warehouseItemCountTests.js');
+  results.push(...await runWarehouseItemCountTests(shouldRun));
 
   return results;
 }

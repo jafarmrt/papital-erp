@@ -70,7 +70,13 @@ export class WorkflowTaskService {
     // V4 Phase 5.3 (A-2): بارگذاری موازی کانتکست موجودیت فقط برای ردیف‌های صفحه فعلی
     const filteredTasks = await Promise.all(
       pagedSlice.map(async ({ task, instance, delegationInfo, isOverdue }) => {
-        return { ...task, isOverdue, ...(await inboxEntityFields(instance)), delegationInfo };
+        return {
+          ...task,
+          isOverdue,
+          ...(await inboxEntityFields(instance)),
+          delegationInfo,
+          rejectTransitions: await WorkflowTaskService.rejectTransitionsOf(instance),
+        };
       })
     );
 
@@ -80,6 +86,17 @@ export class WorkflowTaskService {
       page,
       limit
     };
+  }
+
+  /**
+   * TD-463 (یافته B14-21): اقدام‌های «رد» گام جاری از تصویر فرایند، تا کارتابل وقتی گام بیش از یکی دارد انتخاب را بخواهد و
+   * `transitionId` بفرستد؛ پیش‌تر کارتابل هرگز انتخاب نمی‌کرد و رد چنین گامی همیشه با WF_TASK_REJECT_AMBIGUOUS رد می‌شد.
+   */
+  private static async rejectTransitionsOf(instance: typeof workflowInstances.$inferSelect): Promise<Array<{ id: number; title: string }>> {
+    const transitions = await WorkflowTransitionExecutor.transitionsFromState(instance, instance.currentStateId);
+    return transitions
+      .filter(t => WorkflowTransitionExecutor.isNegativeTransition(t.actionKey, t.title))
+      .map(t => ({ id: t.id, title: t.title }));
   }
 
   /**
@@ -198,7 +215,8 @@ export class WorkflowTaskService {
       if (task.status !== 'pending') {
         return {
           idempotent: true,
-          message: 'این وظیفه قبلاً تعیین تکلیف شده است (WF_TASK_ALREADY_COMPLETED)',
+          code: 'WF_TASK_ALREADY_COMPLETED',
+          message: 'این کار پیش‌تر انجام شده است؛ کارتابل را تازه کنید.',
           task: {
             id: task.id,
             status: task.status,
@@ -208,7 +226,7 @@ export class WorkflowTaskService {
       }
 
       if (!task.transitionId) {
-        throw new ValidationError('انتقال معتبری به این وظیفه متصل نیست');
+        throw new ValidationError('این کار اقدام معتبری ندارد؛ کارتابل را تازه کنید.');
       }
 
       const [instance] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, task.instanceId));
@@ -240,7 +258,7 @@ export class WorkflowTaskService {
       }
 
       if (!isAuthorized) {
-        throw new ForbiddenError('شما مجاز به اجرای این وظیفه نیستید (فاقد تخصیص مستقیم، نقش متناظر یا تفویض اختیار معتبر) (WF_TASK_UNAUTHORIZED).');
+        throw new ForbiddenError('شما مجاز به اجرای این وظیفه نیستید (فاقد تخصیص مستقیم، نقش متناظر یا تفویض اختیار معتبر).', undefined, 'WF_TASK_UNAUTHORIZED');
       }
 
       // v8.0.90 (TD-370): تأیید همان انتقال خود کار را اجرا می‌کند و «رد» فقط انتقال رد گام جاری را (از تصویر نسخه
@@ -273,8 +291,8 @@ export class WorkflowTaskService {
       }
 
       const outcomeText = advanced
-        ? `با اقدام «${params.action === 'reject' ? 'رد' : 'تایید'}» اجرا گردید`
-        : `امضای ${params.action === 'reject' ? 'رد' : 'تایید'} ثبت شد و تا تکمیل حدنصاب باز است`;
+        ? `با اقدام «${params.action === 'reject' ? 'رد' : 'تأیید'}» انجام شد`
+        : `امضای ${params.action === 'reject' ? 'رد' : 'تأیید'} ثبت شد و تا تکمیل حدنصاب باز است`;
       await logActivity({
         userId: params.userId,
         username: params.userName,
@@ -405,24 +423,24 @@ export class WorkflowTaskService {
     const stateTransitions = await WorkflowTransitionExecutor.transitionsFromState(instance, instance.currentStateId, tx);
     const own = stateTransitions.find(t => t.id === task.transitionId);
     if (!own) {
-      throw new ConflictError('این وظیفه به گام جاری فرآیند تعلق ندارد؛ کارتابل را تازه کنید (WF_TASK_STALE)');
+      throw new ConflictError('این وظیفه به گام جاری فرآیند تعلق ندارد؛ کارتابل را تازه کنید', undefined, 'WF_TASK_STALE');
     }
     if (params.action === 'approve') return own.id;
 
     const rejects = stateTransitions.filter(t => WorkflowTransitionExecutor.isNegativeTransition(t.actionKey, t.title));
     if (params.transitionId) {
       const chosen = rejects.find(t => t.id === params.transitionId);
-      if (!chosen) throw new ValidationError('انتقال «رد» انتخاب‌شده از گام جاری این وظیفه نیست (WF_TASK_INVALID_REJECT)');
+      if (!chosen) throw new ValidationError('اقدام «رد» انتخاب‌شده از گام جاری این کار نیست؛ کارتابل را تازه کنید.', undefined, 'WF_TASK_INVALID_REJECT');
       return chosen.id;
     }
     if (rejects.some(t => t.id === own.id)) return own.id;
     if (rejects.length === 0) {
-      throw new ValidationError('این گام فرآیند انتقال «رد» ندارد؛ فقط تأیید ممکن است (WF_TASK_NO_REJECT_TRANSITION)');
+      throw new ValidationError('این گام اقدام «رد» ندارد؛ فقط تأیید ممکن است.', undefined, 'WF_TASK_NO_REJECT_TRANSITION');
     }
     const allowed = rejects.filter(t => WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, t.requiredRole || undefined, params.userPermissions || []));
     if (allowed.length === 1) return allowed[0].id;
     if (rejects.length === 1) return rejects[0].id;
-    throw new ValidationError(`این گام چند انتقال «رد» دارد (${rejects.map(t => t.title).join('، ')})؛ یکی را انتخاب کنید (WF_TASK_REJECT_AMBIGUOUS)`);
+    throw new ValidationError(`این گام چند اقدام «رد» دارد (${rejects.map(t => t.title).join('، ')})؛ یکی را انتخاب کنید.`, undefined, 'WF_TASK_REJECT_AMBIGUOUS');
   }
 
   /**

@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 362
+تعداد مسیرها: 365
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -16,14 +16,15 @@
 | POST | `/api/accounting/accounts/seed-standard` | admin |
 | GET | `/api/accounting/accounts/tree` | accounting.coa \| accounting.reports \| accounting.view |
 | GET | `/api/accounting/automation-status` | accounting.reports \| accounting.view |
-| GET | `/api/accounting/bank-accounts` | accounting.treasury \| accounting.cheques \| accounting.vouchers \| accounting.reports \| accounting.view \| warehouse.in \| warehouse.out \| documents.view \| documents.create |
+| GET | `/api/accounting/bank-accounts` | accounting.treasury \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/bank-accounts` | accounting.treasury |
 | DELETE | `/api/accounting/bank-accounts/:id` | accounting.treasury |
 | PUT | `/api/accounting/bank-accounts/:id` | accounting.treasury |
 | GET | `/api/accounting/bank-accounts/next-code` | accounting.treasury |
+| GET | `/api/accounting/bank-accounts/options` | accounting.treasury \| accounting.cheques \| accounting.vouchers \| accounting.reports \| accounting.view \| warehouse.in \| warehouse.out \| documents.view \| documents.create \| personnel.manage |
 | GET | `/api/accounting/bank-accounts/reconciliation-report` | accounting.treasury |
 | POST | `/api/accounting/bank-accounts/sync-reconcile` | accounting.treasury |
-| GET | `/api/accounting/banks` | accounting.treasury \| accounting.cheques \| accounting.vouchers \| accounting.reports \| accounting.view \| warehouse.in \| warehouse.out \| documents.view \| documents.create |
+| GET | `/api/accounting/banks` | accounting.treasury \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/banks` | accounting.treasury |
 | DELETE | `/api/accounting/banks/:id` | accounting.treasury |
 | PUT | `/api/accounting/banks/:id` | accounting.treasury |
@@ -60,6 +61,7 @@
 | GET | `/api/accounting/treasury` | accounting.treasury \| accounting.reports \| accounting.view |
 | POST | `/api/accounting/treasury` | accounting.treasury |
 | POST | `/api/accounting/treasury/:id/void` | accounting.treasury |
+| GET | `/api/accounting/treasury/contra-accounts` | accounting.treasury \| accounting.cheques |
 | POST | `/api/accounting/treasury/preview-voucher` | accounting.treasury |
 | POST | `/api/accounting/treasury/reconcile` | accounting.treasury |
 | POST | `/api/accounting/treasury/transfer` | accounting.treasury |
@@ -201,6 +203,7 @@
 | POST | `/api/inventory/allocations/:id/consume` | inventory.reconcile \| projects.edit |
 | POST | `/api/inventory/allocations/:id/release` | inventory.reconcile \| projects.edit \| warehouse.out |
 | POST | `/api/inventory/allocations/allocate` | projects.edit \| warehouse.out |
+| POST | `/api/inventory/correct-wac` | inventory.wac_correct |
 | GET | `/api/inventory/integrity-audit` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/item-kardex/:itemId` | warehouse.view |
 | POST | `/api/inventory/kardex-initial-backfill` | inventory.reconcile |

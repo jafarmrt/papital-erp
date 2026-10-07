@@ -4,6 +4,7 @@ import { ChequeLifecycleService } from '../../services/accounting/treasury/chequ
 import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 import { accountIdByCode, outcomeProblems, raceBehindRowLock } from './concurrencyHarness.js';
+import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 
 /**
  * v8.0.78 — سناریوهای سخت‌گیرانه نگهداری حساب بانکی حوزه J برای سوئیت business_invariants.
@@ -78,8 +79,9 @@ export async function checkBankAccountMaintenanceLocked(): Promise<string[]> {
 
   // ۳) حذف هم‌زمان با ثبت دریافت: حساب حذف‌شده با تراکنش فعال نمی‌ماند
   const busy = await newBank(0);
+  const contraAccountId = await miscContraAccountId();
   const receipt = () => TreasuryTransactionService.createTreasuryTransaction({
-    type: 'receipt', method: 'bank_transfer', amount: 1000, bankAccountId: busy.id, partyType: 'other', partyName: 'واریز آزمون حذف', date: '2026-04-01', username: 'inv',
+    type: 'receipt', method: 'bank_transfer', amount: 1000, bankAccountId: busy.id, partyType: 'other', contraAccountId, partyName: 'واریز آزمون حذف', date: '2026-04-01', username: 'inv',
   });
   const outcomes = await raceBehindRowLock<unknown>('bank_accounts', [busy.id], [receipt, () => BankAccountService.deleteBankAccount(busy.id)], { staggered: true });
   problems.push(...outcomeProblems(['ثبت دریافت', 'حذف حساب'], outcomes,

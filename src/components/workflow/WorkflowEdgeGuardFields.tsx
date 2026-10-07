@@ -26,14 +26,14 @@ export const WorkflowEdgeGuardFields: React.FC<WorkflowEdgeGuardFieldsProps> = (
       list="workflow-edge-permission-options"
       value={value.requiredPermission}
       onChange={(e) => onChange({ requiredPermission: e.target.value.trim() })}
-      placeholder="مثلاً accounting.vouchers"
+      placeholder="accounting.vouchers"
       className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono"
     />
     <datalist id="workflow-edge-permission-options">
       {permissionOptions.map((p) => <option key={p} value={p} />)}
     </datalist>
     <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-      اگر پر شود، علاوه بر نقش، فقط کسی که این مجوز را دارد (یا مدیر سیستم) این انتقال را اجرا می‌کند.
+      اگر پر شود، علاوه بر نقش، فقط کسی که این مجوز را دارد (یا مدیر سیستم) این اقدام را انجام می‌دهد.
     </p>
   </div>
   <label className="flex items-start gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">

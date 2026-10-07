@@ -8,6 +8,7 @@ import {
   useUpdateCanvasPositionsMutation 
 } from '../../hooks/queries/useWorkflowQueries';
 import { toast } from 'react-hot-toast';
+import { formatPersianNumber } from '../../utils/persianNumber';
 import { WorkflowEdgeGuardFields } from './WorkflowEdgeGuardFields';
 import { designStepOrder, nextDesignStepOrder, renameDesignStateKey, workflowDesignErrors } from '../../lib/workflow/workflowDesignRules';
 
@@ -177,7 +178,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
     const newKey = `state_${Date.now().toString().slice(-4)}`;
     const newNode: CanvasNode = {
       stateKey: newKey,
-      title: 'وضعیت جدید',
+      title: 'گام جدید',
       stateType: 'intermediate',
       color: 'sky',
       slaHours: 24,
@@ -198,7 +199,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
 
   const handleAddEdgeSubmit = () => {
     if (!newEdgeFrom || !newEdgeTo) {
-      toast.error('لطفاً مبدأ و مقصد انتقال را انتخاب نمایید');
+      toast.error('گام مبدأ و گام مقصد اقدام را انتخاب کنید.');
       return;
     }
     const newEdge: CanvasEdge = {
@@ -224,7 +225,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
 
   const handleSaveAll = () => {
     if (!defTitle) {
-      toast.error('عنوان ورکفلو الزامی است');
+      toast.error('عنوان گردش کار را وارد کنید.');
       return;
     }
 
@@ -258,7 +259,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
   if (isLoading) {
     return (
       <div className="p-12 text-center text-gray-500 dark:text-gray-400">
-        در حال دریافت اطلاعات طراح ورکفلو...
+        در حال دریافت طرح گردش کار...
       </div>
     );
   }
@@ -283,7 +284,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                 value={defTitle}
                 onChange={e => setDefTitle(e.target.value)}
                 className="font-bold text-lg text-gray-900 dark:text-white bg-transparent border-b border-dashed border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:outline-none px-1"
-                placeholder="عنوان ورکفلو..."
+                placeholder="عنوان گردش کار..."
               />
               <span className="text-xs bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-2.5 py-0.5 rounded-full font-mono">
                 کد: {def?.code}
@@ -293,7 +294,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </span>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              طراحی گرافیکی بوم، شروط JSON، زمان‌سنجی SLA و نقش‌های تاییدکننده
+              طراحی گام‌ها و اقدام‌ها، شرط‌ها، مهلت انجام و نقش‌های تأییدکننده
             </p>
           </div>
         </div>
@@ -304,12 +305,12 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/70 rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
-            <span>افزودن وضعیت (State)</span>
+            <span>افزودن گام</span>
           </button>
           <button
             onClick={() => {
               if (nodes.length < 2) {
-                toast.error('حداقل دو وضعیت برای ایجاد انتقال مورد نیاز است');
+                toast.error('برای ساختن اقدام دست‌کم دو گام بسازید.');
                 return;
               }
               setNewEdgeFrom(nodes[0]?.stateKey || '');
@@ -319,7 +320,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/70 rounded-lg transition-colors"
           >
             <Move className="w-4 h-4" />
-            <span>اتصال جدید (Transition)</span>
+            <span>اقدام جدید</span>
           </button>
           <button
             onClick={handleSaveAll}
@@ -426,12 +427,12 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                   <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-200 dark:border-gray-700">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3 text-amber-500" />
-                      SLA: {node.slaHours}h
+                      مهلت: {formatPersianNumber(node.slaHours)} ساعت
                     </span>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteNode(node.stateKey); }}
                       className="text-gray-400 hover:text-rose-600 transition-colors"
-                      title="حذف وضعیت"
+                      title="حذف گام"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -455,11 +456,11 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
           {selectedNode ? (
             <div className="space-y-3">
               <div className="bg-indigo-50 dark:bg-indigo-950/40 p-2.5 rounded-lg border border-indigo-200 dark:border-indigo-800/60 text-xs text-indigo-900 dark:text-indigo-200">
-                ویژگی‌های وضعیت <strong>{selectedNode.title}</strong>
+                ویژگی‌های گام <strong>{selectedNode.title}</strong>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">کد کلید وضعیت (Key)</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">کلید گام</label>
                 <input
                   type="text"
                   value={selectedNode.stateKey}
@@ -489,7 +490,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">نوع وضعیت</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">نوع گام</label>
                 <select
                   value={selectedNode.stateType}
                   onChange={(e) => {
@@ -498,9 +499,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                   }}
                   className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >
-                  <option value="initial">شروع (Initial)</option>
-                  <option value="intermediate">میانی (Intermediate)</option>
-                  <option value="terminal">پایانی (Terminal)</option>
+                  <option value="initial">آغاز</option>
+                  <option value="intermediate">میانی</option>
+                  <option value="terminal">پایان</option>
                 </select>
               </div>
 
@@ -519,7 +520,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">حداکثر زمان مجاز SLA (ساعت)</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">مهلت انجام (ساعت)</label>
                 <input
                   type="number"
                   value={selectedNode.slaHours}
@@ -553,7 +554,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">عنوان اکشن</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">عنوان اقدام</label>
                 <input
                   type="text"
                   value={selectedEdge.title}
@@ -566,7 +567,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">کد کلید اکشن (ActionKey)</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">کلید اقدام</label>
                 <input
                   type="text"
                   value={selectedEdge.actionKey}
@@ -579,7 +580,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">نقش مجاز تاییدکننده</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">نقش مجاز تأییدکننده</label>
                 <select
                   value={selectedEdge.requiredRole}
                   onChange={(e) => {
@@ -592,22 +593,22 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                   {dbRoles && dbRoles.length > 0 ? (
                     dbRoles.map((r) => (
                       <option key={r.code} value={r.code}>
-                        {r.name} ({r.code})
+                        {r.name}
                       </option>
                     ))
                   ) : (
                     <>
-                      <option value="admin">مدیر سیستم (admin)</option>
-                      <option value="warehouse_keeper">انباردار (warehouse_keeper)</option>
-                      <option value="accountant">حسابدار (accountant)</option>
-                      <option value="sales_manager">مدیر فروش (sales_manager)</option>
-                      <option value="production_manager">مدیر تولید (production_manager)</option>
+                      <option value="admin">مدیر سیستم</option>
+                      <option value="warehouse_keeper">انباردار</option>
+                      <option value="accountant">حسابدار</option>
+                      <option value="sales_manager">مدیر فروش</option>
+                      <option value="production_manager">مدیر تولید</option>
                     </>
                   )}
                   {selectedEdge.requiredRole && 
                    (!dbRoles || !dbRoles.some(r => r.code === selectedEdge.requiredRole)) && (
                     <option value={selectedEdge.requiredRole}>
-                      نقش سفارشی یا قبلی: {selectedEdge.requiredRole}
+                      نقشی که دیگر تعریف نشده است
                     </option>
                   )}
                 </select>
@@ -620,7 +621,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               />
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">منطق تاییدات موازی</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">شیوه امضا</label>
                 <select
                   value={selectedEdge.approvalRuleType}
                   onChange={(e) => {
@@ -629,22 +630,22 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                   }}
                   className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >
-                  <option value="SINGLE">تک‌امضا (SINGLE - یک نفر)</option>
-                  <option value="AND_ALL">چندامضایی اجباری / اتفاق آرا (AND_ALL - همه اعضا)</option>
-                  <option value="OR_ANY">اولین تایید / حداقل یک نفر (OR_ANY - هریک از اعضا)</option>
-                  <option value="K_OF_N">تایید حد نصاب (K_OF_N - حداقل K نفر از N نفر)</option>
+                  <option value="SINGLE">یک امضا</option>
+                  <option value="AND_ALL">همه اعضای نقش</option>
+                  <option value="OR_ANY">یکی از اعضا</option>
+                  <option value="K_OF_N">K امضا از N</option>
                 </select>
                 <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                  {selectedEdge.approvalRuleType === 'AND_ALL' && 'همه کاربران فعال نقش لازم این گام باید امضا کنند تا انتقال نهایی شود؛ گام بدون نقش، K امضا می‌خواهد.'}
-                  {selectedEdge.approvalRuleType === 'OR_ANY' && 'به محض ثبت اولین تایید توسط هریک از اعضای مجاز، وضعیت بلافاصله تغییر می‌یابد.'}
+                  {selectedEdge.approvalRuleType === 'AND_ALL' && 'همه کاربران فعال نقش لازم این گام باید امضا کنند تا اقدام انجام شود؛ گام بدون نقش، K امضا می‌خواهد.'}
+                  {selectedEdge.approvalRuleType === 'OR_ANY' && 'با نخستین تأیید یکی از اعضای مجاز، اقدام انجام می‌شود.'}
                   {selectedEdge.approvalRuleType === 'K_OF_N' && 'تعداد حداقل K امضا برای عبور از این گام مورد نیاز است.'}
-                  {selectedEdge.approvalRuleType === 'SINGLE' && 'یک تایید تکی برای تغییر وضعیت کافی است.'}
+                  {selectedEdge.approvalRuleType === 'SINGLE' && 'یک تأیید برای انجام اقدام کافی است.'}
                 </p>
               </div>
 
               {(selectedEdge.approvalRuleType === 'AND_ALL' || selectedEdge.approvalRuleType === 'K_OF_N') && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{selectedEdge.approvalRuleType === 'AND_ALL' ? 'تعداد امضا برای گام بدون نقش (K Value)' : 'تعداد امضاهای مورد نیاز (K Value)'}</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{selectedEdge.approvalRuleType === 'AND_ALL' ? 'تعداد امضا برای گام بدون نقش (K)' : 'تعداد امضاهای لازم (K)'}</label>
                   <input
                     type="number"
                     min="1"
@@ -659,7 +660,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               )}
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">اکشن اتوماتیک سیستمی (Auto Action)</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">اقدام خودکار سیستم</label>
                 <select
                   value={selectedEdge.autoActionKey}
                   onChange={(e) => {
@@ -668,9 +669,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                   }}
                   className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono"
                 >
-                  <option value="">بدون اکشن خودکار</option>
-                  <option value="POST_INVOICE">ثبت نهایی و کسر انبار فاکتور (POST_INVOICE)</option>
-                  <option value="APPROVE_PENDING_MATERIAL">تایید و انتقال به کاتالوگ مواد (APPROVE_PENDING_MATERIAL)</option>
+                  <option value="">بدون اقدام خودکار</option>
+                  <option value="POST_INVOICE">ثبت نهایی فاکتور و کسر از انبار</option>
+                  <option value="APPROVE_PENDING_MATERIAL">تأیید و افزودن به فهرست مواد اولیه</option>
                 </select>
               </div>
 
@@ -682,12 +683,12 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                 className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 rounded-lg transition-colors mt-4"
               >
                 <Trash2 className="w-4 h-4" />
-                <span>حذف این اتصال (Transition)</span>
+                <span>حذف این اقدام</span>
               </button>
             </div>
           ) : (
             <div className="p-8 text-center text-gray-400 dark:text-gray-500 text-xs">
-              روی یکی از وضعیت‌ها (Nodes) یا اتصال‌ها (Transitions) در بوم کلیک کنید تا ویژگی‌های آن قابل ویرایش شود.
+              روی یکی از گام‌ها یا اقدام‌های بوم کلیک کنید تا ویژگی‌هایش را ویرایش کنید.
             </div>
           )}
         </div>
@@ -697,11 +698,11 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
       {showAddTransitionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-5 space-y-4 shadow-xl border border-gray-200 dark:border-gray-700">
-            <h3 className="font-bold text-gray-900 dark:text-white text-base">افزودن اتصال جدید (Transition)</h3>
+            <h3 className="font-bold text-gray-900 dark:text-white text-base">افزودن اقدام جدید</h3>
             
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">وضعیت مبدأ (From State)</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">گام مبدأ</label>
                 <select
                   value={newEdgeFrom}
                   onChange={e => setNewEdgeFrom(e.target.value)}
@@ -714,7 +715,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">وضعیت مقصد (To State)</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">گام مقصد</label>
                 <select
                   value={newEdgeTo}
                   onChange={e => setNewEdgeTo(e.target.value)}
@@ -738,7 +739,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                 onClick={handleAddEdgeSubmit}
                 className="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
               >
-                ایجاد اتصال
+                ایجاد اقدام
               </button>
             </div>
           </div>

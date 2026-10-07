@@ -1,7 +1,7 @@
 import { terminateOpenWorkflows } from '../../workflow/workflowTermination.js';
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
 import { accounts, bankAccounts, cheques, treasuryTransactions, journalVouchers, journalVoucherItems } from '../../../db/schema.js';
-import { eq, asc, and, or, ne } from 'drizzle-orm';
+import { eq, asc, and, or, ne, inArray, sql } from 'drizzle-orm';
 import type { BankAccount } from '../../../types.js';
 import { NotFoundError, BusinessLogicError, ValidationError } from '../../../errors/customErrors.js';
 import { AccountMappingService } from '../accountMapping.service.js';
@@ -10,6 +10,9 @@ import { businessTodayJalaliDash } from '../../../lib/businessClock.js';
 import type { JournalVoucher } from '../../../types.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
+import { assertNoPendingOpeningApproval, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
+import { requireBankLedgerAccount } from './bankLinks.js';
+import { assertBankCurrencyChangeAllowed, requireTreasuryCurrency } from './bankAccountCurrency.js';
 import { assignTreasuryAccountCode, peekNextTreasuryAccountCode, type TreasuryAccountType } from './bankAccountCode.js';
 
 /** گزارش تطبیق مانده حساب‌های خزانه با دفاتر (sync-reconcile و reconciliation-report) */
@@ -57,14 +60,17 @@ export class BankAccountService {
     .where(eq(bankAccounts.isDeleted, 0))
     .orderBy(asc(bankAccounts.code));
 
-    // 1. Fetch all approved/permanent journal voucher items
-    const vItems = await db.select({
-      id: journalVoucherItems.id,
+    // v9.0.102 (TD-509، B04-13): مانده‌ها با SUM … GROUP BY در SQL جمع می‌شوند و فقط ردیف‌های سرفصل‌های بانکی یا تفصیلی
+    // بانک خوانده می‌شوند. پیش‌تر همه ردیف‌های تأییدشده دفتر کل، همه تراکنش‌ها و همه چک‌های وصول‌شده در هر درخواست به
+    // حافظه می‌آمدند و در JS با هر بانک سنجیده می‌شدند (۲۰۰٬۰۰۰ ردیف سند ← ۱٬۶۳۹ ms برای ۱۵ بانک).
+    // v8.0.74 (TD-340): ردیفی که تفصیلی بانک دارد فقط مال همان بانک است، حتی اگر چند بانک یک سرفصل داشته باشند
+    const taggedBank = sql<number | null>`CASE WHEN ${journalVoucherItems.detailedType} = 'bank_account' AND COALESCE(${journalVoucherItems.detailedId}, 0) <> 0 THEN ${journalVoucherItems.detailedId} END`;
+    const bankLedgerIds = [...new Set(rawList.map(b => b.accountId).filter((id): id is number => Boolean(id)))];
+    const ledgerSums = await db.select({
       accountId: journalVoucherItems.accountId,
-      detailedType: journalVoucherItems.detailedType,
-      detailedId: journalVoucherItems.detailedId,
-      debit: journalVoucherItems.debit,
-      credit: journalVoucherItems.credit,
+      taggedBank,
+      debit: sql<string>`COALESCE(SUM(${journalVoucherItems.debit}), 0)::text`,
+      credit: sql<string>`COALESCE(SUM(${journalVoucherItems.credit}), 0)::text`,
     })
     .from(journalVoucherItems)
     .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
@@ -72,30 +78,35 @@ export class BankAccountService {
       eq(journalVouchers.isDeleted, 0),
       // v8.0.15 (TD-270): ردیف حذف نرم‌شده (ویرایش سند پیش‌نویس پیش از تأیید) در مانده دفتری شمرده نمی‌شود
       eq(journalVoucherItems.isDeleted, 0),
-      or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
-    ));
+      or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent')),
+      bankLedgerIds.length > 0
+        ? or(sql`${taggedBank} IS NOT NULL`, inArray(journalVoucherItems.accountId, bankLedgerIds))
+        : sql`${taggedBank} IS NOT NULL`,
+    ))
+    .groupBy(journalVoucherItems.accountId, taggedBank);
 
-    // 2. Fetch all completed treasury transactions
     // v8.0.26 (TD-278): تراکنش‌های پیشین با روش «چک» (و معکوس ابطال آن‌ها) پول حساب را جابه‌جا نکرده‌اند — مانده حساب
     // تغییر نکرد و سندشان اسناد دریافتنی/پرداختنی را گرفت — پس در مانده خزانه حساب شمرده نمی‌شوند.
-    const rawTxs = await db.select({
+    const treasurySums = await db.select({
       bankAccountId: treasuryTransactions.bankAccountId,
       type: treasuryTransactions.type,
-      amount: treasuryTransactions.amount,
+      amount: sql<string>`COALESCE(SUM(${treasuryTransactions.amount}), 0)::text`,
     })
     .from(treasuryTransactions)
-    .where(and(eq(treasuryTransactions.isDeleted, 0), ne(treasuryTransactions.method, 'cheque')));
+    .where(and(eq(treasuryTransactions.isDeleted, 0), ne(treasuryTransactions.method, 'cheque')))
+    .groupBy(treasuryTransactions.bankAccountId, treasuryTransactions.type);
 
     // v8.0.24 (TD-276): چک وصول‌شده (passed، وضعیت پایانی و غیرقابل حذف) هم پول حساب بانکی را جابه‌جا می‌کند: چک دریافتی
     // به حساب واریز و چک پرداختی از آن برداشت شده است (سند وصول همان حساب را بدهکار/بستانکار می‌کند). پیش‌تر مانده خزانه
     // فقط تراکنش‌های خزانه را می‌شمرد و حساب پس از هر وصول چک «مغایر» نشان داده می‌شد.
-    const clearedCheques = await db.select({
+    const chequeSums = await db.select({
       bankAccountId: cheques.bankAccountId,
       type: cheques.type,
-      amount: cheques.amount,
+      amount: sql<string>`COALESCE(SUM(${cheques.amount}), 0)::text`,
     })
     .from(cheques)
-    .where(and(eq(cheques.isDeleted, 0), eq(cheques.status, 'passed')));
+    .where(and(eq(cheques.isDeleted, 0), eq(cheques.status, 'passed')))
+    .groupBy(cheques.bankAccountId, cheques.type);
 
     // V2.0.0: حساب‌هایی که سند افتتاحیه دارند — مانده اولیه در دفتر ثبت شده و
     // نباید در محاسبه ledgerBalance دوباره اضافه شود (جلوگیری از دوبرابرشماری)
@@ -117,42 +128,28 @@ export class BankAccountService {
     return rawList.map(b => {
       const initBal = fin(b.initialBalance);
 
-      // Match journal items for this bank account (deduplicated by item id)
-      const matchingItemsMap = new Map<number, typeof vItems[0]>();
-      for (const it of vItems) {
-        // v8.0.74 (TD-340): ردیفی که تفصیلی بانک دارد فقط مال همان بانک است، حتی اگر چند بانک یک سرفصل داشته باشند
-        const taggedBank = it.detailedType === 'bank_account' && it.detailedId ? it.detailedId : null;
-        const matchesAccount = Boolean(b.accountId && it.accountId === b.accountId && taggedBank === null);
-        const matchesDetailed = taggedBank === b.id;
-        if (matchesAccount || matchesDetailed) {
-          matchingItemsMap.set(it.id, it);
-        }
-      }
-
       let totalDebit = fin(0);
       let totalCredit = fin(0);
-      for (const it of matchingItemsMap.values()) {
-        totalDebit = totalDebit.add(it.debit);
-        totalCredit = totalCredit.add(it.credit);
+      for (const row of ledgerSums) {
+        const tagged = row.taggedBank === null || row.taggedBank === undefined ? null : Number(row.taggedBank);
+        const matchesAccount = Boolean(b.accountId && row.accountId === b.accountId && tagged === null);
+        if (matchesAccount || tagged === b.id) {
+          totalDebit = totalDebit.add(fin(row.debit));
+          totalCredit = totalCredit.add(fin(row.credit));
+        }
       }
 
-      // Match treasury transactions
       let receipts = fin(0);
       let payments = fin(0);
-      for (const tx of rawTxs) {
-        if (tx.bankAccountId === b.id) {
-          if (tx.type === 'receipt') {
-            receipts = receipts.add(tx.amount);
-          } else if (tx.type === 'payment') {
-            payments = payments.add(tx.amount);
-          }
-        }
+      for (const tx of treasurySums) {
+        if (tx.bankAccountId !== b.id) continue;
+        if (tx.type === 'receipt') receipts = receipts.add(fin(tx.amount));
+        else if (tx.type === 'payment') payments = payments.add(fin(tx.amount));
       }
-      for (const chq of clearedCheques) {
-        if (chq.bankAccountId === b.id) {
-          if (chq.type === 'received') receipts = receipts.add(chq.amount);
-          else payments = payments.add(chq.amount);
-        }
+      for (const chq of chequeSums) {
+        if (chq.bankAccountId !== b.id) continue;
+        if (chq.type === 'received') receipts = receipts.add(fin(chq.amount));
+        else payments = payments.add(fin(chq.amount));
       }
 
       const treasuryBalance = initBal.add(receipts).subtract(payments);
@@ -314,6 +311,8 @@ export class BankAccountService {
   }, externalTx?: DbExecutor): Promise<BankAccount> {
     const initialBal = money(data.initialBalance);
     const isStrict = data.strict !== false;
+    // v9.0.99 (TD-508، ت۵ الف): ارز از فهرست پشتیبانی‌شده (خالی ← ریال)
+    const currency = requireTreasuryCurrency(data.currency);
 
     // V4.0.5 (F-3 / TD-093): قانون صریح — اگر موجودی اولیه غیرصفر باشد، انتساب به سرفصل معین حسابداری برای صدور سند افتتاحیه الزامی است
     if (!initialBal.isZero() && !data.accountId && isStrict) {
@@ -324,6 +323,8 @@ export class BankAccountService {
       // v8.0.78 (TD-325): کد از شمارنده اتمی پیشوند، یا کد دستی یکتا زیر قفل همان شمارنده
       const finalCode = await assignTreasuryAccountCode(tx, data.type, data.code);
 
+      // v9.0.100 (TD-510): سرفصل معین فعال زیر کل ۱۰
+      const ledgerAccountId = await requireBankLedgerAccount(tx, data.accountId);
       const [inserted] = await tx.insert(bankAccounts).values({
         code: finalCode,
         title: data.title.trim(),
@@ -335,8 +336,8 @@ export class BankAccountService {
         branch: data.branch?.trim() || '',
         initialBalance: initialBal,
         currentBalance: initialBal,
-        currency: data.currency || 'IRR',
-        accountId: data.accountId || null,
+        currency,
+        accountId: ledgerAccountId,
         isActive: 1,
         notes: data.notes?.trim() || '',
       }).returning();
@@ -470,6 +471,7 @@ export class BankAccountService {
     cardNumber: string;
     branch: string;
     initialBalance: number;
+    currency: string;
     accountId: number | null;
     isActive: number;
     notes: string;
@@ -486,6 +488,17 @@ export class BankAccountService {
         .where(and(eq(bankAccounts.id, id), eq(bankAccounts.isDeleted, 0)))
         .for('update');
       if (!existing) throw new NotFoundError('حساب بانکی یا صندوق یافت نشد');
+      // v9.0.71 (TD-504، ت۸): تغییر مانده اول دوره در انتظار تأیید گردش‌کار رد می‌شود
+      if (data.initialBalance !== undefined && !fin(data.initialBalance).round(4).equals(fin(existing.initialBalance))) {
+        await assertNoPendingOpeningApproval(tx, existing);
+      }
+      // v9.0.99 (TD-508، ت۵ الف): ارز ویرایش می‌شود تا نخستین گردش حساب؛ پس از آن 422 (پیش‌تر بی‌صدا نادیده گرفته می‌شد)
+      const newCurrency = data.currency !== undefined ? requireTreasuryCurrency(data.currency) : undefined;
+      if (newCurrency) await assertBankCurrencyChangeAllowed(tx, existing, newCurrency);
+      // v9.0.100 (TD-510): سرفصل تازه معین فعال زیر کل ۱۰ باشد (سرفصل بی‌تغییر حساب‌های قدیمی دوباره سنجیده نمی‌شود)
+      const ledgerAccountId = data.accountId !== undefined && (data.accountId || null) !== (existing.accountId || null)
+        ? await requireBankLedgerAccount(tx, data.accountId)
+        : undefined;
       const newCode = data.code?.trim();
       if (newCode && newCode.toLowerCase() !== String(existing.code || '').trim().toLowerCase()) {
         await assignTreasuryAccountCode(tx, (data.type || existing.type) as TreasuryAccountType, newCode, id);
@@ -500,7 +513,8 @@ export class BankAccountService {
         ...(data.shebaNumber !== undefined ? { shebaNumber: data.shebaNumber.trim() } : {}),
         ...(data.cardNumber !== undefined ? { cardNumber: data.cardNumber.trim() } : {}),
         ...(data.branch !== undefined ? { branch: data.branch.trim() } : {}),
-        ...(data.accountId !== undefined ? { accountId: data.accountId } : {}),
+        ...(newCurrency && newCurrency !== (existing.currency || 'IRR').toUpperCase() ? { currency: newCurrency } : {}),
+        ...(ledgerAccountId !== undefined ? { accountId: ledgerAccountId } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
         ...(data.notes !== undefined ? { notes: data.notes.trim() } : {}),
       };
@@ -607,9 +621,9 @@ export class BankAccountService {
    * چک‌های حساب زیر همین قفل شمرده می‌شوند. پیش‌تر حذف بی‌قفل بود و حساب در میانه ثبت دریافت با تراکنش فعال حذف می‌شد،
    * و حسابی که چک وصول‌شده یا صادرشده داشت هم حذف می‌شد.
    */
-  static async deleteBankAccount(id: number): Promise<{ success: boolean }> {
+  static async deleteBankAccount(id: number, user?: { userId?: number; username?: string }): Promise<{ success: boolean }> {
     return orm.transaction(async (tx) => {
-      const [existing] = await tx.select({ id: bankAccounts.id }).from(bankAccounts)
+      const [existing] = await tx.select({ id: bankAccounts.id, code: bankAccounts.code, title: bankAccounts.title }).from(bankAccounts)
         .where(and(eq(bankAccounts.id, id), eq(bankAccounts.isDeleted, 0)))
         .for('update');
       if (!existing) throw new NotFoundError('حساب بانکی یا صندوق یافت نشد');
@@ -624,6 +638,8 @@ export class BankAccountService {
         throw new BusinessLogicError('برای این حساب بانکی/صندوق چک ثبت شده است و امکان حذف آن وجود ندارد');
       }
 
+      // v9.0.70 (TD-503، ت۹): اسناد مانده اول دوره در همان تراکنش بی‌اثر می‌شوند؛ سند قطعی حذف را رد می‌کند
+      await voidBankOpeningVouchers(tx, existing, user);
       await tx.update(bankAccounts).set({ isDeleted: 1 }).where(eq(bankAccounts.id, id));
       // v9.0.40 (TD-447، ت۵): فرایند در جریان حساب حذف‌شده در همان تراکنش بسته می‌شود
       await terminateOpenWorkflows(tx, {

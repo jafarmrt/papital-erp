@@ -112,6 +112,20 @@ export interface JournalVoucher {
 
 export type BankAccountType = 'bank' | 'cash' | 'pos' | 'petty_cash';
 
+/**
+ * v9.0.97 (TD-505): یک حساب خزانه در فهرست انتخاب فرم‌ها (`GET /accounting/bank-accounts/options`)؛ بی شماره حساب،
+ * کارت، شبا و مانده
+ */
+export interface BankAccountOption {
+  id: number;
+  code: string;
+  title: string;
+  type: BankAccountType;
+  bankName: string | null;
+  currency: string;
+  hasLedgerAccount: boolean;
+}
+
 export interface BankAccount {
   id: number;
   code: string;
@@ -270,7 +284,12 @@ export interface TreasuryTransaction {
   reconciled?: number | null;
   reconciledAt?: string | null;
   reconciledBatch?: string | null;
+  /** v9.0.102 (TD-509): مانده حساب پس از این ردیف (فقط در صفحه‌ای که با فیلتر یک حساب خوانده شده است) */
+  runningBalance?: number | null;
+  // v9.0.82 (TD-507): هدف دریافت و پرداخت پرسنل و سرفصل طرف مقابلی که کاربر برای «متفرقه» و «سایر» انتخاب کرده است
   purpose?: string | null;
+  contraAccountId?: number | null;
+  contraAccountName?: string | null;
   description?: string | null;
   status?: 'completed' | 'voided' | 'cancelled' | string | null;
   attachments?: FinancialAttachment[];

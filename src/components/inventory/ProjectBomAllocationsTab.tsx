@@ -7,7 +7,8 @@ import { fetchJson } from '../../api';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useInventoryAuditSave';
-import { formatPersianDate, formatPersianNumber, parseCleanNumber, errorMessageOf } from '../../utils';
+import { formatPersianDate, formatPersianNumber, parseCleanNumber, errorMessageOf, getTodayJalaliDate } from '../../utils';
+import { bomAllocationsExportFileName } from '../../lib/inventoryAudit/exportFileNames';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -192,8 +193,8 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
     const ws = xlsx.utils.json_to_sheet(data);
     const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, ws, 'BOM Allocations');
-    xlsx.writeFile(wb, `BOM_Allocations_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    xlsx.utils.book_append_sheet(wb, ws, 'تخصیص مواد اولیه');
+    xlsx.writeFile(wb, bomAllocationsExportFileName(getTodayJalaliDate()));
   };
 
   // KPIs
@@ -360,13 +361,13 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                 <tr>
                   <td colSpan={9} className="py-8 text-center text-slate-400">
                     <RefreshCw className="animate-spin inline-block mr-2" size={16} />
-                    در حال بارگذاری لیست تخصیص‌های BOM...
+                    در حال بارگذاری تخصیص‌های مواد اولیه…
                   </td>
                 </tr>
               ) : allocations.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-8 text-center text-slate-400">
-                    هیچ رکوردی منطبق با فیلترهای جاری یافت نشد.
+                    هیچ تخصیصی با پالایش جاری یافت نشد.
                   </td>
                 </tr>
               ) : (
@@ -610,7 +611,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2 text-slate-800 font-black">
                 <Boxes className="text-blue-600" size={20} />
-                <span>تخصیص مواد اولیه BOM به پروژه تولید</span>
+                <span>تخصیص مواد اولیه به پروژه تولید</span>
               </div>
               <button
                 onClick={() => setShowAllocateModal(false)}

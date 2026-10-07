@@ -144,6 +144,11 @@ export interface FormattedDocument {
   exchangeRate?: number | null;
   /** v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش */
   returnOfDocumentId?: number | null;
+  /** v9.0.80 (TD-489): انبار مبدأ و مقصد حواله انتقال (کد و نام، از ردیف‌های کاردکس سند) */
+  sourceCode?: string;
+  sourceLocation?: string;
+  destinationCode?: string;
+  destinationLocation?: string;
   version?: number | null;
   isDeleted?: number | null;
   projectId?: number | null;

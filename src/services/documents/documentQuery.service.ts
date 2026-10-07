@@ -7,6 +7,9 @@ import type { DecimalValue, FinancialDecimal } from '../../lib/financialDecimal.
 import { MAX_PAGE_LIMIT } from '../../lib/pagination.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { transferLocationsByDocument } from '../inventory/transferDocumentLocations.js';
+import { fetchSettlementRows, settledAmount } from './documentSettlement.js';
+import type { SettlementRow } from './documentSettlement.js';
 import type { 
   GetDocumentsFilter, 
   FormattedDocument, 
@@ -96,12 +99,7 @@ export class DocumentQueryService {
       unit: string | null;
       category: string | null;
     }> = [];
-    let treasurySettlements: Array<{
-      documentId: number | null;
-      amount: Money;
-      type: string;
-      status: string | null;
-    }> = [];
+    let treasurySettlements: SettlementRow[] = [];
 
     if (docIds.length > 0) {
       allItems = await orm.select({
@@ -120,18 +118,7 @@ export class DocumentQueryService {
       .leftJoin(items, eq(documentItems.itemId, items.id))
       .where(and(inArray(documentItems.documentId, docIds), eq(documentItems.isDeleted, 0)));
 
-      treasurySettlements = await orm.select({
-        documentId: treasuryTransactions.documentId,
-        amount: treasuryTransactions.amount,
-        type: treasuryTransactions.type,
-        status: treasuryTransactions.status,
-      })
-      .from(treasuryTransactions)
-      .where(and(
-        inArray(treasuryTransactions.documentId, docIds),
-        eq(treasuryTransactions.isDeleted, 0),
-        eq(treasuryTransactions.status, 'completed')
-      ));
+      treasurySettlements = await fetchSettlementRows(docIds);
     }
 
     const formattedDocs: FormattedDocument[] = docs.map(d => {
@@ -179,6 +166,13 @@ export class DocumentQueryService {
         }))
       };
     });
+
+    // v9.0.80 (TD-489): انبار مبدأ و مقصد حواله‌های انتقال
+    const transferLocations = await transferLocationsByDocument(docs.filter(d => d.type === 'transfer').map(d => d.id));
+    for (const d of formattedDocs) {
+      const loc = transferLocations.get(d.id);
+      if (loc) Object.assign(d, loc);
+    }
 
     if (filter.isExport || (filter.limit === undefined && filter.page === undefined && typeof typeOrFilter === 'string')) {
       return formattedDocs;
@@ -266,6 +260,8 @@ export class DocumentQueryService {
       eq(treasuryTransactions.isDeleted, 0),
       eq(treasuryTransactions.status, 'completed')
     ));
+    // v9.0.68 (TD-500): جمع تسویه ردیف باطلِ معکوس‌شده را هم می‌خواند؛ فهرست نمایش همان ردیف‌های کامل است
+    const settlementRows = await fetchSettlementRows([doc.id]);
 
     const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(doc.type);
     // v7.0.32 (TD-197): مبلغ قابل وصول = جمع خالص اقلام + مالیات ساختاریافته
@@ -273,7 +269,7 @@ export class DocumentQueryService {
     const amounts = documentAmounts(
       rows.map(row => ({ quantity: row.quantity as DecimalValue, unitPrice: row.unit_price as DecimalValue, discount: row.discount as DecimalValue })),
       doc.vatAmount,
-      settledAmount(settlements, isPurchase),
+      settledAmount(settlementRows, isPurchase),
       doc.serviceChargeAmount
     );
 
@@ -312,6 +308,8 @@ export class DocumentQueryService {
       settlementStatus: amounts.settlementStatus,
       // قرارداد API: مبلغ عدد (P2-6)
       settlements: settlements.map(t => ({ ...t, amount: t.amount.toNumber() })),
+      // v9.0.80 (TD-489): انبار مبدأ و مقصد حواله انتقال
+      ...(doc.type === 'transfer' ? (await transferLocationsByDocument([doc.id])).get(doc.id) : {}),
       items: formattedItems
     };
   }
@@ -355,12 +353,6 @@ export class DocumentQueryService {
     }
     return null;
   }
-}
-
-/** v7.0.67 (P2-6): جمع خالص تسویه‌های خزانه یک سند با Decimal؛ خرید با پرداخت و فروش با دریافت تسویه می‌شود. */
-function settledAmount(rows: Array<{ amount: Money; type: string }>, isPurchase: boolean): FinancialDecimal {
-  const settling = isPurchase ? 'payment' : 'receipt';
-  return rows.reduce((sum, t) => (t.type === settling ? sum.add(t.amount) : sum.subtract(t.amount)), fin(0));
 }
 
 /**

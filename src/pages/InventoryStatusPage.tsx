@@ -30,7 +30,7 @@ export default function InventoryStatusPage() {
 
   const loading = isStatsLoading || isBiLoading;
   const isRefreshing = isStatsFetching || isBiFetching;
-  const error = statsError || biError ? 'خطا در دریافت اطلاعات داشبورد تحلیلی' : null;
+  const error = statsError || biError ? 'گزارش تحلیلی انبار دریافت نشد. دوباره تلاش کنید.' : null;
 
   const loadData = () => {
     void refetchStats();
@@ -38,8 +38,8 @@ export default function InventoryStatusPage() {
   };
 
   let locationTotal: number = 0;
-  if (biStats && biStats.locations) {
-    locationTotal = Object.values(biStats.locations).reduce<number>((sum, val) => sum + Number(val || 0), 0);
+  if (biStats && biStats.locationItemCounts) {
+    locationTotal = Object.values(biStats.locationItemCounts).reduce<number>((sum, val) => sum + Number(val || 0), 0);
   }
 
   const getLocationPercentage = (val: number) => {
@@ -67,19 +67,19 @@ export default function InventoryStatusPage() {
           <button
             onClick={() => navigate('/')}
             className="p-2.5 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors flex items-center justify-center gap-2 text-xs font-bold shrink-0"
-            title="بازگشت به داشبورد شخصی"
+            title="بازگشت به پیشخوان شخصی"
           >
             <LayoutDashboard size={15} />
-            <span>داشبورد میز کار من</span>
+            <span>پیشخوان من</span>
           </button>
 
           <button 
             onClick={loadData}
             className="p-2.5 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors flex items-center justify-center gap-2 text-xs font-semibold shrink-0"
-            title="بروزرسانی داده‌ها"
+            title="به‌روزرسانی داده‌ها"
           >
             <RefreshCw size={15} className={isRefreshing ? "animate-spin" : ""} />
-            <span className="hidden sm:inline">بروزرسانی گزارشات</span>
+            <span className="hidden sm:inline">به‌روزرسانی گزارش‌ها</span>
           </button>
         </div>
       </div>
@@ -137,7 +137,7 @@ export default function InventoryStatusPage() {
 
       {error && (
         <ErrorStateView
-          title="خطا در دریافت اطلاعات داشبورد تحلیلی انبار"
+          title="گزارش تحلیلی انبار دریافت نشد"
           description="در واکشی اطلاعات آماری انبار مشکلی رخ داده است. برای تلاش مجدد روی دکمه زیر کلیک نمایید."
           onRetry={loadData}
           compact
@@ -171,7 +171,7 @@ export default function InventoryStatusPage() {
                 </h3>
               </div>
               <div className="mt-4 pt-3 border-t flex justify-between items-center text-xs text-slate-400">
-                <span className="flex items-center gap-1">میانگین بهای خرید</span>
+                <span className="flex items-center gap-1">بر پایه میانگین موزون بها</span>
                 <span className="text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full text-[10px]">ارزش زنده</span>
               </div>
             </div>
@@ -181,7 +181,7 @@ export default function InventoryStatusPage() {
               <div>
                 <p className="text-xs text-slate-500 font-bold flex items-center gap-1">
                   <AlertTriangle size={14} className={biStats && biStats.reorderAlarms.length > 0 ? "text-rose-500" : "text-slate-400"} />
-                  اقلام نیازمند سفارش (آلارم)
+                  اقلام نیازمند سفارش (هشدار)
                 </p>
                 <div className="flex items-end justify-between mt-2">
                   <span className={`text-2xl font-black ${biStats && biStats.reorderAlarms.length > 0 ? "text-rose-600" : "text-slate-800"}`}>
@@ -213,11 +213,11 @@ export default function InventoryStatusPage() {
                   تنوع کالاها و مواد اولیه
                 </p>
                 <h3 className="text-lg font-black text-slate-800 mt-2">
-                  {stats ? `${formatPersianNumber(stats.totalProducts)} محصول / ${formatPersianNumber(stats.totalMaterials)} متریال` : '-'}
+                  {stats ? `${formatPersianNumber(stats.totalProducts)} محصول / ${formatPersianNumber(stats.totalMaterials)} مواد اولیه` : '-'}
                 </h3>
               </div>
               <div className="mt-4 pt-3 border-t flex justify-between items-center text-xs text-slate-400">
-                <span className="flex items-center gap-1">بانک اطلاعاتی انبار</span>
+                <span className="flex items-center gap-1">پایگاه‌داده انبار</span>
                 <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full text-[10px]">فعال</span>
               </div>
             </div>
@@ -256,12 +256,12 @@ export default function InventoryStatusPage() {
                   <Warehouse className="text-blue-500" size={18} />
                   تفکیک فیزیکی انبارها
                 </h3>
-                <p className="text-slate-400 text-xs mb-4 border-b pb-2">سهم هر انبار از مجموع اقلام ذخیره‌شده</p>
+                <p className="text-slate-400 text-xs mb-4 border-b pb-2">شمار اقلام دارای موجودی در هر انبار</p>
 
                 {biStats ? (
                   <div className="space-y-4">
                     {biStats.warehouses?.map((w, index) => {
-                      const qty = biStats.locations[w.code] || 0;
+                      const qty = biStats.locationItemCounts?.[w.code] || 0;
                       const percentage = getLocationPercentage(qty);
                       const emojis = ["🔒", "⚒️", "💎", "📦", "🏪", "🏬", "🏢", "🏭"];
                       const bgColors = ["bg-indigo-600", "bg-orange-500", "bg-emerald-500", "bg-blue-500", "bg-purple-500", "bg-cyan-500", "bg-violet-500", "bg-rose-500"];
@@ -291,7 +291,7 @@ export default function InventoryStatusPage() {
               </div>
 
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 mt-4 text-[11px] text-slate-500 leading-relaxed">
-                💡 تمامی حواله‌ها و رسیدها به صورت مستقیم موجودی این انبارها را بروزرسانی می‌کنند.
+                💡 تمامی حواله‌ها و رسیدها به صورت مستقیم موجودی این انبارها را به‌روزرسانی می‌کنند.
               </div>
             </div>
           </div>

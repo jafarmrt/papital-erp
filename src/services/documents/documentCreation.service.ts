@@ -1,6 +1,6 @@
 import { eq, and, inArray } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { documents, documentItems, items, documentRefCounters, productionProjects } from '../../db/schema.js';
+import { documents, documentItems, items, productionProjects } from '../../db/schema.js';
 import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import { requireDocumentTimestamp, resolveDocumentTimestamp } from '../../lib/storageDate.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
@@ -11,10 +11,11 @@ import { OutboxService } from '../events/outboxService.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
 import { createWarehouseResolver } from '../inventory/warehouseResolver.js';
+import { assertBookStocksUnchanged } from '../inventory/stockCountSheet.js';
 import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { sortIdsForLocking } from '../../lib/lockOrder.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
-import { DocumentRefNumberService, MAX_REF_COUNTER_VALUE, extractRefSerial } from './documentRefNumber.service.js';
+import { DocumentRefNumberService } from './documentRefNumber.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { resolveDocumentVat, parseVatInput, VAT_DOC_TYPES } from './documentVat.js';
@@ -300,76 +301,11 @@ export class DocumentCreationService {
           throw new NotFoundError(`پروژه با شناسه ${finalProjectId} یافت نشد.`);
         }
       }
-      // v7.0.21 (TD-178 / audit P0-2): سال مالی پارتیشن شماره‌گذاری — دقیقاً همان مقداری که
-      // DocumentRefNumberService.getNextRef برای همین تاریخ استفاده می‌کند؛ یکتایی شماره عطف در این دامنه است.
-      const refFiscalYear = resolveJalaliFiscalYear(normalizedDocDate);
-      let finalRefNumber = refNumber;
-      if (!finalRefNumber || finalRefNumber === 'auto' || String(finalRefNumber).trim() === '') {
-        finalRefNumber = await DocumentRefNumberService.getNextRef(docType, normalizedDocDate, tx);
-      } else {
-        // V7 Collision Prevention: If custom refNumber already exists in documents, auto-resolve to next valid atomic number
-        // v7.0.21 (TD-178): بررسی تکرار فقط در دامنه یکتایی واقعی (نوع سند + سال مالی شماره‌گذاری)
-        const [existingDoc] = await tx
-          .select({ id: documents.id })
-          .from(documents)
-          .where(and(
-            eq(documents.type, docType),
-            eq(documents.refFiscalYear, refFiscalYear),
-            eq(documents.refNumber, String(finalRefNumber)),
-            eq(documents.isDeleted, 0)
-          ));
-        if (existingDoc) {
-          finalRefNumber = await DocumentRefNumberService.getNextRef(docType, normalizedDocDate, tx);
-          if (docType === 'audit' && !String(finalRefNumber).startsWith('AUD-')) {
-            finalRefNumber = `AUD-${finalRefNumber}`;
-          }
-        }
-
-        // Sync document_ref_counters with the numeric suffix of a custom refNumber (P3-10)
-        const val = extractRefSerial(finalRefNumber);
-        if (val !== null) {
-          if (val > 0 && val <= MAX_REF_COUNTER_VALUE) {
-            // V3.0.6 (BUG-07): کلید شمارنده دستی نیز باید «سال جلالی» باشد؛
-            // قبلاً سال میلادی (new Date().getFullYear) استفاده می‌شد و شمارنده
-            // دستی روی ردیفی متفاوت از شماره‌گذاری خودکار sync می‌شد.
-            const year = refFiscalYear;
-            const [existingCounter] = await tx
-              .select()
-              .from(documentRefCounters)
-              .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)))
-              .for('update');
-            if (existingCounter) {
-              if (val > existingCounter.lastRefNumber) {
-                await tx
-                  .update(documentRefCounters)
-                  .set({ lastRefNumber: val })
-                  .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)));
-              }
-            } else {
-              const inserted = await tx
-                .insert(documentRefCounters)
-                .values({ docType, fiscalYear: year, lastRefNumber: val })
-                .onConflictDoNothing({
-                  target: [documentRefCounters.docType, documentRefCounters.fiscalYear]
-                })
-                .returning({ lastRefNumber: documentRefCounters.lastRefNumber });
-              if (inserted.length === 0) {
-                const [retryCounter] = await tx
-                  .select()
-                  .from(documentRefCounters)
-                  .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)))
-                  .for('update');
-                if (retryCounter && val > retryCounter.lastRefNumber) {
-                  await tx
-                    .update(documentRefCounters)
-                    .set({ lastRefNumber: val })
-                    .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)));
-                }
-              }
-            }
-          }
-        }
-      }
+      // v7.0.21 (TD-178 / audit P0-2): شماره عطف و سال مالی پارتیشن شماره‌گذاری؛ از v9.0.80 (TD-489) در
+      // DocumentRefNumberService.assignDocumentRefNumber، مشترک با حواله انتقال بین انبارها
+      const { refNumber: finalRefNumber, refFiscalYear } = await DocumentRefNumberService.assignDocumentRefNumber(
+        tx, docType, normalizedDocDate, refNumber
+      );
 
       // v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده در ستون‌های ساختاریافته ذخیره می‌شود و دیگر در متن
       // یادداشت نوشته/از آن خوانده نمی‌شود (پیش‌تر سند حسابداری مبلغ مالیات را با Regex از یادداشت استخراج می‌کرد).
@@ -409,6 +345,8 @@ export class DocumentCreationService {
         const lockedAuditItems = await tx
           .select({
             id: items.id,
+            code: items.code,
+            name: items.name,
             weightedAverageCost: items.weightedAverageCost,
             currentStock: items.currentStock,
           })
@@ -421,6 +359,20 @@ export class DocumentCreationService {
 
         // TD-164: حذف کوئری‌های تکراری N+1 انبار در حلقه انبارگردانی
         const resolveWh = await createWarehouseResolver(tx);
+
+        // v9.0.55 (TD-480، تصمیم ت۷ الف): موجودی دفتری‌ای که برگه نشان داده (`system_stock`) زیر قفل کالاها با موجودی
+        // همین لحظه سنجیده می‌شود؛ اگر فرق کند ثبت ۴۰۹ می‌گیرد و هیچ گردشی ثبت نمی‌شود
+        assertBookStocksUnchanged(docLines.map(line => {
+          const target = auditItemMap.get(Number(line.itemId));
+          const loc = resolveWh(line.location || docLocation || '');
+          return {
+            itemId: Number(line.itemId),
+            code: target?.code ?? String(line.itemId),
+            name: target?.name ?? String(line.itemId),
+            shown: line.system_stock,
+            current: auditStockMap.get(Number(line.itemId))?.byCode[loc] ?? 0,
+          };
+        }));
 
         const auditLineRows: DocumentLineRow[] = [];
         for (const item of docLines) {

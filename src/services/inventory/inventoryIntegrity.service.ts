@@ -63,7 +63,7 @@ export class InventoryIntegrityService {
   }
 
   /**
-   * Rebuilds stock and WAC for a single item from its sequential transaction ledger
+   * Rebuilds the per-warehouse stock of a single item from its Kardex ledger (quantities only, v9.0.90 TD-487)
    */
   static async rebuildItemFromLedger(
     itemId: number,
@@ -74,13 +74,20 @@ export class InventoryIntegrityService {
   }
 
   /**
-   * Rebuilds stock and WAC for ALL items from their transaction ledgers
+   * Rebuilds the per-warehouse stock of ALL items from their Kardex ledgers (quantities only, v9.0.90 TD-487)
    */
   static async rebuildAllFromLedger(
     optsOrUserId?: number | KardexRebuildOptions,
     username?: string
   ) {
     return KardexWacRecalculatorService.rebuildAllFromLedger(optsOrUserId, username);
+  }
+
+  /**
+   * v9.0.90 (TD-487): sets an item's WAC to its Kardex replay with a draft voucher for the value difference
+   */
+  static async correctItemWacFromLedger(itemId: number, opts?: KardexRebuildOptions) {
+    return KardexWacRecalculatorService.correctItemWacFromLedger(itemId, opts);
   }
 
   /**

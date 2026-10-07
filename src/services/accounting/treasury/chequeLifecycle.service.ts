@@ -6,44 +6,38 @@ import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { validateLockOrder, LockHierarchyLevel, LockableResource } from '../../../lib/lockOrder.js';
 import type { Cheque, ChequeStatus } from '../../../types.js';
+import { CHEQUE_TRANSITIONS, chequeStatusLabel } from '../../../lib/treasury/chequeTransitions.js';
 import { NotFoundError, ValidationError, BusinessLogicError, ConflictError } from '../../../errors/customErrors.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
 
-import { businessTodayIsoDate, normalizeDateToIso } from '../../../lib/businessClock.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
 import { containsLikePattern } from '../../../lib/sqlLike.js';
 import { requireStorageDate } from '../../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../../utils/calendarDate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
+import { resolveTreasuryWriteDate } from './treasuryDate.js';
+import { requireChequeBankAccount } from './bankLinks.js';
+import { normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
+import { resolveTreasuryPartyName } from './treasuryLinks.js';
+import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccountId } from './chequePartyAccount.js';
+import { activeChequeVoucherIds, auditChequeDelete, auditChequeStatusChange, type ChequeAuditActor } from './chequeAudit.js';
 
-/**
- * V1.4.0 — ماشین وضعیت چک صیادی
- * هر انتقال فقط در صورت مجاز بودن و فقط یک‌بار امکان‌پذیر است؛
- * این مانع از دوبار وصول (دوبار مانده + دوبار سند) و ناسازگاری دفتر/خزانه می‌شود.
- */
-export const CHEQUE_TRANSITIONS: Record<string, ChequeStatus[]> = {
-  received: ['in_treasury', 'in_collection', 'passed', 'bounced', 'spent'],
-  in_treasury: ['in_collection', 'passed', 'bounced', 'spent'],
-  in_safe: ['in_collection', 'passed', 'bounced', 'spent'],
-  in_collection: ['passed', 'bounced'],
-  passed: [],        // پایانی
-  bounced: ['returned'],
-  returned: [],      // پایانی
-  spent: [],         // پایانی
-};
+// v9.0.69: جدول انتقال وضعیت چک در `src/lib/treasury/chequeTransitions.ts` است و مرورگر هم همان را می‌خواند
+export { CHEQUE_TRANSITIONS };
 
+// v9.0.105 (TD-513، B04-17): پیام‌ها نام فارسی وضعیت را دارند (`chequeStatusLabel`)، نه کد انگلیسی
 export function assertChequeTransition(current: string, next: ChequeStatus): void {
   if (current === next) {
-    throw new ConflictError(`چک هم‌اکنون در وضعیت «${next}» است — تکرار همان وضعیت مجاز نیست`);
+    throw new ConflictError(`چک هم‌اکنون در وضعیت «${chequeStatusLabel(next)}» است — تکرار همان وضعیت مجاز نیست`);
   }
   const allowed = CHEQUE_TRANSITIONS[current];
   if (!allowed) {
-    throw new ConflictError(`وضعیت فعلی چک («${current}») نامعتبر است`);
+    throw new ConflictError(`وضعیت فعلی چک («${chequeStatusLabel(current)}») نامعتبر است`);
   }
   if (!allowed.includes(next)) {
     throw new BusinessLogicError(
-      `انتقال وضعیت «${current}» به «${next}» مجاز نیست — انتقال‌های مجاز: ${allowed.join('، ') || 'هیچ'}`
+      `انتقال وضعیت «${chequeStatusLabel(current)}» به «${chequeStatusLabel(next)}» مجاز نیست — انتقال‌های مجاز: ${allowed.map(chequeStatusLabel).join('، ') || 'هیچ'}`
     );
   }
 }
@@ -163,19 +157,30 @@ export class ChequeLifecycleService {
     /** v8.0.118 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد) */
     allowNoVoucher?: boolean;
     attachments?: unknown[];
+    /** v9.0.84 (TD-497): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر» (همان قاعده فرم خزانه، TD-507) */
+    purpose?: string;
+    contraAccountId?: number | null;
   }): Promise<Cheque> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ چک باید بزرگتر از صفر باشد');
     assertNoVoucherAllowed(data.createVoucher, data.allowNoVoucher, 'چک');
+    // v9.0.84 (TD-497، ت۲ الف): نوع طرف حساب سرفصل سند چک را تعیین می‌کند؛ پرسنل هدف و «متفرقه» سرفصل انتخابی می‌خواهند
+    // بی نوع: دریافتی از مشتری و پرداختی به تأمین‌کننده (همان سندی که پیش از v9.0.84 برای هر چک صادر می‌شد)
+    const partyType = data.partyType || (data.type === 'paid' ? 'supplier' : 'customer');
+    const party = normalizePartyPurpose(partyType, data.purpose, data.contraAccountId);
     // v8.0.23 (TD-275، تصمیم مالک محصول — گزینه ج): چک ارزی پذیرفته نمی‌شود. جدول چک نرخ تسعیر ندارد و اسناد چک ارزی
     // با نرخ ۱ ثبت می‌شدند (۵۰ دلار = ۵۰ ریال). چک‌های ارزی ثبت‌شده پیش از این نسخه چرخه عمر خود را ادامه می‌دهند.
     if ((data.currency || 'IRR').toUpperCase() !== 'IRR') {
       throw new ValidationError('چک ارزی پذیرفته نمی‌شود؛ چک فقط به ریال ثبت می‌شود. دریافت یا پرداخت ارزی را از فرم خزانه با نرخ تسعیر ثبت کنید.');
     }
     // v7.0.133 (TD-232): تاریخ صدور و سررسید چک میلادی ISO ذخیره می‌شوند (ورودی شمسی تبدیل، نامعتبر 422)
-    const issueDate = requireStorageDate(data.issueDate, 'تاریخ صدور چک');
+    if (!String(data.issueDate ?? '').trim() || !String(data.dueDate ?? '').trim()) {
+      throw new ValidationError('تاریخ صدور و تاریخ سررسید چک الزامی است');
+    }
+    // v9.0.98 (TD-506، B04-10، ت۶ الف): سند ثبت چک به تاریخ صدور است، پس صدور پس از امروز کسب‌وکار پذیرفته نیست
+    // (مانند فرم خزانه). سررسید آینده همچنان مجاز است.
+    const issueDate = await resolveTreasuryWriteDate(data.issueDate, 'تاریخ صدور چک');
     const dueDate = requireStorageDate(data.dueDate, 'تاریخ سررسید چک');
-    if (!issueDate || !dueDate) throw new ValidationError('تاریخ صدور و تاریخ سررسید چک الزامی است');
     const dueJalali = isoToJalaliDate(dueDate);
 
     const initialHistory = [{
@@ -188,6 +193,12 @@ export class ChequeLifecycleService {
     // V1.4.0: صدور چک اتمیک است — سند دوبل و ثبت چک در یک تراکنش دیتابیس؛
     // در نبود کدینگ، خطای صریح (به‌جای skip بی‌صدای قبلی) تا چک بدون رد دفتری ثبت نشود.
     const inserted = await orm.transaction(async (txEngine) => {
+      // v9.0.100 (TD-510): حساب بانکی چک فعال و موجود (قفل اشتراکی سطح ۱۰ پیش از درج چک، سطح ۲۰)
+      const chequeBankAccountId = await requireChequeBankAccount(txEngine, data.bankAccountId);
+      if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
+      // شناسه طرف حساب در جدول همان نوع (B04-05)
+      await resolveTreasuryPartyName(txEngine, partyType, data.partyId);
+      const partyAccountId = await resolveChequePartyAccountId(txEngine, partyType, party.purpose, party.contraAccountId);
       // v8.0.19 (TD-271): ابتدا چک ثبت می‌شود تا سند ثبت آن با source_cheque_id به همین چک پیوند بخورد
       const [row] = await txEngine.insert(cheques).values({
         type: data.type,
@@ -199,13 +210,15 @@ export class ChequeLifecycleService {
         dueDate,
         amount: money(amount),
         currency: data.currency || 'IRR',
-        partyType: data.partyType || 'customer',
+        partyType,
         partyId: data.partyId || null,
         partyName: data.partyName.trim(),
+        purpose: party.purpose,
+        partyAccountId,
         status: (data.type === 'received' ? 'received' : 'in_treasury'),
         drawerName: data.drawerName?.trim() || '',
         payeeName: data.payeeName?.trim() || '',
-        bankAccountId: data.bankAccountId || null,
+        bankAccountId: chequeBankAccountId,
         voucherId: null,
         description: data.description?.trim() || '',
         statusHistory: initialHistory,
@@ -216,14 +229,16 @@ export class ChequeLifecycleService {
       if (data.createVoucher !== false) {
         // V1.7.0: کدینگ از مپینگ قابل‌تنظیم (تنظیمات حسابداری) — نه هاردکد
         const chequeReceivableAcc = await AccountMappingService.getChequeReceivableAccount(txEngine);
-        const customerAcc = await AccountMappingService.getTradeReceivablesAccount(txEngine);
         const chequePayableAcc = await AccountMappingService.getChequePayableAccount(txEngine);
-        const supplierAcc = await AccountMappingService.getTradePayablesAccount(txEngine);
+        // v9.0.84 (TD-497): ردیف طرف حساب از سرفصل و نوع خود چک (نه همیشه مشتری یا تأمین‌کننده)
+        requireChequePartyAccount(partyAccountId, data.partyName);
+        const posting = await chequePartyPosting(txEngine, row);
+        if (!posting) throw new ValidationError('سرفصل طرف حساب چک یافت نشد');
         let voucherId: number;
 
         if (data.type === 'received') {
-          if (!chequeReceivableAcc || !customerAcc) {
-            throw new ValidationError('کدینگ لازم برای ثبت چک دریافتی یافت نشد (حساب‌های 1101 اسناد دریافتنی و 1201 حساب‌های دریافتنی تجاری). ابتدا کدینگ حسابداری را تکمیل کنید.');
+          if (!chequeReceivableAcc) {
+            throw new ValidationError('کدینگ لازم برای ثبت چک دریافتی یافت نشد (حساب 1101 اسناد دریافتنی). ابتدا کدینگ حسابداری را تکمیل کنید.');
           }
           const v = await VoucherService.createJournalVoucher({
             date: issueDate,
@@ -246,21 +261,18 @@ export class ChequeLifecycleService {
                 description: `اسناد دریافتنی نزد صندوق بابت چک ${data.chequeNumber}`
               },
               {
-                accountId: customerAcc.id,
-                detailedType: 'customer',
-                detailedId: data.partyId,
-                detailedName: data.partyName,
+                ...posting,
                 debit: 0,
                 credit: amount,
                 currency: data.currency || 'IRR',
-                description: `بستانکاری مشتری بابت تسویه با چک شماره ${data.chequeNumber}`
+                description: `بستانکاری ${data.partyName} بابت چک دریافتی شماره ${data.chequeNumber}`
               }
             ]
           }, txEngine);
           voucherId = v.id;
         } else {
-          if (!chequePayableAcc || !supplierAcc) {
-            throw new ValidationError('کدینگ لازم برای ثبت چک پرداختی یافت نشد (حساب‌های 3101 اسناد پرداختنی و 3001 حساب‌های پرداختنی تجاری). ابتدا کدینگ حسابداری را تکمیل کنید.');
+          if (!chequePayableAcc) {
+            throw new ValidationError('کدینگ لازم برای ثبت چک پرداختی یافت نشد (حساب 3101 اسناد پرداختنی). ابتدا کدینگ حسابداری را تکمیل کنید.');
           }
           const v = await VoucherService.createJournalVoucher({
             date: issueDate,
@@ -274,14 +286,11 @@ export class ChequeLifecycleService {
             username: data.username,
             items: [
               {
-                accountId: supplierAcc.id,
-                detailedType: 'supplier',
-                detailedId: data.partyId,
-                detailedName: data.partyName,
+                ...posting,
                 debit: amount,
                 credit: 0,
                 currency: data.currency || 'IRR',
-                description: `بدهکار شدن تامین‌کننده بابت پرداخت با چک شماره ${data.chequeNumber}`
+                description: `بدهکار شدن ${data.partyName} بابت پرداخت با چک شماره ${data.chequeNumber}`
               },
               {
                 accountId: chequePayableAcc.id,
@@ -320,11 +329,12 @@ export class ChequeLifecycleService {
     actionDate?: string;
     bankAccountId?: number | null;
     transfereePartyId?: number;
-    transfereePartyName?: string;
     notes?: string;
     description?: string;
     userId?: number;
     username?: string;
+    /** v9.0.104 (TD-512): ممیزی درون همین تراکنش */
+    audit?: ChequeAuditActor;
   }): Promise<Cheque> {
     return await orm.transaction(async (txEngine) => {
       // 1. Pre-read cheque to check target bank account if status is passed
@@ -384,13 +394,26 @@ export class ChequeLifecycleService {
 
       // V1.4.0: ماشین وضعیت — انتقال مجاز + جلوگیری از تکرار (دوبار وصول = دوبار مانده و سند)
       assertChequeTransition(String(existing.status), data.status);
+      const vouchersBefore = new Set(await activeChequeVoucherIds(txEngine, id));
 
       if (data.status === 'spent' && existing.type !== 'received') {
         throw new ValidationError('تنها چک‌های دریافتی از مشتریان قابل واگذاری و خرج کردن به غیر هستند');
       }
+      // v9.0.85 (TD-498، B04-02، تصمیم مالک محصول ت۳ الف): خرج چک بدهی ما به یک تأمین‌کننده مشخص را کم می‌کند، پس
+      // شناسه تأمین‌کننده الزامی است و نام او از جدول طرف حساب خوانده می‌شود. پیش‌تر رابط فقط نام می‌فرستاد و سند «بدهکار
+      // پرداختنی تجاری» با تفصیلی «سایر» و بی شناسه صادر می‌شد که به کارت حساب تأمین‌کننده نمی‌رسید.
+      let transfereeName: string | null = null;
+      if (data.status === 'spent') {
+        if (!data.transfereePartyId) {
+          throw new ValidationError('برای خرج چک، تأمین‌کننده‌ای را که چک به او واگذار می‌شود انتخاب کنید.', undefined, 'CHEQUE_TRANSFEREE_REQUIRED');
+        }
+        transfereeName = await resolveTreasuryPartyName(txEngine, 'supplier', data.transfereePartyId);
+      }
 
       const history = Array.isArray(existing.statusHistory) ? [...existing.statusHistory] : [];
-      const voucherIsoDate = normalizeDateToIso(data.actionDate) || (await businessTodayIsoDate());
+      // v9.0.98 (TD-506 / TD-669، B04-10 / B16-05، ت۶ الف): تاریخ اقدام سند همه گام‌های چک است؛ خالی ← امروز کسب‌وکار،
+      // روز ناموجود یا پس از امروز ← 422. پیش‌تر `normalizeDateToIso` روز ناموجود را جابه‌جا و تاریخ آینده را بی‌سقف می‌پذیرفت.
+      const voucherIsoDate = await resolveTreasuryWriteDate(data.actionDate, 'تاریخ اقدام چک');
 
       // V1.7.0: کدینگ از مپینگ قابل‌تنظیم
       await ChartOfAccountsService.getAllAccounts(txEngine);
@@ -520,15 +543,17 @@ export class ChequeLifecycleService {
           }, txEngine);
         }
       } else if (data.status === 'bounced') {
-        const bouncedAcc = (await AccountMappingService.getChequeProtestAccount(txEngine))
-          || (await AccountMappingService.getTradeReceivablesAccount(txEngine));
+        // v9.0.84 (TD-497، ت۲ الف): برگشت همان طرف حساب و نوع ثبت چک را می‌گیرد (چک پیشین: قاعده پیشین)
+        const posting = await chequePartyPosting(txEngine, existing);
+        const protestAcc = await AccountMappingService.getChequeProtestAccount(txEngine);
+        const bouncedAccId = protestAcc?.id ?? posting?.accountId ?? null;
         // P2-01: اگر چک مستقیماً از نزد صندوق واخواست شده باشد، سرفصل اسناد نزد صندوق (۱۱۰۱) بستانکار می‌شود؛ و اگر در جریان وصول بوده، ۱۱۰۲
         const isDirectFromTreasury = existing.status === 'received' || existing.status === 'in_treasury' || existing.status === 'in_safe';
         const creditAcc = isDirectFromTreasury
           ? ((await AccountMappingService.getChequeReceivableAccount(txEngine)) || (await AccountMappingService.getChequeInCollectionAccount(txEngine)))
           : ((await AccountMappingService.getChequeInCollectionAccount(txEngine)) || (await AccountMappingService.getChequeReceivableAccount(txEngine)));
 
-        if (bouncedAcc && creditAcc && existing.type === 'received') {
+        if (bouncedAccId && posting && creditAcc && existing.type === 'received') {
           await VoucherService.createJournalVoucher({
             date: voucherIsoDate,
             voucherType: 'adjustment',
@@ -541,10 +566,10 @@ export class ChequeLifecycleService {
             username: data.username,
             items: [
               {
-                accountId: bouncedAcc.id,
-                detailedType: 'customer',
-                detailedId: existing.partyId,
-                detailedName: existing.partyName,
+                accountId: bouncedAccId,
+                detailedType: posting.detailedType,
+                detailedId: posting.detailedId,
+                detailedName: posting.detailedName,
                 debit: amount,
                 credit: 0,
                 description: `برگشت چک ${existing.chequeNumber}`
@@ -565,8 +590,7 @@ export class ChequeLifecycleService {
           // v8.0.21 (TD-272): برگشت چک پرداختی — بدهی ما به تأمین‌کننده برمی‌گردد: بدهکار اسناد پرداختنی، بستانکار
           // حساب تأمین‌کننده. پیش‌تر سندی صادر نمی‌شد؛ ۳۱۰۱ بستانکار می‌ماند و تأمین‌کننده پرداخت‌شده دیده می‌شد.
           const chequePayableAcc = await AccountMappingService.getChequePayableAccount(txEngine);
-          const supplierAcc = await AccountMappingService.getTradePayablesAccount(txEngine);
-          if (!chequePayableAcc || !supplierAcc) {
+          if (!chequePayableAcc || !posting) {
             throw new ValidationError('کدینگ لازم برای ثبت برگشت چک پرداختی یافت نشد (اسناد پرداختنی و حساب‌های پرداختنی تجاری).');
           }
           await VoucherService.createJournalVoucher({
@@ -589,10 +613,7 @@ export class ChequeLifecycleService {
                 description: `بستن اسناد پرداختنی بابت برگشت چک ${existing.chequeNumber}`
               },
               {
-                accountId: supplierAcc.id,
-                detailedType: 'supplier',
-                detailedId: existing.partyId,
-                detailedName: existing.partyName,
+                ...posting,
                 debit: 0,
                 credit: amount,
                 description: `بازگشت بدهی به ${existing.partyName} بابت برگشت چک ${existing.chequeNumber}`
@@ -605,13 +626,14 @@ export class ChequeLifecycleService {
         // حساب جاری مشتری برمی‌گرداند (بدهکار مشتری، بستانکار اسناد واخواستی) تا دریافت بعدی از مشتری درست تسویه شود.
         // پیش‌تر سندی صادر نمی‌شد و مطالبه برای همیشه در اسناد واخواستی می‌ماند. اگر برگشت به خود حساب مشتری ثبت شده
         // باشد (نبود حساب اسناد واخواستی در کدینگ) سندی لازم نیست.
+        // v9.0.84 (TD-497): مطالبه به حساب همان طرف حساب و نوع ثبت چک برمی‌گردد (چک پیشین: حساب مشتری)
         const protestAcc = await AccountMappingService.getChequeProtestAccount(txEngine);
-        const customerAcc = await AccountMappingService.getTradeReceivablesAccount(txEngine);
-        if (protestAcc && customerAcc && protestAcc.id !== customerAcc.id) {
+        const posting = await chequePartyPosting(txEngine, existing);
+        if (protestAcc && posting && protestAcc.id !== posting.accountId) {
           await VoucherService.createJournalVoucher({
             date: voucherIsoDate,
             voucherType: 'adjustment',
-            description: `عودت چک برگشتی شماره ${existing.chequeNumber} به ${existing.partyName} و انتقال مطالبه به حساب مشتری`,
+            description: `عودت چک برگشتی شماره ${existing.chequeNumber} به ${existing.partyName} و انتقال مطالبه به حساب طرف حساب`,
             referenceModule: 'cheque',
             referenceNumber: existing.chequeNumber,
             sourceChequeId: existing.id,
@@ -620,19 +642,16 @@ export class ChequeLifecycleService {
             username: data.username,
             items: [
               {
-                accountId: customerAcc.id,
-                detailedType: 'customer',
-                detailedId: existing.partyId,
-                detailedName: existing.partyName,
+                ...posting,
                 debit: amount,
                 credit: 0,
-                description: `مطالبه چک برگشتی ${existing.chequeNumber} به حساب جاری مشتری`
+                description: `مطالبه چک برگشتی ${existing.chequeNumber} به حساب جاری ${existing.partyName}`
               },
               {
                 accountId: protestAcc.id,
-                detailedType: 'customer',
-                detailedId: existing.partyId,
-                detailedName: existing.partyName,
+                detailedType: posting.detailedType,
+                detailedId: posting.detailedId,
+                detailedName: posting.detailedName,
                 debit: 0,
                 credit: amount,
                 description: `بستن اسناد واخواستی بابت عودت چک ${existing.chequeNumber}`
@@ -646,7 +665,7 @@ export class ChequeLifecycleService {
           || (await AccountMappingService.getChequeInCollectionAccount(txEngine));
 
         if (tradePayablesAcc && inTreasuryAcc) {
-          const transferee = data.transfereePartyName || data.notes || data.description || 'طرف حساب واگذاری';
+          const transferee = transfereeName || 'طرف حساب واگذاری';
           await VoucherService.createJournalVoucher({
             date: voucherIsoDate,
             voucherType: 'treasury',
@@ -660,7 +679,7 @@ export class ChequeLifecycleService {
             items: [
               {
                 accountId: tradePayablesAcc.id,
-                detailedType: data.transfereePartyId ? 'supplier' : 'other',
+                detailedType: 'supplier',
                 detailedId: data.transfereePartyId,
                 detailedName: transferee,
                 debit: amount,
@@ -680,13 +699,13 @@ export class ChequeLifecycleService {
         }
       }
 
-      const effectiveNotes = data.notes || data.description || (data.transfereePartyName ? `واگذاری به ${data.transfereePartyName}` : undefined);
+      const effectiveNotes = data.notes || data.description || (transfereeName ? `واگذاری به ${transfereeName}` : undefined);
 
       history.push({
         date: voucherIsoDate,
         status: data.status,
         user: data.username || 'سیستم',
-        notes: effectiveNotes || `تغییر وضعیت به ${data.status}`
+        notes: effectiveNotes || `تغییر وضعیت به «${chequeStatusLabel(data.status)}»`
       });
 
       const [updated] = await txEngine.update(cheques).set({
@@ -696,9 +715,12 @@ export class ChequeLifecycleService {
         ...(data.status === 'passed' && bankRecord
           ? { bankAccountId: bankRecord.id }
           : data.bankAccountId !== undefined ? { bankAccountId: data.bankAccountId } : {}),
-        ...(data.transfereePartyName ? { payeeName: data.transfereePartyName } : {}),
+        ...(transfereeName ? { payeeName: transfereeName } : {}),
         statusHistory: history,
       }).where(eq(cheques.id, id)).returning();
+
+      const issuedVoucherIds = (await activeChequeVoucherIds(txEngine, id)).filter(v => !vouchersBefore.has(v));
+      await auditChequeStatusChange(txEngine, data.audit, existing, updated, issuedVoucherIds);
 
       return {
         ...updated,
@@ -711,7 +733,7 @@ export class ChequeLifecycleService {
     });
   }
 
-  static async deleteCheque(id: number, user?: { userId?: number; username?: string }): Promise<{ success: boolean }> {
+  static async deleteCheque(id: number, user?: { userId?: number; username?: string; audit?: ChequeAuditActor }): Promise<{ success: boolean }> {
     return await orm.transaction(async (txEngine) => {
       validateLockOrder([
         { name: 'cheque', hierarchyLevel: LockHierarchyLevel.CHEQUES },
@@ -763,7 +785,24 @@ export class ChequeLifecycleService {
         ))
         .for('update');
 
+      // v9.0.69 (TD-502، تصمیم مالک محصول ت۹ الف): سند قطعی باطل نمی‌شود، پس چکی که سند قطعیِ برگشت‌نخورده دارد حذف
+      // نمی‌شود. پیش‌تر این سند بی‌صدا کنار می‌رفت و چک حذف می‌شد؛ سند در دفتر می‌ماند و هیچ چکی آن را توضیح نمی‌داد.
+      const permanentStanding: string[] = [];
+      for (const v of activeChequeVouchers) {
+        if (v.status !== 'permanent') continue;
+        const [reversal] = await txEngine.select({ id: journalVouchers.id }).from(journalVouchers)
+          .where(and(eq(journalVouchers.referenceId, v.id), eq(journalVouchers.referenceNumber, `REV-V${v.voucherNumber}`), eq(journalVouchers.isDeleted, 0)));
+        if (!reversal) permanentStanding.push(String(v.voucherNumber));
+      }
+      if (permanentStanding.length > 0) {
+        throw new ConflictError(
+          `چک شماره «${existing.chequeNumber}» سند قطعی ${permanentStanding.join('، ')} دارد و سند قطعی باطل نمی‌شود؛ ` +
+          'این چک حذف نمی‌شود. برای جبران، سند اصلاحی دستی ثبت کنید.'
+        );
+      }
+
       const reversedVoucherIds = new Set<number>();
+      const voidedVouchers = { deletedVoucherIds: [] as number[], reversedVoucherIds: [] as number[], reversalVoucherIds: [] as number[] };
       for (const v of activeChequeVouchers) {
         if (!reversedVoucherIds.has(v.id) && v.status !== 'permanent') {
           const expectedRevRef = `REV-V${v.voucherNumber}`;
@@ -777,7 +816,7 @@ export class ChequeLifecycleService {
 
           if (!hasReversal) {
             // v8.0.2 (TD-251، تصمیم مالک محصول): سند پیش‌نویس چک حذف نرم می‌شود و سند معکوس نمی‌گیرد
-            await VoucherService.voidSourceVoucher({
+            const voided = await VoucherService.voidSourceVoucher({
               voucherId: v.id,
               reason: `ابطال چک شماره ${existing.chequeNumber} (حذف رکورد و ابطال چرخه عمر)`,
               userId: user?.userId,
@@ -785,11 +824,15 @@ export class ChequeLifecycleService {
               externalTx: txEngine,
             });
             reversedVoucherIds.add(v.id);
+            if (voided.action === 'deleted') voidedVouchers.deletedVoucherIds.push(v.id);
+            else voidedVouchers.reversedVoucherIds.push(v.id);
+            if (voided.reversalVoucherId) voidedVouchers.reversalVoucherIds.push(voided.reversalVoucherId);
           }
         }
       }
 
       await txEngine.update(cheques).set({ isDeleted: 1 }).where(eq(cheques.id, id));
+      await auditChequeDelete(txEngine, user?.audit, existing, voidedVouchers);
       return { success: true };
     });
   }

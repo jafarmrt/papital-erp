@@ -4,7 +4,7 @@ import { addedLineIndexes, planRenumber, sortChangelogMd, type RenumberInput } f
 import { resolveHunks, resolveReleaseConflict } from '../../../scripts/renumber/conflicts';
 
 /**
- * v9.0.54 (TD-473): `npm run release:renumber` moves a branch's versions, migrations and audit sections after
+ * v9.0.107 (TD-473): `npm run release:renumber` moves a branch's versions, migrations and audit sections after
  * those of the merged base (v9/PHASE4_LANES.md §7.7–§7.8) and touches only the text the branch added.
  */
 
@@ -151,6 +151,15 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     expect([...addedLineIndexes(['a', 'b', 'c'], ['a', 'x', 'b', 'c', 'y'])]).toEqual([1, 4]);
     expect([...addedLineIndexes(['a', 'b'], ['b', 'a'])]).toHaveLength(1);
     expect(sortChangelogMd('no section', 9)).toBe('no section');
+  });
+
+  it('keeps the blank lines of the changelog section and moves only misplaced entries', () => {
+    const head = '# Changelog\n\n## Version 9.x Series (Active)\n\n';
+    const tail = '\n---\n\n## Version 8.x Series (Archived)\n';
+    const sorted = `${head}### v9.0.3 — C\n- c\n\n### v9.0.2 — B\n- b\n### v9.0.1 — A\n- a\n${tail}`;
+    expect(sortChangelogMd(sorted, 9)).toBe(sorted);
+    const unsorted = `${head}### v9.0.2 — B\n- b\n\n### v9.0.3 — C\n- c\n### v9.0.1 — A\n- a\n${tail}`;
+    expect(sortChangelogMd(unsorted, 9)).toBe(`${head}### v9.0.3 — C\n- c\n\n### v9.0.2 — B\n- b\n### v9.0.1 — A\n- a\n${tail}`);
   });
 
   it('resolves the conflicts of the release files and refuses any other', () => {
