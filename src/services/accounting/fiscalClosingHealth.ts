@@ -1,7 +1,11 @@
-import { sql } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
+import { fiscalPeriods } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
-import { isoToJalaliDate } from '../../utils/calendarDate.js';
+import { getDisplayTimezone } from '../../lib/businessClock.js';
+import { zonedDayStartUtc } from '../../lib/serverTimestamp.js';
+import { isoToJalaliDate, jalaliYearBounds } from '../../utils/calendarDate.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 import type { HealthCheckTestResult } from '../../types.js';
 
 /**
@@ -66,5 +70,62 @@ export function buildManualClosingTypeHealthTest(entries: ManualClosingTypeVouch
       details: 'نوع اختتامیه دارد ولی بستن سال آن را صادر نکرده است (TD-559).',
     })),
     metrics: { manualClosingTypeVouchers: entries.length },
+  };
+}
+
+export interface EarlyClosedYear {
+  year: number;
+  /** زمان سرور UTC (`YYYY-MM-DD HH:MM:SS`) */
+  closedAt: string;
+  closedBy: string;
+  /** نخستین روز سال بعد (ISO): سال از این روز تمام است */
+  endsOn: string;
+}
+
+/** زمان سرور بی‌منطقه به شکل قابل مقایسه `YYYY-MM-DD HH:MM:SS` */
+function serverTimestampKey(value: string): string {
+  return value.trim().replace('T', ' ').slice(0, 19);
+}
+
+/**
+ * v9.0.122 (TD-543، B03-01، تصمیم ت۱): سال‌هایی که پیش از پایانشان بسته شده‌اند (زمان بستن پیش از آغاز نخستین روز سال بعد
+ * در منطقه زمانی کسب‌وکار). بستن چنین سالی اکنون رد می‌شود؛ بستن‌های پیشین فقط فهرست می‌شوند. سال بسته بی زمان بستن
+ * (ردیف قدیمی) سنجیده نمی‌شود.
+ */
+export async function findEarlyClosedYears(): Promise<EarlyClosedYear[]> {
+  const timeZone = await getDisplayTimezone();
+  const rows = await orm.select().from(fiscalPeriods).where(eq(fiscalPeriods.status, 'closed')).orderBy(asc(fiscalPeriods.fiscalYear));
+  const early: EarlyClosedYear[] = [];
+  for (const r of rows) {
+    const bounds = jalaliYearBounds(r.fiscalYear);
+    if (!r.closedAt || !bounds) continue;
+    if (serverTimestampKey(r.closedAt) < zonedDayStartUtc(bounds.nextFirstDay, timeZone)) {
+      early.push({ year: r.fiscalYear, closedAt: serverTimestampKey(r.closedAt), closedBy: r.closedBy ?? '', endsOn: bounds.nextFirstDay });
+    }
+  }
+  return early;
+}
+
+export function buildEarlyClosedYearsHealthTest(entries: EarlyClosedYear[]): HealthCheckTestResult {
+  return {
+    id: 'fiscal_year_closed_early',
+    category: 'vouchers',
+    title: 'سال مالی بسته‌شده پیش از پایان',
+    description: 'سال مالی فقط پس از آخرین روزش بسته می‌شود. پیش از نسخه ۹.۰.۱۲۲ سال جاری و حتی سال آینده هم بسته می‌شد و از آن لحظه هیچ سندی با تاریخ امروز ثبت نمی‌شد؛ آخرین سال بسته با «بازگشایی سال مالی» باز می‌شود',
+    status: entries.length > 0 ? 'warning' : 'healthy',
+    scoreImpact: 0,
+    count: entries.length,
+    message: entries.length === 0
+      ? 'هیچ سال مالی‌ای پیش از پایانش بسته نشده است.'
+      : `${toPersianDigits(entries.length)} سال مالی پیش از پایانش بسته شده است.`,
+    items: entries.map(e => ({
+      id: e.year,
+      code: `سال مالی ${toPersianDigits(e.year)}`,
+      title: 'بسته‌شده پیش از پایان سال',
+      subtitle: `بسته شده در ${toPersianDigits(isoToJalaliDate(e.closedAt.slice(0, 10)))} (به وقت جهانی)${e.closedBy ? ` توسط ${e.closedBy}` : ''}؛ سال از ${toPersianDigits(isoToJalaliDate(e.endsOn))} تمام است`,
+      date: e.closedAt.slice(0, 10),
+      details: 'بستن پیش از پایان سال (TD-543).',
+    })),
+    metrics: { earlyClosedYears: entries.length },
   };
 }

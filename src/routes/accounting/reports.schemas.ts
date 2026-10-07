@@ -133,3 +133,11 @@ export const fiscalClosingExecuteSchema = z.object({
     createOpeningVoucher: z.boolean().optional(),
   })
 });
+
+/** v9.0.122 (TD-543): بازگشایی آخرین سال مالی بسته با دلیل الزامی */
+export const fiscalYearReopenSchema = z.object({
+  body: z.object({
+    year: z.union([z.string(), z.number()]).transform(v => String(v)).pipe(z.string().min(1, 'سال مالی الزامی است')),
+    reason: z.string().trim().min(1, 'دلیل بازگشایی سال مالی را بنویسید.').max(500, 'دلیل بازگشایی حداکثر ۵۰۰ نویسه است.'),
+  })
+});

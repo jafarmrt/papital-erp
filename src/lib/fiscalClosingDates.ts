@@ -10,10 +10,3 @@ export function fiscalClosingJalaliDates(year: string | number): { closingDate: 
   if (!bounds) return { closingDate: '', openingDateNewYear: '' };
   return { closingDate: isoToJalaliDate(bounds.lastDay), openingDateNewYear: isoToJalaliDate(bounds.nextFirstDay) };
 }
-
-/** چند سال اخیر تا سال جاری برای فهرست سال مالی (به‌جای فهرست ثابتی که پس از نوروز سال جاری را نداشت) */
-export function fiscalClosingYearOptions(currentYear: string | number, count = 5): string[] {
-  const y = Number(currentYear);
-  if (!Number.isInteger(y)) return [];
-  return Array.from({ length: count }, (_, i) => String(y - count + 1 + i));
-}

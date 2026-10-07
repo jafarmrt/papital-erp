@@ -38,6 +38,8 @@ function baseResponse(url: string, init?: RequestInitLike): unknown {
     if (url === '/accounting/summary') return { stats: null };
     if (url === '/accounting/accounts') return [assetsGroup];
     if (url.startsWith(PREVIEW_PREFIX)) return preview;
+    // v9.0.122 (TD-543): the closing form lists the ended years from the server
+    if (url === '/accounting/fiscal-closing/years') return { currentYear: 1405, years: [{ year: 1404, status: 'open', hasVouchers: true, closedAt: null, closedBy: null }], defaultYear: 1404, reopenableYear: null };
     if (url.startsWith('/accounting/reports/ledger')) return { items: [], totalDebit: 0, totalCredit: 0, finalBalance: 0 };
     return [];
   }

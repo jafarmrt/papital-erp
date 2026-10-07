@@ -1062,6 +1062,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_fiscal_year_isolation_and_calendar_td_141_142', 'td141', 'td142', 'fiscal_year', 'closing')) {
   const t14Start = Date.now();
   try {
+    // v9.0.122 (TD-543): a year closes only after its end, so the test closes a past year inside its own schema (a closed
+    // year in the shared schema would refuse every later test's vouchers of that year)
+    const { inFiscalSandbox } = await import('../regression/fiscalClosingTests.js');
+    await inFiscalSandbox(async () => {
     const { FiscalYearService } = await import('../../services/accounting/fiscalYear.service.js');
     const { VoucherService } = await import('../../services/accounting/voucher.service.js');
     const { ChartOfAccountsService } = await import('../../services/accounting/chartOfAccounts.service.js');
@@ -1077,10 +1081,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       throw new Error(`نرمال‌سازی تاریخ ۱۴۰۳/۰۱/۰۱ باید 2024-03-20 باشد اما مقدار ${normIso2} بازگشت داده شد.`);
     }
 
-    // 2. Setup synthetic dynamic test fiscal year (isolated per run)
-    // v7.0.82: سال واقعی (۱۴۲۰ تا ۱۴۷۷) — قید قالب تاریخ journal_vouchers.date (مهاجرت 0030) فقط سال شمسی ۱۳xx تا ۱۵xx
-    // و میلادی ۱۹xx تا ۲۱xx را می‌پذیرد؛ سال‌های تصادفی ۱۶۰۰ تا ۹۴۹۹ تاریخ ساختگی نامعتبر می‌ساختند
-    const testYear = 1420 + Math.floor(Math.random() * 58);
+    // 2. A past fiscal year inside the test's own schema (v9.0.122, TD-543: a year that has not ended is never closed)
+    const testYear = 1392;
     // v8.0.47 (TD-310): سند اختتامیه فقط به آخرین روز سال (۳۰ اسفند در سال کبیسه) پذیرفته می‌شود
     const { jalaliYearBounds } = await import('../../utils/calendarDate.js');
     const testYearBounds = jalaliYearBounds(testYear);
@@ -1164,6 +1166,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       durationMs: Date.now() - t14Start,
       details: 'تراز آزمایشی با پذیرش شیء تراکنش (tx) و نرمال‌سازی تقویم شمسی/میلادی با موفقیت بدون خطای عدم تراز سند اختتامیه اجرا شد.'
     }));
+    });
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'reg_fiscal_year_isolation_and_calendar_td_141_142',
@@ -4378,6 +4381,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const tStart = Date.now();
     const createdVoucherIds: number[] = [];
     try {
+      // v9.0.122 (TD-543): a year closes only after its end; past years inside the test's own schema
+      const { inFiscalSandbox } = await import('../regression/fiscalClosingTests.js');
+      await inFiscalSandbox(async () => {
       const { FiscalYearService } = await import('../../services/accounting/fiscalYear.service.js');
       const { VoucherService } = await import('../../services/accounting/voucher.service.js');
       const { ChartOfAccountsService } = await import('../../services/accounting/chartOfAccounts.service.js');
@@ -4388,10 +4394,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const revAccount = allAccounts.find(a => a.code === '6001') || allAccounts.find(a => a.accountType === 'revenue');
       const assetAccount = allAccounts.find(a => a.code === '1101') || allAccounts.find(a => a.accountType === 'asset');
       if (!revAccount || !assetAccount) throw new Error('سرفصل‌های لازم آزمون یافت نشد');
-      // سال‌های ۱۴۸۰ تا ۱۵۰۰: جدا از بازه آزمون بستن سال TD-141 (۱۴۲۰ تا ۱۴۷۸)؛ با هم‌پوشانی، گاهی یکی از دو آزمون
-      // سالی را می‌بست که دیگری لازم داشت و این آزمون تصادفی شکست می‌خورد. ۱۵۰۰ آخرین سالی است که normalizeDateToIso
-      // به میلادی برمی‌گرداند
-      const baseYear = 1480 + Math.floor(Math.random() * 7) * 3;
+      // v9.0.122 (TD-543): سال‌های گذشته در اسکیمای خود آزمون؛ سال B که بسته می‌شود پیش از سال‌های A و C است
+      const baseYear = 1393;
       const voucher = (year: number, amount: number, extra: Record<string, unknown> = {}) => ({
         date: normalizeDateToIso(`${year}-06-15`) as string,
         voucherType: 'general' as const,
@@ -4408,7 +4412,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const problems: string[] = [];
 
       // ۱) سندی از نوع «اختتامیه» با مرجع CLOSE-…-سال که از فرایند بستن سال نیامده، سال را نمی‌بندد
-      const yearA = baseYear;
+      const yearA = baseYear + 1;
       const fake = await VoucherService.createJournalVoucher(voucher(yearA, 1000, { voucherType: 'closing', referenceNumber: `CLOSE-NOTE-${yearA}` }) as any);
       createdVoucherIds.push(fake.id);
       try {
@@ -4419,7 +4423,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }
 
       // ۲) بستن واقعی سال B همزمان با تراکنشی که در سال B سند ثبت کرده و هنوز commit نشده است
-      const yearB = baseYear + 1;
+      const yearB = baseYear;
       const holdMs = 1500;
       const inflight = orm.transaction(async (tx) => {
         const v = await VoucherService.createJournalVoucher(voucher(yearB, 2000) as any, tx);
@@ -4498,6 +4502,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         durationMs: Date.now() - tStart,
         details: 'سند «اختتامیه» دستی سال را نبست، بستن سال منتظر سند همزمان ماند و آن را بست، پس از بستن هیچ سندی وارد سال نشد و آستانه تراز ۰٫۰۱ در ایجاد سند اعمال شد.'
       }));
+      // the sandbox is gone with its vouchers: nothing left to clean in the shared schema
+      }).finally(() => { createdVoucherIds.length = 0; });
     } catch (err: any) {
       results.push(makeTestCase({
         id: 'reg_fiscal_periods_p2_5',

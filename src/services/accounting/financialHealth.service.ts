@@ -10,7 +10,7 @@ import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } fro
 import { buildFutureStockMovementHealthTest, findFutureStockMovements } from '../inventory/futureStockMovements.js';
 import { buildOpeningVoucherHealthTest, findOpeningVoucherMismatches } from '../inventory/itemOpeningValue.js';
 import { buildReservedWarehouseCodeHealthTest, findReservedCodeWarehouses } from '../inventory/reservedWarehouseCode.js';
-import { buildManualClosingTypeHealthTest, findManualClosingTypeVouchers } from './fiscalClosingHealth.js';
+import { buildEarlyClosedYearsHealthTest, buildManualClosingTypeHealthTest, findEarlyClosedYears, findManualClosingTypeVouchers } from './fiscalClosingHealth.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1106,6 +1106,9 @@ export class FinancialHealthService {
 
     // آزمون ۲۴: v9.0.121 (TD-559) اسناد دستی با نوع اختتامیه که بستن سال صادر نکرده (فقط فهرست، بی بازنویسی)
     tests.push(buildManualClosingTypeHealthTest(await findManualClosingTypeVouchers()));
+
+    // آزمون ۲۵: v9.0.122 (TD-543) سال مالی بسته‌شده پیش از پایانش (فقط فهرست؛ آخرین سال بسته با بازگشایی باز می‌شود)
+    tests.push(buildEarlyClosedYearsHealthTest(await findEarlyClosedYears()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

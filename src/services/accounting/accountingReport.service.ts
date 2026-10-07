@@ -76,8 +76,8 @@ export class AccountingReportService {
     currency?: string;
     /** v9.0.120 (TD-545): «همراه اسناد اختتامیه»؛ پیش‌فرض اسناد بستن سالِ روز پایان گزارش کنار می‌روند */
     includeClosing?: boolean;
-    /** v9.0.120 (TD-545): اسناد بستن سال از این تاریخ به بعد کنار می‌روند (صورت سود و زیان: آغاز دوره)؛ پیش‌فرض تاریخ پایان */
-    closingExcludedFrom?: string;
+    /** v9.0.120 (TD-545): اسناد بستن سال از آغاز دوره به بعد کنار می‌روند (صورت سود و زیان)؛ پیش‌فرض از تاریخ پایان */
+    closingFromStart?: boolean;
   }, tx?: DbExecutor): Promise<TrialBalanceRow[]> {
     const executor = tx || orm;
     const targetLevel = params.level || 'all';
@@ -149,7 +149,7 @@ export class AccountingReportService {
     const normStartDate = normalizeDateToIso(params.startDate);
     const normEndDate = normalizeDateToIso(params.endDate);
     const isBaseView = !params.currency || params.currency === 'all';
-    const closingCutoff = yearEndClosingCutoff(params.includeClosing, normalizeDateToIso(params.closingExcludedFrom) ?? normEndDate);
+    const closingCutoff = yearEndClosingCutoff(params.includeClosing, (params.closingFromStart ? normStartDate : undefined) ?? normEndDate);
 
     for (const it of groupedItems) {
       const itemCur = it.itemCurrency;
@@ -1104,7 +1104,7 @@ export class AccountingReportService {
    */
   static async getIncomeStatement(params: { startDate?: string; endDate?: string; currency?: string; includeClosing?: boolean }, tx?: DbExecutor): Promise<IncomeStatementReport> {
     // v9.0.120 (TD-545): گردش حساب‌های موقت در دوره بی اسناد بستن سالِ درون دوره؛ بی آغاز دوره، از روز پایان
-    const trial = await this.getTrialBalance({ level: 'subsidiary', ...params, closingExcludedFrom: params.startDate || params.endDate }, tx);
+    const trial = await this.getTrialBalance({ level: 'subsidiary', ...params, closingFromStart: true }, tx);
 
     const revenues: StatementRow[] = [];
     const costOfSales: StatementRow[] = [];

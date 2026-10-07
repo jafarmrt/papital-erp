@@ -10,6 +10,8 @@ import { ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { jalaliYearBounds, isoToJalaliDate, toStorageDate } from '../../utils/calendarDate.js';
 import { toEnglishDigits } from '../../utils/persianNumber.js';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { assertFiscalYearEnded, isFiscalYearEnded, lockFiscalYearSequence } from './fiscalYearOrder.js';
 import type {
   FiscalYearClosingPreview,
   FiscalYearClosingResult,
@@ -109,6 +111,8 @@ export class FiscalYearService {
 
     const normClosingDate = closingDate;
     const draftVouchers = await this.findDraftVouchersOfYear(currentYear, params.externalTx);
+    // v9.0.122 (TD-543): سالی که هنوز تمام نشده پیش‌نمایش می‌شود ولی بسته نمی‌شود
+    const yearEnded = isFiscalYearEnded(currentYear, await businessTodayIsoDate());
 
     // v9.0.120 (TD-545): بستن سال مانده واقعی دفتر را می‌خواهد، پس اسناد اختتامیه (و برگشت آن‌ها پس از بازگشایی) هم شمرده می‌شوند
     const trial = await AccountingReportService.getTrialBalance({
@@ -287,6 +291,7 @@ export class FiscalYearService {
       summaryVouchersPreview,
       draftVouchers: draftVouchers.slice(0, FISCAL_CLOSING_DRAFT_LIST_LIMIT),
       draftVoucherCount: draftVouchers.length,
+      yearEnded,
     };
   }
 
@@ -304,6 +309,9 @@ export class FiscalYearService {
     // v8.0.47 (TD-310): تاریخ‌ها همیشه آخرین روز سال و ۱ فروردین سال بعد؛ تاریخ دیگر رد می‌شود
     const { year, closingDate: normClosingDate, openingDate: normOpeningDate } =
       resolveFiscalClosingDates(data.year, data.closingDate, data.openingDateNewYear);
+    // v9.0.122 (TD-543، تصمیم ت۱ مالک محصول): سال فقط پس از آخرین روزش بسته می‌شود؛ پیش‌تر سال جاری و حتی سال آینده بسته
+    // می‌شد و از آن لحظه هیچ سندی با تاریخ امروز ثبت نمی‌شد
+    assertFiscalYearEnded(year, await businessTodayIsoDate());
 
     // Conceptual Account Resolution (Subphase 9.2: Summary Profit/Loss and Retained Earnings)
     let summaryProfitAcc = await AccountMappingService.getSummaryProfitLossAccount();
@@ -347,6 +355,9 @@ export class FiscalYearService {
           'FISCAL_CLOSING_LOCKED'
         );
       }
+
+      // v9.0.122 (TD-543): بستن و بازگشایی سال‌ها پشت یک قفل؛ وضعیت سال‌های دیگر تا پایان این تراکنش عوض نمی‌شود
+      await lockFiscalYearSequence(tx);
 
       // v7.0.49 (audit P2-5): قفل انحصاری ردیف سال در fiscal_periods — منتظر اسنادی می‌ماند که هم‌اکنون در این سال
       // ثبت می‌شوند و تا پایان این تراکنش هیچ سند تازه‌ای وارد سال نمی‌شود؛ مانده‌ها پس از این قفل محاسبه می‌شوند.
