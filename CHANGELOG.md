@@ -19,14 +19,29 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.272 — Report Digits, Currency Names and Today
+### v9.0.277 — Report Digits, Currency Names and Today
 - **Accounting Report Digits (P3):** the journal book and the ratios show Persian digits, currencies are named, and the party statement and account explorer take today from the business time zone (TD-580).
 
-### v9.0.271 — Persian Wording in the Accounting UI
+### v9.0.276 — Persian Wording in the Accounting UI
 - **Accounting UI Wording (P3):** the accounting screens have no English words or loanwords («دوبل», «آرتیکل», «داشبورد») and the voucher form button says it saves a draft (TD-579).
 
-### v9.0.270 — Payslip Deductions Get Their Own Account
+### v9.0.275 — Payslip Deductions Get Their Own Account
 - **Payslip Deductions Account (P2):** payslip deductions credit the new standard account 3205 «employee deductions payable» instead of 3202 «customer prepayments»; migration 0076 adds it to existing charts, past vouchers stay and the health check lists what is left on 3202 (TD-554).
+
+### v9.0.274 — v9.0.274 — A Sales Return Gives Back Its Share of the Invoice VAT
+- **Documents:** a sales return of an invoice takes that invoice's VAT percent and its share of the invoice VAT for the returned net, so a full return in parts gives back exactly the invoice VAT, and its voucher debits VAT payable; before, a full return of a 1,000,000 invoice at 10% left the customer owing 100,000 and VAT payable 100,000 too high (TD-774).
+
+### v9.0.273 — v9.0.273 — A Sales Return Takes Its Invoice's Currency, Rate and Net Price
+- **Documents:** a sales return of an invoice takes that invoice's currency, exchange rate and net unit price after line discounts; any other price, currency or rate is refused with 422, also on draft edit and finalize, and the stock page fills and locks them; before, one unit sold at 900,000 was credited 5,000,000 and a full return of a 180 USD invoice credited 200 rials (TD-788).
+
+### v9.0.272 — v9.0.272 — Settled Invoice Is Not Voided; Receipts Move On Account
+- **Documents and treasury:** voiding a document with a live treasury receipt or payment is refused with 409 naming them; the treasury table can move such a row on account or to another invoice of the same party, so the void can follow; before, the receipt stayed on the voided invoice and the replacement showed as unpaid (TD-779).
+
+### v9.0.271 — v9.0.271 — Invoice With a Live Return Is Not Voided
+- **Documents:** voiding a sales invoice that still has a sales return (in any status) is refused with 409 naming the returns; before, the returned goods came back to stock twice and the customer kept a credit for a sale that no longer existed (TD-773).
+
+### v9.0.270 — v9.0.270 — Zero-Price Invoice Gets Its Cost Voucher
+- **Accounting:** a final sales invoice with zero gross (free sample, gift) now gets a voucher that moves its Kardex cost from inventory to cost of sales, with zero revenue; before, no voucher was issued and inventory stayed overstated in the ledger (TD-772).
 
 ### v9.0.269 — Only Approved Payslips Are Paid
 - **Only Approved Payslips Are Paid (TD-816):** a draft payslip is refused at payment and the screens offer approval instead, and the payment date, method and reference are written only by the payment, never by the status route.

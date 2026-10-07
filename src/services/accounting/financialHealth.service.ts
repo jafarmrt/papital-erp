@@ -1185,7 +1185,7 @@ export class FinancialHealthService {
     tests.push(categoryIntegrityTest);
     // آزمون ۳۷: v9.0.266 (TD-804) فیش حقوقی با پاداش یا کسورات منفی، بی سند یا ناهمخوان با سند (فقط فهرست، بی بازنویسی)
     tests.push(buildPayrollVoucherHealthTest(await findPayrollVoucherMismatches()));
-    // آزمون ۳۸: v9.0.270 (TD-554) کسورات فیش حقوق که سندهای پیشین در ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» گذاشته‌اند (فقط فهرست)
+    // آزمون ۳۸: v9.0.275 (TD-554) کسورات فیش حقوق که سندهای پیشین در ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» گذاشته‌اند (فقط فهرست)
     tests.push(buildPayslipDeductionsHealthTest(await findPayslipDeductionsInPrepayments()));
 
     // =========================================================================

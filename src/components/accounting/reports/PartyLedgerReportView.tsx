@@ -162,7 +162,7 @@ export function PartyLedgerReportView({
     }
 
     const partyName = reportData.party?.name || selectedParty?.name || 'طرف_حساب';
-    // v9.0.272 (TD-580): تاریخ امروز منطقه زمانی توافقی، نه روز UTC مرورگر
+    // v9.0.277 (TD-580): تاریخ امروز منطقه زمانی توافقی، نه روز UTC مرورگر
     const filename = partyStatementFileName(partyName, getTodayJalaliDate());
 
     const headers = ['ردیف', 'تاریخ', 'شماره سند', 'شماره دستی', 'شرح عملیات', 'کد حساب', 'نام حساب معین', 'بدهکار', 'بستانکار', 'مانده لحظه‌ای', 'نوع مانده', 'ارز'];

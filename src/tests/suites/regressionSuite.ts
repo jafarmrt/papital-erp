@@ -10590,7 +10590,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 12 payroll PR a (v9.0.266 on): payslip integrity (TD-804 ...)
   const { runPayrollIntegrityTests } = await import('../regression/payrollIntegrityTests.js');
   results.push(...await runPayrollIntegrityTests(shouldRun));
-  // Package 3 PR z (v9.0.270 on): payslip deductions account 3205 (TD-554)
+  // Package 3 PR z (v9.0.275 on): payslip deductions account 3205 (TD-554)
   const { runPayrollDeductionAccountTests } = await import('../regression/payrollDeductionAccountTests.js');
   results.push(...await runPayrollDeductionAccountTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
@@ -10659,6 +10659,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 8 PR A (v9.0.238+): stock direction, sellable gate and line numbers of POST /documents
   const { runDocumentEntryTests } = await import('../regression/documentEntryTests.js');
   results.push(...await runDocumentEntryTests(shouldRun));
+  // Package 8 PR B (v9.0.270+): zero-price invoices, voids with dependents, sales return VAT and amounts
+  const { runSalesDocumentTests } = await import('../regression/salesDocumentTests.js');
+  results.push(...await runSalesDocumentTests(shouldRun));
 
   // Package 13 PR B (v9.0.249+): reading daily work logs (list, statistics, timestamps)
   const { runDailyLogReadTests } = await import('../regression/dailyLogReadTests.js');

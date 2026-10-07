@@ -42,7 +42,7 @@ export async function runDocumentEntryTests(shouldRun: ShouldRun): Promise<TestC
   return results;
 }
 
-interface Fixture {
+export interface Fixture {
   wh: string;
   today: string;
   item(stock: number, wac?: number, stocks?: Record<string, number>): Promise<number>;
@@ -50,7 +50,7 @@ interface Fixture {
   doc(docType: string, status: string, lines: Array<Record<string, unknown>>, extra?: Record<string, unknown>): Record<string, unknown>;
 }
 
-async function fixture(h: Harness): Promise<Fixture> {
+export async function fixture(h: Harness): Promise<Fixture> {
   const { createTestItem } = await import('../fixtures/factories.js');
   const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
   const { getDefaultWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
@@ -81,7 +81,7 @@ async function fixture(h: Harness): Promise<Fixture> {
   };
 }
 
-const brief = (res: { status: number; body?: unknown }) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 180)}`;
+export const brief = (res: { status: number; body?: unknown }) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 180)}`;
 
 /** B08-01 (TD-770): «رسید» با inOut: out، فاکتور با inOut: in، پیش‌فاکتور با inOut: in و transfer از POST /documents */
 async function directionFromTypeCase(h: Harness, wrong: string[]): Promise<string> {

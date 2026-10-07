@@ -1,4 +1,4 @@
--- Drizzle Migration 0076: the «کسورات حقوق پرداختنی» account for payslip deductions (v9.0.270 / TD-554)
+-- Drizzle Migration 0076: the «کسورات حقوق پرداختنی» account for payslip deductions (v9.0.275 / TD-554)
 --
 -- Product-owner decision t6 (option a, package 3): the employee share of insurance and income tax withheld on a payslip
 -- is owed to the social security organisation and the tax office, so it gets its own standard subsidiary account

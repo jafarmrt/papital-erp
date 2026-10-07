@@ -78,7 +78,7 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '3202', name: 'پیش‌دریافت‌ها از مشتریان', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
   { code: '3203', name: 'مالیات و عوارض پرداختنی', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
   { code: '3204', name: 'بیمه پرداختنی', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
-  // v9.0.270 (TD-554، B03-12، تصمیم ت۶ الف): بیمه و مالیات سهم کارکنان که از فیش کسر می‌شود؛ پیش‌تر به ۳۲۰۲ پیش‌دریافت مشتری می‌رفت
+  // v9.0.275 (TD-554، B03-12، تصمیم ت۶ الف): بیمه و مالیات سهم کارکنان که از فیش کسر می‌شود؛ پیش‌تر به ۳۲۰۲ پیش‌دریافت مشتری می‌رفت
   { code: '3205', name: 'کسورات حقوق پرداختنی (بیمه و مالیات سهم کارکنان)', level: 'subsidiary', parentCode: '32', accountType: 'liability', nature: 'credit', isSystem: 1 },
 
   // ==========================================
