@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.174 — Audit Gate Fails When npm audit Fails
+- **Audit Gate:** `npm run audit:gate` fails (`auditRunFailure` in `scripts/audit-gate.ts`) when `npm audit` returns an error object or no `vulnerabilities` object, and prints npm's error. Before, `report.vulnerabilities || {}` read the failed run as empty and passed.
+
 ### v9.0.173 — Failed Backups Leave No Partial Files
 - **Backup Cleanup:** a failed `scripts/backup.sh` run removes the files it wrote (uncompressed dump, manifest, archives; a compressed dump that failed verification is still kept for inspection), retention also deletes stray `.dump` files of earlier failed runs, and `file_attachments` is looked up with `to_regclass` in its own query, so a database before its first migration is backed up instead of failing with `relation "file_attachments" does not exist`.
 

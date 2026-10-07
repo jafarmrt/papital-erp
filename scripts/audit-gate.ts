@@ -33,6 +33,20 @@ function advisoryId(url?: string): string {
   return match ? match[0] : String(url || 'unknown');
 }
 
+/** Why the input is not an audit report (an npm error object or no vulnerability list); null for a report */
+function auditRunFailure(report: unknown): string | null {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return 'the output is not a JSON object';
+  const r = report as { error?: { code?: unknown; summary?: unknown } | unknown; vulnerabilities?: unknown };
+  if (r.error !== undefined) {
+    const e = r.error as { code?: unknown; summary?: unknown };
+    return `${String(e?.code ?? 'error')} ${String(e?.summary ?? '')}`.trim();
+  }
+  if (!r.vulnerabilities || typeof r.vulnerabilities !== 'object' || Array.isArray(r.vulnerabilities)) {
+    return 'the output has no "vulnerabilities" object';
+  }
+  return null;
+}
+
 function main(): void {
   const raw = fs.readFileSync(0, 'utf-8');
   let report: { vulnerabilities?: Record<string, AuditVulnerability> };
@@ -43,10 +57,18 @@ function main(): void {
     process.exit(1);
   }
 
+  // v9.0.174 (TD-607): a failed `npm audit` (registry unreachable, no lockfile) prints an error object without a
+  // vulnerability list; the gate used to read it as «no vulnerabilities» and pass
+  const failure = auditRunFailure(report);
+  if (failure) {
+    console.error(`Audit Gate FAILED - npm audit did not produce a report: ${failure}`);
+    process.exit(1);
+  }
+
   const blocking: string[] = [];
   const allowed: string[] = [];
 
-  for (const [pkg, vuln] of Object.entries(report.vulnerabilities || {})) {
+  for (const [pkg, vuln] of Object.entries(report.vulnerabilities ?? {})) {
     if (!BLOCKING_SEVERITIES.has(vuln.severity)) continue;
     // فقط مدخل‌های مستقیم advisory بررسی می‌شوند؛ مدخل رشته‌ای یعنی آسیب‌پذیری از وابستگی دیگری به ارث رسیده است
     const directAdvisories = (Array.isArray(vuln.via) ? vuln.via : []).filter(
