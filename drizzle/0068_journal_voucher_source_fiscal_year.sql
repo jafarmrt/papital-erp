@@ -1,4 +1,4 @@
--- Drizzle Migration 0068: link the vouchers of a fiscal-year closing to the closed year (v9.0.143 / TD-545, finding B03-03,
+-- Drizzle Migration 0068: link the vouchers of a fiscal-year closing to the closed year (v9.0.148 / TD-545, finding B03-03,
 -- product-owner decision t3 option A)
 --
 -- The three closing vouchers of a year (temporary accounts, profit transfer, permanent accounts) are dated the year's

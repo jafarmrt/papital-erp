@@ -43,7 +43,7 @@ afterEach(() => { cleanup(); });
 const ISSUED = 'به عنوان سند شماره ۱ سال جدید ثبت خواهد شد';
 const NOT_ISSUED = 'سند افتتاحیه صادر نمی‌شود';
 
-// v9.0.147 (TD-577, B03-35): with «صدور خودکار سند افتتاحیه» unticked, step 4 and the execution note still said the
+// v9.0.152 (TD-577, B03-35): with «صدور خودکار سند افتتاحیه» unticked, step 4 and the execution note still said the
 // opening voucher would be issued, while closing zeroes the balance-sheet accounts and the new year starts without them.
 describe('fiscal closing step 4 follows the opening-voucher checkbox (TD-577)', () => {
   it('ticked: step 4 says the opening voucher is issued; unticked: it says none is issued and the new year starts without opening balances', async () => {

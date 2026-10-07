@@ -105,7 +105,7 @@ const isVoucherBalanced = (rows: readonly VoucherBalanceRow[]): boolean => {
 };
 
 /**
- * v9.0.144 (TD-559، B03-17): نوع سند دستی؛ «اختتامیه» را فقط بستن سال مالی صادر می‌کند (مانده‌های اول دوره «افتتاحیه» است)
+ * v9.0.149 (TD-559، B03-17): نوع سند دستی؛ «اختتامیه» را فقط بستن سال مالی صادر می‌کند (مانده‌های اول دوره «افتتاحیه» است)
  */
 const manualVoucherType = z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement'])
   .refine(type => type !== 'closing', MANUAL_CLOSING_TYPE_MESSAGE);

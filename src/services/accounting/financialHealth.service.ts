@@ -1113,13 +1113,13 @@ export class FinancialHealthService {
     overallScore += reservedWarehouseCodeTest.scoreImpact;
     tests.push(reservedWarehouseCodeTest);
 
-    // آزمون ۲۴: v9.0.144 (TD-559) اسناد دستی با نوع اختتامیه که بستن سال صادر نکرده (فقط فهرست، بی بازنویسی)
+    // آزمون ۲۴: v9.0.149 (TD-559) اسناد دستی با نوع اختتامیه که بستن سال صادر نکرده (فقط فهرست، بی بازنویسی)
     tests.push(buildManualClosingTypeHealthTest(await findManualClosingTypeVouchers()));
 
-    // آزمون ۲۵: v9.0.145 (TD-543) سال مالی بسته‌شده پیش از پایانش (فقط فهرست؛ آخرین سال بسته با بازگشایی باز می‌شود)
+    // آزمون ۲۵: v9.0.150 (TD-543) سال مالی بسته‌شده پیش از پایانش (فقط فهرست؛ آخرین سال بسته با بازگشایی باز می‌شود)
     tests.push(buildEarlyClosedYearsHealthTest(await findEarlyClosedYears()));
 
-    // آزمون ۲۶: v9.0.146 (TD-544) سال مالی بسته‌شده پیش از سال‌های پیشینِ دارای سند خود (فقط فهرست، بی اصلاح خودکار)
+    // آزمون ۲۶: v9.0.151 (TD-544) سال مالی بسته‌شده پیش از سال‌های پیشینِ دارای سند خود (فقط فهرست، بی اصلاح خودکار)
     tests.push(buildOutOfOrderClosedYearsHealthTest(await findOutOfOrderClosedYears()));
 
     // =========================================================================

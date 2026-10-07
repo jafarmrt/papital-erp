@@ -58,7 +58,7 @@ export function useExecuteFiscalClosing() {
 }
 
 /**
- * v9.0.145 (TD-543، تصمیم ت۱ مالک محصول): سال‌های تمام‌شده با وضعیتشان؛ فرم بستن سال فقط همین سال‌ها را نشان می‌دهد
+ * v9.0.150 (TD-543، تصمیم ت۱ مالک محصول): سال‌های تمام‌شده با وضعیتشان؛ فرم بستن سال فقط همین سال‌ها را نشان می‌دهد
  * (سال جاری و آینده بسته نمی‌شوند) و آخرین سال بسته را برای بازگشایی.
  */
 export function useFiscalClosingYears() {
@@ -69,7 +69,7 @@ export function useFiscalClosingYears() {
   });
 }
 
-/** v9.0.145 (TD-543، تصمیم ت۲): بازگشایی آخرین سال بسته با دلیل؛ اسناد بستن آن سال بی‌اثر می‌شوند */
+/** v9.0.150 (TD-543، تصمیم ت۲): بازگشایی آخرین سال بسته با دلیل؛ اسناد بستن آن سال بی‌اثر می‌شوند */
 export function useReopenFiscalYear() {
   const queryClient = useQueryClient();
   return useMutation<FiscalYearReopenResult, unknown, { year: number; reason: string }>({

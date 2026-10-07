@@ -19,20 +19,35 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.147 — Closing Without an Opening Voucher Says So
+### v9.0.152 — Closing Without an Opening Voucher Says So
 - **Fiscal Closing Opening-Voucher Text (P3):** with «صدور خودکار سند افتتاحیه» unticked, step 4 still said the opening voucher would be issued; step 4, the execution note and the confirm dialog now say none is issued and the next year starts without opening balances (TD-577, Vitest `fiscalOpeningVoucherText.test.tsx`).
 
-### v9.0.146 — Fiscal Years Close in Order
+### v9.0.151 — Fiscal Years Close in Order
 - **Fiscal Year Closing Order (P1):** a year closed while an earlier year with vouchers was open took that year's revenue too, and the earlier year then closed only without an opening voucher, wiping the permanent balances (cash 12,300,000 shown as 2,000,000); a year now closes only after every earlier year with vouchers, the form starts on the oldest open one and out-of-order closings are listed by the health check (TD-544, `reg_fiscal_years_close_in_order_td_544`).
 
-### v9.0.145 — A Fiscal Year Closes After It Ends; the Last Closed Year Reopens
+### v9.0.150 — A Fiscal Year Closes After It Ends; the Last Closed Year Reopens
 - **Fiscal Year Closing Time and Reopening (P1):** the current year, and even the next one, could be closed, after which no invoice, receipt or voucher dated today was accepted and nothing reopened a year; a year now closes only after its last day, the form lists ended years only, and the last closed year reopens with a reason and the new permission `accounting.fiscal_reopen`, its closing vouchers reversed on their own dates (TD-543, `reg_fiscal_year_close_after_end_and_reopen_td_543`).
 
-### v9.0.144 — A Manual Voucher Is an Opening Voucher, Never a Closing One
+### v9.0.149 — A Manual Voucher Is an Opening Voucher, Never a Closing One
 - **Manual Closing Vouchers (P2):** the voucher form saved opening balances as type closing and a manual reference «CLOSING-1400» blocked closing 1400; a manual voucher now takes neither the closing type nor a reserved reference, closing reads only `fiscal_periods`, and only the closing run's vouchers are locked until the year is reopened (TD-559, `reg_manual_voucher_cannot_be_closing_td_559`).
 
-### v9.0.143 — Reports of a Closed Year Show Its Real Figures
+### v9.0.148 — Reports of a Closed Year Show Its Real Figures
 - **Closed-Year Reports (P1):** after a year was closed, its income statement, balance sheet, trial balance and ratios showed zero because they counted the closing vouchers; the closing run's vouchers are now linked to the year (`source_fiscal_year`, migration 0068) and left out by default, with an «include closing vouchers» box (TD-545, `reg_reports_exclude_year_end_closing_td_545`).
+
+### v9.0.147 — Client Trace IDs Validated
+- **Trace IDs:** a client `X-Request-ID` / `X-Correlation-ID` becomes the trace id only when it matches `^[A-Za-z0-9_-]{8,64}$` (`acceptedTraceId` in `src/lib/requestContext.ts`); otherwise a new id is issued, and the error handler never reads the raw header. Before, a 4,000-character id was repeated in the response and every log line.
+
+### v9.0.146 — Metrics Guard Checks the Admin Session Live
+- **Metrics Guard:** `/metrics` and `/api/metrics` check a session token live like every other route (`resolveLiveSession` in `src/middleware/auth.ts`, shared with `authenticateToken`): a deleted user or a stale `tokenVersion` gets 401 and the role is read from the database (non-admin 403). `METRICS_TOKEN` scraping is unchanged. Before, a deleted or demoted admin still read the metrics.
+
+### v9.0.145 — Production CSP Frames and Connects Only to Itself
+- **Production CSP (owner decision t3):** in production `frame-ancestors` and `connect-src` are `'self'` only, plus the origins listed in the new `FRAME_ANCESTORS` and the existing `EXTERNAL_API_ORIGINS` (`buildCspDirectives` in `src/lib/cspDirectives.ts`); the Google preview hosts and the dev server connections stay allowed outside production. Before, any page on `*.run.app` or `*.googleusercontent.com` could frame the app with the user's `SameSite=None` session (clickjacking), and the browser could connect to every HTTPS origin.
+
+### v9.0.144 — Global Rate Limit Keyed by Client Address
+- **Global Rate Limit:** the general limiter (10,000 requests per minute in production) is keyed by the client address only (`req.ip`, honouring `TRUST_PROXY`). It runs before authentication, so the old key, the last 16 characters of an unverified cookie, gave every forged cookie a fresh bucket.
+
+### v9.0.143 — Bounded HTTP Metric Labels
+- **Metric Labels (P1):** the HTTP request metrics label a request by its mount prefix and route pattern (`metricsRouteLabel`); a request that matched no route (404, 401 before a router, static files) is counted under `unmatched_api` or `unmatched`. Before, every unknown path, even without login, added series that were never freed (about 10 KB each), so random paths could exhaust the single server process.
 
 ### v9.0.142 — Piecework Read Scope
 - **Piecework Read Scope:** every personnel's work logs and special rates need a piecework permission; a project reads only its own logs (TD-892).

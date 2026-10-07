@@ -58,7 +58,7 @@ const executeButton = (year: string) => screen.findByText(`اجرای قطعی �
 beforeEach(() => { fetchJson.mockReset(); toastFn.success.mockReset(); toastFn.error.mockReset(); confirmAction.mockReset(); perms.keys = []; });
 afterEach(() => { cleanup(); });
 
-// v9.0.146 (TD-544, B03-02, product-owner decision t1 option A): years were closed out of order; closing 1397 with 1396 open
+// v9.0.151 (TD-544, B03-02, product-owner decision t1 option A): years were closed out of order; closing 1397 with 1396 open
 // closed 1396's revenue too.
 describe('fiscal years close in order (TD-544)', () => {
   it('the form starts on the oldest open year with vouchers the server names', async () => {
