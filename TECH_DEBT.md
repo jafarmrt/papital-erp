@@ -47,7 +47,6 @@
 | TD-664 | کالا و قیمت‌گذاری (بسته ۵) | P3 (B05-18) — ۱۶ اصطلاح انگلیسی یا آوانویسی در رابط کالا و قیمت‌گذاری (WAC، Template، استراتژی، کدینگ، کتگوری، اتمیک، آلارم، ایمپورت، دیتابیس، فرمولاسیون، کاتالوگ، آپلود، فرمت، لیست، آرشیو)؛ بها برای هر خواننده فهرست کالا دیده می‌شود | ItemWarehouseStockForm.tsx، ItemBasicForm.tsx، ExcelUploadStep.tsx، ExcelPreviewStep.tsx، UnifiedExcelModal.tsx، ImportErrorsModal.tsx، ItemsPage.tsx، ItemsTable.tsx، PricingPage.tsx، items.crud.routes.ts | open (P3، تصمیم ت۱۰ بند ۱ و ۲) |
 | TD-582 | زیرساخت (بسته ۱) | P1 (B01-02) — برچسب مسیر `/metrics` برای درخواست بی route خام `req.path` است و هرگز آزاد نمی‌شود: ۳٬۰۰۰ درخواست بی ورود به `/api/zz-<تصادفی>` سری‌های `http_requests_total` را از ۲ به ۳٬۰۰۲ رساند؛ هر مسیر حدود ۱۰ کیلوبایت ماندگار (۵۰٬۰۰۰ مسیر = ۴۵۵ MiB، خواندن `/metrics` ۱٫۳ s)؛ برچسب پیشوند mount را هم ندارد | middleware/metrics.ts | open (P1) |
 | TD-584 | زیرساخت (بسته ۱) | P2 (B01-04) — API پیش از پایان مهاجرت‌ها پاسخ می‌دهد و `/health/ready` «آماده» می‌گوید: با پایگاه‌داده در ۰۰۵۴ و build نیازمند ۰۰۵۵، ورود موفق و `GET /api/personnel` ۵۰۰؛ با قفل مهاجرت در دست دیگری `/health/ready` ۲۰۰ و `POST /api/login` ۵۰۰ (نصب لینوکسی دروازه‌ای ندارد) | server.ts، app.ts | open (P2، تصمیم ت۲ الف) |
-| TD-588 | زیرساخت (بسته ۱) | P2 (B01-08) — Vite کل `public/` را در `dist/` کپی می‌کند: هر build پیوست‌ها را در `dist/uploads/.attachments` تکرار می‌کند (۱٫۱M در هر دو)، پیوست حذف‌شده در `dist/` می‌ماند و `docker build` محلی و zip منبع پیوست‌ها را با خود می‌برند | vite.config.ts، .dockerignore، package-source.ps1 | open (P2) |
 | TD-589 | زیرساخت (بسته ۱) | P2 (B01-09) — قید FK و ایندکس یکتای شرطی مهاجرت‌ها روی داده ناپاک فقط notice `SKIPPED` می‌دهند که کسی نمی‌شنود: پایگاه‌داده دوره v3 پس از ارتقا `success:true, warnings:[]` و بی `fk_transactions_item_id`، `fk_document_items_*` و `uq_cheques_sayad_number_active`، حتی پس از پاک شدن داده | db/migrator.ts، drizzle/0001، 0012، 0015 | open (P2، تصمیم ت۵ الف) |
 | TD-590 | زیرساخت (بسته ۱) | P2 (B01-10) — `0007` ایندکس را بی نام اسکیما حذف می‌کند و اسکیمای ایزوله آزمون با مسیر جست‌وجوی `"<schema>", public` ساخته می‌شود: `public.idx_idemp_user_scope_key` حذف شد و هر POST با کلید idempotency با خطای `ON CONFLICT` شکست | drizzle/0007_idempotency_triple_key.sql، src/tests/setup/testDb.ts | open (P2) |
 | TD-592 | زیرساخت (بسته ۱) | P2 (B01-12) — خروجی داده `SELECT *` بی سقف روی ۲۹ جدول و یک `res.json` است: ۹۵۰٬۰۰۰ ردیف ممیزی ← ۷۵۰ MiB در ۲۷ s، حافظه پردازه ۳٬۰۹۴ MiB و `/health/live` ۱۳٫۲ s منتظر | services/system/dataExport.service.ts، system.routes.ts | open (P2، تصمیم ت۷ الف) |
@@ -110,8 +109,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۸۹ ردیف
-- **آرشیو شده (resolved):** ۵۲۶ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۸۸ ردیف
+- **آرشیو شده (resolved):** ۵۲۷ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -120,4 +119,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.168 — TD-601 (جزئیات build در /health عمومی) رفع و بایگانی شد؛ بسته ۱ ردیف باز دارد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.169 — TD-588 (پیوست‌ها در خروجی build) رفع و بایگانی شد؛ بسته ۱ ردیف باز دارد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

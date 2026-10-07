@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.169 — Attachments Stay Out of Builds and Packages
+- **Public Assets:** the client build copies `public/` without `uploads/` (`copyPublicAssets` in `scripts/publicAssets.ts`, a Vite plugin with `copyPublicDir: false`), `.dockerignore` excludes `public/uploads` and `package-source.ps1` drops it from the source package. Before, every build duplicated all attachments into `dist/uploads`, a deleted attachment stayed there, and a local Docker image or source zip carried them.
+
 ### v9.0.168 — Build Details of /health Scoped and Real
 - **Build Details:** `/health` returns `version` to everyone (`verify-startup.sh` reads it) and `buildInfo` only to the `METRICS_TOKEN` or a live system-admin session (`metricsReaderStatus` in `src/middleware/metricsAuth.ts`). `npm run build` writes `dist/build-info.json` with the commit and build time (`scripts/write-build-info.mjs`; the Docker build takes `--build-arg GIT_COMMIT_SHA`); without it they are `unknown`, never the old fixed `v4-master` and date.
 

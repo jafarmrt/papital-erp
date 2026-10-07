@@ -33,6 +33,10 @@ foreach ($d in $excludeDirs) {
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# v9.0.169 (TD-588): attachments and uploaded images of this machine never go into a source package
+$stageUploads = Join-Path $stage 'public\uploads'
+if (Test-Path $stageUploads) { Remove-Item $stageUploads -Recurse -Force }
+
 # Normalize line endings of shell scripts to LF (required for Linux execution)
 Get-ChildItem $stage -Recurse -Include *.sh -File | ForEach-Object {
     $c = [System.IO.File]::ReadAllText($_.FullName)
