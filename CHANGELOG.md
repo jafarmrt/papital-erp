@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.173 — Failed Backups Leave No Partial Files
+- **Backup Cleanup:** a failed `scripts/backup.sh` run removes the files it wrote (uncompressed dump, manifest, archives; a compressed dump that failed verification is still kept for inspection), retention also deletes stray `.dump` files of earlier failed runs, and `file_attachments` is looked up with `to_regclass` in its own query, so a database before its first migration is backed up instead of failing with `relation "file_attachments" does not exist`.
+
 ### v9.0.172 — .env Read Literally by update.sh and go-live-verify.sh
 - **Literal .env:** `update.sh` and `scripts/go-live-verify.sh` no longer run `set -a; . ./.env`; they read the keys they need literally (`env_file_value` / `env_val`, surrounding quotes removed), as the service reads the file with `node --env-file`. A password such as `S3cr$et9` used to be cut or stop the script under `set -u`, and a value with `;` or a backtick ran as root.
 
