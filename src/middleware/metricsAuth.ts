@@ -4,6 +4,7 @@ import { getJwtSecret, AUTH_COOKIE_NAME, JWT_VERIFY_OPTIONS } from './auth.js';
 import { AuthUserPayload } from '../types.js';
 import { logger } from './logger.js';
 import { safeCompareTokens } from '../lib/timingSafeCompare.js';
+import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 
 export { safeCompareTokens };
 
@@ -52,7 +53,7 @@ export const metricsAuthMiddleware = (req: Request, res: Response, next: NextFun
     }
 
     // Role check: Only 'admin' users may inspect internal system metrics
-    if (decoded.role !== 'admin') {
+    if (decoded.role !== SYSTEM_ADMIN_ROLE) {
       logger.warn(`[Metrics] Non-admin user (ID: ${decoded.id}, Role: ${decoded.role}) attempted to access metrics`);
       return res.status(403).json({ error: 'تنها کاربران با نقش مدیر (Admin) مجاز به مشاهده متریک‌های سامانه هستند.' });
     }

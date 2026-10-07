@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
+import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 import { domainEventBus } from '../services/events/domainEventBus.js';
 import { OutboxService } from '../services/events/outboxService.js';
 import { DeadLetterQueueService } from '../services/events/deadLetterQueueService.js';
@@ -676,7 +677,7 @@ router.get('/webhooks/stats', authorizePermission('events.view'), asyncHandler(a
 router.get('/webhooks', authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const subs = await WebhookSubscriptionService.getSubscriptions();
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = req.user?.role === SYSTEM_ADMIN_ROLE;
     res.json({
       success: true,
       // V3.0.7 (TD-057): secret امضای وب‌هوک هرگز به کاربران غیرمدیر داده نمی‌شود

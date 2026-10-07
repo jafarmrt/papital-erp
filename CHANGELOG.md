@@ -22,6 +22,9 @@ going forward.
 ### v9.0.108 — Treasury Running Balance After a Void
 - **Treasury Running Balance After a Void (P3, product-owner decision):** the treasury list's running balance counts a voided row on its date and its reversal on the void date, and no legacy cheque-method row, so the last row equals the bank balance. Before, after voiding a receipt of 250,000 every later row showed 250,000 less (TD-860, `reg_treasury_running_balance_void_td_860`).
 
+### v9.0.107 — Route Guards Ask Permissions Only
+- **Route Guards:** no route guard takes a role code any more; system maintenance is for the system admin only, warehouses and the fiscal-year close get their own permissions, and migration 0062 turns access seed roles had only by their code into logged ticks (TD-516).
+
 ### v9.0.106 — Treasury Forms and Export
 - **Treasury Forms and Export (P3):** a receipt or payment for an account without a ledger account is stopped in the form, treasury and cheque dates use the Jalali date input, and the treasury Excel export has Persian labels and a Jalali file date. Before, the form promised a voucherless save the server refused, and the date field showed «2026/10/07» in the Jalali calendar (TD-515, Vitest `treasuryFormWording.test.tsx`).
 

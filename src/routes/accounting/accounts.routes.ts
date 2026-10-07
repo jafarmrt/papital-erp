@@ -4,7 +4,7 @@
  */
 import { Router } from 'express';
 import type { z } from 'zod';
-import { authorize, authorizePermission } from '../../middleware/authorize.js';
+import { authorizePermission, requireSystemAdmin } from '../../middleware/authorize.js';
 import { AccountingService } from '../../services/accounting.service.js';
 import { AccountMappingService } from '../../services/accounting/accountMapping.service.js';
 import { logActivity, extractClientIp } from '../../lib/auditLogger.js';
@@ -41,8 +41,8 @@ const seedAccountsHandler = asyncHandler(async (req, res) => {
   });
   res.json({ message: 'کدینگ استاندارد حساب‌ها با موفقیت مستقر و همگام شد', ...result });
 });
-router.post('/accounting/accounts/seed-default', authorize('admin'), seedAccountsHandler);
-router.post('/accounting/accounts/seed-standard', authorize('admin'), seedAccountsHandler);
+router.post('/accounting/accounts/seed-default', requireSystemAdmin, seedAccountsHandler);
+router.post('/accounting/accounts/seed-standard', requireSystemAdmin, seedAccountsHandler);
 
 router.post('/accounting/accounts', authorizePermission('accounting.coa'), validate(createAccountSchema), asyncHandler(async (req, res) => {
   const account = await AccountingService.createAccount(req.body);
