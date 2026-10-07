@@ -5964,7 +5964,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (deletedVoucherLines.length !== 2) {
         throw new Error('آرتیکل‌های قبلی سند به درستی سافت‌دلیت نشده‌اند.');
       }
-      if (activeVoucherLines.length !== 2 || Number(activeVoucherLines[0].debit || activeVoucherLines[1].debit) !== 800000) {
+      // v9.0.164 (TD-897): the debit row is picked by amount, not by row order; `debit` is a Money object and Money(0) is
+      // truthy, so `rows[0].debit || rows[1].debit` read 0 whenever PostgreSQL returned the credit row first
+      const { fin } = await import('../../lib/financialDecimal.js');
+      const activeDebitLine = activeVoucherLines.find(v => fin(v.debit ?? 0).isPositive());
+      if (activeVoucherLines.length !== 2 || !activeDebitLine || fin(activeDebitLine.debit).toNumber() !== 800000) {
         throw new Error('آرتیکل‌های جدید سند فعال نیستند یا مبلغ آنها تطابق ندارد.');
       }
 

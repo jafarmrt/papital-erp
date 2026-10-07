@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.164 — Voucher Soft-Delete Test No Longer Depends on Row Order
+- **Voucher Soft-Delete Test No Longer Depends on Row Order:** a test-only change; the soft-delete regression test picks the debit row by amount, so it no longer fails when the database returns the credit row first (TD-897).
+
 ### v9.0.163 — Clicking a Permission Title Ticks It
 - **Clicking a Permission Title Ticks It:** in the role form a click on a permission's title or description ticks it once, like the box itself (TD-536).
 
