@@ -21,6 +21,7 @@ import {
   GENERIC_LOGIN_FAILURE_MESSAGE
 } from '../services/auth/loginSecurity.service.js';
 import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
+import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 
 const router = Router();
 
@@ -177,7 +178,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
       username: tUsername,
       password: hash,
       fullName,
-      role: 'admin',
+      role: SYSTEM_ADMIN_ROLE,
     }).returning();
 
     // Create the default warehouse from setup

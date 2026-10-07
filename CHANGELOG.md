@@ -19,6 +19,15 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.179 — Role Delete Counts Active Users Only
+- **Role Delete Counts Active Users Only:** a role whose only user was deleted can be deleted (TD-535).
+
+### v9.0.178 — Deleted Username Never Revives an Account
+- **Deleted Username Never Revives an Account:** a new user always gets a new id; restoring a deleted user is a separate action with a new role and a temporary password (TD-519).
+
+### v9.0.177 — System Admin Named by One Constant
+- **System Admin Named by One Constant:** package 2 files and server routes name the system admin only through the shared constant or the admin flag; refactor (TD-896).
+
 ### v9.0.176 — Item Price Amount and Currency
 - **Item Price Input:** a price is a decimal above zero in IRR, USD, EUR, AED or GBP; removal is explicit (`remove: true`), invalid Excel prices refuse the row and old invalid rows are listed by the health check (TD-657, `reg_item_price_amount_currency_td_657`).
 

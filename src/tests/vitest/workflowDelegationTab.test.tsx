@@ -7,7 +7,9 @@ import { WorkflowDelegationTab } from '../../components/workflow/WorkflowDelegat
 // Workflow delegation tab (package 14, PR د)
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
-vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'admin' } }) }));
+vi.mock('../../contexts/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 1, role: 'admin' }, userPermissions: { permissions: [], isAdmin: true } }),
+}));
 
 afterEach(() => {
   cleanup();

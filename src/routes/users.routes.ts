@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { eq, desc } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
 import { authenticateToken, invalidateUserAuthCache } from '../middleware/auth.js';
@@ -9,7 +9,7 @@ import { authorizePermission, ROLE_CODE_PATTERN } from '../middleware/authorize.
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
-import { NotFoundError, ForbiddenError, BadRequestError, ValidationError } from '../errors/customErrors.js';
+import { NotFoundError, ForbiddenError, BadRequestError, ValidationError, ConflictError } from '../errors/customErrors.js';
 import { lockSystemAdminSet, assertAnotherActiveAdmin, SYSTEM_ADMIN_ROLE } from '../services/users/lastAdminGuard.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
 import { invalidateRoleCache } from '../lib/memoryCache.js';
@@ -20,6 +20,7 @@ import {
   assertAssignableRole, assertGrantWithinOwn, assertManageableAccount, assertNotOwnAccountRole, assertNotOwnRole, grantorPermissions,
 } from '../services/users/grantBoundary.js';
 import { isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
+import { USERNAME_OF_DELETED_USER, deletedUsernameMessage } from '../lib/users/userRestore.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
@@ -29,11 +30,10 @@ router.use(authenticateToken); // Protect all user routes
  * فقط کار مدیر سیستم است. دارنده users.manage بدون این قاعده می‌توانست خود یا کاربر تازه‌ای را admin کند
  * یا رمز مدیر را عوض کند و با آن وارد شود.
  */
-const ADMIN_ROLE = 'admin';
 const ONLY_ADMIN_MANAGES_ADMINS = 'فقط مدیر سیستم می‌تواند نقش «مدیر سیستم» را بدهد یا بگیرد، یا حساب یک مدیر سیستم را تغییر دهد یا حذف کند';
 
 function touchesAdminAccount(actorRole: string | undefined, targetRoles: Array<string | null | undefined>): boolean {
-  return actorRole !== ADMIN_ROLE && targetRoles.some(r => r === ADMIN_ROLE);
+  return actorRole !== SYSTEM_ADMIN_ROLE && targetRoles.some(r => r === SYSTEM_ADMIN_ROLE);
 }
 
 const updateProfileSchema = z.object({
@@ -359,8 +359,9 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
       return res.status(400).json({ error: 'نقش «مدیر سیستم» حذف نمی‌شود' });
     }
 
-    // Check if any user is currently assigned this role
-    const assignedUsers = await orm.select().from(users).where(eq(users.role, targetRole.code));
+    // v9.0.179 (TD-535، یافته B02-20): فقط کاربران حذف‌نشده نقش را نگه می‌دارند؛ کاربر حذف‌شده با بازگرداندن نقش تازه می‌گیرد
+    const assignedUsers = await orm.select({ id: users.id }).from(users)
+      .where(and(eq(users.role, targetRole.code), eq(users.isDeleted, 0)));
     if (assignedUsers.length > 0) {
       return res.status(400).json({ error: `این نقش به ${assignedUsers.length} کاربر تخصیص یافته است و ابتدا باید نقش کاربران تغییر یابد` });
     }
@@ -396,10 +397,12 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
 }));
 
 // USERS MANAGEMENT ROUTES
+const userPasswordField = z.string().min(6, 'رمز عبور باید حداقل ۶ کاراکتر باشد');
+
 const userCreateSchema = z.object({
   body: z.object({
     username: z.string().trim().min(3, 'نام کاربری باید حداقل ۳ کاراکتر باشد'),
-    password: z.string().min(6, 'رمز عبور باید حداقل ۶ کاراکتر باشد'),
+    password: userPasswordField,
     full_name: z.string().trim().optional().default(''),
     role: z.string().trim().min(1, 'انتخاب نقش الزامی است'),
   })
@@ -409,6 +412,17 @@ const userUpdateSchema = z.object({
   body: z.object({
     password: z.string().min(6, 'رمز عبور باید حداقل ۶ کاراکتر باشد').optional().or(z.literal('')),
     full_name: z.string().trim().optional().default(''),
+    role: z.string().trim().min(1, 'انتخاب نقش الزامی است'),
+  }),
+  params: z.object({
+    id: numericIdString
+  })
+});
+
+// v9.0.178 (TD-519، تصمیم ت۲ الف): بازگرداندن کاربر حذف‌شده نقش تازه و رمز موقت می‌خواهد
+const userRestoreSchema = z.object({
+  body: z.object({
+    password: userPasswordField,
     role: z.string().trim().min(1, 'انتخاب نقش الزامی است'),
   }),
   params: z.object({
@@ -494,54 +508,21 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     // ۱. بررسی تکراری نبودن نام کاربری در دیتابیس
     const [existingUser] = await orm.select().from(users).where(eq(users.username, tUsername)).limit(1);
     if (existingUser) {
+      // v9.0.178 (TD-519، یافته B02-04، تصمیم ت۲ الف): کاربر تازه همیشه شناسه تازه می‌گیرد. پیش‌تر همان ردیف کاربر حذف‌شده
+      // با رمز و نقش تازه زنده می‌شد و فرد تازه اعلان‌ها، فیش و اطلاعات بانکی فرد قبلی را می‌دید؛ بازگرداندن همان شخص
+      // اقدامی جداست (`POST /users/:id/restore`). پاسخ مستقیم است، چون گرداننده خطا `details` را در تولید نمی‌فرستد.
       if (existingUser.isDeleted === 1) {
-        // حساب کاربری قبلاً حذف نرم شده بوده — فعال‌سازی مجدد با مشخصات جدید بدون خطای یکتایی
-        // حوزه H (TD-299): نقش همان اعتبارسنجی ساخت کاربر تازه را دارد
-        if (role !== ADMIN_ROLE) {
-          const [reactivatedRole] = await orm.select().from(roles).where(eq(roles.code, role)).limit(1);
-          if (!reactivatedRole) {
-            return res.status(400).json({ error: 'نقش انتخاب‌شده در سیستم معتبر نیست' });
-          }
-        }
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        await orm.update(users).set({
-          password: hashedPassword,
-          fullName: tFullName,
-          role: role,
-          isDeleted: 0,
-          mustResetPassword: 0,
-          failedLoginCount: 0,
-          lockedUntil: null,
-          tokenVersion: (existingUser.tokenVersion || 0) + 1,
-        }).where(eq(users.id, existingUser.id));
-
-        invalidateUserAuthCache(existingUser.id);
-
-        await logActivity({
-          req,
-          action: 'CREATE',
-          entity: 'کاربران سیستم',
-          entityId: existingUser.id,
-          description: `فعال‌سازی و بازتعریف کاربر جدید "${tFullName}" با نام کاربری "${tUsername}" (نقش: ${role})`,
-          details: {
-            after: {
-              id: existingUser.id,
-              username: tUsername,
-              fullName: tFullName,
-              role: role
-            }
-          }
+        return res.status(409).json({
+          error: deletedUsernameMessage(existingUser.fullName || existingUser.username),
+          code: USERNAME_OF_DELETED_USER,
+          details: { deletedUser: { id: existingUser.id, username: existingUser.username, fullName: existingUser.fullName } },
         });
-
-        return res.json({ id: existingUser.id, username: tUsername, full_name: tFullName, role });
       }
       return res.status(400).json({ error: 'نام کاربری تکراری است' });
     }
 
     // ۲. اعتبارسنجی نقش انتخابی
-    if (role !== 'admin') {
+    if (role !== SYSTEM_ADMIN_ROLE) {
       const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, role)).limit(1);
       if (!roleRecord) {
         return res.status(400).json({ error: 'نقش انتخاب‌شده در سیستم معتبر نیست' });
@@ -691,6 +672,75 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
     }
     throw err;
   }
+}));
+
+/**
+ * v9.0.178 (TD-519، یافته B02-04، تصمیم ت۲ الف): بازگرداندن کاربر حذف‌شده، همان شخص با همان شناسه و نام، با نقش تازه و
+ * رمز موقت که در ورود بعدی باید عوض شود. قاعده‌های ویرایش کاربر برقرار است: حساب مدیر سیستم فقط با مدیر سیستم،
+ * و نقش تازه و حساب در مرز مجوزهای بازگرداننده (TD-520).
+ */
+router.post('/users/:id/restore', authorizePermission('users.manage'), validate(userRestoreSchema), asyncHandler(async (req, res) => {
+  const { password, role } = req.body;
+  const targetUserId = Number(req.params.id);
+  const passwordHash = await bcrypt.hash(password, await bcrypt.genSalt(10));
+
+  const restored = await orm.transaction(async (tx) => {
+    await lockSystemAdminSet(tx);
+    const [target] = await tx.select().from(users).where(eq(users.id, targetUserId)).for('update');
+    if (!target) {
+      throw new NotFoundError('کاربر یافت نشد');
+    }
+    if (target.isDeleted !== 1) {
+      throw new ConflictError('این کاربر حذف نشده است و بازگرداندن ندارد.', undefined, 'USER_NOT_DELETED');
+    }
+    if (touchesAdminAccount(req.user?.role, [target.role, role])) {
+      throw new ForbiddenError(ONLY_ADMIN_MANAGES_ADMINS);
+    }
+    if (isSyntheticTestUsername(target.username)) {
+      throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
+    }
+    const grantor = await grantorPermissions(req.user?.role, tx);
+    await assertManageableAccount(tx, grantor, target.role);
+    await assertAssignableRole(tx, grantor, role);
+    if (role !== SYSTEM_ADMIN_ROLE) {
+      const [roleRecord] = await tx.select({ id: roles.id }).from(roles).where(eq(roles.code, role)).limit(1);
+      if (!roleRecord) {
+        throw new BadRequestError('نقش انتخاب‌شده در سیستم معتبر نیست');
+      }
+    }
+
+    await tx.update(users).set({
+      password: passwordHash,
+      role,
+      isDeleted: 0,
+      mustResetPassword: 1,
+      failedLoginCount: 0,
+      lockedUntil: null,
+      tokenVersion: (target.tokenVersion || 0) + 1,
+    }).where(eq(users.id, targetUserId));
+
+    const name = target.fullName || target.username;
+    await logActivity({
+      req,
+      tx,
+      action: 'UPDATE',
+      entity: 'کاربران سیستم',
+      entityId: targetUserId,
+      description: `بازگرداندن کاربر حذف‌شده "${name}" (نام کاربری: ${target.username}) با نقش ${role} و رمز موقت`,
+      details: {
+        userId: targetUserId,
+        username: target.username,
+        before: { fullName: target.fullName, role: target.role, isDeleted: 1 },
+        after: { fullName: target.fullName, role, isDeleted: 0 },
+        restored: true,
+        mustResetPassword: true,
+      }
+    });
+    return { id: targetUserId, username: target.username, full_name: name, role };
+  });
+  invalidateUserAuthCache(targetUserId);
+
+  res.json(restored);
 }));
 
 router.delete('/users/:id', authorizePermission('users.manage'), validate(userParamsSchema), asyncHandler(async (req, res) => {

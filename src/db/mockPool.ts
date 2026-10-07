@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { DEFAULT_WORKFLOW_PRESETS } from '../constants/presets.js';
+import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 
 function camelToSnake(str: string): string {
   return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
@@ -38,7 +39,7 @@ export function initMockStore() {
     password: adminPasswordHash,
     full_name: 'مدیر ارشد سامانه',
     fullName: 'مدیر ارشد سامانه',
-    role: 'admin',
+    role: SYSTEM_ADMIN_ROLE,
     avatar_url: '',
     avatarUrl: '',
     must_reset_password: 0,
@@ -60,7 +61,7 @@ export function initMockStore() {
   const adminRole: any = {
     id: 1,
     name: 'مدیر ارشد سیستم',
-    code: 'admin',
+    code: SYSTEM_ADMIN_ROLE,
     description: 'دسترسی کامل سیستمی و مدیریتی',
     permissions: ['*'],
     is_system: 1,

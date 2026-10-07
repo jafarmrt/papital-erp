@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJson } from '../../api';
+import { errorMessageOf } from '../../utils';
 import { toast } from 'react-hot-toast';
 import { User, Role } from '../../types';
 import { isSystemAdminRole, SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog';
 import { roleWithinGrant, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
+import { USERNAME_OF_DELETED_USER, deletedUserOf, deletedUsernameMessage, type DeletedUserMatch } from '../../lib/users/userRestore';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -33,6 +35,8 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     role: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  // v9.0.178 (TD-519، تصمیم ت۲ الف): نام کاربری کاربر حذف‌شده رد می‌شود و بازگرداندن همان کاربر اقدامی جداست
+  const [deletedMatch, setDeletedMatch] = useState<DeletedUserMatch | null>(null);
 
   const isEditing = editingUser !== null;
   // v9.0.130 (TD-525، ت۳): کاربر غیرمدیر نقش حساب خودش را عوض نمی‌کند و فقط نقشی را می‌دهد که همه مجوزهایش را دارد
@@ -57,6 +61,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         role: '',
       });
     }
+    setDeletedMatch(null);
   }, [editingUser, isOpen]);
 
   if (!isOpen) return null;
@@ -92,7 +97,32 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       onSuccess();
       onClose();
     } catch (err: any) {
-      toast.error(err?.message || err?.error || 'خطا در ثبت کاربر');
+      const match = !isEditing && err?.code === USERNAME_OF_DELETED_USER ? deletedUserOf(err?.details) : null;
+      if (match) setDeletedMatch(match);
+      else toast.error(err?.message || err?.error || 'خطا در ثبت کاربر');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deletedName = deletedMatch ? deletedMatch.fullName || deletedMatch.username : '';
+  const handleRestore = async () => {
+    if (!deletedMatch) return;
+    if (!userForm.role || !userForm.password) {
+      toast.error('برای بازگرداندن، نقش و رمز موقت را در همین فرم وارد کنید');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await fetchJson(`/users/${deletedMatch.id}/restore`, {
+        method: 'POST',
+        body: JSON.stringify({ role: userForm.role, password: userForm.password }),
+      });
+      toast.success(`کاربر «${deletedName}» بازگردانده شد؛ در ورود بعدی باید رمز موقت را عوض کند`);
+      onSuccess();
+      onClose();
+    } catch (err) {
+      toast.error(errorMessageOf(err) || 'خطا در بازگرداندن کاربر');
     } finally {
       setIsSaving(false);
     }
@@ -138,7 +168,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 disabled={isEditing}
                 type="text"
                 value={userForm.username}
-                onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
+                onChange={(e) => { setUserForm({ ...userForm, username: e.target.value }); setDeletedMatch(null); }}
                 className="w-full border rounded-lg px-3 py-2 text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
                 dir="ltr"
                 placeholder="e.g. user123"
@@ -207,6 +237,21 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
               placeholder={isEditing ? 'برای عدم تغییر خالی بگذارید' : 'رمز عبور کاربر...'}
             />
           </div>
+
+          {deletedMatch && (
+            <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 space-y-2">
+              <p>{deletedUsernameMessage(deletedName)}</p>
+              <p>بازگرداندن، همان کاربر را با نام و سوابقش، با نقش این فرم و رمز این فرم به‌عنوان رمز موقت فعال می‌کند.</p>
+              <button
+                type="button"
+                onClick={handleRestore}
+                disabled={isSaving}
+                className="px-3 py-1.5 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 disabled:opacity-50"
+              >
+                بازگرداندن «{deletedName}»
+              </button>
+            </div>
+          )}
 
           <div className="pt-4 border-t flex justify-end gap-2">
             <button

@@ -31,7 +31,7 @@ const seedAccountsHandler = asyncHandler(async (req, res) => {
   const result = await AccountingService.seedStandardAccounts();
   await logActivity({
     userId: req.user?.id,
-    username: req.user?.username || 'admin',
+    username: req.user?.username,
     userFullName: req.user?.fullName || '',
     action: 'SEED',
     entity: 'حسابداری:کدینگ_پیش‌فرض',
@@ -134,7 +134,7 @@ router.post('/accounting/mappings', authorizePermission('accounting.coa'), valid
   }
   await logActivity({
     userId: req.user?.id,
-    username: req.user?.username || 'admin',
+    username: req.user?.username,
     userFullName: req.user?.fullName || '',
     action: 'UPDATE',
     entity: 'حسابداری:نگاشت_مفهومی_سرفصل‌ها',
