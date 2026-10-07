@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.177 — Category Soft Delete and Audit
+- **Item Categories:** a category is soft-deleted and every create, edit, delete and default reset writes an audit row in its own transaction; the reset restores a deleted default instead of duplicating it (TD-659, `reg_category_soft_delete_and_audit_td_659`).
+
 ### v9.0.176 — Item Price Amount and Currency
 - **Item Price Input:** a price is a decimal above zero in IRR, USD, EUR, AED or GBP; removal is explicit (`remove: true`), invalid Excel prices refuse the row and old invalid rows are listed by the health check (TD-657, `reg_item_price_amount_currency_td_657`).
 

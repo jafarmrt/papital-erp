@@ -108,7 +108,8 @@
 - **Background Seeding:** Seeding (`runSeed()`) must run asynchronously in background IIFE without blocking server startup.
 
 ## 9. Standard 22 Categories & Default Units
-- **22 Categories:** 8 product categories (گردنبند، گوشواره میخی، گوشواره آویز، انگشتر، دستبند، گوشواره بزرگ، گردنبند بزرگ، دو تکه) and 14 raw_material categories.
+- **22 Categories:** `DEFAULT_CATEGORIES` (`src/data/defaultCategories.ts`) is the one list: 9 product categories (گردنبند، گوشواره میخی، گوشواره آویز، انگشتر، دستبند، گوشواره آویز بزرگ، گردنبند بزرگ، گوشواره دو تکه، گردنبند دو تکه) and 13 raw_material categories (ترنسفر، مهره، مهره کریستالی، سنگ، مهره حدید، مهره چوبی، خرج کار، خرج کار طلایی، خرج کار برنزی، خرج کار استیل، بند چرمی و زنجیر، «کیلر، رنگ، گلیز»، سایر اقلام); the boot seed and «بازگردانی دسته‌های پیش‌فرض» read it.
+- **Category Changes (v9.0.177, TD-659, product-owner decision ت۸):** A category is soft-deleted (`categories.is_deleted`, migration 0071) and the list reads only live ones; a category that active items use is not deleted (422). Create, edit, delete and the default reset run in one transaction with a «دسته‌بندی کالا» audit row (before / after / changes) through `src/services/items/itemCategory.service.ts`; the reset restores a deleted default category instead of adding a second row.
 - **Auto-Fill Default Units:** When category is selected in `ItemFormModal.tsx`, unit automatically updates to category's `defaultUnit` (جفت، ریسه، برگ، متر، عدد و...).
 
 ## 10. Transfers & Image Management
