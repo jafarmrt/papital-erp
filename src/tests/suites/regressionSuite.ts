@@ -8598,7 +8598,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const testName = 'v7.0.101: یادآوری یک‌باره مهلت کار تاییدی به مسئول کار (TD-085)';
     const {
       workflowDefinitions, workflowStates, workflowTransitions, workflowInstances, workflowHistoryLogs,
-      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users, notifications,
+      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users, notifications, roles,
     } = await import('../../db/schema.js');
     const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
     const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
@@ -8610,6 +8610,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const userIds: number[] = [];
     try {
       const violations: string[] = [];
+      // v9.0.111 (TD-542): نقش گام باید تعریف شده باشد
+      await orm.insert(roles).values({ code: role, name: `نقش آزمون مهلت ${suffix}`, permissions: [] });
       for (const [name, userRole] of [['a', role], ['b', role], ['other', `reg_other_${suffix}`]] as const) {
         const [u] = await orm.insert(users).values({
           username: `reg_sla_${name}_${suffix}`, password: 'x', fullName: `کاربر آزمون مهلت ${name}`, role: userRole,
@@ -8685,6 +8687,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
       }
       if (userIds.length > 0) await orm.delete(users).where(inArray(users.id, userIds));
+      await orm.delete(roles).where(eq(roles.code, role));
     }
   }
 
@@ -8695,7 +8698,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const testName = 'v7.0.101: کار تاییدی منقضی نمی‌شود و کارهای منقضی‌شده مرحله جاری با گزارش بازگشایی می‌شوند (TD-085)';
     const {
       workflowDefinitions, workflowStates, workflowTransitions, workflowInstances, workflowHistoryLogs,
-      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users,
+      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users, roles,
     } = await import('../../db/schema.js');
     const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
     const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
@@ -8709,6 +8712,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     let userId: number | undefined;
     try {
       const violations: string[] = [];
+      // v9.0.111 (TD-542): نقش گام باید تعریف شده باشد
+      await orm.insert(roles).values({ code: role, name: `نقش آزمون بازگشایی ${suffix}`, permissions: [] });
       const [u] = await orm.insert(users).values({
         username: `reg_reopen_${suffix}`, password: 'x', fullName: 'کاربر آزمون بازگشایی', role,
       }).returning({ id: users.id });
@@ -8812,6 +8817,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
       }
       if (userId) await orm.delete(users).where(eq(users.id, userId));
+      await orm.delete(roles).where(eq(roles.code, role));
     }
   }
 

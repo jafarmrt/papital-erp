@@ -9,6 +9,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { getDisplayTimezone } from '../../lib/businessClock.js';
 import { zonedDayStartUtc } from '../../lib/serverTimestamp.js';
+import { isSystemAdminRole } from '../../lib/permissions/permissionCatalog.js';
 
 const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -163,7 +164,7 @@ export class WorkflowDelegationService {
    * Get list of delegations for a user or admin
    */
   static async getDelegations(params: { userId: number; userRole?: string }) {
-    const isAdmin = params.userRole === 'admin';
+    const isAdmin = isSystemAdminRole(params.userRole);
 
     let query = orm.select({
       delegation: workflowDelegations,
@@ -219,7 +220,7 @@ export class WorkflowDelegationService {
       }
 
       // v8.0.98 (TD-378): تفویض را فقط تفویض‌کننده یا ادمین لغو می‌کند؛ پیش‌تر خود جانشین هم آن را لغو می‌کرد
-      const isAdmin = params.userRole === 'admin';
+      const isAdmin = isSystemAdminRole(params.userRole);
       if (!isAdmin && delegation.fromUserId !== params.userId) {
         throw new ForbiddenError('فقط تفویض‌کننده یا مدیر سیستم می‌تواند این تفویض اختیار را لغو کند', undefined, 'WF_DELEGATION_REVOKE_FORBIDDEN');
       }

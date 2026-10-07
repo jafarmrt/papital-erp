@@ -9,6 +9,11 @@
 /** تنها نقشی که کد برنامه به نامش می‌شناسد: «مدیر سیستم» همیشه همه مجوزها را دارد (مدل مجوز §۴.۱ قاعده ۳) */
 export const SYSTEM_ADMIN_ROLE = 'admin';
 
+/** کد نقش «مدیر سیستم» است، بی‌توجه به فاصله و بزرگی حروف */
+export function isSystemAdminRole(role: string | null | undefined): boolean {
+  return (role ?? '').trim().toLowerCase() === SYSTEM_ADMIN_ROLE;
+}
+
 export interface PermissionDefinition {
   readonly key: string;
   readonly title: string;

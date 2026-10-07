@@ -14,6 +14,7 @@ import { workflowDesignErrors } from '../../lib/workflow/workflowDesignRules.js'
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
 import { recordDefinitionVersion } from './workflowSnapshot.js';
 import { DOC_APPROVAL_STEP_GUARDS, upgradeLegacyDocApprovalGuards } from './docApprovalGuards.js';
+import { resolveTransitionRoles, storedTransitionRole } from './transitionRoles.js';
 import { 
   CreateWorkflowDefinitionInput, 
   UpdateWorkflowDefinitionInput, 
@@ -257,6 +258,8 @@ export class WorkflowDefinitionService {
     assertSavableWorkflowDesign(payload);
     // v7.0.87 (TD-112): تعریف، وضعیت‌ها، انتقال‌ها و نسخه تازه در یک تراکنش ذخیره می‌شوند
     const defId = await orm.transaction(async (tx) => {
+      // v9.0.111 (TD-542): نقش هر اقدام باید در فهرست نقش‌ها باشد (۴۲۲)؛ کد ثبت‌شده نقش ذخیره می‌شود
+      const knownRoles = await resolveTransitionRoles(tx, Array.isArray(payload.transitions) ? payload.transitions : []);
       let finalDefId = payload.id;
       if (!finalDefId) {
         const [duplicate] = await tx.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
@@ -334,8 +337,8 @@ export class WorkflowDefinitionService {
               toStateId: toId,
               actionKey: tr.actionKey || tr.key || 'action',
               title: tr.title || 'اقدام',
-              requiredRole: tr.requiredRole || '',
-              requiredPermission: tr.requiredPermission || '',
+              requiredRole: storedTransitionRole(tr.requiredRole, knownRoles),
+              requiredPermission: (tr.requiredPermission || '').trim(),
               approvalRuleType: tr.approvalRuleType || tr.parallelApprovalRule || 'SINGLE',
               kValue: Number(tr.kValue) || 1,
               ruleConditionsJson: tr.ruleConditionsJson || [],
@@ -681,13 +684,15 @@ export class WorkflowDefinitionService {
               positionY: 340
             }
           ],
+          // v9.0.111 (TD-542، مدل مجوز §۴.۲): گام‌ها فقط مجوز «accounting.vouchers» را می‌خواهند؛ پیش‌تر نقش «accountant» هم
+          // می‌خواستند و نقش سفارشی با همان مجوز تأیید نمی‌کرد، و در نصب خام نقشی که این کد را داشته باشد نیست
           transitions: [
             {
               from: 'draft',
               to: 'approved',
               actionKey: 'approve_voucher',
               title: 'تایید حسابداری و ثبت در دفاتر',
-              requiredRole: 'accountant',
+              requiredRole: '',
               requiredPermission: 'accounting.vouchers'
             },
             {
@@ -695,7 +700,7 @@ export class WorkflowDefinitionService {
               to: 'permanent',
               actionKey: 'finalize_voucher',
               title: 'قطعی‌سازی و قفل سند',
-              requiredRole: 'accountant',
+              requiredRole: '',
               requiredPermission: 'accounting.vouchers'
             },
             {
@@ -703,7 +708,7 @@ export class WorkflowDefinitionService {
               to: 'rejected',
               actionKey: 'reject_voucher',
               title: 'رد پیش‌نویس جهت اصلاح',
-              requiredRole: 'accountant',
+              requiredRole: '',
               requiredPermission: 'accounting.vouchers'
             },
             {
@@ -711,7 +716,7 @@ export class WorkflowDefinitionService {
               to: 'draft',
               actionKey: 'revert_to_draft',
               title: 'بازگشت به پیش‌نویس',
-              requiredRole: 'accountant',
+              requiredRole: '',
               requiredPermission: 'accounting.vouchers'
             },
             {

@@ -10,7 +10,6 @@ import { WorkflowApprovalRules } from './workflowApprovalRules.js';
 import { WorkflowTransitionExecutor } from './workflowTransitionExecutor.js';
 import { WorkflowDefinitionService } from './workflowDefinitionService.js';
 import { WorkflowVersionService } from './workflowVersionService.js';
-import { WorkflowAuthorizationPolicy } from './workflowAuthorizationPolicy.js';
 import { WorkflowTaskService } from './workflowTaskService.js';
 import { WorkflowDelegationService } from './workflowDelegationService.js';
 import { WorkflowEventPublisher } from './workflowEventPublisher.js';
@@ -39,9 +38,8 @@ export class WorkflowEngineService {
   static evaluateConditions = WorkflowRuleEngine.evaluateConditions.bind(WorkflowRuleEngine);
 
   // --- Authorization & Policy Delegation ---
-  static checkUserRoleMatch = WorkflowAuthorizationPolicy.checkUserRoleMatch.bind(WorkflowAuthorizationPolicy);
-  static getEquivalentRoles = WorkflowAuthorizationPolicy.getEquivalentRoles.bind(WorkflowAuthorizationPolicy);
-  static authorizeAction = WorkflowAuthorizationPolicy.authorizeAction.bind(WorkflowAuthorizationPolicy);
+  // v9.0.111 (TD-542): همان قاعده موتور؛ پیاده‌سازی دوم با جدول هم‌ارزی دیگر (workflowAuthorizationPolicy) حذف شد
+  static checkUserRoleMatch = WorkflowTransitionExecutor.checkUserRoleMatch.bind(WorkflowTransitionExecutor);
 
   // --- Definition & Structure Management ---
   static getDefinitions = WorkflowDefinitionService.getDefinitions.bind(WorkflowDefinitionService);

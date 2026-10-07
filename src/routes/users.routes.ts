@@ -14,7 +14,8 @@ import { lockSystemAdminSet, assertAnotherActiveAdmin, SYSTEM_ADMIN_ROLE } from 
 import { uploadBase64ToStorage } from '../lib/storage.js';
 import { invalidateRoleCache } from '../lib/memoryCache.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { PERMISSION_CATALOG, PERMISSION_KEYS, isCatalogPermission, missingRequiredPermissions, withRequiredPermissions } from '../lib/permissions/permissionCatalog.js';
+import { PERMISSION_CATALOG, PERMISSION_KEYS, isCatalogPermission, isSystemAdminRole, missingRequiredPermissions, withRequiredPermissions } from '../lib/permissions/permissionCatalog.js';
+import { workflowsRequiringRole } from '../services/workflow/transitionRoles.js';
 import { isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 
 const router = Router();
@@ -333,7 +334,7 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
       return res.status(404).json({ error: 'نقش یافت نشد' });
     }
 
-    if (targetRole.isSystem === 1 || targetRole.code === 'admin') {
+    if (targetRole.isSystem === 1 || isSystemAdminRole(targetRole.code)) {
       return res.status(400).json({ error: 'نقش‌های پایه و سیستمی قابل حذف نیستند' });
     }
 
@@ -341,6 +342,15 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
     const assignedUsers = await orm.select().from(users).where(eq(users.role, targetRole.code));
     if (assignedUsers.length > 0) {
       return res.status(400).json({ error: `این نقش به ${assignedUsers.length} کاربر تخصیص یافته است و ابتدا باید نقش کاربران تغییر یابد` });
+    }
+
+    // v9.0.111 (TD-542): نقشی که اقدامی از گردش کار (طرح جاری یا فرایند پایان‌نیافته) به آن بسته است حذف نمی‌شود
+    const requiringWorkflows = await workflowsRequiringRole(orm, targetRole.code);
+    if (requiringWorkflows.length > 0) {
+      return res.status(409).json({
+        error: `این نقش نقش گام در گردش کار ${requiringWorkflows.map(t => `«${t}»`).join('، ')} است؛ نخست در طراح گردش کار نقش آن گام‌ها را عوض کنید.`,
+        code: 'ROLE_USED_BY_WORKFLOW',
+      });
     }
 
     await orm.delete(roles).where(eq(roles.id, roleId));

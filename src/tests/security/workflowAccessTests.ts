@@ -68,7 +68,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
     await runCase(results, {
       id: 'sec_workflow_signer_permissions_td_444',
       name: 'v9.0.34: موتور مجوزهای نقش امضاکننده را خودش می‌خواند و کارتابل همان قاعده ویجت را دارد؛ مجوز طراحی گام دیگران را امضا نمی‌کند (TD-444)',
-      details: 'مدیر مالی کار حسابدار را در کارتابل می‌بیند و اجرا می‌کند؛ مجوز ثبت انبار گام انباردار را باز می‌کند؛ workflow.manage/admin گام حسابدار را نه می‌بیند نه اجرا می‌کند',
+      details: 'مدیر مالی کار سند حسابداری را در کارتابل می‌بیند و اجرا می‌کند؛ مجوز ثبت انبار گام «ثبت انبار» را باز می‌کند؛ workflow.manage/admin گام حسابداری را نه می‌بیند نه اجرا می‌کند',
     }, async (h, wrong) => {
       const { createTestVoucher, createTestWorkflow } = await import('../fixtures/factories.js');
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
@@ -78,7 +78,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
         return rows.filter(t => Number(t.instanceId ?? (t.instance as Row | undefined)?.id) === instanceId);
       };
 
-      // ۱) گردش‌کار سند حسابداری (همه گام‌ها با نقش accountant): مدیر مالی هم‌ارز است
+      // ۱) گردش‌کار سند حسابداری (گام‌ها با مجوز accounting.vouchers، از v9.0.111 بی نقش): مدیر مالی آن مجوز را دارد
       const { voucher } = await createTestVoucher({ status: 'draft', date: await businessTodayIsoDate(), totalDebit: 2000000, totalCredit: 2000000 } as never);
       const started = await h.post('/api/workflow/start', { workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
       const voucherInstance = Number(started.body?.data?.id);
@@ -110,25 +110,26 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       const [vAfter] = await h.q(`SELECT status FROM journal_vouchers WHERE id = $1`, [voucher.id]);
       if (vAfter?.status !== 'approved') wrong.push(`سند حسابداری پس از اجرای مدیر مالی ${String(vAfter?.status)} است`);
 
-      // ۲) گام انباردار: نقش تازه با مجوز ثبت انبار (بی کد نقش انباردار) آن را می‌بیند و اجرا می‌کند
+      // ۲) v9.0.111 (TD-542): گامی که مجوز ثبت انبار می‌خواهد (بی نقش): نقش تازه با همان مجوز آن را می‌بیند و اجرا می‌کند و
+      // مجوز مشاهده انبار نه. پیش‌تر همین را گام نقش «انباردار» با هم‌ارزی مجوز ثبت بخش می‌داد که حذف شد
       const { definition } = await createTestWorkflow({ definition: { entityType: 'test_document' } });
-      await h.q(`UPDATE workflow_transitions SET required_role = 'warehouse_keeper' WHERE workflow_definition_id = $1`, [definition.id]);
+      await h.q(`UPDATE workflow_transitions SET required_role = '', required_permission = 'warehouse.out' WHERE workflow_definition_id = $1`, [definition.id]);
       const docStart = await h.post('/api/workflow/start', { workflowCode: definition.code, entityType: 'test_document', entityId: `TD444-${h.tag}` });
       const docInstance = Number(docStart.body?.data?.id);
       if (!(docInstance > 0)) throw new Error(`شروع گردش‌کار آزمایشی ${docStart.status} داد`);
       const viewer = await h.sessionWith(['workflow.view', 'workflow.approve', 'warehouse.view']);
       const widget = await h.get(`/api/workflow/instance/test_document/TD444-${h.tag}`, viewer);
-      if ((widget.body?.availableTransitions ?? []).length > 0) wrong.push('مجوز مشاهده انبار اقدام گام انباردار را در ویجت دید');
+      if ((widget.body?.availableTransitions ?? []).length > 0) wrong.push('مجوز مشاهده انبار اقدام گام «ثبت انبار» را در ویجت دید');
       const stockKeeper = await h.sessionWith(['workflow.view', 'workflow.approve', 'warehouse.view', 'warehouse.out']);
       const keeperTasks = await tasksOf(stockKeeper, docInstance);
       if (keeperTasks.length === 0) {
-        wrong.push('دارنده مجوز ثبت انبار گام انباردار را در کارتابل ندید');
+        wrong.push('دارنده مجوز ثبت انبار گام «ثبت انبار» را در کارتابل ندید');
       } else {
         const exec = await h.post(`/api/workflow/tasks/${String(keeperTasks[0].id)}/execute`, { action: 'approve' }, stockKeeper);
-        if (exec.status !== 200) wrong.push(`اجرای گام انباردار از کارتابل ${exec.status} داد: ${JSON.stringify(exec.body).slice(0, 160)}`);
+        if (exec.status !== 200) wrong.push(`اجرای گام «ثبت انبار» از کارتابل ${exec.status} داد: ${JSON.stringify(exec.body).slice(0, 160)}`);
       }
       const keeperWalk = await h.walk(docInstance, ['approve'], stockKeeper);
-      if (keeperWalk[0] !== 200) wrong.push(`اقدام دوم گام انباردار از ویجت ${keeperWalk.join(',')} داد، نه ۲۰۰`);
+      if (keeperWalk[0] !== 200) wrong.push(`اقدام دوم گام «ثبت انبار» از ویجت ${keeperWalk.join(',')} داد، نه ۲۰۰`);
       await h.q(`DELETE FROM workflow_tasks WHERE instance_id = $1`, [docInstance]).catch(() => undefined);
     });
   }

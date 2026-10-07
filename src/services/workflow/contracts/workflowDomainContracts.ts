@@ -107,7 +107,8 @@ export interface IWorkflowVersionService {
 }
 
 // ============================================================================
-// 3. WORKFLOW AUTHORIZATION POLICY CONTRACT
+// 3. WORKFLOW AUTHORIZATION: WorkflowTransitionExecutor.checkUserRoleMatch / holdsRequiredPermission
+// (v9.0.111, TD-542: the second implementation with its own role equivalence table was removed)
 // ============================================================================
 
 export interface UserAuthContext {
@@ -115,27 +116,6 @@ export interface UserAuthContext {
   username: string;
   role: string;
   permissions: string[];
-}
-
-export interface IWorkflowAuthorizationPolicy {
-  /**
-   * Evaluates if a user has permission to execute or approve a specific workflow action.
-   * Policy Invariant: Same authorization evaluation logic MUST be used by getAvailableTransitions and executeTransition.
-   */
-  authorizeAction(
-    userCtx: UserAuthContext,
-    requiredRole?: string,
-    requiredPermissions?: string[],
-    actionScope?: WorkflowPermission
-  ): boolean;
-
-  /**
-   * Evaluates task execution authorization for assigned user, candidate user/role, or valid delegate.
-   */
-  authorizeTaskExecution(
-    userCtx: UserAuthContext,
-    task: { assignedUserId?: number | null; candidateRoleKey?: string | null; id: number }
-  ): Promise<boolean>;
 }
 
 // ============================================================================
@@ -414,7 +394,6 @@ export interface IWorkflowEventPublisher {
 export interface IWorkflowEngineFacade extends 
   IWorkflowDefinitionService,
   IWorkflowVersionService,
-  IWorkflowAuthorizationPolicy,
   IWorkflowDslParser,
   IWorkflowTransitionExecutor,
   IWorkflowApprovalRules,

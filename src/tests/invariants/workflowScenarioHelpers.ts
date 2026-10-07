@@ -3,7 +3,7 @@ import { WorkflowDefinitionService, type SaveWorkflowDefinitionPayload } from '.
 import { WorkflowTransitionExecutor } from '../../services/workflow/workflowTransitionExecutor.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
 import { getErrorMessage } from '../../utils/formatters.js';
-import { createTestUser } from '../fixtures/factories.js';
+import { createTestRole, createTestUser } from '../fixtures/factories.js';
 
 /**
  * v8.0.90 — ابزار سناریوهای گردش‌کار حوزه G: تعریف واقعی با saveWorkflowDefinition، نمونه با startInstance
@@ -39,7 +39,20 @@ function payloadOf(spec: WfSpec, code: string, entityType: string, id?: number):
   };
 }
 
+/**
+ * v9.0.111 (TD-542): ذخیره طرح نقش تعریف‌نشده را نمی‌پذیرد؛ نقش‌های آزمون (بی مجوز) پیش از ذخیره تعریف می‌شوند تا
+ * رفتار امضا همان کد نقش کاربر بماند
+ */
+async function ensureTransitionRoles(spec: WfSpec): Promise<void> {
+  const codes = new Set(spec.transitions.map(t => (t.role ?? '').trim()).filter(r => r && r !== '*' && r !== 'ALL'));
+  for (const code of codes) {
+    const found = await pool.query('SELECT 1 FROM roles WHERE lower(code) = lower($1)', [code]);
+    if (found.rowCount === 0) await createTestRole({ code, permissions: [] });
+  }
+}
+
 export async function defineWorkflow(spec: WfSpec): Promise<Wf> {
+  await ensureTransitionRoles(spec);
   const tag = uniqueTag();
   const code = `WFG_${tag}`;
   const entityType = `wfg_${tag}`;
@@ -54,6 +67,7 @@ export async function defineWorkflow(spec: WfSpec): Promise<Wf> {
 
 /** ذخیره دوباره همان طرح از طراح (وضعیت‌ها و انتقال‌ها با شناسه تازه ساخته می‌شوند) */
 export async function resaveWorkflow(wf: Wf): Promise<void> {
+  await ensureTransitionRoles(wf.spec);
   await WorkflowDefinitionService.saveWorkflowDefinition(payloadOf(wf.spec, wf.code, wf.entityType, wf.definitionId));
 }
 

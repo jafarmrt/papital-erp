@@ -11,6 +11,7 @@ import { WorkflowTransitionExecutor } from './workflowTransitionExecutor.js';
 import { lockWorkflowEntity } from './workflowTransitionActions.js';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
 import { snapshotTransitionsOf } from './workflowSnapshot.js';
+import { isSystemAdminRole } from '../../lib/permissions/permissionCatalog.js';
 import { completedByUserCondition, completedTasksOf, inboxEntityFields } from './workflowInboxRows.js';
 import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 
@@ -124,7 +125,7 @@ export class WorkflowTaskService {
    * با تفویضی که کار را به او رسانده (اگر خودش مسئول نیست) و تأخیر از پایگاه‌داده
    */
   private static async pendingTasksOf(userId: number, userRole: string, userPermissions?: string[]): Promise<PendingTaskMatch[]> {
-    const isAdmin = userRole === 'admin';
+    const isAdmin = isSystemAdminRole(userRole);
     const signer = await WorkflowTaskService.signerContext(orm, userId, userRole, userPermissions);
     const allTasks = await orm.select({
       task: workflowTasks,
@@ -236,7 +237,7 @@ export class WorkflowTaskService {
 
       const userRole = (params.userRole || '').trim().toLowerCase();
       // v9.0.34 (TD-444، ت۱ الف): فقط مدیر سیستم هر کاری را اجرا می‌کند؛ مجوزهای نقش از پایگاه‌داده، همان قاعده موتور
-      const isAdmin = userRole === 'admin';
+      const isAdmin = isSystemAdminRole(userRole);
       const signer = await WorkflowTaskService.signerContext(tx, params.userId, userRole, params.userPermissions);
 
       // v8.0.97 (TD-377، تصمیم مالک محصول «کارهای نقش او»): جانشین در بازه و حوزه تفویض کار کاربر تعیین‌شده یا نامزد
@@ -346,8 +347,8 @@ export class WorkflowTaskService {
   }
 
   /**
-   * v9.0.34 (TD-444): همان قاعده موتور برای یک امضاکننده: نقش کار با checkUserRoleMatch (نقش، نقش هم‌ارز همان بخش، یا
-   * مجوز ثبت همان بخش) و مجوز لازم انتقال (TD-391) از تصویر نسخه فرایند. پیش‌تر کارتابل فقط کد نقش برابر را می‌شناخت.
+   * v9.0.34 (TD-444): همان قاعده موتور برای یک امضاکننده: نقش کار با checkUserRoleMatch و مجوز لازم انتقال (TD-391) از
+   * تصویر نسخه فرایند. v9.0.111 (TD-542): نقش کار فقط همان نقش است (بی هم‌ارزی بخش و بی `*`).
    */
   private static roleAllows(
     task: Pick<typeof workflowTasks.$inferSelect, 'candidateRoles' | 'assignedRole' | 'transitionId'>,
@@ -357,9 +358,9 @@ export class WorkflowTaskService {
   ): boolean {
     const transition = snapshotTransitionsOf(instance.snapshotDsl)?.find(t => t.id === task.transitionId);
     const required = (transition?.requiredPermission || '').trim();
-    if (required && (role || '').trim().toLowerCase() !== 'admin' && !permissions.includes(required) && !permissions.includes('*')) return false;
+    if (required && !isSystemAdminRole(role) && !permissions.includes(required)) return false;
     const roles = WorkflowTaskService.taskRolesOf(task);
-    return roles.length === 0 || roles.some(r => WorkflowTransitionExecutor.checkUserRoleMatch(role, r === 'all' ? 'ALL' : r, permissions));
+    return roles.length === 0 || roles.some(r => WorkflowTransitionExecutor.checkUserRoleMatch(role, r === 'all' ? 'ALL' : r));
   }
 
   /** کار به خود کاربر داده شده: کاربر تعیین‌شده یا نامزد، یا نقش کار (یا «همه») با قاعده موتور */
@@ -437,7 +438,7 @@ export class WorkflowTaskService {
     if (rejects.length === 0) {
       throw new ValidationError('این گام اقدام «رد» ندارد؛ فقط تأیید ممکن است.', undefined, 'WF_TASK_NO_REJECT_TRANSITION');
     }
-    const allowed = rejects.filter(t => WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, t.requiredRole || undefined, params.userPermissions || []));
+    const allowed = rejects.filter(t => WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, t.requiredRole || undefined));
     if (allowed.length === 1) return allowed[0].id;
     if (rejects.length === 1) return rejects[0].id;
     throw new ValidationError(`این گام چند اقدام «رد» دارد (${rejects.map(t => t.title).join('، ')})؛ یکی را انتخاب کنید.`, undefined, 'WF_TASK_REJECT_AMBIGUOUS');

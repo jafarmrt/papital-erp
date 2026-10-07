@@ -456,6 +456,13 @@
       "when": 1792840000000,
       "tag": "0064_sensitive_personnel_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792900000000,
+      "tag": "0065_workflow_roles_without_equivalence",
+      "breakpoints": true
     }
   ]
 }

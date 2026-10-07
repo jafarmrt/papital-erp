@@ -27,6 +27,7 @@ import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from
 import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workflowRuleText.js';
 import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels.js';
 import type { RuleExpression } from '../ruleEngine.service.js';
+import { isSystemAdminRole } from '../../lib/permissions/permissionCatalog.js';
 
 type DbClient = typeof orm | Parameters<Parameters<typeof orm.transaction>[0]>[0];
 
@@ -94,83 +95,17 @@ const WORKFLOW_REJECTED_STATE_KEYS = new Set(['rejected', 'canceled']);
 
 export class WorkflowTransitionExecutor {
   /**
-   * Helper: Find equivalent roles
-   *
-   * v8.0.94 (TD-374): هم‌ارزی فقط میان نقش‌های یک بخش است؛ نقش تولید دیگر هم‌ارز «manager» نیست.
+   * نقش گام: نقش مشخصی که طراح از فهرست نقش‌ها برگزیده است، یا خالی / `*` / `ALL` برای همه. مدیر سیستم همه گام‌ها را
+   * امضا می‌کند و هر کاربر دیگر فقط وقتی نقشش همان نقش است؛ «چه کسی» را مجوز لازم انتقال می‌گوید
+   * (`holdsRequiredPermission`). v9.0.111 (TD-542، یافته B02-27، مدل مجوز §۴.۲): پیش‌تر جدول ثابت هم‌ارزی کدها
+   * (accountant = cfo_accountant و …)، مجوز ثبت هر بخش و `*` هم گام نقش را باز می‌کردند و نقش سفارشی هیچ‌کدام را نداشت.
    */
-  static getEquivalentRoles(roleName: string): string[] {
-    const r = (roleName || '').trim().toLowerCase();
-    const res = new Set<string>([r]);
-    if (r === 'admin') {
-      res.add('*');
-      res.add('all');
-      res.add('warehouse');
-      res.add('warehouse_keeper');
-      res.add('accounting');
-      res.add('accountant');
-      res.add('cfo_accountant');
-      res.add('sales');
-      res.add('sales_manager');
-      res.add('production');
-      res.add('production_manager');
-      res.add('procurement_officer');
-      res.add('manager');
-    } else if (r === 'warehouse' || r === 'warehouse_keeper') {
-      res.add('warehouse');
-      res.add('warehouse_keeper');
-    } else if (r === 'accounting' || r === 'accountant' || r === 'cfo_accountant') {
-      res.add('accounting');
-      res.add('accountant');
-      res.add('cfo_accountant');
-    } else if (r === 'sales' || r === 'sales_manager') {
-      res.add('sales');
-      res.add('sales_manager');
-    } else if (r === 'production' || r === 'production_manager') {
-      res.add('production');
-      res.add('production_manager');
-    }
-    return Array.from(res);
-  }
-
-  /**
-   * مجوزهای ثبت هر بخش که گام نقش همان بخش را مجاز می‌کنند. v8.0.94 (TD-374): مجوز مشاهده (warehouse.view،
-   * accounting.view) و مجوز خزانه دیگر گام تأیید انبار یا حسابدار را مجاز نمی‌کنند (همان قاعده TD-298: تغییر با مجوز
-   * مشاهده باز نمی‌شود) و هیچ مجوزی گام نقش «manager» را.
-   */
-  static readonly DEPARTMENT_WRITE_PERMISSIONS: ReadonlyArray<[string[], string[]]> = [
-    [['warehouse', 'warehouse_keeper'], ['warehouse.in', 'warehouse.out']],
-    [['accounting', 'accountant', 'cfo_accountant'], ['accounting.vouchers']],
-    [['sales', 'sales_manager'], ['documents.create', 'crm.manage']],
-    [['production', 'production_manager'], ['projects.edit', 'projects.create']],
-  ];
-
-  /**
-   * Check if a user's role or granular permissions satisfy a required transition role
-   */
-  static checkUserRoleMatch(userRole?: string, requiredRole?: string, userPermissions: string[] = []): boolean {
+  static checkUserRoleMatch(userRole?: string, requiredRole?: string): boolean {
     if (!requiredRole || requiredRole === '' || requiredRole === '*' || requiredRole === 'ALL') {
       return true;
     }
-    const uRole = (userRole || '').trim().toLowerCase();
-    const rRole = (requiredRole || '').trim().toLowerCase();
-
-    // v9.0.34 (TD-444، تصمیم مالک محصول ت۱ الف): فقط مدیر سیستم همه گام‌ها را امضا می‌کند؛ workflow.manage و workflow.admin
-    // مجوز طراحی‌اند و گام دیگران را امضا نمی‌کنند (پیش‌تر می‌کردند، ولی چون مجوزها به موتور نمی‌رسید پنهان بود)
-    if (uRole === 'admin' || userPermissions.includes('*')) {
-      return true;
-    }
-
-    if (userPermissions.includes(requiredRole) || userPermissions.includes(rRole)) {
-      return true;
-    }
-
-    const equivalentRoles = WorkflowTransitionExecutor.getEquivalentRoles(uRole);
-    if (equivalentRoles.some(eqR => eqR.toLowerCase() === rRole)) {
-      return true;
-    }
-
-    return WorkflowTransitionExecutor.DEPARTMENT_WRITE_PERMISSIONS.some(([roles, permissions]) =>
-      roles.includes(rRole) && permissions.some(p => userPermissions.includes(p)));
+    if (isSystemAdminRole(userRole)) return true;
+    return (userRole || '').trim().toLowerCase() === requiredRole.trim().toLowerCase();
   }
 
   /**
@@ -212,7 +147,7 @@ export class WorkflowTransitionExecutor {
     }
 
     let filtered = transitions.filter(t => {
-      return WorkflowTransitionExecutor.checkUserRoleMatch(userRole, t.requiredRole || undefined, userPermissions);
+      return WorkflowTransitionExecutor.checkUserRoleMatch(userRole, t.requiredRole || undefined);
     });
     // v8.0.100 (TD-391): انتقالی که مجوز لازمش را کاربر ندارد پیشنهاد نمی‌شود
     const permitted: WorkflowTransitionSnapshot[] = [];
@@ -265,8 +200,8 @@ export class WorkflowTransitionExecutor {
     const permission = (transition.requiredPermission || '').trim();
     if (!permission) return true;
     const role = (signer.role || '').trim().toLowerCase();
-    if (role === 'admin') return true;
-    const held = (list: string[]) => list.includes(permission) || list.includes('*');
+    if (isSystemAdminRole(role)) return true;
+    const held = (list: string[]) => list.includes(permission);
     if (signer.ownPermissions && held(signer.permissions || [])) return true;
     if (!role) return false;
     const [roleRow] = await txExecutor.select({ permissions: roles.permissions }).from(roles)
@@ -284,35 +219,41 @@ export class WorkflowTransitionExecutor {
     signer: { userId?: number; actorId?: number; role?: string }
   ): boolean {
     if (Number(transition.isInitiatorExcluded) !== 1 || !startedBy) return false;
-    if ((signer.role || '').trim().toLowerCase() === 'admin') return false;
+    if (isSystemAdminRole(signer.role)) return false;
     return signer.userId === startedBy || signer.actorId === startedBy;
   }
 
   /**
    * v8.0.97 (TD-377): اجازه کاربر برای گام؛ تفویضی که به جای آن امضا می‌کند، یا undefined برای امضای خود کاربر.
+   * v9.0.111 (TD-542): «اجازه» یعنی نقش گام و مجوز لازم آن با هم؛ کسی که خودش مجوز را ندارد با تفویض دارنده‌ای امضا
+   * می‌کند که هر دو را دارد (گامی که پس از مهاجرت فقط مجوز می‌خواهد همان جانشین پیشین را نگه می‌دارد).
    */
   static async resolveSigner(
-    transition: Pick<WorkflowTransitionSnapshot, 'requiredRole' | 'title'>,
+    transition: Pick<WorkflowTransitionSnapshot, 'requiredRole' | 'requiredPermission' | 'title'>,
     workflowCode: string | undefined,
     params: { userId?: number; userRole?: string; userPermissions?: string[] },
     txExecutor: DbClient = orm
   ): Promise<ActingDelegation | undefined> {
     const requiredRole = transition.requiredRole || undefined;
-    if (WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, requiredRole, params.userPermissions || [])) return undefined;
+    const ownRole = WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, requiredRole);
+    if (ownRole && await WorkflowTransitionExecutor.holdsRequiredPermission(transition, { role: params.userRole, permissions: params.userPermissions, ownPermissions: true }, txExecutor)) {
+      return undefined;
+    }
     const delegations = params.userId
       ? await WorkflowDelegationService.activeDelegations(txExecutor, { toUserId: params.userId })
       : [];
-    let acting: ActingDelegation | undefined;
     for (const d of delegations) {
       if (!WorkflowDelegationService.delegationCovers(d.scope, workflowCode)) continue;
       // v9.0.34 (TD-444): نقش تفویض‌کننده با مجوزهای همان نقش سنجیده می‌شود، همان قاعده‌ای که خود او را می‌سنجد
-      const fromPermissions = await WorkflowTransitionExecutor.signerPermissions(d.fromRole, [], txExecutor);
-      if (WorkflowTransitionExecutor.checkUserRoleMatch(d.fromRole, requiredRole, fromPermissions)) { acting = d; break; }
+      if (WorkflowTransitionExecutor.checkUserRoleMatch(d.fromRole, requiredRole)
+        && await WorkflowTransitionExecutor.holdsRequiredPermission(transition, { role: d.fromRole, ownPermissions: false }, txExecutor)) {
+        return d;
+      }
     }
-    if (!acting) {
-      throw new ForbiddenError(`نقش شما اجازه اقدام «${transition.title}» را ندارد؛ از دارنده نقش این گام بخواهید آن را انجام دهد.`);
+    if (ownRole) {
+      throw new ForbiddenError(`اقدام «${transition.title}» مجوز «${transition.requiredPermission}» را می‌خواهد.`, undefined, 'WF_PERMISSION_REQUIRED');
     }
-    return acting;
+    throw new ForbiddenError(`نقش شما اجازه اقدام «${transition.title}» را ندارد؛ از دارنده نقش این گام بخواهید آن را انجام دهد.`);
   }
 
   /**
@@ -673,7 +614,7 @@ export class WorkflowTransitionExecutor {
       if (entityPermissions.length > 0) {
         const signerRole = (actingFor ? actingFor.fromRole : params.userRole || '').trim().toLowerCase();
         const signerHeld = actingFor ? await WorkflowTransitionExecutor.signerPermissions(actingFor.fromRole, [], tx) : userPermissions;
-        if (signerRole !== 'admin' && !signerHeld.includes('*') && !entityPermissions.some(p => signerHeld.includes(p))) {
+        if (!isSystemAdminRole(signerRole) && !entityPermissions.some(p => signerHeld.includes(p))) {
           throw new ForbiddenError(`اقدام «${transition.title}» یکی از مجوزهای «${entityPermissions.join('، ')}» را می‌خواهد.`, undefined, 'WF_ENTITY_PERMISSION_REQUIRED');
         }
       }
@@ -953,7 +894,7 @@ export class WorkflowTransitionExecutor {
     }
 
     const userPermissions = await WorkflowTransitionExecutor.signerPermissions(params.userRole, params.userPermissions);
-    const isAuthorized = WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, userPermissions);
+    const isAuthorized = WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined);
     if (!isAuthorized) {
       return { allowed: false, reason: `نقش شما (${params.userRole}) مجوز لازم را ندارد` };
     }
