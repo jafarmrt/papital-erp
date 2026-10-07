@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.207 — Accounting Buttons Only for Their Key Holders
+- **Accounting Buttons (P2):** the dashboard voucher, treasury and cheque buttons, the year-closing execute button and the chart-of-accounts seed button show only for holders of their API key (TD-567).
+
 ### v9.0.206 — Journal Book Paged
 - **Journal Book (P3):** one page of rows per request, sent once; row numbers and the running balance continue from the start of the range and totals cover the whole range (TD-561).
 

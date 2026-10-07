@@ -16,6 +16,11 @@ vi.mock('../../api', () => ({
   fetchJson: (...args: unknown[]) => fetchJson(...args),
   isAbortError: (err: unknown) => (err as { name?: string } | null)?.name === 'AbortError',
 }));
+// v9.0.207 (TD-567): the fiscal closing execute button shows only for holders of accounting.fiscal_close
+vi.mock('../../contexts/AuthContext', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../contexts/AuthContext')>()),
+  useHasPermission: (key: string) => key === 'accounting.fiscal_close',
+}));
 vi.mock('react-hot-toast', () => {
   const t = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() });
   return { toast: t, default: t };

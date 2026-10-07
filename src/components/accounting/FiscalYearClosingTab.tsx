@@ -7,6 +7,10 @@ import { FiscalYearClosingPreview, FiscalYearClosingResult, JournalVoucher, Fisc
 import toast from 'react-hot-toast';
 import { useExecuteFiscalClosing, useFiscalClosingPreview, useFiscalClosingYears } from '../../hooks/accounting/useFiscalClosing';
 import { FiscalYearReopenPanel } from './FiscalYearReopenPanel';
+import { useHasPermission } from '../../contexts/AuthContext';
+
+/** v9.0.207 (TD-567، B03-25): کلید API اجرای بستن سال (`POST /accounting/fiscal-closing/execute`) */
+export const FISCAL_CLOSE_PERMISSION = 'accounting.fiscal_close';
 
 interface FiscalYearClosingTabProps {
   onViewVoucher?: (voucher: JournalVoucher) => void;
@@ -16,6 +20,8 @@ interface FiscalYearClosingTabProps {
 export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYearClosingTabProps) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
+  // v9.0.207 (TD-567): دکمه اجرای بستن فقط برای دارنده کلید API آن؛ پیش‌تر مدیر، مدیر مالی و حسابدار آن را می‌دیدند و ۴۰۳ می‌گرفتند
+  const canExecuteClosing = useHasPermission(FISCAL_CLOSE_PERMISSION);
   // v9.0.161 (TD-543، تصمیم ت۱ مالک محصول): فقط سال‌های تمام‌شده از سرور؛ سال جاری و آینده بسته نمی‌شوند. پیش‌تر فرم سال جاری
   // را پیش‌فرض داشت و همان را با یک تأیید می‌بست
   const yearsQuery = useFiscalClosingYears();
@@ -686,15 +692,21 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsConfirmModalOpen(true)}
-            disabled={isExecuting || closingBlocked}
-            title={closingBlockedReason}
-            className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 active:scale-98 text-slate-950 font-black px-6 py-3 rounded-xl text-sm transition-all shadow-lg hover:shadow-amber-500/20 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            اجرای قطعی بستن سال مالی {toPersianDigits(selectedYear)}
-          </button>
+          {canExecuteClosing ? (
+            <button
+              type="button"
+              onClick={() => setIsConfirmModalOpen(true)}
+              disabled={isExecuting || closingBlocked}
+              title={closingBlockedReason}
+              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 active:scale-98 text-slate-950 font-black px-6 py-3 rounded-xl text-sm transition-all shadow-lg hover:shadow-amber-500/20 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              اجرای قطعی بستن سال مالی {toPersianDigits(selectedYear)}
+            </button>
+          ) : (
+            <p className="text-xs text-amber-300 font-bold max-w-xs leading-relaxed">
+              بستن سال مالی با دارنده مجوز «اجرای بستن سال مالی» است؛ شما پیش‌نمایش را می‌بینید.
+            </p>
+          )}
         </div>
       )}
 

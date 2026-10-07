@@ -6,6 +6,7 @@ import type { Account, AccountLevel, AccountType, AccountNature } from '../../ty
 import toast from 'react-hot-toast';
 import { ACCOUNT_CODE_FORMAT_MESSAGE, isValidAccountCode, normalizeAccountCode } from '../../lib/accounting/accountCode';
 import { accountDeleteConfirmText } from '../../lib/accounting/accountDeleteText';
+import { useIsSystemAdmin } from '../../contexts/AuthContext';
 
 interface ChartOfAccountsTabProps {
   accounts: Account[];
@@ -28,6 +29,9 @@ export function ChartOfAccountsTab({
   onDeleteAccount,
   onSeedStandardAccounts,
 }: ChartOfAccountsTabProps) {
+  // v9.0.207 (TD-567، B03-25): استقرار کدینگ پیش‌فرض فقط برای مدیر سیستم (گارد `requireSystemAdmin`)؛ پیش‌تر مدیر، مدیر مالی و
+  // حسابدار دکمه را می‌دیدند و ۴۰۳ می‌گرفتند
+  const canSeedStandardAccounts = useIsSystemAdmin();
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
   const safeTreeAccounts = Array.isArray(treeAccounts) ? treeAccounts : [];
 
@@ -294,14 +298,16 @@ export function ChartOfAccountsTab({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => { void onSeedStandardAccounts().catch(() => undefined); }}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition disabled:opacity-50"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>همگام‌سازی کدینگ پیش‌فرض</span>
-          </button>
+          {canSeedStandardAccounts && (
+            <button
+              onClick={() => { void onSeedStandardAccounts().catch(() => undefined); }}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition disabled:opacity-50"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>همگام‌سازی کدینگ پیش‌فرض</span>
+            </button>
+          )}
 
           <button
             onClick={() => openCreateModal()}
