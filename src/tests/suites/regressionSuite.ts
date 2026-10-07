@@ -1,3 +1,4 @@
+import { ALL_ITEM_IMPORT_PERMISSIONS } from '../../lib/items/itemImportPermissions.js';
 import { personnelVersion } from '../fixtures/personnelVersion.js';
 import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
@@ -1490,7 +1491,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const importResult = await ItemCatalogService.processUnifiedImport(
       rawRows,
       'raw_material',
-      { user: { username: 'تستر اکسل' } }
+      { user: { username: 'تستر اکسل' } },
+      ALL_ITEM_IMPORT_PERMISSIONS
     );
 
     if (importResult.createdCount !== 1) {

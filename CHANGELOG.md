@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.116 — Excel Import Follows Price and Stock Permissions
+- **Item Excel Permissions:** the item Excel import changes prices only with the price permission, stock only with the warehouse in / out permissions and creates items only with the item creation permission; other parts are reported and skipped (TD-648, `sec_item_import_respects_price_and_stock_permissions_td_648`).
+
 ### v9.0.115 — Re-Importing an Unchanged Excel File Keeps the Price History
 - **Item Price History:** importing the same Excel file again no longer rewrites unchanged prices, so the price history keeps only real changes, and the history shows when each price was recorded (TD-662, `reg_excel_reimport_keeps_price_history_td_662`).
 

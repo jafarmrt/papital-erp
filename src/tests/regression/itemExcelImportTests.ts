@@ -4,7 +4,7 @@ import request from 'supertest';
 import { and, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm, pool } from '../../db/drizzle.js';
-import { itemPrices, items } from '../../db/schema.js';
+import { itemPrices, items, roles, users } from '../../db/schema.js';
 import { withTestMarker } from '../fixtures/testMarker.js';
 import { money } from '../../lib/money.js';
 
@@ -24,6 +24,9 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_excel_reimport_keeps_price_history_td_662',
       'v9.0.115: re-importing an unchanged Excel file rewrites no price row (TD-662)',
       ['td662', 'excel', 'price', 'package5'], unchangedPriceCase],
+    ['sec_item_import_respects_price_and_stock_permissions_td_648',
+      'v9.0.116: the Excel import changes prices only with products.edit_price, stock only with warehouse.in / warehouse.out and creates items only with products.create (TD-648)',
+      ['td648', 'excel', 'security', 'permission', 'package5'], importPermissionsCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -39,6 +42,8 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
       }));
     } finally {
       if (ctx.itemIds.length > 0) await orm.update(items).set({ isDeleted: 1 }).where(inArray(items.id, ctx.itemIds)).catch(() => undefined);
+      if (ctx.userIds.length > 0) await orm.update(users).set({ isDeleted: 1 }).where(inArray(users.id, ctx.userIds)).catch(() => undefined);
+      if (ctx.roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, ctx.roleIds)).catch(() => undefined);
     }
   }
   return results;
@@ -46,17 +51,34 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
 
 interface Ctx {
   itemIds: number[];
+  userIds: number[];
+  roleIds: number[];
   post(url: string, body: unknown): Promise<request.Response>;
+  /** a session of a new user whose role holds exactly these permissions */
+  as(permissions: string[]): Promise<(url: string, body: unknown) => Promise<request.Response>>;
   get(url: string): Promise<request.Response>;
   serial(): string;
 }
 
 async function makeCtx(): Promise<Ctx> {
-  const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+  const { getTestApp, getAdminSession, loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');
+  const { createTestRole, createTestUser } = await import('../fixtures/factories.js');
   const app = await getTestApp();
   const admin = await getAdminSession();
+  const userIds: number[] = [];
+  const roleIds: number[] = [];
   return {
     itemIds: [],
+    userIds,
+    roleIds,
+    as: async (permissions) => {
+      const role = await createTestRole({ permissions });
+      roleIds.push(role.id);
+      const user = await createTestUser({ role: role.code });
+      userIds.push(user.id);
+      const session = await loginTestUserWithSession(app, user.username);
+      return (url, body) => request(app).post(url).set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send(body as object);
+    },
     post: (url, body) => request(app).post(url).set('Cookie', admin.cookie).set('x-csrf-token', admin.csrfToken).send(body as object),
     get: (url) => request(app).get(url).set('Cookie', admin.cookie),
     serial: () => String(100 + Math.floor(Math.random() * 900)),
@@ -71,6 +93,66 @@ async function activeTitles(itemId: number): Promise<string[]> {
 
 async function priceRowCount(itemId: number): Promise<number> {
   return (await orm.select({ id: itemPrices.id }).from(itemPrices).where(eq(itemPrices.itemId, itemId))).length;
+}
+
+async function itemState(itemId: number): Promise<{ unit: string; stock: number; prices: string }> {
+  const [it] = await orm.select({ unit: items.unit, stock: items.currentStock }).from(items).where(eq(items.id, itemId));
+  const prices = await orm.select({ title: itemPrices.title, price: itemPrices.price }).from(itemPrices)
+    .where(and(eq(itemPrices.itemId, itemId), eq(itemPrices.isDeleted, 0)));
+  return { unit: it.unit, stock: Number(it.stock), prices: prices.map(p => `${p.title}:${Number(p.price)}`).sort().join(',') };
+}
+
+function errorText(res: request.Response): string {
+  return ((res.body?.errors ?? []) as Array<{ message: string }>).map(e => e.message).join(' | ');
+}
+
+/**
+ * TD-648 / B05-02: on v9.0.115 a role with only products.view + products.edit set a sale price to 1 rial and cut the stock
+ * from 10 to 2 (with a stock-count voucher) through one Excel row, while POST /items/:id/prices answered 403.
+ */
+async function importPermissionsCase(ctx: Ctx): Promise<string> {
+  const { createTestItem } = await import('../fixtures/factories.js');
+  const wrong: string[] = [];
+  const it = await createTestItem({ code: `1404-N-${ctx.serial()}-03`, name: withTestMarker('گردنبند مجوز td648'), category: 'گردنبند', unit: 'عدد', weightedAverageCost: 300000, stocks: { '': 10 } });
+  ctx.itemIds.push(it.id);
+  const seed = await ctx.post('/api/items/prices/batch-update', { updates: [{ itemId: it.id, title: 'عمده', price: 2000000 }] });
+  if (seed.status !== 200) throw new Error(`seed prices ${seed.status}`);
+
+  // a) products.edit only: the unit changes, the price and the stock do not, both are reported; a new item is refused
+  const editor = await ctx.as(['products.view', 'products.edit']);
+  const newCode = `1404-N-${ctx.serial()}-04`;
+  const res = await editor('/api/items/unified-import', { rows: [
+    { 'کد کالا': it.code, 'نام محصول': it.name, 'واحد': 'جفت', 'قیمت عمده': 1, 'موجودی کل': 2 },
+    { 'کد کالا': newCode, 'نام محصول': withTestMarker('کالای تازه td648'), 'موجودی کل': 3 },
+  ] });
+  const afterEditor = await itemState(it.id);
+  if (res.status !== 200) wrong.push(`editor import ${res.status}`);
+  if (afterEditor.unit !== 'جفت') wrong.push(`unit ${afterEditor.unit}`);
+  if (afterEditor.prices !== 'عمده:2000000') wrong.push(`editor changed prices to ${afterEditor.prices}`);
+  if (afterEditor.stock !== 10) wrong.push(`editor changed stock to ${afterEditor.stock}`);
+  const text = errorText(res);
+  for (const label of ['ویرایش قیمت‌ها', 'ثبت خروج کالا', 'تعریف کالای جدید']) {
+    if (!text.includes(label)) wrong.push(`no error naming «${label}»: ${text}`);
+  }
+  const created = await orm.select({ id: items.id }).from(items).where(and(eq(items.code, newCode), eq(items.isDeleted, 0)));
+  if (created.length > 0) { ctx.itemIds.push(created[0].id); wrong.push('editor created a new item'); }
+
+  // b) the unchanged export round trip raises no permission error for the same user
+  const exp = await ctx.get('/api/items/unified-export?type=product');
+  const row = (exp.body.rows as Row[]).find(r => r['کد کالا'] === it.code);
+  const roundTrip = await editor('/api/items/unified-import', { rows: [row] });
+  if (errorText(roundTrip)) wrong.push(`unchanged round trip errors: ${errorText(roundTrip)}`);
+
+  // c) edit_price + warehouse.in: a price and an increase go through, a decrease is refused
+  const keeper = await ctx.as(['products.view', 'products.edit', 'products.edit_price', 'warehouse.view', 'warehouse.in']);
+  const up = await keeper('/api/items/unified-import', { rows: [{ 'کد کالا': it.code, 'نام محصول': it.name, 'قیمت عمده': 2100000, 'موجودی کل': 12 }] });
+  const afterUp = await itemState(it.id);
+  if (errorText(up) || afterUp.prices !== 'عمده:2100000' || afterUp.stock !== 12) wrong.push(`keeper increase: ${afterUp.prices} stock ${afterUp.stock} ${errorText(up)}`);
+  const down = await keeper('/api/items/unified-import', { rows: [{ 'کد کالا': it.code, 'نام محصول': it.name, 'موجودی کل': 5 }] });
+  if ((await itemState(it.id)).stock !== 12 || !errorText(down).includes('ثبت خروج کالا')) wrong.push(`keeper decrease: stock ${(await itemState(it.id)).stock} ${errorText(down)}`);
+
+  if (wrong.length > 0) throw new Error(wrong.join('; '));
+  return 'price and stock columns follow products.edit_price / warehouse.in / warehouse.out; new items need products.create';
 }
 
 /** TD-662 / B05-16: on v9.0.114 each import of the same file soft-deleted and re-inserted every price (history 2 → 6). */

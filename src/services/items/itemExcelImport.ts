@@ -1,0 +1,278 @@
+import { and, asc, eq } from 'drizzle-orm';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { items, warehouses } from '../../db/schema.js';
+import { logActivity } from '../../lib/auditLogger.js';
+import { ItemPricingService } from './itemPricing.service.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { resolveWarehouseCode, getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
+import { ItemOpeningService } from '../inventory/itemOpening.service.js';
+import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
+import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
+import { money } from '../../lib/money.js';
+import { ITEM_IMPORT_DENIED_MESSAGES, type ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
+import {
+  EXCEL_DOCUMENT_REF, ITEM_FIELD_KEYS, applyStockChange, changedRowPrices, codeFormatError, deniedStockPermissions,
+  plannedStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue,
+  type ItemRow, type Row, type RowFields, type RowStock, type Warehouse,
+} from './itemExcelRow.js';
+
+/** v8.0.5 (TD-264): اختلاف کمتر از ۱ ریال میان WAC فایل اکسل و WAC فعلی «همان مقدار» شمرده می‌شود (WAC فعلی می‌ماند) */
+export const EXCEL_WAC_TOLERANCE = 1;
+
+export interface ItemImportActor {
+  id?: number;
+  username?: string;
+  full_name?: string;
+}
+
+export interface ItemImportRowError {
+  row: number;
+  name?: string;
+  code?: string;
+  message: string;
+}
+
+export interface ItemImportResult {
+  success: true;
+  createdCount: number;
+  updatedCount: number;
+  pricesCount: number;
+  errors: ItemImportRowError[];
+}
+
+interface ImportState {
+  createdCount: number;
+  updatedCount: number;
+  pricesCount: number;
+  errors: ItemImportRowError[];
+  /** v8.0.3 (TD-262): ردیف‌های کاردکس اصلاح موجودی کالاهای موجود، برای یک سند «کسری و اضافات انبار» */
+  adjustmentTransactionIds: number[];
+}
+
+interface ImportContext {
+  tx: DbExecutor;
+  whs: Warehouse[];
+  defaultWhCode: string;
+  strategies: string[];
+  typeFilter: string | undefined;
+  actor: ItemImportActor;
+  perms: ItemImportPermissions;
+  state: ImportState;
+}
+
+async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<void> {
+  const { tx, state, perms } = ctx;
+  const rawCode = row['کد کالا'] || row['کد'] || row['code'] || row['Code'];
+  const rawName = row['نام محصول'] || row['نام کالا'] || row['نام'] || row['name'] || row['Name'];
+  if (!rawCode && !rawName) {
+    state.errors.push({ row: rowNum, message: 'نام یا کد کالا در این ردیف نامشخص است.' });
+    return;
+  }
+  const code = String(rawCode || '').trim();
+  const name = String(rawName || '').trim();
+  const push = (message: string) => state.errors.push({ row: rowNum, name, code, message });
+  const fields = readRowFields(row, ctx.typeFilter);
+  const stock = readRowStock(row, ctx.whs, ctx.defaultWhCode);
+
+  let matchedItem: ItemRow | null = null;
+  if (code) {
+    const [byCode] = await tx.select().from(items).where(and(eq(items.code, code), eq(items.isDeleted, 0))).for('update');
+    if (byCode) matchedItem = byCode;
+  }
+  if (!matchedItem && name) {
+    const [byName] = await tx.select().from(items).where(and(eq(items.name, name), eq(items.isDeleted, 0))).for('update');
+    if (byName) matchedItem = byName;
+  }
+  if (!code) {
+    push('کد کالا نامعتبر است (خالی می‌باشد).');
+    return;
+  }
+  const formatError = codeFormatError(code, fields.itemType, fields.category);
+  if (formatError) {
+    push(formatError);
+    return;
+  }
+  if (name) {
+    const [nameConflict] = await tx.select().from(items).where(and(eq(items.name, name), eq(items.isDeleted, 0))).for('update');
+    if (nameConflict && matchedItem && nameConflict.id !== matchedItem.id) {
+      push(`خطای نام تکراری: محصولی با نام «${name}» قبلاً با کد «${nameConflict.code}» در سیستم ثبت شده است.`);
+      return;
+    }
+  }
+  if (!matchedItem && !perms.createItems) {
+    push(ITEM_IMPORT_DENIED_MESSAGES.createItems);
+    return;
+  }
+
+  // V3.0.6 (Business Clock): تاریخ تراکنش‌های کاردکس از ساعت توافقی سامانه
+  const todayStr = await businessTodayIsoDate();
+  const currentUser = ctx.actor.username || 'مدیر سیستم';
+  const targetItemId = matchedItem
+    ? await updateExistingItem(ctx, matchedItem, { code, name, fields, stock, todayStr, currentUser, push })
+    : await createNewItem(ctx, { code, name, fields, stock, todayStr, currentUser });
+  if (targetItemId === null) return;
+
+  const changedPrices = await changedRowPrices(tx, targetItemId, readRowPrices(row, ctx.strategies, push));
+  if (changedPrices.length > 0 && !perms.editPrices) {
+    push(ITEM_IMPORT_DENIED_MESSAGES.editPrices);
+  } else {
+    state.pricesCount += await saveRowPrices(tx, targetItemId, changedPrices);
+  }
+}
+
+interface RowInput {
+  code: string;
+  name: string;
+  fields: RowFields;
+  stock: RowStock;
+  todayStr: string;
+  currentUser: string;
+}
+
+async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, input: RowInput & { push: (m: string) => void }): Promise<number | null> {
+  const { tx, state, perms } = ctx;
+  const { code, name, fields, stock, push } = input;
+  const targetItemId = matchedItem.id;
+  // v7.0.45 (audit P2-1): موجودی فعلی از جدول موجودی انبارها، نه کش JSONB
+  const existingSnapshot = await ItemWarehouseStockService.getStockSnapshot(tx, targetItemId);
+  const currentWac = money(matchedItem.weightedAverageCost);
+  const fileWac = !isNaN(fields.weightedAverageCost) && fields.weightedAverageCost > 0 ? money(fields.weightedAverageCost) : null;
+  // v8.0.5 (TD-264، تصمیم مالک محصول — گزینه الف): WAC کالای دارای موجودی از اکسل عوض نمی‌شود؛ WAC فقط با
+  // گردش ورود تغییر می‌کند. مقدار برابر WAC فعلی (اختلاف کمتر از EXCEL_WAC_TOLERANCE) نادیده گرفته می‌شود تا فایل
+  // خروجی بی‌خطا برگردد.
+  if (fileWac && existingSnapshot.total > 0 && !fileWac.subtract(currentWac).abs().lessThan(EXCEL_WAC_TOLERANCE)) {
+    push(
+      `بهای میانگین (WAC) کالای «${matchedItem.name}» (${matchedItem.code}) که ${existingSnapshot.total} موجودی دارد از اکسل تغییر نمی‌کند ` +
+      `(فعلی ${currentWac.toString()}، فایل ${fileWac.toString()}). WAC فقط با ورود کالا عوض می‌شود؛ این ردیف ثبت نشد. ` +
+      'ستون «میانگین موزون بها» را خالی بگذارید یا همان مقدار فعلی را بنویسید.',
+    );
+    return null;
+  }
+  const itemWac = fileWac && existingSnapshot.total <= 0 ? fileWac : currentWac;
+
+  const updateSet = {
+    name: name || matchedItem.name,
+    code: code || matchedItem.code,
+    type: fields.itemType,
+    unit: fields.unit || matchedItem.unit,
+    category: fields.category || matchedItem.category,
+    reorderPoint: isNaN(fields.reorderPoint) ? matchedItem.reorderPoint : fields.reorderPoint,
+    weightedAverageCost: itemWac,
+    color: fields.color || matchedItem.color,
+    size: fields.size || matchedItem.size,
+    weight: fields.weight !== null && !isNaN(fields.weight) ? fields.weight : matchedItem.weight,
+    material: fields.material || matchedItem.material,
+    image: fields.image || matchedItem.image,
+  };
+  const fieldsChange = ITEM_FIELD_KEYS.some(k => !sameFieldValue(matchedItem[k], updateSet[k]));
+  if (fieldsChange && !perms.editItems) {
+    push(ITEM_IMPORT_DENIED_MESSAGES.editItems);
+  } else if (fieldsChange) {
+    await tx.update(items).set(updateSet).where(eq(items.id, targetItemId));
+  }
+
+  const changes = await plannedStockChanges(tx, stock, existingSnapshot.byCode, existingSnapshot.total);
+  const denied = deniedStockPermissions(changes, perms);
+  if (denied.length > 0) {
+    denied.forEach(k => push(ITEM_IMPORT_DENIED_MESSAGES[k]));
+  } else {
+    const movement = { itemId: targetItemId, price: itemWac, date: input.todayStr, user: input.currentUser };
+    for (const change of changes) {
+      state.adjustmentTransactionIds.push(await applyStockChange(tx, movement, change, {
+        in: 'افزایش موجودی از اکسل',
+        out: 'کاهش موجودی از اکسل (شمارش فیزیکی)',
+      }));
+    }
+  }
+  state.updatedCount++;
+  return targetItemId;
+}
+
+async function createNewItem(ctx: ImportContext, input: RowInput): Promise<number> {
+  const { tx, state } = ctx;
+  const { code, name, fields, stock } = input;
+  const itemWac = money(isNaN(fields.weightedAverageCost) ? 0 : fields.weightedAverageCost);
+  const [newItem] = await tx.insert(items).values({
+    name: name || 'کالای بدون نام',
+    code,
+    type: fields.itemType,
+    unit: fields.unit || 'عدد',
+    category: fields.category || '',
+    reorderPoint: isNaN(fields.reorderPoint) ? 0 : fields.reorderPoint,
+    weightedAverageCost: itemWac,
+    color: fields.color || null,
+    size: fields.size || null,
+    weight: fields.weight !== null && !isNaN(fields.weight) ? fields.weight : null,
+    material: fields.material || null,
+    image: fields.image || '',
+    currentStock: 0,
+    isDeleted: 0,
+  }).returning({ id: items.id });
+  const targetItemId = newItem.id;
+
+  const movement = { itemId: targetItemId, price: itemWac, date: input.todayStr, user: input.currentUser };
+  const opening = stock.hasCustomStockInRow && Object.keys(stock.stockValues).length > 0
+    ? Object.entries(stock.stockValues).map(([whCode, qty]) => ({ whCode, diff: Number(qty || 0) }))
+    : [{ whCode: await resolveWarehouseCode(tx, ''), diff: stock.currentStock }];
+  for (const change of opening.filter(c => c.diff > 0)) {
+    await applyStockChange(tx, movement, change, { in: 'موجودی اولیه از فایل اکسل', out: '' });
+  }
+  // v8.0.3 (TD-262): کالای تازه با موجودی، همان سند افتتاحیه فرم کالا را می‌گیرد (موجودی × WAC / سرمایه اولیه)؛
+  // همین‌جا صادر می‌شود تا ردیف بعدی همین فایل برای همین کد فقط اختلاف را به سند اصلاح موجودی ببرد
+  if (opening.some(c => c.diff > 0)) {
+    await ItemOpeningService.issueItemOpeningVoucher(targetItemId, { userId: ctx.actor.id, username: input.currentUser, tx });
+  }
+  state.createdCount++;
+  return targetItemId;
+}
+
+/**
+ * ورود یکپارچه اکسل کالا: مشخصات، موجودی هر انبار و قیمت فهرست‌ها، همه در یک تراکنش.
+ * v9.0.116 (TD-648): `perms` در route با `can()` ساخته می‌شود؛ هر بخش فقط با مجوز خودش ثبت می‌شود.
+ */
+export async function importItemsFromExcel(
+  rows: Row[],
+  typeFilter: string | undefined,
+  actor: ItemImportActor,
+  perms: ItemImportPermissions,
+): Promise<ItemImportResult> {
+  const whs = await orm.select().from(warehouses).orderBy(asc(warehouses.id));
+  // v7.0.36 (P2-3): انبار پیش‌فرض قطعی (انبار فعال با کمترین شناسه)
+  const defaultWhCode = (await getDefaultWarehouseCode(orm)) ?? whs[0]?.code ?? 'main';
+  const strategies = await ItemPricingService.getPricingStrategies();
+  const state: ImportState = { createdCount: 0, updatedCount: 0, pricesCount: 0, errors: [], adjustmentTransactionIds: [] };
+
+  await orm.transaction(async (tx) => {
+    const ctx: ImportContext = { tx, whs, defaultWhCode, strategies, typeFilter, actor, perms, state };
+    for (let i = 0; i < rows.length; i++) {
+      await importRow(ctx, rows[i], i + 2);
+    }
+    // v8.0.3 (TD-262، تصمیم مالک محصول درباره TD-255): اصلاح موجودی کالاهای موجود با بهای کاردکس به «کسری و اضافات
+    // انبار»، در همان تراکنش؛ پیش‌تر موجودی عوض می‌شد و دفتر کل از آن خبر نداشت
+    await syncStockAdjustmentVoucher({
+      transactionIds: state.adjustmentTransactionIds,
+      date: await businessTodayIsoDate(),
+      refNumber: EXCEL_DOCUMENT_REF,
+      description: 'اصلاح موجودی کالا از درون‌ریزی اکسل',
+      userId: actor.id,
+      username: actor.username || 'مدیر سیستم',
+    }, tx);
+  });
+
+  await logActivity({
+    userId: actor.id,
+    username: actor.username || 'سیستم',
+    userFullName: actor.full_name || '',
+    action: 'UPDATE',
+    entity: 'ورود اطلاعات اکسل',
+    description: `ورود جامع اطلاعات از اکسل: ${state.createdCount} کالای جدید، ${state.updatedCount} کالای به‌روزرسانی شده و ${state.pricesCount} قیمت تنظیم گردید.`,
+  });
+
+  return {
+    success: true,
+    createdCount: state.createdCount,
+    updatedCount: state.updatedCount,
+    pricesCount: state.pricesCount,
+    errors: state.errors,
+  };
+}
