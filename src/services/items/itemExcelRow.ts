@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { items, itemPrices, warehouses } from '../../db/schema.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
@@ -164,7 +164,7 @@ export function deniedStockPermissions(changes: StockChange[], perms: ItemImport
   return denied;
 }
 
-export const ITEM_FIELD_KEYS = ['name', 'code', 'type', 'unit', 'category', 'reorderPoint', 'weightedAverageCost', 'color', 'size', 'weight', 'material', 'image'] as const;
+export const ITEM_FIELD_KEYS = ['name', 'type', 'unit', 'category', 'reorderPoint', 'weightedAverageCost', 'color', 'size', 'weight', 'material', 'image'] as const;
 
 export function sameFieldValue(a: unknown, b: unknown): boolean {
   if (a instanceof Money || b instanceof Money) return money(a as number).equals(money(b as number));
@@ -225,4 +225,19 @@ export async function saveRowPrices(tx: DbExecutor, itemId: number, changed: Awa
     });
   }
   return changed.length;
+}
+
+/**
+ * v9.0.118 (TD-651): کالای ردیف فقط با کد، قفل‌شده `FOR UPDATE`: کد دقیق، وگرنه تنها کالایی که کدش جز در بزرگی و کوچکی
+ * حروف برابر است. چند کالای هم‌حرف `ambiguous` است (کدهای پیشین؛ ایندکس یکتای ت۴ جلوی کد تازه را می‌گیرد).
+ */
+export async function findItemByCode(tx: DbExecutor, code: string): Promise<{ item: ItemRow | null; ambiguous: string[] }> {
+  const [exact] = await tx.select().from(items).where(and(eq(items.code, code), eq(items.isDeleted, 0))).for('update');
+  if (exact) return { item: exact, ambiguous: [] };
+  const similar = await tx.select().from(items)
+    .where(and(sql`upper(${items.code}) = upper(${code})`, eq(items.isDeleted, 0)))
+    .orderBy(asc(items.id))
+    .for('update');
+  if (similar.length > 1) return { item: null, ambiguous: similar.map(i => i.code) };
+  return { item: similar[0] ?? null, ambiguous: [] };
 }

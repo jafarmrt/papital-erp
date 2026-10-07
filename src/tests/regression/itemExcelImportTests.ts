@@ -30,6 +30,9 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_excel_partial_row_keeps_fields_td_650',
       'v9.0.117: a missing column or blank cell leaves an existing item unchanged and its type comes from the item (TD-650)',
       ['td650', 'excel', 'package5'], partialRowCase],
+    ['reg_excel_name_match_never_changes_code_td_651',
+      'v9.0.118: the Excel import finds items by code only; a name used by another item is refused and the code never changes (TD-651)',
+      ['td651', 'excel', 'package5'], codeOnlyMatchCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -191,6 +194,39 @@ async function partialRowCase(ctx: Ctx): Promise<string> {
   if (p2.unit !== 'عدد' || Number(p2.reorderPoint) !== 0) wrong.push(`explicit cells not applied ${JSON.stringify(p2)}`);
   if (wrong.length > 0) throw new Error(wrong.join('; '));
   return 'a partial file kept unit, reorder point, type and colour; prices were set; explicit cells still apply';
+}
+
+/** TD-651 / B05-05: on v9.0.117 a row with a new code and an existing item's name found that item by name and changed its code. */
+async function codeOnlyMatchCase(ctx: Ctx): Promise<string> {
+  const { createTestItem } = await import('../fixtures/factories.js');
+  const wrong: string[] = [];
+  const serial = ctx.serial();
+  const it = await createTestItem({ code: `1404-N-${serial}-01`, name: withTestMarker(`گردنبند کد td651 ${serial}`), category: 'گردنبند', stocks: { '': 2 } });
+  ctx.itemIds.push(it.id);
+  const codeOf = async () => (await orm.select({ code: items.code, name: items.name }).from(items).where(eq(items.id, it.id)))[0];
+
+  // a) a new code with this item's name: refused as a duplicate name, nothing created, the code stays
+  const newCode = `1404-N-${serial}-99`;
+  const dup = await ctx.post('/api/items/unified-import', { rows: [{ 'کد کالا': newCode, 'نام محصول': it.name, 'قیمت عمده': 700000 }] });
+  if (!errorText(dup).includes('نام تکراری')) wrong.push(`duplicate name not reported: ${errorText(dup)}`);
+  if ((await codeOf()).code !== it.code) wrong.push(`code changed to ${(await codeOf()).code}`);
+  const created = await orm.select({ id: items.id }).from(items).where(and(eq(items.code, newCode), eq(items.isDeleted, 0)));
+  if (created.length > 0) { ctx.itemIds.push(created[0].id); wrong.push('a new item was created with the duplicate name'); }
+  if ((await activeTitles(it.id)).length > 0) wrong.push('the refused row set a price');
+
+  // b) the same code in other letter case finds the item and keeps its stored code
+  const lower = await ctx.post('/api/items/unified-import', { rows: [{ 'کد کالا': it.code.toLowerCase(), 'نام محصول': it.name, 'قیمت عمده': 710000 }] });
+  if (errorText(lower) || (await codeOf()).code !== it.code || !(await activeTitles(it.id)).includes('عمده')) {
+    wrong.push(`case-insensitive code: ${errorText(lower)} code ${(await codeOf()).code}`);
+  }
+
+  // c) the exact code with a new name renames the item and keeps the code
+  const renamed = withTestMarker(`گردنبند نام تازه td651 ${serial}`);
+  await ctx.post('/api/items/unified-import', { rows: [{ 'کد کالا': it.code, 'نام محصول': renamed }] });
+  const after = await codeOf();
+  if (after.name !== renamed || after.code !== it.code) wrong.push(`rename ${JSON.stringify(after)}`);
+  if (wrong.length > 0) throw new Error(wrong.join('; '));
+  return 'matched by code only; duplicate name refused; code kept in every case';
 }
 
 /** TD-662 / B05-16: on v9.0.114 each import of the same file soft-deleted and re-inserted every price (history 2 → 6). */

@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, warehouses } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -11,7 +11,7 @@ import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.servi
 import { money } from '../../lib/money.js';
 import { ITEM_IMPORT_DENIED_MESSAGES, type ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import {
-  EXCEL_DOCUMENT_REF, ITEM_FIELD_KEYS, applyStockChange, changedRowPrices, codeFormatError, deniedStockPermissions,
+  EXCEL_DOCUMENT_REF, ITEM_FIELD_KEYS, applyStockChange, changedRowPrices, codeFormatError, findItemByCode, deniedStockPermissions,
   newItemType, plannedStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue,
   type ItemRow, type Row, type RowFields, type RowStock, type Warehouse,
 } from './itemExcelRow.js';
@@ -74,30 +74,29 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
   const fields = readRowFields(row);
   const stock = readRowStock(row, ctx.whs, ctx.defaultWhCode);
 
-  let matchedItem: ItemRow | null = null;
-  if (code) {
-    const [byCode] = await tx.select().from(items).where(and(eq(items.code, code), eq(items.isDeleted, 0))).for('update');
-    if (byCode) matchedItem = byCode;
-  }
-  if (!matchedItem && name) {
-    const [byName] = await tx.select().from(items).where(and(eq(items.name, name), eq(items.isDeleted, 0))).for('update');
-    if (byName) matchedItem = byName;
-  }
   if (!code) {
     push('کد کالا نامعتبر است (خالی می‌باشد).');
     return;
   }
-  // v9.0.117 (TD-650): قالب کد فقط برای کالای تازه سنجیده می‌شود؛ کد کالای موجود از اکسل عوض نمی‌شود و پیش‌تر نوع پیش‌فرض
-  // «محصول» ردیف ماده اولیه را با پیام «فرمت کد محصول نهایی» رد می‌کرد
+  // v9.0.118 (TD-651، تصمیم ت۳ و ت۵ الف): کالا فقط با کد پیدا می‌شود و کد هرگز از اکسل عوض نمی‌شود؛ پیش‌تر ردیفی با کد تازه
+  // و نام کالای موجود آن کالا را با نام پیدا می‌کرد و کدش (SKU ووکامرس) را بی‌صدا عوض می‌کرد
+  const found = await findItemByCode(tx, code);
+  if (found.ambiguous.length > 0) {
+    push(`کد «${code}» با چند کالا (${found.ambiguous.join('، ')}) فقط در بزرگی و کوچکی حروف فرق دارد؛ کد دقیق را بنویسید.`);
+    return;
+  }
+  const matchedItem = found.item;
   const formatError = matchedItem ? null : codeFormatError(code, newItemType(fields, ctx.typeFilter), fields.category ?? '');
   if (formatError) {
     push(formatError);
     return;
   }
   if (name) {
-    const [nameConflict] = await tx.select().from(items).where(and(eq(items.name, name), eq(items.isDeleted, 0))).for('update');
-    if (nameConflict && matchedItem && nameConflict.id !== matchedItem.id) {
-      push(`خطای نام تکراری: محصولی با نام «${name}» قبلاً با کد «${nameConflict.code}» در سیستم ثبت شده است.`);
+    const [nameConflict] = await tx.select({ id: items.id, code: items.code }).from(items)
+      .where(and(sql`btrim(${items.name}) = ${name}`, eq(items.isDeleted, 0), matchedItem ? ne(items.id, matchedItem.id) : undefined))
+      .limit(1);
+    if (nameConflict) {
+      push(`خطای نام تکراری: محصولی با نام «${name}» قبلاً با کد «${nameConflict.code}» در سیستم ثبت شده است؛ این ردیف ثبت نشد.`);
       return;
     }
   }
@@ -133,7 +132,7 @@ interface RowInput {
 
 async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, input: RowInput & { push: (m: string) => void }): Promise<number | null> {
   const { tx, state, perms } = ctx;
-  const { code, name, fields, stock, push } = input;
+  const { name, fields, stock, push } = input;
   const targetItemId = matchedItem.id;
   // v7.0.45 (audit P2-1): موجودی فعلی از جدول موجودی انبارها، نه کش JSONB
   const existingSnapshot = await ItemWarehouseStockService.getStockSnapshot(tx, targetItemId);
@@ -154,7 +153,6 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
 
   const updateSet = {
     name: name || matchedItem.name,
-    code: code || matchedItem.code,
     // v9.0.117 (TD-650، ت۳ الف): ستونِ نبود یا سلول خالی یعنی «بی‌تغییر»؛ نوع از خود کالا، مگر ستون نوع صریح باشد
     type: fields.itemType ?? matchedItem.type,
     unit: fields.unit ?? matchedItem.unit,
