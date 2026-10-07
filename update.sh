@@ -58,6 +58,13 @@ cd "$APP_DIR" || die "Application directory not found: $APP_DIR"
 # v9.0.124 (TD-587): the service listens on PORT from .env (install.sh writes it there); the startup check watches it
 [ -n "$APP_PORT" ] || APP_PORT="$(env_file_value PORT)"
 APP_PORT="${APP_PORT:-3000}"
+# v9.0.172 (TD-605): the settings the backup and the rehearsal take from the environment come from .env literally
+for key in BACKUP_DIR PRE_DEPLOY_RETENTION_DAYS RESTORE_ADMIN_URL; do
+  if [ -z "${!key:-}" ]; then
+    value="$(env_file_value "$key")"
+    [ -z "$value" ] || export "$key=$value"
+  fi
+done
 UPDATE_STARTED="$(date '+%Y-%m-%d %H:%M:%S')"
 
 # v9.0.123 (TD-586): from the moment the source changes, any failure prints the rollback steps
@@ -128,7 +135,7 @@ if [ "$SKIP_BACKUP" -eq 0 ]; then
   log "[1/6] Creating pre-deployment database backup..."
   # scripts/backup.sh reads DATABASE_URL from .env and tags the dump as pre-deployment (README: kept 90 days)
   if [ -f scripts/backup.sh ]; then
-    set -a; . ./.env; set +a
+    # v9.0.172 (TD-605): .env is read literally, as the service reads it (node --env-file); it is never run as shell code
     BACKUP_KIND=pre-deployment RETENTION_DAYS="${PRE_DEPLOY_RETENTION_DAYS:-90}" bash scripts/backup.sh || die "Database backup failed — aborting update."
     PRE_DEPLOY_DUMP="$(ls -t "${BACKUP_DIR:-/var/backups/erp}"/erp_pre-deployment_*.dump.gz 2>/dev/null | head -1 || true)"
   else
@@ -177,7 +184,7 @@ else
 fi
 
 # ---------- 3) Install & build ----------
-# NOTE: .env (sourced above for the backup) exports NODE_ENV=production which makes
+# NOTE: NODE_ENV=production (from the environment of an operator shell or CI) makes
 # npm omit devDependencies — but the build (vite/esbuild) REQUIRES them (v4.0.30 split).
 # Force full install for the build step only; runtime keeps NODE_ENV=production.
 log "[3/6] Installing dependencies (npm ci --include=dev)..."

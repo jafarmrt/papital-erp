@@ -37,10 +37,12 @@ if [ -f "$APP_DIR/.env" ]; then
 else
   bad ".env not found — cannot continue."; echo "RESULT: ${FAIL} failure(s)"; exit 1
 fi
-set -a; . "$APP_DIR/.env"; set +a
-
+# v9.0.172 (TD-605): .env is read literally, as the service reads it (node --env-file); it is never run as
+# shell code (a value with $, ; or a backtick used to be expanded or executed with root rights)
 env_has() { grep -qE "^$1=" "$APP_DIR/.env"; }
-env_val() { grep -E "^$1=" "$APP_DIR/.env" | head -1 | cut -d= -f2-; }
+env_val() { grep -E "^$1=" "$APP_DIR/.env" | head -1 | cut -d= -f2- | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true; }
+DATABASE_URL="${DATABASE_URL:-$(env_val DATABASE_URL)}"
+BACKUP_DIR="${BACKUP_DIR:-$(env_val BACKUP_DIR)}"
 
 if [ "$(env_val NODE_ENV)" = "production" ]; then ok "NODE_ENV=production"; else bad "NODE_ENV must be 'production'"; fi
 env_has JWT_SECRET || bad "JWT_SECRET missing"

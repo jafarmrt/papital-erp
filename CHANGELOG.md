@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.172 — .env Read Literally by update.sh and go-live-verify.sh
+- **Literal .env:** `update.sh` and `scripts/go-live-verify.sh` no longer run `set -a; . ./.env`; they read the keys they need literally (`env_file_value` / `env_val`, surrounding quotes removed), as the service reads the file with `node --env-file`. A password such as `S3cr$et9` used to be cut or stop the script under `set -u`, and a value with `;` or a backtick ran as root.
+
 ### v9.0.171 — Zip Update Instruction Matches update.sh
 - **Zip Update Documentation:** `deploy/DEPLOY_LINUX.md` §4 gives `sudo bash update.sh --zip <file.zip>` (and `--source <dir>`). It used to say to extract the zip over the app directory and run `update.sh`, which failed after the backup with `fatal: not a git repository`.
 
