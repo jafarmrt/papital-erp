@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.225 — v9.0.225 — Package 16 Dashboard, Settings, Shell, Dates and Numbers Audit Documentation
+- **Package 16 Audit:** section 10 of the V9 stability audit records the dashboard, settings, frontend shell and date and number utilities package: 23 proven findings (nine P2, among them amount inputs that drop decimals or zero a pasted amount, a currency setting that only relabels rial amounts, and resent writes after a network error) opened as TD-665..TD-687 with the product-owner decisions; TD-668 and TD-669 were already fixed in packages 2 and 4, and B01-14 (TD-594) joins this package's PR d. Documentation only.
+
 ### v9.0.224 — Users, Roles and Audit Screens in Plain Persian
 - **Users, Roles and Audit Screens in Plain Persian:** the users, roles, audit log, login, setup and profile screens and the permission list drop English words and transliterations, show counts in Persian digits and name roles instead of showing their codes (TD-540).
 
