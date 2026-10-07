@@ -10,7 +10,7 @@ import { openProformasPageCount } from '../../../lib/invoices/openProformas';
  */
 interface OpenProformasPanelProps {
   proformas: InvoiceListDocument[];
-  /** v9.0.250 (TD-792): شمار همه پیش‌فاکتورهای فروش باز و صفحه جاری فهرست */
+  /** v9.0.277 (TD-792): شمار همه پیش‌فاکتورهای فروش باز و صفحه جاری فهرست */
   total: number;
   page: number;
   onPageChange: (page: number) => void;

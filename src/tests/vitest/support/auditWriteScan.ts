@@ -2,7 +2,7 @@
  * Static scan of what production code writes into activity_logs (logActivity, a direct insert, a migration), shared by
  * the audit entity retention test (TD-522) and the audit action label test (TD-538). A written value is resolved from
  * literals, templates, conditionals, `||` / `??`, identifiers in scope and element access on object literals, also an
- * object literal exported by another production file (`Object.freeze({...})` included, v9.0.258).
+ * object literal exported by another production file (`Object.freeze({...})` included, v9.0.285).
  */
 import fs from 'fs';
 import path from 'path';

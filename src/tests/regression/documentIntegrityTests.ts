@@ -16,19 +16,19 @@ export async function runDocumentIntegrityTests(shouldRun: ShouldRun): Promise<T
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_document_lead_link_in_edit_td_776',
-      'v9.0.254: PUT /documents/:id links its sales lead inside the edit transaction under the lead lock: a lead with another proforma or a missing lead is 422 before any write, a free lead is marked and an unlinked one released (TD-776)',
+      'v9.0.281: PUT /documents/:id links its sales lead inside the edit transaction under the lead lock: a lead with another proforma or a missing lead is 422 before any write, a free lead is marked and an unlinked one released (TD-776)',
       ['td776', 'documents', 'crm', 'lead', 'package8'], documentLeadLinkInEditCase],
     ['reg_stock_count_lines_td_777',
-      'v9.0.255: a stock count line without a count or a repeated (item, warehouse) line is 422 before any movement, and the document view keys each variance by item and warehouse (TD-777)',
+      'v9.0.282: a stock count line without a count or a repeated (item, warehouse) line is 422 before any movement, and the document view keys each variance by item and warehouse (TD-777)',
       ['td777', 'documents', 'audit', 'stock_count', 'package8'], stockCountLinesCase],
     ['reg_production_receipt_project_only_td_780',
-      'v9.0.256: a production receipt is recorded only through the project delivery: POST /documents and finalizing a draft production receipt are 422 and move nothing, the project path still issues it (TD-780)',
+      'v9.0.283: a production receipt is recorded only through the project delivery: POST /documents and finalizing a draft production receipt are 422 and move nothing, the project path still issues it (TD-780)',
       ['td780', 'documents', 'production_receipt', 'projects', 'package8'], productionReceiptProjectOnlyCase],
     ['reg_document_by_ref_fiscal_year_td_782',
-      'v9.0.257: GET /documents/by-ref finds only an active final document of the type, by fiscal year when given; a number in two years is 409 with the years, a draft is 404 (TD-782)',
+      'v9.0.284: GET /documents/by-ref finds only an active final document of the type, by fiscal year when given; a number in two years is 409 with the years, a draft is 404 (TD-782)',
       ['td782', 'documents', 'by_ref', 'fiscal_year', 'package8'], documentByRefFiscalYearCase],
     ['reg_document_ref_number_rules_td_783',
-      'v9.0.258: a sales document number comes only from the server series (manual 422), a taken warehouse number is 409 instead of a silent swap, a manual number does not move the series, and the audit log keeps the stored number (TD-783)',
+      'v9.0.285: a sales document number comes only from the server series (manual 422), a taken warehouse number is 409 instead of a silent swap, a manual number does not move the series, and the audit log keeps the stored number (TD-783)',
       ['td783', 'documents', 'ref_number', 'package8'], documentRefNumberRulesCase],
   ];
   for (const [id, name, tags, run] of cases) {

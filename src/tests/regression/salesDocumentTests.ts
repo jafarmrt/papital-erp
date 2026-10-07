@@ -12,22 +12,22 @@ export async function runSalesDocumentTests(shouldRun: ShouldRun): Promise<TestC
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_zero_price_invoice_voucher_td_772',
-      'v9.0.243: a final sales invoice with zero gross gets a voucher that moves its Kardex cost from inventory to cost of sales (TD-772)',
+      'v9.0.270: a final sales invoice with zero gross gets a voucher that moves its Kardex cost from inventory to cost of sales (TD-772)',
       ['td772', 'documents', 'voucher', 'cogs', 'package8'], zeroPriceInvoiceCase],
     ['reg_void_invoice_with_returns_td_773',
-      'v9.0.244: an invoice with a sales return that is not voided is not voided (409 naming the returns); after the return is voided it is (TD-773)',
+      'v9.0.271: an invoice with a sales return that is not voided is not voided (409 naming the returns); after the return is voided it is (TD-773)',
       ['td773', 'documents', 'void', 'return', 'package8'], voidWithReturnsCase],
     ['reg_void_invoice_with_receipts_td_779',
-      'v9.0.245: a document with a live treasury receipt is not voided (409 naming it); the receipt is moved on account or to another document of the same party, then the void goes through (TD-779)',
+      'v9.0.272: a document with a live treasury receipt is not voided (409 naming it); the receipt is moved on account or to another document of the same party, then the void goes through (TD-779)',
       ['td779', 'documents', 'void', 'treasury', 'package8'], voidWithReceiptsCase],
     ['reg_return_price_from_invoice_td_788',
-      'v9.0.246: a sales return of an invoice takes its currency, rate and net unit price from that invoice; another price, currency, rate or a line discount is 422, also on draft edit and finalize (TD-788)',
+      'v9.0.273: a sales return of an invoice takes its currency, rate and net unit price from that invoice; another price, currency, rate or a line discount is 422, also on draft edit and finalize (TD-788)',
       ['td788', 'documents', 'return', 'currency', 'package8'], returnPriceFromInvoiceCase],
     ['reg_return_vat_from_invoice_td_774',
-      'v9.0.247: a sales return of an invoice takes the invoice VAT in proportion to the returned net (cumulative, so a full return gives all of it back) and its voucher debits VAT payable; a return without an invoice takes the user percent (TD-774)',
+      'v9.0.274: a sales return of an invoice takes the invoice VAT in proportion to the returned net (cumulative, so a full return gives all of it back) and its voucher debits VAT payable; a return without an invoice takes the user percent (TD-774)',
       ['td774', 'documents', 'return', 'vat', 'package8'], returnVatFromInvoiceCase],
     ['reg_document_list_types_filter_td_792',
-      'v9.0.250: GET /documents takes a list of types (types=invoice,proforma), so the open sales proformas leave out a purchase proforma; an unknown type is 400 and every listed type must be readable (TD-792)',
+      'v9.0.277: GET /documents takes a list of types (types=invoice,proforma), so the open sales proformas leave out a purchase proforma; an unknown type is 400 and every listed type must be readable (TD-792)',
       ['td792', 'documents', 'list', 'proforma', 'package8'], documentListTypesCase],
   ];
   for (const [id, name, tags, run] of cases) {

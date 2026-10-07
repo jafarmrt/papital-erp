@@ -5,7 +5,7 @@ import DocumentsPage from '../../pages/DocumentsPage';
 import { invoiceReturnTerms } from '../../lib/documents/returnUnitPrice';
 import type { User } from '../../types';
 
-// v9.0.246 (TD-788، یافته B08-19، تصمیم ت۱۰ الف): برگشت از صفحه اسناد انبار ارز، نرخ و قیمت خالص هر واحد را از فاکتور
+// v9.0.273 (TD-788، یافته B08-19، تصمیم ت۱۰ الف): برگشت از صفحه اسناد انبار ارز، نرخ و قیمت خالص هر واحد را از فاکتور
 // مرجع می‌گیرد و فرم آن‌ها را قفل می‌کند. پیش‌تر برگشت فاکتور ۱۸۰ دلاری با «IRR»، قیمت ۱۰۰ و بی تخفیف فرستاده می‌شد.
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
@@ -29,7 +29,7 @@ const usdInvoice = {
   ],
 };
 
-// v9.0.247 (TD-774): فاکتور ریالی با مالیات؛ مالیات برگشتش را سرور از همین فاکتور می‌گیرد
+// v9.0.274 (TD-774): فاکتور ریالی با مالیات؛ مالیات برگشتش را سرور از همین فاکتور می‌گیرد
 const irrInvoice = {
   id: 41, buyer_name: 'مشتری تهران', currency: 'IRR', exchangeRate: null, vatPercent: 10, vatAmount: 50000,
   items: [{ item_id: 5, name: 'گوشواره میخی', code: 'P-5', unit: 'عدد', quantity: 5, unit_price: 100000, discount: 0 }],

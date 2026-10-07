@@ -14,7 +14,7 @@ import { currencyScale } from '../../lib/currencyScale.js';
 export const VAT_DOC_TYPES: ReadonlySet<string> = new Set(['invoice', 'proforma']);
 
 /**
- * v9.0.247 (TD-774، تصمیم ت۵ «الف» بسته ۸): برگشت از فروش هم مالیات دارد. برگشتِ دارای فاکتور مرجع مالیات را به نسبت از
+ * v9.0.274 (TD-774، تصمیم ت۵ «الف» بسته ۸): برگشت از فروش هم مالیات دارد. برگشتِ دارای فاکتور مرجع مالیات را به نسبت از
  * همان فاکتور می‌گیرد (`resolveReturnVatFromInvoice` در salesReturnVat.ts) و برگشت بی فاکتور مرجع درصد را از کاربر، با
  * همین تابع. هزینه ارسال و خدمات همچنان فقط روی فاکتور فروش است (`VAT_DOC_TYPES`).
  */

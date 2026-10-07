@@ -49,10 +49,10 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   // انبار پیش‌فرض = اولین انبار برگشتی (مثل قبل) تا وقتی کاربر، پیش‌نویس یا سند ویرایشی انبار دیگری انتخاب نکرده باشد
   const [locationOverride, setLocation] = useState<string | null>(null);
   const location = locationOverride ?? warehouses[0]?.code ?? '';
-  // v9.0.249 (TD-790): پیش‌فاکتور چندانباره در ویرایش؛ هر ردیف انبار خودش را نگه می‌دارد
+  // v9.0.276 (TD-790): پیش‌فاکتور چندانباره در ویرایش؛ هر ردیف انبار خودش را نگه می‌دارد
   const [multiWarehouseEdit, setMultiWarehouseEdit] = useState(false);
 
-  // شماره سند = شماره بعدی سرور، یا شماره پیش‌فاکتوری که ویرایش می‌شود (null = شماره سرور)؛ v9.0.258 (TD-783): فقط نمایشی
+  // شماره سند = شماره بعدی سرور، یا شماره پیش‌فاکتوری که ویرایش می‌شود (null = شماره سرور)؛ v9.0.285 (TD-783): فقط نمایشی
   const [refOverride, setRefNumber] = useState<string | null>(null);
   const refNumber = refOverride ?? nextRef;
   const [date, setDate] = useState<string>(() => getTodayJalaliDate());
@@ -143,7 +143,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       const doc = await loadDocument(p.id);
       if (!doc) return;
       const form = invoiceFormFromDocument(doc, p.ref_number);
-      // v9.0.248 (TD-789): این فرم فقط سند فروش را ویرایش می‌کند
+      // v9.0.275 (TD-789): این فرم فقط سند فروش را ویرایش می‌کند
       if (!isSalesFormDocType(form.docType)) {
         toast.error(`سند شماره ${p.ref_number} سند فروش نیست و در این فرم ویرایش نمی‌شود.`);
         return;
@@ -184,7 +184,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   };
 
   // پاک کردن فرم پس از ثبت یا انصراف از ویرایش؛ شماره سند به شماره بعدی سرور برمی‌گردد.
-  // v9.0.248 (TD-789): همه فیلدها به مقدار آغازین برمی‌گردند (نوع، وضعیت، انبار، تاریخ، ارز، نرخ، مالیات و پرونده فروش)؛
+  // v9.0.275 (TD-789): همه فیلدها به مقدار آغازین برمی‌گردند (نوع، وضعیت، انبار، تاریخ، ارز، نرخ، مالیات و پرونده فروش)؛
   // پیش‌تر نوع، وضعیت و پرونده فروش سند قبلی می‌ماند و فاکتور بعدی با نوع «رسید» یا به پرونده دیگری ثبت می‌شد
   const resetForm = () => {
     setEditingDocId(null);
@@ -235,7 +235,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       if (s.status === 'proforma' || (s.status === 'final' && canFinalizeSales)) setStatus(s.status);
       if (s.currency) setCurrency(str(s.currency));
       toast.success('اطلاعات خریدار و پرونده فروش منتقل شد.');
-      // v9.0.248 (TD-789): وضعیت مسیریابی یک بار خوانده می‌شود تا پرونده فروش به سندهای بعدی این صفحه نرسد
+      // v9.0.275 (TD-789): وضعیت مسیریابی یک بار خوانده می‌شود تا پرونده فروش به سندهای بعدی این صفحه نرسد
       void navigate(locationState.pathname, { replace: true, state: null });
     }
   }, [locationState.state, locationState.pathname, navigate, canFinalizeSales, setBuyerName, setBuyerPhone, setBuyerAddress, setBuyerCity]);
@@ -300,7 +300,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     setDocItems(prev => prev.filter((_, i) => i !== index));
   };
 
-  // v9.0.249 (TD-790): تغییر انبار بالای فرم همه ردیف‌ها را به همان انبار می‌برد
+  // v9.0.276 (TD-790): تغییر انبار بالای فرم همه ردیف‌ها را به همان انبار می‌برد
   const handleLocationChange = (next: string) => {
     setLocation(next);
     setMultiWarehouseEdit(false);
@@ -329,7 +329,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       return;
     }
 
-    // v9.0.253 (TD-801): ویرایش پیش‌فاکتور آن را قطعی نمی‌کند (سرور وضعیت «نهایی» را در ویرایش نمی‌پذیرد)؛ قطعی شدن از گردش
+    // v9.0.280 (TD-801): ویرایش پیش‌فاکتور آن را قطعی نمی‌کند (سرور وضعیت «نهایی» را در ویرایش نمی‌پذیرد)؛ قطعی شدن از گردش
     // کار تأیید آن است. پیش‌تر گزینه انتخاب‌پذیر بود و به پیام نادرست «موجودی کافی نیست» با موجودی صفر ردیف بارشده می‌رسید
     if (editingDocId && status === 'final') {
       toast.error(EDIT_FINAL_REFUSED);
@@ -362,7 +362,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     const payload = {
       docType,
       status,
-      // v9.0.258 (TD-783): شماره از سری سرور؛ در ویرایش «auto» یعنی همان شماره ذخیره‌شده
+      // v9.0.285 (TD-783): شماره از سری سرور؛ در ویرایش «auto» یعنی همان شماره ذخیره‌شده
       refNumber: 'auto',
       date: formattedDate,
       user: currentUser.full_name,
@@ -376,7 +376,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       location,
       currency,
       exchangeRate: currency !== 'IRR' ? exchangeRate : null,
-      // v9.0.248 (TD-789): ویرایش پیش‌فاکتور پیوند پرونده فروش را دست نمی‌زند؛ فقط سند تازه با پرونده‌ای که از آن باز شده ثبت می‌شود
+      // v9.0.275 (TD-789): ویرایش پیش‌فاکتور پیوند پرونده فروش را دست نمی‌زند؛ فقط سند تازه با پرونده‌ای که از آن باز شده ثبت می‌شود
       crmLeadId: !editingDocId && crmLeadId ? Number(crmLeadId) : undefined,
       // v8.0.104 (TD-381): فقط درصد؛ مبلغ مالیات را سرور با همان قاعده جمع‌های فرم حساب می‌کند
       vatPercent: applyVat ? vatRate : 0,
@@ -498,7 +498,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               )}
             </div>
             <div>
-              {/* v9.0.258 (TD-783، تصمیم ت۹ الف): شماره فقط از سری سرور؛ سند تازه شماره را هنگام ثبت می‌گیرد */}
+              {/* v9.0.285 (TD-783، تصمیم ت۹ الف): شماره فقط از سری سرور؛ سند تازه شماره را هنگام ثبت می‌گیرد */}
               <label className="block text-xs font-medium mb-1 text-slate-500">شماره سند (از سری سرور)</label>
               <input type="text" value={refNumber} readOnly title="شماره هنگام ثبت از سری فاکتورهای سرور داده می‌شود" className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-left font-mono text-slate-500 bg-slate-50 focus:outline-none" dir="ltr" />
             </div>

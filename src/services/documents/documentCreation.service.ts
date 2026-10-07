@@ -75,7 +75,7 @@ export class DocumentCreationService {
     const leadTarget = documentLeadLinkOf(body.crmLeadId);
 
     await orm.transaction(async (tx) => {
-      // v9.0.254 (TD-776): پیوند پرونده فروش درون همین تراکنش؛ پرونده‌ها پیش از ردیف سند قفل و سنجیده می‌شوند (۴۲۲ پیش از
+      // v9.0.281 (TD-776): پیوند پرونده فروش درون همین تراکنش؛ پرونده‌ها پیش از ردیف سند قفل و سنجیده می‌شوند (۴۲۲ پیش از
       // هر نوشتن). پیش‌فاکتور بودن از نوع سند و وضعیت پس از این ویرایش است.
       let leadLock: LockedDocumentLeads | null = null;
       let leadDocIsProforma = false;
@@ -123,7 +123,7 @@ export class DocumentCreationService {
       // سال مالی دیگری برود شماره بعدی همان سال را می‌گیرد (مگر شماره تازه‌ای داده شده باشد). پیش‌تر شماره و سال
       // شماره‌گذاری سال قبل می‌ماند.
       const newDocDate = date ? requireDocumentTimestamp(date, 'سند') : null;
-      // v9.0.258 (TD-783، تصمیم ت۹ الف): شماره سند فروش (فاکتور، برگشت) فقط از سری سرور است و در ویرایش عوض نمی‌شود؛ شماره
+      // v9.0.285 (TD-783، تصمیم ت۹ الف): شماره سند فروش (فاکتور، برگشت) فقط از سری سرور است و در ویرایش عوض نمی‌شود؛ شماره
       // دستی تازه سند انبار اگر در همان نوع و سال گرفته شده باشد ۴۰۹ با پیام فارسی (پیش‌تر خطای کلی «مقدار تکراری»)
       const requestedRef = isAutoRefNumber(refNumber) ? null : String(refNumber).trim();
       const refChanged = requestedRef !== null && requestedRef !== String(existingDoc.refNumber);
@@ -146,7 +146,7 @@ export class DocumentCreationService {
         });
       }
 
-      // v9.0.246 (TD-788، تصمیم ت۱۰ الف): پیش‌نویس برگشتِ دارای فاکتور مرجع هم ارز، نرخ و قیمت خالص را از همان فاکتور می‌گیرد
+      // v9.0.273 (TD-788، تصمیم ت۱۰ الف): پیش‌نویس برگشتِ دارای فاکتور مرجع هم ارز، نرخ و قیمت خالص را از همان فاکتور می‌گیرد
       const returnTerms = existingDoc.type === 'return' && existingDoc.returnOfDocumentId
         ? await enforceReturnInvoiceTerms(tx, Number(existingDoc.returnOfDocumentId), {
           currency, rate: body, lines: Array.isArray(docLines) ? docLines : null,
@@ -165,7 +165,7 @@ export class DocumentCreationService {
           .from(documentItems)
           .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
       }
-      // v9.0.247 (TD-774): پیش‌نویس برگشتِ دارای فاکتور مرجع مالیات را به نسبت از فاکتور می‌گیرد (ردیف‌های تازه یا ذخیره‌شده)
+      // v9.0.274 (TD-774): پیش‌نویس برگشتِ دارای فاکتور مرجع مالیات را به نسبت از فاکتور می‌گیرد (ردیف‌های تازه یا ذخیره‌شده)
       if (returnTerms && !linesChanged) {
         vatLines = await tx.select({ quantity: documentItems.quantity, unitPrice: documentItems.unitPrice, discount: documentItems.discount })
           .from(documentItems)
@@ -366,17 +366,17 @@ export class DocumentCreationService {
       // v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده در ستون‌های ساختاریافته ذخیره می‌شود و دیگر در متن
       // یادداشت نوشته/از آن خوانده نمی‌شود (پیش‌تر سند حسابداری مبلغ مالیات را با Regex از یادداشت استخراج می‌کرد).
       const finalNotes = notes || '';
-      // v9.0.246 (TD-788، تصمیم ت۱۰ الف): برگشت با فاکتور مرجع ارز، نرخ و قیمت خالص هر واحد را از همان فاکتور می‌گیرد؛
+      // v9.0.273 (TD-788، تصمیم ت۱۰ الف): برگشت با فاکتور مرجع ارز، نرخ و قیمت خالص هر واحد را از همان فاکتور می‌گیرد؛
       // مقدار دیگر در بدنه ۴۲۲. فاکتور نهایی دیگر عوض نمی‌شود و ابطالش با برگشت زنده رد می‌شود (TD-773)، پس خواندن بی قفل بس است
       const returnTerms = returnOfDocumentId !== null
         ? await enforceReturnInvoiceTerms(tx, returnOfDocumentId, { currency, rate: body, lines: docLines || [] })
         : null;
       const docCurrency = returnTerms?.currency ?? (currency || 'IRR');
       const lines = returnTerms?.lines ?? docLines;
-      // v8.0.8 (TD-253): برگشت نهایی با فاکتور مرجع از مانده قابل برگشت همان فاکتور بیشتر نمی‌شود؛ از v9.0.247 (TD-774) پیش از
+      // v8.0.8 (TD-253): برگشت نهایی با فاکتور مرجع از مانده قابل برگشت همان فاکتور بیشتر نمی‌شود؛ از v9.0.274 (TD-774) پیش از
       // مالیات، چون قفل فاکتور برگشت‌های هم‌زمان را پشت سر هم می‌گذارد و مالیات هر برگشت از خالص برگشت‌های نهایی قبلی است
       if (returnOfDocumentId !== null && docStatus === 'final') await assertReturnWithinSold(tx, returnOfDocumentId, lines);
-      // v9.0.247 (TD-774، تصمیم ت۵ الف): مالیات برگشتِ دارای فاکتور مرجع به نسبت از مالیات همان فاکتور
+      // v9.0.274 (TD-774، تصمیم ت۵ الف): مالیات برگشتِ دارای فاکتور مرجع به نسبت از مالیات همان فاکتور
       const docVat = returnOfDocumentId !== null
         ? await resolveReturnVatFromInvoice(tx, { invoiceId: returnOfDocumentId, returnId: null, lines, input: body, currency: docCurrency })
         : resolveDocumentVat({ docType, input: body, lines: lines || [], currency: docCurrency });
@@ -405,7 +405,7 @@ export class DocumentCreationService {
         attachments: [],
         projectId: finalProjectId ?? undefined,
         returnOfDocumentId,
-        // v9.0.254 (TD-776): پیوند پرونده فروش همراه درج سند (route پرونده را پیش از سند قفل و سنجیده است)
+        // v9.0.281 (TD-776): پیوند پرونده فروش همراه درج سند (route پرونده را پیش از سند قفل و سنجیده است)
         crmLeadId: documentLeadLinkOf(body.crmLeadId) ?? undefined,
         isDeleted: 0
       }).returning({ id: documents.id });
@@ -434,7 +434,7 @@ export class DocumentCreationService {
         // TD-164: حذف کوئری‌های تکراری N+1 انبار در حلقه انبارگردانی
         const resolveWh = await createWarehouseResolver(tx);
 
-        // v9.0.255 (TD-777): هر ردیف شمارش دارد و هر (کالا، انبار) یک ردیف؛ پیش از هر گردش انبار
+        // v9.0.282 (TD-777): هر ردیف شمارش دارد و هر (کالا، انبار) یک ردیف؛ پیش از هر گردش انبار
         assertStockCountLines(docLines.map(line => {
           const target = auditItemMap.get(Number(line.itemId));
           return {

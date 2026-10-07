@@ -47,7 +47,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const [actionType, setActionType] = useState<'in' | 'out'>('in');
   const [docType, setDocType] = useState('receipt');
   const [refNumber, setRefNumber] = useState('');
-  // v9.0.258 (TD-783): شماره پیشنهادی سرور؛ همان شماره دست‌نخورده «auto» فرستاده می‌شود
+  // v9.0.285 (TD-783): شماره پیشنهادی سرور؛ همان شماره دست‌نخورده «auto» فرستاده می‌شود
   const [suggestedRef, setSuggestedRef] = useState('');
   const [date, setDate] = useState<string>(() => getTodayJalaliDate());
   const [location, setLocation] = useState('');
@@ -58,9 +58,9 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const [returnInvoiceRef, setReturnInvoiceRef] = useState('');
   // v7.0.81 (TD-230): شناسه فاکتور فروش اصلی؛ کالای برگشتی با بهای خروج همان فاکتور وارد انبار می‌شود
   const [returnInvoiceId, setReturnInvoiceId] = useState<number | null>(null);
-  // v9.0.257 (TD-782): فاکتورهای قطعی هم‌شماره در چند سال مالی، تا کاربر سال را انتخاب کند
+  // v9.0.284 (TD-782): فاکتورهای قطعی هم‌شماره در چند سال مالی، تا کاربر سال را انتخاب کند
   const [returnInvoiceCandidates, setReturnInvoiceCandidates] = useState<ReturnInvoiceCandidate[]>([]);
-  // v9.0.247 (TD-774، تصمیم ت۵ الف): درصد مالیات برگشت بی فاکتور مرجع از کاربر؛ برگشت با فاکتور مرجع آن را از فاکتور دارد
+  // v9.0.274 (TD-774، تصمیم ت۵ الف): درصد مالیات برگشت بی فاکتور مرجع از کاربر؛ برگشت با فاکتور مرجع آن را از فاکتور دارد
   const [returnVatPercent, setReturnVatPercent] = useState<number | ''>('');
   const [notes, setNotes] = useState('');
 
@@ -110,7 +110,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     setReturnInvoiceCandidates([]);
   };
 
-  // v9.0.257 (TD-782): فقط فاکتور قطعی؛ شماره‌ای که در چند سال مالی فاکتور دارد سال را می‌پرسد
+  // v9.0.284 (TD-782): فقط فاکتور قطعی؛ شماره‌ای که در چند سال مالی فاکتور دارد سال را می‌پرسد
   const handleFetchReturnInvoice = async (fiscalYear?: number | null) => {
     if (!returnInvoiceRef.trim()) return;
     try {
@@ -119,7 +119,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
         setReturnInvoiceCandidates([]);
         setReturnInvoiceId(typeof doc.id === 'number' ? doc.id : null);
         setBuyerName(doc.buyer_name || '');
-        // v9.0.246 (TD-788، تصمیم ت۱۰ الف): ارز، نرخ و قیمت خالص هر واحد (پس از تخفیف ردیف، میانگین وزنی ردیف‌های یک کالا)
+        // v9.0.273 (TD-788، تصمیم ت۱۰ الف): ارز، نرخ و قیمت خالص هر واحد (پس از تخفیف ردیف، میانگین وزنی ردیف‌های یک کالا)
         // از فاکتور؛ همان تابعی که سرور با آن می‌سنجد. پیش‌تر فقط قیمت پیش از تخفیف کپی می‌شد و ارز صفحه (ریال) فرستاده می‌شد
         const invoiceLines = doc.items;
         const terms = invoiceReturnTerms(invoiceLines.map(i => ({ itemId: Number(i.item_id), quantity: i.quantity, unitPrice: i.unit_price, discount: i.discount })));
@@ -218,7 +218,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     return docItems.reduce((acc, curr) => acc + Number(curr.quantity || 0), 0);
   }, [docItems]);
 
-  // v9.0.246 (TD-788): برگشتِ دارای فاکتور مرجع ارز، نرخ و قیمت را از فاکتور دارد و فرم آن‌ها را قفل می‌کند
+  // v9.0.273 (TD-788): برگشتِ دارای فاکتور مرجع ارز، نرخ و قیمت را از فاکتور دارد و فرم آن‌ها را قفل می‌کند
   const returnTermsLocked = docType === 'return' && returnInvoiceId !== null;
 
   return {

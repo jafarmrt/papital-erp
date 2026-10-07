@@ -82,7 +82,7 @@ describe('CreateInvoicePage — React Query cache', () => {
     fireEvent.click(await screen.findByText('بازیابی پیش‌نویس'));
     expect(await screen.findByText('گردنبند نقره')).toBeTruthy();
     await waitFor(() => expect(screen.getByDisplayValue('INV-1001')).toBeTruthy());
-    // v9.0.258 (TD-783): the invoice number only comes from the server series
+    // v9.0.285 (TD-783): the invoice number only comes from the server series
     expect((screen.getByDisplayValue('INV-1001') as HTMLInputElement).readOnly).toBe(true);
     otherPages.forEach(key => expect(client.getQueryState(key)?.isInvalidated).toBe(false));
 

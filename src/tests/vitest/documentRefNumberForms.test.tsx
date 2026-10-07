@@ -10,7 +10,7 @@ import type { StockDocumentForm } from '../../hooks/documents/useStockDocumentFo
 import type { StockDocumentReferenceData } from '../../hooks/documents/useStockDocumentReferenceData';
 import type { Item, User } from '../../types';
 
-// v9.0.258 (TD-783، یافته B08-14، تصمیم ت۹ «الف» بسته ۸): شماره فاکتور فروش و برگشت از فروش فقط از سری سرور است و فرم
+// v9.0.285 (TD-783، یافته B08-14، تصمیم ت۹ «الف» بسته ۸): شماره فاکتور فروش و برگشت از فروش فقط از سری سرور است و فرم
 // آن را فقط نشان می‌دهد؛ فرم سند انبار شماره پیشنهادی دست‌نخورده را «auto» می‌فرستد و فقط شماره‌ای را که کاربر نوشته
 // می‌فرستد. پیش‌تر شماره پیشنهادی فرستاده می‌شد و دو فرم باز یک شماره می‌فرستادند.
 const fetchJson = vi.fn();

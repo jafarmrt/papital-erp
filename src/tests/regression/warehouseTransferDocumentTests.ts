@@ -70,7 +70,7 @@ export async function runWarehouseTransferDocumentTests(shouldRun: (id: string, 
     const kardexKey = kardex.map(k => `${k.type}:${k.location}:${k.ref}`).sort().join(',');
     if (kardexKey !== [`in:${wh2.code}:${nextRef}`, `out:${main}:${nextRef}`].sort().join(',')) wrong.push(`Kardex rows ${kardexKey}`);
 
-    // 2) v9.0.258 (TD-783): a repeated number is refused with 409 DOCUMENT_REF_TAKEN (no silent swap); "auto" takes the next one in the series
+    // 2) v9.0.285 (TD-783): a repeated number is refused with 409 DOCUMENT_REF_TAKEN (no silent swap); "auto" takes the next one in the series
     const repeated = await transfer(3, nextRef, 'td489 repeated');
     if (repeated.status !== 409 || repeated.body?.code !== 'DOCUMENT_REF_TAKEN') wrong.push(`a repeated transfer number answered ${repeated.status} ${repeated.body?.code}, expected 409 DOCUMENT_REF_TAKEN`);
     const second = await transfer(3, 'auto', 'td489 second');

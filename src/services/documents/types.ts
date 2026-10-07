@@ -40,7 +40,7 @@ export interface CreateDocumentInput {
   refNumber?: string;
   date?: string;
   items: DocumentLineItemInput[];
-  /** v9.0.254 (TD-776): پرونده فروش سند، از route پس از سنجش و قفل پرونده (پیش‌تر route آن را جدا روی سند می‌نوشت) */
+  /** v9.0.281 (TD-776): پرونده فروش سند، از route پس از سنجش و قفل پرونده (پیش‌تر route آن را جدا روی سند می‌نوشت) */
   crmLeadId?: number | string | null;
   user?: string;
   inOut?: 'in' | 'out';
@@ -103,7 +103,7 @@ export interface UpdateDocumentInput {
   /** v7.0.63 (TD-198): نرخ تسعیر سند غیرریالی */
   exchangeRate?: number | string | null;
   exchange_rate?: number | string | null;
-  /** v9.0.254 (TD-776): پرونده فروش سند (`null` یا رشته خالی: قطع پیوند)؛ درون تراکنش ویرایش و زیر قفل پرونده */
+  /** v9.0.281 (TD-776): پرونده فروش سند (`null` یا رشته خالی: قطع پیوند)؛ درون تراکنش ویرایش و زیر قفل پرونده */
   crmLeadId?: number | string | null;
   expectedVersion?: number;
   version?: number;

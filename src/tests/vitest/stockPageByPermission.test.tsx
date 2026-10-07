@@ -118,7 +118,7 @@ describe('stock document page follows the record permission of each type, not th
   });
 });
 
-// v9.0.256 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): محصول پروژه فقط از «ورود به انبار» همان پروژه وارد انبار می‌شود
+// v9.0.283 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): محصول پروژه فقط از «ورود به انبار» همان پروژه وارد انبار می‌شود
 describe('stock document page never offers a production receipt (TD-780)', () => {
   it('no permission set makes the stock page offer a production receipt', () => {
     expect(Object.values(STOCK_PAGE_DOC_TYPES).flat()).not.toContain('production_receipt');

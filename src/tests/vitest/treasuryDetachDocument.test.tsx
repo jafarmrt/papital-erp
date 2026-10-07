@@ -13,7 +13,7 @@ const row = (fields: Record<string, unknown>) => ({
   type: 'receipt', status: 'completed', reversalOfId: null, voucherId: 7, attachments: [], ...fields,
 });
 
-// v9.0.245 (TD-779, decision t4 «الف» of package 8): an invoice with a live receipt is not voided, so the treasury table offers
+// v9.0.272 (TD-779, decision t4 «الف» of package 8): an invoice with a live receipt is not voided, so the treasury table offers
 // to move a live receipt that is linked to a document on account; voided, reversal, payroll and unlinked rows get no button.
 describe('treasury rows linked to a document can be moved on account (TD-779)', () => {
   it('shows the button only on live linked rows and passes the row to the handler', () => {

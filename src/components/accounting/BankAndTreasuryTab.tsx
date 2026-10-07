@@ -195,7 +195,7 @@ export function BankAndTreasuryTab({
     }
   };
 
-  // v9.0.245 (TD-779، ت۴ الف): دریافت یا پرداخت از سندش جدا و «علی‌الحساب» می‌شود؛ سند حسابداری آن عوض نمی‌شود
+  // v9.0.272 (TD-779، ت۴ الف): دریافت یا پرداخت از سندش جدا و «علی‌الحساب» می‌شود؛ سند حسابداری آن عوض نمی‌شود
   const detachDocument = useTreasuryDocumentDetach();
   const handleDetachDocument = async (tx: TreasuryTransaction) => {
     const ok = await confirmAction({
