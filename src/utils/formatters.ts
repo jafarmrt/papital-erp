@@ -1,7 +1,8 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import Decimal from "decimal.js";
-import { toEnglishDigits, toPersianDigits } from "./persianNumber.js";
+import { toPersianDigits } from "./persianNumber.js";
+import { normalizeDecimalString } from "../lib/numericInput.js";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -77,7 +78,7 @@ export function formatCurrencyLabel(c?: string): string {
  */
 export function roundFinancial(num: number | string | null | undefined, decimals: number = 4): number {
   if (num === null || num === undefined || typeof num === 'object') return 0;
-  const str = toEnglishDigits(String(num)).replace(/,/g, '').trim();
+  const str = normalizeDecimalString(String(num));
   if (str === '' || str === '-') return 0;
   try {
     const d = new Decimal(str);

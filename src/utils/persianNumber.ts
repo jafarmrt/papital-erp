@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { formatCurrencyLabel } from "./formatters.js";
+import { normalizeDecimalString } from "../lib/numericInput.js";
 
 export function toPersianDigits(val: string | number | null | undefined, maxDecimals: number = 2): string {
   if (val === null || val === undefined || typeof val === 'object') return '';
@@ -42,7 +43,7 @@ export function toEnglishDigits(str: string | number | null | undefined): string
 export function cleanDecimalString(val: number | string | null | undefined, maxDecimals: number = 2): string {
   if (val === null || val === undefined || val === '' || typeof val === 'object') return '';
   try {
-    const num = typeof val === 'number' ? val : Number(toEnglishDigits(String(val)).replace(/,/g, ''));
+    const num = typeof val === 'number' ? val : Number(normalizeDecimalString(String(val)));
     if (isNaN(num)) return '';
     if (num === 0) return '0';
     return num.toLocaleString('en-US', {
@@ -61,7 +62,7 @@ export function formatPersianPrice(num: number | string | null | undefined, curr
     return currency ? `${zero} ${formatCurrencyLabel(currency)}` : zero;
   }
   try {
-    const n = typeof num === 'number' ? num : Number(toEnglishDigits(String(num)).replace(/,/g, ''));
+    const n = typeof num === 'number' ? num : Number(normalizeDecimalString(String(num)));
     if (isNaN(n)) {
       const zero = '۰';
       return currency ? `${zero} ${formatCurrencyLabel(currency)}` : zero;
@@ -102,7 +103,7 @@ export function formatPersianNumber(val: number | string | null | undefined, max
       return toPersianDigits(rawStr);
     }
 
-    const englishStr = toEnglishDigits(rawStr).replace(/,/g, '');
+    const englishStr = normalizeDecimalString(rawStr);
     const num = Number(englishStr);
     if (!isNaN(num)) {
       const formatted = num.toLocaleString('en-US', {
@@ -136,11 +137,13 @@ export function formatPersianCode(val: number | string | null | undefined): stri
 /**
  * Safely parse any number or string (including Persian/Arabic digits, thousand separators, or whitespace)
  * into a pure JavaScript number. Backed by Decimal to eliminate floating-point drift.
+ * v9.0.226 (TD-666): همان یکسان‌سازی سرور (`normalizeDecimalString`): ممیز «٫»، جداکننده‌های «٬» «،» «,»، فاصله و نیم‌فاصله؛
+ * پیش‌تر «۱۲٫۵» و «۱٬۲۵۰٬۰۰۰» بی‌صدا صفر می‌شدند.
  */
 export function parseCleanNumber(val: unknown, defaultValue: number = 0): number {
   if (val === null || val === undefined || typeof val === 'object') return defaultValue;
   if (typeof val === 'number') return isNaN(val) || !isFinite(val) ? defaultValue : val;
-  const str = toEnglishDigits(String(val)).replace(/,/g, '').trim();
+  const str = normalizeDecimalString(String(val));
   if (str === '' || str === '-') return defaultValue;
   try {
     const d = new Decimal(str);
@@ -217,7 +220,7 @@ function chunk3ToPersianWords(num: number): string {
  */
 export function numberToPersianWords(input: number | string | null | undefined): string {
   if (input === null || input === undefined || input === '') return '';
-  const clean = toEnglishDigits(String(input)).replace(/[,\s]/g, '').trim();
+  const clean = normalizeDecimalString(String(input));
   if (clean === '0') return 'صفر';
   const isNegative = clean.startsWith('-');
   const rawNum = isNegative ? clean.slice(1) : clean;
@@ -269,7 +272,7 @@ export function financialAmountToPersianWords(
   if (amount === null || amount === undefined || amount === '') {
     return { words: '', tomanEquivalent: '', fullDescription: '' };
   }
-  const cleanStr = toEnglishDigits(String(amount)).replace(/[,\s]/g, '').trim();
+  const cleanStr = normalizeDecimalString(String(amount));
   const num = Number(cleanStr);
   if (isNaN(num)) {
     return { words: '', tomanEquivalent: '', fullDescription: '' };

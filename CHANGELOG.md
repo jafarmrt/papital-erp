@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.226 — v9.0.226 — Amount Input Keeps Decimals and Persian Separators
+- **Amount input (TD-665, TD-666):** the shared amount field keeps the typed text until editing ends, so «12.5» dollars is no longer stored as 125, allows the currency's decimals only (rial none, foreign two), reads the Persian «٫» and «٬», spaces and a copied currency label, and keeps the previous amount with a message instead of zeroing it on a stray character; the shared number parsers use the server's `normalizeDecimalString`.
+
 ### v9.0.225 — v9.0.225 — Package 16 Dashboard, Settings, Shell, Dates and Numbers Audit Documentation
 - **Package 16 Audit:** section 10 of the V9 stability audit records the dashboard, settings, frontend shell and date and number utilities package: 23 proven findings (nine P2, among them amount inputs that drop decimals or zero a pasted amount, a currency setting that only relabels rial amounts, and resent writes after a network error) opened as TD-665..TD-687 with the product-owner decisions; TD-668 and TD-669 were already fixed in packages 2 and 4, and B01-14 (TD-594) joins this package's PR d. Documentation only.
 
