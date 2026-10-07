@@ -24,8 +24,9 @@ vi.mock('react-hot-toast', () => {
 interface RequestInitLike { method?: string; body?: string; signal?: AbortSignal }
 
 const assetsGroup = { id: 1, code: '1', name: 'دارایی‌ها', level: 'group', accountType: 'asset', nature: 'debit', isSystem: 1 };
-const LEDGER_ALL = '/accounting/reports/ledger?';
+const currentAssets = { id: 11, code: '11', name: 'دارایی‌های جاری', level: 'general', parentId: 1, accountType: 'asset', nature: 'debit', isSystem: 1 };
 const LEDGER_ASSETS = '/accounting/reports/ledger?accountId=1';
+const LEDGER_CURRENT_ASSETS = '/accounting/reports/ledger?accountId=11';
 const PREVIEW_PREFIX = '/accounting/fiscal-closing/preview?';
 const preview = {
   summary: { totalRevenue: 1000, totalExpenses: 400, netProfit: 600, isProfit: true },
@@ -183,8 +184,9 @@ describe('AccountingPage — reads are abortable and race-free', () => {
         : Promise.resolve(baseResponse(url, init))
     ));
     const { unmount } = renderAccountingPage(newClient(), 'explorer');
-    await waitFor(() => expect(callsTo(LEDGER_ALL)).toBe(1));
-    const ledgerSignal = signalOf(u => u === LEDGER_ALL);
+    fireEvent.click(await screen.findByText('دارایی‌ها', { selector: 'div' }));
+    await waitFor(() => expect(callsTo(LEDGER_ASSETS)).toBe(1));
+    const ledgerSignal = signalOf(u => u === LEDGER_ASSETS);
     const vouchersSignal = signalOf(u => u === '/accounting/vouchers');
     expect(ledgerSignal).toBeInstanceOf(AbortSignal);
     expect(ledgerSignal?.aborted).toBe(false);
@@ -195,24 +197,39 @@ describe('AccountingPage — reads are abortable and race-free', () => {
     expect(vouchersSignal?.aborted).toBe(true);
   });
 
+  it('the explorer reads no ledger until an account or party is chosen (TD-547)', async () => {
+    fetchJson.mockImplementation((url: string, init?: RequestInitLike) => Promise.resolve(baseResponse(url, init)));
+    renderAccountingPage(newClient(), 'explorer');
+    await screen.findByText('دارایی‌ها', { selector: 'div' });
+    expect(await screen.findByText('برای دیدن گردش، یک حساب یا طرف حساب برگزینید.')).toBeTruthy();
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(getCalls(u => u.startsWith('/accounting/reports/ledger'))).toHaveLength(0);
+
+    fireEvent.click(screen.getByText('دارایی‌ها', { selector: 'div' }));
+    await waitFor(() => expect(callsTo(LEDGER_ASSETS)).toBe(1));
+    expect(getCalls(u => u.startsWith('/accounting/reports/ledger'))).toHaveLength(1);
+  });
+
   it('a late explorer-ledger response for the previous selection never overwrites the newer selection', async () => {
     const stale = deferred<unknown>();
     fetchJson.mockImplementation((url: string, init?: RequestInitLike) => {
-      if (url === LEDGER_ALL) return stale.promise;
-      if (url === LEDGER_ASSETS) {
-        return Promise.resolve({ items: [{ voucherId: 2, voucherNumber: 2, date: '1405/07/02', description: '', accountName: 'ردیف تازه', accountCode: '1', debit: 10, credit: 0, runningBalance: 10 }], totalDebit: 10, totalCredit: 0, finalBalance: 10 });
+      if (url === '/accounting/accounts') return Promise.resolve([assetsGroup, currentAssets]);
+      if (url === LEDGER_ASSETS) return stale.promise;
+      if (url === LEDGER_CURRENT_ASSETS) {
+        return Promise.resolve({ items: [{ voucherId: 2, voucherNumber: 2, date: '1405/07/02', description: '', accountName: 'ردیف تازه', accountCode: '11', debit: 10, credit: 0, runningBalance: 10 }], totalDebit: 10, totalCredit: 0, finalBalance: 10 });
       }
       return Promise.resolve(baseResponse(url, init));
     });
     renderAccountingPage(newClient(), 'explorer');
-    await waitFor(() => expect(callsTo(LEDGER_ALL)).toBe(1));
-
     fireEvent.click(await screen.findByText('دارایی‌ها', { selector: 'div' }));
+    await waitFor(() => expect(callsTo(LEDGER_ASSETS)).toBe(1));
+
+    fireEvent.click(await screen.findByText('دارایی‌های جاری', { selector: 'div' }));
     expect(await screen.findByText('ردیف تازه')).toBeTruthy();
-    expect(signalOf(u => u === LEDGER_ALL)?.aborted).toBe(true);
+    expect(signalOf(u => u === LEDGER_ASSETS)?.aborted).toBe(true);
 
     await act(async () => {
-      stale.resolve({ items: [{ voucherId: 1, voucherNumber: 1, date: '1405/07/01', description: '', accountName: 'ردیف کهنه', accountCode: '9', debit: 5, credit: 0, runningBalance: 5 }], totalDebit: 5, totalCredit: 0, finalBalance: 5 });
+      stale.resolve({ items: [{ voucherId: 1, voucherNumber: 1, date: '1405/07/01', description: '', accountName: 'ردیف کهنه', accountCode: '1', debit: 5, credit: 0, runningBalance: 5 }], totalDebit: 5, totalCredit: 0, finalBalance: 5 });
     });
     expect(screen.queryByText('ردیف کهنه')).toBeNull();
     expect(screen.getByText('ردیف تازه')).toBeTruthy();

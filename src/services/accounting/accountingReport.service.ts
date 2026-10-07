@@ -23,7 +23,8 @@ import { partyDetailedRowsCondition, type PartyDetailedFilter } from './partyDet
 import type { BalanceSheetReport, IncomeStatementReport, StatementRow } from '../../lib/accounting/financialStatements.js';
 import { accountSubtreeCondition } from './accountSubtree.js';
 import { yearEndClosingCutoff, yearEndClosingVoucherSql } from './yearEndClosingVouchers.js';
-import type { AccountCardReport } from '../../lib/accounting/accountCard.js';
+import { accountCardHasFilter, type AccountCardReport } from '../../lib/accounting/accountCard.js';
+import { ValidationError } from '../../errors/customErrors.js';
 
 /** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
 function foreignOrigin(allCurrencies: boolean, row: {
@@ -612,6 +613,10 @@ export class AccountingReportService {
     endDate?: string;
     currency?: string;
   }): Promise<AccountCardReport> {
+    // v9.0.204 (TD-547، B03-05، تصمیم ت۵ الف): کارت حساب بی حساب و بی طرف حساب ۴۲۲؛ پیش‌تر همه ردیف‌های دفتر برمی‌گشت
+    if (!params.party && !accountCardHasFilter(params)) {
+      throw new ValidationError('کارت حساب بی حساب و بی طرف حساب گرفته نمی‌شود؛ یک حساب یا طرف حساب برگزینید.', undefined, 'ACCOUNT_CARD_FILTER_REQUIRED');
+    }
     // V2.0.0: فیلترهای دوره — مانده ابتدای دوره جداگانه محاسبه می‌شود
     const periodConditions = [
       eq(journalVouchers.isDeleted, 0),
@@ -864,6 +869,10 @@ export class AccountingReportService {
     currency?: string;
     includeDrafts?: boolean;
   }): Promise<DetailedPartyLedgerResult> {
+    // v9.0.204 (TD-547، ت۵ الف): صورت‌حساب بی طرف حساب ۴۲۲؛ پیش‌تر بی شرط طرف حساب همه ردیف‌های دفتر برمی‌گشت
+    if (!params.partyId && !params.partyName?.trim()) {
+      throw new ValidationError('صورت‌حساب بی طرف حساب گرفته نمی‌شود؛ یک طرف حساب برگزینید.', undefined, 'PARTY_LEDGER_PARTY_REQUIRED');
+    }
     let partyInfo: {
       id?: number;
       name: string;

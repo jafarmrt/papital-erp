@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.204 — Ledger Reports Only for Accounting Keys
+- **Accounting Reports (P1):** the account card, ledger, party statement and party list need `accounting.reports` or `accounting.view`; a card with no account or party and a statement with no party are 422 (TD-547, decision ت۵).
+
 ### v9.0.203 — Chart of Accounts Messages Shown Once
 - **Chart of Accounts Page (P3):** each save, delete and error message is shown once, a refused seed is handled, and the delete confirmation says an account used in vouchers or with sub-accounts is not deleted (TD-576).
 

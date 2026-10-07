@@ -39,3 +39,21 @@ export interface AccountCardReport {
 export function accountCardRows(report: AccountCardReport | null | undefined): AccountCardRow[] {
   return Array.isArray(report?.items) ? report.items : [];
 }
+
+/** کلیدهای صافی کارت حساب، همان پرس‌وجوی `GET /accounting/reports/ledger` */
+export interface AccountCardFilter {
+  accountId?: number | null;
+  detailedType?: string | null;
+  detailedId?: number | null;
+  detailedName?: string | null;
+}
+
+/**
+ * v9.0.204 (TD-547، B03-05، تصمیم ت۵ الف): کارت حساب فقط با یک حساب یا یک طرف حساب (نوع، شناسه یا نام تفصیلی)
+ * گرفته می‌شود؛ سرور بی آن ۴۲۲ `ACCOUNT_CARD_FILTER_REQUIRED` می‌دهد و «مرور حساب‌ها» تا انتخاب چیزی درخواست نمی‌فرستد.
+ * پیش‌تر کارت بی صافی همه ردیف‌های دفتر را برمی‌گرداند.
+ */
+export function accountCardHasFilter(filter: AccountCardFilter): boolean {
+  return Boolean(filter.accountId || filter.detailedId || (filter.detailedName ?? '').trim()
+    || (filter.detailedType && filter.detailedType !== 'all'));
+}

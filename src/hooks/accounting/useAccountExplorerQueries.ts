@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { ACCOUNTING_REPORT_QUERY_OPTIONS } from './accountingQueryConfig';
+import { accountCardHasFilter } from '../../lib/accounting/accountCard';
 
 /**
  * تب «مرور حساب‌ها»: گردش حساب/تفصیلی انتخاب‌شده (GET /accounting/reports/ledger) با React Query.
@@ -61,7 +62,10 @@ export function explorerLedgerUrl(p: ExplorerLedgerParams): string {
 }
 
 export function useExplorerLedgerQuery(params: ExplorerLedgerParams) {
+  // v9.0.204 (TD-547، ت۵ الف): بی حساب و بی طرف حساب درخواستی نمی‌رود (سرور ۴۲۲ می‌دهد)؛ پیش‌تر باز شدن زبانه کل دفتر را می‌خواند
+  const hasFilter = accountCardHasFilter(params);
   const query = useQuery<ExplorerLedgerData | null>({
+    enabled: hasFilter,
     queryKey: QUERY_KEYS.accounting.report('explorer-ledger', params),
     queryFn: async ({ signal }) => {
       try {
@@ -85,7 +89,8 @@ export function useExplorerLedgerQuery(params: ExplorerLedgerParams) {
   });
 
   return {
-    ledger: query.data ?? EMPTY_LEDGER,
-    loading: query.isFetching,
+    ledger: (hasFilter ? query.data : null) ?? EMPTY_LEDGER,
+    loading: hasFilter && query.isFetching,
+    hasFilter,
   };
 }

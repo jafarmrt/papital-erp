@@ -111,7 +111,7 @@ export function AccountExplorerTab({
     startDate,
     endDate
   ]);
-  const { ledger, loading: isLoadingTransactions } = useExplorerLedgerQuery(ledgerParams);
+  const { ledger, loading: isLoadingTransactions, hasFilter: hasLedgerFilter } = useExplorerLedgerQuery(ledgerParams);
   const transactions: VoucherItemRow[] = ledger.items;
   const summaryStats = useMemo(() => ({
     totalDebit: ledger.totalDebit,
@@ -644,7 +644,9 @@ export function AccountExplorerTab({
                   <td colSpan={10} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center space-y-2">
                       <Search className="w-8 h-8 text-slate-300 dark:text-slate-600" />
-                      <span>هیچ تراکنش یا سند حسابداری برای این فیلترها ثبت نشده است</span>
+                      <span>{hasLedgerFilter
+                        ? 'هیچ تراکنش یا سند حسابداری برای این فیلترها ثبت نشده است'
+                        : 'برای دیدن گردش، یک حساب یا طرف حساب برگزینید.'}</span>
                     </div>
                   </td>
                 </tr>
