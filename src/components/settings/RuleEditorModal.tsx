@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog';
+import { NotificationRecipientField } from './NotificationRecipientField';
 import { X, Plus, Trash2, Globe, Bell, Smartphone, GitBranch, ShieldCheck, HelpCircle, Play, CheckCircle2, XCircle, Code } from 'lucide-react';
 import { fetchJson } from '../../api';
 import { eventFieldOptions } from '../../lib/eventPayloadFields';
@@ -52,7 +54,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
     conditionsJson: [],
     actionType: 'in_app_notification',
     actionConfigJson: {
-      targetRole: 'admin',
+      targetRole: SYSTEM_ADMIN_ROLE,
       titleTemplate: 'اعلان رویداد {{eventType}}',
       messageTemplate: 'رویداد بر روی {{aggregateType}} شماره {{aggregateId}} با موفقیت پردازش شد.',
       linkTemplate: '',
@@ -85,7 +87,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
         conditionsJson: [],
         actionType: 'in_app_notification',
         actionConfigJson: {
-          targetRole: 'admin',
+          targetRole: SYSTEM_ADMIN_ROLE,
           titleTemplate: 'اعلان رویداد {{eventType}}',
           messageTemplate: 'رویداد بر روی {{aggregateType}} شماره {{aggregateId}} با موفقیت پردازش شد.',
           linkTemplate: '',
@@ -147,7 +149,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
       };
     } else if (newType === 'in_app_notification') {
       defaultConfig = {
-        targetRole: 'admin',
+        targetRole: SYSTEM_ADMIN_ROLE,
         titleTemplate: 'اعلان رویداد {{eventType}}',
         messageTemplate: 'رویداد با موفقیت در سیستم ثبت گردید.',
         linkTemplate: '',
@@ -506,24 +508,10 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
               {formData.actionType === 'in_app_notification' && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        نقش کاربری هدف
-                      </label>
-                      <select
-                        value={formData.actionConfigJson?.targetRole || 'admin'}
-                        onChange={(e) => setFormData(prev => ({
-                          ...prev,
-                          actionConfigJson: { ...prev.actionConfigJson, targetRole: e.target.value }
-                        }))}
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white"
-                      >
-                        <option value="admin">مدیر سیستم</option>
-                        <option value="warehouse_keeper">انباردار</option>
-                        <option value="accountant">حسابدار</option>
-                        <option value="sales_manager">مدیر فروش</option>
-                      </select>
-                    </div>
+                    <NotificationRecipientField
+                      config={formData.actionConfigJson || {}}
+                      onChange={(next) => setFormData(prev => ({ ...prev, actionConfigJson: next }))}
+                    />
 
                     <div>
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">

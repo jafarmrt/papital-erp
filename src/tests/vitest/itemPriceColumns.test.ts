@@ -4,7 +4,7 @@ import { buildQuickPriceUpdates } from '../../lib/items/quickPriceImport';
 
 const STRATEGIES = ['فروشگاه', 'مصرف‌کننده', 'عمده'];
 
-// v9.0.114 (TD-647): only configured price lists are prices; the cost and stock columns of an export never become prices
+// v9.0.144 (TD-647): only configured price lists are prices; the cost and stock columns of an export never become prices
 describe('Excel price columns', () => {
   it('reads configured price lists only and reports other «قیمت …» columns', () => {
     const r = extractRowPriceColumns({
@@ -26,7 +26,7 @@ describe('Excel price columns', () => {
   });
 });
 
-// v9.0.115 (TD-662): the price history shows when a row was created, as a UTC server timestamp
+// v9.0.145 (TD-662): the price history shows when a row was created, as a UTC server timestamp
 describe('price history registration time', () => {
   it('prefers created_at and marks it as UTC', async () => {
     const { priceHistoryRegisteredAt } = await import('../../lib/items/priceHistory');

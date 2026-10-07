@@ -404,7 +404,7 @@ export class ItemCatalogService {
   }
 
   /**
-   * ورود یکپارچه اکسل کالا؛ پیاده‌سازی در `itemExcelImport.ts` (v9.0.116، TD-648).
+   * ورود یکپارچه اکسل کالا؛ پیاده‌سازی در `itemExcelImport.ts` (v9.0.146، TD-648).
    */
   static async processUnifiedImport(
     rows: Array<Record<string, unknown>>,

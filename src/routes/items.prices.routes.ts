@@ -68,7 +68,7 @@ router.get('/items/prices/all', authorizePermission(...READ_PERMISSIONS.itemPric
 }));
 
 // GET /items/:id/prices
-router.get('/items/:id/prices', authorizePermission(...READ_PERMISSIONS.itemPrices), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.get('/items/:id/prices', authorizePermission(...READ_PERMISSIONS.itemSalePrices), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const prices = await orm.select().from(itemPrices).where(and(eq(itemPrices.itemId, Number(req.params.id)), eq(itemPrices.isDeleted, 0)));
     const activeStrategies = await ItemsService.getPricingStrategies();
@@ -94,7 +94,7 @@ router.post('/items/:id/prices', authorizePermission('products.edit_price'), val
   try {
     const { title, price, currency = 'IRR' } = req.body;
     const itemId = Number(req.params.id);
-    // v9.0.114 (TD-647، ت۱ الف): فقط فهرست قیمت تنظیم‌شده
+    // v9.0.144 (TD-647، ت۱ الف): فقط فهرست قیمت تنظیم‌شده
     const configuredTitle = priceListMatcher(await ItemsService.getPricingStrategies()).match(String(title));
     if (!configuredTitle) throw unknownPriceListError([String(title)]);
     const cleanTitle = configuredTitle;
@@ -163,7 +163,7 @@ router.post('/items/prices/batch-update', authorizePermission('products.edit_pri
     const { updates } = req.body;
     const nowIso = new Date().toISOString();
     const auditChanges: Array<Record<string, unknown>> = [];
-    // v9.0.114 (TD-647، ت۱ الف): قیمت فقط برای فهرست تنظیم‌شده ثبت می‌شود؛ حذف قیمت (مقدار خالی یا صفر) هر عنوانی را می‌پذیرد
+    // v9.0.144 (TD-647، ت۱ الف): قیمت فقط برای فهرست تنظیم‌شده ثبت می‌شود؛ حذف قیمت (مقدار خالی یا صفر) هر عنوانی را می‌پذیرد
     // تا ردیف‌های پیشینِ عنوان ناشناخته پاک‌شدنی بمانند. پیش‌تر ورود سریع «موجودی کل» را فهرست قیمت فروش می‌کرد.
     const matcher = priceListMatcher(await ItemsService.getPricingStrategies());
     const unknownTitles = [...new Set((updates as Array<{ title: string; price?: unknown }>)

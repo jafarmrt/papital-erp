@@ -1,19 +1,30 @@
 import { TrendingUp } from 'lucide-react';
-import { formatPersianPrice } from '../../../utils';
+import { formatPersianNumber, formatPersianPrice } from '../../../utils';
 import type { IncomeStatementReport } from '../../../types';
+import { netProfitMarginPercent, statementRows } from '../../../lib/accounting/financialStatements';
+import { PeriodFields, periodCaption } from './ReportDateFields';
 
 interface IncomeStatementViewProps {
   incomeStatement: IncomeStatementReport | null;
+  /** v9.0.116 (TD-566): دوره خود صورت سود و زیان (ISO)، نه تاریخ‌های تراز آزمایشی */
+  startDate: string;
+  endDate: string;
+  onPeriodChange: (period: { startDate: string; endDate: string }) => void;
   onApplyIncomeFilter: () => void;
 }
 
 export function IncomeStatementView({
   incomeStatement,
+  startDate,
+  endDate,
+  onPeriodChange,
   onApplyIncomeFilter
 }: IncomeStatementViewProps) {
-  const safeRevenues = Array.isArray(incomeStatement?.revenues) ? incomeStatement.revenues : [];
-  const safeCostOfSales = Array.isArray(incomeStatement?.costOfSales) ? incomeStatement.costOfSales : [];
-  const safeExpenses = Array.isArray(incomeStatement?.expenses) ? incomeStatement.expenses : [];
+  // v9.0.114 (TD-563): همان کلیدهای پاسخ سرور (`totalRevenue`، `operatingExpenses`)، نه `totalRevenues` و `expenses`
+  const safeRevenues = statementRows(incomeStatement?.revenues);
+  const safeCostOfSales = statementRows(incomeStatement?.costOfSales);
+  const safeExpenses = statementRows(incomeStatement?.operatingExpenses);
+  const margin = netProfitMarginPercent(incomeStatement);
 
   return (
     <div className="space-y-4">
@@ -23,10 +34,12 @@ export function IncomeStatementView({
           <div>
             <h4 className="font-bold text-slate-900 dark:text-white text-sm">صورت سود و زیان دوره‌ای (Income Statement)</h4>
             <p className="text-xs text-slate-500">گزارش درآمدهای عملیاتی، بهای تمام شده، سود ناخالص و سود خالص دوره</p>
+            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mt-0.5">{periodCaption(startDate, endDate)}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <PeriodFields startDate={startDate} endDate={endDate} onChange={onPeriodChange} />
           <button
             onClick={onApplyIncomeFilter}
             className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition"
@@ -48,7 +61,7 @@ export function IncomeStatementView({
           <div className="text-left mt-3 md:mt-0">
             <span className="text-xs text-emerald-700 dark:text-emerald-400">حاشیه سود خالص:</span>
             <div className="text-lg font-bold font-mono text-emerald-800 dark:text-emerald-200">
-              {incomeStatement?.totalRevenues ? `${((incomeStatement.netProfit / incomeStatement.totalRevenues) * 100).toFixed(1)}%` : '۰٪'}
+              {margin === null ? '—' : `${formatPersianNumber(margin, 1)}٪`}
             </div>
           </div>
         </div>
@@ -59,7 +72,7 @@ export function IncomeStatementView({
           <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
             <div className="bg-slate-100 dark:bg-slate-700 px-4 py-2.5 font-bold flex justify-between">
               <span>درآمدهای عملیاتی و فروش (الف)</span>
-              <span className="font-mono text-emerald-600 dark:text-emerald-400">{formatPersianPrice(incomeStatement?.totalRevenues || 0)}</span>
+              <span className="font-mono text-emerald-600 dark:text-emerald-400">{formatPersianPrice(incomeStatement?.totalRevenue || 0)}</span>
             </div>
             <div className="p-3 space-y-1.5">
               {safeRevenues.length === 0 ? (
@@ -79,7 +92,7 @@ export function IncomeStatementView({
           <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
             <div className="bg-slate-100 dark:bg-slate-700 px-4 py-2.5 font-bold flex justify-between">
               <span>بهای تمام شده کالای فروش رفته (ب)</span>
-              <span className="font-mono text-rose-600 dark:text-rose-400">{formatPersianPrice(incomeStatement?.totalCostOfGoodsSold || incomeStatement?.totalCostOfSales || 0)}</span>
+              <span className="font-mono text-rose-600 dark:text-rose-400">{formatPersianPrice(incomeStatement?.totalCostOfSales || 0)}</span>
             </div>
             <div className="p-3 space-y-1.5">
               {safeCostOfSales.length === 0 ? (
@@ -105,7 +118,7 @@ export function IncomeStatementView({
           <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
             <div className="bg-slate-100 dark:bg-slate-700 px-4 py-2.5 font-bold flex justify-between">
               <span>هزینه‌های عمومی، اداری و تشکیلاتی (ج)</span>
-              <span className="font-mono text-rose-600 dark:text-rose-400">{formatPersianPrice(incomeStatement?.totalOperatingExpenses || incomeStatement?.totalExpenses || 0)}</span>
+              <span className="font-mono text-rose-600 dark:text-rose-400">{formatPersianPrice(incomeStatement?.totalOperatingExpenses || 0)}</span>
             </div>
             <div className="p-3 space-y-1.5">
               {safeExpenses.length === 0 ? (

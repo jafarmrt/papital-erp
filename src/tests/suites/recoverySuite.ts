@@ -6,6 +6,7 @@ import { OutboxService } from '../../services/events/outboxService.js';
 import { runBackupRestoreChecks, type RecoveryCheckOutcome } from '../recovery/backupRestoreChecks.js';
 import { checkMigrationSession, checkSkippedMigrationRefused, checkUpgradeFromV70137 } from '../recovery/migrationChecks.js';
 import { checkUpdateWaitsForStartup } from '../recovery/updateScriptChecks.js';
+import { runDeploySafetyChecks } from '../recovery/deploySafetyChecks.js';
 
 /** حوزه K (v8.0.81 به بعد): مهاجرت، به‌روزرسانی، پشتیبان و بازیابی با اسکریپت‌ها و پایگاه‌داده واقعی */
 async function runMigrationAndBackupChecks(results: TestCaseResult[]): Promise<void> {
@@ -38,6 +39,11 @@ async function runMigrationAndBackupChecks(results: TestCaseResult[]): Promise<v
     outcomes.push(...await runBackupRestoreChecks());
   } catch (err: unknown) {
     outcomes.push({ id: 'rec_td_362_backup_from_any_directory', name: 'حوزه K: پشتیبان و بازیابی', info: '', violations: [err instanceof Error ? err.message : String(err)] });
+  }
+  try {
+    outcomes.push(...await runDeploySafetyChecks());
+  } catch (err: unknown) {
+    outcomes.push({ id: 'rec_td_581_cleanup_script_guarded', name: 'Package 1: deploy and cleanup script safety', info: '', violations: [err instanceof Error ? err.message : String(err)] });
   }
   for (const o of outcomes) {
     results.push(makeTestCase({

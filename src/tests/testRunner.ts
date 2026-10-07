@@ -112,7 +112,6 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   v10_kardex_envelope_contract: 'Business Logic: Kardex Envelope Contract {item, summary, entries}',
   v10_next_code_concurrent_unique: 'Business Logic: Atomic next-code Uniqueness Under Concurrency (8 parallel)',
   v10_payroll_paid_treasury_only: 'Business Logic: Payroll paid-state Reachable Only Via Treasury',
-  v10_menu_visibility_deny_list: 'Business Logic: menu_visibility Deny-List & Admin Bypass',
   v10_cleanup_refusal_without_flag: 'Data Safety: Test-Cleanup Refusal Without Safety Flag (Silent No-Op)',
   v10_iso_date_standardization: 'Data Safety: ISO Date Standardization & Dual-Write Accuracy',
   v4_strict_financial_voucher_guard: 'Data Integrity: Strict Financial Voucher Guard & Elimination of Log-and-Continue (F-3 / TD-093)',

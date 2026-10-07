@@ -339,95 +339,16 @@ export interface TrialBalanceReport {
   sumClosingCredit?: number;
 }
 
-export interface IncomeStatementRow {
-  accountId?: number;
-  code: string;
-  name: string;
-  amount: number;
-}
+// v9.0.114 (TD-563، B03-21): صورت سود و زیان و ترازنامه قرارداد مشترک سرور و مرورگر دارند
+export type {
+  StatementRow as IncomeStatementRow,
+  StatementRow as BalanceSheetRow,
+  IncomeStatementReport,
+  BalanceSheetReport,
+} from '../lib/accounting/financialStatements';
 
-export interface IncomeStatementReport {
-  fromDate?: string;
-  toDate?: string;
-  revenues: IncomeStatementRow[];
-  totalRevenues: number;
-  costOfGoodsSold: IncomeStatementRow[];
-  costOfSales?: IncomeStatementRow[];
-  totalCostOfGoodsSold: number;
-  totalCostOfSales?: number;
-  grossProfit: number;
-  operatingExpenses: IncomeStatementRow[];
-  expenses?: IncomeStatementRow[];
-  totalOperatingExpenses: number;
-  totalExpenses?: number;
-  operatingProfit: number;
-  otherIncomeExpenses: IncomeStatementRow[];
-  totalOtherIncomeExpenses: number;
-  netProfit: number;
-}
-
-export interface BalanceSheetRow {
-  accountId?: number;
-  code: string;
-  name: string;
-  amount: number;
-}
-
-export interface BalanceSheetSection {
-  title: string;
-  rows: BalanceSheetRow[];
-  totalAmount: number;
-}
-
-export interface BalanceSheetReport {
-  asOfDate: string;
-  currentAssets: BalanceSheetSection;
-  nonCurrentAssets: BalanceSheetSection;
-  assets?: BalanceSheetRow[];
-  totalAssets: number;
-  currentLiabilities: BalanceSheetSection;
-  nonCurrentLiabilities: BalanceSheetSection;
-  liabilities?: BalanceSheetRow[];
-  totalLiabilities: number;
-  equity: BalanceSheetSection & BalanceSheetRow[];
-  totalEquity: number;
-  totalLiabilitiesAndEquity: number;
-  retainedEarnings?: number;
-  isBalanced: boolean;
-  difference?: number;
-}
-
-export interface AccountLedgerRow {
-  id: number;
-  voucherNumber: number;
-  manualVoucherNumber?: string;
-  date: string;
-  description: string;
-  detailedType?: string;
-  detailedName?: string;
-  debit: number;
-  credit: number;
-  runningBalance: number;
-  balanceType: 'debit' | 'credit' | 'zero';
-}
-
-export interface AccountLedgerReport {
-  accountId: number;
-  accountCode: string;
-  accountName: string;
-  account?: { code: string; name: string; nature: string };
-  detailedName?: string;
-  fromDate?: string;
-  toDate?: string;
-  openingBalance: number;
-  openingBalanceType: 'debit' | 'credit' | 'zero';
-  rows: AccountLedgerRow[];
-  items?: AccountLedgerRow[];
-  totalDebit: number;
-  totalCredit: number;
-  closingBalance: number;
-  closingBalanceType: 'debit' | 'credit' | 'zero';
-}
+// v9.0.118 (TD-574، B03-32): کارت حساب قرارداد مشترک سرور و مرورگر دارد
+export type { AccountCardRow as AccountLedgerRow, AccountCardReport as AccountLedgerReport } from '../lib/accounting/accountCard';
 
 /** v8.0.16 (TD-260): ردیف ارزی که در نمای «همه ارزها» به ریال تبدیل شده است — ارز، مبلغ و نرخ اصلی آن */
 export interface ForeignAmountOrigin {

@@ -35,9 +35,9 @@ function apiResponse(url: string, init?: { method?: string }): unknown {
     return { id: 9, buyer_name: 'نگار کریمی', items: [{ item_id: 5, name: 'گردنبند نقره', code: 'P-5', unit: 'عدد', quantity: 1, unit_price: 1000 }] };
   }
   if (url === '/documents' && init?.method === 'POST') return { id: 10 };
-  if (url.startsWith('/items?search=')) return { data: [] };
+  if (url.startsWith('/items?search=') || url.startsWith('/items/options?search=')) return { data: [] };
   if (url === '/customers?limit=1000') return { data: [] };
-  if (url === '/items?limit=2500') return { data: [] };
+  if (url === '/items/options') return { data: [] };
   return [];
 }
 

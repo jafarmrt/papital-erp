@@ -11,6 +11,8 @@ import {
   Loader2
 } from 'lucide-react';
 import { User } from '../types';
+import { canOpenPage, isSystemAdminViewer, pageAccessRule } from '../lib/permissions/pageAccess';
+import { permissionTitles } from '../lib/permissions/grantBoundary';
 
 // v4.0.30: تفکیک chunk تب‌های سنگین حسابداری — هر تب هنگام کلیک بارگذاری می‌شود
 const ChartOfAccountsTab = lazy(() => import('../components/accounting/ChartOfAccountsTab').then(m => ({ default: m.ChartOfAccountsTab })));
@@ -32,9 +34,9 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
   const { tab } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
 
-  const isAdmin = userPermissions?.isAdmin || user?.role === 'admin';
+  const viewer = { permissions: userPermissions?.permissions, isAdmin: userPermissions?.isAdmin, role: user?.role };
   const hasPerm = (perm: string) => {
-    if (isAdmin) return true;
+    if (isSystemAdminViewer(viewer)) return true;
     return Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes(perm) || false;
   };
 
@@ -97,18 +99,9 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
 
   const currentTab: TabType = (tab && (validTabs as readonly string[]).includes(tab)) ? (tab as TabType) : 'dashboard';
 
-  const tabPermissionMap: Record<TabType, string> = {
-    dashboard: 'accounting.view',
-    coa: 'accounting.coa',
-    vouchers: 'accounting.vouchers',
-    explorer: 'accounting.reports',
-    treasury: 'accounting.treasury',
-    cheques: 'accounting.cheques',
-    reports: 'accounting.reports',
-    'fiscal-closing': 'accounting.vouchers',
-  };
-
-  const isTabAllowed = hasPerm(tabPermissionMap[currentTab]);
+  // v9.0.131 (TD-668): هر زبانه همان دسترسی پیوند منوی خودش در جدول یکتای pageAccess را دارد؛ «کدینگ» به تنظیمات می‌رود
+  const tabRule = pageAccessRule(`/accounting/${currentTab}`);
+  const isTabAllowed = currentTab === 'coa' || canOpenPage(`/accounting/${currentTab}`, viewer);
 
   useEffect(() => {
     if (tab === 'coa') {
@@ -190,7 +183,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
           </div>
           <h2 className="text-lg font-bold text-slate-800 dark:text-white">دسترسی محدود شده است</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-            نقش کاربری شما مجوز لازم برای مشاهده این بخش از سیستم مالی ({tabPermissionMap[currentTab]}) را ندارد. برای کسب دسترسی با مدیر سیستم تماس بگیرید.
+            نقش کاربری شما مجوز لازم برای مشاهده این بخش از سیستم مالی ({permissionTitles(tabRule && typeof tabRule.gate === 'object' ? tabRule.gate.anyOf : [])}) را ندارد. برای کسب دسترسی با مدیر سیستم تماس بگیرید.
           </p>
         </div>
       ) : (
@@ -239,8 +232,6 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
 
           {currentTab === 'vouchers' && (
             <JournalVouchersTab
-              vouchers={vouchers}
-              loading={loading}
               accounts={accounts}
               customers={customers}
               personnelList={personnelList}

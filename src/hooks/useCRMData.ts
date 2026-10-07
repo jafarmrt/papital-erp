@@ -8,6 +8,7 @@ import { confirmAction } from '../components/ConfirmDialogHost';
 import { useCRMFilters, normalizeLeadStage, buildLeadQueryParams, buildActivityQueryParams } from './useCRMFilters';
 import type { CrmStats } from '../lib/crm/leadCurrencyTotals';
 import { CRM_FOLLOWUPS_QUERY_KEY } from '../lib/crm/crmFollowupsQuery';
+import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 
 export const STAGES = [
   { key: 'lead', title: 'مخاطب اولیه', color: 'bg-slate-100 border-slate-300 text-slate-700', badge: 'bg-slate-200 text-slate-800' },
@@ -139,7 +140,7 @@ export function useCRMData(user: any) {
 
       // Load customers
       try {
-        const custRes = await fetchJson('/customers?limit=1000', { signal });
+        const custRes = await fetchJson(PICK_LIST_URLS.customers, { signal });
         if (signal?.aborted) return;
         if (Array.isArray(custRes)) {
           setCustomersList(custRes);

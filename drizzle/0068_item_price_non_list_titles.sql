@@ -1,4 +1,4 @@
--- Drizzle Migration 0063: price rows that are not price lists (v9.0.114 / TD-647, product-owner decision t1 option a)
+-- Drizzle Migration 0068: price rows that are not price lists (v9.0.144 / TD-647, product-owner decision t1 option a)
 --
 -- An unchanged re-import of the unified Excel export turned its cost column «قیمت میانگین خرید (WAC)» into the sale
 -- price list «میانگین خرید (WAC)», and the pricing page quick import turned «موجودی کل» and «میانگین بهای خرید» into

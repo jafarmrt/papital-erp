@@ -31,7 +31,7 @@ export function validateExcelRows(
     if (it.name) dbNameMap.set(it.name.trim().toLowerCase(), it);
   });
 
-  // v9.0.117 (TD-650): کالای موجود با کد شناخته می‌شود و قالب کد فقط برای کالای تازه سنجیده می‌شود (مثل سرور)
+  // v9.0.147 (TD-650): کالای موجود با کد شناخته می‌شود و قالب کد فقط برای کالای تازه سنجیده می‌شود (مثل سرور)
   const dbCodes = new Set(dbItems.map(it => String(it.code ?? '').trim()).filter(Boolean));
 
   // Create category lookup

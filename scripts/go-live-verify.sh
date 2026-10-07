@@ -48,13 +48,12 @@ if [ "$(env_val JWT_SECRET | wc -c)" -ge 33 ]; then ok "JWT_SECRET present (>= 3
 env_has DATABASE_URL || bad "DATABASE_URL missing"
 env_has ERP_SETUP_TOKEN || warnc "ERP_SETUP_TOKEN missing (only acceptable if /setup is fully consumed AND token disabled)"
 
+# v9.0.134 (TD-526): the boot seed only inserts missing base data and creates no role, so its gate is retired
+env_has ALLOW_SEED_IN_PRODUCTION \
+  && warnc "ALLOW_SEED_IN_PRODUCTION is retired since v9.0.117 and has no effect; remove it from .env" \
+  || ok "ALLOW_SEED_IN_PRODUCTION not set (retired)"
+
 # Danger flags must be OFF
-SEED_FLAG="$(env_val ALLOW_SEED_IN_PRODUCTION)"
-if [ "$SEED_FLAG" = "false" ] || [ -z "$SEED_FLAG" ]; then
-  ok "ALLOW_SEED_IN_PRODUCTION is off"
-else
-  bad "ALLOW_SEED_IN_PRODUCTION must be false/absent in production"
-fi
 grep -qE '^ERP_ALLOW_TEST_CLEANUP=1' "$APP_DIR/.env" \
   && bad "ERP_ALLOW_TEST_CLEANUP=1 detected — MUST NOT be enabled in production" \
   || ok "ERP_ALLOW_TEST_CLEANUP off"
@@ -141,6 +140,19 @@ echo "[5] Backup infrastructure"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/erp}"
 if [ -d "$BACKUP_DIR" ]; then
   ok "Backup directory exists: $BACKUP_DIR"
+  # v9.0.122 (TD-585): backups hold the whole database and all attachments; only their owner may read them
+  BACKUP_MODE="$(stat -c '%a' "$BACKUP_DIR" 2>/dev/null || echo '?')"
+  if [ "$BACKUP_MODE" = "700" ]; then
+    ok "Backup directory is private (mode 700)"
+  else
+    bad "Backup directory $BACKUP_DIR has mode $BACKUP_MODE - other users can read the backups (chmod 700 $BACKUP_DIR)"
+  fi
+  N_OPEN="$(find "$BACKUP_DIR" -maxdepth 1 -type f -perm /077 2>/dev/null | wc -l)"
+  if [ "$N_OPEN" -eq 0 ]; then
+    ok "No backup file is readable by other users"
+  else
+    bad "$N_OPEN backup file(s) readable by other users (chmod 600 $BACKUP_DIR/erp_*)"
+  fi
   N_DUMP="$(find "$BACKUP_DIR" -name 'erp_*.dump.gz' 2>/dev/null | wc -l)"
   [ "$N_DUMP" -ge 1 ] && ok "Backups present ($N_DUMP dump archive(s))" || warnc "No backup archives yet — run scripts/backup.sh now"
 else

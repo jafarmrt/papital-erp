@@ -25,13 +25,22 @@ import { customerLocationLabel, invoiceFormFromDocument, type BuyerSource, type 
 import type { InvoiceListDocument } from '../lib/invoices/invoiceListDocuments';
 import { Sparkles } from 'lucide-react';
 import { ExchangeRateField, exchangeRateError } from '../components/documents/ExchangeRateField';
+import { useHasPermission } from '../contexts/AuthContext';
+import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog';
+import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions';
+import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 
 // Print styles are added globally or inline
 export default function CreateInvoicePage({ user: currentUser }: { user: User }) {
-  const isSalesUser = currentUser.role === 'sales_manager' || (currentUser.role !== 'admin' && currentUser.role !== 'manager' && currentUser.role !== 'warehouse_keeper' && currentUser.role !== 'accountant');
+  // v9.0.125 (TD-541 / TD-771): گزینه «فاکتور نهایی» با همان مجوزی که سرور می‌سنجد، نه کد نقش (documentPermissions.ts)
+  const isSystemAdmin = currentUser.role === SYSTEM_ADMIN_ROLE;
+  const holdsFinalize = useHasPermission(SALES_FINALIZE_PERMISSION);
+  const holdsCreate = useHasPermission('documents.create');
+  const canFinalizeSales = holdsFinalize || isSystemAdmin;
+  const canRecordSales = canFinalizeSales || holdsCreate;
 
   const [docType, setDocType] = useState('invoice');
-  const [status, setStatus] = useState(isSalesUser ? 'proforma' : 'final'); // 'proforma' or 'final'
+  const [status, setStatus] = useState(canFinalizeSales ? 'final' : 'proforma'); // 'proforma' or 'final'
 
   // خواندنی‌های صفحه با React Query (انبارها، مشتریان، پیش‌فاکتورهای باز، شماره بعدی سند)
   const { warehouses, customersList, proformas, nextRef, loadDocument, refreshProformas, refetchNextRef } = useInvoiceReferenceData(docType);
@@ -405,8 +414,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               <label className="block text-xs font-medium mb-1 text-slate-500">وضعیت سند</label>
               <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={status} onChange={e => setStatus(e.target.value)}>
                 <option value="proforma">پیش فاکتور (رزرو موقت)</option>
-                <option value="final" disabled={isSalesUser}>
-                  فاکتور نهایی (کسر قطعی از انبار){isSalesUser ? ' - فقط انباردار/مدیر' : ''}
+                <option value="final" disabled={!canFinalizeSales}>
+                  فاکتور نهایی (کسر قطعی از انبار){canFinalizeSales ? '' : ' - نیاز به مجوز «قطعی کردن سند فروش»'}
                 </option>
               </select>
             </div>
@@ -465,7 +474,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <label className="text-sm font-bold text-blue-900 shrink-0 min-w-[170px]">انتخاب خریدار از لیست طرفین حساب:*</label>
                 <SearchableSelect 
                   className="w-full"
-                  fetchUrl="/customers?limit=1000"
+                  fetchUrl={PICK_LIST_URLS.customers}
                   mapResultToOption={(c: BuyerSource & { id: number }) => {
                     const loc = customerLocationLabel(c);
                     return {
@@ -531,7 +540,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <SearchableSelect
                   key={`item-select-${location}-${status}`}
                   className="w-full shadow-sm rounded"
-                  fetchUrl="/items"
+                  fetchUrl={PICK_LIST_URLS.items}
                   mapResultToOption={(it: Item) => {
                     const { loc, total, reserved, sellable } = getSellableStock(it, location);
                     const whName = warehouses.find(w => w.code === location)?.name || location || 'انبار انتخابی';
@@ -693,7 +702,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                   انصراف
                 </button>
               )}
-              <button type="submit" disabled={docItems.length === 0 || currentUser.role === 'viewer' || isSaving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-8 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1">
+              <button type="submit" disabled={docItems.length === 0 || !canRecordSales || isSaving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-8 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1">
                 {isSaving ? 'در حال ثبت...' : editingDocId ? 'ذخیره تغییرات پیش‌فاکتور' : 'ثبت و صدور فاکتور'}
               </button>
             </div>

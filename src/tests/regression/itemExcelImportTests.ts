@@ -19,25 +19,25 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (ctx: Ctx) => Promise<string>]> = [
     ['reg_excel_roundtrip_no_cost_price_list_td_647',
-      'v9.0.114: only configured price lists are prices in Excel import, the pricing quick import and the invoice price list; migration 0063 cleans the three non-price titles (TD-647)',
+      'v9.0.144: only configured price lists are prices in Excel import, the pricing quick import and the invoice price list; migration 0068 cleans the three non-price titles (TD-647)',
       ['td647', 'excel', 'price', 'package5'], priceListColumnsCase],
     ['reg_excel_reimport_keeps_price_history_td_662',
-      'v9.0.115: re-importing an unchanged Excel file rewrites no price row (TD-662)',
+      'v9.0.145: re-importing an unchanged Excel file rewrites no price row (TD-662)',
       ['td662', 'excel', 'price', 'package5'], unchangedPriceCase],
     ['sec_item_import_respects_price_and_stock_permissions_td_648',
-      'v9.0.116: the Excel import changes prices only with products.edit_price, stock only with warehouse.in / warehouse.out and creates items only with products.create (TD-648)',
+      'v9.0.146: the Excel import changes prices only with products.edit_price, stock only with warehouse.in / warehouse.out and creates items only with products.create (TD-648)',
       ['td648', 'excel', 'security', 'permission', 'package5'], importPermissionsCase],
     ['reg_excel_partial_row_keeps_fields_td_650',
-      'v9.0.117: a missing column or blank cell leaves an existing item unchanged and its type comes from the item (TD-650)',
+      'v9.0.147: a missing column or blank cell leaves an existing item unchanged and its type comes from the item (TD-650)',
       ['td650', 'excel', 'package5'], partialRowCase],
     ['reg_excel_name_match_never_changes_code_td_651',
-      'v9.0.118: the Excel import finds items by code only; a name used by another item is refused and the code never changes (TD-651)',
+      'v9.0.148: the Excel import finds items by code only; a name used by another item is refused and the code never changes (TD-651)',
       ['td651', 'excel', 'package5'], codeOnlyMatchCase],
     ['inv_excel_total_stock_column_no_phantom_surplus_td_649',
-      'v9.0.119: «موجودی کل» alone changes only an item whose stock is all in the default warehouse; otherwise per-warehouse columns are required and must add up (TD-649)',
+      'v9.0.149: «موجودی کل» alone changes only an item whose stock is all in the default warehouse; otherwise per-warehouse columns are required and must add up (TD-649)',
       ['td649', 'excel', 'stock', 'inventory', 'package5'], totalStockCase],
     ['reg_excel_import_audit_snapshots_td_655',
-      'v9.0.120: every item the Excel import creates or changes gets an audit row with before / after fields, stock and prices, plus one summary row, inside the import transaction (TD-655)',
+      'v9.0.150: every item the Excel import creates or changes gets an audit row with before / after fields, stock and prices, plus one summary row, inside the import transaction (TD-655)',
       ['td655', 'excel', 'audit', 'package5'], importAuditCase],
   ];
   for (const [id, name, tags, run] of cases) {
@@ -122,7 +122,7 @@ function errorText(res: request.Response): string {
 }
 
 /**
- * TD-648 / B05-02: on v9.0.115 a role with only products.view + products.edit set a sale price to 1 rial and cut the stock
+ * TD-648 / B05-02: on v9.0.145 a role with only products.view + products.edit set a sale price to 1 rial and cut the stock
  * from 10 to 2 (with a stock-count voucher) through one Excel row, while POST /items/:id/prices answered 403.
  */
 async function importPermissionsCase(ctx: Ctx): Promise<string> {
@@ -171,7 +171,7 @@ async function importPermissionsCase(ctx: Ctx): Promise<string> {
 }
 
 /**
- * TD-650 / B05-04: on v9.0.116 a «code, name, price» file turned the unit «جفت» into «عدد», the reorder point 7 into 0
+ * TD-650 / B05-04: on v9.0.146 a «code, name, price» file turned the unit «جفت» into «عدد», the reorder point 7 into 0
  * and refused the raw-material row with «فرمت کد محصول نهایی» because the type defaulted to product.
  */
 async function partialRowCase(ctx: Ctx): Promise<string> {
@@ -205,7 +205,7 @@ async function partialRowCase(ctx: Ctx): Promise<string> {
   return 'a partial file kept unit, reorder point, type and colour; prices were set; explicit cells still apply';
 }
 
-/** TD-651 / B05-05: on v9.0.117 a row with a new code and an existing item's name found that item by name and changed its code. */
+/** TD-651 / B05-05: on v9.0.147 a row with a new code and an existing item's name found that item by name and changed its code. */
 async function codeOnlyMatchCase(ctx: Ctx): Promise<string> {
   const { createTestItem } = await import('../fixtures/factories.js');
   const wrong: string[] = [];
@@ -244,7 +244,7 @@ async function stockByWarehouse(itemId: number): Promise<Record<string, number>>
 }
 
 /**
- * TD-649 / B05-03: on v9.0.118 an item with 10 units only in a second warehouse and a «موجودی کل = 10» row (unchanged) got
+ * TD-649 / B05-03: on v9.0.148 an item with 10 units only in a second warehouse and a «موجودی کل = 10» row (unchanged) got
  * 10 more units in the default warehouse (total 20) and a 3,000,000 surplus voucher, with no error.
  */
 async function totalStockCase(ctx: Ctx): Promise<string> {
@@ -275,7 +275,7 @@ async function totalStockCase(ctx: Ctx): Promise<string> {
 }
 
 /**
- * TD-655 / B05-09: on v9.0.119 an import that changed the unit, the stock and a price left only two rows with counts and
+ * TD-655 / B05-09: on v9.0.149 an import that changed the unit, the stock and a price left only two rows with counts and
  * `details: {}` (one written by the route), outside the transaction.
  */
 async function importAuditCase(ctx: Ctx): Promise<string> {
@@ -311,7 +311,7 @@ async function importAuditCase(ctx: Ctx): Promise<string> {
   return 'one UPDATE row with unit, stock and price changes, one CREATE row and one summary row';
 }
 
-/** TD-662 / B05-16: on v9.0.114 each import of the same file soft-deleted and re-inserted every price (history 2 → 6). */
+/** TD-662 / B05-16: on v9.0.144 each import of the same file soft-deleted and re-inserted every price (history 2 → 6). */
 async function unchangedPriceCase(ctx: Ctx): Promise<string> {
   const { createTestItem } = await import('../fixtures/factories.js');
   const it = await createTestItem({ code: `1404-B-${ctx.serial()}-02`, name: withTestMarker('دستبند تاریخچه td662'), category: 'دستبند', stocks: { '': 2 } });
@@ -336,7 +336,7 @@ async function unchangedPriceCase(ctx: Ctx): Promise<string> {
   return `price rows stayed ${before} after two unchanged imports; one changed price added one row`;
 }
 
-/** TD-647 / B05-01: on v9.0.113 the unchanged export round trip added the price list «میانگین خرید (WAC)» and the quick import «موجودی کل». */
+/** TD-647 / B05-01: on v9.0.143 the unchanged export round trip added the price list «میانگین خرید (WAC)» and the quick import «موجودی کل». */
 async function priceListColumnsCase(ctx: Ctx): Promise<string> {
   const { createTestItem } = await import('../fixtures/factories.js');
   const { findUnknownPriceTitles } = await import('../../services/items/itemPriceTitles.js');
@@ -376,7 +376,7 @@ async function priceListColumnsCase(ctx: Ctx): Promise<string> {
   const single = await ctx.post(`/api/items/${it.id}/prices`, { title: 'میانگین خرید (WAC)', price: 1250000 });
   if (single.status !== 422) wrong.push(`POST /items/:id/prices «میانگین خرید (WAC)» answered ${single.status}`);
 
-  // d) legacy rows: hidden from the invoice price list, cleaned by migration 0063 or listed by the health check
+  // d) legacy rows: hidden from the invoice price list, cleaned by migration 0068 or listed by the health check
   const legacy = await orm.insert(itemPrices).values([
     { itemId: it.id, title: 'میانگین خرید (WAC)', price: money(1250000), currency: 'IRR', isDeleted: 0 },
     { itemId: it.id, title: 'موجودی کل', price: money(12), currency: 'IRR', isDeleted: 0 },
@@ -385,13 +385,13 @@ async function priceListColumnsCase(ctx: Ctx): Promise<string> {
   const api2 = await ctx.get(`/api/items/${it.id}/prices`);
   const apiTitles2 = (api2.body as Row[]).map(p => String(p.title)).sort();
   if (JSON.stringify(apiTitles2) !== JSON.stringify(['عمده', 'فروشگاه'])) wrong.push(`legacy titles reach the invoice price list ${JSON.stringify(apiTitles2)}`);
-  const sqlText = fs.readFileSync(path.resolve(process.cwd(), 'drizzle/0063_item_price_non_list_titles.sql'), 'utf8');
+  const sqlText = fs.readFileSync(path.resolve(process.cwd(), 'drizzle/0068_item_price_non_list_titles.sql'), 'utf8');
   for (const stmt of sqlText.split('--> statement-breakpoint').slice(1)) await pool.query(stmt);
   const after = await orm.select({ id: itemPrices.id, isDeleted: itemPrices.isDeleted }).from(itemPrices).where(inArray(itemPrices.id, legacy.map(l => l.id)));
   const deleted = after.filter(r => r.isDeleted === 1).map(r => legacy.find(l => l.id === r.id)?.title).sort();
-  if (JSON.stringify(deleted) !== JSON.stringify(['موجودی کل', 'میانگین خرید (WAC)'].sort())) wrong.push(`migration 0063 soft-deleted ${JSON.stringify(deleted)}`);
+  if (JSON.stringify(deleted) !== JSON.stringify(['موجودی کل', 'میانگین خرید (WAC)'].sort())) wrong.push(`migration 0068 soft-deleted ${JSON.stringify(deleted)}`);
   const recorded = await pool.query('SELECT item_price_id, price::text FROM item_price_title_cleanup WHERE item_id = $1 ORDER BY item_price_id', [it.id]);
-  if (recorded.rowCount !== 2) wrong.push(`migration 0063 recorded ${recorded.rowCount} rows`);
+  if (recorded.rowCount !== 2) wrong.push(`migration 0068 recorded ${recorded.rowCount} rows`);
   const unknown = await findUnknownPriceTitles();
   if (!unknown.some(u => u.title === 'تخفیف نمایشگاه td647')) wrong.push('health check does not list the unknown title');
 

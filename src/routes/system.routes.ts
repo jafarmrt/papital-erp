@@ -105,7 +105,6 @@ router.get('/system/env', requireSystemAdmin, asyncHandler(async (req, res) => {
     nodeVersion: process.version,
     flags: {
       ERP_ALLOW_TEST_CLEANUP: process.env.ERP_ALLOW_TEST_CLEANUP ? 'set' : 'not set',
-      ALLOW_SEED_IN_PRODUCTION: process.env.ALLOW_SEED_IN_PRODUCTION ? 'set' : 'not set',
       DATABASE_URL: process.env.DATABASE_URL ? 'set' : 'not set',
       JWT_SECRET: process.env.JWT_SECRET ? 'set' : 'not set',
       ERP_SETUP_TOKEN: process.env.ERP_SETUP_TOKEN ? 'set' : 'not set'
@@ -127,12 +126,6 @@ router.get('/settings', asyncHandler(async (req, res) => {
     return;
   }
   res.json(SystemSettingsService.maskSensitiveSettings(safeSettings));
-}));
-
-// V10-5.3: نقشه دید منو per-role — خواندنی برای همه کاربران احراز هویت‌شده (سایدبار)
-router.get('/menu-visibility', asyncHandler(async (req, res) => {
-  const result = await SystemSettingsService.getMenuVisibility();
-  return res.json(result);
 }));
 
 // v7.0.26 (TD-184 / audit P1-3): ذخیره فقط کلیدهای تغییرکرده با مجوز سطح کلید در SystemSettingsService

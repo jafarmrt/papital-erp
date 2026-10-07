@@ -135,7 +135,6 @@ ALLOWED_ORIGINS=http://localhost:${APP_PORT}
 LOG_LEVEL=info
 LOG_DIR=logs
 DB_POOL_MAX=20
-ALLOW_SEED_IN_PRODUCTION=false
 ENV
   chmod 600 .env
   success ".env generated (secrets created with openssl)."

@@ -7,7 +7,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
-import { MAX_PAGE_LIMIT } from '../lib/pagination.js';
+import { MAX_PAGE_LIMIT, parsePickListLimit } from '../lib/pagination.js';
 import { ItemsService } from '../services/items.service.js';
 import { ItemOpeningService } from '../services/inventory/itemOpening.service.js';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
@@ -17,6 +17,7 @@ import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { itemListConditions, listItemPicks } from '../services/items/itemPickList.js';
 
 const router = Router();
 
@@ -69,7 +70,7 @@ export const itemUpdateSchema = z.object({
 });
 
 // GET /items/reorder-alerts
-router.get('/items/reorder-alerts', authorizePermission(...READ_PERMISSIONS.items), asyncHandler(async (req, res) => {
+router.get('/items/reorder-alerts', authorizePermission(...READ_PERMISSIONS.itemReorderAlerts), asyncHandler(async (req, res) => {
   try {
     const type = req.query.type as string;
     const search = req.query.search as string;
@@ -133,6 +134,20 @@ router.get('/items/reorder-alerts', authorizePermission(...READ_PERMISSIONS.item
   }
 }));
 
+const itemPickListValidation = z.object({
+  query: z.object({
+    type: z.enum(['product', 'raw_material', 'all']).optional(),
+    search: z.string().max(200).optional(),
+    limit: z.union([z.string(), z.number()]).optional(),
+  }).optional(),
+});
+
+// v9.0.138 (TD-888، تصمیم ت۱۰ الف): فهرست انتخاب کالا برای فرم‌های بخش‌های دیگر؛ فهرست کامل پایین فقط با مجوز بخش کالا
+router.get('/items/options', authorizePermission(...READ_PERMISSIONS.itemOptions), validate(itemPickListValidation), asyncHandler(async (req, res) => {
+  const query = req.query as { type?: string; search?: string; limit?: string };
+  res.json({ success: true, data: await listItemPicks(req.user, { type: query.type, search: query.search, limit: parsePickListLimit(query.limit) }) });
+}));
+
 // GET /items
 router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandler(async (req, res) => {
   try {
@@ -147,20 +162,7 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
     const search = req.query.search as string;
     const isExport = req.query.export === 'true';
 
-    const conditions = [eq(items.isDeleted, 0)];
-
-    if (type === 'product' || type === 'raw_material') {
-      conditions.push(eq(items.type, type));
-    }
-
-    if (search) {
-      conditions.push(or(
-        ilike(items.name, containsLikePattern(search)),
-        ilike(items.code, containsLikePattern(search))
-      )!);
-    }
-
-    const whereClause = and(...conditions);
+    const whereClause = itemListConditions(type, search);
 
     let query = orm.select().from(items).where(whereClause).orderBy(desc(items.id)).$dynamic();
 

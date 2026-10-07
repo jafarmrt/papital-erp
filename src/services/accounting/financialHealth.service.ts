@@ -15,6 +15,7 @@ import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNam
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
+import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
 import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
@@ -1073,6 +1074,11 @@ export class FinancialHealthService {
     overallScore += unguardedApprovalTest.scoreImpact;
     tests.push(unguardedApprovalTest);
 
+    // آزمون ۱۷ب: v9.0.128 (TD-542) گام‌های گردش کاری که مهاجرت 0065 برای بازبینی نقش فهرست کرد
+    const workflowRoleReviewTest = buildWorkflowRoleReviewHealthTest(await findWorkflowRoleReviews());
+    overallScore += workflowRoleReviewTest.scoreImpact;
+    tests.push(workflowRoleReviewTest);
+
     // آزمون ۱۸: v9.0.37 (TD-455) یک فرایند در جریان برای هر موجودیت (مهاجرت 0056)
     const [duplicateOpenInstances, openInstanceIndexPresent] = await Promise.all([findDuplicateOpenInstances(), hasOpenInstanceUniqueIndex()]);
     const openInstanceTest = buildOpenInstanceHealthTest(duplicateOpenInstances, openInstanceIndexPresent);
@@ -1104,7 +1110,7 @@ export class FinancialHealthService {
     overallScore += reservedWarehouseCodeTest.scoreImpact;
     tests.push(reservedWarehouseCodeTest);
 
-    // آزمون ۲۴: v9.0.114 (TD-647) قیمت فعال کالا با عنوانی بیرون از فهرست‌های قیمت تنظیم‌شده (فقط فهرست، بی پاک‌سازی)
+    // آزمون ۲۴: v9.0.144 (TD-647) قیمت فعال کالا با عنوانی بیرون از فهرست‌های قیمت تنظیم‌شده (فقط فهرست، بی پاک‌سازی)
     const unknownPriceTitleTest = buildUnknownPriceTitleHealthTest(await findUnknownPriceTitles());
     overallScore += unknownPriceTitleTest.scoreImpact;
     tests.push(unknownPriceTitleTest);

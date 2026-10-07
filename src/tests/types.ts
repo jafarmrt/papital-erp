@@ -97,7 +97,6 @@ export type CriticalScenarioId =
   | 'v10_kardex_envelope_contract'
   | 'v10_next_code_concurrent_unique'
   | 'v10_payroll_paid_treasury_only'
-  | 'v10_menu_visibility_deny_list'
   | 'v10_cleanup_refusal_without_flag'
   | 'v10_iso_date_standardization'
   | 'v4_strict_financial_voucher_guard'

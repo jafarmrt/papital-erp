@@ -35,7 +35,7 @@ const savedDoc = {
 function saveFlowResponse(url: string, init?: RequestInitLike): unknown {
   const method = init?.method ?? 'GET';
   if (url === '/warehouses') return [warehouse];
-  if (url === '/customers?limit=1000') return { data: [] };
+  if (url === '/customers/options') return { data: [] };
   if (url === '/documents?status=proforma&limit=1000') return { data: [] };
   if (url === '/documents/next-ref?type=invoice') return { nextRef: 'INV-1001' };
   if (url === '/drafts/invoice?draftKey=new_invoice' && method === 'GET') return { draft: { payload: draft, isDeleted: 0, updatedAt: '2026-10-03T08:00:00Z' } };
@@ -103,7 +103,7 @@ describe('CreateInvoicePage — React Query cache', () => {
 
   it('cancels in-flight reads (reference lists and the proforma being loaded for editing) on unmount', async () => {
     const signals = new Map<string, AbortSignal | undefined>();
-    const hanging = new Set(['/warehouses', '/customers?limit=1000', '/documents/next-ref?type=invoice', '/documents/5']);
+    const hanging = new Set(['/warehouses', '/customers/options', '/documents/next-ref?type=invoice', '/documents/5']);
     fetchJson.mockImplementation((url: string, init?: RequestInitLike) => {
       if (hanging.has(url)) {
         signals.set(url, init?.signal);

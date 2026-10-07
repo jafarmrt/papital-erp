@@ -79,7 +79,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     push('کد کالا نامعتبر است (خالی می‌باشد).');
     return;
   }
-  // v9.0.118 (TD-651، تصمیم ت۳ و ت۵ الف): کالا فقط با کد پیدا می‌شود و کد هرگز از اکسل عوض نمی‌شود؛ پیش‌تر ردیفی با کد تازه
+  // v9.0.148 (TD-651، تصمیم ت۳ و ت۵ الف): کالا فقط با کد پیدا می‌شود و کد هرگز از اکسل عوض نمی‌شود؛ پیش‌تر ردیفی با کد تازه
   // و نام کالای موجود آن کالا را با نام پیدا می‌کرد و کدش (SKU ووکامرس) را بی‌صدا عوض می‌کرد
   const found = await findItemByCode(tx, code);
   if (found.ambiguous.length > 0) {
@@ -106,7 +106,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     return;
   }
 
-  // v9.0.120 (TD-655): تصویر کالا پیش از تغییر، برای ردیف ممیزی همان کالا
+  // v9.0.150 (TD-655): تصویر کالا پیش از تغییر، برای ردیف ممیزی همان کالا
   const before = matchedItem ? await itemAuditSnapshot(tx, matchedItem.id) : null;
   // V3.0.6 (Business Clock): تاریخ تراکنش‌های کاردکس از ساعت توافقی سامانه
   const todayStr = await businessTodayIsoDate();
@@ -155,7 +155,7 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
     return null;
   }
   const itemWac = fileWac && existingSnapshot.total <= 0 ? fileWac : currentWac;
-  // v9.0.119 (TD-649): موجودی پیش از هر نوشتن سنجیده می‌شود؛ ناسازگاری ستون‌های موجودی کل ردیف را رد می‌کند
+  // v9.0.149 (TD-649): موجودی پیش از هر نوشتن سنجیده می‌شود؛ ناسازگاری ستون‌های موجودی کل ردیف را رد می‌کند
   const plan = planStockChanges(stock, existingSnapshot, ctx.whs, ctx.defaultWhCode);
   if ('error' in plan) {
     push(plan.error);
@@ -164,7 +164,7 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
 
   const updateSet = {
     name: name || matchedItem.name,
-    // v9.0.117 (TD-650، ت۳ الف): ستونِ نبود یا سلول خالی یعنی «بی‌تغییر»؛ نوع از خود کالا، مگر ستون نوع صریح باشد
+    // v9.0.147 (TD-650، ت۳ الف): ستونِ نبود یا سلول خالی یعنی «بی‌تغییر»؛ نوع از خود کالا، مگر ستون نوع صریح باشد
     type: fields.itemType ?? matchedItem.type,
     unit: fields.unit ?? matchedItem.unit,
     category: fields.category ?? matchedItem.category,
@@ -243,7 +243,7 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
 
 /**
  * ورود یکپارچه اکسل کالا: مشخصات، موجودی هر انبار و قیمت فهرست‌ها، همه در یک تراکنش.
- * v9.0.116 (TD-648): `perms` در route با `can()` ساخته می‌شود؛ هر بخش فقط با مجوز خودش ثبت می‌شود.
+ * v9.0.146 (TD-648): `perms` در route با `can()` ساخته می‌شود؛ هر بخش فقط با مجوز خودش ثبت می‌شود.
  */
 export async function importItemsFromExcel(
   rows: Row[],

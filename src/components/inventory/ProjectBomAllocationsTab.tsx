@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useInventoryAuditSave';
 import { formatPersianDate, formatPersianNumber, parseCleanNumber, errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { bomAllocationsExportFileName } from '../../lib/inventoryAudit/exportFileNames';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -69,8 +70,8 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
   const loadMetadata = async () => {
     try {
       const [projRes, itemsRes] = await Promise.all([
-        fetchJson('/projects'),
-        fetchJson('/items?type=raw_material')
+        fetchJson(PICK_LIST_URLS.projects),
+        fetchJson(`${PICK_LIST_URLS.items}?type=raw_material`)
       ]);
       const rawProjs = Array.isArray(projRes?.data) ? projRes.data : (Array.isArray(projRes) ? projRes : []);
       const rawItems = Array.isArray(itemsRes?.data) ? itemsRes.data : (Array.isArray(itemsRes) ? itemsRes : []);

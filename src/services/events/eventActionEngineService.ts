@@ -4,7 +4,6 @@ import {
   eventActionRules, 
   eventActionLogs, 
   notifications, 
-  users,
   appSettings
 } from '../../db/schema.js';
 import { eq, and, desc, sql, type SQL } from 'drizzle-orm';
@@ -13,6 +12,8 @@ import { logger } from '../../middleware/logger.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
 import { assertSafeExternalUrl } from '../../lib/ssrfGuard.js';
+import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
+import { assertNotificationPermission, permissionHolderUserIds, roleMemberUserIds } from '../notifications/notificationRecipients.js';
 
 export interface RuleCondition {
   field: string; // e.g. 'payload.totalAmount', 'payload.newStock', 'metadata.userRole', 'aggregateType'
@@ -32,7 +33,10 @@ export interface WebhookActionConfig {
 }
 
 export interface InAppNotificationConfig {
-  targetRole?: string; // e.g. 'admin', 'warehouse_keeper', 'accountant'
+  /** v9.0.127 (TD-883): کلید کاتالوگ؛ گیرندگان دارندگان آن و مدیر سیستم‌اند */
+  targetPermission?: string;
+  /** نقشی که مدیر در تنظیم قاعده برگزیده است (داده، نه کد)؛ بی هدف: مدیر سیستم */
+  targetRole?: string;
   targetUserId?: number;
   titleTemplate: string;
   messageTemplate: string;
@@ -233,24 +237,15 @@ export class EventActionEngineService {
     const link = notifConfig.linkTemplate ? this.interpolateTemplate(notifConfig.linkTemplate, event) : '';
     const notifType = notifConfig.notifType || 'system';
 
-    const targetUserIds: number[] = [];
-
-    if (notifConfig.targetUserId) {
-      targetUserIds.push(notifConfig.targetUserId);
-    } else if (notifConfig.targetRole) {
-      const matchedUsers = await orm.select({ id: users.id })
-        .from(users)
-        .where(eq(users.role, notifConfig.targetRole));
-      matchedUsers.forEach(u => targetUserIds.push(u.id));
-    } else {
-      const adminUsers = await orm.select({ id: users.id })
-        .from(users)
-        .where(eq(users.role, 'admin'));
-      adminUsers.forEach(u => targetUserIds.push(u.id));
-    }
+    // v9.0.127 (TD-883، مدل مجوز §۴.۲): کاربر معین، دارندگان یک مجوز، یا نقشی که مدیر برگزیده؛ بی هدف، مدیر سیستم
+    const targetUserIds: number[] = notifConfig.targetUserId
+      ? [notifConfig.targetUserId]
+      : notifConfig.targetPermission
+        ? await permissionHolderUserIds(notifConfig.targetPermission)
+        : await roleMemberUserIds(notifConfig.targetRole || SYSTEM_ADMIN_ROLE);
 
     if (targetUserIds.length === 0) {
-      return { deliveredCount: 0, reason: 'هیچ کاربری با نقش مشخص‌شده یافت نشد.' };
+      return { deliveredCount: 0, reason: 'هیچ گیرنده‌ای برای این اعلان یافت نشد.' };
     }
 
     for (const uId of targetUserIds) {
@@ -535,12 +530,12 @@ export class EventActionEngineService {
       const defaultRules: CreateRuleInput[] = [
         {
           name: 'اعلان کسری موجودی به انبارداران',
-          description: 'ارسال خودکار اعلان درون‌برنامه‌ای به انبارداران هنگام رسیدن کالا به نقطه سفارش مجدد',
+          description: 'ارسال خودکار اعلان درون‌برنامه‌ای به دارندگان مجوز «مشاهده انبارها» هنگام رسیدن کالا به نقطه سفارش مجدد',
           eventType: DomainEventType.INVENTORY_REORDER_ALERT,
           conditionsJson: [],
           actionType: 'in_app_notification',
           actionConfigJson: {
-            targetRole: 'warehouse_keeper',
+            targetPermission: 'warehouse.view',
             titleTemplate: 'هشدار کسری موجودی کالا',
             messageTemplate: 'موجودی کالای {{payload.itemName}} (کد {{payload.itemCode}}) در انبار {{payload.warehouseLocation}} به {{payload.currentStock}} واحد کاهش یافته است.',
             linkTemplate: '/items',
@@ -557,7 +552,7 @@ export class EventActionEngineService {
           ],
           actionType: 'in_app_notification',
           actionConfigJson: {
-            targetRole: 'admin',
+            targetRole: SYSTEM_ADMIN_ROLE,
             titleTemplate: 'درخواست تایید فرآیند جدید',
             messageTemplate: 'فرآیند {{payload.workflowCode}} برای {{payload.entityType}} شماره {{payload.entityId}} وارد مرحله تایید شد.',
             linkTemplate: '/workflow-inbox',
@@ -654,6 +649,7 @@ export class EventActionEngineService {
    * Create new rule
    */
   public static async createRule(data: CreateRuleInput, userId?: number) {
+    if (data.actionType === 'in_app_notification') assertNotificationPermission((data.actionConfigJson as InAppNotificationConfig | undefined)?.targetPermission);
     const [newRule] = await orm.insert(eventActionRules).values({
       name: data.name,
       description: data.description || '',
@@ -675,6 +671,7 @@ export class EventActionEngineService {
    * Update rule
    */
   public static async updateRule(id: number, data: Partial<CreateRuleInput>) {
+    if (data.actionConfigJson !== undefined) assertNotificationPermission((data.actionConfigJson as InAppNotificationConfig | undefined)?.targetPermission);
     const updatePayload: Record<string, unknown> = {
       updatedAt: new Date().toISOString()
     };
@@ -756,7 +753,7 @@ export class EventActionEngineService {
       metadata: {
         userId: 1,
         userName: 'مدیر تستی',
-        userRole: 'admin',
+        userRole: SYSTEM_ADMIN_ROLE,
         correlationId: `corr_${Date.now()}`,
         timestamp: new Date().toISOString()
       },

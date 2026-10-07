@@ -12,6 +12,7 @@ import { ProcurementOrderList } from './ProcurementOrderList';
 import { PillBadge } from '../common/PillBadge';
 import { REQUISITION_PRIORITY_BADGES, REQUISITION_PRIORITY_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 
 interface ProcurementDeskProps {
   currentUser?: User | null;
@@ -59,7 +60,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
     try {
       const [reqsRes, itemsRes, summaryRes, ordersRes] = await Promise.all([
         fetchJson<{ success: boolean; data: PurchaseRequisition[] }>('/api/procurement/requisitions?limit=100'),
-        fetchJson<{ data?: Item[] } | Item[]>('/api/items'),
+        fetchJson<{ data?: Item[] } | Item[]>(PICK_LIST_URLS.items),
         fetchJson<{ success: boolean; data: any }>('/api/procurement/inbox/summary'),
         fetchJson<{ success: boolean; data: ProcurementOrder[] }>('/api/procurement/orders?limit=200')
       ]);

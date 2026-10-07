@@ -40,7 +40,7 @@ router.get('/items/unified-export', authorizePermission('products.view'), asyncH
   }
 }));
 
-/** v9.0.116 (TD-648، تصمیم ت۲ الف): مجوز هر بخش ورود اکسل، از نقش کاربر (هرگز از بدنه درخواست) */
+/** v9.0.146 (TD-648، تصمیم ت۲ الف): مجوز هر بخش ورود اکسل، از نقش کاربر (هرگز از بدنه درخواست) */
 async function itemImportPermissionsOf(user: { role?: string } | undefined): Promise<ItemImportPermissions> {
   const keys = ITEM_IMPORT_PERMISSION_KEYS;
   return {
@@ -56,7 +56,7 @@ async function itemImportPermissionsOf(user: { role?: string } | undefined): Pro
 router.post('/items/unified-import', authorizePermission('products.create', 'products.edit'), validate(unifiedImportSchema), asyncHandler(async (req, res) => {
   try {
     const { rows, typeFilter } = req.body;
-    // v9.0.120 (TD-655): ممیزی هر کالا و جمع‌بندی ورود درون تراکنش سرویس نوشته می‌شود
+    // v9.0.150 (TD-655): ممیزی هر کالا و جمع‌بندی ورود درون تراکنش سرویس نوشته می‌شود
     const actor = { id: req.user?.id, username: req.user?.username, full_name: req.user?.full_name, ipAddress: extractClientIp(req) };
     const result = await ItemsService.processUnifiedImport(rows, typeFilter, { user: actor }, await itemImportPermissionsOf(req.user));
     res.json(result);

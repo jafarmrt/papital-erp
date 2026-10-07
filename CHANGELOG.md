@@ -19,29 +19,119 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.120 — Excel Import Audits Each Item With Before and After
+### v9.0.150 — Excel Import Audits Each Item With Before and After
 - **Item Excel Audit:** every item the Excel import creates or changes gets an audit row with its fields, stock per warehouse and prices before and after, plus one summary row, inside the import transaction (TD-655, `reg_excel_import_audit_snapshots_td_655`).
 
-### v9.0.119 — Excel Total Stock Column No Longer Adds Phantom Surplus
+### v9.0.149 — Excel Total Stock Column No Longer Adds Phantom Surplus
 - **Item Excel Stock:** «موجودی کل» alone changes only an item whose stock is all in the default warehouse, otherwise per-warehouse columns are required and must add up, so an unchanged file no longer doubles stock with a surplus voucher (TD-649, `inv_excel_total_stock_column_no_phantom_surplus_td_649`).
 
-### v9.0.118 — Excel Import Finds Items by Code and Never Changes the Code
+### v9.0.148 — Excel Import Finds Items by Code and Never Changes the Code
 - **Item Excel Matching:** the item Excel import finds items by code only, refuses a name already held by another item and never changes an item's code, which is also its WooCommerce SKU (TD-651, `reg_excel_name_match_never_changes_code_td_651`).
 
-### v9.0.117 — A Partial Excel File Leaves Item Fields Unchanged
+### v9.0.147 — A Partial Excel File Leaves Item Fields Unchanged
 - **Item Excel Partial Rows:** a missing column or blank cell leaves an existing item's field unchanged and its type comes from the item, so a price-only file no longer resets unit and reorder point or refuses raw materials (TD-650, `reg_excel_partial_row_keeps_fields_td_650`).
 
-### v9.0.116 — Excel Import Follows Price and Stock Permissions
+### v9.0.146 — Excel Import Follows Price and Stock Permissions
 - **Item Excel Permissions:** the item Excel import changes prices only with the price permission, stock only with the warehouse in / out permissions and creates items only with the item creation permission; other parts are reported and skipped (TD-648, `sec_item_import_respects_price_and_stock_permissions_td_648`).
 
-### v9.0.115 — Re-Importing an Unchanged Excel File Keeps the Price History
+### v9.0.145 — Re-Importing an Unchanged Excel File Keeps the Price History
 - **Item Price History:** importing the same Excel file again no longer rewrites unchanged prices, so the price history keeps only real changes, and the history shows when each price was recorded (TD-662, `reg_excel_reimport_keeps_price_history_td_662`).
 
-### v9.0.114 — Excel Prices Come From Configured Price Lists Only
-- **Item Excel and Price Lists:** an unchanged Excel round trip no longer turns the cost column into a sale price list, the pricing page quick import ignores stock and cost columns, the invoice price list shows configured price lists only and migration 0063 cleans the three mistaken titles (TD-647, `reg_excel_roundtrip_no_cost_price_list_td_647`).
+### v9.0.144 — Excel Prices Come From Configured Price Lists Only
+- **Item Excel and Price Lists:** an unchanged Excel round trip no longer turns the cost column into a sale price list, the pricing page quick import ignores stock and cost columns, the invoice price list shows configured price lists only and migration 0068 cleans the three mistaken titles (TD-647, `reg_excel_roundtrip_no_cost_price_list_td_647`).
 
-### v9.0.113 — Package 5 Items and Pricing Audit Documentation
+### v9.0.143 — Package 5 Items and Pricing Audit Documentation
 - **Package 5 Audit:** section 7 of the V9 stability audit records the items and pricing package: 18 proven findings (two P1: an unchanged Excel round trip turns the cost column into a sale price list, and Excel import bypasses the price and warehouse permissions) opened as TD-647..TD-664, with the product-owner decisions. Documentation only.
+
+### v9.0.142 — Piecework Read Scope
+- **Piecework Read Scope:** every personnel's work logs and special rates need a piecework permission; a project reads only its own logs (TD-892).
+
+### v9.0.141 — Item Price Read Scope
+- **Item Price Read Scope:** the invoice form reads the sale prices of the chosen item; all prices need the products permission (TD-891).
+
+### v9.0.140 — Document Read Scope
+- **Document Read Scope:** the full document list needs a document permission; the stock count page reads only its own documents (TD-890).
+
+### v9.0.139 — Project Pick List for Forms
+- **Project Pick List for Forms:** forms of other sections pick projects from a short list; the full project list needs the projects permission (TD-889).
+
+### v9.0.138 — Item Pick List for Forms
+- **Item Pick List for Forms:** forms of other sections pick items from a list without the average cost; the full item list needs the products permission (TD-888).
+
+### v9.0.137 — Customer Pick List for Forms
+- **Customer Pick List for Forms:** forms of other sections pick parties from a list without notes; the full customer list needs the customers view permission (TD-887).
+
+### v9.0.136 — System Admin Role Ticks Are Fixed
+- **System Admin Role Ticks Are Fixed:** the system admin role lists every permission, locked; its permissions cannot be edited (TD-886).
+
+### v9.0.135 — Only the System Admin Role Is Fixed
+- **Only the System Admin Role Is Fixed:** former default roles are ordinary roles that the admin edits and deletes (TD-885).
+
+### v9.0.134 — Fresh Install With the System Admin Only
+- **Fresh Install With the System Admin Only:** a fresh production install gets its base data at boot and only the system admin role; other roles come from role templates (TD-526).
+
+### v9.0.133 — Seed Inserts Only What Is Missing
+- **Seed Inserts Only What Is Missing:** the boot seed no longer restores permissions, categories, settings or account natures an admin changed (TD-591).
+
+### v9.0.132 — Menu From Permissions Only
+- **Menu From Permissions Only:** the per-role menu hiding is removed; a role sees exactly the pages its permissions open (TD-884).
+
+### v9.0.131 — One Page-Access Table
+- **One Page-Access Table:** menu, page routes, dashboard shortcuts and settings tabs read one table checked against the API guards (TD-668).
+
+### v9.0.130 — Users and Roles Page by Permission
+- **Users and Roles Page by Permission:** the page and menu open for user and role managers, and the forms offer only what the user may grant (TD-525).
+
+### v9.0.129 — No Self-Escalation by User and Role Managers
+- **No Self-Escalation:** a non-admin user or role manager no longer edits its own role, grants keys it lacks, or takes over an account stronger than its own (TD-520).
+
+### v9.0.128 — Workflow Steps by Permission and Exact Role
+- **Workflow Steps by Permission and Exact Role:** a step role matches only that role and the system admin and who signs is the step's required permission; designs keep only defined roles and catalog keys, and migration 0065 lists the steps another role used to sign (TD-542).
+
+### v9.0.127 — Notification Recipients by Permission
+- **Notification Recipients:** event-rule notifications and the won-lead notice go to the holders of a catalog permission instead of fixed role codes; the rule editor picks the permission from the catalog (TD-883).
+
+### v9.0.126 — Personnel Bank Details by Permission
+- **Personnel Bank Details:** unmasked card, Sheba and account numbers of personnel and payslips need a catalog permission; the role code manager and «*» no longer open them, and migration 0064 grants the keys to the roles that saw them before (TD-882).
+
+### v9.0.125 — Document Permissions by Type
+- **Document Permissions:** a document is recorded and finalized with the permission of its type and status, never the role code; the new documents.finalize finalizes sales documents, and migration 0063 grants it to the roles that finalized before (TD-541, TD-771).
+
+### v9.0.124 — Update Checks Startup on the Configured Port
+- **Update Port:** `update.sh` waits for `/health/startup` on `PORT` from `.env` (written by `install.sh`, read by the server; an `APP_PORT` environment variable still wins, default 3000). Before, a server installed on another port reported "Update NOT completed" after a good update and was offered a backup restore. `setup-domain.sh` reads the port the same way (not covered by a test: it needs root, apt and certbot).
+
+### v9.0.123 — Failed Build During Update Keeps the Previous Build
+- **Update Build Failure:** `update.sh` keeps a copy of `dist/` before `npm run build` and puts it back when the build fails, then stops without restarting the service. From the moment the source changes, any failure prints the rollback steps once (an `EXIT` trap), and the backup step warns that restoring it erases every change made after it, so it is only for a version that has accepted no writes. Before, a failed build left `dist/server.cjs` missing and printed no rollback steps.
+
+### v9.0.122 — Private Backup Files
+- **Private Backups:** `scripts/backup.sh` writes under `umask 077` and makes the backup directory `0700`, so the dump, manifest and uploads archive are `0600` whatever the caller's umask; `scripts/go-live-verify.sh` fails a backup directory or any backup file other users can read (older backups are listed there to `chmod` by hand). Before, every local user could read payslips and attachments from the backups.
+
+### v9.0.121 — Test Data Cleanup Guarded and Marker-Only
+- **Test Data Cleanup (P1):** `npm run db:cleanup-test` runs only with `NODE_ENV` set to `test` or `development` and `ERP_ALLOW_TEST_CLEANUP=1` (checked before connecting), previews by default inside a rolled-back transaction and deletes only with `--force`, and then only `ERP-TEST-MARKER` rows that nothing else refers to. Kardex, treasury, users, audit logs, counters and sequences are never touched. Before, it deleted real payslips, reversal vouchers, items and users on a production database.
+
+### v9.0.120 — Package 1 Data Infrastructure and Deployment Documentation
+- **Stability Audit, Package 1 (Data Infrastructure, Startup, Deployment and Tooling):** `docs/audit/STABILITY_AUDIT_V9.md` gets the package 1 section with the owner decisions t1 to t9 (t9: all terminal output in English); its proven findings are registered as open rows TD-581 to TD-625 (TD-583 unused, B01-03 was fixed as TD-472; TD-591 and TD-594 are opened by package 2 M5 and package 16). Two P1: the test-data cleanup script deletes real data without an environment guard, and unknown paths grow the `/metrics` label set without bound. Documentation only; no behaviour change.
+
+### v9.0.119 — Financial Ratios Show No Made-Up Score Before Data
+- **Ratios Score (P3):** before any data arrived, or after an error, the ratios page showed a health score of 75 out of 100 and «critical» statuses; it now shows no score, status or value until the server answers (TD-575, `financialRatiosNoScore.test.tsx`).
+
+### v9.0.118 — Account Card Prints the Opening Row Once and Names the Account
+- **Account Card View (P3):** the account card printed the «opening balance» row twice (its own and the server's) and its title lacked the account name; the card now shares one contract with the server, prints the opening row once and names the account (TD-574, `ledgerViewOpeningRow.test.tsx`).
+
+### v9.0.117 — Group and General Account Cards Roll Up Their Sub-Accounts
+- **Account Card Roll-Up (P2):** clicking a group or general row of the trial balance opened an empty account card with a zero balance, because the card read only that account's own rows; the card of a group or general account now carries the rows and balances of all its sub-accounts (TD-570, `reg_account_card_rolls_up_sub_accounts_td_570`).
+
+### v9.0.116 — Balance Sheet and Ratios Take a Date, the Income Statement Its Own Period
+- **Statement Dates (P2):** the balance sheet and the financial ratios were always as of today and the income statement silently took the trial balance dates; each statement now has its own date fields in its header and shows its date or period (TD-566, `financialStatementDates.test.tsx`).
+
+### v9.0.115 — The Voucher List Pages Through Every Voucher
+- **Voucher List (P1):** the accounting voucher list loaded only the newest 20 vouchers and ran its counters, search, filters and batch approval on those 20; page, search and filters now run on the server, which also returns each status count (TD-565, `reg_voucher_list_paging_and_status_counts_td_565`, `voucherListServerPaging.test.tsx`).
+
+### v9.0.114 — Income Statement and Balance Sheet Show the Server Figures
+- **Financial Statements (P1):** the income statement showed a revenue total of 0, a 0% margin and no expense rows, and the balance sheet showed no asset, liability or period-profit rows, because the views read keys the server never sends; both now share one contract with the server (TD-563, `financialStatementsView.test.tsx`).
+
+### v9.0.113 — Package 3 Accounting and Money Core Audit Documentation
+- **Stability Audit, Package 3 (Accounting and Money Core):** `docs/audit/STABILITY_AUDIT_V9.md` gets the accounting section; its 38 proven findings are registered as open rows TD-543 to TD-580 (nine P1: closing the running or next year and closing years out of order, statements of a closed year showing zero, deleting an account that has postings, ledger reports open to document and customer viewers, the party ledger matching any id or a contained name, the income statement and balance sheet reading keys the server never sends, the manual voucher form dropping the row currency, and the voucher list showing only the newest 20). Documentation only; no behaviour change.
 
 ### v9.0.112 — Warehouse Deactivation Lock and Reactivation
 - **Warehouse deactivation:** it waits for in-flight movements and refuses a warehouse that got stock, the last active warehouse stays active, and the system admin can reactivate an inactive warehouse (TD-490, `reg_warehouse_deactivation_td_490`).

@@ -15,7 +15,7 @@ import { SectionErrorBoundary } from '../components/common';
 import { useSearch } from '../SearchContext';
 import {
   useProjectsQuery,
-  useAllCustomersQuery,
+  useCustomerOptionsQuery,
   useAllItemsQuery,
   useDeleteProjectMutation,
 } from '../hooks/queries';
@@ -54,7 +54,7 @@ const KANBAN_COLUMNS = [
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
   const projectsQuery = useProjectsQuery();
-  const customersQuery = useAllCustomersQuery();
+  const customersQuery = useCustomerOptionsQuery();
   const itemsQuery = useAllItemsQuery();
   const deleteProjectMutation = useDeleteProjectMutation();
 

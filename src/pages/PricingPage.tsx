@@ -353,7 +353,7 @@ export default function PricingPage({ user }: { user: User }) {
           return;
         }
 
-        // v9.0.114 (TD-647): فقط ستون‌های فهرست‌های قیمت تنظیم‌شده؛ ستون دیگرِ «قیمت …» نادیده گرفته و گزارش می‌شود
+        // v9.0.144 (TD-647): فقط ستون‌های فهرست‌های قیمت تنظیم‌شده؛ ستون دیگرِ «قیمت …» نادیده گرفته و گزارش می‌شود
         const { updates, unknownColumns } = buildQuickPriceUpdates(rawData, Array.isArray(items) ? items : [], strategies);
         if (unknownColumns.length > 0) {
           toast.error(`این ستون‌ها فهرست قیمت تنظیم‌شده‌ای نیستند و نادیده گرفته شدند: ${unknownColumns.join('، ')}`);

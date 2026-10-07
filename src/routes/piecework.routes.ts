@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { PayrollPaymentService } from '../services/accounting/payrollPayment.service.js';
@@ -10,8 +10,9 @@ import { PieceworkService, PieceworkReadService, PayrollReadService, PieceworkPa
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
-import { canAccessSensitivePersonnelData, sanitizePayrollRecord } from '../lib/piiMasker.js';
+import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { ForbiddenError } from '../errors/customErrors.js';
 
 const router = Router();
 
@@ -468,7 +469,7 @@ router.delete('/piecework/categories/:id', authorizePermission('personnel.manage
 // ==========================================
 
 // GET /api/piecework/personnel-rates/:personnelId
-router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:personnelId'], authorizePermission(...READ_PERMISSIONS.pieceworkReference), validate(paramsPersonnelIdSchema), asyncHandler(async (req, res) => {
+router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:personnelId'], authorizePermission(...READ_PERMISSIONS.pieceworkRates), validate(paramsPersonnelIdSchema), asyncHandler(async (req, res) => {
   try {
     const personnelId = Number(req.params.personnelId);
     const rates = await PieceworkReadService.listPersonnelRates(personnelId);
@@ -498,9 +499,16 @@ router.post(['/piecework/personnel-rates', '/piecework/rates'], authorizePermiss
 // ==========================================
 
 // GET /api/piecework/logs - List work logs
-router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkReference), asyncHandler(async (req, res) => {
+// v9.0.142 (TD-892، ت۱۰ الف): کارکرد همه پرسنل فقط با مجوز کارمزدی؛ مشاهده پروژه فقط کارکردهای یک پروژه را می‌خواند
+router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkLogs, ...READ_PERMISSIONS.projectPieceworkLogs), asyncHandler(async (req, res) => {
+  const { personnelId, projectId, startDate, endDate, status } = req.query;
+  if (!(await can(req.user, ...READ_PERMISSIONS.pieceworkLogs))) {
+    const projId = Number(projectId);
+    if (!Number.isInteger(projId) || projId <= 0) {
+      throw new ForbiddenError('کارکرد همه پرسنل مجوز کارمزدی را می‌خواهد؛ مشاهده پروژه فقط کارکردهای یک پروژه را نشان می‌دهد.', undefined, 'PIECEWORK_LOGS_PROJECT_ONLY');
+    }
+  }
   try {
-    const { personnelId, projectId, startDate, endDate, status } = req.query;
     const rows = await PieceworkReadService.listWorkLogs({ personnelId, projectId, startDate, endDate, status });
 
     res.json(rows);
@@ -588,7 +596,7 @@ router.get('/piecework/payrolls', authorizePermission(...READ_PERMISSIONS.payrol
     const { personnelId, status } = req.query;
     const enhancedRows = await PayrollReadService.listPayrolls({ personnelId, status });
 
-    const canViewSensitive = await canAccessSensitivePersonnelData(req.user);
+    const canViewSensitive = await canAccessSensitivePayrollData(req.user);
     const sanitizedRows = enhancedRows.map(r => sanitizePayrollRecord(r, canViewSensitive));
 
     res.json(sanitizedRows);
@@ -625,7 +633,7 @@ router.get('/piecework/payrolls/:id', authorizePermission(...READ_PERMISSIONS.pa
     }
 
     const { payroll: pay, items, voucherLink } = detail;
-    const canViewSensitive = await canAccessSensitivePersonnelData(req.user, pay.personnelUserId);
+    const canViewSensitive = await canAccessSensitivePayrollData(req.user, pay.personnelUserId);
     const sanitizedPay = sanitizePayrollRecord(pay, canViewSensitive);
 
     res.json({

@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
+import { QUERY_KEYS } from '../lib/queryKeys';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import type { Customer } from '../types';
+import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 
 export interface EntitySelectOption<T = string | number> {
   value: T;
@@ -29,9 +31,9 @@ export function useCustomerSelectOptions(config: CustomerSelectOptionsConfig = {
     error,
     refetch
   } = useQuery<Customer[]>({
-    queryKey: ['customers', 'selector-list'],
+    queryKey: QUERY_KEYS.customers.options({ scope: 'selector-list' }),
     queryFn: async () => {
-      const res = await fetchJson('/customers?limit=1000');
+      const res = await fetchJson(PICK_LIST_URLS.customers);
       const raw = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
       return raw;
     },
@@ -75,7 +77,7 @@ export function useCustomerSelectOptions(config: CustomerSelectOptionsConfig = {
 
 /**
  * Hook to fetch and format suppliers/customers for purchase and split order modals.
- * Replaces duplicate fetchJson('/customers?limit=1000') across procurement components.
+ * Replaces duplicate customer list fetches across procurement components (the customer pick list, TD-887).
  */
 export function useSupplierSelectOptions() {
   const { customers, isLoading, isFetching, error, refetch } = useCustomerSelectOptions();
