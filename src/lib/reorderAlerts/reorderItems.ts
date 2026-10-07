@@ -19,6 +19,8 @@ export interface ReorderItem {
   deficit_value: number;
   is_zero_stock: boolean;
   stocks?: Record<string, number>;
+  /** v9.0.161 (TD-654): نسخه کالا؛ ویرایش نقطه سفارش آن را همراه کالا می‌فرستد */
+  version?: number;
 }
 
 /** قلم مودال سفارش خرید مواد اولیه (مقدار و قیمت سفارش قابل ویرایش) */

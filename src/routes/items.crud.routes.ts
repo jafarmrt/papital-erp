@@ -5,7 +5,8 @@ import { items, transactions, documentItems, journalVouchers } from '../db/schem
 import { authorizePermission } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema } from '../middleware/validate.js';
+import { itemCreateUpdateSchema, itemUpdateSchema } from './items.schemas.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { MAX_PAGE_LIMIT, parsePickListLimit } from '../lib/pagination.js';
 import { ItemsService } from '../services/items.service.js';
@@ -19,54 +20,6 @@ import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { itemListConditions, listItemPicks } from '../services/items/itemPickList.js';
 
 const router = Router();
-
-export const itemCreateUpdateSchema = z.object({
-  body: z.preprocess((val: unknown) => {
-    if (val && typeof val === 'object') {
-      const copy = { ...(val as Record<string, unknown>) };
-      // V2.0.0: alias — فرم کالا initial_cost می‌فرستد؛ به weighted_average_cost نگاشت شود
-      if (copy.initial_cost !== undefined && copy.weighted_average_cost === undefined) {
-        copy.weighted_average_cost = copy.initial_cost;
-      }
-      // V2.0.0: پشتیبانی از stocks به‌صورت شیء کلیددار (کلید = شناسه انبار) —
-      // به کلیدهای stock_<warehouseId> تبدیل می‌شود (همان قرارداد قبلی بک‌اند)
-      if (copy.stocks && typeof copy.stocks === 'object' && !Array.isArray(copy.stocks)) {
-        for (const [whKey, val] of Object.entries(copy.stocks)) {
-          const num = Number(val) || 0;
-          if (num !== 0) {
-            copy[`stock_${whKey}`] = num;
-          }
-        }
-      }
-      return copy;
-    }
-    return val;
-  }, z.object({
-    type: z.enum(['product', 'raw_material']).optional(),
-    name: z.string().min(2, 'نام کالا باید حداقل ۲ کاراکتر باشد'),
-    code: z.string().min(1, 'کد کالا الزامی است'),
-    unit: z.string().min(1, 'واحد اندازه گیری الزامی است'),
-    category: z.string().optional(),
-    image: z.string().optional(),
-    thumbnail: z.string().optional(),
-    reorder_point: z.union([z.string(), z.number()]).optional(),
-    weighted_average_cost: z.union([z.string(), z.number()]).optional(),
-    initial_cost: z.union([z.string(), z.number()]).optional(),
-    current_stock: z.union([z.string(), z.number()]).optional(),
-    stocks: z.record(z.string(), z.any()).optional(),
-    color: z.string().optional(),
-    weight: z.union([z.string(), z.number()]).optional(),
-    material: z.string().optional(),
-    size: z.string().optional()
-  }).passthrough())
-});
-
-export const itemUpdateSchema = z.object({
-  body: itemCreateUpdateSchema.shape.body,
-  params: z.object({
-    id: numericIdString
-  })
-});
 
 // GET /items/reorder-alerts
 router.get('/items/reorder-alerts', authorizePermission(...READ_PERMISSIONS.itemReorderAlerts), asyncHandler(async (req, res) => {
@@ -340,79 +293,44 @@ router.post('/items', authorizePermission('products.create'), validate(itemCreat
 }));
 
 // PUT /items/:id
+// v9.0.161 (TD-654): نسخه کالا لازم است (۴۰۰ بی آن، ۴۰۹ OCC_CONFLICT برای نسخه کهنه) و ردیف ممیزی درون همان تراکنش نوشته می‌شود
 router.put('/items/:id', authorizePermission('products.edit'), validate(itemUpdateSchema), asyncHandler(async (req, res) => {
-  try {
-    const itemId = Number(req.params.id);
-    const { name, code, unit, category, reorder_point, color, weight, material, size } = req.body;
-
-    const result = await ItemCatalogService.updateItem(
-      itemId,
-      req.body,
-      {
-        id: req.user?.id,
-        username: req.user?.username,
-        fullName: req.user?.fullName
-      }
-    );
-
-    const { diff, hasChanges } = computeAuditDiff(result.prevItem, { ...result.prevItem, ...result.updateData }, ['image', 'thumbnail', 'updatedAt', 'stocks']);
-
+  const itemId = Number(req.params.id);
+  const result = await orm.transaction(async (tx) => {
+    const result = await ItemCatalogService.updateItem(itemId, req.body, {
+      id: req.user?.id,
+      username: req.user?.username,
+      fullName: req.user?.fullName
+    }, tx);
+    const prev = result.prevItem;
+    const next = result.item;
+    const snapshot = (it: typeof prev) => ({
+      name: it.name,
+      code: it.code,
+      category: it.category,
+      unit: it.unit,
+      currentStock: it.currentStock,
+      reorderPoint: it.reorderPoint,
+      weightedAverageCost: it.weightedAverageCost,
+      color: it.color,
+      weight: it.weight,
+      material: it.material,
+      size: it.size
+    });
+    const { diff, hasChanges } = computeAuditDiff(prev, { ...prev, ...result.updateData }, ['image', 'thumbnail', 'updatedAt', 'stocks', 'version']);
+    const openingNote = result.canSetOpening && result.computedStock > 0 ? ` همراه با ثبت موجودی افتتاحیه (${result.computedStock} ${next.unit})` : '';
     await logActivity({
       req,
+      tx,
       action: 'UPDATE',
       entity: 'کالا',
       entityId: itemId,
-      description: `ویرایش اطلاعات کالای "${name}" (کد: ${code})${result.canSetOpening && result.computedStock > 0 ? ` همراه با ثبت موجودی افتتاحیه (${result.computedStock} ${unit})` : ''}`,
-      details: {
-        before: {
-          name: result.prevItem.name,
-          code: result.prevItem.code,
-          category: result.prevItem.category,
-          unit: result.prevItem.unit,
-          currentStock: result.prevItem.currentStock,
-          reorderPoint: result.prevItem.reorderPoint,
-          weightedAverageCost: result.prevItem.weightedAverageCost,
-          color: result.prevItem.color,
-          weight: result.prevItem.weight,
-          material: result.prevItem.material,
-          size: result.prevItem.size
-        },
-        after: {
-          name,
-          code,
-          category: category || '',
-          unit,
-          currentStock: result.canSetOpening && result.computedStock > 0 ? result.computedStock : result.prevItem.currentStock,
-          reorderPoint: Number(reorder_point || 0),
-          weightedAverageCost: result.updateData.weightedAverageCost,
-          color: color || null,
-          weight: weight ? Number(weight) : null,
-          material: material || null,
-          size: size || null
-        },
-        changes: diff,
-        hasChanges
-      }
+      description: `ویرایش اطلاعات کالای "${next.name}" (کد: ${next.code})${openingNote}`,
+      details: { before: snapshot(prev), after: snapshot(next), changes: diff, hasChanges, version: next.version }
     });
-
-    res.json({ success: true, opening_voucher_id: result.openingVoucherId });
-  } catch (err) {
-    const errorObj = err as { name?: string; code?: string; expectedVersion?: number; currentVersion?: number } | null;
-    if (errorObj?.name === 'OptimisticLockError') {
-      return res.status(409).json({
-        error: 'تداخل همزمانی: کالا توسط کاربر دیگری ویرایش شده است. لطفاً صفحه را بازخوانی کنید.',
-        code: 'OCC_CONFLICT',
-        details: {
-          expectedVersion: errorObj.expectedVersion,
-          currentVersion: errorObj.currentVersion
-        }
-      });
-    }
-    if (errorObj?.code === '23505') {
-      return res.status(400).json({ error: 'کد کالا تکراری است.' });
-    }
-    throw err;
-  }
+    return result;
+  });
+  res.json({ success: true, version: result.item.version, opening_voucher_id: result.openingVoucherId });
 }));
 
 // DELETE /items/:id

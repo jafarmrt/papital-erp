@@ -24,6 +24,8 @@ export interface Item {
   size?: string;
   canSetOpeningBalance?: boolean;
   can_set_opening_balance?: boolean;
+  /** v9.0.161 (TD-654): نسخه رکورد برای قفل خوش‌بینانه ویرایش */
+  version?: number;
 }
 
 export interface PendingMaterial {

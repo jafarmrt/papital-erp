@@ -4190,7 +4190,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         type: 'raw_material', name: `کالای افتتاحیه P2-1 ${Date.now()}`, code: `P21O-${Date.now()}`, unit: 'عدد', category: '', weighted_average_cost: 500
       }, user);
       await ItemCatalogService.updateItem(second.insertedId, {
-        name: second.item.name, code: second.item.code, unit: 'عدد', category: '', weighted_average_cost: 500, [`stock_${w2.code}`]: 7
+        name: second.item.name, code: second.item.code, unit: 'عدد', category: '', weighted_average_cost: 500, [`stock_${w2.code}`]: 7, version: second.item.version
       }, user);
       await assertInvariant(second.insertedId, 'موجودی افتتاحیه در ویرایش کالا', { [w2.code]: 7 });
 

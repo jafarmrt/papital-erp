@@ -6,10 +6,10 @@ import { uploadBase64ToStorage } from '../../lib/storage.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { ItemPricingService } from './itemPricing.service.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
-import { ValidationError, NotFoundError, ConflictError } from '../../errors/customErrors.js';
+import { ValidationError, NotFoundError, ConflictError, BadRequestError } from '../../errors/customErrors.js';
 import { DocumentService } from '../document.service.js';
 import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
-import { nextVersion } from '../../lib/occHelper.js';
+import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
 import { assertItemCodeAvailable, assertItemNameAvailable, guardItemIdentity } from './itemIdentity.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
@@ -62,6 +62,8 @@ export interface ItemWriteBody {
   weight?: string | number;
   material?: string;
   size?: string;
+  /** v9.0.161 (TD-654): نسخه کالایی که فرم ویرایش از آن ساخته شده است؛ ویرایش بی آن رد می‌شود */
+  version?: number | string;
 }
 
 function cleanSegment(value: unknown): string {
@@ -585,6 +587,13 @@ export class ItemCatalogService {
       if (!prevItem) {
         throw new NotFoundError('کالای مورد نظر یافت نشد.');
       }
+      // v9.0.161 (TD-654، تصمیم ت۷ الف): قفل خوش‌بینانه همیشه اجرا می‌شود (همان قرارداد طرف حساب، TD-403)؛ پیش‌تر نسخه
+      // فقط افزایش می‌یافت و فرم کهنه یا درخواست بی نسخه تغییر کاربر دیگر را بی‌خطا پاک می‌کرد
+      const expectedVersion = Number(body.version);
+      if (!Number.isInteger(expectedVersion) || expectedVersion <= 0) {
+        throw new BadRequestError('نسخه کالا ارسال نشده است؛ صفحه را بازخوانی کنید و دوباره ویرایش کنید.');
+      }
+      checkOccVersion(prevItem, { entityType: 'Item', entityId: itemId, expectedVersion });
 
       // v9.0.160 (TD-653): کد و نام با کلید ایندکس‌های یکتا، جز خود کالا
       if (code && code !== prevItem.code) await assertItemCodeAvailable(tx, code, itemId);
@@ -673,11 +682,17 @@ export class ItemCatalogService {
       }
       const effectiveWac = stockBefore.total > 0 ? prevWac : requestedWac;
 
+      // v9.0.161 (TD-654): فیلدی که در بدنه نیامده مقدار فعلی کالا را نگه می‌دارد؛ رشته خالی یعنی پاک کردن آن
+      const keep = <T>(value: unknown, current: T, write: (v: unknown) => T): T => (value === undefined ? current : write(value));
       const updateData: Partial<typeof items.$inferInsert> = {
-        name, code, unit, category: category || '',
-        reorderPoint: Number(reorder_point || 0),
+        name, code, unit,
+        category: keep(category, prevItem.category, v => String(v || '')),
+        reorderPoint: keep(reorder_point, prevItem.reorderPoint, v => Number(v || 0)),
         weightedAverageCost: effectiveWac,
-        color: color || null, weight: weight ? Number(weight) : null, material: material || null, size: size || null,
+        color: keep(color, prevItem.color, v => (v ? String(v) : null)),
+        weight: keep(weight, prevItem.weight, v => (v ? Number(v) : null)),
+        material: keep(material, prevItem.material, v => (v ? String(v) : null)),
+        size: keep(size, prevItem.size, v => (v ? String(v) : null)),
         version: nextVersion(prevItem.version)
       };
 
@@ -686,7 +701,9 @@ export class ItemCatalogService {
 
       let openingVoucherId: number | null = null;
 
-      let [updatedItem] = await guardItemIdentity(name ?? prevItem.name, () => tx.update(items).set(updateData).where(eq(items.id, itemId)).returning());
+      let [updatedItem] = await guardItemIdentity(name ?? prevItem.name, () => tx.update(items).set(updateData)
+        .where(and(eq(items.id, itemId), eq(items.version, prevItem.version))).returning());
+      if (!updatedItem) throw new OptimisticLockError({ entityType: 'Item', entityId: itemId, expectedVersion });
 
       if (canSetOpening && computedStock > 0) {
         // v7.0.45 (audit P2-1): موجودی افتتاحیه از موتور مرکزی گردش انبار (کاردکس + جدول موجودی انبارها + کش)

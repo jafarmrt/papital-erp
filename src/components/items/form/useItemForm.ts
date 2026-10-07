@@ -242,7 +242,9 @@ export function useItemForm({
         // V2.0.0: کلید صحیح بک‌اند برای «بهای تمام‌شده اولیه (WAC/خرید)» —
         // قبلاً initial_cost فرستاده می‌شد که توسط Zod حذف و WAC صفر ذخیره می‌شد
         weighted_average_cost: parseCleanNumber(form.initial_cost, 0),
-        initial_cost: parseCleanNumber(form.initial_cost, 0)
+        initial_cost: parseCleanNumber(form.initial_cost, 0),
+        // v9.0.161 (TD-654): ویرایش نسخه کالایی را که فرم از آن ساخته شده می‌فرستد؛ نسخه کهنه ۴۰۹ می‌گیرد
+        ...(item ? { version: item.version } : {})
       };
 
       if (onSave) {

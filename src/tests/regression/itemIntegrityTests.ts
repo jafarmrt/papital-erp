@@ -176,7 +176,14 @@ async function versionLockCase(ctx: Ctx): Promise<string> {
     throw new Error(`after A and stale B: reorder point ${row.reorderPoint}, colour ${row.color}; expected 25 and the unchanged colour`);
   }
   if (row.version === v0) throw new Error('a saved edit did not advance the version');
-  return `no version ${noVersion.status}; current ${a.status}; stale ${stale.status}; row ${JSON.stringify(row)}`;
+  const imp = await ctx.post('/api/items/unified-import', { rows: [{ 'کد کالا': code, 'نام محصول': base.name, 'رنگ': 'نقره‌ای' }], typeFilter: 'product' });
+  const [afterImport] = await orm.select({ color: items.color, version: items.version }).from(items).where(eq(items.id, id));
+  if (imp.status !== 200 || afterImport.color !== 'نقره‌ای' || afterImport.version <= row.version) {
+    throw new Error(`Excel change of the colour: ${imp.status}, row ${JSON.stringify(afterImport)}; expected the colour and a newer version than ${row.version}`);
+  }
+  const afterExcel = await ctx.put(`/api/items/${id}`, { ...base, reorder_point: 30, version: row.version });
+  if (afterExcel.status !== 409) throw new Error(`a form opened before the Excel import saved with ${afterExcel.status}, expected 409`);
+  return `no version ${noVersion.status}; current ${a.status}; stale ${stale.status}; after Excel ${afterExcel.status}; row ${JSON.stringify(afterImport)}`;
 }
 
 async function codePeekCase(ctx: Ctx): Promise<string> {

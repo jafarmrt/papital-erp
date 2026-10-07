@@ -10,6 +10,7 @@ import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { money } from '../../lib/money.js';
+import { nextVersion } from '../../lib/occHelper.js';
 import { ITEM_IMPORT_DENIED_MESSAGES, type ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import {
   EXCEL_DOCUMENT_REF, ITEM_FIELD_KEYS, applyStockChange, changedRowPrices, codeFormatError, findItemByCode, deniedStockPermissions,
@@ -187,7 +188,9 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
   if (fieldsChange && !perms.editItems) {
     push(ITEM_IMPORT_DENIED_MESSAGES.editItems);
   } else if (fieldsChange) {
-    await guardItemIdentity(updateSet.name ?? matchedItem.name, () => tx.update(items).set(updateSet).where(eq(items.id, targetItemId)));
+    // v9.0.161 (TD-654): تغییر مشخصات از اکسل نسخه کالا را هم جلو می‌برد تا فرم بازِ کهنه آن را بازنویسی نکند
+    await guardItemIdentity(updateSet.name ?? matchedItem.name, () => tx.update(items)
+      .set({ ...updateSet, version: nextVersion(matchedItem.version) }).where(eq(items.id, targetItemId)));
   }
 
   const changes = plan.changes;
