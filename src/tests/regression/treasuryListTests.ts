@@ -235,5 +235,54 @@ export async function runTreasuryListTests(shouldRun: ShouldRun): Promise<TestCa
     });
   }
 
+  const chequeAuditId = 'reg_cheque_audit_before_after_td_512';
+  if (shouldRun(chequeAuditId, 'td512', 'cheque', 'audit', 'package4')) {
+    await runCase(results, chequeAuditId, 'v9.0.104: a cheque status change and a cheque delete are audited with before and after (status with its Persian label, bank account) and the vouchers they issued, deleted or reversed (TD-512)', async () => {
+      const admin = await adminClient();
+      const problems: string[] = [];
+      const bank = await createBank('Cheque audit bank');
+      const today = await businessTodayIsoDate();
+      const dueDate = new Date(Date.parse(`${today}T00:00:00Z`) + 60 * 86_400_000).toISOString().slice(0, 10);
+      const cheque = { type: 'received', bankName: 'ملت', amount: 3_500_000, partyType: 'other', partyName: 'misc drawer', contraAccountId: await accountId('4101'), issueDate: today, dueDate };
+      const create = async () => {
+        const res = await admin.post('/api/accounting/cheques', { ...cheque, chequeNumber: `A${tagOf()}` });
+        if (res.status !== 201) throw new Error(`cheque create returned ${res.status}: ${JSON.stringify(res.body).slice(0, 200)}`);
+        return Number(res.body.id);
+      };
+      const voucherIds = async (chequeId: number) => (await orm.select({ id: journalVouchers.id }).from(journalVouchers)
+        .where(and(eq(journalVouchers.sourceChequeId, chequeId), eq(journalVouchers.isDeleted, 0)))).map(v => v.id);
+      const lastAudit = async (chequeId: number, action: string) => (await orm.select({ description: activityLogs.description, details: activityLogs.details }).from(activityLogs)
+        .where(and(eq(activityLogs.entity, 'cheque'), eq(activityLogs.entityId, String(chequeId)), eq(activityLogs.action, action)))
+        .orderBy(desc(activityLogs.id)).limit(1))[0] as { description: string; details: Record<string, unknown> } | undefined;
+      type State = { status?: string; statusLabel?: string; bankAccountId?: number | null };
+
+      // status change: received → in collection at the bank; the in-collection voucher is the one issued
+      const moving = await create();
+      const registration = await voucherIds(moving);
+      const moved = await admin.patch(`/api/accounting/cheques/${moving}/status`, { status: 'in_collection', bankAccountId: bank.id });
+      if (moved.status !== 200) throw new Error(`in_collection returned ${moved.status}: ${JSON.stringify(moved.body).slice(0, 200)}`);
+      const issued = (await voucherIds(moving)).filter(v => !registration.includes(v));
+      const change = await lastAudit(moving, 'UPDATE');
+      const before = change?.details?.before as State | undefined;
+      const after = change?.details?.after as State | undefined;
+      if (before?.status !== 'received' || before?.statusLabel !== 'دریافت شده') problems.push(`status audit before ${JSON.stringify(before)}, expected received «دریافت شده» (before the fix: only {"status":"in_collection"})`);
+      if (after?.status !== 'in_collection' || after?.bankAccountId !== bank.id || after?.statusLabel !== 'در جریان وصول (خوابانده به حساب)') problems.push(`status audit after ${JSON.stringify(after)}, expected in_collection at bank ${bank.id} with its Persian label`);
+      if (issued.length !== 1 || JSON.stringify(change?.details?.issuedVoucherIds) !== JSON.stringify(issued)) problems.push(`status audit issued vouchers ${JSON.stringify(change?.details?.issuedVoucherIds)}, expected ${JSON.stringify(issued)}`);
+      if (!change || /[a-z_]{4,}/.test(change.description)) problems.push(`status audit description «${change?.description}» has an English status code`);
+
+      // delete: the draft registration voucher is deleted
+      const deleting = await create();
+      const draftVouchers = await voucherIds(deleting);
+      const removed = await admin.del(`/api/accounting/cheques/${deleting}`);
+      if (removed.status !== 200) throw new Error(`cheque delete returned ${removed.status}: ${JSON.stringify(removed.body).slice(0, 200)}`);
+      const del = await lastAudit(deleting, 'DELETE');
+      const delBefore = del?.details?.before as State & { isDeleted?: number } | undefined;
+      if (delBefore?.status !== 'received' || delBefore?.isDeleted !== 0 || (del?.details?.after as { isDeleted?: number } | undefined)?.isDeleted !== 1) problems.push(`delete audit before/after ${JSON.stringify(del?.details).slice(0, 200)}, expected received → deleted (before the fix: only {"chequeId":${deleting}})`);
+      if (draftVouchers.length !== 1 || JSON.stringify(del?.details?.deletedVoucherIds) !== JSON.stringify(draftVouchers)) problems.push(`delete audit deleted vouchers ${JSON.stringify(del?.details?.deletedVoucherIds)}, expected ${JSON.stringify(draftVouchers)}`);
+      assertNoProblems(problems);
+      return `status: ${before?.status} → ${after?.status}, issued ${JSON.stringify(issued)}; delete: deleted ${JSON.stringify(del?.details?.deletedVoucherIds)}`;
+    });
+  }
+
   return results;
 }

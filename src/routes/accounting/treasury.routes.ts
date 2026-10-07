@@ -310,17 +310,8 @@ const updateChequeStatusHandler = asyncHandler(async (req, res) => {
     description: req.body.description,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
-  });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'UPDATE',
-    entity: 'cheque',
-    entityId: String(id),
-    description: `تغییر وضعیت چک شماره ${chq.chequeNumber} به ${chq.status}`,
-    details: { status: chq.status },
-    ipAddress: req.ip || '',
+    // v9.0.104 (TD-512): ممیزی با قبل و بعد و سندهای صادرشده، درون تراکنش تغییر وضعیت
+    audit: { req, userFullName: req.user?.fullName },
   });
   res.json(chq);
 });
@@ -329,20 +320,11 @@ router.patch('/accounting/cheques/:id/status', authorizePermission('accounting.c
 
 router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
+  // v9.0.104 (TD-512): ممیزی با وضعیت پیش از حذف و سندهای حذف یا باطل‌شده، درون تراکنش حذف
   const result = await AccountingService.deleteCheque(id, {
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
-  });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'DELETE',
-    entity: 'cheque',
-    entityId: String(id),
-    description: `حذف چک شناسه ${id}`,
-    details: { chequeId: id },
-    ipAddress: req.ip || '',
+    audit: { req, userFullName: req.user?.fullName },
   });
   res.json(result);
 }));

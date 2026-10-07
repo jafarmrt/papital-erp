@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.104 — Cheque Audit Before and After
+- **Cheque Audit Before and After (P3):** a cheque status change or delete records the previous and new status in Persian, the bank account and the vouchers it issued or voided. Before, the audit held only `{"status":"in_collection"}` or `{"chequeId":6}` (TD-512, `reg_cheque_audit_before_after_td_512`).
+
 ### v9.0.103 — Bank Reconciliation Rows
 - **Bank Reconciliation Rows (P3):** reconciling a row of another bank or a voided row is refused with the list, only changed rows are written and audited, and the reconciliation time is the server UTC time. Before, three ids (bank A, bank B, voided) gave `{"updated": 2}` and the voided row was reconciled (TD-511, `reg_treasury_reconcile_rows_td_511`).
 
