@@ -246,5 +246,32 @@ export async function runAccessPackageTwoInstallTests(shouldRun: ShouldRun): Pro
     });
   }
 
+  if (shouldRun('sec_role_label_from_role_name_td_894', 'security', 'td894', 'roles', 'package2')) {
+    await runCase(results, {
+      id: 'sec_role_label_from_role_name_td_894',
+      name: 'v9.0.144: /users/my-permissions gives every user, the system admin included, the stored name of its role (TD-894)',
+      details: 'the system admin renames its role; GET /api/users/my-permissions as the system admin returns that name as roleName with isAdmin true; a user of another role gets that role\'s stored name',
+    }, async (h, wrong) => {
+      const [stored] = await h.q(`SELECT id, name, description FROM roles WHERE code = 'admin'`);
+      const renamed = 'مدیر کل آزمون td894';
+      try {
+        const rename = await h.put(`/api/roles/${stored.id}`, { name: renamed, description: stored.description ?? '' });
+        if (rename.status !== 200) wrong.push(`the system admin renaming its role got ${rename.status}, not 200`);
+        const mine = await h.get('/api/users/my-permissions');
+        if (mine.body?.roleName !== renamed) wrong.push(`the system admin got roleName ${JSON.stringify(mine.body?.roleName)}, not the stored name ${renamed}`);
+        if (mine.body?.isAdmin !== true) wrong.push('the system admin is no longer reported as isAdmin');
+
+        const other = await h.sessionWith(['daily_logs.view']);
+        const [otherRole] = await h.q(`SELECT name FROM roles WHERE code = $1`, [other.role]);
+        const otherMine = await h.get('/api/users/my-permissions', other);
+        if (otherMine.body?.roleName !== otherRole?.name) {
+          wrong.push(`a user of role ${other.role} got roleName ${JSON.stringify(otherMine.body?.roleName)}, not ${otherRole?.name}`);
+        }
+      } finally {
+        await h.q(`UPDATE roles SET name = $2 WHERE id = $1`, [stored.id, stored.name]);
+      }
+    });
+  }
+
   return results;
 }

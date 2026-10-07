@@ -36,7 +36,7 @@ function renderModal(editingVoucher?: JournalVoucher) {
   return onSave;
 }
 
-// v9.0.149 (TD-559, B03-17): the form saved «افتتاحیه / اختتامیه» as type closing, so a manual opening balance could no longer be
+// v9.0.160 (TD-559, B03-17): the form saved «افتتاحیه / اختتامیه» as type closing, so a manual opening balance could no longer be
 // reversed or corrected; a closing voucher is issued only by the fiscal-year closing.
 describe('a manual voucher is «افتتاحیه», never closing (TD-559)', () => {
   it('the type list offers the opening type and no closing type', () => {

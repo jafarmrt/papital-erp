@@ -1,3 +1,4 @@
+import { ALL_ITEM_IMPORT_PERMISSIONS } from '../../lib/items/itemImportPermissions.js';
 import { orm, pool } from '../../db/drizzle.js';
 import { itemPrices } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
@@ -101,7 +102,7 @@ export async function checkExcelAdjustmentVoucher(wh: string): Promise<string[]>
   const result = await ItemCatalogService.processUnifiedImport([
     { 'کد کالا': existing.code, 'نام کالا': existing.name, 'نوع کالا': 'ماده اولیه', 'موجودی کل': 6 },
     { 'کد کالا': newCode, 'نام کالا': withTestMarker(`کالای تازه اکسل ${stamp}`), 'نوع کالا': 'ماده اولیه', 'موجودی کل': 5, 'قیمت میانگین خرید (WAC)': 20000 },
-  ], undefined, { user: { username: 'inv' } });
+  ], undefined, { user: { username: 'inv' } }, ALL_ITEM_IMPORT_PERMISSIONS);
   if (result.errors.length > 0) problems.push(`خطای درون‌ریزی: ${JSON.stringify(result.errors)}`);
   const created = await pool.query<{ id: number }>(`SELECT id FROM items WHERE code = $1 AND is_deleted = 0`, [newCode]);
   const newItemId = created.rows[0]?.id;
@@ -143,7 +144,7 @@ export async function probeExcelWacOverwrite(wh: string): Promise<boolean> {
   await receive(item.id, 10, 30000, wh, '2025-07-06');
   await ItemCatalogService.processUnifiedImport([
     { 'کد کالا': item.code, 'نام کالا': item.name, 'نوع کالا': 'ماده اولیه', 'موجودی کل': 10, 'قیمت میانگین خرید (WAC)': 45000 },
-  ], undefined, { user: { username: 'inv' } });
+  ], undefined, { user: { username: 'inv' } }, ALL_ITEM_IMPORT_PERMISSIONS);
   const violations = await checkBusinessInvariants({ ...mark, itemIds: [item.id] });
   return violations.some(v => v.invariant === 'I3_stock_value_equals_ledger');
 }
@@ -214,7 +215,7 @@ export async function checkExcelWacChangeRefused(wh: string): Promise<string[]> 
   const refused = await ItemCatalogService.processUnifiedImport([
     { 'کد کالا': stocked.code, 'نام کالا': stocked.name, 'نوع کالا': 'ماده اولیه', 'نقطه سفارش': 7, 'قیمت میانگین خرید (WAC)': 45000 },
     { 'کد کالا': empty.code, 'نام کالا': empty.name, 'نوع کالا': 'ماده اولیه', 'نقطه سفارش': 8, 'قیمت میانگین خرید (WAC)': 25000 },
-  ], undefined, { user: { username: 'inv' } });
+  ], undefined, { user: { username: 'inv' } }, ALL_ITEM_IMPORT_PERMISSIONS);
   const rowError = refused.errors.find(e => e.code === stocked.code);
   if (!rowError || !rowError.message.includes('WAC')) problems.push(`ردیف تغییر WAC کالای دارای موجودی در فهرست خطاها نیامد: ${JSON.stringify(refused.errors)}`);
   const afterRefused = await itemState(stocked.id);
@@ -228,7 +229,7 @@ export async function checkExcelWacChangeRefused(wh: string): Promise<string[]> 
 
   const sameValue = await ItemCatalogService.processUnifiedImport([
     { 'کد کالا': stocked.code, 'نام کالا': stocked.name, 'نوع کالا': 'ماده اولیه', 'نقطه سفارش': 9, 'قیمت میانگین خرید (WAC)': 30000.4 },
-  ], undefined, { user: { username: 'inv' } });
+  ], undefined, { user: { username: 'inv' } }, ALL_ITEM_IMPORT_PERMISSIONS);
   const afterSame = await itemState(stocked.id);
   if (sameValue.errors.length > 0 || !fin(afterSame.wac).equals(30000) || await reorderOf(stocked.id) !== 9) {
     problems.push(`WAC برابر مقدار فعلی (با کمتر از ۱ ریال اختلاف) باید بی‌خطا بماند و WAC فعلی حفظ شود: ${JSON.stringify(sameValue.errors)}، WAC ${afterSame.wac}`);

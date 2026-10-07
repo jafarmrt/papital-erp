@@ -34,6 +34,18 @@
 | TD-540 | دسترسی (بسته ۲) | P3 (B02-25) — واژه انگلیسی و آوانویسی در رابط بسته ۲: «(RBAC)»، «(Audit Trail)»، «Snapshot»، کدهای `LOGIN`، «داشبورد»، «پروفایل»، «ماژول»، «آواتار»، «سایدبار»، «لاگ»، «کلاینت»، «ویزارد»، «کانبان» و ارقام لاتین | UsersPage.tsx، ActivityLogsPage.tsx، AuditDiffViewer.tsx، SystemOperationsTab.tsx، UserProfileModal.tsx، RoleFormModal.tsx، MenuVisibilityPanel.tsx، LoginPage.tsx، ProtectedRoute.tsx | open (P3، تصمیم ت۸ الف) |
 | TD-541 | دسترسی (بسته ۲)؛ اثر روی ۸ | P2 (B02-26) — ثبت سند هر نقشی جز `admin`، `manager`، `warehouse_keeper` و `accountant` را «کاربر فروش» می‌داند و برای هر نوع سند فقط پیش‌فاکتور می‌پذیرد: نقش سفارشی با `warehouse.in` رسید قطعی را ۴۰۳ گرفت و «مدیر ارشد مالی» هم | documents.routes.ts، CreateInvoicePage.tsx | open (P2، مدل مجوز) |
 | TD-542 | دسترسی (بسته ۲)؛ اثر روی ۱۴ | P2 (B02-27) — گردش‌کار تأییدکننده را با کد نقش و جدول هم‌ارزی ثابت کدها می‌سنجد (پیاده‌سازی دوم در `workflowAuthorizationPolicy.ts`، گردش اسناد حسابداری با کد `accountant`، پنج کد ثابت در طراح): نقش سفارشی با `accounting.vouchers` سند حسابداری را تأیید نمی‌کند | workflowTransitionExecutor.ts، workflowAuthorizationPolicy.ts، workflowDefinitionService.ts، WorkflowDesignerCanvas.tsx | open (P2، مدل مجوز) |
+| TD-652 | کالا و قیمت‌گذاری (بسته ۵) | P2 (B05-06) — `POST /items` سند افتتاحیه کالای تازه را بیرون از تراکنش ثبت صادر می‌کند و شکستش را با `logger.warn` می‌بلعد: با نگاشت «سرمایه اولیه» نامعتبر کالا با ۱۰ × ۱٬۰۰۰٬۰۰۰ موجودی و بی سند ثبت شد | items.crud.routes.ts، itemCatalog.service.ts | open (P2، تصمیم ت۶ الف) |
+| TD-653 | کالا و قیمت‌گذاری (بسته ۵) | P2 (B05-07) — کد و نام کالا یکتا نیستند (فقط `SELECT` پیش از `INSERT`): درخواست هم‌زمان ۳ کالای هم‌کد و ۵ کالای هم‌نام ساخت و `b-h-905` و `B-H-905` هر دو پذیرفته شدند | itemCatalog.service.ts، items.crud.routes.ts، schema/inventory.ts | open (P2، تصمیم ت۴ الف) |
+| TD-654 | کالا و قیمت‌گذاری (بسته ۵) | P2 (B05-08) — ویرایش کالا قفل خوش‌بینانه ندارد: نسخه فقط افزایش می‌یابد، فرم کهنه و درخواست بی نسخه ۲۰۰ می‌گیرند و تغییر کاربر دیگر گم می‌شود | itemCatalog.service.ts، items.crud.routes.ts، useItemForm.ts | open (P2، تصمیم ت۷ الف) |
+| TD-656 | کالا و قیمت‌گذاری (بسته ۵) | P3 (B05-10) — پیشنهاد کد کالا پس از نخستین «رزرو» `lastNumber + 1` می‌ماند، چون ثبت کالا شمارنده را جلو نمی‌برد، و کالای بعدی ۴۰۹ «کد تکراری» می‌گیرد | itemCatalog.service.ts، useItemForm.ts | open (P3، تصمیم ت۴ الف) |
+| TD-657 | کالا و قیمت‌گذاری (بسته ۵) | P3 (B05-11) — ورودی عددی و ارز کالا و قیمت بی اعتبارسنجی است: نقطه سفارش «abc» ← `NaN` (همیشه در هشدار نقطه سفارش)، قیمت منفی و «abc» ← ۰ پذیرفته، ارز «XYZ» و «تومان» پذیرفته | items.crud.routes.ts، items.prices.routes.ts، itemCatalog.service.ts | open (P3، تصمیم ت۹ الف) |
+| TD-658 | کالا و قیمت‌گذاری (بسته ۵) | P3 (B05-12) — تغییر نام یا نوع دسته‌بندی کالاهایش را به نامی بی‌دسته وصل می‌گذارد و حذف بعدی پذیرفته می‌شود؛ نام دسته تکراری ممکن است (دو «گردنبند») | categories.routes.ts، schema/inventory.ts | open (P3، تصمیم ت۸ الف) |
+| TD-659 | کالا و قیمت‌گذاری (بسته ۵) | P3 (B05-13) — دسته‌بندی حذف فیزیکی می‌شود و ساخت، ویرایش، حذف و بازگردانی پیش‌فرض‌های آن ممیزی نمی‌شود | categories.routes.ts | open (P3، تصمیم ت۸ الف) |
+| TD-660 | کالا و قیمت‌گذاری (بسته ۵) | P3 (B05-14) — `POST /items/:id/prices` بی تراکنش و قفل است: پنج ذخیره هم‌زمان «عمده» چهار ردیف فعال ساخت که خواندن پنهانشان می‌کند | items.prices.routes.ts، itemPricing.service.ts | open (P3) |
+| TD-661 | کالا و قیمت‌گذاری (بسته ۵) | P3 (B05-15) — حذف کالا موجودی را پیش از قفل رسید هم‌زمان می‌خواند: کالای حذف‌شده با ۵ واحد (۱۰۰٬۰۰۰ ریال) موجودی ماند | itemCatalog.service.ts | open (P3) |
+| TD-663 | کالا و قیمت‌گذاری (بسته ۵) | P3 (B05-17) — هر صفحه فهرست کالا گزارش رزرو همه کالاها را می‌سازد (۷۵ از ۹۳ میلی‌ثانیه با ۵٬۰۰۰ کالا)؛ ورود ۱٬۰۰۰ ردیف اکسل ۱۷٫۱ ثانیه طول می‌کشد و ۹۹۹ سند افتتاحیه جدا می‌سازد | items.crud.routes.ts، itemCatalog.service.ts، itemStockReservation.service.ts | open (P3، تصمیم ت۱۰ بند ۳) |
+| TD-664 | کالا و قیمت‌گذاری (بسته ۵) | P3 (B05-18) — ۱۶ اصطلاح انگلیسی یا آوانویسی در رابط کالا و قیمت‌گذاری (WAC، Template، استراتژی، کدینگ، کتگوری، اتمیک، آلارم، ایمپورت، دیتابیس، فرمولاسیون، کاتالوگ، آپلود، فرمت، لیست، آرشیو)؛ بها برای هر خواننده فهرست کالا دیده می‌شود | ItemWarehouseStockForm.tsx، ItemBasicForm.tsx، ExcelUploadStep.tsx، ExcelPreviewStep.tsx، UnifiedExcelModal.tsx، ImportErrorsModal.tsx، ItemsPage.tsx، ItemsTable.tsx، PricingPage.tsx، items.crud.routes.ts | open (P3، تصمیم ت۱۰ بند ۱ و ۲) |
+| TD-582 | زیرساخت (بسته ۱) | P1 (B01-02) — برچسب مسیر `/metrics` برای درخواست بی route خام `req.path` است و هرگز آزاد نمی‌شود: ۳٬۰۰۰ درخواست بی ورود به `/api/zz-<تصادفی>` سری‌های `http_requests_total` را از ۲ به ۳٬۰۰۲ رساند؛ هر مسیر حدود ۱۰ کیلوبایت ماندگار (۵۰٬۰۰۰ مسیر = ۴۵۵ MiB، خواندن `/metrics` ۱٫۳ s)؛ برچسب پیشوند mount را هم ندارد | middleware/metrics.ts | open (P1) |
 | TD-584 | زیرساخت (بسته ۱) | P2 (B01-04) — API پیش از پایان مهاجرت‌ها پاسخ می‌دهد و `/health/ready` «آماده» می‌گوید: با پایگاه‌داده در ۰۰۵۴ و build نیازمند ۰۰۵۵، ورود موفق و `GET /api/personnel` ۵۰۰؛ با قفل مهاجرت در دست دیگری `/health/ready` ۲۰۰ و `POST /api/login` ۵۰۰ (نصب لینوکسی دروازه‌ای ندارد) | server.ts، app.ts | open (P2، تصمیم ت۲ الف) |
 | TD-588 | زیرساخت (بسته ۱) | P2 (B01-08) — Vite کل `public/` را در `dist/` کپی می‌کند: هر build پیوست‌ها را در `dist/uploads/.attachments` تکرار می‌کند (۱٫۱M در هر دو)، پیوست حذف‌شده در `dist/` می‌ماند و `docker build` محلی و zip منبع پیوست‌ها را با خود می‌برند | vite.config.ts، .dockerignore، package-source.ps1 | open (P2) |
 | TD-589 | زیرساخت (بسته ۱) | P2 (B01-09) — قید FK و ایندکس یکتای شرطی مهاجرت‌ها روی داده ناپاک فقط notice `SKIPPED` می‌دهند که کسی نمی‌شنود: پایگاه‌داده دوره v3 پس از ارتقا `success:true, warnings:[]` و بی `fk_transactions_item_id`، `fk_document_items_*` و `uq_cheques_sayad_number_active`، حتی پس از پاک شدن داده | db/migrator.ts، drizzle/0001، 0012، 0015 | open (P2، تصمیم ت۵ الف) |
@@ -102,8 +114,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۸۱ ردیف
-- **آرشیو شده (resolved):** ۵۱۱ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۹۳ ردیف
+- **آرشیو شده (resolved):** ۵۲۱ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -112,4 +124,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.152 — TD-577 (متن گام ۴ بستن سال بی سند افتتاحیه، P3) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.163 — TD-577 (متن گام ۴ بستن سال بی سند افتتاحیه، P3) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

@@ -113,7 +113,7 @@ export function NewVoucherModal({
   useEffect(() => {
     if (editingVoucher) {
       setDate(editingVoucher.date || '');
-      // v9.0.149 (TD-559): سند دستی قدیمی از نوع اختتامیه در فرم «افتتاحیه» است؛ اختتامیه را فقط بستن سال صادر می‌کند
+      // v9.0.160 (TD-559): سند دستی قدیمی از نوع اختتامیه در فرم «افتتاحیه» است؛ اختتامیه را فقط بستن سال صادر می‌کند
       setVoucherType(manualVoucherFormType(editingVoucher.voucherType));
       setManualVoucherNumber(editingVoucher.manualVoucherNumber || '');
       setDescription(editingVoucher.description || '');

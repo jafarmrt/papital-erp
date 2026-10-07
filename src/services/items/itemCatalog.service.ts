@@ -2,27 +2,25 @@ import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
 import { eq, and, desc, ilike, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions, journalVouchers } from '../../db/schema.js';
-import { logActivity } from '../../lib/auditLogger.js';
 import { uploadBase64ToStorage } from '../../lib/storage.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { ItemPricingService } from './itemPricing.service.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { ValidationError, NotFoundError, ConflictError } from '../../errors/customErrors.js';
 import { DocumentService } from '../document.service.js';
-import { resolveWarehouseCode, getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
+import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
-import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { startsWithLikePattern } from '../../lib/sqlLike.js';
 import { money } from '../../lib/money.js';
+import { ITEM_WAC_COLUMN } from '../../lib/items/excelPriceColumns.js';
+import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
+import { EXCEL_WAC_TOLERANCE, importItemsFromExcel, type ItemImportActor, type ItemImportResult } from './itemExcelImport.js';
 
 // V10-2.1: تایپ کلاینت اتصال DB برای تراکنش‌های داخلی
 type DbLike = DbExecutor;
-
-/** v8.0.5 (TD-264): اختلاف کمتر از ۱ ریال میان WAC فایل اکسل و WAC فعلی «همان مقدار» شمرده می‌شود (WAC فعلی می‌ماند) */
-const EXCEL_WAC_TOLERANCE = 1;
 
 export interface NextItemCodeInput {
   type?: string;
@@ -375,7 +373,7 @@ export class ItemCatalogService {
       }
 
       row['حد نقطه سفارش (آلارم کسری)'] = Number(it.reorderPoint || 0);
-      row['قیمت میانگین خرید (WAC)'] = Number(it.weightedAverageCost || 0);
+      row[ITEM_WAC_COLUMN] = Number(it.weightedAverageCost || 0);
 
       let itemCurrency = 'IRR';
       for (const normStrat of normalizedStrategies) {
@@ -406,417 +404,15 @@ export class ItemCatalogService {
   }
 
   /**
-   * Processes Excel bulk import rows for items, stock logs, and pricing levels.
+   * ورود یکپارچه اکسل کالا؛ پیاده‌سازی در `itemExcelImport.ts` (v9.0.154، TD-648).
    */
   static async processUnifiedImport(
     rows: Array<Record<string, unknown>>,
     typeFilter: string | undefined,
-    req: { user?: { id?: number; username?: string; full_name?: string } }
-  ) {
-    const whs = await orm.select().from(warehouses).orderBy(asc(warehouses.id));
-    // v7.0.36 (P2-3): انبار پیش‌فرض قطعی (انبار فعال با کمترین شناسه)
-    const importDefaultWhCode = (await getDefaultWarehouseCode(orm)) ?? whs[0]?.code ?? 'main';
-    const strategies = await ItemPricingService.getPricingStrategies();
-
-    let createdCount = 0;
-    let updatedCount = 0;
-    let pricesCount = 0;
-    const errors: Array<{ row: number; name?: string; code?: string; message: string }> = [];
-    // v8.0.3 (TD-262): ردیف‌های کاردکس اصلاح موجودی کالاهای موجود، برای یک سند حسابداری «کسری و اضافات انبار»
-    const adjustmentTransactionIds: number[] = [];
-
-    await orm.transaction(async (tx) => {
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const rowNum = i + 2;
-
-        const rawCode = row['کد کالا'] || row['کد'] || row['code'] || row['Code'];
-        const rawName = row['نام محصول'] || row['نام کالا'] || row['نام'] || row['name'] || row['Name'];
-
-        if (!rawCode && !rawName) {
-          errors.push({ row: rowNum, message: 'نام یا کد کالا در این ردیف نامشخص است.' });
-          continue;
-        }
-
-        const code = String(rawCode || '').trim();
-        const name = String(rawName || '').trim();
-
-        let rawType = row['نوع کالا'] || row['نوع'] || row['type'];
-        let itemType: 'product' | 'raw_material' = 'product';
-        if (rawType === 'ماده اولیه' || rawType === 'raw_material' || typeFilter === 'raw_material') {
-          itemType = 'raw_material';
-        } else if (rawType === 'محصول نهایی' || rawType === 'product' || typeFilter === 'product') {
-          itemType = 'product';
-        }
-
-        const category = String(row['دسته‌بندی'] || row['دسته'] || row['category'] || '').trim();
-        const unit = String(row['واحد'] || row['واحد اندازه‌گیری'] || row['unit'] || 'عدد').trim();
-        const reorderPoint = Number(row['حد نقطه سفارش (آلارم کسری)'] || row['حد نقطه سفارش'] || row['نقطه سفارش'] || row['reorder_point'] || 0);
-        const weightedAverageCost = Number(row['قیمت میانگین خرید (WAC)'] || row['قیمت میانگین خرید (WAC - ریال)'] || row['قیمت میانگین خرید'] || row['ارزش خرید'] || row['weighted_average_cost'] || 0);
-        const image = String(row['تصویر'] || row['آدرس عکس'] || row['image'] || '').trim();
-        const color = String(row['رنگ'] || row['color'] || '').trim();
-        const size = String(row['سایز'] || row['size'] || '').trim();
-        const weight = row['وزن'] || row['weight'] ? Number(row['وزن'] || row['weight']) : null;
-        const material = String(row['جنس'] || row['material'] || '').trim();
-
-        const defaultWhCode = importDefaultWhCode;
-        const stockValues: Record<string, number> = {};
-        let computedStock = 0;
-        let hasCustomStockInRow = false;
-
-        for (const w of whs) {
-          const val = row[`موجودی انبار ${w.name}`] ?? row[`موجودی ${w.name}`] ?? row[w.name] ?? row[`stock_${w.code}`];
-          if (val !== undefined && val !== '' && !isNaN(Number(val))) {
-            stockValues[w.code] = Number(val);
-            computedStock += Number(val);
-            hasCustomStockInRow = true;
-          }
-        }
-
-        const currentStock = Number(row['موجودی کل'] || row['موجودی فعلی'] || row['موجودی']) || computedStock;
-
-        const totalWhStock = Object.values(stockValues).reduce((a, b) => a + Number(b || 0), 0);
-        if (totalWhStock === 0 && currentStock > 0) {
-          stockValues[defaultWhCode] = currentStock;
-          hasCustomStockInRow = true;
-        }
-
-        let matchedItem: typeof items.$inferSelect | null = null;
-        if (code) {
-          const [byCode] = await tx.select().from(items)
-            .where(and(eq(items.code, code), eq(items.isDeleted, 0)))
-            .for('update');
-          if (byCode) matchedItem = byCode;
-        }
-
-        if (!matchedItem && name) {
-          const [byName] = await tx.select().from(items)
-            .where(and(eq(items.name, name), eq(items.isDeleted, 0)))
-            .for('update');
-          if (byName) matchedItem = byName;
-        }
-
-        if (!code) {
-          errors.push({ row: rowNum, name, code, message: 'کد کالا نامعتبر است (خالی می‌باشد).' });
-          continue;
-        }
-
-        const isProductType = itemType === 'product' || category.includes('محصول');
-        if (isProductType) {
-          const productRegex = /^\d{4}-[A-Za-z]+-\d{3}-\d{2}$/;
-          if (!productRegex.test(code)) {
-            errors.push({ row: rowNum, name, code, message: `فرمت کد محصول نهایی نامعتبر است (الگوی صحیح: nnnn-x-nnn-nn). کد ارسال شده: ${code}` });
-            continue;
-          }
-        } else {
-          // V10-2.1: قالب تک‌خط جدید (B-H-101) + سازگاری با داده تاریخی دوخط‌تیره (B-H--101)
-          const rawRegex = /^[A-Za-z][A-Za-z0-9\-]*-{1,2}\d{2,3}$/;
-          if (!rawRegex.test(code)) {
-            errors.push({ row: rowNum, name, code, message: `فرمت کد ماده اولیه نامعتبر است (الگوی صحیح: PREFIX-NNN مانند B-H-101). کد ارسال شده: ${code}` });
-            continue;
-          }
-        }
-
-        if (name) {
-          const [nameConflict] = await tx.select().from(items)
-            .where(and(eq(items.name, name), eq(items.isDeleted, 0)))
-            .for('update');
-          if (nameConflict && matchedItem && nameConflict.id !== matchedItem.id) {
-            errors.push({
-              row: rowNum,
-              name,
-              code,
-              message: `خطای نام تکراری: محصولی با نام «${name}» قبلاً با کد «${nameConflict.code}» در سیستم ثبت شده است.`
-            });
-            continue;
-          }
-        }
-
-        let targetItemId: number;
-        // V3.0.6 (Business Clock): تاریخ تراکنش‌های کاردکس از ساعت توافقی سامانه
-        const todayStr = await businessTodayIsoDate();
-        const currentUser = req.user?.username || 'مدیر سیستم';
-
-        if (matchedItem) {
-          targetItemId = matchedItem.id;
-          // v7.0.45 (audit P2-1): موجودی فعلی از جدول موجودی انبارها، نه کش JSONB
-          const existingSnapshot = await ItemWarehouseStockService.getStockSnapshot(tx, targetItemId);
-          const existingStocks = existingSnapshot.byCode;
-          const currentWac = money(matchedItem.weightedAverageCost);
-          const fileWac = !isNaN(weightedAverageCost) && weightedAverageCost > 0 ? money(weightedAverageCost) : null;
-          // v8.0.5 (TD-264، تصمیم مالک محصول — گزینه الف): WAC کالای دارای موجودی از اکسل عوض نمی‌شود؛ WAC فقط با
-          // گردش ورود تغییر می‌کند. پیش‌تر ستون «قیمت میانگین خرید» ارزش موجودی فعلی را بی‌سند حسابداری بازنویسی می‌کرد.
-          // مقدار برابر WAC فعلی (اختلاف کمتر از EXCEL_WAC_TOLERANCE) نادیده گرفته می‌شود تا فایل خروجی بی‌خطا برگردد.
-          if (fileWac && existingSnapshot.total > 0 && !fileWac.subtract(currentWac).abs().lessThan(EXCEL_WAC_TOLERANCE)) {
-            errors.push({
-              row: rowNum,
-              name,
-              code,
-              message: `بهای میانگین (WAC) کالای «${matchedItem.name}» (${matchedItem.code}) که ${existingSnapshot.total} موجودی دارد از اکسل تغییر نمی‌کند ` +
-                `(فعلی ${currentWac.toString()}، فایل ${fileWac.toString()}). WAC فقط با ورود کالا عوض می‌شود؛ این ردیف ثبت نشد. ` +
-                'ستون «قیمت میانگین خرید» را خالی بگذارید یا همان مقدار فعلی را بنویسید.',
-            });
-            continue;
-          }
-          const itemWac = fileWac && existingSnapshot.total <= 0 ? fileWac : currentWac;
-
-          await tx.update(items).set({
-            name: name || matchedItem.name,
-            code: code || matchedItem.code,
-            type: itemType,
-            unit: unit || matchedItem.unit,
-            category: category || matchedItem.category,
-            reorderPoint: isNaN(reorderPoint) ? matchedItem.reorderPoint : reorderPoint,
-            weightedAverageCost: itemWac,
-            color: color || matchedItem.color,
-            size: size || matchedItem.size,
-            weight: weight !== null && !isNaN(weight) ? weight : matchedItem.weight,
-            material: material || matchedItem.material,
-            image: image || matchedItem.image,
-          }).where(eq(items.id, targetItemId));
-
-          if (hasCustomStockInRow && Object.keys(stockValues).length > 0) {
-            for (const whCode of Object.keys(stockValues)) {
-              const oldQty = Number(existingStocks[whCode] || 0);
-              const newQty = Number(stockValues[whCode] || 0);
-              const diff = newQty - oldQty;
-              if (diff > 0) {
-                adjustmentTransactionIds.push((await DocumentService.applyStockMovement(tx, {
-                  itemId: targetItemId,
-                  inOut: 'in',
-                  quantity: diff,
-                  price: itemWac,
-                  date: todayStr,
-                  documentType: 'audit',
-                  documentRef: 'درون‌ریزی اکسل',
-                  user: currentUser,
-                  targetLoc: whCode,
-                  notes: 'افزایش موجودی از اکسل'
-                })).transactionId);
-              } else if (diff < 0) {
-                adjustmentTransactionIds.push((await DocumentService.applyStockMovement(tx, {
-                  itemId: targetItemId,
-                  inOut: 'out',
-                  quantity: Math.abs(diff),
-                  price: itemWac,
-                  date: todayStr,
-                  documentType: 'audit',
-                  documentRef: 'درون‌ریزی اکسل',
-                  user: currentUser,
-                  targetLoc: whCode,
-                  notes: 'کاهش موجودی از اکسل (شمارش فیزیکی)'
-                })).transactionId);
-              }
-            }
-          } else if (hasCustomStockInRow || currentStock !== undefined) {
-            const finalStock = (hasCustomStockInRow ? currentStock : existingSnapshot.total) ?? 0;
-            const diff = finalStock - existingSnapshot.total;
-            const defaultLoc = await resolveWarehouseCode(tx, '');
-            if (diff > 0) {
-              adjustmentTransactionIds.push((await DocumentService.applyStockMovement(tx, {
-                itemId: targetItemId,
-                inOut: 'in',
-                quantity: diff,
-                price: itemWac,
-                date: todayStr,
-                documentType: 'audit',
-                documentRef: 'درون‌ریزی اکسل',
-                user: currentUser,
-                targetLoc: defaultLoc,
-                notes: 'افزایش موجودی از اکسل'
-              })).transactionId);
-            } else if (diff < 0) {
-              adjustmentTransactionIds.push((await DocumentService.applyStockMovement(tx, {
-                itemId: targetItemId,
-                inOut: 'out',
-                quantity: Math.abs(diff),
-                price: itemWac,
-                date: todayStr,
-                documentType: 'audit',
-                documentRef: 'درون‌ریزی اکسل',
-                user: currentUser,
-                targetLoc: defaultLoc,
-                notes: 'کاهش موجودی از اکسل (شمارش فیزیکی)'
-              })).transactionId);
-            }
-          }
-
-          updatedCount++;
-        } else {
-          const finalCode = code || `ITEM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-          const itemWac = money(isNaN(weightedAverageCost) ? 0 : weightedAverageCost);
-          const [newItem] = await tx.insert(items).values({
-            name: name || 'کالای بدون نام',
-            code: finalCode,
-            type: itemType,
-            unit: unit || 'عدد',
-            category: category || '',
-            reorderPoint: isNaN(reorderPoint) ? 0 : reorderPoint,
-            weightedAverageCost: itemWac,
-            color: color || null,
-            size: size || null,
-            weight: weight !== null && !isNaN(weight) ? weight : null,
-            material: material || null,
-            image: image || '',
-            currentStock: 0,
-            isDeleted: 0
-          }).returning({ id: items.id });
-
-          targetItemId = newItem.id;
-
-          if (hasCustomStockInRow && Object.keys(stockValues).length > 0) {
-            for (const whCode of Object.keys(stockValues)) {
-              const qty = Number(stockValues[whCode] || 0);
-              if (qty > 0) {
-                await DocumentService.applyStockMovement(tx, {
-                  itemId: targetItemId,
-                  inOut: 'in',
-                  quantity: qty,
-                  price: itemWac,
-                  date: todayStr,
-                  documentType: 'audit',
-                  documentRef: 'درون‌ریزی اکسل',
-                  user: currentUser,
-                  targetLoc: whCode,
-                  notes: 'موجودی اولیه از فایل اکسل'
-                });
-              }
-            }
-          } else if (currentStock > 0) {
-            const defaultLoc = await resolveWarehouseCode(tx, '');
-            await DocumentService.applyStockMovement(tx, {
-              itemId: targetItemId,
-              inOut: 'in',
-              quantity: currentStock,
-              price: itemWac,
-              date: todayStr,
-              documentType: 'audit',
-              documentRef: 'درون‌ریزی اکسل',
-              user: currentUser,
-              targetLoc: defaultLoc,
-              notes: 'موجودی اولیه از فایل اکسل'
-            });
-          }
-          // v8.0.3 (TD-262): کالای تازه با موجودی، همان سند افتتاحیه فرم کالا را می‌گیرد (موجودی × WAC / سرمایه اولیه)؛
-          // همین‌جا صادر می‌شود تا ردیف بعدی همین فایل برای همین کد فقط اختلاف را به سند اصلاح موجودی ببرد
-          if (Object.values(stockValues).some(qty => Number(qty) > 0) || currentStock > 0) {
-            await ItemOpeningService.issueItemOpeningVoucher(targetItemId, { userId: req.user?.id, username: currentUser, tx });
-          }
-
-          createdCount++;
-        }
-
-        const extractedPrices = new Map<string, { price: number; currency: string }>();
-
-        // 1. Check explicit configured strategies
-        for (const strat of strategies) {
-          const norm = normalizeStrategyTitle(strat);
-          if (!norm) continue;
-
-          const priceVal =
-            row[`قیمت ${norm}`] ??
-            row[`قیمت - ${norm}`] ??
-            row[`قیمت ${strat}`] ??
-            row[`قیمت - ${strat}`] ??
-            row[strat];
-
-          const currVal =
-            row[`ارز - ${norm}`] ??
-            row[`ارز - قیمت ${norm}`] ??
-            row[`ارز ${norm}`] ??
-            row[`ارز - ${strat}`] ??
-            row['واحد ارز'] ??
-            row['ارز'] ??
-            'IRR';
-
-          if (priceVal !== undefined && priceVal !== '' && !isNaN(Number(priceVal)) && Number(priceVal) >= 0) {
-            extractedPrices.set(norm, { price: Number(priceVal), currency: String(currVal || 'IRR').trim() });
-          }
-        }
-
-        // 2. Check any other price columns in row
-        Object.keys(row).forEach(k => {
-          let normKey = '';
-          if (k.startsWith('قیمت - ')) normKey = normalizeStrategyTitle(k.replace('قیمت - ', ''));
-          else if (k.startsWith('قیمت ')) normKey = normalizeStrategyTitle(k.replace('قیمت ', ''));
-          else if (k.startsWith('Price - ')) normKey = normalizeStrategyTitle(k.replace('Price - ', ''));
-          else if (k.startsWith('Price ')) normKey = normalizeStrategyTitle(k.replace('Price ', ''));
-
-          if (normKey && !extractedPrices.has(normKey)) {
-            const rawPrice = row[k];
-            if (rawPrice !== undefined && rawPrice !== '' && !isNaN(Number(rawPrice)) && Number(rawPrice) >= 0) {
-              const currVal =
-                row[`ارز - ${normKey}`] ??
-                row[`ارز - قیمت ${normKey}`] ??
-                row[`ارز ${normKey}`] ??
-                row['واحد ارز'] ??
-                row['ارز'] ??
-                'IRR';
-
-              extractedPrices.set(normKey, { price: Number(rawPrice), currency: String(currVal || 'IRR').trim() });
-            }
-          }
-        });
-
-        // Save extracted prices
-        const nowIso = new Date().toISOString();
-        for (const [normKey, pObj] of extractedPrices.entries()) {
-          const cleanTitle = normalizeStrategyTitle(normKey);
-          const canKey = getStrategyCanonicalKey(cleanTitle);
-
-          const existingList = await tx.select().from(itemPrices)
-            .where(and(eq(itemPrices.itemId, targetItemId), eq(itemPrices.isDeleted, 0)))
-            .for('update');
-
-          const matchingActive = existingList.filter(p => getStrategyCanonicalKey(p.title) === canKey);
-
-          for (const m of matchingActive) {
-            await tx.update(itemPrices)
-              .set({ isDeleted: 1, updatedAt: nowIso })
-              .where(eq(itemPrices.id, m.id));
-          }
-
-          await tx.insert(itemPrices).values({
-            itemId: targetItemId,
-            title: cleanTitle,
-            price: money(pObj.price),
-            currency: pObj.currency,
-            createdAt: nowIso,
-            updatedAt: nowIso,
-            isDeleted: 0
-          });
-          pricesCount++;
-        }
-      }
-
-      // v8.0.3 (TD-262، تصمیم مالک محصول درباره TD-255): اصلاح موجودی کالاهای موجود با بهای کاردکس به «کسری و اضافات
-      // انبار»، در همان تراکنش؛ پیش‌تر موجودی عوض می‌شد و دفتر کل از آن خبر نداشت
-      await syncStockAdjustmentVoucher({
-        transactionIds: adjustmentTransactionIds,
-        date: await businessTodayIsoDate(),
-        refNumber: 'درون‌ریزی اکسل',
-        description: 'اصلاح موجودی کالا از درون‌ریزی اکسل',
-        userId: req.user?.id,
-        username: req.user?.username || 'مدیر سیستم',
-      }, tx);
-    });
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      userFullName: req.user?.full_name || '',
-      action: 'UPDATE',
-      entity: 'ورود اطلاعات اکسل',
-      description: `ورود جامع اطلاعات از اکسل: ${createdCount} کالای جدید، ${updatedCount} کالای به‌روزرسانی شده و ${pricesCount} قیمت تنظیم گردید.`
-    });
-
-    return {
-      success: true,
-      createdCount,
-      updatedCount,
-      pricesCount,
-      errors
-    };
+    req: { user?: ItemImportActor },
+    permissions: ItemImportPermissions,
+  ): Promise<ItemImportResult> {
+    return importItemsFromExcel(rows, typeFilter, req.user ?? {}, permissions);
   }
 
   /**

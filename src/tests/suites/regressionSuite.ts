@@ -1,3 +1,4 @@
+import { ALL_ITEM_IMPORT_PERMISSIONS } from '../../lib/items/itemImportPermissions.js';
 import { personnelVersion } from '../fixtures/personnelVersion.js';
 import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
@@ -1062,7 +1063,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_fiscal_year_isolation_and_calendar_td_141_142', 'td141', 'td142', 'fiscal_year', 'closing')) {
   const t14Start = Date.now();
   try {
-    // v9.0.150 (TD-543): a year closes only after its end, so the test closes a past year inside its own schema (a closed
+    // v9.0.161 (TD-543): a year closes only after its end, so the test closes a past year inside its own schema (a closed
     // year in the shared schema would refuse every later test's vouchers of that year)
     const { inFiscalSandbox } = await import('../regression/fiscalClosingTests.js');
     await inFiscalSandbox(async () => {
@@ -1081,7 +1082,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       throw new Error(`نرمال‌سازی تاریخ ۱۴۰۳/۰۱/۰۱ باید 2024-03-20 باشد اما مقدار ${normIso2} بازگشت داده شد.`);
     }
 
-    // 2. A past fiscal year inside the test's own schema (v9.0.150, TD-543: a year that has not ended is never closed)
+    // 2. A past fiscal year inside the test's own schema (v9.0.161, TD-543: a year that has not ended is never closed)
     const testYear = 1392;
     // v8.0.47 (TD-310): سند اختتامیه فقط به آخرین روز سال (۳۰ اسفند در سال کبیسه) پذیرفته می‌شود
     const { jalaliYearBounds } = await import('../../utils/calendarDate.js');
@@ -1152,9 +1153,18 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
 
     // 5. Clean up test vouchers
+    // v9.0.150 (TD-895): نخست ردیف سال آزمون در fiscal_periods برداشته می‌شود؛ پیش‌تر کلید خارجی closing_voucher_id حذف
+    // سند اختتامیه را رد می‌کرد، سال بسته می‌ماند و آزمون دیگری که در همان سال سند می‌زد (TD-324، سال ۱۴۲۰) رد می‌شد.
+    const { fiscalPeriods } = await import('../../db/schema.js');
     const testVoucherIds = [initialVoucher.id, ...closingResult.closingVouchers.map(v => v.id)];
+    await orm.delete(fiscalPeriods).where(eq(fiscalPeriods.fiscalYear, testYear));
     await cleanTestTableData('journal_voucher_items', 'voucher_id', testVoucherIds);
     await cleanTestTableData('journal_vouchers', 'id', testVoucherIds);
+    const [leftPeriod] = await orm.select({ status: fiscalPeriods.status }).from(fiscalPeriods).where(eq(fiscalPeriods.fiscalYear, testYear));
+    const leftVouchers = await orm.select({ id: journalVouchers.id }).from(journalVouchers).where(inArray(journalVouchers.id, testVoucherIds));
+    if (leftPeriod?.status === 'closed' || leftVouchers.length > 0) {
+      throw new Error(`cleanup left fiscal year ${testYear} ${leftPeriod?.status ?? 'without a row'} and ${leftVouchers.length} of its test vouchers`);
+    }
 
     results.push(makeTestCase({
       id: 'reg_fiscal_year_isolation_and_calendar_td_141_142',
@@ -1493,7 +1503,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const importResult = await ItemCatalogService.processUnifiedImport(
       rawRows,
       'raw_material',
-      { user: { username: 'تستر اکسل' } }
+      { user: { username: 'تستر اکسل' } },
+      ALL_ITEM_IMPORT_PERMISSIONS
     );
 
     if (importResult.createdCount !== 1) {
@@ -4381,7 +4392,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const tStart = Date.now();
     const createdVoucherIds: number[] = [];
     try {
-      // v9.0.150 (TD-543): a year closes only after its end; past years inside the test's own schema
+      // v9.0.161 (TD-543): a year closes only after its end; past years inside the test's own schema
       const { inFiscalSandbox } = await import('../regression/fiscalClosingTests.js');
       await inFiscalSandbox(async () => {
       const { FiscalYearService } = await import('../../services/accounting/fiscalYear.service.js');
@@ -4394,7 +4405,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const revAccount = allAccounts.find(a => a.code === '6001') || allAccounts.find(a => a.accountType === 'revenue');
       const assetAccount = allAccounts.find(a => a.code === '1101') || allAccounts.find(a => a.accountType === 'asset');
       if (!revAccount || !assetAccount) throw new Error('سرفصل‌های لازم آزمون یافت نشد');
-      // v9.0.150 (TD-543): سال‌های گذشته در اسکیمای خود آزمون؛ سال B که بسته می‌شود پیش از سال‌های A و C است
+      // v9.0.161 (TD-543): سال‌های گذشته در اسکیمای خود آزمون؛ سال B که بسته می‌شود پیش از سال‌های A و C است
       const baseYear = 1393;
       const voucher = (year: number, amount: number, extra: Record<string, unknown> = {}) => ({
         date: normalizeDateToIso(`${year}-06-15`) as string,
@@ -10543,7 +10554,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR a (v9.0.115 on): accounting reports and lists in the UI (TD-565 ...)
   const { runAccountingReportsTests } = await import('../regression/accountingReportsTests.js');
   results.push(...await runAccountingReportsTests(shouldRun));
-  // Package 3 PR b (v9.0.148 on): fiscal-year closing and reopening (TD-545 ...)
+  // Package 3 PR b (v9.0.159 on): fiscal-year closing and reopening (TD-545 ...)
   const { runFiscalClosingTests } = await import('../regression/fiscalClosingTests.js');
   results.push(...await runFiscalClosingTests(shouldRun));
   const { runFiscalYearOrderTests } = await import('../regression/fiscalYearOrderTests.js');
@@ -10592,6 +10603,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v9.0.112 (TD-490): warehouse deactivation lock, last active warehouse and reactivation
   const { runWarehouseDeactivationTests } = await import('../regression/warehouseDeactivationTests.js');
   results.push(...await runWarehouseDeactivationTests(shouldRun));
+
+  // Package 5 PR A (v9.0.152+): Excel import / export of items and the pricing quick import
+  const { runItemExcelImportTests } = await import('../regression/itemExcelImportTests.js');
+  results.push(...await runItemExcelImportTests(shouldRun));
 
   return results;
 }

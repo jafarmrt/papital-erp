@@ -98,7 +98,7 @@ export class FiscalPeriodService {
   }
 
   /**
-   * v9.0.150 (TD-543): شروع بازگشایی سال: ردیف سال را FOR UPDATE قفل می‌کند؛ سالی که بسته نیست ۴۰۹ می‌گیرد. وضعیت پیش از
+   * v9.0.161 (TD-543): شروع بازگشایی سال: ردیف سال را FOR UPDATE قفل می‌کند؛ سالی که بسته نیست ۴۰۹ می‌گیرد. وضعیت پیش از
    * بازگشایی برای ممیزی برمی‌گردد.
    */
   static async lockForReopen(tx: DbExecutor, year: number): Promise<{ closedAt: string | null; closedBy: string | null; closingVoucherId: number | null }> {
@@ -113,7 +113,7 @@ export class FiscalPeriodService {
     return { closedAt: row.closedAt ?? null, closedBy: row.closedBy ?? null, closingVoucherId: row.closingVoucherId ?? null };
   }
 
-  /** v9.0.150 (TD-543): پایان بازگشایی سال (در همان تراکنش lockForReopen) */
+  /** v9.0.161 (TD-543): پایان بازگشایی سال (در همان تراکنش lockForReopen) */
   static async markOpen(tx: DbExecutor, year: number): Promise<void> {
     await tx.update(fiscalPeriods)
       .set({ status: 'open', closedAt: null, closedBy: null, closingVoucherId: null })

@@ -84,11 +84,12 @@ router.get('/users/my-permissions', asyncHandler(async (req, res) => {
     const user = req.user;
     if (!user) return res.status(401).json({ error: 'غیر مجاز' });
 
-    if (user.role === 'admin') {
-      return res.json({ role: 'admin', permissions: [...PERMISSION_KEYS], isAdmin: true });
+    const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, user.role));
+    // v9.0.149 (TD-894): مدیر سیستم هم نام ذخیره‌شده نقشش را می‌گیرد تا نوار بالا و نمایه برچسبی از روی کد نسازند.
+    if (isSystemAdminRole(user.role)) {
+      return res.json({ role: user.role, roleName: roleRecord?.name || 'مدیر سیستم', permissions: [...PERMISSION_KEYS], isAdmin: true });
     }
 
-    const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, user.role));
     if (!roleRecord) {
       return res.json({ role: user.role, roleName: user.role, permissions: [], isAdmin: false });
     }
