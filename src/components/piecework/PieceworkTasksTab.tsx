@@ -2,6 +2,7 @@ import { Search, Plus, Award, Edit2, Trash2, FileSpreadsheet, Download, Upload, 
 import { PieceworkTask } from '../../types';
 import { formatPersianNumber } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 
 interface PieceworkTasksTabProps {
   tasksList: PieceworkTask[];
@@ -42,6 +43,8 @@ export function PieceworkTasksTab({
 }: PieceworkTasksTabProps) {
   const rial = useRialDisplay();
   const curLbl = rial.label;
+  // v9.0.286 (TD-805): تعریف، ویرایش، حذف، بازیابی و بارگذاری اکسل عناوین با «مدیریت عناوین کاری و نرخ‌های پایه»
+  const { canManageTasks } = usePieceworkPermissions();
 
   return (
     <div className="space-y-4">
@@ -95,13 +98,15 @@ export function PieceworkTasksTab({
             </button>
 
             {/* Add Task Button */}
-            <button
-              onClick={onOpenAddTaskModal}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus size={16} />
-              <span>افزودن عنوان کاری</span>
-            </button>
+            {canManageTasks && (
+              <button
+                onClick={onOpenAddTaskModal}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={16} />
+                <span>افزودن عنوان کاری</span>
+              </button>
+            )}
 
           </div>
         </div>
@@ -204,13 +209,15 @@ export function PieceworkTasksTab({
 
             {taskStatusFilter === 'active' && (
               <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
-                <button
-                  onClick={onOpenExcelModal}
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-2 cursor-pointer"
-                >
-                  <Upload size={16} />
-                  <span>بارگذاری از طریق فایل اکسل</span>
-                </button>
+                {canManageTasks && (
+                  <button
+                    onClick={onOpenExcelModal}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                  >
+                    <Upload size={16} />
+                    <span>بارگذاری از طریق فایل اکسل</span>
+                  </button>
+                )}
 
                 <button
                   onClick={onDownloadTemplate}
@@ -220,13 +227,15 @@ export function PieceworkTasksTab({
                   <span>دانلود قالب نمونه اکسل</span>
                 </button>
 
-                <button
-                  onClick={onOpenAddTaskModal}
-                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-2 cursor-pointer"
-                >
-                  <Plus size={16} />
-                  <span>تعریف دستی عنوان کاری</span>
-                </button>
+                {canManageTasks && (
+                  <button
+                    onClick={onOpenAddTaskModal}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                  >
+                    <Plus size={16} />
+                    <span>تعریف دستی عنوان کاری</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -288,7 +297,7 @@ export function PieceworkTasksTab({
                             <History size={15} />
                           </button>
 
-                          {!isDeleted ? (
+                          {!canManageTasks ? null : !isDeleted ? (
                             <>
                               <button
                                 onClick={() => onEditTask(task)}

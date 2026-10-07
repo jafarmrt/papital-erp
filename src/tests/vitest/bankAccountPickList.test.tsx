@@ -10,6 +10,10 @@ const fetchJson = vi.fn(async (url: string) => {
 vi.mock('../../api', () => ({ fetchJson: (url: string) => fetchJson(url) }));
 vi.mock('react-hot-toast', () => { const toast = { error: vi.fn(), success: vi.fn() }; return { default: toast, toast }; });
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: () => false }));
+// v9.0.286 (TD-805): the payroll buttons follow their keys; this test grants all of them
+vi.mock('../../hooks/usePieceworkPermissions', () => ({
+  usePieceworkPermissions: () => ({ canManageTasks: true, canLog: true, canIssuePayroll: true, canPay: true }),
+}));
 
 import { PayrollPaymentModal } from '../../components/piecework/PayrollPaymentModal';
 import { InvoiceSettlementModal } from '../../components/invoices/InvoiceSettlementModal';

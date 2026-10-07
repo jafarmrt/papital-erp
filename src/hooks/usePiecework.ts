@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, FormEvent } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { fetchJson } from '../api';
 import { useAuth } from '../contexts/AuthContext';
+import { usePieceworkPermissions } from './usePieceworkPermissions';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import {
@@ -47,12 +48,8 @@ export function usePiecework() {
     (Array.isArray(userPermissions?.permissions) &&
       READ_PERMISSIONS.payrolls.some(p => userPermissions.permissions.includes(p)))
   );
-  // حوزه H (TD-300): نرخ دستی کارکرد فقط برای مدیر پرسنل یا مدیر تعرفه‌ها (همان قاعده سرور)
-  const canSetLogRate = Boolean(
-    userPermissions?.isAdmin ||
-    (Array.isArray(userPermissions?.permissions) &&
-      ['personnel.manage', 'piecework.manage_tasks'].some(p => userPermissions.permissions.includes(p)))
-  );
+  // حوزه H (TD-300): نرخ دستی کارکرد فقط برای مدیر تعرفه‌ها (همان قاعده سرور، در ثبت و ویرایش؛ v9.0.286، TD-805)
+  const { canManageTasks: canSetLogRate } = usePieceworkPermissions();
 
   // Core Data Lists
   const [personnelList, setPersonnelList] = useState<Personnel[]>([]);

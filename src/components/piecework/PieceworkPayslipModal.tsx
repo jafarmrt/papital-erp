@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { X, FileText, Printer } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
 import { formatQuantityOrTime, formatPersianDate, formatPersianNumber } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { PayrollPaymentModal } from './PayrollPaymentModal';
 import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable';
+
+type PaymentTarget = NonNullable<ComponentProps<typeof PayrollPaymentModal>['payroll']>;
 
 interface PieceworkPayslipModalProps {
   viewingPayroll: PieceworkPayroll | null;
@@ -27,7 +30,9 @@ export function PieceworkPayslipModal({
   const rial = useRialDisplay();
   const curLbl = rial.label;
   // V10-4.4: مودال پرداخت خزانه‌ای
-  const [paymentTarget, setPaymentTarget] = useState<{ id: number; payrollNumber: string; netPayable: number | string } | null>(null);
+  const [paymentTarget, setPaymentTarget] = useState<PaymentTarget | null>(null);
+  // v9.0.286 (TD-805): تأیید و ابطال فیش با «محاسبه و صدور فیش حقوقی»، پرداخت با «پرداخت و ابطال پرداخت فیش»
+  const { canIssuePayroll, canPay } = usePieceworkPermissions();
   if (!viewingPayroll) return null;
 
   return (
@@ -41,7 +46,7 @@ export function PieceworkPayslipModal({
           </div>
           <div className="flex items-center gap-2">
             {/* v9.0.269 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود */}
-            {!readOnly && viewingPayroll.status === 'draft' && (
+            {!readOnly && canIssuePayroll && viewingPayroll.status === 'draft' && (
               <button
                 onClick={() => onUpdateStatus(viewingPayroll.id, 'approved')}
                 className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer"
@@ -49,14 +54,17 @@ export function PieceworkPayslipModal({
                 تأیید فیش
               </button>
             )}
-            {!readOnly && isPayablePayrollStatus(viewingPayroll.status) && (
+            {!readOnly && canPay && isPayablePayrollStatus(viewingPayroll.status) && (
               <button
                 onClick={() => {
                   // V10-4.4: پرداخت فقط از مودال خزانه‌ای
+                  // v9.0.288 (TD-814): پرداخت‌شده و وضعیت هم می‌رود تا فرم همان مانده فیش را بگیرد، نه کل خالص
                   setPaymentTarget({
                     id: viewingPayroll.id,
                     payrollNumber: viewingPayroll.payrollNumber,
-                    netPayable: viewingPayroll.netPayable
+                    netPayable: viewingPayroll.netPayable,
+                    paidAmount: viewingPayroll.paidAmount,
+                    status: viewingPayroll.status
                   });
                 }}
                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer"
@@ -71,7 +79,7 @@ export function PieceworkPayslipModal({
               <Printer className="w-4 h-4" />
               <span>پرینت فیش</span>
             </button>
-            {!readOnly && (
+            {!readOnly && canIssuePayroll && (
               <button
                 onClick={() => onDeletePayroll(viewingPayroll.id)}
                 className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white rounded-xl text-xs font-bold cursor-pointer"

@@ -6,6 +6,7 @@ import type { BankAccountOption } from '../../types';
 import { getTodayJalaliDate, extractDateString, formatPersianPrice } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
 import { PayrollPaymentHistory } from './PayrollPaymentHistory';
+import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -33,6 +34,8 @@ const METHOD_OPTIONS = [
 ] as const;
 
 export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPaymentModalProps) {
+  // v9.0.286 (TD-805): ثبت و ابطال پرداخت با «پرداخت و ابطال پرداخت فیش»؛ دیگر خوانندگان فیش فقط سابقه را می‌بینند
+  const { canPay } = usePieceworkPermissions();
   const [bankAccounts, setBankAccounts] = useState<BankAccountOption[]>([]);
   const [previousPayments, setPreviousPayments] = useState<any[]>([]);
   const [loadingBanks, setLoadingBanks] = useState(false);
@@ -57,14 +60,16 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
   useEffect(() => {
     if (!payroll) return;
     let controller = new AbortController();
-    setLoadingBanks(true);
-    // v9.0.97 (TD-505، ت۷): فهرست انتخاب، بی شماره حساب و مانده
-    fetchJson<{ data?: BankAccountOption[] } | BankAccountOption[]>('/accounting/bank-accounts/options', { signal: controller.signal })
-      .then((res) => {
-        setBankAccounts(Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []));
-      })
-      .catch(() => toast.error('خطا در دریافت فهرست حساب‌های خزانه'))
-      .finally(() => setLoadingBanks(false));
+    if (canPay) {
+      setLoadingBanks(true);
+      // v9.0.97 (TD-505، ت۷): فهرست انتخاب، بی شماره حساب و مانده
+      fetchJson<{ data?: BankAccountOption[] } | BankAccountOption[]>('/accounting/bank-accounts/options', { signal: controller.signal })
+        .then((res) => {
+          setBankAccounts(Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []));
+        })
+        .catch(() => toast.error('خطا در دریافت فهرست حساب‌های خزانه'))
+        .finally(() => setLoadingBanks(false));
+    }
 
     // دریافت سوابق پرداخت‌های این فیش
     setLoadingPayments(true);
@@ -85,7 +90,7 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
     setShowHistory(rem <= 0);
 
     return () => controller.abort();
-  }, [payroll]);
+  }, [payroll, canPay]);
 
   const selectedBank = useMemo(
     () => bankAccounts.find(b => String(b.id) === bankAccountId),
@@ -197,130 +202,139 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
               payments={previousPayments}
               loading={loadingPayments}
               initiallyOpen={showHistory}
+              canVoid={canPay}
               onVoided={() => { onPaid?.(); onClose(); }}
             />
 
-            {/* فیلد مبلغ پرداختی این نوبت */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-bold text-slate-700">
-                  مبلغ پرداختی این نوبت (ریال) <span className="text-red-500">*</span>
-                </label>
-                {payAmount !== remainingPayable && (
-                  <button
-                    type="button"
-                    onClick={() => setPayAmount(remainingPayable)}
-                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+            {canPay ? (
+              <>
+                {/* فیلد مبلغ پرداختی این نوبت */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700">
+                      مبلغ پرداختی این نوبت (ریال) <span className="text-red-500">*</span>
+                    </label>
+                    {payAmount !== remainingPayable && (
+                      <button
+                        type="button"
+                        onClick={() => setPayAmount(remainingPayable)}
+                        className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                      >
+                        تسویه کل مانده
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="number"
+                    min="1"
+                    max={remainingPayable}
+                    value={payAmount || ''}
+                    onChange={(e) => setPayAmount(Number(e.target.value) || 0)}
+                    placeholder="مبلغ پرداختی..."
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {/* پیش‌بینی وضعیت پس از پرداخت */}
+                  <div className="mt-1.5 text-[11px] font-bold">
+                    {payAmount > remainingPayable ? (
+                      <p className="text-rose-600 flex items-center gap-1">
+                        <AlertCircle size={12} />
+                        مبلغ پرداختی از مانده فیش بیشتر است!
+                      </p>
+                    ) : isFullSettlement ? (
+                      <p className="text-emerald-700 flex items-center gap-1">
+                        <CheckCircle2 size={12} />
+                        وضعیت پس از ثبت: تسویه کامل فیش (پرداخت‌شده)
+                      </p>
+                    ) : (
+                      <p className="text-amber-700 flex items-center gap-1">
+                        <AlertCircle size={12} />
+                        وضعیت پس از ثبت: پرداخت جزئی — مانده فیش: {formatPersianPrice(remainingAfterThis)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    حساب بانکی / صندوق مبدا <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={bankAccountId}
+                    onChange={(e) => setBankAccountId(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    تسویه کل مانده
-                  </button>
-                )}
-              </div>
-              <input
-                type="number"
-                min="1"
-                max={remainingPayable}
-                value={payAmount || ''}
-                onChange={(e) => setPayAmount(Number(e.target.value) || 0)}
-                placeholder="مبلغ پرداختی..."
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 bg-white outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              {/* پیش‌بینی وضعیت پس از پرداخت */}
-              <div className="mt-1.5 text-[11px] font-bold">
-                {payAmount > remainingPayable ? (
-                  <p className="text-rose-600 flex items-center gap-1">
-                    <AlertCircle size={12} />
-                    مبلغ پرداختی از مانده فیش بیشتر است!
-                  </p>
-                ) : isFullSettlement ? (
-                  <p className="text-emerald-700 flex items-center gap-1">
-                    <CheckCircle2 size={12} />
-                    وضعیت پس از ثبت: تسویه کامل فیش (پرداخت‌شده)
-                  </p>
-                ) : (
-                  <p className="text-amber-700 flex items-center gap-1">
-                    <AlertCircle size={12} />
-                    وضعیت پس از ثبت: پرداخت جزئی — مانده فیش: {formatPersianPrice(remainingAfterThis)}
-                  </p>
-                )}
-              </div>
-            </div>
+                    <option value="">{loadingBanks ? 'در حال بارگذاری...' : '-- انتخاب حساب --'}</option>
+                    {bankAccounts.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {b.title}{b.bankName ? ` (${b.bankName})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {!loadingBanks && bankAccounts.length === 0 && (
+                    <p className="text-[10px] text-rose-500 mt-1">هیچ حساب خزانه‌ای یافت نشد؛ ابتدا در بخش حسابداری ← خزانه یک حساب تعریف کنید.</p>
+                  )}
+                </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                حساب بانکی / صندوق مبدا <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={bankAccountId}
-                onChange={(e) => setBankAccountId(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">{loadingBanks ? 'در حال بارگذاری...' : '-- انتخاب حساب --'}</option>
-                {bankAccounts.map(b => (
-                  <option key={b.id} value={b.id}>
-                    {b.title}{b.bankName ? ` (${b.bankName})` : ''}
-                  </option>
-                ))}
-              </select>
-              {!loadingBanks && bankAccounts.length === 0 && (
-                <p className="text-[10px] text-rose-500 mt-1">هیچ حساب خزانه‌ای یافت نشد؛ ابتدا در بخش حسابداری ← خزانه یک حساب تعریف کنید.</p>
-              )}
-            </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">روش پرداخت</label>
+                    <select
+                      value={method}
+                      onChange={(e) => setMethod(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-2 py-2 text-xs bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {METHOD_OPTIONS.map(m => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ پرداخت</label>
+                    <DatePicker
+                      value={paymentDate}
+                      onChange={(d: any) => setPaymentDate(extractDateString(d))}
+                      calendar={persian}
+                      locale={persian_fa}
+                      calendarPosition="bottom-right"
+                      inputClass="w-full border border-slate-300 rounded-xl px-2 py-2 text-xs text-center bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                      containerClassName="w-full"
+                    />
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">روش پرداخت</label>
-                <select
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-2 py-2 text-xs bg-white outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {METHOD_OPTIONS.map(m => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ پرداخت</label>
-                <DatePicker
-                  value={paymentDate}
-                  onChange={(d: any) => setPaymentDate(extractDateString(d))}
-                  calendar={persian}
-                  locale={persian_fa}
-                  calendarPosition="bottom-right"
-                  inputClass="w-full border border-slate-300 rounded-xl px-2 py-2 text-xs text-center bg-white outline-none focus:ring-2 focus:ring-blue-500"
-                  containerClassName="w-full"
-                />
-              </div>
-            </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">شماره مرجع / پیگیری واریز</label>
+                  <input
+                    type="text"
+                    placeholder="شماره سند انتقال، چک یا رسید"
+                    value={paymentReference}
+                    onChange={(e) => setPaymentReference(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-left bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                    dir="ltr"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">شماره مرجع / پیگیری واریز</label>
-              <input
-                type="text"
-                placeholder="شماره سند انتقال، چک یا رسید"
-                value={paymentReference}
-                onChange={(e) => setPaymentReference(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-left bg-white outline-none focus:ring-2 focus:ring-blue-500"
-                dir="ltr"
-              />
-            </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">توضیحات و بابت</label>
+                  <textarea
+                    rows={2}
+                    placeholder="توضیحات تکمیلی نوبت پرداخت..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">توضیحات و بابت</label>
-              <textarea
-                rows={2}
-                placeholder="توضیحات تکمیلی نوبت پرداخت..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              />
-            </div>
-
-            <p className="text-[10px] leading-relaxed text-slate-400 flex items-start gap-1.5">
-              <Landmark size={12} className="shrink-0 mt-0.5" />
-              با ثبت پرداخت، تراکنش خزانه و سند حسابداری تسویه به‌صورت اتمیک صادر شده و موجودی بانک و مانده قابل پرداخت فیش به‌روزرسانی می‌گردند.
-            </p>
+                <p className="text-[10px] leading-relaxed text-slate-400 flex items-start gap-1.5">
+                  <Landmark size={12} className="shrink-0 mt-0.5" />
+                  با ثبت پرداخت، تراکنش خزانه و سند حسابداری تسویه به‌صورت اتمیک صادر شده و موجودی بانک و مانده قابل پرداخت فیش به‌روزرسانی می‌گردند.
+                </p>
+              </>
+            ) : (
+              <p className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] font-bold text-amber-800">
+                ثبت و ابطال پرداخت فیش مجوز «پرداخت و ابطال پرداخت فیش» را می‌خواهد.
+              </p>
+            )}
           </div>
 
           <div className="p-4 border-t border-slate-200 flex justify-end gap-2.5 bg-slate-50 shrink-0">
@@ -331,13 +345,15 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
             >
               انصراف
             </button>
-            <button
-              type="submit"
-              disabled={isSaving || !bankAccountId || payAmount <= 0 || payAmount > remainingPayable}
-              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold disabled:opacity-50 text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-            >
-              {isSaving ? 'در حال ثبت...' : isFullSettlement ? 'ثبت تسویه کامل' : 'ثبت پرداخت مرحله‌ای'}
-            </button>
+            {canPay && (
+              <button
+                type="submit"
+                disabled={isSaving || !bankAccountId || payAmount <= 0 || payAmount > remainingPayable}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold disabled:opacity-50 text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+              >
+                {isSaving ? 'در حال ثبت...' : isFullSettlement ? 'ثبت تسویه کامل' : 'ثبت پرداخت مرحله‌ای'}
+              </button>
+            )}
           </div>
         </form>
       </div>

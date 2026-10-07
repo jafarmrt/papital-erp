@@ -29,7 +29,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'projects.view', 'projects.create', 'projects.edit', 'projects.delete', 'workflow.view', 'workflow.approve',
       'workflow.manage', 'events.view', 'events.manage', 'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all',
       'personnel.view', 'personnel.manage', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll',
-      'personnel.view_sensitive', 'payroll.view_sensitive', 'pending_materials.view', 'pending_materials.approve', 'pending_materials.delete', 'procurement.view',
+      'piecework.pay', 'personnel.view_sensitive', 'payroll.view_sensitive', 'pending_materials.view', 'pending_materials.approve', 'pending_materials.delete', 'procurement.view',
       'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve', 'accounting.view', 'accounting.vouchers',
       'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports', 'woocommerce.view', 'woocommerce.manage',
       'audit_logs.view', 'settings.manage',

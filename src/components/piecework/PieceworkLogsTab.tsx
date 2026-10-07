@@ -6,6 +6,7 @@ import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { formatQuantityOrTime, formatPersianDate, extractDateString } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 
 interface PieceworkLogsTabProps {
   logsList: PieceworkLog[];
@@ -52,6 +53,8 @@ export function PieceworkLogsTab({
 }: PieceworkLogsTabProps) {
   const rial = useRialDisplay();
   const curLbl = rial.label;
+  // v9.0.286 (TD-805): ثبت، ویرایش و حذف کارکرد با «ثبت و ویرایش کارکرد پرسنل»
+  const { canLog } = usePieceworkPermissions();
   return (
     <div className="space-y-4">
       {/* Filter Bar */}
@@ -68,13 +71,15 @@ export function PieceworkLogsTab({
             />
           </div>
 
-          <button
-            onClick={onOpenAddModal}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-          >
-            <Plus size={16} />
-            <span>ثبت کارکرد پرسنل</span>
-          </button>
+          {canLog && (
+            <button
+              onClick={onOpenAddModal}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <Plus size={16} />
+              <span>ثبت کارکرد پرسنل</span>
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
@@ -236,7 +241,7 @@ export function PieceworkLogsTab({
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          {isPending && (
+                          {isPending && canLog && (
                             <>
                               <button
                                 onClick={() => onEditLog(log)}
