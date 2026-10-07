@@ -12,6 +12,7 @@ import { UsersTab } from '../components/users/UsersTab';
 import { RolesTab } from '../components/users/RolesTab';
 import { UserFormModal } from '../components/users/UserFormModal';
 import { RoleFormModal } from '../components/users/RoleFormModal';
+import { roleDraftFromTemplate, type RoleDraft } from '../lib/permissions/roleTemplates';
 import {
   useUsersQuery,
   useRolesQuery,
@@ -64,6 +65,8 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
   // Role Modal State
   const [showRoleModal, setShowRoleModal] = React.useState(false);
   const [editingRole, setEditingRole] = React.useState<Role | null>(null);
+  // v9.0.117 (TD-526): پیش‌نویس نقش تازه از الگو
+  const [roleDraft, setRoleDraft] = React.useState<RoleDraft | null>(null);
   const [confirmRoleState, setConfirmRoleState] = React.useState<{
     isOpen: boolean;
     roleId: number;
@@ -218,10 +221,17 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
           totalCatalogPermsCount={totalCatalogPermsCount}
           onAddRole={() => {
             setEditingRole(null);
+            setRoleDraft(null);
+            setShowRoleModal(true);
+          }}
+          onAddRoleFromTemplate={(t) => {
+            setEditingRole(null);
+            setRoleDraft(roleDraftFromTemplate(t, rolesList.map((r: Role) => r.code), fullGrantor));
             setShowRoleModal(true);
           }}
           onEditRole={(r) => {
             setEditingRole(r);
+            setRoleDraft(null);
             setShowRoleModal(true);
           }}
           onDeleteRole={(roleId, roleName) => {
@@ -252,11 +262,13 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
         onClose={() => {
           setShowRoleModal(false);
           setEditingRole(null);
+          setRoleDraft(null);
         }}
         editingRole={editingRole}
         permCatalog={permCatalog}
         onSuccess={loadData}
         grantor={fullGrantor}
+        draft={roleDraft}
       />
 
       {/* CONFIRM DELETE USER */}

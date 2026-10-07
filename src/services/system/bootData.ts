@@ -1,4 +1,3 @@
-import { logger } from '../../middleware/logger.js';
 import { runMigrations } from '../../db/migrator.js';
 import { runSeedWithLock } from '../../db/seed.js';
 import { migratePlainPasswords } from '../../db/migratePlainPasswords.js';
@@ -16,11 +15,10 @@ export async function prepareDatabaseAtBoot(): Promise<void> {
   if (!migResult.success) {
     throw new Error(`Migration failed: ${migResult.errors.join(', ')}`);
   }
-  if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_SEED_IN_PRODUCTION === 'true') {
-    await runSeedWithLock();
-  } else {
-    logger.info('[Startup] Skipping seed in production (set ALLOW_SEED_IN_PRODUCTION=true to enable)');
-  }
+  // v9.0.117 (TD-526، تصمیم ت۶ بازنگری‌شده الف): داده پایه در هر محیط، تولید هم، فقط «درج آنچه نیست» (TD-591) و بی هیچ نقشی؛
+  // متغیر ALLOW_SEED_IN_PRODUCTION بازنشسته شد
+  const seed = await runSeedWithLock();
+  if (!seed.success) throw new Error(`Base data seed failed: ${seed.message}`);
   await migratePlainPasswords();
   await WorkflowEngineService.seedDefaultWorkflows();
   await EventActionEngineService.seedDefaultRules();

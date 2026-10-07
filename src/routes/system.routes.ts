@@ -105,7 +105,6 @@ router.get('/system/env', requireSystemAdmin, asyncHandler(async (req, res) => {
     nodeVersion: process.version,
     flags: {
       ERP_ALLOW_TEST_CLEANUP: process.env.ERP_ALLOW_TEST_CLEANUP ? 'set' : 'not set',
-      ALLOW_SEED_IN_PRODUCTION: process.env.ALLOW_SEED_IN_PRODUCTION ? 'set' : 'not set',
       DATABASE_URL: process.env.DATABASE_URL ? 'set' : 'not set',
       JWT_SECRET: process.env.JWT_SECRET ? 'set' : 'not set',
       ERP_SETUP_TOKEN: process.env.ERP_SETUP_TOKEN ? 'set' : 'not set'

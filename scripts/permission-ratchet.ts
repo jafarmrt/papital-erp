@@ -31,6 +31,12 @@ export const ROLE_CODES: readonly string[] = [
 /** The one file allowed to spell the system admin role */
 export const CATALOG_FILE = 'src/lib/permissions/permissionCatalog.ts';
 
+/**
+ * v9.0.117 (TD-526): role templates are data, not checks. Their codes are only suggested codes for a role an admin creates
+ * from a template, so they count neither as role-code literals nor as server checks of permission keys.
+ */
+export const ROLE_TEMPLATES_FILE = 'src/lib/permissions/roleTemplates.ts';
+
 /** Literals shaped like permission keys that are something else: domain event types and table.column references */
 export const NOT_PERMISSION_LITERALS: readonly string[] = [
   'inventory.stock_in', 'inventory.stock_out', 'inventory.stock_alert', 'inventory.transfer',
@@ -40,7 +46,7 @@ export const NOT_PERMISSION_LITERALS: readonly string[] = [
 
 /** Server code: a key appearing here (outside the catalog itself and the seed data) is checked by the server */
 const SERVER_PATH = /^src\/(routes|services|middleware|lib|db|server\.ts|app\.ts)/;
-const NOT_A_CHECK = new Set([CATALOG_FILE, 'src/db/seed.ts']);
+const NOT_A_CHECK = new Set([CATALOG_FILE, ROLE_TEMPLATES_FILE, 'src/db/seed.ts']);
 
 export interface SourceLiteral {
   file: string;
@@ -97,7 +103,7 @@ export function countRoleCodeLiterals(literals: readonly SourceLiteral[]): Recor
   const codes = new Set(ROLE_CODES);
   const counts: Record<string, number> = {};
   for (const l of literals) {
-    if (!codes.has(l.text) || l.isSystemAdminConstant) continue;
+    if (!codes.has(l.text) || l.isSystemAdminConstant || l.file === ROLE_TEMPLATES_FILE) continue;
     counts[l.file] = (counts[l.file] ?? 0) + 1;
   }
   return Object.fromEntries(Object.entries(counts).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));

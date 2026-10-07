@@ -39,7 +39,7 @@ spec:
         emptyDir: {}
       containers:
       - name: erp
-        image: registry.example.com/erp:v9.0.116
+        image: registry.example.com/erp:v9.0.117
         ports:
         - containerPort: 3000
         volumeMounts:
@@ -51,7 +51,7 @@ spec:
         - name: NODE_ENV
           value: "production"
         - name: APP_VERSION
-          value: "9.0.116"
+          value: "9.0.117"
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
@@ -86,8 +86,6 @@ spec:
             secretKeyRef:
               name: erp-secrets
               key: erp-secrets-key
-        - name: ALLOW_SEED_IN_PRODUCTION
-          value: "false"
         # ... سایر env vars طبق .env.production.example
         resources:
           requests:

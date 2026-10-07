@@ -5,8 +5,6 @@ import { Role, PermissionCategory } from '../../types';
 import {
   ShieldCheck,
   Search,
-  Sparkles,
-  Layers,
   ChevronDown,
   ChevronUp,
   Info,
@@ -20,78 +18,10 @@ import {
   withoutPermission,
 } from '../../lib/permissions/permissionCatalog';
 import { canGrantPermission, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
+import type { RoleDraft } from '../../lib/permissions/roleTemplates';
 
 /** عنوان فارسی یک کلید مجوز از کاتالوگ مشترک، وگرنه خود کلید */
 const permissionTitle = (key: string) => permissionDefinition(key)?.title ?? key;
-
-export const ROLE_PRESETS = [
-  {
-    name: 'مدیر ارشد مالی',
-    code: 'cfo_accountant',
-    description: 'دسترسی کامل به تمامی بخش‌های مالی و حسابداری، کدینگ حساب‌ها، اسناد دوبل، خزانه‌داری، چک صیادی و صورت‌های مالی',
-    permissions: [
-      'accounting.view', 'accounting.vouchers', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
-      'products.view', 'products.edit_price', 'documents.view', 'documents.create', 'documents.finalize', 'documents.edit', 'documents.delete',
-      'customers.view', 'customers.manage', 'personnel.view', 'piecework.view', 'piecework.payroll', 'reports.view', 'audit_logs.view'
-    ]
-  },
-  {
-    name: 'حسابدار و مسئول اسناد مالی',
-    code: 'accountant',
-    description: 'مدیریت اسناد دوبل حسابداری، ثبت دفاتر، کدینگ، فاکتورهای خرید/فروش و تراز آزمایشی',
-    permissions: [
-      'accounting.view', 'accounting.vouchers', 'accounting.coa', 'accounting.reports',
-      'documents.view', 'documents.create', 'documents.finalize', 'documents.edit', 'products.view', 'products.edit_price',
-      'customers.view', 'reports.view'
-    ]
-  },
-  {
-    name: 'خزانه‌دار و مسئول صندوق و چک',
-    code: 'treasurer',
-    description: 'مدیریت حساب‌های بانکی، تراکنش‌های خزانه‌داری (دریافت و پرداخت) و دفتر چک‌های صیادی',
-    permissions: [
-      'accounting.view', 'accounting.treasury', 'accounting.cheques',
-      'documents.view', 'customers.view'
-    ]
-  },
-  {
-    name: 'مدیر تولید و کارگاه',
-    code: 'production_manager',
-    description: 'دسترسی کامل به پروژه‌ها، گانت، کانبان، کنترل مواد اولیه، گزارش کارهای روزانه و کار پرکیسی',
-    permissions: [
-      'projects.view', 'projects.create', 'projects.edit', 'products.view', 
-      'warehouse.view', 'daily_logs.view', 'daily_logs.create', 'pending_materials.view',
-      'piecework.view', 'piecework.log'
-    ]
-  },
-  {
-    name: 'سرپرست انبار و اقلام',
-    code: 'warehouse_keeper',
-    description: 'مدیریت موجودی، ثبت رسید و حواله، جابجایی، انبارگردانی و تایید مواد اولیه در انتظار',
-    permissions: [
-      'warehouse.view', 'warehouse.in', 'warehouse.out', 'warehouse.transfer',
-      'products.view', 'products.create', 'products.edit', 'audit.view', 'audit.create', 'audit.apply',
-      'pending_materials.view', 'pending_materials.approve', 'documents.view', 'documents.finalize'
-    ]
-  },
-  {
-    name: 'کارشناس فروش و ارتباط با مشتری',
-    code: 'sales_agent',
-    description: 'مدیریت مشتریان، پرونده‌های فروش، پیش‌فاکتورها و مشاهده سفارشات ووکامرس',
-    permissions: [
-      'crm.view', 'crm.manage', 'customers.view', 'customers.manage', 
-      'documents.view', 'documents.create', 'woocommerce.view'
-    ]
-  },
-  {
-    name: 'اپراتور و ثبت کارکرد کارگاه',
-    code: 'workshop_operator',
-    description: 'ثبت کارکرد پرکیسی پرسنل و درج گزارش کار روزانه کارگاه',
-    permissions: [
-      'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create'
-    ]
-  }
-];
 
 interface RoleFormModalProps {
   isOpen: boolean;
@@ -101,6 +31,8 @@ interface RoleFormModalProps {
   onSuccess: () => void;
   /** v9.0.113 (TD-525، ت۳): کاربر غیرمدیر فقط مجوزهایی را تیک می‌زند که خودش دارد (همان قاعده سرور) */
   grantor?: GrantorPermissions;
+  /** v9.0.117 (TD-526): نقش تازه از یک الگو («ساخت نقش از الگو» در زبانه نقش‌ها)؛ فرم با همین پر می‌شود و ویرایش‌پذیر است */
+  draft?: RoleDraft | null;
 }
 
 export const RoleFormModal: React.FC<RoleFormModalProps> = ({
@@ -110,6 +42,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   permCatalog,
   onSuccess,
   grantor = 'all',
+  draft = null,
 }) => {
   const [roleForm, setRoleForm] = useState<{
     name: string;
@@ -149,14 +82,14 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
     } else {
       setAddedOnOpen([]);
       setRoleForm({
-        name: '',
-        code: '',
-        description: '',
-        permissions: [],
+        name: draft?.name ?? '',
+        code: draft?.code ?? '',
+        description: draft?.description ?? '',
+        permissions: draft ? [...draft.permissions] : [],
         isSystem: 0,
       });
     }
-  }, [editingRole, isOpen]);
+  }, [editingRole, isOpen, draft]);
 
   // Filtered Permission Catalog inside Modal
   const filteredCatalog = useMemo(() => {
@@ -210,17 +143,6 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const applyRolePreset = (preset: typeof ROLE_PRESETS[0]) => {
-    setRoleForm((prev) => ({
-      ...prev,
-      name: prev.name || preset.name,
-      code: prev.code || preset.code,
-      description: prev.description || preset.description,
-      permissions: withRequiredPermissions(grantable(preset.permissions, prev.permissions)),
-    }));
-    toast.success(`قالب نقش "${preset.name}" با موفقیت جاگذاری شد`);
   };
 
   // v9.0.113 (TD-525، ت۳): از فهرست‌های گروهی فقط کلیدهایی افزوده می‌شوند که کاربر جاری دارد
@@ -337,27 +259,6 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
               />
             </div>
 
-            {/* Quick Presets row */}
-            {roleForm.code !== SYSTEM_ADMIN_ROLE && (
-              <div className="pt-2 border-t">
-                <span className="text-[11px] font-bold text-slate-600 block mb-1.5 flex items-center gap-1">
-                  <Sparkles size={13} className="text-amber-500" />
-                  قالب‌های آماده نقش برای بارگذاری سریع:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {ROLE_PRESETS.map((p, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => applyRolePreset(p)}
-                      className="text-[11px] px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-md transition-colors flex items-center gap-1"
-                    >
-                      <Layers size={12} /> {p.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* PERMISSION MATRIX SEARCH & ACTIONS */}

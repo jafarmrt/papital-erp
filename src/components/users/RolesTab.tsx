@@ -1,7 +1,8 @@
 import React from 'react';
 import { Role, User } from '../../types';
-import { Plus, Trash2, Edit2, Users, Check, ShieldCheck } from 'lucide-react';
-import { isSystemAdminRole } from '../../lib/permissions/permissionCatalog';
+import { Plus, Trash2, Edit2, Users, Check, ShieldCheck, Layers } from 'lucide-react';
+import { isSystemAdminRole, withRequiredPermissions } from '../../lib/permissions/permissionCatalog';
+import { ROLE_TEMPLATES, type RoleTemplate } from '../../lib/permissions/roleTemplates';
 
 interface RolesTabProps {
   rolesList: Role[];
@@ -13,6 +14,8 @@ interface RolesTabProps {
   /** v9.0.113 (TD-525، ت۳): دارنده «مدیریت نقش‌ها»؛ نقش خودش را (اگر مدیر سیستم نیست) ویرایش نمی‌کند */
   canManage?: boolean;
   ownRoleCode?: string;
+  /** v9.0.117 (TD-526): «ساخت نقش از الگو»؛ فرم نقش تازه با نام و تیک‌های الگو باز می‌شود */
+  onAddRoleFromTemplate?: (template: RoleTemplate) => void;
 }
 
 export const RolesTab: React.FC<RolesTabProps> = ({
@@ -24,7 +27,9 @@ export const RolesTab: React.FC<RolesTabProps> = ({
   onDeleteRole,
   canManage = true,
   ownRoleCode,
+  onAddRoleFromTemplate,
 }) => {
+  const [showTemplates, setShowTemplates] = React.useState(false);
   const isOwnRole = (code: string) => Boolean(ownRoleCode) && !isSystemAdminRole(ownRoleCode) && code === ownRoleCode;
   return (
     <div className="space-y-6">
@@ -38,14 +43,50 @@ export const RolesTab: React.FC<RolesTabProps> = ({
           </p>
         </div>
         {canManage && (
-        <button
-          onClick={onAddRole}
-          className="px-3.5 py-2 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1.5 shadow-sm shrink-0"
-        >
-          <Plus size={16} /> تعریف نقش جدید
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {onAddRoleFromTemplate && (
+          <button
+            onClick={() => setShowTemplates((v) => !v)}
+            aria-expanded={showTemplates}
+            className="px-3.5 py-2 text-xs font-medium bg-amber-50 text-amber-900 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-1.5"
+          >
+            <Layers size={16} /> ساخت نقش از الگو
+          </button>
+          )}
+          <button
+            onClick={onAddRole}
+            className="px-3.5 py-2 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1.5 shadow-sm"
+          >
+            <Plus size={16} /> تعریف نقش جدید
+          </button>
+        </div>
         )}
       </div>
+
+      {canManage && onAddRoleFromTemplate && showTemplates && (
+        <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-4 space-y-3">
+          <p className="text-xs text-slate-600">
+            الگو فقط نام و تیک‌ها را پیشنهاد می‌دهد؛ پیش از ذخیره آن‌ها را ویرایش کنید. نقش ساخته‌شده مثل هر نقش دیگری ویرایش و حذف می‌شود.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {ROLE_TEMPLATES.map((t) => (
+              <button
+                key={t.code}
+                type="button"
+                onClick={() => {
+                  setShowTemplates(false);
+                  onAddRoleFromTemplate(t);
+                }}
+                className="text-right bg-white border rounded-lg p-3 hover:border-amber-400 hover:shadow-sm transition-all"
+              >
+                <span className="block font-bold text-xs text-slate-800">{t.name}</span>
+                <span className="block text-[11px] text-slate-500 mt-1 line-clamp-2">{t.description}</span>
+                <span className="block text-[11px] text-amber-800 mt-1.5">{withRequiredPermissions(t.permissions).length} مجوز</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {(!Array.isArray(rolesList) || rolesList.length === 0) && (
