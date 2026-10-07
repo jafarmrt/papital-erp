@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.155 — Voucher Row Amounts Read as Decimals
+- **Voucher Row Amounts (P3):** manual and correction voucher row debit, credit and rate go through `decimalInput`: Persian digits and separators are accepted, «0x10» and «1e3» are refused (TD-557, `reg_manual_voucher_row_amount_decimal_input_td_557`).
+
 ### v9.0.154 — Voucher Forms Send Each Row Currency and Rate
 - **Voucher Form Row Currency (P1, decision t7):** the manual voucher form, its edit and the correction form send and keep each row's currency and rate, take the voucher rate, balance by the server rule and offer only the treasury currencies; the routes refuse «TOMAN» (TD-564, `reg_manual_voucher_currency_list_td_564`).
 

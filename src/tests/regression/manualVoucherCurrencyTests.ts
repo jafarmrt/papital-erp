@@ -152,5 +152,42 @@ export async function runManualVoucherCurrencyTests(shouldRun: ShouldRun): Promi
     }));
   }
 
+  const amountId = 'reg_manual_voucher_row_amount_decimal_input_td_557';
+  if (shouldRun(amountId, 'td557', 'voucher', 'amount', 'package3')) {
+    await runCase(results, amountId, 'v9.0.155: manual voucher row amounts and rates are read as decimals: Persian digits and thousands separators are accepted, «0x10» and «1e3» are refused (TD-557)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const acc = await accountIdsByCode('1001', '4001');
+      const admin = await sandboxAdminClient();
+      const base = { date: await businessTodayIsoDate(), status: 'approved', description: 'TD-557 row amount' };
+      const vouchersBefore = (await orm.select({ id: journalVouchers.id }).from(journalVouchers)).length;
+
+      // B03-15 S11: «0x10» was stored as 16 and «1e3» as 1,000; «۱۰۰۰» was refused with «expected number, received NaN»
+      for (const text of ['0x10', '1e3', 'ده']) {
+        const res = await admin.post('/api/accounting/vouchers', { ...base, items: [{ accountId: acc['1001'], debit: text, credit: 0 }, { accountId: acc['4001'], debit: 0, credit: text }] });
+        if (res.status !== 400 || !String(res.body?.message ?? '').includes('مبلغ بدهکار باید عدد معتبر باشد')) problems.push(`amount «${text}»: ${res.status} ${String(res.body?.message ?? '').slice(0, 160)}, expected 400 naming the debit`);
+      }
+      const rate = await admin.post('/api/accounting/vouchers', { ...base, items: [{ accountId: acc['1001'], debit: '100', credit: 0, currency: 'USD', exchangeRate: '6e5' }, { accountId: acc['4001'], debit: 0, credit: '60000000' }] });
+      if (rate.status !== 400) problems.push(`rate «6e5»: ${rate.status}, expected 400`);
+      const vouchersAfterRefusals = (await orm.select({ id: journalVouchers.id }).from(journalVouchers)).length;
+      if (vouchersAfterRefusals !== vouchersBefore) problems.push(`${vouchersAfterRefusals - vouchersBefore} refused vouchers were stored`);
+
+      const persian = await admin.post('/api/accounting/vouchers', { ...base, items: [
+        { accountId: acc['1001'], debit: '۱۰۰٫۵', credit: '', currency: 'USD', exchangeRate: '۶۰۰٬۰۰۰' },
+        { accountId: acc['4001'], debit: 0, credit: '۶۰٬۳۰۰٬۰۰۰' },
+      ] });
+      if (persian.status !== 201) problems.push(`Persian digits: ${persian.status} ${JSON.stringify(persian.body).slice(0, 200)}, expected 201`);
+      else {
+        const rows = await orm.select({ debit: journalVoucherItems.debit, credit: journalVoucherItems.credit, rate: journalVoucherItems.exchangeRate })
+          .from(journalVoucherItems).where(and(eq(journalVoucherItems.voucherId, persian.body.id), eq(journalVoucherItems.isDeleted, 0)))
+          .orderBy(asc(journalVoucherItems.rowOrder));
+        const stored = rows.map(r => `${amountOf(r.debit)}/${amountOf(r.credit)}@${amountOf(r.rate)}`).join(',');
+        if (stored !== '100.5/0@600000,0/60300000@1') problems.push(`Persian digits stored as ${stored}`);
+      }
+
+      assertNoProblems(problems);
+      return '«0x10», «1e3», text and a «6e5» rate refused with a Persian message (nothing stored); «۱۰۰٫۵» at «۶۰۰٬۰۰۰» against «۶۰٬۳۰۰٬۰۰۰» stored as 100.5 at 600,000 and 60,300,000.';
+    }));
+  }
+
   return results;
 }

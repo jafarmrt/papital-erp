@@ -90,17 +90,24 @@ const manualVoucherCurrency = z.preprocess(
   z.enum(TREASURY_CURRENCIES, { message: 'ارز سند پشتیبانی نمی‌شود؛ یکی از ریال، دلار، یورو، درهم یا پوند را انتخاب کنید (مبلغ تومانی را به ریال وارد کنید)' }).optional(),
 );
 
+const voucherRowAmount = (label: string) => decimalInput(label).optional()
+  .transform(v => v ?? '0')
+  .refine(v => Number(v) >= 0, `${label} نمی‌تواند منفی باشد`);
+
 export const voucherItemSchema = z.object({
   accountId: z.coerce.number().int().positive('شناسه حساب الزامی و باید عدد مثبت باشد'),
   detailedType: z.enum(['none', 'customer', 'personnel', 'project', 'bank_account', 'other', 'supplier']).optional().default('none'),
   detailedId: z.coerce.number().int().positive().nullable().optional(),
   detailedName: z.string().optional(),
-  debit: z.coerce.number().min(0, 'مبلغ بدهکار نمی‌تواند منفی باشد').default(0),
-  credit: z.coerce.number().min(0, 'مبلغ بستانکار نمی‌تواند منفی باشد').default(0),
+  // v9.0.155 (TD-557، B03-15): مبلغ و نرخ ردیف با `decimalInput` (رقم فارسی و جداکننده هزارگان پذیرفته؛ «0x10» و «1e3» رد)،
+  // نه `z.coerce.number` که «0x10» را ۱۶ و «1e3» را ۱٬۰۰۰ می‌خواند و «۱۰۰۰» را با پیام انگلیسی NaN رد می‌کرد
+  debit: voucherRowAmount('مبلغ بدهکار'),
+  credit: voucherRowAmount('مبلغ بستانکار'),
   currency: manualVoucherCurrency,
-  exchangeRate: z.coerce.number().positive().optional(),
+  exchangeRate: decimalInput('نرخ تبدیل ردیف').optional()
+    .refine(v => v === undefined || Number(v) > 0, 'نرخ تبدیل ردیف باید بزرگتر از صفر باشد'),
   description: z.string().optional(),
-}).refine(it => (it.debit > 0 || it.credit > 0), {
+}).refine(it => (Number(it.debit) > 0 || Number(it.credit) > 0), {
   message: 'هر ردیف سند باید حداقل دارای مبلغ بدهکار یا بستانکار بزرگتر از صفر باشد'
 });
 
