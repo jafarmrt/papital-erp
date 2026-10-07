@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.206 — Journal Book Paged
+- **Journal Book (P3):** one page of rows per request, sent once; row numbers and the running balance continue from the start of the range and totals cover the whole range (TD-561).
+
 ### v9.0.205 — Party Statement Counts Only the Party's Own Rows
 - **Party Statement (P1):** rows belong to a party only by its own detailed type and id, or legacy rows without an id under its exact name; never another table's id or a longer name (TD-548).
 

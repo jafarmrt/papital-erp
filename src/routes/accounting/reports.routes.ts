@@ -112,14 +112,17 @@ router.get('/accounting/reports/parties', authorizePermission(...LEDGER_REPORT_K
 }));
 
 router.get('/accounting/reports/journal-book', authorizePermission('accounting.reports', 'accounting.view'), validate(journalBookQuerySchema), asyncHandler(async (req, res) => {
-  const { startDate, endDate, search, currency } = (req.query as ValidatedQuery<typeof journalBookQuerySchema>) || {};
+  const { startDate, endDate, search, currency, page, limit } = (req.query as ValidatedQuery<typeof journalBookQuerySchema>) || {};
   const data = await AccountingService.getJournalBook({
     startDate: startDate as string,
     endDate: endDate as string,
     search: search as string,
     currency: currency as string,
+    page,
+    limit,
   });
-  res.json({ report: data, ...data });
+  // v9.0.206 (TD-561): یک صفحه و یک بار؛ پیش‌تر کل بازه با `{ report: data, ...data }` دو بار فرستاده می‌شد
+  res.json(data);
 }));
 
 router.get('/accounting/reports/financial-ratios', authorizePermission('accounting.reports', 'accounting.view'), validate(financialRatiosQuerySchema), asyncHandler(async (req, res) => {

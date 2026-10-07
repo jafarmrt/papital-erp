@@ -24,6 +24,7 @@ import type { BalanceSheetReport, IncomeStatementReport, StatementRow } from '..
 import { accountSubtreeCondition } from './accountSubtree.js';
 import { yearEndClosingCutoff, yearEndClosingVoucherSql } from './yearEndClosingVouchers.js';
 import { accountCardHasFilter, type AccountCardReport } from '../../lib/accounting/accountCard.js';
+import { JOURNAL_BOOK_MAX_PAGE_SIZE, JOURNAL_BOOK_PAGE_SIZE, type JournalBookReport, type JournalBookRow } from '../../lib/accounting/journalBook.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 
 /** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
@@ -326,36 +327,9 @@ export class AccountingReportService {
     endDate?: string;
     search?: string;
     currency?: string;
-  }): Promise<{
-    items: {
-      rowNumber: number;
-      voucherId: number;
-      voucherNumber: number;
-      manualVoucherNumber?: string;
-      date: string;
-      voucherType: string;
-      accountCode: string;
-      accountName: string;
-      accountLevel: string;
-      detailedName?: string;
-      detailedType?: string;
-      currency?: string;
-      description: string;
-      debit: number;
-      credit: number;
-      /** v9.0.190 (TD-551): مبلغ خود ردیف ارزی و نرخ آن، وقتی بدهکار و بستانکار به ریال آمده است */
-      originalDebit?: number;
-      originalCredit?: number;
-      exchangeRate?: number;
-      runningBalance: number;
-    }[];
-    totalDebit: number;
-    totalCredit: number;
-    /** v9.0.190 (TD-551): ارز جمع‌ها؛ نمای همه ارزها به ریال */
-    reportCurrency: string;
-    vouchersCount: number;
-    isBalanced: boolean;
-  }> {
+    page?: number;
+    limit?: number;
+  }): Promise<JournalBookReport> {
     const conditions = [
       eq(journalVouchers.isDeleted, 0),
       eq(journalVoucherItems.isDeleted, 0),
@@ -373,15 +347,37 @@ export class AccountingReportService {
     const currencyCondition = voucherItemCurrencyCondition(params.currency);
     if (currencyCondition) conditions.push(currencyCondition);
     const allCurrencies = isAllCurrenciesView(params.currency);
+    const where = and(...conditions);
+    const reportDebit = voucherItemReportAmountSql(journalVoucherItems.debit, params.currency);
+    const reportCredit = voucherItemReportAmountSql(journalVoucherItems.credit, params.currency);
+
+    // v9.0.206 (TD-561، B03-19): یک صفحه از ردیف‌ها؛ جمع‌ها و شمار اسناد و ردیف‌ها روی همه بازه در SQL، و شماره ردیف و
+    // مانده تجمعی با تابع پنجره‌ای از نخستین ردیف بازه (پیش از LIMIT حساب می‌شود)، پس صفحه دوم از جای درست ادامه می‌دهد
+    const page = Math.max(1, Math.trunc(params.page ?? 1));
+    const limit = Math.min(JOURNAL_BOOK_MAX_PAGE_SIZE, Math.max(1, Math.trunc(params.limit ?? JOURNAL_BOOK_PAGE_SIZE)));
+    const bookOrder = sql`${journalVouchers.date}, ${journalVouchers.voucherNumber}, ${journalVoucherItems.rowOrder}, ${journalVoucherItems.id}`;
+
+    const [totals] = await orm.select({
+      total: sql<number>`count(*)::int`,
+      totalDebit: sql<string>`COALESCE(SUM(${reportDebit}), 0)::text`,
+      totalCredit: sql<string>`COALESCE(SUM(${reportCredit}), 0)::text`,
+      vouchersCount: sql<number>`count(DISTINCT ${journalVouchers.id})::int`,
+    })
+    .from(journalVoucherItems)
+    .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
+    .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
+    .where(where);
 
     const rawRows = await orm.select({
+      rowNumber: sql<number>`(row_number() OVER (ORDER BY ${bookOrder}))::int`,
+      runningBalance: sql<string>`(SUM(${reportDebit} - ${reportCredit}) OVER (ORDER BY ${bookOrder} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW))::text`,
       voucherId: journalVouchers.id,
       voucherNumber: journalVouchers.voucherNumber,
       manualVoucherNumber: journalVouchers.manualVoucherNumber,
       rowCurrency: voucherItemCurrencySql,
       rowRate: voucherItemRateSql,
-      reportDebit: voucherItemReportAmountSql(journalVoucherItems.debit, params.currency),
-      reportCredit: voucherItemReportAmountSql(journalVoucherItems.credit, params.currency),
+      reportDebit,
+      reportCredit,
       date: journalVouchers.date,
       voucherType: journalVouchers.voucherType,
       voucherDescription: journalVouchers.description,
@@ -393,31 +389,19 @@ export class AccountingReportService {
       detailedType: journalVoucherItems.detailedType,
       debit: journalVoucherItems.debit,
       credit: journalVoucherItems.credit,
-      rowOrder: journalVoucherItems.rowOrder,
     })
     .from(journalVoucherItems)
     .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
     .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
-    .where(and(...conditions))
-    .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder));
+    .where(where)
+    .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder), asc(journalVoucherItems.id))
+    .limit(limit)
+    .offset((page - 1) * limit);
 
-    // v7.0.71 (P2-6 بخش ۳): جمع‌ها و مانده جاری با Decimal
-    let runningDec = fin(0);
-    let totalDebitDec = fin(0);
-    let totalCreditDec = fin(0);
-    const uniqueVoucherIds = new Set<number>();
-
-    const items = rawRows.map((r, idx) => {
-      uniqueVoucherIds.add(r.voucherId);
-      const d = fin(r.reportDebit);
-      const c = fin(r.reportCredit);
+    const items: JournalBookRow[] = rawRows.map((r) => {
       const converted = allCurrencies && r.rowCurrency !== 'IRR';
-      totalDebitDec = totalDebitDec.add(d);
-      totalCreditDec = totalCreditDec.add(c);
-      runningDec = runningDec.add(d).subtract(c);
-
       return {
-        rowNumber: idx + 1,
+        rowNumber: Number(r.rowNumber),
         voucherId: r.voucherId,
         voucherNumber: r.voucherNumber,
         manualVoucherNumber: r.manualVoucherNumber || undefined,
@@ -430,20 +414,25 @@ export class AccountingReportService {
         detailedType: r.detailedType || undefined,
         currency: r.rowCurrency,
         description: r.itemDescription || r.voucherDescription || '',
-        debit: d.toNumber(),
-        credit: c.toNumber(),
+        debit: fin(r.reportDebit).toNumber(),
+        credit: fin(r.reportCredit).toNumber(),
         ...(converted ? { originalDebit: fin(r.debit).toNumber(), originalCredit: fin(r.credit).toNumber(), exchangeRate: fin(r.rowRate).toNumber() } : {}),
-        runningBalance: runningDec.toNumber(),
+        runningBalance: fin(r.runningBalance).toNumber(),
       };
     });
 
+    const totalDebitDec = fin(totals?.totalDebit);
+    const totalCreditDec = fin(totals?.totalCredit);
     return {
       items,
       totalDebit: totalDebitDec.toNumber(),
       totalCredit: totalCreditDec.toNumber(),
       reportCurrency: allCurrencies ? 'IRR' : String(params.currency).toUpperCase(),
-      vouchersCount: uniqueVoucherIds.size,
+      vouchersCount: Number(totals?.vouchersCount ?? 0),
       isBalanced: totalDebitDec.subtract(totalCreditDec).abs().lessThan(0.01),
+      total: Number(totals?.total ?? 0),
+      page,
+      limit,
     };
   }
 

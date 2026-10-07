@@ -149,5 +149,49 @@ export async function runAccountingReportAccessTests(shouldRun: ShouldRun): Prom
       }));
   }
 
+  const bookId = 'reg_journal_book_paged_td_561';
+  if (shouldRun(bookId, 'td561', 'accounting', 'journal', 'report', 'package3')) {
+    await runCase(results, bookId,
+      'v9.0.206: the journal book returns one page of rows once, with row numbers and running balance counted from the start of the range and totals over the whole range (TD-561)',
+      () => inFiscalSandbox(async () => {
+        const problems: string[] = [];
+        const today = await businessTodayIsoDate();
+        const ids = await accountIdsByCode('1001', '5001');
+        // three vouchers of two rows each: six rows
+        for (const amount of [100_000, 200_000, 300_000]) await postApproved(today, ids['1001'], ids['5001'], amount, `TD-561 sale ${amount}`);
+        const admin = await sandboxAdminClient();
+        const read = async (query: string) => admin.get(`/api/accounting/reports/journal-book?startDate=${today}&endDate=${today}${query}`);
+
+        const whole = await read('&limit=1000');
+        const all = (whole.body?.items ?? []) as { rowNumber: number; runningBalance: number; debit: number; credit: number }[];
+        if (whole.status !== 200 || all.length !== 6) problems.push(`the whole range answered ${whole.status} with ${all.length} rows, expected 6`);
+        if (whole.body && 'report' in whole.body) problems.push('the journal book still sends every row twice ({ report, ...report })');
+
+        const first = await read('&page=1&limit=4');
+        const second = await read('&page=2&limit=4');
+        const p1 = (first.body?.items ?? []) as typeof all;
+        const p2 = (second.body?.items ?? []) as typeof all;
+        if (p1.length !== 4 || p2.length !== 2) problems.push(`pages of 4 rows held ${p1.length} and ${p2.length} rows, expected 4 and 2`);
+        if (p2.map(r => r.rowNumber).join(',') !== '5,6') problems.push(`page 2 row numbers ${p2.map(r => r.rowNumber).join(',')}, expected 5,6`);
+        if (all.length === 6 && p2.length === 2) {
+          for (const [i, row] of p2.entries()) {
+            if (amountOf(row.runningBalance) !== amountOf(all[4 + i].runningBalance)) {
+              problems.push(`page 2 row ${i + 1} running balance ${row.runningBalance}, expected ${all[4 + i].runningBalance} as in the whole range`);
+            }
+          }
+        }
+        for (const [label, body] of [['page 1', first.body], ['page 2', second.body]] as const) {
+          if (amountOf(body?.totalDebit) !== 600_000 || amountOf(body?.totalCredit) !== 600_000 || body?.vouchersCount !== 3 || body?.total !== 6) {
+            problems.push(`${label} totals ${JSON.stringify({ d: body?.totalDebit, c: body?.totalCredit, v: body?.vouchersCount, t: body?.total })}, expected 600000/600000, 3 vouchers, 6 rows`);
+          }
+        }
+        if (second.body?.page !== 2 || second.body?.limit !== 4) problems.push(`page 2 answered page ${second.body?.page} limit ${second.body?.limit}`);
+        const tooMany = await read('&limit=5000');
+        if (tooMany.status !== 400) problems.push(`a page of 5000 rows answered ${tooMany.status}, expected 400`);
+        assertNoProblems(problems);
+        return 'six rows in pages of 4: rows 5,6 on page 2 with the whole-range running balance; totals 600,000 / 3 vouchers / 6 rows on each page; no report copy; limit 5000 is 400';
+      }));
+  }
+
   return results;
 }

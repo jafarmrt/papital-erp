@@ -431,6 +431,7 @@ export function FinancialReportsTab({
           journalLoading={journalLoading}
           journalBookData={journalBookData}
           onFetchJournalBook={fetchJournalBook}
+          onPageChange={(page) => { void journalBook.goToJournalPage(page); }}
         />
       )}
 
