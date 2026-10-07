@@ -5,6 +5,8 @@ import {
 } from '../../lib/permissions/documentPermissions.js';
 import { documentStockDirection, isRecordableDocumentType } from '../../lib/documents/documentDirection.js';
 import { ValidationError } from '../../errors/customErrors.js';
+import { isAutoRefNumber, isServerSeriesDocumentType } from '../../lib/documents/documentRefRules.js';
+import { documentTypeTitle } from '../../lib/documents/documentTypeTitles.js';
 
 /**
  * v9.0.125 (TD-541 / TD-771): وضعیت و جهت سندی که ثبت یا نهایی می‌شود، با همان قاعده‌ای که `createDocumentWithDetails` و
@@ -47,6 +49,19 @@ export function assertRecordableDocument(docType: string, inOut?: string | null,
       'DOCUMENT_DIRECTION_MISMATCH',
     );
   }
+}
+
+/**
+ * v9.0.258 (TD-783، یافته B08-14، تصمیم ت۹ «الف» بسته ۸): شماره فاکتور فروش و برگشت از فروش فقط از سری سرور است؛ شماره
+ * دستی برای این دو نوع در ثبت و ویرایش ۴۲۲ `DOCUMENT_REF_SERVER_SERIES` است (`refNumber` باید خالی یا «auto» باشد).
+ */
+export function assertManualRefAllowed(docType: string, requested: unknown): void {
+  if (!isServerSeriesDocumentType(docType) || isAutoRefNumber(requested)) return;
+  throw new ValidationError(
+    `شماره ${documentTypeTitle(docType)} فقط از سری فاکتورهای سرور داده می‌شود و دستی نوشته یا عوض نمی‌شود؛ شماره را خالی بگذارید.`,
+    { docType, refNumber: requested ?? null },
+    'DOCUMENT_REF_SERVER_SERIES',
+  );
 }
 
 /**

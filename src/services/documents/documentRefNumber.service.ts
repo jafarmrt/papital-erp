@@ -4,9 +4,27 @@ import { documents, appSettings, documentRefCounters } from '../../db/schema.js'
 import { jalaliToIsoDate } from '../../utils.js';
 import { businessTodayIsoDate, resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import type { DbClient } from './types.js';
+import { ConflictError } from '../../errors/customErrors.js';
+import { isAutoRefNumber } from '../../lib/documents/documentRefRules.js';
+import { documentTypeTitle } from '../../lib/documents/documentTypeTitles.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /** بیشینه مقدار ستون integer شمارنده `document_ref_counters.last_ref_number` */
 export const MAX_REF_COUNTER_VALUE = 2147483647;
+
+/** بیش از این شماره پیاپیِ گرفته‌شده، خطای داده است و شماره خودکار داده نمی‌شود */
+const MAX_TAKEN_SERIALS_SKIPPED = 1000;
+
+export const DOCUMENT_REF_TAKEN = 'DOCUMENT_REF_TAKEN';
+
+/** پیام ۴۰۹ شماره گرفته‌شده در همان نوع و سال مالی */
+export function documentRefTakenError(docType: string, refNumber: string, fiscalYear: number): ConflictError {
+  return new ConflictError(
+    `شماره «${refNumber}» در سال مالی ${toPersianDigits(String(fiscalYear))} برای ${documentTypeTitle(docType)} گرفته شده است؛ شماره دیگری بنویسید یا آن را خالی بگذارید تا شماره بعدی سری داده شود.`,
+    { refNumber, fiscalYear, docType },
+    DOCUMENT_REF_TAKEN,
+  );
+}
 
 /**
  * v7.0.60 (audit P3-10): شماره ترتیبی یک شماره عطف فقط پسوند عددی آن است.
@@ -108,12 +126,30 @@ export class DocumentRefNumberService {
       ));
 
     if (counter) {
-      return String(Math.max(counter.lastRefNumber + 1, startNumber));
+      return String(await DocumentRefNumberService.firstFreeSerial(orm, type, fiscalYear, Math.max(counter.lastRefNumber + 1, startNumber)));
     }
 
     // Cold start: peek from max existing document number for THIS fiscal year (read-only, no counter write)
     const maxNum = await DocumentRefNumberService.getMaxExistingRefNumber(orm, type, fiscalYear);
     return String(Math.max(maxNum + 1, startNumber));
+  }
+
+  /**
+   * v9.0.258 (TD-783): نخستین شماره از `from` به بعد که سند فعالی از همین نوع و سال مالی آن را ندارد. شماره دستی شمارنده
+   * را جلو نمی‌برد، پس شماره خودکار از شماره‌های دستیِ جلوتر می‌گذرد تا شاخص یکتای (نوع، سال، شماره) خطا ندهد.
+   */
+  static async firstFreeSerial(tx: DbClient, type: string, fiscalYear: number, from: number): Promise<number> {
+    for (let serial = from; serial < from + MAX_TAKEN_SERIALS_SKIPPED; serial++) {
+      const [taken] = await tx.select({ id: documents.id }).from(documents)
+        .where(and(eq(documents.type, type), eq(documents.refFiscalYear, fiscalYear), eq(documents.refNumber, String(serial)), eq(documents.isDeleted, 0)))
+        .limit(1);
+      if (!taken) return serial;
+    }
+    throw new ConflictError(
+      `${toPersianDigits(String(MAX_TAKEN_SERIALS_SKIPPED))} شماره پس از ${toPersianDigits(String(from))} برای ${documentTypeTitle(type)} در سال مالی ${toPersianDigits(String(fiscalYear))} گرفته شده است؛ شماره سند را دستی بنویسید.`,
+      { docType: type, fiscalYear, from },
+      'DOCUMENT_REF_SERIES_EXHAUSTED',
+    );
   }
 
   /**
@@ -187,7 +223,18 @@ export class DocumentRefNumberService {
         }
       }
 
-      return String(nextNum);
+      // v9.0.258 (TD-783): شماره دستیِ جلوتر از شمارنده را رد می‌شود (شمارنده زیر قفل همین تراکنش است)
+      const free = await DocumentRefNumberService.firstFreeSerial(tx, type, fiscalYear, nextNum);
+      if (free !== nextNum) {
+        await tx
+          .update(documentRefCounters)
+          .set({ lastRefNumber: free })
+          .where(and(
+            eq(documentRefCounters.docType, type),
+            eq(documentRefCounters.fiscalYear, fiscalYear)
+          ));
+      }
+      return String(free);
     };
 
     if (externalTx) {
@@ -197,9 +244,12 @@ export class DocumentRefNumberService {
   }
 
   /**
-   * شماره عطف سند تازه و سال مالی پارتیشن شماره‌گذاری آن (زیر تراکنش فراخواننده). شماره خالی یا «auto» شماره بعدی سری
-   * همان نوع و سال را می‌گیرد؛ شماره دستی تکراری (همان نوع و سال) به شماره بعدی می‌رود و شمارنده با پسوند عددی شماره دستی
-   * همگام می‌شود (P3-10). v9.0.80 (TD-489): از createDocument جدا شد تا حواله انتقال بین انبارها همان قاعده را بگیرد.
+   * شماره عطف سند تازه و سال مالی پارتیشن شماره‌گذاری آن (زیر تراکنش فراخواننده). شماره خالی یا «auto» شماره آزاد بعدی سری
+   * همان نوع و سال را می‌گیرد. v9.0.80 (TD-489): از createDocument جدا شد تا حواله انتقال بین انبارها همان قاعده را بگیرد.
+   *
+   * v9.0.258 (TD-783، تصمیم ت۹ الف): شماره دستی گرفته‌شده (همان نوع و سال) ۴۰۹ `DOCUMENT_REF_TAKEN` است و شمارنده سری را
+   * جلو نمی‌برد. پیش‌تر شماره تکراری بی‌صدا با شماره خودکار عوض می‌شد (گزارش ممیزی شماره درخواستی را می‌نوشت) و یک شماره
+   * بزرگ دستی (۹۰۰۰۰۰) سری را برای همیشه به ۹۰۰۰۰۱ می‌برد. شماره سند فروش (فاکتور، برگشت) را route فقط از سری می‌پذیرد.
    */
   static async assignDocumentRefNumber(
     tx: DbClient,
@@ -210,73 +260,30 @@ export class DocumentRefNumberService {
     // v7.0.21 (TD-178 / audit P0-2): سال مالی پارتیشن شماره‌گذاری — دقیقاً همان مقداری که
     // DocumentRefNumberService.getNextRef برای همین تاریخ استفاده می‌کند؛ یکتایی شماره عطف در این دامنه است.
     const refFiscalYear = resolveJalaliFiscalYear(normalizedDocDate);
-    let finalRefNumber: string | number | undefined | null = requested;
-    if (!finalRefNumber || finalRefNumber === 'auto' || String(finalRefNumber).trim() === '') {
-      finalRefNumber = await DocumentRefNumberService.getNextRef(docType, normalizedDocDate, tx);
-    } else {
-      // V7 Collision Prevention: If custom refNumber already exists in documents, auto-resolve to next valid atomic number
-      // v7.0.21 (TD-178): بررسی تکرار فقط در دامنه یکتایی واقعی (نوع سند + سال مالی شماره‌گذاری)
-      const [existingDoc] = await tx
-        .select({ id: documents.id })
-        .from(documents)
-        .where(and(
-          eq(documents.type, docType),
-          eq(documents.refFiscalYear, refFiscalYear),
-          eq(documents.refNumber, String(finalRefNumber)),
-          eq(documents.isDeleted, 0)
-        ));
-      if (existingDoc) {
-        finalRefNumber = await DocumentRefNumberService.getNextRef(docType, normalizedDocDate, tx);
-        if (docType === 'audit' && !String(finalRefNumber).startsWith('AUD-')) {
-          finalRefNumber = `AUD-${finalRefNumber}`;
-        }
-      }
-
-      // Sync document_ref_counters with the numeric suffix of a custom refNumber (P3-10)
-      const val = extractRefSerial(finalRefNumber);
-      if (val !== null) {
-        if (val > 0 && val <= MAX_REF_COUNTER_VALUE) {
-          // V3.0.6 (BUG-07): کلید شمارنده دستی نیز باید «سال جلالی» باشد؛
-          // قبلاً سال میلادی (new Date().getFullYear) استفاده می‌شد و شمارنده
-          // دستی روی ردیفی متفاوت از شماره‌گذاری خودکار sync می‌شد.
-          const year = refFiscalYear;
-          const [existingCounter] = await tx
-            .select()
-            .from(documentRefCounters)
-            .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)))
-            .for('update');
-          if (existingCounter) {
-            if (val > existingCounter.lastRefNumber) {
-              await tx
-                .update(documentRefCounters)
-                .set({ lastRefNumber: val })
-                .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)));
-            }
-          } else {
-            const inserted = await tx
-              .insert(documentRefCounters)
-              .values({ docType, fiscalYear: year, lastRefNumber: val })
-              .onConflictDoNothing({
-                target: [documentRefCounters.docType, documentRefCounters.fiscalYear]
-              })
-              .returning({ lastRefNumber: documentRefCounters.lastRefNumber });
-            if (inserted.length === 0) {
-              const [retryCounter] = await tx
-                .select()
-                .from(documentRefCounters)
-                .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)))
-                .for('update');
-              if (retryCounter && val > retryCounter.lastRefNumber) {
-                await tx
-                  .update(documentRefCounters)
-                  .set({ lastRefNumber: val })
-                  .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)));
-              }
-            }
-          }
-        }
-      }
+    if (isAutoRefNumber(requested)) {
+      return { refNumber: await DocumentRefNumberService.getNextRef(docType, normalizedDocDate, tx), refFiscalYear };
     }
-    return { refNumber: String(finalRefNumber), refFiscalYear };
+    const refNumber = String(requested).trim();
+    await DocumentRefNumberService.assertRefNumberFree(tx, { docType, refFiscalYear, refNumber });
+    return { refNumber, refFiscalYear };
+  }
+
+  /** شماره در همان نوع و سال مالی به سند فعال دیگری نرسیده باشد، وگرنه ۴۰۹ با نام نوع و سال */
+  static async assertRefNumberFree(
+    tx: DbClient,
+    input: { docType: string; refFiscalYear: number; refNumber: string; excludeDocumentId?: number },
+  ): Promise<void> {
+    const taken = await tx
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(
+        eq(documents.type, input.docType),
+        eq(documents.refFiscalYear, input.refFiscalYear),
+        eq(documents.refNumber, input.refNumber),
+        eq(documents.isDeleted, 0)
+      ));
+    if (taken.some(d => d.id !== input.excludeDocumentId)) {
+      throw documentRefTakenError(input.docType, input.refNumber, input.refFiscalYear);
+    }
   }
 }

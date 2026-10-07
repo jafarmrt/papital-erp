@@ -27,6 +27,9 @@ export async function runDocumentIntegrityTests(shouldRun: ShouldRun): Promise<T
     ['reg_document_by_ref_fiscal_year_td_782',
       'v9.0.257: GET /documents/by-ref finds only an active final document of the type, by fiscal year when given; a number in two years is 409 with the years, a draft is 404 (TD-782)',
       ['td782', 'documents', 'by_ref', 'fiscal_year', 'package8'], documentByRefFiscalYearCase],
+    ['reg_document_ref_number_rules_td_783',
+      'v9.0.258: a sales document number comes only from the server series (manual 422), a taken warehouse number is 409 instead of a silent swap, a manual number does not move the series, and the audit log keeps the stored number (TD-783)',
+      ['td783', 'documents', 'ref_number', 'package8'], documentRefNumberRulesCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -234,4 +237,64 @@ async function documentByRefFiscalYearCase(h: Harness, wrong: string[]): Promise
   if (noType.status !== 400) wrong.push(`by-ref without a type answered ${brief(noType)}, expected 400`);
 
   return `number ${ref} in ${lastYear} and ${fy}: no year 409 DOCUMENT_REF_AMBIGUOUS [${fy},${lastYear}], each year its own invoice; a draft 404 DOCUMENT_REF_NOT_FOUND; no type 400`;
+}
+
+/** B08-14 (TD-783): a taken number was silently swapped (the log kept the requested one) and a large manual number moved the series */
+async function documentRefNumberRulesCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const item = await f.item(50, 1_000);
+  const lines = [{ itemId: item, quantity: 1, unit_price: 5_000, location: f.wh }];
+  const refOf = (res: { body?: unknown }) => String((res.body as { refNumber?: unknown })?.refNumber ?? '');
+  const storedRef = async (id: number) => String((await h.q(`SELECT ref_number FROM documents WHERE id = $1`, [id]))[0]?.ref_number ?? '');
+  const peek = async (type: string) => String(((await h.get(`/api/documents/next-ref?type=${type}`)).body as { nextRef?: unknown })?.nextRef ?? '');
+
+  // 1) sales documents: a manual number is 422, before anything is written
+  for (const docType of ['invoice', 'return']) {
+    const res = await h.post('/api/documents', f.doc(docType, 'draft', lines, { refNumber: '900000' }));
+    if (res.status !== 422 || codeOf(res) !== 'DOCUMENT_REF_SERVER_SERIES') wrong.push(`a ${docType} with the manual number 900000 answered ${brief(res)}, expected 422 DOCUMENT_REF_SERVER_SERIES`);
+  }
+  const invoiceNext = await peek('invoice');
+  const invoice = await h.post('/api/documents', f.doc('invoice', 'draft', lines));
+  const invoiceRef = await storedRef(docIdOf(invoice));
+  if (invoice.status !== 200 || invoiceRef !== invoiceNext || refOf(invoice) !== invoiceRef) {
+    wrong.push(`an invoice with "auto" answered ${brief(invoice)} and stored ${invoiceRef}, expected the series number ${invoiceNext} in the response`);
+  }
+  const [log] = await h.q(`SELECT description, details FROM activity_logs WHERE entity_id::text = $1 AND action = 'CREATE' ORDER BY id DESC LIMIT 1`, [String(docIdOf(invoice))]) as
+    Array<{ description: string; details: { after?: { refNumber?: string; status?: string } } | string }>;
+  const after = (typeof log?.details === 'string' ? JSON.parse(log.details) : log?.details)?.after;
+  if (!log?.description.includes(`"${invoiceRef}"`) || after?.refNumber !== invoiceRef || after?.status !== 'draft') {
+    wrong.push(`the create log says ${JSON.stringify(log?.description)} with ${JSON.stringify(after ?? null)}, expected the stored number ${invoiceRef} and status draft`);
+  }
+  // editing keeps the invoice number: the same number passes, another is 422
+  const same = await h.put(`/api/documents/${docIdOf(invoice)}`, { refNumber: invoiceRef, notes: 'P8D same number' });
+  const other = await h.put(`/api/documents/${docIdOf(invoice)}`, { refNumber: '900000', notes: 'P8D other number' });
+  if (same.status !== 200 || other.status !== 422 || codeOf(other) !== 'DOCUMENT_REF_SERVER_SERIES' || await storedRef(docIdOf(invoice)) !== invoiceRef) {
+    wrong.push(`editing the invoice number answered ${brief(same)} (same) and ${brief(other)} (other) leaving ${await storedRef(docIdOf(invoice))}, expected 200, 422 DOCUMENT_REF_SERVER_SERIES and ${invoiceRef}`);
+  }
+
+  // 2) warehouse documents: a manual number stays, a taken one is 409 (was: silently the next number, logged as the requested one)
+  const manual = `P8D-R-${h.tag}`;
+  const first = await h.post('/api/documents', f.doc('receipt', 'draft', lines, { refNumber: manual }));
+  const second = await h.post('/api/documents', f.doc('receipt', 'draft', lines, { refNumber: manual }));
+  if (first.status !== 200 || refOf(first) !== manual) wrong.push(`a receipt with the manual number ${manual} answered ${brief(first)}`);
+  if (second.status !== 409 || codeOf(second) !== 'DOCUMENT_REF_TAKEN') wrong.push(`a second receipt with ${manual} answered ${brief(second)}, expected 409 DOCUMENT_REF_TAKEN`);
+  // editing another receipt to that number: the same 409 with its own code (was: a generic duplicate error)
+  const third = await h.post('/api/documents', f.doc('receipt', 'draft', lines));
+  const moved = await h.put(`/api/documents/${docIdOf(third)}`, { refNumber: manual });
+  if (moved.status !== 409 || codeOf(moved) !== 'DOCUMENT_REF_TAKEN') wrong.push(`editing a receipt to the taken number answered ${brief(moved)}, expected 409 DOCUMENT_REF_TAKEN`);
+
+  // 3) a manual number ahead of the series does not move it, and the series skips it
+  const receiptNext = Number(await peek('receipt'));
+  const ahead = await h.post('/api/documents', f.doc('receipt', 'draft', lines, { refNumber: String(receiptNext + 1) }));
+  const big = await h.post('/api/documents', f.doc('receipt', 'draft', lines, { refNumber: '900000' }));
+  if (ahead.status !== 200 || big.status !== 200 || Number(await peek('receipt')) !== receiptNext) {
+    wrong.push(`after manual receipts ${receiptNext + 1} (${ahead.status}) and 900000 (${big.status}) the next receipt number is ${await peek('receipt')}, expected ${receiptNext}`);
+  }
+  const autoA = await h.post('/api/documents', f.doc('receipt', 'draft', lines));
+  const autoB = await h.post('/api/documents', f.doc('receipt', 'draft', lines));
+  if (refOf(autoA) !== String(receiptNext) || refOf(autoB) !== String(receiptNext + 2)) {
+    wrong.push(`the next two automatic receipts got ${refOf(autoA)} and ${refOf(autoB)} (${autoA.status}/${autoB.status}), expected ${receiptNext} and ${receiptNext + 2} (skipping the manual ${receiptNext + 1})`);
+  }
+
+  return `invoice and return with a manual number 422 DOCUMENT_REF_SERVER_SERIES; invoice ${invoiceRef} from the series, logged with that number; receipt ${manual} twice 409 DOCUMENT_REF_TAKEN; manual ${receiptNext + 1} and 900000 leave the series at ${receiptNext}, which then skips ${receiptNext + 1}`;
 }

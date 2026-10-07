@@ -70,8 +70,10 @@ export async function runWarehouseTransferDocumentTests(shouldRun: (id: string, 
     const kardexKey = kardex.map(k => `${k.type}:${k.location}:${k.ref}`).sort().join(',');
     if (kardexKey !== [`in:${wh2.code}:${nextRef}`, `out:${main}:${nextRef}`].sort().join(',')) wrong.push(`Kardex rows ${kardexKey}`);
 
-    // 2) a repeated number takes the next one in the series
-    const second = await transfer(3, nextRef, 'td489 second');
+    // 2) v9.0.258 (TD-783): a repeated number is refused with 409 DOCUMENT_REF_TAKEN (no silent swap); "auto" takes the next one in the series
+    const repeated = await transfer(3, nextRef, 'td489 repeated');
+    if (repeated.status !== 409 || repeated.body?.code !== 'DOCUMENT_REF_TAKEN') wrong.push(`a repeated transfer number answered ${repeated.status} ${repeated.body?.code}, expected 409 DOCUMENT_REF_TAKEN`);
+    const second = await transfer(3, 'auto', 'td489 second');
     const doc2 = second.status === 200 ? await transferDoc(Number(second.body?.data?.transferDocId)) : undefined;
     if (!doc2) wrong.push(`second transfer answered ${second.status}`);
     else {
@@ -120,7 +122,7 @@ export async function runWarehouseTransferDocumentTests(shouldRun: (id: string, 
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'transfer document with the form number, notes, one line and two linked Kardex rows; repeated number advanced; listed with source and destination; void moved 4 back with WAC unchanged; consumed transfer void refused; replay matched',
+      details: 'transfer document with the form number, notes, one line and two linked Kardex rows; repeated number refused and "auto" advanced; listed with source and destination; void moved 4 back with WAC unchanged; consumed transfer void refused; replay matched',
     }));
   } catch (err) {
     results.push(makeTestCase({

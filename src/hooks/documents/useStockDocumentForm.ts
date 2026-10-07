@@ -47,6 +47,8 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const [actionType, setActionType] = useState<'in' | 'out'>('in');
   const [docType, setDocType] = useState('receipt');
   const [refNumber, setRefNumber] = useState('');
+  // v9.0.258 (TD-783): شماره پیشنهادی سرور؛ همان شماره دست‌نخورده «auto» فرستاده می‌شود
+  const [suggestedRef, setSuggestedRef] = useState('');
   const [date, setDate] = useState<string>(() => getTodayJalaliDate());
   const [location, setLocation] = useState('');
   const [buyerName, setBuyerName] = useState('');
@@ -149,6 +151,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     try {
       const { nextRef } = await fetchJson(`/documents/next-ref?type=${docType}`, { signal });
       setRefNumber(nextRef);
+      setSuggestedRef(String(nextRef ?? ''));
     } catch (e: unknown) {
       if ((e as { name?: string } | null)?.name === 'AbortError') return;
       console.error(e);
@@ -221,7 +224,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   return {
     actionType, setActionType,
     docType, setDocType,
-    refNumber, setRefNumber,
+    refNumber, setRefNumber, suggestedRef,
     date, setDate,
     location, setLocation,
     buyerName, setBuyerName,

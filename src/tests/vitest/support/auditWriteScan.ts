@@ -1,7 +1,8 @@
 /**
  * Static scan of what production code writes into activity_logs (logActivity, a direct insert, a migration), shared by
  * the audit entity retention test (TD-522) and the audit action label test (TD-538). A written value is resolved from
- * literals, templates, conditionals, `||` / `??`, identifiers in scope and element access on object literals.
+ * literals, templates, conditionals, `||` / `??`, identifiers in scope and element access on object literals, also an
+ * object literal exported by another production file (`Object.freeze({...})` included, v9.0.258).
  */
 import fs from 'fs';
 import path from 'path';
@@ -52,6 +53,50 @@ function literalTypeNames(type: ts.TypeNode): string[] | undefined {
   return names.every((n): n is string => n !== undefined) ? names : undefined;
 }
 
+/** `Object.freeze({...})`, `{...} as T` and parentheses around an object literal */
+function unwrapObjectLiteral(expr: ts.Expression | undefined): ts.ObjectLiteralExpression | undefined {
+  if (!expr) return undefined;
+  if (ts.isObjectLiteralExpression(expr)) return expr;
+  if (ts.isParenthesizedExpression(expr) || ts.isAsExpression(expr) || ts.isSatisfiesExpression(expr)) return unwrapObjectLiteral(expr.expression);
+  if (ts.isCallExpression(expr) && expr.expression.getText() === 'Object.freeze') return unwrapObjectLiteral(expr.arguments[0]);
+  return undefined;
+}
+
+/** the exported `const name = <object literal>` of the production file a relative import of `sf` names */
+function importedObjectLiteral(name: string, sf: ts.SourceFile): { table: ts.ObjectLiteralExpression; sf: ts.SourceFile } | undefined {
+  for (const statement of sf.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    const named = statement.importClause?.namedBindings;
+    if (!named || !ts.isNamedImports(named)) continue;
+    const spec = named.elements.find(e => e.name.text === name);
+    const target = statement.moduleSpecifier.text;
+    if (!spec || !target.startsWith('.')) continue;
+    const base = path.posix.join(path.posix.dirname(sf.fileName), target).replace(/\.js$/, '');
+    const file = [`${base}.ts`, `${base}.tsx`].find(f => fs.existsSync(path.join(ROOT, f)));
+    if (!file) return undefined;
+    const other = ts.createSourceFile(file, fs.readFileSync(path.join(ROOT, file), 'utf8'), ts.ScriptTarget.Latest, true);
+    const exported = (spec.propertyName ?? spec.name).text;
+    for (const s of other.statements) {
+      if (!ts.isVariableStatement(s)) continue;
+      for (const decl of s.declarationList.declarations) {
+        const table = ts.isIdentifier(decl.name) && decl.name.text === exported ? unwrapObjectLiteral(decl.initializer) : undefined;
+        if (table) return { table, sf: other };
+      }
+    }
+  }
+  return undefined;
+}
+
+/** the object literal an identifier holds: declared here, an alias of another identifier, or imported */
+function objectTableOf(name: string, from: ts.Node, sf: ts.SourceFile, depth = 0): { table: ts.ObjectLiteralExpression; sf: ts.SourceFile } | undefined {
+  if (depth > 3) return undefined;
+  const init = declarationOf(name, from)?.initializer;
+  const local = unwrapObjectLiteral(init);
+  if (local) return { table: local, sf };
+  if (init && ts.isIdentifier(init)) return objectTableOf(init.text, init, sf, depth + 1);
+  return init ? undefined : importedObjectLiteral(name, sf);
+}
+
 function resolveValue(expr: ts.Expression, sf: ts.SourceFile, use: AuditWriteUse, runtime: ReadonlySet<string>, depth = 0): void {
   const next = (e: ts.Expression) => resolveValue(e, sf, use, runtime, depth + 1);
   if (depth > 6) { use.unresolved.push(expr.getText(sf)); return; }
@@ -72,10 +117,10 @@ function resolveValue(expr: ts.Expression, sf: ts.SourceFile, use: AuditWriteUse
     if (decl?.initializer) { next(decl.initializer); return; }
   }
   if (ts.isElementAccessExpression(expr) && ts.isIdentifier(expr.expression)) {
-    const table = declarationOf(expr.expression.text, expr)?.initializer;
-    if (table && ts.isObjectLiteralExpression(table)) {
-      for (const prop of table.properties) {
-        if (ts.isPropertyAssignment(prop)) next(prop.initializer);
+    const found = objectTableOf(expr.expression.text, expr, sf);
+    if (found) {
+      for (const prop of found.table.properties) {
+        if (ts.isPropertyAssignment(prop)) resolveValue(prop.initializer, found.sf, use, runtime, depth + 1);
       }
       return;
     }

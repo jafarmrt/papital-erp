@@ -111,10 +111,11 @@ export function useAuditSheet({ serverItems, selectedLocation, locationLabel, ne
     if (!pendingAuditSummary || pendingAuditSummary.list.length === 0) return;
     setErrorMsg(null);
     setSuccessMsg(null);
-    const payload = buildAuditPayload(pendingAuditSummary.list, { nextRef, location: selectedLocation, locationLabel, notes, user });
+    const payload = buildAuditPayload(pendingAuditSummary.list, { location: selectedLocation, locationLabel, notes, user });
     saveMutation.mutate(payload, {
-      onSuccess: () => {
-        setSuccessMsg(`سند انبارگردانی با شماره ${nextRef} با موفقیت ثبت و موجودی انبار به‌روزرسانی شد.`);
+      onSuccess: (created) => {
+        // v9.0.258 (TD-783): شماره‌ای که سرور ذخیره کرد، نه شماره پیشنهادی برگه
+        setSuccessMsg(`سند انبارگردانی با شماره ${created?.refNumber || nextRef} با موفقیت ثبت و موجودی انبار به‌روزرسانی شد.`);
         setPendingAuditSummary(null);
         setAuditedItemsMap({});
         setNotes('');

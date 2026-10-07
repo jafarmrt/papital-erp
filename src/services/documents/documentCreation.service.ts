@@ -15,6 +15,8 @@ import { assertBookStocksUnchanged, assertStockCountLines } from '../inventory/s
 import { sortIdsForLocking } from '../../lib/lockOrder.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { DocumentRefNumberService } from './documentRefNumber.service.js';
+import { assertManualRefAllowed } from './documentRecordRule.js';
+import { isAutoRefNumber } from '../../lib/documents/documentRefRules.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { resolveDocumentVat, parseVatInput, VAT_DOC_TYPES } from './documentVat.js';
@@ -121,17 +123,27 @@ export class DocumentCreationService {
       // سال مالی دیگری برود شماره بعدی همان سال را می‌گیرد (مگر شماره تازه‌ای داده شده باشد). پیش‌تر شماره و سال
       // شماره‌گذاری سال قبل می‌ماند.
       const newDocDate = date ? requireDocumentTimestamp(date, 'سند') : null;
-      let nextRefNumber = refNumber ? String(refNumber) : existingDoc.refNumber;
+      // v9.0.258 (TD-783، تصمیم ت۹ الف): شماره سند فروش (فاکتور، برگشت) فقط از سری سرور است و در ویرایش عوض نمی‌شود؛ شماره
+      // دستی تازه سند انبار اگر در همان نوع و سال گرفته شده باشد ۴۰۹ با پیام فارسی (پیش‌تر خطای کلی «مقدار تکراری»)
+      const requestedRef = isAutoRefNumber(refNumber) ? null : String(refNumber).trim();
+      const refChanged = requestedRef !== null && requestedRef !== String(existingDoc.refNumber);
+      if (refChanged) assertManualRefAllowed(existingDoc.type, requestedRef);
+      let nextRefNumber = refChanged ? requestedRef : existingDoc.refNumber;
       let nextRefFiscalYear: number | undefined;
+      const currentFiscalYear = existingDoc.refFiscalYear ?? resolveJalaliFiscalYear(existingDoc.date);
       if (newDocDate) {
         const newFiscalYear = resolveJalaliFiscalYear(newDocDate);
-        const currentFiscalYear = existingDoc.refFiscalYear ?? resolveJalaliFiscalYear(existingDoc.date);
         if (newFiscalYear !== currentFiscalYear) {
-          if (!refNumber || String(refNumber) === String(existingDoc.refNumber)) {
+          if (!refChanged) {
             nextRefNumber = await DocumentRefNumberService.getNextRef(existingDoc.type, newDocDate, tx);
           }
           nextRefFiscalYear = newFiscalYear;
         }
+      }
+      if (refChanged) {
+        await DocumentRefNumberService.assertRefNumberFree(tx, {
+          docType: existingDoc.type, refFiscalYear: nextRefFiscalYear ?? currentFiscalYear, refNumber: String(nextRefNumber), excludeDocumentId: id,
+        });
       }
 
       // v9.0.246 (TD-788، تصمیم ت۱۰ الف): پیش‌نویس برگشتِ دارای فاکتور مرجع هم ارز، نرخ و قیمت خالص را از همان فاکتور می‌گیرد

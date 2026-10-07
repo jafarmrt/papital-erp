@@ -34,7 +34,7 @@ function baseResponse(url: string, init?: RequestInitLike): unknown {
   if (url === '/documents/next-ref?type=audit') return { nextRef: 'AUD-2001' };
   if (url === AUDIT_ITEMS_URL) return [auditItem];
   if (url === '/warehouses') return [{ id: 1, name: LOCATION, code: LOCATION_CODE, is_active: 1 }];
-  if (url === '/documents' && method === 'POST') return { success: true, docId: 50 };
+  if (url === '/documents' && method === 'POST') return { success: true, docId: 50, refNumber: 'AUD-2002' };
   return [];
 }
 
@@ -85,11 +85,12 @@ describe('InventoryAuditPage — React Query cache', () => {
     fireEvent.change(input, { target: { value: '8' } });
     fireEvent.click(screen.getByRole('button', { name: /ثبت نهایی سند انبارگردانی/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'ثبت قطعی انبارگردانی' }));
-    expect(await screen.findByText('سند انبارگردانی با شماره AUD-2001 با موفقیت ثبت و موجودی انبار به‌روزرسانی شد.')).toBeTruthy();
+    // v9.0.258 (TD-783): the sheet sends "auto" and shows the number the server stored
+    expect(await screen.findByText('سند انبارگردانی با شماره AUD-2002 با موفقیت ثبت و موجودی انبار به‌روزرسانی شد.')).toBeTruthy();
 
     const post = fetchJson.mock.calls.find(([url, init]) => url === '/documents' && init?.method === 'POST');
     expect(JSON.parse(String(post?.[1].body))).toMatchObject({
-      docType: 'audit', refNumber: 'AUD-2001', location: LOCATION_CODE, user: 'انباردار تست', status: 'final',
+      docType: 'audit', refNumber: 'auto', location: LOCATION_CODE, user: 'انباردار تست', status: 'final',
       notes: `ثبت انبارگردانی در موقعیت ${LOCATION}`,
       items: [{ itemId: 7, system_stock: 10, physical_stock: 8, quantity: 8, location: LOCATION_CODE }],
     });

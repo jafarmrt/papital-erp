@@ -5,6 +5,7 @@ import { SearchableSelect } from './SearchableSelect';
 import { formatPersianNumber, parseCleanNumber, errorMessageOf, toStorageDate, getTodayJalaliDate } from '../utils';
 import { JalaliDateInput } from './common/JalaliDateInput';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
+import { refNumberToSend } from '../lib/documents/documentRefRules';
 
 interface WarehouseTransferModalProps {
   isOpen: boolean;
@@ -28,6 +29,8 @@ export default function WarehouseTransferModal({
   // v7.0.136 (TD-232): امروز در منطقه زمانی کسب‌وکار (نه UTC) و انتخاب با تقویم شمسی؛ مقدار ISO می‌ماند
   const [date, setDate] = useState<string>(() => toStorageDate(getTodayJalaliDate()) || '');
   const [refNumber, setRefNumber] = useState<string>('');
+  // v9.0.258 (TD-783): شماره پیشنهادی سرور؛ دست‌نخورده «auto» فرستاده می‌شود
+  const [suggestedRef, setSuggestedRef] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
   const [loadingInit, setLoadingInit] = useState(false);
@@ -62,6 +65,7 @@ export default function WarehouseTransferModal({
 
           if (nextRefRes?.nextRef) {
             setRefNumber(String(nextRefRes.nextRef));
+            setSuggestedRef(String(nextRefRes.nextRef));
           }
 
           if (defaultItemId) {
@@ -117,7 +121,7 @@ export default function WarehouseTransferModal({
           toLocation,
           quantity: numQty,
           date,
-          refNumber,
+          refNumber: refNumberToSend('transfer', refNumber, suggestedRef),
           notes
         })
       });

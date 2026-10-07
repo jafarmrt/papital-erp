@@ -11,6 +11,7 @@ import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumen
 import { StockCounterpartyField } from './StockCounterpartyField';
 import { STOCK_PAGE_DOC_TYPE_LABELS } from '../../../lib/documents/stockDocumentAccess';
 import { ReturnInvoiceYearChoices } from './ReturnInvoiceYearChoices';
+import { isServerSeriesDocumentType } from '../../../lib/documents/documentRefRules';
 
 interface StockDocumentDetailsFieldsProps {
   form: StockDocumentForm;
@@ -60,12 +61,15 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
 
         <div>
           <label className="block text-xs font-bold mb-1.5 text-slate-700">شماره سند / رفرنس</label>
+          {/* v9.0.258 (TD-783، تصمیم ت۹ الف): شماره برگشت از فروش فقط از سری سرور است */}
           <input 
             required 
             type="text" 
             value={refNumber} 
             onChange={e => setRefNumber(e.target.value)} 
-            className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 text-left font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
+            readOnly={isServerSeriesDocumentType(docType)}
+            title={isServerSeriesDocumentType(docType) ? 'شماره هنگام ثبت از سری سرور داده می‌شود' : undefined}
+            className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 text-left font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all read-only:text-slate-500" 
             dir="ltr" 
           />
         </div>

@@ -3,8 +3,10 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog.js';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
-import { findFinalDocumentIdByRef } from '../services/documents/documentRefLookup.js';
-import { assertNotProjectDelivery, assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
+import { findFinalDocumentIdByRef, storedDocumentHeader } from '../services/documents/documentRefLookup.js';
+import { DOCUMENT_TYPE_TITLES } from '../lib/documents/documentTypeTitles.js';
+import { isAutoRefNumber } from '../lib/documents/documentRefRules.js';
+import { assertManualRefAllowed, assertNotProjectDelivery, assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, storageDateParam, decimalInput } from '../middleware/validate.js';
@@ -262,17 +264,7 @@ router.get('/documents/next-ref', authorizePermission(...READ_PERMISSIONS.docume
   res.json({ nextRef });
 }));
 
-const docTypeTitles: Record<string, string> = {
-  receipt: 'رسید خرید مواد و کالا',
-  production_receipt: 'رسید تولید و تحویل محصول',
-  invoice: 'فاکتور فروش',
-  proforma: 'پیش‌فاکتور',
-  return: 'سند مرجوعی',
-  audit: 'سند انبارگردانی',
-  transfer: 'حواله انتقال',
-  remittance: 'حواله خروج',
-  waste: 'سند ضایعات'
-};
+const docTypeTitles = DOCUMENT_TYPE_TITLES;
 
 /** v9.0.125 (TD-541 / TD-771): کاربر مجوز این کار را دارد، وگرنه ۴۰۳ با نام فارسی مجوز */
 async function assertMayRecordDocument(user: AuthUserPayload | undefined, permission: string, action: string): Promise<void> {
@@ -288,6 +280,8 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   assertRecordableDocument(requestedType, req.body.inOut);
   // v9.0.256 (TD-780، تصمیم ت۷ الف): رسید تولید فقط از «ورود به انبار» پروژه
   assertNotProjectDelivery(requestedType);
+  // v9.0.258 (TD-783، تصمیم ت۹ الف): شماره فاکتور فروش و برگشت فقط از سری سرور
+  assertManualRefAllowed(requestedType, req.body.refNumber);
   const recordStatus = createdDocumentStatus(requestedType, req.body.status);
   await assertMayRecordDocument(req.user, permissionToCreateDocument(req.body),
     `ثبت ${docTypeTitles[requestedType] ?? 'سند'}${recordStatus === 'final' ? ' به‌صورت قطعی' : ''}`);
@@ -317,7 +311,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   const allowBackdate = await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION);
   // v9.0.13 (TD-424): «یک پیش‌فاکتور برای هر پرونده» زیر قفل ردیف پرونده و پیوند و علامت پرونده در همان تراکنش سند
   // (پیش‌تر بررسی بی قفل پیش از تراکنش و علامت‌گذاری پس از commit؛ پیش‌فاکتورهای هم‌زمان همه ثبت می‌شدند)
-  const { docId: newDocId, projectReservation } = await orm.transaction(async (tx) => {
+  const { docId: newDocId, projectReservation, stored } = await orm.transaction(async (tx) => {
     const lead = isProforma && targetLeadId ? await lockLeadForNewProforma(tx, targetLeadId) : null;
     // V10-4.3 / v9.0.254 (TD-776): پیوند رسمی سند به پرونده فروش همراه درج سند در سرویس (نه نوشتن جدا از route)
     const created = await DocumentService.createDocumentWithDetails({ ...req.body, crmLeadId: targetLeadId, user: sessionUserLabel(req.user), externalTx: tx }, { userId: req.user?.id, allowBackdate });
@@ -333,9 +327,10 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
         tx,
       });
     }
-    return created;
+    // v9.0.258 (TD-783): گزارش ممیزی و پاسخ نوع، شماره و وضعیتی را دارند که ذخیره شد (نه آنچه فرستاده شد)
+    return { ...created, stored: await storedDocumentHeader(tx, created.docId) };
   });
-  const title = docTypeTitles[req.body.docType] || 'سند انبار';
+  const title = docTypeTitles[stored?.type ?? req.body.docType] || 'سند انبار';
 
   const hasDiscounts = (req.body.items || []).some((i: { discount?: unknown }) => Number(i.discount || 0) > 0);
   const totalLines = (req.body.items || []).length;
@@ -348,14 +343,15 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
     action: 'CREATE',
     entity: title,
     entityId: newDocId,
-    description: `ثبت ${title} جدید به شماره "${req.body.refNumber}" (${totalLines} قلم کالا${hasDiscounts ? ' همراه با تخفیف ویژه' : ''})`,
+    description: `ثبت ${title} جدید به شماره "${stored?.refNumber ?? ''}" (${totalLines} قلم کالا${hasDiscounts ? ' همراه با تخفیف ویژه' : ''})`,
     details: {
       after: {
         docId: newDocId,
-        docType: req.body.docType,
-        refNumber: req.body.refNumber,
+        docType: stored?.type ?? req.body.docType,
+        refNumber: stored?.refNumber ?? null,
+        ...(isAutoRefNumber(req.body.refNumber) ? {} : { requestedRefNumber: req.body.refNumber }),
         date: req.body.date,
-        status: req.body.status || 'draft',
+        status: stored?.status ?? req.body.status,
         buyerName: req.body.buyer_name,
         buyerPhone: req.body.buyer_phone,
         currency: req.body.currency || 'IRR',
@@ -368,7 +364,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
     }
   });
 
-  res.json({ success: true, docId: newDocId, projectReservation });
+  res.json({ success: true, docId: newDocId, refNumber: stored?.refNumber ?? null, projectReservation });
 }));
 
 // v9.0.140 (TD-890، ت۱۰ الف): فهرست کامل با مجوز بخش اسناد؛ مجوز انبارگردانی فقط فهرست سندهای شمارش و انتقال
@@ -494,16 +490,19 @@ router.put('/documents/:id', authorizePermission('documents.edit'), validate(doc
   // v9.0.254 (TD-776): پیوند پرونده فروش (`crmLeadId`، null = قطع) درون تراکنش ویرایش و زیر قفل پرونده؛ پیش‌تر پس از commit
   // ویرایش، بی قفل و بی قاعده «یک پیش‌فاکتور برای هر پرونده» نوشته می‌شد
   await DocumentService.updateDocument(docId, { ...req.body, user: sessionUserLabel(req.user) });
+  // v9.0.258 (TD-783): گزارش ممیزی شماره و وضعیت ذخیره‌شده پس از ویرایش را می‌نویسد
+  const stored = await storedDocumentHeader(orm, docId);
 
   await logActivity({
     req,
     action: 'UPDATE',
     entity: 'اسناد انبار / پیش‌فاکتور',
     entityId: docId,
-    description: `ویرایش پیش‌فاکتور/سند شماره "${req.body.refNumber || docId}"`,
+    description: `ویرایش پیش‌فاکتور/سند شماره "${stored?.refNumber ?? docId}"`,
     details: {
       docId,
-      refNumber: req.body.refNumber,
+      refNumber: stored?.refNumber ?? null,
+      status: stored?.status ?? null,
       buyerName: req.body.buyer_name,
       notes: req.body.notes,
       ...('crmLeadId' in req.body ? { crmLeadId: req.body.crmLeadId ?? null } : {}),

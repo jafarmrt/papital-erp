@@ -276,7 +276,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       const item = await createTestItem({ currentStock: 5 });
       const [clerkRow] = await orm.select({ username: users.username, fullName: users.fullName }).from(users).where(eq(users.id, clerk.id));
       const res = await send(clerk.session, 'post', '/api/documents', {
-        docType: 'invoice', refNumber: `TD307-${Date.now()}`, date: new Date().toISOString().split('T')[0], status: 'draft', inOut: 'out',
+        docType: 'invoice', refNumber: 'auto', date: new Date().toISOString().split('T')[0], status: 'draft', inOut: 'out',
         buyer_name: 'td307', user: 'مدیر عامل (جعلی)', items: [{ itemId: item.id, quantity: 1, unit_price: 1000 }]
       });
       const docId = Number(res.body?.docId ?? res.body?.id ?? res.body?.data?.id);

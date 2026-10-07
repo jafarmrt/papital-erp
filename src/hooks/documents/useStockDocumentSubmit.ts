@@ -6,6 +6,7 @@ import { User } from '../../types';
 import { extractDateString, errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { exchangeRateError } from '../../components/documents/ExchangeRateField';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { refNumberToSend } from '../../lib/documents/documentRefRules';
 import type { StockDocumentForm } from './useStockDocumentForm';
 import type { StockDocumentReferenceData } from './useStockDocumentReferenceData';
 
@@ -23,7 +24,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
   const queryClient = useQueryClient();
   const { warehouses } = refData;
   const {
-    actionType, docType, refNumber, date, location, buyerName, currency, exchangeRate, returnInvoiceId, returnVatPercent, setReturnVatPercent,
+    actionType, docType, refNumber, suggestedRef, date, location, buyerName, currency, exchangeRate, returnInvoiceId, returnVatPercent, setReturnVatPercent,
     notes, docItems, selectedProjectId, selectedProjectObj, attachments, getItemReservationSummary,
     setIsSaving, setDocItems, fetchNextRef, changeReturnInvoiceRef, setBuyerName,
     setSelectedSupplierObj, setNotes, setUnitPrice, setQuantity, setSelectedProjectId,
@@ -95,7 +96,8 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
         body: JSON.stringify({
           docType,
           status: 'final',
-          refNumber,
+          // v9.0.258 (TD-783): برگشت از فروش و شماره پیشنهادی دست‌نخورده «auto»؛ سرور شماره آزاد سری را می‌دهد
+          refNumber: refNumberToSend(docType, refNumber, suggestedRef),
           date: formattedDate,
           user: currentUser.full_name || currentUser.username,
           location,
