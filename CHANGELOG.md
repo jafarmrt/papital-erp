@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.243 — v9.0.243 — Zero-Price Invoice Gets Its Cost Voucher
+- **Accounting:** a final sales invoice with zero gross (free sample, gift) now gets a voucher that moves its Kardex cost from inventory to cost of sales, with zero revenue; before, no voucher was issued and inventory stayed overstated in the ledger (TD-772).
+
 ### v9.0.242 — v9.0.242 — Stock Page Exit Cap by Source Warehouse
 - **Documents (UI):** the stock document page caps an exit at min(source warehouse stock, total stock − other reservations), the server rule, so a remittance from an empty warehouse is stopped in the form instead of failing on save (TD-799).
 

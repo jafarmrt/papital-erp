@@ -128,7 +128,9 @@ export class VoucherSyncService {
     const grossAmountNum = grossAmount.round(4);
     const totalDiscountNum = totalDiscount.round(4);
 
-    if (!grossAmountNum.isPositive()) return null;
+    // v9.0.243 (TD-772، تصمیم ت۳ «الف» بسته ۸): فاکتور با جمع ناخالص صفر (نمونه رایگان، هدیه) هم سند می‌گیرد: بهای
+    // تمام‌شده به بهای کاردکس «بدهکار ۶۰۰۱ / بستانکار موجودی» و درآمد صفر، مثل فاکتوری که یک ردیف رایگان دارد. پیش‌تر
+    // این‌جا بی سند برمی‌گشت و کالای خارج‌شده هرگز از حساب موجودی کم نمی‌شد (B08-03). ردیف صفر نوشته نمی‌شود.
 
     const netAmountRaw = grossAmountNum.subtract(totalDiscountNum);
     const netAmount = netAmountRaw.isNegative() ? fin(0) : netAmountRaw.round(4);
@@ -217,7 +219,7 @@ export class VoucherSyncService {
     }[] = [];
 
     // ۱) بدهکار: حساب‌های دریافتنی تجاری (مشتری)
-    voucherItems.push({
+    if (finalPayable.isPositive()) voucherItems.push({
       accountId: customerAcc.id,
       detailedType: 'customer',
       detailedId: matchedCustomerId || undefined,
@@ -244,7 +246,7 @@ export class VoucherSyncService {
     }
 
     // ۳) بستانکار: درآمد فروش محصولات
-    voucherItems.push({
+    if (grossAmountNum.isPositive()) voucherItems.push({
       accountId: revenueAcc.id,
       detailedType: 'other',
       detailedName: 'درآمد فروش محصولات',
@@ -372,6 +374,9 @@ export class VoucherSyncService {
         }
       }
     }
+
+    // فاکتوری که نه مبلغ دارد نه بهای کاردکس، چیزی برای ثبت ندارد
+    if (voucherItems.length === 0) return null;
 
     // v7.0.31 (TD-193 / P1-8): یافتن سند حسابداری فاکتور فقط از پیوند صریح source_document_id؛
     // reference_id در اسناد معکوس/اصلاحی شناسه سند حسابداری مبدأ است و با شناسه اسناد انبار تداخل دارد.
