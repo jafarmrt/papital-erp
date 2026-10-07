@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.270 — Requisitions With Orders Are Not Deleted
+- **Fix (TD-695, B10-08):** a purchase requisition with a live purchase order is not deleted (409 REQUISITION_HAS_ORDERS naming the orders), under the requisition row lock with the workflow terminated in the same transaction; the desk shows the delete button only for a requisition without orders.
+
 ### v9.0.269 — Delivery Through the Workflow
 - **Fix (TD-692, B10-05):** delivering a procurement order runs the receive transition in the delivery transaction with the deliverer's role and permissions, a refused transition refuses the delivery, an order of an unapproved requisition is delivered only after approval (decision t1), and the direct writes to workflow_instances, workflow_pending_approvals and workflow_tasks are gone (Vitest ratchet workflowTableWrites).
 

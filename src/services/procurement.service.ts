@@ -399,13 +399,21 @@ export class ProcurementService {
    * Delete requisition (soft delete)
    */
   static async deleteRequisition(id: number, user: { id?: number; username?: string }): Promise<void> {
-    const existing = await this.getRequisitionById(id);
     // v9.0.40 (TD-447، ت۵): حذف و بستن فرایند در جریان درخواست در یک تراکنش، زیر قفل ردیف درخواست (وضعیت زیر قفل دوباره خوانده می‌شود)
     await orm.transaction(async (tx) => {
-      const [locked] = await tx.select({ status: purchaseRequisitions.status }).from(purchaseRequisitions)
+      const [locked] = await tx.select().from(purchaseRequisitions)
         .where(and(eq(purchaseRequisitions.id, id), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');
       if (!locked) throw new NotFoundError('درخواست خرید یافت نشد.');
+      // v9.0.270 (TD-695، B10-08): درخواستی که سند سفارش زنده دارد حذف نمی‌شود. پیش‌تر فقط وضعیت «سفارش‌شده» و
+      // «دریافت‌شده» رد می‌شد: درخواستِ بخشی‌سفارش‌شده یا لغوشده حذف می‌شد و سفارشش بی درخواست تحویل می‌شد
+      const liveOrders = await requisitionOrderDocuments(tx, { code: locked.code, items: locked.items as RequisitionItemWithReceipt[] });
+      if (liveOrders.length > 0) {
+        throw new ConflictError(
+          `درخواست خرید ${locked.code} سفارش خرید ثبت‌شده دارد (${liveOrders.map(o => o.refNumber || String(o.id)).join('، ')}) و حذف نمی‌شود؛ ابتدا سفارش‌ها را باطل کنید.`,
+          { documentIds: liveOrders.map(o => o.id) }, 'REQUISITION_HAS_ORDERS',
+        );
+      }
       if (locked.status === 'ordered' || locked.status === 'received') {
         throw new ValidationError('درخواست‌های خریدی که سفارش آنها صادر شده یا کالا تحویل شده قابل حذف نیستند.');
       }
@@ -425,8 +433,8 @@ export class ProcurementService {
         action: 'DELETE',
         entity: 'درخواست خرید',
         entityId: id,
-        description: `حذف درخواست خرید ${existing.code}`,
-        details: { code: existing.code, title: existing.title },
+        description: `حذف درخواست خرید ${locked.code}`,
+        details: { code: locked.code, title: locked.title, before: toRequisitionDto(locked) },
         tx,
       });
     });

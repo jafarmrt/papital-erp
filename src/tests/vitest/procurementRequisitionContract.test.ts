@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRequisitionSchema, updateRequisitionSchema } from '../../routes/procurement.schemas';
-import { REQUISITION_PRIORITIES } from '../../lib/procurement/requisitionFields';
+import { canDeleteRequisition, REQUISITION_PRIORITIES } from '../../lib/procurement/requisitionFields';
 import { persianIssueMessage } from '../../lib/validationMessages';
 
 /**
@@ -58,5 +58,18 @@ describe('purchase requisition contract (TD-688)', () => {
     expect(persian.data?.body.items[0]).toMatchObject({ requestedQty: '12.5', unitPriceEstimate: '1000' });
     const edit = updateRequisitionSchema.safeParse({ params: { id: '4' }, body: { items: [{ id: 'item-1791-0', itemId: 7, requestedQty: 3 }] } });
     expect(edit.data?.body.items?.[0]?.id).toBe('item-1791-0');
+  });
+});
+
+describe('requisition delete button (TD-695)', () => {
+  const row = { itemId: 7, requestedQty: 5, orderedQty: 0, receivedQty: 0, linkedDocumentIds: [] as number[] };
+  it('offers delete only for a requisition with no order, whatever its status', () => {
+    expect(canDeleteRequisition({ status: 'pending', items: [row] })).toBe(true);
+    expect(canDeleteRequisition({ status: 'rejected', items: [row] })).toBe(true);
+    // a partly ordered requisition (under_review before v9.0.267) and a cancelled one with a live order
+    expect(canDeleteRequisition({ status: 'under_review', items: [{ ...row, orderedQty: 2, linkedDocumentIds: [11] }] })).toBe(false);
+    expect(canDeleteRequisition({ status: 'rejected', items: [{ ...row, orderedQty: 5, linkedDocumentIds: [12] }] })).toBe(false);
+    expect(canDeleteRequisition({ status: 'ordered', items: [row] })).toBe(false);
+    expect(canDeleteRequisition({ status: 'received', items: [{ ...row, receivedQty: 5 }] })).toBe(false);
   });
 });
