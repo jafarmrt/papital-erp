@@ -19,6 +19,45 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.224 — Users, Roles and Audit Screens in Plain Persian
+- **Users, Roles and Audit Screens in Plain Persian:** the users, roles, audit log, login, setup and profile screens and the permission list drop English words and transliterations, show counts in Persian digits and name roles instead of showing their codes (TD-540).
+
+### v9.0.223 — The Simple User List Gives the Role Name, Not Its Code
+- **The Simple User List Gives the Role Name, Not Its Code:** the user list every signed-in user reads for mentions carries each role's Persian name instead of its code (TD-534).
+
+### v9.0.222 — Profile Picture Only From This System, Name Up to 100 Characters
+- **Profile Picture Only From This System, Name Up to 100 Characters:** the profile refuses an outside image address or any other text as the picture, and a user name is at most 100 characters (TD-533).
+
+### v9.0.221 — Clicking a Permission Title Ticks It
+- **Clicking a Permission Title Ticks It:** in the role form a click on a permission's title or description ticks it once, like the box itself (TD-536).
+
+### v9.0.220 — The Login Lock Shows Its Real Minutes in Persian
+- **The Login Lock Shows Its Real Minutes in Persian:** a login lock answers locked and its minutes; the login page counts them down in Persian digits and a general 429 is no longer a fake lock (TD-539).
+
+### v9.0.219 — A Temporary Password Must Be Changed First
+- **A Temporary Password Must Be Changed First:** a password an administrator sets is temporary; until the user changes it the server opens only the session, profile and logout, and the browser shows only the password form (TD-523).
+
+### v9.0.218 — Changing Your Own Password Keeps This Session
+- **Changing Your Own Password Keeps This Session:** after a password change from the profile, this session gets a new token and goes on; the other sessions of the user end (TD-531).
+
+### v9.0.217 — One Minimum Password Length Everywhere
+- **One Minimum Password Length Everywhere:** creating, editing and restoring a user, the profile and the setup all ask eight characters, from one shared constant with one Persian message (TD-532).
+
+### v9.0.216 — Audit Actions in Persian and Jalali Excel File Name
+- **Audit Actions in Persian and Jalali Excel File Name:** one table gives the Persian label of every audit action on the page, the filter, the print and Excel; the Excel file is named with today's Jalali date (TD-538).
+
+### v9.0.215 — Audit Print and Excel Cover the Whole Filter
+- **Audit Print and Excel Cover the Whole Filter:** the official print and the Excel export come from one server request with every filter and the search, up to 1000 rows; the print shows the server total and all filters (TD-527).
+
+### v9.0.214 — Audit Log Page Shows Refusals and Searches After Typing Pauses
+- **Audit Log Page Shows Refusals and Searches After Typing Pauses:** a refused request shows a Persian permission message instead of an empty list; the search is sent once, from page 1 (TD-537).
+
+### v9.0.213 — Audit Log Masks Bank Numbers and Secret Keys in Any Spelling
+- **Audit Log Masks Bank Numbers and Secret Keys in Any Spelling:** card, account and Sheba numbers keep only their last four digits in audit snapshots; secret keys are found by "contains" in any spelling (TD-530).
+
+### v9.0.212 — Audit Purge Keeps Financial, Security, Role and User Events
+- **Audit Purge Keeps Financial, Security, Role and User Events:** the purge deletes only operational sections after the fixed 90 days; the options that turned protection off are gone (TD-522).
+
 ### v9.0.211 — Terminal Output Is English
 - **Terminal English (owner rule t9):** AGENTS.md §6 records that everything a terminal shows is English (scripts, hooks, server logs, test names, commits), while UI text, user error messages and documents stay Persian. `npm run ratchet:terminal-english` (`scripts/terminal-english-ratchet.ts`, run by Vitest `terminalEnglishRatchet.test.ts`) counts the places that still print Persian per file and fails when a file gains one; translating them is the next step of TD-625.
 

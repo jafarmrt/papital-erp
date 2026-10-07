@@ -10,7 +10,8 @@ export interface SimpleUserOption {
   id: number;
   username: string;
   full_name: string;
-  role: string;
+  /** v9.0.223 (TD-534): نام فارسی نقش، نه کد آن */
+  role_name?: string;
   avatar_url?: string;
 }
 
