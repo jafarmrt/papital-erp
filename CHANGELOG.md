@@ -19,6 +19,15 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.288 — Report Digits, Currency Names and Today
+- **Accounting Report Digits (P3):** the journal book and the ratios show Persian digits, currencies are named, and the party statement and account explorer take today from the business time zone (TD-580).
+
+### v9.0.287 — Persian Wording in the Accounting UI
+- **Accounting UI Wording (P3):** the accounting screens have no English words or loanwords («دوبل», «آرتیکل», «داشبورد») and the voucher form button says it saves a draft (TD-579).
+
+### v9.0.286 — Payslip Deductions Get Their Own Account
+- **Payslip Deductions Account (P2):** payslip deductions credit the new standard account 3205 «employee deductions payable» instead of 3202 «customer prepayments»; migration 0077 adds it to existing charts, past vouchers stay and the health check lists what is left on 3202 (TD-554).
+
 ### v9.0.285 — Work Log and Payslip Writes Are Audited
 - **Work Log and Payslip Writes Are Audited (TD-810):** editing a work log from 400,000 to 20,000,000 rials or deleting it left no trace, a batch wrote one «ثبت N ردیف» row without ids, and payslip rows were written after commit with no details, no IP and the raw status code; every log create, edit and delete and every payslip issue, status change and delete now writes its own audit row in its transaction with the request IP, before / after (changed fields on edit) and Persian status labels.
 

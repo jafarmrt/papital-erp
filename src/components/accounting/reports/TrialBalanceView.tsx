@@ -200,7 +200,7 @@ export function TrialBalanceView({
               type="text"
               value={tableSearch}
               onChange={e => setTableSearch(e.target.value)}
-              placeholder="جستجوی سریع کد یا عنوان..."
+              placeholder="جست‌وجوی سریع کد یا عنوان..."
               className="w-full pr-8 pl-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>

@@ -66,10 +66,10 @@ describe('manual voucher row currency and rate (TD-564)', () => {
     fireEvent.click(await screen.findByText('بازیابی پیش‌نویس'));
     await waitFor(() => expect(screen.getByLabelText('نرخ دلار به ریال *')).toBeTruthy());
     expect(document.body.textContent).toContain('نرخ تبدیل ردیف ۱، ۲ به ریال را وارد کنید');
-    expect((screen.getByText('ثبت قطعی سند (Ctrl+S)').closest('button') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText('ذخیره پیش‌نویس سند (Ctrl+S)').closest('button') as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.change(screen.getByLabelText('نرخ دلار به ریال *'), { target: { value: '۶۰۰,۰۰۰' } });
-    fireEvent.click(screen.getByText('ثبت قطعی سند (Ctrl+S)'));
+    fireEvent.click(screen.getByText('ذخیره پیش‌نویس سند (Ctrl+S)'));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect((onSave.mock.calls[0][0] as Row).currency).toBe('USD');
     expect(savedRows(onSave)).toEqual(['USD@600000:100/0', 'USD@600000:0/100']);

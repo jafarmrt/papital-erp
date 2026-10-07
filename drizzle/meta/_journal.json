@@ -540,6 +540,13 @@
       "when": 1793110000000,
       "tag": "0076_piecework_personnel_rate_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1793120000000,
+      "tag": "0077_payroll_deductions_account",
+      "breakpoints": true
     }
   ]
 }

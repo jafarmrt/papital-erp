@@ -20,7 +20,7 @@ export const AutomationStatusView: React.FC = () => {
             <Factory className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="font-bold text-slate-900 dark:text-white text-sm">وضعیت اتوماسیون صدور اسناد دوبل</h4>
+            <h4 className="font-bold text-slate-900 dark:text-white text-sm">وضعیت صدور خودکار اسناد حسابداری</h4>
             <p className="text-xs text-slate-500 dark:text-slate-400">پوشش سند حسابداری خودکار برای اسناد نهایی، به تفکیک نوع سند</p>
           </div>
         </div>
@@ -29,7 +29,7 @@ export const AutomationStatusView: React.FC = () => {
           className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition"
         >
           <RefreshCw className={loading ? 'w-4 h-4 animate-spin' : 'w-4 h-4'} />
-          بروزرسانی
+          به‌روزرسانی
         </button>
       </div>
 
@@ -40,11 +40,11 @@ export const AutomationStatusView: React.FC = () => {
             <p className="text-xl font-black text-slate-800 dark:text-white mt-1 font-mono">{formatPersianNumber(summary.totalDocs)}</p>
           </div>
           <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
-            <p className="text-xs text-slate-500 dark:text-slate-400">دارای سند دوبل خودکار</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">دارای سند حسابداری خودکار</p>
             <p className="text-xl font-black text-emerald-600 mt-1 font-mono">{formatPersianNumber(summary.coveredDocs)}</p>
           </div>
           <div className={`p-4 rounded-2xl border ${summary.coveragePercent >= 90 ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800' : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'}`}>
-            <p className="text-xs text-slate-600 dark:text-slate-300">ضریب پوشش اتوماسیون</p>
+            <p className="text-xs text-slate-600 dark:text-slate-300">درصد پوشش صدور خودکار</p>
             <p className={`text-xl font-black mt-1 font-mono ${summary.coveragePercent >= 90 ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
               {formatPersianNumber(summary.coveragePercent)}٪
             </p>
@@ -56,7 +56,7 @@ export const AutomationStatusView: React.FC = () => {
         <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 flex items-start gap-3 no-print">
           <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-            <strong>شکاف اتوماسیون شناسایی‌شده:</strong> برای «{summary.gapTypes.join('، ')}» هنوز سناریوی پیش‌نویس ← تایید ← صدور خودکار سند دوبل پیاده‌سازی نشده است. این اسناد نیازمند صدور دستی سند حسابداری هستند.
+            <strong>نوع‌های بی سند خودکار:</strong> برای «{summary.gapTypes.join('، ')}» هنوز سناریوی پیش‌نویس ← تایید ← صدور خودکار سند حسابداری پیاده‌سازی نشده است. این اسناد نیازمند صدور دستی سند حسابداری هستند.
           </div>
         </div>
       )}
@@ -67,9 +67,9 @@ export const AutomationStatusView: React.FC = () => {
             <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-black">
               <th className="p-3">نوع سند</th>
               <th className="p-3 text-center">تعداد اسناد</th>
-              <th className="p-3 text-center">دارای سند دوبل</th>
-              <th className="p-3 text-center">بدون سند ( orphan )</th>
-              <th className="p-3 text-center">وضعیت اتوماسیون</th>
+              <th className="p-3 text-center">دارای سند حسابداری</th>
+              <th className="p-3 text-center">بی سند حسابداری</th>
+              <th className="p-3 text-center">وضعیت صدور خودکار</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-bold">

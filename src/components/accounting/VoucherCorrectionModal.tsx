@@ -234,7 +234,7 @@ export function VoucherCorrectionModal({
           <div className="flex items-start gap-3 p-3.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 rounded-xl text-xs text-blue-900 dark:text-blue-200">
             <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
             <div className="leading-relaxed">
-              <span className="font-bold">فرایند استاندارد اصلاح اسناد در حسابداری دوبل:</span> در حسابداری حرفه‌ای، اسناد تاییدشده هرگز دستکاری یا بازنویسی مستقیم نمی‌شوند؛ با تایید این فرم:
+              <span className="font-bold">فرایند استاندارد اصلاح اسناد حسابداری:</span> در حسابداری حرفه‌ای، اسناد تاییدشده هرگز دستکاری یا بازنویسی مستقیم نمی‌شوند؛ با تایید این فرم:
               <ul className="list-disc list-inside mt-1 space-y-0.5 text-[11px] opacity-90">
                 <li>یک سند برگشتی خودکار صادر شده تا اثر مالی سند قبلی را در دفاتر کل خنثی سازد.</li>
                 <li>سند اصلاحی جدید با ردیف‌های زیر و ارجاع مستقیم به سند مبدا ثبت و جایگزین می‌گردد.</li>
@@ -319,7 +319,7 @@ export function VoucherCorrectionModal({
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 <Scale className="w-4 h-4 text-indigo-500" />
-                <span>آرتیکل‌های جدید سند اصلاحی</span>
+                <span>ردیف‌های تازه سند اصلاحی</span>
               </h4>
               <button
                 type="button"
@@ -424,7 +424,7 @@ export function VoucherCorrectionModal({
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100/80 dark:bg-slate-800 font-bold border-t border-slate-200 dark:border-slate-700 text-xs">
-                    <td colSpan={4} className="py-2.5 px-3 text-left">جمع کل آرتیکل‌ها ({formatCurrencyLabel(balance.currency)}{balance.inRial ? '، هر ردیف ارزی با نرخ خودش' : ''}):</td>
+                    <td colSpan={4} className="py-2.5 px-3 text-left">جمع کل ردیف‌ها ({formatCurrencyLabel(balance.currency)}{balance.inRial ? '، هر ردیف ارزی با نرخ خودش' : ''}):</td>
                     <td className="py-2.5 px-2 text-left font-mono text-slate-900 dark:text-white">
                       {formatPersianPrice(totalDebit, undefined, totalDecimals)}
                     </td>
