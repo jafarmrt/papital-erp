@@ -95,6 +95,8 @@ export interface JournalVoucher {
   sourceDocumentId?: number | null;
   /** TD-242: فیش حقوقی مبدأ سند صادرشده توسط VoucherSync برای فیش */
   sourcePayrollId?: number | null;
+  /** v9.0.120 (TD-545): سال مالی‌ای که «بستن سال مالی» این سند اختتامیه یا افتتاحیه را برایش صادر کرده است */
+  sourceFiscalYear?: number | null;
   currency?: string | null;
   createdById?: number | null;
   created_by_id?: number | null;

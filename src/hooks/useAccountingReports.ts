@@ -23,16 +23,17 @@ export function useAccountingReports() {
   const runBalance = balance.run;
   const runLedger = ledger.run;
 
-  const fetchTrialBalance = useCallback(async (level = 'subsidiary', startDate?: string, endDate?: string) => {
-    await runTrial({ level, startDate: startDate || undefined, endDate: endDate || undefined });
+  // v9.0.120 (TD-545): includeClosing = «همراه اسناد اختتامیه»
+  const fetchTrialBalance = useCallback(async (level = 'subsidiary', startDate?: string, endDate?: string, includeClosing?: boolean) => {
+    await runTrial({ level, startDate: startDate || undefined, endDate: endDate || undefined, includeClosing: includeClosing || undefined });
   }, [runTrial]);
 
-  const fetchIncomeStatement = useCallback(async (startDate?: string, endDate?: string) => {
-    await runIncome({ startDate: startDate || undefined, endDate: endDate || undefined });
+  const fetchIncomeStatement = useCallback(async (startDate?: string, endDate?: string, includeClosing?: boolean) => {
+    await runIncome({ startDate: startDate || undefined, endDate: endDate || undefined, includeClosing: includeClosing || undefined });
   }, [runIncome]);
 
-  const fetchBalanceSheet = useCallback(async (asOfDate?: string) => {
-    await runBalance({ asOfDate: asOfDate || undefined });
+  const fetchBalanceSheet = useCallback(async (asOfDate?: string, includeClosing?: boolean) => {
+    await runBalance({ asOfDate: asOfDate || undefined, includeClosing: includeClosing || undefined });
   }, [runBalance]);
 
   const fetchLedger = useCallback(async (accountId: number, startDate?: string, endDate?: string) => {

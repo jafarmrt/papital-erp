@@ -33,6 +33,7 @@ import { FinancialRatiosView } from './reports/FinancialRatiosView';
 import { AccountingAuditChecklistView } from './reports/AccountingAuditChecklistView';
 import { AutomationStatusView } from './reports/AutomationStatusView';
 import { ProjectReportView } from './reports/ProjectReportView';
+import { IncludeClosingToggle } from './reports/IncludeClosingToggle';
 
 interface FinancialReportsTabProps {
   accounts: Account[];
@@ -41,9 +42,9 @@ interface FinancialReportsTabProps {
   balanceSheet: BalanceSheetReport | null;
   ledgerReport: AccountLedgerReport | null;
   loading: boolean;
-  onFetchTrialBalance: (level?: string, startDate?: string, endDate?: string) => Promise<void>;
-  onFetchIncomeStatement: (startDate?: string, endDate?: string) => Promise<void>;
-  onFetchBalanceSheet: (asOfDate?: string) => Promise<void>;
+  onFetchTrialBalance: (level?: string, startDate?: string, endDate?: string, includeClosing?: boolean) => Promise<void>;
+  onFetchIncomeStatement: (startDate?: string, endDate?: string, includeClosing?: boolean) => Promise<void>;
+  onFetchBalanceSheet: (asOfDate?: string, includeClosing?: boolean) => Promise<void>;
   onFetchLedger: (accountId: number, startDate?: string, endDate?: string) => Promise<void>;
 }
 
@@ -88,6 +89,8 @@ export function FinancialReportsTab({
   const [balanceAsOfDate, setBalanceAsOfDate] = useState('');
   const [ratiosAsOfDate, setRatiosAsOfDate] = useState('');
   const [incomePeriod, setIncomePeriod] = useState({ startDate: '', endDate: '' });
+  // v9.0.120 (TD-545): «همراه اسناد اختتامیه» برای تراز آزمایشی، سود و زیان، ترازنامه و نسبت‌ها
+  const [includeClosing, setIncludeClosing] = useState(false);
   const [tableSearch, setTableSearch] = useState('');
   const [selectedLedgerAccountId, setSelectedLedgerAccountId] = useState<number | ''>('');
 
@@ -106,14 +109,14 @@ export function FinancialReportsTab({
     void onFetchTrialBalance(trialLevel, startDate || undefined, endDate || undefined);
   }, []);
 
-  const handleApplyTrialFilter = (newLevel?: 'all' | 'group' | 'general' | 'subsidiary' | 'detailed') => {
+  const handleApplyTrialFilter = (newLevel?: 'all' | 'group' | 'general' | 'subsidiary' | 'detailed', withClosing = includeClosing) => {
     const levelToFetch = newLevel || trialLevel;
     if (newLevel) setTrialLevel(newLevel);
-    void onFetchTrialBalance(levelToFetch, startDate || undefined, endDate || undefined);
+    void onFetchTrialBalance(levelToFetch, startDate || undefined, endDate || undefined, withClosing);
   };
 
-  const handleApplyIncomeFilter = (period = incomePeriod) => {
-    void onFetchIncomeStatement(period.startDate || undefined, period.endDate || undefined);
+  const handleApplyIncomeFilter = (period = incomePeriod, withClosing = includeClosing) => {
+    void onFetchIncomeStatement(period.startDate || undefined, period.endDate || undefined, withClosing);
   };
 
   const handleIncomePeriodChange = (period: { startDate: string; endDate: string }) => {
@@ -121,8 +124,8 @@ export function FinancialReportsTab({
     handleApplyIncomeFilter(period);
   };
 
-  const handleApplyBalanceSheetFilter = (date = balanceAsOfDate) => {
-    void onFetchBalanceSheet(date || undefined);
+  const handleApplyBalanceSheetFilter = (date = balanceAsOfDate, withClosing = includeClosing) => {
+    void onFetchBalanceSheet(date || undefined, withClosing);
   };
 
   const handleBalanceAsOfDateChange = (iso: string) => {
@@ -142,8 +145,19 @@ export function FinancialReportsTab({
     void journalBook.fetchJournalBook(startDate, endDate);
   };
 
-  const fetchFinancialRatios = (currency?: string, date = ratiosAsOfDate) => {
-    void ratios.fetchFinancialRatios(date, currency);
+  const fetchFinancialRatios = (currency?: string, date = ratiosAsOfDate, withClosing = includeClosing) => {
+    void ratios.fetchFinancialRatios(date, currency, withClosing);
+  };
+
+  const showsClosingToggle = activeSubTab === 'trial_balance' || activeSubTab === 'income_statement'
+    || activeSubTab === 'balance_sheet' || activeSubTab === 'ratios';
+
+  const handleIncludeClosingChange = (checked: boolean) => {
+    setIncludeClosing(checked);
+    if (activeSubTab === 'trial_balance') handleApplyTrialFilter(undefined, checked);
+    else if (activeSubTab === 'income_statement') handleApplyIncomeFilter(incomePeriod, checked);
+    else if (activeSubTab === 'balance_sheet') handleApplyBalanceSheetFilter(balanceAsOfDate, checked);
+    else if (activeSubTab === 'ratios') fetchFinancialRatios(undefined, ratiosAsOfDate, checked);
   };
 
   const handlePrint = () => {
@@ -245,6 +259,7 @@ export function FinancialReportsTab({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {showsClosingToggle && <IncludeClosingToggle checked={includeClosing} onChange={handleIncludeClosingChange} />}
           <button
             onClick={handlePrint}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition"
@@ -396,7 +411,7 @@ export function FinancialReportsTab({
           setStartDate={setStartDate}
           setEndDate={setEndDate}
           setTableSearch={setTableSearch}
-          onFetchTrialBalance={onFetchTrialBalance}
+          onFetchTrialBalance={(level, from, to) => onFetchTrialBalance(level, from, to, includeClosing)}
           expandAll={expandAll}
           collapseAll={collapseAll}
           onDrillDownToLedger={handleDrillDownToLedger}

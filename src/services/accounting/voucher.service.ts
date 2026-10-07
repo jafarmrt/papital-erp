@@ -262,6 +262,8 @@ export class VoucherService {
     /** v8.0.19 (TD-271): چکی که این سند در چرخه عمر آن صادر می‌شود */
     sourceChequeId?: number | null;
     sourceBomAllocationId?: number | null;
+    /** v9.0.120 (TD-545): فقط برای اسناد اختتامیه و افتتاحیه‌ای که بستن سال مالی صادر می‌کند */
+    sourceFiscalYear?: number | null;
     currency?: string;
     attachments?: unknown[];
     userId?: number;
@@ -326,6 +328,7 @@ export class VoucherService {
         sourcePayrollId: data.sourcePayrollId ?? null,
         sourceChequeId: data.sourceChequeId ?? null,
         sourceBomAllocationId: data.sourceBomAllocationId ?? null,
+        sourceFiscalYear: data.sourceFiscalYear ?? null,
         currency: data.currency || 'IRR',
         attachments: [],
         createdById: data.userId || null,

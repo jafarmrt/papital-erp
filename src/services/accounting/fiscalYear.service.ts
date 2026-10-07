@@ -110,9 +110,11 @@ export class FiscalYearService {
     const normClosingDate = closingDate;
     const draftVouchers = await this.findDraftVouchersOfYear(currentYear, params.externalTx);
 
+    // v9.0.120 (TD-545): بستن سال مانده واقعی دفتر را می‌خواهد، پس اسناد اختتامیه (و برگشت آن‌ها پس از بازگشایی) هم شمرده می‌شوند
     const trial = await AccountingReportService.getTrialBalance({
       level: 'subsidiary',
-      endDate: normClosingDate
+      endDate: normClosingDate,
+      includeClosing: true,
     }, params.externalTx);
 
     const temporaryAccounts: FiscalClosingAccountRow[] = [];
@@ -467,6 +469,7 @@ export class FiscalYearService {
             description: `بستن حساب‌های موقت (درآمدها، بهای تمام شده و هزینه‌ها) به حساب خلاصه سود و زیان سال مالی ${year}`,
             referenceModule: 'manual',
             referenceNumber: `CLOSE-TEMP-${year}`,
+            sourceFiscalYear: year,
             userId: data.userId,
             username: data.username,
             items: v1Items
@@ -524,6 +527,7 @@ export class FiscalYearService {
           description: `انتقال ${profitFin.greaterThan(0) ? 'سود' : 'زیان'} خالص سال مالی ${year} به حساب سود (زیان) انباشته سنواتی`,
           referenceModule: 'manual',
           referenceNumber: `CLOSE-PROFIT-${year}`,
+          sourceFiscalYear: year,
           userId: data.userId,
           username: data.username,
           items: v2Items
@@ -535,7 +539,8 @@ export class FiscalYearService {
       // V6.0.3 (TD-141): ارسال tx جهت خواندن مانده‌های به‌روزرسانی شده سود انباشته داخل همین تراکنش
       const postTrial = await AccountingReportService.getTrialBalance({
         level: 'subsidiary',
-        endDate: normClosingDate
+        endDate: normClosingDate,
+        includeClosing: true,
       }, tx);
 
       const v3Items: VoucherItemInput[] = [];
@@ -602,6 +607,7 @@ export class FiscalYearService {
           description: `سند اختتامیه سال مالی ${year} (بستن کلیه حساب‌های ترازنامه‌ای، دارایی‌ها، بدهی‌ها و حقوق صاحبان سهام)`,
           referenceModule: 'manual',
           referenceNumber: `CLOSING-${year}`,
+          sourceFiscalYear: year,
           userId: data.userId,
           username: data.username,
           items: v3Items
@@ -627,6 +633,7 @@ export class FiscalYearService {
           description: `سند افتتاحیه سال مالی ${year + 1} (انتقال مانده‌های ابتدای دوره دارایی‌ها، بدهی‌ها و سرمایه از سال مالی ${year})`,
           referenceModule: 'manual',
           referenceNumber: `OPENING-${year + 1}`,
+          sourceFiscalYear: year,
           userId: data.userId,
           username: data.username,
           items: v4Items

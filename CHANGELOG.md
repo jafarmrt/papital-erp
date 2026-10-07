@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.120 — Reports of a Closed Year Show Its Real Figures
+- **Closed-Year Reports (P1):** after a year was closed, its income statement, balance sheet, trial balance and ratios showed zero because they counted the closing vouchers; the closing run's vouchers are now linked to the year (`source_fiscal_year`, migration 0063) and left out by default, with an «include closing vouchers» box (TD-545, `reg_reports_exclude_year_end_closing_td_545`).
+
 ### v9.0.119 — Financial Ratios Show No Made-Up Score Before Data
 - **Ratios Score (P3):** before any data arrived, or after an error, the ratios page showed a health score of 75 out of 100 and «critical» statuses; it now shows no score, status or value until the server answers (TD-575, `financialRatiosNoScore.test.tsx`).
 

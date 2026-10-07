@@ -17,6 +17,9 @@ export const dateRangeQuerySchema = z.object({
   }).optional()
 });
 
+// v9.0.120 (TD-545، ت۳ الف): «همراه اسناد اختتامیه»؛ بی آن اسناد بستن سالِ روز پایان گزارش شمرده نمی‌شوند
+const includeClosingFlag = z.enum(['true', 'false']).optional();
+
 export const trialBalanceQuerySchema = z.object({
   query: z.object({
     // v7.0.138 (TD-249): «all» (درخت ۴ سطحی، پیش‌فرض صفحه صورت‌ها و گزارش‌های مالی) و «tree» را سرویس پشتیبانی می‌کند
@@ -24,6 +27,7 @@ export const trialBalanceQuerySchema = z.object({
     startDate: storageDateParam,
     endDate: storageDateParam,
     currency: z.string().optional(),
+    includeClosing: includeClosingFlag,
   }).optional()
 });
 
@@ -75,6 +79,7 @@ export const financialRatiosQuerySchema = z.object({
   query: z.object({
     asOfDate: storageDateParam,
     currency: z.string().optional(),
+    includeClosing: includeClosingFlag,
   }).optional()
 });
 
@@ -83,6 +88,7 @@ export const incomeStatementQuerySchema = z.object({
     startDate: storageDateParam,
     endDate: storageDateParam,
     currency: z.string().optional(),
+    includeClosing: includeClosingFlag,
   }).optional()
 });
 
@@ -91,6 +97,7 @@ export const balanceSheetQuerySchema = z.object({
     date: storageDateParam,
     asOfDate: storageDateParam,
     currency: z.string().optional(),
+    includeClosing: includeClosingFlag,
   }).optional()
 });
 

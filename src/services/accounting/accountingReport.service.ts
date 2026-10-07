@@ -22,6 +22,7 @@ import { isAllCurrenciesView, voucherItemCurrencyCondition, voucherItemCurrencyS
 import { partyDetailedRowsCondition, type PartyDetailedFilter } from './partyDetailedRows.js';
 import type { BalanceSheetReport, IncomeStatementReport, StatementRow } from '../../lib/accounting/financialStatements.js';
 import { accountSubtreeCondition } from './accountSubtree.js';
+import { yearEndClosingCutoff, yearEndClosingVoucherSql } from './yearEndClosingVouchers.js';
 import type { AccountCardReport } from '../../lib/accounting/accountCard.js';
 
 /** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
@@ -73,6 +74,10 @@ export class AccountingReportService {
     startDate?: string;
     endDate?: string;
     currency?: string;
+    /** v9.0.120 (TD-545): «همراه اسناد اختتامیه»؛ پیش‌فرض اسناد بستن سالِ روز پایان گزارش کنار می‌روند */
+    includeClosing?: boolean;
+    /** v9.0.120 (TD-545): اسناد بستن سال از این تاریخ به بعد کنار می‌روند (صورت سود و زیان: آغاز دوره)؛ پیش‌فرض تاریخ پایان */
+    closingExcludedFrom?: string;
   }, tx?: DbExecutor): Promise<TrialBalanceRow[]> {
     const executor = tx || orm;
     const targetLevel = params.level || 'all';
@@ -92,6 +97,7 @@ export class AccountingReportService {
     const rateExpr = voucherItemRateSql;
     const groupedItems = await executor.select({
       voucherDate: journalVouchers.date,
+      isYearEndClosing: yearEndClosingVoucherSql,
       itemCurrency: itemCurrencyExpr,
       accountId: journalVoucherItems.accountId,
       detailedType: journalVoucherItems.detailedType,
@@ -106,7 +112,7 @@ export class AccountingReportService {
     .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
     .where(and(...baseConditions))
     .groupBy(
-      journalVouchers.date, itemCurrencyExpr, journalVoucherItems.accountId,
+      journalVouchers.date, yearEndClosingVoucherSql, itemCurrencyExpr, journalVoucherItems.accountId,
       journalVoucherItems.detailedType, journalVoucherItems.detailedId, journalVoucherItems.detailedName
     );
 
@@ -143,6 +149,7 @@ export class AccountingReportService {
     const normStartDate = normalizeDateToIso(params.startDate);
     const normEndDate = normalizeDateToIso(params.endDate);
     const isBaseView = !params.currency || params.currency === 'all';
+    const closingCutoff = yearEndClosingCutoff(params.includeClosing, normalizeDateToIso(params.closingExcludedFrom) ?? normEndDate);
 
     for (const it of groupedItems) {
       const itemCur = it.itemCurrency;
@@ -165,6 +172,9 @@ export class AccountingReportService {
 
       if (isAfterEnd) {
         continue; // Skip transactions beyond end date
+      }
+      if (closingCutoff && it.isYearEndClosing && vDate >= closingCutoff) {
+        continue; // v9.0.120 (TD-545): سند بستن سالی که گزارش تا روز آن است
       }
 
       let accTurnover = accountTurnover.get(accId);
@@ -457,9 +467,9 @@ export class AccountingReportService {
   /**
    * Financial Ratios & Health Indicators (نسبت‌های مالی استاندارد، شاخص‌های سلامت مالی و تفکیک ارزی)
    */
-  static async getFinancialRatios(params: { asOfDate?: string; currency?: string }): Promise<FinancialRatiosReport> {
-    const bs = await this.getBalanceSheet({ date: params.asOfDate, currency: params.currency });
-    const is = await this.getIncomeStatement({ endDate: params.asOfDate, currency: params.currency });
+  static async getFinancialRatios(params: { asOfDate?: string; currency?: string; includeClosing?: boolean }): Promise<FinancialRatiosReport> {
+    const bs = await this.getBalanceSheet({ date: params.asOfDate, currency: params.currency, includeClosing: params.includeClosing });
+    const is = await this.getIncomeStatement({ endDate: params.asOfDate, currency: params.currency, includeClosing: params.includeClosing });
 
     const totalCurrentAssets = bs.totalCurrentAssets || 0;
     const totalNonCurrentAssets = bs.totalNonCurrentAssets || 0;
@@ -1092,8 +1102,9 @@ export class AccountingReportService {
   /**
    * Income Statement / Profit & Loss (صورت سود و زیان با پشتیبانی از ارز)
    */
-  static async getIncomeStatement(params: { startDate?: string; endDate?: string; currency?: string }, tx?: DbExecutor): Promise<IncomeStatementReport> {
-    const trial = await this.getTrialBalance({ level: 'subsidiary', ...params }, tx);
+  static async getIncomeStatement(params: { startDate?: string; endDate?: string; currency?: string; includeClosing?: boolean }, tx?: DbExecutor): Promise<IncomeStatementReport> {
+    // v9.0.120 (TD-545): گردش حساب‌های موقت در دوره بی اسناد بستن سالِ درون دوره؛ بی آغاز دوره، از روز پایان
+    const trial = await this.getTrialBalance({ level: 'subsidiary', ...params, closingExcludedFrom: params.startDate || params.endDate }, tx);
 
     const revenues: StatementRow[] = [];
     const costOfSales: StatementRow[] = [];
@@ -1145,8 +1156,8 @@ export class AccountingReportService {
   /**
    * Balance Sheet (ترازنامه با پشتیبانی از ارز)
    */
-  static async getBalanceSheet(params: { date?: string; currency?: string }, tx?: DbExecutor): Promise<BalanceSheetReport> {
-    const trial = await this.getTrialBalance({ level: 'subsidiary', endDate: params.date, currency: params.currency }, tx);
+  static async getBalanceSheet(params: { date?: string; currency?: string; includeClosing?: boolean }, tx?: DbExecutor): Promise<BalanceSheetReport> {
+    const trial = await this.getTrialBalance({ level: 'subsidiary', endDate: params.date, currency: params.currency, includeClosing: params.includeClosing }, tx);
 
     const currentAssets: StatementRow[] = [];
     const nonCurrentAssets: StatementRow[] = [];
