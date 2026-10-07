@@ -39,7 +39,6 @@
 | TD-590 | زیرساخت (بسته ۱) | P2 (B01-10) — `0007` ایندکس را بی نام اسکیما حذف می‌کند و اسکیمای ایزوله آزمون با مسیر جست‌وجوی `"<schema>", public` ساخته می‌شود: `public.idx_idemp_user_scope_key` حذف شد و هر POST با کلید idempotency با خطای `ON CONFLICT` شکست | drizzle/0007_idempotency_triple_key.sql، src/tests/setup/testDb.ts | open (P2) |
 | TD-592 | زیرساخت (بسته ۱) | P2 (B01-12) — خروجی داده `SELECT *` بی سقف روی ۲۹ جدول و یک `res.json` است: ۹۵۰٬۰۰۰ ردیف ممیزی ← ۷۵۰ MiB در ۲۷ s، حافظه پردازه ۳٬۰۹۴ MiB و `/health/live` ۱۳٫۲ s منتظر | services/system/dataExport.service.ts، system.routes.ts | open (P2، تصمیم ت۷ الف) |
 | TD-593 | زیرساخت (بسته ۱) | P2 (B01-13) — یک `try/catch` گرد همه پرس‌وجوهای صفحه سلامت صفر و `status: 'ok'` برمی‌گرداند: با پرس‌وجوی `outbox_events` شکست‌خورده، سند ناتراز موجود «۰ سند ناتراز، ok» و رابط «همه اسناد فعال تراز هستند» نشان داد | services/system/systemHealth.service.ts، SystemHealthDiagnostic.tsx | open (P2) |
-| TD-600 | زیرساخت (بسته ۱) | P3 (B01-20) — `sanitizeObject` در logger دور را تشخیص نمی‌دهد: `logger.error('…', circular)` و خطایی که `cause` آن به خودش برمی‌گردد `RangeError: Maximum call stack size exceeded` پرتاب کردند | middleware/logger.ts | open (P3) |
 | TD-601 | زیرساخت (بسته ۱) | P3 (B01-21) — `/health` عمومی `gitCommit: "v4-master"` و `buildTime` ثابت ۲۰۲۶-۰۹-۰۵ (هیچ فایل استقراری مقدار نمی‌دهد)، نسخه Node و محیط را بی ورود برمی‌گرداند | lib/version.ts، app.ts | open (P3) |
 | TD-603 | زیرساخت (بسته ۱) | P3 (B01-23) — راهنمای برگشت `update.sh` با `git checkout <sha>` HEAD جداشده می‌سازد و به‌روزرسانی بعدی با «You are not currently on a branch» شکست می‌خورد | update.sh | open (P3) |
 | TD-604 | زیرساخت (بسته ۱) | P3 (B01-24) — `DEPLOY_LINUX.md` برای به‌روزرسانی zip «باز کردن zip و سپس `update.sh`» می‌گوید؛ `update.sh` پس از گرفتن پشتیبان با `fatal: not a git repository` (۱۲۸) شکست می‌خورد؛ دستور درست `update.sh --zip <file>` است | deploy/DEPLOY_LINUX.md، update.sh | open (P3) |
@@ -101,8 +100,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۸۰ ردیف
-- **آرشیو شده (resolved):** ۵۰۹ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۷۹ ردیف
+- **آرشیو شده (resolved):** ۵۱۰ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -111,4 +110,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.150 — TD-598 (لاگ دسترسی در تولید) رفع و بایگانی شد؛ بسته ۱ ردیف باز دارد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.151 — TD-600 (شیء دوری در logger) رفع و بایگانی شد؛ بسته ۱ ردیف باز دارد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

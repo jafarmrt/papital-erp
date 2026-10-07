@@ -32,7 +32,15 @@ function sanitizeString(s: string): string {
     .replace(/"(password|new_password|current_password|pass|secret|token)":\s*"[^"]*"/gi, '"$1": "[REDACTED]"');
 }
 
-function sanitizeObject(obj: any): any {
+/** Deeper levels are cut; a log entry never needs more and a deep object cannot exhaust the stack */
+const SANITIZE_MAX_DEPTH = 12;
+
+/**
+ * v9.0.151 (TD-600): an object already on the path (a cycle, e.g. an error whose `cause` points back) becomes
+ * `[Circular]` and nesting beyond `SANITIZE_MAX_DEPTH` becomes `[Truncated]`; the plain recursion threw
+ * `RangeError: Maximum call stack size exceeded` from inside the caller's catch block.
+ */
+export function sanitizeObject(obj: any, ancestors: WeakSet<object> = new WeakSet(), depth = 0): any {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === 'string') {
     if (looksLikeJWT(obj)) {
@@ -42,20 +50,27 @@ function sanitizeObject(obj: any): any {
   }
   if (typeof obj !== 'object') return obj;
   if (obj instanceof FinancialDecimal) return obj.toNumber(); // v7.0.67 (P2-6)
-  if (Array.isArray(obj)) return obj.map(sanitizeObject);
+  if (ancestors.has(obj)) return '[Circular]';
+  if (depth >= SANITIZE_MAX_DEPTH) return '[Truncated]';
+  ancestors.add(obj);
+  try {
+    if (Array.isArray(obj)) return obj.map(item => sanitizeObject(item, ancestors, depth + 1));
 
-  const sanitized: any = {};
-  for (const key of Reflect.ownKeys(obj)) {
-    const value = (obj as any)[key];
-    if (typeof key === 'string' && /password|secret|token|auth|credit.?card|cvv/i.test(key)) {
-      sanitized[key] = '[REDACTED]';
-    } else if (typeof value === 'string' && looksLikeJWT(value)) {
-      sanitized[key] = '[JWT_REDACTED]';
-    } else {
-      sanitized[key] = sanitizeObject(value);
+    const sanitized: any = {};
+    for (const key of Reflect.ownKeys(obj)) {
+      const value = (obj as any)[key];
+      if (typeof key === 'string' && /password|secret|token|auth|credit.?card|cvv/i.test(key)) {
+        sanitized[key] = '[REDACTED]';
+      } else if (typeof value === 'string' && looksLikeJWT(value)) {
+        sanitized[key] = '[JWT_REDACTED]';
+      } else {
+        sanitized[key] = sanitizeObject(value, ancestors, depth + 1);
+      }
     }
+    return sanitized;
+  } finally {
+    ancestors.delete(obj);
   }
-  return sanitized;
 }
 
 // Sanitize any log message or metadata before writing

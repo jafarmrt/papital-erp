@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.151 — Logger Safe on Circular Values
+- **Circular Log Values:** the log sanitizer marks an object already on its path `[Circular]` and cuts nesting deeper than 12 levels (`sanitizeObject` in `src/middleware/logger.ts`). Before, logging a circular object or an error whose `cause` points back threw `RangeError` from inside the caller's `catch`.
+
 ### v9.0.150 — HTTP Access Log Kept in Production
 - **Access Log:** morgan writes access lines at `info` (`ACCESS_LOG_LEVEL` in `src/middleware/logger.ts`), the production default and the `LOG_LEVEL` written by `install.sh`. At `http` they were below it and production kept no access log.
 
