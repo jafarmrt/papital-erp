@@ -204,7 +204,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       await new Promise(resolve => setTimeout(resolve, 800));
       return fetchJson(endpoint, sameKeyOptions(), retries - 1, inFlightWaits);
     }
-    throw new ApiError(`ارتباط با سرور برقرار نشد: ${err?.message || 'خطای شبکه'}`, 'NETWORK_ERROR', 0);
+    throw new ApiError(`ارتباط با کارساز برقرار نشد: ${err?.message || 'خطای شبکه'}`, 'NETWORK_ERROR', 0);
   }
 
   if (!res.ok) {
@@ -220,7 +220,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       }
       settleKey(res.status);
       throw new ProtocolError(
-        `پاسخ خطای سرور با فرمت معتبر JSON دریافت نشد (وضعیت ${res.status}): ${parseErr?.message || 'خطای پروتکل'}`,
+        `پاسخ خطای کارساز با قالب معتبر JSON دریافت نشد (وضعیت ${res.status}): ${parseErr?.message || 'خطای شیوه ارتباط'}`,
         res.status
       );
     }
@@ -259,7 +259,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       data.message || 
       (typeof data.error === 'string' ? data.error : '') ||
       data.errorObject?.message || 
-      `خطا در برقراری ارتباط با سرور (${res.status})`;
+      `خطا در برقراری ارتباط با کارساز (${res.status})`;
     const details = data.details || data.errorDetails || data.errorObject?.details || null;
 
     if (res.status === 403) {
@@ -267,7 +267,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       if (code === PASSWORD_RESET_REQUIRED && typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('auth:password-reset-required'));
       }
-      const forbiddenMsg = data.message || (typeof data.error === 'string' ? data.error : '') || 'دسترسی غیرمجاز یا توکن امنیتی منقضی شده است (۴۰۳)';
+      const forbiddenMsg = data.message || (typeof data.error === 'string' ? data.error : '') || 'دسترسی غیرمجاز یا نشانه ورود منقضی شده است (۴۰۳)';
       throw new ApiError(forbiddenMsg, code || 'AUTHORIZATION_ERROR', 403, details);
     }
     if (res.status === 429) {
@@ -295,7 +295,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       throw (parseErr?.name === 'AbortError' ? parseErr : abortErr);
     }
     throw new ProtocolError(
-      `پاسخ سرور قابل تفسیر به JSON نیست (وضعیت ${res.status}): ${parseErr?.message || 'خطای پروتکل'}`,
+      `پاسخ کارساز قابل تفسیر به JSON نیست (وضعیت ${res.status}): ${parseErr?.message || 'خطای شیوه ارتباط'}`,
       res.status
     );
   }

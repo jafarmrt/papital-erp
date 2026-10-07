@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { rialDisplayOf } from '../../lib/rialDisplay';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
@@ -20,7 +21,7 @@ vi.mock('../../contexts/AuthContext', () => ({
 vi.mock('../../SearchContext', () => ({
   useSearch: () => ({ searchQuery: '', debouncedSearchQuery: '', setSearchQuery: () => undefined }),
 }));
-vi.mock('../../hooks/useAppCurrency', () => ({ useAppCurrency: () => 'USD' }));
+vi.mock('../../hooks/useAppCurrency', () => ({ useAppCurrency: () => 'IRR', useRialDisplay: () => rialDisplayOf('IRR') }));
 
 import ItemsPage from '../../pages/ItemsPage';
 import PricingPage from '../../pages/PricingPage';

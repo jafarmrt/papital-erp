@@ -525,7 +525,7 @@ export function usePiecework() {
           customRate
         })
       });
-      // v9.0.275 (TD-809): نرخ نمایش‌داده همان است که سرور ذخیره کرد و کارکرد می‌گیرد
+      // v9.0.284 (TD-809): نرخ نمایش‌داده همان است که سرور ذخیره کرد و کارکرد می‌گیرد
       await loadCustomRates(Number(selectedPersonnelForRates));
       hotToast.success('نرخ اختصاصی ثبت شد');
     } catch (err) {

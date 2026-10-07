@@ -7,6 +7,8 @@ import { resolveDocumentVat } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { netLineUnitPrice } from './purchaseLineCost.js';
 import { assertReturnWithinSold, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
+import { enforceReturnInvoiceTerms } from './salesReturnPrice.js';
+import { resolveReturnVatFromInvoice } from './salesReturnVat.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -23,6 +25,7 @@ import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { money } from '../../lib/money.js';
 import { releaseReservationsForDocument, restoreReservationsForDocument } from './projectReservationRelease.js';
 import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
+import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows } from './voidDependents.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { proformaInvoiceTarget } from './proformaInvoice.js';
 import { stockDirectionOf } from './documentRecordRule.js';
@@ -142,10 +145,21 @@ export class DocumentLifecycleService {
             });
           }
 
+          // v9.0.273 (TD-788، تصمیم ت۱۰ الف): پیش‌نویس برگشتِ دارای فاکتور مرجع فقط با ارز، نرخ و قیمت خالص همان فاکتور نهایی
+          // می‌شود؛ پیش‌نویس قدیمی که با آن نمی‌خواند ۴۲۲ می‌گیرد و باید ویرایش شود
+          const returnTerms = targetType === 'return' && doc.returnOfDocumentId
+            ? await enforceReturnInvoiceTerms(tx, Number(doc.returnOfDocumentId), {
+              currency: doc.currency,
+              rate: { exchangeRate: options?.exchangeRate ?? doc.exchangeRate?.toString() },
+              lines: docLines.map(l => ({ itemId: l.itemId, quantity: l.quantity, unit_price: fin(l.unitPrice).toString(), discount: fin(l.discount).toString() })),
+              stage: 'finalize',
+            })
+            : null;
+
           // v7.0.63 (TD-198): سند ارزی بدون نرخ تسعیر نهایی نمی‌شود (پیش از گردش انبار، چون قیمت ورود با آن به ریال می‌رود)؛ نرخ ارسالی روی خود سند ذخیره می‌شود
           const finalExchangeRate = resolveDocumentExchangeRate({
             currency: doc.currency,
-            input: { exchangeRate: options?.exchangeRate },
+            input: { exchangeRate: returnTerms ? returnTerms.exchangeRate : options?.exchangeRate },
             existing: doc.exchangeRate,
           });
 
@@ -190,13 +204,20 @@ export class DocumentLifecycleService {
           // Step 3: Document Status Commitment & Domain Event Outbox
           // v7.0.32 (TD-197 / audit P1-7): مالیاتی که هنگام نهایی‌سازی ارسال شود روی خود سند ذخیره می‌شود تا
           // فاکتور و سند حسابداری همیشه از یک مقدار (documents.vat_amount) استفاده کنند.
-          const finalVat = resolveDocumentVat({
-            docType: targetType,
-            input: { vatPercent: options?.vatPercent, vatAmount: options?.vatAmount },
-            lines: docLines,
-            existing: { vatPercent: Number(doc.vatPercent) || 0, vatAmount: doc.vatAmount },
-            currency: doc.currency,
-          });
+          // v9.0.274 (TD-774، تصمیم ت۵ الف): برگشتِ دارای فاکتور مرجع مالیات را زیر قفل فاکتور (assertReturnWithinSold) به نسبت
+          // از مالیات همان فاکتور می‌گیرد، با برگشت‌های نهایی همین لحظه
+          const vatInput = { vatPercent: options?.vatPercent, vatAmount: options?.vatAmount };
+          const finalVat = targetType === 'return' && doc.returnOfDocumentId
+            ? await resolveReturnVatFromInvoice(tx, {
+              invoiceId: Number(doc.returnOfDocumentId), returnId: id, lines: docLines, input: vatInput, currency: doc.currency, stage: 'finalize',
+            })
+            : resolveDocumentVat({
+              docType: targetType,
+              input: vatInput,
+              lines: docLines,
+              existing: { vatPercent: Number(doc.vatPercent) || 0, vatAmount: doc.vatAmount },
+              currency: doc.currency,
+            });
           await tx.update(documents).set({ 
             status: 'final',
             type: targetType,
@@ -314,6 +335,10 @@ export class DocumentLifecycleService {
       // v8.0.6 (TD-265، تصمیم مالک محصول): ابطال سند ورودی‌ای که موجودی‌اش با خروجِ تاریخ‌دار بعدی مصرف شده رد می‌شود
       // (پیش از هر نوشتن)؛ پیش‌تر فقط موجودی لحظه ابطال سنجیده می‌شد و کاردکس به ترتیب تاریخ منفی می‌ماند
       await assertVoidKeepsStockHistory(tx, { id: doc.id, refNumber: doc.refNumber });
+      // v9.0.271 (TD-773، ت۴ الف): فاکتوری که برگشت ابطال‌نشده دارد باطل نمی‌شود (۴۰۹ با فهرست برگشت‌ها)
+      await assertVoidHasNoReturns(tx, { id: doc.id, refNumber: doc.refNumber });
+      // v9.0.272 (TD-779، ت۴ الف): و نه سندی که دریافت یا پرداخت زنده خزانه دارد (۴۰۹ با فهرست آن‌ها)
+      await assertVoidHasNoTreasuryRows(tx, { id: doc.id, refNumber: doc.refNumber });
 
       const deletedByUser = user || doc.user || 'system';
       // V10-1.1: زمان حذف/برگشت‌ها از ساعت توافقی (بدون Z تا مقایسه لغوی ستون date سازگار بماند)

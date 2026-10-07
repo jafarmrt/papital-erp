@@ -9,7 +9,7 @@ import type { ScheduleRowRef } from '../../lib/projects/scheduleWorkLog.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
- * v9.0.271 (TD-812، B12P-09): ردیف کارکرد پیش از هر نوشتن سنجیده می‌شود. پیش‌تر مقدار «-5» با مبلغ منفی و «abc» صفر ذخیره
+ * v9.0.280 (TD-812، B12P-09): ردیف کارکرد پیش از هر نوشتن سنجیده می‌شود. پیش‌تر مقدار «-5» با مبلغ منفی و «abc» صفر ذخیره
  * می‌شد، کارکرد پرسنل حذف‌شده یا ناموجود پذیرفته می‌شد (piecework_logs کلید خارجی واقعی ندارد) و ردیف ناقص بی‌صدا رد می‌شد.
  * اکنون شناسه‌ها عدد صحیح مثبت، مقدار بزرگ‌تر از صفر (یا «ساعت:دقیقه»)، نرخ دستی نامنفی و تاریخ معتبرند (۴۲۲)، و پرسنل، عنوان
  * کار و پروژه باید زنده باشند؛ ردیف‌های آن‌ها `FOR SHARE` قفل می‌شوند تا حذف هم‌زمان پرسنل (که کارکرد آزاد را کار باز می‌داند،
@@ -77,7 +77,7 @@ export function normalizeWorkLogEntries(items: readonly WorkLogEntryInput[]): No
       projectId: workLogId(item.projectId, 'شناسه پروژه', prefix, true),
       isoDate: requireStorageDate(item.date, items.length > 1 ? `تاریخ کارکرد ردیف ${toPersianDigits(index + 1)}` : 'تاریخ کارکرد'),
       quantity: workLogQuantity(item.quantity, prefix),
-      // v9.0.272 (TD-735، تصمیم ت۴ الف): کارکرد ردیف برنامه کارگاه نرخ را همیشه از سرور می‌گیرد؛ نرخ ارسالی آن نادیده گرفته می‌شود
+      // v9.0.281 (TD-735، تصمیم ت۴ الف): کارکرد ردیف برنامه کارگاه نرخ را همیشه از سرور می‌گیرد؛ نرخ ارسالی آن نادیده گرفته می‌شود
       unitRate: item.scheduleRef ? undefined : workLogManualRate(item.unitRate, prefix),
       notes: item.notes ? String(item.notes).trim() : '',
       scheduleRef: item.scheduleRef ?? null,

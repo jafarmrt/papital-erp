@@ -10590,7 +10590,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 12 payroll PR a (v9.0.266 on): payslip integrity (TD-804 ...)
   const { runPayrollIntegrityTests } = await import('../regression/payrollIntegrityTests.js');
   results.push(...await runPayrollIntegrityTests(shouldRun));
-  // Package 12 payroll PR b (v9.0.270 on): work logs, piecework rates and their audit (TD-813 ...)
+  // Package 12 payroll PR b (v9.0.279 on): work logs, piecework rates and their audit (TD-813 ...)
   const { runPieceworkEntryTests } = await import('../regression/pieceworkEntryTests.js');
   results.push(...await runPieceworkEntryTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
@@ -10626,6 +10626,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.96, TD-496): the warehouse chart counts items with stock, not quantities of different units
   const { runWarehouseItemCountTests } = await import('../regression/warehouseItemCountTests.js');
   results.push(...await runWarehouseItemCountTests(shouldRun));
+  const { runSettingValuesTests } = await import('../regression/settingValuesTests.js');
+  results.push(...await runSettingValuesTests(shouldRun));
   // Package 6 (v9.0.110, TD-482): a warehouse code «default» is refused and reversals name a real warehouse
   const { runWarehouseReservedCodeTests } = await import('../regression/warehouseReservedCodeTests.js');
   results.push(...await runWarehouseReservedCodeTests(shouldRun));
@@ -10659,6 +10661,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 8 PR A (v9.0.238+): stock direction, sellable gate and line numbers of POST /documents
   const { runDocumentEntryTests } = await import('../regression/documentEntryTests.js');
   results.push(...await runDocumentEntryTests(shouldRun));
+  // Package 8 PR B (v9.0.270+): zero-price invoices, voids with dependents, sales return VAT and amounts
+  const { runSalesDocumentTests } = await import('../regression/salesDocumentTests.js');
+  results.push(...await runSalesDocumentTests(shouldRun));
 
   // Package 13 PR B (v9.0.249+): reading daily work logs (list, statistics, timestamps)
   const { runDailyLogReadTests } = await import('../regression/dailyLogReadTests.js');

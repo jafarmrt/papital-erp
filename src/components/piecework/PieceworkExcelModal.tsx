@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { X, FileSpreadsheet, Upload, Download, CheckCircle2, AlertTriangle, Loader2, Check } from 'lucide-react';
 import { PieceworkTask } from '../../types';
-import { formatPersianNumber, formatPersianPrice, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import {
   downloadPieceworkTemplate,
   exportPieceworkTasksToExcel,
@@ -25,8 +25,8 @@ export function PieceworkExcelModal({
   tasksList,
   onSuccess
 }: PieceworkExcelModalProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
 
   const [step, setStep] = useState<'upload' | 'preview' | 'result'>('upload');
   const [parsedRows, setParsedRows] = useState<ParsedPieceworkRow[]>([]);
@@ -415,7 +415,7 @@ export function PieceworkExcelModal({
                         </td>
                         <td className="p-2.5 text-center text-slate-600">{r.unit}</td>
                         <td className="p-2.5 text-left font-mono text-blue-700">
-                          {formatPersianPrice(r.defaultRate)}
+                          {rial.number(r.defaultRate)}
                         </td>
                         <td className="p-2.5 text-slate-500 text-[11px] truncate max-w-xs">{r.description || '—'}</td>
                       </tr>
@@ -458,7 +458,7 @@ export function PieceworkExcelModal({
                 </div>
               </div>
 
-              {/* v9.0.270 (TD-813): ردیف‌هایی که سرور ثبت نکرد، با دلیل */}
+              {/* v9.0.279 (TD-813): ردیف‌هایی که سرور ثبت نکرد، با دلیل */}
               {importResult && importResult.errors.length > 0 && (
                 <ul className="w-full max-w-lg text-right text-xs bg-rose-50 border border-rose-200 rounded-2xl px-4 py-3 space-y-1">
                   {importResult.errors.map(e => (

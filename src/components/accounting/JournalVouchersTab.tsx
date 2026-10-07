@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { FileText, Plus, Printer, Edit3, Trash2, ChevronDown, ChevronRight, CheckCircle2, Clock, Lock, RotateCcw, History, ShieldCheck, FileCheck, MoreVertical, CheckSquare, GitFork, X } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber, formatPersianDate } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import type { JournalVoucher, Account, Customer, Personnel, FinancialAttachment } from '../../types';
 import { VoucherReversalModal } from './VoucherReversalModal';
 import { VoucherCorrectionModal } from './VoucherCorrectionModal';
@@ -52,7 +52,7 @@ export function JournalVouchersTab({
   onBatchFinalizeVouchers,
   onBatchApproveVouchers,
 }: JournalVouchersTabProps) {
-  const appCurrency = useAppCurrency();
+  const rial = useRialDisplay();
   // v9.0.115 (TD-565): صفحه، جست‌وجو، نوع، وضعیت و تاریخ به سرور می‌روند و شمارنده‌ها و `total` از سرورند؛
   // پیش‌تر صفحه فقط ۲۰ سند آخر را داشت و همه صافی‌ها و شمارنده‌ها روی همان ۲۰ کار می‌کردند
   const [filters, setFilters] = useState<VoucherListFilters>({ status: 'all', voucherType: 'all', search: '', startDate: '', endDate: '' });
@@ -420,7 +420,7 @@ export function JournalVouchersTab({
                         </td>
 
                         <td className="py-3 px-4 text-left font-mono font-black text-slate-900 dark:text-white">
-                          {formatPersianPrice(voucher.totalDebit, voucher.currency || appCurrency)}
+                          {rial.money(voucher.totalDebit, voucher.currency)}
                         </td>
 
                         <td className="py-3 px-3 text-center text-slate-500 dark:text-slate-400">
@@ -633,10 +633,10 @@ export function JournalVouchersTab({
                                       </td>
                                       <td className="py-1.5 px-2 text-slate-600 dark:text-slate-400">{item.description}</td>
                                       <td className="py-1.5 px-2 text-left font-mono font-bold text-slate-900 dark:text-white">
-                                        {item.debit > 0 ? formatPersianPrice(item.debit) : '-'}
+                                        {item.debit > 0 ? rial.money(item.debit, item.currency || voucher.currency) : '-'}
                                       </td>
                                       <td className="py-1.5 px-2 text-left font-mono font-bold text-slate-900 dark:text-white">
-                                        {item.credit > 0 ? formatPersianPrice(item.credit) : '-'}
+                                        {item.credit > 0 ? rial.money(item.credit, item.currency || voucher.currency) : '-'}
                                       </td>
                                     </tr>
                                   ))}

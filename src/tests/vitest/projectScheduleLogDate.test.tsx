@@ -15,7 +15,10 @@ const fetchJson = vi.fn(async (url: string, opts?: FetchOpts) => {
 });
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('../../hooks/useAppCurrency', () => ({ useAppCurrency: () => 'IRR' }));
+vi.mock('../../hooks/useAppCurrency', async () => {
+  const { rialDisplayOf } = await vi.importActual<typeof import('../../lib/rialDisplay')>('../../lib/rialDisplay');
+  return { useAppCurrency: () => 'IRR', useRialDisplay: () => rialDisplayOf('IRR') };
+});
 vi.mock('../../components/common/JalaliDateInput', () => ({
   JalaliDateInput: ({ value, onChange }: { value: string; onChange: (iso: string) => void }) => (
     <input aria-label="work date" value={value} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} />
@@ -47,7 +50,7 @@ const renderTab = () => render(
   <ProjectScheduleTab project={PROJECT} personnelList={[{ id: 7, fullName: 'پرسنل آزمون' }]} pieceworkTasksList={[{ id: 3, title: 'برش', defaultRate: 1000 }]} onUpdate={vi.fn()} />,
 );
 
-// v9.0.274 (TD-747, package 11 decision t6 «الف»): a schedule work log is dated by the picker (default today), never the row or project start
+// v9.0.283 (TD-747, package 11 decision t6 «الف»): a schedule work log is dated by the picker (default today), never the row or project start
 describe('work date of workshop schedule logs (TD-747)', () => {
   it('logs a row on today, not on the row or project start date', async () => {
     renderTab();

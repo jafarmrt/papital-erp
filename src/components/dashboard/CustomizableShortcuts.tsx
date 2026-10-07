@@ -38,7 +38,7 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
   },
   {
     id: 'approval_inbox',
-    title: 'کارتابل تاییدات (ورکفلو)',
+    title: 'کارتابل تاییدات (گردش کار)',
     description: 'بررسی اسناد و تاییدات معوقه',
     path: '/approval-inbox',
     icon: CheckSquare,
@@ -59,7 +59,7 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
   {
     id: 'products',
     title: 'محصولات و کالاها',
-    description: 'تعریف و مدیریت کاتالوگ محصولات',
+    description: 'تعریف و مدیریت فهرست محصولات',
     path: '/products',
     icon: Package,
     color: 'text-indigo-600',
@@ -69,7 +69,7 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
   {
     id: 'raw_materials',
     title: 'مواد اولیه',
-    description: 'مدیریت و موجودی متریال و مواد خام',
+    description: 'مدیریت و موجودی مواد اولیه',
     path: '/products?type=raw_material',
     icon: Box,
     color: 'text-amber-600',
@@ -129,7 +129,7 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
   {
     id: 'pricing',
     title: 'قیمت‌گذاری اقلام',
-    description: 'استراتژی‌های قیمت و کدهای ترنسفر',
+    description: 'راهبردهای قیمت و کدهای ترنسفر',
     path: '/pricing',
     icon: DollarSign,
     color: 'text-emerald-700',

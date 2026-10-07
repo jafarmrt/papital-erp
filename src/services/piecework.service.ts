@@ -59,7 +59,7 @@ export interface CreatePieceworkLogInput extends WorkLogEntryInput {
   createdByUsername?: string;
 }
 
-/** v9.0.270 (TD-813): نرخ پایه نامعتبر یا منفی ۴۲۲ است (سرویس هم بی طرح route آن را می‌سنجد)؛ خالی یعنی «داده نشده» */
+/** v9.0.279 (TD-813): نرخ پایه نامعتبر یا منفی ۴۲۲ است (سرویس هم بی طرح route آن را می‌سنجد)؛ خالی یعنی «داده نشده» */
 function requireTaskRate(raw: unknown): string | undefined {
   const parsed = parsePieceworkRate(raw, 'نرخ پایه');
   if (!parsed.ok) throw new ValidationError(parsed.message, undefined, 'PIECEWORK_RATE_INVALID');
@@ -261,7 +261,7 @@ export class PieceworkService {
 
   /**
    * Logs piecework work entries with rate auto-resolution
-   * v9.0.271 (TD-812): every row is checked before anything is written (`normalizeWorkLogEntries`: positive ids, quantity above
+   * v9.0.280 (TD-812): every row is checked before anything is written (`normalizeWorkLogEntries`: positive ids, quantity above
    * zero or «hh:mm», non-negative manual rate, valid date) and personnel, task and project must be live; the whole batch is one
    * transaction, so a bad third row no longer leaves the first two saved.
    */
@@ -272,7 +272,7 @@ export class PieceworkService {
   ): Promise<number[]> {
     const entries = normalizeWorkLogEntries(items);
     return inTransaction(executor, async (tx) => {
-      // v9.0.273 (TD-736): نخست ردیف پروژه‌های ردیف‌های برنامه FOR UPDATE، سپس والدها FOR SHARE
+      // v9.0.282 (TD-736): نخست ردیف پروژه‌های ردیف‌های برنامه FOR UPDATE، سپس والدها FOR SHARE
       const schedules = await lockScheduleProjects(tx, entries);
       const names = await assertWorkLogParentsLive(tx, entries);
       await assertScheduleRowsFree(tx, entries, schedules);
@@ -301,7 +301,7 @@ export class PieceworkService {
         }).returning();
 
         insertedIds.push(inserted.id);
-        // v9.0.276 (TD-810): یک ردیف ممیزی برای هر کارکرد، در همان تراکنش
+        // v9.0.285 (TD-810): یک ردیف ممیزی برای هر کارکرد، در همان تراکنش
         await auditWorkLogCreated(tx, inserted, { personnel: names.personnel.get(entry.personnelId), task: names.tasks.get(entry.taskId) }, actor);
         if (entry.scheduleRef && entry.projectId !== null) links.push({ projectId: entry.projectId, ref: entry.scheduleRef, logId: inserted.id });
       }
@@ -312,7 +312,7 @@ export class PieceworkService {
 
   /** نرخ سرور برای کارکرد بی نرخ دستی: نرخ اختصاصی پرسنل برای آن کار، وگرنه نرخ پایه عنوان کار */
   static async serverRate(executor: DbExecutor, personnelId: number, taskId: number): Promise<DecimalValue> {
-    // v9.0.275 (TD-809): تازه‌ترین نرخ فعال، همان که صفحه نرخ‌ها نشان می‌دهد (پیش‌تر نخستین ردیف بی ترتیب)
+    // v9.0.284 (TD-809): تازه‌ترین نرخ فعال، همان که صفحه نرخ‌ها نشان می‌دهد (پیش‌تر نخستین ردیف بی ترتیب)
     const custom = await activePersonnelRate(executor, personnelId, taskId);
     if (custom) return custom.customRate;
     const [taskDef] = await executor.select().from(pieceworkTasks).where(eq(pieceworkTasks.id, taskId));
@@ -389,7 +389,7 @@ export class PieceworkService {
 
       let code = String(row.code || row['کد'] || row['کد کار'] || row['کد کاری'] || '').trim();
       const category = String(row.category || row['دسته'] || row['دسته‌بندی'] || row['گروه'] || 'سایر').trim();
-      // v9.0.270 (TD-813): نرخ متن یا منفی ردیف را ثبت نمی‌کند و در خطاهای ورود فهرست می‌شود (پیش‌تر «abc» صفر و «-1000» منفی ذخیره می‌شد)
+      // v9.0.279 (TD-813): نرخ متن یا منفی ردیف را ثبت نمی‌کند و در خطاهای ورود فهرست می‌شود (پیش‌تر «abc» صفر و «-1000» منفی ذخیره می‌شد)
       const parsedRate = parsePieceworkRate(row.defaultRate || row['نرخ'] || row['نرخ پایه'] || row['نرخ پیش‌فرض'] || row['دستمزد'], 'نرخ پایه');
       if (!parsedRate.ok) {
         errors.push({ row: i + 1, title, message: parsedRate.message });
@@ -686,7 +686,7 @@ export class PieceworkService {
     actor: RateActor = {},
     executor?: DbExecutor
   ): Promise<{ id: number; changed: boolean }> {
-    // v9.0.275 (TD-809): در تراکنش با قفل پرسنل، نرخ نامنفی، پرسنل و کار زنده، تاریخچه و ممیزی با همان tx
+    // v9.0.284 (TD-809): در تراکنش با قفل پرسنل، نرخ نامنفی، پرسنل و کار زنده، تاریخچه و ممیزی با همان tx
     return inTransaction(executor, tx => savePersonnelRate(tx, data, actor));
   }
 
@@ -710,14 +710,14 @@ export class PieceworkService {
       const existing = await lockEditableWorkLog(tx, id, 'کارکردی که در فیش حقوقی درج شده قابل تغییر نیست');
 
       const isoDate = data.date !== undefined ? requireStorageDate(data.date, 'تاریخ کارکرد') || existing.date : existing.date;
-      // v9.0.271 (TD-812): مقدار بزرگ‌تر از صفر، نرخ نامنفی و پروژه زنده، مانند ثبت کارکرد
+      // v9.0.280 (TD-812): مقدار بزرگ‌تر از صفر، نرخ نامنفی و پروژه زنده، مانند ثبت کارکرد
       const newQty = data.quantity !== undefined ? workLogQuantity(data.quantity, '') : existing.quantity;
       const manualRate = data.unitRate !== undefined ? workLogManualRate(data.unitRate, '') : undefined;
       const newRate: FinancialDecimal = manualRate !== undefined ? fin(manualRate) : existing.unitRate;
       const newTotal = fin(newQty).multiply(newRate);
       const newProjectId = data.projectId !== undefined ? workLogId(data.projectId, 'شناسه پروژه', '', true) : existing.projectId;
       const projectMoved = newProjectId !== existing.projectId;
-      // v9.0.273 (TD-736): کارکرد ردیف برنامه که به پروژه دیگر می‌رود پیوند ردیف پروژه پیشین را برمی‌دارد
+      // v9.0.282 (TD-736): کارکرد ردیف برنامه که به پروژه دیگر می‌رود پیوند ردیف پروژه پیشین را برمی‌دارد
       if (projectMoved) await lockProjectsOfLogMove(tx, existing.projectId, newProjectId);
       if (newProjectId !== null && projectMoved) {
         await assertWorkLogParentsLive(tx, [{ personnelId: existing.personnelId, taskId: existing.taskId, projectId: newProjectId }]);
@@ -736,7 +736,7 @@ export class PieceworkService {
         throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');
       }
       if (projectMoved) await unlinkScheduleRow(tx, existing.projectId, id);
-      // v9.0.276 (TD-810): فقط فیلدهای تغییرکرده با قبل و بعد
+      // v9.0.285 (TD-810): فقط فیلدهای تغییرکرده با قبل و بعد
       await auditWorkLogUpdated(tx, existing, updated, actor);
       return updated;
     });
@@ -759,7 +759,7 @@ export class PieceworkService {
       if (!deleted) {
         throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');
       }
-      // v9.0.273 (TD-736): ردیف برنامه کارکرد حذف‌شده دوباره ثبت‌شدنی است
+      // v9.0.282 (TD-736): ردیف برنامه کارکرد حذف‌شده دوباره ثبت‌شدنی است
       await unlinkScheduleRow(tx, existing.projectId, id);
       await auditWorkLogDeleted(tx, existing, actor);
       return existing;

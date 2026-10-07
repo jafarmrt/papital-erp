@@ -133,7 +133,7 @@ export class ProjectService {
       products: Array.isArray(input.products) ? input.products : [],
       // v8.0.58 (TD-306): رزرو پروژه را فقط سرور می‌سازد
       inventoryControl: await resolveServerInventoryControl(input.inventoryControl, {}, input.products, executor),
-      // v9.0.273 (TD-736): پروژه تازه کارکردی ندارد؛ پیوند کارکرد ارسالی ردیف‌ها نوشته نمی‌شود
+      // v9.0.282 (TD-736): پروژه تازه کارکردی ندارد؛ پیوند کارکرد ارسالی ردیف‌ها نوشته نمی‌شود
       stageSchedules: keepScheduleLogLinks(input.stageSchedules || {}, null),
       customStages: input.customStages || [],
       attachments: [],
@@ -227,7 +227,7 @@ export class ProjectService {
       const products = input.products !== undefined ? updateData.products : existing.products;
       updateData.inventoryControl = await resolveServerInventoryControl(input.inventoryControl, existing.inventoryControl, products, executor);
     }
-    // v9.0.273 (TD-736): پیوند کارکرد هر ردیف برنامه را فقط سرور (ثبت و حذف کارکرد) می‌نویسد
+    // v9.0.282 (TD-736): پیوند کارکرد هر ردیف برنامه را فقط سرور (ثبت و حذف کارکرد) می‌نویسد
     if (input.stageSchedules !== undefined) updateData.stageSchedules = keepScheduleLogLinks(input.stageSchedules, existing.stageSchedules);
     if (input.customStages !== undefined) updateData.customStages = input.customStages;
     if (input.attachments !== undefined) {

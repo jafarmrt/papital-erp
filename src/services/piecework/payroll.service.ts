@@ -252,7 +252,7 @@ export class PieceworkPayrollService {
         tx,
         { strict: true }
       );
-      // v9.0.276 (TD-810): ردیف ممیزی صدور با عکس فیش، کارکردها و سند، در همان تراکنش
+      // v9.0.285 (TD-810): ردیف ممیزی صدور با عکس فیش، کارکردها و سند، در همان تراکنش
       await auditPayrollIssued(tx, newPayroll, { personnelName: pInfo.fullName, logIds, voucher: autoVoucher }, { req: input.req, userId: currentUserId, username: currentUsername });
 
       return {
@@ -321,7 +321,7 @@ export class PieceworkPayrollService {
           { strict: true }
         );
       }
-      // v9.0.276 (TD-810): قبل و بعد فیلدهای تغییرکرده و وضعیت با برچسب فارسی (پیش‌تر «به «draft»» پس از commit)
+      // v9.0.285 (TD-810): قبل و بعد فیلدهای تغییرکرده و وضعیت با برچسب فارسی (پیش‌تر «به «draft»» پس از commit)
       await auditPayrollUpdated(tx, pay, { ...pay, ...updates } as typeof pay, autoVoucher, { req: input.req, userId: currentUserId, username: currentUsername });
 
       return {
@@ -453,7 +453,7 @@ export class PieceworkPayrollService {
         .where(eq(pieceworkPayrolls.id, payrollId))
         .returning();
 
-      // v9.0.276 (TD-810): عکس فیش، دلیل، سندهای باطل‌شده و کارکردهای آزادشده در همان تراکنش
+      // v9.0.285 (TD-810): عکس فیش، دلیل، سندهای باطل‌شده و کارکردهای آزادشده در همان تراکنش
       await auditPayrollDeleted(tx, pay, {
         reason,
         voidedVoucherIds: linkedVouchers.map(v => v.id),

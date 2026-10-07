@@ -1,6 +1,6 @@
 import React from 'react';
 import { ShieldCheck, AlertTriangle } from 'lucide-react';
-import { formatPersianPrice } from '../../../utils';
+import { rialDisplayOf } from '../../../lib/rialDisplay';
 
 interface TreasuryHealthBannerProps {
   totalLedgerBalance: number;
@@ -22,6 +22,7 @@ export const TreasuryHealthBanner: React.FC<TreasuryHealthBannerProps> = React.m
   appCurrency,
 }) => {
   const isHealthy = discrepantAccountsCount === 0;
+  const rial = rialDisplayOf(appCurrency);
 
   return (
     <div
@@ -71,19 +72,19 @@ export const TreasuryHealthBanner: React.FC<TreasuryHealthBannerProps> = React.m
           <div className="bg-white/80 dark:bg-slate-800/80 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
             <span className="text-slate-400 block text-[10px]">مجموع مانده دفاتر دوبل:</span>
             <span className="font-bold text-slate-800 dark:text-slate-200">
-              {formatPersianPrice(totalLedgerBalance, appCurrency)}
+              {rial.amount(totalLedgerBalance)}
             </span>
           </div>
           <div className="bg-white/80 dark:bg-slate-800/80 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
             <span className="text-slate-400 block text-[10px]">مجموع گردش خزانه‌داری:</span>
             <span className="font-bold text-slate-800 dark:text-slate-200">
-              {formatPersianPrice(totalTreasuryBalance, appCurrency)}
+              {rial.amount(totalTreasuryBalance)}
             </span>
           </div>
           {totalDiscrepancy > 0 && (
             <div className="bg-rose-100/80 dark:bg-rose-900/40 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300">
               <span className="block text-[10px]">میزان مغایرت کل:</span>
-              <span className="font-bold">{formatPersianPrice(totalDiscrepancy, appCurrency)}</span>
+              <span className="font-bold">{rial.amount(totalDiscrepancy)}</span>
             </div>
           )}
         </div>

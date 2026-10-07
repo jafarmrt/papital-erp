@@ -19,26 +19,53 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.276 — Work Log and Payslip Writes Are Audited
+### v9.0.285 — Work Log and Payslip Writes Are Audited
 - **Work Log and Payslip Writes Are Audited (TD-810):** editing a work log from 400,000 to 20,000,000 rials or deleting it left no trace, a batch wrote one «ثبت N ردیف» row without ids, and payslip rows were written after commit with no details, no IP and the raw status code; every log create, edit and delete and every payslip issue, status change and delete now writes its own audit row in its transaction with the request IP, before / after (changed fields on edit) and Persian status labels.
 
-### v9.0.275 — Personnel Custom Rates Are Unique, Checked and Audited
+### v9.0.284 — Personnel Custom Rates Are Unique, Checked and Audited
 - **Personnel Custom Rates Are Unique, Checked and Audited (TD-809):** a personnel custom rate was saved without a transaction, so concurrent saves made two active rows and the rates page and a work log read different rates; it is now saved under the personnel row lock with one active row per personnel and task (migration 0076), a negative rate or a missing personnel or task is refused, and every change writes a rate history row and an audit row with before and after.
 
-### v9.0.274 — Workshop Schedule Logs Are Dated by the Work Day
+### v9.0.283 — Workshop Schedule Logs Are Dated by the Work Day
 - **Workshop Schedule Logs Are Dated by the Work Day (TD-747):** «ثبت کارمزد» in the project workshop schedule dated a work log by the row or project start date, so today's work landed in another payroll month; the tab now has a Jalali work-date picker defaulting to today in the display time zone, and both the row and the stage batch log use it.
 
-### v9.0.273 — A Workshop Schedule Row Is Logged Once
+### v9.0.282 — A Workshop Schedule Row Is Logged Once
 - **A Workshop Schedule Row Is Logged Once (TD-736):** the «logged» flag of a workshop schedule row lived only in the browser, so reopening the tab logged and paid the same work twice; the server now writes the log id into the schedule row under the project row lock, refuses a second or concurrent log of the row with 409, and frees the row when its log is deleted or moved.
 
-### v9.0.272 — Workshop Schedule Logs Take the Server Rate
+### v9.0.281 — Workshop Schedule Logs Take the Server Rate
 - **Workshop Schedule Logs Take the Server Rate (TD-735):** the project workshop schedule read the task rate from a key the server never sends and posted work logs at rate 0; it now sends no rate, and the server gives a log posted from a schedule row the personnel custom rate, else the task base rate.
 
-### v9.0.271 — Work Logs Are Checked Before They Are Saved
+### v9.0.280 — Work Logs Are Checked Before They Are Saved
 - **Work Logs Are Checked Before They Are Saved (TD-812):** a work log needs positive ids, a quantity above zero or hh:mm, a non-negative manual rate and live personnel, task and project; a batch is one transaction, so a bad row saves nothing, and editing a log follows the same rules.
 
-### v9.0.270 — Piecework Base Rate Is Non-Negative
+### v9.0.279 — Piecework Base Rate Is Non-Negative
 - **Piecework Base Rate Is Non-Negative (TD-813):** a task's base rate is a non-negative number in the task form, the API and the Excel import; a text or negative rate is refused and an Excel row with one is listed in the import errors instead of being saved as 0 or below zero.
+
+### v9.0.278 — v9.0.278 — Approved Persian Words in the Shell and Settings
+- **Shell wording (TD-686):** the sidebar, top bar, dashboard, settings, setup and connection error messages use the owner's Persian glossary instead of transliterations and English words; only «کاردکس», «ترنسفر» and «وبهوک» stay transliterated.
+
+### v9.0.277 — v9.0.277 — Receipts Page Opens for Those Who Record Its Documents
+- **Receipts page access (B16-04, TD-668 follow-up):** the stock in/out page opens for `warehouse.in`, `warehouse.out` or `documents.finalize`, the keys saving its documents asks, instead of `documents.view` / `documents.create`, which opened the page but could not save.
+
+### v9.0.276 — v9.0.276 — Settings Values Are Validated
+- **Settings validation (TD-672):** movement days must be whole numbers from 1 to 3650 with fast < slow < dead and the currency setting is rial or toman (422 otherwise); the dashboard falls back to the defaults 30 / 90 / 180 when a stored value is invalid.
+
+### v9.0.275 — v9.0.275 — Currency Setting Is the Rial Display Unit
+- **Rial display unit (TD-667):** the currency setting is now only the display unit of rial amounts, rial or toman (toman = rial ÷ 10); a record with its own foreign currency keeps it, and amount inputs and Excel exports stay in rial.
+
+### v9.0.274 — v9.0.274 — A Sales Return Gives Back Its Share of the Invoice VAT
+- **Documents:** a sales return of an invoice takes that invoice's VAT percent and its share of the invoice VAT for the returned net, so a full return in parts gives back exactly the invoice VAT, and its voucher debits VAT payable; before, a full return of a 1,000,000 invoice at 10% left the customer owing 100,000 and VAT payable 100,000 too high (TD-774).
+
+### v9.0.273 — v9.0.273 — A Sales Return Takes Its Invoice's Currency, Rate and Net Price
+- **Documents:** a sales return of an invoice takes that invoice's currency, exchange rate and net unit price after line discounts; any other price, currency or rate is refused with 422, also on draft edit and finalize, and the stock page fills and locks them; before, one unit sold at 900,000 was credited 5,000,000 and a full return of a 180 USD invoice credited 200 rials (TD-788).
+
+### v9.0.272 — v9.0.272 — Settled Invoice Is Not Voided; Receipts Move On Account
+- **Documents and treasury:** voiding a document with a live treasury receipt or payment is refused with 409 naming them; the treasury table can move such a row on account or to another invoice of the same party, so the void can follow; before, the receipt stayed on the voided invoice and the replacement showed as unpaid (TD-779).
+
+### v9.0.271 — v9.0.271 — Invoice With a Live Return Is Not Voided
+- **Documents:** voiding a sales invoice that still has a sales return (in any status) is refused with 409 naming the returns; before, the returned goods came back to stock twice and the customer kept a credit for a sale that no longer existed (TD-773).
+
+### v9.0.270 — v9.0.270 — Zero-Price Invoice Gets Its Cost Voucher
+- **Accounting:** a final sales invoice with zero gross (free sample, gift) now gets a voucher that moves its Kardex cost from inventory to cost of sales, with zero revenue; before, no voucher was issued and inventory stayed overstated in the ledger (TD-772).
 
 ### v9.0.269 — Only Approved Payslips Are Paid
 - **Only Approved Payslips Are Paid (TD-816):** a draft payslip is refused at payment and the screens offer approval instead, and the payment date, method and reference are written only by the payment, never by the status route.

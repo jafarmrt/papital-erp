@@ -5,7 +5,7 @@ import {
 
 const row = { taskId: null, taskTitle: '', assignedPersonnelId: 7, quantity: 10 };
 
-// v9.0.272 (TD-735, decision t4 «الف»): the workshop schedule reads the server's `defaultRate` and sends no rate
+// v9.0.281 (TD-735, decision t4 «الف»): the workshop schedule reads the server's `defaultRate` and sends no rate
 describe('work logs of the project workshop schedule (TD-735)', () => {
   it('takes the base rate from defaultRate, the key the server sends', () => {
     const picked = withPieceworkTask(row, { id: 3, title: 'مونتاژ گردنبند', defaultRate: 50000, unit: 'عدد' });
@@ -28,7 +28,7 @@ describe('work logs of the project workshop schedule (TD-735)', () => {
 const schedule = (tasks: Array<Record<string, unknown>>) => ({ 1: { 'prod-main': { productId: 'prod-main', tasks } } });
 const rowsOf = (s: unknown) => (s as { 1: { 'prod-main': { tasks: Array<Record<string, unknown>> } } })[1]['prod-main'].tasks;
 
-// v9.0.273 (TD-736, decision t5 «الف»): the server writes the log id into the schedule row; the browser never sets it
+// v9.0.282 (TD-736, decision t5 «الف»): the server writes the log id into the schedule row; the browser never sets it
 describe('schedule row log links (TD-736)', () => {
   it('reads a row as logged from the server log id or the legacy flag', () => {
     expect(isScheduleRowLogged({ pieceworkLogId: 12 })).toBe(true);

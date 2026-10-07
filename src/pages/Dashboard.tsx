@@ -179,7 +179,7 @@ export default function Dashboard() {
                     <Sparkles size={13} className="text-amber-400" />
                   </h3>
                   <p className="text-[11px] text-slate-300 mt-0.5 truncate">
-                    مشاهده ارزش مالی انبار، آلارم‌های نقطه سفارش و تفکیک موجودی
+                    مشاهده ارزش مالی انبار، هشدارهای نقطه سفارش و تفکیک موجودی
                   </p>
                 </div>
               </div>

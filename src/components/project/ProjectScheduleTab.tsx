@@ -9,9 +9,9 @@ import {
 } from '../../types';
 import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
-import { extractDateString, formatPersianPrice, errorMessageOf, isoToJalaliDate, formatPersianDate, getTodayIsoDate } from '../../utils';
+import { extractDateString, errorMessageOf, isoToJalaliDate, formatPersianDate, getTodayIsoDate } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import {
   isScheduleRowLogged, scheduleLogItem, withPieceworkTask, withScheduleLogLink, withScheduleRowIds,
   type ScheduleLogItem, type ScheduleRowRef
@@ -31,7 +31,7 @@ export default function ProjectScheduleTab({
   pieceworkTasksList: initialPieceworkTasksList = [],
   onUpdate
 }: ProjectScheduleTabProps) {
-  const appCurrency = useAppCurrency();
+  const rial = useRialDisplay();
   const [saving, setSaving] = useState<boolean>(false);
   const [personnelList, setPersonnelList] = useState<any[]>(initialPersonnelList);
   const [pieceworkTasksList, setPieceworkTasksList] = useState<any[]>(initialPieceworkTasksList);
@@ -50,7 +50,7 @@ export default function ProjectScheduleTab({
   const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
   const [loggingTaskId, setLoggingTaskId] = useState<string | null>(null);
   const [batchLoggingStageId, setBatchLoggingStageId] = useState<number | null>(null);
-  // v9.0.274 (TD-747، تصمیم ت۶ الف بسته ۱۱): روز کارکرد «ثبت کارمزد»، پیش‌فرض امروز در منطقه زمانی نمایش؛ نه تاریخ شروع کار یا پروژه
+  // v9.0.283 (TD-747، تصمیم ت۶ الف بسته ۱۱): روز کارکرد «ثبت کارمزد»، پیش‌فرض امروز در منطقه زمانی نمایش؛ نه تاریخ شروع کار یا پروژه
   const [logDate, setLogDate] = useState<string>(() => getTodayIsoDate());
 
   // Load latest presets and personnel if missing
@@ -302,7 +302,7 @@ export default function ProjectScheduleTab({
 
       if (field === 'taskId') {
         const found = pieceworkTasksList.find(pt => pt.id === Number(val));
-        // v9.0.272 (TD-735): نرخ پایه از `defaultRate` سرور (پیش‌تر `default_rate` که سرور نمی‌فرستد، پس نرخ ۰ می‌شد)
+        // v9.0.281 (TD-735): نرخ پایه از `defaultRate` سرور (پیش‌تر `default_rate` که سرور نمی‌فرستد، پس نرخ ۰ می‌شد)
         if (found) Object.assign(t, withPieceworkTask(t, found));
       }
 
@@ -368,7 +368,7 @@ export default function ProjectScheduleTab({
     void fetchProjectPieceworkLogs();
   }, [project.id]);
 
-  // v9.0.273 (TD-736، تصمیم ت۵ الف): پیش از ثبت کارکرد، برنامه (با شناسه هر ردیف) ذخیره می‌شود تا سرور ردیف را بسنجد و
+  // v9.0.282 (TD-736، تصمیم ت۵ الف): پیش از ثبت کارکرد، برنامه (با شناسه هر ردیف) ذخیره می‌شود تا سرور ردیف را بسنجد و
   // شناسه کارکرد را در همان ردیف بنویسد؛ ردیف ثبت‌شده دوباره ثبت نمی‌شود (۴۰۹) و وضعیت دکمه از همان شناسه خوانده می‌شود
   const saveSchedulesForLogging = async (): Promise<ProjectStageSchedulesMap | null> => {
     const withIds = withScheduleRowIds(schedulesMap, () => `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
@@ -427,7 +427,7 @@ export default function ProjectScheduleTab({
       const row = saved?.[stageId]?.[productId]?.tasks?.[taskIdx];
       if (!row?.id) return;
       const ref: ScheduleRowRef = { stageId, productId, rowId: row.id };
-      // v9.0.272 (TD-735): بی نرخ؛ سرور نرخ اختصاصی پرسنل یا نرخ پایه عنوان کار را می‌گذارد
+      // v9.0.281 (TD-735): بی نرخ؛ سرور نرخ اختصاصی پرسنل یا نرخ پایه عنوان کار را می‌گذارد
       const [logId] = await postScheduleLogs([scheduleLogItem({
         projectId: project.id,
         ref,
@@ -561,7 +561,7 @@ export default function ProjectScheduleTab({
           <div>
             <span className="text-[10px] text-slate-400 block">برآورد کل دستمزد:</span>
             <span className="text-base font-bold font-mono text-emerald-400">
-              {formatPersianPrice(totalLaborBudget, appCurrency)}
+              {rial.amount(totalLaborBudget)}
             </span>
           </div>
 
@@ -576,7 +576,7 @@ export default function ProjectScheduleTab({
         </div>
       </div>
 
-      {/* v9.0.274 (TD-747): تاریخ کارکردهایی که این زبانه به حقوق می‌فرستد */}
+      {/* v9.0.283 (TD-747): تاریخ کارکردهایی که این زبانه به حقوق می‌فرستد */}
       <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 flex flex-wrap items-center gap-2">
         <Calendar className="w-4 h-4 text-emerald-700 shrink-0" />
         <span className="font-bold text-emerald-900 text-[11px]">تاریخ کارکرد برای «ثبت کارمزد»:</span>
@@ -803,7 +803,7 @@ export default function ProjectScheduleTab({
                                   {/* Estimated Cost & Piecework Action */}
                                   <div className="sm:col-span-2 flex items-center justify-between gap-1">
                                     <span className="font-mono font-bold text-emerald-700 text-xs">
-                                      {formatPersianPrice(task.estimatedCost || 0, appCurrency)}
+                                      {rial.amount(task.estimatedCost || 0)}
                                     </span>
                                     
                                     {/* Action to log to piecework */}
@@ -830,7 +830,7 @@ export default function ProjectScheduleTab({
                                     )}
                                   </div>
 
-                                  {/* Delete (v9.0.273، TD-736: ردیف ثبت‌شده حذف نمی‌شود تا پیوند کارکردش نماند) */}
+                                  {/* Delete (v9.0.282، TD-736: ردیف ثبت‌شده حذف نمی‌شود تا پیوند کارکردش نماند) */}
                                   <div className="sm:col-span-1 text-center">
                                     {!isScheduleRowLogged(task) && <button
                                       type="button"
@@ -904,21 +904,21 @@ export default function ProjectScheduleTab({
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <span className="text-slate-500 block text-[11px]">کل برآورد بودجه دستمزد:</span>
                 <span className="font-bold font-mono text-slate-800 text-sm mt-0.5 block">
-                  {formatPersianPrice(totalLaborBudget, appCurrency)}
+                  {rial.amount(totalLaborBudget)}
                 </span>
               </div>
 
               <div className="p-3 bg-emerald-50/70 rounded-xl border border-emerald-200">
                 <span className="text-emerald-700 block text-[11px]">مجموع کارمزدهای قطعی ثبت‌شده:</span>
                 <span className="font-bold font-mono text-emerald-900 text-sm mt-0.5 block">
-                  {formatPersianPrice(totalActualRecordedCost, appCurrency)}
+                  {rial.amount(totalActualRecordedCost)}
                 </span>
               </div>
 
               <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200">
                 <span className="text-amber-800 block text-[11px]">انحراف از برآورد اولیه:</span>
                 <span className={`font-bold font-mono text-sm mt-0.5 block ${totalActualRecordedCost > totalLaborBudget ? 'text-rose-600' : 'text-slate-700'}`}>
-                  {formatPersianPrice(Math.abs(totalActualRecordedCost - totalLaborBudget), appCurrency)}
+                  {rial.amount(Math.abs(totalActualRecordedCost - totalLaborBudget))}
                   <span className="text-[10px] font-sans mr-1">
                     {totalActualRecordedCost > totalLaborBudget ? '(مازاد بر بودجه)' : '(باقی‌مانده تا سقف بودجه)'}
                   </span>
@@ -956,9 +956,9 @@ export default function ProjectScheduleTab({
                         {log.taskTitle || log.task_title || log.taskCode || log.notes || 'کارکرد کارمزدی'}
                       </td>
                       <td className="p-2 text-center font-mono font-bold text-slate-800">{qty}</td>
-                      <td className="p-2 text-center font-mono text-slate-600">{formatPersianPrice(rate, appCurrency)}</td>
+                      <td className="p-2 text-center font-mono text-slate-600">{rial.amount(rate)}</td>
                       <td className="p-2 text-center font-mono font-bold text-emerald-700">
-                        {formatPersianPrice(qty * rate, appCurrency)}
+                        {rial.amount(qty * rate)}
                       </td>
                     </tr>
                   );

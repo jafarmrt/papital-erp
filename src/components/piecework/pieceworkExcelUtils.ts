@@ -161,7 +161,7 @@ export function parsePieceworkTaskRows(rawRows: Array<Record<string, unknown>>):
       row['rate'] ||
       row['defaultRate'];
 
-    // v9.0.270 (TD-813): همان قاعده سرور؛ نرخ متن یا منفی ردیف را نامعتبر می‌کند (پیش‌تر منفی بی‌صدا صفر می‌شد)
+    // v9.0.279 (TD-813): همان قاعده سرور؛ نرخ متن یا منفی ردیف را نامعتبر می‌کند (پیش‌تر منفی بی‌صدا صفر می‌شد)
     const parsedRate = parsePieceworkRate(rawRate, 'نرخ پایه');
     const defaultRate = parsedRate.ok ? Number(parsedRate.value ?? 0) : 0;
 

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Layers, Plus, Trash2, ArrowUp, ArrowDown, Archive, ArchiveRestore } from 'lucide-react';
 import { WorkflowPreset } from '../../constants/presets';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
 
 interface PieceworkTask {
@@ -29,8 +29,7 @@ export function WorkflowPresetsTab({
   isSaving,
   onSave
 }: WorkflowPresetsTabProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
 
   const [availableTasks, setAvailableTasks] = useState<PieceworkTask[]>([]);
   const [, setLoadingTasks] = useState<boolean>(true);
@@ -434,7 +433,7 @@ export function WorkflowPresetsTab({
                                   <option value="">-- انتخاب از عناوین کاری تعریف‌شده در حقوق و دستمزد --</option>
                                   {availableTasks.map((t) => (
                                     <option key={t.id} value={t.id}>
-                                      {t.title} ({t.category} - واحد: {t.unit || 'عدد'} - نرخ پایه: {formatPersianPrice(t.defaultRate)} {curLbl})
+                                      {t.title} ({t.category} - واحد: {t.unit || 'عدد'} - نرخ پایه: {rial.amount(t.defaultRate)})
                                     </option>
                                   ))}
                                 </select>
@@ -470,7 +469,7 @@ export function WorkflowPresetsTab({
                                             واحد: <strong className="font-bold">{effectiveUnit}</strong>
                                           </span>
                                           <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded font-mono font-bold text-[11px]">
-                                            نرخ پایه: {formatPersianPrice(effectiveRate)} {curLbl}
+                                            نرخ پایه: {rial.amount(effectiveRate)}
                                           </span>
                                           <button
                                             type="button"
