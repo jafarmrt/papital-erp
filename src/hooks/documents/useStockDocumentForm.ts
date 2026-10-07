@@ -165,7 +165,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   }, [selectedProjectId, allGlobalReservations]);
 
   // Helper to calculate reservation metrics for any item
-  const getItemReservationSummary = (it: Item) => itemReservationSummary(allGlobalReservations, it, selectedProjectId);
+  const getItemReservationSummary = (it: Item) => itemReservationSummary(allGlobalReservations, it, selectedProjectId, location);
 
   const totalSum = useMemo(() => {
     return docItems.reduce((acc, curr) => acc + (curr.quantity * (curr.unitPrice || 0)), 0);
