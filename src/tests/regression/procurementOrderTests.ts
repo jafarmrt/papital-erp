@@ -1,3 +1,4 @@
+import request from 'supertest';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { pool } from '../../db/drizzle.js';
 import { createHarness, draftSalesDocument, type Harness, type Row, type ShouldRun } from '../security/workflowTestHarness.js';
@@ -17,6 +18,9 @@ export async function runProcurementOrderTests(shouldRun: ShouldRun): Promise<Te
     ['reg_procurement_orders_paged_in_sql_td_698',
       'v9.0.272: the procurement order list filters, counts and pages in SQL and reads only the rows of the requested page (TD-698)',
       ['td698', 'procurement', 'orders', 'performance', 'package10'], pagedOrdersCase],
+    ['reg_procurement_double_submit_td_693',
+      'v9.0.273: a repeated procurement submission with the same Idempotency-Key (create requisition, convert to orders, consolidate, deliver) replays the first response and creates nothing new (TD-693)',
+      ['td693', 'procurement', 'idempotency', 'concurrency', 'package10'], doubleSubmitCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -142,4 +146,73 @@ async function pagedOrdersCase(h: Harness, wrong: string[]): Promise<string> {
     wrong.push(`search by requisition code: ${searched.status}, total ${String(searched.body?.total)}, ids ${ids.join(',')}`);
   }
   return `page 2 of the requisition's 3 orders returned the middle order and read ${rowsRead} rows despite 20 other receipts; searching by the requisition code paged in SQL`;
+}
+
+/** POST with the Idempotency-Key header, the way `fetchJson` sends a mutating request */
+function keyedPost(h: Harness, url: string, body: unknown, key: string): Promise<request.Response> {
+  return request(h.app as never).post(url).set('Cookie', h.admin.cookie).set('x-csrf-token', h.admin.csrfToken)
+    .set('Idempotency-Key', key).send(body as object).then(res => res);
+}
+
+/** Both answers of a concurrent pair: one ran, the other replayed it or was told it is in flight */
+function pairAnswered(pair: request.Response[], okStatus: number): boolean {
+  const ran = pair.filter(r => r.status === okStatus && r.headers['x-idempotency-hit'] !== 'true');
+  const other = pair.filter(r => (r.status === okStatus && r.headers['x-idempotency-hit'] === 'true') || (r.status === 409 && r.body?.code === 'IDEMPOTENCY_IN_FLIGHT'));
+  return ran.length === 1 && other.length === 1;
+}
+
+async function doubleSubmitCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const x = await f.item();
+  const key = (step: string) => `p10-td693-${h.tag}-${step}-${Math.floor(Math.random() * 1e9)}`;
+
+  // 1) create: two concurrent submissions of one form, then a late repeat
+  const title = `درخواست ارسال دوباره ${h.tag}`;
+  const createBody = { title, priority: 'normal', requiredDate: f.jalaliDate, notes: '', items: [formRow(x, 10, 1000)] };
+  const createKey = key('create');
+  const created = await Promise.all([keyedPost(h, '/api/procurement/requisitions', createBody, createKey), keyedPost(h, '/api/procurement/requisitions', createBody, createKey)]);
+  const repeatCreate = await keyedPost(h, '/api/procurement/requisitions', createBody, createKey);
+  const [{ n: requisitionCount }] = await h.q(`SELECT count(*)::int AS n FROM purchase_requisitions WHERE title = $1`, [title]);
+  if (!pairAnswered(created, 201) || Number(requisitionCount) !== 1 || repeatCreate.headers['x-idempotency-hit'] !== 'true') {
+    wrong.push(`create twice: ${created.map(r => `${r.status}/${String(r.headers['x-idempotency-hit'] ?? '-')}`).join(' ')}, repeat ${repeatCreate.status}/${String(repeatCreate.headers['x-idempotency-hit'] ?? '-')}, requisitions ${String(requisitionCount)}`);
+  }
+
+  // 2) convert to orders: 5 of 10, submitted twice at once (S06)
+  const req = await approvedRequisition(h, f, [formRow(x, 10, 1000)]);
+  const convertBody = {
+    orderGroups: [{
+      supplierName: `تامین‌کننده بسته ۱۰ ${h.tag}`, targetWarehouse: f.wh, docType: 'receipt', status: 'draft',
+      items: [{ itemId: x.id, quantity: 5, unitPrice: 1000, unit: 'عدد' }],
+    }],
+  };
+  const convertKey = key('convert');
+  const convertUrl = `/api/procurement/requisitions/${req.id}/convert-to-orders`;
+  const converted = await Promise.all([keyedPost(h, convertUrl, convertBody, convertKey), keyedPost(h, convertUrl, convertBody, convertKey)]);
+  const orders = await h.q(`SELECT id FROM documents WHERE procurement_requisition_id = $1 AND is_deleted = 0 ORDER BY id`, [req.id]);
+  const ordered = (await f.requisition(req.id)).items.reduce((sum, row) => sum + Number(row.orderedQty ?? 0), 0);
+  if (!pairAnswered(converted, 200) || orders.length !== 1 || ordered !== 5) {
+    wrong.push(`convert twice: ${converted.map(r => `${r.status}/${String(r.headers['x-idempotency-hit'] ?? '-')}`).join(' ')}, orders ${orders.length}, ordered ${ordered}`);
+  }
+
+  // 3) deliver: the repeat replays the first answer
+  const orderId = Number(orders[0]?.id);
+  const deliverKey = key('deliver');
+  const delivered = await keyedPost(h, `/api/procurement/orders/${orderId}/deliver`, {}, deliverKey);
+  const repeatDeliver = await keyedPost(h, `/api/procurement/orders/${orderId}/deliver`, {}, deliverKey);
+  if (delivered.status !== 200 || repeatDeliver.status !== 200 || repeatDeliver.headers['x-idempotency-hit'] !== 'true' || await f.stock(x.id) !== 5) {
+    wrong.push(`deliver twice: ${delivered.status}, repeat ${repeatDeliver.status}/${String(repeatDeliver.headers['x-idempotency-hit'] ?? '-')}, stock ${await f.stock(x.id)}`);
+  }
+
+  // 4) consolidate two pending requisitions, submitted twice at once
+  const a = await f.create({ title: `درخواست تجمیع الف ${h.tag}`, priority: 'normal', requiredDate: f.jalaliDate, notes: '', items: [formRow(x, 2, 1000)] });
+  const b = await f.create({ title: `درخواست تجمیع ب ${h.tag}`, priority: 'normal', requiredDate: f.jalaliDate, notes: '', items: [formRow(x, 3, 1000)] });
+  const consolidatedTitle = `تجمیع ارسال دوباره ${h.tag}`;
+  const consolidateBody = { requisitionIds: [a.id, b.id], title: consolidatedTitle };
+  const consolidateKey = key('consolidate');
+  const consolidated = await Promise.all([keyedPost(h, '/api/procurement/consolidate', consolidateBody, consolidateKey), keyedPost(h, '/api/procurement/consolidate', consolidateBody, consolidateKey)]);
+  const [{ n: consolidatedCount }] = await h.q(`SELECT count(*)::int AS n FROM purchase_requisitions WHERE title = $1`, [consolidatedTitle]);
+  if (!pairAnswered(consolidated, 201) || Number(consolidatedCount) !== 1) {
+    wrong.push(`consolidate twice: ${consolidated.map(r => `${r.status}/${String(r.headers['x-idempotency-hit'] ?? '-')}`).join(' ')}, consolidated requisitions ${String(consolidatedCount)}`);
+  }
+  return 'create, convert to orders and consolidate submitted twice at once with one key ran once (the other answer was a replay or in flight), and a repeated delivery replayed its first answer';
 }
