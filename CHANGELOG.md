@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.112 — No Self-Escalation by User and Role Managers
+- **No Self-Escalation:** a non-admin user or role manager no longer edits its own role, grants keys it lacks, or takes over an account stronger than its own (TD-520).
+
 ### v9.0.111 — Workflow Steps by Permission and Exact Role
 - **Workflow Steps by Permission and Exact Role:** a step role matches only that role and the system admin and who signs is the step's required permission; designs keep only defined roles and catalog keys, and migration 0065 lists the steps another role used to sign (TD-542).
 

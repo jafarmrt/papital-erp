@@ -16,6 +16,9 @@ import { invalidateRoleCache } from '../lib/memoryCache.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { PERMISSION_CATALOG, PERMISSION_KEYS, isCatalogPermission, isSystemAdminRole, missingRequiredPermissions, withRequiredPermissions } from '../lib/permissions/permissionCatalog.js';
 import { workflowsRequiringRole } from '../services/workflow/transitionRoles.js';
+import {
+  assertAssignableRole, assertGrantWithinOwn, assertManageableAccount, assertNotOwnAccountRole, assertNotOwnRole, grantorPermissions,
+} from '../services/users/grantBoundary.js';
 import { isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 
 const router = Router();
@@ -223,6 +226,8 @@ router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSc
     }
     // v9.0.86 (TD-880): هر مجوز با نیازهایش ذخیره می‌شود (مثلاً «ویرایش فاکتورها» با «مشاهده فاکتورها»)
     const addedByRequirement = missingRequiredPermissions(requested);
+    // v9.0.112 (TD-520، ت۳): نقش تازه فقط مجوزهایی را می‌گیرد که سازنده دارد
+    assertGrantWithinOwn(await grantorPermissions(req.user?.role), withRequiredPermissions(requested));
 
     const slugCode = code.trim().toLowerCase().replace(/\s+/g, '_');
     // v7.0.51 (audit P2-10): کد نقش نقطه ندارد تا با کلید مجوز (مثل customers.manage) اشتباه گرفته نشود
@@ -279,6 +284,8 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
     if (!targetRole) {
       return res.status(404).json({ error: 'نقش یافت نشد' });
     }
+    // v9.0.112 (TD-520، ت۳): نقش خود ویرایشگر ویرایش نمی‌شود
+    assertNotOwnRole(req.user?.role, targetRole.code);
 
     const prevPermissions: string[] = (targetRole.permissions as string[]) || [];
     const requested: string[] = Array.isArray(permissions) ? permissions : prevPermissions;
@@ -292,6 +299,8 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
 
     const addedPermissions = newPermissions.filter(p => !prevPermissions.includes(p));
     const removedPermissions = prevPermissions.filter(p => !newPermissions.includes(p));
+    // v9.0.112 (TD-520، ت۳): افزوده‌ها فقط از مجوزهای ویرایشگر
+    assertGrantWithinOwn(await grantorPermissions(req.user?.role), addedPermissions);
 
     const updateData: Partial<typeof roles.$inferInsert> = {
       name: name || targetRole.name,
@@ -461,6 +470,8 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     if (touchesAdminAccount(req.user?.role, [role])) {
       return res.status(403).json({ error: ONLY_ADMIN_MANAGES_ADMINS });
     }
+    // v9.0.112 (TD-520، ت۳): کاربر تازه فقط نقشی می‌گیرد که مجوزهایش در مجوزهای سازنده است
+    await assertAssignableRole(orm, await grantorPermissions(req.user?.role), role);
     const tUsername = (username || '').trim();
     // v9.0.76 (TD-521): پیشوند کاربران آزمون رد می‌شود؛ چنین کاربری پیش‌تر در فهرست‌ها پنهان می‌ماند
     if (isSyntheticTestUsername(tUsername)) {
@@ -588,6 +599,14 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
       if (touchesAdminAccount(req.user?.role, [prevUser.role, role])) {
         throw new ForbiddenError(ONLY_ADMIN_MANAGES_ADMINS);
       }
+      // v9.0.112 (TD-520، ت۳): حساب قوی‌تر از ویرایشگر دست نمی‌خورد، نقش حساب خودش عوض نمی‌شود و نقش تازه در مرز
+      // مجوزهای اوست
+      const grantor = await grantorPermissions(req.user?.role, tx);
+      await assertManageableAccount(tx, grantor, prevUser.role);
+      if (role && role !== prevUser.role) {
+        assertNotOwnAccountRole(req.user, targetUserId);
+        await assertAssignableRole(tx, grantor, role);
+      }
 
       // اعتبارسنجی نقش
       if (role && role !== SYSTEM_ADMIN_ROLE) {
@@ -683,6 +702,8 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
       if (touchesAdminAccount(req.user?.role, [delUser.role])) {
         throw new ForbiddenError(ONLY_ADMIN_MANAGES_ADMINS);
       }
+      // v9.0.112 (TD-520، ت۳): حسابی که نقشش مجوزی بیش از حذف‌کننده دارد حذف نمی‌شود
+      await assertManageableAccount(tx, await grantorPermissions(req.user?.role, tx), delUser.role);
 
       // ممنوعیت حذف آخرین مدیر فعال سیستم (قفل‌شدن سامانه)
       if (delUser.role === SYSTEM_ADMIN_ROLE) {
