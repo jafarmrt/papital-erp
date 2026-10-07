@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.176 — Linux Install Writes the Secrets Key
+- **Install Secrets:** `install.sh` runs the new `scripts/ensure-env-secrets.sh`, which adds a random `ERP_SECRETS_KEY` and `ERP_WEBHOOK_SECRET_TOKEN` to `.env` when missing and keeps existing values (run it once on an existing server); `go-live-verify.sh` fails without a 32-character key and `audit-env.sh` requires it. Before, saving a personnel's third-party password answered 503 on a Linux install and `audit-env` failed on the install's own `.env`.
+
 ### v9.0.175 — Test Runner Refuses Empty Runs
 - **Test Runner:** `scripts/run-tests.ts` exits 1 on an unknown suite (listing the known ones) and when the suite and filter matched no test («No test ran»), and checks `NODE_ENV` before any schema, migration or seed is written. Before, a mistyped suite or test id reported `Passed Tests: 0 / 0 … PASSED`, which voided the «red on the previous version» rule, and a production run wrote 68 tables before it was refused.
 

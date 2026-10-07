@@ -139,8 +139,11 @@ ENV
   chmod 600 .env
   success ".env generated (secrets created with openssl)."
 else
-  warn ".env already exists — keeping it untouched."
+  warn ".env already exists — keeping its values."
 fi
+# v9.0.176 (TD-609): the encryption key of stored third-party passwords and the webhook signing token; only added
+# when missing, never changed. Keep ERP_SECRETS_KEY with the backups: encrypted values cannot be read without it.
+bash scripts/ensure-env-secrets.sh .env || die "Could not add the generated secrets to .env"
 
 # ---------- 5) Install & build ----------
 log "[4/7] Installing npm dependencies (npm ci)..."

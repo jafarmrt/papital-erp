@@ -48,6 +48,9 @@ if [ "$(env_val NODE_ENV)" = "production" ]; then ok "NODE_ENV=production"; else
 env_has JWT_SECRET || bad "JWT_SECRET missing"
 if [ "$(env_val JWT_SECRET | wc -c)" -ge 33 ]; then ok "JWT_SECRET present (>= 32 chars)"; else bad "JWT_SECRET too short (< 32 chars)"; fi
 env_has DATABASE_URL || bad "DATABASE_URL missing"
+# v9.0.176 (TD-609): the secrets install.sh writes; without ERP_SECRETS_KEY no third-party password can be saved (503)
+if [ "$(env_val ERP_SECRETS_KEY | tr -d '\n' | wc -c)" -ge 32 ]; then ok "ERP_SECRETS_KEY present (>= 32 chars)"; else bad "ERP_SECRETS_KEY missing or shorter than 32 chars (bash scripts/ensure-env-secrets.sh .env adds one)"; fi
+env_has ERP_WEBHOOK_SECRET_TOKEN && ok "ERP_WEBHOOK_SECRET_TOKEN present" || warnc "ERP_WEBHOOK_SECRET_TOKEN missing (webhooks sign only if the token is stored in the settings)"
 env_has ERP_SETUP_TOKEN || warnc "ERP_SETUP_TOKEN missing (only acceptable if /setup is fully consumed AND token disabled)"
 
 # v9.0.134 (TD-526): the boot seed only inserts missing base data and creates no role, so its gate is retired
