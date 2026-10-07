@@ -121,7 +121,7 @@ export async function runAccessPackageTwoUserTests(shouldRun: ShouldRun): Promis
   if (shouldRun('sec_deleted_username_new_identity_td_519', 'security', 'td519', 'users', 'package2')) {
     await runCase(results, {
       id: 'sec_deleted_username_new_identity_td_519',
-      name: 'v9.0.170: a deleted user\'s username never revives that account; restoring the same person is a separate action (TD-519)',
+      name: 'v9.0.178: a deleted user\'s username never revives that account; restoring the same person is a separate action (TD-519)',
       details: 'POST /users with the username of a deleted user is 409 USERNAME_OF_DELETED_USER naming that user, and the deleted row keeps its name, role and password; POST /users/:id/restore brings back the same id and name with the chosen role, a temporary password that must be changed and a new token version; restoring an active user is 409 USER_NOT_DELETED; a non-admin users.manage holder neither restores a former system admin nor gives a restored user a role beyond its own keys (403)',
     }, async (h, wrong) => {
       const { createTestRole, createTestUser } = await import('../fixtures/factories.js');
@@ -182,7 +182,7 @@ export async function runAccessPackageTwoUserTests(shouldRun: ShouldRun): Promis
   if (shouldRun('sec_role_delete_counts_active_users_td_535', 'security', 'td535', 'roles', 'users', 'package2')) {
     await runCase(results, {
       id: 'sec_role_delete_counts_active_users_td_535',
-      name: 'v9.0.171: a role whose only user was deleted can be deleted, and that user is restored with a new role (TD-535)',
+      name: 'v9.0.179: a role whose only user was deleted can be deleted, and that user is restored with a new role (TD-535)',
       details: 'DELETE /roles/:id is refused while an active user holds the role; once that user is deleted the role is deleted (it used to say «assigned to 1 user»); restoring the deleted user then takes another existing role',
     }, async (h, wrong) => {
       const { createTestRole, createTestUser } = await import('../fixtures/factories.js');

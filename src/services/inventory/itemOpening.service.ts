@@ -6,6 +6,7 @@ import { VoucherService } from '../accounting/voucher.service.js';
 import { businessTodayJalaliDash } from '../../lib/businessClock.js';
 import type { JournalVoucher } from '../../types.js';
 import { openingKardexValue } from './itemOpeningValue.js';
+import { ValidationError } from '../../errors/customErrors.js';
 
 /**
  * V2.0.0: سند افتتاحیه موجودی اولیه کالا — اتمیک و idempotent
@@ -40,7 +41,8 @@ export class ItemOpeningService {
       : await AccountMappingService.getInventoryFinishedGoodsAccount(params.tx);
     const capitalAcc = await AccountMappingService.getOpeningCapitalAccount(params.tx);
     if (!inventoryAcc || !capitalAcc) {
-      throw new Error('حساب «موجودی» یا «سرمایه اولیه» در چارت یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید');
+      // v9.0.169 (TD-652): خطای قابل‌نمایش به کاربر (422)؛ ثبت کالا با موجودی اولیه رد می‌شود
+      throw new ValidationError('حساب «موجودی» یا «سرمایه اولیه» در چارت یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید');
     }
 
     // v9.0.93 (TD-481): ردیف کاردکس تغییرناپذیر است؛ پیش‌تر بهای ردیف‌های افتتاحیه (و هر ردیف انبارگردانی با بهای ۰) با WAC

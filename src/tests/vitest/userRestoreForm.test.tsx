@@ -1,5 +1,5 @@
 /**
- * v9.0.170 (TD-519, B02-04, owner decision t2 A): creating a user with a deleted user's username is refused with 409
+ * v9.0.178 (TD-519, B02-04, owner decision t2 A): creating a user with a deleted user's username is refused with 409
  * USERNAME_OF_DELETED_USER. The new-user form then names the deleted user and offers restoring that same user as a
  * separate, explicit action (`POST /users/:id/restore` with the form's role and password); it used to revive the old
  * account silently.
