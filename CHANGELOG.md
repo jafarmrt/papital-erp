@@ -19,6 +19,24 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.248 — v9.0.248 — National ID Is Exactly Ten Digits
+- **National ID (TD-673):** a personnel national ID must be exactly ten digits with a valid check digit; forms and the server never zero-pad a short one (422 `NATIONAL_ID_INVALID`), and only the Excel import pads 8 or 9 digits, which Excel drops, and lists those rows for review.
+
+### v9.0.247 — v9.0.247 — Amount in Words Keeps Foreign Cents
+- **Amount in words (TD-685):** a foreign-currency amount in words includes its cents (cent, fils, penny), so a 12.50 dollar invoice prints «دوازده دلار و پنجاه سنت» instead of «دوازده دلار».
+
+### v9.0.246 — v9.0.246 — Numbers Shown With Persian Separators
+- **Persian separators (TD-687):** every amount and quantity shown through `formatPersianPrice` / `formatPersianNumber` uses the Persian thousands separator «٬» and decimal separator «٫» (vibefarsi numbers rule) instead of the Latin comma and point; a number copied from the screen is read back exactly.
+
+### v9.0.245 — v9.0.245 — Numbers Below 1,000 Keep Their Decimals
+- **Number formatting (TD-678):** `formatPersianNumber` and `formatPersianPrice` no longer re-round their formatted text to two decimals below 1,000, so four-decimal quantities and work hours (`numeric(18,4)`) show in full on payslips and work logs.
+
+### v9.0.244 — v9.0.244 — Amount Input Keeps Decimals and Persian Separators
+- **Amount input (TD-665, TD-666):** the shared amount field keeps the typed text until editing ends, so «12.5» dollars is no longer stored as 125, allows the currency's decimals only (rial none, foreign two), reads the Persian «٫» and «٬», spaces and a copied currency label, and keeps the previous amount with a message instead of zeroing it on a stray character; the shared number parsers use the server's `normalizeDecimalString`.
+
+### v9.0.243 — v9.0.243 — Package 16 Dashboard, Settings, Shell, Dates and Numbers Audit Documentation
+- **Package 16 Audit:** section 10 of the V9 stability audit records the dashboard, settings, frontend shell and date and number utilities package: 23 proven findings (nine P2, among them amount inputs that drop decimals or zero a pasted amount, a currency setting that only relabels rial amounts, and resent writes after a network error) opened as TD-665..TD-687 with the product-owner decisions; TD-668 and TD-669 were already fixed in packages 2 and 4, and B01-14 (TD-594) joins this package's PR d. Documentation only.
+
 ### v9.0.242 — v9.0.242 — Stock Page Exit Cap by Source Warehouse
 - **Documents (UI):** the stock document page caps an exit at min(source warehouse stock, total stock − other reservations), the server rule, so a remittance from an empty warehouse is stopped in the form instead of failing on save (TD-799).
 

@@ -30,15 +30,15 @@ describe('voucher print currency and type (TD-573)', () => {
     expect(headers()).toContain('بستانکار (دلار)');
     expect(text).not.toContain('(ریال)');
     expect(text).toContain('نوع سند: افتتاحیه');
-    expect(text).toContain('نرخ هر دلار ۶۰۰,۰۰۰ ریال');
+    expect(text).toContain('نرخ هر دلار ۶۰۰٬۰۰۰ ریال');
     expect(text).toMatch(/صد دلار/);
   });
 
   it('a multi-currency voucher prints in rials: the dollar row at its rate, totals and words in rials', () => {
     const text = printText(voucher({ currency: 'IRR', items: [row(1, '1201', 100, 0, 'USD', 600_000), row(2, '5001', 0, 60_000_000, 'IRR', 1)] }));
     expect(headers()).toContain('بدهکار (ریال)');
-    expect(text).toContain('۱۰۰ دلار به نرخ ۶۰۰,۰۰۰');
-    expect(screen.getAllByText('۶۰,۰۰۰,۰۰۰').length).toBeGreaterThanOrEqual(4); // two rows and two totals
+    expect(text).toContain('۱۰۰ دلار به نرخ ۶۰۰٬۰۰۰');
+    expect(screen.getAllByText('۶۰٬۰۰۰٬۰۰۰').length).toBeGreaterThanOrEqual(4); // two rows and two totals
     expect(text).toContain('شصت میلیون ریال');
     expect(text).not.toContain('صد ریال');
   });
