@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.108 — Treasury Running Balance After a Void
+- **Treasury Running Balance After a Void (P3, product-owner decision):** the treasury list's running balance counts a voided row on its date and its reversal on the void date, and no legacy cheque-method row, so the last row equals the bank balance. Before, after voiding a receipt of 250,000 every later row showed 250,000 less (TD-860, `reg_treasury_running_balance_void_td_860`).
+
 ### v9.0.107 — Route Guards Ask Permissions Only
 - **Route Guards:** no route guard takes a role code any more; system maintenance is for the system admin only, warehouses and the fiscal-year close get their own permissions, and migration 0062 turns access seed roles had only by their code into logged ticks (TD-516).
 
