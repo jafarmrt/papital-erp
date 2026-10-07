@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.240 — Personnel Custom Rates Are Unique, Checked and Audited
+- **Personnel Custom Rates Are Unique, Checked and Audited (TD-809):** a personnel custom rate was saved without a transaction, so concurrent saves made two active rows and the rates page and a work log read different rates; it is now saved under the personnel row lock with one active row per personnel and task (migration 0075), a negative rate or a missing personnel or task is refused, and every change writes a rate history row and an audit row with before and after.
+
 ### v9.0.239 — Workshop Schedule Logs Are Dated by the Work Day
 - **Workshop Schedule Logs Are Dated by the Work Day (TD-747):** «ثبت کارمزد» in the project workshop schedule dated a work log by the row or project start date, so today's work landed in another payroll month; the tab now has a Jalali work-date picker defaulting to today in the display time zone, and both the row and the stage batch log use it.
 

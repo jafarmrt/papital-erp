@@ -75,19 +75,21 @@ const paramsPersonnelIdSchema = z.object({
   })
 });
 
-const setPersonnelRateSchema = z.object({
-  body: z.object({
-    personnelId: z.union([z.number(), z.string()]),
-    taskId: z.union([z.number(), z.string()]),
-    customRate: decimalInput('نرخ اختصاصی').refine(v => v !== undefined, 'نرخ اختصاصی الزامی است'),
-  })
-});
-
 /**
  * v9.0.236 (TD-812): شناسه‌ها عدد صحیح مثبت (عدد یا رشته)، مقدار بزرگ‌تر از صفر یا «ساعت:دقیقه» و نرخ دستی نامنفی است.
  * پیش‌تر «-5» با مبلغ منفی و «abc» صفر ذخیره می‌شد. سرویس همین را دوباره می‌سنجد (۴۲۲) و پرسنل، کار و پروژه زنده را می‌خواهد.
  */
 const bodyId = (label: string) => z.union([z.number(), z.string()]).refine(v => /^[1-9]\d*$/.test(String(v).trim()), `${label} باید عدد صحیح مثبت باشد`);
+
+// v9.0.240 (TD-809): شناسه‌ها عدد صحیح مثبت و نرخ اختصاصی نامنفی و الزامی (پیش‌تر «-50000» و پرسنل ۹۸۷۶۵۴ پذیرفته شد)
+const setPersonnelRateSchema = z.object({
+  body: z.object({
+    personnelId: bodyId('شناسه پرسنل'),
+    taskId: bodyId('شناسه عنوان کار'),
+    customRate: nonNegativeAmount('نرخ اختصاصی').refine(v => v !== undefined, 'نرخ اختصاصی الزامی است'),
+  })
+});
+
 const optionalProjectId = z.union([bodyId('شناسه پروژه'), z.null(), z.literal('')]).optional();
 const workQuantityInput = z.union([z.number(), z.string()]).transform((v, ctx): number => {
   const parsed = parseWorkQuantity(v);
@@ -528,8 +530,8 @@ router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:person
 router.post(['/piecework/personnel-rates', '/piecework/rates'], authorizePermission('personnel.manage'), validate(setPersonnelRateSchema), asyncHandler(async (req, res) => {
   try {
     const { personnelId, taskId, customRate } = req.body;
-    await PieceworkService.setPersonnelRate({ personnelId, taskId, customRate });
-    res.json({ status: 'ok', message: 'نرخ اختصاصی ثبت شد' });
+    const saved = await PieceworkService.setPersonnelRate({ personnelId, taskId, customRate }, { req });
+    res.json({ status: 'ok', message: saved.changed ? 'نرخ اختصاصی ثبت شد' : 'نرخ اختصاصی تغییری نکرد', id: saved.id, changed: saved.changed });
   } catch (err) {
     logger.error({ message: 'Error setting custom rate', error: err });
     throw err;

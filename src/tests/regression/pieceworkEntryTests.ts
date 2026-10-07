@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
 import { personnel, pieceworkLogs, pieceworkPersonnelRates, pieceworkTasks, productionProjects } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
@@ -288,6 +288,84 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
 
       assertNoProblems(problems);
       return 'each schedule row holds its log id from the server, is logged once (also concurrently), and is free again when its log is deleted or moved';
+    }));
+  }
+
+  const personnelRateId = 'reg_piecework_personnel_rate_td_809';
+  if (shouldRun(personnelRateId, 'td809', 'piecework', 'package12')) {
+    await runCase(results, personnelRateId, 'v9.0.240: a personnel custom rate is saved in one transaction under the personnel lock with one active row per personnel and task, the rates page and a work log read the same rate, a negative rate or a missing personnel or task is refused, and each change writes a rate history row and an audit row with before and after; legacy duplicates are listed by the health check (TD-809)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const task = await rateTask(100_000);
+      const worker = await newWorker('TD-809 rates');
+      const activeRows = async () => (await pool.query<{ n: string }>(
+        'SELECT COUNT(*)::text AS n FROM piecework_personnel_rates WHERE personnel_id = $1 AND task_id = $2 AND is_deleted = 0', [worker, task])).rows[0]?.n;
+
+      // 1) five concurrent saves made two active rows; the page showed one and a work log took the other
+      const saves = await Promise.all([150_000, 160_000, 170_000, 180_000, 190_000].map(customRate =>
+        admin.post('/api/piecework/personnel-rates', { personnelId: worker, taskId: task, customRate })));
+      const statuses = saves.map(r => r.status);
+      if (statuses.some(st => st !== 200)) problems.push(`concurrent rate saves answered ${statuses.join(', ')}`);
+      if (await activeRows() !== '1') problems.push(`${await activeRows()} active custom rates for one personnel and task, expected 1`);
+      const page = await admin.get(`/api/piecework/personnel-rates/${worker}`);
+      const shown = (Array.isArray(page.body) ? page.body : []).filter((r: { taskId: number }) => r.taskId === task).pop()?.customRate;
+      await PieceworkService.logWorkEntries([{ personnelId: worker, taskId: task, date: '1405/06/15', quantity: 1 }]);
+      const [log] = await orm.select().from(pieceworkLogs).where(and(eq(pieceworkLogs.personnelId, worker), eq(pieceworkLogs.isDeleted, 0)));
+      if (shown === undefined || !log || !fin(log.unitRate).equals(Number(shown))) problems.push(`the rates page shows ${String(shown)} and a work log took ${log?.unitRate}`);
+
+      // 2) each change wrote a history row with the personnel and an audit row with before and after; a repeat writes nothing
+      const history = async () => Number((await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM piecework_task_rate_history WHERE personnel_id = $1', [worker])).rows[0]?.n ?? 0);
+      const audits = async () => (await pool.query<{ action: string; details: { before?: unknown; after?: { customRate?: unknown } } }>(
+        "SELECT action, details FROM activity_logs WHERE entity = 'نرخ اختصاصی پرسنل' AND details->>'personnelId' = $1 ORDER BY id", [String(worker)])).rows;
+      const [historyRows, auditRows] = [await history(), await audits()];
+      if (historyRows !== 5 || auditRows.length !== 5) problems.push(`five rate changes wrote ${historyRows} history rows and ${auditRows.length} audit rows, expected 5 and 5`);
+      if (auditRows[0]?.action !== 'CREATE' || auditRows[0]?.details?.before !== null || auditRows[1]?.details?.before === undefined || auditRows.some(a => a.details?.after?.customRate === undefined)) {
+        problems.push(`audit rows lack before / after: ${brief(auditRows.slice(0, 2))}`);
+      }
+      const last = Number(shown);
+      const repeat = await admin.post('/api/piecework/personnel-rates', { personnelId: worker, taskId: task, customRate: last });
+      if (repeat.status !== 200 || repeat.body?.changed !== false || await history() !== 5 || (await audits()).length !== 5) problems.push(`saving the same rate again answered ${repeat.status} ${brief(repeat.body)} and wrote rows`);
+      const baseHistory = await admin.get(`/api/piecework/tasks/${task}/history`);
+      if ((Array.isArray(baseHistory.body) ? baseHistory.body : []).some((h: { personnelId?: number | null }) => h.personnelId)) problems.push('the task base rate history shows personnel custom rates');
+
+      // 3) a negative or empty rate, and a missing personnel or task, are refused and change nothing
+      for (const customRate of ['-50000', -1, '', 'abc']) {
+        const res = await admin.post('/api/piecework/personnel-rates', { personnelId: worker, taskId: task, customRate });
+        if (res.status !== 400) problems.push(`rate ${JSON.stringify(customRate)} answered ${res.status} ${brief(res.body)}, expected 400`);
+      }
+      const negative = await refusal(() => PieceworkService.setPersonnelRate({ personnelId: worker, taskId: task, customRate: '-5' }));
+      if (negative !== '422 PIECEWORK_RATE_INVALID') problems.push(`the service answered a rate of -5 with ${negative}, expected 422 PIECEWORK_RATE_INVALID`);
+      const ghost = await admin.post('/api/piecework/personnel-rates', { personnelId: 987654, taskId: task, customRate: 1000 });
+      if (ghost.status !== 422 || ghost.body?.code !== 'PIECEWORK_RATE_PERSONNEL_INVALID') problems.push(`personnel 987654 answered ${ghost.status} ${brief(ghost.body)}, expected 422 PIECEWORK_RATE_PERSONNEL_INVALID`);
+      const noTask = await refusal(() => PieceworkService.setPersonnelRate({ personnelId: worker, taskId: 987654, customRate: 1000 }));
+      if (noTask !== '422 PIECEWORK_RATE_TASK_INVALID') problems.push(`task 987654 answered ${noTask}, expected 422 PIECEWORK_RATE_TASK_INVALID`);
+      const [stored] = await orm.select().from(pieceworkPersonnelRates).where(and(eq(pieceworkPersonnelRates.personnelId, worker), eq(pieceworkPersonnelRates.isDeleted, 0)));
+      if (!stored || !fin(stored.customRate).equals(last)) problems.push(`refused saves changed the rate to ${stored?.customRate}`);
+
+      // 4) a database whose migration found duplicates: the health check lists them and a log takes the newest row
+      try {
+        await orm.transaction(async (tx) => {
+          await tx.execute(sql`DROP INDEX IF EXISTS uq_piecework_personnel_rates_active`);
+          const [dup] = await tx.insert(pieceworkPersonnelRates).values({ personnelId: worker, taskId: task, customRate: money(123_000) }).returning({ id: pieceworkPersonnelRates.id });
+          const { findDuplicatePersonnelRates, buildPersonnelRateHealthTest } = await import('../../services/piecework/personnelRate.js');
+          const dups = await findDuplicatePersonnelRates(tx);
+          const health = buildPersonnelRateHealthTest(dups, false);
+          if (!dups.some(d => d.rateIds.includes(dup.id)) || health.status !== 'warning' || health.count !== 1) problems.push(`the health check missed a legacy duplicate rate: ${brief({ n: dups.length, status: health.status })}`);
+          const rate = await PieceworkService.serverRate(tx, worker, task);
+          if (!fin(rate).equals(123_000)) problems.push(`with a legacy duplicate a log takes ${String(rate)}, expected the newest row 123000`);
+          tx.rollback();
+        }).catch((err: unknown) => {
+          if (!(err instanceof Error && err.message.toLowerCase().includes('rollback'))) throw err;
+        });
+      } catch (err) {
+        problems.push(`legacy duplicate scenario failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
+      const check = (await FinancialHealthService.runHealthCheck()).tests.find(t => t.id === 'piecework_personnel_rate_uniqueness');
+      if (!check || check.status !== 'healthy' || check.metrics?.uniqueIndexPresent !== 1) problems.push(`health check on clean data: ${brief(check ?? null)}`);
+
+      assertNoProblems(problems);
+      return 'concurrent saves keep one active rate that the page and a log both read; bad rates and dead parents are refused; every change has history and audit rows; legacy duplicates are listed';
     }));
   }
 

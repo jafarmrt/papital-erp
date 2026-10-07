@@ -1,11 +1,12 @@
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, taskCategories } from '../db/schema.js';
+import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkLogs, pieceworkPayrolls, taskCategories } from '../db/schema.js';
 import { NotFoundError, BadRequestError, ConflictError, ValidationError } from '../errors/customErrors.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
 import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workLogPayrollLink.js';
+import { activePersonnelRate, savePersonnelRate, type PersonnelRateInput, type RateActor } from './piecework/personnelRate.js';
 import { assertScheduleRowsFree, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
 import type { ScheduleRowRef } from '../lib/projects/scheduleWorkLog.js';
 import { assertWorkLogParentsLive, normalizeWorkLogEntries, workLogId, workLogManualRate, workLogQuantity, type WorkLogEntryInput } from './piecework/workLogEntry.js';
@@ -307,13 +308,8 @@ export class PieceworkService {
 
   /** نرخ سرور برای کارکرد بی نرخ دستی: نرخ اختصاصی پرسنل برای آن کار، وگرنه نرخ پایه عنوان کار */
   static async serverRate(executor: DbExecutor, personnelId: number, taskId: number): Promise<DecimalValue> {
-    const [custom] = await executor.select()
-      .from(pieceworkPersonnelRates)
-      .where(and(
-        eq(pieceworkPersonnelRates.personnelId, personnelId),
-        eq(pieceworkPersonnelRates.taskId, taskId),
-        eq(pieceworkPersonnelRates.isDeleted, 0)
-      ));
+    // v9.0.240 (TD-809): تازه‌ترین نرخ فعال، همان که صفحه نرخ‌ها نشان می‌دهد (پیش‌تر نخستین ردیف بی ترتیب)
+    const custom = await activePersonnelRate(executor, personnelId, taskId);
     if (custom) return custom.customRate;
     const [taskDef] = await executor.select().from(pieceworkTasks).where(eq(pieceworkTasks.id, taskId));
     return (taskDef && taskDef.defaultRate != null) ? taskDef.defaultRate : 0;
@@ -682,37 +678,12 @@ export class PieceworkService {
    * Sets or updates custom personnel piecework rate
    */
   static async setPersonnelRate(
-    data: {
-      personnelId: number | string;
-      taskId: number | string;
-      customRate: number | string;
-    },
-    executor: DbExecutor = orm
-  ): Promise<void> {
-    const pId = Number(data.personnelId);
-    const tId = Number(data.taskId);
-    const rate = money(data.customRate);
-
-    const [existing] = await executor.select()
-      .from(pieceworkPersonnelRates)
-      .where(and(
-        eq(pieceworkPersonnelRates.personnelId, pId),
-        eq(pieceworkPersonnelRates.taskId, tId),
-        eq(pieceworkPersonnelRates.isDeleted, 0)
-      ));
-
-    if (existing) {
-      await executor.update(pieceworkPersonnelRates)
-        .set({ customRate: rate, updatedAt: sql`NOW()` })
-        .where(eq(pieceworkPersonnelRates.id, existing.id));
-    } else {
-      await executor.insert(pieceworkPersonnelRates).values({
-        personnelId: pId,
-        taskId: tId,
-        customRate: rate,
-        isDeleted: 0
-      });
-    }
+    data: PersonnelRateInput,
+    actor: RateActor = {},
+    executor?: DbExecutor
+  ): Promise<{ id: number; changed: boolean }> {
+    // v9.0.240 (TD-809): در تراکنش با قفل پرسنل، نرخ نامنفی، پرسنل و کار زنده، تاریخچه و ممیزی با همان tx
+    return inTransaction(executor, tx => savePersonnelRate(tx, data, actor));
   }
 
   /**
