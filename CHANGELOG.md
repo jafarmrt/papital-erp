@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.251 — v9.0.251 — A Sales Proforma Prints as a Sales Document
+- **Sales:** a sales proforma stored as type `proforma` (recorded by a user without the finalize permission) now prints with the sales title and the seller and buyer boxes; before, it printed as a stock document without the buyer's address and phone (TD-793).
+
 ### v9.0.250 — v9.0.250 — Sales Form Lists Only Sales Proformas, Page by Page
 - **Sales:** the open proformas of the sales invoice form are now only sales proformas (`GET /documents` takes `types=invoice,proforma`), read twenty at a time with a count and paging; before, purchase proformas were listed and edited there and the list was cut at 1,000 without notice (TD-792).
 

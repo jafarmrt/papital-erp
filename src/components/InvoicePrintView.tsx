@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, formatPersianDate, financialAmountToPersianWords } from '../utils';
 import { fetchJson } from '../api';
 import { printLineAmounts, printTotalsOf } from '../lib/invoices/invoicePrintTotals';
+import { isSalesFormDocType } from '../lib/invoices/invoiceForm';
 
 export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
   const [companyInfo, setCompanyInfo] = useState<{
@@ -48,7 +49,9 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
 
   if (!printedDoc) return null;
 
-  const isInvoice = printedDoc.type === 'invoice';
+  // v9.0.251 (TD-793): پیش‌فاکتور فروش هم سند فروش است، چه با نوع `invoice` (وضعیت پیش‌فاکتور) ذخیره شده باشد چه با نوع
+  // `proforma` (ثبت کاربر بی مجوز قطعی)؛ پیش‌تر دومی با عنوان «سند انبار» و بی کادر فروشنده و خریدار چاپ می‌شد
+  const isInvoice = isSalesFormDocType(printedDoc.type);
   const isReceipt = printedDoc.type === 'receipt';
   const isProforma = printedDoc.status === 'proforma' || printedDoc.type === 'proforma';
   const hasMonetaryValues = isInvoice || isReceipt || isProforma || (printedDoc.items && printedDoc.items.some((i: any) => Number(i.unit_price) > 0));
