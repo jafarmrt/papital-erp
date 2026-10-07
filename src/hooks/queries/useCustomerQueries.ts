@@ -4,6 +4,7 @@ import { Customer } from '../../types';
 import { toast } from 'react-hot-toast';
 import { QUERY_KEYS, customerKeys } from '../../lib/queryKeys';
 import { invalidateDomain } from '../../lib/queryInvalidation';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 
 export { customerKeys };
 
@@ -14,11 +15,12 @@ interface CustomersResponse {
   totalPages: number;
 }
 
-export function useAllCustomersQuery() {
+/** همه طرف حساب‌ها از فهرست انتخاب (فرم پروژه؛ بی یادداشت و نسخه رکورد، TD-887) */
+export function useCustomerOptionsQuery() {
   return useQuery<Customer[]>({
-    queryKey: QUERY_KEYS.customers.list({ all: true }),
+    queryKey: QUERY_KEYS.customers.options({ all: true }),
     queryFn: async () => {
-      const res = await fetchJson('/customers?limit=0');
+      const res = await fetchJson(PICK_LIST_URLS.customers);
       return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
     },
     staleTime: 60 * 1000,

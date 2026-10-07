@@ -170,7 +170,7 @@
   "src/pages/UsersPage.tsx": 2,
   "src/pages/WorkflowManagementPage.tsx": 2,
   "src/routes/auth.routes.ts": 2,
-  "src/routes/customers.routes.ts": 10,
+  "src/routes/customers.routes.ts": 6,
   "src/routes/dashboard.routes.ts": 1,
   "src/routes/projects.routes.ts": 4,
   "src/routes/users.routes.ts": 3,

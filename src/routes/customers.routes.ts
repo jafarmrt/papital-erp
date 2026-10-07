@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sql, ilike, or, and, eq } from 'drizzle-orm';
+import { sql, or, and, eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { customers } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -8,13 +8,13 @@ import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { parsePagination } from '../lib/pagination.js';
+import { parsePagination, parsePickListLimit } from '../lib/pagination.js';
 import { CustomerService } from '../services/customer.service.js';
 import { getCustomerAccountCard } from '../services/customers/customerAccountCard.js';
 import { getCustomerSalesDocuments } from '../services/customers/customerDocuments.js';
-import { containsLikePattern } from '../lib/sqlLike.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { partyRowsForUser } from '../services/customers/partyBankInfoAccess.js';
+import { customerListConditions, listCustomerPicks } from '../services/customers/customerPickList.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -120,31 +120,7 @@ router.get('/customers', authorizePermission(...READ_PERMISSIONS.customers), asy
   const partyTypeFilter = (req.query.partyType || req.query.type) as string;
   const isExport = req.query.export === 'true';
 
-  const conditionsList = [eq(customers.isDeleted, 0)];
-
-  if (search) {
-    conditionsList.push(
-      or(
-        ilike(customers.name, containsLikePattern(search)),
-        ilike(customers.phone, containsLikePattern(search)),
-        ilike(customers.contactName, containsLikePattern(search)),
-        ilike(customers.supplierCategory, containsLikePattern(search)),
-        sql`${customers.contacts}::text ILIKE ${containsLikePattern(search)}`
-      ) as any
-    );
-  }
-
-  if (partyTypeFilter && partyTypeFilter !== 'all') {
-    if (partyTypeFilter === 'supplier') {
-      conditionsList.push(or(eq(customers.partyType, 'supplier'), eq(customers.partyType, 'both')) as any);
-    } else if (partyTypeFilter === 'customer') {
-      conditionsList.push(or(eq(customers.partyType, 'customer'), eq(customers.partyType, 'both')) as any);
-    } else if (partyTypeFilter === 'both') {
-      conditionsList.push(eq(customers.partyType, 'both') as any);
-    }
-  }
-
-  const conditions = and(...conditionsList);
+  const conditions = customerListConditions(search, partyTypeFilter);
 
   let query = orm.select().from(customers).where(conditions);
   query = query.orderBy(customers.name) as any;
@@ -172,6 +148,20 @@ router.get('/customers', authorizePermission(...READ_PERMISSIONS.customers), asy
     limit,
     totalPages: Math.ceil(total / limit)
   });
+}));
+
+const customerPickListValidation = z.object({
+  query: z.object({
+    search: z.string().max(200).optional(),
+    partyType: z.enum(['all', 'customer', 'supplier', 'both']).optional(),
+    limit: z.union([z.string(), z.number()]).optional(),
+  }).optional(),
+});
+
+// v9.0.120 (TD-887، تصمیم ت۱۰ الف): فهرست انتخاب طرف حساب‌ها برای فرم‌های بخش‌های دیگر؛ فهرست کامل بالا فقط با customers.view
+router.get('/customers/options', authorizePermission(...READ_PERMISSIONS.customerOptions), validate(customerPickListValidation), asyncHandler(async (req, res) => {
+  const query = req.query as { search?: string; partyType?: string; limit?: string };
+  res.json({ success: true, data: await listCustomerPicks(req.user, { search: query.search, partyType: query.partyType, limit: parsePickListLimit(query.limit) }) });
 }));
 
 // GET /api/customers/export-excel - Structured Excel export rows

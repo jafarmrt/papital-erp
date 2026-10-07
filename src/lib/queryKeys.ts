@@ -8,6 +8,8 @@ export const QUERY_KEYS = {
   customers: {
     all: ['customers'] as const,
     list: (params?: Record<string, unknown> | object) => ['customers', 'list', params ?? {}] as const,
+    /** فهرست انتخاب طرف حساب‌ها (`GET /customers/options`، TD-887) */
+    options: (params?: Record<string, unknown> | object) => ['customers', 'options', params ?? {}] as const,
     detail: (id: number) => ['customers', 'detail', id] as const,
   },
 

@@ -28,6 +28,7 @@ import { ExchangeRateField, exchangeRateError } from '../components/documents/Ex
 import { useHasPermission } from '../contexts/AuthContext';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions';
+import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 
 // Print styles are added globally or inline
 export default function CreateInvoicePage({ user: currentUser }: { user: User }) {
@@ -473,7 +474,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <label className="text-sm font-bold text-blue-900 shrink-0 min-w-[170px]">انتخاب خریدار از لیست طرفین حساب:*</label>
                 <SearchableSelect 
                   className="w-full"
-                  fetchUrl="/customers?limit=1000"
+                  fetchUrl={PICK_LIST_URLS.customers}
                   mapResultToOption={(c: BuyerSource & { id: number }) => {
                     const loc = customerLocationLabel(c);
                     return {

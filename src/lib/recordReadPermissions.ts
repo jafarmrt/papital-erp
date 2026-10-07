@@ -13,11 +13,20 @@ export const READ_PERMISSIONS = {
     'projects.view', 'projects.create', 'projects.edit', 'documents.view', 'documents.create',
     'warehouse.in', 'warehouse.out', 'warehouse.view'
   ],
-  // documents.view و warehouse.in: صفحه «ورود و خروج انبار» فهرست تأمین‌کنندگان را می‌خواند
-  customers: ['customers.view', 'documents.view', 'documents.create', 'warehouse.in', 'crm.view', 'projects.view', 'procurement.view'],
+  /** فهرست کامل طرف حساب‌ها (با یادداشت و نسخه رکورد) فقط با مجوز مشاهده همان بخش (v9.0.120، TD-887، ت۱۰ الف) */
+  customers: ['customers.view'],
+  /**
+   * فهرست انتخاب طرف حساب (`GET /customers/options`): فاکتور و حواله (documents.create)، رسید انبار (warehouse.in،
+   * documents.view)، ارتباط با مشتری، پروژه، خرید، نقطه سفارش (products.view، warehouse.view) و فرم‌های حسابداری.
+   */
+  customerOptions: [
+    'customers.view', 'documents.view', 'documents.create', 'warehouse.in', 'warehouse.view', 'products.view', 'crm.view',
+    'projects.view', 'procurement.view', 'accounting.view', 'accounting.reports', 'accounting.vouchers', 'accounting.treasury',
+    'accounting.cheques',
+  ],
   customersExport: ['customers.view'],
   /** کارت حساب و مانده طرف حساب (همان مجوزهای کارت حساب گزارش‌های مالی؛ v9.0.4، TD-416) */
-  partyAccountCard: ['accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'documents.view'],
+  partyAccountCard: ['accounting.reports', 'accounting.view', 'customers.view', 'customers.manage'],
   documents: [
     'documents.view', 'documents.create', 'documents.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out',
     'audit.view', 'crm.view', 'workflow.view'

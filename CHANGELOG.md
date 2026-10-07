@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.120 — Customer Pick List for Forms
+- **Customer Pick List for Forms:** forms of other sections pick parties from a list without notes; the full customer list needs the customers view permission (TD-887).
+
 ### v9.0.119 — System Admin Role Ticks Are Fixed
 - **System Admin Role Ticks Are Fixed:** the system admin role lists every permission, locked; its permissions cannot be edited (TD-886).
 

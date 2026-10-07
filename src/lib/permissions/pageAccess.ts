@@ -60,7 +60,7 @@ const ACCOUNTING_TABS = {
 
 const ACCOUNTING_KEYS = [...new Set(Object.values(ACCOUNTING_TABS).flatMap(r => r.gate.anyOf))];
 
-const DOCUMENT_ENTRY = ['GET /api/customers', 'GET /api/documents/next-ref', 'POST /api/documents'];
+const DOCUMENT_ENTRY = ['GET /api/customers/options', 'GET /api/documents/next-ref', 'POST /api/documents'];
 
 export const PAGE_ACCESS = {
   '/': { gate: 'login', api: [] },

@@ -7,6 +7,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import { useWarehousesQuery, type WarehouseItem } from '../queries/useSettingsQueries';
 import { listFromResponse, type InvoiceDocumentDetails } from '../../lib/invoices/invoiceForm';
 import type { InvoiceListDocument } from '../../lib/invoices/invoiceListDocuments';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 
 /**
  * صفحه صدور فاکتور: خواندنی‌های صفحه با React Query (FE-005) به‌جای fetchJson/useState دستی.
@@ -58,8 +59,8 @@ export function useInvoiceReferenceData(docType: string) {
 
   const warehousesQuery = useWarehousesQuery();
   const customersQuery = useQuery<Customer[]>({
-    queryKey: QUERY_KEYS.customers.list({ scope: 'invoice-buyers' }),
-    queryFn: async ({ signal }) => listFromResponse<Customer>(await fetchJson<unknown>('/customers?limit=1000', { signal })),
+    queryKey: QUERY_KEYS.customers.options({ scope: 'invoice-buyers' }),
+    queryFn: async ({ signal }) => listFromResponse<Customer>(await fetchJson<unknown>(PICK_LIST_URLS.customers, { signal })),
     staleTime: FIVE_MINUTES,
   });
   const proformasQuery = useOpenProformasQuery();

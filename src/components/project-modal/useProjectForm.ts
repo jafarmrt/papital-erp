@@ -12,6 +12,7 @@ import {
   createInitialProductRow,
   buildProjectPayload
 } from './projectFormHelpers';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 
 export function useProjectForm({
   isOpen,
@@ -55,7 +56,7 @@ export function useProjectForm({
     if (!isOpen) return;
     const controller = new AbortController();
 
-    fetchJson('/customers?limit=1000', { signal: controller.signal })
+    fetchJson(PICK_LIST_URLS.customers, { signal: controller.signal })
       .then(res => setLocalCustomers(Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])))
       .catch(err => {
         if (err?.name === 'AbortError') return;

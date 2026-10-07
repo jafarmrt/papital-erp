@@ -45,21 +45,28 @@ export async function runPartyBankInfoScopeTests(shouldRun: (id: string, ...extr
       userIds.push(user.id);
       return loginTestUserWithSession(app, user.username);
     };
-    /** ردیف طرف حساب این آزمون در فهرست و در خروجی کامل، برای این نشست */
-    const listedRows = async (s: Session) => {
-      const get = (query: string) => request(app).get(`/api/customers?${query}`).set('Cookie', s.cookie);
-      const page = await get(`search=${encodeURIComponent(party.name)}`);
-      const exported = await get(`export=true&search=${encodeURIComponent(party.name)}`);
-      if (page.status !== 200 || exported.status !== 200) throw new Error(`فهرست طرف حساب‌ها ${page.status}/${exported.status} داد`);
+    /**
+     * ردیف طرف حساب این آزمون در فهرست انتخاب و، برای دارنده customers.view، در فهرست کامل و خروجی آن. از v9.0.120
+     * (TD-887، ت۱۰ الف) فرم‌های بخش‌های دیگر فقط فهرست انتخاب (`/customers/options`) را می‌خوانند.
+     */
+    const listedRows = async (s: Session, full: boolean) => {
+      const get = (path: string) => request(app).get(path).set('Cookie', s.cookie);
+      const search = `search=${encodeURIComponent(party.name)}`;
       const pick = (rows: unknown) => (Array.isArray(rows) ? rows : []).find((r: { id?: number }) => r.id === party.id) as Record<string, unknown> | undefined;
-      return [pick(page.body?.data), pick(exported.body)];
+      const options = await get(`/api/customers/options?${search}`);
+      if (options.status !== 200) throw new Error(`فهرست انتخاب طرف حساب‌ها ${options.status} داد`);
+      if (!full) return [pick(options.body?.data)];
+      const page = await get(`/api/customers?${search}`);
+      const exported = await get(`/api/customers?export=true&${search}`);
+      if (page.status !== 200 || exported.status !== 200) throw new Error(`فهرست طرف حساب‌ها ${page.status}/${exported.status} داد`);
+      return [pick(options.body?.data), pick(page.body?.data), pick(exported.body)];
     };
     const hasBank = (row: Record<string, unknown> | undefined) => (row?.bankInfo as { shaba?: string } | undefined)?.shaba === bankInfo.shaba;
     const hasAnyBankKey = (row: Record<string, unknown> | undefined) => row !== undefined && ('bankInfo' in row || 'bank_info' in row);
 
     // ۱) دارندگان مجوز خواندن فهرست بی مجوز طرف حساب یا حسابداری: ردیف هست، اطلاعات بانکی نیست
     for (const permission of ['warehouse.in', 'documents.view', 'documents.create', 'crm.view', 'projects.view', 'procurement.view']) {
-      const rows = await listedRows(await sessionWith([permission]));
+      const rows = await listedRows(await sessionWith([permission]), false);
       if (rows.some(r => r === undefined)) wrong.push(`${permission}: طرف حساب در فهرست نیامد`);
       if (rows.some(hasAnyBankKey)) wrong.push(`${permission}: اطلاعات بانکی در فهرست یا خروجی آمد`);
     }
@@ -72,10 +79,10 @@ export async function runPartyBankInfoScopeTests(shouldRun: (id: string, ...extr
       ['accounting.reports', ['documents.create', 'accounting.reports']],
     ];
     for (const [label, permissions] of allowed) {
-      const rows = await listedRows(await sessionWith(permissions));
+      const rows = await listedRows(await sessionWith(permissions), permissions.includes('customers.view'));
       if (!rows.every(hasBank)) wrong.push(`${label}: اطلاعات بانکی در فهرست یا خروجی نیامد`);
     }
-    if (!(await listedRows(admin)).every(hasBank)) wrong.push('مدیر سامانه اطلاعات بانکی را در فهرست یا خروجی نگرفت');
+    if (!(await listedRows(admin, true)).every(hasBank)) wrong.push('مدیر سامانه اطلاعات بانکی را در فهرست یا خروجی نگرفت');
 
     // ۳) «تبدیل به مشتری» با نقش فقط ارتباط با مشتری: طرف حساب بی اطلاعات بانکی؛ مدیر سامانه با آن
     const convert = async (s: Session) => {
@@ -100,7 +107,7 @@ export async function runPartyBankInfoScopeTests(shouldRun: (id: string, ...extr
     if (wrong.length > 0) throw new Error(wrong.join('؛ '));
     results.push(makeTestCase({
       id, name, layer: 'security', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'شش مجوز خواندن فهرست بی bankInfo؛ customers.view، customers.manage، accounting.treasury، accounting.reports و مدیر با آن؛ «تبدیل به مشتری» نقش فقط CRM بی آن',
+      details: 'شش مجوز فرم‌ها فهرست انتخاب را بی bankInfo می‌گیرند (از v9.0.120)؛ customers.view، customers.manage، accounting.treasury، accounting.reports و مدیر با آن؛ «تبدیل به مشتری» نقش فقط CRM بی آن',
     }));
   } catch (err) {
     results.push(makeTestCase({

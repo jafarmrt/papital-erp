@@ -1410,6 +1410,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   results.push(...await runAccessPackageTwoPageTests(shouldRunAccess));
   const { runAccessPackageTwoInstallTests } = await import('../security/accessPackageTwoInstallTests.js');
   results.push(...await runAccessPackageTwoInstallTests(shouldRunAccess));
+  // Package 2 M6 (from TD-887): pick lists for forms, full lists by the section's own permission
+  const { runAccessPackageTwoPickListTests } = await import('../security/accessPackageTwoPickListTests.js');
+  results.push(...await runAccessPackageTwoPickListTests(shouldRunAccess));
   // Package 14, PR د (from TD-462): approval inbox rows
   const { runWorkflowInboxTests } = await import('../security/workflowInboxTests.js');
   results.push(...await runWorkflowInboxTests(shouldRunAccess));
