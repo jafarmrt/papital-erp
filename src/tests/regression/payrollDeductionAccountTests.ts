@@ -65,7 +65,7 @@ export async function runPayrollDeductionAccountTests(shouldRun: ShouldRun): Pro
       const standard = await activeAccount('3205');
       if (!standard) problems.push('the standard chart has no account 3205');
       else if (standard.parentId !== general['32'] || standard.level !== 'subsidiary' || standard.accountType !== 'liability' || standard.nature !== 'credit' || standard.isSystem !== 1 || !standard.name.includes('کسورات حقوق')) {
-        problems.push(`account 3205 is ${brief(standard)}, expected a system credit liability subsidiary under 32 named «کسورات حقوق …»`);
+        problems.push(`account 3205 is ${brief(standard)}, expected a system credit liability subsidiary under 32 named for payslip deductions`);
       }
       if (DEFAULT_ACCOUNT_MAPPINGS.employeeDeductionsPayableAccountCode !== '3205') {
         problems.push(`the default deductions mapping is ${DEFAULT_ACCOUNT_MAPPINGS.employeeDeductionsPayableAccountCode}, expected 3205`);
@@ -115,7 +115,7 @@ export async function runPayrollDeductionAccountTests(shouldRun: ShouldRun): Pro
       const items = listed?.items ?? [];
       if (!listed || listed.status !== 'warning' || items.length !== 1 || Number(items[0]?.id) !== legacyWorker) {
         problems.push(`health check payroll_deductions_in_customer_prepayments: ${listed?.status} ${brief(items)}, expected warning with personnel ${legacyWorker} only`);
-      } else if (!String(items[0]?.subtitle ?? '').includes('۳۰۰٬۰۰۰')) problems.push(`the listed amount is «${items[0]?.subtitle}», expected ۳۰۰٬۰۰۰`);
+      } else if (!String(items[0]?.subtitle ?? '').includes('۳۰۰٬۰۰۰')) problems.push(`the listed subtitle is ${JSON.stringify(items[0]?.subtitle)}, expected the amount 300,000 in Persian digits`);
 
       // 5) a correction voucher that moves the amount to 3205 with the personnel detail clears the listing
       const acc = await accountIdsByCode('3202', '3205');
