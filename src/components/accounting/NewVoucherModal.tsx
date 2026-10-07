@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, CheckCircle2, AlertCircle, FileText, Save, X, Scale, Zap, Copy, Keyboard, Sparkles } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDateString, errorMessageOf, toPersianDigits } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayIsoDate, toStorageDate, errorMessageOf, toPersianDigits } from '../../utils';
 import type { Account, Customer, Personnel, JournalVoucher, FinancialAttachment } from '../../types';
 // V9 Phase 5.2: تایپ و جدول ردیف‌ها به کامپوننت VoucherItemsTable منتقل شد
 import VoucherItemsTable, { VoucherItemDraft } from './VoucherItemsTable';
@@ -14,9 +14,7 @@ import { manualVoucherFormType } from '../../lib/accounting/manualVoucherRules';
 import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
 import { useServerDraft } from '../../hooks/useServerDraft';
 import toast from 'react-hot-toast';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
+import { JalaliDateInput } from '../common/JalaliDateInput';
 
 interface NewVoucherModalProps {
   isOpen: boolean;
@@ -41,7 +39,8 @@ export function NewVoucherModal({
   const safeCustomers = Array.isArray(customers) ? customers : [];
   const safePersonnelList = Array.isArray(personnelList) ? personnelList : [];
 
-  const [date, setDate] = useState(() => getTodayJalaliDate());
+  // v9.0.159 (TD-578): تاریخ ISO نگه داشته و با JalaliDateInput شمسی نشان داده می‌شود (پیش‌تر ویرایش «۲۰۲۶/۰۴/۰۱» نشان می‌داد)
+  const [date, setDate] = useState(() => getTodayIsoDate());
   const [voucherType, setVoucherType] = useState<string>('general');
   const [manualVoucherNumber, setManualVoucherNumber] = useState('');
   const [description, setDescription] = useState('');
@@ -93,7 +92,7 @@ export function NewVoucherModal({
     draftKey: editingVoucher ? `edit_${editingVoucher.id}` : 'new_voucher',
     enabled: isOpen && !editingVoucher,
     onDraftLoaded: (loaded) => {
-      if (loaded.date) setDate(loaded.date);
+      if (loaded.date) setDate(toStorageDate(loaded.date) || getTodayIsoDate());
       if (loaded.voucherType) setVoucherType(manualVoucherFormType(loaded.voucherType));
       if (loaded.manualVoucherNumber) setManualVoucherNumber(loaded.manualVoucherNumber);
       if (loaded.description) setDescription(loaded.description);
@@ -121,7 +120,7 @@ export function NewVoucherModal({
 
   useEffect(() => {
     if (editingVoucher) {
-      setDate(editingVoucher.date || '');
+      setDate(toStorageDate(editingVoucher.date) || '');
       // v9.0.149 (TD-559): سند دستی قدیمی از نوع اختتامیه در فرم «افتتاحیه» است؛ اختتامیه را فقط بستن سال صادر می‌کند
       setVoucherType(manualVoucherFormType(editingVoucher.voucherType));
       setManualVoucherNumber(editingVoucher.manualVoucherNumber || '');
@@ -572,15 +571,10 @@ export function NewVoucherModal({
               <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 تاریخ سند *
               </label>
-              <DatePicker
+              <JalaliDateInput
                 value={date}
-                onChange={(dateObj: any) => {
-                  setDate(extractDateString(dateObj));
-                }}
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
-                inputClass="w-full px-3 py-2 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                onChange={setDate}
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
                 containerClassName="w-full"
               />
             </div>

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.159 — Voucher Date Shown in Jalali
+- **Accounting Date Inputs (P3):** the voucher, correction and reversal forms and the trial balance, account explorer and cash flow filters keep ISO dates and use `JalaliDateInput`; editing a voucher no longer shows its ISO date as a Jalali year 2026 (TD-578, Vitest `voucherDateInput.test.tsx`).
+
 ### v9.0.158 — Voucher Print Currency and Types
 - **Voucher Print Currency (P2):** the voucher print follows the TD-551 balance rule (single-currency vouchers in their currency with the rate, multi-currency ones in rials with each row amount and rate) and names every voucher type from one shared list, settlement included (TD-573, Vitest `voucherPrintCurrency.test.tsx`).
 

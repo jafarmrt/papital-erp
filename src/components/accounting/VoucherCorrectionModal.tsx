@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Trash2, CheckCircle2, AlertCircle, FileText, Calendar, Save, X, Scale, Sparkles, AlertTriangle, History } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDateString, errorMessageOf, toPersianDigits, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayIsoDate, errorMessageOf, toPersianDigits, formatCurrencyLabel } from '../../utils';
 import type { Account, Customer, Personnel, JournalVoucher } from '../../types';
 import { AccountSearchSelect } from './AccountSearchSelect';
 import {
@@ -11,9 +11,7 @@ import { VoucherHeaderCurrencyFields, VoucherRowCurrencyCell } from './VoucherCu
 import { VoucherDetailedPicker } from './VoucherDetailedPicker';
 import { voucherDetailedTypeFromStored, type VoucherDetailedType } from '../../lib/accounting/voucherDetailedTypes';
 import toast from 'react-hot-toast';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
+import { JalaliDateInput } from '../common/JalaliDateInput';
 
 interface VoucherCorrectionModalProps {
   isOpen: boolean;
@@ -58,7 +56,7 @@ export function VoucherCorrectionModal({
   const safeCustomers = Array.isArray(customers) ? customers : [];
   const safePersonnelList = Array.isArray(personnelList) ? personnelList : [];
 
-  const [date, setDate] = useState(() => getTodayJalaliDate());
+  const [date, setDate] = useState(() => getTodayIsoDate());
   const [reason, setReason] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [items, setItems] = useState<VoucherItemDraft[]>([]);
@@ -70,7 +68,7 @@ export function VoucherCorrectionModal({
 
   useEffect(() => {
     if (voucher && isOpen) {
-      setDate(getTodayJalaliDate());
+      setDate(getTodayIsoDate());
       setReason('');
       setNewDescription(voucher.description || '');
       const { currency: originalCurrency, replaced } = voucherFormCurrency(voucher.currency);
@@ -251,15 +249,10 @@ export function VoucherCorrectionModal({
                 <Calendar className="w-3.5 h-3.5 text-indigo-500" />
                 <span>تاریخ اصلاحیه</span>
               </label>
-              <DatePicker
+              <JalaliDateInput
                 value={date}
-                onChange={(dateObj: any) => {
-                  setDate(extractDateString(dateObj));
-                }}
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
-                inputClass="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                onChange={setDate}
+                className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
                 containerClassName="w-full"
               />
             </div>
