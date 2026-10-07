@@ -1,10 +1,21 @@
 import { orm } from '../../db/drizzle.js';
-import { customers } from '../../db/schema.js';
+import { customers, personnel } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { TestCaseResult } from '../types.js';
 import {
-  type ShouldRun, accountIdsByCode, assertNoProblems, inFiscalSandbox, postApproved, runCase, sandboxAdminClient, sandboxClientWith,
+  type ShouldRun, accountIdsByCode, amountOf, assertNoProblems, inFiscalSandbox, postApproved, runCase, sandboxAdminClient,
+  sandboxClientWith,
 } from './fiscalClosingTests.js';
+
+interface DetailedLine { accountId: number; debit: number; credit: number; detailedType?: string; detailedId?: number | null; detailedName?: string }
+
+async function postDetailed(date: string, description: string, lines: DetailedLine[]): Promise<void> {
+  await VoucherService.createJournalVoucher({
+    date, voucherType: 'general', status: 'approved', description, referenceModule: 'manual',
+    items: lines.map(l => ({ ...l, description })),
+  });
+}
 
 /**
  * Package 3 PR «د»: who reads the account card, the party statement and the party list, and what they return
@@ -67,6 +78,74 @@ export async function runAccountingReportAccessTests(shouldRun: ShouldRun): Prom
         }
         assertNoProblems(problems);
         return 'documents.view and customers.view get 403 on the four routes and still read the customer card; accounting keys get 200; unfiltered card and statement 422';
+      }));
+  }
+
+  const rowsId = 'reg_party_statement_rows_by_party_td_548';
+  if (shouldRun(rowsId, 'td548', 'accounting', 'party', 'report', 'package3')) {
+    await runCase(results, rowsId,
+      'v9.0.205: a party statement counts only rows of the party\'s own detailed type and id, or legacy rows without an id under its exact current name; never another table\'s id or a longer name (TD-548)',
+      () => inFiscalSandbox(async () => {
+        const problems: string[] = [];
+        const today = await businessTodayIsoDate();
+        const acc = await accountIdsByCode('1201', '5001', '6002', '3201');
+        // B03-06 S06: customer #1 bought 1,000,000 on credit, customer «… و پسران» 600,000, and personnel with the same id 1
+        // has a 2,500,000 payslip
+        const [a] = await orm.insert(customers).values({ name: 'مشتری رضایی TD-548', partyType: 'customer' }).returning({ id: customers.id, name: customers.name });
+        const [b] = await orm.insert(customers).values({ name: 'مشتری رضایی TD-548 و پسران', partyType: 'customer' }).returning({ id: customers.id, name: customers.name });
+        const [p] = await orm.insert(personnel).values({ id: a.id, fullName: 'کارگر حقوق TD-548' }).returning({ id: personnel.id, name: personnel.fullName });
+        await postDetailed(today, 'TD-548 sale A', [
+          { accountId: acc['1201'], debit: 1_000_000, credit: 0, detailedType: 'customer', detailedId: a.id, detailedName: a.name },
+          { accountId: acc['5001'], debit: 0, credit: 1_000_000 },
+        ]);
+        await postDetailed(today, 'TD-548 sale B', [
+          { accountId: acc['1201'], debit: 600_000, credit: 0, detailedType: 'customer', detailedId: b.id, detailedName: b.name },
+          { accountId: acc['5001'], debit: 0, credit: 600_000 },
+        ]);
+        await postDetailed(today, 'TD-548 payslip', [
+          { accountId: acc['6002'], debit: 2_500_000, credit: 0, detailedType: 'personnel', detailedId: p.id, detailedName: p.name },
+          { accountId: acc['3201'], debit: 0, credit: 2_500_000, detailedType: 'personnel', detailedId: p.id, detailedName: p.name },
+        ]);
+        // a legacy row without an id under A's name with spaces around it belongs to A
+        await postDetailed(today, 'TD-548 legacy A', [
+          { accountId: acc['1201'], debit: 50_000, credit: 0, detailedType: 'customer', detailedId: null, detailedName: `  ${a.name} ` },
+          { accountId: acc['5001'], debit: 0, credit: 50_000 },
+        ]);
+
+        const admin = await sandboxAdminClient();
+        const statement = async (query: string) => {
+          const res = await admin.get(`/api/accounting/reports/party-ledger?${query}`);
+          const body = (res.body?.report ?? res.body) as { items?: unknown[]; totalDebit?: number; totalCredit?: number; finalBalance?: number } | undefined;
+          return {
+            status: res.status, code: res.body?.code as string | undefined, rows: Array.isArray(body?.items) ? body.items.length : -1,
+            debit: amountOf(body?.totalDebit), credit: amountOf(body?.totalCredit), balance: amountOf(body?.finalBalance),
+          };
+        };
+        const expect = (label: string, got: Awaited<ReturnType<typeof statement>>, want: { rows: number; debit: number; credit: number; balance: number }) => {
+          if (got.status !== 200 || got.rows !== want.rows || got.debit !== want.debit || got.credit !== want.credit || got.balance !== want.balance) {
+            problems.push(`${label}: ${JSON.stringify(got)}, expected ${JSON.stringify(want)}`);
+          }
+        };
+        const ownA = { rows: 2, debit: 1_050_000, credit: 0, balance: 1_050_000 };
+        expect('customer A by id', await statement(`partyId=${a.id}&partyType=customer`), ownA);
+        expect('customer A by its exact name', await statement(`partyName=${encodeURIComponent(a.name)}`), ownA);
+        expect('customer B by id', await statement(`partyId=${b.id}&partyType=customer`), { rows: 1, debit: 600_000, credit: 0, balance: 600_000 });
+        expect('personnel with A\'s id', await statement(`partyId=${p.id}&partyType=personnel`), { rows: 2, debit: 2_500_000, credit: 2_500_000, balance: 0 });
+        expect('personnel by its exact name', await statement(`partyName=${encodeURIComponent(p.name)}&partyType=personnel`), { rows: 2, debit: 2_500_000, credit: 2_500_000, balance: 0 });
+        expect('a name no party has, contained in two names', await statement(`partyName=${encodeURIComponent('مشتری رضایی')}`), { rows: 0, debit: 0, credit: 0, balance: 0 });
+
+        // the customer page's card (TD-416) and the accounting statement agree
+        const card = await admin.get(`/api/customers/${a.id}/account-card`);
+        const cardBody = (card.body?.report ?? card.body) as { finalBalance?: number } | undefined;
+        if (card.status !== 200 || amountOf(cardBody?.finalBalance) !== ownA.balance) {
+          problems.push(`customer A's own card answered ${card.status} with ${JSON.stringify(cardBody?.finalBalance)}, expected ${ownA.balance}`);
+        }
+        const missing = await statement('partyId=987654&partyType=customer');
+        if (missing.status !== 404 || missing.code !== 'PARTY_LEDGER_PARTY_NOT_FOUND') {
+          problems.push(`a statement of a missing party answered ${missing.status} ${missing.code}, expected 404 PARTY_LEDGER_PARTY_NOT_FOUND`);
+        }
+        assertNoProblems(problems);
+        return 'customer A 1,050,000 (own and legacy rows) like its own card, B 600,000, personnel 2,500,000 both sides; contained name 0 rows; missing id 404';
       }));
   }
 

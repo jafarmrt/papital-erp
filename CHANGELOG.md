@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.205 — Party Statement Counts Only the Party's Own Rows
+- **Party Statement (P1):** rows belong to a party only by its own detailed type and id, or legacy rows without an id under its exact name; never another table's id or a longer name (TD-548).
+
 ### v9.0.204 — Ledger Reports Only for Accounting Keys
 - **Accounting Reports (P1):** the account card, ledger, party statement and party list need `accounting.reports` or `accounting.view`; a card with no account or party and a statement with no party are 422 (TD-547, decision ت۵).
 

@@ -16,10 +16,29 @@ export interface PartyDetailedFilter {
 }
 
 export function partyDetailedRowsCondition(party: PartyDetailedFilter): SQL {
+  return detailedRowsOwnedBy(PARTY_DETAILED_TYPES, party);
+}
+
+/**
+ * v9.0.205 (TD-548، B03-06): ردیف‌های یک پرسنل — نوع تفصیلی `personnel` با شناسه او، و ردیف قدیمیِ بی‌شناسه فقط با
+ * نام دقیق کنونی. شناسه پرسنل و شناسه طرف حساب از دو جدول جدا می‌آیند و هم‌پوشانی دارند، پس شناسه بی نوع هرگز.
+ */
+export const PERSONNEL_DETAILED_TYPES = ['personnel'];
+
+export function personnelDetailedRowsCondition(person: PartyDetailedFilter): SQL {
+  return detailedRowsOwnedBy(PERSONNEL_DETAILED_TYPES, person);
+}
+
+/** ردیف‌هایی که نام تفصیلی آن‌ها، بی فاصله دو سر، دقیقاً این نام است (طرف حسابی که در هیچ جدولی پیدا نشد) */
+export function exactDetailedNameCondition(name: string): SQL {
+  return sql`btrim(${journalVoucherItems.detailedName}) = ${name.trim()}::text`;
+}
+
+function detailedRowsOwnedBy(types: readonly string[], party: PartyDetailedFilter): SQL {
   const legacyName = party.legacyName.trim();
   const byId = eq(journalVoucherItems.detailedId, party.id);
   const owned = legacyName
-    ? or(byId, and(isNull(journalVoucherItems.detailedId), sql`btrim(${journalVoucherItems.detailedName}) = ${legacyName}::text`))
+    ? or(byId, and(isNull(journalVoucherItems.detailedId), exactDetailedNameCondition(legacyName)))
     : byId;
-  return and(inArray(journalVoucherItems.detailedType, PARTY_DETAILED_TYPES), owned) as SQL;
+  return and(inArray(journalVoucherItems.detailedType, [...types]), owned) as SQL;
 }

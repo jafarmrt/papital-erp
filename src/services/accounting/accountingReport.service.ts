@@ -19,12 +19,12 @@ import type {
   PartyOption
 } from '../../types.js';
 import { isAllCurrenciesView, voucherItemCurrencyCondition, voucherItemCurrencySql, voucherItemRateSql, voucherItemReportAmountSql } from './voucherItemAmount.js';
-import { partyDetailedRowsCondition, type PartyDetailedFilter } from './partyDetailedRows.js';
+import { exactDetailedNameCondition, partyDetailedRowsCondition, personnelDetailedRowsCondition, type PartyDetailedFilter } from './partyDetailedRows.js';
 import type { BalanceSheetReport, IncomeStatementReport, StatementRow } from '../../lib/accounting/financialStatements.js';
 import { accountSubtreeCondition } from './accountSubtree.js';
 import { yearEndClosingCutoff, yearEndClosingVoucherSql } from './yearEndClosingVouchers.js';
 import { accountCardHasFilter, type AccountCardReport } from '../../lib/accounting/accountCard.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 
 /** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
 function foreignOrigin(allCurrencies: boolean, row: {
@@ -857,6 +857,62 @@ export class AccountingReportService {
   }
 
   /**
+   * v9.0.205 (TD-548): طرف حساب صورت‌حساب و شرط ردیف‌های او. با شناسه: پرسنل از جدول پرسنل، بقیه از طرف حساب‌ها (رکورد
+   * حذف‌شده هم، تا تاریخچه‌اش خوانده شود؛ شناسه ناموجود ۴۰۴). فقط با نام: طرف حساب یا پرسنل فعال با همان نام دقیق؛ نامی که در
+   * هیچ جدولی نیست فقط ردیف‌هایی را می‌آورد که نام تفصیلی‌شان دقیقاً همان است.
+   */
+  private static async resolveLedgerParty(params: { partyId?: number; partyType?: string; partyName?: string }): Promise<{
+    info: { id?: number; name: string; partyType: string; phone?: string; code?: string; city?: string };
+    rows: SQL;
+  }> {
+    type CustomerRow = typeof customers.$inferSelect;
+    type PersonnelRow = typeof personnel.$inferSelect;
+    const fromCustomer = (c: CustomerRow) => ({
+      info: { id: c.id, name: c.name, partyType: c.partyType || 'customer', phone: c.phone || undefined, city: c.city || undefined },
+      rows: partyDetailedRowsCondition({ id: c.id, legacyName: c.name }),
+    });
+    const fromPersonnel = (p: PersonnelRow) => ({
+      info: {
+        id: p.id, name: p.fullName, partyType: 'personnel', phone: p.phone || undefined,
+        code: p.personnelCode || undefined, city: p.jobTitle || undefined,
+      },
+      rows: personnelDetailedRowsCondition({ id: p.id, legacyName: p.fullName }),
+    });
+    const wantsPersonnel = params.partyType === 'personnel';
+
+    if (params.partyId) {
+      if (wantsPersonnel) {
+        const [p] = await orm.select().from(personnel).where(eq(personnel.id, params.partyId));
+        if (p) return fromPersonnel(p);
+      } else {
+        const [c] = await orm.select().from(customers).where(eq(customers.id, params.partyId));
+        if (c) return fromCustomer(c);
+      }
+      throw new NotFoundError('طرف حساب این صورت‌حساب پیدا نشد.', undefined, 'PARTY_LEDGER_PARTY_NOT_FOUND');
+    }
+
+    const name = (params.partyName ?? '').trim();
+    const searchCustomers = !wantsPersonnel;
+    const searchPersonnel = wantsPersonnel || !params.partyType || params.partyType === 'all';
+    if (searchCustomers) {
+      const [c] = await orm.select().from(customers)
+        .where(and(sql`btrim(${customers.name}) = ${name}::text`, eq(customers.isDeleted, 0)))
+        .orderBy(asc(customers.id)).limit(1);
+      if (c) return fromCustomer(c);
+    }
+    if (searchPersonnel) {
+      const [p] = await orm.select().from(personnel)
+        .where(and(sql`btrim(${personnel.fullName}) = ${name}::text`, eq(personnel.isDeleted, 0)))
+        .orderBy(asc(personnel.id)).limit(1);
+      if (p) return fromPersonnel(p);
+    }
+    return {
+      info: { name, partyType: (params.partyType && params.partyType !== 'all') ? params.partyType : 'طرف‌حساب' },
+      rows: exactDetailedNameCondition(name),
+    };
+  }
+
+  /**
    * Floating Detailed Party Ledger (صورت‌حساب جامع و ریزگردش تفصیلی اشخاص و طرف‌حساب‌ها)
    * استخراج سریع تمامی آرتیکل‌های مالی مرتبط با شخص (مشتری، تامین‌کننده، پرسنل) در تمام معین‌ها
    */
@@ -873,101 +929,12 @@ export class AccountingReportService {
     if (!params.partyId && !params.partyName?.trim()) {
       throw new ValidationError('صورت‌حساب بی طرف حساب گرفته نمی‌شود؛ یک طرف حساب برگزینید.', undefined, 'PARTY_LEDGER_PARTY_REQUIRED');
     }
-    let partyInfo: {
-      id?: number;
-      name: string;
-      partyType: string;
-      phone?: string;
-      code?: string;
-      city?: string;
-    } | null = null;
+    // v9.0.205 (TD-548، B03-06): ردیف از آنِ طرف حساب است اگر نوع تفصیلی و شناسه او را داشته باشد (مشتری و تأمین‌کننده با
+    // قاعده TD-416 کارت حساب صفحه مشتری، پرسنل با نوع `personnel`)، یا ردیف قدیمیِ بی‌شناسه نام دقیق کنونی او را؛ پیش‌تر
+    // شناسه از هر نوع (حقوق پرسنل هم‌شناسه) و «نام شامل» (طرف حساب دیگری با نام بلندتر) هم شمرده می‌شد
+    const { info: partyInfo, rows: partyRowsCondition } = await AccountingReportService.resolveLedgerParty(params);
 
-    // Resolve party details from database
-    if (params.partyId) {
-      if (params.partyType === 'personnel') {
-        const [p] = await orm.select().from(personnel).where(and(eq(personnel.id, params.partyId), eq(personnel.isDeleted, 0)));
-        if (p) {
-          partyInfo = {
-            id: p.id,
-            name: p.fullName,
-            partyType: 'personnel',
-            phone: p.phone || undefined,
-            code: p.personnelCode || undefined,
-            city: p.jobTitle || undefined,
-          };
-        }
-      } else {
-        const [c] = await orm.select().from(customers).where(and(eq(customers.id, params.partyId), eq(customers.isDeleted, 0)));
-        if (c) {
-          partyInfo = {
-            id: c.id,
-            name: c.name,
-            partyType: c.partyType || 'customer',
-            phone: c.phone || undefined,
-            city: c.city || undefined,
-          };
-        }
-      }
-    }
-
-    if (!partyInfo && params.partyName) {
-      const pName = params.partyName.trim();
-      const [c] = await orm.select().from(customers).where(and(eq(customers.name, pName), eq(customers.isDeleted, 0)));
-      if (c) {
-        partyInfo = {
-          id: c.id,
-          name: c.name,
-          partyType: c.partyType || 'customer',
-          phone: c.phone || undefined,
-          city: c.city || undefined,
-        };
-      } else {
-        const [p] = await orm.select().from(personnel).where(and(eq(personnel.fullName, pName), eq(personnel.isDeleted, 0)));
-        if (p) {
-          partyInfo = {
-            id: p.id,
-            name: p.fullName,
-            partyType: 'personnel',
-            phone: p.phone || undefined,
-            code: p.personnelCode || undefined,
-            city: p.jobTitle || undefined,
-          };
-        } else {
-          partyInfo = {
-            id: params.partyId,
-            name: pName,
-            partyType: (params.partyType && params.partyType !== 'all') ? params.partyType : 'طرف‌حساب',
-          };
-        }
-      }
-    }
-
-    const effectivePartyName = partyInfo?.name || params.partyName?.trim() || '';
-    const effectivePartyId = partyInfo?.id || params.partyId;
-
-    // Conditions for party matching in voucher items
-    // An item matches if:
-    // 1) detailedId = effectivePartyId
-    // OR 2) detailedName = effectivePartyName
-    const partyMatchConditions: SQL[] = [];
-    if (effectivePartyId && effectivePartyName) {
-      partyMatchConditions.push(
-        or(
-          eq(journalVoucherItems.detailedId, effectivePartyId),
-          eq(journalVoucherItems.detailedName, effectivePartyName),
-          like(journalVoucherItems.detailedName, containsLikePattern(effectivePartyName))
-        )!
-      );
-    } else if (effectivePartyId) {
-      partyMatchConditions.push(eq(journalVoucherItems.detailedId, effectivePartyId));
-    } else if (effectivePartyName) {
-      partyMatchConditions.push(
-        or(
-          eq(journalVoucherItems.detailedName, effectivePartyName),
-          like(journalVoucherItems.detailedName, containsLikePattern(effectivePartyName))
-        )!
-      );
-    }
+    const partyMatchConditions: SQL[] = [partyRowsCondition];
 
     // Base conditions for valid vouchers
     const voucherStatusCondition = params.includeDrafts
