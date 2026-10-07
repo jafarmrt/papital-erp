@@ -10,11 +10,11 @@ import {
 import * as XLSX from 'xlsx';
 import { toast } from 'react-hot-toast';
 import { confirmAction } from '../ConfirmDialogHost';
-import { getTodayJalaliDate } from '../../utils';
+import { errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { treasuryExportFileName, treasuryExportRows } from '../../lib/treasury/treasuryExport';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { useDebounce } from '../../hooks/useDebounce';
-import { fetchTreasuryTransactions, useTreasuryTransactionPageQuery, type TreasuryListFilters } from '../../hooks/accounting/useTreasuryQueries';
+import { fetchTreasuryTransactions, useTreasuryDocumentDetach, useTreasuryTransactionPageQuery, type TreasuryListFilters } from '../../hooks/accounting/useTreasuryQueries';
 import { BankReconciliationModal } from './reconciliation/BankReconciliationModal';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
 
@@ -195,6 +195,22 @@ export function BankAndTreasuryTab({
     }
   };
 
+  // v9.0.272 (TD-779، ت۴ الف): دریافت یا پرداخت از سندش جدا و «علی‌الحساب» می‌شود؛ سند حسابداری آن عوض نمی‌شود
+  const detachDocument = useTreasuryDocumentDetach();
+  const handleDetachDocument = async (tx: TreasuryTransaction) => {
+    const ok = await confirmAction({
+      title: 'علی‌الحساب کردن تراکنش',
+      message: `تراکنش «${tx.transactionNumber || tx.id}» از سندش جدا و علی‌الحساب می‌شود؛ سند حسابداری آن تغییر نمی‌کند و مبلغ دیگر در تسویه آن سند شمرده نمی‌شود. ادامه می‌دهید؟`,
+    });
+    if (!ok) return;
+    try {
+      await detachDocument.mutateAsync(tx.id);
+      toast.success('تراکنش علی‌الحساب شد');
+    } catch (err: unknown) {
+      toast.error(errorMessageOf(err) || 'خطا در جدا کردن تراکنش از سند');
+    }
+  };
+
   const handleExportExcel = useCallback(async () => {
     let rows: TreasuryTransaction[];
     try {
@@ -324,6 +340,7 @@ export function BankAndTreasuryTab({
         onExportExcel={() => { void handleExportExcel(); }}
         onViewAttachments={(info) => setViewingAttachments(info)}
         onVoidTransaction={(tx) => setVoidTarget(tx)}
+        onDetachDocument={(tx) => { void handleDetachDocument(tx); }}
       />
 
       {/* Bank Reconciliation Modal */}

@@ -129,7 +129,9 @@ export class VoucherSyncService {
     const grossAmountNum = grossAmount.round(4);
     const totalDiscountNum = totalDiscount.round(4);
 
-    if (!grossAmountNum.isPositive()) return null;
+    // v9.0.270 (TD-772، تصمیم ت۳ «الف» بسته ۸): فاکتور با جمع ناخالص صفر (نمونه رایگان، هدیه) هم سند می‌گیرد: بهای
+    // تمام‌شده به بهای کاردکس «بدهکار ۶۰۰۱ / بستانکار موجودی» و درآمد صفر، مثل فاکتوری که یک ردیف رایگان دارد. پیش‌تر
+    // این‌جا بی سند برمی‌گشت و کالای خارج‌شده هرگز از حساب موجودی کم نمی‌شد (B08-03). ردیف صفر نوشته نمی‌شود.
 
     const netAmountRaw = grossAmountNum.subtract(totalDiscountNum);
     const netAmount = netAmountRaw.isNegative() ? fin(0) : netAmountRaw.round(4);
@@ -218,7 +220,7 @@ export class VoucherSyncService {
     }[] = [];
 
     // ۱) بدهکار: حساب‌های دریافتنی تجاری (مشتری)
-    voucherItems.push({
+    if (finalPayable.isPositive()) voucherItems.push({
       accountId: customerAcc.id,
       detailedType: 'customer',
       detailedId: matchedCustomerId || undefined,
@@ -245,7 +247,7 @@ export class VoucherSyncService {
     }
 
     // ۳) بستانکار: درآمد فروش محصولات
-    voucherItems.push({
+    if (grossAmountNum.isPositive()) voucherItems.push({
       accountId: revenueAcc.id,
       detailedType: 'other',
       detailedName: 'درآمد فروش محصولات',
@@ -373,6 +375,9 @@ export class VoucherSyncService {
         }
       }
     }
+
+    // فاکتوری که نه مبلغ دارد نه بهای کاردکس، چیزی برای ثبت ندارد
+    if (voucherItems.length === 0) return null;
 
     // v7.0.31 (TD-193 / P1-8): یافتن سند حسابداری فاکتور فقط از پیوند صریح source_document_id؛
     // reference_id در اسناد معکوس/اصلاحی شناسه سند حسابداری مبدأ است و با شناسه اسناد انبار تداخل دارد.
@@ -993,6 +998,18 @@ export class VoucherSyncService {
         }
         return null;
       }
+      // v9.0.274 (TD-774، تصمیم ت۵ الف): مالیات برگشت (documents.vat_amount، به نسبت از فاکتور مرجع) مالیات پرداختنی را
+      // بدهکار و مشتری را خالص به‌علاوه مالیات بستانکار می‌کند؛ پیش‌تر برگشت مالیات نداشت و هر دو مانده بیش از واقع می‌ماند
+      const returnVatNum = fin(doc.vatAmount).round(4);
+      const returnVatAcc = returnVatNum.isPositive() ? await AccountMappingService.getSalesVatPayableAccount(executor) : null;
+      if (returnVatNum.isPositive() && !returnVatAcc) {
+        if (isStrict) {
+          throw new ValidationError('سرفصل حسابداری مالیات بر ارزش افزوده (۳۲۰۳) در تنظیمات حسابداری تعریف نشده است.');
+        }
+        logger.warn({ message: `VAT account not found for sales return ${doc.refNumber}, skipping auto voucher to prevent unbalanced entry` });
+        return null;
+      }
+      const customerReturnCredit = totalReturnAmountNum.add(returnVatNum).round(4);
 
       let matchedCustomerId: number | null = null;
       if (doc.buyerName) {
@@ -1016,15 +1033,31 @@ export class VoucherSyncService {
           exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
           description: `برگشت از فروش بابت سند مرجوعی شماره ${doc.refNumber}`
         });
+      }
 
-        // ۲) بستانکار: حساب‌های دریافتنی تجاری / مشتری (۱۲۰۱)
+      // ۱-ب) v9.0.274 (TD-774): بدهکار: مالیات و عوارض ارزش افزوده پرداختنی (۳۲۰۳)
+      if (returnVatNum.isPositive() && returnVatAcc) {
+        voucherItems.push({
+          accountId: returnVatAcc.id,
+          detailedType: 'other',
+          detailedName: 'مالیات بر ارزش افزوده',
+          debit: returnVatNum,
+          credit: 0,
+          currency: doc.currency || 'IRR',
+          exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
+          description: `برگشت مالیات و عوارض ارزش افزوده بابت سند مرجوعی شماره ${doc.refNumber}`
+        });
+      }
+
+      if (customerReturnCredit.isPositive()) {
+        // ۲) بستانکار: حساب‌های دریافتنی تجاری / مشتری (۱۲۰۱)، خالص به‌علاوه مالیات
         voucherItems.push({
           accountId: customerAcc.id,
           detailedType: 'customer',
           detailedId: matchedCustomerId || undefined,
           detailedName: doc.buyerName || 'مشتری',
           debit: 0,
-          credit: totalReturnAmountNum,
+          credit: customerReturnCredit,
           currency: doc.currency || 'IRR',
           exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
           description: `بستانکاری مشتری بابت مرجوعی کالا در سند شماره ${doc.refNumber}`
