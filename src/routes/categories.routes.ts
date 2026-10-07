@@ -13,7 +13,7 @@ const router = Router();
 router.use(authenticateToken);
 
 const categorySchema = z.object({
-  name: z.string().min(1, 'نام الزامی است').max(100),
+  name: z.string().trim().min(1, 'نام الزامی است').max(100),
   prefix: z.string().min(1, 'پیشوند الزامی است').max(10),
   type: z.enum(['product', 'raw_material']),
   defaultUnit: z.string().optional().default('عدد'),

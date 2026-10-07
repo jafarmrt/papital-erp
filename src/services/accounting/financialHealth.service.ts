@@ -17,6 +17,7 @@ import {
 import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
 import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
 import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
+import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1144,6 +1145,11 @@ export class FinancialHealthService {
     const invalidPriceTest = buildInvalidActivePriceHealthTest(await findInvalidActivePrices());
     overallScore += invalidPriceTest.scoreImpact;
     tests.push(invalidPriceTest);
+
+    // آزمون ۳۱: v9.0.178 (TD-658) نام دسته‌بندی تکراری و کالای فعال با دسته‌ای که نیست (فقط فهرست، بی تغییر خودکار)
+    const categoryIntegrityTest = buildCategoryIntegrityHealthTest(await findCategoryIntegrityIssues(), await hasCategoryNameUniqueIndex());
+    overallScore += categoryIntegrityTest.scoreImpact;
+    tests.push(categoryIntegrityTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

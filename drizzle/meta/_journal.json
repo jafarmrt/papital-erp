@@ -505,6 +505,13 @@
       "when": 1793060000000,
       "tag": "0071_category_soft_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1793070000000,
+      "tag": "0072_category_name_unique",
+      "breakpoints": true
     }
   ]
 }

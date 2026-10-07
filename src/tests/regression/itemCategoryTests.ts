@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { activityLogs, categories, items } from '../../db/schema.js';
+import { findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../../services/items/itemCategoryIdentity.js';
 
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
@@ -16,6 +17,9 @@ export async function runItemCategoryTests(shouldRun: ShouldRun): Promise<TestCa
     ['reg_category_soft_delete_and_audit_td_659',
       'v9.0.177: a category is soft-deleted and every create, edit, delete and default reset writes an audit row (TD-659)',
       ['td659', 'category', 'audit', 'package5'], softDeleteAuditCase],
+    ['reg_category_rename_keeps_items_td_658',
+      'v9.0.178: a live category name is unique (concurrent requests too), a rename moves its items and a type change with items is refused (TD-658)',
+      ['td658', 'category', 'rename', 'package5'], renameKeepsItemsCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -115,4 +119,56 @@ async function softDeleteAuditCase(ctx: Ctx): Promise<string> {
 
   if (wrong.length > 0) throw new Error(wrong.join(' | '));
   return 'category soft-deleted (row kept, hidden, 404 on repeat); CREATE / UPDATE / DELETE audit rows; reset restores a deleted default and is audited';
+}
+
+async function renameKeepsItemsCase(ctx: Ctx): Promise<string> {
+  const wrong: string[] = [];
+  const name = `دسته نام پ۵ ${ctx.tag}`;
+  const created = await ctx.send('post', '/api/categories', { name, prefix: `K${ctx.tag}`, type: 'raw_material', defaultUnit: 'عدد' });
+  if (created.status !== 200) throw new Error(`create ${created.status} ${JSON.stringify(created.body)}`);
+  const id = created.body.id as number;
+
+  // a) one live name: spacing and letter case do not make a new name, and concurrent requests create one row
+  const dup = await ctx.send('post', '/api/categories', { name: `  ${name} `, prefix: 'X', type: 'product' });
+  if (dup.status !== 409) wrong.push(`duplicate name answered ${dup.status}`);
+  const raceName = `دسته هم‌زمان پ۵ ${ctx.tag}`;
+  const race = await Promise.all(Array.from({ length: 5 }, () =>
+    ctx.send('post', '/api/categories', { name: raceName, prefix: `Z${ctx.tag}`, type: 'raw_material' })));
+  const raceRows = await orm.select({ id: categories.id }).from(categories).where(and(eq(categories.name, raceName), eq(categories.isDeleted, 0)));
+  const statuses = race.map(r => r.status).sort().join(',');
+  if (raceRows.length !== 1 || statuses !== '200,409,409,409,409') wrong.push(`concurrent creates answered ${statuses} and left ${raceRows.length} rows`);
+  if (!(await hasCategoryNameUniqueIndex())) wrong.push('uq_categories_name_active is missing');
+
+  // b) a rename moves the active items of the category, bumps their version and records them in the audit row
+  const item = await ctx.send('post', '/api/items', { type: 'raw_material', code: `K${ctx.tag}-1`, name: `کالای نام دسته ${ctx.tag}`, unit: 'عدد', category: name });
+  if (item.status !== 200) throw new Error(`item ${item.status} ${JSON.stringify(item.body)}`);
+  const itemId = item.body.id as number;
+  const [beforeItem] = await orm.select({ version: items.version }).from(items).where(eq(items.id, itemId));
+  const renamedTo = `دسته نام تازه پ۵ ${ctx.tag}`;
+  const renamed = await ctx.send('put', `/api/categories/${id}`, { name: renamedTo, prefix: `K${ctx.tag}`, type: 'raw_material', defaultUnit: 'عدد' });
+  const [afterItem] = await orm.select({ category: items.category, version: items.version }).from(items).where(eq(items.id, itemId));
+  if (renamed.status !== 200 || afterItem?.category !== renamedTo || afterItem.version !== beforeItem.version + 1) {
+    wrong.push(`rename answered ${renamed.status}, item ${JSON.stringify(afterItem)} (version before ${beforeItem?.version})`);
+  }
+  const [renameLog] = await orm.select({ details: activityLogs.details }).from(activityLogs)
+    .where(and(eq(activityLogs.entity, 'دسته‌بندی کالا'), eq(activityLogs.entityId, String(id)), eq(activityLogs.action, 'UPDATE')));
+  const moved = (renameLog?.details as { movedItems?: { itemIds?: number[] } } | undefined)?.movedItems?.itemIds ?? [];
+  if (!moved.includes(itemId)) wrong.push(`rename audit moved items ${JSON.stringify(moved)}`);
+
+  // c) the category still holds its item: delete and type change are refused
+  const del = await ctx.send('delete', `/api/categories/${id}`);
+  if (del.status !== 422) wrong.push(`delete of the renamed category with an active item answered ${del.status}`);
+  const retype = await ctx.send('put', `/api/categories/${id}`, { name: renamedTo, prefix: `K${ctx.tag}`, type: 'product', defaultUnit: 'عدد' });
+  const [cat] = await orm.select({ type: categories.type }).from(categories).where(eq(categories.id, id));
+  if (retype.status !== 422 || retype.body?.code !== 'CATEGORY_TYPE_HAS_ITEMS' || cat?.type !== 'raw_material') {
+    wrong.push(`type change with an item answered ${retype.status} ${retype.body?.code}, type ${cat?.type}`);
+  }
+
+  // d) the health check lists an active item whose category no longer exists
+  await orm.update(items).set({ category: `دسته ناموجود ${ctx.tag}` }).where(eq(items.id, itemId));
+  const issues = await findCategoryIntegrityIssues();
+  if (!issues.some(r => r.kind === 'unknown_category' && r.id === itemId)) wrong.push('health check did not list the item without a category');
+
+  if (wrong.length > 0) throw new Error(wrong.join(' | '));
+  return 'duplicate name 409 (spacing ignored), 5 concurrent creates -> 1 row; rename moved the item (version +1, audited); delete and type change refused; orphan item listed';
 }

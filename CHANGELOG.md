@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.178 — Unique Category Names and Rename
+- **Category Names:** a live category name is unique (partial index, migration 0072, only on clean data); a rename moves its items in the same transaction and a type change of a category with items is refused (TD-658, `reg_category_rename_keeps_items_td_658`).
+
 ### v9.0.177 — Category Soft Delete and Audit
 - **Item Categories:** a category is soft-deleted and every create, edit, delete and default reset writes an audit row in its own transaction; the reset restores a deleted default instead of duplicating it (TD-659, `reg_category_soft_delete_and_audit_td_659`).
 
