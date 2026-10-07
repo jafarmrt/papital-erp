@@ -1,6 +1,6 @@
 
 /**
- * v9.0.52 (TD-473) — the renumbering plan of `npm run release:renumber` (scripts/release-renumber.ts), in memory.
+ * v9.0.54 (TD-473) — the renumbering plan of `npm run release:renumber` (scripts/release-renumber.ts), in memory.
  *
  * Only text the branch itself added (lines not in <ref>, found with a line diff) is renumbered:
  *  - versions: active changelog entries that are not in <ref> move, in order, to the free versions after the

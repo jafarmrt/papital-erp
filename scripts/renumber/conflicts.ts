@@ -1,5 +1,5 @@
 /**
- * v9.0.52 (TD-473) — automatic resolution of the merge conflicts every parallel release produces
+ * v9.0.54 (TD-473) — automatic resolution of the merge conflicts every parallel release produces
  * (v9/PHASE4_LANES.md §7.6), used by `npm run release:renumber` before renumbering:
  *  - the active changelog and the active CHANGELOG.md section: both sides' entries are kept (sorted later);
  *  - the migration journal: the base's entries plus this branch's own entries (renumbered later);
