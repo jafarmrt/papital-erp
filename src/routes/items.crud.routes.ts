@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { sql, eq, and, desc, ilike, or, gt, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { items, transactions, documentItems, journalVouchers } from '../db/schema.js';
+import { items, transactions, documentItems } from '../db/schema.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { z } from 'zod';
@@ -10,7 +10,7 @@ import { itemCreateUpdateSchema, itemUpdateSchema } from './items.schemas.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { MAX_PAGE_LIMIT, parsePickListLimit } from '../lib/pagination.js';
 import { ItemsService } from '../services/items.service.js';
-import { ItemOpeningService } from '../services/inventory/itemOpening.service.js';
+import { ItemOpeningService, itemIdsWithOpeningVoucher } from '../services/inventory/itemOpening.service.js';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
 import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js';
@@ -123,7 +123,8 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
     }
 
     const fetchedItems = await query;
-    const reservedMap = await ItemsService.getReservedStocksMap();
+    // v9.0.179 (TD-663، B05-17): رزرو فقط برای کالاهای همین صفحه
+    const reservedMap = await ItemsService.getReservedStocksMap({ itemIds: fetchedItems.map(it => it.id) });
     // v7.0.48 (TD-214): نقشه موجودی انبارها (stocks و stock_<کد>) از جدول نرمال؛ شکل پاسخ برای رابط کاربری حفظ شده است
     const listStockMap = await ItemWarehouseStockService.getStocksForItems(orm, fetchedItems.map(it => it.id));
 
@@ -142,19 +143,13 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
           .from(documentItems)
           .where(and(inArray(documentItems.itemId, itemIds), eq(documentItems.isDeleted, 0)))
           .groupBy(documentItems.itemId),
-        orm.select({ referenceId: journalVouchers.referenceId })
-          .from(journalVouchers)
-          .where(and(
-            eq(journalVouchers.referenceModule, 'item_opening'),
-            inArray(journalVouchers.referenceId, itemIds),
-            eq(journalVouchers.isDeleted, 0)
-          ))
-          .groupBy(journalVouchers.referenceId)
+        // v9.0.179 (TD-663): سند افتتاحیه کالا (سند خودش یا سند ورود اکسل) از جدول کالاهای سند افتتاحیه
+        itemIdsWithOpeningVoucher(orm, itemIds),
       ]);
 
       txItemSet = new Set(txRows.map(r => r.itemId));
       docItemSet = new Set(docRows.map(r => r.itemId));
-      voucherItemSet = new Set(voucherRows.map(r => r.referenceId).filter((id): id is number => id !== null));
+      voucherItemSet = voucherRows;
     }
 
     const rawLocQuery = req.query.location ? String(req.query.location).trim() : (req.query.warehouse ? String(req.query.warehouse).trim() : '');

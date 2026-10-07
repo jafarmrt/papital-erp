@@ -150,6 +150,19 @@ export interface ProjectReservationDeduction {
   row: InventoryControlItem;
 }
 
+/** v9.0.179 (TD-663): رزرو فقط برای این کالاها (صفحه فهرست کالا) */
+export interface ReservationScope {
+  itemIds: number[];
+}
+
+function emptyReservationReport(): ReservedItemsFullReport {
+  return {
+    summaryMetrics: { totalReservedItemsCount: 0, totalReservedQty: 0, totalReservedValue: 0, proformaReservationsCount: 0, projectReservationsCount: 0 },
+    itemSummaries: [],
+    allReservationEntries: [],
+  };
+}
+
 export class ItemStockReservationService {
   /**
    * Derive reserved items for a project's inventory control bounded by warehouse stock.
@@ -544,11 +557,18 @@ export class ItemStockReservationService {
 
   /**
    * Comprehensive calculation of reserved items across active Proforma Invoices AND Project Control.
+   *
+   * v9.0.179 (TD-663، B05-17): با `scope.itemIds` فقط رزرو همان کالاها ساخته می‌شود (فهرست کالا یک صفحه را می‌خواهد):
+   * ردیف‌های پیش‌فاکتور همان کالاها، موجودی انبار و خلاصه همان کالاها، و ردیف‌های پروژه‌ای که به همان کالاها می‌رسند.
+   * همه کالاها فقط وقتی (و فقط با ستون‌های تطبیق) خوانده می‌شوند که پروژه فعالی کنترل موجودی دارد. پیش‌تر هر صفحه ۵۰ کالایی
+   * گزارش همه کالاها را با موجودی همه انبارها می‌ساخت (۷۵ از ۹۳ میلی‌ثانیه با ۵٬۰۰۰ کالا).
    */
-  static async getReservedStockDetails(executor?: DbExecutor, throwOnError: boolean = false): Promise<ReservedItemsFullReport> {
+  static async getReservedStockDetails(executor?: DbExecutor, throwOnError: boolean = false, scope?: ReservationScope): Promise<ReservedItemsFullReport> {
     try {
       const client = executor || orm;
       const allReservationEntries: ReservedItemDetail[] = [];
+      const scopeIds = scope ? new Set(scope.itemIds.filter(id => Number.isInteger(id) && id > 0)) : null;
+      if (scopeIds && scopeIds.size === 0) return emptyReservationReport();
 
       // 1. Fetch active proforma documents
       const activeProformas = await client
@@ -588,7 +608,8 @@ export class ItemStockReservationService {
           .where(and(
             inArray(documentItems.documentId, proformaIds),
             eq(documentItems.isDeleted, 0),
-            eq(items.isDeleted, 0)
+            eq(items.isDeleted, 0),
+            scopeIds ? inArray(documentItems.itemId, [...scopeIds]) : undefined
           ));
 
         const proformaMap = new Map(activeProformas.map(p => [p.id, p]));
@@ -637,6 +658,8 @@ export class ItemStockReservationService {
           sql`${productionProjects.status} NOT IN ('completed', 'cancelled')`
         ));
 
+      // v9.0.179 (TD-663): با scope، همه کالاها فقط برای تطبیق ردیف‌های پروژه لازم‌اند؛ بی پروژه فعال فقط کالاهای scope
+      const needsAllItems = !scopeIds || activeProjs.some(p => p.inventoryControl);
       const allItems = await client
         .select({
           id: items.id,
@@ -648,9 +671,10 @@ export class ItemStockReservationService {
           weightedAverageCost: items.weightedAverageCost,
         })
         .from(items)
-        .where(eq(items.isDeleted, 0));
+        .where(and(eq(items.isDeleted, 0), needsAllItems ? undefined : inArray(items.id, [...(scopeIds ?? [])])));
+      const summaryItems = scopeIds ? allItems.filter(i => scopeIds.has(i.id)) : allItems;
       // v7.0.48 (TD-214): موجودی هر انبار از جدول نرمال (ستون JSONB حذف شد)
-      const tableStockMap = await ItemWarehouseStockService.getStocksForItems(client, allItems.map(i => i.id));
+      const tableStockMap = await ItemWarehouseStockService.getStocksForItems(client, summaryItems.map(i => i.id));
 
       const itemsByCodeMap = new Map<string, typeof allItems[0]>();
       const itemsByIdMap = new Map<number, typeof allItems[0]>();
@@ -678,6 +702,7 @@ export class ItemStockReservationService {
           const matchedDbItem = (code ? itemsByCodeMap.get(code.toUpperCase()) : null) 
             || (item.itemId ? itemsByIdMap.get(Number(item.itemId)) : null)
             || (rowName ? itemsByNameMap.get(rowName.trim().toLowerCase()) : null);
+          if (scopeIds && !(matchedDbItem && scopeIds.has(matchedDbItem.id))) continue;
           const price = fin(matchedDbItem ? matchedDbItem.weightedAverageCost : item.unitPrice);
 
           allReservationEntries.push({
@@ -704,7 +729,7 @@ export class ItemStockReservationService {
       // 3. Group by Item
       const itemSummariesMap = new Map<string, ItemReservedReportSummary>();
 
-      for (const it of allItems) {
+      for (const it of summaryItems) {
         const normCode = (it.code || '').trim().toUpperCase();
         itemSummariesMap.set(normCode, {
           itemId: it.id,
@@ -790,26 +815,16 @@ export class ItemStockReservationService {
       if (throwOnError) {
         throw err;
       }
-      return {
-        summaryMetrics: {
-          totalReservedItemsCount: 0,
-          totalReservedQty: 0,
-          totalReservedValue: 0,
-          proformaReservationsCount: 0,
-          projectReservationsCount: 0
-        },
-        itemSummaries: [],
-        allReservationEntries: []
-      };
+      return emptyReservationReport();
     }
   }
 
   /**
    * Calculates reserved stock quantities by item code across all non-completed/non-cancelled active production projects and active proformas.
    */
-  static async getReservedStocksMap(): Promise<Record<string, ReservedStockInfo>> {
+  static async getReservedStocksMap(scope?: ReservationScope): Promise<Record<string, ReservedStockInfo>> {
     try {
-      const report = await ItemStockReservationService.getReservedStockDetails();
+      const report = await ItemStockReservationService.getReservedStockDetails(undefined, false, scope);
       const map: Record<string, ReservedStockInfo> = {};
 
       for (const summary of report.itemSummaries) {

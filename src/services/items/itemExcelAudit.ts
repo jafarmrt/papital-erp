@@ -95,6 +95,9 @@ export interface ItemImportSummary {
   pricesCount: number;
   errorCount: number;
   stockAdjustmentMovements: number;
+  /** v9.0.179 (TD-663): سند افتتاحیه کل فایل و تعداد کالاهای آن */
+  openingVoucherId?: number | null;
+  openingItems?: number;
 }
 
 /** ردیف جمع‌بندی ورود، درون همان تراکنش */

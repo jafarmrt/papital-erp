@@ -512,6 +512,13 @@
       "when": 1793070000000,
       "tag": "0072_category_name_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1793080000000,
+      "tag": "0073_item_opening_voucher_items",
+      "breakpoints": true
     }
   ]
 }

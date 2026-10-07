@@ -1,12 +1,13 @@
-import { and, asc, eq, ne } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, warehouses } from '../../db/schema.js';
 import { advanceItemCodeCounter } from './itemCodeCounter.js';
-import { guardItemIdentity, itemNameKeyCondition } from './itemIdentity.js';
+import { guardItemIdentity } from './itemIdentity.js';
 import { itemAuditSnapshot, logItemImportChange, logItemImportSummary } from './itemExcelAudit.js';
 import { ItemPricingService } from './itemPricing.service.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
+import { ImportItemIndex } from './itemImportIndex.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
@@ -14,7 +15,7 @@ import { money } from '../../lib/money.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { ITEM_IMPORT_DENIED_MESSAGES, type ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import {
-  EXCEL_DOCUMENT_REF, ITEM_FIELD_KEYS, applyStockChange, changedRowPrices, codeFormatError, findItemByCode, deniedStockPermissions,
+  EXCEL_DOCUMENT_REF, ITEM_FIELD_KEYS, applyStockChange, changedRowPrices, codeFormatError, deniedStockPermissions,
   newItemType, planStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue,
   type ItemRow, type Row, type RowFields, type RowStock, type Warehouse,
 } from './itemExcelRow.js';
@@ -51,6 +52,8 @@ interface ImportState {
   errors: ItemImportRowError[];
   /** v8.0.3 (TD-262): ردیف‌های کاردکس اصلاح موجودی کالاهای موجود، برای یک سند «کسری و اضافات انبار» */
   adjustmentTransactionIds: number[];
+  /** v9.0.179 (TD-663، ت۱۰ بند ۳): کالاهای تازه با موجودی اولیه، برای یک سند افتتاحیه کل فایل */
+  openingItemIds: number[];
 }
 
 interface ImportContext {
@@ -62,12 +65,20 @@ interface ImportContext {
   actor: ItemImportActor;
   perms: ItemImportPermissions;
   state: ImportState;
+  /** v9.0.179 (TD-663): کالاهای کد و نام‌های فایل، یک‌بار خوانده و قفل‌شده */
+  index: ImportItemIndex;
+}
+
+function rowCodeAndName(row: Row) {
+  return {
+    rawCode: row['کد کالا'] || row['کد'] || row['code'] || row['Code'],
+    rawName: row['نام محصول'] || row['نام کالا'] || row['نام'] || row['name'] || row['Name'],
+  };
 }
 
 async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<void> {
   const { tx, state, perms } = ctx;
-  const rawCode = row['کد کالا'] || row['کد'] || row['code'] || row['Code'];
-  const rawName = row['نام محصول'] || row['نام کالا'] || row['نام'] || row['name'] || row['Name'];
+  const { rawCode, rawName } = rowCodeAndName(row);
   if (!rawCode && !rawName) {
     state.errors.push({ row: rowNum, message: 'نام یا کد کالا در این ردیف نامشخص است.' });
     return;
@@ -84,7 +95,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
   }
   // v9.0.156 (TD-651، تصمیم ت۳ و ت۵ الف): کالا فقط با کد پیدا می‌شود و کد هرگز از اکسل عوض نمی‌شود؛ پیش‌تر ردیفی با کد تازه
   // و نام کالای موجود آن کالا را با نام پیدا می‌کرد و کدش (SKU ووکامرس) را بی‌صدا عوض می‌کرد
-  const found = await findItemByCode(tx, code);
+  const found = ctx.index.findByCode(code);
   if (found.ambiguous.length > 0) {
     push(`کد «${code}» با چند کالا (${found.ambiguous.join('، ')}) فقط در بزرگی و کوچکی حروف فرق دارد؛ کد دقیق را بنویسید.`);
     return;
@@ -102,9 +113,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
   }
   if (name) {
     // v9.0.170 (TD-653): همان کلید ایندکس یکتای نام (lower(btrim(name)))
-    const [nameConflict] = await tx.select({ id: items.id, code: items.code }).from(items)
-      .where(and(itemNameKeyCondition(name), eq(items.isDeleted, 0), matchedItem ? ne(items.id, matchedItem.id) : undefined))
-      .limit(1);
+    const nameConflict = ctx.index.nameConflict(name, matchedItem?.id);
     if (nameConflict) {
       push(`خطای نام تکراری: محصولی با نام «${name}» قبلاً با کد «${nameConflict.code}» در سیستم ثبت شده است؛ این ردیف ثبت نشد.`);
       return;
@@ -129,7 +138,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     : await createNewItem(ctx, { code, name, fields, stock, todayStr, currentUser, push });
   if (targetItemId === null) return;
 
-  const changedPrices = await changedRowPrices(tx, targetItemId, rowPrices);
+  const changedPrices = await changedRowPrices(tx, targetItemId, rowPrices, !matchedItem);
   if (changedPrices.length > 0 && !perms.editPrices) {
     push(ITEM_IMPORT_DENIED_MESSAGES.editPrices);
   } else {
@@ -196,6 +205,7 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
     // v9.0.171 (TD-654): تغییر مشخصات از اکسل نسخه کالا را هم جلو می‌برد تا فرم بازِ کهنه آن را بازنویسی نکند
     await guardItemIdentity(updateSet.name ?? matchedItem.name, () => tx.update(items)
       .set({ ...updateSet, version: nextVersion(matchedItem.version) }).where(eq(items.id, targetItemId)));
+    ctx.index.remember({ ...matchedItem, ...updateSet, version: nextVersion(matchedItem.version) });
   }
 
   const changes = plan.changes;
@@ -239,7 +249,8 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
     image: fields.image || '',
     currentStock: 0,
     isDeleted: 0,
-  }).returning({ id: items.id, type: items.type }));
+  }).returning());
+  ctx.index.remember(newItem);
   const targetItemId = newItem.id;
   await advanceItemCodeCounter(tx, newItem.type, code);
 
@@ -248,11 +259,10 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
   for (const change of opening) {
     await applyStockChange(tx, movement, change, { in: 'موجودی اولیه از فایل اکسل', out: '' });
   }
-  // v8.0.3 (TD-262): کالای تازه با موجودی، همان سند افتتاحیه فرم کالا را می‌گیرد (موجودی × WAC / سرمایه اولیه)؛
-  // همین‌جا صادر می‌شود تا ردیف بعدی همین فایل برای همین کد فقط اختلاف را به سند اصلاح موجودی ببرد
-  if (opening.length > 0) {
-    await ItemOpeningService.issueItemOpeningVoucher(targetItemId, { userId: ctx.actor.id, username: input.currentUser, tx });
-  }
+  // v8.0.3 (TD-262): کالای تازه با موجودی سند افتتاحیه می‌گیرد (ردیف‌های افتتاحیه کاردکس / سرمایه اولیه). v9.0.179
+  // (TD-663، ت۱۰ بند ۳): یک سند برای همه کالاهای تازه فایل، پس از آخرین ردیف؛ ردیف بعدی همین فایل برای همین کد کالای
+  // موجود است و اختلافش به سند اصلاح موجودی می‌رود، و ارزش سند فقط ردیف‌های افتتاحیه کاردکس را می‌شمارد
+  if (opening.length > 0) state.openingItemIds.push(targetItemId);
   state.createdCount++;
   return targetItemId;
 }
@@ -271,13 +281,19 @@ export async function importItemsFromExcel(
   // v7.0.36 (P2-3): انبار پیش‌فرض قطعی (انبار فعال با کمترین شناسه)
   const defaultWhCode = (await getDefaultWarehouseCode(orm)) ?? whs[0]?.code ?? 'main';
   const strategies = await ItemPricingService.getPricingStrategies();
-  const state: ImportState = { createdCount: 0, updatedCount: 0, pricesCount: 0, errors: [], adjustmentTransactionIds: [] };
+  const state: ImportState = { createdCount: 0, updatedCount: 0, pricesCount: 0, errors: [], adjustmentTransactionIds: [], openingItemIds: [] };
 
   await orm.transaction(async (tx) => {
-    const ctx: ImportContext = { tx, whs, defaultWhCode, strategies, typeFilter, actor, perms, state };
+    const keys = rows.map(rowCodeAndName);
+    const index = await ImportItemIndex.load(tx, keys.map(k => String(k.rawCode || '').trim()), keys.map(k => String(k.rawName || '').trim()));
+    const ctx: ImportContext = { tx, whs, defaultWhCode, strategies, typeFilter, actor, perms, state, index };
     for (let i = 0; i < rows.length; i++) {
       await importRow(ctx, rows[i], i + 2);
     }
+    const openingVoucher = await ItemOpeningService.issueImportOpeningVoucher(tx, state.openingItemIds, {
+      userId: actor.id,
+      username: actor.username || 'مدیر سیستم',
+    });
     // v8.0.3 (TD-262، تصمیم مالک محصول درباره TD-255): اصلاح موجودی کالاهای موجود با بهای کاردکس به «کسری و اضافات
     // انبار»، در همان تراکنش؛ پیش‌تر موجودی عوض می‌شد و دفتر کل از آن خبر نداشت
     await syncStockAdjustmentVoucher({
@@ -295,6 +311,8 @@ export async function importItemsFromExcel(
       pricesCount: state.pricesCount,
       errorCount: state.errors.length,
       stockAdjustmentMovements: state.adjustmentTransactionIds.length,
+      openingVoucherId: openingVoucher?.id ?? null,
+      openingItems: state.openingItemIds.length,
     });
   });
 

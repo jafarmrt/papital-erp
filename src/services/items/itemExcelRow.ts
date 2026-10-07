@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { items, itemPrices, warehouses } from '../../db/schema.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
@@ -224,9 +224,10 @@ export function readRowPrices(row: Row, strategies: string[], push: (message: st
 }
 
 /** قیمت‌هایی از ردیف که با قیمت فعال فعلی فرق دارند (TD-662: قیمت بی‌تغییر دوباره نوشته نمی‌شود) */
-export async function changedRowPrices(tx: DbExecutor, itemId: number, prices: Map<string, RowPrice>) {
+export async function changedRowPrices(tx: DbExecutor, itemId: number, prices: Map<string, RowPrice>, isNewItem = false) {
   if (prices.size === 0) return [];
-  const existingList = await tx.select().from(itemPrices)
+  // v9.0.179 (TD-663): کالایی که همین ردیف ساخته قیمتی ندارد؛ خواندنش لازم نیست
+  const existingList = isNewItem ? [] : await tx.select().from(itemPrices)
     .where(and(eq(itemPrices.itemId, itemId), eq(itemPrices.isDeleted, 0)))
     .for('update');
   const changed: Array<{ title: string; price: RowPrice; replaces: number[] }> = [];
@@ -261,19 +262,4 @@ export async function saveRowPrices(tx: DbExecutor, itemId: number, changed: Awa
     });
   }
   return changed.length;
-}
-
-/**
- * v9.0.156 (TD-651): کالای ردیف فقط با کد، قفل‌شده `FOR UPDATE`: کد دقیق، وگرنه تنها کالایی که کدش جز در بزرگی و کوچکی
- * حروف برابر است. چند کالای هم‌حرف `ambiguous` است (کدهای پیشین؛ ایندکس یکتای ت۴ جلوی کد تازه را می‌گیرد).
- */
-export async function findItemByCode(tx: DbExecutor, code: string): Promise<{ item: ItemRow | null; ambiguous: string[] }> {
-  const [exact] = await tx.select().from(items).where(and(eq(items.code, code), eq(items.isDeleted, 0))).for('update');
-  if (exact) return { item: exact, ambiguous: [] };
-  const similar = await tx.select().from(items)
-    .where(and(sql`upper(${items.code}) = upper(${code})`, eq(items.isDeleted, 0)))
-    .orderBy(asc(items.id))
-    .for('update');
-  if (similar.length > 1) return { item: null, ambiguous: similar.map(i => i.code) };
-  return { item: similar[0] ?? null, ambiguous: [] };
 }

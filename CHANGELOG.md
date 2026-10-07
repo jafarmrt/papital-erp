@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.179 — Item List and Excel Import Performance
+- **Item List and Excel Import:** the item list builds reservations for its own page only; an Excel import reads its items once and its new items with stock share one opening voucher, recorded in `item_opening_voucher_items` (migration 0073) (TD-663, `perf_item_list_and_excel_opening_td_663`).
+
 ### v9.0.178 — Unique Category Names and Rename
 - **Category Names:** a live category name is unique (partial index, migration 0072, only on clean data); a rename moves its items in the same transaction and a type change of a category with items is refused (TD-658, `reg_category_rename_keeps_items_td_658`).
 

@@ -1,7 +1,7 @@
 import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
 import { eq, and, desc, ilike, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions, journalVouchers } from '../../db/schema.js';
+import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions } from '../../db/schema.js';
 import { uploadBase64ToStorage } from '../../lib/storage.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { ItemPricingService } from './itemPricing.service.js';
@@ -12,7 +12,7 @@ import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
 import { advanceItemCodeCounter } from './itemCodeCounter.js';
 import { assertItemCodeAvailable, assertItemNameAvailable, guardItemIdentity } from './itemIdentity.js';
-import { ItemOpeningService } from '../inventory/itemOpening.service.js';
+import { ItemOpeningService, itemIdsWithOpeningVoucher } from '../inventory/itemOpening.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { startsWithLikePattern } from '../../lib/sqlLike.js';
@@ -628,14 +628,8 @@ export class ItemCatalogService {
         .from(documentItems)
         .where(and(eq(documentItems.itemId, itemId), eq(documentItems.isDeleted, 0)))
         .limit(1);
-      const [voucherRow] = await tx.select({ id: journalVouchers.id })
-        .from(journalVouchers)
-        .where(and(
-          eq(journalVouchers.referenceModule, 'item_opening'),
-          eq(journalVouchers.referenceId, itemId),
-          eq(journalVouchers.isDeleted, 0)
-        ))
-        .limit(1);
+      // v9.0.179 (TD-663): سند افتتاحیه این کالا، سند خودش یا سند ورود اکسل
+      const voucherRow = (await itemIdsWithOpeningVoucher(tx, [itemId])).has(itemId);
 
       // v7.0.45 (audit P2-1): موجودی فعلی از جدول موجودی انبارها (منبع حقیقت)
       const stockBefore = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
