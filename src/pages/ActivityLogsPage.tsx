@@ -9,7 +9,7 @@ import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { ActivityLog } from '../types';
-import { formatPersianNumber, formatPersianDateTime, extractDateString } from '../utils';
+import { formatPersianNumber, formatPersianDateTime, extractDateString, errorMessageOf } from '../utils';
 import { useSearch } from '../SearchContext';
 import {
   useActivityLogsQuery,
@@ -20,15 +20,28 @@ import { AuditDiffViewer } from '../components/audit/AuditDiffViewer';
 import { AuditPrintModal } from '../components/audit/AuditPrintModal';
 import { exportAuditLogsToExcel } from '../components/audit/auditExportUtils';
 import { parseUserAgent } from '../utils/userAgentParser';
+import { permissionDefinition } from '../lib/permissions/permissionCatalog';
+
+/** v9.0.156 (TD-537): خطای خواندن سجل، با پیام فارسی ۴۰۳ به‌جای «هیچ رکوردی یافت نشد» */
+function logsLoadErrorMessage(error: unknown): string {
+  if ((error as { status?: unknown } | null)?.status === 403) {
+    return `برای دیدن سجل رویدادها مجوز «${permissionDefinition('audit_logs.view')?.title ?? 'مشاهده سجل رویدادها'}» لازم است.`;
+  }
+  return `سجل رویدادها بارگذاری نشد: ${errorMessageOf(error)}`;
+}
 
 type LogCategory = 'all' | 'auth_security' | 'financial_docs' | 'inventory_items' | 'settings_system';
 
 export default function ActivityLogsPage() {
-  const [page, setPage] = useState<number>(1);
   const limit = 25;
 
   // Filters
-  const { searchQuery: search, setSearchQuery: setSearch } = useSearch();
+  // v9.0.156 (TD-537): درخواست با جست‌وجوی تأخیری فرستاده می‌شود و صفحه هر بار که جست‌وجو عوض شود از ۱ شروع می‌شود
+  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
+  const [pageOfSearch, setPageOfSearch] = useState<{ page: number; search: string }>({ page: 1, search: '' });
+  const page = pageOfSearch.search === debouncedSearchQuery ? pageOfSearch.page : 1;
+  const setPage = (next: number | ((current: number) => number)) =>
+    setPageOfSearch({ page: typeof next === 'function' ? next(page) : next, search: debouncedSearchQuery });
   const [categoryFilter, setCategoryFilter] = useState<LogCategory>('all');
   const [userFilter, setUserFilter] = useState<string>('');
   const [actionFilter, setActionFilter] = useState<string>('');
@@ -52,7 +65,7 @@ export default function ActivityLogsPage() {
   const logsQuery = useActivityLogsQuery({
     page,
     limit,
-    search,
+    search: debouncedSearchQuery,
     category: categoryFilter !== 'all' ? categoryFilter : undefined,
     user: userFilter || undefined,
     action: actionFilter || undefined,
@@ -61,9 +74,10 @@ export default function ActivityLogsPage() {
     endDate: formatToGregorian(endDate) || undefined,
   });
 
-  const logs = logsQuery.data?.logs ?? [];
-  const totalCount = logsQuery.data?.total ?? 0;
-  const totalPages = logsQuery.data?.totalPages ?? 1;
+  const loadError = logsQuery.isError ? logsLoadErrorMessage(logsQuery.error) : null;
+  const logs = loadError ? [] : (logsQuery.data?.logs ?? []);
+  const totalCount = loadError ? 0 : (logsQuery.data?.total ?? 0);
+  const totalPages = loadError ? 1 : (logsQuery.data?.totalPages ?? 1);
   const loading = logsQuery.isLoading;
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -317,7 +331,7 @@ export default function ActivityLogsPage() {
               type="text"
               placeholder="جستجو در شرح لاگ، نام کاربر یا نام بخش..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="w-full pl-9 pr-4 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -438,6 +452,12 @@ export default function ActivityLogsPage() {
                   <td colSpan={8} className="py-12 text-center text-slate-400">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
                     در حال بارگذاری لاگ‌های امنیتی سیستم...
+                  </td>
+                </tr>
+              ) : loadError ? (
+                <tr>
+                  <td colSpan={8} role="alert" className="py-12 text-center text-rose-700 font-medium">
+                    {loadError}
                   </td>
                 </tr>
               ) : logs.length === 0 ? (

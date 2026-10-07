@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.156 — Audit Log Page Shows Refusals and Searches After Typing Pauses
+- **Audit Log Page Shows Refusals and Searches After Typing Pauses:** a refused request shows a Persian permission message instead of an empty list; the search is sent once, from page 1 (TD-537).
+
 ### v9.0.155 — Audit Log Masks Bank Numbers and Secret Keys in Any Spelling
 - **Audit Log Masks Bank Numbers and Secret Keys in Any Spelling:** card, account and Sheba numbers keep only their last four digits in audit snapshots; secret keys are found by "contains" in any spelling (TD-530).
 
