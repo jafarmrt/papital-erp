@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.281 — v9.0.281 — Global Search Finds the Exact Name and Arabic Letters
+- **Global search (TD-675):** results come exact match first, then names that start with the text, then the rest; Arabic «ي» / «ك» and Persian digits match their Persian and Latin forms in both the search text and the stored names.
+
 ### v9.0.280 — v9.0.280 — Dashboard Reads Sales Data Only With Its Permission
 - **Dashboard sales data (TD-674):** the dashboard reads sales files and recent activities only for holders of `crm.view`, and no longer loads parties, personnel, users or sales statistics it never shows.
 
