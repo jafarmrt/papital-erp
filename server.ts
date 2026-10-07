@@ -37,7 +37,7 @@ async function startServer() {
 
   const PORT = parseInt(process.env.PORT || '3000', 10);
 
-  // v9.0.148 (TD-584, decision ت۲): /api answers 503 until the background startup below finishes
+  // v9.0.164 (TD-584, decision ت۲): /api answers 503 until the background startup below finishes
   beginStartup();
   // Build the shared Express application (security middleware + API routes)
   const app = await createApp();

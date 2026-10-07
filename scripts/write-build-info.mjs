@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// v9.0.152 (TD-601): writes <outDir>/build-info.json (default dist/) with the commit and time of this build;
+// v9.0.168 (TD-601): writes <outDir>/build-info.json (default dist/) with the commit and time of this build;
 // src/lib/version.ts reads it for the build details of /health. Runs at the end of `npm run build`.
 // Usage: node scripts/write-build-info.mjs [outDir]
 import { execFileSync } from 'node:child_process';

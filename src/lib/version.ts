@@ -39,7 +39,7 @@ function resolvePackageVersion(): string {
 }
 
 /**
- * v9.0.152 (TD-601): commit and build time come from `dist/build-info.json`, written by
+ * v9.0.168 (TD-601): commit and build time come from `dist/build-info.json`, written by
  * `scripts/write-build-info.mjs` at the end of `npm run build`; environment variables still win. Without
  * either they are `unknown` (the old defaults were a fixed, wrong commit name and date).
  */

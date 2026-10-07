@@ -17,15 +17,23 @@ import { reportFromResponse, useOnDemandReport, type OnDemandReportSpec } from '
 
 const R = QUERY_KEYS.accounting.report;
 
-export interface TrialBalanceParams { level: string; startDate?: string; endDate?: string }
+/** v9.0.159 (TD-545): «همراه اسناد اختتامیه» (پیش‌فرض اسناد بستن سالِ روز پایان گزارش شمرده نمی‌شوند) */
+export interface ClosingVouchersParam { includeClosing?: boolean }
+export interface TrialBalanceParams extends ClosingVouchersParam { level: string; startDate?: string; endDate?: string }
 export interface DateRangeParams { startDate?: string; endDate?: string }
-export interface BalanceSheetParams { asOfDate?: string }
+export interface IncomeStatementParams extends DateRangeParams, ClosingVouchersParam {}
+export interface BalanceSheetParams extends ClosingVouchersParam { asOfDate?: string }
 export interface LedgerParams { accountId: number; startDate?: string; endDate?: string }
-export interface RatiosParams { asOfDate?: string; currency?: string }
+export interface RatiosParams extends ClosingVouchersParam { asOfDate?: string; currency?: string }
 
 function dateRange(params: URLSearchParams, { startDate, endDate }: DateRangeParams): URLSearchParams {
   if (startDate) params.append('startDate', startDate);
   if (endDate) params.append('endDate', endDate);
+  return params;
+}
+
+function closingFlag(params: URLSearchParams, { includeClosing }: ClosingVouchersParam): URLSearchParams {
+  if (includeClosing) params.append('includeClosing', 'true');
   return params;
 }
 
@@ -35,16 +43,16 @@ export const TRIAL_BALANCE_REPORT: OnDemandReportSpec<TrialBalanceParams, TrialB
   url: (p) => {
     const params = new URLSearchParams();
     params.append('level', p.level);
-    return `/accounting/reports/trial-balance?${dateRange(params, p).toString()}`;
+    return `/accounting/reports/trial-balance?${closingFlag(dateRange(params, p), p).toString()}`;
   },
   parse: reportFromResponse<TrialBalanceReport>,
   errorText: 'خطا در دریافت تراز آزمایشی',
 };
 
-export const INCOME_STATEMENT_REPORT: OnDemandReportSpec<DateRangeParams, IncomeStatementReport | null> = {
+export const INCOME_STATEMENT_REPORT: OnDemandReportSpec<IncomeStatementParams, IncomeStatementReport | null> = {
   key: (p) => R('income-statement', p),
   idleKey: R('income-statement', { idle: true }),
-  url: (p) => `/accounting/reports/income-statement?${dateRange(new URLSearchParams(), p).toString()}`,
+  url: (p) => `/accounting/reports/income-statement?${closingFlag(dateRange(new URLSearchParams(), p), p).toString()}`,
   parse: reportFromResponse<IncomeStatementReport>,
   errorText: 'خطا در دریافت صورت سود و زیان',
 };
@@ -52,10 +60,10 @@ export const INCOME_STATEMENT_REPORT: OnDemandReportSpec<DateRangeParams, Income
 export const BALANCE_SHEET_REPORT: OnDemandReportSpec<BalanceSheetParams, BalanceSheetReport | null> = {
   key: (p) => R('balance-sheet', p),
   idleKey: R('balance-sheet', { idle: true }),
-  url: ({ asOfDate }) => {
+  url: (p) => {
     const params = new URLSearchParams();
-    if (asOfDate) params.append('asOfDate', asOfDate);
-    return `/accounting/reports/balance-sheet?${params.toString()}`;
+    if (p.asOfDate) params.append('asOfDate', p.asOfDate);
+    return `/accounting/reports/balance-sheet?${closingFlag(params, p).toString()}`;
   },
   parse: reportFromResponse<BalanceSheetReport>,
   errorText: 'خطا در دریافت ترازنامه',
@@ -84,11 +92,11 @@ const JOURNAL_BOOK_REPORT: OnDemandReportSpec<DateRangeParams, unknown> = {
 const FINANCIAL_RATIOS_REPORT: OnDemandReportSpec<RatiosParams, FinancialRatiosReport | null> = {
   key: (p) => R('financial-ratios', p),
   idleKey: R('financial-ratios', { idle: true }),
-  url: ({ asOfDate, currency }) => {
+  url: (p) => {
     const params = new URLSearchParams();
-    if (asOfDate) params.append('asOfDate', asOfDate);
-    if (currency && currency !== 'all') params.append('currency', currency);
-    return `/accounting/reports/financial-ratios?${params.toString()}`;
+    if (p.asOfDate) params.append('asOfDate', p.asOfDate);
+    if (p.currency && p.currency !== 'all') params.append('currency', p.currency);
+    return `/accounting/reports/financial-ratios?${closingFlag(params, p).toString()}`;
   },
   parse: reportFromResponse<FinancialRatiosReport>,
   errorText: 'خطا در محاسبه نسبت‌های مالی',
@@ -108,10 +116,11 @@ export function useJournalBookReport() {
 export function useFinancialRatiosReport() {
   const report = useOnDemandReport(FINANCIAL_RATIOS_REPORT);
   const { run } = report;
-  const fetchFinancialRatios = useCallback(async (asOfDate?: string, currency?: string) => {
+  const fetchFinancialRatios = useCallback(async (asOfDate?: string, currency?: string, includeClosing?: boolean) => {
     await run({
       asOfDate: asOfDate || undefined,
       currency: currency && currency !== 'all' ? currency : undefined,
+      includeClosing: includeClosing || undefined,
     });
   }, [run]);
   return { ratiosData: report.data, ratiosLoading: report.loading, fetchFinancialRatios };

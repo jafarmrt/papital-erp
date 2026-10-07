@@ -16,7 +16,9 @@ const voucherTypeMap: Record<string, string> = {
   purchase: 'خرید و موجودی',
   treasury: 'دریافت و پرداخت',
   payroll: 'حقوق و دستمزد',
-  closing: 'بستن حساب‌ها',
+  opening: 'افتتاحیه',
+  closing: 'اختتامیه (بستن سال)',
+  adjustment: 'اصلاحی / معکوس',
 };
 
 export function VoucherPrintModal({

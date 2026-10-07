@@ -6,6 +6,7 @@ import type { Account, Customer, Personnel, JournalVoucher, FinancialAttachment 
 // V9 Phase 5.2: تایپ و جدول ردیف‌ها به کامپوننت VoucherItemsTable منتقل شد
 import VoucherItemsTable, { VoucherItemDraft } from './VoucherItemsTable';
 import { computeVoucherBalance } from '../../lib/voucherBalance';
+import { manualVoucherFormType } from '../../lib/accounting/manualVoucherRules';
 import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
 import { useServerDraft } from '../../hooks/useServerDraft';
 import toast from 'react-hot-toast';
@@ -86,7 +87,7 @@ export function NewVoucherModal({
     enabled: isOpen && !editingVoucher,
     onDraftLoaded: (loaded) => {
       if (loaded.date) setDate(loaded.date);
-      if (loaded.voucherType) setVoucherType(loaded.voucherType);
+      if (loaded.voucherType) setVoucherType(manualVoucherFormType(loaded.voucherType));
       if (loaded.manualVoucherNumber) setManualVoucherNumber(loaded.manualVoucherNumber);
       if (loaded.description) setDescription(loaded.description);
       if (loaded.currency) setCurrency(loaded.currency);
@@ -112,7 +113,8 @@ export function NewVoucherModal({
   useEffect(() => {
     if (editingVoucher) {
       setDate(editingVoucher.date || '');
-      setVoucherType(editingVoucher.voucherType || 'general');
+      // v9.0.160 (TD-559): سند دستی قدیمی از نوع اختتامیه در فرم «افتتاحیه» است؛ اختتامیه را فقط بستن سال صادر می‌کند
+      setVoucherType(manualVoucherFormType(editingVoucher.voucherType));
       setManualVoucherNumber(editingVoucher.manualVoucherNumber || '');
       setDescription(editingVoucher.description || '');
       setCurrency(editingVoucher.currency || 'IRR');
@@ -586,7 +588,7 @@ export function NewVoucherModal({
                 <option value="purchase">خرید و انبار</option>
                 <option value="treasury">دریافت و پرداخت</option>
                 <option value="payroll">حقوق و دستمزد</option>
-                <option value="closing">افتتاحیه / اختتامیه</option>
+                <option value="opening">افتتاحیه (مانده‌های اول دوره)</option>
               </select>
             </div>
 

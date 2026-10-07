@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { isSystemStarting, subscribeSystemStarting } from '../../lib/systemStarting';
 
 /**
- * v9.0.148 (TD-584, product-owner decision ت۲): a waiting page while the server finishes an update; the
+ * v9.0.164 (TD-584, product-owner decision ت۲): a waiting page while the server finishes an update; the
  * requests behind it are retried by `fetchThroughStartup` and the page closes on the first real answer.
  */
 export function SystemStartingOverlay() {

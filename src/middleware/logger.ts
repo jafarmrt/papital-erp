@@ -36,7 +36,7 @@ function sanitizeString(s: string): string {
 const SANITIZE_MAX_DEPTH = 12;
 
 /**
- * v9.0.151 (TD-600): an object already on the path (a cycle, e.g. an error whose `cause` points back) becomes
+ * v9.0.167 (TD-600): an object already on the path (a cycle, e.g. an error whose `cause` points back) becomes
  * `[Circular]` and nesting beyond `SANITIZE_MAX_DEPTH` becomes `[Truncated]`; the plain recursion threw
  * `RangeError: Maximum call stack size exceeded` from inside the caller's catch block.
  */
@@ -177,7 +177,7 @@ morgan.token('stripped-url', (req: any) => {
 });
 
 /**
- * v9.0.150 (TD-598): access lines are written at `info`, the production level (and `LOG_LEVEL=info` of
+ * v9.0.166 (TD-598): access lines are written at `info`, the production level (and `LOG_LEVEL=info` of
  * install.sh); at `http` they were below it and production kept no access log at all.
  */
 export const ACCESS_LOG_LEVEL = 'info';

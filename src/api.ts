@@ -187,7 +187,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
 
   let res: Response;
   try {
-    // v9.0.148 (TD-584): while the server finishes an update it answers 503 SYSTEM_STARTING; wait and resend
+    // v9.0.164 (TD-584): while the server finishes an update it answers 503 SYSTEM_STARTING; wait and resend
     res = await fetchThroughStartup(() => fetch(url, {
       ...options,
       credentials: 'include', // Automatically passes and receives HttpOnly Secure cookies

@@ -70,7 +70,7 @@ export function resetLoginRateLimiter(): void {
   }
 }
 
-// v9.0.148 (TD-584): startup state lives in the startup gate; server.ts opens and closes it
+// v9.0.164 (TD-584): startup state lives in the startup gate; server.ts opens and closes it
 export { beginStartup, markStartupComplete } from './middleware/startupGate.js';
 
 /**
@@ -173,7 +173,7 @@ export async function createApp(): Promise<express.Express> {
   }));
   app.use(morganMiddleware);
   app.use(metricsMiddleware);
-  // v9.0.148 (TD-584, decision ت۲): /api answers 503 SYSTEM_STARTING until migrations and seed finish
+  // v9.0.164 (TD-584, decision ت۲): /api answers 503 SYSTEM_STARTING until migrations and seed finish
   app.use('/api', startupGate);
 
   // Rate Limiting (SEC-009): generous limits for ERP operations and distinct user/session buckets
@@ -252,14 +252,14 @@ export async function createApp(): Promise<express.Express> {
 
   // 2. Readiness probe (200 if DB reachable and connection pool not saturated)
   app.get(['/api/health/ready', '/health/ready'], asyncHandler(async (_req, res) => {
-    // v9.0.148 (TD-584): not ready while a gated server is still migrating
+    // v9.0.164 (TD-584): not ready while a gated server is still migrating
     if (isStarting()) {
       return res.status(503).json({ status: 'not_ready', reason: 'Starting', timestamp: new Date().toISOString() });
     }
     try {
       await orm.execute(sql`SELECT 1`);
 
-      // v9.0.149 (TD-596): the real pool (drizzle.ts), not an orm property that does not exist
+      // v9.0.165 (TD-596): the real pool (drizzle.ts), not an orm property that does not exist
       const { total, idle, waiting } = dbPoolStats();
 
       if (waiting > 5) {
@@ -299,7 +299,7 @@ export async function createApp(): Promise<express.Express> {
   app.get(['/api/health', '/health'], asyncHandler(async (req, res) => {
     try {
       await orm.execute(sql`SELECT 1`);
-      // v9.0.152 (TD-601): the version stays public (verify-startup.sh reads it); commit, build time, Node
+      // v9.0.168 (TD-601): the version stays public (verify-startup.sh reads it); commit, build time, Node
       // version and environment only for the metrics token or a live system-admin session
       const reader = await metricsReaderStatus(req);
       res.json({

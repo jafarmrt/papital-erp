@@ -24,7 +24,7 @@ type MetricsReaderResult =
 
 /**
  * Whether the request may read internal system data: the METRICS_TOKEN or a live system-admin session.
- * v9.0.152 (TD-601): shared by the metrics guard and the build details of `/health`.
+ * v9.0.168 (TD-601): shared by the metrics guard and the build details of `/health`.
  */
 export async function metricsReaderStatus(req: Request): Promise<MetricsReaderResult> {
   const configuredMetricsToken = process.env.METRICS_TOKEN?.trim();

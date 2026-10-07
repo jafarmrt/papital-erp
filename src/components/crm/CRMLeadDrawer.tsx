@@ -15,11 +15,11 @@ interface CRMLeadDrawerProps {
   drawerActivities: CRMActivity[];
   onOpenActivityModal: (lead: CRMLead, defaultType?: string) => void;
   onOpenLeadModal: (lead: CRMLead) => void;
-  onDeleteLead: (leadId: number) => void;
+  /** v9.0.148 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
+  onDeleteLead?: (leadId: number) => void;
   onToggleFollowup: (act: CRMActivity) => void;
   onConvertToInvoice?: (lead: CRMLead) => void;
   onOpenCustomerDossier?: (customerName: string) => void;
-  isAdminOrManager: boolean;
 }
 
 export function CRMLeadDrawer({
@@ -31,8 +31,7 @@ export function CRMLeadDrawer({
   onDeleteLead,
   onToggleFollowup,
   onConvertToInvoice,
-  onOpenCustomerDossier,
-  isAdminOrManager
+  onOpenCustomerDossier
 }: CRMLeadDrawerProps) {
   const appCurrency = useAppCurrency();
   const [activeTab, setActiveTab] = useState<'activities' | 'stock'>('activities');
@@ -94,7 +93,7 @@ export function CRMLeadDrawer({
               <Edit3 size={13} />
               <span className="hidden sm:inline">ویرایش</span>
             </button>
-            {isAdminOrManager && (
+            {onDeleteLead && (
               <button
                 onClick={() => onDeleteLead(selectedLeadDrawer.id)}
                 className="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"

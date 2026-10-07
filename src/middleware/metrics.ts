@@ -84,7 +84,7 @@ export const metricsMiddleware = (req: Request, res: Response, next: NextFunctio
 
 // Function to update gauges
 /**
- * v9.0.149 (TD-596): connection counts of the application pool exported by drizzle.ts. drizzle-orm 0.45 exposes
+ * v9.0.165 (TD-596): connection counts of the application pool exported by drizzle.ts. drizzle-orm 0.45 exposes
  * the pool only as `orm.$client`; the old `orm.pool || orm.client?.pool` was always undefined, so readiness and
  * these gauges reported 0 and the «pool saturated» branch never ran.
  */

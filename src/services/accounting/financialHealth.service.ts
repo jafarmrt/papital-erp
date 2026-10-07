@@ -10,6 +10,11 @@ import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } fro
 import { buildFutureStockMovementHealthTest, findFutureStockMovements } from '../inventory/futureStockMovements.js';
 import { buildOpeningVoucherHealthTest, findOpeningVoucherMismatches } from '../inventory/itemOpeningValue.js';
 import { buildReservedWarehouseCodeHealthTest, findReservedCodeWarehouses } from '../inventory/reservedWarehouseCode.js';
+import {
+  buildEarlyClosedYearsHealthTest, buildManualClosingTypeHealthTest, buildOutOfOrderClosedYearsHealthTest,
+  findEarlyClosedYears, findManualClosingTypeVouchers, findOutOfOrderClosedYears,
+} from './fiscalClosingHealth.js';
+import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1108,6 +1113,20 @@ export class FinancialHealthService {
     const reservedWarehouseCodeTest = buildReservedWarehouseCodeHealthTest(await findReservedCodeWarehouses());
     overallScore += reservedWarehouseCodeTest.scoreImpact;
     tests.push(reservedWarehouseCodeTest);
+
+    // آزمون ۲۴: v9.0.152 (TD-647) قیمت فعال کالا با عنوانی بیرون از فهرست‌های قیمت تنظیم‌شده (فقط فهرست، بی پاک‌سازی)
+    const unknownPriceTitleTest = buildUnknownPriceTitleHealthTest(await findUnknownPriceTitles());
+    overallScore += unknownPriceTitleTest.scoreImpact;
+    tests.push(unknownPriceTitleTest);
+
+    // آزمون ۲۵: v9.0.160 (TD-559) اسناد دستی با نوع اختتامیه که بستن سال صادر نکرده (فقط فهرست، بی بازنویسی)
+    tests.push(buildManualClosingTypeHealthTest(await findManualClosingTypeVouchers()));
+
+    // آزمون ۲۶: v9.0.161 (TD-543) سال مالی بسته‌شده پیش از پایانش (فقط فهرست؛ آخرین سال بسته با بازگشایی باز می‌شود)
+    tests.push(buildEarlyClosedYearsHealthTest(await findEarlyClosedYears()));
+
+    // آزمون ۲۷: v9.0.162 (TD-544) سال مالی بسته‌شده پیش از سال‌های پیشینِ دارای سند خود (فقط فهرست، بی اصلاح خودکار)
+    tests.push(buildOutOfOrderClosedYearsHealthTest(await findOutOfOrderClosedYears()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
