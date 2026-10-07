@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { sql, eq, and, desc, ilike, or, gt, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { items, transactions, documentItems, journalVouchers } from '../db/schema.js';
-import { authorize, authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -276,7 +276,7 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
 }));
 
 // POST /items
-router.post('/items', authorize('admin', 'manager', 'products.create'), validate(itemCreateUpdateSchema), asyncHandler(async (req, res) => {
+router.post('/items', authorizePermission('products.create'), validate(itemCreateUpdateSchema), asyncHandler(async (req, res) => {
   try {
     // v9.0.36 (TD-451): کالا و شروع گردش‌کار افتتاحیه در یک تراکنش؛ شروع ناموفقِ تعریف فعال ثبت کالا را رد می‌کند (پیش‌تر
     // کالا ثبت می‌شد، خطا بلعیده می‌شد و سند افتتاحیه بی تأیید صادر می‌شد)
@@ -351,7 +351,7 @@ router.post('/items', authorize('admin', 'manager', 'products.create'), validate
 }));
 
 // PUT /items/:id
-router.put('/items/:id', authorize('admin', 'manager', 'products.edit'), validate(itemUpdateSchema), asyncHandler(async (req, res) => {
+router.put('/items/:id', authorizePermission('products.edit'), validate(itemUpdateSchema), asyncHandler(async (req, res) => {
   try {
     const itemId = Number(req.params.id);
     const { name, code, unit, category, reorder_point, color, weight, material, size } = req.body;
@@ -427,7 +427,7 @@ router.put('/items/:id', authorize('admin', 'manager', 'products.edit'), validat
 }));
 
 // DELETE /items/:id
-router.delete('/items/:id', authorize('admin', 'products.delete'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/items/:id', authorizePermission('products.delete'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const itemId = Number(req.params.id);
     const stockBeforeDelete = await ItemWarehouseStockService.getStockSnapshot(orm, itemId);
@@ -471,7 +471,7 @@ router.get('/items/next-code', authorizePermission(...READ_PERMISSIONS.items), a
   res.json(result);
 }));
 
-router.post('/items/next-code', authorize('admin', 'manager', 'products.create', 'products.edit'), asyncHandler(async (req, res) => {
+router.post('/items/next-code', authorizePermission('products.create', 'products.edit'), asyncHandler(async (req, res) => {
   const { type, year, prefix, transfer } = req.body || {};
   const result = await ItemCatalogService.consumeNextItemCode({ type, year, prefix, transfer });
   await logActivity({

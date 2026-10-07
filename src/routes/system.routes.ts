@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { authenticateToken, AUTH_COOKIE_NAME, getAuthCookieOptions } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorize, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { authorizePermission, userHasRoleOrPermission, requireSystemAdmin } from '../middleware/authorize.js';
+import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate, storageDateParam } from '../middleware/validate.js';
@@ -86,7 +87,7 @@ router.get('/system/business-date', asyncHandler(async (req, res) => {
 }));
 
 // V1.1.1: وضعیت محیط و فلگ‌های سیستمی — فقط set/not-set؛ هرگز مقدار secret ها
-router.get('/system/env', authorize('admin'), asyncHandler(async (req, res) => {
+router.get('/system/env', requireSystemAdmin, asyncHandler(async (req, res) => {
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'admin',
@@ -120,7 +121,7 @@ router.get('/system/env', authorize('admin'), asyncHandler(async (req, res) => {
 
 router.get('/settings', asyncHandler(async (req, res) => {
   const safeSettings = await SystemSettingsService.getAllSettings();
-  const isAdmin = req.user?.role === 'admin';
+  const isAdmin = req.user?.role === SYSTEM_ADMIN_ROLE;
   if (isAdmin) {
     res.json(safeSettings);
     return;
@@ -136,7 +137,7 @@ router.get('/menu-visibility', asyncHandler(async (req, res) => {
 
 // v7.0.26 (TD-184 / audit P1-3): ذخیره فقط کلیدهای تغییرکرده با مجوز سطح کلید در SystemSettingsService
 // (RULE 01: روت فقط اعتبارسنجی و فراخوانی سرویس). مجوز settings.manage هم‌راستا با نمایش منوی تنظیمات است.
-router.post('/settings', authorize('admin', 'manager', 'settings.manage'), validate(settingsSchema), asyncHandler(async (req, res) => {
+router.post('/settings', authorizePermission('settings.manage'), validate(settingsSchema), asyncHandler(async (req, res) => {
   const result = await SystemSettingsService.saveSettings(req.body.settings, {
     id: req.user?.id,
     username: req.user?.username,
@@ -146,7 +147,7 @@ router.post('/settings', authorize('admin', 'manager', 'settings.manage'), valid
   res.json({ success: true, ...result });
 }));
 
-router.get('/activity-logs', authorize('admin', 'manager'), validate(activityLogsQuerySchema), asyncHandler(async (req, res) => {
+router.get('/activity-logs', authorizePermission('audit_logs.view'), validate(activityLogsQuerySchema), asyncHandler(async (req, res) => {
   const query = (req.query || {}) as NonNullable<z.infer<typeof activityLogsQuerySchema>['query']>;
   // V9-1.3: صفحه‌بندی NaN-safe با سقف
   const { page, limit, offset } = parsePagination(query, { page: 1, limit: 30 });
@@ -170,12 +171,12 @@ router.get('/activity-logs', authorize('admin', 'manager'), validate(activityLog
   });
 }));
 
-router.get('/activity-logs/filters', authorize('admin', 'manager'), asyncHandler(async (req, res) => {
+router.get('/activity-logs/filters', authorizePermission('audit_logs.view'), asyncHandler(async (req, res) => {
   res.json(await ActivityLogQueryService.getFilterOptions());
 }));
 
 // Purge old audit logs (Admin only with strict retention policy enforcement - Sub-phase 1.5 / D-2)
-router.post('/activity-logs/purge', authorize('admin'), validate(purgeActivityLogsSchema), asyncHandler(async (req, res) => {
+router.post('/activity-logs/purge', requireSystemAdmin, validate(purgeActivityLogsSchema), asyncHandler(async (req, res) => {
   const { retentionDays, preserveCritical, allowForceRecent } = (req.body || {}) as NonNullable<z.infer<typeof purgeActivityLogsSchema>['body']>;
   const report = await purgeOldAuditLogs({
     retentionDays,
@@ -194,13 +195,13 @@ router.post('/activity-logs/purge', authorize('admin'), validate(purgeActivityLo
 }));
 
 // Audit log integrity and retention status check
-router.get('/activity-logs/integrity', authorize('admin', 'manager'), asyncHandler(async (req, res) => {
+router.get('/activity-logs/integrity', authorizePermission('audit_logs.view'), asyncHandler(async (req, res) => {
   const integrity = await checkAuditLogIntegrity();
   res.json(integrity);
 }));
 
 // Admin clear data (Wipe & Reset all system operational data and users to trigger initial setup scenario)
-router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), asyncHandler(async (req, res) => {
+router.post('/admin/clear-data', requireSystemAdmin, validate(clearDataSchema), asyncHandler(async (req, res) => {
   // P0-01 (ARCH-01): محافظت قطعی در برابر حذف فیزیکی دیتابیس در محیط پروداکشن
   // (نگهبان پیش از هر کاری اجرا می‌شود و FactoryResetService.wipeAndReseed آن را دوباره بررسی می‌کند)
   const actor = { username: req.user?.username, ip: extractClientIp(req) };
@@ -225,7 +226,7 @@ router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), 
 }));
 
 // V3.0.7 (TD-065): اطلاعات زیرساخت (مسیر uploads، حافظه، پروتکل) فقط برای ادمین
-router.get('/system/health', authorize('admin'), asyncHandler(async (req, res) => {
+router.get('/system/health', requireSystemAdmin, asyncHandler(async (req, res) => {
   // 1. Check DB Connection & Latency
   const dbStatus = await SystemHealthService.checkDatabase();
 
@@ -262,12 +263,12 @@ router.get('/system/health', authorize('admin'), asyncHandler(async (req, res) =
 }));
 
 // v7.0.131 (TD-232): گزارش فقط‌خواندنی تقویم ستون‌های تاریخ متنی (همان npm run dates:report)
-router.get('/system/date-calendar-report', authorize('admin'), asyncHandler(async (_req, res) => {
+router.get('/system/date-calendar-report', requireSystemAdmin, asyncHandler(async (_req, res) => {
   res.json(await DateCalendarReportService.buildReport());
 }));
 
 // Automated System Integrity & Reconciliation Scan
-router.get('/system/reconciliation-check', authorize('admin'), asyncHandler(async (req, res) => {
+router.get('/system/reconciliation-check', requireSystemAdmin, asyncHandler(async (req, res) => {
   const { checks, okChecks, healthScorePercentage } = await SystemReconciliationService.runIntegrityScan();
 
   await logActivity({
@@ -292,7 +293,7 @@ router.get('/system/reconciliation-check', authorize('admin'), asyncHandler(asyn
 // Execute Non-Destructive Auto-Fix Actions
 // TD-245: فقط رویدادهای حل‌نشده DLQ بازگردانده و علامت replayed می‌خورند (بدون حذف)، در یک تراکنش با ثبت ممیزی؛
 // بازنشانی رویدادهای متوقف Outbox هم ثبت ممیزی دارد.
-router.post('/system/reconciliation-fix', authorize('admin'), validate(reconciliationFixSchema), asyncHandler(async (req, res) => {
+router.post('/system/reconciliation-fix', requireSystemAdmin, validate(reconciliationFixSchema), asyncHandler(async (req, res) => {
   const { action } = req.body as z.infer<typeof reconciliationFixSchema>['body'];
   const actor = {
     userId: req.user?.id,
@@ -350,7 +351,7 @@ router.get('/global-search', asyncHandler(async (req, res) => {
 // Export full database dump as JSON
 // v7.0.29 (TD-188 / audit P1-6): خروجی امن داده‌ها (بدون هش رمز، رمز صرافی پرسنل و کلیدهای محرمانه؛
 // شامل دفاتر حسابداری و کارمزدی) — نسخه پشتیبان قابل بازگردانی نیست؛ پشتیبان واقعی: scripts/backup.sh
-router.get('/export-backup', authorize('admin'), asyncHandler(async (req, res) => {
+router.get('/export-backup', requireSystemAdmin, asyncHandler(async (req, res) => {
   const exportData = await DataExportService.buildExport();
   const tableCount = Object.keys((exportData.data as Record<string, unknown>) || {}).length;
 

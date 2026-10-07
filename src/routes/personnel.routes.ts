@@ -4,7 +4,7 @@ import { orm } from '../db/drizzle.js';
 import { personnel, users } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorize, authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { personnelAuditChanges, personnelAuditSnapshot } from '../services/personnel/personnelAudit.js';
 import { logger } from '../middleware/logger.js';
@@ -156,7 +156,7 @@ const updatePersonnelSchema = z.object({
 });
 
 // GET /api/personnel/export - Export all personnel for Excel
-router.get('/personnel/export', authorize('admin', 'manager', 'personnel.manage'), asyncHandler(async (req, res) => {
+router.get('/personnel/export', authorizePermission('personnel.manage'), asyncHandler(async (req, res) => {
   try {
     const list = await orm
       .select({
@@ -221,7 +221,7 @@ router.get('/personnel/export', authorize('admin', 'manager', 'personnel.manage'
 }));
 
 // POST /api/personnel/bulk-import - Bulk import personnel from Excel
-router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.manage'), asyncHandler(async (req, res) => {
+router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), asyncHandler(async (req, res) => {
   try {
     const { rows = [], updateIfExists = true } = req.body;
 
@@ -460,7 +460,7 @@ router.get('/personnel/:id', authorizePermission(...READ_PERMISSIONS.personnel),
 }));
 
 // POST /api/personnel - Create new personnel
-router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), validate(createPersonnelSchema), asyncHandler(async (req, res) => {
+router.post('/personnel', authorizePermission('personnel.manage'), validate(createPersonnelSchema), asyncHandler(async (req, res) => {
   try {
     const {
       firstName = '',
@@ -562,7 +562,7 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
 }));
 
 // PUT /api/personnel/:id - Update personnel
-router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), validate(updatePersonnelSchema), asyncHandler(async (req, res) => {
+router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(updatePersonnelSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -683,7 +683,7 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
 }));
 
 // DELETE /api/personnel/:id - Soft delete
-router.delete('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/personnel/:id', authorizePermission('personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
   // v9.0.29 (TD-441، تصمیم D4 الف): زیر قفل ردیف پرسنل، فیش تسویه‌نشده، کارکرد بی فیش، مانده حساب دائم یا سند پیش‌نویس

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorize, authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { PayrollPaymentService } from '../services/accounting/payrollPayment.service.js';
@@ -201,7 +201,7 @@ router.get('/piecework/tasks/:id/history', authorizePermission(...READ_PERMISSIO
 }));
 
 // POST /api/piecework/tasks - Create new task
-router.post('/piecework/tasks', authorize('personnel.manage', 'admin'), validate(createPieceworkTaskSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/tasks', authorizePermission('personnel.manage'), validate(createPieceworkTaskSchema), asyncHandler(async (req, res) => {
   try {
     const { code, title, category, defaultRate, unit, description } = req.body;
 
@@ -233,7 +233,7 @@ router.post('/piecework/tasks', authorize('personnel.manage', 'admin'), validate
 }));
 
 // POST /api/piecework/tasks/import-excel - Bulk import piecework tasks
-router.post('/piecework/tasks/import-excel', authorize('personnel.manage', 'admin'), asyncHandler(async (req, res) => {
+router.post('/piecework/tasks/import-excel', authorizePermission('personnel.manage'), asyncHandler(async (req, res) => {
   try {
     const { rows, mode = 'upsert' } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -269,7 +269,7 @@ router.post('/piecework/tasks/import-excel', authorize('personnel.manage', 'admi
 }));
 
 // POST /api/piecework/tasks/clear-defaults or clear-all
-router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], authorize('personnel.manage', 'admin'), asyncHandler(async (req, res) => {
+router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], authorizePermission('personnel.manage'), asyncHandler(async (req, res) => {
   try {
     const count = await PieceworkService.clearAllTasks({
       userId: req.user?.id,
@@ -296,7 +296,7 @@ router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], a
 }));
 
 // PUT /api/piecework/tasks/:id - Update task
-router.put('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), validate(updatePieceworkTaskSchema), asyncHandler(async (req, res) => {
+router.put('/piecework/tasks/:id', authorizePermission('personnel.manage'), validate(updatePieceworkTaskSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { code, title, category, defaultRate, unit, description, isActive } = req.body;
@@ -331,7 +331,7 @@ router.put('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), valid
 }));
 
 // DELETE /api/piecework/tasks/:id
-router.delete('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/piecework/tasks/:id', authorizePermission('personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const existing = await PieceworkService.deleteTask(id, {
@@ -356,7 +356,7 @@ router.delete('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), va
 }));
 
 // POST /api/piecework/tasks/:id/restore - Restore an archived/deleted task
-router.post('/piecework/tasks/:id/restore', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/tasks/:id/restore', authorizePermission('personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const existing = await PieceworkService.restoreTask(id, {
@@ -397,7 +397,7 @@ router.get('/piecework/categories', authorizePermission(...READ_PERMISSIONS.piec
 }));
 
 // POST /api/piecework/categories
-router.post('/piecework/categories', authorize('personnel.manage', 'admin', 'settings.manage'), validate(createTaskCategorySchema), asyncHandler(async (req, res) => {
+router.post('/piecework/categories', authorizePermission('personnel.manage', 'settings.manage'), validate(createTaskCategorySchema), asyncHandler(async (req, res) => {
   try {
     const { name, description } = req.body;
     const inserted = await PieceworkService.createCategory({ name, description });
@@ -419,7 +419,7 @@ router.post('/piecework/categories', authorize('personnel.manage', 'admin', 'set
 }));
 
 // PUT /api/piecework/categories/:id
-router.put('/piecework/categories/:id', authorize('personnel.manage', 'admin', 'settings.manage'), validate(updateTaskCategorySchema), asyncHandler(async (req, res) => {
+router.put('/piecework/categories/:id', authorizePermission('personnel.manage', 'settings.manage'), validate(updateTaskCategorySchema), asyncHandler(async (req, res) => {
   try {
     const rawId = req.params.id;
     const { name, description } = req.body;
@@ -443,7 +443,7 @@ router.put('/piecework/categories/:id', authorize('personnel.manage', 'admin', '
 }));
 
 // DELETE /api/piecework/categories/:id
-router.delete('/piecework/categories/:id', authorize('personnel.manage', 'admin', 'settings.manage'), asyncHandler(async (req, res) => {
+router.delete('/piecework/categories/:id', authorizePermission('personnel.manage', 'settings.manage'), asyncHandler(async (req, res) => {
   try {
     const rawId = req.params.id;
     const result = await PieceworkService.deleteCategory(rawId);
@@ -482,7 +482,7 @@ router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:person
 }));
 
 // POST /api/piecework/personnel-rates - Set or update custom rate
-router.post(['/piecework/personnel-rates', '/piecework/rates'], authorize('personnel.manage', 'admin'), validate(setPersonnelRateSchema), asyncHandler(async (req, res) => {
+router.post(['/piecework/personnel-rates', '/piecework/rates'], authorizePermission('personnel.manage'), validate(setPersonnelRateSchema), asyncHandler(async (req, res) => {
   try {
     const { personnelId, taskId, customRate } = req.body;
     await PieceworkService.setPersonnelRate({ personnelId, taskId, customRate });
@@ -512,7 +512,7 @@ router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkR
 
 // POST /api/piecework/logs - Record work logs (Supports single or batch array)
 // حوزه H (TD-300): ثبت کارکرد مبلغ فیش را می‌سازد؛ مجوزش «ثبت کارکرد پرسنل» است نه «ثبت گزارش کار روزانه»
-router.post('/piecework/logs', authorize('personnel.manage', 'piecework.log', 'admin'), validate(createPieceworkLogsSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/logs', authorizePermission('personnel.manage', 'piecework.log'), validate(createPieceworkLogsSchema), asyncHandler(async (req, res) => {
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
@@ -551,7 +551,7 @@ router.post('/piecework/logs', authorize('personnel.manage', 'piecework.log', 'a
 }));
 
 // PUT /api/piecework/logs/:id - Update work log
-router.put('/piecework/logs/:id', authorize('personnel.manage', 'admin'), validate(updatePieceworkLogSchema), asyncHandler(async (req, res) => {
+router.put('/piecework/logs/:id', authorizePermission('personnel.manage'), validate(updatePieceworkLogSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { date, quantity, unitRate, notes, projectId } = req.body;
@@ -566,7 +566,7 @@ router.put('/piecework/logs/:id', authorize('personnel.manage', 'admin'), valida
 }));
 
 // DELETE /api/piecework/logs/:id - Delete work log
-router.delete('/piecework/logs/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/piecework/logs/:id', authorizePermission('personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     await PieceworkService.deleteWorkLog(id);
@@ -641,7 +641,7 @@ router.get('/piecework/payrolls/:id', authorizePermission(...READ_PERMISSIONS.pa
 }));
 
 // POST /api/piecework/payrolls - Generate new payroll for personnel
-router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('personnel.manage', 'admin'), idempotency({ scope: 'payroll' }), validate(generatePieceworkPayrollSchema), asyncHandler(async (req, res) => {
+router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorizePermission('personnel.manage'), idempotency({ scope: 'payroll' }), validate(generatePieceworkPayrollSchema), asyncHandler(async (req, res) => {
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
@@ -690,7 +690,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
 }));
 
 // PUT /api/piecework/payrolls/:id/status - Update status or mark as paid
-router.put('/piecework/payrolls/:id/status', authorize('personnel.manage', 'admin'), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
+router.put('/piecework/payrolls/:id/status', authorizePermission('personnel.manage'), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { status, paymentDate, paymentMethod, paymentReference, notes } = req.body;
@@ -734,7 +734,7 @@ router.put('/piecework/payrolls/:id/status', authorize('personnel.manage', 'admi
 }));
 
 // POST /api/piecework/payrolls/:id/register-payment — V10-4.4: مسیر یگانه پرداخت حقوق
-router.post('/piecework/payrolls/:id/register-payment', authorize('personnel.manage', 'admin'), idempotency({ scope: 'payroll' }), validate(registerPayrollPaymentSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/payrolls/:id/register-payment', authorizePermission('personnel.manage'), idempotency({ scope: 'payroll' }), validate(registerPayrollPaymentSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { bankAccountId, method, amount, paymentDate, paymentReference, notes } = req.body;
@@ -779,7 +779,7 @@ router.post('/piecework/payrolls/:id/register-payment', authorize('personnel.man
 }));
 
 // POST /api/piecework/payrolls/:id/payments/:transactionId/void — v8.0.31 (TD-283، تصمیم مالک محصول): ابطال یک پرداخت فیش
-router.post('/piecework/payrolls/:id/payments/:transactionId/void', authorize('personnel.manage', 'admin'), idempotency({ scope: 'payroll' }), validate(voidPayrollPaymentSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/payrolls/:id/payments/:transactionId/void', authorizePermission('personnel.manage'), idempotency({ scope: 'payroll' }), validate(voidPayrollPaymentSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const result = await PayrollPaymentVoidService.voidPayrollPayment({
     payrollId: id,
@@ -859,7 +859,7 @@ router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecewo
 }));
 
 // DELETE /api/piecework/payrolls/:id - Cancel/delete payroll and un-link logs
-router.delete('/piecework/payrolls/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/piecework/payrolls/:id', authorizePermission('personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
   const deletedPayroll = await PieceworkPayrollService.deletePayroll(id, {

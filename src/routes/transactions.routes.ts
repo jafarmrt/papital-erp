@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { orm } from '../db/drizzle.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorize } from '../middleware/authorize.js';
+import { authorizePermission } from '../middleware/authorize.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { validate, storageDateParam } from '../middleware/validate.js';
 import { transactions, items, users } from '../db/schema.js';
@@ -31,7 +31,7 @@ const listTransactionsSchema = z.object({
 
 // v7.0.53 (audit P2-10، تصمیم مالک محصول): فهرست کاردکس (با بهای تمام‌شده) فقط برای دارندگان warehouse.view یا
 // accounting.view؛ پیش‌تر هر کاربر واردشده آن را می‌گرفت
-router.get('/transactions', authorize('warehouse.view', 'accounting.view'), validate(listTransactionsSchema), asyncHandler(async (req, res) => {
+router.get('/transactions', authorizePermission('warehouse.view', 'accounting.view'), validate(listTransactionsSchema), asyncHandler(async (req, res) => {
   try {
     // V9-1.3: صفحه‌بندی NaN-safe با سقف
     const { page, limit, offset } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });

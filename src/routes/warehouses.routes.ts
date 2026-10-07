@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorize } from '../middleware/authorize.js';
+import { authorizePermission } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -38,7 +38,7 @@ router.get('/warehouses', asyncHandler(async (req, res) => {
   } catch (err) { throw err; }
 }));
 
-router.post('/warehouses', authorize('admin'), validate(createWarehouseValidation), asyncHandler(async (req, res) => {
+router.post('/warehouses', authorizePermission('warehouse.manage'), validate(createWarehouseValidation), asyncHandler(async (req, res) => {
   try {
     const { name, code } = req.body;
     const created = await WarehouseService.createWarehouse({ name, code });
@@ -59,7 +59,7 @@ router.post('/warehouses', authorize('admin'), validate(createWarehouseValidatio
   }
 }));
 
-router.put('/warehouses/:id', authorize('admin'), validate(updateWarehouseValidation), asyncHandler(async (req, res) => {
+router.put('/warehouses/:id', authorizePermission('warehouse.manage'), validate(updateWarehouseValidation), asyncHandler(async (req, res) => {
   try {
     const { name } = req.body;
     const id = Number(req.params.id);
@@ -78,7 +78,7 @@ router.put('/warehouses/:id', authorize('admin'), validate(updateWarehouseValida
   } catch (err) { throw err; }
 }));
 
-router.delete('/warehouses/:id', authorize('admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/warehouses/:id', authorizePermission('warehouse.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const wh = await WarehouseService.deactivateWarehouse(id);
