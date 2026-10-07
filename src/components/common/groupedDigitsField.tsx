@@ -56,14 +56,15 @@ export function restoreCaretAfterDigits(
 
 /**
  * Backspace درست پس از جداکننده: به‌جای گیر کردن روی جداکننده، رقم قبلی را حذف می‌کند.
- * رقم‌های تازه (حداکثر maxDigits) را برمی‌گرداند؛ null یعنی رویداد به حالت عادی رها شود.
+ * رقم‌های تازه (حداکثر maxDigits) و شمار رقم‌های پیش از مکان‌نما را برمی‌گرداند؛ null یعنی رویداد به حالت عادی رها شود.
+ * v9.0.299 (TD-682، B16-18): فراخواننده مکان‌نما را با `caretDigits` سر جای رقم حذف‌شده برمی‌گرداند؛ پیش‌تر به آخر کادر می‌رفت.
  */
 export function digitsAfterSeparatorBackspace(
   e: React.KeyboardEvent<HTMLInputElement>,
   input: HTMLInputElement | null,
   separators: string,
   maxDigits: number
-): string | null {
+): { digits: string; caretDigits: number } | null {
   if (e.key !== 'Backspace' || !input) return null;
   const caret = input.selectionStart || 0;
   const val = input.value;
@@ -71,7 +72,8 @@ export function digitsAfterSeparatorBackspace(
   e.preventDefault();
   const lastDigitIndex = val.slice(0, caret).search(/\d(?=[^\d]*$)/);
   if (lastDigitIndex === -1) return null;
-  return (val.slice(0, lastDigitIndex) + val.slice(lastDigitIndex + 1)).replace(/\D/g, '').slice(0, maxDigits);
+  const digits = (val.slice(0, lastDigitIndex) + val.slice(lastDigitIndex + 1)).replace(/\D/g, '').slice(0, maxDigits);
+  return { digits, caretDigits: val.slice(0, lastDigitIndex).replace(/\D/g, '').length };
 }
 
 interface GroupedDigitsFieldProps {

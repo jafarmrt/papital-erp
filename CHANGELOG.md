@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.299 — v9.0.299 — Card and Sheba Fields Keep the Caret After Backspace
+- **Card and Sheba caret (TD-682):** Backspace on a separator removes the digit before it and leaves the caret there instead of moving it to the end of the field.
+
 ### v9.0.298 — v9.0.298 — Searchable Select Shows the Label of a Preselected Value
 - **Preselected picker label (TD-680):** a searchable picker filled from a draft, a sales file or a name match shows the chosen buyer instead of an empty box, and its search request no longer sends `limit` twice.
 
