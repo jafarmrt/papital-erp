@@ -15,6 +15,7 @@ import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { setupTestSchema, withIsolatedTestSchema } from '../setup/testDb.js';
 import { createTestRole, createTestUser } from '../fixtures/factories.js';
 import { migrationsCopyUpTo, runMigrationsIn } from '../recovery/migrationChecks.js';
+import { REPO_ROOT } from '../recovery/scratchDatabase.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
@@ -296,9 +297,13 @@ export async function runFiscalClosingTests(shouldRun: ShouldRun): Promise<TestC
       const q = (text: string) => pool.query(text.replace(/\$S\./g, `"${fresh.schema}".`));
       const root = fs.mkdtempSync(path.join(os.tmpdir(), 'erp-p03-mig-'));
       try {
-        migrationsCopyUpTo(root, 62);
+        // the migration before the link column (its number changes when other lanes merge first)
+        const journal = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'drizzle', 'meta', '_journal.json'), 'utf8')) as { entries: Array<{ idx: number; tag: string }> };
+        const linkIdx = journal.entries.find(e => e.tag.endsWith('_journal_voucher_source_fiscal_year'))?.idx;
+        if (linkIdx === undefined) throw new Error('the journal_voucher_source_fiscal_year migration is missing');
+        migrationsCopyUpTo(root, linkIdx - 1);
         const before = await runMigrationsIn(root);
-        if (!before.success) throw new Error(`migrations up to 0062 failed: ${before.errors.join('; ')}`);
+        if (!before.success) throw new Error(`migrations before ${linkIdx} failed: ${before.errors.join('; ')}`);
         await q(`INSERT INTO $S.fiscal_periods (fiscal_year, status) VALUES (1395, 'closed'), (1396, 'open')`);
         const rows: Array<[number, string, string, string, string, number]> = [
           // number, date, type, module, reference, is_deleted
