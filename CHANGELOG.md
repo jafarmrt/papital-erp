@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.301 — v9.0.301 — Production Error Answers Keep 4xx Details
+- **Production error details (TD-594):** in production a 4xx answer keeps its details, so the over-delivery and over-order prompts list their items, and a broken request body gets a Persian message with its own code.
+
 ### v9.0.300 — v9.0.300 — Print Cleanup Runs Once
 - **Print cleanup (TD-684):** printing cleans up once, keeps the print window's own state while it is open and no longer overwrites a newer page title, so the next Ctrl+P still prints only the document.
 

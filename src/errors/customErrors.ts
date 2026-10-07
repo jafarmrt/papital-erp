@@ -103,6 +103,16 @@ export interface NormalizedError {
  * Normalizes PostgreSQL / Drizzle / Zod / JWT / system errors into safe, operational error objects.
  * Prevents internal database queries, constraints, or schemas from leaking to frontend users.
  */
+/** v9.0.301 (TD-594): خطاهای `body-parser` (کلید: `err.type`) با پیام فارسی، وضعیت و کد پایدار */
+const BODY_PARSER_ERRORS: Record<string, { message: string; statusCode: number; code: string }> = {
+  'entity.parse.failed': { message: 'بدنه درخواست JSON معتبر نیست؛ داده را بررسی و دوباره ارسال کنید.', statusCode: 400, code: 'INVALID_JSON_BODY' },
+  'parameters.too.many': { message: 'شمار پارامترهای درخواست بیش از حد مجاز است.', statusCode: 413, code: 'PAYLOAD_TOO_LARGE' },
+  'encoding.unsupported': { message: 'کدگذاری بدنه درخواست پشتیبانی نمی‌شود.', statusCode: 415, code: 'UNSUPPORTED_BODY_ENCODING' },
+  'charset.unsupported': { message: 'نویسه‌گان بدنه درخواست پشتیبانی نمی‌شود.', statusCode: 415, code: 'UNSUPPORTED_BODY_ENCODING' },
+  'request.aborted': { message: 'ارسال درخواست نیمه‌کاره قطع شد.', statusCode: 400, code: 'REQUEST_ABORTED' },
+  'request.size.invalid': { message: 'اندازه بدنه درخواست با سرآیند آن نمی‌خواند.', statusCode: 400, code: 'INVALID_BODY_SIZE' },
+};
+
 export function normalizeError(err: unknown): NormalizedError {
   if (err instanceof AppError) {
     return {
@@ -125,6 +135,12 @@ export function normalizeError(err: unknown): NormalizedError {
       details: { limit: errObj.limit, length: errObj.length },
       stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
     };
+  }
+  // v9.0.301 (TD-594، B01-14): دیگر خطاهای خواندن بدنه (body-parser) پیام فارسی و کد خودشان را می‌گیرند؛ پیش‌تر JSON ناقص
+  // «Unexpected end of JSON input» با کد INTERNAL_ERROR برمی‌گرداند
+  const bodyError = errObj && typeof errObj.type === 'string' ? BODY_PARSER_ERRORS[errObj.type] : undefined;
+  if (errObj && bodyError) {
+    return { ...bodyError, stack: typeof errObj.stack === 'string' ? errObj.stack : undefined };
   }
 
   // Handle OptimisticLockError
