@@ -314,7 +314,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       workMode: 'onsite',
       title: 'تست استانداردسازی تاریخ روزانه',
       content: 'محتوای گزارش تستی جهت ارزیابی ستون dateIso',
-      visibility: 'public',
+      visibility: 'mentioned_only',
       isDeleted: 0
     }).returning({ id: dailyWorkLogs.id });
     createdWorkLogId = insertedWorkLog.id;

@@ -526,6 +526,13 @@
       "when": 1793090000000,
       "tag": "0074_item_opening_voucher_items",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1793100000000,
+      "tag": "0075_daily_log_visibility",
+      "breakpoints": true
     }
   ]
 }
