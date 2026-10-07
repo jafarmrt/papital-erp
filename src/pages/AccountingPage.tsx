@@ -239,8 +239,6 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
 
           {currentTab === 'vouchers' && (
             <JournalVouchersTab
-              vouchers={vouchers}
-              loading={loading}
               accounts={accounts}
               customers={customers}
               personnelList={personnelList}

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { FileText, Plus, Search, Printer, Edit3, Trash2, ChevronDown, ChevronRight, CheckCircle2, Clock, Lock, RotateCcw, History, ShieldCheck, FileCheck, MoreVertical, CheckSquare, GitFork, X } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, extractDateString, toStorageDate } from '../../utils';
+import { FileText, Plus, Printer, Edit3, Trash2, ChevronDown, ChevronRight, CheckCircle2, Clock, Lock, RotateCcw, History, ShieldCheck, FileCheck, MoreVertical, CheckSquare, GitFork, X } from 'lucide-react';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import type { JournalVoucher, Account, Customer, Personnel, FinancialAttachment } from '../../types';
 import { VoucherReversalModal } from './VoucherReversalModal';
@@ -10,14 +10,13 @@ import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal
 import { WorkflowStepperWidget } from '../workflow/WorkflowStepperWidget';
 import ConfirmModal from '../ConfirmModal';
 import toast from 'react-hot-toast';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { VoucherAttachmentThumbnails } from './VoucherAttachmentThumbnails';
+import { VoucherListPager, VoucherListToolbar } from './vouchers/VoucherListToolbar';
+import { useVoucherPageQuery } from '../../hooks/accounting/useVoucherQueries';
+import { useDebounce } from '../../hooks/useDebounce';
+import { EMPTY_VOUCHER_STATUS_COUNTS, VOUCHER_PAGE_SIZE, type VoucherListFilters } from '../../lib/accounting/voucherList';
 
 interface JournalVouchersTabProps {
-  vouchers: JournalVoucher[];
-  loading: boolean;
   accounts?: Account[];
   customers?: Customer[];
   personnelList?: Personnel[];
@@ -36,8 +35,6 @@ interface JournalVouchersTabProps {
 }
 
 export function JournalVouchersTab({
-  vouchers,
-  loading,
   accounts = [],
   customers = [],
   personnelList = [],
@@ -55,12 +52,21 @@ export function JournalVouchersTab({
   onBatchApproveVouchers,
 }: JournalVouchersTabProps) {
   const appCurrency = useAppCurrency();
-  const safeVouchers = Array.isArray(vouchers) ? vouchers : [];
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedType, setSelectedType] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  // v9.0.109 (TD-565): صفحه، جست‌وجو، نوع، وضعیت و تاریخ به سرور می‌روند و شمارنده‌ها و `total` از سرورند؛
+  // پیش‌تر صفحه فقط ۲۰ سند آخر را داشت و همه صافی‌ها و شمارنده‌ها روی همان ۲۰ کار می‌کردند
+  const [filters, setFilters] = useState<VoucherListFilters>({ status: 'all', voucherType: 'all', search: '', startDate: '', endDate: '' });
+  const [page, setPage] = useState(1);
+  const debouncedSearch = useDebounce(filters.search, 350);
+  const serverFilters = useMemo(() => ({ ...filters, search: debouncedSearch }), [filters, debouncedSearch]);
+  const voucherPageQuery = useVoucherPageQuery(serverFilters, page, VOUCHER_PAGE_SIZE);
+  const safeVouchers = useMemo(() => voucherPageQuery.data?.data ?? [], [voucherPageQuery.data]);
+  const totalFiltered = voucherPageQuery.data?.total ?? 0;
+  const statusCounts = voucherPageQuery.data?.statusCounts ?? EMPTY_VOUCHER_STATUS_COUNTS;
+  const loading = voucherPageQuery.isLoading;
+  const changeFilters = (patch: Partial<VoucherListFilters>) => {
+    setFilters(prev => ({ ...prev, ...patch }));
+    setPage(1);
+  };
   const [expandedVoucherIds, setExpandedVoucherIds] = useState<Record<number, boolean>>({});
   const [openMenuVoucherId, setOpenMenuVoucherId] = useState<number | null>(null);
 
@@ -81,51 +87,55 @@ export function JournalVouchersTab({
   const [workflowTargetVoucher, setWorkflowTargetVoucher] = useState<JournalVoucher | null>(null);
   const [viewingAttachments, setViewingAttachments] = useState<{ title: string; attachments: FinancialAttachment[] } | null>(null);
 
-  // Status counters for Subphase 2.1 segmented control
-  const draftCount = useMemo(() => safeVouchers.filter(v => v.status === 'draft').length, [safeVouchers]);
-  const approvedCount = useMemo(() => safeVouchers.filter(v => v.status === 'approved').length, [safeVouchers]);
-  const permanentCount = useMemo(() => safeVouchers.filter(v => v.status === 'permanent').length, [safeVouchers]);
-  const totalCount = safeVouchers.length;
-
-  // Multi-select & Batch Operations
-  const [selectedVoucherIds, setSelectedVoucherIds] = useState<number[]>([]);
+  // Multi-select & Batch Operations: انتخاب با وضعیت هر سند نگه داشته می‌شود تا در صفحه‌های دیگر هم بماند
+  const [selectedStatuses, setSelectedStatuses] = useState<Record<number, JournalVoucher['status']>>({});
   const [isBatchOperating, setIsBatchOperating] = useState(false);
+  const selectedVoucherIds = useMemo(() => Object.keys(selectedStatuses).map(Number), [selectedStatuses]);
+  const clearSelection = () => setSelectedStatuses({});
+  // وضعیت سند انتخاب‌شده‌ای که در همین صفحه تغییر کرده (تایید یا قطعی تکی) از داده تازه سرور خوانده می‌شود
+  useEffect(() => {
+    setSelectedStatuses(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const v of safeVouchers) {
+        if (v.id in next && next[v.id] !== v.status) {
+          next[v.id] = v.status;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [safeVouchers]);
 
-  // Selected vouchers analysis
-  const selectedVouchers = useMemo(() => {
-    return safeVouchers.filter(v => selectedVoucherIds.includes(v.id));
-  }, [safeVouchers, selectedVoucherIds]);
-
-  const selectedDrafts = useMemo(() => {
-    return selectedVouchers.filter(v => v.status === 'draft');
-  }, [selectedVouchers]);
-
-  const selectedApproved = useMemo(() => {
-    return selectedVouchers.filter(v => v.status === 'approved');
-  }, [selectedVouchers]);
+  const selectedDrafts = useMemo(() => selectedVoucherIds.filter(id => selectedStatuses[id] === 'draft'), [selectedVoucherIds, selectedStatuses]);
+  const selectedApproved = useMemo(() => selectedVoucherIds.filter(id => selectedStatuses[id] === 'approved'), [selectedVoucherIds, selectedStatuses]);
 
   const handleSelectAllVisible = (checked: boolean) => {
-    if (checked) {
-      const visibleIds = filteredVouchers.map(v => v.id);
-      setSelectedVoucherIds(prev => Array.from(new Set([...prev, ...visibleIds])));
-    } else {
-      const visibleIdsSet = new Set(filteredVouchers.map(v => v.id));
-      setSelectedVoucherIds(prev => prev.filter(id => !visibleIdsSet.has(id)));
-    }
+    setSelectedStatuses(prev => {
+      const next = { ...prev };
+      for (const v of filteredVouchers) {
+        if (checked) next[v.id] = v.status;
+        else delete next[v.id];
+      }
+      return next;
+    });
   };
 
-  const handleToggleSelectOne = (id: number) => {
-    setSelectedVoucherIds(prev => 
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
+  const handleToggleSelectOne = (voucher: JournalVoucher) => {
+    setSelectedStatuses(prev => {
+      const next = { ...prev };
+      if (voucher.id in next) delete next[voucher.id];
+      else next[voucher.id] = voucher.status;
+      return next;
+    });
   };
 
   const handleBatchApprove = async () => {
     if (selectedDrafts.length === 0 || !onBatchApproveVouchers || isBatchOperating) return;
     setIsBatchOperating(true);
     try {
-      await onBatchApproveVouchers(selectedDrafts.map(v => v.id));
-      setSelectedVoucherIds([]);
+      await onBatchApproveVouchers(selectedDrafts);
+      clearSelection();
     } catch (err: any) {
       toast.error(err?.message || 'خطا در تایید گروهی اسناد پیش‌نویس');
     } finally {
@@ -137,8 +147,8 @@ export function JournalVouchersTab({
     if (selectedApproved.length === 0 || !onBatchFinalizeVouchers || isBatchOperating) return;
     setIsBatchOperating(true);
     try {
-      await onBatchFinalizeVouchers(selectedApproved.map(v => v.id));
-      setSelectedVoucherIds([]);
+      await onBatchFinalizeVouchers(selectedApproved);
+      clearSelection();
     } catch (err: any) {
       toast.error(err?.message || 'خطا در قطعی‌سازی گروهی اسناد');
     } finally {
@@ -217,7 +227,8 @@ export function JournalVouchersTab({
     purchase: { label: 'خرید و انبار', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' },
     treasury: { label: 'خزانه‌داری / دریافت-پرداخت', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' },
     payroll: { label: 'حقوق و دستمزد', badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' },
-    closing: { label: 'افتتاحیه / اختتامیه', badge: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300' },
+    opening: { label: 'افتتاحیه', badge: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300' },
+    closing: { label: 'اختتامیه', badge: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300' },
     adjustment: { label: 'اصلاحی / معکوس', badge: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300' },
   };
 
@@ -248,20 +259,8 @@ export function JournalVouchersTab({
     }
   };
 
-  const filteredVouchers = safeVouchers.filter(v => {
-    const matchSearch = !searchQuery.trim() || 
-      v.description.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      String(v.voucherNumber).includes(searchQuery.trim()) ||
-      (v.manualVoucherNumber && v.manualVoucherNumber.includes(searchQuery.trim())) ||
-      (v.referenceNumber && v.referenceNumber.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchType = selectedType === 'all' || v.voucherType === selectedType;
-    const matchStatus = selectedStatus === 'all' || v.status === selectedStatus;
-    // v7.0.136 (TD-232): تاریخ سند (ISO یا شمسی قدیمی) و فیلتر شمسی هر دو ISO مقایسه می‌شوند
-    const vDate = toStorageDate(v.date) || '';
-    const matchStart = !startDate || vDate >= (toStorageDate(startDate) || '');
-    const matchEnd = !endDate || vDate <= (toStorageDate(endDate) || '');
-    return matchSearch && matchType && matchStatus && matchStart && matchEnd;
-  });
+  // سرور صافی‌ها را اعمال کرده است؛ جدول همان صفحه را نشان می‌دهد
+  const filteredVouchers = safeVouchers;
 
   return (
     <div className="space-y-6">
@@ -288,150 +287,7 @@ export function JournalVouchersTab({
         </div>
       </div>
 
-      {/* Segmented 3-Status Selector Tabs (فاز ۲ نسخه ۳: تفکیک شفاف سه وضعیت اسناد) */}
-      <div className="flex flex-wrap items-center gap-2 bg-slate-100/80 dark:bg-slate-800/80 p-1.5 rounded-2xl border border-slate-200/70 dark:border-slate-700/70">
-        <button
-          onClick={() => setSelectedStatus('all')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-            selectedStatus === 'all'
-              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs border border-slate-200 dark:border-slate-600'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-          }`}
-        >
-          <span>همه اسناد حسابداری</span>
-          <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono ${
-            selectedStatus === 'all'
-              ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold'
-              : 'bg-slate-200/70 dark:bg-slate-700/70 text-slate-600 dark:text-slate-400'
-          }`}>
-            {formatPersianNumber(totalCount)}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setSelectedStatus('draft')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-            selectedStatus === 'draft'
-              ? 'bg-amber-500 text-white shadow-xs'
-              : 'text-amber-800 dark:text-amber-300 hover:bg-amber-100/60 dark:hover:bg-amber-950/40'
-          }`}
-        >
-          <Clock className="w-3.5 h-3.5" />
-          <span>پیش‌نویس‌ها (یادداشت اولیه)</span>
-          <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono ${
-            selectedStatus === 'draft'
-              ? 'bg-white/20 text-white font-bold'
-              : 'bg-amber-200/70 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200'
-          }`}>
-            {formatPersianNumber(draftCount)}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setSelectedStatus('approved')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-            selectedStatus === 'approved'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-blue-800 dark:text-blue-300 hover:bg-blue-100/60 dark:hover:bg-blue-950/40'
-          }`}
-        >
-          <FileCheck className="w-3.5 h-3.5" />
-          <span>تایید شده (حسابرسی‌شده)</span>
-          <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono ${
-            selectedStatus === 'approved'
-              ? 'bg-white/20 text-white font-bold'
-              : 'bg-blue-200/70 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200'
-          }`}>
-            {formatPersianNumber(approvedCount)}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setSelectedStatus('permanent')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-            selectedStatus === 'permanent'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/60 dark:hover:bg-emerald-950/40'
-          }`}
-        >
-          <Lock className="w-3.5 h-3.5" />
-          <span>دائم و قطعی (قفل دفاتر)</span>
-          <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono ${
-            selectedStatus === 'permanent'
-              ? 'bg-white/20 text-white font-bold'
-              : 'bg-emerald-200/70 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200'
-          }`}>
-            {formatPersianNumber(permanentCount)}
-          </span>
-        </button>
-      </div>
-
-      {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="جستجو در شماره سند، شرح یا عطف..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pr-9 pl-3 py-2 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-          />
-        </div>
-
-        {/* Type Filter */}
-        <select
-          value={selectedType}
-          onChange={e => setSelectedType(e.target.value)}
-          className="px-3 py-2 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
-        >
-          <option value="all">همه انواع اسناد</option>
-          <option value="general">عمومی / عادی</option>
-          <option value="sales">فروش و درآمد</option>
-          <option value="purchase">خرید و انبار</option>
-          <option value="treasury">دریافت و پرداخت</option>
-          <option value="payroll">حقوق و دستمزد</option>
-          <option value="closing">افتتاحیه / اختتامیه</option>
-          <option value="adjustment">اصلاحی / برگشت</option>
-        </select>
-
-        {/* Date Filters */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-slate-500">از:</span>
-            <DatePicker
-              value={startDate}
-              onChange={(dateObj: any) => setStartDate(extractDateString(dateObj))}
-              calendar={persian}
-              locale={persian_fa}
-              calendarPosition="bottom-right"
-              inputClass="w-28 px-2.5 py-2 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
-              containerClassName="inline-block"
-            />
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-slate-500">تا:</span>
-            <DatePicker
-              value={endDate}
-              onChange={(dateObj: any) => setEndDate(extractDateString(dateObj))}
-              calendar={persian}
-              locale={persian_fa}
-              calendarPosition="bottom-right"
-              inputClass="w-28 px-2.5 py-2 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
-              containerClassName="inline-block"
-            />
-          </div>
-          {(startDate || endDate) && (
-            <button
-              onClick={() => { setStartDate(''); setEndDate(''); }}
-              className="text-xs text-rose-500 hover:text-rose-700 font-medium px-1.5 py-1 cursor-pointer"
-            >
-              پاک‌کردن تاریخ
-            </button>
-          )}
-        </div>
-      </div>
+      <VoucherListToolbar filters={filters} statusCounts={statusCounts} onChange={changeFilters} />
 
       {/* Batch Operations Bar */}
       {selectedVoucherIds.length > 0 && (
@@ -467,7 +323,7 @@ export function JournalVouchersTab({
             )}
 
             <button
-              onClick={() => setSelectedVoucherIds([])}
+              onClick={clearSelection}
               className="px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 transition cursor-pointer"
             >
               لغو انتخاب
@@ -522,7 +378,7 @@ export function JournalVouchersTab({
                           <input
                             type="checkbox"
                             checked={selectedVoucherIds.includes(voucher.id)}
-                            onChange={() => handleToggleSelectOne(voucher.id)}
+                            onChange={() => handleToggleSelectOne(voucher)}
                             className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                           />
                         </td>
@@ -836,6 +692,7 @@ export function JournalVouchersTab({
             </tbody>
           </table>
         </div>
+        <VoucherListPager page={page} limit={VOUCHER_PAGE_SIZE} total={totalFiltered} onPageChange={setPage} />
       </div>
 
       {/* Reversal Modal */}

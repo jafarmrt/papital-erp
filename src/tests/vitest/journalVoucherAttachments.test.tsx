@@ -5,7 +5,9 @@ import { JournalVouchersTab } from '../../components/accounting/JournalVouchersT
 import type { JournalVoucher } from '../../types';
 
 // TD-236: پیش‌نمایش پیوست‌های سند حسابداری فیلدهای قدیمی fileName/dataUrl/fileType را می‌خواند و تصویر و نامی نشان نمی‌داد.
-vi.mock('../../api', () => ({ fetchJson: vi.fn(() => Promise.resolve({ instance: null })), getAuthToken: () => null }));
+// v9.0.109 (TD-565): برگه فهرست اسناد صفحه خود را از سرور می‌خواند
+const fetchJson = vi.fn();
+vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args), getAuthToken: () => null, isAbortError: () => false }));
 
 const voucher = {
   id: 41, voucherNumber: 1201, date: '1405/07/10', voucherType: 'manual', status: 'draft',
@@ -19,16 +21,20 @@ const voucher = {
 afterEach(cleanup);
 
 describe('JournalVouchersTab — attachment thumbnails (TD-236)', () => {
-  it('shows the image and the file name of attachments stored as name/url/type', () => {
+  it('shows the image and the file name of attachments stored as name/url/type', async () => {
+    fetchJson.mockImplementation((url: string) => Promise.resolve(String(url).startsWith('/accounting/vouchers?')
+      ? { data: [voucher], total: 1, page: 1, limit: 20, statusCounts: { draft: 1, approved: 0, permanent: 0 } }
+      : { instance: null }));
     const noop = () => undefined;
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <JournalVouchersTab
-          vouchers={[voucher]} loading={false} onRefresh={noop} onOpenNewVoucher={noop} onEditVoucher={noop}
+          onRefresh={noop} onOpenNewVoucher={noop} onEditVoucher={noop}
           onDeleteVoucher={() => Promise.resolve()} onPrintVoucher={noop}
         />
       </QueryClientProvider>,
     );
+    await screen.findByText('خرید ملزومات');
     const expand = screen.getAllByRole('button').find(b => b.querySelector('svg.lucide-chevron-right'));
     if (!expand) throw new Error('expand button not found');
     fireEvent.click(expand);
