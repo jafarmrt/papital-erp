@@ -3,6 +3,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { itemPrices, items } from '../../db/schema.js';
 import { getStrategyCanonicalKey } from '../../utils.js';
 import type { HealthCheckTestResult } from '../../types.js';
+import { priceCurrencyOf } from '../../lib/items/priceInput.js';
 
 /**
  * v9.0.165 (TD-660، B05-14): چند قیمت فعال برای یک فهرست قیمت یک کالا. نوشتن قیمت اکنون زیر قفل ردیف کالاست و تکرار
@@ -59,5 +60,61 @@ export function buildDuplicateActivePriceHealthTest(groups: DuplicateActivePrice
       details: `شناسه ردیف‌ها: ${g.priceIds.join('، ')} (TD-660)`,
     })),
     metrics: { duplicateGroups: groups.length },
+  };
+}
+
+/**
+ * v9.0.166 (TD-657 بخش قیمت، تصمیم ت۹ الف): قیمت فعال با مبلغ صفر یا منفی، یا ارزی بیرون از فهرست AGENTS §6. نوشتن تازه
+ * چنین قیمتی را نمی‌پذیرد؛ ردیف‌های پیشین دست نمی‌خورند و فقط این‌جا فهرست می‌شوند (کشوی قیمت فاکتور قیمتی با ارز
+ * ناشناخته را با ارز سند جور نمی‌کند و نشان نمی‌دهد).
+ */
+export interface InvalidActivePriceRow {
+  priceId: number;
+  itemId: number;
+  itemCode: string;
+  itemName: string;
+  title: string;
+  price: string;
+  currency: string;
+  reason: 'amount' | 'currency';
+}
+
+export async function findInvalidActivePrices(executor: DbExecutor = orm): Promise<InvalidActivePriceRow[]> {
+  const rows = await executor
+    .select({ id: itemPrices.id, itemId: itemPrices.itemId, title: itemPrices.title, price: itemPrices.price, currency: itemPrices.currency, code: items.code, name: items.name })
+    .from(itemPrices)
+    .innerJoin(items, eq(items.id, itemPrices.itemId))
+    .where(and(eq(itemPrices.isDeleted, 0), eq(items.isDeleted, 0)))
+    .orderBy(asc(itemPrices.itemId), asc(itemPrices.id));
+  const invalid: InvalidActivePriceRow[] = [];
+  for (const r of rows) {
+    const reason = !r.price.isPositive() ? 'amount' : (priceCurrencyOf(r.currency) === null ? 'currency' : null);
+    if (!reason) continue;
+    invalid.push({ priceId: r.id, itemId: r.itemId, itemCode: r.code, itemName: r.name, title: r.title.trim(), price: r.price.toString(), currency: String(r.currency ?? ''), reason });
+  }
+  return invalid;
+}
+
+export function buildInvalidActivePriceHealthTest(rows: InvalidActivePriceRow[]): HealthCheckTestResult {
+  const amounts = rows.filter(r => r.reason === 'amount').length;
+  return {
+    id: 'item_price_invalid_amount_currency',
+    category: 'inventory',
+    title: 'قیمت کالا با مبلغ نامعتبر یا ارز ناشناخته',
+    description: 'هر قیمت فعال کالا باید بزرگ‌تر از صفر و به یکی از ارزهای ریال، دلار، یورو، درهم یا پوند باشد',
+    status: rows.length > 0 ? 'warning' : 'healthy',
+    scoreImpact: -Math.min(5, rows.length),
+    count: rows.length,
+    message: rows.length > 0
+      ? `${rows.length} قیمت فعال (${amounts} با مبلغ صفر یا منفی، ${rows.length - amounts} با ارز ناشناخته) هست. این قیمت‌ها خودکار تغییر نمی‌کنند؛ در صفحه قیمت‌گذاری اصلاح یا حذفشان کنید.`
+      : 'همه قیمت‌های فعال کالا مبلغ مثبت و ارز پشتیبانی‌شده دارند.',
+    items: rows.map(r => ({
+      id: r.priceId,
+      code: r.itemCode,
+      title: `${r.itemName} — «${r.title}»`,
+      subtitle: `${r.price} ${r.currency}`,
+      details: r.reason === 'amount' ? 'مبلغ صفر یا منفی (TD-657)' : `ارز «${r.currency}» پشتیبانی نمی‌شود (TD-657)`,
+    })),
+    metrics: { invalidAmount: amounts, invalidCurrency: rows.length - amounts },
   };
 }

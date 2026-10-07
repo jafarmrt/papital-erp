@@ -23,6 +23,7 @@ import { PricingGridView, PricingTableView } from '../components/pricing/Pricing
 import * as xlsx from 'xlsx';
 import UnifiedExcelModal from '../components/UnifiedExcelModal';
 import { buildQuickPriceUpdates } from '../lib/items/quickPriceImport';
+import { priceSaveUpdates, type PriceFieldEdit } from '../lib/items/priceInput';
 import { ITEM_WAC_COLUMN } from '../lib/items/excelPriceColumns';
 
 export default function PricingPage({ user }: { user: User }) {
@@ -207,23 +208,17 @@ export default function PricingPage({ user }: { user: User }) {
     setSavingId(itemId);
     const itemLocal = localEdits[itemId] || {};
     try {
-      const updates: Array<{ itemId: number; title: string; price: number; currency: string }> = [];
-
+      // v9.0.166 (TD-657): خانه خالی حذف صریح است و عدد نامعتبر فرستاده نمی‌شود (پیش‌تر صفر می‌رفت و قیمت پاک می‌شد)
+      const edits: PriceFieldEdit[] = [];
       for (const st of strategies) {
         const cleanTitle = formatStrategyDisplayTitle(st);
-        const canKey = getStrategyCanonicalKey(cleanTitle);
-        const fieldEdit = itemLocal[canKey];
-
-        if (fieldEdit !== undefined) {
-          const valStr = fieldEdit.price;
-          const currStr = fieldEdit.currency || 'IRR';
-          updates.push({
-            itemId,
-            title: cleanTitle,
-            price: valStr !== '' && !isNaN(Number(valStr)) ? Number(valStr) : 0,
-            currency: currStr
-          });
-        }
+        const fieldEdit = itemLocal[getStrategyCanonicalKey(cleanTitle)];
+        if (fieldEdit !== undefined) edits.push({ title: cleanTitle, price: fieldEdit.price, currency: fieldEdit.currency || 'IRR' });
+      }
+      const { updates, errors } = priceSaveUpdates(edits.map(edit => ({ itemId, edit })));
+      if (errors.length > 0) {
+        toast.error(errors[0]);
+        return;
       }
 
       if (updates.length > 0) {
@@ -254,22 +249,13 @@ export default function PricingPage({ user }: { user: User }) {
   };
 
   const handleSaveAllLocalEdits = async () => {
-    const allUpdates: Array<{ itemId: number; title: string; price: number; currency: string }> = [];
+    const { updates: allUpdates, errors } = priceSaveUpdates(Object.entries(localEdits).flatMap(([itemIdStr, stMap]) =>
+      Number(itemIdStr) ? Object.values(stMap).map(edit => ({ itemId: Number(itemIdStr), edit })) : []));
 
-    Object.entries(localEdits).forEach(([itemIdStr, stMap]) => {
-      const itemId = Number(itemIdStr);
-      if (!itemId) return;
-
-      Object.values(stMap).forEach((fieldObj) => {
-        allUpdates.push({
-          itemId,
-          title: fieldObj.title,
-          price: fieldObj.price !== '' && !isNaN(Number(fieldObj.price)) ? Number(fieldObj.price) : 0,
-          currency: fieldObj.currency || 'IRR'
-        });
-      });
-    });
-
+    if (errors.length > 0) {
+      toast.error(errors.length > 1 ? `${errors[0]} (و ${formatPersianNumber(errors.length - 1)} خانه دیگر)` : errors[0]);
+      return;
+    }
     if (allUpdates.length === 0) {
       toast('هیچ تغییر ذخیره‌نشده‌ای وجود ندارد.');
       return;
@@ -354,9 +340,14 @@ export default function PricingPage({ user }: { user: User }) {
         }
 
         // v9.0.152 (TD-647): فقط ستون‌های فهرست‌های قیمت تنظیم‌شده؛ ستون دیگرِ «قیمت …» نادیده گرفته و گزارش می‌شود
-        const { updates, unknownColumns } = buildQuickPriceUpdates(rawData, Array.isArray(items) ? items : [], strategies);
+        const { updates, unknownColumns, invalidCells } = buildQuickPriceUpdates(rawData, Array.isArray(items) ? items : [], strategies);
         if (unknownColumns.length > 0) {
           toast.error(`این ستون‌ها فهرست قیمت تنظیم‌شده‌ای نیستند و نادیده گرفته شدند: ${unknownColumns.join('، ')}`);
+        }
+        // v9.0.166 (TD-657): قیمت صفر، منفی یا نامعتبر و ارز ناشناخته فرستاده نمی‌شوند و گزارش می‌شوند
+        if (invalidCells.length > 0) {
+          const sample = invalidCells.slice(0, 3).map(c => `${c.code} «${c.title}»: ${c.value} ${c.currency}`).join('، ');
+          toast.error(`${formatPersianNumber(invalidCells.length)} قیمت عدد بزرگ‌تر از صفر یا ارز پشتیبانی‌شده نداشت و ثبت نشد: ${sample}`);
         }
 
         if (updates.length === 0) {

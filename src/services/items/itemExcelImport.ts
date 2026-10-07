@@ -115,6 +115,10 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     return;
   }
 
+  // v9.0.166 (TD-657): قیمت نامعتبر یا ارز ناشناخته کل ردیف را پیش از هر نوشتن رد می‌کند
+  const rowPrices = readRowPrices(row, ctx.strategies, push);
+  if (!rowPrices) return;
+
   // v9.0.158 (TD-655): تصویر کالا پیش از تغییر، برای ردیف ممیزی همان کالا
   const before = matchedItem ? await itemAuditSnapshot(tx, matchedItem.id) : null;
   // V3.0.6 (Business Clock): تاریخ تراکنش‌های کاردکس از ساعت توافقی سامانه
@@ -125,7 +129,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     : await createNewItem(ctx, { code, name, fields, stock, todayStr, currentUser, push });
   if (targetItemId === null) return;
 
-  const changedPrices = await changedRowPrices(tx, targetItemId, readRowPrices(row, ctx.strategies, push));
+  const changedPrices = await changedRowPrices(tx, targetItemId, rowPrices);
   if (changedPrices.length > 0 && !perms.editPrices) {
     push(ITEM_IMPORT_DENIED_MESSAGES.editPrices);
   } else {

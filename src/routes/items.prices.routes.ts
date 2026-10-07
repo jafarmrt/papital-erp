@@ -4,7 +4,9 @@ import { eq, and, desc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { itemPrices } from '../db/schema.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
+import { fin } from '../lib/financialDecimal.js';
+import { PRICE_AMOUNT_MESSAGE, PRICE_CURRENCIES, PRICE_CURRENCY_MESSAGE, normalizePriceCurrency } from '../lib/items/priceInput.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { ItemsService } from '../services/items.service.js';
@@ -23,25 +25,45 @@ function unknownPriceListError(titles: string[]): ValidationError {
   );
 }
 
+/**
+ * v9.0.166 (TD-657 بخش قیمت، تصمیم ت۹ الف): مبلغ قیمت با `decimalInput` و بزرگ‌تر از صفر، ارز فقط از فهرست AGENTS §6
+ * (`PRICE_CURRENCIES`)، و حذف قیمت در `batch-update` فقط با `remove: true`. پیش‌تر قیمت منفی ذخیره، «abc» صفر و قیمت صفر
+ * یا خالی حذف می‌شد (صفحه قیمت‌گذاری برای عدد نامعتبر صفر می‌فرستاد و قیمت را پاک می‌کرد) و ارز «XYZ» پذیرفته می‌شد.
+ */
+const priceAmount = decimalInput('قیمت')
+  .refine(v => v !== undefined, 'قیمت الزامی است')
+  .refine(v => v === undefined || fin(v).isPositive(), PRICE_AMOUNT_MESSAGE);
+const priceCurrency = z.preprocess(normalizePriceCurrency, z.enum(PRICE_CURRENCIES, { message: PRICE_CURRENCY_MESSAGE }));
+
 export const itemPriceSchema = z.object({
   body: z.object({
     title: z.string().min(1, 'عنوان قیمت الزامی است'),
-    price: z.union([z.string(), z.number()]),
-    currency: z.string().optional()
+    price: priceAmount,
+    currency: priceCurrency
   }),
   params: z.object({
     id: numericIdString
   })
 });
 
+const batchPriceUpdate = z.object({
+  itemId: z.coerce.number().int('شناسه کالا باید عدد صحیح باشد').positive('شناسه کالا باید مثبت باشد'),
+  title: z.string().min(1, 'عنوان قیمت الزامی است'),
+  remove: z.literal(true).optional(),
+  price: z.union([z.number(), z.string()]).optional(),
+  currency: priceCurrency
+}).superRefine((u, ctx) => {
+  if (u.remove) {
+    if (u.price !== undefined && u.price !== '') ctx.addIssue({ code: 'custom', path: ['price'], message: 'حذف قیمت مبلغ نمی‌گیرد.' });
+    return;
+  }
+  const parsed = priceAmount.safeParse(u.price);
+  if (!parsed.success) ctx.addIssue({ code: 'custom', path: ['price'], message: parsed.error.issues[0]?.message ?? PRICE_AMOUNT_MESSAGE });
+}).transform(u => ({ ...u, price: u.remove ? undefined : priceAmount.safeParse(u.price).data }));
+
 export const batchPriceUpdateSchema = z.object({
   body: z.object({
-    updates: z.array(z.object({
-      itemId: z.union([z.number(), z.string()]),
-      title: z.string().min(1, 'عنوان قیمت الزامی است'),
-      price: z.union([z.number(), z.string(), z.null()]).optional(),
-      currency: z.string().optional()
-    })).min(1, 'لیست تغییرات قیمت خالی است')
+    updates: z.array(batchPriceUpdate).min(1, 'لیست تغییرات قیمت خالی است')
   })
 });
 
@@ -131,23 +153,17 @@ router.post('/items/:id/prices', authorizePermission('products.edit_price'), val
 // v9.0.165 (TD-660): همه تغییرها و ردیف ممیزی‌شان در یک تراکنش، زیر قفل ردیف کالاها (پیش‌تر قفل ردیف قیمت‌های موجود جلوی
 // درج هم‌زمان قیمت تازه را نمی‌گرفت و ممیزی بیرون از تراکنش نوشته می‌شد)
 router.post('/items/prices/batch-update', authorizePermission('products.edit_price'), validate(batchPriceUpdateSchema), asyncHandler(async (req, res) => {
-  const updates = req.body.updates as Array<{ itemId: number | string; title: string; price?: number | string | null; currency?: string }>;
-  const isRemoval = (price: unknown) => price === null || price === undefined || price === '' || Number(price) <= 0;
+  const updates = req.body.updates as Array<{ itemId: number; title: string; remove?: true; price?: string; currency: string }>;
   const changes = await orm.transaction(async (tx) => {
     const strategies = await ItemPricingService.getPricingStrategies(tx);
-    // v9.0.152 (TD-647، ت۱ الف): قیمت فقط برای فهرست تنظیم‌شده ثبت می‌شود؛ حذف قیمت (مقدار خالی یا صفر) هر عنوانی را می‌پذیرد
-    // تا ردیف‌های پیشینِ عنوان ناشناخته پاک‌شدنی بمانند. پیش‌تر ورود سریع «موجودی کل» را فهرست قیمت فروش می‌کرد.
+    // v9.0.152 (TD-647، ت۱ الف): قیمت فقط برای فهرست تنظیم‌شده ثبت می‌شود؛ حذف قیمت هر عنوانی را می‌پذیرد تا ردیف‌های
+    // پیشینِ عنوان ناشناخته پاک‌شدنی بمانند. پیش‌تر ورود سریع «موجودی کل» را فهرست قیمت فروش می‌کرد.
+    // v9.0.166 (TD-657): حذف فقط با `remove: true`؛ قیمت صفر، منفی یا نامعتبر در اعتبارسنجی بدنه ۴۰۰ است
     const matcher = priceListMatcher(strategies);
-    const unknownTitles = [...new Set(updates.filter(u => !isRemoval(u.price) && !matcher.match(u.title)).map(u => u.title))];
+    const unknownTitles = [...new Set(updates.filter(u => !u.remove && !matcher.match(u.title)).map(u => u.title))];
     if (unknownTitles.length > 0) throw unknownPriceListError(unknownTitles);
 
-    const writes = updates.map(u => ({
-      itemId: Number(u.itemId),
-      title: String(u.title),
-      remove: isRemoval(u.price),
-      price: isRemoval(u.price) ? undefined : (u.price as number | string),
-      currency: String(u.currency || 'IRR'),
-    }));
+    const writes = updates.map(u => ({ itemId: u.itemId, title: u.title, remove: u.remove === true, price: u.price, currency: u.currency }));
     const result = await ItemPricingService.applyPriceWrites(tx, writes, strategies);
     if (result.changes.length > 0) {
       await logActivity({

@@ -5,6 +5,7 @@ import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js'
 import { DocumentService } from '../document.service.js';
 import { money, Money } from '../../lib/money.js';
 import { WAC_COLUMNS, extractRowPriceColumns, unknownPriceColumnMessage } from '../../lib/items/excelPriceColumns.js';
+import { parsePriceAmount, priceCurrencyOf } from '../../lib/items/priceInput.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 export { codeFormatError } from '../../lib/items/itemCodeFormat.js';
 
@@ -194,18 +195,30 @@ export function sameFieldValue(a: unknown, b: unknown): boolean {
   return String(a ?? '') === String(b ?? '');
 }
 
-export type RowPrice = { price: number; currency: string };
+export type RowPrice = { price: string; currency: string };
 
-export function readRowPrices(row: Row, strategies: string[], push: (message: string) => void): Map<string, RowPrice> {
+/**
+ * قیمت‌های ردیف، یا null وقتی ردیف رد می‌شود. v9.0.166 (TD-657 بخش قیمت، ت۹ الف): هر قیمت پرشده عددی بزرگ‌تر از صفر با
+ * ارزی از فهرست AGENTS §6 است (ارقام فارسی خوانده می‌شوند)؛ وگرنه کل ردیف پیش از هر نوشتن رد می‌شود. پیش‌تر قیمت صفر
+ * ذخیره، «abc» یا «۲٬۵۰۰٬۰۰۰» بی‌صدا نادیده و ارز «XYZ» پذیرفته می‌شد.
+ */
+export function readRowPrices(row: Row, strategies: string[], push: (message: string) => void): Map<string, RowPrice> | null {
   // v9.0.152 (TD-647، ت۱ الف): فقط فهرست‌های قیمت تنظیم‌شده قیمت‌اند؛ ستون دیگرِ «قیمت …» خطای ردیف می‌گیرد و
   // نادیده گرفته می‌شود (پیش‌تر «قیمت میانگین خرید (WAC)» فایل خروجی فهرست قیمت فروش می‌شد)
   const extracted = new Map<string, RowPrice>();
   const priceColumns = extractRowPriceColumns(row, strategies);
   for (const column of priceColumns.unknownColumns) push(unknownPriceColumnMessage(column));
+  const invalid: string[] = [];
   for (const cell of priceColumns.prices) {
-    if (!isNaN(Number(cell.value)) && Number(cell.value) >= 0) {
-      extracted.set(cell.title, { price: Number(cell.value), currency: cell.currency });
-    }
+    const amount = parsePriceAmount(cell.value);
+    const currency = priceCurrencyOf(cell.currency);
+    if (amount === null) invalid.push(`قیمت «${cell.title}» باید عددی بزرگ‌تر از صفر باشد (مقدار فایل: «${String(cell.value)}»)`);
+    else if (currency === null) invalid.push(`ارز «${cell.currency}» برای قیمت «${cell.title}» پشتیبانی نمی‌شود؛ یکی از IRR، USD، EUR، AED یا GBP را بنویسید`);
+    else extracted.set(cell.title, { price: amount, currency });
+  }
+  if (invalid.length > 0) {
+    push(`${invalid.join('؛ ')}. این ردیف ثبت نشد.`);
+    return null;
   }
   return extracted;
 }

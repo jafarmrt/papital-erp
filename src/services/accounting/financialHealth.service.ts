@@ -12,7 +12,7 @@ import { buildOpeningVoucherHealthTest, findOpeningVoucherMismatches } from '../
 import { buildReservedWarehouseCodeHealthTest, findReservedCodeWarehouses } from '../inventory/reservedWarehouseCode.js';
 import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
 import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
-import { buildDuplicateActivePriceHealthTest, findDuplicateActivePrices } from '../items/itemPriceIntegrity.js';
+import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1126,6 +1126,11 @@ export class FinancialHealthService {
     const duplicatePriceTest = buildDuplicateActivePriceHealthTest(await findDuplicateActivePrices());
     overallScore += duplicatePriceTest.scoreImpact;
     tests.push(duplicatePriceTest);
+
+    // آزمون ۲۷: v9.0.166 (TD-657) قیمت فعال با مبلغ صفر یا منفی یا ارز بیرون از فهرست §6 (فقط فهرست، بی تغییر خودکار)
+    const invalidPriceTest = buildInvalidActivePriceHealthTest(await findInvalidActivePrices());
+    overallScore += invalidPriceTest.scoreImpact;
+    tests.push(invalidPriceTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
