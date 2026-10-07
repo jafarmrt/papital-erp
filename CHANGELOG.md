@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.239 — Workshop Schedule Logs Are Dated by the Work Day
+- **Workshop Schedule Logs Are Dated by the Work Day (TD-747):** «ثبت کارمزد» in the project workshop schedule dated a work log by the row or project start date, so today's work landed in another payroll month; the tab now has a Jalali work-date picker defaulting to today in the display time zone, and both the row and the stage batch log use it.
+
 ### v9.0.238 — A Workshop Schedule Row Is Logged Once
 - **A Workshop Schedule Row Is Logged Once (TD-736):** the «logged» flag of a workshop schedule row lived only in the browser, so reopening the tab logged and paid the same work twice; the server now writes the log id into the schedule row under the project row lock, refuses a second or concurrent log of the row with 409, and frees the row when its log is deleted or moved.
 

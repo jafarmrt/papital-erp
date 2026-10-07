@@ -9,7 +9,8 @@ import {
 } from '../../types';
 import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
-import { extractDateString, formatPersianPrice, errorMessageOf, isoToJalaliDate, formatPersianDate } from '../../utils';
+import { extractDateString, formatPersianPrice, errorMessageOf, isoToJalaliDate, formatPersianDate, getTodayIsoDate } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import {
   isScheduleRowLogged, scheduleLogItem, withPieceworkTask, withScheduleLogLink, withScheduleRowIds,
@@ -49,6 +50,8 @@ export default function ProjectScheduleTab({
   const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
   const [loggingTaskId, setLoggingTaskId] = useState<string | null>(null);
   const [batchLoggingStageId, setBatchLoggingStageId] = useState<number | null>(null);
+  // v9.0.239 (TD-747، تصمیم ت۶ الف بسته ۱۱): روز کارکرد «ثبت کارمزد»، پیش‌فرض امروز در منطقه زمانی نمایش؛ نه تاریخ شروع کار یا پروژه
+  const [logDate, setLogDate] = useState<string>(() => getTodayIsoDate());
 
   // Load latest presets and personnel if missing
   useEffect(() => {
@@ -429,7 +432,7 @@ export default function ProjectScheduleTab({
         projectId: project.id,
         ref,
         row,
-        date: row.startDate || new Date().toLocaleDateString('fa-IR'),
+        date: logDate || getTodayIsoDate(),
         notes: `کارکرد پروژه ${project.project_code || project.title} - ${row.taskTitle}`
       })]);
       toast.success(`کارکرد «${row.taskTitle}» برای ${row.assignedPersonnelName || 'پرسنل'} در ماژول کارمزدی ثبت شد.`);
@@ -469,7 +472,7 @@ export default function ProjectScheduleTab({
             projectId: project.id,
             ref,
             row: t,
-            date: t.startDate || new Date().toLocaleDateString('fa-IR'),
+            date: logDate || getTodayIsoDate(),
             notes: `کارکرد مرحله «${stageTitle}» پروژه ${project.project_code || project.title} - ${t.taskTitle}`
           }));
         });
@@ -571,6 +574,19 @@ export default function ProjectScheduleTab({
             ذخیره برنامه‌ریزی
           </button>
         </div>
+      </div>
+
+      {/* v9.0.239 (TD-747): تاریخ کارکردهایی که این زبانه به حقوق می‌فرستد */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 flex flex-wrap items-center gap-2">
+        <Calendar className="w-4 h-4 text-emerald-700 shrink-0" />
+        <span className="font-bold text-emerald-900 text-[11px]">تاریخ کارکرد برای «ثبت کارمزد»:</span>
+        <JalaliDateInput
+          value={logDate}
+          onChange={iso => setLogDate(iso || getTodayIsoDate())}
+          containerClassName="w-36"
+          className="w-full px-2 py-1 text-xs border border-emerald-300 rounded-lg bg-white text-center"
+        />
+        <span className="text-[10px] text-emerald-800">کارکرد با همین تاریخ در حقوق ماه آن حساب می‌شود؛ پیش‌فرض امروز است.</span>
       </div>
 
       {/* Breakdown per Stage */}
