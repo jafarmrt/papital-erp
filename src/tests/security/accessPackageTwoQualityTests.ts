@@ -21,7 +21,7 @@ export async function runAccessPackageTwoQualityTests(shouldRun: ShouldRun): Pro
   if (shouldRun('sec_profile_fields_bounded_td_533', 'security', 'td533', 'profile', 'package2')) {
     await runCase(results, {
       id: 'sec_profile_fields_bounded_td_533',
-      name: 'v9.0.165: the profile takes only an uploaded avatar and a name of at most 100 characters (TD-533)',
+      name: 'v9.0.222: the profile takes only an uploaded avatar and a name of at most 100 characters (TD-533)',
       details: 'B02-18: PUT /users/profile stored any avatar string (an outside tracker URL, a million characters) and any name length, and list-simple sent them to every signed-in user; now an outside URL or other text is refused with 400, a new image goes to /uploads, a /uploads path of this system is kept, and a name over 100 characters is refused by the profile, POST /users and PUT /users/:id',
     }, async (h, wrong) => {
       const member = await h.sessionWith(['documents.view']);
@@ -55,7 +55,7 @@ export async function runAccessPackageTwoQualityTests(shouldRun: ShouldRun): Pro
   if (shouldRun('sec_list_simple_role_name_td_534', 'security', 'td534', 'list-simple', 'package2')) {
     await runCase(results, {
       id: 'sec_list_simple_role_name_td_534',
-      name: 'v9.0.166: the simple user list gives the role\'s Persian name, never its code (TD-534)',
+      name: 'v9.0.223: the simple user list gives the role\'s Persian name, never its code (TD-534)',
       details: 'B02-19: GET /users/list-simple, open to every signed-in user, sent each user\'s role code (for example cfo_accountant) while GET /users was 403 for the same reader; now no row has a role code, each row carries the stored name of its role (the system admin «مدیر سیستم» when its role row has no name) and the user name stays for mentions',
     }, async (h, wrong) => {
       const reader = await h.sessionWith(['daily_logs.create']);
@@ -84,7 +84,7 @@ export async function runAccessPackageTwoQualityTests(shouldRun: ShouldRun): Pro
   if (shouldRun('sec_login_event_role_name_td_540', 'security', 'td540', 'audit', 'package2')) {
     await runCase(results, {
       id: 'sec_login_event_role_name_td_540',
-      name: 'v9.0.167: the login event and the test-user health check name the role, not its code (TD-540)',
+      name: 'v9.0.224: the login event and the test-user health check name the role, not its code (TD-540)',
       details: 'B02-25: the audit page showed the role code stored in a login event and the synthetic_test_users health check listed «نقش: <code>» with «(TD-521)»; now the login event stores roleName, the stored name of the role, beside the code, and the health check shows that name',
     }, async (h, wrong) => {
       const member = await h.sessionWith(['documents.view']);

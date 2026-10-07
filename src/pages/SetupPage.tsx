@@ -69,7 +69,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
       setError('نام کاربری باید حداقل ۳ کاراکتر باشد');
       return;
     }
-    // v9.0.159 (TD-532): همان کمینه مشترک سرور (۸ نویسه)، نه ۶
+    // v9.0.217 (TD-532): همان کمینه مشترک سرور (۸ نویسه)، نه ۶
     const passwordError = passwordLengthError(password);
     if (passwordError) {
       setError(passwordError);

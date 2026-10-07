@@ -1,39 +1,69 @@
 import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { eq, and, desc, inArray } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { items, itemPrices } from '../db/schema.js';
+import { itemPrices } from '../db/schema.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
+import { fin } from '../lib/financialDecimal.js';
+import { PRICE_AMOUNT_MESSAGE, PRICE_CURRENCIES, PRICE_CURRENCY_MESSAGE, normalizePriceCurrency } from '../lib/items/priceInput.js';
 import { authorizePermission } from '../middleware/authorize.js';
-import { logger } from '../middleware/logger.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { ItemsService } from '../services/items.service.js';
-import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../utils.js';
+import { ItemPricingService } from '../services/items/itemPricing.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { money } from '../lib/money.js';
+import { priceListMatcher } from '../lib/items/excelPriceColumns.js';
+import { NotFoundError, ValidationError } from '../errors/customErrors.js';
 
 const router = Router();
+
+function unknownPriceListError(titles: string[]): ValidationError {
+  return new ValidationError(
+    `«${titles.join('»، «')}» فهرست قیمت تنظیم‌شده‌ای نیست. قیمت فقط برای فهرست‌های قیمت تعریف‌شده در تنظیمات ثبت می‌شود.`,
+    { titles },
+    'PRICE_LIST_NOT_CONFIGURED',
+  );
+}
+
+/**
+ * v9.0.176 (TD-657 بخش قیمت، تصمیم ت۹ الف): مبلغ قیمت با `decimalInput` و بزرگ‌تر از صفر، ارز فقط از فهرست AGENTS §6
+ * (`PRICE_CURRENCIES`)، و حذف قیمت در `batch-update` فقط با `remove: true`. پیش‌تر قیمت منفی ذخیره، «abc» صفر و قیمت صفر
+ * یا خالی حذف می‌شد (صفحه قیمت‌گذاری برای عدد نامعتبر صفر می‌فرستاد و قیمت را پاک می‌کرد) و ارز «XYZ» پذیرفته می‌شد.
+ */
+const priceAmount = decimalInput('قیمت')
+  .refine(v => v !== undefined, 'قیمت الزامی است')
+  .refine(v => v === undefined || fin(v).isPositive(), PRICE_AMOUNT_MESSAGE);
+const priceCurrency = z.preprocess(normalizePriceCurrency, z.enum(PRICE_CURRENCIES, { message: PRICE_CURRENCY_MESSAGE }));
 
 export const itemPriceSchema = z.object({
   body: z.object({
     title: z.string().min(1, 'عنوان قیمت الزامی است'),
-    price: z.union([z.string(), z.number()]),
-    currency: z.string().optional()
+    price: priceAmount,
+    currency: priceCurrency
   }),
   params: z.object({
     id: numericIdString
   })
 });
 
+const batchPriceUpdate = z.object({
+  itemId: z.coerce.number().int('شناسه کالا باید عدد صحیح باشد').positive('شناسه کالا باید مثبت باشد'),
+  title: z.string().min(1, 'عنوان قیمت الزامی است'),
+  remove: z.literal(true).optional(),
+  price: z.union([z.number(), z.string()]).optional(),
+  currency: priceCurrency
+}).superRefine((u, ctx) => {
+  if (u.remove) {
+    if (u.price !== undefined && u.price !== '') ctx.addIssue({ code: 'custom', path: ['price'], message: 'حذف قیمت مبلغ نمی‌گیرد.' });
+    return;
+  }
+  const parsed = priceAmount.safeParse(u.price);
+  if (!parsed.success) ctx.addIssue({ code: 'custom', path: ['price'], message: parsed.error.issues[0]?.message ?? PRICE_AMOUNT_MESSAGE });
+}).transform(u => ({ ...u, price: u.remove ? undefined : priceAmount.safeParse(u.price).data }));
+
 export const batchPriceUpdateSchema = z.object({
   body: z.object({
-    updates: z.array(z.object({
-      itemId: z.union([z.number(), z.string()]),
-      title: z.string().min(1, 'عنوان قیمت الزامی است'),
-      price: z.union([z.number(), z.string(), z.null()]).optional(),
-      currency: z.string().optional()
-    })).min(1, 'لیست تغییرات قیمت خالی است')
+    updates: z.array(batchPriceUpdate).min(1, 'فهرست تغییرات قیمت خالی است')
   })
 });
 
@@ -80,203 +110,87 @@ router.get('/items/:id/prices/history', authorizePermission(...READ_PERMISSIONS.
 }));
 
 // POST /items/:id/prices
+// v9.0.175 (TD-660): نوشتن در `ItemPricingService.applyPriceWrites`، درون تراکنش و زیر قفل ردیف کالا، با ردیف ممیزی در همان تراکنش
 router.post('/items/:id/prices', authorizePermission('products.edit_price'), validate(itemPriceSchema), asyncHandler(async (req, res) => {
-  try {
-    const { title, price, currency = 'IRR' } = req.body;
-    const itemId = Number(req.params.id);
-    const cleanTitle = normalizeStrategyTitle(String(title));
-    const canKey = getStrategyCanonicalKey(cleanTitle);
-
-    const [targetItem] = await orm.select({ id: items.id, name: items.name, code: items.code })
-      .from(items)
-      .where(and(eq(items.id, itemId), eq(items.isDeleted, 0)));
-
-    if (!targetItem) {
-      return res.status(404).json({ error: 'کالای مورد نظر یافت نشد یا حذف شده است' });
+  const { title, price, currency = 'IRR' } = req.body;
+  const itemId = Number(req.params.id);
+  const saved = await orm.transaction(async (tx) => {
+    const strategies = await ItemPricingService.getPricingStrategies(tx);
+    // v9.0.152 (TD-647، ت۱ الف): فقط فهرست قیمت تنظیم‌شده
+    const configuredTitle = priceListMatcher(strategies).match(String(title));
+    if (!configuredTitle) throw unknownPriceListError([String(title)]);
+    const result = await ItemPricingService.applyPriceWrites(tx, [{ itemId, title: configuredTitle, price, currency }], strategies);
+    if (result.missingItemIds.length > 0) throw new NotFoundError('کالای مورد نظر یافت نشد یا حذف شده است');
+    const change = result.changes[0];
+    if (change) {
+      await logActivity({
+        req,
+        tx,
+        action: 'UPDATE',
+        entity: 'قیمت کالا',
+        entityId: itemId,
+        description: `تنظیم قیمت "${configuredTitle}" برای کالای "${change.itemName}" به مبلغ ${price} ${currency}`,
+        details: {
+          itemId,
+          itemCode: change.itemCode,
+          itemName: change.itemName,
+          title: configuredTitle,
+          currency,
+          before: change.beforePrice ? { price: change.beforePrice, currency: change.beforeCurrency } : null,
+          after: { price: change.afterPrice, currency: change.currency }
+        }
+      });
     }
-
-    const existingPrices = await orm.select()
-      .from(itemPrices)
-      .where(and(eq(itemPrices.itemId, itemId), eq(itemPrices.isDeleted, 0)));
-
-    const matchingActive = existingPrices.filter(p => getStrategyCanonicalKey(p.title) === canKey);
-    const nowIso = new Date().toISOString();
-
-    for (const m of matchingActive) {
-      await orm.update(itemPrices)
-        .set({ isDeleted: 1, updatedAt: nowIso })
-        .where(eq(itemPrices.id, m.id));
-    }
-
-    const [inserted] = await orm.insert(itemPrices).values({
-      itemId,
-      title: cleanTitle,
-      price: money(price),
-      currency: String(currency || 'IRR'),
-      createdAt: nowIso,
-      updatedAt: nowIso,
-      isDeleted: 0
-    }).returning({ id: itemPrices.id });
-
-    await logActivity({
-      req,
-      action: 'UPDATE',
-      entity: 'قیمت کالا',
-      entityId: itemId,
-      description: `تنظیم قیمت "${cleanTitle}" برای کالای "${targetItem.name}" به مبلغ ${price} ${currency}`,
-      details: {
-        itemId,
-        itemCode: targetItem.code,
-        itemName: targetItem.name,
-        title: cleanTitle,
-        currency,
-        before: matchingActive[0] ? { price: matchingActive[0].price, currency: matchingActive[0].currency } : null,
-        after: { price: Number(price), currency: String(currency || 'IRR') }
-      }
-    });
-
-    res.json({ id: inserted.id, itemId, title: cleanTitle, price: Number(price), currency });
-  } catch (err) {
-    throw err;
-  }
+    return { id: result.priceIds[0], title: configuredTitle };
+  });
+  res.json({ id: saved.id, itemId, title: saved.title, price: Number(price), currency });
 }));
 
 // DELETE /items/:id/prices/:priceId — حذف شد (v4.0.29): هیچ فراخوانی frontend ندارد؛
 // حذف قیمت‌ها از طریق batch-update انجام می‌شود.
 
 // POST /items/prices/batch-update
+// v9.0.175 (TD-660): همه تغییرها و ردیف ممیزی‌شان در یک تراکنش، زیر قفل ردیف کالاها (پیش‌تر قفل ردیف قیمت‌های موجود جلوی
+// درج هم‌زمان قیمت تازه را نمی‌گرفت و ممیزی بیرون از تراکنش نوشته می‌شد)
 router.post('/items/prices/batch-update', authorizePermission('products.edit_price'), validate(batchPriceUpdateSchema), asyncHandler(async (req, res) => {
-  try {
-    const { updates } = req.body;
-    const nowIso = new Date().toISOString();
-    const auditChanges: Array<Record<string, unknown>> = [];
+  const updates = req.body.updates as Array<{ itemId: number; title: string; remove?: true; price?: string; currency: string }>;
+  const changes = await orm.transaction(async (tx) => {
+    const strategies = await ItemPricingService.getPricingStrategies(tx);
+    // v9.0.152 (TD-647، ت۱ الف): قیمت فقط برای فهرست تنظیم‌شده ثبت می‌شود؛ حذف قیمت هر عنوانی را می‌پذیرد تا ردیف‌های
+    // پیشینِ عنوان ناشناخته پاک‌شدنی بمانند. پیش‌تر ورود سریع «موجودی کل» را فهرست قیمت فروش می‌کرد.
+    // v9.0.176 (TD-657): حذف فقط با `remove: true`؛ قیمت صفر، منفی یا نامعتبر در اعتبارسنجی بدنه ۴۰۰ است
+    const matcher = priceListMatcher(strategies);
+    const unknownTitles = [...new Set(updates.filter(u => !u.remove && !matcher.match(u.title)).map(u => u.title))];
+    if (unknownTitles.length > 0) throw unknownPriceListError(unknownTitles);
 
-    await orm.transaction(async (tx) => {
-      const itemIds = Array.from(new Set(updates.map((u: { itemId: unknown }) => Number(u.itemId)).filter((id: number) => Boolean(id) && !isNaN(id)))) as number[];
-      if (itemIds.length === 0) return;
-
-      const validItems = await tx.select({ id: items.id, name: items.name, code: items.code })
-        .from(items)
-        .where(and(inArray(items.id, itemIds), eq(items.isDeleted, 0)));
-      const validItemMap = new Map<number, { id: number; name: string; code: string }>(validItems.map(i => [i.id, i]));
-
-      // TD-164: واکشی دسته‌ای کلیه قیمت‌های فعلی اقلام تحت قفل سطری با یک کوری واحد
-      const allExistingPrices = await tx.select()
-        .from(itemPrices)
-        .where(and(inArray(itemPrices.itemId, itemIds), eq(itemPrices.isDeleted, 0)))
-        .for('update');
-
-      const pricesByItemId = new Map<number, Array<typeof itemPrices.$inferSelect>>();
-      for (const p of allExistingPrices) {
-        const list = pricesByItemId.get(p.itemId) || [];
-        list.push(p);
-        pricesByItemId.set(p.itemId, list);
-      }
-
-      for (const item of updates) {
-        const { itemId, title, price, currency = 'IRR' } = item;
-        const numItemId = Number(itemId);
-        const itemObj = validItemMap.get(numItemId);
-        if (!numItemId || !title || !itemObj) continue;
-
-        const cleanTitle = normalizeStrategyTitle(String(title));
-        const canKey = getStrategyCanonicalKey(cleanTitle);
-
-        const existingList = pricesByItemId.get(numItemId) || [];
-        const matchingActive = existingList.filter(p => getStrategyCanonicalKey(p.title) === canKey);
-
-        if (price === null || price === undefined || price === '' || Number(price) <= 0) {
-          if (matchingActive.length > 0) {
-            for (const m of matchingActive) {
-              await tx.update(itemPrices)
-                .set({ isDeleted: 1, updatedAt: nowIso })
-                .where(eq(itemPrices.id, m.id));
-            }
-            auditChanges.push({
-              itemId: numItemId,
-              itemCode: itemObj.code,
-              itemName: itemObj.name,
-              title: cleanTitle,
-              beforePrice: matchingActive[0].price,
-              afterPrice: 0,
-              action: 'DELETED'
-            });
-          }
-        } else {
-          const priceVal = money(price);
-          const strCurrency = String(currency || 'IRR');
-          const primaryActive = matchingActive[0];
-
-          if (primaryActive) {
-            if (!primaryActive.price.equals(priceVal) || primaryActive.currency !== strCurrency) {
-              for (const m of matchingActive) {
-                await tx.update(itemPrices)
-                  .set({ isDeleted: 1, updatedAt: nowIso })
-                  .where(eq(itemPrices.id, m.id));
-              }
-              await tx.insert(itemPrices).values({
-                itemId: numItemId,
-                title: cleanTitle,
-                price: priceVal,
-                currency: strCurrency,
-                createdAt: nowIso,
-                updatedAt: nowIso,
-                isDeleted: 0
-              });
-              auditChanges.push({
-                itemId: numItemId,
-                itemCode: itemObj.code,
-                itemName: itemObj.name,
-                title: cleanTitle,
-                beforePrice: primaryActive.price,
-                afterPrice: priceVal.toNumber(),
-                currency: strCurrency,
-                action: 'UPDATED'
-              });
-            }
-          } else {
-            await tx.insert(itemPrices).values({
-              itemId: numItemId,
-              title: cleanTitle,
-              price: priceVal,
-              currency: strCurrency,
-              createdAt: nowIso,
-              updatedAt: nowIso,
-              isDeleted: 0
-            });
-            auditChanges.push({
-              itemId: numItemId,
-              itemCode: itemObj.code,
-              itemName: itemObj.name,
-              title: cleanTitle,
-              beforePrice: null,
-              afterPrice: priceVal.toNumber(),
-              currency: strCurrency,
-              action: 'CREATED'
-            });
-          }
-        }
-      }
-    });
-
-    if (auditChanges.length > 0) {
+    const writes = updates.map(u => ({ itemId: u.itemId, title: u.title, remove: u.remove === true, price: u.price, currency: u.currency }));
+    const result = await ItemPricingService.applyPriceWrites(tx, writes, strategies);
+    if (result.changes.length > 0) {
       await logActivity({
         req,
+        tx,
         action: 'UPDATE',
         entity: 'قیمت کالا',
-        description: `به‌روزرسانی دسته‌ای ${auditChanges.length} قیمت کالا در سامانه`,
+        description: `به‌روزرسانی دسته‌ای ${result.changes.length} قیمت کالا در سامانه`,
         details: {
-          totalModified: auditChanges.length,
-          changes: auditChanges
+          totalModified: result.changes.length,
+          changes: result.changes.map(c => ({
+            itemId: c.itemId,
+            itemCode: c.itemCode,
+            itemName: c.itemName,
+            title: c.title,
+            beforePrice: c.beforePrice,
+            afterPrice: c.afterPrice ?? 0,
+            ...(c.currency ? { currency: c.currency } : {}),
+            action: c.action
+          }))
         }
       });
     }
+    return result.changes;
+  });
 
-    res.json({ success: true, count: updates.length });
-  } catch (err) {
-    logger.error({ message: 'Error in batch price update', error: err });
-    throw err;
-  }
+  res.json({ success: true, count: updates.length, changed: changes.length });
 }));
 
 export default router;

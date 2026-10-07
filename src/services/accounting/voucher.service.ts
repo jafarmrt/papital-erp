@@ -13,9 +13,11 @@ import { NotFoundError, ValidationError, UnbalancedVoucherError, BusinessLogicEr
 import { FiscalPeriodService } from './fiscalPeriod.service.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { assertVoucherRowsBalanced, isVoucherBalancedForFinalize, resolveManualVoucherRows } from './voucherRowBalance.js';
 
 // v7.0.49 (audit P2-5): ثابت یگانه تلورانس تراز؛ v7.0.76 به src/lib/voucherBalance.ts منتقل شد تا فرم‌ها هم آن را بخوانند
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
+import { assertPostingAccounts } from './postingAccounts.js';
 export { VOUCHER_BALANCE_TOLERANCE };
 
 /** v7.0.72 (audit P3-5): حداکثر ردیف در هر INSERT چندردیفی (۱۲ پارامتر در هر ردیف، زیر سقف ۶۵۵۳۵ پارامتر PostgreSQL) */
@@ -262,10 +264,14 @@ export class VoucherService {
     /** v8.0.19 (TD-271): چکی که این سند در چرخه عمر آن صادر می‌شود */
     sourceChequeId?: number | null;
     sourceBomAllocationId?: number | null;
+    /** v9.0.159 (TD-545): فقط برای اسناد اختتامیه و افتتاحیه‌ای که بستن سال مالی صادر می‌کند */
+    sourceFiscalYear?: number | null;
     currency?: string;
     attachments?: unknown[];
     userId?: number;
     username?: string;
+    /** v9.0.190 (TD-551، ت۷): سند دستی از مسیر اسناد؛ فقط مسیر آن را می‌گذارد، هرگز از بدنه درخواست */
+    manualEntry?: boolean;
     items: {
       accountId: number;
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
@@ -282,23 +288,11 @@ export class VoucherService {
       throw new ValidationError('سند دوبل حسابداری باید حداقل شامل دو ردیف (بدهکار و بستانکار) باشد');
     }
 
-    let sumDebit = fin(0);
-    let sumCredit = fin(0);
-
-    for (const item of data.items) {
-      const d = fin(item.debit);
-      const c = fin(item.credit);
-      if (d.isNegative() || c.isNegative()) throw new ValidationError('مبالغ بدهکار و بستانکار نمی‌توانند منفی باشند');
-      if (d.isZero() && c.isZero()) throw new ValidationError('هر ردیف سند باید دارای مبلغ بدهکار یا بستانکار باشد');
-      sumDebit = sumDebit.add(d);
-      sumCredit = sumCredit.add(c);
-    }
-
-    // Verify double-entry balance — v7.0.49 (audit P2-5): آستانه واحد VOUCHER_BALANCE_TOLERANCE در ثبت و قطعی‌سازی
-    const diff = sumDebit.subtract(sumCredit).abs();
-    if (diff.greaterThan(VOUCHER_BALANCE_TOLERANCE)) {
-      throw new UnbalancedVoucherError(`سند تراز نیست! جمع بدهکار: ${sumDebit.toDisplayString()} و جمع بستانکار: ${sumCredit.toDisplayString()} می‌باشد (اختلاف: ${diff.toDisplayString()})`);
-    }
+    // Verify double-entry balance — v7.0.49 (audit P2-5): آستانه واحد VOUCHER_BALANCE_TOLERANCE در ثبت و قطعی‌سازی؛
+    // v9.0.190 (TD-551، ت۷): سند چندارزی به ریال و سند دستی با ارز و نرخ قطعی هر ردیف
+    const manualRows = data.manualEntry ? resolveManualVoucherRows(data.items, data.currency) : null;
+    const items = manualRows?.rows ?? data.items;
+    const { sumDebit, sumCredit } = manualRows?.totals ?? assertVoucherRowsBalanced(data.items, data.currency);
 
     const executeWork = async (tx: DbExecutor) => {
       // v7.0.137 (TD-248): تاریخ سند میلادی ISO؛ ورودی شمسی یا ارقام فارسی تبدیل و نامعتبر 422 (پیش‌تر خام ذخیره می‌شد)
@@ -308,6 +302,8 @@ export class VoucherService {
       // v7.0.49 (audit P2-5): اسناد اختتامیه هم بررسی می‌شوند؛ در فرایند بستن سال، سال تا پایان همان تراکنش باز
       // است و پس از بستن هیچ سندی (از جمله سند از نوع اختتامیه) وارد آن نمی‌شود
       await this.checkFiscalPeriodOpen(voucherDate, tx);
+      // v9.0.198 (TD-549، B03-07): ردیف سند دستی فقط روی حساب فعال معین یا تفصیلیِ بی زیرحساب فعال
+      if (data.manualEntry) await assertPostingAccounts(tx, items.map(item => item.accountId));
 
       const voucherNum = await this.getNextVoucherNumber(tx);
       const [voucher] = await tx.insert(journalVouchers).values({
@@ -326,6 +322,7 @@ export class VoucherService {
         sourcePayrollId: data.sourcePayrollId ?? null,
         sourceChequeId: data.sourceChequeId ?? null,
         sourceBomAllocationId: data.sourceBomAllocationId ?? null,
+        sourceFiscalYear: data.sourceFiscalYear ?? null,
         currency: data.currency || 'IRR',
         attachments: [],
         createdById: data.userId || null,
@@ -339,7 +336,7 @@ export class VoucherService {
       updateRequestContext({ entityId: `voucher:${voucherNum}`, transactionId: `vch_num_${voucherNum}` });
 
       // Insert items
-      await insertVoucherItems(tx, data.items.map((item, idx) => ({
+      await insertVoucherItems(tx, items.map((item, idx) => ({
         voucherId: voucher.id,
         accountId: item.accountId,
         rowOrder: idx + 1,
@@ -368,6 +365,8 @@ export class VoucherService {
     description?: string;
     status?: 'draft' | 'approved' | 'permanent';
     attachments?: unknown[];
+    /** v9.0.190 (TD-551، ت۷): ویرایش سند دستی از مسیر اسناد؛ فقط مسیر آن را می‌گذارد */
+    manualEntry?: boolean;
     items?: {
       accountId: number;
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
@@ -403,25 +402,16 @@ export class VoucherService {
       let sumCredit = fin(existing.totalCredit);
 
       if (data.items && data.items.length >= 2) {
-        sumDebit = fin(0);
-        sumCredit = fin(0);
-        for (const item of data.items) {
-          const d = fin(item.debit);
-          const c = fin(item.credit);
-          if (d.isNegative() || c.isNegative()) throw new ValidationError('مبالغ بدهکار و بستانکار نمی‌توانند منفی باشند');
-          if (d.isZero() && c.isZero()) throw new ValidationError('هر ردیف سند باید دارای مبلغ بدهکار یا بستانکار باشد');
-          sumDebit = sumDebit.add(d);
-          sumCredit = sumCredit.add(c);
-        }
-        const diff = sumDebit.subtract(sumCredit).abs();
-        if (diff.greaterThan(VOUCHER_BALANCE_TOLERANCE)) {
-          throw new UnbalancedVoucherError(`سند تراز نیست! جمع بدهکار: ${sumDebit.toDisplayString()} و جمع بستانکار: ${sumCredit.toDisplayString()} می‌باشد (اختلاف: ${diff.toDisplayString()})`);
-        }
+        // v9.0.190 (TD-551، ت۷): ارز ردیف بی ارز، ارز ذخیره‌شده سند است (سرآیند در ویرایش عوض نمی‌شود)
+        const manualRows = data.manualEntry ? resolveManualVoucherRows(data.items, existing.currency) : null;
+        const items = manualRows?.rows ?? data.items;
+        ({ sumDebit, sumCredit } = manualRows?.totals ?? assertVoucherRowsBalanced(data.items, existing.currency));
+        if (data.manualEntry) await assertPostingAccounts(tx, items.map(item => item.accountId)); // v9.0.198 (TD-549)
 
         // V6.0.21 (TD-157): Soft-delete old items instead of physical hard delete (RULE 09)
         await tx.update(journalVoucherItems).set({ isDeleted: 1 }).where(and(eq(journalVoucherItems.voucherId, id), eq(journalVoucherItems.isDeleted, 0)));
 
-        await insertVoucherItems(tx, data.items.map((item, idx) => ({
+        await insertVoucherItems(tx, items.map((item, idx) => ({
           voucherId: id,
           accountId: item.accountId,
           rowOrder: idx + 1,
@@ -500,6 +490,8 @@ export class VoucherService {
     username?: string;
     externalTx: DbExecutor;
     allowReversalOfReversal?: boolean;
+    /** فقط بازگشایی سال مالی (v9.0.160، TD-559) */
+    allowYearEndClosing?: boolean;
   }): Promise<{ action: 'deleted' | 'reversed'; reversalVoucherId: number | null }> {
     const tx = params.externalTx;
     const [existing] = await tx.select({ id: journalVouchers.id, status: journalVouchers.status, date: journalVouchers.date })
@@ -525,6 +517,7 @@ export class VoucherService {
       username: params.username,
       externalTx: tx,
       allowReversalOfReversal: params.allowReversalOfReversal,
+      allowYearEndClosing: params.allowYearEndClosing,
     });
     return { action: 'reversed', reversalVoucherId: reversal?.id ?? null };
   }
@@ -557,6 +550,20 @@ export class VoucherService {
   }
 
   /**
+   * v9.0.160 (TD-559، B03-17): سندی که بستن سال مالی صادر کرده (پیوند `source_fiscal_year`، TD-545) فقط با بازگشایی همان
+   * سال برمی‌گردد. پیش‌تر نگهبان نوع `closing` را می‌سنجید: افتتاحیه دستی‌ای که فرم با نوع اختتامیه ذخیره کرده بود دیگر
+   * معکوس و اصلاح نمی‌شد، و سند افتتاحیه بستن سال (نوع `opening`) به پیش‌نویس برمی‌گشت و حذف می‌شد.
+   */
+  private static assertNotYearEndClosing(voucher: { voucherNumber: string | number; sourceFiscalYear?: number | null }, action: string): void {
+    if (voucher.sourceFiscalYear === null || voucher.sourceFiscalYear === undefined) return;
+    throw new ConflictError(
+      `سند شماره «${voucher.voucherNumber}» را بستن سال مالی ${voucher.sourceFiscalYear} صادر کرده است و ${action}؛ برای تغییر آن، سال ${voucher.sourceFiscalYear} را بازگشایی کنید.`,
+      { sourceFiscalYear: voucher.sourceFiscalYear },
+      'FISCAL_CLOSING_VOUCHER_LOCKED'
+    );
+  }
+
+  /**
    * Reverse Voucher Pattern (صدور سند عکس / عطف / برگشت)
    * Inverts all debit and credit rows to completely neutralize the financial impact of a voucher.
    */
@@ -569,6 +576,8 @@ export class VoucherService {
       username?: string;
       externalTx?: DbExecutor;
       allowReversalOfReversal?: boolean;
+      /** فقط بازگشایی سال مالی: سند بستن سال را برمی‌گرداند (برگشت نوع و پیوند همان سال را می‌گیرد) */
+      allowYearEndClosing?: boolean;
     }
   ): Promise<JournalVoucher> {
 
@@ -580,10 +589,8 @@ export class VoucherService {
 
       if (!original) throw new NotFoundError('سند مبدا یافت نشد یا قبلاً حذف شده است');
 
-      // ممانعت از ابطال اسناد اختتامیه
-      if (original.voucherType === 'closing') {
-        throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل ابطال مستقیم نیست.`);
-      }
+      // v9.0.160 (TD-559): سند بستن سال فقط با بازگشایی همان سال برمی‌گردد (پیوند، نه نوع سند)
+      if (!params.allowYearEndClosing) this.assertNotYearEndClosing(original, 'مستقیم ابطال نمی‌شود');
       // v8.0.70 (TD-323، قاعده TD-251): سند پیش‌نویس سند معکوس تأییدشده نمی‌گیرد؛ پیش‌تر می‌گرفت و دفاتر تأییدشده فقط
       // سند معکوس را می‌دیدند
       if (original.status === 'draft') {
@@ -644,7 +651,9 @@ export class VoucherService {
         voucherNumber: nextNumber,
         manualVoucherNumber: '',
         date: reversalDate,
-        voucherType: 'adjustment',
+        // v9.0.160 (TD-559): برگشت سند بستن سال (بازگشایی) نوع و پیوند همان سال را می‌گیرد تا گزارش‌ها جفت را با هم بشمارند
+        voucherType: original.sourceFiscalYear != null ? original.voucherType : 'adjustment',
+        sourceFiscalYear: original.sourceFiscalYear ?? null,
         status: 'approved',
         totalDebit: money(original.totalCredit),
         totalCredit: money(original.totalDebit),
@@ -732,9 +741,7 @@ export class VoucherService {
         throw new BusinessLogicError(`سند قطعی شماره «${original.voucherNumber}» غیرقابل اصلاح یا ابطال است.`);
       }
 
-      if (original.voucherType === 'closing') {
-        throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل اصلاح مستقیم نیست.`);
-      }
+      this.assertNotYearEndClosing(original, 'مستقیم اصلاح نمی‌شود'); // v9.0.121 (TD-559)
       if (original.status === 'draft') { // v8.0.70 (TD-323)
         throw new BusinessLogicError(`سند پیش‌نویس شماره «${original.voucherNumber}» در دفاتر نیامده است و برگشت نمی‌خورد؛ آن را ویرایش یا حذف کنید.`);
       }
@@ -789,21 +796,10 @@ export class VoucherService {
         description: `برگشت ردیف ${item.rowOrder || idx + 1}: ${item.description || original.description}`,
       })));
 
-      // 2. Validate new items
-      let sumDebit = fin(0);
-      let sumCredit = fin(0);
-      for (const it of params.newItems) {
-        const d = fin(it.debit);
-        const c = fin(it.credit);
-        if (d.isNegative() || c.isNegative()) throw new Error('مبالغ بدهکار و بستانکار نمی‌توانند منفی باشند');
-        if (d.isZero() && c.isZero()) throw new Error('هر ردیف سند باید دارای مبلغ باشد');
-        sumDebit = sumDebit.add(d);
-        sumCredit = sumCredit.add(c);
-      }
-      const diff = sumDebit.subtract(sumCredit).abs();
-      if (diff.greaterThan(VOUCHER_BALANCE_TOLERANCE)) {
-        throw new Error(`سند اصلاحی تراز نیست! جمع بدهکار: ${sumDebit.toDisplayString()}، جمع بستانکار: ${sumCredit.toDisplayString()} (اختلاف: ${diff.toDisplayString()})`);
-      }
+      // 2. Validate new items — v9.0.190 (TD-551، ت۷): ردیف‌های جایگزین قاعده سند دستی را دارند (ارز بی ارز = ارز
+      // سند اصلی، نرخ ردیف غیرریالی الزامی، تراز چندارزی به ریال)؛ پیش‌تر ردیف بی ارز ریالی با نرخ ۱ ذخیره می‌شد
+      const { rows: newItems, totals: { sumDebit, sumCredit } } = resolveManualVoucherRows(params.newItems, original.currency);
+      await assertPostingAccounts(tx, newItems.map(item => item.accountId)); // v9.0.198 (TD-549): ردیف جایگزین هم فقط روی حساب قابل ثبت
 
       // 3. Create Corrected Voucher
       const corrNumber = await this.getNextVoucherNumber(tx);
@@ -826,7 +822,7 @@ export class VoucherService {
         createdByUsername: params.username || '',
       }).returning();
 
-      await insertVoucherItems(tx, params.newItems.map((item, idx) => ({
+      await insertVoucherItems(tx, newItems.map((item, idx) => ({
         voucherId: corrVoucher.id,
         accountId: item.accountId,
         rowOrder: idx + 1,
@@ -908,9 +904,7 @@ export class VoucherService {
         throw new BusinessLogicError(`سند قطعی شماره «${original.voucherNumber}» از نظر قانونی و مالی غیرقابل ابطال یا بازثبت است.`);
       }
 
-      if (original.voucherType === 'closing') {
-        throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل ابطال یا بازثبت نیست.`);
-      }
+      this.assertNotYearEndClosing(original, 'ابطال و بازثبت نمی‌شود'); // v9.0.121 (TD-559)
       if (original.status === 'draft') { // v8.0.70 (TD-323)
         throw new BusinessLogicError(`سند پیش‌نویس شماره «${original.voucherNumber}» در دفاتر نیامده است و برگشت نمی‌خورد؛ آن را ویرایش یا حذف کنید.`);
       }
@@ -1046,7 +1040,7 @@ export class VoucherService {
 
       await this.checkFiscalPeriodOpen(existing.date, tx);
 
-      if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) > VOUCHER_BALANCE_TOLERANCE) {
+      if (!(await isVoucherBalancedForFinalize(tx, existing))) { // v9.0.190 (TD-551): سند چندارزی به ریال
         throw new UnbalancedVoucherError('امکان قطعی‌سازی سند نامتراز وجود ندارد');
       }
 
@@ -1073,7 +1067,7 @@ export class VoucherService {
         const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
         if (existing && existing.isDeleted === 0 && existing.status !== 'permanent') {
           await this.checkFiscalPeriodOpen(existing.date, tx);
-          if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) <= VOUCHER_BALANCE_TOLERANCE) {
+          if (await isVoucherBalancedForFinalize(tx, existing)) {
             await tx.update(journalVouchers).set({
               status: 'permanent',
               approvedById: userId || null,
@@ -1126,7 +1120,10 @@ export class VoucherService {
   static async applyVoucherStatus(tx: DbExecutor, id: number, status: 'draft' | 'approved' | 'permanent', userId?: number): Promise<void> {
     const [existing] = await tx.select().from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
     if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
-    if (status === 'draft' && existing.status !== 'draft') await this.assertNoActiveReversal(tx, existing, 'به پیش‌نویس برنمی‌گردد');
+    if (status === 'draft' && existing.status !== 'draft') {
+      this.assertNotYearEndClosing(existing, 'به پیش‌نویس برنمی‌گردد'); // v9.0.121 (TD-559)
+      await this.assertNoActiveReversal(tx, existing, 'به پیش‌نویس برنمی‌گردد');
+    }
     if (existing.status === 'permanent' && status !== 'permanent') {
       throw new BusinessLogicError('اسناد دائم و قطعی‌شده قابل تغییر وضعیت به پیش‌نویس یا تایید نشده نیستند. لطفاً از گزینه «صدور سند برگشتی (ابطال سند)» یا «سند اصلاحی» استفاده فرمایید.');
     }
@@ -1134,7 +1131,7 @@ export class VoucherService {
     await this.checkFiscalPeriodOpen(existing.date, tx);
 
     if (status === 'permanent') {
-      if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) > VOUCHER_BALANCE_TOLERANCE) {
+      if (!(await isVoucherBalancedForFinalize(tx, existing))) { // v9.0.190 (TD-551): سند چندارزی به ریال
         throw new UnbalancedVoucherError('امکان قطعی‌سازی سند نامتراز وجود ندارد');
       }
     }

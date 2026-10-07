@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
-import { Item, ItemPrice, User } from '../types';
+import { Item, ItemPrice } from '../types';
 import { 
   Search, Save, LayoutGrid, List,
   Download, Upload, AlertCircle, Check, RefreshCw, FileSpreadsheet, Tag
@@ -11,21 +11,25 @@ import {
   cn, 
   formatPersianNumber, 
   formatPersianDateTime, 
-  normalizePersianText,
   getStrategyCanonicalKey,
   formatStrategyDisplayTitle,
   cleanDecimalString
 } from '../utils';
 import { useSearch } from '../SearchContext';
-import { useAppCurrency } from '../hooks/useAppCurrency';
+import { useHasPermission } from '../contexts/AuthContext';
 import { QUERY_KEYS } from '../lib/queryKeys';
 import PriceHistoryModal from '../components/pricing/PriceHistoryModal';
 import { PricingGridView, PricingTableView } from '../components/pricing/PricingViews';
 import * as xlsx from 'xlsx';
 import UnifiedExcelModal from '../components/UnifiedExcelModal';
+import { buildQuickPriceUpdates } from '../lib/items/quickPriceImport';
+import { priceSaveUpdates, type PriceFieldEdit } from '../lib/items/priceInput';
+import { ITEM_WAC_COLUMN, priceExportCells } from '../lib/items/excelPriceColumns';
+import { priceMarginPercent } from '../lib/items/priceMargin';
 
-export default function PricingPage({ user }: { user: User }) {
-  const appCurrency = useAppCurrency();
+export default function PricingPage() {
+  // v9.0.209 (O14): ورود سریع، فیلدهای قیمت و ذخیره فقط با مجوز مسیرهای ذخیره قیمت سرور، نه نقش «viewer»
+  const canEditPrices = useHasPermission('products.edit_price');
   const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
   const [tab, setTab] = useState<'product'|'raw_material'>('product');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -206,23 +210,17 @@ export default function PricingPage({ user }: { user: User }) {
     setSavingId(itemId);
     const itemLocal = localEdits[itemId] || {};
     try {
-      const updates: Array<{ itemId: number; title: string; price: number; currency: string }> = [];
-
+      // v9.0.176 (TD-657): خانه خالی حذف صریح است و عدد نامعتبر فرستاده نمی‌شود (پیش‌تر صفر می‌رفت و قیمت پاک می‌شد)
+      const edits: PriceFieldEdit[] = [];
       for (const st of strategies) {
         const cleanTitle = formatStrategyDisplayTitle(st);
-        const canKey = getStrategyCanonicalKey(cleanTitle);
-        const fieldEdit = itemLocal[canKey];
-
-        if (fieldEdit !== undefined) {
-          const valStr = fieldEdit.price;
-          const currStr = fieldEdit.currency || 'IRR';
-          updates.push({
-            itemId,
-            title: cleanTitle,
-            price: valStr !== '' && !isNaN(Number(valStr)) ? Number(valStr) : 0,
-            currency: currStr
-          });
-        }
+        const fieldEdit = itemLocal[getStrategyCanonicalKey(cleanTitle)];
+        if (fieldEdit !== undefined) edits.push({ title: cleanTitle, price: fieldEdit.price, currency: fieldEdit.currency || 'IRR' });
+      }
+      const { updates, errors } = priceSaveUpdates(edits.map(edit => ({ itemId, edit })));
+      if (errors.length > 0) {
+        toast.error(errors[0]);
+        return;
       }
 
       if (updates.length > 0) {
@@ -253,22 +251,13 @@ export default function PricingPage({ user }: { user: User }) {
   };
 
   const handleSaveAllLocalEdits = async () => {
-    const allUpdates: Array<{ itemId: number; title: string; price: number; currency: string }> = [];
+    const { updates: allUpdates, errors } = priceSaveUpdates(Object.entries(localEdits).flatMap(([itemIdStr, stMap]) =>
+      Number(itemIdStr) ? Object.values(stMap).map(edit => ({ itemId: Number(itemIdStr), edit })) : []));
 
-    Object.entries(localEdits).forEach(([itemIdStr, stMap]) => {
-      const itemId = Number(itemIdStr);
-      if (!itemId) return;
-
-      Object.values(stMap).forEach((fieldObj) => {
-        allUpdates.push({
-          itemId,
-          title: fieldObj.title,
-          price: fieldObj.price !== '' && !isNaN(Number(fieldObj.price)) ? Number(fieldObj.price) : 0,
-          currency: fieldObj.currency || 'IRR'
-        });
-      });
-    });
-
+    if (errors.length > 0) {
+      toast.error(errors.length > 1 ? `${errors[0]} (و ${formatPersianNumber(errors.length - 1)} خانه دیگر)` : errors[0]);
+      return;
+    }
     if (allUpdates.length === 0) {
       toast('هیچ تغییر ذخیره‌نشده‌ای وجود ندارد.');
       return;
@@ -303,21 +292,11 @@ export default function PricingPage({ user }: { user: User }) {
           'نوع کالا': item.type === 'product' ? 'محصول نهایی' : 'ماده اولیه',
           'موجودی کل': item.current_stock || 0,
           'واحد شمارش': item.unit || 'عدد',
-          'میانگین بهای خرید': item.weighted_average_cost || 0,
+          [ITEM_WAC_COLUMN]: item.weighted_average_cost || 0,
         };
 
-        let rowCurrency = 'IRR';
-        strategies.forEach(st => {
-          const cleanTitle = formatStrategyDisplayTitle(st);
-          const fieldVal = getFieldValue(item.id, cleanTitle);
-          const numPrice = fieldVal.price !== '' && !isNaN(Number(fieldVal.price)) && Number(fieldVal.price) > 0 ? Number(fieldVal.price) : '';
-          row[`قیمت ${cleanTitle}`] = numPrice;
-          if (fieldVal.currency && fieldVal.currency !== 'IRR') {
-            rowCurrency = fieldVal.currency;
-          }
-        });
-
-        row['واحد ارز'] = rowCurrency;
+        // v9.0.207 (O12): ارز هر فهرست در ستون خودش؛ ورود سریع همان ستون را می‌خواند
+        Object.assign(row, priceExportCells(strategies.map(st => formatStrategyDisplayTitle(st)), title => getFieldValue(item.id, title)));
         return row;
       });
 
@@ -348,97 +327,19 @@ export default function PricingPage({ user }: { user: User }) {
         const rawData = xlsx.utils.sheet_to_json<any>(ws);
 
         if (!rawData || rawData.length === 0) {
-          toast.error('فایل اکسل خالی است یا فرمت آن خوانده نشد.');
+          toast.error('فایل اکسل خالی است یا قالب آن خوانده نشد.');
           return;
         }
 
-        const itemCodeMap = new Map<string, Item>();
-        const itemNameMap = new Map<string, Item>();
-        const safeItemsList = Array.isArray(items) ? items : [];
-        safeItemsList.forEach(i => {
-          if (i.code) itemCodeMap.set(normalizePersianText(i.code), i);
-          if (i.name) itemNameMap.set(normalizePersianText(i.name), i);
-        });
-
-        const updates: Array<{ itemId: number; title: string; price: number; currency: string }> = [];
-
-        for (const row of rawData) {
-          const rawCode = row['کد کالا'] || row['کد'] || row['code'] || row['Code'];
-          const rawName = row['نام کالا'] || row['نام محصول'] || row['نام'] || row['name'] || row['Name'];
-
-          let matchedItem: Item | undefined;
-          if (rawCode) {
-            matchedItem = itemCodeMap.get(normalizePersianText(String(rawCode)));
-          }
-          if (!matchedItem && rawName) {
-            matchedItem = itemNameMap.get(normalizePersianText(String(rawName)));
-          }
-
-          if (!matchedItem) continue;
-
-          const extractedRowPrices = new Map<string, { title: string; price: number; currency: string }>();
-
-          // 1. Check known strategies first
-          for (const st of strategies) {
-            const cleanTitle = formatStrategyDisplayTitle(st);
-            const canKey = getStrategyCanonicalKey(cleanTitle);
-
-            const rawPrice =
-              row[`قیمت ${cleanTitle}`] ??
-              row[`قیمت - ${cleanTitle}`] ??
-              row[`قیمت ${st}`] ??
-              row[`قیمت - ${st}`] ??
-              row[cleanTitle] ??
-              row[st];
-
-            if (rawPrice !== undefined && rawPrice !== '' && !isNaN(Number(rawPrice))) {
-              const currVal =
-                row[`ارز - ${cleanTitle}`] ??
-                row[`ارز - قیمت ${cleanTitle}`] ??
-                row[`ارز ${cleanTitle}`] ??
-                row['واحد ارز'] ??
-                row['ارز'] ??
-                'IRR';
-              extractedRowPrices.set(canKey, {
-                title: cleanTitle,
-                price: Number(rawPrice),
-                currency: String(currVal || 'IRR').trim()
-              });
-            }
-          }
-
-          // 2. Check any other columns that have "قیمت" or "Price" in header
-          Object.keys(row).forEach(k => {
-            const cleanTitle = formatStrategyDisplayTitle(k);
-            const canKey = getStrategyCanonicalKey(cleanTitle);
-
-            if (canKey && !extractedRowPrices.has(canKey)) {
-              const rawPrice = row[k];
-              if (rawPrice !== undefined && rawPrice !== '' && !isNaN(Number(rawPrice))) {
-                const currVal =
-                  row[`ارز - ${cleanTitle}`] ??
-                  row[`ارز - قیمت ${cleanTitle}`] ??
-                  row[`ارز ${cleanTitle}`] ??
-                  row['واحد ارز'] ??
-                  row['ارز'] ??
-                  'IRR';
-                extractedRowPrices.set(canKey, {
-                  title: cleanTitle,
-                  price: Number(rawPrice),
-                  currency: String(currVal || 'IRR').trim()
-                });
-              }
-            }
-          });
-
-          for (const pObj of extractedRowPrices.values()) {
-            updates.push({
-              itemId: matchedItem.id,
-              title: pObj.title,
-              price: pObj.price,
-              currency: pObj.currency,
-            });
-          }
+        // v9.0.152 (TD-647): فقط ستون‌های فهرست‌های قیمت تنظیم‌شده؛ ستون دیگرِ «قیمت …» نادیده گرفته و گزارش می‌شود
+        const { updates, unknownColumns, invalidCells } = buildQuickPriceUpdates(rawData, Array.isArray(items) ? items : [], strategies);
+        if (unknownColumns.length > 0) {
+          toast.error(`این ستون‌ها فهرست قیمت تنظیم‌شده‌ای نیستند و نادیده گرفته شدند: ${unknownColumns.join('، ')}`);
+        }
+        // v9.0.176 (TD-657): قیمت صفر، منفی یا نامعتبر و ارز ناشناخته فرستاده نمی‌شوند و گزارش می‌شوند
+        if (invalidCells.length > 0) {
+          const sample = invalidCells.slice(0, 3).map(c => `${c.code} «${c.title}»: ${c.value} ${c.currency}`).join('، ');
+          toast.error(`${formatPersianNumber(invalidCells.length)} قیمت عدد بزرگ‌تر از صفر یا ارز پشتیبانی‌شده نداشت و ثبت نشد: ${sample}`);
         }
 
         if (updates.length === 0) {
@@ -452,11 +353,11 @@ export default function PricingPage({ user }: { user: User }) {
           body: JSON.stringify({ updates })
         });
 
-        toast.success(`تعداد ${formatPersianNumber(res.count || updates.length)} قیمت با موفقیت از روی اکسل آپلود و به‌روزرسانی شد.`);
+        toast.success(`تعداد ${formatPersianNumber(res.count || updates.length)} قیمت از اکسل بارگذاری و به‌روزرسانی شد.`);
         await loadData();
       } catch (err: any) {
         console.error(err);
-        toast.error('خطا در پردازش فایل اکسل: ' + (err.message || 'فرمت نامعتبر'));
+        toast.error('خطا در پردازش فایل اکسل: ' + (err.message || 'قالب نامعتبر'));
       } finally {
         if (e.target) e.target.value = '';
       }
@@ -479,21 +380,20 @@ export default function PricingPage({ user }: { user: User }) {
   };
 
   // Calculate profit margin % relative to WAC
-  const getMarginBadge = (priceStr: string, wacNum?: number) => {
-    if (!wacNum || wacNum <= 0 || !priceStr || isNaN(Number(priceStr)) || Number(priceStr) <= 0) return null;
-    const priceNum = Number(priceStr);
-    const margin = Math.round(((priceNum - wacNum) / wacNum) * 100);
+  const getMarginBadge = (priceStr: string, currency: string, wacNum?: number) => {
+    const margin = priceMarginPercent(priceStr, currency, wacNum);
+    if (margin === null) return null;
 
     if (margin > 0) {
       return (
         <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded dir-ltr shrink-0" title="حاشیه سود نسبت به قیمت خرید">
-          +{formatPersianNumber(margin)}% سود
+          +{formatPersianNumber(margin)}٪ سود
         </span>
       );
     } else if (margin < 0) {
       return (
         <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded dir-ltr shrink-0" title="قیمت زیر قیمت تمام‌شده خرید است!">
-          {formatPersianNumber(margin)}% زیان
+          {formatPersianNumber(Math.abs(margin))}٪ زیان
         </span>
       );
     } else {
@@ -557,7 +457,7 @@ export default function PricingPage({ user }: { user: User }) {
             </div>
             <div>
               <h1 className="text-xl font-black text-white flex items-center gap-2">
-                مدیریت و فرمولاسیون قیمت‌گذاری کالاها
+                مدیریت و تعیین قیمت کالاها
               </h1>
               <p className="text-xs text-slate-300 mt-1">
                 تعیین سطوح و سیاست‌های قیمتی ({strategies.join('، ')})، ورود/خروج اکسل و ثبت چند ارزی
@@ -592,17 +492,19 @@ export default function PricingPage({ user }: { user: User }) {
               خروجی اکسل قیمت‌ها
             </button>
 
-            <label className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold px-3 py-2.5 rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
-              <Upload size={15} className="text-blue-400" />
-              ورود سریع اکسل قیمت
-              <input
-                ref={excelInputRef}
-                type="file"
-                accept=".xlsx, .xls"
-                className="hidden"
-                onChange={handleImportExcel}
-              />
-            </label>
+            {canEditPrices && (
+              <label className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold px-3 py-2.5 rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
+                <Upload size={15} className="text-blue-400" />
+                ورود سریع اکسل قیمت
+                <input
+                  ref={excelInputRef}
+                  type="file"
+                  accept=".xlsx, .xls"
+                  className="hidden"
+                  onChange={handleImportExcel}
+                />
+              </label>
+            )}
 
             {/* Unified Excel Button */}
             <button
@@ -619,7 +521,7 @@ export default function PricingPage({ user }: { user: User }) {
         {/* Stats Summary row in Hero */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5 mt-5 pt-5 border-t border-slate-800/80">
           <div className="bg-slate-800/50 backdrop-blur-xs border border-slate-700/60 rounded-xl p-3 flex items-center gap-3">
-            <span className="text-xs text-slate-400 font-medium">کل اقلام لیست:</span>
+            <span className="text-xs text-slate-400 font-medium">کل اقلام فهرست:</span>
             <strong className="text-sm font-black text-white font-mono">{formatPersianNumber(filtered.length)} مورد</strong>
           </div>
 
@@ -638,7 +540,7 @@ export default function PricingPage({ user }: { user: User }) {
           ) : (
             <div className="bg-slate-800/50 backdrop-blur-xs border border-slate-700/60 rounded-xl p-3 flex items-center gap-2">
               <Check size={16} className="text-emerald-400 shrink-0" />
-              <span className="text-xs text-slate-300">تمامی قیمت‌ها با دیتابیس همگام هستند</span>
+              <span className="text-xs text-slate-300">همه قیمت‌ها با پایگاه داده همگام هستند</span>
             </div>
           )}
         </div>
@@ -721,10 +623,9 @@ export default function PricingPage({ user }: { user: User }) {
           <PricingGridView
             items={paginatedItems}
             strategies={strategies}
-            appCurrency={appCurrency}
             localEdits={localEdits}
             savingId={savingId}
-            userRole={user.role}
+            canEditPrices={canEditPrices}
             getFieldValue={getFieldValue}
             handlePriceChange={handlePriceChange}
             handleCurrencyChange={handleCurrencyChange}
@@ -739,10 +640,9 @@ export default function PricingPage({ user }: { user: User }) {
           <PricingTableView
             items={paginatedItems}
             strategies={strategies}
-            appCurrency={appCurrency}
             localEdits={localEdits}
             savingId={savingId}
-            userRole={user.role}
+            canEditPrices={canEditPrices}
             getFieldValue={getFieldValue}
             handlePriceChange={handlePriceChange}
             handleCurrencyChange={handleCurrencyChange}
@@ -779,7 +679,7 @@ export default function PricingPage({ user }: { user: User }) {
       </div>
 
       {/* Sticky Bottom Bar for Unsaved Edits */}
-      {totalLocalEditsCount > 0 && (
+      {canEditPrices && totalLocalEditsCount > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl z-40 flex items-center gap-4 border border-slate-700 animate-in slide-in-from-bottom duration-200">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>

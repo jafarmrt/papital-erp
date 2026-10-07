@@ -8,8 +8,8 @@ import fs from 'fs';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 import { logger, morganMiddleware, errorHandler } from './middleware/logger.js';
-import { metricsMiddleware, updateDbPoolMetrics, updateOutboxMetrics } from './middleware/metrics.js';
-import { metricsAuthMiddleware } from './middleware/metricsAuth.js';
+import { metricsMiddleware, updateDbPoolMetrics, updateOutboxMetrics, dbPoolStats } from './middleware/metrics.js';
+import { metricsAuthMiddleware, metricsReaderStatus } from './middleware/metricsAuth.js';
 import { asyncHandler } from './middleware/asyncHandler.js';
 import { buildCspDirectives } from './lib/cspDirectives.js';
 import promClient from 'prom-client';
@@ -43,13 +43,13 @@ import procurementRoutes from './routes/procurement.routes.js';
 import attachmentsRoutes from './routes/attachments.routes.js';
 import { authenticateToken, getJwtSecret, csrfProtection, shouldExposeTokenInBody } from './middleware/auth.js';
 import { sessionEndpointOriginGuard } from './middleware/sessionOrigin.js';
+import { startupGate, isStarting, isStartupComplete } from './middleware/startupGate.js';
 import { orm } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
 import { BUILD_INFO } from './lib/version.js';
 import { resolveTrustProxySetting } from './lib/trustProxy.js';
 import { addressLockoutMessage, minutesUntil } from './lib/auth/loginLockout.js';
 
-let isStartupComplete = false;
 let activeLoginLimiter: any = null;
 
 /**
@@ -71,13 +71,8 @@ export function resetLoginRateLimiter(): void {
   }
 }
 
-/**
- * Called by server.ts once background migrations/seeding finish so that
- * the /health/startup probe can report readiness.
- */
-export function markStartupComplete(): void {
-  isStartupComplete = true;
-}
+// v9.0.164 (TD-584): startup state lives in the startup gate; server.ts opens and closes it
+export { beginStartup, markStartupComplete } from './middleware/startupGate.js';
 
 /**
  * TST-004/005 enabler: builds the fully-configured Express application
@@ -179,6 +174,8 @@ export async function createApp(): Promise<express.Express> {
   }));
   app.use(morganMiddleware);
   app.use(metricsMiddleware);
+  // v9.0.164 (TD-584, decision ت۲): /api answers 503 SYSTEM_STARTING until migrations and seed finish
+  app.use('/api', startupGate);
 
   // Rate Limiting (SEC-009): generous limits for ERP operations and distinct user/session buckets
   const generalLimiter = rateLimit({
@@ -209,7 +206,7 @@ export async function createApp(): Promise<express.Express> {
     max: 10,
     standardHeaders: true,
     legacyHeaders: false,
-    // v9.0.162 (TD-539): the answer carries locked and the minutes left of this address's window, so the login page
+    // v9.0.220 (TD-539): the answer carries locked and the minutes left of this address's window, so the login page
     // counts down the real time (it used to read the minutes out of the text and fall back to a made-up 15)
     handler: (req, res) => {
       logger.warn(`[Login Brute Force] IP ${req.ip} blocked after failed attempts`);
@@ -258,13 +255,15 @@ export async function createApp(): Promise<express.Express> {
 
   // 2. Readiness probe (200 if DB reachable and connection pool not saturated)
   app.get(['/api/health/ready', '/health/ready'], asyncHandler(async (_req, res) => {
+    // v9.0.164 (TD-584): not ready while a gated server is still migrating
+    if (isStarting()) {
+      return res.status(503).json({ status: 'not_ready', reason: 'Starting', timestamp: new Date().toISOString() });
+    }
     try {
       await orm.execute(sql`SELECT 1`);
 
-      const pool = (orm as any).pool || (orm as any).client?.pool;
-      const total = pool?.totalCount || 0;
-      const idle = pool?.idleCount || 0;
-      const waiting = pool?.waitingCount || 0;
+      // v9.0.165 (TD-596): the real pool (drizzle.ts), not an orm property that does not exist
+      const { total, idle, waiting } = dbPoolStats();
 
       if (waiting > 5) {
         return res.status(503).json({
@@ -292,7 +291,7 @@ export async function createApp(): Promise<express.Express> {
 
   // 3. Startup probe (200 if background migrations/seeds completed)
   app.get(['/api/health/startup', '/health/startup'], (_req, res) => {
-    if (isStartupComplete) {
+    if (isStartupComplete()) {
       res.status(200).json({ status: 'started', timestamp: new Date().toISOString() });
     } else {
       res.status(503).json({ status: 'starting', timestamp: new Date().toISOString() });
@@ -300,13 +299,16 @@ export async function createApp(): Promise<express.Express> {
   });
 
   // 4. Diagnostic Health Probe
-  app.get(['/api/health', '/health'], asyncHandler(async (_req, res) => {
+  app.get(['/api/health', '/health'], asyncHandler(async (req, res) => {
     try {
       await orm.execute(sql`SELECT 1`);
+      // v9.0.168 (TD-601): the version stays public (verify-startup.sh reads it); commit, build time, Node
+      // version and environment only for the metrics token or a live system-admin session
+      const reader = await metricsReaderStatus(req);
       res.json({
         status: 'ok',
         version: BUILD_INFO.version,
-        buildInfo: BUILD_INFO,
+        ...(reader.ok ? { buildInfo: BUILD_INFO } : {}),
         uptimeSeconds: Math.floor(process.uptime()),
         timestamp: new Date().toISOString()
       });

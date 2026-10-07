@@ -1,5 +1,5 @@
 /**
- * v9.0.154 (TD-522, B02-07, owner decision t4 A): the audit purge deletes only operational sections and never a
+ * v9.0.212 (TD-522, B02-07, owner decision t4 A): the audit purge deletes only operational sections and never a
  * financial, security, role or user event. Every entity name production code writes into activity_logs (logActivity,
  * a direct insert, a migration) must be classified as critical or purgeable in `src/lib/audit/auditRetention.ts`, and
  * both lists hold only names the code really writes. A new entity name fails here until it is classified.
@@ -54,7 +54,7 @@ describe('audit entity retention (TD-522)', () => {
   });
 
   it('keeps the financial names of the finding (R09) and labels every purgeable section in Persian', () => {
-    for (const name of ['journal_voucher', 'account', 'cheque', 'bank_account', 'treasury_transaction', 'treasury_transfer',
+    for (const name of ['account', 'journal_voucher', 'cheque', 'bank_account', 'treasury_transaction', 'treasury_transfer',
       'پرداخت حقوق', 'اسناد انبار', 'طرف حساب', 'فیش حقوقی', 'نقش و دسترسی', 'کاربران سیستم', 'احراز هویت']) {
       expect(critical.has(name), name).toBe(true);
     }

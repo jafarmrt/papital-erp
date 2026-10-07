@@ -8,7 +8,9 @@ export const categories = pgTable('categories', {
   name: text('name').notNull(),
   prefix: text('prefix').notNull(),
   type: text('type').notNull(), // 'product' or 'raw_material'
-  defaultUnit: text('default_unit').default('عدد')
+  defaultUnit: text('default_unit').default('عدد'),
+  // v9.0.204 (TD-659، ت۸ الف): حذف دسته نرم است (مهاجرت 0072)
+  isDeleted: integer('is_deleted').notNull().default(0)
 });
 
 export const warehouses = pgTable('warehouses', {
@@ -135,6 +137,19 @@ export const itemPrices = pgTable('item_prices', {
 }, (table) => ({
   idx_item_id: index('item_prices_item_id').on(table.itemId),
 }));
+
+// v9.0.152 (TD-647، مهاجرت 0068): قیمت‌هایی که فهرست قیمت نبودند («میانگین خرید (WAC)»، «موجودی کل»، «میانگین بهای خرید»)
+// با مقدار پیشین ثبت و نرم حذف شدند
+export const itemPriceTitleCleanup = pgTable('item_price_title_cleanup', {
+  id: serial('id').primaryKey(),
+  itemPriceId: integer('item_price_id').notNull().unique('uq_item_price_title_cleanup_price'),
+  itemId: integer('item_id').notNull(),
+  title: text('title').notNull(),
+  price: moneyNumeric('price').notNull(),
+  currency: text('currency'),
+  reason: text('reason').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+});
 
 export const pendingMaterials = pgTable('pending_materials', {
   id: serial('id').primaryKey(),

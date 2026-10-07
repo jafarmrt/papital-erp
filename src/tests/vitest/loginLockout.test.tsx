@@ -1,5 +1,5 @@
 /**
- * v9.0.162 (TD-539, B02-24): the login page knows a lockout only from the answer's `locked` and `remainingMinutes`, counts
+ * v9.0.220 (TD-539, B02-24): the login page knows a lockout only from the answer's `locked` and `remainingMinutes`, counts
  * down the real minutes in Persian digits and says the sign-in is closed for this user name from this device. Before, it
  * read the minutes out of the message with `\d` (a Persian «۱۵» fell back to a made-up 15), showed «(Lockout)», a fixed
  * «۵ تلاش» and a Latin 04:00, and the general request limiter's 429 started a fake 15-minute lock too.

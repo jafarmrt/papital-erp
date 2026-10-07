@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setUserPermissions({ permissions: [], isAdmin: false });
     };
-    // v9.0.161 (TD-523): سرور رمز را موقت دانست؛ `App` به جای برنامه فقط برگه تغییر رمز را نشان می‌دهد
+    // v9.0.219 (TD-523): سرور رمز را موقت دانست؛ `App` به جای برنامه فقط برگه تغییر رمز را نشان می‌دهد
     const handlePasswordResetRequired = () => {
       setUser(current => (current ? { ...current, mustResetPassword: true, must_reset_password: true } : current));
     };

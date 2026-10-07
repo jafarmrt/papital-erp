@@ -53,7 +53,16 @@ BASE="$BACKUP_DIR/erp_${BACKUP_KIND}_${TIMESTAMP}"
 DUMP_FILE="$BASE.dump"
 MANIFEST_FILE="$BASE.manifest"
 WORK_DIR="$(mktemp -d)"
-trap 'rm -rf "$WORK_DIR"' EXIT
+# v9.0.184 (TD-606): a failed run removes the partial files it wrote (an uncompressed dump, the manifest, the archives);
+# a compressed dump that failed verification is kept for inspection and ages out with the retention below
+BACKUP_DONE=0
+cleanup() {
+  rm -rf "$WORK_DIR"
+  if [ "$BACKUP_DONE" -ne 1 ]; then
+    rm -f "$DUMP_FILE" "$MANIFEST_FILE" "${BASE}_uploads.tar.gz" "${BASE}_attachments.tar.gz"
+  fi
+}
+trap cleanup EXIT
 
 # 1. Full dump (custom format) and its content manifest from ONE snapshot (v8.0.85, TD-361):
 #    a repeatable-read transaction exports its snapshot, pg_dump reads exactly that snapshot, and the manifest
@@ -82,8 +91,15 @@ fi
 # 1b. Attachment files live on disk, outside pg_dump (AGENTS.md §10): the uploads directory is archived with the
 #     dump. Active attachment records whose file is missing on disk right now are listed in the manifest, so a
 #     restore drill tells "missing before the backup" apart from "lost by the backup".
-ATT_ROWS="$(psql "$DATABASE_URL" -X -tA -v ON_ERROR_STOP=1 -c "SELECT CASE WHEN to_regclass('file_attachments') IS NULL THEN '' ELSE (SELECT string_agg(storage_path, E'\n' ORDER BY storage_path) FROM file_attachments WHERE is_deleted = 0) END")" \
+# v9.0.184 (TD-606): the table is looked up first; a CASE around the query does not help, because a missing table
+# fails the statement when it is planned (a database before its first migration)
+HAS_ATTACHMENTS="$(psql "$DATABASE_URL" -X -tA -v ON_ERROR_STOP=1 -c "SELECT to_regclass('file_attachments') IS NOT NULL")" \
   || fail "attachment records could not be read"
+ATT_ROWS=""
+if [ "$HAS_ATTACHMENTS" = "t" ]; then
+  ATT_ROWS="$(psql "$DATABASE_URL" -X -tA -v ON_ERROR_STOP=1 -c "SELECT string_agg(storage_path, E'\n' ORDER BY storage_path) FROM file_attachments WHERE is_deleted = 0")" \
+    || fail "attachment records could not be read"
+fi
 ATT_COUNT=0
 [ -n "$ATT_ROWS" ] && ATT_COUNT="$(printf '%s\n' "$ATT_ROWS" | grep -c . || true)"
 UPLOADS_ARCHIVE=""
@@ -160,6 +176,9 @@ find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*.dump.gz" -mtime +"$RETENTION_DAYS
 find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*.manifest" -mtime +"$RETENTION_DAYS" -delete
 find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*_uploads.tar.gz" -mtime +"$RETENTION_DAYS" -delete
 find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*_attachments.tar.gz" -mtime +"$RETENTION_DAYS" -delete
+# v9.0.184 (TD-606): uncompressed dumps left by failed runs before that release
+find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*.dump" -mtime +"$RETENTION_DAYS" -delete
+BACKUP_DONE=1
 
 # 5. Log
 [ -z "$UPLOADS_ARCHIVE" ] || log "Uploads archive created: $UPLOADS_ARCHIVE ($(du -h "$UPLOADS_ARCHIVE" | cut -f1))"

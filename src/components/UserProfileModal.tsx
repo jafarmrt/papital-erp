@@ -19,7 +19,7 @@ interface UserProfileModalProps {
   onUserUpdate: (updatedUser: User) => void;
   /** v9.0.149 (TD-894): نام ذخیره‌شده نقش کاربر از `/users/my-permissions`، نه برچسبی از روی کد نقش */
   roleName?: string;
-  /** v9.0.161 (TD-523): با رمز موقت، تنها راه بیرون رفتن از برگه تغییر رمز */
+  /** v9.0.219 (TD-523): با رمز موقت، تنها راه بیرون رفتن از برگه تغییر رمز */
   onLogout?: () => void;
 }
 
@@ -39,7 +39,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
   const [saving, setSaving] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // v9.0.161 (TD-523، ت۵ الف): با رمز موقت فقط برگه تغییر رمز است؛ نه ×، نه «انصراف» و نه برگه مشخصات، فقط «خروج»
+  // v9.0.219 (TD-523، ت۵ الف): با رمز موقت فقط برگه تغییر رمز است؛ نه ×، نه «انصراف» و نه برگه مشخصات، فقط «خروج»
   const requiresPasswordReset = mustChangePassword(user);
 
   useEffect(() => {
@@ -138,7 +138,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
       return;
     }
 
-    // v9.0.159 (TD-532): همان کمینه مشترک سرور (۸ نویسه)، نه ۴
+    // v9.0.217 (TD-532): همان کمینه مشترک سرور (۸ نویسه)، نه ۴
     const passwordError = passwordLengthError(newPassword);
     if (passwordError) {
       toast.error(passwordError);

@@ -1,27 +1,37 @@
 import React, { useState, useMemo } from 'react';
 import { Scale, ArrowRightLeft, Trash2 } from 'lucide-react';
-import { formatPersianPrice } from '../../utils';
+import { formatPersianPrice, formatCurrencyLabel } from '../../utils';
 import { AccountSearchSelect } from './AccountSearchSelect';
+import { VoucherRowCurrencyCell } from './VoucherCurrencyInputs';
+import { voucherFormBalance, voucherRowCurrencyRate, type VoucherHeaderCurrency } from '../../lib/accounting/voucherFormCurrency';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
+import { VoucherDetailedPicker } from './VoucherDetailedPicker';
+import type { VoucherDetailedType } from '../../lib/accounting/voucherDetailedTypes';
 import type { Account } from '../../types';
 
 export interface VoucherItemDraft {
   id?: number;
   accountId: number | '';
-  detailedType: 'none' | 'customer' | 'supplier' | 'personnel' | 'project' | 'bank_account' | 'custom';
+  /** v9.0.193 (TD-569): همان نوع‌های سرور؛ `custom` قدیمی «متفرقه» (`other`) است */
+  detailedType: VoucherDetailedType;
   detailedId: number | null;
   detailedName: string;
   debit: number;
   credit: number;
   description: string;
+  /** v9.0.191 (TD-564): خالی = ارز سند */
+  currency?: string;
+  /** v9.0.191 (TD-564): خالی = نرخ ارز سند */
+  exchangeRate?: number | string | '';
 }
 
 interface VoucherItemsTableProps {
   items: VoucherItemDraft[];
   selectableAccounts: Account[];
   customers: Array<{ id: number; name: string; partyType?: string; city?: string; supplierCategory?: string }>;
-  personnelList: Array<{ id: number; firstName?: string; lastName?: string; fullName?: string }>;
-  currencyLabel: string;
+  personnelList: Array<{ id: number; firstName?: string; lastName?: string; fullName?: string; username?: string }>;
+  /** v9.0.191 (TD-564): ارز و نرخ سند؛ ردیف بی ارز و نرخ از آن پیروی می‌کند */
+  header: VoucherHeaderCurrency;
   updateItem: (index: number, patch: Partial<VoucherItemDraft>) => void;
   addRow: () => void;
   removeRow: (index: number) => void;
@@ -46,7 +56,7 @@ export function VoucherItemsTable({
   selectableAccounts,
   customers,
   personnelList,
-  currencyLabel,
+  header,
   updateItem,
   addRow,
   removeRow,
@@ -56,29 +66,31 @@ export function VoucherItemsTable({
 }: VoucherItemsTableProps) {
   const [activeRowIndex, setActiveRowIndex] = useState<number>(0);
 
-  const totalDebit = useMemo(() => items.reduce((acc, it) => acc + (Number(it.debit) || 0), 0), [items]);
-  const totalCredit = useMemo(() => items.reduce((acc, it) => acc + (Number(it.credit) || 0), 0), [items]);
+  // v9.0.191 (TD-564): جمع ستون‌ها با قاعده تراز سرور؛ سند چندارزی یا چندنرخی به ریال
+  const balance = useMemo(() => voucherFormBalance(items, header), [items, header]);
 
   const itemRefs = rowRefs;
 
   return (
     <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-xs">
       <div className="overflow-x-auto">
-        <table className="w-full text-right border-collapse min-w-[780px]">
+        <table className="w-full text-right border-collapse min-w-[900px]">
           <thead>
             <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold">
               <th className="py-2.5 px-3 w-10 text-center">#</th>
               <th className="py-2.5 px-3 w-72">کد و عنوان حساب معین * (جستجوی سریع)</th>
               <th className="py-2.5 px-3 w-52">تفصیلی / شخص</th>
               <th className="py-2.5 px-3">شرح آرتیکل</th>
-              <th className="py-2.5 px-3 w-40 text-left">بدهکار ({currencyLabel})</th>
-              <th className="py-2.5 px-3 w-40 text-left">بستانکار ({currencyLabel})</th>
+              <th className="py-2.5 px-3 w-32">ارز و نرخ</th>
+              <th className="py-2.5 px-3 w-40 text-left">بدهکار</th>
+              <th className="py-2.5 px-3 w-40 text-left">بستانکار</th>
               <th className="py-2.5 px-2 w-20 text-center">عملیات</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
             {items.map((it, idx) => {
               const isActiveRow = activeRowIndex === idx;
+              const rowCurrency = voucherRowCurrencyRate(it, header).currency;
 
               return (
                 <tr 
@@ -114,138 +126,21 @@ export function VoucherItemsTable({
                     />
                   </td>
 
-                  {/* Detailed Selector */}
+                  {/* Detailed Selector — v9.0.193 (TD-569): نوع‌های سرور، پروژه و حساب بانکی؛ «متفرقه» = other */}
                   <td className="py-2 px-2">
-                    <div className="flex items-center gap-1">
-                      <select
-                        ref={itemRefs.current[idx]?.detailedTypeRef}
-                        value={it.detailedType}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            if (it.detailedType !== 'none') {
-                              itemRefs.current[idx]?.detailedSelectRef?.current?.focus();
-                            } else {
-                              itemRefs.current[idx]?.descRef?.current?.focus();
-                            }
-                          }
-                        }}
-                        onChange={e => updateItem(idx, { 
-                          detailedType: e.target.value as any,
-                          detailedId: null,
-                          detailedName: ''
-                        })}
-                        className="w-24 px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-200"
-                      >
-                        <option value="none">بدون تفصیلی</option>
-                        <option value="customer">مشتری</option>
-                        <option value="supplier">تامین‌کننده</option>
-                        <option value="personnel">پرسنل</option>
-                        <option value="custom">متفرقه</option>
-                      </select>
-
-                      {it.detailedType === 'customer' && (
-                        <select
-                          ref={itemRefs.current[idx]?.detailedSelectRef as any}
-                          value={it.detailedId || ''}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              itemRefs.current[idx]?.descRef?.current?.focus();
-                            }
-                          }}
-                          onChange={e => {
-                            const c = customers.find(x => x.id === Number(e.target.value));
-                            updateItem(idx, { detailedId: c ? c.id : null, detailedName: c ? c.name : '' });
-                          }}
-                          className="flex-1 px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
-                        >
-                          <option value="">انتخاب مشتری...</option>
-                          {(() => {
-                            const custs = customers.filter(c => {
-                              const pt = c.partyType || (c as any).party_type || 'customer';
-                              return pt === 'customer' || pt === 'both';
-                            });
-                            const list = custs.length > 0 ? custs : customers;
-                            return list.map(c => (
-                              <option key={c.id} value={c.id}>{c.name} {c.city ? `(${c.city})` : ''}</option>
-                            ));
-                          })()}
-                        </select>
-                      )}
-
-                      {it.detailedType === 'supplier' && (
-                        <select
-                          ref={itemRefs.current[idx]?.detailedSelectRef as any}
-                          value={it.detailedId || ''}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              itemRefs.current[idx]?.descRef?.current?.focus();
-                            }
-                          }}
-                          onChange={e => {
-                            const s = customers.find(x => x.id === Number(e.target.value));
-                            updateItem(idx, { detailedId: s ? s.id : null, detailedName: s ? s.name : '' });
-                          }}
-                          className="flex-1 px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
-                        >
-                          <option value="">انتخاب تامین‌کننده...</option>
-                          {(() => {
-                            const suppliers = customers.filter(c => {
-                              const pt = c.partyType || (c as any).party_type;
-                              return pt === 'supplier' || pt === 'both';
-                            });
-                            const list = suppliers.length > 0 ? suppliers : customers;
-                            return list.map(s => (
-                              <option key={s.id} value={s.id}>
-                                {s.name} {s.supplierCategory ? `[${s.supplierCategory}]` : ''} {s.city ? `(${s.city})` : ''}
-                              </option>
-                            ));
-                          })()}
-                        </select>
-                      )}
-
-                      {it.detailedType === 'personnel' && (
-                        <select
-                          ref={itemRefs.current[idx]?.detailedSelectRef as any}
-                          value={it.detailedId || ''}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              itemRefs.current[idx]?.descRef?.current?.focus();
-                            }
-                          }}
-                          onChange={e => {
-                            const p = personnelList.find(x => x.id === Number(e.target.value));
-                            updateItem(idx, { detailedId: p ? p.id : null, detailedName: p ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : '' });
-                          }}
-                          className="flex-1 px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
-                        >
-                          <option value="">انتخاب پرسنل...</option>
-                          {personnelList.map(p => (
-                            <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
-                          ))}
-                        </select>
-                      )}
-
-                      {it.detailedType === 'custom' && (
-                        <input
-                          ref={itemRefs.current[idx]?.detailedSelectRef as any}
-                          type="text"
-                          value={it.detailedName}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              itemRefs.current[idx]?.descRef?.current?.focus();
-                            }
-                          }}
-                          onChange={e => updateItem(idx, { detailedName: e.target.value })}
-                          placeholder="عنوان تفصیلی..."
-                          className="flex-1 px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
-                        />
-                      )}
-                    </div>
+                    <VoucherDetailedPicker
+                      value={it}
+                      onChange={next => updateItem(idx, next)}
+                      customers={customers}
+                      personnelList={personnelList}
+                      typeRef={itemRefs.current[idx]?.detailedTypeRef}
+                      pickerRef={itemRefs.current[idx]?.detailedSelectRef}
+                      onTypeEnter={() => {
+                        if (it.detailedType !== 'none') itemRefs.current[idx]?.detailedSelectRef?.current?.focus();
+                        else itemRefs.current[idx]?.descRef?.current?.focus();
+                      }}
+                      onAdvance={() => itemRefs.current[idx]?.descRef?.current?.focus()}
+                    />
                   </td>
 
                   {/* Description */}
@@ -265,6 +160,11 @@ export function VoucherItemsTable({
                       placeholder="شرح ردیف..."
                       className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     />
+                  </td>
+
+                  {/* v9.0.191 (TD-564): ارز و نرخ ردیف */}
+                  <td className="py-2 px-2">
+                    <VoucherRowCurrencyCell row={it} header={header} onChange={patch => updateItem(idx, patch)} />
                   </td>
 
                   {/* Debit Input */}
@@ -305,7 +205,7 @@ export function VoucherItemsTable({
                     </div>
                     {it.debit > 0 && (
                       <span className="block text-[9px] text-emerald-600 dark:text-emerald-400 font-mono text-left px-1 mt-0.5 truncate">
-                        {formatPersianPrice(it.debit)}
+                        {formatPersianPrice(it.debit, rowCurrency)}
                       </span>
                     )}
                   </td>
@@ -344,7 +244,7 @@ export function VoucherItemsTable({
                     </div>
                     {it.credit > 0 && (
                       <span className="block text-[9px] text-rose-600 dark:text-rose-400 font-mono text-left px-1 mt-0.5 truncate">
-                        {formatPersianPrice(it.credit)}
+                        {formatPersianPrice(it.credit, rowCurrency)}
                       </span>
                     )}
                   </td>
@@ -384,14 +284,14 @@ export function VoucherItemsTable({
           </tbody>
           <tfoot>
             <tr className="bg-slate-100 dark:bg-slate-800/80 font-bold border-t-2 border-slate-300 dark:border-slate-600 text-xs">
-              <td colSpan={4} className="py-3 px-4 text-left font-bold text-slate-700 dark:text-slate-300">
-                مجموع ستون‌ها:
+              <td colSpan={5} className="py-3 px-4 text-left font-bold text-slate-700 dark:text-slate-300">
+                مجموع ستون‌ها ({formatCurrencyLabel(balance.currency)}{balance.inRial ? '، هر ردیف ارزی با نرخ خودش' : ''}):
               </td>
               <td className="py-3 px-3 text-left font-mono text-emerald-700 dark:text-emerald-300 font-black text-sm">
-                {formatPersianPrice(totalDebit)}
+                {formatPersianPrice(balance.totalDebit, undefined, balance.currency === 'IRR' ? 0 : 2)}
               </td>
               <td className="py-3 px-3 text-left font-mono text-rose-700 dark:text-rose-300 font-black text-sm">
-                {formatPersianPrice(totalCredit)}
+                {formatPersianPrice(balance.totalCredit, undefined, balance.currency === 'IRR' ? 0 : 2)}
               </td>
               <td />
             </tr>

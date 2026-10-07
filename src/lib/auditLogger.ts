@@ -9,7 +9,7 @@ import { toPersianDigits } from '../utils/persianNumber.js';
 import { CRITICAL_AUDIT_ACTIONS, MIN_AUDIT_RETENTION_DAYS, PURGEABLE_AUDIT_ENTITIES } from './audit/auditRetention.js';
 import { sanitizeAuditValue, sanitizeSensitiveData } from './audit/auditSanitizer.js';
 
-// v9.0.155 (TD-530، تصمیم ت۷ الف): پاک‌کننده در `src/lib/audit/auditSanitizer.ts`؛ کلید رمز با «شامل‌بودن» و شماره کارت،
+// v9.0.213 (TD-530، تصمیم ت۷ الف): پاک‌کننده در `src/lib/audit/auditSanitizer.ts`؛ کلید رمز با «شامل‌بودن» و شماره کارت،
 // حساب و شبا تا ۴ رقم آخر
 export { sanitizeSensitiveData } from './audit/auditSanitizer.js';
 
@@ -169,7 +169,7 @@ export async function logActivity(params: AuditLogParams): Promise<AuditLogResul
   }
 }
 
-// v9.0.154 (TD-522): کمینه نگه‌داشت و رده‌بندی موجودیت‌ها در `src/lib/audit/auditRetention.ts`، مشترک با فرم پاک‌سازی
+// v9.0.212 (TD-522): کمینه نگه‌داشت و رده‌بندی موجودیت‌ها در `src/lib/audit/auditRetention.ts`، مشترک با فرم پاک‌سازی
 export {
   MIN_AUDIT_RETENTION_DAYS,
   CRITICAL_AUDIT_ACTIONS,
@@ -203,7 +203,7 @@ function purgeableAuditRowCondition(): SQL {
 }
 
 /**
- * پاک‌سازی سجل قدیمی‌تر از دوره نگه‌داشت (پیش‌فرض و کمینه ۹۰ روز). v9.0.154 (TD-522، تصمیم ت۴ الف): فقط سجل بخش‌های
+ * پاک‌سازی سجل قدیمی‌تر از دوره نگه‌داشت (پیش‌فرض و کمینه ۹۰ روز). v9.0.212 (TD-522، تصمیم ت۴ الف): فقط سجل بخش‌های
  * `PURGEABLE_AUDIT_ENTITIES` با اقدامی جز `CRITICAL_AUDIT_ACTIONS` پاک می‌شود؛ گزینه خاموش کردن حفاظت
  * (`preserveCritical: false`) و پاک کردن زودتر از کمینه (`allowForceRecent`) برداشته شد. تاریخ برش از ساعت کسب‌وکار
  * (`systemNowUtcIso`) است و خود پاک‌سازی در سجل ثبت می‌شود.
@@ -277,7 +277,7 @@ export async function purgeOldAuditLogs(
 export interface AuditLogIntegrityReport {
   healthy: boolean;
   totalLogs: number;
-  /** ردیف‌هایی که پاک‌سازی هرگز پاک نمی‌کند (v9.0.154، TD-522) */
+  /** ردیف‌هایی که پاک‌سازی هرگز پاک نمی‌کند (v9.0.212، TD-522) */
   criticalLogsCount: number;
   earliestTimestamp: string | null;
   latestTimestamp: string | null;

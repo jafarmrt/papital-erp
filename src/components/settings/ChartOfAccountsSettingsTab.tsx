@@ -31,36 +31,20 @@ export function ChartOfAccountsSettingsTab() {
     void refetchTree();
   }, [refetchAccounts, refetchTree]);
 
+  // v9.0.203 (TD-576، B03-34): پیام ذخیره و حذف را فقط خود تب کدینگ می‌دهد (پیش‌تر هر پیام دو بار می‌آمد)
   const handleCreateAccount = async (data: AccountPayload) => {
-    try {
-      await createAccount.mutateAsync(data);
-      toast.success('حساب جدید با موفقیت ایجاد شد');
-    } catch (err: unknown) {
-      toast.error(errorMessageOf(err) || 'خطا در ایجاد حساب');
-      throw err;
-    }
+    await createAccount.mutateAsync(data);
   };
 
   const handleUpdateAccount = async (id: number, data: AccountPayload) => {
-    try {
-      await updateAccount.mutateAsync({ id, data });
-      toast.success('حساب با موفقیت ویرایش شد');
-    } catch (err: unknown) {
-      toast.error(errorMessageOf(err) || 'خطا در ویرایش حساب');
-      throw err;
-    }
+    await updateAccount.mutateAsync({ id, data });
   };
 
   const handleDeleteAccount = async (id: number) => {
-    try {
-      await deleteAccount.mutateAsync(id);
-      toast.success('حساب با موفقیت حذف شد');
-    } catch (err: unknown) {
-      toast.error(errorMessageOf(err) || 'خطا در حذف حساب');
-      throw err;
-    }
+    await deleteAccount.mutateAsync(id);
   };
 
+  // خطا همین‌جا پیام می‌شود و دوباره پرتاب نمی‌شود؛ پیش‌تر دکمه وعده را رها می‌کرد و ۴۰۳ رد رسیدگی‌نشده می‌ساخت
   const handleSeedStandardAccounts = async () => {
     if (seedStandardAccounts.isPending) return;
     try {
@@ -68,7 +52,6 @@ export function ChartOfAccountsSettingsTab() {
       toast.success('کدینگ استاندارد با موفقیت بارگذاری شد');
     } catch (err: unknown) {
       toast.error(errorMessageOf(err) || 'خطا در ایجاد سرفصل‌های پیش‌فرض');
-      throw err;
     }
   };
 

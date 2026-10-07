@@ -87,7 +87,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     const { PERMISSION_CATALOG } = await import('../../routes/users.routes.js');
 
     // 1. Verify all 5 workflow permissions exist in PERMISSION_CATALOG
-    // v9.0.167 (TD-540): the category is found by its keys, not by its title, which is Persian only now
+    // v9.0.224 (TD-540): the category is found by its keys, not by its title, which is Persian only now
     const wfCat = PERMISSION_CATALOG.find(c => c.permissions.some(p => p.key.startsWith('workflow.')));
     const requiredKeys = ['workflow.view', 'workflow.execute', 'workflow.approve', 'workflow.manage', 'workflow.admin'];
     const catalogKeys = wfCat ? wfCat.permissions.map(p => p.key) : [];
@@ -1437,6 +1437,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Package 1, PR «ب» (TD-582, TD-595, TD-597, TD-599, TD-602): the HTTP edge
   const { runEdgeHardeningTests } = await import('../security/edgeHardeningChecks.js');
   results.push(...await runEdgeHardeningTests(shouldRunAccess));
+  // Package 1 PR «ج»: startup gate, pool readiness, access log, circular log values, /health build details
+  const { runStartupMonitoringTests } = await import('../security/startupMonitoringChecks.js');
+  results.push(...await runStartupMonitoringTests(shouldRunAccess));
 
   return results;
 }

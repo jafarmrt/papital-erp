@@ -114,7 +114,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         {/* V10-2.2: مسیر canonical واحد برای کالاها — تب محصول/مواد اولیه با query param (?type=raw_material) */}
         <Route path="/products" element={
           <ProtectedRoute page="/products" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
-            <ItemsPage user={user} />
+            <ItemsPage />
           </ProtectedRoute>
         } />
         <Route path="/transfers" element={
@@ -136,7 +136,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         } />
         <Route path="/pricing" element={
           <ProtectedRoute page="/pricing" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
-            <PricingPage user={user} />
+            <PricingPage />
           </ProtectedRoute>
         } />
         <Route path="/customers" element={

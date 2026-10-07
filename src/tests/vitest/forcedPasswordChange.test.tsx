@@ -1,5 +1,5 @@
 /**
- * v9.0.161 (TD-523, B02-08, owner decision t5 A): a password an administrator set is temporary. Until the user changes
+ * v9.0.219 (TD-523, B02-08, owner decision t5 A): a password an administrator set is temporary. Until the user changes
  * it the browser shows only the password form, which closes only through «خروج», and loads no menu or page. Before,
  * the forced form closed with × and «انصراف» and the whole application stayed open behind it.
  */
@@ -71,7 +71,7 @@ afterEach(() => {
 });
 
 describe('temporary password (TD-523)', () => {
-  it('the forced form has no close button and no cancel; «خروج» is the only way out', () => {
+  it('the forced form has no close button and no cancel; the sign-out button is the only way out', () => {
     const onClose = vi.fn();
     const onLogout = vi.fn();
     render(<UserProfileModal user={temporaryUser as unknown as User} isOpen onClose={onClose} onUserUpdate={() => {}} onLogout={onLogout} />);

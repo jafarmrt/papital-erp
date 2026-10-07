@@ -275,7 +275,7 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
     // Set secure HttpOnly cookie
     res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
 
-    // v9.0.167 (TD-540): سجل ورود نام نقش را هم نگه می‌دارد تا جزئیات رویداد کد نقش نشان ندهد
+    // v9.0.224 (TD-540): سجل ورود نام نقش را هم نگه می‌دارد تا جزئیات رویداد کد نقش نشان ندهد
     const [roleRow] = await orm.select({ name: roles.name }).from(roles).where(eq(roles.code, activeUser.role)).limit(1);
     await logActivity({
       userId: activeUser.id,

@@ -6,7 +6,7 @@ export interface MentionUser {
   fullName?: string;
   full_name?: string;
   username: string;
-  /** v9.0.166 (TD-534): نام فارسی نقش از `/users/list-simple`؛ کد نقش دیگر به مرورگر نمی‌رسد */
+  /** v9.0.223 (TD-534): نام فارسی نقش از `/users/list-simple`؛ کد نقش دیگر به مرورگر نمی‌رسد */
   role_name?: string;
 }
 

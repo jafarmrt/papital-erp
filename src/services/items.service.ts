@@ -3,11 +3,13 @@ import {
   type ReservedItemDetail,
   type ItemReservedReportSummary,
   type ReservedItemsFullReport,
-  type ReservedStockInfo
+  type ReservedStockInfo,
+  type ReservationScope
 } from './items/itemStockReservation.service.js';
 import { ItemPricingService, type PriceItemRecord } from './items/itemPricing.service.js';
 import { ItemCatalogService } from './items/itemCatalog.service.js';
-import { withLongQueryTimeout } from '../db/drizzle.js';
+import type { ItemImportPermissions } from '../lib/items/itemImportPermissions.js';
+import type { ItemImportActor } from './items/itemExcelImport.js';
 
 export type {
   ReservedItemDetail,
@@ -22,8 +24,8 @@ export class ItemsService {
     return ItemStockReservationService.getReservedStockDetails();
   }
 
-  static async getReservedStocksMap(): Promise<Record<string, ReservedStockInfo>> {
-    return ItemStockReservationService.getReservedStocksMap();
+  static async getReservedStocksMap(scope?: ReservationScope): Promise<Record<string, ReservedStockInfo>> {
+    return ItemStockReservationService.getReservedStocksMap(scope);
   }
 
   static async getPricingStrategies(): Promise<string[]> {
@@ -45,10 +47,9 @@ export class ItemsService {
   static async processUnifiedImport(
     rows: Array<Record<string, unknown>>,
     typeFilter: string | undefined,
-    req: { user?: { id?: number; username?: string; full_name?: string } }
+    req: { user?: ItemImportActor },
+    permissions: ItemImportPermissions,
   ) {
-    return withLongQueryTimeout(async () => {
-      return ItemCatalogService.processUnifiedImport(rows, typeFilter, req);
-    });
+    return ItemCatalogService.processUnifiedImport(rows, typeFilter, req, permissions);
   }
 }

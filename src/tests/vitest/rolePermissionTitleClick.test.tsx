@@ -1,5 +1,5 @@
 /**
- * v9.0.163 (TD-536, B02-21): clicking a permission's title in the role form ticks it once. The label that wraps the
+ * v9.0.221 (TD-536, B02-21): clicking a permission's title in the role form ticks it once. The label that wraps the
  * checkbox toggled on its own click and again on the click it passes to the checkbox, so a click on the title did nothing.
  */
 import { afterEach, describe, expect, it } from 'vitest';

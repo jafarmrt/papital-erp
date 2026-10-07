@@ -2,6 +2,10 @@ import React from 'react';
 import { Download, Upload, Loader2, Info } from 'lucide-react';
 
 interface ExcelUploadStepProps {
+  /** v9.0.154 (TD-648): ورود فقط برای دارنده «تعریف کالای جدید» یا «ویرایش اطلاعات کالا» */
+  canImport: boolean;
+  /** بخش‌هایی از ورود که کاربر مجوزشان را ندارد */
+  permissionNotices: string[];
   isExporting: boolean;
   isLoadingMetadata: boolean;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
@@ -11,6 +15,8 @@ interface ExcelUploadStepProps {
 }
 
 export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
+  canImport,
+  permissionNotices,
   isExporting,
   isLoadingMetadata,
   fileInputRef,
@@ -24,14 +30,22 @@ export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-800 leading-relaxed space-y-2">
         <div className="flex items-center gap-2 font-bold text-blue-900 text-sm">
           <Info size={16} />
-          راهنمای سیستم جامع اکسل و کنترل کدینگ:
+          راهنمای ورود و خروجی اکسل و کنترل کدگذاری:
         </div>
         <ul className="list-disc list-inside space-y-1 text-slate-700">
           <li>سیستم پیش از ثبت نهایی، تطابق کدهای فایل را با پیشوند دسته‌بندی‌ها (مانند <span className="font-mono font-bold text-blue-900" dir="ltr">N-</span> برای گردنبند) بررسی نموده و امکان اصلاح خودکار فراهم است.</li>
           <li>جهت حفظ یکپارچگی پایگاه‌داده، ثبت دو محصول با نام مشابه اکیداً مسدود شده و در مرحله پیش‌نمایش به شما هشدار داده می‌شود.</li>
-          <li>در صورت وجود کالا با کد یکسان، مشخصات پایه، موجودی انبارها و استراتژی‌های قیمت‌گذاری به‌روزرسانی خواهند شد.</li>
+          <li>در صورت وجود کالا با کد یکسان، مشخصات پایه، موجودی انبارها و قیمت فهرست‌های قیمت به‌روزرسانی خواهند شد.</li>
         </ul>
       </div>
+
+      {permissionNotices.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-900 leading-relaxed">
+          <ul className="list-disc list-inside space-y-1">
+            {permissionNotices.map(n => <li key={n}>{n}</li>)}
+          </ul>
+        </div>
+      )}
 
       {/* Action Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -43,7 +57,7 @@ export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
               دانلود خروجی کامل
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              دریافت فایل اکسل کامل شامل مشخصات فنی کالاها، ارزش خرید، موجودی انبارها و لیست قیمت تمام استراتژی‌ها
+              دریافت فایل اکسل کامل شامل مشخصات فنی کالاها، میانگین موزون بها، موجودی انبارها و قیمت همه فهرست‌های قیمت
             </p>
           </div>
           <button
@@ -64,7 +78,7 @@ export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
               بارگذاری اکسل و بررسی صحت
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              انتخاب فایل اکسل جدید جهت بررسی پیش‌نمایش، تطابق سیستم کدینگ و ثبت/به‌روزرسانی همزمان کالاها
+              انتخاب فایل اکسل جدید جهت بررسی پیش‌نمایش، بررسی کدگذاری و ثبت یا به‌روزرسانی هم‌زمان کالاها
             </p>
           </div>
           <div>
@@ -77,7 +91,8 @@ export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={isLoadingMetadata}
+              disabled={isLoadingMetadata || !canImport}
+              title={canImport ? undefined : 'برای ورود اکسل مجوز «تعریف کالای جدید» یا «ویرایش اطلاعات کالا» لازم است.'}
               className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
             >
               {isLoadingMetadata ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
@@ -94,7 +109,7 @@ export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
           className="text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <Download size={14} />
-          دانلود الگوی فرمت اکسل استاندارد (Template)
+          دریافت الگوی استاندارد اکسل
         </button>
       </div>
     </div>

@@ -1,5 +1,5 @@
 /**
- * v9.0.156 (TD-537, B02-22): the audit log page shows a Persian error for a refused (403) request instead of "no record
+ * v9.0.214 (TD-537, B02-22): the audit log page shows a Persian error for a refused (403) request instead of "no record
  * found", sends the search only after typing pauses, and starts again from page 1 when the search changes. Typing «علی»
  * on page 2 used to send three requests (page=2, «ع», «عل», «علی»).
  */
@@ -33,13 +33,16 @@ function renderPage() {
   );
 }
 
+/** the server's own 403 text (test data); the page shows its own sentence instead */
+const SERVER_FORBIDDEN_MESSAGE = 'شما مجوز لازم (audit_logs.view) برای انجام این کار را ندارید';
+
 const listCalls = () => fetchJson.mock.calls.map(c => String(c[0])).filter(url => url.startsWith('/activity-logs?'));
 
 describe('audit log page (TD-537)', () => {
   it('shows a Persian permission error for a 403 instead of an empty result', async () => {
     fetchJson.mockImplementation(async (url: string) => {
       if (url.startsWith('/activity-logs?')) {
-        throw Object.assign(new Error('شما مجوز لازم (audit_logs.view) برای انجام این کار را ندارید'), { status: 403, code: 'FORBIDDEN' });
+        throw Object.assign(new Error(SERVER_FORBIDDEN_MESSAGE), { status: 403, code: 'FORBIDDEN' });
       }
       return { users: [], actions: [], entities: [] };
     });

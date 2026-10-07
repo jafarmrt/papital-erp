@@ -1,5 +1,5 @@
 /**
- * v9.0.166 (TD-534, B02-19): the mention list shows the Persian name of each colleague's role from
+ * v9.0.223 (TD-534, B02-19): the mention list shows the Persian name of each colleague's role from
  * `/users/list-simple`, which no longer sends the role code. Before, it showed the raw code (for example cfo_accountant).
  */
 import { useState } from 'react';

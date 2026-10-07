@@ -115,7 +115,7 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
         if (Number(cd.after?.monthlySalary) !== 45000000) wrong.push(`ردیف ثبت مقدار بعد ندارد: ${JSON.stringify(create?.details).slice(0, 120)}`);
         const ud = (update?.details ?? {}) as { before?: Record<string, unknown>; after?: Record<string, unknown>; nobitexPasswordChanged?: boolean };
         if (Number(ud.before?.monthlySalary) !== 45000000 || Number(ud.after?.monthlySalary) !== 60000000) wrong.push(`حقوق قبل و بعد ${JSON.stringify(ud).slice(0, 160)}`);
-        // v9.0.155 (TD-530، تصمیم ت۷ الف): شبا تا ۴ رقم آخر پوشیده است و تغییرش دیده می‌شود
+        // v9.0.213 (TD-530، تصمیم ت۷ الف): شبا تا ۴ رقم آخر پوشیده است و تغییرش دیده می‌شود
         if (ud.before?.shebaNumber !== '****7890' || ud.after?.shebaNumber !== '****3210') wrong.push(`شبای قبل و بعد ${JSON.stringify([ud.before?.shebaNumber, ud.after?.shebaNumber])}`);
         if (ud.before && 'firstName' in ud.before) wrong.push('فیلد تغییرنکرده در ممیزی آمد');
         if (ud.nobitexPasswordChanged !== true) wrong.push('تغییر رمز نوبیتکس علامت نخورد');

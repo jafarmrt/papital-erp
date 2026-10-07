@@ -66,7 +66,7 @@ export function parseUserAgent(uaString?: string | null): ParsedUserAgent {
   } else if (/samsungbrowser\/([0-9.]+)/i.test(ua)) {
     browser = 'Samsung Internet';
   } else if (/\bopr\/|opera/i.test(ua)) {
-    // v9.0.157 (TD-527): Opera «Chrome/…» هم دارد، پس پیش از Chrome سنجیده می‌شود
+    // v9.0.215 (TD-527): Opera «Chrome/…» هم دارد، پس پیش از Chrome سنجیده می‌شود
     browser = 'Opera';
   } else if (/chrome\/([0-9.]+)/i.test(ua) && !/edg/i.test(ua)) {
     browser = 'Chrome';

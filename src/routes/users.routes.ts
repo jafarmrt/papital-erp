@@ -41,7 +41,7 @@ function touchesAdminAccount(actorRole: string | undefined, targetRoles: Array<s
 
 const updateProfileSchema = z.object({
   body: z.object({
-    // v9.0.165 (TD-533): نام حداکثر ۱۰۰ نویسه؛ تصویر فقط بارگذاری تازه یا مسیر `/uploads` همین سامانه (نه نشانی بیرونی)
+    // v9.0.222 (TD-533): نام حداکثر ۱۰۰ نویسه؛ تصویر فقط بارگذاری تازه یا مسیر `/uploads` همین سامانه (نه نشانی بیرونی)
     full_name: z.string().trim().max(FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE).optional(),
     avatar: z.string().refine(isAcceptableAvatar, AVATAR_INVALID_MESSAGE).optional(),
     current_password: z.string().optional(),
@@ -195,7 +195,7 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
       }
     });
 
-    // v9.0.160 (TD-531): نسخه توکن بالا رفت و نشست‌های دیگر کاربر باطل‌اند؛ همین نشست با توکن تازه ادامه می‌یابد، وگرنه
+    // v9.0.218 (TD-531): نسخه توکن بالا رفت و نشست‌های دیگر کاربر باطل‌اند؛ همین نشست با توکن تازه ادامه می‌یابد، وگرنه
     // پس از پیام موفقیت، درخواست بعدی ۴۰۱ می‌گرفت
     let session: { token: string; csrfToken: string } | null = null;
     if (passwordChanged) {
@@ -379,7 +379,7 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
       return res.status(400).json({ error: 'نقش «مدیر سیستم» حذف نمی‌شود' });
     }
 
-    // v9.0.153 (TD-535، یافته B02-20): فقط کاربران حذف‌نشده نقش را نگه می‌دارند؛ کاربر حذف‌شده با بازگرداندن نقش تازه می‌گیرد
+    // v9.0.179 (TD-535، یافته B02-20): فقط کاربران حذف‌نشده نقش را نگه می‌دارند؛ کاربر حذف‌شده با بازگرداندن نقش تازه می‌گیرد
     const assignedUsers = await orm.select({ id: users.id }).from(users)
       .where(and(eq(users.role, targetRole.code), eq(users.isDeleted, 0)));
     if (assignedUsers.length > 0) {
@@ -417,7 +417,7 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
 }));
 
 // USERS MANAGEMENT ROUTES
-// v9.0.159 (TD-532): همان کمینه مشترک نمایه و راه‌اندازی، نه ۶ نویسه
+// v9.0.217 (TD-532): همان کمینه مشترک نمایه و راه‌اندازی، نه ۶ نویسه
 const userPasswordField = z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE);
 
 const userCreateSchema = z.object({
@@ -440,7 +440,7 @@ const userUpdateSchema = z.object({
   })
 });
 
-// v9.0.152 (TD-519، تصمیم ت۲ الف): بازگرداندن کاربر حذف‌شده نقش تازه و رمز موقت می‌خواهد
+// v9.0.178 (TD-519، تصمیم ت۲ الف): بازگرداندن کاربر حذف‌شده نقش تازه و رمز موقت می‌خواهد
 const userRestoreSchema = z.object({
   body: z.object({
     password: userPasswordField,
@@ -458,7 +458,7 @@ const userParamsSchema = z.object({
 });
 
 /**
- * v9.0.166 (TD-534، یافته B02-19): فهرست ساده برای انتخابگر اشاره و فهرست‌های نام است و به هر کاربر واردشده می‌رسد؛ پس
+ * v9.0.223 (TD-534، یافته B02-19): فهرست ساده برای انتخابگر اشاره و فهرست‌های نام است و به هر کاربر واردشده می‌رسد؛ پس
  * کد نقش ندارد. نام کاربری برای اشاره (@نام‌کاربری) می‌ماند و به‌جای کد نقش، نام فارسی ذخیره‌شده نقش می‌آید.
  */
 router.get('/users/list-simple', asyncHandler(async (req, res) => {
@@ -530,7 +530,7 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     // ۱. بررسی تکراری نبودن نام کاربری در دیتابیس
     const [existingUser] = await orm.select().from(users).where(eq(users.username, tUsername)).limit(1);
     if (existingUser) {
-      // v9.0.152 (TD-519، یافته B02-04، تصمیم ت۲ الف): کاربر تازه همیشه شناسه تازه می‌گیرد. پیش‌تر همان ردیف کاربر حذف‌شده
+      // v9.0.178 (TD-519، یافته B02-04، تصمیم ت۲ الف): کاربر تازه همیشه شناسه تازه می‌گیرد. پیش‌تر همان ردیف کاربر حذف‌شده
       // با رمز و نقش تازه زنده می‌شد و فرد تازه اعلان‌ها، فیش و اطلاعات بانکی فرد قبلی را می‌دید؛ بازگرداندن همان شخص
       // اقدامی جداست (`POST /users/:id/restore`). پاسخ مستقیم است، چون گرداننده خطا `details` را در تولید نمی‌فرستد.
       if (existingUser.isDeleted === 1) {
@@ -554,7 +554,7 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // v9.0.161 (TD-523، ت۵ الف): رمزی که مدیر می‌گذارد موقت است و کاربر در نخستین ورود باید آن را عوض کند
+    // v9.0.219 (TD-523، ت۵ الف): رمزی که مدیر می‌گذارد موقت است و کاربر در نخستین ورود باید آن را عوض کند
     const [info] = await orm.insert(users).values({
       username: tUsername,
       password: hashedPassword,
@@ -644,7 +644,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
         : (prevUser.fullName || prevUser.username);
 
       const updateData: Partial<typeof users.$inferInsert> = { fullName: tFullName, role };
-      // v9.0.161 (TD-523، ت۵ الف): رمزی که مدیر برای کاربر دیگری می‌گذارد موقت است (پیش‌تر پرچم را ۰ می‌کرد)؛ رمزی که
+      // v9.0.219 (TD-523، ت۵ الف): رمزی که مدیر برای کاربر دیگری می‌گذارد موقت است (پیش‌تر پرچم را ۰ می‌کرد)؛ رمزی که
       // کسی برای حساب خودش می‌گذارد موقت نیست
       if (passwordHash) {
         updateData.password = passwordHash;
@@ -703,7 +703,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
 }));
 
 /**
- * v9.0.152 (TD-519، یافته B02-04، تصمیم ت۲ الف): بازگرداندن کاربر حذف‌شده، همان شخص با همان شناسه و نام، با نقش تازه و
+ * v9.0.178 (TD-519، یافته B02-04، تصمیم ت۲ الف): بازگرداندن کاربر حذف‌شده، همان شخص با همان شناسه و نام، با نقش تازه و
  * رمز موقت که در ورود بعدی باید عوض شود. قاعده‌های ویرایش کاربر برقرار است: حساب مدیر سیستم فقط با مدیر سیستم،
  * و نقش تازه و حساب در مرز مجوزهای بازگرداننده (TD-520).
  */

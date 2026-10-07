@@ -1,5 +1,5 @@
 /**
- * v9.0.167 (TD-540, B02-25, owner decisions t8 of package 2 and t7 of package 16): the Persian text of the users, roles,
+ * v9.0.224 (TD-540, B02-25, owner decisions t8 of package 2 and t7 of package 16): the Persian text of the users, roles,
  * audit log, login, setup and profile screens, the permission catalog and the package's server messages has no English
  * word and no transliteration («داشبورد» → «پیشخوان», «پروفایل» → «نمایه», «ماژول» → «بخش», «آواتار» → «تصویر نمایه»,
  * «لاگ» → «رویداد», «کلاینت» → «دستگاه کاربر», «ویزارد» → «راه‌اندازی اولیه», Snapshot → «تصویر داده», no «کانبان»),
@@ -92,7 +92,7 @@ describe('package 2 Persian wording (TD-540)', () => {
     expect(texts.filter(t => TRANSLITERATION.test(t.text)).map(t => `${t.where}: ${t.text}`)).toEqual([]);
   });
 
-  it('has no English word in Persian text, except «نشانی IP», the system name, file formats and currency codes', () => {
+  it('has no English word in Persian text, except the IP address label, the system name, file formats and currency codes', () => {
     const offenders = texts.filter((t) => {
       const words = withoutInterpolations(t.text).replace(/[A-Za-z0-9]*_[A-Za-z0-9_]*/g, ' ').match(/[A-Za-z]{2,}/g) ?? [];
       return words.some(w => !ALLOWED_LATIN.has(w.toUpperCase()));
@@ -129,7 +129,7 @@ describe('package 2 Persian wording (TD-540)', () => {
   });
 
   it('names a role by its stored name, the system admin by default, and never by its code', () => {
-    expect(roleDisplayName('branch_sales', 'کارمند فروش')).toBe('کارمند فروش');
+    expect(roleDisplayName('clerk', 'کارمند فروش')).toBe('کارمند فروش');
     expect(roleDisplayName(SYSTEM_ADMIN_ROLE, null)).toBe('مدیر سیستم');
     expect(roleDisplayName('missing_role', null)).toBe('');
   });

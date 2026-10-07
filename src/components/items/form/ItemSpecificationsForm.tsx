@@ -66,7 +66,7 @@ export const ItemSpecificationsForm: React.FC<ItemSpecificationsFormProps> = ({
                   }}
                   className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-slate-50 outline-none flex-1"
                 >
-                  <option value="">+ افزودن رنگ از لیست...</option>
+                  <option value="">+ افزودن رنگ از فهرست...</option>
                   {PREDEFINED_COLORS.filter(c => !parseMultiValue(form.color).includes(c)).map(c => (
                     <option key={c} value={c}>
                       {c}
@@ -137,7 +137,7 @@ export const ItemSpecificationsForm: React.FC<ItemSpecificationsFormProps> = ({
                   }}
                   className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-slate-50 outline-none flex-1"
                 >
-                  <option value="">+ افزودن جنس از لیست...</option>
+                  <option value="">+ افزودن جنس از فهرست...</option>
                   {PREDEFINED_MATERIALS.filter(m => !parseMultiValue(form.material).includes(m)).map(m => (
                     <option key={m} value={m}>
                       {m}

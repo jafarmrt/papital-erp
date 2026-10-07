@@ -28,6 +28,8 @@ COPY vendor ./vendor
 RUN npm ci --no-audit --no-fund
 
 COPY . .
+# The image has no .git: pass the commit with --build-arg GIT_COMMIT_SHA=$(git rev-parse HEAD) (dist/build-info.json)
+ARG GIT_COMMIT_SHA
 # Build the client bundle + server bundle + copies drizzle/ into dist/drizzle (Linux build env)
 RUN npm run build
 

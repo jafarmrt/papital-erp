@@ -36,7 +36,7 @@ export function buildSyntheticUsersHealthTest(rows: SyntheticUserRow[]): HealthC
       id: r.id,
       code: r.username,
       title: r.fullName || r.username,
-      // v9.0.167 (TD-540): نام نقش، نه کد آن
+      // v9.0.224 (TD-540): نام نقش، نه کد آن
       subtitle: `نقش: ${roleDisplayName(r.role, r.roleName) || '—'}`,
       details: `کاربر «${r.fullName || r.username}» با نام کاربری «${r.username}»`,
     })),

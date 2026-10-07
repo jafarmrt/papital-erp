@@ -68,9 +68,9 @@ async function insertDeletableMarkers(url: string): Promise<void> {
     line AS (INSERT INTO document_items (document_id, item_id, quantity) SELECT doc.id, item.id, 1 FROM doc, item RETURNING id),
     dv AS (INSERT INTO journal_vouchers (voucher_number, date, description, source_document_id)
       SELECT 990001, '2026-01-05', 'draft voucher of a marked invoice', id FROM doc RETURNING id),
-    dvi AS (INSERT INTO journal_voucher_items (voucher_id, account_id) SELECT dv.id, acc.id FROM dv, acc RETURNING id),
+    dvi AS (INSERT INTO journal_voucher_items (voucher_id, account_id, debit) SELECT dv.id, acc.id, 1 FROM dv, acc RETURNING id),
     v AS (INSERT INTO journal_vouchers (voucher_number, date, description) VALUES (990002, '2026-01-05', $1 || ' voucher') RETURNING id),
-    vi AS (INSERT INTO journal_voucher_items (voucher_id, account_id) SELECT v.id, acc.id FROM v, acc RETURNING id),
+    vi AS (INSERT INTO journal_voucher_items (voucher_id, account_id, debit) SELECT v.id, acc.id, 1 FROM v, acc RETURNING id),
     cust AS (INSERT INTO customers (name) VALUES ($1 || ' customer') RETURNING id),
     lead AS (INSERT INTO crm_leads (title) VALUES ($1 || ' lead') RETURNING id),
     act AS (INSERT INTO crm_activities (type, title, lead_id) SELECT 'call', 'call', id FROM lead RETURNING id),
@@ -174,7 +174,7 @@ function git(cwd: string, args: string[]): void {
 }
 
 /** origin with two commits; the app clone is on the first, so update.sh pulls the second (package version 9.9.2) */
-function makeGitApp(root: string): string {
+export function makeGitApp(root: string): string {
   const origin = path.join(root, 'origin.git');
   const work = path.join(root, 'work');
   const app = path.join(root, 'app');
@@ -200,7 +200,7 @@ function makeGitApp(root: string): string {
 }
 
 /** npm (vite empties dist/ first, then the build fails when FAKE_BUILD_FAIL=1), systemctl and sudo */
-function fakeBin(root: string): string {
+export function fakeBin(root: string): string {
   const bin = path.join(root, 'bin');
   fs.mkdirSync(bin);
   const write = (name: string, body: string) => fs.writeFileSync(path.join(bin, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
@@ -210,7 +210,7 @@ function fakeBin(root: string): string {
   return bin;
 }
 
-function startupServer(version: string): Promise<{ port: number; close: () => Promise<void> }> {
+export function startupServer(version: string): Promise<{ port: number; close: () => Promise<void> }> {
   const server = http.createServer((req, res) => {
     if (req.url === '/health/startup') res.writeHead(200).end('{"status":"started"}');
     else if (req.url === '/health') res.writeHead(200).end(`{"status":"ok","version":"${version}"}`);
@@ -221,8 +221,8 @@ function startupServer(version: string): Promise<{ port: number; close: () => Pr
   })));
 }
 
-async function runUpdate(app: string, bin: string, extra: Record<string, string>): Promise<{ code: number; output: string }> {
-  return runCommand('bash', [path.join(app, 'update.sh'), '--no-backup'], {
+export async function runUpdate(app: string, bin: string, extra: Record<string, string>, args: string[] = ['--no-backup']): Promise<{ code: number; output: string }> {
+  return runCommand('bash', [path.join(app, 'update.sh'), ...args], {
     cwd: path.dirname(app),
     env: scriptEnv({ PATH: `${bin}:${process.env.PATH ?? ''}`, APP_DIR: app, STARTUP_TIMEOUT: '4', STARTUP_POLL_INTERVAL: '1', ...extra }),
     timeoutMs: 120_000,

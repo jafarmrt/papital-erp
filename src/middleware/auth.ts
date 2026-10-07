@@ -258,7 +258,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     if (!live.ok) {
       return res.status(live.status).json({ error: live.error });
     }
-    // v9.0.161 (TD-523، ت۵ الف): با رمز موقتی که مدیر گذاشته، تا تغییر رمز فقط نشست، نمایه، مجوزهای خود، CSRF و خروج باز است
+    // v9.0.219 (TD-523، ت۵ الف): با رمز موقتی که مدیر گذاشته، تا تغییر رمز فقط نشست، نمایه، مجوزهای خود، CSRF و خروج باز است
     if (live.mustResetPassword && !isPasswordResetAllowedPath(originalPath)) {
       return res.status(403).json({ error: PASSWORD_RESET_REQUIRED_MESSAGE, code: PASSWORD_RESET_REQUIRED });
     }

@@ -10,6 +10,20 @@ import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } fro
 import { buildFutureStockMovementHealthTest, findFutureStockMovements } from '../inventory/futureStockMovements.js';
 import { buildOpeningVoucherHealthTest, findOpeningVoucherMismatches } from '../inventory/itemOpeningValue.js';
 import { buildReservedWarehouseCodeHealthTest, findReservedCodeWarehouses } from '../inventory/reservedWarehouseCode.js';
+import {
+  buildEarlyClosedYearsHealthTest, buildManualClosingTypeHealthTest, buildOutOfOrderClosedYearsHealthTest,
+  findEarlyClosedYears, findManualClosingTypeVouchers, findOutOfOrderClosedYears,
+} from './fiscalClosingHealth.js';
+import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
+import { buildForeignRateHealthTest, findVouchersWithoutForeignRate } from './voucherForeignRateHealth.js';
+import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
+import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
+import {
+  buildAccountMappingHealthTest, buildDeletedAccountRowsHealthTest, buildNonLatinAccountCodeHealthTest, buildNonPostingRowsHealthTest,
+  findAccountMappingIssues, findDeletedAccountsWithVoucherRows, findNonLatinAccountCodes, findVouchersOnNonPostingAccounts,
+} from './chartOfAccountsHealth.js';
+import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
+import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -138,25 +152,39 @@ export class FinancialHealthService {
           (SELECT COUNT(*)::int FROM items WHERE is_deleted = 0) AS total_items
       `),
 
-      // ب: آزمون تراز اسناد دوبل (Voucher Balance)
+      // ب: آزمون تراز اسناد دوبل (Voucher Balance) — v9.0.190 (TD-551، ت۷): سند تک‌ارزی روی مبلغ خام و سند چندارزی به
+      // ریال با قاعده TD-260 (ردیف ارزی × نرخ همان ردیف، گرد به ریال)؛ پیش‌تر «۱۰۰ دلار / ۱۰۰ ریال» تراز شمرده می‌شد
       orm.execute(sql`
-        SELECT 
-          v.id,
-          v.voucher_number,
-          v.date,
-          v.status,
-          v.description,
-          COALESCE(SUM(vi.debit), 0)::float AS calc_debit,
-          COALESCE(SUM(vi.credit), 0)::float AS calc_credit,
-          ABS(COALESCE(SUM(vi.debit), 0) - COALESCE(SUM(vi.credit), 0))::float AS discrepancy
-        FROM journal_vouchers v
-        -- v8.0.15 (TD-270): ردیف‌های حذف نرم‌شده (همگام‌سازی دوباره سند پیش‌نویس) در هیچ آزمونی شمرده نمی‌شوند
-        LEFT JOIN journal_voucher_items vi ON vi.voucher_id = v.id AND vi.is_deleted = 0
-        WHERE v.is_deleted = 0
-        GROUP BY v.id, v.voucher_number, v.date, v.status, v.description
-        HAVING ABS(COALESCE(SUM(vi.debit), 0) - COALESCE(SUM(vi.credit), 0)) > 0.05
-        ORDER BY v.voucher_number DESC
-        LIMIT 50;
+        WITH rows AS (
+          SELECT vi.voucher_id, vi.debit, vi.credit,
+                 UPPER(COALESCE(NULLIF(vi.currency, ''), NULLIF(v.currency, ''), 'IRR')) AS cur,
+                 COALESCE(NULLIF(vi.exchange_rate, 0), 1) AS rate
+            FROM journal_voucher_items vi
+            JOIN journal_vouchers v ON v.id = vi.voucher_id
+           -- v8.0.15 (TD-270): ردیف‌های حذف نرم‌شده (همگام‌سازی دوباره سند پیش‌نویس) در هیچ آزمونی شمرده نمی‌شوند
+           WHERE vi.is_deleted = 0
+        ), sums AS (
+          SELECT voucher_id,
+                 COUNT(DISTINCT cur) AS currency_count,
+                 SUM(debit) AS raw_debit, SUM(credit) AS raw_credit,
+                 SUM(CASE WHEN cur = 'IRR' THEN debit ELSE ROUND(debit * rate, 0) END) AS irr_debit,
+                 SUM(CASE WHEN cur = 'IRR' THEN credit ELSE ROUND(credit * rate, 0) END) AS irr_credit
+            FROM rows GROUP BY voucher_id
+        ), checked AS (
+          SELECT v.id, v.voucher_number, v.date, v.status, v.description,
+                 COALESCE(CASE WHEN s.currency_count > 1 THEN s.irr_debit ELSE s.raw_debit END, 0) AS calc_debit,
+                 COALESCE(CASE WHEN s.currency_count > 1 THEN s.irr_credit ELSE s.raw_credit END, 0) AS calc_credit
+            FROM journal_vouchers v
+            LEFT JOIN sums s ON s.voucher_id = v.id
+           WHERE v.is_deleted = 0
+        )
+        SELECT id, voucher_number, date, status, description,
+               calc_debit::float AS calc_debit, calc_credit::float AS calc_credit,
+               ABS(calc_debit - calc_credit)::float AS discrepancy
+          FROM checked
+         WHERE ABS(calc_debit - calc_credit) > 0.05
+         ORDER BY voucher_number DESC
+         LIMIT 50;
       `),
 
       // ج: آزمون حساب‌های با مانده خلاف ماهیت (Unnatural Balances)
@@ -1108,6 +1136,51 @@ export class FinancialHealthService {
     const reservedWarehouseCodeTest = buildReservedWarehouseCodeHealthTest(await findReservedCodeWarehouses());
     overallScore += reservedWarehouseCodeTest.scoreImpact;
     tests.push(reservedWarehouseCodeTest);
+
+    // آزمون ۲۴: v9.0.152 (TD-647) قیمت فعال کالا با عنوانی بیرون از فهرست‌های قیمت تنظیم‌شده (فقط فهرست، بی پاک‌سازی)
+    const unknownPriceTitleTest = buildUnknownPriceTitleHealthTest(await findUnknownPriceTitles());
+    overallScore += unknownPriceTitleTest.scoreImpact;
+    tests.push(unknownPriceTitleTest);
+
+    // آزمون ۲۵: v9.0.160 (TD-559) اسناد دستی با نوع اختتامیه که بستن سال صادر نکرده (فقط فهرست، بی بازنویسی)
+    tests.push(buildManualClosingTypeHealthTest(await findManualClosingTypeVouchers()));
+    tests.push(buildForeignRateHealthTest(await findVouchersWithoutForeignRate())); // v9.0.190 (TD-551)
+
+    // آزمون ۲۶: v9.0.161 (TD-543) سال مالی بسته‌شده پیش از پایانش (فقط فهرست؛ آخرین سال بسته با بازگشایی باز می‌شود)
+    tests.push(buildEarlyClosedYearsHealthTest(await findEarlyClosedYears()));
+
+    // آزمون ۲۷: v9.0.162 (TD-544) سال مالی بسته‌شده پیش از سال‌های پیشینِ دارای سند خود (فقط فهرست، بی اصلاح خودکار)
+    tests.push(buildOutOfOrderClosedYearsHealthTest(await findOutOfOrderClosedYears()));
+
+    // آزمون ۲۸: v9.0.170 (TD-653) کد یا نام مشترک میان کالاهای فعال (فقط فهرست، بی تغییر خودکار)
+    const itemIdentityTest = buildItemIdentityHealthTest(await findDuplicateItemIdentities(), await hasItemIdentityIndexes());
+    overallScore += itemIdentityTest.scoreImpact;
+    tests.push(itemIdentityTest);
+
+    // آزمون ۲۹: v9.0.175 (TD-660) بیش از یک قیمت فعال برای یک فهرست قیمت کالا (فقط فهرست، بی پاک‌سازی)
+    const duplicatePriceTest = buildDuplicateActivePriceHealthTest(await findDuplicateActivePrices());
+    overallScore += duplicatePriceTest.scoreImpact;
+    tests.push(duplicatePriceTest);
+
+    // آزمون ۳۰: v9.0.176 (TD-657) قیمت فعال با مبلغ صفر یا منفی یا ارز بیرون از فهرست §6 (فقط فهرست، بی تغییر خودکار)
+    const invalidPriceTest = buildInvalidActivePriceHealthTest(await findInvalidActivePrices());
+    overallScore += invalidPriceTest.scoreImpact;
+    tests.push(invalidPriceTest);
+
+    // آزمون ۳۱: v9.0.197 (TD-546) حساب حذف‌شده‌ای که ردیف سند دارد (فقط فهرست، بی احیای خودکار)
+    tests.push(buildDeletedAccountRowsHealthTest(await findDeletedAccountsWithVoucherRows()));
+    // آزمون ۳۲: v9.0.198 (TD-549) ردیف سند روی حساب گروه، کل یا دارای زیرحساب (فقط فهرست، بی بازنویسی)
+    tests.push(buildNonPostingRowsHealthTest(await findVouchersOnNonPostingAccounts()));
+    // آزمون ۳۳: v9.0.199 (TD-550) نگاشت حساب سندهای خودکار به حساب ناموجود، غیرقابل ثبت یا ناسازگار (فقط فهرست)
+    tests.push(buildAccountMappingHealthTest(await findAccountMappingIssues()));
+    // آزمون ۳۴: v9.0.201 (TD-558) کد حساب با رقم فارسی یا نویسه غیررقمی (فقط فهرست، بی بازنویسی)
+    tests.push(buildNonLatinAccountCodeHealthTest(await findNonLatinAccountCodes()));
+    // آزمون ۳۵: v9.0.202 (TD-562) قید پایگاه‌داده سند و سرفصل اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)
+    tests.push(buildAccountingIntegrityHealthTest(await findAccountingIntegrityGaps()));
+    // آزمون ۳۶: v9.0.205 (TD-658) نام دسته‌بندی تکراری و کالای فعال با دسته‌ای که نیست (فقط فهرست، بی تغییر خودکار)
+    const categoryIntegrityTest = buildCategoryIntegrityHealthTest(await findCategoryIntegrityIssues(), await hasCategoryNameUniqueIndex());
+    overallScore += categoryIntegrityTest.scoreImpact;
+    tests.push(categoryIntegrityTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

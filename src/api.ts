@@ -1,3 +1,4 @@
+import { fetchThroughStartup } from './lib/systemStarting';
 import { inFlightRetryDelayMs, isInFlightResponse, releaseSubmissionKey, settlesSubmissionKey, submissionKeyFor } from './lib/submissionKey';
 import { PASSWORD_RESET_REQUIRED } from './lib/auth/passwordReset';
 
@@ -187,11 +188,12 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
 
   let res: Response;
   try {
-    res = await fetch(url, {
+    // v9.0.164 (TD-584): while the server finishes an update it answers 503 SYSTEM_STARTING; wait and resend
+    res = await fetchThroughStartup(() => fetch(url, {
       ...options,
       credentials: 'include', // Automatically passes and receives HttpOnly Secure cookies
       headers,
-    });
+    }), options?.signal);
   } catch (err: any) {
     if (isAbortError(err) || options?.signal?.aborted) {
       const abortErr = new Error('The operation was aborted.');
@@ -261,7 +263,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     const details = data.details || data.errorDetails || data.errorObject?.details || null;
 
     if (res.status === 403) {
-      // v9.0.161 (TD-523): رمز موقت؛ برنامه به برگه تغییر رمز می‌رود
+      // v9.0.219 (TD-523): رمز موقت؛ برنامه به برگه تغییر رمز می‌رود
       if (code === PASSWORD_RESET_REQUIRED && typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('auth:password-reset-required'));
       }
@@ -270,7 +272,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     }
     if (res.status === 429) {
       const rateLimitMsg = data.message || (typeof data.error === 'string' ? data.error : '') || data.errorObject?.message || 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً چند لحظه صبر کنید (۴۲۹)';
-      // v9.0.162 (TD-539): قفل ورود با `locked` و `remainingMinutes` در جزئیات خطا می‌ماند؛ صفحه ورود شمارش را از همین می‌سازد
+      // v9.0.220 (TD-539): قفل ورود با `locked` و `remainingMinutes` در جزئیات خطا می‌ماند؛ صفحه ورود شمارش را از همین می‌سازد
       const lockout = data.locked === true ? { locked: true, remainingMinutes: data.remainingMinutes } : null;
       throw new ApiError(rateLimitMsg, code || 'RATE_LIMIT_EXCEEDED', 429, details ?? lockout);
     }

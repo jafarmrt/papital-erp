@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex, primaryKey } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
@@ -52,6 +52,10 @@ export const journalVouchers = pgTable('journal_vouchers', {
   sourceChequeId: integer('source_cheque_id').references(baseRelations.chequesId, { onDelete: 'set null' }),
   // v8.0.34 (TD-286): سند تخصیص مواد BOM پروژه (مهاجرت 0049)
   sourceBomAllocationId: integer('source_bom_allocation_id').references(baseRelations.projectBomAllocationsId, { onDelete: 'set null' }),
+  // v9.0.159 (TD-545، B03-03، ت۳): سال مالی‌ای که «بستن سال مالی» این سند اختتامیه یا افتتاحیه را برایش صادر کرده است
+  // (مهاجرت 0069). سند اختتامیه فقط با همین پیوند شناخته می‌شود، نه با نوع `closing` یا شماره مرجع؛ سند برگشت آن در
+  // بازگشایی سال همان پیوند و نوع را دارد. کلید خارجی ندارد: شماره سال است و ردیف سال پیش از بستن ساخته شده است.
+  sourceFiscalYear: integer('source_fiscal_year'),
   currency: text('currency').default('IRR'),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   createdById: integer('created_by_id').references(() => users.id),
@@ -71,6 +75,7 @@ export const journalVouchers = pgTable('journal_vouchers', {
   // v8.0.19 (TD-271): مهاجرت 0047
   idx_jv_source_cheque: index('idx_jv_source_cheque').on(table.sourceChequeId).where(sql`${table.sourceChequeId} IS NOT NULL`),
   idx_jv_source_bom_allocation: index('idx_jv_source_bom_allocation').on(table.sourceBomAllocationId).where(sql`${table.sourceBomAllocationId} IS NOT NULL`),
+  idx_jv_source_fiscal_year: index('idx_jv_source_fiscal_year').on(table.sourceFiscalYear).where(sql`${table.sourceFiscalYear} IS NOT NULL`),
   // v7.0.91 (TD-195): ایندکس یکتای uq_jv_voucher_number را مهاجرت 0031 فقط روی داده بدون شماره تکراری می‌سازد
   // (voucherNumberIntegrity.ts)؛ این ایندکس معمولی برای پایگاه‌داده‌ای است که ایندکس یکتا ساخته نشد
   idx_jv_number: index('idx_jv_number').on(table.voucherNumber),
@@ -132,6 +137,21 @@ export const journalVoucherItems = pgTable('journal_voucher_items', {
   idx_jvi_account: index('idx_jvi_account').on(table.accountId),
   idx_jvi_detailed: index('idx_jvi_detailed').on(table.detailedType, table.detailedId),
   idx_jvi_deleted: index('idx_jvi_deleted').on(table.isDeleted),
+}));
+
+/**
+ * v9.0.206 (TD-663، B05-17، تصمیم ت۱۰ بند ۳): کالاهای هر سند افتتاحیه موجودی و سهم هر کالا (مهاجرت 0074). سند افتتاحیه
+ * یک کالا (فرم کالا، گردش کار) یک ردیف دارد و سند ورود اکسل یک ردیف برای هر کالای تازه آن فایل؛ سندهای پیشین با
+ * `reference_id` = کالا در مهاجرت پر شدند. «سند افتتاحیه این کالا» فقط از همین جدول خوانده می‌شود.
+ */
+export const itemOpeningVoucherItems = pgTable('item_opening_voucher_items', {
+  voucherId: integer('voucher_id').notNull().references(() => journalVouchers.id, { onDelete: 'cascade' }),
+  itemId: integer('item_id').notNull().references(baseRelations.itemsId, { onDelete: 'cascade' }),
+  amount: moneyNumeric('amount').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.voucherId, table.itemId] }),
+  idx_iovi_item: index('idx_iovi_item').on(table.itemId),
 }));
 
 export const bankAccounts = pgTable('bank_accounts', {

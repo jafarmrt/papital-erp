@@ -19,11 +19,13 @@ export interface Item {
   cost_price?: number;
   stocks?: any;
   color?: string;
-  weight?: number;
+  weight?: number | null;
   material?: string;
   size?: string;
   canSetOpeningBalance?: boolean;
   can_set_opening_balance?: boolean;
+  /** v9.0.171 (TD-654): نسخه رکورد برای قفل خوش‌بینانه ویرایش */
+  version?: number;
 }
 
 export interface PendingMaterial {

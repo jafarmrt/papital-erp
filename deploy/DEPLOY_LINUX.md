@@ -93,7 +93,11 @@ sudo certbot renew --dry-run                     # تست تمدید خودکا�
 cd /opt/papital-erp
 sudo bash update.sh        # بکاپ خودکار دیتابیس + git pull + build + restart + health
 ```
-(در حالت نصب با زیپ: زیپ جدید را در همان پوشه extract کنید و سپس `update.sh` — فایل `.env` دست‌نخورده می‌ماند.)
+در حالت نصب با زیپ، زیپ تازه را به سرور بفرستید و آن را به `update.sh` بدهید؛ زیپ را روی پوشه برنامه باز نکنید:
+```bash
+sudo bash update.sh --zip /tmp/papital-erp-source-vX.Y.Z.zip   # بکاپ + جایگزینی سورس + build + restart + health
+```
+فایل `.env`، پیوست‌ها (`public/uploads`)، لاگ‌ها و بکاپ‌ها دست‌نخورده می‌مانند. پوشه‌ای که از پیش باز شده است با `--source <پوشه>` داده می‌شود.
 
 ---
 

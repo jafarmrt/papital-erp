@@ -15,7 +15,7 @@ export async function runAccessPackageTwoAuditTests(shouldRun: ShouldRun): Promi
   if (shouldRun('sec_audit_purge_keeps_financial_events_td_522', 'security', 'td522', 'audit', 'purge', 'package2')) {
     await runCase(results, {
       id: 'sec_audit_purge_keeps_financial_events_td_522',
-      name: 'v9.0.154: the audit purge deletes only operational sections and never a financial, security, role or user event (TD-522)',
+      name: 'v9.0.212: the audit purge deletes only operational sections and never a financial, security, role or user event (TD-522)',
       details: 'R09 of the package 2 review: ten 200-day-old events with the names the code writes (voucher finalize and issue, treasury payment, cheque status, bank Sheba, payroll payment, party Sheba, role permission, login, document delete) all stay after the purge the UI sends; an old daily log is purged and an old sales lead DELETE stays; preserveCritical, allowForceRecent and less than 90 days are refused',
     }, async (h, wrong) => {
       const marker = `td522_${h.tag}`;
@@ -70,7 +70,7 @@ export async function runAccessPackageTwoAuditTests(shouldRun: ShouldRun): Promi
   if (shouldRun('sec_audit_masks_bank_numbers_td_530', 'security', 'td530', 'audit', 'sanitize', 'package2')) {
     await runCase(results, {
       id: 'sec_audit_masks_bank_numbers_td_530',
-      name: 'v9.0.155: the audit snapshot of a party keeps only the last four digits of its card, account and Sheba numbers (TD-530)',
+      name: 'v9.0.213: the audit snapshot of a party keeps only the last four digits of its card, account and Sheba numbers (TD-530)',
       details: 'R08 of the package 2 review: POST /customers with bank details used to store the card 6104337812345678 and the account in clear in activity_logs and GET /activity-logs; now the snapshot and the field change hold ****5678 style values, so a Sheba change stays visible without the full number',
     }, async (h, wrong) => {
       const name = `طرف حساب سجل ${h.tag}`;

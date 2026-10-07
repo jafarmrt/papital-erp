@@ -394,7 +394,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                                 type="checkbox"
                                 checked={isChecked}
                                 disabled={locked}
-                                // v9.0.163 (TD-536): فقط تغییر خود جعبه؛ کلیک روی عنوان را برچسب به همین جعبه می‌رساند (پیش‌تر onClick برچسب
+                                // v9.0.221 (TD-536): فقط تغییر خود جعبه؛ کلیک روی عنوان را برچسب به همین جعبه می‌رساند (پیش‌تر onClick برچسب
                                 // و همین کلیک رسانده‌شده دو بار تغییر می‌دادند و عنوان کاری نمی‌کرد)
                                 onChange={() => togglePermission(p.key)}
                                 className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"

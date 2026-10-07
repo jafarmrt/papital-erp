@@ -19,56 +19,227 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.167 — Users, Roles and Audit Screens in Plain Persian
+### v9.0.224 — Users, Roles and Audit Screens in Plain Persian
 - **Users, Roles and Audit Screens in Plain Persian:** the users, roles, audit log, login, setup and profile screens and the permission list drop English words and transliterations, show counts in Persian digits and name roles instead of showing their codes (TD-540).
 
-### v9.0.166 — The Simple User List Gives the Role Name, Not Its Code
+### v9.0.223 — The Simple User List Gives the Role Name, Not Its Code
 - **The Simple User List Gives the Role Name, Not Its Code:** the user list every signed-in user reads for mentions carries each role's Persian name instead of its code (TD-534).
 
-### v9.0.165 — Profile Picture Only From This System, Name Up to 100 Characters
+### v9.0.222 — Profile Picture Only From This System, Name Up to 100 Characters
 - **Profile Picture Only From This System, Name Up to 100 Characters:** the profile refuses an outside image address or any other text as the picture, and a user name is at most 100 characters (TD-533).
 
-### v9.0.164 — Voucher Soft-Delete Test No Longer Depends on Row Order
-- **Voucher Soft-Delete Test No Longer Depends on Row Order:** a test-only change; the soft-delete regression test picks the debit row by amount, so it no longer fails when the database returns the credit row first (TD-897).
-
-### v9.0.163 — Clicking a Permission Title Ticks It
+### v9.0.221 — Clicking a Permission Title Ticks It
 - **Clicking a Permission Title Ticks It:** in the role form a click on a permission's title or description ticks it once, like the box itself (TD-536).
 
-### v9.0.162 — The Login Lock Shows Its Real Minutes in Persian
+### v9.0.220 — The Login Lock Shows Its Real Minutes in Persian
 - **The Login Lock Shows Its Real Minutes in Persian:** a login lock answers locked and its minutes; the login page counts them down in Persian digits and a general 429 is no longer a fake lock (TD-539).
 
-### v9.0.161 — A Temporary Password Must Be Changed First
+### v9.0.219 — A Temporary Password Must Be Changed First
 - **A Temporary Password Must Be Changed First:** a password an administrator sets is temporary; until the user changes it the server opens only the session, profile and logout, and the browser shows only the password form (TD-523).
 
-### v9.0.160 — Changing Your Own Password Keeps This Session
+### v9.0.218 — Changing Your Own Password Keeps This Session
 - **Changing Your Own Password Keeps This Session:** after a password change from the profile, this session gets a new token and goes on; the other sessions of the user end (TD-531).
 
-### v9.0.159 — One Minimum Password Length Everywhere
+### v9.0.217 — One Minimum Password Length Everywhere
 - **One Minimum Password Length Everywhere:** creating, editing and restoring a user, the profile and the setup all ask eight characters, from one shared constant with one Persian message (TD-532).
 
-### v9.0.158 — Audit Actions in Persian and Jalali Excel File Name
+### v9.0.216 — Audit Actions in Persian and Jalali Excel File Name
 - **Audit Actions in Persian and Jalali Excel File Name:** one table gives the Persian label of every audit action on the page, the filter, the print and Excel; the Excel file is named with today's Jalali date (TD-538).
 
-### v9.0.157 — Audit Print and Excel Cover the Whole Filter
+### v9.0.215 — Audit Print and Excel Cover the Whole Filter
 - **Audit Print and Excel Cover the Whole Filter:** the official print and the Excel export come from one server request with every filter and the search, up to 1000 rows; the print shows the server total and all filters (TD-527).
 
-### v9.0.156 — Audit Log Page Shows Refusals and Searches After Typing Pauses
+### v9.0.214 — Audit Log Page Shows Refusals and Searches After Typing Pauses
 - **Audit Log Page Shows Refusals and Searches After Typing Pauses:** a refused request shows a Persian permission message instead of an empty list; the search is sent once, from page 1 (TD-537).
 
-### v9.0.155 — Audit Log Masks Bank Numbers and Secret Keys in Any Spelling
+### v9.0.213 — Audit Log Masks Bank Numbers and Secret Keys in Any Spelling
 - **Audit Log Masks Bank Numbers and Secret Keys in Any Spelling:** card, account and Sheba numbers keep only their last four digits in audit snapshots; secret keys are found by "contains" in any spelling (TD-530).
 
-### v9.0.154 — Audit Purge Keeps Financial, Security, Role and User Events
+### v9.0.212 — Audit Purge Keeps Financial, Security, Role and User Events
 - **Audit Purge Keeps Financial, Security, Role and User Events:** the purge deletes only operational sections after the fixed 90 days; the options that turned protection off are gone (TD-522).
 
-### v9.0.153 — Role Delete Counts Active Users Only
+### v9.0.211 — Terminal Output Is English
+- **Terminal English (owner rule t9):** AGENTS.md §6 records that everything a terminal shows is English (scripts, hooks, server logs, test names, commits), while UI text, user error messages and documents stay Persian. `npm run ratchet:terminal-english` (`scripts/terminal-english-ratchet.ts`, run by Vitest `terminalEnglishRatchet.test.ts`) counts the places that still print Persian per file and fails when a file gains one; translating them is the next step of TD-625.
+
+### v9.0.210 — Item and Pricing UI Wording
+- **Item and Pricing UI Wording:** item, Excel import and pricing text and item server messages use the decided Persian words (no «WAC», «Template», «استراتژی», «اتمیک», «آرشیو» …; «ترنسفر» stays); the Excel reorder header is «حد نقطه سفارش (هشدار کسری)» and the old header is still read (TD-664, `itemsWording.test.ts`).
+
+### v9.0.209 — Item Page Actions by Permission
+- **Item Page Actions by Permission:** the items and pricing pages show buttons and price fields by the permission of the server route (`products.create` / `edit` / `delete`, `woocommerce.manage`, `products.edit_price`) instead of the role code «viewer»; the average cost is shown in rials and the margin badge and markup buttons use rial prices only (TD-840, `itemActionsByPermission.test.tsx`).
+
+### v9.0.208 — Excel Template From the Server
+- **Excel Template From the Server:** `GET /items/excel-template` builds the import template with the columns the import reads (active warehouses with a matching total, every price list with its currency) without reading items or writing an export audit row (TD-842, `reg_excel_template_from_server_td_842`).
+
+### v9.0.207 — Excel Currency per Price List
+- **Excel Currency per Price List:** the item export and the pricing page export write «ارز - قیمت <title>» for each price list instead of one row-wide «واحد ارز», and the imports read it first, so an unchanged round trip keeps a rial price in rials (TD-841, `reg_excel_export_currency_per_price_list_td_841`).
+
+### v9.0.206 — Item List and Excel Import Performance
+- **Item List and Excel Import:** the item list builds reservations for its own page only; an Excel import reads its items once and its new items with stock share one opening voucher, recorded in `item_opening_voucher_items` (migration 0074) (TD-663, `perf_item_list_and_excel_opening_td_663`).
+
+### v9.0.205 — Unique Category Names and Rename
+- **Category Names:** a live category name is unique (partial index, migration 0073, only on clean data); a rename moves its items in the same transaction and a type change of a category with items is refused (TD-658, `reg_category_rename_keeps_items_td_658`).
+
+### v9.0.204 — Category Soft Delete and Audit
+- **Item Categories:** a category is soft-deleted and every create, edit, delete and default reset writes an audit row in its own transaction; the reset restores a deleted default instead of duplicating it (TD-659, `reg_category_soft_delete_and_audit_td_659`).
+
+### v9.0.203 — Chart of Accounts Messages Shown Once
+- **Chart of Accounts Page (P3):** each save, delete and error message is shown once, a refused seed is handled, and the delete confirmation says an account used in vouchers or with sub-accounts is not deleted (TD-576).
+
+### v9.0.202 — Database Constraints on Vouchers and Accounts
+- **Accounting Constraints (P3):** migration 0071 adds NOT VALID CHECK constraints on voucher row amounts, voucher status and type and account level, type and nature, and a parent foreign key on accounts, each validated only on clean data; the health check lists what is left (TD-562).
+
+### v9.0.201 — Account Codes Are Latin Digits, Unique and Fixed
+- **Account Codes (P2):** an account code is stored as Latin digits only (Persian and Arabic digits converted), is unique among active accounts also against legacy Persian-digit codes and concurrent requests (409 `ACCOUNT_CODE_TAKEN`), and cannot change after creation (422 `ACCOUNT_CODE_IMMUTABLE`) (TD-558).
+
+### v9.0.200 — Account Edits Keep the Tree and Posted Accounts Intact
+- **Account Edits (P2):** an account's parent must be exactly one level up and may not close a cycle; a system account takes only a new name and description and an account with voucher rows keeps its type, nature, level and parent; the tree and trial balance survive a legacy cycle (TD-553).
+
+### v9.0.199 — Account Mapping Validated on Save
+- **Account Mapping (P2):** each mapped code must be a posting account of the concept's account types (422 `ACCOUNT_MAPPING_INVALID`); resolution falls back only to the concept's default subsidiary code, never a group or general account, and the page lists all 26 concepts (TD-550).
+
+### v9.0.198 — Voucher Rows Only on Posting Accounts
+- **Posting Accounts (P2):** a manual, edited or correction voucher row goes only on an active subsidiary or detailed account without an active sub-account (422 `VOUCHER_ACCOUNT_NOT_POSTABLE`); the forms offer only those and the health check lists legacy rows elsewhere (TD-549).
+
+### v9.0.197 — Accounts With Voucher Rows Are Not Deleted
+- **Chart of Accounts (P1):** deleting an account that an active voucher row uses is refused with 409 `ACCOUNT_HAS_VOUCHER_ROWS`; the code of a deleted account always makes a new account, and deleted accounts that still carry rows are listed by the health check (TD-546, decision ت۴).
+
+### v9.0.196 — Voucher Date Shown in Jalali
+- **Accounting Date Inputs (P3):** the voucher, correction and reversal forms and the trial balance, account explorer and cash flow filters keep ISO dates and use `JalaliDateInput`; editing a voucher no longer shows its ISO date as a Jalali year 2026 (TD-578, Vitest `voucherDateInput.test.tsx`).
+
+### v9.0.195 — Voucher Print Currency and Types
+- **Voucher Print Currency (P2):** the voucher print follows the TD-551 balance rule (single-currency vouchers in their currency with the rate, multi-currency ones in rials with each row amount and rate) and names every voucher type from one shared list, settlement included (TD-573, Vitest `voucherPrintCurrency.test.tsx`).
+
+### v9.0.194 — Account Picker Reads Persian Digits
+- **Account Picker Digits (P2):** the account picker turns Persian and Arabic digits of the search and of account code, name, type and description to Latin before matching (TD-571, Vitest `accountSearchDigits.test.tsx`).
+
+### v9.0.193 — Voucher Forms Offer Every Detailed Type
+- **Voucher Detailed Types (P2):** the voucher and correction forms take the detailed types from the server schema list: «متفرقه» is `other`, project and bank account are offered and the correction form has the supplier; `accounting.vouchers` reads the project pick list (TD-569, `reg_manual_voucher_detailed_types_td_569`).
+
+### v9.0.192 — Voucher Row Amounts Read as Decimals
+- **Voucher Row Amounts (P3):** manual and correction voucher row debit, credit and rate go through `decimalInput`: Persian digits and separators are accepted, «0x10» and «1e3» are refused (TD-557, `reg_manual_voucher_row_amount_decimal_input_td_557`).
+
+### v9.0.191 — Voucher Forms Send Each Row Currency and Rate
+- **Voucher Form Row Currency (P1, decision t7):** the manual voucher form, its edit and the correction form send and keep each row's currency and rate, take the voucher rate, balance by the server rule and offer only the treasury currencies; the routes refuse «TOMAN» (TD-564, `reg_manual_voucher_currency_list_td_564`).
+
+### v9.0.190 — Manual Vouchers Need a Rate on Foreign Rows and Balance in Rials
+- **Manual Voucher Currency (P2, decision t7):** a manual or correction voucher row without a currency takes the voucher currency, every non-rial row needs a positive rate (422 `VOUCHER_ROW_RATE_REQUIRED`), and a multi-currency voucher balances in rials at each row rate; the journal book and the health check follow the same rule (TD-551, `reg_manual_voucher_foreign_rate_and_rial_balance_td_551`).
+
+### v9.0.189 — Lock Order Behaves the Same Everywhere
+- **Lock Order:** `withOrderedLocks` sorts resources by `LOCK_ORDER_MAP` in every environment and refuses a table without a lock level (pass `level` or add the table); `validateLockOrder` refuses an out-of-order declared sequence everywhere. Before, tests threw on input order while production sorted silently, and an unmapped table (`piecework_payrolls`, `crm_leads`, `journal_voucher_items`) was locked last at level 999.
+
+### v9.0.188 — Long Statement Timeout on the Transaction Itself
+- **Long Statement Timeout:** `extendStatementTimeout(tx)` (`src/db/drizzle.ts`) sets `statement_timeout` to 5 minutes with `SET LOCAL` on the transaction's own connection; the item Excel import calls it first. The removed `withLongQueryTimeout(fn)` set it on a separate pool connection the callback never used (its queries kept the 1-minute limit) and held that connection idle.
+
+### v9.0.187 — Linux Install Writes the Secrets Key
+- **Install Secrets:** `install.sh` runs the new `scripts/ensure-env-secrets.sh`, which adds a random `ERP_SECRETS_KEY` and `ERP_WEBHOOK_SECRET_TOKEN` to `.env` when missing and keeps existing values (run it once on an existing server); `go-live-verify.sh` fails without a 32-character key and `audit-env.sh` requires it. Before, saving a personnel's third-party password answered 503 on a Linux install and `audit-env` failed on the install's own `.env`.
+
+### v9.0.186 — Test Runner Refuses Empty Runs
+- **Test Runner:** `scripts/run-tests.ts` exits 1 on an unknown suite (listing the known ones) and when the suite and filter matched no test («No test ran»), and checks `NODE_ENV` before any schema, migration or seed is written. Before, a mistyped suite or test id reported `Passed Tests: 0 / 0 … PASSED`, which voided the «red on the previous version» rule, and a production run wrote 68 tables before it was refused.
+
+### v9.0.185 — Audit Gate Fails When npm audit Fails
+- **Audit Gate:** `npm run audit:gate` fails (`auditRunFailure` in `scripts/audit-gate.ts`) when `npm audit` returns an error object or no `vulnerabilities` object, and prints npm's error. Before, `report.vulnerabilities || {}` read the failed run as empty and passed.
+
+### v9.0.184 — Failed Backups Leave No Partial Files
+- **Backup Cleanup:** a failed `scripts/backup.sh` run removes the files it wrote (uncompressed dump, manifest, archives; a compressed dump that failed verification is still kept for inspection), retention also deletes stray `.dump` files of earlier failed runs, and `file_attachments` is looked up with `to_regclass` in its own query, so a database before its first migration is backed up instead of failing with `relation "file_attachments" does not exist`.
+
+### v9.0.183 — .env Read Literally by update.sh and go-live-verify.sh
+- **Literal .env:** `update.sh` and `scripts/go-live-verify.sh` no longer run `set -a; . ./.env`; they read the keys they need literally (`env_file_value` / `env_val`, surrounding quotes removed), as the service reads the file with `node --env-file`. A password such as `S3cr$et9` used to be cut or stop the script under `set -u`, and a value with `;` or a backtick ran as root.
+
+### v9.0.182 — Zip Update Instruction Matches update.sh
+- **Zip Update Documentation:** `deploy/DEPLOY_LINUX.md` §4 gives `sudo bash update.sh --zip <file.zip>` (and `--source <dir>`). It used to say to extract the zip over the app directory and run `update.sh`, which failed after the backup with `fatal: not a git repository`.
+
+### v9.0.181 — Rollback Steps Keep the Branch
+- **Rollback Steps:** the rollback and rehearsal hints of `update.sh` reset the branch (`git reset --hard <commit>`) instead of `git checkout <commit>`, which detached HEAD so the next `git pull --ff-only` failed with «You are not currently on a branch».
+
+### v9.0.180 — Attachments Stay Out of Builds and Packages
+- **Public Assets:** the client build copies `public/` without `uploads/` (`copyPublicAssets` in `scripts/publicAssets.ts`, a Vite plugin with `copyPublicDir: false`), `.dockerignore` excludes `public/uploads` and `package-source.ps1` drops it from the source package. Before, every build duplicated all attachments into `dist/uploads`, a deleted attachment stayed there, and a local Docker image or source zip carried them.
+
+### v9.0.179 — Role Delete Counts Active Users Only
 - **Role Delete Counts Active Users Only:** a role whose only user was deleted can be deleted (TD-535).
 
-### v9.0.152 — Deleted Username Never Revives an Account
+### v9.0.178 — Deleted Username Never Revives an Account
 - **Deleted Username Never Revives an Account:** a new user always gets a new id; restoring a deleted user is a separate action with a new role and a temporary password (TD-519).
 
-### v9.0.151 — System Admin Named by One Constant
+### v9.0.177 — System Admin Named by One Constant
 - **System Admin Named by One Constant:** package 2 files and server routes name the system admin only through the shared constant or the admin flag; refactor (TD-896).
+
+### v9.0.176 — Item Price Amount and Currency
+- **Item Price Input:** a price is a decimal above zero in IRR, USD, EUR, AED or GBP; removal is explicit (`remove: true`), invalid Excel prices refuse the row and old invalid rows are listed by the health check (TD-657, `reg_item_price_amount_currency_td_657`).
+
+### v9.0.175 — One Active Price per List Under Concurrent Saves
+- **Item Price Writes:** price saves go through `ItemPricingService.applyPriceWrites` under the item row lock, so concurrent saves leave one active price per list; old duplicates are listed by the health check (TD-660, `conc_item_price_single_active_td_660`).
+
+### v9.0.174 — Guard Test for Item Delete During a Receipt
+- **Item Delete vs Receipt:** a guard test shows that deleting an item while a receipt of it commits waits for the receipt and is refused; the row lock dates from v9.0.40 (TD-661 closed without code change, `conc_item_delete_vs_receipt_td_661`).
+
+### v9.0.173 — Item Numbers Through decimalInput
+- **Item Numeric Input:** reorder point, cost, opening stock and weight go through `decimalInput` and are non-negative; text is 400 and Persian digits are read (TD-657 item part, `reg_item_numeric_input_validation_td_657`).
+
+### v9.0.172 — Item Code Counter Moves on Save
+- **Item Code Suggestion:** saving an item moves its code series counter in the same transaction, so the next suggested code is free (TD-656, `reg_item_code_peek_after_save_td_656`).
+
+### v9.0.171 — Item Edit Version Lock
+- **Item Version Lock:** editing an item needs its current version (400 without, 409 `OCC_CONFLICT` when stale), missing fields keep their values and the edit is audited in its transaction (TD-654, `sec_item_version_lock_td_654`).
+
+### v9.0.170 — Unique Item Code and Name
+- **Item Identity:** two active items never share a code (any letter case) or a name; partial unique indexes (migration 0070, only on clean data) turn concurrent duplicates into a Persian 409 and the health check lists old duplicates (TD-653, `conc_item_code_and_name_unique_td_653`).
+
+### v9.0.169 — New Item Opening Voucher Inside Its Transaction
+- **Item Opening Voucher:** a new item's opening voucher and audit row are written in the item's create transaction; a voucher failure refuses the item and its opening stock (TD-652, `inv_item_create_opening_voucher_atomic_td_652`).
+
+### v9.0.168 — Build Details of /health Scoped and Real
+- **Build Details:** `/health` returns `version` to everyone (`verify-startup.sh` reads it) and `buildInfo` only to the `METRICS_TOKEN` or a live system-admin session (`metricsReaderStatus` in `src/middleware/metricsAuth.ts`). `npm run build` writes `dist/build-info.json` with the commit and build time (`scripts/write-build-info.mjs`; the Docker build takes `--build-arg GIT_COMMIT_SHA`); without it they are `unknown`, never the old fixed `v4-master` and date.
+
+### v9.0.167 — Logger Safe on Circular Values
+- **Circular Log Values:** the log sanitizer marks an object already on its path `[Circular]` and cuts nesting deeper than 12 levels (`sanitizeObject` in `src/middleware/logger.ts`). Before, logging a circular object or an error whose `cause` points back threw `RangeError` from inside the caller's `catch`.
+
+### v9.0.166 — HTTP Access Log Kept in Production
+- **Access Log:** morgan writes access lines at `info` (`ACCESS_LOG_LEVEL` in `src/middleware/logger.ts`), the production default and the `LOG_LEVEL` written by `install.sh`. At `http` they were below it and production kept no access log.
+
+### v9.0.165 — Pool Readiness and Gauges Read the Real Pool
+- **Pool Stats:** `/health/ready` and the `db_pool_*` gauges read the pool exported by `src/db/drizzle.ts` (`dbPoolStats` in `src/middleware/metrics.ts`). drizzle-orm 0.45 exposes no `orm.pool` / `orm.client.pool`, so both always reported 0 and the «pool saturated» 503 never fired.
+
+### v9.0.164 — API Waits for Migrations
+- **Startup Gate (owner decision t2):** the port still opens at once, but until migrations, seed and the engines finish every `/api` request except `/api/health/*` and the WooCommerce webhook answers 503 `SYSTEM_STARTING` with `Retry-After: 5` (`src/middleware/startupGate.ts`, turned on only by `server.ts`), and `/health/ready` is 503. The browser shows a waiting page (`SystemStartingOverlay`) and resends the same request (`fetchThroughStartup`). Before, a Linux update served the new code on the old schema until migrations finished.
+
+### v9.0.163 — Closing Without an Opening Voucher Says So
+- **Fiscal Closing Opening-Voucher Text (P3):** with «صدور خودکار سند افتتاحیه» unticked, step 4 still said the opening voucher would be issued; step 4, the execution note and the confirm dialog now say none is issued and the next year starts without opening balances (TD-577, Vitest `fiscalOpeningVoucherText.test.tsx`).
+
+### v9.0.162 — Fiscal Years Close in Order
+- **Fiscal Year Closing Order (P1):** a year closed while an earlier year with vouchers was open took that year's revenue too, and the earlier year then closed only without an opening voucher, wiping the permanent balances (cash 12,300,000 shown as 2,000,000); a year now closes only after every earlier year with vouchers, the form starts on the oldest open one and out-of-order closings are listed by the health check (TD-544, `reg_fiscal_years_close_in_order_td_544`).
+
+### v9.0.161 — A Fiscal Year Closes After It Ends; the Last Closed Year Reopens
+- **Fiscal Year Closing Time and Reopening (P1):** the current year, and even the next one, could be closed, after which no invoice, receipt or voucher dated today was accepted and nothing reopened a year; a year now closes only after its last day, the form lists ended years only, and the last closed year reopens with a reason and the new permission `accounting.fiscal_reopen`, its closing vouchers reversed on their own dates (TD-543, `reg_fiscal_year_close_after_end_and_reopen_td_543`).
+
+### v9.0.160 — A Manual Voucher Is an Opening Voucher, Never a Closing One
+- **Manual Closing Vouchers (P2):** the voucher form saved opening balances as type closing and a manual reference «CLOSING-1400» blocked closing 1400; a manual voucher now takes neither the closing type nor a reserved reference, closing reads only `fiscal_periods`, and only the closing run's vouchers are locked until the year is reopened (TD-559, `reg_manual_voucher_cannot_be_closing_td_559`).
+
+### v9.0.159 — Reports of a Closed Year Show Its Real Figures
+- **Closed-Year Reports (P1):** after a year was closed, its income statement, balance sheet, trial balance and ratios showed zero because they counted the closing vouchers; the closing run's vouchers are now linked to the year (`source_fiscal_year`, migration 0069) and left out by default, with an «include closing vouchers» box (TD-545, `reg_reports_exclude_year_end_closing_td_545`).
+
+### v9.0.158 — Excel Import Audits Each Item With Before and After
+- **Item Excel Audit:** every item the Excel import creates or changes gets an audit row with its fields, stock per warehouse and prices before and after, plus one summary row, inside the import transaction (TD-655, `reg_excel_import_audit_snapshots_td_655`).
+
+### v9.0.157 — Excel Total Stock Column No Longer Adds Phantom Surplus
+- **Item Excel Stock:** «موجودی کل» alone changes only an item whose stock is all in the default warehouse, otherwise per-warehouse columns are required and must add up, so an unchanged file no longer doubles stock with a surplus voucher (TD-649, `inv_excel_total_stock_column_no_phantom_surplus_td_649`).
+
+### v9.0.156 — Excel Import Finds Items by Code and Never Changes the Code
+- **Item Excel Matching:** the item Excel import finds items by code only, refuses a name already held by another item and never changes an item's code, which is also its WooCommerce SKU (TD-651, `reg_excel_name_match_never_changes_code_td_651`).
+
+### v9.0.155 — A Partial Excel File Leaves Item Fields Unchanged
+- **Item Excel Partial Rows:** a missing column or blank cell leaves an existing item's field unchanged and its type comes from the item, so a price-only file no longer resets unit and reorder point or refuses raw materials (TD-650, `reg_excel_partial_row_keeps_fields_td_650`).
+
+### v9.0.154 — Excel Import Follows Price and Stock Permissions
+- **Item Excel Permissions:** the item Excel import changes prices only with the price permission, stock only with the warehouse in / out permissions and creates items only with the item creation permission; other parts are reported and skipped (TD-648, `sec_item_import_respects_price_and_stock_permissions_td_648`).
+
+### v9.0.153 — Re-Importing an Unchanged Excel File Keeps the Price History
+- **Item Price History:** importing the same Excel file again no longer rewrites unchanged prices, so the price history keeps only real changes, and the history shows when each price was recorded (TD-662, `reg_excel_reimport_keeps_price_history_td_662`).
+
+### v9.0.152 — Excel Prices Come From Configured Price Lists Only
+- **Item Excel and Price Lists:** an unchanged Excel round trip no longer turns the cost column into a sale price list, the pricing page quick import ignores stock and cost columns, the invoice price list shows configured price lists only and migration 0068 cleans the three mistaken titles (TD-647, `reg_excel_roundtrip_no_cost_price_list_td_647`).
+
+### v9.0.151 — Package 5 Items and Pricing Audit Documentation
+- **Package 5 Audit:** section 7 of the V9 stability audit records the items and pricing package: 18 proven findings (two P1: an unchanged Excel round trip turns the cost column into a sale price list, and Excel import bypasses the price and warehouse permissions) opened as TD-647..TD-664, with the product-owner decisions. Documentation only.
 
 ### v9.0.150 — Fiscal-Year Test Cleanup
 - **Fiscal-Year Test Cleanup:** the fiscal-year closing test reopens its year so another test posting in that year is not refused (TD-895).

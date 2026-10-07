@@ -41,24 +41,24 @@ describe('each financial statement has its own date in its header (TD-566)', () 
   it('balance sheet: «تا امروز» by default, then the chosen date is requested and shown', () => {
     const p = renderTab();
     fireEvent.click(screen.getByText('ترازنامه اساسی'));
-    expect(p.onFetchBalanceSheet).toHaveBeenLastCalledWith(undefined);
+    expect(p.onFetchBalanceSheet).toHaveBeenLastCalledWith(undefined, false);
     expect(screen.getByText('تا امروز')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('امروز'), { target: { value: '2026-03-20' } });
-    expect(p.onFetchBalanceSheet).toHaveBeenLastCalledWith('2026-03-20');
+    expect(p.onFetchBalanceSheet).toHaveBeenLastCalledWith('2026-03-20', false);
     expect(screen.getByText('تا تاریخ ۱۴۰۴/۱۲/۲۹')).toBeTruthy();
     fireEvent.click(screen.getByText('به‌روزرسانی ترازنامه'));
-    expect(p.onFetchBalanceSheet).toHaveBeenLastCalledWith('2026-03-20');
+    expect(p.onFetchBalanceSheet).toHaveBeenLastCalledWith('2026-03-20', false);
   });
 
   it('income statement: its own period, not the trial balance dates, and the period is shown', () => {
     const p = renderTab();
     fireEvent.click(screen.getByText('صورت سود و زیان'));
-    expect(p.onFetchIncomeStatement).toHaveBeenLastCalledWith(undefined, undefined);
+    expect(p.onFetchIncomeStatement).toHaveBeenLastCalledWith(undefined, undefined, false);
     expect(screen.getByText('دوره: از آغاز دفاتر تا امروز')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('آغاز دفاتر'), { target: { value: '2026-03-21' } });
-    expect(p.onFetchIncomeStatement).toHaveBeenLastCalledWith('2026-03-21', undefined);
+    expect(p.onFetchIncomeStatement).toHaveBeenLastCalledWith('2026-03-21', undefined, false);
     fireEvent.change(screen.getByLabelText('امروز'), { target: { value: '2026-09-22' } });
-    expect(p.onFetchIncomeStatement).toHaveBeenLastCalledWith('2026-03-21', '2026-09-22');
+    expect(p.onFetchIncomeStatement).toHaveBeenLastCalledWith('2026-03-21', '2026-09-22', false);
     expect(screen.getByText('دوره: از ۱۴۰۵/۰۱/۰۱ تا ۱۴۰۵/۰۶/۳۱')).toBeTruthy();
   });
 

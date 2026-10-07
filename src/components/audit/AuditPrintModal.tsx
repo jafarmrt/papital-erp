@@ -7,7 +7,7 @@ import { auditActionLabel } from '../../lib/audit/auditActionLabels';
 
 interface AuditPrintModalProps {
   logs: ActivityLogItem[];
-  /** v9.0.157 (TD-527): شمار کل ردیف‌های پالایه از سرور؛ برگه وقتی کمتر از آن ردیف دارد می‌گوید فقط ردیف‌های اول آمده‌اند */
+  /** v9.0.215 (TD-527): شمار کل ردیف‌های پالایه از سرور؛ برگه وقتی کمتر از آن ردیف دارد می‌گوید فقط ردیف‌های اول آمده‌اند */
   total: number;
   onClose: () => void;
   filterSummary?: {

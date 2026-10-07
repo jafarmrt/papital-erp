@@ -1,3 +1,4 @@
+import { ALL_ITEM_IMPORT_PERMISSIONS } from '../../lib/items/itemImportPermissions.js';
 import { personnelVersion } from '../fixtures/personnelVersion.js';
 import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
@@ -1062,6 +1063,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_fiscal_year_isolation_and_calendar_td_141_142', 'td141', 'td142', 'fiscal_year', 'closing')) {
   const t14Start = Date.now();
   try {
+    // v9.0.161 (TD-543): a year closes only after its end, so the test closes a past year inside its own schema (a closed
+    // year in the shared schema would refuse every later test's vouchers of that year)
+    const { inFiscalSandbox } = await import('../regression/fiscalClosingTests.js');
+    await inFiscalSandbox(async () => {
     const { FiscalYearService } = await import('../../services/accounting/fiscalYear.service.js');
     const { VoucherService } = await import('../../services/accounting/voucher.service.js');
     const { ChartOfAccountsService } = await import('../../services/accounting/chartOfAccounts.service.js');
@@ -1077,10 +1082,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       throw new Error(`نرمال‌سازی تاریخ ۱۴۰۳/۰۱/۰۱ باید 2024-03-20 باشد اما مقدار ${normIso2} بازگشت داده شد.`);
     }
 
-    // 2. Setup synthetic dynamic test fiscal year (isolated per run)
-    // v7.0.82: سال واقعی (۱۴۲۰ تا ۱۴۷۷) — قید قالب تاریخ journal_vouchers.date (مهاجرت 0030) فقط سال شمسی ۱۳xx تا ۱۵xx
-    // و میلادی ۱۹xx تا ۲۱xx را می‌پذیرد؛ سال‌های تصادفی ۱۶۰۰ تا ۹۴۹۹ تاریخ ساختگی نامعتبر می‌ساختند
-    const testYear = 1420 + Math.floor(Math.random() * 58);
+    // 2. A past fiscal year inside the test's own schema (v9.0.161, TD-543: a year that has not ended is never closed)
+    const testYear = 1392;
     // v8.0.47 (TD-310): سند اختتامیه فقط به آخرین روز سال (۳۰ اسفند در سال کبیسه) پذیرفته می‌شود
     const { jalaliYearBounds } = await import('../../utils/calendarDate.js');
     const testYearBounds = jalaliYearBounds(testYear);
@@ -1173,6 +1176,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       durationMs: Date.now() - t14Start,
       details: 'تراز آزمایشی با پذیرش شیء تراکنش (tx) و نرمال‌سازی تقویم شمسی/میلادی با موفقیت بدون خطای عدم تراز سند اختتامیه اجرا شد.'
     }));
+    });
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'reg_fiscal_year_isolation_and_calendar_td_141_142',
@@ -1499,7 +1503,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const importResult = await ItemCatalogService.processUnifiedImport(
       rawRows,
       'raw_material',
-      { user: { username: 'تستر اکسل' } }
+      { user: { username: 'تستر اکسل' } },
+      ALL_ITEM_IMPORT_PERMISSIONS
     );
 
     if (importResult.createdCount !== 1) {
@@ -1779,7 +1784,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       throw new Error('حذف نرم حساب در دیتابیس اعمال نشد.');
     }
 
-    // Re-create account with SAME code (TD-147: must reuse and revitalize without error)
+    // Re-create account with SAME code. v9.0.197 (TD-546, decision ت۴ الف): the code of a deleted account makes a new
+    // row; the deleted row is no longer revived (TD-147), because its voucher rows would follow the new name and type
     const recreatedAcc = await ChartOfAccountsService.createAccount({
       code: testAccCode,
       name: 'حساب تستی احیا ۲ (بازتعریف‌شده)',
@@ -1789,15 +1795,23 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       description: 'بازتعریف موفق با کد حذف‌شده'
     });
 
-    if (!recreatedAcc || recreatedAcc.id !== createdAcc.id || recreatedAcc.name !== 'حساب تستی احیا ۲ (بازتعریف‌شده)') {
-      throw new Error('احیا و بازتعریف حساب با کد پیشین حذف‌شده انجام نشد.');
+    if (!recreatedAcc || recreatedAcc.id === createdAcc.id || recreatedAcc.name !== 'حساب تستی احیا ۲ (بازتعریف‌شده)') {
+      throw new Error(`re-creating a deleted account code must make a new account (old id ${createdAcc.id}, got ${recreatedAcc?.id})`);
+    }
+    const [oldAccRow] = await orm.select().from(accounts).where(eq(accounts.id, createdAcc.id));
+    if (oldAccRow?.isDeleted !== 1 || oldAccRow.name !== 'حساب تستی احیا ۱') {
+      throw new Error(`the deleted account was changed by re-creating its code: ${JSON.stringify({ isDeleted: oldAccRow?.isDeleted, name: oldAccRow?.name })}`);
     }
 
-    // Test explicit restoreAccount method
-    await ChartOfAccountsService.deleteAccount(createdAcc.id);
+    // Test explicit restoreAccount method: refused while another active account holds the code, then accepted
+    const refusedRestore = await ChartOfAccountsService.restoreAccount(createdAcc.id).then(() => 'restored', (e: unknown) => (e as { code?: string })?.code ?? String(e));
+    if (refusedRestore !== 'ACCOUNT_CODE_TAKEN') {
+      throw new Error(`restoring an account whose code another active account holds answered ${refusedRestore}, expected ACCOUNT_CODE_TAKEN`);
+    }
+    await ChartOfAccountsService.deleteAccount(recreatedAcc.id);
     const restoredAcc = await ChartOfAccountsService.restoreAccount(createdAcc.id);
     if (!restoredAcc || restoredAcc.isDeleted !== 0 || restoredAcc.isActive !== 1) {
-      throw new Error('متد restoreAccount حساب را به وضعیت فعال و غیرحذف بازنگرداند.');
+      throw new Error('restoreAccount did not bring the account back as active and not deleted');
     }
 
     // 3. Cleanup test records
@@ -1806,7 +1820,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     await cleanTestTableData('document_items', 'id', [activeItem.id, deletedItem.id]);
     await cleanTestTableData('documents', 'id', [testDoc.id]);
     await cleanTestTableData('items', 'id', [testItem.id]);
-    await cleanTestTableData('accounts', 'id', [createdAcc.id]);
+    await cleanTestTableData('accounts', 'id', [createdAcc.id, recreatedAcc.id]);
 
     results.push(makeTestCase({
       id: 'reg_purchase_voucher_soft_delete_and_coa_reuse_td_144_147',
@@ -4188,7 +4202,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         type: 'raw_material', name: `کالای افتتاحیه P2-1 ${Date.now()}`, code: `P21O-${Date.now()}`, unit: 'عدد', category: '', weighted_average_cost: 500
       }, user);
       await ItemCatalogService.updateItem(second.insertedId, {
-        name: second.item.name, code: second.item.code, unit: 'عدد', category: '', weighted_average_cost: 500, [`stock_${w2.code}`]: 7
+        name: second.item.name, code: second.item.code, unit: 'عدد', category: '', weighted_average_cost: 500, [`stock_${w2.code}`]: 7, version: second.item.version
       }, user);
       await assertInvariant(second.insertedId, 'موجودی افتتاحیه در ویرایش کالا', { [w2.code]: 7 });
 
@@ -4387,6 +4401,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const tStart = Date.now();
     const createdVoucherIds: number[] = [];
     try {
+      // v9.0.161 (TD-543): a year closes only after its end; past years inside the test's own schema
+      const { inFiscalSandbox } = await import('../regression/fiscalClosingTests.js');
+      await inFiscalSandbox(async () => {
       const { FiscalYearService } = await import('../../services/accounting/fiscalYear.service.js');
       const { VoucherService } = await import('../../services/accounting/voucher.service.js');
       const { ChartOfAccountsService } = await import('../../services/accounting/chartOfAccounts.service.js');
@@ -4397,10 +4414,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const revAccount = allAccounts.find(a => a.code === '6001') || allAccounts.find(a => a.accountType === 'revenue');
       const assetAccount = allAccounts.find(a => a.code === '1101') || allAccounts.find(a => a.accountType === 'asset');
       if (!revAccount || !assetAccount) throw new Error('سرفصل‌های لازم آزمون یافت نشد');
-      // سال‌های ۱۴۸۰ تا ۱۵۰۰: جدا از بازه آزمون بستن سال TD-141 (۱۴۲۰ تا ۱۴۷۸)؛ با هم‌پوشانی، گاهی یکی از دو آزمون
-      // سالی را می‌بست که دیگری لازم داشت و این آزمون تصادفی شکست می‌خورد. ۱۵۰۰ آخرین سالی است که normalizeDateToIso
-      // به میلادی برمی‌گرداند
-      const baseYear = 1480 + Math.floor(Math.random() * 7) * 3;
+      // v9.0.161 (TD-543): سال‌های گذشته در اسکیمای خود آزمون؛ سال B که بسته می‌شود پیش از سال‌های A و C است
+      const baseYear = 1393;
       const voucher = (year: number, amount: number, extra: Record<string, unknown> = {}) => ({
         date: normalizeDateToIso(`${year}-06-15`) as string,
         voucherType: 'general' as const,
@@ -4417,7 +4432,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const problems: string[] = [];
 
       // ۱) سندی از نوع «اختتامیه» با مرجع CLOSE-…-سال که از فرایند بستن سال نیامده، سال را نمی‌بندد
-      const yearA = baseYear;
+      const yearA = baseYear + 1;
       const fake = await VoucherService.createJournalVoucher(voucher(yearA, 1000, { voucherType: 'closing', referenceNumber: `CLOSE-NOTE-${yearA}` }) as any);
       createdVoucherIds.push(fake.id);
       try {
@@ -4428,7 +4443,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }
 
       // ۲) بستن واقعی سال B همزمان با تراکنشی که در سال B سند ثبت کرده و هنوز commit نشده است
-      const yearB = baseYear + 1;
+      const yearB = baseYear;
       const holdMs = 1500;
       const inflight = orm.transaction(async (tx) => {
         const v = await VoucherService.createJournalVoucher(voucher(yearB, 2000) as any, tx);
@@ -4507,6 +4522,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         durationMs: Date.now() - tStart,
         details: 'سند «اختتامیه» دستی سال را نبست، بستن سال منتظر سند همزمان ماند و آن را بست، پس از بستن هیچ سندی وارد سال نشد و آستانه تراز ۰٫۰۱ در ایجاد سند اعمال شد.'
       }));
+      // the sandbox is gone with its vouchers: nothing left to clean in the shared schema
+      }).finally(() => { createdVoucherIds.length = 0; });
     } catch (err: any) {
       results.push(makeTestCase({
         id: 'reg_fiscal_periods_p2_5',
@@ -5964,11 +5981,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (deletedVoucherLines.length !== 2) {
         throw new Error('آرتیکل‌های قبلی سند به درستی سافت‌دلیت نشده‌اند.');
       }
-      // v9.0.164 (TD-897): the debit row is picked by amount, not by row order; `debit` is a Money object and Money(0) is
-      // truthy, so `rows[0].debit || rows[1].debit` read 0 whenever PostgreSQL returned the credit row first
-      const { fin } = await import('../../lib/financialDecimal.js');
-      const activeDebitLine = activeVoucherLines.find(v => fin(v.debit ?? 0).isPositive());
-      if (activeVoucherLines.length !== 2 || !activeDebitLine || fin(activeDebitLine.debit).toNumber() !== 800000) {
+      // v9.0.202: rows come back in no fixed order and a zero Money is truthy, so the debit total is compared
+      const activeDebit = activeVoucherLines.reduce((sum, line) => sum + Number(line.debit ?? 0), 0);
+      if (activeVoucherLines.length !== 2 || activeDebit !== 800000) {
         throw new Error('آرتیکل‌های جدید سند فعال نیستند یا مبلغ آنها تطابق ندارد.');
       }
 
@@ -9859,7 +9874,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         .set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send(body);
 
       const account = await AccountingService.createAccount({
-        code: `T247${suffix}`, name: `ERP-TEST-MARKER حساب TD-247 ${suffix}`, level: 'detailed', parentId: null,
+        code: `9247${suffix}`, name: `ERP-TEST-MARKER حساب TD-247 ${suffix}`, level: 'detailed', parentId: null,
         accountType: 'asset', nature: 'debit', description: '',
       });
       createdAccountIds.push(account.id);
@@ -10155,7 +10170,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const baseUnbalanced = scanNumber(baseScan.body, 'accounting_vouchers', /تعداد (\d+) سند/);
       const baseTotal = baseHealth.body.accounting?.totalVouchers ?? -1;
       const account = await AccountingService.createAccount({
-        code: `T245${suffix}`, name: `ERP-TEST-MARKER حساب TD-245 ${suffix}`, level: 'detailed', parentId: null,
+        code: `9245${suffix}`, name: `ERP-TEST-MARKER حساب TD-245 ${suffix}`, level: 'detailed', parentId: null,
         accountType: 'asset', nature: 'debit', description: '',
       });
       createdAccountIds.push(account.id);
@@ -10550,6 +10565,16 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR a (v9.0.115 on): accounting reports and lists in the UI (TD-565 ...)
   const { runAccountingReportsTests } = await import('../regression/accountingReportsTests.js');
   results.push(...await runAccountingReportsTests(shouldRun));
+  // Package 3 PR b (v9.0.159 on): fiscal-year closing and reopening (TD-545 ...)
+  const { runFiscalClosingTests } = await import('../regression/fiscalClosingTests.js');
+  results.push(...await runFiscalClosingTests(shouldRun));
+  const { runFiscalYearOrderTests } = await import('../regression/fiscalYearOrderTests.js');
+  results.push(...await runFiscalYearOrderTests(shouldRun));
+  const { runManualVoucherCurrencyTests } = await import('../regression/manualVoucherCurrencyTests.js');
+  results.push(...await runManualVoucherCurrencyTests(shouldRun));
+  // Package 3 PR e: the chart of accounts and the account mapping (TD-546 ...)
+  const { runChartOfAccountsTests } = await import('../regression/chartOfAccountsTests.js');
+  results.push(...await runChartOfAccountsTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
@@ -10594,6 +10619,20 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v9.0.112 (TD-490): warehouse deactivation lock, last active warehouse and reactivation
   const { runWarehouseDeactivationTests } = await import('../regression/warehouseDeactivationTests.js');
   results.push(...await runWarehouseDeactivationTests(shouldRun));
+
+  // Package 5 PR A (v9.0.152+): Excel import / export of items and the pricing quick import
+  const { runItemExcelImportTests } = await import('../regression/itemExcelImportTests.js');
+  results.push(...await runItemExcelImportTests(shouldRun));
+  const { runItemIntegrityTests } = await import('../regression/itemIntegrityTests.js');
+  results.push(...await runItemIntegrityTests(shouldRun));
+  const { runItemPriceTests } = await import('../regression/itemPriceTests.js');
+  results.push(...await runItemPriceTests(shouldRun));
+  const { runItemCategoryTests } = await import('../regression/itemCategoryTests.js');
+  results.push(...await runItemCategoryTests(shouldRun));
+  const { runItemPerformanceTests } = await import('../regression/itemPerformanceTests.js');
+  results.push(...await runItemPerformanceTests(shouldRun));
+  const { runItemExcelExportTests } = await import('../regression/itemExcelExportTests.js');
+  results.push(...await runItemExcelExportTests(shouldRun));
 
   return results;
 }

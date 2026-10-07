@@ -4,7 +4,7 @@ import { isSystemAdminRole } from '../permissions/permissionCatalog';
 export const SYSTEM_ADMIN_ROLE_NAME = 'مدیر سیستم';
 
 /**
- * v9.0.167 (TD-540، یافته B02-25): نامی که رابط برای نقش نشان می‌دهد نام ذخیره‌شده خود نقش است، نه کد آن؛ فهرست ساده
+ * v9.0.224 (TD-540، یافته B02-25): نامی که رابط برای نقش نشان می‌دهد نام ذخیره‌شده خود نقش است، نه کد آن؛ فهرست ساده
  * کاربران و رویداد ورود سجل از همین تابع می‌خوانند. نقشی که ردیفش نیست نامی ندارد.
  */
 export function roleDisplayName(roleCode: string | null | undefined, storedName: string | null | undefined): string {

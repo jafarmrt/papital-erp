@@ -2,7 +2,7 @@ import { FinancialDecimal } from '../financialDecimal.js';
 import { toEnglishDigits } from '../../utils/persianNumber.js';
 
 /**
- * پاک‌کننده تصویر سجل (v9.0.155، TD-530، یافته B02-15، تصمیم ت۷ الف). کلید رمز و توکن با «شامل‌بودن» و بی‌توجه به نگارش
+ * پاک‌کننده تصویر سجل (v9.0.213، TD-530، یافته B02-15، تصمیم ت۷ الف). کلید رمز و توکن با «شامل‌بودن» و بی‌توجه به نگارش
  * شناخته می‌شود (`nobitexPassword`، `consumer_secret`، `csrfToken`، `x-api-key`، `Set-Cookie`…) و مقدار متنی آن
  * `[PROTECTED]` می‌شود؛ پرچم بولی یا عددی (`nobitexPasswordChanged: true`، `tokenVersion`) راز نیست و می‌ماند. شماره کارت،
  * حساب و شبا تا ۴ رقم آخر پوشیده می‌شود («****5678»)، پس تغییر شبا در سجل دیده می‌شود ولی شماره کامل نه.

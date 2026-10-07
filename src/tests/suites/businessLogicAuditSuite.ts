@@ -823,7 +823,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       throw new Error(`Sensitive fields were not properly sanitized: ${JSON.stringify(detailsObj)}`);
     }
 
-    // 2. Test Minimum Retention Policy Guard (retentionDays < 90 is always rejected; v9.0.154 removed allowForceRecent)
+    // 2. Test Minimum Retention Policy Guard (retentionDays < 90 is always rejected; v9.0.212 removed allowForceRecent)
     let threwValidationError = false;
     try {
       await purgeOldAuditLogs({ retentionDays: 30 });
@@ -840,7 +840,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
     // Seed three historical audit logs older than 100 days
     const pastTimestamp = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString();
 
-    // A: Routine log of a purgeable section (should be purged; v9.0.154 purges only PURGEABLE_AUDIT_ENTITIES)
+    // A: Routine log of a purgeable section (should be purged; v9.0.212 purges only PURGEABLE_AUDIT_ENTITIES)
     const [routineLog] = await orm.insert(activityLogs).values({
       action: 'VIEW',
       entity: 'گزارش کار روزانه',

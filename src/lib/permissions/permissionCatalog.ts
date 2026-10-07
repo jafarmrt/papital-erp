@@ -171,6 +171,8 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       { key: 'accounting.treasury_no_voucher', title: 'ثبت خزانه و چک بدون سند حسابداری', description: 'ثبت دریافت، پرداخت، انتقال وجه یا چک بدون صدور سند حسابداری (مثلاً مانده افتتاحیه)؛ این موارد در بررسی سلامت مالی فهرست می‌شوند', requires: ['accounting.treasury'] },
       { key: 'accounting.reports', title: 'مشاهده تراز آزمایشی و صورت‌های مالی', description: 'مشاهده تراز آزمایشی، ترازنامه، صورت سود و زیان و کارت حساب', requires: ['accounting.view'] },
       { key: 'accounting.fiscal_close', title: 'اجرای بستن سال مالی', description: 'بستن حساب‌های موقت و دائم سال مالی و صدور اسناد اختتامیه و افتتاحیه سال بعد', requires: ['accounting.view'] },
+      // v9.0.161 (TD-543، تصمیم ت۲ مالک محصول): پیش‌فرض به هیچ نقشی داده نمی‌شود؛ مدیر سیستم آن را به نقشی می‌دهد
+      { key: 'accounting.fiscal_reopen', title: 'بازگشایی سال مالی', description: 'بازگشایی آخرین سال مالی بسته با دلیل؛ اسناد بستن همان سال بی‌اثر می‌شوند', requires: ['accounting.vouchers'] },
     ]
   },
   {

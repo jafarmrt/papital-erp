@@ -37,7 +37,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     role: '',
   });
   const [isSaving, setIsSaving] = useState(false);
-  // v9.0.152 (TD-519، تصمیم ت۲ الف): نام کاربری کاربر حذف‌شده رد می‌شود و بازگرداندن همان کاربر اقدامی جداست
+  // v9.0.178 (TD-519، تصمیم ت۲ الف): نام کاربری کاربر حذف‌شده رد می‌شود و بازگرداندن همان کاربر اقدامی جداست
   const [deletedMatch, setDeletedMatch] = useState<DeletedUserMatch | null>(null);
 
   const isEditing = editingUser !== null;
@@ -74,7 +74,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       toast.error('نقش کاربر را انتخاب کنید');
       return;
     }
-    // v9.0.159 (TD-532): رمز تازه (و در ویرایش، اگر وارد شده) با همان کمینه مشترک سرور
+    // v9.0.217 (TD-532): رمز تازه (و در ویرایش، اگر وارد شده) با همان کمینه مشترک سرور
     const passwordError = !isEditing || userForm.password ? passwordLengthError(userForm.password) : null;
     if (passwordError) {
       toast.error(passwordError);

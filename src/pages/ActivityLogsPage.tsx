@@ -26,7 +26,7 @@ import { parseUserAgent } from '../utils/userAgentParser';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog';
 import { auditActionLabel, auditActionOptions } from '../lib/audit/auditActionLabels';
 
-/** v9.0.156 (TD-537): خطای خواندن سجل، با پیام فارسی ۴۰۳ به‌جای «هیچ رکوردی یافت نشد» */
+/** v9.0.214 (TD-537): خطای خواندن سجل، با پیام فارسی ۴۰۳ به‌جای «هیچ رکوردی یافت نشد» */
 function logsLoadErrorMessage(error: unknown): string {
   if ((error as { status?: unknown } | null)?.status === 403) {
     return `برای دیدن سجل رویدادها مجوز «${permissionDefinition('audit_logs.view')?.title ?? 'مشاهده سجل رویدادها'}» لازم است.`;
@@ -58,7 +58,7 @@ export default function ActivityLogsPage() {
   const limit = 25;
 
   // Filters
-  // v9.0.156 (TD-537): درخواست با جست‌وجوی تأخیری فرستاده می‌شود و صفحه هر بار که جست‌وجو عوض شود از ۱ شروع می‌شود
+  // v9.0.214 (TD-537): درخواست با جست‌وجوی تأخیری فرستاده می‌شود و صفحه هر بار که جست‌وجو عوض شود از ۱ شروع می‌شود
   const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
   const [pageOfSearch, setPageOfSearch] = useState<{ page: number; search: string }>({ page: 1, search: '' });
   const page = pageOfSearch.search === debouncedSearchQuery ? pageOfSearch.page : 1;
@@ -117,7 +117,7 @@ export default function ActivityLogsPage() {
     setPage(1);
   };
 
-  // v9.0.157 (TD-527): چاپ و Excel همه ردیف‌های پالایه را از یک درخواست سروری می‌گیرند، نه ۲۵ ردیف صفحه جاری
+  // v9.0.215 (TD-527): چاپ و Excel همه ردیف‌های پالایه را از یک درخواست سروری می‌گیرند، نه ۲۵ ردیف صفحه جاری
   const prepareReport = async (kind: 'print' | 'excel'): Promise<AuditReportRows | null> => {
     try {
       setPreparingReport(kind);
@@ -140,7 +140,7 @@ export default function ActivityLogsPage() {
     if (report) await exportAuditLogsToExcel(report.rows, report.total);
   };
 
-  // v9.0.158 (TD-538): متن نشان از جدول مشترک برچسب اقدام؛ رنگ و نماد به ازای اقدام
+  // v9.0.216 (TD-538): متن نشان از جدول مشترک برچسب اقدام؛ رنگ و نماد به ازای اقدام
   const getActionBadge = (action: string) => {
     const style = ACTION_BADGE_STYLES[action] ?? DEFAULT_ACTION_BADGE;
     const Icon = style.icon;

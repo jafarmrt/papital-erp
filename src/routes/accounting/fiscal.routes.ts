@@ -3,8 +3,10 @@
  * authenticateToken در src/routes/accounting.routes.ts پیش از این روتر اعمال می‌شود.
  */
 import { Router } from 'express';
-import { authorizePermission } from '../../middleware/authorize.js';
+import { authorizePermission, requirePermission } from '../../middleware/authorize.js';
 import { AccountingService } from '../../services/accounting.service.js';
+import { getFiscalClosingYears } from '../../services/accounting/fiscalYearOrder.js';
+import { reopenFiscalYear } from '../../services/accounting/fiscalYearReopen.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { validate } from '../../middleware/validate.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
@@ -12,6 +14,7 @@ import {
   type ValidatedQuery,
   fiscalClosingPreviewQuerySchema,
   fiscalClosingExecuteSchema,
+  fiscalYearReopenSchema,
 } from './accounting.schemas.js';
 
 const router = Router();
@@ -19,6 +22,11 @@ const router = Router();
 // ==========================================
 // 7. FISCAL YEAR CLOSING & INVOICE VOUCHER SYNC
 // ==========================================
+
+// v9.0.161 (TD-543): سال‌های تمام‌شده با وضعیت بسته/باز، سال پیش‌فرض فرم و تنها سال قابل بازگشایی
+router.get('/accounting/fiscal-closing/years', requirePermission('accounting.vouchers'), asyncHandler(async (_req, res) => {
+  res.json(await getFiscalClosingYears());
+}));
 
 router.get('/accounting/fiscal-closing/preview', authorizePermission('accounting.vouchers'), validate(fiscalClosingPreviewQuerySchema), asyncHandler(async (req, res) => {
   const { year, closingDate, openingDateNewYear } = (req.query as ValidatedQuery<typeof fiscalClosingPreviewQuerySchema>) || {};
@@ -54,6 +62,20 @@ router.post('/accounting/fiscal-closing/execute', authorizePermission('accountin
     ipAddress: req.ip || '',
   });
 
+  res.json(result);
+}));
+
+// v9.0.161 (TD-543، تصمیم ت۲ مالک محصول): فقط آخرین سال بسته، با دلیل؛ ممیزی درون تراکنش بازگشایی ثبت می‌شود
+router.post('/accounting/fiscal-closing/reopen', requirePermission('accounting.fiscal_reopen'), validate(fiscalYearReopenSchema), asyncHandler(async (req, res) => {
+  const { year, reason } = req.body;
+  const result = await reopenFiscalYear({
+    year,
+    reason,
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    ipAddress: req.ip || '',
+  });
   res.json(result);
 }));
 

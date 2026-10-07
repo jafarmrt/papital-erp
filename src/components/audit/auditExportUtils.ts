@@ -3,7 +3,7 @@ import { formatPersianDateTime, formatPersianNumber, getTodayJalaliDate } from '
 import { auditActionLabel } from '../../lib/audit/auditActionLabels';
 import { parseUserAgent } from '../../utils/userAgentParser';
 
-/** v9.0.158 (TD-538): نام فایل با تاریخ شمسی امروزِ منطقه زمانی توافقی، نه روز میلادی UTC */
+/** v9.0.216 (TD-538): نام فایل با تاریخ شمسی امروزِ منطقه زمانی توافقی، نه روز میلادی UTC */
 export function auditExportFileName(jalaliDate: string): string {
   return `گزارش-سجل-رویدادها-${jalaliDate.replace(/\//g, '-')}.xlsx`;
 }
@@ -21,7 +21,7 @@ export interface AuditExportRow {
   details?: any;
 }
 
-/** v9.0.157 (TD-527): `total` شمار کل ردیف‌های پالایه از سرور است؛ وقتی فایل کمتر از آن دارد، پیام همین را می‌گوید */
+/** v9.0.215 (TD-527): `total` شمار کل ردیف‌های پالایه از سرور است؛ وقتی فایل کمتر از آن دارد، پیام همین را می‌گوید */
 export async function exportAuditLogsToExcel(logs: AuditExportRow[], total: number = logs.length): Promise<void> {
   if (!logs || logs.length === 0) {
     toast.error('هیچ لاگی برای دریافت خروجی اکسل موجود نیست.');

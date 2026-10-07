@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { formatPersianNumber } from '../../utils';
 import { MIN_AUDIT_RETENTION_DAYS, PURGEABLE_AUDIT_ENTITY_LABELS } from '../../lib/audit/auditRetention';
 
-/** v9.0.154 (TD-522، تصمیم ت۴ الف): بخش‌هایی که پاک‌سازی سجلشان را پاک می‌کند، از همان فهرست سرور */
+/** v9.0.212 (TD-522، تصمیم ت۴ الف): بخش‌هایی که پاک‌سازی سجلشان را پاک می‌کند، از همان فهرست سرور */
 const PURGEABLE_SECTIONS_TEXT = Object.values(PURGEABLE_AUDIT_ENTITY_LABELS).join('، ');
 
 interface SystemOperationsTabProps {

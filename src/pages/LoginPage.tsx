@@ -69,7 +69,7 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
       }
     } catch (err) {
       setError(errorMessageOf(err) || 'خطا در ارتباط با سرور');
-      // v9.0.162 (TD-539): قفل فقط از `locked` و `remainingMinutes` پاسخ؛ ۴۲۹ عمومی درخواست‌ها قفل نیست و شمارشی ندارد
+      // v9.0.220 (TD-539): قفل فقط از `locked` و `remainingMinutes` پاسخ؛ ۴۲۹ عمومی درخواست‌ها قفل نیست و شمارشی ندارد
       const minutes = err instanceof ApiError && err.status === 429 ? loginLockoutMinutes(err.details) : null;
       if (minutes) startLockoutCountdown(minutes);
     } finally {

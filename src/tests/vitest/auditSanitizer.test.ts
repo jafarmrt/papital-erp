@@ -1,5 +1,5 @@
 /**
- * v9.0.155 (TD-530, B02-15, owner decision t7 A): the audit sanitizer recognises secret keys by "contains", in any
+ * v9.0.213 (TD-530, B02-15, owner decision t7 A): the audit sanitizer recognises secret keys by "contains", in any
  * spelling (camelCase, snake_case, kebab-case, any case), and masks card, account and Sheba numbers down to their last
  * four digits. It used to match only whole snake_case names: cardNumber, shebaNumber, csrfToken, consumerSecret,
  * webhookSecret, nobitexPassword and setupToken stayed in clear.

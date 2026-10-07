@@ -1,8 +1,8 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
-import type { FiscalYearClosingPreview, FiscalYearClosingResult } from '../../types';
-import { silentMutationError } from './accountingQueryConfig';
+import type { FiscalClosingYearsInfo, FiscalYearClosingPreview, FiscalYearClosingResult, FiscalYearReopenResult } from '../../types';
+import { ACCOUNTING_LIST_QUERY_OPTIONS, silentMutationError } from './accountingQueryConfig';
 import { invalidateAfterVoucherChange } from './accountingInvalidation';
 import { useOnDemandReport, type OnDemandReportSpec } from './useOnDemandReport';
 
@@ -48,8 +48,39 @@ export function useExecuteFiscalClosing() {
         createOpeningVoucher: variables.createOpeningVoucher,
       }),
     }),
-    onSuccess: () => { void invalidateAfterVoucherChange(queryClient); },
+    onSuccess: () => {
+      void invalidateAfterVoucherChange(queryClient);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.accounting.fiscalClosingYears() });
+    },
     // خطا مثل قبل در خود تب با پیام فارسی اعلام می‌شود
+    onError: silentMutationError,
+  });
+}
+
+/**
+ * v9.0.161 (TD-543، تصمیم ت۱ مالک محصول): سال‌های تمام‌شده با وضعیتشان؛ فرم بستن سال فقط همین سال‌ها را نشان می‌دهد
+ * (سال جاری و آینده بسته نمی‌شوند) و آخرین سال بسته را برای بازگشایی.
+ */
+export function useFiscalClosingYears() {
+  return useQuery<FiscalClosingYearsInfo>({
+    queryKey: QUERY_KEYS.accounting.fiscalClosingYears(),
+    queryFn: ({ signal }) => fetchJson<FiscalClosingYearsInfo>('/accounting/fiscal-closing/years', { signal }),
+    ...ACCOUNTING_LIST_QUERY_OPTIONS,
+  });
+}
+
+/** v9.0.161 (TD-543، تصمیم ت۲): بازگشایی آخرین سال بسته با دلیل؛ اسناد بستن آن سال بی‌اثر می‌شوند */
+export function useReopenFiscalYear() {
+  const queryClient = useQueryClient();
+  return useMutation<FiscalYearReopenResult, unknown, { year: number; reason: string }>({
+    mutationFn: ({ year, reason }) => fetchJson<FiscalYearReopenResult>('/accounting/fiscal-closing/reopen', {
+      method: 'POST',
+      body: JSON.stringify({ year, reason }),
+    }),
+    onSuccess: () => {
+      void invalidateAfterVoucherChange(queryClient);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.accounting.fiscalClosingYears() });
+    },
     onError: silentMutationError,
   });
 }

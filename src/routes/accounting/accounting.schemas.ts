@@ -4,10 +4,13 @@
  * طرح‌های کوئری گزارش‌ها و بستن سال مالی در reports.schemas.ts هستند و از همین فایل دوباره صادر می‌شوند.
  */
 import { z } from 'zod';
-import { computeVoucherBalance, VOUCHER_BALANCE_TOLERANCE, type VoucherBalanceRow } from '../../lib/voucherBalance.js';
+import { computeVoucherCurrencyBalance, type CurrencyBalanceRow } from '../../lib/accounting/voucherCurrencyBalance.js';
 import { DEFAULT_ACCOUNT_MAPPINGS, type ConceptualAccountMappingConfig } from '../../services/accounting/accountMapping.service.js';
 import { decimalInput, latinDigitsString, storageDateParam } from '../../middleware/validate.js';
 import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../../lib/treasury/treasuryCurrency.js';
+import { VOUCHER_DETAILED_TYPES } from '../../lib/accounting/voucherDetailedTypes.js';
+import { isReservedVoucherReference, MANUAL_CLOSING_TYPE_MESSAGE, RESERVED_REFERENCE_MESSAGE } from '../../lib/accounting/manualVoucherRules.js';
+import { ACCOUNT_CODE_FORMAT_MESSAGE, ACCOUNT_CODE_PATTERN } from '../../lib/accounting/accountCode.js';
 
 /** query پس از validate: میدل‌ور validate مقدار req.query را با خروجی parse شده Zod جایگزین می‌کند. */
 export type ValidatedQuery<S extends z.ZodTypeAny> = z.infer<S> extends { query?: infer Q } ? Partial<NonNullable<Q>> : never;
@@ -15,9 +18,10 @@ export type ValidatedQuery<S extends z.ZodTypeAny> = z.infer<S> extends { query?
 // ==========================================
 // CHART OF ACCOUNTS (کدینگ حساب‌ها)
 // ==========================================
+// v9.0.201 (TD-558، B03-16): کد با رقم لاتین و فقط رقم
 export const createAccountSchema = z.object({
   body: z.object({
-    code: z.string().min(1, 'کد حساب الزامی است'),
+    code: latinDigitsString.pipe(z.string().min(1, 'کد حساب الزامی است').regex(ACCOUNT_CODE_PATTERN, ACCOUNT_CODE_FORMAT_MESSAGE)),
     name: z.string().min(1, 'عنوان حساب الزامی است'),
     level: z.enum(['group', 'general', 'subsidiary', 'detailed']),
     parentId: z.number().nullable().optional(),
@@ -29,14 +33,14 @@ export const createAccountSchema = z.object({
 
 /**
  * v7.0.127 (TD-247): ویرایش حساب — فقط فیلدهایی که ChartOfAccountsService.updateAccount می‌پذیرد (همه اختیاری).
- * `code` را فرم کدینگ هم می‌فرستد ولی سرویس آن را تغییر نمی‌دهد؛ مانند پیش پذیرفته و نادیده گرفته می‌شود.
+ * v9.0.201 (TD-558): `code` را فرم کدینگ می‌فرستد؛ کد دیگری جز کد خود حساب ۴۲۲ است (`ACCOUNT_CODE_IMMUTABLE`).
  */
 export const updateAccountSchema = z.object({
   params: z.object({
     id: z.string().regex(/^[1-9]\d*$/, 'شناسه حساب باید عدد صحیح مثبت باشد')
   }),
   body: z.object({
-    code: z.string().optional(),
+    code: latinDigitsString.optional(),
     name: z.string().trim().min(1, 'عنوان حساب الزامی است').optional(),
     level: z.enum(['group', 'general', 'subsidiary', 'detailed']).optional(),
     parentId: z.number().int().positive().nullable().optional(),
@@ -80,43 +84,72 @@ export const vouchersQuerySchema = z.object({
   }).optional()
 });
 
+/**
+ * v9.0.191 (TD-564، B03-22، تصمیم ت۷): ارز سند و ردیف سند دستی فقط از فهرست ارزهای خزانه (کد کوچک بزرگ می‌شود، «ریال» ← IRR).
+ * خالی یعنی «ارز بالادست» (ردیف ← ارز سند). «تومان» پذیرفته نیست: مبلغ تومانی را به ریال وارد کنید.
+ */
+const manualVoucherCurrency = z.preprocess(
+  value => (typeof value === 'string' && value.trim() === '' ? undefined : normalizeTreasuryCurrency(value)),
+  z.enum(TREASURY_CURRENCIES, { message: 'ارز سند پشتیبانی نمی‌شود؛ یکی از ریال، دلار، یورو، درهم یا پوند را انتخاب کنید (مبلغ تومانی را به ریال وارد کنید)' }).optional(),
+);
+
+const voucherRowAmount = (label: string) => decimalInput(label).optional()
+  .transform(v => v ?? '0')
+  .refine(v => Number(v) >= 0, `${label} نمی‌تواند منفی باشد`);
+
 export const voucherItemSchema = z.object({
   accountId: z.coerce.number().int().positive('شناسه حساب الزامی و باید عدد مثبت باشد'),
-  detailedType: z.enum(['none', 'customer', 'personnel', 'project', 'bank_account', 'other', 'supplier']).optional().default('none'),
+  // v9.0.193 (TD-569): فهرست نوع‌ها مشترک با فرم‌های سند (`voucherDetailedTypes.ts`)
+  detailedType: z.enum(VOUCHER_DETAILED_TYPES).optional().default('none'),
   detailedId: z.coerce.number().int().positive().nullable().optional(),
   detailedName: z.string().optional(),
-  debit: z.coerce.number().min(0, 'مبلغ بدهکار نمی‌تواند منفی باشد').default(0),
-  credit: z.coerce.number().min(0, 'مبلغ بستانکار نمی‌تواند منفی باشد').default(0),
-  currency: z.string().optional(),
-  exchangeRate: z.coerce.number().positive().optional(),
+  // v9.0.192 (TD-557، B03-15): مبلغ و نرخ ردیف با `decimalInput` (رقم فارسی و جداکننده هزارگان پذیرفته؛ «0x10» و «1e3» رد)،
+  // نه `z.coerce.number` که «0x10» را ۱۶ و «1e3» را ۱٬۰۰۰ می‌خواند و «۱۰۰۰» را با پیام انگلیسی NaN رد می‌کرد
+  debit: voucherRowAmount('مبلغ بدهکار'),
+  credit: voucherRowAmount('مبلغ بستانکار'),
+  currency: manualVoucherCurrency,
+  exchangeRate: decimalInput('نرخ تبدیل ردیف').optional()
+    .refine(v => v === undefined || Number(v) > 0, 'نرخ تبدیل ردیف باید بزرگتر از صفر باشد'),
   description: z.string().optional(),
-}).refine(it => (it.debit > 0 || it.credit > 0), {
+}).refine(it => (Number(it.debit) > 0 || Number(it.credit) > 0), {
   message: 'هر ردیف سند باید حداقل دارای مبلغ بدهکار یا بستانکار بزرگتر از صفر باشد'
 });
 
 /**
- * v7.0.127 (TD-247): تراز سند در طرح Zod با جمع اعشاری (computeVoucherBalance) و همان آستانه سرویس
- * (VOUCHER_BALANCE_TOLERANCE؛ VoucherService اختلاف بیشتر از آن را رد می‌کند).
+ * v7.0.127 (TD-247): تراز سند در طرح Zod با جمع اعشاری و همان آستانه سرویس (VOUCHER_BALANCE_TOLERANCE).
+ * v9.0.190 (TD-551، ت۷): با قاعده ارز سند دستی (computeVoucherCurrencyBalance): سند چندارزی یا چندنرخی به ریال.
+ * ردیف ارزی بی نرخ به سرویس سپرده می‌شود تا ۴۲۲ روشن بدهد؛ در ویرایش و اصلاح ارز سند ذخیره‌شده است و در بدنه نیست،
+ * پس ردیف بی ارز (جز سند ساده بی ارز و نرخ) هم به سرویس سپرده می‌شود.
  */
-const isVoucherBalanced = (rows: readonly VoucherBalanceRow[]): boolean => {
-  const balance = computeVoucherBalance(rows);
-  return balance.totalDebit > 0 && balance.difference <= VOUCHER_BALANCE_TOLERANCE;
+const isVoucherBalanced = (rows: readonly CurrencyBalanceRow[], voucherCurrency?: string, headerKnown = true): boolean => {
+  const filled = (value: unknown) => value !== undefined && value !== null && String(value).trim() !== '';
+  const allHaveCurrency = rows.every(row => filled(row.currency));
+  const plainRows = rows.every(row => !filled(row.currency) && !filled(row.exchangeRate));
+  if (!headerKnown && !allHaveCurrency && !plainRows) return true;
+  const balance = computeVoucherCurrencyBalance(rows, voucherCurrency);
+  return balance.rowsWithoutRate.length > 0 || balance.isBalanced;
 };
+
+/**
+ * v9.0.160 (TD-559، B03-17): نوع سند دستی؛ «اختتامیه» را فقط بستن سال مالی صادر می‌کند (مانده‌های اول دوره «افتتاحیه» است)
+ */
+const manualVoucherType = z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement'])
+  .refine(type => type !== 'closing', MANUAL_CLOSING_TYPE_MESSAGE);
 
 export const createVoucherSchema = z.object({
   body: z.object({
     date: z.string().min(1, 'تاریخ سند الزامی است'),
-    voucherType: z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement']).optional().default('general'),
+    voucherType: manualVoucherType.optional().default('general'),
     status: z.enum(['draft', 'approved']).optional(),
     manualVoucherNumber: z.string().optional(),
     description: z.string().min(1, 'شرح کلی سند الزامی است'),
     referenceModule: z.enum(['manual', 'invoice', 'payroll', 'cheque', 'treasury', 'inventory']).optional().default('manual'),
     referenceId: z.coerce.number().int().positive().nullable().optional(),
-    referenceNumber: z.string().optional(),
-    currency: z.string().optional(),
+    referenceNumber: z.string().optional().refine(ref => !isReservedVoucherReference(ref), RESERVED_REFERENCE_MESSAGE),
+    currency: manualVoucherCurrency,
     attachments: z.array(z.any()).optional(),
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است')
-  }).refine((data) => isVoucherBalanced(data.items), {
+  }).refine((data) => isVoucherBalanced(data.items, data.currency), {
     message: 'سند حسابداری تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
     path: ['items']
   })
@@ -130,11 +163,11 @@ export const updateVoucherSchema = z.object({
     date: z.string().min(1, 'تاریخ سند الزامی است').optional(),
     description: z.string().min(1, 'شرح کلی سند الزامی است').optional(),
     manualVoucherNumber: z.string().optional(),
-    voucherType: z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement']).optional(),
-    currency: z.string().optional(),
+    voucherType: manualVoucherType.optional(),
+    currency: manualVoucherCurrency,
     attachments: z.array(z.any()).optional(),
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است').optional(),
-  }).refine((data) => !data.items || isVoucherBalanced(data.items), {
+  }).refine((data) => !data.items || isVoucherBalanced(data.items, undefined, false), {
     message: 'سند حسابداری تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
     path: ['items']
   })
@@ -161,7 +194,7 @@ export const correctVoucherSchema = z.object({
     reason: z.string().min(1, 'علت اصلاح سند الزامی است'),
     newDescription: z.string().optional(),
     newItems: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند اصلاحی الزامی است')
-  }).refine((data) => isVoucherBalanced(data.newItems), {
+  }).refine((data) => isVoucherBalanced(data.newItems, undefined, false), {
     message: 'سند اصلاحی تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
     path: ['newItems']
   })

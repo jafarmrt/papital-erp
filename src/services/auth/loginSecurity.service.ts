@@ -183,7 +183,7 @@ export async function resetFailedAttempts(userIdOrUsername: number | string, pai
   }
 }
 
-/** Lockout response message — identical for existing and unknown usernames (v9.0.162, TD-539: Persian digits, shared text) */
+/** Lockout response message — identical for existing and unknown usernames (v9.0.220, TD-539: Persian digits, shared text) */
 export function lockoutMessage(minutes: number): string {
   return usernameLockoutMessage(minutes);
 }
