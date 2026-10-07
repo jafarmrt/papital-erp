@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.171 — Zip Update Instruction Matches update.sh
+- **Zip Update Documentation:** `deploy/DEPLOY_LINUX.md` §4 gives `sudo bash update.sh --zip <file.zip>` (and `--source <dir>`). It used to say to extract the zip over the app directory and run `update.sh`, which failed after the backup with `fatal: not a git repository`.
+
 ### v9.0.170 — Rollback Steps Keep the Branch
 - **Rollback Steps:** the rollback and rehearsal hints of `update.sh` reset the branch (`git reset --hard <commit>`) instead of `git checkout <commit>`, which detached HEAD so the next `git pull --ff-only` failed with «You are not currently on a branch».
 
