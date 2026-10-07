@@ -2,7 +2,6 @@ import React, { useId, useMemo } from 'react';
 import { Check, AlertCircle } from 'lucide-react';
 import {
   toEnglishDigits,
-  normalizeNationalId,
   validateIranianNationalId,
   toPersianDigits
 } from '../../utils';
@@ -73,11 +72,8 @@ export const NationalIdInput: React.FC<NationalIdInputProps> = ({
     onChange(digits);
   };
 
+  // v9.0.248 (TD-673، تصمیم ت۵ ب): کد ناقص هرگز با صفر پر نمی‌شود؛ پیش‌تر blur «19» را «0000000019» و «کد ملی معتبر» می‌کرد
   const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    if (cleanDigits && cleanDigits.length > 0 && cleanDigits.length < 10) {
-      const padded = normalizeNationalId(cleanDigits);
-      onChange(padded);
-    }
     if (onBlur) {
       onBlur(e);
     }
@@ -128,7 +124,6 @@ export const NationalIdInput: React.FC<NationalIdInputProps> = ({
           name={name}
           type="text"
           inputMode="numeric"
-          maxLength={10}
           autoComplete="off"
           disabled={disabled}
           autoFocus={autoFocus}

@@ -37,6 +37,9 @@ interface PieceworkPayrollModalProps {
   isSaving?: boolean;
 }
 
+/** v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده منفی نمی‌شوند (سرور هم رد می‌کند) */
+const nonNegativeInput = (raw: string): number => Math.max(0, Number(raw) || 0);
+
 export function PieceworkPayrollModal({
   isOpen,
   onClose,
@@ -180,8 +183,9 @@ export function PieceworkPayrollModal({
               <label className="block text-xs font-bold text-slate-700 mb-1">{`پاداش / اضافه کار (${curLbl})`}</label>
               <input
                 type="number"
+                min="0"
                 value={payrollBonuses}
-                onChange={(e) => setPayrollBonuses(Number(e.target.value))}
+                onChange={(e) => setPayrollBonuses(nonNegativeInput(e.target.value))}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
               />
             </div>
@@ -190,8 +194,9 @@ export function PieceworkPayrollModal({
               <label className="block text-xs font-bold text-slate-700 mb-1">سایر کسورات (بیمه/مالیات...)</label>
               <input
                 type="number"
+                min="0"
                 value={payrollDeductions}
-                onChange={(e) => setPayrollDeductions(Number(e.target.value))}
+                onChange={(e) => setPayrollDeductions(nonNegativeInput(e.target.value))}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
               />
             </div>
@@ -215,7 +220,7 @@ export function PieceworkPayrollModal({
               type="number"
               min="0"
               value={advanceDeduction || ''}
-              onChange={(e) => setAdvanceDeduction?.(Number(e.target.value) || 0)}
+              onChange={(e) => setAdvanceDeduction?.(nonNegativeInput(e.target.value))}
               placeholder="مبلغی که از مساعده قبلی پرسنل کسر می‌شود"
               className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
             />

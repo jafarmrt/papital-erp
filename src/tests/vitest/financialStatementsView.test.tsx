@@ -44,13 +44,13 @@ describe('financial statements read the server keys (TD-563)', () => {
   it('income statement: revenue total, a 25% net margin in Persian digits and the expense rows', () => {
     render(<IncomeStatementView incomeStatement={incomeStatement} startDate="" endDate="" onPeriodChange={() => {}} onApplyIncomeFilter={() => {}} />);
     const revenueHeader = screen.getByText('درآمدهای عملیاتی و فروش (الف)').parentElement!;
-    expect(revenueHeader.textContent).toContain('۱,۰۰۰,۰۰۰,۰۰۰');
+    expect(revenueHeader.textContent).toContain('۱٬۰۰۰٬۰۰۰٬۰۰۰');
     expect(screen.getByText('حاشیه سود خالص:').parentElement!.textContent).toContain('۲۵٪');
     const expenseBox = screen.getByText('هزینه‌های عمومی، اداری و تشکیلاتی (ج)').closest('div.border') as HTMLElement;
     expect(within(expenseBox).getByText('6101 - هزینه حقوق اداری')).toBeTruthy();
     expect(within(expenseBox).queryByText('ثبتی یافت نشد')).toBeNull();
     const costBox = screen.getByText('بهای تمام شده کالای فروش رفته (ب)').parentElement!;
-    expect(costBox.textContent).toContain('۶۰۰,۰۰۰,۰۰۰');
+    expect(costBox.textContent).toContain('۶۰۰٬۰۰۰٬۰۰۰');
   });
 
   it('income statement without revenue shows no margin instead of ۰٪', () => {
@@ -65,10 +65,10 @@ describe('financial statements read the server keys (TD-563)', () => {
     expect(text).toContain('2001 - ماشین‌آلات');
     expect(text).toContain('3001 - حساب‌های پرداختنی تجاری');
     expect(text).toContain('4001 - سرمایه');
-    expect(screen.getByText('سود (زیان) دوره').parentElement!.textContent).toContain('۸۰,۰۰۰,۰۰۰');
-    expect(screen.getByText('دارایی‌های جاری').parentElement!.textContent).toContain('۳۰۰,۰۰۰,۰۰۰');
-    expect(screen.getByText('دارایی‌های غیرجاری').parentElement!.textContent).toContain('۲۰۰,۰۰۰,۰۰۰');
-    expect(screen.getAllByText('۵۰۰,۰۰۰,۰۰۰')).toHaveLength(2);
+    expect(screen.getByText('سود (زیان) دوره').parentElement!.textContent).toContain('۸۰٬۰۰۰٬۰۰۰');
+    expect(screen.getByText('دارایی‌های جاری').parentElement!.textContent).toContain('۳۰۰٬۰۰۰٬۰۰۰');
+    expect(screen.getByText('دارایی‌های غیرجاری').parentElement!.textContent).toContain('۲۰۰٬۰۰۰٬۰۰۰');
+    expect(screen.getAllByText('۵۰۰٬۰۰۰٬۰۰۰')).toHaveLength(2);
     expect(screen.queryByText('اطلاعاتی ثبت نشده است')).toBeNull();
   });
 });

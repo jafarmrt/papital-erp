@@ -168,7 +168,7 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
     const id = await createDoc({
       docType: 'return', inOut: 'in', dayIndex, buyerName: customer.name, returnOfDocumentId: inv.id,
       currency: line.currency, exchangeRate: line.currency !== 'IRR' ? Number(line.exchange_rate) || USD_RATE : undefined,
-      // v9.0.246 (TD-788): برگشت با فاکتور مرجع قیمت خالص هر واحد را از همان فاکتور می‌گیرد؛ قیمت ردیف فرستاده نمی‌شود
+      // v9.0.273 (TD-788): برگشت با فاکتور مرجع قیمت خالص هر واحد را از همان فاکتور می‌گیرد؛ قیمت ردیف فرستاده نمی‌شود
       lines: [{ itemId: line.item_id, quantity, location: line.location }],
     });
     return {

@@ -4,6 +4,7 @@ import { PieceworkPayroll } from '../../types';
 import { formatPersianPrice, formatQuantityOrTime, formatPersianDate, formatPersianNumber, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { PayrollPaymentModal } from './PayrollPaymentModal';
+import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable';
 
 interface PieceworkPayslipModalProps {
   viewingPayroll: PieceworkPayroll | null;
@@ -39,7 +40,16 @@ export function PieceworkPayslipModal({
             <span className="font-bold text-sm">فیش حقوقی رسمی پرسنل ({viewingPayroll.payrollNumber})</span>
           </div>
           <div className="flex items-center gap-2">
-            {!readOnly && viewingPayroll.status !== 'paid' && (
+            {/* v9.0.269 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود */}
+            {!readOnly && viewingPayroll.status === 'draft' && (
+              <button
+                onClick={() => onUpdateStatus(viewingPayroll.id, 'approved')}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+              >
+                تأیید فیش
+              </button>
+            )}
+            {!readOnly && isPayablePayrollStatus(viewingPayroll.status) && (
               <button
                 onClick={() => {
                   // V10-4.4: پرداخت فقط از مودال خزانه‌ای

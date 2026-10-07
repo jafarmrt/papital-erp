@@ -106,7 +106,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
           exchangeRate: docCurrency !== 'IRR' ? exchangeRate : null,
           projectId: selectedProjectId ? Number(selectedProjectId) : undefined,
           returnOfDocumentId: docType === 'return' && returnInvoiceId !== null ? returnInvoiceId : undefined,
-          // v9.0.247 (TD-774): مالیات برگشت با فاکتور مرجع را سرور از فاکتور می‌گیرد؛ بی فاکتور مرجع درصد کاربر
+          // v9.0.274 (TD-774): مالیات برگشت با فاکتور مرجع را سرور از فاکتور می‌گیرد؛ بی فاکتور مرجع درصد کاربر
           vatPercent: docType === 'return' && returnInvoiceId === null && returnVatPercent !== '' ? Number(returnVatPercent) : undefined,
           attachments,
           items: docItems.map(d => ({

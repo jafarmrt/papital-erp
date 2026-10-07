@@ -383,7 +383,7 @@ export const reconcileSchema = z.object({
 });
 
 // V1.4.0: ابطال تراکنش خزانه با سند معکوس (DB-009)
-/** v9.0.245 (TD-779): سند دریافت یا پرداخت خزانه؛ null یعنی «علی‌الحساب» */
+/** v9.0.272 (TD-779): سند دریافت یا پرداخت خزانه؛ null یعنی «علی‌الحساب» */
 export const relinkTreasuryDocumentSchema = z.object({
   params: z.object({
     id: z.string().regex(/^\d+$/, 'شناسه تراکنش باید عددی باشد')

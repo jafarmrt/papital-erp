@@ -262,7 +262,7 @@ router.post('/accounting/treasury/:id/void', authorizePermission('accounting.tre
   res.json(reversal);
 }));
 
-// v9.0.245 (TD-779، ت۴ الف): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») یا وصل کردن به سند فعال دیگر
+// v9.0.272 (TD-779، ت۴ الف): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») یا وصل کردن به سند فعال دیگر
 router.put('/accounting/treasury/:id/document', authorizePermission('accounting.treasury'), validate(relinkTreasuryDocumentSchema), asyncHandler(async (req, res) => {
   const result = await relinkTreasuryDocument({
     id: Number(req.params.id),

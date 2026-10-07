@@ -5,6 +5,7 @@ import { normalizeError } from '../../errors/customErrors.js';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { BUILD_INFO, APP_VERSION } from '../../lib/version.js';
 import crypto from 'crypto';
+import { readImportedNationalId } from '../../lib/personnel/nationalIdCell.js';
 import {
   validateIranianNationalId,
   validateIranianPhoneNumber,
@@ -635,10 +636,14 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       throw new Error('کد ملی با رقم کنترلی اشتباه باید رد شود');
     }
 
-    // تست پد خودکار صفرهای سمت چپ
-    const padded = normalizeNationalId('10000038');
-    if (padded !== '0010000038') {
-      throw new Error(`پد کردن صفر سمت چپ نادرست است: ${padded}`);
+    // v9.0.248 (TD-673): فرم صفر نمی‌افزاید؛ فقط ورود اکسل ۸ یا ۹ رقم را با صفر به ۱۰ می‌رساند و گزارش می‌کند
+    const formValue = normalizeNationalId('10000038');
+    if (formValue !== '10000038') {
+      throw new Error(`a form must not zero-pad a national ID: ${formValue}`);
+    }
+    const imported = readImportedNationalId('10000038');
+    if (imported.value !== '0010000038' || !imported.padded) {
+      throw new Error(`the Excel import must pad 8 digits and report it: ${JSON.stringify(imported)}`);
     }
 
     results.push(makeTestCase({

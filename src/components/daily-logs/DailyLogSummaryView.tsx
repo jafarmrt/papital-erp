@@ -5,7 +5,9 @@ import {
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { formatPersianNumber, extractDateString, formatPersianDate } from '../../utils';
+import { formatPersianNumber, extractDateString, formatPersianDate, toPersianDigits } from '../../utils';
+import { summaryYearOptions } from '../../lib/dailyLogs/summaryYears';
+import { workModeLabel } from '../../lib/dailyLogs/workMode';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
 
 interface DailyLogSummaryViewProps {
@@ -143,10 +145,9 @@ export function DailyLogSummaryView({
                   onChange={(e) => setSummaryYear(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-slate-50 focus:bg-white text-slate-800"
                 >
-                  <option value="1405">۱۴۰۵</option>
-                  <option value="1404">۱۴۰۴</option>
-                  <option value="1403">۱۴۰۳</option>
-                  <option value="1402">۱۴۰۲</option>
+                  {summaryYearOptions(summaryYear).map(y => (
+                    <option key={y} value={y}>{toPersianDigits(y)}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -304,7 +305,12 @@ export function DailyLogSummaryView({
                                 🏠 {formatPersianNumber(u.remoteCount)} دورکاری
                               </span>
                             )}
-                            {u.onsiteCount === 0 && u.remoteCount === 0 && (
+                            {u.otherCount > 0 && (
+                              <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold border border-amber-100">
+                                {formatPersianNumber(u.otherCount)} سایر
+                              </span>
+                            )}
+                            {u.onsiteCount === 0 && u.remoteCount === 0 && !u.otherCount && (
                               <span className="text-slate-400">بدون فعالیت</span>
                             )}
                           </div>
@@ -370,8 +376,10 @@ export function DailyLogSummaryView({
                         <span className="font-bold text-xs text-slate-900">{log.title}</span>
                         {log.work_mode === 'onsite' ? (
                           <span className="px-2 py-0.5 rounded text-[10px] bg-blue-100 text-blue-800 font-bold">🏢 حضوری</span>
-                        ) : (
+                        ) : log.work_mode === 'remote' ? (
                           <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-bold">🏠 دورکاری</span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-bold">{workModeLabel(log.work_mode)}</span>
                         )}
                       </div>
                       <span className="text-[11px] text-slate-500 font-bold">

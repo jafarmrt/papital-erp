@@ -104,7 +104,7 @@ describe('stock document form residuals (TD-234)', () => {
     fireEvent.click(screen.getByText('جستجو'));
     expect(await screen.findByText('گردنبند نقره')).toBeTruthy();
 
-    // v9.0.246 (TD-788): ارز و نرخ برگشت از فاکتور مرجع می‌آید (پیش‌تر کاربر آن را در فرم انتخاب می‌کرد)
+    // v9.0.273 (TD-788): ارز و نرخ برگشت از فاکتور مرجع می‌آید (پیش‌تر کاربر آن را در فرم انتخاب می‌کرد)
     expect(currencySelect().value).toBe('USD');
     fireEvent.change(screen.getByLabelText('تاریخ سند'), { target: { value: '' } });
 

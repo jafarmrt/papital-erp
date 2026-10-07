@@ -24,7 +24,7 @@ interface DocItemsTableProps {
   onRemove: (itemId: number) => void;
   onEditItem?: (item: Item) => void;
   canEditItem?: boolean;
-  /** v9.0.246 (TD-788): قیمت برگشتِ دارای فاکتور مرجع قیمت خالص همان فاکتور است و ویرایش نمی‌شود */
+  /** v9.0.273 (TD-788): قیمت برگشتِ دارای فاکتور مرجع قیمت خالص همان فاکتور است و ویرایش نمی‌شود */
   priceLocked?: boolean;
 }
 

@@ -5,7 +5,7 @@ interface ExchangeRateFieldProps {
   currency: string;
   value: number;
   onChange: (rate: number) => void;
-  /** v9.0.246 (TD-788): نرخ برگشتِ دارای فاکتور مرجع همان نرخ فاکتور است و ویرایش نمی‌شود */
+  /** v9.0.273 (TD-788): نرخ برگشتِ دارای فاکتور مرجع همان نرخ فاکتور است و ویرایش نمی‌شود */
   disabled?: boolean;
 }
 

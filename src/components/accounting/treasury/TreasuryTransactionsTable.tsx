@@ -46,7 +46,7 @@ interface TreasuryTransactionsTableProps {
   onExportExcel: () => void;
   onViewAttachments: (info: { title: string; attachments: FinancialAttachment[] }) => void;
   onVoidTransaction: (tx: TreasuryTransaction) => void;
-  /** v9.0.245 (TD-779): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») */
+  /** v9.0.272 (TD-779): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») */
   onDetachDocument?: (tx: TreasuryTransaction) => void;
 }
 
@@ -356,7 +356,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     <td className="py-3 px-3 text-center">
                       {!isVoided && !(tx.reversalOfId ?? tx.reversal_of_id) ? (
                         <div className="inline-flex items-center gap-1">
-                          {/* v9.0.245 (TD-779): دریافت یا پرداخت وصل به سند «علی‌الحساب» می‌شود تا سند باطل‌شدنی شود */}
+                          {/* v9.0.272 (TD-779): دریافت یا پرداخت وصل به سند «علی‌الحساب» می‌شود تا سند باطل‌شدنی شود */}
                           {onDetachDocument && (tx.documentId ?? tx.document_id) && !(tx.payrollId ?? tx.payroll_id) ? (
                             <button
                               onClick={() => onDetachDocument(tx)}
