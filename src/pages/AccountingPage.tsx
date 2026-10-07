@@ -48,8 +48,8 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
     treeAccounts,
     vouchers,
     bankAccounts,
+    bankAccountOptions,
     cheques,
-    treasuryTransactions,
     customers,
     personnelList,
     trialBalance,
@@ -283,7 +283,6 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
           {currentTab === 'treasury' && (
             <BankAndTreasuryTab
               bankAccounts={bankAccounts}
-              transactions={treasuryTransactions}
               customers={customers}
               personnelList={personnelList}
               accounts={accounts}
@@ -304,7 +303,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
           {currentTab === 'cheques' && (
             <ChequesTab
               cheques={cheques}
-              bankAccounts={bankAccounts}
+              bankAccounts={bankAccountOptions}
               customers={customers}
               personnelList={personnelList}
               loading={loading}

@@ -6,7 +6,8 @@
 import { z } from 'zod';
 import { computeVoucherBalance, VOUCHER_BALANCE_TOLERANCE, type VoucherBalanceRow } from '../../lib/voucherBalance.js';
 import { DEFAULT_ACCOUNT_MAPPINGS, type ConceptualAccountMappingConfig } from '../../services/accounting/accountMapping.service.js';
-import { latinDigitsString, storageDateParam } from '../../middleware/validate.js';
+import { decimalInput, latinDigitsString, storageDateParam } from '../../middleware/validate.js';
+import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../../lib/treasury/treasuryCurrency.js';
 
 /** query پس از validate: میدل‌ور validate مقدار req.query را با خروجی parse شده Zod جایگزین می‌کند. */
 export type ValidatedQuery<S extends z.ZodTypeAny> = z.infer<S> extends { query?: infer Q } ? Partial<NonNullable<Q>> : never;
@@ -196,6 +197,21 @@ export const setVoucherStatusSchema = z.object({
 // ==========================================
 // BANK ACCOUNTS & TREASURY
 // ==========================================
+/**
+ * v9.0.101 (TD-514، B04-18): مبلغ، مانده اول دوره و نرخ تسعیر خزانه و چک با `decimalInput` (رقم فارسی، «٫» و جداکننده
+ * هزارگان پذیرفته؛ متن ← پیام فارسی)، نه `z.coerce.number()` که «۲۵۰۰۰۰۰» و «2,500,000» را با پیام انگلیسی NaN رد می‌کرد.
+ * ارز از فهرست `TREASURY_CURRENCIES` (کد کوچک بزرگ می‌شود؛ خالی و «ریال» ← IRR).
+ */
+const positiveTreasuryAmount = (label: string, positiveMessage: string) => decimalInput(label)
+  .refine(v => v !== undefined, `${label} الزامی است`)
+  .refine(v => v === undefined || Number(v) > 0, positiveMessage);
+const optionalPositiveRate = decimalInput('نرخ تسعیر').optional()
+  .refine(v => v === undefined || Number(v) > 0, 'نرخ تسعیر باید بزرگتر از صفر باشد');
+const treasuryCurrency = z.preprocess(
+  normalizeTreasuryCurrency,
+  z.enum(TREASURY_CURRENCIES, { message: 'ارز پشتیبانی نمی‌شود؛ یکی از ریال، دلار، یورو، درهم یا پوند را انتخاب کنید' }),
+);
+
 export const createBankAccountSchema = z.object({
   body: z.object({
     code: z.string().optional(),
@@ -209,8 +225,8 @@ export const createBankAccountSchema = z.object({
     shebaNumber: z.string().optional(),
     cardNumber: z.string().optional(),
     branch: z.string().optional(),
-    currency: z.string().optional().default('IRR'),
-    initialBalance: z.coerce.number().default(0),
+    currency: treasuryCurrency.optional().default('IRR'),
+    initialBalance: decimalInput('موجودی اولیه').optional().transform(v => v ?? '0'),
     accountId: z.coerce.number().nullable().optional(),
     accountCode: z.string().optional(),
     accountName: z.string().optional(),
@@ -232,8 +248,8 @@ export const updateBankAccountSchema = z.object({
     shebaNumber: z.string().optional(),
     cardNumber: z.string().optional(),
     branch: z.string().optional(),
-    currency: z.string().optional(),
-    initialBalance: z.coerce.number().optional(),
+    currency: treasuryCurrency.optional(),
+    initialBalance: decimalInput('موجودی اولیه').optional(),
     accountId: z.coerce.number().nullable().optional(),
     accountCode: z.string().optional(),
     accountName: z.string().optional(),
@@ -258,6 +274,9 @@ export const treasuryQuerySchema = z.object({
     bankAccountId: z.coerce.number().int().positive().optional(),
     startDate: storageDateParam,
     endDate: storageDateParam,
+    // v9.0.102 (TD-509): فیلترهای جدول صفحه خزانه در سرور؛ با page یا limit پاسخ یک صفحه است
+    method: z.enum(['cash', 'bank_transfer', 'pos', 'cheque', 'all']).optional(),
+    q: z.string().max(200).optional(),
     page: z.coerce.number().int().positive().optional(),
     limit: z.coerce.number().int().positive().max(1000).optional(),
   }).optional()
@@ -269,9 +288,9 @@ export const createTreasuryTxSchema = z.object({
     // TD-105: تاریخ اختیاری است — مقدار خالی با businessTodayIsoDate سرور پر می‌شود و بازه در سرویس اعتبارسنجی می‌شود
     date: z.string().optional(),
     method: z.enum(['cash', 'bank_transfer', 'pos', 'cheque'], { message: 'روش پرداخت نامعتبر است' }),
-    amount: z.coerce.number().positive('مبلغ تراکنش باید بزرگتر از صفر باشد'),
-    currency: z.string().optional().default('IRR'),
-    exchangeRate: z.coerce.number().positive().optional(),
+    amount: positiveTreasuryAmount('مبلغ تراکنش', 'مبلغ تراکنش باید بزرگتر از صفر باشد'),
+    currency: treasuryCurrency.optional().default('IRR'),
+    exchangeRate: optionalPositiveRate,
     bankAccountId: z.coerce.number().int().positive('انتخاب حساب بانکی یا صندوق الزامی است'),
     partyType: z.enum(['customer', 'personnel', 'supplier', 'other']).optional(),
     partyId: z.coerce.number().int().positive().nullable().optional(),
@@ -291,8 +310,8 @@ export const previewTreasurySchema = z.object({
   body: z.object({
     type: z.enum(['receipt', 'payment']),
     method: z.enum(['cash', 'bank_transfer', 'pos', 'cheque']).optional(),
-    amount: z.coerce.number().positive('مبلغ تراکنش باید مثبت باشد'),
-    currency: z.string().optional().default('IRR'),
+    amount: positiveTreasuryAmount('مبلغ تراکنش', 'مبلغ تراکنش باید مثبت باشد'),
+    currency: treasuryCurrency.optional().default('IRR'),
     bankAccountId: z.coerce.number().int().positive('شناسه حساب بانکی الزامی است'),
     partyType: z.string().optional(),
     purpose: z.string().optional(),
@@ -306,9 +325,9 @@ export const transferSchema = z.object({
   body: z.object({
     // TD-105: تاریخ اختیاری است — مقدار خالی با businessTodayIsoDate سرور پر می‌شود و بازه در سرویس اعتبارسنجی می‌شود
     date: z.string().optional(),
-    amount: z.coerce.number().positive('مبلغ انتقال باید بزرگتر از صفر باشد'),
-    currency: z.string().optional().default('IRR'),
-    exchangeRate: z.coerce.number().positive().optional(),
+    amount: positiveTreasuryAmount('مبلغ انتقال', 'مبلغ انتقال باید بزرگتر از صفر باشد'),
+    currency: treasuryCurrency.optional().default('IRR'),
+    exchangeRate: optionalPositiveRate,
     fromBankAccountId: z.coerce.number().int().positive('حساب مبدا الزامی است'),
     toBankAccountId: z.coerce.number().int().positive('حساب مقصد الزامی است'),
     trackingNumber: z.string().optional(),
@@ -365,8 +384,8 @@ export const createChequeSchema = z.object({
     branch: z.string().optional(),
     issueDate: z.string().min(1, 'تاریخ صدور الزامی است'),
     dueDate: z.string().min(1, 'تاریخ سررسید الزامی است'),
-    amount: z.coerce.number().positive('مبلغ چک باید بزرگتر از صفر باشد'),
-    currency: z.string().optional().default('IRR'),
+    amount: positiveTreasuryAmount('مبلغ چک', 'مبلغ چک باید بزرگتر از صفر باشد'),
+    currency: treasuryCurrency.optional().default('IRR'),
     partyType: z.enum(['customer', 'personnel', 'supplier', 'other']).optional(),
     partyId: z.coerce.number().int().positive().nullable().optional(),
     partyName: z.string().min(1, 'نام طرف حساب الزامی است'),

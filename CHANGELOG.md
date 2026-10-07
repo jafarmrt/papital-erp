@@ -22,6 +22,35 @@ going forward.
 ### v9.0.107 — Route Guards Ask Permissions Only
 - **Route Guards:** no route guard takes a role code any more; system maintenance is for the system admin only, warehouses and the fiscal-year close get their own permissions, and migration 0062 turns access seed roles had only by their code into logged ticks (TD-516).
 
+### v9.0.106 — Treasury Forms and Export
+- **Treasury Forms and Export (P3):** a receipt or payment for an account without a ledger account is stopped in the form, treasury and cheque dates use the Jalali date input, and the treasury Excel export has Persian labels and a Jalali file date. Before, the form promised a voucherless save the server refused, and the date field showed «2026/10/07» in the Jalali calendar (TD-515, Vitest `treasuryFormWording.test.tsx`).
+
+### v9.0.105 — Cheque History and Status Wording
+- **Cheque History and Status Wording (P3):** the cheque history window shows the stored step notes, messages name statuses in Persian, and the status filter offers «در خزانه / صندوق». Before, notes never showed and messages said «bounced» / «passed» (TD-513, `reg_cheque_status_messages_persian_td_513`).
+
+### v9.0.104 — Cheque Audit Before and After
+- **Cheque Audit Before and After (P3):** a cheque status change or delete records the previous and new status in Persian, the bank account and the vouchers it issued or voided. Before, the audit held only `{"status":"in_collection"}` or `{"chequeId":6}` (TD-512, `reg_cheque_audit_before_after_td_512`).
+
+### v9.0.103 — Bank Reconciliation Rows
+- **Bank Reconciliation Rows (P3):** reconciling a row of another bank or a voided row is refused with the list, only changed rows are written and audited, and the reconciliation time is the server UTC time. Before, three ids (bank A, bank B, voided) gave `{"updated": 2}` and the voided row was reconciled (TD-511, `reg_treasury_reconcile_rows_td_511`).
+
+### v9.0.102 — Paged Treasury List
+- **Paged Treasury List (P2):** bank balances are summed in SQL and the treasury page reads one server page with its total and running balance. Before, every request read all approved ledger rows (200,000 rows, 1,639 ms for 15 banks) and the page loaded all 20,000 transactions (15.88 MB) (TD-509, `reg_treasury_list_paging_and_bank_balances_td_509`).
+
+### v9.0.101 — Treasury Amount Input
+- **Treasury Amount Input (P3):** treasury, transfer and cheque amounts, opening balances and exchange rates accept Persian digits and thousands separators, text gets a Persian message, and the currency must be a supported one. Before, «۲۵۰۰۰۰۰» and «2,500,000» were refused with an English NaN message (TD-514, `reg_treasury_decimal_inputs_td_514`).
+
+### v9.0.100 — Bank Ledger and Cheque Bank Links
+- **Bank Ledger and Cheque Bank Links (P3):** a bank account links only to an active subsidiary account under cash and bank (general 10), and a cheque only to an active bank account. Before, a bank on a missing account or on trade receivables 1201 and a cheque on a missing bank were saved (TD-510, `reg_bank_ledger_and_cheque_bank_td_510`).
+
+### v9.0.99 — Bank Account Currency
+- **Bank Account Currency (P2):** the bank account form takes a currency (rial, dollar, euro, dirham, pound) and the currency is fixed after the account's first transaction, cheque or opening balance. Before, a currency edit returned success and was silently ignored, so a foreign account could be made only through the API (TD-508, `reg_bank_account_currency_td_508`).
+
+### v9.0.98 — Cheque and Treasury Dates
+- **Cheque and Treasury Dates (P2):** a cheque issue or action date after today and a non-existent day such as 1404/12/30 in a receipt, payment, transfer or cheque action are refused; the cheque status form sends the action date. Before, 1404/12/30 was posted on 1 Farvardin 1405 in the next fiscal year (TD-506, TD-669, `reg_cheque_and_treasury_dates_td_506`).
+
+### v9.0.97 — Bank Pick List for Forms
+- **Bank Account Readers (P2):** forms that only pick a bank account read a pick list without account, card or Sheba numbers or balances; the full list goes only to treasury readers. Before, warehouse and document users read every number and balance (TD-505, `reg_bank_account_options_td_505`).
 ### v9.0.96 — Warehouse UI Wording, Export Names and Warehouse Chart
 - **Warehouse UI:** decided Persian terms, Persian digits and surplus/shortage labels on the count sheet, Persian export file names with a failure message, and a warehouse chart that counts items instead of adding units (TD-496, `reg_warehouse_item_count_td_496`).
 

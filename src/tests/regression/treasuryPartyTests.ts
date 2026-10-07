@@ -25,14 +25,14 @@ async function client() {
   };
 }
 
-async function accountId(code: string): Promise<number> {
+export async function accountId(code: string): Promise<number> {
   const [row] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, code), eq(accounts.isDeleted, 0)));
   if (!row) throw new Error(`account ${code} is missing`);
   return row.id;
 }
 
 /** A bank with a ledger account of its own under 1003 */
-async function createBank(title: string): Promise<{ id: number; ledgerId: number }> {
+export async function createBank(title: string): Promise<{ id: number; ledgerId: number }> {
   const api = await client();
   const [ledger] = await orm.insert(accounts).values({
     code: `1003${tagOf()}`, name: `${title} (test ledger)`, level: 'subsidiary', parentId: await accountId('1003'),

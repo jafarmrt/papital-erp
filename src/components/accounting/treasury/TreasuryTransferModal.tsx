@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeftRight, X } from 'lucide-react';
-import DatePicker from 'react-multi-date-picker';
-import persian from 'react-date-object/calendars/persian';
-import persian_fa from 'react-date-object/locales/persian_fa';
-import { formatPersianPrice, extractDateString, getTodayIsoDate } from '../../../utils';
+import { formatPersianPrice, getTodayIsoDate } from '../../../utils';
+import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { FinancialAmountInput } from '../../common/FinancialAmountInput';
 import { HelpBadge } from '../../common/HelpBadge';
 import { fetchJson } from '../../../api';
@@ -173,13 +171,11 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">تاریخ *</label>
-              <DatePicker
+              <JalaliDateInput
                 value={formData.date}
-                onChange={(d: any) => setFormData(p => ({ ...p, date: extractDateString(d) }))}
-                calendar={persian}
-                locale={persian_fa}
+                onChange={iso => setFormData(p => ({ ...p, date: iso }))}
                 calendarPosition="bottom-right"
-                inputClass="w-full px-3 py-2 text-xs text-center bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                className="w-full px-3 py-2 text-xs text-center bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                 containerClassName="w-full"
               />
             </div>
