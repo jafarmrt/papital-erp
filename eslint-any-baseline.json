@@ -1,5 +1,4 @@
 {
-  "scripts/cleanup-test-data.ts": 5,
   "scripts/run-tests.ts": 1,
   "server.ts": 1,
   "src/api.ts": 13,

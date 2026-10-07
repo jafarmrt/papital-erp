@@ -237,7 +237,7 @@
   5. **Data Model Normalization (نرمال‌سازی انبار):** Migration of per-warehouse inventory quantities from JSONB blob into a normalized `item_warehouse_stocks` table with database-level constraints.
 - **CHANGELOG.md Archive:** Condensed markdown archive of major series milestones lives in root `CHANGELOG.md`.
 - **Technical Debt Registry (TECH_DEBT.md):** ANY shortcut, workaround, or known issue must be registered with unique `TD-###` in `TECH_DEBT.md`. Resolving a debt requires updating its status in the same change-set.
-- **Data-Safety Invariant:** Test cleanup gated on `NODE_ENV ∈ {test,development}` AND `ERP_ALLOW_TEST_CLEANUP=1`, scoped to synthetic test IDs only. `db:push` is BANNED; migrations come exclusively from the atomic migrator.
+- **Data-Safety Invariant:** Test cleanup gated on `NODE_ENV ∈ {test,development}` AND `ERP_ALLOW_TEST_CLEANUP=1`, scoped to synthetic test IDs only. `npm run db:cleanup-test` checks both before connecting, previews by default (rolled back) and deletes only with `--force`, and then only `ERP-TEST-MARKER` rows nothing else refers to; it never touches Kardex, treasury, users, audit logs, counters or sequences (v9.0.111, TD-581). `db:push` is BANNED; migrations come exclusively from the atomic migrator.
 - **Business Clock Invariant:** Server-side dates must use `src/lib/businessClock.ts`.
 - **Local Dev & MCP References:**
   - Windows local PostgreSQL & portable `.pgdata` lifecycle: see `docs/LOCAL_DEV_WINDOWS.md`.

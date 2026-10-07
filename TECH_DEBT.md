@@ -39,7 +39,6 @@
 | TD-540 | دسترسی (بسته ۲) | P3 (B02-25) — واژه انگلیسی و آوانویسی در رابط بسته ۲: «(RBAC)»، «(Audit Trail)»، «Snapshot»، کدهای `LOGIN`، «داشبورد»، «پروفایل»، «ماژول»، «آواتار»، «سایدبار»، «لاگ»، «کلاینت»، «ویزارد»، «کانبان» و ارقام لاتین | UsersPage.tsx، ActivityLogsPage.tsx، AuditDiffViewer.tsx، SystemOperationsTab.tsx، UserProfileModal.tsx، RoleFormModal.tsx، MenuVisibilityPanel.tsx، LoginPage.tsx، ProtectedRoute.tsx | open (P3، تصمیم ت۸ الف) |
 | TD-541 | دسترسی (بسته ۲)؛ اثر روی ۸ | P2 (B02-26) — ثبت سند هر نقشی جز `admin`، `manager`، `warehouse_keeper` و `accountant` را «کاربر فروش» می‌داند و برای هر نوع سند فقط پیش‌فاکتور می‌پذیرد: نقش سفارشی با `warehouse.in` رسید قطعی را ۴۰۳ گرفت و «مدیر ارشد مالی» هم | documents.routes.ts، CreateInvoicePage.tsx | open (P2، مدل مجوز) |
 | TD-542 | دسترسی (بسته ۲)؛ اثر روی ۱۴ | P2 (B02-27) — گردش‌کار تأییدکننده را با کد نقش و جدول هم‌ارزی ثابت کدها می‌سنجد (پیاده‌سازی دوم در `workflowAuthorizationPolicy.ts`، گردش اسناد حسابداری با کد `accountant`، پنج کد ثابت در طراح): نقش سفارشی با `accounting.vouchers` سند حسابداری را تأیید نمی‌کند | workflowTransitionExecutor.ts، workflowAuthorizationPolicy.ts، workflowDefinitionService.ts، WorkflowDesignerCanvas.tsx | open (P2، مدل مجوز) |
-| TD-581 | زیرساخت (بسته ۱) | P1 (B01-01) — `npm run db:cleanup-test` نگهبان محیط ندارد و بی پرچم واقعاً پاک می‌کند؛ الگوهایش قالب‌های واقعی برنامه‌اند: روی پایگاه‌داده با `NODE_ENV=production` فیش `PAY-17`، سند معکوس `REV-V1001`، کالای `SILVER-0001` و کاربر `user_ali` پاک شدند، ردیف کاردکس فیزیکی حذف و شماره سند به ۱۰۰۲ بازنشانی شد (AGENTS §23) | scripts/cleanup-test-data.ts، package.json | open (P1، تصمیم ت۱ الف) |
 | TD-582 | زیرساخت (بسته ۱) | P1 (B01-02) — برچسب مسیر `/metrics` برای درخواست بی route خام `req.path` است و هرگز آزاد نمی‌شود: ۳٬۰۰۰ درخواست بی ورود به `/api/zz-<تصادفی>` سری‌های `http_requests_total` را از ۲ به ۳٬۰۰۲ رساند؛ هر مسیر حدود ۱۰ کیلوبایت ماندگار (۵۰٬۰۰۰ مسیر = ۴۵۵ MiB، خواندن `/metrics` ۱٫۳ s)؛ برچسب پیشوند mount را هم ندارد | middleware/metrics.ts | open (P1) |
 | TD-584 | زیرساخت (بسته ۱) | P2 (B01-04) — API پیش از پایان مهاجرت‌ها پاسخ می‌دهد و `/health/ready` «آماده» می‌گوید: با پایگاه‌داده در ۰۰۵۴ و build نیازمند ۰۰۵۵، ورود موفق و `GET /api/personnel` ۵۰۰؛ با قفل مهاجرت در دست دیگری `/health/ready` ۲۰۰ و `POST /api/login` ۵۰۰ (نصب لینوکسی دروازه‌ای ندارد) | server.ts، app.ts | open (P2، تصمیم ت۲ الف) |
 | TD-585 | زیرساخت (بسته ۱) | P2 (B01-05) — `backup.sh` نه `umask` دارد نه `chmod`: پوشه پشتیبان ۰۷۵۵ و dump، manifest و بایگانی پیوست‌ها ۰۶۴۴؛ کاربر `nobody` محتوای فیش حقوقی و ردیف‌های `file_attachments` را از پشتیبان خواند | scripts/backup.sh، scripts/go-live-verify.sh | open (P2) |
@@ -86,8 +85,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۶۵ ردیف
-- **آرشیو شده (resolved):** ۴۶۹ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۶۴ ردیف
+- **آرشیو شده (resolved):** ۴۷۰ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -96,4 +95,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.110 — بخش بسته ۱ در گزارش ممیزی نوشته و ردیف‌های باز TD-581 تا TD-625 ثبت شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.111 — TD-581 (پاک‌سازی داده آزمون بی نگهبان) رفع و بایگانی شد؛ بسته ۱ ردیف باز دارد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
