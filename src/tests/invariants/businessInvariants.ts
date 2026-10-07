@@ -5,6 +5,7 @@ import { createLedgerLocationResolver } from '../../services/inventory/warehouse
 import { activeLedgerRows, isInRow, isOutRow, QTY_TOLERANCE, rows } from './ledgerRows.js';
 import { checkKardexRebuildWac } from './kardexRebuildInvariant.js';
 import { checkBankInvariants } from './bankInvariants.js';
+import { checkPayrollInvariants } from './payrollInvariants.js';
 
 /**
  * v8.0.1 — ناوردایی‌های قابل اجرای منطق کاری (V8_MASTER_ROADMAP.md بخش ۴).
@@ -26,6 +27,8 @@ export type InvariantId =
   | 'I4_one_voucher_per_document'
   | 'I5_invoice_receivable'
   | 'I6_void_trial_balance'
+  /** v9.0.231 (TD-804): gross − deductions = net = wages payable credit of the payslip's voucher */
+  | 'I10_payroll_net_equals_payable'
   | 'I13_kardex_rebuild_wac'
   /** شبیه‌ساز: برگشت از فروش بیش از مقدار فروخته‌شده پذیرفته شد */
   | 'I14_return_within_sold'
@@ -51,6 +54,8 @@ export interface InvariantScope {
   voucherIdAfter: number;
   /** v9.0.67 (TD-499): حساب‌های خزانه‌ای که ناوردایی‌های بانک (I15، I16) روی آن‌ها سنجیده می‌شود */
   bankAccountIds?: number[];
+  /** v9.0.231 (TD-804): only payslips with a larger id (I10); without it I10 is not checked */
+  payrollIdAfter?: number;
 }
 
 /** انواع سندی که هنگام ثبت نهایی سند حسابداری می‌گیرند (انبارگردانی از v8.0.3، TD-255) */
@@ -321,5 +326,6 @@ export async function checkBusinessInvariants(scope: InvariantScope): Promise<In
     ...(await checkVoidTrialBalance(scope)),
     ...(await checkKardexRebuildWac(scope)),
     ...(await checkBankInvariants(scope.bankAccountIds ?? [])),
+    ...(await checkPayrollInvariants(scope.payrollIdAfter)),
   ];
 }

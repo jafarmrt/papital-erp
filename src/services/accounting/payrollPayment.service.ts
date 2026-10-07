@@ -12,6 +12,7 @@ import { eq, and, inArray, or, like, isNull } from 'drizzle-orm';
 import { VoucherService } from './voucher.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
 import { TreasuryTransactionService } from './treasury/treasuryTransaction.service.js';
+import { payrollVouchersWhere, pickPayrollVoucher } from './payrollVoucherLink.js';
 import { LockHierarchyLevel, withOrderedLocks } from '../../lib/lockOrder.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
@@ -187,6 +188,26 @@ export class PayrollPaymentService {
 
       if (!payroll.status || !['approved', 'partially_paid', 'draft'].includes(payroll.status)) {
         throw new ConflictError(`وضعیت فعلی فیش (${payroll.status}) اجازه ثبت پرداخت ندارد.`);
+      }
+
+      // v9.0.231 (TD-804): فیش بی سند حسابداری زنده پرداخت نمی‌شود. پیش‌تر پرداخت آن ۳۲۰۱ را بدهکار و بانک را بستانکار
+      // می‌کرد بی آنکه هزینه یا بدهی حقوقی در دفتر باشد. فیش قدیمی بی سند ابتدا با «همگام‌سازی سند» سند می‌گیرد.
+      const voucherCandidates = await tx
+        .select({
+          id: journalVouchers.id,
+          sourcePayrollId: journalVouchers.sourcePayrollId,
+          referenceId: journalVouchers.referenceId,
+          referenceNumber: journalVouchers.referenceNumber,
+          voucherType: journalVouchers.voucherType,
+        })
+        .from(journalVouchers)
+        .where(payrollVouchersWhere(payroll.id, payroll.payrollNumber));
+      if (!pickPayrollVoucher(voucherCandidates, payroll.id, payroll.payrollNumber)) {
+        throw new ConflictError(
+          `فیش ${payroll.payrollNumber} سند حسابداری ندارد؛ پیش از پرداخت، سند آن را با «همگام‌سازی سند» صادر کنید.`,
+          undefined,
+          'PAYROLL_WITHOUT_VOUCHER'
+        );
       }
 
       // ۳. پرسنل

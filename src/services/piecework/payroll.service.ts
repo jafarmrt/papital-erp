@@ -67,6 +67,26 @@ export class PieceworkPayrollService {
       throw new BadRequestError('بازه فیش معتبر نیست: تاریخ شروع و پایان الزامی است و شروع نباید بعد از پایان باشد');
     }
 
+    const totBonusesFin = fin(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0));
+    const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
+    // v8.0.108 (TD-385): با fin (ارقام فارسی نرمال می‌شوند)؛ پیش‌تر Number('۵۰۰') NaN و کسر مساعده نادیده گرفته می‌شد
+    const advanceDeductionFin = fin(reqAdvanceDeduction ?? 0);
+    // v9.0.231 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده نامنفی‌اند؛ کاهش حقوق فقط از «کسورات» و افزایش فقط از
+    // «پاداش». پیش‌تر کسورات منفی خالص فیش را بالا می‌برد ولی سند آن را صفر می‌گرفت (پرداخت بیش از بستانکار ۳۲۰۱)، با ناخالص
+    // صفر فیش بی سند صادر می‌شد و کسر مساعده منفی بی‌صدا صفر می‌شد.
+    const negativeParts = [
+      totBonusesFin.isNegative() && 'پاداش',
+      totDeductionsFin.isNegative() && 'کسورات',
+      advanceDeductionFin.isNegative() && 'کسر مساعده',
+    ].filter(Boolean);
+    if (negativeParts.length > 0) {
+      throw new ValidationError(
+        `${negativeParts.join('، ')} فیش نمی‌تواند منفی باشد؛ کاهش حقوق را در «کسورات» و افزایش را در «پاداش» وارد کنید.`,
+        undefined,
+        'PAYROLL_NEGATIVE_COMPONENT'
+      );
+    }
+
     // V4.0.4 (TD-091 / Subphase 3.1): کل چرخه صدور فیش، قفل ردیفی کارکردها، محاسبه مالی و سند دوبل داخل یک تراکنش واحد اتمیک
     return orm.transaction(async (tx) => {
       const [pInfo] = await tx.select().from(personnel).where(and(eq(personnel.id, pId), eq(personnel.isDeleted, 0))).for('update');
@@ -129,11 +149,6 @@ export class PieceworkPayrollService {
       for (const log of eligibleLogs) {
         pieceworkTotalFin = pieceworkTotalFin.add(log.totalAmount || 0);
       }
-      const totBonusesFin = fin(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0));
-      const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
-      // v8.0.108 (TD-385): با fin (ارقام فارسی نرمال می‌شوند)؛ پیش‌تر Number('۵۰۰') NaN و کسر مساعده نادیده گرفته می‌شد
-      const requestedAdvance = fin(reqAdvanceDeduction ?? 0);
-      const advanceDeductionFin = requestedAdvance.isNegative() ? fin(0) : requestedAdvance;
 
       // v8.0.29 (TD-282، تصمیم مالک محصول — گزینه الف): کسر مساعده بیش از مانده مساعده تسویه‌نشده پرسنل (از دفتر کل) رد
       // می‌شود. پیش‌تر پذیرفته می‌شد؛ حساب مساعده پرسنل بستانکار (منفی) و خالص پرداختنی او بی‌دلیل کم می‌شد.

@@ -13,6 +13,7 @@ import { idempotency } from '../middleware/idempotency.js';
 import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { ForbiddenError } from '../errors/customErrors.js';
+import { fin } from '../lib/financialDecimal.js';
 
 const router = Router();
 
@@ -107,17 +108,24 @@ const updatePieceworkLogSchema = z.object({
   })
 });
 
+/**
+ * v9.0.231 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده فیش نامنفی‌اند. پیش‌تر `decimalInput` منفی را می‌پذیرفت و
+ * کسورات «-100000» خالص فیش را بالا می‌برد بی آنکه سند حسابداری آن را ببیند.
+ */
+const nonNegativeAmount = (label: string) =>
+  decimalInput(label).refine(v => v === undefined || !fin(v).isNegative(), `${label} نمی‌تواند منفی باشد`);
+
 const generatePieceworkPayrollSchema = z.object({
   body: z.object({
     personnelId: z.union([z.number(), z.string()]),
     startDate: z.string().min(1, 'تاریخ شروع الزامی است'),
     endDate: z.string().min(1, 'تاریخ پایان الزامی است'),
     title: z.string().optional(),
-    bonuses: decimalInput('پاداش').optional(),
-    totalBonuses: decimalInput('پاداش').optional(),
-    deductions: decimalInput('کسور').optional(),
-    totalDeductions: decimalInput('کسور').optional(),
-    advanceDeduction: decimalInput('کسر مساعده').optional(),
+    bonuses: nonNegativeAmount('پاداش').optional(),
+    totalBonuses: nonNegativeAmount('پاداش').optional(),
+    deductions: nonNegativeAmount('کسورات').optional(),
+    totalDeductions: nonNegativeAmount('کسورات').optional(),
+    advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
     notes: z.string().optional(),
   })
 });

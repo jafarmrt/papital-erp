@@ -6616,7 +6616,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_jalali_dash_today_payroll_dates', 'jalalidash', 'payroll', 'date')) {
     const tStart = Date.now();
     const testName = 'v7.0.74: تاریخ شمسی امروز سرور به قالب سال-ماه-روز است و پرداخت حقوق سند و تراکنش خزانه را با تاریخ ISO امروز ثبت می‌کند';
-    const created = { personnelId: null as number | null, bankId: null as number | null, payrollId: null as number | null, treasuryId: null as number | null, voucherId: null as number | null };
+    const created = { personnelId: null as number | null, bankId: null as number | null, payrollId: null as number | null, treasuryId: null as number | null, voucherId: null as number | null, payrollVoucherId: null as number | null };
     try {
       const { businessTodayJalaliDash } = await import('../../lib/businessClock.js');
       const { personnel, bankAccounts, pieceworkPayrolls, treasuryTransactions } = await import('../../db/schema.js');
@@ -6643,6 +6643,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         netPayable: money(500000), status: 'approved', isDeleted: 0
       }).returning({ id: pieceworkPayrolls.id });
       created.payrollId = payroll.id;
+      // v9.0.231 (TD-804): a payslip is paid only with its own voucher, so this test issues it first
+      const { PieceworkPayrollService } = await import('../../services/piecework/payroll.service.js');
+      const issued = await PieceworkPayrollService.syncPayrollVoucher(payroll.id, { username: 'test-agent' });
+      created.payrollVoucherId = issued.voucher?.id ?? null;
 
       const result = await PayrollPaymentService.registerPayrollPayment({ payrollId: payroll.id, bankAccountId: bank.id, method: 'bank_transfer', username: 'test-agent' });
       created.treasuryId = result.transactionId;
@@ -6685,6 +6689,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (created.voucherId !== null) {
         await cleanTestTableData('journal_voucher_items', 'voucher_id', [created.voucherId]);
         await cleanTestTableData('journal_vouchers', 'id', [created.voucherId]);
+      }
+      if (created.payrollVoucherId !== null) {
+        await cleanTestTableData('journal_voucher_items', 'voucher_id', [created.payrollVoucherId]);
+        await cleanTestTableData('journal_vouchers', 'id', [created.payrollVoucherId]);
       }
       if (created.payrollId !== null) await cleanTestTableData('piecework_payrolls', 'id', [created.payrollId]);
       if (created.bankId !== null) await cleanTestTableData('bank_accounts', 'id', [created.bankId]);
@@ -10578,6 +10586,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR d: accounting report access, party statements and the journal book (TD-547 ...)
   const { runAccountingReportAccessTests } = await import('../regression/accountingReportAccessTests.js');
   results.push(...await runAccountingReportAccessTests(shouldRun));
+  // Package 12 payroll PR a (v9.0.231 on): payslip integrity (TD-804 ...)
+  const { runPayrollIntegrityTests } = await import('../regression/payrollIntegrityTests.js');
+  results.push(...await runPayrollIntegrityTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
