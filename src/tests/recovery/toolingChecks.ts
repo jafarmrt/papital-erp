@@ -196,8 +196,8 @@ export async function checkLongStatementTimeout(): Promise<string[]> {
     const after = await show(orm);
     if (after !== before) v.push(`statement_timeout after the transaction is ${after}, expected the pool value ${before}`);
   }
-  const catalog = fs.readFileSync(path.join(REPO_ROOT, 'src', 'services', 'items', 'itemCatalog.service.ts'), 'utf8');
-  const importBody = catalog.slice(catalog.indexOf('processUnifiedImport'));
+  const importer = fs.readFileSync(path.join(REPO_ROOT, 'src', 'services', 'items', 'itemExcelImport.ts'), 'utf8');
+  const importBody = importer.slice(importer.indexOf('export async function importItemsFromExcel'));
   if (!/orm\.transaction\(async \(tx\) => \{\s*(\/\/[^\n]*\n\s*)*await extendStatementTimeout\(tx\)/.test(importBody)) {
     v.push('the item import transaction does not extend its statement timeout first');
   }

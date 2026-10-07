@@ -1,5 +1,6 @@
 import * as schema from './schema.js';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { sql } from 'drizzle-orm';
 import pkg from 'pg';
 import fs from 'fs';
 import { logger } from '../middleware/logger.js';
@@ -155,27 +156,23 @@ export function isMockDatabase(): boolean {
   return useMock;
 }
 
-/**
- * Helper to run long-running database operations with an extended statement_timeout.
- */
-export async function withLongQueryTimeout<T>(
-  fn: (client: pkg.PoolClient) => Promise<T>,
-  timeoutMs: number = 300000
-): Promise<T> {
-  const client = await pool.connect();
-  try {
-    await client.query(`SET statement_timeout = ${timeoutMs}`);
-    return await fn(client);
-  } finally {
-    await client.query(`SET statement_timeout = ${statementTimeoutMs}`).catch(() => {});
-    client.release();
-  }
-}
-
 const orm = drizzle(pool, { schema });
 
 export type AppDatabase = typeof orm;
 export type DbTransaction = Parameters<Parameters<typeof orm.transaction>[0]>[0];
 export type DbExecutor = AppDatabase | DbTransaction;
+
+/** Statement timeout of a bulk task (5 minutes) */
+export const LONG_STATEMENT_TIMEOUT_MS = 300_000;
+
+/**
+ * v9.0.177 (TD-615): extends `statement_timeout` for the rest of this transaction only (`SET LOCAL`), on the
+ * transaction's own connection. The old `withLongQueryTimeout(fn)` set it on a separate pool connection that the
+ * callback never used (its `orm` and `orm.transaction` still had the 1-minute limit) and held that connection idle.
+ */
+export async function extendStatementTimeout(tx: DbTransaction, timeoutMs: number = LONG_STATEMENT_TIMEOUT_MS): Promise<void> {
+  const ms = Math.max(0, Math.floor(Number(timeoutMs) || 0));
+  await tx.execute(sql.raw(`SET LOCAL statement_timeout = ${ms}`));
+}
 
 export { pool, orm };

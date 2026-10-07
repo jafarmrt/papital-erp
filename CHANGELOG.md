@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.177 — Long Statement Timeout on the Transaction Itself
+- **Long Statement Timeout:** `extendStatementTimeout(tx)` (`src/db/drizzle.ts`) sets `statement_timeout` to 5 minutes with `SET LOCAL` on the transaction's own connection; the item Excel import calls it first. The removed `withLongQueryTimeout(fn)` set it on a separate pool connection the callback never used (its queries kept the 1-minute limit) and held that connection idle.
+
 ### v9.0.176 — Linux Install Writes the Secrets Key
 - **Install Secrets:** `install.sh` runs the new `scripts/ensure-env-secrets.sh`, which adds a random `ERP_SECRETS_KEY` and `ERP_WEBHOOK_SECRET_TOKEN` to `.env` when missing and keeps existing values (run it once on an existing server); `go-live-verify.sh` fails without a 32-character key and `audit-env.sh` requires it. Before, saving a personnel's third-party password answered 503 on a Linux install and `audit-env` failed on the install's own `.env`.
 

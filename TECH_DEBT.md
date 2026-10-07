@@ -56,7 +56,6 @@
 | TD-612 | زیرساخت (بسته ۱)؛ اثر روی ۱۴ و ۳ | P3 (B01-32) — ذخیره دوباره بی تغییر طرح گردش کار شناسه گام‌ها را از ۶ تا ۹ به ۱۴ تا ۱۷ برد و ۵ ستون مرجع نمونه‌های در جریان یتیم شدند؛ امضای چاپ سند قدیمی عنوان گام را از جدول زنده می‌خواند؛ استثنای FK مستند نیست | workflowDefinitionService.ts، reports.routes.ts | open (P3، تصمیم ت۶ الف) |
 | TD-613 | زیرساخت (بسته ۱) | P3 (B01-33) — اسکیمای Drizzle با پایگاه‌داده نمی‌خواند: ۵ FK `SET NULL` در پایگاه‌داده و `no action` در Drizzle، ۴ ستون nullable در برابر NOT NULL، ۲ ایندکس فقط در Drizzle و ۸ ایندکس یکتای جزئی فقط در پایگاه‌داده؛ `drizzle-kit generate` یا `push` آن‌ها را جابه‌جا می‌کند | src/db/schema/** | open (P3) |
 | TD-614 | زیرساخت (بسته ۱) | P3 (B01-34) — ۵۶ از ۱۰۴ ستون FK بی ایندکس، ۳۳ روی جدول پرکاربرد (`workflow_instances (entity_type, entity_id)`، `workflow_history_logs.instance_id`، ستون‌های سند و فیش `treasury_transactions`): با حجم ساختگی ۵ ساله جزئیات فاکتور ۲۲٫۳ ms، با ایندکس ۰٫۰۷ ms | drizzle/*.sql | open (P3) |
-| TD-615 | زیرساخت (بسته ۱) | P3 (B01-35) — `withLongQueryTimeout` فقط اتصال تحویلی را ۵ دقیقه می‌کند؛ `orm` و تراکنش درون callback تنها فراخواننده‌اش ۱ دقیقه می‌بینند و یک اتصال بیکار هم نگه داشته می‌شود | db/drizzle.ts، items.service.ts | open (P3) |
 | TD-616 | زیرساخت (بسته ۱) | P3 (B01-36) — شاخه `SQL_HOST` هرگز اجرا نمی‌شود و بی `NODE_ENV` و `DATABASE_URL` یک ERP ساختگی در حافظه با `admin`/`admin` بالا می‌آید (`isMockDatabase: true`)؛ `/health/ready` حالت mock را نمی‌گوید | db/drizzle.ts، db/mockPool.ts، server.ts | open (P3، تصمیم ت۴ الف) |
 | TD-617 | زیرساخت (بسته ۱) | P3 (B01-37) — `migratePlainPasswords` هر بوت، حتی در تولید، هر رشته غیر bcrypt (کاربر حذف‌شده، `!locked`، hash `$argon2id$`) را رمز کارا می‌کند و `mustResetPassword` و ردیف ممیزی نمی‌نویسد | db/migratePlainPasswords.ts، server.ts | open (P3، تصمیم ت۴ الف) |
 | TD-618 | زیرساخت (بسته ۱) | P3 (B01-38) — `withOrderedLocks` بیرون از تولید خطا می‌دهد و در تولید بی صدا مرتب می‌کند؛ جدول بیرون از `LOCK_ORDER_MAP` (`piecework_payrolls`، `crm_leads`، `journal_voucher_items`) سطح ۹۹۹ پس از OUTBOX می‌گیرد؛ آزمون رفتاری را می‌سنجد که در تولید رخ نمی‌دهد | lib/lockOrder.ts | open (P3) |
@@ -102,8 +101,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۸۱ ردیف
-- **آرشیو شده (resolved):** ۵۳۴ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۸۰ ردیف
+- **آرشیو شده (resolved):** ۵۳۵ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -112,4 +111,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.176 — TD-609 (نصب لینوکسی بی کلید رازها) رفع و بایگانی شد؛ بسته ۱ ردیف باز دارد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.177 — TD-615 (`withLongQueryTimeout` بی‌اثر) رفع و بایگانی شد؛ بسته ۱ ردیف باز دارد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
