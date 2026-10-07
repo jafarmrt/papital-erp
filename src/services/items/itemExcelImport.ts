@@ -1,6 +1,7 @@
-import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, ne } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, warehouses } from '../../db/schema.js';
+import { guardItemIdentity, itemNameKeyCondition } from './itemIdentity.js';
 import { itemAuditSnapshot, logItemImportChange, logItemImportSummary } from './itemExcelAudit.js';
 import { ItemPricingService } from './itemPricing.service.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
@@ -92,9 +93,15 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     push(formatError);
     return;
   }
+  if (!matchedItem && !name) {
+    // v9.0.160 (TD-653): نام کالا یکتاست، پس کالای تازه بی نام «کالای بدون نام» دوم نمی‌سازد
+    push('نام کالای تازه خالی است؛ این ردیف ثبت نشد.');
+    return;
+  }
   if (name) {
+    // v9.0.160 (TD-653): همان کلید ایندکس یکتای نام (lower(btrim(name)))
     const [nameConflict] = await tx.select({ id: items.id, code: items.code }).from(items)
-      .where(and(sql`btrim(${items.name}) = ${name}`, eq(items.isDeleted, 0), matchedItem ? ne(items.id, matchedItem.id) : undefined))
+      .where(and(itemNameKeyCondition(name), eq(items.isDeleted, 0), matchedItem ? ne(items.id, matchedItem.id) : undefined))
       .limit(1);
     if (nameConflict) {
       push(`خطای نام تکراری: محصولی با نام «${name}» قبلاً با کد «${nameConflict.code}» در سیستم ثبت شده است؛ این ردیف ثبت نشد.`);
@@ -180,7 +187,7 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
   if (fieldsChange && !perms.editItems) {
     push(ITEM_IMPORT_DENIED_MESSAGES.editItems);
   } else if (fieldsChange) {
-    await tx.update(items).set(updateSet).where(eq(items.id, targetItemId));
+    await guardItemIdentity(updateSet.name ?? matchedItem.name, () => tx.update(items).set(updateSet).where(eq(items.id, targetItemId)));
   }
 
   const changes = plan.changes;
@@ -209,8 +216,8 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
     return null;
   }
   const itemWac = money(fields.weightedAverageCost);
-  const [newItem] = await tx.insert(items).values({
-    name: name || 'کالای بدون نام',
+  const [newItem] = await guardItemIdentity(name, () => tx.insert(items).values({
+    name,
     code,
     type: newItemType(fields, ctx.typeFilter),
     unit: fields.unit || 'عدد',
@@ -224,7 +231,7 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
     image: fields.image || '',
     currentStock: 0,
     isDeleted: 0,
-  }).returning({ id: items.id });
+  }).returning({ id: items.id }));
   const targetItemId = newItem.id;
 
   const movement = { itemId: targetItemId, price: itemWac, date: input.todayStr, user: input.currentUser };

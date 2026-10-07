@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.160 — Unique Item Code and Name
+- **Item Identity:** two active items never share a code (any letter case) or a name; partial unique indexes (migration 0069, only on clean data) turn concurrent duplicates into a Persian 409 and the health check lists old duplicates (TD-653, `conc_item_code_and_name_unique_td_653`).
+
 ### v9.0.159 — New Item Opening Voucher Inside Its Transaction
 - **Item Opening Voucher:** a new item's opening voucher and audit row are written in the item's create transaction; a voucher failure refuses the item and its opening stock (TD-652, `inv_item_create_opening_voucher_atomic_td_652`).
 

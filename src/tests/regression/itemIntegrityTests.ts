@@ -145,6 +145,15 @@ async function uniqueCodeNameCase(ctx: Ctx): Promise<string> {
 
   const indexes = await q(`SELECT indexname FROM pg_indexes WHERE tablename = 'items' AND indexname IN ('uq_items_code_active', 'uq_items_name_active')`);
   if (indexes.length !== 2) throw new Error(`unique indexes present: ${indexes.map(r => r.indexname).join(', ') || 'none'}`);
+  const { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } = await import('../../services/items/itemIdentity.js');
+  const health = buildItemIdentityHealthTest(await findDuplicateItemIdentities(), await hasItemIdentityIndexes());
+  if (health.status !== 'healthy') throw new Error(`health check on clean data: ${health.status} ${health.message}`);
+  const legacy = buildItemIdentityHealthTest([
+    { id: 1, code: 'b-h-1', name: 'الف', kind: 'code' }, { id: 2, code: 'B-H-1 ', name: 'ب', kind: 'code' },
+  ], false);
+  if (legacy.status !== 'warning' || legacy.count !== 1 || (legacy.items ?? []).length !== 2) {
+    throw new Error(`health check with one legacy duplicate code: ${legacy.status}, ${legacy.count} group(s), ${(legacy.items ?? []).length} row(s)`);
+  }
   return `same code ${sameCode.map(r => r.status).join(',')}; same name ${sameName.map(r => r.status).join(',')}; case ${lower.status}/${upper.status}; rename ${rename.status}`;
 }
 

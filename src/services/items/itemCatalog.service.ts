@@ -10,6 +10,7 @@ import { ValidationError, NotFoundError, ConflictError } from '../../errors/cust
 import { DocumentService } from '../document.service.js';
 import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { nextVersion } from '../../lib/occHelper.js';
+import { assertItemCodeAvailable, assertItemNameAvailable, guardItemIdentity } from './itemIdentity.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
@@ -475,16 +476,9 @@ export class ItemCatalogService {
     const { type, name, code, unit, category, image, thumbnail, reorder_point, weighted_average_cost, color, weight, material, size } = body;
 
     const executeWork = async (tx: DbExecutor) => {
-      const [existing] = await tx.select({ id: items.id }).from(items).where(and(eq(items.code, code), eq(items.isDeleted, 0)));
-      if (existing) {
-        throw new ConflictError('کد کالا تکراری است و مجاز به استفاده مجدد نیستید.');
-      }
-
-      const [existingName] = await tx.select({ id: items.id, code: items.code }).from(items)
-        .where(and(eq(items.name, name), eq(items.isDeleted, 0)));
-      if (existingName) {
-        throw new ConflictError(`محصولی با نام «${name}» قبلاً با کد «${existingName.code}» در سیستم ثبت شده است. ثبت دو محصول با نام مشابه امکان‌پذیر نیست.`);
-      }
+      // v9.0.160 (TD-653): کد و نام با کلید ایندکس‌های یکتای uq_items_code_active / uq_items_name_active
+      await assertItemCodeAvailable(tx, code);
+      await assertItemNameAvailable(tx, name);
 
       const whs = await tx.select({ code: warehouses.code }).from(warehouses).orderBy(asc(warehouses.id));
       let computedStock = 0;
@@ -511,7 +505,7 @@ export class ItemCatalogService {
       const imageUrl = image && image.startsWith('data:image') ? await uploadBase64ToStorage(image, 'image') : (image || '');
       const thumbnailUrl = thumbnail && thumbnail.startsWith('data:image') ? await uploadBase64ToStorage(thumbnail, 'thumbnail') : (thumbnail || '');
 
-      const [inserted] = await tx.insert(items).values({
+      const [inserted] = await guardItemIdentity(name, () => tx.insert(items).values({
         type: type || 'product',
         name,
         code,
@@ -526,7 +520,7 @@ export class ItemCatalogService {
         material: material || null,
         size: size || null,
         isDeleted: 0
-      }).returning();
+      }).returning());
 
       // v7.0.45 (audit P2-1): موجودی اولیه از موتور مرکزی گردش انبار (کاردکس + جدول موجودی انبارها + کش)؛
       // پیش‌تر فقط JSONB و کاردکس نوشته می‌شد و جدول موجودی انبارها ردیفی نداشت.
@@ -592,20 +586,9 @@ export class ItemCatalogService {
         throw new NotFoundError('کالای مورد نظر یافت نشد.');
       }
 
-      if (code && code !== prevItem.code) {
-        const [existingCode] = await tx.select({ id: items.id }).from(items).where(and(eq(items.code, code), eq(items.isDeleted, 0)));
-        if (existingCode && existingCode.id !== itemId) {
-          throw new ConflictError('کد کالای جدید تکراری است و مجاز به استفاده مجدد نیستید.');
-        }
-      }
-
-      if (name && name !== prevItem.name) {
-        const [existingName] = await tx.select({ id: items.id, code: items.code }).from(items)
-          .where(and(eq(items.name, name), eq(items.isDeleted, 0)));
-        if (existingName && existingName.id !== itemId) {
-          throw new ConflictError(`محصولی با نام «${name}» قبلاً با کد «${existingName.code}» در سیستم ثبت شده است.`);
-        }
-      }
+      // v9.0.160 (TD-653): کد و نام با کلید ایندکس‌های یکتا، جز خود کالا
+      if (code && code !== prevItem.code) await assertItemCodeAvailable(tx, code, itemId);
+      if (name && name !== prevItem.name) await assertItemNameAvailable(tx, name, itemId);
 
       let imageUrl: string | undefined = undefined;
       let thumbnailUrl: string | undefined = undefined;
@@ -703,7 +686,7 @@ export class ItemCatalogService {
 
       let openingVoucherId: number | null = null;
 
-      let [updatedItem] = await tx.update(items).set(updateData).where(eq(items.id, itemId)).returning();
+      let [updatedItem] = await guardItemIdentity(name ?? prevItem.name, () => tx.update(items).set(updateData).where(eq(items.id, itemId)).returning());
 
       if (canSetOpening && computedStock > 0) {
         // v7.0.45 (audit P2-1): موجودی افتتاحیه از موتور مرکزی گردش انبار (کاردکس + جدول موجودی انبارها + کش)

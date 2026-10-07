@@ -11,6 +11,7 @@ import { buildFutureStockMovementHealthTest, findFutureStockMovements } from '..
 import { buildOpeningVoucherHealthTest, findOpeningVoucherMismatches } from '../inventory/itemOpeningValue.js';
 import { buildReservedWarehouseCodeHealthTest, findReservedCodeWarehouses } from '../inventory/reservedWarehouseCode.js';
 import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
+import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1114,6 +1115,11 @@ export class FinancialHealthService {
     const unknownPriceTitleTest = buildUnknownPriceTitleHealthTest(await findUnknownPriceTitles());
     overallScore += unknownPriceTitleTest.scoreImpact;
     tests.push(unknownPriceTitleTest);
+
+    // آزمون ۲۵: v9.0.160 (TD-653) کد یا نام مشترک میان کالاهای فعال (فقط فهرست، بی تغییر خودکار)
+    const itemIdentityTest = buildItemIdentityHealthTest(await findDuplicateItemIdentities(), await hasItemIdentityIndexes());
+    overallScore += itemIdentityTest.scoreImpact;
+    tests.push(itemIdentityTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
