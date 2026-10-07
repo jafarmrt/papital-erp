@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.162 — The Login Lock Shows Its Real Minutes in Persian
+- **The Login Lock Shows Its Real Minutes in Persian:** a login lock answers locked and its minutes; the login page counts them down in Persian digits and a general 429 is no longer a fake lock (TD-539).
+
 ### v9.0.161 — A Temporary Password Must Be Changed First
 - **A Temporary Password Must Be Changed First:** a password an administrator sets is temporary; until the user changes it the server opens only the session, profile and logout, and the browser shows only the password form (TD-523).
 

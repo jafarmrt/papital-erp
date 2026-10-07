@@ -270,7 +270,9 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     }
     if (res.status === 429) {
       const rateLimitMsg = data.message || (typeof data.error === 'string' ? data.error : '') || data.errorObject?.message || 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً چند لحظه صبر کنید (۴۲۹)';
-      throw new ApiError(rateLimitMsg, code || 'RATE_LIMIT_EXCEEDED', 429, details);
+      // v9.0.162 (TD-539): قفل ورود با `locked` و `remainingMinutes` در جزئیات خطا می‌ماند؛ صفحه ورود شمارش را از همین می‌سازد
+      const lockout = data.locked === true ? { locked: true, remainingMinutes: data.remainingMinutes } : null;
+      throw new ApiError(rateLimitMsg, code || 'RATE_LIMIT_EXCEEDED', 429, details ?? lockout);
     }
     throw new ApiError(errorMessage, code, res.status, details);
   }

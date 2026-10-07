@@ -47,6 +47,7 @@ import { orm } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
 import { BUILD_INFO } from './lib/version.js';
 import { resolveTrustProxySetting } from './lib/trustProxy.js';
+import { addressLockoutMessage, minutesUntil } from './lib/auth/loginLockout.js';
 
 let isStartupComplete = false;
 let activeLoginLimiter: any = null;
@@ -208,10 +209,12 @@ export async function createApp(): Promise<express.Express> {
     max: 10,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: 'تلاش‌های ورود بیش از حد مجاز. لطفاً ۱۵ دقیقه صبر کنید.' },
+    // v9.0.162 (TD-539): the answer carries locked and the minutes left of this address's window, so the login page
+    // counts down the real time (it used to read the minutes out of the text and fall back to a made-up 15)
     handler: (req, res) => {
       logger.warn(`[Login Brute Force] IP ${req.ip} blocked after failed attempts`);
-      res.status(429).json({ error: 'تلاش‌های ورود بیش از حد مجاز. لطفاً ۱۵ دقیقه صبر کنید.' });
+      const remainingMinutes = minutesUntil((req as express.Request & { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime);
+      res.status(429).json({ error: addressLockoutMessage(remainingMinutes), locked: true, remainingMinutes });
     },
     // v7.0.23 (TD-181 / audit P0-5): فقط تلاش‌های ناموفق شمرده می‌شوند — قبلاً ورودهای موفق هم
     // سطل را پر می‌کردند و پشت پراکسی، کل سازمان پس از ۱۰ ورود به مدت ۱۵ دقیقه مسدود می‌شد.

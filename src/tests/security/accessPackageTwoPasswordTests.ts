@@ -1,9 +1,11 @@
+import request from 'supertest';
 import { TestCaseResult } from '../types.js';
 import { runCase, type ShouldRun } from './workflowTestHarness.js';
 import { TEST_PASSWORD } from '../fixtures/factories.js';
 import { loginTestUserWithSession } from '../fixtures/httpTestHelper.js';
 import { PASSWORD_TOO_SHORT_MESSAGE } from '../../lib/auth/passwordPolicy.js';
 import { PASSWORD_RESET_REQUIRED } from '../../lib/auth/passwordReset.js';
+import { addressLockoutMessage, usernameLockoutMessage } from '../../lib/auth/loginLockout.js';
 
 /**
  * بسته ۲ (مدل مجوز)، گروه رمز (تصمیم ت۵ الف): سیاست رمز از مسیرهای واقعی Express با ورود واقعی. هر آزمون روی کد پیشین
@@ -128,6 +130,45 @@ export async function runAccessPackageTwoPasswordTests(shouldRun: ShouldRun): Pr
         else if (await flagOf(manager.userId) !== 0) wrong.push('a password set for one\'s own account became temporary');
       } finally {
         await h.q('DELETE FROM users WHERE username = $1', [username]).catch(() => undefined);
+      }
+    });
+  }
+
+  if (shouldRun('sec_login_lockout_answer_td_539', 'security', 'td539', 'password', 'package2')) {
+    await runCase(results, {
+      id: 'sec_login_lockout_answer_td_539',
+      name: 'v9.0.162: every login lock answers locked and its minutes, with a Persian message (TD-539)',
+      details: 'B02-24: the username lock said «1 دقیقه» in Latin digits and the login limiter answered only a text with a fixed «۱۵ دقیقه», so the login page read the minutes out of the text; now both 429 answers carry locked: true and remainingMinutes, and their messages name this user name or this device in Persian digits',
+    }, async (h, wrong) => {
+      const { resetLoginRateLimiter } = await import('../../app.js');
+      const { resetPhantomLockouts } = await import('../../services/auth/loginSecurity.service.js');
+      const attempt = (username: string, ip: string) => request(h.app as Parameters<typeof request>[0]).post('/api/auth/login')
+        .set('X-Forwarded-For', ip).send({ username, password: 'definitely-wrong-pass' });
+      resetLoginRateLimiter();
+      resetPhantomLockouts();
+      try {
+        let pairLock: request.Response | null = null;
+        for (let i = 0; i < 5; i++) pairLock = await attempt(`td539_ghost_${h.tag}`, '198.51.100.139');
+        if (pairLock?.status !== 429 || pairLock.body?.locked !== true || pairLock.body?.remainingMinutes !== 1) {
+          wrong.push(`the fifth failure for one user name answered ${pairLock?.status} ${JSON.stringify(pairLock?.body)}, not 429 locked for 1 minute`);
+        } else if (pairLock.body?.error !== usernameLockoutMessage(1)) {
+          wrong.push(`the user name lock says «${pairLock.body?.error}», not «${usernameLockoutMessage(1)}»`);
+        }
+
+        let addressLock: request.Response | null = null;
+        for (let i = 0; i < 12 && addressLock === null; i++) {
+          const res = await attempt(`td539_spray_${i}_${h.tag}`, '198.51.100.140');
+          if (res.status === 429) addressLock = res;
+        }
+        const minutes = Number(addressLock?.body?.remainingMinutes);
+        if (!addressLock || addressLock.body?.locked !== true || !(minutes >= 1 && minutes <= 15)) {
+          wrong.push(`the login limiter answered ${addressLock?.status} ${JSON.stringify(addressLock?.body)}, not 429 locked with the minutes left`);
+        } else if (addressLock.body?.error !== addressLockoutMessage(minutes)) {
+          wrong.push(`the login limiter says «${addressLock.body?.error}», not «${addressLockoutMessage(minutes)}»`);
+        }
+      } finally {
+        resetPhantomLockouts();
+        resetLoginRateLimiter();
       }
     });
   }

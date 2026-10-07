@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppFavicon } from '../hooks/useAppFavicon';
-import { fetchJson } from '../api';
+import { ApiError, fetchJson } from '../api';
 import { User } from '../types';
 import { Lock, User as UserIcon, Shield, AlertTriangle, ShieldAlert, Eye, EyeOff } from 'lucide-react';
 import SetupPage from './SetupPage';
 import { getLatestAppVersion } from '../data/appInfoAndChangelog';
+import { formatLockoutCountdown, loginLockoutMinutes } from '../lib/auth/loginLockout';
+import { errorMessageOf } from '../utils';
 
 export default function LoginPage({ onLogin }: { onLogin: (user: User, token: string) => void }) {
   const [username, setUsername] = useState('');
@@ -14,7 +16,6 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
   const [isSaving, setIsSaving] = useState(false);
   const [companyLogo, setCompanyLogo] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [lockoutMinutes, setLockoutMinutes] = useState<number | null>(null);
   // V9 Phase 4.3: شمارش معکوس زنده lockout + toggle نمایش رمز عبور
   const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState<number | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -43,7 +44,6 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
     if (lockoutSecondsLeft === null) return;
     if (lockoutSecondsLeft <= 0) {
       setLockoutSecondsLeft(null);
-      setLockoutMinutes(null);
       setError('');
       return;
     }
@@ -52,7 +52,6 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
   }, [lockoutSecondsLeft]);
 
   const startLockoutCountdown = useCallback((minutes: number) => {
-    setLockoutMinutes(minutes);
     setLockoutSecondsLeft(minutes * 60);
   }, []);
 
@@ -60,7 +59,6 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
     e.preventDefault();
     setIsSaving(true);
     setError('');
-    setLockoutMinutes(null);
     try {
       const res = await fetchJson('/login', {
         method: 'POST',
@@ -69,17 +67,11 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
       if (res.success) {
         onLogin(res.user, res.token);
       }
-    } catch (err: any) {
-      setError(err.message || 'خطا در ارتباط با سرور');
-      if (err.status === 429 || (err.message && err.message.includes('قفل'))) {
-        // Extract minutes if present
-        const match = err.message?.match(/(\d+)\s*دقیقه/);
-        if (match && match[1]) {
-          startLockoutCountdown(parseInt(match[1], 10));
-        } else {
-          startLockoutCountdown(15);
-        }
-      }
+    } catch (err) {
+      setError(errorMessageOf(err) || 'خطا در ارتباط با سرور');
+      // v9.0.162 (TD-539): قفل فقط از `locked` و `remainingMinutes` پاسخ؛ ۴۲۹ عمومی درخواست‌ها قفل نیست و شمارشی ندارد
+      const minutes = err instanceof ApiError && err.status === 429 ? loginLockoutMinutes(err.details) : null;
+      if (minutes) startLockoutCountdown(minutes);
     } finally {
       setIsSaving(false);
     }
@@ -125,14 +117,12 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
           <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl mb-5 flex items-start gap-3 text-xs leading-relaxed">
             <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="font-bold text-rose-900">حساب کاربری موقتاً مسدود شد (Lockout)</p>
-              <p className="mt-1 text-rose-700">
-                به دلیل ۵ تلاش ناموفق مکرر و به منظور حفاظت از حساب کاربری، ورود به مدت {lockoutMinutes} دقیقه مسدود گردید.
+              <p className="font-bold text-rose-900">ورود موقتاً بسته است</p>
+              <p className="mt-1 text-rose-700">{error}</p>
+              <p className="mt-2 text-center font-mono font-black text-lg text-rose-900" dir="ltr" aria-live="polite" data-testid="lockout-countdown">
+                {formatLockoutCountdown(lockoutSecondsLeft)}
               </p>
-              <p className="mt-2 text-center font-mono font-black text-lg text-rose-900" aria-live="polite">
-                {String(Math.floor(lockoutSecondsLeft / 60)).padStart(2, '0')}:{String(lockoutSecondsLeft % 60).padStart(2, '0')}
-              </p>
-              <p className="text-center text-[10px] text-rose-600 mt-1">پس از پایان شمارش معکوس، فرم ورود به‌طور خودکار فعال می‌شود.</p>
+              <p className="text-center text-[10px] text-rose-600 mt-1">پس از پایان شمارش معکوس، فرم ورود دوباره باز می‌شود.</p>
             </div>
           </div>
         ) : error ? (
@@ -191,7 +181,7 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
             disabled={isSaving || isLocked} 
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors mt-4"
           >
-            {isSaving ? 'در حال ورود...' : isLocked ? 'حساب قفل است — در انتظار فعال‌سازی' : 'ورود به سیستم'}
+            {isSaving ? 'در حال ورود...' : isLocked ? 'ورود موقتاً بسته است' : 'ورود به سیستم'}
           </button>
         </form>
       </div>
