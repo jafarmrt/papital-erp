@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.212 — v9.0.212 — Package 8 Documents and Invoices Audit Documentation
+- **Package 8 Audit:** section 10 of the V9 stability audit records the documents and invoices package: 34 proven findings (seven P1, among them stock direction taken from the request body, a zero-price invoice without a voucher, voiding an invoice that has a return, and sales returns without VAT or tied price) opened as TD-770 and TD-772..TD-803 (TD-771 was closed in v9.0.125), with the product-owner decisions. Documentation only.
+
 ### v9.0.211 — Terminal Output Is English
 - **Terminal English (owner rule t9):** AGENTS.md §6 records that everything a terminal shows is English (scripts, hooks, server logs, test names, commits), while UI text, user error messages and documents stay Persian. `npm run ratchet:terminal-english` (`scripts/terminal-english-ratchet.ts`, run by Vitest `terminalEnglishRatchet.test.ts`) counts the places that still print Persian per file and fails when a file gains one; translating them is the next step of TD-625.
 
