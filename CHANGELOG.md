@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.110 — Balance Sheet and Ratios Take a Date, the Income Statement Its Own Period
+- **Statement Dates (P2):** the balance sheet and the financial ratios were always as of today and the income statement silently took the trial balance dates; each statement now has its own date fields in its header and shows its date or period (TD-566, `financialStatementDates.test.tsx`).
+
 ### v9.0.109 — The Voucher List Pages Through Every Voucher
 - **Voucher List (P1):** the accounting voucher list loaded only the newest 20 vouchers and ran its counters, search, filters and batch approval on those 20; page, search and filters now run on the server, which also returns each status count (TD-565, `reg_voucher_list_paging_and_status_counts_td_565`, `voucherListServerPaging.test.tsx`).
 

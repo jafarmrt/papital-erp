@@ -2,9 +2,13 @@ import { FileSpreadsheet } from 'lucide-react';
 import { formatPersianPrice } from '../../../utils';
 import type { BalanceSheetReport } from '../../../types';
 import { statementRows, type StatementRow } from '../../../lib/accounting/financialStatements';
+import { AsOfDateField, asOfCaption } from './ReportDateFields';
 
 interface BalanceSheetViewProps {
   balanceSheet: BalanceSheetReport | null;
+  /** v9.0.110 (TD-566): تاریخ ترازنامه (ISO)؛ خالی یعنی تا امروز */
+  asOfDate: string;
+  onAsOfDateChange: (iso: string) => void;
   onApplyBalanceSheetFilter: () => void;
 }
 
@@ -32,6 +36,8 @@ function StatementSection({ title, rows, total }: { title: string; rows: Stateme
 
 export function BalanceSheetView({
   balanceSheet,
+  asOfDate,
+  onAsOfDateChange,
   onApplyBalanceSheetFilter
 }: BalanceSheetViewProps) {
   // v9.0.108 (TD-563): بخش‌های پاسخ سرور (دارایی جاری و غیرجاری، بدهی جاری، حقوق صاحبان سهام، سود دوره)،
@@ -49,10 +55,12 @@ export function BalanceSheetView({
           <div>
             <h4 className="font-bold text-slate-900 dark:text-white text-sm">ترازنامه اساسی (Balance Sheet)</h4>
             <p className="text-xs text-slate-500">وضعیت دارایی‌ها، بدهی‌ها و حقوق صاحبان سهام شرکت</p>
+            <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 mt-0.5">{asOfCaption(asOfDate)}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <AsOfDateField value={asOfDate} onChange={onAsOfDateChange} />
           <button
             onClick={onApplyBalanceSheetFilter}
             className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition"

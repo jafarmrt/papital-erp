@@ -2,14 +2,22 @@ import { TrendingUp } from 'lucide-react';
 import { formatPersianNumber, formatPersianPrice } from '../../../utils';
 import type { IncomeStatementReport } from '../../../types';
 import { netProfitMarginPercent, statementRows } from '../../../lib/accounting/financialStatements';
+import { PeriodFields, periodCaption } from './ReportDateFields';
 
 interface IncomeStatementViewProps {
   incomeStatement: IncomeStatementReport | null;
+  /** v9.0.110 (TD-566): دوره خود صورت سود و زیان (ISO)، نه تاریخ‌های تراز آزمایشی */
+  startDate: string;
+  endDate: string;
+  onPeriodChange: (period: { startDate: string; endDate: string }) => void;
   onApplyIncomeFilter: () => void;
 }
 
 export function IncomeStatementView({
   incomeStatement,
+  startDate,
+  endDate,
+  onPeriodChange,
   onApplyIncomeFilter
 }: IncomeStatementViewProps) {
   // v9.0.108 (TD-563): همان کلیدهای پاسخ سرور (`totalRevenue`، `operatingExpenses`)، نه `totalRevenues` و `expenses`
@@ -26,10 +34,12 @@ export function IncomeStatementView({
           <div>
             <h4 className="font-bold text-slate-900 dark:text-white text-sm">صورت سود و زیان دوره‌ای (Income Statement)</h4>
             <p className="text-xs text-slate-500">گزارش درآمدهای عملیاتی، بهای تمام شده، سود ناخالص و سود خالص دوره</p>
+            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mt-0.5">{periodCaption(startDate, endDate)}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <PeriodFields startDate={startDate} endDate={endDate} onChange={onPeriodChange} />
           <button
             onClick={onApplyIncomeFilter}
             className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition"

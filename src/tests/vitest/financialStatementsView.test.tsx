@@ -42,7 +42,7 @@ const balanceSheet: BalanceSheetReport = {
 
 describe('financial statements read the server keys (TD-563)', () => {
   it('income statement: revenue total, a 25% net margin in Persian digits and the expense rows', () => {
-    render(<IncomeStatementView incomeStatement={incomeStatement} onApplyIncomeFilter={() => {}} />);
+    render(<IncomeStatementView incomeStatement={incomeStatement} startDate="" endDate="" onPeriodChange={() => {}} onApplyIncomeFilter={() => {}} />);
     const revenueHeader = screen.getByText('درآمدهای عملیاتی و فروش (الف)').parentElement!;
     expect(revenueHeader.textContent).toContain('۱,۰۰۰,۰۰۰,۰۰۰');
     expect(screen.getByText('حاشیه سود خالص:').parentElement!.textContent).toContain('۲۵٪');
@@ -54,12 +54,12 @@ describe('financial statements read the server keys (TD-563)', () => {
   });
 
   it('income statement without revenue shows no margin instead of ۰٪', () => {
-    render(<IncomeStatementView incomeStatement={{ ...incomeStatement, revenues: [], totalRevenue: 0, netProfit: -150_000_000 }} onApplyIncomeFilter={() => {}} />);
+    render(<IncomeStatementView incomeStatement={{ ...incomeStatement, revenues: [], totalRevenue: 0, netProfit: -150_000_000 }} startDate="" endDate="" onPeriodChange={() => {}} onApplyIncomeFilter={() => {}} />);
     expect(screen.getByText('حاشیه سود خالص:').parentElement!.textContent).not.toContain('٪');
   });
 
   it('balance sheet: asset, liability and equity rows and the period profit add up to both totals', () => {
-    const { container } = render(<BalanceSheetView balanceSheet={balanceSheet} onApplyBalanceSheetFilter={() => {}} />);
+    const { container } = render(<BalanceSheetView balanceSheet={balanceSheet} asOfDate="" onAsOfDateChange={() => {}} onApplyBalanceSheetFilter={() => {}} />);
     const text = container.textContent || '';
     expect(text).toContain('1001 - صندوق');
     expect(text).toContain('2001 - ماشین‌آلات');
