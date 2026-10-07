@@ -32,7 +32,20 @@ interface WooCommerceTabProps {
   loadSyncedWcOrders: () => void;
   handleSyncAllStocks: () => void;
   isSyncingAllStocks: boolean;
+  /** v9.0.114 (TD-668): هر بخش فقط برای کسی که API آن را می‌پذیرد فعال است (پیش‌فرض: همه، برای مدیر سیستم) */
+  access?: WooCommerceTabAccess;
 }
+
+export interface WooCommerceTabAccess {
+  /** آدرس سایت و کلیدها: فقط مدیر سیستم (کلیدهای مدیر سیستم در `src/lib/settings/settingKeyAccess.ts`) */
+  connection: boolean;
+  /** انبار فروشگاه اینترنتی: `settings.manage` */
+  shopWarehouse: boolean;
+  /** آزمون اتصال و همگام‌سازی: `woocommerce.manage` */
+  sync: boolean;
+}
+
+const FULL_ACCESS: WooCommerceTabAccess = { connection: true, shopWarehouse: true, sync: true };
 
 export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
   wcStoreUrl,
@@ -59,6 +72,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
   loadSyncedWcOrders,
   handleSyncAllStocks,
   isSyncingAllStocks,
+  access = FULL_ACCESS,
 }) => {
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [activeLogSubTab, setActiveLogSubTab] = useState<'audit_logs' | 'invoices'>('audit_logs');
@@ -89,7 +103,10 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           <strong>ووکامرس &gt; پیکربندی &gt; پیشرفته &gt; REST API</strong> دریافت کرده‌اید وارد کنید.
         </p>
 
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
+        {!access.connection && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">آدرس سایت و کلیدهای دسترسی را فقط مدیر سیستم تغییر می‌دهد.</p>
+        )}
+        <fieldset disabled={!access.connection} className="grid md:grid-cols-2 gap-6 mb-6">
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-1 text-slate-700">آدرس سایت (URL)</label>
             <input
@@ -126,9 +143,10 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
               dir="ltr"
             />
           </div>
-        </div>
+        </fieldset>
 
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 mb-8">
+          {access.sync && (
           <button
             onClick={handleTestWcConnection}
             disabled={isTestingWc || isSaving}
@@ -141,6 +159,8 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             )}
             تست اتصال به سایت
           </button>
+          )}
+          {(access.connection || access.shopWarehouse) && (
           <button
             onClick={handleSaveSettings}
             disabled={isSaving || isTestingWc}
@@ -148,6 +168,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           >
             {isSaving ? 'در حال ذخیره...' : 'ذخیره تنظیمات ووکامرس'}
           </button>
+          )}
         </div>
       </div>
 
@@ -185,7 +206,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
         </div>
 
         {/* HMAC Secret Config */}
-        <div className="bg-white/90 border border-blue-200 rounded-lg p-3 space-y-2">
+        <fieldset disabled={!access.connection} className="bg-white/90 border border-blue-200 rounded-lg p-3 space-y-2">
           <label className="block text-xs font-bold text-blue-950 flex items-center gap-1.5">
             <Key size={14} className="text-amber-600" />
             کلید محرمانه امضای دیجیتال وب‌هوک (Webhook Secret Key)
@@ -201,9 +222,11 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           <p className="text-[11px] text-slate-500 leading-normal">
             در صورت تنظیم این کلید در ووکامرس و سیستم، تمام وب‌هوک‌های دریافتی از نظر اصالت فرستنده با امضای HMAC SHA-256 اعتبارسنجی می‌شوند.
           </p>
-        </div>
+        </fieldset>
 
-        <ShopWarehouseSelect value={wcShopWarehouse} onChange={setWcShopWarehouse} warehouses={warehouses} />
+        <fieldset disabled={!access.shopWarehouse}>
+          <ShopWarehouseSelect value={wcShopWarehouse} onChange={setWcShopWarehouse} warehouses={warehouses} />
+        </fieldset>
 
         <div className="bg-white/80 rounded-lg p-3 text-xs text-blue-900 space-y-1.5 border border-blue-100">
           <div className="font-semibold text-blue-950 mb-1">📋 مراحل ثبت وب‌هوک در ووکامرس:</div>
@@ -219,6 +242,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
       </div>
 
       {/* SECTION 3: Bulk Stock Sync & Manual Order Sync */}
+      {access.sync && (
       <div className="grid md:grid-cols-2 gap-6">
         {/* Bulk Sync */}
         <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-5 space-y-3">
@@ -273,6 +297,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           </form>
         </div>
       </div>
+      )}
 
       {/* SECTION 4: Audit Logs & Synced Orders Table */}
       <div className="border border-slate-200 rounded-xl overflow-hidden">

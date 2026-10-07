@@ -13,14 +13,13 @@ import {
   Activity,
   LucideIcon
 } from 'lucide-react';
+import { canOpenSettingsTab } from '../../lib/permissions/pageAccess';
 
 export interface SettingTabItem {
   id: string;
   label: string;
   shortDesc: string;
   icon: LucideIcon;
-  adminOnly?: boolean;
-  permission?: string;
   keywords: string[];
 }
 
@@ -76,7 +75,6 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
         label: 'کدینگ حساب‌ها',
         shortDesc: 'درخت ۴ سطحی گروه، کل، معین و تفصیلی حسابداری ایران',
         icon: FolderTree,
-        permission: 'accounting.coa',
         keywords: ['کدینگ', 'درخت حساب', 'گروه', 'کل', 'معین', 'تفصیلی', 'حساب', 'دفتر']
       }
     ]
@@ -176,7 +174,6 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
         label: 'پیکربندی سیستمی',
         shortDesc: 'پرچم‌های اجرایی، اندپوینت‌های تست و دسترسی‌های ویژه',
         icon: ShieldAlert,
-        adminOnly: true,
         keywords: ['پیکربندی', 'کانفیگ', 'تست', 'سیستم', 'فلگ', 'مدیر', 'اندپوینت']
       },
       {
@@ -184,37 +181,21 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
         label: 'عملیات سیستمی',
         shortDesc: 'پاکسازی داده‌های تستی، بازنشانی تراکنش‌ها و ابزارهای نگهداری',
         icon: ShieldAlert,
-        adminOnly: true,
         keywords: ['عملیات سیستمی', 'پاکسازی', 'ریست', 'حذف داده', 'داده آزمایشی', 'تراکنش']
       }
     ]
   }
 ];
 
+/** v9.0.114 (TD-668، ت۲ بسته ۱۶): زبانه‌ای دیده می‌شود که API آن کاربر را می‌پذیرد (جدول `SETTINGS_TAB_ACCESS`) */
 export function getVisibleGroups(
   groups: SettingCategoryGroup[],
   userRole: string,
-  userPermissions?: { permissions: string[]; isAdmin: boolean }
+  userPermissions?: { permissions?: string[]; isAdmin?: boolean }
 ): SettingCategoryGroup[] {
-  const isAdmin = userRole === 'admin' || userPermissions?.isAdmin;
-  const isManager = userRole === 'manager';
-  const hasCoaPerm = userPermissions?.permissions?.includes('accounting.coa');
-
+  const viewer = { permissions: userPermissions?.permissions, isAdmin: userPermissions?.isAdmin, role: userRole };
   return groups
-    .map(group => {
-      const filteredTabs = group.tabs.filter(tab => {
-        if (tab.adminOnly && !isAdmin) return false;
-        if (tab.permission === 'accounting.coa') {
-          return isAdmin || isManager || hasCoaPerm;
-        }
-        return true;
-      });
-
-      return {
-        ...group,
-        tabs: filteredTabs
-      };
-    })
+    .map(group => ({ ...group, tabs: group.tabs.filter(tab => canOpenSettingsTab(tab.id, viewer)) }))
     .filter(group => group.tabs.length > 0);
 }
 

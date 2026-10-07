@@ -39,7 +39,8 @@ const MAPPING_ROWS: MappingRowMeta[] = [
   { key: 'openingCapitalAccountCode', label: 'سرمایه اولیه (4001)', description: 'طرف حساب اسناد افتتاحیه موجودی اولیه خزانه و انبار' },
 ];
 
-export function AccountingSettingsTab({ currentUser }: { currentUser: any }) {
+// v9.0.114 (TD-668): استقرار کدینگ پیش‌فرض فقط برای مدیر سیستم است (همان گارد API)؛ دیگران فقط پیام آن را می‌بینند
+export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: { currentUser: any; canSeedDefaults?: boolean }) {
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [disabled, setDisabled] = useState<string[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -123,6 +124,7 @@ export function AccountingSettingsTab({ currentUser }: { currentUser: any }) {
               هنوز هیچ حسابی در چارت حساب‌ها تعریف نشده است. با دکمه زیر، ساختار کدینگ استاندارد
               (گروه‌ها، معین‌ها و تفصیلی‌های پیش‌فرض نرم‌افزار) یک‌جا مستقر و همگام می‌شود.
             </p>
+            {canSeedDefaults ? (
             <button
               onClick={handleSeedDefault}
               disabled={isSeeding}
@@ -131,6 +133,9 @@ export function AccountingSettingsTab({ currentUser }: { currentUser: any }) {
               <RefreshCw size={14} className={isSeeding ? 'animate-spin' : ''} />
               <span>{isSeeding ? 'در حال استقرار...' : 'همگام‌سازی کدینگ پیش‌فرض'}</span>
             </button>
+            ) : (
+              <p className="text-xs text-amber-700 font-bold">استقرار کدینگ پیش‌فرض با مدیر سیستم است.</p>
+            )}
           </>
         ) : (
           <p className="text-xs text-slate-600 dark:text-slate-300 leading-6 flex items-center gap-1.5">

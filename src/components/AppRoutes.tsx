@@ -92,130 +92,130 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
           <Route path="/" element={<Dashboard />} />
         {/* V10-5.0: وضعیت انبار = داشبورد تحلیلی و هوش تجاری انبار */}
         <Route path="/inventory-status" element={
-          <ProtectedRoute requiredPerm={['reports.view', 'warehouse.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/inventory-status" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <InventoryStatusPage />
           </ProtectedRoute>
         } />
         <Route path="/crm" element={
-          <ProtectedRoute requiredPerm="crm.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/crm" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <CRMPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/daily-logs" element={
-          <ProtectedRoute requiredPerm={['daily_logs.view', 'daily_logs.create']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/daily-logs" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <DailyLogsPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/reorder-alerts" element={
-          <ProtectedRoute requiredPerm={['products.view', 'warehouse.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/reorder-alerts" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ReorderAlertsPage user={user} />
           </ProtectedRoute>
         } />
         {/* V10-2.2: مسیر canonical واحد برای کالاها — تب محصول/مواد اولیه با query param (?type=raw_material) */}
         <Route path="/products" element={
-          <ProtectedRoute requiredPerm="products.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/products" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ItemsPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/transfers" element={
-          <ProtectedRoute requiredPerm={['products.view', 'warehouse.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/transfers" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <TransfersPage user={user} />
           </ProtectedRoute>
         } />
         {/* V10-2.2: مسیر قدیمی /materials حفظ شد (redirect) */}
         <Route path="/materials" element={<Navigate to="/products?type=raw_material" replace />} />
         <Route path="/pending-materials" element={
-          <ProtectedRoute requiredPerm={['pending_materials.view', 'pending_materials.approve']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/pending-materials" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <PendingMaterialsPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/gallery" element={
-          <ProtectedRoute requiredPerm="products.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/gallery" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <GalleryPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/pricing" element={
-          <ProtectedRoute requiredPerm={['products.edit_price', 'products.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/pricing" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <PricingPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/customers" element={
-          <ProtectedRoute requiredPerm="customers.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/customers" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <CustomersPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/receipts" element={
-          <ProtectedRoute requiredPerm={['warehouse.in', 'documents.view', 'documents.create']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/receipts" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <DocumentsPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/remittances" element={
-          <ProtectedRoute requiredPerm="documents.create" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/remittances" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <CreateInvoicePage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/invoices/create" element={
-          <ProtectedRoute requiredPerm="documents.create" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/invoices/create" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <CreateInvoicePage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/invoices" element={
-          <ProtectedRoute requiredPerm={['documents.view', 'accounting.treasury', 'accounting.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/invoices" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <InvoicesListPage />
           </ProtectedRoute>
         } />
         <Route path="/audit" element={
-          <ProtectedRoute requiredPerm="audit.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/audit" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <InventoryAuditPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/projects" element={
-          <ProtectedRoute requiredPerm="projects.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/projects" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ProjectsPage />
           </ProtectedRoute>
         } />
         <Route path="/project-inventory" element={
-          <ProtectedRoute requiredPerm={['projects.view', 'warehouse.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/project-inventory" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ProjectInventoryPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/procurement" element={
-          <ProtectedRoute requiredPerm={['procurement.view', 'procurement_officer', 'projects.view', 'documents.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/procurement" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ProcurementPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/reserved-items" element={
-          <ProtectedRoute requiredPerm={['products.view', 'reports.view', 'warehouse.view', 'documents.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/reserved-items" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ReservedItemsReportPage />
           </ProtectedRoute>
         } />
         <Route path="/transactions" element={
-          <ProtectedRoute requiredPerm={['warehouse.view', 'accounting.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/transactions" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <TransactionsPage />
           </ProtectedRoute>
         } />
         <Route path="/activity-logs" element={
-          <ProtectedRoute requiredPerm={['audit_logs.view', 'reports.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/activity-logs" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ActivityLogsPage />
           </ProtectedRoute>
         } />
         <Route path="/settings" element={
-          <ProtectedRoute requiredPerm={['settings.manage', 'accounting.coa']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/settings" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <SettingsPage currentUser={user} userPermissions={userPermissions} />
           </ProtectedRoute>
         } />
         <Route path="/users" element={
-          <ProtectedRoute requiredPerm={['users.manage', 'roles.manage']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/users" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <UsersPage currentUser={user} userPermissions={userPermissions} />
           </ProtectedRoute>
         } />
         <Route path="/personnel" element={
-          <ProtectedRoute requiredPerm="personnel.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/personnel" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <PersonnelPage />
           </ProtectedRoute>
         } />
         <Route path="/piecework" element={
-          <ProtectedRoute requiredPerm="piecework.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/piecework" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <PieceworkPayrollPage />
           </ProtectedRoute>
         } />
@@ -226,32 +226,32 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
           </Suspense>
         } />
         <Route path="/accounting" element={
-          <ProtectedRoute requiredPerm={['accounting.view', 'accounting.coa', 'accounting.vouchers', 'accounting.treasury', 'accounting.cheques', 'accounting.reports']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/accounting" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <AccountingPage userPermissions={userPermissions} user={user} />
           </ProtectedRoute>
         } />
         <Route path="/accounting/:tab" element={
-          <ProtectedRoute requiredPerm={['accounting.view', 'accounting.coa', 'accounting.vouchers', 'accounting.treasury', 'accounting.cheques', 'accounting.reports']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/accounting" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <AccountingPage userPermissions={userPermissions} user={user} />
           </ProtectedRoute>
         } />
         <Route path="/approval-inbox" element={
-          <ProtectedRoute requiredPerm="workflow.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/approval-inbox" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ApprovalInboxPage />
           </ProtectedRoute>
         } />
         <Route path="/workflow-designer" element={
-          <ProtectedRoute requiredPerm={['workflow.manage', 'settings.manage']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/workflow-designer" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <WorkflowManagementPage />
           </ProtectedRoute>
         } />
         <Route path="/domain-events" element={
-          <ProtectedRoute requiredPerm={['events.view', 'settings.manage']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/domain-events" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <DomainEventsPage currentUser={user} />
           </ProtectedRoute>
         } />
         <Route path="/changelog" element={
-          <ProtectedRoute requiredPerm="settings.manage" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute page="/changelog" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ChangelogPage />
           </ProtectedRoute>
         } />

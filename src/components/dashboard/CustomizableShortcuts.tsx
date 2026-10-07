@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings2, Package, Box, FileText, Target, CalendarCheck, Layers, CheckSquare, FileInput, Warehouse, UsersRound, DollarSign, Sparkles, AlertTriangle, Users, Calculator, Landmark, ClipboardList, Check, X, ArrowUpRight, ShoppingBag } from 'lucide-react';
 import { User } from '../../types';
+import { canOpenPage, type ViewerAccess } from '../../lib/permissions/pageAccess';
 
 export interface ShortcutItemDef {
   id: string;
@@ -12,7 +13,6 @@ export interface ShortcutItemDef {
   color: string;
   bgColor: string;
   borderColor: string;
-  requiredPerm?: string | string[];
 }
 
 export const ALL_SHORTCUTS: ShortcutItemDef[] = [
@@ -25,7 +25,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-rose-600',
     bgColor: 'bg-rose-50 hover:bg-rose-100/80',
     borderColor: 'border-rose-200/80',
-    requiredPerm: 'crm.view',
   },
   {
     id: 'daily_logs',
@@ -36,7 +35,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-blue-600',
     bgColor: 'bg-blue-50 hover:bg-blue-100/80',
     borderColor: 'border-blue-200/80',
-    requiredPerm: ['daily_logs.view', 'daily_logs.create'],
   },
   {
     id: 'approval_inbox',
@@ -57,7 +55,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-emerald-600',
     bgColor: 'bg-emerald-50 hover:bg-emerald-100/80',
     borderColor: 'border-emerald-200/80',
-    requiredPerm: 'documents.create',
   },
   {
     id: 'products',
@@ -68,7 +65,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-indigo-600',
     bgColor: 'bg-indigo-50 hover:bg-indigo-100/80',
     borderColor: 'border-indigo-200/80',
-    requiredPerm: 'products.view',
   },
   {
     id: 'raw_materials',
@@ -79,7 +75,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-amber-600',
     bgColor: 'bg-amber-50 hover:bg-amber-100/80',
     borderColor: 'border-amber-200/80',
-    requiredPerm: 'products.view',
   },
   {
     id: 'projects',
@@ -90,7 +85,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-cyan-600',
     bgColor: 'bg-cyan-50 hover:bg-cyan-100/80',
     borderColor: 'border-cyan-200/80',
-    requiredPerm: 'projects.view',
   },
   {
     id: 'procurement',
@@ -101,7 +95,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-amber-600',
     bgColor: 'bg-amber-50 hover:bg-amber-100/80',
     borderColor: 'border-amber-200/80',
-    requiredPerm: ['procurement.view', 'projects.view', 'documents.view'],
   },
   {
     id: 'inventory_status',
@@ -122,7 +115,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-teal-600',
     bgColor: 'bg-teal-50 hover:bg-teal-100/80',
     borderColor: 'border-teal-200/80',
-    requiredPerm: ['warehouse.in', 'documents.view', 'documents.create'],
   },
   {
     id: 'customers',
@@ -133,7 +125,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-sky-600',
     bgColor: 'bg-sky-50 hover:bg-sky-100/80',
     borderColor: 'border-sky-200/80',
-    requiredPerm: 'customers.view',
   },
   {
     id: 'pricing',
@@ -144,7 +135,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-emerald-700',
     bgColor: 'bg-emerald-50 hover:bg-emerald-100/80',
     borderColor: 'border-emerald-300/80',
-    requiredPerm: ['products.edit_price', 'products.view'],
   },
   {
     id: 'transfers',
@@ -155,7 +145,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-purple-600',
     bgColor: 'bg-purple-50 hover:bg-purple-100/80',
     borderColor: 'border-purple-200/80',
-    requiredPerm: ['products.view', 'warehouse.view'],
   },
   {
     id: 'reorder_alerts',
@@ -166,7 +155,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-rose-600',
     bgColor: 'bg-rose-50 hover:bg-rose-100/80',
     borderColor: 'border-rose-200/80',
-    requiredPerm: ['products.view', 'warehouse.view'],
   },
   {
     id: 'personnel',
@@ -177,7 +165,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-blue-700',
     bgColor: 'bg-blue-50 hover:bg-blue-100/80',
     borderColor: 'border-blue-200/80',
-    requiredPerm: 'personnel.view',
   },
   {
     id: 'piecework',
@@ -188,7 +175,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-amber-700',
     bgColor: 'bg-amber-50 hover:bg-amber-100/80',
     borderColor: 'border-amber-300/80',
-    requiredPerm: 'piecework.view',
   },
   {
     id: 'accounting',
@@ -199,7 +185,6 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-violet-700',
     bgColor: 'bg-violet-50 hover:bg-violet-100/80',
     borderColor: 'border-violet-200/80',
-    requiredPerm: 'accounting.view',
   },
   {
     id: 'audit',
@@ -210,9 +195,13 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-slate-600',
     bgColor: 'bg-slate-50 hover:bg-slate-100/80',
     borderColor: 'border-slate-200/80',
-    requiredPerm: 'audit.view',
   },
 ];
+
+/** v9.0.114 (TD-668، ت۲ بسته ۱۶): میانبری که صفحه‌اش برای کاربر باز است، از همان جدول دسترسی منو و مسیر */
+export function accessibleShortcutsFor(viewer: ViewerAccess): ShortcutItemDef[] {
+  return ALL_SHORTCUTS.filter((s) => canOpenPage(s.path, viewer));
+}
 
 const DEFAULT_SELECTED_SHORTCUTS = ['crm', 'daily_logs', 'approval_inbox', 'create_invoice', 'products', 'projects'];
 
@@ -223,21 +212,12 @@ interface CustomizableShortcutsProps {
 
 export function CustomizableShortcuts({ user, userPermissions }: CustomizableShortcutsProps) {
   const navigate = useNavigate();
-  const isAdmin = Boolean(userPermissions?.isAdmin || user?.role === 'admin');
-
-  const checkPermission = (required?: string | string[]) => {
-    if (isAdmin || !required) return true;
-    const perms = Array.isArray(userPermissions?.permissions) ? userPermissions.permissions : [];
-    if (Array.isArray(required)) {
-      return required.some((p) => perms.includes(p));
-    }
-    return perms.includes(required);
-  };
 
   // Filter shortcuts allowed for this specific user
-  const accessibleShortcuts = useMemo(() => {
-    return ALL_SHORTCUTS.filter((s) => checkPermission(s.requiredPerm));
-  }, [userPermissions, isAdmin]);
+  const accessibleShortcuts = useMemo(
+    () => accessibleShortcutsFor({ permissions: userPermissions?.permissions, isAdmin: userPermissions?.isAdmin, role: user?.role }),
+    [userPermissions, user?.role],
+  );
 
   const storageKey = `user_shortcuts_${user?.id || 'default'}`;
 

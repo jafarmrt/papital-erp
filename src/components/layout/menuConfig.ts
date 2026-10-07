@@ -33,6 +33,7 @@ import {
   Calculator
 } from 'lucide-react';
 import { User } from '../../types';
+import { canOpenPage, isSystemAdminViewer } from '../../lib/permissions/pageAccess';
 
 export interface MenuItem {
   name: string;
@@ -56,13 +57,9 @@ export function getMenuGroups(
   userPermissions?: { permissions?: string[]; isAdmin?: boolean; roleName?: string } | null,
   menuVisibility?: MenuVisibilityMap | null
 ): MenuGroup[] {
-  const isAdmin = Boolean(userPermissions?.isAdmin || user?.role === 'admin');
-
-  const hasPerm = (permKey: string) => {
-    if (isAdmin) return true;
-    const permissions = Array.isArray(userPermissions?.permissions) ? userPermissions.permissions : [];
-    return permissions.includes(permKey);
-  };
+  // v9.0.114 (TD-668، ت۲ بسته ۱۶): دید هر پیوند همان دسترسی صفحه در جدول یکتای pageAccess است (همان مسیر و API صفحه)
+  const viewer = { permissions: userPermissions?.permissions, isAdmin: userPermissions?.isAdmin, role: user?.role };
+  const open = (path: string) => canOpenPage(path, viewer);
 
   return [
     {
@@ -70,8 +67,8 @@ export function getMenuGroups(
       title: 'اصلی',
       groupIcon: Compass,
       items: [
-        { name: 'داشبورد', path: '/', icon: LayoutDashboard, visible: true },
-        { name: 'کارتابل تاییدات و گردش کار', path: '/approval-inbox', icon: CheckSquare, visible: true },
+        { name: 'داشبورد', path: '/', icon: LayoutDashboard, visible: open('/') },
+        { name: 'کارتابل تاییدات و گردش کار', path: '/approval-inbox', icon: CheckSquare, visible: open('/approval-inbox') },
       ]
     },
     {
@@ -80,16 +77,15 @@ export function getMenuGroups(
       groupIcon: Package,
       items: [
         // V10-5.0: محتوای فعلی داشبورد BI انبار؛ داشبورد سراسری آینده در «/» جای می‌گیرد
-        // v7.0.53 / v7.0.55 (audit P2-10): آمار داشبورد انبار با reports.view یا warehouse.view (همان مجوز API)
-        { name: 'وضعیت انبار', path: '/inventory-status', icon: Warehouse, visible: hasPerm('reports.view') || hasPerm('warehouse.view') },
-        { name: 'محصولات و مواد اولیه', path: '/products', icon: Package, visible: hasPerm('products.view') },
-        { name: 'ورود و خروج انبار', path: '/receipts', icon: FileInput, visible: hasPerm('warehouse.in') || hasPerm('documents.view') || hasPerm('documents.create') },
-        { name: 'تأیید مواد اولیه جدید', path: '/pending-materials', icon: CheckSquare, visible: hasPerm('products.view') },
-        { name: 'کدهای ترنسفر', path: '/transfers', icon: Layers, visible: hasPerm('products.view') },
-        { name: 'هشدار نقطه سفارش', path: '/reorder-alerts', icon: AlertTriangle, visible: hasPerm('products.view') },
-        { name: 'قیمت‌گذاری اقلام', path: '/pricing', icon: DollarSign, visible: hasPerm('products.edit_price') || hasPerm('products.view') },
-        { name: 'گالری تصویری', path: '/gallery', icon: Image, visible: hasPerm('products.view') },
-        { name: 'انبارگردانی دوره‌ای', path: '/audit', icon: ClipboardList, visible: hasPerm('audit.view') },
+        { name: 'وضعیت انبار', path: '/inventory-status', icon: Warehouse, visible: open('/inventory-status') },
+        { name: 'محصولات و مواد اولیه', path: '/products', icon: Package, visible: open('/products') },
+        { name: 'ورود و خروج انبار', path: '/receipts', icon: FileInput, visible: open('/receipts') },
+        { name: 'تأیید مواد اولیه جدید', path: '/pending-materials', icon: CheckSquare, visible: open('/pending-materials') },
+        { name: 'کدهای ترنسفر', path: '/transfers', icon: Layers, visible: open('/transfers') },
+        { name: 'هشدار نقطه سفارش', path: '/reorder-alerts', icon: AlertTriangle, visible: open('/reorder-alerts') },
+        { name: 'قیمت‌گذاری اقلام', path: '/pricing', icon: DollarSign, visible: open('/pricing') },
+        { name: 'گالری تصویری', path: '/gallery', icon: Image, visible: open('/gallery') },
+        { name: 'انبارگردانی دوره‌ای', path: '/audit', icon: ClipboardList, visible: open('/audit') },
       ]
     },
     {
@@ -97,9 +93,9 @@ export function getMenuGroups(
       title: 'فروش و مشتریان',
       groupIcon: Target,
       items: [
-        { name: 'ارتباط با مشتری و فروش', path: '/crm', icon: Target, visible: hasPerm('crm.view') },
-        { name: 'طرفین حساب', path: '/customers', icon: UsersRound, visible: hasPerm('customers.view') },
-        { name: 'صدور فاکتور و پیش‌فاکتور', path: '/invoices/create', icon: FileOutput, visible: hasPerm('documents.create') },
+        { name: 'ارتباط با مشتری و فروش', path: '/crm', icon: Target, visible: open('/crm') },
+        { name: 'طرفین حساب', path: '/customers', icon: UsersRound, visible: open('/customers') },
+        { name: 'صدور فاکتور و پیش‌فاکتور', path: '/invoices/create', icon: FileOutput, visible: open('/invoices/create') },
       ]
     },
     {
@@ -107,7 +103,7 @@ export function getMenuGroups(
       title: 'برنامه‌ریزی و کنترل تولید',
       groupIcon: Layers,
       items: [
-        { name: 'کنترل پروژه‌های تولید', path: '/projects', icon: Layers, visible: hasPerm('projects.view') },
+        { name: 'کنترل پروژه‌های تولید', path: '/projects', icon: Layers, visible: open('/projects') },
       ]
     },
     {
@@ -115,7 +111,7 @@ export function getMenuGroups(
       title: 'خرید و تدارکات',
       groupIcon: ShoppingBag,
       items: [
-        { name: 'میز کار تدارکات و خرید', path: '/procurement', icon: ShoppingBag, visible: hasPerm('procurement.view') || hasPerm('projects.view') || hasPerm('documents.view') },
+        { name: 'میز کار تدارکات و خرید', path: '/procurement', icon: ShoppingBag, visible: open('/procurement') },
       ]
     },
     {
@@ -123,12 +119,12 @@ export function getMenuGroups(
       title: 'منابع انسانی و پرسنل',
       groupIcon: Users,
       items: [
-        { name: 'مشخصات پرسنل', path: '/personnel', icon: Users, visible: hasPerm('personnel.view') },
+        { name: 'مشخصات پرسنل', path: '/personnel', icon: Users, visible: open('/personnel') },
         // V10-5.4: گزارش کار روزانه به گروه HR منتقل شد
-        { name: 'گزارش کار روزانه', path: '/daily-logs', icon: CalendarCheck, visible: hasPerm('daily_logs.view') || hasPerm('daily_logs.create') },
-        { name: 'حقوق و دستمزد', path: '/piecework', icon: Calculator, visible: hasPerm('piecework.view') },
+        { name: 'گزارش کار روزانه', path: '/daily-logs', icon: CalendarCheck, visible: open('/daily-logs') },
+        { name: 'حقوق و دستمزد', path: '/piecework', icon: Calculator, visible: open('/piecework') },
         // فیش‌های حقوقی من: برای تمام کاربران لاگین‌شده (پرسنلی که کاربر سیستم هستند)
-        { name: 'فیش‌های حقوقی من', path: '/my-payslips', icon: Wallet, visible: true },
+        { name: 'فیش‌های حقوقی من', path: '/my-payslips', icon: Wallet, visible: open('/my-payslips') },
       ]
     },
     {
@@ -136,9 +132,8 @@ export function getMenuGroups(
       title: 'گزارش‌ها و نظارت',
       groupIcon: History,
       items: [
-        { name: 'گزارش اقلام رزروی', path: '/reserved-items', icon: Lock, visible: hasPerm('products.view') || hasPerm('reports.view') || hasPerm('warehouse.view') },
-        // v7.0.53 (audit P2-10): کاردکس با warehouse.view یا accounting.view (همان مجوز API)
-        { name: 'گزارش تراکنش‌ها', path: '/transactions', icon: History, visible: hasPerm('warehouse.view') || hasPerm('accounting.view') },
+        { name: 'گزارش اقلام رزروی', path: '/reserved-items', icon: Lock, visible: open('/reserved-items') },
+        { name: 'گزارش تراکنش‌ها', path: '/transactions', icon: History, visible: open('/transactions') },
       ]
     },
     {
@@ -146,14 +141,14 @@ export function getMenuGroups(
       title: 'مالی و حسابداری دوبل',
       groupIcon: Landmark,
       items: [
-        { name: 'داشبورد مالی', path: '/accounting/dashboard', icon: LayoutDashboard, visible: hasPerm('accounting.view') },
-        { name: 'مرور حساب‌ها (درخت و کاردکس)', path: '/accounting/explorer', icon: Layers, visible: hasPerm('accounting.reports') },
-        { name: 'اسناد دوبل حسابداری', path: '/accounting/vouchers', icon: FileText, visible: hasPerm('accounting.vouchers') },
-        { name: 'خزانه‌داری و حساب‌های بانکی', path: '/accounting/treasury', icon: Building2, visible: hasPerm('accounting.treasury') },
-        { name: 'لیست اسناد و فاکتورها', path: '/invoices', icon: ClipboardList, visible: hasPerm('documents.view') || hasPerm('accounting.treasury') || hasPerm('accounting.view') },
-        { name: 'مدیریت چک‌های صیادی', path: '/accounting/cheques', icon: CreditCard, visible: hasPerm('accounting.cheques') },
-        { name: 'صورت‌ها و گزارش‌های مالی', path: '/accounting/reports', icon: BarChart3, visible: hasPerm('accounting.reports') },
-        { name: 'بستن سال مالی', path: '/accounting/fiscal-closing', icon: Lock, visible: hasPerm('accounting.vouchers') },
+        { name: 'داشبورد مالی', path: '/accounting/dashboard', icon: LayoutDashboard, visible: open('/accounting/dashboard') },
+        { name: 'مرور حساب‌ها (درخت و کاردکس)', path: '/accounting/explorer', icon: Layers, visible: open('/accounting/explorer') },
+        { name: 'اسناد دوبل حسابداری', path: '/accounting/vouchers', icon: FileText, visible: open('/accounting/vouchers') },
+        { name: 'خزانه‌داری و حساب‌های بانکی', path: '/accounting/treasury', icon: Building2, visible: open('/accounting/treasury') },
+        { name: 'لیست اسناد و فاکتورها', path: '/invoices', icon: ClipboardList, visible: open('/invoices') },
+        { name: 'مدیریت چک‌های صیادی', path: '/accounting/cheques', icon: CreditCard, visible: open('/accounting/cheques') },
+        { name: 'صورت‌ها و گزارش‌های مالی', path: '/accounting/reports', icon: BarChart3, visible: open('/accounting/reports') },
+        { name: 'بستن سال مالی', path: '/accounting/fiscal-closing', icon: Lock, visible: open('/accounting/fiscal-closing') },
       ]
     },
     {
@@ -161,14 +156,12 @@ export function getMenuGroups(
       title: 'مدیریت و سیستم',
       groupIcon: Settings,
       items: [
-        // V10-5.2: هم‌راستا با API — events.view (admin از طریق isAdmin عبور می‌کند)
-        { name: 'رویدادها و اتوماسیون سازمانی', path: '/domain-events', icon: Zap, visible: hasPerm('events.view') },
-        { name: 'طراح فرایند و گردش کار', path: '/workflow-designer', icon: Workflow, visible: user?.role === 'admin' },
-        // v9.0.113 (TD-525، ت۳): همان مجوزهای مسیر و API صفحه
-        { name: 'مدیریت کاربران و نقش‌ها', path: '/users', icon: Users, visible: hasPerm('users.manage') || hasPerm('roles.manage') },
-        { name: 'تنظیمات سامانه', path: '/settings', icon: Settings, visible: user?.role === 'admin' || user?.role === 'manager' || hasPerm('settings.manage') || hasPerm('accounting.coa') },
-        { name: 'سجل تغییرات', path: '/activity-logs', icon: ShieldAlert, visible: hasPerm('audit_logs.view') || hasPerm('reports.view') },
-        { name: 'معرفی و به‌روزرسانی‌ها', path: '/changelog', icon: FileCode2, visible: user?.role === 'admin' },
+        { name: 'رویدادها و اتوماسیون سازمانی', path: '/domain-events', icon: Zap, visible: open('/domain-events') },
+        { name: 'طراح فرایند و گردش کار', path: '/workflow-designer', icon: Workflow, visible: open('/workflow-designer') },
+        { name: 'مدیریت کاربران و نقش‌ها', path: '/users', icon: Users, visible: open('/users') },
+        { name: 'تنظیمات سامانه', path: '/settings', icon: Settings, visible: open('/settings') },
+        { name: 'سجل تغییرات', path: '/activity-logs', icon: ShieldAlert, visible: open('/activity-logs') },
+        { name: 'معرفی و به‌روزرسانی‌ها', path: '/changelog', icon: FileCode2, visible: open('/changelog') },
       ]
     }
   ].map(group => ({
@@ -176,7 +169,7 @@ export function getMenuGroups(
     items: group.items.map(item => ({
       ...item,
       // V10-5.3: اعمال deny-list دید منو — admin همیشه همه را می‌بیند
-      visible: item.visible && !(menuVisibility && user?.role && user.role !== 'admin' && Array.isArray(menuVisibility[user.role]) && menuVisibility[user.role].includes(item.path))
+      visible: item.visible && !(menuVisibility && user?.role && !isSystemAdminViewer(viewer) && Array.isArray(menuVisibility[user.role]) && menuVisibility[user.role].includes(item.path))
     }))
   }));
 }

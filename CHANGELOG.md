@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.114 — One Page-Access Table
+- **One Page-Access Table:** menu, page routes, dashboard shortcuts and settings tabs read one table checked against the API guards (TD-668).
+
 ### v9.0.113 — Users and Roles Page by Permission
 - **Users and Roles Page by Permission:** the page and menu open for user and role managers, and the forms offer only what the user may grant (TD-525).
 

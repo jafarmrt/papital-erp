@@ -2,9 +2,11 @@ import { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Lock } from 'lucide-react';
 import { User } from '../../types';
+import { canOpenPage, isSystemAdminViewer, type PagePath } from '../../lib/permissions/pageAccess';
 
 export interface ProtectedRouteProps {
-  requiredPerm?: string | string[];
+  /** v9.0.114 (TD-668): دسترسی صفحه فقط از جدول یکتای pageAccess، همان که منو و میانبرها می‌خوانند */
+  page: PagePath;
   userPermissions: { permissions: string[]; isAdmin: boolean; roleName?: string };
   permissionsLoaded: boolean;
   user: User;
@@ -12,13 +14,14 @@ export interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({
-  requiredPerm,
+  page,
   userPermissions,
   permissionsLoaded,
   user,
   children
 }: ProtectedRouteProps) {
-  if (userPermissions?.isAdmin || user?.role === 'admin') {
+  const viewer = { permissions: userPermissions?.permissions, isAdmin: userPermissions?.isAdmin, role: user?.role };
+  if (isSystemAdminViewer(viewer)) {
     return <>{children}</>;
   }
 
@@ -33,15 +36,7 @@ export function ProtectedRoute({
     );
   }
 
-  if (!requiredPerm) {
-    return <>{children}</>;
-  }
-
-  const permArray = Array.isArray(requiredPerm) ? requiredPerm : [requiredPerm];
-  const permissions = Array.isArray(userPermissions?.permissions) ? userPermissions.permissions : [];
-  const hasAccess = permArray.some(p => permissions.includes(p));
-
-  if (!hasAccess) {
+  if (!canOpenPage(page, viewer)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded-3xl border border-slate-200 shadow-sm max-w-md mx-auto mt-10">
         <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center mb-4 border border-rose-100 shadow-sm">

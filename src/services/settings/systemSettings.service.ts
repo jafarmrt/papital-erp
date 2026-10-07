@@ -4,6 +4,7 @@ import { appSettings, warehouses } from '../../db/schema.js';
 import { ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 import { userHasRoleOrPermission } from '../../middleware/authorize.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
+import { SYSTEM_ADMIN_SETTING_KEYS } from '../../lib/settings/settingKeyAccess.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { invalidateSettingsCache, appSettingsCache } from '../../lib/memoryCache.js';
 
@@ -40,14 +41,8 @@ const BUSINESS_SETTING_KEYS = new Set([
   'wc_shop_warehouse',
 ]);
 
-/** کلیدهای محرمانه یکپارچه‌سازی و فلگ‌های سیستمی — فقط مدیر سیستم (admin) */
-const ADMIN_ONLY_SETTING_KEYS = new Set([
-  // تغییر آدرس فروشگاه باعث ارسال کلیدهای ووکامرس به سایت دیگر می‌شود؛ بنابراین هم‌ردیف کلیدهای محرمانه است
-  'wc_store_url',
-  'wc_consumer_key',
-  'wc_consumer_secret',
-  'wc_webhook_secret',
-]);
+/** کلیدهای محرمانه یکپارچه‌سازی — فقط مدیر سیستم؛ فهرست مشترک با زبانه ووکامرس (v9.0.114، TD-668) */
+const ADMIN_ONLY_SETTING_KEYS = new Set(SYSTEM_ADMIN_SETTING_KEYS);
 
 /** پیکربندی دسترسی نقش‌ها — admin یا دارنده مجوز roles.manage (هم‌راستا با مدیریت نقش‌ها) */
 const ROLE_CONFIG_SETTING_KEYS = new Set(['menu_visibility']);

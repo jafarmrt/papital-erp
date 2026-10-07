@@ -32,8 +32,11 @@ export const READ_PERMISSIONS = {
     'personnel.view', 'personnel.manage', 'piecework.view', 'projects.view', 'accounting.view', 'crm.view',
     'documents.view', 'documents.create', 'warehouse.in'
   ],
-  /** کارکرد، تعرفه‌ها، عناوین و دسته‌های کارمزدی */
-  pieceworkReference: ['piecework.view', 'piecework.log', 'piecework.manage_tasks', 'projects.view', 'settings.manage'],
+  /**
+   * کارکرد، تعرفه‌ها، عناوین و دسته‌های کارمزدی. `personnel.manage` همین‌ها را می‌نویسد (عناوین کاری در زبانه تنظیمات،
+   * ثبت کارکرد) و پیش‌تر فهرستی را که ذخیره می‌کرد نمی‌خواند (v9.0.114، TD-668).
+   */
+  pieceworkReference: ['piecework.view', 'piecework.log', 'piecework.manage_tasks', 'projects.view', 'settings.manage', 'personnel.manage'],
   /** فیش‌های حقوق و کارمزد با مبالغ (فیش خود کاربر از /piecework/payrolls/mine) */
   payrolls: ['piecework.payroll', 'personnel.manage', 'accounting.treasury'],
   transfers: ['products.view'],

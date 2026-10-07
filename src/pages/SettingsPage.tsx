@@ -25,6 +25,8 @@ import {
   findTabById 
 } from '../components/settings/settingsNavigationConfig';
 import { SettingsNavigationSidebar } from '../components/settings/SettingsNavigationSidebar';
+import { isSystemAdminViewer } from '../lib/permissions/pageAccess';
+import { canEditSettingKey } from '../lib/settings/settingKeyAccess';
 
 interface SettingsPageProps {
   currentUser: User;
@@ -38,24 +40,25 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const isAdmin = currentUser.role === 'admin' || userPermissions?.isAdmin;
-  const isManager = currentUser.role === 'manager';
-  const hasCoaPerm = Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('accounting.coa');
-  const hasSettingsPerm = Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('settings.manage');
-
+  // v9.0.114 (TD-668، ت۲ بسته ۱۶): زبانه‌ها و خود صفحه از جدول یکتای دسترسی؛ زبانه‌ای که کاربر نمی‌بیند (پیش‌فرض «عمومی» یا
+  // `?tab=`) به نخستین زبانه دیدنی برمی‌گردد و هرگز نمایش داده نمی‌شود
+  const viewer = { permissions: userPermissions?.permissions, isAdmin: userPermissions?.isAdmin, role: currentUser.role };
+  const isSystemAdmin = isSystemAdminViewer(viewer);
   const visibleGroups = useMemo(() => {
     return getVisibleGroups(SETTINGS_GROUPS, currentUser.role, userPermissions);
   }, [currentUser.role, userPermissions]);
 
+  const activeTab = (findTabById(visibleGroups, s.activeTab) ? s.activeTab : visibleGroups[0]?.tabs[0]?.id) as typeof s.activeTab | undefined;
+
   const activeTabItem = useMemo(() => {
-    return findTabById(visibleGroups, s.activeTab);
-  }, [visibleGroups, s.activeTab]);
+    return activeTab ? findTabById(visibleGroups, activeTab) : undefined;
+  }, [visibleGroups, activeTab]);
 
   const activeGroupItem = useMemo(() => {
-    return findGroupByTabId(visibleGroups, s.activeTab);
-  }, [visibleGroups, s.activeTab]);
+    return activeTab ? findGroupByTabId(visibleGroups, activeTab) : undefined;
+  }, [visibleGroups, activeTab]);
 
-  if (!isAdmin && !isManager && !hasCoaPerm && !hasSettingsPerm) {
+  if (visibleGroups.length === 0) {
     return <div className="p-8 text-center text-slate-500 font-farsi">عدم دسترسی</div>;
   }
 
@@ -122,7 +125,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
         )}>
           <SettingsNavigationSidebar
             groups={visibleGroups}
-            activeTab={s.activeTab}
+            activeTab={activeTab ?? s.activeTab}
             onSelectTab={handleSelectTab}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
@@ -134,7 +137,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
         {/* Content Pane */}
         <main className="flex-1 min-w-0 overflow-y-auto custom-scrollbar flex flex-col space-y-4">
           <div className="flex-1">
-        {s.activeTab === 'general' && (
+        {activeTab === 'general' && (
           <GeneralSettingsTab
             companyName={s.companyName}
             setCompanyName={s.setCompanyName}
@@ -161,19 +164,19 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
           />
         )}
 
-        {s.activeTab === 'accounting' && (
-          <AccountingSettingsTab currentUser={currentUser} />
+        {activeTab === 'accounting' && (
+          <AccountingSettingsTab currentUser={currentUser} canSeedDefaults={isSystemAdmin} />
         )}
 
-        {s.activeTab === 'chart_of_accounts' && (
+        {activeTab === 'chart_of_accounts' && (
           <ChartOfAccountsSettingsTab />
         )}
 
-        {s.activeTab === 'inventory_integrity' && (
+        {activeTab === 'inventory_integrity' && (
           <NegativeStockPolicySettingsTab />
         )}
 
-        {s.activeTab === 'categories' && (
+        {activeTab === 'categories' && (
           <CategoriesTab
             categories={s.categories}
             onOpenCreateModal={() => {
@@ -192,11 +195,11 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
               s.setShowCatModal(true);
             }}
             onDeleteCategory={s.handleCatDelete}
-            onResetDefaults={s.handleResetDefaultCategories}
+            onResetDefaults={isSystemAdmin ? s.handleResetDefaultCategories : undefined}
           />
         )}
 
-        {s.activeTab === 'warehouses' && (
+        {activeTab === 'warehouses' && (
           <WarehousesTab
             warehouses={s.warehouses}
             onOpenCreateModal={() => {
@@ -213,7 +216,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
           />
         )}
 
-        {s.activeTab === 'pricing' && (
+        {activeTab === 'pricing' && (
           <PricingStrategiesTab
             pricingStrategies={s.pricingStrategies}
             setPricingStrategies={s.setPricingStrategies}
@@ -222,11 +225,11 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
           />
         )}
 
-        {s.activeTab === 'task_titles' && (
+        {activeTab === 'task_titles' && (
           <TaskTitlesSettingsTab />
         )}
 
-        {s.activeTab === 'projects' && (
+        {activeTab === 'projects' && (
           <WorkflowPresetsTab
             workflowPresets={s.workflowPresets}
             setWorkflowPresets={s.setWorkflowPresets}
@@ -235,7 +238,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
           />
         )}
 
-        {s.activeTab === 'inventory_control' && (
+        {activeTab === 'inventory_control' && (
           <InventoryControlPresetTab
             sections={s.inventoryControlSections}
             setSections={s.setInventoryControlSections}
@@ -244,7 +247,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
           />
         )}
         
-        {s.activeTab === 'woocommerce' && (
+        {activeTab === 'woocommerce' && (
           <WooCommerceTab
             wcStoreUrl={s.wcStoreUrl}
             setWcStoreUrl={s.setWcStoreUrl}
@@ -270,17 +273,22 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
             loadSyncedWcOrders={s.loadSyncedWcOrders}
             handleSyncAllStocks={s.handleSyncAllStocks}
             isSyncingAllStocks={s.isSyncingAllStocks}
+            access={{
+              connection: canEditSettingKey('wc_store_url', viewer),
+              shopWarehouse: canEditSettingKey('wc_shop_warehouse', viewer),
+              sync: isSystemAdmin || Boolean(userPermissions?.permissions?.includes('woocommerce.manage')),
+            }}
           />
         )}
 
-        {s.activeTab === 'health' && <SystemHealthDiagnostic />}
+        {activeTab === 'health' && <SystemHealthDiagnostic />}
 
         {/* V1.1.1: تب پیکربندی سیستمی جایگزین تب اجرای تست شد — اجرای درون‌برنامه‌ای تست‌ها به‌دلیل آلودگی دیتابیس زنده حذف شد */}
-        {s.activeTab === 'system_config' && currentUser.role === 'admin' && (
+        {activeTab === 'system_config' && (
           <SystemConfigTab />
         )}
 
-        {s.activeTab === 'system' && currentUser.role === 'admin' && (
+        {activeTab === 'system' && (
           <SystemOperationsTab onOpenClearModal={() => s.setShowClearModal(true)} />
         )}
           </div>
