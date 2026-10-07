@@ -48,6 +48,23 @@ function saveErrorMessage(err: unknown): string {
   return 'خطا در ثبت سند';
 }
 
+/**
+ * v9.0.252 (TD-794): سند در سرور ثبت شده است، پس نسخه چاپی «بهترین تلاش» است: شکست بارگذاری آن ثبت را شکست نمی‌دهد و
+ * فرم پاک می‌شود. پیش‌تر خطای این بارگذاری کل ثبت را خطا می‌کرد، فرم با همان ردیف‌ها پر می‌ماند و کلیک دوم سند دوم می‌ساخت.
+ */
+async function loadPrintCopy(
+  loadDocument: InvoiceSaveDeps['loadDocument'],
+  docId: number,
+): Promise<InvoiceDocumentDetails | null> {
+  try {
+    return await loadDocument(docId);
+  } catch (err: unknown) {
+    console.error(`Failed to load the print copy of document ${docId}:`, err);
+    toast.error('سند ثبت شد، اما نسخه چاپی آن بارگذاری نشد. آن را از «لیست اسناد و فاکتورها» چاپ کنید.', { duration: 6000 });
+    return null;
+  }
+}
+
 export function useInvoiceSave({ loadDocument, discardDraft }: InvoiceSaveDeps) {
   const queryClient = useQueryClient();
 
@@ -74,7 +91,7 @@ export function useInvoiceSave({ loadDocument, discardDraft }: InvoiceSaveDeps) 
       }
 
       const targetDocId = editingDocId || res?.docId;
-      const printedDoc = targetDocId ? await loadDocument(targetDocId) : null;
+      const printedDoc = targetDocId ? await loadPrintCopy(loadDocument, targetDocId) : null;
 
       if (!editingDocId) {
         await discardDraft();
