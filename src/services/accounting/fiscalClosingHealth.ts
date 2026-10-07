@@ -48,7 +48,7 @@ export async function findManualClosingTypeVouchers(): Promise<ManualClosingType
 
 export function buildManualClosingTypeHealthTest(entries: ManualClosingTypeVoucher[]): HealthCheckTestResult {
   return {
-    id: 'manual_closing_type_vouchers',
+    id: 'manual_vouchers_closing_type',
     category: 'vouchers',
     title: 'اسناد دستی با نوع «اختتامیه»',
     description: 'سند اختتامیه را فقط بستن سال مالی صادر می‌کند. پیش از نسخه ۹.۰.۱۲۱ فرم سند دستی گزینه «افتتاحیه / اختتامیه» را با نوع اختتامیه ذخیره می‌کرد؛ این اسناد مانند سند عادی در گزارش‌ها شمرده می‌شوند و نوعشان خودکار عوض نمی‌شود',

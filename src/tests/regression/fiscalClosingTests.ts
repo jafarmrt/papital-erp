@@ -248,7 +248,7 @@ export async function runFiscalClosingTests(shouldRun: ShouldRun): Promise<TestC
       // the health check lists the legacy manual closing-type vouchers, not the closing run's
       const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
       const health = await FinancialHealthService.runHealthCheck();
-      const listed = health.tests.find(t => t.id === 'manual_closing_type_vouchers');
+      const listed = health.tests.find(t => t.id === 'manual_vouchers_closing_type');
       const listedIds = (listed?.items ?? []).map(i => Number(i.linkId)).sort((a, b) => a - b);
       const expectedIds = [legacyClosingRef.id, legacyOpening].sort((a, b) => a - b);
       if (JSON.stringify(listedIds) !== JSON.stringify(expectedIds)) problems.push(`health check lists ${JSON.stringify(listedIds)}, expected the legacy vouchers ${JSON.stringify(expectedIds)}`);
