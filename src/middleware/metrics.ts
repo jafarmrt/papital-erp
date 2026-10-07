@@ -48,13 +48,27 @@ export const outboxProcessingDuration = new promClient.Histogram({
   buckets: [0.001, 0.01, 0.05, 0.1, 0.5, 1, 5],
 });
 
+/**
+ * v9.0.125 (TD-582): the route label is bounded by the route table: the mount prefix plus the matched
+ * route pattern; a request that matched no route (404, 401 before a router, static files) never
+ * carries its raw path, or every unknown path would add series that are never freed.
+ */
+export function metricsRouteLabel(req: Request): string {
+  const pattern: unknown = req.route?.path;
+  if (typeof pattern === 'string') return `${req.baseUrl || ''}${pattern}` || '/';
+  if (pattern instanceof RegExp) return `${req.baseUrl || ''}${pattern.source}`;
+  if (Array.isArray(pattern)) return `${req.baseUrl || ''}${pattern.map(String).join('|')}`;
+  const p = req.originalUrl?.split('?')[0] || req.path || '';
+  return p === '/api' || p.startsWith('/api/') ? 'unmatched_api' : 'unmatched';
+}
+
 // Middleware for tracking HTTP metrics
 export const metricsMiddleware = (req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
   
   res.on('finish', () => {
     const duration = (Date.now() - start) / 1000;
-    const route = req.route?.path || req.path || 'unknown';
+    const route = metricsRouteLabel(req);
     
     httpRequestDuration
       .labels(req.method, route, String(res.statusCode))

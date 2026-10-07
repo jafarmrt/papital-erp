@@ -1179,8 +1179,15 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     }
 
     // Test Case C: Valid JWT with non-admin role ('personnel') -> 403 Forbidden
+    // v9.0.128 (TD-599): the guard checks the session live, so C and D use real users
     const secret = getJwtSecret();
-    const personnelToken = jwt.sign({ id: 99, username: 'operator1', role: 'personnel' }, secret, { expiresIn: '1h' });
+    const { ensureAdminTestUser } = await import('../fixtures/httpTestHelper.js');
+    const { orm: metricsOrm } = await import('../../db/drizzle.js');
+    const { users: metricsUsers } = await import('../../db/schema.js');
+    const { eq: metricsEq } = await import('drizzle-orm');
+    const metricsAdmin = await ensureAdminTestUser();
+    const [metricsOperator] = await metricsOrm.insert(metricsUsers).values({ username: `p01_metrics_operator_${Date.now()}`, password: 'x', fullName: 'Metrics operator', role: 'personnel', avatarUrl: '' }).returning();
+    const personnelToken = jwt.sign({ id: metricsOperator.id, username: metricsOperator.username, role: 'personnel', tokenVersion: metricsOperator.tokenVersion ?? 0 }, secret, { expiresIn: '1h' });
     const resC = await runMiddleware({
       headers: { authorization: `Bearer ${personnelToken}` },
       cookies: {}
@@ -1188,9 +1195,11 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     if (resC.statusCode !== 403 || resC.nextCalled) {
       throw new Error('کاربر لاگین‌شده با نقش غیر مدیر (پرسنل) نباید به متریک‌های پرومتئوس دسترسی داشته باشد (403 Forbidden).');
     }
+    await metricsOrm.update(metricsUsers).set({ isDeleted: 1 }).where(metricsEq(metricsUsers.id, metricsOperator.id));
 
     // Test Case D: Valid JWT with 'admin' role -> next() called
-    const adminToken = jwt.sign({ id: 1, username: 'admin', role: 'admin' }, secret, { expiresIn: '1h' });
+    const [adminRow] = await metricsOrm.select({ tokenVersion: metricsUsers.tokenVersion }).from(metricsUsers).where(metricsEq(metricsUsers.id, metricsAdmin.id));
+    const adminToken = jwt.sign({ id: metricsAdmin.id, username: metricsAdmin.username, role: 'admin', tokenVersion: adminRow?.tokenVersion ?? 0 }, secret, { expiresIn: '1h' });
     const mockAdminReq: any = {
       headers: { authorization: `Bearer ${adminToken}` },
       cookies: {}
@@ -1398,6 +1407,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Package 14, PR د (from TD-462): approval inbox rows
   const { runWorkflowInboxTests } = await import('../security/workflowInboxTests.js');
   results.push(...await runWorkflowInboxTests(shouldRunAccess));
+  // Package 1, PR «ب» (TD-582, TD-595, TD-597, TD-599, TD-602): the HTTP edge
+  const { runEdgeHardeningTests } = await import('../security/edgeHardeningChecks.js');
+  results.push(...await runEdgeHardeningTests(shouldRunAccess));
 
   return results;
 }

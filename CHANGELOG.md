@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.125 — Bounded HTTP Metric Labels
+- **Metric Labels (P1):** the HTTP request metrics label a request by its mount prefix and route pattern (`metricsRouteLabel`); a request that matched no route (404, 401 before a router, static files) is counted under `unmatched_api` or `unmatched`. Before, every unknown path, even without login, added series that were never freed (about 10 KB each), so random paths could exhaust the single server process.
+
 ### v9.0.124 — Update Checks Startup on the Configured Port
 - **Update Port:** `update.sh` waits for `/health/startup` on `PORT` from `.env` (written by `install.sh`, read by the server; an `APP_PORT` environment variable still wins, default 3000). Before, a server installed on another port reported "Update NOT completed" after a good update and was offered a backup restore. `setup-domain.sh` reads the port the same way (not covered by a test: it needs root, apt and certbot).
 
