@@ -540,6 +540,13 @@
       "when": 1793150000000,
       "tag": "0076_document_party_id",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1793160000000,
+      "tag": "0077_document_check_constraints",
+      "breakpoints": true
     }
   ]
 }

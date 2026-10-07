@@ -32,7 +32,7 @@ import { releaseReservationsForDocument, type ProjectReservationRelease } from '
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 import { money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
-import { assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
+import { assertDocumentStatus, assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
 import { documentAuditSnapshot, type DocumentAuditChange } from './documentAudit.js';
@@ -317,9 +317,10 @@ export class DocumentCreationService {
     const docType = rawDocType || rawType || 'invoice';
     // v9.0.238 (TD-770، تصمیم ت۲ الف): جهت گردش فقط از نوع سند؛ `inOut` ناسازگار ۴۲۲، انتقال پذیرفته نمی‌شود و نوع ناشناخته
     // ردیف نمی‌گیرد. پیش‌تر «رسید» با `inOut: out` کالا را خارج و سند حسابداری خرید صادر می‌کرد، و `transfer` بی ردیف مقصد خارج می‌کرد
-    assertRecordableDocument(docType, inOut, Array.isArray(docLines) && docLines.length > 0);
+    assertRecordableDocument(docType, inOut);
     // P0-02 (F17 & ACC-03): تعیین امن وضعیت سند؛ پیش‌فاکتور هرگز نباید به عنوان سند نهایی ثبت شود
     const docStatus = status || (docType === 'proforma' ? 'proforma' : 'final');
+    assertDocumentStatus(docStatus);
 
     if (docType === 'proforma' && docStatus === 'final') {
       throw new ValidationError('پیش‌فاکتور نمی‌تواند مستقیماً با وضعیت نهایی (final) صادر شود. لطفاً پیش‌فاکتور را صادر کرده و سپس از طریق فرآیند نهایی‌سازی اقدام فرمایید.');

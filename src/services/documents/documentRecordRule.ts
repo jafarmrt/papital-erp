@@ -15,9 +15,18 @@ import { documentTypeTitle } from '../../lib/documents/documentTypeTitles.js';
  *
  * v9.0.238 (TD-770، تصمیم ت۲ «الف» بسته ۸): جهت گردش فقط از نوع سند (`documentStockDirection`)، در ثبت و نهایی‌سازی؛
  * `inOut` ناسازگار با نوع ۴۲۲ است (نه نادیده) تا فراخواننده‌ای که جهت دیگری می‌فرستد خطایش را ببیند، انتقال بین انبارها
- * از مسیر ثبت سند پذیرفته نمی‌شود، و نوع ناشناخته فقط سربرگ بی‌ردیف است (کالایی جابه‌جا نمی‌کند؛ route فقط نوع‌های ثبت‌شدنی
- * را می‌پذیرد و آزمون‌های شماره‌گذاری سری جدا را با سربرگ نوع ساختگی می‌سازند).
+ * از مسیر ثبت سند پذیرفته نمی‌شود، و از v9.0.289 (TD-786) نوع یا وضعیت ناشناخته هیچ‌گاه ثبت نمی‌شود (پیش‌تر سربرگ بی‌ردیف
+ * نوع ساختگی ثبت می‌شد؛ پایگاه‌داده هم اکنون قید `chk_documents_type` و `chk_documents_status` دارد).
  */
+
+/** وضعیت‌های سند (قید `chk_documents_status`، مهاجرت 0077) */
+export const DOCUMENT_STATUSES: readonly DocumentRecordStatus[] = ['draft', 'proforma', 'final'];
+
+export function assertDocumentStatus(status: string): void {
+  if (!(DOCUMENT_STATUSES as readonly string[]).includes(status)) {
+    throw new ValidationError(`وضعیت سند «${status}» شناخته نیست؛ وضعیت فقط پیش‌نویس، پیش‌فاکتور یا قطعی است.`, { status }, 'DOCUMENT_STATUS_INVALID');
+  }
+}
 
 /** وضعیت سند تازه: وضعیت فرستاده‌شده، وگرنه پیش‌فاکتور برای نوع پیش‌فاکتور و قطعی برای بقیه */
 export function createdDocumentStatus(docType: string, status?: string | null): DocumentRecordStatus {
@@ -27,15 +36,15 @@ export function createdDocumentStatus(docType: string, status?: string | null): 
 
 /**
  * سند از این نوع با این `inOut` ثبت‌شدنی است: نوع جهت‌دار یا انبارگردانی، و `inOut` (اگر آمده) همان جهت نوع. انبارگردانی جهت
- * نوعی ندارد و `inOut` آن خوانده نمی‌شود. انتقال هرگز پذیرفته نمی‌شود؛ نوع ناشناخته فقط وقتی سند ردیف ندارد (`hasLines`
- * false)، چون ردیفش جهت گردش و سند حسابداری ندارد.
+ * نوعی ندارد و `inOut` آن خوانده نمی‌شود. انتقال هرگز پذیرفته نمی‌شود. v9.0.289 (TD-786): نوع ناشناخته حتی بی ردیف هم ثبت
+ * نمی‌شود (پیش‌تر سند بی ردیفِ هر نوعی ثبت می‌شد)؛ قید `chk_documents_type` پایگاه‌داده هم همین را می‌خواهد.
  */
-export function assertRecordableDocument(docType: string, inOut?: string | null, hasLines = true): void {
-  if (docType === 'transfer' || (hasLines && !isRecordableDocumentType(docType))) {
+export function assertRecordableDocument(docType: string, inOut?: string | null): void {
+  if (docType === 'transfer' || !isRecordableDocumentType(docType)) {
     throw new ValidationError(
       docType === 'transfer'
         ? 'انتقال بین انبارها فقط از صفحه «انتقال بین انبارها» ثبت می‌شود.'
-        : `نوع سند «${docType}» جهت گردش کالا ندارد و ردیف کالا نمی‌پذیرد.`,
+        : `نوع سند «${docType}» شناخته نیست؛ سند فقط از نوع‌های رسید، خرید، فاکتور، پیش‌فاکتور، برگشت، حواله، ضایعات، انبارگردانی و رسید تولید ثبت می‌شود.`,
       { docType },
       'DOCUMENT_TYPE_NOT_RECORDABLE',
     );

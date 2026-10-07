@@ -27,6 +27,7 @@ import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from 
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from '../documents/documentParty.js';
+import { buildDocumentIntegrityHealthTest, findDocumentIntegrityGaps } from '../documents/documentConstraintHealth.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
@@ -1187,6 +1188,8 @@ export class FinancialHealthService {
     tests.push(buildPayrollVoucherHealthTest(await findPayrollVoucherMismatches()));
     // آزمون ۳۸: v9.0.287 (TD-778) سند فروش و خرید با نام خریدار و بی شناسه طرف حساب (فقط فهرست، بی بازنویسی)
     tests.push(buildUnlinkedPartyDocumentHealthTest(await findUnlinkedPartyDocuments()));
+    // آزمون ۳۹: v9.0.289 (TD-786) قید پایگاه‌داده سند و ردیف سند اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)
+    tests.push(buildDocumentIntegrityHealthTest(await findDocumentIntegrityGaps()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

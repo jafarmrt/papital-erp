@@ -72,7 +72,6 @@
 | TD-683 | پیشخوان (بسته ۱۶) | P3 (B16-19) — بنر شخصی داشبورد ساعت دستگاه را نشان می‌دهد، نه ساعت توافقی: با `TZ=UTC` در ۰۰:۳۰ تهران روز نوروز ۱۴۰۵ بنر «جمعه، ۲۹ اسفند ۱۴۰۴» و ساعت ۲۱:۰۰ نشان داد، در حالی که `getTodayJalaliDate()` = ۱۴۰۵/۰۱/۰۱ | PersonalBanner.tsx | open (P3) |
 | TD-684 | پوسته (بسته ۱۶) | P3 (B16-20) — `executePrint` پاک‌سازی چاپ را دو بار اجرا می‌کند: `onAfterPrint` دو بار صدا زده شد؛ عنوان صفحه ۲ ثانیه بعد بازنشانی شد و عنوان تازه‌تر را پاک کرد؛ کلاس `printing-doc` با پنجره هنوز باز برداشته شد | printHelper.ts | open (P3) |
 | TD-686 | پوسته (بسته ۱۶) | P3 (B16-22) — آوانویسی و انگلیسی در رابط پوسته (قاعده ۱۰): ورکفلو، تسک، متریال، آلارم، دیتابیس، فلگ، اندپوینت، کانفیگ، فرانت، بک‌اند، باندل، ری‌استارت، اتوماسیون، استراتژی، پروفایل، ماژول، پروتکل، توکن، «TOMAN»، «Drag & Drop»، «Paste (Ctrl+V)»، «KB»، «Invalid time value»، «Tech Stack»، «AGENTS.md» و `⌘K` | CustomizableShortcuts.tsx، settingsNavigationConfig.ts، SystemConfigTab.tsx، GeneralSettingsTab.tsx، SettingsPage.tsx، menuConfig.ts، Sidebar.tsx، TopBar.tsx، ModernPersianDropzone.tsx، ChangelogPage.tsx، GlobalHeaderSearch.tsx | open (P3، تصمیم ت۷) |
-| TD-786 | اسناد (بسته ۸) | P3 (B08-17) — `documents.type` و `status` و `quantity`، `unit_price` و `discount` ردیف قید CHECK ندارند؛ دو ایندکس هم‌پوشان روی `documents.project_id` | schema/documents، drizzle | open (P3) |
 | TD-787 | اسناد (بسته ۸) | P3 (B08-18) — `GET /documents` بی `page` و `limit` کل جدول را با ردیف‌ها و تسویه‌ها برمی‌گرداند: ۲۰٬۰۵۰ سند ۴٫۹ تا ۶٫۵ ثانیه و ۲۷٫۹ مگابایت (صفحه ۵۰ تایی ۱۲ تا ۲۶ میلی‌ثانیه) | documentQuery.service.ts، useInventoryAuditQueries.ts | open (P3) |
 | TD-795 | اسناد (بسته ۸) | P3 (B08-26) — دکمه‌های «تسویه سریع»، «چرخه تأییدات»، «ابطال» و یادداشت ردیف فهرست فاکتورها مجوز را نمی‌سنجند؛ خطای یادداشت همیشه «خطا در بروزرسانی توضیحات» است | InvoiceRowActions.tsx، InvoiceRowNotesCell.tsx، useInvoiceListActions.ts | open (P3) |
 | TD-796 | اسناد (بسته ۸) | P3 (B08-27) — ثبت سند انبار، ابطال و تسویه کالاها، کاردکس، اسناد حسابداری، پیشخوان، پرونده‌های فروش، رزرو، حساب‌های بانکی و خزانه را باطل نمی‌کنند و تا ۵ دقیقه کهنه می‌مانند | useStockDocumentSubmit.ts، useInvoiceListActions.ts، useInvoiceListQuery.ts | open (P3) |
@@ -102,8 +101,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۸۱ ردیف
-- **آرشیو شده (resolved):** ۶۴۱ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۸۰ ردیف
+- **آرشیو شده (resolved):** ۶۴۲ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -112,4 +111,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.288 — TD-785 (ردپای ممیزی اسناد، P3) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.289 — TD-786 (قیدهای پایگاه‌داده اسناد، P3) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

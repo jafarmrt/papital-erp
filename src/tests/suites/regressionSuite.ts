@@ -2464,29 +2464,31 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_fiscal_year_ref_isolation_td_152_153', 'td152', 'td153', 'ref_counters', 'duplicate_refs')) {
     const t26Start = Date.now();
     const createdDocIds: number[] = [];
-    const testDocTypeInv = 'reg_test_inv';
-    const testDocTypeRec = 'reg_test_rec';
+    // v9.0.289 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in far past fiscal years (1390 and
+    // 1391) that no other case writes, and removes only those two counter rows
+    const testDocTypeInv = 'waste';
+    const testYears = [1390, 1391];
     try {
-      // 1. Setup existing synthetic document in fiscal year 1404 with high ref number '888'
-      // 1404/05/10 is approximately 2025-08-01
+      // 1. Setup existing synthetic document in fiscal year 1390 with high ref number '888'
+      // 1390/05/10 is approximately 2011-08-01
       const [doc1404] = await orm.insert(documents).values({
         type: testDocTypeInv,
         refNumber: '888',
-        date: '2025-08-01 10:00:00',
+        date: '2011-08-01 10:00:00',
         user: 'test-agent',
         status: 'final'
       }).returning({ id: documents.id });
       createdDocIds.push(doc1404.id);
 
-      // 2. TD-152: Peek and Next for fiscal year 1405 (a new year with no documents yet of this type)
-      // 1405/05/10 is approximately 2026-08-01
+      // 2. TD-152: Peek and Next for fiscal year 1391 (a new year with no documents yet of this type)
+      // 1391/05/10 is approximately 2012-08-01
       // Must return '1' (or startNumber), NOT '889'
-      const peek1405 = await DocumentService.peekNextRef(testDocTypeInv, '2026-08-01');
+      const peek1405 = await DocumentService.peekNextRef(testDocTypeInv, '2012-08-01');
       if (peek1405 !== '1') {
         throw new Error(`شماره پیش‌نمایش سال مالی جدید باید 1 باشد اما ${peek1405} برگردانده شد (عدم ایزولاسیون سال مالی TD-152)`);
       }
 
-      const next1405 = await DocumentService.getNextRef(testDocTypeInv, '2026-08-01');
+      const next1405 = await DocumentService.getNextRef(testDocTypeInv, '2012-08-01');
       if (next1405 !== '1') {
         throw new Error(`شماره عطف سال مالی جدید باید 1 باشد اما ${next1405} تولید شد`);
       }
@@ -2495,20 +2497,20 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const [doc1405] = await orm.insert(documents).values({
         type: testDocTypeInv,
         refNumber: next1405,
-        date: '2026-08-01 10:00:00',
+        date: '2012-08-01 10:00:00',
         user: 'test-agent',
         status: 'final'
       }).returning({ id: documents.id });
       createdDocIds.push(doc1405.id);
 
-      // Verify next for 1405 is now '2'
-      const next1405Again = await DocumentService.getNextRef(testDocTypeInv, '2026-08-01');
+      // Verify next for 1391 is now '2'
+      const next1405Again = await DocumentService.getNextRef(testDocTypeInv, '2012-08-01');
       if (next1405Again !== '2') {
         throw new Error(`شماره بعدی سال 1405 باید 2 باشد اما ${next1405Again} تولید شد`);
       }
 
-      // Also verify that for fiscal year 1404, cold start still sees '888' and yields '889'
-      const peek1404 = await DocumentService.peekNextRef(testDocTypeInv, '2025-08-01');
+      // Also verify that for fiscal year 1390, cold start still sees '888' and yields '889'
+      const peek1404 = await DocumentService.peekNextRef(testDocTypeInv, '2011-08-01');
       if (peek1404 !== '889') {
         throw new Error(`شماره پیش‌نمایش سال 1404 باید 889 باشد اما ${peek1404} برگردانده شد`);
       }
@@ -2538,8 +2540,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (createdDocIds.length > 0) {
         await cleanTestTableData('documents', 'id', createdDocIds);
       }
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocTypeInv));
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocTypeRec));
+      await orm.delete(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocTypeInv), inArray(documentRefCounters.fiscalYear, testYears)));
     }
   }
 
@@ -2547,12 +2548,14 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_fiscal_year_ref_unique_scope_td_178', 'td178', 'ref_counters', 'duplicate_refs', 'fiscal_year')) {
     const tStart = Date.now();
     const createdDocIds: number[] = [];
-    const testDocType = 'reg_test_fy178';
+    // v9.0.289 (TD-786): a real type (documents.type has a CHECK constraint) in fiscal years 1392 and 1393, which no other case writes
+    const testDocType = 'remittance';
+    const testYears = [1392, 1393];
     try {
-      // 1. شماره‌گذاری خودکار در سال ۱۴۰۴ و سپس سال ۱۴۰۵ — هر دو باید «1» باشند و هر دو با موفقیت درج شوند
-      const doc1404 = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2025-08-01', items: [], user: 'test-agent' });
+      // 1. شماره‌گذاری خودکار در سال ۱۳۹۲ و سپس سال ۱۳۹۳ — هر دو باید «1» باشند و هر دو با موفقیت درج شوند
+      const doc1404 = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2013-08-01', items: [], user: 'test-agent' });
       createdDocIds.push(doc1404);
-      const doc1405 = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-01', items: [], user: 'test-agent' });
+      const doc1405 = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2014-08-01', items: [], user: 'test-agent' });
       createdDocIds.push(doc1405);
 
       const rows = await orm
@@ -2561,18 +2564,18 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         .where(inArray(documents.id, createdDocIds));
       const r1404 = rows.find(r => r.id === doc1404);
       const r1405 = rows.find(r => r.id === doc1405);
-      if (r1404?.refNumber !== '1' || r1404?.refFiscalYear !== 1404) {
-        throw new Error(`سند سال ۱۴۰۴ باید شماره «1» و سال مالی 1404 داشته باشد: ${JSON.stringify(r1404)}`);
+      if (r1404?.refNumber !== '1' || r1404?.refFiscalYear !== 1392) {
+        throw new Error(`سند سال ۱۳۹۲ باید شماره «1» و سال مالی 1392 داشته باشد: ${JSON.stringify(r1404)}`);
       }
-      if (r1405?.refNumber !== '1' || r1405?.refFiscalYear !== 1405) {
-        throw new Error(`سند سال ۱۴۰۵ باید شماره «1» و سال مالی 1405 داشته باشد (برخورد بین‌سالی): ${JSON.stringify(r1405)}`);
+      if (r1405?.refNumber !== '1' || r1405?.refFiscalYear !== 1393) {
+        throw new Error(`سند سال ۱۳۹۳ باید شماره «1» و سال مالی 1393 داشته باشد (برخورد بین‌سالی): ${JSON.stringify(r1405)}`);
       }
 
       // 2. شماره تکراری در همان سال مالی همچنان باید توسط دیتابیس رد شود
       let sameYearRejected = false;
       try {
         const [dup] = await orm.insert(documents).values({
-          type: testDocType, refNumber: '1', refFiscalYear: 1405, date: '2026-09-01 10:00:00', user: 'test-agent', status: 'draft'
+          type: testDocType, refNumber: '1', refFiscalYear: 1393, date: '2014-09-01 10:00:00', user: 'test-agent', status: 'draft'
         }).returning({ id: documents.id });
         createdDocIds.push(dup.id);
       } catch {
@@ -2607,7 +2610,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (createdDocIds.length > 0) {
         await cleanTestTableData('documents', 'id', createdDocIds);
       }
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
+      await orm.delete(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocType), inArray(documentRefCounters.fiscalYear, testYears)));
     }
   }
 
@@ -3283,14 +3286,16 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_ref_counter_long_manual_ref_td_196', 'td196', 'ref_counters', 'refnumber')) {
     const tStart = Date.now();
     const createdDocIds: number[] = [];
-    const testDocType = 'reg_test_td196';
+    // v9.0.289 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in a fiscal year no other case writes
+    const testDocType = 'waste';
+    const testYear = 1394;
     try {
       // ۱) سند با شماره دستی ۱۳ رقمی پیش از اولین شماره خودکار این نوع سند در سال مالی
-      const manualId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-01', refNumber: `MAN-${1790882288234}`, items: [], user: 'test-agent' });
+      const manualId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2015-08-01', refNumber: `MAN-${1790882288234}`, items: [], user: 'test-agent' });
       createdDocIds.push(manualId);
       // ۲) شماره‌گذاری خودکار باید کار کند و از سقف شمارنده عبور نکند
-      const peek = await DocumentService.peekNextRef(testDocType, '2026-08-02');
-      const autoId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-02', items: [], user: 'test-agent' });
+      const peek = await DocumentService.peekNextRef(testDocType, '2015-08-02');
+      const autoId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2015-08-02', items: [], user: 'test-agent' });
       createdDocIds.push(autoId);
       const [autoDoc] = await orm.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, autoId));
       if (autoDoc?.refNumber !== '1' || peek !== '1') {
@@ -3321,7 +3326,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (createdDocIds.length > 0) {
         await cleanTestTableData('documents', 'id', createdDocIds);
       }
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
+      await orm.delete(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocType), eq(documentRefCounters.fiscalYear, testYear)));
     }
   }
 
@@ -3329,21 +3334,23 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_ref_counter_numeric_suffix_p3_10', 'p310', 'ref_counters', 'refnumber')) {
     const tStart = Date.now();
     const createdDocIds: number[] = [];
-    const testDocType = 'reg_test_p3_10';
+    // v9.0.289 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in a fiscal year no other case writes
+    const testDocType = 'waste';
+    const testYear = 1395;
     const testName = 'v7.0.60: شماره دستی «INV-1403-0005» شمارنده را به ۵ می‌برد، نه 14030005 (P3-10)';
     try {
       // ۱) همگام‌سازی شمارنده با شماره دستی در createDocument
-      const manualId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-01', refNumber: 'INV-1403-0005', items: [], user: 'test-agent' });
+      const manualId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2016-08-01', refNumber: 'INV-1403-0005', items: [], user: 'test-agent' });
       createdDocIds.push(manualId);
-      const autoId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-02', items: [], user: 'test-agent' });
+      const autoId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2016-08-02', items: [], user: 'test-agent' });
       createdDocIds.push(autoId);
       const [autoDoc] = await orm.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, autoId));
       if (autoDoc?.refNumber !== '6') {
         throw new Error(`شماره خودکار پس از «INV-1403-0005» باید «6» باشد: ${autoDoc?.refNumber}`);
       }
       // ۲) مقداردهی اولیه شمارنده از روی اسناد موجود (شروع سرد) نیز فقط پسوند عددی را می‌خواند
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
-      const peek = await DocumentService.peekNextRef(testDocType, '2026-08-03');
+      await orm.delete(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocType), eq(documentRefCounters.fiscalYear, testYear)));
+      const peek = await DocumentService.peekNextRef(testDocType, '2016-08-03');
       if (peek !== '7') {
         throw new Error(`پیش‌نمایش شماره پس از شروع سرد باید «7» باشد: ${peek}`);
       }
@@ -3372,7 +3379,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (createdDocIds.length > 0) {
         await cleanTestTableData('documents', 'id', createdDocIds);
       }
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
+      await orm.delete(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocType), eq(documentRefCounters.fiscalYear, testYear)));
     }
   }
 
@@ -3380,7 +3387,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_ref_fiscal_year_exact_nowruz_td_179', 'td179', 'nowruz', 'ref_fiscal_year')) {
     const tStart = Date.now();
     const createdDocIds: number[] = [];
-    const testDocType = 'reg_test_td179';
+    // v9.0.289 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in a fiscal year no other case writes
+    const testDocType = 'waste';
     const testName = 'v7.0.62: سند ۲۰ مارس ۲۰۲۴ (نوروز ۱۴۰۳) در سال ۱۴۰۳ شماره می‌خورد و ردیف‌های مرزی قدیمی با گزارش اصلاح می‌شوند (TD-179)';
     try {
       const violations: string[] = [];
@@ -3463,7 +3471,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await cleanTestTableData('ref_fiscal_year_corrections', 'document_id', createdDocIds);
         await cleanTestTableData('documents', 'id', createdDocIds);
       }
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
+      await orm.delete(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocType), inArray(documentRefCounters.fiscalYear, [1402, 1403])));
     }
   }
 

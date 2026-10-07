@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.289 — v9.0.289 — Database Rules for Documents
+- **Document constraints:** the database now refuses an unknown document type or status and a negative line quantity, price or discount; the document service refuses an unknown type or status even without lines, legacy rows are listed by the health check and a duplicate index on the project link was removed (TD-786).
+
 ### v9.0.288 — v9.0.288 — One Audit Row per Document Change
 - **Document audit trail:** creating, editing, finalizing, changing the notes of and voiding a document each write one audit row in the same transaction with the stored document before and after; a void writes one row instead of two and the invoice event carries the buyer name (TD-785).
 

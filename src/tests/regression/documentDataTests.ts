@@ -19,6 +19,9 @@ export async function runDocumentDataTests(shouldRun: ShouldRun): Promise<TestCa
     ['reg_document_audit_trail_td_785',
       'v9.0.288: every change of a document writes one audit row in its own transaction with the stored document before and after: create, edit, finalize, a final invoice\'s notes and a void (one DELETE row), and the invoice event carries the buyer name (TD-785)',
       ['td785', 'documents', 'audit', 'package8'], documentAuditTrailCase],
+    ['reg_document_check_constraints_td_786',
+      'v9.0.289: the database refuses an unknown document type or status and a negative line quantity, unit price or discount (a counted zero stays possible), the service refuses an unknown type or status, a legacy row leaves its constraint NOT VALID and is listed by the health check, and documents.project_id has one index (TD-786)',
+      ['td786', 'documents', 'constraint', 'package8'], documentCheckConstraintsCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -285,4 +288,114 @@ async function documentAuditTrailCase(h: Harness, wrong: string[]): Promise<stri
     wrong.push(`the void wrote ${deletes.length} DELETE rows (${deletes.map(show).join(' | ')}), expected one with the final invoice ${ref} before it`);
   }
   return `invoice ${ref}: CREATE (stored after), edit, finalize and notes UPDATE rows with before and after, one DELETE row; event buyer ${buyer}`;
+}
+
+/** B08-17 (TD-786): documents and document lines had no CHECK constraints and documents.project_id had two identical indexes */
+async function documentCheckConstraintsCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const { orm } = await import('../../db/drizzle.js');
+  const { sql } = await import('drizzle-orm');
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const names = ['chk_documents_type', 'chk_documents_status', 'chk_document_items_quantity', 'chk_document_items_unit_price', 'chk_document_items_discount'];
+  const pgCode = (err: unknown): string | undefined => {
+    for (let e: unknown = err, depth = 0; e && typeof e === 'object' && depth < 3; e = (e as { cause?: unknown }).cause, depth++) {
+      const code = (e as { code?: unknown }).code;
+      if (typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code)) return code;
+    }
+    return undefined;
+  };
+  const refused = async (label: string, write: () => Promise<unknown>) => {
+    try {
+      await write();
+      wrong.push(`${label} was stored, expected 23514`);
+    } catch (err) {
+      if (pgCode(err) !== '23514') wrong.push(`${label} failed with ${pgCode(err)} instead of 23514: ${String(err).slice(0, 160)}`);
+    }
+  };
+
+  // 1) the migrated schema: every constraint present and validated, one index on project_id
+  const constraints = await h.q(`SELECT conname, convalidated FROM pg_constraint WHERE conname = ANY($1::text[])`, [names]) as Array<{ conname: string; convalidated: boolean }>;
+  for (const name of names) {
+    const row = constraints.find(c => c.conname === name);
+    if (!row?.convalidated) wrong.push(`constraint ${name} is ${row ? 'NOT VALID' : 'missing'}, expected validated`);
+  }
+  const indexes = (await h.q(`SELECT indexname FROM pg_indexes WHERE tablename = 'documents' AND schemaname = current_schema() AND indexdef LIKE '%(project_id)%'`) as Array<{ indexname: string }>)
+    .map(r => r.indexname).sort();
+  if (indexes.join(',') !== 'idx_docs_project') wrong.push(`documents.project_id indexes: ${indexes.join(', ') || 'none'}, expected only idx_docs_project`);
+
+  // 2) direct writes the services never make: refused by the database (a soft-deleted line is exempt)
+  const item = await f.item(10, 1_000);
+  const receipt = await h.post('/api/documents', f.doc('receipt', 'draft', [{ itemId: item, quantity: 1, unit_price: 1_000, location: f.wh }]));
+  const receiptId = docIdOf(receipt);
+  if (receipt.status !== 200 || !receiptId) throw new Error(`setup: receipt ${brief(receipt)}`);
+  const doc = (type: string, status: string) => h.q(`INSERT INTO documents (type, ref_number, date, status) VALUES ($1, $2, now(), $3) RETURNING id`, [type, `P8E-${h.tag}-${type}-${status}`, status]);
+  const line = (quantity: number, unitPrice: number, discount: number, isDeleted = 0) => h.q(
+    `INSERT INTO document_items (document_id, item_id, quantity, unit_price, discount, location, is_deleted) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [receiptId, item, quantity, unitPrice, discount, f.wh, isDeleted],
+  );
+  await refused('a document of type quote', () => doc('quote', 'draft'));
+  await refused('a document with status pending', () => doc('receipt', 'pending'));
+  await refused('a line with quantity -1', () => line(-1, 1_000, 0));
+  await refused('a line with unit price -1', () => line(1, -1, 0));
+  await refused('a line with discount -1', () => line(1, 1_000, -1));
+  try {
+    await line(1, 1_000, -1, 1);
+  } catch (err) {
+    wrong.push(`a soft-deleted line with discount -1 was refused (${pgCode(err)}), expected it to be exempt`);
+  }
+
+  // 3) a counted zero is still a stock count line
+  const counted = await h.post('/api/documents', f.doc('audit', 'final', [{ itemId: item, physical_stock: 0, system_stock: 10, location: f.wh }], { location: f.wh }));
+  const countedQty = await h.q(`SELECT quantity::float8 AS q FROM document_items WHERE document_id = $1 AND is_deleted = 0`, [docIdOf(counted)]) as Array<{ q: number }>;
+  if (counted.status !== 200 || countedQty.length !== 1 || countedQty[0].q !== 0 || await f.stock(item) !== 0) {
+    wrong.push(`a count of zero answered ${brief(counted)} with lines ${JSON.stringify(countedQty)} and stock ${await f.stock(item)}, expected 200, one line of 0 and stock 0`);
+  }
+
+  // 4) the document service refuses an unknown type or status before writing (was: a header row of any type or status)
+  const { DocumentService } = await import('../../services/document.service.js');
+  const serviceCode = (body: Record<string, unknown>) => DocumentService.createDocument({ date: f.today, items: [], user: 'test-agent', ...body } as never)
+    .then(id => `recorded #${id}`, (err: { code?: string }) => String(err?.code));
+  const unknownType = await serviceCode({ docType: 'quote', status: 'draft' });
+  if (unknownType !== 'DOCUMENT_TYPE_NOT_RECORDABLE') wrong.push(`the service answered ${unknownType} for a draft of type quote, expected DOCUMENT_TYPE_NOT_RECORDABLE`);
+  const unknownStatus = await serviceCode({ docType: 'receipt', status: 'pending' });
+  if (unknownStatus !== 'DOCUMENT_STATUS_INVALID') wrong.push(`the service answered ${unknownStatus} for a receipt with status pending, expected DOCUMENT_STATUS_INVALID`);
+
+  // 5) a legacy row from before the constraint: the migration leaves that constraint NOT VALID and the health check lists it
+  //    (inside a transaction that is rolled back, so the shared test schema keeps its validated constraints)
+  const dir = path.resolve(process.cwd(), 'drizzle');
+  const file = fs.readdirSync(dir).find(name => name.endsWith('_document_check_constraints.sql'));
+  if (!file) {
+    wrong.push('the document constraint migration file is missing');
+    return 'constraints missing';
+  }
+  const health = await import('../../services/documents/documentConstraintHealth.js').catch(() => null);
+  const rollback = new Error('rollback');
+  let legacyReport = '';
+  try {
+    await orm.transaction(async (tx) => {
+      // zero-quantity lines other cases may have left are counted before, so only this case's legacy rows are compared
+      const zeroBefore = health ? (await health.findDocumentIntegrityGaps(tx)).find(g => g.name === 'document_items_quantity_zero')?.brokenRows ?? 0 : 0;
+      await tx.execute(sql`ALTER TABLE documents DROP CONSTRAINT IF EXISTS chk_documents_status`);
+      await tx.execute(sql`INSERT INTO documents (type, ref_number, date, status) VALUES ('receipt', ${`P8E-${h.tag}-legacy`}, now(), 'pending')`);
+      await tx.execute(sql`INSERT INTO document_items (document_id, item_id, quantity, unit_price, discount, location) VALUES (${receiptId}, ${item}, 0, 1000, 0, ${f.wh})`);
+      await tx.execute(sql.raw(fs.readFileSync(path.join(dir, file), 'utf8')));
+      const state = await tx.execute(sql`SELECT conname, convalidated FROM pg_constraint WHERE conname = ANY(${sql.param(names)}::text[])`);
+      const rows = state.rows as Array<{ conname: string; convalidated: boolean }>;
+      const status = rows.find(r => r.conname === 'chk_documents_status');
+      if (status?.convalidated !== false) wrong.push(`chk_documents_status over a legacy row is ${JSON.stringify(status ?? null)}, expected NOT VALID`);
+      if (rows.filter(r => r.conname !== 'chk_documents_status').some(r => !r.convalidated)) wrong.push(`other constraints over the legacy rows: ${JSON.stringify(rows)}`);
+      const gaps = health ? await health.findDocumentIntegrityGaps(tx) : [];
+      legacyReport = gaps
+        .map(g => `${g.name}:${g.state}:${g.name === 'document_items_quantity_zero' ? g.brokenRows - zeroBefore : g.brokenRows}`)
+        .sort().join(', ');
+      if (legacyReport !== 'chk_documents_status:not_valid:1, document_items_quantity_zero:service:1') {
+        wrong.push(`the health check lists ${legacyReport || 'nothing'}, expected chk_documents_status (NOT VALID, 1 row) and document_items_quantity_zero (1 row)`);
+      }
+      throw rollback;
+    });
+  } catch (err) {
+    if (err !== rollback) wrong.push(`the legacy rerun failed: ${String(err).slice(0, 200)}`);
+  }
+  return `constraints validated, one project_id index; type, status and negative line values refused (23514); a counted zero stored; the service refuses quote and pending; legacy rerun lists ${legacyReport}`;
 }
