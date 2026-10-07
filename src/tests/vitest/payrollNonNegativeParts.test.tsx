@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 vi.mock('../../api', () => ({ fetchJson: async () => ({ outstandingAdvance: 500000, totalAdvances: 500000, totalDeducted: 0 }) }));
-vi.mock('../../hooks/useAppCurrency', () => ({ useAppCurrency: () => 'IRR' }));
+vi.mock('../../hooks/useAppCurrency', async () => {
+  const { rialDisplayOf } = await vi.importActual<typeof import('../../lib/rialDisplay')>('../../lib/rialDisplay');
+  return { useAppCurrency: () => 'IRR', useRialDisplay: () => rialDisplayOf('IRR') };
+});
 
 import { PieceworkPayrollModal } from '../../components/piecework/PieceworkPayrollModal';
 

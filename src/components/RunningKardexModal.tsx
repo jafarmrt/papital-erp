@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { X, RefreshCw, ArrowDownRight, ArrowUpRight, Download, Search, Layers, ShieldCheck } from 'lucide-react';
 import * as xlsx from 'xlsx';
-import { formatPersianNumber, formatPersianPrice, formatPersianDate, errorMessageOf } from '../utils';
-import { useAppCurrency } from '../hooks/useAppCurrency';
+import { formatPersianNumber, formatPersianDate, errorMessageOf } from '../utils';
+import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useItemKardexQuery } from '../hooks/queries/useTransactionQueries';
 import { runningKardexEntryLabel, type RunningKardexEntry } from '../lib/transactions/runningKardex';
 import { toast } from 'react-hot-toast';
@@ -17,7 +17,7 @@ interface RunningKardexModalProps {
 const NO_ENTRIES: RunningKardexEntry[] = [];
 
 export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningKardexModalProps) {
-  const appCurrency = useAppCurrency();
+  const rial = useRialDisplay();
   const [search, setSearch] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [filterType, setFilterType] = useState<'all' | 'in' | 'out'>('all');
@@ -63,13 +63,13 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
         'نوع تراکنش': e.type === 'in' ? 'ورود به انبار' : 'خروج از انبار',
         'مقدار': e.quantity,
         'واحد': data.item?.unit || '',
-        'قیمت واحد': e.unitPrice,
-        'مبلغ کل': e.totalAmount,
+        'قیمت واحد (ریال)': e.unitPrice,
+        'مبلغ کل (ریال)': e.totalAmount,
         'انبار / موقعیت': e.location,
         'مانده در این انبار': e.runningLocationStock,
         'مانده کل موجودی': e.runningGlobalStock ?? e.runningBalance,
-        'میانگین موزون بها': e.runningWac,
-        'ارزش کل مانده': e.runningTotalValue,
+        'میانگین موزون بها (ریال)': e.runningWac,
+        'ارزش کل مانده (ریال)': e.runningTotalValue,
         'شماره سند/عطف': e.documentRef,
         'نوع سند': e.documentType,
         'وضعیت': runningKardexEntryLabel(e),
@@ -194,11 +194,11 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                 <div className="bg-amber-50/70 border border-amber-200 p-4 rounded-xl space-y-1 text-xs">
                   <div className="flex justify-between items-center text-amber-900">
                     <span>میانگین موزون بها:</span>
-                    <strong className="text-amber-950 font-mono">{formatPersianPrice(data.item?.weightedAverageCost, appCurrency)}</strong>
+                    <strong className="text-amber-950 font-mono">{rial.amount(data.item?.weightedAverageCost)}</strong>
                   </div>
                   <div className="flex justify-between items-center text-slate-500">
-                    <span>ارزش ریالی موجودی:</span>
-                    <strong className="text-slate-800 font-mono text-sm">{formatPersianPrice(data.summary?.valuation, appCurrency)}</strong>
+                    <span>ارزش موجودی:</span>
+                    <strong className="text-slate-800 font-mono text-sm">{rial.amount(data.summary?.valuation)}</strong>
                   </div>
                   <div className="text-[10px] text-slate-400">
                     محاسبه شده بر مبنای آخرین گردش‌های ورود
@@ -287,8 +287,8 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                       <th className="p-3 text-center">موقعیت انبار</th>
                       <th className="p-3 text-center">مانده انبار</th>
                       <th className="p-3 text-center">مانده کل لحظه‌ای</th>
-                      <th className="p-3 text-center">قیمت واحد</th>
-                      <th className="p-3 text-center">میانگین موزون بها</th>
+                      <th className="p-3 text-center">{`قیمت واحد (${rial.label})`}</th>
+                      <th className="p-3 text-center">{`میانگین موزون بها (${rial.label})`}</th>
                       <th className="p-3">شماره سند / عطف</th>
                       <th className="p-3">توضیحات و کاربر</th>
                     </tr>
@@ -334,10 +334,10 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                               {formatPersianNumber(entry.runningGlobalStock)}
                             </td>
                             <td className="p-3 text-center font-mono text-slate-600">
-                              {entry.unitPrice > 0 ? formatPersianPrice(entry.unitPrice) : '-'}
+                              {entry.unitPrice > 0 ? rial.number(entry.unitPrice) : '-'}
                             </td>
                             <td className="p-3 text-center font-mono text-amber-800 font-medium">
-                              {(entry.runningWac ?? 0) > 0 ? formatPersianPrice(entry.runningWac) : '-'}
+                              {(entry.runningWac ?? 0) > 0 ? rial.number(entry.runningWac) : '-'}
                             </td>
                             <td className="p-3">
                               <div className="font-mono text-slate-800 font-medium">{entry.documentRef || '-'}</div>

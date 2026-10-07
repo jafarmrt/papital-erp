@@ -3,7 +3,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { Cheque } from '../../types';
 
 vi.mock('../../hooks/accounting/useChequeQueries', () => ({ useChequeReconciliationReport: () => ({ data: [], loading: false }) }));
-vi.mock('../../hooks/useAppCurrency', () => ({ useAppCurrency: () => 'IRR' }));
+vi.mock('../../hooks/useAppCurrency', async () => {
+  const { rialDisplayOf } = await vi.importActual<typeof import('../../lib/rialDisplay')>('../../lib/rialDisplay');
+  return { useAppCurrency: () => 'IRR', useRialDisplay: () => rialDisplayOf('IRR') };
+});
 vi.mock('../../utils/clipboard', () => ({ copyToClipboard: async () => false }));
 const toastError = vi.fn();
 vi.mock('react-hot-toast', () => {

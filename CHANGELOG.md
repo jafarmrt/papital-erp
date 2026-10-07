@@ -19,6 +19,18 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.278 — v9.0.278 — Approved Persian Words in the Shell and Settings
+- **Shell wording (TD-686):** the sidebar, top bar, dashboard, settings, setup and connection error messages use the owner's Persian glossary instead of transliterations and English words; only «کاردکس», «ترنسفر» and «وبهوک» stay transliterated.
+
+### v9.0.277 — v9.0.277 — Receipts Page Opens for Those Who Record Its Documents
+- **Receipts page access (B16-04, TD-668 follow-up):** the stock in/out page opens for `warehouse.in`, `warehouse.out` or `documents.finalize`, the keys saving its documents asks, instead of `documents.view` / `documents.create`, which opened the page but could not save.
+
+### v9.0.276 — v9.0.276 — Settings Values Are Validated
+- **Settings validation (TD-672):** movement days must be whole numbers from 1 to 3650 with fast < slow < dead and the currency setting is rial or toman (422 otherwise); the dashboard falls back to the defaults 30 / 90 / 180 when a stored value is invalid.
+
+### v9.0.275 — v9.0.275 — Currency Setting Is the Rial Display Unit
+- **Rial display unit (TD-667):** the currency setting is now only the display unit of rial amounts, rial or toman (toman = rial ÷ 10); a record with its own foreign currency keeps it, and amount inputs and Excel exports stay in rial.
+
 ### v9.0.274 — v9.0.274 — A Sales Return Gives Back Its Share of the Invoice VAT
 - **Documents:** a sales return of an invoice takes that invoice's VAT percent and its share of the invoice VAT for the returned net, so a full return in parts gives back exactly the invoice VAT, and its voucher debits VAT payable; before, a full return of a 1,000,000 invoice at 10% left the customer owing 100,000 and VAT payable 100,000 too high (TD-774).
 
