@@ -5981,7 +5981,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (deletedVoucherLines.length !== 2) {
         throw new Error('آرتیکل‌های قبلی سند به درستی سافت‌دلیت نشده‌اند.');
       }
-      if (activeVoucherLines.length !== 2 || Number(activeVoucherLines[0].debit || activeVoucherLines[1].debit) !== 800000) {
+      // v9.0.202: rows come back in no fixed order and a zero Money is truthy, so the debit total is compared
+      const activeDebit = activeVoucherLines.reduce((sum, line) => sum + Number(line.debit ?? 0), 0);
+      if (activeVoucherLines.length !== 2 || activeDebit !== 800000) {
         throw new Error('آرتیکل‌های جدید سند فعال نیستند یا مبلغ آنها تطابق ندارد.');
       }
 

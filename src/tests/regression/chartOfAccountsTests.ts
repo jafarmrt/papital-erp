@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { and, eq, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { accounts, appSettings, journalVoucherItems, journalVouchers } from '../../db/schema.js';
@@ -355,6 +357,75 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
 
       assertNoProblems(problems);
       return '«۷۰۹۶» stored as 7096, duplicates 409 (five concurrent creates: one 201, four 409), a code change 422, a legacy Persian code turned Latin on save, its taken twin 409 and listed by the health check, and its restore 409.';
+    }));
+  }
+
+  const constraintId = 'reg_accounting_check_constraints_td_562';
+  if (shouldRun(constraintId, 'td562', 'constraint', 'account', 'chart', 'package3')) {
+    await runCase(results, constraintId, 'v9.0.202: the database refuses a negative or empty voucher row, an unknown voucher status or type, an unknown account level, type or nature and a missing parent account; a soft-deleted row is exempt, and a legacy row that breaks a rule leaves its constraint NOT VALID and is listed by the health check (TD-562)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const acc = await accountIdsByCode('1001', '5001', '70');
+      const today = await businessTodayIsoDate();
+      const pgCode = (err: unknown): string | undefined => {
+        for (let e: unknown = err, depth = 0; e && typeof e === 'object' && depth < 3; e = (e as { cause?: unknown }).cause, depth++) {
+          const code = (e as { code?: unknown }).code;
+          if (typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code)) return code;
+        }
+        return undefined;
+      };
+      const refused = async (label: string, expected: string, write: () => Promise<unknown>) => {
+        try {
+          await write();
+          problems.push(`${label} was stored`);
+        } catch (err) {
+          if (pgCode(err) !== expected) problems.push(`${label} failed with ${pgCode(err)} instead of ${expected}: ${String(err).slice(0, 160)}`);
+        }
+      };
+      const gaps = async () => (await FinancialHealthService.runHealthCheck()).tests.find(t => t.id === 'accounting_integrity_constraints');
+
+      // 1) on clean data every constraint is validated
+      const clean = await gaps();
+      if (clean?.status !== 'healthy') problems.push(`health check on clean data: ${String(JSON.stringify(clean)).slice(0, 300)}`);
+
+      // 2) B03-20 S00: the database took every one of these rows
+      const voucherId = await insertLegacyVoucher(today, 'draft', 'TD-562 voucher', [
+        { accountId: acc['1001'], debit: 1000, credit: 0 }, { accountId: acc['5001'], debit: 0, credit: 1000 },
+      ]);
+      const row = (debit: number, credit: number, isDeleted = 0) => orm.insert(journalVoucherItems).values({
+        voucherId, accountId: acc['1001'], rowOrder: 9, detailedType: 'none', detailedName: '', debit: money(debit), credit: money(credit),
+        currency: 'IRR', exchangeRate: money(1), description: 'TD-562 row', isDeleted,
+      });
+      await refused('a row with a negative debit', '23514', () => row(-5, 0));
+      await refused('a row with neither debit nor credit', '23514', () => row(0, 0));
+      await row(0, 0, 1); // a soft-deleted row is exempt
+      await refused('a voucher with status «final»', '23514', () => orm.update(journalVouchers).set({ status: 'final' }).where(eq(journalVouchers.id, voucherId)));
+      await refused('a voucher with type «manual»', '23514', () => orm.update(journalVouchers).set({ voucherType: 'manual' }).where(eq(journalVouchers.id, voucherId)));
+      const account = (over: Partial<typeof accounts.$inferInsert>) => orm.insert(accounts).values({
+        code: '7091', name: 'TD-562 account', level: 'subsidiary', parentId: acc['70'], accountType: 'expense', nature: 'debit', isSystem: 0, isActive: 1, isDeleted: 0, ...over,
+      });
+      await refused('an account at level «leaf»', '23514', () => account({ level: 'leaf' }));
+      await refused('an account of type «cost»', '23514', () => account({ accountType: 'cost' }));
+      await refused('an account of nature «mixed»', '23514', () => account({ nature: 'mixed' }));
+      await refused('an account under a missing parent', '23503', () => account({ parentId: 99_999_999 }));
+
+      // 3) a legacy row from before the constraint: the migration leaves it NOT VALID and the health check lists it
+      await orm.execute(sql`ALTER TABLE journal_voucher_items DROP CONSTRAINT chk_jvi_amount_present`);
+      const [legacy] = await row(0, 0).returning({ id: journalVoucherItems.id });
+      const dir = path.resolve(process.cwd(), 'drizzle');
+      const file = fs.readdirSync(dir).find(f => f.endsWith('_accounting_check_constraints.sql'));
+      if (!file) throw new Error('the accounting constraint migration file is missing');
+      await orm.execute(sql.raw(fs.readFileSync(path.join(dir, file), 'utf8')));
+      const state = await orm.execute(sql`SELECT convalidated FROM pg_constraint WHERE conname = 'chk_jvi_amount_present' AND conrelid = to_regclass('journal_voucher_items')`);
+      if ((state.rows as Array<{ convalidated?: boolean }>)[0]?.convalidated !== false) problems.push(`chk_jvi_amount_present over a legacy row: ${JSON.stringify(state.rows)}`);
+      await refused('a new row with neither debit nor credit after the rerun', '23514', () => row(0, 0));
+      const listed = await gaps();
+      const item = listed?.items?.find(i => i.code === 'chk_jvi_amount_present');
+      if (listed?.status !== 'warning' || listed?.items?.length !== 1 || !item?.subtitle?.includes('۱')) problems.push(`health check with a legacy row: ${String(JSON.stringify(listed)).slice(0, 400)}`);
+      // the legacy row can still be soft-deleted
+      await orm.update(journalVoucherItems).set({ isDeleted: 1 }).where(eq(journalVoucherItems.id, legacy.id));
+
+      assertNoProblems(problems);
+      return 'Negative and empty rows, an unknown status, type, level and nature were refused (23514) and a missing parent (23503); a soft-deleted empty row was stored; a legacy empty row left chk_jvi_amount_present NOT VALID, was listed by the health check and was soft-deleted.';
     }));
   }
 

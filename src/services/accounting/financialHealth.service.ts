@@ -22,6 +22,7 @@ import {
   buildAccountMappingHealthTest, buildDeletedAccountRowsHealthTest, buildNonLatinAccountCodeHealthTest, buildNonPostingRowsHealthTest,
   findAccountMappingIssues, findDeletedAccountsWithVoucherRows, findNonLatinAccountCodes, findVouchersOnNonPostingAccounts,
 } from './chartOfAccountsHealth.js';
+import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1173,6 +1174,8 @@ export class FinancialHealthService {
     tests.push(buildAccountMappingHealthTest(await findAccountMappingIssues()));
     // آزمون ۳۴: v9.0.201 (TD-558) کد حساب با رقم فارسی یا نویسه غیررقمی (فقط فهرست، بی بازنویسی)
     tests.push(buildNonLatinAccountCodeHealthTest(await findNonLatinAccountCodes()));
+    // آزمون ۳۵: v9.0.202 (TD-562) قید پایگاه‌داده سند و سرفصل اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)
+    tests.push(buildAccountingIntegrityHealthTest(await findAccountingIntegrityGaps()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

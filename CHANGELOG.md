@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.202 — Database Constraints on Vouchers and Accounts
+- **Accounting Constraints (P3):** migration 0071 adds NOT VALID CHECK constraints on voucher row amounts, voucher status and type and account level, type and nature, and a parent foreign key on accounts, each validated only on clean data; the health check lists what is left (TD-562).
+
 ### v9.0.201 — Account Codes Are Latin Digits, Unique and Fixed
 - **Account Codes (P2):** an account code is stored as Latin digits only (Persian and Arabic digits converted), is unique among active accounts also against legacy Persian-digit codes and concurrent requests (409 `ACCOUNT_CODE_TAKEN`), and cannot change after creation (422 `ACCOUNT_CODE_IMMUTABLE`) (TD-558).
 
