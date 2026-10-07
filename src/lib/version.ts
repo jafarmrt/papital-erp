@@ -38,9 +38,32 @@ function resolvePackageVersion(): string {
   return '4.0.0';
 }
 
+/**
+ * v9.0.168 (TD-601): commit and build time come from `dist/build-info.json`, written by
+ * `scripts/write-build-info.mjs` at the end of `npm run build`; environment variables still win. Without
+ * either they are `unknown` (the old defaults were a fixed, wrong commit name and date).
+ */
+export const BUILD_INFO_FILE = 'build-info.json';
+
+function readBuiltInfo(): { gitCommit?: string; buildTime?: string } {
+  try {
+    const file = path.resolve(process.cwd(), 'dist', BUILD_INFO_FILE);
+    if (!fs.existsSync(file)) return {};
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8')) as { gitCommit?: unknown; buildTime?: unknown };
+    return {
+      gitCommit: typeof parsed.gitCommit === 'string' ? parsed.gitCommit : undefined,
+      buildTime: typeof parsed.buildTime === 'string' ? parsed.buildTime : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+const builtInfo = readBuiltInfo();
+
 export const APP_VERSION: string = resolvePackageVersion();
-export const GIT_COMMIT_SHA: string = process.env.GIT_COMMIT_SHA || process.env.COMMIT_SHA || 'v4-master';
-export const BUILD_TIMESTAMP: string = process.env.BUILD_TIMESTAMP || '2026-09-05T06:30:00.000Z';
+export const GIT_COMMIT_SHA: string = process.env.GIT_COMMIT_SHA || process.env.COMMIT_SHA || builtInfo.gitCommit || 'unknown';
+export const BUILD_TIMESTAMP: string = process.env.BUILD_TIMESTAMP || builtInfo.buildTime || 'unknown';
 
 export const BUILD_INFO: AppBuildInfo = Object.freeze({
   version: APP_VERSION,

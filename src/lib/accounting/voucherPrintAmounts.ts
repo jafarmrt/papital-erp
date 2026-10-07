@@ -2,7 +2,7 @@ import { fin } from '../financialDecimal';
 import { computeVoucherCurrencyBalance, voucherRowCurrency, voucherRowRate, type CurrencyBalanceRow } from './voucherCurrencyBalance';
 
 /**
- * v9.0.158 (TD-573، B03-31): مبلغ‌های چاپ سند حسابداری با قاعده تراز TD-551.
+ * v9.0.174 (TD-573، B03-31): مبلغ‌های چاپ سند حسابداری با قاعده تراز TD-551.
  *
  * - سندی که همه ردیف‌هایش یک ارز و یک نرخ دارند در همان ارز چاپ می‌شود و سرستون‌ها نام همان ارز را دارند.
  * - سند چندارزی یا چندنرخی به ریال چاپ می‌شود: ردیف ارزی مبلغ × نرخ همان ردیف (گرد به ریال) است و مبلغ ارزی و نرخش زیر آن

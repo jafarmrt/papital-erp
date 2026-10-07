@@ -74,9 +74,9 @@ export class AccountingReportService {
     startDate?: string;
     endDate?: string;
     currency?: string;
-    /** v9.0.148 (TD-545): «همراه اسناد اختتامیه»؛ پیش‌فرض اسناد بستن سالِ روز پایان گزارش کنار می‌روند */
+    /** v9.0.159 (TD-545): «همراه اسناد اختتامیه»؛ پیش‌فرض اسناد بستن سالِ روز پایان گزارش کنار می‌روند */
     includeClosing?: boolean;
-    /** v9.0.148 (TD-545): اسناد بستن سال از آغاز دوره به بعد کنار می‌روند (صورت سود و زیان)؛ پیش‌فرض از تاریخ پایان */
+    /** v9.0.159 (TD-545): اسناد بستن سال از آغاز دوره به بعد کنار می‌روند (صورت سود و زیان)؛ پیش‌فرض از تاریخ پایان */
     closingFromStart?: boolean;
   }, tx?: DbExecutor): Promise<TrialBalanceRow[]> {
     const executor = tx || orm;
@@ -339,7 +339,7 @@ export class AccountingReportService {
       description: string;
       debit: number;
       credit: number;
-      /** v9.0.153 (TD-551): مبلغ خود ردیف ارزی و نرخ آن، وقتی بدهکار و بستانکار به ریال آمده است */
+      /** v9.0.169 (TD-551): مبلغ خود ردیف ارزی و نرخ آن، وقتی بدهکار و بستانکار به ریال آمده است */
       originalDebit?: number;
       originalCredit?: number;
       exchangeRate?: number;
@@ -347,7 +347,7 @@ export class AccountingReportService {
     }[];
     totalDebit: number;
     totalCredit: number;
-    /** v9.0.153 (TD-551): ارز جمع‌ها؛ نمای همه ارزها به ریال */
+    /** v9.0.169 (TD-551): ارز جمع‌ها؛ نمای همه ارزها به ریال */
     reportCurrency: string;
     vouchersCount: number;
     isBalanced: boolean;
@@ -364,7 +364,7 @@ export class AccountingReportService {
     if (params.endDate) {
       conditions.push(lte(journalVouchers.date, params.endDate));
     }
-    // v9.0.153 (TD-551، ت۷): قاعده ارز TD-260؛ پیش‌تر صافی «ارز ردیف یا ارز سند» ردیف دلاری سند ریالی را در نمای ریال
+    // v9.0.169 (TD-551، ت۷): قاعده ارز TD-260؛ پیش‌تر صافی «ارز ردیف یا ارز سند» ردیف دلاری سند ریالی را در نمای ریال
     // می‌آورد و نمای همه ارزها دلار را با ریال جمع می‌زد
     const currencyCondition = voucherItemCurrencyCondition(params.currency);
     if (currencyCondition) conditions.push(currencyCondition);
@@ -1113,7 +1113,7 @@ export class AccountingReportService {
    * Income Statement / Profit & Loss (صورت سود و زیان با پشتیبانی از ارز)
    */
   static async getIncomeStatement(params: { startDate?: string; endDate?: string; currency?: string; includeClosing?: boolean }, tx?: DbExecutor): Promise<IncomeStatementReport> {
-    // v9.0.148 (TD-545): گردش حساب‌های موقت در دوره بی اسناد بستن سالِ درون دوره؛ بی آغاز دوره، از روز پایان
+    // v9.0.159 (TD-545): گردش حساب‌های موقت در دوره بی اسناد بستن سالِ درون دوره؛ بی آغاز دوره، از روز پایان
     const trial = await this.getTrialBalance({ level: 'subsidiary', ...params, closingFromStart: true }, tx);
 
     const revenues: StatementRow[] = [];

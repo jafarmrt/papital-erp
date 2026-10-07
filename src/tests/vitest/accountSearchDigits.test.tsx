@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { AccountSearchSelect } from '../../components/accounting/AccountSearchSelect';
 
-// v9.0.157 (TD-571, B03-29): the account picker matches Persian and Arabic digits; «۱۱۰۱» typed on a Persian keyboard found nothing.
+// v9.0.173 (TD-571, B03-29): the account picker matches Persian and Arabic digits; «۱۱۰۱» typed on a Persian keyboard found nothing.
 
 const accounts = [
   { id: 1101, code: '1101', name: 'صندوق', level: 'subsidiary', accountType: 'asset', nature: 'debit' },

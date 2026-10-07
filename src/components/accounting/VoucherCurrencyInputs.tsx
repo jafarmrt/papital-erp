@@ -3,7 +3,7 @@ import { VOUCHER_CURRENCIES, type VoucherHeaderCurrency, type VoucherRowCurrency
 import { voucherRowCurrency } from '../../lib/accounting/voucherCurrencyBalance';
 
 /**
- * v9.0.154 (TD-564، B03-22، تصمیم ت۷): انتخاب ارز و نرخ تبدیل به ریال در سرآیند و ردیف سند حسابداری دستی و اصلاحی.
+ * v9.0.170 (TD-564، B03-22، تصمیم ت۷): انتخاب ارز و نرخ تبدیل به ریال در سرآیند و ردیف سند حسابداری دستی و اصلاحی.
  */
 
 const currencyOption = (code: string) => `${formatCurrencyLabel(code)} (${code})`;

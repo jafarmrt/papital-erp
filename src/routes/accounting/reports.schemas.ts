@@ -17,7 +17,7 @@ export const dateRangeQuerySchema = z.object({
   }).optional()
 });
 
-// v9.0.148 (TD-545، ت۳ الف): «همراه اسناد اختتامیه»؛ بی آن اسناد بستن سالِ روز پایان گزارش شمرده نمی‌شوند
+// v9.0.159 (TD-545، ت۳ الف): «همراه اسناد اختتامیه»؛ بی آن اسناد بستن سالِ روز پایان گزارش شمرده نمی‌شوند
 const includeClosingFlag = z.enum(['true', 'false']).optional();
 
 export const trialBalanceQuerySchema = z.object({
@@ -134,7 +134,7 @@ export const fiscalClosingExecuteSchema = z.object({
   })
 });
 
-/** v9.0.150 (TD-543): بازگشایی آخرین سال مالی بسته با دلیل الزامی */
+/** v9.0.161 (TD-543): بازگشایی آخرین سال مالی بسته با دلیل الزامی */
 export const fiscalYearReopenSchema = z.object({
   body: z.object({
     year: z.union([z.string(), z.number()]).transform(v => String(v)).pipe(z.string().min(1, 'سال مالی الزامی است')),

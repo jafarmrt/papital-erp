@@ -4,7 +4,7 @@ import { VoucherPrintModal } from '../../components/accounting/VoucherPrintModal
 import { VoucherListToolbar } from '../../components/accounting/vouchers/VoucherListToolbar';
 import { EMPTY_VOUCHER_STATUS_COUNTS } from '../../lib/accounting/voucherList';
 
-// v9.0.158 (TD-573, B03-31): the voucher print labels its amount columns with the voucher's currency, prints a multi-currency
+// v9.0.174 (TD-573, B03-31): the voucher print labels its amount columns with the voucher's currency, prints a multi-currency
 // voucher in rials with each row's own amount and rate, and names every voucher type (settlement included).
 
 afterEach(() => cleanup());

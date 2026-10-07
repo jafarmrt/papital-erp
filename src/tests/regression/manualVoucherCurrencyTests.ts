@@ -24,7 +24,7 @@ async function storedRows(voucherId: number) {
   return rows.map(r => `${r.currency}@${amountOf(r.rate)}`);
 }
 
-/** A voucher written straight into the tables, as versions before v9.0.153 could store it */
+/** A voucher written straight into the tables, as versions before v9.0.169 could store it */
 async function insertLegacyVoucher(description: string, rows: Array<{ accountId: number; debit: number; credit: number; currency: string; rate: number }>): Promise<number> {
   const voucherNumber = await VoucherService.getNextVoucherNumber();
   const [v] = await orm.insert(journalVouchers).values({

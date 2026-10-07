@@ -9,6 +9,7 @@ import { useCRMFilters, normalizeLeadStage, buildLeadQueryParams, buildActivityQ
 import type { CrmStats } from '../lib/crm/leadCurrencyTotals';
 import { CRM_FOLLOWUPS_QUERY_KEY } from '../lib/crm/crmFollowupsQuery';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
+import { useHasPermission } from '../contexts/AuthContext';
 
 export const STAGES = [
   { key: 'lead', title: 'مخاطب اولیه', color: 'bg-slate-100 border-slate-300 text-slate-700', badge: 'bg-slate-200 text-slate-800' },
@@ -22,7 +23,8 @@ export const SOURCES = ['تماس تلفنی', 'وبسایت', 'معرف', 'نم
 
 export function useCRMData(user: any) {
   const currentLoggedInUser = user?.fullName || user?.full_name || user?.username || '';
-  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
+  // v9.0.148 (TD-893): دکمه حذف پرونده فروش با همان مجوز API حذف (`crm.delete`)، نه با کد نقش
+  const canDeleteLead = useHasPermission('crm.delete');
 
   const [activeTab, setActiveTab] = useState<'kanban' | 'list' | 'activities' | 'followups'>('kanban');
   const [stats, setStats] = useState<Partial<CrmStats>>({});
@@ -477,7 +479,7 @@ export function useCRMData(user: any) {
 
   return {
     currentLoggedInUser,
-    isAdminOrManager,
+    canDeleteLead,
     activeTab,
     setActiveTab,
     stats,

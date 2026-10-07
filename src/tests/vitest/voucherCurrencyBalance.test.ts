@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeVoucherCurrencyBalance, voucherRowCurrency, voucherRowRate } from '../../lib/accounting/voucherCurrencyBalance';
 
-// v9.0.153 (TD-551, B03-09, decision t7): the currency, rate and balance of manual voucher rows, shared by the server and the form.
+// v9.0.169 (TD-551, B03-09, decision t7): the currency, rate and balance of manual voucher rows, shared by the server and the form.
 describe('manual voucher currency balance (TD-551)', () => {
   it('a row takes its own currency, else the voucher currency, else IRR; empty and «ریال» are IRR', () => {
     expect(voucherRowCurrency('usd', 'EUR')).toBe('USD');

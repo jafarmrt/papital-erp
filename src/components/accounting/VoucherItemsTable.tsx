@@ -12,16 +12,16 @@ import type { Account } from '../../types';
 export interface VoucherItemDraft {
   id?: number;
   accountId: number | '';
-  /** v9.0.156 (TD-569): همان نوع‌های سرور؛ `custom` قدیمی «متفرقه» (`other`) است */
+  /** v9.0.172 (TD-569): همان نوع‌های سرور؛ `custom` قدیمی «متفرقه» (`other`) است */
   detailedType: VoucherDetailedType;
   detailedId: number | null;
   detailedName: string;
   debit: number;
   credit: number;
   description: string;
-  /** v9.0.154 (TD-564): خالی = ارز سند */
+  /** v9.0.170 (TD-564): خالی = ارز سند */
   currency?: string;
-  /** v9.0.154 (TD-564): خالی = نرخ ارز سند */
+  /** v9.0.170 (TD-564): خالی = نرخ ارز سند */
   exchangeRate?: number | string | '';
 }
 
@@ -30,7 +30,7 @@ interface VoucherItemsTableProps {
   selectableAccounts: Account[];
   customers: Array<{ id: number; name: string; partyType?: string; city?: string; supplierCategory?: string }>;
   personnelList: Array<{ id: number; firstName?: string; lastName?: string; fullName?: string; username?: string }>;
-  /** v9.0.154 (TD-564): ارز و نرخ سند؛ ردیف بی ارز و نرخ از آن پیروی می‌کند */
+  /** v9.0.170 (TD-564): ارز و نرخ سند؛ ردیف بی ارز و نرخ از آن پیروی می‌کند */
   header: VoucherHeaderCurrency;
   updateItem: (index: number, patch: Partial<VoucherItemDraft>) => void;
   addRow: () => void;
@@ -66,7 +66,7 @@ export function VoucherItemsTable({
 }: VoucherItemsTableProps) {
   const [activeRowIndex, setActiveRowIndex] = useState<number>(0);
 
-  // v9.0.154 (TD-564): جمع ستون‌ها با قاعده تراز سرور؛ سند چندارزی یا چندنرخی به ریال
+  // v9.0.170 (TD-564): جمع ستون‌ها با قاعده تراز سرور؛ سند چندارزی یا چندنرخی به ریال
   const balance = useMemo(() => voucherFormBalance(items, header), [items, header]);
 
   const itemRefs = rowRefs;
@@ -126,7 +126,7 @@ export function VoucherItemsTable({
                     />
                   </td>
 
-                  {/* Detailed Selector — v9.0.156 (TD-569): نوع‌های سرور، پروژه و حساب بانکی؛ «متفرقه» = other */}
+                  {/* Detailed Selector — v9.0.172 (TD-569): نوع‌های سرور، پروژه و حساب بانکی؛ «متفرقه» = other */}
                   <td className="py-2 px-2">
                     <VoucherDetailedPicker
                       value={it}
@@ -162,7 +162,7 @@ export function VoucherItemsTable({
                     />
                   </td>
 
-                  {/* v9.0.154 (TD-564): ارز و نرخ ردیف */}
+                  {/* v9.0.170 (TD-564): ارز و نرخ ردیف */}
                   <td className="py-2 px-2">
                     <VoucherRowCurrencyCell row={it} header={header} onChange={patch => updateItem(idx, patch)} />
                   </td>

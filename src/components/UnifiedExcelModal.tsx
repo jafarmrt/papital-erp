@@ -4,6 +4,8 @@ import { useUnifiedExcelImport } from './excel/useUnifiedExcelImport';
 import { ExcelUploadStep } from './excel/ExcelUploadStep';
 import { ExcelPreviewStep } from './excel/ExcelPreviewStep';
 import { ExcelResultStep } from './excel/ExcelResultStep';
+import { useHasPermission } from '../contexts/AuthContext';
+import { ITEM_IMPORT_PERMISSION_KEYS, itemImportPermissionNotices, type ItemImportPermissions } from '../lib/items/itemImportPermissions';
 
 export default function UnifiedExcelModal({
   isOpen,
@@ -43,6 +45,17 @@ export default function UnifiedExcelModal({
     onClose
   });
 
+  // v9.0.154 (TD-648): بخش‌هایی از ورود که کاربر مجوزشان را ندارد پیش از بارگذاری گفته می‌شود؛ سرور همان را می‌سنجد
+  const importPerms: ItemImportPermissions = {
+    createItems: useHasPermission(ITEM_IMPORT_PERMISSION_KEYS.createItems),
+    editItems: useHasPermission(ITEM_IMPORT_PERMISSION_KEYS.editItems),
+    editPrices: useHasPermission(ITEM_IMPORT_PERMISSION_KEYS.editPrices),
+    stockIn: useHasPermission(ITEM_IMPORT_PERMISSION_KEYS.stockIn),
+    stockOut: useHasPermission(ITEM_IMPORT_PERMISSION_KEYS.stockOut),
+  };
+  const canImport = importPerms.createItems || importPerms.editItems;
+  const permissionNotices = canImport ? itemImportPermissionNotices(importPerms) : [];
+
   if (!isOpen) return null;
 
   return (
@@ -76,6 +89,8 @@ export default function UnifiedExcelModal({
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
           {step === 'upload' && (
             <ExcelUploadStep
+              canImport={canImport}
+              permissionNotices={permissionNotices}
               isExporting={isExporting}
               isLoadingMetadata={isLoadingMetadata}
               fileInputRef={fileInputRef}

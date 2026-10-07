@@ -18,7 +18,7 @@ import { NewVoucherModal } from '../../components/accounting/NewVoucherModal';
 import { VoucherCorrectionModal } from '../../components/accounting/VoucherCorrectionModal';
 import { VOUCHER_DETAILED_TYPES, voucherDetailedTypeFromStored } from '../../lib/accounting/voucherDetailedTypes';
 
-// v9.0.156 (TD-569, B03-27): the voucher forms offer the server's detailed types: «متفرقه» is `other` (was `custom`, refused with
+// v9.0.172 (TD-569, B03-27): the voucher forms offer the server's detailed types: «متفرقه» is `other` (was `custom`, refused with
 // 400), project and bank account are offered, and the correction form has the supplier.
 
 const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
