@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { users, appSettings } from '../db/schema.js';
+import { users, roles, appSettings } from '../db/schema.js';
 import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken, getJwtSecret, JWT_VERIFY_OPTIONS, invalidateUserAuthCache, shouldExposeTokenInBody } from '../middleware/auth.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
@@ -22,6 +22,9 @@ import {
 } from '../services/auth/loginSecurity.service.js';
 import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
+import { FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE } from '../lib/users/profileFields.js';
+import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 
 const router = Router();
 
@@ -95,8 +98,8 @@ router.get('/public-settings', asyncHandler(async (req, res) => {
 const setupSchema = z.object({
   body: z.object({
     username: z.string().min(3, 'نام کاربری باید حداقل ۳ کاراکتر باشد'),
-    password: z.string().min(8, 'رمز عبور باید حداقل ۸ کاراکتر باشد'),
-    fullName: z.string().min(1, 'نام و نام خانوادگی الزامی است'),
+    password: z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE),
+    fullName: z.string().min(1, 'نام و نام خانوادگی الزامی است').max(FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE),
     companyName: z.string().optional().default(''),
     warehouseName: z.string().optional().default('انبار مرکزی'),
     phone: z.string().optional().default(''),
@@ -126,7 +129,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
 
   if (!providedToken || !safeCompareTokens(providedToken, effectiveSetupToken)) {
     logger.warn(`[Setup] Unauthorized setup attempt with invalid or missing token from IP: ${req.ip}`);
-    throw new UnauthorizedError('توکن راه‌اندازی نامعتبر است');
+    throw new UnauthorizedError('رمز راه‌اندازی نادرست است');
   }
 
   // 2. PostgreSQL advisory lock (79234) to prevent race conditions (SEC-012)
@@ -160,7 +163,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
     }
 
     const { username, password, fullName, companyName, warehouseName, phone, address, logo, currency } = req.body;
-    if (isProduction && (password === 'admin123456' || password.length < 8)) {
+    if (isProduction && (password === 'admin123456' || password.length < MIN_PASSWORD_LENGTH)) {
       throw new ValidationError('رمز عبور مدیر در محیط عملیاتی باید حداقل ۸ کاراکتر بوده و نمی‌تواند رمزهای پیش‌فرض باشد');
     }
     const tUsername = (username || '').trim();
@@ -272,6 +275,8 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
     // Set secure HttpOnly cookie
     res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
 
+    // v9.0.224 (TD-540): سجل ورود نام نقش را هم نگه می‌دارد تا جزئیات رویداد کد نقش نشان ندهد
+    const [roleRow] = await orm.select({ name: roles.name }).from(roles).where(eq(roles.code, activeUser.role)).limit(1);
     await logActivity({
       userId: activeUser.id,
       username: activeUser.username,
@@ -281,7 +286,7 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
       entityId: activeUser.id,
       description: `ورود موفق کاربر ${activeUser.fullName || activeUser.username} به سامانه`,
       ipAddress: clientIp,
-      details: { role: activeUser.role, method: 'نام کاربری و رمز عبور', status: 'success', userAgent },
+      details: { role: activeUser.role, roleName: roleDisplayName(activeUser.role, roleRow?.name), method: 'نام کاربری و رمز عبور', status: 'success', userAgent },
       req
     });
 

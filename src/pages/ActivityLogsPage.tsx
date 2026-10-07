@@ -9,26 +9,61 @@ import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { ActivityLog } from '../types';
-import { formatPersianNumber, formatPersianDateTime, extractDateString } from '../utils';
+import { formatPersianNumber, formatPersianDateTime, extractDateString, errorMessageOf } from '../utils';
 import { useSearch } from '../SearchContext';
+import toast from 'react-hot-toast';
 import {
   useActivityLogsQuery,
-  useActivityLogFilterOptionsQuery
+  useActivityLogFilterOptionsQuery,
+  fetchAuditReportRows,
+  type AuditReportRows
 } from '../hooks/queries';
 import { DeviceBadge } from '../components/audit/DeviceBadge';
 import { AuditDiffViewer } from '../components/audit/AuditDiffViewer';
 import { AuditPrintModal } from '../components/audit/AuditPrintModal';
 import { exportAuditLogsToExcel } from '../components/audit/auditExportUtils';
 import { parseUserAgent } from '../utils/userAgentParser';
+import { permissionDefinition } from '../lib/permissions/permissionCatalog';
+import { auditActionLabel, auditActionOptions } from '../lib/audit/auditActionLabels';
+
+/** v9.0.214 (TD-537): خطای خواندن سجل، با پیام فارسی ۴۰۳ به‌جای «هیچ رکوردی یافت نشد» */
+function logsLoadErrorMessage(error: unknown): string {
+  if ((error as { status?: unknown } | null)?.status === 403) {
+    return `برای دیدن سجل رویدادها مجوز «${permissionDefinition('audit_logs.view')?.title ?? 'مشاهده سجل رویدادها'}» لازم است.`;
+  }
+  return `سجل رویدادها بارگذاری نشد: ${errorMessageOf(error)}`;
+}
 
 type LogCategory = 'all' | 'auth_security' | 'financial_docs' | 'inventory_items' | 'settings_system';
 
+const DEFAULT_ACTION_BADGE = { className: 'bg-slate-100 text-slate-700 border-slate-200', icon: History };
+const ACTION_BADGE_STYLES: Record<string, { className: string; icon: typeof History }> = {
+  CREATE: { className: 'bg-blue-50 text-blue-700 border-blue-200', icon: PlusCircle },
+  UPDATE: { className: 'bg-amber-50 text-amber-700 border-amber-200', icon: Edit3 },
+  DELETE: { className: 'bg-rose-50 text-rose-700 border-rose-200', icon: Trash2 },
+  LOGIN: { className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: KeyRound },
+  LOGIN_FAILED: { className: 'bg-rose-50 text-rose-700 border-rose-300', icon: AlertCircle },
+  LOGOUT: { className: 'bg-slate-100 text-slate-700 border-slate-300', icon: LogOut },
+  SETTING_CHANGE: { className: 'bg-purple-50 text-purple-700 border-purple-200', icon: SettingsIcon },
+  PURGE: { className: 'bg-orange-50 text-orange-700 border-orange-300', icon: Trash2 },
+  AUDIT_APPLY: { className: 'bg-teal-50 text-teal-700 border-teal-200', icon: ShieldCheck },
+  RECONCILIATION_EXECUTE: { className: 'bg-teal-50 text-teal-700 border-teal-200', icon: ShieldCheck },
+  SEED: { className: 'bg-cyan-50 text-cyan-700 border-cyan-200', icon: Layers },
+  IMPORT: { className: 'bg-cyan-50 text-cyan-700 border-cyan-200', icon: Layers },
+  EXPORT: { className: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: Download },
+  RESTORE: { className: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: Download },
+};
+
 export default function ActivityLogsPage() {
-  const [page, setPage] = useState<number>(1);
   const limit = 25;
 
   // Filters
-  const { searchQuery: search, setSearchQuery: setSearch } = useSearch();
+  // v9.0.214 (TD-537): درخواست با جست‌وجوی تأخیری فرستاده می‌شود و صفحه هر بار که جست‌وجو عوض شود از ۱ شروع می‌شود
+  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
+  const [pageOfSearch, setPageOfSearch] = useState<{ page: number; search: string }>({ page: 1, search: '' });
+  const page = pageOfSearch.search === debouncedSearchQuery ? pageOfSearch.page : 1;
+  const setPage = (next: number | ((current: number) => number)) =>
+    setPageOfSearch({ page: typeof next === 'function' ? next(page) : next, search: debouncedSearchQuery });
   const [categoryFilter, setCategoryFilter] = useState<LogCategory>('all');
   const [userFilter, setUserFilter] = useState<string>('');
   const [actionFilter, setActionFilter] = useState<string>('');
@@ -39,8 +74,8 @@ export default function ActivityLogsPage() {
   // Modals
   const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null);
   const [modalTab, setModalTab] = useState<'visual' | 'json'>('visual');
-  const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
-  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [printReport, setPrintReport] = useState<AuditReportRows | null>(null);
+  const [preparingReport, setPreparingReport] = useState<'print' | 'excel' | null>(null);
 
   const formatToGregorian = (d: any): string => {
     return extractDateString(d);
@@ -49,21 +84,21 @@ export default function ActivityLogsPage() {
   const filterOptionsQuery = useActivityLogFilterOptionsQuery();
   const filterOptions = filterOptionsQuery.data ?? { users: [], actions: [], entities: [] };
 
-  const logsQuery = useActivityLogsQuery({
-    page,
-    limit,
-    search,
+  const reportFilters = {
+    search: debouncedSearchQuery,
     category: categoryFilter !== 'all' ? categoryFilter : undefined,
     user: userFilter || undefined,
     action: actionFilter || undefined,
     entity: entityFilter || undefined,
     startDate: formatToGregorian(startDate) || undefined,
     endDate: formatToGregorian(endDate) || undefined,
-  });
+  };
+  const logsQuery = useActivityLogsQuery({ page, limit, ...reportFilters });
 
-  const logs = logsQuery.data?.logs ?? [];
-  const totalCount = logsQuery.data?.total ?? 0;
-  const totalPages = logsQuery.data?.totalPages ?? 1;
+  const loadError = logsQuery.isError ? logsLoadErrorMessage(logsQuery.error) : null;
+  const logs = loadError ? [] : (logsQuery.data?.logs ?? []);
+  const totalCount = loadError ? 0 : (logsQuery.data?.total ?? 0);
+  const totalPages = loadError ? 1 : (logsQuery.data?.totalPages ?? 1);
   const loading = logsQuery.isLoading;
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -82,105 +117,39 @@ export default function ActivityLogsPage() {
     setPage(1);
   };
 
-  const handleExportExcel = async () => {
+  // v9.0.215 (TD-527): چاپ و Excel همه ردیف‌های پالایه را از یک درخواست سروری می‌گیرند، نه ۲۵ ردیف صفحه جاری
+  const prepareReport = async (kind: 'print' | 'excel'): Promise<AuditReportRows | null> => {
     try {
-      setIsExporting(true);
-      await exportAuditLogsToExcel(logs as any, categoryFilter);
+      setPreparingReport(kind);
+      return await fetchAuditReportRows(reportFilters);
+    } catch (error) {
+      toast.error(logsLoadErrorMessage(error));
+      return null;
     } finally {
-      setIsExporting(false);
+      setPreparingReport(null);
     }
   };
 
+  const handlePrintPreview = async () => {
+    const report = await prepareReport('print');
+    if (report) setPrintReport(report);
+  };
+
+  const handleExportExcel = async () => {
+    const report = await prepareReport('excel');
+    if (report) await exportAuditLogsToExcel(report.rows, report.total);
+  };
+
+  // v9.0.216 (TD-538): متن نشان از جدول مشترک برچسب اقدام؛ رنگ و نماد به ازای اقدام
   const getActionBadge = (action: string) => {
-    switch (action) {
-      case 'CREATE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-            <PlusCircle className="w-3.5 h-3.5" />
-            ثبت / ایجاد
-          </span>
-        );
-      case 'UPDATE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-            <Edit3 className="w-3.5 h-3.5" />
-            ویرایش
-          </span>
-        );
-      case 'DELETE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
-            <Trash2 className="w-3.5 h-3.5" />
-            حذف رکورد
-          </span>
-        );
-      case 'LOGIN':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-            <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-            ورود موفق
-          </span>
-        );
-      case 'LOGIN_FAILED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-300 shadow-2xs">
-            <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-            ورود ناموفق
-          </span>
-        );
-      case 'LOGOUT':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300">
-            <LogOut className="w-3.5 h-3.5 text-slate-600" />
-            خروج از سیستم
-          </span>
-        );
-      case 'SETTING_CHANGE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-            <SettingsIcon className="w-3.5 h-3.5 text-purple-600" />
-            تغییر تنظیمات
-          </span>
-        );
-      case 'PURGE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-orange-700 border border-orange-300">
-            <Trash2 className="w-3.5 h-3.5 text-orange-600" />
-            پاکسازی ممیزی
-          </span>
-        );
-      case 'AUDIT_APPLY':
-      case 'RECONCILIATION_EXECUTE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200">
-            <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
-            اصلاح و تطبیق
-          </span>
-        );
-      case 'SEED':
-      case 'IMPORT':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-cyan-50 text-cyan-700 border border-cyan-200">
-            <Layers className="w-3.5 h-3.5 text-cyan-600" />
-            بارگذاری پایه
-          </span>
-        );
-      case 'EXPORT':
-      case 'RESTORE':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-            <Download className="w-3.5 h-3.5 text-indigo-600" />
-            پشتیبان / بازیابی
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-            <History className="w-3.5 h-3.5" />
-            {action}
-          </span>
-        );
-    }
+    const style = ACTION_BADGE_STYLES[action] ?? DEFAULT_ACTION_BADGE;
+    const Icon = style.icon;
+    return (
+      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${style.className}`}>
+        <Icon className="w-3.5 h-3.5" />
+        {auditActionLabel(action)}
+      </span>
+    );
   };
 
   const categories: { id: LogCategory; label: string; icon: any; countNote?: string }[] = [
@@ -200,7 +169,7 @@ export default function ActivityLogsPage() {
             <ShieldAlert className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">سجل تغییرات و لاگ فعالیت کاربران (Audit Trail)</h1>
+            <h1 className="text-xl font-bold text-slate-900">سجل تغییرات و رویدادهای کاربران</h1>
             <p className="text-xs text-slate-500 mt-1">
               ثبت جامع و ممیزی امنیتی از تمامی ورود و خروج‌ها، تغییرات اسناد مالی، انبار و تنظیمات مالکیتی
             </p>
@@ -216,21 +185,21 @@ export default function ActivityLogsPage() {
             بروزرسانی
           </button>
           <button
-            onClick={handleExportExcel}
-            disabled={isExporting || logs.length === 0}
+            onClick={() => { void handleExportExcel(); }}
+            disabled={preparingReport !== null || logs.length === 0}
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors disabled:opacity-50"
-            title="دریافت فایل اکسل XLSX"
+            title="دریافت فایل اکسل"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            خروجی اکسل (XLSX)
+            {preparingReport === 'excel' ? 'در حال آماده‌سازی…' : 'خروجی اکسل'}
           </button>
           <button
-            onClick={() => setShowPrintModal(true)}
-            disabled={logs.length === 0}
+            onClick={() => { void handlePrintPreview(); }}
+            disabled={preparingReport !== null || logs.length === 0}
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors shadow-xs disabled:opacity-50"
           >
             <Printer className="w-4 h-4" />
-            پیش‌نمایش چاپ امنیتی
+            {preparingReport === 'print' ? 'در حال آماده‌سازی…' : 'پیش‌نمایش چاپ امنیتی'}
           </button>
         </div>
       </div>
@@ -317,7 +286,7 @@ export default function ActivityLogsPage() {
               type="text"
               placeholder="جستجو در شرح لاگ، نام کاربر یا نام بخش..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="w-full pl-9 pr-4 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -342,19 +311,10 @@ export default function ActivityLogsPage() {
               onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
               className="px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
-              <option value="">همه اقدامات (نوع)</option>
-              <option value="LOGIN">ورود موفق (LOGIN)</option>
-              <option value="LOGIN_FAILED">ورود ناموفق (LOGIN_FAILED)</option>
-              <option value="LOGOUT">خروج از سیستم (LOGOUT)</option>
-              <option value="CREATE">ایجاد / ثبت (CREATE)</option>
-              <option value="UPDATE">ویرایش (UPDATE)</option>
-              <option value="DELETE">حذف (DELETE)</option>
-              <option value="SETTING_CHANGE">تغییر تنظیمات (SETTING_CHANGE)</option>
-              {filterOptions.actions
-                .filter((a: any) => !['LOGIN', 'LOGIN_FAILED', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'SETTING_CHANGE'].includes(a))
-                .map((a: any) => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
+              <option value="">همه اقدامات</option>
+              {auditActionOptions(filterOptions.actions).map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
 
             <select
@@ -428,7 +388,7 @@ export default function ActivityLogsPage() {
                 <th className="py-3 px-4">نوع اقدام</th>
                 <th className="py-3 px-4">بخش / موجودیت</th>
                 <th className="py-3 px-4">شرح کامل فعالیت</th>
-                <th className="py-3 px-4 text-center">دستگاه و IP</th>
+                <th className="py-3 px-4 text-center">دستگاه و نشانی IP</th>
                 <th className="py-3 px-4 text-center">عملیات</th>
               </tr>
             </thead>
@@ -437,7 +397,13 @@ export default function ActivityLogsPage() {
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
-                    در حال بارگذاری لاگ‌های امنیتی سیستم...
+                    در حال بارگذاری رویدادهای سجل…
+                  </td>
+                </tr>
+              ) : loadError ? (
+                <tr>
+                  <td colSpan={8} role="alert" className="py-12 text-center text-rose-700 font-medium">
+                    {loadError}
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
@@ -568,7 +534,7 @@ export default function ActivityLogsPage() {
                   <span className="font-bold text-slate-800">{selectedLog.entity} {selectedLog.entityId ? `(#${selectedLog.entityId})` : ''}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block mb-0.5">آدرس IP:</span>
+                  <span className="text-slate-400 block mb-0.5">نشانی IP:</span>
                   <span className="font-mono font-bold text-slate-700 bg-slate-200/60 px-2 py-0.5 rounded text-2xs inline-block">
                     {selectedLog.ipAddress || '127.0.0.1 (محلی)'}
                   </span>
@@ -590,7 +556,7 @@ export default function ActivityLogsPage() {
                   <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                     <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
                       <Laptop className="w-4 h-4 text-indigo-600" />
-                      <span>مشخصات دستگاه، سیستم‌عامل و مرورگر کلاینت:</span>
+                      <span>مشخصات دستگاه کاربر، سیستم‌عامل و مرورگر:</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-2xs">
                       <div className="bg-white p-2.5 rounded-lg border border-slate-200">
@@ -606,7 +572,7 @@ export default function ActivityLogsPage() {
                         <span className="font-bold text-slate-800">{ua.browser}</span>
                       </div>
                       <div className="bg-white p-2.5 rounded-lg border border-slate-200 sm:col-span-3">
-                        <span className="text-slate-400 block mb-1">شناسه خام هدر مرورگر (User-Agent):</span>
+                        <span className="text-slate-400 block mb-1">شناسه خام مرورگر:</span>
                         <span className="font-mono text-3xs text-slate-600 break-all block ltr text-left bg-slate-50 p-2 rounded border border-slate-100">
                           {selectedLog.details.userAgent}
                         </span>
@@ -630,7 +596,7 @@ export default function ActivityLogsPage() {
                         }`}
                       >
                         <ArrowRightLeft className="w-3.5 h-3.5" />
-                        نمایش بصری تفاوت‌ها و تغییرات (Diff)
+                        نمایش تفاوت‌ها و تغییرات
                       </button>
                       <button
                         onClick={() => setModalTab('json')}
@@ -641,7 +607,7 @@ export default function ActivityLogsPage() {
                         }`}
                       >
                         <FileCode className="w-3.5 h-3.5" />
-                        داده خام سیستمی (JSON)
+                        داده خام رویداد
                       </button>
                     </div>
                   </div>
@@ -701,7 +667,7 @@ export default function ActivityLogsPage() {
                             {selectedLog.details.role && (
                               <div className="bg-white p-3 rounded-lg border border-slate-200">
                                 <span className="text-slate-400 block mb-0.5 text-2xs">نقش کاربری در زمان ورود:</span>
-                                <span className="font-semibold text-slate-800">{selectedLog.details.role}</span>
+                                <span className="font-semibold text-slate-800">{selectedLog.details.roleName || selectedLog.details.role}</span>
                               </div>
                             )}
                           </div>
@@ -735,15 +701,17 @@ export default function ActivityLogsPage() {
       )}
 
       {/* Audit Print Preview Modal */}
-      {showPrintModal && (
+      {printReport && (
         <AuditPrintModal
-          logs={logs}
-          onClose={() => setShowPrintModal(false)}
+          logs={printReport.rows}
+          total={printReport.total}
+          onClose={() => setPrintReport(null)}
           filterSummary={{
             categoryLabel: categories.find(c => c.id === categoryFilter)?.label,
             userFilter,
-            actionFilter,
+            actionFilter: actionFilter ? auditActionLabel(actionFilter) : '',
             entityFilter,
+            searchText: debouncedSearchQuery.trim(),
             startDate,
             endDate
           }}

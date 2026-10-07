@@ -50,7 +50,7 @@ export function ProtectedRoute({
           to="/"
           className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-slate-900/10"
         >
-          بازگشت به داشبورد اصلی
+          بازگشت به پیشخوان
         </Link>
       </div>
     );

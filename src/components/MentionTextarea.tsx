@@ -6,7 +6,8 @@ export interface MentionUser {
   fullName?: string;
   full_name?: string;
   username: string;
-  role?: string;
+  /** v9.0.223 (TD-534): نام فارسی نقش از `/users/list-simple`؛ کد نقش دیگر به مرورگر نمی‌رسد */
+  role_name?: string;
 }
 
 interface MentionTextareaProps {
@@ -273,7 +274,7 @@ export function MentionTextarea({
                   </div>
 
                   <div className="flex items-center gap-1.5">
-                    {u.role && (
+                    {u.role_name && (
                       <span
                         className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
                           isHighlighted
@@ -281,7 +282,7 @@ export function MentionTextarea({
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
-                        {u.role}
+                        {u.role_name}
                       </span>
                     )}
                     {isAlreadyMentioned && (

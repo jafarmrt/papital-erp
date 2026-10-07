@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "9.0.215",
+  "version": "9.0.229",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -31,7 +31,8 @@
     "test:coverage": "c8 --reporter=text --reporter=text-summary --reporter=json-summary --include=src --include=server.ts --exclude=src/tests/** tsx scripts/run-tests.ts",
     "lint:eslint": "tsx scripts/eslint-ratchet.ts",
     "check:runtime-deps": "tsx scripts/check-runtime-deps.ts",
-    "ratchet:permissions": "tsx scripts/permission-ratchet.ts"
+    "ratchet:permissions": "tsx scripts/permission-ratchet.ts",
+    "ratchet:terminal-english": "tsx scripts/terminal-english-ratchet.ts"
   },
   "dependencies": {
     "axios": "^1.20.0",

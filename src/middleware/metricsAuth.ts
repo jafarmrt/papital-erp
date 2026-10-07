@@ -6,6 +6,7 @@ import { logger } from './logger.js';
 import { safeCompareTokens } from '../lib/timingSafeCompare.js';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 import { asyncHandler } from './asyncHandler.js';
+import { PASSWORD_RESET_REQUIRED, PASSWORD_RESET_REQUIRED_MESSAGE } from '../lib/auth/passwordReset.js';
 
 export { safeCompareTokens };
 
@@ -20,7 +21,7 @@ export { safeCompareTokens };
  */
 type MetricsReaderResult =
   | { ok: true; user?: AuthUserPayload }
-  | { ok: false; status: 401 | 403 | 500; error: string };
+  | { ok: false; status: 401 | 403 | 500; error: string; code?: string };
 
 /**
  * Whether the request may read internal system data: the METRICS_TOKEN or a live system-admin session.
@@ -67,6 +68,10 @@ export async function metricsReaderStatus(req: Request): Promise<MetricsReaderRe
   if (!live.ok) {
     return { ok: false, status: live.status, error: live.error };
   }
+  // v9.0.219 (TD-523): a temporary password set by an administrator opens nothing but the password change
+  if (live.mustResetPassword) {
+    return { ok: false, status: 403, error: PASSWORD_RESET_REQUIRED_MESSAGE, code: PASSWORD_RESET_REQUIRED };
+  }
 
   // Role check: Only the system admin may inspect internal system metrics (live role, not the token's)
   if (live.user.role !== SYSTEM_ADMIN_ROLE) {
@@ -79,7 +84,7 @@ export async function metricsReaderStatus(req: Request): Promise<MetricsReaderRe
 export const metricsAuthMiddleware = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   const reader = await metricsReaderStatus(req);
   if (!reader.ok) {
-    return res.status(reader.status).json({ error: reader.error });
+    return res.status(reader.status).json(reader.code ? { error: reader.error, code: reader.code } : { error: reader.error });
   }
   if (reader.user) req.user = reader.user;
   return next();

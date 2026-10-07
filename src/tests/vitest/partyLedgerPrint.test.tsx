@@ -16,7 +16,7 @@ vi.mock('react-hot-toast', () => ({ default: toastFn, toast: toastFn, Toaster: (
 
 import { PartyLedgerReportView } from '../../components/accounting/reports/PartyLedgerReportView';
 
-// v9.0.215 (TD-572, B03-30): the party statement's print header wrote the form's currency and range over data loaded with
+// v9.0.229 (TD-572, B03-30): the party statement's print header wrote the form's currency and range over data loaded with
 // other filters (12,500,000 rial printed as «12,500,000 دلار»), changing a filter did not reload, and «this month» / «this year»
 // meant the last 30 / 365 days.
 

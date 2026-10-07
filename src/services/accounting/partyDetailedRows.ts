@@ -20,7 +20,7 @@ export function partyDetailedRowsCondition(party: PartyDetailedFilter): SQL {
 }
 
 /**
- * v9.0.212 (TD-548، B03-06): ردیف‌های یک پرسنل — نوع تفصیلی `personnel` با شناسه او، و ردیف قدیمیِ بی‌شناسه فقط با
+ * v9.0.226 (TD-548، B03-06): ردیف‌های یک پرسنل — نوع تفصیلی `personnel` با شناسه او، و ردیف قدیمیِ بی‌شناسه فقط با
  * نام دقیق کنونی. شناسه پرسنل و شناسه طرف حساب از دو جدول جدا می‌آیند و هم‌پوشانی دارند، پس شناسه بی نوع هرگز.
  */
 export const PERSONNEL_DETAILED_TYPES = ['personnel'];

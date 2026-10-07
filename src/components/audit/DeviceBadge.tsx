@@ -28,7 +28,7 @@ export const DeviceBadge: React.FC<DeviceBadgeProps> = ({ userAgent, ipAddress }
   return (
     <div
       className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-100/90 hover:bg-slate-200/90 border border-slate-200 rounded-lg text-2xs transition-colors group cursor-default"
-      title={`${parsed.deviceLabel} • ${parsed.os} • ${parsed.browser} (IP: ${ipAddress || 'نامشخص'})`}
+      title={`${parsed.deviceLabel} • ${parsed.os} • ${parsed.browser} (نشانی IP: ${ipAddress || 'نامشخص'})`}
     >
       {getDeviceIcon()}
       <span className="font-medium text-slate-700 font-sans hidden sm:inline">

@@ -83,7 +83,7 @@ export function PartyLedgerReportView({
   const handleApplyDatePreset = (preset: 'all' | 'month' | 'three_months' | 'year') => {
     setActiveDatePreset(preset);
     // v7.0.136 (TD-232): بازه‌های آماده از امروز منطقه زمانی کسب‌وکار (ISO) و نمایش شمسی در JalaliDateInput
-    // v9.0.215 (TD-572، B03-30): «ماه جاری» و «سال جاری» از نخستین روز ماه و سال شمسی امروز؛ پیش‌تر ۳۰ و ۳۶۵ روز پیش
+    // v9.0.229 (TD-572، B03-30): «ماه جاری» و «سال جاری» از نخستین روز ماه و سال شمسی امروز؛ پیش‌تر ۳۰ و ۳۶۵ روز پیش
     const todayIso = getTodayIsoDate();
     const jalaliYear = Number((isoToJalaliDate(todayIso) || '').split('/')[0]);
 
@@ -122,7 +122,7 @@ export function PartyLedgerReportView({
     await runPartyLedger(ledgerParams(selectedParty, partySearchQuery));
   }, [selectedParty, partySearchQuery, ledgerParams, runPartyLedger]);
 
-  // v9.0.215 (TD-572): با تغییر طرف حساب، بازه یا ارز صورت‌حساب دوباره خوانده می‌شود؛ پیش‌تر فقط با تغییر طرف حساب، و
+  // v9.0.229 (TD-572): با تغییر طرف حساب، بازه یا ارز صورت‌حساب دوباره خوانده می‌شود؛ پیش‌تر فقط با تغییر طرف حساب، و
   // سرآیند چاپ بازه و ارز تازه را روی داده قبلی می‌نوشت
   useEffect(() => {
     if (selectedParty) {

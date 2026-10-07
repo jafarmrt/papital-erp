@@ -84,7 +84,7 @@ const accountCardReportHandler = asyncHandler(async (req, res) => {
   });
   res.json({ report: data, ...data });
 });
-// v9.0.211 (TD-547، B03-05، تصمیم ت۵ الف): کارت حساب، گردش، صورت‌حساب و فهرست طرف‌های حساب فقط با کلیدهای منو و صفحه
+// v9.0.225 (TD-547، B03-05، تصمیم ت۵ الف): کارت حساب، گردش، صورت‌حساب و فهرست طرف‌های حساب فقط با کلیدهای منو و صفحه
 // حسابداری؛ پیش‌تر «مشاهده اسناد» و «مشاهده طرف حساب» کل دفتر، حقوق و تلفن پرسنل را می‌خواندند. صفحه مشتری کارت خودش
 // را از `GET /customers/:id/account-card` (TD-416) می‌خواند.
 const LEDGER_REPORT_KEYS = ['accounting.reports', 'accounting.view'] as const;
@@ -121,7 +121,7 @@ router.get('/accounting/reports/journal-book', authorizePermission('accounting.r
     page,
     limit,
   });
-  // v9.0.213 (TD-561): یک صفحه و یک بار؛ پیش‌تر کل بازه با `{ report: data, ...data }` دو بار فرستاده می‌شد
+  // v9.0.227 (TD-561): یک صفحه و یک بار؛ پیش‌تر کل بازه با `{ report: data, ...data }` دو بار فرستاده می‌شد
   res.json(data);
 }));
 

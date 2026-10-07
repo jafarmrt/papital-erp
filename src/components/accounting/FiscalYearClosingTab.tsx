@@ -9,7 +9,7 @@ import { useExecuteFiscalClosing, useFiscalClosingPreview, useFiscalClosingYears
 import { FiscalYearReopenPanel } from './FiscalYearReopenPanel';
 import { useHasPermission } from '../../contexts/AuthContext';
 
-/** v9.0.214 (TD-567، B03-25): کلید API اجرای بستن سال (`POST /accounting/fiscal-closing/execute`) */
+/** v9.0.228 (TD-567، B03-25): کلید API اجرای بستن سال (`POST /accounting/fiscal-closing/execute`) */
 export const FISCAL_CLOSE_PERMISSION = 'accounting.fiscal_close';
 
 interface FiscalYearClosingTabProps {
@@ -20,7 +20,7 @@ interface FiscalYearClosingTabProps {
 export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYearClosingTabProps) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
-  // v9.0.214 (TD-567): دکمه اجرای بستن فقط برای دارنده کلید API آن؛ پیش‌تر مدیر، مدیر مالی و حسابدار آن را می‌دیدند و ۴۰۳ می‌گرفتند
+  // v9.0.228 (TD-567): دکمه اجرای بستن فقط برای دارنده کلید API آن؛ پیش‌تر مدیر، مدیر مالی و حسابدار آن را می‌دیدند و ۴۰۳ می‌گرفتند
   const canExecuteClosing = useHasPermission(FISCAL_CLOSE_PERMISSION);
   // v9.0.161 (TD-543، تصمیم ت۱ مالک محصول): فقط سال‌های تمام‌شده از سرور؛ سال جاری و آینده بسته نمی‌شوند. پیش‌تر فرم سال جاری
   // را پیش‌فرض داشت و همان را با یک تأیید می‌بست

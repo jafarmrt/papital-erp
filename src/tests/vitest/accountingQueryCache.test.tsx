@@ -16,7 +16,7 @@ vi.mock('../../api', () => ({
   fetchJson: (...args: unknown[]) => fetchJson(...args),
   isAbortError: (err: unknown) => (err as { name?: string } | null)?.name === 'AbortError',
 }));
-// v9.0.214 (TD-567): the fiscal closing execute button shows only for holders of accounting.fiscal_close
+// v9.0.228 (TD-567): the fiscal closing execute button shows only for holders of accounting.fiscal_close
 vi.mock('../../contexts/AuthContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../contexts/AuthContext')>()),
   useHasPermission: (key: string) => key === 'accounting.fiscal_close',

@@ -87,7 +87,8 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     const { PERMISSION_CATALOG } = await import('../../routes/users.routes.js');
 
     // 1. Verify all 5 workflow permissions exist in PERMISSION_CATALOG
-    const wfCat = PERMISSION_CATALOG.find(c => c.category.includes('Workflow'));
+    // v9.0.224 (TD-540): the category is found by its keys, not by its title, which is Persian only now
+    const wfCat = PERMISSION_CATALOG.find(c => c.permissions.some(p => p.key.startsWith('workflow.')));
     const requiredKeys = ['workflow.view', 'workflow.execute', 'workflow.approve', 'workflow.manage', 'workflow.admin'];
     const catalogKeys = wfCat ? wfCat.permissions.map(p => p.key) : [];
     const missingKeys = requiredKeys.filter(k => !catalogKeys.includes(k));
@@ -1422,6 +1423,14 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Package 2 M6 (from TD-887): pick lists for forms, full lists by the section's own permission
   const { runAccessPackageTwoPickListTests } = await import('../security/accessPackageTwoPickListTests.js');
   results.push(...await runAccessPackageTwoPickListTests(shouldRunAccess));
+  // Package 2, audit-log group (from TD-522): purge and masking of the audit log
+  const { runAccessPackageTwoAuditTests } = await import('../security/accessPackageTwoAuditTests.js');
+  results.push(...await runAccessPackageTwoAuditTests(shouldRunAccess));
+  // Package 2, password group (from TD-532): password policy
+  const { runAccessPackageTwoPasswordTests } = await import('../security/accessPackageTwoPasswordTests.js');
+  results.push(...await runAccessPackageTwoPasswordTests(shouldRunAccess));
+  const { runAccessPackageTwoQualityTests } = await import('../security/accessPackageTwoQualityTests.js');
+  results.push(...await runAccessPackageTwoQualityTests(shouldRunAccess));
   // Package 14, PR د (from TD-462): approval inbox rows
   const { runWorkflowInboxTests } = await import('../security/workflowInboxTests.js');
   results.push(...await runWorkflowInboxTests(shouldRunAccess));

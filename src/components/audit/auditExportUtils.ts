@@ -1,10 +1,16 @@
 import toast from 'react-hot-toast';
-import { formatPersianDateTime } from '../../utils';
+import { formatPersianDateTime, formatPersianNumber, getTodayJalaliDate } from '../../utils';
+import { auditActionLabel } from '../../lib/audit/auditActionLabels';
 import { parseUserAgent } from '../../utils/userAgentParser';
+
+/** v9.0.216 (TD-538): نام فایل با تاریخ شمسی امروزِ منطقه زمانی توافقی، نه روز میلادی UTC */
+export function auditExportFileName(jalaliDate: string): string {
+  return `گزارش-سجل-رویدادها-${jalaliDate.replace(/\//g, '-')}.xlsx`;
+}
 
 export interface AuditExportRow {
   id: number;
-  timestamp: string | number;
+  timestamp?: string | number;
   username: string;
   userFullName?: string | null;
   action: string;
@@ -15,7 +21,8 @@ export interface AuditExportRow {
   details?: any;
 }
 
-export async function exportAuditLogsToExcel(logs: AuditExportRow[], filterSummary?: string): Promise<void> {
+/** v9.0.215 (TD-527): `total` شمار کل ردیف‌های پالایه از سرور است؛ وقتی فایل کمتر از آن دارد، پیام همین را می‌گوید */
+export async function exportAuditLogsToExcel(logs: AuditExportRow[], total: number = logs.length): Promise<void> {
   if (!logs || logs.length === 0) {
     toast.error('هیچ لاگی برای دریافت خروجی اکسل موجود نیست.');
     return;
@@ -28,15 +35,15 @@ export async function exportAuditLogsToExcel(logs: AuditExportRow[], filterSumma
       const parsedUA = parseUserAgent(log.details?.userAgent);
       return {
         'ردیف': index + 1,
-        'شناسه لاگ': log.id,
+        'شناسه رویداد': log.id,
         'تاریخ و زمان (شمسی)': formatPersianDateTime(log.timestamp),
         'نام کاربری': log.username,
         'نام کامل کاربر': log.userFullName || '—',
-        'نوع اقدام': log.action,
+        'نوع اقدام': auditActionLabel(log.action),
         'بخش / موجودیت': log.entity,
         'شناسه موجودیت': log.entityId || '—',
         'شرح رویداد': log.description,
-        'آدرس IP': log.ipAddress || '—',
+        'نشانی IP': log.ipAddress || '—',
         'دستگاه': parsedUA.deviceLabel,
         'سیستم‌عامل': parsedUA.os,
         'مرورگر': parsedUA.browser
@@ -66,11 +73,13 @@ export async function exportAuditLogsToExcel(logs: AuditExportRow[], filterSumma
     const sheetName = 'سجل_تغییرات_سیستم';
     xlsx.utils.book_append_sheet(workbook, worksheet, sheetName);
 
-    const now = new Date().toISOString().slice(0, 10);
-    const fileName = `گزارش_سجل_تغییرات_ERP_${now}.xlsx`;
-    xlsx.writeFile(workbook, fileName);
+    xlsx.writeFile(workbook, auditExportFileName(getTodayJalaliDate()));
 
-    toast.success(`فایل اکسل با موفقیت ایجاد شد (${logs.length} رکورد)`);
+    if (logs.length < total) {
+      toast(`فقط ${formatPersianNumber(logs.length)} ردیف اول از ${formatPersianNumber(total)} ردیف در فایل اکسل آمده است؛ برای همه ردیف‌ها پالایه را محدودتر کنید.`, { duration: 8000 });
+    } else {
+      toast.success(`فایل اکسل با موفقیت ایجاد شد (${formatPersianNumber(logs.length)} رکورد)`);
+    }
   } catch (error) {
     console.error('Failed to export audit logs to Excel:', error);
     toast.error('خطا در ایجاد فایل اکسل سجل تغییرات');

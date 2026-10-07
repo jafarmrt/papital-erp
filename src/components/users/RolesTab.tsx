@@ -3,6 +3,7 @@ import { Role, User } from '../../types';
 import { Plus, Trash2, Edit2, Users, Check, ShieldCheck, Layers } from 'lucide-react';
 import { isSystemAdminRole, withRequiredPermissions } from '../../lib/permissions/permissionCatalog';
 import { ROLE_TEMPLATES, type RoleTemplate } from '../../lib/permissions/roleTemplates';
+import { formatPersianNumber } from '../../utils';
 
 interface RolesTabProps {
   rolesList: Role[];
@@ -81,7 +82,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
               >
                 <span className="block font-bold text-xs text-slate-800">{t.name}</span>
                 <span className="block text-[11px] text-slate-500 mt-1 line-clamp-2">{t.description}</span>
-                <span className="block text-[11px] text-amber-800 mt-1.5">{withRequiredPermissions(t.permissions).length} مجوز</span>
+                <span className="block text-[11px] text-amber-800 mt-1.5">{formatPersianNumber(withRequiredPermissions(t.permissions).length)} مجوز</span>
               </button>
             ))}
           </div>
@@ -134,8 +135,8 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                     </span>
                   )}
                 </div>
-                <p className="text-xs font-mono text-slate-400 mb-2" dir="ltr">
-                  code: {r.code}
+                <p className="text-xs text-slate-400 mb-2">
+                  کد نقش: <span className="font-mono" dir="ltr">{r.code}</span>
                 </p>
                 <p className="text-xs text-slate-600 line-clamp-2 min-h-[32px]">
                   {r.description || 'بدون توضیحات'}
@@ -145,13 +146,13 @@ export const RolesTab: React.FC<RolesTabProps> = ({
               <div className="space-y-3 pt-3 border-t">
                 <div className="flex justify-between items-center text-xs text-slate-500">
                   <span className="flex items-center gap-1 font-medium">
-                    <Users size={14} className="text-blue-500" /> {userCountWithRole} کاربر فعال
+                    <Users size={14} className="text-blue-500" /> {formatPersianNumber(userCountWithRole)} کاربر فعال
                   </span>
                   <span className="text-slate-500 font-medium flex items-center gap-1">
                     <Check size={14} className="text-emerald-600" />
                     {isSystemAdminRole(r.code)
                       ? 'دسترسی نامحدود'
-                      : `${permCount} از ${totalCatalogPermsCount} کلید`}
+                      : `${formatPersianNumber(permCount)} از ${formatPersianNumber(totalCatalogPermsCount)} کلید`}
                   </span>
                 </div>
 

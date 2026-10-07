@@ -60,9 +60,8 @@ export const purgeActivityLogsSchema = z.object({
   body: z.object({
     retentionDays: z.number({ message: 'مدت نگه‌داشت باید عدد باشد' }).int('مدت نگه‌داشت باید عدد صحیح باشد')
       .positive('مدت نگه‌داشت باید مثبت باشد').max(36500, 'مدت نگه‌داشت حداکثر ۳۶۵۰۰ روز است').optional(),
-    preserveCritical: z.boolean({ message: 'preserveCritical باید true یا false باشد' }).optional(),
-    allowForceRecent: z.boolean({ message: 'allowForceRecent باید true یا false باشد' }).optional(),
-  }).optional()
+    // v9.0.212 (TD-522، تصمیم ت۴ الف): خاموش کردن حفاظت و پاک کردن زودتر از ۹۰ روز گزینه‌ای ندارد؛ کلید ناشناخته ۴۰۰ است
+  }).strict().optional()
 });
 
 export const reconciliationFixSchema = z.object({
@@ -170,11 +169,9 @@ router.get('/activity-logs/filters', authorizePermission('audit_logs.view'), asy
 
 // Purge old audit logs (Admin only with strict retention policy enforcement - Sub-phase 1.5 / D-2)
 router.post('/activity-logs/purge', requireSystemAdmin, validate(purgeActivityLogsSchema), asyncHandler(async (req, res) => {
-  const { retentionDays, preserveCritical, allowForceRecent } = (req.body || {}) as NonNullable<z.infer<typeof purgeActivityLogsSchema>['body']>;
+  const { retentionDays } = (req.body || {}) as NonNullable<z.infer<typeof purgeActivityLogsSchema>['body']>;
   const report = await purgeOldAuditLogs({
     retentionDays,
-    preserveCritical: preserveCritical ?? true,
-    allowForceRecent: allowForceRecent === true,
     actorUsername: req.user?.username,
     actorUserId: req.user?.id,
     actorIp: extractClientIp(req)

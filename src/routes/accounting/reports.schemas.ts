@@ -73,7 +73,7 @@ export const journalBookQuerySchema = z.object({
     endDate: storageDateParam,
     search: z.string().optional(),
     currency: z.string().optional(),
-    // v9.0.213 (TD-561): یک صفحه از ردیف‌ها (پیش‌فرض JOURNAL_BOOK_PAGE_SIZE)
+    // v9.0.227 (TD-561): یک صفحه از ردیف‌ها (پیش‌فرض JOURNAL_BOOK_PAGE_SIZE)
     page: z.coerce.number().int().positive().optional(),
     limit: z.coerce.number().int().positive().max(JOURNAL_BOOK_MAX_PAGE_SIZE).optional(),
   }).optional()

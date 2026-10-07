@@ -23,7 +23,7 @@ import AccountingPage from '../../pages/AccountingPage';
 import { FiscalYearClosingTab } from '../../components/accounting/FiscalYearClosingTab';
 import { ChartOfAccountsSettingsTab } from '../../components/settings/ChartOfAccountsSettingsTab';
 
-// v9.0.214 (TD-567, B03-25): each accounting button asks the key of its own API. Before, the manager, CFO and accountant saw
+// v9.0.228 (TD-567, B03-25): each accounting button asks the key of its own API. Before, the manager, CFO and accountant saw
 // «execute the year closing» (accounting.fiscal_close) and «sync the default chart» (system admin) and got 403, and the treasurer
 // opened the full voucher form from the dashboard and got 403 on save.
 
