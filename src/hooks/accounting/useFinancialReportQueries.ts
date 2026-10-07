@@ -17,7 +17,7 @@ import { reportFromResponse, useOnDemandReport, type OnDemandReportSpec } from '
 
 const R = QUERY_KEYS.accounting.report;
 
-/** v9.0.120 (TD-545): «همراه اسناد اختتامیه» (پیش‌فرض اسناد بستن سالِ روز پایان گزارش شمرده نمی‌شوند) */
+/** v9.0.143 (TD-545): «همراه اسناد اختتامیه» (پیش‌فرض اسناد بستن سالِ روز پایان گزارش شمرده نمی‌شوند) */
 export interface ClosingVouchersParam { includeClosing?: boolean }
 export interface TrialBalanceParams extends ClosingVouchersParam { level: string; startDate?: string; endDate?: string }
 export interface DateRangeParams { startDate?: string; endDate?: string }

@@ -34,7 +34,7 @@ function renderTab() {
 
 const BOX = 'همراه اسناد اختتامیه';
 
-// v9.0.120 (TD-545, B03-03, product-owner decision t3 option A): once a year was closed, every report up to its last day showed
+// v9.0.143 (TD-545, B03-03, product-owner decision t3 option A): once a year was closed, every report up to its last day showed
 // it as zero. The server now leaves the closing run's vouchers out by default; the box «همراه اسناد اختتامیه» brings them back.
 describe('reports leave year-end closing vouchers out unless the box is ticked (TD-545)', () => {
   it('the report URLs carry includeClosing only when the box is ticked', () => {

@@ -16,7 +16,7 @@ interface FiscalYearClosingTabProps {
 export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYearClosingTabProps) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
-  // v9.0.122 (TD-543، تصمیم ت۱ مالک محصول): فقط سال‌های تمام‌شده از سرور؛ سال جاری و آینده بسته نمی‌شوند. پیش‌تر فرم سال جاری
+  // v9.0.145 (TD-543، تصمیم ت۱ مالک محصول): فقط سال‌های تمام‌شده از سرور؛ سال جاری و آینده بسته نمی‌شوند. پیش‌تر فرم سال جاری
   // را پیش‌فرض داشت و همان را با یک تأیید می‌بست
   const yearsQuery = useFiscalClosingYears();
   const yearsInfo = yearsQuery.data;
@@ -78,9 +78,9 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
   const safeNetProfit = previewData?.summary?.netProfit ?? previewData?.netProfit ?? 0;
   const isNetProfitPositive = previewData?.summary?.isProfit ?? previewData?.isProfit ?? (safeNetProfit >= 0);
   const draftVoucherCount = previewData?.draftVoucherCount ?? 0;
-  // v9.0.122 (TD-543): سال تمام‌نشده (پیش‌نمایش کهنه) یا بسته اجرا نمی‌شود
+  // v9.0.145 (TD-543): سال تمام‌نشده (پیش‌نمایش کهنه) یا بسته اجرا نمی‌شود
   const yearNotEnded = previewData?.yearEnded === false;
-  // v9.0.123 (TD-544): سال‌ها به ترتیب بسته می‌شوند؛ سال پیشینِ دارای سند و باز این سال را نگه می‌دارد
+  // v9.0.146 (TD-544): سال‌ها به ترتیب بسته می‌شوند؛ سال پیشینِ دارای سند و باز این سال را نگه می‌دارد
   const earlierOpenYears = previewData?.earlierOpenYears ?? [];
   const earlierOpenText = earlierOpenYears.map(y => toPersianDigits(y)).join('، ');
   const closingBlocked = draftVoucherCount > 0 || yearNotEnded || isSelectedClosed || earlierOpenYears.length > 0;
@@ -88,7 +88,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
     : yearNotEnded ? `سال مالی ${toPersianDigits(selectedYear)} هنوز تمام نشده است`
     : earlierOpenYears.length > 0 ? `ابتدا سال ${earlierOpenText} را ببندید`
     : draftVoucherCount > 0 ? 'ابتدا اسناد پیش‌نویس این سال را تأیید یا حذف کنید' : undefined;
-  // v9.0.124 (TD-577): بی سند افتتاحیه، سال بعد بی مانده ابتدای دوره آغاز می‌شود
+  // v9.0.147 (TD-577): بی سند افتتاحیه، سال بعد بی مانده ابتدای دوره آغاز می‌شود
   const noOpeningVoucherText = `سند افتتاحیه صادر نمی‌شود؛ سال مالی ${toPersianDigits(Number(selectedYear) + 1)} بی مانده ابتدای دوره آغاز می‌شود`;
 
   // Normalize temporary accounts (revenue / expense)
@@ -656,7 +656,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                     </span>
                   </div>
                 ) : (
-                  // v9.0.124 (TD-577): بی تیک، سند اختتامیه مانده‌های دائمی را صفر می‌کند و سند افتتاحیه‌ای صادر نمی‌شود
+                  // v9.0.147 (TD-577): بی تیک، سند اختتامیه مانده‌های دائمی را صفر می‌کند و سند افتتاحیه‌ای صادر نمی‌شود
                   <div role="alert" className="p-4 bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40 rounded-xl flex items-center gap-3 text-xs text-amber-800 dark:text-amber-300">
                     <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600" />
                     <span>

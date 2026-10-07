@@ -1062,7 +1062,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_fiscal_year_isolation_and_calendar_td_141_142', 'td141', 'td142', 'fiscal_year', 'closing')) {
   const t14Start = Date.now();
   try {
-    // v9.0.122 (TD-543): a year closes only after its end, so the test closes a past year inside its own schema (a closed
+    // v9.0.145 (TD-543): a year closes only after its end, so the test closes a past year inside its own schema (a closed
     // year in the shared schema would refuse every later test's vouchers of that year)
     const { inFiscalSandbox } = await import('../regression/fiscalClosingTests.js');
     await inFiscalSandbox(async () => {
@@ -1081,7 +1081,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       throw new Error(`نرمال‌سازی تاریخ ۱۴۰۳/۰۱/۰۱ باید 2024-03-20 باشد اما مقدار ${normIso2} بازگشت داده شد.`);
     }
 
-    // 2. A past fiscal year inside the test's own schema (v9.0.122, TD-543: a year that has not ended is never closed)
+    // 2. A past fiscal year inside the test's own schema (v9.0.145, TD-543: a year that has not ended is never closed)
     const testYear = 1392;
     // v8.0.47 (TD-310): سند اختتامیه فقط به آخرین روز سال (۳۰ اسفند در سال کبیسه) پذیرفته می‌شود
     const { jalaliYearBounds } = await import('../../utils/calendarDate.js');
@@ -4381,7 +4381,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const tStart = Date.now();
     const createdVoucherIds: number[] = [];
     try {
-      // v9.0.122 (TD-543): a year closes only after its end; past years inside the test's own schema
+      // v9.0.145 (TD-543): a year closes only after its end; past years inside the test's own schema
       const { inFiscalSandbox } = await import('../regression/fiscalClosingTests.js');
       await inFiscalSandbox(async () => {
       const { FiscalYearService } = await import('../../services/accounting/fiscalYear.service.js');
@@ -4394,7 +4394,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const revAccount = allAccounts.find(a => a.code === '6001') || allAccounts.find(a => a.accountType === 'revenue');
       const assetAccount = allAccounts.find(a => a.code === '1101') || allAccounts.find(a => a.accountType === 'asset');
       if (!revAccount || !assetAccount) throw new Error('سرفصل‌های لازم آزمون یافت نشد');
-      // v9.0.122 (TD-543): سال‌های گذشته در اسکیمای خود آزمون؛ سال B که بسته می‌شود پیش از سال‌های A و C است
+      // v9.0.145 (TD-543): سال‌های گذشته در اسکیمای خود آزمون؛ سال B که بسته می‌شود پیش از سال‌های A و C است
       const baseYear = 1393;
       const voucher = (year: number, amount: number, extra: Record<string, unknown> = {}) => ({
         date: normalizeDateToIso(`${year}-06-15`) as string,
@@ -5120,9 +5120,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         ['production', production, '/api/items', 200],
         ['production', production, '/api/piecework/payrolls', 403],
         ['production', production, '/api/users', 403],
-        // خزانه‌دار: فیش‌ها (پرداخت) و فهرست کالا برای صفحه ورود و خروج انبار بله، قیمت‌ها نه
+        // خزانه‌دار: فیش‌ها (پرداخت) و فهرست انتخاب کالا برای صفحه ورود و خروج انبار بله، قیمت‌ها نه؛ فهرست کامل کالا از
+        // v9.0.138 (TD-888، ت۱۰ الف) فقط با مجوزهای بخش کالا
         ['treasurer', treasurer, '/api/piecework/payrolls', 200],
-        ['treasurer', treasurer, '/api/items', 200],
+        ['treasurer', treasurer, '/api/items/options', 200],
+        ['treasurer', treasurer, '/api/items', 403],
         ['treasurer', treasurer, '/api/items/prices/all', 403],
         ['treasurer', treasurer, '/api/customers/export-excel', 200],
         // دارنده مجوز فیش و مدیر کاربران
@@ -8604,7 +8606,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const testName = 'v7.0.101: یادآوری یک‌باره مهلت کار تاییدی به مسئول کار (TD-085)';
     const {
       workflowDefinitions, workflowStates, workflowTransitions, workflowInstances, workflowHistoryLogs,
-      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users, notifications,
+      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users, notifications, roles,
     } = await import('../../db/schema.js');
     const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
     const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
@@ -8616,6 +8618,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const userIds: number[] = [];
     try {
       const violations: string[] = [];
+      // v9.0.128 (TD-542): نقش گام باید تعریف شده باشد
+      await orm.insert(roles).values({ code: role, name: `نقش آزمون مهلت ${suffix}`, permissions: [] });
       for (const [name, userRole] of [['a', role], ['b', role], ['other', `reg_other_${suffix}`]] as const) {
         const [u] = await orm.insert(users).values({
           username: `reg_sla_${name}_${suffix}`, password: 'x', fullName: `کاربر آزمون مهلت ${name}`, role: userRole,
@@ -8691,6 +8695,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
       }
       if (userIds.length > 0) await orm.delete(users).where(inArray(users.id, userIds));
+      await orm.delete(roles).where(eq(roles.code, role));
     }
   }
 
@@ -8701,7 +8706,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const testName = 'v7.0.101: کار تاییدی منقضی نمی‌شود و کارهای منقضی‌شده مرحله جاری با گزارش بازگشایی می‌شوند (TD-085)';
     const {
       workflowDefinitions, workflowStates, workflowTransitions, workflowInstances, workflowHistoryLogs,
-      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users,
+      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users, roles,
     } = await import('../../db/schema.js');
     const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
     const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
@@ -8715,6 +8720,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     let userId: number | undefined;
     try {
       const violations: string[] = [];
+      // v9.0.128 (TD-542): نقش گام باید تعریف شده باشد
+      await orm.insert(roles).values({ code: role, name: `نقش آزمون بازگشایی ${suffix}`, permissions: [] });
       const [u] = await orm.insert(users).values({
         username: `reg_reopen_${suffix}`, password: 'x', fullName: 'کاربر آزمون بازگشایی', role,
       }).returning({ id: users.id });
@@ -8818,6 +8825,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
       }
       if (userId) await orm.delete(users).where(eq(users.id, userId));
+      await orm.delete(roles).where(eq(roles.code, role));
     }
   }
 
@@ -10535,7 +10543,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR a (v9.0.115 on): accounting reports and lists in the UI (TD-565 ...)
   const { runAccountingReportsTests } = await import('../regression/accountingReportsTests.js');
   results.push(...await runAccountingReportsTests(shouldRun));
-  // Package 3 PR b (v9.0.120 on): fiscal-year closing and reopening (TD-545 ...)
+  // Package 3 PR b (v9.0.143 on): fiscal-year closing and reopening (TD-545 ...)
   const { runFiscalClosingTests } = await import('../regression/fiscalClosingTests.js');
   results.push(...await runFiscalClosingTests(shouldRun));
   const { runFiscalYearOrderTests } = await import('../regression/fiscalYearOrderTests.js');

@@ -262,7 +262,7 @@ export class VoucherService {
     /** v8.0.19 (TD-271): چکی که این سند در چرخه عمر آن صادر می‌شود */
     sourceChequeId?: number | null;
     sourceBomAllocationId?: number | null;
-    /** v9.0.120 (TD-545): فقط برای اسناد اختتامیه و افتتاحیه‌ای که بستن سال مالی صادر می‌کند */
+    /** v9.0.143 (TD-545): فقط برای اسناد اختتامیه و افتتاحیه‌ای که بستن سال مالی صادر می‌کند */
     sourceFiscalYear?: number | null;
     currency?: string;
     attachments?: unknown[];
@@ -503,7 +503,7 @@ export class VoucherService {
     username?: string;
     externalTx: DbExecutor;
     allowReversalOfReversal?: boolean;
-    /** فقط بازگشایی سال مالی (v9.0.121، TD-559) */
+    /** فقط بازگشایی سال مالی (v9.0.144، TD-559) */
     allowYearEndClosing?: boolean;
   }): Promise<{ action: 'deleted' | 'reversed'; reversalVoucherId: number | null }> {
     const tx = params.externalTx;
@@ -563,7 +563,7 @@ export class VoucherService {
   }
 
   /**
-   * v9.0.121 (TD-559، B03-17): سندی که بستن سال مالی صادر کرده (پیوند `source_fiscal_year`، TD-545) فقط با بازگشایی همان
+   * v9.0.144 (TD-559، B03-17): سندی که بستن سال مالی صادر کرده (پیوند `source_fiscal_year`، TD-545) فقط با بازگشایی همان
    * سال برمی‌گردد. پیش‌تر نگهبان نوع `closing` را می‌سنجید: افتتاحیه دستی‌ای که فرم با نوع اختتامیه ذخیره کرده بود دیگر
    * معکوس و اصلاح نمی‌شد، و سند افتتاحیه بستن سال (نوع `opening`) به پیش‌نویس برمی‌گشت و حذف می‌شد.
    */
@@ -602,7 +602,7 @@ export class VoucherService {
 
       if (!original) throw new NotFoundError('سند مبدا یافت نشد یا قبلاً حذف شده است');
 
-      // v9.0.121 (TD-559): سند بستن سال فقط با بازگشایی همان سال برمی‌گردد (پیوند، نه نوع سند)
+      // v9.0.144 (TD-559): سند بستن سال فقط با بازگشایی همان سال برمی‌گردد (پیوند، نه نوع سند)
       if (!params.allowYearEndClosing) this.assertNotYearEndClosing(original, 'مستقیم ابطال نمی‌شود');
       // v8.0.70 (TD-323، قاعده TD-251): سند پیش‌نویس سند معکوس تأییدشده نمی‌گیرد؛ پیش‌تر می‌گرفت و دفاتر تأییدشده فقط
       // سند معکوس را می‌دیدند
@@ -664,7 +664,7 @@ export class VoucherService {
         voucherNumber: nextNumber,
         manualVoucherNumber: '',
         date: reversalDate,
-        // v9.0.121 (TD-559): برگشت سند بستن سال (بازگشایی) نوع و پیوند همان سال را می‌گیرد تا گزارش‌ها جفت را با هم بشمارند
+        // v9.0.144 (TD-559): برگشت سند بستن سال (بازگشایی) نوع و پیوند همان سال را می‌گیرد تا گزارش‌ها جفت را با هم بشمارند
         voucherType: original.sourceFiscalYear != null ? original.voucherType : 'adjustment',
         sourceFiscalYear: original.sourceFiscalYear ?? null,
         status: 'approved',

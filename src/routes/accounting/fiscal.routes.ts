@@ -23,7 +23,7 @@ const router = Router();
 // 7. FISCAL YEAR CLOSING & INVOICE VOUCHER SYNC
 // ==========================================
 
-// v9.0.122 (TD-543): سال‌های تمام‌شده با وضعیت بسته/باز، سال پیش‌فرض فرم و تنها سال قابل بازگشایی
+// v9.0.145 (TD-543): سال‌های تمام‌شده با وضعیت بسته/باز، سال پیش‌فرض فرم و تنها سال قابل بازگشایی
 router.get('/accounting/fiscal-closing/years', requirePermission('accounting.vouchers'), asyncHandler(async (_req, res) => {
   res.json(await getFiscalClosingYears());
 }));
@@ -65,7 +65,7 @@ router.post('/accounting/fiscal-closing/execute', authorizePermission('accountin
   res.json(result);
 }));
 
-// v9.0.122 (TD-543، تصمیم ت۲ مالک محصول): فقط آخرین سال بسته، با دلیل؛ ممیزی درون تراکنش بازگشایی ثبت می‌شود
+// v9.0.145 (TD-543، تصمیم ت۲ مالک محصول): فقط آخرین سال بسته، با دلیل؛ ممیزی درون تراکنش بازگشایی ثبت می‌شود
 router.post('/accounting/fiscal-closing/reopen', requirePermission('accounting.fiscal_reopen'), validate(fiscalYearReopenSchema), asyncHandler(async (req, res) => {
   const { year, reason } = req.body;
   const result = await reopenFiscalYear({

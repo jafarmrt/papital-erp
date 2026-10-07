@@ -5,6 +5,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import { listFromResponse } from '../../lib/invoices/invoiceForm';
 import { reorderItemsFromResponse, type ReorderItem } from '../../lib/reorderAlerts/reorderItems';
 import type { Customer } from '../../types';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 
 /**
  * صفحه نقطه سفارش: خواندنی‌های صفحه با React Query (FE-005) به‌جای fetchJson/useState دستی.
@@ -15,7 +16,7 @@ import type { Customer } from '../../types';
 const FIVE_MINUTES = 5 * 60 * 1000;
 const REORDER_ALERTS_KEY = QUERY_KEYS.items.reorderAlerts();
 // فهرست طرف‌حساب‌های مودال سفارش خرید (GET /customers?limit=1000)؛ کلید جدا از فهرست‌های صفحه‌بندی‌شده مشتریان
-const SUPPLIERS_KEY = QUERY_KEYS.customers.list({ scope: 'reorder-suppliers', limit: 1000 });
+const SUPPLIERS_KEY = QUERY_KEYS.customers.options({ scope: 'reorder-suppliers' });
 // آرایه‌های خالی ثابت تا محاسبات وابسته به لیست‌ها با هر رندر دوباره اجرا نشوند
 const NO_ITEMS: ReorderItem[] = [];
 const NO_SUPPLIERS: Customer[] = [];
@@ -57,7 +58,7 @@ export function useReorderSuppliersQuery(enabled: boolean): Customer[] {
     enabled,
     queryFn: async ({ signal }) => {
       try {
-        return listFromResponse<Customer>(await fetchJson<unknown>('/customers?limit=1000', { signal }));
+        return listFromResponse<Customer>(await fetchJson<unknown>(PICK_LIST_URLS.customers, { signal }));
       } catch (err: unknown) {
         if (!signal.aborted) console.error('Error fetching suppliers:', err);
         throw err;

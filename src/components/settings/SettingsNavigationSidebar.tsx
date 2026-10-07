@@ -1,6 +1,7 @@
 import { Search, X, ChevronLeft } from 'lucide-react';
 import { SettingCategoryGroup } from './settingsNavigationConfig';
 import { cn } from '../../utils';
+import { isSystemAdminSettingsTab } from '../../lib/permissions/pageAccess';
 
 interface SettingsNavigationSidebarProps {
   groups: SettingCategoryGroup[];
@@ -172,9 +173,9 @@ export function SettingsNavigationSidebar({
                               )}>
                                 {tab.label}
                               </span>
-                              {tab.adminOnly && (
+                              {isSystemAdminSettingsTab(tab.id) && (
                                 <span className="text-[9px] px-1 py-0.2 rounded bg-rose-100 text-rose-700 font-bold">
-                                  مدیر
+                                  مدیر سیستم
                                 </span>
                               )}
                             </div>

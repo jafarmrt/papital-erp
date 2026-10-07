@@ -18,6 +18,7 @@ import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNam
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
+import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
 import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
@@ -1076,6 +1077,11 @@ export class FinancialHealthService {
     overallScore += unguardedApprovalTest.scoreImpact;
     tests.push(unguardedApprovalTest);
 
+    // آزمون ۱۷ب: v9.0.128 (TD-542) گام‌های گردش کاری که مهاجرت 0065 برای بازبینی نقش فهرست کرد
+    const workflowRoleReviewTest = buildWorkflowRoleReviewHealthTest(await findWorkflowRoleReviews());
+    overallScore += workflowRoleReviewTest.scoreImpact;
+    tests.push(workflowRoleReviewTest);
+
     // آزمون ۱۸: v9.0.37 (TD-455) یک فرایند در جریان برای هر موجودیت (مهاجرت 0056)
     const [duplicateOpenInstances, openInstanceIndexPresent] = await Promise.all([findDuplicateOpenInstances(), hasOpenInstanceUniqueIndex()]);
     const openInstanceTest = buildOpenInstanceHealthTest(duplicateOpenInstances, openInstanceIndexPresent);
@@ -1107,13 +1113,13 @@ export class FinancialHealthService {
     overallScore += reservedWarehouseCodeTest.scoreImpact;
     tests.push(reservedWarehouseCodeTest);
 
-    // آزمون ۲۴: v9.0.121 (TD-559) اسناد دستی با نوع اختتامیه که بستن سال صادر نکرده (فقط فهرست، بی بازنویسی)
+    // آزمون ۲۴: v9.0.144 (TD-559) اسناد دستی با نوع اختتامیه که بستن سال صادر نکرده (فقط فهرست، بی بازنویسی)
     tests.push(buildManualClosingTypeHealthTest(await findManualClosingTypeVouchers()));
 
-    // آزمون ۲۵: v9.0.122 (TD-543) سال مالی بسته‌شده پیش از پایانش (فقط فهرست؛ آخرین سال بسته با بازگشایی باز می‌شود)
+    // آزمون ۲۵: v9.0.145 (TD-543) سال مالی بسته‌شده پیش از پایانش (فقط فهرست؛ آخرین سال بسته با بازگشایی باز می‌شود)
     tests.push(buildEarlyClosedYearsHealthTest(await findEarlyClosedYears()));
 
-    // آزمون ۲۶: v9.0.123 (TD-544) سال مالی بسته‌شده پیش از سال‌های پیشینِ دارای سند خود (فقط فهرست، بی اصلاح خودکار)
+    // آزمون ۲۶: v9.0.146 (TD-544) سال مالی بسته‌شده پیش از سال‌های پیشینِ دارای سند خود (فقط فهرست، بی اصلاح خودکار)
     tests.push(buildOutOfOrderClosedYearsHealthTest(await findOutOfOrderClosedYears()));
 
     // =========================================================================

@@ -74,9 +74,9 @@ export class AccountingReportService {
     startDate?: string;
     endDate?: string;
     currency?: string;
-    /** v9.0.120 (TD-545): «همراه اسناد اختتامیه»؛ پیش‌فرض اسناد بستن سالِ روز پایان گزارش کنار می‌روند */
+    /** v9.0.143 (TD-545): «همراه اسناد اختتامیه»؛ پیش‌فرض اسناد بستن سالِ روز پایان گزارش کنار می‌روند */
     includeClosing?: boolean;
-    /** v9.0.120 (TD-545): اسناد بستن سال از آغاز دوره به بعد کنار می‌روند (صورت سود و زیان)؛ پیش‌فرض از تاریخ پایان */
+    /** v9.0.143 (TD-545): اسناد بستن سال از آغاز دوره به بعد کنار می‌روند (صورت سود و زیان)؛ پیش‌فرض از تاریخ پایان */
     closingFromStart?: boolean;
   }, tx?: DbExecutor): Promise<TrialBalanceRow[]> {
     const executor = tx || orm;
@@ -1103,7 +1103,7 @@ export class AccountingReportService {
    * Income Statement / Profit & Loss (صورت سود و زیان با پشتیبانی از ارز)
    */
   static async getIncomeStatement(params: { startDate?: string; endDate?: string; currency?: string; includeClosing?: boolean }, tx?: DbExecutor): Promise<IncomeStatementReport> {
-    // v9.0.120 (TD-545): گردش حساب‌های موقت در دوره بی اسناد بستن سالِ درون دوره؛ بی آغاز دوره، از روز پایان
+    // v9.0.143 (TD-545): گردش حساب‌های موقت در دوره بی اسناد بستن سالِ درون دوره؛ بی آغاز دوره، از روز پایان
     const trial = await this.getTrialBalance({ level: 'subsidiary', ...params, closingFromStart: true }, tx);
 
     const revenues: StatementRow[] = [];

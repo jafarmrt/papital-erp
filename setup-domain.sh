@@ -22,7 +22,7 @@ die()      { log "ERROR: $*"; exit 1; }
 
 APP_DIR="${APP_DIR:-/opt/papital-erp}"
 SERVICE_NAME="papital-erp"
-APP_PORT="${APP_PORT:-3000}"
+APP_PORT="${APP_PORT:-}"
 DOMAIN="${DOMAIN:-}"
 EMAIL="${EMAIL:-}"
 
@@ -40,6 +40,11 @@ if [ -z "$EMAIL" ]; then
   [ -n "$EMAIL" ] || die "Email is required."
 fi
 [ -f "$APP_DIR/.env" ] || die ".env not found in $APP_DIR — run install.sh first."
+# v9.0.124 (TD-587): the app listens on PORT from .env (install.sh writes it); Nginx must proxy to that port
+if [ -z "$APP_PORT" ]; then
+  APP_PORT="$(grep -E '^PORT=' "$APP_DIR/.env" | head -1 | cut -d= -f2- | tr -d "\"'" || true)"
+fi
+APP_PORT="${APP_PORT:-3000}"
 
 # ---------- 2) DNS sanity check ----------
 SERVER_IP="$(curl -fsS4 https://api.ipify.org 2>/dev/null || echo '')"

@@ -111,12 +111,12 @@ export class FiscalYearService {
 
     const normClosingDate = closingDate;
     const draftVouchers = await this.findDraftVouchersOfYear(currentYear, params.externalTx);
-    // v9.0.122 (TD-543): سالی که هنوز تمام نشده پیش‌نمایش می‌شود ولی بسته نمی‌شود
+    // v9.0.145 (TD-543): سالی که هنوز تمام نشده پیش‌نمایش می‌شود ولی بسته نمی‌شود
     const yearEnded = isFiscalYearEnded(currentYear, await businessTodayIsoDate());
-    // v9.0.123 (TD-544): سال‌های پیشینِ دارای سند که هنوز بازند؛ تا بسته نشوند این سال بسته نمی‌شود
+    // v9.0.146 (TD-544): سال‌های پیشینِ دارای سند که هنوز بازند؛ تا بسته نشوند این سال بسته نمی‌شود
     const earlierOpenYears = await findEarlierOpenYears(params.externalTx ?? orm, currentYear);
 
-    // v9.0.120 (TD-545): بستن سال مانده واقعی دفتر را می‌خواهد، پس اسناد اختتامیه (و برگشت آن‌ها پس از بازگشایی) هم شمرده می‌شوند
+    // v9.0.143 (TD-545): بستن سال مانده واقعی دفتر را می‌خواهد، پس اسناد اختتامیه (و برگشت آن‌ها پس از بازگشایی) هم شمرده می‌شوند
     const trial = await AccountingReportService.getTrialBalance({
       level: 'subsidiary',
       endDate: normClosingDate,
@@ -312,7 +312,7 @@ export class FiscalYearService {
     // v8.0.47 (TD-310): تاریخ‌ها همیشه آخرین روز سال و ۱ فروردین سال بعد؛ تاریخ دیگر رد می‌شود
     const { year, closingDate: normClosingDate, openingDate: normOpeningDate } =
       resolveFiscalClosingDates(data.year, data.closingDate, data.openingDateNewYear);
-    // v9.0.122 (TD-543، تصمیم ت۱ مالک محصول): سال فقط پس از آخرین روزش بسته می‌شود؛ پیش‌تر سال جاری و حتی سال آینده بسته
+    // v9.0.145 (TD-543، تصمیم ت۱ مالک محصول): سال فقط پس از آخرین روزش بسته می‌شود؛ پیش‌تر سال جاری و حتی سال آینده بسته
     // می‌شد و از آن لحظه هیچ سندی با تاریخ امروز ثبت نمی‌شد
     assertFiscalYearEnded(year, await businessTodayIsoDate());
 
@@ -359,15 +359,15 @@ export class FiscalYearService {
         );
       }
 
-      // v9.0.122 (TD-543): بستن و بازگشایی سال‌ها پشت یک قفل؛ وضعیت سال‌های دیگر تا پایان این تراکنش عوض نمی‌شود
+      // v9.0.145 (TD-543): بستن و بازگشایی سال‌ها پشت یک قفل؛ وضعیت سال‌های دیگر تا پایان این تراکنش عوض نمی‌شود
       await lockFiscalYearSequence(tx);
 
       // v7.0.49 (audit P2-5): قفل انحصاری ردیف سال در fiscal_periods — منتظر اسنادی می‌ماند که هم‌اکنون در این سال
       // ثبت می‌شوند و تا پایان این تراکنش هیچ سند تازه‌ای وارد سال نمی‌شود؛ مانده‌ها پس از این قفل محاسبه می‌شوند.
-      // v9.0.121 (TD-559): بسته بودن سال فقط از همین ردیف خوانده می‌شود؛ پیش‌تر سندی با مرجع «CLOSING-<سال>» (حتی دستی)
+      // v9.0.144 (TD-559): بسته بودن سال فقط از همین ردیف خوانده می‌شود؛ پیش‌تر سندی با مرجع «CLOSING-<سال>» (حتی دستی)
       // بستن سال باز را با «قبلاً بسته شده است» رد می‌کرد
       await FiscalPeriodService.lockForClosing(tx, year);
-      // v9.0.123 (TD-544، تصمیم ت۱): سال‌ها به ترتیب بسته می‌شوند؛ پیش‌تر بستن ۱۳۹۷ با ۱۳۹۶ باز درآمد ۱۳۹۶ را هم می‌بست
+      // v9.0.146 (TD-544، تصمیم ت۱): سال‌ها به ترتیب بسته می‌شوند؛ پیش‌تر بستن ۱۳۹۷ با ۱۳۹۶ باز درآمد ۱۳۹۶ را هم می‌بست
       await assertEarlierYearsClosed(tx, year);
 
       // C-02 & P0-05: محاسبه تراز اختتامیه و ارقام به صورت تازه در داخل تراکنش و زیر چتر قفل

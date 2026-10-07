@@ -11,6 +11,7 @@ import { getErrorMessage } from '../utils.js';
 import { z } from 'zod';
 import { MY_TASK_FILTERS } from '../services/workflow/workflowTaskService.js';
 import { withUtcTimestamps } from '../services/workflow/workflowTimestamps.js';
+import { isSystemAdminRole } from '../lib/permissions/permissionCatalog.js';
 import { canvasPositionsSchema, createDelegationSchema, executeTransitionSchema, saveDefinitionSchema } from './workflowRouteSchemas.js';
 
 const taskIdParamSchema = z.object({
@@ -381,7 +382,7 @@ router.post('/delegations', authorizePermission('workflow.approve', 'workflow.ma
 
     const { fromUserId, toUserId, scope, startDate, endDate, reason } = req.body as z.infer<typeof createDelegationSchema>['body'];
 
-    const targetFromUserId = (userRole === 'admin' && fromUserId) ? fromUserId : userId;
+    const targetFromUserId = (isSystemAdminRole(userRole) && fromUserId) ? fromUserId : userId;
     const targetToUserId = toUserId;
 
     const created = await WorkflowEngineService.createDelegation({

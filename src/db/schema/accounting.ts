@@ -52,8 +52,8 @@ export const journalVouchers = pgTable('journal_vouchers', {
   sourceChequeId: integer('source_cheque_id').references(baseRelations.chequesId, { onDelete: 'set null' }),
   // v8.0.34 (TD-286): سند تخصیص مواد BOM پروژه (مهاجرت 0049)
   sourceBomAllocationId: integer('source_bom_allocation_id').references(baseRelations.projectBomAllocationsId, { onDelete: 'set null' }),
-  // v9.0.120 (TD-545، B03-03، ت۳): سال مالی‌ای که «بستن سال مالی» این سند اختتامیه یا افتتاحیه را برایش صادر کرده است
-  // (مهاجرت 0063). سند اختتامیه فقط با همین پیوند شناخته می‌شود، نه با نوع `closing` یا شماره مرجع؛ سند برگشت آن در
+  // v9.0.143 (TD-545، B03-03، ت۳): سال مالی‌ای که «بستن سال مالی» این سند اختتامیه یا افتتاحیه را برایش صادر کرده است
+  // (مهاجرت 0068). سند اختتامیه فقط با همین پیوند شناخته می‌شود، نه با نوع `closing` یا شماره مرجع؛ سند برگشت آن در
   // بازگشایی سال همان پیوند و نوع را دارد. کلید خارجی ندارد: شماره سال است و ردیف سال پیش از بستن ساخته شده است.
   sourceFiscalYear: integer('source_fiscal_year'),
   currency: text('currency').default('IRR'),

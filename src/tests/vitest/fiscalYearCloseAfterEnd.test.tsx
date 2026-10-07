@@ -57,7 +57,7 @@ const executeButton = (year: string) => screen.findByText(`اجرای قطعی �
 beforeEach(() => { fetchJson.mockReset(); toastFn.success.mockReset(); toastFn.error.mockReset(); confirmAction.mockReset(); perms.keys = []; });
 afterEach(() => { cleanup(); });
 
-// v9.0.122 (TD-543, B03-01, product-owner decisions t1/t2 option A): the tab opened on the current, unfinished year and closed it
+// v9.0.145 (TD-543, B03-01, product-owner decisions t1/t2 option A): the tab opened on the current, unfinished year and closed it
 // with one confirm; nothing reopened a closed year.
 describe('fiscal closing lists ended years only and reopens the last closed year (TD-543)', () => {
   it('the year list comes from the server: ended years only, the current year is not offered, the default year is previewed', async () => {

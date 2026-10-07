@@ -12,7 +12,7 @@ import type { FiscalClosingYearRow, FiscalClosingYearsInfo } from '../../types.j
 /**
  * بسته ۳، PR «ب» (تصمیم ت۱ و ت۲ مالک محصول): کی و به چه ترتیب سال مالی بسته یا باز می‌شود.
  *
- * v9.0.122 (TD-543، B03-01): سال فقط پس از آخرین روزش بسته می‌شود؛ پیش‌تر سال جاری و حتی سال آینده بسته می‌شد و از آن
+ * v9.0.145 (TD-543، B03-01): سال فقط پس از آخرین روزش بسته می‌شود؛ پیش‌تر سال جاری و حتی سال آینده بسته می‌شد و از آن
  * لحظه هیچ فاکتور، رسید یا سندی با تاریخ امروز ثبت نمی‌شد و راه بازگشایی نبود.
  */
 
@@ -35,7 +35,7 @@ export function isFiscalYearEnded(year: number, todayIso: string): boolean {
   return todayIso >= boundsOf(year).nextFirstDay;
 }
 
-/** v9.0.122 (TD-543): سالی که هنوز تمام نشده بسته نمی‌شود (۴۲۲ `FISCAL_YEAR_NOT_ENDED`) */
+/** v9.0.145 (TD-543): سالی که هنوز تمام نشده بسته نمی‌شود (۴۲۲ `FISCAL_YEAR_NOT_ENDED`) */
 export function assertFiscalYearEnded(year: number, todayIso: string): void {
   if (isFiscalYearEnded(year, todayIso)) return;
   const { lastDay, nextFirstDay } = boundsOf(year);
@@ -89,7 +89,7 @@ export async function fiscalYearsWithVouchers(executor: DbExecutor, fromYear: nu
 }
 
 /**
- * v9.0.123 (TD-544، B03-02، تصمیم ت۱): سال‌های پیش از `year` که سند حسابداری فعال دارند و بسته نیستند. بستن سال حساب‌های
+ * v9.0.146 (TD-544، B03-02، تصمیم ت۱): سال‌های پیش از `year` که سند حسابداری فعال دارند و بسته نیستند. بستن سال حساب‌های
  * موقت را از تراز تجمعی می‌گیرد؛ با سال پیشینِ باز، درآمد و هزینه آن سال هم در بستن این سال می‌آمد و آن سال دیگر درست
  * بسته نمی‌شد.
  */
@@ -104,7 +104,7 @@ export async function findEarlierOpenYears(executor: DbExecutor, year: number): 
   return [...withVouchers].filter(y => !closedYears.has(y)).sort((a, b) => a - b);
 }
 
-/** v9.0.123 (TD-544): سال فقط وقتی بسته می‌شود که همه سال‌های پیشینِ دارای سند بسته باشند (۴۲۲ `FISCAL_YEAR_EARLIER_OPEN`) */
+/** v9.0.146 (TD-544): سال فقط وقتی بسته می‌شود که همه سال‌های پیشینِ دارای سند بسته باشند (۴۲۲ `FISCAL_YEAR_EARLIER_OPEN`) */
 export async function assertEarlierYearsClosed(executor: DbExecutor, year: number): Promise<void> {
   const open = await findEarlierOpenYears(executor, year);
   if (open.length === 0) return;
@@ -139,7 +139,7 @@ export async function getFiscalClosingYears(): Promise<FiscalClosingYearsInfo> {
   }
   const closedYears = periods.filter(p => p.status === 'closed').map(p => p.fiscalYear);
   const reopenableYear = closedYears.length > 0 ? Math.max(...closedYears) : null;
-  // v9.0.123 (TD-544): قدیمی‌ترین سال باز دارای سند (همان سالی که باید نخست بسته شود)؛ وگرنه آخرین سال باز، وگرنه آخرین سال
+  // v9.0.146 (TD-544): قدیمی‌ترین سال باز دارای سند (همان سالی که باید نخست بسته شود)؛ وگرنه آخرین سال باز، وگرنه آخرین سال
   const openYears = years.filter(y => y.status === 'open');
   const defaultYear = openYears.find(y => y.hasVouchers)?.year
     ?? (openYears.length > 0 ? openYears[openYears.length - 1].year : (years.length > 0 ? years[years.length - 1].year : null));

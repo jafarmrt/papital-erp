@@ -14,8 +14,7 @@ import {
 import { cn } from '../../utils';
 import { fetchJson } from '../../api';
 import { User } from '../../types';
-import { getMenuGroups, MenuVisibilityMap, MenuItem } from './menuConfig';
-import { useMenuVisibilityQuery } from '../../hooks/queries/useSettingsQueries';
+import { getMenuGroups, MenuItem } from './menuConfig';
 import { useAppFavicon } from '../../hooks/useAppFavicon';
 import { SidebarSearch } from './SidebarSearch';
 import { useSidebarFavorites } from './useSidebarFavorites';
@@ -60,15 +59,10 @@ export function Sidebar({
   // فاوآیکون برنامه = همان لوگوی شرکت (پیش‌فرض: نشان داخلی)
   useAppFavicon(companyLogo);
 
-  // V10-5.3: نقشه دید منو per-role — از endpoint اختصاصی
-  const { data: menuVisibilityData } = useMenuVisibilityQuery();
-  const menuVisibilityMap = useMemo<MenuVisibilityMap | null>(() => {
-    return menuVisibilityData && typeof menuVisibilityData === 'object' ? menuVisibilityData : null;
-  }, [menuVisibilityData]);
-
+  // v9.0.132 (TD-884، تصمیم ت۱۱): منو فقط از مجوزها ساخته می‌شود؛ پنهان کردن پیوند برای هر نقش حذف شد
   const rawMenuGroups = useMemo(() => {
-    return getMenuGroups(user, userPermissions, menuVisibilityMap);
-  }, [user, userPermissions, menuVisibilityMap]);
+    return getMenuGroups(user, userPermissions);
+  }, [user, userPermissions]);
 
   // شناسه گروه فعال فعلی برای قانون Single-Accordion
   const [activeGroupId, setActiveGroupId] = useState<string>(() => {

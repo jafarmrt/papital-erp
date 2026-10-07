@@ -6,7 +6,7 @@ import { useReopenFiscalYear } from '../../hooks/accounting/useFiscalClosing';
 import { errorMessageOf, toPersianDigits } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
 
-/** v9.0.122 (TD-543): مجوز بازگشایی سال مالی (کاتالوگ مجوزها) */
+/** v9.0.145 (TD-543): مجوز بازگشایی سال مالی (کاتالوگ مجوزها) */
 export const FISCAL_REOPEN_PERMISSION = 'accounting.fiscal_reopen';
 
 interface FiscalYearReopenPanelProps {
@@ -16,7 +16,7 @@ interface FiscalYearReopenPanelProps {
 }
 
 /**
- * v9.0.122 (TD-543، B03-01، تصمیم ت۲ مالک محصول): بازگشایی آخرین سال مالی بسته با دلیل الزامی، فقط برای دارنده مجوز
+ * v9.0.145 (TD-543، B03-01، تصمیم ت۲ مالک محصول): بازگشایی آخرین سال مالی بسته با دلیل الزامی، فقط برای دارنده مجوز
  * «بازگشایی سال مالی». پیش‌تر سال بسته‌شده در محصول باز نمی‌شد.
  */
 export function FiscalYearReopenPanel({ reopenableYear, onReopened }: FiscalYearReopenPanelProps) {
