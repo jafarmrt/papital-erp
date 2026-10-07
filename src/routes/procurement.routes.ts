@@ -21,9 +21,10 @@ router.use(authenticateToken);
 
 /**
  * GET /api/procurement/inbox/summary
- * Procurement Desk metrics summary
+ * Procurement Desk metrics summary. v9.0.277 (TD-702): the same readers as the requisition list (every key that opens
+ * the desk page); it took procurement.view only and its 403 emptied the desk for projects.view
  */
-router.get('/inbox/summary', authorizePermission('procurement.view'), asyncHandler(async (_req, res) => {
+router.get('/inbox/summary', authorizePermission(...READ_PERMISSIONS.purchaseRequisitions), asyncHandler(async (_req, res) => {
   const summary = await ProcurementService.getInboxSummary();
   res.json({ success: true, data: summary });
 }));

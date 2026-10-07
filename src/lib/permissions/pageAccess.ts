@@ -81,7 +81,7 @@ export const PAGE_ACCESS = {
   '/remittances': { gate: anyOf('documents.create'), api: DOCUMENT_ENTRY },
   '/projects': { gate: anyOf('projects.view'), api: ['GET /api/projects', 'GET /api/items/options'] },
   '/project-inventory': { gate: anyOf('projects.view', 'warehouse.view'), api: ['GET /api/projects/options', 'GET /api/projects/:id', 'GET /api/items/options'] },
-  '/procurement': { gate: anyOf('procurement.view', 'projects.view'), api: ['GET /api/procurement/requisitions', 'GET /api/procurement/orders', 'GET /api/items/options'] },
+  '/procurement': { gate: anyOf('procurement.view', 'projects.view'), api: ['GET /api/procurement/inbox/summary', 'GET /api/procurement/requisitions', 'GET /api/procurement/orders', 'GET /api/items/options'] },
   '/personnel': { gate: anyOf('personnel.view'), api: ['GET /api/personnel'] },
   '/daily-logs': { gate: anyOf('daily_logs.view'), api: ['GET /api/daily-logs', 'GET /api/projects/options'] },
   '/piecework': { gate: anyOf('piecework.view'), api: ['GET /api/piecework/logs', 'GET /api/projects/options'] },

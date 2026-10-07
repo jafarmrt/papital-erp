@@ -115,3 +115,17 @@ export interface ProcurementOrder {
   items: ProcurementOrderItem[];
   user?: string;
 }
+
+/** خلاصه میز تدارکات، همان پاسخ `GET /procurement/inbox/summary` (`ProcurementService.getInboxSummary`) */
+export interface ProcurementInboxSummary {
+  totalRequisitions: number;
+  pendingCount: number;
+  underReviewCount: number;
+  managerApprovalCount: number;
+  orderedCount: number;
+  receivedCount: number;
+  urgentCount: number;
+  pendingDeliveryOrdersCount: number;
+  deliveredOrdersCount: number;
+  totalOrdersCount: number;
+}

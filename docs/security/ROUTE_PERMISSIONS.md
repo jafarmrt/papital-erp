@@ -293,7 +293,7 @@
 | POST | `/api/piecework/tasks/clear-defaults` | personnel.manage |
 | POST | `/api/piecework/tasks/import-excel` | personnel.manage |
 | POST | `/api/procurement/consolidate` | procurement.manage |
-| GET | `/api/procurement/inbox/summary` | procurement.view |
+| GET | `/api/procurement/inbox/summary` | procurement.view \| projects.view |
 | GET | `/api/procurement/orders` | procurement.view \| projects.view |
 | POST | `/api/procurement/orders/:id/deliver` | procurement.order \| procurement.manage |
 | GET | `/api/procurement/requisitions` | procurement.view \| projects.view |

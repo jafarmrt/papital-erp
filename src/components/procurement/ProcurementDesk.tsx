@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ShoppingBag, ShoppingCart, Search, Plus, Layers, RefreshCw, Eye, Trash2, Building2, Check, FileText, Truck, PackageCheck } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { ShoppingBag, ShoppingCart, Search, Plus, Layers, RefreshCw, Eye, Trash2, Building2, Check, FileText, Truck, PackageCheck, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { PurchaseRequisition, Item, User, ProcurementOrder } from '../../types';
+import { PurchaseRequisition, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 import { RequisitionDetailModal } from './RequisitionDetailModal';
@@ -12,18 +12,17 @@ import { ProcurementOrderList } from './ProcurementOrderList';
 import { PillBadge } from '../common/PillBadge';
 import { REQUISITION_PRIORITY_BADGES, REQUISITION_PRIORITY_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
-import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
-import { canConsolidateRequisition, canDeleteRequisition } from '../../lib/procurement/requisitionFields';
+import { canConsolidateRequisition, canDeleteRequisition, canOrderRequisition } from '../../lib/procurement/requisitionFields';
+import { useProcurementDeskData } from '../../hooks/procurement/useProcurementDeskData';
+import { useProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
 
-interface ProcurementDeskProps {
-  currentUser?: User | null;
-}
+/** شمار خلاصه، یا «—» وقتی خلاصه بارگذاری نشد */
+const countText = (n: number | undefined): string => (n === undefined ? '—' : formatPersianNumber(n));
 
-export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
-  const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
-  const [orders, setOrders] = useState<ProcurementOrder[]>([]);
-  const [warehouseItems, setWarehouseItems] = useState<Item[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+export function ProcurementDesk() {
+  // v9.0.277 (TD-702، B10-15): هر بخش جدا بارگذاری می‌شود و هر دکمه با مجوز API خودش نشان داده می‌شود
+  const { requisitions, orders, warehouseItems, summary, errors, isLoading, reload: loadData } = useProcurementDeskData();
+  const access = useProcurementAccess();
   const [activeMainTab, setActiveMainTab] = useState<'requisitions' | 'active_orders' | 'delivered_receipts'>('requisitions');
   const [deliveringOrderId, setDeliveringOrderId] = useState<number | null>(null);
   const [deliveryModalOrder, setDeliveryModalOrder] = useState<ProcurementOrder | null>(null);
@@ -36,58 +35,11 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-  // Summary Metrics State
-  const [summary, setSummary] = useState({
-    totalRequisitions: 0,
-    pendingCount: 0,
-    underReviewCount: 0,
-    managerApprovalCount: 0,
-    orderedCount: 0,
-    receivedCount: 0,
-    urgentCount: 0,
-    pendingDeliveryOrdersCount: 0,
-    deliveredOrdersCount: 0,
-    totalOrdersCount: 0
-  });
-
   // Modal States
   const [selectedRequisitionForDetail, setSelectedRequisitionForDetail] = useState<PurchaseRequisition | null>(null);
   const [selectedRequisitionForSplit, setSelectedRequisitionForSplit] = useState<PurchaseRequisition | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isConsolidateModalOpen, setIsConsolidateModalOpen] = useState(false);
-
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [reqsRes, itemsRes, summaryRes, ordersRes] = await Promise.all([
-        fetchJson<{ success: boolean; data: PurchaseRequisition[] }>('/api/procurement/requisitions?limit=100'),
-        fetchJson<{ data?: Item[] } | Item[]>(PICK_LIST_URLS.items),
-        fetchJson<{ success: boolean; data: any }>('/api/procurement/inbox/summary'),
-        fetchJson<{ success: boolean; data: ProcurementOrder[] }>('/api/procurement/orders?limit=200')
-      ]);
-
-      const reqs = reqsRes?.data || [];
-      setRequisitions(Array.isArray(reqs) ? reqs : []);
-
-      const itms = Array.isArray(itemsRes) ? itemsRes : (itemsRes?.data || []);
-      setWarehouseItems(itms);
-
-      if (summaryRes?.data) {
-        setSummary(summaryRes.data);
-      }
-
-      const ords = ordersRes?.data || [];
-      setOrders(Array.isArray(ords) ? ords : []);
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در بارگذاری داده‌های میز کار تدارکات');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
 
   // v9.0.276 (TD-701): فقط سفارشی که سرور فرستاده تأیید می‌شود؛ پیش‌تر سفارش پیدانشده با تأمین‌کننده و انبار ساختگی نمایش داده می‌شد
   const handleDeliverOrder = (orderId: number) => {
@@ -208,7 +160,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
         </div>
 
         <div className="flex items-center gap-2.5">
-          {selectedIds.length >= 2 && (
+          {access.canManage && selectedIds.length >= 2 && (
             <button
               type="button"
               onClick={() => setIsConsolidateModalOpen(true)}
@@ -228,14 +180,16 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
 
-          <button
-            type="button"
-            onClick={() => setIsCreateModalOpen(true)}
-            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 shadow-sm transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            ثبت درخواست خرید جدید
-          </button>
+          {access.canCreate && (
+            <button
+              type="button"
+              onClick={() => setIsCreateModalOpen(true)}
+              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              ثبت درخواست خرید جدید
+            </button>
+          )}
         </div>
       </div>
 
@@ -278,7 +232,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                   درخواست‌های خرید (Requisitions)
                 </span>
                 <span className="text-xl font-black font-mono text-amber-700">
-                  {formatPersianNumber(summary.totalRequisitions)}
+                  {countText(summary?.totalRequisitions)}
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 leading-relaxed">
@@ -287,7 +241,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
             </div>
             <div className="mt-4 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-[11px]">
               <span className="text-amber-800 font-bold">
-                {formatPersianNumber(summary.pendingCount + summary.underReviewCount + summary.managerApprovalCount)} در انتظار تایید
+                {countText(summary ? summary.pendingCount + summary.underReviewCount + summary.managerApprovalCount : undefined)} در انتظار تایید
               </span>
               <span className="text-blue-700 font-bold flex items-center gap-1">
                 مرز ۱: تفکیک و صدور فاکتور ➔
@@ -312,7 +266,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                   فاکتورهای خرید (در انتظار تحویل انبار)
                 </span>
                 <span className="text-xl font-black font-mono text-sky-700">
-                  {formatPersianNumber(orders.filter(o => o.status !== 'final').length)}
+                  {formatPersianNumber(summary?.pendingDeliveryOrdersCount ?? orders.filter(o => o.status !== 'final').length)}
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 leading-relaxed">
@@ -346,7 +300,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                   رسیدهای قطعی انبار (تحویل‌شده)
                 </span>
                 <span className="text-xl font-black font-mono text-emerald-700">
-                  {formatPersianNumber(orders.filter(o => o.status === 'final').length)}
+                  {formatPersianNumber(summary?.deliveredOrdersCount ?? orders.filter(o => o.status === 'final').length)}
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 leading-relaxed">
@@ -395,7 +349,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
           <Truck className="w-4 h-4 text-sky-600" />
           <span>۲. فاکتورهای خرید (در انتظار تحویل انبار)</span>
           <span className="px-2 py-0.5 bg-sky-100 text-sky-900 rounded-full font-mono text-[11px]">
-            {formatPersianNumber(orders.filter(o => o.status !== 'final').length)}
+            {formatPersianNumber(summary?.pendingDeliveryOrdersCount ?? orders.filter(o => o.status !== 'final').length)}
           </span>
         </button>
 
@@ -411,7 +365,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
           <PackageCheck className="w-4 h-4 text-emerald-600" />
           <span>۳. رسیدهای قطعی انبار (تحویل‌شده)</span>
           <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded-full font-mono text-[11px]">
-            {formatPersianNumber(orders.filter(o => o.status === 'final').length)}
+            {formatPersianNumber(summary?.deliveredOrdersCount ?? orders.filter(o => o.status === 'final').length)}
           </span>
         </button>
       </div>
@@ -422,7 +376,8 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
           orders={orders}
           isLoading={isLoading}
           type="active"
-          onDeliverOrder={handleDeliverOrder}
+          error={errors.orders}
+          onDeliverOrder={access.canDeliver ? handleDeliverOrder : undefined}
           deliveringOrderId={deliveringOrderId}
           onViewRequisition={(reqId) => {
             const req = requisitions.find(r => r.id === reqId);
@@ -434,6 +389,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
           orders={orders}
           isLoading={isLoading}
           type="delivered"
+          error={errors.orders}
           onViewRequisition={(reqId) => {
             const req = requisitions.find(r => r.id === reqId);
             if (req) setSelectedRequisitionForDetail(req);
@@ -509,28 +465,40 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleSelectAll(true)}
-                  className="text-blue-600 hover:text-blue-800 font-bold cursor-pointer"
-                >
-                  انتخاب همه
-                </button>
-                <span className="text-slate-300">|</span>
-                <button
-                  type="button"
-                  onClick={() => handleSelectAll(false)}
-                  className="text-slate-500 hover:text-slate-700 font-bold cursor-pointer"
-                >
-                  لغو انتخاب
-                </button>
-              </div>
+              {access.canManage && (
+                <div className="flex items-center gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectAll(true)}
+                    className="text-blue-600 hover:text-blue-800 font-bold cursor-pointer"
+                  >
+                    انتخاب همه
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectAll(false)}
+                    className="text-slate-500 hover:text-slate-700 font-bold cursor-pointer"
+                  >
+                    لغو انتخاب
+                  </button>
+                </div>
+              )}
             </div>
 
             {isLoading ? (
               <div className="p-12 text-center text-slate-500 text-xs">
                 در حال بارگذاری کارتابل تدارکات...
+              </div>
+            ) : errors.requisitions ? (
+              <div className="p-8 flex flex-col items-center gap-3 text-xs text-rose-800">
+                <div className="flex items-center gap-2 font-bold">
+                  <AlertTriangle className="w-4 h-4 text-rose-600" />
+                  درخواست‌های خرید بارگذاری نشد: {errors.requisitions}
+                </div>
+                <button type="button" onClick={() => void loadData()} className="px-3 py-1.5 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg font-bold cursor-pointer">
+                  تلاش دوباره
+                </button>
               </div>
             ) : filteredRequisitions.length === 0 ? (
               <div className="p-12 text-center text-slate-400 text-xs">
@@ -541,7 +509,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                 <table className="w-full text-xs text-right">
                   <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                     <tr>
-                      <th className="p-3 text-center w-12">انتخاب</th>
+                      {access.canManage && <th className="p-3 text-center w-12">انتخاب</th>}
                       <th className="p-3">شماره و اولویت</th>
                       <th className="p-3">عنوان و پروژه</th>
                       <th className="p-3 text-center">اقلام</th>
@@ -561,16 +529,18 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
 
                       return (
                         <tr key={req.id} className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-amber-50/40' : ''}`}>
-                          <td className="p-3 text-center">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              disabled={!isSelected && !canConsolidateRequisition(req)}
-                              title={canConsolidateRequisition(req) ? 'انتخاب برای تجمیع' : 'فقط درخواست تأییدنشده و بی سفارش تجمیع می‌شود'}
-                              onChange={() => handleToggleSelect(req.id)}
-                              className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                            />
-                          </td>
+                          {access.canManage && (
+                            <td className="p-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                disabled={!isSelected && !canConsolidateRequisition(req)}
+                                title={canConsolidateRequisition(req) ? 'انتخاب برای تجمیع' : 'فقط درخواست تأییدنشده و بی سفارش تجمیع می‌شود'}
+                                onChange={() => handleToggleSelect(req.id)}
+                                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                              />
+                            </td>
+                          )}
 
                           <td className="p-3">
                             <div className="flex items-center gap-2 mb-1">
@@ -648,8 +618,8 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                                 <Eye className="w-4 h-4" />
                               </button>
 
-                              {/* Split & Order Action Button */}
-                              {req.status !== 'ordered' && req.status !== 'received' && req.status !== 'rejected' && (
+                              {/* v9.0.277 (TD-702): صدور سفارش با procurement.order، و پیش از تأیید فقط با حق تأیید (TD-689) */}
+                              {canOrderRequisition(req, access) && (
                                 <button
                                   type="button"
                                   onClick={() => setSelectedRequisitionForSplit(req)}
@@ -662,7 +632,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                               )}
 
                               {/* v9.0.270 (TD-695): حذف فقط برای درخواستی که سفارش یا دریافت نشده است */}
-                              {canDeleteRequisition(req) && (
+                              {access.canManage && canDeleteRequisition(req) && (
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteRequisition(req.id, req.code)}
@@ -691,7 +661,6 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
           isOpen={!!selectedRequisitionForDetail}
           requisition={selectedRequisitionForDetail}
           warehouseItems={warehouseItems}
-          currentUser={currentUser}
           onClose={() => setSelectedRequisitionForDetail(null)}
           onRefresh={loadData}
           onOpenSplitOrder={(req) => {

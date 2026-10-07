@@ -50,8 +50,11 @@ export function canEditRequisition(req: { status?: string | null; items?: Requis
 /** v9.0.274 (TD-694، ت۳): وضعیت درخواستی که در درخواست دیگری تجمیع شده است؛ بسته است و هیچ اقدامی نمی‌پذیرد */
 export const CONSOLIDATED_REQUISITION_STATUS = 'consolidated';
 
+/** گام‌های پیش از تأیید درخواست خرید (گام‌های `pending`، `procurement_review` و `manager_approval` گردش کار) */
+export const OPEN_REQUISITION_STATUSES: ReadonlySet<string> = new Set(['pending', 'under_review', 'manager_approval']);
+
 /** v9.0.274 (TD-694، B10-07، ت۳ الف): وضعیت‌های پیش از تأیید که درخواست در آن‌ها تجمیع می‌شود */
-export const CONSOLIDATABLE_REQUISITION_STATUSES: ReadonlySet<string> = new Set(['pending', 'under_review', 'manager_approval']);
+export const CONSOLIDATABLE_REQUISITION_STATUSES: ReadonlySet<string> = OPEN_REQUISITION_STATUSES;
 
 /** درخواست فقط پیش از تأیید و وقتی هیچ ردیفش سفارش نشده تجمیع می‌شود؛ کادر انتخاب میز تدارکات همین را می‌خواند */
 export function canConsolidateRequisition(req: { status?: string | null; items?: RequisitionRowLike[] | null }): boolean {
@@ -64,4 +67,30 @@ const UNDELETABLE_REQUISITION_STATUSES: ReadonlySet<string> = new Set(['ordered'
 
 export function canDeleteRequisition(req: { status?: string | null; items?: RequisitionRowLike[] | null }): boolean {
   return !UNDELETABLE_REQUISITION_STATUSES.has(String(req.status)) && !requisitionHasOrders(req);
+}
+
+interface OrderableRowLike extends RequisitionRowLike {
+  requestedQty?: number | string | null;
+  remainingQty?: number | string | null;
+  closed?: boolean;
+}
+
+/**
+ * v9.0.277 (TD-702، B10-15): دکمه «تفکیک و صدور سفارش» میز و جزئیات درخواست، با همان قاعده سرور (TD-689، ت۱): درخواست
+ * تأییدشده (`ordered`) که ردیف باز با مانده دارد برای دارنده `procurement.order`، و درخواست پیش از تأیید فقط وقتی کاربر
+ * حق تأیید هم دارد (سرور نخست انتقال تأیید را به نام او اجرا می‌کند).
+ */
+export function canOrderRequisition(
+  req: { status?: string | null; items?: OrderableRowLike[] | null },
+  access: { canOrder: boolean; canApprove: boolean },
+): boolean {
+  if (!access.canOrder) return false;
+  const status = String(req.status);
+  if (OPEN_REQUISITION_STATUSES.has(status)) return access.canApprove;
+  if (status !== 'ordered') return false;
+  return (Array.isArray(req.items) ? req.items : []).some(row => {
+    if (row.closed) return false;
+    const remaining = row.remainingQty ?? Math.max(0, Number(row.requestedQty || 0) - Number(row.orderedQty || 0));
+    return Number(remaining) > 0;
+  });
 }

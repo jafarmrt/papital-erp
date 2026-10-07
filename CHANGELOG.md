@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.277 — Procurement Desk Sections and Buttons by Permission
+- **Fix (TD-702, B10-15):** the procurement desk loads its summary, requisitions, orders and items one by one (`useProcurementDeskData`), so one refused or failed section shows its own error and the others still show; `GET /procurement/inbox/summary` opens for both page keys (`READ_PERMISSIONS.purchaseRequisitions`) and is listed among the page's APIs; each button follows the permission of its API (`useProcurementAccess`).
+
 ### v9.0.276 — Order Number and Supplier in Procurement Dialogs
 - **Fix (TD-701, B10-14):** the delivery confirmation and the requisition detail read `refNumber`, `date` and `supplierName` of `GET /procurement/orders` instead of `orderNumber`, `orderDate` and `buyerName`, which the server never sends; the confirmation no longer shows «تامین‌کننده تدارکات» for every order.
 

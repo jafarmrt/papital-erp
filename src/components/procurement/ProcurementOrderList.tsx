@@ -6,6 +6,8 @@ import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../.
 interface ProcurementOrderListProps {
   orders: ProcurementOrder[];
   isLoading: boolean;
+  /** v9.0.277 (TD-702): پیام خطای بارگذاری سفارش‌ها، به‌جای «هیچ فاکتوری … نیست» */
+  error?: string;
   onDeliverOrder?: (orderId: number) => Promise<void> | void;
   deliveringOrderId?: number | null;
   onViewRequisition?: (requisitionId: number) => void;
@@ -15,6 +17,7 @@ interface ProcurementOrderListProps {
 export function ProcurementOrderList({
   orders,
   isLoading,
+  error,
   onDeliverOrder,
   deliveringOrderId,
   onViewRequisition,
@@ -98,6 +101,10 @@ export function ProcurementOrderList({
         {isLoading ? (
           <div className="p-12 text-center text-slate-500 text-xs">
             در حال بارگذاری فاکتورهای خرید...
+          </div>
+        ) : error ? (
+          <div className="p-12 text-center text-rose-800 text-xs font-bold">
+            فاکتورهای خرید بارگذاری نشد: {error}
           </div>
         ) : filteredOrders.length === 0 ? (
           <div className="p-12 text-center text-slate-400 text-xs">

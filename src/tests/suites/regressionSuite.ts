@@ -10677,5 +10677,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');
   results.push(...await runProcurementOrderTests(shouldRun));
 
+  // Package 10 PR C (v9.0.276+): what the procurement desk reads and shows
+  const { runProcurementDeskTests } = await import('../regression/procurementDeskTests.js');
+  results.push(...await runProcurementDeskTests(shouldRun));
+
   return results;
 }
