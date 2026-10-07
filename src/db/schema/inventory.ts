@@ -136,6 +136,19 @@ export const itemPrices = pgTable('item_prices', {
   idx_item_id: index('item_prices_item_id').on(table.itemId),
 }));
 
+// v9.0.114 (TD-647، مهاجرت 0063): قیمت‌هایی که فهرست قیمت نبودند («میانگین خرید (WAC)»، «موجودی کل»، «میانگین بهای خرید»)
+// با مقدار پیشین ثبت و نرم حذف شدند
+export const itemPriceTitleCleanup = pgTable('item_price_title_cleanup', {
+  id: serial('id').primaryKey(),
+  itemPriceId: integer('item_price_id').notNull().unique('uq_item_price_title_cleanup_price'),
+  itemId: integer('item_id').notNull(),
+  title: text('title').notNull(),
+  price: moneyNumeric('price').notNull(),
+  currency: text('currency'),
+  reason: text('reason').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+});
+
 export const pendingMaterials = pgTable('pending_materials', {
   id: serial('id').primaryKey(),
   code: text('code').notNull(),

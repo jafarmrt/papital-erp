@@ -12,8 +12,18 @@ import { ItemsService } from '../services/items.service.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../utils.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { money } from '../lib/money.js';
+import { priceListMatcher } from '../lib/items/excelPriceColumns.js';
+import { ValidationError } from '../errors/customErrors.js';
 
 const router = Router();
+
+function unknownPriceListError(titles: string[]): ValidationError {
+  return new ValidationError(
+    `«${titles.join('»، «')}» فهرست قیمت تنظیم‌شده‌ای نیست. قیمت فقط برای فهرست‌های قیمت تعریف‌شده در تنظیمات ثبت می‌شود.`,
+    { titles },
+    'PRICE_LIST_NOT_CONFIGURED',
+  );
+}
 
 export const itemPriceSchema = z.object({
   body: z.object({
@@ -84,7 +94,10 @@ router.post('/items/:id/prices', authorizePermission('products.edit_price'), val
   try {
     const { title, price, currency = 'IRR' } = req.body;
     const itemId = Number(req.params.id);
-    const cleanTitle = normalizeStrategyTitle(String(title));
+    // v9.0.114 (TD-647، ت۱ الف): فقط فهرست قیمت تنظیم‌شده
+    const configuredTitle = priceListMatcher(await ItemsService.getPricingStrategies()).match(String(title));
+    if (!configuredTitle) throw unknownPriceListError([String(title)]);
+    const cleanTitle = configuredTitle;
     const canKey = getStrategyCanonicalKey(cleanTitle);
 
     const [targetItem] = await orm.select({ id: items.id, name: items.name, code: items.code })
@@ -150,6 +163,13 @@ router.post('/items/prices/batch-update', authorizePermission('products.edit_pri
     const { updates } = req.body;
     const nowIso = new Date().toISOString();
     const auditChanges: Array<Record<string, unknown>> = [];
+    // v9.0.114 (TD-647، ت۱ الف): قیمت فقط برای فهرست تنظیم‌شده ثبت می‌شود؛ حذف قیمت (مقدار خالی یا صفر) هر عنوانی را می‌پذیرد
+    // تا ردیف‌های پیشینِ عنوان ناشناخته پاک‌شدنی بمانند. پیش‌تر ورود سریع «موجودی کل» را فهرست قیمت فروش می‌کرد.
+    const matcher = priceListMatcher(await ItemsService.getPricingStrategies());
+    const unknownTitles = [...new Set((updates as Array<{ title: string; price?: unknown }>)
+      .filter(u => !(u.price === null || u.price === undefined || u.price === '' || Number(u.price) <= 0) && !matcher.match(u.title))
+      .map(u => u.title))];
+    if (unknownTitles.length > 0) throw unknownPriceListError(unknownTitles);
 
     await orm.transaction(async (tx) => {
       const itemIds = Array.from(new Set(updates.map((u: { itemId: unknown }) => Number(u.itemId)).filter((id: number) => Boolean(id) && !isNaN(id)))) as number[];
@@ -179,7 +199,7 @@ router.post('/items/prices/batch-update', authorizePermission('products.edit_pri
         const itemObj = validItemMap.get(numItemId);
         if (!numItemId || !title || !itemObj) continue;
 
-        const cleanTitle = normalizeStrategyTitle(String(title));
+        const cleanTitle = matcher.match(String(title)) ?? normalizeStrategyTitle(String(title));
         const canKey = getStrategyCanonicalKey(cleanTitle);
 
         const existingList = pricesByItemId.get(numItemId) || [];

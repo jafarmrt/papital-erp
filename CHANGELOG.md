@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.114 — Excel Prices Come From Configured Price Lists Only
+- **Item Excel and Price Lists:** an unchanged Excel round trip no longer turns the cost column into a sale price list, the pricing page quick import ignores stock and cost columns, the invoice price list shows configured price lists only and migration 0063 cleans the three mistaken titles (TD-647, `reg_excel_roundtrip_no_cost_price_list_td_647`).
+
 ### v9.0.113 — Package 5 Items and Pricing Audit Documentation
 - **Package 5 Audit:** section 7 of the V9 stability audit records the items and pricing package: 18 proven findings (two P1: an unchanged Excel round trip turns the cost column into a sale price list, and Excel import bypasses the price and warehouse permissions) opened as TD-647..TD-664, with the product-owner decisions. Documentation only.
 

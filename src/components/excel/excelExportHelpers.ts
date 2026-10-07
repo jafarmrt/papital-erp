@@ -1,5 +1,6 @@
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
+import { ITEM_WAC_COLUMN } from '../../lib/items/excelPriceColumns';
 
 export async function exportCompleteExcel(typeFilter: string): Promise<void> {
   const query = typeFilter ? `?type=${typeFilter}` : '';
@@ -42,7 +43,7 @@ export async function downloadExcelTemplate(): Promise<void> {
   });
 
   sampleRow['حد نقطه سفارش (آلارم کسری)'] = 20;
-  sampleRow['قیمت میانگین خرید (WAC)'] = 1500000;
+  sampleRow[ITEM_WAC_COLUMN] = 1500000;
   sampleRow['تصویر'] = '';
   sampleRow['رنگ'] = 'طلایی';
   sampleRow['سایز'] = 'استاندارد';

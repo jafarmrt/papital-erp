@@ -17,6 +17,7 @@ import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.servi
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { startsWithLikePattern } from '../../lib/sqlLike.js';
 import { money } from '../../lib/money.js';
+import { ITEM_WAC_COLUMN, WAC_COLUMNS, extractRowPriceColumns, unknownPriceColumnMessage } from '../../lib/items/excelPriceColumns.js';
 
 // V10-2.1: تایپ کلاینت اتصال DB برای تراکنش‌های داخلی
 type DbLike = DbExecutor;
@@ -375,7 +376,7 @@ export class ItemCatalogService {
       }
 
       row['حد نقطه سفارش (آلارم کسری)'] = Number(it.reorderPoint || 0);
-      row['قیمت میانگین خرید (WAC)'] = Number(it.weightedAverageCost || 0);
+      row[ITEM_WAC_COLUMN] = Number(it.weightedAverageCost || 0);
 
       let itemCurrency = 'IRR';
       for (const normStrat of normalizedStrategies) {
@@ -452,7 +453,7 @@ export class ItemCatalogService {
         const category = String(row['دسته‌بندی'] || row['دسته'] || row['category'] || '').trim();
         const unit = String(row['واحد'] || row['واحد اندازه‌گیری'] || row['unit'] || 'عدد').trim();
         const reorderPoint = Number(row['حد نقطه سفارش (آلارم کسری)'] || row['حد نقطه سفارش'] || row['نقطه سفارش'] || row['reorder_point'] || 0);
-        const weightedAverageCost = Number(row['قیمت میانگین خرید (WAC)'] || row['قیمت میانگین خرید (WAC - ریال)'] || row['قیمت میانگین خرید'] || row['ارزش خرید'] || row['weighted_average_cost'] || 0);
+        const weightedAverageCost = Number(WAC_COLUMNS.map(h => row[h]).find(v => v !== undefined && v !== '') || 0);
         const image = String(row['تصویر'] || row['آدرس عکس'] || row['image'] || '').trim();
         const color = String(row['رنگ'] || row['color'] || '').trim();
         const size = String(row['سایز'] || row['size'] || '').trim();
@@ -554,7 +555,7 @@ export class ItemCatalogService {
               code,
               message: `بهای میانگین (WAC) کالای «${matchedItem.name}» (${matchedItem.code}) که ${existingSnapshot.total} موجودی دارد از اکسل تغییر نمی‌کند ` +
                 `(فعلی ${currentWac.toString()}، فایل ${fileWac.toString()}). WAC فقط با ورود کالا عوض می‌شود؛ این ردیف ثبت نشد. ` +
-                'ستون «قیمت میانگین خرید» را خالی بگذارید یا همان مقدار فعلی را بنویسید.',
+                'ستون «میانگین موزون بها» را خالی بگذارید یا همان مقدار فعلی را بنویسید.',
             });
             continue;
           }
@@ -706,57 +707,18 @@ export class ItemCatalogService {
           createdCount++;
         }
 
+        // v9.0.114 (TD-647، ت۱ الف): فقط فهرست‌های قیمت تنظیم‌شده قیمت‌اند؛ ستون دیگرِ «قیمت …» خطای ردیف می‌گیرد و
+        // نادیده گرفته می‌شود (پیش‌تر «قیمت میانگین خرید (WAC)» فایل خروجی فهرست قیمت فروش می‌شد)
         const extractedPrices = new Map<string, { price: number; currency: string }>();
-
-        // 1. Check explicit configured strategies
-        for (const strat of strategies) {
-          const norm = normalizeStrategyTitle(strat);
-          if (!norm) continue;
-
-          const priceVal =
-            row[`قیمت ${norm}`] ??
-            row[`قیمت - ${norm}`] ??
-            row[`قیمت ${strat}`] ??
-            row[`قیمت - ${strat}`] ??
-            row[strat];
-
-          const currVal =
-            row[`ارز - ${norm}`] ??
-            row[`ارز - قیمت ${norm}`] ??
-            row[`ارز ${norm}`] ??
-            row[`ارز - ${strat}`] ??
-            row['واحد ارز'] ??
-            row['ارز'] ??
-            'IRR';
-
-          if (priceVal !== undefined && priceVal !== '' && !isNaN(Number(priceVal)) && Number(priceVal) >= 0) {
-            extractedPrices.set(norm, { price: Number(priceVal), currency: String(currVal || 'IRR').trim() });
+        const priceColumns = extractRowPriceColumns(row, strategies);
+        for (const column of priceColumns.unknownColumns) {
+          errors.push({ row: rowNum, name, code, message: unknownPriceColumnMessage(column) });
+        }
+        for (const cell of priceColumns.prices) {
+          if (!isNaN(Number(cell.value)) && Number(cell.value) >= 0) {
+            extractedPrices.set(cell.title, { price: Number(cell.value), currency: cell.currency });
           }
         }
-
-        // 2. Check any other price columns in row
-        Object.keys(row).forEach(k => {
-          let normKey = '';
-          if (k.startsWith('قیمت - ')) normKey = normalizeStrategyTitle(k.replace('قیمت - ', ''));
-          else if (k.startsWith('قیمت ')) normKey = normalizeStrategyTitle(k.replace('قیمت ', ''));
-          else if (k.startsWith('Price - ')) normKey = normalizeStrategyTitle(k.replace('Price - ', ''));
-          else if (k.startsWith('Price ')) normKey = normalizeStrategyTitle(k.replace('Price ', ''));
-
-          if (normKey && !extractedPrices.has(normKey)) {
-            const rawPrice = row[k];
-            if (rawPrice !== undefined && rawPrice !== '' && !isNaN(Number(rawPrice)) && Number(rawPrice) >= 0) {
-              const currVal =
-                row[`ارز - ${normKey}`] ??
-                row[`ارز - قیمت ${normKey}`] ??
-                row[`ارز ${normKey}`] ??
-                row['واحد ارز'] ??
-                row['ارز'] ??
-                'IRR';
-
-              extractedPrices.set(normKey, { price: Number(rawPrice), currency: String(currVal || 'IRR').trim() });
-            }
-          }
-        });
 
         // Save extracted prices
         const nowIso = new Date().toISOString();

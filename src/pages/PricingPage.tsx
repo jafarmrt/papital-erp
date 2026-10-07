@@ -11,7 +11,6 @@ import {
   cn, 
   formatPersianNumber, 
   formatPersianDateTime, 
-  normalizePersianText,
   getStrategyCanonicalKey,
   formatStrategyDisplayTitle,
   cleanDecimalString
@@ -23,6 +22,8 @@ import PriceHistoryModal from '../components/pricing/PriceHistoryModal';
 import { PricingGridView, PricingTableView } from '../components/pricing/PricingViews';
 import * as xlsx from 'xlsx';
 import UnifiedExcelModal from '../components/UnifiedExcelModal';
+import { buildQuickPriceUpdates } from '../lib/items/quickPriceImport';
+import { ITEM_WAC_COLUMN } from '../lib/items/excelPriceColumns';
 
 export default function PricingPage({ user }: { user: User }) {
   const appCurrency = useAppCurrency();
@@ -303,7 +304,7 @@ export default function PricingPage({ user }: { user: User }) {
           'نوع کالا': item.type === 'product' ? 'محصول نهایی' : 'ماده اولیه',
           'موجودی کل': item.current_stock || 0,
           'واحد شمارش': item.unit || 'عدد',
-          'میانگین بهای خرید': item.weighted_average_cost || 0,
+          [ITEM_WAC_COLUMN]: item.weighted_average_cost || 0,
         };
 
         let rowCurrency = 'IRR';
@@ -352,93 +353,10 @@ export default function PricingPage({ user }: { user: User }) {
           return;
         }
 
-        const itemCodeMap = new Map<string, Item>();
-        const itemNameMap = new Map<string, Item>();
-        const safeItemsList = Array.isArray(items) ? items : [];
-        safeItemsList.forEach(i => {
-          if (i.code) itemCodeMap.set(normalizePersianText(i.code), i);
-          if (i.name) itemNameMap.set(normalizePersianText(i.name), i);
-        });
-
-        const updates: Array<{ itemId: number; title: string; price: number; currency: string }> = [];
-
-        for (const row of rawData) {
-          const rawCode = row['کد کالا'] || row['کد'] || row['code'] || row['Code'];
-          const rawName = row['نام کالا'] || row['نام محصول'] || row['نام'] || row['name'] || row['Name'];
-
-          let matchedItem: Item | undefined;
-          if (rawCode) {
-            matchedItem = itemCodeMap.get(normalizePersianText(String(rawCode)));
-          }
-          if (!matchedItem && rawName) {
-            matchedItem = itemNameMap.get(normalizePersianText(String(rawName)));
-          }
-
-          if (!matchedItem) continue;
-
-          const extractedRowPrices = new Map<string, { title: string; price: number; currency: string }>();
-
-          // 1. Check known strategies first
-          for (const st of strategies) {
-            const cleanTitle = formatStrategyDisplayTitle(st);
-            const canKey = getStrategyCanonicalKey(cleanTitle);
-
-            const rawPrice =
-              row[`قیمت ${cleanTitle}`] ??
-              row[`قیمت - ${cleanTitle}`] ??
-              row[`قیمت ${st}`] ??
-              row[`قیمت - ${st}`] ??
-              row[cleanTitle] ??
-              row[st];
-
-            if (rawPrice !== undefined && rawPrice !== '' && !isNaN(Number(rawPrice))) {
-              const currVal =
-                row[`ارز - ${cleanTitle}`] ??
-                row[`ارز - قیمت ${cleanTitle}`] ??
-                row[`ارز ${cleanTitle}`] ??
-                row['واحد ارز'] ??
-                row['ارز'] ??
-                'IRR';
-              extractedRowPrices.set(canKey, {
-                title: cleanTitle,
-                price: Number(rawPrice),
-                currency: String(currVal || 'IRR').trim()
-              });
-            }
-          }
-
-          // 2. Check any other columns that have "قیمت" or "Price" in header
-          Object.keys(row).forEach(k => {
-            const cleanTitle = formatStrategyDisplayTitle(k);
-            const canKey = getStrategyCanonicalKey(cleanTitle);
-
-            if (canKey && !extractedRowPrices.has(canKey)) {
-              const rawPrice = row[k];
-              if (rawPrice !== undefined && rawPrice !== '' && !isNaN(Number(rawPrice))) {
-                const currVal =
-                  row[`ارز - ${cleanTitle}`] ??
-                  row[`ارز - قیمت ${cleanTitle}`] ??
-                  row[`ارز ${cleanTitle}`] ??
-                  row['واحد ارز'] ??
-                  row['ارز'] ??
-                  'IRR';
-                extractedRowPrices.set(canKey, {
-                  title: cleanTitle,
-                  price: Number(rawPrice),
-                  currency: String(currVal || 'IRR').trim()
-                });
-              }
-            }
-          });
-
-          for (const pObj of extractedRowPrices.values()) {
-            updates.push({
-              itemId: matchedItem.id,
-              title: pObj.title,
-              price: pObj.price,
-              currency: pObj.currency,
-            });
-          }
+        // v9.0.114 (TD-647): فقط ستون‌های فهرست‌های قیمت تنظیم‌شده؛ ستون دیگرِ «قیمت …» نادیده گرفته و گزارش می‌شود
+        const { updates, unknownColumns } = buildQuickPriceUpdates(rawData, Array.isArray(items) ? items : [], strategies);
+        if (unknownColumns.length > 0) {
+          toast.error(`این ستون‌ها فهرست قیمت تنظیم‌شده‌ای نیستند و نادیده گرفته شدند: ${unknownColumns.join('، ')}`);
         }
 
         if (updates.length === 0) {
