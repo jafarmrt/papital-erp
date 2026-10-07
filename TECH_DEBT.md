@@ -107,7 +107,6 @@
 | TD-644 | گزارش کار و پیوست (بسته ۱۳) | P3 (B13-19) — عنوان، متن و برچسب گزارش کار سقف طول ندارند: متن ۲٫۳ میلیون نویسه‌ای ذخیره و در هر فهرست برای همه بینندگان فرستاده شد | dailyLogs.routes.ts | open (P3) |
 | TD-645 | گزارش کار و پیوست (بسته ۱۳) | P3 (B13-20) — پیوند اعلان `/daily-logs?id=N` خوانده نمی‌شود و کلیک روی اعلان یا کارت داشبورد فهرست کلی را باز می‌کند، نه همان گزارش | DailyLogsPage.tsx، useDailyLogs.ts، DailyLogsMentionsWidget.tsx | open (P3) |
 | TD-646 | گزارش کار و پیوست (بسته ۱۳) | P3 (B13-21) — «منشن» ۲۰ بار، «نوتیفیکیشن» یک بار و کلید مجوز `daily_logs.manage_all` در رابط گزارش کار | MentionTextarea.tsx، DailyLogsMentionsWidget.tsx، DailyLogModal.tsx، DailyLogReviewModal.tsx، DailyLogStatsCards.tsx، DailyLogsList.tsx، useDailyLogs.ts، DailyLogsPage.tsx، dailyLogs.routes.ts | open (P3، تصمیم ت۶) |
-| TD-688 | تدارکات (بسته ۱۰)؛ اثر روی ۶ و ۱۱ | P1 (B10-01) — ثبت درخواست خرید از هر سه فرم رابط (میز تدارکات، کسری مواد پروژه، هشدار نقطه سفارش) ۴۰۰ می‌گیرد: Zod `quantity` و اولویت `low\|medium\|high\|emergency` می‌خواهد و فرم‌ها `requestedQty`، نام، کد و واحد کالا و اولویت `normal\|urgent` می‌فرستند؛ بدنه سازگار با Zod (`quantity: 3`، `emergency`) با ۲۰۱ مقدار ۰، «کالای سفارشی» و جمع `0.00` ذخیره کرد و شمارنده «فوری» ۰ ماند | procurement.routes.ts، procurement.service.ts، CreateRequisitionModal.tsx، CreatePurchaseOrderModal.tsx، useReorderAlertsMutations.ts | open (P1) |
 | TD-689 | تدارکات (بسته ۱۰)؛ اثر روی ۱۴ | P1 (B10-02) — درخواست تأییدنشده بی حق تأیید سفارش و تحویل می‌شود: نقش فقط `procurement.view` و `procurement.order` اقدام تأیید را ۴۰۳ گرفت ولی `convert-to-orders` ۲۰۰ داد و گام گردش‌کار بی انتقال و بی ردیف تاریخچه به «تأییدشده» رفت؛ تحویل ۲۰۰، موجودی ۰ ← ۱۰ و نمونه `COMPLETED` (A02-15 جهت دیگر همین سازوکار است) | procurement.service.ts | open (P1، تصمیم ت۱ الف) |
 | TD-690 | تدارکات (بسته ۱۰) | P2 (B10-03) — تحویل تنها سفارش درخواست بخشی‌سفارش‌شده، درخواست را «دریافت‌شده» می‌کند: درخواست X ۱۰ و Y ۵، فقط X سفارش و تحویل شد؛ وضعیت `received`، Y بی سفارش، و سپس سفارش Y و «دریافت کالا» هر دو ۴۰۹ و موجودی Y صفر | procurement.service.ts | open (P2) |
 | TD-691 | تدارکات (بسته ۱۰)؛ اثر روی ۸ | P2 (B10-04) — مسیرهای سفارش تدارکات هر رسید انبار را سفارش تدارکات می‌شمارند: نقش فقط `projects.view` `GET /documents` را ۴۰۳ ولی `GET /procurement/orders` را ۲۰۰ با رسید عادی انبار، قیمت ۴٬۳۲۱٬۰۰۰ و تأمین‌کننده گرفت؛ نقش `procurement.manage` نهایی‌سازی سند را ۴۰۳ ولی `POST /procurement/orders/:id/deliver` را ۲۰۰ گرفت و موجودی ۱۰ ← ۱۷ شد؛ یک پیش‌فاکتور فروش شمارنده «در انتظار تحویل» را ۱ ← ۲ کرد؛ پیوند سفارش و درخواست از متن یادداشت است | procurement.service.ts، procurement.routes.ts | open (P2، تصمیم ت۲ الف) |
@@ -128,8 +127,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۱۰۷ ردیف
-- **آرشیو شده (resolved):** ۶۱۸ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۱۰۶ ردیف
+- **آرشیو شده (resolved):** ۶۱۹ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.266 — Purchase Requisition Contract
+- **Fix (TD-688, B10-01):** the procurement desk, project shortage and reorder alert forms record purchase requisitions again; one contract for create and edit (requested quantity above zero, catalog item or item name, priority urgent/high/normal/low), and a body without a quantity is refused instead of storing zero.
+
 ### v9.0.265 — Package 10 Procurement Audit
 - **Audit (package 10):** purchasing and procurement section of the stability audit report: 15 proven findings opened as TD-688..TD-702 plus TD-901 (decision t5) with the product-owner decisions t1-t5; documentation only.
 

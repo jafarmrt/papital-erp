@@ -1,7 +1,7 @@
 import { terminateOpenWorkflows } from './workflow/workflowTermination.js';
 import { sql, eq, and, desc, inArray, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { purchaseRequisitions, productionProjects, documentRefCounters, items, documents, documentItems, workflowInstances, workflowStates, workflowTransitions, workflowPendingApprovals, workflowTasks } from '../db/schema.js';
+import { purchaseRequisitions, documentRefCounters, items, documents, documentItems, workflowInstances, workflowStates, workflowTransitions, workflowPendingApprovals, workflowTasks } from '../db/schema.js';
 import { businessFiscalYear, businessTodayIsoDate } from '../lib/businessClock.js';
 import { errorMessageOf } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
@@ -26,6 +26,8 @@ import { assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES } from
 import { describeOverOrders, findOverOrders } from './procurement/requisitionOrder.js';
 import { money } from '../lib/money.js';
 import { fin } from '../lib/financialDecimal.js';
+import { REQUISITION_PRIORITIES, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
+import { buildRequisitionRows, resolveRequisitionProject, type RequisitionRowFields } from './procurement/requisitionRows.js';
 
 type DbClient = DbExecutor;
 
@@ -39,15 +41,14 @@ type WorkflowTransitionRef = Pick<WorkflowTransitionSnapshot, 'id' | 'fromStateI
 /** سند خرید صادرشده از درخواست: ردیف documents، یا شناسه و شماره وقتی ردیف خوانده نشد */
 type CreatedProcurementDocument = typeof documents.$inferSelect | { id: number; refNumber: string };
 
+/** v9.0.266 (TD-688): بدنه ثبت درخواست خرید (قرارداد `createRequisitionSchema`) */
 export interface CreateRequisitionInput {
   title: string;
   projectId?: number | null;
-  projectCode?: string;
-  projectName?: string;
-  priority?: 'urgent' | 'high' | 'normal' | 'low';
+  priority?: RequisitionPriority;
   requiredDate?: string;
   notes?: string;
-  items: PurchaseRequisitionItemRow[];
+  items: RequisitionRowFields[];
 }
 
 export interface UpdateRequisitionInput {
@@ -183,53 +184,25 @@ export class ProcurementService {
       throw new ValidationError('حداقل یک قلم کالا برای درخواست خرید باید مشخص شود.');
     }
 
-    // Sanitize and calculate totals — v7.0.113 (TD-239): مبلغ با FinancialDecimal (AGENTS §1.8)
-    let totalEst = fin(0);
-    const sanitizedItems: PurchaseRequisitionItemRow[] = input.items.map((item, idx) => {
-      const qty = Number(item.requestedQty || item.requested_qty || 0);
-      const price = Number(item.unitPriceEstimate || item.unit_price_estimate || 0);
-      totalEst = totalEst.add(fin(qty).multiply(price));
-      return {
-        id: item.id || `item-${Date.now()}-${idx}`,
-        itemId: item.itemId ?? item.item_id ?? null,
-        itemCode: item.itemCode || item.item_code || '',
-        itemName: item.itemName || item.item_name || 'کالای سفارشی',
-        category: item.category || '',
-        unit: item.unit || 'عدد',
-        requestedQty: qty,
-        orderedQty: 0,
-        remainingQty: qty,
-        unitPriceEstimate: price,
-        targetSupplierId: item.targetSupplierId ?? item.target_supplier_id ?? null,
-        targetSupplierName: item.targetSupplierName || item.target_supplier_name || '',
-        status: 'pending',
-        linkedDocumentIds: [],
-        notes: item.notes || ''
-      };
-    });
-
-    let projectCode = input.projectCode || '';
-    let projectName = input.projectName || '';
-
-    if (input.projectId && (!projectCode || !projectName)) {
-      const [proj] = await orm.select().from(productionProjects).where(eq(productionProjects.id, input.projectId));
-      if (proj) {
-        projectCode = proj.projectCode || '';
-        projectName = proj.title || '';
-      }
+    const priority = input.priority ?? 'normal';
+    if (!(REQUISITION_PRIORITIES as readonly string[]).includes(priority)) {
+      throw new ValidationError('اولویت درخواست خرید یکی از «فوری»، «بالا»، «عادی» یا «پایین» است.');
     }
 
     const createdReq = await orm.transaction(async (tx) => {
+      // v9.0.266 (TD-688): ردیف‌ها و پروژه با یک قاعده برای ثبت و ویرایش؛ مقدار جمع برآورد با FinancialDecimal (AGENTS §1.8)
+      const { rows: sanitizedItems, total: totalEst } = await buildRequisitionRows(tx, input.items);
+      const { projectId, projectCode, projectName } = await resolveRequisitionProject(tx, input.projectId);
       const code = await this.generateRequisitionCode(tx);
 
       const [inserted] = await tx.insert(purchaseRequisitions).values({
         code,
         title: input.title.trim(),
-        projectId: input.projectId || null,
+        projectId,
         projectCode,
         projectName,
         status: 'pending',
-        priority: input.priority || 'normal',
+        priority,
         // v7.0.135 (TD-232): تاریخ نیاز میلادی ISO (پیش‌فرض امروز کسب‌وکار)
         requiredDate: requireStorageDate(input.requiredDate, 'تاریخ نیاز') || await businessTodayIsoDate(),
         requestedById: user.id || null,
