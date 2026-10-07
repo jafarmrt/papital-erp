@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronDown, Check, X } from 'lucide-react';
-import { normalizePersianText } from '../../utils';
+import { normalizePersianText, toEnglishDigits } from '../../utils';
+
+/** متن جست‌وجوی حساب: «ی» و «ک» یکسان، فاصله و نیم‌فاصله یکی و رقم فارسی و عربی لاتین */
+const accountSearchText = (value: string | null | undefined) => toEnglishDigits(normalizePersianText(value));
 import type { Account } from '../../types';
 import { useClickOutside } from '../../hooks/useClickOutside';
 
@@ -45,16 +48,17 @@ export function AccountSearchSelect({
   }, [accounts, value]);
 
   // Filter selectable accounts (primarily subsidiary and detailed, but allow general too)
+  // v9.0.157 (TD-571، B03-29): رقم فارسی و عربی هر دو سو لاتین می‌شود؛ پیش‌تر «۱۱۰۱» با صفحه‌کلید فارسی حسابی پیدا نمی‌کرد
   const filteredAccounts = useMemo(() => {
-    const query = normalizePersianText(searchQuery);
+    const query = accountSearchText(searchQuery);
     if (!query) {
       return baseAccounts.slice(0, 100);
     }
     return baseAccounts.filter(acc => {
-      const matchCode = acc.code.toLowerCase().includes(query);
-      const matchName = normalizePersianText(acc.name).includes(query);
-      const matchType = acc.accountType ? normalizePersianText(acc.accountType).includes(query) : false;
-      const matchDesc = acc.description ? normalizePersianText(acc.description).includes(query) : false;
+      const matchCode = accountSearchText(acc.code).includes(query);
+      const matchName = accountSearchText(acc.name).includes(query);
+      const matchType = acc.accountType ? accountSearchText(acc.accountType).includes(query) : false;
+      const matchDesc = acc.description ? accountSearchText(acc.description).includes(query) : false;
       return matchCode || matchName || matchType || matchDesc;
     }).slice(0, 100);
   }, [baseAccounts, searchQuery]);

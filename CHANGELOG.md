@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.157 — Account Picker Reads Persian Digits
+- **Account Picker Digits (P2):** the account picker turns Persian and Arabic digits of the search and of account code, name, type and description to Latin before matching (TD-571, Vitest `accountSearchDigits.test.tsx`).
+
 ### v9.0.156 — Voucher Forms Offer Every Detailed Type
 - **Voucher Detailed Types (P2):** the voucher and correction forms take the detailed types from the server schema list: «متفرقه» is `other`, project and bank account are offered and the correction form has the supplier; `accounting.vouchers` reads the project pick list (TD-569, `reg_manual_voucher_detailed_types_td_569`).
 
