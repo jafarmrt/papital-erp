@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.170 — Rollback Steps Keep the Branch
+- **Rollback Steps:** the rollback and rehearsal hints of `update.sh` reset the branch (`git reset --hard <commit>`) instead of `git checkout <commit>`, which detached HEAD so the next `git pull --ff-only` failed with «You are not currently on a branch».
+
 ### v9.0.169 — Attachments Stay Out of Builds and Packages
 - **Public Assets:** the client build copies `public/` without `uploads/` (`copyPublicAssets` in `scripts/publicAssets.ts`, a Vite plugin with `copyPublicDir: false`), `.dockerignore` excludes `public/uploads` and `package-source.ps1` drops it from the source package. Before, every build duplicated all attachments into `dist/uploads`, a deleted attachment stayed there, and a local Docker image or source zip carried them.
 

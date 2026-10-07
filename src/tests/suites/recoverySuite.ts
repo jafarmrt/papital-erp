@@ -7,6 +7,7 @@ import { runBackupRestoreChecks, type RecoveryCheckOutcome } from '../recovery/b
 import { checkMigrationSession, checkSkippedMigrationRefused, checkUpgradeFromV70137 } from '../recovery/migrationChecks.js';
 import { checkUpdateWaitsForStartup } from '../recovery/updateScriptChecks.js';
 import { runDeploySafetyChecks } from '../recovery/deploySafetyChecks.js';
+import { runToolingChecks } from '../recovery/toolingChecks.js';
 
 /** حوزه K (v8.0.81 به بعد): مهاجرت، به‌روزرسانی، پشتیبان و بازیابی با اسکریپت‌ها و پایگاه‌داده واقعی */
 async function runMigrationAndBackupChecks(results: TestCaseResult[]): Promise<void> {
@@ -44,6 +45,11 @@ async function runMigrationAndBackupChecks(results: TestCaseResult[]): Promise<v
     outcomes.push(...await runDeploySafetyChecks());
   } catch (err: unknown) {
     outcomes.push({ id: 'rec_td_581_cleanup_script_guarded', name: 'Package 1: deploy and cleanup script safety', info: '', violations: [err instanceof Error ? err.message : String(err)] });
+  }
+  try {
+    outcomes.push(...await runToolingChecks());
+  } catch (err: unknown) {
+    outcomes.push({ id: 'rec_td_603_update_rollback_stays_on_branch', name: 'Package 1: operations tooling', info: '', violations: [err instanceof Error ? err.message : String(err)] });
   }
   for (const o of outcomes) {
     results.push(makeTestCase({

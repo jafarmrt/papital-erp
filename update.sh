@@ -68,7 +68,8 @@ rollback_hint() {
   log "Rollback:"
   log "  1) ${SUDO:+sudo }systemctl stop ${SERVICE_NAME}"
   if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
-    log "  2) git checkout ${PREVIOUS_COMMIT} && NODE_ENV=development npm ci --include=dev && npm run build"
+    # v9.0.170 (TD-603): reset the branch itself; a checkout of the commit detaches HEAD and the next git pull fails
+    log "  2) git reset --hard ${PREVIOUS_COMMIT} && NODE_ENV=development npm ci --include=dev && npm run build"
   else
     log "  2) put the previous source back and rebuild (npm ci --include=dev && npm run build)"
   fi
@@ -217,7 +218,7 @@ if [ "$REHEARSE" -eq 1 ]; then
     log "The service was NOT restarted and still runs the previous build; the database is unchanged."
     log "Put the previous source back before anything restarts the service:"
     if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
-      log "  git checkout ${PREVIOUS_COMMIT} && NODE_ENV=development npm ci --include=dev && npm run build"
+      log "  git reset --hard ${PREVIOUS_COMMIT} && NODE_ENV=development npm ci --include=dev && npm run build"
     else
       log "  restore the previous source tree and run: NODE_ENV=development npm ci --include=dev && npm run build"
     fi
