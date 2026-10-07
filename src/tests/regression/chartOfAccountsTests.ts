@@ -1,11 +1,14 @@
 import { and, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { accounts, journalVoucherItems, journalVouchers } from '../../db/schema.js';
+import { accounts, appSettings, journalVoucherItems, journalVouchers } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { AccountingReportService } from '../../services/accounting/accountingReport.service.js';
 import { FinancialHealthService } from '../../services/accounting/financialHealth.service.js';
+import { AccountMappingService } from '../../services/accounting/accountMapping.service.js';
+import { DocumentService } from '../../services/document.service.js';
+import { createTestItem, createTestWarehouse } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
 import {
   type ShouldRun, accountIdsByCode, amountOf, assertNoProblems, inFiscalSandbox, postApproved, runCase, sandboxAdminClient,
@@ -178,6 +181,64 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
 
       assertNoProblems(problems);
       return 'Rows on group, general, inactive and parent accounts refused in new, edited and correction vouchers (422) with nothing stored, a detailed account accepted, and legacy vouchers listed by the health check.';
+    }));
+  }
+
+  const mappingId = 'reg_account_mapping_validated_td_550';
+  if (shouldRun(mappingId, 'td550', 'mapping', 'account', 'chart', 'package3')) {
+    await runCase(results, mappingId, 'v9.0.199: an account mapping is saved only onto a posting account of the concept\'s type (422 ACCOUNT_MAPPING_INVALID), automatic vouchers never fall back to a general account, and the health check lists mappings that are wrong today (TD-550)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const acc = await accountIdsByCode('14', '1401', '1201');
+      const stored = async () => (await AccountMappingService.getMappings()).inventoryRawMaterialsCode;
+      const save = (body: Record<string, unknown>) => admin.post('/api/accounting/mappings', body);
+
+      // 1) B03-08 S04: «1499» (missing), «9999» and «5001» (revenue) were saved (200); a general account and the group «1» too
+      for (const code of ['1499', '9999', '5001', '14', '1']) {
+        const res = await save({ inventoryRawMaterialsCode: code });
+        if (res.status !== 422 || res.body?.code !== 'ACCOUNT_MAPPING_INVALID') problems.push(`raw materials mapped to ${code} answered ${res.status} ${JSON.stringify(res.body).slice(0, 160)}, expected 422 ACCOUNT_MAPPING_INVALID`);
+        else if (!String(res.body?.error ?? res.body?.message ?? '').includes('موجودی مواد اولیه')) problems.push(`the refusal for ${code} does not name the concept: ${JSON.stringify(res.body).slice(0, 200)}`);
+      }
+      if (await stored() !== '1401') problems.push(`a refused mapping was stored: ${await stored()}`);
+      // 2) a posting asset account is accepted, Persian digits become Latin; a disabled concept is not checked
+      const custom = await admin.post('/api/accounting/accounts', { code: '1499', name: 'TD-550 raw materials', level: 'subsidiary', parentId: acc['14'], accountType: 'asset', nature: 'debit' });
+      if (custom.status !== 201) problems.push(`creating 1499 answered ${custom.status}`);
+      const persian = await save({ inventoryRawMaterialsCode: '۱۴۹۹' });
+      if (persian.status !== 200 || await stored() !== '1499') problems.push(`«۱۴۹۹» answered ${persian.status}, stored ${await stored()}`);
+      const disabledSave = await save({ inventoryRawMaterialsCode: '1401', salesRevenueAccountCode: '9999', disabled: ['salesRevenueAccountCode'] });
+      if (disabledSave.status !== 200) problems.push(`a disabled concept with an unknown code answered ${disabledSave.status} ${JSON.stringify(disabledSave.body).slice(0, 160)}`);
+      await save({ salesRevenueAccountCode: '5001', disabled: [] });
+
+      // 3) mappings stored before the check: a missing code and a general account resolve to the concept's default 1401,
+      //    never to general account 14, and the health check lists them
+      const writeLegacy = (value: Record<string, string>) => orm.update(appSettings).set({ value: JSON.stringify({ ...value }) })
+        .where(eq(appSettings.key, 'accounting_account_mappings'));
+      for (const legacy of ['7777', '14']) {
+        await writeLegacy({ ...(await AccountMappingService.getMappings()), inventoryRawMaterialsCode: legacy });
+        const resolved = await AccountMappingService.resolveAccount('inventoryRawMaterialsCode');
+        if (resolved?.code !== '1401') problems.push(`a legacy mapping ${legacy} resolved to ${resolved?.code ?? 'nothing'}, expected 1401`);
+      }
+      await writeLegacy({ ...(await AccountMappingService.getMappings()), inventoryRawMaterialsCode: '14', salesRevenueAccountCode: '1201' });
+      const report = await FinancialHealthService.runHealthCheck();
+      const health = report.tests.find(t => t.id === 'account_mapping_invalid');
+      const listed = (health?.items ?? []).map(i => String(i.code)).sort();
+      if (!health || health.status !== 'warning' || JSON.stringify(listed) !== JSON.stringify(['inventoryRawMaterialsCode', 'salesRevenueAccountCode'])) {
+        problems.push(`health check account_mapping_invalid: ${health?.status} ${JSON.stringify(listed)}, expected the raw materials and sales revenue mappings`);
+      }
+
+      // 4) with neither the mapped account nor 1401, a purchase receipt never posts to general account 14 (it did)
+      await writeLegacy({ ...(await AccountMappingService.getMappings()), inventoryRawMaterialsCode: '7777', salesRevenueAccountCode: '5001' });
+      await orm.update(accounts).set({ isDeleted: 1 }).where(eq(accounts.id, acc['1401']));
+      const wh = await createTestWarehouse();
+      const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+      await DocumentService.createDocument({
+        docType: 'receipt', status: 'final', inOut: 'in', date: await businessTodayIsoDate(), user: 'td550', buyerName: 'td550',
+        location: wh.code, items: [{ itemId: item.id, quantity: 2, unitPrice: 100_000, location: wh.code }],
+      }).catch(() => null);
+      if (await activeRowsOn(acc['14']) !== 0) problems.push(`the purchase receipt posted ${await activeRowsOn(acc['14'])} rows on general account 14`);
+
+      assertNoProblems(problems);
+      return 'Missing, revenue, general and group codes refused (422), a posting asset account saved with Latin digits, disabled concepts skipped, legacy mappings resolved to 1401 and listed, and no automatic row on general account 14.';
     }));
   }
 

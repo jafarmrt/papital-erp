@@ -212,6 +212,8 @@ export function AccountSearchSelect({
                   ? { label: 'معین', bg: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' }
                   : acc.level === 'detailed'
                   ? { label: 'تفصیلی', bg: 'bg-teal-50 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300' }
+                  : acc.level === 'group' // v9.0.199 (TD-550): گروه «کل» نامیده می‌شد
+                  ? { label: 'گروه', bg: 'bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' }
                   : { label: 'کل', bg: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300' };
 
                 return (

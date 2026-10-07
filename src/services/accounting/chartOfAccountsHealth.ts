@@ -4,6 +4,9 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 import type { HealthCheckTestResult } from '../../types.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
 import { accountHasActiveChildSql } from './postingAccounts.js';
+import { ACCOUNT_MAPPING_CONCEPTS, type AccountMappingKey } from '../../lib/accounting/accountMappingConcepts.js';
+import { AccountMappingService, DEFAULT_ACCOUNT_MAPPINGS, accountMappingIssues, type AccountMappingIssue } from './accountMapping.service.js';
+import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 
 const VOUCHER_STATUS_TEXT: Record<string, string> = { draft: 'پیش‌نویس', approved: 'تأییدشده', permanent: 'دائم' };
 
@@ -119,5 +122,48 @@ export function buildNonPostingRowsHealthTest(entries: VoucherOnNonPostingAccoun
       details: `${VOUCHER_STATUS_TEXT[e.status] ?? e.status}، تاریخ ${toPersianDigits(isoToJalaliDate(e.date) || e.date)} (TD-549).`,
     })),
     metrics: { vouchersOnNonPostingAccounts: entries.length },
+  };
+}
+
+export interface AccountMappingHealthEntry extends AccountMappingIssue {
+  fallback: string;
+}
+
+/**
+ * v9.0.199 (TD-550، B03-08): نگاشت‌هایی که امروز به حساب ناموجود، غیرقابل ثبت یا ناسازگار با مفهوم می‌رسند. سند
+ * خودکار چنین مفهومی کد پیش‌فرض را می‌گیرد (اگر قابل ثبت باشد)؛ هیچ نگاشتی خودکار عوض نمی‌شود.
+ */
+export async function findAccountMappingIssues(): Promise<AccountMappingHealthEntry[]> {
+  const [mappings, disabled, chart] = await Promise.all([
+    AccountMappingService.getMappings(), AccountMappingService.getDisabledMappings(), ChartOfAccountsService.getAllAccounts(),
+  ]);
+  const entries = ACCOUNT_MAPPING_CONCEPTS.map(c => [c.key, disabled.includes(c.key) ? c.defaultCode : (String(mappings[c.key] || '') || c.defaultCode)] as [AccountMappingKey, string]);
+  const issues = accountMappingIssues(entries, chart);
+  const defaultIssues = new Set(accountMappingIssues(ACCOUNT_MAPPING_CONCEPTS.map(c => [c.key, c.defaultCode] as [AccountMappingKey, string]), chart).map(i => i.key));
+  return issues.map(i => ({ ...i, fallback: i.code !== DEFAULT_ACCOUNT_MAPPINGS[i.key] && !defaultIssues.has(i.key) ? DEFAULT_ACCOUNT_MAPPINGS[i.key] : '' }));
+}
+
+export function buildAccountMappingHealthTest(entries: AccountMappingHealthEntry[]): HealthCheckTestResult {
+  return {
+    id: 'account_mapping_invalid',
+    category: 'accounts',
+    title: 'نگاشت حساب سندهای خودکار',
+    description: 'هر مفهوم نگاشت (موجودی، دریافتنی، درآمد و …) باید به حساب فعال معین یا تفصیلیِ بی زیرحساب با نوع همان مفهوم برسد. نگاشت نادرست خودکار عوض نمی‌شود',
+    status: entries.length > 0 ? 'warning' : 'healthy',
+    scoreImpact: 0,
+    count: entries.length,
+    message: entries.length === 0
+      ? 'همه نگاشت‌های حساب درست‌اند.'
+      : `${toPersianDigits(String(entries.length))} نگاشت حساب نادرست است. از «تنظیمات › حسابداری» حساب درست را انتخاب و ذخیره کنید.`,
+    items: entries.map((e, index) => ({
+      id: index + 1,
+      code: e.key,
+      title: e.label,
+      subtitle: `کد ${toPersianDigits(e.code)}: ${e.reason}`,
+      details: e.fallback
+        ? `سند خودکار این مفهوم اکنون حساب پیش‌فرض ${toPersianDigits(e.fallback)} را می‌گیرد (TD-550).`
+        : 'سند خودکار این مفهوم حساب درستی ندارد (TD-550).',
+    })),
+    metrics: { invalidAccountMappings: entries.length },
   };
 }

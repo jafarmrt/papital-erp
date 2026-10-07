@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.199 — Account Mapping Validated on Save
+- **Account Mapping (P2):** each mapped code must be a posting account of the concept's account types (422 `ACCOUNT_MAPPING_INVALID`); resolution falls back only to the concept's default subsidiary code, never a group or general account, and the page lists all 26 concepts (TD-550).
+
 ### v9.0.198 — Voucher Rows Only on Posting Accounts
 - **Posting Accounts (P2):** a manual, edited or correction voucher row goes only on an active subsidiary or detailed account without an active sub-account (422 `VOUCHER_ACCOUNT_NOT_POSTABLE`); the forms offer only those and the health check lists legacy rows elsewhere (TD-549).
 

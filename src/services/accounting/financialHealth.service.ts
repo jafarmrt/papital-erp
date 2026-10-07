@@ -19,7 +19,8 @@ import { buildForeignRateHealthTest, findVouchersWithoutForeignRate } from './vo
 import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
 import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
 import {
-  buildDeletedAccountRowsHealthTest, buildNonPostingRowsHealthTest, findDeletedAccountsWithVoucherRows, findVouchersOnNonPostingAccounts,
+  buildAccountMappingHealthTest, buildDeletedAccountRowsHealthTest, buildNonPostingRowsHealthTest, findAccountMappingIssues,
+  findDeletedAccountsWithVoucherRows, findVouchersOnNonPostingAccounts,
 } from './chartOfAccountsHealth.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
@@ -1168,6 +1169,8 @@ export class FinancialHealthService {
     tests.push(buildDeletedAccountRowsHealthTest(await findDeletedAccountsWithVoucherRows()));
     // آزمون ۳۲: v9.0.198 (TD-549) ردیف سند روی حساب گروه، کل یا دارای زیرحساب (فقط فهرست، بی بازنویسی)
     tests.push(buildNonPostingRowsHealthTest(await findVouchersOnNonPostingAccounts()));
+    // آزمون ۳۳: v9.0.199 (TD-550) نگاشت حساب سندهای خودکار به حساب ناموجود، غیرقابل ثبت یا ناسازگار (فقط فهرست)
+    tests.push(buildAccountMappingHealthTest(await findAccountMappingIssues()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

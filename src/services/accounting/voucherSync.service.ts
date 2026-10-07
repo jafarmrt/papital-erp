@@ -539,12 +539,13 @@ export class VoucherSyncService {
     const totalGrossRate = rowExchangeRate(rawMaterialsIrr.add(finishedGoodsIrr), totalGross, exchangeRate);
 
     const allAccs = await ChartOfAccountsService.getAllAccounts(tx);
+    // v9.0.199 (TD-550، B03-08): پشتیبان فقط کد معین پیش‌فرض است، هرگز حساب کل (۱۴، ۳۰ و …)
     // v8.0.14 (TD-259): سرفصل‌ها از نگاشت حساب‌ها، مانند سند فروش و حواله؛ پیش‌تر کد ثابت ۱۴۰۱/۱۴۰۲/۱۴۰۳/۳۰۰۱ بود و با
     // نگاشت سفارشی، خرید و فروش یک کالا به دو حساب موجودی می‌رفتند. کد پیش‌فرض فقط وقتی است که حساب نگاشت‌شده نباشد.
-    const rawMaterialAcc = (await AccountMappingService.getInventoryRawMaterialsAccount(tx)) || allAccs.find(a => a.code === '1401') || allAccs.find(a => a.code === '14');
-    const wipAcc = (await AccountMappingService.getWorkInProgressAccount(tx)) || allAccs.find(a => a.code === '1402') || allAccs.find(a => a.code === '14');
-    const finishedGoodsAcc = (await AccountMappingService.getInventoryFinishedGoodsAccount(tx)) || allAccs.find(a => a.code === '1403') || allAccs.find(a => a.code === '14');
-    const supplierAcc = (await AccountMappingService.getTradePayablesAccount(tx)) || allAccs.find(a => a.code === '3001') || allAccs.find(a => a.code === '30');
+    const rawMaterialAcc = (await AccountMappingService.getInventoryRawMaterialsAccount(tx)) || allAccs.find(a => a.code === '1401');
+    const wipAcc = (await AccountMappingService.getWorkInProgressAccount(tx)) || allAccs.find(a => a.code === '1402');
+    const finishedGoodsAcc = (await AccountMappingService.getInventoryFinishedGoodsAccount(tx)) || allAccs.find(a => a.code === '1403');
+    const supplierAcc = (await AccountMappingService.getTradePayablesAccount(tx)) || allAccs.find(a => a.code === '3001');
 
     let matchedSupplierId: number | null = null;
     if (doc.buyerName && doc.type !== 'production_receipt') {
@@ -773,17 +774,18 @@ export class VoucherSyncService {
     }
 
     const allAccs = await ChartOfAccountsService.getAllAccounts(tx);
-    const rawMaterialAcc = (await AccountMappingService.getInventoryRawMaterialsAccount(tx)) || allAccs.find(a => a.code === '1401') || allAccs.find(a => a.code === '14');
-    const finishedGoodsAcc = (await AccountMappingService.getInventoryFinishedGoodsAccount(tx)) || allAccs.find(a => a.code === '1403') || allAccs.find(a => a.code === '14');
+    // v9.0.199 (TD-550، B03-08): پشتیبان فقط کد معین پیش‌فرض است، هرگز حساب کل یا گروه (۱۴، ۵۱، ۶۰، ۷۰ و …)
+    const rawMaterialAcc = (await AccountMappingService.getInventoryRawMaterialsAccount(tx)) || allAccs.find(a => a.code === '1401');
+    const finishedGoodsAcc = (await AccountMappingService.getInventoryFinishedGoodsAccount(tx)) || allAccs.find(a => a.code === '1403');
     // V5.0.17 (TD-121): سرفصل کالای در جریان ساخت (۱۴۰۲) — حذف قطعی فالبک اشتباه ۶۰۰۱ (بهای تمام‌شده کالای فروش‌رفته)
     const wipAcc = (await AccountMappingService.getWorkInProgressAccount(tx)) || allAccs.find(a => a.code === '1402');
     // v8.0.114 (TD-413، TD-400): هزینه ضایعات از نگاشت حساب‌ها («ضایعات و افت کیفی» ۶۰۰۴)، نه کد ثابت ۶۰۰۳ (سربار)
-    const wasteExpenseAcc = (await AccountMappingService.getWasteExpenseAccount(tx)) || allAccs.find(a => a.code === '6003') || allAccs.find(a => a.code === '7009') || allAccs.find(a => a.code === '70');
-    const salesReturnAcc = allAccs.find(a => a.code === '5101') || allAccs.find(a => a.code === '51');
+    const wasteExpenseAcc = (await AccountMappingService.getWasteExpenseAccount(tx)) || allAccs.find(a => a.code === '6003') || allAccs.find(a => a.code === '7009');
+    const salesReturnAcc = allAccs.find(a => a.code === '5101');
     // v8.0.14 (TD-259): بدهکاران تجاری برگشت از فروش از نگاشت حساب‌ها، همان حساب سند فروش
-    const customerAcc = (await AccountMappingService.getTradeReceivablesAccount(tx)) || allAccs.find(a => a.code === '1201') || allAccs.find(a => a.code === '12');
+    const customerAcc = (await AccountMappingService.getTradeReceivablesAccount(tx)) || allAccs.find(a => a.code === '1201');
     // V6.0.10 (TD-145): سرفصل بهای تمام‌شده کالای فروش‌رفته (۶۰۰۱) جهت صدور آرتیکل مرجوعی فروش
-    const cogsAcc = (await AccountMappingService.getCostOfGoodsSoldAccount(tx)) || allAccs.find(a => a.code === '6001') || allAccs.find(a => a.code === '60');
+    const cogsAcc = (await AccountMappingService.getCostOfGoodsSoldAccount(tx)) || allAccs.find(a => a.code === '6001');
 
     // V10-1.1 & V5.0.17: fallback تاریخ ۱۰ کاراکتری ایمن
     const docDate = doc.date ? String(doc.date).slice(0, 10) : await businessTodayIsoDate();
