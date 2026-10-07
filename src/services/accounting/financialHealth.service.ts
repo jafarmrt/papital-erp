@@ -12,6 +12,7 @@ import { buildOpeningVoucherHealthTest, findOpeningVoucherMismatches } from '../
 import { buildReservedWarehouseCodeHealthTest, findReservedCodeWarehouses } from '../inventory/reservedWarehouseCode.js';
 import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
 import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
+import { buildDuplicateActivePriceHealthTest, findDuplicateActivePrices } from '../items/itemPriceIntegrity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1120,6 +1121,11 @@ export class FinancialHealthService {
     const itemIdentityTest = buildItemIdentityHealthTest(await findDuplicateItemIdentities(), await hasItemIdentityIndexes());
     overallScore += itemIdentityTest.scoreImpact;
     tests.push(itemIdentityTest);
+
+    // آزمون ۲۶: v9.0.165 (TD-660) بیش از یک قیمت فعال برای یک فهرست قیمت کالا (فقط فهرست، بی پاک‌سازی)
+    const duplicatePriceTest = buildDuplicateActivePriceHealthTest(await findDuplicateActivePrices());
+    overallScore += duplicatePriceTest.scoreImpact;
+    tests.push(duplicatePriceTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

@@ -10598,6 +10598,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runItemExcelImportTests(shouldRun));
   const { runItemIntegrityTests } = await import('../regression/itemIntegrityTests.js');
   results.push(...await runItemIntegrityTests(shouldRun));
+  const { runItemPriceTests } = await import('../regression/itemPriceTests.js');
+  results.push(...await runItemPriceTests(shouldRun));
 
   return results;
 }

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.165 — One Active Price per List Under Concurrent Saves
+- **Item Price Writes:** price saves go through `ItemPricingService.applyPriceWrites` under the item row lock, so concurrent saves leave one active price per list; old duplicates are listed by the health check (TD-660, `conc_item_price_single_active_td_660`).
+
 ### v9.0.164 — Guard Test for Item Delete During a Receipt
 - **Item Delete vs Receipt:** a guard test shows that deleting an item while a receipt of it commits waits for the receipt and is refused; the row lock dates from v9.0.40 (TD-661 closed without code change, `conc_item_delete_vs_receipt_td_661`).
 
