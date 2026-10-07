@@ -40,7 +40,7 @@ export const LOGIN_ONLY_ROUTES = new Set([
 ]);
 
 /**
- * v9.0.97 (TD-516، فهرست تأییدشده M2): کارهای نگهداری سامانه که فقط «مدیر سیستم» انجام می‌دهد (`requireSystemAdmin`).
+ * v9.0.107 (TD-516، فهرست تأییدشده M2): کارهای نگهداری سامانه که فقط «مدیر سیستم» انجام می‌دهد (`requireSystemAdmin`).
  * هیچ گارد دیگری کد نقش ندارد؛ کار تازه‌ای که فقط مدیر سیستم بکند، اینجا با تصمیم مالک محصول افزوده می‌شود.
  */
 export const SYSTEM_ADMIN_ONLY_ROUTES = new Set([
@@ -74,7 +74,7 @@ export function routeAccessPolicyViolations(rows: RouteGuardRow[], catalogKeys: 
     for (const entry of row.guards.flat()) {
       if (entry.includes('.') && !catalogKeys.has(entry)) violations.push(`${key}: مجوز «${entry}» در کاتالوگ نیست`);
     }
-    // v9.0.97 (TD-516): کد نقش فقط به شکل گارد تنهای «مدیر سیستم» و فقط روی فهرست تأییدشده
+    // v9.0.107 (TD-516): کد نقش فقط به شکل گارد تنهای «مدیر سیستم» و فقط روی فهرست تأییدشده
     const adminOnly = row.guards.some(g => g.length === 1 && g[0] === SYSTEM_ADMIN_ROLE);
     for (const g of row.guards) {
       const codes = g.filter(e => !e.includes('.'));
