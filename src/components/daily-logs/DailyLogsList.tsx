@@ -7,11 +7,14 @@ import { DailyWorkLog, User } from '../../types';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
 import { formatPersianNumber, formatPersianDate, formatPersianDateTime } from '../../utils';
 import { useHasPermission } from '../../contexts/AuthContext';
+import { workModeLabel } from '../../lib/dailyLogs/workMode';
 
 interface DailyLogsListProps {
   logs: DailyWorkLog[];
   loading: boolean;
   page: number;
+  /** v9.0.249 (TD-630): every log the filters match; the server sends one page */
+  total: number;
   setPage: React.Dispatch<React.SetStateAction<number>>;
   limit: number;
   user: User;
@@ -26,6 +29,7 @@ export function DailyLogsList({
   logs,
   loading,
   page,
+  total,
   setPage,
   limit,
   user,
@@ -54,7 +58,12 @@ export function DailyLogsList({
           </span>
         );
       default:
-        return null;
+        // v9.0.260 (TD-635): a legacy leave, mission or hybrid log shows its own label
+        return mode ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+            {workModeLabel(mode)}
+          </span>
+        ) : null;
     }
   };
 
@@ -63,9 +72,9 @@ export function DailyLogsList({
       case 'mentioned_only':
       case 'custom':
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200" title="محرمانه - فقط منشن‌شده‌ها و خودم">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200" title="محرمانه - فقط اشاره‌شده‌ها و خودم">
             <AtSign className="w-3 h-3 text-amber-600" />
-            فقط منشن‌شده‌ها و خودم
+            فقط اشاره‌شده‌ها و خودم
           </span>
         );
       case 'private':
@@ -105,12 +114,11 @@ export function DailyLogsList({
     );
   }
 
-  const totalPages = Math.ceil(logs.length / limit);
-  const paginatedLogs = logs.slice((page - 1) * limit, page * limit);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
     <div className="space-y-3.5 font-farsi text-right">
-      {paginatedLogs.map((log) => {
+      {logs.map((log) => {
         const isOwner = log.userId === user.id || log.user_id === user.id;
         const mentionsList = Array.isArray(log.mentions) ? log.mentions : [];
         const mentionedUsersObj = systemUsers.filter((u) => mentionsList.includes(u.id));
@@ -200,7 +208,7 @@ export function DailyLogsList({
               {mentionedUsersObj.length > 0 && (
                 <div className="flex items-center gap-1 bg-amber-50/80 px-2.5 py-1 rounded-lg border border-amber-200/60 text-xs">
                   <AtSign className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="text-[10px] font-bold text-amber-800">افراد منشن‌شده:</span>
+                  <span className="text-[10px] font-bold text-amber-800">افراد اشاره‌شده:</span>
                   <div className="flex items-center gap-1">
                     {mentionedUsersObj.map((mUser) => (
                       <span
@@ -273,7 +281,7 @@ export function DailyLogsList({
         <div className="mt-4 p-4 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-slate-50/50 rounded-xl">
           <span className="text-slate-500">
             نمایش صفحه {formatPersianNumber(page)} از {formatPersianNumber(totalPages)} (مجموع{' '}
-            {formatPersianNumber(logs.length)} رکورد)
+            {formatPersianNumber(total)} گزارش)
           </span>
           <div className="flex items-center gap-1">
             <button

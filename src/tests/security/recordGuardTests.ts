@@ -84,13 +84,15 @@ export async function runRecordGuardTests(shouldRun: (id: string, ...extra: stri
         ]).returning({ id: dailyWorkLogs.id });
         try {
           const stats = await send(viewer.session, 'get', '/api/daily-logs/stats');
-          const list = await send(viewer.session, 'get', '/api/daily-logs?limit=500');
+          const list = await send(viewer.session, 'get', '/api/daily-logs?limit=100');
           const authorStats = await send(author.session, 'get', '/api/daily-logs/stats');
-          const visible = Array.isArray(list.body) ? list.body.length : -1;
+          // v9.0.249 (TD-630): the list is paged; `total` counts every visible log
+          const rows: Array<{ title?: string; work_mode?: string }> = Array.isArray(list.body?.data) ? list.body.data : [];
+          const visible = typeof list.body?.total === 'number' ? list.body.total : -1;
           const wrong: string[] = [];
           if (stats.status !== 200) throw new Error(`آمار ${stats.status} داد`);
           if (stats.body.total_logs !== visible) wrong.push(`شمار کل آمار ${stats.body.total_logs} است و فهرست ${visible}`);
-          const remoteVisible = (list.body as Array<{ title?: string; work_mode?: string }>).filter(l => String(l.title).startsWith('td406') && l.work_mode === 'remote').length;
+          const remoteVisible = rows.filter(l => String(l.title).startsWith('td406') && l.work_mode === 'remote').length;
           if (remoteVisible !== 0) wrong.push(`گزارش محرمانه در فهرست بیننده آمد (${remoteVisible})`);
           if (stats.body.my_mentions_count !== 1) wrong.push(`«اشاره به من» ${stats.body.my_mentions_count} است، نه ۱ (گزارش محرمانه شمرده شد)`);
           if (authorStats.body.my_total_logs !== 3) wrong.push(`نویسنده ${authorStats.body.my_total_logs} گزارش خود را شمرد، نه ۳`);

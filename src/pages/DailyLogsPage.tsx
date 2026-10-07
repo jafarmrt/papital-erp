@@ -13,6 +13,8 @@ import { DailyLogsList } from '../components/daily-logs/DailyLogsList';
 import { DailyLogSummaryView } from '../components/daily-logs/DailyLogSummaryView';
 import { DailyLogModal } from '../components/daily-logs/DailyLogModal';
 import { DailyLogReviewModal } from '../components/daily-logs/DailyLogReviewModal';
+import { DailyLogDetailModal } from '../components/daily-logs/DailyLogDetailModal';
+import { useDailyLogFocus } from '../hooks/useDailyLogFocus';
 
 interface DailyLogsPageProps {
   user: User;
@@ -20,6 +22,7 @@ interface DailyLogsPageProps {
 
 export default function DailyLogsPage({ user }: DailyLogsPageProps) {
   const dl = useDailyLogs(user);
+  const { focusedLog, closeFocusedLog } = useDailyLogFocus();
   // گزارش تجمیعی مدیریت فقط با مجوز daily_logs.manage_all (مدیر سیستم همه مجوزها را دارد؛ v9.0.231، TD-626)
   const canViewSummary = useHasPermission('daily_logs.manage_all');
 
@@ -42,7 +45,7 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
           <div className="text-left text-xs font-semibold text-slate-700">
             <p>کاربر / همکار: {user.full_name || user.username}</p>
             <p>تاریخ خروجی: {getTodayJalaliDate()}</p>
-            <p>تعداد گزارش‌ها: {formatPersianNumber(dl.logs.length)} مورد</p>
+            <p>تعداد گزارش‌ها: {formatPersianNumber(dl.total)} مورد</p>
           </div>
         </div>
       </div>
@@ -87,7 +90,7 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              منشن‌شده‌های من ({formatPersianNumber(dl.stats.my_mentions_count)})
+              اشاره‌شده به من ({formatPersianNumber(dl.stats.my_mentions_count)})
             </button>
             {canViewSummary && (
               <button
@@ -192,6 +195,7 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
           logs={dl.logs}
           loading={dl.loading}
           page={dl.page}
+          total={dl.total}
           setPage={dl.setPage}
           limit={dl.limit}
           user={user}
@@ -248,8 +252,9 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
         setReviewNotes={dl.setReviewNotes}
         isSubmittingReview={dl.isSubmittingReview}
         onSaveReview={dl.handleSaveReview}
-        systemUsers={dl.systemUsers}
       />
+
+      <DailyLogDetailModal log={focusedLog} onClose={closeFocusedLog} />
     </div>
   );
 }
