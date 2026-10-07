@@ -2,7 +2,7 @@ import '../src/lib/processTimezone.js';
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
-import { Phase21TestRunner, assertRealTestDatabase } from '../src/tests/testRunner.js';
+import { Phase21TestRunner, assertRealTestDatabase, assertRunnerEnvironment } from '../src/tests/testRunner.js';
 import { setupTestSchema } from '../src/tests/setup/testDb.js';
 import { bootstrapTestMasterData } from '../src/tests/setup/testBootstrap.js';
 
@@ -119,7 +119,20 @@ Available Suites:
       invariants: 'business_invariants',
       inv: 'business_invariants'
     };
-    layerArg = aliasMap[normalized] || layerArg;
+    // v9.0.175 (TD-608): an unknown suite used to run nothing and report PASSED
+    if (!aliasMap[normalized]) {
+      console.error(`Unknown test suite "${layerArg}". Known suites: ${[...new Set(Object.values(aliasMap))].join(', ')}`);
+      process.exit(1);
+    }
+    layerArg = aliasMap[normalized];
+  }
+
+  // v9.0.175 (TD-608): refused before any schema, migration or seed is written (the check used to run after them)
+  try {
+    assertRunnerEnvironment();
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
   }
 
   // TD-134 (Roadmap 2.5): ایزولاسیون کامل دیتابیس تست‌ها به‌صورت پیش‌فرض فعال است مگر با ERP_TEST_SCHEMA_ISOLATION=0 خاموش شود
@@ -222,6 +235,12 @@ Available Suites:
         });
         process.exitCode = 1;
       }
+    }
+
+    // v9.0.175 (TD-608): a filter that matches no test is a failure, never a pass; a mistyped test id must not turn green
+    if (totalCases === 0) {
+      console.error(`\nNo test ran: suite ${layerArg ?? 'all'}${testFilter ? `, filter "${testFilter}"` : ''} matched no test.`);
+      process.exitCode = 1;
     }
 
     // Optional CI artifact output

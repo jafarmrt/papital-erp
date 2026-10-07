@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.175 — Test Runner Refuses Empty Runs
+- **Test Runner:** `scripts/run-tests.ts` exits 1 on an unknown suite (listing the known ones) and when the suite and filter matched no test («No test ran»), and checks `NODE_ENV` before any schema, migration or seed is written. Before, a mistyped suite or test id reported `Passed Tests: 0 / 0 … PASSED`, which voided the «red on the previous version» rule, and a production run wrote 68 tables before it was refused.
+
 ### v9.0.174 — Audit Gate Fails When npm audit Fails
 - **Audit Gate:** `npm run audit:gate` fails (`auditRunFailure` in `scripts/audit-gate.ts`) when `npm audit` returns an error object or no `vulnerabilities` object, and prints npm's error. Before, `report.vulnerabilities || {}` read the failed run as empty and passed.
 
