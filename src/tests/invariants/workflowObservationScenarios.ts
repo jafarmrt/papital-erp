@@ -6,7 +6,7 @@ import { ProcurementService } from '../../services/procurement.service.js';
 import { getEntityContext, WorkflowRuleEngine } from '../../services/workflow/workflowDslParser.js';
 import { WorkflowTransitionExecutor } from '../../services/workflow/workflowTransitionExecutor.js';
 import { createTestDocument, createTestItem } from '../fixtures/factories.js';
-import { refusalStatus } from './workflowScenarioHelpers.js';
+import { legacyRequisitionOrder, refusalStatus } from './workflowScenarioHelpers.js';
 import type { RuleExpression } from '../../services/ruleEngine.service.js';
 
 /**
@@ -88,6 +88,7 @@ export async function checkRequisitionStepNotRewritten(): Promise<string[]> {
   // وضعیت «سفارش‌شده» از مسیری بیرون از گردش‌کار، گام هنوز «در انتظار»
   const ordered = await requisitionWithWorkflow(item.id, 3);
   await pool.query(`UPDATE purchase_requisitions SET status = 'ordered' WHERE id = $1`, [ordered.id]);
+  await legacyRequisitionOrder(ordered.id, item.id, 3);
   await ProcurementService.executeWorkflowAction(ordered.id, 'receive_items', ADMIN);
   const history = await stepHistory(ordered.instanceId);
   for (let i = 1; i < history.length; i++) {

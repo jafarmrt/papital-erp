@@ -3,7 +3,7 @@ import { ProcurementService } from '../../services/procurement.service.js';
 import { createTestItem } from '../fixtures/factories.js';
 import { itemState } from './scenarioHelpers.js';
 import { WorkflowTransitionExecutor } from '../../services/workflow/workflowTransitionExecutor.js';
-import { refusal, refusalStatus, uniqueTag, wfUser } from './workflowScenarioHelpers.js';
+import { legacyRequisitionOrder, refusal, refusalStatus, uniqueTag, wfUser } from './workflowScenarioHelpers.js';
 
 /**
  * v8.0.99 — اقدام گردش‌کار درخواست خرید (حوزه G). هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
@@ -39,6 +39,11 @@ export async function checkRequisitionActionFollowsWorkflow(): Promise<string[]>
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const id = await requisition(item.id, 10);
   await ProcurementService.executeWorkflowAction(id, 'approve_request', ADMIN);
+  // v9.0.275 (TD-699، ت۴): «دریافت کالا» فقط ردیف سفارش‌شده را می‌پذیرد
+  await ProcurementService.convertToPurchaseOrders({
+    requisitionId: id,
+    orderGroups: [{ supplierName: 'تامین‌کننده آزمون گردش‌کار', targetWarehouse: '', status: 'draft', items: [{ itemId: item.id, quantity: 10, unitPrice: 1000 }] }],
+  } as Parameters<typeof ProcurementService.convertToPurchaseOrders>[0], ADMIN);
   await ProcurementService.executeWorkflowAction(id, 'receive_items', ADMIN);
   for (const action of ['reopen', 'reject_request', 'approve_request']) {
     const error = await refusal(() => ProcurementService.executeWorkflowAction(id, action, ADMIN));
@@ -91,6 +96,7 @@ export async function checkReceiveApprovesInReceiverName(): Promise<string[]> {
 
   const id = await requisition(item.id, 4);
   const instanceId = await startRequisitionWorkflow(id);
+  await legacyRequisitionOrder(id, item.id, 4);
   const error = await refusal(() => ProcurementService.executeWorkflowAction(id, 'receive_items', asReceiver));
   if (error) return [`دریافت درخواستِ تأییدنشده با گام تأیید بی‌نقش رد شد: ${error}`];
   const history = await pool.query<{ action_key: string; performed_by: number | null }>(
@@ -104,6 +110,7 @@ export async function checkReceiveApprovesInReceiverName(): Promise<string[]> {
   // گام تأییدی که نقش مدیر می‌خواهد: دریافت‌کننده بی آن نقش رد می‌شود و کالایی وارد انبار نمی‌شود
   const guarded = await requisition(item.id, 6);
   const guardedInstance = await startRequisitionWorkflow(guarded);
+  await legacyRequisitionOrder(guarded, item.id, 6);
   const snap = await pool.query<{ snapshot_dsl: { transitions: Array<{ actionKey: string; requiredRole?: string }> } }>(
     'SELECT snapshot_dsl FROM workflow_instances WHERE id = $1', [guardedInstance]);
   const dsl = snap.rows[0].snapshot_dsl;

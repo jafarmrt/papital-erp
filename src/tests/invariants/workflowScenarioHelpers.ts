@@ -1,9 +1,10 @@
-import { pool } from '../../db/drizzle.js';
+import { orm, pool } from '../../db/drizzle.js';
+import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
 import { WorkflowDefinitionService, type SaveWorkflowDefinitionPayload } from '../../services/workflow/workflowDefinitionService.js';
 import { WorkflowTransitionExecutor } from '../../services/workflow/workflowTransitionExecutor.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
 import { getErrorMessage } from '../../utils/formatters.js';
-import { createTestRole, createTestUser } from '../fixtures/factories.js';
+import { createTestDocument, createTestRole, createTestUser } from '../fixtures/factories.js';
 
 /**
  * v8.0.90 — ابزار سناریوهای گردش‌کار حوزه G: تعریف واقعی با saveWorkflowDefinition، نمونه با startInstance
@@ -132,4 +133,20 @@ export async function refusalStatus(run: () => Promise<unknown>): Promise<number
     const status = (err as { statusCode?: unknown }).statusCode;
     return typeof status === 'number' ? status : 500;
   }
+}
+
+/**
+ * v9.0.275 (TD-699، ت۴): سفارش پیش‌نویس درخواستی که پیش از ت۱ (TD-689) و بی تأیید صادر شده بود، با پیوند ستون و ردیف.
+ * «دریافت کالا» فقط ردیف سفارش‌شده را می‌پذیرد؛ سناریوهای دریافت درخواستِ تأییدنشده همین داده قدیمی را می‌سازند.
+ */
+export async function legacyRequisitionOrder(requisitionId: number, itemId: number, quantity: number): Promise<number> {
+  const location = (await getDefaultWarehouseCode(orm)) ?? '';
+  const { document } = await createTestDocument({ type: 'receipt', status: 'draft', procurementRequisitionId: requisitionId },
+    [{ itemId, quantity, unitPrice: 1000, location }]);
+  await pool.query(
+    `UPDATE purchase_requisitions SET items = (
+       SELECT jsonb_agg(row || jsonb_build_object('orderedQty', $3::numeric, 'remainingQty', 0, 'linkedDocumentIds', jsonb_build_array($2::int)))
+         FROM jsonb_array_elements(items) AS row)
+      WHERE id = $1`, [requisitionId, document.id, quantity]);
+  return document.id;
 }

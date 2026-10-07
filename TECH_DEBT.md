@@ -108,7 +108,6 @@
 | TD-645 | گزارش کار و پیوست (بسته ۱۳) | P3 (B13-20) — پیوند اعلان `/daily-logs?id=N` خوانده نمی‌شود و کلیک روی اعلان یا کارت داشبورد فهرست کلی را باز می‌کند، نه همان گزارش | DailyLogsPage.tsx، useDailyLogs.ts، DailyLogsMentionsWidget.tsx | open (P3) |
 | TD-646 | گزارش کار و پیوست (بسته ۱۳) | P3 (B13-21) — «منشن» ۲۰ بار، «نوتیفیکیشن» یک بار و کلید مجوز `daily_logs.manage_all` در رابط گزارش کار | MentionTextarea.tsx، DailyLogsMentionsWidget.tsx، DailyLogModal.tsx، DailyLogReviewModal.tsx، DailyLogStatsCards.tsx، DailyLogsList.tsx، useDailyLogs.ts، DailyLogsPage.tsx، dailyLogs.routes.ts | open (P3، تصمیم ت۶) |
 | TD-697 | تدارکات (بسته ۱۰) | P3 (B10-10) — فیلتر وضعیت فهرست درخواست‌ها وضعیت‌های واقعی را نمی‌پذیرد (`received` و `under_review` ← ۴۰۰) و `limit=200` ۱۰۰ ردیف با `limit: 200` و `total: 115` برمی‌گرداند؛ میز فقط ۱۰۰ درخواست آخر را بی صفحه‌بندی دارد | procurement.routes.ts، procurement.service.ts، ProcurementDesk.tsx | open (P3) |
-| TD-699 | تدارکات (بسته ۱۰)؛ اثر روی ۳ | P2 (B10-12) — «دریافت کالا»ی ردیف هرگز سفارش‌نشده رسید قطعی به نام «تامین‌کننده تدارکات» و به برآورد قیمت (پیش‌فرض ۰) می‌سازد: کالای بی WAC با موجودی ۳ و بی سند حسابداری وارد شد؛ با ۵ عدد و WAC ۱۰۰٬۰۰۰، دریافت ۳ عدد بدهکار ۱۴۰۱ و بستانکار ۵۲۰۴ «درآمد کالای اهدایی» ۳۰۰٬۰۰۰ ثبت کرد و بدهی به تأمین‌کننده ثبت نشد | requisitionReceiveAction.ts | open (P2، تصمیم ت۴ الف) |
 | TD-700 | تدارکات (بسته ۱۰) | P3 (B10-13) — انتخابگر کالای فرم درخواست `<select>` ساده بی جست‌وجو است، نه `SearchableSelect`؛ برش ۵۰ کالایی آن (۲۵ از ۷۵ کالا بی پیام نبودند) با فهرست انتخاب `/items/options` در v9.0.138 (TD-888) برطرف شد | CreateRequisitionModal.tsx | open (P3) |
 | TD-701 | تدارکات (بسته ۱۰) | P3 (B10-14) — مودال‌ها `orderNumber`، `orderDate` و `buyerName` را می‌خوانند که سرور ندارد (`refNumber`، `date`، `supplierName`): تأیید تحویل «تامین‌کننده تدارکات» را به‌جای «تامین الماس» نشان داد و جزئیات درخواست شماره `R-1405-0009` را نه | RequisitionDetailModal.tsx، ConfirmWarehouseDeliveryModal.tsx | open (P3) |
 | TD-702 | تدارکات (بسته ۱۰) | P3 (B10-15) — میز تدارکات چهار درخواست را در یک `Promise.all` می‌خواند و `GET /procurement/inbox/summary` فقط `procurement.view` را می‌پذیرد: دارنده `projects.view` که صفحه را می‌بیند میز خالی می‌گیرد؛ دکمه‌های اقدام هیچ مجوزی نمی‌سنجند | ProcurementDesk.tsx، RequisitionDetailModal.tsx، procurement.routes.ts | open (P3) |
@@ -118,8 +117,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۹۷ ردیف
-- **آرشیو شده (resolved):** ۶۲۸ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۹۶ ردیف
+- **آرشیو شده (resolved):** ۶۲۹ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 

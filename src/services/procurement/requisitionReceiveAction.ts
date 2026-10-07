@@ -1,9 +1,8 @@
 import { and, asc, eq, inArray, or } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents } from '../../db/schema.js';
-import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { DocumentService } from '../document.service.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { applyDeliveredLines, isClosedRequisitionRow, type RequisitionItemWithReceipt } from './requisitionReceipt.js';
 
 /** v8.0.10 (TD-267): انواع سندی که مسیر تحویل تدارکات به انبار نهایی می‌کند (فقط ورود کالا) */
@@ -74,8 +73,8 @@ export async function requisitionOrderDocuments(
 
 /**
  * v8.0.71 (TD-326): «دریافت کالا»ی درخواست خرید (اقدام گردش‌کار receive_items)، درون تراکنش فراخواننده و زیر قفل ردیف
- * درخواست. سفارش‌های پیش‌نویس یا پیش‌فاکتورِ درخواست نهایی می‌شوند و کالایی که هرگز سفارش نشده با یک رسید قطعی وارد
- * انبار می‌شود؛ خطای هر کدام کل اقدام را برمی‌گرداند. مقدار دریافتی هر ردیف دوباره از سطرهای فعال اسناد قطعی درخواست
+ * درخواست. سفارش‌های پیش‌نویس یا پیش‌فاکتورِ درخواست نهایی می‌شوند؛ کالایی که هرگز سفارش نشده اقدام را رد می‌کند
+ * (v9.0.275، TD-699، ت۴) و خطای هر کدام کل اقدام را برمی‌گرداند. مقدار دریافتی هر ردیف دوباره از سطرهای فعال اسناد قطعی درخواست
  * ساخته می‌شود (applyDeliveredLines)، نه برابر مقدار درخواست.
  *
  * پیش‌تر این شاخه بی‌تراکنش و بی‌قفل بود: هم‌زمان با «تبدیل به سفارش»، یا پیش از تبدیل و تحویل، کالا دو بار وارد انبار
@@ -87,7 +86,7 @@ export async function receiveRequisitionItems(
   req: ReceivedRequisition,
   opts: ReceiveOptions
 ): Promise<RequisitionItemWithReceipt[]> {
-  let rows = (Array.isArray(req.items) ? req.items : []).map(row => ({ ...row }));
+  const rows = (Array.isArray(req.items) ? req.items : []).map(row => ({ ...row }));
 
   const orderDocs = await requisitionOrderDocuments(tx, { id: req.id, items: rows });
   for (const doc of orderDocs) {
@@ -97,37 +96,19 @@ export async function receiveRequisitionItems(
   }
   const requisitionDocIds = new Set(orderDocs.map(doc => doc.id));
 
-  // v9.0.268 (TD-690): ردیفی که هنگام صدور سفارش بسته شد بی سفارش وارد انبار نمی‌شود. v9.0.269 (TD-692): ردیفی هم که
-  // سفارش ردیف دیگری از همان کالا پرش کرده است (applyDeliveredLines) دوباره دریافت نمی‌شود؛ تحویل اکنون همین اقدام را
-  // در تراکنش خود اجرا می‌کند
+  // v9.0.275 (TD-699، B10-12، تصمیم ت۴ الف): کالای ردیفی که هرگز سفارش نشده وارد انبار نمی‌شود؛ ورود کالا فقط از راه سفارش
+  // با تأمین‌کننده و قیمت و تحویل آن است. پیش‌تر این ردیف‌ها با یک رسید قطعی به نام «تامین‌کننده تدارکات» و به برآورد قیمت
+  // (پیش‌فرض ۰) وارد انبار می‌شدند: کالای بی میانگین موزون بی سند حسابداری، و با میانگین موزون به‌صورت «درآمد کالای
+  // اهدایی» (TD-268) بی بدهی به تأمین‌کننده. ردیفی که بسته شده (TD-690) یا سفارش ردیف دیگری از همان کالا پرش کرده
+  // (TD-692) سفارش‌نشده شمرده نمی‌شود.
   const neverOrdered = rows.filter(row =>
     !(Array.isArray(row.linkedDocumentIds) && row.linkedDocumentIds.length > 0) && row.itemId && Number(row.requestedQty || 0) > 0
     && !isClosedRequisitionRow(row) && Number(row.receivedQty || 0) < Number(row.requestedQty));
   if (neverOrdered.length > 0) {
-    const receiptId = await DocumentService.createDocument({
-      docType: 'receipt',
-      date: await businessTodayIsoDate(),
-      status: 'final',
-      buyer_name: 'تامین‌کننده تدارکات',
-      notes: `[تدارکات: تحویل مستقیم به انبار] درخواست ${req.code} ${req.projectName ? `[پروژه: ${req.projectName}]` : ''}`.trim(),
-      location: '',
-      inOut: 'in',
-      currency: 'IRR',
-      user: opts.username,
-      items: neverOrdered.map(row => ({
-        itemId: Number(row.itemId) || 0,
-        quantity: Number(row.requestedQty),
-        unit_price: Number(row.unitPriceEstimate || 0),
-        discount: 0,
-        location: '',
-      })),
-      externalTx: tx,
-    });
-    requisitionDocIds.add(receiptId);
-    const neverOrderedIds = new Set(neverOrdered.map(row => row.id));
-    rows = rows.map(row => neverOrderedIds.has(row.id)
-      ? { ...row, linkedDocumentIds: [...(Array.isArray(row.linkedDocumentIds) ? row.linkedDocumentIds : []), receiptId] }
-      : row);
+    throw new ConflictError(
+      `کالای ${neverOrdered.map(row => `«${row.itemName || row.itemCode || row.itemId}»`).join('، ')} در درخواست خرید ${req.code} هنوز سفارش داده نشده است. ابتدا سفارش خرید با تأمین‌کننده و قیمت صادر کنید.`,
+      { rowIds: neverOrdered.map(row => row.id) }, 'REQUISITION_ROWS_NOT_ORDERED',
+    );
   }
 
   // مقدار دریافتی از نو: جمع سطرهای فعال همه اسناد قطعی درخواست، میان ردیف‌های هر کالا به ترتیب

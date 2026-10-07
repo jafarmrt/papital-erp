@@ -33,6 +33,9 @@ async function order(requisitionId: number, itemId: number, quantity: number, wh
   return res.createdDocuments[0].id;
 }
 
+/** v9.0.275 (TD-699): پیام رد «دریافت کالا»ی ردیف سفارش‌نشده */
+const NOT_ORDERED_HINT = 'ابتدا سفارش خرید با تأمین‌کننده و قیمت صادر کنید';
+
 const receiveItems = (requisitionId: number, user: typeof ADMIN = ADMIN) =>
   ProcurementService.executeWorkflowAction(requisitionId, 'receive_items', user);
 
@@ -85,13 +88,19 @@ export async function checkRequisitionReceivedOnce(wh: string): Promise<string[]
   const raced = await requisition(racedItem, 10);
   const racedCode = (await pool.query<{ code: string }>('SELECT code FROM purchase_requisitions WHERE id = $1', [raced])).rows[0].code;
   const outcomes = await raceBehindRowLock<unknown>('purchase_requisitions', [raced], [() => receiveItems(raced), () => order(raced, racedItem, 10, wh)]);
-  problems.push(...outcomeProblems(['دریافت کالا', 'تبدیل به سفارش'], outcomes, (label, message) => label === 'تبدیل به سفارش' && message.includes('قبلاً دریافت')));
+  // v9.0.275 (TD-699): «دریافت کالا» پیش از سفارش رد می‌شود (ابتدا سفارش خرید)؛ پس از سفارش، سفارش را نهایی می‌کند
+  problems.push(...outcomeProblems(['دریافت کالا', 'تبدیل به سفارش'], outcomes, (label, message) =>
+    (label === 'تبدیل به سفارش' && message.includes('قبلاً دریافت')) || (label === 'دریافت کالا' && message.includes(NOT_ORDERED_HINT))));
   await deliverOpenOrders(racedCode);
   await expectStock(racedItem, raced, 10, 'دریافت و تبدیل هم‌زمان');
 
-  // ۲) دریافت کالا و سپس تبدیل همان درخواست به سفارش
+  // ۲) دریافت کالای سفارش‌نشده رد می‌شود (v9.0.275، TD-699، ت۴)؛ پس از سفارش، دریافت و سپس تبدیل دوباره
   const seqItem = await newItem();
   const seq = await requisition(seqItem, 10);
+  const beforeOrder = await rejection(() => receiveItems(seq));
+  if (!beforeOrder?.includes(NOT_ORDERED_HINT)) problems.push(`receiving a never-ordered requisition was not refused (${beforeOrder ?? 'accepted'})`);
+  if ((await itemState(seqItem)).stock !== 0 || (await requisitionRow(seq)).status === 'received') problems.push('a refused receive moved stock or the requisition');
+  await order(seq, seqItem, 10, wh);
   await receiveItems(seq);
   const reorder = await rejection(() => order(seq, seqItem, 10, wh));
   if (!reorder?.includes('قبلاً دریافت')) problems.push(`تبدیل درخواستِ دریافت‌شده به سفارش رد نشد (${reorder ?? 'پذیرفته شد'})`);
@@ -109,6 +118,7 @@ export async function checkRequisitionReceivedOnce(wh: string): Promise<string[]
   // ۴) دو دریافت هم‌زمان درخواستی که نمونه گردش‌کار ندارد (درخواست قدیمی)
   const legacyItem = await newItem();
   const legacy = await requisition(legacyItem, 10);
+  await order(legacy, legacyItem, 10, wh);
   await pool.query(`UPDATE workflow_instances SET entity_id = 'detached-' || entity_id WHERE entity_type = 'purchase_requisition' AND entity_id = $1`, [String(legacy)]);
   await pool.query('UPDATE purchase_requisitions SET workflow_instance_id = NULL WHERE id = $1', [legacy]);
   const twice = await raceBehindRowLock<unknown>('purchase_requisitions', [legacy], [() => receiveItems(legacy), () => receiveItems(legacy)]);

@@ -28,6 +28,9 @@ export async function runProcurementOrderTests(shouldRun: ShouldRun): Promise<Te
     ['reg_procurement_consolidation_legacy_sources_td_694',
       'v9.0.274: the financial health check lists the still-open sources of a consolidation made before the fix and changes nothing (TD-694)',
       ['td694', 'procurement', 'consolidation', 'health', 'package10'], legacyConsolidationHealthCase],
+    ['reg_procurement_receive_never_ordered_td_699',
+      'v9.0.275: "receive items" refuses a row that was never ordered (order with a supplier and a price first) instead of a final receipt from the generic procurement supplier at the estimate, which posted donated-goods income (TD-699)',
+      ['td699', 'procurement', 'receive', 'accounting', 'package10'], neverOrderedReceiveCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -222,4 +225,44 @@ async function doubleSubmitCase(h: Harness, wrong: string[]): Promise<string> {
     wrong.push(`consolidate twice: ${consolidated.map(r => `${r.status}/${String(r.headers['x-idempotency-hit'] ?? '-')}`).join(' ')}, consolidated requisitions ${String(consolidatedCount)}`);
   }
   return 'create, convert to orders and consolidate submitted twice at once with one key ran once (the other answer was a replay or in flight), and a repeated delivery replayed its first answer';
+}
+
+async function donatedIncomeRows(h: Harness, documentIds: number[]): Promise<number> {
+  if (documentIds.length === 0) return 0;
+  const [row] = await h.q(
+    `SELECT count(*)::int AS n FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
+      WHERE v.source_document_id = ANY($1::int[]) AND v.is_deleted = 0 AND i.is_deleted = 0 AND a.code = '5204'`, [documentIds]);
+  return Number(row?.n ?? 0);
+}
+
+/** S12: «دریافت کالا»ی ردیف هرگز سفارش‌نشده (ت۴ الف) */
+async function neverOrderedReceiveCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const { receive } = await import('../invariants/scenarioHelpers.js');
+  const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
+  const fresh = await f.item();
+  const stocked = await f.item();
+  await receive(stocked.id, 5, 100000, f.wh, await businessTodayIsoDate());
+  const docsBefore = await h.q(`SELECT id FROM documents WHERE is_deleted = 0 ORDER BY id DESC LIMIT 1`);
+  const lastDocBefore = Number(docsBefore[0]?.id ?? 0);
+
+  const req = await approvedRequisition(h, f, [formRow(fresh, 3, 0), formRow(stocked, 3, 0)]);
+  const refused = await f.action(req.id, 'receive_items');
+  const newDocs = (await h.q(`SELECT id FROM documents WHERE id > $1`, [lastDocBefore])).map(r => Number(r.id));
+  if (refused.status !== 409 || refused.code !== 'REQUISITION_ROWS_NOT_ORDERED' || !String(refused.error ?? '').includes('ابتدا سفارش خرید با تأمین‌کننده و قیمت صادر کنید')) {
+    wrong.push(`receive of never-ordered rows: ${refused.status} ${String(refused.code)} ${String(refused.error ?? '').slice(0, 120)}`);
+  }
+  if (await f.stock(fresh.id) !== 0 || await f.stock(stocked.id) !== 5 || newDocs.length !== 0 || await donatedIncomeRows(h, newDocs) !== 0) {
+    wrong.push(`refused receive moved stock or issued documents: stock ${await f.stock(fresh.id)} / ${await f.stock(stocked.id)}, new documents ${newDocs.join(',')}, 5204 rows ${await donatedIncomeRows(h, newDocs)}`);
+  }
+  if ((await f.requisition(req.id)).status === 'received') wrong.push('the requisition became received');
+
+  // ordered with a supplier and a price: «receive items» finalizes the order, debt to the supplier and no donated income
+  const order = await f.convert(req.id, [{ itemId: fresh.id, quantity: 3 }, { itemId: stocked.id, quantity: 3 }]);
+  const received = await f.action(req.id, 'receive_items');
+  if (order.status !== 200 || received.status !== 200 || await f.stock(fresh.id) !== 3 || await f.stock(stocked.id) !== 8 || await f.docStatus(order.docIds[0]) !== 'final') {
+    wrong.push(`receive after ordering: convert ${order.status}, receive ${received.status} ${String(received.code)}, stock ${await f.stock(fresh.id)} / ${await f.stock(stocked.id)}`);
+  }
+  if (await donatedIncomeRows(h, order.docIds) !== 0) wrong.push('the ordered receipt posted donated-goods income (5204)');
+  return 'receive items of never-ordered rows was refused with the "order with a supplier and a price first" message and moved nothing; after an order with a supplier and a price it finalized the order without donated-goods income';
 }
