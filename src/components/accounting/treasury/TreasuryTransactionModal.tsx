@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowDownLeft, ArrowUpRight, X, ShieldCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import DatePicker from 'react-multi-date-picker';
-import persian from 'react-date-object/calendars/persian';
-import persian_fa from 'react-date-object/locales/persian_fa';
 import { SearchableSelect } from '../../SearchableSelect';
 import { FinancialAttachmentUploader } from '../FinancialAttachmentUploader';
 import { FinancialAmountInput } from '../../common/FinancialAmountInput';
 import { HelpBadge } from '../../common/HelpBadge';
-import { formatPersianPrice, formatCurrencyLabel, extractDateString, getTodayIsoDate } from '../../../utils';
+import { formatPersianPrice, formatCurrencyLabel, getTodayIsoDate } from '../../../utils';
+import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { fetchJson } from '../../../api';
 import { useHasPermission } from '../../../contexts/AuthContext';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../../lib/noVoucherPermission';
@@ -162,6 +160,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (bankWithoutLedger) return;
     const needsContra = needsChosenContraAccount(formData.partyType, formData.purpose);
     if (needsContra && !formData.contraAccountId) {
       toast.error('سرفصل طرف مقابل را انتخاب کنید.');
@@ -205,6 +204,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
 
   const isReceipt = formData.type === 'receipt';
   const selectedBank = safeBankAccounts.find(b => b.id === formData.bankAccountId);
+  // v9.0.106 (TD-515): سرور ثبت با حساب بی سرفصل را رد می‌کند (۴۲۲)، پس فرم هم ثبت را نمی‌پذیرد
+  const bankWithoutLedger = Boolean(formData.bankAccountId) && !selectedBank?.accountId;
   const isForeignBank = (selectedBank?.currency || 'IRR').toUpperCase() !== 'IRR';
   const curLbl = formatCurrencyLabel(isForeignBank ? (selectedBank?.currency || appCurrency) : appCurrency);
 
@@ -229,7 +230,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               </h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 {isReceipt
-                  ? 'دریافت نقدی / حواله / پایا / چک از مشتریان یا متفرقه'
+                  ? 'دریافت نقدی / حواله / پایا / کارتخوان از مشتریان یا متفرقه'
                   : 'پرداخت وجه به تامین‌کنندگان، پرسنل یا تسویه هزینه‌ها'}
               </p>
             </div>
@@ -250,15 +251,11 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   تاریخ تراکنش *
                 </label>
-                <DatePicker
+                <JalaliDateInput
                   value={formData.date}
-                  onChange={(dateObj: any) => {
-                    setFormData({ ...formData, date: extractDateString(dateObj) });
-                  }}
-                  calendar={persian}
-                  locale={persian_fa}
+                  onChange={iso => setFormData({ ...formData, date: iso })}
                   calendarPosition="bottom-right"
-                  inputClass="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
                   containerClassName="w-full"
                 />
               </div>
@@ -298,9 +295,9 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                   </option>
                 ))}
               </select>
-              {formData.bankAccountId && !selectedBank?.accountId && (
+              {bankWithoutLedger && (
                 <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 mt-1 leading-5">
-                  ⚠️ این حساب به چارت حساب‌ها متصل نیست — سند دوبل صادر نخواهد شد. از ویرایش حساب، «اتصال به حساب معین» را تکمیل کنید.
+                  ⚠️ این حساب به چارت حساب‌ها متصل نیست و ثبت دریافت یا پرداخت با آن ممکن نیست. از ویرایش حساب، «اتصال به حساب معین» را تکمیل کنید.
                 </p>
               )}
             </div>
@@ -552,7 +549,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
             </button>
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || bankWithoutLedger}
               className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm disabled:opacity-50 transition cursor-pointer"
             >
               {isSaving ? 'در حال ثبت...' : 'ثبت قطعی تراکنش'}

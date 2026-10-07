@@ -2,16 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3 } from 'lucide-react';
 import * as xlsx from 'xlsx';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, extractDateString, formatCurrencyLabel, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, formatCurrencyLabel, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import type { Cheque, ChequeType, ChequeStatus, BankAccountOption, Customer, Personnel, FinancialAttachment } from '../../types';
 import toast from 'react-hot-toast';
 import { JalaliDateInput } from '../common/JalaliDateInput';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
 import { FinancialAttachmentBadge } from './FinancialAttachmentBadge';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
@@ -81,11 +78,8 @@ export function ChequesTab({
     sayadNumber: '',
     bankName: '',
     branch: '',
-    issueDate: new Intl.DateTimeFormat('fa-IR-u-nu-latn', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date()).replace(/\//g, '-'),
+    // v9.0.106 (TD-515): تاریخ‌های فرم ISO هستند و `JalaliDateInput` آن‌ها را شمسی نشان می‌دهد؛ امروز از منطقه زمانی نمایش
+    issueDate: getTodayIsoDate(),
     dueDate: '',
     amount: 0,
     currency: 'IRR',
@@ -382,7 +376,7 @@ export function ChequesTab({
               sayadNumber: '',
               bankName: '',
               branch: '',
-              issueDate: getTodayJalaliDate(),
+              issueDate: getTodayIsoDate(),
               dueDate: '',
               amount: 0,
               currency: 'IRR',
@@ -481,25 +475,21 @@ export function ChequesTab({
 
           {/* V1.5.0: بازه سررسید + اکسل */}
           <div className="flex items-center gap-1">
-            <DatePicker
+            <JalaliDateInput
               value={dueFromFilter}
-              onChange={(d: any) => setDueFromFilter(d ? extractDateString(d) : '')}
-              calendar={persian}
-              locale={persian_fa}
+              onChange={setDueFromFilter}
               calendarPosition="bottom-right"
               placeholder="سررسید از"
-              inputClass="px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-center w-24"
+              className="px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-center w-24"
               containerClassName="inline-block"
             />
             <span className="text-slate-400 text-[10px]">تا</span>
-            <DatePicker
+            <JalaliDateInput
               value={dueToFilter}
-              onChange={(d: any) => setDueToFilter(d ? extractDateString(d) : '')}
-              calendar={persian}
-              locale={persian_fa}
+              onChange={setDueToFilter}
               calendarPosition="bottom-left"
               placeholder="سررسید تا"
-              inputClass="px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-center w-24"
+              className="px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-center w-24"
               containerClassName="inline-block"
             />
           </div>
@@ -807,15 +797,11 @@ export function ChequesTab({
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       تاریخ صدور
                     </label>
-                    <DatePicker
-                      value={isoToJalaliDate(newFormData.issueDate) || newFormData.issueDate}
-                      onChange={(dateObj: any) => {
-                        setNewFormData({ ...newFormData, issueDate: extractDateString(dateObj) });
-                      }}
-                      calendar={persian}
-                      locale={persian_fa}
+                    <JalaliDateInput
+                      value={newFormData.issueDate}
+                      onChange={iso => setNewFormData({ ...newFormData, issueDate: iso })}
                       calendarPosition="bottom-right"
-                      inputClass="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
                       containerClassName="w-full"
                     />
                   </div>
@@ -824,15 +810,11 @@ export function ChequesTab({
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       تاریخ سررسید *
                     </label>
-                    <DatePicker
-                      value={isoToJalaliDate(newFormData.dueDate) || newFormData.dueDate}
-                      onChange={(dateObj: any) => {
-                        setNewFormData({ ...newFormData, dueDate: extractDateString(dateObj) });
-                      }}
-                      calendar={persian}
-                      locale={persian_fa}
+                    <JalaliDateInput
+                      value={newFormData.dueDate}
+                      onChange={iso => setNewFormData({ ...newFormData, dueDate: iso })}
                       calendarPosition="bottom-right"
-                      inputClass="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
                       containerClassName="w-full"
                     />
                   </div>

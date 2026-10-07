@@ -10,7 +10,8 @@ import {
 import * as XLSX from 'xlsx';
 import { toast } from 'react-hot-toast';
 import { confirmAction } from '../ConfirmDialogHost';
-import { formatPersianDate } from '../../utils';
+import { getTodayJalaliDate } from '../../utils';
+import { treasuryExportFileName, treasuryExportRows } from '../../lib/treasury/treasuryExport';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { useDebounce } from '../../hooks/useDebounce';
 import { fetchTreasuryTransactions, useTreasuryTransactionPageQuery, type TreasuryListFilters } from '../../hooks/accounting/useTreasuryQueries';
@@ -202,26 +203,15 @@ export function BankAndTreasuryTab({
       toast.error(err instanceof Error && err.message ? err.message : 'خواندن تراکنش‌ها برای خروجی اکسل ممکن نشد');
       return;
     }
-    const exportData = rows.map((tx, idx) => ({
-      'ردیف': idx + 1,
-      'شماره رسید': tx.transactionNumber,
-      'تاریخ': formatPersianDate(tx.date),
-      'نوع': tx.type === 'receipt' ? 'دریافت' : 'پرداخت',
-      'وضعیت': tx.status === 'voided' ? 'ابطال‌شده' : 'معتبر',
-      'طرف حساب': tx.partyName || '—',
-      'نوع طرف': tx.partyType || '—',
-      'بانک / صندوق': tx.bankAccountTitle || '—',
-      'روش پرداخت': tx.method,
-      'شماره پیگیری': tx.trackingNumber || '—',
-      'مبلغ': tx.amount,
-      'شماره سند': tx.voucherId || '—',
-      'توضیحات': tx.description || '—',
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'گردش خزانه');
-    XLSX.writeFile(wb, `treasury-transactions-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    // v9.0.106 (TD-515): برچسب فارسی روش و نوع طرف، نام فایل با تاریخ شمسی امروز (نه روز UTC)
+    try {
+      const ws = XLSX.utils.json_to_sheet(treasuryExportRows(rows));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'گردش خزانه');
+      XLSX.writeFile(wb, treasuryExportFileName(getTodayJalaliDate()));
+    } catch {
+      toast.error('فایل اکسل ساخته نشد. دوباره تلاش کنید.');
+    }
   }, [listFilters]);
 
   return (

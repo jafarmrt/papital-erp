@@ -13,10 +13,9 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
 } from 'lucide-react';
-import DatePicker from 'react-multi-date-picker';
-import persian from 'react-date-object/calendars/persian';
-import persian_fa from 'react-date-object/locales/persian_fa';
-import { formatPersianPrice, formatCurrencyLabel, formatPersianDate, extractDateString } from '../../../utils';
+import { formatPersianPrice, formatCurrencyLabel, formatPersianDate } from '../../../utils';
+import { JalaliDateInput } from '../../common/JalaliDateInput';
+import { treasuryMethodLabel, treasuryPartyTypeLabel } from '../../../lib/treasury/treasuryExport';
 import type { BankAccount, TreasuryTransaction, FinancialAttachment } from '../../../types';
 import { personnelPurposeLabel } from '../../../lib/treasury/partyPurpose';
 
@@ -78,25 +77,6 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
   // v9.0.102 (TD-509): `transactions` همان صفحه جاری است که سرور برگردانده (شمار کل در totalFilteredCount)
   const pagedTransactions = transactions;
-
-  const getMethodLabel = (m: string) => {
-    switch (m) {
-      case 'bank_transfer': return 'حواله / پایا';
-      case 'pos': return 'کارتخوان';
-      case 'cash': return 'نقدی';
-      case 'cheque': return 'چک';
-      default: return m;
-    }
-  };
-
-  const getPartyTypeLabel = (p: string) => {
-    switch (p) {
-      case 'customer': return 'مشتری';
-      case 'supplier': return 'تامین‌کننده';
-      case 'personnel': return 'پرسنل';
-      default: return 'متفرقه';
-    }
-  };
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm overflow-hidden">
@@ -176,25 +156,21 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
           {/* Jalali Date Range */}
           <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-xl px-2 py-1">
             <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <DatePicker
+            <JalaliDateInput
               value={dateFromFilter}
-              onChange={(d: any) => { setDateFromFilter(extractDateString(d)); setTxPage(1); }}
-              calendar={persian}
-              locale={persian_fa}
+              onChange={iso => { setDateFromFilter(iso); setTxPage(1); }}
               calendarPosition="bottom-right"
               placeholder="از تاریخ"
-              inputClass="w-full bg-transparent text-[11px] outline-none text-center"
+              className="w-full bg-transparent text-[11px] outline-none text-center"
               containerClassName="w-full"
             />
             <span className="text-slate-400 text-xs">تا</span>
-            <DatePicker
+            <JalaliDateInput
               value={dateToFilter}
-              onChange={(d: any) => { setDateToFilter(extractDateString(d)); setTxPage(1); }}
-              calendar={persian}
-              locale={persian_fa}
+              onChange={iso => { setDateToFilter(iso); setTxPage(1); }}
               calendarPosition="bottom-right"
               placeholder="تا تاریخ"
-              inputClass="w-full bg-transparent text-[11px] outline-none text-center"
+              className="w-full bg-transparent text-[11px] outline-none text-center"
               containerClassName="w-full"
             />
             {(dateFromFilter || dateToFilter) && (
@@ -301,7 +277,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                         {tx.partyName || '—'}
                       </div>
                       <div className="text-[10px] text-slate-400">
-                        {getPartyTypeLabel(tx.partyType || '')}
+                        {treasuryPartyTypeLabel(tx.partyType)}
                         {tx.purpose && <span className="mr-1">({personnelPurposeLabel(tx.purpose)})</span>}
                         {tx.contraAccountName && <span className="mr-1">← {tx.contraAccountName}</span>}
                       </div>
@@ -313,7 +289,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                         {tx.bankAccountTitle || '—'}
                       </div>
                       <div className="text-[10px] text-slate-400 font-mono">
-                        {getMethodLabel(tx.method)}
+                        {treasuryMethodLabel(tx.method)}
                         {tx.trackingNumber && ` • پیگیری: ${tx.trackingNumber}`}
                       </div>
                     </td>
