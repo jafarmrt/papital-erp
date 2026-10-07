@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.297 — v9.0.297 — Idempotency Key Kept While the Server Still Runs a Save
+- **Idempotency key kept (TD-679):** when the browser stops waiting for a save the server is still running, it keeps the key, so a resend gets that save's result instead of starting a second, unguarded one.
+
 ### v9.0.296 — v9.0.296 — Saves Are Not Resent Automatically After a Lost Connection
 - **No automatic resend of saves (TD-670):** after a network error only reads are retried automatically; a save tells the user to check whether it was recorded, and a resend by the user carries the same idempotency key.
 
