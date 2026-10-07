@@ -70,7 +70,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
   const loadMetadata = async () => {
     try {
       const [projRes, itemsRes] = await Promise.all([
-        fetchJson('/projects'),
+        fetchJson(PICK_LIST_URLS.projects),
         fetchJson(`${PICK_LIST_URLS.items}?type=raw_material`)
       ]);
       const rawProjs = Array.isArray(projRes?.data) ? projRes.data : (Array.isArray(projRes) ? projRes : []);

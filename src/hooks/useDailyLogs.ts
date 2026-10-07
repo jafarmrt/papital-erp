@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import { fetchJson } from '../api';
-import { DailyWorkLog, User, ProductionProject } from '../types';
+import { DailyWorkLog, User } from '../types';
+import { PICK_LIST_URLS, type ProjectPick } from '../lib/permissions/pickLists';
 import { toast } from 'react-hot-toast';
 import { getTodayJalaliDate, extractDateString, errorMessageOf, isoToJalaliDate } from '../utils';
 import { confirmAction } from '../components/ConfirmDialogHost';
@@ -41,7 +42,7 @@ export function useDailyLogs(user: User) {
     my_mentions_count: 0
   });
   const [systemUsers, setSystemUsers] = useState<SimpleUserOption[]>([]);
-  const [projects, setProjects] = useState<ProductionProject[]>([]);
+  const [projects, setProjects] = useState<ProjectPick[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [page, setPage] = useState(1);
   const limit = 30;
@@ -104,9 +105,9 @@ export function useDailyLogs(user: User) {
         console.error('Error loading users for mentions:', err);
       });
 
-    fetchJson('/projects', { signal: controller.signal })
-      .then((data: ProductionProject[]) => {
-        if (Array.isArray(data)) setProjects(data);
+    fetchJson<{ data?: ProjectPick[] } | null>(PICK_LIST_URLS.projects, { signal: controller.signal })
+      .then((res) => {
+        if (Array.isArray(res?.data)) setProjects(res.data);
       })
       .catch(err => {
         if (err?.name === 'AbortError') return;

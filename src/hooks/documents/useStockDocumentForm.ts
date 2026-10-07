@@ -123,20 +123,13 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     }
   };
 
+  // v9.0.122 (TD-889): پروژه برگزیده از فهرست انتخاب پروژه؛ فرم فقط کد و عنوان آن را نشان می‌دهد و رزروهایش را از
+  // /inventory/reserved-items می‌خواند، پس پرونده کامل پروژه (فقط با مجوز بخش پروژه) لازم نیست
   useEffect(() => {
-    if (!selectedProjectId) {
-      setSelectedProjectObj(null);
-      return;
-    }
-    const controller = new AbortController();
-    fetchJson(`/projects/${selectedProjectId}`, { signal: controller.signal }).then(p => {
-      setSelectedProjectObj(p);
-    }).catch(err => {
-      if (err?.name === 'AbortError') return;
-      console.error(err);
-    });
-    return () => controller.abort();
-  }, [selectedProjectId]);
+    setSelectedProjectObj(selectedProjectId
+      ? projectsList.find(p => String(p.id) === String(selectedProjectId)) ?? null
+      : null);
+  }, [selectedProjectId, projectsList]);
 
   useEffect(() => {
     // reset form when actionType changes

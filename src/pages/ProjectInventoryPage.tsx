@@ -10,13 +10,13 @@ import { fetchJson } from '../api';
 import { formatPersianNumber, formatPersianDate } from '../utils';
 import toast from 'react-hot-toast';
 import ProjectInventoryTab from '../components/project/ProjectInventoryTab';
-import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
+import { PICK_LIST_URLS, type ProjectPick } from '../lib/permissions/pickLists';
 
 export default function ProjectInventoryPage({ user }: { user?: User }) {
   const [searchParams, setSearchParams] = useSearchParams();
   
   const queryProjectId = searchParams.get('projectId');
-  const [projects, setProjects] = useState<ProductionProject[]>([]);
+  const [projects, setProjects] = useState<ProjectPick[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(
     queryProjectId ? Number(queryProjectId) : null
   );
@@ -31,13 +31,13 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
   const loadProjects = async (signal?: AbortSignal) => {
     setLoadingProjects(true);
     try {
-      const data = await fetchJson('/projects', { signal });
+      const data = await fetchJson(PICK_LIST_URLS.projects, { signal });
       const rawList = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : []);
       setProjects(rawList);
 
       // If no project selected yet, select the first active or recent project
       if (!selectedProjectId && rawList.length > 0) {
-        const firstActive = rawList.find((p: ProductionProject) => p.status !== 'completed') || rawList[0];
+        const firstActive = rawList.find((p: ProjectPick) => p.status !== 'completed') || rawList[0];
         setSelectedProjectId(firstActive.id);
         setSearchParams({ projectId: String(firstActive.id) });
       }

@@ -5,12 +5,13 @@
  * پنهان» در P02_PERMISSION_MODEL.md §۲.۷). سرور و مرورگر نشانی و فیلدهای هر فهرست را از همین پرونده می‌خوانند؛ مجوزها در
  * `READ_PERMISSIONS` (`src/lib/recordReadPermissions.ts`) و آزمون Vitest `pickLists.test.ts` نگه‌شان می‌دارد.
  *
- * v9.0.120 (TD-887): طرف حساب‌ها. v9.0.121 (TD-888): کالاها.
+ * v9.0.120 (TD-887): طرف حساب‌ها. v9.0.121 (TD-888): کالاها. v9.0.122 (TD-889): پروژه‌ها.
  */
 
 export const PICK_LIST_URLS = {
   customers: '/customers/options',
   items: '/items/options',
+  projects: '/projects/options',
 } as const;
 
 /**
@@ -83,4 +84,23 @@ export interface ItemPick {
   weightedAverageCost?: number;
   weighted_average_cost?: number;
   [warehouseStock: `stock_${string}`]: number;
+}
+
+/**
+ * فیلدهای فهرست انتخاب پروژه: شناسه، کد، عنوان، وضعیت و نام مشتری (برچسبی که فرم انبار، انبار پروژه، کارکرد کارمزدی،
+ * گزارش روزانه و تخصیص مواد اولیه نشان می‌دهند). محصولات، کنترل موجودی و رزرو، مراحل، زمان‌بندی و پیوست‌ها فقط در فهرست
+ * کامل (`projects.view`) و پرونده یک پروژه است.
+ */
+export const PROJECT_PICK_FIELDS = [
+  'id', 'projectCode', 'project_code', 'title', 'status', 'customerName', 'customer_name',
+] as const;
+
+export interface ProjectPick {
+  id: number;
+  projectCode: string;
+  project_code: string;
+  title: string;
+  status: string;
+  customerName: string;
+  customer_name: string;
 }

@@ -76,6 +76,8 @@ export const QUERY_KEYS = {
   projects: {
     all: ['projects'] as const,
     list: () => ['projects', 'list'] as const,
+    /** فهرست انتخاب پروژه (`GET /projects/options`، TD-889) */
+    options: () => ['projects', 'options'] as const,
     detail: (id: number) => ['projects', 'detail', id] as const,
   },
 

@@ -17,8 +17,7 @@ const reservedItem = { id: 3, type: 'raw_material', name: 'سنگ فیروزه',
 function apiResponse(url: string): unknown {
   if (url === '/warehouses') return [{ id: 1, name: 'انبار مرکزی', code: 'WH1', is_active: 1 }];
   if (url === '/personnel') return [{ id: 1, fullName: 'علی رضایی', personnelCode: 'P1', jobTitle: 'زرگر' }];
-  if (url === '/projects') return [{ id: 7, project_code: 'PRJ-7', title: 'گردنبند سفارشی' }];
-  if (url === '/projects/7') return { id: 7, project_code: 'PRJ-7', title: 'گردنبند سفارشی', inventory_control: {} };
+  if (url === '/projects/options') return { success: true, data: [{ id: 7, projectCode: 'PRJ-7', project_code: 'PRJ-7', title: 'گردنبند سفارشی', status: 'in_progress' }] };
   if (url === '/customers?limit=1000') return { data: [] };
   if (url === '/items/options') return { data: [reservedItem] };
   if (url === '/inventory/reserved-items') {
@@ -105,7 +104,8 @@ describe('DocumentsPage — stock receipt / remittance form (TD-080 part 3 chara
     fireEvent.change(projectSelect, { target: { value: '7' } });
     expect(await screen.findByText('اقلام رزرو شده انبار برای پروژه «PRJ-7»')).toBeTruthy();
     expect(screen.getByText('1 قلم کالا فریز شده')).toBeTruthy();
-    expect(fetchJson).toHaveBeenCalledWith('/projects/7', expect.anything());
+    // v9.0.122 (TD-889): پروژه برگزیده از فهرست انتخاب می‌آید، نه از پرونده کامل پروژه
+    expect(fetchJson.mock.calls.some(([url]) => String(url).startsWith('/projects/7'))).toBe(false);
     await screen.findByText('+ افزودن');
     fireEvent.click(screen.getByText('+ افزودن'));
     expect(await screen.findByText('✓ در سند')).toBeTruthy();

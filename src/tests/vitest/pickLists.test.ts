@@ -36,6 +36,13 @@ const SECTIONS: Record<string, Section> = {
     fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/items(?:\?|['"`])/g,
     ownPages: ['hooks/queries/useItemQueries.ts', 'pages/GalleryPage.tsx', 'pages/PricingPage.tsx', 'components/excel/useUnifiedExcelImport.ts'],
   },
+  // v9.0.122 (TD-889)
+  projects: {
+    fullList: 'projects',
+    ownGroups: ['projects.'],
+    fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/projects(?:\?|['"`])/g,
+    ownPages: ['hooks/queries/useProjectQueries.ts'],
+  },
 };
 
 /** درخواست خواندن فهرست کامل در متن فایل؛ فراخوانی‌ای که در همان چند خط `method` نوشتن دارد (POST و …) خواندن نیست */

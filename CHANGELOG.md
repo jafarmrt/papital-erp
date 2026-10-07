@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.122 — Project Pick List for Forms
+- **Project Pick List for Forms:** forms of other sections pick projects from a short list; the full project list needs the projects permission (TD-889).
+
 ### v9.0.121 — Item Pick List for Forms
 - **Item Pick List for Forms:** forms of other sections pick items from a list without the average cost; the full item list needs the products permission (TD-888).
 

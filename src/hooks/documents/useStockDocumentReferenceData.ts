@@ -18,9 +18,9 @@ export function useStockDocumentReferenceData() {
   const whsQuery = useWarehousesQuery();
   const personnelQuery = usePersonnelListQuery();
   const projectsQuery = useQuery<StockDocProject[]>({
-    queryKey: QUERY_KEYS.projects.list(),
+    queryKey: QUERY_KEYS.projects.options(),
     queryFn: async () => {
-      const res = await fetchJson('/projects');
+      const res = await fetchJson(PICK_LIST_URLS.projects);
       return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
     },
     staleTime: 5 * 60 * 1000,

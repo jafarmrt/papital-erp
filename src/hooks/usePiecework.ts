@@ -3,6 +3,7 @@ import { confirmAction } from '../components/ConfirmDialogHost';
 import { fetchJson } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions';
+import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import {
   Personnel,
   PieceworkTask,
@@ -132,7 +133,7 @@ export function usePiecework() {
         fetchJson(`/piecework/tasks?status=${status}`, { signal }),
         fetchJson('/piecework/logs', { signal }),
         canViewPayrolls ? fetchJson('/piecework/payrolls', { signal }) : Promise.resolve([]),
-        fetchJson('/projects', { signal }).catch((err) => {
+        fetchJson(PICK_LIST_URLS.projects, { signal }).catch((err) => {
           if (err?.name === 'AbortError') throw err;
           console.error('Failed to load projects for piecework:', err);
           return [];

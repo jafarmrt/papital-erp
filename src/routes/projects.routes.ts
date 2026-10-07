@@ -5,7 +5,9 @@ import { productionProjects, projectStages, items, projectProductStageProgress }
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
-import { RECORD_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { READ_PERMISSIONS, RECORD_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { parsePickListLimit } from '../lib/pagination.js';
+import { listProjectPicks } from '../services/projects/projectPickList.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -532,8 +534,22 @@ export async function getProjectProgressMatrixStatus(
   };
 }
 
+const projectPickListValidation = z.object({
+  query: z.object({
+    status: z.string().max(40).optional(),
+    search: z.string().max(200).optional(),
+    limit: z.union([z.string(), z.number()]).optional(),
+  }).optional(),
+});
+
+// v9.0.122 (TD-889، تصمیم ت۱۰ الف): فهرست انتخاب پروژه برای فرم‌های بخش‌های دیگر؛ فهرست کامل پایین فقط با projects.view
+router.get('/projects/options', authorizePermission(...READ_PERMISSIONS.projectOptions), validate(projectPickListValidation), asyncHandler(async (req, res) => {
+  const query = req.query as { status?: string; search?: string; limit?: string };
+  res.json({ success: true, data: await listProjectPicks({ status: query.status, search: query.search, limit: parsePickListLimit(query.limit) }) });
+}));
+
 // GET /api/projects - List all production projects with summary progress
-router.get('/projects', authorizePermission(...RECORD_READ_PERMISSIONS.production_project), asyncHandler(async (req, res) => {
+router.get('/projects', authorizePermission(...READ_PERMISSIONS.projects), asyncHandler(async (req, res) => {
   try {
     const { status, priority, search } = req.query;
 

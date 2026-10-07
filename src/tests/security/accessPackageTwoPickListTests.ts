@@ -1,7 +1,7 @@
 import { inArray } from 'drizzle-orm';
 import { TestCaseResult } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { customers, items, itemWarehouseStocks } from '../../db/schema.js';
+import { customers, items, itemWarehouseStocks, productionProjects } from '../../db/schema.js';
 import { runCase, type Row, type ShouldRun } from './workflowTestHarness.js';
 
 /**
@@ -140,6 +140,74 @@ export async function runAccessPackageTwoPickListTests(shouldRun: ShouldRun): Pr
       } finally {
         await orm.delete(itemWarehouseStocks).where(inArray(itemWarehouseStocks.itemId, [item.id])).catch(() => undefined);
         await orm.delete(items).where(inArray(items.id, [item.id])).catch(() => undefined);
+      }
+    });
+  }
+
+  if (shouldRun('sec_project_options_td_889', 'security', 'td889', 'projects', 'pick', 'permissions', 'package2')) {
+    await runCase(results, {
+      id: 'sec_project_options_td_889',
+      name: 'v9.0.122: forms of other sections read the project pick list; the full project list opens only with projects.view (TD-889)',
+      details: 'for each form key of another section (documents.view, documents.create, warehouse.view, warehouse.in, warehouse.out, piecework.view, piecework.log, daily_logs.view, daily_logs.create): GET /api/projects is 403 and GET /api/projects/options returns the project with exactly the pick fields (code, title, status, customer name); projects.view reads the full list with inventory control; the status filter and limit work; a key of no picking form gets 403; a project record opens for projects.view and warehouse.view (project inventory page) and no longer for document keys',
+    }, async (h, wrong) => {
+      const { PROJECT_PICK_FIELDS } = await import('../../lib/permissions/pickLists.js');
+      const [project] = await orm.insert(productionProjects).values({
+        projectCode: `PRJ_${h.tag}`,
+        title: `ERP-TEST-MARKER project ${h.tag}`,
+        customerName: `Customer ${h.tag}`,
+        status: 'in_progress',
+        inventoryControl: { reservedItems: [{ itemId: 1, qty: 3 }] },
+      }).returning({ id: productionProjects.id, projectCode: productionProjects.projectCode });
+      try {
+        const search = `search=${encodeURIComponent(project.projectCode)}`;
+        const rowOf = (body: unknown): Row | undefined => {
+          const list = Array.isArray((body as { data?: unknown })?.data) ? (body as { data: Row[] }).data : (Array.isArray(body) ? body as Row[] : []);
+          return list.find(r => r.id === project.id);
+        };
+        const expected = new Set<string>(PROJECT_PICK_FIELDS);
+        const checkPick = (label: string, row: Row | undefined) => {
+          if (!row) { wrong.push(`${label}: the project is missing from the pick list`); return; }
+          const extra = Object.keys(row).filter(k => !expected.has(k));
+          const missing = [...expected].filter(k => !(k in row));
+          if (extra.length > 0) wrong.push(`${label}: pick row carries ${extra.join(', ')}`);
+          if (missing.length > 0) wrong.push(`${label}: pick row lacks ${missing.join(', ')}`);
+          if (row.project_code !== project.projectCode || row.status !== 'in_progress' || row.customer_name !== `Customer ${h.tag}`) {
+            wrong.push(`${label}: pick row is ${JSON.stringify(row)}`);
+          }
+        };
+
+        for (const key of ['documents.view', 'documents.create', 'warehouse.view', 'warehouse.in', 'warehouse.out', 'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create']) {
+          const s = await h.sessionWith([key]);
+          const full = await h.get(`/api/projects?${search}`, s);
+          if (full.status !== 403) wrong.push(`${key}: GET /api/projects returned ${full.status}, not 403`);
+          const options = await h.get(`/api/projects/options?${search}`, s);
+          if (options.status !== 200) { wrong.push(`${key}: GET /api/projects/options returned ${options.status}, not 200`); continue; }
+          checkPick(key, rowOf(options.body));
+        }
+
+        const viewer = await h.sessionWith(['projects.view']);
+        const fullList = await h.get(`/api/projects?${search}`, viewer);
+        const fullRow = rowOf(fullList.body);
+        const reserved = (fullRow?.inventory_control as { reservedItems?: unknown[] } | undefined)?.reservedItems;
+        if (fullList.status !== 200 || !Array.isArray(reserved) || reserved.length !== 1) {
+          wrong.push(`projects.view: full list returned ${fullList.status} with reservations ${JSON.stringify(reserved)}`);
+        }
+        checkPick('projects.view', rowOf((await h.get(`/api/projects/options?${search}`, viewer)).body));
+
+        if (rowOf((await h.get(`/api/projects/options?status=completed&${search}`, viewer)).body)) wrong.push('status=completed: the running project is in the pick list');
+        const limited = await h.get('/api/projects/options?limit=1', viewer);
+        const limitedRows = (limited.body as { data?: unknown[] })?.data;
+        if (limited.status !== 200 || !Array.isArray(limitedRows) || limitedRows.length !== 1) wrong.push(`limit=1 returned ${limited.status} with ${Array.isArray(limitedRows) ? limitedRows.length : 'no'} rows`);
+
+        const refused = await h.get(`/api/projects/options?${search}`, await h.sessionWith(['crm.view']));
+        if (refused.status !== 403) wrong.push(`crm.view: GET /api/projects/options returned ${refused.status}, not 403`);
+
+        for (const [key, status] of [['projects.view', 200], ['warehouse.view', 200], ['documents.create', 403], ['warehouse.in', 403]] as const) {
+          const record = await h.get(`/api/projects/${project.id}`, await h.sessionWith([key]));
+          if (record.status !== status) wrong.push(`${key}: GET /api/projects/:id returned ${record.status}, not ${status}`);
+        }
+      } finally {
+        await orm.delete(productionProjects).where(inArray(productionProjects.id, [project.id])).catch(() => undefined);
       }
     });
   }

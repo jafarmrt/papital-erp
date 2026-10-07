@@ -9,9 +9,24 @@ export const READ_PERMISSIONS = {
   journalVouchers: ['accounting.vouchers', 'accounting.reports', 'accounting.view'],
   treasuryTransactions: ['accounting.treasury', 'accounting.reports', 'accounting.view'],
   cheques: ['accounting.cheques', 'accounting.treasury', 'accounting.reports', 'accounting.view'],
-  projects: [
-    'projects.view', 'projects.create', 'projects.edit', 'documents.view', 'documents.create',
-    'warehouse.in', 'warehouse.out', 'warehouse.view'
+  /**
+   * فهرست کامل پروژه‌ها (با محصولات، کنترل موجودی و رزرو، مراحل و پیوست‌ها) فقط با مجوز بخش پروژه (v9.0.122، TD-889،
+   * ت۱۰ الف؛ پیش‌تر کلیدهای سند و انبار هم آن را باز می‌کردند)
+   */
+  projects: ['projects.view'],
+  /**
+   * پرونده یک پروژه (`GET /projects/:id`) و پیوست‌های آن: بخش پروژه و صفحه «انبار پروژه» (`warehouse.view`، کنترل
+   * موجودی پروژه)
+   */
+  projectRecord: ['projects.view', 'warehouse.view'],
+  /**
+   * فهرست انتخاب پروژه (`GET /projects/options`، شناسه، کد، عنوان، وضعیت و نام مشتری): سند ورود و خروج انبار
+   * (documents.view، documents.create، warehouse.in)، انبار پروژه و تخصیص مواد اولیه (warehouse.view، warehouse.out)،
+   * کارکرد کارمزدی (piecework.view، piecework.log) و گزارش روزانه (daily_logs.view، daily_logs.create)
+   */
+  projectOptions: [
+    'projects.view', 'documents.view', 'documents.create', 'warehouse.view', 'warehouse.in', 'warehouse.out',
+    'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create',
   ],
   /** فهرست کامل طرف حساب‌ها (با یادداشت و نسخه رکورد) فقط با مجوز مشاهده همان بخش (v9.0.120، TD-887، ت۱۰ الف) */
   customers: ['customers.view'],
@@ -101,7 +116,7 @@ export const RECORD_READ_PERMISSIONS = {
   journal_voucher: READ_PERMISSIONS.journalVouchers,
   treasury_transaction: READ_PERMISSIONS.treasuryTransactions,
   cheque: READ_PERMISSIONS.cheques,
-  production_project: READ_PERMISSIONS.projects,
+  production_project: READ_PERMISSIONS.projectRecord,
   document: READ_PERMISSIONS.documents,
   piecework_payroll: READ_PERMISSIONS.payrolls,
 } as const satisfies Record<string, readonly string[] | null>;
