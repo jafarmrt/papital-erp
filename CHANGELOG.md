@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.270 — Payslip Deductions Get Their Own Account
+- **Payslip Deductions Account (P2):** payslip deductions credit the new standard account 3205 «employee deductions payable» instead of 3202 «customer prepayments»; migration 0076 adds it to existing charts, past vouchers stay and the health check lists what is left on 3202 (TD-554).
+
 ### v9.0.269 — Only Approved Payslips Are Paid
 - **Only Approved Payslips Are Paid (TD-816):** a draft payslip is refused at payment and the screens offer approval instead, and the payment date, method and reference are written only by the payment, never by the status route.
 

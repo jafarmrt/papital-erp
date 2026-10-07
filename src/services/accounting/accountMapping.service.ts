@@ -288,7 +288,7 @@ export class AccountMappingService {
   }
 
   /**
-   * V1.9.0: سایر کسورات پرداختنی (بیمه/مالیات سهم کارمند)
+   * V1.9.0: کسورات حقوق پرداختنی (بیمه/مالیات سهم کارکنان)؛ v9.0.270 (TD-554): پیش‌فرض ۳۲۰۵
    */
   static async getEmployeeDeductionsPayableAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('employeeDeductionsPayableAccountCode', tx);

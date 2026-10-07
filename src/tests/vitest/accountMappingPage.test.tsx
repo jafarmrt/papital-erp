@@ -49,7 +49,7 @@ describe('account mapping page (TD-550)', () => {
   it('lists every server concept with Persian labels', async () => {
     render(<AccountingSettingsTab currentUser={{ role: 'admin' }} />);
     expect(await screen.findByText('کالای در جریان ساخت')).toBeTruthy();
-    for (const label of ['هزینه حقوق ثابت', 'سایر کسورات پرداختنی', 'تراز اختتامیه و افتتاحیه']) expect(screen.getByText(label)).toBeTruthy();
+    for (const label of ['هزینه حقوق ثابت', 'کسورات حقوق پرداختنی', 'تراز اختتامیه و افتتاحیه']) expect(screen.getByText(label)).toBeTruthy();
     expect(screen.getAllByPlaceholderText('انتخاب حساب معین یا تفصیلی...')).toHaveLength(ACCOUNT_MAPPING_CONCEPTS.length);
     expect(document.body.textContent).not.toMatch(/Closing|مپینگ/);
   });

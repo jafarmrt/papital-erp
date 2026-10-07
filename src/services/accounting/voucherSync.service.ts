@@ -1288,7 +1288,7 @@ export class VoucherSyncService {
 
     // V4.0.33: تفکیک دقیق طرف بستانکار بر مبنای استاندارد حسابداری دوطرفه:
     // ۱. کسر از مساعده پرسنلی (بستانکار حساب 1301 مساعده)
-    // ۲. سایر کسورات پرداختنی (بستانکار حساب 3202 کسورات)
+    // ۲. کسورات حقوق پرداختنی (بستانکار حساب نگاشت‌شده، پیش‌فرض 3205؛ تا v9.0.269 پیش‌دریافت مشتری 3202، TD-554)
     // ۳. خالص حقوق پرداختنی (بستانکار حساب 3201 حقوق پرداختنی)
     const advanceDeduction = nonNegative(pay.advanceDeduction);
     const otherDeductions = nonNegative(pay.totalDeductions);
@@ -1328,7 +1328,7 @@ export class VoucherSyncService {
         });
         allocatedCredits = allocatedCredits.add(otherDeductions);
       } else if (isStrict) {
-        throw new ValidationError(`حساب معین سایر کسورات پرداختنی (3202) جهت ثبت کسورات فیش ${pay.payrollNumber} یافت نشد.`);
+        throw new ValidationError(`حساب «کسورات حقوق پرداختنی» (نگاشت حساب‌ها، پیش‌فرض ۳۲۰۵) برای ثبت کسورات فیش ${pay.payrollNumber} یافت نشد.`);
       }
     }
 

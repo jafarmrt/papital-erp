@@ -10,7 +10,7 @@ import { rows } from './ledgerRows.js';
  * - bonuses, deductions and advance deduction are never negative;
  * - a payslip with a positive net has a live voucher (linked by `source_payroll_id`);
  * - its voucher credits «wages payable» (mapped 3201) with exactly the net, and the advance (mapped 1301) and other
- *   deductions (mapped 3202) accounts with exactly the advance deduction and the other deductions.
+ *   deductions (mapped 3205 since v9.0.270, TD-554) accounts with exactly the advance deduction and the other deductions.
  */
 export async function checkPayrollInvariants(payrollIdAfter: number | undefined): Promise<InvariantViolation[]> {
   if (payrollIdAfter === undefined) return [];

@@ -25,7 +25,8 @@ export const ACCOUNT_MAPPING_CONCEPTS = [
   { key: 'tradeReceivablesAccountCode', label: 'حساب‌های دریافتنی تجاری', description: 'طرف حساب فروش، دریافت وجه از مشتری و چک دریافتی', defaultCode: '1201', accountTypes: ASSET },
   { key: 'tradePayablesAccountCode', label: 'حساب‌های پرداختنی تجاری', description: 'طرف حساب خرید، پرداخت وجه به تأمین‌کننده و چک پرداختی', defaultCode: '3001', accountTypes: LIABILITY },
   { key: 'wagesPayableAccountCode', label: 'حقوق و دستمزد پرداختنی', description: 'فیش حقوق، پرداخت حقوق و دریافت وجه از پرسنل', defaultCode: '3201', accountTypes: LIABILITY },
-  { key: 'employeeDeductionsPayableAccountCode', label: 'سایر کسورات پرداختنی', description: 'بیمه و مالیات سهم کارمند در فیش حقوق', defaultCode: '3202', accountTypes: LIABILITY },
+  // v9.0.270 (TD-554، تصمیم ت۶ الف): پیش‌فرض ۳۲۰۵؛ پیش‌تر ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» بود
+  { key: 'employeeDeductionsPayableAccountCode', label: 'کسورات حقوق پرداختنی', description: 'بیمه و مالیات سهم کارکنان در فیش حقوق', defaultCode: '3205', accountTypes: LIABILITY },
   { key: 'chequeReceivableAccountCode', label: 'اسناد دریافتنی نزد صندوق', description: 'ثبت چک دریافتی و بازگشت آن از جریان وصول', defaultCode: '1101', accountTypes: ASSET },
   { key: 'chequeInCollectionAccountCode', label: 'اسناد در جریان وصول', description: 'فرستادن چک به بانک برای وصول، تا پاس یا برگشت', defaultCode: '1102', accountTypes: ASSET },
   { key: 'chequeProtestAccountCode', label: 'اسناد واخواستی', description: 'برگشت چک دریافتی', defaultCode: '1103', accountTypes: ASSET },

@@ -24,6 +24,7 @@ import {
   findAccountMappingIssues, findDeletedAccountsWithVoucherRows, findNonLatinAccountCodes, findVouchersOnNonPostingAccounts,
 } from './chartOfAccountsHealth.js';
 import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
+import { buildPayslipDeductionsHealthTest, findPayslipDeductionsInPrepayments } from './payrollDeductionHealth.js';
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
@@ -1184,6 +1185,8 @@ export class FinancialHealthService {
     tests.push(categoryIntegrityTest);
     // آزمون ۳۷: v9.0.266 (TD-804) فیش حقوقی با پاداش یا کسورات منفی، بی سند یا ناهمخوان با سند (فقط فهرست، بی بازنویسی)
     tests.push(buildPayrollVoucherHealthTest(await findPayrollVoucherMismatches()));
+    // آزمون ۳۸: v9.0.270 (TD-554) کسورات فیش حقوق که سندهای پیشین در ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» گذاشته‌اند (فقط فهرست)
+    tests.push(buildPayslipDeductionsHealthTest(await findPayslipDeductionsInPrepayments()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
