@@ -383,7 +383,6 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                           return (
                             <label
                               key={p.key}
-                              onClick={() => togglePermission(p.key)}
                               title={isFixedAdmin ? 'مدیر سیستم همیشه این مجوز را دارد' : locked ? 'این مجوز را خودتان ندارید و نمی‌توانید آن را بدهید' : undefined}
                               className={`flex items-start gap-2.5 p-2.5 rounded-lg border transition-all ${isFixedAdmin ? 'cursor-default' : locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${
                                 isChecked
@@ -395,7 +394,9 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                                 type="checkbox"
                                 checked={isChecked}
                                 disabled={locked}
-                                onChange={() => {}} // handled by label onClick
+                                // v9.0.163 (TD-536): فقط تغییر خود جعبه؛ کلیک روی عنوان را برچسب به همین جعبه می‌رساند (پیش‌تر onClick برچسب
+                                // و همین کلیک رسانده‌شده دو بار تغییر می‌دادند و عنوان کاری نمی‌کرد)
+                                onChange={() => togglePermission(p.key)}
                                 className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
                               />
                               <div>
