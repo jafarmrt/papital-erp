@@ -21,7 +21,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 
 APP_DIR="${APP_DIR:-/opt/papital-erp}"
 SERVICE_NAME="papital-erp"
-APP_PORT="${APP_PORT:-3000}"
+APP_PORT="${APP_PORT:-}"
 SKIP_BACKUP=0
 REHEARSE=0
 SOURCE_DIR=""
@@ -32,6 +32,12 @@ log()      { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 success()  { log "OK: $*"; }
 warn()     { log "WARN: $*"; }
 die()      { log "ERROR: $*"; exit 1; }
+
+# Value of KEY in ./.env read literally, as the service reads it (first match, surrounding quotes removed)
+env_file_value() {
+  [ -f .env ] || return 0
+  grep -E "^$1=" .env | head -1 | cut -d= -f2- | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true
+}
 
 # ---------- Parse arguments ----------
 while [ $# -gt 0 ]; do
@@ -49,6 +55,37 @@ done
 log "=== Papital ERP Updater — log file: $LOG_FILE ==="
 cd "$APP_DIR" || die "Application directory not found: $APP_DIR"
 [ -f .env ] || die ".env not found in $APP_DIR"
+# v9.0.114 (TD-587): the service listens on PORT from .env (install.sh writes it there); the startup check watches it
+[ -n "$APP_PORT" ] || APP_PORT="$(env_file_value PORT)"
+APP_PORT="${APP_PORT:-3000}"
+UPDATE_STARTED="$(date '+%Y-%m-%d %H:%M:%S')"
+
+# v9.0.113 (TD-586): from the moment the source changes, any failure prints the rollback steps
+SOURCE_CHANGED=0
+HINT_SHOWN=0
+rollback_hint() {
+  HINT_SHOWN=1
+  log "Rollback:"
+  log "  1) ${SUDO:+sudo }systemctl stop ${SERVICE_NAME}"
+  if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
+    log "  2) git checkout ${PREVIOUS_COMMIT} && NODE_ENV=development npm ci --include=dev && npm run build"
+  else
+    log "  2) put the previous source back and rebuild (npm ci --include=dev && npm run build)"
+  fi
+  log "  3) ONLY if the new version has accepted no writes: restoring the backup erases every change made after it"
+  log "     was taken (before ${UPDATE_STARTED}). If users have already worked on the new version, keep the database."
+  if [ -n "$PRE_DEPLOY_DUMP" ]; then
+    log "     RESTORE_MODE=apply RESTORE_CONFIRM=yes ./scripts/restore.sh ${PRE_DEPLOY_DUMP}"
+  else
+    log "     restore the last backup taken before this update with scripts/restore.sh (RESTORE_MODE=apply)"
+  fi
+  log "  4) ${SUDO:+sudo }systemctl start ${SERVICE_NAME}"
+}
+on_exit() {
+  local rc=$?
+  if [ "$rc" -ne 0 ] && [ "$SOURCE_CHANGED" -eq 1 ] && [ "$HINT_SHOWN" -eq 0 ]; then rollback_hint; fi
+}
+trap on_exit EXIT
 
 # ---------- Manual mode: extract zip / locate source directory ----------
 if [ -n "$SOURCE_ZIP" ]; then
@@ -112,9 +149,11 @@ if [ "$UPDATE_MODE" = "git" ]; then
   bash "$APP_DIR/scripts/untrack-node-modules-link.sh" "$APP_DIR" || die "Could not untrack the node_modules symlink."
   log "[2/6] Pulling latest source (git pull --ff-only)..."
   git pull --ff-only || die "git pull failed (local changes or divergence). Resolve manually, then re-run."
+  SOURCE_CHANGED=1
 else
   log "[2/6] Syncing source from $SOURCE_DIR (state-preserving rsync)..."
   command -v rsync >/dev/null 2>&1 || die "rsync is required for manual updates (apt-get install -y rsync)."
+  SOURCE_CHANGED=1
   # Preserve live state: .env, git history, logs, uploads, backups, db data, node_modules, dist, installer logs
   rsync -a \
     --exclude='.env' \
@@ -154,7 +193,17 @@ NODE_ENV=development npm ci --include=dev || {
   NODE_ENV=development npm ci --include=dev || die "npm ci failed even after lockfile regeneration."
 }
 log "[4/6] Building application..."
-npm run build
+# v9.0.113 (TD-586): vite empties dist/ before esbuild writes dist/server.cjs; a failed build puts the previous
+# build back so the next restart of the service still finds it
+rm -rf dist.prev
+[ ! -d dist ] || cp -a dist dist.prev
+if ! npm run build; then
+  if [ -d dist.prev ]; then
+    rm -rf dist && mv dist.prev dist && warn "Build failed - the previous build was put back in dist/."
+  fi
+  die "Build failed - the service was NOT restarted and still runs the previous build."
+fi
+rm -rf dist.prev
 success "Build completed."
 
 # ---------- 3b) Upgrade rehearsal (v8.0.88, TD-367; --rehearse) ----------
@@ -164,6 +213,7 @@ if [ "$REHEARSE" -eq 1 ]; then
   [ -n "$PRE_DEPLOY_DUMP" ] || die "--rehearse: no pre-deployment backup found in ${BACKUP_DIR:-/var/backups/erp}"
   log "[4b/6] Rehearsing this update's migrations on a copy of $PRE_DEPLOY_DUMP ..."
   if ! bash scripts/upgrade-rehearsal.sh "$PRE_DEPLOY_DUMP"; then
+    HINT_SHOWN=1
     log "The service was NOT restarted and still runs the previous build; the database is unchanged."
     log "Put the previous source back before anything restarts the service:"
     if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
@@ -204,21 +254,6 @@ fi
 # ---------- 5) Startup verification (v8.0.83, TD-365) ----------
 # The liveness probe answers 200 while migrations are still running (or just before they fail); only
 # /health/startup proves that migrations, seed and engines finished on the NEW build.
-rollback_hint() {
-  log "Rollback:"
-  log "  1) ${SUDO:+sudo }systemctl stop ${SERVICE_NAME}"
-  if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
-    log "  2) git checkout ${PREVIOUS_COMMIT} && NODE_ENV=development npm ci --include=dev && npm run build"
-  else
-    log "  2) put the previous source back and rebuild (npm ci --include=dev && npm run build)"
-  fi
-  if [ -n "$PRE_DEPLOY_DUMP" ]; then
-    log "  3) RESTORE_MODE=apply RESTORE_CONFIRM=yes ./scripts/restore.sh ${PRE_DEPLOY_DUMP}"
-  else
-    log "  3) restore the last backup taken before this update with scripts/restore.sh (RESTORE_MODE=apply)"
-  fi
-  log "  4) ${SUDO:+sudo }systemctl start ${SERVICE_NAME}"
-}
 log "[6/6] Waiting for startup (migrations + seed) to complete..."
 if ! STARTUP_OUTPUT="$(bash scripts/verify-startup.sh "$APP_PORT" "${STARTUP_TIMEOUT:-600}" "$PKG_VERSION")"; then
   log "$STARTUP_OUTPUT"
