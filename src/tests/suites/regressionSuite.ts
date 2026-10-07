@@ -10689,6 +10689,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 16 PR d (v9.0.294+): drafts routes and expiry
   const { runFormDraftRouteErrorsTests } = await import('../regression/formDraftRouteErrorsTests.js');
   results.push(...await runFormDraftRouteErrorsTests(shouldRun));
+  const { runFormDraftExpiryTests } = await import('../regression/formDraftExpiryTests.js');
+  results.push(...await runFormDraftExpiryTests(shouldRun));
 
   return results;
 }

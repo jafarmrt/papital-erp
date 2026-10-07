@@ -4,7 +4,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { FormDraftService } from '../services/drafts/formDraft.service.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
-import { DRAFT_DEFAULT_KEY, DRAFT_ENTITY_TYPE_PATTERN, DRAFT_KEY_PATTERN } from '../lib/drafts/draftRules.js';
+import { DRAFT_DEFAULT_KEY, DRAFT_EXPIRY_DAYS, DRAFT_ENTITY_TYPE_PATTERN, DRAFT_KEY_PATTERN } from '../lib/drafts/draftRules.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -20,7 +20,10 @@ const saveDraftSchema = z.object({
     draftKey: draftKeyField.optional().default(DRAFT_DEFAULT_KEY),
     payload: z.record(z.string(), z.unknown()),
     summary: z.string().max(500, 'خلاصه پیش‌نویس حداکثر ۵۰۰ نویسه است').optional().default(''),
-    expiresInDays: z.number().optional().default(30)
+    expiresInDays: z.number().int('ماندگاری پیش‌نویس باید عدد صحیح باشد')
+      .min(DRAFT_EXPIRY_DAYS.min, 'ماندگاری پیش‌نویس دست‌کم ۱ روز است')
+      .max(DRAFT_EXPIRY_DAYS.max, 'ماندگاری پیش‌نویس حداکثر ۹۰ روز است')
+      .optional().default(DRAFT_EXPIRY_DAYS.default)
   })
 });
 

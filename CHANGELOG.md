@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.295 — v9.0.295 — Form Drafts Expire
+- **Form draft expiry (TD-676):** a draft lives 1 to 90 days, an expired draft no longer offers «restore», and a daily job soft-deletes expired drafts.
+
 ### v9.0.294 — v9.0.294 — Draft Routes Validate Their Input and Hide Database Errors
 - **Form draft errors (TD-677):** a draft's type and key are checked against a pattern and a length cap, and a database error goes to the global error handler instead of returning the raw SQL text with status 400.
 

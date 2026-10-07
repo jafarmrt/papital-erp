@@ -12,6 +12,7 @@ import { registerWorkflowDomainActions } from './src/services/system/workflowDom
 import { registerDomainEventHandlers } from './src/services/events/domainEventHandlers.js';
 import { OutboxService } from './src/services/events/outboxService.js';
 import { WorkflowSlaReminderService } from './src/services/workflow/workflowSlaReminderService.js';
+import { FormDraftService } from './src/services/drafts/formDraft.service.js';
 import { pool } from './src/db/drizzle.js';
 import { decideProcessErrorAction, processErrorMessage } from './src/lib/processErrorPolicy.js';
 
@@ -58,6 +59,8 @@ async function startServer() {
         OutboxService.startOutboxWorker(3000);
         // v7.0.101 (TD-085 بند ۴): یادآوری یک‌باره مهلت کارهای تاییدی به مسئول کار
         WorkflowSlaReminderService.start(60_000);
+        // v9.0.295 (TD-676): daily soft cleanup of expired form drafts
+        FormDraftService.startCleanup();
         markStartupComplete();
         migrationSucceeded = true;
         break;
@@ -123,6 +126,7 @@ async function startServer() {
 
       OutboxService.stopOutboxWorker();
       WorkflowSlaReminderService.stop();
+      FormDraftService.stopCleanup();
 
       if (pool && typeof pool.end === 'function') {
         pool.end().then(() => {

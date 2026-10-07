@@ -184,7 +184,7 @@
 ## 16. Frontend Communication & Polling Optimization
 - **Standardized `fetchJson`:** Use `fetchJson` from `/src/api.ts` with `credentials: 'include'`.
 - **Guarded Background Polling:** Intervals (`setInterval`) must check active sub-tab state and clean up on unmount.
-- **Form Drafts (v9.0.294, TD-677):** A draft's type and key match `DRAFT_ENTITY_TYPE_PATTERN` / `DRAFT_KEY_PATTERN` (`src/lib/drafts/draftRules.ts`, else 400) and the drafts routes leave every other error to `errorHandler`, so no SQL text reaches the browser.
+- **Form Drafts (v9.0.294, TD-677):** A draft's type and key match `DRAFT_ENTITY_TYPE_PATTERN` / `DRAFT_KEY_PATTERN` (`src/lib/drafts/draftRules.ts`, else 400) and the drafts routes leave every other error to `errorHandler`, so no SQL text reaches the browser. A draft lives 1 to 90 days (`DRAFT_EXPIRY_DAYS`), an expired draft is never returned (a legacy row without `expires_at` lives 30 days from its last save) and `FormDraftService.startCleanup` soft-deletes expired drafts daily under advisory lock 91031 (v9.0.295, TD-676, product-owner decision ت۶ of package 16).
 
 ## 17. System Testing, E2E Audit & Test Runs
 - **Vitest for New Unit & Frontend Tests (v7.0.76, audit P3-6, product-owner decision):** New pure-unit and React component tests are Vitest files in `src/tests/vitest/*.test.ts(x)` (jsdom + Testing Library), run with `npm run test:vitest` (CI lint job). Database and domain suites stay on the existing runner.
