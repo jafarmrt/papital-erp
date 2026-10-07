@@ -111,7 +111,8 @@ describe('itemReservationSummary', () => {
     expect(itemReservationSummary([], split, '', 'WH2').maxAllowedForExit).toBe(10);
     // both limits apply: min(warehouse stock, total − other reservations)
     expect(itemReservationSummary(reservations, split, '7', 'WH2').maxAllowedForExit).toBe(6);
-    expect(itemReservationSummary(reservations, { ...split, stocks: { WH1: 3, WH2: 7 }, stock_WH1: 3, stock_WH2: 7 }, '7', 'WH1').maxAllowedForExit).toBe(3);
+    const threeAndSeven = { ...split, stocks: { WH1: 3, WH2: 7 }, stock_WH1: 3, stock_WH2: 7 };
+    expect(itemReservationSummary(reservations, threeAndSeven, '7', 'WH1').maxAllowedForExit).toBe(3);
     // a warehouse the item has no row in holds nothing; no warehouse means the whole stock
     expect(itemReservationSummary([], split, '', 'WH9').maxAllowedForExit).toBe(0);
     expect(itemReservationSummary([], split, '').maxAllowedForExit).toBe(10);
