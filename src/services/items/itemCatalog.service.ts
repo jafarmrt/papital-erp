@@ -63,7 +63,7 @@ export interface ItemWriteBody {
   weight?: string | number | null;
   material?: string;
   size?: string;
-  /** v9.0.161 (TD-654): نسخه کالایی که فرم ویرایش از آن ساخته شده است؛ ویرایش بی آن رد می‌شود */
+  /** v9.0.171 (TD-654): نسخه کالایی که فرم ویرایش از آن ساخته شده است؛ ویرایش بی آن رد می‌شود */
   version?: number | string;
 }
 
@@ -479,7 +479,7 @@ export class ItemCatalogService {
     const { type, name, code, unit, category, image, thumbnail, reorder_point, weighted_average_cost, color, weight, material, size } = body;
 
     const executeWork = async (tx: DbExecutor) => {
-      // v9.0.160 (TD-653): کد و نام با کلید ایندکس‌های یکتای uq_items_code_active / uq_items_name_active
+      // v9.0.170 (TD-653): کد و نام با کلید ایندکس‌های یکتای uq_items_code_active / uq_items_name_active
       await assertItemCodeAvailable(tx, code);
       await assertItemNameAvailable(tx, name);
 
@@ -589,7 +589,7 @@ export class ItemCatalogService {
       if (!prevItem) {
         throw new NotFoundError('کالای مورد نظر یافت نشد.');
       }
-      // v9.0.161 (TD-654، تصمیم ت۷ الف): قفل خوش‌بینانه همیشه اجرا می‌شود (همان قرارداد طرف حساب، TD-403)؛ پیش‌تر نسخه
+      // v9.0.171 (TD-654، تصمیم ت۷ الف): قفل خوش‌بینانه همیشه اجرا می‌شود (همان قرارداد طرف حساب، TD-403)؛ پیش‌تر نسخه
       // فقط افزایش می‌یافت و فرم کهنه یا درخواست بی نسخه تغییر کاربر دیگر را بی‌خطا پاک می‌کرد
       const expectedVersion = Number(body.version);
       if (!Number.isInteger(expectedVersion) || expectedVersion <= 0) {
@@ -597,7 +597,7 @@ export class ItemCatalogService {
       }
       checkOccVersion(prevItem, { entityType: 'Item', entityId: itemId, expectedVersion });
 
-      // v9.0.160 (TD-653): کد و نام با کلید ایندکس‌های یکتا، جز خود کالا
+      // v9.0.170 (TD-653): کد و نام با کلید ایندکس‌های یکتا، جز خود کالا
       if (code && code !== prevItem.code) await assertItemCodeAvailable(tx, code, itemId);
       if (name && name !== prevItem.name) await assertItemNameAvailable(tx, name, itemId);
 
@@ -684,7 +684,7 @@ export class ItemCatalogService {
       }
       const effectiveWac = stockBefore.total > 0 ? prevWac : requestedWac;
 
-      // v9.0.161 (TD-654): فیلدی که در بدنه نیامده مقدار فعلی کالا را نگه می‌دارد؛ رشته خالی یعنی پاک کردن آن
+      // v9.0.171 (TD-654): فیلدی که در بدنه نیامده مقدار فعلی کالا را نگه می‌دارد؛ رشته خالی یعنی پاک کردن آن
       const keep = <T>(value: unknown, current: T, write: (v: unknown) => T): T => (value === undefined ? current : write(value));
       const updateData: Partial<typeof items.$inferInsert> = {
         name, code, unit,

@@ -15,22 +15,22 @@ export async function runItemIntegrityTests(shouldRun: ShouldRun): Promise<TestC
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (ctx: Ctx) => Promise<string>]> = [
     ['inv_item_create_opening_voucher_atomic_td_652',
-      'v9.0.159: a new item with opening stock is refused when its opening voucher cannot be issued; no item and no Kardex row remain (TD-652)',
+      'v9.0.169: a new item with opening stock is refused when its opening voucher cannot be issued; no item and no Kardex row remain (TD-652)',
       ['td652', 'item', 'voucher', 'inventory', 'package5'], openingVoucherAtomicCase],
     ['conc_item_code_and_name_unique_td_653',
-      'v9.0.160: concurrent requests never create two active items with one code (any letter case) or one name (TD-653)',
+      'v9.0.170: concurrent requests never create two active items with one code (any letter case) or one name (TD-653)',
       ['td653', 'item', 'concurrency', 'package5'], uniqueCodeNameCase],
     ['sec_item_version_lock_td_654',
-      'v9.0.161: editing an item needs its current version (400 without, 409 when stale) and a missing field keeps its value (TD-654)',
+      'v9.0.171: editing an item needs its current version (400 without, 409 when stale) and a missing field keeps its value (TD-654)',
       ['td654', 'item', 'occ', 'package5'], versionLockCase],
     ['reg_item_code_peek_after_save_td_656',
-      'v9.0.162: saving an item moves its code series counter, so the next suggested code is free (TD-656)',
+      'v9.0.172: saving an item moves its code series counter, so the next suggested code is free (TD-656)',
       ['td656', 'item', 'code', 'package5'], codePeekCase],
     ['reg_item_numeric_input_validation_td_657',
-      'v9.0.163: item numbers go through decimalInput: text is refused, Persian digits are read and negatives are refused (TD-657, item part)',
+      'v9.0.173: item numbers go through decimalInput: text is refused, Persian digits are read and negatives are refused (TD-657, item part)',
       ['td657', 'item', 'validation', 'package5'], numericInputCase],
     ['conc_item_delete_vs_receipt_td_661',
-      'v9.0.164: deleting an item while a receipt of it is being committed is refused after the receipt (TD-661)',
+      'v9.0.174: deleting an item while a receipt of it is being committed is refused after the receipt (TD-661)',
       ['td661', 'item', 'concurrency', 'inventory', 'package5'], deleteVsReceiptCase],
   ];
   for (const [id, name, tags, run] of cases) {

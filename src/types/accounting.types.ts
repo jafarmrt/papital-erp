@@ -95,6 +95,8 @@ export interface JournalVoucher {
   sourceDocumentId?: number | null;
   /** TD-242: فیش حقوقی مبدأ سند صادرشده توسط VoucherSync برای فیش */
   sourcePayrollId?: number | null;
+  /** v9.0.159 (TD-545): سال مالی‌ای که «بستن سال مالی» این سند اختتامیه یا افتتاحیه را برایش صادر کرده است */
+  sourceFiscalYear?: number | null;
   currency?: string | null;
   createdById?: number | null;
   created_by_id?: number | null;
@@ -516,6 +518,40 @@ export interface FiscalYearClosingPreview {
    */
   draftVouchers?: FiscalClosingDraftVoucher[];
   draftVoucherCount?: number;
+  /** v9.0.161 (TD-543): امروز از آخرین روز سال گذشته است؛ سال تمام‌نشده بسته نمی‌شود */
+  yearEnded?: boolean;
+  /** v9.0.162 (TD-544): سال‌های پیشینِ دارای سند که هنوز بازند؛ تا بسته نشوند این سال بسته نمی‌شود */
+  earlierOpenYears?: number[];
+}
+
+/** v9.0.161 (TD-543): یک سال تمام‌شده در فرم بستن سال */
+export interface FiscalClosingYearRow {
+  year: number;
+  status: 'open' | 'closed';
+  hasVouchers: boolean;
+  /** زمان سرور با Z */
+  closedAt: string | null;
+  closedBy: string | null;
+}
+
+/** v9.0.161 (TD-543): پاسخ `GET /accounting/fiscal-closing/years` */
+export interface FiscalClosingYearsInfo {
+  /** سال مالی امروز (باز؛ تا پایانش بسته نمی‌شود) */
+  currentYear: number;
+  /** سال‌های تمام‌شده، از قدیمی‌ترین سال دارای سند یا ثبت‌شده در fiscal_periods تا سال پیش از سال جاری */
+  years: FiscalClosingYearRow[];
+  /** سالی که فرم بستن سال با آن باز می‌شود */
+  defaultYear: number | null;
+  /** آخرین سال بسته (سال‌های پس از آن همه بازند)؛ فقط همین سال بازگشایی می‌شود */
+  reopenableYear: number | null;
+}
+
+/** v9.0.161 (TD-543): پاسخ `POST /accounting/fiscal-closing/reopen` */
+export interface FiscalYearReopenResult {
+  success: true;
+  year: number;
+  message: string;
+  voidedVouchers: Array<{ id: number; voucherNumber: number; referenceNumber: string; action: 'deleted' | 'reversed'; reversalVoucherId: number | null }>;
 }
 
 export interface FiscalClosingDraftVoucher {

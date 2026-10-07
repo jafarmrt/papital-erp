@@ -15,10 +15,10 @@ export async function runItemPriceTests(shouldRun: ShouldRun): Promise<TestCaseR
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (ctx: Ctx) => Promise<string>]> = [
     ['conc_item_price_single_active_td_660',
-      'v9.0.165: concurrent saves of one price list leave one active price, through POST /items/:id/prices and batch-update (TD-660)',
+      'v9.0.175: concurrent saves of one price list leave one active price, through POST /items/:id/prices and batch-update (TD-660)',
       ['td660', 'item', 'price', 'concurrency', 'package5'], singleActiveCase],
     ['reg_item_price_amount_currency_td_657',
-      'v9.0.166: a price is a decimal above zero in a supported currency, removal is explicit, and the Excel import refuses a row with an invalid price (TD-657, price part)',
+      'v9.0.176: a price is a decimal above zero in a supported currency, removal is explicit, and the Excel import refuses a row with an invalid price (TD-657, price part)',
       ['td657', 'item', 'price', 'validation', 'package5'], amountCurrencyCase],
   ];
   for (const [id, name, tags, run] of cases) {

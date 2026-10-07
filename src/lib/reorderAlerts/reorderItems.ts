@@ -19,7 +19,7 @@ export interface ReorderItem {
   deficit_value: number;
   is_zero_stock: boolean;
   stocks?: Record<string, number>;
-  /** v9.0.161 (TD-654): نسخه کالا؛ ویرایش نقطه سفارش آن را همراه کالا می‌فرستد */
+  /** v9.0.171 (TD-654): نسخه کالا؛ ویرایش نقطه سفارش آن را همراه کالا می‌فرستد */
   version?: number;
 }
 

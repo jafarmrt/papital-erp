@@ -53,7 +53,7 @@ export interface ItemPriceWriteResult {
 export class ItemPricingService {
   /**
    * Retrieves active pricing strategy titles configured in system settings.
-   * v9.0.165 (TD-660): درون تراکنش با همان `tx` خوانده می‌شود (AGENTS §19).
+   * v9.0.175 (TD-660): درون تراکنش با همان `tx` خوانده می‌شود (AGENTS §19).
    */
   static async getPricingStrategies(executor: DbExecutor = orm): Promise<string[]> {
     try {
@@ -118,7 +118,7 @@ export class ItemPricingService {
   }
 
   /**
-   * v9.0.165 (TD-660، B05-14): همه نوشتن‌های قیمت فرم و صفحه قیمت‌گذاری (`POST /items/:id/prices` و `batch-update`) از این
+   * v9.0.175 (TD-660، B05-14): همه نوشتن‌های قیمت فرم و صفحه قیمت‌گذاری (`POST /items/:id/prices` و `batch-update`) از این
    * تابع و درون تراکنش فراخوان می‌گذرند. کالاها پیش از خواندن قیمت‌های فعال به ترتیب صعودی شناسه با `lockStockItems`
    * (FOR NO KEY UPDATE) قفل می‌شوند، پس دو ذخیره هم‌زمان یک فهرست پشت هم اجرا می‌شوند و هر فهرست یک ردیف فعال دارد.
    * پیش‌تر `POST` بی تراکنش و قفل می‌خواند، نرم حذف و درج می‌کرد و پنج ذخیره هم‌زمان «عمده» چهار ردیف فعال ساخت؛ قفل

@@ -41,7 +41,7 @@ export class ItemOpeningService {
       : await AccountMappingService.getInventoryFinishedGoodsAccount(params.tx);
     const capitalAcc = await AccountMappingService.getOpeningCapitalAccount(params.tx);
     if (!inventoryAcc || !capitalAcc) {
-      // v9.0.159 (TD-652): خطای قابل‌نمایش به کاربر (422)؛ ثبت کالا با موجودی اولیه رد می‌شود
+      // v9.0.169 (TD-652): خطای قابل‌نمایش به کاربر (422)؛ ثبت کالا با موجودی اولیه رد می‌شود
       throw new ValidationError('حساب «موجودی» یا «سرمایه اولیه» در چارت یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید');
     }
 

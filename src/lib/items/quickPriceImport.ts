@@ -20,7 +20,7 @@ export interface QuickPriceUpdate {
   currency: string;
 }
 
-/** v9.0.166 (TD-657): سلول قیمتی که عدد بزرگ‌تر از صفر یا ارز پشتیبانی‌شده ندارد؛ فرستاده نمی‌شود */
+/** v9.0.176 (TD-657): سلول قیمتی که عدد بزرگ‌تر از صفر یا ارز پشتیبانی‌شده ندارد؛ فرستاده نمی‌شود */
 export interface QuickPriceInvalidCell {
   code: string;
   title: string;
@@ -65,7 +65,7 @@ export function buildQuickPriceUpdates(
     const { prices, unknownColumns } = extractRowPriceColumns(row, strategies);
     unknownColumns.forEach(c => unknown.add(c));
     for (const cell of prices) {
-      // v9.0.166 (TD-657): پیش‌تر سلول «۰» حذف قیمت فرستاده می‌شد و «۲٬۵۰۰٬۰۰۰» یا ارز «XYZ» بی‌صدا رد یا ذخیره می‌شد
+      // v9.0.176 (TD-657): پیش‌تر سلول «۰» حذف قیمت فرستاده می‌شد و «۲٬۵۰۰٬۰۰۰» یا ارز «XYZ» بی‌صدا رد یا ذخیره می‌شد
       const price = parsePriceAmount(cell.value);
       const currency = priceCurrencyOf(cell.currency);
       if (price === null || currency === null) {

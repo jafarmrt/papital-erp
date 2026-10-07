@@ -96,12 +96,12 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     return;
   }
   if (!matchedItem && !name) {
-    // v9.0.160 (TD-653): نام کالا یکتاست، پس کالای تازه بی نام «کالای بدون نام» دوم نمی‌سازد
+    // v9.0.170 (TD-653): نام کالا یکتاست، پس کالای تازه بی نام «کالای بدون نام» دوم نمی‌سازد
     push('نام کالای تازه خالی است؛ این ردیف ثبت نشد.');
     return;
   }
   if (name) {
-    // v9.0.160 (TD-653): همان کلید ایندکس یکتای نام (lower(btrim(name)))
+    // v9.0.170 (TD-653): همان کلید ایندکس یکتای نام (lower(btrim(name)))
     const [nameConflict] = await tx.select({ id: items.id, code: items.code }).from(items)
       .where(and(itemNameKeyCondition(name), eq(items.isDeleted, 0), matchedItem ? ne(items.id, matchedItem.id) : undefined))
       .limit(1);
@@ -115,7 +115,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     return;
   }
 
-  // v9.0.166 (TD-657): قیمت نامعتبر یا ارز ناشناخته کل ردیف را پیش از هر نوشتن رد می‌کند
+  // v9.0.176 (TD-657): قیمت نامعتبر یا ارز ناشناخته کل ردیف را پیش از هر نوشتن رد می‌کند
   const rowPrices = readRowPrices(row, ctx.strategies, push);
   if (!rowPrices) return;
 
@@ -193,7 +193,7 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
   if (fieldsChange && !perms.editItems) {
     push(ITEM_IMPORT_DENIED_MESSAGES.editItems);
   } else if (fieldsChange) {
-    // v9.0.161 (TD-654): تغییر مشخصات از اکسل نسخه کالا را هم جلو می‌برد تا فرم بازِ کهنه آن را بازنویسی نکند
+    // v9.0.171 (TD-654): تغییر مشخصات از اکسل نسخه کالا را هم جلو می‌برد تا فرم بازِ کهنه آن را بازنویسی نکند
     await guardItemIdentity(updateSet.name ?? matchedItem.name, () => tx.update(items)
       .set({ ...updateSet, version: nextVersion(matchedItem.version) }).where(eq(items.id, targetItemId)));
   }

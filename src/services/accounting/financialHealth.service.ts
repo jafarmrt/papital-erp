@@ -10,6 +10,10 @@ import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } fro
 import { buildFutureStockMovementHealthTest, findFutureStockMovements } from '../inventory/futureStockMovements.js';
 import { buildOpeningVoucherHealthTest, findOpeningVoucherMismatches } from '../inventory/itemOpeningValue.js';
 import { buildReservedWarehouseCodeHealthTest, findReservedCodeWarehouses } from '../inventory/reservedWarehouseCode.js';
+import {
+  buildEarlyClosedYearsHealthTest, buildManualClosingTypeHealthTest, buildOutOfOrderClosedYearsHealthTest,
+  findEarlyClosedYears, findManualClosingTypeVouchers, findOutOfOrderClosedYears,
+} from './fiscalClosingHealth.js';
 import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
 import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
 import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
@@ -1117,17 +1121,26 @@ export class FinancialHealthService {
     overallScore += unknownPriceTitleTest.scoreImpact;
     tests.push(unknownPriceTitleTest);
 
-    // آزمون ۲۵: v9.0.160 (TD-653) کد یا نام مشترک میان کالاهای فعال (فقط فهرست، بی تغییر خودکار)
+    // آزمون ۲۵: v9.0.160 (TD-559) اسناد دستی با نوع اختتامیه که بستن سال صادر نکرده (فقط فهرست، بی بازنویسی)
+    tests.push(buildManualClosingTypeHealthTest(await findManualClosingTypeVouchers()));
+
+    // آزمون ۲۶: v9.0.161 (TD-543) سال مالی بسته‌شده پیش از پایانش (فقط فهرست؛ آخرین سال بسته با بازگشایی باز می‌شود)
+    tests.push(buildEarlyClosedYearsHealthTest(await findEarlyClosedYears()));
+
+    // آزمون ۲۷: v9.0.162 (TD-544) سال مالی بسته‌شده پیش از سال‌های پیشینِ دارای سند خود (فقط فهرست، بی اصلاح خودکار)
+    tests.push(buildOutOfOrderClosedYearsHealthTest(await findOutOfOrderClosedYears()));
+
+    // آزمون ۲۸: v9.0.170 (TD-653) کد یا نام مشترک میان کالاهای فعال (فقط فهرست، بی تغییر خودکار)
     const itemIdentityTest = buildItemIdentityHealthTest(await findDuplicateItemIdentities(), await hasItemIdentityIndexes());
     overallScore += itemIdentityTest.scoreImpact;
     tests.push(itemIdentityTest);
 
-    // آزمون ۲۶: v9.0.165 (TD-660) بیش از یک قیمت فعال برای یک فهرست قیمت کالا (فقط فهرست، بی پاک‌سازی)
+    // آزمون ۲۹: v9.0.175 (TD-660) بیش از یک قیمت فعال برای یک فهرست قیمت کالا (فقط فهرست، بی پاک‌سازی)
     const duplicatePriceTest = buildDuplicateActivePriceHealthTest(await findDuplicateActivePrices());
     overallScore += duplicatePriceTest.scoreImpact;
     tests.push(duplicatePriceTest);
 
-    // آزمون ۲۷: v9.0.166 (TD-657) قیمت فعال با مبلغ صفر یا منفی یا ارز بیرون از فهرست §6 (فقط فهرست، بی تغییر خودکار)
+    // آزمون ۳۰: v9.0.176 (TD-657) قیمت فعال با مبلغ صفر یا منفی یا ارز بیرون از فهرست §6 (فقط فهرست، بی تغییر خودکار)
     const invalidPriceTest = buildInvalidActivePriceHealthTest(await findInvalidActivePrices());
     overallScore += invalidPriceTest.scoreImpact;
     tests.push(invalidPriceTest);

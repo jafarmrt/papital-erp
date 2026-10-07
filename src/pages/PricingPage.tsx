@@ -208,7 +208,7 @@ export default function PricingPage({ user }: { user: User }) {
     setSavingId(itemId);
     const itemLocal = localEdits[itemId] || {};
     try {
-      // v9.0.166 (TD-657): خانه خالی حذف صریح است و عدد نامعتبر فرستاده نمی‌شود (پیش‌تر صفر می‌رفت و قیمت پاک می‌شد)
+      // v9.0.176 (TD-657): خانه خالی حذف صریح است و عدد نامعتبر فرستاده نمی‌شود (پیش‌تر صفر می‌رفت و قیمت پاک می‌شد)
       const edits: PriceFieldEdit[] = [];
       for (const st of strategies) {
         const cleanTitle = formatStrategyDisplayTitle(st);
@@ -344,7 +344,7 @@ export default function PricingPage({ user }: { user: User }) {
         if (unknownColumns.length > 0) {
           toast.error(`این ستون‌ها فهرست قیمت تنظیم‌شده‌ای نیستند و نادیده گرفته شدند: ${unknownColumns.join('، ')}`);
         }
-        // v9.0.166 (TD-657): قیمت صفر، منفی یا نامعتبر و ارز ناشناخته فرستاده نمی‌شوند و گزارش می‌شوند
+        // v9.0.176 (TD-657): قیمت صفر، منفی یا نامعتبر و ارز ناشناخته فرستاده نمی‌شوند و گزارش می‌شوند
         if (invalidCells.length > 0) {
           const sample = invalidCells.slice(0, 3).map(c => `${c.code} «${c.title}»: ${c.value} ${c.currency}`).join('، ');
           toast.error(`${formatPersianNumber(invalidCells.length)} قیمت عدد بزرگ‌تر از صفر یا ارز پشتیبانی‌شده نداشت و ثبت نشد: ${sample}`);

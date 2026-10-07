@@ -1,4 +1,4 @@
--- Drizzle Migration 0069: unique code and name among active items (v9.0.160 / TD-653, product-owner decision t4 option a)
+-- Drizzle Migration 0070: unique code and name among active items (v9.0.170 / TD-653, product-owner decision t4 option a)
 --
 -- Two active items (is_deleted = 0) must never share a code or a name. The code key is upper(btrim(code)): codes that
 -- differ only in letter case or surrounding spaces are one code (WooCommerce matches orders to items.code and project

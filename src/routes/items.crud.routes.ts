@@ -232,7 +232,7 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
 // POST /items
 router.post('/items', authorizePermission('products.create'), validate(itemCreateUpdateSchema), asyncHandler(async (req, res) => {
   // v9.0.36 (TD-451): کالا و شروع گردش‌کار افتتاحیه در یک تراکنش؛ شروع ناموفقِ تعریف فعال ثبت کالا را رد می‌کند.
-  // v9.0.159 (TD-652، تصمیم ت۶ الف): سند افتتاحیه و ردیف ممیزی هم درون همان تراکنش‌اند و شکست سند ثبت کالا و موجودی اولیه‌اش
+  // v9.0.169 (TD-652، تصمیم ت۶ الف): سند افتتاحیه و ردیف ممیزی هم درون همان تراکنش‌اند و شکست سند ثبت کالا و موجودی اولیه‌اش
   // را رد می‌کند، مثل ویرایش کالا و ورود اکسل. پیش‌تر سند بیرون از تراکنش صادر و شکستش با `logger.warn` بلعیده می‌شد: کالا با
   // موجودی در کاردکس ثبت می‌شد و دفتر کل تغییری نمی‌کرد.
   const { name, code } = req.body;
@@ -293,7 +293,7 @@ router.post('/items', authorizePermission('products.create'), validate(itemCreat
 }));
 
 // PUT /items/:id
-// v9.0.161 (TD-654): نسخه کالا لازم است (۴۰۰ بی آن، ۴۰۹ OCC_CONFLICT برای نسخه کهنه) و ردیف ممیزی درون همان تراکنش نوشته می‌شود
+// v9.0.171 (TD-654): نسخه کالا لازم است (۴۰۰ بی آن، ۴۰۹ OCC_CONFLICT برای نسخه کهنه) و ردیف ممیزی درون همان تراکنش نوشته می‌شود
 router.put('/items/:id', authorizePermission('products.edit'), validate(itemUpdateSchema), asyncHandler(async (req, res) => {
   const itemId = Number(req.params.id);
   const result = await orm.transaction(async (tx) => {

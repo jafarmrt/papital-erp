@@ -26,7 +26,7 @@ function unknownPriceListError(titles: string[]): ValidationError {
 }
 
 /**
- * v9.0.166 (TD-657 بخش قیمت، تصمیم ت۹ الف): مبلغ قیمت با `decimalInput` و بزرگ‌تر از صفر، ارز فقط از فهرست AGENTS §6
+ * v9.0.176 (TD-657 بخش قیمت، تصمیم ت۹ الف): مبلغ قیمت با `decimalInput` و بزرگ‌تر از صفر، ارز فقط از فهرست AGENTS §6
  * (`PRICE_CURRENCIES`)، و حذف قیمت در `batch-update` فقط با `remove: true`. پیش‌تر قیمت منفی ذخیره، «abc» صفر و قیمت صفر
  * یا خالی حذف می‌شد (صفحه قیمت‌گذاری برای عدد نامعتبر صفر می‌فرستاد و قیمت را پاک می‌کرد) و ارز «XYZ» پذیرفته می‌شد.
  */
@@ -110,7 +110,7 @@ router.get('/items/:id/prices/history', authorizePermission(...READ_PERMISSIONS.
 }));
 
 // POST /items/:id/prices
-// v9.0.165 (TD-660): نوشتن در `ItemPricingService.applyPriceWrites`، درون تراکنش و زیر قفل ردیف کالا، با ردیف ممیزی در همان تراکنش
+// v9.0.175 (TD-660): نوشتن در `ItemPricingService.applyPriceWrites`، درون تراکنش و زیر قفل ردیف کالا، با ردیف ممیزی در همان تراکنش
 router.post('/items/:id/prices', authorizePermission('products.edit_price'), validate(itemPriceSchema), asyncHandler(async (req, res) => {
   const { title, price, currency = 'IRR' } = req.body;
   const itemId = Number(req.params.id);
@@ -150,7 +150,7 @@ router.post('/items/:id/prices', authorizePermission('products.edit_price'), val
 // حذف قیمت‌ها از طریق batch-update انجام می‌شود.
 
 // POST /items/prices/batch-update
-// v9.0.165 (TD-660): همه تغییرها و ردیف ممیزی‌شان در یک تراکنش، زیر قفل ردیف کالاها (پیش‌تر قفل ردیف قیمت‌های موجود جلوی
+// v9.0.175 (TD-660): همه تغییرها و ردیف ممیزی‌شان در یک تراکنش، زیر قفل ردیف کالاها (پیش‌تر قفل ردیف قیمت‌های موجود جلوی
 // درج هم‌زمان قیمت تازه را نمی‌گرفت و ممیزی بیرون از تراکنش نوشته می‌شد)
 router.post('/items/prices/batch-update', authorizePermission('products.edit_price'), validate(batchPriceUpdateSchema), asyncHandler(async (req, res) => {
   const updates = req.body.updates as Array<{ itemId: number; title: string; remove?: true; price?: string; currency: string }>;
@@ -158,7 +158,7 @@ router.post('/items/prices/batch-update', authorizePermission('products.edit_pri
     const strategies = await ItemPricingService.getPricingStrategies(tx);
     // v9.0.152 (TD-647، ت۱ الف): قیمت فقط برای فهرست تنظیم‌شده ثبت می‌شود؛ حذف قیمت هر عنوانی را می‌پذیرد تا ردیف‌های
     // پیشینِ عنوان ناشناخته پاک‌شدنی بمانند. پیش‌تر ورود سریع «موجودی کل» را فهرست قیمت فروش می‌کرد.
-    // v9.0.166 (TD-657): حذف فقط با `remove: true`؛ قیمت صفر، منفی یا نامعتبر در اعتبارسنجی بدنه ۴۰۰ است
+    // v9.0.176 (TD-657): حذف فقط با `remove: true`؛ قیمت صفر، منفی یا نامعتبر در اعتبارسنجی بدنه ۴۰۰ است
     const matcher = priceListMatcher(strategies);
     const unknownTitles = [...new Set(updates.filter(u => !u.remove && !matcher.match(u.title)).map(u => u.title))];
     if (unknownTitles.length > 0) throw unknownPriceListError(unknownTitles);

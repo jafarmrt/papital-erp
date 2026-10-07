@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parsePriceAmount, priceCurrencyOf, priceSaveUpdates } from '../../lib/items/priceInput';
 import { buildQuickPriceUpdates } from '../../lib/items/quickPriceImport';
 
-// v9.0.166 (TD-657, price part): a price is a decimal above zero in a supported currency; removal is explicit
+// v9.0.176 (TD-657, price part): a price is a decimal above zero in a supported currency; removal is explicit
 describe('item price input', () => {
   it('reads Persian digits and refuses zero, negative and text amounts', () => {
     expect(parsePriceAmount('۲٬۵۰۰٬۰۰۰')).toBe('2500000');

@@ -15,7 +15,7 @@ function itemBodyAliases(val: unknown): unknown {
     // به کلیدهای stock_<warehouseId> تبدیل می‌شود (همان قرارداد قبلی بک‌اند)
     if (copy.stocks && typeof copy.stocks === 'object' && !Array.isArray(copy.stocks)) {
       for (const [whKey, val] of Object.entries(copy.stocks)) {
-        // v9.0.163 (TD-657): ارقام فارسی خوانده می‌شوند؛ مقدار نامعتبر را اعتبارسنجی `stocks` با ۴۰۰ رد می‌کند
+        // v9.0.173 (TD-657): ارقام فارسی خوانده می‌شوند؛ مقدار نامعتبر را اعتبارسنجی `stocks` با ۴۰۰ رد می‌کند
         const num = Number(normalizeDecimalString(String(val ?? ''))) || 0;
         if (num !== 0) {
           copy[`stock_${whKey}`] = num;
@@ -28,7 +28,7 @@ function itemBodyAliases(val: unknown): unknown {
 }
 
 /**
- * v9.0.163 (TD-657، بخش کالا): عددهای کالا با `decimalInput` خوانده می‌شوند (ارقام فارسی و جداکننده هزارگان پذیرفته، متن
+ * v9.0.173 (TD-657، بخش کالا): عددهای کالا با `decimalInput` خوانده می‌شوند (ارقام فارسی و جداکننده هزارگان پذیرفته، متن
  * خطای ۴۰۰) و نامنفی‌اند. پیش‌تر «abc» نقطه سفارش NaN و وزن «سبک» خطای ۵۰۰ می‌داد و «-۵» منفی ذخیره می‌شد.
  */
 const nonNegativeDecimal = (label: string) =>
@@ -62,7 +62,7 @@ export const itemCreateUpdateSchema = z.object({
 const itemVersion = z.coerce.number().int('نسخه کالا باید عدد صحیح باشد').positive('نسخه کالا باید مثبت باشد');
 
 /**
- * v9.0.161 (TD-654، تصمیم ت۷ الف): ویرایش کالا نسخه کالایی را که فرم از آن ساخته شده می‌فرستد و قفل خوش‌بینانه همیشه
+ * v9.0.171 (TD-654، تصمیم ت۷ الف): ویرایش کالا نسخه کالایی را که فرم از آن ساخته شده می‌فرستد و قفل خوش‌بینانه همیشه
  * اجرا می‌شود، همان قرارداد طرف حساب (TD-403). پیش‌تر نسخه فقط افزایش می‌یافت و فرم کهنه تغییر کاربر دیگر را پاک می‌کرد.
  */
 export const itemUpdateSchema = z.object({

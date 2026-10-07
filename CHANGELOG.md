@@ -19,29 +19,59 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.166 — Item Price Amount and Currency
+### v9.0.176 — Item Price Amount and Currency
 - **Item Price Input:** a price is a decimal above zero in IRR, USD, EUR, AED or GBP; removal is explicit (`remove: true`), invalid Excel prices refuse the row and old invalid rows are listed by the health check (TD-657, `reg_item_price_amount_currency_td_657`).
 
-### v9.0.165 — One Active Price per List Under Concurrent Saves
+### v9.0.175 — One Active Price per List Under Concurrent Saves
 - **Item Price Writes:** price saves go through `ItemPricingService.applyPriceWrites` under the item row lock, so concurrent saves leave one active price per list; old duplicates are listed by the health check (TD-660, `conc_item_price_single_active_td_660`).
 
-### v9.0.164 — Guard Test for Item Delete During a Receipt
+### v9.0.174 — Guard Test for Item Delete During a Receipt
 - **Item Delete vs Receipt:** a guard test shows that deleting an item while a receipt of it commits waits for the receipt and is refused; the row lock dates from v9.0.40 (TD-661 closed without code change, `conc_item_delete_vs_receipt_td_661`).
 
-### v9.0.163 — Item Numbers Through decimalInput
+### v9.0.173 — Item Numbers Through decimalInput
 - **Item Numeric Input:** reorder point, cost, opening stock and weight go through `decimalInput` and are non-negative; text is 400 and Persian digits are read (TD-657 item part, `reg_item_numeric_input_validation_td_657`).
 
-### v9.0.162 — Item Code Counter Moves on Save
+### v9.0.172 — Item Code Counter Moves on Save
 - **Item Code Suggestion:** saving an item moves its code series counter in the same transaction, so the next suggested code is free (TD-656, `reg_item_code_peek_after_save_td_656`).
 
-### v9.0.161 — Item Edit Version Lock
+### v9.0.171 — Item Edit Version Lock
 - **Item Version Lock:** editing an item needs its current version (400 without, 409 `OCC_CONFLICT` when stale), missing fields keep their values and the edit is audited in its transaction (TD-654, `sec_item_version_lock_td_654`).
 
-### v9.0.160 — Unique Item Code and Name
-- **Item Identity:** two active items never share a code (any letter case) or a name; partial unique indexes (migration 0069, only on clean data) turn concurrent duplicates into a Persian 409 and the health check lists old duplicates (TD-653, `conc_item_code_and_name_unique_td_653`).
+### v9.0.170 — Unique Item Code and Name
+- **Item Identity:** two active items never share a code (any letter case) or a name; partial unique indexes (migration 0070, only on clean data) turn concurrent duplicates into a Persian 409 and the health check lists old duplicates (TD-653, `conc_item_code_and_name_unique_td_653`).
 
-### v9.0.159 — New Item Opening Voucher Inside Its Transaction
+### v9.0.169 — New Item Opening Voucher Inside Its Transaction
 - **Item Opening Voucher:** a new item's opening voucher and audit row are written in the item's create transaction; a voucher failure refuses the item and its opening stock (TD-652, `inv_item_create_opening_voucher_atomic_td_652`).
+
+### v9.0.168 — Build Details of /health Scoped and Real
+- **Build Details:** `/health` returns `version` to everyone (`verify-startup.sh` reads it) and `buildInfo` only to the `METRICS_TOKEN` or a live system-admin session (`metricsReaderStatus` in `src/middleware/metricsAuth.ts`). `npm run build` writes `dist/build-info.json` with the commit and build time (`scripts/write-build-info.mjs`; the Docker build takes `--build-arg GIT_COMMIT_SHA`); without it they are `unknown`, never the old fixed `v4-master` and date.
+
+### v9.0.167 — Logger Safe on Circular Values
+- **Circular Log Values:** the log sanitizer marks an object already on its path `[Circular]` and cuts nesting deeper than 12 levels (`sanitizeObject` in `src/middleware/logger.ts`). Before, logging a circular object or an error whose `cause` points back threw `RangeError` from inside the caller's `catch`.
+
+### v9.0.166 — HTTP Access Log Kept in Production
+- **Access Log:** morgan writes access lines at `info` (`ACCESS_LOG_LEVEL` in `src/middleware/logger.ts`), the production default and the `LOG_LEVEL` written by `install.sh`. At `http` they were below it and production kept no access log.
+
+### v9.0.165 — Pool Readiness and Gauges Read the Real Pool
+- **Pool Stats:** `/health/ready` and the `db_pool_*` gauges read the pool exported by `src/db/drizzle.ts` (`dbPoolStats` in `src/middleware/metrics.ts`). drizzle-orm 0.45 exposes no `orm.pool` / `orm.client.pool`, so both always reported 0 and the «pool saturated» 503 never fired.
+
+### v9.0.164 — API Waits for Migrations
+- **Startup Gate (owner decision t2):** the port still opens at once, but until migrations, seed and the engines finish every `/api` request except `/api/health/*` and the WooCommerce webhook answers 503 `SYSTEM_STARTING` with `Retry-After: 5` (`src/middleware/startupGate.ts`, turned on only by `server.ts`), and `/health/ready` is 503. The browser shows a waiting page (`SystemStartingOverlay`) and resends the same request (`fetchThroughStartup`). Before, a Linux update served the new code on the old schema until migrations finished.
+
+### v9.0.163 — Closing Without an Opening Voucher Says So
+- **Fiscal Closing Opening-Voucher Text (P3):** with «صدور خودکار سند افتتاحیه» unticked, step 4 still said the opening voucher would be issued; step 4, the execution note and the confirm dialog now say none is issued and the next year starts without opening balances (TD-577, Vitest `fiscalOpeningVoucherText.test.tsx`).
+
+### v9.0.162 — Fiscal Years Close in Order
+- **Fiscal Year Closing Order (P1):** a year closed while an earlier year with vouchers was open took that year's revenue too, and the earlier year then closed only without an opening voucher, wiping the permanent balances (cash 12,300,000 shown as 2,000,000); a year now closes only after every earlier year with vouchers, the form starts on the oldest open one and out-of-order closings are listed by the health check (TD-544, `reg_fiscal_years_close_in_order_td_544`).
+
+### v9.0.161 — A Fiscal Year Closes After It Ends; the Last Closed Year Reopens
+- **Fiscal Year Closing Time and Reopening (P1):** the current year, and even the next one, could be closed, after which no invoice, receipt or voucher dated today was accepted and nothing reopened a year; a year now closes only after its last day, the form lists ended years only, and the last closed year reopens with a reason and the new permission `accounting.fiscal_reopen`, its closing vouchers reversed on their own dates (TD-543, `reg_fiscal_year_close_after_end_and_reopen_td_543`).
+
+### v9.0.160 — A Manual Voucher Is an Opening Voucher, Never a Closing One
+- **Manual Closing Vouchers (P2):** the voucher form saved opening balances as type closing and a manual reference «CLOSING-1400» blocked closing 1400; a manual voucher now takes neither the closing type nor a reserved reference, closing reads only `fiscal_periods`, and only the closing run's vouchers are locked until the year is reopened (TD-559, `reg_manual_voucher_cannot_be_closing_td_559`).
+
+### v9.0.159 — Reports of a Closed Year Show Its Real Figures
+- **Closed-Year Reports (P1):** after a year was closed, its income statement, balance sheet, trial balance and ratios showed zero because they counted the closing vouchers; the closing run's vouchers are now linked to the year (`source_fiscal_year`, migration 0069) and left out by default, with an «include closing vouchers» box (TD-545, `reg_reports_exclude_year_end_closing_td_545`).
 
 ### v9.0.158 — Excel Import Audits Each Item With Before and After
 - **Item Excel Audit:** every item the Excel import creates or changes gets an audit row with its fields, stock per warehouse and prices before and after, plus one summary row, inside the import transaction (TD-655, `reg_excel_import_audit_snapshots_td_655`).

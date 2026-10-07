@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Scale, RefreshCw, ShieldCheck, Check, Layers, Printer, ChevronDown, ChevronUp } from 'lucide-react';
-import { formatPersianPrice, toPersianDigits, getTodayJalaliDate, formatPersianDate, formatCurrencyLabel, errorMessageOf } from '../../utils';
-import { fiscalClosingJalaliDates, fiscalClosingYearOptions } from '../../lib/fiscalClosingDates';
+import { formatPersianPrice, toPersianDigits, formatPersianDate, formatCurrencyLabel, errorMessageOf } from '../../utils';
+import { fiscalClosingJalaliDates } from '../../lib/fiscalClosingDates';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { FiscalYearClosingPreview, FiscalYearClosingResult, JournalVoucher, FiscalClosingAccountRow } from '../../types';
 import toast from 'react-hot-toast';
-import { useExecuteFiscalClosing, useFiscalClosingPreview } from '../../hooks/accounting/useFiscalClosing';
+import { useExecuteFiscalClosing, useFiscalClosingPreview, useFiscalClosingYears } from '../../hooks/accounting/useFiscalClosing';
+import { FiscalYearReopenPanel } from './FiscalYearReopenPanel';
 
 interface FiscalYearClosingTabProps {
   onViewVoucher?: (voucher: JournalVoucher) => void;
@@ -15,14 +16,17 @@ interface FiscalYearClosingTabProps {
 export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYearClosingTabProps) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
-  // Current Jalali Year calculation default
-  const currentJalaliDate = getTodayJalaliDate();
-  const currentJalaliYear = currentJalaliDate ? currentJalaliDate.split('/')[0] : '1403';
-  
-  const [selectedYear, setSelectedYear] = useState<string>(currentJalaliYear);
+  // v9.0.161 (TD-543، تصمیم ت۱ مالک محصول): فقط سال‌های تمام‌شده از سرور؛ سال جاری و آینده بسته نمی‌شوند. پیش‌تر فرم سال جاری
+  // را پیش‌فرض داشت و همان را با یک تأیید می‌بست
+  const yearsQuery = useFiscalClosingYears();
+  const yearsInfo = yearsQuery.data;
+  const yearRows = useMemo(() => yearsInfo?.years ?? [], [yearsInfo]);
+  const [pickedYear, setPickedYear] = useState<string>('');
+  const selectedYear = pickedYear || (yearsInfo?.defaultYear != null ? String(yearsInfo.defaultYear) : '');
+  const selectedRow = yearRows.find(y => String(y.year) === selectedYear);
+  const isSelectedClosed = selectedRow?.status === 'closed';
   // v8.0.47 (TD-310): تاریخ اختتامیه همیشه آخرین روز سال (۲۹ یا ۳۰ اسفند) و افتتاحیه ۱ فروردین سال بعد است
   const { closingDate, openingDateNewYear } = fiscalClosingJalaliDates(selectedYear);
-  const yearOptions = useMemo(() => fiscalClosingYearOptions(currentJalaliYear), [currentJalaliYear]);
   const [createOpeningVoucher, setCreateOpeningVoucher] = useState<boolean>(true);
 
   // پیش‌نمایش و اجرای بستن سال با React Query: پیش‌نمایش سال قبلی که دیر برسد جای پیش‌نمایش سال تازه را نمی‌گیرد
@@ -46,7 +50,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
   };
 
   const handleYearChange = (newYear: string) => {
-    setSelectedYear(newYear);
+    setPickedYear(newYear);
     preview.reset();
     setExecutionResult(null);
   };
@@ -65,7 +69,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
   };
 
   useEffect(() => {
-    void loadPreview();
+    if (selectedYear) void loadPreview();
   }, [selectedYear]);
 
   // Computed safe values from previewData
@@ -74,6 +78,18 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
   const safeNetProfit = previewData?.summary?.netProfit ?? previewData?.netProfit ?? 0;
   const isNetProfitPositive = previewData?.summary?.isProfit ?? previewData?.isProfit ?? (safeNetProfit >= 0);
   const draftVoucherCount = previewData?.draftVoucherCount ?? 0;
+  // v9.0.161 (TD-543): سال تمام‌نشده (پیش‌نمایش کهنه) یا بسته اجرا نمی‌شود
+  const yearNotEnded = previewData?.yearEnded === false;
+  // v9.0.162 (TD-544): سال‌ها به ترتیب بسته می‌شوند؛ سال پیشینِ دارای سند و باز این سال را نگه می‌دارد
+  const earlierOpenYears = previewData?.earlierOpenYears ?? [];
+  const earlierOpenText = earlierOpenYears.map(y => toPersianDigits(y)).join('، ');
+  const closingBlocked = draftVoucherCount > 0 || yearNotEnded || isSelectedClosed || earlierOpenYears.length > 0;
+  const closingBlockedReason = isSelectedClosed ? `سال مالی ${toPersianDigits(selectedYear)} بسته است`
+    : yearNotEnded ? `سال مالی ${toPersianDigits(selectedYear)} هنوز تمام نشده است`
+    : earlierOpenYears.length > 0 ? `ابتدا سال ${earlierOpenText} را ببندید`
+    : draftVoucherCount > 0 ? 'ابتدا اسناد پیش‌نویس این سال را تأیید یا حذف کنید' : undefined;
+  // v9.0.163 (TD-577): بی سند افتتاحیه، سال بعد بی مانده ابتدای دوره آغاز می‌شود
+  const noOpeningVoucherText = `سند افتتاحیه صادر نمی‌شود؛ سال مالی ${toPersianDigits(Number(selectedYear) + 1)} بی مانده ابتدای دوره آغاز می‌شود`;
 
   // Normalize temporary accounts (revenue / expense)
   const { revenuesList, expensesList } = useMemo(() => {
@@ -158,8 +174,11 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                 onChange={e => handleYearChange(e.target.value)}
                 className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none"
               >
-                {yearOptions.map(y => (
-                  <option key={y} value={y}>سال مالی {toPersianDigits(y)}</option>
+                {selectedYear === '' && <option value="">سال تمام‌شده‌ای نیست</option>}
+                {yearRows.map(y => (
+                  <option key={y.year} value={String(y.year)}>
+                    سال مالی {toPersianDigits(y.year)}{y.status === 'closed' ? ' (بسته)' : ''}{y.hasVouchers ? '' : ' (بی سند)'}
+                  </option>
                 ))}
               </select>
             </div>
@@ -315,6 +334,26 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
               <Layers className="w-6 h-6" />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* v9.0.122 (TD-543): سال جاری تا پایانش بسته نمی‌شود؛ سال بسته فقط با بازگشایی دوباره باز می‌شود */}
+      {yearsInfo && yearRows.length === 0 && (
+        <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900/60 rounded-2xl p-5 text-sm text-sky-800 dark:text-sky-300" role="status">
+          هیچ سال مالی تمام‌شده‌ای برای بستن نیست؛ سال مالی {toPersianDigits(yearsInfo.currentYear)} پس از آخرین روزش بسته می‌شود.
+        </div>
+      )}
+      {(yearNotEnded || isSelectedClosed) && !executionResult && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 rounded-2xl p-5 text-sm font-bold text-amber-800 dark:text-amber-300" role="alert">
+          {isSelectedClosed
+            ? `سال مالی ${toPersianDigits(selectedYear)} بسته است؛ برای تغییر آن، اگر آخرین سال بسته است، از «بازگشایی سال مالی» استفاده کنید.`
+            : `سال مالی ${toPersianDigits(selectedYear)} هنوز تمام نشده است و پس از آخرین روزش (${toPersianDigits(closingDate)}) بسته می‌شود.`}
+        </div>
+      )}
+
+      {earlierOpenYears.length > 0 && !isSelectedClosed && !executionResult && (
+        <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 rounded-2xl p-5 text-sm font-bold text-rose-700 dark:text-rose-300" role="alert">
+          پیش از سال مالی {toPersianDigits(selectedYear)}، سال {earlierOpenText} سند دارد و هنوز بسته نشده است؛ سال‌ها به ترتیب بسته می‌شوند.
         </div>
       )}
 
@@ -609,12 +648,22 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
 
             {expandedSections.step4 && (
               <div className="p-5">
-                <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/40 rounded-xl flex items-center gap-3 text-xs text-emerald-800 dark:text-emerald-300">
-                  <Check className="w-5 h-5 shrink-0 text-emerald-600" />
-                  <span>
-                    سند افتتاحیه با تاریخ {toPersianDigits(openingDateNewYear)} و با شرح «سند افتتاحیه سال مالی {toPersianDigits(Number(selectedYear) + 1)}» به عنوان سند شماره ۱ سال جدید ثبت خواهد شد.
-                  </span>
-                </div>
+                {createOpeningVoucher ? (
+                  <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/40 rounded-xl flex items-center gap-3 text-xs text-emerald-800 dark:text-emerald-300">
+                    <Check className="w-5 h-5 shrink-0 text-emerald-600" />
+                    <span>
+                      سند افتتاحیه با تاریخ {toPersianDigits(openingDateNewYear)} و با شرح «سند افتتاحیه سال مالی {toPersianDigits(Number(selectedYear) + 1)}» به عنوان سند شماره ۱ سال جدید ثبت خواهد شد.
+                    </span>
+                  </div>
+                ) : (
+                  // v9.0.163 (TD-577): بی تیک، سند اختتامیه مانده‌های دائمی را صفر می‌کند و سند افتتاحیه‌ای صادر نمی‌شود
+                  <div role="alert" className="p-4 bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40 rounded-xl flex items-center gap-3 text-xs text-amber-800 dark:text-amber-300">
+                    <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600" />
+                    <span>
+                      {noOpeningVoucherText}. سند اختتامیه مانده حساب‌های ترازنامه‌ای را صفر می‌کند؛ مانده‌های ابتدای دوره را باید جداگانه با سند افتتاحیه ثبت کنید.
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -630,15 +679,18 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
               آماده اجرای نهایی بستن سال مالی {toPersianDigits(selectedYear)}
             </h3>
             <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-              با تایید این مرحله، کلیه اسناد اختتامیه و افتتاحیه صادر شده و حساب‌های موقت بسته خواهند شد. این فرایند برگشت‌ناپذیر است و توصیه می‌شود قبل از اجرا، اسناد نهایی بازبینی شوند.
+              {createOpeningVoucher
+                ? 'با تایید این مرحله، کلیه اسناد اختتامیه و افتتاحیه صادر شده و حساب‌های موقت بسته خواهند شد.'
+                : 'با تایید این مرحله، اسناد اختتامیه صادر شده و حساب‌های موقت بسته خواهند شد؛ سند افتتاحیه صادر نمی‌شود.'}
+              {' '}پس از بستن، هیچ سندی در این سال ثبت نمی‌شود و فقط آخرین سال بسته با «بازگشایی سال مالی» دوباره باز می‌شود؛ پیش از اجرا اسناد نهایی را بازبینی کنید.
             </p>
           </div>
 
           <button
             type="button"
             onClick={() => setIsConfirmModalOpen(true)}
-            disabled={isExecuting || draftVoucherCount > 0}
-            title={draftVoucherCount > 0 ? 'ابتدا اسناد پیش‌نویس این سال را تأیید یا حذف کنید' : undefined}
+            disabled={isExecuting || closingBlocked}
+            title={closingBlockedReason}
             className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 active:scale-98 text-slate-950 font-black px-6 py-3 rounded-xl text-sm transition-all shadow-lg hover:shadow-amber-500/20 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             اجرای قطعی بستن سال مالی {toPersianDigits(selectedYear)}
@@ -677,10 +729,15 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>صدور سند اختتامیه حساب‌های دائمی ترازنامه به تاریخ {toPersianDigits(closingDate)}</span>
               </div>
-              {createOpeningVoucher && (
+              {createOpeningVoucher ? (
                 <div className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>صدور سند افتتاحیه سال {toPersianDigits(Number(selectedYear) + 1)} به تاریخ {toPersianDigits(openingDateNewYear)}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{noOpeningVoucherText}</span>
                 </div>
               )}
             </div>
@@ -716,6 +773,14 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
           </div>
         </div>
       )}
+
+      <FiscalYearReopenPanel
+        reopenableYear={yearsInfo?.reopenableYear ?? null}
+        onReopened={year => {
+          setExecutionResult(null);
+          if (String(year) === selectedYear) void loadPreview();
+        }}
+      />
     </div>
   );
 }

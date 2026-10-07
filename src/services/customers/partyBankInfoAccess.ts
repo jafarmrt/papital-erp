@@ -17,6 +17,7 @@ export const PARTY_BANK_INFO_PERMISSIONS = [
   'accounting.cheques',
   'accounting.coa',
   'accounting.fiscal_close',
+  'accounting.fiscal_reopen',
 ] as const;
 
 export async function canSeePartyBankInfo(user: { role?: string } | undefined): Promise<boolean> {

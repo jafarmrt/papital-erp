@@ -45,10 +45,6 @@
 | TD-590 | زیرساخت (بسته ۱) | P2 (B01-10) — `0007` ایندکس را بی نام اسکیما حذف می‌کند و اسکیمای ایزوله آزمون با مسیر جست‌وجوی `"<schema>", public` ساخته می‌شود: `public.idx_idemp_user_scope_key` حذف شد و هر POST با کلید idempotency با خطای `ON CONFLICT` شکست | drizzle/0007_idempotency_triple_key.sql، src/tests/setup/testDb.ts | open (P2) |
 | TD-592 | زیرساخت (بسته ۱) | P2 (B01-12) — خروجی داده `SELECT *` بی سقف روی ۲۹ جدول و یک `res.json` است: ۹۵۰٬۰۰۰ ردیف ممیزی ← ۷۵۰ MiB در ۲۷ s، حافظه پردازه ۳٬۰۹۴ MiB و `/health/live` ۱۳٫۲ s منتظر | services/system/dataExport.service.ts، system.routes.ts | open (P2، تصمیم ت۷ الف) |
 | TD-593 | زیرساخت (بسته ۱) | P2 (B01-13) — یک `try/catch` گرد همه پرس‌وجوهای صفحه سلامت صفر و `status: 'ok'` برمی‌گرداند: با پرس‌وجوی `outbox_events` شکست‌خورده، سند ناتراز موجود «۰ سند ناتراز، ok» و رابط «همه اسناد فعال تراز هستند» نشان داد | services/system/systemHealth.service.ts، SystemHealthDiagnostic.tsx | open (P2) |
-| TD-596 | زیرساخت (بسته ۱) | P2 (B01-16) — readiness و سنجه‌های استخر `orm.pool` / `orm.client.pool` را می‌خوانند که در drizzle-orm 0.45 نیست: با چهار اتصال باز `/health/ready` و `/metrics` استخر را ۰ نشان دادند و شرط «استخر اشباع» هرگز ۵۰۳ نمی‌دهد | app.ts، middleware/metrics.ts | open (P2) |
-| TD-598 | زیرساخت (بسته ۱) | P3 (B01-18) — morgan با `logger.http` می‌نویسد و سطح تولید `info` است: لاگ دسترسی HTTP در تولید هرگز نوشته نمی‌شود | middleware/logger.ts | open (P3) |
-| TD-600 | زیرساخت (بسته ۱) | P3 (B01-20) — `sanitizeObject` در logger دور را تشخیص نمی‌دهد: `logger.error('…', circular)` و خطایی که `cause` آن به خودش برمی‌گردد `RangeError: Maximum call stack size exceeded` پرتاب کردند | middleware/logger.ts | open (P3) |
-| TD-601 | زیرساخت (بسته ۱) | P3 (B01-21) — `/health` عمومی `gitCommit: "v4-master"` و `buildTime` ثابت ۲۰۲۶-۰۹-۰۵ (هیچ فایل استقراری مقدار نمی‌دهد)، نسخه Node و محیط را بی ورود برمی‌گرداند | lib/version.ts، app.ts | open (P3) |
 | TD-603 | زیرساخت (بسته ۱) | P3 (B01-23) — راهنمای برگشت `update.sh` با `git checkout <sha>` HEAD جداشده می‌سازد و به‌روزرسانی بعدی با «You are not currently on a branch» شکست می‌خورد | update.sh | open (P3) |
 | TD-604 | زیرساخت (بسته ۱) | P3 (B01-24) — `DEPLOY_LINUX.md` برای به‌روزرسانی zip «باز کردن zip و سپس `update.sh`» می‌گوید؛ `update.sh` پس از گرفتن پشتیبان با `fatal: not a git repository` (۱۲۸) شکست می‌خورد؛ دستور درست `update.sh --zip <file>` است | deploy/DEPLOY_LINUX.md، update.sh | open (P3) |
 | TD-605 | زیرساخت (بسته ۱) | P3 (B01-25) — `update.sh` و `go-live-verify.sh` فایل `.env` را با `set -a; . ./.env` مثل کد shell اجرا می‌کنند: رمز `S3cr$et9` به `S3cr` تبدیل یا با `set -u` خارج شد، و مقدار دارای `;` یا backtick با دسترسی root اجرا می‌شود | update.sh، scripts/go-live-verify.sh | open (P3) |
@@ -88,7 +84,6 @@
 | TD-556 | حسابداری (بسته ۳) | P3 (B03-14) — `finalizeJournalVouchers` شمار را `sortedIds.length` برمی‌گرداند: [پیش‌نویس، دائم، حذف‌شده، ۹۹۹۹۹۹۹۹] ← «4 سند با موفقیت قطعی و دائم شدند»، در حالی که فقط پیش‌نویس، بی گذر از تأیید، دائم شد | voucher.service.ts | open (P3) |
 | TD-557 | حسابداری (بسته ۳) | P3 (B03-15) — `debit`، `credit` و `exchangeRate` ردیف سند با `z.coerce.number` خوانده می‌شوند: «0x10» ← ۱۶، «1e3» ← ۱٬۰۰۰ و «۱۰۰۰» ← ۴۰۰ «expected number, received NaN» (قاعده TD-385) | accounting.schemas.ts | open (P3) |
 | TD-558 | حسابداری (بسته ۳) | P2 (B03-16) — کد سرفصل فقط `trim` می‌شود: «۷۰۹۶» و «7096» دو حساب جدا شدند، صندوق «۱۱۰۵» نسبت جاری و نقدی را ۰ کرد، ویرایش کد «با موفقیت» ولی بی اثر بود و کد تکراری ۵۰۰ داد | chartOfAccounts.service.ts، accounting.schemas.ts، accountingReport.service.ts، ChartOfAccountsTab.tsx | open (P2) |
-| TD-559 | حسابداری (بسته ۳) | P2 (B03-17) — نوع و مرجع سند دستی از بدنه می‌آید و گارد بستن شماره مرجع را می‌خواند: «افتتاحیه / اختتامیه» فرم `closing` ذخیره می‌شود و دیگر معکوس و اصلاح نمی‌شود؛ سند دستی «CLOSING-1400» بستن ۱۴۰۰ را با ۴۰۹ «قبلاً بسته شده است» بست، در حالی که `fiscal_periods` آن سال را باز می‌داند | accounting.schemas.ts، NewVoucherModal.tsx، voucher.service.ts، fiscalYear.service.ts | open (P2) |
 | TD-560 | حسابداری (بسته ۳) | P2 (B03-18) — «وضعیت اتوماسیون» `final` و `proforma` را می‌شمارد و انبارگردانی را «پشتیبانی‌نشده» می‌داند: با یک پیش‌فاکتور فروش و یک پیش‌فاکتور خرید پوشش ۳۳٪ شد و بنر برای سه انبارگردانی سنددار سند دستی خواست (خطر ثبت دوباره در ۷۰۱۲)؛ route خودش SQL خام دارد | voucherSync.routes.ts، AutomationStatusView.tsx | open (P2) |
 | TD-561 | حسابداری (بسته ۳) | P3 (B03-19) — دفتر روزنامه بی صفحه و با `{ report: data, ...data }` هر ردیف را دو بار می‌فرستد (۵ سال: ۱٬۱۰۸ ms و ۲۶٫۵۵ MB) و کارت حساب بی صافی کل دفتر را برمی‌گرداند (۲۲٫۵۵ MB) | reports.routes.ts، accountingReport.service.ts | open (P3) |
 | TD-562 | حسابداری (بسته ۳) | P3 (B03-20) — CHECK مبلغ نامنفی و «یکی ناصفر» ردیف سند، وضعیت و نوع سند، سطح، نوع و ماهیت حساب و FK `accounts.parent_id` در پایگاه‌داده نیست؛ حلقه TD-553 از همین راه ساخته شد | drizzle/*.sql، src/db/schema/accounting.ts | open (P3) |
@@ -100,7 +95,6 @@
 | TD-572 | حسابداری (بسته ۳) | P2 (B03-30) — چاپ صورت‌حساب طرف حساب سرآیند و ارز را از حالت فرم می‌خواند: داده ۱۲٬۵۰۰٬۰۰۰ ریالی پس از انتخاب «دلار» «۱۲٬۵۰۰٬۰۰۰ دلار» چاپ شد؛ «سال جاری» = ۳۶۵ روز پیش و «ماه جاری» = ۳۰ روز پیش | PartyLedgerReportView.tsx | open (P2) |
 | TD-573 | حسابداری (بسته ۳) | P2 (B03-31) — چاپ سند مبلغ ارزی را زیر «بدهکار (ریال)» می‌نویسد (سند ۱۰۰ دلاری: «۱۰۰» زیر «(ریال)» و به حروف «صد دلار») و افتتاحیه، تعدیل و تسویه را «عمومی» چاپ می‌کند | VoucherPrintModal.tsx | open (P2) |
 | TD-576 | حسابداری (بسته ۳) | P3 (B03-34) — سرفصل: هر ذخیره دو پیام می‌دهد، دکمه کدینگ خطای ۴۰۳ را رها می‌کند (`onClick={() => onSeedStandardAccounts()}`) و تأیید حذف از سند خوردن حساب چیزی نمی‌گوید | ChartOfAccountsTab.tsx، ChartOfAccountsSettingsTab.tsx | open (P3) |
-| TD-577 | حسابداری (بسته ۳) | P3 (B03-35) — با برداشتن تیک «صدور خودکار سند افتتاحیه» گام ۴ بستن سال هنوز می‌گوید سند افتتاحیه «ثبت خواهد شد» | FiscalYearClosingTab.tsx | open (P3) |
 | TD-578 | حسابداری (بسته ۳) | P3 (B03-36) — فرم ویرایش سند تاریخ ذخیره‌شده `2026-04-01` را مستقیم به تقویم شمسی می‌دهد و «۲۰۲۶/۰۴/۰۱» نشان می‌دهد (باید «۱۴۰۵/۰۱/۱۲»)؛ شش فایل بسته `react-multi-date-picker` را به جای `JalaliDateInput` دارند | NewVoucherModal.tsx | open (P3) |
 | TD-579 | حسابداری (بسته ۳) | P3 (B03-37) — واژه بیگانه در رابط حسابداری («داشبورد»، «دوبل»، «آرتیکل»، «ورکفلو»، «مپینگ»، «اتوماتیک»، «سوییچ»، «چارت»، «کیبورد»، «ERP»، ۲۳ واژه انگلیسی، «جستجو»)، کلید خام «(accounting.reports)» و دکمه «ثبت قطعی سند» برای ذخیره پیش‌نویس | AccountingPage.tsx، NewVoucherModal.tsx، components/accounting/** | open (P3) |
 | TD-580 | حسابداری (بسته ۳) | P3 (B03-38) — رقم لاتین و `%` در متن فارسی («25.0%»، «#11»)، کد ISO ارز، «ریال» پیش‌فرض برای صورت‌حساب ارزی، و `new Date()` / `toISOString()` به جای `getTodayJalaliDate` (TD-312) | IncomeStatementView.tsx، JournalBookView.tsx، VoucherPrintModal.tsx، FinancialRatiosView.tsx، PartyLedgerReportView.tsx، AccountExplorerTab.tsx | open (P3) |
@@ -109,8 +103,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۸۸ ردیف
-- **آرشیو شده (resolved):** ۵۲۳ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۸۲ ردیف
+- **آرشیو شده (resolved):** ۵۳۳ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -119,4 +113,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.166 — TD-657 (مبلغ و ارز قیمت کالا، P3) با بخش قیمت رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.176 — TD-657 (مبلغ و ارز قیمت کالا، P3) با بخش قیمت رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
