@@ -28,7 +28,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
   const { handleSubmit } = useStockDocumentSubmit(form, refData, currentUser);
   const { warehouses, personnelList, projectsList, suppliersList, categories } = refData;
   const { actionType, docItems, docType, setActionType, setDocType } = form;
-  // v9.0.216 (TD-791، تصمیم ت۱ «الف» بسته ۸): جهت، نوع سند و دکمه ثبت با همان مجوزی که سرور برای ثبت قطعی آن نوع می‌سنجد،
+  // v9.0.241 (TD-791، تصمیم ت۱ «الف» بسته ۸): جهت، نوع سند و دکمه ثبت با همان مجوزی که سرور برای ثبت قطعی آن نوع می‌سنجد،
   // نه با کد نقش؛ نوع یا جهتی که ثبتش از کاربر برنمی‌آید پیشنهاد نمی‌شود
   const access = useStockPageAccess();
   useEffect(() => {

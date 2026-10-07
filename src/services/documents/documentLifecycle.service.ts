@@ -133,7 +133,7 @@ export class DocumentLifecycleService {
           // v8.0.10 (TD-267): سند خرید (purchase) هم ورودی است، همان قاعده ثبت سند (documentCreation)
           const inOut = stockDirectionOf(targetType);
 
-          // Pre-flight stock availability & reservation check for exit documents (TD-118). v9.0.214 (TD-775): جمع مقدار هر
+          // Pre-flight stock availability & reservation check for exit documents (TD-118). v9.0.239 (TD-775): جمع مقدار هر
           // (کالا، انبار)، موجودی و رزرو یک‌جا و fail-closed، همان تابع ثبت سند (documentSellableGate.ts)
           if (inOut === 'out') {
             await assertOutflowWithinSellable(tx, docLines, {

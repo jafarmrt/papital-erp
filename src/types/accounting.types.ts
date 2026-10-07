@@ -397,6 +397,9 @@ export interface DetailedPartyLedgerResult {
   netStatusText: string;
   /** ارز مبالغ گزارش: IRR در نمای همه ارزها، وگرنه همان ارز انتخاب‌شده */
   currency?: string;
+  /** v9.0.229 (TD-572): بازه همین گزارش (ISO؛ null = از آغاز / تا امروز)، برای سرآیند چاپ */
+  startDate?: string | null;
+  endDate?: string | null;
   items: DetailedPartyLedgerItem[];
 }
 

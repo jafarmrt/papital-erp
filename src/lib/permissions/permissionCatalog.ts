@@ -48,7 +48,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       { key: 'warehouse.transfer', title: 'جابجایی بین انبارها', description: 'انتقال کالا از یک انبار به انبار دیگر', requires: ['warehouse.view'] },
       // v8.0.4 (TD-257، تصمیم مالک محصول): استثنای قاعده تاریخ سند انبار؛ پیش‌فرض به هیچ نقشی داده نمی‌شود
       { key: 'warehouse.backdate', title: 'ثبت سند انبار با تاریخ گذشته', description: 'ثبت گردش با تاریخی پیش از آخرین گردش کالا، فقط وقتی موجودی انبار در آن تاریخ و پس از آن منفی نشود', requires: ['warehouse.view'] },
-      { key: 'inventory.reconcile', title: 'ممیزی کاردکس و بازسازی انبار', description: 'اجرای بازسازی انبار و تطبیق تراکنش‌ها با لاگ کاردکس', requires: ['warehouse.view'] },
+      { key: 'inventory.reconcile', title: 'ممیزی کاردکس و بازسازی انبار', description: 'اجرای بازسازی انبار و تطبیق تراکنش‌ها با دفتر کاردکس', requires: ['warehouse.view'] },
       // v9.0.90 (TD-487، تصمیم ت۳): اصلاح WAC از بازپخش کاردکس با سند پیش‌نویس اختلاف ارزش؛ پیش‌فرض به هیچ نقشی داده نمی‌شود
       { key: 'inventory.wac_correct', title: 'اصلاح میانگین بها از کاردکس', description: 'برابر کردن میانگین بهای کالا با بازپخش کاردکس، همراه با سند پیش‌نویس اختلاف ارزش در برابر «کسری و اضافات انبار»', requires: ['warehouse.view'] },
     ]
@@ -67,7 +67,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
   {
     category: 'انبارگردانی',
     permissions: [
-      { key: 'audit.view', title: 'مشاهده انبارگردانی', description: 'مشاهده دوره‌ها و لاگ‌های انبارگردانی' },
+      { key: 'audit.view', title: 'مشاهده انبارگردانی', description: 'مشاهده دوره‌ها و سوابق انبارگردانی' },
       { key: 'audit.create', title: 'شروع دوره انبارگردانی', description: 'ثبت شمارش واقعی فیزیکی کالاها', requires: ['audit.view'] },
       { key: 'audit.apply', title: 'اعمال و تسویه مغایرت', description: 'تأیید نهایی و اصلاح خودکار موجودی انبار', requires: ['audit.view'] },
     ]
@@ -82,35 +82,35 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
   {
     category: 'کنترل پروژه‌های تولید',
     permissions: [
-      { key: 'projects.view', title: 'مشاهده پروژه‌ها و مراحل', description: 'دسترسی به لیست پروژه‌ها، گانت چارت، تخته کانبان و مراحل تولید' },
+      { key: 'projects.view', title: 'مشاهده پروژه‌ها و مراحل', description: 'دسترسی به فهرست پروژه‌ها، نمودار گانت، تخته پروژه‌ها و مراحل تولید' },
       { key: 'projects.create', title: 'تعریف پروژه تولید جدید', description: 'ایجاد پروژه، تعیین کد مشتری و کد کالا و مراحل پیش‌فرض', requires: ['projects.view'] },
       { key: 'projects.edit', title: 'ویرایش پروژه و مراحل تولید', description: 'تغییر وضعیت، پیشرفت، زمان‌بندی، تخصیص پرسنل و منابع هر مرحله', requires: ['projects.view'] },
       { key: 'projects.delete', title: 'حذف پروژه تولید', description: 'حذف پروژه و مراحل مرتبط با آن', requires: ['projects.view'] },
     ]
   },
   {
-    category: 'جریان‌های کاری و کارتابل تاییدات (Workflow)',
+    category: 'گردش کار و کارتابل تأییدات',
     permissions: [
       { key: 'workflow.view', title: 'مشاهده فرآیندها و کارتابل تاییدات', description: 'دسترسی به کارتابل وظایف، مشاهده وضعیت فرآیندها و سوابق امضاها' },
       { key: 'workflow.execute', title: 'شروع و اجرای فرآیندها', description: 'امکان شروع نمونه فرآیند کاری جدید بر روی اسناد و موجودیت‌ها', requires: ['workflow.view'] },
       { key: 'workflow.approve', title: 'تایید و رد درخواست‌ها در کارتابل', description: 'امکان امضا، تایید یا رد درخواست‌ها در کارتابل و فرآیندهای مجاز', requires: ['workflow.view'] },
-      { key: 'workflow.manage', title: 'مدیریت و طراحی جریان‌های کاری', description: 'طراحی گرافیکی فرآیندها، نسخه‌بندی DSL، قوانین Rule Engine و تحلیل SLA', requires: ['workflow.view'] },
+      { key: 'workflow.manage', title: 'مدیریت و طراحی جریان‌های کاری', description: 'طراحی گرافیکی فرآیندها، نسخه‌بندی طرح، قاعده‌های شرطی و تحلیل مهلت انجام', requires: ['workflow.view'] },
       { key: 'workflow.admin', title: 'مدیریت ارشد و همگام‌سازی فرآیندها', description: 'همگام‌سازی الگوهای پیش‌فرض و مدیریت تنظیمات ساختاری فرآیندها', requires: ['workflow.view'] },
     ]
   },
   {
-    category: 'گذرگاه رویدادها، صف Outbox و وب‌هوک‌ها',
+    category: 'گذرگاه رویدادها، صف ارسال و وب‌هوک‌ها',
     permissions: [
-      { key: 'events.view', title: 'مشاهده رویدادها و صف Outbox', description: 'مشاهده لاگ رویدادهای دامنه، پیام‌های Outbox و پیام‌های قرنطینه (DLQ)' },
-      { key: 'events.manage', title: 'مدیریت قوانین رویدادها و وب‌هوک‌ها', description: 'تعریف اکشن‌های خودکار، تنظیم اشتراک‌های وب‌هوک و Replay پیام‌های DLQ', requires: ['events.view'] },
+      { key: 'events.view', title: 'مشاهده رویدادها و صف ارسال', description: 'مشاهده رویدادهای دامنه، پیام‌های صف ارسال و پیام‌های قرنطینه' },
+      { key: 'events.manage', title: 'مدیریت قوانین رویدادها و وب‌هوک‌ها', description: 'تعریف اقدام‌های خودکار، تنظیم اشتراک‌های وب‌هوک و ارسال دوباره پیام‌های قرنطینه', requires: ['events.view'] },
     ]
   },
   {
     category: 'گزارش کار روزانه و اعلان‌ها',
     permissions: [
-      { key: 'daily_logs.view', title: 'مشاهده گزارش کارهای روزانه', description: 'مشاهده گزارش کارهای عمومی، منشن‌شده و مجاز' },
+      { key: 'daily_logs.view', title: 'مشاهده گزارش کارهای روزانه', description: 'مشاهده گزارش کارهای خود و گزارش‌هایی که در آن‌ها به کاربر اشاره شده یا کاربر مجاز است' },
       { key: 'daily_logs.create', title: 'ثبت و ویرایش گزارش کار روزانه', description: 'امکان ثبت، ویرایش و حذف گزارش کار روزانه خود', requires: ['daily_logs.view'] },
-      { key: 'daily_logs.manage_all', title: 'مدیریت و نظارت کامل گزارش‌ها', description: 'مشاهده تمامی گزارش کارهای محرمانه و ثبت بازخورد و یادداشت مدیریتی', requires: ['daily_logs.view'] },
+      { key: 'daily_logs.manage_all', title: 'مدیریت و نظارت کامل گزارش‌ها', description: 'مشاهده همه گزارش‌های کار (شخصی هم)، ثبت بازخورد مدیریتی و ویرایش و حذف گزارش دیگران', requires: ['daily_logs.view'] },
     ]
   },
   {
@@ -131,7 +131,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     ]
   },
   {
-    category: 'دستمرزد و کارهای پرکیسی (Piecework)',
+    category: 'دستمزد و کارهای پرکیسی',
     permissions: [
       { key: 'piecework.view', title: 'مشاهده تعرفه‌ها و گزارش‌های پرکیسی', description: 'مشاهده لیست عناوین کاری، نرخ‌ها، ثبت کارکردها و فیش‌های حقوقی' },
       { key: 'piecework.manage_tasks', title: 'مدیریت عناوین کاری و نرخ‌های پایه', description: 'تعریف و ویرایش کارهای پرکیسی، دسته‌بندی‌ها و نرخ پایه', requires: ['piecework.view'] },
@@ -150,7 +150,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     ]
   },
   {
-    category: 'خرید و تدارکات (Procurement)',
+    category: 'خرید و تدارکات',
     permissions: [
       { key: 'procurement.view', title: 'مشاهده درخواست‌های خرید و کارتابل تدارکات', description: 'مشاهده لیست درخواست‌های خرید، نیازمندی‌های پروژه‌ها و وضعیت تامین' },
       { key: 'procurement.create', title: 'ثبت درخواست خرید جدید', description: 'ثبت درخواست خرید دستی یا کسری کالا مستقل از پروژه‌ها', requires: ['procurement.view'] },
@@ -164,7 +164,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     permissions: [
       { key: 'accounting.view', title: 'مشاهده اسناد و دفاتر حسابداری', description: 'دسترسی به اسناد دوبل، دفتر روزنامه، کل، معین و گزارش‌ها' },
       { key: 'accounting.vouchers', title: 'صدور و ویرایش اسناد حسابداری', description: 'امکان ثبت اسناد دوبل مالی، اصلاح و تأیید اسناد', requires: ['accounting.view'] },
-      { key: 'accounting.coa', title: 'مدیریت کدینگ حساب‌ها (COA)', description: 'تعریف، ویرایش و حذف حساب‌های گروه، کل، معین و تفصیلی', requires: ['accounting.view'] },
+      { key: 'accounting.coa', title: 'مدیریت کدینگ حساب‌ها', description: 'تعریف، ویرایش و حذف حساب‌های گروه، کل، معین و تفصیلی', requires: ['accounting.view'] },
       { key: 'accounting.treasury', title: 'عملیات خزانه‌داری (دریافت و پرداخت)', description: 'ثبت و پیگیری نقدینگی، حساب‌های بانکی، پوز و حواله‌ها', requires: ['accounting.view'] },
       { key: 'accounting.cheques', title: 'مدیریت دفتر چک صیادی', description: 'ثبت چک‌های دریافتی/پرداختی، تغییر وضعیت وصول، برگشت و واگذاری', requires: ['accounting.view'] },
       // v8.0.118 (TD-409، تصمیم مالک محصول): برای مانده‌های افتتاحیه؛ پیش‌فرض به هیچ نقشی داده نمی‌شود
@@ -176,17 +176,17 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     ]
   },
   {
-    category: 'یکپارچه‌سازی فروشگاه آنلاین (WooCommerce)',
+    category: 'یکپارچه‌سازی فروشگاه آنلاین ووکامرس',
     permissions: [
-      { key: 'woocommerce.view', title: 'مشاهده وضعیت اتصال و سفارشات ووکامرس', description: 'مشاهده همگام‌سازی محصولات، کدهای SKU و لاگ سفارشات واردشده' },
-      { key: 'woocommerce.manage', title: 'تنظیمات API و همگام‌سازی دستی', description: 'تنظیم کلیدهای API ووکامرس، وب‌هوک‌ها و اجرای همگام‌سازی خودکار', requires: ['woocommerce.view'] },
+      { key: 'woocommerce.view', title: 'مشاهده وضعیت اتصال و سفارشات ووکامرس', description: 'مشاهده همگام‌سازی محصولات، کد کالاها و سوابق سفارش‌های واردشده' },
+      { key: 'woocommerce.manage', title: 'تنظیمات اتصال و همگام‌سازی دستی', description: 'تنظیم کلیدهای اتصال ووکامرس، وب‌هوک‌ها و اجرای همگام‌سازی خودکار', requires: ['woocommerce.view'] },
     ]
   },
   {
-    category: 'گزارش‌ها و لاگ فعالیت سیستم (Audit Trail)',
+    category: 'گزارش‌ها و سجل رویدادها',
     permissions: [
-      { key: 'reports.view', title: 'مشاهده گزارش‌ها و آمار', description: 'دسترسی به نمودارها، گزارش تراکنش‌ها و داشبورد' },
-      { key: 'audit_logs.view', title: 'مشاهده دفترچه سوابق تغییرات', description: 'مشاهده لاگ ثبت، ویرایش، حذف و فعالیت‌های تمامی کاربران سیستم' },
+      { key: 'reports.view', title: 'مشاهده گزارش‌ها و آمار', description: 'دسترسی به نمودارها، گزارش تراکنش‌ها و پیشخوان' },
+      { key: 'audit_logs.view', title: 'مشاهده دفترچه سوابق تغییرات', description: 'مشاهده رویدادهای ثبت، ویرایش، حذف و فعالیت‌های همه کاربران سامانه' },
     ]
   },
   {

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { MAX_PAGE_LIMIT } from '../../lib/pagination';
 
 export interface ActivityLogFilters {
   page?: number;
@@ -28,37 +29,54 @@ export interface ActivityLogItem {
   timestamp?: string;
 }
 
+async function fetchActivityLogs(filters: ActivityLogFilters) {
+  const params = new URLSearchParams();
+  params.set('page', String(filters.page ?? 1));
+  params.set('limit', String(filters.limit ?? 30));
+  if (filters.search?.trim()) params.set('search', filters.search.trim());
+  if (filters.user) params.set('user', filters.user);
+  if (filters.action) params.set('action', filters.action);
+  if (filters.entity) params.set('entity', filters.entity);
+  if (filters.category) params.set('category', filters.category);
+  if (filters.startDate) params.set('startDate', filters.startDate);
+  if (filters.endDate) params.set('endDate', filters.endDate);
+
+  const res = await fetchJson(`/activity-logs?${params.toString()}`);
+  // V9: گارد استاندارد آرایه — پاسخ صفحه‌بندی‌شده یا آرایه خام
+  const rawData = Array.isArray(res?.data)
+    ? res.data
+    : (Array.isArray(res) ? res : []);
+  return {
+    logs: rawData as ActivityLogItem[],
+    total: Number(res?.total) || 0,
+    totalPages: res?.totalPages || 1,
+  };
+}
+
 export function useActivityLogsQuery(filters: ActivityLogFilters) {
   return useQuery({
     queryKey: QUERY_KEYS.activityLogs.list(filters),
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set('page', String(filters.page ?? 1));
-      params.set('limit', String(filters.limit ?? 30));
-      if (filters.search?.trim()) params.set('search', filters.search.trim());
-      if (filters.user) params.set('user', filters.user);
-      if (filters.action) params.set('action', filters.action);
-      if (filters.entity) params.set('entity', filters.entity);
-      if (filters.category) params.set('category', filters.category);
-      if (filters.startDate) params.set('startDate', filters.startDate);
-      if (filters.endDate) params.set('endDate', filters.endDate);
-
-      const res = await fetchJson(`/activity-logs?${params.toString()}`);
-      // V9: گارد استاندارد آرایه — پاسخ صفحه‌بندی‌شده یا آرایه خام
-      const rawData = Array.isArray(res?.data)
-        ? res.data
-        : (Array.isArray(res) ? res : []);
-      return {
-        logs: rawData as ActivityLogItem[],
-        total: res?.total || 0,
-        totalPages: res?.totalPages || 1,
-      };
-    },
+    queryFn: () => fetchActivityLogs(filters),
     staleTime: 30 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
     placeholderData: (prev: any) => prev,
   });
+}
+
+export interface AuditReportRows {
+  rows: ActivityLogItem[];
+  /** شمار کل ردیف‌های پالایه از سرور؛ وقتی از `rows.length` بیشتر است فقط ردیف‌های اول آمده‌اند */
+  total: number;
+}
+
+/**
+ * v9.0.215 (TD-527): ردیف‌های چاپ و Excel سجل، از یک درخواست بی صفحه‌بندی با همه پالایه‌های صفحه (جست‌وجو هم) و سقف
+ * `MAX_PAGE_LIMIT` ردیف؛ شمار کل همان `total` سرور است، نه ردیف‌های صفحه جاری
+ */
+export async function fetchAuditReportRows(filters: Omit<ActivityLogFilters, 'page' | 'limit'>): Promise<AuditReportRows> {
+  const { logs, total } = await fetchActivityLogs({ ...filters, page: 1, limit: MAX_PAGE_LIMIT });
+  return { rows: logs, total: Math.max(total, logs.length) };
 }
 
 export function useActivityLogFilterOptionsQuery() {

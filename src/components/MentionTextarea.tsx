@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from 'react';
 import { AtSign, UserCheck } from 'lucide-react';
+import { detectMentionedUserIds, mentionDisplayName, sameIdSet } from '../lib/mentions/mentionDetection';
 
 export interface MentionUser {
   id: number;
   fullName?: string;
   full_name?: string;
   username: string;
-  role?: string;
+  /** v9.0.223 (TD-534): نام فارسی نقش از `/users/list-simple`؛ کد نقش دیگر به مرورگر نمی‌رسد */
+  role_name?: string;
 }
 
 interface MentionTextareaProps {
@@ -27,8 +29,7 @@ interface MentionTextareaProps {
 }
 
 export function getUserDisplayName(u: MentionUser): string {
-  if (!u) return '';
-  return (u.fullName || u.full_name || u.username || '').trim();
+  return mentionDisplayName(u);
 }
 
 export function MentionTextarea({
@@ -56,28 +57,12 @@ export function MentionTextarea({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Sync mentions array with @mentions present in text
+  // v9.0.232 (TD-628): the mentions are exactly the users the text names with «@» (longest name at a word boundary),
+  // so «@علی رضایی» never mentions «علی» too and a mention deleted from the text leaves the list
   useEffect(() => {
     if (!onMentionsChange || !users.length) return;
-    const detectedIds = new Set<number>(mentions);
-    let changed = false;
-
-    users.forEach((u) => {
-      const name = getUserDisplayName(u);
-      const uname = u.username;
-      const isMentioned =
-        (name && value.includes(`@${name}`)) ||
-        (uname && value.includes(`@${uname}`));
-
-      if (isMentioned && !detectedIds.has(u.id)) {
-        detectedIds.add(u.id);
-        changed = true;
-      }
-    });
-
-    if (changed) {
-      onMentionsChange(Array.from(detectedIds));
-    }
+    const detected = detectMentionedUserIds(value, users);
+    if (!sameIdSet(detected, mentions)) onMentionsChange(detected);
   }, [value, users]);
 
   // Filter users based on query
@@ -273,7 +258,7 @@ export function MentionTextarea({
                   </div>
 
                   <div className="flex items-center gap-1.5">
-                    {u.role && (
+                    {u.role_name && (
                       <span
                         className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
                           isHighlighted
@@ -281,7 +266,7 @@ export function MentionTextarea({
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
-                        {u.role}
+                        {u.role_name}
                       </span>
                     )}
                     {isAlreadyMentioned && (

@@ -40,7 +40,7 @@ const nonNegativeMoney = (label: string) => (val: unknown): boolean =>
   val === undefined || val === null || (Number.isFinite(Number(val)) && Number(val) >= 0);
 
 /**
- * v9.0.215 (TD-784، یافته B08-15): عددهای ردیف سند با `decimalInput` خوانده می‌شوند (AGENTS §6، TD-385): ارقام فارسی و عربی و
+ * v9.0.240 (TD-784، یافته B08-15): عددهای ردیف سند با `decimalInput` خوانده می‌شوند (AGENTS §6، TD-385): ارقام فارسی و عربی و
  * جداکننده هزارگان پذیرفته می‌شوند و «0x10»، «1e3» یا متن خطای اعتبارسنجی است. پیش‌تر مقدار خام به `Number()` می‌رسید:
  * «0x10» شانزده و «1e3» هزار ثبت می‌شد و «۲» رد. قیمت فرستاده‌شده‌ی خالی خطاست، نه صفر؛ قیمتی که فرستاده نشود مثل پیش است.
  */
@@ -101,7 +101,7 @@ const exchangeRateInput = z.union([
 
 export const documentCreateSchema = z.object({
   body: z.object({
-    // v9.0.213 (TD-770، تصمیم ت۲ الف): انتقال بین انبارها فقط از transfers.routes.ts (TD-489)
+    // v9.0.238 (TD-770، تصمیم ت۲ الف): انتقال بین انبارها فقط از transfers.routes.ts (TD-489)
     docType: z.enum(['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'remittance', 'waste'], {
       error: (issue) => issue.input === 'transfer'
         ? 'انتقال بین انبارها فقط از صفحه «انتقال بین انبارها» ثبت می‌شود'
@@ -267,7 +267,7 @@ async function assertMayRecordDocument(user: AuthUserPayload | undefined, permis
 // خوانده می‌شود. پیش‌تر هر نقشی جز چهار کد ثابت «کاربر فروش» بود: سند قطعی نمی‌زد و پیش‌نویسش پیش‌فاکتور می‌شد
 router.post('/documents', authorizePermission('documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'audit.apply'), idempotency({ scope: 'documents' }), validate(documentCreateSchema), asyncHandler(async (req, res) => {
   const requestedType = String(req.body.docType);
-  // v9.0.213 (TD-770): جهت گردش از نوع سند؛ `inOut` ناسازگار پیش از سنجش مجوز ۴۲۲ می‌گیرد
+  // v9.0.238 (TD-770): جهت گردش از نوع سند؛ `inOut` ناسازگار پیش از سنجش مجوز ۴۲۲ می‌گیرد
   assertRecordableDocument(requestedType, req.body.inOut);
   const recordStatus = createdDocumentStatus(requestedType, req.body.status);
   await assertMayRecordDocument(req.user, permissionToCreateDocument(req.body),

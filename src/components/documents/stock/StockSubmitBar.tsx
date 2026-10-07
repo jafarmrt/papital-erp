@@ -7,7 +7,7 @@ interface StockSubmitBarProps {
   totalQuantitySum: number;
   disabled: boolean;
   isSaving: boolean;
-  /** v9.0.216 (TD-791): چرا کاربر این نوع سند را ثبت نمی‌کند (مجوز لازم)؛ null یعنی ثبت‌شدنی است */
+  /** v9.0.241 (TD-791): چرا کاربر این نوع سند را ثبت نمی‌کند (مجوز لازم)؛ null یعنی ثبت‌شدنی است */
   blockedReason?: string | null;
 }
 

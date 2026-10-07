@@ -7,6 +7,7 @@ import { orm } from '../db/drizzle.js';
 import { users } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { safeCompareTokens } from '../lib/timingSafeCompare.js';
+import { PASSWORD_RESET_REQUIRED, PASSWORD_RESET_REQUIRED_MESSAGE, isPasswordResetAllowedPath } from '../lib/auth/passwordReset.js';
 
 declare global {
   namespace Express {
@@ -133,6 +134,7 @@ interface CachedUserAuth {
   isDeleted: number;
   tokenVersion: number;
   fullName: string | null;
+  mustResetPassword: boolean;
   cachedAt: number;
 }
 
@@ -153,7 +155,7 @@ export function getUserAuthCacheStats(): { size: number; maxSize: number } {
 }
 
 export type LiveSessionResult =
-  | { ok: true; user: AuthUserPayload }
+  | { ok: true; user: AuthUserPayload; mustResetPassword: boolean }
   | { ok: false; status: 401 | 500; error: string };
 
 /**
@@ -172,7 +174,7 @@ export async function resolveLiveSession(payload: AuthUserPayload): Promise<Live
       liveUser = cached;
     } else {
       const [dbUser] = await orm
-        .select({ id: users.id, role: users.role, isDeleted: users.isDeleted, tokenVersion: users.tokenVersion, fullName: users.fullName })
+        .select({ id: users.id, role: users.role, isDeleted: users.isDeleted, tokenVersion: users.tokenVersion, fullName: users.fullName, mustResetPassword: users.mustResetPassword })
         .from(users)
         .where(eq(users.id, userIdNum))
         .limit(1);
@@ -184,6 +186,7 @@ export async function resolveLiveSession(payload: AuthUserPayload): Promise<Live
           isDeleted: dbUser.isDeleted ?? 0,
           tokenVersion: dbUser.tokenVersion ?? 0,
           fullName: dbUser.fullName,
+          mustResetPassword: Number(dbUser.mustResetPassword ?? 0) === 1,
           cachedAt: now,
         };
         if (userAuthCache.size >= MAX_USER_AUTH_CACHE_SIZE) {
@@ -208,7 +211,11 @@ export async function resolveLiveSession(payload: AuthUserPayload): Promise<Live
 
     // نقش، نام کامل و توکن CSRF همیشه از وضعیت معتبر دیتابیس/کش بازخوانی می‌شوند
     // یک موجودیت هویت کاربر: full_name همیشه در req.user موجود است
-    return { ok: true, user: { ...payload, role: liveUser.role, full_name: liveUser.fullName || (payload as any).full_name || payload.username } };
+    return {
+      ok: true,
+      user: { ...payload, role: liveUser.role, full_name: liveUser.fullName || (payload as any).full_name || payload.username },
+      mustResetPassword: liveUser.mustResetPassword,
+    };
   } catch {
     // در صورت خطای موقت دیتابیس، اعتبارسنجی DB را نقض نکنیم
     return { ok: false, status: 500, error: 'خطا در اعتبارسنجی نشست کاربر' };
@@ -250,6 +257,10 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     const live = await resolveLiveSession(payload);
     if (!live.ok) {
       return res.status(live.status).json({ error: live.error });
+    }
+    // v9.0.219 (TD-523، ت۵ الف): با رمز موقتی که مدیر گذاشته، تا تغییر رمز فقط نشست، نمایه، مجوزهای خود، CSRF و خروج باز است
+    if (live.mustResetPassword && !isPasswordResetAllowedPath(originalPath)) {
+      return res.status(403).json({ error: PASSWORD_RESET_REQUIRED_MESSAGE, code: PASSWORD_RESET_REQUIRED });
     }
     req.user = live.user;
 

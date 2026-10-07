@@ -8,6 +8,9 @@ import { fetchJson } from '../api';
 import { compressTo300KB } from '../utils/imageCompression';
 import toast from 'react-hot-toast';
 import { errorMessageOf } from '../utils';
+import { PASSWORD_LENGTH_HINT, passwordLengthError } from '../lib/auth/passwordPolicy';
+import { mustChangePassword } from '../lib/auth/passwordReset';
+import { FULL_NAME_MAX_LENGTH } from '../lib/users/profileFields';
 
 interface UserProfileModalProps {
   user: User;
@@ -16,9 +19,11 @@ interface UserProfileModalProps {
   onUserUpdate: (updatedUser: User) => void;
   /** v9.0.149 (TD-894): نام ذخیره‌شده نقش کاربر از `/users/my-permissions`، نه برچسبی از روی کد نقش */
   roleName?: string;
+  /** v9.0.219 (TD-523): با رمز موقت، تنها راه بیرون رفتن از برگه تغییر رمز */
+  onLogout?: () => void;
 }
 
-export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, roleName }: UserProfileModalProps) {
+export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, roleName, onLogout }: UserProfileModalProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
   const [fullName, setFullName] = useState<string>(user.full_name || '');
   const [avatarPreview, setAvatarPreview] = useState<string>(user.avatar_url || '');
@@ -34,7 +39,8 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
   const [saving, setSaving] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const requiresPasswordReset = Boolean(user.mustResetPassword || (user as any).must_reset_password);
+  // v9.0.219 (TD-523، ت۵ الف): با رمز موقت فقط برگه تغییر رمز است؛ نه ×، نه «انصراف» و نه برگه مشخصات، فقط «خروج»
+  const requiresPasswordReset = mustChangePassword(user);
 
   useEffect(() => {
     if (isOpen) {
@@ -57,7 +63,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error('لطفاً یک فایل تصویری انتخاب کنید (PNG, JPG, WebP)');
+      toast.error('یک فایل تصویری انتخاب کنید (PNG، JPG، WEBP یا GIF).');
       return;
     }
 
@@ -105,11 +111,11 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
       });
 
       if (res && res.user) {
-        toast.success('پروفایل با موفقیت بروزرسانی شد');
+        toast.success('نمایه ذخیره شد');
         onUserUpdate(res.user);
         onClose();
       } else {
-        toast.error(res?.error || 'خطا در بروزرسانی پروفایل');
+        toast.error(res?.error || 'ذخیره نمایه انجام نشد؛ دوباره تلاش کنید.');
       }
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در برقراری ارتباط با سرور');
@@ -132,8 +138,10 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
       return;
     }
 
-    if (newPassword.length < 4) {
-      toast.error('کلمه عبور جدید باید حداقل ۴ کاراکتر باشد');
+    // v9.0.217 (TD-532): همان کمینه مشترک سرور (۸ نویسه)، نه ۴
+    const passwordError = passwordLengthError(newPassword);
+    if (passwordError) {
+      toast.error(passwordError);
       return;
     }
 
@@ -182,18 +190,22 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               </div>
               <div>
                 <h2 className="text-lg font-bold">تنظیمات حساب کاربری</h2>
-                <p className="text-xs text-slate-400">ویرایش مشخصات، تصویر آواتار و کلمه عبور شخصی</p>
+                <p className="text-xs text-slate-400">ویرایش مشخصات، تصویر نمایه و کلمه عبور</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            {!requiresPasswordReset && (
+              <button
+                onClick={onClose}
+                aria-label="بستن"
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           {/* Navigation Tabs */}
+          {!requiresPasswordReset && (
           <div className="flex items-center gap-2 mt-6 bg-slate-800/80 p-1 rounded-xl text-xs">
             <button
               onClick={() => setActiveTab('profile')}
@@ -204,7 +216,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               }`}
             >
               <UserIcon className="w-4 h-4" />
-              مشخصات و آواتار
+              مشخصات و تصویر نمایه
             </button>
             <button
               onClick={() => setActiveTab('password')}
@@ -218,11 +230,12 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
               تغییر کلمه عبور
             </button>
           </div>
+          )}
         </div>
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto">
-          {activeTab === 'profile' ? (
+          {activeTab === 'profile' && !requiresPasswordReset ? (
             <form onSubmit={handleSubmitProfile} className="space-y-6">
               {/* Avatar Upload Box */}
               <div className="flex flex-col items-center justify-center gap-3">
@@ -245,7 +258,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-slate-900 hover:bg-slate-800 text-amber-400 border-2 border-white flex items-center justify-center shadow-md transition-all hover:scale-110"
-                    title="تغییر تصویر آواتار"
+                    title="تغییر تصویر نمایه"
                   >
                     <Camera className="w-4 h-4" />
                   </button>
@@ -275,11 +288,11 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                       className="text-xs text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 border-r border-slate-200 pr-2 mr-2"
                     >
                       <X className="w-3.5 h-3.5" />
-                      حذف آواتار
+                      حذف تصویر نمایه
                     </button>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-400">فرمت‌های مجاز: PNG, JPG, WebP (حداکثر ۵ مگابایت)</p>
+                <p className="text-[11px] text-slate-400">قالب‌های مجاز: PNG، JPG، WEBP و GIF (حداکثر ۵ مگابایت)</p>
               </div>
 
               {/* Form Inputs */}
@@ -299,6 +312,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                   <input
                     type="text"
                     value={fullName}
+                    maxLength={FULL_NAME_MAX_LENGTH}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="نام کامل خود را وارد کنید..."
                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
@@ -350,9 +364,9 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                 <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-rose-900 animate-pulse">
                   <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                   <div className="leading-relaxed">
-                    <p className="font-bold">تغییر اجباری کلمه عبور (الزامات امنیتی)</p>
+                    <p className="font-bold">کلمه عبور شما موقت است</p>
                     <p className="text-[11px] text-rose-800 mt-0.5">
-                      جهت ارتقای امنیت حساب کاربری و انطباق با استانداردهای رمزنگاری سامانه، لطفاً یک کلمه عبور امن جدید تعیین نمایید.
+                      این کلمه عبور را مدیر سامانه گذاشته است. تا کلمه عبور تازه‌ای نگذارید، بخش‌های دیگر سامانه باز نمی‌شوند.
                     </p>
                   </div>
                 </div>
@@ -395,7 +409,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                     type={showNewPassword ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="حداقل ۴ کاراکتر..."
+                    placeholder={PASSWORD_LENGTH_HINT}
                     className="w-full pr-3.5 pl-10 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-left ltr"
                   />
                   <button
@@ -421,13 +435,25 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
 
               {/* Action Buttons */}
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-                >
-                  انصراف
-                </button>
+                {requiresPasswordReset ? (
+                  onLogout && (
+                    <button
+                      type="button"
+                      onClick={onLogout}
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                    >
+                      خروج
+                    </button>
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                  >
+                    انصراف
+                  </button>
+                )}
                 <button
                   type="submit"
                   disabled={saving}

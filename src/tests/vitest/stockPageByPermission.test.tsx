@@ -6,7 +6,7 @@ import { permissionToCreateDocument } from '../../services/documents/documentRec
 import { STOCK_PAGE_DOC_TYPES, stockPageAccess, stockPageRecordPermission } from '../../lib/documents/stockDocumentAccess';
 import type { User } from '../../types';
 
-// v9.0.216 (TD-791، یافته B08-22، تصمیم ت۱ «الف» بسته ۸): صفحه «ورود و خروج به انبار» جهت، نوع سند و دکمه ثبت را با همان
+// v9.0.241 (TD-791، یافته B08-22، تصمیم ت۱ «الف» بسته ۸): صفحه «ورود و خروج به انبار» جهت، نوع سند و دکمه ثبت را با همان
 // مجوزی نشان می‌دهد که سرور برای ثبت قطعی آن نوع می‌سنجد، نه با کد نقش. پیش‌تر دکمه فقط برای کد `viewer` غیرفعال بود: مدیر
 // تولید (فقط `warehouse.in`) برگشت از فروش را می‌دید و ۴۰۳ می‌گرفت، و کاربری بی مجوز ثبت دکمه فعال می‌دید.
 const fetchJson = vi.fn();

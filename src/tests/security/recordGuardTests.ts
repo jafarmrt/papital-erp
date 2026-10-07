@@ -80,7 +80,7 @@ export async function runRecordGuardTests(shouldRun: (id: string, ...extra: stri
         const inserted = await orm.insert(dailyWorkLogs).values([
           { ...base, title: 'td406 محرمانه', visibility: 'private', workMode: 'remote', mentions: [viewer.id] },
           { ...base, title: 'td406 مدیران', visibility: 'managers', workMode: 'remote' },
-          { ...base, title: 'td406 عمومی', visibility: 'public', workMode: 'onsite', mentions: [viewer.id] },
+          { ...base, title: 'td406 اشاره‌شده', visibility: 'mentioned_only', workMode: 'onsite', mentions: [viewer.id] },
         ]).returning({ id: dailyWorkLogs.id });
         try {
           const stats = await send(viewer.session, 'get', '/api/daily-logs/stats');

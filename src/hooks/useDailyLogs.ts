@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
+import { DEFAULT_DAILY_LOG_VISIBILITY, type DailyLogVisibility } from '../lib/dailyLogs/dailyLogVisibility';
+import { SUMMARY_CSV_DOWNLOADED, buildSummaryCsv, summaryCsvFileName } from '../lib/dailyLogs/summaryCsv';
 import { fetchJson } from '../api';
 import { DailyWorkLog, User } from '../types';
 import { PICK_LIST_URLS, type ProjectPick } from '../lib/permissions/pickLists';
@@ -10,7 +12,8 @@ export interface SimpleUserOption {
   id: number;
   username: string;
   full_name: string;
-  role: string;
+  /** v9.0.223 (TD-534): نام فارسی نقش، نه کد آن */
+  role_name?: string;
   avatar_url?: string;
 }
 
@@ -83,7 +86,7 @@ export function useDailyLogs(user: User) {
   const [formTitle, setFormTitle] = useState<string>('');
   const [formContent, setFormContent] = useState<string>('');
   const [formProjectId, setFormProjectId] = useState<string>('');
-  const [formVisibility, setFormVisibility] = useState<'mentioned_only' | 'public' | 'private'>('mentioned_only');
+  const [formVisibility, setFormVisibility] = useState<DailyLogVisibility>(DEFAULT_DAILY_LOG_VISIBILITY);
   const [formMentions, setFormMentions] = useState<number[]>([]);
   const [formTags, setFormTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState<string>('');
@@ -197,40 +200,17 @@ export function useDailyLogs(user: User) {
       toast.error('اطلاعاتی جهت دانلود موجود نیست');
       return;
     }
-    const headers = [
-      'نام و نام خانوادگی',
-      'نام کاربری',
-      'نقش',
-      'ساعات کارکرد (ساعت)',
-      'تعداد روزهای کاری',
-      'تعداد گزارش‌ها',
-      'روزهای حضوری',
-      'روزهای دورکاری',
-      'میانگین کارکرد روزانه (ساعت)'
-    ];
-    const rows = summaryReportData.user_summaries.map((u: any) => [
-      `"${u.userFullName || u.username}"`,
-      `"${u.username}"`,
-      `"${u.role || 'کاربر'}"`,
-      u.totalHours,
-      u.daysWorked,
-      u.logsCount,
-      u.onsiteCount,
-      u.remoteCount,
-      u.avgDailyHours
-    ]);
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
+    // v9.0.235 (TD-640): quoted, escaped cells and no live formula
+    const csvContent = buildSummaryCsv(summaryReportData.user_summaries);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    const filename = summaryMode === 'daily' 
-      ? `Gozaresh_Rouzaneh_${getFormattedDateString(summaryDateFilter) || 'Today'}.csv`
-      : `Gozaresh_Mahaneh_${summaryYear}_${summaryMonth}.csv`;
+    const filename = summaryCsvFileName(summaryMode, getFormattedDateString(summaryDateFilter) || getTodayJalaliDate(), summaryYear, summaryMonth);
     link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success('فایل اکسل گزارش تجمیعی با موفقیت دانلود شد');
+    toast.success(SUMMARY_CSV_DOWNLOADED);
   };
 
   const currentFormHours = calculateHours(formStartTime, formEndTime);
@@ -264,7 +244,7 @@ export function useDailyLogs(user: User) {
     setFormTitle(log.title || '');
     setFormContent(log.content || '');
     setFormProjectId(log.project_id || log.projectId ? String(log.project_id || log.projectId) : '');
-    setFormVisibility((log.visibility as any) || 'mentioned_only');
+    setFormVisibility(log.visibility || DEFAULT_DAILY_LOG_VISIBILITY);
     setFormMentions(Array.isArray(log.mentions) ? log.mentions : []);
     setFormTags(Array.isArray(log.tags) ? log.tags : []);
     setIsModalOpen(true);

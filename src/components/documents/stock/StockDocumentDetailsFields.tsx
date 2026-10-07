@@ -18,7 +18,7 @@ interface StockDocumentDetailsFieldsProps {
   projectsList: StockDocProject[];
   personnelList: Personnel[];
   suppliersList: Customer[];
-  /** v9.0.216 (TD-791): نوع‌های سندی که فهرست نشان می‌دهد (`stockPageTypeOptions`) */
+  /** v9.0.241 (TD-791): نوع‌های سندی که فهرست نشان می‌دهد (`stockPageTypeOptions`) */
   typeOptions: readonly string[];
 }
 

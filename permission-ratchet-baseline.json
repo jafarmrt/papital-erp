@@ -1,11 +1,8 @@
 {
   "roleCodeLiteralsByFile": {
-    "src/components/daily-logs/DailyLogsList.tsx": 2,
     "src/db/mockPool.ts": 2,
-    "src/pages/DailyLogsPage.tsx": 1,
     "src/pages/DomainEventsPage.tsx": 2,
-    "src/pages/SetupPage.tsx": 2,
-    "src/routes/dailyLogs.routes.ts": 8
+    "src/pages/SetupPage.tsx": 2
   },
   "uncataloguedPermissionKeys": [],
   "uncheckedCatalogKeys": [

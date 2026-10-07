@@ -236,7 +236,7 @@ export class DocumentCreationService {
     } = body;
 
     const docType = rawDocType || rawType || 'invoice';
-    // v9.0.213 (TD-770، تصمیم ت۲ الف): جهت گردش فقط از نوع سند؛ `inOut` ناسازگار ۴۲۲، انتقال پذیرفته نمی‌شود و نوع ناشناخته
+    // v9.0.238 (TD-770، تصمیم ت۲ الف): جهت گردش فقط از نوع سند؛ `inOut` ناسازگار ۴۲۲، انتقال پذیرفته نمی‌شود و نوع ناشناخته
     // ردیف نمی‌گیرد. پیش‌تر «رسید» با `inOut: out` کالا را خارج و سند حسابداری خرید صادر می‌کرد، و `transfer` بی ردیف مقصد خارج می‌کرد
     assertRecordableDocument(docType, inOut, Array.isArray(docLines) && docLines.length > 0);
     // P0-02 (F17 & ACC-03): تعیین امن وضعیت سند؛ پیش‌فاکتور هرگز نباید به عنوان سند نهایی ثبت شود
@@ -431,7 +431,7 @@ export class DocumentCreationService {
         // TD-164: ایجاد حل‌کننده انبار قبل از ورود به حلقه‌ها
         const resolveWh = await createWarehouseResolver(tx);
 
-        // V6 Sub-phase 2.4 (TD-139) & P1-05 (H-02): گیت رزرویشن Fail-Closed در تراکنش خروج قطعی. v9.0.214 (TD-775): با جهت
+        // V6 Sub-phase 2.4 (TD-139) & P1-05 (H-02): گیت رزرویشن Fail-Closed در تراکنش خروج قطعی. v9.0.239 (TD-775): با جهت
         // نوع سند (نه `inOut` بدنه) و جمع مقدار هر (کالا، انبار)، همان تابع نهایی‌سازی (documentSellableGate.ts)
         const stockDirection = stockDirectionOf(docType);
         if (docStatus === 'final' && stockDirection === 'out') {

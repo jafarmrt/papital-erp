@@ -104,7 +104,7 @@ describe('itemReservationSummary', () => {
   });
 
   it('caps the exit by the stock of the selected warehouse, like computeSellable on the server (TD-799)', () => {
-    // v9.0.217 (B08-30): انبار WH1 صفر و WH2 ده عدد؛ پیش‌تر سقف حواله از WH1 هم ده بود و سرور سند را رد می‌کرد
+    // v9.0.242 (B08-30): انبار WH1 صفر و WH2 ده عدد؛ پیش‌تر سقف حواله از WH1 هم ده بود و سرور سند را رد می‌کرد
     const split = { ...stone, current_stock: 10, stocks: { WH1: 0, WH2: 10 }, stock_WH1: 0, stock_WH2: 10 };
     expect(itemReservationSummary([], split, '', 'WH1').maxAllowedForExit).toBe(0);
     expect(itemReservationSummary([], split, '', 'WH1').locationStock).toBe(0);

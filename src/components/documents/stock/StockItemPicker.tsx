@@ -63,7 +63,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
                 let label = `${it.code} - ${it.name} (موجودی فعلی: ${it.current_stock} ${it.unit})`;
 
                 if (actionType === 'out') {
-                  // v9.0.217 (TD-799): سقف خروج از موجودی انبار انتخاب‌شده هم کم است
+                  // v9.0.242 (TD-799): سقف خروج از موجودی انبار انتخاب‌شده هم کم است
                   if (locationStock !== Number(it.current_stock)) {
                     label += ` | 🏬 موجودی انبار مبدا: ${locationStock} ${it.unit}`;
                   }

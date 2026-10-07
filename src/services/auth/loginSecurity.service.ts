@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { users } from '../../db/schema.js';
 import { logger } from '../../middleware/logger.js';
+import { usernameLockoutMessage } from '../../lib/auth/loginLockout.js';
 
 /**
  * v7.0.28 (TD-186 / audit P1-5) — Login hardening
@@ -182,7 +183,7 @@ export async function resetFailedAttempts(userIdOrUsername: number | string, pai
   }
 }
 
-/** Lockout response message — identical for existing and unknown usernames */
+/** Lockout response message — identical for existing and unknown usernames (v9.0.220, TD-539: Persian digits, shared text) */
 export function lockoutMessage(minutes: number): string {
-  return `به دلیل تلاش‌های ناموفق مکرر، ورود با این نام کاربری به‌طور موقت مسدود شده است. لطفاً ${minutes} دقیقه دیگر تلاش فرمایید.`;
+  return usernameLockoutMessage(minutes);
 }

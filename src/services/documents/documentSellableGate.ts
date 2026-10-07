@@ -9,7 +9,7 @@ import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.servi
 import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 
 /**
- * v9.0.214 (TD-775، یافته B08-06): گیت «قابل فروش = min(موجودی انبار، موجودی کل − رزرو دیگران)» (AGENTS §3) برای هر سند
+ * v9.0.239 (TD-775، یافته B08-06): گیت «قابل فروش = min(موجودی انبار، موجودی کل − رزرو دیگران)» (AGENTS §3) برای هر سند
  * خروجی که قطعی ثبت یا نهایی می‌شود، یک تابع برای `createDocumentWithDetails` و `finalizeDocument`.
  *
  * مقدار درخواستی هر (کالا، انبار) جمع زده و یک بار سنجیده می‌شود، موجودی و رزرو همه کالاهای سند یک‌جا و فقط برای همان

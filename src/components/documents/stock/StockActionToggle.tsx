@@ -3,7 +3,7 @@ import { FileInput, FileOutput } from 'lucide-react';
 interface StockActionToggleProps {
   actionType: 'in' | 'out';
   onChange: (actionType: 'in' | 'out') => void;
-  /** v9.0.216 (TD-791): جهتی که کاربر هیچ نوع سندش را ثبت نمی‌کند غیرفعال است */
+  /** v9.0.241 (TD-791): جهتی که کاربر هیچ نوع سندش را ثبت نمی‌کند غیرفعال است */
   isEnabled?: (actionType: 'in' | 'out') => boolean;
 }
 

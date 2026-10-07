@@ -6,7 +6,7 @@ import type { User } from '../../types';
 
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
-// v9.0.216 (TD-791): نوع سند و دکمه ثبت با مجوز ثبت همان نوع؛ انباردار آزمون مجوزهای ثبت این صفحه را دارد
+// v9.0.241 (TD-791): نوع سند و دکمه ثبت با مجوز ثبت همان نوع؛ انباردار آزمون مجوزهای ثبت این صفحه را دارد
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({ userPermissions: { permissions: ['warehouse.in', 'warehouse.out'], isAdmin: false } }),
   useHasPermission: () => false,
@@ -115,7 +115,7 @@ describe('DocumentsPage — stock receipt / remittance form (TD-080 part 3 chara
   });
 
   it('caps a remittance by the stock of the source warehouse, not the total (TD-799)', async () => {
-    // v9.0.217 (B08-30): کالا فقط در انبار دوم موجودی دارد؛ «بارگذاری تمام اقلام» رزرو پروژه را از انبار اول به صفر محدود می‌کند و از انبار دوم می‌افزاید
+    // v9.0.242 (B08-30): کالا فقط در انبار دوم موجودی دارد؛ «بارگذاری تمام اقلام» رزرو پروژه را از انبار اول به صفر محدود می‌کند و از انبار دوم می‌افزاید
     const splitItem = { ...reservedItem, stocks: { WH1: 0, WH2: 10 }, stock_WH1: 0, stock_WH2: 10 };
     fetchJson.mockImplementation((url: string) => Promise.resolve(
       url === '/warehouses' ? [{ id: 1, name: 'انبار مرکزی', code: 'WH1', is_active: 1 }, { id: 2, name: 'انبار دوم', code: 'WH2', is_active: 1 }]

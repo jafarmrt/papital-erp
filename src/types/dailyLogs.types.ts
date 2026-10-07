@@ -1,3 +1,4 @@
+import type { DailyLogVisibility } from '../lib/dailyLogs/dailyLogVisibility';
 export interface DailyWorkLog {
   id: number;
   user_id: number;
@@ -24,7 +25,7 @@ export interface DailyWorkLog {
   projectName?: string;
   tags?: string[];
   mentions?: number[]; // array of user IDs
-  visibility: 'public' | 'managers' | 'mentioned_only' | 'custom' | 'private';
+  visibility: DailyLogVisibility; // v9.0.236 (TD-900): no public logs
   allowed_users?: number[]; // user IDs allowed
   allowedUsers?: number[];
   status?: 'submitted' | 'reviewed';

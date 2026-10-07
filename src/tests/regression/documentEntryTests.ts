@@ -11,13 +11,13 @@ export async function runDocumentEntryTests(shouldRun: ShouldRun): Promise<TestC
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_document_direction_from_type_td_770',
-      'v9.0.213: the stock direction of a document comes from its type; an inOut against the type is 422 and a transfer is not recorded through POST /documents (TD-770)',
+      'v9.0.238: the stock direction of a document comes from its type; an inOut against the type is 422 and a transfer is not recorded through POST /documents (TD-770)',
       ['td770', 'documents', 'direction', 'package8'], directionFromTypeCase],
     ['reg_document_sellable_gate_td_775',
-      'v9.0.214: create and finalize check the summed quantity of each item and warehouse against sellable stock, with or without inOut (TD-775)',
+      'v9.0.239: create and finalize check the summed quantity of each item and warehouse against sellable stock, with or without inOut (TD-775)',
       ['td775', 'documents', 'sellable', 'reservation', 'package8'], sellableGateCase],
     ['reg_document_line_numbers_decimal_td_784',
-      'v9.0.215: document line numbers are read with decimalInput: hex and exponent text is 400, an empty sent price is 400, Persian digits and thousands separators are read (TD-784)',
+      'v9.0.240: document line numbers are read with decimalInput: hex and exponent text is 400, an empty sent price is 400, Persian digits and thousands separators are read (TD-784)',
       ['td784', 'documents', 'decimal', 'validation', 'package8'], lineNumbersCase],
   ];
   for (const [id, name, tags, run] of cases) {

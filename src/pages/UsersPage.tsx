@@ -21,6 +21,7 @@ import {
   useDeleteRoleMutation,
 } from '../hooks/queries';
 import { QUERY_KEYS } from '../lib/queryKeys';
+import { formatPersianNumber } from '../utils';
 import { isSystemAdminRole } from '../lib/permissions/permissionCatalog';
 import { canGrantPermission, grantorPermissionsOf, type GrantorPermissions } from '../lib/permissions/grantBoundary';
 
@@ -108,10 +109,10 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
           <div>
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <Users className="text-blue-600" size={24} />
-              مدیریت کاربران و سطح دسترسی (RBAC)
+              مدیریت کاربران و سطح دسترسی
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              تعریف کاربران، تخصیص نقش‌های سفارشی و پیکربندی تفکیکی ماتریس مجوزهای تمامی ماژول‌های سیستم
+              تعریف کاربران، تخصیص نقش‌ها و تعیین مجوزهای هر نقش در همه بخش‌های سامانه
             </p>
           </div>
 
@@ -125,7 +126,7 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
               }`}
             >
               <Users size={16} />
-              لیست کاربران ({users.length})
+              لیست کاربران ({formatPersianNumber(users.length)})
             </button>
             <button
               onClick={() => setActiveTab('roles')}
@@ -136,7 +137,7 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
               }`}
             >
               <ShieldCheck size={16} />
-              ماتریس نقش‌ها و مجوزها ({rolesList.length})
+              ماتریس نقش‌ها و مجوزها ({formatPersianNumber(rolesList.length)})
             </button>
           </div>
         </div>
@@ -149,7 +150,7 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
             </div>
             <div>
               <span className="text-[11px] text-slate-500 font-medium block">کل کاربران سیستم</span>
-              <strong className="text-base text-slate-800 font-bold">{users.length} نفر</strong>
+              <strong className="text-base text-slate-800 font-bold">{formatPersianNumber(users.length)} نفر</strong>
             </div>
           </div>
 
@@ -159,7 +160,7 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
             </div>
             <div>
               <span className="text-[11px] text-slate-500 font-medium block">نقش‌های تعریف‌شده</span>
-              <strong className="text-base text-slate-800 font-bold">{rolesList.length} نقش</strong>
+              <strong className="text-base text-slate-800 font-bold">{formatPersianNumber(rolesList.length)} نقش</strong>
             </div>
           </div>
 
@@ -170,7 +171,7 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
             <div>
               <span className="text-[11px] text-slate-500 font-medium block">مجوزهای سیستم</span>
               <strong className="text-base text-slate-800 font-bold">
-                {totalCatalogPermsCount} کلید
+                {formatPersianNumber(totalCatalogPermsCount)} کلید
               </strong>
             </div>
           </div>
@@ -181,10 +182,10 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
             </div>
             <div>
               <span className="text-[11px] text-slate-500 font-medium block">
-                مدیران ارشد (Admin)
+                مدیران سیستم
               </span>
               <strong className="text-base text-slate-800 font-bold">
-                {users.filter((u: any) => isSystemAdminRole(u.role)).length} کاربر
+                {formatPersianNumber(users.filter((u: any) => isSystemAdminRole(u.role)).length)} کاربر
               </strong>
             </div>
           </div>

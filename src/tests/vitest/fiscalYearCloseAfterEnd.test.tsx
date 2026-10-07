@@ -54,7 +54,7 @@ function server(options: { years?: unknown; yearEnded?: boolean } = {}) {
 const previewUrls = () => fetchJson.mock.calls.map(([u]) => String(u)).filter(u => u.startsWith('/accounting/fiscal-closing/preview?'));
 const executeButton = (year: string) => screen.findByText(`اجرای قطعی بستن سال مالی ${year}`) as Promise<HTMLButtonElement>;
 
-beforeEach(() => { fetchJson.mockReset(); toastFn.success.mockReset(); toastFn.error.mockReset(); confirmAction.mockReset(); perms.keys = []; });
+beforeEach(() => { fetchJson.mockReset(); toastFn.success.mockReset(); toastFn.error.mockReset(); confirmAction.mockReset(); perms.keys = ['accounting.fiscal_close']; });
 afterEach(() => { cleanup(); });
 
 // v9.0.161 (TD-543, B03-01, product-owner decisions t1/t2 option A): the tab opened on the current, unfinished year and closed it
@@ -96,7 +96,7 @@ describe('fiscal closing lists ended years only and reopens the last closed year
     expect(screen.queryByText('بازگشایی سال مالی ۱۴۰۳', { selector: 'button' })).toBeNull();
     cleanup();
 
-    perms.keys = ['accounting.fiscal_reopen'];
+    perms.keys = ['accounting.fiscal_close', 'accounting.fiscal_reopen'];
     server();
     renderTab();
     const button = await screen.findByText('بازگشایی سال مالی ۱۴۰۳', { selector: 'button' }) as HTMLButtonElement;

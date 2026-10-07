@@ -35,7 +35,7 @@ export function documentRecordPermission(docType: string, status: DocumentRecord
 }
 
 /**
- * v9.0.213 (TD-770): مجوز ثبت سندی از این نوع در این وضعیت؛ جهت گردش از خود نوع (`documentStockDirection`)، همان که
+ * v9.0.238 (TD-770): مجوز ثبت سندی از این نوع در این وضعیت؛ جهت گردش از خود نوع (`documentStockDirection`)، همان که
  * سرور با آن کالا را جابه‌جا می‌کند. صفحه اسناد انبار دکمه ثبت را با همین نشان می‌دهد.
  */
 export function documentTypeRecordPermission(docType: string, status: DocumentRecordStatus): string {
