@@ -9,18 +9,16 @@ import { netLineUnitPrice } from './purchaseLineCost.js';
 import { assertReturnWithinSold, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
-import { NotFoundError, ValidationError, InsufficientStockError } from '../../errors/customErrors.js';
+import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { VoucherService } from '../accounting/voucher.service.js';
 import { resolveWarehouseCode } from '../inventory/warehouseResolver.js';
-import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { LockHierarchyLevel, sortIdsForLocking, withOrderedLocks } from '../../lib/lockOrder.js';
 import { logger } from '../../middleware/logger.js';
 import { logActivity } from '../../lib/auditLogger.js';
-import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { money } from '../../lib/money.js';
 import { releaseReservationsForDocument, restoreReservationsForDocument } from './projectReservationRelease.js';
@@ -28,6 +26,7 @@ import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { proformaInvoiceTarget } from './proformaInvoice.js';
 import { stockDirectionOf } from './documentRecordRule.js';
+import { assertOutflowWithinSellable } from './documentSellableGate.js';
 
 export class DocumentLifecycleService {
   /**
@@ -134,44 +133,13 @@ export class DocumentLifecycleService {
           // v8.0.10 (TD-267): سند خرید (purchase) هم ورودی است، همان قاعده ثبت سند (documentCreation)
           const inOut = stockDirectionOf(targetType);
 
-          // Pre-flight stock availability & reservation check for exit documents (TD-118)
+          // Pre-flight stock availability & reservation check for exit documents (TD-118). v9.0.214 (TD-775): جمع مقدار هر
+          // (کالا، انبار)، موجودی و رزرو یک‌جا و fail-closed، همان تابع ثبت سند (documentSellableGate.ts)
           if (inOut === 'out') {
-            const reservationReport = await ItemStockReservationService.getReservedStockDetails(tx);
-            for (const item of docLines) {
-              const qty = fin(item.quantity).toNumber();
-              const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : '');
-
-              const [dbItem] = await tx.select({
-                id: items.id,
-                code: items.code,
-                name: items.name,
-                unit: items.unit,
-                currentStock: items.currentStock,
-              }).from(items).where(eq(items.id, item.itemId)).for('no key update');
-
-              if (!dbItem) {
-                throw new NotFoundError(`کالا با شناسه ${item.itemId} یافت نشد`);
-              }
-
-              const summary = reservationReport.itemSummaries.find(s => s.itemId === item.itemId);
-              // v7.0.45 (audit P2-1): موجودی انبارها از جدول نرمال (منبع حقیقت)، نه کش JSONB
-              const tableStock = await ItemWarehouseStockService.getStockSnapshot(tx, item.itemId);
-              const sellableInfo = ItemStockReservationService.computeSellable(
-                summary,
-                tableStock.byCode,
-                {
-                  location: targetLoc,
-                  excludeDocumentId: id,
-                  projectId: doc.projectId ? Number(doc.projectId) : null,
-                }
-              );
-
-              if (qty > sellableInfo.sellable) {
-                throw new InsufficientStockError(
-                  `امکان خروج بیش از ${sellableInfo.sellable} ${dbItem.unit || 'عدد'} برای کالا «${dbItem.name}» (${dbItem.code}) وجود ندارد. موجودی انبار «${targetLoc}»: ${sellableInfo.locationStock}، رزرو سایر مصارف: ${sellableInfo.reservedForOthers}، قابل فروش: ${sellableInfo.sellable}.`
-                );
-              }
-            }
+            await assertOutflowWithinSellable(tx, docLines, {
+              excludeDocumentId: id,
+              projectId: doc.projectId ? Number(doc.projectId) : null,
+            });
           }
 
           // v7.0.63 (TD-198): سند ارزی بدون نرخ تسعیر نهایی نمی‌شود (پیش از گردش انبار، چون قیمت ورود با آن به ریال می‌رود)؛ نرخ ارسالی روی خود سند ذخیره می‌شود

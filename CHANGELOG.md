@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.214 — v9.0.214 — One Sellable Gate for Create and Finalize
+- **Documents:** every outgoing document recorded or finalized as final passes one sellable gate that sums each item and warehouse, with or without `inOut`, so a second line or a missing field no longer sells stock reserved for another customer (TD-775).
+
 ### v9.0.213 — v9.0.213 — Stock Direction From the Document Type
 - **Documents (P1):** a document moves stock only in the direction of its type; an `inOut` against the type is refused with 422 `DOCUMENT_DIRECTION_MISMATCH` and a transfer is no longer recorded through `POST /documents`, so a receipt can no longer take goods out while its voucher adds them (TD-770, decision ت۲).
 
