@@ -1,3 +1,4 @@
+import { fetchThroughStartup } from './lib/systemStarting';
 import { inFlightRetryDelayMs, isInFlightResponse, releaseSubmissionKey, settlesSubmissionKey, submissionKeyFor } from './lib/submissionKey';
 
 export const API_URL = '/api';
@@ -186,11 +187,12 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
 
   let res: Response;
   try {
-    res = await fetch(url, {
+    // v9.0.148 (TD-584): while the server finishes an update it answers 503 SYSTEM_STARTING; wait and resend
+    res = await fetchThroughStartup(() => fetch(url, {
       ...options,
       credentials: 'include', // Automatically passes and receives HttpOnly Secure cookies
       headers,
-    });
+    }), options?.signal);
   } catch (err: any) {
     if (isAbortError(err) || options?.signal?.aborted) {
       const abortErr = new Error('The operation was aborted.');

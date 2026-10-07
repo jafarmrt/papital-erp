@@ -1428,6 +1428,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Package 1, PR «ب» (TD-582, TD-595, TD-597, TD-599, TD-602): the HTTP edge
   const { runEdgeHardeningTests } = await import('../security/edgeHardeningChecks.js');
   results.push(...await runEdgeHardeningTests(shouldRunAccess));
+  // Package 1 PR «ج»: startup gate, pool readiness, access log, circular log values, /health build details
+  const { runStartupMonitoringTests } = await import('../security/startupMonitoringChecks.js');
+  results.push(...await runStartupMonitoringTests(shouldRunAccess));
 
   return results;
 }

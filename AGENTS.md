@@ -103,7 +103,7 @@
 - **Every Claim Has a Test (v7.0.64, audit P3-13):** Every fix or behaviour change recorded in the changelog is backed by at least one automated test that fails on the previous version and passes on the new one. The test id is named in the commit message and in the `TECH_DEBT.md` / `TECH_DEBT_ARCHIVE.md` row (never in the changelog file, per the rule above). A claim without such a test (e.g. a refactor or a documentation change) is worded as such and never as a fix.
 
 ## 8. Server Startup & Background Seed Execution
-- **Port 3000 Ingress:** In AI Studio preview / Cloud Run, `server.ts` MUST bind and listen on port 3000 immediately.
+- **Port 3000 Ingress:** In AI Studio preview / Cloud Run, `server.ts` MUST bind and listen on port 3000 immediately. Until migrations, seed and the engines finish, every `/api` request except `/api/health/*` and the WooCommerce webhook answers 503 `SYSTEM_STARTING` with `Retry-After` and `/health/ready` is 503 (`startupGate` in `src/middleware/startupGate.ts`, turned on only by `server.ts` with `beginStartup`); the browser shows a waiting page and resends the request (`fetchThroughStartup` in `src/lib/systemStarting.ts`, `SystemStartingOverlay`) (v9.0.148, TD-584, product-owner decision t2).
 - **Background Seeding:** Seeding (`runSeed()`) must run asynchronously in background IIFE without blocking server startup.
 
 ## 9. Standard 22 Categories & Default Units

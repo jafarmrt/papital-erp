@@ -43,12 +43,12 @@ import procurementRoutes from './routes/procurement.routes.js';
 import attachmentsRoutes from './routes/attachments.routes.js';
 import { authenticateToken, getJwtSecret, csrfProtection, shouldExposeTokenInBody } from './middleware/auth.js';
 import { sessionEndpointOriginGuard } from './middleware/sessionOrigin.js';
+import { startupGate, isStarting, isStartupComplete } from './middleware/startupGate.js';
 import { orm } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
 import { BUILD_INFO } from './lib/version.js';
 import { resolveTrustProxySetting } from './lib/trustProxy.js';
 
-let isStartupComplete = false;
 let activeLoginLimiter: any = null;
 
 /**
@@ -70,13 +70,8 @@ export function resetLoginRateLimiter(): void {
   }
 }
 
-/**
- * Called by server.ts once background migrations/seeding finish so that
- * the /health/startup probe can report readiness.
- */
-export function markStartupComplete(): void {
-  isStartupComplete = true;
-}
+// v9.0.148 (TD-584): startup state lives in the startup gate; server.ts opens and closes it
+export { beginStartup, markStartupComplete } from './middleware/startupGate.js';
 
 /**
  * TST-004/005 enabler: builds the fully-configured Express application
@@ -178,6 +173,8 @@ export async function createApp(): Promise<express.Express> {
   }));
   app.use(morganMiddleware);
   app.use(metricsMiddleware);
+  // v9.0.148 (TD-584, decision ت۲): /api answers 503 SYSTEM_STARTING until migrations and seed finish
+  app.use('/api', startupGate);
 
   // Rate Limiting (SEC-009): generous limits for ERP operations and distinct user/session buckets
   const generalLimiter = rateLimit({
@@ -255,6 +252,10 @@ export async function createApp(): Promise<express.Express> {
 
   // 2. Readiness probe (200 if DB reachable and connection pool not saturated)
   app.get(['/api/health/ready', '/health/ready'], asyncHandler(async (_req, res) => {
+    // v9.0.148 (TD-584): not ready while a gated server is still migrating
+    if (isStarting()) {
+      return res.status(503).json({ status: 'not_ready', reason: 'Starting', timestamp: new Date().toISOString() });
+    }
     try {
       await orm.execute(sql`SELECT 1`);
 
@@ -289,7 +290,7 @@ export async function createApp(): Promise<express.Express> {
 
   // 3. Startup probe (200 if background migrations/seeds completed)
   app.get(['/api/health/startup', '/health/startup'], (_req, res) => {
-    if (isStartupComplete) {
+    if (isStartupComplete()) {
       res.status(200).json({ status: 'started', timestamp: new Date().toISOString() });
     } else {
       res.status(503).json({ status: 'starting', timestamp: new Date().toISOString() });

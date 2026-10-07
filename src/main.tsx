@@ -5,6 +5,7 @@ import { queryClient } from './lib/queryClient';
 import { AuthProvider } from './contexts/AuthContext';
 import { SearchProvider } from './SearchContext';
 import App from './App.tsx';
+import { SystemStartingOverlay } from './components/common/SystemStartingOverlay';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -13,6 +14,7 @@ createRoot(document.getElementById('root')!).render(
       <AuthProvider>
         <SearchProvider>
           <App />
+          <SystemStartingOverlay />
         </SearchProvider>
       </AuthProvider>
     </QueryClientProvider>
