@@ -15,6 +15,8 @@ import {
   findEarlyClosedYears, findManualClosingTypeVouchers, findOutOfOrderClosedYears,
 } from './fiscalClosingHealth.js';
 import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
+import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
+import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1127,6 +1129,21 @@ export class FinancialHealthService {
 
     // آزمون ۲۷: v9.0.162 (TD-544) سال مالی بسته‌شده پیش از سال‌های پیشینِ دارای سند خود (فقط فهرست، بی اصلاح خودکار)
     tests.push(buildOutOfOrderClosedYearsHealthTest(await findOutOfOrderClosedYears()));
+
+    // آزمون ۲۸: v9.0.170 (TD-653) کد یا نام مشترک میان کالاهای فعال (فقط فهرست، بی تغییر خودکار)
+    const itemIdentityTest = buildItemIdentityHealthTest(await findDuplicateItemIdentities(), await hasItemIdentityIndexes());
+    overallScore += itemIdentityTest.scoreImpact;
+    tests.push(itemIdentityTest);
+
+    // آزمون ۲۹: v9.0.175 (TD-660) بیش از یک قیمت فعال برای یک فهرست قیمت کالا (فقط فهرست، بی پاک‌سازی)
+    const duplicatePriceTest = buildDuplicateActivePriceHealthTest(await findDuplicateActivePrices());
+    overallScore += duplicatePriceTest.scoreImpact;
+    tests.push(duplicatePriceTest);
+
+    // آزمون ۳۰: v9.0.176 (TD-657) قیمت فعال با مبلغ صفر یا منفی یا ارز بیرون از فهرست §6 (فقط فهرست، بی تغییر خودکار)
+    const invalidPriceTest = buildInvalidActivePriceHealthTest(await findInvalidActivePrices());
+    overallScore += invalidPriceTest.scoreImpact;
+    tests.push(invalidPriceTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

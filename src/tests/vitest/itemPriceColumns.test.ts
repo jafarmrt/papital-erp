@@ -21,7 +21,7 @@ describe('Excel price columns', () => {
       [{ id: 7, code: 'A-101', name: 'x' }],
       STRATEGIES,
     );
-    expect(r.updates).toEqual([{ itemId: 7, title: 'عمده', price: 950000, currency: 'IRR' }]);
+    expect(r.updates).toEqual([{ itemId: 7, title: 'عمده', price: '950000', currency: 'IRR' }]);
     expect(r.unmatchedRows).toBe(1);
   });
 });
