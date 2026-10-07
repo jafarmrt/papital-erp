@@ -161,8 +161,14 @@ morgan.token('stripped-url', (req: any) => {
   }
 });
 
+/**
+ * v9.0.150 (TD-598): access lines are written at `info`, the production level (and `LOG_LEVEL=info` of
+ * install.sh); at `http` they were below it and production kept no access log at all.
+ */
+export const ACCESS_LOG_LEVEL = 'info';
+
 const stream = {
-  write: (message: string) => logger.http(message.trim())
+  write: (message: string) => logger.log(ACCESS_LOG_LEVEL, message.trim())
 };
 
 export const morganMiddleware = morgan(
