@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Users, Search, Calendar, Printer, Download, RefreshCw, CheckCircle2, AlertCircle, User, Building, Briefcase, ChevronDown, X } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatPersianCode, formatCurrencyLabel, toStorageDate, getTodayIsoDate, getPastJalaliDate, isoToJalaliDate, jalaliMonthStart, jalaliYearBounds } from '../../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatPersianCode, formatCurrencyLabel, toStorageDate, getTodayIsoDate, getTodayJalaliDate, getPastJalaliDate, isoToJalaliDate, jalaliMonthStart, jalaliYearBounds } from '../../../utils';
+import { TREASURY_CURRENCIES } from '../../../lib/treasury/treasuryCurrency';
+import { partyStatementFileName } from '../../../lib/accounting/accountingExport';
 import toast from 'react-hot-toast';
 import type { PartyOption } from '../../../types';
 import { usePartiesQuery, usePartyLedgerReport, type PartyLedgerParams } from '../../../hooks/accounting/usePartyProjectReportQueries';
@@ -160,7 +162,8 @@ export function PartyLedgerReportView({
     }
 
     const partyName = reportData.party?.name || selectedParty?.name || 'طرف_حساب';
-    const filename = `صورت_حساب_${partyName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    // v9.0.272 (TD-580): تاریخ امروز منطقه زمانی توافقی، نه روز UTC مرورگر
+    const filename = partyStatementFileName(partyName, getTodayJalaliDate());
 
     const headers = ['ردیف', 'تاریخ', 'شماره سند', 'شماره دستی', 'شرح عملیات', 'کد حساب', 'نام حساب معین', 'بدهکار', 'بستانکار', 'مانده لحظه‌ای', 'نوع مانده', 'ارز'];
     const rows = reportData.items.map(it => [
@@ -181,7 +184,7 @@ export function PartyLedgerReportView({
     // Prepend UTF-8 BOM \uFEFF for correct Persian display in Microsoft Excel
     const csvContent = '\uFEFF' + [
       [`"صورت‌حساب تفصیلی طرف‌حساب: ${partyName}"`],
-      [`"تاریخ صدور گزارش: ${new Date().toLocaleDateString('fa-IR')}"`],
+      [`"تاریخ صدور گزارش: ${formatPersianDate(getTodayIsoDate())}"`],
       [`"مانده ابتدای دوره: ${reportData.openingBalance} (${reportData.openingBalanceType})"`],
       [`"جمع گردش بدهکار: ${reportData.totalDebit}"`, `"جمع گردش بستانکار: ${reportData.totalCredit}"`],
       [`"مانده نهایی: ${reportData.finalBalance} (${reportData.finalBalanceType})"`],
@@ -483,10 +486,7 @@ export function PartyLedgerReportView({
               className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white"
             >
               <option value="all">همه ارزها</option>
-              <option value="IRR">ریال (IRR)</option>
-              <option value="USD">دلار (USD)</option>
-              <option value="EUR">یورو (EUR)</option>
-              <option value="AED">درهم (AED)</option>
+              {TREASURY_CURRENCIES.map(c => <option key={c} value={c}>{formatCurrencyLabel(c)}</option>)}
             </select>
           </div>
         </div>
@@ -521,7 +521,7 @@ export function PartyLedgerReportView({
               </div>
 
               <div className="text-left sm:text-right space-y-1 text-xs text-slate-500 dark:text-slate-400 font-mono">
-                <div>تاریخ صدور گزارش: <span className="font-bold text-slate-800 dark:text-slate-200">{new Date().toLocaleDateString('fa-IR')}</span></div>
+                <div>تاریخ صدور گزارش: <span className="font-bold text-slate-800 dark:text-slate-200">{formatPersianDate(getTodayIsoDate())}</span></div>
                 <div>
                   بازه زمانی: <span className="font-bold text-slate-800 dark:text-slate-200">
                     {reportData.startDate ? formatPersianDate(reportData.startDate) : 'ابتدای دوره'} الی {reportData.endDate ? formatPersianDate(reportData.endDate) : 'امروز'}

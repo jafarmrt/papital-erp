@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Layers, ChevronLeft, Search, Printer, Download, Eye, ArrowUpRight, ArrowDownLeft, User, Users, FolderKanban, RotateCcw, FileText, X } from 'lucide-react';
 import { JalaliDateInput } from '../common/JalaliDateInput';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatCurrencyLabel, getTodayJalaliDate } from '../../utils';
+import { accountExplorerFileName } from '../../lib/accounting/accountingExport';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { SearchableSelect } from '../SearchableSelect';
 import { useExplorerLedgerQuery, type ExplorerLedgerParams, type ExplorerLedgerRow } from '../../hooks/accounting/useAccountExplorerQueries';
@@ -180,7 +181,7 @@ export function AccountExplorerTab({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `مرور_حساب‌ها_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute("download", accountExplorerFileName(getTodayJalaliDate()));
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

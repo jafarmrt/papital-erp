@@ -1,5 +1,5 @@
 import { BookOpen } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatCurrencyLabel } from '../../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatCurrencyLabel, toPersianDigits } from '../../../utils';
 import { journalBookPageCount, type JournalBookReport } from '../../../lib/accounting/journalBook';
 
 /** v9.0.190 (TD-551): ردیف ارزی در نمای همه ارزها به ریال می‌آید و مبلغ خودش با نرخ زیر آن دیده می‌شود */
@@ -122,7 +122,7 @@ export function JournalBookView({
                       {formatPersianDate(item.date)}
                     </td>
                     <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono font-bold text-indigo-600">
-                      #{item.voucherNumber}
+                      {toPersianDigits(String(item.voucherNumber))}
                     </td>
                     <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono">
                       {item.accountCode}

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type React from 'react';
 import { Activity, Coins, TrendingUp, ShieldCheck, CheckCircle2, AlertTriangle, RefreshCw, BarChart2, Wallet, ArrowUpRight, ArrowDownRight, type LucideIcon } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber } from '../../../utils';
+import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../../utils';
+import { TREASURY_CURRENCIES } from '../../../lib/treasury/treasuryCurrency';
 import type { FinancialRatiosReport } from '../../../types';
 import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../../common/PillBadge';
 import { AsOfDateField, asOfCaption } from './ReportDateFields';
@@ -166,7 +167,7 @@ export function FinancialRatiosView({
           {/* Currency Selector */}
           <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700/60 p-1 rounded-xl">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 px-2">ارز مبنا:</span>
-            {['all', 'IRR', 'USD', 'EUR', 'AED', 'GBP'].map((cur) => (
+            {['all', ...TREASURY_CURRENCIES].map((cur) => (
               <button
                 key={cur}
                 onClick={() => handleCurrencyChange(cur)}
@@ -176,7 +177,7 @@ export function FinancialRatiosView({
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
                 }`}
               >
-                {cur === 'all' ? 'همه ارزها' : cur}
+                {cur === 'all' ? 'همه ارزها' : formatCurrencyLabel(cur)}
               </button>
             ))}
           </div>
@@ -259,10 +260,10 @@ export function FinancialRatiosView({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="px-2.5 py-1 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-mono font-black text-xs rounded-lg">
-                      {cur.currency}
+                      {formatCurrencyLabel(cur.currency)}
                     </span>
                     <span className="text-xs text-slate-500 font-semibold">
-                      {cur.vouchersCount} سند
+                      {formatPersianNumber(cur.vouchersCount)} سند
                     </span>
                   </div>
                   <div className={`text-xs font-bold flex items-center gap-1 ${
@@ -276,15 +277,15 @@ export function FinancialRatiosView({
                 <div className="space-y-1.5 pt-1 border-t border-slate-200/50 dark:border-slate-700/40 text-xs">
                   <div className="flex justify-between text-slate-600 dark:text-slate-300">
                     <span>مجموع بدهکار:</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPersianPrice(cur.totalDebit)} {cur.currency}</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPersianPrice(cur.totalDebit, cur.currency)}</span>
                   </div>
                   <div className="flex justify-between text-slate-600 dark:text-slate-300">
                     <span>مجموع بستانکار:</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPersianPrice(cur.totalCredit)} {cur.currency}</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPersianPrice(cur.totalCredit, cur.currency)}</span>
                   </div>
                   <div className="flex justify-between text-slate-900 dark:text-white font-bold pt-1 border-t border-dashed border-slate-200 dark:border-slate-700">
                     <span>مانده خالص:</span>
-                    <span className="font-mono">{formatPersianPrice(Math.abs(cur.netBalance))} {cur.currency}</span>
+                    <span className="font-mono">{formatPersianPrice(Math.abs(cur.netBalance), cur.currency)}</span>
                   </div>
                 </div>
               </div>
