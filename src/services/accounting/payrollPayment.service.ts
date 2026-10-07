@@ -8,15 +8,17 @@ import {
   journalVouchers,
   journalVoucherItems
 } from '../../db/schema.js';
-import { eq, and, inArray, or, like, isNull } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { VoucherService } from './voucher.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
 import { TreasuryTransactionService } from './treasury/treasuryTransaction.service.js';
+import { payrollVouchersWhere, pickPayrollVoucher } from './payrollVoucherLink.js';
+import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable.js';
 import { LockHierarchyLevel, withOrderedLocks } from '../../lib/lockOrder.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
-import { fin, FinancialMath } from '../../lib/financialDecimal.js';
+import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { isoToJalaliDate } from '../../utils.js';
@@ -50,7 +52,10 @@ export interface RegisterPayrollPaymentResult {
 
 export class PayrollPaymentService {
   /**
-   * V4.0.33: استعلام مانده مساعده تسویه‌نشده پرسنل از دفتر کل حسابداری و تراکنش‌های خزانه
+   * V4.0.33: استعلام مانده مساعده تسویه‌نشده پرسنل از دفتر کل حسابداری.
+   * v9.0.267 (TD-807، B12P-04): مانده فقط از ردیف‌های «مساعده پرسنل» (نگاشت ۱۳۰۱) با تفصیلی همین پرسنل خوانده می‌شود؛ نبود
+   * ردیف یعنی صفر. پیش‌تر برای پرسنل بی ردیف ۱۳۰۱ هر پرداخت خزانه‌ای بی فیش یا با شرح «مساعده» مساعده شمرده می‌شد، حتی
+   * پرداخت «تسویه حقوق»، پس نگهبان TD-282 دور زده می‌شد و کسر مساعده ۱۳۰۱ را منفی می‌کرد.
    */
   static async getPersonnelAdvanceBalance(personnelId: number, tx?: DbExecutor): Promise<{
     personnelId: number;
@@ -59,12 +64,9 @@ export class PayrollPaymentService {
     outstandingAdvance: number;
   }> {
     const executor = tx || orm;
-
-    // ۱. بررسی اقلام ثبت‌شده در حساب معین مساعده پرسنلی (1301)
     const advanceAcc = await AccountMappingService.getEmployeeAdvanceAccount(executor);
     let ledgerDebits = fin(0);
     let ledgerCredits = fin(0);
-    let hasLedgerEntries = false;
 
     if (advanceAcc) {
       const items = await executor
@@ -82,60 +84,17 @@ export class PayrollPaymentService {
           // v8.0.15 (TD-270): ردیف حذف نرم‌شده (ویرایش یا همگام‌سازی دوباره سند پیش‌نویس) مساعده را دو بار نمی‌شمارد
           eq(journalVoucherItems.isDeleted, 0)
         ));
-
-      if (items.length > 0) {
-        hasLedgerEntries = true;
-        for (const item of items) {
-          ledgerDebits = ledgerDebits.add(item.debit);
-          ledgerCredits = ledgerCredits.add(item.credit);
-        }
+      for (const item of items) {
+        ledgerDebits = ledgerDebits.add(item.debit);
+        ledgerCredits = ledgerCredits.add(item.credit);
       }
     }
 
-    if (hasLedgerEntries) {
-      const outstanding = ledgerDebits.subtract(ledgerCredits);
-      return {
-        personnelId,
-        totalAdvances: ledgerDebits.toNumber(),
-        totalDeducted: ledgerCredits.toNumber(),
-        outstandingAdvance: outstanding.isNegative() ? 0 : outstanding.toNumber()
-      };
-    }
-
-    // ۲. در صورت نبود سند در دفتر، استفاده از تراکنش‌های خزانه‌ای مساعده منهای کسورات ثبت‌شده در فیش‌ها
-    const treasuryAdvances = await executor
-      .select({ amount: treasuryTransactions.amount })
-      .from(treasuryTransactions)
-      .where(and(
-        eq(treasuryTransactions.type, 'payment'),
-        eq(treasuryTransactions.partyType, 'personnel'),
-        eq(treasuryTransactions.partyId, personnelId),
-        eq(treasuryTransactions.isDeleted, 0),
-        eq(treasuryTransactions.status, 'completed'),
-        or(
-          isNull(treasuryTransactions.payrollId),
-          like(treasuryTransactions.description, '%مساعده%')
-        )
-      ));
-
-    const totalAdv = FinancialMath.sum(treasuryAdvances.map(t => t.amount));
-
-    const pastPayrolls = await executor
-      .select({ advanceDeduction: pieceworkPayrolls.advanceDeduction })
-      .from(pieceworkPayrolls)
-      .where(and(
-        eq(pieceworkPayrolls.personnelId, personnelId),
-        eq(pieceworkPayrolls.isDeleted, 0),
-        inArray(pieceworkPayrolls.status, ['approved', 'partially_paid', 'paid'])
-      ));
-
-    const totalDed = FinancialMath.sum(pastPayrolls.map(p => p.advanceDeduction));
-    const outstanding = totalAdv.subtract(totalDed);
-
+    const outstanding = ledgerDebits.subtract(ledgerCredits);
     return {
       personnelId,
-      totalAdvances: totalAdv.toNumber(),
-      totalDeducted: totalDed.toNumber(),
+      totalAdvances: ledgerDebits.toNumber(),
+      totalDeducted: ledgerCredits.toNumber(),
       outstandingAdvance: outstanding.isNegative() ? 0 : outstanding.toNumber()
     };
   }
@@ -185,8 +144,32 @@ export class PayrollPaymentService {
         );
       }
 
-      if (!payroll.status || !['approved', 'partially_paid', 'draft'].includes(payroll.status)) {
+      // v9.0.269 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ پیش‌تر «draft» هم پذیرفته می‌شد
+      if (payroll.status === 'draft') {
+        throw new ConflictError(`فیش ${payroll.payrollNumber} پیش‌نویس است؛ پیش از ثبت پرداخت آن را تأیید کنید.`, undefined, 'PAYROLL_NOT_APPROVED');
+      }
+      if (!isPayablePayrollStatus(payroll.status)) {
         throw new ConflictError(`وضعیت فعلی فیش (${payroll.status}) اجازه ثبت پرداخت ندارد.`);
+      }
+
+      // v9.0.266 (TD-804): فیش بی سند حسابداری زنده پرداخت نمی‌شود. پیش‌تر پرداخت آن ۳۲۰۱ را بدهکار و بانک را بستانکار
+      // می‌کرد بی آنکه هزینه یا بدهی حقوقی در دفتر باشد. فیش قدیمی بی سند ابتدا با «همگام‌سازی سند» سند می‌گیرد.
+      const voucherCandidates = await tx
+        .select({
+          id: journalVouchers.id,
+          sourcePayrollId: journalVouchers.sourcePayrollId,
+          referenceId: journalVouchers.referenceId,
+          referenceNumber: journalVouchers.referenceNumber,
+          voucherType: journalVouchers.voucherType,
+        })
+        .from(journalVouchers)
+        .where(payrollVouchersWhere(payroll.id, payroll.payrollNumber));
+      if (!pickPayrollVoucher(voucherCandidates, payroll.id, payroll.payrollNumber)) {
+        throw new ConflictError(
+          `فیش ${payroll.payrollNumber} سند حسابداری ندارد؛ پیش از پرداخت، سند آن را با «همگام‌سازی سند» صادر کنید.`,
+          undefined,
+          'PAYROLL_WITHOUT_VOUCHER'
+        );
       }
 
       // ۳. پرسنل

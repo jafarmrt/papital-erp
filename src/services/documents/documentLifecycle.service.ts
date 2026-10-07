@@ -145,7 +145,7 @@ export class DocumentLifecycleService {
             });
           }
 
-          // v9.0.246 (TD-788، تصمیم ت۱۰ الف): پیش‌نویس برگشتِ دارای فاکتور مرجع فقط با ارز، نرخ و قیمت خالص همان فاکتور نهایی
+          // v9.0.273 (TD-788، تصمیم ت۱۰ الف): پیش‌نویس برگشتِ دارای فاکتور مرجع فقط با ارز، نرخ و قیمت خالص همان فاکتور نهایی
           // می‌شود؛ پیش‌نویس قدیمی که با آن نمی‌خواند ۴۲۲ می‌گیرد و باید ویرایش شود
           const returnTerms = targetType === 'return' && doc.returnOfDocumentId
             ? await enforceReturnInvoiceTerms(tx, Number(doc.returnOfDocumentId), {
@@ -204,7 +204,7 @@ export class DocumentLifecycleService {
           // Step 3: Document Status Commitment & Domain Event Outbox
           // v7.0.32 (TD-197 / audit P1-7): مالیاتی که هنگام نهایی‌سازی ارسال شود روی خود سند ذخیره می‌شود تا
           // فاکتور و سند حسابداری همیشه از یک مقدار (documents.vat_amount) استفاده کنند.
-          // v9.0.247 (TD-774، تصمیم ت۵ الف): برگشتِ دارای فاکتور مرجع مالیات را زیر قفل فاکتور (assertReturnWithinSold) به نسبت
+          // v9.0.274 (TD-774، تصمیم ت۵ الف): برگشتِ دارای فاکتور مرجع مالیات را زیر قفل فاکتور (assertReturnWithinSold) به نسبت
           // از مالیات همان فاکتور می‌گیرد، با برگشت‌های نهایی همین لحظه
           const vatInput = { vatPercent: options?.vatPercent, vatAmount: options?.vatAmount };
           const finalVat = targetType === 'return' && doc.returnOfDocumentId
@@ -335,9 +335,9 @@ export class DocumentLifecycleService {
       // v8.0.6 (TD-265، تصمیم مالک محصول): ابطال سند ورودی‌ای که موجودی‌اش با خروجِ تاریخ‌دار بعدی مصرف شده رد می‌شود
       // (پیش از هر نوشتن)؛ پیش‌تر فقط موجودی لحظه ابطال سنجیده می‌شد و کاردکس به ترتیب تاریخ منفی می‌ماند
       await assertVoidKeepsStockHistory(tx, { id: doc.id, refNumber: doc.refNumber });
-      // v9.0.244 (TD-773، ت۴ الف): فاکتوری که برگشت ابطال‌نشده دارد باطل نمی‌شود (۴۰۹ با فهرست برگشت‌ها)
+      // v9.0.271 (TD-773، ت۴ الف): فاکتوری که برگشت ابطال‌نشده دارد باطل نمی‌شود (۴۰۹ با فهرست برگشت‌ها)
       await assertVoidHasNoReturns(tx, { id: doc.id, refNumber: doc.refNumber });
-      // v9.0.245 (TD-779، ت۴ الف): و نه سندی که دریافت یا پرداخت زنده خزانه دارد (۴۰۹ با فهرست آن‌ها)
+      // v9.0.272 (TD-779، ت۴ الف): و نه سندی که دریافت یا پرداخت زنده خزانه دارد (۴۰۹ با فهرست آن‌ها)
       await assertVoidHasNoTreasuryRows(tx, { id: doc.id, refNumber: doc.refNumber });
 
       const deletedByUser = user || doc.user || 'system';

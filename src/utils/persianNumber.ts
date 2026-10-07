@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { formatCurrencyLabel } from "./formatters.js";
+import { normalizeDecimalString } from "../lib/numericInput.js";
 
 export function toPersianDigits(val: string | number | null | undefined, maxDecimals: number = 2): string {
   if (val === null || val === undefined || typeof val === 'object') return '';
@@ -16,13 +17,24 @@ export function toPersianDigits(val: string | number | null | undefined, maxDeci
           maximumFractionDigits: maxDecimals,
           minimumFractionDigits: 0,
           useGrouping: false
-        });
+        }).replace('.', '٫');
       }
     }
     return s.replace(/[0-9]/g, (w) => farsiDigits[parseInt(w, 10)]);
   } catch {
     return '';
   }
+}
+
+/**
+ * v9.0.245 (TD-678): فقط ارقام لاتین را فارسی می‌کند، بی تبدیل دوباره به عدد و بی گرد کردن متنی که قالب گرفته است.
+ * v9.0.246 (TD-687، قاعده numbers در vibefarsi): جداکننده هزارگان «٬» (U+066C) و ممیز «٫» (U+066B)، نه «,» و «.».
+ */
+function persianDigitsOf(formatted: string): string {
+  return formatted
+    .replace(/[0-9]/g, (w) => '۰۱۲۳۴۵۶۷۸۹'[Number(w)])
+    .replace(/,/g, '٬')
+    .replace(/\./g, '٫');
 }
 
 export function toEnglishDigits(str: string | number | null | undefined): string {
@@ -42,7 +54,7 @@ export function toEnglishDigits(str: string | number | null | undefined): string
 export function cleanDecimalString(val: number | string | null | undefined, maxDecimals: number = 2): string {
   if (val === null || val === undefined || val === '' || typeof val === 'object') return '';
   try {
-    const num = typeof val === 'number' ? val : Number(toEnglishDigits(String(val)).replace(/,/g, ''));
+    const num = typeof val === 'number' ? val : Number(normalizeDecimalString(String(val)));
     if (isNaN(num)) return '';
     if (num === 0) return '0';
     return num.toLocaleString('en-US', {
@@ -61,7 +73,7 @@ export function formatPersianPrice(num: number | string | null | undefined, curr
     return currency ? `${zero} ${formatCurrencyLabel(currency)}` : zero;
   }
   try {
-    const n = typeof num === 'number' ? num : Number(toEnglishDigits(String(num)).replace(/,/g, ''));
+    const n = typeof num === 'number' ? num : Number(normalizeDecimalString(String(num)));
     if (isNaN(n)) {
       const zero = '۰';
       return currency ? `${zero} ${formatCurrencyLabel(currency)}` : zero;
@@ -73,7 +85,7 @@ export function formatPersianPrice(num: number | string | null | undefined, curr
       maximumFractionDigits: effDecimals,
       minimumFractionDigits: 0
     });
-    const persianVal = toPersianDigits(formatted);
+    const persianVal = persianDigitsOf(formatted);
     return currency ? `${persianVal} ${formatCurrencyLabel(currency)}` : persianVal;
   } catch {
     const zero = '۰';
@@ -90,7 +102,7 @@ export function formatPersianNumber(val: number | string | null | undefined, max
       maximumFractionDigits: maxDecimals,
       minimumFractionDigits: 0
     });
-    return toPersianDigits(formatted);
+    return persianDigitsOf(formatted);
   }
   
   try {
@@ -102,14 +114,14 @@ export function formatPersianNumber(val: number | string | null | undefined, max
       return toPersianDigits(rawStr);
     }
 
-    const englishStr = toEnglishDigits(rawStr).replace(/,/g, '');
+    const englishStr = normalizeDecimalString(rawStr);
     const num = Number(englishStr);
     if (!isNaN(num)) {
       const formatted = num.toLocaleString('en-US', {
         maximumFractionDigits: maxDecimals,
         minimumFractionDigits: 0
       });
-      return toPersianDigits(formatted);
+      return persianDigitsOf(formatted);
     }
 
     return toPersianDigits(rawStr);
@@ -136,11 +148,13 @@ export function formatPersianCode(val: number | string | null | undefined): stri
 /**
  * Safely parse any number or string (including Persian/Arabic digits, thousand separators, or whitespace)
  * into a pure JavaScript number. Backed by Decimal to eliminate floating-point drift.
+ * v9.0.244 (TD-666): همان یکسان‌سازی سرور (`normalizeDecimalString`): ممیز «٫»، جداکننده‌های «٬» «،» «,»، فاصله و نیم‌فاصله؛
+ * پیش‌تر «۱۲٫۵» و «۱٬۲۵۰٬۰۰۰» بی‌صدا صفر می‌شدند.
  */
 export function parseCleanNumber(val: unknown, defaultValue: number = 0): number {
   if (val === null || val === undefined || typeof val === 'object') return defaultValue;
   if (typeof val === 'number') return isNaN(val) || !isFinite(val) ? defaultValue : val;
-  const str = toEnglishDigits(String(val)).replace(/,/g, '').trim();
+  const str = normalizeDecimalString(String(val));
   if (str === '' || str === '-') return defaultValue;
   try {
     const d = new Decimal(str);
@@ -217,7 +231,7 @@ function chunk3ToPersianWords(num: number): string {
  */
 export function numberToPersianWords(input: number | string | null | undefined): string {
   if (input === null || input === undefined || input === '') return '';
-  const clean = toEnglishDigits(String(input)).replace(/[,\s]/g, '').trim();
+  const clean = normalizeDecimalString(String(input));
   if (clean === '0') return 'صفر';
   const isNegative = clean.startsWith('-');
   const rawNum = isNegative ? clean.slice(1) : clean;
@@ -247,6 +261,9 @@ export function numberToPersianWords(input: number | string | null | undefined):
   return (isNegative ? 'منفی ' : '') + result;
 }
 
+/** واحد خرد ارزهای §۶ برای مبلغ به حروف (TD-685) */
+const FOREIGN_SUBUNIT_LABELS: Record<string, string> = { USD: 'سنت', EUR: 'سنت', AED: 'فلس', GBP: 'پنی' };
+
 export interface FinancialWordsResult {
   words: string;
   tomanEquivalent: string;
@@ -269,7 +286,7 @@ export function financialAmountToPersianWords(
   if (amount === null || amount === undefined || amount === '') {
     return { words: '', tomanEquivalent: '', fullDescription: '' };
   }
-  const cleanStr = toEnglishDigits(String(amount)).replace(/[,\s]/g, '').trim();
+  const cleanStr = normalizeDecimalString(String(amount));
   const num = Number(cleanStr);
   if (isNaN(num)) {
     return { words: '', tomanEquivalent: '', fullDescription: '' };
@@ -326,9 +343,12 @@ export function financialAmountToPersianWords(
   }
 
   // سایر ارزها (USD, EUR, AED, GBP)
+  // v9.0.247 (TD-685): بخش اعشاری (سنت) هم به حروف می‌آید؛ پیش‌تر ۱۲٫۵ دلار «دوازده دلار» چاپ می‌شد
   const currLabel = formatCurrencyLabel(cur);
-  const foreignWords = numberToPersianWords(intPart);
-  const fullText = `${prefix}${foreignWords} ${currLabel}`;
+  const cents = new Decimal(cleanStr).abs().minus(intPart).times(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
+  const intWords = intPart > 0 ? `${numberToPersianWords(intPart)} ${currLabel}` : '';
+  const centWords = cents > 0 ? `${numberToPersianWords(cents)} ${FOREIGN_SUBUNIT_LABELS[cur] ?? 'صدم'}` : '';
+  const fullText = `${prefix}${[intWords, centWords].filter(Boolean).join(' و ')}`;
 
   return {
     words: fullText,

@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { transfers, activityLogs } from '../db/schema.js';
-import { uploadBase64ToStorage } from '../lib/storage.js';
+import { isDataUrl, uploadBase64ToStorage } from '../lib/storage.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
 import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -37,10 +37,10 @@ export class TransferService {
     let thumbnailUrl = input.thumbnail || '';
 
     // Process base64 uploads to storage
-    if (imageUrl && imageUrl.startsWith('data:image')) {
+    if (isDataUrl(imageUrl)) {
       imageUrl = await uploadBase64ToStorage(imageUrl, 'image');
     }
-    if (thumbnailUrl && thumbnailUrl.startsWith('data:image')) {
+    if (isDataUrl(thumbnailUrl)) {
       thumbnailUrl = await uploadBase64ToStorage(thumbnailUrl, 'thumbnail');
     } else if (!thumbnailUrl && imageUrl) {
       thumbnailUrl = imageUrl;

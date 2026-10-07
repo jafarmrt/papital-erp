@@ -13,6 +13,7 @@ import { idempotency } from '../middleware/idempotency.js';
 import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { ForbiddenError } from '../errors/customErrors.js';
+import { fin } from '../lib/financialDecimal.js';
 
 const router = Router();
 
@@ -107,28 +108,43 @@ const updatePieceworkLogSchema = z.object({
   })
 });
 
+/**
+ * v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده فیش نامنفی‌اند. پیش‌تر `decimalInput` منفی را می‌پذیرفت و
+ * کسورات «-100000» خالص فیش را بالا می‌برد بی آنکه سند حسابداری آن را ببیند.
+ */
+const nonNegativeAmount = (label: string) =>
+  decimalInput(label).refine(v => v === undefined || !fin(v).isNegative(), `${label} نمی‌تواند منفی باشد`);
+
 const generatePieceworkPayrollSchema = z.object({
   body: z.object({
     personnelId: z.union([z.number(), z.string()]),
     startDate: z.string().min(1, 'تاریخ شروع الزامی است'),
     endDate: z.string().min(1, 'تاریخ پایان الزامی است'),
     title: z.string().optional(),
-    bonuses: decimalInput('پاداش').optional(),
-    totalBonuses: decimalInput('پاداش').optional(),
-    deductions: decimalInput('کسور').optional(),
-    totalDeductions: decimalInput('کسور').optional(),
-    advanceDeduction: decimalInput('کسر مساعده').optional(),
+    bonuses: nonNegativeAmount('پاداش').optional(),
+    totalBonuses: nonNegativeAmount('پاداش').optional(),
+    deductions: nonNegativeAmount('کسورات').optional(),
+    totalDeductions: nonNegativeAmount('کسورات').optional(),
+    advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
     notes: z.string().optional(),
   })
 });
 
+// v9.0.269 (TD-816): تاریخ، روش و شماره پیگیری پرداخت فقط از «ثبت پرداخت» (register-payment) نوشته می‌شود
+const PAYMENT_FIELDS_OF_PAYROLL = ['paymentDate', 'paymentMethod', 'paymentReference'] as const;
 const updatePieceworkPayrollStatusSchema = z.object({
   body: z.object({
     status: z.string().optional(),
-    paymentDate: z.string().optional(),
-    paymentMethod: z.string().optional(),
-    paymentReference: z.string().optional(),
     notes: z.string().optional(),
+    paymentDate: z.unknown().optional(),
+    paymentMethod: z.unknown().optional(),
+    paymentReference: z.unknown().optional(),
+  }).superRefine((body, ctx) => {
+    for (const key of PAYMENT_FIELDS_OF_PAYROLL) {
+      if (body[key] !== undefined) {
+        ctx.addIssue({ code: 'custom', path: [key], message: 'تاریخ، روش و شماره پیگیری پرداخت فیش فقط از «ثبت پرداخت» ثبت می‌شود' });
+      }
+    }
   }),
   params: z.object({
     id: numericIdString
@@ -701,16 +717,13 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorizePe
 router.put('/piecework/payrolls/:id/status', authorizePermission('personnel.manage'), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { status, paymentDate, paymentMethod, paymentReference, notes } = req.body;
+    const { status, notes } = req.body;
 
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
 
     const result = await PieceworkPayrollService.updatePayrollStatus(id, {
       status,
-      paymentDate,
-      paymentMethod,
-      paymentReference,
       notes,
       userId: currentUserId,
       username: currentUsername

@@ -5,12 +5,13 @@ import { checkBusinessInvariants, type InvariantScope } from './businessInvarian
 
 /** ابزارهای مشترک سناریوهای سخت‌گیرانه سوئیت business_invariants (v8.0.3، در v8.0.4 جدا شد) */
 
-export interface Watermarks { documentIdAfter: number; voucherIdAfter: number }
+export interface Watermarks { documentIdAfter: number; voucherIdAfter: number; payrollIdAfter: number }
 
 export async function watermarks(): Promise<Watermarks> {
-  const res = await pool.query<{ d: string; v: string }>(
-    `SELECT (SELECT COALESCE(MAX(id), 0) FROM documents)::text AS d, (SELECT COALESCE(MAX(id), 0) FROM journal_vouchers)::text AS v`);
-  return { documentIdAfter: Number(res.rows[0].d), voucherIdAfter: Number(res.rows[0].v) };
+  const res = await pool.query<{ d: string; v: string; p: string }>(
+    `SELECT (SELECT COALESCE(MAX(id), 0) FROM documents)::text AS d, (SELECT COALESCE(MAX(id), 0) FROM journal_vouchers)::text AS v,
+            (SELECT COALESCE(MAX(id), 0) FROM piecework_payrolls)::text AS p`);
+  return { documentIdAfter: Number(res.rows[0].d), voucherIdAfter: Number(res.rows[0].v), payrollIdAfter: Number(res.rows[0].p) };
 }
 
 export async function itemState(itemId: number): Promise<{ stock: number; wac: string }> {

@@ -57,14 +57,14 @@ describe('party statement print header and reload (TD-572)', () => {
   it('changing the currency reloads and the balance is labelled with the currency of the data shown', async () => {
     renderView(<PartyLedgerReportView initialPartyId={7} />);
     await screen.findByText('صورت‌حساب مالی طرف‌حساب');
-    await waitFor(() => expect(balanceText()).toContain('۱۲,۵۰۰,۰۰۰ ریال'));
+    await waitFor(() => expect(balanceText()).toContain('۱۲٬۵۰۰٬۰۰۰ ریال'));
     expect(ledgerUrls()).toHaveLength(1);
 
     await act(async () => { fireEvent.change(screen.getByDisplayValue('همه ارزها'), { target: { value: 'USD' } }); });
     await waitFor(() => expect(ledgerUrls()).toHaveLength(2));
     expect(lastLedgerQuery().get('currency')).toBe('USD');
-    await waitFor(() => expect(balanceText()).toContain('۳,۰۰۰ دلار'));
-    expect(balanceText()).not.toContain('۱۲,۵۰۰,۰۰۰');
+    await waitFor(() => expect(balanceText()).toContain('۳٬۰۰۰ دلار'));
+    expect(balanceText()).not.toContain('۱۲٬۵۰۰٬۰۰۰');
   });
 
   it('«this year» and «this month» start on the first day of the Jalali year and month, reload, and the header shows the loaded range', async () => {

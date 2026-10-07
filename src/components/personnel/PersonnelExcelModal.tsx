@@ -3,7 +3,8 @@ import { X, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, Loader
 import * as xlsx from 'xlsx';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
-import { formatPersianNumber, formatPersianPhone, formatPersianNationalId, normalizePhoneNumber, normalizeNationalId, errorMessageOf } from '../../utils';
+import { formatPersianNumber, formatPersianPhone, formatPersianNationalId, normalizePhoneNumber, errorMessageOf } from '../../utils';
+import { paddedNationalIdNotice, readImportedNationalId } from '../../lib/personnel/nationalIdCell';
 import { Personnel } from '../../types';
 import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell, personnelCellLabel } from '../../lib/personnel/personnelImportCells';
 
@@ -64,6 +65,7 @@ export function PersonnelExcelModal({
     updatedCount: number;
     totalProcessed: number;
     errors: Array<{ row: number; code?: string; name?: string; message: string }>;
+    warnings: Array<{ row: number; code?: string; name?: string; message: string }>;
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -221,7 +223,9 @@ export function PersonnelExcelModal({
           const rawPhone = getField(row, ['شماره تماس', 'شماره همراه', 'تلفن', 'موبایل', 'phone', 'mobile', 'cellphone']);
           const phone = normalizePhoneNumber(rawPhone);
           const rawNationalId = getField(row, ['کد ملی', 'کدملی', 'شماره ملی', 'nationalid', 'national_id', 'ssn']);
-          const nationalId = normalizeNationalId(rawNationalId);
+          // v9.0.248 (TD-673): همان قاعده سرور؛ ۸ و ۹ رقم با صفر تکمیل و در ستون مشکلات گفته می‌شود
+          const importedNationalId = readImportedNationalId(rawNationalId);
+          const nationalId = importedNationalId.value;
           const jobTitle = getField(row, ['عنوان شغلی', 'عنوانشغلی', 'شغل', 'سمت', 'سمت سازمانی', 'jobtitle', 'job_title', 'position', 'role']);
           const genderRaw = getField(row, ['جنسیت', 'gender', 'sex']);
           const gender = parseGenderCell(genderRaw);
@@ -245,6 +249,8 @@ export function PersonnelExcelModal({
           if (!fullName) {
             issues.push('نام یا نام خانوادگی خالی است.');
           }
+          if (importedNationalId.error) issues.push(importedNationalId.error);
+          else if (importedNationalId.padded) issues.push(paddedNationalIdNotice(nationalId));
 
           let isDuplicateInBatch = false;
           if (personnelCode) {
@@ -372,7 +378,8 @@ export function PersonnelExcelModal({
         createdCount: res.createdCount || 0,
         updatedCount: res.updatedCount || 0,
         totalProcessed: res.totalProcessed || payloadRows.length,
-        errors: Array.isArray(res.errors) ? res.errors : []
+        errors: Array.isArray(res.errors) ? res.errors : [],
+        warnings: Array.isArray(res.warnings) ? res.warnings : []
       });
 
       setStep('result');
@@ -720,6 +727,22 @@ export function PersonnelExcelModal({
                   </p>
                 </div>
               </div>
+
+              {importResult.warnings.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-right space-y-2">
+                  <div className="flex items-center gap-2 text-amber-800 font-bold text-xs">
+                    <AlertCircle size={16} />
+                    <span>ردیف‌هایی که باید بررسی شوند:</span>
+                  </div>
+                  <ul className="text-xs text-amber-800 space-y-1 list-disc mr-5">
+                    {importResult.warnings.map((w, idx) => (
+                      <li key={idx}>
+                        ردیف {formatPersianNumber(w.row)} {w.name ? `(${w.name})` : ''}: {w.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Errors list if any */}
               {importResult.errors.length > 0 && (

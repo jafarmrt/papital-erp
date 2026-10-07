@@ -2,7 +2,7 @@ import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
 import { eq, and, desc, ilike, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions } from '../../db/schema.js';
-import { uploadBase64ToStorage } from '../../lib/storage.js';
+import { isDataUrl, uploadBase64ToStorage } from '../../lib/storage.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { ItemPricingService } from './itemPricing.service.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
@@ -500,8 +500,8 @@ export class ItemCatalogService {
         computedStock = currentStockBody;
       }
 
-      const imageUrl = image && image.startsWith('data:image') ? await uploadBase64ToStorage(image, 'image') : (image || '');
-      const thumbnailUrl = thumbnail && thumbnail.startsWith('data:image') ? await uploadBase64ToStorage(thumbnail, 'thumbnail') : (thumbnail || '');
+      const imageUrl = isDataUrl(image) ? await uploadBase64ToStorage(image, 'image') : (image || '');
+      const thumbnailUrl = isDataUrl(thumbnail) ? await uploadBase64ToStorage(thumbnail, 'thumbnail') : (thumbnail || '');
 
       const [inserted] = await guardItemIdentity(name, () => tx.insert(items).values({
         type: type || 'product',
@@ -600,7 +600,7 @@ export class ItemCatalogService {
       let thumbnailUrl: string | undefined = undefined;
 
       if (image !== undefined) {
-        if (image && image.startsWith('data:image')) {
+        if (isDataUrl(image)) {
           imageUrl = await uploadBase64ToStorage(image, 'image');
         } else {
           imageUrl = image || '';
@@ -608,7 +608,7 @@ export class ItemCatalogService {
       }
 
       if (thumbnail !== undefined) {
-        if (thumbnail && thumbnail.startsWith('data:image')) {
+        if (isDataUrl(thumbnail)) {
           thumbnailUrl = await uploadBase64ToStorage(thumbnail, 'thumbnail');
         } else {
           thumbnailUrl = thumbnail || '';

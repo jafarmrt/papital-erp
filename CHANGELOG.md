@@ -19,38 +19,119 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.253 — v9.0.253 — Editing a Proforma Does Not Offer to Finalize It
+### v9.0.280 — v9.0.280 — Editing a Proforma Does Not Offer to Finalize It
 - **Sales:** while a proforma is edited, «فاکتور نهایی» is closed with the reason that a proforma is finalized by its approval, and the item codes of its lines are shown; before, the option led to a false stock shortage message and the codes were empty (TD-801).
 
-### v9.0.252 — v9.0.252 — A Failed Print Copy No Longer Leaves the Invoice Form Filled
+### v9.0.279 — v9.0.279 — A Failed Print Copy No Longer Leaves the Invoice Form Filled
 - **Sales:** when the print copy of a just-saved invoice fails to load, the save still counts: the user is told to print it from the document list and the form is cleared; before, the save showed as failed, the form stayed filled and a second click created a second invoice (TD-794).
 
-### v9.0.251 — v9.0.251 — A Sales Proforma Prints as a Sales Document
+### v9.0.278 — v9.0.278 — A Sales Proforma Prints as a Sales Document
 - **Sales:** a sales proforma stored as type `proforma` (recorded by a user without the finalize permission) now prints with the sales title and the seller and buyer boxes; before, it printed as a stock document without the buyer's address and phone (TD-793).
 
-### v9.0.250 — v9.0.250 — Sales Form Lists Only Sales Proformas, Page by Page
+### v9.0.277 — v9.0.277 — Sales Form Lists Only Sales Proformas, Page by Page
 - **Sales:** the open proformas of the sales invoice form are now only sales proformas (`GET /documents` takes `types=invoice,proforma`), read twenty at a time with a count and paging; before, purchase proformas were listed and edited there and the list was cut at 1,000 without notice (TD-792).
 
-### v9.0.249 — v9.0.249 — Proforma Edit Keeps the Warehouse of Its Lines
+### v9.0.276 — v9.0.276 — Proforma Edit Keeps the Warehouse of Its Lines
 - **Sales:** editing a proforma now reads each line's warehouse and saves the line there; before, every edit silently moved all lines (and their reservation) to the first warehouse (TD-790).
 
-### v9.0.248 — v9.0.248 — Sales Invoice Form Resets Every Field
+### v9.0.275 — v9.0.275 — Sales Invoice Form Resets Every Field
 - **Sales:** clearing the sales invoice form (after a save or a cancelled edit) now puts the type, status, warehouse, date, currency, rate and sales lead back to their start values, and the form edits only sales documents; before, a cancelled edit of a purchase proforma made the next sale a receipt and a sales lead stuck to later documents (TD-789).
 
-### v9.0.247 — v9.0.247 — A Sales Return Gives Back Its Share of the Invoice VAT
+### v9.0.274 — v9.0.274 — A Sales Return Gives Back Its Share of the Invoice VAT
 - **Documents:** a sales return of an invoice takes that invoice's VAT percent and its share of the invoice VAT for the returned net, so a full return in parts gives back exactly the invoice VAT, and its voucher debits VAT payable; before, a full return of a 1,000,000 invoice at 10% left the customer owing 100,000 and VAT payable 100,000 too high (TD-774).
 
-### v9.0.246 — v9.0.246 — A Sales Return Takes Its Invoice's Currency, Rate and Net Price
+### v9.0.273 — v9.0.273 — A Sales Return Takes Its Invoice's Currency, Rate and Net Price
 - **Documents:** a sales return of an invoice takes that invoice's currency, exchange rate and net unit price after line discounts; any other price, currency or rate is refused with 422, also on draft edit and finalize, and the stock page fills and locks them; before, one unit sold at 900,000 was credited 5,000,000 and a full return of a 180 USD invoice credited 200 rials (TD-788).
 
-### v9.0.245 — v9.0.245 — Settled Invoice Is Not Voided; Receipts Move On Account
+### v9.0.272 — v9.0.272 — Settled Invoice Is Not Voided; Receipts Move On Account
 - **Documents and treasury:** voiding a document with a live treasury receipt or payment is refused with 409 naming them; the treasury table can move such a row on account or to another invoice of the same party, so the void can follow; before, the receipt stayed on the voided invoice and the replacement showed as unpaid (TD-779).
 
-### v9.0.244 — v9.0.244 — Invoice With a Live Return Is Not Voided
+### v9.0.271 — v9.0.271 — Invoice With a Live Return Is Not Voided
 - **Documents:** voiding a sales invoice that still has a sales return (in any status) is refused with 409 naming the returns; before, the returned goods came back to stock twice and the customer kept a credit for a sale that no longer existed (TD-773).
 
-### v9.0.243 — v9.0.243 — Zero-Price Invoice Gets Its Cost Voucher
+### v9.0.270 — v9.0.270 — Zero-Price Invoice Gets Its Cost Voucher
 - **Accounting:** a final sales invoice with zero gross (free sample, gift) now gets a voucher that moves its Kardex cost from inventory to cost of sales, with zero revenue; before, no voucher was issued and inventory stayed overstated in the ledger (TD-772).
+
+### v9.0.269 — Only Approved Payslips Are Paid
+- **Only Approved Payslips Are Paid (TD-816):** a draft payslip is refused at payment and the screens offer approval instead, and the payment date, method and reference are written only by the payment, never by the status route.
+
+### v9.0.268 — Fixed Salary Up to the End of Service
+- **Fixed Salary Up to the End of Service (TD-808):** a terminated personnel earns fixed salary only up to its end date (pro rata by days) and nothing after it, a terminated personnel without an end date gets no fixed-salary payslip, and a payslip whose period ends after today is refused.
+
+### v9.0.267 — Advance Balance From the Ledger
+- **Advance Balance From the Ledger (TD-807):** a personnel's outstanding advance is read only from its rows on the advance account (1301); treasury payments such as a salary settlement no longer count as an advance, so an advance deduction without a recorded advance is refused.
+
+### v9.0.266 — Payslip Integrity
+- **Payslip Integrity (TD-804):** negative bonuses, deductions and advance deductions are refused, a payslip voucher always credits wages payable with the net (invariant I10), a payslip without a voucher is not paid, and older mismatched payslips are listed by the financial health check.
+
+### v9.0.265 — Package 12 Payroll Audit Documentation
+- **Package 12 Payroll Audit:** section 10 of the V9 stability audit records the payroll part of package 12: 13 proven findings (one P1: negative deductions and bonuses make the payslip disagree with its voucher, and a payslip without a voucher can be paid) opened as TD-804..TD-816, with the product-owner decisions. Documentation only.
+
+### v9.0.264 — بسته ۱۳ د: «اشاره» و «اعلان» در رابط گزارش کار
+- «منشن» و «نوتیفیکیشن» در رابط گزارش کار جای خود را به «اشاره» و «اعلان» دادند (TD-646، تصمیم ت۶).
+
+### v9.0.263 — بسته ۱۳ د: پیوند اعلان همان گزارش را باز می‌کند
+- کلیک روی اعلان یا کارت پیشخوان همان گزارش کار را باز می‌کند (TD-645).
+
+### v9.0.262 — بسته ۱۳ د: پیشخوان بی مجوز گزارش کار درخواستی نمی‌فرستد
+- پیشخوان گزارش کار را فقط با مجوز دیدن آن می‌خواند و دیگر پیغام خطا نمی‌دهد (TD-639).
+
+### v9.0.261 — بسته ۱۳ د: فرم بازخورد بی اشاره
+- فرم بازخورد مدیر دیگر اشاره پیشنهاد نمی‌کند و می‌گوید اعلان فقط به نویسنده می‌رسد (TD-637).
+
+### v9.0.260 — بسته ۱۳ د: نوع حضور فقط حضوری یا دورکاری
+- مرخصی، مأموریت و ترکیبی از ورودی برداشته شد؛ گزارش‌های قدیمی «سایر» شمرده می‌شوند و ساعت مرخصی کارکرد نیست (TD-635، تصمیم ت۳).
+
+### v9.0.259 — بسته ۱۳ د: ساعت شروع و پایان گزارش کار سنجیده می‌شود
+- ساعت نادرست رد می‌شود و پایان باید بعد از شروع باشد؛ کار شبانه در دو گزارش ثبت می‌شود (TD-634، تصمیم ت۵).
+
+### v9.0.258 — بسته ۱۳ ج: سقف طول گزارش کار
+- عنوان، متن، برچسب‌ها و یادداشت مدیر گزارش کار سقف طول دارند (TD-644).
+
+### v9.0.257 — بسته ۱۳ ج: کف ۵ دقیقه برای پاک‌سازی پیوست یتیم
+- پاک‌سازی پیوست یتیم فایل جوان‌تر از ۵ دقیقه را پاک نمی‌کند (TD-643).
+
+### v9.0.256 — بسته ۱۳ ج: خطای بارگذاری تصویر با پیام فارسی ۴۲۲
+- تصویر بزرگ یا با قالب نادرست ۴۲۲ با پیام فارسی می‌گیرد و متن نادرست در ستون تصویر ذخیره نمی‌شود (TD-642).
+
+### v9.0.255 — بسته ۱۳ ج: سقف یکسان پیوست و پیام فارسی ۴۱۳
+- هر پیوست حداکثر ۱۰ مگابایت در همه لایه‌ها؛ مسیرهای پیوست‌دار بدنه ۱۴ مگابایتی می‌پذیرند و بدنه بزرگ‌تر پیام فارسی می‌گیرد (TD-641، تصمیم ت۴).
+
+### v9.0.254 — بسته ۱۳ ج: خطای خواندن پیوست سرور را خاموش نمی‌کند
+- فایل پیوست ناخوانا ۴۰۴ یا ۵۰۰ می‌دهد و دیگر سرور را خاموش نمی‌کند (TD-627).
+
+### v9.0.253 — بسته ۱۳ ب: ابزارک اشاره‌ها با فیلد mentions
+- ابزارک اشاره‌های پیشخوان شناسه کاربر را در فیلد `mentions` می‌جوید، نه «@نام» در متن (TD-638).
+
+### v9.0.252 — بسته ۱۳ ب: زمان ثبت گزارش کار به وقت درست
+- زمان ثبت گزارش کار با منطقه زمانی به مرورگر می‌رود و دیگر ۳:۳۰ عقب نیست (TD-636).
+
+### v9.0.251 — بسته ۱۳ ب: سال‌های گزارش ماهانه از سال جاری
+- سال‌های گزارش ماهانه مدیریت از سال شمسی جاری ساخته می‌شوند، نه فهرست ثابت ۱۴۰۲ تا ۱۴۰۵ (TD-632).
+
+### v9.0.250 — بسته ۱۳ ب: «کارکرد امروز» با تاریخ کارکرد
+- «کارکرد امروز» فقط گزارش‌های تاریخ امروز را می‌شمارد، نه گزارش روزهای دیگر که امروز ثبت شده‌اند (TD-631).
+
+### v9.0.249 — بسته ۱۳ ب: فهرست و آمار گزارش کار با SQL و صفحه‌بندی
+- فهرست گزارش کار صفحه‌بندی و در SQL فیلتر می‌شود و دیگر در ۲۰۰ ردیف بریده نمی‌شود؛ آمار همان مجموعه را می‌شمارد (TD-630).
+
+### v9.0.248 — v9.0.248 — National ID Is Exactly Ten Digits
+- **National ID (TD-673):** a personnel national ID must be exactly ten digits with a valid check digit; forms and the server never zero-pad a short one (422 `NATIONAL_ID_INVALID`), and only the Excel import pads 8 or 9 digits, which Excel drops, and lists those rows for review.
+
+### v9.0.247 — v9.0.247 — Amount in Words Keeps Foreign Cents
+- **Amount in words (TD-685):** a foreign-currency amount in words includes its cents (cent, fils, penny), so a 12.50 dollar invoice prints «دوازده دلار و پنجاه سنت» instead of «دوازده دلار».
+
+### v9.0.246 — v9.0.246 — Numbers Shown With Persian Separators
+- **Persian separators (TD-687):** every amount and quantity shown through `formatPersianPrice` / `formatPersianNumber` uses the Persian thousands separator «٬» and decimal separator «٫» (vibefarsi numbers rule) instead of the Latin comma and point; a number copied from the screen is read back exactly.
+
+### v9.0.245 — v9.0.245 — Numbers Below 1,000 Keep Their Decimals
+- **Number formatting (TD-678):** `formatPersianNumber` and `formatPersianPrice` no longer re-round their formatted text to two decimals below 1,000, so four-decimal quantities and work hours (`numeric(18,4)`) show in full on payslips and work logs.
+
+### v9.0.244 — v9.0.244 — Amount Input Keeps Decimals and Persian Separators
+- **Amount input (TD-665, TD-666):** the shared amount field keeps the typed text until editing ends, so «12.5» dollars is no longer stored as 125, allows the currency's decimals only (rial none, foreign two), reads the Persian «٫» and «٬», spaces and a copied currency label, and keeps the previous amount with a message instead of zeroing it on a stray character; the shared number parsers use the server's `normalizeDecimalString`.
+
+### v9.0.243 — v9.0.243 — Package 16 Dashboard, Settings, Shell, Dates and Numbers Audit Documentation
+- **Package 16 Audit:** section 10 of the V9 stability audit records the dashboard, settings, frontend shell and date and number utilities package: 23 proven findings (nine P2, among them amount inputs that drop decimals or zero a pasted amount, a currency setting that only relabels rial amounts, and resent writes after a network error) opened as TD-665..TD-687 with the product-owner decisions; TD-668 and TD-669 were already fixed in packages 2 and 4, and B01-14 (TD-594) joins this package's PR d. Documentation only.
 
 ### v9.0.242 — v9.0.242 — Stock Page Exit Cap by Source Warehouse
 - **Documents (UI):** the stock document page caps an exit at min(source warehouse stock, total stock − other reservations), the server rule, so a remittance from an empty warehouse is stopped in the form instead of failing on save (TD-799).

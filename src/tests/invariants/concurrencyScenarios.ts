@@ -80,7 +80,7 @@ export async function checkMixedStockPathsNoDeadlock(wh: string): Promise<string
   ];
   const outcomes = await raceBehindRowLock('items', [a.id, b.id], ops.map(([, op]) => op));
   // اگر ابطال فاکتور پیش از برگشت برسد، برگشت درست رد می‌شود (فاکتور مرجع ابطال شده است)؛ اگر برگشت پیش از ابطال
-  // ثبت شود، ابطال درست رد می‌شود (v9.0.244، TD-773: فاکتوری که برگشت ابطال‌نشده دارد باطل نمی‌شود). هر دو ترتیب درست است.
+  // ثبت شود، ابطال درست رد می‌شود (v9.0.271، TD-773: فاکتوری که برگشت ابطال‌نشده دارد باطل نمی‌شود). هر دو ترتیب درست است.
   const problems = outcomeProblems(ops.map(([label]) => label), outcomes,
     (label, message) => (label.startsWith('برگشت از فروش') && (message.includes('ابطال') || message.includes('قابل برگشت')))
       || (label.startsWith('ابطال فاکتورِ مرجع برگشت') && message.includes('برگشت از فروش ابطال‌نشده دارد')));

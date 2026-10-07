@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AtSign, Clock, User, ArrowLeft, Plus, Tag, Briefcase, MessageSquare, Search, X } from 'lucide-react';
 import { toPersianDigits, formatPersianDate } from '../../utils';
 import { DailyWorkLog, User as UserModel } from '../../types';
+import { idList } from '../../lib/dailyLogs/dailyLogVisibility';
 
 interface DailyLogsMentionsWidgetProps {
   user: UserModel;
@@ -23,33 +24,14 @@ export function DailyLogsMentionsWidget({
 }: DailyLogsMentionsWidgetProps) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const currentUsername = user?.username || '';
   const currentUserId = user?.id;
-  const currentFullName = user?.full_name || (user as any)?.fullName || '';
 
-  // Filter logs where current user is mentioned
-  const mentionedLogs = useMemo(() => {
-    return logs.filter((log) => {
-      // 1. Array of mentioned users IDs or objects
-      const mentions = (log as any).mentionedUsers || (log as any).mentioned_users || [];
-      if (Array.isArray(mentions) && mentions.length > 0) {
-        const isMentionedById = mentions.some(
-          (u: any) => u === currentUserId || u?.id === currentUserId || u?.username === currentUsername
-        );
-        if (isMentionedById) return true;
-      }
-      // 2. Mentioned in content text with @username or @fullName
-      if (log.content && typeof log.content === 'string') {
-        if (
-          (currentUsername && log.content.includes(`@${currentUsername}`)) ||
-          (currentFullName && log.content.includes(`@${currentFullName}`))
-        ) {
-          return true;
-        }
-      }
-      return false;
-    });
-  }, [logs, currentUserId, currentUsername, currentFullName]);
+  // v9.0.253 (TD-638): a log mentions me when its `mentions` (the API field, user ids) holds my id; a text match on
+  // «@name» found the wrong user for prefix names (TD-628) and missed logs after a rename
+  const mentionedLogs = useMemo(
+    () => logs.filter((log) => currentUserId !== undefined && idList(log.mentions).includes(currentUserId)),
+    [logs, currentUserId]
+  );
 
   // Search filter
   const displayedLogs = useMemo(() => {
@@ -77,7 +59,7 @@ export function DailyLogsMentionsWidget({
           </div>
           <div>
             <h2 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
-              <span>منشن‌ها و ارجاعات کار روزانه</span>
+              <span>اشاره‌ها و ارجاعات کار روزانه</span>
               {mentionedLogs.length > 0 && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white">
                   {toPersianDigits(mentionedLogs.length)} ارجاع
@@ -160,14 +142,14 @@ export function DailyLogsMentionsWidget({
             <div className="w-10 h-10 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
               <MessageSquare size={18} />
             </div>
-            <p className="text-xs font-bold text-slate-700">هیچ منشن جدیدی ندارید</p>
+            <p className="text-xs font-bold text-slate-700">هیچ اشاره تازه‌ای ندارید</p>
             <p className="text-[11px] text-slate-400 mt-1">
               وقتی همکاران در ثبت کارهای روزانه از نام کاربری شما استفاده کنند، اینجا نمایش داده می‌شود.
             </p>
           </div>
         ) : displayedLogs.length === 0 && searchQuery ? (
           <div className="text-center py-6 text-slate-400 text-xs bg-slate-50 rounded-2xl">
-            موردی مطابق با «{searchQuery}» در منشن‌ها پیدا نشد.
+            موردی مطابق با «{searchQuery}» در اشاره‌ها پیدا نشد.
           </div>
         ) : (
           displayedLogs.map((log) => {
@@ -177,7 +159,7 @@ export function DailyLogsMentionsWidget({
             return (
               <div
                 key={log.id}
-                onClick={() => navigate('/daily-logs')}
+                onClick={() => navigate(`/daily-logs?id=${log.id}`)}
                 className="p-3 bg-slate-50 hover:bg-blue-50/60 border border-slate-200/80 rounded-2xl transition-all cursor-pointer space-y-2"
               >
                 <div className="flex items-center justify-between gap-2">
@@ -228,7 +210,7 @@ export function DailyLogsMentionsWidget({
       {mentionedLogs.length > 0 && (
         <div className="pt-2.5 mt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
           <span>
-            نمایش {toPersianDigits(displayedLogs.length)} از {toPersianDigits(mentionedLogs.length)} منشن
+            نمایش {toPersianDigits(displayedLogs.length)} از {toPersianDigits(mentionedLogs.length)} اشاره
           </span>
           <button
             onClick={() => navigate('/daily-logs')}

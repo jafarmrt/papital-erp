@@ -220,7 +220,7 @@ export const nextRefQuerySchema = z.object({
 
 const DOCUMENT_LIST_TYPES = ['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste'] as const;
 
-/** v9.0.250 (TD-792): `types=invoice,proforma` فهرست را به چند نوع محدود می‌کند */
+/** v9.0.277 (TD-792): `types=invoice,proforma` فهرست را به چند نوع محدود می‌کند */
 function documentListTypes(raw: unknown): string[] | undefined {
   if (typeof raw !== 'string') return undefined;
   const types = raw.split(',').map(t => t.trim()).filter(Boolean);

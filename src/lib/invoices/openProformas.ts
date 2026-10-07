@@ -2,7 +2,7 @@ import { listFromResponse, SALES_FORM_DOC_TYPES } from './invoiceForm';
 import type { InvoiceListDocument } from './invoiceListDocuments';
 
 /**
- * v9.0.250 (TD-792): پیش‌فاکتورهای باز صفحه صدور فاکتور فقط سندهای فروش‌اند (`types=invoice,proforma`) و صفحه‌به‌صفحه خوانده
+ * v9.0.277 (TD-792): پیش‌فاکتورهای باز صفحه صدور فاکتور فقط سندهای فروش‌اند (`types=invoice,proforma`) و صفحه‌به‌صفحه خوانده
  * می‌شوند. پیش‌تر فهرست بی نوع بود، پس پیش‌فاکتور خرید (`receipt` با وضعیت `proforma`) در فرم فروش ویرایش می‌شد، و بی هیچ
  * نشانه‌ای در ۱٬۰۰۰ ردیف بریده می‌شد.
  */

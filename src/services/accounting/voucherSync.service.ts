@@ -20,6 +20,7 @@ import { AccountMappingService } from './accountMapping.service.js';
 import { logger } from '../../middleware/logger.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { salesReturnKardexUnitCosts } from '../documents/salesReturnCost.js';
 import { kardexInCostByItem } from './productionReceiptCost.js';
 import { documentOutflowCost } from './outflowVoucherCost.js';
@@ -128,7 +129,7 @@ export class VoucherSyncService {
     const grossAmountNum = grossAmount.round(4);
     const totalDiscountNum = totalDiscount.round(4);
 
-    // v9.0.243 (TD-772، تصمیم ت۳ «الف» بسته ۸): فاکتور با جمع ناخالص صفر (نمونه رایگان، هدیه) هم سند می‌گیرد: بهای
+    // v9.0.270 (TD-772، تصمیم ت۳ «الف» بسته ۸): فاکتور با جمع ناخالص صفر (نمونه رایگان، هدیه) هم سند می‌گیرد: بهای
     // تمام‌شده به بهای کاردکس «بدهکار ۶۰۰۱ / بستانکار موجودی» و درآمد صفر، مثل فاکتوری که یک ردیف رایگان دارد. پیش‌تر
     // این‌جا بی سند برمی‌گشت و کالای خارج‌شده هرگز از حساب موجودی کم نمی‌شد (B08-03). ردیف صفر نوشته نمی‌شود.
 
@@ -997,7 +998,7 @@ export class VoucherSyncService {
         }
         return null;
       }
-      // v9.0.247 (TD-774، تصمیم ت۵ الف): مالیات برگشت (documents.vat_amount، به نسبت از فاکتور مرجع) مالیات پرداختنی را
+      // v9.0.274 (TD-774، تصمیم ت۵ الف): مالیات برگشت (documents.vat_amount، به نسبت از فاکتور مرجع) مالیات پرداختنی را
       // بدهکار و مشتری را خالص به‌علاوه مالیات بستانکار می‌کند؛ پیش‌تر برگشت مالیات نداشت و هر دو مانده بیش از واقع می‌ماند
       const returnVatNum = fin(doc.vatAmount).round(4);
       const returnVatAcc = returnVatNum.isPositive() ? await AccountMappingService.getSalesVatPayableAccount(executor) : null;
@@ -1034,7 +1035,7 @@ export class VoucherSyncService {
         });
       }
 
-      // ۱-ب) v9.0.247 (TD-774): بدهکار: مالیات و عوارض ارزش افزوده پرداختنی (۳۲۰۳)
+      // ۱-ب) v9.0.274 (TD-774): بدهکار: مالیات و عوارض ارزش افزوده پرداختنی (۳۲۰۳)
       if (returnVatNum.isPositive() && returnVatAcc) {
         voucherItems.push({
           accountId: returnVatAcc.id,
@@ -1262,7 +1263,23 @@ export class VoucherSyncService {
     const bonuses = fin(pay.totalBonuses);
     const fixedAmount = fin(pay.totalFixedAmount);
     const grossAmount = pieceworkAmount.add(bonuses).add(fixedAmount);
-    if (!grossAmount.isPositive()) return null;
+    const netPayable = fin(pay.netPayable);
+    // v9.0.266 (TD-804، تصمیم ت۱ الف): سندی که با خالص فیش نمی‌خواند ساخته نمی‌شود و فیش با خالص مثبت بی‌صدا بی سند نمی‌ماند.
+    // پیش‌تر کسورات منفی صفر گرفته می‌شد (بستانکار ۳۲۰۱ کمتر از خالص) و با ناخالص صفر `null` برمی‌گشت، حتی در حالت strict.
+    const refuse = (message: string, code: string): null => {
+      logger.warn({ message: `Payroll voucher refused for ${pay.payrollNumber}: ${code}` });
+      if (isStrict) throw new ValidationError(message, undefined, code);
+      return null;
+    };
+    if (bonuses.isNegative() || fin(pay.totalDeductions).isNegative() || fin(pay.advanceDeduction).isNegative()) {
+      return refuse(`فیش ${pay.payrollNumber} پاداش، کسورات یا کسر مساعده منفی دارد و سند آن با خالص فیش نمی‌خواند؛ این فیش را باطل و دوباره صادر کنید.`, 'PAYROLL_NEGATIVE_COMPONENT');
+    }
+    if (!grossAmount.isPositive()) {
+      if (netPayable.isPositive()) {
+        return refuse(`خالص فیش ${pay.payrollNumber} مثبت است ولی اجزای آن (کارکرد، حقوق ثابت و پاداش) صفر است؛ سند حسابداری برای آن ساخته نمی‌شود.`, 'PAYROLL_VOUCHER_NET_MISMATCH');
+      }
+      return null;
+    }
 
     const items: Array<{
       accountId: number;
@@ -1350,6 +1367,10 @@ export class VoucherSyncService {
 
     // بستانکاری خالص حقوق پرداختنی به پرسنل (تضمین موازنه ۱۰۰٪ بدهکار و بستانکار)
     const payableCredit = nonNegative(grossAmount.subtract(allocatedCredits));
+    // v9.0.266 (TD-804): ناوردایی I10 — بستانکار ۳۲۰۱ سند همان خالص فیش است
+    if (payableCredit.subtract(netPayable).abs().greaterThan(VOUCHER_BALANCE_TOLERANCE)) {
+      return refuse(`بستانکار «حقوق و دستمزد پرداختنی» سند (${payableCredit.toNumber().toLocaleString('fa-IR')}) با خالص فیش ${pay.payrollNumber} (${netPayable.toNumber().toLocaleString('fa-IR')}) نمی‌خواند؛ سند صادر نشد.`, 'PAYROLL_VOUCHER_NET_MISMATCH');
+    }
     if (payableCredit.isPositive()) {
       items.push({
         accountId: payableAcc.id,

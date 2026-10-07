@@ -119,7 +119,7 @@ export class DocumentCreationService {
         }
       }
 
-      // v9.0.246 (TD-788، تصمیم ت۱۰ الف): پیش‌نویس برگشتِ دارای فاکتور مرجع هم ارز، نرخ و قیمت خالص را از همان فاکتور می‌گیرد
+      // v9.0.273 (TD-788، تصمیم ت۱۰ الف): پیش‌نویس برگشتِ دارای فاکتور مرجع هم ارز، نرخ و قیمت خالص را از همان فاکتور می‌گیرد
       const returnTerms = existingDoc.type === 'return' && existingDoc.returnOfDocumentId
         ? await enforceReturnInvoiceTerms(tx, Number(existingDoc.returnOfDocumentId), {
           currency, rate: body, lines: Array.isArray(docLines) ? docLines : null,
@@ -138,7 +138,7 @@ export class DocumentCreationService {
           .from(documentItems)
           .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
       }
-      // v9.0.247 (TD-774): پیش‌نویس برگشتِ دارای فاکتور مرجع مالیات را به نسبت از فاکتور می‌گیرد (ردیف‌های تازه یا ذخیره‌شده)
+      // v9.0.274 (TD-774): پیش‌نویس برگشتِ دارای فاکتور مرجع مالیات را به نسبت از فاکتور می‌گیرد (ردیف‌های تازه یا ذخیره‌شده)
       if (returnTerms && !linesChanged) {
         vatLines = await tx.select({ quantity: documentItems.quantity, unitPrice: documentItems.unitPrice, discount: documentItems.discount })
           .from(documentItems)
@@ -335,17 +335,17 @@ export class DocumentCreationService {
       // v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده در ستون‌های ساختاریافته ذخیره می‌شود و دیگر در متن
       // یادداشت نوشته/از آن خوانده نمی‌شود (پیش‌تر سند حسابداری مبلغ مالیات را با Regex از یادداشت استخراج می‌کرد).
       const finalNotes = notes || '';
-      // v9.0.246 (TD-788، تصمیم ت۱۰ الف): برگشت با فاکتور مرجع ارز، نرخ و قیمت خالص هر واحد را از همان فاکتور می‌گیرد؛
+      // v9.0.273 (TD-788، تصمیم ت۱۰ الف): برگشت با فاکتور مرجع ارز، نرخ و قیمت خالص هر واحد را از همان فاکتور می‌گیرد؛
       // مقدار دیگر در بدنه ۴۲۲. فاکتور نهایی دیگر عوض نمی‌شود و ابطالش با برگشت زنده رد می‌شود (TD-773)، پس خواندن بی قفل بس است
       const returnTerms = returnOfDocumentId !== null
         ? await enforceReturnInvoiceTerms(tx, returnOfDocumentId, { currency, rate: body, lines: docLines || [] })
         : null;
       const docCurrency = returnTerms?.currency ?? (currency || 'IRR');
       const lines = returnTerms?.lines ?? docLines;
-      // v8.0.8 (TD-253): برگشت نهایی با فاکتور مرجع از مانده قابل برگشت همان فاکتور بیشتر نمی‌شود؛ از v9.0.247 (TD-774) پیش از
+      // v8.0.8 (TD-253): برگشت نهایی با فاکتور مرجع از مانده قابل برگشت همان فاکتور بیشتر نمی‌شود؛ از v9.0.274 (TD-774) پیش از
       // مالیات، چون قفل فاکتور برگشت‌های هم‌زمان را پشت سر هم می‌گذارد و مالیات هر برگشت از خالص برگشت‌های نهایی قبلی است
       if (returnOfDocumentId !== null && docStatus === 'final') await assertReturnWithinSold(tx, returnOfDocumentId, lines);
-      // v9.0.247 (TD-774، تصمیم ت۵ الف): مالیات برگشتِ دارای فاکتور مرجع به نسبت از مالیات همان فاکتور
+      // v9.0.274 (TD-774، تصمیم ت۵ الف): مالیات برگشتِ دارای فاکتور مرجع به نسبت از مالیات همان فاکتور
       const docVat = returnOfDocumentId !== null
         ? await resolveReturnVatFromInvoice(tx, { invoiceId: returnOfDocumentId, returnId: null, lines, input: body, currency: docCurrency })
         : resolveDocumentVat({ docType, input: body, lines: lines || [], currency: docCurrency });
