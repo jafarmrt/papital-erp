@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.293 — v9.0.293 — Document List Load Errors
+- **Document list errors:** a failed load of the invoices and documents list (no permission, server error) now shows the server's message with a retry button instead of «no document found» (TD-797).
+
 ### v9.0.292 — v9.0.292 — Fresh Lists After Document Changes
 - **Cache refresh:** saving a stock document and voiding a document now refresh Kardex, vouchers, items, the dashboard, reservations, projects, sales leads and parties, and a settlement refreshes bank accounts and treasury (TD-796).
 

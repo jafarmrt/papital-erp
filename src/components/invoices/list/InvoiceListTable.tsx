@@ -6,10 +6,13 @@ interface InvoiceListTableProps {
   safeDocs: InvoiceListDocument[];
   loading: boolean;
   actions: InvoiceListActions;
+  /** v9.0.293 (TD-797): پیام خطای دریافت فهرست و تلاش دوباره */
+  loadError?: string | null;
+  onRetry?: () => void;
 }
 
 /** TD-080 (بخش ۳): جدول لیست اسناد (پوشش بارگذاری، سرستون‌ها، ردیف‌ها و پیام خالی) */
-export function InvoiceListTable({ safeDocs, loading, actions }: InvoiceListTableProps) {
+export function InvoiceListTable({ safeDocs, loading, actions, loadError, onRetry }: InvoiceListTableProps) {
   return (
     <div className="flex-1 overflow-auto relative min-h-[340px]">
       {loading && (
@@ -36,7 +39,24 @@ export function InvoiceListTable({ safeDocs, loading, actions }: InvoiceListTabl
           {safeDocs.map(doc => (
             <InvoiceListRow key={doc.id} doc={doc} actions={actions} />
           ))}
-          {!loading && safeDocs.length === 0 && (
+          {!loading && loadError && (
+            <tr>
+              <td colSpan={10} className="p-10 text-center text-xs" role="alert">
+                <div className="text-rose-700 font-bold mb-1">فهرست اسناد دریافت نشد</div>
+                <div className="text-slate-600 mb-3">{loadError}</div>
+                {onRetry && (
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                  >
+                    تلاش دوباره
+                  </button>
+                )}
+              </td>
+            </tr>
+          )}
+          {!loading && !loadError && safeDocs.length === 0 && (
             <tr>
               <td colSpan={10} className="p-12 text-center text-slate-400 text-xs">
                 سندی مطابق فیلترهای انتخابی یا عبارت جستجو یافت نشد.

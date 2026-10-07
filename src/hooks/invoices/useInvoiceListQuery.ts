@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type SetStateAction } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { extractDateString } from '../../utils';
+import { errorMessageOf, extractDateString } from '../../utils';
 import { useSearch } from '../../SearchContext';
 import { useDocumentsQuery } from '../queries';
 import { QUERY_KEYS } from '../../lib/queryKeys';
@@ -46,6 +46,11 @@ export function useInvoiceListQuery() {
   const result = docsQuery.data as InvoiceListResponse | null | undefined;
   const totalPages = result?.totalPages || 1;
   const loading = docsQuery.isFetching;
+  // v9.0.293 (TD-797، یافته B08-28): خطای دریافت فهرست (مثلاً ۴۰۳ یا ۵۰۰) با پیام سرور نمایش داده می‌شود؛ پیش‌تر همان
+  // «سندی مطابق فیلترهای انتخابی … یافت نشد» فهرست خالی بود
+  const loadError = docsQuery.isError ? (errorMessageOf(docsQuery.error) || 'خطا در دریافت فهرست اسناد') : null;
+  const { refetch } = docsQuery;
+  const retryLoad = useCallback(() => { void refetch(); }, [refetch]);
 
   const loadData = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documents.all });
@@ -77,6 +82,7 @@ export function useInvoiceListQuery() {
     page, setPage,
     pageSize, setPageSize,
     safeDocs, totalItems, totalPages, loading,
+    loadError, retryLoad,
     summaryMetrics,
     hasActiveFilters, clearFilters,
     loadData,
