@@ -6,7 +6,7 @@ import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../.
 interface ProcurementOrderListProps {
   orders: ProcurementOrder[];
   isLoading: boolean;
-  onDeliverOrder?: (orderId: number, orderRef: string) => Promise<void> | void;
+  onDeliverOrder?: (orderId: number) => Promise<void> | void;
   deliveringOrderId?: number | null;
   onViewRequisition?: (requisitionId: number) => void;
   type: 'active' | 'delivered';
@@ -216,7 +216,7 @@ export function ProcurementOrderList({
                             <button
                               type="button"
                               disabled={isDelivering}
-                              onClick={() => onDeliverOrder(order.id, order.refNumber)}
+                              onClick={() => onDeliverOrder(order.id)}
                               className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer mx-auto disabled:opacity-50"
                               title="تایید رسید کالا و ثبت در کاردکس انبار"
                             >

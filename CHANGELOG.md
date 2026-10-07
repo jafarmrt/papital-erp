@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.276 — Order Number and Supplier in Procurement Dialogs
+- **Fix (TD-701, B10-14):** the delivery confirmation and the requisition detail read `refNumber`, `date` and `supplierName` of `GET /procurement/orders` instead of `orderNumber`, `orderDate` and `buyerName`, which the server never sends; the confirmation no longer shows «تامین‌کننده تدارکات» for every order.
+
 ### v9.0.275 — Receive Items Needs an Order
 - **Fix (TD-699, B10-12, decision t4):** `receive_items` of a purchase requisition refuses a catalog row that was never ordered (409 REQUISITION_ROWS_NOT_ORDERED, «ابتدا سفارش خرید با تأمین‌کننده و قیمت صادر کنید») instead of a final receipt from the generic procurement supplier at the estimate, which posted donated-goods income (5204) with no supplier debt.
 

@@ -109,7 +109,6 @@
 | TD-646 | گزارش کار و پیوست (بسته ۱۳) | P3 (B13-21) — «منشن» ۲۰ بار، «نوتیفیکیشن» یک بار و کلید مجوز `daily_logs.manage_all` در رابط گزارش کار | MentionTextarea.tsx، DailyLogsMentionsWidget.tsx، DailyLogModal.tsx، DailyLogReviewModal.tsx، DailyLogStatsCards.tsx، DailyLogsList.tsx، useDailyLogs.ts، DailyLogsPage.tsx، dailyLogs.routes.ts | open (P3، تصمیم ت۶) |
 | TD-697 | تدارکات (بسته ۱۰) | P3 (B10-10) — فیلتر وضعیت فهرست درخواست‌ها وضعیت‌های واقعی را نمی‌پذیرد (`received` و `under_review` ← ۴۰۰) و `limit=200` ۱۰۰ ردیف با `limit: 200` و `total: 115` برمی‌گرداند؛ میز فقط ۱۰۰ درخواست آخر را بی صفحه‌بندی دارد | procurement.routes.ts، procurement.service.ts، ProcurementDesk.tsx | open (P3) |
 | TD-700 | تدارکات (بسته ۱۰) | P3 (B10-13) — انتخابگر کالای فرم درخواست `<select>` ساده بی جست‌وجو است، نه `SearchableSelect`؛ برش ۵۰ کالایی آن (۲۵ از ۷۵ کالا بی پیام نبودند) با فهرست انتخاب `/items/options` در v9.0.138 (TD-888) برطرف شد | CreateRequisitionModal.tsx | open (P3) |
-| TD-701 | تدارکات (بسته ۱۰) | P3 (B10-14) — مودال‌ها `orderNumber`، `orderDate` و `buyerName` را می‌خوانند که سرور ندارد (`refNumber`، `date`، `supplierName`): تأیید تحویل «تامین‌کننده تدارکات» را به‌جای «تامین الماس» نشان داد و جزئیات درخواست شماره `R-1405-0009` را نه | RequisitionDetailModal.tsx، ConfirmWarehouseDeliveryModal.tsx | open (P3) |
 | TD-702 | تدارکات (بسته ۱۰) | P3 (B10-15) — میز تدارکات چهار درخواست را در یک `Promise.all` می‌خواند و `GET /procurement/inbox/summary` فقط `procurement.view` را می‌پذیرد: دارنده `projects.view` که صفحه را می‌بیند میز خالی می‌گیرد؛ دکمه‌های اقدام هیچ مجوزی نمی‌سنجند | ProcurementDesk.tsx، RequisitionDetailModal.tsx، procurement.routes.ts | open (P3) |
 | TD-901 | تدارکات (بسته ۱۰) | P3 (ت۵، مشاهده‌های O19 و O20) — واژه‌ها و پیام‌های رابط تدارکات: «(Requisitions)»، «متریال»، «کاتالوگ»، «سند دوبل»، «پک»، «کلید اکشن گردش کار»، کلید انگلیسی اقدام در پیام خطا («cancel_order»)، رقم لاتین `describeOverOrders` و خطای اعتبارسنجی فقط در toast، نه زیر فیلد | ProcurementDesk.tsx، CreateRequisitionModal.tsx، ConfirmWarehouseDeliveryModal.tsx، ProcurementOrderList.tsx، SplitOrderModal.tsx، procurement.routes.ts، procurement.service.ts، requisitionOrder.ts | open (P3، تصمیم ت۵) |
 
@@ -117,8 +116,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۹۶ ردیف
-- **آرشیو شده (resolved):** ۶۲۹ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۹۵ ردیف
+- **آرشیو شده (resolved):** ۶۳۰ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 

@@ -97,14 +97,13 @@ export interface ProcurementOrderItem {
   location?: string;
 }
 
+/** سفارش تدارکات، همان شکل پاسخ `GET /procurement/orders` (`listProcurementOrders`)؛ شماره در refNumber و تأمین‌کننده در supplierName */
 export interface ProcurementOrder {
   id: number;
   refNumber: string;
-  orderNumber?: string;
   docType: string;
   status: 'draft' | 'final';
   date: string;
-  orderDate?: string;
   supplierName: string;
   notes: string;
   requisitionId?: number | null;

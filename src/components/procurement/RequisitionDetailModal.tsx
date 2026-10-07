@@ -385,15 +385,16 @@ export function RequisitionDetailModal({
                     >
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
+                          {/* v9.0.276 (TD-701): شماره و تاریخ سفارش از refNumber و date پاسخ سرور */}
                           <span className="font-mono font-bold text-xs text-slate-900">
-                            فاکتور خرید #{order.orderNumber}
+                            فاکتور خرید {order.refNumber}
                           </span>
                           <span className="font-bold text-xs text-slate-700">
                             تامین‌کننده: {order.supplierName}
                           </span>
-                          {order.orderDate && (
+                          {order.date && (
                             <span className="text-[11px] text-slate-400 font-mono">
-                              ({order.orderDate})
+                              ({formatPersianDate(order.date)})
                             </span>
                           )}
                         </div>
