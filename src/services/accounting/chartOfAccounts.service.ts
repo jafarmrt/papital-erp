@@ -4,6 +4,9 @@ import { eq, asc, and } from 'drizzle-orm';
 import { STANDARD_CHART_OF_ACCOUNTS } from '../../data/standardChartOfAccounts.js';
 import { logger } from '../../middleware/logger.js';
 import type { Account, AccountLevel, AccountType, AccountNature } from '../../types.js';
+import { ConflictError, NotFoundError } from '../../errors/customErrors.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
+import { countAccountVoucherRows } from './accountPostings.js';
 
 export class ChartOfAccountsService {
   /**
@@ -224,7 +227,9 @@ export class ChartOfAccountsService {
   }
 
   /**
-   * Create a new custom account (TD-147: filter soft-deleted and allow code reuse)
+   * Create a new custom account.
+   * v9.0.197 (TD-546، تصمیم ت۴ الف): کد حساب حذف‌شده همیشه ردیف تازه می‌سازد؛ ردیف قدیم (TD-147) دیگر زنده نمی‌شود،
+   * چون ردیف‌های سند آن حساب به حساب تازه با نام و نوع دیگر می‌چسبیدند.
    */
   static async createAccount(data: {
     code: string;
@@ -240,27 +245,6 @@ export class ChartOfAccountsService {
       .where(and(eq(accounts.code, code), eq(accounts.isDeleted, 0)));
     if (existingActive.length > 0) {
       throw new Error(`حساب با کد ${data.code} قبلاً تعریف شده است.`);
-    }
-
-    // TD-147: اگر سرفصلی قبلاً با این کد به صورت نرم حذف شده، مجدداً احیا و بازتعریف می‌گردد
-    const existingDeleted = await orm.select().from(accounts)
-      .where(and(eq(accounts.code, code), eq(accounts.isDeleted, 1)));
-    if (existingDeleted.length > 0) {
-      const targetId = existingDeleted[0].id;
-      await orm.update(accounts).set({
-        name: data.name.trim(),
-        level: data.level,
-        parentId: data.parentId || null,
-        accountType: data.accountType,
-        nature: data.nature,
-        description: data.description?.trim() || null,
-        isSystem: 0,
-        isActive: 1,
-        isDeleted: 0,
-      }).where(eq(accounts.id, targetId));
-
-      const all = await this.getAllAccounts();
-      return all.find(a => a.id === targetId)!;
     }
 
     const [inserted] = await orm.insert(accounts).values({
@@ -349,28 +333,42 @@ export class ChartOfAccountsService {
   }
 
   /**
-   * Delete an account (soft delete)
+   * Delete an account (soft delete).
+   * v9.0.197 (TD-546، B03-04، تصمیم ت۴ الف): حسابی که ردیف سند دارد، با هر وضعیت سند، حذف نمی‌شود (۴۰۹
+   * `ACCOUNT_HAS_VOUCHER_ROWS`)؛ پیش‌تر حذف آن تراز آزمایشی و ترازنامه را نامتراز می‌کرد و هزینه‌اش از بستن سال می‌افتاد.
+   * ردیف حساب با `FOR UPDATE` قفل می‌شود؛ ردیف سند تازه قفل کلید خارجی همین ردیف را می‌خواهد، پس شمارش با ثبت هم‌زمان نمی‌لغزد.
    */
   static async deleteAccount(id: number): Promise<{ success: boolean }> {
-    const [existing] = await orm.select().from(accounts).where(eq(accounts.id, id));
-    if (!existing) {
-      throw new Error('حساب مورد نظر یافت نشد.');
-    }
-    if (existing.isSystem === 1) {
-      throw new Error('حساب‌های سیستمی و پیش‌فرض قابل حذف نیستند.');
-    }
+    return orm.transaction(async (tx) => {
+      const [existing] = await tx.select().from(accounts).where(eq(accounts.id, id)).for('update');
+      if (!existing || existing.isDeleted === 1) {
+        throw new NotFoundError('حساب مورد نظر یافت نشد.', undefined, 'ACCOUNT_NOT_FOUND');
+      }
+      if (existing.isSystem === 1) {
+        throw new ConflictError('حساب‌های سیستمی و پیش‌فرض قابل حذف نیستند.', undefined, 'ACCOUNT_IS_SYSTEM');
+      }
 
-    const children = await orm.select().from(accounts)
-      .where(and(eq(accounts.parentId, id), eq(accounts.isDeleted, 0)));
-    if (children.length > 0) {
-      throw new Error('این حساب دارای زیرمجموعه فعال است و نمی‌توان آن را حذف کرد.');
-    }
+      const children = await tx.select({ id: accounts.id }).from(accounts)
+        .where(and(eq(accounts.parentId, id), eq(accounts.isDeleted, 0)));
+      if (children.length > 0) {
+        throw new ConflictError('این حساب دارای زیرمجموعه فعال است و نمی‌توان آن را حذف کرد.', undefined, 'ACCOUNT_HAS_CHILDREN');
+      }
 
-    await orm.update(accounts).set({
-      isDeleted: 1,
-      isActive: 0,
-    }).where(eq(accounts.id, id));
+      const voucherRows = await countAccountVoucherRows(tx, id);
+      if (voucherRows > 0) {
+        throw new ConflictError(
+          `حساب «${existing.name}» (کد ${existing.code}) در ${toPersianDigits(String(voucherRows))} ردیف سند به کار رفته و حذف نمی‌شود؛ برای کنار گذاشتن آن، حساب را غیرفعال کنید.`,
+          { voucherRowCount: voucherRows },
+          'ACCOUNT_HAS_VOUCHER_ROWS',
+        );
+      }
 
-    return { success: true };
+      await tx.update(accounts).set({
+        isDeleted: 1,
+        isActive: 0,
+      }).where(eq(accounts.id, id));
+
+      return { success: true };
+    });
   }
 }

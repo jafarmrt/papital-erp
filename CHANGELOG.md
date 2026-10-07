@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.197 — Accounts With Voucher Rows Are Not Deleted
+- **Chart of Accounts (P1):** deleting an account that an active voucher row uses is refused with 409 `ACCOUNT_HAS_VOUCHER_ROWS`; the code of a deleted account always makes a new account, and deleted accounts that still carry rows are listed by the health check (TD-546, decision ت۴).
+
 ### v9.0.196 — Voucher Date Shown in Jalali
 - **Accounting Date Inputs (P3):** the voucher, correction and reversal forms and the trial balance, account explorer and cash flow filters keep ISO dates and use `JalaliDateInput`; editing a voucher no longer shows its ISO date as a Jalali year 2026 (TD-578, Vitest `voucherDateInput.test.tsx`).
 

@@ -1784,7 +1784,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       throw new Error('حذف نرم حساب در دیتابیس اعمال نشد.');
     }
 
-    // Re-create account with SAME code (TD-147: must reuse and revitalize without error)
+    // Re-create account with SAME code. v9.0.197 (TD-546, decision ت۴ الف): the code of a deleted account makes a new
+    // row; the deleted row is no longer revived (TD-147), because its voucher rows would follow the new name and type
     const recreatedAcc = await ChartOfAccountsService.createAccount({
       code: testAccCode,
       name: 'حساب تستی احیا ۲ (بازتعریف‌شده)',
@@ -1794,15 +1795,23 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       description: 'بازتعریف موفق با کد حذف‌شده'
     });
 
-    if (!recreatedAcc || recreatedAcc.id !== createdAcc.id || recreatedAcc.name !== 'حساب تستی احیا ۲ (بازتعریف‌شده)') {
-      throw new Error('احیا و بازتعریف حساب با کد پیشین حذف‌شده انجام نشد.');
+    if (!recreatedAcc || recreatedAcc.id === createdAcc.id || recreatedAcc.name !== 'حساب تستی احیا ۲ (بازتعریف‌شده)') {
+      throw new Error(`re-creating a deleted account code must make a new account (old id ${createdAcc.id}, got ${recreatedAcc?.id})`);
+    }
+    const [oldAccRow] = await orm.select().from(accounts).where(eq(accounts.id, createdAcc.id));
+    if (oldAccRow?.isDeleted !== 1 || oldAccRow.name !== 'حساب تستی احیا ۱') {
+      throw new Error(`the deleted account was changed by re-creating its code: ${JSON.stringify({ isDeleted: oldAccRow?.isDeleted, name: oldAccRow?.name })}`);
     }
 
-    // Test explicit restoreAccount method
-    await ChartOfAccountsService.deleteAccount(createdAcc.id);
+    // Test explicit restoreAccount method: refused while another active account holds the code, then accepted
+    const refusedRestore = await ChartOfAccountsService.restoreAccount(createdAcc.id).then(() => 'restored', (e: unknown) => (e as { code?: string })?.code ?? String(e));
+    if (refusedRestore !== 'ACCOUNT_CODE_TAKEN') {
+      throw new Error(`restoring an account whose code another active account holds answered ${refusedRestore}, expected ACCOUNT_CODE_TAKEN`);
+    }
+    await ChartOfAccountsService.deleteAccount(recreatedAcc.id);
     const restoredAcc = await ChartOfAccountsService.restoreAccount(createdAcc.id);
     if (!restoredAcc || restoredAcc.isDeleted !== 0 || restoredAcc.isActive !== 1) {
-      throw new Error('متد restoreAccount حساب را به وضعیت فعال و غیرحذف بازنگرداند.');
+      throw new Error('restoreAccount did not bring the account back as active and not deleted');
     }
 
     // 3. Cleanup test records
@@ -1811,7 +1820,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     await cleanTestTableData('document_items', 'id', [activeItem.id, deletedItem.id]);
     await cleanTestTableData('documents', 'id', [testDoc.id]);
     await cleanTestTableData('items', 'id', [testItem.id]);
-    await cleanTestTableData('accounts', 'id', [createdAcc.id]);
+    await cleanTestTableData('accounts', 'id', [createdAcc.id, recreatedAcc.id]);
 
     results.push(makeTestCase({
       id: 'reg_purchase_voucher_soft_delete_and_coa_reuse_td_144_147',
@@ -10561,6 +10570,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runFiscalYearOrderTests(shouldRun));
   const { runManualVoucherCurrencyTests } = await import('../regression/manualVoucherCurrencyTests.js');
   results.push(...await runManualVoucherCurrencyTests(shouldRun));
+  // Package 3 PR e: the chart of accounts and the account mapping (TD-546 ...)
+  const { runChartOfAccountsTests } = await import('../regression/chartOfAccountsTests.js');
+  results.push(...await runChartOfAccountsTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
