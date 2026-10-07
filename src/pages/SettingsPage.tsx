@@ -210,6 +210,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
               s.setShowWhModal(true);
             }}
             onDeleteWarehouse={s.handleWhDelete}
+            canReactivate={currentUser.role === 'admin'}
           />
         )}
 
@@ -329,7 +330,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
 
       <ConfirmModal
         isOpen={s.whConfirmState.isOpen}
-        message="غیرفعال‌سازی این انبار؟"
+        message="این انبار غیرفعال شود؟ مدیر سیستم می‌تواند آن را دوباره فعال کند."
         onConfirm={s.executeWhDelete}
         onCancel={() => s.setWhConfirmState({ isOpen: false, whId: 0 })}
       />

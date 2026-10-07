@@ -10572,5 +10572,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runSystemInventoryCheckTests } = await import('../regression/systemInventoryCheckTests.js');
   results.push(...await runSystemInventoryCheckTests(shouldRun));
 
+  // v9.0.109 (TD-490): warehouse deactivation lock, last active warehouse and reactivation
+  const { runWarehouseDeactivationTests } = await import('../regression/warehouseDeactivationTests.js');
+  results.push(...await runWarehouseDeactivationTests(shouldRun));
+
   return results;
 }

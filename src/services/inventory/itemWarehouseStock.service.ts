@@ -64,6 +64,21 @@ export class ItemWarehouseStockService {
       throw new ValidationError(`مقدار گردش انبار باید عددی مثبت باشد: ${quantity}`);
     }
 
+    // v9.0.109 (TD-490): ردیف انبار FOR KEY SHARE و فقط اگر فعال است؛ با قفل FOR UPDATE غیرفعال‌سازی ناسازگار است، پس
+    // غیرفعال‌سازی پس از commit این گردش موجودی آن را می‌بیند و گردشی که پس از آن برسد انبار غیرفعال را نمی‌پذیرد
+    const [activeWarehouse] = await tx
+      .select({ id: warehouses.id })
+      .from(warehouses)
+      .where(and(eq(warehouses.id, warehouse.id), eq(warehouses.isActive, 1)))
+      .for('key share');
+    if (!activeWarehouse) {
+      throw new ValidationError(
+        `انبار «${warehouse.name}» (${warehouse.code}) غیرفعال است و گردش موجودی نمی‌پذیرد.`,
+        { warehouseId: warehouse.id, code: warehouse.code },
+        'WAREHOUSE_INACTIVE'
+      );
+    }
+
     // v7.0.35 (audit P2-2): ردیف (کالا × انبار) ابتدا با INSERT ... ON CONFLICT DO NOTHING تضمین و سپس قفل
     // سطری واقعی گرفته می‌شود. پیش‌تر SELECT ... FOR UPDATE روی ردیف ناموجود قفلی نمی‌گرفت و دو تراکنش همزمانِ
     // اولین حرکت یک کالا در یک انبار هر دو INSERT می‌کردند و یکی با خطای 23505 شکست می‌خورد.

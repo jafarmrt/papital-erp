@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { WarehouseService } from '../services/warehouse.service.js';
+import { orm } from '../db/drizzle.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -31,11 +32,14 @@ const updateWarehouseValidation = z.object({
   })
 });
 
-router.get('/warehouses', asyncHandler(async (req, res) => {
-  try {
-    const data = await WarehouseService.listActive();
-    res.json(data);
-  } catch (err) { throw err; }
+const listWarehousesValidation = z.object({
+  query: z.object({ includeInactive: z.enum(['0', '1', 'true', 'false']).optional() }).passthrough(),
+});
+
+// v9.0.109 (TD-490): `includeInactive=1` انبارهای غیرفعال را هم برای «مدیریت انبارها» می‌دهد؛ پیش‌فرض فقط فعال‌ها
+router.get('/warehouses', validate(listWarehousesValidation), asyncHandler(async (req, res) => {
+  const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
+  res.json(includeInactive ? await WarehouseService.listAll() : await WarehouseService.listActive());
 }));
 
 router.post('/warehouses', authorize('admin'), validate(createWarehouseValidation), asyncHandler(async (req, res) => {
@@ -79,21 +83,40 @@ router.put('/warehouses/:id', authorize('admin'), validate(updateWarehouseValida
 }));
 
 router.delete('/warehouses/:id', authorize('admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const wh = await WarehouseService.deactivateWarehouse(id);
-
+  const id = Number(req.params.id);
+  // v9.0.109 (TD-490): غیرفعال‌سازی و ثبت ممیزی در یک تراکنش، زیر قفل ردیف انبار
+  await orm.transaction(async (tx) => {
+    const wh = await WarehouseService.deactivateWarehouse(id, tx);
     await logActivity({
+      tx,
       action: 'DELETE',
       entity: 'انبار',
       entityId: wh.id,
       description: `غیرفعال‌سازی انبار «${wh.name}» با کد «${wh.code}»`,
-      details: { code: wh.code, name: wh.name, isActive: 0 },
+      details: { code: wh.code, name: wh.name, before: { isActive: wh.isActive }, after: { isActive: 0 } },
       req
     });
+  });
+  res.json({ success: true });
+}));
 
-    res.json({ success: true });
-  } catch (err) { throw err; }
+// v9.0.109 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال، فقط مدیر سیستم، با ممیزی در همان تراکنش
+router.post('/warehouses/:id/reactivate', authorize('admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const result = await orm.transaction(async (tx) => {
+    const { previous, current } = await WarehouseService.reactivateWarehouse(id, tx);
+    await logActivity({
+      tx,
+      action: 'RESTORE',
+      entity: 'انبار',
+      entityId: current.id,
+      description: `فعال‌سازی دوباره انبار «${current.name}» با کد «${current.code}»`,
+      details: { code: current.code, name: current.name, before: { isActive: previous.isActive }, after: { isActive: current.isActive } },
+      req
+    });
+    return current;
+  });
+  res.json({ id: result.id, name: result.name, code: result.code, is_active: result.isActive });
 }));
 
 export default router;
