@@ -9,7 +9,7 @@ export const categories = pgTable('categories', {
   prefix: text('prefix').notNull(),
   type: text('type').notNull(), // 'product' or 'raw_material'
   defaultUnit: text('default_unit').default('عدد'),
-  // v9.0.197 (TD-659، ت۸ الف): حذف دسته نرم است (مهاجرت 0071)
+  // v9.0.204 (TD-659، ت۸ الف): حذف دسته نرم است (مهاجرت 0072)
   isDeleted: integer('is_deleted').notNull().default(0)
 });
 

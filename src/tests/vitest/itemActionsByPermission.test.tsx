@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 
-// v9.0.202 (O14 of package 5): the item and pricing pages show their buttons and price fields by the permission of the
+// v9.0.209 (O14 of package 5): the item and pricing pages show their buttons and price fields by the permission of the
 // server route each one calls (products.create / edit / delete, woocommerce.manage, products.edit_price), never by the
 // role code «viewer»; the average cost is always shown in rials (O11).
 const fetchJson = vi.fn();

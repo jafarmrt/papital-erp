@@ -21,7 +21,7 @@ import {
 } from '../hooks/queries';
 
 export default function ItemsPage() {
-  // v9.0.202 (O14): دکمه‌ها با مجوز همان مسیر سرور (ساخت، ویرایش، حذف کالا، همگام‌سازی ووکامرس)، نه نقش «viewer»
+  // v9.0.209 (O14): دکمه‌ها با مجوز همان مسیر سرور (ساخت، ویرایش، حذف کالا، همگام‌سازی ووکامرس)، نه نقش «viewer»
   const canCreate = useHasPermission('products.create');
   const canEdit = useHasPermission('products.edit');
   const canDelete = useHasPermission('products.delete');

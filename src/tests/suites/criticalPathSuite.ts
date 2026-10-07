@@ -77,8 +77,12 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
     async () => {
       if (!session.cookie) throw new Error('admin session in hand nist');
 
+      // v9.0.198 (TD-549): a manual voucher row goes only on a posting account (active subsidiary or detailed, no active sub-account)
       const accountsRes = await orm.execute(sql`
-        SELECT id FROM accounts WHERE is_deleted = 0 ORDER BY id LIMIT 2
+        SELECT a.id FROM accounts a
+        WHERE a.is_deleted = 0 AND a.is_active = 1 AND a.level IN ('subsidiary', 'detailed')
+          AND NOT EXISTS (SELECT 1 FROM accounts c WHERE c.parent_id = a.id AND c.is_deleted = 0 AND c.is_active = 1)
+        ORDER BY a.id LIMIT 2
       `);
       const accountRows: any[] = (accountsRes as any).rows || [];
       if (accountRows.length < 2) throw new Error('حداقل دو سرفصل برای آزمون لازم است');

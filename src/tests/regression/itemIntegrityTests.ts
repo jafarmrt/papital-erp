@@ -96,10 +96,14 @@ async function activeItemsWhere(condition: string, params: unknown[]): Promise<n
 async function openingVoucherAtomicCase(ctx: Ctx): Promise<string> {
   const prev = (await q(`SELECT value FROM app_settings WHERE key = 'accounting_account_mappings'`))[0]?.value ?? null;
   const code = `1404-N-${ctx.tag}-01`;
+  let hiddenCapital: Row[] = [];
   try {
     await q(`INSERT INTO app_settings (key, value) VALUES ('accounting_account_mappings', $1)
              ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
     [JSON.stringify({ ...(prev ? JSON.parse(String(prev)) : {}), openingCapitalAccountCode: '9999' })]);
+    // v9.0.199 (TD-550): a mapped code with no account falls back to the concept's default code (4001), so the default is
+    // hidden too for the opening voucher to have no capital account
+    hiddenCapital = await q(`UPDATE accounts SET is_deleted = 1 WHERE code = '4001' AND is_deleted = 0 RETURNING id`);
     const def = await defaultWarehouseCode();
     const res = await ctx.post('/api/items', {
       type: 'product', code, name: `گردنبند بی‌سند ${ctx.tag}`, unit: 'عدد', category: 'گردنبند', weighted_average_cost: 1000000, [`stock_${def}`]: 10,
@@ -112,6 +116,7 @@ async function openingVoucherAtomicCase(ctx: Ctx): Promise<string> {
     }
     return `POST refused with ${res.status}: ${String(res.body?.error ?? '').slice(0, 120)}; no item and no Kardex row`;
   } finally {
+    if (hiddenCapital.length > 0) await q(`UPDATE accounts SET is_deleted = 0 WHERE id = ANY($1::int[])`, [hiddenCapital.map(r => Number(r.id))]);
     await q(prev === null ? `DELETE FROM app_settings WHERE key = 'accounting_account_mappings'`
       : `UPDATE app_settings SET value = $1 WHERE key = 'accounting_account_mappings'`, prev === null ? [] : [prev]);
   }

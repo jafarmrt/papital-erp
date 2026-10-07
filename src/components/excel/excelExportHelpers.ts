@@ -23,7 +23,7 @@ export async function exportCompleteExcel(typeFilter: string): Promise<void> {
   toast.success('فایل اکسل جامع با موفقیت دانلود شد.');
 }
 
-/** v9.0.201 (O8): الگو را سرور با سرستون‌های ورود می‌سازد (انبارهای فعال، فهرست‌های قیمت و ارز هر کدام) */
+/** v9.0.208 (O8): الگو را سرور با سرستون‌های ورود می‌سازد (انبارهای فعال، فهرست‌های قیمت و ارز هر کدام) */
 export async function downloadExcelTemplate(): Promise<void> {
   const data = await fetchJson('/items/excel-template');
   const rows = Array.isArray(data?.rows) ? data.rows : [];

@@ -208,7 +208,10 @@ export class AccountingReportService {
     const aggTurnover = new Map<number, TurnoverAccumulator>();
     for (const [accId, turnover] of accountTurnover.entries()) {
       let cur = accMap.get(accId);
-      while (cur) {
+      // v9.0.200 (TD-553، B03-11): بالادست حلقه‌ای قدیمی حلقه بی‌پایان نمی‌سازد؛ هر حساب یک بار جمع می‌گیرد
+      const climbed = new Set<number>();
+      while (cur && !climbed.has(cur.id)) {
+        climbed.add(cur.id);
         let agg = aggTurnover.get(cur.id);
         if (!agg) {
           agg = emptyTurnover();

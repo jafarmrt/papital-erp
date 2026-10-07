@@ -4,6 +4,8 @@ import { FolderTree, Plus, Search, ChevronRight, ChevronDown, Edit3, Trash2, Ref
 import { formatPersianPrice, errorMessageOf } from '../../utils';
 import type { Account, AccountLevel, AccountType, AccountNature } from '../../types';
 import toast from 'react-hot-toast';
+import { ACCOUNT_CODE_FORMAT_MESSAGE, isValidAccountCode, normalizeAccountCode } from '../../lib/accounting/accountCode';
+import { accountDeleteConfirmText } from '../../lib/accounting/accountDeleteText';
 
 interface ChartOfAccountsTabProps {
   accounts: Account[];
@@ -48,6 +50,8 @@ export function ChartOfAccountsTab({
     description: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  // v9.0.200 (TD-553، تصمیم ت۴ الف): حساب سیستمی فقط عنوان و توضیح می‌گیرد؛ سرور جز این را ۴۰۹ پاسخ می‌دهد
+  const systemLocked = editingAccount?.isSystem === 1;
 
   const toggleExpand = (id: number) => {
     setExpandedNodes(prev => ({ ...prev, [id]: !prev[id] }));
@@ -107,6 +111,11 @@ export function ChartOfAccountsTab({
       toast.error('کد و نام حساب الزامی است');
       return;
     }
+    // v9.0.201 (TD-558): کد حساب تازه فقط رقم؛ کد حساب موجود در ویرایش فقط‌خواندنی است
+    if (!editingAccount && !isValidAccountCode(normalizeAccountCode(formData.code))) {
+      toast.error(ACCOUNT_CODE_FORMAT_MESSAGE);
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -130,7 +139,8 @@ export function ChartOfAccountsTab({
       toast.error('حساب‌های سیستمی و پایه قابل حذف نیستند');
       return;
     }
-    if (!(await confirmAction({ title: 'حذف حساب', message: `آیا از حذف حساب "${acc.name}" (کد: ${acc.code}) اطمینان دارید؟` }))) return;
+    // v9.0.203 (TD-576، B03-34): تأیید حذف می‌گوید حساب سندخورده حذف نمی‌شود و راه کنار گذاشتن آن غیرفعال کردن است
+    if (!(await confirmAction({ title: 'حذف حساب', message: accountDeleteConfirmText(acc) }))) return;
 
     try {
       await onDeleteAccount(acc.id);
@@ -285,7 +295,7 @@ export function ChartOfAccountsTab({
 
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => onSeedStandardAccounts()}
+            onClick={() => { void onSeedStandardAccounts().catch(() => undefined); }}
             disabled={loading}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition disabled:opacity-50"
           >
@@ -459,6 +469,7 @@ export function ChartOfAccountsTab({
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => openEditModal(acc)}
+                            title="ویرایش"
                             className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -466,6 +477,7 @@ export function ChartOfAccountsTab({
                           {acc.isSystem !== 1 && (
                             <button
                               onClick={() => handleDelete(acc)}
+                              title="حذف"
                               className="p-1 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -491,6 +503,11 @@ export function ChartOfAccountsTab({
             </h3>
 
             <form onSubmit={handleSave} className="space-y-4">
+              {systemLocked && (
+                <p className="text-[11px] leading-5 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded-xl px-3 py-2">
+                  این حساب سیستمی است؛ فقط عنوان و توضیحات آن ویرایش می‌شود.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
@@ -499,10 +516,15 @@ export function ChartOfAccountsTab({
                   <input
                     type="text"
                     required
+                    aria-label="کد حساب"
+                    inputMode="numeric"
+                    dir="ltr"
                     value={formData.code}
-                    onChange={e => setFormData({ ...formData, code: e.target.value })}
+                    readOnly={!!editingAccount}
+                    title={editingAccount ? 'کد حساب پس از ساخت عوض نمی‌شود' : undefined}
+                    onChange={e => setFormData({ ...formData, code: normalizeAccountCode(e.target.value) })}
                     placeholder="مثال: 1001"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono read-only:opacity-60"
                   />
                 </div>
 
@@ -544,7 +566,9 @@ export function ChartOfAccountsTab({
                     حساب بالادست (والد)
                   </label>
                   <select
+                    aria-label="حساب بالادست"
                     value={formData.parentId || ''}
+                    disabled={systemLocked}
                     onChange={e => setFormData({ ...formData, parentId: e.target.value ? Number(e.target.value) : null })}
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                   >
@@ -571,7 +595,9 @@ export function ChartOfAccountsTab({
                     نوع / طبقه‌بندی
                   </label>
                   <select
+                    aria-label="نوع حساب"
                     value={formData.accountType}
+                    disabled={systemLocked}
                     onChange={e => setFormData({ ...formData, accountType: e.target.value as AccountType })}
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                   >
@@ -589,7 +615,9 @@ export function ChartOfAccountsTab({
                     ماهیت حساب
                   </label>
                   <select
+                    aria-label="ماهیت حساب"
                     value={formData.nature}
+                    disabled={systemLocked}
                     onChange={e => setFormData({ ...formData, nature: e.target.value as AccountNature })}
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                   >

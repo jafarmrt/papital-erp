@@ -380,7 +380,7 @@ export class ItemCatalogService {
       row[ITEM_REORDER_POINT_COLUMN] = Number(it.reorderPoint || 0);
       row[ITEM_WAC_COLUMN] = Number(it.weightedAverageCost || 0);
 
-      // v9.0.200 (O12): ارز هر فهرست در ستون خودش، نه یک «واحد ارز» برای کل ردیف
+      // v9.0.207 (O12): ارز هر فهرست در ستون خودش، نه یک «واحد ارز» برای کل ردیف
       Object.assign(row, priceExportCells(normalizedStrategies, (normStrat) => {
         const canKey = getStrategyCanonicalKey(normStrat);
         return itemPriceObj?.get(normStrat) || (canKey ? itemPriceObj?.get(canKey) : undefined);
@@ -623,7 +623,7 @@ export class ItemCatalogService {
         .from(documentItems)
         .where(and(eq(documentItems.itemId, itemId), eq(documentItems.isDeleted, 0)))
         .limit(1);
-      // v9.0.199 (TD-663): سند افتتاحیه این کالا، سند خودش یا سند ورود اکسل
+      // v9.0.206 (TD-663): سند افتتاحیه این کالا، سند خودش یا سند ورود اکسل
       const voucherRow = (await itemIdsWithOpeningVoucher(tx, [itemId])).has(itemId);
 
       // v7.0.45 (audit P2-1): موجودی فعلی از جدول موجودی انبارها (منبع حقیقت)

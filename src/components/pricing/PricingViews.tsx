@@ -9,7 +9,7 @@ interface PricingViewsShared {
   strategies: string[];
   localEdits: Record<number, Record<string, { title: string; price: string; currency: string }>>;
   savingId: number | null;
-  /** v9.0.202 (O14): فیلدهای قیمت، پیشنهاد سود و ذخیره فقط با `products.edit_price` (مسیرهای ذخیره قیمت سرور) */
+  /** v9.0.209 (O14): فیلدهای قیمت، پیشنهاد سود و ذخیره فقط با `products.edit_price` (مسیرهای ذخیره قیمت سرور) */
   canEditPrices: boolean;
   getFieldValue: (itemId: number, strategyTitle: string) => { price: string; currency: string };
   handlePriceChange: (itemId: number, strategyTitle: string, newPrice: string, currentCurrency?: string) => void;

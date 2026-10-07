@@ -16,10 +16,10 @@ export async function runItemExcelExportTests(shouldRun: ShouldRun): Promise<Tes
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (ctx: Ctx) => Promise<string>]> = [
     ['reg_excel_export_currency_per_price_list_td_841',
-      'v9.0.200: the item Excel export writes a currency column for each price list, so a rial and a dollar price of one item come back unchanged (TD-841)',
+      'v9.0.207: the item Excel export writes a currency column for each price list, so a rial and a dollar price of one item come back unchanged (TD-841)',
       ['td841', 'excel', 'price', 'currency', 'package5'], currencyRoundTripCase],
     ['reg_excel_template_from_server_td_842',
-      'v9.0.201: the Excel import template comes from the server without an export audit row, and the import accepts its sample row (TD-842)',
+      'v9.0.208: the Excel import template comes from the server without an export audit row, and the import accepts its sample row (TD-842)',
       ['td842', 'excel', 'template', 'package5'], templateCase],
   ];
   for (const [id, name, tags, run] of cases) {
@@ -66,7 +66,7 @@ async function activePrices(itemId: number): Promise<string> {
   return rows.map(r => `${r.title}=${r.price.toNumber()} ${r.currency}`).sort().join(', ');
 }
 
-/** O12: on v9.0.199 the export had one «واحد ارز» per row (USD here), so re-importing it turned the rial price into dollars. */
+/** O12: on v9.0.206 the export had one «واحد ارز» per row (USD here), so re-importing it turned the rial price into dollars. */
 async function currencyRoundTripCase(ctx: Ctx): Promise<string> {
   const { createTestItem } = await import('../fixtures/factories.js');
   const it = await createTestItem({ code: `1404-B-${ctx.serial()}-03`, name: withTestMarker('دستبند دو ارزی td841'), category: 'دستبند', stocks: { '': 1 } });
@@ -92,7 +92,7 @@ async function currencyRoundTripCase(ctx: Ctx): Promise<string> {
   return `export wrote عمده IRR and فروشگاه USD in their own columns; re-import kept ${after} and wrote no price`;
 }
 
-/** O8: on v9.0.200 the browser built the template from the full export (an EXPORT audit row) and the route did not exist. */
+/** O8: on v9.0.207 the browser built the template from the full export (an EXPORT audit row) and the route did not exist. */
 async function templateCase(ctx: Ctx): Promise<string> {
   const { codeFormatError } = await import('../../lib/items/itemCodeFormat.js');
   const markRes = await orm.execute(sql`SELECT COALESCE(MAX(id), 0)::int AS id FROM activity_logs`);

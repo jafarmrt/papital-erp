@@ -150,7 +150,7 @@ export interface ProjectReservationDeduction {
   row: InventoryControlItem;
 }
 
-/** v9.0.199 (TD-663): رزرو فقط برای این کالاها (صفحه فهرست کالا) */
+/** v9.0.206 (TD-663): رزرو فقط برای این کالاها (صفحه فهرست کالا) */
 export interface ReservationScope {
   itemIds: number[];
 }
@@ -558,7 +558,7 @@ export class ItemStockReservationService {
   /**
    * Comprehensive calculation of reserved items across active Proforma Invoices AND Project Control.
    *
-   * v9.0.199 (TD-663، B05-17): با `scope.itemIds` فقط رزرو همان کالاها ساخته می‌شود (فهرست کالا یک صفحه را می‌خواهد):
+   * v9.0.206 (TD-663، B05-17): با `scope.itemIds` فقط رزرو همان کالاها ساخته می‌شود (فهرست کالا یک صفحه را می‌خواهد):
    * ردیف‌های پیش‌فاکتور همان کالاها، موجودی انبار و خلاصه همان کالاها، و ردیف‌های پروژه‌ای که به همان کالاها می‌رسند.
    * همه کالاها فقط وقتی (و فقط با ستون‌های تطبیق) خوانده می‌شوند که پروژه فعالی کنترل موجودی دارد. پیش‌تر هر صفحه ۵۰ کالایی
    * گزارش همه کالاها را با موجودی همه انبارها می‌ساخت (۷۵ از ۹۳ میلی‌ثانیه با ۵٬۰۰۰ کالا).
@@ -658,7 +658,7 @@ export class ItemStockReservationService {
           sql`${productionProjects.status} NOT IN ('completed', 'cancelled')`
         ));
 
-      // v9.0.199 (TD-663): با scope، همه کالاها فقط برای تطبیق ردیف‌های پروژه لازم‌اند؛ بی پروژه فعال فقط کالاهای scope
+      // v9.0.206 (TD-663): با scope، همه کالاها فقط برای تطبیق ردیف‌های پروژه لازم‌اند؛ بی پروژه فعال فقط کالاهای scope
       const needsAllItems = !scopeIds || activeProjs.some(p => p.inventoryControl);
       const allItems = await client
         .select({

@@ -123,7 +123,7 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
     }
 
     const fetchedItems = await query;
-    // v9.0.199 (TD-663، B05-17): رزرو فقط برای کالاهای همین صفحه
+    // v9.0.206 (TD-663، B05-17): رزرو فقط برای کالاهای همین صفحه
     const reservedMap = await ItemsService.getReservedStocksMap({ itemIds: fetchedItems.map(it => it.id) });
     // v7.0.48 (TD-214): نقشه موجودی انبارها (stocks و stock_<کد>) از جدول نرمال؛ شکل پاسخ برای رابط کاربری حفظ شده است
     const listStockMap = await ItemWarehouseStockService.getStocksForItems(orm, fetchedItems.map(it => it.id));
@@ -143,7 +143,7 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
           .from(documentItems)
           .where(and(inArray(documentItems.itemId, itemIds), eq(documentItems.isDeleted, 0)))
           .groupBy(documentItems.itemId),
-        // v9.0.199 (TD-663): سند افتتاحیه کالا (سند خودش یا سند ورود اکسل) از جدول کالاهای سند افتتاحیه
+        // v9.0.206 (TD-663): سند افتتاحیه کالا (سند خودش یا سند ورود اکسل) از جدول کالاهای سند افتتاحیه
         itemIdsWithOpeningVoucher(orm, itemIds),
       ]);
 

@@ -1,4 +1,4 @@
--- Drizzle Migration 0073: items of each item opening voucher (v9.0.199 / TD-663, product-owner decision t10 item 3)
+-- Drizzle Migration 0074: items of each item opening voucher (v9.0.206 / TD-663, product-owner decision t10 item 3)
 --
 -- An Excel import used to issue one opening voucher per new item (999 vouchers for a 1,000-row file, each approved
 -- one by one). It now issues one voucher for the whole file, with one debit row per item, so "the opening voucher of

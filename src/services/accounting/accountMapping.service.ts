@@ -4,71 +4,54 @@ import { eq } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { logger } from '../../middleware/logger.js';
 import type { Account } from '../../types.js';
+import { ValidationError } from '../../errors/customErrors.js';
+import { toLatinDigits } from '../../lib/numericInput.js';
+import { POSTING_ACCOUNT_LEVELS, postingAccountsOf, postingRefusal, postingRefusalText } from '../../lib/accounting/postingAccount.js';
+import {
+  ACCOUNT_MAPPING_CONCEPTS, accountMappingConcept, accountTypeFitsConcept, conceptAccountTypesText, type AccountMappingKey,
+} from '../../lib/accounting/accountMappingConcepts.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 
-export interface ConceptualAccountMappingConfig {
-  directProductionWagesAccountCode: string; // Default: '6002' (حقوق مستقیم تولید)
-  wagesPayableAccountCode: string;          // Default: '3201' (حقوق و دستمزد پرداختنی)
-  salesRevenueAccountCode: string;          // Default: '5001' (فروش)
-  tradeReceivablesAccountCode: string;      // Default: '1201' (حساب‌های دریافتنی تجاری)
-  tradePayablesAccountCode: string;         // Default: '3001' (حساب‌های پرداختنی تجاری)
-  salesDiscountAccountCode: string;         // Default: '5102' (تخفیف فروش)
-  serviceRevenueAccountCode: string;        // Default: '5004' (درآمد حمل و خدمات — v7.0.103، TD-191)
-  salesVatPayableAccountCode: string;       // Default: '3203' (مالیات بر ارزش افزوده)
-  inventoryRawMaterialsCode: string;        // Default: '1401' (موجودی مواد اولیه)
-  inventoryFinishedGoodsCode: string;       // Default: '1403' (موجودی کالای تولیدشده)
-  workInProgressCode: string;               // Default: '1402' (کالای در جریان ساخت - TD-121)
-  costOfGoodsSoldCode: string;              // Default: '6001' (بهای تمام‌شده کالای فروش‌رفته)
-  summaryProfitLossCode: string;            // Default: '4301' (خلاصه سود و زیان)
-  retainedEarningsCode: string;             // Default: '4201' (سود انباشته)
-  closingBalanceAccountCode: string;        // Default: '4401' (اموال/بدهی ترازنامه)
-  // V1.7.0: مفاهیم چرخه چک صیادی (قبلاً هاردکد بودند)
-  chequeReceivableAccountCode: string;      // Default: '1101' (اسناد دریافتنی نزد صندوق)
-  chequeInCollectionAccountCode: string;    // Default: '1102' (اسناد در جریان وصول)
-  chequeProtestAccountCode: string;         // Default: '1103' (اسناد واخواستی/برگشتی)
-  chequePayableAccountCode: string;         // Default: '3101' (اسناد پرداختنی تجاری)
-  // V1.8.0: مساعده و وام پرسنل (مطالبات از کارکنان — دارایی تا کسر از حقوق)
-  employeeAdvanceAccountCode: string;       // Default: '1301' (مساعده و وام پرسنل)
-  // V1.9.0: تفکیک هزینه حقوق ثابت و سایر کسورات
-  fixedSalaryExpenseAccountCode: string;    // Default: '6003' (هزینه حقوق و دستمزد ثابت)
-  employeeDeductionsPayableAccountCode: string; // Default: '3202' (سایر کسورات پرداختنی — بیمه/مالیات سهم کارمند)
-  // V2.0.0: طرف حساب اسناد افتتاحیه (موجودی اولیه خزانه/انبار)
-  openingCapitalAccountCode: string;        // Default: '4001' (سرمایه اولیه سهامداران/موسسین)
-  // v8.0.3 (TD-255): کسری و اضافی انبارگردانی و اصلاح موجودی از اکسل
-  inventoryCountDifferenceAccountCode: string; // Default: '7012' (کسری و اضافات انبار)
-  // v8.0.17 (TD-268): کالای رایگان (اهدایی تأمین‌کننده) در رسید و خرید، به میانگین موزون
-  donatedGoodsIncomeAccountCode: string;    // Default: '5204' (درآمد کالای اهدایی)
-  // v8.0.114 (TD-413): هزینه سند ضایعات، جدا از سربار ۶۰۰۳
-  wasteExpenseAccountCode: string;          // Default: '6004' (ضایعات و افت کیفی)
+/**
+ * v9.0.199 (TD-550، B03-08): فهرست مفهوم‌ها، برچسب، کد پیش‌فرض و نوع‌های پذیرفته هر مفهوم در
+ * `src/lib/accounting/accountMappingConcepts.ts` است (مشترک سرور و صفحه نگاشت)؛ این نوع و پیش‌فرض‌ها از همان ساخته می‌شوند.
+ */
+export type ConceptualAccountMappingConfig = Record<AccountMappingKey, string>;
+
+export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = Object.fromEntries(
+  ACCOUNT_MAPPING_CONCEPTS.map(c => [c.key, c.defaultCode]),
+) as ConceptualAccountMappingConfig;
+
+export interface AccountMappingIssue {
+  key: AccountMappingKey;
+  label: string;
+  code: string;
+  reason: string;
 }
 
-export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
-  directProductionWagesAccountCode: '6002',
-  wagesPayableAccountCode: '3201',
-  salesRevenueAccountCode: '5001',
-  tradeReceivablesAccountCode: '1201',
-  tradePayablesAccountCode: '3001',
-  salesDiscountAccountCode: '5102',
-  serviceRevenueAccountCode: '5004',
-  salesVatPayableAccountCode: '3203',
-  inventoryRawMaterialsCode: '1401',
-  inventoryFinishedGoodsCode: '1403',
-  workInProgressCode: '1402',
-  costOfGoodsSoldCode: '6001',
-  summaryProfitLossCode: '4301',
-  retainedEarningsCode: '4201',
-  closingBalanceAccountCode: '4401',
-  chequeReceivableAccountCode: '1101',
-  chequeInCollectionAccountCode: '1102',
-  chequeProtestAccountCode: '1103',
-  chequePayableAccountCode: '3101',
-  employeeAdvanceAccountCode: '1301',
-  fixedSalaryExpenseAccountCode: '6003',
-  employeeDeductionsPayableAccountCode: '3202',
-  openingCapitalAccountCode: '4001',
-  inventoryCountDifferenceAccountCode: '7012',
-  donatedGoodsIncomeAccountCode: '5204',
-  wasteExpenseAccountCode: '6004',
-};
+/**
+ * v9.0.199 (TD-550): کد نگاشت فقط به حساب قابل ثبت (فعال، معین یا تفصیلی، بی زیرحساب فعال) از نوع‌های همان مفهوم
+ * می‌رسد؛ برای هر کد ناپذیرفته دلیل فارسی برمی‌گردد.
+ */
+export function accountMappingIssues(entries: Array<[AccountMappingKey, string]>, chart: Account[]): AccountMappingIssue[] {
+  const posting = new Set(postingAccountsOf(chart).map(a => a.id));
+  const issues: AccountMappingIssue[] = [];
+  for (const [key, code] of entries) {
+    const concept = accountMappingConcept(key);
+    if (!concept) continue;
+    const account = chart.find(a => a.code === code);
+    let reason = '';
+    if (!account) reason = 'حسابی با این کد در سرفصل نیست';
+    else if (!posting.has(account.id)) {
+      const hasChild = chart.some(c => c.parentId === account.id && Number(c.isActive ?? 1) === 1);
+      reason = postingRefusalText(postingRefusal(account, hasChild) ?? 'summary_level');
+    } else if (!accountTypeFitsConcept(concept, account.accountType)) {
+      reason = `نوع حساب باید ${conceptAccountTypesText(concept)} باشد`;
+    }
+    if (reason) issues.push({ key, label: concept.label, code, reason });
+  }
+  return issues;
+}
 
 const SETTINGS_KEY = 'accounting_account_mappings';
 const DISABLED_KEY = 'accounting_mappings_disabled';
@@ -92,21 +75,38 @@ export class AccountMappingService {
   }
 
   /**
-   * Save or update conceptual account mapping configurations
+   * Save or update conceptual account mapping configurations.
+   * v9.0.199 (TD-550، B03-08): کدها لاتین می‌شوند و هر کد ناخالیِ مفهومی که خاموش نیست باید حساب قابل ثبت با نوع
+   * سازگار باشد، وگرنه ۴۲۲ `ACCOUNT_MAPPING_INVALID` با فهرست همه مفهوم‌های نادرست و هیچ چیز ذخیره نمی‌شود. پیش‌تر کد
+   * ناموجود یا حساب درآمد به جای موجودی بی‌صدا ذخیره می‌شد. با `disabled` فهرست مفهوم‌های خاموش در همان تراکنش نوشته می‌شود.
    */
-  static async saveMappings(mappings: Partial<ConceptualAccountMappingConfig>): Promise<ConceptualAccountMappingConfig> {
-    const current = await this.getMappings();
-    const updated = { ...current, ...mappings };
-    
-    await orm.insert(appSettings).values({
-      key: SETTINGS_KEY,
-      value: JSON.stringify(updated)
-    }).onConflictDoUpdate({
-      target: appSettings.key,
-      set: { value: JSON.stringify(updated) }
+  static async saveMappings(mappings: Partial<ConceptualAccountMappingConfig>, disabled?: string[]): Promise<ConceptualAccountMappingConfig> {
+    return orm.transaction(async (tx) => {
+      const current = await this.getMappings(tx);
+      const disabledNow = disabled ?? await this.getDisabledMappings(tx);
+      const incoming = Object.fromEntries(Object.entries(mappings)
+        .filter(([key]) => accountMappingConcept(key))
+        .map(([key, value]) => [key, toLatinDigits(String(value ?? '')).trim()])) as Partial<ConceptualAccountMappingConfig>;
+      const toCheck = (Object.entries(incoming) as Array<[AccountMappingKey, string]>)
+        .filter(([key, code]) => code !== '' && !disabledNow.includes(key));
+      if (toCheck.length > 0) {
+        const issues = accountMappingIssues(toCheck, await ChartOfAccountsService.getAllAccounts(tx));
+        if (issues.length > 0) {
+          const lines = issues.map(i => `«${i.label}» (کد ${toPersianDigits(i.code)}): ${i.reason}`);
+          throw new ValidationError(`نگاشت حساب ذخیره نشد؛ ${lines.join('؛ ')}.`, { issues }, 'ACCOUNT_MAPPING_INVALID');
+        }
+      }
+      const updated = { ...current, ...incoming };
+      await tx.insert(appSettings).values({
+        key: SETTINGS_KEY,
+        value: JSON.stringify(updated)
+      }).onConflictDoUpdate({
+        target: appSettings.key,
+        set: { value: JSON.stringify(updated) }
+      });
+      if (disabled !== undefined) await this.setDisabledMappings(disabled, tx);
+      return updated;
     });
-
-    return updated;
   }
 
   /**
@@ -120,16 +120,11 @@ export class AccountMappingService {
       ? DEFAULT_ACCOUNT_MAPPINGS[concept]
       : (mappings[concept] || DEFAULT_ACCOUNT_MAPPINGS[concept]);
 
+    // v9.0.199 (TD-550، B03-08): فقط حساب معین یا تفصیلی؛ کد نگاشت‌شده‌ای که نیست یا گروه و کل است به کد پیش‌فرض
+    // مفهوم می‌رود و هرگز به حساب کل (دو رقم اول کد) نمی‌افتد. پیش‌تر کد ناموجود «۱۴۹۹» سند رسید را روی حساب کل ۱۴ می‌برد
     const allAccs = await ChartOfAccountsService.getAllAccounts(tx);
-    let matched = allAccs.find(a => a.code === targetCode);
-
-    // Fallback search by general code if subsidiary not found (e.g., '12' for '1201')
-    if (!matched && targetCode.length > 2) {
-      const generalCode = targetCode.slice(0, 2);
-      matched = allAccs.find(a => a.code === generalCode);
-    }
-
-    return matched || null;
+    const usable = (code: string) => allAccs.find(a => a.code === code && (POSTING_ACCOUNT_LEVELS as readonly string[]).includes(a.level));
+    return usable(targetCode) ?? (targetCode !== DEFAULT_ACCOUNT_MAPPINGS[concept] ? usable(DEFAULT_ACCOUNT_MAPPINGS[concept]) : undefined) ?? null;
   }
 
   /**
