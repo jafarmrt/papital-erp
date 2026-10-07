@@ -8,6 +8,7 @@ const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({ userPermissions: { permissions: [], isAdmin: false } }),
+  useHasPermission: () => false,
 }));
 
 const user: User = { id: 1, username: 'storekeeper', full_name: 'انباردار تست', role: 'staff' };

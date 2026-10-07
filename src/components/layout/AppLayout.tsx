@@ -51,6 +51,7 @@ export function AppLayout({
           isOpen={isProfileModalOpen}
           onClose={() => setIsProfileModalOpen(false)}
           onUserUpdate={onUserUpdate}
+          roleName={userPermissions.roleName}
         />
         <div className="p-3 sm:p-4 lg:p-6 print:p-0 overflow-auto flex-1 print:overflow-visible">
           {children || <Outlet />}

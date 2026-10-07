@@ -19,6 +19,15 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.150 — Fiscal-Year Test Cleanup
+- **Fiscal-Year Test Cleanup:** the fiscal-year closing test reopens its year so another test posting in that year is not refused (TD-895).
+
+### v9.0.149 — Role Label From the Role Name
+- **Role Label From the Role Name:** the top bar and the profile show the stored name of the user's role, the system admin's too (TD-894).
+
+### v9.0.148 — Action Buttons by Permission
+- **Action Buttons by Permission:** the customers page, sales file delete and the stock form item button follow the API permission, not the role code (TD-893).
+
 ### v9.0.147 — Client Trace IDs Validated
 - **Trace IDs:** a client `X-Request-ID` / `X-Correlation-ID` becomes the trace id only when it matches `^[A-Za-z0-9_-]{8,64}$` (`acceptedTraceId` in `src/lib/requestContext.ts`); otherwise a new id is issued, and the error handler never reads the raw header. Before, a 4,000-character id was repeated in the response and every log line.
 

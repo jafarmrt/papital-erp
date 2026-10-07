@@ -11,6 +11,7 @@ const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({ userPermissions: { permissions: [], isAdmin: false } }),
+  useHasPermission: () => false,
 }));
 vi.mock('react-hot-toast', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
