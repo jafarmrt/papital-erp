@@ -58,6 +58,13 @@ const SECTIONS: Record<string, Section> = {
     fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/items\/prices\/all(?:\?|['"`])/g,
     ownPages: ['pages/PricingPage.tsx'],
   },
+  // v9.0.125 (TD-892): کارکرد همه پرسنل فقط برای صفحه کارمزدی؛ زبانه زمان‌بندی پروژه کارکردهای همان پروژه را می‌خواند
+  pieceworkLogs: {
+    fullList: 'pieceworkLogs',
+    ownGroups: ['piecework.', 'personnel.manage'],
+    fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/piecework\/logs(?:\?(?!projectId=)|['"`])/g,
+    ownPages: ['hooks/usePiecework.ts'],
+  },
 };
 
 /** درخواست خواندن فهرست کامل در متن فایل؛ فراخوانی‌ای که در همان چند خط `method` نوشتن دارد (POST و …) خواندن نیست */

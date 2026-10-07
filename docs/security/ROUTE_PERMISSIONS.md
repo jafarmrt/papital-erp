@@ -259,7 +259,7 @@
 | POST | `/api/piecework/categories` | personnel.manage \| settings.manage |
 | DELETE | `/api/piecework/categories/:id` | personnel.manage \| settings.manage |
 | PUT | `/api/piecework/categories/:id` | personnel.manage \| settings.manage |
-| GET | `/api/piecework/logs` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage \| personnel.manage |
+| GET | `/api/piecework/logs` | piecework.view \| piecework.log \| personnel.manage \| projects.view |
 | POST | `/api/piecework/logs` | personnel.manage \| piecework.log |
 | DELETE | `/api/piecework/logs/:id` | personnel.manage |
 | PUT | `/api/piecework/logs/:id` | personnel.manage |
@@ -275,10 +275,10 @@
 | POST | `/api/piecework/payrolls/generate` | personnel.manage |
 | GET | `/api/piecework/payrolls/mine` | login-only |
 | POST | `/api/piecework/personnel-rates` | personnel.manage |
-| GET | `/api/piecework/personnel-rates/:personnelId` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage \| personnel.manage |
+| GET | `/api/piecework/personnel-rates/:personnelId` | piecework.view \| piecework.log \| personnel.manage |
 | GET | `/api/piecework/personnel/:id/advance-balance` | piecework.payroll \| personnel.manage \| accounting.treasury |
 | POST | `/api/piecework/rates` | personnel.manage |
-| GET | `/api/piecework/rates/:personnelId` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage \| personnel.manage |
+| GET | `/api/piecework/rates/:personnelId` | piecework.view \| piecework.log \| personnel.manage |
 | GET | `/api/piecework/tasks` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage \| personnel.manage |
 | POST | `/api/piecework/tasks` | personnel.manage |
 | GET | `/api/piecework/tasks-history` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage \| personnel.manage |

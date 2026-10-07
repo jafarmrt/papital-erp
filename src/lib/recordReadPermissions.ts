@@ -97,6 +97,15 @@ export const READ_PERMISSIONS = {
    * ثبت کارکرد) و پیش‌تر فهرستی را که ذخیره می‌کرد نمی‌خواند (v9.0.114، TD-668).
    */
   pieceworkReference: ['piecework.view', 'piecework.log', 'piecework.manage_tasks', 'projects.view', 'settings.manage', 'personnel.manage'],
+  /**
+   * کارکرد همه پرسنل با نرخ و مبلغ (`GET /piecework/logs`) فقط برای صفحه کارمزدی و مدیر کارکرد (`personnel.manage`، ویرایش
+   * و حذف کارکرد) (v9.0.125، TD-892؛ پیش‌تر مشاهده پروژه و مدیریت تنظیمات هم کارکرد همه پرسنل را می‌خواندند)
+   */
+  pieceworkLogs: ['piecework.view', 'piecework.log', 'personnel.manage'],
+  /** کارکردهای یک پروژه (`GET /piecework/logs?projectId=`، زبانه زمان‌بندی پروژه) */
+  projectPieceworkLogs: ['projects.view'],
+  /** نرخ‌های اختصاصی یک پرسنل: فرم ثبت کارکرد و پنجره نرخ‌های پرسنل */
+  pieceworkRates: ['piecework.view', 'piecework.log', 'personnel.manage'],
   /** فیش‌های حقوق و کارمزد با مبالغ (فیش خود کاربر از /piecework/payrolls/mine) */
   payrolls: ['piecework.payroll', 'personnel.manage', 'accounting.treasury'],
   transfers: ['products.view'],

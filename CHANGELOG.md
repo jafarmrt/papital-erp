@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.125 — Piecework Read Scope
+- **Piecework Read Scope:** every personnel's work logs and special rates need a piecework permission; a project reads only its own logs (TD-892).
+
 ### v9.0.124 — Item Price Read Scope
 - **Item Price Read Scope:** the invoice form reads the sale prices of the chosen item; all prices need the products permission (TD-891).
 

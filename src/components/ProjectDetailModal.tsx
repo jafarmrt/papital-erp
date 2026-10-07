@@ -68,7 +68,6 @@ export default function ProjectDetailModal({
   const [itemsList, setItemsList] = useState<Item[]>([]);
   const [personnelList, setPersonnelList] = useState<any[]>([]);
   const [pieceworkTasksList, setPieceworkTasksList] = useState<any[]>([]);
-  const [, setPieceworkLogs] = useState<any[]>([]);
 
   // Stage editing inline state
   const [editingStageId, setEditingStageId] = useState<number | null>(null);
@@ -104,7 +103,7 @@ export default function ProjectDetailModal({
 
   const loadAuxiliaryData = async (signal?: AbortSignal) => {
     try {
-      const [items, personnel, tasks, logs] = await Promise.all([
+      const [items, personnel, tasks] = await Promise.all([
         fetchJson(PICK_LIST_URLS.items, { signal }).catch((err) => {
           if (err?.name === 'AbortError') throw err;
           console.error('Failed to load items in project detail modal:', err);
@@ -123,13 +122,11 @@ export default function ProjectDetailModal({
           toast.error('خطا در دریافت لیست عناوین کارمزدی');
           return [];
         }),
-        fetchJson(`/piecework/logs?projectId=${projectId}`, { signal }).catch(() => [])
       ]);
       const rawItems = Array.isArray(items) ? items : (items?.data && Array.isArray(items.data) ? items.data : []);
       setItemsList(rawItems);
       setPersonnelList(Array.isArray(personnel) ? personnel : []);
       setPieceworkTasksList(Array.isArray(tasks) ? tasks : []);
-      setPieceworkLogs(Array.isArray(logs) ? logs : []);
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
       console.error('Error fetching auxiliary project data:', err);

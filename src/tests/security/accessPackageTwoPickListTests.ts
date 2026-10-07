@@ -1,7 +1,8 @@
 import { inArray } from 'drizzle-orm';
 import { TestCaseResult } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { customers, documents, items, itemWarehouseStocks, productionProjects } from '../../db/schema.js';
+import { customers, documents, items, itemWarehouseStocks, personnel, pieceworkLogs, pieceworkTasks, productionProjects } from '../../db/schema.js';
+import { money } from '../../lib/money.js';
 import { runCase, type Row, type ShouldRun } from './workflowTestHarness.js';
 
 /**
@@ -289,6 +290,55 @@ export async function runAccessPackageTwoPickListTests(shouldRun: ShouldRun): Pr
         }
       } finally {
         await orm.delete(items).where(inArray(items.id, [item.id])).catch(() => undefined);
+      }
+    });
+  }
+
+  if (shouldRun('sec_piecework_read_scope_td_892', 'security', 'td892', 'piecework', 'pick', 'permissions', 'package2')) {
+    await runCase(results, {
+      id: 'sec_piecework_read_scope_td_892',
+      name: 'v9.0.125: every personnel\'s work logs and special rates need a piecework key; projects.view reads one project\'s logs (TD-892)',
+      details: 'GET /api/piecework/logs: piecework.view, piecework.log and personnel.manage list both logs; projects.view gets 403 without a project and with projectId=ALL, and only that project\'s log with its id; settings.manage gets 403; personnel rates: piecework.view and personnel.manage 200, projects.view and settings.manage 403; task titles stay open to projects.view and settings.manage',
+    }, async (h, wrong) => {
+      const [worker] = await orm.insert(personnel).values({ fullName: `ERP-TEST-MARKER worker ${h.tag}` }).returning({ id: personnel.id });
+      const [task] = await orm.insert(pieceworkTasks).values({ code: `PWT${h.tag}`, title: `ERP-TEST-MARKER task ${h.tag}` }).returning({ id: pieceworkTasks.id });
+      const [project] = await orm.insert(productionProjects).values({ projectCode: `PRJ_PW${h.tag}`, title: `ERP-TEST-MARKER project ${h.tag}` }).returning({ id: productionProjects.id });
+      const logRow = (projectId: number | null) => ({ personnelId: worker.id, taskId: task.id, projectId, date: '2026-10-01', quantity: 2, unitRate: money(1500), totalAmount: money(3000) });
+      const inserted = await orm.insert(pieceworkLogs).values([logRow(project.id), logRow(null)]).returning({ id: pieceworkLogs.id });
+      const [projectLog, otherLog] = inserted.map(r => r.id);
+      try {
+        const logIds = (body: unknown) => (Array.isArray(body) ? body as Row[] : []).map(r => Number(r.id));
+        for (const key of ['piecework.view', 'piecework.log', 'personnel.manage']) {
+          const res = await h.get(`/api/piecework/logs?personnelId=${worker.id}`, await h.sessionWith([key]));
+          const ids = logIds(res.body);
+          if (res.status !== 200 || !ids.includes(projectLog) || !ids.includes(otherLog)) wrong.push(`${key}: work logs returned ${res.status} with ${JSON.stringify(ids)}`);
+        }
+        const planner = await h.sessionWith(['projects.view']);
+        for (const url of [`/api/piecework/logs?personnelId=${worker.id}`, '/api/piecework/logs?projectId=ALL']) {
+          const res = await h.get(url, planner);
+          if (res.status !== 403) wrong.push(`projects.view: GET ${url} returned ${res.status}, not 403`);
+        }
+        const scoped = await h.get(`/api/piecework/logs?projectId=${project.id}`, planner);
+        if (scoped.status !== 200 || JSON.stringify(logIds(scoped.body)) !== JSON.stringify([projectLog])) {
+          wrong.push(`projects.view: the project's logs returned ${scoped.status} with ${JSON.stringify(logIds(scoped.body))}`);
+        }
+        const settings = await h.sessionWith(['settings.manage']);
+        const bySettings = await h.get('/api/piecework/logs', settings);
+        if (bySettings.status !== 403) wrong.push(`settings.manage: work logs returned ${bySettings.status}, not 403`);
+
+        for (const [key, status] of [['piecework.view', 200], ['personnel.manage', 200], ['projects.view', 403], ['settings.manage', 403]] as const) {
+          const rates = await h.get(`/api/piecework/personnel-rates/${worker.id}`, await h.sessionWith([key]));
+          if (rates.status !== status) wrong.push(`${key}: personnel rates returned ${rates.status}, not ${status}`);
+        }
+        for (const s of [planner, settings]) {
+          const tasks = await h.get('/api/piecework/tasks', s);
+          if (tasks.status !== 200) wrong.push(`task titles returned ${tasks.status} for a project or settings user`);
+        }
+      } finally {
+        await orm.delete(pieceworkLogs).where(inArray(pieceworkLogs.id, [projectLog, otherLog])).catch(() => undefined);
+        await orm.delete(pieceworkTasks).where(inArray(pieceworkTasks.id, [task.id])).catch(() => undefined);
+        await orm.delete(productionProjects).where(inArray(productionProjects.id, [project.id])).catch(() => undefined);
+        await orm.delete(personnel).where(inArray(personnel.id, [worker.id])).catch(() => undefined);
       }
     });
   }
