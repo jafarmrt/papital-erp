@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.212 — Package 13 Daily Logs and Attachments Audit
+- **Audit (package 13):** daily logs and attachments section of the stability audit report: 21 proven findings opened as TD-626..TD-646 plus TD-900 (decision t7) with the product-owner decisions t1-t7; documentation only.
+
 ### v9.0.211 — Terminal Output Is English
 - **Terminal English (owner rule t9):** AGENTS.md §6 records that everything a terminal shows is English (scripts, hooks, server logs, test names, commits), while UI text, user error messages and documents stay Persian. `npm run ratchet:terminal-english` (`scripts/terminal-english-ratchet.ts`, run by Vitest `terminalEnglishRatchet.test.ts`) counts the places that still print Persian per file and fails when a file gains one; translating them is the next step of TD-625.
 
