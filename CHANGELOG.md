@@ -19,6 +19,30 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.158 — Excel Import Audits Each Item With Before and After
+- **Item Excel Audit:** every item the Excel import creates or changes gets an audit row with its fields, stock per warehouse and prices before and after, plus one summary row, inside the import transaction (TD-655, `reg_excel_import_audit_snapshots_td_655`).
+
+### v9.0.157 — Excel Total Stock Column No Longer Adds Phantom Surplus
+- **Item Excel Stock:** «موجودی کل» alone changes only an item whose stock is all in the default warehouse, otherwise per-warehouse columns are required and must add up, so an unchanged file no longer doubles stock with a surplus voucher (TD-649, `inv_excel_total_stock_column_no_phantom_surplus_td_649`).
+
+### v9.0.156 — Excel Import Finds Items by Code and Never Changes the Code
+- **Item Excel Matching:** the item Excel import finds items by code only, refuses a name already held by another item and never changes an item's code, which is also its WooCommerce SKU (TD-651, `reg_excel_name_match_never_changes_code_td_651`).
+
+### v9.0.155 — A Partial Excel File Leaves Item Fields Unchanged
+- **Item Excel Partial Rows:** a missing column or blank cell leaves an existing item's field unchanged and its type comes from the item, so a price-only file no longer resets unit and reorder point or refuses raw materials (TD-650, `reg_excel_partial_row_keeps_fields_td_650`).
+
+### v9.0.154 — Excel Import Follows Price and Stock Permissions
+- **Item Excel Permissions:** the item Excel import changes prices only with the price permission, stock only with the warehouse in / out permissions and creates items only with the item creation permission; other parts are reported and skipped (TD-648, `sec_item_import_respects_price_and_stock_permissions_td_648`).
+
+### v9.0.153 — Re-Importing an Unchanged Excel File Keeps the Price History
+- **Item Price History:** importing the same Excel file again no longer rewrites unchanged prices, so the price history keeps only real changes, and the history shows when each price was recorded (TD-662, `reg_excel_reimport_keeps_price_history_td_662`).
+
+### v9.0.152 — Excel Prices Come From Configured Price Lists Only
+- **Item Excel and Price Lists:** an unchanged Excel round trip no longer turns the cost column into a sale price list, the pricing page quick import ignores stock and cost columns, the invoice price list shows configured price lists only and migration 0068 cleans the three mistaken titles (TD-647, `reg_excel_roundtrip_no_cost_price_list_td_647`).
+
+### v9.0.151 — Package 5 Items and Pricing Audit Documentation
+- **Package 5 Audit:** section 7 of the V9 stability audit records the items and pricing package: 18 proven findings (two P1: an unchanged Excel round trip turns the cost column into a sale price list, and Excel import bypasses the price and warehouse permissions) opened as TD-647..TD-664, with the product-owner decisions. Documentation only.
+
 ### v9.0.150 — Fiscal-Year Test Cleanup
 - **Fiscal-Year Test Cleanup:** the fiscal-year closing test reopens its year so another test posting in that year is not refused (TD-895).
 

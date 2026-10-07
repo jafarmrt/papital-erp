@@ -1,3 +1,4 @@
+import { ALL_ITEM_IMPORT_PERMISSIONS } from '../../lib/items/itemImportPermissions.js';
 import { personnelVersion } from '../fixtures/personnelVersion.js';
 import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
@@ -1499,7 +1500,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const importResult = await ItemCatalogService.processUnifiedImport(
       rawRows,
       'raw_material',
-      { user: { username: 'تستر اکسل' } }
+      { user: { username: 'تستر اکسل' } },
+      ALL_ITEM_IMPORT_PERMISSIONS
     );
 
     if (importResult.createdCount !== 1) {
@@ -10590,6 +10592,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v9.0.112 (TD-490): warehouse deactivation lock, last active warehouse and reactivation
   const { runWarehouseDeactivationTests } = await import('../regression/warehouseDeactivationTests.js');
   results.push(...await runWarehouseDeactivationTests(shouldRun));
+
+  // Package 5 PR A (v9.0.152+): Excel import / export of items and the pricing quick import
+  const { runItemExcelImportTests } = await import('../regression/itemExcelImportTests.js');
+  results.push(...await runItemExcelImportTests(shouldRun));
 
   return results;
 }

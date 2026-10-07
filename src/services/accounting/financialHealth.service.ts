@@ -10,6 +10,7 @@ import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } fro
 import { buildFutureStockMovementHealthTest, findFutureStockMovements } from '../inventory/futureStockMovements.js';
 import { buildOpeningVoucherHealthTest, findOpeningVoucherMismatches } from '../inventory/itemOpeningValue.js';
 import { buildReservedWarehouseCodeHealthTest, findReservedCodeWarehouses } from '../inventory/reservedWarehouseCode.js';
+import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1108,6 +1109,11 @@ export class FinancialHealthService {
     const reservedWarehouseCodeTest = buildReservedWarehouseCodeHealthTest(await findReservedCodeWarehouses());
     overallScore += reservedWarehouseCodeTest.scoreImpact;
     tests.push(reservedWarehouseCodeTest);
+
+    // آزمون ۲۴: v9.0.152 (TD-647) قیمت فعال کالا با عنوانی بیرون از فهرست‌های قیمت تنظیم‌شده (فقط فهرست، بی پاک‌سازی)
+    const unknownPriceTitleTest = buildUnknownPriceTitleHealthTest(await findUnknownPriceTitles());
+    overallScore += unknownPriceTitleTest.scoreImpact;
+    tests.push(unknownPriceTitleTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

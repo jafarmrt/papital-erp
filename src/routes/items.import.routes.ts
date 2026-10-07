@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission, can } from '../middleware/authorize.js';
+import { ITEM_IMPORT_PERMISSION_KEYS, type ItemImportPermissions } from '../lib/items/itemImportPermissions.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { ItemsService } from '../services/items.service.js';
@@ -39,20 +40,25 @@ router.get('/items/unified-export', authorizePermission('products.view'), asyncH
   }
 }));
 
+/** v9.0.154 (TD-648، تصمیم ت۲ الف): مجوز هر بخش ورود اکسل، از نقش کاربر (هرگز از بدنه درخواست) */
+async function itemImportPermissionsOf(user: { role?: string } | undefined): Promise<ItemImportPermissions> {
+  const keys = ITEM_IMPORT_PERMISSION_KEYS;
+  return {
+    createItems: await can(user, keys.createItems),
+    editItems: await can(user, keys.editItems),
+    editPrices: await can(user, keys.editPrices),
+    stockIn: await can(user, keys.stockIn),
+    stockOut: await can(user, keys.stockOut),
+  };
+}
+
 // POST /items/unified-import
 router.post('/items/unified-import', authorizePermission('products.create', 'products.edit'), validate(unifiedImportSchema), asyncHandler(async (req, res) => {
   try {
     const { rows, typeFilter } = req.body;
-    const result = await ItemsService.processUnifiedImport(rows, typeFilter, req);
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'user',
-      userFullName: req.user?.fullName || '',
-      action: 'IMPORT',
-      entity: 'کالاها_و_محصولات',
-      description: `واردات دسته‌ای کالاها و خدمات از طریق اکسل شامل ${rows.length} ردیف داده`,
-      ipAddress: extractClientIp(req)
-    });
+    // v9.0.158 (TD-655): ممیزی هر کالا و جمع‌بندی ورود درون تراکنش سرویس نوشته می‌شود
+    const actor = { id: req.user?.id, username: req.user?.username, full_name: req.user?.full_name, ipAddress: extractClientIp(req) };
+    const result = await ItemsService.processUnifiedImport(rows, typeFilter, { user: actor }, await itemImportPermissionsOf(req.user));
     res.json(result);
   } catch (err) {
     logger.error({ message: 'Error in unified import', error: err });

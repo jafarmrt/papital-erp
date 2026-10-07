@@ -2,6 +2,10 @@ import React from 'react';
 import { Download, Upload, Loader2, Info } from 'lucide-react';
 
 interface ExcelUploadStepProps {
+  /** v9.0.154 (TD-648): ورود فقط برای دارنده «تعریف کالای جدید» یا «ویرایش اطلاعات کالا» */
+  canImport: boolean;
+  /** بخش‌هایی از ورود که کاربر مجوزشان را ندارد */
+  permissionNotices: string[];
   isExporting: boolean;
   isLoadingMetadata: boolean;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
@@ -11,6 +15,8 @@ interface ExcelUploadStepProps {
 }
 
 export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
+  canImport,
+  permissionNotices,
   isExporting,
   isLoadingMetadata,
   fileInputRef,
@@ -32,6 +38,14 @@ export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
           <li>در صورت وجود کالا با کد یکسان، مشخصات پایه، موجودی انبارها و استراتژی‌های قیمت‌گذاری به‌روزرسانی خواهند شد.</li>
         </ul>
       </div>
+
+      {permissionNotices.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-900 leading-relaxed">
+          <ul className="list-disc list-inside space-y-1">
+            {permissionNotices.map(n => <li key={n}>{n}</li>)}
+          </ul>
+        </div>
+      )}
 
       {/* Action Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -77,7 +91,8 @@ export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={isLoadingMetadata}
+              disabled={isLoadingMetadata || !canImport}
+              title={canImport ? undefined : 'برای ورود اکسل مجوز «تعریف کالای جدید» یا «ویرایش اطلاعات کالا» لازم است.'}
               className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
             >
               {isLoadingMetadata ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
