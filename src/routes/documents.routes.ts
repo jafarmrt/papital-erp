@@ -15,8 +15,6 @@ import { needsApprovalWorkflow } from '../services/documents/documentApprovalSco
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { orm } from '../db/drizzle.js';
-import { documents } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
 import { lockLeadForNewProforma, markLeadProforma, releaseLeadOfVoidedDocument } from '../services/crm/leadProforma.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
@@ -313,9 +311,8 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   // (پیش‌تر بررسی بی قفل پیش از تراکنش و علامت‌گذاری پس از commit؛ پیش‌فاکتورهای هم‌زمان همه ثبت می‌شدند)
   const { docId: newDocId, projectReservation } = await orm.transaction(async (tx) => {
     const lead = isProforma && targetLeadId ? await lockLeadForNewProforma(tx, targetLeadId) : null;
-    const created = await DocumentService.createDocumentWithDetails({ ...req.body, user: sessionUserLabel(req.user), externalTx: tx }, { userId: req.user?.id, allowBackdate });
-    // V10-4.3: لینک رسمی سند به پرونده CRM (صدور خودکار و دستی، هر دو مسیر از همین نقطه ست می‌کنند)
-    if (targetLeadId) await tx.update(documents).set({ crmLeadId: targetLeadId }).where(eq(documents.id, created.docId));
+    // V10-4.3 / v9.0.254 (TD-776): پیوند رسمی سند به پرونده فروش همراه درج سند در سرویس (نه نوشتن جدا از route)
+    const created = await DocumentService.createDocumentWithDetails({ ...req.body, crmLeadId: targetLeadId, user: sessionUserLabel(req.user), externalTx: tx }, { userId: req.user?.id, allowBackdate });
     if (lead) await markLeadProforma(tx, lead, created.docId, req.user?.full_name || 'سیستم');
     // v9.0.39 (TD-446، ت۴): فقط سند فروش پیش‌نویس یا پیش‌فاکتور، در همین تراکنش، وارد گردش کار تأیید می‌شود و خطای شروع
     // ثبت سند را رد می‌کند. پیش‌تر هر سند، حتی رسید و فاکتور قطعی، پس از commit و با خطای بلعیده فرایند می‌گرفت
@@ -488,15 +485,9 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
 
 router.put('/documents/:id', authorizePermission('documents.edit'), validate(documentUpdateSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
+  // v9.0.254 (TD-776): پیوند پرونده فروش (`crmLeadId`، null = قطع) درون تراکنش ویرایش و زیر قفل پرونده؛ پیش‌تر پس از commit
+  // ویرایش، بی قفل و بی قاعده «یک پیش‌فاکتور برای هر پرونده» نوشته می‌شد
   await DocumentService.updateDocument(docId, { ...req.body, user: sessionUserLabel(req.user) });
-
-  // V10-4.3: امکان ست/به‌روزرسانی لینک CRM هنگام ویرایش (null = قطع لینک)
-  if ('crmLeadId' in req.body) {
-    const parsedLead = req.body.crmLeadId === null || String(req.body.crmLeadId).trim() === '' ? null : Number(req.body.crmLeadId);
-    if (!Number.isNaN(parsedLead)) {
-      await orm.update(documents).set({ crmLeadId: parsedLead }).where(eq(documents.id, docId));
-    }
-  }
 
   await logActivity({
     req,
@@ -509,6 +500,7 @@ router.put('/documents/:id', authorizePermission('documents.edit'), validate(doc
       refNumber: req.body.refNumber,
       buyerName: req.body.buyer_name,
       notes: req.body.notes,
+      ...('crmLeadId' in req.body ? { crmLeadId: req.body.crmLeadId ?? null } : {}),
       itemsCount: req.body.items?.length || 0
     }
   });

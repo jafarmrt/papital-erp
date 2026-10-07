@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.254 — v9.0.254 — A Document Edit Links Its Sales Lead Under the Lead Lock
+- **Sales:** `PUT /documents/:id` with `crmLeadId` now links or unlinks the sales lead inside the edit transaction under the lead lock: a missing lead or a lead with another proforma is 422 before anything is saved, and an unlinked lead is released for a new proforma; before, the link was written after the edit, without the one-proforma rule (TD-776).
+
 ### v9.0.253 — v9.0.253 — Editing a Proforma Does Not Offer to Finalize It
 - **Sales:** while a proforma is edited, «فاکتور نهایی» is closed with the reason that a proforma is finalized by its approval, and the item codes of its lines are shown; before, the option led to a false stock shortage message and the codes were empty (TD-801).
 

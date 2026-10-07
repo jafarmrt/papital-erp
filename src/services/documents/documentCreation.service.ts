@@ -24,6 +24,7 @@ import { netLineUnitPrice } from './purchaseLineCost.js';
 import { assertReturnWithinSold, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import { enforceReturnInvoiceTerms } from './salesReturnPrice.js';
 import { resolveReturnVatFromInvoice } from './salesReturnVat.js';
+import { applyDocumentLeadLink, documentLeadLinkOf, lockLeadsForDocumentLink, type LockedDocumentLeads } from '../crm/leadProforma.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
 import { releaseReservationsForDocument, type ProjectReservationRelease } from './projectReservationRelease.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
@@ -69,7 +70,21 @@ export class DocumentCreationService {
     // v8.0.103 (TD-380): تخفیف هر ردیف حداکثر برابر مبلغ همان ردیف
     if (Array.isArray(docLines)) assertLineDiscountsWithinAmount(docLines);
 
+    const leadTarget = documentLeadLinkOf(body.crmLeadId);
+
     await orm.transaction(async (tx) => {
+      // v9.0.254 (TD-776): پیوند پرونده فروش درون همین تراکنش؛ پرونده‌ها پیش از ردیف سند قفل و سنجیده می‌شوند (۴۲۲ پیش از
+      // هر نوشتن). پیش‌فاکتور بودن از نوع سند و وضعیت پس از این ویرایش است.
+      let leadLock: LockedDocumentLeads | null = null;
+      let leadDocIsProforma = false;
+      if (leadTarget !== undefined) {
+        const [stored] = await tx.select({ type: documents.type, status: documents.status }).from(documents)
+          .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
+        if (!stored) throw new NotFoundError('سند مورد نظر یافت نشد.');
+        leadDocIsProforma = stored.type === 'proforma' || (status || stored.status) === 'proforma';
+        leadLock = await lockLeadsForDocumentLink(tx, id, leadTarget, leadDocIsProforma);
+      }
+
       // V6 Sub-phase 5.2 (TD-154): Read document under row lock (.for('update')) to prevent concurrent lost updates
       // and race conditions with concurrent finalizeDocument calls.
       const [existingDoc] = await tx
@@ -232,6 +247,10 @@ export class DocumentCreationService {
         }
         await insertDocumentLines(tx, lineRows);
       }
+
+      if (leadLock) {
+        await applyDocumentLeadLink(tx, { id, refNumber: nextRefNumber, isProforma: leadDocIsProforma }, leadLock, user || existingDoc.user || 'سیستم');
+      }
     });
   }
 
@@ -374,6 +393,8 @@ export class DocumentCreationService {
         attachments: [],
         projectId: finalProjectId ?? undefined,
         returnOfDocumentId,
+        // v9.0.254 (TD-776): پیوند پرونده فروش همراه درج سند (route پرونده را پیش از سند قفل و سنجیده است)
+        crmLeadId: documentLeadLinkOf(body.crmLeadId) ?? undefined,
         isDeleted: 0
       }).returning({ id: documents.id });
       const docId = insertedDoc.id;
