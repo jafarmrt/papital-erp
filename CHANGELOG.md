@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.211 — Terminal Output Is English
+- **Terminal English (owner rule t9):** AGENTS.md §6 records that everything a terminal shows is English (scripts, hooks, server logs, test names, commits), while UI text, user error messages and documents stay Persian. `npm run ratchet:terminal-english` (`scripts/terminal-english-ratchet.ts`, run by Vitest `terminalEnglishRatchet.test.ts`) counts the places that still print Persian per file and fails when a file gains one; translating them is the next step of TD-625.
+
 ### v9.0.210 — Item and Pricing UI Wording
 - **Item and Pricing UI Wording:** item, Excel import and pricing text and item server messages use the decided Persian words (no «WAC», «Template», «استراتژی», «اتمیک», «آرشیو» …; «ترنسفر» stays); the Excel reorder header is «حد نقطه سفارش (هشدار کسری)» and the old header is still read (TD-664, `itemsWording.test.ts`).
 
