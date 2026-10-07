@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 365
+تعداد مسیرها: 366
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -37,7 +37,7 @@
 | PATCH | `/api/accounting/cheques/:id/status` | accounting.cheques |
 | PUT | `/api/accounting/cheques/:id/status` | accounting.cheques |
 | GET | `/api/accounting/doc-signatures` | accounting.reports \| accounting.view \| documents.view |
-| POST | `/api/accounting/fiscal-closing/execute` | admin |
+| POST | `/api/accounting/fiscal-closing/execute` | accounting.fiscal_close |
 | GET | `/api/accounting/fiscal-closing/preview` | accounting.vouchers |
 | GET | `/api/accounting/mappings` | accounting.coa \| accounting.view |
 | POST | `/api/accounting/mappings` | accounting.coa |
@@ -76,9 +76,9 @@
 | PUT | `/api/accounting/vouchers/:id/status` | accounting.vouchers |
 | POST | `/api/accounting/vouchers/batch-approve` | accounting.vouchers |
 | POST | `/api/accounting/vouchers/batch-finalize` | accounting.vouchers |
-| GET | `/api/activity-logs` | admin \| manager |
-| GET | `/api/activity-logs/filters` | admin \| manager |
-| GET | `/api/activity-logs/integrity` | admin \| manager |
+| GET | `/api/activity-logs` | audit_logs.view |
+| GET | `/api/activity-logs/filters` | audit_logs.view |
+| GET | `/api/activity-logs/integrity` | audit_logs.view |
 | POST | `/api/activity-logs/purge` | admin |
 | POST | `/api/admin/clear-data` | admin |
 | GET | `/api/attachments/:id` | login-only |
@@ -90,9 +90,9 @@
 | POST | `/api/auth/logout` | public |
 | GET | `/api/auth/me` | login-only |
 | GET | `/api/categories` | login-only |
-| POST | `/api/categories` | admin \| manager \| products.create \| products.edit |
-| DELETE | `/api/categories/:id` | admin \| products.delete |
-| PUT | `/api/categories/:id` | admin \| manager \| products.edit |
+| POST | `/api/categories` | products.create \| products.edit |
+| DELETE | `/api/categories/:id` | products.delete |
+| PUT | `/api/categories/:id` | products.edit |
 | POST | `/api/categories/reset-defaults` | admin |
 | GET | `/api/check-setup` | public |
 | GET | `/api/crm/activities` | crm.view \| customers.view \| customers.manage |
@@ -109,12 +109,12 @@
 | GET | `/api/crm/stats` | crm.view \| customers.view \| customers.manage |
 | GET | `/api/csrf` | login-only |
 | GET | `/api/customers` | customers.view \| documents.view \| documents.create \| warehouse.in \| crm.view \| projects.view \| procurement.view |
-| POST | `/api/customers` | admin \| manager \| sales_manager \| customers.manage |
-| DELETE | `/api/customers/:id` | admin \| manager \| sales_manager \| customers.manage |
-| PUT | `/api/customers/:id` | admin \| manager \| sales_manager \| customers.manage |
+| POST | `/api/customers` | customers.manage |
+| DELETE | `/api/customers/:id` | customers.manage |
+| PUT | `/api/customers/:id` | customers.manage |
 | GET | `/api/customers/:id/account-card` | accounting.reports \| accounting.view \| customers.view \| customers.manage \| documents.view |
 | GET | `/api/customers/:id/documents` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
-| POST | `/api/customers/bulk-import` | admin \| manager \| sales_manager \| customers.manage |
+| POST | `/api/customers/bulk-import` | customers.manage |
 | GET | `/api/customers/export-excel` | customers.view |
 | GET | `/api/daily-logs` | daily_logs.view |
 | POST | `/api/daily-logs` | daily_logs.create |
@@ -126,12 +126,12 @@
 | GET | `/api/daily-logs/summary-report` | daily_logs.manage_all |
 | GET | `/api/dashboard-bi-stats` | reports.view \| warehouse.view |
 | GET | `/api/documents` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
-| POST | `/api/documents` | admin \| manager \| sales_manager \| accountant \| warehouse_keeper \| documents.create \| warehouse.in \| warehouse.out |
+| POST | `/api/documents` | documents.create \| warehouse.in \| warehouse.out |
 | DELETE | `/api/documents/:id` | documents.delete |
 | GET | `/api/documents/:id` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
-| PUT | `/api/documents/:id` | admin \| manager \| sales_manager \| accountant \| warehouse_keeper \| documents.edit |
-| PUT | `/api/documents/:id/finalize` | admin \| manager \| warehouse_keeper \| accountant \| documents.edit \| warehouse.in \| warehouse.out |
-| PUT | `/api/documents/:id/notes` | admin \| manager \| documents.edit |
+| PUT | `/api/documents/:id` | documents.edit |
+| PUT | `/api/documents/:id/finalize` | documents.edit \| warehouse.in \| warehouse.out |
+| PUT | `/api/documents/:id/notes` | documents.edit |
 | GET | `/api/documents/audit-items` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
 | GET | `/api/documents/by-ref/:ref` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
 | GET | `/api/documents/next-ref` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
@@ -216,19 +216,19 @@
 | GET | `/api/inventory/warehouse-stock-reconciliation` | warehouse.view \| inventory.reconcile \| audit.view |
 | POST | `/api/inventory/warehouse-stock-reconciliation/repair` | inventory.reconcile |
 | GET | `/api/items` | products.view \| products.edit_price \| documents.view \| documents.create \| warehouse.view \| warehouse.in \| audit.view \| projects.view \| crm.view \| procurement.view |
-| POST | `/api/items` | admin \| manager \| products.create |
-| DELETE | `/api/items/:id` | admin \| products.delete |
-| PUT | `/api/items/:id` | admin \| manager \| products.edit |
+| POST | `/api/items` | products.create |
+| DELETE | `/api/items/:id` | products.delete |
+| PUT | `/api/items/:id` | products.edit |
 | GET | `/api/items/:id/prices` | products.view \| products.edit_price \| projects.view |
-| POST | `/api/items/:id/prices` | admin \| manager \| products.edit_price |
+| POST | `/api/items/:id/prices` | products.edit_price |
 | GET | `/api/items/:id/prices/history` | products.view \| products.edit_price \| projects.view |
 | GET | `/api/items/next-code` | products.view \| products.edit_price \| documents.view \| documents.create \| warehouse.view \| warehouse.in \| audit.view \| projects.view \| crm.view \| procurement.view |
-| POST | `/api/items/next-code` | admin \| manager \| products.create \| products.edit |
+| POST | `/api/items/next-code` | products.create \| products.edit |
 | GET | `/api/items/prices/all` | products.view \| products.edit_price \| projects.view |
-| POST | `/api/items/prices/batch-update` | admin \| manager \| products.edit_price |
+| POST | `/api/items/prices/batch-update` | products.edit_price |
 | GET | `/api/items/reorder-alerts` | products.view \| products.edit_price \| documents.view \| documents.create \| warehouse.view \| warehouse.in \| audit.view \| projects.view \| crm.view \| procurement.view |
-| GET | `/api/items/unified-export` | admin \| manager \| products.view |
-| POST | `/api/items/unified-import` | admin \| manager \| products.create \| products.edit |
+| GET | `/api/items/unified-export` | products.view |
+| POST | `/api/items/unified-import` | products.create \| products.edit |
 | POST | `/api/login` | public |
 | POST | `/api/login` | public |
 | POST | `/api/logout` | public |
@@ -242,63 +242,63 @@
 | GET | `/api/notifications/unread-count` | login-only |
 | GET | `/api/pending-materials` | pending_materials.view \| products.view |
 | POST | `/api/pending-materials` | login-only |
-| DELETE | `/api/pending-materials/:id` | admin \| manager |
+| DELETE | `/api/pending-materials/:id` | pending_materials.delete |
 | PUT | `/api/pending-materials/:id` | pending_materials.approve |
 | PUT | `/api/pending-materials/:id/approve` | pending_materials.approve |
 | PUT | `/api/pending-materials/:id/reject` | pending_materials.approve |
 | GET | `/api/permissions` | roles.manage \| users.manage |
 | GET | `/api/personnel` | personnel.view \| personnel.manage \| piecework.view \| projects.view \| accounting.view \| crm.view \| documents.view \| documents.create \| warehouse.in |
-| POST | `/api/personnel` | admin \| manager \| personnel.manage |
-| DELETE | `/api/personnel/:id` | admin \| manager \| personnel.manage |
+| POST | `/api/personnel` | personnel.manage |
+| DELETE | `/api/personnel/:id` | personnel.manage |
 | GET | `/api/personnel/:id` | personnel.view \| personnel.manage \| piecework.view \| projects.view \| accounting.view \| crm.view \| documents.view \| documents.create \| warehouse.in |
-| PUT | `/api/personnel/:id` | admin \| manager \| personnel.manage |
-| POST | `/api/personnel/bulk-import` | admin \| manager \| personnel.manage |
-| GET | `/api/personnel/export` | admin \| manager \| personnel.manage |
+| PUT | `/api/personnel/:id` | personnel.manage |
+| POST | `/api/personnel/bulk-import` | personnel.manage |
+| GET | `/api/personnel/export` | personnel.manage |
 | GET | `/api/piecework/categories` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage |
-| POST | `/api/piecework/categories` | personnel.manage \| admin \| settings.manage |
-| DELETE | `/api/piecework/categories/:id` | personnel.manage \| admin \| settings.manage |
-| PUT | `/api/piecework/categories/:id` | personnel.manage \| admin \| settings.manage |
+| POST | `/api/piecework/categories` | personnel.manage \| settings.manage |
+| DELETE | `/api/piecework/categories/:id` | personnel.manage \| settings.manage |
+| PUT | `/api/piecework/categories/:id` | personnel.manage \| settings.manage |
 | GET | `/api/piecework/logs` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage |
-| POST | `/api/piecework/logs` | personnel.manage \| piecework.log \| admin |
-| DELETE | `/api/piecework/logs/:id` | personnel.manage \| admin |
-| PUT | `/api/piecework/logs/:id` | personnel.manage \| admin |
+| POST | `/api/piecework/logs` | personnel.manage \| piecework.log |
+| DELETE | `/api/piecework/logs/:id` | personnel.manage |
+| PUT | `/api/piecework/logs/:id` | personnel.manage |
 | GET | `/api/piecework/payrolls` | piecework.payroll \| personnel.manage \| accounting.treasury |
-| POST | `/api/piecework/payrolls` | personnel.manage \| admin |
-| DELETE | `/api/piecework/payrolls/:id` | personnel.manage \| admin |
+| POST | `/api/piecework/payrolls` | personnel.manage |
+| DELETE | `/api/piecework/payrolls/:id` | personnel.manage |
 | GET | `/api/piecework/payrolls/:id` | piecework.payroll \| personnel.manage \| accounting.treasury |
 | GET | `/api/piecework/payrolls/:id/payments` | piecework.payroll \| personnel.manage \| accounting.treasury |
-| POST | `/api/piecework/payrolls/:id/payments/:transactionId/void` | personnel.manage \| admin |
-| POST | `/api/piecework/payrolls/:id/register-payment` | personnel.manage \| admin |
-| PUT | `/api/piecework/payrolls/:id/status` | personnel.manage \| admin |
+| POST | `/api/piecework/payrolls/:id/payments/:transactionId/void` | personnel.manage |
+| POST | `/api/piecework/payrolls/:id/register-payment` | personnel.manage |
+| PUT | `/api/piecework/payrolls/:id/status` | personnel.manage |
 | POST | `/api/piecework/payrolls/:id/sync-voucher` | piecework.payroll \| personnel.manage |
-| POST | `/api/piecework/payrolls/generate` | personnel.manage \| admin |
+| POST | `/api/piecework/payrolls/generate` | personnel.manage |
 | GET | `/api/piecework/payrolls/mine` | login-only |
-| POST | `/api/piecework/personnel-rates` | personnel.manage \| admin |
+| POST | `/api/piecework/personnel-rates` | personnel.manage |
 | GET | `/api/piecework/personnel-rates/:personnelId` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage |
 | GET | `/api/piecework/personnel/:id/advance-balance` | piecework.payroll \| personnel.manage \| accounting.treasury |
-| POST | `/api/piecework/rates` | personnel.manage \| admin |
+| POST | `/api/piecework/rates` | personnel.manage |
 | GET | `/api/piecework/rates/:personnelId` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage |
 | GET | `/api/piecework/tasks` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage |
-| POST | `/api/piecework/tasks` | personnel.manage \| admin |
+| POST | `/api/piecework/tasks` | personnel.manage |
 | GET | `/api/piecework/tasks-history` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage |
-| DELETE | `/api/piecework/tasks/:id` | personnel.manage \| admin |
-| PUT | `/api/piecework/tasks/:id` | personnel.manage \| admin |
+| DELETE | `/api/piecework/tasks/:id` | personnel.manage |
+| PUT | `/api/piecework/tasks/:id` | personnel.manage |
 | GET | `/api/piecework/tasks/:id/history` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage |
-| POST | `/api/piecework/tasks/:id/restore` | personnel.manage \| admin |
-| POST | `/api/piecework/tasks/clear-all` | personnel.manage \| admin |
-| POST | `/api/piecework/tasks/clear-defaults` | personnel.manage \| admin |
-| POST | `/api/piecework/tasks/import-excel` | personnel.manage \| admin |
-| POST | `/api/procurement/consolidate` | procurement.manage \| procurement_officer \| manager \| admin |
-| GET | `/api/procurement/inbox/summary` | procurement.view \| procurement_officer \| manager \| admin |
-| GET | `/api/procurement/orders` | procurement.view \| procurement_officer \| manager \| admin \| projects.view |
-| POST | `/api/procurement/orders/:id/deliver` | procurement.order \| procurement.manage \| procurement_officer \| manager \| admin |
-| GET | `/api/procurement/requisitions` | procurement.view \| procurement_officer \| manager \| admin \| projects.view |
-| POST | `/api/procurement/requisitions` | procurement.create \| procurement_officer \| manager \| admin \| projects.edit |
-| DELETE | `/api/procurement/requisitions/:id` | procurement.manage \| procurement_officer \| manager \| admin |
-| GET | `/api/procurement/requisitions/:id` | procurement.view \| procurement_officer \| manager \| admin \| projects.view |
-| PUT | `/api/procurement/requisitions/:id` | procurement.manage \| procurement_officer \| manager \| admin |
-| POST | `/api/procurement/requisitions/:id/convert-to-orders` | procurement.order \| procurement_officer \| manager \| admin |
-| POST | `/api/procurement/requisitions/:id/workflow-action` | procurement.approve \| procurement.manage \| procurement_officer \| manager \| admin |
+| POST | `/api/piecework/tasks/:id/restore` | personnel.manage |
+| POST | `/api/piecework/tasks/clear-all` | personnel.manage |
+| POST | `/api/piecework/tasks/clear-defaults` | personnel.manage |
+| POST | `/api/piecework/tasks/import-excel` | personnel.manage |
+| POST | `/api/procurement/consolidate` | procurement.manage |
+| GET | `/api/procurement/inbox/summary` | procurement.view |
+| GET | `/api/procurement/orders` | procurement.view \| projects.view |
+| POST | `/api/procurement/orders/:id/deliver` | procurement.order \| procurement.manage |
+| GET | `/api/procurement/requisitions` | procurement.view \| projects.view |
+| POST | `/api/procurement/requisitions` | procurement.create \| projects.edit |
+| DELETE | `/api/procurement/requisitions/:id` | procurement.manage |
+| GET | `/api/procurement/requisitions/:id` | procurement.view \| projects.view |
+| PUT | `/api/procurement/requisitions/:id` | procurement.manage |
+| POST | `/api/procurement/requisitions/:id/convert-to-orders` | procurement.order |
+| POST | `/api/procurement/requisitions/:id/workflow-action` | procurement.approve \| procurement.manage |
 | GET | `/api/projects` | projects.view \| projects.create \| projects.edit \| documents.view \| documents.create \| warehouse.in \| warehouse.out \| warehouse.view |
 | POST | `/api/projects` | projects.create |
 | DELETE | `/api/projects/:id` | projects.delete |
@@ -316,7 +316,7 @@
 | DELETE | `/api/roles/:id` | roles.manage |
 | PUT | `/api/roles/:id` | roles.manage |
 | GET | `/api/settings` | login-only |
-| POST | `/api/settings` | admin \| manager \| settings.manage |
+| POST | `/api/settings` | settings.manage |
 | POST | `/api/setup` | public |
 | GET | `/api/stats` | reports.view \| warehouse.view |
 | GET | `/api/system/business-date` | login-only |
@@ -327,12 +327,12 @@
 | POST | `/api/system/reconciliation-fix` | admin |
 | GET | `/api/transactions` | warehouse.view \| accounting.view |
 | GET | `/api/transfers` | products.view |
-| POST | `/api/transfers` | admin \| manager \| warehouse_keeper \| products.create \| products.edit |
-| PUT | `/api/transfers` | admin \| manager \| warehouse_keeper \| products.create \| products.edit |
-| DELETE | `/api/transfers/:code` | admin \| manager \| products.delete |
+| POST | `/api/transfers` | products.create \| products.edit |
+| PUT | `/api/transfers` | products.create \| products.edit |
+| DELETE | `/api/transfers/:code` | products.delete |
 | GET | `/api/transfers/:code` | products.view |
-| POST | `/api/transfers/:code` | admin \| manager \| warehouse_keeper \| products.create \| products.edit |
-| PUT | `/api/transfers/:code` | admin \| manager \| warehouse_keeper \| products.create \| products.edit |
+| POST | `/api/transfers/:code` | products.create \| products.edit |
+| PUT | `/api/transfers/:code` | products.create \| products.edit |
 | GET | `/api/users` | users.manage \| roles.manage \| personnel.manage \| workflow.manage \| settings.manage |
 | POST | `/api/users` | users.manage |
 | DELETE | `/api/users/:id` | users.manage |
@@ -342,15 +342,16 @@
 | GET | `/api/users/profile` | login-only |
 | PUT | `/api/users/profile` | login-only |
 | GET | `/api/warehouses` | login-only |
-| POST | `/api/warehouses` | admin |
-| DELETE | `/api/warehouses/:id` | admin |
-| PUT | `/api/warehouses/:id` | admin |
-| GET | `/api/woocommerce/order-logs` | admin \| manager \| woocommerce.view |
-| POST | `/api/woocommerce/sync-all-stocks` | admin \| manager \| woocommerce.manage |
-| POST | `/api/woocommerce/sync-item` | admin \| manager \| woocommerce.manage |
-| POST | `/api/woocommerce/sync-order-by-id` | admin \| manager \| woocommerce.manage |
-| GET | `/api/woocommerce/synced-orders` | admin \| manager \| woocommerce.view |
-| POST | `/api/woocommerce/test-connection` | admin \| manager \| woocommerce.manage |
+| POST | `/api/warehouses` | warehouse.manage |
+| DELETE | `/api/warehouses/:id` | warehouse.manage |
+| PUT | `/api/warehouses/:id` | warehouse.manage |
+| POST | `/api/warehouses/:id/reactivate` | admin |
+| GET | `/api/woocommerce/order-logs` | woocommerce.view |
+| POST | `/api/woocommerce/sync-all-stocks` | woocommerce.manage |
+| POST | `/api/woocommerce/sync-item` | woocommerce.manage |
+| POST | `/api/woocommerce/sync-order-by-id` | woocommerce.manage |
+| GET | `/api/woocommerce/synced-orders` | woocommerce.view |
+| POST | `/api/woocommerce/test-connection` | woocommerce.manage |
 | GET | `/api/workflow/analytics/sla` | workflow.manage \| workflow.admin |
 | GET | `/api/workflow/definitions` | workflow.manage \| workflow.admin |
 | POST | `/api/workflow/definitions` | workflow.manage \| workflow.admin |

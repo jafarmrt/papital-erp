@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorize } from '../middleware/authorize.js';
+import { authorizePermission, requireSystemAdmin } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -36,13 +36,13 @@ const listWarehousesValidation = z.object({
   query: z.object({ includeInactive: z.enum(['0', '1', 'true', 'false']).optional() }).passthrough(),
 });
 
-// v9.0.109 (TD-490): `includeInactive=1` انبارهای غیرفعال را هم برای «مدیریت انبارها» می‌دهد؛ پیش‌فرض فقط فعال‌ها
+// v9.0.110 (TD-490): `includeInactive=1` انبارهای غیرفعال را هم برای «مدیریت انبارها» می‌دهد؛ پیش‌فرض فقط فعال‌ها
 router.get('/warehouses', validate(listWarehousesValidation), asyncHandler(async (req, res) => {
   const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
   res.json(includeInactive ? await WarehouseService.listAll() : await WarehouseService.listActive());
 }));
 
-router.post('/warehouses', authorize('admin'), validate(createWarehouseValidation), asyncHandler(async (req, res) => {
+router.post('/warehouses', authorizePermission('warehouse.manage'), validate(createWarehouseValidation), asyncHandler(async (req, res) => {
   try {
     const { name, code } = req.body;
     const created = await WarehouseService.createWarehouse({ name, code });
@@ -63,7 +63,7 @@ router.post('/warehouses', authorize('admin'), validate(createWarehouseValidatio
   }
 }));
 
-router.put('/warehouses/:id', authorize('admin'), validate(updateWarehouseValidation), asyncHandler(async (req, res) => {
+router.put('/warehouses/:id', authorizePermission('warehouse.manage'), validate(updateWarehouseValidation), asyncHandler(async (req, res) => {
   try {
     const { name } = req.body;
     const id = Number(req.params.id);
@@ -82,9 +82,9 @@ router.put('/warehouses/:id', authorize('admin'), validate(updateWarehouseValida
   } catch (err) { throw err; }
 }));
 
-router.delete('/warehouses/:id', authorize('admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/warehouses/:id', authorizePermission('warehouse.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  // v9.0.109 (TD-490): غیرفعال‌سازی و ثبت ممیزی در یک تراکنش، زیر قفل ردیف انبار
+  // v9.0.110 (TD-490): غیرفعال‌سازی و ثبت ممیزی در یک تراکنش، زیر قفل ردیف انبار
   await orm.transaction(async (tx) => {
     const wh = await WarehouseService.deactivateWarehouse(id, tx);
     await logActivity({
@@ -100,8 +100,8 @@ router.delete('/warehouses/:id', authorize('admin'), validate(paramsIdSchema), a
   res.json({ success: true });
 }));
 
-// v9.0.109 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال، فقط مدیر سیستم، با ممیزی در همان تراکنش
-router.post('/warehouses/:id/reactivate', authorize('admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+// v9.0.110 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال، فقط مدیر سیستم، با ممیزی در همان تراکنش
+router.post('/warehouses/:id/reactivate', requireSystemAdmin, validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const result = await orm.transaction(async (tx) => {
     const { previous, current } = await WarehouseService.reactivateWarehouse(id, tx);

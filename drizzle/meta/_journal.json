@@ -435,6 +435,13 @@
       "when": 1792810000000,
       "tag": "0061_cheque_party_account",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792820000000,
+      "tag": "0062_role_code_guards_to_permissions",
+      "breakpoints": true
     }
   ]
 }

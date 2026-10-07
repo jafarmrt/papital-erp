@@ -19,11 +19,17 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.108 — Inventory Layer in the System Reconciliation Scan
+### v9.0.110 — Warehouse Deactivation Lock and Reactivation
+- **Warehouse deactivation:** it waits for in-flight movements and refuses a warehouse that got stock, the last active warehouse stays active, and the system admin can reactivate an inactive warehouse (TD-490, `reg_warehouse_deactivation_td_490`).
+
+### v9.0.109 — Inventory Layer in the System Reconciliation Scan
 - **System reconciliation scan:** the inventory layer check warns when the stock integrity report finds discrepancies or negative Kardex balances instead of always reporting healthy (TD-495, `reg_system_inventory_check_td_495`).
 
-### v9.0.107 — Reserved Warehouse Code
+### v9.0.108 — Reserved Warehouse Code
 - **Warehouse code `default`:** a new warehouse can no longer take a code the Kardex reads as the default warehouse, a void reversal writes the real default code, and a legacy one is listed by the health check (TD-482, `reg_warehouse_reserved_code_td_482`).
+
+### v9.0.107 — Route Guards Ask Permissions Only
+- **Route Guards:** no route guard takes a role code any more; system maintenance is for the system admin only, warehouses and the fiscal-year close get their own permissions, and migration 0062 turns access seed roles had only by their code into logged ticks (TD-516).
 
 ### v9.0.106 — Treasury Forms and Export
 - **Treasury Forms and Export (P3):** a receipt or payment for an account without a ledger account is stopped in the form, treasury and cheque dates use the Jalali date input, and the treasury Excel export has Persian labels and a Jalali file date. Before, the form promised a voucherless save the server refused, and the date field showed «2026/10/07» in the Jalali calendar (TD-515, Vitest `treasuryFormWording.test.tsx`).

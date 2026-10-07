@@ -5,6 +5,7 @@ import { orm } from '../../db/drizzle.js';
 import { roles, users, dailyWorkLogs, pendingMaterials, personnel, pieceworkTasks, pieceworkLogs, items, documents, accounts, journalVouchers, journalVoucherItems, crmLeads, crmActivities, productionProjects } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
+import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 
 /**
  * حوزه H نقشه راه V8 — امنیت و دسترسی. جدول «مسیر ← مجوز» از خود روترها ساخته و با سیاست زیر سنجیده می‌شود،
@@ -38,6 +39,20 @@ export const LOGIN_ONLY_ROUTES = new Set([
   'GET /api/attachments/:id',
 ]);
 
+/**
+ * v9.0.107 (TD-516، فهرست تأییدشده M2): کارهای نگهداری سامانه که فقط «مدیر سیستم» انجام می‌دهد (`requireSystemAdmin`).
+ * هیچ گارد دیگری کد نقش ندارد؛ کار تازه‌ای که فقط مدیر سیستم بکند، اینجا با تصمیم مالک محصول افزوده می‌شود.
+ */
+export const SYSTEM_ADMIN_ONLY_ROUTES = new Set([
+  'GET /api/export-backup', 'POST /api/admin/clear-data', 'POST /api/activity-logs/purge',
+  'POST /api/attachments/cleanup-orphans', 'POST /api/attachments/migrate-inline', 'POST /api/categories/reset-defaults',
+  'POST /api/accounting/accounts/seed-default', 'POST /api/accounting/accounts/seed-standard',
+  'GET /api/system/health', 'GET /api/system/env', 'GET /api/system/date-calendar-report',
+  'GET /api/system/reconciliation-check', 'POST /api/system/reconciliation-fix',
+  // v9.0.110 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال فقط با مدیر سیستم
+  'POST /api/warehouses/:id/reactivate',
+]);
+
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const isViewPermission = (entry: string) => entry.endsWith('.view');
 
@@ -61,6 +76,17 @@ export function routeAccessPolicyViolations(rows: RouteGuardRow[], catalogKeys: 
     for (const entry of row.guards.flat()) {
       if (entry.includes('.') && !catalogKeys.has(entry)) violations.push(`${key}: مجوز «${entry}» در کاتالوگ نیست`);
     }
+    // v9.0.107 (TD-516): کد نقش فقط به شکل گارد تنهای «مدیر سیستم» و فقط روی فهرست تأییدشده
+    const adminOnly = row.guards.some(g => g.length === 1 && g[0] === SYSTEM_ADMIN_ROLE);
+    for (const g of row.guards) {
+      const codes = g.filter(e => !e.includes('.'));
+      if (codes.length > 0 && !(g.length === 1 && g[0] === SYSTEM_ADMIN_ROLE)) violations.push(`${key}: guard names role code(s) ${codes.join(', ')}`);
+    }
+    if (adminOnly && !SYSTEM_ADMIN_ONLY_ROUTES.has(key)) violations.push(`${key}: system-admin-only guard outside SYSTEM_ADMIN_ONLY_ROUTES`);
+    if (!adminOnly && SYSTEM_ADMIN_ONLY_ROUTES.has(key)) violations.push(`${key}: listed in SYSTEM_ADMIN_ONLY_ROUTES but not guarded by requireSystemAdmin`);
+  }
+  for (const key of SYSTEM_ADMIN_ONLY_ROUTES) {
+    if (!rows.some(r => `${r.method} ${r.path}` === key)) violations.push(`${key}: listed in SYSTEM_ADMIN_ONLY_ROUTES but not registered`);
   }
   return violations;
 }

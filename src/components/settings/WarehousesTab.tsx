@@ -8,7 +8,7 @@ interface WarehousesTabProps {
   onOpenCreateModal: () => void;
   onOpenEditModal: (wh: Warehouse) => void;
   onDeleteWarehouse: (id: number) => void;
-  /** v9.0.109 (TD-490): فقط مدیر سیستم انبار غیرفعال را دوباره فعال می‌کند */
+  /** v9.0.110 (TD-490): فقط مدیر سیستم انبار غیرفعال را دوباره فعال می‌کند */
   canReactivate?: boolean;
 }
 

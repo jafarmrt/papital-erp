@@ -3,7 +3,7 @@ import { confirmAction } from '../ConfirmDialogHost';
 import { useInactiveWarehousesQuery, useReactivateWarehouseMutation } from '../../hooks/queries/useSettingsQueries';
 
 /**
- * v9.0.109 (TD-490، تصمیم ت۵ الف): انبارهای غیرفعال و فعال‌سازی دوباره آن‌ها در «مدیریت انبارها»؛ فقط برای مدیر سیستم
+ * v9.0.110 (TD-490، تصمیم ت۵ الف): انبارهای غیرفعال و فعال‌سازی دوباره آن‌ها در «مدیریت انبارها»؛ فقط برای مدیر سیستم
  * نمایش داده می‌شود (route هم فقط مدیر سیستم را می‌پذیرد).
  */
 export function InactiveWarehousesPanel({ enabled }: { enabled: boolean }) {

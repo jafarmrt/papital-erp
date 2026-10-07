@@ -380,7 +380,7 @@ export class DocumentLifecycleService {
         isDeleted: 1,
       }).where(eq(transactions.documentId, doc.id));
 
-      // v9.0.107 (TD-482): a reversal of a row without a warehouse names the warehouse its stock comes back to (the
+      // v9.0.108 (TD-482): a reversal of a row without a warehouse names the warehouse its stock comes back to (the
       // default one, as in step 4), never the ledger alias 'default' that a warehouse code could also be
       const unlocatedDefaultWh = originalTxs.some(t => !(t.location || '').trim()) ? await resolveWarehouseCode(tx, '') : '';
       for (const orig of originalTxs) {

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import fs from 'fs';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorize, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { userHasRoleOrPermission, requireSystemAdmin } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { NotFoundError } from '../errors/customErrors.js';
@@ -64,7 +64,7 @@ router.get('/attachments/:id', validate(attachmentIdSchema), asyncHandler(async 
 }));
 
 // انتقال دستی پیوست‌های قدیمی داخل پایگاه‌داده به دیسک (پیش‌فرض آزمایشی؛ همان `npm run attachments:migrate`)
-router.post('/attachments/migrate-inline', authorize('admin'), validate(migrateInlineSchema), asyncHandler(async (req, res) => {
+router.post('/attachments/migrate-inline', requireSystemAdmin, validate(migrateInlineSchema), asyncHandler(async (req, res) => {
   const report = await AttachmentStorageService.migrateInlineAttachments({
     apply: req.body?.apply === true,
     actor: req.user?.username || 'admin',
@@ -73,7 +73,7 @@ router.post('/attachments/migrate-inline', authorize('admin'), validate(migrateI
 }));
 
 // v7.0.83 (TD-224): پاک‌سازی دستی فایل‌های پیوست بدون ثبت (پیش‌فرض آزمایشی؛ همان `npm run attachments:cleanup`)
-router.post('/attachments/cleanup-orphans', authorize('admin'), validate(cleanupOrphansSchema), asyncHandler(async (req, res) => {
+router.post('/attachments/cleanup-orphans', requireSystemAdmin, validate(cleanupOrphansSchema), asyncHandler(async (req, res) => {
   const report = await AttachmentOrphanCleanupService.cleanupOrphanFiles({
     apply: req.body?.apply === true,
     actor: req.user?.username || 'admin',

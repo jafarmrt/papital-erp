@@ -24,7 +24,7 @@ export class WarehouseService {
   }
 
   /**
-   * v9.0.109 (TD-490): همه انبارها، فعال و غیرفعال، برای «مدیریت انبارها» و فعال‌سازی دوباره
+   * v9.0.110 (TD-490): همه انبارها، فعال و غیرفعال، برای «مدیریت انبارها» و فعال‌سازی دوباره
    */
   static async listAll(executor: DbExecutor = orm): Promise<Array<typeof warehouses.$inferSelect>> {
     return executor.select().from(warehouses).orderBy(desc(warehouses.isActive), asc(warehouses.id));
@@ -63,7 +63,7 @@ export class WarehouseService {
       .from(warehouses)
       .where(eq(warehouses.code, cleanCode));
     if (existing) {
-      // v9.0.109 (TD-490، تصمیم ت۵): کد انبار غیرفعال با فعال‌سازی دوباره برمی‌گردد، نه با ساخت انبار تازه
+      // v9.0.110 (TD-490، تصمیم ت۵): کد انبار غیرفعال با فعال‌سازی دوباره برمی‌گردد، نه با ساخت انبار تازه
       throw new ConflictError(existing.isActive === 1
         ? `انباری با کد «${cleanCode}» از قبل در سیستم تعریف شده است.`
         : `انبار «${existing.name}» با کد «${cleanCode}» غیرفعال است. مدیر سیستم می‌تواند آن را در «مدیریت انبارها» دوباره فعال کند.`,
@@ -102,7 +102,7 @@ export class WarehouseService {
   }
 
   /**
-   * v9.0.109 (TD-490، تصمیم ت۵ الف): غیرفعال‌سازی در یک تراکنش، زیر قفل مجموعه انبارهای فعال و قفل `FOR UPDATE` ردیف
+   * v9.0.110 (TD-490، تصمیم ت۵ الف): غیرفعال‌سازی در یک تراکنش، زیر قفل مجموعه انبارهای فعال و قفل `FOR UPDATE` ردیف
    * انبار. هر گردش موجودی ردیف همان انبار را `FOR KEY SHARE` قفل می‌کند (`ItemWarehouseStockService.applyMovement`)،
    * پس بررسی «موجودی ندارد» پس از commit گردش‌های در جریان انجام می‌شود و گردش بعدی انبار غیرفعال را نمی‌پذیرد.
    * آخرین انبار فعال غیرفعال نمی‌شود (۴۲۲).
@@ -157,7 +157,7 @@ export class WarehouseService {
   }
 
   /**
-   * v9.0.109 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال (فقط مدیر سیستم، در route)، زیر همان قفل‌ها.
+   * v9.0.110 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال (فقط مدیر سیستم، در route)، زیر همان قفل‌ها.
    * انبار با کد رزرو کاردکس (TD-482) فعال نمی‌شود.
    */
   static async reactivateWarehouse(
@@ -188,7 +188,7 @@ export class WarehouseService {
 }
 
 /**
- * v9.0.109 (TD-490): قفل تراکنشی مجموعه انبارهای فعال (دو غیرفعال‌سازی هم‌زمان هر کدام انبار دیگر را فعال نبینند)، سپس
+ * v9.0.110 (TD-490): قفل تراکنشی مجموعه انبارهای فعال (دو غیرفعال‌سازی هم‌زمان هر کدام انبار دیگر را فعال نبینند)، سپس
  * قفل `FOR UPDATE` ردیف انبار که با قفل `FOR KEY SHARE` گردش‌های همان انبار ناسازگار است.
  */
 async function lockWarehouseForActivation(tx: DbTransaction, id: number): Promise<typeof warehouses.$inferSelect> {

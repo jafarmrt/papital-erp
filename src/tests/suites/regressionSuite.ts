@@ -4521,10 +4521,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // (مثل customers.manage) آن مجوز را نمی‌گیرد و نقش تازه با کد نقطه‌دار ساخته نمی‌شود
   if (shouldRun('reg_role_permission_namespace_p2_10', 'p210', 'authorize', 'roles')) {
     const tStart = Date.now();
-    const testName = 'v7.0.51: کد نقش هم‌نام مجوز، آن مجوز را در authorize و authorizePermission و userHasRoleOrPermission نمی‌گیرد (P2-10)';
+    const testName = 'v7.0.51: a role whose code equals a permission key does not get that permission in authorizePermission or userHasRoleOrPermission (P2-10)';
     const createdRoleIds: number[] = [];
     try {
-      const { authorize, authorizePermission, userHasRoleOrPermission } = await import('../../middleware/authorize.js');
+      const { authorizePermission, userHasRoleOrPermission } = await import('../../middleware/authorize.js');
       const { createTestRole } = await import('../fixtures/factories.js');
       const { roles } = await import('../../db/schema.js');
       const request = (await import('supertest')).default;
@@ -4543,10 +4543,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
 
       // الف) کاربری که کد نقشش دقیقاً نام مجوز است (نقشی که پیش‌تر ساخته شده) و خود مجوز را ندارد
       const dotted = 'customers.manage';
-      const guarded = await runGuard(authorize('admin', 'manager', 'sales_manager', 'customers.manage'), dotted);
-      if (guarded !== 403) {
-        throw new Error(`authorize به نقشی با کد «${dotted}» بدون داشتن مجوز دسترسی داد (وضعیت ${guarded})`);
-      }
       const guardedPerm = await runGuard(authorizePermission('customers.manage'), dotted);
       if (guardedPerm !== 403) {
         throw new Error(`authorizePermission به نقشی با کد «${dotted}» بدون داشتن مجوز دسترسی داد (وضعیت ${guardedPerm})`);
@@ -4555,17 +4551,16 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error(`userHasRoleOrPermission نقشی با کد «${dotted}» را دارنده همان مجوز دانست`);
       }
 
-      // ب) کنترل: دارنده واقعی مجوز و نقشِ نام‌برده در گارد همچنان مجازند؛ نقش بدون مجوز و خارج از فهرست رد می‌شود
+      // ب) کنترل: دارنده واقعی مجوز و مدیر سیستم مجازند و نقش بی مجوز رد می‌شود. از v9.0.107 (TD-516) هیچ گاردی کد نقش
+      // نمی‌پذیرد، پس «نقش نام‌برده در گارد» دیگر حالتی نیست (آزمون sec_route_guards_permission_only_td_516)
       const holder = await createTestRole({ permissions: ['customers.manage'] });
       createdRoleIds.push(holder.id);
       const plain = await createTestRole({ permissions: ['daily_logs.view'] });
       createdRoleIds.push(plain.id);
       const checks: Array<[string, number, number]> = [
-        ['دارنده مجوز در authorize', await runGuard(authorize('admin', 'manager', 'customers.manage'), holder.code), 200],
-        ['دارنده مجوز در authorizePermission', await runGuard(authorizePermission('customers.manage'), holder.code), 200],
-        ['نقش نام‌برده در گارد', await runGuard(authorize('admin', 'manager'), 'manager'), 200],
-        ['نقش بدون مجوز', await runGuard(authorize('admin', 'manager', 'customers.manage'), plain.code), 403],
-        ['مدیر سیستم', await runGuard(authorizePermission('customers.manage'), 'admin'), 200]
+        ['permission holder', await runGuard(authorizePermission('customers.manage'), holder.code), 200],
+        ['role without the permission', await runGuard(authorizePermission('customers.manage'), plain.code), 403],
+        ['system admin', await runGuard(authorizePermission('customers.manage'), 'admin'), 200]
       ];
       const wrong = checks.filter(([, got, want]) => got !== want);
       if (wrong.length > 0) {
@@ -4595,7 +4590,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         executionType: 'real_code',
         passed: true,
         durationMs: Date.now() - tStart,
-        details: 'نقش با کد customers.manage در هر سه مسیر بررسی دسترسی رد شد؛ دارنده واقعی مجوز، نقش نام‌برده و مدیر سیستم مجاز ماندند؛ ساخت نقش با کد نقطه‌دار 400 داد.'
+        details: 'a role coded customers.manage was refused by authorizePermission and userHasRoleOrPermission; the real holder and the system admin passed; creating a role with a dotted code returned 400'
       }));
     } catch (err: any) {
       results.push(makeTestCase({
@@ -10173,7 +10168,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       createdItemIds.push(deletedItem.id);
       const iScan = await scan();
       const [{ n: activeItems }] = (await orm.execute(sql`SELECT count(*)::int AS n FROM items WHERE is_deleted = 0`)).rows as Array<{ n: number }>;
-      // v9.0.108 (TD-495): the count is written with Persian digits
+      // v9.0.109 (TD-495): the count is written with Persian digits
       const scanItemsText = iScan.body.checks?.find(c => c.id === 'inventory_kardex')?.details?.match(/([۰-۹]+) کالای فعال/)?.[1] ?? '';
       const scanItems = Number(scanItemsText.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))) || -1);
       check(scanItems === Number(activeItems), `ممیزی یکپارچگی باید ${activeItems} کالای فعال گزارش کند (دریافتی ${scanItems})`);
@@ -10564,15 +10559,15 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.96, TD-496): the warehouse chart counts items with stock, not quantities of different units
   const { runWarehouseItemCountTests } = await import('../regression/warehouseItemCountTests.js');
   results.push(...await runWarehouseItemCountTests(shouldRun));
-  // Package 6 (v9.0.107, TD-482): a warehouse code «default» is refused and reversals name a real warehouse
+  // Package 6 (v9.0.108, TD-482): a warehouse code «default» is refused and reversals name a real warehouse
   const { runWarehouseReservedCodeTests } = await import('../regression/warehouseReservedCodeTests.js');
   results.push(...await runWarehouseReservedCodeTests(shouldRun));
 
-  // v9.0.108 (TD-495): system reconciliation scan reads the stock integrity summary
+  // v9.0.109 (TD-495): system reconciliation scan reads the stock integrity summary
   const { runSystemInventoryCheckTests } = await import('../regression/systemInventoryCheckTests.js');
   results.push(...await runSystemInventoryCheckTests(shouldRun));
 
-  // v9.0.109 (TD-490): warehouse deactivation lock, last active warehouse and reactivation
+  // v9.0.110 (TD-490): warehouse deactivation lock, last active warehouse and reactivation
   const { runWarehouseDeactivationTests } = await import('../regression/warehouseDeactivationTests.js');
   results.push(...await runWarehouseDeactivationTests(shouldRun));
 

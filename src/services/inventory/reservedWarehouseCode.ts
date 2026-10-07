@@ -3,7 +3,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import type { HealthCheckTestResult } from '../../types.js';
 
 /**
- * v9.0.107 (TD-482 / B06-03): a warehouse whose code is a Kardex ledger alias ('default') shares its Kardex rows with the
+ * v9.0.108 (TD-482 / B06-03): a warehouse whose code is a Kardex ledger alias ('default') shares its Kardex rows with the
  * default warehouse, so reconciliation, repair and rebuild move its stock there. New ones are refused at creation; one
  * created before this version is only listed here and never changed automatically (AGENTS §12).
  */

@@ -316,5 +316,5 @@ export const generateToken = (payload: AuthUserPayload | { id: number; username:
   return jwt.sign(payload, jwtSecret, { expiresIn: '24h', algorithm: JWT_ALGORITHM });
 };
 
-export { authorize, authorizePermission } from './authorize.js';
+export { authorizePermission, requirePermission, requireSystemAdmin } from './authorize.js';
 
