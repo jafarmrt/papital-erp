@@ -6,6 +6,7 @@ import { cn } from '../utils';
 import SystemHealthDiagnostic from '../components/SystemHealthDiagnostic';
 import { SystemConfigTab } from '../components/settings/SystemConfigTab';
 import { useSettings } from '../hooks/useSettings';
+import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog';
 import { GeneralSettingsTab } from '../components/settings/GeneralSettingsTab';
 import { CategoriesTab, CategoryModal } from '../components/settings/CategoriesTab';
 import { WarehousesTab, WarehouseModal } from '../components/settings/WarehousesTab';
@@ -210,7 +211,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
               s.setShowWhModal(true);
             }}
             onDeleteWarehouse={s.handleWhDelete}
-            canReactivate={currentUser.role === 'admin'}
+            canReactivate={currentUser.role === SYSTEM_ADMIN_ROLE}
           />
         )}
 
