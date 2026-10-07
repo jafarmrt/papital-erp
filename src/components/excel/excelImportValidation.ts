@@ -1,5 +1,6 @@
 import { Category, Item } from '../../types';
 import { PreviewRow } from './types';
+import { PRODUCT_CODE_PATTERN, RAW_MATERIAL_CODE_PATTERN } from '../../lib/items/itemCodeFormat';
 
 export interface ParsedExcelItem {
   index: number;
@@ -30,6 +31,9 @@ export function validateExcelRows(
     if (it.name) dbNameMap.set(it.name.trim().toLowerCase(), it);
   });
 
+  // v9.0.117 (TD-650): کالای موجود با کد شناخته می‌شود و قالب کد فقط برای کالای تازه سنجیده می‌شود (مثل سرور)
+  const dbCodes = new Set(dbItems.map(it => String(it.code ?? '').trim()).filter(Boolean));
+
   // Create category lookup
   const catMap = new Map<string, Category>();
   catsList.forEach(c => {
@@ -55,18 +59,16 @@ export function validateExcelRows(
     if (!cleanCode) {
       hasPrefixMismatch = true;
       issues.push(`کد کالا خالی است.`);
-    } else {
+    } else if (!dbCodes.has(cleanCode)) {
       if (itemType === 'product') {
-        const productRegex = /^\d{4}-[A-Za-z]+-\d{3}-\d{2}$/;
-        if (!productRegex.test(cleanCode)) {
+        if (!PRODUCT_CODE_PATTERN.test(cleanCode)) {
           hasPrefixMismatch = true;
           issues.push(`فرمت کد محصول نهایی نامعتبر است (الگوی صحیح: nnnn-x-nnn-nn).`);
         }
       } else {
-        const rawRegex = /^[A-Za-z\-]+-\d{3}$/;
-        if (!rawRegex.test(cleanCode)) {
+        if (!RAW_MATERIAL_CODE_PATTERN.test(cleanCode)) {
           hasPrefixMismatch = true;
-          issues.push(`فرمت کد ماده اولیه نامعتبر است (الگوی صحیح: x-nnn).`);
+          issues.push(`فرمت کد ماده اولیه نامعتبر است (الگوی صحیح: PREFIX-NNN مانند B-H-101).`);
         }
       }
 

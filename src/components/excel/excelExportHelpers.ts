@@ -30,7 +30,7 @@ export async function downloadExcelTemplate(): Promise<void> {
   const strategies = data.strategies || ['قیمت عمده', 'قیمت خرده', 'قیمت همکار'];
 
   const sampleRow: Record<string, any> = {
-    'کد کالا': 'N-101',
+    'کد کالا': '1404-N-101-01',
     'نام محصول': 'گردنبند طلایی طرح لوتوس',
     'نوع کالا': 'محصول نهایی',
     'دسته‌بندی': 'گردنبند',

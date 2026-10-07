@@ -27,6 +27,9 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
     ['sec_item_import_respects_price_and_stock_permissions_td_648',
       'v9.0.116: the Excel import changes prices only with products.edit_price, stock only with warehouse.in / warehouse.out and creates items only with products.create (TD-648)',
       ['td648', 'excel', 'security', 'permission', 'package5'], importPermissionsCase],
+    ['reg_excel_partial_row_keeps_fields_td_650',
+      'v9.0.117: a missing column or blank cell leaves an existing item unchanged and its type comes from the item (TD-650)',
+      ['td650', 'excel', 'package5'], partialRowCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -153,6 +156,41 @@ async function importPermissionsCase(ctx: Ctx): Promise<string> {
 
   if (wrong.length > 0) throw new Error(wrong.join('; '));
   return 'price and stock columns follow products.edit_price / warehouse.in / warehouse.out; new items need products.create';
+}
+
+/**
+ * TD-650 / B05-04: on v9.0.116 a «code, name, price» file turned the unit «جفت» into «عدد», the reorder point 7 into 0
+ * and refused the raw-material row with «فرمت کد محصول نهایی» because the type defaulted to product.
+ */
+async function partialRowCase(ctx: Ctx): Promise<string> {
+  const { createTestItem } = await import('../fixtures/factories.js');
+  const wrong: string[] = [];
+  const product = await createTestItem({ code: `1404-E-${ctx.serial()}-05`, name: withTestMarker('گوشواره ناقص td650'), category: 'گوشواره میخی', unit: 'جفت', reorderPoint: 7, color: 'طلایی', stocks: { '': 3 } });
+  const raw = await createTestItem({ type: 'raw_material', code: `B-H-${ctx.serial()}`, name: withTestMarker('ماده اولیه ناقص td650'), category: 'زنجیر', unit: 'ریسه', reorderPoint: 40, stocks: { '': 50 } });
+  const legacy = await createTestItem({ code: `N-${ctx.serial()}`, name: withTestMarker('کد قدیمی td650'), category: 'گردنبند', stocks: { '': 1 } });
+  ctx.itemIds.push(product.id, raw.id, legacy.id);
+  const res = await ctx.post('/api/items/unified-import', { rows: [
+    { 'کد کالا': product.code, 'نام محصول': product.name, 'قیمت عمده': 500000 },
+    { 'کد کالا': raw.code, 'نام محصول': raw.name, 'قیمت عمده': 20000, 'واحد': '' },
+    { 'کد کالا': legacy.code, 'نام محصول': legacy.name, 'قیمت عمده': 90000 },
+  ] });
+  if (res.status !== 200 || errorText(res)) wrong.push(`import ${res.status}: ${errorText(res)}`);
+  const rows = await orm.select({ id: items.id, type: items.type, unit: items.unit, reorderPoint: items.reorderPoint, color: items.color, category: items.category })
+    .from(items).where(inArray(items.id, [product.id, raw.id, legacy.id]));
+  const byId = new Map(rows.map(r => [r.id, r]));
+  const p = byId.get(product.id)!;
+  const r = byId.get(raw.id)!;
+  if (p.unit !== 'جفت' || Number(p.reorderPoint) !== 7 || p.color !== 'طلایی' || p.category !== 'گوشواره میخی') wrong.push(`product fields ${JSON.stringify(p)}`);
+  if (r.type !== 'raw_material' || r.unit !== 'ریسه' || Number(r.reorderPoint) !== 40) wrong.push(`raw material fields ${JSON.stringify(r)}`);
+  for (const it of [product, raw, legacy]) {
+    if (!(await activeTitles(it.id)).includes('عمده')) wrong.push(`no price for ${it.code}`);
+  }
+  // an explicit type column and an explicit cell still change the item
+  await ctx.post('/api/items/unified-import', { rows: [{ 'کد کالا': product.code, 'نام محصول': product.name, 'واحد': 'عدد', 'حد نقطه سفارش (آلارم کسری)': 0 }] });
+  const [p2] = await orm.select({ unit: items.unit, reorderPoint: items.reorderPoint }).from(items).where(eq(items.id, product.id));
+  if (p2.unit !== 'عدد' || Number(p2.reorderPoint) !== 0) wrong.push(`explicit cells not applied ${JSON.stringify(p2)}`);
+  if (wrong.length > 0) throw new Error(wrong.join('; '));
+  return 'a partial file kept unit, reorder point, type and colour; prices were set; explicit cells still apply';
 }
 
 /** TD-662 / B05-16: on v9.0.114 each import of the same file soft-deleted and re-inserted every price (history 2 → 6). */

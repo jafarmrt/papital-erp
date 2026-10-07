@@ -12,7 +12,7 @@ import { money } from '../../lib/money.js';
 import { ITEM_IMPORT_DENIED_MESSAGES, type ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import {
   EXCEL_DOCUMENT_REF, ITEM_FIELD_KEYS, applyStockChange, changedRowPrices, codeFormatError, deniedStockPermissions,
-  plannedStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue,
+  newItemType, plannedStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue,
   type ItemRow, type Row, type RowFields, type RowStock, type Warehouse,
 } from './itemExcelRow.js';
 
@@ -71,7 +71,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
   const code = String(rawCode || '').trim();
   const name = String(rawName || '').trim();
   const push = (message: string) => state.errors.push({ row: rowNum, name, code, message });
-  const fields = readRowFields(row, ctx.typeFilter);
+  const fields = readRowFields(row);
   const stock = readRowStock(row, ctx.whs, ctx.defaultWhCode);
 
   let matchedItem: ItemRow | null = null;
@@ -87,7 +87,9 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     push('کد کالا نامعتبر است (خالی می‌باشد).');
     return;
   }
-  const formatError = codeFormatError(code, fields.itemType, fields.category);
+  // v9.0.117 (TD-650): قالب کد فقط برای کالای تازه سنجیده می‌شود؛ کد کالای موجود از اکسل عوض نمی‌شود و پیش‌تر نوع پیش‌فرض
+  // «محصول» ردیف ماده اولیه را با پیام «فرمت کد محصول نهایی» رد می‌کرد
+  const formatError = matchedItem ? null : codeFormatError(code, newItemType(fields, ctx.typeFilter), fields.category ?? '');
   if (formatError) {
     push(formatError);
     return;
@@ -136,7 +138,7 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
   // v7.0.45 (audit P2-1): موجودی فعلی از جدول موجودی انبارها، نه کش JSONB
   const existingSnapshot = await ItemWarehouseStockService.getStockSnapshot(tx, targetItemId);
   const currentWac = money(matchedItem.weightedAverageCost);
-  const fileWac = !isNaN(fields.weightedAverageCost) && fields.weightedAverageCost > 0 ? money(fields.weightedAverageCost) : null;
+  const fileWac = fields.weightedAverageCost > 0 ? money(fields.weightedAverageCost) : null;
   // v8.0.5 (TD-264، تصمیم مالک محصول — گزینه الف): WAC کالای دارای موجودی از اکسل عوض نمی‌شود؛ WAC فقط با
   // گردش ورود تغییر می‌کند. مقدار برابر WAC فعلی (اختلاف کمتر از EXCEL_WAC_TOLERANCE) نادیده گرفته می‌شود تا فایل
   // خروجی بی‌خطا برگردد.
@@ -153,16 +155,17 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
   const updateSet = {
     name: name || matchedItem.name,
     code: code || matchedItem.code,
-    type: fields.itemType,
-    unit: fields.unit || matchedItem.unit,
-    category: fields.category || matchedItem.category,
-    reorderPoint: isNaN(fields.reorderPoint) ? matchedItem.reorderPoint : fields.reorderPoint,
+    // v9.0.117 (TD-650، ت۳ الف): ستونِ نبود یا سلول خالی یعنی «بی‌تغییر»؛ نوع از خود کالا، مگر ستون نوع صریح باشد
+    type: fields.itemType ?? matchedItem.type,
+    unit: fields.unit ?? matchedItem.unit,
+    category: fields.category ?? matchedItem.category,
+    reorderPoint: fields.reorderPoint ?? matchedItem.reorderPoint,
     weightedAverageCost: itemWac,
-    color: fields.color || matchedItem.color,
-    size: fields.size || matchedItem.size,
-    weight: fields.weight !== null && !isNaN(fields.weight) ? fields.weight : matchedItem.weight,
-    material: fields.material || matchedItem.material,
-    image: fields.image || matchedItem.image,
+    color: fields.color ?? matchedItem.color,
+    size: fields.size ?? matchedItem.size,
+    weight: fields.weight ?? matchedItem.weight,
+    material: fields.material ?? matchedItem.material,
+    image: fields.image ?? matchedItem.image,
   };
   const fieldsChange = ITEM_FIELD_KEYS.some(k => !sameFieldValue(matchedItem[k], updateSet[k]));
   if (fieldsChange && !perms.editItems) {
@@ -191,18 +194,18 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
 async function createNewItem(ctx: ImportContext, input: RowInput): Promise<number> {
   const { tx, state } = ctx;
   const { code, name, fields, stock } = input;
-  const itemWac = money(isNaN(fields.weightedAverageCost) ? 0 : fields.weightedAverageCost);
+  const itemWac = money(fields.weightedAverageCost);
   const [newItem] = await tx.insert(items).values({
     name: name || 'کالای بدون نام',
     code,
-    type: fields.itemType,
+    type: newItemType(fields, ctx.typeFilter),
     unit: fields.unit || 'عدد',
-    category: fields.category || '',
-    reorderPoint: isNaN(fields.reorderPoint) ? 0 : fields.reorderPoint,
+    category: fields.category ?? '',
+    reorderPoint: fields.reorderPoint ?? 0,
     weightedAverageCost: itemWac,
     color: fields.color || null,
     size: fields.size || null,
-    weight: fields.weight !== null && !isNaN(fields.weight) ? fields.weight : null,
+    weight: fields.weight ?? null,
     material: fields.material || null,
     image: fields.image || '',
     currentStock: 0,

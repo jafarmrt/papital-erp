@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.117 — A Partial Excel File Leaves Item Fields Unchanged
+- **Item Excel Partial Rows:** a missing column or blank cell leaves an existing item's field unchanged and its type comes from the item, so a price-only file no longer resets unit and reorder point or refuses raw materials (TD-650, `reg_excel_partial_row_keeps_fields_td_650`).
+
 ### v9.0.116 — Excel Import Follows Price and Stock Permissions
 - **Item Excel Permissions:** the item Excel import changes prices only with the price permission, stock only with the warehouse in / out permissions and creates items only with the item creation permission; other parts are reported and skipped (TD-648, `sec_item_import_respects_price_and_stock_permissions_td_648`).
 

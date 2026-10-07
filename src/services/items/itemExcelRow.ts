@@ -7,6 +7,7 @@ import { resolveWarehouseCode } from '../inventory/warehouseResolver.js';
 import { money, Money } from '../../lib/money.js';
 import { WAC_COLUMNS, extractRowPriceColumns, unknownPriceColumnMessage } from '../../lib/items/excelPriceColumns.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
+export { codeFormatError } from '../../lib/items/itemCodeFormat.js';
 
 /**
  * v9.0.116 (TD-648): خواندن یک ردیف اکسل کالا و گام‌های موجودی و قیمت آن؛ گردش ردیف در `itemExcelImport.ts` است.
@@ -18,40 +19,74 @@ export type Row = Record<string, unknown>;
 export type ItemRow = typeof items.$inferSelect;
 export type Warehouse = typeof warehouses.$inferSelect;
 
+/**
+ * v9.0.117 (TD-650، تصمیم ت۳ الف): مشخصات یک ردیف؛ ستونِ نبود یا سلول خالی `undefined` است و برای کالای موجود یعنی
+ * «بی‌تغییر». پیش‌تر نبود ستون واحد «عدد»، نقطه سفارش ۰ و نوع «محصول» می‌شد و فایل ناقص مشخصات کالا را بازنویسی می‌کرد.
+ */
 export interface RowFields {
-  itemType: 'product' | 'raw_material';
-  category: string;
-  unit: string;
-  reorderPoint: number;
+  /** نوع فقط از ستون نوع؛ نوع کالای موجود بی این ستون همان نوع خودش است */
+  itemType?: 'product' | 'raw_material';
+  category?: string;
+  unit?: string;
+  reorderPoint?: number;
   weightedAverageCost: number;
-  image: string;
-  color: string;
-  size: string;
-  weight: number | null;
-  material: string;
+  image?: string;
+  color?: string;
+  size?: string;
+  weight?: number;
+  material?: string;
 }
 
-export function readRowFields(row: Row, typeFilter: string | undefined): RowFields {
-  const rawType = row['نوع کالا'] || row['نوع'] || row['type'];
-  let itemType: 'product' | 'raw_material' = 'product';
-  if (rawType === 'ماده اولیه' || rawType === 'raw_material' || typeFilter === 'raw_material') {
-    itemType = 'raw_material';
-  } else if (rawType === 'محصول نهایی' || rawType === 'product' || typeFilter === 'product') {
-    itemType = 'product';
+export function isBlankCell(v: unknown): boolean {
+  return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+}
+
+/** نخستین سلول پرِ این سرستون‌ها */
+function cell(row: Row, headers: string[]): unknown {
+  for (const h of headers) {
+    if (!isBlankCell(row[h])) return row[h];
   }
-  const weightCell = row['وزن'] || row['weight'];
+  return undefined;
+}
+
+function textCell(row: Row, headers: string[]): string | undefined {
+  const v = cell(row, headers);
+  return v === undefined ? undefined : String(v).trim();
+}
+
+/** عدد سلول؛ سلول خالی یا ناعددی `undefined` (بی‌تغییر) */
+function numberCell(row: Row, headers: string[]): number | undefined {
+  const v = cell(row, headers);
+  if (v === undefined) return undefined;
+  const n = Number(v);
+  return Number.isNaN(n) ? undefined : n;
+}
+
+function typeCell(row: Row): 'product' | 'raw_material' | undefined {
+  const rawType = textCell(row, ['نوع کالا', 'نوع', 'type']);
+  if (rawType === 'ماده اولیه' || rawType === 'raw_material') return 'raw_material';
+  if (rawType === 'محصول نهایی' || rawType === 'product') return 'product';
+  return undefined;
+}
+
+export function readRowFields(row: Row): RowFields {
   return {
-    itemType,
-    category: String(row['دسته‌بندی'] || row['دسته'] || row['category'] || '').trim(),
-    unit: String(row['واحد'] || row['واحد اندازه‌گیری'] || row['unit'] || 'عدد').trim(),
-    reorderPoint: Number(row['حد نقطه سفارش (آلارم کسری)'] || row['حد نقطه سفارش'] || row['نقطه سفارش'] || row['reorder_point'] || 0),
-    weightedAverageCost: Number(WAC_COLUMNS.map(h => row[h]).find(v => v !== undefined && v !== '') || 0),
-    image: String(row['تصویر'] || row['آدرس عکس'] || row['image'] || '').trim(),
-    color: String(row['رنگ'] || row['color'] || '').trim(),
-    size: String(row['سایز'] || row['size'] || '').trim(),
-    weight: weightCell ? Number(weightCell) : null,
-    material: String(row['جنس'] || row['material'] || '').trim(),
+    itemType: typeCell(row),
+    category: textCell(row, ['دسته‌بندی', 'دسته', 'category']),
+    unit: textCell(row, ['واحد', 'واحد اندازه‌گیری', 'unit']),
+    reorderPoint: numberCell(row, ['حد نقطه سفارش (آلارم کسری)', 'حد نقطه سفارش', 'نقطه سفارش', 'reorder_point']),
+    weightedAverageCost: numberCell(row, [...WAC_COLUMNS]) ?? 0,
+    image: textCell(row, ['تصویر', 'آدرس عکس', 'image']),
+    color: textCell(row, ['رنگ', 'color']),
+    size: textCell(row, ['سایز', 'size']),
+    weight: numberCell(row, ['وزن', 'weight']),
+    material: textCell(row, ['جنس', 'material']),
   };
+}
+
+/** نوع کالای تازه: ستون نوع، وگرنه پالایش صفحه، وگرنه محصول */
+export function newItemType(fields: RowFields, typeFilter: string | undefined): 'product' | 'raw_material' {
+  return fields.itemType ?? (typeFilter === 'raw_material' ? 'raw_material' : 'product');
 }
 
 export interface RowStock {
@@ -190,18 +225,4 @@ export async function saveRowPrices(tx: DbExecutor, itemId: number, changed: Awa
     });
   }
   return changed.length;
-}
-
-/** کد کالا با قالب نوع خودش؛ پیام خطا یا null */
-export function codeFormatError(code: string, itemType: 'product' | 'raw_material', category: string): string | null {
-  const isProductType = itemType === 'product' || category.includes('محصول');
-  if (isProductType) {
-    if (!/^\d{4}-[A-Za-z]+-\d{3}-\d{2}$/.test(code)) {
-      return `فرمت کد محصول نهایی نامعتبر است (الگوی صحیح: nnnn-x-nnn-nn). کد ارسال شده: ${code}`;
-    }
-  } else if (!/^[A-Za-z][A-Za-z0-9\-]*-{1,2}\d{2,3}$/.test(code)) {
-    // V10-2.1: قالب تک‌خط جدید (B-H-101) + سازگاری با داده تاریخی دوخط‌تیره (B-H--101)
-    return `فرمت کد ماده اولیه نامعتبر است (الگوی صحیح: PREFIX-NNN مانند B-H-101). کد ارسال شده: ${code}`;
-  }
-  return null;
 }
