@@ -10625,6 +10625,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runWarehouseItemCountTests(shouldRun));
   const { runSettingValuesTests } = await import('../regression/settingValuesTests.js');
   results.push(...await runSettingValuesTests(shouldRun));
+  // Package 16 (v9.0.279, TD-671): the warehouse dashboard counts documents and real outflows of the Kardex ledger
+  const { runDashboardMovementStatsTests } = await import('../regression/dashboardMovementStatsTests.js');
+  results.push(...await runDashboardMovementStatsTests(shouldRun));
   // Package 6 (v9.0.110, TD-482): a warehouse code «default» is refused and reversals name a real warehouse
   const { runWarehouseReservedCodeTests } = await import('../regression/warehouseReservedCodeTests.js');
   results.push(...await runWarehouseReservedCodeTests(shouldRun));
