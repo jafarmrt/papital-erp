@@ -1,10 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Trash2, CheckCircle2, AlertCircle, FileText, Calendar, Save, X, Scale, Sparkles, AlertTriangle, History } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDateString, formatCurrencyLabel, errorMessageOf } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDateString, errorMessageOf, toPersianDigits, formatCurrencyLabel } from '../../utils';
 import type { Account, Customer, Personnel, JournalVoucher } from '../../types';
 import { AccountSearchSelect } from './AccountSearchSelect';
-import { computeVoucherBalance } from '../../lib/voucherBalance';
+import {
+  voucherBalancingAmount, voucherFormBalance, voucherFormCurrency, voucherHeaderRateFromRows, voucherRowDraftFromStored,
+  withVoucherRowCurrency, type VoucherHeaderCurrency, type VoucherRowCurrencyDraft,
+} from '../../lib/accounting/voucherFormCurrency';
+import { VoucherHeaderCurrencyFields, VoucherRowCurrencyCell } from './VoucherCurrencyInputs';
 import toast from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -20,7 +23,7 @@ interface VoucherCorrectionModalProps {
   onCorrect: (voucherId: number, data: { reason: string; newItems: any[]; newDescription?: string; date?: string }) => Promise<void>;
 }
 
-interface VoucherItemDraft {
+interface VoucherItemDraft extends VoucherRowCurrencyDraft {
   id?: number;
   accountId: number | '';
   detailedType: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'custom';
@@ -48,8 +51,6 @@ export function VoucherCorrectionModal({
   personnelList,
   onCorrect,
 }: VoucherCorrectionModalProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
   const safeCustomers = Array.isArray(customers) ? customers : [];
   const safePersonnelList = Array.isArray(personnelList) ? personnelList : [];
@@ -59,14 +60,23 @@ export function VoucherCorrectionModal({
   const [newDescription, setNewDescription] = useState('');
   const [items, setItems] = useState<VoucherItemDraft[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // v9.0.154 (TD-564): ارز سند اصلاحی همان ارز سند اصلی است؛ نرخ سند از ردیف‌های اصلی و قابل تغییر
+  const [headerRate, setHeaderRate] = useState<number | string | ''>('');
+  const voucherCurrency = useMemo(() => voucherFormCurrency(voucher?.currency), [voucher?.currency]);
+  const header = useMemo<VoucherHeaderCurrency>(() => ({ currency: voucherCurrency.currency, rate: headerRate }), [voucherCurrency.currency, headerRate]);
 
   useEffect(() => {
     if (voucher && isOpen) {
       setDate(getTodayJalaliDate());
       setReason('');
       setNewDescription(voucher.description || '');
+      const { currency: originalCurrency, replaced } = voucherFormCurrency(voucher.currency);
+      if (replaced) toast.error(`ارز «${replaced}» در فهرست ارزهای سند نیست؛ ردیف‌های اصلاحی ریالی فرض شدند. مبلغ‌ها را بررسی کنید.`);
+      const originalHeader = { currency: originalCurrency, rate: voucherHeaderRateFromRows(voucher.items, originalCurrency) };
+      setHeaderRate(originalHeader.rate);
       if (voucher.items && Array.isArray(voucher.items) && voucher.items.length > 0) {
         setItems(voucher.items.map(it => ({
+          ...voucherRowDraftFromStored({ currency: it.currency, exchangeRate: it.exchangeRate ?? it.exchange_rate }, originalHeader),
           accountId: it.accountId,
           detailedType: (it.detailedType as any) || 'none',
           detailedId: it.detailedId || null,
@@ -88,8 +98,11 @@ export function VoucherCorrectionModal({
     return safeAccounts.filter(a => a.level === 'subsidiary' || a.level === 'detailed' || a.level === 'general');
   }, [safeAccounts]);
 
-  // v7.0.76 (P3-6): جمع اعشاری دقیق و تلورانس یگانه سرور
-  const { totalDebit, totalCredit, difference: balanceDifference, isBalanced } = useMemo(() => computeVoucherBalance(items), [items]);
+  // v7.0.76 (P3-6): جمع اعشاری دقیق و تلورانس یگانه سرور. v9.0.154 (TD-564): با ارز و نرخ هر ردیف (سند چندارزی به ریال)
+  const balance = useMemo(() => voucherFormBalance(items, header), [items, header]);
+  const { totalDebit, totalCredit, difference: balanceDifference, isBalanced } = balance;
+  const rowsWithoutRateText = toPersianDigits(balance.rowsWithoutRate.join('، '));
+  const totalDecimals = balance.currency === 'IRR' ? 0 : 2;
 
   if (!isOpen || !voucher) return null;
 
@@ -117,20 +130,15 @@ export function VoucherCorrectionModal({
   };
 
   const handleAutoBalance = () => {
-    if (balanceDifference <= 0) return;
-    if (totalDebit > totalCredit) {
-      // Need credit
-      setItems(prev => [
-        ...prev,
-        { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: balanceDifference, description: 'ردیف موازنه‌ساز' }
-      ]);
-    } else {
-      // Need debit
-      setItems(prev => [
-        ...prev,
-        { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: balanceDifference, credit: 0, description: 'ردیف موازنه‌ساز' }
-      ]);
+    if (isBalanced) return;
+    const newRow: VoucherItemDraft = { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: 'ردیف موازنه‌ساز' };
+    const result = voucherBalancingAmount([...items, newRow], items.length, header);
+    if (result.kind === 'error') {
+      toast.error(result.message);
+      return;
     }
+    if (result.kind === 'balanced') return;
+    setItems(prev => [...prev, result.side === 'debit' ? { ...newRow, debit: result.amount } : { ...newRow, credit: result.amount }]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,8 +148,13 @@ export function VoucherCorrectionModal({
       return;
     }
 
+    if (balance.rowsWithoutRate.length > 0) {
+      toast.error(`نرخ تبدیل ردیف ${rowsWithoutRateText} به ریال را وارد کنید؛ ردیف غیرریالی بی نرخ ثبت نمی‌شود`);
+      return;
+    }
+
     if (!isBalanced) {
-      toast.error(`سند تراز نیست! اختلاف تراز: ${formatPersianPrice(balanceDifference, appCurrency)}`);
+      toast.error(`سند تراز نیست! اختلاف تراز: ${formatPersianPrice(balanceDifference, balance.currency)}`);
       return;
     }
 
@@ -163,13 +176,16 @@ export function VoucherCorrectionModal({
         date: date.trim(),
         reason: reason.trim(),
         newDescription: newDescription.trim(),
-        newItems: items.map(it => ({
+        // v9.0.154 (TD-564): ردیف‌های جایگزین با ارز و نرخ قطعی خود (پیش‌تر ۱۰۰ دلار ۱۰۰ ریال می‌شد)
+        newItems: withVoucherRowCurrency(items, header).map(it => ({
           accountId: Number(it.accountId),
           detailedType: it.detailedType,
           detailedId: it.detailedId,
           detailedName: it.detailedName,
           debit: Number(it.debit) || 0,
           credit: Number(it.credit) || 0,
+          currency: it.currency,
+          ...(it.exchangeRate !== undefined ? { exchangeRate: it.exchangeRate } : {}),
           description: it.description || newDescription,
         }))
       });
@@ -299,6 +315,9 @@ export function VoucherCorrectionModal({
             />
           </div>
 
+          {/* v9.0.154 (TD-564): ارز سند اصلی (ثابت) و نرخ آن */}
+          <VoucherHeaderCurrencyFields value={header} onChange={next => setHeaderRate(next.rate ?? '')} currencyLocked />
+
           {/* New Items Editor */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -323,8 +342,9 @@ export function VoucherCorrectionModal({
                     <th className="py-2.5 px-2 w-8 text-center">#</th>
                     <th className="py-2.5 px-2 min-w-[200px]">حساب معین / تفصیلی</th>
                     <th className="py-2.5 px-2 min-w-[150px]">شرح ردیف</th>
-                    <th className="py-2.5 px-2 w-32 text-left">{`بدهکار (${curLbl})`}</th>
-                    <th className="py-2.5 px-2 w-32 text-left">{`بستانکار (${curLbl})`}</th>
+                    <th className="py-2.5 px-2 w-28">ارز و نرخ</th>
+                    <th className="py-2.5 px-2 w-32 text-left">بدهکار</th>
+                    <th className="py-2.5 px-2 w-32 text-left">بستانکار</th>
                     <th className="py-2.5 px-2 w-10 text-center">حذف</th>
                   </tr>
                 </thead>
@@ -416,6 +436,13 @@ export function VoucherCorrectionModal({
                         />
                       </td>
                       <td className="py-2 px-2">
+                        <VoucherRowCurrencyCell
+                          row={item}
+                          header={header}
+                          onChange={patch => setItems(prev => prev.map((row, i) => (i === idx ? { ...row, ...patch } : row)))}
+                        />
+                      </td>
+                      <td className="py-2 px-2">
                         <input
                           type="number"
                           min="0"
@@ -457,12 +484,12 @@ export function VoucherCorrectionModal({
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100/80 dark:bg-slate-800 font-bold border-t border-slate-200 dark:border-slate-700 text-xs">
-                    <td colSpan={3} className="py-2.5 px-3 text-left">جمع کل آرتیکل‌ها:</td>
+                    <td colSpan={4} className="py-2.5 px-3 text-left">جمع کل آرتیکل‌ها ({formatCurrencyLabel(balance.currency)}{balance.inRial ? '، هر ردیف ارزی با نرخ خودش' : ''}):</td>
                     <td className="py-2.5 px-2 text-left font-mono text-slate-900 dark:text-white">
-                      {formatPersianPrice(totalDebit)}
+                      {formatPersianPrice(totalDebit, undefined, totalDecimals)}
                     </td>
                     <td className="py-2.5 px-2 text-left font-mono text-slate-900 dark:text-white">
-                      {formatPersianPrice(totalCredit)}
+                      {formatPersianPrice(totalCredit, undefined, totalDecimals)}
                     </td>
                     <td></td>
                   </tr>
@@ -480,9 +507,11 @@ export function VoucherCorrectionModal({
             <div className="flex items-center gap-2">
               {isBalanced ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-rose-600" />}
               <span>
-                {isBalanced 
-                  ? 'سند کاملاً تراز است (بدهکار = بستانکار)' 
-                  : `سند تراز نیست! اختلاف تراز: ${formatPersianPrice(balanceDifference, appCurrency)}`}
+                {isBalanced
+                  ? 'سند کاملاً تراز است (بدهکار = بستانکار)'
+                  : balance.rowsWithoutRate.length > 0
+                    ? `نرخ تبدیل ردیف ${rowsWithoutRateText} به ریال را وارد کنید`
+                    : `سند تراز نیست! اختلاف تراز: ${formatPersianPrice(balanceDifference, balance.currency)}`}
               </span>
             </div>
 

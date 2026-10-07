@@ -119,5 +119,38 @@ export async function runManualVoucherCurrencyTests(shouldRun: ShouldRun): Promi
     }));
   }
 
+  const listId = 'reg_manual_voucher_currency_list_td_564';
+  if (shouldRun(listId, 'td564', 'voucher', 'currency', 'package3')) {
+    await runCase(results, listId, 'v9.0.154: a manual voucher and its rows take only the treasury currencies; «TOMAN» is refused, a lowercase code is read as the code and an empty row currency follows the voucher (TD-564)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const acc = await accountIdsByCode('1001', '4001');
+      const admin = await sandboxAdminClient();
+      const base = { date: await businessTodayIsoDate(), status: 'approved', description: 'TD-564 voucher currency' };
+      const row = (accountId: number, debit: number, credit: number, extra: Record<string, unknown> = {}) => ({ accountId, debit, credit, ...extra });
+      const vouchersBefore = (await orm.select({ id: journalVouchers.id }).from(journalVouchers)).length;
+
+      // 1) B03-22: the form offered «تومان»; a TOMAN voucher with rial rows was stored and read as rials
+      const tomanHeader = await admin.post('/api/accounting/vouchers', { ...base, currency: 'TOMAN', items: [row(acc['1001'], 1_000_000, 0, { currency: 'IRR' }), row(acc['4001'], 0, 1_000_000, { currency: 'IRR' })] });
+      if (tomanHeader.status !== 400 || !JSON.stringify(tomanHeader.body).includes('تومانی')) problems.push(`TOMAN voucher: ${tomanHeader.status} ${JSON.stringify(tomanHeader.body).slice(0, 200)}, expected 400 naming toman`);
+      const tomanRow = await admin.post('/api/accounting/vouchers', { ...base, items: [row(acc['1001'], 1_000_000, 0, { currency: 'TOMAN', exchangeRate: 10 }), row(acc['4001'], 0, 10_000_000, { currency: 'IRR' })] });
+      if (tomanRow.status !== 400) problems.push(`TOMAN row: ${tomanRow.status} ${JSON.stringify(tomanRow.body).slice(0, 200)}, expected 400`);
+      const tomanEdit = await admin.post('/api/accounting/vouchers', { ...base, status: 'draft', items: [row(acc['1001'], 10, 0), row(acc['4001'], 0, 10)] });
+      if (tomanEdit.status === 201) {
+        const put = await admin.put(`/api/accounting/vouchers/${tomanEdit.body.id}`, { currency: 'TOMAN', items: [row(acc['1001'], 10, 0, { currency: 'IRR' }), row(acc['4001'], 0, 10, { currency: 'IRR' })] });
+        if (put.status !== 400) problems.push(`TOMAN on edit: ${put.status}, expected 400`);
+      } else problems.push(`a plain rial draft answered ${tomanEdit.status}`);
+      const vouchersAfterRefusals = (await orm.select({ id: journalVouchers.id }).from(journalVouchers)).length;
+      if (vouchersAfterRefusals !== vouchersBefore + 1) problems.push(`${vouchersAfterRefusals - vouchersBefore - 1} refused vouchers were stored`);
+
+      // 2) the form now sends each row's currency and rate: a lowercase code is the code, an empty row currency is the voucher's
+      const usd = await admin.post('/api/accounting/vouchers', { ...base, currency: 'usd', items: [row(acc['1001'], 100, 0, { currency: '', exchangeRate: 600000 }), row(acc['4001'], 0, 60_000_000, { currency: 'irr' })] });
+      if (usd.status !== 201) problems.push(`USD voucher with an IRR row: ${usd.status} ${JSON.stringify(usd.body).slice(0, 200)}, expected 201`);
+      else if ((await storedRows(usd.body.id)).join(',') !== 'USD@600000,IRR@1') problems.push(`USD voucher rows stored as ${(await storedRows(usd.body.id)).join(',')}`);
+
+      assertNoProblems(problems);
+      return 'TOMAN refused on the voucher, its rows and on edit (400, nothing stored); a lowercase code read as the code and an empty row currency stored as the voucher currency.';
+    }));
+  }
+
   return results;
 }

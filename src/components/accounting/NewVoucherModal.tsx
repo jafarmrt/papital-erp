@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, CheckCircle2, AlertCircle, FileText, Save, X, Scale, Zap, Copy, Keyboard, Sparkles } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDateString, errorMessageOf } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDateString, errorMessageOf, toPersianDigits } from '../../utils';
 import type { Account, Customer, Personnel, JournalVoucher, FinancialAttachment } from '../../types';
 // V9 Phase 5.2: تایپ و جدول ردیف‌ها به کامپوننت VoucherItemsTable منتقل شد
 import VoucherItemsTable, { VoucherItemDraft } from './VoucherItemsTable';
-import { computeVoucherBalance } from '../../lib/voucherBalance';
+import {
+  voucherBalancingAmount, voucherFormBalance, voucherFormCurrency, voucherHeaderRateFromRows, voucherRowCurrencyRate,
+  voucherRowDraftFromStored, withVoucherRowCurrency, type VoucherHeaderCurrency,
+} from '../../lib/accounting/voucherFormCurrency';
+import { VoucherHeaderCurrencyFields } from './VoucherCurrencyInputs';
 import { manualVoucherFormType } from '../../lib/accounting/manualVoucherRules';
 import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
 import { useServerDraft } from '../../hooks/useServerDraft';
@@ -33,7 +36,6 @@ export function NewVoucherModal({
   onSave,
   editingVoucher,
 }: NewVoucherModalProps) {
-  const appCurrency = useAppCurrency();
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
   const safeCustomers = Array.isArray(customers) ? customers : [];
   const safePersonnelList = Array.isArray(personnelList) ? personnelList : [];
@@ -43,6 +45,9 @@ export function NewVoucherModal({
   const [manualVoucherNumber, setManualVoucherNumber] = useState('');
   const [description, setDescription] = useState('');
   const [currency, setCurrency] = useState('IRR');
+  // v9.0.154 (TD-564): نرخ ارز سند به ریال؛ ردیف هم‌ارز سند بی نرخ خودش این نرخ را می‌گیرد
+  const [headerRate, setHeaderRate] = useState<number | string | ''>('');
+  const header = useMemo<VoucherHeaderCurrency>(() => ({ currency, rate: headerRate }), [currency, headerRate]);
   const [attachments, setAttachments] = useState<FinancialAttachment[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
@@ -72,9 +77,10 @@ export function NewVoucherModal({
     manualVoucherNumber,
     description,
     currency,
+    headerRate,
     attachments,
     items
-  }), [date, voucherType, manualVoucherNumber, description, currency, attachments, items]);
+  }), [date, voucherType, manualVoucherNumber, description, currency, headerRate, attachments, items]);
 
   const {
     hasServerDraft,
@@ -90,7 +96,8 @@ export function NewVoucherModal({
       if (loaded.voucherType) setVoucherType(manualVoucherFormType(loaded.voucherType));
       if (loaded.manualVoucherNumber) setManualVoucherNumber(loaded.manualVoucherNumber);
       if (loaded.description) setDescription(loaded.description);
-      if (loaded.currency) setCurrency(loaded.currency);
+      if (loaded.currency) setCurrency(supportedVoucherCurrency(loaded.currency));
+      setHeaderRate(loaded.headerRate ?? '');
       if (Array.isArray(loaded.attachments)) setAttachments(loaded.attachments);
       if (Array.isArray(loaded.items) && loaded.items.length > 0) {
         setItems(loaded.items);
@@ -117,10 +124,15 @@ export function NewVoucherModal({
       setVoucherType(manualVoucherFormType(editingVoucher.voucherType));
       setManualVoucherNumber(editingVoucher.manualVoucherNumber || '');
       setDescription(editingVoucher.description || '');
-      setCurrency(editingVoucher.currency || 'IRR');
+      // v9.0.154 (TD-564): ارز و نرخ سند و هر ردیف همان که ذخیره شده می‌ماند (پیش‌تر ویرایش آن‌ها را می‌انداخت)
+      const editCurrency = supportedVoucherCurrency(editingVoucher.currency);
+      const editHeader = { currency: editCurrency, rate: voucherHeaderRateFromRows(editingVoucher.items, editCurrency) };
+      setCurrency(editHeader.currency);
+      setHeaderRate(editHeader.rate);
       setAttachments(Array.isArray(editingVoucher.attachments) ? editingVoucher.attachments : []);
       if (editingVoucher.items && Array.isArray(editingVoucher.items) && editingVoucher.items.length > 0) {
         setItems(editingVoucher.items.map(it => ({
+          ...voucherRowDraftFromStored({ currency: it.currency, exchangeRate: it.exchangeRate ?? it.exchange_rate }, editHeader),
           id: it.id,
           accountId: it.accountId,
           detailedType: (it.detailedType || 'none') as any,
@@ -147,8 +159,11 @@ export function NewVoucherModal({
     return safeAccounts.filter(a => a.level === 'subsidiary' || a.level === 'detailed' || a.level === 'general');
   }, [safeAccounts]);
 
-  // v7.0.76 (P3-6): جمع اعشاری دقیق و تلورانس سرور (قبلاً اختلاف دقیقاً صفر با جمع اعشاری جاوااسکریپت)
-  const { difference, isBalanced, debitSurplus } = useMemo(() => computeVoucherBalance(items), [items]);
+  // v7.0.76 (P3-6): جمع اعشاری دقیق و تلورانس سرور. v9.0.154 (TD-564): با ارز و نرخ هر ردیف؛ سند چندارزی یا چندنرخی به ریال
+  const balance = useMemo(() => voucherFormBalance(items, header), [items, header]);
+  const { difference, isBalanced } = balance;
+  const debitSurplus = balance.totalDebit - balance.totalCredit;
+  const rowsWithoutRateText = toPersianDigits(balance.rowsWithoutRate.join('، '));
 
   const addRow = (initialData?: Partial<VoucherItemDraft>) => {
     const newRowIndex = items.length;
@@ -200,34 +215,28 @@ export function NewVoucherModal({
   };
 
   // Auto-balance targeted row or active row
+  // v9.0.154 (TD-564): مبلغ موازنه با قاعده تراز سرور؛ در سند چندارزی اختلاف ریالی بر نرخ همان ردیف
+  const applyBalancing = (rows: VoucherItemDraft[], targetIndex: number, apply: (side: 'debit' | 'credit', amount: number) => void) => {
+    const result = voucherBalancingAmount(rows, targetIndex, header);
+    if (result.kind === 'error') {
+      toast.error(result.message);
+      return;
+    }
+    if (result.kind === 'balanced') {
+      toast.success('سند تراز شد');
+      return;
+    }
+    apply(result.side, result.amount);
+    const rowCurrency = voucherRowCurrencyRate(rows[targetIndex], header).currency;
+    toast.success(`ردیف شماره ${toPersianDigits(String(targetIndex + 1))} با مبلغ ${formatPersianPrice(result.amount, rowCurrency)} ${result.side === 'debit' ? 'بدهکار' : 'بستانکار'} تراز شد`);
+  };
+
   const handleAutoBalanceRow = (targetIndex: number) => {
     if (isBalanced) {
       toast.success('سند هم‌اکنون کاملاً تراز است');
       return;
     }
-
-    // Calculate sum of all other rows
-    let otherDebit = 0;
-    let otherCredit = 0;
-    items.forEach((it, idx) => {
-      if (idx !== targetIndex) {
-        otherDebit += Number(it.debit) || 0;
-        otherCredit += Number(it.credit) || 0;
-      }
-    });
-
-    const diff = otherDebit - otherCredit;
-    if (diff > 0) {
-      // Debit is higher, this row should be Credit
-      updateItem(targetIndex, { credit: diff, debit: 0 });
-      toast.success(`ردیف شماره ${targetIndex + 1} با مبلغ ${formatPersianPrice(diff, appCurrency)} بستانکار تراز شد`);
-    } else if (diff < 0) {
-      // Credit is higher, this row should be Debit
-      updateItem(targetIndex, { debit: Math.abs(diff), credit: 0 });
-      toast.success(`ردیف شماره ${targetIndex + 1} با مبلغ ${formatPersianPrice(Math.abs(diff), appCurrency)} بدهکار تراز شد`);
-    } else {
-      toast.success('سند تراز شد');
-    }
+    applyBalancing(items, targetIndex, (side, amount) => updateItem(targetIndex, side === 'debit' ? { debit: amount, credit: 0 } : { credit: amount, debit: 0 }));
   };
 
   // Add auto-balancing row with 1-click
@@ -236,16 +245,8 @@ export function NewVoucherModal({
       toast.success('سند هم‌اکنون کاملاً تراز است');
       return;
     }
-
-    if (debitSurplus > 0) {
-      // Debit higher, need credit row
-      addRow({ credit: debitSurplus, debit: 0, description: description || '' });
-      toast.success(`سطر جدید با مبلغ ${formatPersianPrice(debitSurplus)} بستانکار جهت تراز سند اضافه شد`);
-    } else if (debitSurplus < 0) {
-      // Credit higher, need debit row
-      addRow({ debit: Math.abs(debitSurplus), credit: 0, description: description || '' });
-      toast.success(`سطر جدید با مبلغ ${formatPersianPrice(Math.abs(debitSurplus))} بدهکار جهت تراز سند اضافه شد`);
-    }
+    const newRow: VoucherItemDraft = { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: description || '' };
+    applyBalancing([...items, newRow], items.length, (side, amount) => addRow(side === 'debit' ? { ...newRow, debit: amount } : { ...newRow, credit: amount }));
   };
 
   // Swap debit and credit for active row
@@ -282,7 +283,7 @@ export function NewVoucherModal({
         if (isBalanced && description.trim()) {
           void submitVoucher();
         } else if (!isBalanced) {
-          toast.error(`سند تراز نیست! اختلاف: ${formatPersianPrice(difference, appCurrency)}`);
+          toast.error(balance.rowsWithoutRate.length > 0 ? `نرخ تبدیل ردیف ${rowsWithoutRateText} به ریال را وارد کنید` : `سند تراز نیست! اختلاف: ${formatPersianPrice(difference, balance.currency)}`);
         } else {
           toast.error('لطفاً شرح سند را تکمیل نمایید');
         }
@@ -345,7 +346,7 @@ export function NewVoucherModal({
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isOpen, isBalanced, description, activeRowIndex, items, difference, showShortcutsHelp]);
+  }, [isOpen, isBalanced, description, activeRowIndex, items, difference, showShortcutsHelp, header, balance]);
 
   const isPermanentVoucher = editingVoucher?.status === 'permanent';
 
@@ -360,8 +361,13 @@ export function NewVoucherModal({
       return;
     }
 
+    if (balance.rowsWithoutRate.length > 0) {
+      toast.error(`نرخ تبدیل ردیف ${rowsWithoutRateText} به ریال را وارد کنید؛ ردیف غیرریالی بی نرخ ثبت نمی‌شود`);
+      return;
+    }
+
     if (!isBalanced) {
-      toast.error(`سند تراز نیست! اختلاف بدهکار و بستانکار: ${formatPersianPrice(difference, appCurrency)}`);
+      toast.error(`سند تراز نیست! اختلاف بدهکار و بستانکار: ${formatPersianPrice(difference, balance.currency)}`);
       return;
     }
 
@@ -388,13 +394,16 @@ export function NewVoucherModal({
         description,
         currency,
         attachments,
-        items: items.map(it => ({
+        // v9.0.154 (TD-564): هر ردیف با ارز و نرخ قطعی خود (ردیف ریالی بی نرخ)
+        items: withVoucherRowCurrency(items, header).map(it => ({
           accountId: Number(it.accountId),
           detailedType: it.detailedType,
           detailedId: it.detailedId,
           detailedName: it.detailedName,
           debit: Number(it.debit) || 0,
           credit: Number(it.credit) || 0,
+          currency: it.currency,
+          ...(it.exchangeRate !== undefined ? { exchangeRate: it.exchangeRate } : {}),
           description: it.description || description,
         }))
       };
@@ -605,22 +614,11 @@ export function NewVoucherModal({
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                واحد پولی
-              </label>
-              <select
-                value={currency}
-                onChange={e => setCurrency(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
-              >
-                <option value="IRR">ریال (IRR)</option>
-                <option value="TOMAN">تومان</option>
-                <option value="USD">دلار ($)</option>
-                <option value="EUR">یورو (€)</option>
-                <option value="AED">درهم (AED)</option>
-              </select>
-            </div>
+            {/* v9.0.154 (TD-564): ارزهای خزانه و نرخ ارز سند؛ «تومان» حذف شد (مبلغ تومانی را به ریال وارد کنید) */}
+            <VoucherHeaderCurrencyFields
+              value={header}
+              onChange={next => { setCurrency(next.currency); setHeaderRate(next.rate ?? ''); }}
+            />
 
             <div className="sm:col-span-2 md:col-span-4">
               <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
@@ -662,7 +660,7 @@ export function NewVoucherModal({
                 </h4>
                 {!isBalanced && (
                   <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
-                    مابه‌التفاوت: {formatPersianPrice(difference)} {currency}
+                    مابه‌التفاوت: {formatPersianPrice(difference, balance.currency)}
                   </span>
                 )}
               </div>
@@ -676,7 +674,7 @@ export function NewVoucherModal({
                     title="افزودن سطر جدید حاوی دقیقاً مبلغ موازنه‌کننده (Alt+B)"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>افزودن سطر موازنه‌کننده ({formatPersianPrice(difference)})</span>
+                    <span>افزودن سطر موازنه‌کننده ({formatPersianPrice(difference, balance.currency)})</span>
                   </button>
                 )}
 
@@ -698,7 +696,7 @@ export function NewVoucherModal({
               selectableAccounts={selectableAccounts}
               customers={safeCustomers}
               personnelList={safePersonnelList}
-              currencyLabel={currency}
+              header={header}
               updateItem={updateItem}
               addRow={addRow}
               removeRow={removeRow}
@@ -735,10 +733,16 @@ export function NewVoucherModal({
                 <div className="text-xs font-bold">
                   {isBalanced ? 'سند کاملاً تراز است و آماده ثبت نهایی می‌باشد' : 'سند حسابداری هنوز تراز نیست!'}
                 </div>
-                {!isBalanced && (
+                {!isBalanced && balance.rowsWithoutRate.length > 0 && (
                   <div className="text-[11px] opacity-90 mt-0.5">
-                    مابه‌التفاوت بدهکار و بستانکار: <strong className="font-mono text-rose-600 dark:text-rose-400">{formatPersianPrice(difference)} {currency}</strong>
+                    نرخ تبدیل ردیف {rowsWithoutRateText} به ریال را وارد کنید؛ تراز ریالی سند بی آن سنجیده نمی‌شود.
+                  </div>
+                )}
+                {!isBalanced && balance.rowsWithoutRate.length === 0 && (
+                  <div className="text-[11px] opacity-90 mt-0.5">
+                    مابه‌التفاوت بدهکار و بستانکار: <strong className="font-mono text-rose-600 dark:text-rose-400">{formatPersianPrice(difference, balance.currency)}</strong>
                     {debitSurplus > 0 ? ' (بدهکار بیشتر است)' : ' (بستانکار بیشتر است)'}
+                    {balance.inRial ? ' — سند چندارزی به ریال و با نرخ هر ردیف تراز می‌شود' : ''}
                   </div>
                 )}
               </div>
@@ -757,7 +761,7 @@ export function NewVoucherModal({
               )}
 
               <div className="text-left font-mono text-xs font-bold px-3 py-1.5 rounded-lg bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
-                {isBalanced ? 'تراز: ۱۰۰٪' : `اختلاف: ${formatPersianPrice(difference)}`}
+                {isBalanced ? 'تراز: ۱۰۰٪' : `اختلاف: ${formatPersianPrice(difference, balance.currency)}`}
               </div>
             </div>
           </div>
@@ -797,4 +801,11 @@ export function NewVoucherModal({
       </div>
     </div>
   );
+}
+
+/** v9.0.154 (TD-564): ارز سند از فهرست ارزهای خزانه؛ ارز بیرون از آن (مانند «تومان» قدیمی) ریال می‌شود و کاربر آگاه می‌شود */
+function supportedVoucherCurrency(value: string | null | undefined): string {
+  const { currency, replaced } = voucherFormCurrency(value);
+  if (replaced) toast.error(`ارز «${replaced}» در فهرست ارزهای سند نیست؛ ارز سند ریال شد. مبلغ ردیف‌ها را به ریال بررسی کنید.`);
+  return currency;
 }

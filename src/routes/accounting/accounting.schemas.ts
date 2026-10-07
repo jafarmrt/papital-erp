@@ -81,6 +81,15 @@ export const vouchersQuerySchema = z.object({
   }).optional()
 });
 
+/**
+ * v9.0.154 (TD-564، B03-22، تصمیم ت۷): ارز سند و ردیف سند دستی فقط از فهرست ارزهای خزانه (کد کوچک بزرگ می‌شود، «ریال» ← IRR).
+ * خالی یعنی «ارز بالادست» (ردیف ← ارز سند). «تومان» پذیرفته نیست: مبلغ تومانی را به ریال وارد کنید.
+ */
+const manualVoucherCurrency = z.preprocess(
+  value => (typeof value === 'string' && value.trim() === '' ? undefined : normalizeTreasuryCurrency(value)),
+  z.enum(TREASURY_CURRENCIES, { message: 'ارز سند پشتیبانی نمی‌شود؛ یکی از ریال، دلار، یورو، درهم یا پوند را انتخاب کنید (مبلغ تومانی را به ریال وارد کنید)' }).optional(),
+);
+
 export const voucherItemSchema = z.object({
   accountId: z.coerce.number().int().positive('شناسه حساب الزامی و باید عدد مثبت باشد'),
   detailedType: z.enum(['none', 'customer', 'personnel', 'project', 'bank_account', 'other', 'supplier']).optional().default('none'),
@@ -88,7 +97,7 @@ export const voucherItemSchema = z.object({
   detailedName: z.string().optional(),
   debit: z.coerce.number().min(0, 'مبلغ بدهکار نمی‌تواند منفی باشد').default(0),
   credit: z.coerce.number().min(0, 'مبلغ بستانکار نمی‌تواند منفی باشد').default(0),
-  currency: z.string().optional(),
+  currency: manualVoucherCurrency,
   exchangeRate: z.coerce.number().positive().optional(),
   description: z.string().optional(),
 }).refine(it => (it.debit > 0 || it.credit > 0), {
@@ -126,7 +135,7 @@ export const createVoucherSchema = z.object({
     referenceModule: z.enum(['manual', 'invoice', 'payroll', 'cheque', 'treasury', 'inventory']).optional().default('manual'),
     referenceId: z.coerce.number().int().positive().nullable().optional(),
     referenceNumber: z.string().optional().refine(ref => !isReservedVoucherReference(ref), RESERVED_REFERENCE_MESSAGE),
-    currency: z.string().optional(),
+    currency: manualVoucherCurrency,
     attachments: z.array(z.any()).optional(),
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است')
   }).refine((data) => isVoucherBalanced(data.items, data.currency), {
@@ -144,7 +153,7 @@ export const updateVoucherSchema = z.object({
     description: z.string().min(1, 'شرح کلی سند الزامی است').optional(),
     manualVoucherNumber: z.string().optional(),
     voucherType: manualVoucherType.optional(),
-    currency: z.string().optional(),
+    currency: manualVoucherCurrency,
     attachments: z.array(z.any()).optional(),
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است').optional(),
   }).refine((data) => !data.items || isVoucherBalanced(data.items, undefined, false), {

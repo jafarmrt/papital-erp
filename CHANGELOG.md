@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.154 — Voucher Forms Send Each Row Currency and Rate
+- **Voucher Form Row Currency (P1, decision t7):** the manual voucher form, its edit and the correction form send and keep each row's currency and rate, take the voucher rate, balance by the server rule and offer only the treasury currencies; the routes refuse «TOMAN» (TD-564, `reg_manual_voucher_currency_list_td_564`).
+
 ### v9.0.153 — Manual Vouchers Need a Rate on Foreign Rows and Balance in Rials
 - **Manual Voucher Currency (P2, decision t7):** a manual or correction voucher row without a currency takes the voucher currency, every non-rial row needs a positive rate (422 `VOUCHER_ROW_RATE_REQUIRED`), and a multi-currency voucher balances in rials at each row rate; the journal book and the health check follow the same rule (TD-551, `reg_manual_voucher_foreign_rate_and_rial_balance_td_551`).
 

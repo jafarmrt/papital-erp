@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Scale, ArrowRightLeft, Trash2 } from 'lucide-react';
-import { formatPersianPrice } from '../../utils';
+import { formatPersianPrice, formatCurrencyLabel } from '../../utils';
 import { AccountSearchSelect } from './AccountSearchSelect';
+import { VoucherRowCurrencyCell } from './VoucherCurrencyInputs';
+import { voucherFormBalance, voucherRowCurrencyRate, type VoucherHeaderCurrency } from '../../lib/accounting/voucherFormCurrency';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import type { Account } from '../../types';
 
@@ -14,6 +16,10 @@ export interface VoucherItemDraft {
   debit: number;
   credit: number;
   description: string;
+  /** v9.0.154 (TD-564): خالی = ارز سند */
+  currency?: string;
+  /** v9.0.154 (TD-564): خالی = نرخ ارز سند */
+  exchangeRate?: number | string | '';
 }
 
 interface VoucherItemsTableProps {
@@ -21,7 +27,8 @@ interface VoucherItemsTableProps {
   selectableAccounts: Account[];
   customers: Array<{ id: number; name: string; partyType?: string; city?: string; supplierCategory?: string }>;
   personnelList: Array<{ id: number; firstName?: string; lastName?: string; fullName?: string }>;
-  currencyLabel: string;
+  /** v9.0.154 (TD-564): ارز و نرخ سند؛ ردیف بی ارز و نرخ از آن پیروی می‌کند */
+  header: VoucherHeaderCurrency;
   updateItem: (index: number, patch: Partial<VoucherItemDraft>) => void;
   addRow: () => void;
   removeRow: (index: number) => void;
@@ -46,7 +53,7 @@ export function VoucherItemsTable({
   selectableAccounts,
   customers,
   personnelList,
-  currencyLabel,
+  header,
   updateItem,
   addRow,
   removeRow,
@@ -56,29 +63,31 @@ export function VoucherItemsTable({
 }: VoucherItemsTableProps) {
   const [activeRowIndex, setActiveRowIndex] = useState<number>(0);
 
-  const totalDebit = useMemo(() => items.reduce((acc, it) => acc + (Number(it.debit) || 0), 0), [items]);
-  const totalCredit = useMemo(() => items.reduce((acc, it) => acc + (Number(it.credit) || 0), 0), [items]);
+  // v9.0.154 (TD-564): جمع ستون‌ها با قاعده تراز سرور؛ سند چندارزی یا چندنرخی به ریال
+  const balance = useMemo(() => voucherFormBalance(items, header), [items, header]);
 
   const itemRefs = rowRefs;
 
   return (
     <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-xs">
       <div className="overflow-x-auto">
-        <table className="w-full text-right border-collapse min-w-[780px]">
+        <table className="w-full text-right border-collapse min-w-[900px]">
           <thead>
             <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold">
               <th className="py-2.5 px-3 w-10 text-center">#</th>
               <th className="py-2.5 px-3 w-72">کد و عنوان حساب معین * (جستجوی سریع)</th>
               <th className="py-2.5 px-3 w-52">تفصیلی / شخص</th>
               <th className="py-2.5 px-3">شرح آرتیکل</th>
-              <th className="py-2.5 px-3 w-40 text-left">بدهکار ({currencyLabel})</th>
-              <th className="py-2.5 px-3 w-40 text-left">بستانکار ({currencyLabel})</th>
+              <th className="py-2.5 px-3 w-32">ارز و نرخ</th>
+              <th className="py-2.5 px-3 w-40 text-left">بدهکار</th>
+              <th className="py-2.5 px-3 w-40 text-left">بستانکار</th>
               <th className="py-2.5 px-2 w-20 text-center">عملیات</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
             {items.map((it, idx) => {
               const isActiveRow = activeRowIndex === idx;
+              const rowCurrency = voucherRowCurrencyRate(it, header).currency;
 
               return (
                 <tr 
@@ -267,6 +276,11 @@ export function VoucherItemsTable({
                     />
                   </td>
 
+                  {/* v9.0.154 (TD-564): ارز و نرخ ردیف */}
+                  <td className="py-2 px-2">
+                    <VoucherRowCurrencyCell row={it} header={header} onChange={patch => updateItem(idx, patch)} />
+                  </td>
+
                   {/* Debit Input */}
                   <td className="py-2 px-2">
                     <div className="relative">
@@ -305,7 +319,7 @@ export function VoucherItemsTable({
                     </div>
                     {it.debit > 0 && (
                       <span className="block text-[9px] text-emerald-600 dark:text-emerald-400 font-mono text-left px-1 mt-0.5 truncate">
-                        {formatPersianPrice(it.debit)}
+                        {formatPersianPrice(it.debit, rowCurrency)}
                       </span>
                     )}
                   </td>
@@ -344,7 +358,7 @@ export function VoucherItemsTable({
                     </div>
                     {it.credit > 0 && (
                       <span className="block text-[9px] text-rose-600 dark:text-rose-400 font-mono text-left px-1 mt-0.5 truncate">
-                        {formatPersianPrice(it.credit)}
+                        {formatPersianPrice(it.credit, rowCurrency)}
                       </span>
                     )}
                   </td>
@@ -384,14 +398,14 @@ export function VoucherItemsTable({
           </tbody>
           <tfoot>
             <tr className="bg-slate-100 dark:bg-slate-800/80 font-bold border-t-2 border-slate-300 dark:border-slate-600 text-xs">
-              <td colSpan={4} className="py-3 px-4 text-left font-bold text-slate-700 dark:text-slate-300">
-                مجموع ستون‌ها:
+              <td colSpan={5} className="py-3 px-4 text-left font-bold text-slate-700 dark:text-slate-300">
+                مجموع ستون‌ها ({formatCurrencyLabel(balance.currency)}{balance.inRial ? '، هر ردیف ارزی با نرخ خودش' : ''}):
               </td>
               <td className="py-3 px-3 text-left font-mono text-emerald-700 dark:text-emerald-300 font-black text-sm">
-                {formatPersianPrice(totalDebit)}
+                {formatPersianPrice(balance.totalDebit, undefined, balance.currency === 'IRR' ? 0 : 2)}
               </td>
               <td className="py-3 px-3 text-left font-mono text-rose-700 dark:text-rose-300 font-black text-sm">
-                {formatPersianPrice(totalCredit)}
+                {formatPersianPrice(balance.totalCredit, undefined, balance.currency === 'IRR' ? 0 : 2)}
               </td>
               <td />
             </tr>
