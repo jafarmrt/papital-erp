@@ -4,7 +4,7 @@ import { pendingMaterials } from '../db/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorize, authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
@@ -228,7 +228,7 @@ router.put('/pending-materials/:id', authenticateToken, authorizePermission('pen
 }));
 
 // DELETE /api/pending-materials/:id - Delete pending material
-router.delete('/pending-materials/:id', authenticateToken, authorize('admin', 'manager'), validate(paramsIdSchema), asyncHandler(async (req: Request, res: Response) => {
+router.delete('/pending-materials/:id', authenticateToken, authorizePermission('pending_materials.delete'), validate(paramsIdSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
     const pId = Number(req.params.id);
     await PendingMaterialsService.deletePendingMaterial(pId);

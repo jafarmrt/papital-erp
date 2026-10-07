@@ -4,7 +4,7 @@ import { addedLineIndexes, planRenumber, sortChangelogMd, type RenumberInput } f
 import { resolveHunks, resolveReleaseConflict } from '../../../scripts/renumber/conflicts';
 
 /**
- * v9.0.107 (TD-473): `npm run release:renumber` moves a branch's versions, migrations and audit sections after
+ * v9.0.109 (TD-473): `npm run release:renumber` moves a branch's versions, migrations and audit sections after
  * those of the merged base (v9/PHASE4_LANES.md §7.7–§7.8) and touches only the text the branch added.
  */
 

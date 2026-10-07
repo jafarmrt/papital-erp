@@ -1,6 +1,6 @@
 import { orm } from '../../../db/drizzle.js';
 import { accounts, bankAccounts, treasuryTransactions, users } from '../../../db/schema.js';
-import { and, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import { fin } from '../../../lib/financialDecimal.js';
 import { containsLikePattern } from '../../../lib/sqlLike.js';
 import type { TreasuryTransaction } from '../../../types.js';
@@ -119,8 +119,10 @@ export async function listTreasuryTransactions(filters: TreasuryListFilters): Pr
 }
 
 /**
- * مانده پس از هر ردیف این صفحه برای فیلتر یک حساب: مانده اول دوره + جمع ردیف‌های باطل‌نشده همان حساب به ترتیب (تاریخ،
- * شناسه)، بی‌اثر از فیلترهای دیگر — همان قاعده‌ای که جدول پیش‌تر روی کل فهرست در مرورگر حساب می‌کرد. ردیف باطل‌شده مانده ندارد.
+ * مانده پس از هر ردیف این صفحه برای فیلتر یک حساب: مانده اول دوره + جمع ردیف‌های همان حساب به ترتیب (تاریخ، شناسه)، بی‌اثر از
+ * فیلترهای دیگر. v9.0.108 (TD-860، تصمیم مالک محصول): همان ردیف‌هایی که مانده خزانه بانک (`computeBankBalances`) می‌شمارد —
+ * ردیف باطل‌شده در تاریخ خودش و ردیف معکوسش در تاریخ ابطال، بی ردیف قدیمی روش چک که مانده بانک را تغییر نداده بود (و خودش مانده
+ * ندارد) — تا مانده ردیف آخر با مانده خزانه بانک یکی باشد. پیش‌تر ردیف باطل‌شده کنار می‌رفت و معکوسش شمرده می‌شد.
  */
 async function runningBalancesOf(bankAccountId: number, ids: number[]): Promise<Map<number, number>> {
   const result = new Map<number, number>();
@@ -136,7 +138,7 @@ async function runningBalancesOf(bankAccountId: number, ids: number[]): Promise<
     .where(and(
       eq(treasuryTransactions.isDeleted, 0),
       eq(treasuryTransactions.bankAccountId, bankAccountId),
-      sql`COALESCE(${treasuryTransactions.status}, 'completed') <> 'voided'`,
+      ne(treasuryTransactions.method, 'cheque'),
     )),
   );
   const rows = await orm.with(ranked).select({ id: ranked.id, cumulative: ranked.cumulative }).from(ranked).where(inArray(ranked.id, ids));
@@ -158,7 +160,7 @@ export async function pageTreasuryTransactions(filters: TreasuryListFilters, pag
     .offset((page - 1) * limit);
   const data = rows.map(toTreasuryTransactionDto);
   if (filters.bankAccountId) {
-    const balances = await runningBalancesOf(filters.bankAccountId, data.filter(t => t.status !== 'voided').map(t => t.id));
+    const balances = await runningBalancesOf(filters.bankAccountId, data.filter(t => t.method !== 'cheque').map(t => t.id));
     for (const tx of data) {
       const balance = balances.get(tx.id);
       if (balance !== undefined) tx.runningBalance = balance;

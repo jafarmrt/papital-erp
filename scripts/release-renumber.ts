@@ -5,7 +5,7 @@ import { resolveReleaseConflict } from './renumber/conflicts';
 import { planRenumber, type RenumberInput } from './renumber/plan';
 
 /**
- * v9.0.107 (TD-473) — merge-time renumbering for parallel change lanes (v9/PHASE4_LANES.md §7.7–§7.8):
+ * v9.0.109 (TD-473) — merge-time renumbering for parallel change lanes (v9/PHASE4_LANES.md §7.7–§7.8):
  *
  *   git fetch origin master
  *   npm run release:renumber -- origin/master [--dry-run] [--no-check]

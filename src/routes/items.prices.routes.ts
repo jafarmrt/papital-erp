@@ -5,7 +5,7 @@ import { orm } from '../db/drizzle.js';
 import { items, itemPrices } from '../db/schema.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
-import { authorize, authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { ItemsService } from '../services/items.service.js';
@@ -80,7 +80,7 @@ router.get('/items/:id/prices/history', authorizePermission(...READ_PERMISSIONS.
 }));
 
 // POST /items/:id/prices
-router.post('/items/:id/prices', authorize('admin', 'manager', 'products.edit_price'), validate(itemPriceSchema), asyncHandler(async (req, res) => {
+router.post('/items/:id/prices', authorizePermission('products.edit_price'), validate(itemPriceSchema), asyncHandler(async (req, res) => {
   try {
     const { title, price, currency = 'IRR' } = req.body;
     const itemId = Number(req.params.id);
@@ -145,7 +145,7 @@ router.post('/items/:id/prices', authorize('admin', 'manager', 'products.edit_pr
 // حذف قیمت‌ها از طریق batch-update انجام می‌شود.
 
 // POST /items/prices/batch-update
-router.post('/items/prices/batch-update', authorize('admin', 'manager', 'products.edit_price'), validate(batchPriceUpdateSchema), asyncHandler(async (req, res) => {
+router.post('/items/prices/batch-update', authorizePermission('products.edit_price'), validate(batchPriceUpdateSchema), asyncHandler(async (req, res) => {
   try {
     const { updates } = req.body;
     const nowIso = new Date().toISOString();
