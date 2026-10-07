@@ -1,4 +1,4 @@
--- Drizzle Migration 0075: no public daily work logs (v9.0.218 / TD-900, product-owner decision t7)
+-- Drizzle Migration 0075: no public daily work logs (v9.0.236 / TD-900, product-owner decision t7)
 --
 -- A daily work log with visibility «public» (or the legacy values «all» and empty) was readable by every holder of
 -- daily_logs.view, and the form offered «public» as one choice among others. The product owner removed the public

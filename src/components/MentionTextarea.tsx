@@ -7,7 +7,8 @@ export interface MentionUser {
   fullName?: string;
   full_name?: string;
   username: string;
-  role?: string;
+  /** v9.0.223 (TD-534): نام فارسی نقش از `/users/list-simple`؛ کد نقش دیگر به مرورگر نمی‌رسد */
+  role_name?: string;
 }
 
 interface MentionTextareaProps {
@@ -56,7 +57,7 @@ export function MentionTextarea({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // v9.0.214 (TD-628): the mentions are exactly the users the text names with «@» (longest name at a word boundary),
+  // v9.0.232 (TD-628): the mentions are exactly the users the text names with «@» (longest name at a word boundary),
   // so «@علی رضایی» never mentions «علی» too and a mention deleted from the text leaves the list
   useEffect(() => {
     if (!onMentionsChange || !users.length) return;
@@ -257,7 +258,7 @@ export function MentionTextarea({
                   </div>
 
                   <div className="flex items-center gap-1.5">
-                    {u.role && (
+                    {u.role_name && (
                       <span
                         className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
                           isHighlighted
@@ -265,7 +266,7 @@ export function MentionTextarea({
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
-                        {u.role}
+                        {u.role_name}
                       </span>
                     )}
                     {isAlreadyMentioned && (

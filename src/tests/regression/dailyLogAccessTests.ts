@@ -17,16 +17,16 @@ export async function runDailyLogAccessTests(shouldRun: ShouldRun): Promise<Test
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (ctx: Ctx) => Promise<string>]> = [
     ['sec_daily_log_manage_by_permission_td_626',
-      'v9.0.213: reviewing, editing and deleting another user\'s daily log needs daily_logs.manage_all, not the role code, and is audited (TD-626)',
+      'v9.0.231: reviewing, editing and deleting another user\'s daily log needs daily_logs.manage_all, not the role code, and is audited (TD-626)',
       ['td626', 'daily_log', 'permission', 'package13'], manageByPermissionCase],
     ['reg_daily_log_private_mention_no_notification_td_633',
-      'v9.0.215: a mention in a private or managers-only daily log sends no notification (TD-633)',
+      'v9.0.233: a mention in a private or managers-only daily log sends no notification (TD-633)',
       ['td633', 'daily_log', 'mention', 'package13'], privateMentionCase],
     ['reg_daily_log_mentions_validated_atomic_td_629',
-      'v9.0.216: daily log mentions, allowed users and project are validated before anything is written, and the log, its notifications and its audit row commit together (TD-629)',
+      'v9.0.234: daily log mentions, allowed users and project are validated before anything is written, and the log, its notifications and its audit row commit together (TD-629)',
       ['td629', 'daily_log', 'mention', 'package13'], mentionsValidatedCase],
     ['reg_daily_log_public_visibility_removed_td_900',
-      'v9.0.218: the public daily log visibility is gone: refused on input, default mentioned_only, and the data migration moves public, all and empty logs to mentioned_only and records the old value (TD-900)',
+      'v9.0.236: the public daily log visibility is gone: refused on input, default mentioned_only, and the data migration moves public, all and empty logs to mentioned_only and records the old value (TD-900)',
       ['td900', 'daily_log', 'visibility', 'package13'], publicVisibilityRemovedCase],
   ];
   for (const [id, name, tags, run] of cases) {

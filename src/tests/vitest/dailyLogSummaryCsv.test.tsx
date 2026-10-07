@@ -15,7 +15,7 @@ import { buildSummaryCsv, csvTextCell } from '../../lib/dailyLogs/summaryCsv';
 
 afterEach(() => { cleanup(); fetchJson.mockReset(); toastSuccess.mockReset(); });
 
-// v9.0.217 (TD-640, finding B13-15): the summary CSV never writes a live formula and escapes quotes
+// v9.0.235 (TD-640, finding B13-15): the summary CSV never writes a live formula and escapes quotes
 describe('daily log summary CSV (TD-640)', () => {
   it('a full name that starts with "=" is not written as a live spreadsheet formula', async () => {
     fetchJson.mockImplementation((url: string) => String(url).startsWith('/daily-logs/summary-report')

@@ -2,65 +2,16 @@ import { orm } from '../db/drizzle.js';
 import { activityLogs } from '../db/schema.js';
 import { logger } from '../middleware/logger.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
-import { sql, lt, and, notInArray, count, type SQL } from 'drizzle-orm';
+import { sql, lt, and, inArray, notInArray, count, not, type SQL } from 'drizzle-orm';
 import type { Request } from 'express';
 import { ValidationError } from '../errors/customErrors.js';
-import { FinancialDecimal } from './financialDecimal.js';
+import { toPersianDigits } from '../utils/persianNumber.js';
+import { CRITICAL_AUDIT_ACTIONS, MIN_AUDIT_RETENTION_DAYS, PURGEABLE_AUDIT_ENTITIES } from './audit/auditRetention.js';
+import { sanitizeAuditValue, sanitizeSensitiveData } from './audit/auditSanitizer.js';
 
-// Regex patterns to identify sensitive keys that MUST NEVER be stored in audit logs
-const SENSITIVE_KEY_REGEX = /^(password|pass|new_password|current_password|newpassword|currentpassword|old_password|oldpassword|confirmpassword|confirm_password|token|access_token|accesstoken|refresh_token|refreshtoken|auth_token|authtoken|secret|jwt|apikey|api_key|authorization|cookie|card_number|credit_card|cvv|ssn)$/i;
-
-/**
- * Recursively sanitizes any sensitive credentials (passwords, tokens, secrets) from objects or arrays.
- * Replaces sensitive values with '[PROTECTED]' or boolean flags.
- */
-export function sanitizeSensitiveData<T = unknown>(obj: T, depth = 0, seen = new WeakSet()): T {
-  if (obj === null || obj === undefined) return obj;
-  if (depth > 6) return '[MAX_DEPTH_REACHED]' as unknown as T;
-
-  if (typeof obj === 'string') {
-    // If string contains JWT-like token (eyJh...) mask it
-    if (/^Bearer\s+[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/i.test(obj.trim())) {
-      return 'Bearer [PROTECTED_JWT]' as unknown as T;
-    }
-    if (/^eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/i.test(obj.trim())) {
-      return '[PROTECTED_JWT]' as unknown as T;
-    }
-    return obj;
-  }
-
-  if (typeof obj !== 'object') {
-    return obj;
-  }
-
-  // v7.0.67 (P2-6): مبلغ Decimal/Money در اسنپ‌شات ممیزی عدد است (نه ساختار داخلی Decimal)
-  if (obj instanceof FinancialDecimal) {
-    return obj.toNumber() as unknown as T;
-  }
-
-  // Prevent circular references
-  if (seen.has(obj as object)) {
-    return '[CIRCULAR]' as unknown as T;
-  }
-  seen.add(obj as object);
-
-  if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeSensitiveData(item, depth + 1, seen)) as unknown as T;
-  }
-
-  const sanitized: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-    if (SENSITIVE_KEY_REGEX.test(key)) {
-      sanitized[key] = '[PROTECTED]';
-    } else if (typeof value === 'object' && value !== null) {
-      sanitized[key] = sanitizeSensitiveData(value, depth + 1, seen);
-    } else {
-      sanitized[key] = value;
-    }
-  }
-
-  return sanitized as T;
-}
+// v9.0.213 (TD-530، تصمیم ت۷ الف): پاک‌کننده در `src/lib/audit/auditSanitizer.ts`؛ کلید رمز با «شامل‌بودن» و شماره کارت،
+// حساب و شبا تا ۴ رقم آخر
+export { sanitizeSensitiveData } from './audit/auditSanitizer.js';
 
 /**
  * آدرس IP کلاینت برای لاگ ممیزی.
@@ -95,8 +46,8 @@ export function computeAuditDiff(
 
     if (strBefore !== strAfter) {
       diff[key] = {
-        before: sanitizeSensitiveData(valBefore),
-        after: sanitizeSensitiveData(valAfter)
+        before: sanitizeAuditValue(key, valBefore),
+        after: sanitizeAuditValue(key, valAfter)
       };
     }
   }
@@ -218,46 +169,17 @@ export async function logActivity(params: AuditLogParams): Promise<AuditLogResul
   }
 }
 
-/**
- * Minimum permitted retention period in days for general audit logs.
- * Enforces data governance rule (D-2) to prevent accidental or malicious premature wiping of audit trails.
- */
-export const MIN_AUDIT_RETENTION_DAYS = 90;
-
-/**
- * Actions considered critical to security, financial integrity, or governance.
- * These records are preserved during standard routine purges unless explicitly requested with forced administrative override.
- */
-export const CRITICAL_AUDIT_ACTIONS = [
-  'DELETE',
-  'RESTORE',
-  'AUDIT_APPLY',
-  'RECONCILIATION_EXECUTE',
-  'SETTING_CHANGE',
-  'SEED',
-  'LOGIN_FAILED',
-  'PURGE'
-] as const;
-
-export const CRITICAL_AUDIT_ENTITIES = [
-  'احراز هویت',
-  'کاربر',
-  'کاربران سیستم',
-  'پروفایل کاربر',
-  'نقش و دسترسی',
-  'نقش',
-  'تنظیمات سیستم',
-  'صف خطاهای قرنطینه (DLQ)',
-  'حسابداری',
-  'اسناد دوبل مالی',
-  'بستن سال مالی',
-  'فیش حقوقی'
-] as const;
+// v9.0.212 (TD-522): کمینه نگه‌داشت و رده‌بندی موجودیت‌ها در `src/lib/audit/auditRetention.ts`، مشترک با فرم پاک‌سازی
+export {
+  MIN_AUDIT_RETENTION_DAYS,
+  CRITICAL_AUDIT_ACTIONS,
+  CRITICAL_AUDIT_ENTITIES,
+  CRITICAL_AUDIT_ENTITY_PREFIXES,
+  PURGEABLE_AUDIT_ENTITIES
+} from './audit/auditRetention.js';
 
 export interface PurgeAuditLogsOptions {
   retentionDays?: number;
-  preserveCritical?: boolean;
-  allowForceRecent?: boolean;
   tx?: any;
   actorUsername?: string;
   actorUserId?: number;
@@ -269,17 +191,22 @@ export interface PurgeAuditLogsResult {
   purgedCount: number;
   cutoffDate: string;
   retentionDays: number;
-  criticalLogsPreserved: boolean;
   error?: unknown;
 }
 
+/** ردیف‌هایی که پاک‌سازی می‌تواند پاک کند: بخش پاک‌شدنی و اقدامی که بحرانی نیست */
+function purgeableAuditRowCondition(): SQL {
+  return and(
+    inArray(activityLogs.entity, [...PURGEABLE_AUDIT_ENTITIES]),
+    notInArray(activityLogs.action, [...CRITICAL_AUDIT_ACTIONS])
+  ) as SQL;
+}
+
 /**
- * پاکسازی/بایگانی ایمن لاگ‌های ممیزی قدیمی‌تر از تعداد روز مشخص (پیش‌فرض ۹۰ روز)
- * طبق سیاست حاکمیت داده و ارتقای ممیزی (یافته D-2 / زیرفاز ۱.۵ نقشه راه ۴):
- * ۱. حداقل زمان نگه‌داشت ۹۰ روز است و حذف بازه‌های جدیدتر مگر با تایید صریح allowForceRecent مسدود می‌شود.
- * ۲. لاگ‌های ممیزی رخدادهای حساس امنیتی، مالی و مدیریتی به‌صورت پیش‌فرض حفظ و استثنا می‌شوند (preserveCritical).
- * ۳. تاریخ برش دقیقا بر اساس ساعت هماهنگ کسب‌وکار (systemNowUtcIso) محاسبه می‌گردد.
- * ۴. رخداد خود پاکسازی در جدول لاگ‌های ممیزی با تمام جزئیات ثبت می‌گردد.
+ * پاک‌سازی سجل قدیمی‌تر از دوره نگه‌داشت (پیش‌فرض و کمینه ۹۰ روز). v9.0.212 (TD-522، تصمیم ت۴ الف): فقط سجل بخش‌های
+ * `PURGEABLE_AUDIT_ENTITIES` با اقدامی جز `CRITICAL_AUDIT_ACTIONS` پاک می‌شود؛ گزینه خاموش کردن حفاظت
+ * (`preserveCritical: false`) و پاک کردن زودتر از کمینه (`allowForceRecent`) برداشته شد. تاریخ برش از ساعت کسب‌وکار
+ * (`systemNowUtcIso`) است و خود پاک‌سازی در سجل ثبت می‌شود.
  */
 export async function purgeOldAuditLogs(
   retentionDaysOrOptions: number | PurgeAuditLogsOptions = MIN_AUDIT_RETENTION_DAYS
@@ -294,31 +221,20 @@ export async function purgeOldAuditLogs(
     throw new ValidationError('مدت زمان نگه‌داشت لاگ‌های ممیزی باید یک عدد معتبر و مثبت باشد.');
   }
 
-  if (retentionDays < MIN_AUDIT_RETENTION_DAYS && !options.allowForceRecent) {
+  if (retentionDays < MIN_AUDIT_RETENTION_DAYS) {
     throw new ValidationError(
-      `سیاست نگه‌داشت ممیزی (D-2): حذف لاگ‌های ممیزی با قدمت کمتر از ${MIN_AUDIT_RETENTION_DAYS} روز بدون مجوز اضطراری صریح (allowForceRecent) مجاز نمی‌باشد.`
+      `سجل تازه‌تر از ${toPersianDigits(MIN_AUDIT_RETENTION_DAYS)} روز پاک نمی‌شود؛ دوره نگه‌داشت را دست‌کم ${toPersianDigits(MIN_AUDIT_RETENTION_DAYS)} روز بگذارید.`
     );
   }
-
-  const preserveCritical = options.preserveCritical !== false;
 
   const nowIso = systemNowUtcIso();
   const nowMs = new Date(nowIso).getTime();
   const cutoffMs = nowMs - retentionDays * 24 * 60 * 60 * 1000;
   const cutoffDate = new Date(cutoffMs).toISOString();
 
-  const conditions: SQL[] = [lt(activityLogs.timestamp, cutoffDate)];
-
-  if (preserveCritical) {
-    conditions.push(
-      notInArray(activityLogs.action, [...CRITICAL_AUDIT_ACTIONS]),
-      notInArray(activityLogs.entity, [...CRITICAL_AUDIT_ENTITIES])
-    );
-  }
-
   try {
     const executor = options.tx || orm;
-    const result = await executor.delete(activityLogs).where(and(...conditions));
+    const result = await executor.delete(activityLogs).where(and(lt(activityLogs.timestamp, cutoffDate), purgeableAuditRowCondition()));
     const purgedCount = Number((result as any)?.rowCount || 0);
 
     // ثبت ردپای خود عملیات پاکسازی در سیستم ممیزی
@@ -332,7 +248,7 @@ export async function purgeOldAuditLogs(
           purgedCount,
           cutoffDate,
           retentionDays,
-          criticalLogsPreserved: preserveCritical
+          purgeableEntities: [...PURGEABLE_AUDIT_ENTITIES]
         },
         username: options.actorUsername || 'سیستم',
         userId: options.actorUserId,
@@ -346,7 +262,6 @@ export async function purgeOldAuditLogs(
       purgedCount,
       cutoffDate,
       retentionDays,
-      criticalLogsPreserved: preserveCritical,
       valueOf: () => purgedCount,
       [Symbol.toPrimitive]: (hint: string) => (hint === 'number' ? purgedCount : String(purgedCount))
     };
@@ -362,6 +277,7 @@ export async function purgeOldAuditLogs(
 export interface AuditLogIntegrityReport {
   healthy: boolean;
   totalLogs: number;
+  /** ردیف‌هایی که پاک‌سازی هرگز پاک نمی‌کند (v9.0.212، TD-522) */
   criticalLogsCount: number;
   earliestTimestamp: string | null;
   latestTimestamp: string | null;
@@ -381,9 +297,7 @@ export async function checkAuditLogIntegrity(): Promise<AuditLogIntegrityReport>
 
     const [critical] = await orm.select({
       criticalCount: count()
-    }).from(activityLogs).where(
-      sql`(${activityLogs.action} IN ${CRITICAL_AUDIT_ACTIONS} OR ${activityLogs.entity} IN ${CRITICAL_AUDIT_ENTITIES})`
-    );
+    }).from(activityLogs).where(not(purgeableAuditRowCondition()));
 
     const totalLogs = Number(stats?.total || 0);
 

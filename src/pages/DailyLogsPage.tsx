@@ -20,7 +20,7 @@ interface DailyLogsPageProps {
 
 export default function DailyLogsPage({ user }: DailyLogsPageProps) {
   const dl = useDailyLogs(user);
-  // گزارش تجمیعی مدیریت فقط با مجوز daily_logs.manage_all (مدیر سیستم همه مجوزها را دارد؛ v9.0.213، TD-626)
+  // گزارش تجمیعی مدیریت فقط با مجوز daily_logs.manage_all (مدیر سیستم همه مجوزها را دارد؛ v9.0.231، TD-626)
   const canViewSummary = useHasPermission('daily_logs.manage_all');
 
   // اگر تب تجمیعی فعال بود ولی دسترسی وجود نداشت، به تب همه برگرد

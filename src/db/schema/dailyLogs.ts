@@ -19,7 +19,7 @@ export const dailyWorkLogs = pgTable('daily_work_logs', {
   projectName: text('project_name').default(''),
   tags: jsonb('tags').default([]),
   mentions: jsonb('mentions').default([]), // array of user IDs
-  // v9.0.218 (TD-900): 'mentioned_only' | 'private' | 'managers' | 'custom' (chk_daily_work_logs_visibility); no public logs
+  // v9.0.236 (TD-900): 'mentioned_only' | 'private' | 'managers' | 'custom' (chk_daily_work_logs_visibility); no public logs
   visibility: text('visibility').notNull().default('mentioned_only'),
   allowedUsers: jsonb('allowed_users').default([]),
   status: text('status').default('submitted'), // 'submitted', 'reviewed'
@@ -34,7 +34,7 @@ export const dailyWorkLogs = pgTable('daily_work_logs', {
   idx_dwl_deleted: index('idx_dwl_deleted').on(table.isDeleted),
 }));
 
-/** v9.0.218 (TD-900, migration 0075): the old visibility of each log the removal of «public» moved to mentioned_only */
+/** v9.0.236 (TD-900, migration 0075): the old visibility of each log the removal of «public» moved to mentioned_only */
 export const dailyLogVisibilityRepairs = pgTable('daily_log_visibility_repairs', {
   id: serial('id').primaryKey(),
   dailyLogId: integer('daily_log_id').notNull().unique('uq_daily_log_visibility_repairs_log'),

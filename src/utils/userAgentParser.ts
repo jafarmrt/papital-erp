@@ -65,14 +65,15 @@ export function parseUserAgent(uaString?: string | null): ParsedUserAgent {
     browser = 'Edge';
   } else if (/samsungbrowser\/([0-9.]+)/i.test(ua)) {
     browser = 'Samsung Internet';
+  } else if (/\bopr\/|opera/i.test(ua)) {
+    // v9.0.215 (TD-527): Opera «Chrome/…» هم دارد، پس پیش از Chrome سنجیده می‌شود
+    browser = 'Opera';
   } else if (/chrome\/([0-9.]+)/i.test(ua) && !/edg/i.test(ua)) {
     browser = 'Chrome';
   } else if (/firefox\/([0-9.]+)/i.test(ua)) {
     browser = 'Firefox';
   } else if (/safari\/([0-9.]+)/i.test(ua) && !/chrome/i.test(ua)) {
     browser = 'Safari';
-  } else if (/opera|opr\/([0-9.]+)/i.test(ua)) {
-    browser = 'Opera';
   }
 
   const shortSummary = `${browser} روی ${os}`;

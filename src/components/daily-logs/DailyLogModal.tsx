@@ -239,7 +239,7 @@ export function DailyLogModal({
                 </div>
               </button>
             </div>
-            {/* v9.0.215 (TD-633, decision ت۲ الف): a mention in a log hidden from the mentioned users notifies nobody */}
+            {/* v9.0.233 (TD-633, decision ت۲ الف): a mention in a log hidden from the mentioned users notifies nobody */}
             {formMentions.length > 0 && !visibilityNotifiesMentions(formVisibility) && (
               <p role="note" className="mt-1.5 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1">
                 این گزارش برای اشاره‌شده‌ها دیده نمی‌شود، پس به آن‌ها اعلانی نمی‌رسد.

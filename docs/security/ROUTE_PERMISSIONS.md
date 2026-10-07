@@ -44,7 +44,7 @@
 | GET | `/api/accounting/mappings` | accounting.coa \| accounting.view |
 | POST | `/api/accounting/mappings` | accounting.coa |
 | POST | `/api/accounting/quick-fix/sync-all-vouchers` | accounting.vouchers |
-| GET | `/api/accounting/reports/account-card` | accounting.reports \| accounting.view \| customers.view \| customers.manage \| documents.view |
+| GET | `/api/accounting/reports/account-card` | accounting.reports \| accounting.view |
 | GET | `/api/accounting/reports/balance-sheet` | accounting.reports \| accounting.view |
 | GET | `/api/accounting/reports/cash-flow` | accounting.reports \| accounting.treasury \| accounting.view |
 | GET | `/api/accounting/reports/cheque-reconciliation` | accounting.reports \| accounting.treasury \| accounting.cheques \| accounting.view |
@@ -52,9 +52,9 @@
 | GET | `/api/accounting/reports/health-check` | accounting.reports \| accounting.view |
 | GET | `/api/accounting/reports/income-statement` | accounting.reports \| accounting.view |
 | GET | `/api/accounting/reports/journal-book` | accounting.reports \| accounting.view |
-| GET | `/api/accounting/reports/ledger` | accounting.reports \| accounting.view \| customers.view \| customers.manage \| documents.view |
-| GET | `/api/accounting/reports/parties` | accounting.reports \| accounting.view \| customers.view \| customers.manage \| documents.view |
-| GET | `/api/accounting/reports/party-ledger` | accounting.reports \| accounting.view \| customers.view \| customers.manage \| documents.view |
+| GET | `/api/accounting/reports/ledger` | accounting.reports \| accounting.view |
+| GET | `/api/accounting/reports/parties` | accounting.reports \| accounting.view |
+| GET | `/api/accounting/reports/party-ledger` | accounting.reports \| accounting.view |
 | GET | `/api/accounting/reports/project-detail` | accounting.reports \| accounting.view |
 | GET | `/api/accounting/reports/project-summary` | accounting.reports \| accounting.view |
 | GET | `/api/accounting/reports/trial-balance` | accounting.reports \| accounting.view |

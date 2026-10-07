@@ -52,7 +52,7 @@ function formatDailyLog(l: (Partial<typeof dailyWorkLogs.$inferSelect> & Record<
     projectName: l.projectName || '',
     tags: tagsArr,
     mentions: mentionsArr,
-    // v9.0.218 (TD-900): there is no public visibility; an empty value reads as mentioned_only
+    // v9.0.236 (TD-900): there is no public visibility; an empty value reads as mentioned_only
     visibility: l.visibility || DEFAULT_DAILY_LOG_VISIBILITY,
     allowed_users: allowedArr,
     allowedUsers: allowedArr,
@@ -332,28 +332,28 @@ router.get('/daily-logs/:id', authorizePermission('daily_logs.view'), validate(p
   res.json(formatDailyLog(l));
 }));
 
-// POST create new daily work log (v9.0.213+: one transaction with its notifications and audit row)
+// POST create new daily work log (v9.0.231+: one transaction with its notifications and audit row)
 router.post('/daily-logs', authorizePermission('daily_logs.create'), validate(createDailyLogSchema), asyncHandler(async (req, res) => {
   if (!req.user?.id) throw new UnauthorizedError('احراز هویت انجام نشده است');
   const log = await createDailyLog(req.user, req.body);
   res.json(formatDailyLog(log));
 }));
 
-// PUT edit daily work log: the author, or a holder of daily_logs.manage_all (v9.0.213, TD-626)
+// PUT edit daily work log: the author, or a holder of daily_logs.manage_all (v9.0.231, TD-626)
 router.put('/daily-logs/:id', authorizePermission('daily_logs.create'), validate(updateDailyLogSchema), asyncHandler(async (req, res) => {
   if (!req.user?.id) throw new UnauthorizedError('احراز هویت انجام نشده است');
   const updated = await updateDailyLog(req.user, Number(req.params.id), req.body);
   res.json(formatDailyLog(updated));
 }));
 
-// PUT manager review / feedback: only holders of daily_logs.manage_all (v9.0.213, TD-626)
+// PUT manager review / feedback: only holders of daily_logs.manage_all (v9.0.231, TD-626)
 router.put('/daily-logs/:id/review', requirePermission('daily_logs.manage_all'), validate(reviewDailyLogSchema), asyncHandler(async (req, res) => {
   if (!req.user?.id) throw new UnauthorizedError('احراز هویت انجام نشده است');
   const updated = await reviewDailyLog(req.user, Number(req.params.id), req.body.manager_notes);
   res.json(formatDailyLog(updated));
 }));
 
-// DELETE soft delete daily log: the author, or a holder of daily_logs.manage_all (v9.0.213, TD-626)
+// DELETE soft delete daily log: the author, or a holder of daily_logs.manage_all (v9.0.231, TD-626)
 router.delete('/daily-logs/:id', authorizePermission('daily_logs.create'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   if (!req.user?.id) throw new UnauthorizedError('احراز هویت انجام نشده است');
   await deleteDailyLog(req.user, Number(req.params.id));

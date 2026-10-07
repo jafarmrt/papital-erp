@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import { User } from '../types';
 import { fetchJson, setAuthToken, setCsrfToken } from '../api';
 import { queryClient } from '../lib/queryClient';
+import { isSystemAdminViewer } from '../lib/permissions/pageAccess';
 
 export interface UserPermissions {
   permissions: string[];
@@ -81,9 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(res.user);
         if (res.token) setAuthToken(res.token);
         await loadUserPermissions(signal);
-        if (res.user.mustResetPassword || (res.user as any).must_reset_password) {
-          setIsProfileModalOpen(true);
-        }
       } else {
         await logout();
       }
@@ -106,9 +104,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (res.token) setAuthToken(res.token);
         setUser(res.user);
         await loadUserPermissions();
-        if (res.user.mustResetPassword || res.user.must_reset_password) {
-          setIsProfileModalOpen(true);
-        }
       }
       return res;
     } else {
@@ -116,9 +111,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token) setAuthToken(token);
       setUser(u);
       await loadUserPermissions();
-      if (u.mustResetPassword || (u as any).must_reset_password) {
-        setIsProfileModalOpen(true);
-      }
       return { success: true, user: u };
     }
   }, [loadUserPermissions]);
@@ -133,8 +125,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setUserPermissions({ permissions: [], isAdmin: false });
     };
+    // v9.0.219 (TD-523): سرور رمز را موقت دانست؛ `App` به جای برنامه فقط برگه تغییر رمز را نشان می‌دهد
+    const handlePasswordResetRequired = () => {
+      setUser(current => (current ? { ...current, mustResetPassword: true, must_reset_password: true } : current));
+    };
     window.addEventListener('auth:unauthorized', handleUnauthorized);
-    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    window.addEventListener('auth:password-reset-required', handlePasswordResetRequired);
+    return () => {
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+      window.removeEventListener('auth:password-reset-required', handlePasswordResetRequired);
+    };
   }, []);
 
   useEffect(() => {
@@ -180,4 +180,14 @@ export function useHasPermission(permission: string): boolean {
   const ctx = useContext(AuthContext);
   if (!ctx) return false;
   return ctx.userPermissions.isAdmin || (Array.isArray(ctx.userPermissions.permissions) && ctx.userPermissions.permissions.includes(permission));
+}
+
+/**
+ * v9.0.228 (TD-567، B03-25): آیا کاربر جاری مدیر سیستم است (همان گارد `requireSystemAdmin`)؛ بیرون از AuthProvider false.
+ * فقط برای نمایش دکمه‌های نگهداری سیستم است؛ سرور خودش می‌سنجد.
+ */
+export function useIsSystemAdmin(): boolean {
+  const ctx = useContext(AuthContext);
+  if (!ctx) return false;
+  return isSystemAdminViewer({ isAdmin: ctx.userPermissions.isAdmin, role: ctx.user?.role });
 }

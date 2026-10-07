@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { and, eq, desc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
-import { authenticateToken, invalidateUserAuthCache } from '../middleware/auth.js';
+import { authenticateToken, invalidateUserAuthCache, generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, shouldExposeTokenInBody } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission, ROLE_CODE_PATTERN } from '../middleware/authorize.js';
 import { z } from 'zod';
@@ -12,6 +12,7 @@ import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { NotFoundError, ForbiddenError, BadRequestError, ValidationError, ConflictError } from '../errors/customErrors.js';
 import { lockSystemAdminSet, assertAnotherActiveAdmin, SYSTEM_ADMIN_ROLE } from '../services/users/lastAdminGuard.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
+import { AVATAR_INVALID_MESSAGE, FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE, isAcceptableAvatar, isStoredAvatarPath } from '../lib/users/profileFields.js';
 import { invalidateRoleCache } from '../lib/memoryCache.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { PERMISSION_CATALOG, PERMISSION_KEYS, isCatalogPermission, isSystemAdminRole, missingRequiredPermissions, withRequiredPermissions } from '../lib/permissions/permissionCatalog.js';
@@ -21,6 +22,8 @@ import {
 } from '../services/users/grantBoundary.js';
 import { isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 import { USERNAME_OF_DELETED_USER, deletedUsernameMessage } from '../lib/users/userRestore.js';
+import { roleDisplayName } from '../lib/users/roleDisplayName.js';
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
@@ -38,10 +41,11 @@ function touchesAdminAccount(actorRole: string | undefined, targetRoles: Array<s
 
 const updateProfileSchema = z.object({
   body: z.object({
-    full_name: z.string().optional(),
-    avatar: z.string().optional(),
+    // v9.0.222 (TD-533): نام حداکثر ۱۰۰ نویسه؛ تصویر فقط بارگذاری تازه یا مسیر `/uploads` همین سامانه (نه نشانی بیرونی)
+    full_name: z.string().trim().max(FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE).optional(),
+    avatar: z.string().refine(isAcceptableAvatar, AVATAR_INVALID_MESSAGE).optional(),
     current_password: z.string().optional(),
-    new_password: z.string().min(8, 'کلمه عبور جدید باید حداقل ۸ کاراکتر باشد').optional().or(z.literal(''))
+    new_password: z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE).optional().or(z.literal(''))
   })
 });
 
@@ -141,6 +145,9 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
     if (avatar) {
       if (avatar.startsWith('data:image')) {
         const avatarPath = await uploadBase64ToStorage(avatar);
+        if (!isStoredAvatarPath(avatarPath)) {
+          return res.status(400).json({ error: AVATAR_INVALID_MESSAGE });
+        }
         updateData.avatarUrl = avatarPath;
       } else {
         updateData.avatarUrl = avatar;
@@ -178,7 +185,7 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
       action: 'UPDATE',
       entity: 'پروفایل کاربر',
       entityId: userId,
-      description: `بروزرسانی اطلاعات پروفایل شخصی ${passwordChanged ? 'و تغییر کلمه عبور' : ''}`,
+      description: `به‌روزرسانی اطلاعات نمایه شخصی ${passwordChanged ? 'و تغییر کلمه عبور' : ''}`,
       details: {
         userId,
         username: u.username,
@@ -188,14 +195,27 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
       }
     });
 
+    // v9.0.218 (TD-531): نسخه توکن بالا رفت و نشست‌های دیگر کاربر باطل‌اند؛ همین نشست با توکن تازه ادامه می‌یابد، وگرنه
+    // پس از پیام موفقیت، درخواست بعدی ۴۰۱ می‌گرفت
+    let session: { token: string; csrfToken: string } | null = null;
+    if (passwordChanged) {
+      const csrfToken = req.user?.csrfToken || generateCsrfToken();
+      const token = generateToken({ id: updatedUser.id, username: updatedUser.username, role: updatedUser.role, csrfToken, tokenVersion: updatedUser.tokenVersion || 0 });
+      res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+      session = { token, csrfToken };
+    }
+
     const { password: _, ...userInfo } = updatedUser;
     res.json({
       success: true,
       user: {
         ...userInfo,
         full_name: updatedUser.fullName,
-        avatar_url: updatedUser.avatarUrl || ''
-      }
+        avatar_url: updatedUser.avatarUrl || '',
+        mustResetPassword: Boolean(updatedUser.mustResetPassword),
+        must_reset_password: Boolean(updatedUser.mustResetPassword)
+      },
+      ...(session ? { csrfToken: session.csrfToken, ...(shouldExposeTokenInBody() ? { token: session.token } : {}) } : {})
     });
   } catch (err) {
     throw err;
@@ -397,21 +417,22 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
 }));
 
 // USERS MANAGEMENT ROUTES
-const userPasswordField = z.string().min(6, 'رمز عبور باید حداقل ۶ کاراکتر باشد');
+// v9.0.217 (TD-532): همان کمینه مشترک نمایه و راه‌اندازی، نه ۶ نویسه
+const userPasswordField = z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE);
 
 const userCreateSchema = z.object({
   body: z.object({
     username: z.string().trim().min(3, 'نام کاربری باید حداقل ۳ کاراکتر باشد'),
     password: userPasswordField,
-    full_name: z.string().trim().optional().default(''),
+    full_name: z.string().trim().max(FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE).optional().default(''),
     role: z.string().trim().min(1, 'انتخاب نقش الزامی است'),
   })
 });
 
 const userUpdateSchema = z.object({
   body: z.object({
-    password: z.string().min(6, 'رمز عبور باید حداقل ۶ کاراکتر باشد').optional().or(z.literal('')),
-    full_name: z.string().trim().optional().default(''),
+    password: userPasswordField.optional().or(z.literal('')),
+    full_name: z.string().trim().max(FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE).optional().default(''),
     role: z.string().trim().min(1, 'انتخاب نقش الزامی است'),
   }),
   params: z.object({
@@ -436,30 +457,31 @@ const userParamsSchema = z.object({
   })
 });
 
+/**
+ * v9.0.223 (TD-534، یافته B02-19): فهرست ساده برای انتخابگر اشاره و فهرست‌های نام است و به هر کاربر واردشده می‌رسد؛ پس
+ * کد نقش ندارد. نام کاربری برای اشاره (@نام‌کاربری) می‌ماند و به‌جای کد نقش، نام فارسی ذخیره‌شده نقش می‌آید.
+ */
 router.get('/users/list-simple', asyncHandler(async (req, res) => {
-  try {
-    const allUsers = await orm.select({
-      id: users.id,
-      username: users.username,
-      fullName: users.fullName,
-      role: users.role,
-      avatarUrl: users.avatarUrl
-    })
-    .from(users)
-    .where(eq(users.isDeleted, 0))
-    .orderBy(desc(users.id));
-    
-    const mapped = allUsers.map(u => ({
-      id: u.id,
-      username: u.username,
-      full_name: u.fullName || u.username,
-      role: u.role,
-      avatar_url: u.avatarUrl || ''
-    }));
-    res.json(mapped);
-  } catch (err) {
-    throw err;
-  }
+  const allUsers = await orm.select({
+    id: users.id,
+    username: users.username,
+    fullName: users.fullName,
+    role: users.role,
+    roleName: roles.name,
+    avatarUrl: users.avatarUrl
+  })
+  .from(users)
+  .leftJoin(roles, eq(roles.code, users.role))
+  .where(eq(users.isDeleted, 0))
+  .orderBy(desc(users.id));
+
+  res.json(allUsers.map(u => ({
+    id: u.id,
+    username: u.username,
+    full_name: u.fullName || u.username,
+    role_name: roleDisplayName(u.role, u.roleName),
+    avatar_url: u.avatarUrl || ''
+  })));
 }));
 
 router.get('/users', authorizePermission(...READ_PERMISSIONS.userDirectory), asyncHandler(async (req, res) => {
@@ -532,11 +554,13 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // v9.0.219 (TD-523، ت۵ الف): رمزی که مدیر می‌گذارد موقت است و کاربر در نخستین ورود باید آن را عوض کند
     const [info] = await orm.insert(users).values({
       username: tUsername,
       password: hashedPassword,
       fullName: tFullName,
-      role: role
+      role: role,
+      mustResetPassword: 1,
     }).returning({ id: users.id });
 
     // V9-2.2: ثبت لاگ ممیزی پیش از ارسال پاسخ — جلوگیری از گم‌شدن رکورد ممیزی و خطای headers-sent
@@ -552,7 +576,8 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
           username: tUsername,
           fullName: tFullName,
           role: role
-        }
+        },
+        mustResetPassword: true,
       }
     });
 
@@ -619,9 +644,11 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
         : (prevUser.fullName || prevUser.username);
 
       const updateData: Partial<typeof users.$inferInsert> = { fullName: tFullName, role };
+      // v9.0.219 (TD-523، ت۵ الف): رمزی که مدیر برای کاربر دیگری می‌گذارد موقت است (پیش‌تر پرچم را ۰ می‌کرد)؛ رمزی که
+      // کسی برای حساب خودش می‌گذارد موقت نیست
       if (passwordHash) {
         updateData.password = passwordHash;
-        updateData.mustResetPassword = 0;
+        updateData.mustResetPassword = targetUserId === Number(req.user?.id) ? 0 : 1;
       }
 
       // V9-2.2: تغییر نقش یا رمز عبور نشست‌های فعال کاربر هدف را باطل می‌کند (tokenVersion)
@@ -650,7 +677,8 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
           after: { fullName: tFullName, role: role },
           changes: diff,
           hasChanges,
-          passwordChanged
+          passwordChanged,
+          ...(passwordChanged ? { mustResetPassword: updateData.mustResetPassword === 1 } : {})
         }
       });
     });

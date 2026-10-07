@@ -823,10 +823,10 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       throw new Error(`Sensitive fields were not properly sanitized: ${JSON.stringify(detailsObj)}`);
     }
 
-    // 2. Test Minimum Retention Policy Guard (Must reject retentionDays < 90 without allowForceRecent)
+    // 2. Test Minimum Retention Policy Guard (retentionDays < 90 is always rejected; v9.0.212 removed allowForceRecent)
     let threwValidationError = false;
     try {
-      await purgeOldAuditLogs({ retentionDays: 30, allowForceRecent: false });
+      await purgeOldAuditLogs({ retentionDays: 30 });
     } catch (err: any) {
       if (err instanceof ValidationError || err.name === 'ValidationError' || err.statusCode === 422) {
         threwValidationError = true;
@@ -840,10 +840,10 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
     // Seed three historical audit logs older than 100 days
     const pastTimestamp = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString();
 
-    // A: Routine non-critical log (should be purged)
+    // A: Routine log of a purgeable section (should be purged; v9.0.212 purges only PURGEABLE_AUDIT_ENTITIES)
     const [routineLog] = await orm.insert(activityLogs).values({
       action: 'VIEW',
-      entity: 'ERP-TEST-MARKER گزارش آزمایشی',
+      entity: 'گزارش کار روزانه',
       entityId: 'test_view_1',
       description: 'مشاهده گزارش عادی تاریخی',
       timestamp: pastTimestamp,
@@ -873,10 +873,9 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
     }).returning({ id: activityLogs.id });
     if (criticalEntityLog) testAuditLogIds.push(criticalEntityLog.id);
 
-    // Execute purge with retentionDays=90 and preserveCritical=true
+    // Execute purge with retentionDays=90
     const purgeReport = await purgeOldAuditLogs({
       retentionDays: 90,
-      preserveCritical: true,
       actorUsername: 'تست_ممیزی'
     });
 
@@ -893,12 +892,12 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
     // Check that critical logs WERE PRESERVED
     const [checkCritAction] = await orm.select().from(activityLogs).where(eq(activityLogs.id, criticalActionLog.id));
     if (!checkCritAction) {
-      throw new Error('Critical audit log with action DELETE was erroneously purged despite preserveCritical=true');
+      throw new Error('Critical audit log with action DELETE was erroneously purged');
     }
 
     const [checkCritEntity] = await orm.select().from(activityLogs).where(eq(activityLogs.id, criticalEntityLog.id));
     if (!checkCritEntity) {
-      throw new Error('Critical audit log with entity "تنظیمات سیستم" was erroneously purged despite preserveCritical=true');
+      throw new Error('Critical audit log with entity "تنظیمات سیستم" was erroneously purged');
     }
 
     // 4. Test Audit Log Integrity Check

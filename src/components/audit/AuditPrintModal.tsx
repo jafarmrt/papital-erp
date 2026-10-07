@@ -2,21 +2,26 @@ import React from 'react';
 import { Printer, X, ShieldAlert } from 'lucide-react';
 import { formatPersianDateTime, formatPersianNumber, formatPersianDate } from '../../utils';
 import { parseUserAgent } from '../../utils/userAgentParser';
+import type { ActivityLogItem } from '../../hooks/queries/useActivityLogQueries';
+import { auditActionLabel } from '../../lib/audit/auditActionLabels';
 
 interface AuditPrintModalProps {
-  logs: any[];
+  logs: ActivityLogItem[];
+  /** v9.0.215 (TD-527): شمار کل ردیف‌های پالایه از سرور؛ برگه وقتی کمتر از آن ردیف دارد می‌گوید فقط ردیف‌های اول آمده‌اند */
+  total: number;
   onClose: () => void;
   filterSummary?: {
     categoryLabel?: string;
     userFilter?: string;
     actionFilter?: string;
     entityFilter?: string;
+    searchText?: string;
     startDate?: string;
     endDate?: string;
   };
 }
 
-export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose, filterSummary }) => {
+export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, total, onClose, filterSummary }) => {
   React.useEffect(() => {
     document.body.classList.add('printing-doc');
     return () => {
@@ -43,7 +48,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose,
               <Printer className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-900 text-sm">پیش‌نمایش چاپ رسمی گزارش سجل تغییرات (Audit Report)</h3>
+              <h3 className="font-bold text-slate-900 text-sm">پیش‌نمایش چاپ رسمی گزارش سجل تغییرات</h3>
               <p className="text-2xs text-slate-500">طراحی استاندارد جهت ارائه در ممیزی‌های داخلی و حسابرسی‌های قانونی</p>
             </div>
           </div>
@@ -73,8 +78,8 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose,
                 <ShieldAlert className="w-7 h-7" />
               </div>
               <div>
-                <h1 className="text-lg font-black text-slate-900">سامانه جامع مدیریت کارگاه و ERP صنعتی</h1>
-                <h2 className="text-sm font-bold text-slate-700">گزارش ممیزی امنیتی و سجل رویدادهای سیستمی (Audit Trail)</h2>
+                <h1 className="text-lg font-black text-slate-900">سامانه جامع مدیریت کارگاه</h1>
+                <h2 className="text-sm font-bold text-slate-700">گزارش ممیزی امنیتی و سجل رویدادهای سامانه</h2>
               </div>
             </div>
 
@@ -85,7 +90,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose,
               </p>
               <p className="flex items-center gap-1 sm:justify-end">
                 <span className="font-bold">تعداد کل رکوردها:</span>
-                <span>{formatPersianNumber(logs.length)} مورد</span>
+                <span>{formatPersianNumber(total)} مورد</span>
               </p>
               <p className="flex items-center gap-1 sm:justify-end">
                 <span className="font-bold">سطح دسترسی:</span>
@@ -94,9 +99,15 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose,
             </div>
           </div>
 
+          {logs.length < total && (
+            <p role="note" className="p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-2xs font-bold text-amber-900">
+              فقط {formatPersianNumber(logs.length)} ردیف اول از {formatPersianNumber(total)} ردیف در این برگه آمده است؛ برای چاپ همه ردیف‌ها پالایه را محدودتر کنید.
+            </p>
+          )}
+
           {/* Filter Criteria Details */}
           {filterSummary && (
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-2xs grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-700">
+            <div data-testid="audit-print-filters" className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-2xs grid grid-cols-2 sm:grid-cols-3 gap-2 text-slate-700">
               <div>
                 <span className="text-slate-400 block mb-0.5">دسته‌بندی موضوعی:</span>
                 <span className="font-bold text-slate-900">{filterSummary.categoryLabel || 'همه موضوعات'}</span>
@@ -108,6 +119,14 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose,
               <div>
                 <span className="text-slate-400 block mb-0.5">نوع اقدام:</span>
                 <span className="font-bold text-slate-900">{filterSummary.actionFilter || 'همه اقدامات'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">بخش:</span>
+                <span className="font-bold text-slate-900">{filterSummary.entityFilter || 'همه بخش‌ها'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">متن جست‌وجو:</span>
+                <span className="font-bold text-slate-900">{filterSummary.searchText ? `«${filterSummary.searchText}»` : 'بدون جست‌وجو'}</span>
               </div>
               <div>
                 <span className="text-slate-400 block mb-0.5">بازه تاریخی:</span>
@@ -131,7 +150,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose,
                   <th className="py-2.5 px-3 border-l border-slate-300 text-center w-20">اقدام</th>
                   <th className="py-2.5 px-3 border-l border-slate-300 w-24">موجودیت</th>
                   <th className="py-2.5 px-3 border-l border-slate-300">شرح رویداد</th>
-                  <th className="py-2.5 px-3 border-l border-slate-300 w-24 text-center">آدرس IP</th>
+                  <th className="py-2.5 px-3 border-l border-slate-300 w-24 text-center">نشانی IP</th>
                   <th className="py-2.5 px-3 w-28 text-center">دستگاه / مرورگر</th>
                 </tr>
               </thead>
@@ -160,7 +179,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose,
                           log.action === 'DELETE' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
                           'bg-slate-100 text-slate-700'
                         }`}>
-                          {log.action}
+                          {auditActionLabel(log.action)}
                         </span>
                       </td>
                       <td className="py-2 px-3 border-l border-slate-200 font-medium text-slate-800">
@@ -191,7 +210,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose,
               <p className="text-2xs text-slate-500">امضا و تاریخ</p>
             </div>
             <div className="space-y-12">
-              <p className="font-bold">مدیر فناوری اطلاعات و امنیت (IT)</p>
+              <p className="font-bold">مدیر فناوری اطلاعات و امنیت</p>
               <div className="border-b border-dashed border-slate-400 w-36 mx-auto"></div>
               <p className="text-2xs text-slate-500">امضا و تایید سیستمی</p>
             </div>

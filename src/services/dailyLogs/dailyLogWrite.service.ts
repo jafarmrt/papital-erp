@@ -19,9 +19,9 @@ export const DAILY_LOG_AUDIT_ENTITY = 'گزارش کار روزانه';
  * Package 13: every write of a daily work log (create, edit, manager review, delete) runs here in one transaction with
  * its notifications and its audit row (A02-02 / A02-03 / A02-16).
  *
- * v9.0.213 (TD-626, decision ت۱ الف): another user's log is reviewed, edited or deleted only by a holder of
+ * v9.0.231 (TD-626, decision ت۱ الف): another user's log is reviewed, edited or deleted only by a holder of
  * `daily_logs.manage_all` (and the system admin), never by role code; the author edits and deletes their own log.
- * v9.0.216 (TD-629): mentioned and allowed users and the project must exist; the project name comes from the project.
+ * v9.0.234 (TD-629): mentioned and allowed users and the project must exist; the project name comes from the project.
  */
 export function calculateWorkHours(startTime: string, endTime: string): number {
   try {

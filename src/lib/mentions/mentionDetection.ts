@@ -1,5 +1,5 @@
 /**
- * v9.0.214 (TD-628, finding B13-03): which users a text mentions with «@name».
+ * v9.0.232 (TD-628, finding B13-03): which users a text mentions with «@name».
  *
  * Each «@» is matched with the LONGEST display name or username that follows it and ends at a word boundary, so
  * «@علی رضایی» mentions «علی رضایی» only, never «علی» as well, and «@علی‌رضا» does not mention «علی». Shared by the

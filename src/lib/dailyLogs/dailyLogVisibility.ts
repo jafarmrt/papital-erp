@@ -1,7 +1,7 @@
 /**
  * Package 13: who sees a daily work log. Shared by the server (list, single read, notifications) and the browser (form).
  *
- * v9.0.218 (TD-900, product-owner decision ت۷): there is no public visibility any more. `public`, `all` and an empty
+ * v9.0.236 (TD-900, product-owner decision ت۷): there is no public visibility any more. `public`, `all` and an empty
  * value were readable by every holder of `daily_logs.view`; migration 0075 moved such logs to `mentioned_only` and
  * recorded the old value in `daily_log_visibility_repairs`, and the input accepts only the values below.
  */
@@ -41,7 +41,7 @@ export function canSeeDailyLog(row: DailyLogVisibilityRow, userId: number | unde
 }
 
 /**
- * v9.0.215 (TD-633, decision ت۲ الف): a mention notifies only a user who may read the log. A mention in a private or
+ * v9.0.233 (TD-633, decision ت۲ الف): a mention notifies only a user who may read the log. A mention in a private or
  * managers-only log notifies nobody (the form says so), so its title never reaches a reader the log is hidden from.
  */
 export function mentionNotifies(row: DailyLogVisibilityRow, mentionedUserId: number): boolean {

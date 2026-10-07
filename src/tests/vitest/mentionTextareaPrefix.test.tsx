@@ -3,7 +3,7 @@ import { cleanup, render } from '@testing-library/react';
 import { MentionTextarea } from '../../components/MentionTextarea';
 import { detectMentionedUserIds } from '../../lib/mentions/mentionDetection';
 
-// v9.0.214 (TD-628, finding B13-03): a mention is the longest name after «@» at a word boundary, never a name prefix
+// v9.0.232 (TD-628, finding B13-03): a mention is the longest name after «@» at a word boundary, never a name prefix
 const users = [
   { id: 1, username: 'ali', full_name: 'علی' },
   { id: 2, username: 'alireza', full_name: 'علی رضایی' },

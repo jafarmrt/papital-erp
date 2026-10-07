@@ -25,7 +25,7 @@ export interface DailyWorkLog {
   projectName?: string;
   tags?: string[];
   mentions?: number[]; // array of user IDs
-  visibility: DailyLogVisibility; // v9.0.218 (TD-900): no public logs
+  visibility: DailyLogVisibility; // v9.0.236 (TD-900): no public logs
   allowed_users?: number[]; // user IDs allowed
   allowedUsers?: number[];
   status?: 'submitted' | 'reviewed';

@@ -35,7 +35,7 @@ export function DailyLogsList({
   onDeleteLog,
   onOpenReviewModal
 }: DailyLogsListProps) {
-  // v9.0.213 (TD-626): review, edit and delete of another user's log follow daily_logs.manage_all, never a role code
+  // v9.0.231 (TD-626): review, edit and delete of another user's log follow daily_logs.manage_all, never a role code
   const canManageAll = useHasPermission('daily_logs.manage_all');
   const getWorkModeBadge = (mode: string) => {
     switch (mode) {

@@ -5,10 +5,10 @@ import { DAILY_LOG_VISIBILITIES } from '../lib/dailyLogs/dailyLogVisibility.js';
 /**
  * Request bodies of the daily work log routes (package 13).
  *
- * v9.0.216 (TD-629): a user or project id is a positive integer (a Latin digit string is accepted, as the form sends
+ * v9.0.234 (TD-629): a user or project id is a positive integer (a Latin digit string is accepted, as the form sends
  * numbers); anything else is 400 before the log is written. Whether the users and the project exist is checked by the
  * service in the save transaction (422).
- * v9.0.218 (TD-900, decision ت۷): `public` and `all` are no longer accepted.
+ * v9.0.236 (TD-900, decision ت۷): `public` and `all` are no longer accepted.
  */
 const positiveId = (label: string) => z.union([z.number(), z.string()]).transform((v, ctx) => {
   const n = typeof v === 'number' ? v : (/^[1-9]\d*$/.test(v.trim()) ? Number(v.trim()) : NaN);
