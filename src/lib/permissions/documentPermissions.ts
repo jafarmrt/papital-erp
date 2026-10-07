@@ -12,8 +12,10 @@
  * این فایل به چیزی از سرور یا مرورگر وابسته نیست.
  */
 
+import { documentStockDirection, type DocumentStockDirection } from '../documents/documentDirection.js';
+
+export type { DocumentStockDirection };
 export type DocumentRecordStatus = 'draft' | 'proforma' | 'final';
-export type DocumentStockDirection = 'in' | 'out';
 
 /** نوع‌های سند فروش */
 export const SALES_DOCUMENT_TYPES: ReadonlySet<string> = new Set(['invoice', 'proforma', 'return']);
@@ -30,4 +32,12 @@ export function documentRecordPermission(docType: string, status: DocumentRecord
   if (isSalesDocumentType(docType)) return status === 'final' ? SALES_FINALIZE_PERMISSION : 'documents.create';
   if (docType === 'audit') return 'audit.apply';
   return direction === 'in' ? 'warehouse.in' : 'warehouse.out';
+}
+
+/**
+ * v9.0.213 (TD-770): مجوز ثبت سندی از این نوع در این وضعیت؛ جهت گردش از خود نوع (`documentStockDirection`)، همان که
+ * سرور با آن کالا را جابه‌جا می‌کند. صفحه اسناد انبار دکمه ثبت را با همین نشان می‌دهد.
+ */
+export function documentTypeRecordPermission(docType: string, status: DocumentRecordStatus): string {
+  return documentRecordPermission(docType, status, documentStockDirection(docType) ?? 'out');
 }

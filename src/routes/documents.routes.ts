@@ -3,7 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog.js';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
-import { createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
+import { assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
@@ -92,8 +92,11 @@ const exchangeRateInput = z.union([
 
 export const documentCreateSchema = z.object({
   body: z.object({
-    docType: z.enum(['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste'], {
-      message: 'نوع سند نامعتبر است'
+    // v9.0.213 (TD-770، تصمیم ت۲ الف): انتقال بین انبارها فقط از transfers.routes.ts (TD-489)
+    docType: z.enum(['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'remittance', 'waste'], {
+      error: (issue) => issue.input === 'transfer'
+        ? 'انتقال بین انبارها فقط از صفحه «انتقال بین انبارها» ثبت می‌شود'
+        : 'نوع سند نامعتبر است'
     }),
     refNumber: z.union([z.string().min(1, 'شماره مرجع الزامی است'), z.number().int().positive()]),
     date: z.string().min(1, 'تاریخ سند الزامی است'),
@@ -255,6 +258,8 @@ async function assertMayRecordDocument(user: AuthUserPayload | undefined, permis
 // خوانده می‌شود. پیش‌تر هر نقشی جز چهار کد ثابت «کاربر فروش» بود: سند قطعی نمی‌زد و پیش‌نویسش پیش‌فاکتور می‌شد
 router.post('/documents', authorizePermission('documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'audit.apply'), idempotency({ scope: 'documents' }), validate(documentCreateSchema), asyncHandler(async (req, res) => {
   const requestedType = String(req.body.docType);
+  // v9.0.213 (TD-770): جهت گردش از نوع سند؛ `inOut` ناسازگار پیش از سنجش مجوز ۴۲۲ می‌گیرد
+  assertRecordableDocument(requestedType, req.body.inOut);
   const recordStatus = createdDocumentStatus(requestedType, req.body.status);
   await assertMayRecordDocument(req.user, permissionToCreateDocument(req.body),
     `ثبت ${docTypeTitles[requestedType] ?? 'سند'}${recordStatus === 'final' ? ' به‌صورت قطعی' : ''}`);

@@ -10634,5 +10634,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runItemExcelExportTests } = await import('../regression/itemExcelExportTests.js');
   results.push(...await runItemExcelExportTests(shouldRun));
 
+  // Package 8 PR A (v9.0.213+): stock direction, sellable gate and line numbers of POST /documents
+  const { runDocumentEntryTests } = await import('../regression/documentEntryTests.js');
+  results.push(...await runDocumentEntryTests(shouldRun));
+
   return results;
 }

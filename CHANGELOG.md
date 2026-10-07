@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.213 — v9.0.213 — Stock Direction From the Document Type
+- **Documents (P1):** a document moves stock only in the direction of its type; an `inOut` against the type is refused with 422 `DOCUMENT_DIRECTION_MISMATCH` and a transfer is no longer recorded through `POST /documents`, so a receipt can no longer take goods out while its voucher adds them (TD-770, decision ت۲).
+
 ### v9.0.212 — v9.0.212 — Package 8 Documents and Invoices Audit Documentation
 - **Package 8 Audit:** section 10 of the V9 stability audit records the documents and invoices package: 34 proven findings (seven P1, among them stock direction taken from the request body, a zero-price invoice without a voucher, voiding an invoice that has a return, and sales returns without VAT or tied price) opened as TD-770 and TD-772..TD-803 (TD-771 was closed in v9.0.125), with the product-owner decisions. Documentation only.
 
