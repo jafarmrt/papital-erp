@@ -53,7 +53,7 @@ describe('voucher row menu follows the server rules (TD-568, B03-26)', () => {
     expect(voucherLockNote({ status: 'approved' })).toBeNull();
   });
 
-  it('renders the menu of an approved manual voucher without «ویرایش مستقیم سند» and runs the chosen action', () => {
+  it('renders the menu of an approved manual voucher without a direct edit item and runs the chosen action', () => {
     const onAction = vi.fn();
     render(<VoucherRowMenu voucher={voucher({ status: 'approved' })} onAction={onAction} />);
     const labels = screen.getAllByRole('menuitem').map(b => b.textContent);

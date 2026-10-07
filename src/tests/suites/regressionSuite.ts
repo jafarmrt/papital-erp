@@ -9953,7 +9953,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const base = { date: '1405/01/15', description: 'ERP-TEST-MARKER سند TD-247' };
       for (const [debit, want] of [[100.005, true], [100.01, true], [100.02, false]] as Array<[number, boolean]>) {
         const c = createVoucherSchema.safeParse({ body: { ...base, items: items(debit) } }).success;
-        const u = updateVoucherSchema.safeParse({ params: { id: '1' }, body: { items: items(debit) } }).success;
+        const u = updateVoucherSchema.safeParse({ params: { id: '1' }, body: { version: 1, items: items(debit) } }).success; // v9.0.279 (TD-555): ویرایش نسخه می‌خواهد
         const k = correctVoucherSchema.safeParse({ params: { id: '1' }, body: { reason: 'اصلاح آزمون', newItems: items(debit) } }).success;
         check(c === want && u === want && k === want, `طرح سند با بدهکار ${debit} و بستانکار 100 باید ${want ? 'پذیرفته' : 'رد'} شود (ایجاد ${c}، ویرایش ${u}، اصلاحی ${k})`);
       }
