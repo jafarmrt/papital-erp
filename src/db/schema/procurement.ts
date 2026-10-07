@@ -23,6 +23,8 @@ export const purchaseRequisitions = pgTable('purchase_requisitions', {
   notes: text('notes').default(''),
   totalEstimatedAmount: moneyNumeric('total_estimated_amount', { precision: 18, scale: 2 }).default(sql`0`),
   items: jsonb('items').notNull().default([]),
+  /** v9.0.274 (TD-694, migration 0077): the requisition this one was consolidated into (status 'consolidated') */
+  consolidatedIntoId: integer('consolidated_into_id').references((): AnyPgColumn => purchaseRequisitions.id),
   isDeleted: integer('is_deleted').default(0),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
@@ -33,5 +35,6 @@ export const purchaseRequisitions = pgTable('purchase_requisitions', {
   idx_pr_priority: index('idx_pr_priority').on(table.priority),
   idx_pr_workflow: index('idx_pr_workflow').on(table.workflowInstanceId),
   idx_pr_deleted: index('idx_pr_deleted').on(table.isDeleted),
+  idx_pr_consolidated_into: index('idx_pr_consolidated_into').on(table.consolidatedIntoId).where(sql`consolidated_into_id IS NOT NULL`),
 }));
 registerColumnRef('purchaseRequisitions.id', () => purchaseRequisitions.id);

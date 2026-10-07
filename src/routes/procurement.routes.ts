@@ -179,7 +179,7 @@ router.post('/consolidate', authorizePermission('procurement.manage'), idempoten
   res.status(201).json({
     success: true,
     data: result,
-    message: `درخواست تجمیع‌شده ${result.code} با موفقیت ایجاد گردید.`
+    message: `درخواست تجمیعی ${result.code} ثبت شد و درخواست‌های منبع بسته شدند.`
   });
 }));
 

@@ -1,5 +1,5 @@
 import { terminateOpenWorkflows } from './workflow/workflowTermination.js';
-import { sql, eq, and, desc, inArray, or, ilike } from 'drizzle-orm';
+import { sql, eq, and, desc, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { purchaseRequisitions, documentRefCounters, documents, documentItems, workflowInstances } from '../db/schema.js';
 import { businessFiscalYear, businessTodayIsoDate } from '../lib/businessClock.js';
@@ -17,7 +17,7 @@ import { BACKDATE_PERMISSION } from './inventory/stockMovementDate.js';
 const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve', 'procurement.manage'];
 /** v8.0.71 (TD-326): درخواست ردشده دریافت یا سفارش داده نمی‌شود، مگر پس از بازگشایی */
 const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
-import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
+import type { PurchaseRequisition, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { applyDeliveredLines, isSettledRequisitionRow, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
 import { assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES, requisitionOrderDocuments } from './procurement/requisitionReceiveAction.js';
@@ -30,6 +30,10 @@ import {
 } from './procurement/requisitionApproval.js';
 import { buildRequisitionRows, resolveRequisitionProject, type RequisitionRowFields } from './procurement/requisitionRows.js';
 import { listProcurementOrders, procurementOrderCounts, type ProcurementOrderListParams } from './procurement/procurementOrderList.js';
+import {
+  assertRequisitionNotConsolidated, closeConsolidationSources, consolidatedIntoCodes, consolidationHeader, lockConsolidationSources,
+  mergeConsolidationRows,
+} from './procurement/requisitionConsolidation.js';
 
 type DbClient = DbExecutor;
 
@@ -175,6 +179,19 @@ export class ProcurementService {
     input: CreateRequisitionInput,
     user: { id?: number; username?: string; role?: string }
   ): Promise<PurchaseRequisition> {
+    return orm.transaction(async (tx) => toRequisitionDto(await this.insertRequisition(tx, input, user)));
+  }
+
+  /**
+   * ثبت یک درخواست خرید درون تراکنش فراخواننده، با آغاز گردش کار و ردیف ممیزی؛ ثبت از فرم‌ها و تجمیع (v9.0.274، TD-694)
+   * هر دو از این‌جا می‌گذرند. `auditDetails` به جزئیات ردیف ممیزی افزوده می‌شود.
+   */
+  static async insertRequisition(
+    tx: DbClient,
+    input: CreateRequisitionInput,
+    user: { id?: number; username?: string; role?: string },
+    auditDetails: Record<string, unknown> = {},
+  ): Promise<typeof purchaseRequisitions.$inferSelect> {
     if (!input.title || input.title.trim() === '') {
       throw new ValidationError('عنوان درخواست خرید الزامی است.');
     }
@@ -187,73 +204,70 @@ export class ProcurementService {
       throw new ValidationError('اولویت درخواست خرید یکی از «فوری»، «بالا»، «عادی» یا «پایین» است.');
     }
 
-    const createdReq = await orm.transaction(async (tx) => {
-      // v9.0.266 (TD-688): ردیف‌ها و پروژه با یک قاعده برای ثبت و ویرایش؛ مقدار جمع برآورد با FinancialDecimal (AGENTS §1.8)
-      const { rows: sanitizedItems, total: totalEst } = await buildRequisitionRows(tx, input.items);
-      const { projectId, projectCode, projectName } = await resolveRequisitionProject(tx, input.projectId);
-      const code = await this.generateRequisitionCode(tx);
+    // v9.0.266 (TD-688): ردیف‌ها و پروژه با یک قاعده برای ثبت و ویرایش؛ مقدار جمع برآورد با FinancialDecimal (AGENTS §1.8)
+    const { rows: sanitizedItems, total: totalEst } = await buildRequisitionRows(tx, input.items);
+    const { projectId, projectCode, projectName } = await resolveRequisitionProject(tx, input.projectId);
+    const code = await this.generateRequisitionCode(tx);
 
-      const [inserted] = await tx.insert(purchaseRequisitions).values({
-        code,
-        title: input.title.trim(),
-        projectId,
-        projectCode,
-        projectName,
-        status: 'pending',
-        priority,
-        // v7.0.135 (TD-232): تاریخ نیاز میلادی ISO (پیش‌فرض امروز کسب‌وکار)
-        requiredDate: requireStorageDate(input.requiredDate, 'تاریخ نیاز') || await businessTodayIsoDate(),
-        requestedById: user.id || null,
-        requestedByName: user.username || 'سیستم',
-        notes: input.notes || '',
-        totalEstimatedAmount: money(totalEst),
-        items: sanitizedItems,
-        isDeleted: 0
-      }).returning();
+    const [inserted] = await tx.insert(purchaseRequisitions).values({
+      code,
+      title: input.title.trim(),
+      projectId,
+      projectCode,
+      projectName,
+      status: 'pending',
+      priority,
+      // v7.0.135 (TD-232): تاریخ نیاز میلادی ISO (پیش‌فرض امروز کسب‌وکار)
+      requiredDate: requireStorageDate(input.requiredDate, 'تاریخ نیاز') || await businessTodayIsoDate(),
+      requestedById: user.id || null,
+      requestedByName: user.username || 'سیستم',
+      notes: input.notes || '',
+      totalEstimatedAmount: money(totalEst),
+      items: sanitizedItems,
+      isDeleted: 0
+    }).returning();
 
-      // Start workflow instance if definition exists
-      // v8.0.77 (TD-324): در همان تراکنش، درون savepoint — شکست گردش‌کار فقط همان را برمی‌گرداند، نه درخواست را
-      try {
-        const wfInstance = await tx.transaction((sp) => WorkflowTransitionExecutor.startInstance({
-          workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
-          entityType: 'purchase_requisition',
-          entityId: String(inserted.id),
-          userId: user.id,
-          userName: user.username,
-          tx: sp
-        }));
-
-        if (wfInstance && wfInstance.id) {
-          await tx.update(purchaseRequisitions)
-            .set({ workflowInstanceId: wfInstance.id })
-            .where(eq(purchaseRequisitions.id, inserted.id));
-          inserted.workflowInstanceId = wfInstance.id;
-        }
-      } catch (err: unknown) {
-        logger.warn(`[ProcurementService] Workflow start warning for PR ${inserted.id}: ${String(err)}`);
-      }
-
-      await logActivity({
-        tx,
+    // Start workflow instance if definition exists
+    // v8.0.77 (TD-324): در همان تراکنش، درون savepoint — شکست گردش‌کار فقط همان را برمی‌گرداند، نه درخواست را
+    try {
+      const wfInstance = await tx.transaction((sp) => WorkflowTransitionExecutor.startInstance({
+        workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
+        entityType: 'purchase_requisition',
+        entityId: String(inserted.id),
         userId: user.id,
-        username: user.username || 'سیستم',
-        action: 'CREATE',
-        entity: 'درخواست خرید',
-        entityId: inserted.id,
-        description: `ثبت درخواست خرید جدید ${inserted.code} - ${inserted.title}`,
-        details: {
-          code: inserted.code,
-          title: inserted.title,
-          projectId: inserted.projectId,
-          itemCount: sanitizedItems.length,
-          totalEstimatedAmount: totalEst.toNumber()
-        }
-      });
+        userName: user.username,
+        tx: sp
+      }));
 
-      return toRequisitionDto(inserted);
+      if (wfInstance && wfInstance.id) {
+        await tx.update(purchaseRequisitions)
+          .set({ workflowInstanceId: wfInstance.id })
+          .where(eq(purchaseRequisitions.id, inserted.id));
+        inserted.workflowInstanceId = wfInstance.id;
+      }
+    } catch (err: unknown) {
+      logger.warn(`[ProcurementService] Workflow start warning for PR ${inserted.id}: ${String(err)}`);
+    }
+
+    await logActivity({
+      tx,
+      userId: user.id,
+      username: user.username || 'سیستم',
+      action: 'CREATE',
+      entity: 'درخواست خرید',
+      entityId: inserted.id,
+      description: `ثبت درخواست خرید جدید ${inserted.code} - ${inserted.title}`,
+      details: {
+        code: inserted.code,
+        title: inserted.title,
+        projectId: inserted.projectId,
+        itemCount: sanitizedItems.length,
+        totalEstimatedAmount: totalEst.toNumber(),
+        ...auditDetails
+      }
     });
 
-    return createdReq;
+    return inserted;
   }
 
   /**
@@ -304,8 +318,9 @@ export class ProcurementService {
       .limit(limit)
       .offset(offset);
 
+    const targetCodes = await consolidatedIntoCodes(orm, rows);
     return {
-      data: rows.map(toRequisitionDto),
+      data: rows.map(row => ({ ...toRequisitionDto(row), consolidatedIntoCode: targetCodes.get(Number(row.consolidatedIntoId)) ?? null })),
       total: countRes?.count || 0
     };
   }
@@ -323,7 +338,8 @@ export class ProcurementService {
       throw new NotFoundError(`درخواست خرید با شناسه #${id} یافت نشد.`);
     }
 
-    return toRequisitionDto(req);
+    const targetCodes = await consolidatedIntoCodes(orm, [req]);
+    return { ...toRequisitionDto(req), consolidatedIntoCode: targetCodes.get(Number(req.consolidatedIntoId)) ?? null };
   }
 
   /**
@@ -350,6 +366,7 @@ export class ProcurementService {
         .where(and(eq(purchaseRequisitions.id, id), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');
       if (!locked) throw new NotFoundError(`درخواست خرید با شناسه #${id} یافت نشد.`);
+      assertRequisitionNotConsolidated(locked);
       const existing = toRequisitionDto(locked);
       const liveOrders = await requisitionOrderDocuments(tx, { id: locked.id, items: locked.items as RequisitionItemWithReceipt[] });
       if (!canEditRequisition(existing) || liveOrders.length > 0) {
@@ -403,6 +420,7 @@ export class ProcurementService {
         .where(and(eq(purchaseRequisitions.id, id), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');
       if (!locked) throw new NotFoundError('درخواست خرید یافت نشد.');
+      assertRequisitionNotConsolidated(locked);
       // v9.0.270 (TD-695، B10-08): درخواستی که سند سفارش زنده دارد حذف نمی‌شود. پیش‌تر فقط وضعیت «سفارش‌شده» و
       // «دریافت‌شده» رد می‌شد: درخواستِ بخشی‌سفارش‌شده یا لغوشده حذف می‌شد و سفارشش بی درخواست تحویل می‌شد
       const liveOrders = await requisitionOrderDocuments(tx, { id: locked.id, items: locked.items as RequisitionItemWithReceipt[] });
@@ -481,6 +499,8 @@ export class ProcurementService {
         throw new NotFoundError(`درخواست خرید با شناسه #${requisitionId} یافت نشد.`);
       }
       const req = toRequisitionDto(locked);
+      // v9.0.274 (TD-694): گردش کار درخواستِ تجمیع‌شده خاتمه یافته است و نمونه تازه‌ای برایش ساخته نمی‌شود
+      assertRequisitionNotConsolidated(req);
       if (isReceive && RECEIVED_REQUISITION_STATUSES.has(req.status)) {
         throw new ConflictError(`درخواست خرید ${req.code} قبلاً دریافت شده است و کالای آن دوباره وارد انبار نمی‌شود.`);
       }
@@ -675,6 +695,7 @@ export class ProcurementService {
       if (CLOSED_REQUISITION_STATUSES.has(req.status)) {
         throw new ConflictError(`درخواست خرید ${req.code} رد شده است و سفارش داده نمی‌شود؛ ابتدا درخواست را بازگشایی کنید.`);
       }
+      assertRequisitionNotConsolidated(req);
       // v9.0.267 (TD-689، ت۱): سفارش فقط از گام «تأییدشده»؛ دارنده حق تأیید نخست تأیید را به نام خودش اجرا می‌کند
       await ensureRequisitionApproved(tx, req, user, {
         mayApprove,
@@ -833,50 +854,31 @@ export class ProcurementService {
   }
 
   /**
-   * Consolidate items across multiple requisitions into a single requisition or purchase group
+   * Consolidate unapproved requisitions without orders into one new requisition; the sources are closed (TD-694)
    */
   static async consolidateRequisitions(
     requisitionIds: number[],
-    newTitle: string,
+    newTitle: string | undefined,
     user: { id?: number; username?: string }
   ): Promise<PurchaseRequisition> {
-    if (!requisitionIds || requisitionIds.length < 2) {
-      throw new ValidationError('برای تجمیع حداقل دو درخواست خرید باید انتخاب شود.');
-    }
-
-    const reqs = await orm.select().from(purchaseRequisitions)
-      .where(and(inArray(purchaseRequisitions.id, requisitionIds), eq(purchaseRequisitions.isDeleted, 0)));
-
-    if (reqs.length === 0) {
-      throw new ValidationError('درخواست‌های انتخابی یافت نشدند.');
-    }
-
-    // Consolidate items by itemId / itemCode
-    const itemMap = new Map<string, PurchaseRequisitionItemRow>();
-
-    for (const r of reqs) {
-      const itemsList = Array.isArray(r.items) ? (r.items as PurchaseRequisitionItemRow[]) : [];
-      for (const item of itemsList) {
-        const key = item.itemId ? `id-${item.itemId}` : `code-${item.itemCode || item.itemName}`;
-        if (!itemMap.has(key)) {
-          itemMap.set(key, { ...item, notes: `تجمیع از ${r.code}` });
-        } else {
-          const existing = itemMap.get(key)!;
-          existing.requestedQty = Number(existing.requestedQty) + Number(item.requestedQty);
-          existing.remainingQty = (existing.remainingQty || 0) + (item.remainingQty || item.requestedQty);
-          existing.notes = `${existing.notes || ''} + ${r.code}`.trim();
-        }
-      }
-    }
-
-    const consolidatedItems = Array.from(itemMap.values());
-
-    return this.createRequisition({
-      title: newTitle || `تجمیع درخواست‌های خرید (${reqs.map(r => r.code).join('، ')})`,
-      priority: 'normal',
-      notes: `تجمیع شده از درخواست‌های: ${reqs.map(r => r.code).join('، ')}`,
-      items: consolidatedItems
-    }, user);
+    // v9.0.274 (TD-694، B10-07، ت۳ الف): قفل منبع‌ها به ترتیب شناسه، ساخت درخواست تجمیعی و بستن منبع‌ها با پیوند و خاتمه
+    // گردش کار، همه در یک تراکنش. پیش‌تر تجمیع بی تراکنش و قفل بود، منبع‌ها (حتی دریافت‌شده) باز می‌ماندند و شناسه
+    // ناموجود بی‌صدا کنار گذاشته می‌شد.
+    return orm.transaction(async (tx) => {
+      const sources = await lockConsolidationSources(tx, requisitionIds);
+      const codes = sources.map(r => r.code).join('، ');
+      const header = consolidationHeader(sources);
+      const inserted = await this.insertRequisition(tx, {
+        title: newTitle?.trim() || `تجمیع درخواست‌های خرید (${codes})`,
+        projectId: header.projectId,
+        priority: header.priority,
+        requiredDate: header.requiredDate,
+        notes: `تجمیع شده از درخواست‌های: ${codes}`,
+        items: mergeConsolidationRows(sources),
+      }, user, { consolidatedFrom: sources.map(r => ({ id: r.id, code: r.code })) });
+      await closeConsolidationSources(tx, sources, inserted, user);
+      return toRequisitionDto(inserted);
+    });
   }
 
   /**
@@ -1054,7 +1056,8 @@ export class ProcurementService {
       else if (r.status === 'ordered') orderedCount++;
       else if (r.status === 'received') receivedCount++;
 
-      if (r.priority === 'urgent' && r.status !== 'received' && r.status !== 'rejected') {
+      // v9.0.274 (TD-694): درخواستِ تجمیع‌شده بسته است و فوری شمرده نمی‌شود
+      if (r.priority === 'urgent' && r.status !== 'received' && r.status !== 'rejected' && r.status !== 'consolidated') {
         urgentCount++;
       }
     }

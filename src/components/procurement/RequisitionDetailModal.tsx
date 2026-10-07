@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, FileText, CheckCircle2, AlertTriangle, ShoppingCart, UserCheck, Check, Ban, Loader2, PackageCheck, Truck } from 'lucide-react';
+import { X, FileText, CheckCircle2, AlertTriangle, ShoppingCart, UserCheck, Check, Ban, Loader2, PackageCheck, Truck, Layers } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, Item, User, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
@@ -129,6 +129,7 @@ export function RequisitionDetailModal({
   const isOrderedStage = statusStr === 'ordered' || statusStr === 'approved';
   const isReceivedStage = statusStr === 'received' || statusStr === 'completed';
   const isRejectedStage = statusStr === 'rejected' || statusStr === 'cancelled';
+  const isConsolidated = statusStr === 'consolidated';
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
@@ -540,6 +541,16 @@ export function RequisitionDetailModal({
                 <div className="w-full p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-bold flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   این سفارش با موفقیت خریداری و تحویل انبار شده است و گردش‌کار آن تکمیل می‌باشد.
+                </div>
+              )}
+
+              {/* v9.0.274 (TD-694): consolidated into another requisition; closed, no action */}
+              {isConsolidated && (
+                <div className="w-full p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-900 font-bold flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-violet-600 shrink-0" />
+                  {requisition.consolidatedIntoCode
+                    ? `این درخواست در درخواست تجمیعی ${requisition.consolidatedIntoCode} آمده و بسته است؛ کار را با همان درخواست ادامه دهید.`
+                    : 'این درخواست در درخواست تجمیعی دیگری آمده و بسته است.'}
                 </div>
               )}
 

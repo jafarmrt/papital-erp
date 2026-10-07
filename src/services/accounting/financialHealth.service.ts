@@ -25,6 +25,7 @@ import {
 import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildProcurementOrderLinkHealthTest, findUnresolvedProcurementOrderLinks } from '../procurement/procurementOrderLinks.js';
+import { buildConsolidationSourcesHealthTest, findOpenLegacyConsolidationSources } from '../procurement/consolidationSourceHealth.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1186,6 +1187,10 @@ export class FinancialHealthService {
     const procurementOrderLinkTest = buildProcurementOrderLinkHealthTest(await findUnresolvedProcurementOrderLinks());
     overallScore += procurementOrderLinkTest.scoreImpact;
     tests.push(procurementOrderLinkTest);
+    // آزمون ۳۸: v9.0.274 (TD-694) منبع تجمیع قدیمی که هنوز باز است و می‌تواند دوباره سفارش داده شود (فقط فهرست)
+    const consolidationSourcesTest = buildConsolidationSourcesHealthTest(await findOpenLegacyConsolidationSources());
+    overallScore += consolidationSourcesTest.scoreImpact;
+    tests.push(consolidationSourcesTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

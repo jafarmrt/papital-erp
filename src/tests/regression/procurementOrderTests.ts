@@ -3,6 +3,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { pool } from '../../db/drizzle.js';
 import { createHarness, draftSalesDocument, type Harness, type Row, type ShouldRun } from '../security/workflowTestHarness.js';
 import { approvedRequisition, fixture, formRow, type Fixture } from './procurementRequisitionTests.js';
+import { consolidationCase, legacyConsolidationHealthCase } from './procurementConsolidationTests.js';
 
 /**
  * Package 10 (purchasing and procurement), PR B: what a procurement order is (the requisition link column), duplicate
@@ -21,6 +22,12 @@ export async function runProcurementOrderTests(shouldRun: ShouldRun): Promise<Te
     ['reg_procurement_double_submit_td_693',
       'v9.0.273: a repeated procurement submission with the same Idempotency-Key (create requisition, convert to orders, consolidate, deliver) replays the first response and creates nothing new (TD-693)',
       ['td693', 'procurement', 'idempotency', 'concurrency', 'package10'], doubleSubmitCase],
+    ['reg_procurement_consolidation_closes_sources_td_694',
+      'v9.0.274: consolidation takes only unapproved requisitions without orders, refuses a missing id, and in one transaction closes the sources as consolidated with a link and a terminated workflow; a closed source takes no action (TD-694)',
+      ['td694', 'procurement', 'consolidation', 'concurrency', 'package10'], consolidationCase],
+    ['reg_procurement_consolidation_legacy_sources_td_694',
+      'v9.0.274: the financial health check lists the still-open sources of a consolidation made before the fix and changes nothing (TD-694)',
+      ['td694', 'procurement', 'consolidation', 'health', 'package10'], legacyConsolidationHealthCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;

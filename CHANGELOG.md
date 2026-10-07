@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.274 — Requisition Consolidation Closes Its Sources
+- **Fix (TD-694, B10-07, decision t3):** `POST /procurement/consolidate` locks its sources in id order in one transaction, refuses a missing id (404 REQUISITION_NOT_FOUND) or a source that is approved, ordered, received, rejected or consolidated (409 REQUISITION_NOT_CONSOLIDATABLE), creates the consolidated requisition and marks each source `consolidated` with `consolidated_into_id` (migration 0077) and a terminated workflow; a consolidated requisition takes no action (409 REQUISITION_CONSOLIDATED).
+
 ### v9.0.273 — Procurement Double Submission
 - **Fix (TD-693, B10-06):** `POST /procurement/requisitions`, `/requisitions/:id/convert-to-orders`, `/consolidate` and `/orders/:id/deliver` use `idempotency({ scope: 'procurement' })`, so a repeated submission with the browser's Idempotency-Key replays the first response instead of creating a second order or requisition.
 

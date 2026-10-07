@@ -13,7 +13,7 @@ import { PillBadge } from '../common/PillBadge';
 import { REQUISITION_PRIORITY_BADGES, REQUISITION_PRIORITY_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
-import { canDeleteRequisition } from '../../lib/procurement/requisitionFields';
+import { canConsolidateRequisition, canDeleteRequisition } from '../../lib/procurement/requisitionFields';
 
 interface ProcurementDeskProps {
   currentUser?: User | null;
@@ -171,7 +171,8 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
 
   const handleSelectAll = (select: boolean) => {
     if (select) {
-      setSelectedIds(filteredRequisitions.map(r => r.id));
+      // v9.0.274 (TD-694): فقط درخواست تأییدنشده و بی سفارش تجمیع می‌شود
+      setSelectedIds(filteredRequisitions.filter(canConsolidateRequisition).map(r => r.id));
     } else {
       setSelectedIds([]);
     }
@@ -576,8 +577,10 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                             <input
                               type="checkbox"
                               checked={isSelected}
+                              disabled={!isSelected && !canConsolidateRequisition(req)}
+                              title={canConsolidateRequisition(req) ? 'انتخاب برای تجمیع' : 'فقط درخواست تأییدنشده و بی سفارش تجمیع می‌شود'}
                               onChange={() => handleToggleSelect(req.id)}
-                              className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer"
+                              className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                             />
                           </td>
 
