@@ -27,14 +27,23 @@ export function executePrint(options: PrintOptions = {}): void {
     }
   }
 
+  // v9.0.300 (TD-684، B16-20): کلاسی که پنجره چاپ باز (`useDocumentPrint`) گذاشته بود همان‌جا می‌ماند، پاک‌سازی یک بار اجرا
+  // می‌شود و عنوانی که پس از چاپ عوض شده دوباره نوشته نمی‌شود. پیش‌تر `afterprint` و زمان‌سنج ۲ ثانیه‌ای هر دو پاک‌سازی
+  // می‌کردند: `onAfterPrint` دو بار صدا زده می‌شد و Ctrl+P بعدی با پنجره هنوز باز کل صفحه را چاپ می‌کرد.
+  const classWasSet = document.body.classList.contains('printing-doc');
   document.body.classList.add('printing-doc');
 
+  let done = false;
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
   const cleanup = () => {
-    document.body.classList.remove('printing-doc');
-    if (documentTitle) {
+    if (done) return;
+    done = true;
+    if (fallbackTimer) clearTimeout(fallbackTimer);
+    window.removeEventListener('afterprint', cleanup);
+    if (!classWasSet) document.body.classList.remove('printing-doc');
+    if (documentTitle && document.title === documentTitle) {
       document.title = originalTitle;
     }
-    window.removeEventListener('afterprint', cleanup);
     if (onAfterPrint) {
       try {
         onAfterPrint();
@@ -52,10 +61,11 @@ export function executePrint(options: PrintOptions = {}): void {
   } catch (err) {
     console.error('[PrintHelper] window.print failed:', err);
     cleanup();
+    return;
   }
 
-  // Fallback cleanup in case afterprint does not fire (some browser iframe contexts)
-  setTimeout(cleanup, 2000);
+  // Fallback cleanup only where the browser has no afterprint event (some embedded contexts)
+  if (!done && !('onafterprint' in window)) fallbackTimer = setTimeout(cleanup, 2000);
 }
 
 /**

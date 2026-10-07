@@ -45,7 +45,6 @@
 | TD-814 | حقوق و دستمزد (بسته ۱۲) | P3 (B12P-11) — دکمه «ثبت پرداخت» در فیش، پرداخت‌شده را نمی‌فرستد؛ فرم پرداخت کل خالص را مانده می‌داند: فیش «مانده ۴۰۰٬۰۰۰»، فرم ۱٬۰۰۰٬۰۰۰ | PieceworkPayslipModal.tsx، PayrollPaymentModal.tsx | open (P3) |
 | TD-815 | حقوق و دستمزد (بسته ۱۲) | P3 (B12P-12) — رابط فیش و «فیش‌های حقوقی من»: وضعیت و برچسب نادرست، نام شرکت ثابت، ریال دوبار، واژه‌های بیگانه («۱ دوره ماهانه»، نیمه‌پرداخت «پیش‌نویس»، «ریالریال»، «پرینت»، «(Template)»، «پرکیسی») | PieceworkPayslipModal.tsx، MyPayslipsPage.tsx، PieceworkPayrollsTab.tsx، PieceworkExcelModal.tsx، payroll.service.ts | open (P3، تصمیم ت۶ الف) |
 | TD-594 | زیرساخت (بسته ۱)؛ رفع در بسته ۱۶ | P2 (B01-14) — در تولید، پاسخ خطا `details` را دور می‌ریزد؛ کادر «تحویل بیش از برنامه» فهرست کالاها را نمی‌گیرد؛ پیام خطای قالب بدنه انگلیسی است: همان ۴۲۲ با `NODE_ENV=test` فهرست `overDeliveries` دارد و با `production` `details=undefined`؛ JSON ناقص ← ۴۰۰ `"Unexpected end of JSON input"` با کد `INTERNAL_ERROR`؛ بدنه ۶ مگابایتی ← ۴۱۳ `"request entity too large"` | middleware/logger.ts، customErrors.ts | open (P2، با PR د بسته ۱۶) |
-| TD-684 | پوسته (بسته ۱۶) | P3 (B16-20) — `executePrint` پاک‌سازی چاپ را دو بار اجرا می‌کند: `onAfterPrint` دو بار صدا زده شد؛ عنوان صفحه ۲ ثانیه بعد بازنشانی شد و عنوان تازه‌تر را پاک کرد؛ کلاس `printing-doc` با پنجره هنوز باز برداشته شد | printHelper.ts | open (P3) |
 | TD-776 | اسناد (بسته ۸)؛ اثر روی ۹ | P2 (B08-07) — `PUT /documents/:id` پیوند پرونده فروش را پس از commit با `orm.update` و بی قفل می‌نویسد: دو پیش‌فاکتور زنده به یک پرونده وصل شدند (TD-424 دور زده) و `PUT` با پرونده ناموجود ۴۰۹ گرفت ولی یادداشت و نسخه عوض شده بود | documents.routes.ts، documentCreation.service.ts | open (P2) |
 | TD-777 | اسناد (بسته ۸)؛ اثر روی ۶ | P2 (B08-08) — انبارگردانی: ردیف بی `physical_stock` موجودی ۱۰ را ۰ و سند کسری ۱۰٬۰۰۰ کرد؛ دو ردیف «شمارش ۶» یک کالا موجودی را ۲ کرد؛ نمایش سند انحراف را با نخستین ردیف کاردکس کالا بی انبار جور می‌کند («۳−، موجودی سیستم ۱۳» به جای ۰ و ۱۰) | documentCreation.service.ts، documents.routes.ts، documentQuery.service.ts | open (P2) |
 | TD-778 | اسناد (بسته ۸)؛ اثر روی ۳، ۹، ۱۰ و ۱۵ | P2 (B08-09) — سند طرف حساب را فقط با نام متنی می‌شناسد: فاکتور ۱٬۰۰۰٬۰۰۰ برای «علي رضايي» (ی عربی) بی تفصیلی ثبت شد، کارت حساب و پرونده مشتری خالی ماندند و طرف حساب با همان طلب حذف شد؛ «ROSE GALLERY» در برابر «Rose Gallery» همین | voucherSync.service.ts، customerDeleteGuard.ts، schema/documents | open (P2، تصمیم ت۶ الف) |
@@ -74,8 +73,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۵۳ ردیف
-- **آرشیو شده (resolved):** ۶۵۱ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۵۲ ردیف
+- **آرشیو شده (resolved):** ۶۵۲ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 

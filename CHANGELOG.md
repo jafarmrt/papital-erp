@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.300 — v9.0.300 — Print Cleanup Runs Once
+- **Print cleanup (TD-684):** printing cleans up once, keeps the print window's own state while it is open and no longer overwrites a newer page title, so the next Ctrl+P still prints only the document.
+
 ### v9.0.299 — v9.0.299 — Card and Sheba Fields Keep the Caret After Backspace
 - **Card and Sheba caret (TD-682):** Backspace on a separator removes the digit before it and leaves the caret there instead of moving it to the end of the field.
 
