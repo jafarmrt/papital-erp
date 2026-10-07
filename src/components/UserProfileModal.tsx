@@ -14,7 +14,7 @@ interface UserProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUserUpdate: (updatedUser: User) => void;
-  /** v9.0.144 (TD-894): نام ذخیره‌شده نقش کاربر از `/users/my-permissions`، نه برچسبی از روی کد نقش */
+  /** v9.0.149 (TD-894): نام ذخیره‌شده نقش کاربر از `/users/my-permissions`، نه برچسبی از روی کد نقش */
   roleName?: string;
 }
 

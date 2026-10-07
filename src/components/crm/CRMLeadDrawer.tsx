@@ -15,7 +15,7 @@ interface CRMLeadDrawerProps {
   drawerActivities: CRMActivity[];
   onOpenActivityModal: (lead: CRMLead, defaultType?: string) => void;
   onOpenLeadModal: (lead: CRMLead) => void;
-  /** v9.0.143 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
+  /** v9.0.148 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
   onDeleteLead?: (leadId: number) => void;
   onToggleFollowup: (act: CRMActivity) => void;
   onConvertToInvoice?: (lead: CRMLead) => void;

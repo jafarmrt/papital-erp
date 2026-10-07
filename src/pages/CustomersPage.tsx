@@ -25,7 +25,7 @@ export default function CustomersPage({ user }: { user: User }) {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
-  // v9.0.143 (TD-893): افزودن، ویرایش و حذف طرف حساب با همان مجوز API (`customers.manage`)، نه با کد نقش
+  // v9.0.148 (TD-893): افزودن، ویرایش و حذف طرف حساب با همان مجوز API (`customers.manage`)، نه با کد نقش
   const canManageCustomers = useHasPermission('customers.manage');
 
   // Tab filter: 'all' | 'customer' | 'supplier'

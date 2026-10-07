@@ -17,7 +17,7 @@ interface CRMLeadModalProps {
   setLeadForm: React.Dispatch<React.SetStateAction<any>>;
   isSavingLead: boolean;
   onSaveLead: (e: React.FormEvent) => void;
-  /** v9.0.143 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
+  /** v9.0.148 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
   onDeleteLead?: (leadId: number) => void;
   customersList: any[];
   // V10-4.1: منبع فروشنده مسئول = پرسنل فعال

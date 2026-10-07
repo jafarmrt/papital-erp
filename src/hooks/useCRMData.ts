@@ -23,7 +23,7 @@ export const SOURCES = ['تماس تلفنی', 'وبسایت', 'معرف', 'نم
 
 export function useCRMData(user: any) {
   const currentLoggedInUser = user?.fullName || user?.full_name || user?.username || '';
-  // v9.0.143 (TD-893): دکمه حذف پرونده فروش با همان مجوز API حذف (`crm.delete`)، نه با کد نقش
+  // v9.0.148 (TD-893): دکمه حذف پرونده فروش با همان مجوز API حذف (`crm.delete`)، نه با کد نقش
   const canDeleteLead = useHasPermission('crm.delete');
 
   const [activeTab, setActiveTab] = useState<'kanban' | 'list' | 'activities' | 'followups'>('kanban');

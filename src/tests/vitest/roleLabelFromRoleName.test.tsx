@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { User } from '../../types';
 
-// v9.0.144 (TD-894، یافته O14 بسته ۲): نوار بالا و نمایه نام ذخیره‌شده نقش را نشان می‌دهند، نه برچسبی که از روی کد نقش
+// v9.0.149 (TD-894، یافته O14 بسته ۲): نوار بالا و نمایه نام ذخیره‌شده نقش را نشان می‌دهند، نه برچسبی که از روی کد نقش
 // ساخته شده («سرپرست انبار» برای `manager`، «کاربر تماشاگر» یا کد خام برای بقیه).
 vi.mock('../../api', () => ({ fetchJson: vi.fn(() => Promise.resolve({})) }));
 vi.mock('../../components/GlobalHeaderSearch', () => ({ default: () => null }));

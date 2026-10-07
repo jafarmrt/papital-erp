@@ -60,7 +60,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [modalItemToEdit, setModalItemToEdit] = useState<Item | null>(null);
 
-  // v9.0.143 (TD-893): تعریف و ویرایش کالا از فرم سند با همان مجوزهای API کالا، نه با کد نقش یا «*»
+  // v9.0.148 (TD-893): تعریف و ویرایش کالا از فرم سند با همان مجوزهای API کالا، نه با کد نقش یا «*»
   const canCreateItem = useHasPermission('products.create');
   const canEditItem = useHasPermission('products.edit');
   const canCreateOrEditItem = canCreateItem || canEditItem;

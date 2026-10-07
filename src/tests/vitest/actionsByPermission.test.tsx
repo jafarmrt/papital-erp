@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import type { CRMLead, Customer, User } from '../../types';
 
-// v9.0.143 (TD-893، مدل مجوز §۴.۵): دکمه‌های افزودن، ویرایش و حذف طرف حساب، حذف پرونده فروش و تعریف کالا از فرم سند انبار
+// v9.0.148 (TD-893، مدل مجوز §۴.۵): دکمه‌های افزودن، ویرایش و حذف طرف حساب، حذف پرونده فروش و تعریف کالا از فرم سند انبار
 // با همان مجوز API نمایش داده می‌شوند، نه با کد نقش (`viewer`، `admin`، `manager`) یا «*».
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({

@@ -34,21 +34,16 @@
 | TD-540 | دسترسی (بسته ۲) | P3 (B02-25) — واژه انگلیسی و آوانویسی در رابط بسته ۲: «(RBAC)»، «(Audit Trail)»، «Snapshot»، کدهای `LOGIN`، «داشبورد»، «پروفایل»، «ماژول»، «آواتار»، «سایدبار»، «لاگ»، «کلاینت»، «ویزارد»، «کانبان» و ارقام لاتین | UsersPage.tsx، ActivityLogsPage.tsx، AuditDiffViewer.tsx، SystemOperationsTab.tsx، UserProfileModal.tsx، RoleFormModal.tsx، MenuVisibilityPanel.tsx، LoginPage.tsx، ProtectedRoute.tsx | open (P3، تصمیم ت۸ الف) |
 | TD-541 | دسترسی (بسته ۲)؛ اثر روی ۸ | P2 (B02-26) — ثبت سند هر نقشی جز `admin`، `manager`، `warehouse_keeper` و `accountant` را «کاربر فروش» می‌داند و برای هر نوع سند فقط پیش‌فاکتور می‌پذیرد: نقش سفارشی با `warehouse.in` رسید قطعی را ۴۰۳ گرفت و «مدیر ارشد مالی» هم | documents.routes.ts، CreateInvoicePage.tsx | open (P2، مدل مجوز) |
 | TD-542 | دسترسی (بسته ۲)؛ اثر روی ۱۴ | P2 (B02-27) — گردش‌کار تأییدکننده را با کد نقش و جدول هم‌ارزی ثابت کدها می‌سنجد (پیاده‌سازی دوم در `workflowAuthorizationPolicy.ts`، گردش اسناد حسابداری با کد `accountant`، پنج کد ثابت در طراح): نقش سفارشی با `accounting.vouchers` سند حسابداری را تأیید نمی‌کند | workflowTransitionExecutor.ts، workflowAuthorizationPolicy.ts، workflowDefinitionService.ts، WorkflowDesignerCanvas.tsx | open (P2، مدل مجوز) |
-| TD-582 | زیرساخت (بسته ۱) | P1 (B01-02) — برچسب مسیر `/metrics` برای درخواست بی route خام `req.path` است و هرگز آزاد نمی‌شود: ۳٬۰۰۰ درخواست بی ورود به `/api/zz-<تصادفی>` سری‌های `http_requests_total` را از ۲ به ۳٬۰۰۲ رساند؛ هر مسیر حدود ۱۰ کیلوبایت ماندگار (۵۰٬۰۰۰ مسیر = ۴۵۵ MiB، خواندن `/metrics` ۱٫۳ s)؛ برچسب پیشوند mount را هم ندارد | middleware/metrics.ts | open (P1) |
 | TD-584 | زیرساخت (بسته ۱) | P2 (B01-04) — API پیش از پایان مهاجرت‌ها پاسخ می‌دهد و `/health/ready` «آماده» می‌گوید: با پایگاه‌داده در ۰۰۵۴ و build نیازمند ۰۰۵۵، ورود موفق و `GET /api/personnel` ۵۰۰؛ با قفل مهاجرت در دست دیگری `/health/ready` ۲۰۰ و `POST /api/login` ۵۰۰ (نصب لینوکسی دروازه‌ای ندارد) | server.ts، app.ts | open (P2، تصمیم ت۲ الف) |
 | TD-588 | زیرساخت (بسته ۱) | P2 (B01-08) — Vite کل `public/` را در `dist/` کپی می‌کند: هر build پیوست‌ها را در `dist/uploads/.attachments` تکرار می‌کند (۱٫۱M در هر دو)، پیوست حذف‌شده در `dist/` می‌ماند و `docker build` محلی و zip منبع پیوست‌ها را با خود می‌برند | vite.config.ts، .dockerignore، package-source.ps1 | open (P2) |
 | TD-589 | زیرساخت (بسته ۱) | P2 (B01-09) — قید FK و ایندکس یکتای شرطی مهاجرت‌ها روی داده ناپاک فقط notice `SKIPPED` می‌دهند که کسی نمی‌شنود: پایگاه‌داده دوره v3 پس از ارتقا `success:true, warnings:[]` و بی `fk_transactions_item_id`، `fk_document_items_*` و `uq_cheques_sayad_number_active`، حتی پس از پاک شدن داده | db/migrator.ts، drizzle/0001، 0012، 0015 | open (P2، تصمیم ت۵ الف) |
 | TD-590 | زیرساخت (بسته ۱) | P2 (B01-10) — `0007` ایندکس را بی نام اسکیما حذف می‌کند و اسکیمای ایزوله آزمون با مسیر جست‌وجوی `"<schema>", public` ساخته می‌شود: `public.idx_idemp_user_scope_key` حذف شد و هر POST با کلید idempotency با خطای `ON CONFLICT` شکست | drizzle/0007_idempotency_triple_key.sql، src/tests/setup/testDb.ts | open (P2) |
 | TD-592 | زیرساخت (بسته ۱) | P2 (B01-12) — خروجی داده `SELECT *` بی سقف روی ۲۹ جدول و یک `res.json` است: ۹۵۰٬۰۰۰ ردیف ممیزی ← ۷۵۰ MiB در ۲۷ s، حافظه پردازه ۳٬۰۹۴ MiB و `/health/live` ۱۳٫۲ s منتظر | services/system/dataExport.service.ts، system.routes.ts | open (P2، تصمیم ت۷ الف) |
 | TD-593 | زیرساخت (بسته ۱) | P2 (B01-13) — یک `try/catch` گرد همه پرس‌وجوهای صفحه سلامت صفر و `status: 'ok'` برمی‌گرداند: با پرس‌وجوی `outbox_events` شکست‌خورده، سند ناتراز موجود «۰ سند ناتراز، ok» و رابط «همه اسناد فعال تراز هستند» نشان داد | services/system/systemHealth.service.ts، SystemHealthDiagnostic.tsx | open (P2) |
-| TD-595 | زیرساخت (بسته ۱) | P2 (B01-15) — کلید سقف درخواست سراسری ۱۶ نویسه آخر هر کوکی است (`req.user` در آن نقطه همیشه تهی است): هر کوکی جعلی سطل تازه ۵۰٬۰۰۰ دارد و سقف هر نشانی بی‌اثر است | app.ts | open (P2) |
 | TD-596 | زیرساخت (بسته ۱) | P2 (B01-16) — readiness و سنجه‌های استخر `orm.pool` / `orm.client.pool` را می‌خوانند که در drizzle-orm 0.45 نیست: با چهار اتصال باز `/health/ready` و `/metrics` استخر را ۰ نشان دادند و شرط «استخر اشباع» هرگز ۵۰۳ نمی‌دهد | app.ts، middleware/metrics.ts | open (P2) |
-| TD-597 | زیرساخت (بسته ۱) | P2 (B01-17) — CSP تولید `frame-ancestors` را برای `*.run.app` و `*.googleusercontent.com` باز می‌گذارد و `connect-src` هر مقصد HTTPS است؛ با کوکی `SameSite=None` هر صفحه‌ای روی این دامنه‌ها سامانه را با نشست کاربر در قاب می‌گذارد (کلیک‌دزدی) | app.ts | open (P2، تصمیم ت۳ الف) |
 | TD-598 | زیرساخت (بسته ۱) | P3 (B01-18) — morgan با `logger.http` می‌نویسد و سطح تولید `info` است: لاگ دسترسی HTTP در تولید هرگز نوشته نمی‌شود | middleware/logger.ts | open (P3) |
-| TD-599 | زیرساخت (بسته ۱) | P3 (B01-19) — `/metrics` فقط امضای JWT و `role` درون توکن را می‌سنجد: مدیر حذف نرم‌شده و مدیر تنزل‌یافته (با `token_version` بالارفته) همچنان ۲۰۰ گرفتند، در حالی که `/api/auth/me` ۴۰۱ داد | middleware/metricsAuth.ts | open (P3) |
 | TD-600 | زیرساخت (بسته ۱) | P3 (B01-20) — `sanitizeObject` در logger دور را تشخیص نمی‌دهد: `logger.error('…', circular)` و خطایی که `cause` آن به خودش برمی‌گردد `RangeError: Maximum call stack size exceeded` پرتاب کردند | middleware/logger.ts | open (P3) |
 | TD-601 | زیرساخت (بسته ۱) | P3 (B01-21) — `/health` عمومی `gitCommit: "v4-master"` و `buildTime` ثابت ۲۰۲۶-۰۹-۰۵ (هیچ فایل استقراری مقدار نمی‌دهد)، نسخه Node و محیط را بی ورود برمی‌گرداند | lib/version.ts، app.ts | open (P3) |
-| TD-602 | زیرساخت (بسته ۱) | P3 (B01-22) — `X-Request-ID` کاربر بی بررسی شناسه ردگیری می‌شود: شناسه ۴٬۰۰۴ نویسه‌ای در پاسخ و هر سطر لاگ تکرار شد و دو درخواست با یک شناسه دلخواه یک `traceId` گرفتند | lib/requestContext.ts | open (P3) |
 | TD-603 | زیرساخت (بسته ۱) | P3 (B01-23) — راهنمای برگشت `update.sh` با `git checkout <sha>` HEAD جداشده می‌سازد و به‌روزرسانی بعدی با «You are not currently on a branch» شکست می‌خورد | update.sh | open (P3) |
 | TD-604 | زیرساخت (بسته ۱) | P3 (B01-24) — `DEPLOY_LINUX.md` برای به‌روزرسانی zip «باز کردن zip و سپس `update.sh`» می‌گوید؛ `update.sh` پس از گرفتن پشتیبان با `fatal: not a git repository` (۱۲۸) شکست می‌خورد؛ دستور درست `update.sh --zip <file>` است | deploy/DEPLOY_LINUX.md، update.sh | open (P3) |
 | TD-605 | زیرساخت (بسته ۱) | P3 (B01-25) — `update.sh` و `go-live-verify.sh` فایل `.env` را با `set -a; . ./.env` مثل کد shell اجرا می‌کنند: رمز `S3cr$et9` به `S3cr` تبدیل یا با `set -u` خارج شد، و مقدار دارای `;` یا backtick با دسترسی root اجرا می‌شود | update.sh، scripts/go-live-verify.sh | open (P3) |
@@ -109,8 +104,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۸۸ ردیف
-- **آرشیو شده (resolved):** ۵۰۴ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۸۳ ردیف
+- **آرشیو شده (resolved):** ۵۰۹ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -119,4 +114,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.145 — TD-895 رفع و بایگانی شد. شناسه‌های بسته ۲: TD-516 تا TD-542؛ اجرای مدل مجوز: TD-880 به بعد*
+*آخرین بازبینی: v9.0.150 — TD-895 رفع و بایگانی شد. شناسه‌های بسته ۲: TD-516 تا TD-542؛ اجرای مدل مجوز: TD-880 به بعد*

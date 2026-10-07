@@ -8,7 +8,7 @@ interface CRMKanbanPipelineProps {
   onOpenLeadDrawer: (lead: CRMLead) => void;
   onOpenActivityModal: (lead: CRMLead) => void;
   onOpenLeadModal: (lead?: CRMLead) => void;
-  /** v9.0.143 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
+  /** v9.0.148 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
   onDeleteLead?: (leadId: number) => void;
   onStageChange: (leadId: number, newStage: string) => void;
   onConvertToInvoice?: (lead: CRMLead) => void;

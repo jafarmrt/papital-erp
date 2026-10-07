@@ -18,7 +18,7 @@ export function TopBar({
   isSidebarCollapsed,
   onOpenProfile
 }: TopBarProps) {
-  // v9.0.144 (TD-894): برچسب نقش نام ذخیره‌شده خود نقش است (`/users/my-permissions`)، نه برچسب ثابتی از روی کد نقش.
+  // v9.0.149 (TD-894): برچسب نقش نام ذخیره‌شده خود نقش است (`/users/my-permissions`)، نه برچسب ثابتی از روی کد نقش.
   const roleTitle = userPermissions.roleName ?? '';
 
   return (

@@ -1150,7 +1150,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
 
     // 5. Clean up test vouchers
-    // v9.0.145 (TD-895): نخست ردیف سال آزمون در fiscal_periods برداشته می‌شود؛ پیش‌تر کلید خارجی closing_voucher_id حذف
+    // v9.0.150 (TD-895): نخست ردیف سال آزمون در fiscal_periods برداشته می‌شود؛ پیش‌تر کلید خارجی closing_voucher_id حذف
     // سند اختتامیه را رد می‌کرد، سال بسته می‌ماند و آزمون دیگری که در همان سال سند می‌زد (TD-324، سال ۱۴۲۰) رد می‌شد.
     const { fiscalPeriods } = await import('../../db/schema.js');
     const testVoucherIds = [initialVoucher.id, ...closingResult.closingVouchers.map(v => v.id)];

@@ -19,14 +19,29 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.145 — Fiscal-Year Test Cleanup
+### v9.0.150 — Fiscal-Year Test Cleanup
 - **Fiscal-Year Test Cleanup:** the fiscal-year closing test reopens its year so another test posting in that year is not refused (TD-895).
 
-### v9.0.144 — Role Label From the Role Name
+### v9.0.149 — Role Label From the Role Name
 - **Role Label From the Role Name:** the top bar and the profile show the stored name of the user's role, the system admin's too (TD-894).
 
-### v9.0.143 — Action Buttons by Permission
+### v9.0.148 — Action Buttons by Permission
 - **Action Buttons by Permission:** the customers page, sales file delete and the stock form item button follow the API permission, not the role code (TD-893).
+
+### v9.0.147 — Client Trace IDs Validated
+- **Trace IDs:** a client `X-Request-ID` / `X-Correlation-ID` becomes the trace id only when it matches `^[A-Za-z0-9_-]{8,64}$` (`acceptedTraceId` in `src/lib/requestContext.ts`); otherwise a new id is issued, and the error handler never reads the raw header. Before, a 4,000-character id was repeated in the response and every log line.
+
+### v9.0.146 — Metrics Guard Checks the Admin Session Live
+- **Metrics Guard:** `/metrics` and `/api/metrics` check a session token live like every other route (`resolveLiveSession` in `src/middleware/auth.ts`, shared with `authenticateToken`): a deleted user or a stale `tokenVersion` gets 401 and the role is read from the database (non-admin 403). `METRICS_TOKEN` scraping is unchanged. Before, a deleted or demoted admin still read the metrics.
+
+### v9.0.145 — Production CSP Frames and Connects Only to Itself
+- **Production CSP (owner decision t3):** in production `frame-ancestors` and `connect-src` are `'self'` only, plus the origins listed in the new `FRAME_ANCESTORS` and the existing `EXTERNAL_API_ORIGINS` (`buildCspDirectives` in `src/lib/cspDirectives.ts`); the Google preview hosts and the dev server connections stay allowed outside production. Before, any page on `*.run.app` or `*.googleusercontent.com` could frame the app with the user's `SameSite=None` session (clickjacking), and the browser could connect to every HTTPS origin.
+
+### v9.0.144 — Global Rate Limit Keyed by Client Address
+- **Global Rate Limit:** the general limiter (10,000 requests per minute in production) is keyed by the client address only (`req.ip`, honouring `TRUST_PROXY`). It runs before authentication, so the old key, the last 16 characters of an unverified cookie, gave every forged cookie a fresh bucket.
+
+### v9.0.143 — Bounded HTTP Metric Labels
+- **Metric Labels (P1):** the HTTP request metrics label a request by its mount prefix and route pattern (`metricsRouteLabel`); a request that matched no route (404, 401 before a router, static files) is counted under `unmatched_api` or `unmatched`. Before, every unknown path, even without login, added series that were never freed (about 10 KB each), so random paths could exhaust the single server process.
 
 ### v9.0.142 — Piecework Read Scope
 - **Piecework Read Scope:** every personnel's work logs and special rates need a piecework permission; a project reads only its own logs (TD-892).
