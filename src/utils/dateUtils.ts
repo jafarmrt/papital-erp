@@ -151,6 +151,21 @@ function getShiftedJalaliDate(dayOffset: number, fallback: string = ''): string 
   }
 }
 
+/**
+ * v9.0.283 (TD-683، B16-19): ساعت و تاریخ امروز در منطقه زمانی نمایش (`display_timezone`)، نه ساعت دستگاه. پیش‌تر بنر
+ * پیشخوان روی دستگاهی با منطقه زمانی UTC در ۰۰:۳۰ نوروز تهران «جمعه، ۲۹ اسفند» و «۲۱:۰۰» نشان می‌داد.
+ */
+export function displayClockNow(now: Date = new Date()): { hour: number; time: string; dateLabel: string } {
+  const timeParts = new Intl.DateTimeFormat('en-GB', tzOptions({ hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }))
+    .formatToParts(now);
+  const part = (type: string) => timeParts.find(p => p.type === type)?.value ?? '00';
+  const hour = Number(part('hour')) % 24;
+  const time = toPersianDigits(`${String(hour).padStart(2, '0')}:${part('minute')}:${part('second')}`);
+  const fa = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('fa-IR-u-ca-persian', tzOptions(options)).format(now);
+  const dateLabel = `${fa({ weekday: 'long' })}، ${toPersianDigits(fa({ day: 'numeric' }))} ${fa({ month: 'long' })} ${toPersianDigits(fa({ year: 'numeric' }))}`;
+  return { hour, time, dateLabel };
+}
+
 export function getTodayJalaliDate(): string {
   return getShiftedJalaliDate(0, '1405/06/06');
 }
