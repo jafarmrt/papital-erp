@@ -1,8 +1,10 @@
 import { and, eq } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
-import { pieceworkTasks } from '../../db/schema.js';
+import { orm, pool } from '../../db/drizzle.js';
+import { personnel, pieceworkLogs, pieceworkTasks } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
+import { money } from '../../lib/money.js';
 import { PieceworkService } from '../../services/piecework.service.js';
+import { newTask, newWorker } from '../invariants/payrollScenarios.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 
@@ -16,6 +18,20 @@ const tag = (prefix: string) => `${prefix}${Date.now().toString().slice(-6)}${++
 const brief = (body: unknown) => JSON.stringify(body).slice(0, 200);
 const codeOf = (err: unknown) => String((err as { code?: string } | undefined)?.code ?? '');
 const statusOf = (err: unknown) => Number((err as { statusCode?: number } | undefined)?.statusCode ?? 0);
+
+async function logCount(personnelId: number): Promise<number> {
+  const res = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM piecework_logs WHERE personnel_id = $1 AND is_deleted = 0', [personnelId]);
+  return Number(res.rows[0]?.n ?? 0);
+}
+
+async function refusal(fn: () => Promise<unknown>): Promise<string> {
+  try {
+    await fn();
+    return 'accepted';
+  } catch (err) {
+    return `${statusOf(err)} ${codeOf(err)}`;
+  }
+}
 
 async function taskByTitle(title: string) {
   const [row] = await orm.select().from(pieceworkTasks).where(and(eq(pieceworkTasks.title, title), eq(pieceworkTasks.isDeleted, 0)));
@@ -42,7 +58,7 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
       const good = await admin.post('/api/piecework/tasks', { title: goodTitle, defaultRate: '۲۵۰٬۰۰۰' });
       const goodRow = await taskByTitle(goodTitle);
       if (good.status !== 201 || !goodRow || !fin(goodRow.defaultRate ?? 0).equals(250000)) {
-        problems.push(`create with «۲۵۰٬۰۰۰» answered ${good.status}, stored ${goodRow?.defaultRate}, expected 201 and 250000`);
+        problems.push(`create with 250,000 in Persian digits answered ${good.status}, stored ${goodRow?.defaultRate}, expected 201 and 250000`);
       }
 
       // 2) edit: a negative rate is refused and the stored rate stays
@@ -76,6 +92,68 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
 
       assertNoProblems(problems);
       return 'text and negative base rates are refused in the form, the service and the Excel import; valid rows are written';
+    }));
+  }
+
+  const entryId = 'reg_piecework_log_entry_checked_td_812';
+  if (shouldRun(entryId, 'td812', 'piecework', 'worklog', 'package12')) {
+    await runCase(results, entryId, 'v9.0.236: a work log needs positive ids, a quantity above zero or hh:mm, a non-negative manual rate and live personnel, task and project, and a batch is saved whole or not at all (400 / 422 PIECEWORK_LOG_*) (TD-812)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const worker = await newWorker('TD-812 worker');
+      const task = await newTask();
+      const base = { personnelId: worker, taskId: task, date: '1405/06/10' };
+
+      // 1) quantity: «-5» was saved with a negative amount shown as «۰», «abc» as 0
+      for (const quantity of ['-5', 'abc', 0, '']) {
+        const res = await admin.post('/api/piecework/logs', { ...base, quantity });
+        if (res.status !== 400) problems.push(`quantity ${JSON.stringify(quantity)} answered ${res.status} ${brief(res.body)}, expected 400`);
+      }
+      const negativeRate = await admin.post('/api/piecework/logs', { ...base, quantity: 1, unitRate: '-100' });
+      if (negativeRate.status !== 400) problems.push(`manual rate -100 answered ${negativeRate.status}, expected 400`);
+      if (await logCount(worker) !== 0) problems.push(`${await logCount(worker)} logs were saved for refused rows`);
+      const time = await admin.post('/api/piecework/logs', { ...base, quantity: '۱:۳۰', unitRate: 100000 });
+      const [timeRow] = await orm.select().from(pieceworkLogs).where(and(eq(pieceworkLogs.personnelId, worker), eq(pieceworkLogs.isDeleted, 0)));
+      if (time.status !== 201 || !timeRow || timeRow.quantity !== 1.5 || !fin(timeRow.totalAmount).equals(150000)) {
+        problems.push(`quantity 1:30 in Persian digits answered ${time.status}, stored ${timeRow?.quantity} / ${timeRow?.totalAmount}, expected 1.5 / 150000`);
+      }
+
+      // 2) personnel, task and project must exist and be live (a deleted personnel and id 987654 were accepted)
+      const [gone] = await orm.insert(personnel).values({ fullName: tag('TD-812 deleted '), isDeleted: 1 }).returning({ id: personnel.id });
+      const [goneTask] = await orm.insert(pieceworkTasks).values({ code: tag('PT812'), title: tag('TD-812 deleted task '), defaultRate: money(1), isDeleted: 1 }).returning({ id: pieceworkTasks.id });
+      const cases: Array<[string, Record<string, unknown>, string]> = [
+        ['a deleted personnel', { ...base, personnelId: gone.id }, 'PIECEWORK_LOG_PERSONNEL_INVALID'],
+        ['personnel 987654', { ...base, personnelId: 987654 }, 'PIECEWORK_LOG_PERSONNEL_INVALID'],
+        ['a deleted task', { ...base, taskId: goneTask.id }, 'PIECEWORK_LOG_TASK_INVALID'],
+        ['project 987654', { ...base, projectId: 987654 }, 'PIECEWORK_LOG_PROJECT_INVALID'],
+      ];
+      for (const [label, body, code] of cases) {
+        const res = await admin.post('/api/piecework/logs', { ...body, quantity: 1 });
+        if (res.status !== 422 || res.body?.code !== code) problems.push(`${label} answered ${res.status} ${brief(res.body)}, expected 422 ${code}`);
+      }
+      const [orphans] = (await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM piecework_logs WHERE personnel_id IN ($1, 987654) OR task_id = $2 OR project_id = 987654', [gone.id, goneTask.id])).rows;
+      if (Number(orphans?.n ?? 0) !== 0) problems.push(`${orphans?.n} logs were saved for missing or deleted parents`);
+
+      // 3) a batch of three whose third row has an invalid date: nothing is saved (two rows used to stay)
+      const before = await logCount(worker);
+      const batch = await admin.post('/api/piecework/logs', { items: [{ ...base, quantity: 1 }, { ...base, quantity: 2 }, { ...base, quantity: 3, date: '1405/07/31' }] });
+      if (batch.status !== 422) problems.push(`the batch with a bad third date answered ${batch.status}, expected 422`);
+      if (await logCount(worker) !== before) problems.push(`the refused batch saved ${await logCount(worker) - before} rows`);
+
+      // 4) the service checks the same without the route schema, and so does editing a log
+      const direct = await refusal(() => PieceworkService.logWorkEntries([{ ...base, quantity: -5 }]));
+      if (direct !== '422 PIECEWORK_LOG_INVALID') problems.push(`the service answered a quantity of -5 with ${direct}, expected 422 PIECEWORK_LOG_INVALID`);
+      if (timeRow) {
+        const edit = await admin.put(`/api/piecework/logs/${timeRow.id}`, { quantity: '-5' });
+        if (edit.status !== 400) problems.push(`editing a log to quantity -5 answered ${edit.status}, expected 400`);
+        const editDirect = await refusal(() => PieceworkService.updateWorkLog(timeRow.id, { quantity: 0 }));
+        if (editDirect !== '422 PIECEWORK_LOG_INVALID') problems.push(`the service edited a log to quantity 0 with ${editDirect}, expected 422 PIECEWORK_LOG_INVALID`);
+        const editProject = await refusal(() => PieceworkService.updateWorkLog(timeRow.id, { projectId: 987654 }));
+        if (editProject !== '422 PIECEWORK_LOG_PROJECT_INVALID') problems.push(`editing a log to project 987654 answered ${editProject}, expected 422 PIECEWORK_LOG_PROJECT_INVALID`);
+      }
+
+      assertNoProblems(problems);
+      return 'bad quantities, rates, ids and dead parents are refused, a bad row refuses its whole batch, and edits follow the same rules';
     }));
   }
 

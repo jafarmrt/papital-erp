@@ -14,6 +14,7 @@ import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/pii
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { ForbiddenError } from '../errors/customErrors.js';
 import { fin } from '../lib/financialDecimal.js';
+import { parseWorkQuantity } from '../lib/piecework/workQuantity.js';
 
 const router = Router();
 
@@ -82,13 +83,28 @@ const setPersonnelRateSchema = z.object({
   })
 });
 
+/**
+ * v9.0.236 (TD-812): شناسه‌ها عدد صحیح مثبت (عدد یا رشته)، مقدار بزرگ‌تر از صفر یا «ساعت:دقیقه» و نرخ دستی نامنفی است.
+ * پیش‌تر «-5» با مبلغ منفی و «abc» صفر ذخیره می‌شد. سرویس همین را دوباره می‌سنجد (۴۲۲) و پرسنل، کار و پروژه زنده را می‌خواهد.
+ */
+const bodyId = (label: string) => z.union([z.number(), z.string()]).refine(v => /^[1-9]\d*$/.test(String(v).trim()), `${label} باید عدد صحیح مثبت باشد`);
+const optionalProjectId = z.union([bodyId('شناسه پروژه'), z.null(), z.literal('')]).optional();
+const workQuantityInput = z.union([z.number(), z.string()]).transform((v, ctx): number => {
+  const parsed = parseWorkQuantity(v);
+  if (!parsed.ok) {
+    ctx.addIssue({ code: 'custom', message: parsed.message });
+    return z.NEVER;
+  }
+  return parsed.value;
+});
+
 const pieceworkLogItemSchema = z.object({
-  personnelId: z.union([z.number(), z.string()]),
-  taskId: z.union([z.number(), z.string()]),
-  projectId: z.union([z.number(), z.string(), z.null()]).optional(),
+  personnelId: bodyId('شناسه پرسنل'),
+  taskId: bodyId('شناسه عنوان کار'),
+  projectId: optionalProjectId,
   date: z.string().min(1, 'تاریخ کارکرد الزامی است'),
-  quantity: z.union([z.number(), z.string()]),
-  unitRate: decimalInput('نرخ کارکرد').optional(),
+  quantity: workQuantityInput,
+  unitRate: nonNegativeAmount('نرخ کارکرد').optional(),
   notes: z.string().optional(),
 });
 
@@ -106,10 +122,10 @@ const createPieceworkLogsSchema = z.object({
 const updatePieceworkLogSchema = z.object({
   body: z.object({
     date: z.string().optional(),
-    quantity: z.union([z.number(), z.string()]).optional(),
-    unitRate: decimalInput('نرخ کارکرد').optional(),
+    quantity: workQuantityInput.optional(),
+    unitRate: nonNegativeAmount('نرخ کارکرد').optional(),
     notes: z.string().optional(),
-    projectId: z.union([z.number(), z.string(), z.null()]).optional(),
+    projectId: optionalProjectId,
   }),
   params: z.object({
     id: numericIdString
