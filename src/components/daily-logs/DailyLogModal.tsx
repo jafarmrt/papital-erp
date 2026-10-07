@@ -1,5 +1,5 @@
 import { FormEvent } from 'react';
-import { Clock, X, Building2, Laptop, AtSign, Eye, Lock } from 'lucide-react';
+import { Clock, X, Building2, Laptop, AtSign, Lock } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -8,6 +8,7 @@ import type { ProjectPick } from '../../lib/permissions/pickLists';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
 import { formatPersianNumber, getTodayJalaliDate, extractDateString } from '../../utils';
 import { MentionTextarea } from '../MentionTextarea';
+import { type DailyLogVisibility, visibilityNotifiesMentions } from '../../lib/dailyLogs/dailyLogVisibility';
 
 interface DailyLogModalProps {
   isModalOpen: boolean;
@@ -27,8 +28,8 @@ interface DailyLogModalProps {
   setFormContent: (content: string) => void;
   formProjectId: string;
   setFormProjectId: (id: string) => void;
-  formVisibility: 'mentioned_only' | 'public' | 'private';
-  setFormVisibility: (vis: 'mentioned_only' | 'public' | 'private') => void;
+  formVisibility: DailyLogVisibility;
+  setFormVisibility: (vis: DailyLogVisibility) => void;
   formMentions: number[];
   setFormMentions?: (mentions: number[]) => void;
   formTags: string[];
@@ -205,7 +206,7 @@ export function DailyLogModal({
             <label className="block text-xs font-bold text-slate-800 mb-1">
               سطح محرمانگی و مشاهده <span className="text-rose-500">*</span>
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
               <button
                 type="button"
                 onClick={() => setFormVisibility('mentioned_only')}
@@ -219,22 +220,6 @@ export function DailyLogModal({
                 <div>
                   <p className="text-[11px] font-bold">منشن‌شده‌ها و خودم</p>
                   <p className="text-[9px] font-normal text-slate-500">فقط منشن‌شده‌ها + مدیر</p>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFormVisibility('public')}
-                className={`p-2 rounded-xl border text-right text-xs transition-all flex items-start gap-1.5 cursor-pointer ${
-                  formVisibility === 'public'
-                    ? 'bg-blue-50 border-blue-500 text-blue-900 font-bold shadow-2xs ring-1 ring-blue-400'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Eye className="w-3.5 h-3.5 text-blue-600 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[11px] font-bold">🌐 عمومی</p>
-                  <p className="text-[9px] font-normal text-slate-500">مشاهده برای همه همکاران</p>
                 </div>
               </button>
 
@@ -254,6 +239,12 @@ export function DailyLogModal({
                 </div>
               </button>
             </div>
+            {/* v9.0.215 (TD-633, decision ت۲ الف): a mention in a log hidden from the mentioned users notifies nobody */}
+            {formMentions.length > 0 && !visibilityNotifiesMentions(formVisibility) && (
+              <p role="note" className="mt-1.5 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1">
+                این گزارش برای اشاره‌شده‌ها دیده نمی‌شود، پس به آن‌ها اعلانی نمی‌رسد.
+              </p>
+            )}
           </div>
 
           {/* Row 5: Title & Project Link */}
