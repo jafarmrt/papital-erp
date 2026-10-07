@@ -183,7 +183,7 @@ export async function runTreasuryListTests(shouldRun: ShouldRun): Promise<TestCa
 
   const runningId = 'reg_treasury_running_balance_void_td_860';
   if (shouldRun(runningId, 'td860', 'treasury', 'running', 'package4')) {
-    await runCase(results, runningId, 'v9.0.107: the treasury running balance counts the same rows as the bank balance: a voided row on its own date and its reversal on the void date, never a legacy cheque-method row, so after a void the last row equals the bank balance (TD-860)', async () => {
+    await runCase(results, runningId, 'v9.0.108: the treasury running balance counts the same rows as the bank balance: a voided row on its own date and its reversal on the void date, never a legacy cheque-method row, so after a void the last row equals the bank balance (TD-860)', async () => {
       const admin = await adminClient();
       const problems: string[] = [];
       const today = await businessTodayIsoDate();
