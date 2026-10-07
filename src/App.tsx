@@ -5,6 +5,8 @@ import { useAuth } from './contexts/AuthContext';
 import { PageLoader } from './components/PageLoader';
 import { AppLayout } from './components/layout';
 import { AppRoutes } from './components/AppRoutes';
+import { ForcedPasswordChange } from './components/auth/ForcedPasswordChange';
+import { mustChangePassword } from './lib/auth/passwordReset';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 
@@ -64,31 +66,50 @@ export default function App() {
     );
   }
 
+  const toaster = (
+    <Toaster 
+      position="bottom-right" 
+      toastOptions={{ 
+        className: 'font-sans text-xs font-medium rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100', 
+        duration: 4000,
+        style: {
+          direction: 'rtl',
+          textAlign: 'right',
+        },
+        success: {
+          iconTheme: {
+            primary: '#10b981',
+            secondary: '#ffffff',
+          },
+        },
+        error: {
+          iconTheme: {
+            primary: '#ef4444',
+            secondary: '#ffffff',
+          },
+        }
+      }} 
+    />
+  );
+
+  // v9.0.161 (TD-523، ت۵ الف): با رمز موقت مدیر فقط برگه تغییر رمز، بی منو و صفحه
+  if (mustChangePassword(user)) {
+    return (
+      <>
+        {toaster}
+        <ForcedPasswordChange
+          user={user}
+          onLogout={logout}
+          onUserUpdate={updateUser}
+          roleName={userPermissions.roleName}
+        />
+      </>
+    );
+  }
+
   return (
     <Router>
-      <Toaster 
-        position="bottom-right" 
-        toastOptions={{ 
-          className: 'font-sans text-xs font-medium rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100', 
-          duration: 4000,
-          style: {
-            direction: 'rtl',
-            textAlign: 'right',
-          },
-          success: {
-            iconTheme: {
-              primary: '#10b981',
-              secondary: '#ffffff',
-            },
-          },
-          error: {
-            iconTheme: {
-              primary: '#ef4444',
-              secondary: '#ffffff',
-            },
-          }
-        }} 
-      />
+      {toaster}
       <AppLayout
         user={user}
         userPermissions={userPermissions}

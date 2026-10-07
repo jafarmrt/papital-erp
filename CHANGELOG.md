@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.161 — A Temporary Password Must Be Changed First
+- **A Temporary Password Must Be Changed First:** a password an administrator sets is temporary; until the user changes it the server opens only the session, profile and logout, and the browser shows only the password form (TD-523).
+
 ### v9.0.160 — Changing Your Own Password Keeps This Session
 - **Changing Your Own Password Keeps This Session:** after a password change from the profile, this session gets a new token and goes on; the other sessions of the user end (TD-531).
 

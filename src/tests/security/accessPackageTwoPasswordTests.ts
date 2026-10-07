@@ -3,6 +3,7 @@ import { runCase, type ShouldRun } from './workflowTestHarness.js';
 import { TEST_PASSWORD } from '../fixtures/factories.js';
 import { loginTestUserWithSession } from '../fixtures/httpTestHelper.js';
 import { PASSWORD_TOO_SHORT_MESSAGE } from '../../lib/auth/passwordPolicy.js';
+import { PASSWORD_RESET_REQUIRED } from '../../lib/auth/passwordReset.js';
 
 /**
  * بسته ۲ (مدل مجوز)، گروه رمز (تصمیم ت۵ الف): سیاست رمز از مسیرهای واقعی Express با ورود واقعی. هر آزمون روی کد پیشین
@@ -77,6 +78,57 @@ export async function runAccessPackageTwoPasswordTests(shouldRun: ShouldRun): Pr
       }
       if ((await h.get('/api/auth/me', member)).status !== 401) wrong.push('the old cookie of this session still works');
       if ((await h.get('/api/auth/me', other)).status !== 401) wrong.push('another session of the user still works after the password change');
+    });
+  }
+
+  if (shouldRun('sec_temporary_password_must_change_td_523', 'security', 'td523', 'password', 'package2')) {
+    await runCase(results, {
+      id: 'sec_temporary_password_must_change_td_523',
+      name: 'v9.0.161: a password an administrator set must be changed before anything else (TD-523)',
+      details: 'B02-08: the server never read must_reset_password and a password set by an administrator cleared it; now creating a user or resetting another user\'s password sets it, every request except /auth/me, /users/profile, /users/my-permissions, /csrf and /logout gets 403 PASSWORD_RESET_REQUIRED until the user changes the password, and a password set for one\'s own account is not temporary',
+    }, async (h, wrong) => {
+      const member = await h.sessionWith(['documents.view']);
+      const username = `td523_${h.tag}`;
+      const temporary = 'Tempor4ry!';
+      const flagOf = async (userId: number) => Number((await h.q('SELECT must_reset_password FROM users WHERE id = $1', [userId]))[0]?.must_reset_password);
+      try {
+        const created = await h.post('/api/users', { username, password: temporary, full_name: 'td523', role: member.role });
+        if (created.status !== 200) throw new Error(`creating the user returned ${created.status}`);
+        const id = Number(created.body?.id);
+        if (await flagOf(id) !== 1) wrong.push('a user created by an administrator does not have to change the password');
+
+        const session = await loginTestUserWithSession(h.app as Parameters<typeof loginTestUserWithSession>[0], username, temporary);
+        for (const url of ['/api/documents', '/api/users/list-simple']) {
+          const res = await h.get(url, session);
+          if (res.status !== 403 || res.body?.code !== PASSWORD_RESET_REQUIRED) {
+            wrong.push(`GET ${url} with a temporary password returned ${res.status} ${String(res.body?.code ?? '')}, not 403 ${PASSWORD_RESET_REQUIRED}`);
+          }
+        }
+        for (const url of ['/api/auth/me', '/api/users/my-permissions', '/api/csrf', '/api/users/profile']) {
+          const res = await h.get(url, session);
+          if (res.status !== 200) wrong.push(`GET ${url} with a temporary password returned ${res.status}, not 200`);
+        }
+
+        const changed = await h.put('/api/users/profile', { current_password: temporary, new_password: 'N3w-passw0rd' }, session);
+        if (changed.status !== 200) throw new Error(`changing the temporary password returned ${changed.status}`);
+        if (await flagOf(id) !== 0) wrong.push('changing the password left it temporary');
+        const setCookie = changed.headers['set-cookie'] as unknown as string[] | string | undefined;
+        const raw = Array.isArray(setCookie) ? setCookie.find(c => c.startsWith('auth_token=')) : setCookie;
+        const fresh = raw ? { cookie: raw.split(';')[0], csrfToken: String(changed.body?.csrfToken ?? session.csrfToken) } : session;
+        const opened = await h.get('/api/documents', fresh);
+        if (opened.status !== 200) wrong.push(`GET /api/documents after the password change returned ${opened.status}`);
+
+        const reset = await h.put(`/api/users/${id}`, { password: 'Reset-pass1', full_name: 'td523', role: member.role });
+        if (reset.status !== 200) throw new Error(`resetting the password returned ${reset.status}`);
+        if (await flagOf(id) !== 1) wrong.push('a password an administrator reset is not temporary');
+
+        const manager = await h.sessionWith(['users.manage']);
+        const own = await h.put(`/api/users/${manager.userId}`, { password: 'Own-pass12', full_name: 'td523 manager', role: manager.role }, manager);
+        if (own.status !== 200) wrong.push(`setting one's own password through the user form returned ${own.status}`);
+        else if (await flagOf(manager.userId) !== 0) wrong.push('a password set for one\'s own account became temporary');
+      } finally {
+        await h.q('DELETE FROM users WHERE username = $1', [username]).catch(() => undefined);
+      }
     });
   }
 

@@ -1,4 +1,5 @@
 import { inFlightRetryDelayMs, isInFlightResponse, releaseSubmissionKey, settlesSubmissionKey, submissionKeyFor } from './lib/submissionKey';
+import { PASSWORD_RESET_REQUIRED } from './lib/auth/passwordReset';
 
 export const API_URL = '/api';
 
@@ -260,6 +261,10 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     const details = data.details || data.errorDetails || data.errorObject?.details || null;
 
     if (res.status === 403) {
+      // v9.0.161 (TD-523): رمز موقت؛ برنامه به برگه تغییر رمز می‌رود
+      if (code === PASSWORD_RESET_REQUIRED && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:password-reset-required'));
+      }
       const forbiddenMsg = data.message || (typeof data.error === 'string' ? data.error : '') || 'دسترسی غیرمجاز یا توکن امنیتی منقضی شده است (۴۰۳)';
       throw new ApiError(forbiddenMsg, code || 'AUTHORIZATION_ERROR', 403, details);
     }

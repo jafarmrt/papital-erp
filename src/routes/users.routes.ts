@@ -205,7 +205,9 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
       user: {
         ...userInfo,
         full_name: updatedUser.fullName,
-        avatar_url: updatedUser.avatarUrl || ''
+        avatar_url: updatedUser.avatarUrl || '',
+        mustResetPassword: Boolean(updatedUser.mustResetPassword),
+        must_reset_password: Boolean(updatedUser.mustResetPassword)
       },
       ...(session ? { csrfToken: session.csrfToken, ...(shouldExposeTokenInBody() ? { token: session.token } : {}) } : {})
     });
@@ -545,11 +547,13 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // v9.0.161 (TD-523، ت۵ الف): رمزی که مدیر می‌گذارد موقت است و کاربر در نخستین ورود باید آن را عوض کند
     const [info] = await orm.insert(users).values({
       username: tUsername,
       password: hashedPassword,
       fullName: tFullName,
-      role: role
+      role: role,
+      mustResetPassword: 1,
     }).returning({ id: users.id });
 
     // V9-2.2: ثبت لاگ ممیزی پیش از ارسال پاسخ — جلوگیری از گم‌شدن رکورد ممیزی و خطای headers-sent
@@ -565,7 +569,8 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
           username: tUsername,
           fullName: tFullName,
           role: role
-        }
+        },
+        mustResetPassword: true,
       }
     });
 
@@ -632,9 +637,11 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
         : (prevUser.fullName || prevUser.username);
 
       const updateData: Partial<typeof users.$inferInsert> = { fullName: tFullName, role };
+      // v9.0.161 (TD-523، ت۵ الف): رمزی که مدیر برای کاربر دیگری می‌گذارد موقت است (پیش‌تر پرچم را ۰ می‌کرد)؛ رمزی که
+      // کسی برای حساب خودش می‌گذارد موقت نیست
       if (passwordHash) {
         updateData.password = passwordHash;
-        updateData.mustResetPassword = 0;
+        updateData.mustResetPassword = targetUserId === Number(req.user?.id) ? 0 : 1;
       }
 
       // V9-2.2: تغییر نقش یا رمز عبور نشست‌های فعال کاربر هدف را باطل می‌کند (tokenVersion)
@@ -663,7 +670,8 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
           after: { fullName: tFullName, role: role },
           changes: diff,
           hasChanges,
-          passwordChanged
+          passwordChanged,
+          ...(passwordChanged ? { mustResetPassword: updateData.mustResetPassword === 1 } : {})
         }
       });
     });

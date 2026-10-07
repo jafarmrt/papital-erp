@@ -6,6 +6,7 @@ import { logger } from './logger.js';
 import { safeCompareTokens } from '../lib/timingSafeCompare.js';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 import { asyncHandler } from './asyncHandler.js';
+import { PASSWORD_RESET_REQUIRED, PASSWORD_RESET_REQUIRED_MESSAGE } from '../lib/auth/passwordReset.js';
 
 export { safeCompareTokens };
 
@@ -62,6 +63,10 @@ export const metricsAuthMiddleware = asyncHandler(async (req: Request, res: Resp
   const live = await resolveLiveSession(decoded);
   if (!live.ok) {
     return res.status(live.status).json({ error: live.error });
+  }
+  // v9.0.161 (TD-523): a temporary password set by an administrator opens nothing but the password change
+  if (live.mustResetPassword) {
+    return res.status(403).json({ error: PASSWORD_RESET_REQUIRED_MESSAGE, code: PASSWORD_RESET_REQUIRED });
   }
 
   // Role check: Only the system admin may inspect internal system metrics (live role, not the token's)
