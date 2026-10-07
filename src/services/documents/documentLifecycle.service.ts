@@ -8,6 +8,7 @@ import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExch
 import { netLineUnitPrice } from './purchaseLineCost.js';
 import { assertReturnWithinSold, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import { enforceReturnInvoiceTerms } from './salesReturnPrice.js';
+import { resolveReturnVatFromInvoice } from './salesReturnVat.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
@@ -203,13 +204,20 @@ export class DocumentLifecycleService {
           // Step 3: Document Status Commitment & Domain Event Outbox
           // v7.0.32 (TD-197 / audit P1-7): مالیاتی که هنگام نهایی‌سازی ارسال شود روی خود سند ذخیره می‌شود تا
           // فاکتور و سند حسابداری همیشه از یک مقدار (documents.vat_amount) استفاده کنند.
-          const finalVat = resolveDocumentVat({
-            docType: targetType,
-            input: { vatPercent: options?.vatPercent, vatAmount: options?.vatAmount },
-            lines: docLines,
-            existing: { vatPercent: Number(doc.vatPercent) || 0, vatAmount: doc.vatAmount },
-            currency: doc.currency,
-          });
+          // v9.0.247 (TD-774، تصمیم ت۵ الف): برگشتِ دارای فاکتور مرجع مالیات را زیر قفل فاکتور (assertReturnWithinSold) به نسبت
+          // از مالیات همان فاکتور می‌گیرد، با برگشت‌های نهایی همین لحظه
+          const vatInput = { vatPercent: options?.vatPercent, vatAmount: options?.vatAmount };
+          const finalVat = targetType === 'return' && doc.returnOfDocumentId
+            ? await resolveReturnVatFromInvoice(tx, {
+              invoiceId: Number(doc.returnOfDocumentId), returnId: id, lines: docLines, input: vatInput, currency: doc.currency, stage: 'finalize',
+            })
+            : resolveDocumentVat({
+              docType: targetType,
+              input: vatInput,
+              lines: docLines,
+              existing: { vatPercent: Number(doc.vatPercent) || 0, vatAmount: doc.vatAmount },
+              currency: doc.currency,
+            });
           await tx.update(documents).set({ 
             status: 'final',
             type: targetType,

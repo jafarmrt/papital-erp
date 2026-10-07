@@ -53,6 +53,8 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const [returnInvoiceRef, setReturnInvoiceRef] = useState('');
   // v7.0.81 (TD-230): شناسه فاکتور فروش اصلی؛ کالای برگشتی با بهای خروج همان فاکتور وارد انبار می‌شود
   const [returnInvoiceId, setReturnInvoiceId] = useState<number | null>(null);
+  // v9.0.247 (TD-774، تصمیم ت۵ الف): درصد مالیات برگشت بی فاکتور مرجع از کاربر؛ برگشت با فاکتور مرجع آن را از فاکتور دارد
+  const [returnVatPercent, setReturnVatPercent] = useState<number | ''>('');
   const [notes, setNotes] = useState('');
 
   const [selectedItem, setSelectedItem] = useState('');
@@ -159,6 +161,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     // TD-234 (بند ۳): ارز و نرخ تسعیر هم مثل بقیه فرم پاک می‌شوند
     setCurrency('IRR');
     setExchangeRate(0);
+    setReturnVatPercent('');
   }, [actionType]);
 
   useEffect(() => {
@@ -211,6 +214,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     returnInvoiceRef, setReturnInvoiceRef,
     returnInvoiceId, setReturnInvoiceId,
     returnTermsLocked,
+    returnVatPercent, setReturnVatPercent,
     notes, setNotes,
     selectedItem, setSelectedItem,
     selectedItemObj, setSelectedItemObj,

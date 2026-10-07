@@ -997,6 +997,18 @@ export class VoucherSyncService {
         }
         return null;
       }
+      // v9.0.247 (TD-774، تصمیم ت۵ الف): مالیات برگشت (documents.vat_amount، به نسبت از فاکتور مرجع) مالیات پرداختنی را
+      // بدهکار و مشتری را خالص به‌علاوه مالیات بستانکار می‌کند؛ پیش‌تر برگشت مالیات نداشت و هر دو مانده بیش از واقع می‌ماند
+      const returnVatNum = fin(doc.vatAmount).round(4);
+      const returnVatAcc = returnVatNum.isPositive() ? await AccountMappingService.getSalesVatPayableAccount(executor) : null;
+      if (returnVatNum.isPositive() && !returnVatAcc) {
+        if (isStrict) {
+          throw new ValidationError('سرفصل حسابداری مالیات بر ارزش افزوده (۳۲۰۳) در تنظیمات حسابداری تعریف نشده است.');
+        }
+        logger.warn({ message: `VAT account not found for sales return ${doc.refNumber}, skipping auto voucher to prevent unbalanced entry` });
+        return null;
+      }
+      const customerReturnCredit = totalReturnAmountNum.add(returnVatNum).round(4);
 
       let matchedCustomerId: number | null = null;
       if (doc.buyerName) {
@@ -1020,15 +1032,31 @@ export class VoucherSyncService {
           exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
           description: `برگشت از فروش بابت سند مرجوعی شماره ${doc.refNumber}`
         });
+      }
 
-        // ۲) بستانکار: حساب‌های دریافتنی تجاری / مشتری (۱۲۰۱)
+      // ۱-ب) v9.0.247 (TD-774): بدهکار: مالیات و عوارض ارزش افزوده پرداختنی (۳۲۰۳)
+      if (returnVatNum.isPositive() && returnVatAcc) {
+        voucherItems.push({
+          accountId: returnVatAcc.id,
+          detailedType: 'other',
+          detailedName: 'مالیات بر ارزش افزوده',
+          debit: returnVatNum,
+          credit: 0,
+          currency: doc.currency || 'IRR',
+          exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
+          description: `برگشت مالیات و عوارض ارزش افزوده بابت سند مرجوعی شماره ${doc.refNumber}`
+        });
+      }
+
+      if (customerReturnCredit.isPositive()) {
+        // ۲) بستانکار: حساب‌های دریافتنی تجاری / مشتری (۱۲۰۱)، خالص به‌علاوه مالیات
         voucherItems.push({
           accountId: customerAcc.id,
           detailedType: 'customer',
           detailedId: matchedCustomerId || undefined,
           detailedName: doc.buyerName || 'مشتری',
           debit: 0,
-          credit: totalReturnAmountNum,
+          credit: customerReturnCredit,
           currency: doc.currency || 'IRR',
           exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
           description: `بستانکاری مشتری بابت مرجوعی کالا در سند شماره ${doc.refNumber}`

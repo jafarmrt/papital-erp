@@ -29,10 +29,17 @@ const usdInvoice = {
   ],
 };
 
+// v9.0.247 (TD-774): فاکتور ریالی با مالیات؛ مالیات برگشتش را سرور از همین فاکتور می‌گیرد
+const irrInvoice = {
+  id: 41, buyer_name: 'مشتری تهران', currency: 'IRR', exchangeRate: null, vatPercent: 10, vatAmount: 50000,
+  items: [{ item_id: 5, name: 'گوشواره میخی', code: 'P-5', unit: 'عدد', quantity: 5, unit_price: 100000, discount: 0 }],
+};
+
 function apiResponse(url: string, init?: { method?: string }): unknown {
   if (url === '/warehouses') return [{ id: 1, name: 'انبار مرکزی', code: 'WH1', is_active: 1 }];
   if (url.startsWith('/documents/next-ref?type=')) return { nextRef: `${url.split('=')[1].toUpperCase()}-1` };
   if (url === '/documents/by-ref/INV-USD-1?type=invoice') return usdInvoice;
+  if (url === '/documents/by-ref/INV-IRR-1?type=invoice') return irrInvoice;
   if (url === '/documents' && init?.method === 'POST') return { docId: 90 };
   if (url.startsWith('/items/options') || url === '/customers?limit=1000') return { data: [] };
   return [];
@@ -95,5 +102,46 @@ describe('a sales return from the stock page (TD-788)', () => {
     await waitFor(() => expect(postedDocument().docType).toBe('return'));
     expect(postedDocument()).toMatchObject({ returnOfDocumentId: 40, currency: 'USD', exchangeRate: 600000 });
     expect(postedDocument().items).toEqual([{ itemId: 3, quantity: 3, unit_price: 103.3333 }]);
+  });
+});
+
+describe('the VAT of a sales return from the stock page (TD-774)', () => {
+  async function openReturnOf(ref: string): Promise<void> {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <DocumentsPage user={user} />
+      </QueryClientProvider>,
+    );
+    await screen.findByDisplayValue('RECEIPT-1');
+    fireEvent.change(screen.getByDisplayValue('رسید خرید مواد اولیه / کالا (فاکتور خرید)'), { target: { value: 'return' } });
+    fireEvent.change(screen.getByPlaceholderText('مثال: 1005'), { target: { value: ref } });
+    fireEvent.click(screen.getByText('جستجو'));
+    expect(await screen.findByText('گوشواره میخی')).toBeTruthy();
+  }
+
+  async function submit(): Promise<void> {
+    const button = screen.getAllByRole('button').find(b => b.textContent?.includes('ثبت نهایی'))!;
+    await act(async () => { fireEvent.click(button); });
+    await waitFor(() => expect(postedDocument().docType).toBe('return'));
+  }
+
+  it('leaves the VAT of a return with an invoice to the server and sends no percent', async () => {
+    await openReturnOf('INV-IRR-1');
+    expect(screen.getByText('مالیات بر ارزش افزوده به نسبت مبلغ برگشتی از مالیات همین فاکتور برمی‌گردد.')).toBeTruthy();
+    expect(screen.queryByLabelText('درصد مالیات بر ارزش افزوده')).toBeNull();
+    await submit();
+    expect(postedDocument()).toMatchObject({ returnOfDocumentId: 41 });
+    expect(postedDocument().vatPercent).toBeUndefined();
+  });
+
+  it('asks the VAT percent of a return without an invoice and sends it', async () => {
+    await openReturnOf('INV-IRR-1');
+    // the reference is changed by hand: the invoice is no longer linked, the lines stay
+    fireEvent.change(screen.getByPlaceholderText('مثال: 1005'), { target: { value: 'INV-IRR-2' } });
+    fireEvent.change(screen.getByLabelText('درصد مالیات بر ارزش افزوده'), { target: { value: '10' } });
+    await submit();
+    expect(postedDocument().returnOfDocumentId).toBeUndefined();
+    expect(postedDocument().vatPercent).toBe(10);
   });
 });

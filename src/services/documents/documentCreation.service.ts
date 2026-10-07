@@ -23,6 +23,7 @@ import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExch
 import { netLineUnitPrice } from './purchaseLineCost.js';
 import { assertReturnWithinSold, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import { enforceReturnInvoiceTerms } from './salesReturnPrice.js';
+import { resolveReturnVatFromInvoice } from './salesReturnVat.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
 import { releaseReservationsForDocument, type ProjectReservationRelease } from './projectReservationRelease.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
@@ -137,14 +138,24 @@ export class DocumentCreationService {
           .from(documentItems)
           .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
       }
-      const docVat = resolveDocumentVat({
-        docType: existingDoc.type,
-        input: body,
-        lines: vatLines,
-        existing: { vatPercent: Number(existingDoc.vatPercent) || 0, vatAmount: existingDoc.vatAmount },
-        linesChanged,
-        currency: docCurrency,
-      });
+      // v9.0.247 (TD-774): پیش‌نویس برگشتِ دارای فاکتور مرجع مالیات را به نسبت از فاکتور می‌گیرد (ردیف‌های تازه یا ذخیره‌شده)
+      if (returnTerms && !linesChanged) {
+        vatLines = await tx.select({ quantity: documentItems.quantity, unitPrice: documentItems.unitPrice, discount: documentItems.discount })
+          .from(documentItems)
+          .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
+      }
+      const docVat = returnTerms
+        ? await resolveReturnVatFromInvoice(tx, {
+          invoiceId: Number(existingDoc.returnOfDocumentId), returnId: id, lines: vatLines, input: body, currency: docCurrency,
+        })
+        : resolveDocumentVat({
+          docType: existingDoc.type,
+          input: body,
+          lines: vatLines,
+          existing: { vatPercent: Number(existingDoc.vatPercent) || 0, vatAmount: existingDoc.vatAmount },
+          linesChanged,
+          currency: docCurrency,
+        });
 
       // v7.0.63 (TD-198): نرخ تسعیر ساختاریافته؛ برای ارز غیرریالی الزامی (ورودی یا نرخ ذخیره‌شده)
       const docExchangeRate = resolveDocumentExchangeRate({
@@ -331,7 +342,13 @@ export class DocumentCreationService {
         : null;
       const docCurrency = returnTerms?.currency ?? (currency || 'IRR');
       const lines = returnTerms?.lines ?? docLines;
-      const docVat = resolveDocumentVat({ docType, input: body, lines: lines || [], currency: docCurrency });
+      // v8.0.8 (TD-253): برگشت نهایی با فاکتور مرجع از مانده قابل برگشت همان فاکتور بیشتر نمی‌شود؛ از v9.0.247 (TD-774) پیش از
+      // مالیات، چون قفل فاکتور برگشت‌های هم‌زمان را پشت سر هم می‌گذارد و مالیات هر برگشت از خالص برگشت‌های نهایی قبلی است
+      if (returnOfDocumentId !== null && docStatus === 'final') await assertReturnWithinSold(tx, returnOfDocumentId, lines);
+      // v9.0.247 (TD-774، تصمیم ت۵ الف): مالیات برگشتِ دارای فاکتور مرجع به نسبت از مالیات همان فاکتور
+      const docVat = returnOfDocumentId !== null
+        ? await resolveReturnVatFromInvoice(tx, { invoiceId: returnOfDocumentId, returnId: null, lines, input: body, currency: docCurrency })
+        : resolveDocumentVat({ docType, input: body, lines: lines || [], currency: docCurrency });
       const docExchangeRate = resolveDocumentExchangeRate({
         currency: docCurrency,
         input: returnTerms ? { exchangeRate: returnTerms.exchangeRate } : body,
@@ -466,8 +483,6 @@ export class DocumentCreationService {
         // مرجع) وارد انبار می‌شود، نه با قیمت فروش
         let returnUnitCosts: Map<number, FinancialDecimal> | null = null;
         if (docType === 'return' && docStatus === 'final') {
-          // v8.0.8 (TD-253): برگشت نهایی با فاکتور مرجع از مانده قابل برگشت همان فاکتور بیشتر نمی‌شود
-          if (returnOfDocumentId !== null) await assertReturnWithinSold(tx, returnOfDocumentId, lines);
           returnUnitCosts = await resolveSalesReturnUnitCosts(tx, returnOfDocumentId, lines.map(l => Number(l.itemId)));
         }
 

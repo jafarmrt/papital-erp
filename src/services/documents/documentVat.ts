@@ -13,6 +13,13 @@ import { currencyScale } from '../../lib/currencyScale.js';
 
 export const VAT_DOC_TYPES: ReadonlySet<string> = new Set(['invoice', 'proforma']);
 
+/**
+ * v9.0.247 (TD-774، تصمیم ت۵ «الف» بسته ۸): برگشت از فروش هم مالیات دارد. برگشتِ دارای فاکتور مرجع مالیات را به نسبت از
+ * همان فاکتور می‌گیرد (`resolveReturnVatFromInvoice` در salesReturnVat.ts) و برگشت بی فاکتور مرجع درصد را از کاربر، با
+ * همین تابع. هزینه ارسال و خدمات همچنان فقط روی فاکتور فروش است (`VAT_DOC_TYPES`).
+ */
+const VAT_BEARING_DOC_TYPES: ReadonlySet<string> = new Set([...VAT_DOC_TYPES, 'return']);
+
 export interface DocumentVat {
   vatPercent: number;
   /** v7.0.68 (P2-6): Decimal، بدون عبور از double */
@@ -91,7 +98,7 @@ export function resolveDocumentVat(params: {
   /** v8.0.105 (TD-382): ارز سند؛ مالیات درصدی به کوچک‌ترین واحد همین ارز گرد می‌شود (ریال بی‌اعشار، ارز خارجی سِنت) */
   currency?: string | null;
 }): DocumentVat {
-  if (!VAT_DOC_TYPES.has(params.docType)) {
+  if (!VAT_BEARING_DOC_TYPES.has(params.docType)) {
     return { vatPercent: 0, vatAmount: money(0) };
   }
   const { vatPercent, vatAmount } = parseVatInput(params.input);

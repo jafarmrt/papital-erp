@@ -22,6 +22,9 @@ export async function runSalesDocumentTests(shouldRun: ShouldRun): Promise<TestC
     ['reg_return_price_from_invoice_td_788',
       'v9.0.246: a sales return of an invoice takes its currency, rate and net unit price from that invoice; another price, currency, rate or a line discount is 422, also on draft edit and finalize (TD-788)',
       ['td788', 'documents', 'return', 'currency', 'package8'], returnPriceFromInvoiceCase],
+    ['reg_return_vat_from_invoice_td_774',
+      'v9.0.247: a sales return of an invoice takes the invoice VAT in proportion to the returned net (cumulative, so a full return gives all of it back) and its voucher debits VAT payable; a return without an invoice takes the user percent (TD-774)',
+      ['td774', 'documents', 'return', 'vat', 'package8'], returnVatFromInvoiceCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -305,4 +308,89 @@ async function returnPriceFromInvoiceCase(h: Harness, wrong: string[]): Promise<
   if (free.status !== 200) wrong.push(`a return without an invoice answered ${brief(free)}, expected 200`);
   else await expectCredit('the return without an invoice', docIdOf(free), 5_000_000, 'IRR', null);
   return 'a rial invoice 2 x 1,000,000 less 200,000: returns at 5,000,000, with a discount or in USD are 422, a return of 1 is 900,000 with or without the price; a USD invoice 2 x 100 less 20 at 600,000: IRR, another rate or the gross price are 422, a draft takes USD, 600,000 and 90, is not edited away from them, a legacy gross-price draft is not finalized, and the fixed draft credits 180 USD at 600,000; a return without an invoice keeps its price';
+}
+
+/** B08-05 (TD-774): a sales return always had VAT 0, so the customer kept owing the VAT of goods given back */
+async function returnVatFromInvoiceCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const { AccountMappingService } = await import('../../services/accounting/accountMapping.service.js');
+  const receivable = await AccountMappingService.getTradeReceivablesAccount();
+  const vatPayable = await AccountMappingService.getSalesVatPayableAccount();
+  if (!receivable || !vatPayable) throw new Error('the trade receivables or VAT payable account is not mapped');
+  const codeOf = (res: { body?: unknown }) => (res.body as { code?: string })?.code;
+  const vatOf = async (docId: number) => (await h.q(`SELECT vat_percent::float8 AS pct, vat_amount::float8 AS amount FROM documents WHERE id = $1`, [docId]))[0] as { pct: number; amount: number };
+  const netOn = async (docIds: number[], accountId: number) => Number((await h.q(
+    `SELECT COALESCE(SUM(i.debit - i.credit), 0)::float8 AS net FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id
+      WHERE v.source_document_id = ANY($1::int[]) AND v.is_deleted = 0 AND i.is_deleted = 0 AND i.account_id = $2`,
+    [docIds, accountId],
+  ))[0]?.net);
+  const sale = async (itemId: number, lines: Array<Record<string, unknown>>, extra: Record<string, unknown> = {}) => {
+    const res = await h.post('/api/documents', f.doc('invoice', 'final', lines.map(l => ({ itemId, location: f.wh, ...l })), extra));
+    if (res.status !== 200) throw new Error(`setup: invoice ${brief(res)}`);
+    return docIdOf(res);
+  };
+  const giveBack = (itemId: number, invoiceId: number, quantity: number, extra: Record<string, unknown> = {}, status = 'final') =>
+    h.post('/api/documents', f.doc('return', status, [{ itemId, quantity, location: f.wh }], { returnOfDocumentId: invoiceId, ...extra }));
+
+  // 1) S05: invoice 1 x 1,000,000 at 10% (VAT 100,000); its full return gives back 100,000 VAT and 1,100,000 to the customer
+  const a = await f.item(10, 400_000);
+  const invoiceId = await sale(a, [{ quantity: 1, unit_price: 1_000_000 }], { vatPercent: 10 });
+  const otherPercent = await giveBack(a, invoiceId, 1, { vatPercent: 5 });
+  if (otherPercent.status !== 422 || codeOf(otherPercent) !== 'RETURN_VAT_MISMATCH') wrong.push(`a return at 5% of a 10% invoice answered ${brief(otherPercent)}, expected 422 RETURN_VAT_MISMATCH`);
+  const full = await giveBack(a, invoiceId, 1, { vatPercent: 10 });
+  if (full.status !== 200) wrong.push(`the full return answered ${brief(full)}, expected 200`);
+  else {
+    const vat = await vatOf(docIdOf(full));
+    if (vat.pct !== 10 || vat.amount !== 100_000) wrong.push(`the full return stored VAT ${JSON.stringify(vat)}, expected 10% and 100,000`);
+    const both = [invoiceId, docIdOf(full)];
+    const customer = await netOn(both, receivable.id);
+    const payable = await netOn(both, vatPayable.id);
+    if (customer !== 0 || payable !== 0) wrong.push(`after the invoice and its full return the customer nets ${customer} and VAT payable ${payable}, expected 0 and 0`);
+  }
+
+  // 2) VAT 100 over 3 units of 1,000 returned one by one: 33, 34 and 33, all of the invoice VAT and never more
+  const b = await f.item(10, 400);
+  const thirds = await sale(b, [{ quantity: 3, unit_price: 1_000 }], { vatAmount: 100 });
+  const amounts: number[] = [];
+  for (let i = 0; i < 2; i += 1) {
+    const res = await giveBack(b, thirds, 1);
+    if (res.status !== 200) wrong.push(`return ${i + 1} of the 3-unit invoice answered ${brief(res)}, expected 200`);
+    else amounts.push((await vatOf(docIdOf(res))).amount);
+  }
+  // the third return is a draft first: it takes its share as a draft and keeps it on finalize
+  const draft = await giveBack(b, thirds, 1, {}, 'draft');
+  const draftVat = (await vatOf(docIdOf(draft))).amount;
+  const finalized = await h.put(`/api/documents/${docIdOf(draft)}/finalize`, {});
+  if (draft.status !== 200 || finalized.status !== 200) wrong.push(`the draft third return answered ${brief(draft)} and its finalize ${brief(finalized)}, expected 200 and 200`);
+  else amounts.push((await vatOf(docIdOf(draft))).amount);
+  if (JSON.stringify(amounts) !== JSON.stringify([33, 34, 33]) || draftVat !== 33) {
+    wrong.push(`the VAT of the three returns was ${JSON.stringify(amounts)} (draft ${draftVat}), expected [33,34,33] and draft 33`);
+  }
+
+  // 3) a USD invoice 2 x 100 less 20 at 10% (18 USD VAT): a return of 1 takes 9 USD and debits VAT payable in USD
+  const c = await f.item(10, 400_000);
+  const usd = await sale(c, [{ quantity: 2, unit_price: 100, discount: 20 }], { currency: 'USD', exchangeRate: 600_000, vatPercent: 10 });
+  const usdReturn = await giveBack(c, usd, 1);
+  if (usdReturn.status !== 200) wrong.push(`the USD return answered ${brief(usdReturn)}, expected 200`);
+  else {
+    const vat = await vatOf(docIdOf(usdReturn));
+    const rows = await h.q(
+      `SELECT i.debit::float8 AS debit, COALESCE(i.currency, v.currency) AS currency, i.exchange_rate::float8 AS rate FROM journal_voucher_items i
+         JOIN journal_vouchers v ON v.id = i.voucher_id WHERE v.source_document_id = $1 AND v.is_deleted = 0 AND i.is_deleted = 0 AND i.account_id = $2`,
+      [docIdOf(usdReturn), vatPayable.id],
+    );
+    if (vat.amount !== 9 || rows.length !== 1 || Number(rows[0].debit) !== 9 || rows[0].currency !== 'USD' || Number(rows[0].rate) !== 600_000) {
+      wrong.push(`the USD return stored VAT ${JSON.stringify(vat)} with VAT rows ${JSON.stringify(rows)}, expected 9 USD debited at 600,000`);
+    }
+  }
+
+  // 4) a return without an invoice takes the user's percent
+  const free = await h.post('/api/documents', f.doc('return', 'final', [{ itemId: a, quantity: 1, unit_price: 500_000, location: f.wh }], { vatPercent: 10 }));
+  if (free.status !== 200) wrong.push(`a return without an invoice at 10% answered ${brief(free)}, expected 200`);
+  else {
+    const vat = await vatOf(docIdOf(free));
+    const payable = await netOn([docIdOf(free)], vatPayable.id);
+    if (vat.amount !== 50_000 || payable !== 50_000) wrong.push(`the return without an invoice stored VAT ${JSON.stringify(vat)} and debited VAT payable ${payable}, expected 50,000 and 50,000`);
+  }
+  return 'a full return of 1,000,000 at 10% gives back 100,000 VAT (customer and VAT payable net 0), another percent is 422; VAT 100 over 3 units returns as 33, 34 and 33 (the draft keeps 33 on finalize); a USD return of 1 of 2 x 100 less 20 at 10% debits 9 USD at 600,000; a return without an invoice at 10% of 500,000 debits 50,000';
 }

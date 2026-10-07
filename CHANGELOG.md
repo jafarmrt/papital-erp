@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.247 — v9.0.247 — A Sales Return Gives Back Its Share of the Invoice VAT
+- **Documents:** a sales return of an invoice takes that invoice's VAT percent and its share of the invoice VAT for the returned net, so a full return in parts gives back exactly the invoice VAT, and its voucher debits VAT payable; before, a full return of a 1,000,000 invoice at 10% left the customer owing 100,000 and VAT payable 100,000 too high (TD-774).
+
 ### v9.0.246 — v9.0.246 — A Sales Return Takes Its Invoice's Currency, Rate and Net Price
 - **Documents:** a sales return of an invoice takes that invoice's currency, exchange rate and net unit price after line discounts; any other price, currency or rate is refused with 422, also on draft edit and finalize, and the stock page fills and locks them; before, one unit sold at 900,000 was credited 5,000,000 and a full return of a 180 USD invoice credited 200 rials (TD-788).
 
