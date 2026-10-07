@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.123 — Fiscal Years Close in Order
+- **Fiscal Year Closing Order (P1):** a year closed while an earlier year with vouchers was open took that year's revenue too, and the earlier year then closed only without an opening voucher, wiping the permanent balances (cash 12,300,000 shown as 2,000,000); a year now closes only after every earlier year with vouchers, the form starts on the oldest open one and out-of-order closings are listed by the health check (TD-544, `reg_fiscal_years_close_in_order_td_544`).
+
 ### v9.0.122 — A Fiscal Year Closes After It Ends; the Last Closed Year Reopens
 - **Fiscal Year Closing Time and Reopening (P1):** the current year, and even the next one, could be closed, after which no invoice, receipt or voucher dated today was accepted and nothing reopened a year; a year now closes only after its last day, the form lists ended years only, and the last closed year reopens with a reason and the new permission `accounting.fiscal_reopen`, its closing vouchers reversed on their own dates (TD-543, `reg_fiscal_year_close_after_end_and_reopen_td_543`).
 

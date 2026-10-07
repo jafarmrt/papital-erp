@@ -6,6 +6,7 @@ import { getDisplayTimezone } from '../../lib/businessClock.js';
 import { zonedDayStartUtc } from '../../lib/serverTimestamp.js';
 import { isoToJalaliDate, jalaliYearBounds } from '../../utils/calendarDate.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
+import { earliestVoucherYear, fiscalYearsWithVouchers } from './fiscalYearOrder.js';
 import type { HealthCheckTestResult } from '../../types.js';
 
 /**
@@ -127,5 +128,60 @@ export function buildEarlyClosedYearsHealthTest(entries: EarlyClosedYear[]): Hea
       details: 'بستن پیش از پایان سال (TD-543).',
     })),
     metrics: { earlyClosedYears: entries.length },
+  };
+}
+
+export interface OutOfOrderClosedYear {
+  year: number;
+  /** سال‌های پیشینِ دارای سند که هنوز بازند یا پس از این سال بسته شده‌اند */
+  earlierYears: number[];
+}
+
+/**
+ * v9.0.123 (TD-544، B03-02، تصمیم ت۱): سال‌های بسته‌ای که پیش از سال‌های پیشینِ دارای سند خود بسته شده‌اند (سال پیشین هنوز باز
+ * است یا دیرتر بسته شده). بستن بی ترتیب اکنون رد می‌شود؛ بستن‌های پیشین فقط فهرست می‌شوند.
+ */
+export async function findOutOfOrderClosedYears(): Promise<OutOfOrderClosedYear[]> {
+  const periods = await orm.select().from(fiscalPeriods).orderBy(asc(fiscalPeriods.fiscalYear));
+  const closed = periods.filter(p => p.status === 'closed');
+  if (closed.length === 0) return [];
+  const first = await earliestVoucherYear();
+  if (first === null) return [];
+  const lastClosed = closed[closed.length - 1].fiscalYear;
+  const withVouchers = await fiscalYearsWithVouchers(orm, first, lastClosed - 1);
+  const periodOf = new Map(periods.map(p => [p.fiscalYear, p]));
+  const result: OutOfOrderClosedYear[] = [];
+  for (const c of closed) {
+    const earlierYears = [...withVouchers].filter(x => {
+      if (x >= c.fiscalYear) return false;
+      const p = periodOf.get(x);
+      if (p?.status !== 'closed') return true;
+      return Boolean(p.closedAt && c.closedAt && serverTimestampKey(p.closedAt) > serverTimestampKey(c.closedAt));
+    }).sort((a, b) => a - b);
+    if (earlierYears.length > 0) result.push({ year: c.fiscalYear, earlierYears });
+  }
+  return result;
+}
+
+export function buildOutOfOrderClosedYearsHealthTest(entries: OutOfOrderClosedYear[]): HealthCheckTestResult {
+  return {
+    id: 'fiscal_year_closed_out_of_order',
+    category: 'vouchers',
+    title: 'سال مالی بسته‌شده بی ترتیب',
+    description: 'سال‌ها به ترتیب بسته می‌شوند. پیش از نسخه ۹.۰.۱۲۳ سالی بسته می‌شد در حالی که سال پیشینِ دارای سند هنوز باز بود؛ درآمد و هزینه آن سال پیشین هم در بستن این سال می‌آمد. این سال‌ها خودکار اصلاح نمی‌شوند',
+    status: entries.length > 0 ? 'warning' : 'healthy',
+    scoreImpact: 0,
+    count: entries.length,
+    message: entries.length === 0
+      ? 'هیچ سال مالی‌ای پیش از سال‌های پیشینِ دارای سند خود بسته نشده است.'
+      : `${toPersianDigits(entries.length)} سال مالی پیش از سال‌های پیشینِ دارای سند خود بسته شده است.`,
+    items: entries.map(e => ({
+      id: e.year,
+      code: `سال مالی ${toPersianDigits(e.year)}`,
+      title: 'بسته‌شده پیش از سال‌های پیشین',
+      subtitle: `سال‌های پیشینِ دارای سند که باز ماندند یا دیرتر بسته شدند: ${e.earlierYears.map(y => toPersianDigits(y)).join('، ')}`,
+      details: 'بستن بی ترتیب (TD-544).',
+    })),
+    metrics: { outOfOrderClosedYears: entries.length },
   };
 }

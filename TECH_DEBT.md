@@ -36,7 +36,6 @@
 | TD-540 | دسترسی (بسته ۲) | P3 (B02-25) — واژه انگلیسی و آوانویسی در رابط بسته ۲: «(RBAC)»، «(Audit Trail)»، «Snapshot»، کدهای `LOGIN`، «داشبورد»، «پروفایل»، «ماژول»، «آواتار»، «سایدبار»، «لاگ»، «کلاینت»، «ویزارد»، «کانبان» و ارقام لاتین | UsersPage.tsx، ActivityLogsPage.tsx، AuditDiffViewer.tsx، SystemOperationsTab.tsx، UserProfileModal.tsx، RoleFormModal.tsx، MenuVisibilityPanel.tsx، LoginPage.tsx، ProtectedRoute.tsx | open (P3، تصمیم ت۸ الف) |
 | TD-541 | دسترسی (بسته ۲)؛ اثر روی ۸ | P2 (B02-26) — ثبت سند هر نقشی جز `admin`، `manager`، `warehouse_keeper` و `accountant` را «کاربر فروش» می‌داند و برای هر نوع سند فقط پیش‌فاکتور می‌پذیرد: نقش سفارشی با `warehouse.in` رسید قطعی را ۴۰۳ گرفت و «مدیر ارشد مالی» هم | documents.routes.ts، CreateInvoicePage.tsx | open (P2، مدل مجوز) |
 | TD-542 | دسترسی (بسته ۲)؛ اثر روی ۱۴ | P2 (B02-27) — گردش‌کار تأییدکننده را با کد نقش و جدول هم‌ارزی ثابت کدها می‌سنجد (پیاده‌سازی دوم در `workflowAuthorizationPolicy.ts`، گردش اسناد حسابداری با کد `accountant`، پنج کد ثابت در طراح): نقش سفارشی با `accounting.vouchers` سند حسابداری را تأیید نمی‌کند | workflowTransitionExecutor.ts، workflowAuthorizationPolicy.ts، workflowDefinitionService.ts، WorkflowDesignerCanvas.tsx | open (P2، مدل مجوز) |
-| TD-544 | حسابداری (بسته ۳) | P1 (B03-02) — بستن سال سال‌های پیشینِ باز را نمی‌سنجد و حساب‌های موقت را از تراز تجمعی بی تاریخ شروع می‌گیرد: بستن ۱۳۹۷ با ۱۳۹۶ باز درآمد ۱۳۹۶ را هم بست، ۱۳۹۶ فقط بی سند افتتاحیه بسته شد و صندوق از ۱۲٬۳۰۰٬۰۰۰ به ۲٬۰۰۰٬۰۰۰ رسید | fiscalYear.service.ts | open (P1، تصمیم ت۱ الف) |
 | TD-546 | حسابداری (بسته ۳) | P1 (B03-04) — `deleteAccount` ردیف سند را نمی‌سنجد و `createAccount` ردیف حذف‌شده هم‌کد را زنده می‌کند: حذف حساب هزینه ۷۰۹۱ با سند ۷۰۰٬۰۰۰ تراز آزمایشی را ۰ / ۷۰۰٬۰۰۰ و دارایی را −۷۰۰٬۰۰۰ کرد، هزینه از بستن ۱۳۹۹ افتاد و حساب درآمد تازه ۷۰۹۱ ردیف اجاره را به ارث برد | chartOfAccounts.service.ts | open (P1، تصمیم ت۴ الف) |
 | TD-547 | حسابداری (بسته ۳)؛ اثر روی ۲ | P1 (B03-05) — `account-card`، `ledger`، `party-ledger` و `parties` با `customers.view`، `customers.manage` یا `documents.view` باز می‌شوند: نقش فقط `documents.view` کارت حساب بی صافی (۵۵ ردیف روی ۱۴ حساب، حقوق ۲٬۵۰۰٬۰۰۰ کارگر) و تلفن و کد پرسنلی را خواند، در حالی که فیش و تراز آزمایشی برایش ۴۰۳ است | reports.routes.ts، recordReadPermissions.ts، accountingReport.service.ts | open (P1، تصمیم ت۵ الف) |
 | TD-548 | حسابداری (بسته ۳) | P1 (B03-06) — `getDetailedPartyLedger` ردیف را با `detailed_id` از هر نوع یا «نام شامل» به طرف حساب می‌دهد: صورت‌حساب حسابداری مشتری #۱ حقوق پرسنل #۱ و بدهی «… و پسران» را هم آورد (۱٬۶۰۰٬۰۰۰ به جای ۱٬۰۰۰٬۰۰۰ کارت TD-416) | accountingReport.service.ts | open (P1) |
@@ -70,8 +69,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۴۹ ردیف
-- **آرشیو شده (resolved):** ۴۸۱ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۴۸ ردیف
+- **آرشیو شده (resolved):** ۴۸۲ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -80,4 +79,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.122 — TD-543 (بستن سال پیش از پایانش و نبود بازگشایی، P1) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.123 — TD-544 (بستن سال‌ها بی ترتیب، P1) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

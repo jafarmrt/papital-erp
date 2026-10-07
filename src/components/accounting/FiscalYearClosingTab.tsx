@@ -80,9 +80,13 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
   const draftVoucherCount = previewData?.draftVoucherCount ?? 0;
   // v9.0.122 (TD-543): سال تمام‌نشده (پیش‌نمایش کهنه) یا بسته اجرا نمی‌شود
   const yearNotEnded = previewData?.yearEnded === false;
-  const closingBlocked = draftVoucherCount > 0 || yearNotEnded || isSelectedClosed;
+  // v9.0.123 (TD-544): سال‌ها به ترتیب بسته می‌شوند؛ سال پیشینِ دارای سند و باز این سال را نگه می‌دارد
+  const earlierOpenYears = previewData?.earlierOpenYears ?? [];
+  const earlierOpenText = earlierOpenYears.map(y => toPersianDigits(y)).join('، ');
+  const closingBlocked = draftVoucherCount > 0 || yearNotEnded || isSelectedClosed || earlierOpenYears.length > 0;
   const closingBlockedReason = isSelectedClosed ? `سال مالی ${toPersianDigits(selectedYear)} بسته است`
     : yearNotEnded ? `سال مالی ${toPersianDigits(selectedYear)} هنوز تمام نشده است`
+    : earlierOpenYears.length > 0 ? `ابتدا سال ${earlierOpenText} را ببندید`
     : draftVoucherCount > 0 ? 'ابتدا اسناد پیش‌نویس این سال را تأیید یا حذف کنید' : undefined;
 
   // Normalize temporary accounts (revenue / expense)
@@ -342,6 +346,12 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
           {isSelectedClosed
             ? `سال مالی ${toPersianDigits(selectedYear)} بسته است؛ برای تغییر آن، اگر آخرین سال بسته است، از «بازگشایی سال مالی» استفاده کنید.`
             : `سال مالی ${toPersianDigits(selectedYear)} هنوز تمام نشده است و پس از آخرین روزش (${toPersianDigits(closingDate)}) بسته می‌شود.`}
+        </div>
+      )}
+
+      {earlierOpenYears.length > 0 && !isSelectedClosed && !executionResult && (
+        <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 rounded-2xl p-5 text-sm font-bold text-rose-700 dark:text-rose-300" role="alert">
+          پیش از سال مالی {toPersianDigits(selectedYear)}، سال {earlierOpenText} سند دارد و هنوز بسته نشده است؛ سال‌ها به ترتیب بسته می‌شوند.
         </div>
       )}
 

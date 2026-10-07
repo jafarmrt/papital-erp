@@ -11,7 +11,7 @@ import { jalaliYearBounds, isoToJalaliDate, toStorageDate } from '../../utils/ca
 import { toEnglishDigits } from '../../utils/persianNumber.js';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
-import { assertFiscalYearEnded, isFiscalYearEnded, lockFiscalYearSequence } from './fiscalYearOrder.js';
+import { assertEarlierYearsClosed, assertFiscalYearEnded, findEarlierOpenYears, isFiscalYearEnded, lockFiscalYearSequence } from './fiscalYearOrder.js';
 import type {
   FiscalYearClosingPreview,
   FiscalYearClosingResult,
@@ -113,6 +113,8 @@ export class FiscalYearService {
     const draftVouchers = await this.findDraftVouchersOfYear(currentYear, params.externalTx);
     // v9.0.122 (TD-543): سالی که هنوز تمام نشده پیش‌نمایش می‌شود ولی بسته نمی‌شود
     const yearEnded = isFiscalYearEnded(currentYear, await businessTodayIsoDate());
+    // v9.0.123 (TD-544): سال‌های پیشینِ دارای سند که هنوز بازند؛ تا بسته نشوند این سال بسته نمی‌شود
+    const earlierOpenYears = await findEarlierOpenYears(params.externalTx ?? orm, currentYear);
 
     // v9.0.120 (TD-545): بستن سال مانده واقعی دفتر را می‌خواهد، پس اسناد اختتامیه (و برگشت آن‌ها پس از بازگشایی) هم شمرده می‌شوند
     const trial = await AccountingReportService.getTrialBalance({
@@ -292,6 +294,7 @@ export class FiscalYearService {
       draftVouchers: draftVouchers.slice(0, FISCAL_CLOSING_DRAFT_LIST_LIMIT),
       draftVoucherCount: draftVouchers.length,
       yearEnded,
+      earlierOpenYears,
     };
   }
 
@@ -364,6 +367,8 @@ export class FiscalYearService {
       // v9.0.121 (TD-559): بسته بودن سال فقط از همین ردیف خوانده می‌شود؛ پیش‌تر سندی با مرجع «CLOSING-<سال>» (حتی دستی)
       // بستن سال باز را با «قبلاً بسته شده است» رد می‌کرد
       await FiscalPeriodService.lockForClosing(tx, year);
+      // v9.0.123 (TD-544، تصمیم ت۱): سال‌ها به ترتیب بسته می‌شوند؛ پیش‌تر بستن ۱۳۹۷ با ۱۳۹۶ باز درآمد ۱۳۹۶ را هم می‌بست
+      await assertEarlierYearsClosed(tx, year);
 
       // C-02 & P0-05: محاسبه تراز اختتامیه و ارقام به صورت تازه در داخل تراکنش و زیر چتر قفل
       const preview = await this.getFiscalYearClosingPreview({

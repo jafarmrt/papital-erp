@@ -10538,6 +10538,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR b (v9.0.120 on): fiscal-year closing and reopening (TD-545 ...)
   const { runFiscalClosingTests } = await import('../regression/fiscalClosingTests.js');
   results.push(...await runFiscalClosingTests(shouldRun));
+  const { runFiscalYearOrderTests } = await import('../regression/fiscalYearOrderTests.js');
+  results.push(...await runFiscalYearOrderTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));

@@ -520,6 +520,8 @@ export interface FiscalYearClosingPreview {
   draftVoucherCount?: number;
   /** v9.0.122 (TD-543): امروز از آخرین روز سال گذشته است؛ سال تمام‌نشده بسته نمی‌شود */
   yearEnded?: boolean;
+  /** v9.0.123 (TD-544): سال‌های پیشینِ دارای سند که هنوز بازند؛ تا بسته نشوند این سال بسته نمی‌شود */
+  earlierOpenYears?: number[];
 }
 
 /** v9.0.122 (TD-543): یک سال تمام‌شده در فرم بستن سال */

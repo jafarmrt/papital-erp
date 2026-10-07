@@ -88,6 +88,34 @@ export async function fiscalYearsWithVouchers(executor: DbExecutor, fromYear: nu
   return years;
 }
 
+/**
+ * v9.0.123 (TD-544، B03-02، تصمیم ت۱): سال‌های پیش از `year` که سند حسابداری فعال دارند و بسته نیستند. بستن سال حساب‌های
+ * موقت را از تراز تجمعی می‌گیرد؛ با سال پیشینِ باز، درآمد و هزینه آن سال هم در بستن این سال می‌آمد و آن سال دیگر درست
+ * بسته نمی‌شد.
+ */
+export async function findEarlierOpenYears(executor: DbExecutor, year: number): Promise<number[]> {
+  const first = await earliestVoucherYear(executor);
+  if (first === null || first >= year) return [];
+  const withVouchers = await fiscalYearsWithVouchers(executor, first, year - 1);
+  if (withVouchers.size === 0) return [];
+  const closed = await executor.select({ fiscalYear: fiscalPeriods.fiscalYear }).from(fiscalPeriods)
+    .where(sql`${fiscalPeriods.status} = 'closed' AND ${fiscalPeriods.fiscalYear} < ${year}`);
+  const closedYears = new Set(closed.map(c => c.fiscalYear));
+  return [...withVouchers].filter(y => !closedYears.has(y)).sort((a, b) => a - b);
+}
+
+/** v9.0.123 (TD-544): سال فقط وقتی بسته می‌شود که همه سال‌های پیشینِ دارای سند بسته باشند (۴۲۲ `FISCAL_YEAR_EARLIER_OPEN`) */
+export async function assertEarlierYearsClosed(executor: DbExecutor, year: number): Promise<void> {
+  const open = await findEarlierOpenYears(executor, year);
+  if (open.length === 0) return;
+  const list = open.map(y => toPersianDigits(y)).join('، ');
+  throw new ValidationError(
+    `پیش از سال مالی ${toPersianDigits(year)}، سال ${list} سند دارد و هنوز بسته نشده است؛ سال‌ها به ترتیب بسته می‌شوند. ابتدا سال ${toPersianDigits(open[0])} را ببندید.`,
+    { year, earlierOpenYears: open },
+    'FISCAL_YEAR_EARLIER_OPEN'
+  );
+}
+
 /** وضعیت سال‌های مالی برای فرم بستن سال (`GET /accounting/fiscal-closing/years`) */
 export async function getFiscalClosingYears(): Promise<FiscalClosingYearsInfo> {
   const today = await businessTodayIsoDate();
@@ -111,7 +139,9 @@ export async function getFiscalClosingYears(): Promise<FiscalClosingYearsInfo> {
   }
   const closedYears = periods.filter(p => p.status === 'closed').map(p => p.fiscalYear);
   const reopenableYear = closedYears.length > 0 ? Math.max(...closedYears) : null;
+  // v9.0.123 (TD-544): قدیمی‌ترین سال باز دارای سند (همان سالی که باید نخست بسته شود)؛ وگرنه آخرین سال باز، وگرنه آخرین سال
   const openYears = years.filter(y => y.status === 'open');
-  const defaultYear = openYears.length > 0 ? openYears[openYears.length - 1].year : (years.length > 0 ? years[years.length - 1].year : null);
+  const defaultYear = openYears.find(y => y.hasVouchers)?.year
+    ?? (openYears.length > 0 ? openYears[openYears.length - 1].year : (years.length > 0 ? years[years.length - 1].year : null));
   return { currentYear, years, defaultYear, reopenableYear };
 }
