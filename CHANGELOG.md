@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.106 — Treasury Forms and Export
+- **Treasury Forms and Export (P3):** a receipt or payment for an account without a ledger account is stopped in the form, treasury and cheque dates use the Jalali date input, and the treasury Excel export has Persian labels and a Jalali file date. Before, the form promised a voucherless save the server refused, and the date field showed «2026/10/07» in the Jalali calendar (TD-515, Vitest `treasuryFormWording.test.tsx`).
+
+### v9.0.105 — Cheque History and Status Wording
+- **Cheque History and Status Wording (P3):** the cheque history window shows the stored step notes, messages name statuses in Persian, and the status filter offers «در خزانه / صندوق». Before, notes never showed and messages said «bounced» / «passed» (TD-513, `reg_cheque_status_messages_persian_td_513`).
+
+### v9.0.104 — Cheque Audit Before and After
+- **Cheque Audit Before and After (P3):** a cheque status change or delete records the previous and new status in Persian, the bank account and the vouchers it issued or voided. Before, the audit held only `{"status":"in_collection"}` or `{"chequeId":6}` (TD-512, `reg_cheque_audit_before_after_td_512`).
+
+### v9.0.103 — Bank Reconciliation Rows
+- **Bank Reconciliation Rows (P3):** reconciling a row of another bank or a voided row is refused with the list, only changed rows are written and audited, and the reconciliation time is the server UTC time. Before, three ids (bank A, bank B, voided) gave `{"updated": 2}` and the voided row was reconciled (TD-511, `reg_treasury_reconcile_rows_td_511`).
+
+### v9.0.102 — Paged Treasury List
+- **Paged Treasury List (P2):** bank balances are summed in SQL and the treasury page reads one server page with its total and running balance. Before, every request read all approved ledger rows (200,000 rows, 1,639 ms for 15 banks) and the page loaded all 20,000 transactions (15.88 MB) (TD-509, `reg_treasury_list_paging_and_bank_balances_td_509`).
+
 ### v9.0.101 — Treasury Amount Input
 - **Treasury Amount Input (P3):** treasury, transfer and cheque amounts, opening balances and exchange rates accept Persian digits and thousands separators, text gets a Persian message, and the currency must be a supported one. Before, «۲۵۰۰۰۰۰» and «2,500,000» were refused with an English NaN message (TD-514, `reg_treasury_decimal_inputs_td_514`).
 

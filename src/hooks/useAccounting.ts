@@ -1,4 +1,6 @@
 import { useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { QUERY_KEYS } from '../lib/queryKeys';
 import type { JournalVoucher } from '../types';
 import toast from 'react-hot-toast';
 import { useAccountingReports } from './useAccountingReports';
@@ -20,7 +22,6 @@ import {
 import {
   useBankAccountsQuery,
   useBankAccountOptionsQuery,
-  useTreasuryTransactionsQuery,
   useTreasuryMutations,
   type TreasuryPayload,
 } from './accounting/useTreasuryQueries';
@@ -33,7 +34,6 @@ const NO_VOUCHERS: never[] = [];
 const NO_BANK_ACCOUNTS: never[] = [];
 const NO_BANK_ACCOUNT_OPTIONS: never[] = [];
 const NO_CHEQUES: never[] = [];
-const NO_TREASURY_TRANSACTIONS: never[] = [];
 const NO_CUSTOMERS: never[] = [];
 const NO_PERSONNEL: never[] = [];
 
@@ -46,6 +46,7 @@ type AccountingTab = 'dashboard' | 'coa' | 'vouchers' | 'treasury' | 'cheques' |
  */
 export function useAccounting() {
   const [activeTab, setActiveTab] = useState<AccountingTab>('dashboard');
+  const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
 
   const summaryQuery = useAccountingSummaryQuery();
@@ -55,7 +56,6 @@ export function useAccounting() {
   const bankAccountsQuery = useBankAccountsQuery();
   // v9.0.97 (TD-505، ت۷): دفتر چک فقط فهرست انتخاب را می‌خواند؛ فهرست کامل فقط برای خوانندگان خزانه
   const bankAccountOptionsQuery = useBankAccountOptionsQuery();
-  const treasuryQuery = useTreasuryTransactionsQuery();
   const chequesQuery = useChequesQuery();
   const customersQuery = useAccountingCustomersQuery();
   const personnelQuery = useAccountingPersonnelQuery();
@@ -78,7 +78,6 @@ export function useAccounting() {
   const { refetch: refetchTree } = treeQuery;
   const { refetch: refetchVouchers } = vouchersQuery;
   const { refetch: refetchBankAccounts } = bankAccountsQuery;
-  const { refetch: refetchTreasury } = treasuryQuery;
   const { refetch: refetchCheques } = chequesQuery;
   const { refetch: refetchCustomers } = customersQuery;
   const { refetch: refetchPersonnel } = personnelQuery;
@@ -93,7 +92,8 @@ export function useAccounting() {
         refetchTree(),
         refetchVouchers(),
         refetchBankAccounts(),
-        refetchTreasury(),
+        // v9.0.102 (TD-509): جدول خزانه صفحه خودش را می‌خواند؛ «به‌روزرسانی» همان صفحه را دوباره می‌گیرد
+        queryClient.refetchQueries({ queryKey: QUERY_KEYS.accounting.treasuryTransactions(), type: 'active' }),
         refetchCheques(),
         refetchCustomers(),
         refetchPersonnel(),
@@ -101,10 +101,10 @@ export function useAccounting() {
     } finally {
       setRefreshing(false);
     }
-  }, [refetchSummary, refetchAccounts, refetchTree, refetchVouchers, refetchBankAccounts, refetchTreasury, refetchCheques, refetchCustomers, refetchPersonnel]);
+  }, [refetchSummary, refetchAccounts, refetchTree, refetchVouchers, refetchBankAccounts, queryClient, refetchCheques, refetchCustomers, refetchPersonnel]);
 
   const initialLoading = [
-    summaryQuery, accountsQuery, treeQuery, vouchersQuery, bankAccountsQuery, treasuryQuery, chequesQuery, customersQuery, personnelQuery,
+    summaryQuery, accountsQuery, treeQuery, vouchersQuery, bankAccountsQuery, chequesQuery, customersQuery, personnelQuery,
   ].some(q => q.isLoading);
 
   // Account Operations
@@ -228,7 +228,6 @@ export function useAccounting() {
     bankAccounts: bankAccountsQuery.data ?? NO_BANK_ACCOUNTS,
     bankAccountOptions: bankAccountOptionsQuery.data ?? NO_BANK_ACCOUNT_OPTIONS,
     cheques: chequesQuery.data ?? NO_CHEQUES,
-    treasuryTransactions: treasuryQuery.data ?? NO_TREASURY_TRANSACTIONS,
     customers: customersQuery.data ?? NO_CUSTOMERS,
     personnelList: personnelQuery.data ?? NO_PERSONNEL,
     trialBalance: reports.trialBalance,

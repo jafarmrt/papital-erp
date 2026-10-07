@@ -6,7 +6,7 @@ import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { validateLockOrder, LockHierarchyLevel, LockableResource } from '../../../lib/lockOrder.js';
 import type { Cheque, ChequeStatus } from '../../../types.js';
-import { CHEQUE_TRANSITIONS } from '../../../lib/treasury/chequeTransitions.js';
+import { CHEQUE_TRANSITIONS, chequeStatusLabel } from '../../../lib/treasury/chequeTransitions.js';
 import { NotFoundError, ValidationError, BusinessLogicError, ConflictError } from '../../../errors/customErrors.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
@@ -21,21 +21,23 @@ import { requireChequeBankAccount } from './bankLinks.js';
 import { normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
 import { resolveTreasuryPartyName } from './treasuryLinks.js';
 import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccountId } from './chequePartyAccount.js';
+import { activeChequeVoucherIds, auditChequeDelete, auditChequeStatusChange, type ChequeAuditActor } from './chequeAudit.js';
 
 // v9.0.69: جدول انتقال وضعیت چک در `src/lib/treasury/chequeTransitions.ts` است و مرورگر هم همان را می‌خواند
 export { CHEQUE_TRANSITIONS };
 
+// v9.0.105 (TD-513، B04-17): پیام‌ها نام فارسی وضعیت را دارند (`chequeStatusLabel`)، نه کد انگلیسی
 export function assertChequeTransition(current: string, next: ChequeStatus): void {
   if (current === next) {
-    throw new ConflictError(`چک هم‌اکنون در وضعیت «${next}» است — تکرار همان وضعیت مجاز نیست`);
+    throw new ConflictError(`چک هم‌اکنون در وضعیت «${chequeStatusLabel(next)}» است — تکرار همان وضعیت مجاز نیست`);
   }
   const allowed = CHEQUE_TRANSITIONS[current];
   if (!allowed) {
-    throw new ConflictError(`وضعیت فعلی چک («${current}») نامعتبر است`);
+    throw new ConflictError(`وضعیت فعلی چک («${chequeStatusLabel(current)}») نامعتبر است`);
   }
   if (!allowed.includes(next)) {
     throw new BusinessLogicError(
-      `انتقال وضعیت «${current}» به «${next}» مجاز نیست — انتقال‌های مجاز: ${allowed.join('، ') || 'هیچ'}`
+      `انتقال وضعیت «${chequeStatusLabel(current)}» به «${chequeStatusLabel(next)}» مجاز نیست — انتقال‌های مجاز: ${allowed.map(chequeStatusLabel).join('، ') || 'هیچ'}`
     );
   }
 }
@@ -331,6 +333,8 @@ export class ChequeLifecycleService {
     description?: string;
     userId?: number;
     username?: string;
+    /** v9.0.104 (TD-512): ممیزی درون همین تراکنش */
+    audit?: ChequeAuditActor;
   }): Promise<Cheque> {
     return await orm.transaction(async (txEngine) => {
       // 1. Pre-read cheque to check target bank account if status is passed
@@ -390,6 +394,7 @@ export class ChequeLifecycleService {
 
       // V1.4.0: ماشین وضعیت — انتقال مجاز + جلوگیری از تکرار (دوبار وصول = دوبار مانده و سند)
       assertChequeTransition(String(existing.status), data.status);
+      const vouchersBefore = new Set(await activeChequeVoucherIds(txEngine, id));
 
       if (data.status === 'spent' && existing.type !== 'received') {
         throw new ValidationError('تنها چک‌های دریافتی از مشتریان قابل واگذاری و خرج کردن به غیر هستند');
@@ -700,7 +705,7 @@ export class ChequeLifecycleService {
         date: voucherIsoDate,
         status: data.status,
         user: data.username || 'سیستم',
-        notes: effectiveNotes || `تغییر وضعیت به ${data.status}`
+        notes: effectiveNotes || `تغییر وضعیت به «${chequeStatusLabel(data.status)}»`
       });
 
       const [updated] = await txEngine.update(cheques).set({
@@ -714,6 +719,9 @@ export class ChequeLifecycleService {
         statusHistory: history,
       }).where(eq(cheques.id, id)).returning();
 
+      const issuedVoucherIds = (await activeChequeVoucherIds(txEngine, id)).filter(v => !vouchersBefore.has(v));
+      await auditChequeStatusChange(txEngine, data.audit, existing, updated, issuedVoucherIds);
+
       return {
         ...updated,
         amount: updated.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
@@ -725,7 +733,7 @@ export class ChequeLifecycleService {
     });
   }
 
-  static async deleteCheque(id: number, user?: { userId?: number; username?: string }): Promise<{ success: boolean }> {
+  static async deleteCheque(id: number, user?: { userId?: number; username?: string; audit?: ChequeAuditActor }): Promise<{ success: boolean }> {
     return await orm.transaction(async (txEngine) => {
       validateLockOrder([
         { name: 'cheque', hierarchyLevel: LockHierarchyLevel.CHEQUES },
@@ -794,6 +802,7 @@ export class ChequeLifecycleService {
       }
 
       const reversedVoucherIds = new Set<number>();
+      const voidedVouchers = { deletedVoucherIds: [] as number[], reversedVoucherIds: [] as number[], reversalVoucherIds: [] as number[] };
       for (const v of activeChequeVouchers) {
         if (!reversedVoucherIds.has(v.id) && v.status !== 'permanent') {
           const expectedRevRef = `REV-V${v.voucherNumber}`;
@@ -807,7 +816,7 @@ export class ChequeLifecycleService {
 
           if (!hasReversal) {
             // v8.0.2 (TD-251، تصمیم مالک محصول): سند پیش‌نویس چک حذف نرم می‌شود و سند معکوس نمی‌گیرد
-            await VoucherService.voidSourceVoucher({
+            const voided = await VoucherService.voidSourceVoucher({
               voucherId: v.id,
               reason: `ابطال چک شماره ${existing.chequeNumber} (حذف رکورد و ابطال چرخه عمر)`,
               userId: user?.userId,
@@ -815,11 +824,15 @@ export class ChequeLifecycleService {
               externalTx: txEngine,
             });
             reversedVoucherIds.add(v.id);
+            if (voided.action === 'deleted') voidedVouchers.deletedVoucherIds.push(v.id);
+            else voidedVouchers.reversedVoucherIds.push(v.id);
+            if (voided.reversalVoucherId) voidedVouchers.reversalVoucherIds.push(voided.reversalVoucherId);
           }
         }
       }
 
       await txEngine.update(cheques).set({ isDeleted: 1 }).where(eq(cheques.id, id));
+      await auditChequeDelete(txEngine, user?.audit, existing, voidedVouchers);
       return { success: true };
     });
   }

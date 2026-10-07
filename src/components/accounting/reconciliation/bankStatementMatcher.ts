@@ -31,10 +31,10 @@ export interface TreasuryTxCandidate {
   type: 'receipt' | 'payment';
   amount: number | string;
   partyName?: string;
-  trackingNumber?: string;
-  reconciled?: number | boolean;
-  status?: string;
-  isDeleted?: number;
+  trackingNumber?: string | null;
+  reconciled?: number | boolean | null;
+  status?: string | null;
+  isDeleted?: number | null;
 }
 
 /**

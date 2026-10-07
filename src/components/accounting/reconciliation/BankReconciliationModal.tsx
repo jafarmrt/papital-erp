@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { BankAccount } from '../../../types';
 import { formatPersianNumber, formatPersianPrice, formatPersianDate } from '../../../utils';
 import { confirmAction } from '../../ConfirmDialogHost';
+import { useBankTreasuryTransactionsQuery } from '../../../hooks/accounting/useTreasuryQueries';
 import { 
   parseBankStatementBuffer, 
   matchStatementWithTransactions, 
@@ -15,7 +16,6 @@ interface BankReconciliationModalProps {
   isOpen: boolean;
   onClose: () => void;
   bankAccounts: BankAccount[];
-  transactions: TreasuryTxCandidate[];
   initialBankAccountId?: number | string;
   onReconcileTransactions?: (bankAccountId: number, txIds: number[], batch: string, reconciled: boolean) => Promise<void>;
 }
@@ -24,7 +24,6 @@ export function BankReconciliationModal({
   isOpen,
   onClose,
   bankAccounts,
-  transactions,
   initialBankAccountId,
   onReconcileTransactions,
 }: BankReconciliationModalProps) {
@@ -49,15 +48,15 @@ export function BankReconciliationModal({
     return bankAccounts.find(b => String(b.id) === String(selectedAccountId)) || null;
   }, [bankAccounts, selectedAccountId]);
 
-  // تراکنش‌های حساب انتخابی
-  const accountTxs = useMemo(() => {
-    if (!selectedAccountId) return [];
-    return transactions.filter(t => 
-      (t as any).bankAccountId === Number(selectedAccountId) && 
-      t.status !== 'voided' &&
-      (t.isDeleted === undefined || t.isDeleted === 0)
+  // تراکنش‌های حساب انتخابی؛ v9.0.102 (TD-509): فقط همین حساب از سرور خوانده می‌شود، نه کل فهرست خزانه
+  const accountTxQuery = useBankTreasuryTransactionsQuery(selectedAccountId ? Number(selectedAccountId) : null);
+  const accountTxs = useMemo<TreasuryTxCandidate[]>(() => {
+    const rows = Array.isArray(accountTxQuery.data) ? accountTxQuery.data : [];
+    return rows.filter(t =>
+      t.bankAccountId === Number(selectedAccountId) &&
+      t.status !== 'voided'
     );
-  }, [transactions, selectedAccountId]);
+  }, [accountTxQuery.data, selectedAccountId]);
 
   // پردازش فایل اکسل صورت‌حساب
   const processFile = async (file: File) => {

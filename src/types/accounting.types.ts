@@ -284,6 +284,8 @@ export interface TreasuryTransaction {
   reconciled?: number | null;
   reconciledAt?: string | null;
   reconciledBatch?: string | null;
+  /** v9.0.102 (TD-509): مانده حساب پس از این ردیف (فقط در صفحه‌ای که با فیلتر یک حساب خوانده شده است) */
+  runningBalance?: number | null;
   // v9.0.82 (TD-507): هدف دریافت و پرداخت پرسنل و سرفصل طرف مقابلی که کاربر برای «متفرقه» و «سایر» انتخاب کرده است
   purpose?: string | null;
   contraAccountId?: number | null;

@@ -19,6 +19,7 @@ export class TreasuryService {
 
   // 2. Treasury Transactions
   static getTreasuryTransactions = TreasuryTransactionService.getTreasuryTransactions.bind(TreasuryTransactionService);
+  static getTreasuryTransactionPage = TreasuryTransactionService.getTreasuryTransactionPage.bind(TreasuryTransactionService);
   static generateTransactionNumber = TreasuryTransactionService.generateTransactionNumber.bind(TreasuryTransactionService);
   static createTreasuryTransaction = TreasuryTransactionService.createTreasuryTransaction.bind(TreasuryTransactionService);
   static createTreasuryTransfer = TreasuryTransactionService.createTreasuryTransfer.bind(TreasuryTransactionService);
