@@ -6,6 +6,7 @@ import { User, Role } from '../../types';
 import { isSystemAdminRole, SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog';
 import { roleWithinGrant, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
 import { USERNAME_OF_DELETED_USER, deletedUserOf, deletedUsernameMessage, type DeletedUserMatch } from '../../lib/users/userRestore';
+import { PASSWORD_LENGTH_HINT, passwordLengthError } from '../../lib/auth/passwordPolicy';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -72,6 +73,12 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       toast.error('نقش کاربر را انتخاب کنید');
       return;
     }
+    // v9.0.159 (TD-532): رمز تازه (و در ویرایش، اگر وارد شده) با همان کمینه مشترک سرور
+    const passwordError = !isEditing || userForm.password ? passwordLengthError(userForm.password) : null;
+    if (passwordError) {
+      toast.error(passwordError);
+      return;
+    }
     setIsSaving(true);
     try {
       const payload = {
@@ -110,6 +117,11 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     if (!deletedMatch) return;
     if (!userForm.role || !userForm.password) {
       toast.error('برای بازگرداندن، نقش و رمز موقت را در همین فرم وارد کنید');
+      return;
+    }
+    const passwordError = passwordLengthError(userForm.password);
+    if (passwordError) {
+      toast.error(passwordError);
       return;
     }
     setIsSaving(true);
@@ -234,7 +246,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
               onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-left"
               dir="ltr"
-              placeholder={isEditing ? 'برای عدم تغییر خالی بگذارید' : 'رمز عبور کاربر...'}
+              placeholder={isEditing ? 'برای عدم تغییر خالی بگذارید' : `رمز عبور کاربر، ${PASSWORD_LENGTH_HINT}`}
             />
           </div>
 

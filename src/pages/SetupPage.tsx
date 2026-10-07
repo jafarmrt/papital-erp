@@ -4,6 +4,7 @@ import { User } from '../types';
 import { Shield, Building2, User as UserIcon, Lock, KeyRound, CheckCircle2, ArrowRight, ArrowLeft, Upload, Image as ImageIcon, Phone, MapPin, DollarSign, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { compressTo300KB } from '../utils/imageCompression';
+import { MIN_PASSWORD_LENGTH, passwordLengthError } from '../lib/auth/passwordPolicy';
 
 interface SetupPageProps {
   onLogin: (user: User, token: string) => void;
@@ -67,8 +68,10 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
       setError('نام کاربری باید حداقل ۳ کاراکتر باشد');
       return;
     }
-    if (!password || password.length < 6) {
-      setError('رمز عبور باید حداقل ۶ کاراکتر باشد');
+    // v9.0.159 (TD-532): همان کمینه مشترک سرور (۸ نویسه)، نه ۶
+    const passwordError = passwordLengthError(password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     if (password !== confirmPassword) {
@@ -120,7 +123,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
   // Password strength checker helper
   const getPasswordStrength = () => {
     if (!password) return { score: 0, label: '', color: '' };
-    if (password.length < 6) return { score: 1, label: 'ضعیف', color: 'bg-red-500' };
+    if (password.length < MIN_PASSWORD_LENGTH) return { score: 1, label: 'ضعیف', color: 'bg-red-500' };
     if (password.length < 10 || !/\d/.test(password)) return { score: 2, label: 'متوسط', color: 'bg-amber-500' };
     return { score: 3, label: 'قوی', color: 'bg-emerald-500' };
   };
@@ -248,7 +251,6 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
-                      minLength={6}
                       dir="ltr"
                       placeholder="••••••••"
                       className="w-full pr-10 pl-10 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500/50"
@@ -285,7 +287,6 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                       type={showPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
-                      minLength={6}
                       dir="ltr"
                       placeholder="••••••••"
                       className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500/50"

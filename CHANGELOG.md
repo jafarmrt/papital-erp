@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.159 — One Minimum Password Length Everywhere
+- **One Minimum Password Length Everywhere:** creating, editing and restoring a user, the profile and the setup all ask eight characters, from one shared constant with one Persian message (TD-532).
+
 ### v9.0.158 — Audit Actions in Persian and Jalali Excel File Name
 - **Audit Actions in Persian and Jalali Excel File Name:** one table gives the Persian label of every audit action on the page, the filter, the print and Excel; the Excel file is named with today's Jalali date (TD-538).
 

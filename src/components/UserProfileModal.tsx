@@ -8,6 +8,7 @@ import { fetchJson } from '../api';
 import { compressTo300KB } from '../utils/imageCompression';
 import toast from 'react-hot-toast';
 import { errorMessageOf } from '../utils';
+import { PASSWORD_LENGTH_HINT, passwordLengthError } from '../lib/auth/passwordPolicy';
 
 interface UserProfileModalProps {
   user: User;
@@ -132,8 +133,10 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
       return;
     }
 
-    if (newPassword.length < 4) {
-      toast.error('کلمه عبور جدید باید حداقل ۴ کاراکتر باشد');
+    // v9.0.159 (TD-532): همان کمینه مشترک سرور (۸ نویسه)، نه ۴
+    const passwordError = passwordLengthError(newPassword);
+    if (passwordError) {
+      toast.error(passwordError);
       return;
     }
 
@@ -395,7 +398,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                     type={showNewPassword ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="حداقل ۴ کاراکتر..."
+                    placeholder={PASSWORD_LENGTH_HINT}
                     className="w-full pr-3.5 pl-10 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-left ltr"
                   />
                   <button

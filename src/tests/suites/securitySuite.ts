@@ -1425,6 +1425,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Package 2, audit-log group (from TD-522): purge and masking of the audit log
   const { runAccessPackageTwoAuditTests } = await import('../security/accessPackageTwoAuditTests.js');
   results.push(...await runAccessPackageTwoAuditTests(shouldRunAccess));
+  // Package 2, password group (from TD-532): password policy
+  const { runAccessPackageTwoPasswordTests } = await import('../security/accessPackageTwoPasswordTests.js');
+  results.push(...await runAccessPackageTwoPasswordTests(shouldRunAccess));
   // Package 14, PR د (from TD-462): approval inbox rows
   const { runWorkflowInboxTests } = await import('../security/workflowInboxTests.js');
   results.push(...await runWorkflowInboxTests(shouldRunAccess));

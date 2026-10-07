@@ -22,6 +22,7 @@ import {
 } from '../services/auth/loginSecurity.service.js';
 import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
 
 const router = Router();
 
@@ -95,7 +96,7 @@ router.get('/public-settings', asyncHandler(async (req, res) => {
 const setupSchema = z.object({
   body: z.object({
     username: z.string().min(3, 'نام کاربری باید حداقل ۳ کاراکتر باشد'),
-    password: z.string().min(8, 'رمز عبور باید حداقل ۸ کاراکتر باشد'),
+    password: z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE),
     fullName: z.string().min(1, 'نام و نام خانوادگی الزامی است'),
     companyName: z.string().optional().default(''),
     warehouseName: z.string().optional().default('انبار مرکزی'),
@@ -160,7 +161,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
     }
 
     const { username, password, fullName, companyName, warehouseName, phone, address, logo, currency } = req.body;
-    if (isProduction && (password === 'admin123456' || password.length < 8)) {
+    if (isProduction && (password === 'admin123456' || password.length < MIN_PASSWORD_LENGTH)) {
       throw new ValidationError('رمز عبور مدیر در محیط عملیاتی باید حداقل ۸ کاراکتر بوده و نمی‌تواند رمزهای پیش‌فرض باشد');
     }
     const tUsername = (username || '').trim();

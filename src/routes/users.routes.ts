@@ -21,6 +21,7 @@ import {
 } from '../services/users/grantBoundary.js';
 import { isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 import { USERNAME_OF_DELETED_USER, deletedUsernameMessage } from '../lib/users/userRestore.js';
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
@@ -41,7 +42,7 @@ const updateProfileSchema = z.object({
     full_name: z.string().optional(),
     avatar: z.string().optional(),
     current_password: z.string().optional(),
-    new_password: z.string().min(8, 'کلمه عبور جدید باید حداقل ۸ کاراکتر باشد').optional().or(z.literal(''))
+    new_password: z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE).optional().or(z.literal(''))
   })
 });
 
@@ -397,7 +398,8 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
 }));
 
 // USERS MANAGEMENT ROUTES
-const userPasswordField = z.string().min(6, 'رمز عبور باید حداقل ۶ کاراکتر باشد');
+// v9.0.159 (TD-532): همان کمینه مشترک نمایه و راه‌اندازی، نه ۶ نویسه
+const userPasswordField = z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE);
 
 const userCreateSchema = z.object({
   body: z.object({
@@ -410,7 +412,7 @@ const userCreateSchema = z.object({
 
 const userUpdateSchema = z.object({
   body: z.object({
-    password: z.string().min(6, 'رمز عبور باید حداقل ۶ کاراکتر باشد').optional().or(z.literal('')),
+    password: userPasswordField.optional().or(z.literal('')),
     full_name: z.string().trim().optional().default(''),
     role: z.string().trim().min(1, 'انتخاب نقش الزامی است'),
   }),
