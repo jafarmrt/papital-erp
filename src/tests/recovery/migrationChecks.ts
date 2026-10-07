@@ -20,7 +20,7 @@ function readJournal(folder: string): { entries: JournalEntry[] } & Record<strin
 }
 
 /** رونوشت drizzle/ که دفترش فقط مهاجرت‌های 0000 تا `lastIdx` را دارد (سطح مهاجرت یک نسخه قدیمی) */
-function migrationsCopyUpTo(root: string, lastIdx: number): string {
+export function migrationsCopyUpTo(root: string, lastIdx: number): string {
   const dir = path.join(root, 'drizzle');
   fs.rmSync(dir, { recursive: true, force: true });
   fs.cpSync(path.join(REPO_ROOT, 'drizzle'), dir, { recursive: true });
@@ -42,7 +42,7 @@ function migrationsCopyWithProbe(root: string, tag: string, sql: string, when: (
   return { dir, last: last.when };
 }
 
-async function runMigrationsIn(root: string): Promise<MigrationResult> {
+export async function runMigrationsIn(root: string): Promise<MigrationResult> {
   const previous = process.cwd();
   process.chdir(root);
   try {

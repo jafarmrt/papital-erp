@@ -106,6 +106,8 @@ export const QUERY_KEYS = {
     reports: () => ['accounting', 'reports'] as const,
     report: (kind: string, params?: Record<string, unknown> | object) => ['accounting', 'reports', kind, params ?? {}] as const,
     fiscalClosingPreview: (params: Record<string, unknown> | object) => ['accounting', 'fiscal-closing', params] as const,
+    /** v9.0.161 (TD-543): سال‌های تمام‌شده و وضعیتشان (فرم بستن سال و بازگشایی) */
+    fiscalClosingYears: () => ['accounting', 'fiscal-closing-years'] as const,
   },
 
   // CRM

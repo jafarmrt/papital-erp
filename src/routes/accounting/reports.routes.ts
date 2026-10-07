@@ -60,12 +60,13 @@ router.get('/accounting/reports/cheque-reconciliation', authorizePermission('acc
 // ==========================================
 
 router.get('/accounting/reports/trial-balance', authorizePermission('accounting.reports', 'accounting.view'), validate(trialBalanceQuerySchema), asyncHandler(async (req, res) => {
-  const { level, startDate, endDate, currency } = (req.query as ValidatedQuery<typeof trialBalanceQuerySchema>) || {};
+  const { level, startDate, endDate, currency, includeClosing } = (req.query as ValidatedQuery<typeof trialBalanceQuerySchema>) || {};
   const data = await AccountingService.getTrialBalance({
     level,
     startDate: startDate as string,
     endDate: endDate as string,
     currency: currency as string,
+    includeClosing: includeClosing === 'true',
   });
   res.json({ report: data, ...data });
 }));
@@ -118,29 +119,32 @@ router.get('/accounting/reports/journal-book', authorizePermission('accounting.r
 }));
 
 router.get('/accounting/reports/financial-ratios', authorizePermission('accounting.reports', 'accounting.view'), validate(financialRatiosQuerySchema), asyncHandler(async (req, res) => {
-  const { asOfDate, currency } = (req.query as ValidatedQuery<typeof financialRatiosQuerySchema>) || {};
+  const { asOfDate, currency, includeClosing } = (req.query as ValidatedQuery<typeof financialRatiosQuerySchema>) || {};
   const data = await AccountingService.getFinancialRatios({
     asOfDate: asOfDate as string,
     currency: currency as string,
+    includeClosing: includeClosing === 'true',
   });
   res.json({ report: data, ...data });
 }));
 
 router.get('/accounting/reports/income-statement', authorizePermission('accounting.reports', 'accounting.view'), validate(incomeStatementQuerySchema), asyncHandler(async (req, res) => {
-  const { startDate, endDate, currency } = (req.query as ValidatedQuery<typeof incomeStatementQuerySchema>) || {};
+  const { startDate, endDate, currency, includeClosing } = (req.query as ValidatedQuery<typeof incomeStatementQuerySchema>) || {};
   const data = await AccountingService.getIncomeStatement({
     startDate: startDate as string,
     endDate: endDate as string,
     currency: currency as string,
+    includeClosing: includeClosing === 'true',
   });
   res.json({ report: data, ...data });
 }));
 
 router.get('/accounting/reports/balance-sheet', authorizePermission('accounting.reports', 'accounting.view'), validate(balanceSheetQuerySchema), asyncHandler(async (req, res) => {
-  const { date, asOfDate, currency } = (req.query as ValidatedQuery<typeof balanceSheetQuerySchema>) || {};
+  const { date, asOfDate, currency, includeClosing } = (req.query as ValidatedQuery<typeof balanceSheetQuerySchema>) || {};
   const data = await AccountingService.getBalanceSheet({
     date: (date || asOfDate) as string,
     currency: currency as string,
+    includeClosing: includeClosing === 'true',
   });
   res.json({ report: data, ...data });
 }));
