@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { eq, desc } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
 import { authenticateToken, invalidateUserAuthCache } from '../middleware/auth.js';
@@ -359,8 +359,9 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
       return res.status(400).json({ error: 'نقش «مدیر سیستم» حذف نمی‌شود' });
     }
 
-    // Check if any user is currently assigned this role
-    const assignedUsers = await orm.select().from(users).where(eq(users.role, targetRole.code));
+    // v9.0.153 (TD-535، یافته B02-20): فقط کاربران حذف‌نشده نقش را نگه می‌دارند؛ کاربر حذف‌شده با بازگرداندن نقش تازه می‌گیرد
+    const assignedUsers = await orm.select({ id: users.id }).from(users)
+      .where(and(eq(users.role, targetRole.code), eq(users.isDeleted, 0)));
     if (assignedUsers.length > 0) {
       return res.status(400).json({ error: `این نقش به ${assignedUsers.length} کاربر تخصیص یافته است و ابتدا باید نقش کاربران تغییر یابد` });
     }

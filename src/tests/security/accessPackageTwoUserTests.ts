@@ -179,5 +179,37 @@ export async function runAccessPackageTwoUserTests(shouldRun: ShouldRun): Promis
     });
   }
 
+  if (shouldRun('sec_role_delete_counts_active_users_td_535', 'security', 'td535', 'roles', 'users', 'package2')) {
+    await runCase(results, {
+      id: 'sec_role_delete_counts_active_users_td_535',
+      name: 'v9.0.153: a role whose only user was deleted can be deleted, and that user is restored with a new role (TD-535)',
+      details: 'DELETE /roles/:id is refused while an active user holds the role; once that user is deleted the role is deleted (it used to say «assigned to 1 user»); restoring the deleted user then takes another existing role',
+    }, async (h, wrong) => {
+      const { createTestRole, createTestUser } = await import('../fixtures/factories.js');
+      const prefix = `td535_${h.tag}`;
+      try {
+        const temp = await createTestRole({ code: `${prefix}_temp`, permissions: ['customers.view'] });
+        const next = await createTestRole({ code: `${prefix}_next`, permissions: ['customers.view'] });
+        const only = await createTestUser({ username: `${prefix}_u`, role: temp.code });
+
+        const whileActive = await h.del(`/api/roles/${temp.id}`);
+        if (whileActive.status !== 400) wrong.push(`deleting a role with an active user returned ${whileActive.status}, not 400`);
+        const removed = await h.del(`/api/users/${only.id}`);
+        if (removed.status !== 200) wrong.push(`deleting the user returned ${removed.status}, not 200`);
+        const afterDelete = await h.del(`/api/roles/${temp.id}`);
+        if (afterDelete.status !== 200) wrong.push(`deleting a role whose only user was deleted returned ${afterDelete.status} ${String(afterDelete.body?.error ?? '')}, not 200`);
+        if ((await h.q('SELECT 1 FROM roles WHERE id = $1', [temp.id])).length > 0) wrong.push('the role is still there');
+
+        const restore = await h.post(`/api/users/${only.id}/restore`, { role: next.code, password: 'Tempor4ry!' });
+        if (restore.status !== 200) wrong.push(`restoring the user with another role returned ${restore.status}, not 200`);
+        const [back] = await h.q('SELECT role, is_deleted FROM users WHERE id = $1', [only.id]);
+        if (back?.role !== next.code || Number(back?.is_deleted) !== 0) wrong.push(`the restored user is ${String(back?.role)} / ${String(back?.is_deleted)}`);
+      } finally {
+        await orm.delete(users).where(like(users.username, `${prefix}%`));
+        await orm.delete(roles).where(like(roles.code, `${prefix}%`));
+      }
+    });
+  }
+
   return results;
 }

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.153 — Role Delete Counts Active Users Only
+- **Role Delete Counts Active Users Only:** a role whose only user was deleted can be deleted (TD-535).
+
 ### v9.0.152 — Deleted Username Never Revives an Account
 - **Deleted Username Never Revives an Account:** a new user always gets a new id; restoring a deleted user is a separate action with a new role and a temporary password (TD-519).
 
