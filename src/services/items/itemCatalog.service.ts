@@ -947,7 +947,7 @@ export class ItemCatalogService {
               date: txDate,
               documentType: 'audit',
               documentRef: 'ثبت اولیه کالا',
-              user: user?.username || 'admin',
+              user: user?.username || 'سیستم',
               targetLoc: whCode,
               notes: 'موجودی اولیه هنگام تعریف کالا'
             });
@@ -1123,7 +1123,7 @@ export class ItemCatalogService {
               date: txDate,
               documentType: 'audit',
               documentRef: 'ثبت موجودی افتتاحیه',
-              user: user?.username || 'admin',
+              user: user?.username || 'سیستم',
               targetLoc: whCode,
               notes: 'موجودی اولیه هنگام ویرایش کالا (سند افتتاحیه)'
             });

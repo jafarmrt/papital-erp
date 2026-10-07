@@ -29,11 +29,10 @@ router.use(authenticateToken); // Protect all user routes
  * فقط کار مدیر سیستم است. دارنده users.manage بدون این قاعده می‌توانست خود یا کاربر تازه‌ای را admin کند
  * یا رمز مدیر را عوض کند و با آن وارد شود.
  */
-const ADMIN_ROLE = 'admin';
 const ONLY_ADMIN_MANAGES_ADMINS = 'فقط مدیر سیستم می‌تواند نقش «مدیر سیستم» را بدهد یا بگیرد، یا حساب یک مدیر سیستم را تغییر دهد یا حذف کند';
 
 function touchesAdminAccount(actorRole: string | undefined, targetRoles: Array<string | null | undefined>): boolean {
-  return actorRole !== ADMIN_ROLE && targetRoles.some(r => r === ADMIN_ROLE);
+  return actorRole !== SYSTEM_ADMIN_ROLE && targetRoles.some(r => r === SYSTEM_ADMIN_ROLE);
 }
 
 const updateProfileSchema = z.object({
@@ -497,7 +496,7 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
       if (existingUser.isDeleted === 1) {
         // حساب کاربری قبلاً حذف نرم شده بوده — فعال‌سازی مجدد با مشخصات جدید بدون خطای یکتایی
         // حوزه H (TD-299): نقش همان اعتبارسنجی ساخت کاربر تازه را دارد
-        if (role !== ADMIN_ROLE) {
+        if (role !== SYSTEM_ADMIN_ROLE) {
           const [reactivatedRole] = await orm.select().from(roles).where(eq(roles.code, role)).limit(1);
           if (!reactivatedRole) {
             return res.status(400).json({ error: 'نقش انتخاب‌شده در سیستم معتبر نیست' });
@@ -541,7 +540,7 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     }
 
     // ۲. اعتبارسنجی نقش انتخابی
-    if (role !== 'admin') {
+    if (role !== SYSTEM_ADMIN_ROLE) {
       const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, role)).limit(1);
       if (!roleRecord) {
         return res.status(400).json({ error: 'نقش انتخاب‌شده در سیستم معتبر نیست' });

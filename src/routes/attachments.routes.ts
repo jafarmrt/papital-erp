@@ -67,7 +67,7 @@ router.get('/attachments/:id', validate(attachmentIdSchema), asyncHandler(async 
 router.post('/attachments/migrate-inline', requireSystemAdmin, validate(migrateInlineSchema), asyncHandler(async (req, res) => {
   const report = await AttachmentStorageService.migrateInlineAttachments({
     apply: req.body?.apply === true,
-    actor: req.user?.username || 'admin',
+    actor: req.user?.username ?? '',
   });
   res.json(report);
 }));
@@ -76,7 +76,7 @@ router.post('/attachments/migrate-inline', requireSystemAdmin, validate(migrateI
 router.post('/attachments/cleanup-orphans', requireSystemAdmin, validate(cleanupOrphansSchema), asyncHandler(async (req, res) => {
   const report = await AttachmentOrphanCleanupService.cleanupOrphanFiles({
     apply: req.body?.apply === true,
-    actor: req.user?.username || 'admin',
+    actor: req.user?.username ?? '',
     minAgeMinutes: req.body?.minAgeMinutes,
   });
   res.json(report);

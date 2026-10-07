@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.151 — System Admin Named by One Constant
+- **System Admin Named by One Constant:** package 2 files and server routes name the system admin only through the shared constant or the admin flag; refactor (TD-896).
+
 ### v9.0.150 — Fiscal-Year Test Cleanup
 - **Fiscal-Year Test Cleanup:** the fiscal-year closing test reopens its year so another test posting in that year is not refused (TD-895).
 
