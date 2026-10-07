@@ -339,63 +339,13 @@ export interface TrialBalanceReport {
   sumClosingCredit?: number;
 }
 
-export interface IncomeStatementRow {
-  accountId?: number;
-  code: string;
-  name: string;
-  amount: number;
-}
-
-export interface IncomeStatementReport {
-  fromDate?: string;
-  toDate?: string;
-  revenues: IncomeStatementRow[];
-  totalRevenues: number;
-  costOfGoodsSold: IncomeStatementRow[];
-  costOfSales?: IncomeStatementRow[];
-  totalCostOfGoodsSold: number;
-  totalCostOfSales?: number;
-  grossProfit: number;
-  operatingExpenses: IncomeStatementRow[];
-  expenses?: IncomeStatementRow[];
-  totalOperatingExpenses: number;
-  totalExpenses?: number;
-  operatingProfit: number;
-  otherIncomeExpenses: IncomeStatementRow[];
-  totalOtherIncomeExpenses: number;
-  netProfit: number;
-}
-
-export interface BalanceSheetRow {
-  accountId?: number;
-  code: string;
-  name: string;
-  amount: number;
-}
-
-export interface BalanceSheetSection {
-  title: string;
-  rows: BalanceSheetRow[];
-  totalAmount: number;
-}
-
-export interface BalanceSheetReport {
-  asOfDate: string;
-  currentAssets: BalanceSheetSection;
-  nonCurrentAssets: BalanceSheetSection;
-  assets?: BalanceSheetRow[];
-  totalAssets: number;
-  currentLiabilities: BalanceSheetSection;
-  nonCurrentLiabilities: BalanceSheetSection;
-  liabilities?: BalanceSheetRow[];
-  totalLiabilities: number;
-  equity: BalanceSheetSection & BalanceSheetRow[];
-  totalEquity: number;
-  totalLiabilitiesAndEquity: number;
-  retainedEarnings?: number;
-  isBalanced: boolean;
-  difference?: number;
-}
+// v9.0.108 (TD-563، B03-21): صورت سود و زیان و ترازنامه قرارداد مشترک سرور و مرورگر دارند
+export type {
+  StatementRow as IncomeStatementRow,
+  StatementRow as BalanceSheetRow,
+  IncomeStatementReport,
+  BalanceSheetReport,
+} from '../lib/accounting/financialStatements';
 
 export interface AccountLedgerRow {
   id: number;

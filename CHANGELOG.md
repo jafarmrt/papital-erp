@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.108 — Income Statement and Balance Sheet Show the Server Figures
+- **Financial Statements (P1):** the income statement showed a revenue total of 0, a 0% margin and no expense rows, and the balance sheet showed no asset, liability or period-profit rows, because the views read keys the server never sends; both now share one contract with the server (TD-563, `financialStatementsView.test.tsx`).
+
 ### v9.0.107 — Package 3 Accounting and Money Core Audit Documentation
 - **Stability Audit, Package 3 (Accounting and Money Core):** `docs/audit/STABILITY_AUDIT_V9.md` gets the accounting section; its 38 proven findings are registered as open rows TD-543 to TD-580 (nine P1: closing the running or next year and closing years out of order, statements of a closed year showing zero, deleting an account that has postings, ledger reports open to document and customer viewers, the party ledger matching any id or a contained name, the income statement and balance sheet reading keys the server never sends, the manual voucher form dropping the row currency, and the voucher list showing only the newest 20). Documentation only; no behaviour change.
 
