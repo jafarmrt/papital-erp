@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.280 — v9.0.280 — Dashboard Reads Sales Data Only With Its Permission
+- **Dashboard sales data (TD-674):** the dashboard reads sales files and recent activities only for holders of `crm.view`, and no longer loads parties, personnel, users or sales statistics it never shows.
+
 ### v9.0.279 — v9.0.279 — Warehouse Dashboard Counts the Kardex Ledger
 - **Dashboard movement figures (TD-671):** recent documents count documents, not Kardex rows; a voided document and its reversal and warehouse transfers no longer count as consumption; the day windows follow the business time zone.
 

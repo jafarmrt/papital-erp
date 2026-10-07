@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, useHasPermission } from '../contexts/AuthContext';
-import { useCRMData } from '../hooks/useCRMData';
+import { useDashboardCrm } from '../hooks/useDashboardCrm';
 import { useDashboardDailyLogs } from '../hooks/useDashboardDailyLogs';
 import { PersonalBanner } from '../components/dashboard/PersonalBanner';
 import { CustomizableShortcuts } from '../components/dashboard/CustomizableShortcuts';
@@ -16,14 +16,6 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { user, userPermissions, logout } = useAuth();
 
-  // Load CRM Data (Leads, Activities, Follow-ups)
-  const {
-    leads,
-    activities,
-    loading: crmLoading,
-    loadAllData: fetchCRMData
-  } = useCRMData(user);
-
   // v9.0.262 (TD-639): daily logs only for holders of daily_logs.view, with the dashboard's own requests
   const canViewDailyLogs = useHasPermission('daily_logs.view');
   const {
@@ -37,6 +29,14 @@ export default function Dashboard() {
     userPermissions?.isAdmin ||
     Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('crm.view')
   );
+
+  // v9.0.280 (TD-674): پرونده‌ها و اقدام‌ها فقط برای دارنده crm.view و بی داده‌های صفحه ارتباط با مشتری که پیشخوان نشان نمی‌دهد
+  const {
+    leads,
+    activities,
+    loading: crmLoading,
+    refresh: fetchCRMData
+  } = useDashboardCrm(hasCrmPermission);
 
   // v9.0.14 (TD-428): ویجت «امروز و معوق» از پیگیری‌های باز سرور، بی بازه تاریخ اقدام
   const openFollowups = useCrmFollowups({ status: 'pending', page: 1, limit: 200 }, hasCrmPermission);

@@ -58,7 +58,6 @@
 | TD-815 | حقوق و دستمزد (بسته ۱۲) | P3 (B12P-12) — رابط فیش و «فیش‌های حقوقی من»: وضعیت و برچسب نادرست، نام شرکت ثابت، ریال دوبار، واژه‌های بیگانه («۱ دوره ماهانه»، نیمه‌پرداخت «پیش‌نویس»، «ریالریال»، «پرینت»، «(Template)»، «پرکیسی») | PieceworkPayslipModal.tsx، MyPayslipsPage.tsx، PieceworkPayrollsTab.tsx، PieceworkExcelModal.tsx، payroll.service.ts | open (P3، تصمیم ت۶ الف) |
 | TD-594 | زیرساخت (بسته ۱)؛ رفع در بسته ۱۶ | P2 (B01-14) — در تولید، پاسخ خطا `details` را دور می‌ریزد؛ کادر «تحویل بیش از برنامه» فهرست کالاها را نمی‌گیرد؛ پیام خطای قالب بدنه انگلیسی است: همان ۴۲۲ با `NODE_ENV=test` فهرست `overDeliveries` دارد و با `production` `details=undefined`؛ JSON ناقص ← ۴۰۰ `"Unexpected end of JSON input"` با کد `INTERNAL_ERROR`؛ بدنه ۶ مگابایتی ← ۴۱۳ `"request entity too large"` | middleware/logger.ts، customErrors.ts | open (P2، با PR د بسته ۱۶) |
 | TD-670 | پوسته (بسته ۱۶) | P2 (B16-06) — تکرار خودکار درخواست تغییردهنده پس از قطع ارتباط، روی routeهای بی idempotency ثبت تکراری یا خطای کاذب می‌سازد: `fetchJson` پس از `TypeError('Failed to fetch')` همان `POST /crm/activities` را با همان کلید دوباره فرستاد؛ روی سرور واقعی `POST /crm/activities` ← ۲۰۱، ۲۰۱ و ۲ ردیف، `POST /customers` ← ۲۰۰ و سپس ۴۰۰ «طرف حساب با این نام قبلاً ثبت شده است.»؛ فقط ۲۵ route کلید idempotency را می‌خوانند | api.ts | open (P2، تصمیم ت۳ الف) |
-| TD-674 | پیشخوان (بسته ۱۶) | P3 (B16-10) — داشبورد داده CRM را برای همه کاربران بار می‌کند: انبارداری بی `crm.view` در هر بار باز شدن داشبورد دو پیام خطای «خطا در دریافت سرنخ‌های CRM» و «خطا در دریافت فعالیت‌های CRM» دید؛ داشبورد ۱۰ درخواست می‌فرستد، از جمله `/customers?limit=1000`، `/personnel?limit=1000` و `/users/list-simple` دو بار، که هیچ‌کدام نمایش داده نمی‌شوند | Dashboard.tsx، useCRMData.ts | open (P3) |
 | TD-675 | پیشخوان (بسته ۱۶) | P3 (B16-11) — جست‌وجوی سراسری به نام دقیق نمی‌رسد و «ي/ك» عربی را نمی‌یابد: با پنج طرف حساب «علی کاظمی»، «علی رضایی»، … و سپس «علی»، جست‌وجوی «علی» «علی» را نیاورد (`ilike` شامل، `LIMIT` بی `ORDER BY`)؛ «كيان» ← ۰ نتیجه و «کیان» ← «شرکت کیان»؛ «انگشتر ياقوت» با «یاقوت» پیدا نشد | globalSearch.service.ts | open (P3) |
 | TD-676 | پیش‌نویس (بسته ۱۶) | P3 (B16-12) — پیش‌نویس فرم هرگز منقضی نمی‌شود: پیش‌نویس با `expiresInDays: -10` ذخیره و با `GET /drafts/invoice` برگردانده شد؛ پیش‌نویس ۳۱ روزه با `expires_at` گذشته هم برگشت و بنر «بازیابی» نشان داده شد؛ `cleanupExpiredDrafts` فراخواننده ندارد؛ `expiresInDays: 1e9` ← ۴۰۰ با پیام انگلیسی `Invalid time value` | formDraft.service.ts، drafts.routes.ts | open (P3، تصمیم ت۶ الف) |
 | TD-677 | پیش‌نویس (بسته ۱۶) | P3 (B16-13) — `POST /drafts` خطای خام پایگاه‌داده را با متن SQL و پارامترها برمی‌گرداند، حتی در تولید: `entityType` شامل نویسه `\u0000` ← ۴۰۰ با `"Failed query: select "id", "user_id", … from "form_drafts" where … params: 1,invoice…"`؛ خطای سرور هم ۴۰۰ نام می‌گیرد | drafts.routes.ts | open (P3) |
@@ -115,8 +114,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۹۴ ردیف
-- **آرشیو شده (resolved):** ۶۳۱ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۹۳ ردیف
+- **آرشیو شده (resolved):** ۶۳۲ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
