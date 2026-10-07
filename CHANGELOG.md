@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.152 — Deleted Username Never Revives an Account
+- **Deleted Username Never Revives an Account:** a new user always gets a new id; restoring a deleted user is a separate action with a new role and a temporary password (TD-519).
+
 ### v9.0.151 — System Admin Named by One Constant
 - **System Admin Named by One Constant:** package 2 files and server routes name the system admin only through the shared constant or the admin flag; refactor (TD-896).
 

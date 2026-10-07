@@ -118,5 +118,66 @@ export async function runAccessPackageTwoUserTests(shouldRun: ShouldRun): Promis
     });
   }
 
+  if (shouldRun('sec_deleted_username_new_identity_td_519', 'security', 'td519', 'users', 'package2')) {
+    await runCase(results, {
+      id: 'sec_deleted_username_new_identity_td_519',
+      name: 'v9.0.152: a deleted user\'s username never revives that account; restoring the same person is a separate action (TD-519)',
+      details: 'POST /users with the username of a deleted user is 409 USERNAME_OF_DELETED_USER naming that user, and the deleted row keeps its name, role and password; POST /users/:id/restore brings back the same id and name with the chosen role, a temporary password that must be changed and a new token version; restoring an active user is 409 USER_NOT_DELETED; a non-admin users.manage holder neither restores a former system admin nor gives a restored user a role beyond its own keys (403)',
+    }, async (h, wrong) => {
+      const { createTestRole, createTestUser } = await import('../fixtures/factories.js');
+      const prefix = `td519_${h.tag}`;
+      try {
+        const weak = await createTestRole({ code: `${prefix}_weak`, permissions: ['customers.view'] });
+        const strong = await createTestRole({ code: `${prefix}_strong`, permissions: ['accounting.view', 'accounting.vouchers'] });
+        const first = await createTestUser({ username: `${prefix}_ali`, fullName: 'علی رضایی', role: strong.code });
+        const removed = await h.del(`/api/users/${first.id}`);
+        if (removed.status !== 200) wrong.push(`deleting the first user returned ${removed.status}, not 200`);
+        const [deletedRow] = await h.q('SELECT password, token_version FROM users WHERE id = $1', [first.id]);
+
+        // 1) a new person with the same username
+        const again = await h.post('/api/users', { username: `${prefix}_ali`, password: 'Passw0rd!x', full_name: 'علی محمدی', role: weak.code });
+        const deletedUser = (again.body?.details as { deletedUser?: { id?: number } } | undefined)?.deletedUser;
+        if (again.status !== 409 || codeOf(again) !== 'USERNAME_OF_DELETED_USER') wrong.push(`creating a user with a deleted user's username returned ${again.status} ${codeOf(again)}, not 409 USERNAME_OF_DELETED_USER`);
+        if (deletedUser?.id !== first.id) wrong.push(`the refusal named user ${String(deletedUser?.id)}, not the deleted user ${first.id}`);
+        if (!String(again.body?.error ?? '').includes('علی رضایی')) wrong.push(`the refusal did not name the deleted user: ${String(again.body?.error)}`);
+        const [stillDeleted] = await h.q('SELECT is_deleted, full_name, role, password FROM users WHERE id = $1', [first.id]);
+        if (Number(stillDeleted?.is_deleted) !== 1) wrong.push('the deleted account was revived');
+        if (stillDeleted?.full_name !== 'علی رضایی' || stillDeleted?.role !== strong.code || stillDeleted?.password !== deletedRow?.password) {
+          wrong.push(`the deleted account changed: ${String(stillDeleted?.full_name)} / ${String(stillDeleted?.role)}`);
+        }
+        const other = await h.post('/api/users', { username: `${prefix}_ali2`, password: 'Passw0rd!x', full_name: 'علی محمدی', role: weak.code });
+        if (other.status !== 200 || Number(other.body?.id) === first.id) wrong.push(`a new username returned ${other.status} with id ${String(other.body?.id)}`);
+
+        // 2) restoring the same person
+        const restore = await h.post(`/api/users/${first.id}/restore`, { role: weak.code, password: 'Tempor4ry!' });
+        if (restore.status !== 200 || Number(restore.body?.id) !== first.id) wrong.push(`restoring returned ${restore.status} with id ${String(restore.body?.id)}`);
+        const [back] = await h.q('SELECT is_deleted, full_name, role, must_reset_password, token_version FROM users WHERE id = $1', [first.id]);
+        if (Number(back?.is_deleted) !== 0 || back?.full_name !== 'علی رضایی' || back?.role !== weak.code) {
+          wrong.push(`the restored account is ${String(back?.is_deleted)} / ${String(back?.full_name)} / ${String(back?.role)}`);
+        }
+        if (Number(back?.must_reset_password) !== 1) wrong.push('the restored account does not have to change its temporary password');
+        if (Number(back?.token_version) !== Number(deletedRow?.token_version) + 1) wrong.push(`token version ${String(back?.token_version)}, not ${Number(deletedRow?.token_version) + 1}`);
+        const twice = await h.post(`/api/users/${first.id}/restore`, { role: weak.code, password: 'Tempor4ry!' });
+        if (twice.status !== 409 || codeOf(twice) !== 'USER_NOT_DELETED') wrong.push(`restoring an active user returned ${twice.status} ${codeOf(twice)}, not 409 USER_NOT_DELETED`);
+
+        // 3) a non-admin users.manage holder
+        const manager = await h.sessionWith(['users.manage', 'customers.view']);
+        const formerAdmin = await createTestUser({ username: `${prefix}_adm`, role: 'admin' });
+        await h.del(`/api/users/${formerAdmin.id}`);
+        const adminBack = await h.post(`/api/users/${formerAdmin.id}/restore`, { role: weak.code, password: 'Tempor4ry!' }, manager);
+        if (adminBack.status !== 403) wrong.push(`a users.manage holder restoring a former system admin returned ${adminBack.status}, not 403`);
+        const weakUser = await createTestUser({ username: `${prefix}_w`, role: weak.code });
+        await h.del(`/api/users/${weakUser.id}`);
+        const stronger = await h.post(`/api/users/${weakUser.id}/restore`, { role: strong.code, password: 'Tempor4ry!' }, manager);
+        if (stronger.status !== 403 || codeOf(stronger) !== 'GRANT_BEYOND_OWN_PERMISSIONS') wrong.push(`restoring with a stronger role returned ${stronger.status} ${codeOf(stronger)}, not 403 GRANT_BEYOND_OWN_PERMISSIONS`);
+        const within = await h.post(`/api/users/${weakUser.id}/restore`, { role: weak.code, password: 'Tempor4ry!' }, manager);
+        if (within.status !== 200) wrong.push(`restoring with a role within its keys returned ${within.status}, not 200`);
+      } finally {
+        await orm.delete(users).where(like(users.username, `${prefix}%`));
+        await orm.delete(roles).where(like(roles.code, `${prefix}%`));
+      }
+    });
+  }
+
   return results;
 }
