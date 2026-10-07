@@ -1,5 +1,5 @@
 import { and, asc, eq, ne } from 'drizzle-orm';
-import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { orm, extendStatementTimeout, type DbExecutor } from '../../db/drizzle.js';
 import { items, warehouses } from '../../db/schema.js';
 import { advanceItemCodeCounter } from './itemCodeCounter.js';
 import { guardItemIdentity, itemNameKeyCondition } from './itemIdentity.js';
@@ -274,6 +274,8 @@ export async function importItemsFromExcel(
   const state: ImportState = { createdCount: 0, updatedCount: 0, pricesCount: 0, errors: [], adjustmentTransactionIds: [] };
 
   await orm.transaction(async (tx) => {
+    // v9.0.188 (TD-615): a large import may take longer than the 1-minute statement limit of a request
+    await extendStatementTimeout(tx);
     const ctx: ImportContext = { tx, whs, defaultWhCode, strategies, typeFilter, actor, perms, state };
     for (let i = 0; i < rows.length; i++) {
       await importRow(ctx, rows[i], i + 2);

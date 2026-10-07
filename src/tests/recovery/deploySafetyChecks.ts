@@ -174,7 +174,7 @@ function git(cwd: string, args: string[]): void {
 }
 
 /** origin with two commits; the app clone is on the first, so update.sh pulls the second (package version 9.9.2) */
-function makeGitApp(root: string): string {
+export function makeGitApp(root: string): string {
   const origin = path.join(root, 'origin.git');
   const work = path.join(root, 'work');
   const app = path.join(root, 'app');
@@ -200,7 +200,7 @@ function makeGitApp(root: string): string {
 }
 
 /** npm (vite empties dist/ first, then the build fails when FAKE_BUILD_FAIL=1), systemctl and sudo */
-function fakeBin(root: string): string {
+export function fakeBin(root: string): string {
   const bin = path.join(root, 'bin');
   fs.mkdirSync(bin);
   const write = (name: string, body: string) => fs.writeFileSync(path.join(bin, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
@@ -210,7 +210,7 @@ function fakeBin(root: string): string {
   return bin;
 }
 
-function startupServer(version: string): Promise<{ port: number; close: () => Promise<void> }> {
+export function startupServer(version: string): Promise<{ port: number; close: () => Promise<void> }> {
   const server = http.createServer((req, res) => {
     if (req.url === '/health/startup') res.writeHead(200).end('{"status":"started"}');
     else if (req.url === '/health') res.writeHead(200).end(`{"status":"ok","version":"${version}"}`);
@@ -221,8 +221,8 @@ function startupServer(version: string): Promise<{ port: number; close: () => Pr
   })));
 }
 
-async function runUpdate(app: string, bin: string, extra: Record<string, string>): Promise<{ code: number; output: string }> {
-  return runCommand('bash', [path.join(app, 'update.sh'), '--no-backup'], {
+export async function runUpdate(app: string, bin: string, extra: Record<string, string>, args: string[] = ['--no-backup']): Promise<{ code: number; output: string }> {
+  return runCommand('bash', [path.join(app, 'update.sh'), ...args], {
     cwd: path.dirname(app),
     env: scriptEnv({ PATH: `${bin}:${process.env.PATH ?? ''}`, APP_DIR: app, STARTUP_TIMEOUT: '4', STARTUP_POLL_INTERVAL: '1', ...extra }),
     timeoutMs: 120_000,

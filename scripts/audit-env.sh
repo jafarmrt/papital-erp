@@ -7,7 +7,7 @@ set -euo pipefail
 
 REQUIRED_VARS=(
   NODE_ENV DATABASE_URL JWT_SECRET ALLOWED_ORIGINS
-  ERP_SETUP_TOKEN ERP_WEBHOOK_SECRET_TOKEN
+  ERP_SETUP_TOKEN ERP_WEBHOOK_SECRET_TOKEN ERP_SECRETS_KEY
 )
 
 WARN_IF_EMPTY=(
@@ -31,6 +31,12 @@ done
 # JWT_SECRET length check (>= 32 chars, generate with: openssl rand -hex 48)
 if [ -n "${JWT_SECRET:-}" ] && [ ${#JWT_SECRET} -lt 32 ]; then
   echo "❌ JWT_SECRET must be at least 32 characters"
+  ERRORS=$((ERRORS + 1))
+fi
+
+# v9.0.187 (TD-609): ERP_SECRETS_KEY length check (>= 32 chars, src/lib/secretBox.ts)
+if [ -n "${ERP_SECRETS_KEY:-}" ] && [ ${#ERP_SECRETS_KEY} -lt 32 ]; then
+  echo "❌ ERP_SECRETS_KEY must be at least 32 characters"
   ERRORS=$((ERRORS + 1))
 fi
 
