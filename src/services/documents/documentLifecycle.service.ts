@@ -23,7 +23,7 @@ import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { money } from '../../lib/money.js';
 import { releaseReservationsForDocument, restoreReservationsForDocument } from './projectReservationRelease.js';
 import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
-import { assertVoidHasNoReturns } from './voidDependents.js';
+import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows } from './voidDependents.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { proformaInvoiceTarget } from './proformaInvoice.js';
 import { stockDirectionOf } from './documentRecordRule.js';
@@ -317,6 +317,8 @@ export class DocumentLifecycleService {
       await assertVoidKeepsStockHistory(tx, { id: doc.id, refNumber: doc.refNumber });
       // v9.0.244 (TD-773، ت۴ الف): فاکتوری که برگشت ابطال‌نشده دارد باطل نمی‌شود (۴۰۹ با فهرست برگشت‌ها)
       await assertVoidHasNoReturns(tx, { id: doc.id, refNumber: doc.refNumber });
+      // v9.0.245 (TD-779، ت۴ الف): و نه سندی که دریافت یا پرداخت زنده خزانه دارد (۴۰۹ با فهرست آن‌ها)
+      await assertVoidHasNoTreasuryRows(tx, { id: doc.id, refNumber: doc.refNumber });
 
       const deletedByUser = user || doc.user || 'system';
       // V10-1.1: زمان حذف/برگشت‌ها از ساعت توافقی (بدون Z تا مقایسه لغوی ستون date سازگار بماند)

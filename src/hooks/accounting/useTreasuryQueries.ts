@@ -209,6 +209,22 @@ export function useTreasuryMutations() {
   };
 }
 
+/**
+ * v9.0.245 (TD-779، ت۴ الف): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب»)؛ فاکتوری که دریافت زنده دارد باطل نمی‌شود
+ * و این راه کاربر برای ابطال آن است. فهرست خزانه و وضعیت تسویه اسناد تازه می‌شوند.
+ */
+export function useTreasuryDocumentDetach() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, unknown, number>({
+    mutationFn: (id) => fetchJson(`/accounting/treasury/${id}/document`, { method: 'PUT', body: JSON.stringify({ documentId: null }) }),
+    onSuccess: () => {
+      void invalidateAfterTreasuryChange(queryClient);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documents.all });
+    },
+    onError: silentMutationError,
+  });
+}
+
 export interface CashFlowParams {
   startDate?: string;
   endDate?: string;

@@ -8,6 +8,7 @@ import { READ_PERMISSIONS, RECORD_READ_PERMISSIONS } from '../../lib/recordReadP
 import { AccountingService } from '../../services/accounting.service.js';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../services/accounting/treasury/noVoucherTreasury.js';
 import { getBankAccountOptions } from '../../services/accounting/treasury/bankAccountOptions.js';
+import { relinkTreasuryDocument } from '../../services/accounting/treasury/treasuryDocumentRelink.js';
 import { choosableContraAccounts } from '../../services/accounting/treasury/partyContraAccount.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
@@ -23,6 +24,7 @@ import {
   transferSchema,
   reconcileSchema,
   voidTreasuryTxSchema,
+  relinkTreasuryDocumentSchema,
   chequesQuerySchema,
   createChequeSchema,
   updateChequeStatusSchema,
@@ -258,6 +260,18 @@ router.post('/accounting/treasury/:id/void', authorizePermission('accounting.tre
     ipAddress: req.ip || '',
   });
   res.json(reversal);
+}));
+
+// v9.0.245 (TD-779، ت۴ الف): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») یا وصل کردن به سند فعال دیگر
+router.put('/accounting/treasury/:id/document', authorizePermission('accounting.treasury'), validate(relinkTreasuryDocumentSchema), asyncHandler(async (req, res) => {
+  const result = await relinkTreasuryDocument({
+    id: Number(req.params.id),
+    documentId: req.body.documentId,
+    req,
+    userId: req.user?.id,
+    username: req.user?.username,
+  });
+  res.json(result);
 }));
 
 // ==========================================

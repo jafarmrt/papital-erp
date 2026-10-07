@@ -16,6 +16,9 @@ export async function runSalesDocumentTests(shouldRun: ShouldRun): Promise<TestC
     ['reg_void_invoice_with_returns_td_773',
       'v9.0.244: an invoice with a sales return that is not voided is not voided (409 naming the returns); after the return is voided it is (TD-773)',
       ['td773', 'documents', 'void', 'return', 'package8'], voidWithReturnsCase],
+    ['reg_void_invoice_with_receipts_td_779',
+      'v9.0.245: a document with a live treasury receipt is not voided (409 naming it); the receipt is moved on account or to another document of the same party, then the void goes through (TD-779)',
+      ['td779', 'documents', 'void', 'treasury', 'package8'], voidWithReceiptsCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -133,4 +136,69 @@ async function voidWithReturnsCase(h: Harness, wrong: string[]): Promise<string>
     wrong.push(`voiding the invoice after its returns answered ${brief(voided)} with stock ${await f.stock(a)}, expected 200 and 10`);
   }
   return 'an invoice of 5 with a final return of 2 is not voided (409 naming the return, stock stays 7), a draft return also stops it, and after both returns are voided the invoice is voided and stock is 10';
+}
+
+/** B08-10 (TD-779): a settled invoice was voided silently and its receipt stayed linked to the voided document */
+async function voidWithReceiptsCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const { createBank } = await import('./treasuryPartyTests.js');
+  const { createTestCustomer } = await import('../fixtures/factories.js');
+  const bank = await createBank('P8 TD-779 bank');
+  const party = `P8 party ${h.tag}`;
+  const customer = await createTestCustomer({ name: party });
+  const a = await f.item(10, 1_000);
+  const codeOf = (res: { body?: unknown }) => (res.body as { code?: string })?.code;
+  const textOf = (res: { body?: unknown }) => String((res.body as { error?: unknown })?.error ?? (res.body as { message?: unknown })?.message ?? '');
+  const docRow = async (id: number) => (await h.q(`SELECT is_deleted FROM documents WHERE id = $1`, [id]))[0];
+  const txRow = async (id: number) => (await h.q(`SELECT document_id, voucher_id, status FROM treasury_transactions WHERE id = $1`, [id]))[0];
+  const sale = async (buyer = party) => docIdOf(await h.post('/api/documents', f.doc('invoice', 'final', [{ itemId: a, quantity: 1, unit_price: 3_000_000, location: f.wh }], { buyer_name: buyer })));
+
+  const invoiceId = await sale();
+  const receipt = await h.post('/api/accounting/treasury', {
+    type: 'receipt', method: 'bank_transfer', bankAccountId: bank.id, amount: 3_000_000, date: f.today,
+    partyType: 'customer', partyId: customer.id, partyName: party, documentId: invoiceId,
+  });
+  const receiptId = Number((receipt.body as { id?: unknown })?.id);
+  if (![200, 201].includes(receipt.status) || !receiptId) throw new Error(`setup: receipt ${brief(receipt)}`);
+  const receiptBefore = await txRow(receiptId);
+  const number = String((await h.q(`SELECT transaction_number FROM treasury_transactions WHERE id = $1`, [receiptId]))[0]?.transaction_number);
+
+  // 1) the settled invoice is not voided: 409 naming the receipt, nothing changes
+  const refused = await h.del(`/api/documents/${invoiceId}`);
+  if (refused.status !== 409 || codeOf(refused) !== 'DOCUMENT_HAS_TREASURY_ROWS' || !textOf(refused).includes(number)) {
+    wrong.push(`voiding a settled invoice answered ${brief(refused)}, expected 409 DOCUMENT_HAS_TREASURY_ROWS naming ${number}`);
+  }
+  if (Number((await docRow(invoiceId))?.is_deleted) !== 0) wrong.push('the refused void deleted the invoice');
+
+  // 2) a reader of the treasury cannot move the receipt; the treasury user moves it on account and the voucher stays
+  const reader = await h.sessionWith(['accounting.view']);
+  const readerMove = await h.put(`/api/accounting/treasury/${receiptId}/document`, { documentId: null }, reader);
+  if (readerMove.status !== 403) wrong.push(`accounting.view moved a receipt with ${brief(readerMove)}, expected 403`);
+  const detached = await h.put(`/api/accounting/treasury/${receiptId}/document`, { documentId: null });
+  const afterDetach = await txRow(receiptId);
+  if (detached.status !== 200 || afterDetach?.document_id !== null || afterDetach?.voucher_id !== receiptBefore?.voucher_id) {
+    wrong.push(`moving the receipt on account answered ${brief(detached)} and left ${JSON.stringify(afterDetach)}, expected 200, no document and the same voucher`);
+  }
+  const voided = await h.del(`/api/documents/${invoiceId}`);
+  if (voided.status !== 200) wrong.push(`voiding the invoice after its receipt moved on account answered ${brief(voided)}, expected 200`);
+
+  // 3) the receipt goes to another invoice of the same party, never to a voided one or another party's
+  const toVoided = await h.put(`/api/accounting/treasury/${receiptId}/document`, { documentId: invoiceId });
+  if (toVoided.status !== 422 || codeOf(toVoided) !== 'TREASURY_DOCUMENT_INVALID') wrong.push(`moving the receipt to the voided invoice answered ${brief(toVoided)}, expected 422 TREASURY_DOCUMENT_INVALID`);
+  const otherParty = await sale(`P8 other party ${h.tag}`);
+  const toOther = await h.put(`/api/accounting/treasury/${receiptId}/document`, { documentId: otherParty });
+  if (toOther.status !== 422 || codeOf(toOther) !== 'TREASURY_DOCUMENT_PARTY_MISMATCH') wrong.push(`moving the receipt to another party's invoice answered ${brief(toOther)}, expected 422 TREASURY_DOCUMENT_PARTY_MISMATCH`);
+  const second = await sale();
+  const moved = await h.put(`/api/accounting/treasury/${receiptId}/document`, { documentId: second });
+  if (moved.status !== 200 || (await txRow(receiptId))?.document_id !== second) wrong.push(`moving the receipt to another invoice of the party answered ${brief(moved)}, expected 200 and the new link`);
+  const secondRefused = await h.del(`/api/documents/${second}`);
+  if (secondRefused.status !== 409) wrong.push(`the second invoice with the moved receipt was voided: ${brief(secondRefused)}, expected 409`);
+
+  // 4) a voided receipt and its reversal do not hold the invoice
+  const receiptVoid = await h.post(`/api/accounting/treasury/${receiptId}/void`, { reason: 'TD-779 test' });
+  const secondVoided = await h.del(`/api/documents/${second}`);
+  if (receiptVoid.status !== 200 || secondVoided.status !== 200) wrong.push(`after voiding the receipt (${brief(receiptVoid)}) the invoice void answered ${brief(secondVoided)}, expected 200 and 200`);
+  const movedVoided = await h.put(`/api/accounting/treasury/${receiptId}/document`, { documentId: null });
+  if (movedVoided.status !== 409 || codeOf(movedVoided) !== 'TREASURY_ROW_NOT_RELINKABLE') wrong.push(`moving a voided receipt answered ${brief(movedVoided)}, expected 409 TREASURY_ROW_NOT_RELINKABLE`);
+  return 'a settled invoice is not voided (409 naming the receipt); accounting.view cannot move it; the treasury user moves it on account with its voucher unchanged and the void goes through; it moves to another invoice of the party but not to a voided invoice or another party\'s; a voided receipt does not hold the invoice and is not moved';
 }

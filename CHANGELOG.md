@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.245 — v9.0.245 — Settled Invoice Is Not Voided; Receipts Move On Account
+- **Documents and treasury:** voiding a document with a live treasury receipt or payment is refused with 409 naming them; the treasury table can move such a row on account or to another invoice of the same party, so the void can follow; before, the receipt stayed on the voided invoice and the replacement showed as unpaid (TD-779).
+
 ### v9.0.244 — v9.0.244 — Invoice With a Live Return Is Not Voided
 - **Documents:** voiding a sales invoice that still has a sales return (in any status) is refused with 409 naming the returns; before, the returned goods came back to stock twice and the customer kept a credit for a sale that no longer existed (TD-773).
 

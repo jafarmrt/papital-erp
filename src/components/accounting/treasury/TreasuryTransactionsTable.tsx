@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ArrowDownLeft,
   ArrowUpRight,
+  Unlink,
 } from 'lucide-react';
 import { formatPersianPrice, formatCurrencyLabel, formatPersianDate } from '../../../utils';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
@@ -45,6 +46,8 @@ interface TreasuryTransactionsTableProps {
   onExportExcel: () => void;
   onViewAttachments: (info: { title: string; attachments: FinancialAttachment[] }) => void;
   onVoidTransaction: (tx: TreasuryTransaction) => void;
+  /** v9.0.245 (TD-779): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») */
+  onDetachDocument?: (tx: TreasuryTransaction) => void;
 }
 
 export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps> = React.memo(({
@@ -73,6 +76,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
   onExportExcel,
   onViewAttachments,
   onVoidTransaction,
+  onDetachDocument,
 }) => {
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
   // v9.0.102 (TD-509): `transactions` همان صفحه جاری است که سرور برگردانده (شمار کل در totalFilteredCount)
@@ -351,13 +355,26 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     {/* v9.0.67 (TD-499، ت۱): ردیف معکوس (ابطال تراکنش دیگر) دکمه ابطال ندارد؛ سرور هم آن را رد می‌کند */}
                     <td className="py-3 px-3 text-center">
                       {!isVoided && !(tx.reversalOfId ?? tx.reversal_of_id) ? (
-                        <button
-                          onClick={() => onVoidTransaction(tx)}
-                          title="ابطال تراکنش و ثبت سند معکوس"
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
-                        >
-                          <AlertTriangle size={14} />
-                        </button>
+                        <div className="inline-flex items-center gap-1">
+                          {/* v9.0.245 (TD-779): دریافت یا پرداخت وصل به سند «علی‌الحساب» می‌شود تا سند باطل‌شدنی شود */}
+                          {onDetachDocument && (tx.documentId ?? tx.document_id) && !(tx.payrollId ?? tx.payroll_id) ? (
+                            <button
+                              onClick={() => onDetachDocument(tx)}
+                              title="جدا کردن از سند (علی‌الحساب)"
+                              aria-label="جدا کردن از سند (علی‌الحساب)"
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition cursor-pointer"
+                            >
+                              <Unlink size={14} />
+                            </button>
+                          ) : null}
+                          <button
+                            onClick={() => onVoidTransaction(tx)}
+                            title="ابطال تراکنش و ثبت سند معکوس"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
+                          >
+                            <AlertTriangle size={14} />
+                          </button>
+                        </div>
                       ) : (
                         <span className="text-[10px] text-slate-400 font-mono">—</span>
                       )}
