@@ -24,6 +24,9 @@ export async function runDocumentIntegrityTests(shouldRun: ShouldRun): Promise<T
     ['reg_production_receipt_project_only_td_780',
       'v9.0.256: a production receipt is recorded only through the project delivery: POST /documents and finalizing a draft production receipt are 422 and move nothing, the project path still issues it (TD-780)',
       ['td780', 'documents', 'production_receipt', 'projects', 'package8'], productionReceiptProjectOnlyCase],
+    ['reg_document_by_ref_fiscal_year_td_782',
+      'v9.0.257: GET /documents/by-ref finds only an active final document of the type, by fiscal year when given; a number in two years is 409 with the years, a draft is 404 (TD-782)',
+      ['td782', 'documents', 'by_ref', 'fiscal_year', 'package8'], documentByRefFiscalYearCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -191,4 +194,44 @@ async function productionReceiptProjectOnlyCase(h: Harness, wrong: string[]): Pr
   }
 
   return 'POST /documents refuses a production receipt (final, on a cancelled project, draft) with 422 PRODUCTION_RECEIPT_PROJECT_ONLY and finalizing a legacy draft is refused the same way, leaving stock 0; the project delivery issues a final production receipt and stock 1';
+}
+
+/** B08-13 (TD-782): by-ref loaded every document of the type and always returned the current year's one */
+async function documentByRefFiscalYearCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const item = await f.item(20, 1_000);
+  const lines = [{ itemId: item, quantity: 1, unit_price: 5_000, location: f.wh }];
+  const older = await h.post('/api/documents', f.doc('invoice', 'final', lines));
+  const newer = await h.post('/api/documents', f.doc('invoice', 'final', lines));
+  const draft = await h.post('/api/documents', f.doc('invoice', 'draft', lines));
+  if (older.status !== 200 || newer.status !== 200 || draft.status !== 200) throw new Error(`setup: invoices ${brief(older)}, ${brief(newer)}, ${brief(draft)}`);
+  const [{ fy }] = await h.q(`SELECT ref_fiscal_year AS fy FROM documents WHERE id = $1`, [docIdOf(newer)]) as Array<{ fy: number }>;
+  const lastYear = Number(fy) - 1;
+  // the same number in two fiscal years, as each year's series restarts (uq_documents_type_fy_ref_active is per year)
+  const ref = `P8D-${h.tag}`;
+  await h.q(`UPDATE documents SET ref_number = $1, ref_fiscal_year = $2 WHERE id = $3`, [ref, lastYear, docIdOf(older)]);
+  await h.q(`UPDATE documents SET ref_number = $1 WHERE id = $2`, [ref, docIdOf(newer)]);
+  const draftRef = `P8D-draft-${h.tag}`;
+  await h.q(`UPDATE documents SET ref_number = $1 WHERE id = $2`, [draftRef, docIdOf(draft)]);
+  const byRef = (r: string, query: string) => h.get(`/api/documents/by-ref/${encodeURIComponent(r)}?${query}`);
+  const idOf = (res: { body?: unknown }) => Number((res.body as { id?: unknown })?.id);
+
+  // 1) no year: two matches are 409 with both years, newest first (was: 200 with the current year's invoice)
+  const both = await byRef(ref, 'type=invoice');
+  const years = ((both.body as { details?: { candidates?: Array<{ refFiscalYear: number }> } })?.details?.candidates ?? []).map(c => c.refFiscalYear);
+  if (both.status !== 409 || codeOf(both) !== 'DOCUMENT_REF_AMBIGUOUS' || JSON.stringify(years) !== JSON.stringify([Number(fy), lastYear])) {
+    wrong.push(`by-ref without a year answered ${brief(both)} with years ${JSON.stringify(years)}, expected 409 DOCUMENT_REF_AMBIGUOUS with [${fy},${lastYear}]`);
+  }
+  // 2) each year finds its own invoice (was: last year's invoice unreachable)
+  const old = await byRef(ref, `type=invoice&fiscalYear=${lastYear}`);
+  if (old.status !== 200 || idOf(old) !== docIdOf(older)) wrong.push(`by-ref for ${lastYear} answered ${brief(old)}, expected invoice ${docIdOf(older)}`);
+  const cur = await byRef(ref, `type=invoice&fiscalYear=${fy}`);
+  if (cur.status !== 200 || idOf(cur) !== docIdOf(newer)) wrong.push(`by-ref for ${fy} answered ${brief(cur)}, expected invoice ${docIdOf(newer)}`);
+  // 3) a draft is not a reference invoice; a missing type is 400
+  const draftLookup = await byRef(draftRef, 'type=invoice');
+  if (draftLookup.status !== 404 || codeOf(draftLookup) !== 'DOCUMENT_REF_NOT_FOUND') wrong.push(`by-ref of a draft invoice answered ${brief(draftLookup)}, expected 404 DOCUMENT_REF_NOT_FOUND`);
+  const noType = await h.get(`/api/documents/by-ref/${encodeURIComponent(ref)}`);
+  if (noType.status !== 400) wrong.push(`by-ref without a type answered ${brief(noType)}, expected 400`);
+
+  return `number ${ref} in ${lastYear} and ${fy}: no year 409 DOCUMENT_REF_AMBIGUOUS [${fy},${lastYear}], each year its own invoice; a draft 404 DOCUMENT_REF_NOT_FOUND; no type 400`;
 }

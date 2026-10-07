@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.257 — v9.0.257 — The Reference Invoice of a Sales Return by Fiscal Year
+- **Sales returns:** the reference invoice lookup now finds only final invoices with one indexed query and knows the fiscal year: a number used in two years asks which year, so last year's invoice can be returned against, and each lookup error shows its real cause (TD-782).
+
 ### v9.0.256 — v9.0.256 — A Production Receipt Comes Only From the Project Delivery
 - **Production:** a production receipt is now recorded only through the project's «ورود به انبار», where the project, its planned quantity and its delivery cost are checked; the stock document page no longer offers it and `POST /documents` or finalizing a draft one is refused (TD-780, decision ت۷).
 

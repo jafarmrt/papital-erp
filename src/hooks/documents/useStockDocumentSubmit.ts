@@ -25,7 +25,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
   const {
     actionType, docType, refNumber, date, location, buyerName, currency, exchangeRate, returnInvoiceId, returnVatPercent, setReturnVatPercent,
     notes, docItems, selectedProjectId, selectedProjectObj, attachments, getItemReservationSummary,
-    setIsSaving, setDocItems, fetchNextRef, setReturnInvoiceRef, setReturnInvoiceId, setBuyerName,
+    setIsSaving, setDocItems, fetchNextRef, changeReturnInvoiceRef, setBuyerName,
     setSelectedSupplierObj, setNotes, setUnitPrice, setQuantity, setSelectedProjectId,
     setSelectedProjectObj, setAttachments, setCurrency, setExchangeRate,
   } = form;
@@ -134,8 +134,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
 
       setDocItems([]);
       void fetchNextRef();
-      setReturnInvoiceRef('');
-      setReturnInvoiceId(null);
+      changeReturnInvoiceRef('');
       setReturnVatPercent('');
       setBuyerName('');
       setSelectedSupplierObj(null);

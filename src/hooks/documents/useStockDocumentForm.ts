@@ -14,6 +14,8 @@ import {
 } from '../../lib/documents/stockReservations';
 import type { StockDocumentReferenceData } from './useStockDocumentReferenceData';
 import { invoiceReturnTerms } from '../../lib/documents/returnUnitPrice';
+import { returnInvoiceLookupError, returnInvoiceLookupUrl, type ReturnInvoiceCandidate } from '../../lib/documents/returnInvoiceLookup';
+import { toPersianDigits } from '../../utils/persianNumber';
 
 interface ReturnInvoiceLine {
   item_id: number;
@@ -27,6 +29,7 @@ interface ReturnInvoiceLine {
 
 interface ReturnInvoiceDocument {
   id?: number;
+  refFiscalYear?: number | null;
   buyer_name?: string;
   currency?: string | null;
   exchangeRate?: number | null;
@@ -53,6 +56,8 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const [returnInvoiceRef, setReturnInvoiceRef] = useState('');
   // v7.0.81 (TD-230): شناسه فاکتور فروش اصلی؛ کالای برگشتی با بهای خروج همان فاکتور وارد انبار می‌شود
   const [returnInvoiceId, setReturnInvoiceId] = useState<number | null>(null);
+  // v9.0.257 (TD-782): فاکتورهای قطعی هم‌شماره در چند سال مالی، تا کاربر سال را انتخاب کند
+  const [returnInvoiceCandidates, setReturnInvoiceCandidates] = useState<ReturnInvoiceCandidate[]>([]);
   // v9.0.247 (TD-774، تصمیم ت۵ الف): درصد مالیات برگشت بی فاکتور مرجع از کاربر؛ برگشت با فاکتور مرجع آن را از فاکتور دارد
   const [returnVatPercent, setReturnVatPercent] = useState<number | ''>('');
   const [notes, setNotes] = useState('');
@@ -96,11 +101,20 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     return personnelList.find(p => (p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim()) === buyerName.trim()) || null;
   }, [buyerName, personnelList, actionType]);
 
-  const handleFetchReturnInvoice = async () => {
-    if (!returnInvoiceRef) return;
+  /** شماره فاکتور مرجع عوض شد: فاکتور و سال‌های پیشین دیگر به آن تعلق ندارند */
+  const changeReturnInvoiceRef = (ref: string) => {
+    setReturnInvoiceRef(ref);
+    setReturnInvoiceId(null);
+    setReturnInvoiceCandidates([]);
+  };
+
+  // v9.0.257 (TD-782): فقط فاکتور قطعی؛ شماره‌ای که در چند سال مالی فاکتور دارد سال را می‌پرسد
+  const handleFetchReturnInvoice = async (fiscalYear?: number | null) => {
+    if (!returnInvoiceRef.trim()) return;
     try {
-      const doc = await fetchJson<ReturnInvoiceDocument>(`/documents/by-ref/${encodeURIComponent(returnInvoiceRef.trim())}?type=invoice`);
+      const doc = await fetchJson<ReturnInvoiceDocument>(returnInvoiceLookupUrl(returnInvoiceRef, fiscalYear));
       if (doc && Array.isArray(doc.items)) {
+        setReturnInvoiceCandidates([]);
         setReturnInvoiceId(typeof doc.id === 'number' ? doc.id : null);
         setBuyerName(doc.buyer_name || '');
         // v9.0.246 (TD-788، تصمیم ت۱۰ الف): ارز، نرخ و قیمت خالص هر واحد (پس از تخفیف ردیف، میانگین وزنی ردیف‌های یک کالا)
@@ -119,11 +133,14 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
         setCurrency(doc.currency || 'IRR');
         setExchangeRate(doc.currency && doc.currency !== 'IRR' ? Number(doc.exchangeRate) || 0 : 0);
         setDocItems(newDocItems);
-        setNotes(`برگشت از فاکتور فروش شماره ${returnInvoiceRef}`);
+        const year = doc.refFiscalYear ?? fiscalYear;
+        setNotes(`برگشت از فاکتور فروش شماره ${returnInvoiceRef.trim()}${year ? ` سال مالی ${toPersianDigits(String(year))}` : ''}`);
         toast.success('اقلام فاکتور مرجع با موفقیت بارگذاری شد.');
       }
-    } catch {
-      toast.error('فاکتوری با این شماره یافت نشد.');
+    } catch (err: unknown) {
+      const { message, candidates } = returnInvoiceLookupError(err);
+      setReturnInvoiceCandidates(candidates);
+      toast.error(message);
     }
   };
 
@@ -213,6 +230,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     exchangeRate, setExchangeRate,
     returnInvoiceRef, setReturnInvoiceRef,
     returnInvoiceId, setReturnInvoiceId,
+    returnInvoiceCandidates, changeReturnInvoiceRef,
     returnTermsLocked,
     returnVatPercent, setReturnVatPercent,
     notes, setNotes,

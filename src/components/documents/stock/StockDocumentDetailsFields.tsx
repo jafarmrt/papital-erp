@@ -10,6 +10,7 @@ import type { StockDocProject } from '../../../lib/documents/stockReservations';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
 import { StockCounterpartyField } from './StockCounterpartyField';
 import { STOCK_PAGE_DOC_TYPE_LABELS } from '../../../lib/documents/stockDocumentAccess';
+import { ReturnInvoiceYearChoices } from './ReturnInvoiceYearChoices';
 
 interface StockDocumentDetailsFieldsProps {
   form: StockDocumentForm;
@@ -29,7 +30,7 @@ interface StockDocumentDetailsFieldsProps {
 export function StockDocumentDetailsFields({ form, currentUser, warehouses, projectsList, personnelList, suppliersList, typeOptions }: StockDocumentDetailsFieldsProps) {
   const {
     actionType, docType, setDocType, refNumber, setRefNumber, currency, setCurrency, exchangeRate, setExchangeRate,
-    selectedProjectId, setSelectedProjectId, returnInvoiceRef, setReturnInvoiceRef, returnInvoiceId, setReturnInvoiceId,
+    selectedProjectId, setSelectedProjectId, returnInvoiceRef, changeReturnInvoiceRef, returnInvoiceId, returnInvoiceCandidates,
     returnTermsLocked, returnVatPercent, setReturnVatPercent, handleFetchReturnInvoice, location, setLocation, date, setDate, notes, setNotes,
   } = form;
 
@@ -116,19 +117,20 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
               <input 
                 type="text" 
                 value={returnInvoiceRef} 
-                onChange={e => { setReturnInvoiceRef(e.target.value); setReturnInvoiceId(null); }} 
+                onChange={e => changeReturnInvoiceRef(e.target.value)} 
                 placeholder="مثال: 1005" 
                 className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 text-left font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" 
                 dir="ltr" 
               />
               <button 
                 type="button" 
-                onClick={handleFetchReturnInvoice} 
+                onClick={() => void handleFetchReturnInvoice()} 
                 className="bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 px-3 rounded-xl text-xs font-bold whitespace-nowrap transition-colors"
               >
                 جستجو
               </button>
             </div>
+            <ReturnInvoiceYearChoices candidates={returnInvoiceCandidates} onChoose={year => void handleFetchReturnInvoice(year)} />
             <p className="text-[10px] text-slate-500 mt-1">
               {returnInvoiceId !== null
                 ? 'ارز، نرخ و قیمت خالص هر کالا از همین فاکتور است و کالاها با بهای تمام‌شده خروج همین فاکتور وارد انبار می‌شوند.'

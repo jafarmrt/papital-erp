@@ -3,6 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog.js';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
+import { findFinalDocumentIdByRef } from '../services/documents/documentRefLookup.js';
 import { assertNotProjectDelivery, assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
@@ -196,10 +197,17 @@ export const documentUpdateSchema = z.object({
   }).passthrough()
 }).passthrough();
 
+const DOCUMENT_LIST_TYPES = ['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste'] as const;
+
 export const paramsRefSchema = z.object({
   params: z.object({
     ref: z.string().min(1, 'شماره سند الزامی است')
-  })
+  }),
+  // v9.0.257 (TD-782): نوع سند الزامی و سال مالی اختیاری (خالی = همه سال‌ها)
+  query: z.object({
+    type: z.enum(DOCUMENT_LIST_TYPES, { error: 'نوع سند نامعتبر است' }),
+    fiscalYear: z.coerce.number().int('سال مالی باید عدد صحیح باشد').min(1300, 'سال مالی نامعتبر است').max(1600, 'سال مالی نامعتبر است').optional(),
+  }).passthrough(),
 });
 
 export const paramsDocIdOrRefSchema = z.object({
@@ -215,8 +223,6 @@ export const nextRefQuerySchema = z.object({
     })
   }).passthrough()
 }).passthrough();
-
-const DOCUMENT_LIST_TYPES = ['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste'] as const;
 
 /** v9.0.250 (TD-792): `types=invoice,proforma` فهرست را به چند نوع محدود می‌کند */
 function documentListTypes(raw: unknown): string[] | undefined {
@@ -399,17 +405,15 @@ router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...R
 }));
 
 router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.documentRecord, ...READ_PERMISSIONS.stockCountDocuments), validate(paramsRefSchema), asyncHandler(async (req, res) => {
-  const type = req.query.type as string;
+  const type = String(req.query.type);
   const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documentRecord);
   assertDocumentTypeReadable(readable, type);
-  const ref = req.params.ref;
-  const docsResult = await DocumentService.getDocuments(type);
-  const docList = Array.isArray(docsResult) ? docsResult : (docsResult?.data || []);
-  const docSummary = docList.find((d: { ref_number?: string; id?: number }) => d.ref_number === ref);
-  if (!docSummary) {
-    throw new NotFoundError('سند یافت نشد');
-  }
-  const doc = await DocumentService.getDocumentById(docSummary.id);
+  // v9.0.257 (TD-782): یک کوئری روی شاخص (نوع، سال، شماره) و فقط سند قطعی فعال؛ چند سال با یک شماره ۴۰۹ با فهرست سال‌ها.
+  // پیش‌تر همه اسناد نوع بار می‌شد و سند سال جاری همیشه برنده بود
+  const fiscalYear = req.query.fiscalYear === undefined ? null : Number(req.query.fiscalYear);
+  const docId = await findFinalDocumentIdByRef({ ref: req.params.ref, type, fiscalYear, typeTitle: docTypeTitles[type] ?? 'سند' });
+  const doc = await DocumentService.getDocumentById(docId);
+  if (!doc) throw new NotFoundError('سند یافت نشد');
   assertDocumentTypeReadable(readable, doc?.type);
   res.json(doc);
 }));
