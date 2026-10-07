@@ -79,6 +79,12 @@ export const LOCK_ORDER_MAP: Record<string, LockOrderMetadata> = {
     tableName: 'production_projects',
     description: 'Production projects and stage tracking'
   },
+  // v9.0.178 (TD-618): every table a caller locks has a level; withOrderedLocks refuses one without
+  project_bom_allocations: {
+    level: LockHierarchyLevel.PRODUCTION,
+    tableName: 'project_bom_allocations',
+    description: 'Material allocations of a production project'
+  },
   documents: {
     level: LockHierarchyLevel.DOCUMENTS,
     tableName: 'documents',
@@ -125,13 +131,9 @@ export function validateLockOrder(arg1: LockableResource[] | LockHierarchyLevel 
     const resources = arg1;
     for (let i = 0; i < resources.length - 1; i++) {
       if (resources[i].hierarchyLevel > resources[i + 1].hierarchyLevel) {
-        const msg = `Lock order violation: ${resources[i].name} (level ${resources[i].hierarchyLevel}) ` +
-          `acquired before ${resources[i + 1].name} (level ${resources[i + 1].hierarchyLevel})`;
-        if (process.env.NODE_ENV !== 'production') {
-          throw new Error(msg);
-        } else {
-          logger.error(`[Lock Order] ${msg}`);
-        }
+        // v9.0.178 (TD-618): the same in every environment; production used to log and go on with the wrong order
+        throw new Error(`Lock order violation: ${resources[i].name} (level ${resources[i].hierarchyLevel}) ` +
+          `acquired before ${resources[i + 1].name} (level ${resources[i + 1].hierarchyLevel})`);
       }
     }
     return true;
@@ -141,12 +143,7 @@ export function validateLockOrder(arg1: LockableResource[] | LockHierarchyLevel 
   const requestedLevel = Number(arg2);
   const isOrdered = requestedLevel >= currentLevel;
   if (!isOrdered) {
-    const msg = `Lock order violation: level ${currentLevel} acquired before level ${requestedLevel}`;
-    if (process.env.NODE_ENV !== 'production') {
-      logger.warn(`[Lock Order Warning] ${msg}`);
-    } else {
-      logger.error(`[Lock Order] ${msg}`);
-    }
+    logger.error(`[Lock Order] Lock order violation: level ${currentLevel} acquired before level ${requestedLevel}`);
   }
   return isOrdered;
 }
@@ -164,11 +161,14 @@ export interface LockResourceTarget {
  * Resolves hierarchy level for a table or resource name from LOCK_ORDER_MAP.
  * Accepts either a LockResourceTarget object, a Drizzle table instance, or a resource string.
  */
+/** Level returned for a table that is not in LOCK_ORDER_MAP; withOrderedLocks refuses it */
+export const UNKNOWN_LOCK_LEVEL = 999;
+
 export function resolveLockHierarchyLevel(
   targetOrResource: any,
   fallbackName?: string
 ): number {
-  if (!targetOrResource) return 999;
+  if (!targetOrResource) return UNKNOWN_LOCK_LEVEL;
 
   if (typeof targetOrResource === 'number') {
     return targetOrResource;
@@ -223,7 +223,7 @@ export function resolveLockHierarchyLevel(
     }
   }
 
-  return 999;
+  return UNKNOWN_LOCK_LEVEL;
 }
 
 /**
@@ -254,8 +254,12 @@ export async function withOrderedLocks<T>(
     };
   });
 
-  // Validate locking sequence
-  validateLockOrder(normalized.map(r => ({ name: r.name, hierarchyLevel: r.level })));
+  // v9.0.178 (TD-618): the caller's order does not matter (the resources are sorted below, in every environment);
+  // a table with no lock level is refused instead of being locked last, after the outbox
+  const unknown = normalized.filter(r => r.level === UNKNOWN_LOCK_LEVEL);
+  if (unknown.length > 0) {
+    throw new Error(`Lock order: no lock level for ${unknown.map(r => r.name).join(', ')}; add the table to LOCK_ORDER_MAP or pass level`);
+  }
 
   // Sort resources strictly by hierarchy level
   const sortedResources = [...normalized].sort((a, b) => a.level - b.level);

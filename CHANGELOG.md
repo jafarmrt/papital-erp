@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.178 — Lock Order Behaves the Same Everywhere
+- **Lock Order:** `withOrderedLocks` sorts resources by `LOCK_ORDER_MAP` in every environment and refuses a table without a lock level (pass `level` or add the table); `validateLockOrder` refuses an out-of-order declared sequence everywhere. Before, tests threw on input order while production sorted silently, and an unmapped table (`piecework_payrolls`, `crm_leads`, `journal_voucher_items`) was locked last at level 999.
+
 ### v9.0.177 — Long Statement Timeout on the Transaction Itself
 - **Long Statement Timeout:** `extendStatementTimeout(tx)` (`src/db/drizzle.ts`) sets `statement_timeout` to 5 minutes with `SET LOCAL` on the transaction's own connection; the item Excel import calls it first. The removed `withLongQueryTimeout(fn)` set it on a separate pool connection the callback never used (its queries kept the 1-minute limit) and held that connection idle.
 
