@@ -50,6 +50,21 @@ export function assertRecordableDocument(docType: string, inOut?: string | null,
 }
 
 /**
+ * v9.0.256 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): رسید تولید فقط از «ورود به انبار» پروژه ثبت می‌شود
+ * (`ProjectService.addProjectToInventory`، TD-285)، جایی که پروژه، سقف مقدار برنامه با دلیل (TD-327) و بهای تحویل سنجیده
+ * می‌شود. `POST /documents` و نهایی‌سازی رسید تولید پیش‌نویس آن را ۴۲۲ می‌دهند؛ پیش‌تر از این مسیر رسید تولید بی پروژه،
+ * فراتر از برنامه و روی پروژه لغوشده ثبت می‌شد و کالای در جریان ساخت بی پروژه بستانکار می‌شد.
+ */
+export function assertNotProjectDelivery(docType: string, refNumber?: string | null): void {
+  if (docType !== 'production_receipt') return;
+  throw new ValidationError(
+    `${refNumber ? `رسید تولید «${refNumber}» قطعی نمی‌شود؛ ` : ''}رسید تولید فقط از «ورود به انبار» همان پروژه ثبت می‌شود تا پروژه، سقف مقدار برنامه و بهای تحویل سنجیده شود.`,
+    { docType },
+    'PRODUCTION_RECEIPT_PROJECT_ONLY',
+  );
+}
+
+/**
  * جهت گردش کالای سند، از نوع آن، در ثبت و نهایی‌سازی (فاکتور حاصل از پیش‌فاکتور خروج است). انبارگردانی جهت نوعی ندارد و
  * این تابع برای آن «خروج» برمی‌گرداند؛ ردیف‌های انبارگردانی جهت خود را از اختلاف شمارش می‌گیرند و مجوزش `audit.apply` است.
  */

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.256 — v9.0.256 — A Production Receipt Comes Only From the Project Delivery
+- **Production:** a production receipt is now recorded only through the project's «ورود به انبار», where the project, its planned quantity and its delivery cost are checked; the stock document page no longer offers it and `POST /documents` or finalizing a draft one is refused (TD-780, decision ت۷).
+
 ### v9.0.255 — v9.0.255 — Stock Count Lines Need a Count and One Line per Item and Warehouse
 - **Inventory:** a stock count line without a count is now refused instead of being counted as zero, a repeated item in the same warehouse is refused instead of being adjusted twice, and the count document shows each warehouse's own variance and book stock (TD-777).
 

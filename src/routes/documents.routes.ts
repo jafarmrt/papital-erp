@@ -3,7 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog.js';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
-import { assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
+import { assertNotProjectDelivery, assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, storageDateParam, decimalInput } from '../middleware/validate.js';
@@ -280,6 +280,8 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   const requestedType = String(req.body.docType);
   // v9.0.238 (TD-770): جهت گردش از نوع سند؛ `inOut` ناسازگار پیش از سنجش مجوز ۴۲۲ می‌گیرد
   assertRecordableDocument(requestedType, req.body.inOut);
+  // v9.0.256 (TD-780، تصمیم ت۷ الف): رسید تولید فقط از «ورود به انبار» پروژه
+  assertNotProjectDelivery(requestedType);
   const recordStatus = createdDocumentStatus(requestedType, req.body.status);
   await assertMayRecordDocument(req.user, permissionToCreateDocument(req.body),
     `ثبت ${docTypeTitles[requestedType] ?? 'سند'}${recordStatus === 'final' ? ' به‌صورت قطعی' : ''}`);
