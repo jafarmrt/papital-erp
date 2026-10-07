@@ -154,5 +154,45 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
     }));
   }
 
+  const draftId = 'reg_payroll_pay_only_approved_td_816';
+  if (shouldRun(draftId, 'td816', 'payroll', 'payslip', 'payment', 'package12')) {
+    await runCase(results, draftId, 'v9.0.234: a draft payslip is not paid (409 PAYROLL_NOT_APPROVED) and the status route no longer writes the payment date, method or reference (400) (TD-816)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const worker = await newWorker('TD-816 worker');
+      await addLog(worker, await newTask(), '2026-04-08', 800_000);
+      const issued = await admin.post('/api/piecework/payrolls/generate', { personnelId: worker, ...PERIOD });
+      const payrollId = Number((issued.body as { id?: number })?.id);
+      if (issued.status !== 201 || !payrollId) throw new Error(`issuing the payslip answered ${issued.status} ${brief(issued.body)}`);
+      const bankId = await fundedBank();
+      const row = async () => (await orm.select({ status: pieceworkPayrolls.status, paidAmount: pieceworkPayrolls.paidAmount, paymentMethod: pieceworkPayrolls.paymentMethod, paymentDate: pieceworkPayrolls.paymentDate })
+        .from(pieceworkPayrolls).where(eq(pieceworkPayrolls.id, payrollId)))[0];
+
+      // 1) a draft is not paid; approving it makes it payable
+      const toDraft = await admin.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'draft' });
+      if (toDraft.status !== 200) problems.push(`moving the payslip to draft answered ${toDraft.status} ${brief(toDraft.body)}`);
+      const refused = await admin.post(`/api/piecework/payrolls/${payrollId}/register-payment`, { bankAccountId: bankId, paymentDate: '2026-05-01' });
+      if (refused.status !== 409 || codeOf(refused.body) !== 'PAYROLL_NOT_APPROVED') problems.push(`paying a draft payslip answered ${refused.status} ${brief(refused.body)}, expected 409 PAYROLL_NOT_APPROVED`);
+      const afterRefusal = await row();
+      if (afterRefusal?.status !== 'draft' || !fin(afterRefusal?.paidAmount ?? 0).isZero()) problems.push(`the draft payslip is ${afterRefusal?.status} with ${afterRefusal?.paidAmount} paid after the refusal`);
+      const approved = await admin.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'approved', notes: 'approved for payment' });
+      if (approved.status !== 200) problems.push(`approving the payslip answered ${approved.status} ${brief(approved.body)}`);
+      const paid = await admin.post(`/api/piecework/payrolls/${payrollId}/register-payment`, { bankAccountId: bankId, paymentDate: '2026-05-01' });
+      if (paid.status !== 200 && paid.status !== 201) problems.push(`paying the approved payslip answered ${paid.status} ${brief(paid.body)}`);
+
+      // 2) the status route does not rewrite the payment details of a paid payslip (it used to take «cheque» and any date)
+      const before = await row();
+      const rewrite = await admin.put(`/api/piecework/payrolls/${payrollId}/status`, { paymentMethod: 'cheque', paymentDate: '2026-01-01' });
+      if (rewrite.status !== 400) problems.push(`rewriting the payment details answered ${rewrite.status} ${brief(rewrite.body)}, expected 400`);
+      const after = await row();
+      if (after?.paymentMethod !== before?.paymentMethod || after?.paymentDate !== before?.paymentDate || after?.status !== 'paid') {
+        problems.push(`payment details changed from ${before?.paymentMethod} ${before?.paymentDate} to ${after?.paymentMethod} ${after?.paymentDate} (status ${after?.status})`);
+      }
+
+      assertNoProblems(problems);
+      return 'The draft payslip refused with 409 and left unpaid, paid after approval, and the payment details of the paid payslip kept against a status request (400).';
+    }));
+  }
+
   return results;
 }

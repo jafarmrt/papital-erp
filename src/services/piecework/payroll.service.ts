@@ -47,9 +47,6 @@ export interface GeneratePayrollInput {
 
 export interface UpdatePayrollStatusInput {
   status?: string;
-  paymentDate?: string;
-  paymentMethod?: string;
-  paymentReference?: string;
   notes?: string;
   userId?: number;
   username: string;
@@ -263,7 +260,9 @@ export class PieceworkPayrollService {
 
   /** تغییر وضعیت فیش (به‌جز «paid» که فقط از مسیر خزانه‌داری مجاز است) و صدور/بررسی سند. */
   static async updatePayrollStatus(id: number, input: UpdatePayrollStatusInput) {
-    const { status, paymentDate, paymentMethod, paymentReference, notes } = input;
+    // v9.0.234 (TD-816): تاریخ، روش و شماره پیگیری پرداخت فقط از مسیر «ثبت پرداخت» نوشته می‌شود؛ پیش‌تر این مسیر آن‌ها را
+    // روی فیش پرداخت‌شده هم بازنویسی می‌کرد، حتی به «cheque» که TD-411 برای پرداخت حقوق ممنوع کرده است.
+    const { status, notes } = input;
 
     // V10-4.4: گذار وضعیت به «paid» دیگر مستقیم مجاز نیست — فقط از مسیر خزانه‌داری
     if (status && String(status).trim().toLowerCase() === 'paid') {
@@ -294,9 +293,6 @@ export class PieceworkPayrollService {
 
       const updates: Partial<typeof pieceworkPayrolls.$inferInsert> = {};
       if (targetStatus) updates.status = targetStatus;
-      if (paymentDate !== undefined) updates.paymentDate = requireStorageDate(paymentDate, 'تاریخ پرداخت فیش');
-      if (paymentMethod !== undefined) updates.paymentMethod = String(paymentMethod).trim();
-      if (paymentReference !== undefined) updates.paymentReference = String(paymentReference).trim();
       if (notes !== undefined) updates.notes = String(notes).trim();
 
       await tx.update(pieceworkPayrolls).set(updates).where(eq(pieceworkPayrolls.id, id));

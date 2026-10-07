@@ -13,6 +13,7 @@ import { VoucherService } from './voucher.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
 import { TreasuryTransactionService } from './treasury/treasuryTransaction.service.js';
 import { payrollVouchersWhere, pickPayrollVoucher } from './payrollVoucherLink.js';
+import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable.js';
 import { LockHierarchyLevel, withOrderedLocks } from '../../lib/lockOrder.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
@@ -143,7 +144,11 @@ export class PayrollPaymentService {
         );
       }
 
-      if (!payroll.status || !['approved', 'partially_paid', 'draft'].includes(payroll.status)) {
+      // v9.0.234 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ پیش‌تر «draft» هم پذیرفته می‌شد
+      if (payroll.status === 'draft') {
+        throw new ConflictError(`فیش ${payroll.payrollNumber} پیش‌نویس است؛ پیش از ثبت پرداخت آن را تأیید کنید.`, undefined, 'PAYROLL_NOT_APPROVED');
+      }
+      if (!isPayablePayrollStatus(payroll.status)) {
         throw new ConflictError(`وضعیت فعلی فیش (${payroll.status}) اجازه ثبت پرداخت ندارد.`);
       }
 

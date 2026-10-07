@@ -130,13 +130,21 @@ const generatePieceworkPayrollSchema = z.object({
   })
 });
 
+// v9.0.234 (TD-816): تاریخ، روش و شماره پیگیری پرداخت فقط از «ثبت پرداخت» (register-payment) نوشته می‌شود
+const PAYMENT_FIELDS_OF_PAYROLL = ['paymentDate', 'paymentMethod', 'paymentReference'] as const;
 const updatePieceworkPayrollStatusSchema = z.object({
   body: z.object({
     status: z.string().optional(),
-    paymentDate: z.string().optional(),
-    paymentMethod: z.string().optional(),
-    paymentReference: z.string().optional(),
     notes: z.string().optional(),
+    paymentDate: z.unknown().optional(),
+    paymentMethod: z.unknown().optional(),
+    paymentReference: z.unknown().optional(),
+  }).superRefine((body, ctx) => {
+    for (const key of PAYMENT_FIELDS_OF_PAYROLL) {
+      if (body[key] !== undefined) {
+        ctx.addIssue({ code: 'custom', path: [key], message: 'تاریخ، روش و شماره پیگیری پرداخت فیش فقط از «ثبت پرداخت» ثبت می‌شود' });
+      }
+    }
   }),
   params: z.object({
     id: numericIdString
@@ -709,16 +717,13 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorizePe
 router.put('/piecework/payrolls/:id/status', authorizePermission('personnel.manage'), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { status, paymentDate, paymentMethod, paymentReference, notes } = req.body;
+    const { status, notes } = req.body;
 
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
 
     const result = await PieceworkPayrollService.updatePayrollStatus(id, {
       status,
-      paymentDate,
-      paymentMethod,
-      paymentReference,
       notes,
       userId: currentUserId,
       username: currentUsername
