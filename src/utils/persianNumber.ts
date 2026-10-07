@@ -17,7 +17,7 @@ export function toPersianDigits(val: string | number | null | undefined, maxDeci
           maximumFractionDigits: maxDecimals,
           minimumFractionDigits: 0,
           useGrouping: false
-        });
+        }).replace('.', '٫');
       }
     }
     return s.replace(/[0-9]/g, (w) => farsiDigits[parseInt(w, 10)]);
@@ -26,9 +26,15 @@ export function toPersianDigits(val: string | number | null | undefined, maxDeci
   }
 }
 
-/** v9.0.227 (TD-678): فقط ارقام لاتین را فارسی می‌کند، بی تبدیل دوباره به عدد و بی گرد کردن متنی که قالب گرفته است */
+/**
+ * v9.0.227 (TD-678): فقط ارقام لاتین را فارسی می‌کند، بی تبدیل دوباره به عدد و بی گرد کردن متنی که قالب گرفته است.
+ * v9.0.228 (TD-687، قاعده numbers در vibefarsi): جداکننده هزارگان «٬» (U+066C) و ممیز «٫» (U+066B)، نه «,» و «.».
+ */
 function persianDigitsOf(formatted: string): string {
-  return formatted.replace(/[0-9]/g, (w) => '۰۱۲۳۴۵۶۷۸۹'[Number(w)]);
+  return formatted
+    .replace(/[0-9]/g, (w) => '۰۱۲۳۴۵۶۷۸۹'[Number(w)])
+    .replace(/,/g, '٬')
+    .replace(/\./g, '٫');
 }
 
 export function toEnglishDigits(str: string | number | null | undefined): string {

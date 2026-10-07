@@ -32,7 +32,7 @@ describe('account card view (TD-574)', () => {
     expect(screen.getByRole('heading', { level: 4 }).textContent?.trim()).toBe('دفتر حساب معین 1101 - صندوق');
     const firstVoucherRow = screen.getByText('دریافت از مشتری').closest('tr')!;
     expect(firstVoucherRow.querySelector('td')!.textContent).toBe('۱');
-    expect(container.textContent).toContain('۶۰,۰۰۰,۰۰۰');
+    expect(container.textContent).toContain('۶۰٬۰۰۰٬۰۰۰');
   });
 
   it('a group card says it carries its sub-accounts and names the sub-account of each row', () => {

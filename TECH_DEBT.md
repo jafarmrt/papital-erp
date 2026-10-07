@@ -70,14 +70,13 @@
 | TD-684 | پوسته (بسته ۱۶) | P3 (B16-20) — `executePrint` پاک‌سازی چاپ را دو بار اجرا می‌کند: `onAfterPrint` دو بار صدا زده شد؛ عنوان صفحه ۲ ثانیه بعد بازنشانی شد و عنوان تازه‌تر را پاک کرد؛ کلاس `printing-doc` با پنجره هنوز باز برداشته شد | printHelper.ts | open (P3) |
 | TD-685 | تاریخ و عدد (بسته ۱۶) | P3 (B16-21) — مبلغ به حروف، سنتِ ارز خارجی را می‌اندازد: `financialAmountToPersianWords(12.5, 'USD').words` ← «دوازده دلار»؛ فاکتور ۱۲٫۵۰ دلاری «دوازده دلار» به حروف چاپ می‌شود | persianNumber.ts | open (P3) |
 | TD-686 | پوسته (بسته ۱۶) | P3 (B16-22) — آوانویسی و انگلیسی در رابط پوسته (قاعده ۱۰): ورکفلو، تسک، متریال، آلارم، دیتابیس، فلگ، اندپوینت، کانفیگ، فرانت، بک‌اند، باندل، ری‌استارت، اتوماسیون، استراتژی، پروفایل، ماژول، پروتکل، توکن، «TOMAN»، «Drag & Drop»، «Paste (Ctrl+V)»، «KB»، «Invalid time value»، «Tech Stack»، «AGENTS.md» و `⌘K` | CustomizableShortcuts.tsx، settingsNavigationConfig.ts، SystemConfigTab.tsx، GeneralSettingsTab.tsx، SettingsPage.tsx، menuConfig.ts، Sidebar.tsx، TopBar.tsx، ModernPersianDropzone.tsx، ChangelogPage.tsx، GlobalHeaderSearch.tsx | open (P3، تصمیم ت۷) |
-| TD-687 | تاریخ و عدد (بسته ۱۶) | P3 (B16-23) — نمایش عدد با جداکننده لاتین: «۲۵,۰۰۰,۰۰۰» و «۱۲.۵» به‌جای «۲۵٬۰۰۰٬۰۰۰» و «۱۲٫۵» (قاعده numbers در vibefarsi): `formatPersianPrice(25000000)` ← «۲۵,۰۰۰,۰۰۰» (U+002C)، `formatPersianPrice(12.5,'USD')` ← «۱۲.۵ دلار» (U+002E)، `formatPersianNumber(1250000.75)` ← «۱,۲۵۰,۰۰۰.۷۵» | persianNumber.ts | open (P3) |
 
 ---
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۵۵ ردیف
-- **آرشیو شده (resolved):** ۵۸۳ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۵۴ ردیف
+- **آرشیو شده (resolved):** ۵۸۴ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
