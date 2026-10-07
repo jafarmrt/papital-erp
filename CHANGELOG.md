@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.165 — Profile Picture Only From This System, Name Up to 100 Characters
+- **Profile Picture Only From This System, Name Up to 100 Characters:** the profile refuses an outside image address or any other text as the picture, and a user name is at most 100 characters (TD-533).
+
 ### v9.0.164 — Voucher Soft-Delete Test No Longer Depends on Row Order
 - **Voucher Soft-Delete Test No Longer Depends on Row Order:** a test-only change; the soft-delete regression test picks the debit row by amount, so it no longer fails when the database returns the credit row first (TD-897).
 

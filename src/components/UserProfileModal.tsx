@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { errorMessageOf } from '../utils';
 import { PASSWORD_LENGTH_HINT, passwordLengthError } from '../lib/auth/passwordPolicy';
 import { mustChangePassword } from '../lib/auth/passwordReset';
+import { FULL_NAME_MAX_LENGTH } from '../lib/users/profileFields';
 
 interface UserProfileModalProps {
   user: User;
@@ -311,6 +312,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                   <input
                     type="text"
                     value={fullName}
+                    maxLength={FULL_NAME_MAX_LENGTH}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="نام کامل خود را وارد کنید..."
                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"

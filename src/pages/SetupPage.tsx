@@ -5,6 +5,7 @@ import { Shield, Building2, User as UserIcon, Lock, KeyRound, CheckCircle2, Arro
 import { toast } from 'react-hot-toast';
 import { compressTo300KB } from '../utils/imageCompression';
 import { MIN_PASSWORD_LENGTH, passwordLengthError } from '../lib/auth/passwordPolicy';
+import { FULL_NAME_MAX_LENGTH } from '../lib/users/profileFields';
 
 interface SetupPageProps {
   onLogin: (user: User, token: string) => void;
@@ -217,6 +218,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     required
                     type="text"
                     value={fullName}
+                    maxLength={FULL_NAME_MAX_LENGTH}
                     onChange={e => setFullName(e.target.value)}
                     placeholder="مثال: علی رضایی"
                     className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"

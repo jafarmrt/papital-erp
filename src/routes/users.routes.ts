@@ -12,6 +12,7 @@ import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { NotFoundError, ForbiddenError, BadRequestError, ValidationError, ConflictError } from '../errors/customErrors.js';
 import { lockSystemAdminSet, assertAnotherActiveAdmin, SYSTEM_ADMIN_ROLE } from '../services/users/lastAdminGuard.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
+import { AVATAR_INVALID_MESSAGE, FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE, isAcceptableAvatar, isStoredAvatarPath } from '../lib/users/profileFields.js';
 import { invalidateRoleCache } from '../lib/memoryCache.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { PERMISSION_CATALOG, PERMISSION_KEYS, isCatalogPermission, isSystemAdminRole, missingRequiredPermissions, withRequiredPermissions } from '../lib/permissions/permissionCatalog.js';
@@ -39,8 +40,9 @@ function touchesAdminAccount(actorRole: string | undefined, targetRoles: Array<s
 
 const updateProfileSchema = z.object({
   body: z.object({
-    full_name: z.string().optional(),
-    avatar: z.string().optional(),
+    // v9.0.165 (TD-533): نام حداکثر ۱۰۰ نویسه؛ تصویر فقط بارگذاری تازه یا مسیر `/uploads` همین سامانه (نه نشانی بیرونی)
+    full_name: z.string().trim().max(FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE).optional(),
+    avatar: z.string().refine(isAcceptableAvatar, AVATAR_INVALID_MESSAGE).optional(),
     current_password: z.string().optional(),
     new_password: z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE).optional().or(z.literal(''))
   })
@@ -142,6 +144,9 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
     if (avatar) {
       if (avatar.startsWith('data:image')) {
         const avatarPath = await uploadBase64ToStorage(avatar);
+        if (!isStoredAvatarPath(avatarPath)) {
+          return res.status(400).json({ error: AVATAR_INVALID_MESSAGE });
+        }
         updateData.avatarUrl = avatarPath;
       } else {
         updateData.avatarUrl = avatar;
@@ -418,7 +423,7 @@ const userCreateSchema = z.object({
   body: z.object({
     username: z.string().trim().min(3, 'نام کاربری باید حداقل ۳ کاراکتر باشد'),
     password: userPasswordField,
-    full_name: z.string().trim().optional().default(''),
+    full_name: z.string().trim().max(FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE).optional().default(''),
     role: z.string().trim().min(1, 'انتخاب نقش الزامی است'),
   })
 });
@@ -426,7 +431,7 @@ const userCreateSchema = z.object({
 const userUpdateSchema = z.object({
   body: z.object({
     password: userPasswordField.optional().or(z.literal('')),
-    full_name: z.string().trim().optional().default(''),
+    full_name: z.string().trim().max(FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE).optional().default(''),
     role: z.string().trim().min(1, 'انتخاب نقش الزامی است'),
   }),
   params: z.object({

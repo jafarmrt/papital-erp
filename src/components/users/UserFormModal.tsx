@@ -7,6 +7,7 @@ import { isSystemAdminRole, SYSTEM_ADMIN_ROLE } from '../../lib/permissions/perm
 import { roleWithinGrant, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
 import { USERNAME_OF_DELETED_USER, deletedUserOf, deletedUsernameMessage, type DeletedUserMatch } from '../../lib/users/userRestore';
 import { PASSWORD_LENGTH_HINT, passwordLengthError } from '../../lib/auth/passwordPolicy';
+import { FULL_NAME_MAX_LENGTH } from '../../lib/users/profileFields';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -164,6 +165,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
               required
               type="text"
               value={userForm.full_name}
+              maxLength={FULL_NAME_MAX_LENGTH}
               onChange={(e) => setUserForm({ ...userForm, full_name: e.target.value })}
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="مثال: علی محمدی"

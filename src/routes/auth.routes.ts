@@ -23,6 +23,7 @@ import {
 import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
+import { FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE } from '../lib/users/profileFields.js';
 
 const router = Router();
 
@@ -97,7 +98,7 @@ const setupSchema = z.object({
   body: z.object({
     username: z.string().min(3, 'نام کاربری باید حداقل ۳ کاراکتر باشد'),
     password: z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE),
-    fullName: z.string().min(1, 'نام و نام خانوادگی الزامی است'),
+    fullName: z.string().min(1, 'نام و نام خانوادگی الزامی است').max(FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE),
     companyName: z.string().optional().default(''),
     warehouseName: z.string().optional().default('انبار مرکزی'),
     phone: z.string().optional().default(''),
