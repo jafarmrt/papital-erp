@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.235 — Piecework Base Rate Is Non-Negative
+- **Piecework Base Rate Is Non-Negative (TD-813):** a task's base rate is a non-negative number in the task form, the API and the Excel import; a text or negative rate is refused and an Excel row with one is listed in the import errors instead of being saved as 0 or below zero.
+
 ### v9.0.234 — Only Approved Payslips Are Paid
 - **Only Approved Payslips Are Paid (TD-816):** a draft payslip is refused at payment and the screens offer approval instead, and the payment date, method and reference are written only by the payment, never by the status route.
 

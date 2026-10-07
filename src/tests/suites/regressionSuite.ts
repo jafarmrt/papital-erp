@@ -10590,6 +10590,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 12 payroll PR a (v9.0.231 on): payslip integrity (TD-804 ...)
   const { runPayrollIntegrityTests } = await import('../regression/payrollIntegrityTests.js');
   results.push(...await runPayrollIntegrityTests(shouldRun));
+  // Package 12 payroll PR b (v9.0.235 on): work logs, piecework rates and their audit (TD-813 ...)
+  const { runPieceworkEntryTests } = await import('../regression/pieceworkEntryTests.js');
+  results.push(...await runPieceworkEntryTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));

@@ -1,7 +1,7 @@
 import { eq, and, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, taskCategories } from '../db/schema.js';
-import { NotFoundError, BadRequestError, ConflictError } from '../errors/customErrors.js';
+import { NotFoundError, BadRequestError, ConflictError, ValidationError } from '../errors/customErrors.js';
 import { parseQuantityOrTime } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
@@ -16,8 +16,9 @@ import {
   pieceworkTaskCodeKey,
   toPieceworkTaskCodeError,
 } from './piecework/taskCode.js';
-import { money, moneyOr } from '../lib/money.js';
+import { money } from '../lib/money.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../lib/financialDecimal.js';
+import { parsePieceworkRate } from '../lib/piecework/pieceworkRate.js';
 
 // خواندن‌ها و چرخه فیش حقوقی در src/services/piecework/ (لایه سرویس روت piecework.routes.ts)
 export { PieceworkReadService, type TaskListFilters, type WorkLogListFilters } from './piecework/pieceworkRead.service.js';
@@ -59,6 +60,20 @@ export interface CreatePieceworkLogInput {
   notes?: string;
   createdById?: number;
   createdByUsername?: string;
+}
+
+/** v9.0.235 (TD-813): نرخ پایه نامعتبر یا منفی ۴۲۲ است (سرویس هم بی طرح route آن را می‌سنجد)؛ خالی یعنی «داده نشده» */
+function requireTaskRate(raw: unknown): string | undefined {
+  const parsed = parsePieceworkRate(raw, 'نرخ پایه');
+  if (!parsed.ok) throw new ValidationError(parsed.message, undefined, 'PIECEWORK_RATE_INVALID');
+  return parsed.value;
+}
+
+/** ردیفی از فایل اکسل که ثبت نشد، با شماره ردیف (از ۱) و دلیل فارسی */
+export interface TaskImportRowError {
+  row: number;
+  title: string;
+  message: string;
 }
 
 async function inTransaction<T>(externalTx: DbExecutor | undefined, fn: (tx: DbExecutor) => Promise<T>): Promise<T> {
@@ -126,7 +141,7 @@ export class PieceworkService {
         code: taskCode,
         title: input.title.trim(),
         category: input.category ? String(input.category).trim() : 'سایر',
-        defaultRate: moneyOr(input.defaultRate, 0),
+        defaultRate: money(requireTaskRate(input.defaultRate) ?? 0),
         unit: input.unit ? String(input.unit).trim() : 'عدد',
         description: input.description ? String(input.description).trim() : '',
         isActive: 1,
@@ -164,8 +179,9 @@ export class PieceworkService {
       throw new NotFoundError('عنوان کاری یافت نشد');
     }
 
-    const oldRate = moneyOr(existing.defaultRate, 0);
-    const newRate = input.defaultRate !== undefined ? money(input.defaultRate) : oldRate;
+    const oldRate = money(existing.defaultRate ?? 0);
+    const requestedRate = requireTaskRate(input.defaultRate);
+    const newRate = requestedRate !== undefined ? money(requestedRate) : oldRate;
     const newTitle = input.title !== undefined ? String(input.title).trim() : existing.title;
     const requestedCode = input.code !== undefined ? String(input.code).trim() : '';
     const newCode = requestedCode || existing.code;
@@ -322,6 +338,7 @@ export class PieceworkService {
     createdCount: number;
     updatedCount: number;
     totalProcessed: number;
+    errors: TaskImportRowError[];
   }> {
     const { rows, mode = 'upsert', userId, username } = data;
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -350,6 +367,7 @@ export class PieceworkService {
     createdCount: number;
     updatedCount: number;
     totalProcessed: number;
+    errors: TaskImportRowError[];
   }> {
     if (mode === 'replace') {
       await executor.update(pieceworkTasks).set({ isDeleted: 1 }).where(eq(pieceworkTasks.isDeleted, 0));
@@ -362,6 +380,7 @@ export class PieceworkService {
 
     let createdCount = 0;
     let updatedCount = 0;
+    const errors: TaskImportRowError[] = [];
     const addedCategories = new Set<string>();
 
     // TD-243: کد خودکار از توالی اتمیک؛ شماره‌های گرفته‌شده شامل عناوین حذف‌شده هم هست
@@ -374,7 +393,13 @@ export class PieceworkService {
 
       let code = String(row.code || row['کد'] || row['کد کار'] || row['کد کاری'] || '').trim();
       const category = String(row.category || row['دسته'] || row['دسته‌بندی'] || row['گروه'] || 'سایر').trim();
-      const defaultRate = Number(row.defaultRate || row['نرخ'] || row['نرخ پایه'] || row['نرخ پیش‌فرض'] || row['دستمزد'] || 0) || 0;
+      // v9.0.235 (TD-813): نرخ متن یا منفی ردیف را ثبت نمی‌کند و در خطاهای ورود فهرست می‌شود (پیش‌تر «abc» صفر و «-1000» منفی ذخیره می‌شد)
+      const parsedRate = parsePieceworkRate(row.defaultRate || row['نرخ'] || row['نرخ پایه'] || row['نرخ پیش‌فرض'] || row['دستمزد'], 'نرخ پایه');
+      if (!parsedRate.ok) {
+        errors.push({ row: i + 1, title, message: parsedRate.message });
+        continue;
+      }
+      const defaultRate = money(parsedRate.value ?? 0);
       const unit = String(row.unit || row['واحد'] || row['واحد سنجش'] || 'عدد').trim();
       const description = String(row.description || row['توضیحات'] || '').trim();
 
@@ -391,11 +416,11 @@ export class PieceworkService {
       const existing = codeOwner || taskByTitle.get(title.toLowerCase());
 
       if (existing && mode !== 'append') {
-        const oldRate = Number(existing.defaultRate) || 0;
+        const oldRate = money(existing.defaultRate ?? 0);
         await executor.update(pieceworkTasks).set({
           title,
           category,
-          defaultRate: money(defaultRate),
+          defaultRate,
           unit,
           description: description || existing.description,
           isActive: 1,
@@ -403,7 +428,8 @@ export class PieceworkService {
         }).where(eq(pieceworkTasks.id, existing.id));
         updatedCount++;
 
-        if (oldRate !== defaultRate || existing.title !== title) {
+        const rateChanged = !oldRate.equals(defaultRate);
+        if (rateChanged || existing.title !== title) {
           await PieceworkService.recordTaskRateHistory({
             taskId: existing.id,
             taskCode: existing.code,
@@ -411,7 +437,7 @@ export class PieceworkService {
             oldRate,
             newRate: defaultRate,
             changeType: 'excel_import',
-            reason: oldRate !== defaultRate ? `تغییر نرخ پایه از اکسل (${oldRate.toLocaleString()} -> ${defaultRate.toLocaleString()})` : 'به‌روزرسانی عنوان از اکسل',
+            reason: rateChanged ? `تغییر نرخ پایه از اکسل (${oldRate.toLocaleString()} -> ${defaultRate.toLocaleString()})` : 'به‌روزرسانی عنوان از اکسل',
             userId,
             username
           }, executor);
@@ -428,7 +454,7 @@ export class PieceworkService {
             code,
             title,
             category,
-            defaultRate: money(defaultRate),
+            defaultRate,
             unit,
             description,
             isActive: 1,
@@ -469,7 +495,8 @@ export class PieceworkService {
     return {
       createdCount,
       updatedCount,
-      totalProcessed: createdCount + updatedCount
+      totalProcessed: createdCount + updatedCount,
+      errors
     };
   }
 

@@ -19,12 +19,20 @@ const router = Router();
 
 router.use(authenticateToken);
 
+/**
+ * v9.0.231 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده فیش نامنفی‌اند. پیش‌تر `decimalInput` منفی را می‌پذیرفت و
+ * کسورات «-100000» خالص فیش را بالا می‌برد بی آنکه سند حسابداری آن را ببیند.
+ * v9.0.235 (TD-813): نرخ پایه عنوان کار هم (پیش‌تر «abc» صفر و «-1000» منفی ذخیره می‌شد).
+ */
+const nonNegativeAmount = (label: string) =>
+  decimalInput(label).refine(v => v === undefined || !fin(v).isNegative(), `${label} نمی‌تواند منفی باشد`);
+
 const createPieceworkTaskSchema = z.object({
   body: z.object({
     code: z.string().optional(),
     title: z.string().min(1, 'عنوان کاری پرکیسی الزامی است'),
     category: z.string().optional(),
-    defaultRate: z.union([z.number(), z.string()]).optional(),
+    defaultRate: nonNegativeAmount('نرخ پایه').optional(),
     unit: z.string().optional(),
     description: z.string().optional(),
   })
@@ -36,7 +44,7 @@ const updatePieceworkTaskSchema = z.object({
     code: z.string().optional(),
     title: z.string().min(1, 'عنوان کاری پرکیسی الزامی است').optional(),
     category: z.string().optional(),
-    defaultRate: z.union([z.number(), z.string()]).optional(),
+    defaultRate: nonNegativeAmount('نرخ پایه').optional(),
     unit: z.string().optional(),
     description: z.string().optional(),
     isActive: z.boolean().optional(),
@@ -107,13 +115,6 @@ const updatePieceworkLogSchema = z.object({
     id: numericIdString
   })
 });
-
-/**
- * v9.0.231 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده فیش نامنفی‌اند. پیش‌تر `decimalInput` منفی را می‌پذیرفت و
- * کسورات «-100000» خالص فیش را بالا می‌برد بی آنکه سند حسابداری آن را ببیند.
- */
-const nonNegativeAmount = (label: string) =>
-  decimalInput(label).refine(v => v === undefined || !fin(v).isNegative(), `${label} نمی‌تواند منفی باشد`);
 
 const generatePieceworkPayrollSchema = z.object({
   body: z.object({
@@ -272,12 +273,15 @@ router.post('/piecework/tasks/import-excel', authorizePermission('personnel.mana
       description: `واردات اکسل عناوین کاری پرکیسی (${result.createdCount} عنوان جدید، ${result.updatedCount} عنوان ویرایش‌شده، شیوه: ${mode})`
     });
 
+    // v9.0.235 (TD-813): ردیف‌های ثبت‌نشده (نرخ متن یا منفی) با شماره ردیف و دلیل در `errors`
+    const skipped = result.errors.length > 0 ? ` ${result.errors.length} ردیف ثبت نشد.` : '';
     res.json({
       status: 'ok',
-      message: `عملیات واردات با موفقیت انجام شد: ${result.createdCount} عنوان جدید ایجاد و ${result.updatedCount} عنوان به‌روزرسانی شدند.`,
+      message: `عملیات واردات با موفقیت انجام شد: ${result.createdCount} عنوان جدید ایجاد و ${result.updatedCount} عنوان به‌روزرسانی شدند.${skipped}`,
       createdCount: result.createdCount,
       updatedCount: result.updatedCount,
-      totalProcessed: result.totalProcessed
+      totalProcessed: result.totalProcessed,
+      errors: result.errors
     });
   } catch (err) {
     logger.error({ message: 'Error importing piecework tasks from excel', error: err });
