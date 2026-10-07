@@ -39,13 +39,13 @@ export function NewVoucherModal({
   const safeCustomers = Array.isArray(customers) ? customers : [];
   const safePersonnelList = Array.isArray(personnelList) ? personnelList : [];
 
-  // v9.0.175 (TD-578): تاریخ ISO نگه داشته و با JalaliDateInput شمسی نشان داده می‌شود (پیش‌تر ویرایش «۲۰۲۶/۰۴/۰۱» نشان می‌داد)
+  // v9.0.186 (TD-578): تاریخ ISO نگه داشته و با JalaliDateInput شمسی نشان داده می‌شود (پیش‌تر ویرایش «۲۰۲۶/۰۴/۰۱» نشان می‌داد)
   const [date, setDate] = useState(() => getTodayIsoDate());
   const [voucherType, setVoucherType] = useState<string>('general');
   const [manualVoucherNumber, setManualVoucherNumber] = useState('');
   const [description, setDescription] = useState('');
   const [currency, setCurrency] = useState('IRR');
-  // v9.0.170 (TD-564): نرخ ارز سند به ریال؛ ردیف هم‌ارز سند بی نرخ خودش این نرخ را می‌گیرد
+  // v9.0.181 (TD-564): نرخ ارز سند به ریال؛ ردیف هم‌ارز سند بی نرخ خودش این نرخ را می‌گیرد
   const [headerRate, setHeaderRate] = useState<number | string | ''>('');
   const header = useMemo<VoucherHeaderCurrency>(() => ({ currency, rate: headerRate }), [currency, headerRate]);
   const [attachments, setAttachments] = useState<FinancialAttachment[]>([]);
@@ -100,7 +100,7 @@ export function NewVoucherModal({
       setHeaderRate(loaded.headerRate ?? '');
       if (Array.isArray(loaded.attachments)) setAttachments(loaded.attachments);
       if (Array.isArray(loaded.items) && loaded.items.length > 0) {
-        // v9.0.172 (TD-569): پیش‌نویس قدیمی «متفرقه» را `custom` نگه داشته بود
+        // v9.0.183 (TD-569): پیش‌نویس قدیمی «متفرقه» را `custom` نگه داشته بود
         setItems((loaded.items as VoucherItemDraft[]).map(it => ({ ...it, detailedType: voucherDetailedTypeFromStored(it.detailedType) })));
       }
     }
@@ -125,7 +125,7 @@ export function NewVoucherModal({
       setVoucherType(manualVoucherFormType(editingVoucher.voucherType));
       setManualVoucherNumber(editingVoucher.manualVoucherNumber || '');
       setDescription(editingVoucher.description || '');
-      // v9.0.170 (TD-564): ارز و نرخ سند و هر ردیف همان که ذخیره شده می‌ماند (پیش‌تر ویرایش آن‌ها را می‌انداخت)
+      // v9.0.181 (TD-564): ارز و نرخ سند و هر ردیف همان که ذخیره شده می‌ماند (پیش‌تر ویرایش آن‌ها را می‌انداخت)
       const editCurrency = supportedVoucherCurrency(editingVoucher.currency);
       const editHeader = { currency: editCurrency, rate: voucherHeaderRateFromRows(editingVoucher.items, editCurrency) };
       setCurrency(editHeader.currency);
@@ -160,7 +160,7 @@ export function NewVoucherModal({
     return safeAccounts.filter(a => a.level === 'subsidiary' || a.level === 'detailed' || a.level === 'general');
   }, [safeAccounts]);
 
-  // v7.0.76 (P3-6): جمع اعشاری دقیق و تلورانس سرور. v9.0.170 (TD-564): با ارز و نرخ هر ردیف؛ سند چندارزی یا چندنرخی به ریال
+  // v7.0.76 (P3-6): جمع اعشاری دقیق و تلورانس سرور. v9.0.181 (TD-564): با ارز و نرخ هر ردیف؛ سند چندارزی یا چندنرخی به ریال
   const balance = useMemo(() => voucherFormBalance(items, header), [items, header]);
   const { difference, isBalanced } = balance;
   const debitSurplus = balance.totalDebit - balance.totalCredit;
@@ -216,7 +216,7 @@ export function NewVoucherModal({
   };
 
   // Auto-balance targeted row or active row
-  // v9.0.170 (TD-564): مبلغ موازنه با قاعده تراز سرور؛ در سند چندارزی اختلاف ریالی بر نرخ همان ردیف
+  // v9.0.181 (TD-564): مبلغ موازنه با قاعده تراز سرور؛ در سند چندارزی اختلاف ریالی بر نرخ همان ردیف
   const applyBalancing = (rows: VoucherItemDraft[], targetIndex: number, apply: (side: 'debit' | 'credit', amount: number) => void) => {
     const result = voucherBalancingAmount(rows, targetIndex, header);
     if (result.kind === 'error') {
@@ -395,7 +395,7 @@ export function NewVoucherModal({
         description,
         currency,
         attachments,
-        // v9.0.170 (TD-564): هر ردیف با ارز و نرخ قطعی خود (ردیف ریالی بی نرخ)
+        // v9.0.181 (TD-564): هر ردیف با ارز و نرخ قطعی خود (ردیف ریالی بی نرخ)
         items: withVoucherRowCurrency(items, header).map(it => ({
           accountId: Number(it.accountId),
           detailedType: it.detailedType,
@@ -610,7 +610,7 @@ export function NewVoucherModal({
               />
             </div>
 
-            {/* v9.0.170 (TD-564): ارزهای خزانه و نرخ ارز سند؛ «تومان» حذف شد (مبلغ تومانی را به ریال وارد کنید) */}
+            {/* v9.0.181 (TD-564): ارزهای خزانه و نرخ ارز سند؛ «تومان» حذف شد (مبلغ تومانی را به ریال وارد کنید) */}
             <VoucherHeaderCurrencyFields
               value={header}
               onChange={next => { setCurrency(next.currency); setHeaderRate(next.rate ?? ''); }}
@@ -799,7 +799,7 @@ export function NewVoucherModal({
   );
 }
 
-/** v9.0.170 (TD-564): ارز سند از فهرست ارزهای خزانه؛ ارز بیرون از آن (مانند «تومان» قدیمی) ریال می‌شود و کاربر آگاه می‌شود */
+/** v9.0.181 (TD-564): ارز سند از فهرست ارزهای خزانه؛ ارز بیرون از آن (مانند «تومان» قدیمی) ریال می‌شود و کاربر آگاه می‌شود */
 function supportedVoucherCurrency(value: string | null | undefined): string {
   const { currency, replaced } = voucherFormCurrency(value);
   if (replaced) toast.error(`ارز «${replaced}» در فهرست ارزهای سند نیست؛ ارز سند ریال شد. مبلغ ردیف‌ها را به ریال بررسی کنید.`);

@@ -33,7 +33,6 @@ export default function Dashboard() {
 
   const hasCrmPermission = Boolean(
     userPermissions?.isAdmin ||
-    user?.role === 'admin' ||
     Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('crm.view')
   );
 
@@ -43,7 +42,6 @@ export default function Dashboard() {
   // v7.0.53 / v7.0.55 (audit P2-10): کارت «وضعیت انبار» برای دارندگان reports.view یا warehouse.view (مجوز آمار داشبورد انبار)
   const canViewWarehouseStatus = Boolean(
     userPermissions?.isAdmin ||
-    user?.role === 'admin' ||
     Array.isArray(userPermissions?.permissions) &&
       (userPermissions.permissions.includes('reports.view') || userPermissions.permissions.includes('warehouse.view'))
   );

@@ -18,7 +18,7 @@ vi.mock('react-hot-toast', () => ({ default: toastFn, toast: toastFn, Toaster: (
 
 import { NewVoucherModal } from '../../components/accounting/NewVoucherModal';
 
-// v9.0.175 (TD-578, B03-36): the accounting forms and filters keep ISO dates and show them with JalaliDateInput; editing a voucher
+// v9.0.186 (TD-578, B03-36): the accounting forms and filters keep ISO dates and show them with JalaliDateInput; editing a voucher
 // dated 2026-04-01 showed «۲۰۲۶/۰۴/۰۱» as a Jalali date.
 
 const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });

@@ -491,6 +491,13 @@
       "when": 1793040000000,
       "tag": "0069_journal_voucher_source_fiscal_year",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1793050000000,
+      "tag": "0070_item_code_name_unique",
+      "breakpoints": true
     }
   ]
 }

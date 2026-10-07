@@ -19,26 +19,59 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.175 — Voucher Date Shown in Jalali
+### v9.0.186 — Voucher Date Shown in Jalali
 - **Accounting Date Inputs (P3):** the voucher, correction and reversal forms and the trial balance, account explorer and cash flow filters keep ISO dates and use `JalaliDateInput`; editing a voucher no longer shows its ISO date as a Jalali year 2026 (TD-578, Vitest `voucherDateInput.test.tsx`).
 
-### v9.0.174 — Voucher Print Currency and Types
+### v9.0.185 — Voucher Print Currency and Types
 - **Voucher Print Currency (P2):** the voucher print follows the TD-551 balance rule (single-currency vouchers in their currency with the rate, multi-currency ones in rials with each row amount and rate) and names every voucher type from one shared list, settlement included (TD-573, Vitest `voucherPrintCurrency.test.tsx`).
 
-### v9.0.173 — Account Picker Reads Persian Digits
+### v9.0.184 — Account Picker Reads Persian Digits
 - **Account Picker Digits (P2):** the account picker turns Persian and Arabic digits of the search and of account code, name, type and description to Latin before matching (TD-571, Vitest `accountSearchDigits.test.tsx`).
 
-### v9.0.172 — Voucher Forms Offer Every Detailed Type
+### v9.0.183 — Voucher Forms Offer Every Detailed Type
 - **Voucher Detailed Types (P2):** the voucher and correction forms take the detailed types from the server schema list: «متفرقه» is `other`, project and bank account are offered and the correction form has the supplier; `accounting.vouchers` reads the project pick list (TD-569, `reg_manual_voucher_detailed_types_td_569`).
 
-### v9.0.171 — Voucher Row Amounts Read as Decimals
+### v9.0.182 — Voucher Row Amounts Read as Decimals
 - **Voucher Row Amounts (P3):** manual and correction voucher row debit, credit and rate go through `decimalInput`: Persian digits and separators are accepted, «0x10» and «1e3» are refused (TD-557, `reg_manual_voucher_row_amount_decimal_input_td_557`).
 
-### v9.0.170 — Voucher Forms Send Each Row Currency and Rate
+### v9.0.181 — Voucher Forms Send Each Row Currency and Rate
 - **Voucher Form Row Currency (P1, decision t7):** the manual voucher form, its edit and the correction form send and keep each row's currency and rate, take the voucher rate, balance by the server rule and offer only the treasury currencies; the routes refuse «TOMAN» (TD-564, `reg_manual_voucher_currency_list_td_564`).
 
-### v9.0.169 — Manual Vouchers Need a Rate on Foreign Rows and Balance in Rials
+### v9.0.180 — Manual Vouchers Need a Rate on Foreign Rows and Balance in Rials
 - **Manual Voucher Currency (P2, decision t7):** a manual or correction voucher row without a currency takes the voucher currency, every non-rial row needs a positive rate (422 `VOUCHER_ROW_RATE_REQUIRED`), and a multi-currency voucher balances in rials at each row rate; the journal book and the health check follow the same rule (TD-551, `reg_manual_voucher_foreign_rate_and_rial_balance_td_551`).
+
+### v9.0.179 — Role Delete Counts Active Users Only
+- **Role Delete Counts Active Users Only:** a role whose only user was deleted can be deleted (TD-535).
+
+### v9.0.178 — Deleted Username Never Revives an Account
+- **Deleted Username Never Revives an Account:** a new user always gets a new id; restoring a deleted user is a separate action with a new role and a temporary password (TD-519).
+
+### v9.0.177 — System Admin Named by One Constant
+- **System Admin Named by One Constant:** package 2 files and server routes name the system admin only through the shared constant or the admin flag; refactor (TD-896).
+
+### v9.0.176 — Item Price Amount and Currency
+- **Item Price Input:** a price is a decimal above zero in IRR, USD, EUR, AED or GBP; removal is explicit (`remove: true`), invalid Excel prices refuse the row and old invalid rows are listed by the health check (TD-657, `reg_item_price_amount_currency_td_657`).
+
+### v9.0.175 — One Active Price per List Under Concurrent Saves
+- **Item Price Writes:** price saves go through `ItemPricingService.applyPriceWrites` under the item row lock, so concurrent saves leave one active price per list; old duplicates are listed by the health check (TD-660, `conc_item_price_single_active_td_660`).
+
+### v9.0.174 — Guard Test for Item Delete During a Receipt
+- **Item Delete vs Receipt:** a guard test shows that deleting an item while a receipt of it commits waits for the receipt and is refused; the row lock dates from v9.0.40 (TD-661 closed without code change, `conc_item_delete_vs_receipt_td_661`).
+
+### v9.0.173 — Item Numbers Through decimalInput
+- **Item Numeric Input:** reorder point, cost, opening stock and weight go through `decimalInput` and are non-negative; text is 400 and Persian digits are read (TD-657 item part, `reg_item_numeric_input_validation_td_657`).
+
+### v9.0.172 — Item Code Counter Moves on Save
+- **Item Code Suggestion:** saving an item moves its code series counter in the same transaction, so the next suggested code is free (TD-656, `reg_item_code_peek_after_save_td_656`).
+
+### v9.0.171 — Item Edit Version Lock
+- **Item Version Lock:** editing an item needs its current version (400 without, 409 `OCC_CONFLICT` when stale), missing fields keep their values and the edit is audited in its transaction (TD-654, `sec_item_version_lock_td_654`).
+
+### v9.0.170 — Unique Item Code and Name
+- **Item Identity:** two active items never share a code (any letter case) or a name; partial unique indexes (migration 0070, only on clean data) turn concurrent duplicates into a Persian 409 and the health check lists old duplicates (TD-653, `conc_item_code_and_name_unique_td_653`).
+
+### v9.0.169 — New Item Opening Voucher Inside Its Transaction
+- **Item Opening Voucher:** a new item's opening voucher and audit row are written in the item's create transaction; a voucher failure refuses the item and its opening stock (TD-652, `inv_item_create_opening_voucher_atomic_td_652`).
 
 ### v9.0.168 — Build Details of /health Scoped and Real
 - **Build Details:** `/health` returns `version` to everyone (`verify-startup.sh` reads it) and `buildInfo` only to the `METRICS_TOKEN` or a live system-admin session (`metricsReaderStatus` in `src/middleware/metricsAuth.ts`). `npm run build` writes `dist/build-info.json` with the commit and build time (`scripts/write-build-info.mjs`; the Docker build takes `--build-arg GIT_COMMIT_SHA`); without it they are `unknown`, never the old fixed `v4-master` and date.

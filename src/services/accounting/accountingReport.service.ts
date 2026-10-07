@@ -339,7 +339,7 @@ export class AccountingReportService {
       description: string;
       debit: number;
       credit: number;
-      /** v9.0.169 (TD-551): مبلغ خود ردیف ارزی و نرخ آن، وقتی بدهکار و بستانکار به ریال آمده است */
+      /** v9.0.180 (TD-551): مبلغ خود ردیف ارزی و نرخ آن، وقتی بدهکار و بستانکار به ریال آمده است */
       originalDebit?: number;
       originalCredit?: number;
       exchangeRate?: number;
@@ -347,7 +347,7 @@ export class AccountingReportService {
     }[];
     totalDebit: number;
     totalCredit: number;
-    /** v9.0.169 (TD-551): ارز جمع‌ها؛ نمای همه ارزها به ریال */
+    /** v9.0.180 (TD-551): ارز جمع‌ها؛ نمای همه ارزها به ریال */
     reportCurrency: string;
     vouchersCount: number;
     isBalanced: boolean;
@@ -364,7 +364,7 @@ export class AccountingReportService {
     if (params.endDate) {
       conditions.push(lte(journalVouchers.date, params.endDate));
     }
-    // v9.0.169 (TD-551، ت۷): قاعده ارز TD-260؛ پیش‌تر صافی «ارز ردیف یا ارز سند» ردیف دلاری سند ریالی را در نمای ریال
+    // v9.0.180 (TD-551، ت۷): قاعده ارز TD-260؛ پیش‌تر صافی «ارز ردیف یا ارز سند» ردیف دلاری سند ریالی را در نمای ریال
     // می‌آورد و نمای همه ارزها دلار را با ریال جمع می‌زد
     const currencyCondition = voucherItemCurrencyCondition(params.currency);
     if (currencyCondition) conditions.push(currencyCondition);

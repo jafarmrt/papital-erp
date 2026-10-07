@@ -2,7 +2,7 @@ import { TREASURY_CURRENCIES } from '../treasury/treasuryCurrency';
 import { computeVoucherCurrencyBalance, voucherRowCurrency, voucherRowRate, type VoucherCurrencyBalance } from './voucherCurrencyBalance';
 
 /**
- * v9.0.170 (TD-564، B03-22، تصمیم ت۷ الف): ارز و نرخ ردیف در فرم سند دستی و فرم سند اصلاحی.
+ * v9.0.181 (TD-564، B03-22، تصمیم ت۷ الف): ارز و نرخ ردیف در فرم سند دستی و فرم سند اصلاحی.
  *
  * - ارزهای سند همان فهرست ارزهای خزانه است («تومان» دیگر پیشنهاد نمی‌شود؛ مبلغ تومانی ریال × ۱۰ است).
  * - ردیف بی ارز ارز سند را می‌گیرد؛ ردیف غیرریالی بی نرخ خودش، نرخ ارز سند را (وقتی ارزش همان ارز سند است).

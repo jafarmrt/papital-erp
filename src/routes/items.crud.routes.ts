@@ -5,13 +5,13 @@ import { items, transactions, documentItems, journalVouchers } from '../db/schem
 import { authorizePermission } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema } from '../middleware/validate.js';
+import { itemCreateUpdateSchema, itemUpdateSchema } from './items.schemas.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { MAX_PAGE_LIMIT, parsePickListLimit } from '../lib/pagination.js';
 import { ItemsService } from '../services/items.service.js';
 import { ItemOpeningService } from '../services/inventory/itemOpening.service.js';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
-import { logger } from '../middleware/logger.js';
 import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js';
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
@@ -20,54 +20,6 @@ import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { itemListConditions, listItemPicks } from '../services/items/itemPickList.js';
 
 const router = Router();
-
-export const itemCreateUpdateSchema = z.object({
-  body: z.preprocess((val: unknown) => {
-    if (val && typeof val === 'object') {
-      const copy = { ...(val as Record<string, unknown>) };
-      // V2.0.0: alias — فرم کالا initial_cost می‌فرستد؛ به weighted_average_cost نگاشت شود
-      if (copy.initial_cost !== undefined && copy.weighted_average_cost === undefined) {
-        copy.weighted_average_cost = copy.initial_cost;
-      }
-      // V2.0.0: پشتیبانی از stocks به‌صورت شیء کلیددار (کلید = شناسه انبار) —
-      // به کلیدهای stock_<warehouseId> تبدیل می‌شود (همان قرارداد قبلی بک‌اند)
-      if (copy.stocks && typeof copy.stocks === 'object' && !Array.isArray(copy.stocks)) {
-        for (const [whKey, val] of Object.entries(copy.stocks)) {
-          const num = Number(val) || 0;
-          if (num !== 0) {
-            copy[`stock_${whKey}`] = num;
-          }
-        }
-      }
-      return copy;
-    }
-    return val;
-  }, z.object({
-    type: z.enum(['product', 'raw_material']).optional(),
-    name: z.string().min(2, 'نام کالا باید حداقل ۲ کاراکتر باشد'),
-    code: z.string().min(1, 'کد کالا الزامی است'),
-    unit: z.string().min(1, 'واحد اندازه گیری الزامی است'),
-    category: z.string().optional(),
-    image: z.string().optional(),
-    thumbnail: z.string().optional(),
-    reorder_point: z.union([z.string(), z.number()]).optional(),
-    weighted_average_cost: z.union([z.string(), z.number()]).optional(),
-    initial_cost: z.union([z.string(), z.number()]).optional(),
-    current_stock: z.union([z.string(), z.number()]).optional(),
-    stocks: z.record(z.string(), z.any()).optional(),
-    color: z.string().optional(),
-    weight: z.union([z.string(), z.number()]).optional(),
-    material: z.string().optional(),
-    size: z.string().optional()
-  }).passthrough())
-});
-
-export const itemUpdateSchema = z.object({
-  body: itemCreateUpdateSchema.shape.body,
-  params: z.object({
-    id: numericIdString
-  })
-});
 
 // GET /items/reorder-alerts
 router.get('/items/reorder-alerts', authorizePermission(...READ_PERMISSIONS.itemReorderAlerts), asyncHandler(async (req, res) => {
@@ -279,153 +231,106 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
 
 // POST /items
 router.post('/items', authorizePermission('products.create'), validate(itemCreateUpdateSchema), asyncHandler(async (req, res) => {
-  try {
-    // v9.0.36 (TD-451): کالا و شروع گردش‌کار افتتاحیه در یک تراکنش؛ شروع ناموفقِ تعریف فعال ثبت کالا را رد می‌کند (پیش‌تر
-    // کالا ثبت می‌شد، خطا بلعیده می‌شد و سند افتتاحیه بی تأیید صادر می‌شد)
-    const { created, wfInstance } = await orm.transaction(async (tx) => {
-      const created = await ItemCatalogService.createItem(req.body, req.user, tx);
-      const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
-        entityType: 'item',
-        entityId: String(created.insertedId),
-        userId: req.user?.id,
-        userName: req.user?.fullName || req.user?.username,
-        tx
-      });
-      return { created, wfInstance };
+  // v9.0.36 (TD-451): کالا و شروع گردش‌کار افتتاحیه در یک تراکنش؛ شروع ناموفقِ تعریف فعال ثبت کالا را رد می‌کند.
+  // v9.0.169 (TD-652، تصمیم ت۶ الف): سند افتتاحیه و ردیف ممیزی هم درون همان تراکنش‌اند و شکست سند ثبت کالا و موجودی اولیه‌اش
+  // را رد می‌کند، مثل ویرایش کالا و ورود اکسل. پیش‌تر سند بیرون از تراکنش صادر و شکستش با `logger.warn` بلعیده می‌شد: کالا با
+  // موجودی در کاردکس ثبت می‌شد و دفتر کل تغییری نمی‌کرد.
+  const { name, code } = req.body;
+  const { created, openingVoucherId } = await orm.transaction(async (tx) => {
+    const created = await ItemCatalogService.createItem(req.body, req.user, tx);
+    const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
+      entityType: 'item',
+      entityId: String(created.insertedId),
+      userId: req.user?.id,
+      userName: req.user?.fullName || req.user?.username,
+      tx
     });
-    const { insertedId, stockValues, computedStock, imageUrl, thumbnailUrl } = created;
-
-    const { type, name, code, unit, category, reorder_point, weighted_average_cost, color, weight, material, size } = req.body;
-
-    const responseStock: Record<string, number> = {};
-    for (const k of Object.keys(stockValues)) responseStock[`stock_${k}`] = stockValues[k];
-
-    // V2.0.0: سند افتتاحیه موجودی اولیه — ورکفلو شرطی
-    // اگر تعریف workflow فعال برای entityType «item» باشد، سند افتتاحیه بعد از تأیید نهایی صادر می‌شود
-    // در غیر این صورت فوری صادر می‌شود (رفتار مستقیم)
-    let openingVoucherId: number | null = null;
-    try {
-      if (!wfInstance) {
-        const opening = await ItemOpeningService.issueItemOpeningVoucher(insertedId, {
-          userId: req.user?.id,
-          username: req.user?.fullName || req.user?.username
-        });
-        openingVoucherId = opening?.id || null;
-      }
-    } catch (openingErr) {
-      logger.warn({ message: `Item opening voucher for ${insertedId} failed/deferred`, error: openingErr });
-    }
-
+    // با تعریف گردش‌کار فعال برای «item» سند افتتاحیه پس از تأیید نهایی صادر می‌شود، وگرنه همین‌جا
+    const opening = wfInstance ? null : await ItemOpeningService.issueItemOpeningVoucher(created.insertedId, {
+      userId: req.user?.id,
+      username: req.user?.fullName || req.user?.username,
+      tx
+    });
+    const it = created.item;
     await logActivity({
       req,
+      tx,
       action: 'CREATE',
       entity: 'کالا',
-      entityId: insertedId,
+      entityId: created.insertedId,
       description: `تعریف کالای جدید "${name}" با کد "${code}"`,
       details: {
         after: {
-          id: insertedId,
-          name,
-          code,
-          type,
-          category,
-          unit,
-          currentStock: computedStock,
-          stocks: stockValues,
-          reorderPoint: Number(reorder_point || 0),
-          weightedAverageCost: Number(weighted_average_cost || 0),
-          color,
-          weight,
-          material,
-          size
-        }
+          id: created.insertedId,
+          name: it.name,
+          code: it.code,
+          type: it.type,
+          category: it.category,
+          unit: it.unit,
+          currentStock: created.computedStock,
+          stocks: created.stockValues,
+          reorderPoint: Number(it.reorderPoint ?? 0),
+          weightedAverageCost: Number(it.weightedAverageCost ?? 0),
+          color: it.color,
+          weight: it.weight,
+          material: it.material,
+          size: it.size
+        },
+        openingVoucherId: opening?.id ?? null
       }
     });
+    return { created, openingVoucherId: opening?.id ?? null };
+  });
 
-    res.json({ id: insertedId, type, name, code, current_stock: computedStock, unit, category, image: imageUrl, thumbnail: thumbnailUrl, ...responseStock, reorder_point, weighted_average_cost, color, weight, material, size, opening_voucher_id: openingVoucherId });
-  } catch (err) {
-    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === '23505') {
-      // V9-1.2: خطای یکتایی کد کالا (پنجره رقابتی بین بررسی و درج) — پیام راهنما برای دریافت کد جدید
-      return res.status(400).json({ error: 'کد کالا هم‌اکنون توسط کاربر دیگری ثبت شد. لطفاً کد جدیدی از دکمه «کد پیشنهادی» دریافت کرده و مجدداً ذخیره کنید.' });
-    }
-    throw err;
-  }
+  const { insertedId, stockValues, computedStock, imageUrl, thumbnailUrl, item } = created;
+  const responseStock: Record<string, number> = {};
+  for (const k of Object.keys(stockValues)) responseStock[`stock_${k}`] = stockValues[k];
+  res.json({
+    id: insertedId, type: item.type, name: item.name, code: item.code, current_stock: computedStock, unit: item.unit, category: item.category,
+    image: imageUrl, thumbnail: thumbnailUrl, ...responseStock, reorder_point: item.reorderPoint, weighted_average_cost: item.weightedAverageCost,
+    color: item.color, weight: item.weight, material: item.material, size: item.size, opening_voucher_id: openingVoucherId
+  });
 }));
 
 // PUT /items/:id
+// v9.0.171 (TD-654): نسخه کالا لازم است (۴۰۰ بی آن، ۴۰۹ OCC_CONFLICT برای نسخه کهنه) و ردیف ممیزی درون همان تراکنش نوشته می‌شود
 router.put('/items/:id', authorizePermission('products.edit'), validate(itemUpdateSchema), asyncHandler(async (req, res) => {
-  try {
-    const itemId = Number(req.params.id);
-    const { name, code, unit, category, reorder_point, color, weight, material, size } = req.body;
-
-    const result = await ItemCatalogService.updateItem(
-      itemId,
-      req.body,
-      {
-        id: req.user?.id,
-        username: req.user?.username,
-        fullName: req.user?.fullName
-      }
-    );
-
-    const { diff, hasChanges } = computeAuditDiff(result.prevItem, { ...result.prevItem, ...result.updateData }, ['image', 'thumbnail', 'updatedAt', 'stocks']);
-
+  const itemId = Number(req.params.id);
+  const result = await orm.transaction(async (tx) => {
+    const result = await ItemCatalogService.updateItem(itemId, req.body, {
+      id: req.user?.id,
+      username: req.user?.username,
+      fullName: req.user?.fullName
+    }, tx);
+    const prev = result.prevItem;
+    const next = result.item;
+    const snapshot = (it: typeof prev) => ({
+      name: it.name,
+      code: it.code,
+      category: it.category,
+      unit: it.unit,
+      currentStock: it.currentStock,
+      reorderPoint: it.reorderPoint,
+      weightedAverageCost: it.weightedAverageCost,
+      color: it.color,
+      weight: it.weight,
+      material: it.material,
+      size: it.size
+    });
+    const { diff, hasChanges } = computeAuditDiff(prev, { ...prev, ...result.updateData }, ['image', 'thumbnail', 'updatedAt', 'stocks', 'version']);
+    const openingNote = result.canSetOpening && result.computedStock > 0 ? ` همراه با ثبت موجودی افتتاحیه (${result.computedStock} ${next.unit})` : '';
     await logActivity({
       req,
+      tx,
       action: 'UPDATE',
       entity: 'کالا',
       entityId: itemId,
-      description: `ویرایش اطلاعات کالای "${name}" (کد: ${code})${result.canSetOpening && result.computedStock > 0 ? ` همراه با ثبت موجودی افتتاحیه (${result.computedStock} ${unit})` : ''}`,
-      details: {
-        before: {
-          name: result.prevItem.name,
-          code: result.prevItem.code,
-          category: result.prevItem.category,
-          unit: result.prevItem.unit,
-          currentStock: result.prevItem.currentStock,
-          reorderPoint: result.prevItem.reorderPoint,
-          weightedAverageCost: result.prevItem.weightedAverageCost,
-          color: result.prevItem.color,
-          weight: result.prevItem.weight,
-          material: result.prevItem.material,
-          size: result.prevItem.size
-        },
-        after: {
-          name,
-          code,
-          category: category || '',
-          unit,
-          currentStock: result.canSetOpening && result.computedStock > 0 ? result.computedStock : result.prevItem.currentStock,
-          reorderPoint: Number(reorder_point || 0),
-          weightedAverageCost: result.updateData.weightedAverageCost,
-          color: color || null,
-          weight: weight ? Number(weight) : null,
-          material: material || null,
-          size: size || null
-        },
-        changes: diff,
-        hasChanges
-      }
+      description: `ویرایش اطلاعات کالای "${next.name}" (کد: ${next.code})${openingNote}`,
+      details: { before: snapshot(prev), after: snapshot(next), changes: diff, hasChanges, version: next.version }
     });
-
-    res.json({ success: true, opening_voucher_id: result.openingVoucherId });
-  } catch (err) {
-    const errorObj = err as { name?: string; code?: string; expectedVersion?: number; currentVersion?: number } | null;
-    if (errorObj?.name === 'OptimisticLockError') {
-      return res.status(409).json({
-        error: 'تداخل همزمانی: کالا توسط کاربر دیگری ویرایش شده است. لطفاً صفحه را بازخوانی کنید.',
-        code: 'OCC_CONFLICT',
-        details: {
-          expectedVersion: errorObj.expectedVersion,
-          currentVersion: errorObj.currentVersion
-        }
-      });
-    }
-    if (errorObj?.code === '23505') {
-      return res.status(400).json({ error: 'کد کالا تکراری است.' });
-    }
-    throw err;
-  }
+    return result;
+  });
+  res.json({ success: true, version: result.item.version, opening_voucher_id: result.openingVoucherId });
 }));
 
 // DELETE /items/:id

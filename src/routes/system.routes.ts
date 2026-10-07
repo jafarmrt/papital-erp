@@ -90,7 +90,7 @@ router.get('/system/business-date', asyncHandler(async (req, res) => {
 router.get('/system/env', requireSystemAdmin, asyncHandler(async (req, res) => {
   await logActivity({
     userId: req.user?.id,
-    username: req.user?.username || 'admin',
+    username: req.user?.username,
     userFullName: req.user?.full_name || '',
     action: 'VIEW',
     entity: 'سیستم:تنظیمات_محیطی',
@@ -266,7 +266,7 @@ router.get('/system/reconciliation-check', requireSystemAdmin, asyncHandler(asyn
 
   await logActivity({
     userId: req.user?.id,
-    username: req.user?.username || 'admin',
+    username: req.user?.username,
     userFullName: req.user?.full_name || '',
     action: 'AUDIT',
     entity: 'سیستم:ممیزی_و_تطبیق_داده‌ها',
@@ -350,7 +350,7 @@ router.get('/export-backup', requireSystemAdmin, asyncHandler(async (req, res) =
 
   await logActivity({
     userId: req.user?.id,
-    username: req.user?.username || 'admin',
+    username: req.user?.username,
     userFullName: req.user?.full_name || '',
     action: 'EXPORT',
     entity: 'سیستم:خروجی_داده‌ها',

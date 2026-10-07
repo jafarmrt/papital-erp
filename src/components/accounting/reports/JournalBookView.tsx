@@ -1,7 +1,7 @@
 import { BookOpen } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatCurrencyLabel } from '../../../utils';
 
-/** v9.0.169 (TD-551): ردیف ارزی در نمای همه ارزها به ریال می‌آید و مبلغ خودش با نرخ زیر آن دیده می‌شود */
+/** v9.0.180 (TD-551): ردیف ارزی در نمای همه ارزها به ریال می‌آید و مبلغ خودش با نرخ زیر آن دیده می‌شود */
 function OriginalAmount({ amount, currency, rate }: { amount?: number; currency?: string; rate?: number }) {
   if (!amount || !currency || currency === 'IRR' || rate === undefined) return null;
   return (

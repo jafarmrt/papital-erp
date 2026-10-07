@@ -21,7 +21,7 @@ export function VoucherPrintModal({
 }: VoucherPrintModalProps) {
   if (!isOpen || !voucher) return null;
 
-  // v9.0.174 (TD-573): ستون‌ها، جمع‌ها و مبلغ به حروف در ارز سند تک‌ارز، و سند چندارزی به ریال با مبلغ ارزی هر ردیف
+  // v9.0.185 (TD-573): ستون‌ها، جمع‌ها و مبلغ به حروف در ارز سند تک‌ارز، و سند چندارزی به ریال با مبلغ ارزی هر ردیف
   const amounts = voucherPrintAmounts(voucher.items, voucher.currency);
   const { totalDebit, totalCredit } = amounts;
   const currencyLabel = formatCurrencyLabel(amounts.currency);

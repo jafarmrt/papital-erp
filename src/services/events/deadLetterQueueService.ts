@@ -308,7 +308,7 @@ export class DeadLetterQueueService {
         metadata: {
           ...((record.metadata as Record<string, unknown>) || {}),
           replayedAt: nowIso,
-          replayedBy: userId || 'admin',
+          replayedBy: userId ?? null,
           isReplay: true
         } as unknown as BaseDomainEvent['metadata'],
         occurredAt: record.quarantinedAt || nowIso

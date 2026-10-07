@@ -255,7 +255,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       const { createTestItem } = await import('../fixtures/factories.js');
       const item = await createTestItem({ weightedAverageCost: 50000, currentStock: 10 });
       try {
-        const base = { name: item.name, code: item.code, unit: item.unit, category: item.category };
+        const base = { name: item.name, code: item.code, unit: item.unit, category: item.category, version: item.version };
         const forged = await send(editor.session, 'put', `/api/items/${item.id}`, { ...base, weighted_average_cost: 1 });
         const [afterForged] = await orm.select({ wac: items.weightedAverageCost }).from(items).where(eq(items.id, item.id));
         const same = await send(editor.session, 'put', `/api/items/${item.id}`, { ...base, weighted_average_cost: 50000.4 });
