@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.111 — Group and General Account Cards Roll Up Their Sub-Accounts
+- **Account Card Roll-Up (P2):** clicking a group or general row of the trial balance opened an empty account card with a zero balance, because the card read only that account's own rows; the card of a group or general account now carries the rows and balances of all its sub-accounts (TD-570, `reg_account_card_rolls_up_sub_accounts_td_570`).
+
 ### v9.0.110 — Balance Sheet and Ratios Take a Date, the Income Statement Its Own Period
 - **Statement Dates (P2):** the balance sheet and the financial ratios were always as of today and the income statement silently took the trial balance dates; each statement now has its own date fields in its header and shows its date or period (TD-566, `financialStatementDates.test.tsx`).
 

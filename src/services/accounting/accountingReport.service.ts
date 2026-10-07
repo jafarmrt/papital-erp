@@ -21,6 +21,7 @@ import type {
 import { isAllCurrenciesView, voucherItemCurrencyCondition, voucherItemCurrencySql, voucherItemRateSql, voucherItemReportAmountSql } from './voucherItemAmount.js';
 import { partyDetailedRowsCondition, type PartyDetailedFilter } from './partyDetailedRows.js';
 import type { BalanceSheetReport, IncomeStatementReport, StatementRow } from '../../lib/accounting/financialStatements.js';
+import { accountSubtreeCondition } from './accountSubtree.js';
 
 /** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
 function foreignOrigin(allCurrencies: boolean, row: {
@@ -617,8 +618,9 @@ export class AccountingReportService {
       or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
     ];
 
+    // v9.0.111 (TD-570): حساب گروه یا کل با همه زیرحساب‌هایش (کلیک ردیف تراز آزمایشی، «مرور حساب‌ها»)
     if (params.accountId) {
-      periodConditions.push(eq(journalVoucherItems.accountId, params.accountId));
+      periodConditions.push(accountSubtreeCondition(journalVoucherItems.accountId, params.accountId));
     }
     if (params.detailedType && params.detailedType !== 'all') {
       periodConditions.push(eq(journalVoucherItems.detailedType, params.detailedType));
@@ -679,7 +681,7 @@ export class AccountingReportService {
         eq(journalVoucherItems.isDeleted, 0),
         or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
       ];
-      if (params.accountId) priorConds.push(eq(journalVoucherItems.accountId, params.accountId));
+      if (params.accountId) priorConds.push(accountSubtreeCondition(journalVoucherItems.accountId, params.accountId));
       if (params.detailedType && params.detailedType !== 'all') priorConds.push(eq(journalVoucherItems.detailedType, params.detailedType));
       if (params.detailedId) priorConds.push(eq(journalVoucherItems.detailedId, params.detailedId));
       if (params.detailedName) priorConds.push(like(journalVoucherItems.detailedName, containsLikePattern(params.detailedName.trim())));
