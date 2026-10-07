@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.251 — v9.0.251 — Receipts Page Opens for Those Who Record Its Documents
+- **Receipts page access (B16-04, TD-668 follow-up):** the stock in/out page opens for `warehouse.in`, `warehouse.out` or `documents.finalize`, the keys saving its documents asks, instead of `documents.view` / `documents.create`, which opened the page but could not save.
+
 ### v9.0.250 — v9.0.250 — Settings Values Are Validated
 - **Settings validation (TD-672):** movement days must be whole numbers from 1 to 3650 with fast < slow < dead and the currency setting is rial or toman (422 otherwise); the dashboard falls back to the defaults 30 / 90 / 180 when a stored value is invalid.
 
