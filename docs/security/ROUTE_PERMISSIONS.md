@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 365
+تعداد مسیرها: 366
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -345,6 +345,7 @@
 | POST | `/api/warehouses` | warehouse.manage |
 | DELETE | `/api/warehouses/:id` | warehouse.manage |
 | PUT | `/api/warehouses/:id` | warehouse.manage |
+| POST | `/api/warehouses/:id/reactivate` | admin |
 | GET | `/api/woocommerce/order-logs` | woocommerce.view |
 | POST | `/api/woocommerce/sync-all-stocks` | woocommerce.manage |
 | POST | `/api/woocommerce/sync-item` | woocommerce.manage |
