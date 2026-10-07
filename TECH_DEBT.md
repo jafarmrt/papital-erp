@@ -73,7 +73,6 @@
 | TD-684 | پوسته (بسته ۱۶) | P3 (B16-20) — `executePrint` پاک‌سازی چاپ را دو بار اجرا می‌کند: `onAfterPrint` دو بار صدا زده شد؛ عنوان صفحه ۲ ثانیه بعد بازنشانی شد و عنوان تازه‌تر را پاک کرد؛ کلاس `printing-doc` با پنجره هنوز باز برداشته شد | printHelper.ts | open (P3) |
 | TD-686 | پوسته (بسته ۱۶) | P3 (B16-22) — آوانویسی و انگلیسی در رابط پوسته (قاعده ۱۰): ورکفلو، تسک، متریال، آلارم، دیتابیس، فلگ، اندپوینت، کانفیگ، فرانت، بک‌اند، باندل، ری‌استارت، اتوماسیون، استراتژی، پروفایل، ماژول، پروتکل، توکن، «TOMAN»، «Drag & Drop»، «Paste (Ctrl+V)»، «KB»، «Invalid time value»، «Tech Stack»، «AGENTS.md» و `⌘K` | CustomizableShortcuts.tsx، settingsNavigationConfig.ts، SystemConfigTab.tsx، GeneralSettingsTab.tsx، SettingsPage.tsx، menuConfig.ts، Sidebar.tsx، TopBar.tsx، ModernPersianDropzone.tsx، ChangelogPage.tsx، GlobalHeaderSearch.tsx | open (P3، تصمیم ت۷) |
 | TD-778 | اسناد (بسته ۸)؛ اثر روی ۳، ۹، ۱۰ و ۱۵ | P2 (B08-09) — سند طرف حساب را فقط با نام متنی می‌شناسد: فاکتور ۱٬۰۰۰٬۰۰۰ برای «علي رضايي» (ی عربی) بی تفصیلی ثبت شد، کارت حساب و پرونده مشتری خالی ماندند و طرف حساب با همان طلب حذف شد؛ «ROSE GALLERY» در برابر «Rose Gallery» همین | voucherSync.service.ts، customerDeleteGuard.ts، schema/documents | open (P2، تصمیم ت۶ الف) |
-| TD-781 | اسناد (بسته ۸)؛ اثر روی ۴ | P2 (B08-12) — `GET /documents/:id` فهرست `settlements` (شماره پیگیری، حساب بانکی، شرح) را به خواننده سند بی مجوز خزانه می‌دهد؛ TD-890 دامنه را به مجوزهای اسناد تنگ کرد ولی دارنده `documents.view` هنوز آن را می‌گیرد | documentQuery.service.ts، documents.routes.ts | open (P2، تصمیم ت۸ الف) |
 | TD-785 | اسناد (بسته ۸)؛ اثر روی ۲ و ۱۵ | P3 (B08-16) — ممیزی اسناد ناقص است: `PUT /notes` یادداشت فاکتور قطعی را بی ممیزی پاک کرد، ابطال دو ردیف `DELETE` می‌نویسد، ثبت بدنه درخواست را «after» می‌نویسد، ویرایش «before» ندارد و `InvoiceCreated` با `buyerName` خریدار خالی دارد | documents.routes.ts، documentLifecycle.service.ts، documentCreation.service.ts | open (P3) |
 | TD-786 | اسناد (بسته ۸) | P3 (B08-17) — `documents.type` و `status` و `quantity`، `unit_price` و `discount` ردیف قید CHECK ندارند؛ دو ایندکس هم‌پوشان روی `documents.project_id` | schema/documents، drizzle | open (P3) |
 | TD-787 | اسناد (بسته ۸) | P3 (B08-18) — `GET /documents` بی `page` و `limit` کل جدول را با ردیف‌ها و تسویه‌ها برمی‌گرداند: ۲۰٬۰۵۰ سند ۴٫۹ تا ۶٫۵ ثانیه و ۲۷٫۹ مگابایت (صفحه ۵۰ تایی ۱۲ تا ۲۶ میلی‌ثانیه) | documentQuery.service.ts، useInventoryAuditQueries.ts | open (P3) |
@@ -105,8 +104,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۸۴ ردیف
-- **آرشیو شده (resolved):** ۶۳۸ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۸۳ ردیف
+- **آرشیو شده (resolved):** ۶۳۹ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -115,4 +114,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.285 — TD-783 (شماره سند فروش از سری سرور و شماره تکراری ۴۰۹، P2) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.286 — TD-781 (ردیف‌های خزانه سند فقط برای خوانندگان خزانه، P2) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

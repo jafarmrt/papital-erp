@@ -1,5 +1,6 @@
 import { ForbiddenError } from '../../errors/customErrors.js';
 import { can } from '../../middleware/authorize.js';
+import { READ_PERMISSIONS } from '../../lib/recordReadPermissions.js';
 
 /**
  * v9.0.140 (TD-890، تصمیم ت۱۰ الف مدل مجوز): فهرست و پرونده اسناد با مجوز بخش اسناد باز است؛ صفحه انبارگردانی
@@ -23,4 +24,13 @@ export function assertDocumentTypeReadable(types: readonly string[] | null, type
     undefined,
     'DOCUMENT_TYPE_NOT_READABLE',
   );
+}
+
+/**
+ * v9.0.286 (TD-781، تصمیم ت۸ الف بسته ۸): ردیف‌های خزانهٔ سند (شماره تراکنش، روش، شماره پیگیری، حساب بانکی، شرح) فقط به
+ * خوانندگان خزانه (`READ_PERMISSIONS.treasuryTransactions`) داده می‌شود؛ دیگر خوانندگان سند فقط مبلغ پرداخت‌شده، مانده و
+ * وضعیت تسویه را می‌گیرند. پیش‌تر انباردار و هر خواننده دیگر سند جزئیات دریافت‌ها را می‌دید.
+ */
+export async function documentForReader<T extends { settlements?: unknown }>(user: { role?: string } | undefined, doc: T): Promise<T> {
+  return await can(user, ...READ_PERMISSIONS.treasuryTransactions) ? doc : { ...doc, settlements: undefined };
 }

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.286 — v9.0.286 — Document Treasury Rows Only for Treasury Readers
+- **Document read scope:** a document's receipts and payments (tracking number, bank account, description) are now shown only to treasury readers; other document readers see only the paid amount, the balance and the settlement status (TD-781).
+
 ### v9.0.285 — v9.0.285 — Sales Document Numbers Only From the Server Series
 - **Document numbers:** a sales invoice or sales return number now comes only from the server series; a stock document may keep a manual number, but a taken one is refused instead of being silently replaced, a manual number no longer moves the series, and the audit log records the stored number (TD-783).
 

@@ -23,7 +23,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { getStockCountSheetItems } from '../services/inventory/stockCountSheet.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { assertDocumentTypeReadable, readableDocumentTypes } from '../services/documents/documentReadScope.js';
+import { assertDocumentTypeReadable, documentForReader, readableDocumentTypes } from '../services/documents/documentReadScope.js';
 import type { AuthUserPayload } from '../types.js';
 
 const router = Router();
@@ -411,7 +411,7 @@ router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.doc
   const doc = await DocumentService.getDocumentById(docId);
   if (!doc) throw new NotFoundError('سند یافت نشد');
   assertDocumentTypeReadable(readable, doc?.type);
-  res.json(doc);
+  res.json(await documentForReader(req.user, doc));
 }));
 
 router.get('/documents/audit-items', authorizePermission(...READ_PERMISSIONS.stockCountSheet), validate(auditItemsQuerySchema), asyncHandler(async (req, res) => {
@@ -426,7 +426,8 @@ router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documentRec
   const doc = await DocumentService.getDocumentByIdOrRef(rawId);
   if (!doc) throw new NotFoundError(`سند با شناسه یا عطف ${rawId} یافت نشد`);
   assertDocumentTypeReadable(readable, doc.type);
-  res.json(doc);
+  // v9.0.286 (TD-781): ردیف‌های خزانه فقط برای خوانندگان خزانه
+  res.json(await documentForReader(req.user, doc));
 }));
 
 // v9.0.125 (TD-541 / TD-771): نهایی‌سازی همان مجوز ثبت قطعی همان نوع سند را می‌خواهد (پیش‌تر «ویرایش فاکتورها» بس بود و
