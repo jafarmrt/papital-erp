@@ -56,10 +56,3 @@ export async function findFinalDocumentIdByRef(input: { ref: string; type: strin
   }
   return rows[0].id;
 }
-
-/** v9.0.285 (TD-783): نوع، شماره و وضعیت ذخیره‌شده سند، برای گزارش ممیزی و پاسخ ثبت و ویرایش (نه مقدار فرستاده‌شده) */
-export async function storedDocumentHeader(db: Pick<typeof orm, 'select'>, docId: number): Promise<{ type: string; refNumber: string; status: string } | null> {
-  const [row] = await db.select({ type: documents.type, refNumber: documents.refNumber, status: documents.status })
-    .from(documents).where(eq(documents.id, docId));
-  return row ? { type: String(row.type), refNumber: String(row.refNumber ?? ''), status: String(row.status ?? '') } : null;
-}

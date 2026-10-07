@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.288 — v9.0.288 — One Audit Row per Document Change
+- **Document audit trail:** creating, editing, finalizing, changing the notes of and voiding a document each write one audit row in the same transaction with the stored document before and after; a void writes one row instead of two and the invoice event carries the buyer name (TD-785).
+
 ### v9.0.287 — v9.0.287 — The Party of a Document by Id
 - **Document party:** a sales or purchase document now keeps its party by id; the voucher, the customer dossier, the treasury link and the party delete guard follow the id whatever the buyer name, a return takes its invoice's party, and old documents were linked by exact name, the rest listed by the health check (TD-778).
 

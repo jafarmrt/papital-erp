@@ -1,5 +1,5 @@
 import { eq, and, inArray } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, productionProjects } from '../../db/schema.js';
 import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import { requireDocumentTimestamp, resolveDocumentTimestamp } from '../../lib/storageDate.js';
@@ -35,6 +35,7 @@ import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
+import { documentAuditSnapshot, type DocumentAuditChange } from './documentAudit.js';
 
 type DocumentLineRow = typeof documentItems.$inferInsert;
 
@@ -51,19 +52,25 @@ async function insertDocumentLines(tx: DbClient, rows: DocumentLineRow[]): Promi
 export class DocumentCreationService {
   /**
    * Updates the notes of a specific document.
+   * v9.0.288 (TD-785): در تراکنش فراخواننده و با سند پیش و پس از تغییر، تا ردیف ممیزی همان تراکنش نوشته شود
+   * (پیش‌تر یادداشت سند قطعی بی هیچ ردیف ممیزی عوض می‌شد)
    */
-  static async updateDocumentNotes(id: number, notes: string): Promise<void> {
-    await orm.transaction(async (tx) => {
+  static async updateDocumentNotes(id: number, notes: string, externalTx?: DbExecutor): Promise<DocumentAuditChange> {
+    const execute = async (tx: DbExecutor): Promise<DocumentAuditChange> => {
       const [doc] = await tx.select().from(documents).where(and(eq(documents.id, id), eq(documents.isDeleted, 0))).for('update');
       if (!doc) throw new NotFoundError('سند مورد نظر یافت نشد.');
+      const before = await documentAuditSnapshot(tx, id);
       await tx.update(documents).set({ notes, version: nextVersion(doc.version) }).where(eq(documents.id, id));
-    });
+      return { before, after: await documentAuditSnapshot(tx, id) };
+    };
+    return externalTx ? execute(externalTx) : orm.transaction(execute);
   }
 
   /**
    * Updates an existing document (proforma or draft) and its line items.
+   * v9.0.288 (TD-785): در تراکنش فراخواننده؛ سند پیش از تغییر زیر قفل ردیف و پس از تغییر برای ردیف ممیزی برمی‌گردد
    */
-  static async updateDocument(id: number, body: UpdateDocumentInput): Promise<void> {
+  static async updateDocument(id: number, body: UpdateDocumentInput, externalTx?: DbExecutor): Promise<DocumentAuditChange> {
     const { 
       refNumber, date, user,
       buyer_name, buyer_city, buyer_phone, buyer_address,
@@ -76,7 +83,7 @@ export class DocumentCreationService {
     const leadTarget = documentLeadLinkOf(body.crmLeadId);
     const requestedPartyId = parseDocumentPartyId(body.partyId);
 
-    await orm.transaction(async (tx) => {
+    const execute = async (tx: DbExecutor): Promise<DocumentAuditChange> => {
       // v9.0.281 (TD-776): پیوند پرونده فروش درون همین تراکنش؛ پرونده‌ها پیش از ردیف سند قفل و سنجیده می‌شوند (۴۲۲ پیش از
       // هر نوشتن). پیش‌فاکتور بودن از نوع سند و وضعیت پس از این ویرایش است.
       let leadLock: LockedDocumentLeads | null = null;
@@ -104,6 +111,7 @@ export class DocumentCreationService {
       if (existingDoc.status === 'final') {
         throw new ValidationError('امکان ویرایش مستقیم سند نهایی‌شده وجود ندارد.');
       }
+      const before = await documentAuditSnapshot(tx, id);
 
       if (status === 'final') {
         throw new ValidationError(
@@ -280,7 +288,9 @@ export class DocumentCreationService {
       if (leadLock) {
         await applyDocumentLeadLink(tx, { id, refNumber: nextRefNumber, isProforma: leadDocIsProforma }, leadLock, user || existingDoc.user || 'سیستم');
       }
-    });
+      return { before, after: await documentAuditSnapshot(tx, id) };
+    };
+    return externalTx ? execute(externalTx) : orm.transaction(execute);
   }
 
   /**
@@ -617,7 +627,8 @@ export class DocumentCreationService {
             documentId: docId,
             refNumber: String(finalRefNumber),
             docType,
-            buyerName: buyer_name || '',
+            // v9.0.288 (TD-785): نام ذخیره‌شده خریدار (پیش‌تر فقط `buyer_name`؛ با `buyerName` یا شناسه طرف حساب خالی بود)
+            buyerName: party.buyerName || '',
             currency: docCurrency,
             itemCount: docLines?.length || 0,
             status: docStatus
@@ -633,7 +644,7 @@ export class DocumentCreationService {
           {
             documentId: docId,
             refNumber: String(finalRefNumber),
-            supplierName: buyer_name || '',
+            supplierName: party.buyerName || '',
             currency: docCurrency,
             itemCount: docLines?.length || 0,
             status: docStatus

@@ -16,6 +16,9 @@ export async function runDocumentDataTests(shouldRun: ShouldRun): Promise<TestCa
     ['reg_document_party_by_id_td_778',
       'v9.0.287: a sales or purchase document keeps its party by id: the voucher, the dossier, the treasury link and the party delete guard follow the id whatever the buyer name, a return takes its invoice\'s party, and the migration links old documents by exact name (TD-778)',
       ['td778', 'documents', 'party', 'customers', 'package8'], documentPartyByIdCase],
+    ['reg_document_audit_trail_td_785',
+      'v9.0.288: every change of a document writes one audit row in its own transaction with the stored document before and after: create, edit, finalize, a final invoice\'s notes and a void (one DELETE row), and the invoice event carries the buyer name (TD-785)',
+      ['td785', 'documents', 'audit', 'package8'], documentAuditTrailCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -201,4 +204,85 @@ async function documentPartyByIdCase(h: Harness, wrong: string[]): Promise<strin
   if ((await partyOf(nobody))?.party_id !== null) wrong.push('the migration linked a document whose name no party has');
 
   return `invoice ${invoice} named «علي رضايي» on party ${party.id}: voucher detail ${detail.join(',')}, dossier after rename, receipt by id, delete refused naming ${draftRef}; return on the invoice's party, wrong party 422; edit by id; missing party 422; remittance 422; exact-name fallback; unknown name listed; migration backfill`;
+}
+
+/** B08-16 (TD-785): the create row logged the request, the edit row had no «before», notes had no row and a void had two */
+async function documentAuditTrailCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const buyer = `P8 audit buyer ${h.tag}`;
+  const item = await f.item(20, 1_000);
+  type Snapshot = { id?: number; refNumber?: string; status?: string; docType?: string; buyerName?: string; notes?: string; items?: Array<{ itemId?: number; quantity?: string; unitPrice?: string }> };
+  type AuditRow = { action: string; description: string; details: { before?: Snapshot | null; after?: Snapshot | null; changes?: Record<string, { before: unknown; after: unknown }> } };
+  const auditRows = async (docId: number): Promise<AuditRow[]> => {
+    const rows = await h.q(
+      `SELECT action, description, details FROM activity_logs
+        WHERE entity_id = $1 AND (entity LIKE 'اسناد انبار%' OR entity = 'فاکتور فروش') ORDER BY id`,
+      [String(docId)],
+    ) as Array<{ action: string; description: string; details: unknown }>;
+    return rows.map(r => ({ ...r, details: (typeof r.details === 'string' ? JSON.parse(r.details) : r.details) as AuditRow['details'] ?? {} }));
+  };
+  const show = (row: AuditRow | undefined) => JSON.stringify(row?.details ?? null).slice(0, 220);
+
+  // 1) create: one CREATE row whose «after» is the stored invoice (camelCase buyer name, stored number and lines)
+  const created = await h.post('/api/documents', f.doc('invoice', 'draft', [{ itemId: item, quantity: 2, unit_price: 5_000, location: f.wh }], {
+    buyer_name: undefined, buyerName: buyer, notes: 'P8 audit first note',
+  }));
+  const docId = docIdOf(created);
+  if (created.status !== 200 || !docId) throw new Error(`setup: invoice ${brief(created)}`);
+  const [{ ref }] = await h.q(`SELECT ref_number AS ref FROM documents WHERE id = $1`, [docId]) as Array<{ ref: string }>;
+  let rows = await auditRows(docId);
+  const createRow = rows.find(r => r.action === 'CREATE');
+  const createAfter = createRow?.details.after;
+  if (rows.filter(r => r.action === 'CREATE').length !== 1 || createAfter?.id !== docId || createAfter?.refNumber !== ref
+    || createAfter?.status !== 'draft' || createAfter?.buyerName !== buyer || createAfter?.items?.length !== 1
+    || Number(createAfter?.items?.[0]?.quantity) !== 2 || Number(createAfter?.items?.[0]?.unitPrice) !== 5_000) {
+    wrong.push(`the create row is ${show(createRow)}, expected the stored invoice ${ref} (id ${docId}, draft, buyer ${buyer}, one line of 2 at 5000)`);
+  }
+  const [event] = await h.q(
+    `SELECT payload->>'buyerName' AS buyer FROM outbox_events WHERE aggregate_id = $1 AND event_type = 'InvoiceCreated' ORDER BY id DESC LIMIT 1`,
+    [String(docId)],
+  ) as Array<{ buyer: string | null }>;
+  if (event?.buyer !== buyer) wrong.push(`the InvoiceCreated event carries the buyer ${JSON.stringify(event?.buyer ?? null)}, expected ${buyer}`);
+
+  // 2) edit: one UPDATE row with the stored document before and after and the changed field
+  const edited = await h.put(`/api/documents/${docId}`, { notes: 'P8 audit second note' });
+  if (edited.status !== 200) throw new Error(`setup: edit ${brief(edited)}`);
+  rows = await auditRows(docId);
+  const editRow = rows.filter(r => r.action === 'UPDATE').at(-1);
+  if (editRow?.details.before?.notes !== 'P8 audit first note' || editRow?.details.after?.notes !== 'P8 audit second note'
+    || editRow?.details.changes?.notes?.after !== 'P8 audit second note' || editRow?.details.before?.buyerName !== buyer) {
+    wrong.push(`the edit row is ${show(editRow)}, expected before.notes «P8 audit first note», after.notes «P8 audit second note» and changes.notes`);
+  }
+
+  // 3) finalize: one UPDATE row from draft to final
+  const finalized = await h.put(`/api/documents/${docId}/finalize`, {});
+  if (finalized.status !== 200) throw new Error(`setup: finalize ${brief(finalized)}`);
+  rows = await auditRows(docId);
+  const finalizeRow = rows.filter(r => r.action === 'UPDATE').at(-1);
+  if (finalizeRow?.details.before?.status !== 'draft' || finalizeRow?.details.after?.status !== 'final' || finalizeRow?.details.changes?.status?.after !== 'final') {
+    wrong.push(`the finalize row is ${show(finalizeRow)}, expected before.status draft and after.status final`);
+  }
+  const updatesBeforeNotes = rows.filter(r => r.action === 'UPDATE').length;
+
+  // 4) notes of the final invoice: one more UPDATE row with the old and the new notes
+  const noted = await h.put(`/api/documents/${docId}/notes`, { notes: 'P8 audit final note' });
+  if (noted.status !== 200) throw new Error(`setup: notes ${brief(noted)}`);
+  rows = await auditRows(docId);
+  const notesRow = rows.filter(r => r.action === 'UPDATE').at(-1);
+  if (rows.filter(r => r.action === 'UPDATE').length !== updatesBeforeNotes + 1
+    || notesRow?.details.before?.notes !== 'P8 audit second note' || notesRow?.details.after?.notes !== 'P8 audit final note') {
+    wrong.push(`changing the final invoice's notes wrote ${rows.filter(r => r.action === 'UPDATE').length - updatesBeforeNotes} rows (last ${show(notesRow)}), expected one with before «P8 audit second note» and after «P8 audit final note»`);
+  }
+
+  // 5) void: exactly one DELETE row, carrying the invoice as it was
+  const voided = await h.del(`/api/documents/${docId}`);
+  if (voided.status !== 200) throw new Error(`setup: void ${brief(voided)}`);
+  rows = await auditRows(docId);
+  const deletes = rows.filter(r => r.action === 'DELETE');
+  const deleteBefore = deletes[0]?.details.before;
+  if (deletes.length !== 1 || deleteBefore?.refNumber !== ref || deleteBefore?.status !== 'final' || deleteBefore?.notes !== 'P8 audit final note'
+    || deleteBefore?.items?.length !== 1) {
+    wrong.push(`the void wrote ${deletes.length} DELETE rows (${deletes.map(show).join(' | ')}), expected one with the final invoice ${ref} before it`);
+  }
+  return `invoice ${ref}: CREATE (stored after), edit, finalize and notes UPDATE rows with before and after, one DELETE row; event buyer ${buyer}`;
 }
