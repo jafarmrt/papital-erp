@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.124 — Update Checks Startup on the Configured Port
+- **Update Port:** `update.sh` waits for `/health/startup` on `PORT` from `.env` (written by `install.sh`, read by the server; an `APP_PORT` environment variable still wins, default 3000). Before, a server installed on another port reported "Update NOT completed" after a good update and was offered a backup restore. `setup-domain.sh` reads the port the same way (not covered by a test: it needs root, apt and certbot).
+
+### v9.0.123 — Failed Build During Update Keeps the Previous Build
+- **Update Build Failure:** `update.sh` keeps a copy of `dist/` before `npm run build` and puts it back when the build fails, then stops without restarting the service. From the moment the source changes, any failure prints the rollback steps once (an `EXIT` trap), and the backup step warns that restoring it erases every change made after it, so it is only for a version that has accepted no writes. Before, a failed build left `dist/server.cjs` missing and printed no rollback steps.
+
+### v9.0.122 — Private Backup Files
+- **Private Backups:** `scripts/backup.sh` writes under `umask 077` and makes the backup directory `0700`, so the dump, manifest and uploads archive are `0600` whatever the caller's umask; `scripts/go-live-verify.sh` fails a backup directory or any backup file other users can read (older backups are listed there to `chmod` by hand). Before, every local user could read payslips and attachments from the backups.
+
+### v9.0.121 — Test Data Cleanup Guarded and Marker-Only
+- **Test Data Cleanup (P1):** `npm run db:cleanup-test` runs only with `NODE_ENV` set to `test` or `development` and `ERP_ALLOW_TEST_CLEANUP=1` (checked before connecting), previews by default inside a rolled-back transaction and deletes only with `--force`, and then only `ERP-TEST-MARKER` rows that nothing else refers to. Kardex, treasury, users, audit logs, counters and sequences are never touched. Before, it deleted real payslips, reversal vouchers, items and users on a production database.
+
+### v9.0.120 — Package 1 Data Infrastructure and Deployment Documentation
+- **Stability Audit, Package 1 (Data Infrastructure, Startup, Deployment and Tooling):** `docs/audit/STABILITY_AUDIT_V9.md` gets the package 1 section with the owner decisions t1 to t9 (t9: all terminal output in English); its proven findings are registered as open rows TD-581 to TD-625 (TD-583 unused, B01-03 was fixed as TD-472; TD-591 and TD-594 are opened by package 2 M5 and package 16). Two P1: the test-data cleanup script deletes real data without an environment guard, and unknown paths grow the `/metrics` label set without bound. Documentation only; no behaviour change.
+
 ### v9.0.119 — Financial Ratios Show No Made-Up Score Before Data
 - **Ratios Score (P3):** before any data arrived, or after an error, the ratios page showed a health score of 75 out of 100 and «critical» statuses; it now shows no score, status or value until the server answers (TD-575, `financialRatiosNoScore.test.tsx`).
 

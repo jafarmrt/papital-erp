@@ -141,6 +141,19 @@ echo "[5] Backup infrastructure"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/erp}"
 if [ -d "$BACKUP_DIR" ]; then
   ok "Backup directory exists: $BACKUP_DIR"
+  # v9.0.122 (TD-585): backups hold the whole database and all attachments; only their owner may read them
+  BACKUP_MODE="$(stat -c '%a' "$BACKUP_DIR" 2>/dev/null || echo '?')"
+  if [ "$BACKUP_MODE" = "700" ]; then
+    ok "Backup directory is private (mode 700)"
+  else
+    bad "Backup directory $BACKUP_DIR has mode $BACKUP_MODE - other users can read the backups (chmod 700 $BACKUP_DIR)"
+  fi
+  N_OPEN="$(find "$BACKUP_DIR" -maxdepth 1 -type f -perm /077 2>/dev/null | wc -l)"
+  if [ "$N_OPEN" -eq 0 ]; then
+    ok "No backup file is readable by other users"
+  else
+    bad "$N_OPEN backup file(s) readable by other users (chmod 600 $BACKUP_DIR/erp_*)"
+  fi
   N_DUMP="$(find "$BACKUP_DIR" -name 'erp_*.dump.gz' 2>/dev/null | wc -l)"
   [ "$N_DUMP" -ge 1 ] && ok "Backups present ($N_DUMP dump archive(s))" || warnc "No backup archives yet — run scripts/backup.sh now"
 else
