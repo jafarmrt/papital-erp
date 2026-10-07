@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { isCancelledError } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { Item, User } from '../types';
@@ -21,7 +21,7 @@ import { computeInvoiceTotals } from '../lib/invoiceTotals';
 import { currencyChangeError, lineDiscountError, pricesForCurrency } from '../lib/invoices/invoiceLine';
 import { printLineAmounts } from '../lib/invoices/invoicePrintTotals';
 import { amountDecimalsOf } from '../lib/invoices/invoiceListDocuments';
-import { customerLocationLabel, invoiceFormFromDocument, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
+import { customerLocationLabel, invoiceFormFromDocument, isSalesFormDocType, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
 import type { InvoiceListDocument } from '../lib/invoices/invoiceListDocuments';
 import { Sparkles } from 'lucide-react';
 import { ExchangeRateField, exchangeRateError } from '../components/documents/ExchangeRateField';
@@ -40,7 +40,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   const canRecordSales = canFinalizeSales || holdsCreate;
 
   const [docType, setDocType] = useState('invoice');
-  const [status, setStatus] = useState(canFinalizeSales ? 'final' : 'proforma'); // 'proforma' or 'final'
+  const initialStatus = canFinalizeSales ? 'final' : 'proforma';
+  const [status, setStatus] = useState(initialStatus); // 'proforma' or 'final'
 
   // خواندنی‌های صفحه با React Query (انبارها، مشتریان، پیش‌فاکتورهای باز، شماره بعدی سند)
   const { warehouses, customersList, proformas, nextRef, loadDocument, refreshProformas, refetchNextRef } = useInvoiceReferenceData(docType);
@@ -111,7 +112,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     // v8.0.111 (TD-388): فرم بی ردیف و بی خریدار (مثلاً پس از ثبت) پیش‌نویس نمی‌سازد
     isEmpty: isEmptyInvoiceDraft,
     onDraftLoaded: (loaded) => {
-      if (loaded.docType) setDocType(loaded.docType);
+      if (isSalesFormDocType(loaded.docType)) setDocType(loaded.docType);
       if (loaded.status) setStatus(loaded.status);
       if (loaded.location) setLocation(loaded.location);
       if (loaded.currency) setCurrency(loaded.currency);
@@ -138,9 +139,16 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       const doc = await loadDocument(p.id);
       if (!doc) return;
       const form = invoiceFormFromDocument(doc, p.ref_number);
+      // v9.0.248 (TD-789): این فرم فقط سند فروش را ویرایش می‌کند
+      if (!isSalesFormDocType(form.docType)) {
+        toast.error(`سند شماره ${p.ref_number} سند فروش نیست و در این فرم ویرایش نمی‌شود.`);
+        return;
+      }
+      resetForm();
       setEditingDocId(p.id);
       setDocType(form.docType);
       setStatus(form.status);
+      setCrmLeadId(form.crmLeadId);
       setRefNumber(form.refNumber);
       if (form.date) setDate(form.date);
       buyer.setBuyer(form);
@@ -167,27 +175,40 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     }
   };
 
-  // پاک کردن فرم پس از ثبت یا انصراف از ویرایش؛ شماره سند به شماره بعدی سرور برمی‌گردد
+  // پاک کردن فرم پس از ثبت یا انصراف از ویرایش؛ شماره سند به شماره بعدی سرور برمی‌گردد.
+  // v9.0.248 (TD-789): همه فیلدها به مقدار آغازین برمی‌گردند (نوع، وضعیت، انبار، تاریخ، ارز، نرخ، مالیات و پرونده فروش)؛
+  // پیش‌تر نوع، وضعیت و پرونده فروش سند قبلی می‌ماند و فاکتور بعدی با نوع «رسید» یا به پرونده دیگری ثبت می‌شد
   const resetForm = () => {
     setEditingDocId(null);
-    setDocItems([]);
-    setBuyerName('');
-    setBuyerCity('');
-    setBuyerPhone('');
-    setBuyerAddress('');
-    setNotes('');
-    setApplyVat(false);
+    setDocType('invoice');
+    setStatus(initialStatus);
+    setLocation(null);
     setRefNumber(null);
+    setDate(getTodayJalaliDate());
+    buyer.setBuyer({ buyerName: '', buyerCity: '', buyerPhone: '', buyerAddress: '' });
+    setSelectedCustomerId('');
+    setNotes('');
+    setCrmLeadId(null);
+    setCurrency('IRR');
+    setExchangeRate(0);
+    setApplyVat(false);
+    setVatRate(10);
+    setDocItems([]);
+    setSelectedItem('');
+    setSelectedItemObj(null);
+    setQuantity('');
+    setUnitPrice('');
+    setDiscount(0);
   };
 
   const handleCancelEdit = () => {
     resetForm();
-    setSelectedCustomerId('');
     refetchNextRef();
     toast('ویرایش پیش‌فاکتور لغو شد.');
   };
 
   const locationState = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (locationState.state) {
@@ -200,13 +221,15 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       if (uniqueLoc) setBuyerCity(uniqueLoc);
       else if (s.buyerCity) setBuyerCity(str(s.buyerCity));
       if (s.notes) setNotes(str(s.notes));
-      if (s.crmLeadId) setCrmLeadId(Number(s.crmLeadId));
-      if (s.type) { setDocType(str(s.type)); setStatus('proforma'); }
-      if (s.status) setStatus(str(s.status));
+      if (Number(s.crmLeadId) > 0) setCrmLeadId(Number(s.crmLeadId));
+      if (isSalesFormDocType(str(s.type))) { setDocType(str(s.type)); setStatus('proforma'); }
+      if (s.status === 'proforma' || (s.status === 'final' && canFinalizeSales)) setStatus(s.status);
       if (s.currency) setCurrency(str(s.currency));
       toast.success('اطلاعات خریدار و پرونده فروش منتقل شد.');
+      // v9.0.248 (TD-789): وضعیت مسیریابی یک بار خوانده می‌شود تا پرونده فروش به سندهای بعدی این صفحه نرسد
+      void navigate(locationState.pathname, { replace: true, state: null });
     }
-  }, [locationState.state, setBuyerName, setBuyerPhone, setBuyerAddress, setBuyerCity]);
+  }, [locationState.state, locationState.pathname, navigate, canFinalizeSales, setBuyerName, setBuyerPhone, setBuyerAddress, setBuyerCity]);
 
   const handleItemSelect = (val: string, rawItem?: Item) => {
     setSelectedItem(val);
@@ -284,6 +307,11 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       return;
     }
 
+    if (!isSalesFormDocType(docType)) {
+      toast.error('این فرم فقط فاکتور و پیش‌فاکتور فروش ثبت می‌کند.');
+      return;
+    }
+
     const rateError = exchangeRateError(currency, exchangeRate);
     if (rateError) {
       toast.error(rateError);
@@ -329,7 +357,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       location,
       currency,
       exchangeRate: currency !== 'IRR' ? exchangeRate : null,
-      crmLeadId: crmLeadId ? Number(crmLeadId) : undefined,
+      // v9.0.248 (TD-789): ویرایش پیش‌فاکتور پیوند پرونده فروش را دست نمی‌زند؛ فقط سند تازه با پرونده‌ای که از آن باز شده ثبت می‌شود
+      crmLeadId: !editingDocId && crmLeadId ? Number(crmLeadId) : undefined,
       // v8.0.104 (TD-381): فقط درصد؛ مبلغ مالیات را سرور با همان قاعده جمع‌های فرم حساب می‌کند
       vatPercent: applyVat ? vatRate : 0,
       items: docItems.map(d => ({ itemId: d.item.id, quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount }))

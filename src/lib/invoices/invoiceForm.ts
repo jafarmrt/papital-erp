@@ -50,6 +50,7 @@ export interface InvoiceDocumentDetails {
   vatPercent?: number | string | null;
   vat_percent?: number | string | null;
   location?: string | null;
+  crmLeadId?: number | null;
   items?: InvoiceDocumentLine[];
 }
 
@@ -118,6 +119,16 @@ export function buyerFieldsOf(customer: BuyerSource): BuyerFields {
   };
 }
 
+/**
+ * v9.0.248 (TD-789): این فرم فقط سند فروش ثبت می‌کند. نوعی که از سند بارشده، پیش‌نویس یا پرونده فروش می‌آید و فروش نیست
+ * (مثلاً پیش‌فاکتور خرید، `receipt` با وضعیت `proforma`) پذیرفته نمی‌شود؛ پیش‌تر همان نوع می‌ماند و فاکتور بعدی «رسید» ثبت می‌شد.
+ */
+export const SALES_FORM_DOC_TYPES: readonly string[] = ['invoice', 'proforma'];
+
+export function isSalesFormDocType(type: string | null | undefined): boolean {
+  return typeof type === 'string' && SALES_FORM_DOC_TYPES.includes(type);
+}
+
 /** مقادیر فرم برای ویرایش یک سند (پیش‌فاکتور) بارگذاری‌شده */
 export interface InvoiceFormValues extends BuyerFields {
   docType: string;
@@ -129,6 +140,8 @@ export interface InvoiceFormValues extends BuyerFields {
   exchangeRate: number;
   vatPercent: number;
   location: string | null;
+  /** پرونده فروشی که خود سند به آن وصل است (نه پرونده‌ای که فرم پیش‌تر از آن باز شده بود) */
+  crmLeadId: number | null;
   docItems: InvoiceDocItem[] | null;
 }
 
@@ -148,6 +161,7 @@ export function invoiceFormFromDocument(doc: InvoiceDocumentDetails, fallbackRef
     // v7.0.32 (TD-197): بازیابی مالیات ساختاریافته پیش‌فاکتور در حالت ویرایش
     vatPercent: Number(doc.vatPercent ?? doc.vat_percent ?? 0) || 0,
     location: doc.location || null,
+    crmLeadId: Number(doc.crmLeadId) > 0 ? Number(doc.crmLeadId) : null,
     docItems: Array.isArray(doc.items)
       ? doc.items.map(it => ({
         item: {
@@ -167,7 +181,7 @@ export function invoiceFormFromDocument(doc: InvoiceDocumentDetails, fallbackRef
 
 /**
  * v8.0.111 (TD-388): پیش‌نویس فاکتور فروش فقط وقتی ذخیره می‌شود که فرم ردیف یا خریدار داشته باشد. فرمی که پس از ثبت پاک
- * شده (نوع، انبار، ارز و نرخ مالیات سند قبلی را نگه می‌دارد) پیش‌نویس نیست.
+ * شده پیش‌نویس نیست.
  */
 export function isEmptyInvoiceDraft(data: { docItems?: unknown[] | null; buyerName?: string | null }): boolean {
   return !(Array.isArray(data.docItems) && data.docItems.length > 0) && !(data.buyerName || '').trim();
