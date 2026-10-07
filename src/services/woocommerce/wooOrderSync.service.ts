@@ -421,7 +421,7 @@ export class WooOrderSyncService {
 
         // (ز) تطبیق یا ایجاد مشتری؛ نام فاکتور همان نام پرونده مشتری است تا سند حسابداری روی حساب
         // تفصیلی همان مشتری بنشیند. ایجاد مشتری در Savepoint تا شکست آن تراکنش اصلی را abort نکند (ج).
-        const invoiceBuyerName = await this.matchOrCreateCustomer(tx, wcOrderId, buyer);
+        const { name: invoiceBuyerName, id: invoicePartyId } = await this.matchOrCreateCustomer(tx, wcOrderId, buyer);
 
         const todayStr = await businessTodayIsoDate();
         const nextRef = await DocumentService.getNextRef('invoice', todayStr, tx);
@@ -432,6 +432,8 @@ export class WooOrderSyncService {
           user: WC_BOT_USER,
           inOut: 'out',
           status: 'final',
+          // v9.0.287 (TD-778، B15-01): فاکتور به همان مشتری تطبیق‌یافته یا ساخته‌شده با شناسه وصل می‌شود
+          partyId: invoicePartyId ?? undefined,
           buyer_name: invoiceBuyerName,
           buyer_phone: buyer.buyerPhone,
           buyer_city: buyer.buyerCity,
@@ -480,7 +482,7 @@ export class WooOrderSyncService {
     }
   }
 
-  private static async matchOrCreateCustomer(tx: DbExecutor, wcOrderId: string, buyer: BuyerInfo): Promise<string> {
+  private static async matchOrCreateCustomer(tx: DbExecutor, wcOrderId: string, buyer: BuyerInfo): Promise<{ name: string; id: number | null }> {
     // v8.0.40 (TD-296): تلفن با کلید تطبیق (ارقام لاتین، بی‌جداکننده، ده رقم آخر) مقایسه می‌شود؛ پیش‌تر ‎+۹۸۹۱۲… مشتری
     // ۰۹۱۲… را نمی‌یافت و مشتری تکراری ساخته می‌شد
     const phoneKey = phoneMatchKey(buyer.buyerPhone);
@@ -492,22 +494,24 @@ export class WooOrderSyncService {
       ))
       .orderBy(asc(customers.id))
       .limit(1);
-    if (matched) return matched.name;
+    if (matched) return { name: matched.name, id: matched.id };
 
+    let createdId: number | null = null;
     try {
       await tx.transaction(async (sp) => {
-        await sp.insert(customers).values({
+        const [created] = await sp.insert(customers).values({
           name: buyer.buyerName,
           phone: buyer.buyerPhone,
           city: buyer.buyerCity,
           address: buyer.buyerAddress,
           notes: 'مشتری ثبت‌شده خودکار از فروشگاه ووکامرس',
-        });
+        }).returning({ id: customers.id });
+        createdId = created?.id ?? null;
       });
     } catch (custErr) {
       logger.warn({ message: `Failed to auto-create WooCommerce customer for order #${wcOrderId}`, error: custErr });
     }
-    return buyer.buyerName;
+    return { name: buyer.buyerName, id: createdId };
   }
 
   private static async markFailed(

@@ -26,6 +26,7 @@ import {
 import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
+import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from '../documents/documentParty.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
@@ -1184,6 +1185,8 @@ export class FinancialHealthService {
     tests.push(categoryIntegrityTest);
     // آزمون ۳۷: v9.0.266 (TD-804) فیش حقوقی با پاداش یا کسورات منفی، بی سند یا ناهمخوان با سند (فقط فهرست، بی بازنویسی)
     tests.push(buildPayrollVoucherHealthTest(await findPayrollVoucherMismatches()));
+    // آزمون ۳۸: v9.0.287 (TD-778) سند فروش و خرید با نام خریدار و بی شناسه طرف حساب (فقط فهرست، بی بازنویسی)
+    tests.push(buildUnlinkedPartyDocumentHealthTest(await findUnlinkedPartyDocuments()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

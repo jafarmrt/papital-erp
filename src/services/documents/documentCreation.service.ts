@@ -34,6 +34,7 @@ import { money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
+import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
 
 type DocumentLineRow = typeof documentItems.$inferInsert;
 
@@ -73,6 +74,7 @@ export class DocumentCreationService {
     if (Array.isArray(docLines)) assertLineDiscountsWithinAmount(docLines);
 
     const leadTarget = documentLeadLinkOf(body.crmLeadId);
+    const requestedPartyId = parseDocumentPartyId(body.partyId);
 
     await orm.transaction(async (tx) => {
       // v9.0.281 (TD-776): پیوند پرونده فروش درون همین تراکنش؛ پرونده‌ها پیش از ردیف سند قفل و سنجیده می‌شوند (۴۲۲ پیش از
@@ -191,6 +193,20 @@ export class DocumentCreationService {
         existing: existingDoc.exchangeRate,
       });
 
+      // v9.0.287 (TD-778، تصمیم ت۶ الف): طرف حساب با شناسه؛ بی شناسه و با نام تازه دوباره یافته می‌شود، وگرنه همان می‌ماند.
+      // برگشت با فاکتور مرجع طرف حساب همان فاکتور را نگه می‌دارد
+      const returnInvoiceId = existingDoc.type === 'return' && existingDoc.returnOfDocumentId ? Number(existingDoc.returnOfDocumentId) : null;
+      const nameChanged = buyer_name !== undefined && buyer_name !== existingDoc.buyerName;
+      const party = requestedPartyId !== undefined || nameChanged
+        ? await resolveDocumentParty(tx, {
+          docType: existingDoc.type,
+          partyId: requestedPartyId === undefined && returnInvoiceId !== null ? await returnInvoicePartyId(tx, returnInvoiceId) : requestedPartyId,
+          // شناسه تازه بی نام: نام طرف حساب تازه، نه نام طرف حساب پیشین
+          buyerName: buyer_name ?? (requestedPartyId ? '' : existingDoc.buyerName ?? ''),
+        })
+        : { partyId: existingDoc.partyId ?? null, buyerName: existingDoc.buyerName ?? '' };
+      if (returnInvoiceId !== null && requestedPartyId !== undefined) await assertReturnPartyOfInvoice(tx, returnInvoiceId, party.partyId);
+
       // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
       const storedAttachments = body.attachments !== undefined
         ? await AttachmentStorageService.normalizeForRecord(tx, 'document', id, body.attachments, user || existingDoc.user || '')
@@ -203,7 +219,8 @@ export class DocumentCreationService {
         date: newDocDate ?? existingDoc.date,
         user: user || existingDoc.user,
         notes: notes !== undefined ? notes : existingDoc.notes,
-        buyerName: buyer_name !== undefined ? buyer_name : existingDoc.buyerName,
+        partyId: party.partyId,
+        buyerName: party.buyerName,
         buyerCity: buyer_city !== undefined ? buyer_city : existingDoc.buyerCity,
         buyerPhone: buyer_phone !== undefined ? buyer_phone : existingDoc.buyerPhone,
         buyerAddress: buyer_address !== undefined ? buyer_address : existingDoc.buyerAddress,
@@ -337,6 +354,7 @@ export class DocumentCreationService {
     assertLineDiscountsWithinAmount(docLines);
 
     const finalBuyerName = buyerName || buyer_name || '';
+    const requestedPartyId = parseDocumentPartyId(body.partyId);
     const finalBuyerCity = buyerCity || buyer_city || '';
     const finalBuyerPhone = buyerPhone || buyer_phone || '';
     const finalBuyerAddress = buyerAddress || buyer_address || '';
@@ -384,6 +402,17 @@ export class DocumentCreationService {
         currency: docCurrency,
         input: returnTerms ? { exchangeRate: returnTerms.exchangeRate } : body,
       });
+      // v9.0.287 (TD-778، تصمیم ت۶ الف): طرف حساب با شناسه؛ برگشت با فاکتور مرجع طرف حساب همان فاکتور را می‌گیرد
+      const party = await resolveDocumentParty(tx, {
+        docType,
+        partyId: requestedPartyId === undefined && returnOfDocumentId !== null
+          ? await returnInvoicePartyId(tx, returnOfDocumentId)
+          : requestedPartyId,
+        buyerName: finalBuyerName,
+      });
+      if (returnOfDocumentId !== null && requestedPartyId !== undefined) {
+        await assertReturnPartyOfInvoice(tx, returnOfDocumentId, party.partyId);
+      }
 
       const [insertedDoc] = await tx.insert(documents).values({
         type: docType,
@@ -392,7 +421,8 @@ export class DocumentCreationService {
         date: normalizedDocDate,
         user,
         notes: finalNotes,
-        buyerName: finalBuyerName,
+        partyId: party.partyId,
+        buyerName: party.buyerName,
         buyerCity: finalBuyerCity,
         buyerPhone: finalBuyerPhone,
         buyerAddress: finalBuyerAddress,

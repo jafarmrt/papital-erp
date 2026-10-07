@@ -3,7 +3,7 @@ import { createHarness, type Harness, type ShouldRun } from '../security/workflo
 import { brief, fixture } from './documentEntryTests.js';
 
 /**
- * Package 8 (documents and invoices), PR E: the data of a document (who reads its treasury rows). Through the real
+ * Package 8 (documents and invoices), PR E: the data of a document (who reads its treasury rows, its party by id). Through the real
  * Express routes with real sessions. Each case reproduces a finding of the package 8 review and is red on the code before
  * its fix.
  */
@@ -13,6 +13,9 @@ export async function runDocumentDataTests(shouldRun: ShouldRun): Promise<TestCa
     ['reg_document_settlements_by_permission_td_781',
       'v9.0.286: a document gives its treasury rows (number, method, tracking number, bank account, description) only to treasury readers; other readers get the paid amount, the balance and the settlement status (TD-781)',
       ['td781', 'documents', 'treasury', 'settlements', 'package8'], settlementsByPermissionCase],
+    ['reg_document_party_by_id_td_778',
+      'v9.0.287: a sales or purchase document keeps its party by id: the voucher, the dossier, the treasury link and the party delete guard follow the id whatever the buyer name, a return takes its invoice\'s party, and the migration links old documents by exact name (TD-778)',
+      ['td778', 'documents', 'party', 'customers', 'package8'], documentPartyByIdCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -94,4 +97,108 @@ async function settlementsByPermissionCase(h: Harness, wrong: string[]): Promise
     }
   }
   return `invoice ${ref} with receipt ${tracking}: documents.view, documents.create and workflow.view see paid 500000 / remaining 1500000 / partially_paid and no rows; treasury readers see the row`;
+}
+
+/** B08-09 (TD-778): a document knew its party only by the buyer name text; an Arabic «ي» left the voucher without the party */
+async function documentPartyByIdCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const { createBank } = await import('./treasuryPartyTests.js');
+  const { createTestCustomer } = await import('../fixtures/factories.js');
+  const codeOf = (res: { body?: unknown }) => (res.body as { code?: string })?.code;
+  const textOf = (res: { body?: unknown }) => JSON.stringify(res.body ?? null);
+  const partyOf = async (docId: number) => {
+    // read through to_jsonb so the case reports the behaviour (not a missing column) on the code before the fix
+    const [row] = await h.q(`SELECT (to_jsonb(d) ->> 'party_id')::int AS party_id, d.buyer_name FROM documents d WHERE d.id = $1`, [docId]) as Array<{ party_id: number | null; buyer_name: string }>;
+    return row;
+  };
+  const voucherPartyIds = async (docId: number) => (await h.q(
+    `SELECT DISTINCT jvi.detailed_id FROM journal_voucher_items jvi JOIN journal_vouchers jv ON jv.id = jvi.voucher_id
+      WHERE jv.source_document_id = $1 AND jv.is_deleted = 0 AND jvi.is_deleted = 0 AND jvi.detailed_type = 'customer'`, [docId],
+  ) as Array<{ detailed_id: number | null }>).map(r => r.detailed_id);
+  const dossierIds = async (customerId: number) => {
+    const res = await h.get(`/api/customers/${customerId}/documents`);
+    const rows = (res.body as { data?: Array<{ id: number }> })?.data;
+    return Array.isArray(rows) ? rows.map(r => Number(r.id)) : [];
+  };
+  const item = await f.item(20, 1_000);
+  const line = (qty: number) => [{ itemId: item, quantity: qty, unit_price: 1_000_000, location: f.wh }];
+  const post = async (body: Record<string, unknown>, label: string) => {
+    const res = await h.post('/api/documents', body);
+    const id = docIdOf(res);
+    if (res.status !== 200 || !id) throw new Error(`setup: ${label} ${brief(res)}`);
+    return id;
+  };
+
+  // 1) the invoice names its party with an Arabic «ي» but carries the party id: voucher, dossier and treasury follow the id
+  const party = await createTestCustomer({ name: `علی رضایی ${h.tag}` });
+  const invoice = await post(f.doc('invoice', 'final', line(2), { partyId: party.id, buyer_name: `علي رضايي ${h.tag}` }), 'invoice');
+  const detail = await voucherPartyIds(invoice);
+  if (detail.length !== 1 || Number(detail[0]) !== party.id) wrong.push(`the invoice voucher put the customer row on detailed ids ${JSON.stringify(detail)}, expected [${party.id}]`);
+  if (Number((await partyOf(invoice))?.party_id) !== party.id) wrong.push(`the invoice stored party ${JSON.stringify(await partyOf(invoice))}, expected ${party.id}`);
+  // a rename does not cut the link either
+  await h.q(`UPDATE customers SET name = $1 WHERE id = $2`, [`Rezaei Trading ${h.tag}`, party.id]);
+  if (!(await dossierIds(party.id)).includes(invoice)) wrong.push(`the dossier of the renamed party does not list invoice ${invoice}`);
+  const bank = await createBank('P8 TD-778 bank');
+  const receipt = await h.post('/api/accounting/treasury', {
+    type: 'receipt', method: 'bank_transfer', bankAccountId: bank.id, amount: 100_000, date: f.today,
+    partyType: 'customer', partyId: party.id, partyName: `Rezaei Trading ${h.tag}`, documentId: invoice,
+  });
+  if (![200, 201].includes(receipt.status)) wrong.push(`a receipt of the invoice's party by id answered ${brief(receipt)}, expected 201`);
+
+  // 2) an open proforma of the party under another name, and the draft voucher, keep the party from being deleted
+  const draft = await post(f.doc('invoice', 'draft', line(1), { partyId: party.id, buyer_name: 'P8 other display name' }), 'draft');
+  const [{ ref: draftRef }] = await h.q(`SELECT ref_number AS ref FROM documents WHERE id = $1`, [draft]) as Array<{ ref: string }>;
+  const refused = await h.del(`/api/customers/${party.id}`);
+  if (refused.status !== 409 || !textOf(refused).includes(draftRef)) wrong.push(`deleting the party answered ${brief(refused)}, expected 409 naming draft ${draftRef}`);
+
+  // 3) a return of the invoice takes the invoice's party; another party is 422
+  const other = await createTestCustomer({ name: `P8 other party ${h.tag}` });
+  const returnLine = [{ itemId: item, quantity: 1, unit_price: 1_000_000, location: f.wh }];
+  const wrongReturn = await h.post('/api/documents', f.doc('return', 'final', returnLine, { returnOfDocumentId: invoice, partyId: other.id }));
+  if (wrongReturn.status !== 422 || codeOf(wrongReturn) !== 'RETURN_PARTY_MISMATCH') wrong.push(`a return of the invoice to another party answered ${brief(wrongReturn)}, expected 422 RETURN_PARTY_MISMATCH`);
+  const ret = await post(f.doc('return', 'final', returnLine, { returnOfDocumentId: invoice, buyer_name: 'P8 return display' }), 'return');
+  if (Number((await partyOf(ret))?.party_id) !== party.id) wrong.push(`the return stored party ${JSON.stringify(await partyOf(ret))}, expected the invoice's ${party.id}`);
+
+  // 4) an edit moves the draft to another party by id; its name becomes that party's name
+  const edited = await h.put(`/api/documents/${draft}`, { partyId: other.id });
+  const afterEdit = await partyOf(draft);
+  if (edited.status !== 200 || Number(afterEdit?.party_id) !== other.id || afterEdit?.buyer_name !== other.name) {
+    wrong.push(`moving the draft to party ${other.id} answered ${brief(edited)} and stored ${JSON.stringify(afterEdit)}, expected the party and its name`);
+  }
+
+  // 5) a missing or deleted party is 422; a remittance takes no party
+  const missing = await h.post('/api/documents', f.doc('invoice', 'draft', line(1), { partyId: 2_000_000_000 }));
+  if (missing.status !== 422 || codeOf(missing) !== 'DOCUMENT_PARTY_INVALID') wrong.push(`a missing party answered ${brief(missing)}, expected 422 DOCUMENT_PARTY_INVALID`);
+  const remittance = await h.post('/api/documents', f.doc('remittance', 'final', line(1), { partyId: party.id }));
+  if (remittance.status !== 422 || codeOf(remittance) !== 'DOCUMENT_PARTY_NOT_ALLOWED') wrong.push(`a remittance with a party answered ${brief(remittance)}, expected 422 DOCUMENT_PARTY_NOT_ALLOWED`);
+
+  // 6) a caller that sends no id gets the single party of exactly that name; an unknown name stays unlinked and is listed
+  const named = await createTestCustomer({ name: `P8 named party ${h.tag}` });
+  const byName = await post(f.doc('invoice', 'draft', line(1), { buyer_name: ` P8 named party ${h.tag} ` }), 'invoice by name');
+  if (Number((await partyOf(byName))?.party_id) !== named.id) wrong.push(`an invoice named exactly as party ${named.id} stored ${JSON.stringify(await partyOf(byName))}`);
+  const nobody = await post(f.doc('invoice', 'draft', line(1), { buyer_name: `P8 nobody ${h.tag}` }), 'invoice of nobody');
+  if ((await partyOf(nobody))?.party_id !== null) wrong.push(`an invoice of an unknown name stored party ${JSON.stringify(await partyOf(nobody))}, expected none`);
+  const unlinked = await import('../../services/documents/documentParty.js')
+    .then(m => m.findUnlinkedPartyDocuments(), () => null);
+  if (!unlinked?.some(d => d.id === nobody)) wrong.push(`the health check does not list invoice ${nobody} without a party`);
+
+  // 7) the migration links an old document to the single live party of exactly its name
+  const { existsSync, readFileSync } = await import('node:fs');
+  const migration = 'drizzle/0076_document_party_id.sql';
+  const backfill = existsSync(migration)
+    ? readFileSync(migration, 'utf8').split('--> statement-breakpoint').find(part => part.includes('SELECT erp_update_with_unvalidated_checks('))
+    : undefined;
+  if (!backfill) {
+    wrong.push(`the backfill statement of ${migration} was not found`);
+    return 'migration missing';
+  }
+  const live = await createTestCustomer({ name: `P8 backfill ${h.tag}` });
+  await createTestCustomer({ name: `P8 backfill ${h.tag}`, isDeleted: 1 });
+  const oldDoc = await post(f.doc('invoice', 'draft', line(1), { buyer_name: `P8 backfill ${h.tag}` }), 'old document');
+  await h.q(`UPDATE documents SET party_id = NULL WHERE id = ANY($1::int[])`, [[oldDoc, nobody]]);
+  await h.q(backfill);
+  if (Number((await partyOf(oldDoc))?.party_id) !== live.id) wrong.push(`the migration linked the old document to ${JSON.stringify(await partyOf(oldDoc))}, expected the live party ${live.id}`);
+  if ((await partyOf(nobody))?.party_id !== null) wrong.push('the migration linked a document whose name no party has');
+
+  return `invoice ${invoice} named «علي رضايي» on party ${party.id}: voucher detail ${detail.join(',')}, dossier after rename, receipt by id, delete refused naming ${draftRef}; return on the invoice's party, wrong party 422; edit by id; missing party 422; remittance 422; exact-name fallback; unknown name listed; migration backfill`;
 }

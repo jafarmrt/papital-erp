@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.287 — v9.0.287 — The Party of a Document by Id
+- **Document party:** a sales or purchase document now keeps its party by id; the voucher, the customer dossier, the treasury link and the party delete guard follow the id whatever the buyer name, a return takes its invoice's party, and old documents were linked by exact name, the rest listed by the health check (TD-778).
+
 ### v9.0.286 — v9.0.286 — Document Treasury Rows Only for Treasury Readers
 - **Document read scope:** a document's receipts and payments (tracking number, bank account, description) are now shown only to treasury readers; other document readers see only the paid amount, the balance and the settlement status (TD-781).
 

@@ -739,6 +739,8 @@ export class ProcurementService {
           docType,
           date: today,
           status: docStatus,
+          // v9.0.287 (TD-778، O25 بسته ۱۰): سفارش به تأمین‌کننده انتخاب‌شده با شناسه وصل می‌شود؛ بی شناسه با نام یکتا
+          partyId: group.supplierId ?? undefined,
           buyer_name: supplierName,
           notes: docNotes,
           location: warehouseLoc,

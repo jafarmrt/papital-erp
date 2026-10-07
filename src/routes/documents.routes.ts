@@ -126,6 +126,8 @@ export const documentCreateSchema = z.object({
     notes: z.string().max(2000).nullable().optional(),
     location: z.string().max(100).nullable().optional(),
     crmLeadId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
+    // v9.0.287 (TD-778): طرف حساب سند فروش و خرید از انتخابگر (شناسه `customers`)
+    partyId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     projectId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     // v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش
     returnOfDocumentId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
@@ -185,6 +187,8 @@ export const documentUpdateSchema = z.object({
     location: z.string().max(100).nullable().optional(),
     // V10-4.3: پذیرش لینک رسمی CRM در ویرایش سند
     crmLeadId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
+    // v9.0.287 (TD-778): طرف حساب سند فروش و خرید از انتخابگر (شناسه `customers`)
+    partyId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     expectedVersion: z.number().int().positive().optional(),
     version: z.number().int().positive().optional(),
     attachments: z.array(z.any()).optional(),

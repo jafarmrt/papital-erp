@@ -15,6 +15,8 @@ export interface GetDocumentsFilter {
   projectId?: number | string;
   /** v9.0.6 (TD-417): نام خریدار با برابری دقیق (پس از حذف فاصله ابتدا و انتها)، نه جست‌وجوی «شامل» */
   buyerName?: string;
+  /** v9.0.287 (TD-778): اسناد یک طرف حساب با شناسه، و سند پیشین بی شناسه با نام برابر */
+  party?: { id: number; legacyName: string | null };
   /** v9.0.6 (TD-417): چند نوع سند با هم (مثلاً نوع‌های فروش پرونده مشتری) */
   types?: string[];
 }
@@ -42,6 +44,8 @@ export interface CreateDocumentInput {
   items: DocumentLineItemInput[];
   /** v9.0.281 (TD-776): پرونده فروش سند، از route پس از سنجش و قفل پرونده (پیش‌تر route آن را جدا روی سند می‌نوشت) */
   crmLeadId?: number | string | null;
+  /** v9.0.287 (TD-778): طرف حساب سند فروش و خرید (شناسه `customers`)؛ نام خریدار فقط برای نمایش */
+  partyId?: number | string | null;
   user?: string;
   inOut?: 'in' | 'out';
   buyer_name?: string;
@@ -105,6 +109,8 @@ export interface UpdateDocumentInput {
   exchange_rate?: number | string | null;
   /** v9.0.281 (TD-776): پرونده فروش سند (`null` یا رشته خالی: قطع پیوند)؛ درون تراکنش ویرایش و زیر قفل پرونده */
   crmLeadId?: number | string | null;
+  /** v9.0.287 (TD-778): طرف حساب (`null` یا رشته خالی: بی طرف حساب)؛ فرستاده نشود، با نام خریدار تازه دوباره یافته می‌شود */
+  partyId?: number | string | null;
   expectedVersion?: number;
   version?: number;
 }
@@ -148,6 +154,8 @@ export interface FormattedDocument {
   exchangeRate?: number | null;
   /** v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش */
   returnOfDocumentId?: number | null;
+  /** v9.0.287 (TD-778): طرف حساب سند فروش و خرید */
+  partyId?: number | null;
   /** v9.0.80 (TD-489): انبار مبدأ و مقصد حواله انتقال (کد و نام، از ردیف‌های کاردکس سند) */
   sourceCode?: string;
   sourceLocation?: string;

@@ -14,5 +14,6 @@ export const SALES_DOCUMENT_TYPES = ['invoice', 'proforma', 'return'];
 export async function getCustomerSalesDocuments(customerId: number, page = 1, limit = 50): Promise<PaginatedDocumentsResult> {
   const party = await CustomerService.getById(customerId);
   if (!party) throw new NotFoundError('طرف حساب یافت نشد.');
-  return await DocumentService.getDocuments({ buyerName: party.name, types: SALES_DOCUMENT_TYPES, page, limit }) as PaginatedDocumentsResult;
+  // v9.0.287 (TD-778، تصمیم ت۶ الف): سند با شناسه طرف حساب (نام سند فقط نمایش است)؛ سند پیشین بی شناسه با نام برابر
+  return await DocumentService.getDocuments({ party: { id: party.id, legacyName: party.name }, types: SALES_DOCUMENT_TYPES, page, limit }) as PaginatedDocumentsResult;
 }

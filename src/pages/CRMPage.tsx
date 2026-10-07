@@ -67,6 +67,8 @@ export default function CRMPage({ user }: { user: any }) {
       void navigate('/remittances', {
         state: {
           crmLeadId: lead.id,
+          // v9.0.287 (TD-778): پیش‌فاکتور به همان مشتری با شناسه وصل می‌شود
+          customerId: res.customer?.id,
           buyerName: res.customer?.name || lead.customerName || lead.company || lead.title,
           buyerPhone: res.customer?.phone || lead.phone || '',
           buyerAddress: res.customer?.address || lead.notes || '',
