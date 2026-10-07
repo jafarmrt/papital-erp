@@ -347,37 +347,8 @@ export type {
   BalanceSheetReport,
 } from '../lib/accounting/financialStatements';
 
-export interface AccountLedgerRow {
-  id: number;
-  voucherNumber: number;
-  manualVoucherNumber?: string;
-  date: string;
-  description: string;
-  detailedType?: string;
-  detailedName?: string;
-  debit: number;
-  credit: number;
-  runningBalance: number;
-  balanceType: 'debit' | 'credit' | 'zero';
-}
-
-export interface AccountLedgerReport {
-  accountId: number;
-  accountCode: string;
-  accountName: string;
-  account?: { code: string; name: string; nature: string };
-  detailedName?: string;
-  fromDate?: string;
-  toDate?: string;
-  openingBalance: number;
-  openingBalanceType: 'debit' | 'credit' | 'zero';
-  rows: AccountLedgerRow[];
-  items?: AccountLedgerRow[];
-  totalDebit: number;
-  totalCredit: number;
-  closingBalance: number;
-  closingBalanceType: 'debit' | 'credit' | 'zero';
-}
+// v9.0.112 (TD-574، B03-32): کارت حساب قرارداد مشترک سرور و مرورگر دارد
+export type { AccountCardRow as AccountLedgerRow, AccountCardReport as AccountLedgerReport } from '../lib/accounting/accountCard';
 
 /** v8.0.16 (TD-260): ردیف ارزی که در نمای «همه ارزها» به ریال تبدیل شده است — ارز، مبلغ و نرخ اصلی آن */
 export interface ForeignAmountOrigin {

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.112 — Account Card Prints the Opening Row Once and Names the Account
+- **Account Card View (P3):** the account card printed the «opening balance» row twice (its own and the server's) and its title lacked the account name; the card now shares one contract with the server, prints the opening row once and names the account (TD-574, `ledgerViewOpeningRow.test.tsx`).
+
 ### v9.0.111 — Group and General Account Cards Roll Up Their Sub-Accounts
 - **Account Card Roll-Up (P2):** clicking a group or general row of the trial balance opened an empty account card with a zero balance, because the card read only that account's own rows; the card of a group or general account now carries the rows and balances of all its sub-accounts (TD-570, `reg_account_card_rolls_up_sub_accounts_td_570`).
 

@@ -22,6 +22,7 @@ import { isAllCurrenciesView, voucherItemCurrencyCondition, voucherItemCurrencyS
 import { partyDetailedRowsCondition, type PartyDetailedFilter } from './partyDetailedRows.js';
 import type { BalanceSheetReport, IncomeStatementReport, StatementRow } from '../../lib/accounting/financialStatements.js';
 import { accountSubtreeCondition } from './accountSubtree.js';
+import type { AccountCardReport } from '../../lib/accounting/accountCard.js';
 
 /** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
 function foreignOrigin(allCurrencies: boolean, row: {
@@ -587,30 +588,7 @@ export class AccountingReportService {
     startDate?: string;
     endDate?: string;
     currency?: string;
-  }): Promise<{
-    items: ({
-      voucherId: number;
-      voucherNumber: number;
-      date: string;
-      description?: string | null;
-      accountName: string;
-      accountCode: string;
-      detailedName?: string;
-      detailedType?: string;
-      detailedId?: number | null;
-      currency?: string;
-      debit: number;
-      credit: number;
-      runningBalance: number;
-      isOpening?: boolean;
-    } & ForeignAmountOrigin)[];
-    openingBalance: number;
-    totalDebit: number;
-    totalCredit: number;
-    finalBalance: number;
-    /** v8.0.16 (TD-260): ارز مبالغ گزارش — IRR در نمای همه ارزها، وگرنه همان ارز انتخاب‌شده */
-    currency: string;
-  }> {
+  }): Promise<AccountCardReport> {
     // V2.0.0: فیلترهای دوره — مانده ابتدای دوره جداگانه محاسبه می‌شود
     const periodConditions = [
       eq(journalVouchers.isDeleted, 0),
