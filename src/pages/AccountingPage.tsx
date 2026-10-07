@@ -214,6 +214,9 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               }}
               onOpenNewTreasury={() => handleTabChange('treasury')}
               onOpenNewCheque={() => handleTabChange('cheques')}
+              canRecordVoucher={hasPerm('accounting.vouchers')}
+              canRecordTreasury={hasPerm('accounting.treasury')}
+              canRecordCheque={hasPerm('accounting.cheques')}
             />
           )}
 

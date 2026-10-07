@@ -10575,6 +10575,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR e: the chart of accounts and the account mapping (TD-546 ...)
   const { runChartOfAccountsTests } = await import('../regression/chartOfAccountsTests.js');
   results.push(...await runChartOfAccountsTests(shouldRun));
+  // Package 3 PR d: accounting report access, party statements and the journal book (TD-547 ...)
+  const { runAccountingReportAccessTests } = await import('../regression/accountingReportAccessTests.js');
+  results.push(...await runAccountingReportAccessTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
@@ -10633,6 +10636,14 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runItemPerformanceTests(shouldRun));
   const { runItemExcelExportTests } = await import('../regression/itemExcelExportTests.js');
   results.push(...await runItemExcelExportTests(shouldRun));
+
+  // Package 13 PR A (v9.0.231+): access and privacy of daily work logs
+  const { runDailyLogAccessTests } = await import('../regression/dailyLogAccessTests.js');
+  results.push(...await runDailyLogAccessTests(shouldRun));
+
+  // Package 8 PR A (v9.0.238+): stock direction, sellable gate and line numbers of POST /documents
+  const { runDocumentEntryTests } = await import('../regression/documentEntryTests.js');
+  results.push(...await runDocumentEntryTests(shouldRun));
 
   return results;
 }

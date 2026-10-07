@@ -84,10 +84,14 @@ const accountCardReportHandler = asyncHandler(async (req, res) => {
   });
   res.json({ report: data, ...data });
 });
-router.get('/accounting/reports/account-card', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'documents.view'), validate(accountCardQuerySchema), accountCardReportHandler);
-router.get('/accounting/reports/ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'documents.view'), validate(accountCardQuerySchema), accountCardReportHandler);
+// v9.0.225 (TD-547، B03-05، تصمیم ت۵ الف): کارت حساب، گردش، صورت‌حساب و فهرست طرف‌های حساب فقط با کلیدهای منو و صفحه
+// حسابداری؛ پیش‌تر «مشاهده اسناد» و «مشاهده طرف حساب» کل دفتر، حقوق و تلفن پرسنل را می‌خواندند. صفحه مشتری کارت خودش
+// را از `GET /customers/:id/account-card` (TD-416) می‌خواند.
+const LEDGER_REPORT_KEYS = ['accounting.reports', 'accounting.view'] as const;
+router.get('/accounting/reports/account-card', authorizePermission(...LEDGER_REPORT_KEYS), validate(accountCardQuerySchema), accountCardReportHandler);
+router.get('/accounting/reports/ledger', authorizePermission(...LEDGER_REPORT_KEYS), validate(accountCardQuerySchema), accountCardReportHandler);
 
-router.get('/accounting/reports/party-ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'documents.view'), validate(partyLedgerQuerySchema), asyncHandler(async (req, res) => {
+router.get('/accounting/reports/party-ledger', authorizePermission(...LEDGER_REPORT_KEYS), validate(partyLedgerQuerySchema), asyncHandler(async (req, res) => {
   const { partyId, partyType, partyName, startDate, endDate, currency, includeDrafts } = (req.query as ValidatedQuery<typeof partyLedgerQuerySchema>) || {};
   const data = await AccountingService.getDetailedPartyLedger({
     partyId: partyId ? Number(partyId) : undefined,
@@ -101,21 +105,24 @@ router.get('/accounting/reports/party-ledger', authorizePermission('accounting.r
   res.json({ report: data, ...data });
 }));
 
-router.get('/accounting/reports/parties', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'documents.view'), validate(partiesQuerySchema), asyncHandler(async (req, res) => {
+router.get('/accounting/reports/parties', authorizePermission(...LEDGER_REPORT_KEYS), validate(partiesQuerySchema), asyncHandler(async (req, res) => {
   const { search, type } = (req.query as ValidatedQuery<typeof partiesQuerySchema>) || {};
   const data = await AccountingService.getPartiesList({ search, type });
   res.json({ data });
 }));
 
 router.get('/accounting/reports/journal-book', authorizePermission('accounting.reports', 'accounting.view'), validate(journalBookQuerySchema), asyncHandler(async (req, res) => {
-  const { startDate, endDate, search, currency } = (req.query as ValidatedQuery<typeof journalBookQuerySchema>) || {};
+  const { startDate, endDate, search, currency, page, limit } = (req.query as ValidatedQuery<typeof journalBookQuerySchema>) || {};
   const data = await AccountingService.getJournalBook({
     startDate: startDate as string,
     endDate: endDate as string,
     search: search as string,
     currency: currency as string,
+    page,
+    limit,
   });
-  res.json({ report: data, ...data });
+  // v9.0.227 (TD-561): یک صفحه و یک بار؛ پیش‌تر کل بازه با `{ report: data, ...data }` دو بار فرستاده می‌شد
+  res.json(data);
 }));
 
 router.get('/accounting/reports/financial-ratios', authorizePermission('accounting.reports', 'accounting.view'), validate(financialRatiosQuerySchema), asyncHandler(async (req, res) => {

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from 'react';
 import { AtSign, UserCheck } from 'lucide-react';
+import { detectMentionedUserIds, mentionDisplayName, sameIdSet } from '../lib/mentions/mentionDetection';
 
 export interface MentionUser {
   id: number;
@@ -28,8 +29,7 @@ interface MentionTextareaProps {
 }
 
 export function getUserDisplayName(u: MentionUser): string {
-  if (!u) return '';
-  return (u.fullName || u.full_name || u.username || '').trim();
+  return mentionDisplayName(u);
 }
 
 export function MentionTextarea({
@@ -57,28 +57,12 @@ export function MentionTextarea({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Sync mentions array with @mentions present in text
+  // v9.0.232 (TD-628): the mentions are exactly the users the text names with «@» (longest name at a word boundary),
+  // so «@علی رضایی» never mentions «علی» too and a mention deleted from the text leaves the list
   useEffect(() => {
     if (!onMentionsChange || !users.length) return;
-    const detectedIds = new Set<number>(mentions);
-    let changed = false;
-
-    users.forEach((u) => {
-      const name = getUserDisplayName(u);
-      const uname = u.username;
-      const isMentioned =
-        (name && value.includes(`@${name}`)) ||
-        (uname && value.includes(`@${uname}`));
-
-      if (isMentioned && !detectedIds.has(u.id)) {
-        detectedIds.add(u.id);
-        changed = true;
-      }
-    });
-
-    if (changed) {
-      onMentionsChange(Array.from(detectedIds));
-    }
+    const detected = detectMentionedUserIds(value, users);
+    if (!sameIdSet(detected, mentions)) onMentionsChange(detected);
   }, [value, users]);
 
   // Filter users based on query

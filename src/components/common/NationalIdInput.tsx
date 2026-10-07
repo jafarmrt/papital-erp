@@ -72,7 +72,7 @@ export const NationalIdInput: React.FC<NationalIdInputProps> = ({
     onChange(digits);
   };
 
-  // v9.0.230 (TD-673، تصمیم ت۵ ب): کد ناقص هرگز با صفر پر نمی‌شود؛ پیش‌تر blur «19» را «0000000019» و «کد ملی معتبر» می‌کرد
+  // v9.0.248 (TD-673، تصمیم ت۵ ب): کد ناقص هرگز با صفر پر نمی‌شود؛ پیش‌تر blur «19» را «0000000019» و «کد ملی معتبر» می‌کرد
   const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     if (onBlur) {
       onBlur(e);

@@ -8,6 +8,7 @@ import type {
   TrialBalanceReport,
 } from '../../types';
 import { reportFromResponse, useOnDemandReport, type OnDemandReportSpec } from './useOnDemandReport';
+import { JOURNAL_BOOK_PAGE_SIZE, type JournalBookReport } from '../../lib/accounting/journalBook';
 
 /**
  * گزارش‌های تب «صورت‌ها و گزارش‌های مالی» با React Query: تراز آزمایشی، صورت سود و زیان، ترازنامه، گردش حساب،
@@ -81,11 +82,19 @@ export const LEDGER_REPORT: OnDemandReportSpec<LedgerParams, AccountLedgerReport
   errorText: 'خطا در دریافت گردش حساب',
 };
 
-const JOURNAL_BOOK_REPORT: OnDemandReportSpec<DateRangeParams, unknown> = {
+/** v9.0.227 (TD-561): دفتر روزنامه صفحه‌به‌صفحه؛ صفحه بخشی از کلید است */
+export interface JournalBookParams extends DateRangeParams { page?: number }
+
+export const JOURNAL_BOOK_REPORT: OnDemandReportSpec<JournalBookParams, JournalBookReport | null> = {
   key: (p) => R('journal-book', p),
   idleKey: R('journal-book', { idle: true }),
-  url: (p) => `/accounting/reports/journal-book?${dateRange(new URLSearchParams(), p).toString()}`,
-  parse: reportFromResponse<unknown>,
+  url: (p) => {
+    const params = dateRange(new URLSearchParams(), p);
+    params.set('page', String(p.page ?? 1));
+    params.set('limit', String(JOURNAL_BOOK_PAGE_SIZE));
+    return `/accounting/reports/journal-book?${params.toString()}`;
+  },
+  parse: reportFromResponse<JournalBookReport>,
   errorText: 'خطا در بارگذاری دفتر روزنامه',
 };
 
@@ -107,9 +116,14 @@ export function useJournalBookReport() {
   const report = useOnDemandReport(JOURNAL_BOOK_REPORT);
   const { run } = report;
   const fetchJournalBook = useCallback(async (startDate?: string, endDate?: string) => {
-    await run({ startDate: startDate || undefined, endDate: endDate || undefined });
+    await run({ startDate: startDate || undefined, endDate: endDate || undefined, page: 1 });
   }, [run]);
-  return { journalBookData: report.data, journalLoading: report.loading, fetchJournalBook };
+  // همان بازه آخرین اجرا، صفحه دیگر
+  const lastParams = report.params;
+  const goToJournalPage = useCallback(async (page: number) => {
+    await run({ ...(lastParams ?? {}), page });
+  }, [run, lastParams]);
+  return { journalBookData: report.data, journalLoading: report.loading, fetchJournalBook, goToJournalPage };
 }
 
 /** نسبت‌ها و سلامت مالی (تب گزارش‌ها) */

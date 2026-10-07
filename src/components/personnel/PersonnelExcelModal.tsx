@@ -223,7 +223,7 @@ export function PersonnelExcelModal({
           const rawPhone = getField(row, ['شماره تماس', 'شماره همراه', 'تلفن', 'موبایل', 'phone', 'mobile', 'cellphone']);
           const phone = normalizePhoneNumber(rawPhone);
           const rawNationalId = getField(row, ['کد ملی', 'کدملی', 'شماره ملی', 'nationalid', 'national_id', 'ssn']);
-          // v9.0.230 (TD-673): همان قاعده سرور؛ ۸ و ۹ رقم با صفر تکمیل و در ستون مشکلات گفته می‌شود
+          // v9.0.248 (TD-673): همان قاعده سرور؛ ۸ و ۹ رقم با صفر تکمیل و در ستون مشکلات گفته می‌شود
           const importedNationalId = readImportedNationalId(rawNationalId);
           const nationalId = importedNationalId.value;
           const jobTitle = getField(row, ['عنوان شغلی', 'عنوانشغلی', 'شغل', 'سمت', 'سمت سازمانی', 'jobtitle', 'job_title', 'position', 'role']);

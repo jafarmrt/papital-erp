@@ -636,7 +636,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       throw new Error('کد ملی با رقم کنترلی اشتباه باید رد شود');
     }
 
-    // v9.0.230 (TD-673): فرم صفر نمی‌افزاید؛ فقط ورود اکسل ۸ یا ۹ رقم را با صفر به ۱۰ می‌رساند و گزارش می‌کند
+    // v9.0.248 (TD-673): فرم صفر نمی‌افزاید؛ فقط ورود اکسل ۸ یا ۹ رقم را با صفر به ۱۰ می‌رساند و گزارش می‌کند
     const formValue = normalizeNationalId('10000038');
     if (formValue !== '10000038') {
       throw new Error(`a form must not zero-pad a national ID: ${formValue}`);

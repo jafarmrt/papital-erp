@@ -55,7 +55,7 @@ function server(options: { years?: unknown; yearEnded?: boolean; earlierOpenYear
 const previewUrls = () => fetchJson.mock.calls.map(([u]) => String(u)).filter(u => u.startsWith('/accounting/fiscal-closing/preview?'));
 const executeButton = (year: string) => screen.findByText(`اجرای قطعی بستن سال مالی ${year}`) as Promise<HTMLButtonElement>;
 
-beforeEach(() => { fetchJson.mockReset(); toastFn.success.mockReset(); toastFn.error.mockReset(); confirmAction.mockReset(); perms.keys = []; });
+beforeEach(() => { fetchJson.mockReset(); toastFn.success.mockReset(); toastFn.error.mockReset(); confirmAction.mockReset(); perms.keys = ['accounting.fiscal_close']; });
 afterEach(() => { cleanup(); });
 
 // v9.0.162 (TD-544, B03-02, product-owner decision t1 option A): years were closed out of order; closing 1397 with 1396 open

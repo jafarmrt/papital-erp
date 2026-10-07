@@ -6,8 +6,9 @@ import type { User } from '../../types';
 
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
+// v9.0.241 (TD-791): نوع سند و دکمه ثبت با مجوز ثبت همان نوع؛ انباردار آزمون مجوزهای ثبت این صفحه را دارد
 vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: () => ({ userPermissions: { permissions: [], isAdmin: false } }),
+  useAuth: () => ({ userPermissions: { permissions: ['warehouse.in', 'warehouse.out'], isAdmin: false } }),
   useHasPermission: () => false,
 }));
 
@@ -109,6 +110,29 @@ describe('DocumentsPage — stock receipt / remittance form (TD-080 part 3 chara
     expect(fetchJson.mock.calls.some(([url]) => String(url).startsWith('/projects/7'))).toBe(false);
     await screen.findByText('+ افزودن');
     fireEvent.click(screen.getByText('+ افزودن'));
+    expect(await screen.findByText('✓ در سند')).toBeTruthy();
+    expect(submitButton('ثبت نهایی و صدور حواله خروج').disabled).toBe(false);
+  });
+
+  it('caps a remittance by the stock of the source warehouse, not the total (TD-799)', async () => {
+    // v9.0.242 (B08-30): کالا فقط در انبار دوم موجودی دارد؛ «بارگذاری تمام اقلام» رزرو پروژه را از انبار اول به صفر محدود می‌کند و از انبار دوم می‌افزاید
+    const splitItem = { ...reservedItem, stocks: { WH1: 0, WH2: 10 }, stock_WH1: 0, stock_WH2: 10 };
+    fetchJson.mockImplementation((url: string) => Promise.resolve(
+      url === '/warehouses' ? [{ id: 1, name: 'انبار مرکزی', code: 'WH1', is_active: 1 }, { id: 2, name: 'انبار دوم', code: 'WH2', is_active: 1 }]
+        : url === '/items/options' ? { data: [splitItem] }
+          : apiResponse(url),
+    ));
+    renderPage();
+    fireEvent.click(screen.getByText('خروج از انبار (حواله مصرف)'));
+    await screen.findByText('پروژه PRJ-7 - گردنبند سفارشی');
+    await screen.findByText('اقلام رزرو شده انبار (1 کالا)');
+    await screen.findByText('📦 انبار دوم');
+    fireEvent.change(screen.getByDisplayValue('— خروج عمومی (بدون تخصیص به پروژه) —'), { target: { value: '7' } });
+    fireEvent.click(await screen.findByText('➕ بارگذاری تمام اقلام فریز شده در حواله'));
+    expect(screen.queryByText('✓ در سند')).toBeNull();
+    expect(submitButton('ثبت نهایی و صدور حواله خروج').disabled).toBe(true);
+    fireEvent.change(screen.getByDisplayValue('📦 انبار مرکزی'), { target: { value: 'WH2' } });
+    fireEvent.click(screen.getByText('➕ بارگذاری تمام اقلام فریز شده در حواله'));
     expect(await screen.findByText('✓ در سند')).toBeTruthy();
     expect(submitButton('ثبت نهایی و صدور حواله خروج').disabled).toBe(false);
   });

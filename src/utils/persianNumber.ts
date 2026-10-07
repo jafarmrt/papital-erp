@@ -27,8 +27,8 @@ export function toPersianDigits(val: string | number | null | undefined, maxDeci
 }
 
 /**
- * v9.0.227 (TD-678): فقط ارقام لاتین را فارسی می‌کند، بی تبدیل دوباره به عدد و بی گرد کردن متنی که قالب گرفته است.
- * v9.0.228 (TD-687، قاعده numbers در vibefarsi): جداکننده هزارگان «٬» (U+066C) و ممیز «٫» (U+066B)، نه «,» و «.».
+ * v9.0.245 (TD-678): فقط ارقام لاتین را فارسی می‌کند، بی تبدیل دوباره به عدد و بی گرد کردن متنی که قالب گرفته است.
+ * v9.0.246 (TD-687، قاعده numbers در vibefarsi): جداکننده هزارگان «٬» (U+066C) و ممیز «٫» (U+066B)، نه «,» و «.».
  */
 function persianDigitsOf(formatted: string): string {
   return formatted
@@ -148,7 +148,7 @@ export function formatPersianCode(val: number | string | null | undefined): stri
 /**
  * Safely parse any number or string (including Persian/Arabic digits, thousand separators, or whitespace)
  * into a pure JavaScript number. Backed by Decimal to eliminate floating-point drift.
- * v9.0.226 (TD-666): همان یکسان‌سازی سرور (`normalizeDecimalString`): ممیز «٫»، جداکننده‌های «٬» «،» «,»، فاصله و نیم‌فاصله؛
+ * v9.0.244 (TD-666): همان یکسان‌سازی سرور (`normalizeDecimalString`): ممیز «٫»، جداکننده‌های «٬» «،» «,»، فاصله و نیم‌فاصله؛
  * پیش‌تر «۱۲٫۵» و «۱٬۲۵۰٬۰۰۰» بی‌صدا صفر می‌شدند.
  */
 export function parseCleanNumber(val: unknown, defaultValue: number = 0): number {
@@ -343,7 +343,7 @@ export function financialAmountToPersianWords(
   }
 
   // سایر ارزها (USD, EUR, AED, GBP)
-  // v9.0.229 (TD-685): بخش اعشاری (سنت) هم به حروف می‌آید؛ پیش‌تر ۱۲٫۵ دلار «دوازده دلار» چاپ می‌شد
+  // v9.0.247 (TD-685): بخش اعشاری (سنت) هم به حروف می‌آید؛ پیش‌تر ۱۲٫۵ دلار «دوازده دلار» چاپ می‌شد
   const currLabel = formatCurrencyLabel(cur);
   const cents = new Decimal(cleanStr).abs().minus(intPart).times(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
   const intWords = intPart > 0 ? `${numberToPersianWords(intPart)} ${currLabel}` : '';

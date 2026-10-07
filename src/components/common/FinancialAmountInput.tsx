@@ -104,7 +104,7 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
     return parseCleanNumber(value, 0);
   }, [value]);
 
-  // v9.0.226 (TD-665): متن خام کادر تا پایان ویرایش جدا از عدد نگه داشته می‌شود («12.» و «12.5» از دست نمی‌روند)؛
+  // v9.0.244 (TD-665): متن خام کادر تا پایان ویرایش جدا از عدد نگه داشته می‌شود («12.» و «12.5» از دست نمی‌روند)؛
   // اعشار مجاز از ارز می‌آید (ریال ۰، ارز ۲) و قالب از مقدار فقط وقتی ساخته می‌شود که متن با مقدار والد نخواند.
   const scale = currencyScale(currency);
   const allowNegative = min !== undefined && min < 0;
@@ -143,7 +143,7 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target;
     const cursor = input.selectionStart ?? input.value.length;
-    // v9.0.226 (TD-666): ورودی نامعتبر (حرف، نویسه ناآشنا، اعشار بیش از ارز) مقدار قبلی را نگه می‌دارد و پیام می‌دهد؛
+    // v9.0.244 (TD-666): ورودی نامعتبر (حرف، نویسه ناآشنا، اعشار بیش از ارز) مقدار قبلی را نگه می‌دارد و پیام می‌دهد؛
     // جداکننده‌های فارسی «٬» «٫» «،»، فاصله و برچسب ارزی که از خود برنامه کپی شده پذیرفته می‌شوند.
     const result = readAmountText(input.value, { scale, allowNegative });
     if (!result.ok) {

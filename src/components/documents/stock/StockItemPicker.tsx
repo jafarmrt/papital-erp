@@ -58,11 +58,15 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
               className="w-full shadow-2xs rounded-xl"
               fetchUrl={PICK_LIST_URLS.items}
               mapResultToOption={(it: Item) => {
-                const { totalReservedQty, reservedForOtherProjects, reservedForSelectedProject, maxAllowedForExit } = getItemReservationSummary(it);
+                const { totalReservedQty, reservedForOtherProjects, reservedForSelectedProject, locationStock, maxAllowedForExit } = getItemReservationSummary(it);
 
                 let label = `${it.code} - ${it.name} (موجودی فعلی: ${it.current_stock} ${it.unit})`;
 
                 if (actionType === 'out') {
+                  // v9.0.242 (TD-799): سقف خروج از موجودی انبار انتخاب‌شده هم کم است
+                  if (locationStock !== Number(it.current_stock)) {
+                    label += ` | 🏬 موجودی انبار مبدا: ${locationStock} ${it.unit}`;
+                  }
                   if (totalReservedQty > 0) {
                     if (reservedForOtherProjects > 0) {
                       label += ` | 🔒 رزرو سایر مصارف: ${reservedForOtherProjects} ${it.unit}`;
@@ -141,10 +145,11 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
               <span className="font-bold text-slate-900">{selectedItemObj.name}</span>
             </div>
             {(() => {
-              const { reservedForOtherProjects, reservedForSelectedProject, maxAllowedForExit } = getItemReservationSummary(selectedItemObj);
+              const { reservedForOtherProjects, reservedForSelectedProject, locationStock, maxAllowedForExit } = getItemReservationSummary(selectedItemObj);
               return (
                 <div className="flex flex-wrap items-center gap-2 font-mono">
                   <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 border">موجودی کل: {formatPersianNumber(selectedItemObj.current_stock)} {selectedItemObj.unit}</span>
+                  <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 border">موجودی انبار مبدا: {formatPersianNumber(locationStock)} {selectedItemObj.unit}</span>
                   {reservedForOtherProjects > 0 && (
                     <span className="px-2 py-0.5 bg-purple-100 text-purple-950 rounded font-bold border border-purple-300">
                       🔒 رزرو سایر پروژه‌ها: {formatPersianNumber(reservedForOtherProjects)} {selectedItemObj.unit}

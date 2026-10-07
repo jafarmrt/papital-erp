@@ -412,7 +412,7 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
 
   const nationalIdTd673 = 'reg_personnel_national_id_ten_digits_td_673';
   if (shouldRun(nationalIdTd673, 'td673', 'personnel', 'national_id', 'package16')) {
-    await runCase(results, nationalIdTd673, 'v9.0.230: personnel save refuses a national ID that is not ten digits; only the Excel import pads 8-9 digits and lists the row (TD-673)', async (ids) => {
+    await runCase(results, nationalIdTd673, 'v9.0.248: personnel save refuses a national ID that is not ten digits; only the Excel import pads 8-9 digits and lists the row (TD-673)', async (ids) => {
       const { send } = await adminClient();
       const tag = tagOf();
       const wrong: string[] = [];

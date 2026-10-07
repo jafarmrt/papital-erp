@@ -271,7 +271,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), a
 
         const personnelCode = String(item.personnelCode || '').trim();
         const phone = normalizePhoneNumber(item.phone || '');
-        // v9.0.230 (TD-673، تصمیم ت۵ ب): فقط ورود اکسل کد ۸ و ۹ رقمی را با صفر پر می‌کند و ردیف را در گزارش فهرست می‌کند
+        // v9.0.248 (TD-673، تصمیم ت۵ ب): فقط ورود اکسل کد ۸ و ۹ رقمی را با صفر پر می‌کند و ردیف را در گزارش فهرست می‌کند
         const importedNationalId = readImportedNationalId(item.nationalId);
         if (importedNationalId.error) {
           errors.push({ row: rowIndex, code: String(item.personnelCode ?? ''), name: fullName, message: importedNationalId.error });
