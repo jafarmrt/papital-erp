@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.110 — Package 1 Data Infrastructure and Deployment Documentation
+- **Stability Audit, Package 1 (Data Infrastructure, Startup, Deployment and Tooling):** `docs/audit/STABILITY_AUDIT_V9.md` gets the package 1 section with the owner decisions t1 to t9 (t9: all terminal output in English); its proven findings are registered as open rows TD-581 to TD-625 (TD-583 unused, B01-03 was fixed as TD-472; TD-591 and TD-594 are opened by package 2 M5 and package 16). Two P1: the test-data cleanup script deletes real data without an environment guard, and unknown paths grow the `/metrics` label set without bound. Documentation only; no behaviour change.
+
 ### v9.0.109 — Merge-Time Renumbering Tool for Parallel Lanes
 - **Release Renumbering:** `npm run release:renumber -- origin/master` (`scripts/release-renumber.ts`) merges the base without committing, resolves the conflicts of the release files, moves the branch's own versions, migrations (file, journal idx, tag and a later `when`) and audit report sections after those of the base, rewrites only lines the branch added, sorts the active changelog, sets the four version locations, recounts TECH_DEBT.md and runs `check:version` and the migration plan test (TD-473, `releaseRenumber.test.ts`).
 
