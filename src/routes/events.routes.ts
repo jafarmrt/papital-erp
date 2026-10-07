@@ -285,7 +285,7 @@ router.post(['/action-rules', '/rules'], authorizePermission('events.manage'), a
 
     await logActivity({
       userId: req.user?.id,
-      username: req.user?.username || 'admin',
+      username: req.user?.username,
       userFullName: req.user?.full_name || '',
       action: 'CREATE',
       entity: `قانون واکنش خودکار: ${name}`,
@@ -309,7 +309,7 @@ router.put(['/action-rules/:id', '/rules/:id'], authorizePermission('events.mana
 
     await logActivity({
       userId: req.user?.id,
-      username: req.user?.username || 'admin',
+      username: req.user?.username,
       userFullName: req.user?.full_name || '',
       action: 'UPDATE',
       entity: `قانون واکنش خودکار #${id}`,
@@ -333,7 +333,7 @@ router.delete(['/action-rules/:id', '/rules/:id'], authorizePermission('events.m
 
     await logActivity({
       userId: req.user?.id,
-      username: req.user?.username || 'admin',
+      username: req.user?.username,
       userFullName: req.user?.full_name || '',
       action: 'DELETE',
       entity: `قانون واکنش خودکار #${id}`,
@@ -476,7 +476,7 @@ router.post('/dlq/:id/replay', authorizePermission('events.manage'), validate(pa
 
     await logActivity({
       userId,
-      username: req.user?.username || 'admin',
+      username: req.user?.username,
       userFullName: req.user?.full_name || '',
       action: 'UPDATE',
       entity: `صف خطاهای قرنطینه #${id}`,
@@ -501,7 +501,7 @@ router.post('/dlq/replay-batch', authorizePermission('events.manage'), asyncHand
 
     await logActivity({
       userId,
-      username: req.user?.username || 'admin',
+      username: req.user?.username,
       userFullName: req.user?.full_name || '',
       action: 'UPDATE',
       entity: 'صف خطاهای قرنطینه (DLQ)',
@@ -699,7 +699,7 @@ router.get('/webhooks/:id', authorizePermission('events.view'), validate(paramsI
 
     res.json({
       success: true,
-      data: maskSubscriptionSecret(sub, req.user?.role === 'admin')
+      data: maskSubscriptionSecret(sub, req.user?.role === SYSTEM_ADMIN_ROLE)
     });
   } catch (error) {
     throw error;
@@ -734,7 +734,7 @@ router.post('/webhooks', authorizePermission('events.manage'), asyncHandler(asyn
 
     await logActivity({
       userId: req.user?.id,
-      username: req.user?.username || 'admin',
+      username: req.user?.username,
       userFullName: req.user?.full_name || '',
       action: 'CREATE',
       entity: `اشتراک وب‌هوک: ${name}`,

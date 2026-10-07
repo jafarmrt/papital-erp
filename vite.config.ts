@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
-      // v9.0.169 (TD-588): public/ is copied without public/uploads (attachments and uploaded images stay where the app serves them)
+      // v9.0.180 (TD-588): public/ is copied without public/uploads (attachments and uploaded images stay where the app serves them)
       {
         name: 'copy-public-assets',
         apply: 'build',
@@ -53,7 +53,7 @@ export default defineConfig(({ mode }) => {
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
     build: {
-      // v9.0.169 (TD-588): the copy-public-assets plugin above copies public/ instead (without uploads)
+      // v9.0.180 (TD-588): the copy-public-assets plugin above copies public/ instead (without uploads)
       copyPublicDir: false,
       rollupOptions: {
         output: {

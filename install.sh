@@ -141,7 +141,7 @@ ENV
 else
   warn ".env already exists — keeping its values."
 fi
-# v9.0.176 (TD-609): the encryption key of stored third-party passwords and the webhook signing token; only added
+# v9.0.187 (TD-609): the encryption key of stored third-party passwords and the webhook signing token; only added
 # when missing, never changed. Keep ERP_SECRETS_KEY with the backups: encrypted values cannot be read without it.
 bash scripts/ensure-env-secrets.sh .env || die "Could not add the generated secrets to .env"
 

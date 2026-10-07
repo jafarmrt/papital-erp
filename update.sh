@@ -58,7 +58,7 @@ cd "$APP_DIR" || die "Application directory not found: $APP_DIR"
 # v9.0.124 (TD-587): the service listens on PORT from .env (install.sh writes it there); the startup check watches it
 [ -n "$APP_PORT" ] || APP_PORT="$(env_file_value PORT)"
 APP_PORT="${APP_PORT:-3000}"
-# v9.0.172 (TD-605): the settings the backup and the rehearsal take from the environment come from .env literally
+# v9.0.183 (TD-605): the settings the backup and the rehearsal take from the environment come from .env literally
 for key in BACKUP_DIR PRE_DEPLOY_RETENTION_DAYS RESTORE_ADMIN_URL; do
   if [ -z "${!key:-}" ]; then
     value="$(env_file_value "$key")"
@@ -75,7 +75,7 @@ rollback_hint() {
   log "Rollback:"
   log "  1) ${SUDO:+sudo }systemctl stop ${SERVICE_NAME}"
   if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
-    # v9.0.170 (TD-603): reset the branch itself; a checkout of the commit detaches HEAD and the next git pull fails
+    # v9.0.181 (TD-603): reset the branch itself; a checkout of the commit detaches HEAD and the next git pull fails
     log "  2) git reset --hard ${PREVIOUS_COMMIT} && NODE_ENV=development npm ci --include=dev && npm run build"
   else
     log "  2) put the previous source back and rebuild (npm ci --include=dev && npm run build)"
@@ -135,7 +135,7 @@ if [ "$SKIP_BACKUP" -eq 0 ]; then
   log "[1/6] Creating pre-deployment database backup..."
   # scripts/backup.sh reads DATABASE_URL from .env and tags the dump as pre-deployment (README: kept 90 days)
   if [ -f scripts/backup.sh ]; then
-    # v9.0.172 (TD-605): .env is read literally, as the service reads it (node --env-file); it is never run as shell code
+    # v9.0.183 (TD-605): .env is read literally, as the service reads it (node --env-file); it is never run as shell code
     BACKUP_KIND=pre-deployment RETENTION_DAYS="${PRE_DEPLOY_RETENTION_DAYS:-90}" bash scripts/backup.sh || die "Database backup failed — aborting update."
     PRE_DEPLOY_DUMP="$(ls -t "${BACKUP_DIR:-/var/backups/erp}"/erp_pre-deployment_*.dump.gz 2>/dev/null | head -1 || true)"
   else

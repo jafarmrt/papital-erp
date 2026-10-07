@@ -40,15 +40,15 @@ export function usePiecework() {
   const [activeTab, setActiveTab] = useState<'logs' | 'tasks' | 'rates' | 'payrolls' | 'project-costs'>('logs');
 
   // v7.0.59 (TD-223، تصمیم مالک محصول): مبالغ فیش‌ها فقط برای دارندگان مجوز فیش (همان گارد API)
-  const { user, userPermissions } = useAuth();
+  const { userPermissions } = useAuth();
   const canViewPayrolls = Boolean(
-    userPermissions?.isAdmin || user?.role === 'admin' ||
+    userPermissions?.isAdmin ||
     (Array.isArray(userPermissions?.permissions) &&
       READ_PERMISSIONS.payrolls.some(p => userPermissions.permissions.includes(p)))
   );
   // حوزه H (TD-300): نرخ دستی کارکرد فقط برای مدیر پرسنل یا مدیر تعرفه‌ها (همان قاعده سرور)
   const canSetLogRate = Boolean(
-    userPermissions?.isAdmin || user?.role === 'admin' ||
+    userPermissions?.isAdmin ||
     (Array.isArray(userPermissions?.permissions) &&
       ['personnel.manage', 'piecework.manage_tasks'].some(p => userPermissions.permissions.includes(p)))
   );

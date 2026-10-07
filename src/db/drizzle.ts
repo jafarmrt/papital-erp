@@ -166,7 +166,7 @@ export type DbExecutor = AppDatabase | DbTransaction;
 export const LONG_STATEMENT_TIMEOUT_MS = 300_000;
 
 /**
- * v9.0.177 (TD-615): extends `statement_timeout` for the rest of this transaction only (`SET LOCAL`), on the
+ * v9.0.188 (TD-615): extends `statement_timeout` for the rest of this transaction only (`SET LOCAL`), on the
  * transaction's own connection. The old `withLongQueryTimeout(fn)` set it on a separate pool connection that the
  * callback never used (its `orm` and `orm.transaction` still had the 1-minute limit) and held that connection idle.
  */

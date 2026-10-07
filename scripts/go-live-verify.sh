@@ -37,7 +37,7 @@ if [ -f "$APP_DIR/.env" ]; then
 else
   bad ".env not found — cannot continue."; echo "RESULT: ${FAIL} failure(s)"; exit 1
 fi
-# v9.0.172 (TD-605): .env is read literally, as the service reads it (node --env-file); it is never run as
+# v9.0.183 (TD-605): .env is read literally, as the service reads it (node --env-file); it is never run as
 # shell code (a value with $, ; or a backtick used to be expanded or executed with root rights)
 env_has() { grep -qE "^$1=" "$APP_DIR/.env"; }
 env_val() { grep -E "^$1=" "$APP_DIR/.env" | head -1 | cut -d= -f2- | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true; }
@@ -48,7 +48,7 @@ if [ "$(env_val NODE_ENV)" = "production" ]; then ok "NODE_ENV=production"; else
 env_has JWT_SECRET || bad "JWT_SECRET missing"
 if [ "$(env_val JWT_SECRET | wc -c)" -ge 33 ]; then ok "JWT_SECRET present (>= 32 chars)"; else bad "JWT_SECRET too short (< 32 chars)"; fi
 env_has DATABASE_URL || bad "DATABASE_URL missing"
-# v9.0.176 (TD-609): the secrets install.sh writes; without ERP_SECRETS_KEY no third-party password can be saved (503)
+# v9.0.187 (TD-609): the secrets install.sh writes; without ERP_SECRETS_KEY no third-party password can be saved (503)
 if [ "$(env_val ERP_SECRETS_KEY | tr -d '\n' | wc -c)" -ge 32 ]; then ok "ERP_SECRETS_KEY present (>= 32 chars)"; else bad "ERP_SECRETS_KEY missing or shorter than 32 chars (bash scripts/ensure-env-secrets.sh .env adds one)"; fi
 env_has ERP_WEBHOOK_SECRET_TOKEN && ok "ERP_WEBHOOK_SECRET_TOKEN present" || warnc "ERP_WEBHOOK_SECRET_TOKEN missing (webhooks sign only if the token is stored in the settings)"
 env_has ERP_SETUP_TOKEN || warnc "ERP_SETUP_TOKEN missing (only acceptable if /setup is fully consumed AND token disabled)"

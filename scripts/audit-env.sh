@@ -34,7 +34,7 @@ if [ -n "${JWT_SECRET:-}" ] && [ ${#JWT_SECRET} -lt 32 ]; then
   ERRORS=$((ERRORS + 1))
 fi
 
-# v9.0.176 (TD-609): ERP_SECRETS_KEY length check (>= 32 chars, src/lib/secretBox.ts)
+# v9.0.187 (TD-609): ERP_SECRETS_KEY length check (>= 32 chars, src/lib/secretBox.ts)
 if [ -n "${ERP_SECRETS_KEY:-}" ] && [ ${#ERP_SECRETS_KEY} -lt 32 ]; then
   echo "❌ ERP_SECRETS_KEY must be at least 32 characters"
   ERRORS=$((ERRORS + 1))

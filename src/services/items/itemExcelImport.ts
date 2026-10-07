@@ -1,6 +1,8 @@
-import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, ne } from 'drizzle-orm';
 import { orm, extendStatementTimeout, type DbExecutor } from '../../db/drizzle.js';
 import { items, warehouses } from '../../db/schema.js';
+import { advanceItemCodeCounter } from './itemCodeCounter.js';
+import { guardItemIdentity, itemNameKeyCondition } from './itemIdentity.js';
 import { itemAuditSnapshot, logItemImportChange, logItemImportSummary } from './itemExcelAudit.js';
 import { ItemPricingService } from './itemPricing.service.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
@@ -9,6 +11,7 @@ import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { money } from '../../lib/money.js';
+import { nextVersion } from '../../lib/occHelper.js';
 import { ITEM_IMPORT_DENIED_MESSAGES, type ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import {
   EXCEL_DOCUMENT_REF, ITEM_FIELD_KEYS, applyStockChange, changedRowPrices, codeFormatError, findItemByCode, deniedStockPermissions,
@@ -92,9 +95,15 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     push(formatError);
     return;
   }
+  if (!matchedItem && !name) {
+    // v9.0.170 (TD-653): نام کالا یکتاست، پس کالای تازه بی نام «کالای بدون نام» دوم نمی‌سازد
+    push('نام کالای تازه خالی است؛ این ردیف ثبت نشد.');
+    return;
+  }
   if (name) {
+    // v9.0.170 (TD-653): همان کلید ایندکس یکتای نام (lower(btrim(name)))
     const [nameConflict] = await tx.select({ id: items.id, code: items.code }).from(items)
-      .where(and(sql`btrim(${items.name}) = ${name}`, eq(items.isDeleted, 0), matchedItem ? ne(items.id, matchedItem.id) : undefined))
+      .where(and(itemNameKeyCondition(name), eq(items.isDeleted, 0), matchedItem ? ne(items.id, matchedItem.id) : undefined))
       .limit(1);
     if (nameConflict) {
       push(`خطای نام تکراری: محصولی با نام «${name}» قبلاً با کد «${nameConflict.code}» در سیستم ثبت شده است؛ این ردیف ثبت نشد.`);
@@ -106,6 +115,10 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     return;
   }
 
+  // v9.0.176 (TD-657): قیمت نامعتبر یا ارز ناشناخته کل ردیف را پیش از هر نوشتن رد می‌کند
+  const rowPrices = readRowPrices(row, ctx.strategies, push);
+  if (!rowPrices) return;
+
   // v9.0.158 (TD-655): تصویر کالا پیش از تغییر، برای ردیف ممیزی همان کالا
   const before = matchedItem ? await itemAuditSnapshot(tx, matchedItem.id) : null;
   // V3.0.6 (Business Clock): تاریخ تراکنش‌های کاردکس از ساعت توافقی سامانه
@@ -116,7 +129,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     : await createNewItem(ctx, { code, name, fields, stock, todayStr, currentUser, push });
   if (targetItemId === null) return;
 
-  const changedPrices = await changedRowPrices(tx, targetItemId, readRowPrices(row, ctx.strategies, push));
+  const changedPrices = await changedRowPrices(tx, targetItemId, rowPrices);
   if (changedPrices.length > 0 && !perms.editPrices) {
     push(ITEM_IMPORT_DENIED_MESSAGES.editPrices);
   } else {
@@ -180,7 +193,9 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
   if (fieldsChange && !perms.editItems) {
     push(ITEM_IMPORT_DENIED_MESSAGES.editItems);
   } else if (fieldsChange) {
-    await tx.update(items).set(updateSet).where(eq(items.id, targetItemId));
+    // v9.0.171 (TD-654): تغییر مشخصات از اکسل نسخه کالا را هم جلو می‌برد تا فرم بازِ کهنه آن را بازنویسی نکند
+    await guardItemIdentity(updateSet.name ?? matchedItem.name, () => tx.update(items)
+      .set({ ...updateSet, version: nextVersion(matchedItem.version) }).where(eq(items.id, targetItemId)));
   }
 
   const changes = plan.changes;
@@ -209,8 +224,8 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
     return null;
   }
   const itemWac = money(fields.weightedAverageCost);
-  const [newItem] = await tx.insert(items).values({
-    name: name || 'کالای بدون نام',
+  const [newItem] = await guardItemIdentity(name, () => tx.insert(items).values({
+    name,
     code,
     type: newItemType(fields, ctx.typeFilter),
     unit: fields.unit || 'عدد',
@@ -224,8 +239,9 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
     image: fields.image || '',
     currentStock: 0,
     isDeleted: 0,
-  }).returning({ id: items.id });
+  }).returning({ id: items.id, type: items.type }));
   const targetItemId = newItem.id;
+  await advanceItemCodeCounter(tx, newItem.type, code);
 
   const movement = { itemId: targetItemId, price: itemWac, date: input.todayStr, user: input.currentUser };
   const opening = plan.changes;
@@ -258,7 +274,7 @@ export async function importItemsFromExcel(
   const state: ImportState = { createdCount: 0, updatedCount: 0, pricesCount: 0, errors: [], adjustmentTransactionIds: [] };
 
   await orm.transaction(async (tx) => {
-    // v9.0.177 (TD-615): a large import may take longer than the 1-minute statement limit of a request
+    // v9.0.188 (TD-615): a large import may take longer than the 1-minute statement limit of a request
     await extendStatementTimeout(tx);
     const ctx: ImportContext = { tx, whs, defaultWhCode, strategies, typeFilter, actor, perms, state };
     for (let i = 0; i < rows.length; i++) {

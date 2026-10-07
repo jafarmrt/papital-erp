@@ -112,7 +112,9 @@ export async function draftSalesDocument(h: Harness, status: 'draft' | 'proforma
   const { DocumentService } = await import('../../services/document.service.js');
   const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
   const { getDefaultWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
-  const item = await createTestItem({ type: 'product', name: `کالای گردش‌کار ${h.tag}`, code: `WF14-${h.tag}-${Math.floor(Math.random() * 1e6)}` });
+  // v9.0.170 (TD-653): نام کالای فعال یکتاست، پس هر سند آزمون کالای هم‌نام تازه نمی‌سازد
+  const serial = Math.floor(Math.random() * 1e6);
+  const item = await createTestItem({ type: 'product', name: `کالای گردش‌کار ${h.tag} ${serial}`, code: `WF14-${h.tag}-${serial}` });
   return Number(await DocumentService.createDocument({
     docType: 'invoice', inOut: 'out', status, date: await businessTodayIsoDate(), user: 'آزمون بسته ۱۴', buyerName: `خریدار ${h.tag}`,
     items: [{ itemId: item.id, quantity: 1, unitPrice: 5000, location: await getDefaultWarehouseCode(orm) }],

@@ -57,7 +57,7 @@ function main(): void {
     process.exit(1);
   }
 
-  // v9.0.174 (TD-607): a failed `npm audit` (registry unreachable, no lockfile) prints an error object without a
+  // v9.0.185 (TD-607): a failed `npm audit` (registry unreachable, no lockfile) prints an error object without a
   // vulnerability list; the gate used to read it as «no vulnerabilities» and pass
   const failure = auditRunFailure(report);
   if (failure) {

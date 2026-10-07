@@ -79,7 +79,7 @@ export const LOCK_ORDER_MAP: Record<string, LockOrderMetadata> = {
     tableName: 'production_projects',
     description: 'Production projects and stage tracking'
   },
-  // v9.0.178 (TD-618): every table a caller locks has a level; withOrderedLocks refuses one without
+  // v9.0.189 (TD-618): every table a caller locks has a level; withOrderedLocks refuses one without
   project_bom_allocations: {
     level: LockHierarchyLevel.PRODUCTION,
     tableName: 'project_bom_allocations',
@@ -131,7 +131,7 @@ export function validateLockOrder(arg1: LockableResource[] | LockHierarchyLevel 
     const resources = arg1;
     for (let i = 0; i < resources.length - 1; i++) {
       if (resources[i].hierarchyLevel > resources[i + 1].hierarchyLevel) {
-        // v9.0.178 (TD-618): the same in every environment; production used to log and go on with the wrong order
+        // v9.0.189 (TD-618): the same in every environment; production used to log and go on with the wrong order
         throw new Error(`Lock order violation: ${resources[i].name} (level ${resources[i].hierarchyLevel}) ` +
           `acquired before ${resources[i + 1].name} (level ${resources[i + 1].hierarchyLevel})`);
       }
@@ -254,7 +254,7 @@ export async function withOrderedLocks<T>(
     };
   });
 
-  // v9.0.178 (TD-618): the caller's order does not matter (the resources are sorted below, in every environment);
+  // v9.0.189 (TD-618): the caller's order does not matter (the resources are sorted below, in every environment);
   // a table with no lock level is refused instead of being locked last, after the outbox
   const unknown = normalized.filter(r => r.level === UNKNOWN_LOCK_LEVEL);
   if (unknown.length > 0) {

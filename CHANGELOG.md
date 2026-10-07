@@ -19,35 +19,68 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.178 — Lock Order Behaves the Same Everywhere
+### v9.0.189 — Lock Order Behaves the Same Everywhere
 - **Lock Order:** `withOrderedLocks` sorts resources by `LOCK_ORDER_MAP` in every environment and refuses a table without a lock level (pass `level` or add the table); `validateLockOrder` refuses an out-of-order declared sequence everywhere. Before, tests threw on input order while production sorted silently, and an unmapped table (`piecework_payrolls`, `crm_leads`, `journal_voucher_items`) was locked last at level 999.
 
-### v9.0.177 — Long Statement Timeout on the Transaction Itself
+### v9.0.188 — Long Statement Timeout on the Transaction Itself
 - **Long Statement Timeout:** `extendStatementTimeout(tx)` (`src/db/drizzle.ts`) sets `statement_timeout` to 5 minutes with `SET LOCAL` on the transaction's own connection; the item Excel import calls it first. The removed `withLongQueryTimeout(fn)` set it on a separate pool connection the callback never used (its queries kept the 1-minute limit) and held that connection idle.
 
-### v9.0.176 — Linux Install Writes the Secrets Key
+### v9.0.187 — Linux Install Writes the Secrets Key
 - **Install Secrets:** `install.sh` runs the new `scripts/ensure-env-secrets.sh`, which adds a random `ERP_SECRETS_KEY` and `ERP_WEBHOOK_SECRET_TOKEN` to `.env` when missing and keeps existing values (run it once on an existing server); `go-live-verify.sh` fails without a 32-character key and `audit-env.sh` requires it. Before, saving a personnel's third-party password answered 503 on a Linux install and `audit-env` failed on the install's own `.env`.
 
-### v9.0.175 — Test Runner Refuses Empty Runs
+### v9.0.186 — Test Runner Refuses Empty Runs
 - **Test Runner:** `scripts/run-tests.ts` exits 1 on an unknown suite (listing the known ones) and when the suite and filter matched no test («No test ran»), and checks `NODE_ENV` before any schema, migration or seed is written. Before, a mistyped suite or test id reported `Passed Tests: 0 / 0 … PASSED`, which voided the «red on the previous version» rule, and a production run wrote 68 tables before it was refused.
 
-### v9.0.174 — Audit Gate Fails When npm audit Fails
+### v9.0.185 — Audit Gate Fails When npm audit Fails
 - **Audit Gate:** `npm run audit:gate` fails (`auditRunFailure` in `scripts/audit-gate.ts`) when `npm audit` returns an error object or no `vulnerabilities` object, and prints npm's error. Before, `report.vulnerabilities || {}` read the failed run as empty and passed.
 
-### v9.0.173 — Failed Backups Leave No Partial Files
+### v9.0.184 — Failed Backups Leave No Partial Files
 - **Backup Cleanup:** a failed `scripts/backup.sh` run removes the files it wrote (uncompressed dump, manifest, archives; a compressed dump that failed verification is still kept for inspection), retention also deletes stray `.dump` files of earlier failed runs, and `file_attachments` is looked up with `to_regclass` in its own query, so a database before its first migration is backed up instead of failing with `relation "file_attachments" does not exist`.
 
-### v9.0.172 — .env Read Literally by update.sh and go-live-verify.sh
+### v9.0.183 — .env Read Literally by update.sh and go-live-verify.sh
 - **Literal .env:** `update.sh` and `scripts/go-live-verify.sh` no longer run `set -a; . ./.env`; they read the keys they need literally (`env_file_value` / `env_val`, surrounding quotes removed), as the service reads the file with `node --env-file`. A password such as `S3cr$et9` used to be cut or stop the script under `set -u`, and a value with `;` or a backtick ran as root.
 
-### v9.0.171 — Zip Update Instruction Matches update.sh
+### v9.0.182 — Zip Update Instruction Matches update.sh
 - **Zip Update Documentation:** `deploy/DEPLOY_LINUX.md` §4 gives `sudo bash update.sh --zip <file.zip>` (and `--source <dir>`). It used to say to extract the zip over the app directory and run `update.sh`, which failed after the backup with `fatal: not a git repository`.
 
-### v9.0.170 — Rollback Steps Keep the Branch
+### v9.0.181 — Rollback Steps Keep the Branch
 - **Rollback Steps:** the rollback and rehearsal hints of `update.sh` reset the branch (`git reset --hard <commit>`) instead of `git checkout <commit>`, which detached HEAD so the next `git pull --ff-only` failed with «You are not currently on a branch».
 
-### v9.0.169 — Attachments Stay Out of Builds and Packages
+### v9.0.180 — Attachments Stay Out of Builds and Packages
 - **Public Assets:** the client build copies `public/` without `uploads/` (`copyPublicAssets` in `scripts/publicAssets.ts`, a Vite plugin with `copyPublicDir: false`), `.dockerignore` excludes `public/uploads` and `package-source.ps1` drops it from the source package. Before, every build duplicated all attachments into `dist/uploads`, a deleted attachment stayed there, and a local Docker image or source zip carried them.
+
+### v9.0.179 — Role Delete Counts Active Users Only
+- **Role Delete Counts Active Users Only:** a role whose only user was deleted can be deleted (TD-535).
+
+### v9.0.178 — Deleted Username Never Revives an Account
+- **Deleted Username Never Revives an Account:** a new user always gets a new id; restoring a deleted user is a separate action with a new role and a temporary password (TD-519).
+
+### v9.0.177 — System Admin Named by One Constant
+- **System Admin Named by One Constant:** package 2 files and server routes name the system admin only through the shared constant or the admin flag; refactor (TD-896).
+
+### v9.0.176 — Item Price Amount and Currency
+- **Item Price Input:** a price is a decimal above zero in IRR, USD, EUR, AED or GBP; removal is explicit (`remove: true`), invalid Excel prices refuse the row and old invalid rows are listed by the health check (TD-657, `reg_item_price_amount_currency_td_657`).
+
+### v9.0.175 — One Active Price per List Under Concurrent Saves
+- **Item Price Writes:** price saves go through `ItemPricingService.applyPriceWrites` under the item row lock, so concurrent saves leave one active price per list; old duplicates are listed by the health check (TD-660, `conc_item_price_single_active_td_660`).
+
+### v9.0.174 — Guard Test for Item Delete During a Receipt
+- **Item Delete vs Receipt:** a guard test shows that deleting an item while a receipt of it commits waits for the receipt and is refused; the row lock dates from v9.0.40 (TD-661 closed without code change, `conc_item_delete_vs_receipt_td_661`).
+
+### v9.0.173 — Item Numbers Through decimalInput
+- **Item Numeric Input:** reorder point, cost, opening stock and weight go through `decimalInput` and are non-negative; text is 400 and Persian digits are read (TD-657 item part, `reg_item_numeric_input_validation_td_657`).
+
+### v9.0.172 — Item Code Counter Moves on Save
+- **Item Code Suggestion:** saving an item moves its code series counter in the same transaction, so the next suggested code is free (TD-656, `reg_item_code_peek_after_save_td_656`).
+
+### v9.0.171 — Item Edit Version Lock
+- **Item Version Lock:** editing an item needs its current version (400 without, 409 `OCC_CONFLICT` when stale), missing fields keep their values and the edit is audited in its transaction (TD-654, `sec_item_version_lock_td_654`).
+
+### v9.0.170 — Unique Item Code and Name
+- **Item Identity:** two active items never share a code (any letter case) or a name; partial unique indexes (migration 0070, only on clean data) turn concurrent duplicates into a Persian 409 and the health check lists old duplicates (TD-653, `conc_item_code_and_name_unique_td_653`).
+
+### v9.0.169 — New Item Opening Voucher Inside Its Transaction
+- **Item Opening Voucher:** a new item's opening voucher and audit row are written in the item's create transaction; a voucher failure refuses the item and its opening stock (TD-652, `inv_item_create_opening_voucher_atomic_td_652`).
 
 ### v9.0.168 — Build Details of /health Scoped and Real
 - **Build Details:** `/health` returns `version` to everyone (`verify-startup.sh` reads it) and `buildInfo` only to the `METRICS_TOKEN` or a live system-admin session (`metricsReaderStatus` in `src/middleware/metricsAuth.ts`). `npm run build` writes `dist/build-info.json` with the commit and build time (`scripts/write-build-info.mjs`; the Docker build takes `--build-arg GIT_COMMIT_SHA`); without it they are `unknown`, never the old fixed `v4-master` and date.

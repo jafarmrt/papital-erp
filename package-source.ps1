@@ -33,7 +33,7 @@ foreach ($d in $excludeDirs) {
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# v9.0.169 (TD-588): attachments and uploaded images of this machine never go into a source package
+# v9.0.180 (TD-588): attachments and uploaded images of this machine never go into a source package
 $stageUploads = Join-Path $stage 'public\uploads'
 if (Test-Path $stageUploads) { Remove-Item $stageUploads -Recurse -Force }
 

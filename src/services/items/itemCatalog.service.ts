@@ -6,10 +6,12 @@ import { uploadBase64ToStorage } from '../../lib/storage.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { ItemPricingService } from './itemPricing.service.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
-import { ValidationError, NotFoundError, ConflictError } from '../../errors/customErrors.js';
+import { ValidationError, NotFoundError, ConflictError, BadRequestError } from '../../errors/customErrors.js';
 import { DocumentService } from '../document.service.js';
 import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
-import { nextVersion } from '../../lib/occHelper.js';
+import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
+import { advanceItemCodeCounter } from './itemCodeCounter.js';
+import { assertItemCodeAvailable, assertItemNameAvailable, guardItemIdentity } from './itemIdentity.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
@@ -58,9 +60,11 @@ export interface ItemWriteBody {
   current_stock?: string | number;
   stocks?: Record<string, unknown>;
   color?: string;
-  weight?: string | number;
+  weight?: string | number | null;
   material?: string;
   size?: string;
+  /** v9.0.171 (TD-654): نسخه کالایی که فرم ویرایش از آن ساخته شده است؛ ویرایش بی آن رد می‌شود */
+  version?: number | string;
 }
 
 function cleanSegment(value: unknown): string {
@@ -404,7 +408,7 @@ export class ItemCatalogService {
   }
 
   /**
-   * ورود یکپارچه اکسل کالا؛ پیاده‌سازی در `itemExcelImport.ts` (v9.0.170، TD-648).
+   * ورود یکپارچه اکسل کالا؛ پیاده‌سازی در `itemExcelImport.ts` (v9.0.154، TD-648).
    */
   static async processUnifiedImport(
     rows: Array<Record<string, unknown>>,
@@ -475,16 +479,9 @@ export class ItemCatalogService {
     const { type, name, code, unit, category, image, thumbnail, reorder_point, weighted_average_cost, color, weight, material, size } = body;
 
     const executeWork = async (tx: DbExecutor) => {
-      const [existing] = await tx.select({ id: items.id }).from(items).where(and(eq(items.code, code), eq(items.isDeleted, 0)));
-      if (existing) {
-        throw new ConflictError('کد کالا تکراری است و مجاز به استفاده مجدد نیستید.');
-      }
-
-      const [existingName] = await tx.select({ id: items.id, code: items.code }).from(items)
-        .where(and(eq(items.name, name), eq(items.isDeleted, 0)));
-      if (existingName) {
-        throw new ConflictError(`محصولی با نام «${name}» قبلاً با کد «${existingName.code}» در سیستم ثبت شده است. ثبت دو محصول با نام مشابه امکان‌پذیر نیست.`);
-      }
+      // v9.0.170 (TD-653): کد و نام با کلید ایندکس‌های یکتای uq_items_code_active / uq_items_name_active
+      await assertItemCodeAvailable(tx, code);
+      await assertItemNameAvailable(tx, name);
 
       const whs = await tx.select({ code: warehouses.code }).from(warehouses).orderBy(asc(warehouses.id));
       let computedStock = 0;
@@ -511,7 +508,7 @@ export class ItemCatalogService {
       const imageUrl = image && image.startsWith('data:image') ? await uploadBase64ToStorage(image, 'image') : (image || '');
       const thumbnailUrl = thumbnail && thumbnail.startsWith('data:image') ? await uploadBase64ToStorage(thumbnail, 'thumbnail') : (thumbnail || '');
 
-      const [inserted] = await tx.insert(items).values({
+      const [inserted] = await guardItemIdentity(name, () => tx.insert(items).values({
         type: type || 'product',
         name,
         code,
@@ -526,7 +523,8 @@ export class ItemCatalogService {
         material: material || null,
         size: size || null,
         isDeleted: 0
-      }).returning();
+      }).returning());
+      await advanceItemCodeCounter(tx, inserted.type, inserted.code);
 
       // v7.0.45 (audit P2-1): موجودی اولیه از موتور مرکزی گردش انبار (کاردکس + جدول موجودی انبارها + کش)؛
       // پیش‌تر فقط JSONB و کاردکس نوشته می‌شد و جدول موجودی انبارها ردیفی نداشت.
@@ -543,7 +541,7 @@ export class ItemCatalogService {
               date: txDate,
               documentType: 'audit',
               documentRef: 'ثبت اولیه کالا',
-              user: user?.username || 'admin',
+              user: user?.username || 'سیستم',
               targetLoc: whCode,
               notes: 'موجودی اولیه هنگام تعریف کالا'
             });
@@ -591,21 +589,17 @@ export class ItemCatalogService {
       if (!prevItem) {
         throw new NotFoundError('کالای مورد نظر یافت نشد.');
       }
-
-      if (code && code !== prevItem.code) {
-        const [existingCode] = await tx.select({ id: items.id }).from(items).where(and(eq(items.code, code), eq(items.isDeleted, 0)));
-        if (existingCode && existingCode.id !== itemId) {
-          throw new ConflictError('کد کالای جدید تکراری است و مجاز به استفاده مجدد نیستید.');
-        }
+      // v9.0.171 (TD-654، تصمیم ت۷ الف): قفل خوش‌بینانه همیشه اجرا می‌شود (همان قرارداد طرف حساب، TD-403)؛ پیش‌تر نسخه
+      // فقط افزایش می‌یافت و فرم کهنه یا درخواست بی نسخه تغییر کاربر دیگر را بی‌خطا پاک می‌کرد
+      const expectedVersion = Number(body.version);
+      if (!Number.isInteger(expectedVersion) || expectedVersion <= 0) {
+        throw new BadRequestError('نسخه کالا ارسال نشده است؛ صفحه را بازخوانی کنید و دوباره ویرایش کنید.');
       }
+      checkOccVersion(prevItem, { entityType: 'Item', entityId: itemId, expectedVersion });
 
-      if (name && name !== prevItem.name) {
-        const [existingName] = await tx.select({ id: items.id, code: items.code }).from(items)
-          .where(and(eq(items.name, name), eq(items.isDeleted, 0)));
-        if (existingName && existingName.id !== itemId) {
-          throw new ConflictError(`محصولی با نام «${name}» قبلاً با کد «${existingName.code}» در سیستم ثبت شده است.`);
-        }
-      }
+      // v9.0.170 (TD-653): کد و نام با کلید ایندکس‌های یکتا، جز خود کالا
+      if (code && code !== prevItem.code) await assertItemCodeAvailable(tx, code, itemId);
+      if (name && name !== prevItem.name) await assertItemNameAvailable(tx, name, itemId);
 
       let imageUrl: string | undefined = undefined;
       let thumbnailUrl: string | undefined = undefined;
@@ -690,11 +684,17 @@ export class ItemCatalogService {
       }
       const effectiveWac = stockBefore.total > 0 ? prevWac : requestedWac;
 
+      // v9.0.171 (TD-654): فیلدی که در بدنه نیامده مقدار فعلی کالا را نگه می‌دارد؛ رشته خالی یعنی پاک کردن آن
+      const keep = <T>(value: unknown, current: T, write: (v: unknown) => T): T => (value === undefined ? current : write(value));
       const updateData: Partial<typeof items.$inferInsert> = {
-        name, code, unit, category: category || '',
-        reorderPoint: Number(reorder_point || 0),
+        name, code, unit,
+        category: keep(category, prevItem.category, v => String(v || '')),
+        reorderPoint: keep(reorder_point, prevItem.reorderPoint, v => Number(v || 0)),
         weightedAverageCost: effectiveWac,
-        color: color || null, weight: weight ? Number(weight) : null, material: material || null, size: size || null,
+        color: keep(color, prevItem.color, v => (v ? String(v) : null)),
+        weight: keep(weight, prevItem.weight, v => (v ? Number(v) : null)),
+        material: keep(material, prevItem.material, v => (v ? String(v) : null)),
+        size: keep(size, prevItem.size, v => (v ? String(v) : null)),
         version: nextVersion(prevItem.version)
       };
 
@@ -703,7 +703,10 @@ export class ItemCatalogService {
 
       let openingVoucherId: number | null = null;
 
-      let [updatedItem] = await tx.update(items).set(updateData).where(eq(items.id, itemId)).returning();
+      let [updatedItem] = await guardItemIdentity(name ?? prevItem.name, () => tx.update(items).set(updateData)
+        .where(and(eq(items.id, itemId), eq(items.version, prevItem.version))).returning());
+      if (!updatedItem) throw new OptimisticLockError({ entityType: 'Item', entityId: itemId, expectedVersion });
+      if (code && code !== prevItem.code) await advanceItemCodeCounter(tx, updatedItem.type, updatedItem.code);
 
       if (canSetOpening && computedStock > 0) {
         // v7.0.45 (audit P2-1): موجودی افتتاحیه از موتور مرکزی گردش انبار (کاردکس + جدول موجودی انبارها + کش)
@@ -719,7 +722,7 @@ export class ItemCatalogService {
               date: txDate,
               documentType: 'audit',
               documentRef: 'ثبت موجودی افتتاحیه',
-              user: user?.username || 'admin',
+              user: user?.username || 'سیستم',
               targetLoc: whCode,
               notes: 'موجودی اولیه هنگام ویرایش کالا (سند افتتاحیه)'
             });

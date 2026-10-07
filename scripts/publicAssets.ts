@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * v9.0.169 (TD-588): what `vite build` copies from `public/` into `dist/`. `public/uploads/` holds the only copy of
+ * v9.0.180 (TD-588): what `vite build` copies from `public/` into `dist/`. `public/uploads/` holds the only copy of
  * the attachment files (AGENTS §10) and the uploaded images; it is served by the app from `public/uploads`, so a
  * copy in `dist/` only doubled the disk use, slowed every build and kept deleted attachments out of reach of the
  * cleanup and the backup.

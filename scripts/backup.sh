@@ -53,7 +53,7 @@ BASE="$BACKUP_DIR/erp_${BACKUP_KIND}_${TIMESTAMP}"
 DUMP_FILE="$BASE.dump"
 MANIFEST_FILE="$BASE.manifest"
 WORK_DIR="$(mktemp -d)"
-# v9.0.173 (TD-606): a failed run removes the partial files it wrote (an uncompressed dump, the manifest, the archives);
+# v9.0.184 (TD-606): a failed run removes the partial files it wrote (an uncompressed dump, the manifest, the archives);
 # a compressed dump that failed verification is kept for inspection and ages out with the retention below
 BACKUP_DONE=0
 cleanup() {
@@ -91,7 +91,7 @@ fi
 # 1b. Attachment files live on disk, outside pg_dump (AGENTS.md §10): the uploads directory is archived with the
 #     dump. Active attachment records whose file is missing on disk right now are listed in the manifest, so a
 #     restore drill tells "missing before the backup" apart from "lost by the backup".
-# v9.0.173 (TD-606): the table is looked up first; a CASE around the query does not help, because a missing table
+# v9.0.184 (TD-606): the table is looked up first; a CASE around the query does not help, because a missing table
 # fails the statement when it is planned (a database before its first migration)
 HAS_ATTACHMENTS="$(psql "$DATABASE_URL" -X -tA -v ON_ERROR_STOP=1 -c "SELECT to_regclass('file_attachments') IS NOT NULL")" \
   || fail "attachment records could not be read"
@@ -176,7 +176,7 @@ find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*.dump.gz" -mtime +"$RETENTION_DAYS
 find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*.manifest" -mtime +"$RETENTION_DAYS" -delete
 find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*_uploads.tar.gz" -mtime +"$RETENTION_DAYS" -delete
 find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*_attachments.tar.gz" -mtime +"$RETENTION_DAYS" -delete
-# v9.0.173 (TD-606): uncompressed dumps left by failed runs before that release
+# v9.0.184 (TD-606): uncompressed dumps left by failed runs before that release
 find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*.dump" -mtime +"$RETENTION_DAYS" -delete
 BACKUP_DONE=1
 
