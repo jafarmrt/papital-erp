@@ -17,6 +17,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
 import { formatPersianPrice, formatCurrencyLabel, formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate } from '../utils';
 import { useAppCurrency } from '../hooks/useAppCurrency';
+import { useHasPermission } from '../contexts/AuthContext';
 
 export default function CustomersPage({ user }: { user: User }) {
   const appCurrency = useAppCurrency();
@@ -24,6 +25,8 @@ export default function CustomersPage({ user }: { user: User }) {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
+  // v9.0.143 (TD-893): افزودن، ویرایش و حذف طرف حساب با همان مجوز API (`customers.manage`)، نه با کد نقش
+  const canManageCustomers = useHasPermission('customers.manage');
 
   // Tab filter: 'all' | 'customer' | 'supplier'
   const [activeTab, setActiveTab] = useState<'all' | 'customer' | 'supplier'>('all');
@@ -320,7 +323,7 @@ export default function CustomersPage({ user }: { user: User }) {
             <span>ورود و خروجی اکسل</span>
           </button>
 
-          {user.role !== 'viewer' && (
+          {canManageCustomers && (
             <button 
               type="button"
               onClick={() => {
@@ -561,7 +564,7 @@ export default function CustomersPage({ user }: { user: User }) {
                         </button>
                       )}
 
-                      {user.role !== 'viewer' && (
+                      {canManageCustomers && (
                         <>
                           <button onClick={() => handleEdit(c)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer" title="ویرایش">
                             <Edit2 size={14} />

@@ -9,7 +9,8 @@ interface CRMLeadsTableProps {
   onOpenLeadDrawer: (lead: CRMLead) => void;
   onOpenActivityModal: (lead: CRMLead) => void;
   onOpenLeadModal: (lead: CRMLead) => void;
-  onDeleteLead: (leadId: number) => void;
+  /** v9.0.143 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
+  onDeleteLead?: (leadId: number) => void;
   onConvertToInvoice?: (lead: CRMLead) => void;
   onOpenCustomerDossier?: (customerName: string) => void;
 }
@@ -123,13 +124,15 @@ export function CRMLeadsTable({
                         >
                           <Edit3 size={15} />
                         </button>
-                        <button
-                          onClick={() => onDeleteLead(lead.id)}
-                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                          title="حذف"
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        {onDeleteLead && (
+                          <button
+                            onClick={() => onDeleteLead(lead.id)}
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="حذف"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -17,13 +17,13 @@ interface CRMLeadModalProps {
   setLeadForm: React.Dispatch<React.SetStateAction<any>>;
   isSavingLead: boolean;
   onSaveLead: (e: React.FormEvent) => void;
-  onDeleteLead: (leadId: number) => void;
+  /** v9.0.143 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
+  onDeleteLead?: (leadId: number) => void;
   customersList: any[];
   // V10-4.1: منبع فروشنده مسئول = پرسنل فعال
   personnelList: any[];
   currentPersonnelId: number | null;
   currentLoggedInUser: string;
-  isAdminOrManager: boolean;
 }
 
 export function CRMLeadModal({
@@ -38,8 +38,7 @@ export function CRMLeadModal({
   customersList,
   personnelList,
   currentPersonnelId,
-  currentLoggedInUser,
-  isAdminOrManager
+  currentLoggedInUser
 }: CRMLeadModalProps) {
   if (!isLeadModalOpen) return null;
 
@@ -340,7 +339,7 @@ export function CRMLeadModal({
         </div>
 
         <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
-            {editingLead && isAdminOrManager ? (
+            {editingLead && onDeleteLead ? (
               <button
                 type="button"
                 onClick={() => {

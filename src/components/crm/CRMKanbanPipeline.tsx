@@ -8,7 +8,8 @@ interface CRMKanbanPipelineProps {
   onOpenLeadDrawer: (lead: CRMLead) => void;
   onOpenActivityModal: (lead: CRMLead) => void;
   onOpenLeadModal: (lead?: CRMLead) => void;
-  onDeleteLead: (leadId: number) => void;
+  /** v9.0.143 (TD-893): فقط برای دارنده `crm.delete`؛ بی آن دکمه حذف نیست */
+  onDeleteLead?: (leadId: number) => void;
   onStageChange: (leadId: number, newStage: string) => void;
   onConvertToInvoice?: (lead: CRMLead) => void;
 }
@@ -141,13 +142,15 @@ export function CRMKanbanPipeline({
                         >
                           <Edit3 size={13} />
                         </button>
-                        <button
-                          onClick={() => onDeleteLead(lead.id)}
-                          className="p-1 text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
-                          title="حذف"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {onDeleteLead && (
+                          <button
+                            onClick={() => onDeleteLead(lead.id)}
+                            className="p-1 text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                            title="حذف"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
