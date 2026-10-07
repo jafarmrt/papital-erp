@@ -7,7 +7,7 @@ import { PayrollPaymentService } from '../../services/accounting/payrollPayment.
 import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
 import { PieceworkPayrollService } from '../../services/piecework/payroll.service.js';
 import { checkPayrollInvariants } from './payrollInvariants.js';
-import { addLog, fundedBank, newTask, newWorker, payrollCount, refusalOf } from './payrollScenarios.js';
+import { addLog, fundedBank, newTask, newWorker, payrollCount, personNet, refusalOf } from './payrollScenarios.js';
 import { watermarks } from './scenarioHelpers.js';
 
 /** Package 12 payroll (series 9) strict checks for the business_invariants suite: [id, name, check, success text] */
@@ -76,7 +76,34 @@ export async function checkPayrollNetEqualsVoucher(): Promise<string[]> {
   return problems;
 }
 
+/**
+ * v9.0.232 (TD-807, B12P-04): the outstanding advance comes only from the advance ledger account (mapped 1301); a
+ * personnel without such rows has none. A settlement payment used to count as an advance, so an advance deduction of the
+ * same amount passed the TD-282 guard and turned 1301 negative.
+ */
+export async function checkAdvanceBalanceFromLedgerOnly(): Promise<string[]> {
+  const problems: string[] = [];
+  const worker = await newWorker('TD-807 worker');
+  await addLog(worker, await newTask(), '2026-04-07', 3000000);
+  const [{ fullName }] = await orm.select({ fullName: personnel.fullName }).from(personnel).where(eq(personnel.id, worker));
+  await TreasuryTransactionService.createTreasuryTransaction({
+    type: 'payment', method: 'bank_transfer', amount: 2000000, bankAccountId: await fundedBank(), partyType: 'personnel', partyId: worker, partyName: fullName,
+    purpose: 'settlement', date: '2026-04-03', username: 'inv',
+  });
+  const balance = await PayrollPaymentService.getPersonnelAdvanceBalance(worker);
+  if (balance.outstandingAdvance !== 0 || balance.totalAdvances !== 0) problems.push(`advance balance after a settlement payment: ${balance.outstandingAdvance} (total ${balance.totalAdvances}), expected 0`);
+  const issued = await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD, advanceDeduction: 2000000 });
+  if (issued.payroll) problems.push(`an advance deduction of 2,000,000 was accepted without any advance (net ${issued.payroll.netPayable})`);
+  else if (!String(issued.error ?? '').includes('مساعده')) problems.push(`the refusal does not name the advance: ${issued.error}`);
+  const ledger = await personNet('1301', worker);
+  if (!fin(ledger).isZero()) problems.push(`the advance account of the worker is ${ledger}, expected 0`);
+  if (await payrollCount(worker) !== 0) problems.push('a payslip was written for the refused advance deduction');
+  return problems;
+}
+
 export const PAYROLL_INTEGRITY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
   ['inv_td_804_payroll_net_equals_voucher', 'v9.0.231: a payslip voucher credits wages payable with exactly the net (I10); negative bonuses, deductions or advance deductions are refused and a payslip without a voucher is not paid (TD-804)',
     () => checkPayrollNetEqualsVoucher(), 'net 700,000 matched the voucher; three negative parts refused; I10 flagged both legacy payslips; the unvouchered one was paid after its voucher was issued'],
+  ['inv_td_807_advance_balance_from_ledger_only', 'v9.0.232: the outstanding advance is read only from the advance ledger account; a settlement payment is no advance and an advance deduction against it is refused (TD-807)',
+    () => checkAdvanceBalanceFromLedgerOnly(), 'balance 0 after a settlement payment of 2,000,000; the advance deduction refused; 1301 stayed 0'],
 ];

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.232 — Advance Balance From the Ledger
+- **Advance Balance From the Ledger (TD-807):** a personnel's outstanding advance is read only from its rows on the advance account (1301); treasury payments such as a salary settlement no longer count as an advance, so an advance deduction without a recorded advance is refused.
+
 ### v9.0.231 — Payslip Integrity
 - **Payslip Integrity (TD-804):** negative bonuses, deductions and advance deductions are refused, a payslip voucher always credits wages payable with the net (invariant I10), a payslip without a voucher is not paid, and older mismatched payslips are listed by the financial health check.
 
