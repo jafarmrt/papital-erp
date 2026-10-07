@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.269 — Only Approved Payslips Are Paid
+- **Only Approved Payslips Are Paid (TD-816):** a draft payslip is refused at payment and the screens offer approval instead, and the payment date, method and reference are written only by the payment, never by the status route.
+
+### v9.0.268 — Fixed Salary Up to the End of Service
+- **Fixed Salary Up to the End of Service (TD-808):** a terminated personnel earns fixed salary only up to its end date (pro rata by days) and nothing after it, a terminated personnel without an end date gets no fixed-salary payslip, and a payslip whose period ends after today is refused.
+
+### v9.0.267 — Advance Balance From the Ledger
+- **Advance Balance From the Ledger (TD-807):** a personnel's outstanding advance is read only from its rows on the advance account (1301); treasury payments such as a salary settlement no longer count as an advance, so an advance deduction without a recorded advance is refused.
+
+### v9.0.266 — Payslip Integrity
+- **Payslip Integrity (TD-804):** negative bonuses, deductions and advance deductions are refused, a payslip voucher always credits wages payable with the net (invariant I10), a payslip without a voucher is not paid, and older mismatched payslips are listed by the financial health check.
+
+### v9.0.265 — Package 12 Payroll Audit Documentation
+- **Package 12 Payroll Audit:** section 10 of the V9 stability audit records the payroll part of package 12: 13 proven findings (one P1: negative deductions and bonuses make the payslip disagree with its voucher, and a payslip without a voucher can be paid) opened as TD-804..TD-816, with the product-owner decisions. Documentation only.
+
 ### v9.0.264 — بسته ۱۳ د: «اشاره» و «اعلان» در رابط گزارش کار
 - «منشن» و «نوتیفیکیشن» در رابط گزارش کار جای خود را به «اشاره» و «اعلان» دادند (TD-646، تصمیم ت۶).
 
