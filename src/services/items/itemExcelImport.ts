@@ -1,5 +1,5 @@
 import { asc, eq } from 'drizzle-orm';
-import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { orm, extendStatementTimeout, type DbExecutor } from '../../db/drizzle.js';
 import { items, warehouses } from '../../db/schema.js';
 import { advanceItemCodeCounter } from './itemCodeCounter.js';
 import { guardItemIdentity } from './itemIdentity.js';
@@ -52,7 +52,7 @@ interface ImportState {
   errors: ItemImportRowError[];
   /** v8.0.3 (TD-262): ردیف‌های کاردکس اصلاح موجودی کالاهای موجود، برای یک سند «کسری و اضافات انبار» */
   adjustmentTransactionIds: number[];
-  /** v9.0.179 (TD-663، ت۱۰ بند ۳): کالاهای تازه با موجودی اولیه، برای یک سند افتتاحیه کل فایل */
+  /** v9.0.199 (TD-663، ت۱۰ بند ۳): کالاهای تازه با موجودی اولیه، برای یک سند افتتاحیه کل فایل */
   openingItemIds: number[];
 }
 
@@ -65,7 +65,7 @@ interface ImportContext {
   actor: ItemImportActor;
   perms: ItemImportPermissions;
   state: ImportState;
-  /** v9.0.179 (TD-663): کالاهای کد و نام‌های فایل، یک‌بار خوانده و قفل‌شده */
+  /** v9.0.199 (TD-663): کالاهای کد و نام‌های فایل، یک‌بار خوانده و قفل‌شده */
   index: ImportItemIndex;
 }
 
@@ -259,7 +259,7 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
   for (const change of opening) {
     await applyStockChange(tx, movement, change, { in: 'موجودی اولیه از فایل اکسل', out: '' });
   }
-  // v8.0.3 (TD-262): کالای تازه با موجودی سند افتتاحیه می‌گیرد (ردیف‌های افتتاحیه کاردکس / سرمایه اولیه). v9.0.179
+  // v8.0.3 (TD-262): کالای تازه با موجودی سند افتتاحیه می‌گیرد (ردیف‌های افتتاحیه کاردکس / سرمایه اولیه). v9.0.199
   // (TD-663، ت۱۰ بند ۳): یک سند برای همه کالاهای تازه فایل، پس از آخرین ردیف؛ ردیف بعدی همین فایل برای همین کد کالای
   // موجود است و اختلافش به سند اصلاح موجودی می‌رود، و ارزش سند فقط ردیف‌های افتتاحیه کاردکس را می‌شمارد
   if (opening.length > 0) state.openingItemIds.push(targetItemId);
@@ -284,6 +284,8 @@ export async function importItemsFromExcel(
   const state: ImportState = { createdCount: 0, updatedCount: 0, pricesCount: 0, errors: [], adjustmentTransactionIds: [], openingItemIds: [] };
 
   await orm.transaction(async (tx) => {
+    // v9.0.188 (TD-615): a large import may take longer than the 1-minute statement limit of a request
+    await extendStatementTimeout(tx);
     const keys = rows.map(rowCodeAndName);
     const index = await ImportItemIndex.load(tx, keys.map(k => String(k.rawCode || '').trim()), keys.map(k => String(k.rawName || '').trim()));
     const ctx: ImportContext = { tx, whs, defaultWhCode, strategies, typeFilter, actor, perms, state, index };

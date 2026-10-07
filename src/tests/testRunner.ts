@@ -138,7 +138,7 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
 
 const RUNNER_ALLOWED_ENVS = ['test', 'development'];
 
-function assertRunnerEnvironment(): void {
+export function assertRunnerEnvironment(): void {
   const env = process.env.NODE_ENV || 'development';
   if (!RUNNER_ALLOWED_ENVS.includes(env)) {
     throw new Error(`Test runner can only run in test/development environment. Current: ${env}`);

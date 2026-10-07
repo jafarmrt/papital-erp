@@ -314,7 +314,7 @@
 | POST | `/api/projects/:id/stages` | projects.edit |
 | DELETE | `/api/projects/:id/stages/:stageId` | projects.edit |
 | PUT | `/api/projects/:id/stages/:stageId` | projects.edit |
-| GET | `/api/projects/options` | projects.view \| documents.view \| documents.create \| warehouse.view \| warehouse.in \| warehouse.out \| piecework.view \| piecework.log \| daily_logs.view \| daily_logs.create |
+| GET | `/api/projects/options` | projects.view \| documents.view \| documents.create \| warehouse.view \| warehouse.in \| warehouse.out \| piecework.view \| piecework.log \| daily_logs.view \| daily_logs.create \| accounting.vouchers |
 | GET | `/api/public-settings` | public |
 | GET | `/api/roles` | users.manage \| roles.manage \| personnel.manage \| workflow.manage \| settings.manage |
 | POST | `/api/roles` | roles.manage |
@@ -342,6 +342,7 @@
 | POST | `/api/users` | users.manage |
 | DELETE | `/api/users/:id` | users.manage |
 | PUT | `/api/users/:id` | users.manage |
+| POST | `/api/users/:id/restore` | users.manage |
 | GET | `/api/users/list-simple` | login-only |
 | GET | `/api/users/my-permissions` | login-only |
 | GET | `/api/users/profile` | login-only |

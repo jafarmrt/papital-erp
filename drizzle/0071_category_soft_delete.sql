@@ -1,4 +1,4 @@
--- Drizzle Migration 0071: categories are soft-deleted (v9.0.177 / TD-659, product-owner decision t8 option a)
+-- Drizzle Migration 0071: categories are soft-deleted (v9.0.197 / TD-659, product-owner decision t8 option a)
 --
 -- DELETE /categories/:id used to remove the row physically, so a deleted category left no trace. A category is now
 -- deleted by setting is_deleted = 1; reads list only is_deleted = 0 and the boot seed still sees the table as not empty.

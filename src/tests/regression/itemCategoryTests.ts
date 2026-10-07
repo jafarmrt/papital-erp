@@ -15,10 +15,10 @@ export async function runItemCategoryTests(shouldRun: ShouldRun): Promise<TestCa
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (ctx: Ctx) => Promise<string>]> = [
     ['reg_category_soft_delete_and_audit_td_659',
-      'v9.0.177: a category is soft-deleted and every create, edit, delete and default reset writes an audit row (TD-659)',
+      'v9.0.197: a category is soft-deleted and every create, edit, delete and default reset writes an audit row (TD-659)',
       ['td659', 'category', 'audit', 'package5'], softDeleteAuditCase],
     ['reg_category_rename_keeps_items_td_658',
-      'v9.0.178: a live category name is unique (concurrent requests too), a rename moves its items and a type change with items is refused (TD-658)',
+      'v9.0.198: a live category name is unique (concurrent requests too), a rename moves its items and a type change with items is refused (TD-658)',
       ['td658', 'category', 'rename', 'package5'], renameKeepsItemsCase],
   ];
   for (const [id, name, tags, run] of cases) {

@@ -27,7 +27,7 @@ export interface Account {
   children?: Account[];
 }
 
-export type VoucherType = 'general' | 'opening' | 'closing' | 'sales' | 'purchase' | 'treasury' | 'payroll' | 'adjustment';
+export type VoucherType = 'general' | 'opening' | 'closing' | 'sales' | 'purchase' | 'treasury' | 'payroll' | 'adjustment' | 'settlement';
 
 export interface FinancialAttachment {
   id: string;

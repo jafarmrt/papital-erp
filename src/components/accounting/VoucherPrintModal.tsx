@@ -1,6 +1,8 @@
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, financialAmountToPersianWords } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, financialAmountToPersianWords, formatCurrencyLabel } from '../../utils';
 import { PrintModal } from '../common/PrintModal';
 import type { JournalVoucher } from '../../types';
+import { voucherTypeLabel } from '../../lib/accounting/voucherTypes';
+import { voucherPrintAmounts, type VoucherPrintRowAmounts } from '../../lib/accounting/voucherPrintAmounts';
 
 interface VoucherPrintModalProps {
   voucher: JournalVoucher | null;
@@ -9,17 +11,6 @@ interface VoucherPrintModalProps {
   companyName?: string;
   companyLogo?: string;
 }
-
-const voucherTypeMap: Record<string, string> = {
-  general: 'عمومی',
-  sales: 'فروش و درآمد',
-  purchase: 'خرید و موجودی',
-  treasury: 'دریافت و پرداخت',
-  payroll: 'حقوق و دستمزد',
-  opening: 'افتتاحیه',
-  closing: 'اختتامیه (بستن سال)',
-  adjustment: 'اصلاحی / معکوس',
-};
 
 export function VoucherPrintModal({
   voucher,
@@ -30,8 +21,13 @@ export function VoucherPrintModal({
 }: VoucherPrintModalProps) {
   if (!isOpen || !voucher) return null;
 
-  const totalDebit = (voucher.items || []).reduce((sum, item) => sum + Number(item.debit || 0), 0);
-  const totalCredit = (voucher.items || []).reduce((sum, item) => sum + Number(item.credit || 0), 0);
+  // v9.0.195 (TD-573): ستون‌ها، جمع‌ها و مبلغ به حروف در ارز سند تک‌ارز، و سند چندارزی به ریال با مبلغ ارزی هر ردیف
+  const amounts = voucherPrintAmounts(voucher.items, voucher.currency);
+  const { totalDebit, totalCredit } = amounts;
+  const currencyLabel = formatCurrencyLabel(amounts.currency);
+  const decimals = amounts.currency === 'IRR' ? 0 : 2;
+  const money = (value: number) => formatPersianPrice(value, undefined, decimals);
+  const typeLabel = voucherTypeLabel(voucher.voucherType);
 
   return (
     <PrintModal
@@ -39,7 +35,7 @@ export function VoucherPrintModal({
       isOpen={isOpen}
       onClose={onClose}
       title={`پیش‌نمایش چاپی سند حسابداری #${formatPersianNumber(voucher.voucherNumber)}`}
-      subtitle={`نوع سند: ${voucherTypeMap[voucher.voucherType] || 'عمومی'}`}
+      subtitle={`نوع سند: ${typeLabel}`}
       printButtonText="چاپ سند حسابداری"
       size="3xl"
       showSignatures={false}
@@ -59,7 +55,13 @@ export function VoucherPrintModal({
             <div className="w-2/4 text-center">
               <h1 className="text-lg font-black tracking-tight">{companyName}</h1>
               <h2 className="text-base font-bold mt-1 text-slate-700">سند حسابداری (دوبل)</h2>
-              <div className="text-[11px] text-slate-500 mt-0.5">نوع سند: {voucherTypeMap[voucher.voucherType] || 'عمومی'}</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">نوع سند: {typeLabel}</div>
+              {amounts.rate !== null && (
+                <div className="text-[11px] text-slate-500 mt-0.5">ارز سند: {currencyLabel}، نرخ هر {currencyLabel} {formatPersianPrice(amounts.rate)} ریال</div>
+              )}
+              {amounts.inRial && (
+                <div className="text-[11px] text-slate-500 mt-0.5">سند چندارزی؛ مبلغ‌ها به ریال با نرخ هر ردیف</div>
+              )}
             </div>
 
             <div className="w-1/4 text-left font-mono text-xs space-y-1 text-slate-700">
@@ -86,8 +88,8 @@ export function VoucherPrintModal({
                 <th className="border border-slate-300 p-2 text-center w-12">ردیف</th>
                 <th className="border border-slate-300 p-2 w-32">کد معین/تفصیلی</th>
                 <th className="border border-slate-300 p-2">عنوان حساب / شرح آرتیکل</th>
-                <th className="border border-slate-300 p-2 text-left w-36">بدهکار (ریال)</th>
-                <th className="border border-slate-300 p-2 text-left w-36">بستانکار (ریال)</th>
+                <th className="border border-slate-300 p-2 text-left w-36">بدهکار ({currencyLabel})</th>
+                <th className="border border-slate-300 p-2 text-left w-36">بستانکار ({currencyLabel})</th>
               </tr>
             </thead>
             <tbody>
@@ -103,12 +105,8 @@ export function VoucherPrintModal({
                     {item.detailedName && <div className="text-[11px] text-indigo-700">{item.detailedName}</div>}
                     <div className="text-[11px] text-slate-500 mt-0.5">{item.description}</div>
                   </td>
-                  <td className="border border-slate-300 p-2 text-left font-mono font-medium">
-                    {Number(item.debit) > 0 ? formatPersianPrice(Number(item.debit)) : '-'}
-                  </td>
-                  <td className="border border-slate-300 p-2 text-left font-mono font-medium">
-                    {Number(item.credit) > 0 ? formatPersianPrice(Number(item.credit)) : '-'}
-                  </td>
+                  <VoucherPrintAmountCell row={amounts.rows[idx]} side="debit" money={money} />
+                  <VoucherPrintAmountCell row={amounts.rows[idx]} side="credit" money={money} />
                 </tr>
               ))}
             </tbody>
@@ -118,10 +116,10 @@ export function VoucherPrintModal({
                   جمع کل سند
                 </td>
                 <td className="border border-slate-300 p-2 text-left font-mono text-sm text-indigo-900 font-black">
-                  {formatPersianPrice(totalDebit)}
+                  {money(totalDebit)}
                 </td>
                 <td className="border border-slate-300 p-2 text-left font-mono text-sm text-indigo-900 font-black">
-                  {formatPersianPrice(totalCredit)}
+                  {money(totalCredit)}
                 </td>
               </tr>
               {totalDebit > 0 && (
@@ -129,8 +127,15 @@ export function VoucherPrintModal({
                   <td colSpan={5} className="border border-slate-300 p-2 text-right text-xs">
                     <span className="font-bold text-slate-700">مبلغ سند به حروف: </span>
                     <span className="font-bold text-indigo-900">
-                      {financialAmountToPersianWords(totalDebit, voucher.currency || 'IRR').fullDescription}
+                      {financialAmountToPersianWords(totalDebit, amounts.currency).fullDescription}
                     </span>
+                  </td>
+                </tr>
+              )}
+              {amounts.rowsWithoutRate.length > 0 && (
+                <tr>
+                  <td colSpan={5} className="border border-slate-300 p-2 text-right text-xs font-bold text-rose-700">
+                    ردیف {amounts.rowsWithoutRate.map(n => formatPersianNumber(n)).join('، ')} نرخ تبدیل ندارد و در جمع ریالی نیامده است.
                   </td>
                 </tr>
               )}
@@ -159,5 +164,26 @@ export function VoucherPrintModal({
         </div>
       </div>
     </PrintModal>
+  );
+}
+
+function VoucherPrintAmountCell({ row, side, money }: {
+  row: VoucherPrintRowAmounts | undefined;
+  side: 'debit' | 'credit';
+  money: (value: number) => string;
+}) {
+  const value = row?.[side] ?? 0;
+  const original = row?.original;
+  const originalValue = original ? original[side] : 0;
+  return (
+    <td className="border border-slate-300 p-2 text-left font-mono font-medium">
+      {value > 0 || originalValue > 0 ? (original && original.rate === null ? '؟' : money(value)) : '-'}
+      {original && originalValue > 0 && (
+        <div className="text-[10px] text-slate-500 font-normal">
+          {formatPersianPrice(originalValue, original.currency)}
+          {original.rate !== null ? ` به نرخ ${formatPersianPrice(original.rate)}` : '، بی نرخ'}
+        </div>
+      )}
+    </td>
   );
 }

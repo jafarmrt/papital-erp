@@ -15,7 +15,7 @@ type ShouldRun = (id: string, ...extra: string[]) => boolean;
 export async function runItemPerformanceTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const id = 'perf_item_list_and_excel_opening_td_663';
   if (!shouldRun(id, 'td663', 'performance', 'items', 'excel', 'package5')) return [];
-  const name = 'v9.0.179: the item list reads reservations of its own page only, and an Excel import reads its items once and issues one opening voucher for all its new items (TD-663)';
+  const name = 'v9.0.199: the item list reads reservations of its own page only, and an Excel import reads its items once and issues one opening voucher for all its new items (TD-663)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   const documentIds: number[] = [];
@@ -93,7 +93,7 @@ async function listAndImportCase(itemIds: number[], documentIds: number[]): Prom
   const large = await importRows(codes);
   const created = large.created;
   const perRow = (large.statements - small.statements) / 4;
-  // v9.0.178 ran about 38 statements for each new item row with stock and a price (the code, case and name lookups and a
+  // v9.0.198 ran about 38 statements for each new item row with stock and a price (the code, case and name lookups and a
   // voucher for each item among them)
   if (perRow > 25) wrong.push(`each extra import row ran ${perRow.toFixed(1)} SQL statements (2 rows ${small.statements}, 6 rows ${large.statements}), at most 25 expected`);
 

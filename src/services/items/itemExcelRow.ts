@@ -227,7 +227,7 @@ export function readRowPrices(row: Row, strategies: string[], push: (message: st
 /** قیمت‌هایی از ردیف که با قیمت فعال فعلی فرق دارند (TD-662: قیمت بی‌تغییر دوباره نوشته نمی‌شود) */
 export async function changedRowPrices(tx: DbExecutor, itemId: number, prices: Map<string, RowPrice>, isNewItem = false) {
   if (prices.size === 0) return [];
-  // v9.0.179 (TD-663): کالایی که همین ردیف ساخته قیمتی ندارد؛ خواندنش لازم نیست
+  // v9.0.199 (TD-663): کالایی که همین ردیف ساخته قیمتی ندارد؛ خواندنش لازم نیست
   const existingList = isNewItem ? [] : await tx.select().from(itemPrices)
     .where(and(eq(itemPrices.itemId, itemId), eq(itemPrices.isDeleted, 0)))
     .for('update');

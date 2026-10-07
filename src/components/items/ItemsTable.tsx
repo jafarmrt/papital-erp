@@ -13,7 +13,7 @@ interface ItemsTableProps {
   requestSort: (key: string) => void;
   loading: boolean;
   onViewImage: (url: string) => void;
-  /** v9.0.182 (O14): هر کار فقط وقتی داده می‌شود که کاربر مجوز همان مسیر سرور را دارد (ویرایش، حذف، همگام‌سازی) */
+  /** v9.0.202 (O14): هر کار فقط وقتی داده می‌شود که کاربر مجوز همان مسیر سرور را دارد (ویرایش، حذف، همگام‌سازی) */
   onEditItem?: (item: Item) => void;
   onArchiveItem?: (itemId: number) => void;
   onSyncItem?: (itemId: number) => void;

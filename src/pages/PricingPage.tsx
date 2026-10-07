@@ -28,7 +28,7 @@ import { ITEM_WAC_COLUMN, priceExportCells } from '../lib/items/excelPriceColumn
 import { priceMarginPercent } from '../lib/items/priceMargin';
 
 export default function PricingPage() {
-  // v9.0.182 (O14): ورود سریع، فیلدهای قیمت و ذخیره فقط با مجوز مسیرهای ذخیره قیمت سرور، نه نقش «viewer»
+  // v9.0.202 (O14): ورود سریع، فیلدهای قیمت و ذخیره فقط با مجوز مسیرهای ذخیره قیمت سرور، نه نقش «viewer»
   const canEditPrices = useHasPermission('products.edit_price');
   const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
   const [tab, setTab] = useState<'product'|'raw_material'>('product');
@@ -295,7 +295,7 @@ export default function PricingPage() {
           [ITEM_WAC_COLUMN]: item.weighted_average_cost || 0,
         };
 
-        // v9.0.180 (O12): ارز هر فهرست در ستون خودش؛ ورود سریع همان ستون را می‌خواند
+        // v9.0.200 (O12): ارز هر فهرست در ستون خودش؛ ورود سریع همان ستون را می‌خواند
         Object.assign(row, priceExportCells(strategies.map(st => formatStrategyDisplayTitle(st)), title => getFieldValue(item.id, title)));
         return row;
       });

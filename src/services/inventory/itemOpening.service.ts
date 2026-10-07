@@ -13,7 +13,7 @@ import { money } from '../../lib/money.js';
 const ACCOUNTS_MISSING_MESSAGE = 'حساب «موجودی» یا «سرمایه اولیه» در چارت یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید';
 
 /**
- * v9.0.179 (TD-663): کالاهایی از این فهرست که سند افتتاحیه فعال دارند. سند یک کالا و سند یک ورود اکسل هر دو در
+ * v9.0.199 (TD-663): کالاهایی از این فهرست که سند افتتاحیه فعال دارند. سند یک کالا و سند یک ورود اکسل هر دو در
  * `item_opening_voucher_items` (مهاجرت 0073) ثبت می‌شوند؛ سندهای پیشین با `reference_id` در مهاجرت پر شدند.
  */
 export async function itemIdsWithOpeningVoucher(executor: DbExecutor, itemIds: number[]): Promise<Set<number>> {
@@ -47,7 +47,7 @@ export class ItemOpeningService {
     const [item] = await executor.select().from(items).where(eq(items.id, itemId));
     if (!item || item.isDeleted === 1) return null;
 
-    // idempotency: سند فعال این کالا، سند خودش یا سند ورود اکسل (v9.0.179، TD-663)
+    // idempotency: سند فعال این کالا، سند خودش یا سند ورود اکسل (v9.0.199، TD-663)
     const existingId = await liveOpeningVoucherId(executor, itemId);
     if (existingId) return VoucherService.getJournalVoucherById(existingId, params.tx);
 
@@ -107,7 +107,7 @@ export class ItemOpeningService {
   }
 
   /**
-   * v9.0.179 (TD-663، B05-17، تصمیم ت۱۰ بند ۳): یک سند افتتاحیه برای همه کالاهای تازه یک ورود اکسل، با یک ردیف بدهکار
+   * v9.0.199 (TD-663، B05-17، تصمیم ت۱۰ بند ۳): یک سند افتتاحیه برای همه کالاهای تازه یک ورود اکسل، با یک ردیف بدهکار
    * برای هر کالا (به ارزش ردیف‌های افتتاحیه کاردکس همان کالا) و یک ردیف بستانکار سرمایه اولیه. پیش‌تر هر کالای تازه سند
    * جدا می‌گرفت و فایل ۱٬۰۰۰ ردیفی ۹۹۹ سند می‌ساخت که حسابدار یکی‌یکی تأیید می‌کرد. کالایی که سند فعال دارد یا ردیف
    * افتتاحیه با بها ندارد کنار می‌ماند؛ بی هیچ کالای با ارزش، سندی صادر نمی‌شود.

@@ -8,7 +8,6 @@ import {
 } from './items/itemStockReservation.service.js';
 import { ItemPricingService, type PriceItemRecord } from './items/itemPricing.service.js';
 import { ItemCatalogService } from './items/itemCatalog.service.js';
-import { withLongQueryTimeout } from '../db/drizzle.js';
 import type { ItemImportPermissions } from '../lib/items/itemImportPermissions.js';
 import type { ItemImportActor } from './items/itemExcelImport.js';
 
@@ -51,8 +50,6 @@ export class ItemsService {
     req: { user?: ItemImportActor },
     permissions: ItemImportPermissions,
   ) {
-    return withLongQueryTimeout(async () => {
-      return ItemCatalogService.processUnifiedImport(rows, typeFilter, req, permissions);
-    });
+    return ItemCatalogService.processUnifiedImport(rows, typeFilter, req, permissions);
   }
 }

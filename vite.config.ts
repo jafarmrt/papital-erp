@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
+import { copyPublicAssets } from './scripts/publicAssets';
 
 export default defineConfig(({ mode }) => {
   const isProd = mode === 'production' || process.env.NODE_ENV === 'production';
@@ -10,6 +11,14 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      // v9.0.180 (TD-588): public/ is copied without public/uploads (attachments and uploaded images stay where the app serves them)
+      {
+        name: 'copy-public-assets',
+        apply: 'build',
+        closeBundle() {
+          copyPublicAssets(path.resolve(__dirname, 'public'), path.resolve(__dirname, 'dist'));
+        },
+      },
       // v4.0.30: آنالیز ترکیب باندل فقط با VISUALIZE=1 → خروجی dist/bundle-stats.html
       ...(process.env.VISUALIZE === '1' ? [visualizer({ filename: 'dist/bundle-stats.html', gzipSize: true, brotliSize: true })] : []),
     ],
@@ -44,6 +53,8 @@ export default defineConfig(({ mode }) => {
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
     build: {
+      // v9.0.180 (TD-588): the copy-public-assets plugin above copies public/ instead (without uploads)
+      copyPublicDir: false,
       rollupOptions: {
         output: {
           manualChunks(id) {

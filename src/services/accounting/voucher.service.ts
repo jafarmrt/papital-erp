@@ -13,6 +13,7 @@ import { NotFoundError, ValidationError, UnbalancedVoucherError, BusinessLogicEr
 import { FiscalPeriodService } from './fiscalPeriod.service.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { assertVoucherRowsBalanced, isVoucherBalancedForFinalize, resolveManualVoucherRows } from './voucherRowBalance.js';
 
 // v7.0.49 (audit P2-5): ثابت یگانه تلورانس تراز؛ v7.0.76 به src/lib/voucherBalance.ts منتقل شد تا فرم‌ها هم آن را بخوانند
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
@@ -268,6 +269,8 @@ export class VoucherService {
     attachments?: unknown[];
     userId?: number;
     username?: string;
+    /** v9.0.190 (TD-551، ت۷): سند دستی از مسیر اسناد؛ فقط مسیر آن را می‌گذارد، هرگز از بدنه درخواست */
+    manualEntry?: boolean;
     items: {
       accountId: number;
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
@@ -284,23 +287,11 @@ export class VoucherService {
       throw new ValidationError('سند دوبل حسابداری باید حداقل شامل دو ردیف (بدهکار و بستانکار) باشد');
     }
 
-    let sumDebit = fin(0);
-    let sumCredit = fin(0);
-
-    for (const item of data.items) {
-      const d = fin(item.debit);
-      const c = fin(item.credit);
-      if (d.isNegative() || c.isNegative()) throw new ValidationError('مبالغ بدهکار و بستانکار نمی‌توانند منفی باشند');
-      if (d.isZero() && c.isZero()) throw new ValidationError('هر ردیف سند باید دارای مبلغ بدهکار یا بستانکار باشد');
-      sumDebit = sumDebit.add(d);
-      sumCredit = sumCredit.add(c);
-    }
-
-    // Verify double-entry balance — v7.0.49 (audit P2-5): آستانه واحد VOUCHER_BALANCE_TOLERANCE در ثبت و قطعی‌سازی
-    const diff = sumDebit.subtract(sumCredit).abs();
-    if (diff.greaterThan(VOUCHER_BALANCE_TOLERANCE)) {
-      throw new UnbalancedVoucherError(`سند تراز نیست! جمع بدهکار: ${sumDebit.toDisplayString()} و جمع بستانکار: ${sumCredit.toDisplayString()} می‌باشد (اختلاف: ${diff.toDisplayString()})`);
-    }
+    // Verify double-entry balance — v7.0.49 (audit P2-5): آستانه واحد VOUCHER_BALANCE_TOLERANCE در ثبت و قطعی‌سازی؛
+    // v9.0.190 (TD-551، ت۷): سند چندارزی به ریال و سند دستی با ارز و نرخ قطعی هر ردیف
+    const manualRows = data.manualEntry ? resolveManualVoucherRows(data.items, data.currency) : null;
+    const items = manualRows?.rows ?? data.items;
+    const { sumDebit, sumCredit } = manualRows?.totals ?? assertVoucherRowsBalanced(data.items, data.currency);
 
     const executeWork = async (tx: DbExecutor) => {
       // v7.0.137 (TD-248): تاریخ سند میلادی ISO؛ ورودی شمسی یا ارقام فارسی تبدیل و نامعتبر 422 (پیش‌تر خام ذخیره می‌شد)
@@ -342,7 +333,7 @@ export class VoucherService {
       updateRequestContext({ entityId: `voucher:${voucherNum}`, transactionId: `vch_num_${voucherNum}` });
 
       // Insert items
-      await insertVoucherItems(tx, data.items.map((item, idx) => ({
+      await insertVoucherItems(tx, items.map((item, idx) => ({
         voucherId: voucher.id,
         accountId: item.accountId,
         rowOrder: idx + 1,
@@ -371,6 +362,8 @@ export class VoucherService {
     description?: string;
     status?: 'draft' | 'approved' | 'permanent';
     attachments?: unknown[];
+    /** v9.0.190 (TD-551، ت۷): ویرایش سند دستی از مسیر اسناد؛ فقط مسیر آن را می‌گذارد */
+    manualEntry?: boolean;
     items?: {
       accountId: number;
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
@@ -406,25 +399,15 @@ export class VoucherService {
       let sumCredit = fin(existing.totalCredit);
 
       if (data.items && data.items.length >= 2) {
-        sumDebit = fin(0);
-        sumCredit = fin(0);
-        for (const item of data.items) {
-          const d = fin(item.debit);
-          const c = fin(item.credit);
-          if (d.isNegative() || c.isNegative()) throw new ValidationError('مبالغ بدهکار و بستانکار نمی‌توانند منفی باشند');
-          if (d.isZero() && c.isZero()) throw new ValidationError('هر ردیف سند باید دارای مبلغ بدهکار یا بستانکار باشد');
-          sumDebit = sumDebit.add(d);
-          sumCredit = sumCredit.add(c);
-        }
-        const diff = sumDebit.subtract(sumCredit).abs();
-        if (diff.greaterThan(VOUCHER_BALANCE_TOLERANCE)) {
-          throw new UnbalancedVoucherError(`سند تراز نیست! جمع بدهکار: ${sumDebit.toDisplayString()} و جمع بستانکار: ${sumCredit.toDisplayString()} می‌باشد (اختلاف: ${diff.toDisplayString()})`);
-        }
+        // v9.0.190 (TD-551، ت۷): ارز ردیف بی ارز، ارز ذخیره‌شده سند است (سرآیند در ویرایش عوض نمی‌شود)
+        const manualRows = data.manualEntry ? resolveManualVoucherRows(data.items, existing.currency) : null;
+        const items = manualRows?.rows ?? data.items;
+        ({ sumDebit, sumCredit } = manualRows?.totals ?? assertVoucherRowsBalanced(data.items, existing.currency));
 
         // V6.0.21 (TD-157): Soft-delete old items instead of physical hard delete (RULE 09)
         await tx.update(journalVoucherItems).set({ isDeleted: 1 }).where(and(eq(journalVoucherItems.voucherId, id), eq(journalVoucherItems.isDeleted, 0)));
 
-        await insertVoucherItems(tx, data.items.map((item, idx) => ({
+        await insertVoucherItems(tx, items.map((item, idx) => ({
           voucherId: id,
           accountId: item.accountId,
           rowOrder: idx + 1,
@@ -809,21 +792,9 @@ export class VoucherService {
         description: `برگشت ردیف ${item.rowOrder || idx + 1}: ${item.description || original.description}`,
       })));
 
-      // 2. Validate new items
-      let sumDebit = fin(0);
-      let sumCredit = fin(0);
-      for (const it of params.newItems) {
-        const d = fin(it.debit);
-        const c = fin(it.credit);
-        if (d.isNegative() || c.isNegative()) throw new Error('مبالغ بدهکار و بستانکار نمی‌توانند منفی باشند');
-        if (d.isZero() && c.isZero()) throw new Error('هر ردیف سند باید دارای مبلغ باشد');
-        sumDebit = sumDebit.add(d);
-        sumCredit = sumCredit.add(c);
-      }
-      const diff = sumDebit.subtract(sumCredit).abs();
-      if (diff.greaterThan(VOUCHER_BALANCE_TOLERANCE)) {
-        throw new Error(`سند اصلاحی تراز نیست! جمع بدهکار: ${sumDebit.toDisplayString()}، جمع بستانکار: ${sumCredit.toDisplayString()} (اختلاف: ${diff.toDisplayString()})`);
-      }
+      // 2. Validate new items — v9.0.190 (TD-551، ت۷): ردیف‌های جایگزین قاعده سند دستی را دارند (ارز بی ارز = ارز
+      // سند اصلی، نرخ ردیف غیرریالی الزامی، تراز چندارزی به ریال)؛ پیش‌تر ردیف بی ارز ریالی با نرخ ۱ ذخیره می‌شد
+      const { rows: newItems, totals: { sumDebit, sumCredit } } = resolveManualVoucherRows(params.newItems, original.currency);
 
       // 3. Create Corrected Voucher
       const corrNumber = await this.getNextVoucherNumber(tx);
@@ -846,7 +817,7 @@ export class VoucherService {
         createdByUsername: params.username || '',
       }).returning();
 
-      await insertVoucherItems(tx, params.newItems.map((item, idx) => ({
+      await insertVoucherItems(tx, newItems.map((item, idx) => ({
         voucherId: corrVoucher.id,
         accountId: item.accountId,
         rowOrder: idx + 1,
@@ -1064,7 +1035,7 @@ export class VoucherService {
 
       await this.checkFiscalPeriodOpen(existing.date, tx);
 
-      if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) > VOUCHER_BALANCE_TOLERANCE) {
+      if (!(await isVoucherBalancedForFinalize(tx, existing))) { // v9.0.190 (TD-551): سند چندارزی به ریال
         throw new UnbalancedVoucherError('امکان قطعی‌سازی سند نامتراز وجود ندارد');
       }
 
@@ -1091,7 +1062,7 @@ export class VoucherService {
         const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
         if (existing && existing.isDeleted === 0 && existing.status !== 'permanent') {
           await this.checkFiscalPeriodOpen(existing.date, tx);
-          if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) <= VOUCHER_BALANCE_TOLERANCE) {
+          if (await isVoucherBalancedForFinalize(tx, existing)) {
             await tx.update(journalVouchers).set({
               status: 'permanent',
               approvedById: userId || null,
@@ -1155,7 +1126,7 @@ export class VoucherService {
     await this.checkFiscalPeriodOpen(existing.date, tx);
 
     if (status === 'permanent') {
-      if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) > VOUCHER_BALANCE_TOLERANCE) {
+      if (!(await isVoucherBalancedForFinalize(tx, existing))) { // v9.0.190 (TD-551): سند چندارزی به ریال
         throw new UnbalancedVoucherError('امکان قطعی‌سازی سند نامتراز وجود ندارد');
       }
     }

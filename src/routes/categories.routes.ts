@@ -44,7 +44,7 @@ const formatCategory = (cat: Partial<typeof categories.$inferSelect> & Record<st
 };
 
 // v9.0.134 (TD-526، A02-19): خواندن فهرست دیگر چیزی نمی‌نویسد؛ نصب تازه دسته‌های استاندارد را در بوت می‌گیرد (seed)
-// v9.0.177 (TD-659): فقط دسته‌های حذف‌نشده؛ نوشتن‌ها در `itemCategory.service.ts` با تراکنش و ردیف ممیزی
+// v9.0.197 (TD-659): فقط دسته‌های حذف‌نشده؛ نوشتن‌ها در `itemCategory.service.ts` با تراکنش و ردیف ممیزی
 router.get('/categories', asyncHandler(async (req, res) => {
   const data = await listActiveCategories();
   res.json(data.map(formatCategory));

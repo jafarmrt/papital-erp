@@ -9,6 +9,8 @@ update-*.log
 .env.*
 !.env.example
 backups
+# v9.0.180 (TD-588): attachments and uploaded images of the development machine never go into an image
+public/uploads
 papital-erp-source-*.zip
 .git
 .github

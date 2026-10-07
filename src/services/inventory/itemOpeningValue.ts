@@ -28,7 +28,7 @@ export async function openingKardexValue(executor: DbExecutor, itemId: number): 
   return { quantity: fin(row.quantity ?? 0), value: fin(row.value ?? 0).round(4) };
 }
 
-/** v9.0.179 (TD-663): ارزش افتتاحیه چند کالا با یک پرس‌وجو (سند افتتاحیه یک ورود اکسل) */
+/** v9.0.199 (TD-663): ارزش افتتاحیه چند کالا با یک پرس‌وجو (سند افتتاحیه یک ورود اکسل) */
 export async function openingKardexValues(executor: DbExecutor, itemIds: number[]): Promise<Map<number, OpeningKardexValue>> {
   const result = new Map<number, OpeningKardexValue>();
   const ids = [...new Set(itemIds.filter(id => Number.isInteger(id) && id > 0))];
@@ -61,7 +61,7 @@ export interface OpeningVoucherMismatchRow {
  * سندهای افتتاحیه فعالی که مبلغشان با ارزش ردیف‌های افتتاحیه کاردکس کالا نمی‌خواند. سندهای صادرشده دست نمی‌خورند و فقط
  * در بررسی سلامت مالی فهرست می‌شوند (تصمیم ت۴).
  *
- * v9.0.179 (TD-663): کالای هر سند از `item_opening_voucher_items` خوانده می‌شود. مبلغ سند یک کالا جمع بدهکار ردیف‌های
+ * v9.0.199 (TD-663): کالای هر سند از `item_opening_voucher_items` خوانده می‌شود. مبلغ سند یک کالا جمع بدهکار ردیف‌های
  * زنده آن است (ویرایش دستی سند پیش‌نویس دیده می‌شود)؛ سند ورود اکسل چند کالا دارد و مبلغ هر کالا همان است که هنگام صدور
  * در ردیف پیوند ثبت شد.
  */

@@ -1,4 +1,4 @@
--- Drizzle Migration 0072: unique name among live item categories (v9.0.178 / TD-658, product-owner decision t8 option a)
+-- Drizzle Migration 0072: unique name among live item categories (v9.0.198 / TD-658, product-owner decision t8 option a)
 --
 -- Items point to their category by name (items.category), so two live categories with one name made the item's
 -- category ambiguous. The key is lower(btrim(name)), as for item and customer names; soft-deleted categories
