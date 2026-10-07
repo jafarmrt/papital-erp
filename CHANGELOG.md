@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.149 — Pool Readiness and Gauges Read the Real Pool
+- **Pool Stats:** `/health/ready` and the `db_pool_*` gauges read the pool exported by `src/db/drizzle.ts` (`dbPoolStats` in `src/middleware/metrics.ts`). drizzle-orm 0.45 exposes no `orm.pool` / `orm.client.pool`, so both always reported 0 and the «pool saturated» 503 never fired.
+
 ### v9.0.148 — API Waits for Migrations
 - **Startup Gate (owner decision t2):** the port still opens at once, but until migrations, seed and the engines finish every `/api` request except `/api/health/*` and the WooCommerce webhook answers 503 `SYSTEM_STARTING` with `Retry-After: 5` (`src/middleware/startupGate.ts`, turned on only by `server.ts`), and `/health/ready` is 503. The browser shows a waiting page (`SystemStartingOverlay`) and resends the same request (`fetchThroughStartup`). Before, a Linux update served the new code on the old schema until migrations finished.
 

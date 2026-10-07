@@ -1,6 +1,6 @@
 import promClient from 'prom-client';
 import { Request, Response, NextFunction } from 'express';
-import { orm } from '../db/drizzle.js';
+import { orm, pool } from '../db/drizzle.js';
 import { outboxEvents } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 
@@ -83,13 +83,20 @@ export const metricsMiddleware = (req: Request, res: Response, next: NextFunctio
 };
 
 // Function to update gauges
+/**
+ * v9.0.149 (TD-596): connection counts of the application pool exported by drizzle.ts. drizzle-orm 0.45 exposes
+ * the pool only as `orm.$client`; the old `orm.pool || orm.client?.pool` was always undefined, so readiness and
+ * these gauges reported 0 and the «pool saturated» branch never ran.
+ */
+export function dbPoolStats(): { total: number; idle: number; waiting: number } {
+  return { total: pool.totalCount || 0, idle: pool.idleCount || 0, waiting: pool.waitingCount || 0 };
+}
+
 export const updateDbPoolMetrics = () => {
-  const pool = (orm as any).pool || (orm as any).client?.pool;
-  if (pool) {
-    dbPoolTotal.set(pool.totalCount || 0);
-    dbPoolIdle.set(pool.idleCount || 0);
-    dbPoolWaiting.set(pool.waitingCount || 0);
-  }
+  const { total, idle, waiting } = dbPoolStats();
+  dbPoolTotal.set(total);
+  dbPoolIdle.set(idle);
+  dbPoolWaiting.set(waiting);
 };
 
 export const updateOutboxMetrics = async () => {

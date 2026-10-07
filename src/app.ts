@@ -8,7 +8,7 @@ import fs from 'fs';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 import { logger, morganMiddleware, errorHandler } from './middleware/logger.js';
-import { metricsMiddleware, updateDbPoolMetrics, updateOutboxMetrics } from './middleware/metrics.js';
+import { metricsMiddleware, updateDbPoolMetrics, updateOutboxMetrics, dbPoolStats } from './middleware/metrics.js';
 import { metricsAuthMiddleware } from './middleware/metricsAuth.js';
 import { asyncHandler } from './middleware/asyncHandler.js';
 import { buildCspDirectives } from './lib/cspDirectives.js';
@@ -259,10 +259,8 @@ export async function createApp(): Promise<express.Express> {
     try {
       await orm.execute(sql`SELECT 1`);
 
-      const pool = (orm as any).pool || (orm as any).client?.pool;
-      const total = pool?.totalCount || 0;
-      const idle = pool?.idleCount || 0;
-      const waiting = pool?.waitingCount || 0;
+      // v9.0.149 (TD-596): the real pool (drizzle.ts), not an orm property that does not exist
+      const { total, idle, waiting } = dbPoolStats();
 
       if (waiting > 5) {
         return res.status(503).json({
