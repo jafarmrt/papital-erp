@@ -5115,7 +5115,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         ['production', production, '/api/piecework/payrolls', 403],
         ['production', production, '/api/users', 403],
         // خزانه‌دار: فیش‌ها (پرداخت) و فهرست انتخاب کالا برای صفحه ورود و خروج انبار بله، قیمت‌ها نه؛ فهرست کامل کالا از
-        // v9.0.121 (TD-888، ت۱۰ الف) فقط با مجوزهای بخش کالا
+        // v9.0.138 (TD-888، ت۱۰ الف) فقط با مجوزهای بخش کالا
         ['treasurer', treasurer, '/api/piecework/payrolls', 200],
         ['treasurer', treasurer, '/api/items/options', 200],
         ['treasurer', treasurer, '/api/items', 403],
@@ -8612,7 +8612,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const userIds: number[] = [];
     try {
       const violations: string[] = [];
-      // v9.0.111 (TD-542): نقش گام باید تعریف شده باشد
+      // v9.0.128 (TD-542): نقش گام باید تعریف شده باشد
       await orm.insert(roles).values({ code: role, name: `نقش آزمون مهلت ${suffix}`, permissions: [] });
       for (const [name, userRole] of [['a', role], ['b', role], ['other', `reg_other_${suffix}`]] as const) {
         const [u] = await orm.insert(users).values({
@@ -8714,7 +8714,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     let userId: number | undefined;
     try {
       const violations: string[] = [];
-      // v9.0.111 (TD-542): نقش گام باید تعریف شده باشد
+      // v9.0.128 (TD-542): نقش گام باید تعریف شده باشد
       await orm.insert(roles).values({ code: role, name: `نقش آزمون بازگشایی ${suffix}`, permissions: [] });
       const [u] = await orm.insert(users).values({
         username: `reg_reopen_${suffix}`, password: 'x', fullName: 'کاربر آزمون بازگشایی', role,
@@ -10176,7 +10176,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       createdItemIds.push(deletedItem.id);
       const iScan = await scan();
       const [{ n: activeItems }] = (await orm.execute(sql`SELECT count(*)::int AS n FROM items WHERE is_deleted = 0`)).rows as Array<{ n: number }>;
-      const scanItems = scanNumber(iScan.body, 'inventory_kardex', /: (\d+) قلم/);
+      // v9.0.111 (TD-495): the count is written with Persian digits
+      const scanItemsText = iScan.body.checks?.find(c => c.id === 'inventory_kardex')?.details?.match(/([۰-۹]+) کالای فعال/)?.[1] ?? '';
+      const scanItems = Number(scanItemsText.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))) || -1);
       check(scanItems === Number(activeItems), `ممیزی یکپارچگی باید ${activeItems} کالای فعال گزارش کند (دریافتی ${scanItems})`);
 
       // (د) بازنشانی رویدادهای متوقف Outbox ثبت ممیزی دارد
@@ -10532,6 +10534,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 4 PR d: treasury lists, reconciliation, cheque audit and wording (TD-509, TD-511, TD-512, TD-513, TD-515)
   const { runTreasuryListTests } = await import('../regression/treasuryListTests.js');
   results.push(...await runTreasuryListTests(shouldRun));
+  // Package 3 PR a (v9.0.115 on): accounting reports and lists in the UI (TD-565 ...)
+  const { runAccountingReportsTests } = await import('../regression/accountingReportsTests.js');
+  results.push(...await runAccountingReportsTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
@@ -10565,6 +10570,17 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.96, TD-496): the warehouse chart counts items with stock, not quantities of different units
   const { runWarehouseItemCountTests } = await import('../regression/warehouseItemCountTests.js');
   results.push(...await runWarehouseItemCountTests(shouldRun));
+  // Package 6 (v9.0.110, TD-482): a warehouse code «default» is refused and reversals name a real warehouse
+  const { runWarehouseReservedCodeTests } = await import('../regression/warehouseReservedCodeTests.js');
+  results.push(...await runWarehouseReservedCodeTests(shouldRun));
+
+  // v9.0.111 (TD-495): system reconciliation scan reads the stock integrity summary
+  const { runSystemInventoryCheckTests } = await import('../regression/systemInventoryCheckTests.js');
+  results.push(...await runSystemInventoryCheckTests(shouldRun));
+
+  // v9.0.112 (TD-490): warehouse deactivation lock, last active warehouse and reactivation
+  const { runWarehouseDeactivationTests } = await import('../regression/warehouseDeactivationTests.js');
+  results.push(...await runWarehouseDeactivationTests(shouldRun));
 
   return results;
 }

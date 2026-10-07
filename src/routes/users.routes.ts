@@ -210,7 +210,7 @@ router.get('/permissions', authorizePermission(...READ_PERMISSIONS.permissionCat
 router.get('/roles', authorizePermission(...READ_PERMISSIONS.userDirectory), asyncHandler(async (req, res) => {
   try {
     const allRoles = await orm.select().from(roles).orderBy(roles.id);
-    // v9.0.119 (TD-886، قاعده ۳ مدل مجوز): «مدیر سیستم» همیشه همه مجوزها را دارد؛ فهرست آن محاسبه می‌شود، نه خوانده
+    // v9.0.136 (TD-886، قاعده ۳ مدل مجوز): «مدیر سیستم» همیشه همه مجوزها را دارد؛ فهرست آن محاسبه می‌شود، نه خوانده
     res.json(allRoles.map(r => (isSystemAdminRole(r.code) ? { ...r, permissions: [...PERMISSION_KEYS] } : r)));
   } catch (err) {
     throw err;
@@ -227,7 +227,7 @@ router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSc
     }
     // v9.0.86 (TD-880): هر مجوز با نیازهایش ذخیره می‌شود (مثلاً «ویرایش فاکتورها» با «مشاهده فاکتورها»)
     const addedByRequirement = missingRequiredPermissions(requested);
-    // v9.0.112 (TD-520، ت۳): نقش تازه فقط مجوزهایی را می‌گیرد که سازنده دارد
+    // v9.0.129 (TD-520، ت۳): نقش تازه فقط مجوزهایی را می‌گیرد که سازنده دارد
     assertGrantWithinOwn(await grantorPermissions(req.user?.role), withRequiredPermissions(requested));
 
     const slugCode = code.trim().toLowerCase().replace(/\s+/g, '_');
@@ -285,9 +285,9 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
     if (!targetRole) {
       return res.status(404).json({ error: 'نقش یافت نشد' });
     }
-    // v9.0.112 (TD-520، ت۳): نقش خود ویرایشگر ویرایش نمی‌شود
+    // v9.0.129 (TD-520، ت۳): نقش خود ویرایشگر ویرایش نمی‌شود
     assertNotOwnRole(req.user?.role, targetRole.code);
-    // v9.0.119 (TD-886، قاعده ۳ مدل مجوز): نقش ثابت «مدیر سیستم» را فقط مدیر سیستم ویرایش می‌کند، و فقط نام و توضیح آن را
+    // v9.0.136 (TD-886، قاعده ۳ مدل مجوز): نقش ثابت «مدیر سیستم» را فقط مدیر سیستم ویرایش می‌کند، و فقط نام و توضیح آن را
     if (isSystemAdminRole(targetRole.code)) {
       if (!isSystemAdminRole(req.user?.role)) {
         return res.status(403).json({ error: 'نقش «مدیر سیستم» را فقط مدیر سیستم ویرایش می‌کند', code: 'SYSTEM_ADMIN_ROLE_FIXED' });
@@ -309,7 +309,7 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
 
     const addedPermissions = newPermissions.filter(p => !prevPermissions.includes(p));
     const removedPermissions = prevPermissions.filter(p => !newPermissions.includes(p));
-    // v9.0.112 (TD-520، ت۳): افزوده‌ها فقط از مجوزهای ویرایشگر
+    // v9.0.129 (TD-520، ت۳): افزوده‌ها فقط از مجوزهای ویرایشگر
     assertGrantWithinOwn(await grantorPermissions(req.user?.role), addedPermissions);
 
     const updateData: Partial<typeof roles.$inferInsert> = {
@@ -353,7 +353,7 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
       return res.status(404).json({ error: 'نقش یافت نشد' });
     }
 
-    // v9.0.118 (TD-885، تصمیم ت۹ الف): فقط نقش ثابت «مدیر سیستم» حذف نمی‌شود؛ نقش‌های پیش‌فرض قدیمی نقش عادی‌اند
+    // v9.0.135 (TD-885، تصمیم ت۹ الف): فقط نقش ثابت «مدیر سیستم» حذف نمی‌شود؛ نقش‌های پیش‌فرض قدیمی نقش عادی‌اند
     if (isSystemAdminRole(targetRole.code)) {
       return res.status(400).json({ error: 'نقش «مدیر سیستم» حذف نمی‌شود' });
     }
@@ -364,7 +364,7 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
       return res.status(400).json({ error: `این نقش به ${assignedUsers.length} کاربر تخصیص یافته است و ابتدا باید نقش کاربران تغییر یابد` });
     }
 
-    // v9.0.111 (TD-542): نقشی که اقدامی از گردش کار (طرح جاری یا فرایند پایان‌نیافته) به آن بسته است حذف نمی‌شود
+    // v9.0.128 (TD-542): نقشی که اقدامی از گردش کار (طرح جاری یا فرایند پایان‌نیافته) به آن بسته است حذف نمی‌شود
     const requiringWorkflows = await workflowsRequiringRole(orm, targetRole.code);
     if (requiringWorkflows.length > 0) {
       return res.status(409).json({
@@ -481,7 +481,7 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     if (touchesAdminAccount(req.user?.role, [role])) {
       return res.status(403).json({ error: ONLY_ADMIN_MANAGES_ADMINS });
     }
-    // v9.0.112 (TD-520، ت۳): کاربر تازه فقط نقشی می‌گیرد که مجوزهایش در مجوزهای سازنده است
+    // v9.0.129 (TD-520، ت۳): کاربر تازه فقط نقشی می‌گیرد که مجوزهایش در مجوزهای سازنده است
     await assertAssignableRole(orm, await grantorPermissions(req.user?.role), role);
     const tUsername = (username || '').trim();
     // v9.0.76 (TD-521): پیشوند کاربران آزمون رد می‌شود؛ چنین کاربری پیش‌تر در فهرست‌ها پنهان می‌ماند
@@ -610,7 +610,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
       if (touchesAdminAccount(req.user?.role, [prevUser.role, role])) {
         throw new ForbiddenError(ONLY_ADMIN_MANAGES_ADMINS);
       }
-      // v9.0.112 (TD-520، ت۳): حساب قوی‌تر از ویرایشگر دست نمی‌خورد، نقش حساب خودش عوض نمی‌شود و نقش تازه در مرز
+      // v9.0.129 (TD-520، ت۳): حساب قوی‌تر از ویرایشگر دست نمی‌خورد، نقش حساب خودش عوض نمی‌شود و نقش تازه در مرز
       // مجوزهای اوست
       const grantor = await grantorPermissions(req.user?.role, tx);
       await assertManageableAccount(tx, grantor, prevUser.role);
@@ -713,7 +713,7 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
       if (touchesAdminAccount(req.user?.role, [delUser.role])) {
         throw new ForbiddenError(ONLY_ADMIN_MANAGES_ADMINS);
       }
-      // v9.0.112 (TD-520، ت۳): حسابی که نقشش مجوزی بیش از حذف‌کننده دارد حذف نمی‌شود
+      // v9.0.129 (TD-520، ت۳): حسابی که نقشش مجوزی بیش از حذف‌کننده دارد حذف نمی‌شود
       await assertManageableAccount(tx, await grantorPermissions(req.user?.role, tx), delUser.role);
 
       // ممنوعیت حذف آخرین مدیر فعال سیستم (قفل‌شدن سامانه)

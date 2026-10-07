@@ -30,7 +30,7 @@ async function documentExists(tx: DbExecutor, entityId: string): Promise<boolean
   return !!row;
 }
 
-/** v9.0.108 (TD-541 / TD-771): گام قطعی‌سازی مجوز نهایی کردن همین نوع سند را می‌خواهد؛ سند ناپیدا مانند سند فروش */
+/** v9.0.125 (TD-541 / TD-771): گام قطعی‌سازی مجوز نهایی کردن همین نوع سند را می‌خواهد؛ سند ناپیدا مانند سند فروش */
 async function finalizePermissionsOfStep(target: WorkflowActionTarget, entity: WorkflowActionEntity): Promise<string[]> {
   if (target.toStateKey !== 'approved' && target.autoActionKey !== 'POST_INVOICE') return [];
   const id = workflowEntityNumericId(entity.entityId);
@@ -42,7 +42,7 @@ export function registerDocumentWorkflowAction(): void {
   registerWorkflowTransitionAction(['document'], {
     run: finalizeApprovedDocument,
     entityExists: documentExists,
-    // v9.0.35 (TD-445، ت۳): قطعی‌سازی از گردش‌کار همان مجوز `PUT /documents/:id/finalize` را می‌خواهد؛ از v9.0.108
+    // v9.0.35 (TD-445، ت۳): قطعی‌سازی از گردش‌کار همان مجوز `PUT /documents/:id/finalize` را می‌خواهد؛ از v9.0.125
     // (TD-541 / TD-771) همان مجوز جدول برای نوع همین سند (سند فروش: «قطعی کردن سند فروش»)، نه هر یک از سه مجوز
     requiredPermissions: finalizePermissionsOfStep,
   });

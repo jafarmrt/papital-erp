@@ -1,8 +1,8 @@
 -- Drizzle Migration 0067: only the system admin role stays a system role
--- (v9.0.118 / TD-885, permission model rule 4 and decision t9 option A)
+-- (v9.0.135 / TD-885, permission model rule 4 and decision t9 option A)
 --
--- Until v9.0.117 the seed created twelve roles with is_system = 1, and DELETE /roles refused every one of them, so an
--- install had to keep «مدیر عمومی», «انباردار» and the others whether it used them or not. From v9.0.118 the system
+-- Until v9.0.134 the seed created twelve roles with is_system = 1, and DELETE /roles refused every one of them, so an
+-- install had to keep «مدیر عمومی», «انباردار» and the others whether it used them or not. From v9.0.135 the system
 -- admin (code admin) is the only fixed role: every other role, a former seed role included, is an ordinary role that
 -- the admin renames, edits and deletes (when no user, workflow step or running workflow needs it).
 --

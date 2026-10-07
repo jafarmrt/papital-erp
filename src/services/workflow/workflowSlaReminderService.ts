@@ -42,7 +42,7 @@ const positiveIds = (values: unknown): number[] =>
     .filter((v) => Number.isInteger(v) && v > 0);
 
 /**
- * v9.0.111 (TD-542): مجوز لازم انتقال کار، از تصویر نسخه فرایند یا جدول جاری؛ همان مجوزی که کارتابل از عضو نقش یا گام
+ * v9.0.128 (TD-542): مجوز لازم انتقال کار، از تصویر نسخه فرایند یا جدول جاری؛ همان مجوزی که کارتابل از عضو نقش یا گام
  * بی‌نقش می‌خواهد. پس از تبدیل گام نقش‌دار به گام «فقط مجوز» یادآوری به دارنده همان مجوز می‌رسد، نه به هر تأییدکننده.
  */
 async function transitionPermissionOf(tx: DbExecutor, task: TaskRow, snapshotDsl: unknown): Promise<string> {

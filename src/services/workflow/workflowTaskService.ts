@@ -348,7 +348,7 @@ export class WorkflowTaskService {
 
   /**
    * v9.0.34 (TD-444): همان قاعده موتور برای یک امضاکننده: نقش کار با checkUserRoleMatch و مجوز لازم انتقال (TD-391) از
-   * تصویر نسخه فرایند. v9.0.111 (TD-542): نقش کار فقط همان نقش است (بی هم‌ارزی بخش و بی `*`).
+   * تصویر نسخه فرایند. v9.0.128 (TD-542): نقش کار فقط همان نقش است (بی هم‌ارزی بخش و بی `*`).
    */
   private static roleAllows(
     task: Pick<typeof workflowTasks.$inferSelect, 'candidateRoles' | 'assignedRole' | 'transitionId'>,

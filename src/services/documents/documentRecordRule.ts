@@ -5,7 +5,7 @@ import {
 } from '../../lib/permissions/documentPermissions.js';
 
 /**
- * v9.0.108 (TD-541 / TD-771): وضعیت و جهت سندی که ثبت یا نهایی می‌شود، با همان قاعده‌ای که `createDocumentWithDetails` و
+ * v9.0.125 (TD-541 / TD-771): وضعیت و جهت سندی که ثبت یا نهایی می‌شود، با همان قاعده‌ای که `createDocumentWithDetails` و
  * `finalizeDocument` به کار می‌برند، و مجوزی که جدول `documentRecordPermission` برای آن می‌خواهد. مسیرها و گام تأیید
  * گردش کار مجوز را از همین‌جا می‌گیرند تا با رفتار سرویس یکی بماند.
  */

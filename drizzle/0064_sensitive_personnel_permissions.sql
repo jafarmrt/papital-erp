@@ -1,10 +1,10 @@
 -- Drizzle Migration 0064: unmasked personnel and payslip bank details by permission only
--- (v9.0.109 / TD-882, the approved permission model §4.2 and §4.4)
+-- (v9.0.126 / TD-882, the approved permission model §4.2 and §4.4)
 --
--- Until v9.0.108 canAccessSensitivePersonnelData showed card, Sheba, account number and Nobitex username unmasked to the
+-- Until v9.0.125 canAccessSensitivePersonnelData showed card, Sheba, account number and Nobitex username unmasked to the
 -- system admin, the record owner, holders of personnel.manage and of two keys outside the permission catalog
 -- (personnel.view_sensitive, payroll.view_sensitive, which no role could be given), to a role holding the legacy «*»
--- and to the role coded manager whatever its permissions. From v9.0.109 the two keys are catalog keys: the personnel
+-- and to the role coded manager whatever its permissions. From v9.0.126 the two keys are catalog keys: the personnel
 -- dossier asks personnel.view_sensitive or personnel.manage, the payslip payroll.view_sensitive or personnel.manage;
 -- no role code and no «*» opens them. So that no role gains or loses anything on the day of release:
 --

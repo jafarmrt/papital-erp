@@ -59,7 +59,7 @@ export function Sidebar({
   // فاوآیکون برنامه = همان لوگوی شرکت (پیش‌فرض: نشان داخلی)
   useAppFavicon(companyLogo);
 
-  // v9.0.115 (TD-884، تصمیم ت۱۱): منو فقط از مجوزها ساخته می‌شود؛ پنهان کردن پیوند برای هر نقش حذف شد
+  // v9.0.132 (TD-884، تصمیم ت۱۱): منو فقط از مجوزها ساخته می‌شود؛ پنهان کردن پیوند برای هر نقش حذف شد
   const rawMenuGroups = useMemo(() => {
     return getMenuGroups(user, userPermissions);
   }, [user, userPermissions]);

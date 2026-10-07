@@ -7,7 +7,7 @@ import { can } from '../../middleware/authorize.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 
 /**
- * v9.0.121 (TD-888، تصمیم ت۱۰ الف مدل مجوز): فهرست انتخاب کالا (`GET /items/options`) برای فرم‌های بخش‌های دیگر (فاکتور و
+ * v9.0.138 (TD-888، تصمیم ت۱۰ الف مدل مجوز): فهرست انتخاب کالا (`GET /items/options`) برای فرم‌های بخش‌های دیگر (فاکتور و
  * حواله، رسید انبار، انبارگردانی، پروژه، خرید، ارتباط با مشتری، انتقال). فقط فیلدهای `ITEM_PICK_FIELDS` و موجودی هر انبار؛
  * میانگین بها فقط برای دارندگان `products.view`. فهرست کامل (`GET /items`، با نقطه سفارش، رزروها و نسخه رکورد) فقط با
  * مجوزهای بخش کالا باز است.

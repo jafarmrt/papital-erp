@@ -6,7 +6,7 @@ import type { CustomerPick } from '../../lib/permissions/pickLists.js';
 import { canSeePartyBankInfo } from './partyBankInfoAccess.js';
 
 /**
- * v9.0.120 (TD-887، تصمیم ت۱۰ الف مدل مجوز): فهرست انتخاب طرف حساب‌ها (`GET /customers/options`) برای فرم‌های بخش‌های
+ * v9.0.137 (TD-887، تصمیم ت۱۰ الف مدل مجوز): فهرست انتخاب طرف حساب‌ها (`GET /customers/options`) برای فرم‌های بخش‌های
  * دیگر (فاکتور و حواله، رسید انبار، ارتباط با مشتری، پروژه، خرید، نقطه سفارش، حسابداری). فقط فیلدهای
  * `CUSTOMER_PICK_FIELDS` را می‌خواند؛ اطلاعات بانکی با همان قاعده TD-433. فهرست کامل (`GET /customers`، با یادداشت و
  * نسخه رکورد) فقط با customers.view باز است.

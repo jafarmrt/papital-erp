@@ -39,7 +39,7 @@ const MAPPING_ROWS: MappingRowMeta[] = [
   { key: 'openingCapitalAccountCode', label: 'سرمایه اولیه (4001)', description: 'طرف حساب اسناد افتتاحیه موجودی اولیه خزانه و انبار' },
 ];
 
-// v9.0.114 (TD-668): استقرار کدینگ پیش‌فرض فقط برای مدیر سیستم است (همان گارد API)؛ دیگران فقط پیام آن را می‌بینند
+// v9.0.131 (TD-668): استقرار کدینگ پیش‌فرض فقط برای مدیر سیستم است (همان گارد API)؛ دیگران فقط پیام آن را می‌بینند
 export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: { currentUser: any; canSeedDefaults?: boolean }) {
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [disabled, setDisabled] = useState<string[]>([]);

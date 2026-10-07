@@ -38,7 +38,7 @@ export class WorkflowEngineService {
   static evaluateConditions = WorkflowRuleEngine.evaluateConditions.bind(WorkflowRuleEngine);
 
   // --- Authorization & Policy Delegation ---
-  // v9.0.111 (TD-542): همان قاعده موتور؛ پیاده‌سازی دوم با جدول هم‌ارزی دیگر (workflowAuthorizationPolicy) حذف شد
+  // v9.0.128 (TD-542): همان قاعده موتور؛ پیاده‌سازی دوم با جدول هم‌ارزی دیگر (workflowAuthorizationPolicy) حذف شد
   static checkUserRoleMatch = WorkflowTransitionExecutor.checkUserRoleMatch.bind(WorkflowTransitionExecutor);
 
   // --- Definition & Structure Management ---

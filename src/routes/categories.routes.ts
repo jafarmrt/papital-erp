@@ -44,7 +44,7 @@ const formatCategory = (cat: Partial<typeof categories.$inferSelect> & Record<st
   };
 };
 
-// v9.0.117 (TD-526، A02-19): خواندن فهرست دیگر چیزی نمی‌نویسد؛ نصب تازه دسته‌های استاندارد را در بوت می‌گیرد (seed)
+// v9.0.134 (TD-526، A02-19): خواندن فهرست دیگر چیزی نمی‌نویسد؛ نصب تازه دسته‌های استاندارد را در بوت می‌گیرد (seed)
 router.get('/categories', asyncHandler(async (req, res) => {
   const data = await orm.select().from(categories).orderBy(categories.type, categories.id);
   res.json(data.map(formatCategory));
@@ -54,7 +54,7 @@ router.post('/categories/reset-defaults', requireSystemAdmin, asyncHandler(async
   const existingCatRows = await orm.select().from(categories);
   const existingCatMap = new Map(existingCatRows.map(c => [c.name, c]));
 
-  // v9.0.117 (TD-526): همان فهرست یکتای seed (`src/data/defaultCategories.ts`)
+  // v9.0.134 (TD-526): همان فهرست یکتای seed (`src/data/defaultCategories.ts`)
   for (const cat of DEFAULT_CATEGORIES) {
     const existing = existingCatMap.get(cat.name);
     if (existing) {

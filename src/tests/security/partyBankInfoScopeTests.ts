@@ -46,7 +46,7 @@ export async function runPartyBankInfoScopeTests(shouldRun: (id: string, ...extr
       return loginTestUserWithSession(app, user.username);
     };
     /**
-     * ردیف طرف حساب این آزمون در فهرست انتخاب و، برای دارنده customers.view، در فهرست کامل و خروجی آن. از v9.0.120
+     * ردیف طرف حساب این آزمون در فهرست انتخاب و، برای دارنده customers.view، در فهرست کامل و خروجی آن. از v9.0.137
      * (TD-887، ت۱۰ الف) فرم‌های بخش‌های دیگر فقط فهرست انتخاب (`/customers/options`) را می‌خوانند.
      */
     const listedRows = async (s: Session, full: boolean) => {

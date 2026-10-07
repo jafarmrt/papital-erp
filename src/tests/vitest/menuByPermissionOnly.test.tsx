@@ -6,7 +6,7 @@ import { Sidebar } from '../../components/layout/Sidebar';
 import { RolesTab } from '../../components/users/RolesTab';
 import type { Role, User } from '../../types';
 
-// v9.0.115 (TD-884، تصمیم ت۱۱ مدل مجوز): منو فقط از مجوزهای نقش ساخته می‌شود. پنهان کردن پیوند برای هر نقش (تنظیم
+// v9.0.132 (TD-884، تصمیم ت۱۱ مدل مجوز): منو فقط از مجوزهای نقش ساخته می‌شود. پنهان کردن پیوند برای هر نقش (تنظیم
 // `menu_visibility`) فقط پیوند را برمی‌داشت و دسترسی را نمی‌گرفت، پس حذف شد.
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));

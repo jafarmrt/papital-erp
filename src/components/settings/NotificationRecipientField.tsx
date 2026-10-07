@@ -1,7 +1,7 @@
 import { PERMISSION_CATALOG, SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog';
 
 /**
- * v9.0.110 (TD-883، مدل مجوز §۴.۲): گیرنده اعلان قاعده «دارندگان یک مجوز» از کاتالوگ است، یا مدیر سیستم. پیش‌تر فهرست
+ * v9.0.127 (TD-883، مدل مجوز §۴.۲): گیرنده اعلان قاعده «دارندگان یک مجوز» از کاتالوگ است، یا مدیر سیستم. پیش‌تر فهرست
  * ثابت چهار کد نقش بود. قاعده‌ای که پیش‌تر نقش دیگری را برگزیده آن نقش را نگه می‌دارد و همان نشان داده می‌شود.
  */
 export type NotificationActionConfig = Record<string, unknown> & { targetPermission?: string; targetRole?: string };

@@ -65,6 +65,7 @@ export const QUERY_KEYS = {
   warehouses: {
     all: ['warehouses'] as const,
     list: () => ['warehouses', 'list'] as const,
+    inactive: () => ['warehouses', 'inactive'] as const,
   },
 
   // تدارکات: درخواست‌های خرید و سفارش‌ها (صفحه نقطه سفارش درخواست خرید ثبت می‌کند)

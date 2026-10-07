@@ -1,10 +1,10 @@
 -- Drizzle Migration 0065: workflow steps by permission and exact role, without the role equivalence table
--- (v9.0.111 / TD-542, finding B02-27, the approved permission model §4.2 and §4.4 item 3)
+-- (v9.0.128 / TD-542, finding B02-27, the approved permission model §4.2 and §4.4 item 3)
 --
--- Until v9.0.110 a transition's role was matched through a fixed equivalence table of role codes (warehouse =
+-- Until v9.0.127 a transition's role was matched through a fixed equivalence table of role codes (warehouse =
 -- warehouse_keeper; accounting = accountant = cfo_accountant; sales = sales_manager; production = production_manager),
 -- a department's posting permission (warehouse.in / warehouse.out, accounting.vouchers, documents.create / crm.manage,
--- projects.edit / projects.create) and the legacy «*». From v9.0.111 the system admin signs every step and anyone else
+-- projects.edit / projects.create) and the legacy «*». From v9.0.128 the system admin signs every step and anyone else
 -- only a step whose role is exactly their own role; who may sign is the transition's required permission.
 --
 -- Conversions that keep exactly the same signers, applied to the live transitions (with a new definition version, so

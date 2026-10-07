@@ -198,7 +198,7 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
   },
 ];
 
-/** v9.0.114 (TD-668، ت۲ بسته ۱۶): میانبری که صفحه‌اش برای کاربر باز است، از همان جدول دسترسی منو و مسیر */
+/** v9.0.131 (TD-668، ت۲ بسته ۱۶): میانبری که صفحه‌اش برای کاربر باز است، از همان جدول دسترسی منو و مسیر */
 export function accessibleShortcutsFor(viewer: ViewerAccess): ShortcutItemDef[] {
   return ALL_SHORTCUTS.filter((s) => canOpenPage(s.path, viewer));
 }

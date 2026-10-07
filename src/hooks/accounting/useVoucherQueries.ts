@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { JournalVoucher } from '../../types';
 import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError } from './accountingQueryConfig';
 import { invalidateAfterVoucherChange } from './accountingInvalidation';
+import { toVoucherPage, voucherListParams, type JournalVoucherPage, type VoucherListFilters } from '../../lib/accounting/voucherList';
 
 /**
  * اسناد حسابداری: فهرست اسناد با useQuery و همه ذخیره‌ها (ثبت/ویرایش/حذف/معکوس/اصلاحی/تایید/قطعی) با useMutation —
@@ -41,7 +42,7 @@ function vouchersUrl(filters: VoucherFilters): string {
   const params = new URLSearchParams();
   if (filters.startDate) params.append('startDate', filters.startDate);
   if (filters.endDate) params.append('endDate', filters.endDate);
-  if (filters.type) params.append('type', filters.type);
+  if (filters.type) params.append('voucherType', filters.type);
   if (filters.search) params.append('search', filters.search);
   const query = params.toString();
   return query ? `/accounting/vouchers?${query}` : '/accounting/vouchers';
@@ -52,6 +53,23 @@ export function useVouchersQuery(filters: VoucherFilters = {}) {
     queryKey: QUERY_KEYS.accounting.vouchers(filters),
     queryFn: ({ signal }) => fetchAccountingList<JournalVoucher>(vouchersUrl(filters), signal, 'vouchers'),
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
+  });
+}
+
+/**
+ * v9.0.115 (TD-565): یک صفحه از فهرست اسناد با صافی‌ها، `total` و شمار هر وضعیت از سرور (برگه «اسناد حسابداری»).
+ * کلید زیر `vouchers()` است تا هر ذخیره سند همین صفحه را هم باطل کند.
+ */
+export function useVoucherPageQuery(filters: VoucherListFilters, page: number, limit: number) {
+  return useQuery<JournalVoucherPage>({
+    queryKey: [...QUERY_KEYS.accounting.vouchers(), 'page', filters, page, limit],
+    queryFn: async ({ signal }) => toVoucherPage(
+      await fetchJson<unknown>(`/accounting/vouchers?${voucherListParams(filters, page, limit).toString()}`, { signal }),
+      page,
+      limit,
+    ),
+    ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    placeholderData: keepPreviousData,
   });
 }
 

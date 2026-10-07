@@ -499,7 +499,7 @@ router.post(['/piecework/personnel-rates', '/piecework/rates'], authorizePermiss
 // ==========================================
 
 // GET /api/piecework/logs - List work logs
-// v9.0.125 (TD-892، ت۱۰ الف): کارکرد همه پرسنل فقط با مجوز کارمزدی؛ مشاهده پروژه فقط کارکردهای یک پروژه را می‌خواند
+// v9.0.142 (TD-892، ت۱۰ الف): کارکرد همه پرسنل فقط با مجوز کارمزدی؛ مشاهده پروژه فقط کارکردهای یک پروژه را می‌خواند
 router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkLogs, ...READ_PERMISSIONS.projectPieceworkLogs), asyncHandler(async (req, res) => {
   const { personnelId, projectId, startDate, endDate, status } = req.query;
   if (!(await can(req.user, ...READ_PERMISSIONS.pieceworkLogs))) {

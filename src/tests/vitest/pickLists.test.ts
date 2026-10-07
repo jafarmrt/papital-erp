@@ -22,28 +22,28 @@ interface Section {
 }
 
 const SECTIONS: Record<string, Section> = {
-  // v9.0.120 (TD-887)
+  // v9.0.137 (TD-887)
   customers: {
     fullList: 'customers',
     ownGroups: ['customers.'],
     fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/customers(?:\?|['"`])/g,
     ownPages: ['hooks/queries/useCustomerQueries.ts'],
   },
-  // v9.0.121 (TD-888)
+  // v9.0.138 (TD-888)
   items: {
     fullList: 'items',
     ownGroups: ['products.'],
     fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/items(?:\?|['"`])/g,
     ownPages: ['hooks/queries/useItemQueries.ts', 'pages/GalleryPage.tsx', 'pages/PricingPage.tsx', 'components/excel/useUnifiedExcelImport.ts'],
   },
-  // v9.0.122 (TD-889)
+  // v9.0.139 (TD-889)
   projects: {
     fullList: 'projects',
     ownGroups: ['projects.'],
     fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/projects(?:\?|['"`])/g,
     ownPages: ['hooks/queries/useProjectQueries.ts'],
   },
-  // v9.0.123 (TD-890): فهرست اسناد پیش‌فاکتورها برای فرم فاکتور هم از خود بخش است؛ صفحه انبارگردانی با audit.view فقط
+  // v9.0.140 (TD-890): فهرست اسناد پیش‌فاکتورها برای فرم فاکتور هم از خود بخش است؛ صفحه انبارگردانی با audit.view فقط
   // نوع‌های شمارش و انتقال را می‌گیرد (READ_PERMISSIONS.stockCountDocuments، آزمون sec_document_read_scope_td_890)
   documents: {
     fullList: 'documents',
@@ -51,14 +51,14 @@ const SECTIONS: Record<string, Section> = {
     fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/documents(?:\?|['"`])/g,
     ownPages: ['hooks/queries/useDocumentQueries.ts', 'hooks/invoices/useInvoiceReferenceData.ts', 'hooks/inventoryAudit/useInventoryAuditQueries.ts'],
   },
-  // v9.0.124 (TD-891): قیمت همه کالاها فقط برای صفحه قیمت‌گذاری؛ فرم فاکتور قیمت یک کالا را از /items/:id/prices می‌خواند
+  // v9.0.141 (TD-891): قیمت همه کالاها فقط برای صفحه قیمت‌گذاری؛ فرم فاکتور قیمت یک کالا را از /items/:id/prices می‌خواند
   itemPrices: {
     fullList: 'itemPrices',
     ownGroups: ['products.'],
     fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/items\/prices\/all(?:\?|['"`])/g,
     ownPages: ['pages/PricingPage.tsx'],
   },
-  // v9.0.125 (TD-892): کارکرد همه پرسنل فقط برای صفحه کارمزدی؛ زبانه زمان‌بندی پروژه کارکردهای همان پروژه را می‌خواند
+  // v9.0.142 (TD-892): کارکرد همه پرسنل فقط برای صفحه کارمزدی؛ زبانه زمان‌بندی پروژه کارکردهای همان پروژه را می‌خواند
   pieceworkLogs: {
     fullList: 'pieceworkLogs',
     ownGroups: ['piecework.', 'personnel.manage'],

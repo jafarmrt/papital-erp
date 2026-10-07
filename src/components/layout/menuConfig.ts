@@ -53,7 +53,7 @@ export function getMenuGroups(
   user?: User | null,
   userPermissions?: { permissions?: string[]; isAdmin?: boolean; roleName?: string } | null
 ): MenuGroup[] {
-  // v9.0.114 (TD-668، ت۲ بسته ۱۶): دید هر پیوند همان دسترسی صفحه در جدول یکتای pageAccess است (همان مسیر و API صفحه)
+  // v9.0.131 (TD-668، ت۲ بسته ۱۶): دید هر پیوند همان دسترسی صفحه در جدول یکتای pageAccess است (همان مسیر و API صفحه)
   const viewer = { permissions: userPermissions?.permissions, isAdmin: userPermissions?.isAdmin, role: user?.role };
   const open = (path: string) => canOpenPage(path, viewer);
 

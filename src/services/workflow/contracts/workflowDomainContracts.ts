@@ -108,7 +108,7 @@ export interface IWorkflowVersionService {
 
 // ============================================================================
 // 3. WORKFLOW AUTHORIZATION: WorkflowTransitionExecutor.checkUserRoleMatch / holdsRequiredPermission
-// (v9.0.111, TD-542: the second implementation with its own role equivalence table was removed)
+// (v9.0.128, TD-542: the second implementation with its own role equivalence table was removed)
 // ============================================================================
 
 export interface UserAuthContext {

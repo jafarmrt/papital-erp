@@ -5,7 +5,7 @@
  * پنهان» در P02_PERMISSION_MODEL.md §۲.۷). سرور و مرورگر نشانی و فیلدهای هر فهرست را از همین پرونده می‌خوانند؛ مجوزها در
  * `READ_PERMISSIONS` (`src/lib/recordReadPermissions.ts`) و آزمون Vitest `pickLists.test.ts` نگه‌شان می‌دارد.
  *
- * v9.0.120 (TD-887): طرف حساب‌ها. v9.0.121 (TD-888): کالاها. v9.0.122 (TD-889): پروژه‌ها.
+ * v9.0.137 (TD-887): طرف حساب‌ها. v9.0.138 (TD-888): کالاها. v9.0.139 (TD-889): پروژه‌ها.
  */
 
 export const PICK_LIST_URLS = {

@@ -158,7 +158,7 @@ const customerPickListValidation = z.object({
   }).optional(),
 });
 
-// v9.0.120 (TD-887، تصمیم ت۱۰ الف): فهرست انتخاب طرف حساب‌ها برای فرم‌های بخش‌های دیگر؛ فهرست کامل بالا فقط با customers.view
+// v9.0.137 (TD-887، تصمیم ت۱۰ الف): فهرست انتخاب طرف حساب‌ها برای فرم‌های بخش‌های دیگر؛ فهرست کامل بالا فقط با customers.view
 router.get('/customers/options', authorizePermission(...READ_PERMISSIONS.customerOptions), validate(customerPickListValidation), asyncHandler(async (req, res) => {
   const query = req.query as { search?: string; partyType?: string; limit?: string };
   res.json({ success: true, data: await listCustomerPicks(req.user, { search: query.search, partyType: query.partyType, limit: parsePickListLimit(query.limit) }) });

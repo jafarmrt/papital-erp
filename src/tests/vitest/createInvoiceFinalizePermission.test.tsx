@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import CreateInvoicePage from '../../pages/CreateInvoicePage';
 import type { User } from '../../types';
 
-// v9.0.108 (TD-541 / TD-771): گزینه «فاکتور نهایی» صفحه صدور فاکتور با مجوز «قطعی کردن سند فروش» باز است، نه با کد نقش
+// v9.0.125 (TD-541 / TD-771): گزینه «فاکتور نهایی» صفحه صدور فاکتور با مجوز «قطعی کردن سند فروش» باز است، نه با کد نقش
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
 vi.mock('react-hot-toast', () => {

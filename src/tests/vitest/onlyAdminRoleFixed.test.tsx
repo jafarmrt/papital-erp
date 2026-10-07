@@ -5,8 +5,8 @@ import { RoleFormModal } from '../../components/users/RoleFormModal';
 import { PERMISSION_CATALOG, PERMISSION_KEYS } from '../../lib/permissions/permissionCatalog';
 import type { PermissionCategory, Role } from '../../types';
 
-// v9.0.118 (TD-885، تصمیم ت۹ الف مدل مجوز): فقط «مدیر سیستم» نقش ثابت است. نقش پیش‌فرض قدیمی (که پیش‌تر «سیستمی» و
-// حذف‌نشدنی بود) مثل هر نقش دیگری دکمه حذف دارد. v9.0.119 (TD-886، قاعده ۳): تیک‌های «مدیر سیستم» همه زده و قفل‌اند.
+// v9.0.135 (TD-885، تصمیم ت۹ الف مدل مجوز): فقط «مدیر سیستم» نقش ثابت است. نقش پیش‌فرض قدیمی (که پیش‌تر «سیستمی» و
+// حذف‌نشدنی بود) مثل هر نقش دیگری دکمه حذف دارد. v9.0.136 (TD-886، قاعده ۳): تیک‌های «مدیر سیستم» همه زده و قفل‌اند.
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
 vi.mock('react-hot-toast', () => {

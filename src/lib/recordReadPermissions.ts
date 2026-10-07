@@ -10,7 +10,7 @@ export const READ_PERMISSIONS = {
   treasuryTransactions: ['accounting.treasury', 'accounting.reports', 'accounting.view'],
   cheques: ['accounting.cheques', 'accounting.treasury', 'accounting.reports', 'accounting.view'],
   /**
-   * فهرست کامل پروژه‌ها (با محصولات، کنترل موجودی و رزرو، مراحل و پیوست‌ها) فقط با مجوز بخش پروژه (v9.0.122، TD-889،
+   * فهرست کامل پروژه‌ها (با محصولات، کنترل موجودی و رزرو، مراحل و پیوست‌ها) فقط با مجوز بخش پروژه (v9.0.139، TD-889،
    * ت۱۰ الف؛ پیش‌تر کلیدهای سند و انبار هم آن را باز می‌کردند)
    */
   projects: ['projects.view'],
@@ -28,7 +28,7 @@ export const READ_PERMISSIONS = {
     'projects.view', 'documents.view', 'documents.create', 'warehouse.view', 'warehouse.in', 'warehouse.out',
     'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create',
   ],
-  /** فهرست کامل طرف حساب‌ها (با یادداشت و نسخه رکورد) فقط با مجوز مشاهده همان بخش (v9.0.120، TD-887، ت۱۰ الف) */
+  /** فهرست کامل طرف حساب‌ها (با یادداشت و نسخه رکورد) فقط با مجوز مشاهده همان بخش (v9.0.137، TD-887، ت۱۰ الف) */
   customers: ['customers.view'],
   /**
    * فهرست انتخاب طرف حساب (`GET /customers/options`): فاکتور و حواله (documents.create)، رسید انبار (warehouse.in،
@@ -43,7 +43,7 @@ export const READ_PERMISSIONS = {
   /** کارت حساب و مانده طرف حساب (همان مجوزهای کارت حساب گزارش‌های مالی؛ v9.0.4، TD-416) */
   partyAccountCard: ['accounting.reports', 'accounting.view', 'customers.view', 'customers.manage'],
   /**
-   * فهرست کامل اسناد (با مبالغ و طرف حساب) فقط با مجوز بخش اسناد: فهرست فاکتورها و فرم فاکتور (v9.0.123، TD-890، ت۱۰ الف؛
+   * فهرست کامل اسناد (با مبالغ و طرف حساب) فقط با مجوز بخش اسناد: فهرست فاکتورها و فرم فاکتور (v9.0.140، TD-890، ت۱۰ الف؛
    * پیش‌تر کلیدهای انبار، انبارگردانی، ارتباط با مشتری و گردش کار هم آن را باز می‌کردند)
    */
   documents: ['documents.view', 'documents.create', 'documents.edit'],
@@ -67,7 +67,7 @@ export const READ_PERMISSIONS = {
   partyDocuments: ['documents.view', 'customers.view', 'crm.view'],
   /**
    * فهرست کامل کالاها (با میانگین بها، نقطه سفارش، رزروها و نسخه رکورد) فقط با مجوزهای بخش کالا: صفحه کالاها، گالری و
-   * قیمت‌گذاری (v9.0.121، TD-888، ت۱۰ الف)
+   * قیمت‌گذاری (v9.0.138، TD-888، ت۱۰ الف)
    */
   items: ['products.view', 'products.edit_price'],
   /**
@@ -82,7 +82,7 @@ export const READ_PERMISSIONS = {
   /** صفحه هشدار نقطه سفارش (همان کلیدهای صفحه در `PAGE_ACCESS`) */
   itemReorderAlerts: ['products.view', 'warehouse.view'],
   /**
-   * همه قیمت‌های همه کالاها و تاریخچه قیمت فقط با مجوز بخش کالا: صفحه قیمت‌گذاری (v9.0.124، TD-891؛ پیش‌تر مشاهده پروژه هم
+   * همه قیمت‌های همه کالاها و تاریخچه قیمت فقط با مجوز بخش کالا: صفحه قیمت‌گذاری (v9.0.141، TD-891؛ پیش‌تر مشاهده پروژه هم
    * آن را باز می‌کرد، برای فهرستی که پنجره پروژه می‌خواند و به کار نمی‌برد)
    */
   itemPrices: ['products.view', 'products.edit_price'],
@@ -94,12 +94,12 @@ export const READ_PERMISSIONS = {
   ],
   /**
    * کارکرد، تعرفه‌ها، عناوین و دسته‌های کارمزدی. `personnel.manage` همین‌ها را می‌نویسد (عناوین کاری در زبانه تنظیمات،
-   * ثبت کارکرد) و پیش‌تر فهرستی را که ذخیره می‌کرد نمی‌خواند (v9.0.114، TD-668).
+   * ثبت کارکرد) و پیش‌تر فهرستی را که ذخیره می‌کرد نمی‌خواند (v9.0.131، TD-668).
    */
   pieceworkReference: ['piecework.view', 'piecework.log', 'piecework.manage_tasks', 'projects.view', 'settings.manage', 'personnel.manage'],
   /**
    * کارکرد همه پرسنل با نرخ و مبلغ (`GET /piecework/logs`) فقط برای صفحه کارمزدی و مدیر کارکرد (`personnel.manage`، ویرایش
-   * و حذف کارکرد) (v9.0.125، TD-892؛ پیش‌تر مشاهده پروژه و مدیریت تنظیمات هم کارکرد همه پرسنل را می‌خواندند)
+   * و حذف کارکرد) (v9.0.142، TD-892؛ پیش‌تر مشاهده پروژه و مدیریت تنظیمات هم کارکرد همه پرسنل را می‌خواندند)
    */
   pieceworkLogs: ['piecework.view', 'piecework.log', 'personnel.manage'],
   /** کارکردهای یک پروژه (`GET /piecework/logs?projectId=`، زبانه زمان‌بندی پروژه) */

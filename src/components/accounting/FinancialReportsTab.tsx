@@ -84,7 +84,10 @@ export function FinancialReportsTab({
   const [trialCols, setTrialCols] = useState<'2' | '4' | '6' | '8'>('4');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [asOfDate] = useState('');
+  // v9.0.116 (TD-566): هر صورت تاریخ خودش را دارد (ISO)؛ ترازنامه و نسبت‌ها «تا تاریخ»، سود و زیان دوره خودش را
+  const [balanceAsOfDate, setBalanceAsOfDate] = useState('');
+  const [ratiosAsOfDate, setRatiosAsOfDate] = useState('');
+  const [incomePeriod, setIncomePeriod] = useState({ startDate: '', endDate: '' });
   const [tableSearch, setTableSearch] = useState('');
   const [selectedLedgerAccountId, setSelectedLedgerAccountId] = useState<number | ''>('');
 
@@ -96,7 +99,7 @@ export function FinancialReportsTab({
   const journalBook = useJournalBookReport();
   const ratios = useFinancialRatiosReport();
   const { journalBookData, journalLoading } = journalBook;
-  const { ratiosData } = ratios;
+  const { ratiosData, ratiosLoading } = ratios;
 
   // Initial fetch of trial balance and ratios
   useEffect(() => {
@@ -109,12 +112,22 @@ export function FinancialReportsTab({
     void onFetchTrialBalance(levelToFetch, startDate || undefined, endDate || undefined);
   };
 
-  const handleApplyIncomeFilter = () => {
-    void onFetchIncomeStatement(startDate || undefined, endDate || undefined);
+  const handleApplyIncomeFilter = (period = incomePeriod) => {
+    void onFetchIncomeStatement(period.startDate || undefined, period.endDate || undefined);
   };
 
-  const handleApplyBalanceSheetFilter = () => {
-    void onFetchBalanceSheet(asOfDate || undefined);
+  const handleIncomePeriodChange = (period: { startDate: string; endDate: string }) => {
+    setIncomePeriod(period);
+    handleApplyIncomeFilter(period);
+  };
+
+  const handleApplyBalanceSheetFilter = (date = balanceAsOfDate) => {
+    void onFetchBalanceSheet(date || undefined);
+  };
+
+  const handleBalanceAsOfDateChange = (iso: string) => {
+    setBalanceAsOfDate(iso);
+    handleApplyBalanceSheetFilter(iso);
   };
 
   const handleApplyLedgerFilter = () => {
@@ -129,8 +142,8 @@ export function FinancialReportsTab({
     void journalBook.fetchJournalBook(startDate, endDate);
   };
 
-  const fetchFinancialRatios = (currency?: string) => {
-    void ratios.fetchFinancialRatios(asOfDate, currency);
+  const fetchFinancialRatios = (currency?: string, date = ratiosAsOfDate) => {
+    void ratios.fetchFinancialRatios(date, currency);
   };
 
   const handlePrint = () => {
@@ -410,7 +423,10 @@ export function FinancialReportsTab({
       {activeSubTab === 'income_statement' && (
         <IncomeStatementView
           incomeStatement={incomeStatement}
-          onApplyIncomeFilter={handleApplyIncomeFilter}
+          startDate={incomePeriod.startDate}
+          endDate={incomePeriod.endDate}
+          onPeriodChange={handleIncomePeriodChange}
+          onApplyIncomeFilter={() => handleApplyIncomeFilter()}
         />
       )}
 
@@ -418,7 +434,9 @@ export function FinancialReportsTab({
       {activeSubTab === 'balance_sheet' && (
         <BalanceSheetView
           balanceSheet={balanceSheet}
-          onApplyBalanceSheetFilter={handleApplyBalanceSheetFilter}
+          asOfDate={balanceAsOfDate}
+          onAsOfDateChange={handleBalanceAsOfDateChange}
+          onApplyBalanceSheetFilter={() => handleApplyBalanceSheetFilter()}
         />
       )}
 
@@ -441,6 +459,9 @@ export function FinancialReportsTab({
         <FinancialRatiosView
           ratiosData={ratiosData}
           onFetchFinancialRatios={fetchFinancialRatios}
+          asOfDate={ratiosAsOfDate}
+          onAsOfDateChange={setRatiosAsOfDate}
+          loading={ratiosLoading}
         />
       )}
 

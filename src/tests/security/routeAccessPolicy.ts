@@ -49,6 +49,8 @@ export const SYSTEM_ADMIN_ONLY_ROUTES = new Set([
   'POST /api/accounting/accounts/seed-default', 'POST /api/accounting/accounts/seed-standard',
   'GET /api/system/health', 'GET /api/system/env', 'GET /api/system/date-calendar-report',
   'GET /api/system/reconciliation-check', 'POST /api/system/reconciliation-fix',
+  // v9.0.112 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال فقط با مدیر سیستم
+  'POST /api/warehouses/:id/reactivate',
 ]);
 
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -132,7 +134,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       return 'هر دو 403';
     }),
     record('sec_user_manager_cannot_grant_admin_td_299', 'حوزه H: دارنده users.manage نقش مدیر سیستم نمی‌دهد و حساب مدیر را تغییر یا حذف نمی‌کند (TD-299)', 'real_database', async () => {
-      // از v9.0.112 (TD-520) مدیر کاربران فقط نقشی را می‌دهد که همه کلیدهایش را دارد
+      // از v9.0.129 (TD-520) مدیر کاربران فقط نقشی را می‌دهد که همه کلیدهایش را دارد
       const manager = await userWith(['users.manage', 'daily_logs.view']);
       const admin = await createTestUser({ role: 'admin' });
       createdUserIds.push(admin.id);
@@ -234,7 +236,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       return 'personnel.view ← 403، piecework.payroll مجاز';
     }),
     record('sec_role_permissions_from_catalog_td_304', 'حوزه H: نقش فقط مجوزهای کاتالوگ را می‌گیرد، نه «*» یا کلید ناشناخته (TD-304)', 'real_database', async () => {
-      // از v9.0.112 (TD-520) مدیر نقش‌ها فقط کلیدی را به نقش می‌دهد که خودش دارد
+      // از v9.0.129 (TD-520) مدیر نقش‌ها فقط کلیدی را به نقش می‌دهد که خودش دارد
       const roleAdmin = await userWith(['roles.manage', 'daily_logs.view']);
       const suffix = Date.now();
       const star = await send(roleAdmin.session, 'post', '/api/roles', { name: 'td304', code: `td304_star_${suffix}`, permissions: ['*'] });

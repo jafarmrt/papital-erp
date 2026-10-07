@@ -11,7 +11,7 @@ interface UserFormModalProps {
   editingUser: User | null;
   rolesList: Role[];
   onSuccess: () => void;
-  /** v9.0.113 (TD-525، ت۳): مجوزهای کاربر جاری؛ فقط نقش‌هایی که همه مجوزهایشان را دارد پیشنهاد می‌شوند */
+  /** v9.0.130 (TD-525، ت۳): مجوزهای کاربر جاری؛ فقط نقش‌هایی که همه مجوزهایشان را دارد پیشنهاد می‌شوند */
   grantor?: GrantorPermissions;
   currentUserId?: number;
 }
@@ -35,7 +35,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
 
   const isEditing = editingUser !== null;
-  // v9.0.113 (TD-525، ت۳): کاربر غیرمدیر نقش حساب خودش را عوض نمی‌کند و فقط نقشی را می‌دهد که همه مجوزهایش را دارد
+  // v9.0.130 (TD-525، ت۳): کاربر غیرمدیر نقش حساب خودش را عوض نمی‌کند و فقط نقشی را می‌دهد که همه مجوزهایش را دارد
   const ownAccount = isEditing && grantor !== 'all' && currentUserId !== undefined && editingUser?.id === currentUserId;
   const assignableRoles = rolesList.filter((r) => !isSystemAdminRole(r.code) && roleWithinGrant(grantor, r));
   const currentRoleOutside = isEditing && userForm.role !== '' && !isSystemAdminRole(userForm.role)

@@ -502,7 +502,7 @@ export class DocumentCreationService {
           await assertReturnableInvoice(tx, returnOfDocumentId);
         }
 
-        // v9.0.108 (TD-541): همان قاعده‌ای که مجوز ثبت سند از آن خوانده می‌شود (documentRecordRule.ts)
+        // v9.0.125 (TD-541): همان قاعده‌ای که مجوز ثبت سند از آن خوانده می‌شود (documentRecordRule.ts)
         const stockDirection = createdStockDirection(docType, inOut);
         const lineRows: DocumentLineRow[] = [];
         for (const item of docLines) {

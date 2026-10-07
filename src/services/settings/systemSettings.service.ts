@@ -40,7 +40,7 @@ const BUSINESS_SETTING_KEYS = new Set([
   'wc_shop_warehouse',
 ]);
 
-/** کلیدهای محرمانه یکپارچه‌سازی — فقط مدیر سیستم؛ فهرست مشترک با زبانه ووکامرس (v9.0.114، TD-668) */
+/** کلیدهای محرمانه یکپارچه‌سازی — فقط مدیر سیستم؛ فهرست مشترک با زبانه ووکامرس (v9.0.131، TD-668) */
 const ADMIN_ONLY_SETTING_KEYS = new Set(SYSTEM_ADMIN_SETTING_KEYS);
 
 /**
@@ -49,7 +49,7 @@ const ADMIN_ONLY_SETTING_KEYS = new Set(SYSTEM_ADMIN_SETTING_KEYS);
  */
 const RETIRED_SETTING_KEYS = new Set([
   'runtime_enable_test_endpoints',
-  // v9.0.115 (TD-884، تصمیم ت۱۱): پنهان کردن منو برای هر نقش حذف شد؛ منو فقط از مجوزها ساخته می‌شود. مقدار ذخیره‌شده دست نخورده
+  // v9.0.132 (TD-884، تصمیم ت۱۱): پنهان کردن منو برای هر نقش حذف شد؛ منو فقط از مجوزها ساخته می‌شود. مقدار ذخیره‌شده دست نخورده
   // می‌ماند ولی دیگر خوانده یا نوشته نمی‌شود
   'menu_visibility',
 ]);

@@ -38,8 +38,8 @@ async function isEmptyTable(table: typeof categories | typeof pieceworkTasks): P
 /**
  * Standard System Seed Data
  * Seeds initial master catalog, 22 standard categories, settings, piecework tasks, and chart of accounts.
- * v9.0.116 (TD-591، یافته B01-11، تصمیم ت۴ بسته ۱): فقط «درج آنچه نیست». هر گونه داده پایه فقط در جدولی درج می‌شود که از
- * آن گونه هیچ ندارد و هیچ ردیف موجودی (دسته، حساب، تنظیم) ویرایش نمی‌شود. v9.0.117 (TD-526): در هر محیط، تولید هم، در بوت اجرا
+ * v9.0.133 (TD-591، یافته B01-11، تصمیم ت۴ بسته ۱): فقط «درج آنچه نیست». هر گونه داده پایه فقط در جدولی درج می‌شود که از
+ * آن گونه هیچ ندارد و هیچ ردیف موجودی (دسته، حساب، تنظیم) ویرایش نمی‌شود. v9.0.134 (TD-526): در هر محیط، تولید هم، در بوت اجرا
  * می‌شود و نقشی نمی‌سازد.
  */
 export async function runSeed(
@@ -55,7 +55,7 @@ export async function runSeed(
     throw new Error(`[Seeder] Schema migrations failed; seed aborted: ${migration.errors.join('; ') || 'unknown error'}`);
   }
 
-  // 2. ۲۲ دسته استاندارد، فقط وقتی هیچ دسته‌ای نیست (v9.0.116، TD-591: دسته موجود بازنویسی و دسته حذف‌شده برگردانده نمی‌شود)
+  // 2. ۲۲ دسته استاندارد، فقط وقتی هیچ دسته‌ای نیست (v9.0.133، TD-591: دسته موجود بازنویسی و دسته حذف‌شده برگردانده نمی‌شود)
   try {
     if (await isEmptyTable(categories)) {
       await orm.insert(categories).values(DEFAULT_CATEGORIES.map(c => ({ ...c })));
@@ -67,7 +67,7 @@ export async function runSeed(
 
   // 3. System warehouses are user-managed (no hardcoded default warehouse)
 
-  // 4. نقش‌ها: seed هیچ نقشی نمی‌سازد (v9.0.117، TD-526، مدل مجوز §۴.۳). نقش «مدیر سیستم» را مهاجرت 0066 می‌سازد و نقش‌های
+  // 4. نقش‌ها: seed هیچ نقشی نمی‌سازد (v9.0.134، TD-526، مدل مجوز §۴.۳). نقش «مدیر سیستم» را مهاجرت 0066 می‌سازد و نقش‌های
   // دیگر را مدیر با «ساخت نقش از الگو» (`src/lib/permissions/roleTemplates.ts`) می‌سازد.
 
   // 5. System Settings
@@ -87,7 +87,7 @@ export async function runSeed(
   ];
 
   try {
-    // v9.0.116 (TD-591): فقط پایگاه‌داده‌ای که هیچ‌یک از این کلیدها را ندارد؛ کلید تازه در نصب موجود رفتار را عوض نمی‌کند
+    // v9.0.133 (TD-591): فقط پایگاه‌داده‌ای که هیچ‌یک از این کلیدها را ندارد؛ کلید تازه در نصب موجود رفتار را عوض نمی‌کند
     // (مثلاً `invoice_start_number` نبودنش یعنی شروع از ۱ و درجش شماره فاکتور بعدی را به ۱۰۰۰ می‌پراند)
     const existingSettings = await orm.select({ key: appSettings.key }).from(appSettings).where(inArray(appSettings.key, settings.map(s => s.key))).limit(1);
     if (existingSettings.length === 0) {
@@ -105,7 +105,7 @@ export async function runSeed(
 
   // 8. Seed piecework tasks
   try {
-    // v9.0.116 (TD-591): فقط وقتی هیچ عنوان کاری نیست
+    // v9.0.133 (TD-591): فقط وقتی هیچ عنوان کاری نیست
     const missingTasks = (await isEmptyTable(pieceworkTasks)) ? INITIAL_PIECEWORK_TASKS : [];
 
     if (missingTasks.length > 0) {
@@ -121,7 +121,7 @@ export async function runSeed(
   }
 
   // 9. Seed standard chart of accounts
-  // v9.0.116 (TD-591): فقط وقتی هیچ حساب فعالی نیست؛ همگام‌سازی حساب‌های موجود (والد و ماهیت) فقط با دکمه «همگام‌سازی کدینگ پیش‌فرض» است
+  // v9.0.133 (TD-591): فقط وقتی هیچ حساب فعالی نیست؛ همگام‌سازی حساب‌های موجود (والد و ماهیت) فقط با دکمه «همگام‌سازی کدینگ پیش‌فرض» است
   try {
     const hasAccounts = (await orm.select({ id: accounts.id }).from(accounts).where(eq(accounts.isDeleted, 0)).limit(1)).length > 0;
     const seedRes = hasAccounts ? { seededCount: 0 } : await AccountingService.seedStandardAccounts();

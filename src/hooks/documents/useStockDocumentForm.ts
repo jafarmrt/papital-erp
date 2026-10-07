@@ -123,7 +123,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     }
   };
 
-  // v9.0.122 (TD-889): پروژه برگزیده از فهرست انتخاب پروژه؛ فرم فقط کد و عنوان آن را نشان می‌دهد و رزروهایش را از
+  // v9.0.139 (TD-889): پروژه برگزیده از فهرست انتخاب پروژه؛ فرم فقط کد و عنوان آن را نشان می‌دهد و رزروهایش را از
   // /inventory/reserved-items می‌خواند، پس پرونده کامل پروژه (فقط با مجوز بخش پروژه) لازم نیست
   useEffect(() => {
     setSelectedProjectObj(selectedProjectId

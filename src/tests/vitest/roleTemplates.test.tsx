@@ -8,7 +8,7 @@ import { PERMISSION_CATALOG, withRequiredPermissions } from '../../lib/permissio
 import { ROLE_TEMPLATES, roleDraftFromTemplate, uniqueRoleCode } from '../../lib/permissions/roleTemplates';
 import type { PermissionCategory, Role, User } from '../../types';
 
-// v9.0.117 (TD-526، یافته B02-11، تصمیم ت۶ بازنگری‌شده الف): نصب تازه جز «مدیر سیستم» نقشی ندارد؛ مدیر با «ساخت نقش از الگو»
+// v9.0.134 (TD-526، یافته B02-11، تصمیم ت۶ بازنگری‌شده الف): نصب تازه جز «مدیر سیستم» نقشی ندارد؛ مدیر با «ساخت نقش از الگو»
 // یکی از فهرست واحد الگوها را برمی‌گزیند و فرم نقش تازه با نام و تیک‌های همان الگو باز می‌شود. قالب‌های جداگانه فرم نقش رفتند.
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));

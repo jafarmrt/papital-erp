@@ -57,7 +57,7 @@ The installer performs: system deps (Node 22, PostgreSQL 16) → source → DB +
 |---|-------|---------------------------|
 | 2.1 | `.env` exists and is locked down | `stat -c '%a %n' .env` → `600 .env` |
 | 2.2 | `NODE_ENV=production` | `grep '^NODE_ENV' .env` |
-| 2.3 | **Retired seed flag removed** | `grep '^ALLOW_SEED_IN_PRODUCTION' .env` → no output (retired in v9.0.117: the boot seed only inserts missing base data and creates no role) |
+| 2.3 | **Retired seed flag removed** | `grep '^ALLOW_SEED_IN_PRODUCTION' .env` → no output (retired in v9.0.134: the boot seed only inserts missing base data and creates no role) |
 | 2.4 | **Danger flags absent** | `grep -E '^ERP_ALLOW_TEST_CLEANUP=1|^ENABLE_TEST_ENDPOINTS=true' .env` → no output |
 | 2.5 | `JWT_SECRET` >= 32 chars | `grep -c '^JWT_SECRET=.\{32,\}' .env` → `1` |
 | 2.6 | Env audit | `set -a; . ./.env; set +a; ./scripts/audit-env.sh` → no CRITICAL findings |

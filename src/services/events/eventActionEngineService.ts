@@ -33,7 +33,7 @@ export interface WebhookActionConfig {
 }
 
 export interface InAppNotificationConfig {
-  /** v9.0.110 (TD-883): کلید کاتالوگ؛ گیرندگان دارندگان آن و مدیر سیستم‌اند */
+  /** v9.0.127 (TD-883): کلید کاتالوگ؛ گیرندگان دارندگان آن و مدیر سیستم‌اند */
   targetPermission?: string;
   /** نقشی که مدیر در تنظیم قاعده برگزیده است (داده، نه کد)؛ بی هدف: مدیر سیستم */
   targetRole?: string;
@@ -237,7 +237,7 @@ export class EventActionEngineService {
     const link = notifConfig.linkTemplate ? this.interpolateTemplate(notifConfig.linkTemplate, event) : '';
     const notifType = notifConfig.notifType || 'system';
 
-    // v9.0.110 (TD-883، مدل مجوز §۴.۲): کاربر معین، دارندگان یک مجوز، یا نقشی که مدیر برگزیده؛ بی هدف، مدیر سیستم
+    // v9.0.127 (TD-883، مدل مجوز §۴.۲): کاربر معین، دارندگان یک مجوز، یا نقشی که مدیر برگزیده؛ بی هدف، مدیر سیستم
     const targetUserIds: number[] = notifConfig.targetUserId
       ? [notifConfig.targetUserId]
       : notifConfig.targetPermission

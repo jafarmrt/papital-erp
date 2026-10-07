@@ -32,7 +32,7 @@ export interface WorkflowActionTarget {
   autoActionKey: string;
 }
 
-/** v9.0.108 (TD-541): موجودیت فرایند، برای مجوزی که به خود موجودیت بسته است (مثلاً نوع سند) */
+/** v9.0.125 (TD-541): موجودیت فرایند، برای مجوزی که به خود موجودیت بسته است (مثلاً نوع سند) */
 export interface WorkflowActionEntity {
   tx: DbExecutor;
   entityId: string;

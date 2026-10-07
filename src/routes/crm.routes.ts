@@ -343,7 +343,7 @@ router.get('/crm/leads/:id', authorizePermission('crm.view'), validate(paramsIdS
   });
 }));
 
-// v9.0.110 (TD-883، مدل مجوز §۴.۲): «معامله موفق» به دارندگان «مدیریت فرصت‌های فروش» می‌رود؛ پیش‌تر به پنج کد نقش ثابت
+// v9.0.127 (TD-883، مدل مجوز §۴.۲): «معامله موفق» به دارندگان «مدیریت فرصت‌های فروش» می‌رود؛ پیش‌تر به پنج کد نقش ثابت
 async function notifySalesOnWonLead(lead: (Partial<typeof crmLeads.$inferSelect> & Record<string, unknown>), authorName: string, senderId?: number) {
   try {
     const targetUserIds = await permissionHolderUserIds(WON_LEAD_NOTIFY_PERMISSION);

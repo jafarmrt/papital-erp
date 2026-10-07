@@ -174,7 +174,7 @@ export async function checkSignaturesResetOnReentry(): Promise<string[]> {
 
 /**
  * TD-374: مجوز «مشاهده» (warehouse.view، accounting.view) یا مجوز خزانه گام نقش انبار یا حسابداری را اجرا نمی‌کند و
- * نقش تولید گام «مدیر» را. v9.0.111 (TD-542): گام نقش‌دار فقط برای همان نقش و مدیر سیستم است؛ نقش هم‌ارز بخش و مجوز
+ * نقش تولید گام «مدیر» را. v9.0.128 (TD-542): گام نقش‌دار فقط برای همان نقش و مدیر سیستم است؛ نقش هم‌ارز بخش و مجوز
  * ثبت بخش هم دیگر آن را باز نمی‌کنند (چه کسی را مجوز لازم انتقال می‌گوید).
  */
 export async function checkViewPermissionCannotApprove(): Promise<string[]> {

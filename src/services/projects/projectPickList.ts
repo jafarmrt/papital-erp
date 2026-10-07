@@ -5,7 +5,7 @@ import { containsLikePattern } from '../../lib/sqlLike.js';
 import type { ProjectPick } from '../../lib/permissions/pickLists.js';
 
 /**
- * v9.0.122 (TD-889، تصمیم ت۱۰ الف مدل مجوز): فهرست انتخاب پروژه (`GET /projects/options`) برای فرم‌های بخش‌های دیگر
+ * v9.0.139 (TD-889، تصمیم ت۱۰ الف مدل مجوز): فهرست انتخاب پروژه (`GET /projects/options`) برای فرم‌های بخش‌های دیگر
  * (سند ورود و خروج انبار، انبار پروژه، کارکرد کارمزدی، گزارش روزانه و تخصیص مواد اولیه). فقط فیلدهای
  * `PROJECT_PICK_FIELDS`؛ فهرست کامل (`GET /projects`، با محصولات، کنترل موجودی، مراحل و پیوست‌ها) فقط با `projects.view`.
  */

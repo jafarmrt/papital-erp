@@ -245,13 +245,13 @@ const docTypeTitles: Record<string, string> = {
   waste: 'سند ضایعات'
 };
 
-/** v9.0.108 (TD-541 / TD-771): کاربر مجوز این کار را دارد، وگرنه ۴۰۳ با نام فارسی مجوز */
+/** v9.0.125 (TD-541 / TD-771): کاربر مجوز این کار را دارد، وگرنه ۴۰۳ با نام فارسی مجوز */
 async function assertMayRecordDocument(user: AuthUserPayload | undefined, permission: string, action: string): Promise<void> {
   if (await can(user, permission)) return;
   throw new ForbiddenError(`${action} مجوز «${permissionDefinition(permission)?.title ?? permission}» را می‌خواهد.`, { permission }, 'DOCUMENT_PERMISSION_REQUIRED');
 }
 
-// v9.0.108 (TD-541 / TD-771، تصمیم ت۱ بسته ۸): مجوز هر سند از جدول «نوع سند و وضعیت ← مجوز» (documentPermissions.ts)
+// v9.0.125 (TD-541 / TD-771، تصمیم ت۱ بسته ۸): مجوز هر سند از جدول «نوع سند و وضعیت ← مجوز» (documentPermissions.ts)
 // خوانده می‌شود. پیش‌تر هر نقشی جز چهار کد ثابت «کاربر فروش» بود: سند قطعی نمی‌زد و پیش‌نویسش پیش‌فاکتور می‌شد
 router.post('/documents', authorizePermission('documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'audit.apply'), idempotency({ scope: 'documents' }), validate(documentCreateSchema), asyncHandler(async (req, res) => {
   const requestedType = String(req.body.docType);
@@ -339,7 +339,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   res.json({ success: true, docId: newDocId, projectReservation });
 }));
 
-// v9.0.123 (TD-890، ت۱۰ الف): فهرست کامل با مجوز بخش اسناد؛ مجوز انبارگردانی فقط فهرست سندهای شمارش و انتقال
+// v9.0.140 (TD-890، ت۱۰ الف): فهرست کامل با مجوز بخش اسناد؛ مجوز انبارگردانی فقط فهرست سندهای شمارش و انتقال
 router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...READ_PERMISSIONS.stockCountDocuments), validate(documentsQuerySchema), asyncHandler(async (req, res) => {
   const type = req.query.type as string;
   assertDocumentTypeReadable(await readableDocumentTypes(req.user, READ_PERMISSIONS.documents), type);
@@ -399,7 +399,7 @@ router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documentRec
   res.json(doc);
 }));
 
-// v9.0.108 (TD-541 / TD-771): نهایی‌سازی همان مجوز ثبت قطعی همان نوع سند را می‌خواهد (پیش‌تر «ویرایش فاکتورها» بس بود و
+// v9.0.125 (TD-541 / TD-771): نهایی‌سازی همان مجوز ثبت قطعی همان نوع سند را می‌خواهد (پیش‌تر «ویرایش فاکتورها» بس بود و
 // فروشنده پیش‌فاکتوری را که خودش قطعی نمی‌توانست ثبت کند از این مسیر قطعی می‌کرد)
 router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 'warehouse.in', 'warehouse.out'), idempotency({ scope: 'documents' }), validate(finalizeDocumentSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);

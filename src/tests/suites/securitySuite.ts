@@ -98,7 +98,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
 
     // 2. Role matching checks
     // v9.0.34 (TD-444، تصمیم ت۱): workflow.admin و workflow.manage مجوز طراحی‌اند و گام دیگران را امضا نمی‌کنند؛ فقط مدیر سیستم.
-    // v9.0.111 (TD-542): نقش گام فقط همان نقش است؛ مجوز ثبت بخش (warehouse.in) گام نقش انبار را دیگر باز نمی‌کند
+    // v9.0.128 (TD-542): نقش گام فقط همان نقش است؛ مجوز ثبت بخش (warehouse.in) گام نقش انبار را دیگر باز نمی‌کند
     const ownRoleCheck = WorkflowTransitionExecutor.checkUserRoleMatch('finance_manager', 'finance_manager');
     const otherRoleCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'finance_manager');
     const systemAdminCheck = WorkflowTransitionExecutor.checkUserRoleMatch('admin', 'finance_manager');

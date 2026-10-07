@@ -187,7 +187,7 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
   }
 ];
 
-/** v9.0.114 (TD-668، ت۲ بسته ۱۶): زبانه‌ای دیده می‌شود که API آن کاربر را می‌پذیرد (جدول `SETTINGS_TAB_ACCESS`) */
+/** v9.0.131 (TD-668، ت۲ بسته ۱۶): زبانه‌ای دیده می‌شود که API آن کاربر را می‌پذیرد (جدول `SETTINGS_TAB_ACCESS`) */
 export function getVisibleGroups(
   groups: SettingCategoryGroup[],
   userRole: string,

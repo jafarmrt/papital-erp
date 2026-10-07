@@ -5,7 +5,7 @@ import { User } from '../../types';
 import { canOpenPage, isSystemAdminViewer, type PagePath } from '../../lib/permissions/pageAccess';
 
 export interface ProtectedRouteProps {
-  /** v9.0.114 (TD-668): دسترسی صفحه فقط از جدول یکتای pageAccess، همان که منو و میانبرها می‌خوانند */
+  /** v9.0.131 (TD-668): دسترسی صفحه فقط از جدول یکتای pageAccess، همان که منو و میانبرها می‌خوانند */
   page: PagePath;
   userPermissions: { permissions: string[]; isAdmin: boolean; roleName?: string };
   permissionsLoaded: boolean;

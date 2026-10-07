@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { WorkflowEdgeGuardFields, type WorkflowEdgeGuard } from '../../components/workflow/WorkflowEdgeGuardFields';
 import { workflowDesignErrors } from '../../lib/workflow/workflowDesignRules';
 
-// v9.0.111 (TD-542): مجوز اقدام از فهرست مشترک مجوزها و نقش فقط از نقش‌های تعریف‌شده؛ بی پنج کد نقش ثابت طراح
+// v9.0.128 (TD-542): مجوز اقدام از فهرست مشترک مجوزها و نقش فقط از نقش‌های تعریف‌شده؛ بی پنج کد نقش ثابت طراح
 const roles = [{ code: 'branch_accountant', name: 'حسابدار شعبه' }];
 
 function renderFields(value: Partial<WorkflowEdgeGuard>) {

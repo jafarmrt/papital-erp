@@ -542,7 +542,7 @@ const projectPickListValidation = z.object({
   }).optional(),
 });
 
-// v9.0.122 (TD-889، تصمیم ت۱۰ الف): فهرست انتخاب پروژه برای فرم‌های بخش‌های دیگر؛ فهرست کامل پایین فقط با projects.view
+// v9.0.139 (TD-889، تصمیم ت۱۰ الف): فهرست انتخاب پروژه برای فرم‌های بخش‌های دیگر؛ فهرست کامل پایین فقط با projects.view
 router.get('/projects/options', authorizePermission(...READ_PERMISSIONS.projectOptions), validate(projectPickListValidation), asyncHandler(async (req, res) => {
   const query = req.query as { status?: string; search?: string; limit?: string };
   res.json({ success: true, data: await listProjectPicks({ status: query.status, search: query.search, limit: parsePickListLimit(query.limit) }) });

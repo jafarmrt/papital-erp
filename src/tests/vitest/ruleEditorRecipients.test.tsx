@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { RuleEditorModal, type RuleFormData } from '../../components/settings/RuleEditorModal';
 
-// v9.0.110 (TD-883): گیرنده اعلان قاعده «دارندگان یک مجوز» از کاتالوگ است، نه فهرست ثابت چهار کد نقش
+// v9.0.127 (TD-883): گیرنده اعلان قاعده «دارندگان یک مجوز» از کاتالوگ است، نه فهرست ثابت چهار کد نقش
 vi.mock('../../api', () => ({ fetchJson: vi.fn() }));
 
 const rule = (actionConfigJson: Record<string, unknown>): RuleFormData => ({

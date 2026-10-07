@@ -32,7 +32,7 @@ interface WooCommerceTabProps {
   loadSyncedWcOrders: () => void;
   handleSyncAllStocks: () => void;
   isSyncingAllStocks: boolean;
-  /** v9.0.114 (TD-668): هر بخش فقط برای کسی که API آن را می‌پذیرد فعال است (پیش‌فرض: همه، برای مدیر سیستم) */
+  /** v9.0.131 (TD-668): هر بخش فقط برای کسی که API آن را می‌پذیرد فعال است (پیش‌فرض: همه، برای مدیر سیستم) */
   access?: WooCommerceTabAccess;
 }
 

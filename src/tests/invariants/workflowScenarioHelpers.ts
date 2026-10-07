@@ -40,7 +40,7 @@ function payloadOf(spec: WfSpec, code: string, entityType: string, id?: number):
 }
 
 /**
- * v9.0.111 (TD-542): ذخیره طرح نقش تعریف‌نشده را نمی‌پذیرد؛ نقش‌های آزمون (بی مجوز) پیش از ذخیره تعریف می‌شوند تا
+ * v9.0.128 (TD-542): ذخیره طرح نقش تعریف‌نشده را نمی‌پذیرد؛ نقش‌های آزمون (بی مجوز) پیش از ذخیره تعریف می‌شوند تا
  * رفتار امضا همان کد نقش کاربر بماند
  */
 async function ensureTransitionRoles(spec: WfSpec): Promise<void> {

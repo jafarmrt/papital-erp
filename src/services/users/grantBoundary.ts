@@ -6,7 +6,7 @@ import { isSystemAdminRole } from '../../lib/permissions/permissionCatalog.js';
 import { grantorPermissionsOf, permissionsBeyond, permissionTitles, type GrantorPermissions } from '../../lib/permissions/grantBoundary.js';
 
 /**
- * v9.0.112 (TD-520، یافته B02-05، تصمیم ت۳ الف): دارنده غیرمدیر `users.manage` / `roles.manage` دسترسی خودش را بالا
+ * v9.0.129 (TD-520، یافته B02-05، تصمیم ت۳ الف): دارنده غیرمدیر `users.manage` / `roles.manage` دسترسی خودش را بالا
  * نمی‌برد. پیش‌تر دارنده «مدیریت نقش‌ها» به نقش خودش «صدور و ویرایش اسناد حسابداری»، «مدیریت کاربران» و «مدیریت
  * تنظیمات» افزود و دارنده «مدیریت کاربران» نقش خودش را «مدیر ارشد مالی» کرد. قاعده‌ها:
  * - نقش خود را نه ویرایش می‌کند نه عوض؛

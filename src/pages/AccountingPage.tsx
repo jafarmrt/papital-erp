@@ -99,7 +99,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
 
   const currentTab: TabType = (tab && (validTabs as readonly string[]).includes(tab)) ? (tab as TabType) : 'dashboard';
 
-  // v9.0.114 (TD-668): هر زبانه همان دسترسی پیوند منوی خودش در جدول یکتای pageAccess را دارد؛ «کدینگ» به تنظیمات می‌رود
+  // v9.0.131 (TD-668): هر زبانه همان دسترسی پیوند منوی خودش در جدول یکتای pageAccess را دارد؛ «کدینگ» به تنظیمات می‌رود
   const tabRule = pageAccessRule(`/accounting/${currentTab}`);
   const isTabAllowed = currentTab === 'coa' || canOpenPage(`/accounting/${currentTab}`, viewer);
 
@@ -232,8 +232,6 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
 
           {currentTab === 'vouchers' && (
             <JournalVouchersTab
-              vouchers={vouchers}
-              loading={loading}
               accounts={accounts}
               customers={customers}
               personnelList={personnelList}

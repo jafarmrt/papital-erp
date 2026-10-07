@@ -6,6 +6,7 @@ import { cn } from '../utils';
 import SystemHealthDiagnostic from '../components/SystemHealthDiagnostic';
 import { SystemConfigTab } from '../components/settings/SystemConfigTab';
 import { useSettings } from '../hooks/useSettings';
+import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog';
 import { GeneralSettingsTab } from '../components/settings/GeneralSettingsTab';
 import { CategoriesTab, CategoryModal } from '../components/settings/CategoriesTab';
 import { WarehousesTab, WarehouseModal } from '../components/settings/WarehousesTab';
@@ -40,7 +41,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // v9.0.114 (TD-668، ت۲ بسته ۱۶): زبانه‌ها و خود صفحه از جدول یکتای دسترسی؛ زبانه‌ای که کاربر نمی‌بیند (پیش‌فرض «عمومی» یا
+  // v9.0.131 (TD-668، ت۲ بسته ۱۶): زبانه‌ها و خود صفحه از جدول یکتای دسترسی؛ زبانه‌ای که کاربر نمی‌بیند (پیش‌فرض «عمومی» یا
   // `?tab=`) به نخستین زبانه دیدنی برمی‌گردد و هرگز نمایش داده نمی‌شود
   const viewer = { permissions: userPermissions?.permissions, isAdmin: userPermissions?.isAdmin, role: currentUser.role };
   const isSystemAdmin = isSystemAdminViewer(viewer);
@@ -213,6 +214,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
               s.setShowWhModal(true);
             }}
             onDeleteWarehouse={s.handleWhDelete}
+            canReactivate={currentUser.role === SYSTEM_ADMIN_ROLE}
           />
         )}
 
@@ -337,7 +339,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
 
       <ConfirmModal
         isOpen={s.whConfirmState.isOpen}
-        message="غیرفعال‌سازی این انبار؟"
+        message="این انبار غیرفعال شود؟ مدیر سیستم می‌تواند آن را دوباره فعال کند."
         onConfirm={s.executeWhDelete}
         onCancel={() => s.setWhConfirmState({ isOpen: false, whId: 0 })}
       />

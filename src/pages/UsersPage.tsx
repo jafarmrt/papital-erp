@@ -30,7 +30,7 @@ interface UsersPageProps {
 }
 
 /**
- * v9.0.113 (TD-525، یافته B02-10، تصمیم ت۳ الف): صفحه برای دارندگان «مدیریت کاربران» و «مدیریت نقش‌ها» باز است (همان
+ * v9.0.130 (TD-525، یافته B02-10، تصمیم ت۳ الف): صفحه برای دارندگان «مدیریت کاربران» و «مدیریت نقش‌ها» باز است (همان
  * مجوزهای مسیر و API)، نه فقط برای کد مدیر سیستم. هر دکمه همان مجوز API خودش را می‌پرسد و فرم‌ها فقط آنچه کاربر جاری
  * می‌تواند بدهد پیشنهاد می‌کنند (قاعده مشترک `grantBoundary`).
  */
@@ -65,7 +65,7 @@ export default function UsersPage({ currentUser, userPermissions }: UsersPagePro
   // Role Modal State
   const [showRoleModal, setShowRoleModal] = React.useState(false);
   const [editingRole, setEditingRole] = React.useState<Role | null>(null);
-  // v9.0.117 (TD-526): پیش‌نویس نقش تازه از الگو
+  // v9.0.134 (TD-526): پیش‌نویس نقش تازه از الگو
   const [roleDraft, setRoleDraft] = React.useState<RoleDraft | null>(null);
   const [confirmRoleState, setConfirmRoleState] = React.useState<{
     isOpen: boolean;

@@ -104,7 +104,7 @@ describe('DocumentsPage — stock receipt / remittance form (TD-080 part 3 chara
     fireEvent.change(projectSelect, { target: { value: '7' } });
     expect(await screen.findByText('اقلام رزرو شده انبار برای پروژه «PRJ-7»')).toBeTruthy();
     expect(screen.getByText('1 قلم کالا فریز شده')).toBeTruthy();
-    // v9.0.122 (TD-889): پروژه برگزیده از فهرست انتخاب می‌آید، نه از پرونده کامل پروژه
+    // v9.0.139 (TD-889): پروژه برگزیده از فهرست انتخاب می‌آید، نه از پرونده کامل پروژه
     expect(fetchJson.mock.calls.some(([url]) => String(url).startsWith('/projects/7'))).toBe(false);
     await screen.findByText('+ افزودن');
     fireEvent.click(screen.getByText('+ افزودن'));

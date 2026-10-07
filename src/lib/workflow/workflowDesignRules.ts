@@ -124,7 +124,7 @@ export function workflowDesignErrors(states: unknown, transitions: unknown): str
     if (tr.kValue !== undefined && tr.kValue !== null && !(Number.isInteger(tr.kValue) && Number(tr.kValue) >= 1)) {
       errors.push(`شمار امضای اقدام ${transitionLabel(tr, i)} باید عدد درست و دست‌کم ۱ باشد.`);
     }
-    // v9.0.111 (TD-542، مدل مجوز §۴.۲): هر اقدام یک مجوز از فهرست مجوزها می‌خواهد و اختیاراً یک نقش مشخص؛ وجود نقش را
+    // v9.0.128 (TD-542، مدل مجوز §۴.۲): هر اقدام یک مجوز از فهرست مجوزها می‌خواهد و اختیاراً یک نقش مشخص؛ وجود نقش را
     // سرور هنگام ذخیره می‌سنجد
     const permission = text(tr.requiredPermission);
     if (permission && !isCatalogPermission(permission)) {

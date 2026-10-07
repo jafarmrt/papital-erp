@@ -22,7 +22,7 @@ interface UsersTabProps {
   onAddUser: () => void;
   onEditUser: (user: User) => void;
   onDeleteUser: (userId: number) => void;
-  /** v9.0.113 (TD-525، ت۳): دارنده «مدیریت کاربران»؛ حساب‌هایی را ویرایش و حذف می‌کند که همه مجوزهای نقششان را دارد */
+  /** v9.0.130 (TD-525، ت۳): دارنده «مدیریت کاربران»؛ حساب‌هایی را ویرایش و حذف می‌کند که همه مجوزهای نقششان را دارد */
   canManage?: boolean;
   grantor?: GrantorPermissions;
 }

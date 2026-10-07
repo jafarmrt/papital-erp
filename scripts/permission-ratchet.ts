@@ -32,7 +32,7 @@ export const ROLE_CODES: readonly string[] = [
 export const CATALOG_FILE = 'src/lib/permissions/permissionCatalog.ts';
 
 /**
- * v9.0.117 (TD-526): role templates are data, not checks. Their codes are only suggested codes for a role an admin creates
+ * v9.0.134 (TD-526): role templates are data, not checks. Their codes are only suggested codes for a role an admin creates
  * from a template, so they count neither as role-code literals nor as server checks of permission keys.
  */
 export const ROLE_TEMPLATES_FILE = 'src/lib/permissions/roleTemplates.ts';

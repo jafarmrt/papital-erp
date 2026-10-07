@@ -1,11 +1,11 @@
 -- Drizzle Migration 0063: the new permission documents.finalize goes to the roles that finalized sales documents before
--- (v9.0.108 / TD-541 and TD-771, findings B02-26 and B08-02, product-owner decision ت۱ «الف» of package 8 and the approved
+-- (v9.0.125 / TD-541 and TD-771, findings B02-26 and B08-02, product-owner decision ت۱ «الف» of package 8 and the approved
 -- permission model §4.4)
 --
 -- Until v9.0.107 POST /documents treated every role except four fixed role codes (admin, manager, warehouse_keeper,
 -- accountant) as a "sales user": it refused a final document and turned a draft into a proforma, while
 -- PUT /documents/:id/finalize let any holder of documents.edit, warehouse.in or warehouse.out finalize any document.
--- From v9.0.108 one table decides by document type and status: a sales document (invoice, proforma, sales return) is
+-- From v9.0.125 one table decides by document type and status: a sales document (invoice, proforma, sales return) is
 -- recorded as draft or proforma with documents.create and recorded final or finalized with the new documents.finalize;
 -- a warehouse document needs warehouse.in or warehouse.out by its stock direction; a stock count needs audit.apply.
 --

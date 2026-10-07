@@ -32,7 +32,7 @@ import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 
 // Print styles are added globally or inline
 export default function CreateInvoicePage({ user: currentUser }: { user: User }) {
-  // v9.0.108 (TD-541 / TD-771): گزینه «فاکتور نهایی» با همان مجوزی که سرور می‌سنجد، نه کد نقش (documentPermissions.ts)
+  // v9.0.125 (TD-541 / TD-771): گزینه «فاکتور نهایی» با همان مجوزی که سرور می‌سنجد، نه کد نقش (documentPermissions.ts)
   const isSystemAdmin = currentUser.role === SYSTEM_ADMIN_ROLE;
   const holdsFinalize = useHasPermission(SALES_FINALIZE_PERMISSION);
   const holdsCreate = useHasPermission('documents.create');

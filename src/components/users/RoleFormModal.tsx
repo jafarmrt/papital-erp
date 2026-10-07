@@ -29,9 +29,9 @@ interface RoleFormModalProps {
   editingRole: Role | null;
   permCatalog: PermissionCategory[];
   onSuccess: () => void;
-  /** v9.0.113 (TD-525، ت۳): کاربر غیرمدیر فقط مجوزهایی را تیک می‌زند که خودش دارد (همان قاعده سرور) */
+  /** v9.0.130 (TD-525، ت۳): کاربر غیرمدیر فقط مجوزهایی را تیک می‌زند که خودش دارد (همان قاعده سرور) */
   grantor?: GrantorPermissions;
-  /** v9.0.117 (TD-526): نقش تازه از یک الگو («ساخت نقش از الگو» در زبانه نقش‌ها)؛ فرم با همین پر می‌شود و ویرایش‌پذیر است */
+  /** v9.0.134 (TD-526): نقش تازه از یک الگو («ساخت نقش از الگو» در زبانه نقش‌ها)؛ فرم با همین پر می‌شود و ویرایش‌پذیر است */
   draft?: RoleDraft | null;
 }
 
@@ -66,7 +66,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   const [addedOnOpen, setAddedOnOpen] = useState<string[]>([]);
 
   const isEditing = editingRole !== null;
-  // v9.0.119 (TD-886، قاعده ۳ مدل مجوز): «مدیر سیستم» همه مجوزها را همیشه دارد؛ تیک‌هایش نمایش داده می‌شوند ولی ویرایش نمی‌شوند
+  // v9.0.136 (TD-886، قاعده ۳ مدل مجوز): «مدیر سیستم» همه مجوزها را همیشه دارد؛ تیک‌هایش نمایش داده می‌شوند ولی ویرایش نمی‌شوند
   const isFixedAdmin = isSystemAdminRole(editingRole?.code);
   const allCatalogKeys = useMemo(() => permCatalog.flatMap((c) => c.permissions.map((p) => p.key)), [permCatalog]);
 
@@ -127,7 +127,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
     setIsSaving(true);
     try {
       if (isEditing) {
-        // v9.0.119 (TD-886): از نقش «مدیر سیستم» فقط نام و توضیح فرستاده می‌شود
+        // v9.0.136 (TD-886): از نقش «مدیر سیستم» فقط نام و توضیح فرستاده می‌شود
         await fetchJson(`/roles/${editingRole.id}`, {
           method: 'PUT',
           body: JSON.stringify(isFixedAdmin ? { name: roleForm.name, description: roleForm.description } : roleForm),
@@ -149,7 +149,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
     }
   };
 
-  // v9.0.113 (TD-525، ت۳): از فهرست‌های گروهی فقط کلیدهایی افزوده می‌شوند که کاربر جاری دارد
+  // v9.0.130 (TD-525، ت۳): از فهرست‌های گروهی فقط کلیدهایی افزوده می‌شوند که کاربر جاری دارد
   const grantable = (keys: string[], current: string[]) => keys.filter((k) => current.includes(k) || canGrantPermission(grantor, k));
 
   // v9.0.86 (TD-880): تیک یک مجوز نیازهایش را هم می‌زند و برداشتن آن مجوزهای وابسته را هم برمی‌دارد، همان قاعده‌ای که سرور در ذخیره اعمال می‌کند

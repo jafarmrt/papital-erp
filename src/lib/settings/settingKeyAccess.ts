@@ -3,7 +3,7 @@ import { isSystemAdminViewer, type ViewerAccess } from '../permissions/pageAcces
 /**
  * کلیدهای تنظیمات که فقط مدیر سیستم تغییر می‌دهد: آدرس فروشگاه و کلیدهای محرمانه ووکامرس (تغییر آدرس فروشگاه کلیدها را
  * به سایت دیگری می‌فرستد، پس هم‌ردیف کلیدهای محرمانه است). سرور (`SystemSettingsService`) و زبانه ووکامرس از همین فهرست
- * می‌خوانند (v9.0.114، TD-668)؛ بقیه کلیدهای کسب‌وکاری با `settings.manage` ذخیره می‌شوند.
+ * می‌خوانند (v9.0.131، TD-668)؛ بقیه کلیدهای کسب‌وکاری با `settings.manage` ذخیره می‌شوند.
  */
 export const SYSTEM_ADMIN_SETTING_KEYS: readonly string[] = [
   'wc_store_url',

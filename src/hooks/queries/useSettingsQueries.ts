@@ -14,7 +14,9 @@ export interface WarehouseItem {
   id: number;
   name: string;
   code: string;
-  is_active: number;
+  is_active?: number;
+  /** v9.0.112 (TD-490): فهرست سرور ستون Drizzle را با نام camelCase می‌فرستد */
+  isActive?: number;
 }
 
 /**
@@ -65,6 +67,37 @@ export function useWarehousesQuery() {
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
+  });
+}
+
+/**
+ * v9.0.112 (TD-490): انبارهای غیرفعال برای فعال‌سازی دوباره در «مدیریت انبارها» (فقط مدیر سیستم)
+ */
+export function useInactiveWarehousesQuery(enabled: boolean) {
+  return useQuery<WarehouseItem[]>({
+    queryKey: QUERY_KEYS.warehouses.inactive(),
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson('/warehouses?includeInactive=1', { signal });
+      const rows: WarehouseItem[] = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+      return rows.filter(w => Number(w.isActive ?? w.is_active) === 0);
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useReactivateWarehouseMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: number) => fetchJson(`/warehouses/${id}/reactivate`, { method: 'POST' }),
+    onSuccess: () => {
+      void invalidateDomain(queryClient, 'warehouses');
+      toast.success('انبار دوباره فعال شد');
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error && err.message ? err.message : 'فعال‌سازی دوباره انبار انجام نشد');
+    },
   });
 }
 

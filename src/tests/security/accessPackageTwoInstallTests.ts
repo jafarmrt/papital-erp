@@ -45,7 +45,7 @@ export async function runAccessPackageTwoInstallTests(shouldRun: ShouldRun): Pro
           return;
         }
 
-        // a role with a former seed code whose admin took products.delete away (the seed until v9.0.115 put it back)
+        // a role with a former seed code whose admin took products.delete away (the seed until v9.0.132 put it back)
         const role = { code: 'manager' };
         const kept = ['products.view', 'customers.view'];
         await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES ('مدیر عمومی', 'manager', $1::jsonb, 0)

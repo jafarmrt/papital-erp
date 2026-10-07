@@ -1,9 +1,9 @@
 -- Drizzle Migration 0066: every install has the system admin role row
--- (v9.0.117 / TD-526, finding B02-11, permission model §4.3 and decision t6 revised option A)
+-- (v9.0.134 / TD-526, finding B02-11, permission model §4.3 and decision t6 revised option A)
 --
--- Until v9.0.116 roles were created only by the seed, which production did not run, so a fresh production install had
+-- Until v9.0.133 roles were created only by the seed, which production did not run, so a fresh production install had
 -- no role at all: the roles page was empty although the setup wizard had created the first user with role code admin.
--- From v9.0.117 the seed creates no role; this migration creates the one fixed role, «مدیر سیستم» (code admin), when
+-- From v9.0.134 the seed creates no role; this migration creates the one fixed role, «مدیر سیستم» (code admin), when
 -- it is missing. Its permissions are not stored: the system admin passes every check by its code (can() in
 -- src/middleware/authorize.ts). Other roles are made by the admin from a template on the roles page.
 -- An existing admin row (name, description, permissions) is left as it is. An inserted row gets one activity_logs

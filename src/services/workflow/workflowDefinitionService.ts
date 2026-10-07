@@ -258,7 +258,7 @@ export class WorkflowDefinitionService {
     assertSavableWorkflowDesign(payload);
     // v7.0.87 (TD-112): تعریف، وضعیت‌ها، انتقال‌ها و نسخه تازه در یک تراکنش ذخیره می‌شوند
     const defId = await orm.transaction(async (tx) => {
-      // v9.0.111 (TD-542): نقش هر اقدام باید در فهرست نقش‌ها باشد (۴۲۲)؛ کد ثبت‌شده نقش ذخیره می‌شود
+      // v9.0.128 (TD-542): نقش هر اقدام باید در فهرست نقش‌ها باشد (۴۲۲)؛ کد ثبت‌شده نقش ذخیره می‌شود
       const knownRoles = await resolveTransitionRoles(tx, Array.isArray(payload.transitions) ? payload.transitions : []);
       let finalDefId = payload.id;
       if (!finalDefId) {
@@ -684,7 +684,7 @@ export class WorkflowDefinitionService {
               positionY: 340
             }
           ],
-          // v9.0.111 (TD-542، مدل مجوز §۴.۲): گام‌ها فقط مجوز «accounting.vouchers» را می‌خواهند؛ پیش‌تر نقش «accountant» هم
+          // v9.0.128 (TD-542، مدل مجوز §۴.۲): گام‌ها فقط مجوز «accounting.vouchers» را می‌خواهند؛ پیش‌تر نقش «accountant» هم
           // می‌خواستند و نقش سفارشی با همان مجوز تأیید نمی‌کرد، و در نصب خام نقشی که این کد را داشته باشد نیست
           transitions: [
             {

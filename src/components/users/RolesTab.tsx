@@ -11,10 +11,10 @@ interface RolesTabProps {
   onAddRole: () => void;
   onEditRole: (role: Role) => void;
   onDeleteRole: (roleId: number, roleName: string) => void;
-  /** v9.0.113 (TD-525، ت۳): دارنده «مدیریت نقش‌ها»؛ نقش خودش را (اگر مدیر سیستم نیست) ویرایش نمی‌کند */
+  /** v9.0.130 (TD-525، ت۳): دارنده «مدیریت نقش‌ها»؛ نقش خودش را (اگر مدیر سیستم نیست) ویرایش نمی‌کند */
   canManage?: boolean;
   ownRoleCode?: string;
-  /** v9.0.117 (TD-526): «ساخت نقش از الگو»؛ فرم نقش تازه با نام و تیک‌های الگو باز می‌شود */
+  /** v9.0.134 (TD-526): «ساخت نقش از الگو»؛ فرم نقش تازه با نام و تیک‌های الگو باز می‌شود */
   onAddRoleFromTemplate?: (template: RoleTemplate) => void;
 }
 
@@ -110,7 +110,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
         )}
         {rolesList.map((r) => {
           const permCount = Array.isArray(r.permissions) ? r.permissions.length : 0;
-          // v9.0.118 (TD-885، ت۹ الف): فقط «مدیر سیستم» ثابت است؛ هر نقش دیگر ویرایش و حذف می‌شود
+          // v9.0.135 (TD-885، ت۹ الف): فقط «مدیر سیستم» ثابت است؛ هر نقش دیگر ویرایش و حذف می‌شود
           const isSys = isSystemAdminRole(r.code);
           const userCountWithRole = users.filter((u) => u.role === r.code).length;
 

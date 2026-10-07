@@ -14,7 +14,7 @@ import { defineWorkflow, instanceRow, refusalStatus, startWf, tasksOf, transit, 
  */
 export async function checkTransitionRequiredPermission(): Promise<string[]> {
   const problems: string[] = [];
-  // v9.0.111 (TD-542): مجوز لازم کلید فهرست مجوزهاست؛ کلیدی که کاربران آزمون جز از این راه ندارند
+  // v9.0.128 (TD-542): مجوز لازم کلید فهرست مجوزهاست؛ کلیدی که کاربران آزمون جز از این راه ندارند
   const permission = 'accounting.fiscal_close';
   const allowedRole = `wfg_perm_${uniqueTag()}`;
   await createTestRole({ code: allowedRole, name: allowedRole, permissions: [permission] });

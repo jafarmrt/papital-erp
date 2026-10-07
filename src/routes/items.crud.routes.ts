@@ -142,7 +142,7 @@ const itemPickListValidation = z.object({
   }).optional(),
 });
 
-// v9.0.121 (TD-888، تصمیم ت۱۰ الف): فهرست انتخاب کالا برای فرم‌های بخش‌های دیگر؛ فهرست کامل پایین فقط با مجوز بخش کالا
+// v9.0.138 (TD-888، تصمیم ت۱۰ الف): فهرست انتخاب کالا برای فرم‌های بخش‌های دیگر؛ فهرست کامل پایین فقط با مجوز بخش کالا
 router.get('/items/options', authorizePermission(...READ_PERMISSIONS.itemOptions), validate(itemPickListValidation), asyncHandler(async (req, res) => {
   const query = req.query as { type?: string; search?: string; limit?: string };
   res.json({ success: true, data: await listItemPicks(req.user, { type: query.type, search: query.search, limit: parsePickListLimit(query.limit) }) });

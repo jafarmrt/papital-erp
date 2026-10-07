@@ -12,7 +12,7 @@ import { PERMISSION_KEYS } from '../../lib/permissions/permissionCatalog';
 import { PAGE_ACCESS, SETTINGS_TAB_ACCESS, canOpenPage, canOpenSettingsTab } from '../../lib/permissions/pageAccess';
 import type { User } from '../../types';
 
-// v9.0.114 (TD-668، یافته B16-04، تصمیم ت۲ الف بسته ۱۶): منو، مسیر صفحه، میانبرهای پیشخوان و زبانه‌های تنظیمات فقط از
+// v9.0.131 (TD-668، یافته B16-04، تصمیم ت۲ الف بسته ۱۶): منو، مسیر صفحه، میانبرهای پیشخوان و زبانه‌های تنظیمات فقط از
 // جدول یکتای pageAccess می‌خوانند. هم‌خوانی همان جدول با گارد API در آزمون sec_page_access_matches_api_td_668 است.
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));

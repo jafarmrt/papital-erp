@@ -78,7 +78,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
         return rows.filter(t => Number(t.instanceId ?? (t.instance as Row | undefined)?.id) === instanceId);
       };
 
-      // ۱) گردش‌کار سند حسابداری (گام‌ها با مجوز accounting.vouchers، از v9.0.111 بی نقش): مدیر مالی آن مجوز را دارد
+      // ۱) گردش‌کار سند حسابداری (گام‌ها با مجوز accounting.vouchers، از v9.0.128 بی نقش): مدیر مالی آن مجوز را دارد
       const { voucher } = await createTestVoucher({ status: 'draft', date: await businessTodayIsoDate(), totalDebit: 2000000, totalCredit: 2000000 } as never);
       const started = await h.post('/api/workflow/start', { workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
       const voucherInstance = Number(started.body?.data?.id);
@@ -110,7 +110,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       const [vAfter] = await h.q(`SELECT status FROM journal_vouchers WHERE id = $1`, [voucher.id]);
       if (vAfter?.status !== 'approved') wrong.push(`سند حسابداری پس از اجرای مدیر مالی ${String(vAfter?.status)} است`);
 
-      // ۲) v9.0.111 (TD-542): گامی که مجوز ثبت انبار می‌خواهد (بی نقش): نقش تازه با همان مجوز آن را می‌بیند و اجرا می‌کند و
+      // ۲) v9.0.128 (TD-542): گامی که مجوز ثبت انبار می‌خواهد (بی نقش): نقش تازه با همان مجوز آن را می‌بیند و اجرا می‌کند و
       // مجوز مشاهده انبار نه. پیش‌تر همین را گام نقش «انباردار» با هم‌ارزی مجوز ثبت بخش می‌داد که حذف شد
       const { definition } = await createTestWorkflow({ definition: { entityType: 'test_document' } });
       await h.q(`UPDATE workflow_transitions SET required_role = '', required_permission = 'warehouse.out' WHERE workflow_definition_id = $1`, [definition.id]);

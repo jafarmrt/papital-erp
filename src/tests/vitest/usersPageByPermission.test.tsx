@@ -9,7 +9,7 @@ import { getMenuGroups } from '../../components/layout/menuConfig';
 import { PERMISSION_CATALOG } from '../../lib/permissions/permissionCatalog';
 import type { PermissionCategory, Role, User } from '../../types';
 
-// v9.0.113 (TD-525، یافته B02-10، تصمیم ت۳ الف): صفحه و منوی کاربران و نقش‌ها با «مدیریت کاربران» / «مدیریت نقش‌ها» باز
+// v9.0.130 (TD-525، یافته B02-10، تصمیم ت۳ الف): صفحه و منوی کاربران و نقش‌ها با «مدیریت کاربران» / «مدیریت نقش‌ها» باز
 // است، نه فقط با کد مدیر سیستم، و فرم‌ها فقط آنچه کاربر جاری می‌تواند بدهد پیشنهاد می‌کنند (همان قاعده سرور، TD-520)
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));

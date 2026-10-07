@@ -47,7 +47,7 @@ async function startServer() {
     let migrationSucceeded = false;
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
-        // v9.0.116 (TD-591): مهاجرت، داده پایه و موتورهای پیش‌فرض در prepareDatabaseAtBoot
+        // v9.0.133 (TD-591): مهاجرت، داده پایه و موتورهای پیش‌فرض در prepareDatabaseAtBoot
         await prepareDatabaseAtBoot();
         logger.info('Database schema verified, migrated, seeded, passwords checked and workflow/event action/webhook engines initialized successfully');
         // v7.0.31 (TD-193 / audit P1-8): همگام‌سازی کامل اسناد حسابداری و پرکردن موجودی اولیه کاردکس از مسیر

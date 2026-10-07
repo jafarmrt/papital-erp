@@ -58,7 +58,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     permissions: [
       { key: 'documents.view', title: 'مشاهده فاکتورها', description: 'مشاهده لیست فاکتورهای فروش و پیش‌فاکتورها' },
       { key: 'documents.create', title: 'صدور فاکتور و پیش‌فاکتور', description: 'ثبت پیش‌نویس و پیش‌فاکتور فروش و برگشت از فروش', requires: ['documents.view'] },
-      // v9.0.108 (TD-541 / TD-771، تصمیم ت۱ بسته ۸): جای قاعده «کاربر فروش فقط پیش‌فاکتور» که با کد نقش نوشته شده بود
+      // v9.0.125 (TD-541 / TD-771، تصمیم ت۱ بسته ۸): جای قاعده «کاربر فروش فقط پیش‌فاکتور» که با کد نقش نوشته شده بود
       { key: 'documents.finalize', title: 'قطعی کردن سند فروش', description: 'ثبت قطعی یا نهایی کردن فاکتور، پیش‌فاکتور و برگشت از فروش، با کسر یا افزایش موجودی و صدور سند حسابداری', requires: ['documents.view'] },
       { key: 'documents.edit', title: 'ویرایش فاکتورها', description: 'اصلاح اقلام و مشخصات فاکتورهای صادرشده', requires: ['documents.view'] },
       { key: 'documents.delete', title: 'حذف فاکتور', description: 'حذف فاکتور و برگشت خودکار موجودی کالاها', requires: ['documents.view'] },
@@ -126,7 +126,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     permissions: [
       { key: 'personnel.view', title: 'مشاهده لیست و پرونده پرسنل', description: 'دسترسی به مشاهده مشخصات فردی، شغلی و مهارت‌های پرسنل؛ اطلاعات بانکی با پوشش' },
       { key: 'personnel.manage', title: 'مدیریت کامل پرسنل', description: 'امکان ثبت، ویرایش، قطع همکاری و حذف مشخصات پرسنل؛ اطلاعات بانکی پرونده و فیش را بی پوشش می‌بیند', requires: ['personnel.view'] },
-      // v9.0.109 (TD-882، مدل مجوز §۴.۲): پیش‌تر بیرون از کاتالوگ بود و کد نقش «مدیر» جای آن را می‌گرفت
+      // v9.0.126 (TD-882، مدل مجوز §۴.۲): پیش‌تر بیرون از کاتالوگ بود و کد نقش «مدیر» جای آن را می‌گرفت
       { key: 'personnel.view_sensitive', title: 'مشاهده اطلاعات بانکی پرسنل', description: 'شماره کارت، شبا، شماره حساب و نام کاربری نوبیتکس پرونده پرسنل بدون پوشش', requires: ['personnel.view'] },
     ]
   },
@@ -137,7 +137,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       { key: 'piecework.manage_tasks', title: 'مدیریت عناوین کاری و نرخ‌های پایه', description: 'تعریف و ویرایش کارهای پرکیسی، دسته‌بندی‌ها و نرخ پایه', requires: ['piecework.view'] },
       { key: 'piecework.log', title: 'ثبت و ویرایش کارکرد پرسنل', description: 'ثبت کارکرد روزانه پرسنل و تخصیص به پروژه‌ها', requires: ['piecework.view'] },
       { key: 'piecework.payroll', title: 'محاسبه و صدور فیش حقوقی', description: 'محاسبه کارکرد، کسر مساعده/مساعده و صدور تسویه‌حساب پرکیسی', requires: ['piecework.view'] },
-      // v9.0.109 (TD-882): پیش‌تر بیرون از کاتالوگ بود و کد نقش «مدیر» جای آن را می‌گرفت
+      // v9.0.126 (TD-882): پیش‌تر بیرون از کاتالوگ بود و کد نقش «مدیر» جای آن را می‌گرفت
       { key: 'payroll.view_sensitive', title: 'مشاهده اطلاعات بانکی فیش‌ها', description: 'شماره کارت، شبا و نام کاربری نوبیتکس فیش‌های حقوق بدون پوشش', requires: ['piecework.view'] },
     ]
   },
