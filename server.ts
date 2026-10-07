@@ -7,17 +7,11 @@ import 'dotenv/config';
 
 import { logger } from './src/middleware/logger.js';
 import { createApp, markStartupComplete } from './src/app.js';
-import { runMigrations } from './src/db/migrator.js';
-import { warmDisplayTimezone } from './src/lib/businessClock.js';
-import { runSeedWithLock } from './src/db/seed.js';
-import { migratePlainPasswords } from './src/db/migratePlainPasswords.js';
+import { prepareDatabaseAtBoot } from './src/services/system/bootData.js';
 import { registerWorkflowDomainActions } from './src/services/system/workflowDomainActions.js';
 import { registerDomainEventHandlers } from './src/services/events/domainEventHandlers.js';
 import { OutboxService } from './src/services/events/outboxService.js';
 import { WorkflowSlaReminderService } from './src/services/workflow/workflowSlaReminderService.js';
-import { EventActionEngineService } from './src/services/events/eventActionEngineService.js';
-import { WebhookSubscriptionService } from './src/services/events/webhookSubscriptionService.js';
-import { WorkflowEngineService } from './src/services/workflow/workflowEngineService.js';
 import { pool } from './src/db/drizzle.js';
 import { decideProcessErrorAction, processErrorMessage } from './src/lib/processErrorPolicy.js';
 
@@ -53,21 +47,8 @@ async function startServer() {
     let migrationSucceeded = false;
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
-        const migResult = await runMigrations();
-        if (!migResult.success) {
-          throw new Error(`Migration failed: ${migResult.errors.join(', ')}`);
-        }
-        if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_SEED_IN_PRODUCTION === 'true') {
-          await runSeedWithLock();
-        } else {
-          logger.info('[Startup] Skipping seed in production (set ALLOW_SEED_IN_PRODUCTION=true to enable)');
-        }
-        await migratePlainPasswords();
-        await WorkflowEngineService.seedDefaultWorkflows();
-        await EventActionEngineService.seedDefaultRules();
-        await WebhookSubscriptionService.seedDefaultSubscriptions();
-        // v8.0.77 (TD-324): کش منطقه زمانی پیش از اولین درخواست، بیرون از هر تراکنش پر می‌شود
-        await warmDisplayTimezone();
+        // v9.0.116 (TD-591): مهاجرت، داده پایه و موتورهای پیش‌فرض در prepareDatabaseAtBoot
+        await prepareDatabaseAtBoot();
         logger.info('Database schema verified, migrated, seeded, passwords checked and workflow/event action/webhook engines initialized successfully');
         // v7.0.31 (TD-193 / audit P1-8): همگام‌سازی کامل اسناد حسابداری و پرکردن موجودی اولیه کاردکس از مسیر
         // بوت حذف شدند (زمان آماده‌شدن Pod با رشد داده خطی بود و چند Pod همزمان اسناد تکراری می‌ساختند).

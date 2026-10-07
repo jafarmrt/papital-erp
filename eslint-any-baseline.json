@@ -121,7 +121,7 @@
   "src/db/migrator.ts": 5,
   "src/db/mockPool.ts": 29,
   "src/db/schema/accounting.ts": 1,
-  "src/db/seed.ts": 2,
+  "src/db/seed.ts": 1,
   "src/hooks/queries/useActivityLogQueries.ts": 2,
   "src/hooks/queries/useCustomerQueries.ts": 3,
   "src/hooks/queries/useEventQueries.ts": 12,

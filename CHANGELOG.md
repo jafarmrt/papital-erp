@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.116 — Seed Inserts Only What Is Missing
+- **Seed Inserts Only What Is Missing:** the boot seed no longer restores permissions, categories, settings or account natures an admin changed (TD-591).
+
 ### v9.0.115 — Menu From Permissions Only
 - **Menu From Permissions Only:** the per-role menu hiding is removed; a role sees exactly the pages its permissions open (TD-884).
 

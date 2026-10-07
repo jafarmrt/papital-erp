@@ -1,14 +1,14 @@
 import { orm } from './drizzle.js';
 import { runMigrations, type MigrationResult } from './migrator.js';
-import { categories, appSettings, roles, pieceworkTasks } from './schema.js';
+import { categories, appSettings, roles, pieceworkTasks, accounts } from './schema.js';
 import { eq, inArray } from 'drizzle-orm';
 import { DEFAULT_WORKFLOW_PRESETS } from '../constants/presets.js';
 import { INITIAL_PIECEWORK_TASKS } from '../data/pieceworkTasksData.js';
+import { DEFAULT_CATEGORIES } from '../data/defaultCategories.js';
 import { money } from '../lib/money.js';
 import { AccountingService } from '../services/accounting.service.js';
 import { WorkflowDefinitionService } from '../services/workflow/workflowDefinitionService.js';
 import { logger } from '../middleware/logger.js';
-import { invalidateRoleCache } from '../lib/memoryCache.js';
 import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../lib/advisoryLock.js';
 
 /**
@@ -30,9 +30,16 @@ export async function runSeedWithLock(): Promise<{ success: boolean; message: st
   }
 }
 
+/** جدولی که هیچ ردیفی ندارد (حذف‌شده‌های نرم هم ردیف‌اند) */
+async function isEmptyTable(table: typeof categories | typeof pieceworkTasks): Promise<boolean> {
+  return (await orm.select({ id: table.id }).from(table).limit(1)).length === 0;
+}
+
 /**
  * Standard System Seed Data
  * Seeds initial master catalog, 22 standard categories, roles, presets, piecework tasks, and chart of accounts.
+ * v9.0.116 (TD-591، یافته B01-11، تصمیم ت۴ بسته ۱): فقط «درج آنچه نیست». هر گونه داده پایه فقط در جدولی درج می‌شود که از
+ * آن گونه هیچ ندارد، نقش فقط اگر کدش نباشد ساخته می‌شود، و هیچ ردیف موجودی (مجوز نقش، دسته، حساب، تنظیم) ویرایش نمی‌شود.
  */
 export async function runSeed(
   options: { migrate?: () => Promise<MigrationResult> } = {}
@@ -47,53 +54,11 @@ export async function runSeed(
     throw new Error(`[Seeder] Schema migrations failed; seed aborted: ${migration.errors.join('; ') || 'unknown error'}`);
   }
 
-  // 2. Check & sync 22 standard categories
-  const defaultCategories = [
-    // محصولات نهایی (product)
-    { name: 'گردنبند', prefix: 'N', type: 'product', defaultUnit: 'عدد' },
-    { name: 'گوشواره میخی', prefix: 'S', type: 'product', defaultUnit: 'جفت' },
-    { name: 'گوشواره آویز', prefix: 'E', type: 'product', defaultUnit: 'جفت' },
-    { name: 'انگشتر', prefix: 'R', type: 'product', defaultUnit: 'عدد' },
-    { name: 'دستبند', prefix: 'B', type: 'product', defaultUnit: 'عدد' },
-    { name: 'گوشواره آویز بزرگ', prefix: 'E', type: 'product', defaultUnit: 'جفت' },
-    { name: 'گردنبند بزرگ', prefix: 'N', type: 'product', defaultUnit: 'عدد' },
-    { name: 'گوشواره دو تکه', prefix: 'E', type: 'product', defaultUnit: 'عدد' },
-    { name: 'گردنبند دو تکه', prefix: 'N', type: 'product', defaultUnit: 'عدد' },
-
-    // مواد اولیه (raw_material) — V10-2.1: prefix بدون dash انتهایی تا کد کلاینت تک‌خط ساخته شود
-    { name: 'ترنسفر', prefix: 'T', type: 'raw_material', defaultUnit: 'برگ' },
-    { name: 'مهره', prefix: 'B', type: 'raw_material', defaultUnit: 'ریسه' },
-    { name: 'مهره کریستالی', prefix: 'B-C', type: 'raw_material', defaultUnit: 'ریسه' },
-    { name: 'سنگ', prefix: 'S', type: 'raw_material', defaultUnit: 'ریسه' },
-    { name: 'مهره حدید', prefix: 'B-H', type: 'raw_material', defaultUnit: 'ریسه' },
-    { name: 'مهره چوبی', prefix: 'B-W', type: 'raw_material', defaultUnit: 'ریسه' },
-    { name: 'خرج کار', prefix: 'M', type: 'raw_material', defaultUnit: 'عدد' },
-    { name: 'خرج کار طلایی', prefix: 'M-G', type: 'raw_material', defaultUnit: 'عدد' },
-    { name: 'خرج کار برنزی', prefix: 'M-B', type: 'raw_material', defaultUnit: 'عدد' },
-    { name: 'خرج کار استیل', prefix: 'M-M', type: 'raw_material', defaultUnit: 'عدد' },
-    { name: 'بند چرمی و زنجیر', prefix: 'C', type: 'raw_material', defaultUnit: 'متر' },
-    { name: 'کیلر، رنگ، گلیز', prefix: 'G', type: 'raw_material', defaultUnit: 'عدد' },
-    { name: 'سایر اقلام', prefix: 'O', type: 'raw_material', defaultUnit: 'عدد' }
-  ];
-
+  // 2. ۲۲ دسته استاندارد، فقط وقتی هیچ دسته‌ای نیست (v9.0.116، TD-591: دسته موجود بازنویسی و دسته حذف‌شده برگردانده نمی‌شود)
   try {
-    const existingCatRows = await orm.select().from(categories);
-    const existingCatMap = new Map(existingCatRows.map(c => [c.name, c]));
-
-    for (const cat of defaultCategories) {
-      const existing = existingCatMap.get(cat.name);
-      if (existing) {
-        const currentUnit = existing.defaultUnit || (existing as any).default_unit;
-        if (existing.prefix !== cat.prefix || existing.type !== cat.type || currentUnit !== cat.defaultUnit) {
-          await orm.update(categories).set({
-            prefix: cat.prefix,
-            type: cat.type,
-            defaultUnit: cat.defaultUnit
-          }).where(eq(categories.id, existing.id));
-        }
-      } else {
-        await orm.insert(categories).values(cat);
-      }
+    if (await isEmptyTable(categories)) {
+      await orm.insert(categories).values(DEFAULT_CATEGORIES.map(c => ({ ...c })));
+      logger.info(`[Seeder] Seeded ${DEFAULT_CATEGORIES.length} standard categories into an empty table.`);
     }
   } catch (err) {
     logger.error('[Seeder] Error seeding categories:', err);
@@ -319,31 +284,7 @@ export async function runSeed(
       await orm.insert(roles).values(newRoles);
     }
 
-    // Update existing system roles with missing default permissions
-    // V10-5.1: (اختیاری) پاکسازی grants ناشناخته — فقط با ERP_SEED_PERMISSION_CLEANUP=true
-    const cleanupEnabled = process.env.ERP_SEED_PERMISSION_CLEANUP === 'true';
-    const defaultRoleMap = new Map(defaultRoles.map(d => [d.code, d]));
-    const defaultPermSets = new Map(defaultRoles.map(d => [d.code, new Set(d.permissions)]));
-    for (const existingRole of existingRoles) {
-      const defaultDef = defaultRoleMap.get(existingRole.code);
-      if (defaultDef) {
-        const currentPerms: string[] = Array.isArray(existingRole.permissions) ? (existingRole.permissions as string[]) : [];
-        const missingPerms = defaultDef.permissions.filter(p => !currentPerms.includes(p));
-
-        if (cleanupEnabled) {
-          const stalePerms = currentPerms.filter(p => !defaultPermSets.get(existingRole.code)?.has(p) && p !== '*');
-          if (stalePerms.length > 0) {
-            logger.warn(`[Seeder] ERP_SEED_PERMISSION_CLEANUP: removing ${stalePerms.length} stale permission(s) from role ${existingRole.code}: ${stalePerms.join(', ')}`);
-          }
-          await orm.update(roles).set({ permissions: [...defaultDef.permissions] }).where(eq(roles.id, existingRole.id));
-          invalidateRoleCache(existingRole.code);
-        } else if (missingPerms.length > 0) {
-          const updatedPerms = [...currentPerms, ...missingPerms];
-          await orm.update(roles).set({ permissions: updatedPerms }).where(eq(roles.id, existingRole.id));
-          invalidateRoleCache(existingRole.code);
-        }
-      }
-    }
+    // v9.0.116 (TD-591، تصمیم ت۴ بسته ۱): نقش موجود دست نمی‌خورد؛ مجوزی که مدیر برداشته برگردانده نمی‌شود
   } catch (err) {
     logger.error('[Seeder] Error seeding roles:', err);
   }
@@ -365,11 +306,11 @@ export async function runSeed(
   ];
 
   try {
-    const existingSettings = await orm.select().from(appSettings).where(inArray(appSettings.key, settings.map(s => s.key)));
-    const existingKeys = new Set(existingSettings.map(s => s.key));
-    const newSettings = settings.filter(s => !existingKeys.has(s.key));
-    if (newSettings.length > 0) {
-      await orm.insert(appSettings).values(newSettings);
+    // v9.0.116 (TD-591): فقط پایگاه‌داده‌ای که هیچ‌یک از این کلیدها را ندارد؛ کلید تازه در نصب موجود رفتار را عوض نمی‌کند
+    // (مثلاً `invoice_start_number` نبودنش یعنی شروع از ۱ و درجش شماره فاکتور بعدی را به ۱۰۰۰ می‌پراند)
+    const existingSettings = await orm.select({ key: appSettings.key }).from(appSettings).where(inArray(appSettings.key, settings.map(s => s.key))).limit(1);
+    if (existingSettings.length === 0) {
+      await orm.insert(appSettings).values(settings);
     }
   } catch (err) {
     logger.error('[Seeder] Error seeding app settings:', err);
@@ -383,9 +324,8 @@ export async function runSeed(
 
   // 8. Seed piecework tasks
   try {
-    const existingTasks = await orm.select({ code: pieceworkTasks.code }).from(pieceworkTasks);
-    const existingCodes = new Set(existingTasks.map(t => t.code));
-    const missingTasks = INITIAL_PIECEWORK_TASKS.filter(t => !existingCodes.has(t.code));
+    // v9.0.116 (TD-591): فقط وقتی هیچ عنوان کاری نیست
+    const missingTasks = (await isEmptyTable(pieceworkTasks)) ? INITIAL_PIECEWORK_TASKS : [];
 
     if (missingTasks.length > 0) {
       const chunkSize = 20;
@@ -400,8 +340,10 @@ export async function runSeed(
   }
 
   // 9. Seed standard chart of accounts
+  // v9.0.116 (TD-591): فقط وقتی هیچ حساب فعالی نیست؛ همگام‌سازی حساب‌های موجود (والد و ماهیت) فقط با دکمه «همگام‌سازی کدینگ پیش‌فرض» است
   try {
-    const seedRes = await AccountingService.seedStandardAccounts();
+    const hasAccounts = (await orm.select({ id: accounts.id }).from(accounts).where(eq(accounts.isDeleted, 0)).limit(1)).length > 0;
+    const seedRes = hasAccounts ? { seededCount: 0 } : await AccountingService.seedStandardAccounts();
     if (seedRes.seededCount > 0) {
       logger.info(`[Seeder] Seeded ${seedRes.seededCount} standard chart of accounts.`);
     }

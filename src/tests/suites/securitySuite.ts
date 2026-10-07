@@ -1408,6 +1408,8 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   results.push(...await runAccessPackageTwoUserTests(shouldRunAccess));
   const { runAccessPackageTwoPageTests } = await import('../security/accessPackageTwoPageTests.js');
   results.push(...await runAccessPackageTwoPageTests(shouldRunAccess));
+  const { runAccessPackageTwoInstallTests } = await import('../security/accessPackageTwoInstallTests.js');
+  results.push(...await runAccessPackageTwoInstallTests(shouldRunAccess));
   // Package 14, PR د (from TD-462): approval inbox rows
   const { runWorkflowInboxTests } = await import('../security/workflowInboxTests.js');
   results.push(...await runWorkflowInboxTests(shouldRunAccess));
