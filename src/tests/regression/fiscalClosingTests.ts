@@ -80,6 +80,7 @@ export async function sandboxClientWith(permissions: string[]) {
   const user = await createTestUser({ role: role.code });
   const s = await loginTestUserWithSession(app, user.username);
   return {
+    get: (url: string) => request(app).get(url).set('Cookie', s.cookie),
     post: (url: string, body: unknown) => request(app).post(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken).send(body as object),
   };
 }

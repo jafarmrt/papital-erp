@@ -9,6 +9,7 @@ import {
   voucherRowDraftFromStored, withVoucherRowCurrency, type VoucherHeaderCurrency,
 } from '../../lib/accounting/voucherFormCurrency';
 import { VoucherHeaderCurrencyFields } from './VoucherCurrencyInputs';
+import { voucherDetailedTypeFromStored } from '../../lib/accounting/voucherDetailedTypes';
 import { manualVoucherFormType } from '../../lib/accounting/manualVoucherRules';
 import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
 import { useServerDraft } from '../../hooks/useServerDraft';
@@ -100,7 +101,8 @@ export function NewVoucherModal({
       setHeaderRate(loaded.headerRate ?? '');
       if (Array.isArray(loaded.attachments)) setAttachments(loaded.attachments);
       if (Array.isArray(loaded.items) && loaded.items.length > 0) {
-        setItems(loaded.items);
+        // v9.0.156 (TD-569): پیش‌نویس قدیمی «متفرقه» را `custom` نگه داشته بود
+        setItems((loaded.items as VoucherItemDraft[]).map(it => ({ ...it, detailedType: voucherDetailedTypeFromStored(it.detailedType) })));
       }
     }
   });
@@ -135,7 +137,7 @@ export function NewVoucherModal({
           ...voucherRowDraftFromStored({ currency: it.currency, exchangeRate: it.exchangeRate ?? it.exchange_rate }, editHeader),
           id: it.id,
           accountId: it.accountId,
-          detailedType: (it.detailedType || 'none') as any,
+          detailedType: voucherDetailedTypeFromStored(it.detailedType),
           detailedId: it.detailedId || null,
           detailedName: it.detailedName || '',
           debit: it.debit || 0,

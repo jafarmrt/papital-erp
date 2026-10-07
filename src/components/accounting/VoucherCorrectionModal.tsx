@@ -8,6 +8,8 @@ import {
   withVoucherRowCurrency, type VoucherHeaderCurrency, type VoucherRowCurrencyDraft,
 } from '../../lib/accounting/voucherFormCurrency';
 import { VoucherHeaderCurrencyFields, VoucherRowCurrencyCell } from './VoucherCurrencyInputs';
+import { VoucherDetailedPicker } from './VoucherDetailedPicker';
+import { voucherDetailedTypeFromStored, type VoucherDetailedType } from '../../lib/accounting/voucherDetailedTypes';
 import toast from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -26,7 +28,8 @@ interface VoucherCorrectionModalProps {
 interface VoucherItemDraft extends VoucherRowCurrencyDraft {
   id?: number;
   accountId: number | '';
-  detailedType: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'custom';
+  /** v9.0.156 (TD-569): همان نوع‌های سرور، تأمین‌کننده هم */
+  detailedType: VoucherDetailedType;
   detailedId: number | null;
   detailedName: string;
   debit: number;
@@ -78,7 +81,7 @@ export function VoucherCorrectionModal({
         setItems(voucher.items.map(it => ({
           ...voucherRowDraftFromStored({ currency: it.currency, exchangeRate: it.exchangeRate ?? it.exchange_rate }, originalHeader),
           accountId: it.accountId,
-          detailedType: (it.detailedType as any) || 'none',
+          detailedType: voucherDetailedTypeFromStored(it.detailedType),
           detailedId: it.detailedId || null,
           detailedName: it.detailedName || '',
           debit: it.debit || 0,
@@ -360,70 +363,14 @@ export function VoucherCorrectionModal({
                             onChange={(accId) => handleItemChange(idx, 'accountId', accId)}
                             placeholder="انتخاب حساب..."
                           />
-                          {/* Detailed Selector */}
-                          <div className="flex items-center gap-1">
-                            <select
-                              value={item.detailedType}
-                              onChange={(e) => {
-                                const type = e.target.value as any;
-                                handleItemChange(idx, 'detailedType', type);
-                                handleItemChange(idx, 'detailedId', null);
-                                handleItemChange(idx, 'detailedName', '');
-                              }}
-                              className="w-24 text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1.5 py-0.5 text-slate-700 dark:text-slate-300"
-                            >
-                              <option value="none">بدون تفصیلی</option>
-                              <option value="customer">مشتری</option>
-                              <option value="personnel">پرسنل</option>
-                              <option value="custom">سایر</option>
-                            </select>
-
-                            {item.detailedType === 'customer' && (
-                              <select
-                                value={item.detailedId || ''}
-                                onChange={(e) => {
-                                  const cId = Number(e.target.value);
-                                  const cust = safeCustomers.find(c => c.id === cId);
-                                  handleItemChange(idx, 'detailedId', cId || null);
-                                  handleItemChange(idx, 'detailedName', cust?.name || '');
-                                }}
-                                className="flex-1 text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1.5 py-0.5"
-                              >
-                                <option value="">انتخاب مشتری...</option>
-                                {safeCustomers.map(c => (
-                                  <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                              </select>
-                            )}
-
-                            {item.detailedType === 'personnel' && (
-                              <select
-                                value={item.detailedId || ''}
-                                onChange={(e) => {
-                                  const pId = Number(e.target.value);
-                                  const p = safePersonnelList.find(x => x.id === pId);
-                                  handleItemChange(idx, 'detailedId', pId || null);
-                                  handleItemChange(idx, 'detailedName', p?.fullName || '');
-                                }}
-                                className="flex-1 text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1.5 py-0.5"
-                              >
-                                <option value="">انتخاب پرسنل...</option>
-                                {safePersonnelList.map(p => (
-                                  <option key={p.id} value={p.id}>{p.fullName || p.username}</option>
-                                ))}
-                              </select>
-                            )}
-
-                            {item.detailedType === 'custom' && (
-                              <input
-                                type="text"
-                                value={item.detailedName}
-                                onChange={(e) => handleItemChange(idx, 'detailedName', e.target.value)}
-                                placeholder="عنوان تفصیلی..."
-                                className="flex-1 text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1.5 py-0.5"
-                              />
-                            )}
-                          </div>
+                          {/* Detailed Selector — v9.0.156 (TD-569): همان نوع‌های سرور با تأمین‌کننده، پروژه و حساب بانکی */}
+                          <VoucherDetailedPicker
+                            size="compact"
+                            value={item}
+                            onChange={next => setItems(prev => prev.map((row, i) => (i === idx ? { ...row, ...next } : row)))}
+                            customers={safeCustomers}
+                            personnelList={safePersonnelList}
+                          />
                         </div>
                       </td>
                       <td className="py-2 px-2">

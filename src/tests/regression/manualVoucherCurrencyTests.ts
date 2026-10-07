@@ -1,6 +1,6 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { journalVoucherItems, journalVouchers } from '../../db/schema.js';
+import { journalVoucherItems, journalVouchers, productionProjects } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
@@ -8,7 +8,7 @@ import { AccountingReportService } from '../../services/accounting/accountingRep
 import { FinancialHealthService } from '../../services/accounting/financialHealth.service.js';
 import { TestCaseResult } from '../types.js';
 import {
-  type ShouldRun, accountIdsByCode, amountOf, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient,
+  type ShouldRun, accountIdsByCode, amountOf, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient, sandboxClientWith,
 } from './fiscalClosingTests.js';
 
 /**
@@ -186,6 +186,51 @@ export async function runManualVoucherCurrencyTests(shouldRun: ShouldRun): Promi
 
       assertNoProblems(problems);
       return '«0x10», «1e3», text and a «6e5» rate refused with a Persian message (nothing stored); «۱۰۰٫۵» at «۶۰۰٬۰۰۰» against «۶۰٬۳۰۰٬۰۰۰» stored as 100.5 at 600,000 and 60,300,000.';
+    }));
+  }
+
+  const detailId = 'reg_manual_voucher_detailed_types_td_569';
+  if (shouldRun(detailId, 'td569', 'voucher', 'detailed', 'package3')) {
+    await runCase(results, detailId, 'v9.0.156: a manual voucher row takes a project, bank account or «other» detail, the voucher form reads the project pick list with accounting.vouchers, and the legacy «custom» type is refused (TD-569)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const acc = await accountIdsByCode('1001', '4001');
+      const admin = await sandboxAdminClient();
+      const base = { date: await businessTodayIsoDate(), status: 'approved', description: 'TD-569 detailed rows' };
+
+      // B03-27 FE-08: the forms sent «متفرقه» / «سایر» as `custom`, which the server refused with 400
+      const custom = await admin.post('/api/accounting/vouchers', { ...base, items: [
+        { accountId: acc['1001'], debit: 10, credit: 0, detailedType: 'custom', detailedName: 'هزینه متفرقه' },
+        { accountId: acc['4001'], debit: 0, credit: 10 },
+      ] });
+      if (custom.status !== 400) problems.push(`detail «custom»: ${custom.status}, expected 400`);
+      const [project] = await orm.insert(productionProjects).values({ projectCode: 'PRJ-TD569', title: 'پروژه آزمون', customerName: 'مشتری', status: 'in_progress' })
+        .returning({ id: productionProjects.id });
+      const rows = await admin.post('/api/accounting/vouchers', { ...base, items: [
+        { accountId: acc['1001'], debit: 10, credit: 0, detailedType: 'project', detailedId: project.id, detailedName: 'پروژه آزمون (PRJ-TD569)' },
+        { accountId: acc['1001'], debit: 5, credit: 0, detailedType: 'other', detailedName: 'هزینه متفرقه' },
+        { accountId: acc['4001'], debit: 0, credit: 15, detailedType: 'none' },
+      ] });
+      if (rows.status !== 201) problems.push(`project and other rows: ${rows.status} ${JSON.stringify(rows.body).slice(0, 200)}, expected 201`);
+      else {
+        const stored = await orm.select({ type: journalVoucherItems.detailedType, id: journalVoucherItems.detailedId, name: journalVoucherItems.detailedName })
+          .from(journalVoucherItems).where(and(eq(journalVoucherItems.voucherId, rows.body.id), eq(journalVoucherItems.isDeleted, 0)))
+          .orderBy(asc(journalVoucherItems.rowOrder));
+        const text = stored.map(r => `${r.type}:${r.id ?? '-'}:${r.name}`).join(',');
+        if (text !== `project:${project.id}:پروژه آزمون (PRJ-TD569),other:-:هزینه متفرقه,none:-:`) problems.push(`stored details ${text}`);
+      }
+
+      // the voucher form now offers the project detail: a holder of accounting.vouchers alone reads the pick list, not the full list
+      const accountant = await sandboxClientWith(['accounting.vouchers']);
+      const options = await accountant.get('/api/projects/options?search=PRJ-TD569');
+      const pick = (options.body?.data ?? []) as Array<Record<string, unknown>>;
+      if (options.status !== 200 || !pick.some(p => p.id === project.id)) problems.push(`accounting.vouchers: GET /api/projects/options ${options.status} with ${JSON.stringify(pick).slice(0, 160)}`);
+      const full = await accountant.get('/api/projects');
+      if (full.status !== 403) problems.push(`accounting.vouchers: GET /api/projects returned ${full.status}, not 403`);
+      const banks = await accountant.get('/api/accounting/bank-accounts/options');
+      if (banks.status !== 200) problems.push(`accounting.vouchers: GET /api/accounting/bank-accounts/options returned ${banks.status}`);
+
+      assertNoProblems(problems);
+      return '«custom» refused (400); project and «other» rows stored with their detail; accounting.vouchers reads the project and bank pick lists but not the full project list.';
     }));
   }
 

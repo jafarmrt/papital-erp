@@ -8,6 +8,7 @@ import { computeVoucherCurrencyBalance, type CurrencyBalanceRow } from '../../li
 import { DEFAULT_ACCOUNT_MAPPINGS, type ConceptualAccountMappingConfig } from '../../services/accounting/accountMapping.service.js';
 import { decimalInput, latinDigitsString, storageDateParam } from '../../middleware/validate.js';
 import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../../lib/treasury/treasuryCurrency.js';
+import { VOUCHER_DETAILED_TYPES } from '../../lib/accounting/voucherDetailedTypes.js';
 import { isReservedVoucherReference, MANUAL_CLOSING_TYPE_MESSAGE, RESERVED_REFERENCE_MESSAGE } from '../../lib/accounting/manualVoucherRules.js';
 
 /** query پس از validate: میدل‌ور validate مقدار req.query را با خروجی parse شده Zod جایگزین می‌کند. */
@@ -96,7 +97,8 @@ const voucherRowAmount = (label: string) => decimalInput(label).optional()
 
 export const voucherItemSchema = z.object({
   accountId: z.coerce.number().int().positive('شناسه حساب الزامی و باید عدد مثبت باشد'),
-  detailedType: z.enum(['none', 'customer', 'personnel', 'project', 'bank_account', 'other', 'supplier']).optional().default('none'),
+  // v9.0.156 (TD-569): فهرست نوع‌ها مشترک با فرم‌های سند (`voucherDetailedTypes.ts`)
+  detailedType: z.enum(VOUCHER_DETAILED_TYPES).optional().default('none'),
   detailedId: z.coerce.number().int().positive().nullable().optional(),
   detailedName: z.string().optional(),
   // v9.0.155 (TD-557، B03-15): مبلغ و نرخ ردیف با `decimalInput` (رقم فارسی و جداکننده هزارگان پذیرفته؛ «0x10» و «1e3» رد)،

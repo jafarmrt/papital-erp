@@ -5,12 +5,15 @@ import { AccountSearchSelect } from './AccountSearchSelect';
 import { VoucherRowCurrencyCell } from './VoucherCurrencyInputs';
 import { voucherFormBalance, voucherRowCurrencyRate, type VoucherHeaderCurrency } from '../../lib/accounting/voucherFormCurrency';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
+import { VoucherDetailedPicker } from './VoucherDetailedPicker';
+import type { VoucherDetailedType } from '../../lib/accounting/voucherDetailedTypes';
 import type { Account } from '../../types';
 
 export interface VoucherItemDraft {
   id?: number;
   accountId: number | '';
-  detailedType: 'none' | 'customer' | 'supplier' | 'personnel' | 'project' | 'bank_account' | 'custom';
+  /** v9.0.156 (TD-569): همان نوع‌های سرور؛ `custom` قدیمی «متفرقه» (`other`) است */
+  detailedType: VoucherDetailedType;
   detailedId: number | null;
   detailedName: string;
   debit: number;
@@ -26,7 +29,7 @@ interface VoucherItemsTableProps {
   items: VoucherItemDraft[];
   selectableAccounts: Account[];
   customers: Array<{ id: number; name: string; partyType?: string; city?: string; supplierCategory?: string }>;
-  personnelList: Array<{ id: number; firstName?: string; lastName?: string; fullName?: string }>;
+  personnelList: Array<{ id: number; firstName?: string; lastName?: string; fullName?: string; username?: string }>;
   /** v9.0.154 (TD-564): ارز و نرخ سند؛ ردیف بی ارز و نرخ از آن پیروی می‌کند */
   header: VoucherHeaderCurrency;
   updateItem: (index: number, patch: Partial<VoucherItemDraft>) => void;
@@ -123,138 +126,21 @@ export function VoucherItemsTable({
                     />
                   </td>
 
-                  {/* Detailed Selector */}
+                  {/* Detailed Selector — v9.0.156 (TD-569): نوع‌های سرور، پروژه و حساب بانکی؛ «متفرقه» = other */}
                   <td className="py-2 px-2">
-                    <div className="flex items-center gap-1">
-                      <select
-                        ref={itemRefs.current[idx]?.detailedTypeRef}
-                        value={it.detailedType}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            if (it.detailedType !== 'none') {
-                              itemRefs.current[idx]?.detailedSelectRef?.current?.focus();
-                            } else {
-                              itemRefs.current[idx]?.descRef?.current?.focus();
-                            }
-                          }
-                        }}
-                        onChange={e => updateItem(idx, { 
-                          detailedType: e.target.value as any,
-                          detailedId: null,
-                          detailedName: ''
-                        })}
-                        className="w-24 px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-200"
-                      >
-                        <option value="none">بدون تفصیلی</option>
-                        <option value="customer">مشتری</option>
-                        <option value="supplier">تامین‌کننده</option>
-                        <option value="personnel">پرسنل</option>
-                        <option value="custom">متفرقه</option>
-                      </select>
-
-                      {it.detailedType === 'customer' && (
-                        <select
-                          ref={itemRefs.current[idx]?.detailedSelectRef as any}
-                          value={it.detailedId || ''}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              itemRefs.current[idx]?.descRef?.current?.focus();
-                            }
-                          }}
-                          onChange={e => {
-                            const c = customers.find(x => x.id === Number(e.target.value));
-                            updateItem(idx, { detailedId: c ? c.id : null, detailedName: c ? c.name : '' });
-                          }}
-                          className="flex-1 px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
-                        >
-                          <option value="">انتخاب مشتری...</option>
-                          {(() => {
-                            const custs = customers.filter(c => {
-                              const pt = c.partyType || (c as any).party_type || 'customer';
-                              return pt === 'customer' || pt === 'both';
-                            });
-                            const list = custs.length > 0 ? custs : customers;
-                            return list.map(c => (
-                              <option key={c.id} value={c.id}>{c.name} {c.city ? `(${c.city})` : ''}</option>
-                            ));
-                          })()}
-                        </select>
-                      )}
-
-                      {it.detailedType === 'supplier' && (
-                        <select
-                          ref={itemRefs.current[idx]?.detailedSelectRef as any}
-                          value={it.detailedId || ''}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              itemRefs.current[idx]?.descRef?.current?.focus();
-                            }
-                          }}
-                          onChange={e => {
-                            const s = customers.find(x => x.id === Number(e.target.value));
-                            updateItem(idx, { detailedId: s ? s.id : null, detailedName: s ? s.name : '' });
-                          }}
-                          className="flex-1 px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
-                        >
-                          <option value="">انتخاب تامین‌کننده...</option>
-                          {(() => {
-                            const suppliers = customers.filter(c => {
-                              const pt = c.partyType || (c as any).party_type;
-                              return pt === 'supplier' || pt === 'both';
-                            });
-                            const list = suppliers.length > 0 ? suppliers : customers;
-                            return list.map(s => (
-                              <option key={s.id} value={s.id}>
-                                {s.name} {s.supplierCategory ? `[${s.supplierCategory}]` : ''} {s.city ? `(${s.city})` : ''}
-                              </option>
-                            ));
-                          })()}
-                        </select>
-                      )}
-
-                      {it.detailedType === 'personnel' && (
-                        <select
-                          ref={itemRefs.current[idx]?.detailedSelectRef as any}
-                          value={it.detailedId || ''}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              itemRefs.current[idx]?.descRef?.current?.focus();
-                            }
-                          }}
-                          onChange={e => {
-                            const p = personnelList.find(x => x.id === Number(e.target.value));
-                            updateItem(idx, { detailedId: p ? p.id : null, detailedName: p ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : '' });
-                          }}
-                          className="flex-1 px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
-                        >
-                          <option value="">انتخاب پرسنل...</option>
-                          {personnelList.map(p => (
-                            <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
-                          ))}
-                        </select>
-                      )}
-
-                      {it.detailedType === 'custom' && (
-                        <input
-                          ref={itemRefs.current[idx]?.detailedSelectRef as any}
-                          type="text"
-                          value={it.detailedName}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              itemRefs.current[idx]?.descRef?.current?.focus();
-                            }
-                          }}
-                          onChange={e => updateItem(idx, { detailedName: e.target.value })}
-                          placeholder="عنوان تفصیلی..."
-                          className="flex-1 px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
-                        />
-                      )}
-                    </div>
+                    <VoucherDetailedPicker
+                      value={it}
+                      onChange={next => updateItem(idx, next)}
+                      customers={customers}
+                      personnelList={personnelList}
+                      typeRef={itemRefs.current[idx]?.detailedTypeRef}
+                      pickerRef={itemRefs.current[idx]?.detailedSelectRef}
+                      onTypeEnter={() => {
+                        if (it.detailedType !== 'none') itemRefs.current[idx]?.detailedSelectRef?.current?.focus();
+                        else itemRefs.current[idx]?.descRef?.current?.focus();
+                      }}
+                      onAdvance={() => itemRefs.current[idx]?.descRef?.current?.focus()}
+                    />
                   </td>
 
                   {/* Description */}

@@ -22,11 +22,12 @@ export const READ_PERMISSIONS = {
   /**
    * فهرست انتخاب پروژه (`GET /projects/options`، شناسه، کد، عنوان، وضعیت و نام مشتری): سند ورود و خروج انبار
    * (documents.view، documents.create، warehouse.in)، انبار پروژه و تخصیص مواد اولیه (warehouse.view، warehouse.out)،
-   * کارکرد کارمزدی (piecework.view، piecework.log) و گزارش روزانه (daily_logs.view، daily_logs.create)
+   * کارکرد کارمزدی (piecework.view، piecework.log)، گزارش روزانه (daily_logs.view، daily_logs.create) و تفصیلی پروژه در
+   * سند حسابداری دستی و اصلاحی (accounting.vouchers، v9.0.156، TD-569)
    */
   projectOptions: [
     'projects.view', 'documents.view', 'documents.create', 'warehouse.view', 'warehouse.in', 'warehouse.out',
-    'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create',
+    'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create', 'accounting.vouchers',
   ],
   /** فهرست کامل طرف حساب‌ها (با یادداشت و نسخه رکورد) فقط با مجوز مشاهده همان بخش (v9.0.137، TD-887، ت۱۰ الف) */
   customers: ['customers.view'],
