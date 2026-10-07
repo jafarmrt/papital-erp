@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.181 — Excel Template From the Server
+- **Excel Template From the Server:** `GET /items/excel-template` builds the import template with the columns the import reads (active warehouses with a matching total, every price list with its currency) without reading items or writing an export audit row (TD-842, `reg_excel_template_from_server_td_842`).
+
 ### v9.0.180 — Excel Currency per Price List
 - **Excel Currency per Price List:** the item export and the pricing page export write «ارز - قیمت <title>» for each price list instead of one row-wide «واحد ارز», and the imports read it first, so an unchanged round trip keeps a rial price in rials (TD-841, `reg_excel_export_currency_per_price_list_td_841`).
 

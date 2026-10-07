@@ -8,6 +8,8 @@ import { validate } from '../middleware/validate.js';
 import { ItemsService } from '../services/items.service.js';
 import { logActivity, extractClientIp } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { buildItemExcelTemplate } from '../services/items/itemExcelTemplate.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -18,6 +20,11 @@ export const unifiedImportSchema = z.object({
     typeFilter: z.string().optional()
   })
 });
+
+// v9.0.181 (O8): الگوی ورود اکسل کالا از سرور، بی خواندن کالاها و بی ردیف ممیزی خروجی
+router.get('/items/excel-template', authorizePermission(...READ_PERMISSIONS.items), asyncHandler(async (_req, res) => {
+  res.json(await buildItemExcelTemplate());
+}));
 
 // GET /items/unified-export
 router.get('/items/unified-export', authorizePermission('products.view'), asyncHandler(async (req, res) => {

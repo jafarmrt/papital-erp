@@ -1,15 +1,16 @@
 import request from 'supertest';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { itemPrices, items } from '../../db/schema.js';
+import { activityLogs, itemPrices, items } from '../../db/schema.js';
 import { withTestMarker } from '../fixtures/testMarker.js';
 
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 type Row = Record<string, unknown>;
 
 /**
- * Package 5 (items and pricing), PR E: the Excel export keeps each price list's currency (O12).
+ * Package 5 (items and pricing), PR E: the Excel export keeps each price list's currency (O12) and the import template
+ * comes from the server with the columns the import reads (O8).
  */
 export async function runItemExcelExportTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -17,6 +18,9 @@ export async function runItemExcelExportTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_excel_export_currency_per_price_list_td_841',
       'v9.0.180: the item Excel export writes a currency column for each price list, so a rial and a dollar price of one item come back unchanged (TD-841)',
       ['td841', 'excel', 'price', 'currency', 'package5'], currencyRoundTripCase],
+    ['reg_excel_template_from_server_td_842',
+      'v9.0.181: the Excel import template comes from the server without an export audit row, and the import accepts its sample row (TD-842)',
+      ['td842', 'excel', 'template', 'package5'], templateCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -86,4 +90,36 @@ async function currencyRoundTripCase(ctx: Ctx): Promise<string> {
   if (Number(imp.body.pricesCount) !== 0) wrong.push(`the unchanged round trip wrote ${imp.body.pricesCount} prices`);
   if (wrong.length > 0) throw new Error(wrong.join(' | '));
   return `export wrote عمده IRR and فروشگاه USD in their own columns; re-import kept ${after} and wrote no price`;
+}
+
+/** O8: on v9.0.180 the browser built the template from the full export (an EXPORT audit row) and the route did not exist. */
+async function templateCase(ctx: Ctx): Promise<string> {
+  const { codeFormatError } = await import('../../lib/items/itemCodeFormat.js');
+  const markRes = await orm.execute(sql`SELECT COALESCE(MAX(id), 0)::int AS id FROM activity_logs`);
+  const mark = Number((markRes.rows?.[0] as { id?: number } | undefined)?.id ?? 0);
+  const res = await ctx.get('/api/items/excel-template');
+  const rows = Array.isArray(res.body?.rows) ? res.body.rows as Row[] : [];
+  if (res.status !== 200 || rows.length !== 1) throw new Error(`template ${res.status} with ${rows.length} rows`);
+  const sample = rows[0];
+  const wrong: string[] = [];
+  const exports = await orm.select({ id: activityLogs.id }).from(activityLogs).where(and(gt(activityLogs.id, mark), eq(activityLogs.action, 'EXPORT')));
+  if (exports.length > 0) wrong.push(`the template wrote ${exports.length} export audit rows`);
+  const formatError = codeFormatError(String(sample['کد کالا']), 'product', String(sample['دسته‌بندی']));
+  if (formatError) wrong.push(`sample code: ${formatError}`);
+  const warehouseSum = Object.entries(sample).filter(([k]) => k.startsWith('موجودی انبار ')).reduce((s, [, v]) => s + Number(v), 0);
+  if (Number(sample['موجودی کل']) !== warehouseSum) wrong.push(`total stock ${String(sample['موجودی کل'])} is not the warehouse sum ${warehouseSum}`);
+  const { ItemPricingService } = await import('../../services/items/itemPricing.service.js');
+  const { priceListMatcher } = await import('../../lib/items/excelPriceColumns.js');
+  for (const title of priceListMatcher(await ItemPricingService.getPricingStrategies()).titles) {
+    if (!(`قیمت ${title}` in sample) || sample[`ارز - قیمت ${title}`] !== 'IRR') wrong.push(`price list ${title} lacks its price or currency column`);
+  }
+
+  const code = `1404-N-${ctx.serial()}-01`;
+  const imp = await ctx.post('/api/items/unified-import', { rows: [{ ...sample, 'کد کالا': code, 'نام محصول': withTestMarker(`گردنبند الگو td842 ${code}`) }] });
+  const [created] = await orm.select({ id: items.id }).from(items).where(and(eq(items.code, code), eq(items.isDeleted, 0)));
+  if (created) ctx.itemIds.push(created.id);
+  const errors = Array.isArray(imp.body?.errors) ? imp.body.errors : [];
+  if (imp.status !== 200 || !created || errors.length > 0) wrong.push(`import of the sample answered ${imp.status} with errors ${JSON.stringify(errors)}`);
+  if (wrong.length > 0) throw new Error(wrong.join(' | '));
+  return `template row with ${Object.keys(sample).length} columns, no export audit row; the import created the sample item without row errors`;
 }

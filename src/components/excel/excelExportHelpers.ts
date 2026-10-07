@@ -1,6 +1,5 @@
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
-import { ITEM_WAC_COLUMN } from '../../lib/items/excelPriceColumns';
 
 export async function exportCompleteExcel(typeFilter: string): Promise<void> {
   const query = typeFilter ? `?type=${typeFilter}` : '';
@@ -24,46 +23,14 @@ export async function exportCompleteExcel(typeFilter: string): Promise<void> {
   toast.success('فایل اکسل جامع با موفقیت دانلود شد.');
 }
 
+/** v9.0.181 (O8): الگو را سرور با سرستون‌های ورود می‌سازد (انبارهای فعال، فهرست‌های قیمت و ارز هر کدام) */
 export async function downloadExcelTemplate(): Promise<void> {
-  const data = await fetchJson('/items/unified-export');
-  const warehouses = data.warehouses || [];
-  const strategies = data.strategies || ['قیمت عمده', 'قیمت خرده', 'قیمت همکار'];
-
-  const sampleRow: Record<string, any> = {
-    'کد کالا': '1404-N-101-01',
-    'نام محصول': 'گردنبند طلایی طرح لوتوس',
-    'نوع کالا': 'محصول نهایی',
-    'دسته‌بندی': 'گردنبند',
-    'واحد': 'عدد',
-    'موجودی کل': 100,
-  };
-
-  warehouses.forEach((w: any) => {
-    sampleRow[`موجودی انبار ${w.name}`] = 50;
-  });
-
-  sampleRow['حد نقطه سفارش (آلارم کسری)'] = 20;
-  sampleRow[ITEM_WAC_COLUMN] = 1500000;
-  sampleRow['تصویر'] = '';
-  sampleRow['رنگ'] = 'طلایی';
-  sampleRow['سایز'] = 'استاندارد';
-  sampleRow['وزن'] = 15;
-  sampleRow['جنس'] = 'استیل';
-
-  strategies.forEach((st: string) => {
-    let cleanStrat = (st || '').trim();
-    while (cleanStrat.startsWith('قیمت - ') || cleanStrat.startsWith('قیمت ')) {
-      if (cleanStrat.startsWith('قیمت - ')) cleanStrat = cleanStrat.substring(7).trim();
-      else if (cleanStrat.startsWith('قیمت ')) cleanStrat = cleanStrat.substring(5).trim();
-    }
-    sampleRow[`قیمت ${cleanStrat || st}`] = 2500000;
-  });
-  sampleRow['واحد ارز'] = 'IRR';
-
+  const data = await fetchJson('/items/excel-template');
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
   const xlsx = await import('xlsx');
-  const ws = xlsx.utils.json_to_sheet([sampleRow]);
+  const ws = xlsx.utils.json_to_sheet(rows);
   const wb = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(wb, ws, 'الگوی_ورود_کالا_و_قیمت');
   xlsx.writeFile(wb, 'الگوی_استاندارد_ورود_کالا_و_قیمت.xlsx');
-  toast.success('الگوی نمونه اکسل با موفقیت دانلود شد.');
+  toast.success('الگوی نمونه اکسل دریافت شد.');
 }
