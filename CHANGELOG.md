@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.129 — Client Trace IDs Validated
+- **Trace IDs:** a client `X-Request-ID` / `X-Correlation-ID` becomes the trace id only when it matches `^[A-Za-z0-9_-]{8,64}$` (`acceptedTraceId` in `src/lib/requestContext.ts`); otherwise a new id is issued, and the error handler never reads the raw header. Before, a 4,000-character id was repeated in the response and every log line.
+
 ### v9.0.128 — Metrics Guard Checks the Admin Session Live
 - **Metrics Guard:** `/metrics` and `/api/metrics` check a session token live like every other route (`resolveLiveSession` in `src/middleware/auth.ts`, shared with `authenticateToken`): a deleted user or a stale `tokenVersion` gets 401 and the role is read from the database (non-admin 403). `METRICS_TOKEN` scraping is unchanged. Before, a deleted or demoted admin still read the metrics.
 

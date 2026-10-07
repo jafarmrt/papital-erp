@@ -27,9 +27,17 @@ export function updateRequestContext(updates: Partial<RequestContextStore>): voi
   }
 }
 
+export const CLIENT_TRACE_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
+
+export function acceptedTraceId(value: string | string[] | undefined): string | undefined {
+  return typeof value === 'string' && CLIENT_TRACE_ID_PATTERN.test(value) ? value : undefined;
+}
+
 export const requestContextMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  const headerReqId = req.headers['x-request-id'] as string;
-  const headerCorrId = req.headers['x-correlation-id'] as string;
+  // v9.0.129 (TD-602): a client-sent id is used only when it matches the trace id pattern; otherwise a new one
+  // is issued, so support never searches the logs for an id the client chose or padded to thousands of characters
+  const headerReqId = acceptedTraceId(req.headers['x-request-id']);
+  const headerCorrId = acceptedTraceId(req.headers['x-correlation-id']);
 
   const requestId = headerReqId || `req_${uuidv4().substring(0, 12)}`;
   const correlationId = headerCorrId || headerReqId || `corr_${uuidv4().substring(0, 12)}`;
