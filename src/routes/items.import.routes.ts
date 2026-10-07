@@ -56,16 +56,9 @@ async function itemImportPermissionsOf(user: { role?: string } | undefined): Pro
 router.post('/items/unified-import', authorizePermission('products.create', 'products.edit'), validate(unifiedImportSchema), asyncHandler(async (req, res) => {
   try {
     const { rows, typeFilter } = req.body;
-    const result = await ItemsService.processUnifiedImport(rows, typeFilter, req, await itemImportPermissionsOf(req.user));
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'user',
-      userFullName: req.user?.fullName || '',
-      action: 'IMPORT',
-      entity: 'کالاها_و_محصولات',
-      description: `واردات دسته‌ای کالاها و خدمات از طریق اکسل شامل ${rows.length} ردیف داده`,
-      ipAddress: extractClientIp(req)
-    });
+    // v9.0.120 (TD-655): ممیزی هر کالا و جمع‌بندی ورود درون تراکنش سرویس نوشته می‌شود
+    const actor = { id: req.user?.id, username: req.user?.username, full_name: req.user?.full_name, ipAddress: extractClientIp(req) };
+    const result = await ItemsService.processUnifiedImport(rows, typeFilter, { user: actor }, await itemImportPermissionsOf(req.user));
     res.json(result);
   } catch (err) {
     logger.error({ message: 'Error in unified import', error: err });

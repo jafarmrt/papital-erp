@@ -1,7 +1,7 @@
 import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, warehouses } from '../../db/schema.js';
-import { logActivity } from '../../lib/auditLogger.js';
+import { itemAuditSnapshot, logItemImportChange, logItemImportSummary } from './itemExcelAudit.js';
 import { ItemPricingService } from './itemPricing.service.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
@@ -23,6 +23,7 @@ export interface ItemImportActor {
   id?: number;
   username?: string;
   full_name?: string;
+  ipAddress?: string;
 }
 
 export interface ItemImportRowError {
@@ -105,6 +106,8 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     return;
   }
 
+  // v9.0.120 (TD-655): تصویر کالا پیش از تغییر، برای ردیف ممیزی همان کالا
+  const before = matchedItem ? await itemAuditSnapshot(tx, matchedItem.id) : null;
   // V3.0.6 (Business Clock): تاریخ تراکنش‌های کاردکس از ساعت توافقی سامانه
   const todayStr = await businessTodayIsoDate();
   const currentUser = ctx.actor.username || 'مدیر سیستم';
@@ -119,6 +122,7 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
   } else {
     state.pricesCount += await saveRowPrices(tx, targetItemId, changedPrices);
   }
+  await logItemImportChange(tx, ctx.actor, targetItemId, rowNum, before, await itemAuditSnapshot(tx, targetItemId));
 }
 
 interface RowInput {
@@ -268,15 +272,14 @@ export async function importItemsFromExcel(
       userId: actor.id,
       username: actor.username || 'مدیر سیستم',
     }, tx);
-  });
-
-  await logActivity({
-    userId: actor.id,
-    username: actor.username || 'سیستم',
-    userFullName: actor.full_name || '',
-    action: 'UPDATE',
-    entity: 'ورود اطلاعات اکسل',
-    description: `ورود جامع اطلاعات از اکسل: ${state.createdCount} کالای جدید، ${state.updatedCount} کالای به‌روزرسانی شده و ${state.pricesCount} قیمت تنظیم گردید.`,
+    await logItemImportSummary(tx, actor, {
+      rows: rows.length,
+      createdCount: state.createdCount,
+      updatedCount: state.updatedCount,
+      pricesCount: state.pricesCount,
+      errorCount: state.errors.length,
+      stockAdjustmentMovements: state.adjustmentTransactionIds.length,
+    });
   });
 
   return {

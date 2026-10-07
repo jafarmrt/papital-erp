@@ -1,10 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import request from 'supertest';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm, pool } from '../../db/drizzle.js';
-import { itemPrices, items, roles, users, warehouses } from '../../db/schema.js';
+import { activityLogs, itemPrices, items, roles, users, warehouses } from '../../db/schema.js';
 import { withTestMarker } from '../fixtures/testMarker.js';
 import { money } from '../../lib/money.js';
 
@@ -36,6 +36,9 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
     ['inv_excel_total_stock_column_no_phantom_surplus_td_649',
       'v9.0.119: «موجودی کل» alone changes only an item whose stock is all in the default warehouse; otherwise per-warehouse columns are required and must add up (TD-649)',
       ['td649', 'excel', 'stock', 'inventory', 'package5'], totalStockCase],
+    ['reg_excel_import_audit_snapshots_td_655',
+      'v9.0.120: every item the Excel import creates or changes gets an audit row with before / after fields, stock and prices, plus one summary row, inside the import transaction (TD-655)',
+      ['td655', 'excel', 'audit', 'package5'], importAuditCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -269,6 +272,43 @@ async function totalStockCase(ctx: Ctx): Promise<string> {
   if (errorText(singleRes) || (await stockByWarehouse(single.id))[main] !== 6) wrong.push(`default-only item: ${errorText(singleRes)} ${JSON.stringify(await stockByWarehouse(single.id))}`);
   if (wrong.length > 0) throw new Error(wrong.join('; '));
   return 'unchanged total kept; total alone refused for a second-warehouse item; mismatch refused; per-warehouse and default-only rows applied';
+}
+
+/**
+ * TD-655 / B05-09: on v9.0.119 an import that changed the unit, the stock and a price left only two rows with counts and
+ * `details: {}` (one written by the route), outside the transaction.
+ */
+async function importAuditCase(ctx: Ctx): Promise<string> {
+  const { createTestItem } = await import('../fixtures/factories.js');
+  const { getDefaultWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
+  const main = (await getDefaultWarehouseCode(orm)) as string;
+  const wrong: string[] = [];
+  const it = await createTestItem({ code: `1404-R-${ctx.serial()}-08`, name: withTestMarker('انگشتر ممیزی td655'), category: 'انگشتر', unit: 'عدد', weightedAverageCost: 200000, stocks: { '': 5 } });
+  ctx.itemIds.push(it.id);
+  const [{ maxId }] = await orm.select({ maxId: sql<number>`coalesce(max(${activityLogs.id}), 0)::int` }).from(activityLogs);
+  const newCode = `1404-R-${ctx.serial()}-09`;
+  const res = await ctx.post('/api/items/unified-import', { rows: [
+    { 'کد کالا': it.code, 'نام محصول': it.name, 'واحد': 'جفت', 'موجودی کل': 2, 'قیمت عمده': 450000 },
+    { 'کد کالا': newCode, 'نام محصول': withTestMarker('انگشتر تازه td655'), 'موجودی کل': 3, 'میانگین موزون بها': 100000 },
+  ] });
+  if (errorText(res)) wrong.push(`import errors ${errorText(res)}`);
+  const created = await orm.select({ id: items.id }).from(items).where(and(eq(items.code, newCode), eq(items.isDeleted, 0)));
+  if (created[0]) ctx.itemIds.push(created[0].id);
+  const logs = await orm.select().from(activityLogs).where(gt(activityLogs.id, maxId));
+  type Details = { before?: Row; after?: Row; changes?: Record<string, { before: unknown; after: unknown }>; createdCount?: number };
+  const update = logs.find(l => l.entity === 'کالا' && l.action === 'UPDATE' && l.entityId === String(it.id));
+  const changes = (update?.details as Details | undefined)?.changes ?? {};
+  const expected: Record<string, [unknown, unknown]> = { unit: ['عدد', 'جفت'], [`موجودی ${main}`]: [5, 2], 'قیمت عمده': [undefined, '450000 IRR'] };
+  for (const [key, [b, a]] of Object.entries(expected)) {
+    const c = changes[key];
+    if (!c || (c.before ?? undefined) !== b || !String(c.after).startsWith(String(a).split(' ')[0])) wrong.push(`change ${key}: ${JSON.stringify(c)}`);
+  }
+  const create = logs.find(l => l.entity === 'کالا' && l.action === 'CREATE' && created[0] && l.entityId === String(created[0].id));
+  if (!create || (create.details as Details).after?.[`موجودی ${main}`] !== 3) wrong.push(`create row ${JSON.stringify(create?.details)}`);
+  const summary = logs.filter(l => l.action === 'IMPORT');
+  if (summary.length !== 1 || (summary[0].details as Details).createdCount !== 1) wrong.push(`summary rows ${JSON.stringify(summary.map(l => [l.entity, l.details]))}`);
+  if (wrong.length > 0) throw new Error(wrong.join('; '));
+  return 'one UPDATE row with unit, stock and price changes, one CREATE row and one summary row';
 }
 
 /** TD-662 / B05-16: on v9.0.114 each import of the same file soft-deleted and re-inserted every price (history 2 → 6). */

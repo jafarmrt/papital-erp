@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.120 — Excel Import Audits Each Item With Before and After
+- **Item Excel Audit:** every item the Excel import creates or changes gets an audit row with its fields, stock per warehouse and prices before and after, plus one summary row, inside the import transaction (TD-655, `reg_excel_import_audit_snapshots_td_655`).
+
 ### v9.0.119 — Excel Total Stock Column No Longer Adds Phantom Surplus
 - **Item Excel Stock:** «موجودی کل» alone changes only an item whose stock is all in the default warehouse, otherwise per-warehouse columns are required and must add up, so an unchanged file no longer doubles stock with a surplus voucher (TD-649, `inv_excel_total_stock_column_no_phantom_surplus_td_649`).
 
