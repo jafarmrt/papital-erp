@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.291 — Batch Finalize Reports Its Real Count
+- **Batch Finalize Count (P3):** batch finalize returns only the vouchers it made permanent and lists each refused id with its reason (missing, deleted, already permanent, closed year, unbalanced); the message and the audit row say the same (TD-556).
+
 ### v9.0.290 — Voucher Edits Need Their Version
 - **Voucher Edit Lock and Audit (P3):** a voucher edit sends the version it read (400 without, 409 `OCC_CONFLICT` when stale), a deleted voucher is never edited, and voucher and account edit and delete audit rows carry before and after (TD-555).
 
