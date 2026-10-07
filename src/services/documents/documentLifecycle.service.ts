@@ -380,6 +380,9 @@ export class DocumentLifecycleService {
         isDeleted: 1,
       }).where(eq(transactions.documentId, doc.id));
 
+      // v9.0.107 (TD-482): a reversal of a row without a warehouse names the warehouse its stock comes back to (the
+      // default one, as in step 4), never the ledger alias 'default' that a warehouse code could also be
+      const unlocatedDefaultWh = originalTxs.some(t => !(t.location || '').trim()) ? await resolveWarehouseCode(tx, '') : '';
       for (const orig of originalTxs) {
         const origQty = Number(orig.quantity) || 0;
         if (origQty > 0) {
@@ -395,7 +398,7 @@ export class DocumentLifecycleService {
             documentRef: `REV-${orig.documentRef || doc.refNumber || id}`,
             createdBy: deletedByUser,
             notes: `تراکنش معکوس حذف سند ${doc.refNumber || id} (معکوس تراکنش #${orig.id})`,
-            location: orig.location || 'default',
+            location: (orig.location || '').trim() ? orig.location : unlocatedDefaultWh,
             reversalOfId: orig.id,
             isDeleted: 0, // V9 (DB-009): تراکنش معکوس فعال جهت تراز کردن کاردکس و ثبت عطف معکوس
           });

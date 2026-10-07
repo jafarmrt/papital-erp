@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.107 — Reserved Warehouse Code
+- **Warehouse code `default`:** a new warehouse can no longer take a code the Kardex reads as the default warehouse, a void reversal writes the real default code, and a legacy one is listed by the health check (TD-482, `reg_warehouse_reserved_code_td_482`).
+
 ### v9.0.106 — Treasury Forms and Export
 - **Treasury Forms and Export (P3):** a receipt or payment for an account without a ledger account is stopped in the form, treasury and cheque dates use the Jalali date input, and the treasury Excel export has Persian labels and a Jalali file date. Before, the form promised a voucherless save the server refused, and the date field showed «2026/10/07» in the Jalali calendar (TD-515, Vitest `treasuryFormWording.test.tsx`).
 

@@ -1,7 +1,8 @@
 import { eq, sql, asc, and, ne } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { warehouses, items, itemWarehouseStocks } from '../db/schema.js';
-import { NotFoundError, ConflictError, BadRequestError } from '../errors/customErrors.js';
+import { NotFoundError, ConflictError, BadRequestError, ValidationError } from '../errors/customErrors.js';
+import { isLedgerReservedWarehouseCode } from './inventory/warehouseResolver.js';
 
 export interface CreateWarehouseInput {
   name: string;
@@ -40,6 +41,13 @@ export class WarehouseService {
     const cleanCode = input.code.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
     if (!cleanCode) {
       throw new BadRequestError('کد انبار نامعتبر است');
+    }
+    if (isLedgerReservedWarehouseCode(cleanCode)) {
+      throw new ValidationError(
+        `کد «${cleanCode}» در کاردکس به معنای انبار پیش‌فرض است و برای انبار تازه پذیرفته نمی‌شود. کد دیگری وارد کنید.`,
+        { field: 'code', value: cleanCode },
+        'WAREHOUSE_CODE_RESERVED'
+      );
     }
 
     const [existing] = await executor

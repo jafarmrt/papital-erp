@@ -79,6 +79,16 @@ export async function resolveWarehouseCode(tx: DbClient, raw: unknown): Promise<
 export interface LedgerWarehouseRef { id: number; code: string; name: string; isActive: number | null }
 
 /**
+ * v9.0.107 (TD-482 / B06-03): the Kardex ledger reads '' and 'default' as the default warehouse, so neither may be a
+ * warehouse code; a warehouse that already has one is only listed by the financial health check.
+ */
+export const LEDGER_RESERVED_WAREHOUSE_CODES: ReadonlySet<string> = new Set(['', 'default']);
+
+export function isLedgerReservedWarehouseCode(code: unknown): boolean {
+  return LEDGER_RESERVED_WAREHOUSE_CODES.has(String(code ?? '').trim().toLowerCase());
+}
+
+/**
  * v7.0.33 (TD-200) / v7.0.45 (P2-1): نگاشت محل ثبت‌شده در کاردکس (یا کلید JSONB قدیمی) به انبار — روی همه انبارها،
  * از جمله غیرفعال، چون تاریخچه ممکن است به انباری اشاره کند که بعداً غیرفعال شده است.
  * '' و 'default' = انبار پیش‌فرض (فعال با کمترین شناسه)؛ سپس کد و سپس نام (بدون حساسیت به حروف)؛ در غیر این صورت null.

@@ -10562,6 +10562,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.96, TD-496): the warehouse chart counts items with stock, not quantities of different units
   const { runWarehouseItemCountTests } = await import('../regression/warehouseItemCountTests.js');
   results.push(...await runWarehouseItemCountTests(shouldRun));
+  // Package 6 (v9.0.107, TD-482): a warehouse code «default» is refused and reversals name a real warehouse
+  const { runWarehouseReservedCodeTests } = await import('../regression/warehouseReservedCodeTests.js');
+  results.push(...await runWarehouseReservedCodeTests(shouldRun));
 
   return results;
 }
