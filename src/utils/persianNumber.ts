@@ -261,6 +261,9 @@ export function numberToPersianWords(input: number | string | null | undefined):
   return (isNegative ? 'منفی ' : '') + result;
 }
 
+/** واحد خرد ارزهای §۶ برای مبلغ به حروف (TD-685) */
+const FOREIGN_SUBUNIT_LABELS: Record<string, string> = { USD: 'سنت', EUR: 'سنت', AED: 'فلس', GBP: 'پنی' };
+
 export interface FinancialWordsResult {
   words: string;
   tomanEquivalent: string;
@@ -340,9 +343,12 @@ export function financialAmountToPersianWords(
   }
 
   // سایر ارزها (USD, EUR, AED, GBP)
+  // v9.0.229 (TD-685): بخش اعشاری (سنت) هم به حروف می‌آید؛ پیش‌تر ۱۲٫۵ دلار «دوازده دلار» چاپ می‌شد
   const currLabel = formatCurrencyLabel(cur);
-  const foreignWords = numberToPersianWords(intPart);
-  const fullText = `${prefix}${foreignWords} ${currLabel}`;
+  const cents = new Decimal(cleanStr).abs().minus(intPart).times(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
+  const intWords = intPart > 0 ? `${numberToPersianWords(intPart)} ${currLabel}` : '';
+  const centWords = cents > 0 ? `${numberToPersianWords(cents)} ${FOREIGN_SUBUNIT_LABELS[cur] ?? 'صدم'}` : '';
+  const fullText = `${prefix}${[intWords, centWords].filter(Boolean).join(' و ')}`;
 
   return {
     words: fullText,

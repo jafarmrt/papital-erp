@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.229 — v9.0.229 — Amount in Words Keeps Foreign Cents
+- **Amount in words (TD-685):** a foreign-currency amount in words includes its cents (cent, fils, penny), so a 12.50 dollar invoice prints «دوازده دلار و پنجاه سنت» instead of «دوازده دلار».
+
 ### v9.0.228 — v9.0.228 — Numbers Shown With Persian Separators
 - **Persian separators (TD-687):** every amount and quantity shown through `formatPersianPrice` / `formatPersianNumber` uses the Persian thousands separator «٬» and decimal separator «٫» (vibefarsi numbers rule) instead of the Latin comma and point; a number copied from the screen is read back exactly.
 

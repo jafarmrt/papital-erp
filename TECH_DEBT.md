@@ -68,15 +68,14 @@
 | TD-682 | پوسته (بسته ۱۶) | P3 (B16-18) — کادر شماره کارت و شبا پس از Backspace روی جداکننده، مکان‌نما را به آخر می‌برد: از `6037 - |9918…` مقدار `6039 - 9181 - 2345 - 678` شد و مکان‌نما در ۲۴ بود، به‌جای ۳ | groupedDigitsField.tsx | open (P3) |
 | TD-683 | پیشخوان (بسته ۱۶) | P3 (B16-19) — بنر شخصی داشبورد ساعت دستگاه را نشان می‌دهد، نه ساعت توافقی: با `TZ=UTC` در ۰۰:۳۰ تهران روز نوروز ۱۴۰۵ بنر «جمعه، ۲۹ اسفند ۱۴۰۴» و ساعت ۲۱:۰۰ نشان داد، در حالی که `getTodayJalaliDate()` = ۱۴۰۵/۰۱/۰۱ | PersonalBanner.tsx | open (P3) |
 | TD-684 | پوسته (بسته ۱۶) | P3 (B16-20) — `executePrint` پاک‌سازی چاپ را دو بار اجرا می‌کند: `onAfterPrint` دو بار صدا زده شد؛ عنوان صفحه ۲ ثانیه بعد بازنشانی شد و عنوان تازه‌تر را پاک کرد؛ کلاس `printing-doc` با پنجره هنوز باز برداشته شد | printHelper.ts | open (P3) |
-| TD-685 | تاریخ و عدد (بسته ۱۶) | P3 (B16-21) — مبلغ به حروف، سنتِ ارز خارجی را می‌اندازد: `financialAmountToPersianWords(12.5, 'USD').words` ← «دوازده دلار»؛ فاکتور ۱۲٫۵۰ دلاری «دوازده دلار» به حروف چاپ می‌شود | persianNumber.ts | open (P3) |
 | TD-686 | پوسته (بسته ۱۶) | P3 (B16-22) — آوانویسی و انگلیسی در رابط پوسته (قاعده ۱۰): ورکفلو، تسک، متریال، آلارم، دیتابیس، فلگ، اندپوینت، کانفیگ، فرانت، بک‌اند، باندل، ری‌استارت، اتوماسیون، استراتژی، پروفایل، ماژول، پروتکل، توکن، «TOMAN»، «Drag & Drop»، «Paste (Ctrl+V)»، «KB»، «Invalid time value»، «Tech Stack»، «AGENTS.md» و `⌘K` | CustomizableShortcuts.tsx، settingsNavigationConfig.ts، SystemConfigTab.tsx، GeneralSettingsTab.tsx، SettingsPage.tsx، menuConfig.ts، Sidebar.tsx، TopBar.tsx، ModernPersianDropzone.tsx، ChangelogPage.tsx، GlobalHeaderSearch.tsx | open (P3، تصمیم ت۷) |
 
 ---
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۵۴ ردیف
-- **آرشیو شده (resolved):** ۵۸۴ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۵۳ ردیف
+- **آرشیو شده (resolved):** ۵۸۵ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
