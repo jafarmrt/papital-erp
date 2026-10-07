@@ -1,6 +1,7 @@
 import { TestCaseResult } from '../types.js';
 import { runCase, type ShouldRun } from './workflowTestHarness.js';
 import { TEST_PASSWORD } from '../fixtures/factories.js';
+import { loginTestUserWithSession } from '../fixtures/httpTestHelper.js';
 import { PASSWORD_TOO_SHORT_MESSAGE } from '../../lib/auth/passwordPolicy.js';
 
 /**
@@ -48,6 +49,34 @@ export async function runAccessPackageTwoPasswordTests(shouldRun: ShouldRun): Pr
       } finally {
         await h.q('DELETE FROM users WHERE username IN ($1, $2)', [username, `${username}_short`]).catch(() => undefined);
       }
+    });
+  }
+
+  if (shouldRun('sec_own_password_change_keeps_session_td_531', 'security', 'td531', 'password', 'package2')) {
+    await runCase(results, {
+      id: 'sec_own_password_change_keeps_session_td_531',
+      name: 'v9.0.160: changing one\'s own password keeps this session and ends the others (TD-531)',
+      details: 'B02-16 (R11): PUT /users/profile raised the token version without a new cookie, so after the success message the same session got 401; now the response sets a cookie with the new version, GET /auth/me answers 200 with it, and another session of the same user and the old cookie get 401',
+    }, async (h, wrong) => {
+      const member = await h.sessionWith(['documents.view']);
+      const [row] = await h.q('SELECT username FROM users WHERE id = $1', [member.userId]);
+      const other = await loginTestUserWithSession(h.app as Parameters<typeof loginTestUserWithSession>[0], String(row?.username));
+
+      const changed = await h.put('/api/users/profile', { current_password: TEST_PASSWORD, new_password: 'N3w-passw0rd' }, member);
+      if (changed.status !== 200) throw new Error(`changing the password returned ${changed.status}`);
+      const setCookie = changed.headers['set-cookie'] as unknown as string[] | string | undefined;
+      const raw = Array.isArray(setCookie) ? setCookie.find(c => c.startsWith('auth_token=')) : setCookie;
+      if (!raw) {
+        wrong.push('the password change set no new session cookie');
+      } else {
+        const fresh = { cookie: raw.split(';')[0], csrfToken: String(changed.body?.csrfToken ?? member.csrfToken) };
+        const me = await h.get('/api/auth/me', fresh);
+        if (me.status !== 200) wrong.push(`GET /auth/me with the new cookie returned ${me.status}`);
+        const write = await h.put('/api/users/profile', { full_name: 'td531' }, fresh);
+        if (write.status !== 200) wrong.push(`a write with the new cookie returned ${write.status}`);
+      }
+      if ((await h.get('/api/auth/me', member)).status !== 401) wrong.push('the old cookie of this session still works');
+      if ((await h.get('/api/auth/me', other)).status !== 401) wrong.push('another session of the user still works after the password change');
     });
   }
 

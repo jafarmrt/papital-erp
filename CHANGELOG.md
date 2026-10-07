@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.160 — Changing Your Own Password Keeps This Session
+- **Changing Your Own Password Keeps This Session:** after a password change from the profile, this session gets a new token and goes on; the other sessions of the user end (TD-531).
+
 ### v9.0.159 — One Minimum Password Length Everywhere
 - **One Minimum Password Length Everywhere:** creating, editing and restoring a user, the profile and the setup all ask eight characters, from one shared constant with one Persian message (TD-532).
 

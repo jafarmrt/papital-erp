@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { and, eq, desc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
-import { authenticateToken, invalidateUserAuthCache } from '../middleware/auth.js';
+import { authenticateToken, invalidateUserAuthCache, generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, shouldExposeTokenInBody } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission, ROLE_CODE_PATTERN } from '../middleware/authorize.js';
 import { z } from 'zod';
@@ -189,6 +189,16 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
       }
     });
 
+    // v9.0.160 (TD-531): نسخه توکن بالا رفت و نشست‌های دیگر کاربر باطل‌اند؛ همین نشست با توکن تازه ادامه می‌یابد، وگرنه
+    // پس از پیام موفقیت، درخواست بعدی ۴۰۱ می‌گرفت
+    let session: { token: string; csrfToken: string } | null = null;
+    if (passwordChanged) {
+      const csrfToken = req.user?.csrfToken || generateCsrfToken();
+      const token = generateToken({ id: updatedUser.id, username: updatedUser.username, role: updatedUser.role, csrfToken, tokenVersion: updatedUser.tokenVersion || 0 });
+      res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+      session = { token, csrfToken };
+    }
+
     const { password: _, ...userInfo } = updatedUser;
     res.json({
       success: true,
@@ -196,7 +206,8 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
         ...userInfo,
         full_name: updatedUser.fullName,
         avatar_url: updatedUser.avatarUrl || ''
-      }
+      },
+      ...(session ? { csrfToken: session.csrfToken, ...(shouldExposeTokenInBody() ? { token: session.token } : {}) } : {})
     });
   } catch (err) {
     throw err;
