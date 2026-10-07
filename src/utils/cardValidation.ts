@@ -47,28 +47,24 @@ export function formatPersianPhone(val: number | string | null | undefined): str
 }
 
 /**
- * استانداردسازی کد ملی ایران:
- * - ارقام انگلیسی شده و کاراکترهای غیرعددی پاک می‌شوند.
- * - کد ملی در ایران ۱۰ رقم است؛ در صورتی که به دلیل ورود در اکسل یا بدون صفر ۱ تا ۹ رقم باشد،
- *   با صفرهای پیشین به ۱۰ رقم کامل تبدیل می‌شود (مثلاً 87654321 -> 0087654321).
+ * استانداردسازی کد ملی ایران: ارقام فارسی و عربی لاتین می‌شوند و نویسه‌های غیرعددی (فاصله، خط تیره) پاک می‌شوند.
+ * v9.0.230 (TD-673، تصمیم ت۵ ب، قاعده iran-validation در vibefarsi): کد ملی دقیقاً ۱۰ رقم است و این تابع هرگز آن را با صفر
+ * پر نمی‌کند؛ پیش‌تر «19» به «0000000019» می‌رسید و معتبر شناخته می‌شد. فقط ورود اکسل، که صفر اول را خودش می‌اندازد،
+ * ورودی ۸ و ۹ رقمی را پر و فهرست می‌کند (`readImportedNationalId` در `src/lib/personnel/nationalIdCell.ts`).
  */
 export function normalizeNationalId(val: number | string | null | undefined): string {
   if (val === null || val === undefined || val === '' || typeof val === 'object') return '';
   try {
     const rawStr = toEnglishDigits(String(val)).trim();
     const digits = rawStr.replace(/\D/g, '');
-    if (!digits) return rawStr;
-    if (digits.length > 0 && digits.length < 10) {
-      return digits.padStart(10, '0');
-    }
-    return digits;
+    return digits || rawStr;
   } catch {
     return '';
   }
 }
 
 /**
- * فرمت‌بندی کد ملی با ارقام فارسی و تضمین نمایش کامل ۱۰ رقم با صفرهای پیشین
+ * فرمت‌بندی کد ملی با ارقام فارسی؛ صفرهای پیشین ذخیره‌شده حفظ می‌شوند
  */
 export function formatPersianNationalId(val: number | string | null | undefined): string {
   if (val === null || val === undefined || val === '' || typeof val === 'object') return '';
@@ -396,7 +392,7 @@ export function validateIranianNationalId(id: string | null | undefined): { isVa
   }
   const cleanId = normalizeNationalId(id);
   if (!/^\d{10}$/.test(cleanId)) {
-    return { isValid: false, error: 'کد ملی باید دقیقاً ۱۰ رقم عددی باشد' };
+    return { isValid: false, error: 'کد ملی باید ۱۰ رقم باشد' };
   }
   // جلوگیری از ارقام تکراری ساختگی نامعتبر مانند ۱۱۱۱۱۱۱۱۱۱
   const allSame = /^(\d)\1{9}$/.test(cleanId);

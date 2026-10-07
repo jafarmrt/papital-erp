@@ -410,5 +410,34 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
     });
   }
 
+  const nationalIdTd673 = 'reg_personnel_national_id_ten_digits_td_673';
+  if (shouldRun(nationalIdTd673, 'td673', 'personnel', 'national_id', 'package16')) {
+    await runCase(results, nationalIdTd673, 'v9.0.230: personnel save refuses a national ID that is not ten digits; only the Excel import pads 8-9 digits and lists the row (TD-673)', async (ids) => {
+      const { send } = await adminClient();
+      const tag = tagOf();
+      const wrong: string[] = [];
+      const short = await send('post', '/api/personnel', { firstName: 'کوتاه', lastName: `کد ملی ${tag}`, personnelCode: `NID-${tag}-S`, nationalId: '19' });
+      if (short.status !== 422 || short.body?.code !== 'NATIONAL_ID_INVALID') wrong.push(`short ID on save: ${short.status} ${short.body?.code}`);
+      if (short.body?.id) ids.push(Number(short.body.id));
+      const full = await send('post', '/api/personnel', { firstName: 'کامل', lastName: `کد ملی ${tag}`, personnelCode: `NID-${tag}-F`, nationalId: '۰۰۱۲۳۴۵۶۷۹' });
+      if (full.status !== 201) wrong.push(`ten-digit ID on save: ${full.status}`);
+      else ids.push(Number(full.body.id));
+      const imported = await send('post', '/api/personnel/bulk-import', { rows: [
+        { personnelCode: `NID-${tag}-P`, firstName: 'اکسل', lastName: `کد ملی ${tag}`, nationalId: 12345679 },
+        { personnelCode: `NID-${tag}-X`, firstName: 'اکسل', lastName: `ناقص ${tag}`, nationalId: '19' },
+      ], updateIfExists: false });
+      const rows = await orm.select().from(personnel).where(and(sql`${personnel.personnelCode} like ${`NID-${tag}-%`}`, eq(personnel.isDeleted, 0)));
+      ids.push(...rows.map(r => r.id).filter(id => !ids.includes(id)));
+      const padded = rows.find(r => r.personnelCode === `NID-${tag}-P`);
+      if (imported.status !== 200 || imported.body?.createdCount !== 1) wrong.push(`import: ${imported.status} created ${imported.body?.createdCount}`);
+      if (padded?.nationalId !== '0012345679') wrong.push(`8-digit Excel ID stored as ${padded?.nationalId}`);
+      if (imported.body?.warnings?.length !== 1 || imported.body.warnings[0].row !== 1) wrong.push(`warnings ${JSON.stringify(imported.body?.warnings)}`);
+      if (imported.body?.errors?.length !== 1 || imported.body.errors[0].row !== 2) wrong.push(`errors ${JSON.stringify(imported.body?.errors)}`);
+      if (rows.some(r => r.personnelCode === `NID-${tag}-X`)) wrong.push('two-digit Excel ID was saved');
+      if (wrong.length > 0) throw new Error(wrong.join('; '));
+      return 'short ID refused with 422 NATIONAL_ID_INVALID; Excel 8-digit ID padded and listed as a warning, two-digit ID a row error';
+    });
+  }
+
   return results;
 }

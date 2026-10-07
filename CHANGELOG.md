@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.230 — v9.0.230 — National ID Is Exactly Ten Digits
+- **National ID (TD-673):** a personnel national ID must be exactly ten digits with a valid check digit; forms and the server never zero-pad a short one (422 `NATIONAL_ID_INVALID`), and only the Excel import pads 8 or 9 digits, which Excel drops, and lists those rows for review.
+
 ### v9.0.229 — v9.0.229 — Amount in Words Keeps Foreign Cents
 - **Amount in words (TD-685):** a foreign-currency amount in words includes its cents (cent, fils, penny), so a 12.50 dollar invoice prints «دوازده دلار و پنجاه سنت» instead of «دوازده دلار».
 
