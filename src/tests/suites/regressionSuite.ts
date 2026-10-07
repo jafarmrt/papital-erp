@@ -10248,7 +10248,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       expectStatus('تاریخچه ممیزی با کاربر تکراری (آرایه)', (await get('/api/activity-logs?user=a&user=b')).status, 400);
       expectStatus('تاریخچه ممیزی با دسته نامعتبر', (await get('/api/activity-logs?category=bogus')).status, 400);
       expectStatus('تاریخچه ممیزی با صفحه غیرعددی', (await get('/api/activity-logs?page=abc')).status, 400);
-      expectStatus('پاکسازی ممیزی با بدنه رابط کاربری', (await post('/api/activity-logs/purge', { retentionDays: 730, preserveCritical: true })).status, 200);
+      expectStatus('پاکسازی ممیزی با بدنه رابط کاربری', (await post('/api/activity-logs/purge', { retentionDays: 730 })).status, 200);
       expectStatus('پاکسازی ممیزی با مدت آرایه', (await post('/api/activity-logs/purge', { retentionDays: [36500] })).status, 400);
       expectStatus('پاکسازی ممیزی با allowForceRecent رشته‌ای', (await post('/api/activity-logs/purge', { retentionDays: 36500, allowForceRecent: 'false' })).status, 400);
       expectStatus('پاکسازی ممیزی با مدت غیرعددی', (await post('/api/activity-logs/purge', { retentionDays: 'abc' })).status, 400);

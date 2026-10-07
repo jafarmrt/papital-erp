@@ -4,6 +4,10 @@ import { useAuditLogIntegrityQuery, useInvalidateActivityLogs } from '../../hook
 import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';
 import { formatPersianNumber } from '../../utils';
+import { MIN_AUDIT_RETENTION_DAYS, PURGEABLE_AUDIT_ENTITY_LABELS } from '../../lib/audit/auditRetention';
+
+/** v9.0.154 (TD-522، تصمیم ت۴ الف): بخش‌هایی که پاک‌سازی سجلشان را پاک می‌کند، از همان فهرست سرور */
+const PURGEABLE_SECTIONS_TEXT = Object.values(PURGEABLE_AUDIT_ENTITY_LABELS).join('، ');
 
 interface SystemOperationsTabProps {
   onOpenClearModal: () => void;
@@ -13,8 +17,7 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
   const { data: integrity, isLoading: isCheckingIntegrity, refetch: refetchIntegrity } = useAuditLogIntegrityQuery();
   const invalidateActivityLogs = useInvalidateActivityLogs();
 
-  const [retentionDays, setRetentionDays] = useState<number>(90);
-  const [preserveCritical, setPreserveCritical] = useState<boolean>(true);
+  const [retentionDays, setRetentionDays] = useState<number>(MIN_AUDIT_RETENTION_DAYS);
   const [isPurging, setIsPurging] = useState<boolean>(false);
   const [showPurgeModal, setShowPurgeModal] = useState<boolean>(false);
 
@@ -24,10 +27,7 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
       const res = await fetchJson('/activity-logs/purge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          retentionDays,
-          preserveCritical
-        })
+        body: JSON.stringify({ retentionDays })
       });
 
       if (res?.success) {
@@ -73,7 +73,7 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
             </div>
           </div>
           <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl">
-            <div className="text-[11px] text-emerald-700 font-medium">رویدادهای بحرانی و حساس</div>
+            <div className="text-[11px] text-emerald-700 font-medium">رویدادهای ماندگار (پاک‌نشدنی)</div>
             <div className="text-lg font-black text-emerald-800 mt-1">
               {integrity ? formatPersianNumber(integrity.criticalLogsCount) : '...'}
             </div>
@@ -81,7 +81,7 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
           <div className="bg-indigo-50 border border-indigo-200 p-3.5 rounded-xl">
             <div className="text-[11px] text-indigo-700 font-medium">حداقل زمان نگه‌داشت قانونی</div>
             <div className="text-lg font-black text-indigo-800 mt-1">
-              {integrity ? formatPersianNumber(integrity.minRetentionDays) : '۹۰'} روز
+              {formatPersianNumber(integrity?.minRetentionDays ?? MIN_AUDIT_RETENTION_DAYS)} روز
             </div>
           </div>
         </div>
@@ -90,10 +90,10 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
         <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200 space-y-3">
           <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
             <History size={16} className="text-indigo-600" />
-            <h4>پاکسازی دوره‌ای سوابق ممیزی قدیمی (Archival & Purge)</h4>
+            <h4>پاکسازی دوره‌ای سوابق ممیزی قدیمی</h4>
           </div>
           <p className="text-xs text-slate-600 leading-relaxed">
-            مطابق سیاست حاکمیت داده سامانه، حذف لاگ‌های ممیزی با قدمت کمتر از ۹۰ روز مجاز نمی‌باشد. همچنین رویدادهای حساس (مانند حذف رکوردها، تغییر تنظیمات، خطاهای ورود، احراز هویت و اسناد دوبل مالی) به‌صورت خودکار محافظت شده و از جدول حذف نخواهند شد.
+            سوابق ممیزی تازه‌تر از {formatPersianNumber(MIN_AUDIT_RETENTION_DAYS)} روز پاک نمی‌شوند. پاکسازی فقط سوابق این بخش‌ها را پاک می‌کند: {PURGEABLE_SECTIONS_TEXT}. رویدادهای مالی، امنیتی، نقش و کاربر، و هر حذف و تغییر تنظیمات، هرگز پاک نمی‌شوند.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
@@ -111,18 +111,6 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
                 <option value={365}>قدیمی‌تر از ۳۶۵ روز (۱ سال)</option>
                 <option value={730}>قدیمی‌تر از ۷۳۰ روز (۲ سال)</option>
               </select>
-            </div>
-
-            <div className="flex items-end pb-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={preserveCritical}
-                  onChange={(e) => setPreserveCritical(e.target.checked)}
-                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                />
-                <span className="text-xs text-slate-700 font-medium">حفاظت کامل از رویدادهای بحرانی و مالی</span>
-              </label>
             </div>
           </div>
 
@@ -177,15 +165,9 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
               <p className="text-slate-600 leading-relaxed">
                 آیا از پاکسازی لاگ‌های ممیزی قدیمی‌تر از <span className="font-bold text-indigo-700">{formatPersianNumber(retentionDays)} روز</span> اطمینان دارید؟
               </p>
-              {preserveCritical ? (
-                <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-800 text-[11px] leading-relaxed">
-                  ✓ رویدادهای حذف داده، تغییر تنظیمات و فعالیت‌های امنیتی و مالی به‌صورت خودکار حفظ خواهند شد.
-                </div>
-              ) : (
-                <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-800 text-[11px] leading-relaxed">
-                  ⚠️ تمام لاگ‌های مربوط به دوره مشخص‌شده حذف خواهند شد.
-                </div>
-              )}
+              <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-800 text-[11px] leading-relaxed">
+                ✓ فقط سوابق این بخش‌ها پاک می‌شود: {PURGEABLE_SECTIONS_TEXT}. رویدادهای مالی، امنیتی، نقش و کاربر، و هر حذف و تغییر تنظیمات، می‌مانند.
+              </div>
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"

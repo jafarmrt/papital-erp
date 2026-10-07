@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.154 — Audit Purge Keeps Financial, Security, Role and User Events
+- **Audit Purge Keeps Financial, Security, Role and User Events:** the purge deletes only operational sections after the fixed 90 days; the options that turned protection off are gone (TD-522).
+
 ### v9.0.153 — Role Delete Counts Active Users Only
 - **Role Delete Counts Active Users Only:** a role whose only user was deleted can be deleted (TD-535).
 
