@@ -24,7 +24,7 @@ import * as xlsx from 'xlsx';
 import UnifiedExcelModal from '../components/UnifiedExcelModal';
 import { buildQuickPriceUpdates } from '../lib/items/quickPriceImport';
 import { priceSaveUpdates, type PriceFieldEdit } from '../lib/items/priceInput';
-import { ITEM_WAC_COLUMN } from '../lib/items/excelPriceColumns';
+import { ITEM_WAC_COLUMN, priceExportCells } from '../lib/items/excelPriceColumns';
 
 export default function PricingPage({ user }: { user: User }) {
   const appCurrency = useAppCurrency();
@@ -293,18 +293,8 @@ export default function PricingPage({ user }: { user: User }) {
           [ITEM_WAC_COLUMN]: item.weighted_average_cost || 0,
         };
 
-        let rowCurrency = 'IRR';
-        strategies.forEach(st => {
-          const cleanTitle = formatStrategyDisplayTitle(st);
-          const fieldVal = getFieldValue(item.id, cleanTitle);
-          const numPrice = fieldVal.price !== '' && !isNaN(Number(fieldVal.price)) && Number(fieldVal.price) > 0 ? Number(fieldVal.price) : '';
-          row[`قیمت ${cleanTitle}`] = numPrice;
-          if (fieldVal.currency && fieldVal.currency !== 'IRR') {
-            rowCurrency = fieldVal.currency;
-          }
-        });
-
-        row['واحد ارز'] = rowCurrency;
+        // v9.0.180 (O12): ارز هر فهرست در ستون خودش؛ ورود سریع همان ستون را می‌خواند
+        Object.assign(row, priceExportCells(strategies.map(st => formatStrategyDisplayTitle(st)), title => getFieldValue(item.id, title)));
         return row;
       });
 

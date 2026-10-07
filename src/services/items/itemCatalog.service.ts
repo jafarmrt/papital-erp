@@ -17,7 +17,8 @@ import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.servi
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { startsWithLikePattern } from '../../lib/sqlLike.js';
 import { money } from '../../lib/money.js';
-import { ITEM_WAC_COLUMN } from '../../lib/items/excelPriceColumns.js';
+import { ITEM_WAC_COLUMN, priceExportCells } from '../../lib/items/excelPriceColumns.js';
+import { ITEM_REORDER_POINT_COLUMN } from '../../lib/items/itemExcelColumns.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import { EXCEL_WAC_TOLERANCE, importItemsFromExcel, type ItemImportActor, type ItemImportResult } from './itemExcelImport.js';
 
@@ -376,21 +377,15 @@ export class ItemCatalogService {
         row[`موجودی انبار ${w.name}`] = Number(st[w.code] || 0);
       }
 
-      row['حد نقطه سفارش (آلارم کسری)'] = Number(it.reorderPoint || 0);
+      row[ITEM_REORDER_POINT_COLUMN] = Number(it.reorderPoint || 0);
       row[ITEM_WAC_COLUMN] = Number(it.weightedAverageCost || 0);
 
-      let itemCurrency = 'IRR';
-      for (const normStrat of normalizedStrategies) {
+      // v9.0.180 (O12): ارز هر فهرست در ستون خودش، نه یک «واحد ارز» برای کل ردیف
+      Object.assign(row, priceExportCells(normalizedStrategies, (normStrat) => {
         const canKey = getStrategyCanonicalKey(normStrat);
-        const prVal = itemPriceObj?.get(normStrat) || (canKey ? itemPriceObj?.get(canKey) : undefined);
-        const numPrice = prVal && prVal.price !== undefined && prVal.price !== null && !isNaN(Number(prVal.price)) && Number(prVal.price) > 0 ? Number(prVal.price) : '';
-        row[`قیمت ${normStrat}`] = numPrice;
-        if (prVal?.currency && prVal.currency !== 'IRR') {
-          itemCurrency = prVal.currency;
-        }
-      }
+        return itemPriceObj?.get(normStrat) || (canKey ? itemPriceObj?.get(canKey) : undefined);
+      }));
 
-      row['واحد ارز'] = itemCurrency;
       row['تصویر'] = it.image || '';
       row['رنگ'] = it.color || '';
       row['سایز'] = it.size || '';

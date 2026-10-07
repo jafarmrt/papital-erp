@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.180 — Excel Currency per Price List
+- **Excel Currency per Price List:** the item export and the pricing page export write «ارز - قیمت <title>» for each price list instead of one row-wide «واحد ارز», and the imports read it first, so an unchanged round trip keeps a rial price in rials (TD-841, `reg_excel_export_currency_per_price_list_td_841`).
+
 ### v9.0.179 — Item List and Excel Import Performance
 - **Item List and Excel Import:** the item list builds reservations for its own page only; an Excel import reads its items once and its new items with stock share one opening voucher, recorded in `item_opening_voucher_items` (migration 0073) (TD-663, `perf_item_list_and_excel_opening_td_663`).
 

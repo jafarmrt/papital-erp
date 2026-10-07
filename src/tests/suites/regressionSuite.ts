@@ -10615,6 +10615,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runItemCategoryTests(shouldRun));
   const { runItemPerformanceTests } = await import('../regression/itemPerformanceTests.js');
   results.push(...await runItemPerformanceTests(shouldRun));
+  const { runItemExcelExportTests } = await import('../regression/itemExcelExportTests.js');
+  results.push(...await runItemExcelExportTests(shouldRun));
 
   return results;
 }
