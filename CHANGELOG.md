@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.162 — Item Code Counter Moves on Save
+- **Item Code Suggestion:** saving an item moves its code series counter in the same transaction, so the next suggested code is free (TD-656, `reg_item_code_peek_after_save_td_656`).
+
 ### v9.0.161 — Item Edit Version Lock
 - **Item Version Lock:** editing an item needs its current version (400 without, 409 `OCC_CONFLICT` when stale), missing fields keep their values and the edit is audited in its transaction (TD-654, `sec_item_version_lock_td_654`).
 

@@ -10,6 +10,7 @@ import { ValidationError, NotFoundError, ConflictError, BadRequestError } from '
 import { DocumentService } from '../document.service.js';
 import { getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
+import { advanceItemCodeCounter } from './itemCodeCounter.js';
 import { assertItemCodeAvailable, assertItemNameAvailable, guardItemIdentity } from './itemIdentity.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
@@ -523,6 +524,7 @@ export class ItemCatalogService {
         size: size || null,
         isDeleted: 0
       }).returning());
+      await advanceItemCodeCounter(tx, inserted.type, inserted.code);
 
       // v7.0.45 (audit P2-1): موجودی اولیه از موتور مرکزی گردش انبار (کاردکس + جدول موجودی انبارها + کش)؛
       // پیش‌تر فقط JSONB و کاردکس نوشته می‌شد و جدول موجودی انبارها ردیفی نداشت.
@@ -704,6 +706,7 @@ export class ItemCatalogService {
       let [updatedItem] = await guardItemIdentity(name ?? prevItem.name, () => tx.update(items).set(updateData)
         .where(and(eq(items.id, itemId), eq(items.version, prevItem.version))).returning());
       if (!updatedItem) throw new OptimisticLockError({ entityType: 'Item', entityId: itemId, expectedVersion });
+      if (code && code !== prevItem.code) await advanceItemCodeCounter(tx, updatedItem.type, updatedItem.code);
 
       if (canSetOpening && computedStock > 0) {
         // v7.0.45 (audit P2-1): موجودی افتتاحیه از موتور مرکزی گردش انبار (کاردکس + جدول موجودی انبارها + کش)

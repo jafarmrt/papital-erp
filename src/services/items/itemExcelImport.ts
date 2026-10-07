@@ -1,6 +1,7 @@
 import { and, asc, eq, ne } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, warehouses } from '../../db/schema.js';
+import { advanceItemCodeCounter } from './itemCodeCounter.js';
 import { guardItemIdentity, itemNameKeyCondition } from './itemIdentity.js';
 import { itemAuditSnapshot, logItemImportChange, logItemImportSummary } from './itemExcelAudit.js';
 import { ItemPricingService } from './itemPricing.service.js';
@@ -234,8 +235,9 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
     image: fields.image || '',
     currentStock: 0,
     isDeleted: 0,
-  }).returning({ id: items.id }));
+  }).returning({ id: items.id, type: items.type }));
   const targetItemId = newItem.id;
+  await advanceItemCodeCounter(tx, newItem.type, code);
 
   const movement = { itemId: targetItemId, price: itemWac, date: input.todayStr, user: input.currentUser };
   const opening = plan.changes;
