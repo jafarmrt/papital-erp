@@ -1182,7 +1182,7 @@ export class FinancialHealthService {
     const categoryIntegrityTest = buildCategoryIntegrityHealthTest(await findCategoryIntegrityIssues(), await hasCategoryNameUniqueIndex());
     overallScore += categoryIntegrityTest.scoreImpact;
     tests.push(categoryIntegrityTest);
-    // آزمون ۳۷: v9.0.231 (TD-804) فیش حقوقی با پاداش یا کسورات منفی، بی سند یا ناهمخوان با سند (فقط فهرست، بی بازنویسی)
+    // آزمون ۳۷: v9.0.266 (TD-804) فیش حقوقی با پاداش یا کسورات منفی، بی سند یا ناهمخوان با سند (فقط فهرست، بی بازنویسی)
     tests.push(buildPayrollVoucherHealthTest(await findPayrollVoucherMismatches()));
 
     // =========================================================================

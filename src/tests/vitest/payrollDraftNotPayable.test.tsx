@@ -16,7 +16,7 @@ const payslip = (id: number, status: PieceworkPayroll['status']): PieceworkPayro
   totalPieceworkAmount: 1000000, totalBonuses: 0, totalDeductions: 0, netPayable: 1000000, paidAmount: 0, status,
 });
 
-// v9.0.234 (TD-816): a draft payslip offers approval, never a payment
+// v9.0.269 (TD-816): a draft payslip offers approval, never a payment
 describe('a draft payslip is not payable (TD-816)', () => {
   it('shows approve instead of pay for a draft in the payslip list', () => {
     const onUpdateStatus = vi.fn();

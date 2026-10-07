@@ -27,7 +27,7 @@ export type InvariantId =
   | 'I4_one_voucher_per_document'
   | 'I5_invoice_receivable'
   | 'I6_void_trial_balance'
-  /** v9.0.231 (TD-804): gross − deductions = net = wages payable credit of the payslip's voucher */
+  /** v9.0.266 (TD-804): gross − deductions = net = wages payable credit of the payslip's voucher */
   | 'I10_payroll_net_equals_payable'
   | 'I13_kardex_rebuild_wac'
   /** شبیه‌ساز: برگشت از فروش بیش از مقدار فروخته‌شده پذیرفته شد */
@@ -54,7 +54,7 @@ export interface InvariantScope {
   voucherIdAfter: number;
   /** v9.0.67 (TD-499): حساب‌های خزانه‌ای که ناوردایی‌های بانک (I15، I16) روی آن‌ها سنجیده می‌شود */
   bankAccountIds?: number[];
-  /** v9.0.231 (TD-804): only payslips with a larger id (I10); without it I10 is not checked */
+  /** v9.0.266 (TD-804): only payslips with a larger id (I10); without it I10 is not checked */
   payrollIdAfter?: number;
 }
 

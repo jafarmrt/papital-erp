@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
+import { DEFAULT_DAILY_LOG_VISIBILITY, type DailyLogVisibility } from '../lib/dailyLogs/dailyLogVisibility';
+import { EMPTY_DAILY_LOG_STATS, type DailyLogStats } from '../lib/dailyLogs/dailyLogStats';
+import { workHoursBetween, workTimeError } from '../lib/dailyLogs/workHours';
+import { SUMMARY_CSV_DOWNLOADED, buildSummaryCsv, summaryCsvFileName } from '../lib/dailyLogs/summaryCsv';
 import { fetchJson } from '../api';
 import { DailyWorkLog, User } from '../types';
 import { PICK_LIST_URLS, type ProjectPick } from '../lib/permissions/pickLists';
 import { toast } from 'react-hot-toast';
 import { getTodayJalaliDate, extractDateString, errorMessageOf, isoToJalaliDate } from '../utils';
 import { confirmAction } from '../components/ConfirmDialogHost';
+import { DAILY_LOG_TAGS_MAX } from '../lib/dailyLogs/dailyLogLimits';
 
 export interface SimpleUserOption {
   id: number;
@@ -19,29 +24,13 @@ export function getFormattedDateString(dateObj: any): string {
   return extractDateString(dateObj);
 }
 
-export function calculateHours(start: string, end: string): number {
-  if (!start || !end) return 8;
-  const [sH, sM] = start.split(':').map(Number);
-  const [eH, eM] = end.split(':').map(Number);
-  if (isNaN(sH) || isNaN(sM) || isNaN(eH) || isNaN(eM)) return 8;
-  let sTot = sH * 60 + sM;
-  let eTot = eH * 60 + eM;
-  if (eTot < sTot) eTot += 24 * 60;
-  const diff = eTot - sTot;
-  return Math.max(0, Math.round((diff / 60) * 10) / 10);
-}
+const SEARCH_DEBOUNCE_MS = 300;
 
 export function useDailyLogs(user: User) {
   const [logs, setLogs] = useState<DailyWorkLog[]>([]);
-  const [stats, setStats] = useState<any>({
-    today_hours: 0,
-    my_total_logs: 0,
-    my_total_hours: 0,
-    total_logs: 0,
-    onsite_count: 0,
-    remote_count: 0,
-    my_mentions_count: 0
-  });
+  // v9.0.249 (TD-630): the server pages the list; `total` is every log the filters match
+  const [total, setTotal] = useState<number>(0);
+  const [stats, setStats] = useState<DailyLogStats>(EMPTY_DAILY_LOG_STATS);
   const [systemUsers, setSystemUsers] = useState<SimpleUserOption[]>([]);
   const [projects, setProjects] = useState<ProjectPick[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -51,6 +40,13 @@ export function useDailyLogs(user: User) {
   // Filters
   const [activeTab, setActiveTab] = useState<'all' | 'mine' | 'mentioned' | 'summary'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  // v9.0.249 (TD-630): the search box asks the server only after typing pauses
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+  const listFilterKey = useRef('');
   const [selectedWorkMode, setSelectedWorkMode] = useState<string>('');
   const [selectedDateFilter, setSelectedDateFilter] = useState<any>(null);
   // گارد stale-response برای درخواست‌های abort شده
@@ -84,7 +80,7 @@ export function useDailyLogs(user: User) {
   const [formTitle, setFormTitle] = useState<string>('');
   const [formContent, setFormContent] = useState<string>('');
   const [formProjectId, setFormProjectId] = useState<string>('');
-  const [formVisibility, setFormVisibility] = useState<'mentioned_only' | 'public' | 'private'>('mentioned_only');
+  const [formVisibility, setFormVisibility] = useState<DailyLogVisibility>(DEFAULT_DAILY_LOG_VISIBILITY);
   const [formMentions, setFormMentions] = useState<number[]>([]);
   const [formTags, setFormTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState<string>('');
@@ -123,13 +119,13 @@ export function useDailyLogs(user: User) {
     // (رفع باگ: پس از پاک کردن فیلتر، لیست در حالت فیلتر قبلی گیر می‌کرد)
     const seq = ++logsFetchSeq.current;
     setLoading(true);
-    let url = `/daily-logs?filter_type=${activeTab}`;
+    let url = `/daily-logs?filter_type=${activeTab}&page=${page}&limit=${limit}`;
     if (selectedWorkMode) url += `&work_mode=${selectedWorkMode}`;
     if (selectedDateFilter) {
       const dateStr = getFormattedDateString(selectedDateFilter);
       if (dateStr) url += `&date=${encodeURIComponent(dateStr)}`;
     }
-    if (searchQuery) url += `&search=${encodeURIComponent(searchQuery)}`;
+    if (debouncedSearch) url += `&search=${encodeURIComponent(debouncedSearch)}`;
 
     Promise.all([
       fetchJson(url, { signal }),
@@ -137,10 +133,9 @@ export function useDailyLogs(user: User) {
     ])
       .then(([logsData, statsData]) => {
         if (seq !== logsFetchSeq.current) return;
-        if (Array.isArray(logsData)) {
-          setLogs(logsData);
-          setPage(1);
-        }
+        const rows = Array.isArray(logsData?.data) ? logsData.data : (Array.isArray(logsData) ? logsData : []);
+        setLogs(rows);
+        setTotal(typeof logsData?.total === 'number' ? logsData.total : rows.length);
         if (statsData) setStats(statsData);
         setLoading(false);
       })
@@ -188,53 +183,38 @@ export function useDailyLogs(user: User) {
     if (activeTab === 'summary') {
       loadSummaryReportData(controller.signal);
     } else {
+      // a filter change starts again from page 1 (one request, not a request for the old page first)
+      const filterKey = JSON.stringify([activeTab, selectedWorkMode, getFormattedDateString(selectedDateFilter), debouncedSearch]);
+      const filterChanged = listFilterKey.current !== '' && listFilterKey.current !== filterKey;
+      listFilterKey.current = filterKey;
+      if (filterChanged && page !== 1) {
+        setPage(1);
+        return () => controller.abort();
+      }
       loadLogsAndStats(controller.signal);
     }
     return () => controller.abort();
-  }, [activeTab, selectedWorkMode, selectedDateFilter, searchQuery, summaryMode, summaryDateFilter, summaryYear, summaryMonth, summarySelectedUserId]);
+  }, [activeTab, selectedWorkMode, selectedDateFilter, debouncedSearch, page, summaryMode, summaryDateFilter, summaryYear, summaryMonth, summarySelectedUserId]);
 
   const handleExportSummaryCSV = () => {
     if (!summaryReportData || !Array.isArray(summaryReportData.user_summaries)) {
       toast.error('اطلاعاتی جهت دانلود موجود نیست');
       return;
     }
-    const headers = [
-      'نام و نام خانوادگی',
-      'نام کاربری',
-      'نقش',
-      'ساعات کارکرد (ساعت)',
-      'تعداد روزهای کاری',
-      'تعداد گزارش‌ها',
-      'روزهای حضوری',
-      'روزهای دورکاری',
-      'میانگین کارکرد روزانه (ساعت)'
-    ];
-    const rows = summaryReportData.user_summaries.map((u: any) => [
-      `"${u.userFullName || u.username}"`,
-      `"${u.username}"`,
-      `"${u.role || 'کاربر'}"`,
-      u.totalHours,
-      u.daysWorked,
-      u.logsCount,
-      u.onsiteCount,
-      u.remoteCount,
-      u.avgDailyHours
-    ]);
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
+    // v9.0.235 (TD-640): quoted, escaped cells and no live formula
+    const csvContent = buildSummaryCsv(summaryReportData.user_summaries);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    const filename = summaryMode === 'daily' 
-      ? `Gozaresh_Rouzaneh_${getFormattedDateString(summaryDateFilter) || 'Today'}.csv`
-      : `Gozaresh_Mahaneh_${summaryYear}_${summaryMonth}.csv`;
+    const filename = summaryCsvFileName(summaryMode, getFormattedDateString(summaryDateFilter) || getTodayJalaliDate(), summaryYear, summaryMonth);
     link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success('فایل اکسل گزارش تجمیعی با موفقیت دانلود شد');
+    toast.success(SUMMARY_CSV_DOWNLOADED);
   };
 
-  const currentFormHours = calculateHours(formStartTime, formEndTime);
+  const currentFormHours = workHoursBetween(formStartTime, formEndTime) ?? 0; // v9.0.259 (TD-634): the server's rule
 
   const resetForm = () => {
     setEditingLog(null);
@@ -265,7 +245,7 @@ export function useDailyLogs(user: User) {
     setFormTitle(log.title || '');
     setFormContent(log.content || '');
     setFormProjectId(log.project_id || log.projectId ? String(log.project_id || log.projectId) : '');
-    setFormVisibility((log.visibility as any) || 'mentioned_only');
+    setFormVisibility(log.visibility || DEFAULT_DAILY_LOG_VISIBILITY);
     setFormMentions(Array.isArray(log.mentions) ? log.mentions : []);
     setFormTags(Array.isArray(log.tags) ? log.tags : []);
     setIsModalOpen(true);
@@ -273,7 +253,7 @@ export function useDailyLogs(user: User) {
 
   const handleAddTag = () => {
     const trimmed = tagInput.trim();
-    if (trimmed && !formTags.includes(trimmed)) {
+    if (trimmed && !formTags.includes(trimmed) && formTags.length < DAILY_LOG_TAGS_MAX) {
       setFormTags([...formTags, trimmed]);
       setTagInput('');
     }
@@ -301,6 +281,8 @@ export function useDailyLogs(user: User) {
       toast.error('لطفاً شرح کامل فعالیت‌ها را وارد کنید');
       return;
     }
+    const timeError = workTimeError(formStartTime, formEndTime);
+    if (timeError) { toast.error(timeError); return; }
 
     setIsSaving(true);
     const selectedProj = projects.find(p => p.id === Number(formProjectId));
@@ -332,7 +314,7 @@ export function useDailyLogs(user: User) {
           method: 'POST',
           body: JSON.stringify(payload)
         });
-        toast.success('گزارش کار جدید ثبت شد و برای افراد منشن‌شده ارسال گردید');
+        toast.success('گزارش کار جدید ثبت شد و برای افراد اشاره‌شده ارسال گردید');
       }
       setIsModalOpen(false);
       resetForm();
@@ -389,6 +371,7 @@ export function useDailyLogs(user: User) {
 
   return {
     logs,
+    total,
     stats,
     loadLogsAndStats,
     systemUsers,

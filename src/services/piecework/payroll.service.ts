@@ -66,7 +66,7 @@ export class PieceworkPayrollService {
     if (!sDate || !eDate || sDate > eDate) {
       throw new BadRequestError('بازه فیش معتبر نیست: تاریخ شروع و پایان الزامی است و شروع نباید بعد از پایان باشد');
     }
-    // v9.0.233 (TD-808، تصمیم ت۴ الف): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود. پیش‌تر فیش آذر در مهر صادر و تأیید شد و
+    // v9.0.268 (TD-808، تصمیم ت۴ الف): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود. پیش‌تر فیش آذر در مهر صادر و تأیید شد و
     // حقوق ثابت ماه‌های آینده پیشاپیش هزینه و بدهی شد.
     const futureError = payrollPeriodFutureError(eDate, await businessTodayIsoDate());
     if (futureError) throw new ValidationError(futureError, undefined, 'PAYROLL_PERIOD_IN_FUTURE');
@@ -75,7 +75,7 @@ export class PieceworkPayrollService {
     const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
     // v8.0.108 (TD-385): با fin (ارقام فارسی نرمال می‌شوند)؛ پیش‌تر Number('۵۰۰') NaN و کسر مساعده نادیده گرفته می‌شد
     const advanceDeductionFin = fin(reqAdvanceDeduction ?? 0);
-    // v9.0.231 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده نامنفی‌اند؛ کاهش حقوق فقط از «کسورات» و افزایش فقط از
+    // v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده نامنفی‌اند؛ کاهش حقوق فقط از «کسورات» و افزایش فقط از
     // «پاداش». پیش‌تر کسورات منفی خالص فیش را بالا می‌برد ولی سند آن را صفر می‌گرفت (پرداخت بیش از بستانکار ۳۲۰۱)، با ناخالص
     // صفر فیش بی سند صادر می‌شد و کسر مساعده منفی بی‌صدا صفر می‌شد.
     const negativeParts = [
@@ -125,7 +125,7 @@ export class PieceworkPayrollService {
       let fixedPortionFin = fin(0);
       let fixedSalaryMonths: FixedSalaryMonthShare[] = [];
       let fixedDedupNote = '';
-      // v9.0.233 (TD-808، تصمیم ت۴ الف): حقوق ثابت فقط تا تاریخ پایان همکاری (serviceEndOf)؛ دوره پس از آن بی حقوق ثابت
+      // v9.0.268 (TD-808، تصمیم ت۴ الف): حقوق ثابت فقط تا تاریخ پایان همکاری (serviceEndOf)؛ دوره پس از آن بی حقوق ثابت
       const serviceEnd = serviceEndOf(pInfo);
       const fixedEnd = fixedSalaryPeriodEnd(sDate, eDate, serviceEnd);
       if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && serviceEnd.kind === 'unknown') {
@@ -260,7 +260,7 @@ export class PieceworkPayrollService {
 
   /** تغییر وضعیت فیش (به‌جز «paid» که فقط از مسیر خزانه‌داری مجاز است) و صدور/بررسی سند. */
   static async updatePayrollStatus(id: number, input: UpdatePayrollStatusInput) {
-    // v9.0.234 (TD-816): تاریخ، روش و شماره پیگیری پرداخت فقط از مسیر «ثبت پرداخت» نوشته می‌شود؛ پیش‌تر این مسیر آن‌ها را
+    // v9.0.269 (TD-816): تاریخ، روش و شماره پیگیری پرداخت فقط از مسیر «ثبت پرداخت» نوشته می‌شود؛ پیش‌تر این مسیر آن‌ها را
     // روی فیش پرداخت‌شده هم بازنویسی می‌کرد، حتی به «cheque» که TD-411 برای پرداخت حقوق ممنوع کرده است.
     const { status, notes } = input;
 

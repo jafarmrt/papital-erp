@@ -90,14 +90,14 @@ describe('InvoicesListPage — invoices list (TD-080 part 3 characterization)', 
     expect(screen.getByText('۱ رسید خرید ثبت‌شده')).toBeTruthy();
     expect(screen.getByText('۱ پیش‌فاکتور در جریان')).toBeTruthy();
     expect(screen.getByText('۲۰۰ دلار')).toBeTruthy();
-    expect(screen.getByText('۹۰۰,۰۰۰ ریال')).toBeTruthy();
+    expect(screen.getByText('۹۰۰٬۰۰۰ ریال')).toBeTruthy();
     expect(screen.getByText('۴ سند ثبت‌شده')).toBeTruthy();
 
     const invoiceRow = rowOf('INV-۱۰۰۱');
     expect(within(invoiceRow).getByText('فاکتور فروش')).toBeTruthy();
     expect(within(invoiceRow).getByText('مشتری: نگار کریمی')).toBeTruthy();
     expect(within(invoiceRow).getByText('تسویه ناقص')).toBeTruthy();
-    expect(within(invoiceRow).getByText('۱,۰۰۰,۰۰۰')).toBeTruthy();
+    expect(within(invoiceRow).getByText('۱٬۰۰۰٬۰۰۰')).toBeTruthy();
     expect(within(invoiceRow).getByText('تسویه سریع')).toBeTruthy();
 
     const receiptRow = rowOf('RC-۲۰۰۱');
@@ -132,8 +132,8 @@ describe('InvoicesListPage — invoices list (TD-080 part 3 characterization)', 
     expect(screen.getByText('صورتحساب فروش کالا')).toBeTruthy();
     expect(screen.getByText('ریز اقلام و ردیف‌های سند (۲ قلم)')).toBeTruthy();
     expect(screen.getByText('مجموع تعداد: ۳ واحد')).toBeTruthy();
-    expect(screen.getAllByText('۱,۵۰۰,۰۰۰ ریال')).toHaveLength(2);
-    expect(screen.getByText('۱,۵۵۰,۰۰۰')).toBeTruthy();
+    expect(screen.getAllByText('۱٬۵۰۰٬۰۰۰ ریال')).toHaveLength(2);
+    expect(screen.getByText('۱٬۵۵۰٬۰۰۰')).toBeTruthy();
     fireEvent.click(screen.getByText('بستن پنجره'));
     expect(screen.queryByText('گردنبند نقره')).toBeNull();
   });

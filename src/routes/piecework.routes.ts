@@ -109,7 +109,7 @@ const updatePieceworkLogSchema = z.object({
 });
 
 /**
- * v9.0.231 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده فیش نامنفی‌اند. پیش‌تر `decimalInput` منفی را می‌پذیرفت و
+ * v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده فیش نامنفی‌اند. پیش‌تر `decimalInput` منفی را می‌پذیرفت و
  * کسورات «-100000» خالص فیش را بالا می‌برد بی آنکه سند حسابداری آن را ببیند.
  */
 const nonNegativeAmount = (label: string) =>
@@ -130,7 +130,7 @@ const generatePieceworkPayrollSchema = z.object({
   })
 });
 
-// v9.0.234 (TD-816): تاریخ، روش و شماره پیگیری پرداخت فقط از «ثبت پرداخت» (register-payment) نوشته می‌شود
+// v9.0.269 (TD-816): تاریخ، روش و شماره پیگیری پرداخت فقط از «ثبت پرداخت» (register-payment) نوشته می‌شود
 const PAYMENT_FIELDS_OF_PAYROLL = ['paymentDate', 'paymentMethod', 'paymentReference'] as const;
 const updatePieceworkPayrollStatusSchema = z.object({
   body: z.object({

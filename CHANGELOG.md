@@ -19,20 +19,125 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.234 — Only Approved Payslips Are Paid
+### v9.0.269 — Only Approved Payslips Are Paid
 - **Only Approved Payslips Are Paid (TD-816):** a draft payslip is refused at payment and the screens offer approval instead, and the payment date, method and reference are written only by the payment, never by the status route.
 
-### v9.0.233 — Fixed Salary Up to the End of Service
+### v9.0.268 — Fixed Salary Up to the End of Service
 - **Fixed Salary Up to the End of Service (TD-808):** a terminated personnel earns fixed salary only up to its end date (pro rata by days) and nothing after it, a terminated personnel without an end date gets no fixed-salary payslip, and a payslip whose period ends after today is refused.
 
-### v9.0.232 — Advance Balance From the Ledger
+### v9.0.267 — Advance Balance From the Ledger
 - **Advance Balance From the Ledger (TD-807):** a personnel's outstanding advance is read only from its rows on the advance account (1301); treasury payments such as a salary settlement no longer count as an advance, so an advance deduction without a recorded advance is refused.
 
-### v9.0.231 — Payslip Integrity
+### v9.0.266 — Payslip Integrity
 - **Payslip Integrity (TD-804):** negative bonuses, deductions and advance deductions are refused, a payslip voucher always credits wages payable with the net (invariant I10), a payslip without a voucher is not paid, and older mismatched payslips are listed by the financial health check.
 
-### v9.0.230 — Package 12 Payroll Audit Documentation
+### v9.0.265 — Package 12 Payroll Audit Documentation
 - **Package 12 Payroll Audit:** section 10 of the V9 stability audit records the payroll part of package 12: 13 proven findings (one P1: negative deductions and bonuses make the payslip disagree with its voucher, and a payslip without a voucher can be paid) opened as TD-804..TD-816, with the product-owner decisions. Documentation only.
+
+### v9.0.264 — بسته ۱۳ د: «اشاره» و «اعلان» در رابط گزارش کار
+- «منشن» و «نوتیفیکیشن» در رابط گزارش کار جای خود را به «اشاره» و «اعلان» دادند (TD-646، تصمیم ت۶).
+
+### v9.0.263 — بسته ۱۳ د: پیوند اعلان همان گزارش را باز می‌کند
+- کلیک روی اعلان یا کارت پیشخوان همان گزارش کار را باز می‌کند (TD-645).
+
+### v9.0.262 — بسته ۱۳ د: پیشخوان بی مجوز گزارش کار درخواستی نمی‌فرستد
+- پیشخوان گزارش کار را فقط با مجوز دیدن آن می‌خواند و دیگر پیغام خطا نمی‌دهد (TD-639).
+
+### v9.0.261 — بسته ۱۳ د: فرم بازخورد بی اشاره
+- فرم بازخورد مدیر دیگر اشاره پیشنهاد نمی‌کند و می‌گوید اعلان فقط به نویسنده می‌رسد (TD-637).
+
+### v9.0.260 — بسته ۱۳ د: نوع حضور فقط حضوری یا دورکاری
+- مرخصی، مأموریت و ترکیبی از ورودی برداشته شد؛ گزارش‌های قدیمی «سایر» شمرده می‌شوند و ساعت مرخصی کارکرد نیست (TD-635، تصمیم ت۳).
+
+### v9.0.259 — بسته ۱۳ د: ساعت شروع و پایان گزارش کار سنجیده می‌شود
+- ساعت نادرست رد می‌شود و پایان باید بعد از شروع باشد؛ کار شبانه در دو گزارش ثبت می‌شود (TD-634، تصمیم ت۵).
+
+### v9.0.258 — بسته ۱۳ ج: سقف طول گزارش کار
+- عنوان، متن، برچسب‌ها و یادداشت مدیر گزارش کار سقف طول دارند (TD-644).
+
+### v9.0.257 — بسته ۱۳ ج: کف ۵ دقیقه برای پاک‌سازی پیوست یتیم
+- پاک‌سازی پیوست یتیم فایل جوان‌تر از ۵ دقیقه را پاک نمی‌کند (TD-643).
+
+### v9.0.256 — بسته ۱۳ ج: خطای بارگذاری تصویر با پیام فارسی ۴۲۲
+- تصویر بزرگ یا با قالب نادرست ۴۲۲ با پیام فارسی می‌گیرد و متن نادرست در ستون تصویر ذخیره نمی‌شود (TD-642).
+
+### v9.0.255 — بسته ۱۳ ج: سقف یکسان پیوست و پیام فارسی ۴۱۳
+- هر پیوست حداکثر ۱۰ مگابایت در همه لایه‌ها؛ مسیرهای پیوست‌دار بدنه ۱۴ مگابایتی می‌پذیرند و بدنه بزرگ‌تر پیام فارسی می‌گیرد (TD-641، تصمیم ت۴).
+
+### v9.0.254 — بسته ۱۳ ج: خطای خواندن پیوست سرور را خاموش نمی‌کند
+- فایل پیوست ناخوانا ۴۰۴ یا ۵۰۰ می‌دهد و دیگر سرور را خاموش نمی‌کند (TD-627).
+
+### v9.0.253 — بسته ۱۳ ب: ابزارک اشاره‌ها با فیلد mentions
+- ابزارک اشاره‌های پیشخوان شناسه کاربر را در فیلد `mentions` می‌جوید، نه «@نام» در متن (TD-638).
+
+### v9.0.252 — بسته ۱۳ ب: زمان ثبت گزارش کار به وقت درست
+- زمان ثبت گزارش کار با منطقه زمانی به مرورگر می‌رود و دیگر ۳:۳۰ عقب نیست (TD-636).
+
+### v9.0.251 — بسته ۱۳ ب: سال‌های گزارش ماهانه از سال جاری
+- سال‌های گزارش ماهانه مدیریت از سال شمسی جاری ساخته می‌شوند، نه فهرست ثابت ۱۴۰۲ تا ۱۴۰۵ (TD-632).
+
+### v9.0.250 — بسته ۱۳ ب: «کارکرد امروز» با تاریخ کارکرد
+- «کارکرد امروز» فقط گزارش‌های تاریخ امروز را می‌شمارد، نه گزارش روزهای دیگر که امروز ثبت شده‌اند (TD-631).
+
+### v9.0.249 — بسته ۱۳ ب: فهرست و آمار گزارش کار با SQL و صفحه‌بندی
+- فهرست گزارش کار صفحه‌بندی و در SQL فیلتر می‌شود و دیگر در ۲۰۰ ردیف بریده نمی‌شود؛ آمار همان مجموعه را می‌شمارد (TD-630).
+
+### v9.0.248 — v9.0.248 — National ID Is Exactly Ten Digits
+- **National ID (TD-673):** a personnel national ID must be exactly ten digits with a valid check digit; forms and the server never zero-pad a short one (422 `NATIONAL_ID_INVALID`), and only the Excel import pads 8 or 9 digits, which Excel drops, and lists those rows for review.
+
+### v9.0.247 — v9.0.247 — Amount in Words Keeps Foreign Cents
+- **Amount in words (TD-685):** a foreign-currency amount in words includes its cents (cent, fils, penny), so a 12.50 dollar invoice prints «دوازده دلار و پنجاه سنت» instead of «دوازده دلار».
+
+### v9.0.246 — v9.0.246 — Numbers Shown With Persian Separators
+- **Persian separators (TD-687):** every amount and quantity shown through `formatPersianPrice` / `formatPersianNumber` uses the Persian thousands separator «٬» and decimal separator «٫» (vibefarsi numbers rule) instead of the Latin comma and point; a number copied from the screen is read back exactly.
+
+### v9.0.245 — v9.0.245 — Numbers Below 1,000 Keep Their Decimals
+- **Number formatting (TD-678):** `formatPersianNumber` and `formatPersianPrice` no longer re-round their formatted text to two decimals below 1,000, so four-decimal quantities and work hours (`numeric(18,4)`) show in full on payslips and work logs.
+
+### v9.0.244 — v9.0.244 — Amount Input Keeps Decimals and Persian Separators
+- **Amount input (TD-665, TD-666):** the shared amount field keeps the typed text until editing ends, so «12.5» dollars is no longer stored as 125, allows the currency's decimals only (rial none, foreign two), reads the Persian «٫» and «٬», spaces and a copied currency label, and keeps the previous amount with a message instead of zeroing it on a stray character; the shared number parsers use the server's `normalizeDecimalString`.
+
+### v9.0.243 — v9.0.243 — Package 16 Dashboard, Settings, Shell, Dates and Numbers Audit Documentation
+- **Package 16 Audit:** section 10 of the V9 stability audit records the dashboard, settings, frontend shell and date and number utilities package: 23 proven findings (nine P2, among them amount inputs that drop decimals or zero a pasted amount, a currency setting that only relabels rial amounts, and resent writes after a network error) opened as TD-665..TD-687 with the product-owner decisions; TD-668 and TD-669 were already fixed in packages 2 and 4, and B01-14 (TD-594) joins this package's PR d. Documentation only.
+
+### v9.0.242 — v9.0.242 — Stock Page Exit Cap by Source Warehouse
+- **Documents (UI):** the stock document page caps an exit at min(source warehouse stock, total stock − other reservations), the server rule, so a remittance from an empty warehouse is stopped in the form instead of failing on save (TD-799).
+
+### v9.0.241 — v9.0.241 — Stock Document Page by Record Permission
+- **Documents (UI):** the stock document page offers each direction, document type and its submit button by the permission the server asks to record that type final, instead of the `viewer` role code, and names the missing permission (TD-791).
+
+### v9.0.240 — v9.0.240 — Document Line Numbers Read as Decimals
+- **Documents:** quantity, price, discount and stock-count numbers of a document line are read with `decimalInput`: Persian digits and thousands separators are accepted, hex and exponent text is refused, and a price sent empty is an error instead of zero (TD-784).
+
+### v9.0.239 — v9.0.239 — One Sellable Gate for Create and Finalize
+- **Documents:** every outgoing document recorded or finalized as final passes one sellable gate that sums each item and warehouse, with or without `inOut`, so a second line or a missing field no longer sells stock reserved for another customer (TD-775).
+
+### v9.0.238 — v9.0.238 — Stock Direction From the Document Type
+- **Documents (P1):** a document moves stock only in the direction of its type; an `inOut` against the type is refused with 422 `DOCUMENT_DIRECTION_MISMATCH` and a transfer is no longer recorded through `POST /documents`, so a receipt can no longer take goods out while its voucher adds them (TD-770, decision ت۲).
+
+### v9.0.237 — v9.0.237 — Package 8 Documents and Invoices Audit Documentation
+- **Package 8 Audit:** section 10 of the V9 stability audit records the documents and invoices package: 34 proven findings (seven P1, among them stock direction taken from the request body, a zero-price invoice without a voucher, voiding an invoice that has a return, and sales returns without VAT or tied price) opened as TD-770 and TD-772..TD-803 (TD-771 was closed in v9.0.125), with the product-owner decisions. Documentation only.
+
+### v9.0.236 — بسته ۱۳ الف: حالت دید «عمومی» گزارش کار برداشته شد
+- فرم دو حالت دید دارد؛ مهاجرت ۰۰۷۵ گزارش‌های عمومی را به «اشاره‌شده‌ها و خودم» برد و مقدار پیشین را نگه داشت (TD-900، تصمیم ت۷).
+
+### v9.0.235 — بسته ۱۳ الف: CSV گزارش تجمیعی بی فرمول زنده
+- خانه‌های CSV گزارش تجمیعی در گیومه و بی فرمول زنده؛ نام فایل فارسی (TD-640).
+
+### v9.0.234 — بسته ۱۳ الف: اشاره و پروژه گزارش کار پیش از ذخیره سنجیده می‌شوند
+- شناسه نادرست ۴۰۰، کاربر یا پروژه ناموجود ۴۲۲ بی ذخیره چیزی؛ گزارش و اعلان در یک تراکنش (TD-629).
+
+### v9.0.233 — بسته ۱۳ الف: اعلان اشاره فقط برای خواننده گزارش
+- اشاره در گزارش شخصی اعلان نمی‌دهد و فرم هشدار می‌دهد؛ ویرایش فقط به اشاره‌های تازه اعلان می‌دهد (TD-633).
+
+### v9.0.232 — بسته ۱۳ الف: اشاره با بلندترین نام کامل
+- «@علی رضایی» دیگر «علی» را اشاره‌شده نمی‌کند و اشاره پاک‌شده از متن از فهرست می‌رود (TD-628).
+
+### v9.0.231 — بسته ۱۳ الف: دسترسی مدیریتی گزارش کار با مجوز
+- بازخورد، ویرایش و حذف گزارش کار دیگران و دیدن گزارش شخصی فقط با `daily_logs.manage_all`؛ نوشتن‌ها در یک تراکنش با ردیف ممیزی (TD-626).
+
+### v9.0.230 — Package 13 Daily Logs and Attachments Audit
+- **Audit (package 13):** daily logs and attachments section of the stability audit report: 21 proven findings opened as TD-626..TD-646 plus TD-900 (decision t7) with the product-owner decisions t1-t7; documentation only.
 
 ### v9.0.229 — Party Statement Print Follows the Data
 - **Party Statement Print (P2):** the header and final balance read the range and currency from the response, a filter change reloads, and «this month» / «this year» start on the Jalali month and year (TD-572).

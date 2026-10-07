@@ -569,7 +569,7 @@ export function usePiecework() {
     const startIso = toStorageDate(payrollStartDate);
     const endIso = toStorageDate(payrollEndDate);
     if (!startIso || !endIso || Number(selectedPayrollPerson.monthlySalary || 0) <= 0) return null;
-    // v9.0.233 (TD-808): حقوق ثابت فقط تا پایان همکاری — همان قاعده سرور
+    // v9.0.268 (TD-808): حقوق ثابت فقط تا پایان همکاری — همان قاعده سرور
     const fixedEnd = fixedSalaryPeriodEnd(startIso, endIso, serviceEndOf(selectedPayrollPerson));
     if (fixedEnd === null) return null;
     const personPayrolls = (Array.isArray(payrollsList) ? payrollsList : []).filter(pr => Number(pr.personnelId) === Number(payrollPersonnelId));
@@ -593,7 +593,7 @@ export function usePiecework() {
       hotToast.error('پرسنل و بازه تاریخی الزامی هستند');
       return;
     }
-    // v9.0.233 (TD-808): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود — همان پیام سرور
+    // v9.0.268 (TD-808): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود — همان پیام سرور
     const futureError = payrollPeriodFutureError(toStorageDate(payrollEndDate) || '', getTodayIsoDate());
     if (futureError) {
       hotToast.error(futureError);

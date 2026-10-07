@@ -1231,7 +1231,7 @@ export class VoucherSyncService {
     const fixedAmount = fin(pay.totalFixedAmount);
     const grossAmount = pieceworkAmount.add(bonuses).add(fixedAmount);
     const netPayable = fin(pay.netPayable);
-    // v9.0.231 (TD-804، تصمیم ت۱ الف): سندی که با خالص فیش نمی‌خواند ساخته نمی‌شود و فیش با خالص مثبت بی‌صدا بی سند نمی‌ماند.
+    // v9.0.266 (TD-804، تصمیم ت۱ الف): سندی که با خالص فیش نمی‌خواند ساخته نمی‌شود و فیش با خالص مثبت بی‌صدا بی سند نمی‌ماند.
     // پیش‌تر کسورات منفی صفر گرفته می‌شد (بستانکار ۳۲۰۱ کمتر از خالص) و با ناخالص صفر `null` برمی‌گشت، حتی در حالت strict.
     const refuse = (message: string, code: string): null => {
       logger.warn({ message: `Payroll voucher refused for ${pay.payrollNumber}: ${code}` });
@@ -1334,7 +1334,7 @@ export class VoucherSyncService {
 
     // بستانکاری خالص حقوق پرداختنی به پرسنل (تضمین موازنه ۱۰۰٪ بدهکار و بستانکار)
     const payableCredit = nonNegative(grossAmount.subtract(allocatedCredits));
-    // v9.0.231 (TD-804): ناوردایی I10 — بستانکار ۳۲۰۱ سند همان خالص فیش است
+    // v9.0.266 (TD-804): ناوردایی I10 — بستانکار ۳۲۰۱ سند همان خالص فیش است
     if (payableCredit.subtract(netPayable).abs().greaterThan(VOUCHER_BALANCE_TOLERANCE)) {
       return refuse(`بستانکار «حقوق و دستمزد پرداختنی» سند (${payableCredit.toNumber().toLocaleString('fa-IR')}) با خالص فیش ${pay.payrollNumber} (${netPayable.toNumber().toLocaleString('fa-IR')}) نمی‌خواند؛ سند صادر نشد.`, 'PAYROLL_VOUCHER_NET_MISMATCH');
     }

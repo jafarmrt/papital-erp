@@ -19,7 +19,7 @@ import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdmi
 const PERIOD = { startDate: '2026-04-01', endDate: '2026-04-30' };
 let seq = 0;
 
-/** A payslip row written straight to the table, the way versions before v9.0.231 could leave one */
+/** A payslip row written straight to the table, the way versions before v9.0.266 could leave one */
 async function legacyPayslip(personnelId: number, amounts: { piecework: number; deductions: number; net: number }): Promise<number> {
   const [row] = await orm.insert(pieceworkPayrolls).values({
     payrollNumber: `PAY-L${Date.now().toString().slice(-6)}${++seq}`, personnelId, ...PERIOD, title: 'TD-804 legacy payslip',
@@ -47,7 +47,7 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
 
   const negativeId = 'reg_payroll_negative_components_td_804';
   if (shouldRun(negativeId, 'td804', 'payroll', 'payslip', 'package12')) {
-    await runCase(results, negativeId, 'v9.0.231: negative bonuses, deductions or advance deductions are refused (400 / 422 PAYROLL_NEGATIVE_COMPONENT), a payslip voucher that would not credit wages payable with the net is refused, a payslip without a voucher is not paid (409 PAYROLL_WITHOUT_VOUCHER), and the health check lists such payslips (TD-804)', async () => inFiscalSandbox(async () => {
+    await runCase(results, negativeId, 'v9.0.266: negative bonuses, deductions or advance deductions are refused (400 / 422 PAYROLL_NEGATIVE_COMPONENT), a payslip voucher that would not credit wages payable with the net is refused, a payslip without a voucher is not paid (409 PAYROLL_WITHOUT_VOUCHER), and the health check lists such payslips (TD-804)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const task = await newTask();
@@ -116,7 +116,7 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
 
   const serviceEndId = 'reg_payroll_fixed_salary_service_end_td_808';
   if (shouldRun(serviceEndId, 'td808', 'payroll', 'payslip', 'fixed', 'package12')) {
-    await runCase(results, serviceEndId, 'v9.0.233: fixed salary is granted only up to the end of service (pro rata by days), a period after it gets none, a terminated personnel without an end date is 422 PAYROLL_SERVICE_END_DATE_REQUIRED and a period ending after today is 422 PAYROLL_PERIOD_IN_FUTURE (TD-808)', async () => inFiscalSandbox(async () => {
+    await runCase(results, serviceEndId, 'v9.0.268: fixed salary is granted only up to the end of service (pro rata by days), a period after it gets none, a terminated personnel without an end date is 422 PAYROLL_SERVICE_END_DATE_REQUIRED and a period ending after today is 422 PAYROLL_PERIOD_IN_FUTURE (TD-808)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const generate = (personnelId: number, startDate: string, endDate: string) => admin.post('/api/piecework/payrolls/generate', { personnelId, startDate, endDate });
@@ -156,7 +156,7 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
 
   const draftId = 'reg_payroll_pay_only_approved_td_816';
   if (shouldRun(draftId, 'td816', 'payroll', 'payslip', 'payment', 'package12')) {
-    await runCase(results, draftId, 'v9.0.234: a draft payslip is not paid (409 PAYROLL_NOT_APPROVED) and the status route no longer writes the payment date, method or reference (400) (TD-816)', async () => inFiscalSandbox(async () => {
+    await runCase(results, draftId, 'v9.0.269: a draft payslip is not paid (409 PAYROLL_NOT_APPROVED) and the status route no longer writes the payment date, method or reference (400) (TD-816)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const worker = await newWorker('TD-816 worker');

@@ -20,6 +20,8 @@ import { OptimisticLockError, checkOccVersion, nextVersion } from '../lib/occHel
 import { fin } from '../lib/financialDecimal.js';
 import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell } from '../lib/personnel/personnelImportCells.js';
 import { assertPersonnelDeletable } from '../services/personnel/personnelDeleteGuard.js';
+import { requirePersonnelNationalId } from '../services/personnel/personnelNationalId.js';
+import { paddedNationalIdNotice, readImportedNationalId } from '../lib/personnel/nationalIdCell.js';
 import { assertPersonnelCodeAvailable, guardPersonnelCode, isPersonnelCodeUniqueViolation, personnelCodeKey, personnelCodeTakenMessage } from '../services/personnel/personnelCode.js';
 import { guardPersonnelUserLink, parsePersonnelUserId, resolvePersonnelUserLink } from '../services/personnel/personnelUserLink.js';
 import { matchesPersonnelSearch, personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '../services/personnel/personnelFieldScope.js';
@@ -232,6 +234,7 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), a
     let createdCount = 0;
     let updatedCount = 0;
     const errors: Array<{ row: number; code?: string; name?: string; message: string }> = [];
+    const warnings: Array<{ row: number; code?: string; name?: string; message: string }> = [];
 
     // Fetch existing active personnel to check codes
     const existingPersonnel = await orm
@@ -268,7 +271,16 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), a
 
         const personnelCode = String(item.personnelCode || '').trim();
         const phone = normalizePhoneNumber(item.phone || '');
-        const nationalId = normalizeNationalId(item.nationalId || '');
+        // v9.0.248 (TD-673، تصمیم ت۵ ب): فقط ورود اکسل کد ۸ و ۹ رقمی را با صفر پر می‌کند و ردیف را در گزارش فهرست می‌کند
+        const importedNationalId = readImportedNationalId(item.nationalId);
+        if (importedNationalId.error) {
+          errors.push({ row: rowIndex, code: String(item.personnelCode ?? ''), name: fullName, message: importedNationalId.error });
+          continue;
+        }
+        const nationalId = importedNationalId.value;
+        if (importedNationalId.padded) {
+          warnings.push({ row: rowIndex, code: String(item.personnelCode ?? ''), name: fullName, message: paddedNationalIdNotice(nationalId) });
+        }
         const jobTitle = String(item.jobTitle || '').trim();
         // v9.0.25 (TD-436، تصمیم D3): خانه خالی جنسیت، وضعیت همکاری و ملیت در به‌روزرسانی یعنی «بی تغییر»؛ پیش‌فرض فقط برای پرسنل تازه
         const gender = parseGenderCell(item.gender);
@@ -403,7 +415,8 @@ router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), a
       createdCount,
       updatedCount,
       totalProcessed: rows.length,
-      errors
+      errors,
+      warnings
     });
   } catch (err) {
     logger.error({ message: 'Error bulk importing personnel', error: err });
@@ -515,7 +528,7 @@ router.post('/personnel', authorizePermission('personnel.manage'), validate(crea
           gender,
           birthDate: requireStorageDate(birthDate, 'تاریخ تولد'),
           nationality,
-          nationalId: normalizeNationalId(nationalId),
+          nationalId: requirePersonnelNationalId(nationalId),
           phone: normalizePhoneNumber(phone),
           employmentStatus,
           salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
@@ -634,7 +647,7 @@ router.put('/personnel/:id', authorizePermission('personnel.manage'), validate(u
           gender,
           birthDate: requireStorageDate(birthDate, 'تاریخ تولد'),
           nationality,
-          nationalId: nationalId ? normalizeNationalId(nationalId) : '',
+          nationalId: requirePersonnelNationalId(nationalId, existing.nationalId),
           phone: phone ? normalizePhoneNumber(phone) : '',
           employmentStatus,
           // V10-4.4: مدل حقوق ثابت/ترکیبی

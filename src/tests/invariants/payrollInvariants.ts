@@ -5,7 +5,7 @@ import type { InvariantViolation } from './businessInvariants.js';
 import { rows } from './ledgerRows.js';
 
 /**
- * v9.0.231 (TD-804, B12P-01) — payroll invariant I10 (V8_MASTER_ROADMAP.md §4), read-only SQL over the live payslips
+ * v9.0.266 (TD-804, B12P-01) — payroll invariant I10 (V8_MASTER_ROADMAP.md §4), read-only SQL over the live payslips
  * with an id above the watermark:
  * - bonuses, deductions and advance deduction are never negative;
  * - a payslip with a positive net has a live voucher (linked by `source_payroll_id`);

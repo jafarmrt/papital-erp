@@ -1,16 +1,20 @@
 import React from 'react';
 import { 
-  Calendar as CalendarIcon, Clock, Building2, Laptop, Eye, AtSign, 
+  Calendar as CalendarIcon, Clock, Building2, Laptop, AtSign, 
   Lock, Tag, CheckCircle2, MessageSquare, Edit3, Trash2 
 } from 'lucide-react';
 import { DailyWorkLog, User } from '../../types';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
 import { formatPersianNumber, formatPersianDate, formatPersianDateTime } from '../../utils';
+import { useHasPermission } from '../../contexts/AuthContext';
+import { workModeLabel } from '../../lib/dailyLogs/workMode';
 
 interface DailyLogsListProps {
   logs: DailyWorkLog[];
   loading: boolean;
   page: number;
+  /** v9.0.249 (TD-630): every log the filters match; the server sends one page */
+  total: number;
   setPage: React.Dispatch<React.SetStateAction<number>>;
   limit: number;
   user: User;
@@ -25,6 +29,7 @@ export function DailyLogsList({
   logs,
   loading,
   page,
+  total,
   setPage,
   limit,
   user,
@@ -34,6 +39,8 @@ export function DailyLogsList({
   onDeleteLog,
   onOpenReviewModal
 }: DailyLogsListProps) {
+  // v9.0.231 (TD-626): review, edit and delete of another user's log follow daily_logs.manage_all, never a role code
+  const canManageAll = useHasPermission('daily_logs.manage_all');
   const getWorkModeBadge = (mode: string) => {
     switch (mode) {
       case 'onsite':
@@ -51,26 +58,23 @@ export function DailyLogsList({
           </span>
         );
       default:
-        return null;
+        // v9.0.260 (TD-635): a legacy leave, mission or hybrid log shows its own label
+        return mode ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+            {workModeLabel(mode)}
+          </span>
+        ) : null;
     }
   };
 
   const getVisibilityBadge = (vis: string) => {
     switch (vis) {
-      case 'public':
-      case 'all':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500" title="عمومی - همه همکاران">
-            <Eye className="w-3 h-3 text-slate-400" />
-            عمومی
-          </span>
-        );
       case 'mentioned_only':
       case 'custom':
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200" title="محرمانه - فقط منشن‌شده‌ها و خودم">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200" title="محرمانه - فقط اشاره‌شده‌ها و خودم">
             <AtSign className="w-3 h-3 text-amber-600" />
-            فقط منشن‌شده‌ها و خودم
+            فقط اشاره‌شده‌ها و خودم
           </span>
         );
       case 'private':
@@ -110,14 +114,12 @@ export function DailyLogsList({
     );
   }
 
-  const totalPages = Math.ceil(logs.length / limit);
-  const paginatedLogs = logs.slice((page - 1) * limit, page * limit);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
     <div className="space-y-3.5 font-farsi text-right">
-      {paginatedLogs.map((log) => {
+      {logs.map((log) => {
         const isOwner = log.userId === user.id || log.user_id === user.id;
-        const isManagerOrAdmin = user.role === 'admin' || user.role === 'manager';
         const mentionsList = Array.isArray(log.mentions) ? log.mentions : [];
         const mentionedUsersObj = systemUsers.filter((u) => mentionsList.includes(u.id));
 
@@ -206,7 +208,7 @@ export function DailyLogsList({
               {mentionedUsersObj.length > 0 && (
                 <div className="flex items-center gap-1 bg-amber-50/80 px-2.5 py-1 rounded-lg border border-amber-200/60 text-xs">
                   <AtSign className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="text-[10px] font-bold text-amber-800">افراد منشن‌شده:</span>
+                  <span className="text-[10px] font-bold text-amber-800">افراد اشاره‌شده:</span>
                   <div className="flex items-center gap-1">
                     {mentionedUsersObj.map((mUser) => (
                       <span
@@ -239,7 +241,7 @@ export function DailyLogsList({
               </span>
 
               <div className="flex items-center gap-1.5">
-                {isManagerOrAdmin && (
+                {canManageAll && (
                   <button
                     onClick={() => onOpenReviewModal(log)}
                     className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[11px] transition-colors flex items-center gap-1 cursor-pointer"
@@ -249,7 +251,7 @@ export function DailyLogsList({
                   </button>
                 )}
 
-                {(isOwner || isManagerOrAdmin) && (
+                {(isOwner || canManageAll) && (
                   <button
                     onClick={() => onOpenEditModal(log)}
                     className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
@@ -259,7 +261,7 @@ export function DailyLogsList({
                   </button>
                 )}
 
-                {(isOwner || isManagerOrAdmin) && (
+                {(isOwner || canManageAll) && (
                   <button
                     onClick={() => onDeleteLog(log.id)}
                     className="p-1 rounded-lg hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
@@ -279,7 +281,7 @@ export function DailyLogsList({
         <div className="mt-4 p-4 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-slate-50/50 rounded-xl">
           <span className="text-slate-500">
             نمایش صفحه {formatPersianNumber(page)} از {formatPersianNumber(totalPages)} (مجموع{' '}
-            {formatPersianNumber(logs.length)} رکورد)
+            {formatPersianNumber(total)} گزارش)
           </span>
           <div className="flex items-center gap-1">
             <button
