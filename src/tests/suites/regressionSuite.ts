@@ -10173,7 +10173,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       createdItemIds.push(deletedItem.id);
       const iScan = await scan();
       const [{ n: activeItems }] = (await orm.execute(sql`SELECT count(*)::int AS n FROM items WHERE is_deleted = 0`)).rows as Array<{ n: number }>;
-      const scanItems = scanNumber(iScan.body, 'inventory_kardex', /: (\d+) قلم/);
+      // v9.0.108 (TD-495): the count is written with Persian digits
+      const scanItemsText = iScan.body.checks?.find(c => c.id === 'inventory_kardex')?.details?.match(/([۰-۹]+) کالای فعال/)?.[1] ?? '';
+      const scanItems = Number(scanItemsText.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))) || -1);
       check(scanItems === Number(activeItems), `ممیزی یکپارچگی باید ${activeItems} کالای فعال گزارش کند (دریافتی ${scanItems})`);
 
       // (د) بازنشانی رویدادهای متوقف Outbox ثبت ممیزی دارد
@@ -10565,6 +10567,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.107, TD-482): a warehouse code «default» is refused and reversals name a real warehouse
   const { runWarehouseReservedCodeTests } = await import('../regression/warehouseReservedCodeTests.js');
   results.push(...await runWarehouseReservedCodeTests(shouldRun));
+
+  // v9.0.108 (TD-495): system reconciliation scan reads the stock integrity summary
+  const { runSystemInventoryCheckTests } = await import('../regression/systemInventoryCheckTests.js');
+  results.push(...await runSystemInventoryCheckTests(shouldRun));
 
   return results;
 }

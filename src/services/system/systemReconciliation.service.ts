@@ -5,6 +5,8 @@ import { validateDbSchema } from '../../db/migrator.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { DeadLetterQueueService } from '../events/deadLetterQueueService.js';
 import { SystemHealthService } from './systemHealth.service.js';
+import { StockReconciliationService } from '../inventory/stockReconciliation.service.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
  * ممیزی خودکار یکپارچگی سیستم (GET /system/reconciliation-check) و اقدام‌های اصلاحی غیرمخرب
@@ -31,6 +33,33 @@ export interface ReconciliationActor {
   username?: string;
   fullName?: string;
   ipAddress?: string;
+}
+
+/**
+ * v9.0.108 (TD-495): بررسی لایه موجودی از خلاصه گزارش سلامت انبار؛ مغایرت میان موجودی انبارها، موجودی کل و
+ * دفتر کاردکس، یا مانده منفی کاردکس، هشدار است.
+ */
+export function inventoryKardexCheck(
+  activeItemCount: number,
+  summary: { discrepancyItems: number; negativeStockItems: number },
+): IntegrityCheck {
+  const discrepancies = Number(summary.discrepancyItems) || 0;
+  const negatives = Number(summary.negativeStockItems) || 0;
+  const healthy = discrepancies === 0 && negatives === 0;
+  const fa = (n: number) => toPersianDigits(n, 0);
+  const problems = [
+    discrepancies > 0 ? `${fa(discrepancies)} کالا با مغایرت میان موجودی انبارها، موجودی کل و دفتر کاردکس` : '',
+    negatives > 0 ? `${fa(negatives)} کالا با مانده منفی کاردکس` : '',
+  ].filter(Boolean).join(' و ');
+  return {
+    id: 'inventory_kardex',
+    category: 'انبارداری و کالاها',
+    title: 'بررسی لایه موجودی و کالاها',
+    status: healthy ? 'ok' : 'warning',
+    details: healthy
+      ? `موجودی انبارها، موجودی کل و دفتر کاردکس ${fa(activeItemCount)} کالای فعال با هم می‌خوانند.`
+      : `از ${fa(activeItemCount)} کالای فعال، ${problems} یافت شد. جزئیات در بخش «انبارگردانی و تطبیق سه‌جانبه» است.`,
+  };
 }
 
 export class SystemReconciliationService {
@@ -70,14 +99,9 @@ export class SystemReconciliationService {
     });
 
     // Check 4: Inventory Items Count & Stock Consistency
+    // v9.0.108 (TD-495): وضعیت از خلاصه همان گزارش سلامت انبار (مغایرت سه‌طرفه یا مانده منفی کاردکس ← هشدار)، نه «سالم» ثابت
     const [itemsCountRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(items).where(eq(items.isDeleted, 0));
-    checks.push({
-      id: 'inventory_kardex',
-      category: 'انبارداری و کالاهها',
-      title: 'بررسی لایه موجودی و کالاها',
-      status: 'ok',
-      details: `تعداد کل کالاها و مواد اولیه فعال در سیستم: ${itemsCountRes?.count || 0} قلم`
-    });
+    checks.push(inventoryKardexCheck(itemsCountRes?.count || 0, (await StockReconciliationService.getIntegrityReport()).summary));
 
     // Check 5: Workflow Engine SLA SLA Overdues
     const overdueCount = await SystemHealthService.countOverdueSlaTasks();
