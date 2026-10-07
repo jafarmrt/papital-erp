@@ -255,7 +255,7 @@ export const ModernPersianDropzone: React.FC<ModernPersianDropzoneProps> = ({
         <div>
           <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">{title}</h4>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            {description || helperText || 'تصاویر به صورت خودکار زیر ۳۰۰KB فشرده می‌شوند. پشتیبانی از Drag & Drop و Paste (Ctrl+V).'}
+            {description || helperText || 'تصاویر به صورت خودکار زیر ۳۰۰ کیلوبایت فشرده می‌شوند. پشتیبانی از کشیدن و رها کردن و چسباندن (Ctrl+V).'}
           </p>
         </div>
 
@@ -318,7 +318,7 @@ export const ModernPersianDropzone: React.FC<ModernPersianDropzoneProps> = ({
                   <span>•</span>
                   <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
                     <ClipboardPaste size={12} />
-                    امکان Paste مستقیم با Ctrl+V
+                    امکان چسباندن مستقیم با Ctrl+V
                   </span>
                 </div>
               </div>

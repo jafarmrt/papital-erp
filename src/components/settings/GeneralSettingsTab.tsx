@@ -111,7 +111,7 @@ export function GeneralSettingsTab({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">لوگوی شرکت / برند</label>
+            <label className="block text-sm font-medium mb-1 text-slate-700">نشان تجاری شرکت</label>
             <div className="flex items-center gap-3">
               {companyLogo && (
                 <div className="relative w-12 h-12 border rounded-lg overflow-hidden bg-white p-1 shrink-0 flex items-center justify-center">
@@ -126,7 +126,7 @@ export function GeneralSettingsTab({
                 </div>
               )}
               <label className="flex-1 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-300 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 text-center transition-colors">
-                بارگذاری لوگو جدید
+                بارگذاری نشان تجاری جدید
                 <input
                   type="file"
                   accept="image/*"
@@ -134,7 +134,7 @@ export function GeneralSettingsTab({
                     const file = e.target.files?.[0];
                     if (!file) return;
                     if (!file.type.startsWith('image/')) {
-                      toast.error('لطفاً یک فایل تصویری برای لوگو انتخاب کنید');
+                      toast.error('لطفاً یک فایل تصویری برای نشان تجاری انتخاب کنید');
                       return;
                     }
                     try {
@@ -218,7 +218,7 @@ export function GeneralSettingsTab({
       {/* V10-1.1: ساعت توافقی واحد */}
       <div>
         <h3 className="font-bold border-b border-slate-200 pb-3 mb-6 text-slate-800 flex items-center gap-2 text-base">
-          <Globe size={18} className="text-indigo-600" /> منطقه زمانی و ساعت توافقی سیستم
+          <Globe size={18} className="text-indigo-600" /> منطقه زمانی و ساعت توافقی سامانه
         </h3>
         <div className="grid md:grid-cols-2 gap-6">
           <div>
@@ -234,7 +234,7 @@ export function GeneralSettingsTab({
               ))}
             </select>
             <p className="text-xs text-slate-500 mt-1">
-              مرجع واحد تاریخ/ساعت سرور و نمایش همه کاربران. تاریخ‌ها بر اساس تقویم جلالی همین ساعت توافقی نمایش داده می‌شوند. تغییر پس از ذخیره، بلافاصله اعمال می‌شود.
+              مرجع واحد تاریخ/ساعت کارساز و نمایش همه کاربران. تاریخ‌ها بر اساس تقویم جلالی همین ساعت توافقی نمایش داده می‌شوند. تغییر پس از ذخیره، بلافاصله اعمال می‌شود.
             </p>
           </div>
         </div>
@@ -249,7 +249,7 @@ export function GeneralSettingsTab({
           این فایل شامل اطلاعات کالاها، انبار، اسناد، مشتریان، پروژه‌ها، دفاتر حسابداری و کارمزدی برای گزارش‌گیری و بایگانی است. رمزهای عبور و کلیدهای محرمانه در آن ذخیره نمی‌شوند.
         </p>
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
-          توجه: این فایل نسخه پشتیبان قابل بازگردانی نیست. پشتیبان کامل پایگاه‌داده باید توسط مدیر سرور با اسکریپت پشتیبان‌گیری برنامه گرفته شود (راهنما در مستندات نصب).
+          توجه: این فایل نسخه پشتیبان قابل بازگردانی نیست. پشتیبان کامل پایگاه‌داده باید توسط مدیر کارساز با اسکریپت پشتیبان‌گیری برنامه گرفته شود (راهنما در مستندات نصب).
         </p>
 
         <div className="pt-2">

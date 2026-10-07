@@ -83,8 +83,8 @@ export default function ChangelogPage() {
   };
 
   const getTechCategoryIcon = (category: string) => {
-    if (category.includes('فرانت‌اند')) return <Code2 size={18} className="text-blue-500" />;
-    if (category.includes('بک‌اند')) return <Server size={18} className="text-emerald-500" />;
+    if (category.includes('رابط کاربری')) return <Code2 size={18} className="text-blue-500" />;
+    if (category.includes('کارساز')) return <Server size={18} className="text-emerald-500" />;
     if (category.includes('پایگاه‌داده')) return <Database size={18} className="text-amber-500" />;
     return <Lock size={18} className="text-purple-500" />;
   };
@@ -141,13 +141,13 @@ export default function ChangelogPage() {
         <div className="space-y-2 max-w-2xl">
           <div className="inline-flex items-center gap-2 bg-blue-500/20 text-blue-300 border border-blue-500/30 px-3 py-1 rounded-full text-xs font-bold">
             <Sparkles size={14} />
-            <span>معرفی کامل سیستم و به‌روزرسانی‌های هوشمند</span>
+            <span>معرفی کامل سامانه و به‌روزرسانی‌های هوشمند</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            شناسنامه فنی، قابلیت‌ها و تاریخچه سیستم
+            شناسنامه فنی، قابلیت‌ها و تاریخچه سامانه
           </h1>
           <p className="text-sm text-slate-300 leading-relaxed">
-            بررسی تمام ماژول‌های فعال، معماری توسعه و تاریخچه به‌روزرسانی‌های سامانه یکپارچه مدیریت کارگاه و ERP پاپیتال.
+            بررسی تمام بخش‌های فعال، معماری توسعه و تاریخچه به‌روزرسانی‌های سامانه یکپارچه مدیریت کارگاه و ERP پاپیتال.
           </p>
         </div>
 
@@ -158,7 +158,7 @@ export default function ChangelogPage() {
             <div className="text-[10px] text-slate-400 mt-0.5">پاپیتال ERP</div>
           </div>
           <div className="bg-slate-800/90 border border-slate-700 p-3.5 rounded-xl text-center min-w-[120px]">
-            <div className="text-[11px] text-slate-400 mb-0.5">ماژول‌های اصلی</div>
+            <div className="text-[11px] text-slate-400 mb-0.5">بخش‌های اصلی</div>
             <div className="text-xl font-black text-blue-400 font-mono">{formatPersianNumber(APP_FEATURES.length)}</div>
             <div className="text-[10px] text-slate-400 mt-0.5">قابلیت کلیدی</div>
           </div>
@@ -324,7 +324,7 @@ export default function ChangelogPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <Cpu className="text-emerald-600" size={20} />
-              <span>۲. تکنولوژی‌ها و معماری توسعه (Tech Stack)</span>
+              <span>۲. فناوری‌های به‌کاررفته و معماری توسعه</span>
             </h2>
             <span className="text-xs text-slate-500 font-medium">معماری فول‌استک مدرن</span>
           </div>
@@ -367,7 +367,7 @@ export default function ChangelogPage() {
             <div>
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <History className="text-indigo-600" size={20} />
-                <span>۳. تاریخچه به روزرسانی‌های سیستم به همراه جزییات فنی</span>
+                <span>۳. تاریخچه به‌روزرسانی‌های سامانه به همراه جزییات فنی</span>
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 لیست جامع به‌روزرسانی‌ها و رفع اشکالات انجام‌شده در نسخه‌های مختلف نرم‌افزار.
@@ -376,7 +376,7 @@ export default function ChangelogPage() {
 
             <div className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 shrink-0">
               <Terminal size={14} />
-              <span>ثبت خودکار با پروتکل AGENTS.md</span>
+              <span>ثبت خودکار بر پایه قواعد معماری پروژه</span>
             </div>
           </div>
 
