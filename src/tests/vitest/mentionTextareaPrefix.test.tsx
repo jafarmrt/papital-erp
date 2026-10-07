@@ -13,7 +13,7 @@ const users = [
 afterEach(cleanup);
 
 describe('mention detection (TD-628)', () => {
-  it('"@علی رضایی" mentions only «علی رضایی», not «علی»', () => {
+  it('"@Ali Rezaei" (Persian full name) mentions only that user, not the prefix name "Ali"', () => {
     const onMentionsChange = vi.fn();
     render(<MentionTextarea value="@علی رضایی لطفاً پیگیری کن" onChange={() => {}} users={users} mentions={[]} onMentionsChange={onMentionsChange} />);
     expect(onMentionsChange).toHaveBeenLastCalledWith([2]);
