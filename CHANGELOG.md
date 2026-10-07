@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.127 — Production CSP Frames and Connects Only to Itself
+- **Production CSP (owner decision t3):** in production `frame-ancestors` and `connect-src` are `'self'` only, plus the origins listed in the new `FRAME_ANCESTORS` and the existing `EXTERNAL_API_ORIGINS` (`buildCspDirectives` in `src/lib/cspDirectives.ts`); the Google preview hosts and the dev server connections stay allowed outside production. Before, any page on `*.run.app` or `*.googleusercontent.com` could frame the app with the user's `SameSite=None` session (clickjacking), and the browser could connect to every HTTPS origin.
+
 ### v9.0.126 — Global Rate Limit Keyed by Client Address
 - **Global Rate Limit:** the general limiter (10,000 requests per minute in production) is keyed by the client address only (`req.ip`, honouring `TRUST_PROXY`). It runs before authentication, so the old key, the last 16 characters of an unverified cookie, gave every forged cookie a fresh bucket.
 
