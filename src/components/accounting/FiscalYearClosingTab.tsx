@@ -88,6 +88,8 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
     : yearNotEnded ? `سال مالی ${toPersianDigits(selectedYear)} هنوز تمام نشده است`
     : earlierOpenYears.length > 0 ? `ابتدا سال ${earlierOpenText} را ببندید`
     : draftVoucherCount > 0 ? 'ابتدا اسناد پیش‌نویس این سال را تأیید یا حذف کنید' : undefined;
+  // v9.0.124 (TD-577): بی سند افتتاحیه، سال بعد بی مانده ابتدای دوره آغاز می‌شود
+  const noOpeningVoucherText = `سند افتتاحیه صادر نمی‌شود؛ سال مالی ${toPersianDigits(Number(selectedYear) + 1)} بی مانده ابتدای دوره آغاز می‌شود`;
 
   // Normalize temporary accounts (revenue / expense)
   const { revenuesList, expensesList } = useMemo(() => {
@@ -646,12 +648,22 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
 
             {expandedSections.step4 && (
               <div className="p-5">
-                <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/40 rounded-xl flex items-center gap-3 text-xs text-emerald-800 dark:text-emerald-300">
-                  <Check className="w-5 h-5 shrink-0 text-emerald-600" />
-                  <span>
-                    سند افتتاحیه با تاریخ {toPersianDigits(openingDateNewYear)} و با شرح «سند افتتاحیه سال مالی {toPersianDigits(Number(selectedYear) + 1)}» به عنوان سند شماره ۱ سال جدید ثبت خواهد شد.
-                  </span>
-                </div>
+                {createOpeningVoucher ? (
+                  <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/40 rounded-xl flex items-center gap-3 text-xs text-emerald-800 dark:text-emerald-300">
+                    <Check className="w-5 h-5 shrink-0 text-emerald-600" />
+                    <span>
+                      سند افتتاحیه با تاریخ {toPersianDigits(openingDateNewYear)} و با شرح «سند افتتاحیه سال مالی {toPersianDigits(Number(selectedYear) + 1)}» به عنوان سند شماره ۱ سال جدید ثبت خواهد شد.
+                    </span>
+                  </div>
+                ) : (
+                  // v9.0.124 (TD-577): بی تیک، سند اختتامیه مانده‌های دائمی را صفر می‌کند و سند افتتاحیه‌ای صادر نمی‌شود
+                  <div role="alert" className="p-4 bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40 rounded-xl flex items-center gap-3 text-xs text-amber-800 dark:text-amber-300">
+                    <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600" />
+                    <span>
+                      {noOpeningVoucherText}. سند اختتامیه مانده حساب‌های ترازنامه‌ای را صفر می‌کند؛ مانده‌های ابتدای دوره را باید جداگانه با سند افتتاحیه ثبت کنید.
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -667,7 +679,10 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
               آماده اجرای نهایی بستن سال مالی {toPersianDigits(selectedYear)}
             </h3>
             <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-              با تایید این مرحله، کلیه اسناد اختتامیه و افتتاحیه صادر شده و حساب‌های موقت بسته خواهند شد. پس از بستن، هیچ سندی در این سال ثبت نمی‌شود و فقط آخرین سال بسته با «بازگشایی سال مالی» دوباره باز می‌شود؛ پیش از اجرا اسناد نهایی را بازبینی کنید.
+              {createOpeningVoucher
+                ? 'با تایید این مرحله، کلیه اسناد اختتامیه و افتتاحیه صادر شده و حساب‌های موقت بسته خواهند شد.'
+                : 'با تایید این مرحله، اسناد اختتامیه صادر شده و حساب‌های موقت بسته خواهند شد؛ سند افتتاحیه صادر نمی‌شود.'}
+              {' '}پس از بستن، هیچ سندی در این سال ثبت نمی‌شود و فقط آخرین سال بسته با «بازگشایی سال مالی» دوباره باز می‌شود؛ پیش از اجرا اسناد نهایی را بازبینی کنید.
             </p>
           </div>
 
@@ -714,10 +729,15 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>صدور سند اختتامیه حساب‌های دائمی ترازنامه به تاریخ {toPersianDigits(closingDate)}</span>
               </div>
-              {createOpeningVoucher && (
+              {createOpeningVoucher ? (
                 <div className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>صدور سند افتتاحیه سال {toPersianDigits(Number(selectedYear) + 1)} به تاریخ {toPersianDigits(openingDateNewYear)}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{noOpeningVoucherText}</span>
                 </div>
               )}
             </div>

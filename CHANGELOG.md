@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.124 — Closing Without an Opening Voucher Says So
+- **Fiscal Closing Opening-Voucher Text (P3):** with «صدور خودکار سند افتتاحیه» unticked, step 4 still said the opening voucher would be issued; step 4, the execution note and the confirm dialog now say none is issued and the next year starts without opening balances (TD-577, Vitest `fiscalOpeningVoucherText.test.tsx`).
+
 ### v9.0.123 — Fiscal Years Close in Order
 - **Fiscal Year Closing Order (P1):** a year closed while an earlier year with vouchers was open took that year's revenue too, and the earlier year then closed only without an opening voucher, wiping the permanent balances (cash 12,300,000 shown as 2,000,000); a year now closes only after every earlier year with vouchers, the form starts on the oldest open one and out-of-order closings are listed by the health check (TD-544, `reg_fiscal_years_close_in_order_td_544`).
 
