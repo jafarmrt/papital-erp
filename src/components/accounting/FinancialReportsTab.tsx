@@ -99,7 +99,7 @@ export function FinancialReportsTab({
   const journalBook = useJournalBookReport();
   const ratios = useFinancialRatiosReport();
   const { journalBookData, journalLoading } = journalBook;
-  const { ratiosData } = ratios;
+  const { ratiosData, ratiosLoading } = ratios;
 
   // Initial fetch of trial balance and ratios
   useEffect(() => {
@@ -461,6 +461,7 @@ export function FinancialReportsTab({
           onFetchFinancialRatios={fetchFinancialRatios}
           asOfDate={ratiosAsOfDate}
           onAsOfDateChange={setRatiosAsOfDate}
+          loading={ratiosLoading}
         />
       )}
 

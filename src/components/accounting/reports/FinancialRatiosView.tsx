@@ -43,20 +43,24 @@ const NEUTRAL = 'text-slate-900 dark:text-white';
 const INDIGO = 'text-indigo-600 dark:text-indigo-400';
 const EMERALD = 'text-emerald-600 dark:text-emerald-400';
 
-function withSuffix(value: number | undefined, suffix: string) {
-  return <>{formatPersianNumber(value ?? 0)} <span className="text-xs font-normal text-slate-400">{suffix}</span></>;
-}
+/** v9.0.113 (TD-575): پیش از رسیدن داده یا پس از خطا هیچ عدد، امتیاز یا وضعیتی ساخته نمی‌شود */
+const NO_VALUE = '—';
 
 function buildRatioSections(r: FinancialRatiosReport | null): RatioSectionSpec[] {
-  const pct = (v: number | undefined) => `${formatPersianNumber(v ?? 0)}٪`;
+  const num = (v: number | undefined) => (r ? formatPersianNumber(v ?? 0) : NO_VALUE);
+  const pct = (v: number | undefined) => (r ? `${formatPersianNumber(v ?? 0)}٪` : NO_VALUE);
+  const price = (v: number | undefined) => (r ? formatPersianPrice(v ?? 0) : NO_VALUE);
+  const withSuffix = (value: number | undefined, suffix: string) => (r
+    ? <>{formatPersianNumber(value ?? 0)} <span className="text-xs font-normal text-slate-400">{suffix}</span></>
+    : NO_VALUE);
   return [
     {
       title: '۱. نسبت‌های نقدینگی (Liquidity Ratios)', icon: Wallet, iconClassName: 'text-indigo-600', gridClassName: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4',
       cards: [
-        { label: 'نسبت جاری (Current)', value: formatPersianNumber(r?.currentRatio ?? 0), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'دارایی جاری ÷ بدهی جاری (معیار: > ۱.۵)', statusKey: 'liquidity' },
-        { label: 'نسبت آنی / سریع (Quick)', value: formatPersianNumber(r?.quickRatio ?? 0), valueClassName: `${BIG} ${INDIGO}`, hint: '(دارایی جاری - کالا) ÷ بدهی جاری (معیار: > ۱.۰)' },
-        { label: 'نسبت نقدی (Cash Ratio)', value: formatPersianNumber(r?.cashRatio ?? 0), valueClassName: `${BIG} ${EMERALD}`, hint: 'موجودی نقد و بانک ÷ بدهی جاری' },
-        { label: 'سرمایه در گردش خالص (NWC)', value: formatPersianPrice(r?.netWorkingCapital ?? 0), valueClassName: `text-xl font-bold font-mono ${NEUTRAL}`, hint: 'دارایی جاری منهای بدهی جاری' },
+        { label: 'نسبت جاری (Current)', value: num(r?.currentRatio), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'دارایی جاری ÷ بدهی جاری (معیار: > ۱.۵)', statusKey: 'liquidity' },
+        { label: 'نسبت آنی / سریع (Quick)', value: num(r?.quickRatio), valueClassName: `${BIG} ${INDIGO}`, hint: '(دارایی جاری - کالا) ÷ بدهی جاری (معیار: > ۱.۰)' },
+        { label: 'نسبت نقدی (Cash Ratio)', value: num(r?.cashRatio), valueClassName: `${BIG} ${EMERALD}`, hint: 'موجودی نقد و بانک ÷ بدهی جاری' },
+        { label: 'سرمایه در گردش خالص (NWC)', value: price(r?.netWorkingCapital), valueClassName: `text-xl font-bold font-mono ${NEUTRAL}`, hint: 'دارایی جاری منهای بدهی جاری' },
       ],
     },
     {
@@ -88,10 +92,10 @@ function buildRatioSections(r: FinancialRatiosReport | null): RatioSectionSpec[]
   ];
 }
 
-function RatioCard({ card, status }: { card: RatioCardSpec; status?: string }) {
+function RatioCard({ card, status, hasData }: { card: RatioCardSpec; status?: string; hasData: boolean }) {
   return (
     <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-      {card.statusKey ? (
+      {card.statusKey && hasData ? (
         <div className="flex justify-between items-center">
           <span className="text-xs font-semibold text-slate-500">{card.label}</span>
           <PillBadge variants={RATIO_STATUS_BADGES} value={status} fallback={RATIO_STATUS_DANGER} />
@@ -112,6 +116,8 @@ interface FinancialRatiosViewProps {
   /** v9.0.110 (TD-566): تاریخ نسبت‌ها در سرآیند همین صفحه */
   asOfDate?: string;
   onAsOfDateChange?: (iso: string) => void;
+  /** درخواست نسبت‌ها در جریان است */
+  loading?: boolean;
 }
 
 export function FinancialRatiosView({
@@ -119,6 +125,7 @@ export function FinancialRatiosView({
   onFetchFinancialRatios,
   asOfDate = '',
   onAsOfDateChange,
+  loading = false,
 }: FinancialRatiosViewProps) {
   const [selectedCurrency, setSelectedCurrency] = useState<string>('all');
   const currencyParam = (cur: string) => (cur === 'all' ? undefined : cur);
@@ -133,7 +140,9 @@ export function FinancialRatiosView({
     onFetchFinancialRatios(currencyParam(selectedCurrency), iso);
   };
 
-  const overallScore = ratiosData?.status?.overallScore ?? 75;
+  // v9.0.113 (TD-575): امتیاز فقط از پاسخ سرور؛ پیش‌تر بی داده یا پس از خطا «۷۵ از ۱۰۰» نشان داده می‌شد
+  const overallScore = ratiosData?.status?.overallScore;
+  const hasScore = typeof overallScore === 'number' && Number.isFinite(overallScore);
 
   return (
     <div className="space-y-6">
@@ -189,9 +198,13 @@ export function FinancialRatiosView({
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
             <span className="text-xs font-bold text-indigo-200">امتیاز سلامت و پایداری مالی شرکت</span>
           </div>
-          <h3 className="text-2xl font-black font-mono">
-            {formatPersianNumber(overallScore)} <span className="text-sm font-normal text-indigo-200">از ۱۰۰</span>
-          </h3>
+          {hasScore ? (
+            <h3 className="text-2xl font-black font-mono">
+              {formatPersianNumber(overallScore)} <span className="text-sm font-normal text-indigo-200">از ۱۰۰</span>
+            </h3>
+          ) : (
+            <h3 className="text-base font-bold text-indigo-100">{loading ? 'در حال محاسبه…' : 'هنوز محاسبه نشده است'}</h3>
+          )}
           <p className="text-xs text-indigo-200/80 max-w-xl leading-relaxed">
             شاخص کلی بر اساس وزن‌دهی نسبت‌های جاری، پوشش بدهی، کارایی دارایی‌ها و حاشیه سود عملیاتی محاسبه شده است.
           </p>
@@ -202,7 +215,9 @@ export function FinancialRatiosView({
           {STATUS_TILES.map(([label, key]) => (
             <div key={key} className="bg-white/10 backdrop-blur-xs p-3 rounded-xl text-center space-y-1">
               <span className="text-[11px] text-indigo-200 block">{label}</span>
-              <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.[key]} fallback={RATIO_STATUS_DANGER} />
+              {ratiosData
+                ? <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData.status?.[key]} fallback={RATIO_STATUS_DANGER} />
+                : <span className="text-xs text-indigo-200">{NO_VALUE}</span>}
             </div>
           ))}
         </div>
@@ -216,7 +231,7 @@ export function FinancialRatiosView({
           </div>
           <div className={`grid gap-4 ${section.gridClassName}`}>
             {section.cards.map((card) => (
-              <RatioCard key={card.label} card={card} status={card.statusKey ? ratiosData?.status?.[card.statusKey] : undefined} />
+              <RatioCard key={card.label} card={card} hasData={!!ratiosData} status={card.statusKey ? ratiosData?.status?.[card.statusKey] : undefined} />
             ))}
           </div>
         </div>
