@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.290 — Voucher Edits Need Their Version
+- **Voucher Edit Lock and Audit (P3):** a voucher edit sends the version it read (400 without, 409 `OCC_CONFLICT` when stale), a deleted voucher is never edited, and voucher and account edit and delete audit rows carry before and after (TD-555).
+
 ### v9.0.289 — Vouchers of a Source Change Only Through Their Source
 - **Source Vouchers Locked on the Voucher Page (P2, decision t8):** a voucher issued by a document, treasury transaction, cheque, payroll or BOM allocation, and its reversal, is only approved and finalized from the voucher page; delete, edit, back to draft, reverse and correct answer 409 `VOUCHER_HAS_SOURCE` and the list shows each voucher's source (TD-552).
 
