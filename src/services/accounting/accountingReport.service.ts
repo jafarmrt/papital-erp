@@ -20,6 +20,9 @@ import type {
 } from '../../types.js';
 import { isAllCurrenciesView, voucherItemCurrencyCondition, voucherItemCurrencySql, voucherItemRateSql, voucherItemReportAmountSql } from './voucherItemAmount.js';
 import { partyDetailedRowsCondition, type PartyDetailedFilter } from './partyDetailedRows.js';
+import type { BalanceSheetReport, IncomeStatementReport, StatementRow } from '../../lib/accounting/financialStatements.js';
+import { accountSubtreeCondition } from './accountSubtree.js';
+import type { AccountCardReport } from '../../lib/accounting/accountCard.js';
 
 /** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
 function foreignOrigin(allCurrencies: boolean, row: {
@@ -585,30 +588,7 @@ export class AccountingReportService {
     startDate?: string;
     endDate?: string;
     currency?: string;
-  }): Promise<{
-    items: ({
-      voucherId: number;
-      voucherNumber: number;
-      date: string;
-      description?: string | null;
-      accountName: string;
-      accountCode: string;
-      detailedName?: string;
-      detailedType?: string;
-      detailedId?: number | null;
-      currency?: string;
-      debit: number;
-      credit: number;
-      runningBalance: number;
-      isOpening?: boolean;
-    } & ForeignAmountOrigin)[];
-    openingBalance: number;
-    totalDebit: number;
-    totalCredit: number;
-    finalBalance: number;
-    /** v8.0.16 (TD-260): ارز مبالغ گزارش — IRR در نمای همه ارزها، وگرنه همان ارز انتخاب‌شده */
-    currency: string;
-  }> {
+  }): Promise<AccountCardReport> {
     // V2.0.0: فیلترهای دوره — مانده ابتدای دوره جداگانه محاسبه می‌شود
     const periodConditions = [
       eq(journalVouchers.isDeleted, 0),
@@ -616,8 +596,9 @@ export class AccountingReportService {
       or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
     ];
 
+    // v9.0.117 (TD-570): حساب گروه یا کل با همه زیرحساب‌هایش (کلیک ردیف تراز آزمایشی، «مرور حساب‌ها»)
     if (params.accountId) {
-      periodConditions.push(eq(journalVoucherItems.accountId, params.accountId));
+      periodConditions.push(accountSubtreeCondition(journalVoucherItems.accountId, params.accountId));
     }
     if (params.detailedType && params.detailedType !== 'all') {
       periodConditions.push(eq(journalVoucherItems.detailedType, params.detailedType));
@@ -678,7 +659,7 @@ export class AccountingReportService {
         eq(journalVoucherItems.isDeleted, 0),
         or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
       ];
-      if (params.accountId) priorConds.push(eq(journalVoucherItems.accountId, params.accountId));
+      if (params.accountId) priorConds.push(accountSubtreeCondition(journalVoucherItems.accountId, params.accountId));
       if (params.detailedType && params.detailedType !== 'all') priorConds.push(eq(journalVoucherItems.detailedType, params.detailedType));
       if (params.detailedId) priorConds.push(eq(journalVoucherItems.detailedId, params.detailedId));
       if (params.detailedName) priorConds.push(like(journalVoucherItems.detailedName, containsLikePattern(params.detailedName.trim())));
@@ -1111,22 +1092,12 @@ export class AccountingReportService {
   /**
    * Income Statement / Profit & Loss (صورت سود و زیان با پشتیبانی از ارز)
    */
-  static async getIncomeStatement(params: { startDate?: string; endDate?: string; currency?: string }, tx?: DbExecutor): Promise<{
-    revenues: { code: string; name: string; amount: number }[];
-    totalRevenue: number;
-    costOfSales: { code: string; name: string; amount: number }[];
-    totalCostOfSales: number;
-    grossProfit: number;
-    operatingExpenses: { code: string; name: string; amount: number }[];
-    totalOperatingExpenses: number;
-    operatingProfit: number;
-    netProfit: number;
-  }> {
+  static async getIncomeStatement(params: { startDate?: string; endDate?: string; currency?: string }, tx?: DbExecutor): Promise<IncomeStatementReport> {
     const trial = await this.getTrialBalance({ level: 'subsidiary', ...params }, tx);
 
-    const revenues: { code: string; name: string; amount: number }[] = [];
-    const costOfSales: { code: string; name: string; amount: number }[] = [];
-    const operatingExpenses: { code: string; name: string; amount: number }[] = [];
+    const revenues: StatementRow[] = [];
+    const costOfSales: StatementRow[] = [];
+    const operatingExpenses: StatementRow[] = [];
 
     // v7.0.71 (P2-6 بخش ۳): جمع‌ها با Decimal
     let totalRevenue = fin(0);
@@ -1174,25 +1145,13 @@ export class AccountingReportService {
   /**
    * Balance Sheet (ترازنامه با پشتیبانی از ارز)
    */
-  static async getBalanceSheet(params: { date?: string; currency?: string }, tx?: DbExecutor): Promise<{
-    currentAssets: { code: string; name: string; amount: number }[];
-    totalCurrentAssets: number;
-    nonCurrentAssets: { code: string; name: string; amount: number }[];
-    totalNonCurrentAssets: number;
-    totalAssets: number;
-    currentLiabilities: { code: string; name: string; amount: number }[];
-    totalCurrentLiabilities: number;
-    equity: { code: string; name: string; amount: number }[];
-    totalEquity: number;
-    netProfitPeriod: number;
-    totalLiabilitiesAndEquity: number;
-  }> {
+  static async getBalanceSheet(params: { date?: string; currency?: string }, tx?: DbExecutor): Promise<BalanceSheetReport> {
     const trial = await this.getTrialBalance({ level: 'subsidiary', endDate: params.date, currency: params.currency }, tx);
 
-    const currentAssets: { code: string; name: string; amount: number }[] = [];
-    const nonCurrentAssets: { code: string; name: string; amount: number }[] = [];
-    const currentLiabilities: { code: string; name: string; amount: number }[] = [];
-    const equity: { code: string; name: string; amount: number }[] = [];
+    const currentAssets: StatementRow[] = [];
+    const nonCurrentAssets: StatementRow[] = [];
+    const currentLiabilities: StatementRow[] = [];
+    const equity: StatementRow[] = [];
 
     // v7.0.71 (P2-6 بخش ۳): جمع‌ها با Decimal
     let totalCurrentAssets = fin(0);

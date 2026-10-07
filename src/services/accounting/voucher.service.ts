@@ -1,8 +1,9 @@
 import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems } from '../../db/schema.js';
-import { eq, desc, asc, and, or, sql, like, inArray, gte, lte } from 'drizzle-orm';
+import { eq, desc, asc, and, or, sql, ilike, inArray, gte, lte } from 'drizzle-orm';
 import type { JournalVoucher, JournalVoucherItem, FinancialAttachment } from '../../types.js';
+import type { JournalVoucherPage, VoucherStatusCounts } from '../../lib/accounting/voucherList.js';
 import { updateRequestContext } from '../../lib/requestContext.js';
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
 import { money, moneyOr } from '../../lib/money.js';
@@ -66,16 +67,15 @@ export class VoucherService {
     voucherType?: string;
     startDate?: string;
     endDate?: string;
-  }): Promise<{ data: JournalVoucher[]; total: number; page: number; limit: number }> {
+  }): Promise<JournalVoucherPage> {
     const page = Math.max(1, Number(params.page) || 1);
     const limit = Math.max(1, Math.min(100, Number(params.limit) || 20));
     const offset = (page - 1) * limit;
 
+    // v9.0.115 (TD-565): شمارنده‌های وضعیت با همه صافی‌ها جز خود وضعیت شمرده می‌شوند (برگه‌های وضعیت فهرست اسناد)
     const conditions = [eq(journalVouchers.isDeleted, 0)];
+    const status = params.status && params.status !== 'all' ? params.status : null;
 
-    if (params.status && params.status !== 'all') {
-      conditions.push(eq(journalVouchers.status, params.status));
-    }
     if (params.voucherType && params.voucherType !== 'all') {
       conditions.push(eq(journalVouchers.voucherType, params.voucherType));
     }
@@ -89,20 +89,28 @@ export class VoucherService {
       const q = containsLikePattern(params.search.trim());
       conditions.push(
         or(
-          like(journalVouchers.description, q),
-          like(journalVouchers.manualVoucherNumber, q),
-          like(journalVouchers.referenceNumber, q),
+          ilike(journalVouchers.description, q),
+          ilike(journalVouchers.manualVoucherNumber, q),
+          ilike(journalVouchers.referenceNumber, q),
           sql`CAST(${journalVouchers.voucherNumber} AS TEXT) LIKE ${q}`
         )!
       );
     }
 
-    const whereClause = and(...conditions);
-
-    const [countRes] = await orm.select({ count: sql<number>`count(*)` })
+    const countRows = await orm.select({ status: journalVouchers.status, count: sql<string>`count(*)::text` })
       .from(journalVouchers)
-      .where(whereClause);
-    const total = Number(countRes?.count) || 0;
+      .where(and(...conditions))
+      .groupBy(journalVouchers.status);
+    const statusCounts: VoucherStatusCounts = { draft: 0, approved: 0, permanent: 0 };
+    let total = 0;
+    for (const row of countRows) {
+      const count = Number(row.count) || 0;
+      if (row.status === 'draft' || row.status === 'approved' || row.status === 'permanent') statusCounts[row.status] = count;
+      if (status === null || row.status === status) total += count;
+    }
+
+    if (status !== null) conditions.push(eq(journalVouchers.status, status));
+    const whereClause = and(...conditions);
 
     const rawList = await orm.select()
       .from(journalVouchers)
@@ -175,7 +183,7 @@ export class VoucherService {
       items: itemsMap.get(v.id) || []
     } as JournalVoucher));
 
-    return { data, total, page, limit };
+    return { data, total, page, limit, statusCounts };
   }
 
   static async getJournalVoucherById(id: number, tx?: DbExecutor): Promise<JournalVoucher> {

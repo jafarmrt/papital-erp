@@ -52,6 +52,7 @@ export function useAccounting() {
   const summaryQuery = useAccountingSummaryQuery();
   const accountsQuery = useAccountsListQuery();
   const treeQuery = useAccountsTreeQuery();
+  // آخرین اسناد پیشخوان حسابداری؛ برگه «اسناد حسابداری» صفحه خود را از سرور می‌خواند (v9.0.115، TD-565)
   const vouchersQuery = useVouchersQuery();
   const bankAccountsQuery = useBankAccountsQuery();
   // v9.0.97 (TD-505، ت۷): دفتر چک فقط فهرست انتخاب را می‌خواند؛ فهرست کامل فقط برای خوانندگان خزانه
