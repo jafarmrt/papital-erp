@@ -213,5 +213,38 @@ export async function runAccessPackageTwoInstallTests(shouldRun: ShouldRun): Pro
     });
   }
 
+  if (shouldRun('sec_system_admin_role_fixed_td_886', 'security', 'td886', 'roles', 'package2')) {
+    await runCase(results, {
+      id: 'sec_system_admin_role_fixed_td_886',
+      name: 'v9.0.119: the system admin role lists every catalog key and its permissions cannot be edited (TD-886)',
+      details: 'GET /api/roles returns the system admin row with exactly the catalog keys whatever is stored; PUT /api/roles/:id of that role with permissions returns 409 and stores nothing; a holder of roles.manage gets 403 even for its name; the system admin changes its description (200)',
+    }, async (h, wrong) => {
+      const { PERMISSION_KEYS } = await import('../../lib/permissions/permissionCatalog.js');
+      const [stored] = await h.q(`SELECT id, name, description, permissions FROM roles WHERE code = 'admin'`);
+      const listed = await h.get('/api/roles');
+      const adminRow = Array.isArray(listed.body) ? listed.body.find((r: { code?: string }) => r.code === 'admin') : undefined;
+      const listedKeys = Array.isArray(adminRow?.permissions) ? [...adminRow.permissions].sort() : null;
+      if (JSON.stringify(listedKeys) !== JSON.stringify([...PERMISSION_KEYS].sort())) {
+        wrong.push(`GET /api/roles lists the system admin with ${listedKeys?.length ?? 'no'} keys, not the ${PERMISSION_KEYS.length} catalog keys`);
+      }
+
+      const edit = await h.put(`/api/roles/${stored.id}`, { name: stored.name, permissions: ['customers.view'] });
+      if (edit.status !== 409) wrong.push(`changing the system admin role permissions returned ${edit.status}, not 409`);
+      const [afterEdit] = await h.q(`SELECT permissions FROM roles WHERE id = $1`, [stored.id]);
+      if (JSON.stringify(afterEdit.permissions) !== JSON.stringify(stored.permissions)) wrong.push(`the stored permissions became ${JSON.stringify(afterEdit.permissions)}`);
+
+      const manager = await h.sessionWith(['roles.manage', 'daily_logs.view']);
+      const rename = await h.put(`/api/roles/${stored.id}`, { name: 'نقش دیگر' }, manager);
+      if (rename.status !== 403) wrong.push(`a holder of roles.manage renaming the system admin role got ${rename.status}, not 403`);
+
+      const describe = await h.put(`/api/roles/${stored.id}`, { name: stored.name, description: 'توضیح آزمون td886' });
+      if (describe.status !== 200) wrong.push(`the system admin changing its role description got ${describe.status}, not 200`);
+      const [afterDescribe] = await h.q(`SELECT name, description FROM roles WHERE id = $1`, [stored.id]);
+      if (afterDescribe.name !== stored.name) wrong.push(`the system admin role name became ${afterDescribe.name}`);
+      if (afterDescribe.description !== 'توضیح آزمون td886') wrong.push(`the description was not saved (${afterDescribe.description})`);
+      await h.q(`UPDATE roles SET name = $2, description = $3, permissions = $4::jsonb WHERE id = $1`, [stored.id, stored.name, stored.description, JSON.stringify(stored.permissions)]);
+    });
+  }
+
   return results;
 }

@@ -210,7 +210,8 @@ router.get('/permissions', authorizePermission(...READ_PERMISSIONS.permissionCat
 router.get('/roles', authorizePermission(...READ_PERMISSIONS.userDirectory), asyncHandler(async (req, res) => {
   try {
     const allRoles = await orm.select().from(roles).orderBy(roles.id);
-    res.json(allRoles);
+    // v9.0.119 (TD-886، قاعده ۳ مدل مجوز): «مدیر سیستم» همیشه همه مجوزها را دارد؛ فهرست آن محاسبه می‌شود، نه خوانده
+    res.json(allRoles.map(r => (isSystemAdminRole(r.code) ? { ...r, permissions: [...PERMISSION_KEYS] } : r)));
   } catch (err) {
     throw err;
   }
@@ -286,6 +287,15 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
     }
     // v9.0.112 (TD-520، ت۳): نقش خود ویرایشگر ویرایش نمی‌شود
     assertNotOwnRole(req.user?.role, targetRole.code);
+    // v9.0.119 (TD-886، قاعده ۳ مدل مجوز): نقش ثابت «مدیر سیستم» را فقط مدیر سیستم ویرایش می‌کند، و فقط نام و توضیح آن را
+    if (isSystemAdminRole(targetRole.code)) {
+      if (!isSystemAdminRole(req.user?.role)) {
+        return res.status(403).json({ error: 'نقش «مدیر سیستم» را فقط مدیر سیستم ویرایش می‌کند', code: 'SYSTEM_ADMIN_ROLE_FIXED' });
+      }
+      if (permissions !== undefined) {
+        return res.status(409).json({ error: 'مجوزهای نقش «مدیر سیستم» ویرایش نمی‌شود؛ این نقش همیشه همه مجوزها را دارد', code: 'SYSTEM_ADMIN_ROLE_FIXED' });
+      }
+    }
 
     const prevPermissions: string[] = (targetRole.permissions as string[]) || [];
     const requested: string[] = Array.isArray(permissions) ? permissions : prevPermissions;

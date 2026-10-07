@@ -11,9 +11,9 @@ import {
 } from 'lucide-react';
 import { errorMessageOf } from '../../utils';
 import {
+  isSystemAdminRole,
   missingRequiredPermissions,
   permissionDefinition,
-  SYSTEM_ADMIN_ROLE,
   withRequiredPermissions,
   withoutPermission,
 } from '../../lib/permissions/permissionCatalog';
@@ -66,17 +66,20 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   const [addedOnOpen, setAddedOnOpen] = useState<string[]>([]);
 
   const isEditing = editingRole !== null;
+  // v9.0.119 (TD-886، قاعده ۳ مدل مجوز): «مدیر سیستم» همه مجوزها را همیشه دارد؛ تیک‌هایش نمایش داده می‌شوند ولی ویرایش نمی‌شوند
+  const isFixedAdmin = isSystemAdminRole(editingRole?.code);
+  const allCatalogKeys = useMemo(() => permCatalog.flatMap((c) => c.permissions.map((p) => p.key)), [permCatalog]);
 
   useEffect(() => {
     if (editingRole) {
       const stored = Array.isArray(editingRole.permissions) ? editingRole.permissions : [];
-      const isSystemAdminRole = editingRole.code === SYSTEM_ADMIN_ROLE;
-      setAddedOnOpen(isSystemAdminRole ? [] : missingRequiredPermissions(stored));
+      const fixedAdmin = isSystemAdminRole(editingRole.code);
+      setAddedOnOpen(fixedAdmin ? [] : missingRequiredPermissions(stored));
       setRoleForm({
         name: editingRole.name || '',
         code: editingRole.code || '',
         description: editingRole.description || '',
-        permissions: isSystemAdminRole ? stored : withRequiredPermissions(stored),
+        permissions: fixedAdmin ? [] : withRequiredPermissions(stored),
         isSystem: editingRole.isSystem || 0,
       });
     } else {
@@ -124,9 +127,10 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
     setIsSaving(true);
     try {
       if (isEditing) {
+        // v9.0.119 (TD-886): از نقش «مدیر سیستم» فقط نام و توضیح فرستاده می‌شود
         await fetchJson(`/roles/${editingRole.id}`, {
           method: 'PUT',
-          body: JSON.stringify(roleForm),
+          body: JSON.stringify(isFixedAdmin ? { name: roleForm.name, description: roleForm.description } : roleForm),
         });
         toast.success('نقش و ماتریس دسترسی با موفقیت بروزرسانی شد');
       } else {
@@ -150,6 +154,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
 
   // v9.0.86 (TD-880): تیک یک مجوز نیازهایش را هم می‌زند و برداشتن آن مجوزهای وابسته را هم برمی‌دارد، همان قاعده‌ای که سرور در ذخیره اعمال می‌کند
   const togglePermission = (permKey: string) => {
+    if (isFixedAdmin) return;
     setRoleForm((prev) => {
       const exists = prev.permissions.includes(permKey);
       if (exists) {
@@ -289,7 +294,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
               </select>
             </div>
 
-            {roleForm.code !== SYSTEM_ADMIN_ROLE && (
+            {!isFixedAdmin && (
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
@@ -323,14 +328,15 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                 با ذخیره، این مجوزهای لازم هم به نقش افزوده می‌شوند: {addedOnOpen.map((k) => `«${permissionTitle(k)}»`).join('، ')}
               </div>
             )}
-            {roleForm.code === SYSTEM_ADMIN_ROLE ? (
-              <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 text-xs text-purple-800 flex items-center gap-2">
+            {isFixedAdmin && (
+              <div role="note" className="bg-purple-50 border border-purple-200 rounded-xl p-4 text-xs text-purple-800 flex items-center gap-2">
                 <Info size={18} className="shrink-0 text-purple-600" />
                 <span>
-                  نقش <strong>مدیر ارشد سیستم</strong> به صورت پیش‌فرض به تمامی بخش‌ها و قابلیت‌های فنی و مدیریتی برنامه دسترسی کامل و نامحدود دارد.
+                  نقش <strong>مدیر سیستم</strong> همیشه همه مجوزها را دارد؛ تیک‌های آن ویرایش نمی‌شوند و فقط نام و توضیحش تغییر می‌کند.
                 </span>
               </div>
-            ) : filteredCatalog.length === 0 ? (
+            )}
+            {filteredCatalog.length === 0 ? (
               <div className="text-center py-10 text-slate-400 text-xs">
                 هیچ مجوزی مطابق با عبارت جستجویافته پیدا نشد.
               </div>
@@ -339,7 +345,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                 const catPermKeys = cat.permissions.map((p) => p.key);
                 const allCatSelected =
                   catPermKeys.length > 0 &&
-                  catPermKeys.every((k) => roleForm.permissions.includes(k));
+                  (isFixedAdmin || catPermKeys.every((k) => roleForm.permissions.includes(k)));
                 const isCollapsed = !!collapsedCategories[cat.category];
 
                 return (
@@ -354,6 +360,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                         <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
                         {cat.category} ({cat.permissions.length} کلید)
                       </button>
+                      {!isFixedAdmin && (
                       <button
                         type="button"
                         onClick={() => toggleCategoryPermissions(catPermKeys)}
@@ -365,19 +372,20 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                       >
                         {allCatSelected ? 'لغو این بخش' : 'انتخاب کامل بخش'}
                       </button>
+                      )}
                     </div>
 
                     {!isCollapsed && (
                       <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         {cat.permissions.map((p) => {
-                          const isChecked = roleForm.permissions.includes(p.key);
-                          const locked = !isChecked && !canGrantPermission(grantor, p.key);
+                          const isChecked = isFixedAdmin || roleForm.permissions.includes(p.key);
+                          const locked = isFixedAdmin || (!isChecked && !canGrantPermission(grantor, p.key));
                           return (
                             <label
                               key={p.key}
                               onClick={() => togglePermission(p.key)}
-                              title={locked ? 'این مجوز را خودتان ندارید و نمی‌توانید آن را بدهید' : undefined}
-                              className={`flex items-start gap-2.5 p-2.5 rounded-lg border transition-all ${locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${
+                              title={isFixedAdmin ? 'مدیر سیستم همیشه این مجوز را دارد' : locked ? 'این مجوز را خودتان ندارید و نمی‌توانید آن را بدهید' : undefined}
+                              className={`flex items-start gap-2.5 p-2.5 rounded-lg border transition-all ${isFixedAdmin ? 'cursor-default' : locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${
                                 isChecked
                                   ? 'bg-blue-50/80 border-blue-300 text-slate-800 shadow-xs'
                                   : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -422,8 +430,8 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
             <span className="text-xs text-slate-600">
               تعداد مجوزهای فعال:{' '}
               <strong className="text-slate-800 font-bold">
-                {roleForm.code === SYSTEM_ADMIN_ROLE
-                  ? 'تمامی مجوزهای سیستم'
+                {isFixedAdmin
+                  ? `همه ${allCatalogKeys.length} مجوز`
                   : `${roleForm.permissions.length} کلید`}
               </strong>
             </span>
