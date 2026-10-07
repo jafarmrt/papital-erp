@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.293 — Voucher Row Menu Offers Only Accepted Actions
+- **Voucher Row Menu (P2, decision t8):** the menu offers per status only what the server accepts (no direct edit of an approved voucher, no correction of a permanent one, no reverse or correct of a reversal), a voucher with a source or of a year-end closing shows why it is locked, and the finalize confirmation promises no correction path (TD-568).
+
 ### v9.0.292 — Automation Status Counts Final Documents Only
 - **Voucher Automation Status (P2):** the panel counts only final documents, takes a stock count as automatic when it has a valued difference and a transfer as without financial effect, reaches 100% only with every needed voucher, and warns only for types missing one (TD-560).
 
