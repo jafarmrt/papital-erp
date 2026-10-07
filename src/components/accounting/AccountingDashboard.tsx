@@ -11,7 +11,7 @@ interface AccountingDashboardProps {
   onOpenNewTreasury: () => void;
   onOpenNewCheque: () => void;
   /**
-   * v9.0.207 (TD-567، B03-25): هر دکمه سرآیند فقط برای دارنده کلید API خودش (سند `accounting.vouchers`، دریافت و پرداخت
+   * v9.0.214 (TD-567، B03-25): هر دکمه سرآیند فقط برای دارنده کلید API خودش (سند `accounting.vouchers`، دریافت و پرداخت
    * `accounting.treasury`، چک `accounting.cheques`)؛ پیش‌تر خزانه‌دار فرم کامل سند را باز می‌کرد و ذخیره ۴۰۳ می‌شد
    */
   canRecordVoucher: boolean;

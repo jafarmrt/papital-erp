@@ -82,7 +82,7 @@ export const LEDGER_REPORT: OnDemandReportSpec<LedgerParams, AccountLedgerReport
   errorText: 'خطا در دریافت گردش حساب',
 };
 
-/** v9.0.206 (TD-561): دفتر روزنامه صفحه‌به‌صفحه؛ صفحه بخشی از کلید است */
+/** v9.0.213 (TD-561): دفتر روزنامه صفحه‌به‌صفحه؛ صفحه بخشی از کلید است */
 export interface JournalBookParams extends DateRangeParams { page?: number }
 
 export const JOURNAL_BOOK_REPORT: OnDemandReportSpec<JournalBookParams, JournalBookReport | null> = {

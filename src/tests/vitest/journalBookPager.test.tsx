@@ -4,7 +4,7 @@ import { JournalBookView } from '../../components/accounting/reports/JournalBook
 import { JOURNAL_BOOK_REPORT } from '../../hooks/accounting/useFinancialReportQueries';
 import type { JournalBookReport } from '../../lib/accounting/journalBook';
 
-// v9.0.206 (TD-561, B03-19): the journal book asks the server for one page of rows and pages through the range; the
+// v9.0.213 (TD-561, B03-19): the journal book asks the server for one page of rows and pages through the range; the
 // footer totals cover the whole range. Before, the whole range came at once and every row was sent twice.
 
 const row = (n: number) => ({

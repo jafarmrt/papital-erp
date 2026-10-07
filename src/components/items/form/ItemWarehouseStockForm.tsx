@@ -85,7 +85,7 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
       {/* Initial cost */}
       <div>
         <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1">
-          <span>بهای تمام‌شده اولیه (WAC / خرید)</span>
+          <span>میانگین موزون بهای اولیه (بهای هر واحد)</span>
           <HelpBadge text="ارزش دفتری و بهای تمام‌شده هر واحد کالا به ریال در زمان ورود اولیه به انبار. معادل تومانی و حروفی آن در زیر کادر به‌طور خودکار محاسبه و درج می‌شود." />
         </label>
         <FinancialAmountInput

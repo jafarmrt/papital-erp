@@ -28,7 +28,7 @@ export async function runAccountingReportAccessTests(shouldRun: ShouldRun): Prom
   const accessId = 'reg_ledger_reports_need_accounting_keys_td_547';
   if (shouldRun(accessId, 'td547', 'accounting', 'permission', 'report', 'package3')) {
     await runCase(results, accessId,
-      'v9.0.204: the account card, ledger, party statement and party list open only for accounting.reports or accounting.view, and a card or statement with no account or party is 422 (TD-547)',
+      'v9.0.211: the account card, ledger, party statement and party list open only for accounting.reports or accounting.view, and a card or statement with no account or party is 422 (TD-547)',
       () => inFiscalSandbox(async () => {
         const problems: string[] = [];
         const today = await businessTodayIsoDate();
@@ -84,7 +84,7 @@ export async function runAccountingReportAccessTests(shouldRun: ShouldRun): Prom
   const rowsId = 'reg_party_statement_rows_by_party_td_548';
   if (shouldRun(rowsId, 'td548', 'accounting', 'party', 'report', 'package3')) {
     await runCase(results, rowsId,
-      'v9.0.205: a party statement counts only rows of the party\'s own detailed type and id, or legacy rows without an id under its exact current name; never another table\'s id or a longer name (TD-548)',
+      'v9.0.212: a party statement counts only rows of the party\'s own detailed type and id, or legacy rows without an id under its exact current name; never another table\'s id or a longer name (TD-548)',
       () => inFiscalSandbox(async () => {
         const problems: string[] = [];
         const today = await businessTodayIsoDate();
@@ -152,7 +152,7 @@ export async function runAccountingReportAccessTests(shouldRun: ShouldRun): Prom
   const bookId = 'reg_journal_book_paged_td_561';
   if (shouldRun(bookId, 'td561', 'accounting', 'journal', 'report', 'package3')) {
     await runCase(results, bookId,
-      'v9.0.206: the journal book returns one page of rows once, with row numbers and running balance counted from the start of the range and totals over the whole range (TD-561)',
+      'v9.0.213: the journal book returns one page of rows once, with row numbers and running balance counted from the start of the range and totals over the whole range (TD-561)',
       () => inFiscalSandbox(async () => {
         const problems: string[] = [];
         const today = await businessTodayIsoDate();
@@ -196,7 +196,7 @@ export async function runAccountingReportAccessTests(shouldRun: ShouldRun): Prom
   const periodId = 'reg_party_statement_echoes_period_td_572';
   if (shouldRun(periodId, 'td572', 'accounting', 'party', 'report', 'package3')) {
     await runCase(results, periodId,
-      'v9.0.208: a party statement answers with the range and currency it was computed for, so the print header reads them from the data (TD-572)',
+      'v9.0.215: a party statement answers with the range and currency it was computed for, so the print header reads them from the data (TD-572)',
       () => inFiscalSandbox(async () => {
         const problems: string[] = [];
         const today = await businessTodayIsoDate();

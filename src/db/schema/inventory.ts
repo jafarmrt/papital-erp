@@ -8,7 +8,9 @@ export const categories = pgTable('categories', {
   name: text('name').notNull(),
   prefix: text('prefix').notNull(),
   type: text('type').notNull(), // 'product' or 'raw_material'
-  defaultUnit: text('default_unit').default('عدد')
+  defaultUnit: text('default_unit').default('عدد'),
+  // v9.0.204 (TD-659، ت۸ الف): حذف دسته نرم است (مهاجرت 0072)
+  isDeleted: integer('is_deleted').notNull().default(0)
 });
 
 export const warehouses = pgTable('warehouses', {

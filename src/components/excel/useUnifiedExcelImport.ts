@@ -104,7 +104,7 @@ export function useUnifiedExcelImport({
           const rawRows = xlsx.utils.sheet_to_json<any>(ws);
 
           if (!rawRows || rawRows.length === 0) {
-            toast.error('فایل اکسل خالی است یا فرمت آن پشتیبانی نمی‌شود.');
+            toast.error('فایل اکسل خالی است یا قالب آن پشتیبانی نمی‌شود.');
             setIsLoadingMetadata(false);
             return;
           }

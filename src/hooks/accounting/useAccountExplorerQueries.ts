@@ -62,7 +62,7 @@ export function explorerLedgerUrl(p: ExplorerLedgerParams): string {
 }
 
 export function useExplorerLedgerQuery(params: ExplorerLedgerParams) {
-  // v9.0.204 (TD-547، ت۵ الف): بی حساب و بی طرف حساب درخواستی نمی‌رود (سرور ۴۲۲ می‌دهد)؛ پیش‌تر باز شدن زبانه کل دفتر را می‌خواند
+  // v9.0.211 (TD-547، ت۵ الف): بی حساب و بی طرف حساب درخواستی نمی‌رود (سرور ۴۲۲ می‌دهد)؛ پیش‌تر باز شدن زبانه کل دفتر را می‌خواند
   const hasFilter = accountCardHasFilter(params);
   const query = useQuery<ExplorerLedgerData | null>({
     enabled: hasFilter,

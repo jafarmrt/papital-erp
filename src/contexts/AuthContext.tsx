@@ -184,7 +184,7 @@ export function useHasPermission(permission: string): boolean {
 }
 
 /**
- * v9.0.207 (TD-567، B03-25): آیا کاربر جاری مدیر سیستم است (همان گارد `requireSystemAdmin`)؛ بیرون از AuthProvider false.
+ * v9.0.214 (TD-567، B03-25): آیا کاربر جاری مدیر سیستم است (همان گارد `requireSystemAdmin`)؛ بیرون از AuthProvider false.
  * فقط برای نمایش دکمه‌های نگهداری سیستم است؛ سرور خودش می‌سنجد.
  */
 export function useIsSystemAdmin(): boolean {

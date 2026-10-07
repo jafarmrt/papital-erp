@@ -30,12 +30,12 @@ export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-800 leading-relaxed space-y-2">
         <div className="flex items-center gap-2 font-bold text-blue-900 text-sm">
           <Info size={16} />
-          راهنمای سیستم جامع اکسل و کنترل کدینگ:
+          راهنمای ورود و خروجی اکسل و کنترل کدگذاری:
         </div>
         <ul className="list-disc list-inside space-y-1 text-slate-700">
           <li>سیستم پیش از ثبت نهایی، تطابق کدهای فایل را با پیشوند دسته‌بندی‌ها (مانند <span className="font-mono font-bold text-blue-900" dir="ltr">N-</span> برای گردنبند) بررسی نموده و امکان اصلاح خودکار فراهم است.</li>
           <li>جهت حفظ یکپارچگی پایگاه‌داده، ثبت دو محصول با نام مشابه اکیداً مسدود شده و در مرحله پیش‌نمایش به شما هشدار داده می‌شود.</li>
-          <li>در صورت وجود کالا با کد یکسان، مشخصات پایه، موجودی انبارها و استراتژی‌های قیمت‌گذاری به‌روزرسانی خواهند شد.</li>
+          <li>در صورت وجود کالا با کد یکسان، مشخصات پایه، موجودی انبارها و قیمت فهرست‌های قیمت به‌روزرسانی خواهند شد.</li>
         </ul>
       </div>
 
@@ -57,7 +57,7 @@ export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
               دانلود خروجی کامل
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              دریافت فایل اکسل کامل شامل مشخصات فنی کالاها، ارزش خرید، موجودی انبارها و لیست قیمت تمام استراتژی‌ها
+              دریافت فایل اکسل کامل شامل مشخصات فنی کالاها، میانگین موزون بها، موجودی انبارها و قیمت همه فهرست‌های قیمت
             </p>
           </div>
           <button
@@ -78,7 +78,7 @@ export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
               بارگذاری اکسل و بررسی صحت
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              انتخاب فایل اکسل جدید جهت بررسی پیش‌نمایش، تطابق سیستم کدینگ و ثبت/به‌روزرسانی همزمان کالاها
+              انتخاب فایل اکسل جدید جهت بررسی پیش‌نمایش، بررسی کدگذاری و ثبت یا به‌روزرسانی هم‌زمان کالاها
             </p>
           </div>
           <div>
@@ -109,7 +109,7 @@ export const ExcelUploadStep: React.FC<ExcelUploadStepProps> = ({
           className="text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <Download size={14} />
-          دانلود الگوی فرمت اکسل استاندارد (Template)
+          دریافت الگوی استاندارد اکسل
         </button>
       </div>
     </div>

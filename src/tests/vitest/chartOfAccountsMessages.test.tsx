@@ -14,7 +14,7 @@ vi.mock('../../api', () => ({
 }));
 vi.mock('react-hot-toast', () => ({ default: toastFn, toast: toastFn, Toaster: () => null }));
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: (...a: unknown[]) => confirmAction(...a) }));
-// v9.0.207 (TD-567): the seed button shows only for the system admin
+// v9.0.214 (TD-567): the seed button shows only for the system admin
 vi.mock('../../contexts/AuthContext', () => ({ useIsSystemAdmin: () => true, useHasPermission: () => true }));
 
 import { ChartOfAccountsSettingsTab } from '../../components/settings/ChartOfAccountsSettingsTab';

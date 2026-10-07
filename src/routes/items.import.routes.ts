@@ -8,16 +8,23 @@ import { validate } from '../middleware/validate.js';
 import { ItemsService } from '../services/items.service.js';
 import { logActivity, extractClientIp } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { buildItemExcelTemplate } from '../services/items/itemExcelTemplate.js';
 
 const router = Router();
 router.use(authenticateToken);
 
 export const unifiedImportSchema = z.object({
   body: z.object({
-    rows: z.array(z.record(z.string(), z.unknown())).min(1, 'لیست ردیف‌های فایل اکسل خالی است'),
+    rows: z.array(z.record(z.string(), z.unknown())).min(1, 'فهرست ردیف‌های فایل اکسل خالی است'),
     typeFilter: z.string().optional()
   })
 });
+
+// v9.0.208 (O8): الگوی ورود اکسل کالا از سرور، بی خواندن کالاها و بی ردیف ممیزی خروجی
+router.get('/items/excel-template', authorizePermission(...READ_PERMISSIONS.items), asyncHandler(async (_req, res) => {
+  res.json(await buildItemExcelTemplate());
+}));
 
 // GET /items/unified-export
 router.get('/items/unified-export', authorizePermission('products.view'), asyncHandler(async (req, res) => {

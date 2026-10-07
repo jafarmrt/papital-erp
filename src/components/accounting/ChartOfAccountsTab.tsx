@@ -29,7 +29,7 @@ export function ChartOfAccountsTab({
   onDeleteAccount,
   onSeedStandardAccounts,
 }: ChartOfAccountsTabProps) {
-  // v9.0.207 (TD-567، B03-25): استقرار کدینگ پیش‌فرض فقط برای مدیر سیستم (گارد `requireSystemAdmin`)؛ پیش‌تر مدیر، مدیر مالی و
+  // v9.0.214 (TD-567، B03-25): استقرار کدینگ پیش‌فرض فقط برای مدیر سیستم (گارد `requireSystemAdmin`)؛ پیش‌تر مدیر، مدیر مالی و
   // حسابدار دکمه را می‌دیدند و ۴۰۳ می‌گرفتند
   const canSeedStandardAccounts = useIsSystemAdmin();
   const safeAccounts = Array.isArray(accounts) ? accounts : [];

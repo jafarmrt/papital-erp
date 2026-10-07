@@ -16,11 +16,11 @@ interface JournalBookViewProps {
   journalLoading: boolean;
   journalBookData: JournalBookReport | null;
   onFetchJournalBook: () => void;
-  /** v9.0.206 (TD-561): رفتن به صفحه دیگر همان بازه */
+  /** v9.0.213 (TD-561): رفتن به صفحه دیگر همان بازه */
   onPageChange: (page: number) => void;
 }
 
-/** v9.0.206 (TD-561): صفحه‌بندی دفتر روزنامه؛ جمع‌های پانویس همه بازه را می‌گیرند */
+/** v9.0.213 (TD-561): صفحه‌بندی دفتر روزنامه؛ جمع‌های پانویس همه بازه را می‌گیرند */
 function JournalBookPager({ report, loading, onPageChange }: { report: JournalBookReport; loading: boolean; onPageChange: (page: number) => void }) {
   const pages = journalBookPageCount(report);
   const page = report.page || 1;

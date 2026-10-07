@@ -351,7 +351,7 @@ export class AccountingReportService {
     const reportDebit = voucherItemReportAmountSql(journalVoucherItems.debit, params.currency);
     const reportCredit = voucherItemReportAmountSql(journalVoucherItems.credit, params.currency);
 
-    // v9.0.206 (TD-561، B03-19): یک صفحه از ردیف‌ها؛ جمع‌ها و شمار اسناد و ردیف‌ها روی همه بازه در SQL، و شماره ردیف و
+    // v9.0.213 (TD-561، B03-19): یک صفحه از ردیف‌ها؛ جمع‌ها و شمار اسناد و ردیف‌ها روی همه بازه در SQL، و شماره ردیف و
     // مانده تجمعی با تابع پنجره‌ای از نخستین ردیف بازه (پیش از LIMIT حساب می‌شود)، پس صفحه دوم از جای درست ادامه می‌دهد
     const page = Math.max(1, Math.trunc(params.page ?? 1));
     const limit = Math.min(JOURNAL_BOOK_MAX_PAGE_SIZE, Math.max(1, Math.trunc(params.limit ?? JOURNAL_BOOK_PAGE_SIZE)));
@@ -602,7 +602,7 @@ export class AccountingReportService {
     endDate?: string;
     currency?: string;
   }): Promise<AccountCardReport> {
-    // v9.0.204 (TD-547، B03-05، تصمیم ت۵ الف): کارت حساب بی حساب و بی طرف حساب ۴۲۲؛ پیش‌تر همه ردیف‌های دفتر برمی‌گشت
+    // v9.0.211 (TD-547، B03-05، تصمیم ت۵ الف): کارت حساب بی حساب و بی طرف حساب ۴۲۲؛ پیش‌تر همه ردیف‌های دفتر برمی‌گشت
     if (!params.party && !accountCardHasFilter(params)) {
       throw new ValidationError('کارت حساب بی حساب و بی طرف حساب گرفته نمی‌شود؛ یک حساب یا طرف حساب برگزینید.', undefined, 'ACCOUNT_CARD_FILTER_REQUIRED');
     }
@@ -846,7 +846,7 @@ export class AccountingReportService {
   }
 
   /**
-   * v9.0.205 (TD-548): طرف حساب صورت‌حساب و شرط ردیف‌های او. با شناسه: پرسنل از جدول پرسنل، بقیه از طرف حساب‌ها (رکورد
+   * v9.0.212 (TD-548): طرف حساب صورت‌حساب و شرط ردیف‌های او. با شناسه: پرسنل از جدول پرسنل، بقیه از طرف حساب‌ها (رکورد
    * حذف‌شده هم، تا تاریخچه‌اش خوانده شود؛ شناسه ناموجود ۴۰۴). فقط با نام: طرف حساب یا پرسنل فعال با همان نام دقیق؛ نامی که در
    * هیچ جدولی نیست فقط ردیف‌هایی را می‌آورد که نام تفصیلی‌شان دقیقاً همان است.
    */
@@ -914,11 +914,11 @@ export class AccountingReportService {
     currency?: string;
     includeDrafts?: boolean;
   }): Promise<DetailedPartyLedgerResult> {
-    // v9.0.204 (TD-547، ت۵ الف): صورت‌حساب بی طرف حساب ۴۲۲؛ پیش‌تر بی شرط طرف حساب همه ردیف‌های دفتر برمی‌گشت
+    // v9.0.211 (TD-547، ت۵ الف): صورت‌حساب بی طرف حساب ۴۲۲؛ پیش‌تر بی شرط طرف حساب همه ردیف‌های دفتر برمی‌گشت
     if (!params.partyId && !params.partyName?.trim()) {
       throw new ValidationError('صورت‌حساب بی طرف حساب گرفته نمی‌شود؛ یک طرف حساب برگزینید.', undefined, 'PARTY_LEDGER_PARTY_REQUIRED');
     }
-    // v9.0.205 (TD-548، B03-06): ردیف از آنِ طرف حساب است اگر نوع تفصیلی و شناسه او را داشته باشد (مشتری و تأمین‌کننده با
+    // v9.0.212 (TD-548، B03-06): ردیف از آنِ طرف حساب است اگر نوع تفصیلی و شناسه او را داشته باشد (مشتری و تأمین‌کننده با
     // قاعده TD-416 کارت حساب صفحه مشتری، پرسنل با نوع `personnel`)، یا ردیف قدیمیِ بی‌شناسه نام دقیق کنونی او را؛ پیش‌تر
     // شناسه از هر نوع (حقوق پرسنل هم‌شناسه) و «نام شامل» (طرف حساب دیگری با نام بلندتر) هم شمرده می‌شد
     const { info: partyInfo, rows: partyRowsCondition } = await AccountingReportService.resolveLedgerParty(params);
@@ -1073,7 +1073,7 @@ export class AccountingReportService {
       finalBalanceType,
       netStatusText,
       currency: reportCurrency,
-      // v9.0.208 (TD-572، B03-30): بازه همین گزارش؛ سرآیند چاپ آن را از پاسخ می‌خواند، نه از فرم
+      // v9.0.215 (TD-572، B03-30): بازه همین گزارش؛ سرآیند چاپ آن را از پاسخ می‌خواند، نه از فرم
       startDate: params.startDate || null,
       endDate: params.endDate || null,
       items,

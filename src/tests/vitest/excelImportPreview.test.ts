@@ -15,6 +15,6 @@ describe('item Excel preview code checks (TD-650)', () => {
   it('accepts the server raw-material pattern in the preview', () => {
     expect(validateExcelRows([row('B-H-101', 'زنجیر', 'ماده اولیه')], [], [])[0].issues).toEqual([]);
     expect(codeFormatError('B-H--101', 'raw_material', '')).toBeNull();
-    expect(codeFormatError('N-101', 'product', '')).toContain('nnnn-x-nnn-nn');
+    expect(codeFormatError('N-101', 'product', '')).toContain('1404-N-101-01');
   });
 });
