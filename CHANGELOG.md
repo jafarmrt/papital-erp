@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.233 — Fixed Salary Up to the End of Service
+- **Fixed Salary Up to the End of Service (TD-808):** a terminated personnel earns fixed salary only up to its end date (pro rata by days) and nothing after it, a terminated personnel without an end date gets no fixed-salary payslip, and a payslip whose period ends after today is refused.
+
 ### v9.0.232 — Advance Balance From the Ledger
 - **Advance Balance From the Ledger (TD-807):** a personnel's outstanding advance is read only from its rows on the advance account (1301); treasury payments such as a salary settlement no longer count as an advance, so an advance deduction without a recorded advance is refused.
 

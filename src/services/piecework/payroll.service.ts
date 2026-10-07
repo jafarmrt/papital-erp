@@ -8,6 +8,9 @@ import { VoucherService } from '../accounting/voucher.service.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { PayrollPaymentService } from '../accounting/payrollPayment.service.js';
 import { computeFixedSalaryShares, describeFixedSalaryShares, priorFixedGrantsOf, type FixedSalaryMonthShare } from '../../lib/payroll/fixedSalaryProration.js';
+import { fixedSalaryPeriodEnd, payrollPeriodFutureError, serviceEndOf } from '../../lib/payroll/payrollPeriod.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
@@ -66,6 +69,10 @@ export class PieceworkPayrollService {
     if (!sDate || !eDate || sDate > eDate) {
       throw new BadRequestError('بازه فیش معتبر نیست: تاریخ شروع و پایان الزامی است و شروع نباید بعد از پایان باشد');
     }
+    // v9.0.233 (TD-808، تصمیم ت۴ الف): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود. پیش‌تر فیش آذر در مهر صادر و تأیید شد و
+    // حقوق ثابت ماه‌های آینده پیشاپیش هزینه و بدهی شد.
+    const futureError = payrollPeriodFutureError(eDate, await businessTodayIsoDate());
+    if (futureError) throw new ValidationError(futureError, undefined, 'PAYROLL_PERIOD_IN_FUTURE');
 
     const totBonusesFin = fin(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0));
     const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
@@ -121,7 +128,17 @@ export class PieceworkPayrollService {
       let fixedPortionFin = fin(0);
       let fixedSalaryMonths: FixedSalaryMonthShare[] = [];
       let fixedDedupNote = '';
-      if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0)) {
+      // v9.0.233 (TD-808، تصمیم ت۴ الف): حقوق ثابت فقط تا تاریخ پایان همکاری (serviceEndOf)؛ دوره پس از آن بی حقوق ثابت
+      const serviceEnd = serviceEndOf(pInfo);
+      const fixedEnd = fixedSalaryPeriodEnd(sDate, eDate, serviceEnd);
+      if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && serviceEnd.kind === 'unknown') {
+        throw new ValidationError(
+          `${pInfo.fullName} «قطع همکاری» است ولی تاریخ پایان همکاری معتبری ندارد؛ پیش از صدور فیش با حقوق ثابت، تاریخ پایان همکاری را در پرونده پرسنل ثبت کنید.`,
+          undefined,
+          'PAYROLL_SERVICE_END_DATE_REQUIRED'
+        );
+      }
+      if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && fixedEnd !== null) {
         const priorFixedPayrolls = await tx.select({
           startDate: pieceworkPayrolls.startDate,
           totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
@@ -134,13 +151,19 @@ export class PieceworkPayrollService {
         ))
         .for('update');
 
-        const shares = computeFixedSalaryShares(pInfo.monthlySalary, sDate, eDate, priorFixedPayrolls.flatMap(priorFixedGrantsOf));
+        const shares = computeFixedSalaryShares(pInfo.monthlySalary, sDate, fixedEnd, priorFixedPayrolls.flatMap(priorFixedGrantsOf));
         fixedPortionFin = shares.total;
         fixedSalaryMonths = shares.months;
-        fixedDedupNote = describeFixedSalaryShares(shares.months, pInfo.monthlySalary);
+        fixedDedupNote = [
+          describeFixedSalaryShares(shares.months, pInfo.monthlySalary),
+          fixedEnd < eDate ? `حقوق ثابت تا پایان همکاری (${toPersianDigits(isoToJalaliDate(fixedEnd))})` : '',
+        ].filter(Boolean).join(' — ');
       }
 
       if (eligibleLogs.length === 0 && fixedPortionFin.lessThanOrEqual(0)) {
+        if (fixedIncluded && serviceEnd.kind === 'ended' && fixedEnd === null) {
+          return { status: 400, error: `همکاری ${pInfo.fullName} در ${toPersianDigits(isoToJalaliDate(serviceEnd.endIso))} پایان یافته است؛ این بازه حقوق ثابت ندارد و کارکرد معوقی هم در آن نیست.` };
+        }
         return { status: 400, error: 'هیچ کارکرد معوقی در این بازه زمانی برای پرسنل انتخاب‌شده پیدا نشد.' };
       }
 

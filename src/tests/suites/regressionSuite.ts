@@ -7532,8 +7532,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
 
       // ۲) ثبت کارکرد با تاریخ شمسی ← ISO؛ فیلتر بازه شمسی
       const ids = await PieceworkService.logWorkEntries([
-        { personnelId: pers.id, taskId: task.id, date: '۱۴۰۵/۰۷/۰۵', quantity: 2 },
-        { personnelId: pers.id, taskId: task.id, date: '1405/07/20', quantity: 3 },
+        { personnelId: pers.id, taskId: task.id, date: '۱۴۰۵/۰۶/۰۵', quantity: 2 },
+        { personnelId: pers.id, taskId: task.id, date: '1405/06/20', quantity: 3 },
       ]);
       logIds.push(...ids);
       const stored = await orm.select({ date: pieceworkLogs.date, dateIso: pieceworkLogs.dateIso }).from(pieceworkLogs).where(inArray(pieceworkLogs.id, ids));
@@ -7547,21 +7547,22 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const [rate] = await orm.select({ d: pieceworkTaskRateHistory.effectiveDate }).from(pieceworkTaskRateHistory).where(eq(pieceworkTaskRateHistory.taskId, task.id)).orderBy(sql`id DESC`).limit(1);
       if (rate?.d !== await businessTodayIsoDate()) violations.push(`تاریخ اعمال نرخ: ${rate?.d} (انتظار امروز ISO)`);
       const { PieceworkReadService } = await import('../../services/piecework/pieceworkRead.service.js');
-      const ranged = await PieceworkReadService.listWorkLogs({ personnelId: String(pers.id), startDate: '1405/07/01', endDate: '1405/07/10' });
-      if (ranged.length !== 1 || ranged[0].date !== toStorageDate('1405/07/05')) violations.push(`فیلتر بازه شمسی کارکرد: ${JSON.stringify(ranged.map(r => r.date))}`);
+      const ranged = await PieceworkReadService.listWorkLogs({ personnelId: String(pers.id), startDate: '1405/06/01', endDate: '1405/06/10' });
+      if (ranged.length !== 1 || ranged[0].date !== toStorageDate('1405/06/05')) violations.push(`فیلتر بازه شمسی کارکرد: ${JSON.stringify(ranged.map(r => r.date))}`);
 
-      // ۳) حقوق ثابت: دو فیش در یک ماه شمسی (مهر ۱۴۰۵ = ۲۳ سپتامبر تا ۲۲ اکتبر) روی هم فقط یک ماه حقوق ثابت می‌گیرند
+      // ۳) حقوق ثابت: دو فیش در یک ماه شمسی (شهریور ۱۴۰۵ = ۲۳ اوت تا ۲۲ سپتامبر، ۳۱ روز) روی هم فقط یک ماه حقوق ثابت می‌گیرند.
+      // v9.0.233 (TD-808): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود، پس این آزمون از مهر به شهریور آمد
       const audit = { username: 'ERP-TEST-MARKER' };
-      const first = await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/07/01', endDate: '1405/07/15', ...audit });
+      const first = await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/06/01', endDate: '1405/06/15', ...audit });
       if (first.status !== 201 || !('payroll' in first) || !first.payroll) throw new Error(`فیش اول: ${JSON.stringify(first)}`);
       payrollIds.push(first.payroll.id);
-      const second = await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/07/16', endDate: '1405/07/30', ...audit });
+      const second = await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/06/16', endDate: '1405/06/31', ...audit });
       if (second.status !== 201 || !('payroll' in second) || !second.payroll) throw new Error(`فیش دوم: ${JSON.stringify(second)}`);
       payrollIds.push(second.payroll.id);
-      if (first.payroll.startDate !== toStorageDate('1405/07/01') || first.payroll.endDate !== toStorageDate('1405/07/15')) violations.push(`بازه فیش: ${first.payroll.startDate}، ${first.payroll.endDate}`);
-      // v8.0.30 (TD-284، تصمیم مالک محصول — گزینه ب): ماه ناقص به نسبت روزها؛ دو نیمه مهر (۳۰ روزه) روی هم دقیقاً یک ماه
-      if (!first.payroll.totalFixedAmount?.equals(1500000)) violations.push(`حقوق ثابت فیش اول (۱۵ از ۳۰ روز): ${first.payroll.totalFixedAmount?.toString()}`);
-      if (!second.payroll.totalFixedAmount?.equals(1500000)) violations.push(`حقوق ثابت فیش دوم همان ماه شمسی (باقی ماه): ${second.payroll.totalFixedAmount?.toString()}`);
+      if (first.payroll.startDate !== toStorageDate('1405/06/01') || first.payroll.endDate !== toStorageDate('1405/06/15')) violations.push(`بازه فیش: ${first.payroll.startDate}، ${first.payroll.endDate}`);
+      // v8.0.30 (TD-284، تصمیم مالک محصول — گزینه ب): ماه ناقص به نسبت روزها؛ دو نیمه شهریور (۳۱ روزه) روی هم دقیقاً یک ماه
+      if (!first.payroll.totalFixedAmount?.equals(1451613)) violations.push(`حقوق ثابت فیش اول (۱۵ از ۳۱ روز): ${first.payroll.totalFixedAmount?.toString()}`);
+      if (!second.payroll.totalFixedAmount?.equals(1548387)) violations.push(`حقوق ثابت فیش دوم همان ماه شمسی (باقی ماه): ${second.payroll.totalFixedAmount?.toString()}`);
       if (!second.payroll.totalPieceworkAmount?.equals(3000)) violations.push(`کارکرد فیش دوم: ${second.payroll.totalPieceworkAmount?.toString()}`);
       try {
         await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/08/10', endDate: '1405/08/01', ...audit });
@@ -7577,7 +7578,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - tStart,
-        details: 'تاریخ‌ها ISO ذخیره شدند، داده قدیمی با گزارش تبدیل شد، فیلتر بازه شمسی درست بود و حقوق ثابت مهر فقط در فیش اول آمد.'
+        details: 'تاریخ‌ها ISO ذخیره شدند، داده قدیمی با گزارش تبدیل شد، فیلتر بازه شمسی درست بود و حقوق ثابت شهریور بین دو فیش به نسبت روزها تقسیم شد.'
       }));
     } catch (err) {
       results.push(makeTestCase({

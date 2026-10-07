@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { pieceworkPayrolls } from '../../db/schema.js';
+import { personnel, pieceworkPayrolls } from '../../db/schema.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { FinancialHealthService } from '../../services/accounting/financialHealth.service.js';
@@ -27,6 +28,16 @@ async function legacyPayslip(personnelId: number, amounts: { piecework: number; 
   }).returning({ id: pieceworkPayrolls.id });
   return row.id;
 }
+
+/** A mixed-salary personnel with 30,000,000 a month */
+async function salariedWorker(name: string, extra: { employmentStatus?: string; endDate?: string } = {}): Promise<number> {
+  const [row] = await orm.insert(personnel).values({
+    fullName: `${name} ${Date.now().toString().slice(-6)}${++seq}`, salaryType: 'mixed', monthlySalary: money(30_000_000), ...extra,
+  }).returning({ id: personnel.id });
+  return row.id;
+}
+
+const isoPlusDays = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 const codeOf = (body: unknown) => String((body as { code?: string } | undefined)?.code ?? '');
 const brief = (body: unknown) => JSON.stringify(body).slice(0, 200);
@@ -100,6 +111,46 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
 
       assertNoProblems(problems);
       return 'Four negative parts refused with 400 and the service with 422, the valid payslip credited wages payable with its net 900,000, two legacy vouchers refused with their codes, three payslips listed by the health check, and the unvouchered payslip paid only after its voucher was issued.';
+    }));
+  }
+
+  const serviceEndId = 'reg_payroll_fixed_salary_service_end_td_808';
+  if (shouldRun(serviceEndId, 'td808', 'payroll', 'payslip', 'fixed', 'package12')) {
+    await runCase(results, serviceEndId, 'v9.0.233: fixed salary is granted only up to the end of service (pro rata by days), a period after it gets none, a terminated personnel without an end date is 422 PAYROLL_SERVICE_END_DATE_REQUIRED and a period ending after today is 422 PAYROLL_PERIOD_IN_FUTURE (TD-808)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const generate = (personnelId: number, startDate: string, endDate: string) => admin.post('/api/piecework/payrolls/generate', { personnelId, startDate, endDate });
+      const fixedOf = (body: unknown) => String((body as { totalFixedAmount?: unknown } | undefined)?.totalFixedAmount ?? '-');
+
+      // 1) terminated on 2026-08-22 (1405/05/31): Mordad 16..31 is 16 of 31 days of 30,000,000; Shahrivar 1..15 earns nothing
+      const leaver = await salariedWorker('TD-808 leaver', { employmentStatus: 'قطع همکاری', endDate: '2026-08-22' });
+      const straddling = await generate(leaver, '1405/05/16', '1405/06/15');
+      if (straddling.status !== 201 && straddling.status !== 200) problems.push(`the payslip across the end of service answered ${straddling.status} ${brief(straddling.body)}`);
+      else if (!fin(fixedOf(straddling.body)).equals(15_483_871)) problems.push(`fixed salary across the end of service is ${fixedOf(straddling.body)}, expected 15,483,871 (16 of 31 days of Mordad)`);
+
+      // 2) a period after the end of service: piecework only, and without work logs no payslip at all
+      const task = await newTask();
+      await addLog(leaver, task, '2026-09-10', 500_000);
+      const after = await generate(leaver, '1405/06/16', '1405/06/31');
+      if (after.status !== 201 && after.status !== 200) problems.push(`the payslip after the end of service answered ${after.status} ${brief(after.body)}`);
+      else if (!fin(fixedOf(after.body)).isZero()) problems.push(`the payslip after the end of service has fixed salary ${fixedOf(after.body)}, expected 0`);
+      const empty = await generate(leaver, '1405/07/01', '1405/07/10');
+      if (empty.status !== 400) problems.push(`a period after the end of service without work logs answered ${empty.status} ${brief(empty.body)}, expected 400`);
+
+      // 3) a terminated personnel without an end date gets no fixed-salary payslip until the date is recorded
+      const undated = await salariedWorker('TD-808 undated', { employmentStatus: 'قطع همکاری', endDate: '' });
+      const refusedUndated = await generate(undated, '1405/06/01', '1405/06/31');
+      if (refusedUndated.status !== 422 || codeOf(refusedUndated.body) !== 'PAYROLL_SERVICE_END_DATE_REQUIRED') problems.push(`a terminated personnel without an end date answered ${refusedUndated.status} ${brief(refusedUndated.body)}, expected 422 PAYROLL_SERVICE_END_DATE_REQUIRED`);
+
+      // 4) a period ending after the business today is refused, for any personnel
+      const today = await businessTodayIsoDate();
+      const active = await salariedWorker('TD-808 active');
+      const future = await generate(active, today, isoPlusDays(today, 30));
+      if (future.status !== 422 || codeOf(future.body) !== 'PAYROLL_PERIOD_IN_FUTURE') problems.push(`a period ending after today answered ${future.status} ${brief(future.body)}, expected 422 PAYROLL_PERIOD_IN_FUTURE`);
+      if (await payrollCount(undated) + await payrollCount(active) !== 0) problems.push('a refused payslip was written');
+
+      assertNoProblems(problems);
+      return 'Fixed salary 15,483,871 up to the end of service, none after it, the undated leaver refused with 422 and a period ending after today refused with 422.';
     }));
   }
 
