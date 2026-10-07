@@ -214,7 +214,8 @@ router.post('/orders/:id/deliver', authorizePermission('procurement.order', 'pro
   const result = await ProcurementService.deliverOrderToWarehouse(id, {
     id: req.user!.id,
     username: req.user!.username,
-    role: req.user!.role
+    role: req.user!.role,
+    permissions: req.user!.permissions || []
   });
 
   res.json(result);

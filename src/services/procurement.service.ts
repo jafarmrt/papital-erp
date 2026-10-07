@@ -1,9 +1,8 @@
 import { terminateOpenWorkflows } from './workflow/workflowTermination.js';
 import { sql, eq, and, desc, inArray, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { purchaseRequisitions, documentRefCounters, items, documents, documentItems, workflowInstances, workflowPendingApprovals, workflowTasks } from '../db/schema.js';
+import { purchaseRequisitions, documentRefCounters, items, documents, documentItems, workflowInstances } from '../db/schema.js';
 import { businessFiscalYear, businessTodayIsoDate } from '../lib/businessClock.js';
-import { errorMessageOf } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
@@ -14,8 +13,6 @@ import { DocumentService } from './document.service.js';
 import { userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from './inventory/stockMovementDate.js';
 
-/** اقدام‌های گردش‌کار «دریافت کالا»ی درخواست خرید */
-const RECEIVE_ACTION_KEYS = ['receive_items', 'mark_received', 'receive'];
 /** v9.0.267 (TD-689): مجوزهایی که درخواست خرید را تأیید می‌کنند (همان گارد مسیر اقدام گردش‌کار) */
 const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve', 'procurement.manage'];
 /** v8.0.71 (TD-326): درخواست ردشده دریافت یا سفارش داده نمی‌شود، مگر پس از بازگشایی */
@@ -28,7 +25,10 @@ import { describeOverOrders, findOverOrders } from './procurement/requisitionOrd
 import { money } from '../lib/money.js';
 import { fin } from '../lib/financialDecimal.js';
 import { REQUISITION_PRIORITIES, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
-import { ensureRequisitionApproved, requisitionWorkflowGraph, type RequisitionActor, type WorkflowStateRef, type WorkflowTransitionRef } from './procurement/requisitionApproval.js';
+import {
+  ensureRequisitionApproved, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY, requisitionFlow, requisitionWorkflowGraph, transitionFromStep,
+  type RequisitionActor, type WorkflowStateRef, type WorkflowTransitionRef,
+} from './procurement/requisitionApproval.js';
 import { buildRequisitionRows, resolveRequisitionProject, type RequisitionRowFields } from './procurement/requisitionRows.js';
 
 type DbClient = DbExecutor;
@@ -1058,7 +1058,7 @@ export class ProcurementService {
    */
   static async deliverOrderToWarehouse(
     documentId: number,
-    user: { id?: number; username?: string; role?: string }
+    user: RequisitionActor
   ): Promise<{ success: boolean; message: string }> {
     const [doc] = await orm.select().from(documents).where(and(eq(documents.id, documentId), eq(documents.isDeleted, 0)));
     if (!doc) {
@@ -1075,6 +1075,8 @@ export class ProcurementService {
 
     // v8.0.4 (TD-257): سفارشی که تاریخش پیش از آخرین گردش کالاست فقط با مجوز همین کاربر به انبار تحویل می‌شود
     const allowBackdate = await userHasRoleOrPermission(user, BACKDATE_PERMISSION);
+    // v9.0.269 (TD-692): حق تأیید پیش از تراکنش سنجیده می‌شود (TD-324)
+    const mayApprove = await userHasRoleOrPermission(user, ...REQUISITION_APPROVE_PERMISSIONS);
     const reqCode = doc.notes?.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/)?.[1]?.trim() ?? null;
 
     // v8.0.36 (TD-290): نهایی‌سازی سند و به‌روزرسانی مقدار دریافتی درخواست خرید در یک تراکنش و زیر قفل ردیف درخواست.
@@ -1082,97 +1084,88 @@ export class ProcurementService {
     // درخواست مقدار دریافتیِ دیگری را بازنویسی می‌کرد. مقدار هر کالا هم جمع همه سطرهای فعال سند است، نه فقط سطر اول.
     // قفل درخواست پیش از نهایی‌سازی گرفته و وضعیت سند زیر همان قفل دوباره خوانده می‌شود، تا تحویل دوباره همین سفارش (که
     // نهایی‌سازی‌اش بی‌صدا رد می‌شود) مقدار دریافتی را دو بار نشمارد.
-    const delivery = await orm.transaction(async (tx) => {
+    //
+    // v9.0.269 (TD-692، B10-05): انتقال «دریافت کالا» در همین تراکنش و با نقش و مجوز تحویل‌دهنده اجرا می‌شود و شکستش کل
+    // تحویل را برمی‌گرداند؛ سفارش درخواستِ تأییدنشده تحویل نمی‌شود (ت۱). پیش‌تر انتقال پس از commit، بی نقش و مجوز اجرا
+    // می‌شد و شکستش با نوشتن مستقیم `workflow_instances` (COMPLETED)، حذف `workflow_pending_approvals` و بستن
+    // `workflow_tasks` دور زده می‌شد (A02-03، A02-04، A02-08).
+    await orm.transaction(async (tx) => {
       const linkedReqId = await ProcurementService.findDeliveredOrderRequisitionId(tx, reqCode, documentId);
       const [lockedReq] = linkedReqId === null ? [] : await tx.select().from(purchaseRequisitions)
         .where(and(eq(purchaseRequisitions.id, linkedReqId), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');
       const [current] = await tx.select({ status: documents.status }).from(documents).where(eq(documents.id, documentId));
-      if (current?.status === 'final') return { linkedReq: null, allDelivered: false };
+      if (current?.status === 'final') return;
+
+      const alreadyReceived = !!lockedReq && RECEIVED_REQUISITION_STATUSES.has(lockedReq.status);
+      if (lockedReq && !alreadyReceived) {
+        if (CLOSED_REQUISITION_STATUSES.has(lockedReq.status)) {
+          throw new ConflictError(`درخواست خرید ${lockedReq.code} رد شده است و سفارش آن به انبار تحویل نمی‌شود؛ ابتدا درخواست را بازگشایی کنید.`, undefined, 'REQUISITION_NOT_APPROVED');
+        }
+        await ensureRequisitionApproved(tx, lockedReq, user, {
+          mayApprove,
+          comment: `تأیید هنگام تحویل سفارش خرید ${doc.refNumber}`,
+          allowBackdate,
+          snapshotData: { id: lockedReq.id, code: lockedReq.code, priority: lockedReq.priority, status: lockedReq.status },
+        });
+      }
 
       await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات', tx, { allowBackdate });
-      if (!lockedReq) return null;
 
-      const docLines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity }).from(documentItems)
-        .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
-      const updatedReqItems = applyDeliveredLines((lockedReq.items || []) as RequisitionItemWithReceipt[], docLines);
+      if (lockedReq) {
+        const docLines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity }).from(documentItems)
+          .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
+        const updatedReqItems = applyDeliveredLines((lockedReq.items || []) as RequisitionItemWithReceipt[], docLines);
+        await tx.update(purchaseRequisitions).set({
+          items: updatedReqItems,
+          updatedAt: new Date().toISOString()
+        }).where(eq(purchaseRequisitions.id, lockedReq.id));
 
-      // v9.0.268 (TD-690، B10-03): درخواست فقط وقتی «دریافت‌شده» است که هیچ سفارش زنده‌اش نهایی‌نشده نمانده و هر ردیف
-      // دریافت یا بسته شده است. پیش‌تر فقط سندهای موجود درخواست سنجیده می‌شد: تحویل تنها سفارشِ درخواستی که بخشی‌اش
-      // سفارش شده بود، درخواست را «دریافت‌شده» می‌کرد و ردیف‌های مانده دیگر سفارش داده نمی‌شدند
-      const openOrders = (await requisitionOrderDocuments(tx, { code: lockedReq.code, items: updatedReqItems }))
-        .filter(order => order.id !== documentId && order.status !== 'final');
-      const allDelivered = openOrders.length === 0 && updatedReqItems.every(isSettledRequisitionRow);
-
-      await tx.update(purchaseRequisitions).set({
-        items: updatedReqItems,
-        status: allDelivered ? 'received' : lockedReq.status,
-        updatedAt: new Date().toISOString()
-      }).where(eq(purchaseRequisitions.id, lockedReq.id));
-
-      return { linkedReq: lockedReq, allDelivered };
-    });
-    const linkedReq = delivery?.linkedReq ?? null;
-    const allDelivered = delivery?.allDelivered ?? false;
-
-    if (linkedReq && allDelivered && linkedReq.workflowInstanceId) {
-      const [wfInst] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
-      if (wfInst && wfInst.status === 'IN_PROGRESS') {
-        const { states, transitions } = await this.workflowGraphOf(wfInst);
-        const receivedState = states.find(s => s.stateKey === 'received');
-        const trToReceived = transitions.find(t => t.fromStateId === wfInst.currentStateId && t.toStateId === receivedState?.id);
-
-        if (trToReceived) {
-          try {
-            await WorkflowTransitionExecutor.executeTransition({
-              instanceId: wfInst.id,
-              transitionId: trToReceived.id,
-              // v9.0.2 (TD-415): بی شناسه کاربر، انتقال به نام کاربر ۱ ثبت نمی‌شود
-              userId: user.id,
-              userName: user.username || 'انباردار تحویل‌گیرنده',
-              comment: `تحویل و ورود خودکار اقلام به انبار با فاکتور خرید ${doc.refNumber}`
-            });
-          } catch (trErr) {
-            logger.warn({ message: `[Procurement] Error executing workflow transition on delivery: ${errorMessageOf(trErr)}` });
-            if (receivedState) {
-              await orm.update(workflowInstances).set({
-                currentStateId: receivedState.id,
-                status: 'COMPLETED',
-                updatedAt: new Date().toISOString()
-              }).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
-              await orm.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, linkedReq.workflowInstanceId));
-              await orm.update(workflowTasks)
-                .set({ status: 'completed', completedAt: new Date().toISOString() })
-                .where(and(eq(workflowTasks.instanceId, linkedReq.workflowInstanceId), eq(workflowTasks.status, 'pending')));
-            }
+        // v9.0.268 (TD-690، B10-03): درخواست فقط وقتی «دریافت‌شده» است که هیچ سفارش زنده‌اش نهایی‌نشده نمانده و هر ردیف
+        // دریافت یا بسته شده است. پیش‌تر فقط سندهای موجود درخواست سنجیده می‌شد: تحویل تنها سفارشِ درخواستی که بخشی‌اش
+        // سفارش شده بود، درخواست را «دریافت‌شده» می‌کرد و ردیف‌های مانده دیگر سفارش داده نمی‌شدند
+        const openOrders = (await requisitionOrderDocuments(tx, { code: lockedReq.code, items: updatedReqItems }))
+          .filter(order => order.status !== 'final');
+        if (!alreadyReceived && openOrders.length === 0 && updatedReqItems.every(isSettledRequisitionRow)) {
+          // وضعیت «دریافت‌شده» را اقدام پس از انتقال (applyRequisitionTransition) در همین تراکنش می‌نویسد
+          const flow = await requisitionFlow(tx, lockedReq, user);
+          const receive = transitionFromStep(flow, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY);
+          if (!receive) {
+            throw new ConflictError(
+              `گردش کار درخواست خرید ${lockedReq.code} از گام «${flow.stepTitle || flow.stepKey}» اقدامی به «دریافت‌شده» ندارد؛ طرح گردش کار را بررسی کنید.`,
+              undefined, 'WF_ACTION_NOT_IN_STEP',
+            );
           }
-        } else if (receivedState) {
-          await orm.update(workflowInstances).set({
-            currentStateId: receivedState.id,
-            status: 'COMPLETED',
-            updatedAt: new Date().toISOString()
-          }).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
-          await orm.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, linkedReq.workflowInstanceId));
-          await orm.update(workflowTasks)
-            .set({ status: 'completed', completedAt: new Date().toISOString() })
-            .where(and(eq(workflowTasks.instanceId, linkedReq.workflowInstanceId), eq(workflowTasks.status, 'pending')));
+          await WorkflowTransitionExecutor.executeTransition({
+            instanceId: flow.instance.id,
+            transitionId: receive.id,
+            userId: user.id,
+            userName: user.username,
+            userRole: user.role,
+            userPermissions: user.permissions || [],
+            comment: `تحویل و ورود کالا به انبار با سفارش خرید ${doc.refNumber}`,
+            snapshotData: { id: lockedReq.id, code: lockedReq.code, priority: lockedReq.priority, status: lockedReq.status },
+            allowBackdate,
+            tx,
+          });
         }
       }
-    }
 
-    await logActivity({
-      userId: user.id,
-      username: user.username || 'سیستم تدارکات',
-      action: 'UPDATE',
-      entity: 'document',
-      description: `تحویل فاکتور خرید ${doc.refNumber} به انبار و صدور رسید قطعی`,
-      details: {
-        operation: 'DELIVER_PROCUREMENT_ORDER',
-        documentId,
-        refNumber: doc.refNumber,
-        supplierName: doc.buyerName,
-        linkedRequisitionCode: reqCode || linkedReq?.code
-      }
+      await logActivity({
+        tx,
+        userId: user.id,
+        username: user.username || 'سیستم تدارکات',
+        action: 'UPDATE',
+        entity: 'document',
+        description: `تحویل فاکتور خرید ${doc.refNumber} به انبار و صدور رسید قطعی`,
+        details: {
+          operation: 'DELIVER_PROCUREMENT_ORDER',
+          documentId,
+          refNumber: doc.refNumber,
+          supplierName: doc.buyerName,
+          linkedRequisitionCode: reqCode || lockedReq?.code
+        }
+      });
     });
 
     return {

@@ -108,7 +108,6 @@
 | TD-645 | گزارش کار و پیوست (بسته ۱۳) | P3 (B13-20) — پیوند اعلان `/daily-logs?id=N` خوانده نمی‌شود و کلیک روی اعلان یا کارت داشبورد فهرست کلی را باز می‌کند، نه همان گزارش | DailyLogsPage.tsx، useDailyLogs.ts، DailyLogsMentionsWidget.tsx | open (P3) |
 | TD-646 | گزارش کار و پیوست (بسته ۱۳) | P3 (B13-21) — «منشن» ۲۰ بار، «نوتیفیکیشن» یک بار و کلید مجوز `daily_logs.manage_all` در رابط گزارش کار | MentionTextarea.tsx، DailyLogsMentionsWidget.tsx، DailyLogModal.tsx، DailyLogReviewModal.tsx، DailyLogStatsCards.tsx، DailyLogsList.tsx، useDailyLogs.ts، DailyLogsPage.tsx، dailyLogs.routes.ts | open (P3، تصمیم ت۶) |
 | TD-691 | تدارکات (بسته ۱۰)؛ اثر روی ۸ | P2 (B10-04) — مسیرهای سفارش تدارکات هر رسید انبار را سفارش تدارکات می‌شمارند: نقش فقط `projects.view` `GET /documents` را ۴۰۳ ولی `GET /procurement/orders` را ۲۰۰ با رسید عادی انبار، قیمت ۴٬۳۲۱٬۰۰۰ و تأمین‌کننده گرفت؛ نقش `procurement.manage` نهایی‌سازی سند را ۴۰۳ ولی `POST /procurement/orders/:id/deliver` را ۲۰۰ گرفت و موجودی ۱۰ ← ۱۷ شد؛ یک پیش‌فاکتور فروش شمارنده «در انتظار تحویل» را ۱ ← ۲ کرد؛ پیوند سفارش و درخواست از متن یادداشت است | procurement.service.ts، procurement.routes.ts | open (P2، تصمیم ت۲ الف) |
-| TD-692 | تدارکات (بسته ۱۰)؛ اثر روی ۱۴ | P2 (B10-05) — تحویل انتقال «تحویل و ورود به انبار» را پس از commit و بی نقش و مجوز کاربر اجرا می‌کند و شکستش را با نوشتن مستقیم `workflow_instances` (`COMPLETED`)، حذف فیزیکی `workflow_pending_approvals` و بستن `workflow_tasks` دور می‌زند: با `warehouse.in` روی انتقال، کاربر بی آن ۲۰۰ گرفت، موجودی ۴ شد و تاریخچه ردیف تحویل ندارد (A02-03، A02-04، A02-08) | procurement.service.ts | open (P2) |
 | TD-693 | تدارکات (بسته ۱۰) | P2 (B10-06) — ارسال دوباره «تبدیل به سفارش» سفارش تکراری می‌سازد: دو `POST` هم‌زمان با بدنه یکسان (۵ از ۱۰) هر دو ۲۰۰ و دو سند خرید پیش‌نویس؛ هیچ مسیر تدارکاتی `idempotency` ندارد | procurement.routes.ts | open (P2) |
 | TD-694 | تدارکات (بسته ۱۰) | P2 (B10-07) — تجمیع بی تراکنش و قفل است، منبع‌ها را نمی‌بندد و درخواست دریافت‌شده را هم می‌پذیرد: الف ۵، ب ۳ و ج ۲ (دریافت‌شده) درخواست ۱۰ تایی ساخت، منبع‌ها `pending` و `received` ماندند و سفارش هر سه برای نیاز ۸ واحدی ۱۸ واحد شد | procurement.service.ts | open (P2، تصمیم ت۳ الف) |
 | TD-695 | تدارکات (بسته ۱۰) | P3 (B10-08) — حذف درخواستی که سفارش زنده دارد پذیرفته می‌شود: درخواست بخشی‌سفارش‌شده (`under_review`) با ۲۰۰ حذف شد و سفارشش با `requisitionId: null` هنوز تحویل شد (موجودی ۶)؛ دکمه حذف میز برای `under_review` هم هست. نیمه گردش‌کار (کار تأیید در کارتابل) در v9.0.40 رفع شد (TD-447) | procurement.service.ts، ProcurementDesk.tsx | open (P3) |
@@ -125,8 +124,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۱۰۴ ردیف
-- **آرشیو شده (resolved):** ۶۲۱ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۱۰۳ ردیف
+- **آرشیو شده (resolved):** ۶۲۲ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 

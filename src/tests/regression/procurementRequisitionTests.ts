@@ -329,10 +329,16 @@ async function deliveryWorkflowCase(h: Harness, wrong: string[]): Promise<string
   } as never));
   const rows = (await f.requisition(legacy.id)).items.map(r => ({ ...r, orderedQty: 2, remainingQty: 0, status: 'ordered', linkedDocumentIds: [legacyDoc] }));
   await h.q(`UPDATE purchase_requisitions SET items = $2::jsonb, status = 'under_review' WHERE id = $1`, [legacy.id, JSON.stringify(rows)]);
-  const legacyDelivery = await f.deliver(legacyDoc);
+  const legacyDelivery = await f.deliver(legacyDoc, withoutWarehouse);
   if (legacyDelivery.status !== 409 || legacyDelivery.body.code !== 'REQUISITION_NOT_APPROVED') wrong.push(`order of an unapproved requisition: ${legacyDelivery.status} ${String(legacyDelivery.body.code)}`);
   if (await f.docStatus(legacyDoc) !== 'draft') wrong.push('the order of the unapproved requisition was finalized');
-  return 'a delivery refused by the receive transition left the order, stock and workflow unchanged; with warehouse.in the receive transition completed the workflow in the deliverer name; an order of an unapproved requisition was refused';
+  // a holder of the approval right approves it in their own name and then delivers (the TD-390 rule)
+  const approverDelivery = await f.deliver(legacyDoc, await h.sessionWith(['procurement.view', 'procurement.order', 'procurement.approve']));
+  const legacyFlow = await f.workflow(legacy.id);
+  if (approverDelivery.status !== 200 || await f.docStatus(legacyDoc) !== 'final' || !legacyFlow.history.some(r => r.action_key === 'approve_request')) {
+    wrong.push(`approver delivery of the unapproved requisition: ${approverDelivery.status}, order ${await f.docStatus(legacyDoc)}, workflow ${legacyFlow.step}`);
+  }
+  return 'a delivery refused by the receive transition left the order, stock and workflow unchanged; with warehouse.in the receive transition completed the workflow in the deliverer name; an order of an unapproved requisition was refused, and an approver approved it in their name before delivering';
 }
 
 async function deleteWithOrdersCase(h: Harness, wrong: string[]): Promise<string> {
