@@ -134,6 +134,18 @@ export function isSalesFormDocType(type: string | null | undefined): boolean {
   return typeof type === 'string' && SALES_FORM_DOC_TYPES.includes(type);
 }
 
+/**
+ * v9.0.253 (TD-801): ویرایش پیش‌فاکتور آن را قطعی نمی‌کند؛ `PUT /documents/:id` وضعیت «نهایی» را نمی‌پذیرد و پیش‌فاکتور از
+ * گردش کار تأیید خودش قطعی می‌شود. پس گزینه «فاکتور نهایی» در ویرایش بسته است و دلیلش کنار آن نوشته می‌شود.
+ */
+export const EDIT_FINAL_REFUSED = 'پیش‌فاکتور در ویرایش قطعی نمی‌شود؛ آن را از گردش کار تأیید پیش‌فاکتور قطعی کنید.';
+
+export function finalStatusOptionNote(canFinalizeSales: boolean, isEditing: boolean): string {
+  if (!canFinalizeSales) return ' - نیاز به مجوز «قطعی کردن سند فروش»';
+  if (isEditing) return ' - پیش‌فاکتور از گردش کار تأیید قطعی می‌شود';
+  return '';
+}
+
 /** مقادیر فرم برای ویرایش یک سند (پیش‌فاکتور) بارگذاری‌شده */
 export interface InvoiceFormValues extends BuyerFields {
   docType: string;
@@ -169,8 +181,9 @@ export function invoiceFormFromDocument(doc: InvoiceDocumentDetails, fallbackRef
       ? doc.items.map(it => ({
         item: {
           id: it.itemId || it.item_id,
-          code: it.itemCode || it.item_code || '',
-          name: it.itemName || it.item_name || 'کالا',
+          // v9.0.253 (TD-801): سرور کد کالای ردیف را با کلید `code` می‌فرستد؛ پیش‌تر کد در ویرایش پیش‌فاکتور خالی می‌ماند
+          code: it.itemCode || it.item_code || it.code || '',
+          name: it.itemName || it.item_name || it.name || 'کالا',
           unit: it.itemUnit || it.unit || 'عدد',
           current_stock: it.current_stock || 0,
         } as Item,

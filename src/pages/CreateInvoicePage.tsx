@@ -21,7 +21,7 @@ import { computeInvoiceTotals } from '../lib/invoiceTotals';
 import { currencyChangeError, lineDiscountError, pricesForCurrency } from '../lib/invoices/invoiceLine';
 import { printLineAmounts } from '../lib/invoices/invoicePrintTotals';
 import { amountDecimalsOf } from '../lib/invoices/invoiceListDocuments';
-import { addInvoiceLine, customerLocationLabel, invoiceFormFromDocument, invoiceLineLocations, isSalesFormDocType, lineLocationOf, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
+import { addInvoiceLine, customerLocationLabel, EDIT_FINAL_REFUSED, finalStatusOptionNote, invoiceFormFromDocument, invoiceLineLocations, isSalesFormDocType, lineLocationOf, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
 import type { InvoiceListDocument } from '../lib/invoices/invoiceListDocuments';
 import { Sparkles } from 'lucide-react';
 import { ExchangeRateField, exchangeRateError } from '../components/documents/ExchangeRateField';
@@ -79,6 +79,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
 
   const [docItems, setDocItems] = useState<InvoiceDocItem[]>([]);
   const [editingDocId, setEditingDocId] = useState<number | null>(null);
+  const isEditing = editingDocId !== null;
+  const finalOptionNote = finalStatusOptionNote(canFinalizeSales, isEditing);
 
   // Print view state
   const [printedDoc, setPrintedDoc] = useState<InvoiceDocumentDetails | null>(null);
@@ -327,6 +329,13 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       return;
     }
 
+    // v9.0.253 (TD-801): ویرایش پیش‌فاکتور آن را قطعی نمی‌کند (سرور وضعیت «نهایی» را در ویرایش نمی‌پذیرد)؛ قطعی شدن از گردش
+    // کار تأیید آن است. پیش‌تر گزینه انتخاب‌پذیر بود و به پیام نادرست «موجودی کافی نیست» با موجودی صفر ردیف بارشده می‌رسید
+    if (editingDocId && status === 'final') {
+      toast.error(EDIT_FINAL_REFUSED);
+      return;
+    }
+
     if (status === 'final' && warehouses.length === 0) {
       toast.error('هیچ انباری در سیستم تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
       return;
@@ -452,8 +461,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               <label className="block text-xs font-medium mb-1 text-slate-500">وضعیت سند</label>
               <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={status} onChange={e => setStatus(e.target.value)}>
                 <option value="proforma">پیش فاکتور (رزرو موقت)</option>
-                <option value="final" disabled={!canFinalizeSales}>
-                  فاکتور نهایی (کسر قطعی از انبار){canFinalizeSales ? '' : ' - نیاز به مجوز «قطعی کردن سند فروش»'}
+                <option value="final" disabled={!canFinalizeSales || isEditing}>
+                  فاکتور نهایی (کسر قطعی از انبار){finalOptionNote}
                 </option>
               </select>
             </div>

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.253 — v9.0.253 — Editing a Proforma Does Not Offer to Finalize It
+- **Sales:** while a proforma is edited, «فاکتور نهایی» is closed with the reason that a proforma is finalized by its approval, and the item codes of its lines are shown; before, the option led to a false stock shortage message and the codes were empty (TD-801).
+
 ### v9.0.252 — v9.0.252 — A Failed Print Copy No Longer Leaves the Invoice Form Filled
 - **Sales:** when the print copy of a just-saved invoice fails to load, the save still counts: the user is told to print it from the document list and the form is cleared; before, the save showed as failed, the form stayed filled and a second click created a second invoice (TD-794).
 
