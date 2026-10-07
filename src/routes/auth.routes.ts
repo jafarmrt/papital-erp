@@ -106,7 +106,7 @@ const setupSchema = z.object({
     phone: z.string().optional().default(''),
     address: z.string().optional().default(''),
     logo: z.string().optional().default(''),
-    // v9.0.249 (TD-667، تصمیم ت۱): واحد نمایش مبالغ ریالی، فقط ریال یا تومان
+    // v9.0.275 (TD-667، تصمیم ت۱): واحد نمایش مبالغ ریالی، فقط ریال یا تومان
     currency: z.enum(['IRR', 'TOMAN'], { message: 'واحد نمایش مبالغ فقط «ریال» یا «تومان» است' }).optional().default('IRR'),
     setupToken: z.string().optional(),
   })

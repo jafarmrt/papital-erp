@@ -8,6 +8,8 @@ import type { ProjectPick } from '../../lib/permissions/pickLists';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
 import { formatPersianNumber, getTodayJalaliDate, extractDateString } from '../../utils';
 import { MentionTextarea } from '../MentionTextarea';
+import { workTimeError } from '../../lib/dailyLogs/workHours';
+import { DAILY_LOG_CONTENT_MAX, DAILY_LOG_TAG_MAX, DAILY_LOG_TITLE_MAX } from '../../lib/dailyLogs/dailyLogLimits';
 import { type DailyLogVisibility, visibilityNotifiesMentions } from '../../lib/dailyLogs/dailyLogVisibility';
 
 interface DailyLogModalProps {
@@ -176,6 +178,9 @@ export function DailyLogModal({
                 کارکرد: {formatPersianNumber(currentFormHours)} ساعت
               </span>
             </div>
+            {workTimeError(formStartTime, formEndTime) && (
+              <p role="alert" className="text-[11px] font-bold text-rose-600">{workTimeError(formStartTime, formEndTime)}</p>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -218,8 +223,8 @@ export function DailyLogModal({
               >
                 <AtSign className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-[11px] font-bold">منشن‌شده‌ها و خودم</p>
-                  <p className="text-[9px] font-normal text-slate-500">فقط منشن‌شده‌ها + مدیر</p>
+                  <p className="text-[11px] font-bold">اشاره‌شده‌ها و خودم</p>
+                  <p className="text-[9px] font-normal text-slate-500">فقط اشاره‌شده‌ها + مدیر</p>
                 </div>
               </button>
 
@@ -257,6 +262,7 @@ export function DailyLogModal({
                 type="text"
                 placeholder="عنوان کار (مثلاً: برنامه‌نویسی انبار)"
                 value={formTitle}
+                maxLength={DAILY_LOG_TITLE_MAX}
                 onChange={(e) => setFormTitle(e.target.value)}
                 className="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-xs focus:bg-white"
                 required
@@ -289,6 +295,7 @@ export function DailyLogModal({
                 type="text"
                 placeholder="افزودن برچسب (انتر بکنید)..."
                 value={tagInput}
+                maxLength={DAILY_LOG_TAG_MAX}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -327,8 +334,9 @@ export function DailyLogModal({
             </label>
             <MentionTextarea
               rows={3}
-              placeholder="شرح کارهای انجام‌شده، نتایج حاصله و پیگیری‌ها... (تایپ @ جهت منشن همکاران)"
+              placeholder="شرح کارهای انجام‌شده، نتایج حاصله و پیگیری‌ها... (برای اشاره به همکاران @ را تایپ کنید)"
               value={formContent}
+              maxLength={DAILY_LOG_CONTENT_MAX}
               onChange={setFormContent}
               users={systemUsers}
               currentUser={user}

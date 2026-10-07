@@ -112,7 +112,7 @@ export function CustomerDossierDrawer({
 
   // v8.0.16 (TD-260): ارز مبالغ کارت حساب از خود گزارش (در نمای همه ارزها ریال)، نه ارز تعریف‌شده مشتری
   const ledgerCurrency = financialReport?.currency || (customer as any)?.currency || 'IRR';
-  // v9.0.249 (TD-667): مبالغ ریالی کارت حساب در واحد نمایش (ریال یا تومان)، ارز خارجی با همان ارز
+  // v9.0.275 (TD-667): مبالغ ریالی کارت حساب در واحد نمایش (ریال یا تومان)، ارز خارجی با همان ارز
   const ledgerIsRial = isRialCurrency(ledgerCurrency);
   const ledgerLbl = ledgerIsRial ? rial.label : formatCurrencyLabel(ledgerCurrency);
   const ledgerNumber = (value: number) => (ledgerIsRial ? rial.number(value) : formatPersianPrice(value));

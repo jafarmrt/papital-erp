@@ -58,7 +58,7 @@ router.get('/dashboard-bi-stats', authorizePermission('reports.view', 'warehouse
     const settings = await orm.select().from(appSettings)
       .where(inArray(appSettings.key, ['fast_moving_days', 'slow_moving_days', 'dead_stock_days']));
     
-    // v9.0.250 (TD-672، تصمیم ت۴): مقدار نامعتبرِ ذخیره‌شده (خالی، متن، منفی، ترتیب نادرست) پیش‌فرض‌ها را می‌گیرد، نه خطای ۵۰۰
+    // v9.0.276 (TD-672، تصمیم ت۴): مقدار نامعتبرِ ذخیره‌شده (خالی، متن، منفی، ترتیب نادرست) پیش‌فرض‌ها را می‌گیرد، نه خطای ۵۰۰
     const { fastDays, slowDays, deadDays } = resolveMovementDays(
       Object.fromEntries(settings.map(s => [s.key, s.value]))
     );

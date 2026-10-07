@@ -19,17 +19,95 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.252 — v9.0.252 — Approved Persian Words in the Shell and Settings
+### v9.0.278 — v9.0.278 — Approved Persian Words in the Shell and Settings
 - **Shell wording (TD-686):** the sidebar, top bar, dashboard, settings, setup and connection error messages use the owner's Persian glossary instead of transliterations and English words; only «کاردکس», «ترنسفر» and «وبهوک» stay transliterated.
 
-### v9.0.251 — v9.0.251 — Receipts Page Opens for Those Who Record Its Documents
+### v9.0.277 — v9.0.277 — Receipts Page Opens for Those Who Record Its Documents
 - **Receipts page access (B16-04, TD-668 follow-up):** the stock in/out page opens for `warehouse.in`, `warehouse.out` or `documents.finalize`, the keys saving its documents asks, instead of `documents.view` / `documents.create`, which opened the page but could not save.
 
-### v9.0.250 — v9.0.250 — Settings Values Are Validated
+### v9.0.276 — v9.0.276 — Settings Values Are Validated
 - **Settings validation (TD-672):** movement days must be whole numbers from 1 to 3650 with fast < slow < dead and the currency setting is rial or toman (422 otherwise); the dashboard falls back to the defaults 30 / 90 / 180 when a stored value is invalid.
 
-### v9.0.249 — v9.0.249 — Currency Setting Is the Rial Display Unit
+### v9.0.275 — v9.0.275 — Currency Setting Is the Rial Display Unit
 - **Rial display unit (TD-667):** the currency setting is now only the display unit of rial amounts, rial or toman (toman = rial ÷ 10); a record with its own foreign currency keeps it, and amount inputs and Excel exports stay in rial.
+
+### v9.0.274 — v9.0.274 — A Sales Return Gives Back Its Share of the Invoice VAT
+- **Documents:** a sales return of an invoice takes that invoice's VAT percent and its share of the invoice VAT for the returned net, so a full return in parts gives back exactly the invoice VAT, and its voucher debits VAT payable; before, a full return of a 1,000,000 invoice at 10% left the customer owing 100,000 and VAT payable 100,000 too high (TD-774).
+
+### v9.0.273 — v9.0.273 — A Sales Return Takes Its Invoice's Currency, Rate and Net Price
+- **Documents:** a sales return of an invoice takes that invoice's currency, exchange rate and net unit price after line discounts; any other price, currency or rate is refused with 422, also on draft edit and finalize, and the stock page fills and locks them; before, one unit sold at 900,000 was credited 5,000,000 and a full return of a 180 USD invoice credited 200 rials (TD-788).
+
+### v9.0.272 — v9.0.272 — Settled Invoice Is Not Voided; Receipts Move On Account
+- **Documents and treasury:** voiding a document with a live treasury receipt or payment is refused with 409 naming them; the treasury table can move such a row on account or to another invoice of the same party, so the void can follow; before, the receipt stayed on the voided invoice and the replacement showed as unpaid (TD-779).
+
+### v9.0.271 — v9.0.271 — Invoice With a Live Return Is Not Voided
+- **Documents:** voiding a sales invoice that still has a sales return (in any status) is refused with 409 naming the returns; before, the returned goods came back to stock twice and the customer kept a credit for a sale that no longer existed (TD-773).
+
+### v9.0.270 — v9.0.270 — Zero-Price Invoice Gets Its Cost Voucher
+- **Accounting:** a final sales invoice with zero gross (free sample, gift) now gets a voucher that moves its Kardex cost from inventory to cost of sales, with zero revenue; before, no voucher was issued and inventory stayed overstated in the ledger (TD-772).
+
+### v9.0.269 — Only Approved Payslips Are Paid
+- **Only Approved Payslips Are Paid (TD-816):** a draft payslip is refused at payment and the screens offer approval instead, and the payment date, method and reference are written only by the payment, never by the status route.
+
+### v9.0.268 — Fixed Salary Up to the End of Service
+- **Fixed Salary Up to the End of Service (TD-808):** a terminated personnel earns fixed salary only up to its end date (pro rata by days) and nothing after it, a terminated personnel without an end date gets no fixed-salary payslip, and a payslip whose period ends after today is refused.
+
+### v9.0.267 — Advance Balance From the Ledger
+- **Advance Balance From the Ledger (TD-807):** a personnel's outstanding advance is read only from its rows on the advance account (1301); treasury payments such as a salary settlement no longer count as an advance, so an advance deduction without a recorded advance is refused.
+
+### v9.0.266 — Payslip Integrity
+- **Payslip Integrity (TD-804):** negative bonuses, deductions and advance deductions are refused, a payslip voucher always credits wages payable with the net (invariant I10), a payslip without a voucher is not paid, and older mismatched payslips are listed by the financial health check.
+
+### v9.0.265 — Package 12 Payroll Audit Documentation
+- **Package 12 Payroll Audit:** section 10 of the V9 stability audit records the payroll part of package 12: 13 proven findings (one P1: negative deductions and bonuses make the payslip disagree with its voucher, and a payslip without a voucher can be paid) opened as TD-804..TD-816, with the product-owner decisions. Documentation only.
+
+### v9.0.264 — بسته ۱۳ د: «اشاره» و «اعلان» در رابط گزارش کار
+- «منشن» و «نوتیفیکیشن» در رابط گزارش کار جای خود را به «اشاره» و «اعلان» دادند (TD-646، تصمیم ت۶).
+
+### v9.0.263 — بسته ۱۳ د: پیوند اعلان همان گزارش را باز می‌کند
+- کلیک روی اعلان یا کارت پیشخوان همان گزارش کار را باز می‌کند (TD-645).
+
+### v9.0.262 — بسته ۱۳ د: پیشخوان بی مجوز گزارش کار درخواستی نمی‌فرستد
+- پیشخوان گزارش کار را فقط با مجوز دیدن آن می‌خواند و دیگر پیغام خطا نمی‌دهد (TD-639).
+
+### v9.0.261 — بسته ۱۳ د: فرم بازخورد بی اشاره
+- فرم بازخورد مدیر دیگر اشاره پیشنهاد نمی‌کند و می‌گوید اعلان فقط به نویسنده می‌رسد (TD-637).
+
+### v9.0.260 — بسته ۱۳ د: نوع حضور فقط حضوری یا دورکاری
+- مرخصی، مأموریت و ترکیبی از ورودی برداشته شد؛ گزارش‌های قدیمی «سایر» شمرده می‌شوند و ساعت مرخصی کارکرد نیست (TD-635، تصمیم ت۳).
+
+### v9.0.259 — بسته ۱۳ د: ساعت شروع و پایان گزارش کار سنجیده می‌شود
+- ساعت نادرست رد می‌شود و پایان باید بعد از شروع باشد؛ کار شبانه در دو گزارش ثبت می‌شود (TD-634، تصمیم ت۵).
+
+### v9.0.258 — بسته ۱۳ ج: سقف طول گزارش کار
+- عنوان، متن، برچسب‌ها و یادداشت مدیر گزارش کار سقف طول دارند (TD-644).
+
+### v9.0.257 — بسته ۱۳ ج: کف ۵ دقیقه برای پاک‌سازی پیوست یتیم
+- پاک‌سازی پیوست یتیم فایل جوان‌تر از ۵ دقیقه را پاک نمی‌کند (TD-643).
+
+### v9.0.256 — بسته ۱۳ ج: خطای بارگذاری تصویر با پیام فارسی ۴۲۲
+- تصویر بزرگ یا با قالب نادرست ۴۲۲ با پیام فارسی می‌گیرد و متن نادرست در ستون تصویر ذخیره نمی‌شود (TD-642).
+
+### v9.0.255 — بسته ۱۳ ج: سقف یکسان پیوست و پیام فارسی ۴۱۳
+- هر پیوست حداکثر ۱۰ مگابایت در همه لایه‌ها؛ مسیرهای پیوست‌دار بدنه ۱۴ مگابایتی می‌پذیرند و بدنه بزرگ‌تر پیام فارسی می‌گیرد (TD-641، تصمیم ت۴).
+
+### v9.0.254 — بسته ۱۳ ج: خطای خواندن پیوست سرور را خاموش نمی‌کند
+- فایل پیوست ناخوانا ۴۰۴ یا ۵۰۰ می‌دهد و دیگر سرور را خاموش نمی‌کند (TD-627).
+
+### v9.0.253 — بسته ۱۳ ب: ابزارک اشاره‌ها با فیلد mentions
+- ابزارک اشاره‌های پیشخوان شناسه کاربر را در فیلد `mentions` می‌جوید، نه «@نام» در متن (TD-638).
+
+### v9.0.252 — بسته ۱۳ ب: زمان ثبت گزارش کار به وقت درست
+- زمان ثبت گزارش کار با منطقه زمانی به مرورگر می‌رود و دیگر ۳:۳۰ عقب نیست (TD-636).
+
+### v9.0.251 — بسته ۱۳ ب: سال‌های گزارش ماهانه از سال جاری
+- سال‌های گزارش ماهانه مدیریت از سال شمسی جاری ساخته می‌شوند، نه فهرست ثابت ۱۴۰۲ تا ۱۴۰۵ (TD-632).
+
+### v9.0.250 — بسته ۱۳ ب: «کارکرد امروز» با تاریخ کارکرد
+- «کارکرد امروز» فقط گزارش‌های تاریخ امروز را می‌شمارد، نه گزارش روزهای دیگر که امروز ثبت شده‌اند (TD-631).
+
+### v9.0.249 — بسته ۱۳ ب: فهرست و آمار گزارش کار با SQL و صفحه‌بندی
+- فهرست گزارش کار صفحه‌بندی و در SQL فیلتر می‌شود و دیگر در ۲۰۰ ردیف بریده نمی‌شود؛ آمار همان مجموعه را می‌شمارد (TD-630).
 
 ### v9.0.248 — v9.0.248 — National ID Is Exactly Ten Digits
 - **National ID (TD-673):** a personnel national ID must be exactly ten digits with a valid check digit; forms and the server never zero-pad a short one (422 `NATIONAL_ID_INVALID`), and only the Excel import pads 8 or 9 digits, which Excel drops, and lists those rows for review.

@@ -23,7 +23,7 @@ export const READ_PERMISSIONS = {
    * فهرست انتخاب پروژه (`GET /projects/options`، شناسه، کد، عنوان، وضعیت و نام مشتری): سند ورود و خروج انبار
    * (documents.view، documents.create، warehouse.in)، انبار پروژه و تخصیص مواد اولیه (warehouse.view، warehouse.out)،
    * کارکرد کارمزدی (piecework.view، piecework.log)، گزارش روزانه (daily_logs.view، daily_logs.create) و تفصیلی پروژه در
-   * سند حسابداری دستی و اصلاحی (accounting.vouchers، v9.0.193، TD-569). v9.0.251 (B16-04): هر کلیدی که صفحه «ورود و خروج
+   * سند حسابداری دستی و اصلاحی (accounting.vouchers، v9.0.193، TD-569). v9.0.277 (B16-04): هر کلیدی که صفحه «ورود و خروج
    * انبار» را باز می‌کند (`documents.finalize` هم) فهرست‌های انتخاب آن صفحه را هم می‌خواند.
    */
   projectOptions: [
@@ -35,7 +35,7 @@ export const READ_PERMISSIONS = {
   /**
    * فهرست انتخاب طرف حساب (`GET /customers/options`): فاکتور و حواله (documents.create)، رسید انبار (warehouse.in،
    * documents.view)، ارتباط با مشتری، پروژه، خرید، نقطه سفارش (products.view، warehouse.view) و فرم‌های حسابداری.
-   * v9.0.251 (B16-04): کلیدهای صفحه «ورود و خروج انبار» (warehouse.out، documents.finalize) هم.
+   * v9.0.277 (B16-04): کلیدهای صفحه «ورود و خروج انبار» (warehouse.out، documents.finalize) هم.
    */
   customerOptions: [
     'customers.view', 'documents.view', 'documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'warehouse.view', 'products.view', 'crm.view',
@@ -59,7 +59,7 @@ export const READ_PERMISSIONS = {
   documentRecord: ['documents.view', 'documents.create', 'documents.edit', 'workflow.view'],
   /**
    * شماره بعدی سند (`/documents/next-ref`): فرم‌هایی که سند ثبت می‌کنند — فاکتور و حواله، رسید و حواله انبار، انبارگردانی
-   * و انتقال بین انبارها (v9.0.251، B16-04: `documents.finalize` که صفحه ورود و خروج انبار را باز می‌کند)
+   * و انتقال بین انبارها (v9.0.277، B16-04: `documents.finalize` که صفحه ورود و خروج انبار را باز می‌کند)
    */
   documentNextRef: [
     'documents.view', 'documents.create', 'documents.edit', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'audit.view',
@@ -76,7 +76,7 @@ export const READ_PERMISSIONS = {
   /**
    * فهرست انتخاب کالا (`GET /items/options`، بی نقطه سفارش، رزرو و نسخه؛ میانگین بها فقط با products.view): فاکتور و حواله
    * (documents.create)، ورود و خروج انبار (documents.view، warehouse.in)، انبارگردانی (audit.view)، پروژه و انبار پروژه
-   * (projects.view، warehouse.view)، خرید، ارتباط با مشتری و انتقال (products.view). v9.0.251 (B16-04): کلیدهای صفحه
+   * (projects.view، warehouse.view)، خرید، ارتباط با مشتری و انتقال (products.view). v9.0.277 (B16-04): کلیدهای صفحه
    * «ورود و خروج انبار» (warehouse.out، documents.finalize) هم.
    */
   itemOptions: [

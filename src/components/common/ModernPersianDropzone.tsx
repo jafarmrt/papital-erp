@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { MAX_ATTACHMENT_FILE_MB } from '../../lib/attachments/attachmentBodyLimit';
 import { 
   Upload, 
   X, 
@@ -51,7 +52,7 @@ export const ModernPersianDropzone: React.FC<ModernPersianDropzoneProps> = ({
   description,
   helperText,
   maxFiles = 10,
-  maxSizeMB = 15,
+  maxSizeMB = MAX_ATTACHMENT_FILE_MB, // v9.0.255 (TD-641): the server's per-file limit
   accept = 'image/*,application/pdf,.xlsx,.xls,.csv,.doc,.docx,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel',
   className = '',
   autoCompressImages = true

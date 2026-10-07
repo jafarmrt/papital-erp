@@ -17,7 +17,7 @@ export async function runSettingValuesTests(shouldRun: (id: string, ...extra: st
   const id = 'reg_setting_values_validated_td_672';
   if (!shouldRun(id, 'td672', 'td667', 'settings', 'dashboard', 'package16')) return results;
 
-  const name = 'v9.0.250: settings refuse invalid movement days and currency, the dashboard falls back to defaults (TD-672, TD-667)';
+  const name = 'v9.0.276: settings refuse invalid movement days and currency, the dashboard falls back to defaults (TD-672, TD-667)';
   const tStart = Date.now();
   const saved = await orm.select().from(appSettings).where(inArray(appSettings.key, KEYS));
   try {

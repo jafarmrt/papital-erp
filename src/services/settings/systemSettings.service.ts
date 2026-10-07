@@ -73,7 +73,7 @@ function normalizeSettingValue(key: string, raw: string): string {
   if (key === 'display_timezone' || key === 'currency') {
     return String(raw).trim();
   }
-  // v9.0.250 (TD-672): روزهای گردش با ارقام لاتین ذخیره می‌شوند؛ مقدار نادرست دست‌نخورده می‌ماند تا بررسی آن را رد کند
+  // v9.0.276 (TD-672): روزهای گردش با ارقام لاتین ذخیره می‌شوند؛ مقدار نادرست دست‌نخورده می‌ماند تا بررسی آن را رد کند
   if (isMovementDayKey(key)) {
     const days = readMovementDays(raw);
     return days === null ? String(raw) : String(days);
@@ -82,7 +82,7 @@ function normalizeSettingValue(key: string, raw: string): string {
 }
 
 async function validateSettingValue(key: string, value: string): Promise<void> {
-  // v9.0.250 (TD-667 / TD-672، تصمیم‌های ت۱ و ت۴): واحد نمایش فقط ریال یا تومان
+  // v9.0.276 (TD-667 / TD-672، تصمیم‌های ت۱ و ت۴): واحد نمایش فقط ریال یا تومان
   if (key === 'currency') {
     const error = currencySettingError(value);
     if (error) throw new ValidationError(error, { key, value }, 'SETTING_CURRENCY_INVALID');
@@ -175,7 +175,7 @@ export class SystemSettingsService {
         changes.push({ key: item.key, before, after: value });
       }
 
-      // v9.0.250 (TD-672، تصمیم ت۴): سه روز گردش با هم سنجیده می‌شوند (مقدار تازه، وگرنه ذخیره‌شده) و هیچ‌چیز نوشته نمی‌شود اگر نادرست باشند
+      // v9.0.276 (TD-672، تصمیم ت۴): سه روز گردش با هم سنجیده می‌شوند (مقدار تازه، وگرنه ذخیره‌شده) و هیچ‌چیز نوشته نمی‌شود اگر نادرست باشند
       if (changes.some(c => isMovementDayKey(c.key))) {
         const merged = Object.fromEntries(MOVEMENT_DAY_KEYS.map(key => [
           key,

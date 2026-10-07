@@ -3,7 +3,7 @@ import { useSettingsQuery, SettingItem } from './queries/useSettingsQueries';
 import { normalizeRialDisplayUnit, rialDisplayOf, type RialDisplay, type RialDisplayUnit } from '../lib/rialDisplay';
 
 /**
- * v9.0.249 (TD-667، تصمیم ت۱): تنظیم `currency` واحد نمایش مبالغ ریالی است، ریال یا تومان، نه ارز سند.
+ * v9.0.275 (TD-667، تصمیم ت۱): تنظیم `currency` واحد نمایش مبالغ ریالی است، ریال یا تومان، نه ارز سند.
  * مبلغی که ارز خود را دارد با همان ارز نشان داده می‌شود؛ مبلغ ریالی (ارزش انبار، حقوق، مانده‌ها)
  * با `useRialDisplay()` در واحد نمایش و با برچسب درست آن.
  */

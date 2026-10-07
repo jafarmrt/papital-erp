@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, useHasPermission } from '../contexts/AuthContext';
 import { useCRMData } from '../hooks/useCRMData';
-import { useDailyLogs } from '../hooks/useDailyLogs';
+import { useDashboardDailyLogs } from '../hooks/useDashboardDailyLogs';
 import { PersonalBanner } from '../components/dashboard/PersonalBanner';
 import { CustomizableShortcuts } from '../components/dashboard/CustomizableShortcuts';
 import { InteractiveJalaliCalendar, CalendarEventItem } from '../components/dashboard/InteractiveJalaliCalendar';
@@ -24,12 +24,14 @@ export default function Dashboard() {
     loadAllData: fetchCRMData
   } = useCRMData(user);
 
-  // Load Daily Logs and Mentions Data
+  // v9.0.262 (TD-639): daily logs only for holders of daily_logs.view, with the dashboard's own requests
+  const canViewDailyLogs = useHasPermission('daily_logs.view');
   const {
     logs: dailyLogs,
+    mentionedLogs,
     stats: dailyStats,
     loading: logsLoading,
-  } = useDailyLogs(user as any);
+  } = useDashboardDailyLogs(canViewDailyLogs);
 
   const hasCrmPermission = Boolean(
     userPermissions?.isAdmin ||
@@ -110,7 +112,8 @@ export default function Dashboard() {
       const leadId = event.raw?.leadId || event.raw?.id;
       void navigate(`/crm${leadId ? `?leadId=${leadId}` : ''}`);
     } else if (event.type === 'daily_log') {
-      void navigate('/daily-logs');
+      const logId = (event.raw as { id?: number } | undefined)?.id;
+      void navigate(logId ? `/daily-logs?id=${logId}` : '/daily-logs');
     }
   };
 
@@ -142,13 +145,15 @@ export default function Dashboard() {
             />
           )}
 
-          {/* Daily Logs & Mentions Widget */}
-          <DailyLogsMentionsWidget
-            user={user}
-            logs={dailyLogs}
-            stats={dailyStats}
-            loading={logsLoading}
-          />
+          {/* Daily Logs & Mentions Widget - ONLY rendered if user may read daily logs */}
+          {canViewDailyLogs && (
+            <DailyLogsMentionsWidget
+              user={user}
+              logs={mentionedLogs}
+              stats={dailyStats}
+              loading={logsLoading}
+            />
+          )}
         </div>
 
         {/* Left Column: Interactive Jalali Calendar & Secondary Panels (5 Cols on desktop) */}
