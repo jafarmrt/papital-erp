@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.335 — Webhook Connection Test Never Reaches an Internal Service
+- **Webhook SSRF guard (TD-704):** the webhook connection test followed redirects and showed the internal service's answer, and the local echo exception opened any loopback port in production too; the test no longer follows a redirect, and the echo simulator passes only in test and development, on the server's own port and exact path.
+
 ### v9.0.334 — WooCommerce Bulk Stock Sync Reports Failed Items
 - **WooCommerce bulk stock sync (TD-724):** the bulk stock sync showed the server's green message even when no item was updated; a failed item is now an error message with the counts and the first errors, and the WooCommerce order tables show a load error (403 / 500) instead of «no orders yet» (WooCommerce half of TD-730).
 

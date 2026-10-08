@@ -441,11 +441,23 @@ export class WebhookSubscriptionService {
         method: 'POST',
         headers,
         body: payloadString,
-        signal: controller.signal
+        signal: controller.signal,
+        // v9.0.335 (TD-704): like a real delivery, a redirect is never followed, so the guard above cannot be bypassed by a 302
+        redirect: 'manual'
       });
 
-      const responseText = await response.text();
       const durationMs = Date.now() - startTime;
+      if (response.status >= 300 && response.status < 400) {
+        return {
+          success: false,
+          statusCode: response.status,
+          durationMs,
+          signature,
+          responseBody: '',
+          message: `نشانی مقصد با کد ${response.status} به نشانی دیگری ارجاع داد؛ ارجاع برای امنیت دنبال نمی‌شود و نشانی نهایی را مستقیم وارد کنید.`
+        };
+      }
+      const responseText = await response.text();
 
       return {
         success: response.ok,

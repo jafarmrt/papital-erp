@@ -184,6 +184,7 @@
 - **Dead Letter Queue (DLQ):** Failed events transfer to `dead_letter_queue` with replay/dismiss endpoints. Replay and dismiss of one DLQ row run under that row's session advisory lock (`withDeadLetterRowLock`, `withRowAdvisoryLock` namespace 91007; never an open transaction around the handlers): a concurrent replay or dismiss is refused (409) and the outbox requeue skips a row being replayed. A replayed event is never replayed or dismissed again; a dismissed one may be replayed (v8.0.75, TD-342).
 - **Automated Event Actions:** `EventActionEngineService` dynamically triggers webhooks, notifications, SMS, or workflows based on rules.
 - **HMAC-SHA256 Signatures:** Webhooks sign payload with HMAC-SHA256 and attach `X-ERP-Signature-256` and `X-ERP-Delivery-Id`.
+- **Webhook SSRF Guard and Echo Simulator (v9.0.335, TD-704, product-owner decision ت۴):** every outgoing webhook request, the connection test included (`pingTest`), uses `redirect: 'manual'` and refuses a 3xx; the echo-simulator exception of `assertSafeExternalUrl` holds only through `isLocalEchoTarget` (`src/lib/ssrfGuard.ts`): `NODE_ENV` test or development, a loopback host, this server's own `PORT` and the exact path `LOCAL_ECHO_PATH`; in production the simulator is unreachable.
 
 ## 16. Frontend Communication & Polling Optimization
 - **Standardized `fetchJson`:** Use `fetchJson` from `/src/api.ts` with `credentials: 'include'`.

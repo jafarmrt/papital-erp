@@ -10711,6 +10711,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runWooNamesakeCustomerTests(shouldRun));
   const { runWooConnectionTestTests } = await import('../regression/wooConnectionTestTests.js');
   results.push(...await runWooConnectionTestTests(shouldRun));
+  // Package 15 PR b (v9.0.335+): webhook secrets and SSRF
+  const { runWebhookSsrfEchoTests } = await import('../regression/webhookSsrfEchoTests.js');
+  results.push(...await runWebhookSsrfEchoTests(shouldRun));
 
   return results;
 }

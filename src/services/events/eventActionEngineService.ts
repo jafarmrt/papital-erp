@@ -119,7 +119,8 @@ export class EventActionEngineService {
 
     let targetUrl = this.interpolateTemplate(webhookConfig.url, event);
     if (targetUrl.startsWith('/')) {
-      targetUrl = `http://127.0.0.1:3000${targetUrl}`;
+      // v9.0.335 (TD-704): this server's own port, the only port the echo exception of the SSRF guard accepts
+      targetUrl = `http://127.0.0.1:${process.env.PORT || 3000}${targetUrl}`;
     }
 
     await assertSafeExternalUrl(targetUrl, { allowLocalEcho: true });
