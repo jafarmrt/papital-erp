@@ -262,16 +262,17 @@ export class TreasuryTransactionService {
         : null;
       const partyId = data.partyId || documentParty?.id || null;
       const partyName = documentParty?.name ?? data.partyName;
-      // v9.0.83 (TD-501، B04-05): شناسه طرف حساب در جدول همان نوع، و سند پیوسته فعال، هم‌سو و با همان طرف حساب
+      const txCurrency = data.currency || bank.currency || 'IRR';
+      // v9.0.83 (TD-501، B04-05): شناسه طرف حساب در جدول همان نوع، و سند پیوسته فعال، هم‌سو و با همان طرف حساب؛
+      // v9.0.452 (TD-908): و با همان ارز ردیف، مانند «وصل دوباره»
       const partyCurrentName = await resolveTreasuryPartyName(txEngine, partyType, partyId);
       if (data.documentId) {
         await assertTreasuryDocumentLink(txEngine, {
-          type: data.type, documentId: data.documentId, partyType, partyId, partyName: partyCurrentName ?? partyName,
+          type: data.type, documentId: data.documentId, partyType, partyId, partyName: partyCurrentName ?? partyName, currency: txCurrency,
         });
       }
 
       // V1.4.0: گارد هم‌ارزی ارز — تراکنش باید هم‌ارز با حساب باشد تا مانده‌ها معنادار بمانند
-      const txCurrency = data.currency || bank.currency || 'IRR';
       if (bank.currency && txCurrency !== bank.currency) {
         throw new ValidationError(`ارز تراکنش (${txCurrency}) با ارز حساب «${bank.title}» (${bank.currency}) هم‌خوانی ندارد. تراکنش هم‌ارز ثبت کنید.`);
       }

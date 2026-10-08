@@ -81,7 +81,8 @@ export async function documentPartyOfTreasuryLink(tx: DbExecutor, link: {
 
 /**
  * سند پیوسته فعال است (باطل‌نشده)، دریافت به سند فروش و پرداخت به سند خرید است، طرف حساب مشتری یا تأمین‌کننده همان سوی
- * سند است و طرف حساب سند همان است: شناسه طرف حساب سند (v9.0.336، TD-778)، و در سند پیشین بی شناسه نام خریدار برابر نام طرف
+ * سند است، ارز سند همان ارز ردیف است (v9.0.452، TD-908: پیش‌تر فقط «وصل دوباره» آن را می‌سنجید و ثبت، ردیف ریالی را به سند
+ * ارزی وصل می‌کرد و جمع تسویه دو ارز را خام جمع می‌زد) و طرف حساب سند همان است: شناسه طرف حساب سند (v9.0.336، TD-778)، و در سند پیشین بی شناسه نام خریدار برابر نام طرف
  * حساب (قاعده TD-417: نام بی فاصله دو سر). سند `FOR SHARE` قفل می‌شود تا تا
  * پایان ثبت باطل نشود؛ فراخواننده پیش‌تر حساب بانکی را قفل کرده است (سطح ۱۰ پیش از سطح ۶۰).
  */
@@ -92,8 +93,12 @@ export async function assertTreasuryDocumentLink(tx: DbExecutor, link: {
   /** v9.0.336 (TD-778): شناسه طرف حساب دریافت یا پرداخت؛ سند دارای طرف حساب فقط با همان شناسه وصل می‌شود */
   partyId?: number | null;
   partyName: string;
+  /** v9.0.452 (TD-908): ارز ردیف خزانه؛ جمع تسویه سند فقط ردیف‌های ارز خودش را معنادار می‌شمارد */
+  currency: string | null | undefined;
 }): Promise<void> {
-  const [doc] = await tx.select({ refNumber: documents.refNumber, type: documents.type, buyerName: documents.buyerName, partyId: documents.partyId })
+  const [doc] = await tx.select({
+    refNumber: documents.refNumber, type: documents.type, buyerName: documents.buyerName, partyId: documents.partyId, currency: documents.currency,
+  })
     .from(documents)
     .where(and(eq(documents.id, link.documentId), eq(documents.isDeleted, 0)))
     .for('share');
@@ -117,6 +122,15 @@ export async function assertTreasuryDocumentLink(tx: DbExecutor, link: {
       `طرف حساب ${isReceipt ? 'دریافت فاکتور فروش باید مشتری' : 'پرداخت سند خرید باید تأمین‌کننده'} باشد.`,
       undefined,
       'TREASURY_DOCUMENT_PARTY_MISMATCH',
+    );
+  }
+  const documentCurrency = (doc.currency || 'IRR').toUpperCase();
+  const rowCurrency = (link.currency || 'IRR').toUpperCase();
+  if (documentCurrency !== rowCurrency) {
+    throw new ValidationError(
+      `ارز سند «${doc.refNumber}» (${documentCurrency}) با ارز تراکنش (${rowCurrency}) یکی نیست.`,
+      undefined,
+      'TREASURY_DOCUMENT_CURRENCY_MISMATCH',
     );
   }
   // v9.0.336 (TD-778، تصمیم ت۶ الف): دریافت یا پرداخت با شناسه طرف حساب به سند دارای شناسه فقط با همان شناسه وصل می‌شود و

@@ -176,5 +176,68 @@ export async function runTreasuryPayrollPhase5Tests(shouldRun: ShouldRun): Promi
     }));
   }
 
+  const currencyId = 'reg_treasury_document_currency_td_908';
+  if (shouldRun(currencyId, 'td908', 'treasury', 'currency', 'settlement', 'phase5')) {
+    await runCase(results, currencyId, 'v9.0.452: a new receipt or payment is linked only to a document of its own currency (422 TREASURY_DOCUMENT_CURRENCY_MISMATCH, nothing written), as the relink already was; a matching currency still settles the document (TD-908)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const today = await businessTodayIsoDate();
+      const wh = String(await getDefaultWarehouseCode(orm));
+      const item = await createTestItem({ type: 'product', stocks: { [wh]: 0 }, weightedAverageCost: 0 } as never);
+      const supplier = await createTestCustomer({ name: `TD-908 supplier ${tagOf()}`, partyType: 'supplier' });
+      // receipt 10 x 50 USD with a line discount of 20: 480 USD at 600,000 = 288,000,000 rial
+      const created = await api.post('/api/documents', {
+        docType: 'receipt', status: 'final', refNumber: 'auto', date: today, location: wh, partyId: supplier.id, buyer_name: supplier.name,
+        currency: 'USD', exchangeRate: 600_000, items: [{ itemId: item.id, quantity: 10, unit_price: 50, discount: 20 }],
+      });
+      const usdDoc = docIdOf(created);
+      if (created.status !== 200 || !usdDoc) throw new Error(`setup: USD receipt ${brief(created)}`);
+      const irrBank = await fundedBank(api, 'IRR', 5_000_000);
+      const usdBank = await fundedBank(api, 'USD', 1_000, 600_000);
+      const view = async () => {
+        const body = (await api.get(`/api/documents/${usdDoc}`)).body as { paidAmount?: unknown; settlementStatus?: unknown };
+        return `${String(body?.paidAmount)} ${String(body?.settlementStatus)}`;
+      };
+      const snapshot = async () => JSON.stringify({
+        banks: (await q('SELECT id, current_balance::text AS b FROM bank_accounts ORDER BY id')).map(r => `${String(r.id)}:${String(r.b)}`),
+        treasury: num((await q('SELECT count(*)::int AS n FROM treasury_transactions'))[0]?.n),
+        vouchers: num((await q('SELECT count(*)::int AS n FROM journal_vouchers WHERE is_deleted = 0'))[0]?.n),
+        settlement: await view(),
+      });
+      const payment = (body: Record<string, unknown>) => api.post('/api/accounting/treasury', {
+        type: 'payment', method: 'bank_transfer', partyType: 'supplier', partyName: supplier.name, date: today, ...body,
+      });
+
+      // 480 rial from the rial bank on the USD receipt (finding P5-P08), with the party id and as the settlement form sends it
+      const before = await snapshot();
+      for (const extra of [{ partyId: supplier.id }, {}]) {
+        const res = await payment({ amount: 480, currency: 'IRR', bankAccountId: irrBank, documentId: usdDoc, ...extra });
+        if (res.status !== 422 || codeOf(res) !== 'TREASURY_DOCUMENT_CURRENCY_MISMATCH') {
+          problems.push(`a rial payment ${'partyId' in extra ? 'with' : 'without'} a party id on the USD receipt answered ${brief(res)}, expected 422 TREASURY_DOCUMENT_CURRENCY_MISMATCH`);
+        }
+      }
+      const after = await snapshot();
+      if (after !== before) problems.push(`the refused payments changed the data: ${before} -> ${after}`);
+      if (await view() !== '0 unpaid') problems.push(`the USD receipt shows ${await view()} after the refused payments, expected 0 unpaid`);
+
+      // a payment in the document's currency still settles it
+      const usdPay = await payment({ amount: 100, currency: 'USD', bankAccountId: usdBank, partyId: supplier.id, documentId: usdDoc });
+      if (usdPay.status !== 201) problems.push(`a USD payment on the USD receipt answered ${brief(usdPay)}, expected 201`);
+      if (await view() !== '100 partially_paid') problems.push(`the USD receipt shows ${await view()} after a 100 USD payment, expected 100 partially_paid`);
+
+      // the relink keeps its own 422 for a rial row moved onto the USD receipt
+      const onAccount = await payment({ amount: 480, currency: 'IRR', bankAccountId: irrBank, partyId: supplier.id });
+      const onAccountId = Number((onAccount.body as { id?: unknown } | undefined)?.id);
+      if (onAccount.status !== 201 || !onAccountId) throw new Error(`setup: on-account payment ${brief(onAccount)}`);
+      const relink = await api.put(`/api/accounting/treasury/${onAccountId}/document`, { documentId: usdDoc });
+      if (relink.status !== 422 || codeOf(relink) !== 'TREASURY_DOCUMENT_CURRENCY_MISMATCH') problems.push(`moving the rial payment onto the USD receipt answered ${brief(relink)}, expected 422 TREASURY_DOCUMENT_CURRENCY_MISMATCH`);
+      const [stillOnAccount] = await q('SELECT document_id FROM treasury_transactions WHERE id = $1', [onAccountId]);
+      if (stillOnAccount?.document_id !== null) problems.push(`the refused relink left the payment on document ${String(stillOnAccount?.document_id)}`);
+
+      assertNoProblems(problems);
+      return 'Rial payments on the USD receipt refused with 422 (with and without a party id) and nothing written; a 100 USD payment settled 100; moving a rial row onto it is still 422.';
+    }));
+  }
+
   return results;
 }

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.452 — Treasury Rows Link Only to Documents of Their Currency
+- **Fix (TD-908, P5-P08 / P5-S-06):** a new receipt or payment is linked only to a document in its own currency (422 `TREASURY_DOCUMENT_CURRENCY_MISMATCH`, nothing written), the same rule the relink already had; a rial row no longer settles a foreign-currency document.
+
 ### v9.0.451 — Settlement Receipts and Payments Carry the Document's Party
 - **Fix (TD-907, P5-S-01 / P5-P06):** a receipt or payment recorded against a document without a party id takes the document's party id and current name, so the party's account card and delete guard still see it after a rename; the invoice settlement form sends the party id too.
 
