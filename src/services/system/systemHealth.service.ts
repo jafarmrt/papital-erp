@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { sql, eq, and } from 'drizzle-orm';
+import { sql, eq, and, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { outboxEvents, deadLetterEvents, journalVouchers, journalVoucherItems, workflowInstances, workflowTasks } from '../../db/schema.js';
 import { unresolvedDeadLetterCondition } from '../events/deadLetterQueueService.js';
@@ -83,6 +83,15 @@ function storageLocationHealth(kind: StorageLocationKind, dir: string): StorageL
   return { kind, path: dir, writable: !problem, message: STORAGE_LOCATION_MESSAGES[kind][problem ? 'error' : 'ok'] };
 }
 
+/**
+ * v9.0.361 (TD-623): an outbox event stuck in `processing` for more than five minutes. Shared by the count on the health
+ * page and the reset action (`SystemReconciliationService.resetStuckOutboxEvents`), so the page offers the reset only
+ * when it would reset something.
+ */
+export function stuckOutboxCondition(): SQL {
+  return and(eq(outboxEvents.status, 'processing'), sql`${outboxEvents.occurredAt} < now() - interval '5 minutes'`) as SQL;
+}
+
 export class SystemHealthService {
   /** تعداد رویدادهای حل‌نشده صف قرنطینه DLQ (TD-245: ردیف‌های replayed / dismissed شمرده نمی‌شوند) */
   static async countDeadLetterEvents(): Promise<number> {
@@ -104,6 +113,12 @@ export class SystemHealthService {
       .groupBy(journalVouchers.id, journalVouchers.voucherNumber)
       .having(sql`ABS(SUM(${journalVoucherItems.debit}) - SUM(${journalVoucherItems.credit})) > ${String(VOUCHER_BALANCE_TOLERANCE)}::numeric`)
       .orderBy(journalVouchers.id);
+  }
+
+  /** v9.0.361 (TD-623): outbox events stuck in processing (what «اجرای دوباره رویدادهای مانده» would reset) */
+  static async countStuckOutboxEvents(): Promise<number> {
+    const [res] = await orm.select({ count: sql<number>`count(*)::int` }).from(outboxEvents).where(stuckOutboxCondition());
+    return res?.count || 0;
   }
 
   /** تعداد وظایف در انتظاری که مهلت SLA آن‌ها گذشته است */
@@ -150,8 +165,9 @@ export class SystemHealthService {
     const outbox = await measureSubsystem<OutboxHealth>('outbox', async () => {
       const [pendingRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(outboxEvents).where(eq(outboxEvents.status, 'pending'));
       const dlqCount = await this.countDeadLetterEvents();
-      return { pendingCount: pendingRes?.count || 0, dlqCount, status: dlqCount > 0 ? 'warning' : 'ok' };
-    }, { pendingCount: null, dlqCount: null, status: 'unknown', message: SUBSYSTEM_UNKNOWN_MESSAGES.outbox });
+      const stuckCount = await this.countStuckOutboxEvents();
+      return { pendingCount: pendingRes?.count || 0, dlqCount, stuckCount, status: dlqCount > 0 || stuckCount > 0 ? 'warning' : 'ok' };
+    }, { pendingCount: null, dlqCount: null, stuckCount: null, status: 'unknown', message: SUBSYSTEM_UNKNOWN_MESSAGES.outbox });
 
     const accounting = await measureSubsystem<AccountingHealth>('accounting', async () => {
       const [vouchersRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(journalVouchers)

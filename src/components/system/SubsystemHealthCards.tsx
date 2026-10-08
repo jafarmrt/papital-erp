@@ -70,17 +70,22 @@ function UnknownNote({ message }: { message: string }) {
   return <p className="text-xs text-slate-700 dark:text-slate-300 mb-2" role="status">{message}</p>;
 }
 
-function OutboxCard({ outbox }: { outbox?: OutboxHealth }) {
+function OutboxCard({ outbox, actions }: { outbox?: OutboxHealth; actions?: ReactNode }) {
   const status = subsystemStatusOf(outbox);
   const badge = status === 'unknown' ? SUBSYSTEM_UNKNOWN_LABEL
-    : status === 'ok' ? 'روان' : `${countText(outbox?.dlqCount)} ناموفق`;
+    : status === 'ok' ? 'روان'
+    : (outbox?.dlqCount ?? 0) > 0 ? `${countText(outbox?.dlqCount)} ناموفق` : `${countText(outbox?.stuckCount)} مانده`;
   return (
     <SubsystemCard status={status} icon={<Send size={18} className="text-slate-600" />} title="صف رویدادها" badge={badge}>
       {status === 'unknown' && <UnknownNote message={outbox?.message || SUBSYSTEM_UNKNOWN_MESSAGES.outbox} />}
       <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300 mb-2">
         <CountRow label="رویدادهای در صف ارسال:" value={countText(outbox?.pendingCount)} />
         <CountRow label="رویدادهای ناموفق:" value={countText(outbox?.dlqCount)} alert={(outbox?.dlqCount ?? 0) > 0} />
+        {(outbox?.stuckCount ?? 0) > 0 && (
+          <CountRow label="مانده در حال ارسال بیش از پنج دقیقه:" value={countText(outbox?.stuckCount)} alert />
+        )}
       </div>
+      {actions}
     </SubsystemCard>
   );
 }
@@ -124,12 +129,14 @@ function WorkflowCard({ workflow }: { workflow?: WorkflowHealth }) {
   );
 }
 
-export function SubsystemHealthCards({ outbox, accounting, workflow }: {
+export function SubsystemHealthCards({ outbox, accounting, workflow, outboxActions }: {
   outbox?: OutboxHealth; accounting?: AccountingHealth; workflow?: WorkflowHealth;
+  /** v9.0.361 (TD-623): the event queue buttons, shown inside the queue card */
+  outboxActions?: ReactNode;
 }) {
   return (
     <>
-      <OutboxCard outbox={outbox} />
+      <OutboxCard outbox={outbox} actions={outboxActions} />
       <AccountingCard accounting={accounting} />
       <WorkflowCard workflow={workflow} />
     </>

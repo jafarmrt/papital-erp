@@ -2,6 +2,9 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
+/** Name of the default low-stock alert rule (test data) */
+const LOW_STOCK_RULE_NAME = 'اعلان کسری موجودی به انبارداران';
+
 /**
  * Package 1 finding B01-40, TD-620: the factory reset wiped the event rules and webhook subscriptions but ran only
  * `runSeed()`, so they stayed missing until the next restart (the low-stock alert to warehouse keepers was not sent).
@@ -41,7 +44,8 @@ export async function runFactoryResetTests(shouldRun: ShouldRun): Promise<TestCa
     const subscriptions = await countOf('webhook_subscriptions');
     const workflows = await countOf('workflow_definitions', `code = 'DOC_APPROVAL_WORKFLOW'`);
     if (rules === 0) wrong.push('no event rule after the reset');
-    if (await countOf('event_action_rules', `name = 'اعلان کسری موجودی به انبارداران'`) === 0) wrong.push('the low-stock alert rule is missing');
+    const lowStockRule = await countOf('event_action_rules', `name = '${LOW_STOCK_RULE_NAME}'`);
+    if (lowStockRule === 0) wrong.push('the low-stock alert rule is missing');
     if (subscriptions === 0) wrong.push('no default webhook subscription after the reset');
     if (workflows !== 1) wrong.push(`document approval workflow rows after the reset: ${workflows}`);
     if (await countOf('roles', `code = 'td620_custom'`) !== 1) wrong.push('the custom role was not kept');

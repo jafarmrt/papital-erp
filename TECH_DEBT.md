@@ -27,7 +27,6 @@
 | TD-617 | زیرساخت (بسته ۱) | P3 (B01-37) — `migratePlainPasswords` هر بوت، حتی در تولید، هر رشته غیر bcrypt (کاربر حذف‌شده، `!locked`، hash `$argon2id$`) را رمز کارا می‌کند و `mustResetPassword` و ردیف ممیزی نمی‌نویسد | db/migratePlainPasswords.ts، server.ts | open (P3، تصمیم ت۴ الف) |
 | TD-621 | زیرساخت (بسته ۱)؛ اثر روی ۲ | P3 (B01-41) — جادوگر راه‌اندازی رمز ۶ نویسه‌ای را «متوسط» می‌پذیرد و سرور ۸ نویسه می‌خواهد (۴۰۰)؛ گام ۱ توکن را نمی‌سنجد و خطای ۴۰۱ توکن در گام ۲ بی فیلد توکن نشان داده می‌شود | SetupPage.tsx | open (P3) |
 | TD-622 | زیرساخت (بسته ۱) | P3 (B01-42) — جادوگر راه‌اندازی و صفحه سلامت واژه انگلیسی و آوانویسی (ERP_SETUP_TOKEN، «ERP پاپیتال»، (Toman)، PostgreSQL، RAM Heap، DLQ، Outbox، Replay، «دیتابیس»، «اسکن») و ۱۶ عدد با رقم لاتین دارند؛ نام پیش‌فرض شرکت روی سربرگ فاکتور چاپ می‌شود | SetupPage.tsx، SystemHealthDiagnostic.tsx، system.routes.ts، systemHealth.service.ts | open (P3، تصمیم ت۸) |
-| TD-623 | زیرساخت (بسته ۱) | P3 (B01-43) — «بازیابی صف DLQ» و «بازنشانی Outbox» با یک کلیک و بی پرسش همه رویدادهای ناموفق را دوباره اجرا می‌کنند (وب‌هوک طرف سوم، اعلان، گردش کار) و حتی با صف خالی نشان داده می‌شوند | SystemHealthDiagnostic.tsx، system.routes.ts | open (P3، تصمیم ت۸) |
 | TD-625 | زیرساخت (بسته ۱)؛ اثر روی همه بسته‌ها | P3 (B01-45) — خروجی ترمینال فارسی است: ۵ پیام hook آغاز جلسه، ۱۱۷ خط در ۱۲ اسکریپت CLI و ۱۳ پیام `check:version`، لاگ پیام فارسی هر خطای کسب‌وکار در `errorHandler`، حدود ۸۰۱ خط نام آزمون در ۶۸ فایل و ۱۲ نام آزمون Vitest | .claude/hooks/session-start.sh، scripts/*.ts، middleware/logger.ts، src/tests/** | open (P3، قاعده ت۹؛ قاعده در AGENTS.md §6 و ratchet فقط کاهشی `ratchet:terminal-english` از v9.0.211؛ ترجمه باز) |
 | TD-704 | امنیت رویدادها (بسته ۱۵) | P2 (B15-02) — نگهبان SSRF دور زده می‌شود: «آزمایش اتصال» وب‌هوک (`pingTest`) redirect را بی `redirect: 'manual'` دنبال می‌کند و ۵۰۰ نویسه پاسخ را برمی‌گرداند: نشانی مجازی که با 302 به سرویس داخلی برمی‌گردد ← `success: true, responseBody: "TOP-SECRET-INTERNAL-DATA (db password=hunter2)"`؛ استثنای «شبیه‌ساز محلی» (`allowLocalEcho`، ۵ محل) هر `127.0.0.1` / `localhost` / `::1` را روی هر درگاه با مسیر شامل `/webhook-echo` و بی شرط محیط می‌پذیرد | webhookSubscriptionService.ts، ssrfGuard.ts، eventActionEngineService.ts | open (P2، تصمیم ت۴ الف) |
 | TD-705 | رویدادها و وب‌هوک (بسته ۱۵) | P2 (B15-03) — شکست وب‌هوک و اقدام قانون هرگز به تلاش دوباره outbox یا صف خطا نمی‌رسد و تلاش دوباره فقط سه `setTimeout` در حافظه است: با گیرنده‌ای که همیشه ۵۰۰ می‌دهد، outbox بلافاصله `completed` با `completed_handlers: [event-action-engine, webhook-subscriptions, domain-audit-log]` شد، ۳ ردیف `failed / 500` در `webhook_deliveries` و صف خطا ۰ ردیف؛ اقدام شکست‌خورده قانون هرگز دوباره اجرا نمی‌شود (خلاف AGENTS §15) | webhookSubscriptionService.ts، eventActionEngineService.ts | open (P2، تصمیم ت۲ الف) |
@@ -63,8 +62,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۴۲ ردیف
-- **آرشیو شده (resolved):** ۷۱۱ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۴۱ ردیف
+- **آرشیو شده (resolved):** ۷۱۲ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -73,5 +72,5 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.360 — TD-620 (پس از بازنشانی کارخانه قاعده‌های رویداد و اشتراک‌ها نبودند، P3) رفع و بایگانی شد؛ بسته ۱ ردیف باز دارد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.361 — TD-623 (اجرای دوباره صف رویدادهای ناموفق بی تأیید، P3) رفع و بایگانی شد؛ بسته ۱ ردیف باز دارد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
 *v9.0.313 — نسخه مستند بسته ۱۰ (خرید و تدارکات): TD-688 تا TD-702 و TD-901 (تصمیم ت۵) باز شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

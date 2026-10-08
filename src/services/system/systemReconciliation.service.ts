@@ -1,10 +1,10 @@
-import { sql, eq, and } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { items, outboxEvents } from '../../db/schema.js';
 import { validateDbSchema } from '../../db/migrator.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { DeadLetterQueueService } from '../events/deadLetterQueueService.js';
-import { SystemHealthService } from './systemHealth.service.js';
+import { SystemHealthService, stuckOutboxCondition } from './systemHealth.service.js';
 import { StockReconciliationService } from '../inventory/stockReconciliation.service.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
@@ -157,7 +157,7 @@ export class SystemReconciliationService {
     return orm.transaction(async (tx) => {
       const reset = await tx.update(outboxEvents)
         .set({ status: 'pending', retryCount: 0 })
-        .where(and(eq(outboxEvents.status, 'processing'), sql`occurred_at < now() - interval '5 minutes'`))
+        .where(stuckOutboxCondition())
         .returning({ id: outboxEvents.id, eventId: outboxEvents.eventId });
       await logActivity({
         tx,

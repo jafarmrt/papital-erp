@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
 import { getDisplayTimezoneClient, errorMessageOf } from '../utils';
-import { Database, ShieldCheck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Cpu, Wrench, Play, Activity } from 'lucide-react';
+import { Database, ShieldCheck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Cpu, Activity } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { SubsystemHealthCards } from './system/SubsystemHealthCards';
+import { EventQueueActions, type EventQueueAction } from './system/EventQueueActions';
 import type { AccountingHealth, OutboxHealth, WorkflowHealth } from '../lib/system/subsystemHealth';
 import { StorageHealthCard } from './system/StorageHealthCard';
 import type { StorageHealth } from '../lib/system/storageHealth';
@@ -89,7 +90,7 @@ export default function SystemHealthDiagnostic() {
     }
   };
 
-  const handleExecuteFix = async (action: string) => {
+  const handleExecuteFix = async (action: EventQueueAction) => {
     setFixingAction(action);
     try {
       const res = await fetchJson('/system/reconciliation-fix', {
@@ -205,7 +206,10 @@ export default function SystemHealthDiagnostic() {
         </div>
 
         {/* CARDS 2-4: event queue, voucher balance, workflow (each with its own unknown state, TD-593) */}
-        <SubsystemHealthCards outbox={health.outbox} accounting={health.accounting} workflow={health.workflow} />
+        <SubsystemHealthCards
+          outbox={health.outbox} accounting={health.accounting} workflow={health.workflow}
+          outboxActions={<EventQueueActions outbox={health.outbox} busy={fixingAction !== ''} onRun={handleExecuteFix} />}
+        />
 
         {/* CARD 5: attachment and image directories (TD-619) */}
         <StorageHealthCard storage={health.storage} />
@@ -278,26 +282,6 @@ export default function SystemHealthDiagnostic() {
                     تعداد {reconciliationReport.okChecks} از {reconciliationReport.totalChecks} آزمون انطباق با موفقیت تأیید شد.
                   </p>
                 </div>
-              </div>
-
-              {/* Admin Quick Repair Actions */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleExecuteFix('requeue_dlq')}
-                  disabled={fixingAction !== ''}
-                  className="bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-3 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors"
-                >
-                  <Wrench size={12} />
-                  <span>بازیابی صف DLQ</span>
-                </button>
-                <button
-                  onClick={() => handleExecuteFix('clear_stuck_outbox')}
-                  disabled={fixingAction !== ''}
-                  className="bg-slate-100 hover:bg-slate-200 dark:bg-gray-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-gray-600 px-3 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors"
-                >
-                  <Play size={12} />
-                  <span>بازنشانی Outbox</span>
-                </button>
               </div>
             </div>
 

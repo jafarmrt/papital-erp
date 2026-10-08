@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.361 — Event Queue Replay Asks First
+- **Fix (TD-623, B01-43, decision ت۸):** replaying the failed events or the events stuck in the send queue asks «… دوباره اجرا شوند؟» first, and each button shows only when its queue has events; the health answer carries `outbox.stuckCount`, counted with the reset's own condition.
+
 ### v9.0.360 — Factory Reset Restores Event Rules and Subscriptions
 - **Fix (TD-620, B01-40):** after a factory reset the default workflows, event rules and webhook subscriptions are seeded again with the boot's `seedDefaultEngines`, so the low-stock alert works without a restart; the reset card names what is erased, what comes back and that roles are kept.
 

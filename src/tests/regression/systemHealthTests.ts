@@ -3,9 +3,12 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
-/** System health page findings of package 1 (B01-13, B01-39) */
+/** System health page findings of package 1 (B01-13, B01-39, B01-43) */
 export async function runSystemHealthTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
-  return [...await runUnknownSubsystemTest(shouldRun), ...await runStorageDirectoriesTest(shouldRun)];
+  return [
+    ...await runUnknownSubsystemTest(shouldRun), ...await runStorageDirectoriesTest(shouldRun),
+    ...await runStuckOutboxCountTest(shouldRun),
+  ];
 }
 
 /**
@@ -160,5 +163,60 @@ async function runStorageDirectoriesTest(shouldRun: ShouldRun): Promise<TestCase
   } finally {
     if (savedDir === undefined) delete process.env.ATTACHMENTS_DIR; else process.env.ATTACHMENTS_DIR = savedDir;
     fs.rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Package 1 finding B01-43, TD-623: the queue buttons showed even with an empty queue because the page knew only the
+ * failed-event count. The health answer now carries `stuckCount` (outbox events in processing for more than five
+ * minutes), counted with the same condition the reset uses, so the page offers the reset only when it resets something.
+ * On v9.0.360 `outbox.stuckCount` was missing.
+ */
+async function runStuckOutboxCountTest(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
+  const id = 'reg_system_health_stuck_outbox_count_td_623';
+  if (!shouldRun(id, 'td623', 'b01-43', 'health', 'outbox', 'package1')) return [];
+  const name = 'v9.0.361: the health page counts stuck outbox events with the condition the reset uses (TD-623)';
+  const tStart = Date.now();
+  const eventId = `TD623-${Date.now().toString(36)}`;
+  const { pool } = await import('../../db/drizzle.js');
+  try {
+    const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+    const app = await getTestApp();
+    const admin = await getAdminSession();
+    const wrong: string[] = [];
+    const stuck = async () => {
+      const res = await request(app).get('/api/system/health').set('Cookie', admin.cookie);
+      return (res.body as { outbox?: { stuckCount?: unknown; status?: string } }).outbox;
+    };
+
+    const before = await stuck();
+    if (typeof before?.stuckCount !== 'number') throw new Error(`outbox.stuckCount is ${JSON.stringify(before?.stuckCount)} (expected a number)`);
+    await pool.query(
+      `INSERT INTO outbox_events (event_id, event_type, aggregate_type, aggregate_id, status, occurred_at)
+       VALUES ($1, 'td623.test', 'test', 'td623', 'processing', now() - interval '10 minutes')`, [eventId]);
+    const during = await stuck();
+    if (during?.stuckCount !== before.stuckCount + 1) wrong.push(`stuck count ${JSON.stringify(during?.stuckCount)} after one stuck event (before ${before.stuckCount})`);
+    if (during?.status === 'ok') wrong.push('a stuck event left the queue status ok');
+
+    const reset = await request(app).post('/api/system/reconciliation-fix').set('Cookie', admin.cookie)
+      .set('x-csrf-token', admin.csrfToken).send({ action: 'clear_stuck_outbox' });
+    if (reset.status !== 200 || Number((reset.body as { resetCount?: number }).resetCount) < 1) {
+      wrong.push(`reset answered ${reset.status} ${JSON.stringify(reset.body).slice(0, 160)}`);
+    }
+    const after = await stuck();
+    if (after?.stuckCount !== before.stuckCount) wrong.push(`stuck count ${JSON.stringify(after?.stuckCount)} after the reset (expected ${before.stuckCount})`);
+
+    if (wrong.length > 0) throw new Error(wrong.join('; '));
+    return [makeTestCase({
+      id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+      details: 'one event stuck for ten minutes counted, reset by the action, and the count back to its value before',
+    })];
+  } catch (err) {
+    return [makeTestCase({
+      id, name, layer: 'regression', executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+      error: err instanceof Error ? err.message : String(err),
+    })];
+  } finally {
+    await pool.query(`DELETE FROM outbox_events WHERE event_id = $1`, [eventId]);
   }
 }

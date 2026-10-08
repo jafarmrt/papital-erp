@@ -6,7 +6,14 @@
 
 export type SubsystemStatus = 'ok' | 'warning' | 'error' | 'unknown';
 
-export interface OutboxHealth { pendingCount: number | null; dlqCount: number | null; status: SubsystemStatus; message?: string }
+export interface OutboxHealth {
+  pendingCount: number | null;
+  dlqCount: number | null;
+  /** v9.0.361 (TD-623): events stuck in processing for more than five minutes */
+  stuckCount?: number | null;
+  status: SubsystemStatus;
+  message?: string;
+}
 export interface AccountingHealth { totalVouchers: number | null; unbalancedVouchers: number | null; status: SubsystemStatus; message?: string }
 export interface WorkflowHealth { activeInstances: number | null; overdueSlaTasks: number | null; status: SubsystemStatus; message?: string }
 
