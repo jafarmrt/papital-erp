@@ -56,7 +56,6 @@
 | TD-712 | رویدادها (بسته ۱۵) | P3 (B15-10) — اقدام «تحریک گردش کار» کاری نمی‌کند و «در صف قرار گرفت» گزارش می‌دهد و «ارزیابی پیش‌نویس» همیشه موفق است: قانون گردش کار `status: success` با نمونه گردش کار ۰ / ۰؛ `test-draft` با عملگر نامعتبر و رویداد ناموجود «ارزیابی آزمایشی شروط و فیلدها با موفقیت انجام شد»؛ «تست آنلاین قانون» برای هر پیش‌نویس، حتی با نشانی خالی، نتیجه سبز؛ `sms_simulation` فقط لاگ می‌نویسد | eventActionEngineService.ts، events.routes.ts، RuleEditorModal.tsx | open (P3، تصمیم ت۴ الف) |
 | TD-713 | رویدادها (بسته ۱۵)؛ اثر روی ۸ | P3 (B15-11) — رویداد تأیید فاکتور مبلغ ندارد: payload فقط `documentId, refNumber, docType, buyerName, currency, itemCount, status` دارد، پس قانون seed «وب‌هوک تایید فاکتور فروش» (`payload.totalAmount gt 0`) هرگز اجرا نمی‌شود و ممیزی «تایید نهایی فاکتور فروش شماره 1000 به مبلغ undefined IRR» می‌نویسد | documentCreation.service.ts، domainEventHandlers.ts، eventPayloadFields.ts | open (P3) |
 | TD-714 | رویدادها (بسته ۱۵) | P3 (B15-12) — سه handler نمایشی (`WorkflowInventorySyncActionHandler`، `InvoiceAccountingSyncActionHandler`، `InventoryReorderAlertActionHandler`) فقط لاگ می‌کنند ولی ممیزی «اجرای موفق اکشن‌هندلر» با `{voucherGenerated: true}` می‌نویسند و برای هر رویداد ردیف بی انقضای `idempotency_keys` می‌سازند: فاکتور سه‌سطری ۶ سطر ممیزی و ۳ ردیف idempotency ساخت | actionHandlerService.ts | open (P3، تصمیم ت۴ الف) |
-| TD-715 | امنیت رویدادها (بسته ۱۵) | P3 (B15-13) — هر راه‌اندازی سرور، قانون‌های وب‌هوک کاربر را بازنویسی می‌کند و توکن داخلی را به نشانی بیرونی می‌فرستد: نشانی شامل `example.com` یا `httpbin.org` (مثلاً `https://erp.example.com.ir/hooks/invoice`) ← `http://127.0.0.1:3000/api/events/webhook-echo`؛ قانون «وب‌هوک انبار بیرونی» (`https://partner-logistics.ir/hook`) با `secretToken` خالی توکن echo سامانه را گرفت و با `X-ERP-Signature-Token` می‌فرستد | eventActionEngineService.ts، server.ts | open (P3، تصمیم ت۴ الف) |
 | TD-716 | صف خطا (بسته ۱۵) | P3 (B15-14) — ویرایش داده رویداد بازپخش‌شده ردیف تکمیل‌شده outbox را بی قفل، بی بررسی وضعیت و بی ممیزی بازنویسی می‌کند و «تلاش دوباره همه» ردیف صف خطا را باز می‌گذارد: `PUT /dlq/:id/payload` با `{"amount":1}` پس از بازپخش ۲۰۰ داد و ردیف «replayed» و outbox «completed» هر دو `{"amount":1}` گرفتند، ممیزی ۰؛ `POST /outbox/retry-failed` رویداد را تکمیل کرد ولی ردیف صف خطا «quarantined» ماند؛ رابط «اصلاح داده و بازپخش» را برای `replayed` و `dismissed` هم پیشنهاد می‌کند | deadLetterQueueService.ts، outboxService.ts، DeadLetterQueueSubTab.tsx | open (P3) |
 | TD-717 | اعلان (بسته ۱۵) | P3 (B15-15) — یادآوری پیگیری با درخواست‌های هم‌زمان دو بار ساخته می‌شود و پس از حذف دوباره می‌آید (بررسی و درج بی قید یکتا در هر `GET /notifications` و `/unread-count`؛ حذف فیزیکی): ۴ درخواست هم‌زمان ۲ ردیف ساختند و پس از حذف همه، درخواست بعدی دوباره ۱ ردیف ساخت | notifications.routes.ts | open (P3، تصمیم ت۸ الف) |
 | TD-718 | رویدادها و وب‌هوک (بسته ۱۵) | P3 (B15-16) — شمارنده اجرای قانون و شمارنده‌های اشتراک به‌روزرسانی هم‌زمان را گم می‌کنند (مقدار از شیء کهنه به‌اضافه ۱): ۱۰ رویداد هم‌زمان ۱۰ گزارش و `execution_count: 3`؛ ۳ تلاش ناموفق اشتراک ← `total_deliveries: 1, failed_deliveries: 1` | eventActionEngineService.ts، webhookSubscriptionService.ts | open (P3) |
@@ -89,8 +88,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۶۸ ردیف
-- **آرشیو شده (resolved):** ۶۸۵ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۶۷ ردیف
+- **آرشیو شده (resolved):** ۶۸۶ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -99,5 +98,5 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.335 — TD-704 (دور زدن نگهبان SSRF در آزمایش اتصال وب‌هوک، P2) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.336 — TD-715 (بازنویسی قانون‌های وب‌هوک در راه‌اندازی، P3) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
 *v9.0.313 — نسخه مستند بسته ۱۰ (خرید و تدارکات): TD-688 تا TD-702 و TD-901 (تصمیم ت۵) باز شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

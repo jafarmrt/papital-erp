@@ -185,6 +185,7 @@
 - **Automated Event Actions:** `EventActionEngineService` dynamically triggers webhooks, notifications, SMS, or workflows based on rules.
 - **HMAC-SHA256 Signatures:** Webhooks sign payload with HMAC-SHA256 and attach `X-ERP-Signature-256` and `X-ERP-Delivery-Id`.
 - **Webhook SSRF Guard and Echo Simulator (v9.0.335, TD-704, product-owner decision ت۴):** every outgoing webhook request, the connection test included (`pingTest`), uses `redirect: 'manual'` and refuses a 3xx; the echo-simulator exception of `assertSafeExternalUrl` holds only through `isLocalEchoTarget` (`src/lib/ssrfGuard.ts`): `NODE_ENV` test or development, a loopback host, this server's own `PORT` and the exact path `LOCAL_ECHO_PATH`; in production the simulator is unreachable.
+- **No Rule Rewriting at Start (v9.0.336, TD-715, product-owner decision ت۴):** `seedDefaultRules` only seeds an empty rule table and never reads or rewrites saved rules; its echo-simulator webhook rule is seeded only in test and development (`isEchoSimulatorEnvironment`). The system's echo token (`ERP_WEBHOOK_SECRET_TOKEN` / `erp_webhook_secret_token`) is sent as `X-ERP-Signature-Token` only to `isLocalEchoTarget`; a rule holding it sends no token to another address (`systemTokenWithheld` in the result).
 
 ## 16. Frontend Communication & Polling Optimization
 - **Standardized `fetchJson`:** Use `fetchJson` from `/src/api.ts` with `credentials: 'include'`.

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.336 — Server Start No Longer Rewrites Webhook Rules
+- **Webhook rules at start (TD-715):** every server start turned a webhook rule URL containing «example.com» into the local echo simulator and put the system's echo token into every webhook rule without one, which then sent it to the external address; saved rules are now left as they are and the system token goes only to the server's own echo simulator.
+
 ### v9.0.335 — Webhook Connection Test Never Reaches an Internal Service
 - **Webhook SSRF guard (TD-704):** the webhook connection test followed redirects and showed the internal service's answer, and the local echo exception opened any loopback port in production too; the test no longer follows a redirect, and the echo simulator passes only in test and development, on the server's own port and exact path.
 
