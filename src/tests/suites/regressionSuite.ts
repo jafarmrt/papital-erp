@@ -10747,6 +10747,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runDataExportTests(shouldRun));
   const { runSystemHealthTests } = await import('../regression/systemHealthTests.js');
   results.push(...await runSystemHealthTests(shouldRun));
+  const { runFactoryResetTests } = await import('../regression/factoryResetTests.js');
+  results.push(...await runFactoryResetTests(shouldRun));
 
   return results;
 }

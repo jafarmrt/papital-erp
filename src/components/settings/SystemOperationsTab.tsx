@@ -5,6 +5,7 @@ import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';
 import { formatPersianNumber } from '../../utils';
 import { MIN_AUDIT_RETENTION_DAYS, PURGEABLE_AUDIT_ENTITY_LABELS } from '../../lib/audit/auditRetention';
+import { FACTORY_RESET_ERASED, FACTORY_RESET_KEPT, FACTORY_RESET_RESTORED } from '../../lib/system/factoryReset';
 
 /** v9.0.212 (TD-522، تصمیم ت۴ الف): بخش‌هایی که پاک‌سازی سجلشان را پاک می‌کند، از همان فهرست سرور */
 const PURGEABLE_SECTIONS_TEXT = Object.values(PURGEABLE_AUDIT_ENTITY_LABELS).join('، ');
@@ -139,7 +140,7 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
             <h4>پاکسازی کامل سیستم، حذف کاربران و بازنشانی به سناریوی شروع اولیه</h4>
           </div>
           <p className="text-xs text-red-700 leading-relaxed">
-            این عملیات تمامی اطلاعات عملیاتی سامانه (کالاها، انبارها، فاکتورها، اسناد دوبل مالی، چک‌ها، پروژه‌ها، ارتباط با مشتری، کارکرد و کلیه حساب‌های کاربری) را به‌طور کامل پاک کرده و ساختارهای استاندارد پایه (۲۲ دسته‌بندی اصلی، نقش‌های سیستمی، کدینگ حسابداری و گردش‌کارها) را بازنشانی می‌کند. پس از اتمام، سیستم فوراً به صفحه راه‌اندازی و شروع به کار اولیه هدایت می‌شود. این عملیات غیرقابل بازگشت است.
+            این عملیات همه اطلاعات عملیاتی سامانه ({FACTORY_RESET_ERASED.join('، ')}) را پاک می‌کند و پیش‌فرض‌های نصب تازه ({FACTORY_RESET_RESTORED.join('، ')}) را برمی‌گرداند. {FACTORY_RESET_KEPT} پاک نمی‌شوند. پس از پایان، سامانه به صفحه راه‌اندازی اولیه می‌رود. این عملیات برگشت‌پذیر نیست.
           </p>
           <div className="pt-2">
             <button

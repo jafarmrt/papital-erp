@@ -21,6 +21,7 @@ import { logger } from '../../middleware/logger.js';
 import { invalidateUserAuthCache } from '../../middleware/auth.js';
 import { ConflictError, ForbiddenError } from '../../errors/customErrors.js';
 import { runSeed } from '../../db/seed.js';
+import { seedDefaultEngines } from './bootData.js';
 import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { invalidateRoleCache, invalidateSettingsCache } from '../../lib/memoryCache.js';
@@ -102,8 +103,11 @@ export class FactoryResetService {
       const files = await this.removeAttachmentFiles(attachmentPaths);
       this.invalidateCaches();
 
-      // Re-seed system standard defaults (22 categories, default warehouse, standard chart of accounts, task categories, piecework tasks, system roles)
+      // Re-seed the base data (categories, settings, chart of accounts, task categories, piecework tasks; roles are kept,
+      // TD-245) and, as at boot, the default workflows, event rules and webhook subscriptions this reset wiped
+      // (v9.0.360, TD-620: before, they stayed missing until the next restart)
       await runSeed();
+      await seedDefaultEngines();
       this.invalidateCaches();
 
       return { deletedRows, attachmentFiles: { total: attachmentPaths.length, ...files } };
