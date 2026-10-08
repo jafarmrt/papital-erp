@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.395 — Timeline Aggregate Search Settles
+- **Timeline search (TD-731):** the event timeline's aggregate search sent a request per keystroke and a late answer overwrote the newer list; it now waits for the keyword to settle (`useDebounce`) and aborts the older request.
+
 ### v9.0.394 — Event Screens Show the Server Reason
 - **Event error messages (TD-730):** the dead-letter, webhook, rule, outbox and timeline tabs showed fixed texts for refused requests (losing the server's 409 «in replay» or SSRF reason) and called any refusal of a dead-letter payload edit a JSON format error; every catch now shows the server's message and only a parse error is a JSON format error.
 

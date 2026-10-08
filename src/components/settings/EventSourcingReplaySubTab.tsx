@@ -3,6 +3,10 @@ import { History, Play, RotateCcw, Search, CheckCircle2, AlertTriangle, FileText
 import { formatPersianDate, errorMessageOf } from '../../utils';
 import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
+import { useDebounce } from '../../hooks/useDebounce';
+
+/** v9.0.395 (TD-731): the aggregate search waits this long after the last keystroke before it asks the server. */
+export const AGGREGATE_SEARCH_DELAY_MS = 350;
 
 interface AggregateTypeOption {
   type: string;
@@ -65,11 +69,14 @@ export function EventSourcingReplaySubTab() {
     }
   };
 
-  const searchAggregates = async (type: string, keyword: string = '') => {
+  // v9.0.395 (TD-731): one request per settled keyword; a newer keyword or type aborts the older request, so a late answer
+  // never overwrites the newer list
+  const searchAggregates = async (type: string, keyword: string, signal: AbortSignal) => {
     if (!type) return;
     try {
       const params = new URLSearchParams({ type, aggregateType: type, search: keyword, limit: '25' });
-      const data = await fetchJson<{ success?: boolean; data?: { id: string; title: string }[] }>(`/events/event-sourcing/aggregates?${params.toString()}`);
+      const data = await fetchJson<{ success?: boolean; data?: { id: string; title: string }[] }>(`/events/event-sourcing/aggregates?${params.toString()}`, { signal });
+      if (signal.aborted) return;
       if (data?.success) {
         const list = Array.isArray(data.data) ? data.data : [];
         setAggregateOptions(list);
@@ -78,6 +85,7 @@ export function EventSourcingReplaySubTab() {
         }
       }
     } catch (err) {
+      if (signal.aborted) return;
       console.error('Error searching aggregates:', err);
     }
   };
@@ -107,9 +115,12 @@ export function EventSourcingReplaySubTab() {
     void fetchTypes();
   }, []);
 
+  const debouncedKeyword = useDebounce(searchKeyword, AGGREGATE_SEARCH_DELAY_MS);
   useEffect(() => {
-    void searchAggregates(selectedType, searchKeyword);
-  }, [selectedType]);
+    const controller = new AbortController();
+    void searchAggregates(selectedType, debouncedKeyword, controller.signal);
+    return () => controller.abort();
+  }, [selectedType, debouncedKeyword]);
 
   useEffect(() => {
     if (selectedAggregateId) {
@@ -240,10 +251,7 @@ export function EventSourcingReplaySubTab() {
                 type="text"
                 placeholder="جستجو با کد یا عنوان (مثال: فاکتور، کالا، مشتری)..."
                 value={searchKeyword}
-                onChange={e => {
-                  setSearchKeyword(e.target.value);
-                  void searchAggregates(selectedType, e.target.value);
-                }}
+                onChange={e => setSearchKeyword(e.target.value)}
                 className="w-full text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl pr-9 pl-4 py-2.5 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
               />
               <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
