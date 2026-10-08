@@ -1,5 +1,5 @@
 #!/bin/bash
-# scripts/backup-offsite.sh — v10.0.2 (O-02, TD-957): the encrypted off-server copy of one backup.
+# scripts/backup-offsite.sh — v10.0.4 (O-02, TD-957): the encrypted off-server copy of one backup.
 #
 #   scripts/backup-offsite.sh <backup base path>        e.g. /var/backups/erp/erp_daily_20261009_023000
 #

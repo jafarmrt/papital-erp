@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# v10.0.1 (TD-1020): installs the operations schedule of a Linux server in one cron file:
+# v10.0.3 (TD-1020): installs the operations schedule of a Linux server in one cron file:
 #   - scripts/backup.sh every day at BACKUP_HOUR:BACKUP_MINUTE (server time; default 02:30) — the local backup and,
 #     when BACKUP_RCLONE_REMOTE is set in .env, its encrypted off-server copy (scripts/backup-offsite.sh);
-#   - scripts/monitor.sh every five minutes — health, disk, backup age and event queue alerts (v10.0.4).
+#   - scripts/monitor.sh every five minutes — health, disk, backup age and event queue alerts (v10.0.6).
 # install.sh runs it; on a server installed earlier run it once by hand:
 #   sudo bash scripts/install-ops-cron.sh [service-user]
 # The file is rewritten as a whole, so running it again changes nothing. The output of both jobs goes to

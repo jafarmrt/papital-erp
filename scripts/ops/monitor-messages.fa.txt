@@ -1,4 +1,4 @@
-# Persian alert texts of scripts/monitor.sh (v10.0.4, O-03), one «key|text» per line; %s is filled in order.
+# Persian alert texts of scripts/monitor.sh (v10.0.6, O-03), one «key|text» per line; %s is filled in order.
 # They go to the owner's phone or mailbox, never to a terminal (AGENTS.md §6, terminal output is English).
 title|هشدار سامانه پاپیتال (%s)
 still|هنوز برقرار است: %s

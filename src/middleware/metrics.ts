@@ -45,7 +45,7 @@ export const outboxQueueDepth = new promClient.Gauge({
   help: 'Number of pending events in outbox',
 });
 
-// v10.0.3 (OBS-R2-11): the queues an operator must act on, read on every scrape; scripts/monitor.sh alerts on them
+// v10.0.5 (OBS-R2-11): the queues an operator must act on, read on every scrape; scripts/monitor.sh alerts on them
 export const queueMetricsUp = new promClient.Gauge({
   name: 'erp_queue_metrics_up',
   help: '1 when the queue gauges below were read on this scrape, 0 when the read failed (their values are then stale)',
@@ -134,7 +134,7 @@ export const updateDbPoolMetrics = () => {
 };
 
 /**
- * v10.0.3 (OBS-R2-11): the outbox depth and the queue gauges. A failed read sets `erp_queue_metrics_up` to 0 and is
+ * v10.0.5 (OBS-R2-11): the outbox depth and the queue gauges. A failed read sets `erp_queue_metrics_up` to 0 and is
  * logged, never swallowed (the previous `catch {}` left the gauges at their old values with nothing to tell).
  */
 export const updateOutboxMetrics = async () => {

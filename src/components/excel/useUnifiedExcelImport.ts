@@ -39,7 +39,7 @@ export function useUnifiedExcelImport({
 
       if (!matchesSearch) return false;
       if (filterMode === 'issues') {
-        return r.hasPrefixMismatch || r.isDuplicateInBatch || r.isDuplicateInDb;
+        return r.hasPrefixMismatch || r.isDuplicateInBatch || r.isDuplicateInDb || r.hasCellError;
       }
       return true;
     });
@@ -118,7 +118,7 @@ export function useUnifiedExcelImport({
             type: String(row['نوع کالا'] || row['نوع'] || row['type'] || '').trim()
           }));
 
-          const validated = validateExcelRows(parsedList, loadedCats, loadedItems);
+          const validated = validateExcelRows(parsedList, loadedCats, loadedItems, typeFilter);
           setPreviewRows(validated);
           setStep('preview');
           toast.success(`${validated.length} ردیف آماده بررسی و ثبت است.`);
@@ -150,7 +150,7 @@ export function useUnifiedExcelImport({
         return r;
       });
 
-      return validateExcelRows(updated, categories, existingItems);
+      return validateExcelRows(updated, categories, existingItems, typeFilter);
     });
   };
 
@@ -169,7 +169,7 @@ export function useUnifiedExcelImport({
         return r;
       });
 
-      return validateExcelRows(updated, categories, existingItems);
+      return validateExcelRows(updated, categories, existingItems, typeFilter);
     });
     toast.success('پیشوند کد اصلاح شد.');
   };
@@ -191,7 +191,7 @@ export function useUnifiedExcelImport({
         return r;
       });
 
-      return validateExcelRows(updated, categories, existingItems);
+      return validateExcelRows(updated, categories, existingItems, typeFilter);
     });
 
     if (fixedCount > 0) {
@@ -256,7 +256,7 @@ export function useUnifiedExcelImport({
     mismatchCount: previewRows.filter(r => r.hasPrefixMismatch).length,
     duplicateBatchCount: previewRows.filter(r => r.isDuplicateInBatch).length,
     duplicateDbCount: previewRows.filter(r => r.isDuplicateInDb).length,
-    totalIssues: previewRows.filter(r => r.hasPrefixMismatch || r.isDuplicateInBatch || r.isDuplicateInDb).length,
+    totalIssues: previewRows.filter(r => r.hasPrefixMismatch || r.isDuplicateInBatch || r.isDuplicateInDb || r.hasCellError).length,
     handleClose,
     handleResetModal,
     handleDownloadExport,

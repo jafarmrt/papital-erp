@@ -1,5 +1,5 @@
 #!/bin/bash
-# scripts/monitor.sh — v10.0.4 (O-03, TD-1021): health, disk, backup age and event queue alerts of one server.
+# scripts/monitor.sh — v10.0.6 (O-03, TD-1021): health, disk, backup age and event queue alerts of one server.
 #
 # Run every five minutes by cron (scripts/install-ops-cron.sh). Each run checks:
 #   app      GET /health/ready answers 200

@@ -174,7 +174,7 @@ if [ "$CRON_HIT" -eq 1 ]; then
 else
   bad "No backup cron entry found (sudo bash scripts/install-ops-cron.sh <service-user>)"
 fi
-# v10.0.2 / v10.0.4 (O-02, O-03): the encrypted off-server copy and an alert channel of scripts/monitor.sh
+# v10.0.4 / v10.0.6 (O-02, O-03): the encrypted off-server copy and an alert channel of scripts/monitor.sh
 if [ -n "$(env_val BACKUP_RCLONE_REMOTE)" ]; then
   ok "Off-server backup copy configured ($(env_val BACKUP_RCLONE_REMOTE))"
 else

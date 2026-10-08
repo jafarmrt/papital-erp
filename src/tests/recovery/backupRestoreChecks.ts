@@ -31,7 +31,7 @@ const NAMES: Array<[string, string, CriticalScenarioId | undefined, string]> = [
   ['rec_td_362_backup_from_any_directory', 'v8.0.84: a backup from any directory (such as cron) reads the database URL from the app .env and archives the attachment files too; an attachment record without the attachment directory does not produce a partial backup (TD-362)', undefined,
     'The backup from another directory used the app .env and the attachments were in the archive; a missing attachment directory refused the backup'],
   ['rec_td_957_daily_backup_goes_offsite',
-    'v10.0.2: the daily backup copies its dump, manifest, attachment archive and the .env with ERP_SECRETS_KEY to the encrypted rclone remote and records both times; a failed copy keeps the local backup and exits 3 (TD-957)', undefined,
+    'v10.0.4: the daily backup copies its dump, manifest, attachment archive and the .env with ERP_SECRETS_KEY to the encrypted rclone remote and records both times; a failed copy keeps the local backup and exits 3 (TD-957)', undefined,
     'The remote held the four files and the .env copy; daily_ok and offsite_ok were written; with a failing upload the run exited 3 and kept the local dump'],
   ['rec_td_361_restore_drill_compares_content', 'v8.0.85: the restore drill compares the restored database row by row with the content manifest of the same backup; a difference, an empty main table in a backup without a manifest and a missing attachment are refused (TD-361)', 'recovery_backup_restore',
     'The restore matched the manifest; a tampered manifest, an empty users table in a backup without a manifest and a missing attachment archive were refused'],

@@ -98,7 +98,7 @@ async function checkPoolStatsLive(): Promise<string[]> {
   return v;
 }
 
-// ---------- OBS-R2-11 (v10.0.3) ----------
+// ---------- OBS-R2-11 (v10.0.5) ----------
 const QUEUE_GAUGES = ['erp_queue_metrics_up', 'erp_dead_letter_unresolved', 'erp_outbox_failed', 'erp_outbox_stuck',
   'erp_integration_deliveries_retrying', 'erp_integration_deliveries_failed'] as const;
 
@@ -226,7 +226,7 @@ const CASES: Array<[string, string, () => Promise<string[]>, string]> = [
     'readiness and the pool gauges read the real connection pool (TD-596)',
     checkPoolStatsLive, 'with a held connection /health/ready and /metrics report a pool total above 0'],
   ['sec_obs_r2_11_queue_gauges',
-    'v10.0.3: /metrics exports the unresolved dead-letter events, failed and stuck outbox events and retrying and failed integration deliveries, and whether they were read (OBS-R2-11)',
+    'v10.0.5: /metrics exports the unresolved dead-letter events, failed and stuck outbox events and retrying and failed integration deliveries, and whether they were read (OBS-R2-11)',
     checkQueueGauges, 'each queue gauge rose by exactly one for one matching row; erp_queue_metrics_up was 1'],
   ['sec_td_598_access_log_at_production_level',
     'the HTTP access log is written at the production log level info (TD-598)',

@@ -64,7 +64,7 @@ fi
 log "[1/7] Installing system dependencies (curl, git, OpenSSL, PostgreSQL, Node.js 22)..."
 
 $SUDO apt-get update -y
-# v10.0.2 (TD-957): rclone copies the daily backup off the server (scripts/backup-offsite.sh)
+# v10.0.4 (TD-957): rclone copies the daily backup off the server (scripts/backup-offsite.sh)
 $SUDO apt-get install -y curl git ca-certificates openssl gnupg rclone
 
 # PostgreSQL (>=14 required; add PGDG repo when distro version is older)
@@ -179,7 +179,7 @@ $SUDO systemctl enable "$SERVICE_NAME"
 $SUDO systemctl restart "$SERVICE_NAME"
 success "systemd service ${SERVICE_NAME} enabled and started."
 
-# v10.0.1 (TD-1020): the daily backup and the five-minute monitor run from one cron file; the backup directory
+# v10.0.3 (TD-1020): the daily backup and the five-minute monitor run from one cron file; the backup directory
 # belongs to the service user and only it can read it (scripts/backup.sh, TD-585)
 BACKUP_DIR_ENV="$(grep -E '^BACKUP_DIR=' .env | head -1 | cut -d= -f2- || true)"
 $SUDO install -d -m 700 -o "$(id -un)" "${BACKUP_DIR_ENV:-/var/backups/erp}"

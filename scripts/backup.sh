@@ -1,6 +1,6 @@
 #!/bin/bash
 # scripts/backup.sh — PHASE 9 (14.1) Production Backup Strategy
-# Full pg_dump backup with integrity verification, content manifest, retention cleanup and (v10.0.2) an encrypted
+# Full pg_dump backup with integrity verification, content manifest, retention cleanup and (v10.0.4) an encrypted
 # off-server copy through scripts/backup-offsite.sh.
 #
 # Usage:
@@ -13,7 +13,7 @@
 # so a cron line from any working directory backs up the database AND the attachment files. A database that has
 # attachment records but no attachment directory is a failed backup, never a silent database-only one.
 #
-# v10.0.1 (TD-1020): the daily run is scheduled by scripts/install-ops-cron.sh (/etc/cron.d/papital-erp), which
+# v10.0.3 (TD-1020): the daily run is scheduled by scripts/install-ops-cron.sh (/etc/cron.d/papital-erp), which
 # install.sh runs.
 set -euo pipefail
 # v9.0.122 (TD-585): a backup holds every financial row, password hashes, salaries and all attachment files; it is
@@ -169,7 +169,7 @@ find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*_attachments.tar.gz" -mtime +"$RET
 # v9.0.184 (TD-606): uncompressed dumps left by failed runs before that release
 find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*.dump" -mtime +"$RETENTION_DAYS" -delete
 BACKUP_DONE=1
-# v10.0.2 (TD-957): the time of the last good local backup, read by scripts/monitor.sh (backup age alert)
+# v10.0.4 (TD-957): the time of the last good local backup, read by scripts/monitor.sh (backup age alert)
 echo "$(date +%s) $(basename "$BASE")" > "$BACKUP_DIR/.last_${BACKUP_KIND}_ok"
 
 # 5. Log
@@ -177,7 +177,7 @@ echo "$(date +%s) $(basename "$BASE")" > "$BACKUP_DIR/.last_${BACKUP_KIND}_ok"
 [ -z "$ATTACHMENTS_ARCHIVE" ] || log "Attachments archive created: $ATTACHMENTS_ARCHIVE ($(du -h "$ATTACHMENTS_ARCHIVE" | cut -f1))"
 log "${BACKUP_KIND} backup completed: $DUMP_FILE.gz ($(du -h "$DUMP_FILE.gz" | cut -f1), $ATT_COUNT attachment(s), retention ${RETENTION_DAYS}d)"
 
-# 6. v10.0.2 (O-02, TD-957): the encrypted off-server copy (scripts/backup-offsite.sh) of the kinds in
+# 6. v10.0.4 (O-02, TD-957): the encrypted off-server copy (scripts/backup-offsite.sh) of the kinds in
 #    BACKUP_OFFSITE_KINDS (default: daily; update.sh's pre-deployment backup stays local and fast). A backup on the
 #    same disk is not a backup: when the copy fails the run exits 3 (the local backup is kept and complete), and
 #    without BACKUP_RCLONE_REMOTE it says so on every run.
