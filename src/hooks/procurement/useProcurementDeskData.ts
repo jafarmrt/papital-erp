@@ -1,19 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchJson } from '../../api';
-import type { Item, ProcurementInboxSummary } from '../../types';
-import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import type { ProcurementInboxSummary } from '../../types';
 import { getErrorMessage } from '../../utils';
 
-/** خطای هر بخش میز تدارکات؛ بخشی که بارگذاری نشد پیام خودش را دارد و بخش‌های دیگر نشان داده می‌شوند */
+/** خطای خلاصه میز تدارکات؛ بخش‌های دیگر جدا بارگذاری و نشان داده می‌شوند */
 export interface ProcurementDeskErrors {
   summary?: string;
-  items?: string;
-}
-
-/** آرایه داده پاسخ فهرست (`{ data: [...] }` یا آرایه)، با گارد آرایه */
-function listOf<T>(res: unknown): T[] {
-  const data = Array.isArray(res) ? res : (res as { data?: unknown } | null)?.data;
-  return Array.isArray(data) ? data as T[] : [];
 }
 
 /**
@@ -22,9 +14,9 @@ function listOf<T>(res: unknown): T[] {
  * را خالی می‌کرد؛ بارگذاری تازه درخواست‌های قبلی را لغو می‌کند.
  * v9.0.278 (TD-697): درخواست‌ها و سفارش‌ها صفحه‌به‌صفحه با `useProcurementPage` خوانده می‌شوند؛ `version` با هر
  * بارگذاری تازه بالا می‌رود تا صفحه‌های باز هم دوباره خوانده شوند.
+ * v9.0.279 (TD-700): کالاها دیگر خوانده نمی‌شوند؛ انتخابگر کالای فرم درخواست در سرور جست‌وجو می‌کند.
  */
 export function useProcurementDeskData() {
-  const [warehouseItems, setWarehouseItems] = useState<Item[]>([]);
   const [summary, setSummary] = useState<ProcurementInboxSummary | null>(null);
   const [errors, setErrors] = useState<ProcurementDeskErrors>({});
   const [version, setVersion] = useState(0);
@@ -35,14 +27,11 @@ export function useProcurementDeskData() {
     const controller = new AbortController();
     controllerRef.current = controller;
     const { signal } = controller;
-    const [items, sum] = await Promise.allSettled([
-      fetchJson<unknown>(PICK_LIST_URLS.items, { signal }),
+    const [sum] = await Promise.allSettled([
       fetchJson<{ data?: ProcurementInboxSummary }>('/api/procurement/inbox/summary', { signal }),
     ]);
     if (signal.aborted) return;
     const next: ProcurementDeskErrors = {};
-    if (items.status === 'fulfilled') setWarehouseItems(listOf<Item>(items.value));
-    else next.items = getErrorMessage(items.reason);
     if (sum.status === 'fulfilled') setSummary(sum.value?.data ?? null);
     else {
       setSummary(null);
@@ -61,5 +50,5 @@ export function useProcurementDeskData() {
     return () => controllerRef.current?.abort();
   }, [loadSummary]);
 
-  return { warehouseItems, summary, errors, version, reload };
+  return { summary, errors, version, reload };
 }

@@ -4,13 +4,17 @@ import { toast } from 'react-hot-toast';
 import { Item } from '../../types';
 import { fetchJson } from '../../api';
 import { getTodayJalaliDate, formatPersianPrice } from '../../utils';
+import { SearchableSelect } from '../SearchableSelect';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 
 interface CreateRequisitionModalProps {
   isOpen: boolean;
-  warehouseItems: Item[];
   onClose: () => void;
   onSuccess: () => void;
 }
+
+/** گزینه انتخابگر کالا: نام و کد کالای فهرست انتخاب (`GET /items/options`) */
+const itemOption = (item: Item) => ({ value: item.id, label: `${item.name}${item.code ? ` (${item.code})` : ''}` });
 
 interface NewItemRow {
   id: string;
@@ -25,7 +29,6 @@ interface NewItemRow {
 
 export function CreateRequisitionModal({
   isOpen,
-  warehouseItems,
   onClose,
   onSuccess
 }: CreateRequisitionModalProps) {
@@ -74,8 +77,9 @@ export function CreateRequisitionModal({
     setItems(prev => prev.filter(i => i.id !== id));
   };
 
-  const handleSelectWarehouseItem = (rowId: string, itemId: number) => {
-    const matched = warehouseItems.find(w => w.id === itemId);
+  // v9.0.279 (TD-700، B10-13): کالا از فهرست انتخاب کالا با جست‌وجوی سرور برگزیده می‌شود؛ پیش‌تر `<select>` ساده‌ای از
+  // کالاهای بارگذاری‌شده میز بود که پیش از TD-888 فقط ۵۰ کالا داشت و جست‌وجو نداشت
+  const handleSelectWarehouseItem = (rowId: string, matched: Item | undefined) => {
     if (!matched) return;
 
     setItems(prev => prev.map(i => {
@@ -86,7 +90,7 @@ export function CreateRequisitionModal({
         itemCode: matched.code || '',
         itemName: matched.name,
         unit: matched.unit || 'عدد',
-        unitPriceEstimate: (matched as any).purchase_price || (matched as any).unit_price || matched.weightedAverageCost || 0
+        unitPriceEstimate: Number(matched.weightedAverageCost ?? 0) || 0
       };
     }));
   };
@@ -256,18 +260,13 @@ export function CreateRequisitionModal({
                     <tr key={row.id} className="hover:bg-slate-50/50">
                       <td className="p-2.5 text-center font-mono text-slate-400">{idx + 1}</td>
                       <td className="p-2.5">
-                        <select
-                          onChange={e => handleSelectWarehouseItem(row.id, Number(e.target.value))}
-                          value={row.itemId || ''}
-                          className="w-full p-1.5 bg-slate-50 border border-slate-300 rounded text-slate-700 text-xs focus:bg-white"
-                        >
-                          <option value="">انتخاب کالای کاتالوگ...</option>
-                          {warehouseItems.map(w => (
-                            <option key={w.id} value={w.id}>
-                              {w.name} {w.code ? `(${w.code})` : ''}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect
+                          value={row.itemId ?? ''}
+                          onChange={(_value, raw) => handleSelectWarehouseItem(row.id, raw as Item | undefined)}
+                          fetchUrl={PICK_LIST_URLS.items}
+                          mapResultToOption={itemOption}
+                          placeholder="جست‌وجو در فهرست کالا..."
+                        />
                       </td>
                       <td className="p-2.5">
                         <input

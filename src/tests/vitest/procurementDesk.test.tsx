@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ProcurementOrder, PurchaseRequisition } from '../../types';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
@@ -14,6 +15,7 @@ vi.mock('../../contexts/AuthContext', () => ({
 import { ConfirmWarehouseDeliveryModal } from '../../components/procurement/ConfirmWarehouseDeliveryModal';
 import { RequisitionDetailModal } from '../../components/procurement/RequisitionDetailModal';
 import { ProcurementDesk } from '../../components/procurement/ProcurementDesk';
+import { CreateRequisitionModal } from '../../components/procurement/CreateRequisitionModal';
 
 /** an order exactly as `GET /api/procurement/orders` returns it (`listProcurementOrders`) */
 const serverOrder: ProcurementOrder = {
@@ -60,7 +62,7 @@ describe('procurement order fields (TD-701)', () => {
 
   it('requisition detail shows the number and the Jalali date of each purchase order', async () => {
     fetchJson.mockResolvedValue({ success: true, data: [serverOrder] });
-    render(<RequisitionDetailModal isOpen requisition={requisition} warehouseItems={[]} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
+    render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
     await waitFor(() => expect(screen.queryAllByText(/تامین الماس/).length).toBeGreaterThan(0));
     expect(screen.queryByText(/R-1405-0009/)).not.toBeNull();
     expect(screen.queryByText(/۱۴۰۵\/۰۷\/۱۴/)).not.toBeNull();
@@ -133,13 +135,13 @@ describe('procurement desk sections and buttons (TD-702)', () => {
   it('the requisition detail offers workflow actions only to approvers', async () => {
     fetchJson.mockResolvedValue({ success: true, data: [] });
     granted.add('procurement.view');
-    const { unmount } = render(<RequisitionDetailModal isOpen requisition={pending} warehouseItems={[]} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
+    const { unmount } = render(<RequisitionDetailModal isOpen requisition={pending} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
     await waitFor(() => expect(fetchJson).toHaveBeenCalled());
     expect(screen.queryByText('رد درخواست خرید')).toBeNull();
     expect(screen.queryByText(/تایید و صدور دستور خرید/)).toBeNull();
     unmount();
     granted.add('procurement.approve');
-    render(<RequisitionDetailModal isOpen requisition={pending} warehouseItems={[]} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
+    render(<RequisitionDetailModal isOpen requisition={pending} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
     expect(screen.queryByText('رد درخواست خرید')).not.toBeNull();
   });
 });
@@ -198,5 +200,27 @@ describe('procurement desk pages and server filters (TD-697)', () => {
     await waitFor(() => expect(requestsTo('/api/procurement/orders').some(q => q.get('status') === 'pending_delivery' && q.get('limit') === '20')).toBe(true));
     screen.getByText('۳. رسیدهای قطعی انبار (تحویل‌شده)').click();
     await waitFor(() => expect(requestsTo('/api/procurement/orders').some(q => q.get('status') === 'final')).toBe(true));
+  });
+});
+
+/**
+ * v9.0.279 (TD-700، B10-13): انتخابگر کالای فرم درخواست خرید در فهرست انتخاب کالا (`/items/options`) با جست‌وجوی
+ * سرور می‌گردد. پیش‌تر `<select>` ساده‌ای از کالاهای بارگذاری‌شده میز بود که با ۷۵ کالا فقط ۵۰ را داشت و جست‌وجو نداشت.
+ */
+describe('requisition item picker (TD-700)', () => {
+  it('searches the item pick list on the server and fills the row from the chosen item', async () => {
+    const sixtieth = { id: 60, code: 'RM-60', name: 'مهره کریستالی شصتم', unit: 'ریسه', weightedAverageCost: 2500 };
+    fetchJson.mockImplementation(async (u: unknown) => {
+      const url = String(u ?? '');
+      if (url.startsWith(PICK_LIST_URLS.items) && url.includes(encodeURIComponent('شصتم'))) return { success: true, data: [sixtieth] };
+      return { success: true, data: [] };
+    });
+    render(<CreateRequisitionModal isOpen onClose={() => undefined} onSuccess={() => undefined} />);
+    fireEvent.click(screen.getByText('جست‌وجو در فهرست کالا...'));
+    fireEvent.change(screen.getByPlaceholderText('جستجو...'), { target: { value: 'شصتم' } });
+    await waitFor(() => expect(screen.queryByText('مهره کریستالی شصتم (RM-60)')).not.toBeNull());
+    fireEvent.click(screen.getByText('مهره کریستالی شصتم (RM-60)'));
+    expect((screen.getByPlaceholderText('نام کالا') as HTMLInputElement).value).toBe('مهره کریستالی شصتم');
+    expect(fetchJson.mock.calls.some(call => String(call[0]).startsWith(`${PICK_LIST_URLS.items}?search=`))).toBe(true);
   });
 });

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.279 — Requisition Item Picker With Server Search
+- **Fix (TD-700, B10-13):** the requisition form picks items with `SearchableSelect` over the item pick list (`/items/options`, server search) instead of a plain `<select>` of the items the desk had loaded; the desk no longer preloads items.
+
 ### v9.0.278 — Procurement Desk Pages and Server Filters
 - **Fix (TD-697, B10-10):** the requisition list takes the statuses it writes and their groups (`REQUISITION_STATUS_FILTERS`: open, ordered, received, rejected, consolidated), the form priorities, item-name search in SQL and one shared limit (`PROCUREMENT_LIST_MAX_LIMIT`, answered as used); each requisition carries its order counts; the desk pages requisitions and orders on the server.
 

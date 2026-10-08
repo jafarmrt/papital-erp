@@ -107,15 +107,14 @@
 | TD-644 | گزارش کار و پیوست (بسته ۱۳) | P3 (B13-19) — عنوان، متن و برچسب گزارش کار سقف طول ندارند: متن ۲٫۳ میلیون نویسه‌ای ذخیره و در هر فهرست برای همه بینندگان فرستاده شد | dailyLogs.routes.ts | open (P3) |
 | TD-645 | گزارش کار و پیوست (بسته ۱۳) | P3 (B13-20) — پیوند اعلان `/daily-logs?id=N` خوانده نمی‌شود و کلیک روی اعلان یا کارت داشبورد فهرست کلی را باز می‌کند، نه همان گزارش | DailyLogsPage.tsx، useDailyLogs.ts، DailyLogsMentionsWidget.tsx | open (P3) |
 | TD-646 | گزارش کار و پیوست (بسته ۱۳) | P3 (B13-21) — «منشن» ۲۰ بار، «نوتیفیکیشن» یک بار و کلید مجوز `daily_logs.manage_all` در رابط گزارش کار | MentionTextarea.tsx، DailyLogsMentionsWidget.tsx، DailyLogModal.tsx، DailyLogReviewModal.tsx، DailyLogStatsCards.tsx، DailyLogsList.tsx، useDailyLogs.ts، DailyLogsPage.tsx، dailyLogs.routes.ts | open (P3، تصمیم ت۶) |
-| TD-700 | تدارکات (بسته ۱۰) | P3 (B10-13) — انتخابگر کالای فرم درخواست `<select>` ساده بی جست‌وجو است، نه `SearchableSelect`؛ برش ۵۰ کالایی آن (۲۵ از ۷۵ کالا بی پیام نبودند) با فهرست انتخاب `/items/options` در v9.0.138 (TD-888) برطرف شد | CreateRequisitionModal.tsx | open (P3) |
 | TD-901 | تدارکات (بسته ۱۰) | P3 (ت۵، مشاهده‌های O19 و O20) — واژه‌ها و پیام‌های رابط تدارکات: «(Requisitions)»، «متریال»، «کاتالوگ»، «سند دوبل»، «پک»، «کلید اکشن گردش کار»، کلید انگلیسی اقدام در پیام خطا («cancel_order»)، رقم لاتین `describeOverOrders` و خطای اعتبارسنجی فقط در toast، نه زیر فیلد | ProcurementDesk.tsx، CreateRequisitionModal.tsx، ConfirmWarehouseDeliveryModal.tsx، ProcurementOrderList.tsx، SplitOrderModal.tsx، procurement.routes.ts، procurement.service.ts، requisitionOrder.ts | open (P3، تصمیم ت۵) |
 
 ---
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۹۳ ردیف
-- **آرشیو شده (resolved):** ۶۳۲ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۹۲ ردیف
+- **آرشیو شده (resolved):** ۶۳۳ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 

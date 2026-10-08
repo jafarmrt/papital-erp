@@ -25,7 +25,7 @@ type DeskTab = 'requisitions' | 'active_orders' | 'delivered_receipts';
 
 export function ProcurementDesk() {
   // v9.0.277 (TD-702، B10-15): هر بخش جدا بارگذاری می‌شود و هر دکمه با مجوز API خودش نشان داده می‌شود
-  const { warehouseItems, summary, version, reload: loadData } = useProcurementDeskData();
+  const { summary, version, reload: loadData } = useProcurementDeskData();
   const access = useProcurementAccess();
   const [activeMainTab, setActiveMainTab] = useState<DeskTab>('requisitions');
   const [deliveringOrderId, setDeliveringOrderId] = useState<number | null>(null);
@@ -376,7 +376,6 @@ export function ProcurementDesk() {
         <RequisitionDetailModal
           isOpen={!!selectedRequisitionForDetail}
           requisition={selectedRequisitionForDetail}
-          warehouseItems={warehouseItems}
           onClose={() => setSelectedRequisitionForDetail(null)}
           onRefresh={loadData}
           onOpenSplitOrder={(req) => {
@@ -391,7 +390,6 @@ export function ProcurementDesk() {
         <SplitOrderModal
           isOpen={!!selectedRequisitionForSplit}
           requisition={selectedRequisitionForSplit}
-          warehouseItems={warehouseItems}
           onClose={() => setSelectedRequisitionForSplit(null)}
           onSuccess={loadData}
         />
@@ -401,7 +399,6 @@ export function ProcurementDesk() {
       {isCreateModalOpen && (
         <CreateRequisitionModal
           isOpen={isCreateModalOpen}
-          warehouseItems={warehouseItems}
           onClose={() => setIsCreateModalOpen(false)}
           onSuccess={loadData}
         />

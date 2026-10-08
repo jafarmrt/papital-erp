@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, ShoppingBag, Plus, Trash2, CheckCircle2, Building2, FileText, AlertCircle, Loader2, ArrowDown, PackageCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { PurchaseRequisition, PurchaseRequisitionItemRow, Item } from '../../types';
+import { PurchaseRequisition, PurchaseRequisitionItemRow } from '../../types';
 import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber, parseCleanNumber, formatPersianDate } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
@@ -13,7 +13,6 @@ import { OverOrderWarning, type OverOrderedItem } from './OverOrderWarning';
 interface SplitOrderModalProps {
   isOpen: boolean;
   requisition: PurchaseRequisition;
-  warehouseItems: Item[];
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -51,7 +50,6 @@ const CLOSURE_REASON_OPTIONS = [
 export function SplitOrderModal({
   isOpen,
   requisition,
-  warehouseItems,
   onClose,
   onSuccess
 }: SplitOrderModalProps) {

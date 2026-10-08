@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, FileText, CheckCircle2, AlertTriangle, ShoppingCart, UserCheck, Check, Ban, Loader2, PackageCheck, Truck, Layers } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { PurchaseRequisition, Item, ProcurementOrder } from '../../types';
+import { PurchaseRequisition, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
@@ -13,7 +13,6 @@ import { REQUISITION_PRIORITY_DETAIL_BADGES, REQUISITION_PRIORITY_DETAIL_FALLBAC
 interface RequisitionDetailModalProps {
   isOpen: boolean;
   requisition: PurchaseRequisition;
-  warehouseItems: Item[];
   onClose: () => void;
   onRefresh: () => void;
   onOpenSplitOrder: (req: PurchaseRequisition) => void;
@@ -22,7 +21,6 @@ interface RequisitionDetailModalProps {
 export function RequisitionDetailModal({
   isOpen,
   requisition,
-  warehouseItems,
   onClose,
   onRefresh,
   onOpenSplitOrder
