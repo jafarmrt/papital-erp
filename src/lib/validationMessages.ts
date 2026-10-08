@@ -151,7 +151,7 @@ export const FIELD_LABELS: Record<string, string> = {
   isActive: 'وضعیت فعال بودن',
   query: 'پارامترهای جست‌وجو',
   params: 'پارامترهای نشانی',
-  // v9.0.266 (TD-688): فیلدهای درخواست خرید
+  // v9.0.314 (TD-688): فیلدهای درخواست خرید
   requestedQty: 'مقدار درخواستی',
   unitPriceEstimate: 'برآورد قیمت واحد',
   itemName: 'نام کالا',

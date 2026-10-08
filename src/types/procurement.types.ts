@@ -28,7 +28,7 @@ export interface PurchaseRequisitionItemRow {
   notes?: string;
   closureNote?: string;
   closure_note?: string;
-  /** v9.0.268 (TD-690): ردیفی که هنگام صدور سفارش بسته شد؛ دیگر سفارش داده و بی سفارش دریافت نمی‌شود */
+  /** v9.0.316 (TD-690): ردیفی که هنگام صدور سفارش بسته شد؛ دیگر سفارش داده و بی سفارش دریافت نمی‌شود */
   closed?: boolean;
   /** v8.0.38 (TD-289): سفارش‌های بیش از درخواست این ردیف با دلیل ثبت‌شده */
   overOrders?: RequisitionOverOrderRecord[];
@@ -74,10 +74,10 @@ export interface PurchaseRequisition {
   totalEstimatedAmount?: number;
   total_estimated_amount?: number;
   items: PurchaseRequisitionItemRow[];
-  /** v9.0.274 (TD-694): درخواستی که این درخواست در آن تجمیع شد (وضعیت `consolidated`) و کد آن */
+  /** v9.0.322 (TD-694): درخواستی که این درخواست در آن تجمیع شد (وضعیت `consolidated`) و کد آن */
   consolidatedIntoId?: number | null;
   consolidatedIntoCode?: string | null;
-  /** v9.0.278 (TD-697): شمار سفارش‌های زنده درخواست و سفارش‌های در انتظار تحویل (از سرور، شمرده در SQL) */
+  /** v9.0.326 (TD-697): شمار سفارش‌های زنده درخواست و سفارش‌های در انتظار تحویل (از سرور، شمرده در SQL) */
   ordersCount?: number;
   pendingDeliveryOrdersCount?: number;
   isDeleted?: number;

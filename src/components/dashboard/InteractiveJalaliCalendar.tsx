@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, Clock } from 'lucide-react';
-import { toPersianDigits, toEnglishDigits, getTodayJalaliDate } from '../../utils';
+import { toPersianDigits, toEnglishDigits, getTodayJalaliDate, jalaliMonthFirstWeekday, jalaliMonthLength } from '../../utils';
 
 export interface CalendarEventItem {
   id: string | number;
@@ -29,52 +29,6 @@ const JALALI_MONTH_NAMES = [
 
 const WEEKDAY_NAMES = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
 
-// Helper to determine days in Jalali month
-function getJalaliMonthDaysCount(year: number, month: number): number {
-  if (month >= 1 && month <= 6) return 31;
-  if (month >= 7 && month <= 11) return 30;
-  // Is leap year in Jalali
-  const leaps = [1, 5, 9, 13, 17, 22, 26, 30];
-  const cycleYear = year % 33;
-  const isLeap = leaps.includes(cycleYear);
-  return isLeap ? 30 : 29;
-}
-
-// Convert Jalali year/month/1 to approximate day of week (0 = Sat, 6 = Fri)
-function getFirstDayOfWeekInJalaliMonth(year: number, month: number): number {
-  try {
-    // We create a date string in Persian calendar format and find corresponding weekday
-    // By probing Gregorian dates or using an anchor calculation
-    // Anchor: 1403/01/01 was Wednesday (day 4 in 0=Sat, 1=Sun, 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri)
-    // For general robustness, let's use Intl on approximate Gregorian anchor
-    const testDate = new Date();
-    // Search within +/- 400 days for matching Jalali year and month
-    for (let offset = -400; offset <= 400; offset++) {
-      const d = new Date(testDate.getTime() + offset * 86400000);
-      const parts = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric'
-      }).format(d);
-      const enParts = toEnglishDigits(parts).split('/');
-      if (enParts.length === 3) {
-        const y = parseInt(enParts[0], 10);
-        const m = parseInt(enParts[1], 10);
-        const day = parseInt(enParts[2], 10);
-        if (y === year && m === month && day === 1) {
-          // JS Date getDay(): 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
-          // Convert to: 0=Sat, 1=Sun, 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri
-          const jsDay = d.getDay();
-          return (jsDay + 1) % 7;
-        }
-      }
-    }
-    return 0;
-  } catch {
-    return 0;
-  }
-}
-
 export function InteractiveJalaliCalendar({ events = [], onSelectDate, onEventClick }: InteractiveJalaliCalendarProps) {
   const todayStr = getTodayJalaliDate(); // e.g. 1405/06/06
   const [todayYear, todayMonth, todayDay] = useMemo(() => {
@@ -91,11 +45,12 @@ export function InteractiveJalaliCalendar({ events = [], onSelectDate, onEventCl
   }, [currentYear, currentMonth, selectedDay]);
 
   const daysInMonth = useMemo(() => {
-    return getJalaliMonthDaysCount(currentYear, currentMonth);
+    return jalaliMonthLength(currentYear, currentMonth);
   }, [currentYear, currentMonth]);
 
+  // v9.0.292 (TD-681): روز هفته آغاز ماه از تبدیل تقویم، برای هر ماهی؛ پیش‌تر جست‌وجوی ±۴۰۰ روزه دور امروز بود
   const firstDayOffset = useMemo(() => {
-    return getFirstDayOfWeekInJalaliMonth(currentYear, currentMonth);
+    return jalaliMonthFirstWeekday(currentYear, currentMonth);
   }, [currentYear, currentMonth]);
 
   // Events mapped by day of current month
@@ -310,7 +265,7 @@ export function InteractiveJalaliCalendar({ events = [], onSelectDate, onEventCl
                 </div>
 
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 shrink-0 font-medium">
-                  {ev.type === 'crm_followup' ? 'پیگیری' : 'تسک'}
+                  {ev.type === 'crm_followup' ? 'پیگیری' : 'کار'}
                 </span>
               </div>
             ))}

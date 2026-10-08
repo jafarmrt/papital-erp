@@ -366,7 +366,7 @@ export function FinancialReportsTab({
           }`}
         >
           <ShieldCheck className="w-4 h-4" />
-          <span>وضعیت اتوماسیون اسناد</span>
+          <span>وضعیت صدور خودکار اسناد</span>
         </button>
 
         {/* V10-6.1: گزارش حسابداری پروژه‌ها */}

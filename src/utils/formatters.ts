@@ -66,6 +66,7 @@ export function formatStrategyDisplayTitle(rawTitle: string | null | undefined):
 
 export function formatCurrencyLabel(c?: string): string {
   if (!c || c === 'IRR' || c === 'ریال') return 'ریال';
+  if (c === 'TOMAN' || c === 'تومان') return 'تومان';
   if (c === 'USD') return 'دلار';
   if (c === 'EUR') return 'یورو';
   if (c === 'AED') return 'درهم';

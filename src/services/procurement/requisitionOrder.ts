@@ -50,7 +50,7 @@ export function findOverOrders(
 }
 
 /** متن هشدار سفارش بیش از درخواست برای پیام خطا، یادداشت درخواست و گزارش فعالیت */
-/** v9.0.280 (TD-901، ت۵): مقدارها با رقم فارسی؛ پیش‌تر پیام سفارش بیش از درخواست رقم لاتین داشت */
+/** v9.0.328 (TD-901، ت۵): مقدارها با رقم فارسی؛ پیش‌تر پیام سفارش بیش از درخواست رقم لاتین داشت */
 export function describeOverOrders(overOrders: OverOrderLine[]): string {
   const n = (value: number) => toPersianDigits(value, 3);
   return overOrders

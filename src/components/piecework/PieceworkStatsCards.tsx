@@ -1,6 +1,6 @@
 import { DollarSign, Clock, FileText, CheckCircle2 } from 'lucide-react';
-import { formatPersianNumber, formatPersianPrice } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 interface PieceworkStatsCardsProps {
   totalLoggedAmount: number;
@@ -15,14 +15,14 @@ export function PieceworkStatsCards({
   payrollsCount,
   tasksCount
 }: PieceworkStatsCardsProps) {
-  const appCurrency = useAppCurrency();
+  const rial = useRialDisplay();
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between">
         <div>
           <span className="text-xs text-slate-500 font-bold block">مجموع کارکرد ثبت‌شده</span>
           <span className="text-lg font-black text-slate-900 mt-1 block font-mono">
-            {formatPersianPrice(totalLoggedAmount, appCurrency)}
+            {rial.amount(totalLoggedAmount)}
           </span>
         </div>
         <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -34,7 +34,7 @@ export function PieceworkStatsCards({
         <div>
           <span className="text-xs text-slate-500 font-bold block">در انتظار تسویه و فیش</span>
           <span className="text-lg font-black text-amber-600 mt-1 block font-mono">
-            {formatPersianPrice(pendingLoggedAmount, appCurrency)}
+            {rial.amount(pendingLoggedAmount)}
           </span>
         </div>
         <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">

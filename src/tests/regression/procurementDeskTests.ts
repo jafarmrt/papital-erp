@@ -12,13 +12,13 @@ export async function runProcurementDeskTests(shouldRun: ShouldRun): Promise<Tes
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_procurement_desk_reads_td_702',
-      'v9.0.277: every API the procurement desk reads opens for each permission that opens the page (procurement.view, projects.view); the summary refused projects.view and emptied the desk (TD-702)',
+      'v9.0.325: every API the procurement desk reads opens for each permission that opens the page (procurement.view, projects.view); the summary refused projects.view and emptied the desk (TD-702)',
       ['td702', 'procurement', 'permissions', 'security', 'package10'], deskReadsCase],
     ['reg_procurement_list_filters_td_697',
-      'v9.0.278: the requisition list filters by the statuses it writes and their groups, searches item names, counts each requisition\'s orders in SQL and answers with the limit it used; the order list takes only its own status filters (TD-697)',
+      'v9.0.326: the requisition list filters by the statuses it writes and their groups, searches item names, counts each requisition\'s orders in SQL and answers with the limit it used; the order list takes only its own status filters (TD-697)',
       ['td697', 'procurement', 'pagination', 'package10'], listFiltersCase],
     ['reg_procurement_messages_td_901',
-      'v9.0.280: procurement errors name a workflow action by its Persian title, never its key, and a requisition row without a quantity gets its own Persian message on that field (TD-901)',
+      'v9.0.328: procurement errors name a workflow action by its Persian title, never its key, and a requisition row without a quantity gets its own Persian message on that field (TD-901)',
       ['td901', 'procurement', 'wording', 'package10'], messagesCase],
   ];
   for (const [id, name, tags, run] of cases) {
@@ -43,7 +43,7 @@ export async function runProcurementDeskTests(shouldRun: ShouldRun): Promise<Tes
   return results;
 }
 
-/** v9.0.277 (TD-702, B10-15): a holder of either page key reads every desk API; a key that does not open the page reads none */
+/** v9.0.325 (TD-702, B10-15): a holder of either page key reads every desk API; a key that does not open the page reads none */
 async function deskReadsCase(h: Harness, wrong: string[]): Promise<string> {
   const rule = PAGE_ACCESS['/procurement'];
   const keys = typeof rule.gate === 'object' ? rule.gate.anyOf : [];
@@ -64,7 +64,7 @@ async function deskReadsCase(h: Harness, wrong: string[]): Promise<string> {
 
 type ListBody = { data?: Array<Record<string, unknown>>; total?: number; limit?: number; page?: number };
 
-/** v9.0.278 (TD-697, B10-10): status groups, item search, order counts and the limit actually used */
+/** v9.0.326 (TD-697, B10-10): status groups, item search, order counts and the limit actually used */
 async function listFiltersCase(h: Harness, wrong: string[]): Promise<string> {
   const prefix = `P10L-${h.tag}-${Math.floor(Math.random() * 1e5)}`;
   const itemName = `فیروزه فهرست ${prefix}`;
@@ -128,7 +128,7 @@ async function listFiltersCase(h: Harness, wrong: string[]): Promise<string> {
 
 type ErrorBody = { message?: string; details?: { issues?: Array<{ path?: string; message?: string }> } };
 
-/** v9.0.280 (TD-901, decision t5): Persian workflow action names and a field-level message for a missing quantity */
+/** v9.0.328 (TD-901, decision t5): Persian workflow action names and a field-level message for a missing quantity */
 async function messagesCase(h: Harness, wrong: string[]): Promise<string> {
   const missingQty = await h.post('/api/procurement/requisitions', { title: `پیام‌ها ${h.tag}`, items: [{ itemName: `کالای پیام ${h.tag}` }] });
   const qtyIssue = (missingQty.body as ErrorBody)?.details?.issues?.find(issue => issue.path === 'body.items.0.requestedQty');

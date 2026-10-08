@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { FinancialHealthReport } from '../../types';
+import type { AutomationRow, AutomationSummary } from '../../lib/accounting/automationStatus';
 import { ACCOUNTING_REPORT_QUERY_OPTIONS, silentMutationError } from './accountingQueryConfig';
 import { invalidateAfterVoucherChange } from './accountingInvalidation';
 
@@ -38,21 +39,7 @@ export function useSyncMissingVouchers() {
   });
 }
 
-export interface AutomationRow {
-  docType: string;
-  label: string;
-  autoSupported: boolean;
-  totalDocs: number;
-  withVoucher: number;
-  missingVoucher: number;
-}
-
-export interface AutomationSummary {
-  totalDocs: number;
-  coveredDocs: number;
-  coveragePercent: number;
-  gapTypes: string[];
-}
+export type { AutomationRow, AutomationSummary } from '../../lib/accounting/automationStatus';
 
 export interface AutomationStatusData {
   report: AutomationRow[];

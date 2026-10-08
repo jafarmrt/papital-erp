@@ -49,8 +49,8 @@ export function applyDeliveredLines(
 type SettlementRow = Pick<PurchaseRequisitionItemRow, 'itemId' | 'requestedQty' | 'orderedQty' | 'status' | 'closureNote' | 'closed'> & { receivedQty?: number | string };
 
 /**
- * v9.0.268 (TD-690، B10-03): ردیفی که هنگام صدور سفارش بسته شد و دیگر سفارش داده نمی‌شود: نشان `closed`، یا یادداشت
- * بستن، یا (ردیف‌های پیش از v9.0.268) وضعیت «سفارش‌شده» با سفارشی کمتر از درخواست، که تبدیل فقط هنگام بستن می‌نوشت.
+ * v9.0.316 (TD-690، B10-03): ردیفی که هنگام صدور سفارش بسته شد و دیگر سفارش داده نمی‌شود: نشان `closed`، یا یادداشت
+ * بستن، یا (ردیف‌های پیش از v9.0.316) وضعیت «سفارش‌شده» با سفارشی کمتر از درخواست، که تبدیل فقط هنگام بستن می‌نوشت.
  */
 export function isClosedRequisitionRow(row: SettlementRow): boolean {
   return row.closed === true
@@ -59,7 +59,7 @@ export function isClosedRequisitionRow(row: SettlementRow): boolean {
 }
 
 /**
- * v9.0.268 (TD-690): ردیفی که کارش تمام است: کالای فهرست که به اندازه درخواست دریافت شده یا بسته شده است، و ردیف بی‌کالا
+ * v9.0.316 (TD-690): ردیفی که کارش تمام است: کالای فهرست که به اندازه درخواست دریافت شده یا بسته شده است، و ردیف بی‌کالا
  * (خدمت) که «دریافت کالا» آن را دریافت‌شده کرده است.
  */
 export function isSettledRequisitionRow(row: SettlementRow): boolean {

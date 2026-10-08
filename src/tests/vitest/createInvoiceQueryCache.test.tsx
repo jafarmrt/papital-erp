@@ -36,7 +36,7 @@ function saveFlowResponse(url: string, init?: RequestInitLike): unknown {
   const method = init?.method ?? 'GET';
   if (url === '/warehouses') return [warehouse];
   if (url === '/customers/options') return { data: [] };
-  if (url === '/documents?status=proforma&limit=1000') return { data: [] };
+  if (url === '/documents?status=proforma&types=invoice,proforma&page=1&limit=20') return { data: [] };
   if (url === '/documents/next-ref?type=invoice') return { nextRef: 'INV-1001' };
   if (url === '/drafts/invoice?draftKey=new_invoice' && method === 'GET') return { draft: { payload: draft, isDeleted: 0, updatedAt: '2026-10-03T08:00:00Z' } };
   if (url === '/documents' && method === 'POST') return { success: true, docId: 11 };
@@ -96,7 +96,7 @@ describe('CreateInvoicePage — React Query cache', () => {
     otherPages.forEach(key => expect(client.getQueryState(key)?.isInvalidated, JSON.stringify(key)).toBe(true));
     // پیش‌فاکتورهای باز و شماره بعدی همین صفحه هم دوباره خوانده می‌شوند
     await waitFor(() => {
-      expect(fetchJson.mock.calls.filter(([url]) => url === '/documents?status=proforma&limit=1000').length).toBeGreaterThanOrEqual(2);
+      expect(fetchJson.mock.calls.filter(([url]) => url === '/documents?status=proforma&types=invoice,proforma&page=1&limit=20').length).toBeGreaterThanOrEqual(2);
       expect(fetchJson.mock.calls.filter(([url]) => url === '/documents/next-ref?type=invoice').length).toBeGreaterThanOrEqual(2);
     });
   });
@@ -109,7 +109,7 @@ describe('CreateInvoicePage — React Query cache', () => {
         signals.set(url, init?.signal);
         return new Promise(() => undefined);
       }
-      if (url === '/documents?status=proforma&limit=1000') {
+      if (url === '/documents?status=proforma&types=invoice,proforma&page=1&limit=20') {
         return Promise.resolve({ data: [{ id: 5, type: 'invoice', status: 'proforma', ref_number: 'PF-5', date: '2026-10-01', buyer_name: 'مشتری باز' }] });
       }
       return Promise.resolve([]);

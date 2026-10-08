@@ -12,8 +12,9 @@ import {
   PieceworkPersonnelRate
 } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
-import { parseQuantityOrTime, formatPersianPrice, errorMessageOf, toStorageDate } from '../utils';
+import { parseQuantityOrTime, formatPersianPrice, errorMessageOf, toStorageDate, getTodayIsoDate } from '../utils';
 import { computeFixedSalaryShares, priorFixedGrantsOf } from '../lib/payroll/fixedSalaryProration';
+import { fixedSalaryPeriodEnd, payrollPeriodFutureError, serviceEndOf } from '../lib/payroll/payrollPeriod';
 import { refreshSuggestedRates, submittedRate, suggestedRate } from '../lib/payroll/workLogRate';
 import {
   exportPieceworkTasksToExcel,
@@ -512,7 +513,7 @@ export function usePiecework() {
     }
   };
 
-  const handleSaveCustomRate = async (taskId: number, customRate: number) => {
+  const handleSaveCustomRate = async (taskId: number, customRate: string) => {
     if (!selectedPersonnelForRates) return;
     try {
       await fetchJson('/piecework/personnel-rates', {
@@ -524,7 +525,8 @@ export function usePiecework() {
           customRate
         })
       });
-      setCustomRatesMap(prev => ({ ...prev, [taskId]: customRate }));
+      // v9.0.284 (TD-809): نرخ نمایش‌داده همان است که سرور ذخیره کرد و کارکرد می‌گیرد
+      await loadCustomRates(Number(selectedPersonnelForRates));
       hotToast.success('نرخ اختصاصی ثبت شد');
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در ذخیره نرخ اختصاصی');
@@ -568,8 +570,11 @@ export function usePiecework() {
     const startIso = toStorageDate(payrollStartDate);
     const endIso = toStorageDate(payrollEndDate);
     if (!startIso || !endIso || Number(selectedPayrollPerson.monthlySalary || 0) <= 0) return null;
+    // v9.0.268 (TD-808): حقوق ثابت فقط تا پایان همکاری — همان قاعده سرور
+    const fixedEnd = fixedSalaryPeriodEnd(startIso, endIso, serviceEndOf(selectedPayrollPerson));
+    if (fixedEnd === null) return null;
     const personPayrolls = (Array.isArray(payrollsList) ? payrollsList : []).filter(pr => Number(pr.personnelId) === Number(payrollPersonnelId));
-    return computeFixedSalaryShares(selectedPayrollPerson.monthlySalary, startIso, endIso, personPayrolls.flatMap(priorFixedGrantsOf));
+    return computeFixedSalaryShares(selectedPayrollPerson.monthlySalary, startIso, fixedEnd, personPayrolls.flatMap(priorFixedGrantsOf));
   }, [payrollFixedIncluded, selectedPayrollPerson, payrollsList, payrollPersonnelId, payrollStartDate, payrollEndDate]);
 
   const payrollFixedRemainingHint = useMemo<string | null>(() => {
@@ -587,6 +592,12 @@ export function usePiecework() {
 
     if (!payrollPersonnelId || !payrollStartDate || !payrollEndDate) {
       hotToast.error('پرسنل و بازه تاریخی الزامی هستند');
+      return;
+    }
+    // v9.0.268 (TD-808): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود — همان پیام سرور
+    const futureError = payrollPeriodFutureError(toStorageDate(payrollEndDate) || '', getTodayIsoDate());
+    if (futureError) {
+      hotToast.error(futureError);
       return;
     }
 

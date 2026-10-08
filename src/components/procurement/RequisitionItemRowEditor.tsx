@@ -19,7 +19,7 @@ export interface NewRequisitionRow {
 /** گزینه انتخابگر کالا: نام و کد کالای فهرست انتخاب (`GET /items/options`) */
 const itemOption = (item: Item) => ({ value: item.id, label: `${item.name}${item.code ? ` (${item.code})` : ''}` });
 
-/** v9.0.280 (TD-901، ت۵): پیام خطای هر فیلد زیر همان فیلد، نه فقط در اعلان */
+/** v9.0.328 (TD-901، ت۵): پیام خطای هر فیلد زیر همان فیلد، نه فقط در اعلان */
 export function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
   return <p id={id} role="alert" className="mt-1 text-[11px] font-bold text-rose-600">{message}</p>;

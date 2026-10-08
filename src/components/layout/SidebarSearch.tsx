@@ -22,7 +22,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           type="text"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="جستجوی منو... (Ctrl+K)"
+          placeholder="جستجوی فهرست... (Ctrl+K)"
           className="w-full bg-slate-800/90 text-slate-100 placeholder:text-slate-500 text-[11px] rounded-xl pl-7 pr-7 py-1.5 border border-slate-750 focus:border-blue-500 focus:bg-slate-800 focus:outline-none transition-all shadow-inner"
         />
         <Search

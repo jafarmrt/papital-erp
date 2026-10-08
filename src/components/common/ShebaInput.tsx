@@ -98,8 +98,10 @@ export const ShebaInput: React.FC<ShebaInputProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const digits = digitsAfterSeparatorBackspace(e, inputRef.current, ' ', 24);
-    if (digits !== null) onChange(digits ? `IR${digits}` : '');
+    const removed = digitsAfterSeparatorBackspace(e, inputRef.current, ' ', 24);
+    if (removed === null) return;
+    onChange(removed.digits ? `IR${removed.digits}` : '');
+    restoreCaretAfterDigits(inputRef, formatShebaDigits(removed.digits), removed.caretDigits, removed.digits.length);
   };
 
   return (

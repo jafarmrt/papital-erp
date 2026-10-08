@@ -2,6 +2,7 @@ import { ACCOUNTING_COST_CHECKS } from './accountingCostScenarios.js';
 import { CONCURRENCY_CHECKS } from './concurrencyChecks.js';
 import { DECISION_CHECKS } from './decisionScenarios.js';
 import { FRONTEND_SERVER_CHECKS } from './frontendServerChecks.js';
+import { PAYROLL_INTEGRITY_CHECKS } from './payrollIntegrityChecks.js';
 import { TREASURY_BANK_CHECKS } from './treasuryBankChecks.js';
 import { WOO_DELETED_ORDER_CHECKS } from './wooDeletedOrderChecks.js';
 
@@ -17,4 +18,5 @@ export const DOMAIN_CHECKS: Array<[string, string, (wh: string) => Promise<strin
   ...DECISION_CHECKS,
   ...WOO_DELETED_ORDER_CHECKS,
   ...TREASURY_BANK_CHECKS, // package 4, series 9 (v9.0.67 on)
+  ...PAYROLL_INTEGRITY_CHECKS, // package 12 payroll, series 9 (v9.0.266 on)
 ];

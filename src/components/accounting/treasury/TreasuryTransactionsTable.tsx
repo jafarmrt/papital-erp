@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Search,
   Download,
@@ -12,8 +12,10 @@ import {
   ChevronLeft,
   ArrowDownLeft,
   ArrowUpRight,
+  Unlink,
 } from 'lucide-react';
-import { formatPersianPrice, formatCurrencyLabel, formatPersianDate } from '../../../utils';
+import { formatPersianPrice, formatPersianDate } from '../../../utils';
+import { isRialCurrency, rialDisplayOf } from '../../../lib/rialDisplay';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { treasuryMethodLabel, treasuryPartyTypeLabel } from '../../../lib/treasury/treasuryExport';
 import type { BankAccount, TreasuryTransaction, FinancialAttachment } from '../../../types';
@@ -45,6 +47,8 @@ interface TreasuryTransactionsTableProps {
   onExportExcel: () => void;
   onViewAttachments: (info: { title: string; attachments: FinancialAttachment[] }) => void;
   onVoidTransaction: (tx: TreasuryTransaction) => void;
+  /** v9.0.272 (TD-779): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») */
+  onDetachDocument?: (tx: TreasuryTransaction) => void;
 }
 
 export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps> = React.memo(({
@@ -73,7 +77,9 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
   onExportExcel,
   onViewAttachments,
   onVoidTransaction,
+  onDetachDocument,
 }) => {
+  const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
   // v9.0.102 (TD-509): `transactions` همان صفحه جاری است که سرور برگردانده (شمار کل در totalFilteredCount)
   const pagedTransactions = transactions;
@@ -198,7 +204,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
               <th className="py-3 px-3">طرف حساب</th>
               <th className="py-3 px-3">روش و حساب</th>
               <th className="py-3 px-3">شرح</th>
-              <th className="py-3 px-3 text-left">مبلغ ({formatCurrencyLabel(appCurrency)})</th>
+              <th className="py-3 px-3 text-left">مبلغ ({rial.label})</th>
               {txAccountFilter !== 'all' && (
                 <th className="py-3 px-3 text-left">مانده جاری</th>
               )}
@@ -316,7 +322,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     {/* Amount */}
                     <td className="py-3 px-3 text-left font-mono font-bold">
                       <span className={isReceipt ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
-                        {isReceipt ? '+' : '-'}{formatPersianPrice(tx.amount)}
+                        {isReceipt ? '+' : '-'}{isRialCurrency(tx.currency) ? rial.number(tx.amount) : formatPersianPrice(tx.amount, String(tx.currency).trim())}
                       </span>
                     </td>
 
@@ -325,7 +331,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                       <td className="py-3 px-3 text-left font-mono font-bold text-slate-700 dark:text-slate-200">
                         {runningBal !== undefined ? (
                           <span className={runningBal >= 0 ? 'text-slate-800 dark:text-slate-200' : 'text-rose-500'}>
-                            {formatPersianPrice(runningBal)}
+                            {rial.money(runningBal, tx.currency)}
                           </span>
                         ) : '—'}
                       </td>
@@ -351,13 +357,26 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     {/* v9.0.67 (TD-499، ت۱): ردیف معکوس (ابطال تراکنش دیگر) دکمه ابطال ندارد؛ سرور هم آن را رد می‌کند */}
                     <td className="py-3 px-3 text-center">
                       {!isVoided && !(tx.reversalOfId ?? tx.reversal_of_id) ? (
-                        <button
-                          onClick={() => onVoidTransaction(tx)}
-                          title="ابطال تراکنش و ثبت سند معکوس"
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
-                        >
-                          <AlertTriangle size={14} />
-                        </button>
+                        <div className="inline-flex items-center gap-1">
+                          {/* v9.0.272 (TD-779): دریافت یا پرداخت وصل به سند «علی‌الحساب» می‌شود تا سند باطل‌شدنی شود */}
+                          {onDetachDocument && (tx.documentId ?? tx.document_id) && !(tx.payrollId ?? tx.payroll_id) ? (
+                            <button
+                              onClick={() => onDetachDocument(tx)}
+                              title="جدا کردن از سند (علی‌الحساب)"
+                              aria-label="جدا کردن از سند (علی‌الحساب)"
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition cursor-pointer"
+                            >
+                              <Unlink size={14} />
+                            </button>
+                          ) : null}
+                          <button
+                            onClick={() => onVoidTransaction(tx)}
+                            title="ابطال تراکنش و ثبت سند معکوس"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
+                          >
+                            <AlertTriangle size={14} />
+                          </button>
+                        </div>
                       ) : (
                         <span className="text-[10px] text-slate-400 font-mono">—</span>
                       )}

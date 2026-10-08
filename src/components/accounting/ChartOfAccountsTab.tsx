@@ -327,7 +327,7 @@ export function ChartOfAccountsTab({
             <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="جستجو در کد یا نام حساب..."
+              placeholder="جست‌وجو در کد یا نام حساب..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pr-9 pl-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"

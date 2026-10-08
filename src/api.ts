@@ -134,6 +134,12 @@ export function isPublicApiEndpoint(endpoint: string): boolean {
   return PUBLIC_API_PATHS.has(path);
 }
 
+/** v9.0.307 (TD-670): پیام قطع ارتباط هنگام ثبت؛ معلوم نیست کارساز ثبت را انجام داده است یا نه */
+export const UNCONFIRMED_MUTATION_MESSAGE = 'ارتباط با کارساز قطع شد و معلوم نیست ثبت انجام شد یا نه. وضعیت را بررسی کنید و اگر ثبت نشده بود، دوباره بفرستید.';
+
+/** v9.0.308 (TD-679): پیام پایان انتظار برای ثبتی که کارساز هنوز انجامش می‌دهد */
+export const IN_FLIGHT_STILL_RUNNING_MESSAGE = 'ثبت پیشین هنوز در کارساز در حال انجام است. کمی بعد وضعیت را بررسی کنید؛ ارسال دوباره نتیجه همان ثبت را می‌گیرد.';
+
 /** بیشینه بار انتظار برای نتیجه درخواستی که سرور «در حال پردازش» گزارش می‌کند (هر بار به اندازه Retry-After) */
 const IN_FLIGHT_MAX_WAITS = 15;
 
@@ -200,11 +206,15 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       abortErr.name = 'AbortError';
       throw (err?.name === 'AbortError' ? err : abortErr);
     }
-    if (retries > 0) {
+    // v9.0.307 (TD-670، B16-06، تصمیم ت۳-الف): فقط خواندن خودکار دوباره فرستاده می‌شود. درخواست تغییردهنده شاید به کارساز
+    // رسیده و ثبت شده باشد و بیشتر مسیرها کلید تکرار را نمی‌خوانند؛ کاربر وضعیت را می‌بیند و اگر لازم بود خودش دوباره
+    // می‌فرستد، با همان کلید (کلید پس از خطای شبکه آزاد نمی‌شود)
+    if (retries > 0 && !isMutation) {
       await new Promise(resolve => setTimeout(resolve, 800));
       return fetchJson(endpoint, sameKeyOptions(), retries - 1, inFlightWaits);
     }
-    throw new ApiError(`ارتباط با سرور برقرار نشد: ${err?.message || 'خطای شبکه'}`, 'NETWORK_ERROR', 0);
+    if (isMutation) throw new ApiError(UNCONFIRMED_MUTATION_MESSAGE, 'NETWORK_ERROR', 0);
+    throw new ApiError(`ارتباط با کارساز برقرار نشد: ${err?.message || 'خطای شبکه'}`, 'NETWORK_ERROR', 0);
   }
 
   if (!res.ok) {
@@ -220,7 +230,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       }
       settleKey(res.status);
       throw new ProtocolError(
-        `پاسخ خطای سرور با فرمت معتبر JSON دریافت نشد (وضعیت ${res.status}): ${parseErr?.message || 'خطای پروتکل'}`,
+        `پاسخ خطای کارساز با قالب معتبر JSON دریافت نشد (وضعیت ${res.status}): ${parseErr?.message || 'خطای شیوه ارتباط'}`,
         res.status
       );
     }
@@ -228,6 +238,11 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     if (idempotencyKey && isInFlightResponse(res.status, data?.code) && inFlightWaits < IN_FLIGHT_MAX_WAITS) {
       await new Promise(resolve => setTimeout(resolve, inFlightRetryDelayMs(res.headers.get('Retry-After'))));
       return fetchJson(endpoint, sameKeyOptions(), retries, inFlightWaits + 1);
+    }
+    // v9.0.308 (TD-679، B16-15): درخواست اول هنوز در کارساز اجراست؛ کلید نگه داشته می‌شود تا ارسال دوباره کاربر همان
+    // کلید را بفرستد و نتیجه همان درخواست را بگیرد، نه ثبتی تازه و بی‌محافظت کنار آن
+    if (idempotencyKey && isInFlightResponse(res.status, data?.code)) {
+      throw new ApiError(IN_FLIGHT_STILL_RUNNING_MESSAGE, 'IDEMPOTENCY_IN_FLIGHT', 409, data?.details ?? null);
     }
     settleKey(res.status);
 
@@ -259,7 +274,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       data.message || 
       (typeof data.error === 'string' ? data.error : '') ||
       data.errorObject?.message || 
-      `خطا در برقراری ارتباط با سرور (${res.status})`;
+      `خطا در برقراری ارتباط با کارساز (${res.status})`;
     const details = data.details || data.errorDetails || data.errorObject?.details || null;
 
     if (res.status === 403) {
@@ -267,7 +282,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       if (code === PASSWORD_RESET_REQUIRED && typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('auth:password-reset-required'));
       }
-      const forbiddenMsg = data.message || (typeof data.error === 'string' ? data.error : '') || 'دسترسی غیرمجاز یا توکن امنیتی منقضی شده است (۴۰۳)';
+      const forbiddenMsg = data.message || (typeof data.error === 'string' ? data.error : '') || 'دسترسی غیرمجاز یا نشانه ورود منقضی شده است (۴۰۳)';
       throw new ApiError(forbiddenMsg, code || 'AUTHORIZATION_ERROR', 403, details);
     }
     if (res.status === 429) {
@@ -295,7 +310,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       throw (parseErr?.name === 'AbortError' ? parseErr : abortErr);
     }
     throw new ProtocolError(
-      `پاسخ سرور قابل تفسیر به JSON نیست (وضعیت ${res.status}): ${parseErr?.message || 'خطای پروتکل'}`,
+      `پاسخ کارساز قابل تفسیر به JSON نیست (وضعیت ${res.status}): ${parseErr?.message || 'خطای شیوه ارتباط'}`,
       res.status
     );
   }

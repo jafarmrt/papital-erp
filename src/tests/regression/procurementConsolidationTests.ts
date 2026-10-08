@@ -19,7 +19,7 @@ async function countTitled(h: Harness, title: string): Promise<number> {
 }
 
 /**
- * v9.0.274 (TD-694، B10-07، ت۳ الف): تجمیع فقط درخواست تأییدنشده و بی سفارش را می‌پذیرد، شناسه ناموجود را رد می‌کند و
+ * v9.0.322 (TD-694، B10-07، ت۳ الف): تجمیع فقط درخواست تأییدنشده و بی سفارش را می‌پذیرد، شناسه ناموجود را رد می‌کند و
  * منبع‌ها را در همان تراکنش «تجمیع‌شده» با پیوند و گردش کار خاتمه‌یافته می‌کند؛ منبع بسته اقدامی نمی‌پذیرد.
  */
 export async function consolidationCase(h: Harness, wrong: string[]): Promise<string> {
@@ -103,7 +103,7 @@ export async function consolidationCase(h: Harness, wrong: string[]): Promise<st
   return 'received and missing sources refused the whole consolidation; two consolidations sharing a source ran one after the other and the second was refused; the sources became consolidated with a link, a terminated workflow and an audit row, and took no further action';
 }
 
-/** v9.0.274 (TD-694): منبع باز تجمیع قدیمی (یادداشت «تجمیع شده از درخواست‌های: …») در بررسی سلامت فهرست می‌شود */
+/** v9.0.322 (TD-694): منبع باز تجمیع قدیمی (یادداشت «تجمیع شده از درخواست‌های: …») در بررسی سلامت فهرست می‌شود */
 export async function legacyConsolidationHealthCase(h: Harness, wrong: string[]): Promise<string> {
   const f = await fixture(h);
   const x = await f.item();

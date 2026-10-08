@@ -170,7 +170,7 @@ export default function GlobalHeaderSearch() {
             </button>
           ) : (
             <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono text-slate-400 bg-slate-200/70 border border-slate-300 rounded shadow-2xs">
-              ⌘K
+              Ctrl+K
             </kbd>
           )}
         </div>

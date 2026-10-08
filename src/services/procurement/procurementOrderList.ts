@@ -15,7 +15,7 @@ export interface ProcurementOrderListParams {
   limit?: number;
 }
 
-/** سفارش تدارکات: سند زنده‌ای که ستون پیوندش به درخواست خرید پر است (v9.0.272، TD-691، ت۲) */
+/** سفارش تدارکات: سند زنده‌ای که ستون پیوندش به درخواست خرید پر است (v9.0.320، TD-691، ت۲) */
 const linkedOrder = and(isNotNull(documents.procurementRequisitionId), eq(documents.isDeleted, 0));
 
 function orderListConditions(params: ProcurementOrderListParams): SQL | undefined {
@@ -41,7 +41,7 @@ function orderListConditions(params: ProcurementOrderListParams): SQL | undefine
 }
 
 /**
- * v9.0.272 (TD-691 / TD-698، B10-04 و B10-11، ت۲): فهرست سفارش‌های تدارکات فقط سندهای دارای پیوند درخواست است، و
+ * v9.0.320 (TD-691 / TD-698، B10-04 و B10-11، ت۲): فهرست سفارش‌های تدارکات فقط سندهای دارای پیوند درخواست است، و
  * فیلتر، شمارش و صفحه‌بندی در SQL انجام می‌شود. پیش‌تر برای هر صفحه همه رسیدها، پیش‌فاکتورها و درخواست‌ها در حافظه
  * خوانده و با `slice` صفحه‌بندی می‌شد، و هر رسید عادی انبار سفارش تدارکات شمرده می‌شد.
  */

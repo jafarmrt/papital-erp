@@ -23,7 +23,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
   const queryClient = useQueryClient();
   const { warehouses } = refData;
   const {
-    actionType, docType, refNumber, date, location, buyerName, currency, exchangeRate, returnInvoiceId,
+    actionType, docType, refNumber, date, location, buyerName, currency, exchangeRate, returnInvoiceId, returnVatPercent, setReturnVatPercent,
     notes, docItems, selectedProjectId, selectedProjectObj, attachments, getItemReservationSummary,
     setIsSaving, setDocItems, fetchNextRef, setReturnInvoiceRef, setReturnInvoiceId, setBuyerName,
     setSelectedSupplierObj, setNotes, setUnitPrice, setQuantity, setSelectedProjectId,
@@ -106,6 +106,8 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
           exchangeRate: docCurrency !== 'IRR' ? exchangeRate : null,
           projectId: selectedProjectId ? Number(selectedProjectId) : undefined,
           returnOfDocumentId: docType === 'return' && returnInvoiceId !== null ? returnInvoiceId : undefined,
+          // v9.0.274 (TD-774): مالیات برگشت با فاکتور مرجع را سرور از فاکتور می‌گیرد؛ بی فاکتور مرجع درصد کاربر
+          vatPercent: docType === 'return' && returnInvoiceId === null && returnVatPercent !== '' ? Number(returnVatPercent) : undefined,
           attachments,
           items: docItems.map(d => ({
             itemId: d.item.id,
@@ -134,6 +136,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
       void fetchNextRef();
       setReturnInvoiceRef('');
       setReturnInvoiceId(null);
+      setReturnVatPercent('');
       setBuyerName('');
       setSelectedSupplierObj(null);
       setNotes('');
