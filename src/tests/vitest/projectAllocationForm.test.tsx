@@ -40,13 +40,27 @@ const openForm = async () => {
   return screen.getByText('پروژه تولید مقصد:').parentElement as HTMLElement;
 };
 
+/** v9.0.399 (TD-767): the project and material pickers are SearchableSelect lists; open one and read its rows */
+const openPicker = (field: HTMLElement) => {
+  fireEvent.click(within(field).getByRole('button'));
+  return screen.getAllByRole('listitem').map(li => li.textContent ?? '');
+};
+const chooseRow = (label: string) => {
+  const row = screen.getAllByRole('listitem').find(li => li.textContent === label);
+  if (!row) throw new Error(`no row ${label}`);
+  fireEvent.click(row);
+};
+const pick = (field: HTMLElement, label: string) => {
+  fireEvent.click(within(field).getByRole('button'));
+  chooseRow(label);
+};
+
 // v9.0.386 (TD-759, owner decision t9 A): a cancelled or completed project takes no new material
 describe('material allocation form (TD-759)', () => {
   it('offers only projects that may take material', async () => {
     const field = await openForm();
-    await waitFor(() => expect(within(field).getAllByRole('option').length).toBeGreaterThan(1));
-    const offered = within(field).getAllByRole('option').map(o => o.textContent ?? '');
-    expect(offered.some(t => t.includes('PRJ-OPEN'))).toBe(true);
+    await waitFor(() => expect(openPicker(field).some(t => t.includes('PRJ-OPEN'))).toBe(true));
+    const offered = screen.getAllByRole('listitem').map(o => o.textContent ?? '');
     expect(offered.some(t => t.includes('PRJ-PAUSED'))).toBe(true);
     expect(offered.some(t => t.includes('PRJ-CANCELLED') || t.includes('PRJ-DONE'))).toBe(false);
   });
@@ -56,10 +70,10 @@ describe('material allocation form (TD-759)', () => {
 describe('material allocation warehouse (TD-751)', () => {
   it('allocates from the warehouse shown first', async () => {
     const field = await openForm();
-    await waitFor(() => expect(within(field).getAllByRole('option').length).toBeGreaterThan(1));
-    fireEvent.change(within(field).getByRole('combobox'), { target: { value: '1' } });
+    await waitFor(() => expect(openPicker(field).some(t => t.includes('PRJ-OPEN'))).toBe(true));
+    chooseRow('PRJ-OPEN - در جریان');
     const material = screen.getByText('ماده اولیه / قطعه مصرفی:').parentElement as HTMLElement;
-    fireEvent.change(within(material).getByRole('combobox'), { target: { value: '9' } });
+    pick(material, 'مهره (R-1) - موجودی کل: ۲۰ عدد');
     const warehouse = screen.getByText('انبار مبداء کسر موجودی:').parentElement as HTMLElement;
     expect((within(warehouse).getByRole('combobox') as HTMLSelectElement).value).toBe('WH-A');
     fireEvent.click(screen.getByText('تأیید و ثبت تخصیص'));

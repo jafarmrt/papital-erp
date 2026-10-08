@@ -4,6 +4,7 @@ import { WorkflowPreset } from '../../constants/presets';
 import { fetchJson } from '../../api';
 import { errorMessageOf, formatPersianNumber } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { SearchableSelect } from '../SearchableSelect';
 import { toast } from 'react-hot-toast';
 
 interface PieceworkTask {
@@ -395,10 +396,12 @@ export function WorkflowPresetsTab({
                               {/* Task Selector from Piecework Tasks */}
                               <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-amber-200">
                                 <span className="text-xs font-semibold text-slate-600 shrink-0">افزودن عنوان کاری:</span>
-                                <select
-                                  defaultValue=""
-                                  onChange={(e) => {
-                                    const selectedId = Number(e.target.value);
+                                {/* v9.0.399 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه عناوین کاری */}
+                                <SearchableSelect
+                                  className="flex-1"
+                                  value=""
+                                  onChange={(value) => {
+                                    const selectedId = Number(value);
                                     if (!selectedId) return;
                                     const selectedTask = availableTasks.find((t) => t.id === selectedId);
                                     if (!selectedTask) return;
@@ -410,7 +413,6 @@ export function WorkflowPresetsTab({
                                     // Check if already added
                                     if (currentTasks.some((t) => t.taskId === selectedTask.id || t.taskTitle === selectedTask.title)) {
                                       toast.error('این عنوان کاری قبلاً به این مرحله اضافه شده است');
-                                      e.target.value = '';
                                       return;
                                     }
 
@@ -428,17 +430,13 @@ export function WorkflowPresetsTab({
                                     }
 
                                     setWorkflowPresets(copy);
-                                    e.target.value = '';
                                   }}
-                                  className="flex-1 text-xs border border-slate-300 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                >
-                                  <option value="">-- انتخاب از عناوین کاری تعریف‌شده در حقوق و دستمزد --</option>
-                                  {availableTasks.map((t) => (
-                                    <option key={t.id} value={t.id}>
-                                      {t.title} ({t.category} - واحد: {t.unit || 'عدد'} - نرخ پایه: {rial.amount(t.defaultRate)})
-                                    </option>
-                                  ))}
-                                </select>
+                                  options={availableTasks.map((t) => ({
+                                    value: t.id,
+                                    label: `${t.title} (${t.category} - واحد: ${t.unit || 'عدد'} - نرخ پایه: ${rial.amount(t.defaultRate)})`,
+                                  }))}
+                                  placeholder="انتخاب از عناوین کاری تعریف‌شده در حقوق و دستمزد"
+                                />
                               </div>
 
                               {stgTasks.length > 0 ? (

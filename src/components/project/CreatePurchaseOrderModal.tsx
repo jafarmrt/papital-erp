@@ -14,6 +14,7 @@ import {
 import { ProjectDirectOrderFields } from './ProjectDirectOrderFields';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
+import { SearchableSelect } from '../SearchableSelect';
 
 interface CreatePurchaseOrderModalProps {
   isOpen: boolean;
@@ -416,18 +417,14 @@ export function CreatePurchaseOrderModal({
                           ) : (
                             <div className="flex items-center gap-1.5">
                               <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                              <select
-                                className="p-1 border border-amber-300 rounded text-[11px] bg-amber-50 text-amber-950 font-bold focus:outline-none"
-                                onChange={e => handleAssignWarehouseItem(idx, Number(e.target.value))}
-                                defaultValue=""
-                              >
-                                <option value="" disabled>انتخاب کالای انبار...</option>
-                                {warehouseItems.map(w => (
-                                  <option key={w.id} value={w.id}>
-                                    {w.name} ({w.code})
-                                  </option>
-                                ))}
-                              </select>
+                              {/* v9.0.399 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه کالاهای انبار */}
+                              <SearchableSelect
+                                className="min-w-[180px]"
+                                value=""
+                                onChange={value => { if (value) handleAssignWarehouseItem(idx, Number(value)); }}
+                                options={warehouseItems.map(w => ({ value: w.id, label: `${w.name} (${w.code})` }))}
+                                placeholder="انتخاب کالای انبار"
+                              />
                             </div>
                           )}
                         </td>

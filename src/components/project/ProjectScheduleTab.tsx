@@ -8,6 +8,7 @@ import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
 import { errorMessageOf, formatPersianDate, getTodayIsoDate, toStorageDate } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
+import { SearchableSelect } from '../SearchableSelect';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { useProjectVersion } from '../../hooks/useProjectVersion';
@@ -758,19 +759,15 @@ export default function ProjectScheduleTab({
                                 <div key={task.id || tIdx} className="p-2.5 bg-white border border-slate-200 rounded-xl grid grid-cols-1 sm:grid-cols-12 gap-2 items-center shadow-2xs hover:border-slate-300 transition-colors">
                                   {/* Piecework Task Select / Custom Input */}
                                   <div className="sm:col-span-4 flex items-center gap-1">
-                                    <select
+                                    {/* v9.0.399 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه عناوین کارمزدی */}
+                                    <SearchableSelect
+                                      className="w-full"
                                       disabled={!canEdit}
                                       value={task.taskId ? String(task.taskId) : ''}
-                                      onChange={(e) => handleUpdateTask(stg.id, p.id, tIdx, 'taskId', e.target.value)}
-                                      className="w-full px-2 py-1 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-amber-500 bg-white"
-                                    >
-                                      <option value="">-- انتخاب از عناوین کارمزدی --</option>
-                                      {pieceworkTasksList.map((pt) => (
-                                        <option key={pt.id} value={pt.id}>
-                                          {pt.title} 
-                                        </option>
-                                      ))}
-                                    </select>
+                                      onChange={(value) => handleUpdateTask(stg.id, p.id, tIdx, 'taskId', value)}
+                                      options={pieceworkTasksList.map((pt) => ({ value: pt.id, label: pt.title }))}
+                                      placeholder="انتخاب از عناوین کارمزدی"
+                                    />
                                     {!task.taskId && (
                                       <input
                                         type="text"

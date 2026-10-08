@@ -12,6 +12,7 @@ import { bomAllocationsExportFileName } from '../../lib/inventoryAudit/exportFil
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 import { isProjectOpenForAllocation } from '../../lib/projects/projectStatus';
 import { ErrorStateView } from '../common/ErrorStateView';
+import { SearchableSelect } from '../SearchableSelect';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 
 interface ProjectBomAllocationsTabProps {
@@ -656,35 +657,27 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
               {/* Project Select */}
               <div>
                 <label className="block text-slate-700 font-bold mb-1">پروژه تولید مقصد:</label>
-                <select
+                {/* v9.0.399 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه پروژه‌ها */}
+                <SearchableSelect
                   value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(Number(e.target.value))}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                >
-                  <option value="">-- انتخاب پروژه --</option>
-                  {projectsList.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.projectCode} - {p.title}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setSelectedProjectId(value ? Number(value) : '')}
+                  options={projectsList.map((p) => ({ value: p.id, label: `${p.projectCode} - ${p.title}` }))}
+                  placeholder="انتخاب پروژه"
+                />
               </div>
 
               {/* Raw Material Select */}
               <div>
                 <label className="block text-slate-700 font-bold mb-1">ماده اولیه / قطعه مصرفی:</label>
-                <select
+                <SearchableSelect
                   value={selectedItemId}
-                  onChange={(e) => setSelectedItemId(Number(e.target.value))}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                >
-                  <option value="">-- انتخاب ماده اولیه --</option>
-                  {itemsList.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} ({item.code}) - موجودی کل: {formatPersianNumber(item.currentStock || item.current_stock || 0)} {item.unit}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setSelectedItemId(value ? Number(value) : '')}
+                  options={itemsList.map((item) => ({
+                    value: item.id,
+                    label: `${item.name} (${item.code}) - موجودی کل: ${formatPersianNumber(item.currentStock || item.current_stock || 0)} ${item.unit ?? ''}`,
+                  }))}
+                  placeholder="انتخاب ماده اولیه"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">

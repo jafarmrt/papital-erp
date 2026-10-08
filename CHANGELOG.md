@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.399 — Searchable Project, Item and Task Pickers
+- **Searchable Project, Item and Task Pickers (TD-767):** six package-11 pickers were native selects over whole entity lists (projects, raw materials, warehouse items, piecework tasks); they are now `SearchableSelect`, and the project inventory picker labels each status from the closed status list.
+
 ### v9.0.398 — Project Read Failures Are Shown
 - **Project Read Failures Are Shown (TD-766):** several project screen reads only logged their failure, so it looked like empty data, and a failed item code suggestion became `PREFIX001`; each failure now shows its message (`errorMessageOf`) and the code stays empty.
 
