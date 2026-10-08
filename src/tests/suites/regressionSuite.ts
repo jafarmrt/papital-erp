@@ -677,13 +677,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       category: 'عمومی',
       unit: 'عدد',
       currentStock: 5,
-      buyPrice: 1000,
-      sellPrice: 1500,
+      weightedAverageCost: 1000,
       proformaReservedQty: 1,
       projectReservedQty: 1,
       totalReservedQty: 2,
       availableStock: 3,
-      totalReservedValue: 3000,
+      totalReservedCost: 2000,
       reservations: [
         {
           id: 'proforma-999-1',
@@ -698,8 +697,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           category: 'عمومی',
           unit: 'عدد',
           reservedQty: 1,
-          unitPrice: 1500,
-          totalValue: 1500,
+          unitCost: 1000,
+          totalCost: 1000,
           date: '2026-09-25'
         },
         {
@@ -715,8 +714,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           category: 'عمومی',
           unit: 'عدد',
           reservedQty: 1,
-          unitPrice: 1500,
-          totalValue: 1500,
+          unitCost: 1000,
+          totalCost: 1000,
           date: '2026-09-25'
         }
       ]
@@ -9336,7 +9335,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const { createTestItem, createTestDocument } = await import('../fixtures/factories.js');
       const { ProcurementService } = await import('../../services/procurement.service.js');
       const { ItemStockReservationService } = await import('../../services/items/itemStockReservation.service.js');
-      const item = await createTestItem({ name: `ERP-TEST-MARKER کالای اعشاری TD-239 ${suffix}`, code: `ITEM_TD239_${suffix}`, stocks: { '': 10 } });
+      const item = await createTestItem({ name: `ERP-TEST-MARKER کالای اعشاری TD-239 ${suffix}`, code: `ITEM_TD239_${suffix}`, stocks: { '': 10 }, weightedAverageCost: 0.1 });
       itemId = item.id;
       const violations: string[] = [];
       // 3 × 0.1 در عدد JS برابر 0.30000000000000004 است
@@ -9364,7 +9363,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const report = await ItemStockReservationService.getReservedStockDetails(undefined, true);
       const entry = report.allReservationEntries.find(e => e.sourceType === 'proforma' && Number(e.sourceId) === proforma.document.id);
       if (!entry) violations.push('رزرو پیش‌فاکتور آزمایشی در گزارش نیامد');
-      else if (entry.totalValue !== 0.3) violations.push(`ارزش رزرو پیش‌فاکتور: ${entry.totalValue} (باید 0.3)`);
+      // v9.0.399 (TD-823): the reservation is valued at the item's cost (WAC 0.1), never the proforma's price
+      else if (entry.totalCost !== 0.3) violations.push(`ارزش رزرو پیش‌فاکتور: ${entry.totalCost} (باید 0.3)`);
       if (violations.length > 0) throw new Error(violations.join(' | '));
       results.push(makeTestCase({
         id: 'reg_procurement_reservation_decimal_td_239', scenarioId: 'multi_currency_financials_and_ratios', name: testName, layer: 'regression',
@@ -10773,9 +10773,17 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runProcurementDeskTests } = await import('../regression/procurementDeskTests.js');
   results.push(...await runProcurementDeskTests(shouldRun));
 
-  // Package 7 PR A (v9.0.370+): which documents and projects reserve stock, and how much
+  // Package 7 PR A (v9.0.370+): which documents and projects reserve stock, and how much; PR B (v9.0.394+): how they are read
   const { runStockReservationTests } = await import('../regression/stockReservationTests.js');
   results.push(...await runStockReservationTests(shouldRun));
+  const { runStockReservationReadTests } = await import('../regression/stockReservationReadTests.js');
+  results.push(...await runStockReservationReadTests(shouldRun));
+  // Package 7 PR C (v9.0.396+): the raw material request queue
+  const { runPendingMaterialTests } = await import('../regression/pendingMaterialTests.js');
+  results.push(...await runPendingMaterialTests(shouldRun));
+  // Package 7 PR D (v9.0.399+): the reserved items report and the reorder alerts
+  const { runReservedItemsReportTests } = await import('../regression/reservedItemsReportTests.js');
+  results.push(...await runReservedItemsReportTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');

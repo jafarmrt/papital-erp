@@ -19,6 +19,39 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.404 — Reorder Alert on Free Stock
+- **Reorder alerts (TD-843, decision t7):** free stock (stock minus reservations) is compared with the reorder point; open purchases are shown as «در راه».
+
+### v9.0.403 — Reorder Purchase Receipt at Price Zero
+- **Reorder alerts (TD-830, B07-14):** a final receipt at price zero needs «کالای اهدایی» and is refused for an item without cost; the warehouse and the Jalali date can be chosen.
+
+### v9.0.402 — Reserved Items Excel Export and Source Links
+- **Reserved items report (TD-828, B07-12):** «خروجی اکسل» writes a real xlsx file with a Persian name and Jalali date; source links open the searched documents list or the project inventory control.
+
+### v9.0.401 — Below Reorder Point Filter
+- **Reorder alerts (TD-827, B07-11):** the «زیر نقطه سفارش» filter shows items with stock up to the reorder point instead of the out-of-stock ones.
+
+### v9.0.400 — Reserved Items by Reader
+- **Reserved items report (TD-829, B07-13):** cost and value go only to item cost readers and a proforma buyer only to documents.view holders; other readers see quantities and sources.
+
+### v9.0.399 — Reserved Items at Cost
+- **Reserved items report (TD-823, B07-07):** every reservation is valued at quantity × the item WAC in IRR, for proformas in any currency and projects alike; the proforma sale price is no longer reported.
+
+### v9.0.398 — Project Material Requests Through the Queue
+- **Raw material requests (TD-826, B07-10):** project control sends a request instead of creating an item; a request starts the pending-material workflow, whose approve and reject steps review it, and a direct review closes the open instance.
+
+### v9.0.397 — Pending Material Review Once
+- **Raw material requests (TD-825, B07-09):** sending needs `pending_materials.create`; approve, reject, edit and delete run under the request row lock and only from pending; the item is made by the item service and linked on the request (migration 0087).
+
+### v9.0.396 — Pending Material Approval Body
+- **Raw material requests (TD-824, B07-08):** the approval and the edit of a request send one camelCase form; the route bodies are strict, so the old snake_case keys are a 400 instead of being dropped.
+
+### v9.0.395 — Scoped Reservation Reads
+- **Reservations (TD-831, B07-15):** the reservation report reads sales proforma lines in one joined query, only finalized projects with stored rows and only the items those rows name; scoped reads (exit gate, item list, online shop) read only what may reach their items.
+
+### v9.0.394 — Reservation Readers Fail Closed
+- **Reservations (TD-821, B07-05):** a stored project reservation row is read as text and a row that reaches no live item is skipped and listed by the financial health check; the item list, the online shop sync and the reservation report fail closed instead of showing zero reservations.
+
 ### v9.0.393 — Setup Token Checked on Step 1
 - **Fix (TD-621, B01-41):** step 1 of the setup wizard needs the setup token, and a wrong token takes the wizard back to step 1 with the message under the token field; the password half was fixed by TD-532.
 

@@ -33,7 +33,6 @@ export const LOGIN_ONLY_ROUTES = new Set([
   'GET /api/notifications', 'GET /api/notifications/unread-count', 'PUT /api/notifications/:id/read',
   'PUT /api/notifications/read-all', 'DELETE /api/notifications/:id',
   'GET /api/piecework/payrolls/mine',
-  'POST /api/pending-materials',
   'POST /api/drafts', 'GET /api/drafts/:entityType', 'GET /api/drafts', 'DELETE /api/drafts/:entityType', 'DELETE /api/drafts/id/:id',
   'GET /api/attachments/:id',
 ]);

@@ -247,7 +247,7 @@
 | PUT | `/api/notifications/read-all` | login-only |
 | GET | `/api/notifications/unread-count` | login-only |
 | GET | `/api/pending-materials` | pending_materials.view \| products.view |
-| POST | `/api/pending-materials` | login-only |
+| POST | `/api/pending-materials` | pending_materials.create |
 | DELETE | `/api/pending-materials/:id` | pending_materials.delete |
 | PUT | `/api/pending-materials/:id` | pending_materials.approve |
 | PUT | `/api/pending-materials/:id/approve` | pending_materials.approve |

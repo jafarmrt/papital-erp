@@ -8,8 +8,7 @@ import { brief, fixture, type Fixture } from './documentEntryTests.js';
  * package 7 review and is red on the code before its fix.
  */
 export async function runStockReservationTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
-  const results: TestCaseResult[] = [];
-  const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
+  return runReservationCases(shouldRun, [
     ['reg_reservation_sales_proforma_only_td_818',
       'v9.0.370: only a sales proforma (invoice or proforma type in proforma status) reserves stock; a purchase proforma and a draft do not (TD-818)',
       ['td818', 'reservation', 'proforma', 'package7'], salesProformaOnlyCase],
@@ -25,7 +24,15 @@ export async function runStockReservationTests(shouldRun: ShouldRun): Promise<Te
     ['reg_reservation_keyed_by_item_td_822',
       'v9.0.374: the reservation summary is keyed by item id, so two items whose codes fold to one key keep their own reservations in the report, the item list and the exit gate (TD-822)',
       ['td822', 'reservation', 'summary', 'package7'], keyedByItemCase],
-  ];
+  ]);
+}
+
+/** [test id, test name, filter tags, case]; a case pushes what is wrong and returns its details */
+export type ReservationCase = [string, string, string[], (h: Harness, wrong: string[]) => Promise<string>];
+
+/** Runs each case selected by the filter on its own harness */
+export async function runReservationCases(shouldRun: ShouldRun, cases: ReservationCase[]): Promise<TestCaseResult[]> {
+  const results: TestCaseResult[] = [];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
     const tStart = Date.now();
@@ -87,7 +94,7 @@ async function putProject(h: Harness, projectId: number, body: Record<string, un
   return h.put(`/api/projects/${projectId}`, { ...body, version: Number(row?.version) });
 }
 
-async function postDoc(h: Harness, f: Fixture, type: string, status: string, itemId: number, quantity: number, price = 5_000) {
+export async function postDoc(h: Harness, f: Fixture, type: string, status: string, itemId: number, quantity: number, price = 5_000) {
   return h.post('/api/documents', f.doc(type, status, [{ itemId, quantity, unit_price: price, location: f.wh }]));
 }
 
@@ -364,3 +371,4 @@ async function keyedByItemCase(h: Harness, wrong: string[]): Promise<string> {
   if (over.status !== 400) wrong.push(`one more unit of the proforma's item answered ${brief(over)}, expected 400`);
   return 'two items whose codes fold to one key: the proforma of 6 stays on its own item in the report, GET /items and the exit gate';
 }
+

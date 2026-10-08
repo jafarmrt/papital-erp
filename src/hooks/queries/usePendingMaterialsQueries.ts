@@ -4,6 +4,7 @@ import { PendingMaterial, Category } from '../../types';
 import { toast } from 'react-hot-toast';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { invalidateDomain, invalidatePreset } from '../../lib/queryInvalidation';
+import type { PendingMaterialForm } from '../../lib/pendingMaterials/pendingMaterialForm';
 
 export function usePendingMaterialsQuery() {
   return useQuery<{ items: PendingMaterial[]; categories: Category[] }>({
@@ -25,7 +26,7 @@ export function useApprovePendingMaterialMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, payload }: { id: number; payload: any }) => {
+    mutationFn: async ({ id, payload }: { id: number; payload: PendingMaterialForm }) => {
       return fetchJson(`/pending-materials/${id}/approve`, {
         method: 'PUT',
         body: JSON.stringify(payload),
@@ -65,7 +66,7 @@ export function useUpdatePendingMaterialMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, payload }: { id: number; payload: any }) => {
+    mutationFn: async ({ id, payload }: { id: number; payload: PendingMaterialForm }) => {
       return fetchJson(`/pending-materials/${id}`, {
         method: 'PUT',
         body: JSON.stringify(payload),
