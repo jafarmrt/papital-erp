@@ -10772,6 +10772,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 15 PR e (v9.0.385+): test tools, timeline, dead-letter queue and notifications
   const { runRuleTestSimulationTests } = await import('../regression/ruleTestSimulationTests.js');
   results.push(...await runRuleTestSimulationTests(shouldRun));
+  const { runEventTimelineTests } = await import('../regression/eventTimelineTests.js');
+  results.push(...await runEventTimelineTests(shouldRun));
 
   // Package 10 PR B (v9.0.347+): procurement order link, duplicate submissions, consolidation, receiving
   const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');

@@ -1,6 +1,6 @@
 import { orm } from '../../db/drizzle.js';
 import { outboxEvents, deadLetterEvents, activityLogs, documents, items, customers, treasuryTransactions, productionProjects } from '../../db/schema.js';
-import { eq, and, desc, or, ilike } from 'drizzle-orm';
+import { eq, and, desc, or, ilike, inArray, sql } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { ruleActionTypeLabel } from '../../lib/events/ruleActionTypes.js';
@@ -9,6 +9,7 @@ import { EventActionEngineService } from './eventActionEngineService.js';
 import { RuleExpression } from '../ruleEngine.service.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { actionRuleView } from './integrationSecrets.js';
+import { timelineAggregateScope } from './timelineAggregates.js';
 
 /** v9.0.385 (TD-708): the live replay of a made-up event is removed */
 export const EVENT_REPLAY_LIVE_REMOVED = 'EVENT_REPLAY_LIVE_REMOVED';
@@ -96,8 +97,9 @@ export class EventSourcingReplayService {
             .orderBy(desc(documents.id))
             .limit(limit);
 
+          // v9.0.386 (TD-711): the id is the document id the events carry, never its number
           return rows.map(r => ({
-            id: String(r.code || r.id),
+            id: String(r.id),
             title: `سند شماره ${r.code || r.id} (${r.extra || r.type || 'بدون نام'})`
           }));
         }
@@ -138,7 +140,7 @@ export class EventSourcingReplayService {
             .limit(limit);
 
           return rows.map(r => ({
-            id: String(r.code || r.id),
+            id: String(r.id),
             title: `[${r.code}] ${r.title} (موجودی: ${r.extra || 0})`
           }));
         }
@@ -159,7 +161,7 @@ export class EventSourcingReplayService {
             .limit(limit);
 
           return rows.map(r => ({
-            id: String(r.code || r.id),
+            id: String(r.id),
             title: `تراکنش ${r.code || r.id} - ${r.title} (${Number(r.extra || 0).toLocaleString('fa-IR')})`
           }));
         }
@@ -180,7 +182,7 @@ export class EventSourcingReplayService {
             .limit(limit);
 
           return rows.map(r => ({
-            id: String(r.code || r.id),
+            id: String(r.id),
             title: `پروژه ${r.code || r.id} - ${r.title} (${r.extra || 'جاری'})`
           }));
         }
@@ -197,25 +199,24 @@ export class EventSourcingReplayService {
 
   /**
    * Builds a full chronological Event Sourcing timeline for a single aggregate instance.
+   *
+   * v9.0.386 (TD-711, B15-09): events match the aggregate types their publishers write (case-insensitive) and the exact
+   * aggregate id; audit rows are read only for the section's own entity names and the exact id, and only when the caller
+   * holds `audit_logs.view` (`includeAudit`, computed in the route), the permission of the audit log itself.
    */
-  static async getAggregateTimeline(aggregateType: string, aggregateId: string): Promise<TimelineEventItem[]> {
+  static async getAggregateTimeline(aggregateType: string, aggregateId: string, options: { includeAudit: boolean }): Promise<TimelineEventItem[]> {
     const timeline: TimelineEventItem[] = [];
     const aggIdStr = String(aggregateId).trim();
+    const scope = timelineAggregateScope(aggregateType);
+    if (!scope || !aggIdStr) return timeline;
+    const eventTypes = [...scope.eventAggregateTypes];
 
     try {
       // 1. Fetch Outbox Events for this aggregate
       const outboxList = await orm
         .select()
         .from(outboxEvents)
-        .where(
-          and(
-            eq(outboxEvents.aggregateType, aggregateType),
-            or(
-              eq(outboxEvents.aggregateId, aggIdStr),
-              ilike(outboxEvents.aggregateId, containsLikePattern(aggIdStr))
-            )
-          )
-        )
+        .where(and(inArray(sql<string>`lower(${outboxEvents.aggregateType})`, eventTypes), eq(outboxEvents.aggregateId, aggIdStr)))
         .orderBy(desc(outboxEvents.occurredAt));
 
       for (const ev of outboxList) {
@@ -240,15 +241,7 @@ export class EventSourcingReplayService {
       const dlqList = await orm
         .select()
         .from(deadLetterEvents)
-        .where(
-          and(
-            eq(deadLetterEvents.aggregateType, aggregateType),
-            or(
-              eq(deadLetterEvents.aggregateId, aggIdStr),
-              ilike(deadLetterEvents.aggregateId, containsLikePattern(aggIdStr))
-            )
-          )
-        );
+        .where(and(inArray(sql<string>`lower(${deadLetterEvents.aggregateType})`, eventTypes), eq(deadLetterEvents.aggregateId, aggIdStr)));
 
       for (const dlq of dlqList) {
         timeline.push({
@@ -266,18 +259,15 @@ export class EventSourcingReplayService {
         });
       }
 
-      // 3. Fetch Audit Logs for this entity
-      const auditLogs = await orm
-        .select()
-        .from(activityLogs)
-        .where(
-          or(
-            eq(activityLogs.entityId, aggIdStr),
-            ilike(activityLogs.description, containsLikePattern(aggIdStr))
-          )
-        )
-        .orderBy(desc(activityLogs.timestamp))
-        .limit(30);
+      // 3. Fetch Audit Logs for this entity (its own entity names and id; only for holders of the audit log permission)
+      const auditLogs = options.includeAudit && scope.auditEntities.length > 0
+        ? await orm
+          .select()
+          .from(activityLogs)
+          .where(and(inArray(activityLogs.entity, [...scope.auditEntities]), eq(activityLogs.entityId, aggIdStr)))
+          .orderBy(desc(activityLogs.timestamp))
+          .limit(30)
+        : [];
 
       for (const al of auditLogs) {
         const details = (al.details && typeof al.details === 'object') ? (al.details as Record<string, unknown>) : {};

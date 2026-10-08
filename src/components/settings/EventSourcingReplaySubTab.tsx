@@ -34,6 +34,8 @@ export function EventSourcingReplaySubTab() {
   
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
+  // v9.0.386 (TD-711): audit rows come only to holders of the audit log permission; the server says whether they were read
+  const [auditIncluded, setAuditIncluded] = useState(true);
   const [expandedTimelineId, setExpandedTimelineId] = useState<string | number | null>(null);
 
   // Simulation & Replay Modal state
@@ -83,9 +85,10 @@ export function EventSourcingReplaySubTab() {
     setTimeline([]);
     try {
       const params = new URLSearchParams({ type, aggregateType: type, id: aggId, aggregateId: aggId });
-      const data = await fetchJson<{ success?: boolean; timeline?: TimelineItem[]; message?: string }>(`/events/event-sourcing/timeline?${params.toString()}`);
+      const data = await fetchJson<{ success?: boolean; timeline?: TimelineItem[]; auditIncluded?: boolean; message?: string }>(`/events/event-sourcing/timeline?${params.toString()}`);
       if (data?.success) {
         setTimeline(Array.isArray(data.timeline) ? data.timeline : []);
+        setAuditIncluded(data.auditIncluded !== false);
       } else {
         showToast(data?.message || 'خطا در بارگذاری خط زمان رویدادها', 'error');
       }
@@ -274,6 +277,12 @@ export function EventSourcingReplaySubTab() {
             {timeline.length.toLocaleString('fa-IR')} رخداد ثبت‌شده
           </span>
         </div>
+
+        {!auditIncluded && selectedAggregateId && !isLoadingTimeline && (
+          <p className="mb-3 text-[11px] text-slate-500 dark:text-slate-400">
+            سطرهای سجل ممیزی فقط برای دارنده مجوز «مشاهده دفترچه سوابق تغییرات» نشان داده می‌شوند.
+          </p>
+        )}
 
         {isLoadingTimeline ? (
           <div className="p-12 text-center text-slate-400">

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission, can } from '../middleware/authorize.js';
 import { domainEventBus } from '../services/events/domainEventBus.js';
 import { OutboxService } from '../services/events/outboxService.js';
 import { DeadLetterQueueService } from '../services/events/deadLetterQueueService.js';
@@ -596,12 +596,15 @@ router.get(['/event-sourcing/timeline', '/timeline'], authorizePermission('event
       return res.status(400).json({ success: false, message: 'پارامترهای type و id الزامی هستند.' });
     }
 
-    const timeline = await EventSourcingReplayService.getAggregateTimeline(type, id);
+    // v9.0.386 (TD-711): audit rows only for holders of the audit log permission, computed here, never read from the request
+    const auditIncluded = await can(req.user, 'audit_logs.view');
+    const timeline = await EventSourcingReplayService.getAggregateTimeline(type, id, { includeAudit: auditIncluded });
 
     res.json({
       success: true,
       data: timeline,
-      timeline
+      timeline,
+      auditIncluded
     });
   } catch (error) {
     throw error;

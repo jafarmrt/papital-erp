@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.386 — Event Timeline Shows the Entity Own Rows
+- **Event timeline (TD-711):** the timeline compared «document» with the publisher's «Document», its picker gave the document number instead of the id, and audit rows of any entity whose id or description contained the id came back, also to a role without the audit-log permission; each entity type now maps to its event aggregate types and audit entity names (`TIMELINE_AGGREGATE_SCOPES`), outbox, dead-letter and audit rows match the exact id, and audit rows go only to holders of `audit_logs.view`.
+
 ### v9.0.385 — Rule Test, Event Simulation and Replay Have No Effect
 - **No-effect test tools (TD-708):** the rule test and the event simulation ran real actions with sample data (notifications to recipients, audit rows, a validly signed webhook with a fake amount to an outside partner) and the timeline's live replay ran without confirmation; the rule test now evaluates the stored rule and only describes its action, the simulation publishes nothing and lists the matching rules and receiving webhooks, and live replay is refused (422 EVENT_REPLAY_LIVE_REMOVED).
 
