@@ -1,3 +1,4 @@
+import { createTestUser } from '../fixtures/factories.js';
 import { runBusinessYearSimulation, type SimOperation } from '../simulation/businessYearSimulator.js';
 
 /**
@@ -13,6 +14,8 @@ const NEW_OPERATIONS: SimOperation[] = [
 export async function checkSimulatorRunsNewOperations(): Promise<string[]> {
   const weights: Partial<Record<SimOperation, number>> = { purchase: 6, sale: 6 };
   for (const op of NEW_OPERATIONS) weights[op] = 4;
+  // the simulator signs approvals as an existing user and creates none
+  await createTestUser({ role: 'admin' });
   const run = await runBusinessYearSimulation({ seed: 11, steps: 160, checkEvery: 20, weights });
   const problems = run.findings.map(f => `step ${f.firstStep} ${f.firstOp}: ${f.invariant} ${f.key}: ${f.message}`);
   for (const op of NEW_OPERATIONS) {

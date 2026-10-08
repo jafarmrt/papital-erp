@@ -202,12 +202,9 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
     const it = await createTestItem({ type: 'product', code: `${tag}_P${i}`, category: 'دستبند', stocks: {}, weightedAverageCost: 0 });
     items.push({ id: it.id, type: 'product' });
   }
+  // project items are made by the first purchases of the project operations (`purchaseItem`) and join the scope then
   const projectItems: SimItem[] = [];
-  for (let i = 0; i < 2; i++) {
-    const it = await createTestItem({ type: 'raw_material', code: `${tag}_PJ${i}`, category: 'مواد اولیه', stocks: {}, weightedAverageCost: 0 });
-    projectItems.push({ id: it.id, type: 'raw_material' });
-  }
-  scope.itemIds = [...items, ...projectItems].map(i => i.id);
+  scope.itemIds = items.map(i => i.id);
   const finance = await setupFinance(tag);
   const projectWorld = await setupProjectWorld(tag);
   Object.assign(scope, { bankAccountIds: [finance.bankAccountId], partyIds: [customer.id], projectIds: [projectWorld.projectId] });
@@ -220,7 +217,7 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
   const { snapshot, purchase, sale, salesReturn, issue, stockCount, transfer, voidDoc, productionReceipt } = ops;
   const random = { rng, pick, between, chance };
   const fin10 = createFinanceOperations(random, { tag, customer, supplier, treasuryIds: [], chequeIds: [], payrollPayments: [] }, finance);
-  const proj = createProjectOperations(random, { projectItems, mainWh, customer, supplier, allocationIds: [] }, projectWorld);
+  const proj = createProjectOperations(random, { tag, onItem: id => { scope.itemIds = [...(scope.itemIds ?? []), id]; }, projectItems, mainWh, customer, supplier, allocationIds: [] }, projectWorld);
   const steps: SimStepRecord[] = [];
   const findings = new Map<string, SimulationFinding>();
   let day = 0;
@@ -230,6 +227,7 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
     if (!findings.has(k)) findings.set(k, { ...v, firstStep: step, firstOp: op });
   };
 
+  await ops.openingReceipt();
   for (const v of await checkBusinessInvariants(scope)) addFinding(v, 0, 'setup');
   let lastGap: FinancialDecimal = (await inventoryValueGap(scope)).gap;
   const gapBySignature = new Map<string, { count: number; total: FinancialDecimal; firstStep: number }>();

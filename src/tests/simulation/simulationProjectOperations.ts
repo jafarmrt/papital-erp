@@ -8,7 +8,7 @@ import { ProjectService } from '../../services/projects.service.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
 import { snapshotTransitionsOf } from '../../services/workflow/workflowSnapshot.js';
 import type { WorkflowSnapshotDsl } from '../../services/workflow/workflowTransitionExecutor.js';
-import { createTestUser } from '../fixtures/factories.js';
+import { createTestItem } from '../fixtures/factories.js';
 import type { OpOutcome, SimItem, SimRandom } from './simulationOperations.js';
 import type { SimParty } from './simulationFinanceOperations.js';
 
@@ -21,23 +21,45 @@ import type { SimParty } from './simulationFinanceOperations.js';
 
 const ADMIN = { username: 'sim', role: 'admin' };
 const MAX_APPROVAL_STEPS = 6;
+const PROJECT_ITEM_COUNT = 2;
 
-export async function setupProjectWorld(tag: string): Promise<{ projectId: number; approverId: number }> {
+/**
+ * The approver is an existing user (the simulator creates none, so a database whose users table was empty stays so, as
+ * the restore drill of TD-361 expects); without one the approval operation is skipped.
+ */
+export async function setupProjectWorld(tag: string): Promise<{ projectId: number; approverId: number | null }> {
   await WorkflowEngineService.seedDefaultWorkflows();
   const { project } = await ProjectService.createProject({
     title: `Simulator project ${tag}`, startDate: await businessTodayIsoDate(), quantity: 1, products: [],
   } as unknown as Parameters<typeof ProjectService.createProject>[0]);
-  const approver = await createTestUser({ role: 'admin' });
-  return { projectId: project.id, approverId: approver.id };
+  const approver = (await pool.query<{ id: number }>(`SELECT id FROM users WHERE is_deleted = 0 ORDER BY id LIMIT 1`)).rows[0];
+  return { projectId: project.id, approverId: approver?.id ?? null };
 }
 
 export function createProjectOperations(
   random: SimRandom,
-  world: { projectItems: SimItem[]; mainWh: string; customer: SimParty; supplier: SimParty; allocationIds: number[] },
-  ids: { projectId: number; approverId: number }
+  world: { tag: string; onItem: (itemId: number) => void; projectItems: SimItem[]; mainWh: string; customer: SimParty; supplier: SimParty; allocationIds: number[] },
+  ids: { projectId: number; approverId: number | null }
 ) {
   const { pick, between } = random;
   const { projectItems, mainWh, customer, supplier } = world;
+
+  /**
+   * The project items are made by the first purchases (at most PROJECT_ITEM_COUNT), so every one carries a document line
+   * and none is an unreferenced marker row that `db:cleanup-test` would remove (TD-581 check on a simulated year)
+   */
+  const purchaseItem = async (): Promise<SimItem> => {
+    if (projectItems.length < PROJECT_ITEM_COUNT) {
+      const it = await createTestItem({
+        type: 'raw_material', code: `${world.tag}_PJ${projectItems.length}`, category: 'مواد اولیه', stocks: {}, weightedAverageCost: 0,
+      });
+      const item: SimItem = { id: it.id, type: 'raw_material' };
+      projectItems.push(item);
+      world.onItem(item.id);
+      return item;
+    }
+    return pick(projectItems);
+  };
 
   /** Stock of the main warehouse less every reservation of the item (sales proformas left open by a stuck approval) */
   const freeStock = async (itemId: number): Promise<number> => {
@@ -49,7 +71,7 @@ export function createProjectOperations(
 
   /** A requisition converted to one order and delivered; approval runs in the admin's name on conversion */
   const procurement = async (): Promise<OpOutcome> => {
-    const item = pick(projectItems);
+    const item = await purchaseItem();
     const quantity = between(5, 30);
     const unitPrice = between(50, 300) * 1000;
     const requisition = await ProcurementService.createRequisition({
@@ -65,6 +87,7 @@ export function createProjectOperations(
   };
 
   const bomAllocation = async (): Promise<OpOutcome> => {
+    if (projectItems.length === 0) return { detail: 'skip:no-project-item', tags: [] };
     const item = pick(projectItems);
     const available = await freeStock(item.id);
     if (available < 1) return { detail: 'skip:no-stock', tags: [] };
@@ -90,6 +113,9 @@ export function createProjectOperations(
    * walks it to its end (never a reject action), which finalizes it into an invoice (TD-415).
    */
   const proformaApproval = async (): Promise<OpOutcome> => {
+    const approverId = ids.approverId;
+    if (approverId === null) return { detail: 'skip:no-approver', tags: [] };
+    if (projectItems.length === 0) return { detail: 'skip:no-project-item', tags: [] };
     const item = pick(projectItems);
     const available = await freeStock(item.id);
     if (available < 1) return { detail: 'skip:no-stock', tags: [] };
@@ -99,7 +125,7 @@ export function createProjectOperations(
       items: [{ itemId: item.id, quantity, unitPrice: between(100, 500) * 1000, location: mainWh }],
     });
     // as POST /documents does for a sales proforma (TD-446): the active document definition, if any
-    await WorkflowEngineService.maybeStartWorkflow({ entityType: 'document', entityId: docId, userId: ids.approverId, userName: 'sim' });
+    await WorkflowEngineService.maybeStartWorkflow({ entityType: 'document', entityId: docId, userId: approverId, userName: 'sim' });
     for (let n = 0; n < MAX_APPROVAL_STEPS; n++) {
       const instance = (await pool.query<{ id: number; current_state_id: number; status: string; snapshot_dsl: WorkflowSnapshotDsl }>(
         `SELECT id, current_state_id, status, snapshot_dsl FROM workflow_instances
@@ -113,7 +139,7 @@ export function createProjectOperations(
       const next = forward.find(t => states.find(s => s.id === t.toStateId)?.stateType === 'terminal') ?? forward[0];
       if (!next) return { detail: `proforma #${docId} workflow has no forward action`, tags: ['stuck'] };
       await WorkflowEngineService.executeTransition({
-        instanceId: instance.id, transitionId: next.id, userId: ids.approverId, userName: 'sim', userRole: 'admin', userPermissions: [],
+        instanceId: instance.id, transitionId: next.id, userId: approverId, userName: 'sim', userRole: 'admin', userPermissions: [],
       });
     }
     return { detail: `proforma #${docId} workflow not finished in ${MAX_APPROVAL_STEPS} steps`, tags: ['stuck'] };
