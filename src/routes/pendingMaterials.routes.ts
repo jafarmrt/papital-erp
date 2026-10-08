@@ -5,14 +5,16 @@ import { eq, and, desc } from 'drizzle-orm';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
-import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { approvePendingMaterialSchema, createPendingMaterialSchema, rejectPendingMaterialSchema, updatePendingMaterialSchema } from './pendingMaterials.schemas.js';
-import { PendingMaterialsService } from '../services/pendingMaterials.service.js';
+import { PendingMaterialsService, type PendingMaterialActor } from '../services/pendingMaterials.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
+
+/** v9.0.378 (TD-825): the reviewer or sender whose name the service writes into the audit row, inside its transaction */
+const actorOf = (req: Request): PendingMaterialActor => ({ req, userId: req.user?.id, username: req.user?.username });
 
 // GET /api/pending-materials - List pending raw materials
 router.get('/pending-materials', authenticateToken, authorizePermission(...READ_PERMISSIONS.pendingMaterials), asyncHandler(async (req: Request, res: Response) => {
@@ -55,6 +57,7 @@ router.get('/pending-materials', authenticateToken, authorizePermission(...READ_
       thumbnail: r.thumbnail,
       rejectionReason: r.rejectionReason,
       rejection_reason: r.rejectionReason,
+      itemId: r.itemId,
       createdAt: r.createdAt,
       created_at: r.createdAt
     }));
@@ -68,109 +71,50 @@ router.get('/pending-materials', authenticateToken, authorizePermission(...READ_
 }));
 
 // POST /api/pending-materials - Submit a new pending material (from project inventory control)
-router.post('/pending-materials', authenticateToken, validate(createPendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const username = req.user?.username || req.user?.full_name || 'کاربر سیستم';
-    const inserted = await PendingMaterialsService.submitPendingMaterial({
-      ...req.body,
-      requestedBy: username
-    });
+// v9.0.378 (TD-825): sending a request needs pending_materials.create (before, any signed-in user); the request and its audit
+// row are written in one transaction
+router.post('/pending-materials', authenticateToken, authorizePermission('pending_materials.create'), validate(createPendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
+  const inserted = await PendingMaterialsService.submitPendingMaterial({
+    ...req.body,
+    requestedBy: req.user?.username || req.user?.full_name || 'کاربر سامانه'
+  }, actorOf(req));
 
-    // Log activity
-    await logActivity({
-      userId: req.user?.id,
-      username,
-      action: 'CREATE',
-      entity: 'ماده اولیه',
-      entityId: inserted.id,
-      description: `ثبت ماده اولیه "${inserted.name}" با کد "${inserted.code}" جهت بررسی انباردار`
-    });
-
-    res.status(201).json({
-      message: 'ماده اولیه در صف بررسی و تأیید انبار قرار گرفت',
-      data: inserted
-    });
-  } catch (err) {
-    logger.error({ message: 'Error creating pending material', error: err });
-    throw err;
-  }
+  res.status(201).json({
+    message: 'ماده اولیه در صف بررسی و تأیید انبار قرار گرفت',
+    data: inserted
+  });
 }));
 
 // PUT /api/pending-materials/:id/approve - Approve and register in official warehouse inventory
+// v9.0.378 (TD-825): one transaction under the request row lock, only from pending (409), the item made by the item service
 router.put('/pending-materials/:id/approve', authenticateToken, authorizePermission('pending_materials.approve'), validate(approvePendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const pId = Number(req.params.id);
-    const { officialItem: newItem } = await PendingMaterialsService.approvePendingMaterial(pId, req.body);
-
-    const username = req.user?.username || 'انباردار';
-    await logActivity({
-      userId: req.user?.id,
-      username,
-      action: 'CREATE',
-      entity: 'کالا',
-      entityId: newItem.id,
-      description: `کالای "${newItem.name}" با کد "${newItem.code}" توسط انباردار تأیید و در انبار ثبت گردید`
-    });
-
-    res.json({
-      message: 'ماده اولیه با موفقیت تأیید و در انبار ثبت شد',
-      item: newItem
-    });
-  } catch (err) {
-    logger.error({ message: 'Error approving pending material', error: err });
-    throw err;
-  }
+  const { officialItem: newItem } = await PendingMaterialsService.approvePendingMaterial(Number(req.params.id), req.body ?? {}, actorOf(req));
+  res.json({
+    message: 'ماده اولیه با موفقیت تأیید و در انبار ثبت شد',
+    item: newItem
+  });
 }));
 
 // PUT /api/pending-materials/:id/reject - Reject pending material
 router.put('/pending-materials/:id/reject', authenticateToken, authorizePermission('pending_materials.approve'), validate(rejectPendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const pId = Number(req.params.id);
-    const { rejectionReason } = req.body || {};
-    const rejected = await PendingMaterialsService.rejectPendingMaterial(pId, rejectionReason);
-
-    const username = req.user?.username || 'انباردار';
-    await logActivity({
-      userId: req.user?.id,
-      username,
-      action: 'UPDATE',
-      entity: 'ماده اولیه',
-      entityId: pId,
-      description: `کد ماده اولیه "${rejected.name}" (${rejected.code}) رد شد و به انبار اضافه نگردید`
-    });
-
-    res.json({
-      message: 'درخواست ماده اولیه رد گردید. کد کالا در انبار ثبت نشد.'
-    });
-  } catch (err) {
-    logger.error({ message: 'Error rejecting pending material', error: err });
-    throw err;
-  }
+  const { rejectionReason } = req.body || {};
+  await PendingMaterialsService.rejectPendingMaterial(Number(req.params.id), rejectionReason, actorOf(req));
+  res.json({
+    message: 'درخواست ماده اولیه رد گردید. کد کالا در انبار ثبت نشد.'
+  });
 }));
 
 // PUT /api/pending-materials/:id - Update pending material details
 // حوزه H (TD-302): «ذخیره ویرایش» پنجره تأیید است؛ همان مجوز تأیید را می‌خواهد (پیش‌تر هر کاربر واردشده)
 router.put('/pending-materials/:id', authenticateToken, authorizePermission('pending_materials.approve'), validate(updatePendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const pId = Number(req.params.id);
-    await PendingMaterialsService.updatePendingMaterial(pId, req.body);
-    res.json({ message: 'مشخصات ماده اولیه به‌روزرسانی شد' });
-  } catch (err) {
-    logger.error({ message: 'Error updating pending material', error: err });
-    throw err;
-  }
+  await PendingMaterialsService.updatePendingMaterial(Number(req.params.id), req.body, actorOf(req));
+  res.json({ message: 'مشخصات ماده اولیه به‌روزرسانی شد' });
 }));
 
-// DELETE /api/pending-materials/:id - Delete pending material
+// DELETE /api/pending-materials/:id - Delete pending material (only while pending, v9.0.378)
 router.delete('/pending-materials/:id', authenticateToken, authorizePermission('pending_materials.delete'), validate(paramsIdSchema), asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const pId = Number(req.params.id);
-    await PendingMaterialsService.deletePendingMaterial(pId);
-    res.json({ message: 'ماده اولیه حذف شد' });
-  } catch (err) {
-    logger.error({ message: 'Error deleting pending material', error: err });
-    throw err;
-  }
+  await PendingMaterialsService.deletePendingMaterial(Number(req.params.id), actorOf(req));
+  res.json({ message: 'ماده اولیه حذف شد' });
 }));
 
 export default router;

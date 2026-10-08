@@ -152,7 +152,8 @@ export function cleanupSteps(m: string): CleanupStep[] {
           AND NOT EXISTS (SELECT 1 FROM document_items di WHERE di.item_id = i.id)
           AND NOT EXISTS (SELECT 1 FROM project_product_stage_progress sp WHERE sp.item_id = i.id)
           AND NOT EXISTS (SELECT 1 FROM project_bom_allocations b WHERE b.item_id = i.id)
-          AND NOT EXISTS (SELECT 1 FROM production_projects p WHERE p.item_id = i.id)`,
+          AND NOT EXISTS (SELECT 1 FROM production_projects p WHERE p.item_id = i.id)
+          AND NOT EXISTS (SELECT 1 FROM pending_materials pm WHERE pm.item_id = i.id)`,
         ...workflowOf('item', 'erp_cleanup_items'),
         sql`DELETE FROM item_prices WHERE item_id IN (SELECT id FROM erp_cleanup_items)`,
         sql`DELETE FROM items WHERE id IN (SELECT id FROM erp_cleanup_items)`,

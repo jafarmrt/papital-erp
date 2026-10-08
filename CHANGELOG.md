@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.378 — Pending Material Review Once
+- **Raw material requests (TD-825, B07-09):** sending needs `pending_materials.create`; approve, reject, edit and delete run under the request row lock and only from pending; the item is made by the item service and linked on the request (migration 0085).
+
 ### v9.0.377 — Pending Material Approval Body
 - **Raw material requests (TD-824, B07-08):** the approval and the edit of a request send one camelCase form; the route bodies are strict, so the old snake_case keys are a 400 instead of being dropped.
 

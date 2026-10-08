@@ -1,8 +1,12 @@
 import { eq, and } from 'drizzle-orm';
+import type { Request } from 'express';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { pendingMaterials, items } from '../db/schema.js';
-import { NotFoundError, ConflictError } from '../errors/customErrors.js';
+import { NotFoundError, ConflictError, ValidationError } from '../errors/customErrors.js';
 import { moneyOr } from '../lib/money.js';
+import { logActivity } from '../lib/auditLogger.js';
+import { isDataUrl, uploadBase64ToStorage } from '../lib/storage.js';
+import { ItemCatalogService } from './items/itemCatalog.service.js';
 
 export interface CreatePendingMaterialInput {
   name: string;
@@ -50,11 +54,85 @@ export interface UpdatePendingMaterialInput {
   size?: string;
 }
 
+/** The user who sends or reviews a request; the audit row is written with `req`, or with the id and name */
+export interface PendingMaterialActor {
+  req?: Request;
+  userId?: number;
+  username?: string;
+}
+
+type PendingMaterialRow = typeof pendingMaterials.$inferSelect;
+
+const ENTITY = 'ماده اولیه';
+const STATUS_LABELS: Record<string, string> = { pending: 'در انتظار تأیید', approved: 'تأییدشده', rejected: 'ردشده' };
+
+/** v9.0.378 (TD-825): a number of the request; the route schema read it with `decimalInput` and refused a negative one */
+const quantityOf = (value: number | string | undefined, fallback: number): number => {
+  if (value === undefined || value === '') return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+/** The request's image: a data URL goes to a file (JPG, PNG, WEBP or GIF up to 3 MB, else 422), a stored path stays */
+const storedImage = async (value: string | undefined, kind: 'image' | 'thumbnail'): Promise<string> =>
+  isDataUrl(value) ? uploadBase64ToStorage(value, kind) : (value || '');
+
+/** The request row for the audit, without the image (older requests may hold a large data URL) */
+export function pendingMaterialAuditSnapshot(row: PendingMaterialRow) {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    unit: row.unit,
+    category: row.category,
+    status: STATUS_LABELS[row.status ?? ''] ?? row.status,
+    projectId: row.projectId,
+    projectTitle: row.projectTitle,
+    reorderPoint: Number(row.reorderPoint ?? 0),
+    weightedAverageCost: Number(row.weightedAverageCost ?? 0),
+    color: row.color,
+    weight: Number(row.weight ?? 0),
+    material: row.material,
+    size: row.size,
+    itemId: row.itemId ?? null,
+    rejectionReason: row.rejectionReason
+  };
+}
+
+/**
+ * v9.0.378 (TD-825، یافته B07-09): ردیف درخواست زنده با قفل `FOR UPDATE`. تأیید، رد، ویرایش و حذف هر کدام در یک تراکنش با
+ * همین قفل اجرا می‌شوند، پس دو بررسی هم‌زمان یک درخواست پشت سر هم می‌روند و دومی وضعیت تازه را می‌بیند.
+ */
+async function lockLiveRequest(tx: DbExecutor, id: number): Promise<PendingMaterialRow> {
+  const [row] = await tx.select().from(pendingMaterials)
+    .where(and(eq(pendingMaterials.id, id), eq(pendingMaterials.isDeleted, 0)))
+    .for('update');
+  if (!row) throw new NotFoundError('ماده اولیه مورد نظر یافت نشد', undefined, 'PENDING_MATERIAL_NOT_FOUND');
+  return row;
+}
+
+/**
+ * فقط درخواست «در انتظار تأیید» تأیید، رد، ویرایش یا حذف می‌شود؛ پیش‌تر درخواست تأییدشده رد یا حذف و درخواست ردشده دوباره
+ * تأیید می‌شد (دو کالا از یک درخواست)
+ */
+function assertStillPending(row: PendingMaterialRow, action: string): void {
+  if (row.status === 'pending') return;
+  const status = STATUS_LABELS[row.status ?? ''] ?? row.status;
+  throw new ConflictError(
+    `این درخواست ماده اولیه قبلاً بررسی شده است (${status}) و ${action} نمی‌شود`,
+    { status: row.status, itemId: row.itemId ?? null },
+    'PENDING_MATERIAL_NOT_PENDING'
+  );
+}
+
+const inTransaction = <T>(externalTx: DbExecutor | undefined, work: (tx: DbExecutor) => Promise<T>): Promise<T> =>
+  externalTx ? work(externalTx) : orm.transaction(work);
+
 export class PendingMaterialsService {
   /**
    * Retrieves pending material by ID
    */
-  static async getById(id: number, executor: DbExecutor = orm): Promise<typeof pendingMaterials.$inferSelect | null> {
+  static async getById(id: number, executor: DbExecutor = orm): Promise<PendingMaterialRow | null> {
     const [row] = await executor
       .select()
       .from(pendingMaterials)
@@ -63,213 +141,224 @@ export class PendingMaterialsService {
   }
 
   /**
-   * Submits a new pending raw material from project control
+   * Submits a new pending raw material from project control.
+   * v9.0.378 (TD-825): no `TEMP-<ms>` code (the reviewer gives the code), numbers come validated by the route schema and an
+   * inline image is stored as a file; the request and its audit row are written in one transaction.
    */
   static async submitPendingMaterial(
     input: CreatePendingMaterialInput,
-    executor: DbExecutor = orm
-  ): Promise<typeof pendingMaterials.$inferSelect> {
-    const code = input.code ? input.code.trim() : `TEMP-${Date.now()}`;
-    const name = input.name.trim();
-    const unit = input.unit ? input.unit.trim() : 'عدد';
-    const category = input.category ? input.category.trim() : 'عمومی';
-    const projectId = input.projectId ? Number(input.projectId) : null;
-    const projectTitle = input.projectTitle ? input.projectTitle.trim() : '';
-    const requestedBy = input.requestedBy || 'کاربر سیستم';
+    actor: PendingMaterialActor = {},
+    externalTx?: DbExecutor
+  ): Promise<PendingMaterialRow> {
+    const image = await storedImage(input.image, 'image');
+    const thumbnail = await storedImage(input.thumbnail, 'thumbnail');
+    return inTransaction(externalTx, async (tx) => {
+      const [inserted] = await tx
+        .insert(pendingMaterials)
+        .values({
+          code: (input.code ?? '').trim(),
+          name: input.name.trim(),
+          unit: input.unit?.trim() || 'عدد',
+          category: input.category?.trim() || 'عمومی',
+          type: 'raw_material',
+          projectId: input.projectId ? Number(input.projectId) : null,
+          projectTitle: input.projectTitle?.trim() || '',
+          requestedBy: input.requestedBy || actor.username || 'کاربر سامانه',
+          status: 'pending',
+          reorderPoint: quantityOf(input.reorderPoint, 0),
+          weightedAverageCost: moneyOr(input.weightedAverageCost, 0),
+          color: input.color || '',
+          weight: quantityOf(input.weight, 0),
+          material: input.material || '',
+          size: input.size || '',
+          image,
+          thumbnail,
+          isDeleted: 0
+        })
+        .returning();
 
-    const [inserted] = await executor
-      .insert(pendingMaterials)
-      .values({
-        code,
-        name,
-        unit,
-        category,
-        type: 'raw_material',
-        projectId,
-        projectTitle,
-        requestedBy,
-        status: 'pending',
-        reorderPoint: Number(input.reorderPoint) || 0,
-        weightedAverageCost: moneyOr(input.weightedAverageCost, 0),
-        color: input.color || '',
-        weight: Number(input.weight) || 0,
-        material: input.material || '',
-        size: input.size || '',
-        image: input.image || '',
-        thumbnail: input.thumbnail || '',
-        isDeleted: 0
-      })
-      .returning();
-
-    return inserted;
+      await logActivity({
+        req: actor.req, userId: actor.userId, username: actor.username, tx,
+        action: 'CREATE',
+        entity: ENTITY,
+        entityId: inserted.id,
+        description: `ثبت درخواست ماده اولیه "${inserted.name}" جهت بررسی انباردار`,
+        details: { after: pendingMaterialAuditSnapshot(inserted) }
+      });
+      return inserted;
+    });
   }
 
   /**
-   * Approves pending material and registers it into official items catalog
+   * Approves a pending material and registers it into the official items catalog.
+   * v9.0.378 (TD-825, finding B07-09): one transaction under the request row lock and only from `pending` (409
+   * `PENDING_MATERIAL_NOT_PENDING`). The item is made by `ItemCatalogService.createItem` (code and name unique case-insensitively,
+   * code series counter, image to a file) and its id stays on the request (`item_id`); the item's CREATE row and the
+   * request's UPDATE row are written in the same transaction. Before, two approvals made two items with one code and an
+   * approved request could be rejected and approved again into a second item.
    */
   static async approvePendingMaterial(
     id: number,
-    overrides?: ApprovePendingMaterialInput,
-    executor: DbExecutor = orm
-  ): Promise<{ pendingRecord: typeof pendingMaterials.$inferSelect; officialItem: typeof items.$inferSelect }> {
-    const [existing] = await executor
-      .select()
-      .from(pendingMaterials)
-      .where(and(eq(pendingMaterials.id, id), eq(pendingMaterials.isDeleted, 0)));
+    overrides: ApprovePendingMaterialInput = {},
+    actor: PendingMaterialActor = {},
+    externalTx?: DbExecutor
+  ): Promise<{ pendingRecord: PendingMaterialRow; officialItem: typeof items.$inferSelect }> {
+    return inTransaction(externalTx, async (tx) => {
+      const existing = await lockLiveRequest(tx, id);
+      assertStillPending(existing, 'تأیید');
 
-    if (!existing) {
-      throw new NotFoundError('ماده اولیه مورد نظر یافت نشد');
-    }
+      const code = (overrides.code ?? existing.code ?? '').trim();
+      if (!code) throw new ValidationError('برای ثبت ماده اولیه در انبار، کد کالا را وارد کنید', undefined, 'PENDING_MATERIAL_CODE_REQUIRED');
+      const name = (overrides.name || existing.name).trim();
+      const unit = (overrides.unit || existing.unit).trim();
+      const category = (overrides.category || existing.category || 'عمومی').trim();
 
-    const finalCode = (overrides?.code || existing.code).trim();
-    const finalName = (overrides?.name || existing.name).trim();
-    const finalUnit = (overrides?.unit || existing.unit).trim();
-    const finalCategory = (overrides?.category || existing.category || 'عمومی').trim();
-
-    // Check code duplication in official items
-    const [codeDup] = await executor
-      .select({ id: items.id })
-      .from(items)
-      .where(and(eq(items.code, finalCode), eq(items.isDeleted, 0)));
-
-    if (codeDup) {
-      throw new ConflictError(`کد کالا «${finalCode}» قبلاً در انبار ثبت شده است. لطفاً کد دیگری انتخاب کنید.`);
-    }
-
-    // Register into official items table
-    const [newItem] = await executor
-      .insert(items)
-      .values({
+      const { item } = await ItemCatalogService.createItem({
         type: 'raw_material',
-        name: finalName,
-        code: finalCode,
-        unit: finalUnit,
-        category: finalCategory,
-        currentStock: 0,
-        reorderPoint: Number(overrides?.reorderPoint ?? existing.reorderPoint) || 0,
-        weightedAverageCost: moneyOr(overrides?.weightedAverageCost ?? existing.weightedAverageCost, 0),
-        color: overrides?.color ?? existing.color ?? '',
-        weight: Number(overrides?.weight ?? existing.weight) || 0,
-        material: overrides?.material ?? existing.material ?? '',
-        size: overrides?.size ?? existing.size ?? '',
-        image: overrides?.image ?? existing.image ?? '',
-        thumbnail: overrides?.thumbnail ?? existing.thumbnail ?? '',
-        isDeleted: 0,
-        version: 1
-      })
-      .returning();
+        name,
+        code,
+        unit,
+        category,
+        image: overrides.image ?? existing.image ?? '',
+        thumbnail: overrides.thumbnail ?? existing.thumbnail ?? '',
+        reorder_point: overrides.reorderPoint ?? existing.reorderPoint ?? 0,
+        weighted_average_cost: overrides.weightedAverageCost ?? Number(existing.weightedAverageCost ?? 0),
+        color: overrides.color ?? existing.color ?? '',
+        weight: overrides.weight ?? existing.weight ?? 0,
+        material: overrides.material ?? existing.material ?? '',
+        size: overrides.size ?? existing.size ?? ''
+      }, { id: actor.userId, username: actor.username }, tx);
 
-    // Update pending_materials status
-    const [updatedPending] = await executor
-      .update(pendingMaterials)
-      .set({
-        status: 'approved',
-        code: finalCode,
-        name: finalName,
-        unit: finalUnit,
-        category: finalCategory
-      })
-      .where(eq(pendingMaterials.id, id))
-      .returning();
+      const [approved] = await tx.update(pendingMaterials)
+        .set({ status: 'approved', code: item.code, name: item.name, unit: item.unit, category: item.category ?? category, itemId: item.id })
+        .where(eq(pendingMaterials.id, id))
+        .returning();
 
-    return {
-      pendingRecord: updatedPending || { ...existing, status: 'approved' },
-      officialItem: newItem
-    };
+      await logActivity({
+        req: actor.req, userId: actor.userId, username: actor.username, tx,
+        action: 'CREATE',
+        entity: 'کالا',
+        entityId: item.id,
+        description: `کالای "${item.name}" با کد "${item.code}" از درخواست ماده اولیه شماره ${id} تأیید و در انبار ثبت شد`,
+        details: {
+          after: {
+            id: item.id, name: item.name, code: item.code, type: item.type, category: item.category, unit: item.unit,
+            reorderPoint: Number(item.reorderPoint ?? 0), weightedAverageCost: Number(item.weightedAverageCost ?? 0),
+            color: item.color, weight: item.weight, material: item.material, size: item.size
+          },
+          pendingMaterialId: id
+        }
+      });
+      await logActivity({
+        req: actor.req, userId: actor.userId, username: actor.username, tx,
+        action: 'UPDATE',
+        entity: ENTITY,
+        entityId: id,
+        description: `درخواست ماده اولیه "${item.name}" تأیید شد و کالای شماره ${item.id} ساخته شد`,
+        details: { before: pendingMaterialAuditSnapshot(existing), after: pendingMaterialAuditSnapshot(approved) }
+      });
+
+      return { pendingRecord: approved, officialItem: item };
+    });
   }
 
   /**
-   * Rejects pending material request
+   * Rejects a pending material request.
+   * v9.0.378 (TD-825): only from `pending`, under the row lock, with its audit row in the same transaction.
    */
   static async rejectPendingMaterial(
     id: number,
     rejectionReason?: string,
-    executor: DbExecutor = orm
-  ): Promise<typeof pendingMaterials.$inferSelect> {
-    const [existing] = await executor
-      .select()
-      .from(pendingMaterials)
-      .where(and(eq(pendingMaterials.id, id), eq(pendingMaterials.isDeleted, 0)));
+    actor: PendingMaterialActor = {},
+    externalTx?: DbExecutor
+  ): Promise<PendingMaterialRow> {
+    return inTransaction(externalTx, async (tx) => {
+      const existing = await lockLiveRequest(tx, id);
+      assertStillPending(existing, 'رد');
+      const reason = rejectionReason?.trim() || 'عدم تأیید توسط انباردار';
+      const [rejected] = await tx.update(pendingMaterials)
+        .set({ status: 'rejected', rejectionReason: reason })
+        .where(eq(pendingMaterials.id, id))
+        .returning();
 
-    if (!existing) {
-      throw new NotFoundError('ماده اولیه مورد نظر یافت نشد');
-    }
-
-    const reason = rejectionReason ? rejectionReason.trim() : 'عدم تأیید توسط انباردار';
-    const [updated] = await executor
-      .update(pendingMaterials)
-      .set({
-        status: 'rejected',
-        rejectionReason: reason
-      })
-      .where(eq(pendingMaterials.id, id))
-      .returning();
-
-    return updated || { ...existing, status: 'rejected', rejectionReason: reason };
+      await logActivity({
+        req: actor.req, userId: actor.userId, username: actor.username, tx,
+        action: 'UPDATE',
+        entity: ENTITY,
+        entityId: id,
+        description: `درخواست ماده اولیه "${rejected.name}" رد شد و کالایی در انبار ثبت نشد`,
+        details: { before: pendingMaterialAuditSnapshot(existing), after: pendingMaterialAuditSnapshot(rejected) }
+      });
+      return rejected;
+    });
   }
 
   /**
-   * Updates details of pending material
+   * Updates details of a pending material (only while pending; TD-302).
+   * v9.0.378 (TD-825): under the row lock, with its audit row in the same transaction.
    */
   static async updatePendingMaterial(
     id: number,
     data: UpdatePendingMaterialInput,
-    executor: DbExecutor = orm
-  ): Promise<typeof pendingMaterials.$inferSelect> {
-    const [existing] = await executor
-      .select()
-      .from(pendingMaterials)
-      .where(and(eq(pendingMaterials.id, id), eq(pendingMaterials.isDeleted, 0)));
+    actor: PendingMaterialActor = {},
+    externalTx?: DbExecutor
+  ): Promise<PendingMaterialRow> {
+    return inTransaction(externalTx, async (tx) => {
+      const existing = await lockLiveRequest(tx, id);
+      assertStillPending(existing, 'ویرایش');
+      const [updated] = await tx
+        .update(pendingMaterials)
+        .set({
+          code: data.code !== undefined ? data.code.trim() : existing.code,
+          name: data.name !== undefined ? data.name.trim() : existing.name,
+          unit: data.unit !== undefined ? data.unit.trim() : existing.unit,
+          category: data.category !== undefined ? data.category.trim() : existing.category,
+          reorderPoint: quantityOf(data.reorderPoint, Number(existing.reorderPoint ?? 0)),
+          weightedAverageCost: data.weightedAverageCost !== undefined ? moneyOr(data.weightedAverageCost, 0) : existing.weightedAverageCost,
+          color: data.color !== undefined ? data.color : existing.color,
+          weight: quantityOf(data.weight, Number(existing.weight ?? 0)),
+          material: data.material !== undefined ? data.material : existing.material,
+          size: data.size !== undefined ? data.size : existing.size
+        })
+        .where(eq(pendingMaterials.id, id))
+        .returning();
 
-    if (!existing) {
-      throw new NotFoundError('ماده اولیه مورد نظر یافت نشد');
-    }
-    // حوزه H (TD-302): درخواست تأییدشده یا ردشده دیگر ویرایش نمی‌شود
-    if (existing.status !== 'pending') {
-      throw new ConflictError('این درخواست ماده اولیه قبلاً بررسی شده است و قابل ویرایش نیست');
-    }
-
-    const [updated] = await executor
-      .update(pendingMaterials)
-      .set({
-        code: data.code !== undefined ? data.code.trim() : existing.code,
-        name: data.name !== undefined ? data.name.trim() : existing.name,
-        unit: data.unit !== undefined ? data.unit.trim() : existing.unit,
-        category: data.category !== undefined ? data.category.trim() : existing.category,
-        reorderPoint: data.reorderPoint !== undefined ? Number(data.reorderPoint) || 0 : existing.reorderPoint,
-        weightedAverageCost: data.weightedAverageCost !== undefined ? moneyOr(data.weightedAverageCost, 0) : existing.weightedAverageCost,
-        color: data.color !== undefined ? data.color : existing.color,
-        weight: data.weight !== undefined ? Number(data.weight) || 0 : existing.weight,
-        material: data.material !== undefined ? data.material : existing.material,
-        size: data.size !== undefined ? data.size : existing.size
-      })
-      .where(eq(pendingMaterials.id, id))
-      .returning();
-
-    return updated;
+      await logActivity({
+        req: actor.req, userId: actor.userId, username: actor.username, tx,
+        action: 'UPDATE',
+        entity: ENTITY,
+        entityId: id,
+        description: `ویرایش مشخصات درخواست ماده اولیه "${updated.name}"`,
+        details: { before: pendingMaterialAuditSnapshot(existing), after: pendingMaterialAuditSnapshot(updated) }
+      });
+      return updated;
+    });
   }
 
   /**
-   * Soft-deletes a pending material
+   * Soft-deletes a pending material.
+   * v9.0.378 (TD-825): only while pending (a reviewed request is the record of its item or its rejection), under the row
+   * lock, with its audit row in the same transaction.
    */
   static async deletePendingMaterial(
     id: number,
-    executor: DbExecutor = orm
-  ): Promise<typeof pendingMaterials.$inferSelect> {
-    const [existing] = await executor
-      .select()
-      .from(pendingMaterials)
-      .where(and(eq(pendingMaterials.id, id), eq(pendingMaterials.isDeleted, 0)));
+    actor: PendingMaterialActor = {},
+    externalTx?: DbExecutor
+  ): Promise<PendingMaterialRow> {
+    return inTransaction(externalTx, async (tx) => {
+      const existing = await lockLiveRequest(tx, id);
+      assertStillPending(existing, 'حذف');
+      await tx.update(pendingMaterials).set({ isDeleted: 1 }).where(eq(pendingMaterials.id, id));
 
-    if (!existing) {
-      throw new NotFoundError('ماده اولیه مورد نظر یافت نشد');
-    }
-
-    await executor
-      .update(pendingMaterials)
-      .set({ isDeleted: 1 })
-      .where(eq(pendingMaterials.id, id));
-
-    return existing;
+      await logActivity({
+        req: actor.req, userId: actor.userId, username: actor.username, tx,
+        action: 'DELETE',
+        entity: ENTITY,
+        entityId: id,
+        description: `حذف درخواست ماده اولیه "${existing.name}"`,
+        details: { before: pendingMaterialAuditSnapshot(existing) }
+      });
+      return existing;
+    });
   }
 }

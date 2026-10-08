@@ -1,23 +1,38 @@
 import { z } from 'zod';
-import { numericIdString } from '../middleware/validate.js';
+import { decimalInput, numericIdString } from '../middleware/validate.js';
+import { fin } from '../lib/financialDecimal.js';
+import { isDataUrl } from '../lib/storage.js';
+
+/**
+ * v9.0.378 (TD-825، یافته B07-09): عددهای درخواست با `decimalInput` خوانده می‌شوند (ارقام فارسی پذیرفته، متن ۴۰۰ و منفی
+ * ۴۰۰)؛ پیش‌تر `Number(x) || 0` نقطه سفارش «۱۲» را ۰ و بهای «abc» را ۰ ذخیره می‌کرد.
+ */
+const nonNegativeDecimal = (label: string) =>
+  decimalInput(label).refine(v => v === undefined || !fin(v).isNegative(), `${label} نمی‌تواند منفی باشد`);
+
+/** تصویر: data URL را سرویس به فایل می‌برد و می‌سنجد (۴۲۲ برای قالب یا اندازه نادرست)؛ متن دیگر فقط نشانی کوتاه فایل است */
+const MAX_IMAGE_PATH_LENGTH = 1000;
+const imageField = (label: string) => z.string()
+  .refine(v => v.length <= MAX_IMAGE_PATH_LENGTH || isDataUrl(v), `${label} باید تصویر بارگذاری‌شده یا نشانی فایل باشد`)
+  .optional();
 
 /** بدنه‌های مسیرهای صف «مواد اولیه در انتظار تأیید» (`pendingMaterials.routes.ts`) */
 export const createPendingMaterialSchema = z.object({
   body: z.object({
-    name: z.string().min(1, 'عنوان ماده اولیه الزامی است'),
+    name: z.string().trim().min(1, 'عنوان ماده اولیه الزامی است'),
     code: z.string().optional(),
     unit: z.string().optional(),
     category: z.string().optional(),
     projectId: z.union([z.number(), z.string(), z.null()]).optional(),
     projectTitle: z.string().optional(),
-    reorderPoint: z.union([z.number(), z.string()]).optional(),
-    weightedAverageCost: z.union([z.number(), z.string()]).optional(),
+    reorderPoint: nonNegativeDecimal('نقطه سفارش').optional(),
+    weightedAverageCost: nonNegativeDecimal('بهای واحد').optional(),
     color: z.string().optional(),
-    weight: z.union([z.number(), z.string()]).optional(),
+    weight: nonNegativeDecimal('وزن').optional(),
     material: z.string().optional(),
     size: z.string().optional(),
-    image: z.string().optional(),
-    thumbnail: z.string().optional()
+    image: imageField('تصویر'),
+    thumbnail: imageField('تصویر کوچک')
   })
 });
 
@@ -31,18 +46,18 @@ const reviewFields = {
   name: z.string().optional(),
   unit: z.string().optional(),
   category: z.string().optional(),
-  reorderPoint: z.union([z.number(), z.string()]).optional(),
-  weightedAverageCost: z.union([z.number(), z.string()]).optional(),
+  reorderPoint: nonNegativeDecimal('نقطه سفارش').optional(),
+  weightedAverageCost: nonNegativeDecimal('بهای واحد').optional(),
   color: z.string().optional(),
-  weight: z.union([z.number(), z.string()]).optional(),
+  weight: nonNegativeDecimal('وزن').optional(),
   material: z.string().optional(),
   size: z.string().optional(),
 };
 
 export const approvePendingMaterialBody = z.object({
   ...reviewFields,
-  image: z.string().optional(),
-  thumbnail: z.string().optional()
+  image: imageField('تصویر'),
+  thumbnail: imageField('تصویر کوچک')
 }).strict();
 
 export const updatePendingMaterialBody = z.object(reviewFields).strict();
