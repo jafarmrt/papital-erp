@@ -34,7 +34,7 @@ const syncItemSchema = z.object({
   })
 });
 
-// v9.0.322 (TD-723): هر سه اختیاری‌اند؛ کلید واردنشده یا ماسک‌شده از تنظیمات ذخیره‌شده خوانده می‌شود (resolveWcTestCredentials)
+// v9.0.325 (TD-723): هر سه اختیاری‌اند؛ کلید واردنشده یا ماسک‌شده از تنظیمات ذخیره‌شده خوانده می‌شود (resolveWcTestCredentials)
 const testConnectionSchema = z.object({
   body: z.object({
     url: z.string().max(500).optional(),
@@ -382,7 +382,7 @@ router.post('/sync-all-stocks', authorizePermission('woocommerce.manage'), async
 // Test Connection
 router.post('/test-connection', authorizePermission('woocommerce.manage'), validate(testConnectionSchema), asyncHandler(async (req, res) => {
   try {
-    // v9.0.322 (TD-723): غیرمدیر کلیدها را «********» می‌بیند و نمی‌فرستد؛ کلید ذخیره‌شده فقط با نشانی ذخیره‌شده به کار می‌رود
+    // v9.0.325 (TD-723): غیرمدیر کلیدها را «********» می‌بیند و نمی‌فرستد؛ کلید ذخیره‌شده فقط با نشانی ذخیره‌شده به کار می‌رود
     const resolved = resolveWcTestCredentials(req.body, await readWcConnectionSettings());
     if (!resolved.ok) throw new ValidationError(resolved.message, undefined, resolved.code);
     const { url, consumerKey, consumerSecret } = resolved.credentials;

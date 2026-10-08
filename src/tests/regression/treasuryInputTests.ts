@@ -96,9 +96,10 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
           problems.push(`${perm} pick list row is missing title / currency / hasLedgerAccount: ${JSON.stringify(row)}`);
         }
       }
-      const payroll = await sessionWith(['personnel.manage']);
+      // v9.0.320 (TD-805): payroll payment asks piecework.pay; personnel.manage covers the personnel dossier only
+      const payroll = await sessionWith(['piecework.view', 'piecework.pay']);
       const payrollOptions = await payroll.get('/api/accounting/bank-accounts/options');
-      if (payrollOptions.status !== 200) problems.push(`personnel.manage (payroll payment) pick list returned ${payrollOptions.status}`);
+      if (payrollOptions.status !== 200) problems.push(`piecework.pay (payroll payment) pick list returned ${payrollOptions.status}`);
 
       for (const perm of ['accounting.treasury', 'accounting.view']) {
         const reader = await sessionWith([perm]);
@@ -107,7 +108,7 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
         if (full.status !== 200 || row?.accountNumber !== '0101234567') problems.push(`${perm} full list returned ${full.status} without the account number`);
       }
       assertNoProblems(problems);
-      return 'warehouse.in/out, documents.view/create, accounting.cheques/vouchers: full list 403, pick list 200 without account, card, Sheba or balances; personnel.manage pick list 200; accounting.treasury / accounting.view full list 200';
+      return 'warehouse.in/out, documents.view/create, accounting.cheques/vouchers: full list 403, pick list 200 without account, card, Sheba or balances; piecework.pay pick list 200; accounting.treasury / accounting.view full list 200';
     });
   }
 

@@ -30,7 +30,7 @@ interface WooCommerceTabProps {
   handleSyncManualOrder: (e: React.FormEvent) => void;
   syncedWcOrders: any[];
   wcOrderLogs: any[];
-  /** v9.0.323 (TD-730): خطای خواندن هر فهرست؛ خالی یعنی خوانده شد */
+  /** v9.0.326 (TD-730): خطای خواندن هر فهرست؛ خالی یعنی خوانده شد */
   syncedWcOrdersError?: string;
   wcOrderLogsError?: string;
   loadSyncedWcOrders: () => void;

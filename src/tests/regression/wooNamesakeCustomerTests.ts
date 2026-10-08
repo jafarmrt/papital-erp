@@ -8,7 +8,7 @@ import { cleanTestTableData } from '../fixtures/dbTestHelper.js';
  * Package 15 (events and integrations), TD-703 / B15-01 (decision t1 a): a WooCommerce buyer whose name is the name of
  * another customer gets a new customer named «name (phone)», the invoice and its voucher go to that customer and the order
  * log says so; a name differing only in letter case matches the stored customer, whose stored name the invoice takes. On
- * v9.0.320 the namesake's sale was debited to the existing customer (detailed_id of the other person), a case variant
+ * v9.0.323 the namesake's sale was debited to the existing customer (detailed_id of the other person), a case variant
  * left the receivable row without a party, and nothing was reported.
  */
 export async function runWooNamesakeCustomerTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -16,7 +16,7 @@ export async function runWooNamesakeCustomerTests(shouldRun: (id: string, ...ext
   const id = 'reg_woocommerce_namesake_customer_td_703';
   if (!shouldRun(id, 'td703', 'b15-01', 'woocommerce', 'customer', 'package15')) return results;
 
-  const name = 'v9.0.321: a WooCommerce namesake with another phone gets a distinct customer and a case variant matches the stored customer (TD-703)';
+  const name = 'v9.0.324: a WooCommerce namesake with another phone gets a distinct customer and a case variant matches the stored customer (TD-703)';
   const tStart = Date.now();
   const tag = String(Date.now()).slice(-7);
   const orderIds = [1, 2, 3, 4].map(n => `703${tag}${n}`);

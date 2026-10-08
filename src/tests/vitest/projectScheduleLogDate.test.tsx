@@ -19,6 +19,9 @@ vi.mock('../../hooks/useAppCurrency', async () => {
   const { rialDisplayOf } = await vi.importActual<typeof import('../../lib/rialDisplay')>('../../lib/rialDisplay');
   return { useAppCurrency: () => 'IRR', useRialDisplay: () => rialDisplayOf('IRR') };
 });
+vi.mock('../../hooks/usePieceworkPermissions', () => ({
+  usePieceworkPermissions: () => ({ canManageTasks: false, canLog: true, canIssuePayroll: false, canPay: false }),
+}));
 vi.mock('../../components/common/JalaliDateInput', () => ({
   JalaliDateInput: ({ value, onChange }: { value: string; onChange: (iso: string) => void }) => (
     <input aria-label="work date" value={value} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} />

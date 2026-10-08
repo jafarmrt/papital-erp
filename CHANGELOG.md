@@ -19,17 +19,26 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.323 — WooCommerce Bulk Stock Sync Reports Failed Items
+### v9.0.326 — WooCommerce Bulk Stock Sync Reports Failed Items
 - **WooCommerce bulk stock sync (TD-724):** the bulk stock sync showed the server's green message even when no item was updated; a failed item is now an error message with the counts and the first errors, and the WooCommerce order tables show a load error (403 / 500) instead of «no orders yet» (WooCommerce half of TD-730).
 
-### v9.0.322 — WooCommerce Connection Test With Stored Keys
+### v9.0.325 — WooCommerce Connection Test With Stored Keys
 - **WooCommerce connection test (TD-723):** a non-admin sees the WooCommerce keys masked and the test button sent the mask as the keys, so the test always failed; the browser now leaves out an empty or masked key and the server uses the stored key, only at the stored store address.
 
-### v9.0.321 — WooCommerce Namesake Buyers Get Their Own Customer
+### v9.0.324 — WooCommerce Namesake Buyers Get Their Own Customer
 - **WooCommerce namesake buyers (TD-703):** a WooCommerce buyer whose name belongs to another customer with another phone gets a new customer named «name (phone)», so the sale is no longer debited to the existing customer's receivable; a name that differs only in letter case matches the stored customer, and the order log reports the distinct customer.
 
-### v9.0.320 — Package 15 Events and Integrations Audit Documentation
+### v9.0.323 — Package 15 Events and Integrations Audit Documentation
 - **Package 15 Audit:** section 15 of the V9 stability audit records the events, webhooks, automatic rules, dead-letter queue, notifications and WooCommerce package: 32 proven findings (one P1, a WooCommerce order of a namesake posted to the existing customer's receivable, and eighteen P2, among them a webhook test that follows redirects to internal addresses and delivery failures that never retry) opened as TD-703..TD-734 with the product-owner decisions. Documentation only.
+
+### v9.0.322 — Payment From a Payslip Offers Its Remainder
+- **Payment From a Payslip Offers Its Remainder (TD-814):** the pay button inside a payslip sent no paid amount, so a partly paid payslip's payment form offered the whole net, which the server refused; it now sends the paid amount and status, as the payslip list does.
+
+### v9.0.321 — Custom Rate Readers Follow Decision t3
+- **Custom Rate Readers Follow Decision t3 (TD-806):** a personnel's custom rates opened only for piecework.view, piecework.log and personnel.manage, so the rate writer (piecework.manage_tasks) and the payroll issuers and payers could not read them; they now open for exactly the decision t3 list, while projects.view and settings.manage read only titles and categories.
+
+### v9.0.320 — Each Payroll Action Asks Its Own Key
+- **Each Payroll Action Asks Its Own Key (TD-805):** personnel.manage alone set custom rates and issued, paid, voided and deleted payrolls while piecework.payroll could not issue one; titles, categories and rates now ask piecework.manage_tasks, work logs piecework.log, payrolls piecework.payroll and payments the new piecework.pay; migration 0078 gives existing roles the keys of what they did, and every button follows the same key.
 
 ### v9.0.319 — Requisition Edit Before Approval
 - **Fix (TD-696, B10-09):** `PUT /procurement/requisitions/:id` edits only an unapproved (or rejected) requisition without orders (else 409 REQUISITION_NOT_EDITABLE), in one transaction under the row lock, with the create contract, the stored row ids kept and a before/after audit row.
