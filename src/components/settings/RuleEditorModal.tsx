@@ -6,6 +6,8 @@ import { fetchJson } from '../../api';
 import { eventFieldOptions } from '../../lib/eventPayloadFields';
 import { EventFieldChips } from './EventFieldChips';
 import { isRetiredRuleActionType, retiredRuleActionMessage, type RuleActionType, type StoredRuleActionType } from '../../lib/events/ruleActionTypes';
+import { ALL_EVENTS_LABEL, ALL_EVENTS_PATTERN, eventTypeLabel, isSubscribableEventPattern, publishedEventTypesByCategory } from '../../lib/events/eventTypeCatalog';
+import { checkRuleConditionValue } from '../../lib/events/ruleConditionValue';
 
 export interface RuleCondition {
   field: string;
@@ -32,21 +34,10 @@ interface RuleEditorModalProps {
   initialRule?: RuleFormData | null;
 }
 
-const EVENT_TYPE_OPTIONS = [
-  { value: 'InvoiceApproved', label: 'InvoiceApproved (تایید نهایی فاکتور فروش)', category: 'فروش و فاکتور' },
-  { value: 'InvoiceCreated', label: 'InvoiceCreated (ثبت فاکتور/پیش‌فاکتور جدید)', category: 'فروش و فاکتور' },
-  { value: 'InvoiceCancelled', label: 'InvoiceCancelled (ابطال یا لغو فاکتور)', category: 'فروش و فاکتور' },
-  { value: 'PurchaseApproved', label: 'PurchaseApproved (تایید فاکتور خرید / ورودی انبار)', category: 'خرید و تدارکات' },
-  { value: 'StockReceived', label: 'StockReceived (ورود کالا به انبار)', category: 'انبارداری' },
-  { value: 'StockIssued', label: 'StockIssued (خروج کالا یا صدور حواله انبار)', category: 'انبارداری' },
-  { value: 'InventoryReorderAlert', label: 'InventoryReorderAlert (هشدار رسیدن به نقطه سفارش کالا)', category: 'انبارداری' },
-  { value: 'TreasuryTransactionApproved', label: 'TreasuryTransactionApproved (تایید تراکنش مالی خزانه‌داری)', category: 'مالی و خزانه‌داری' },
-  { value: 'ChequeStatusChanged', label: 'ChequeStatusChanged (تغییر وضعیت چک صیادی)', category: 'مالی و خزانه‌داری' },
-  { value: 'WorkflowTransitioned', label: 'WorkflowTransitioned (تغییر وضعیت یا تایید گام گردش کار)', category: 'گردش کار' },
-  { value: 'ProjectStageCompleted', label: 'ProjectStageCompleted (تکمیل مرحله پروژه تولید)', category: 'تولید' },
-  { value: 'CustomerCreated', label: 'CustomerCreated (تعریف طرف‌حساب/مشتری جدید)', category: 'مشتریان و ارتباط با مشتری' },
-  { value: '*', label: '* (کلیه رویدادهای سامانه)', category: 'عمومی' }
-];
+// v9.0.406 (TD-726, decision t3 a): only the event types the server publishes (PUBLISHED_EVENT_TYPES), with Persian labels,
+// and «همه رویدادها»; the editor used to offer InvoiceCancelled, ChequeStatusChanged, ProjectStageCompleted and
+// CustomerCreated, which nothing publishes, so such a rule never ran
+const EVENT_TYPE_GROUPS = publishedEventTypesByCategory();
 
 export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEditorModalProps) {
   const [formData, setFormData] = useState<RuleFormData>({
@@ -107,6 +98,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
   const fieldOptions = eventFieldOptions(formData.eventType);
   const canInsertIntoMessage = formData.actionType === 'in_app_notification';
   const retiredAction = isRetiredRuleActionType(formData.actionType);
+  // v9.0.409 (TD-727): a numeric comparison takes Persian digits and thousands separators and is saved as a number
+  const conditionChecks = formData.conditionsJson.map(cond =>
+    checkRuleConditionValue(cond.operator, cond.value, fieldOptions.find(f => f.path === cond.field)?.label ?? cond.field));
+  const hasConditionError = conditionChecks.some(c => c.error !== null);
+  const unpublishedEvent = !isSubscribableEventPattern(formData.eventType);
   const insertIntoMessageTemplate = (path: string) => {
     setFormData(prev => {
       const current = String(prev.actionConfigJson?.messageTemplate || '');
@@ -175,11 +171,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) return;
+    if (!formData.name.trim() || hasConditionError) return;
 
     try {
       setIsSaving(true);
-      await onSave(formData);
+      await onSave({ ...formData, conditionsJson: formData.conditionsJson.map((cond, idx) => ({ ...cond, value: conditionChecks[idx].value })) });
       onClose();
     } finally {
       setIsSaving(false);
@@ -270,12 +266,23 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                   onChange={(e) => setFormData(prev => ({ ...prev, eventType: e.target.value }))}
                   className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-white"
                 >
-                  {EVENT_TYPE_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
+                  {unpublishedEvent && (
+                    <option value={formData.eventType}>{`${formData.eventType} (در سامانه منتشر نمی‌شود)`}</option>
+                  )}
+                  <option value={ALL_EVENTS_PATTERN}>{ALL_EVENTS_LABEL}</option>
+                  {EVENT_TYPE_GROUPS.map(group => (
+                    <optgroup key={group.category} label={group.category}>
+                      {group.types.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
+                {unpublishedEvent && (
+                  <p role="alert" className="mt-1.5 text-[11px] text-amber-700 dark:text-amber-300">
+                    سامانه رویداد «{formData.eventType}» را منتشر نمی‌کند و این قانون هرگز اجرا نمی‌شود؛ رویداد دیگری برگزینید.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -315,7 +322,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
 
             {formData.conditionsJson.length === 0 ? (
               <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 text-center text-xs text-slate-500">
-                هیچ شرطی تعریف نشده است؛ اقدام برای تمامی رخدادهای رویداد <span className="font-mono text-indigo-600 font-bold">{formData.eventType}</span> اجرا خواهد شد.
+                هیچ شرطی تعریف نشده است؛ اقدام برای تمامی رخدادهای رویداد <span className="text-indigo-600 font-bold">«{eventTypeLabel(formData.eventType)}»</span> اجرا خواهد شد.
               </div>
             ) : (
               <div className="space-y-2.5">
@@ -361,8 +368,13 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                         placeholder="مقدار مورد انتظار"
                         value={cond.value}
                         onChange={(e) => handleConditionChange(idx, 'value', e.target.value)}
+                        aria-label="مقدار شرط"
+                        aria-invalid={conditionChecks[idx].error !== null}
                         className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white"
                       />
+                      {conditionChecks[idx].error && (
+                        <p role="alert" className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">{conditionChecks[idx].error}</p>
+                      )}
                     </div>
 
                     {/* Delete */}
@@ -646,7 +658,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
               </button>
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={isSaving || hasConditionError}
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors disabled:opacity-50"
               >
                 {isSaving ? 'در حال ذخیره‌سازی...' : 'ذخیره قانون خودکار'}

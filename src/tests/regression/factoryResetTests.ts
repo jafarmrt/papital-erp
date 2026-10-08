@@ -8,13 +8,14 @@ const LOW_STOCK_RULE_NAME = 'اعلان کسری موجودی به انبارد�
 /**
  * Package 1 finding B01-40, TD-620: the factory reset wiped the event rules and webhook subscriptions but ran only
  * `runSeed()`, so they stayed missing until the next restart (the low-stock alert to warehouse keepers was not sent).
- * On v9.0.389 a reset left 0 event rules and 0 webhook subscriptions; now it runs the boot's `seedDefaultEngines`.
+ * On v9.0.389 a reset left 0 event rules; now it runs the boot's `seedDefaultEngines`. Since TD-707 no demo webhook
+ * subscription is seeded, so a reset leaves none.
  * Runs in its own isolated schema, like reg_factory_reset_complete_td_245.
  */
 export async function runFactoryResetTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const id = 'reg_factory_reset_restores_default_engines_td_620';
   if (!shouldRun(id, 'td620', 'b01-40', 'factory', 'reset', 'package1')) return [];
-  const name = 'v9.0.390: a factory reset puts back the default workflows, event rules and webhook subscriptions and keeps the roles (TD-620)';
+  const name = 'v9.0.390: a factory reset puts back the default workflows and event rules, seeds no webhook subscription and keeps the roles (TD-620, TD-707)';
   const tStart = Date.now();
   const fs = (await import('fs')).default;
   const os = (await import('os')).default;
@@ -46,7 +47,7 @@ export async function runFactoryResetTests(shouldRun: ShouldRun): Promise<TestCa
     if (rules === 0) wrong.push('no event rule after the reset');
     const lowStockRule = await countOf('event_action_rules', `name = '${LOW_STOCK_RULE_NAME}'`);
     if (lowStockRule === 0) wrong.push('the low-stock alert rule is missing');
-    if (subscriptions === 0) wrong.push('no default webhook subscription after the reset');
+    if (subscriptions !== 0) wrong.push(`webhook subscriptions after the reset: ${subscriptions} (no demo subscription is seeded since TD-707)`);
     if (workflows !== 1) wrong.push(`document approval workflow rows after the reset: ${workflows}`);
     if (await countOf('roles', `code = 'td620_custom'`) !== 1) wrong.push('the custom role was not kept');
     if (await countOf('categories') < 22) wrong.push('base data seed did not run');

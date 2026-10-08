@@ -6,7 +6,8 @@ import { requireDocumentTimestamp, resolveDocumentTimestamp } from '../../lib/st
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { domainEventBus } from '../events/domainEventBus.js';
-import { DomainEventType } from '../events/domainEvents.js';
+import { DomainEventType, type InvoiceEventPayload, type PurchaseEventPayload } from '../events/domainEvents.js';
+import { documentEventAmounts } from './documentEventAmount.js';
 import { OutboxService } from '../events/outboxService.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
@@ -620,7 +621,7 @@ export class DocumentCreationService {
       // Phase 12 - Transactional Outbox (Guarantees atomic event persistence with document creation)
       const isApproved = docStatus === 'final';
       if (docType === 'invoice' || docType === 'proforma') {
-        const invEvent = domainEventBus.createEvent(
+        const invEvent = domainEventBus.createEvent<InvoiceEventPayload>(
           isApproved ? DomainEventType.INVOICE_APPROVED : DomainEventType.INVOICE_CREATED,
           'Document',
           String(docId),
@@ -628,6 +629,8 @@ export class DocumentCreationService {
             documentId: docId,
             refNumber: String(finalRefNumber),
             docType,
+            // v9.0.407 (TD-713): the payable amount of the stored document (the event used to carry no amount)
+            ...await documentEventAmounts(tx, docId),
             // v9.0.337 (TD-785): نام ذخیره‌شده خریدار (پیش‌تر فقط `buyer_name`؛ با `buyerName` یا شناسه طرف حساب خالی بود)
             buyerName: party.buyerName || '',
             currency: docCurrency,
@@ -638,13 +641,14 @@ export class DocumentCreationService {
         );
         await OutboxService.saveToOutbox(tx, invEvent);
       } else if (docType === 'receipt' || docType === 'production_receipt' || docType === 'purchase') {
-        const purchEvent = domainEventBus.createEvent(
+        const purchEvent = domainEventBus.createEvent<PurchaseEventPayload>(
           isApproved ? DomainEventType.PURCHASE_APPROVED : DomainEventType.PURCHASE_CREATED,
           'Document',
           String(docId),
           {
             documentId: docId,
             refNumber: String(finalRefNumber),
+            ...await documentEventAmounts(tx, docId),
             supplierName: party.buyerName || '',
             currency: docCurrency,
             itemCount: docLines?.length || 0,

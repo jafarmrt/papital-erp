@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.409 — Rule Conditions Read Persian Digits
+- **Rule condition digits (TD-727):** the rule engine compared with Number(value), so a condition value typed with Persian digits or thousands separators (`gt "۱٬۰۰۰٬۰۰۰"`) never matched; the engine now reads both sides with `normalizeDecimalString` for numeric comparisons and equality with a number, and the rule editor saves such a value as a number and refuses one that is not a number.
+
+### v9.0.408 — Rule Execution Log and Stats Are Shown
+- **Rule execution log (TD-721):** the «لاگ‌های اجرا» view of the automatic actions tab was always empty and its cards always 0, because the hook read `logs` / `totalLogs` / `avgDurationMs` while the server sends `data` / `logsTotal` / `avgLatencyMs`; both now share one contract (`actionLogContract.ts`) and each row shows the rule, event, status, duration and result.
+
+### v9.0.407 — Invoice and Purchase Events Carry the Payable Amount
+- **Document event amounts (TD-713):** the invoice event carried no amount, so a rule on payload.totalAmount never ran and the audit wrote «به مبلغ undefined»; invoice and purchase events now carry the payable amount (net of lines + VAT + service charge) in the document currency and in rials, on create and on finalize, and the rule editor offers these fields.
+
+### v9.0.406 — Rules Trigger Only on Published Event Types
+- **Rule trigger events (TD-726):** the rule editor offered InvoiceCancelled, ChequeStatusChanged, ProjectStageCompleted and CustomerCreated, which nothing publishes, so such a rule was saved active and never ran; the editor now offers the published types with Persian labels and «همه رویدادها», the server refuses another type on create, switch, activation and active save (422), and stored rules of such types are listed by the health check.
+
+### v9.0.405 — Webhook Subscriptions Use the Published Event Types
+- **Webhook event patterns (TD-707):** the webhook form offered dotted patterns (document.invoiced, inventory.*) that matched no event the server publishes, so such subscriptions received nothing; the form now offers only the published types with Persian labels and «همه رویدادها», the server refuses any other pattern (422), stored subscriptions were converted with a mapping table (old lists recorded, unmappable or example.com ones deactivated), and the two demo subscriptions are no longer seeded.
+
 ### v9.0.404 — Reorder Alert on Free Stock
 - **Reorder alerts (TD-843, decision t7):** free stock (stock minus reservations) is compared with the reorder point; open purchases are shown as «در راه».
 

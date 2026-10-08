@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import request from 'supertest';
 import { and, eq, inArray, like } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
+import { setProbeEventPatterns } from '../fixtures/eventProbe.js';
 import { orm } from '../../db/drizzle.js';
 import { appSettings, roles, users, webhookDeliveries, webhookSubscriptions } from '../../db/schema.js';
 import { decryptSecret, isEncryptedSecret } from '../../lib/secretBox.js';
@@ -107,9 +108,10 @@ export async function runIntegrationSecretsAtRestTests(shouldRun: (id: string, .
 
     // 2. a webhook subscription: key and header value stored encrypted, sent decrypted and signed with the plain key
     const created = await send(admin, 'post', '/api/events/webhooks', {
-      name: `${namePrefix} partner`, targetUrl, eventPatterns: [EVENT_TYPE], customHeaders: { [PARTNER_HEADER]: PARTNER_TOKEN },
+      name: `${namePrefix} partner`, targetUrl, eventPatterns: ['*'], customHeaders: { [PARTNER_HEADER]: PARTNER_TOKEN },
     });
     const subId = Number(created.body?.data?.id);
+    if (subId) await setProbeEventPatterns(subId, [EVENT_TYPE]);
     const shownKey = String(created.body?.data?.secretKey ?? '');
     const [row] = subId ? await orm.select().from(webhookSubscriptions).where(eq(webhookSubscriptions.id, subId)) : [];
     const storedHeader = String((row?.customHeaders as Record<string, unknown> | undefined)?.[PARTNER_HEADER] ?? '');
@@ -174,7 +176,7 @@ export async function runIntegrationSecretsAtRestTests(shouldRun: (id: string, .
     const storedBefore = await storedSetting('wc_consumer_key');
     const noKeySave = await send(admin, 'post', '/api/settings', { settings: [{ key: 'wc_consumer_key', value: 'ck_td898_without_key' }] });
     if (noKeySave.status !== 503 || (await storedSetting('wc_consumer_key')) !== storedBefore) wrong.push(`save without key: ${noKeySave.status}`);
-    const noKeyCreate = await send(admin, 'post', '/api/events/webhooks', { name: `${namePrefix} without key`, targetUrl, eventPatterns: [EVENT_TYPE] });
+    const noKeyCreate = await send(admin, 'post', '/api/events/webhooks', { name: `${namePrefix} without key`, targetUrl, eventPatterns: ['*'] });
     const strayNoKey = await orm.select({ id: webhookSubscriptions.id }).from(webhookSubscriptions).where(eq(webhookSubscriptions.name, `${namePrefix} without key`));
     if (noKeyCreate.status !== 503 || strayNoKey.length > 0) wrong.push(`create webhook without key: ${noKeyCreate.status}, stored ${strayNoKey.length}`);
 

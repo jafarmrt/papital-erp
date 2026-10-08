@@ -96,6 +96,7 @@ export const DATA_EXPORT_EXCLUDED_TABLES: Readonly<Record<string, string>> = {
   webhook_deliveries: 'سابقه فنی ارسال وبهوک‌ها',
   integration_delivery_jobs: 'صف فنی ارسال به سامانه‌های بیرونی',
   event_action_rule_retirements: 'پیکربندی قاعده‌های بازنشسته که ممکن است کلید داشته باشد',
+  webhook_event_pattern_repairs: 'سابقه تبدیل یک‌باره الگوی رویداد اشتراک‌های وبهوک',
   woocommerce_order_logs: 'سابقه فنی همگام‌سازی سفارش‌های ووکامرس',
   legacy_date_repairs: 'سابقه اصلاح یک‌باره تاریخ‌ها',
   ref_fiscal_year_corrections: 'سابقه اصلاح یک‌باره سال شماره اسناد',

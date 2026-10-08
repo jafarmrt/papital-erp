@@ -4,7 +4,6 @@ import { migratePlainPasswords } from '../../db/migratePlainPasswords.js';
 import { warmDisplayTimezone } from '../../lib/businessClock.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { EventActionEngineService } from '../events/eventActionEngineService.js';
-import { WebhookSubscriptionService } from '../events/webhookSubscriptionService.js';
 
 /**
  * v9.0.133 (TD-591): کارهای داده‌ای بوت، به همان ترتیب `server.ts`، در یک تابع تا آزمون نصب تازه همان مسیر را روی
@@ -26,11 +25,11 @@ export async function prepareDatabaseAtBoot(): Promise<void> {
 }
 
 /**
- * v9.0.390 (TD-620، B01-40): گردش کارها، قاعده‌های رویداد و اشتراک‌های پیش‌فرض، هر کدام فقط وقتی نیست. هم در بوت و هم
+ * v9.0.390 (TD-620، B01-40): گردش کارها و قاعده‌های رویداد پیش‌فرض، هر کدام فقط وقتی نیست. هم در بوت و هم
  * پس از بازنشانی کارخانه اجرا می‌شود که همین‌ها را پاک می‌کند، تا بازنشانی همان پیش‌فرض‌های نصب تازه را بگذارد.
  */
 export async function seedDefaultEngines(): Promise<void> {
   await WorkflowEngineService.seedDefaultWorkflows();
   await EventActionEngineService.seedDefaultRules();
-  await WebhookSubscriptionService.seedDefaultSubscriptions();
+  // v9.0.405 (TD-707): no demo webhook subscription is seeded; the two seeded ones sent to example.com addresses
 }
