@@ -1,5 +1,5 @@
 /**
- * v9.0.430 (TD-612, B01-32, decision t6 «الف»): columns that hold another table's id on purpose without a foreign key.
+ * v9.0.444 (TD-612, B01-32, decision t6 «الف»): columns that hold another table's id on purpose without a foreign key.
  * Every other reference declared in the Drizzle schema has a database constraint (the regression test
  * `reg_foreign_key_inventory_td_612` checks both lists against the migrated schema). A new reference either gets its
  * constraint in its migration or is added here with its reason in the same change.

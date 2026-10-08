@@ -174,7 +174,7 @@ export class FactoryResetService {
       await wipe('project_reservation_releases', projectReservationReleases);
       await wipe('ref_fiscal_year_corrections', refFiscalYearCorrections);
       await wipe('document_items', documentItems);
-      // v9.0.433 (TD-903): project_bom_allocations.source_transaction_id references transactions (migration 0091)
+      // v9.0.447 (TD-903): project_bom_allocations.source_transaction_id references transactions (migration 0092)
       await wipe('project_bom_allocations', projectBomAllocations);
       await wipe('transactions', transactions);
       await wipe('documents', documents);

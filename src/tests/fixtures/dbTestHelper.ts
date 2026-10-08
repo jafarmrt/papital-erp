@@ -324,7 +324,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
     await orm.execute(sql`UPDATE piecework_payrolls SET created_by_id = NULL WHERE created_by_id IN (SELECT id FROM users WHERE ${testUserCond})`);
     await orm.execute(sql`UPDATE cheques SET created_by_id = NULL WHERE created_by_id IN (SELECT id FROM users WHERE ${testUserCond})`);
     await orm.execute(sql`UPDATE personnel SET user_id = NULL WHERE user_id IN (SELECT id FROM users WHERE ${testUserCond})`);
-    // v9.0.432 (TD-902): the other user columns have foreign keys too (migration 0090)
+    // v9.0.446 (TD-902): the other user columns have foreign keys too (migration 0091)
     await orm.execute(sql`DELETE FROM daily_work_logs WHERE user_id IN (SELECT id FROM users WHERE ${testUserCond})`);
     await orm.execute(sql`UPDATE dead_letter_events SET resolved_by = NULL WHERE resolved_by IN (SELECT id FROM users WHERE ${testUserCond})`);
     await orm.execute(sql`UPDATE event_action_rules SET created_by = NULL WHERE created_by IN (SELECT id FROM users WHERE ${testUserCond})`);

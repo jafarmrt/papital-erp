@@ -1,4 +1,4 @@
--- Drizzle Migration 0092: required columns of project_product_stage_progress (v9.0.434 / TD-613, finding B01-33,
+-- Drizzle Migration 0093: required columns of project_product_stage_progress (v9.0.448 / TD-613, finding B01-33,
 -- product-owner decision t5 «الف» of package 1)
 --
 -- The Drizzle schema declares item_code, quantity, stage_title and status of project_product_stage_progress NOT NULL

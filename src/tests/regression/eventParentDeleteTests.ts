@@ -5,10 +5,10 @@ import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 
 /**
- * v9.0.431 (TD-611, B01-31, decision t6 «الف»): webhook deliveries and rule action logs have the foreign keys the Drizzle
- * schema declares (CASCADE and SET NULL, migration 0089), deleting a subscription or a rule runs in one transaction with
+ * v9.0.445 (TD-611, B01-31, decision t6 «الف»): webhook deliveries and rule action logs have the foreign keys the Drizzle
+ * schema declares (CASCADE and SET NULL, migration 0090), deleting a subscription or a rule runs in one transaction with
  * its queued jobs and one audit row, and a key left NOT VALID over legacy orphans is listed and validated by hand once the
- * data is clean. Red on v9.0.430: no constraint, so the delivery and the log kept pointing to the deleted id, and the
+ * data is clean. Red on v9.0.444: no constraint, so the delivery and the log kept pointing to the deleted id, and the
  * webhook delete wrote no audit row.
  */
 
@@ -87,7 +87,7 @@ async function scenario(): Promise<string> {
 
   assertNoProblems(problems);
 
-  // a database whose legacy logs point to a removed rule: 0089 leaves the key NOT VALID and lists it
+  // a database whose legacy logs point to a removed rule: 0090 leaves the key NOT VALID and lists it
   await orm.execute(sql`ALTER TABLE event_action_logs DROP CONSTRAINT fk_event_action_logs_rule`);
   await orm.execute(sql`INSERT INTO event_action_logs (rule_id, rule_name, event_id, event_type, action_type, status)
     VALUES (987611, 'legacy rule', ${`${tag}-legacy`}, 'DocumentCreated', 'audit_log', 'success')`);
@@ -110,7 +110,7 @@ export async function runEventParentDeleteTests(shouldRun: ShouldRun): Promise<T
   const results: TestCaseResult[] = [];
   const id = 'reg_event_parent_delete_td_611';
   if (shouldRun(id, 'TD-611', 'B01-31')) {
-    await runCase(results, id, 'v9.0.431: webhook deliveries and rule logs follow their declared ON DELETE and the delete is one audited transaction (TD-611)',
+    await runCase(results, id, 'v9.0.445: webhook deliveries and rule logs follow their declared ON DELETE and the delete is one audited transaction (TD-611)',
       () => inFiscalSandbox(scenario));
   }
   return results;

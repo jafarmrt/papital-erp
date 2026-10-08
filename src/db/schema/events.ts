@@ -42,7 +42,7 @@ export const eventActionRules = pgTable('event_action_rules', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_action_rules_event_active: index('idx_action_rules_event_active').on(table.eventType, table.isActive),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_event_action_rules_created_by: index('idx_event_action_rules_created_by').on(table.createdBy).where(sql`${table.createdBy} IS NOT NULL`),
 }));
 
@@ -130,7 +130,7 @@ export const deadLetterEvents = pgTable('dead_letter_events', {
   idx_dlq_status: index('idx_dlq_status').on(table.status),
   idx_dlq_event_type: index('idx_dlq_event_type').on(table.eventType),
   idx_dlq_aggregate: index('idx_dlq_aggregate').on(table.aggregateType, table.aggregateId),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_dead_letter_events_resolved_by: index('idx_dead_letter_events_resolved_by').on(table.resolvedBy).where(sql`${table.resolvedBy} IS NOT NULL`),
 }));
 
@@ -155,7 +155,7 @@ export const webhookSubscriptions = pgTable('webhook_subscriptions', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_webhook_subs_active: index('idx_webhook_subs_active').on(table.isActive),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_webhook_subscriptions_created_by: index('idx_webhook_subscriptions_created_by').on(table.createdBy).where(sql`${table.createdBy} IS NOT NULL`),
 }));
 
@@ -175,7 +175,7 @@ export const webhookDeliveries = pgTable('webhook_deliveries', {
   durationMs: integer('duration_ms').default(0),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
 }, (table) => ({
-  // v9.0.434 (TD-613): the indexes migration 0000 built; the three declared before never existed in the database
+  // v9.0.448 (TD-613): the indexes migration 0000 built; the three declared before never existed in the database
   idx_webhook_deliv_sub: index('idx_webhook_deliv_sub').on(table.subscriptionId, table.createdAt),
   idx_webhook_deliv_event: index('idx_webhook_deliv_event').on(table.eventId),
 }));

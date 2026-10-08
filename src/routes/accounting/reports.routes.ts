@@ -214,7 +214,7 @@ router.get('/accounting/doc-signatures', authorizePermission('accounting.reports
     ))
     .orderBy(workflowHistoryLogs.createdAt);
 
-  // v9.0.430 (TD-612, B01-32): the step title comes from the instance's own snapshot. Saving the design replaces the
+  // v9.0.444 (TD-612, B01-32): the step title comes from the instance's own snapshot. Saving the design replaces the
   // step rows and their ids, so the live table (kept only as a fallback for old snapshots) lost the title of an old step.
   const snapshotTitles = snapshotStateTitles(instance.snapshotDsl);
   const signatures = logs

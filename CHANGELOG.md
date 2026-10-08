@@ -19,23 +19,65 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.435 — Every Foreign Key Column Has an Index
+### v9.0.449 — Every Foreign Key Column Has an Index
 - **Fix (TD-614, B01-34):** the 41 foreign key columns without an index leading with them get one (partial on IS NOT NULL when nullable), so a parent's rows and the delete check are read without a table scan; a test refuses a new unindexed key.
 
-### v9.0.434 — The Drizzle Schema Matches the Database
+### v9.0.448 — The Drizzle Schema Matches the Database
 - **Fix (TD-613, B01-33):** the Drizzle schema declares the ON DELETE actions, NOT NULL columns, indexes and unique indexes the migrations built, and a drift test refuses any new difference; four stage progress columns become NOT NULL on clean data.
 
-### v9.0.433 — Business References Get Their Foreign Keys
+### v9.0.447 — Business References Get Their Foreign Keys
 - **Fix (TD-903, B01-31 / B01-32):** the thirty references between business tables get database foreign keys (NO ACTION as declared), validated on clean data and listed by the health check until validated.
 
-### v9.0.432 — User Columns Get Their Foreign Keys
+### v9.0.446 — User Columns Get Their Foreign Keys
 - **Fix (TD-902, B01-31 / B01-32):** the sixteen columns declared as references to users get database foreign keys with their declared ON DELETE, validated on clean data and listed by the health check until validated.
 
-### v9.0.431 — Webhook Deliveries and Rule Logs Follow Their Declared ON DELETE
+### v9.0.445 — Webhook Deliveries and Rule Logs Follow Their Declared ON DELETE
 - **Fix (TD-611, B01-31):** webhook deliveries and rule action logs get the foreign keys the schema declares; deleting a subscription or a rule is one audited transaction that also closes its queued jobs.
 
-### v9.0.430 — Print Signatures Keep Their Step Title; Foreign Key Exceptions Documented
+### v9.0.444 — Print Signatures Keep Their Step Title; Foreign Key Exceptions Documented
 - **Fix (TD-612, B01-32):** the document print signature reads the step title from the instance's own snapshot, so a workflow design save no longer drops it; columns kept without a foreign key on purpose are listed with their reason and a test checks the schema against the database.
+
+### v9.0.443 — Persian Wording in the Events Screens
+- **Events wording (TD-734):** the events, webhook, dead-letter, notification and WooCommerce screens use the words of decision t9 («اقدام», «آزمایش», «گزارش», «داده رویداد», «صف ارسال رویداد», «صف خطا», «سرآیند», «اشاره») instead of «اکشن», «تست», «لاگ», Outbox and Payload; «وب‌هوک» is the third allowed loanword, WordPress labels stay only in parentheses, and the WooCommerce secret is no longer called optional.
+
+### v9.0.442 — Persian Digits in the Events Screens
+- **Persian digits (TD-732):** counts, percentages and durations in the events, webhook, dead-letter, WooCommerce and notification screens were written with Latin digits («بازپخش 1 مورد», «%۸۶», «120ms», «تلاش 3/۵»); they now use `formatPersianNumber` / `toPersianDigits`, «٪» after the number and «میلی‌ثانیه».
+
+### v9.0.441 — Events Page States Its Real Status
+- **Events page status (TD-733):** a stopped outbox worker showed the green pulse, each outbox action was announced by a banner and a toast, the live list label said 8 seconds for a 10-second refresh and the WooCommerce order log header promised amounts; each now states what is true.
+
+### v9.0.440 — Timeline Aggregate Search Settles
+- **Timeline search (TD-731):** the event timeline's aggregate search sent a request per keystroke and a late answer overwrote the newer list; it now waits for the keyword to settle (`useDebounce`) and aborts the older request.
+
+### v9.0.439 — Event Screens Show the Server Reason
+- **Event error messages (TD-730):** the dead-letter, webhook, rule, outbox and timeline tabs showed fixed texts for refused requests (losing the server's 409 «in replay» or SSRF reason) and called any refusal of a dead-letter payload edit a JSON format error; every catch now shows the server's message and only a parse error is a JSON format error.
+
+### v9.0.438 — Rule Switch Sends Its Target State
+- **Rule switch (TD-729):** the automatic rule switch flipped the state on every call, so a double click put the rule back (with two success messages) and no change was audited; the switch now sends `{ active }` (`setRuleActive` under the rule row lock: a repeat changes nothing, each change one audit row in its transaction) and the switch and the test button wait for their answer.
+
+### v9.0.437 — Webhook Form Saves Once
+- **Webhook form double submit (TD-728):** the webhook form's submit button was never disabled, so a double click made two subscriptions and every event was delivered twice; the form now sends once (`isSaving` with a ref guard) and the button stays disabled until the answer.
+
+### v9.0.436 — Event, Notification and WooCommerce Log Times in UTC
+- **Server times of package 15 (TD-725):** the events routes, the notification list and the WooCommerce order log sent zone-less UTC timestamps, so a Tehran browser showed them 3.5 hours early (the previous day before 03:30) and a new notification said «3 ساعت پیش»; they now carry a Z (`utcTimestampResponses` / `withUtcTimestampKeys`), stored event payloads are sent as stored, and the bell prints its relative time from UTC with Persian digits.
+
+### v9.0.435 — Events Page by Permission
+- **Events page access (TD-722):** the events page was guarded by the role codes admin / manager while its menu entry and route asked `events.view`, so a holder of events.view with another role got «عدم دسترسی»; the page now opens with `events.view` and every change button of its sub-tabs (rules, outbox, dead letters, timeline replay, webhooks, event simulation) shows only for `events.manage`, the key each change route asks.
+
+### v9.0.434 — Dismissed Notifications Stay Dismissed
+- **Notification dismissal (TD-717):** deleting a notification removed its row and the due reminder was made by read-then-write on every bell and counter request, so a deleted reminder came back and concurrent requests made two; «حذف» now sets `dismissed_at` (migration 0089), the bell and its counter skip dismissed rows, and the reminder insert is ON CONFLICT DO NOTHING on the partial unique index `uq_notifications_due_reminder` (created only on clean data; older duplicates listed by the financial health check).
+
+### v9.0.433 — Due Follow-up Reminder Reaches Only Its Assignee
+- **Due reminder recipient (TD-709):** the notification bell matched a follow-up's assignee with «contains», so a user named «علی» got the reminder (title and customer) of «علی رضایی»'s follow-up; the reminder now goes to the user linked to the assigned personnel, or for a legacy row without a personnel id to the user whose full name or username equals the trimmed assignee (else logger) exactly.
+
+### v9.0.432 — Dead Letter Payload Edit and Outbox Retry Are Consistent
+- **Dead letter edit and outbox retry (TD-716):** editing the payload of a replayed dead-letter row rewrote it and its completed outbox row with no lock or audit, and retrying a failed outbox event left its dead-letter row quarantined; a replayed row is now never edited (409 DLQ_EVENT_REPLAYED), an open row's edit runs under its row lock with an audit row and spares a completed outbox row, and the retry resolves the event's idle dead-letter rows in the same transaction and refuses an event that is not failed.
+
+### v9.0.431 — Event Timeline Shows the Entity Own Rows
+- **Event timeline (TD-711):** the timeline compared «document» with the publisher's «Document», its picker gave the document number instead of the id, and audit rows of any entity whose id or description contained the id came back, also to a role without the audit-log permission; each entity type now maps to its event aggregate types and audit entity names (`TIMELINE_AGGREGATE_SCOPES`), outbox, dead-letter and audit rows match the exact id, and audit rows go only to holders of `audit_logs.view`.
+
+### v9.0.430 — Rule Test, Event Simulation and Replay Have No Effect
+- **No-effect test tools (TD-708):** the rule test and the event simulation ran real actions with sample data (notifications to recipients, audit rows, a validly signed webhook with a fake amount to an outside partner) and the timeline's live replay ran without confirmation; the rule test now evaluates the stored rule and only describes its action, the simulation publishes nothing and lists the matching rules and receiving webhooks, and live replay is refused (422 EVENT_REPLAY_LIVE_REMOVED).
 
 ### v9.0.429 — Non-bcrypt Passwords Are Locked, Never Turned Into Passwords
 - **Fix (TD-617, B01-37):** the boot no longer hashes stored non-bcrypt values into working passwords; a one-off script locks them with a required reset, ended sessions and an audit row.

@@ -1,13 +1,18 @@
 import { orm } from '../../db/drizzle.js';
 import { outboxEvents, deadLetterEvents, activityLogs, documents, items, customers, treasuryTransactions, productionProjects } from '../../db/schema.js';
-import { eq, and, desc, or, ilike } from 'drizzle-orm';
+import { eq, and, desc, or, ilike, inArray, sql } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
-import { domainEventBus } from './domainEventBus.js';
+import { ValidationError } from '../../errors/customErrors.js';
+import { ruleActionTypeLabel } from '../../lib/events/ruleActionTypes.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { EventActionEngineService } from './eventActionEngineService.js';
 import { RuleExpression } from '../ruleEngine.service.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { actionRuleView } from './integrationSecrets.js';
+import { timelineAggregateScope } from './timelineAggregates.js';
+
+/** v9.0.430 (TD-708): the live replay of a made-up event is removed */
+export const EVENT_REPLAY_LIVE_REMOVED = 'EVENT_REPLAY_LIVE_REMOVED';
 
 export interface TimelineEventItem {
   id: string | number;
@@ -92,8 +97,9 @@ export class EventSourcingReplayService {
             .orderBy(desc(documents.id))
             .limit(limit);
 
+          // v9.0.431 (TD-711): the id is the document id the events carry, never its number
           return rows.map(r => ({
-            id: String(r.code || r.id),
+            id: String(r.id),
             title: `سند شماره ${r.code || r.id} (${r.extra || r.type || 'بدون نام'})`
           }));
         }
@@ -134,7 +140,7 @@ export class EventSourcingReplayService {
             .limit(limit);
 
           return rows.map(r => ({
-            id: String(r.code || r.id),
+            id: String(r.id),
             title: `[${r.code}] ${r.title} (موجودی: ${r.extra || 0})`
           }));
         }
@@ -155,7 +161,7 @@ export class EventSourcingReplayService {
             .limit(limit);
 
           return rows.map(r => ({
-            id: String(r.code || r.id),
+            id: String(r.id),
             title: `تراکنش ${r.code || r.id} - ${r.title} (${Number(r.extra || 0).toLocaleString('fa-IR')})`
           }));
         }
@@ -176,7 +182,7 @@ export class EventSourcingReplayService {
             .limit(limit);
 
           return rows.map(r => ({
-            id: String(r.code || r.id),
+            id: String(r.id),
             title: `پروژه ${r.code || r.id} - ${r.title} (${r.extra || 'جاری'})`
           }));
         }
@@ -193,25 +199,24 @@ export class EventSourcingReplayService {
 
   /**
    * Builds a full chronological Event Sourcing timeline for a single aggregate instance.
+   *
+   * v9.0.431 (TD-711, B15-09): events match the aggregate types their publishers write (case-insensitive) and the exact
+   * aggregate id; audit rows are read only for the section's own entity names and the exact id, and only when the caller
+   * holds `audit_logs.view` (`includeAudit`, computed in the route), the permission of the audit log itself.
    */
-  static async getAggregateTimeline(aggregateType: string, aggregateId: string): Promise<TimelineEventItem[]> {
+  static async getAggregateTimeline(aggregateType: string, aggregateId: string, options: { includeAudit: boolean }): Promise<TimelineEventItem[]> {
     const timeline: TimelineEventItem[] = [];
     const aggIdStr = String(aggregateId).trim();
+    const scope = timelineAggregateScope(aggregateType);
+    if (!scope || !aggIdStr) return timeline;
+    const eventTypes = [...scope.eventAggregateTypes];
 
     try {
       // 1. Fetch Outbox Events for this aggregate
       const outboxList = await orm
         .select()
         .from(outboxEvents)
-        .where(
-          and(
-            eq(outboxEvents.aggregateType, aggregateType),
-            or(
-              eq(outboxEvents.aggregateId, aggIdStr),
-              ilike(outboxEvents.aggregateId, containsLikePattern(aggIdStr))
-            )
-          )
-        )
+        .where(and(inArray(sql<string>`lower(${outboxEvents.aggregateType})`, eventTypes), eq(outboxEvents.aggregateId, aggIdStr)))
         .orderBy(desc(outboxEvents.occurredAt));
 
       for (const ev of outboxList) {
@@ -236,15 +241,7 @@ export class EventSourcingReplayService {
       const dlqList = await orm
         .select()
         .from(deadLetterEvents)
-        .where(
-          and(
-            eq(deadLetterEvents.aggregateType, aggregateType),
-            or(
-              eq(deadLetterEvents.aggregateId, aggIdStr),
-              ilike(deadLetterEvents.aggregateId, containsLikePattern(aggIdStr))
-            )
-          )
-        );
+        .where(and(inArray(sql<string>`lower(${deadLetterEvents.aggregateType})`, eventTypes), eq(deadLetterEvents.aggregateId, aggIdStr)));
 
       for (const dlq of dlqList) {
         timeline.push({
@@ -262,18 +259,15 @@ export class EventSourcingReplayService {
         });
       }
 
-      // 3. Fetch Audit Logs for this entity
-      const auditLogs = await orm
-        .select()
-        .from(activityLogs)
-        .where(
-          or(
-            eq(activityLogs.entityId, aggIdStr),
-            ilike(activityLogs.description, containsLikePattern(aggIdStr))
-          )
-        )
-        .orderBy(desc(activityLogs.timestamp))
-        .limit(30);
+      // 3. Fetch Audit Logs for this entity (its own entity names and id; only for holders of the audit log permission)
+      const auditLogs = options.includeAudit && scope.auditEntities.length > 0
+        ? await orm
+          .select()
+          .from(activityLogs)
+          .where(and(inArray(activityLogs.entity, [...scope.auditEntities]), eq(activityLogs.entityId, aggIdStr)))
+          .orderBy(desc(activityLogs.timestamp))
+          .limit(30)
+        : [];
 
       for (const al of auditLogs) {
         const details = (al.details && typeof al.details === 'object') ? (al.details as Record<string, unknown>) : {};
@@ -305,7 +299,10 @@ export class EventSourcingReplayService {
   }
 
   /**
-   * Simulates or executes a Time-Travel Replay of a historical domain event.
+   * Simulates a Time-Travel Replay of a historical domain event.
+   *
+   * v9.0.430 (TD-708, B15-06, decision t5 a): the replay only evaluates the rules; the live replay (`dryRun: false`), which
+   * published a made-up event to the live handlers, is removed and refused with 422 `EVENT_REPLAY_LIVE_REMOVED`.
    */
   static async simulateEventReplay(params: {
     eventId?: string;
@@ -317,7 +314,13 @@ export class EventSourcingReplayService {
     userId?: number;
     userName?: string;
   }) {
-    const dryRun = params.dryRun !== false; // default true for safety
+    if (params.dryRun === false) {
+      throw new ValidationError(
+        'بازپخش زنده رویداد حذف شده است: رویداد ساختگی به قانون‌ها و وب‌هوک‌های زنده نمی‌رسد. بازپخش فقط شبیه‌سازی بی‌اثر است.',
+        { dryRun: false }, EVENT_REPLAY_LIVE_REMOVED,
+      );
+    }
+    const dryRun = true;
     const nowIso = new Date().toISOString();
     const eventId = params.eventId || `replay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const idempotencyKey = `idemp-${eventId}`;
@@ -354,15 +357,9 @@ export class EventSourcingReplayService {
         // v9.0.360 (TD-710): the rule token and header values are masked here too
         actionConfig: actionRuleView(rule).actionConfigJson,
         simulatedOutcome: isMatched
-          ? `قانون با موفقیت منطبق شد و اکشن ${rule.actionType} ${dryRun ? 'شبیه‌سازی' : 'اجرا'} گردید.`
-          : 'شروط قانون منطبق نشد و اکشن نادیده گرفته شد.'
+          ? `شرط‌های قانون جور شد؛ اقدام «${ruleActionTypeLabel(rule.actionType)}» فقط شبیه‌سازی شد و چیزی فرستاده یا ثبت نشد.`
+          : 'شرط‌های قانون جور نشد و اقدام اجرا نمی‌شد.'
       });
-    }
-
-    // 2. If not dryRun, actually dispatch to DomainEventBus
-    if (!dryRun) {
-      await domainEventBus.publish(syntheticEvent);
-      logger.info(`[Event Sourcing Replay] Dispatched live event ${eventId} (${params.eventType}) to EventBus`);
     }
 
     return {
@@ -376,9 +373,7 @@ export class EventSourcingReplayService {
       evaluatedRulesCount: rules.length,
       matchedRulesCount: simulationResults.filter(r => r.matched).length,
       rulesBreakdown: simulationResults,
-      message: dryRun
-        ? 'شبیه‌سازی بازپخش رویداد با موفقیت و بدون اعمال تغییرات جانبی (Dry-Run) محاسبه شد.'
-        : 'رویداد بازپخش‌شده با موفقیت در گذرگاه رویدادها منتشر و اقدامات فعال اجرا گردیدند.'
+      message: 'شبیه‌سازی بازپخش رویداد بی‌اثر انجام شد: رویداد منتشر نشد و چیزی فرستاده یا ثبت نشد.'
     };
   }
 

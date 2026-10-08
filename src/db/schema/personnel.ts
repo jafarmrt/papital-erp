@@ -44,13 +44,13 @@ export const personnel = pgTable('personnel', {
   version: integer('version').notNull().default(1),
 }, (table) => ({
   // v9.0.28 (TD-439): ایندکس یکتای جزئی uq_personnel_code_active روی lower(btrim(personnel_code)) پرسنل فعال با کد غیرخالی
-  // را مهاجرت 0054 فقط روی داده بی کد تکراری می‌سازد (src/services/personnel/personnelCode.ts)؛ v9.0.434 (TD-613): اعلام‌شده تا اسکیما با پایگاه‌داده بخواند
+  // را مهاجرت 0054 فقط روی داده بی کد تکراری می‌سازد (src/services/personnel/personnelCode.ts)؛ v9.0.448 (TD-613): اعلام‌شده تا اسکیما با پایگاه‌داده بخواند
   uq_personnel_code_active: uniqueIndex('uq_personnel_code_active').on(sql`lower(btrim(${table.personnelCode}))`)
     .where(sql`${table.isDeleted} = 0 AND btrim(${table.personnelCode}) <> ''`),
   idx_personnel_code: index('idx_personnel_code').on(table.personnelCode),
   idx_personnel_user: index('idx_personnel_user').on(table.userId),
   // v9.0.24 (TD-435): ایندکس یکتای جزئی uq_personnel_user_active روی user_id پرسنل فعال را مهاجرت 0053 فقط روی داده
-  // بی پیوند تکراری می‌سازد (src/services/personnel/personnelUserLink.ts)؛ v9.0.434 (TD-613): اعلام‌شده تا اسکیما با پایگاه‌داده بخواند
+  // بی پیوند تکراری می‌سازد (src/services/personnel/personnelUserLink.ts)؛ v9.0.448 (TD-613): اعلام‌شده تا اسکیما با پایگاه‌داده بخواند
   uq_personnel_user_active: uniqueIndex('uq_personnel_user_active').on(table.userId).where(sql`${table.isDeleted} = 0 AND ${table.userId} IS NOT NULL`),
   idx_personnel_status: index('idx_personnel_status').on(table.employmentStatus),
   idx_personnel_deleted: index('idx_personnel_deleted').on(table.isDeleted),
@@ -78,7 +78,7 @@ export const pieceworkTasks = pgTable('piecework_tasks', {
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   // TD-246: ایندکس یکتای جزئی uq_ptask_code_active روی lower(btrim(code)) برای عناوین فعال را مهاجرت 0037 فقط روی داده
-  // بدون کد تکراری می‌سازد (src/services/piecework/taskCode.ts)؛ این ایندکس معمولی برای پایگاه‌داده‌ای است که ساخته نشد؛ v9.0.434 (TD-613): اعلام‌شده تا اسکیما با پایگاه‌داده بخواند
+  // بدون کد تکراری می‌سازد (src/services/piecework/taskCode.ts)؛ این ایندکس معمولی برای پایگاه‌داده‌ای است که ساخته نشد؛ v9.0.448 (TD-613): اعلام‌شده تا اسکیما با پایگاه‌داده بخواند
   uq_ptask_code_active: uniqueIndex('uq_ptask_code_active').on(sql`lower(btrim(${table.code}))`).where(sql`${table.isDeleted} = 0`),
   idx_ptask_code: index('idx_ptask_code').on(table.code),
   idx_ptask_cat: index('idx_ptask_cat').on(table.category),
@@ -103,9 +103,9 @@ export const pieceworkTaskRateHistory = pgTable('piecework_task_rate_history', {
 }, (table) => ({
   idx_ptrh_task: index('idx_ptrh_task').on(table.taskId),
   idx_ptrh_created: index('idx_ptrh_created').on(table.createdAt),
-  // v9.0.434 (TD-613): index of migration 0076, declared so the schema matches the database
+  // v9.0.448 (TD-613): index of migration 0076, declared so the schema matches the database
   idx_ptrh_personnel: index('idx_ptrh_personnel').on(table.personnelId).where(sql`${table.personnelId} IS NOT NULL`),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_piecework_task_rate_history_changed_by_user_id: index('idx_piecework_task_rate_history_changed_by_user_id').on(table.changedByUserId).where(sql`${table.changedByUserId} IS NOT NULL`),
 }));
 
@@ -119,7 +119,7 @@ export const pieceworkPersonnelRates = pgTable('piecework_personnel_rates', {
 }, (table) => ({
   idx_ppr_personnel: index('idx_ppr_personnel').on(table.personnelId),
   idx_ppr_task: index('idx_ppr_task').on(table.taskId),
-  // v9.0.434 (TD-613): built by migration 0076 only on data without duplicates; declared so the schema matches the database
+  // v9.0.448 (TD-613): built by migration 0076 only on data without duplicates; declared so the schema matches the database
   uq_piecework_personnel_rates_active: uniqueIndex('uq_piecework_personnel_rates_active').on(table.personnelId, table.taskId).where(sql`${table.isDeleted} = 0`),
 }));
 
@@ -158,7 +158,7 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   idx_ppay_number: index('idx_ppay_number').on(table.payrollNumber),
   idx_ppay_status: index('idx_ppay_status').on(table.status),
   idx_ppay_deleted: index('idx_ppay_deleted').on(table.isDeleted),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_piecework_payrolls_created_by_id: index('idx_piecework_payrolls_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
 }));
 registerColumnRef('pieceworkPayrolls.id', () => pieceworkPayrolls.id);
@@ -188,6 +188,6 @@ export const pieceworkLogs = pgTable('piecework_logs', {
   idx_plog_date_iso: index('idx_plog_date_iso').on(table.dateIso),
   idx_plog_payroll: index('idx_plog_payroll').on(table.payrollId),
   idx_plog_deleted: index('idx_plog_deleted').on(table.isDeleted),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_piecework_logs_created_by_id: index('idx_piecework_logs_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
 }));

@@ -5,9 +5,9 @@ import { declaredForeignKeys, databaseForeignKeys } from './foreignKeyPolicyTest
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase } from './fiscalClosingTests.js';
 
 /**
- * v9.0.435 (TD-614, B01-34): every foreign key column has an index that leads with it, so reading the rows of a parent
+ * v9.0.449 (TD-614, B01-34): every foreign key column has an index that leads with it, so reading the rows of a parent
  * (a document's treasury rows, a payroll's payments, a cheque's vouchers) and the database's own check on deleting a
- * parent never scan the whole table. Red on v9.0.434: 41 foreign key columns had no such index (among them
+ * parent never scan the whole table. Red on v9.0.448: 41 foreign key columns had no such index (among them
  * `treasury_transactions.document_id / payroll_id / voucher_id / cheque_id`, `cheques.bank_account_id`,
  * `journal_vouchers.created_by_id`, `documents.crm_lead_id`).
  *
@@ -44,7 +44,7 @@ export async function runForeignKeyIndexTests(shouldRun: ShouldRun): Promise<Tes
   const results: TestCaseResult[] = [];
   const id = 'reg_foreign_key_indexes_td_614';
   if (shouldRun(id, 'TD-614', 'B01-34')) {
-    await runCase(results, id, 'v9.0.435: every foreign key column has an index that leads with it, so parent lookups and delete checks never scan the table (TD-614)',
+    await runCase(results, id, 'v9.0.449: every foreign key column has an index that leads with it, so parent lookups and delete checks never scan the table (TD-614)',
       () => inFiscalSandbox(scenario));
   }
   return results;

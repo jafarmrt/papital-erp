@@ -1,4 +1,4 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './auth';
 import { baseRelations } from './baseRelations';
@@ -33,7 +33,7 @@ export const dailyWorkLogs = pgTable('daily_work_logs', {
   idx_dwl_date_iso: index('idx_dwl_date_iso').on(table.dateIso),
   idx_dwl_vis: index('idx_dwl_vis').on(table.visibility),
   idx_dwl_deleted: index('idx_dwl_deleted').on(table.isDeleted),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_daily_work_logs_project_id: index('idx_daily_work_logs_project_id').on(table.projectId).where(sql`${table.projectId} IS NOT NULL`),
 }));
 
@@ -57,9 +57,14 @@ export const notifications = pgTable('notifications', {
   link: text('link').default(''),
   isRead: integer('is_read').default(0),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  // v9.0.434 (TD-717): «حذف» در زنگ اعلان ردیف را نگه می‌دارد و فقط این زمان (UTC کارساز) را می‌نویسد؛ اعلان کنارگذاشته فهرست و شمرده نمی‌شود
+  dismissedAt: timestamp('dismissed_at', { mode: 'string' }),
 }, (table) => ({
   idx_notif_user: index('idx_notif_user').on(table.userId),
   idx_notif_read: index('idx_notif_read').on(table.isRead),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_notifications_sender_id: index('idx_notifications_sender_id').on(table.senderId).where(sql`${table.senderId} IS NOT NULL`),
+  // v9.0.434 (TD-717): ایندکس یکتای جزئی uq_notifications_due_reminder روی (user_id, type, link) یادآوری‌های crm_due_task
+  // (مهاجرت 0089، فقط روی داده بی تکرار ساخته شد؛ تکراری‌های قدیمی را بررسی سلامت مالی فهرست می‌کند)
+  uq_notifications_due_reminder: uniqueIndex('uq_notifications_due_reminder').on(table.userId, table.type, table.link).where(sql`${table.type} = 'crm_due_task'`),
 }));

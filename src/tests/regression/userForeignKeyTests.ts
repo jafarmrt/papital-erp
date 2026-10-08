@@ -5,10 +5,10 @@ import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 
 /**
- * v9.0.432 (TD-902, B01-31 / B01-32, decision t6 «الف»): the sixteen user columns the Drizzle schema declares as references
- * to users have database foreign keys (migration 0090) with their declared ON DELETE, validated on clean data; a row for a
+ * v9.0.446 (TD-902, B01-31 / B01-32, decision t6 «الف»): the sixteen user columns the Drizzle schema declares as references
+ * to users have database foreign keys (migration 0091) with their declared ON DELETE, validated on clean data; a row for a
  * missing user is refused, and a key left NOT VALID over a legacy orphan is listed and validated by hand after the fix.
- * Red on v9.0.431, where none of them existed and a notification for a missing user was stored.
+ * Red on v9.0.445, where none of them existed and a notification for a missing user was stored.
  */
 
 const USER_KEYS: ReadonlyArray<readonly [table: string, column: string]> = [
@@ -51,7 +51,7 @@ async function scenario(): Promise<string> {
   if (refused !== '23503') problems.push(`a notification for a missing user was ${refused ? `refused with ${refused}` : 'stored'}`);
   assertNoProblems(problems);
 
-  // a database whose legacy notifications name a removed sender: 0090 leaves the key NOT VALID and lists it
+  // a database whose legacy notifications name a removed sender: 0091 leaves the key NOT VALID and lists it
   const admins = await orm.execute(sql`SELECT id FROM users WHERE is_deleted = 0 ORDER BY id LIMIT 1`);
   const recipient = Number((admins.rows[0] as Row | undefined)?.id);
   await orm.execute(sql`ALTER TABLE notifications DROP CONSTRAINT fk_notifications_sender_id`);
@@ -72,7 +72,7 @@ export async function runUserForeignKeyTests(shouldRun: ShouldRun): Promise<Test
   const results: TestCaseResult[] = [];
   const id = 'reg_user_foreign_keys_td_902';
   if (shouldRun(id, 'TD-902', 'B01-31', 'B01-32')) {
-    await runCase(results, id, 'v9.0.432: the user columns declared as references have database foreign keys (TD-902)', () => inFiscalSandbox(scenario));
+    await runCase(results, id, 'v9.0.446: the user columns declared as references have database foreign keys (TD-902)', () => inFiscalSandbox(scenario));
   }
   return results;
 }

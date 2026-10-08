@@ -86,7 +86,7 @@ export async function checkCleanupScript(cluster: ScratchCluster): Promise<strin
   const run = (env: Record<string, string>, args: string[] = []) => runCommand(tsx, ['scripts/cleanup-test-data.ts', ...args],
     { env: scriptEnv({ DATABASE_URL: url, ERP_TEST_SCHEMA_ISOLATION: '0', ...env }), timeoutMs: 120_000 });
 
-  // the marker daily log needs an owner (a foreign key since v9.0.432) and the marker work log a task (v9.0.433); the
+  // the marker daily log needs an owner (a foreign key since v9.0.446) and the marker work log a task (v9.0.447); the
   // script never removes users or tasks, so they are part of the clean state
   await querySql(url, `INSERT INTO users (username, password, full_name, role)
     SELECT 'p01_owner', 'x', 'P01 owner', 'admin' WHERE NOT EXISTS (SELECT 1 FROM users)`);

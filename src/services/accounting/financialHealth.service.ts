@@ -44,6 +44,7 @@ import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApproval
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
 import { buildUnpublishedRuleEventHealthTest, findRulesWithUnpublishedEvent } from '../events/unpublishedRuleEventHealth.js';
+import { buildDueReminderHealthTest, findDuplicateDueReminders, hasDueReminderUniqueIndex } from '../notifications/notificationReminderHealth.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
 import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
@@ -1239,6 +1240,11 @@ export class FinancialHealthService {
     tests.push(unpublishedEventRuleTest);
     // آزمون ۵۰: v9.0.427 (TD-589) قید و ایندکس یکتای شرطی مهاجرت‌ها که روی داده ناپاک ساخته نشده (فهرست با علت؛ ساختن دستی)
     tests.push(buildConditionalConstraintsHealthTest(await findMissingConditionalConstraints()));
+    // آزمون ۵۱: v9.0.434 (TD-717) یادآوری سررسید پیگیری تکراری برای یک کاربر و پیوند (مهاجرت 0089؛ فقط فهرست)
+    const [duplicateDueReminders, dueReminderIndexPresent] = await Promise.all([findDuplicateDueReminders(), hasDueReminderUniqueIndex()]);
+    const dueReminderTest = buildDueReminderHealthTest(duplicateDueReminders, dueReminderIndexPresent);
+    overallScore += dueReminderTest.scoreImpact;
+    tests.push(dueReminderTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

@@ -24,7 +24,7 @@ export const accounts = pgTable('accounts', {
   idx_acc_level: index('idx_acc_level').on(table.level),
   idx_acc_type: index('idx_acc_type').on(table.accountType),
   idx_acc_deleted: index('idx_acc_deleted').on(table.isDeleted),
-  // v9.0.434 (TD-613): built by migration 0012 only on data without duplicates; declared so the schema matches the database
+  // v9.0.448 (TD-613): built by migration 0012 only on data without duplicates; declared so the schema matches the database
   uq_accounts_code_active: uniqueIndex('uq_accounts_code_active').on(table.code).where(sql`${table.isDeleted} = 0`),
 }));
 
@@ -81,13 +81,13 @@ export const journalVouchers = pgTable('journal_vouchers', {
   // v7.0.91 (TD-195): ایندکس یکتای uq_jv_voucher_number را مهاجرت 0031 فقط روی داده بدون شماره تکراری می‌سازد
   // (voucherNumberIntegrity.ts)؛ این ایندکس معمولی برای پایگاه‌داده‌ای است که ایندکس یکتا ساخته نشد
   idx_jv_number: index('idx_jv_number').on(table.voucherNumber),
-  // v9.0.434 (TD-613): built by migration 0031 only on data without duplicates; declared so the schema matches the database
+  // v9.0.448 (TD-613): built by migration 0031 only on data without duplicates; declared so the schema matches the database
   uq_jv_voucher_number: uniqueIndex('uq_jv_voucher_number').on(table.voucherNumber),
   idx_jv_date: index('idx_jv_date').on(table.date),
   idx_jv_status: index('idx_jv_status').on(table.status),
   idx_jv_module: index('idx_jv_module').on(table.referenceModule),
   idx_jv_deleted: index('idx_jv_deleted').on(table.isDeleted),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_journal_vouchers_approved_by_id: index('idx_journal_vouchers_approved_by_id').on(table.approvedById).where(sql`${table.approvedById} IS NOT NULL`),
   idx_journal_vouchers_created_by_id: index('idx_journal_vouchers_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
   idx_journal_vouchers_source_document_id: index('idx_journal_vouchers_source_document_id').on(table.sourceDocumentId).where(sql`${table.sourceDocumentId} IS NOT NULL`),
@@ -107,7 +107,7 @@ export const fiscalPeriods = pgTable('fiscal_periods', {
   closingVoucherId: integer('closing_voucher_id').references(() => journalVouchers.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
 }, (table) => ({
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_fiscal_periods_closing_voucher_id: index('idx_fiscal_periods_closing_voucher_id').on(table.closingVoucherId).where(sql`${table.closingVoucherId} IS NOT NULL`),
 }));
 
@@ -189,7 +189,7 @@ export const bankAccounts = pgTable('bank_accounts', {
   idx_bank_code: index('idx_bank_code').on(table.code),
   idx_bank_type: index('idx_bank_type').on(table.type),
   idx_bank_deleted: index('idx_bank_deleted').on(table.isDeleted),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_bank_accounts_account_id: index('idx_bank_accounts_account_id').on(table.accountId).where(sql`${table.accountId} IS NOT NULL`),
 }));
 
@@ -229,10 +229,10 @@ export const cheques = pgTable('cheques', {
   idx_chq_status: index('idx_chq_status').on(table.status),
   idx_chq_sayad: index('idx_chq_sayad').on(table.sayadNumber),
   idx_chq_deleted: index('idx_chq_deleted').on(table.isDeleted),
-  // v9.0.434 (TD-613): built by migration 0012 only on data without duplicates; declared so the schema matches the database
+  // v9.0.448 (TD-613): built by migration 0012 only on data without duplicates; declared so the schema matches the database
   uq_cheques_sayad_number_active: uniqueIndex('uq_cheques_sayad_number_active').on(table.sayadNumber)
     .where(sql`${table.isDeleted} = 0 AND ${table.sayadNumber} IS NOT NULL AND ${table.sayadNumber} <> ''`),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_cheques_bank_account_id: index('idx_cheques_bank_account_id').on(table.bankAccountId).where(sql`${table.bankAccountId} IS NOT NULL`),
   idx_cheques_created_by_id: index('idx_cheques_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
   idx_cheques_party_account_id: index('idx_cheques_party_account_id').on(table.partyAccountId).where(sql`${table.partyAccountId} IS NOT NULL`),
@@ -283,7 +283,7 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
   idx_tt_date: index('idx_tt_date').on(table.date),
   idx_tt_bank: index('idx_tt_bank').on(table.bankAccountId),
   idx_tt_deleted: index('idx_tt_deleted').on(table.isDeleted),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_treasury_transactions_cheque_id: index('idx_treasury_transactions_cheque_id').on(table.chequeId).where(sql`${table.chequeId} IS NOT NULL`),
   idx_treasury_transactions_contra_account_id: index('idx_treasury_transactions_contra_account_id').on(table.contraAccountId).where(sql`${table.contraAccountId} IS NOT NULL`),
   idx_treasury_transactions_created_by_id: index('idx_treasury_transactions_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
@@ -299,6 +299,6 @@ export const accountingSettings = pgTable('accounting_settings', {
   description: text('description').default(''),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
 }, (table) => ({
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_accounting_settings_account_id: index('idx_accounting_settings_account_id').on(table.accountId).where(sql`${table.accountId} IS NOT NULL`),
 }));

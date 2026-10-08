@@ -11,17 +11,17 @@ import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 
 /**
- * Package 1 second half PR 3 (v9.0.430+, decision t6 «الف»): the foreign keys of the Drizzle schema and the database.
+ * Package 1 second half PR 3 (v9.0.444+, decision t6 «الف»): the foreign keys of the Drizzle schema and the database.
  *
  * - `reg_doc_signature_snapshot_title_td_612` (TD-612, B01-32): the print signature takes the step title from the
- *   instance's own snapshot. Red on v9.0.429, where it joined the live step table, so after an unchanged design save
+ *   instance's own snapshot. Red on v9.0.443, where it joined the live step table, so after an unchanged design save
  *   (new step ids) an old document's signature lost its step title.
  * - `reg_foreign_key_inventory_td_612`: every reference the Drizzle schema declares has a database foreign key, except the
  *   ones still pending below (this list only shrinks: a pending key that gets its constraint fails until it is removed
  *   here), and every documented exception of `FOREIGN_KEY_EXCEPTIONS` is a real column with neither.
  */
 
-/** Declared references without a database constraint; empty since v9.0.433 (TD-903), so a new reference gets its key in its migration */
+/** Declared references without a database constraint; empty since v9.0.447 (TD-903), so a new reference gets its key in its migration */
 const PENDING_FOREIGN_KEYS: readonly string[] = [];
 
 type DeclaredFk = { key: string; table: string; column: string; refTable: string; onDelete: string };
@@ -144,11 +144,11 @@ export async function runForeignKeyPolicyTests(shouldRun: ShouldRun): Promise<Te
   const results: TestCaseResult[] = [];
   if (shouldRun('reg_doc_signature_snapshot_title_td_612', 'TD-612', 'B01-32')) {
     await runCase(results, 'reg_doc_signature_snapshot_title_td_612',
-      'v9.0.430: the print signature keeps its step title after the workflow design is saved again (TD-612)', () => inFiscalSandbox(signatureScenario));
+      'v9.0.444: the print signature keeps its step title after the workflow design is saved again (TD-612)', () => inFiscalSandbox(signatureScenario));
   }
   if (shouldRun('reg_foreign_key_inventory_td_612', 'TD-612', 'B01-31', 'B01-32')) {
     await runCase(results, 'reg_foreign_key_inventory_td_612',
-      'v9.0.430: every declared reference has a database foreign key or is pending, and every documented exception has neither (TD-612)', inventoryScenario);
+      'v9.0.444: every declared reference has a database foreign key or is pending, and every documented exception has neither (TD-612)', inventoryScenario);
   }
   return results;
 }

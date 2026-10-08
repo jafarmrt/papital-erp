@@ -2862,7 +2862,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         .where(inArray(woocommerceOrderLogs.wcOrderId, orderIdList));
       await orm.delete(woocommerceOrderLogs).where(inArray(woocommerceOrderLogs.wcOrderId, orderIdList));
       const docIds = logs.map(l => l.docId).filter((v): v is number => typeof v === 'number');
-      // v9.0.433 (TD-903): a Kardex row keeps its document (fk_transactions_document_id) and a document its party, so an
+      // v9.0.447 (TD-903): a Kardex row keeps its document (fk_transactions_document_id) and a document its party, so an
       // invoice that moved stock and its customer stay in the isolated test schema
       if (docIds.length > 0) {
         await orm.execute(sql`DELETE FROM document_items WHERE document_id = ANY(${sql.param(docIds)}::int[])
@@ -5843,7 +5843,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await cleanTestTableData('project_stages', 'project_id', createdProjectIds);
       }
       if (createdTaskIds.length > 0) {
-        // v9.0.433 (TD-903): the rate change wrote a history row that references the task
+        // v9.0.447 (TD-903): the rate change wrote a history row that references the task
         await cleanTestTableData('piecework_task_rate_history', 'task_id', createdTaskIds);
         await cleanTestTableData('piecework_tasks', 'id', createdTaskIds);
       }
@@ -10789,6 +10789,22 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runDocumentEventAmountTests } = await import('../regression/documentEventAmountTests.js');
   results.push(...await runDocumentEventAmountTests(shouldRun));
 
+  // Package 15 PR e (v9.0.430+): test tools, timeline, dead-letter queue and notifications
+  const { runRuleTestSimulationTests } = await import('../regression/ruleTestSimulationTests.js');
+  results.push(...await runRuleTestSimulationTests(shouldRun));
+  const { runEventTimelineTests } = await import('../regression/eventTimelineTests.js');
+  results.push(...await runEventTimelineTests(shouldRun));
+  const { runDeadLetterEditRetryTests } = await import('../regression/deadLetterEditRetryTests.js');
+  results.push(...await runDeadLetterEditRetryTests(shouldRun));
+  const { runCrmDueReminderTests } = await import('../regression/crmDueReminderTests.js');
+  results.push(...await runCrmDueReminderTests(shouldRun));
+  const { runNotificationDismissTests } = await import('../regression/notificationDismissTests.js');
+  results.push(...await runNotificationDismissTests(shouldRun));
+  const { runEventTimestampUtcTests } = await import('../regression/eventTimestampUtcTests.js');
+  results.push(...await runEventTimestampUtcTests(shouldRun));
+  const { runRuleActiveStateTests } = await import('../regression/ruleActiveStateTests.js');
+  results.push(...await runRuleActiveStateTests(shouldRun));
+
   // Package 10 PR B (v9.0.347+): procurement order link, duplicate submissions, consolidation, receiving
   const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');
   results.push(...await runProcurementOrderTests(shouldRun));
@@ -10817,7 +10833,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runFactoryResetTests } = await import('../regression/factoryResetTests.js');
   results.push(...await runFactoryResetTests(shouldRun));
 
-  // Package 1 second half PR 3 (v9.0.430+): foreign keys of the schema and the database
+  // Package 1 second half PR 3 (v9.0.444+): foreign keys of the schema and the database
   const { runForeignKeyPolicyTests } = await import('../regression/foreignKeyPolicyTests.js');
   results.push(...await runForeignKeyPolicyTests(shouldRun));
   const { runEventParentDeleteTests } = await import('../regression/eventParentDeleteTests.js');

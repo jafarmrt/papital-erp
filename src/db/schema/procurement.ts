@@ -36,7 +36,7 @@ export const purchaseRequisitions = pgTable('purchase_requisitions', {
   idx_pr_workflow: index('idx_pr_workflow').on(table.workflowInstanceId),
   idx_pr_deleted: index('idx_pr_deleted').on(table.isDeleted),
   idx_pr_consolidated_into: index('idx_pr_consolidated_into').on(table.consolidatedIntoId).where(sql`consolidated_into_id IS NOT NULL`),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_purchase_requisitions_assigned_to_id: index('idx_purchase_requisitions_assigned_to_id').on(table.assignedToId).where(sql`${table.assignedToId} IS NOT NULL`),
   idx_purchase_requisitions_requested_by_id: index('idx_purchase_requisitions_requested_by_id').on(table.requestedById).where(sql`${table.requestedById} IS NOT NULL`),
 }));

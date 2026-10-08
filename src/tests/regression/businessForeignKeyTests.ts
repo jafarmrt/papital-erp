@@ -5,11 +5,11 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 
 /**
- * v9.0.433 (TD-903, B01-31 / B01-32, decision t6 «الف», rule of TD-060): the thirty references between business tables
- * that the Drizzle schema declares have database foreign keys (migration 0091), NO ACTION and validated on clean data; a
+ * v9.0.447 (TD-903, B01-31 / B01-32, decision t6 «الف», rule of TD-060): the thirty references between business tables
+ * that the Drizzle schema declares have database foreign keys (migration 0092), NO ACTION and validated on clean data; a
  * row pointing to a missing parent is refused, a referenced parent is never physically deleted, a key left NOT VALID
  * over a legacy orphan is listed and validated by hand after the fix, and the factory reset still wipes everything
- * (material allocations now go before the Kardex rows they reference). Red on v9.0.432, where none of the keys existed.
+ * (material allocations now go before the Kardex rows they reference). Red on v9.0.446, where none of the keys existed.
  */
 
 export const BUSINESS_KEYS: ReadonlyArray<readonly [table: string, column: string, parent: string]> = [
@@ -69,7 +69,7 @@ async function scenario(): Promise<string> {
   if (parentDelete !== '23503') problems.push(`an item with a price was ${parentDelete ? `refused with ${parentDelete}` : 'physically deleted'}`);
   assertNoProblems(problems);
 
-  // a database whose legacy price row names a removed item: 0091 leaves the key NOT VALID and lists it
+  // a database whose legacy price row names a removed item: 0092 leaves the key NOT VALID and lists it
   await orm.execute(sql`ALTER TABLE item_prices DROP CONSTRAINT fk_item_prices_item_id`);
   await orm.execute(sql`INSERT INTO item_prices (item_id, title, price) VALUES (987903, 'TD-903 legacy', 1000)`);
   await orm.execute(sql`ALTER TABLE item_prices ADD CONSTRAINT fk_item_prices_item_id FOREIGN KEY (item_id) REFERENCES items(id) NOT VALID`);
@@ -87,7 +87,7 @@ async function scenario(): Promise<string> {
 /** The factory reset over a material allocation that points to its Kardex row (own isolated schema, like TD-620) */
 async function factoryResetCase(): Promise<TestCaseResult> {
   const id = 'reg_factory_reset_allocation_order_td_903';
-  const name = 'v9.0.433: the factory reset wipes material allocations before the Kardex rows they reference (TD-903)';
+  const name = 'v9.0.447: the factory reset wipes material allocations before the Kardex rows they reference (TD-903)';
   const tStart = Date.now();
   const fs = (await import('fs')).default;
   const os = (await import('os')).default;
@@ -138,7 +138,7 @@ export async function runBusinessForeignKeyTests(shouldRun: ShouldRun): Promise<
   const results: TestCaseResult[] = [];
   const id = 'reg_business_foreign_keys_td_903';
   if (shouldRun(id, 'TD-903', 'B01-31', 'B01-32')) {
-    await runCase(results, id, 'v9.0.433: the business references declared in the schema have database foreign keys (TD-903)', () => inFiscalSandbox(scenario));
+    await runCase(results, id, 'v9.0.447: the business references declared in the schema have database foreign keys (TD-903)', () => inFiscalSandbox(scenario));
   }
   if (shouldRun('reg_factory_reset_allocation_order_td_903', 'TD-903', 'factory', 'reset')) results.push(await factoryResetCase());
   return results;

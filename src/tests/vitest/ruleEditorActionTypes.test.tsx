@@ -37,7 +37,7 @@ describe('RuleEditorModal — action types and draft evaluation (TD-712)', () =>
   it('shows the server evaluation: a draft whose conditions do not match is not shown as a success', async () => {
     vi.mocked(fetchJson).mockResolvedValue({ status: 'success', conditionMatches: false, message: 'شرط‌ها برقرار نیست' });
     renderEditor(null);
-    fireEvent.click(screen.getByText('تست آنلاین قانون'));
+    fireEvent.click(screen.getByText('آزمایش قانون'));
     await waitFor(() => expect(screen.getByText('شرط‌ها برقرار نیست')).toBeTruthy());
     expect(screen.queryByText('اقدام با موفقیت شبیه‌سازی و اعتبارسنجی شد.')).toBeNull();
   });
@@ -46,7 +46,7 @@ describe('RuleEditorModal — action types and draft evaluation (TD-712)', () =>
     const refusal = 'پیش‌نویس قانون پذیرفته نیست: نشانی وب‌هوک تعیین نشده است.'; // the server's message, shown in the UI
     vi.mocked(fetchJson).mockRejectedValue(new Error(refusal));
     renderEditor(null);
-    fireEvent.click(screen.getByText('تست آنلاین قانون'));
+    fireEvent.click(screen.getByText('آزمایش قانون'));
     await waitFor(() => expect(screen.getByText(/پیش‌نویس قانون پذیرفته نیست/)).toBeTruthy());
   });
 });

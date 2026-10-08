@@ -4,7 +4,7 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
  * v9.0.427 (TD-589، B01-09، تصمیم ت۵ الف): قرارداد فهرست و ساختن قیدهای شرطی جاافتاده مهاجرت‌ها، مشترک سرور
  * (`src/services/system/conditionalConstraints.ts`) و کارت «قیدهای جاافتاده پایگاه‌داده» در «عملیات سامانه».
  */
-/** v9.0.434 (TD-613): `not_null` ستونی است که Drizzle الزامی اعلام کرده و مهاجرتش فقط روی داده بی مقدار تهی الزامی می‌کند */
+/** v9.0.448 (TD-613): `not_null` ستونی است که Drizzle الزامی اعلام کرده و مهاجرتش فقط روی داده بی مقدار تهی الزامی می‌کند */
 export type ConditionalConstraintKind = 'foreign_key' | 'unique_index' | 'not_null';
 
 export type ConditionalConstraintState = 'ready' | 'blocked';
@@ -20,7 +20,7 @@ export interface ConditionalConstraintEntry {
   blockers: number;
   blockerUnit: string;
   /**
-   * v9.0.431 (TD-611): کلید خارجی‌ای که مهاجرتش آن را NOT VALID افزوده و هنوز تأیید نشده؛ برای ردیف‌های تازه برقرار است و
+   * v9.0.445 (TD-611): کلید خارجی‌ای که مهاجرتش آن را NOT VALID افزوده و هنوز تأیید نشده؛ برای ردیف‌های تازه برقرار است و
    * «ساختن» فقط ردیف‌های قدیمی را با آن می‌سنجد (VALIDATE CONSTRAINT)
    */
   unvalidated?: boolean;

@@ -10,6 +10,8 @@ import {
   useDeleteNotificationMutation
 } from '../hooks/queries';
 import { useClickOutside } from '../hooks/useClickOutside';
+import { formatPersianNumber } from '../utils';
+import { notificationRelativeTime } from '../lib/notifications/relativeTime';
 
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -61,35 +63,19 @@ export default function NotificationBell() {
     }
   };
 
-  const formatRelativeTime = (timeStr?: string) => {
-    if (!timeStr) return '';
-    try {
-      const date = new Date(timeStr);
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      if (diffMins < 1) return 'همین الان';
-      if (diffMins < 60) return `${diffMins} دقیقه پیش`;
-      const diffHours = Math.floor(diffMins / 60);
-      if (diffHours < 24) return `${diffHours} ساعت پیش`;
-      const diffDays = Math.floor(diffHours / 24);
-      return `${diffDays} روز پیش`;
-    } catch (e) {
-      return timeStr.slice(0, 10);
-    }
-  };
+  const formatRelativeTime = (timeStr?: string) => notificationRelativeTime(timeStr);
 
   return (
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all focus:outline-hidden"
-        title="اعلان‌ها و منشن‌ها"
+        title="اعلان‌ها و اشاره‌ها"
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-bold text-[10px] w-5 h-5 rounded-full flex items-center justify-center animate-pulse border-2 border-white shadow-xs">
-            {unreadCount > 9 ? '+۹' : unreadCount}
+            {unreadCount > 9 ? '+۹' : formatPersianNumber(unreadCount)}
           </span>
         )}
       </button>
@@ -99,10 +85,10 @@ export default function NotificationBell() {
           <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Bell className="w-4 h-4 text-amber-400" />
-              <span className="text-xs font-bold">اعلان‌ها و منشن‌های شما</span>
+              <span className="text-xs font-bold">اعلان‌ها و اشاره‌های شما</span>
               {unreadCount > 0 && (
                 <span className="bg-amber-500/20 text-amber-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-amber-500/30">
-                  {unreadCount} خوانده‌نشده
+                  {formatPersianNumber(unreadCount)} خوانده‌نشده
                 </span>
               )}
             </div>
@@ -190,7 +176,7 @@ export default function NotificationBell() {
               }}
               className="text-[11px] font-bold text-blue-600 hover:text-blue-700 transition-colors inline-flex items-center gap-1"
             >
-              مشاهده تمام گزارش‌های روزانه و منشن‌ها
+              مشاهده همه گزارش‌های روزانه و اشاره‌ها
               <ExternalLink className="w-3 h-3" />
             </button>
           </div>

@@ -25,7 +25,7 @@ export function ShopWarehouseSelect({ value, onChange, warehouses }: ShopWarehou
         onChange={e => onChange(e.target.value)}
         className="w-full border border-slate-300 rounded px-3 py-1.5 text-xs bg-slate-50 outline-none focus:ring-1 focus:ring-blue-500"
       >
-        <option value="">انبار پیش‌فرض سیستم</option>
+        <option value="">انبار پیش‌فرض سامانه</option>
         {active.map(w => (
           <option key={w.id} value={w.code}>{w.name} ({w.code})</option>
         ))}

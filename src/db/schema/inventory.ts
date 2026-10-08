@@ -12,7 +12,7 @@ export const categories = pgTable('categories', {
   // v9.0.204 (TD-659، ت۸ الف): حذف دسته نرم است (مهاجرت 0072)
   isDeleted: integer('is_deleted').notNull().default(0)
 }, (table) => ({
-  // v9.0.434 (TD-613): built by migration 0073 only on data without duplicates; declared so the schema matches the database
+  // v9.0.448 (TD-613): built by migration 0073 only on data without duplicates; declared so the schema matches the database
   uq_categories_name_active: uniqueIndex('uq_categories_name_active').on(sql`lower(btrim(${table.name}))`).where(sql`${table.isDeleted} = 0`),
 }));
 
@@ -63,7 +63,7 @@ export const inventoryReconciliationAnomalies = pgTable('inventory_reconciliatio
 }, (table) => ({
   idxRun: index('idx_inv_recon_anomalies_run').on(table.runId),
   idxItem: index('idx_inv_recon_anomalies_item').on(table.itemId),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_inventory_reconciliation_anomalies_warehouse_id: index('idx_inventory_reconciliation_anomalies_warehouse_id').on(table.warehouseId).where(sql`${table.warehouseId} IS NOT NULL`),
 }));
 
@@ -92,7 +92,7 @@ export const items = pgTable('items', {
   idx_code: index('items_code').on(table.code),
   idx_category: index('items_category').on(table.category),
   nameTrgmIdx: index('items_name_trgm_idx').using('gin', sql`${table.name} gin_trgm_ops`),
-  // v9.0.434 (TD-613): built by migration 0070 only on data without duplicates; declared so the schema matches the database
+  // v9.0.448 (TD-613): built by migration 0070 only on data without duplicates; declared so the schema matches the database
   uq_items_code_active: uniqueIndex('uq_items_code_active').on(sql`upper(btrim(${table.code}))`).where(sql`${table.isDeleted} = 0`),
   uq_items_name_active: uniqueIndex('uq_items_name_active').on(sql`lower(btrim(${table.name}))`).where(sql`${table.isDeleted} = 0`),
 }));

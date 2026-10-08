@@ -53,13 +53,13 @@ export const documents = pgTable('documents', {
   idx_docs_project: index('idx_docs_project').on(table.projectId),
   idx_docs_return_of_document: index('idx_docs_return_of_document').on(table.returnOfDocumentId),
   idx_docs_procurement_requisition: index('idx_docs_procurement_requisition').on(table.procurementRequisitionId).where(sql`procurement_requisition_id IS NOT NULL`),
-  // v9.0.434 (TD-613): indexes of migrations 0015 and 0080, declared so the schema matches the database; the unique one is
+  // v9.0.448 (TD-613): indexes of migrations 0015 and 0080, declared so the schema matches the database; the unique one is
   // built only on data without duplicate numbers
   idx_docs_type_ref_fiscal_year: index('idx_docs_type_ref_fiscal_year').on(table.type, table.refFiscalYear),
   uq_documents_type_fy_ref_active: uniqueIndex('uq_documents_type_fy_ref_active').on(table.type, table.refFiscalYear, table.refNumber)
     .where(sql`${table.isDeleted} = 0 AND length(${table.refNumber}) > 0`),
   idx_documents_party_id: index('idx_documents_party_id').on(table.partyId).where(sql`${table.partyId} IS NOT NULL`),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_documents_crm_lead_id: index('idx_documents_crm_lead_id').on(table.crmLeadId).where(sql`${table.crmLeadId} IS NOT NULL`),
 }));
 registerColumnRef('documents.id', () => documents.id);
@@ -76,7 +76,7 @@ export const refFiscalYearCorrections = pgTable('ref_fiscal_year_corrections', {
   status: text('status').notNull(), // 'corrected' | 'conflict'
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
 }, (table) => ({
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_ref_fiscal_year_corrections_document_id: index('idx_ref_fiscal_year_corrections_document_id').on(table.documentId),
 }));
 
@@ -100,7 +100,7 @@ export const documentItems = pgTable('document_items', {
 }, (table) => ({
   idx_doc_id: index('doc_items_doc_id').on(table.documentId),
   idx_item_id: index('doc_items_item_id').on(table.itemId),
-  // v9.0.434 (TD-613): index of migration 0012, declared so the schema matches the database
+  // v9.0.448 (TD-613): index of migration 0012, declared so the schema matches the database
   idx_doc_items_deleted: index('idx_doc_items_deleted').on(table.isDeleted),
 }));
 

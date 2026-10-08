@@ -1,4 +1,4 @@
--- Drizzle Migration 0089: foreign keys of webhook deliveries and rule action logs (v9.0.431 / TD-611, finding B01-31,
+-- Drizzle Migration 0090: foreign keys of webhook deliveries and rule action logs (v9.0.445 / TD-611, finding B01-31,
 -- product-owner decision t6 «الف» of package 1)
 --
 -- The Drizzle schema declares webhook_deliveries.subscription_id ON DELETE CASCADE and event_action_logs.rule_id

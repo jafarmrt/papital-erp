@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Zap, Plus, RefreshCw, Search, Globe, Bell, Smartphone, GitBranch, ShieldCheck, CheckCircle2, XCircle, AlertCircle, Play, Edit3, Trash2, ToggleLeft, ToggleRight, Clock, Activity, FileText, ChevronDown, ChevronUp } from 'lucide-react';
-import { formatPersianDate } from '../../utils';
+import { formatPersianDate, errorMessageOf, formatPersianNumber } from '../../utils';
 import { fetchJson } from '../../api';
 import { RuleEditorModal, RuleFormData } from './RuleEditorModal';
 import {
@@ -13,11 +13,15 @@ import {
 } from '../../hooks/queries/useEventQueries';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { ruleActionTypeLabel } from '../../lib/events/ruleActionTypes';
+import { actionPreviewLines } from '../../lib/events/eventSimulationContract';
 import { eventTypeLabel, isSubscribableEventPattern } from '../../lib/events/eventTypeCatalog';
 import { actionLogStatusLabel } from '../../lib/events/actionLogContract';
+import { useHasPermission } from '../../contexts/AuthContext';
 
 export function AutoActionsSubTab() {
   const queryClient = useQueryClient();
+  // v9.0.435 (TD-722): adding, editing, deleting, switching and testing a rule ask events.manage on the server
+  const canManage = useHasPermission('events.manage');
   const { data: rules = [], isLoading: isLoadingRules, refetch: refetchRules } = useActionRulesQuery();
   const { data: stats = null, refetch: refetchStats } = useActionStatsQuery();
   const { data: logPage, isLoading: isLoadingLogs, refetch: refetchLogs } = useActionLogsQuery(50);
@@ -35,6 +39,20 @@ export function AutoActionsSubTab() {
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const [activeView, setActiveView] = useState<'rules' | 'logs'>('rules');
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  // v9.0.438 (TD-729): a rule's switch and test button wait for their answer before they can be pressed again
+  const [pendingRuleIds, setPendingRuleIds] = useState<number[]>([]);
+  const pendingRef = useRef(new Set<string>());
+  const runOnce = async (key: string, ruleId: number, run: () => Promise<void>) => {
+    if (pendingRef.current.has(key)) return;
+    pendingRef.current.add(key);
+    setPendingRuleIds(ids => [...ids, ruleId]);
+    try {
+      await run();
+    } finally {
+      pendingRef.current.delete(key);
+      setPendingRuleIds(ids => { const i = ids.indexOf(ruleId); return i < 0 ? ids : [...ids.slice(0, i), ...ids.slice(i + 1)]; });
+    }
+  };
 
   const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
     setNotification({ text, type });
@@ -45,22 +63,24 @@ export function AutoActionsSubTab() {
     await Promise.all([refetchRules(), refetchStats(), refetchLogs()]);
   };
 
-  const handleToggleRule = async (id: number) => {
+  // v9.0.438 (TD-729): the switch sends the state it shows the user will get, never a two-way toggle
+  const handleToggleRule = (rule: ActionRule) => runOnce(`toggle-${rule.id}`, rule.id, async () => {
     try {
-      const data = await fetchJson<{ success?: boolean; message?: string }>(`/events/action-rules/${id}/toggle`, {
-        method: 'POST'
+      const data = await fetchJson<{ success?: boolean; message?: string }>(`/events/action-rules/${rule.id}/toggle`, {
+        method: 'POST',
+        body: JSON.stringify({ active: rule.isActive !== 1 })
       });
       if (data?.success) {
         showNotification(data.message || 'وضعیت قانون به‌روز شد.');
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
       }
-    } catch (err: any) {
-      showNotification(err?.message || 'خطا در تغییر وضعیت قانون', 'error');
+    } catch (err) {
+      showNotification(errorMessageOf(err) || 'خطا در تغییر وضعیت قانون', 'error');
     }
-  };
+  });
 
   const handleDeleteRule = async (id: number) => {
-    if (!(await confirmAction({ title: 'حذف قانون اکشن', message: 'آیا از حذف این قانون اکشن اطمینان دارید؟' }))) return;
+    if (!(await confirmAction({ title: 'حذف قانون خودکار', message: 'این قانون خودکار حذف شود؟' }))) return;
 
     try {
       await fetchJson(`/events/action-rules/${id}`, {
@@ -68,27 +88,25 @@ export function AutoActionsSubTab() {
       });
       showNotification('قانون با موفقیت حذف گردید.');
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-    } catch (err: any) {
-      showNotification(err?.message || 'خطا در حذف قانون', 'error');
+    } catch (err) {
+      showNotification(errorMessageOf(err) || 'خطا در حذف قانون', 'error');
     }
   };
 
-  const handleTestRule = async (rule: ActionRule) => {
+  // v9.0.430 (TD-708, decision t5 a): the test evaluates the stored rule on a sample event and only shows what its action
+  // would do; nothing is sent or written, so nothing is invalidated
+  const handleTestRule = (rule: ActionRule) => runOnce(`test-${rule.id}`, rule.id, async () => {
     try {
-      const data = await fetchJson<{ success?: boolean; status?: string; durationMs?: number }>(`/events/action-rules/${rule.id}/test`, {
+      const data = await fetchJson<{ conditionMatches?: boolean; message?: string; preview?: Record<string, unknown> }>(`/events/action-rules/${rule.id}/test`, {
         method: 'POST',
         body: JSON.stringify({})
       });
-      if (data?.success) {
-        showNotification(`تست قانون اجرا شد: وضعیت [${data.status}] (${data.durationMs}ms)`);
-        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-      } else {
-        showNotification('خطا در اجرای تست قانون', 'error');
-      }
-    } catch (err: any) {
-      showNotification(err?.message || 'خطا در ارتباط با سرور', 'error');
+      const what = data?.conditionMatches ? actionPreviewLines(data.preview).join('؛ ') : '';
+      showNotification([data?.message || 'آزمایش قانون انجام شد؛ اقدام اجرا نشد.', what].filter(Boolean).join(' '));
+    } catch (err) {
+      showNotification(errorMessageOf(err) || 'ارتباط با کارساز برقرار نشد.', 'error');
     }
-  };
+  });
 
   const handleSaveRule = async (formData: RuleFormData) => {
     const isEdit = !!formData.id;
@@ -103,8 +121,8 @@ export function AutoActionsSubTab() {
 
       showNotification(data?.message || 'قانون با موفقیت ذخیره گردید.');
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-    } catch (err: any) {
-      showNotification(err?.message || 'خطا در ذخیره‌سازی قانون', 'error');
+    } catch (err) {
+      showNotification(errorMessageOf(err) || 'خطا در ذخیره‌سازی قانون', 'error');
       throw err;
     }
   };
@@ -122,7 +140,7 @@ export function AutoActionsSubTab() {
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
             <Bell className="w-3 h-3" />
-            <span>اعلان سیستم</span>
+            <span>اعلان درون‌برنامه</span>
           </span>
         );
       case 'sms_simulation':
@@ -271,7 +289,7 @@ export function AutoActionsSubTab() {
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>لاگ‌های اجرا ({logsTotal.toLocaleString('fa-IR')})</span>
+                <span>گزارش اجرا ({logsTotal.toLocaleString('fa-IR')})</span>
               </button>
             </div>
 
@@ -286,6 +304,7 @@ export function AutoActionsSubTab() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            {canManage && (
             <button
               onClick={() => {
                 setSelectedRule(null);
@@ -294,8 +313,9 @@ export function AutoActionsSubTab() {
               className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
             >
               <Plus className="w-4 h-4" />
-              <span>افزودن قانون اکشن جدید</span>
+              <span>افزودن قانون خودکار</span>
             </button>
+            )}
           </div>
 
         </div>
@@ -309,7 +329,7 @@ export function AutoActionsSubTab() {
                 <Search className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="جستجو در نام قانون، رویداد یا توضیحات..."
+                  placeholder="جست‌وجو در نام قانون، رویداد یا توضیحات…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-3 pr-9 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white"
@@ -334,7 +354,7 @@ export function AutoActionsSubTab() {
                 >
                   <option value="ALL">همه انواع اقدام</option>
                   <option value="webhook">وب‌هوک</option>
-                  <option value="in_app_notification">اعلان سیستم</option>
+                  <option value="in_app_notification">اعلان درون‌برنامه</option>
                   <option value="sms_simulation">{ruleActionTypeLabel('sms_simulation')}</option>
                   <option value="workflow_trigger">{ruleActionTypeLabel('workflow_trigger')}</option>
                   <option value="audit_log">ممیزی ویژه</option>
@@ -357,9 +377,19 @@ export function AutoActionsSubTab() {
                       {/* Left: Info */}
                       <div className="flex items-start gap-3.5">
                         <div className="mt-1">
+                          {!canManage ? (
+                            <span title={rule.isActive === 1 ? 'فعال' : 'غیرفعال'}>
+                              {rule.isActive === 1 ? (
+                                <ToggleRight className="w-7 h-7 text-indigo-600" />
+                              ) : (
+                                <ToggleLeft className="w-7 h-7 text-slate-300 dark:text-slate-600" />
+                              )}
+                            </span>
+                          ) : (
                           <button
-                            onClick={() => handleToggleRule(rule.id)}
-                            className="text-slate-400 hover:text-indigo-600 transition-colors"
+                            onClick={() => void handleToggleRule(rule)}
+                            disabled={pendingRuleIds.includes(rule.id)}
+                            className="text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-50"
                             title={rule.isActive === 1 ? 'غیرفعال‌سازی' : 'فعال‌سازی'}
                           >
                             {rule.isActive === 1 ? (
@@ -368,6 +398,7 @@ export function AutoActionsSubTab() {
                               <ToggleLeft className="w-7 h-7 text-slate-300 dark:text-slate-600" />
                             )}
                           </button>
+                          )}
                         </div>
 
                         <div>
@@ -388,7 +419,7 @@ export function AutoActionsSubTab() {
 
                           <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-400 mt-2">
                             <span>
-                              شروط: <span className="font-bold text-slate-600 dark:text-slate-300">{conditionCount === 0 ? 'بدون شرط (همه)' : `${conditionCount} شرط`}</span>
+                              شروط: <span className="font-bold text-slate-600 dark:text-slate-300">{conditionCount === 0 ? 'بدون شرط (همه)' : `${formatPersianNumber(conditionCount)} شرط`}</span>
                             </span>
                             <span>•</span>
                             <span>
@@ -403,14 +434,16 @@ export function AutoActionsSubTab() {
                       </div>
 
                       {/* Right: Actions */}
+                      {canManage && (
                       <div className="flex items-center gap-2 self-end md:self-center">
                         <button
-                          onClick={() => handleTestRule(rule)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-medium transition-colors"
-                          title="تست آنلاین با رویداد پیش‌فرض"
+                          onClick={() => void handleTestRule(rule)}
+                          disabled={pendingRuleIds.includes(rule.id)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-medium transition-colors disabled:opacity-50"
+                          title="آزمایش بی‌اثر با رویداد نمونه؛ چیزی فرستاده یا ثبت نمی‌شود"
                         >
                           <Play className="w-3.5 h-3.5" />
-                          <span>تست</span>
+                          <span>آزمایش</span>
                         </button>
 
                         <button
@@ -432,6 +465,7 @@ export function AutoActionsSubTab() {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
+                      )}
 
                     </div>
                   );
@@ -446,7 +480,7 @@ export function AutoActionsSubTab() {
           <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
             {logs.length === 0 ? (
               <div className="p-12 text-center text-slate-400 text-xs">
-                هنوز هیچ لاگ اجرایی برای اکشن‌های خودکار ثبت نشده است.
+                هنوز هیچ گزارش اجرایی برای اقدام‌های خودکار ثبت نشده است.
               </div>
             ) : (
               logs.map((log) => {

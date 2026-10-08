@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ALL_EVENTS_LABEL, ALL_EVENTS_PATTERN, PUBLISHED_EVENT_TYPES, eventTypeLabel } from '../../lib/events/eventTypeCatalog';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Trash2, Edit3, Shield, Activity } from 'lucide-react';
-import { formatPersianDate, errorMessageOf } from '../../utils';
+import { formatPersianDate, errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
 import { fetchJson } from '../../api';
+import { useHasPermission } from '../../contexts/AuthContext';
 import { isEnteredSecret } from '../../lib/secrets/maskedSecret';
 import { WebhookSecretRevealPanel, type RevealedWebhookSecret } from './WebhookSecretRevealPanel';
 import { WEBHOOK_TIMEOUT_DEFAULT_MS, WEBHOOK_TIMEOUT_MAX_MS, WEBHOOK_TIMEOUT_MIN_MS } from '../../lib/events/webhookTimeout';
@@ -67,6 +68,8 @@ const AVAILABLE_EVENT_PRESETS = [
 ];
 
 export function WebhookManagementSubTab() {
+  // v9.0.435 (TD-722): create, edit, delete, toggle, ping and key rotation are guarded by events.manage
+  const canManage = useHasPermission('events.manage');
   const [subscriptions, setSubscriptions] = useState<WebhookSubscription[]>([]);
   const [deliveries, setDeliveries] = useState<WebhookDeliveryLog[]>([]);
   const [stats, setStats] = useState<WebhookStats | null>(null);
@@ -91,6 +94,9 @@ export function WebhookManagementSubTab() {
 
   // Ping Test State
   const [pingTestingId, setPingTestingId] = useState<number | null>(null);
+  // v9.0.437 (TD-728): the form is sent once; a second click while it is saving does nothing
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
   const [, setPingResult] = useState<any | null>(null);
 
   // Toast
@@ -118,7 +124,8 @@ export function WebhookManagementSubTab() {
         setSubscriptions(Array.isArray(data.data) ? data.data : []);
       }
     } catch (err) {
-      showToast('خطا در دریافت لیست وب‌هوک‌ها', 'error');
+      // v9.0.439 (TD-730): the server's own reason is shown, never a fixed text
+      showToast(errorMessageOf(err) || 'فهرست وب‌هوک‌ها بارگذاری نشد.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -181,7 +188,7 @@ export function WebhookManagementSubTab() {
   const handleSaveSubscription = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.targetUrl.trim()) {
-      showToast('نام درگاه و آدرس URL مقصد الزامی است.', 'error');
+      showToast('نام درگاه و نشانی مقصد را وارد کنید.', 'error');
       return;
     }
 
@@ -191,9 +198,13 @@ export function WebhookManagementSubTab() {
         parsedHeaders = JSON.parse(formData.customHeadersJson);
       }
     } catch (err) {
-      showToast('فرمت JSON هدرهای سفارشی نامعتبر است.', 'error');
+      showToast('سرآیندهای سفارشی باید یک شیء JSON معتبر باشند.', 'error');
       return;
     }
+
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setIsSaving(true);
 
     const payload = {
       name: formData.name.trim(),
@@ -228,6 +239,9 @@ export function WebhookManagementSubTab() {
       }
     } catch (err) {
       showToast(errorMessageOf(err) || 'خطای شبکه در ذخیره‌سازی', 'error');
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
   };
 
@@ -242,7 +256,7 @@ export function WebhookManagementSubTab() {
         void fetchStats();
       }
     } catch (err) {
-      showToast('خطا در تغییر وضعیت وب‌هوک', 'error');
+      showToast(errorMessageOf(err) || 'وضعیت وب‌هوک تغییر نکرد.', 'error');
     }
   };
 
@@ -258,7 +272,7 @@ export function WebhookManagementSubTab() {
         void fetchStats();
       }
     } catch (err) {
-      showToast('خطا در حذف وب‌هوک', 'error');
+      showToast(errorMessageOf(err) || 'وب‌هوک حذف نشد.', 'error');
     }
   };
 
@@ -274,12 +288,12 @@ export function WebhookManagementSubTab() {
       setPingResult(data);
       const keyNote = data?.keySource === 'temporary' ? ' (امضا با کلید موقت؛ کلید درگاه پس از ذخیره ساخته می‌شود)' : '';
       if (data?.success) {
-        showToast(`تست پینگ موفق (${data.statusCode} OK) - تاخیر: ${data.durationMs}ms${keyNote}`, 'success');
+        showToast(`آزمایش اتصال موفق بود (پاسخ ${toPersianDigits(data.statusCode)}، تأخیر ${formatPersianNumber(data.durationMs ?? 0)} میلی‌ثانیه)${keyNote}`, 'success');
       } else {
-        showToast(`${data?.message || 'خطا در تست پینگ وب‌هوک'}${keyNote}`, 'error');
+        showToast(`${data?.message || 'آزمایش اتصال وب‌هوک ناموفق بود'}${keyNote}`, 'error');
       }
     } catch (err) {
-      showToast(errorMessageOf(err) || 'خطای ارتباط در تست پینگ', 'error');
+      showToast(errorMessageOf(err) || 'آزمایش اتصال انجام نشد. دوباره تلاش کنید.', 'error');
     } finally {
       if (subId) setPingTestingId(null);
     }
@@ -390,9 +404,9 @@ export function WebhookManagementSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-            {stats ? `%${stats.successRate.toLocaleString('fa-IR')}` : '%۱۰۰'}
+            {stats ? `${formatPersianNumber(stats.successRate)}٪` : '۱۰۰٪'}
           </div>
-          <p className="text-xs text-slate-400 mt-1">همراه با اعتبارسنجی امضای SHA256</p>
+          <p className="text-xs text-slate-400 mt-1">همراه با امضای HMAC-SHA256</p>
         </div>
       </div>
 
@@ -403,10 +417,10 @@ export function WebhookManagementSubTab() {
         <div>
           <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Globe className="w-4 h-4 text-indigo-500" />
-            <span>درگاه‌های وب‌هوک و اشتراک سرویس‌های بیرونی</span>
+            <span>درگاه‌های وب‌هوک و اشتراک سامانه‌های بیرونی</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            ارسال Real-time رویدادهای دامنه‌ای به سامانه‌های خارجی (ووکامرس، لجستیک، حسابداری ابری) با امضای HMAC-SHA256.
+            ارسال رویدادهای سامانه به سامانه‌های بیرونی (ووکامرس، باربری، حسابداری ابری) با امضای HMAC-SHA256.
           </p>
         </div>
 
@@ -423,13 +437,15 @@ export function WebhookManagementSubTab() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
 
-          <button
-            onClick={openCreateModal}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-md transition-all flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            <span>تعریف وب‌هوک جدید</span>
-          </button>
+          {canManage && (
+            <button
+              onClick={openCreateModal}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-md transition-all flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>تعریف وب‌هوک جدید</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -455,7 +471,8 @@ export function WebhookManagementSubTab() {
                       <span className="text-sm font-bold text-slate-900 dark:text-white">{sub.name}</span>
                       <button
                         onClick={() => handleToggleActive(sub)}
-                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 transition-all ${
+                        disabled={!canManage}
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 transition-all disabled:cursor-default ${
                           sub.isActive === 1
                             ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
                             : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
@@ -473,14 +490,16 @@ export function WebhookManagementSubTab() {
 
                   {/* Actions & Buttons */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={() => handlePingTest({ subscriptionId: sub.id }, sub.id)}
-                      disabled={isTestingPing}
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
-                    >
-                      <Send className={`w-3.5 h-3.5 ${isTestingPing ? 'animate-spin' : ''}`} />
-                      <span>تست پینگ و امضا</span>
-                    </button>
+                    {canManage && (
+                      <button
+                        onClick={() => handlePingTest({ subscriptionId: sub.id }, sub.id)}
+                        disabled={isTestingPing}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
+                      >
+                        <Send className={`w-3.5 h-3.5 ${isTestingPing ? 'animate-spin' : ''}`} />
+                        <span>آزمایش اتصال و امضا</span>
+                      </button>
+                    )}
 
                     <button
                       onClick={() => {
@@ -490,24 +509,28 @@ export function WebhookManagementSubTab() {
                       className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
                     >
                       <Activity className="w-3.5 h-3.5" />
-                      <span>لاگ تحویل ({sub.totalDeliveries || 0})</span>
+                      <span>گزارش تحویل ({formatPersianNumber(sub.totalDeliveries || 0)})</span>
                     </button>
 
-                    <button
-                      onClick={() => openEditModal(sub)}
-                      className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl"
-                      title="ویرایش تنظیمات"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
+                    {canManage && (
+                      <>
+                        <button
+                          onClick={() => openEditModal(sub)}
+                          className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl"
+                          title="ویرایش تنظیمات"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
 
-                    <button
-                      onClick={() => handleDeleteSubscription(sub.id)}
-                      className="p-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-xl"
-                      title="حذف درگاه"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                        <button
+                          onClick={() => handleDeleteSubscription(sub.id)}
+                          className="p-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-xl"
+                          title="حذف درگاه"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -521,13 +544,15 @@ export function WebhookManagementSubTab() {
                         {sub.secretKey}
                       </span>
                     </div>
-                    <button
-                      onClick={() => void handleRotateSecret(sub)}
-                      className="p-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline rounded shrink-0"
-                      title="ساخت کلید امضای تازه"
-                    >
-                      ساخت کلید تازه
-                    </button>
+                    {canManage && (
+                      <button
+                        onClick={() => void handleRotateSecret(sub)}
+                        className="p-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline rounded shrink-0"
+                        title="ساخت کلید امضای تازه"
+                      >
+                        ساخت کلید تازه
+                      </button>
+                    )}
                   </div>
 
                   {/* Patterns */}
@@ -564,7 +589,7 @@ export function WebhookManagementSubTab() {
           <div className="flex items-center gap-2">
             <Send className="w-4 h-4 text-indigo-500" />
             <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-              لاگ‌های اخیر تحویل وب‌هوک
+              گزارش‌های اخیر تحویل وب‌هوک
             </h4>
           </div>
           <button
@@ -572,7 +597,7 @@ export function WebhookManagementSubTab() {
             className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
           >
             <RefreshCw className="w-3 h-3" />
-            <span>تازه‌سازی لاگ‌ها</span>
+            <span>تازه‌سازی گزارش‌ها</span>
           </button>
         </div>
 
@@ -593,7 +618,7 @@ export function WebhookManagementSubTab() {
               {deliveries.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-slate-400">
-                    هنوز لاگ تحویلی ثبت نشده است.
+                    هنوز تحویلی ثبت نشده است.
                   </td>
                 </tr>
               ) : (
@@ -609,19 +634,19 @@ export function WebhookManagementSubTab() {
                             : 'text-rose-600 dark:text-rose-400'
                         }
                       >
-                        {deliv.statusCode || 'N/A'}
+                        {deliv.statusCode ? toPersianDigits(deliv.statusCode) : '—'}
                       </span>
                     </td>
                     <td className="p-2.5">
                       {deliv.status === 'success' ? (
                         <span className="text-emerald-600 dark:text-emerald-400 font-medium">موفق</span>
                       ) : deliv.status === 'timeout' ? (
-                        <span className="text-amber-600 dark:text-amber-400 font-medium">Timeout</span>
+                        <span className="text-amber-600 dark:text-amber-400 font-medium">پایان مهلت</span>
                       ) : (
                         <span className="text-rose-600 dark:text-rose-400 font-medium">ناموفق</span>
                       )}
                     </td>
-                    <td className="p-2.5 font-mono text-slate-500">{deliv.durationMs}ms</td>
+                    <td className="p-2.5 text-slate-500">{formatPersianNumber(deliv.durationMs ?? 0)} میلی‌ثانیه</td>
                     <td className="p-2.5 font-mono text-[10px] text-slate-400 max-w-[120px] truncate" title={deliv.signature}>
                       {deliv.signature ? deliv.signature.substring(0, 16) + '...' : '-'}
                     </td>
@@ -645,7 +670,7 @@ export function WebhookManagementSubTab() {
                   {editingSub ? `ویرایش درگاه وب‌هوک "${editingSub.name}"` : 'تعریف درگاه جدید وب‌هوک'}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  پیکربندی آدرس مقصد، رویدادهای مشترک و کلید امنیتی جهت امضای امنیتی
+                  پیکربندی نشانی مقصد، رویدادهای اشتراک و کلید امضا
                 </p>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
@@ -660,7 +685,7 @@ export function WebhookManagementSubTab() {
                   <input
                     type="text"
                     required
-                    placeholder="مثال: فروشگاه آنلاین ووکامرس"
+                    placeholder="مثال: فروشگاه برخط ووکامرس"
                     value={formData.name}
                     onChange={e => setFormData({ ...formData, name: e.target.value })}
                     className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3.5 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
@@ -701,7 +726,7 @@ export function WebhookManagementSubTab() {
                     })}
                     className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-medium"
                   >
-                    تست اتصال
+                    آزمایش اتصال
                   </button>
                 </div>
               </div>
@@ -734,7 +759,7 @@ export function WebhookManagementSubTab() {
 
               {/* Custom Headers JSON */}
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700 dark:text-slate-300">هدرهای سفارشی HTTP:</label>
+                <label className="font-semibold text-slate-700 dark:text-slate-300">سرآیندهای سفارشی:</label>
                 <textarea
                   rows={3}
                   value={formData.customHeadersJson}
@@ -800,9 +825,10 @@ export function WebhookManagementSubTab() {
 
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md font-semibold transition-all"
+                  disabled={isSaving}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md font-semibold transition-all disabled:opacity-50"
                 >
-                  {editingSub ? 'ذخیره تغییرات درگاه' : 'ایجاد و فعال‌سازی درگاه وب‌هوک'}
+                  {isSaving ? 'در حال ذخیره…' : (editingSub ? 'ذخیره تغییرات درگاه' : 'ایجاد و فعال‌سازی درگاه وب‌هوک')}
                 </button>
               </div>
             </form>

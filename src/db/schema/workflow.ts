@@ -49,7 +49,7 @@ export const workflowTransitions = pgTable('workflow_transitions', {
   isInitiatorExcluded: integer('is_initiator_excluded').notNull().default(0),
 }, (table) => ({
   idx_wftr_definition: index('idx_wftr_definition').on(table.workflowDefinitionId),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_workflow_transitions_from_state_id: index('idx_workflow_transitions_from_state_id').on(table.fromStateId),
   idx_workflow_transitions_to_state_id: index('idx_workflow_transitions_to_state_id').on(table.toStateId),
 }));
@@ -71,9 +71,9 @@ export const workflowInstances = pgTable('workflow_instances', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
 }, (table) => ({
   idx_wfi_entity: index('idx_wfi_entity').on(table.entityType, table.entityId),
-  // v9.0.434 (TD-613): built by migration 0056 only on data without duplicates; declared so the schema matches the database
+  // v9.0.448 (TD-613): built by migration 0056 only on data without duplicates; declared so the schema matches the database
   uq_workflow_instances_open_entity: uniqueIndex('uq_workflow_instances_open_entity').on(table.entityType, table.entityId).where(sql`${table.status} = 'IN_PROGRESS'`),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_workflow_instances_workflow_definition_id: index('idx_workflow_instances_workflow_definition_id').on(table.workflowDefinitionId),
 }));
 
@@ -141,7 +141,7 @@ export const workflowTasks = pgTable('workflow_tasks', {
   idx_wft_instance: index('idx_wft_instance').on(table.instanceId),
   idx_wft_assigned_user: index('idx_wft_assigned_user').on(table.assignedUserId),
   idx_wft_status: index('idx_wft_status').on(table.status),
-  // v9.0.434 (TD-613): index of migration 0032, declared so the schema matches the database
+  // v9.0.448 (TD-613): index of migration 0032, declared so the schema matches the database
   idx_wft_sla_due: index('idx_wft_sla_due').on(table.dueAt).where(sql`${table.status} = 'pending' AND ${table.slaRemindedAt} IS NULL`),
 }));
 

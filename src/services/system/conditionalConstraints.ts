@@ -37,12 +37,12 @@ export interface ConditionalConstraintRule {
   /** پس از ساختن، مثل مهاجرت (ایندکس جایگزین‌شده) */
   afterCreate?: (schema: string) => ReturnType<typeof sql>;
   /**
-   * v9.0.431 (TD-611، B01-31، تصمیم ت۶ الف): کلید خارجی‌ای که مهاجرتش آن را NOT VALID می‌افزاید (برای ردیف تازه برقرار) و فقط
+   * v9.0.445 (TD-611، B01-31، تصمیم ت۶ الف): کلید خارجی‌ای که مهاجرتش آن را NOT VALID می‌افزاید (برای ردیف تازه برقرار) و فقط
    * روی داده پاک تأیید می‌کند. تا تأیید نشده جاافتاده شمرده می‌شود؛ «ساختن» آن را اگر نباشد با `create` (NOT VALID) می‌افزاید و
    * سپس با VALIDATE CONSTRAINT تأیید می‌کند.
    */
   addedNotValid?: boolean;
-  /** v9.0.434 (TD-613): ستون قید `not_null` */
+  /** v9.0.448 (TD-613): ستون قید `not_null` */
   column?: string;
 }
 
@@ -59,14 +59,14 @@ const notValidForeignKey = (rule: {
   create: `ALTER TABLE ${rule.table} ADD CONSTRAINT ${rule.name} FOREIGN KEY (${rule.column}) REFERENCES ${rule.parent}(id) ON DELETE ${rule.onDelete} NOT VALID`,
 });
 
-/** v9.0.434 (TD-613، مهاجرت 0092): ستونی که Drizzle الزامی اعلام کرده و مهاجرت فقط روی داده بی مقدار تهی الزامی می‌کند */
+/** v9.0.448 (TD-613، مهاجرت 0093): ستونی که Drizzle الزامی اعلام کرده و مهاجرت فقط روی داده بی مقدار تهی الزامی می‌کند */
 const notNullColumn = (table: string, column: string, label: string, migration: string): ConditionalConstraintRule => ({
   name: `nn_${table}_${column}`, kind: 'not_null', table, column, migration, label, blockerUnit: 'ردیف بی مقدار',
   blockerCount: `SELECT COUNT(*)::int AS n FROM ${table} WHERE ${column} IS NULL`,
   create: `ALTER TABLE ${table} ALTER COLUMN ${column} SET NOT NULL`,
 });
 
-/** v9.0.432 (TD-902، مهاجرت 0090): ستون‌های کاربر، هر کدام با عنوانی که در فهرست قیدهای جاافتاده می‌آید */
+/** v9.0.446 (TD-902، مهاجرت 0091): ستون‌های کاربر، هر کدام با عنوانی که در فهرست قیدهای جاافتاده می‌آید */
 const USER_FOREIGN_KEYS: ReadonlyArray<readonly [table: string, column: string, label: string]> = [
   ['cheques', 'created_by_id', 'پیوند ثبت‌کننده چک به کاربر'],
   ['daily_work_logs', 'user_id', 'پیوند گزارش کار روزانه به کاربر'],
@@ -87,7 +87,7 @@ const USER_FOREIGN_KEYS: ReadonlyArray<readonly [table: string, column: string, 
 ];
 
 /**
- * v9.0.433 (TD-903، مهاجرت 0091، قاعده TD-060): مرجع‌های میان جدول‌های کسب‌وکار؛ والدشان فقط حذف نرم می‌شود. هر ردیف: جدول، ستون،
+ * v9.0.447 (TD-903، مهاجرت 0092، قاعده TD-060): مرجع‌های میان جدول‌های کسب‌وکار؛ والدشان فقط حذف نرم می‌شود. هر ردیف: جدول، ستون،
  * جدول مرجع، عنوان در فهرست و نام والد در شمار ردیف‌های ناسازگار
  */
 const BUSINESS_FOREIGN_KEYS: ReadonlyArray<readonly [table: string, column: string, parent: string, label: string, parentNoun: string]> = [
@@ -178,7 +178,7 @@ export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] 
     // مثل 0015: ایندکس قدیمی بی سال مالی فقط وقتی برداشته می‌شود که ایندکس تازه ساخته شده باشد
     afterCreate: (schema) => sql`DROP INDEX IF EXISTS ${sql.identifier(schema)}.uq_documents_type_ref_number_active`,
   },
-  // v9.0.431 (TD-611): webhook deliveries and rule action logs, with the ON DELETE the Drizzle schema declares
+  // v9.0.445 (TD-611): webhook deliveries and rule action logs, with the ON DELETE the Drizzle schema declares
   notValidForeignKey({
     name: 'fk_webhook_deliveries_subscription', table: 'webhook_deliveries', column: 'subscription_id',
     parent: 'webhook_subscriptions', onDelete: 'CASCADE', migration: '0089',
@@ -189,17 +189,17 @@ export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] 
     parent: 'event_action_rules', onDelete: 'SET NULL', migration: '0089',
     label: 'پیوند گزارش اجرای قانون خودکار به قانون', blockerUnit: 'گزارش اجرا با قانون ناموجود',
   }),
-  // v9.0.432 (TD-902): user columns (users are only soft-deleted); the workflow engine's user columns stay without a key
+  // v9.0.446 (TD-902): user columns (users are only soft-deleted); the workflow engine's user columns stay without a key
   ...USER_FOREIGN_KEYS.map(([table, column, label]) => notValidForeignKey({
     name: `fk_${table}_${column}`, table, column, parent: 'users', onDelete: table === 'form_drafts' ? 'CASCADE' : 'NO ACTION',
     migration: '0090', label, blockerUnit: 'ردیف با کاربر ناموجود',
   })),
-  // v9.0.433 (TD-903): business references, NO ACTION as declared
+  // v9.0.447 (TD-903): business references, NO ACTION as declared
   ...BUSINESS_FOREIGN_KEYS.map(([table, column, parent, label, parentNoun]) => notValidForeignKey({
     name: `fk_${table}_${column}`, table, column, parent, onDelete: 'NO ACTION', migration: '0091', label,
     blockerUnit: `ردیف با ${parentNoun} ناموجود`,
   })),
-  // v9.0.434 (TD-613): required columns of the project stage progress
+  // v9.0.448 (TD-613): required columns of the project stage progress
   notNullColumn('project_product_stage_progress', 'item_code', 'الزام کد کالا در پیشرفت مرحله محصول پروژه', '0092'),
   notNullColumn('project_product_stage_progress', 'quantity', 'الزام مقدار در پیشرفت مرحله محصول پروژه', '0092'),
   notNullColumn('project_product_stage_progress', 'stage_title', 'الزام عنوان مرحله در پیشرفت مرحله محصول پروژه', '0092'),
@@ -238,7 +238,7 @@ async function entryFor(db: Executor, rule: ConditionalConstraintRule, presence:
 }
 
 /**
- * قیدهای شرطی که در اسکیمای جاری نیستند، یا (کلید خارجی NOT VALID، v9.0.431) هنوز تأیید نشده‌اند، هر کدام با شمار آنچه
+ * قیدهای شرطی که در اسکیمای جاری نیستند، یا (کلید خارجی NOT VALID، v9.0.445) هنوز تأیید نشده‌اند، هر کدام با شمار آنچه
  * ساختن یا تأییدش را ناممکن می‌کند
  */
 export async function findMissingConditionalConstraints(db: Executor = orm): Promise<ConditionalConstraintEntry[]> {

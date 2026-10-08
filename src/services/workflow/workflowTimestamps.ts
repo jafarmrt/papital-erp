@@ -1,4 +1,4 @@
-import { serverTimestampToUtcIso } from '../../lib/serverTimestamp.js';
+import { withUtcTimestampKeys } from '../../lib/serverTimestamp.js';
 
 /**
  * TD-468 (یافته B14-26): زمان‌های سرور جدول‌های گردش کار (timestamp بی منطقه، ساعت UTC) با Z به مرورگر می‌روند
@@ -11,16 +11,6 @@ export const WORKFLOW_TIMESTAMP_KEYS = new Set([
   'enteredAt', 'reopenedAt', 'publishedAt', 'lastActionAt', 'startedAt', 'timestamp',
 ]);
 
-const SERVER_TIMESTAMP = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
-
 export function withUtcTimestamps<T>(value: T): T {
-  if (Array.isArray(value)) return value.map((v) => withUtcTimestamps(v)) as T;
-  if (!value || typeof value !== 'object' || value instanceof Date) return value;
-  const out: Record<string, unknown> = {};
-  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
-    out[key] = typeof v === 'string' && WORKFLOW_TIMESTAMP_KEYS.has(key) && SERVER_TIMESTAMP.test(v.trim())
-      ? serverTimestampToUtcIso(v)
-      : withUtcTimestamps(v);
-  }
-  return out as T;
+  return withUtcTimestampKeys(value, WORKFLOW_TIMESTAMP_KEYS);
 }

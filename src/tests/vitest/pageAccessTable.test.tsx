@@ -117,8 +117,8 @@ describe('one page-access table for menu, routes, shortcuts and settings tabs (T
       </QueryClientProvider>,
     );
     expect((screen.getByPlaceholderText('https://yoursite.com') as HTMLInputElement).matches(':disabled')).toBe(true);
-    expect(screen.getByText('آدرس سایت و کلیدهای دسترسی را فقط مدیر سیستم تغییر می‌دهد.')).toBeTruthy();
-    expect(screen.queryByText('تست اتصال به سایت')).toBeNull();
+    expect(screen.getByText('نشانی سایت و کلیدهای دسترسی را فقط مدیر سامانه تغییر می‌دهد.')).toBeTruthy();
+    expect(screen.queryByText('آزمایش اتصال به سایت')).toBeNull();
     expect(screen.queryByText('همگام‌سازی موجودی کل کالاها با سایت')).toBeNull();
     expect(screen.getByText('ذخیره تنظیمات ووکامرس')).toBeTruthy();
   });

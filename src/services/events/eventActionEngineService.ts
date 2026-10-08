@@ -19,7 +19,6 @@ import { type RuleActionType } from '../../lib/events/ruleActionTypes.js';
 import { assertRuleActionTypeAllowed, assertRuleEventTypeAllowed } from './ruleActionTypeGuard.js';
 import type { ActionEngineStats, ActionLogPage } from '../../lib/events/actionLogContract.js';
 import { deleteEventActionRule, type IntegrationDeleteActor } from './integrationParentDelete.js';
-import { ruleSampleEvent } from './ruleSampleEvent.js';
 import { IntegrationDeliveryService, RULE_ACTION_MAX_ATTEMPTS, type DeliveryAttemptContext, type DeliveryAttemptOutcome } from './integrationDelivery.service.js';
 
 export interface RuleCondition {
@@ -647,54 +646,11 @@ export class EventActionEngineService {
   }
 
   /**
-   * Delete rule: v9.0.431 (TD-611) one transaction; its logs stay with rule_id set to null (SET NULL), audit row with tx.
+   * Delete rule: v9.0.445 (TD-611) one transaction; its logs stay with rule_id set to null (SET NULL), audit row with tx.
    */
   public static async deleteRule(id: number, actor: IntegrationDeleteActor = {}) {
     const result = await deleteEventActionRule(id, actor);
     return { success: true, ...result };
-  }
-
-  /**
-   * Toggle active state
-   */
-  public static async toggleRule(id: number) {
-    const rule = await this.getRuleById(id);
-    if (!rule) throw new Error('قانون مورد نظر یافت نشد.');
-
-    const newActive = rule.isActive === 1 ? 0 : 1;
-    assertRuleActionTypeAllowed(rule.actionType, { active: newActive === 1, changingType: false });
-    assertRuleEventTypeAllowed(rule.eventType, { active: newActive === 1, changingType: false });
-    const [updated] = await orm.update(eventActionRules)
-      .set({
-        isActive: newActive,
-        updatedAt: new Date().toISOString()
-      })
-      .where(eq(eventActionRules.id, id))
-      .returning();
-
-    return updated;
-  }
-
-  /**
-   * Test execute rule with simulated event
-   */
-  public static async testRule(ruleId: number, customEvent?: BaseDomainEvent) {
-    const rule = await this.getRuleById(ruleId);
-    if (!rule) throw new Error('قانون مورد نظر یافت نشد.');
-
-    const sampleEvent: BaseDomainEvent = customEvent || ruleSampleEvent(rule.eventType);
-
-    const conditions = Array.isArray(rule.conditionsJson) ? rule.conditionsJson as RuleCondition[] : [];
-    const conditionMatches = this.evaluateConditions(conditions, sampleEvent);
-
-    const execution = await this.executeAction(rule, sampleEvent);
-
-    return {
-      rule,
-      sampleEvent,
-      conditionMatches,
-      execution
-    };
   }
 
   /**

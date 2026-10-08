@@ -27,7 +27,7 @@ describe('event field picker (TD-085 part 3)', () => {
 
   it('offers the fields as suggestions for a condition and inserts a variable into the message on click', () => {
     const { container } = render(<RuleEditorModal isOpen onClose={() => {}} onSave={async () => {}} initialRule={rule} />);
-    const field = screen.getByLabelText('فیلد شرط') as HTMLInputElement;
+    const field = screen.getByLabelText('داده شرط') as HTMLInputElement;
     expect(field.getAttribute('list')).toBe('rule-event-fields');
     const options = Array.from(container.querySelectorAll('#rule-event-fields option')).map((o) => (o as HTMLOptionElement).value);
     expect(options).toContain('payload.buyerName');

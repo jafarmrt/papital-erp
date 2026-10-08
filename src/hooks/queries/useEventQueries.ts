@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
-import { toast } from 'react-hot-toast';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { StoredRuleActionType } from '../../lib/events/ruleActionTypes';
 import type { ActionEngineStats, ActionLogPage, ActionLogRow } from '../../lib/events/actionLogContract';
+import type { EventSimulationResult } from '../../lib/events/eventSimulationContract';
 
 export interface DomainEvent {
   eventId: string;
@@ -70,6 +70,9 @@ export interface ActionRule {
 export type ActionLog = ActionLogRow;
 export type ActionStats = ActionEngineStats;
 
+/** v9.0.441 (TD-733): the live events list refreshes this often; the tab's label reads the same constant. */
+export const DOMAIN_EVENTS_REFRESH_MS = 10000;
+
 // Live Domain Events Query
 export function useDomainEventsQuery(filter: string = 'ALL', options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery<{ events: DomainEvent[]; stats: DomainEventStats | null }>({
@@ -86,7 +89,7 @@ export function useDomainEventsQuery(filter: string = 'ALL', options?: { enabled
     },
     staleTime: 5000,
     enabled: options?.enabled ?? true,
-    refetchInterval: options?.refetchInterval ?? 10000,
+    refetchInterval: options?.refetchInterval ?? DOMAIN_EVENTS_REFRESH_MS,
   });
 }
 
@@ -166,22 +169,15 @@ export function useActionLogsQuery(limit: number = 50, options?: { enabled?: boo
 }
 
 // Mutation: Simulate Domain Event
+// v9.0.430 (TD-708, decision t5 a): the simulation has no effect (nothing is published, sent or written), so nothing is
+// invalidated; the caller shows the rules and webhooks the event would have reached
 export function useSimulateEventMutation() {
-  const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async (payload: { eventType: string; aggregateType: string; aggregateId: string; payload: any }) => {
-      return fetchJson<{ success?: boolean; message?: string }>('/events/domain-events/simulate', {
+    mutationFn: async (body: { eventType: string; payload?: Record<string, unknown> }) => {
+      return fetchJson<EventSimulationResult & { success?: boolean }>('/events/domain-events/simulate', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-      toast.success('رویداد شبیه‌سازی‌شده با موفقیت منتشر و در Outbox ذخیره شد');
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'خطا در شبیه‌سازی انتشار رویداد');
     },
   });
 }
@@ -196,12 +192,9 @@ export function useProcessOutboxMutation() {
         method: 'POST',
       });
     },
-    onSuccess: (res) => {
+    // v9.0.441 (TD-733): the events tab announces the result once, in its own banner
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-      toast.success(res?.message || 'صف رویدادها با موفقیت پردازش شد');
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'خطا در پردازش دستی صف Outbox');
     },
   });
 }
@@ -216,12 +209,9 @@ export function useRetryFailedOutboxMutation() {
         method: 'POST',
       });
     },
-    onSuccess: (res) => {
+    // v9.0.441 (TD-733): the events tab announces the result once, in its own banner
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-      toast.success(res?.message || 'رویدادهای ناموفق برای تلاش مجدد نشانه‌گذاری شدند');
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'خطا در بازنشانی تلاش مجدد رویدادهای ناموفق');
     },
   });
 }
@@ -236,12 +226,9 @@ export function useRetrySingleOutboxEventMutation() {
         method: 'POST',
       });
     },
-    onSuccess: (res) => {
+    // v9.0.441 (TD-733): the events tab announces the result once, in its own banner
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-      toast.success(res?.message || 'رویداد برای تلاش مجدد زمان‌بندی شد');
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'خطا در تلاش مجدد رویداد');
     },
   });
 }

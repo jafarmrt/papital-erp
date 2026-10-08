@@ -33,7 +33,7 @@ export const productionProjects = pgTable('production_projects', {
   idx_proj_code: index('idx_proj_code').on(table.projectCode),
   idx_proj_status: index('idx_proj_status').on(table.status),
   idx_proj_deleted: index('idx_proj_deleted').on(table.isDeleted),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_production_projects_customer_id: index('idx_production_projects_customer_id').on(table.customerId).where(sql`${table.customerId} IS NOT NULL`),
   idx_production_projects_item_id: index('idx_production_projects_item_id').on(table.itemId).where(sql`${table.itemId} IS NOT NULL`),
 }));
@@ -57,7 +57,7 @@ export const projectStages = pgTable('project_stages', {
 }, (table) => ({
   idx_stage_proj: index('idx_stage_proj').on(table.projectId),
   idx_stage_order: index('idx_stage_order').on(table.stageOrder),
-  // v9.0.434 (TD-613): built by migration 0084 only on data without duplicates; declared so the schema matches the database
+  // v9.0.448 (TD-613): built by migration 0084 only on data without duplicates; declared so the schema matches the database
   uq_project_stages_order_active: uniqueIndex('uq_project_stages_order_active').on(table.projectId, table.stageOrder).where(sql`${table.isDeleted} = 0`),
 }));
 
@@ -76,12 +76,12 @@ export const projectProductStageProgress = pgTable('project_product_stage_progre
   updatedByName: text('updated_by_name').default(''),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
-  // v9.0.434 (TD-613): migration 0002 built a unique index, not a constraint
+  // v9.0.448 (TD-613): migration 0002 built a unique index, not a constraint
   uq_ppsp: uniqueIndex('uq_ppsp_project_item_stage').on(table.projectId, table.itemId, table.stageOrder),
   idx_ppsp_item: index('idx_ppsp_item').on(table.projectId, table.itemId),
   idx_ppsp_order: index('idx_ppsp_order').on(table.projectId, table.stageOrder),
   idx_ppsp_deleted: index('idx_ppsp_deleted').on(table.isDeleted),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_project_product_stage_progress_item_id: index('idx_project_product_stage_progress_item_id').on(table.itemId),
 }));
 
@@ -109,7 +109,7 @@ export const projectBomAllocations = pgTable('project_bom_allocations', {
   idx_bom_alloc_item: index('idx_bom_alloc_item').on(table.itemId),
   idx_bom_alloc_status: index('idx_bom_alloc_status').on(table.status),
   idx_bom_alloc_src_tx: index('idx_bom_alloc_src_tx').on(table.sourceTransactionId),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_project_bom_allocations_user_id: index('idx_project_bom_allocations_user_id').on(table.userId).where(sql`${table.userId} IS NOT NULL`),
 }));
 registerColumnRef('projectBomAllocations.id', () => projectBomAllocations.id);
@@ -128,6 +128,6 @@ export const projectReservationReleases = pgTable('project_reservation_releases'
   restoredAt: timestamp('restored_at', { mode: 'string' }),
 }, (table) => ({
   idx_prr_document: index('idx_prr_document').on(table.documentId),
-  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_project_reservation_releases_project_id: index('idx_project_reservation_releases_project_id').on(table.projectId),
 }));

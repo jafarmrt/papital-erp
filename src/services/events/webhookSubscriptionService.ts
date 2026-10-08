@@ -272,7 +272,7 @@ export class WebhookSubscriptionService {
   }
 
   /**
-   * Delete subscription: v9.0.431 (TD-611) one transaction with its deliveries (CASCADE), queued jobs and audit row.
+   * Delete subscription: v9.0.445 (TD-611) one transaction with its deliveries (CASCADE), queued jobs and audit row.
    */
   static async deleteSubscription(id: number, actor: IntegrationDeleteActor = {}) {
     const result = await deleteWebhookSubscription(id, actor);
@@ -477,7 +477,7 @@ export class WebhookSubscriptionService {
    * Pattern matcher for event subscriptions: '*', an exact event type, or a dotted prefix ('woocommerce.*'). Stored patterns
    * are «*» or published event types since v9.0.405 (TD-707).
    */
-  private static matchesPattern(eventType: string, patterns: string[] = ['*']): boolean {
+  public static matchesPattern(eventType: string, patterns: string[] = ['*']): boolean {
     if (!patterns || patterns.length === 0 || patterns.includes('*')) return true;
 
     for (const pattern of patterns) {

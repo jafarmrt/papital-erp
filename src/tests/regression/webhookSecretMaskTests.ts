@@ -109,7 +109,7 @@ export async function runWebhookSecretMaskTests(shouldRun: (id: string, ...extra
     if (ruleId) ruleIds.push(ruleId);
     const rulesViewer = await send(viewer, 'get', '/api/events/action-rules');
     const ruleViewer = await send(viewer, 'get', `/api/events/action-rules/${ruleId}`);
-    const ruleToggled = await send(manager, 'post', `/api/events/action-rules/${ruleId}/toggle`, {});
+    const ruleToggled = await send(manager, 'post', `/api/events/action-rules/${ruleId}/toggle`, { active: true });
     for (const [label, res] of [['rule create', ruleCreated], ['viewer rules', rulesViewer], ['viewer rule', ruleViewer], ['rule toggle', ruleToggled]] as const) {
       if (res.status !== 200 && res.status !== 201) wrong.push(`${label}: ${res.status}`);
       leaks(label, res.body, [RULE_TOKEN, RULE_HEADER]);

@@ -8,8 +8,8 @@ import { declaredForeignKeys, databaseForeignKeys } from './foreignKeyPolicyTest
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 
 /**
- * v9.0.434 (TD-613, B01-33): the Drizzle schema says what the migrations built, so `drizzle-kit generate` or `push` would
- * neither drop nor rebuild anything. Red on v9.0.433: five foreign keys were SET NULL in the database and NO ACTION in
+ * v9.0.448 (TD-613, B01-33): the Drizzle schema says what the migrations built, so `drizzle-kit generate` or `push` would
+ * neither drop nor rebuild anything. Red on v9.0.447: five foreign keys were SET NULL in the database and NO ACTION in
  * Drizzle, four stage progress columns were NOT NULL only in Drizzle, three webhook delivery indexes existed only in
  * Drizzle and twenty-two indexes (fourteen unique) only in the database.
  *
@@ -130,7 +130,7 @@ async function scenario(): Promise<string> {
   const problems: string[] = await schemaDrift();
   assertNoProblems(problems);
 
-  // a database whose stage progress holds a NULL title: 0092 leaves the column nullable and the health check lists it
+  // a database whose stage progress holds a NULL title: 0093 leaves the column nullable and the health check lists it
   const admin = await sandboxAdminClient();
   const name = 'nn_project_product_stage_progress_stage_title';
   await orm.execute(sql`ALTER TABLE project_product_stage_progress ALTER COLUMN stage_title DROP NOT NULL`);
@@ -158,7 +158,7 @@ export async function runSchemaDriftTests(shouldRun: ShouldRun): Promise<TestCas
   const results: TestCaseResult[] = [];
   const id = 'reg_schema_drift_td_613';
   if (shouldRun(id, 'TD-613', 'B01-33')) {
-    await runCase(results, id, 'v9.0.434: the Drizzle schema matches the migrated database, so drizzle-kit would drop or rebuild nothing (TD-613)',
+    await runCase(results, id, 'v9.0.448: the Drizzle schema matches the migrated database, so drizzle-kit would drop or rebuild nothing (TD-613)',
       () => inFiscalSandbox(scenario));
   }
   return results;

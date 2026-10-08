@@ -36,7 +36,7 @@ export function snapshotTransitionsOf(snapshot: unknown): WorkflowTransitionSnap
 }
 
 /**
- * v9.0.430 (TD-612, B01-32): step id → title in an instance's snapshot (empty when the snapshot is not usable). History rows
+ * v9.0.444 (TD-612, B01-32): step id → title in an instance's snapshot (empty when the snapshot is not usable). History rows
  * and the instance hold the step ids of their own snapshot, which a later design save removes from the live table.
  */
 export function snapshotStateTitles(snapshot: unknown): Map<number, string> {
