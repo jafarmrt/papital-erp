@@ -5,7 +5,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { DocumentService } from '../document.service.js';
 import { ValidationError } from '../../errors/customErrors.js';
-import { applyDeliveredLines, type RequisitionItemWithReceipt } from './requisitionReceipt.js';
+import { applyDeliveredLines, isClosedRequisitionRow, type RequisitionItemWithReceipt } from './requisitionReceipt.js';
 
 /** v8.0.10 (TD-267): انواع سندی که مسیر تحویل تدارکات به انبار نهایی می‌کند (فقط ورود کالا) */
 export const PROCUREMENT_INCOMING_TYPES = ['receipt', 'purchase'];
@@ -35,6 +35,48 @@ interface ReceiveOptions {
   assertIncoming: (doc: { id: number; type: string | null; refNumber: string | null }) => void;
 }
 
+/** برچسب یادداشت سفارش‌هایی که «تبدیل به سفارش» برای درخواست می‌سازد */
+export function requisitionOrderTag(code: string): string {
+  return `[تدارکات: درخواست ${code}]`;
+}
+
+export interface RequisitionOrderDocument {
+  id: number;
+  type: string | null;
+  refNumber: string | null;
+  status: string | null;
+}
+
+/**
+ * سندهای زنده سفارش یک درخواست خرید: سندهایی که ردیف‌های درخواست به آن‌ها پیوند دارند، و سند ورودی خریدی که برچسب
+ * `[تدارکات: درخواست <کد>]` را در یادداشت دارد. v9.0.316 (TD-690): برچسب کامل جست‌وجو می‌شود، نه هر یادداشتی که کد
+ * درخواست را دارد.
+ */
+export async function requisitionOrderDocuments(
+  tx: DbExecutor,
+  req: { code: string; items?: RequisitionItemWithReceipt[] | null },
+): Promise<RequisitionOrderDocument[]> {
+  const linkedIds = new Set<number>();
+  for (const row of Array.isArray(req.items) ? req.items : []) {
+    for (const id of Array.isArray(row.linkedDocumentIds) ? row.linkedDocumentIds : []) {
+      if (Number(id) > 0) linkedIds.add(Number(id));
+    }
+  }
+  const columns = { id: documents.id, type: documents.type, refNumber: documents.refNumber, status: documents.status };
+  const linkedDocs = linkedIds.size === 0 ? [] : await tx.select(columns).from(documents)
+    .where(and(inArray(documents.id, [...linkedIds]), eq(documents.isDeleted, 0)));
+  // سفارش‌هایی که برچسب درخواست را در یادداشت دارند ولی به ردیفی پیوند نخورده‌اند (فقط سند ورودی خرید)
+  const notedDocs = await tx.select(columns).from(documents)
+    .where(and(
+      ilike(documents.notes, containsLikePattern(requisitionOrderTag(req.code))),
+      inArray(documents.type, PROCUREMENT_INCOMING_TYPES),
+      eq(documents.isDeleted, 0)
+    ));
+  const byId = new Map<number, RequisitionOrderDocument>();
+  for (const doc of [...linkedDocs, ...notedDocs]) byId.set(doc.id, doc);
+  return [...byId.values()].sort((a, b) => a.id - b.id);
+}
+
 /**
  * v8.0.71 (TD-326): «دریافت کالا»ی درخواست خرید (اقدام گردش‌کار receive_items)، درون تراکنش فراخواننده و زیر قفل ردیف
  * درخواست. سفارش‌های پیش‌نویس یا پیش‌فاکتورِ درخواست نهایی می‌شوند و کالایی که هرگز سفارش نشده با یک رسید قطعی وارد
@@ -52,37 +94,20 @@ export async function receiveRequisitionItems(
 ): Promise<RequisitionItemWithReceipt[]> {
   let rows = (Array.isArray(req.items) ? req.items : []).map(row => ({ ...row }));
 
-  const linkedIds = new Set<number>();
-  for (const row of rows) {
-    for (const id of Array.isArray(row.linkedDocumentIds) ? row.linkedDocumentIds : []) {
-      if (Number(id) > 0) linkedIds.add(Number(id));
-    }
-  }
-  const linkedDocs = linkedIds.size === 0 ? [] : await tx
-    .select({ id: documents.id, type: documents.type, refNumber: documents.refNumber, status: documents.status })
-    .from(documents)
-    .where(and(inArray(documents.id, [...linkedIds]), eq(documents.isDeleted, 0)));
-  // سفارش‌هایی که کد درخواست را در یادداشت دارند ولی به ردیفی پیوند نخورده‌اند (فقط سند ورودی خرید)
-  const notedDocs = await tx
-    .select({ id: documents.id, type: documents.type, refNumber: documents.refNumber, status: documents.status })
-    .from(documents)
-    .where(and(
-      ilike(documents.notes, containsLikePattern(req.code)),
-      inArray(documents.type, PROCUREMENT_INCOMING_TYPES),
-      eq(documents.isDeleted, 0)
-    ));
-
-  const orderDocs = new Map<number, (typeof linkedDocs)[number]>();
-  for (const doc of [...linkedDocs, ...notedDocs]) orderDocs.set(doc.id, doc);
-  for (const doc of [...orderDocs.values()].sort((a, b) => a.id - b.id)) {
+  const orderDocs = await requisitionOrderDocuments(tx, { code: req.code, items: rows });
+  for (const doc of orderDocs) {
     if (doc.status === 'final') continue;
     opts.assertIncoming(doc);
     await DocumentService.finalizeDocument(doc.id, opts.username, tx, { allowBackdate: opts.allowBackdate });
   }
-  const requisitionDocIds = new Set(orderDocs.keys());
+  const requisitionDocIds = new Set(orderDocs.map(doc => doc.id));
 
+  // v9.0.316 (TD-690): ردیفی که هنگام صدور سفارش بسته شد بی سفارش وارد انبار نمی‌شود. v9.0.317 (TD-692): ردیفی هم که
+  // سفارش ردیف دیگری از همان کالا پرش کرده است (applyDeliveredLines) دوباره دریافت نمی‌شود؛ تحویل اکنون همین اقدام را
+  // در تراکنش خود اجرا می‌کند
   const neverOrdered = rows.filter(row =>
-    !(Array.isArray(row.linkedDocumentIds) && row.linkedDocumentIds.length > 0) && row.itemId && Number(row.requestedQty || 0) > 0);
+    !(Array.isArray(row.linkedDocumentIds) && row.linkedDocumentIds.length > 0) && row.itemId && Number(row.requestedQty || 0) > 0
+    && !isClosedRequisitionRow(row) && Number(row.receivedQty || 0) < Number(row.requestedQty));
   if (neverOrdered.length > 0) {
     const receiptId = await DocumentService.createDocument({
       docType: 'receipt',

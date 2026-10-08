@@ -7,7 +7,7 @@ const CONNECTION_KEYS = ['wc_store_url', 'wc_consumer_key', 'wc_consumer_secret'
 
 /**
  * نشانی فروشگاه و کلیدهای ذخیره‌شده ووکامرس (کلید نبود = رشته خالی). مسیرهای همگام‌سازی و «آزمایش اتصال» از همین
- * می‌خوانند (v9.0.315، TD-723).
+ * می‌خوانند (v9.0.322، TD-723).
  */
 export async function readWcConnectionSettings(executor: DbExecutor = orm): Promise<WcConnectionFields> {
   const rows = await executor.select({ key: appSettings.key, value: appSettings.value })

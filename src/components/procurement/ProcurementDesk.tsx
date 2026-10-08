@@ -13,6 +13,7 @@ import { PillBadge } from '../common/PillBadge';
 import { REQUISITION_PRIORITY_BADGES, REQUISITION_PRIORITY_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { canDeleteRequisition } from '../../lib/procurement/requisitionFields';
 
 interface ProcurementDeskProps {
   currentUser?: User | null;
@@ -669,8 +670,8 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                                 </button>
                               )}
 
-                              {/* Delete Requisition (only if pending/under_review) */}
-                              {(req.status === 'pending' || req.status === 'under_review' || req.status === 'rejected') && (
+                              {/* v9.0.318 (TD-695): حذف فقط برای درخواستی که سفارش یا دریافت نشده است */}
+                              {canDeleteRequisition(req) && (
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteRequisition(req.id, req.code)}

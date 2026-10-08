@@ -415,7 +415,7 @@ export class WooOrderSyncService {
         }
 
         // (ز) تطبیق یا ایجاد مشتری؛ نام فاکتور همان نام پرونده مشتری است تا سند حسابداری روی حساب
-        // تفصیلی همان مشتری بنشیند. v9.0.314 (TD-703، ت۱ الف): خریدار هم‌نام با تلفن دیگر طرف حساب متمایز می‌گیرد
+        // تفصیلی همان مشتری بنشیند. v9.0.321 (TD-703، ت۱ الف): خریدار هم‌نام با تلفن دیگر طرف حساب متمایز می‌گیرد
         const orderCustomer = await resolveWooOrderCustomer(tx, wcOrderId, buyer, WC_BOT_USER);
         const invoiceBuyerName = orderCustomer.name;
 

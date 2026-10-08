@@ -27,7 +27,7 @@ const MASKED_SETTING_VALUE = '********';
 
 export type Warehouse = WarehouseItem;
 
-// v9.0.316 (TD-730، نیمه ووکامرس): خطای خواندن (۴۰۳، ۵۰۰) نگه داشته و در جدول نشان داده می‌شود، نه «هنوز هیچ سفارشی ثبت نشده است»
+// v9.0.323 (TD-730، نیمه ووکامرس): خطای خواندن (۴۰۳، ۵۰۰) نگه داشته و در جدول نشان داده می‌شود، نه «هنوز هیچ سفارشی ثبت نشده است»
 function loadWcList(endpoint: string, setRows: (rows: unknown[]) => void, setError: (message: string) => void, signal?: AbortSignal) {
   fetchJson(endpoint, { signal })
     .then((res) => {
@@ -226,7 +226,7 @@ export function useSettings() {
     try {
       const res = await fetchJson('/woocommerce/sync-all-stocks', { method: 'POST' });
       if (res.success) {
-        // v9.0.316 (TD-724): کالای ناموفق پیام خطا با شمار و نخستین خطاها می‌گیرد، نه پیام سبز سرور
+        // v9.0.323 (TD-724): کالای ناموفق پیام خطا با شمار و نخستین خطاها می‌گیرد، نه پیام سبز سرور
         const outcome = stockSyncOutcome(res);
         if (outcome.tone === 'error') toast.error(outcome.message, { duration: 15000 });
         else toast.success(outcome.message);
@@ -266,7 +266,7 @@ export function useSettings() {
   const handleTestWcConnection = async () => {
     setIsTestingWc(true);
     try {
-      // v9.0.315 (TD-723): کلید ماسک‌شده («********») یا خالی فرستاده نمی‌شود؛ کارساز کلید ذخیره‌شده را به کار می‌برد
+      // v9.0.322 (TD-723): کلید ماسک‌شده («********») یا خالی فرستاده نمی‌شود؛ کارساز کلید ذخیره‌شده را به کار می‌برد
       const res = await fetchJson('/woocommerce/test-connection', {
         method: 'POST',
         body: JSON.stringify(wcTestConnectionBody({

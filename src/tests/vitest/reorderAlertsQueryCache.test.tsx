@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider, type QueryKey } from '@tanstack/react
 import { MemoryRouter } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import ReorderAlertsPage from '../../pages/ReorderAlertsPage';
+import { createRequisitionSchema } from '../../routes/procurement.schemas';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { User } from '../../types';
 
@@ -135,6 +136,8 @@ describe('ReorderAlertsPage — React Query cache', () => {
       title: 'سفارش تامین ماده اولیه سیم نقره', priority: 'normal',
       items: [{ itemId: 7, itemCode: 'R-7', requestedQty: 8, unitPriceEstimate: 1000 }],
     });
+    // v9.0.314 (TD-688): همان بدنه از قرارداد سرور می‌گذرد (پیش‌تر سرور ساختگی بدنه‌ای را تأیید می‌کرد که سرور واقعی با ۴۰۰ رد می‌کرد)
+    expect(createRequisitionSchema.safeParse({ body: bodyOf('/api/procurement/requisitions', 'POST') }).error?.issues).toBeUndefined();
     expectInvalidated(client, procurementKeys, true);
     expectInvalidated(client, stockKeys, false);
     await waitFor(() => expect(callsTo(REORDER_URL)).toBeGreaterThan(listBefore));

@@ -6,7 +6,7 @@ import { appSettings } from '../../db/schema.js';
 
 /**
  * Package 15 (events and integrations), TD-723 / B15-21: the WooCommerce «test connection» route takes a missing or masked
- * key from the stored settings, and then only at the stored store address. On v9.0.314 the route required both keys in the
+ * key from the stored settings, and then only at the stored store address. On v9.0.321 the route required both keys in the
  * body, so a non-admin (who sees «********») always tested the mask, and nothing stopped stored keys from being sent to an
  * address the caller chose once a fallback existed. Only refusals are exercised here, so no request leaves the test.
  */
