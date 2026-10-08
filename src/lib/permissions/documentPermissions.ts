@@ -23,6 +23,12 @@ export const SALES_DOCUMENT_TYPES: ReadonlySet<string> = new Set(['invoice', 'pr
 /** مجوز ثبت قطعی و نهایی‌سازی سند فروش */
 export const SALES_FINALIZE_PERMISSION = 'documents.finalize';
 
+/**
+ * v8.0.4 (TD-257): گردش انبار با تاریخ پیش از آخرین گردش کالا فقط با این مجوز. v9.0.452 (TD-928): از اینجا خوانده
+ * می‌شود تا موتور گردش کار هم آن را از امضاکننده بسنجد، بی وابستگی به سرویس انبار.
+ */
+export const STOCK_BACKDATE_PERMISSION = 'warehouse.backdate';
+
 export function isSalesDocumentType(docType: string): boolean {
   return SALES_DOCUMENT_TYPES.has(docType);
 }

@@ -28,6 +28,7 @@ import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workf
 import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels.js';
 import type { RuleExpression } from '../ruleEngine.service.js';
 import { isSystemAdminRole, permissionDefinition } from '../../lib/permissions/permissionCatalog.js';
+import { STOCK_BACKDATE_PERMISSION } from '../../lib/permissions/documentPermissions.js';
 
 type DbClient = typeof orm | Parameters<Parameters<typeof orm.transaction>[0]>[0];
 
@@ -517,7 +518,10 @@ export class WorkflowTransitionExecutor {
     userPermissions?: string[];
     comment?: string;
     snapshotData?: Record<string, unknown>;
-    /** v9.0.2 (TD-415): مجوز تاریخ گذشته‌ای که فراخواننده برای همین کاربر سنجیده است، برای اقدام خودکار پس از انتقال */
+    /**
+     * v9.0.2 (TD-415): مجوز تاریخ گذشته‌ای که فراخواننده برای همین کاربر سنجیده است، برای اقدام خودکار پس از انتقال.
+     * v9.0.452 (TD-928): بی آن، موتور همان مجوز را از امضاکننده (یا نقش تفویض‌کننده) می‌خواند.
+     */
     allowBackdate?: boolean;
     tx?: DbClient;
   }) {
@@ -610,16 +614,20 @@ export class WorkflowTransitionExecutor {
       }
       // v9.0.35 (TD-445، تصمیم مالک محصول ت۳ الف): گامی که اقدام دامنه دارد مجوز همان موجودیت را از امضاکننده (یا نقش
       // تفویض‌کننده) می‌خواهد؛ پیش‌تر نقش گام بس بود و خزانه‌دار بی مجوز قطعی‌سازی، سند را از گردش‌کار قطعی می‌کرد
+      const signerRole = (actingFor ? actingFor.fromRole : params.userRole || '').trim().toLowerCase();
+      const signerHeld = actingFor ? await WorkflowTransitionExecutor.signerPermissions(actingFor.fromRole, [], tx) : userPermissions;
       const entityPermissions = await workflowActionPermissions(instance.entityType, { toStateKey: toState.stateKey, autoActionKey: transition.autoActionKey || '' }, { tx, entityId: instance.entityId });
       if (entityPermissions.length > 0) {
-        const signerRole = (actingFor ? actingFor.fromRole : params.userRole || '').trim().toLowerCase();
-        const signerHeld = actingFor ? await WorkflowTransitionExecutor.signerPermissions(actingFor.fromRole, [], tx) : userPermissions;
         if (!isSystemAdminRole(signerRole) && !entityPermissions.some(p => signerHeld.includes(p))) {
           // v9.0.451 (TD-904): نام فارسی مجوز در پیام، کلید آن در جزئیات
           const titles = entityPermissions.map(p => permissionDefinition(p)?.title ?? p);
           throw new ForbiddenError(`اقدام «${transition.title}» یکی از مجوزهای «${titles.join('، ')}» را می‌خواهد.`, { permissions: entityPermissions }, 'WF_ENTITY_PERMISSION_REQUIRED');
         }
       }
+      // v9.0.452 (TD-928، یافته P5-S-04، تصمیم ت۳ الف فاز ۵): مجوز تاریخ گذشته اقدام دامنه (قطعی‌سازی سند، دریافت کالا)
+      // از همان امضاکننده (یا نقش تفویض‌کننده) خوانده می‌شود، مانند `PUT /documents/:id/finalize`؛ هرگز از بدنه درخواست.
+      // پیش‌تر فقط فراخواننده تدارکات آن را می‌فرستاد و تأیید سند تاریخ گذشته از گردش کار حتی برای دارنده مجوز ۴۲۲ بود.
+      const allowBackdate = params.allowBackdate === true || isSystemAdminRole(signerRole) || signerHeld.includes(STOCK_BACKDATE_PERMISSION);
 
       // Authoritative Server-side Entity Context & Rule Evaluation (Subphase 1.3: Never trust client snapshotData for rule conditions)
       const authoritativeContext = await getEntityContext(instance.entityType, instance.entityId, tx);
@@ -801,7 +809,7 @@ export class WorkflowTransitionExecutor {
         autoActionKey: transition.autoActionKey || '',
         performedBy: params.userId,
         performedByName: params.userName,
-        allowBackdate: params.allowBackdate === true,
+        allowBackdate,
       });
 
       await logActivity({

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.452 — Workflow Approval Reads the Signer's Backdate Permission
+- **Fix (TD-928, P5-S-04):** a workflow transition that finalizes a document or receives goods takes warehouse.backdate from the signer's role (the delegator's for a deputy, always for the system admin), like PUT /documents/:id/finalize; it was never passed and a permitted backdated approval got 422.
+
 ### v9.0.451 — Purchase Goods Enter Stock Only With warehouse.in
 - **Fix (TD-904, P5-P01):** a requisition transition into the received step (workflow route, inbox task, receive items) and order delivery ask the receipt's stock-in permission `warehouse.in`; workflow-only or procurement-only users get 403 and nothing moves, and the procurement page hides the buttons.
 
