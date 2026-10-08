@@ -4,8 +4,8 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { Search, Plus, Edit2, Trash2, CheckCircle2, Clock, FolderKanban } from 'lucide-react';
 import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
-import { formatPersianPrice, formatQuantityOrTime, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatQuantityOrTime, formatPersianDate, extractDateString } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 interface PieceworkLogsTabProps {
   logsList: PieceworkLog[];
@@ -50,8 +50,8 @@ export function PieceworkLogsTab({
   onEditLog,
   onDeleteLog
 }: PieceworkLogsTabProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
   return (
     <div className="space-y-4">
       {/* Filter Bar */}
@@ -216,10 +216,10 @@ export function PieceworkLogsTab({
                         {formatQuantityOrTime(log.quantity, log.unit)}
                       </td>
                       <td className="p-3 text-center font-mono text-slate-600">
-                        {formatPersianPrice(log.unitRate)}
+                        {rial.number(log.unitRate)}
                       </td>
                       <td className="p-3 text-center font-mono text-blue-700 font-black">
-                        {formatPersianPrice(log.totalAmount)}
+                        {rial.number(log.totalAmount)}
                       </td>
                       <td className="p-3 text-center">
                         {isPending ? (

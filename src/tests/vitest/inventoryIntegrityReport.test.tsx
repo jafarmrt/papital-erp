@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { rialDisplayOf } from '../../lib/rialDisplay';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { InventoryIntegrityReport, ItemIntegrityAuditResult } from '../../types';
 import { filterIntegrityItems, integrityExcelRows } from '../../lib/inventoryAudit/integrityReport';
@@ -7,7 +8,7 @@ import { Inventory3WayIntegrityTab } from '../../components/inventory/Inventory3
 // Package 6 integrity report (TD-485 / B06-06): the tab reads the server's response shape ({ summary, audits, warehouses }
 // with scalarCurrentStock, whStocksSum, kardexNetBalance, recordedWac, computedWac). On v9.0.88 it read report.items and
 // other field names, so the table was always empty and the Excel export did nothing.
-vi.mock('../../hooks/useAppCurrency', () => ({ useAppCurrency: () => 'IRR' }));
+vi.mock('../../hooks/useAppCurrency', () => ({ useAppCurrency: () => 'IRR', useRialDisplay: () => rialDisplayOf('IRR') }));
 
 const audit = (over: Partial<ItemIntegrityAuditResult>): ItemIntegrityAuditResult => ({
   itemId: 1, itemCode: 'A-1', itemName: 'سنگ فیروزه', category: 'دستبند', unit: 'عدد',

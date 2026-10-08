@@ -1,7 +1,7 @@
 import { Search, Plus, Award, Edit2, Trash2, FileSpreadsheet, Download, Upload, History, RotateCcw, Archive, CheckCircle2 } from 'lucide-react';
 import { PieceworkTask } from '../../types';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 interface PieceworkTasksTabProps {
   tasksList: PieceworkTask[];
@@ -40,8 +40,8 @@ export function PieceworkTasksTab({
   onOpenExcelModal,
   onDownloadTemplate
 }: PieceworkTasksTabProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
 
   return (
     <div className="space-y-4">
@@ -275,7 +275,7 @@ export function PieceworkTasksTab({
                         {task.unit || 'عدد'}
                       </td>
                       <td className="p-3 text-left font-mono text-emerald-700 dark:text-emerald-400 font-black">
-                        {formatPersianPrice(task.defaultRate)}
+                        {rial.number(task.defaultRate)}
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1">

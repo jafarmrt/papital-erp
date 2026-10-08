@@ -16,6 +16,8 @@ import {
 } from './fiscalClosingHealth.js';
 import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
 import { buildForeignRateHealthTest, findVouchersWithoutForeignRate } from './voucherForeignRateHealth.js';
+import { buildPayrollVoucherHealthTest, findPayrollVoucherMismatches } from '../piecework/payrollVoucherHealth.js';
+import { buildPersonnelRateHealthTest, findDuplicatePersonnelRates, hasPersonnelRateUniqueIndex } from '../piecework/personnelRate.js';
 import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
 import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
 import {
@@ -23,6 +25,7 @@ import {
   findAccountMappingIssues, findDeletedAccountsWithVoucherRows, findNonLatinAccountCodes, findVouchersOnNonPostingAccounts,
 } from './chartOfAccountsHealth.js';
 import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
+import { buildPayslipDeductionsHealthTest, findPayslipDeductionsInPrepayments } from './payrollDeductionHealth.js';
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildProcurementOrderLinkHealthTest, findUnresolvedProcurementOrderLinks } from '../procurement/procurementOrderLinks.js';
 import { buildConsolidationSourcesHealthTest, findOpenLegacyConsolidationSources } from '../procurement/consolidationSourceHealth.js';
@@ -1183,11 +1186,20 @@ export class FinancialHealthService {
     const categoryIntegrityTest = buildCategoryIntegrityHealthTest(await findCategoryIntegrityIssues(), await hasCategoryNameUniqueIndex());
     overallScore += categoryIntegrityTest.scoreImpact;
     tests.push(categoryIntegrityTest);
-    // آزمون ۳۷: v9.0.272 (TD-691) سند با برچسب یا ردیف درخواست خرید که پیوند سفارش تدارکاتش روشن نیست (فقط فهرست)
+    // آزمون ۳۷: v9.0.266 (TD-804) فیش حقوقی با پاداش یا کسورات منفی، بی سند یا ناهمخوان با سند (فقط فهرست، بی بازنویسی)
+    tests.push(buildPayrollVoucherHealthTest(await findPayrollVoucherMismatches()));
+    // آزمون ۳۸: v9.0.284 (TD-809) بیش از یک نرخ اختصاصی فعال برای یک پرسنل و عنوان کار (مهاجرت 0076؛ فقط فهرست)
+    const [duplicatePersonnelRates, personnelRateIndexPresent] = await Promise.all([findDuplicatePersonnelRates(), hasPersonnelRateUniqueIndex()]);
+    const personnelRateTest = buildPersonnelRateHealthTest(duplicatePersonnelRates, personnelRateIndexPresent);
+    overallScore += personnelRateTest.scoreImpact;
+    tests.push(personnelRateTest);
+    // آزمون ۳۹: v9.0.286 (TD-554) کسورات فیش حقوق که سندهای پیشین در ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» گذاشته‌اند (فقط فهرست)
+    tests.push(buildPayslipDeductionsHealthTest(await findPayslipDeductionsInPrepayments()));
+    // آزمون ۴۰: v9.0.320 (TD-691) سند با برچسب یا ردیف درخواست خرید که پیوند سفارش تدارکاتش روشن نیست (فقط فهرست)
     const procurementOrderLinkTest = buildProcurementOrderLinkHealthTest(await findUnresolvedProcurementOrderLinks());
     overallScore += procurementOrderLinkTest.scoreImpact;
     tests.push(procurementOrderLinkTest);
-    // آزمون ۳۸: v9.0.274 (TD-694) منبع تجمیع قدیمی که هنوز باز است و می‌تواند دوباره سفارش داده شود (فقط فهرست)
+    // آزمون ۴۱: v9.0.322 (TD-694) منبع تجمیع قدیمی که هنوز باز است و می‌تواند دوباره سفارش داده شود (فقط فهرست)
     const consolidationSourcesTest = buildConsolidationSourcesHealthTest(await findOpenLegacyConsolidationSources());
     overallScore += consolidationSourcesTest.scoreImpact;
     tests.push(consolidationSourcesTest);

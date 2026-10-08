@@ -136,7 +136,7 @@ describe('ReorderAlertsPage — React Query cache', () => {
       title: 'سفارش تامین ماده اولیه سیم نقره', priority: 'normal',
       items: [{ itemId: 7, itemCode: 'R-7', requestedQty: 8, unitPriceEstimate: 1000 }],
     });
-    // v9.0.266 (TD-688): همان بدنه از قرارداد سرور می‌گذرد (پیش‌تر سرور ساختگی بدنه‌ای را تأیید می‌کرد که سرور واقعی با ۴۰۰ رد می‌کرد)
+    // v9.0.314 (TD-688): همان بدنه از قرارداد سرور می‌گذرد (پیش‌تر سرور ساختگی بدنه‌ای را تأیید می‌کرد که سرور واقعی با ۴۰۰ رد می‌کرد)
     expect(createRequisitionSchema.safeParse({ body: bodyOf('/api/procurement/requisitions', 'POST') }).error?.issues).toBeUndefined();
     expectInvalidated(client, procurementKeys, true);
     expectInvalidated(client, stockKeys, false);

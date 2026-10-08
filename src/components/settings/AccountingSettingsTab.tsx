@@ -100,7 +100,7 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
         {accountsCount === 0 ? (
           <>
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-6 mb-3">
-              هنوز هیچ حسابی در چارت حساب‌ها تعریف نشده است. با دکمه زیر، ساختار کدینگ استاندارد
+              هنوز هیچ حسابی در درخت حساب‌ها تعریف نشده است. با دکمه زیر، ساختار کدینگ استاندارد
               (گروه‌ها، معین‌ها و تفصیلی‌های پیش‌فرض نرم‌افزار) یک‌جا مستقر و همگام می‌شود.
             </p>
             {canSeedDefaults ? (
@@ -119,7 +119,7 @@ export function AccountingSettingsTab({ currentUser, canSeedDefaults = true }: {
         ) : (
           <p className="text-xs text-slate-600 dark:text-slate-300 leading-6 flex items-center gap-1.5">
             <Check size={14} className="text-emerald-600 shrink-0" />
-            چارت حساب‌ها فعال است ({formatPersianNumber(accountsCount)} حساب تعریف‌شده) — نیازی به همگام‌سازی پیش‌فرض نیست.
+            درخت حساب‌ها فعال است ({formatPersianNumber(accountsCount)} حساب تعریف‌شده) — نیازی به همگام‌سازی پیش‌فرض نیست.
             مدیریت کدینگ از بخش <span className="font-bold">حسابداری ← کدینگ حساب‌ها</span> انجام می‌شود.
           </p>
         )}

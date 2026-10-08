@@ -88,7 +88,7 @@
   "src/components/project/ProjectGanttTab.tsx": 2,
   "src/components/project/ProjectInventoryTab.tsx": 2,
   "src/components/project/ProjectProductProgressTab.tsx": 2,
-  "src/components/project/ProjectScheduleTab.tsx": 25,
+  "src/components/project/ProjectScheduleTab.tsx": 18,
   "src/components/project/ProjectStockEntryTab.tsx": 2,
   "src/components/ProjectDetailModal.tsx": 5,
   "src/components/providers/TimezoneProvider.tsx": 1,

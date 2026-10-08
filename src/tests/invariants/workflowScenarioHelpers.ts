@@ -136,7 +136,7 @@ export async function refusalStatus(run: () => Promise<unknown>): Promise<number
 }
 
 /**
- * v9.0.275 (TD-699، ت۴): سفارش پیش‌نویس درخواستی که پیش از ت۱ (TD-689) و بی تأیید صادر شده بود، با پیوند ستون و ردیف.
+ * v9.0.323 (TD-699، ت۴): سفارش پیش‌نویس درخواستی که پیش از ت۱ (TD-689) و بی تأیید صادر شده بود، با پیوند ستون و ردیف.
  * «دریافت کالا» فقط ردیف سفارش‌شده را می‌پذیرد؛ سناریوهای دریافت درخواستِ تأییدنشده همین داده قدیمی را می‌سازند.
  */
 export async function legacyRequisitionOrder(requisitionId: number, itemId: number, quantity: number): Promise<number> {

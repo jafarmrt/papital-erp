@@ -4,14 +4,14 @@ import {
   Warehouse, RefreshCw, ArrowLeft, ShoppingCart,
   PlusCircle, FileText, Layers, Sparkles, LayoutDashboard
 } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../utils';
+import { formatPersianNumber } from '../utils';
 import { useDashboardStatsQuery, useDashboardBIStatsQuery } from '../hooks/queries';
-import { useAppCurrency } from '../hooks/useAppCurrency';
+import { useRialDisplay } from '../hooks/useAppCurrency';
 import { ErrorStateView } from '../components/common/ErrorStateView';
 
 export default function InventoryStatusPage() {
   const navigate = useNavigate();
-  const appCurrency = useAppCurrency();
+  const rial = useRialDisplay();
   const { 
     data: stats, 
     isLoading: isStatsLoading, 
@@ -166,8 +166,8 @@ export default function InventoryStatusPage() {
                   ارزش کل موجودی انبار
                 </p>
                 <h3 className="text-xl font-black text-blue-600 mt-2 font-mono tracking-tight">
-                  {biStats ? formatPersianPrice(biStats.totalValuation) : '۰'}
-                  <span className="text-xs font-sans text-slate-500 font-normal mr-1">{formatCurrencyLabel(appCurrency)}</span>
+                  {biStats ? rial.number(biStats.totalValuation) : '۰'}
+                  <span className="text-xs font-sans text-slate-500 font-normal mr-1">{rial.label}</span>
                 </h3>
               </div>
               <div className="mt-4 pt-3 border-t flex justify-between items-center text-xs text-slate-400">

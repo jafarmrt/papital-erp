@@ -1,28 +1,34 @@
 import { useState } from 'react';
 import { Edit3, GitBranch, X } from 'lucide-react';
-import { cn, formatPersianCode, formatPersianDate } from '../../../utils';
+import { cn, formatPersianCode, formatPersianDate, formatPersianNumber } from '../../../utils';
 import { WorkflowStepperWidget } from '../../workflow/WorkflowStepperWidget';
 import type { InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
+import { openProformasPageCount } from '../../../lib/invoices/openProformas';
 
 /**
  * صفحه صدور فاکتور: جدول «پیش فاکتورهای باز» و پنجره گردش‌کار پیش‌فاکتور — منتقل‌شده بدون تغییر از CreateInvoicePage.
  */
 interface OpenProformasPanelProps {
   proformas: InvoiceListDocument[];
+  /** v9.0.301 (TD-792): شمار همه پیش‌فاکتورهای فروش باز و صفحه جاری فهرست */
+  total: number;
+  page: number;
+  onPageChange: (page: number) => void;
   editingDocId: number | null;
   onPrint: (proforma: InvoiceListDocument) => void;
   onEdit: (proforma: InvoiceListDocument) => void;
   onWorkflowStateChange: () => void;
 }
 
-export function OpenProformasPanel({ proformas, editingDocId, onPrint, onEdit, onWorkflowStateChange }: OpenProformasPanelProps) {
+export function OpenProformasPanel({ proformas, total, page, onPageChange, editingDocId, onPrint, onEdit, onWorkflowStateChange }: OpenProformasPanelProps) {
   const [workflowModalDoc, setWorkflowModalDoc] = useState<InvoiceListDocument | null>(null);
+  const pageCount = openProformasPageCount(total);
 
   return (
     <>
       {proformas.length > 0 && (
         <div className="bg-white border rounded-xl shadow-sm flex flex-col p-6 mt-8">
-          <h3 className="font-bold flex items-center gap-2 mb-4">⏳ پیش فاکتورهای باز ({proformas.length})</h3>
+          <h3 className="font-bold flex items-center gap-2 mb-4">⏳ پیش فاکتورهای باز ({formatPersianNumber(total)})</h3>
           <div className="border rounded-xl flex overflow-hidden">
             <table className="w-full text-sm text-right">
               <thead className="bg-slate-50 text-slate-500 border-b">
@@ -60,6 +66,13 @@ export function OpenProformasPanel({ proformas, editingDocId, onPrint, onEdit, o
               </tbody>
             </table>
           </div>
+          {pageCount > 1 && (
+            <div className="flex items-center justify-center gap-3 mt-3 text-xs">
+              <button type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} className="px-3 py-1.5 border rounded-lg disabled:opacity-40">قبلی</button>
+              <span>صفحه {formatPersianNumber(page)} از {formatPersianNumber(pageCount)}</span>
+              <button type="button" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)} className="px-3 py-1.5 border rounded-lg disabled:opacity-40">بعدی</button>
+            </div>
+          )}
         </div>
       )}
 

@@ -261,7 +261,7 @@ export function Sidebar({
         <button
           onClick={onToggleCollapse}
           className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
-          title={isCollapsed ? "باز کردن منوی کناری" : "جمع کردن منوی کناری"}
+          title={isCollapsed ? "باز کردن فهرست کناری" : "جمع کردن فهرست کناری"}
         >
           {isCollapsed ? <PanelRightOpen size={18} /> : <PanelRightClose size={18} />}
         </button>
@@ -278,7 +278,7 @@ export function Sidebar({
           />
           
           <div className="flex items-center justify-between px-1 pb-1">
-            <span className="text-[10px] text-slate-500 font-medium">پیمایش منوها</span>
+            <span className="text-[10px] text-slate-500 font-medium">پیمایش فهرست‌ها</span>
             <button
               type="button"
               onClick={handleCollapseAll}
@@ -486,10 +486,10 @@ export function Sidebar({
         <button 
           onClick={onOpenProfile} 
           className={cn("flex items-center gap-2 text-slate-300 hover:text-white transition-colors rounded-lg hover:bg-slate-900 cursor-pointer", isCollapsed ? "p-2 justify-center" : "px-2 py-1.5")}
-          title="پروفایل و تنظیمات شخصی"
+          title="نمایه و تنظیمات شخصی"
         >
           <Settings size={16} className="text-amber-400 shrink-0" />
-          {!isCollapsed && <span className="truncate">پروفایل و تنظیمات</span>}
+          {!isCollapsed && <span className="truncate">نمایه و تنظیمات</span>}
         </button>
         <button 
           onClick={onLogout} 

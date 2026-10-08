@@ -62,6 +62,6 @@ export const baseRelations = {
   // v8.0.34 (TD-286): پیوند سند حسابداری به تخصیص مواد BOM پروژه
   projectBomAllocationsId: schemaRef('projectBomAllocations.id'),
 
-  // Procurement (v9.0.272، TD-691: پیوند سفارش خرید تدارکات به درخواست خرید)
+  // Procurement (v9.0.320، TD-691: پیوند سفارش خرید تدارکات به درخواست خرید)
   purchaseRequisitionsId: schemaRef('purchaseRequisitions.id'),
 } as const;

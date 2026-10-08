@@ -247,6 +247,10 @@ export const errorHandler = (err: any, req: any, res: any, next: any) => {
   if (!isProduction) {
     if (normalized.stack) responsePayload.stack = normalized.stack;
     if (normalized.details) responsePayload.details = normalized.details;
+  } else if (normalized.details && normalized.statusCode < 500) {
+    // v9.0.312 (TD-594، B01-14): جزئیات خطای ۴xx (مثل فهرست کالاهای «تحویل بیش از برنامه») در تولید هم فرستاده می‌شود؛
+    // فقط جزئیات خطای ۵xx پنهان می‌ماند
+    responsePayload.details = normalized.details;
   }
 
   res.status(normalized.statusCode).json(responsePayload);

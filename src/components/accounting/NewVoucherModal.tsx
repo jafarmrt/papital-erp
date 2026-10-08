@@ -189,7 +189,7 @@ export function NewVoucherModal({
 
   const removeRow = (index: number) => {
     if (items.length <= 2) {
-      toast.error('سند حسابداری حداقل باید شامل دو آرتیکل (ردیف) باشد');
+      toast.error('سند حسابداری دست‌کم دو ردیف لازم دارد');
       return;
     }
     setItems(prev => prev.filter((_, i) => i !== index));
@@ -441,10 +441,10 @@ export function NewVoucherModal({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-slate-900 dark:text-white text-base">
-                  {editingVoucher ? `ویرایش سند حسابداری شماره ${formatPersianNumber(editingVoucher.voucherNumber)}` : 'فرم ثبت سریع سند حسابداری دوطرفه (دوبل)'}
+                  {editingVoucher ? `ویرایش سند حسابداری شماره ${formatPersianNumber(editingVoucher.voucherNumber)}` : 'فرم ثبت سریع سند حسابداری'}
                 </h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
-                  ورود سریع کیبورد محور
+                  ورود سریع با صفحه‌کلید
                 </span>
                 {draftStatusText && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 animate-pulse">
@@ -453,7 +453,7 @@ export function NewVoucherModal({
                 )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                ثبت آنی آرتیکل‌ها با کلیدهای میانبر، جستجوی کد معین و تراز خودکار لحظه‌ای
+                ثبت آنی ردیف‌ها با کلیدهای میانبر، جست‌وجوی کد معین و تراز خودکار لحظه‌ای
               </p>
             </div>
           </div>
@@ -462,7 +462,7 @@ export function NewVoucherModal({
             <button
               type="button"
               onClick={() => setShowShortcutsHelp(!showShortcutsHelp)}
-              title="راهنمای کلیدهای میانبر کیبورد"
+              title="راهنمای کلیدهای میانبر صفحه‌کلید"
               className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition border ${
                 showShortcutsHelp 
                   ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700' 
@@ -526,7 +526,7 @@ export function NewVoucherModal({
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 pt-1 font-mono text-[11px]">
               <div className="bg-white/80 dark:bg-slate-800/80 p-1.5 rounded-lg border border-amber-200 dark:border-amber-800">
                 <span className="font-bold text-indigo-600 dark:text-indigo-400">Ctrl + S</span>
-                <span className="block text-[10px] text-slate-600 dark:text-slate-300 font-sans">ثبت قطعی سند</span>
+                <span className="block text-[10px] text-slate-600 dark:text-slate-300 font-sans">ذخیره پیش‌نویس سند</span>
               </div>
               <div className="bg-white/80 dark:bg-slate-800/80 p-1.5 rounded-lg border border-amber-200 dark:border-amber-800">
                 <span className="font-bold text-amber-600 dark:text-amber-400">Alt + B</span>
@@ -651,7 +651,7 @@ export function NewVoucherModal({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  آرتیکل‌ها و ردیف‌های سند ({items.length} سطر)
+                  ردیف‌های سند ({items.length} سطر)
                 </h4>
                 {!isBalanced && (
                   <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
@@ -764,7 +764,7 @@ export function NewVoucherModal({
           {/* Footer Controls */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
             <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
-              <span>راهنما: برای ثبت سریع از <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[10px] text-slate-800 dark:text-slate-200">Ctrl + S</kbd> و برای تراز خودکار از <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[10px] text-slate-800 dark:text-slate-200">Alt + B</kbd> استفاده کنید.</span>
+              <span>راهنما: برای ذخیره سریع از <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[10px] text-slate-800 dark:text-slate-200">Ctrl + S</kbd> و برای تراز خودکار از <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[10px] text-slate-800 dark:text-slate-200">Alt + B</kbd> استفاده کنید.</span>
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
@@ -783,10 +783,10 @@ export function NewVoucherModal({
                 <Save className="w-4 h-4" />
                 <span>
                   {isSaving 
-                    ? 'در حال ثبت...' 
+                    ? 'در حال ذخیره...' 
                     : isPermanentVoucher 
                       ? 'سند دائم (غیرقابل ویرایش)' 
-                      : (editingVoucher ? 'به‌روزرسانی سند' : 'ثبت قطعی سند (Ctrl+S)')
+                      : (editingVoucher ? 'به‌روزرسانی سند' : 'ذخیره پیش‌نویس سند (Ctrl+S)')
                   }
                 </span>
               </button>

@@ -133,7 +133,9 @@ export function useAccounting() {
 
   // Voucher Operations
   const handleSaveVoucher = async (data: VoucherPayload) => {
-    await voucherMutations.saveVoucher.mutateAsync({ editingId: editingVoucher ? editingVoucher.id : null, data });
+    // v9.0.295 (TD-555): ویرایش نسخه‌ای را می‌فرستد که فرم از آن باز شد؛ تغییر هم‌زمان دیگری ۴۰۹ OCC_CONFLICT می‌گیرد
+    const payload = editingVoucher ? { ...data, version: editingVoucher.version } : data;
+    await voucherMutations.saveVoucher.mutateAsync({ editingId: editingVoucher ? editingVoucher.id : null, data: payload });
   };
 
   const handleDeleteVoucher = async (id: number) => {

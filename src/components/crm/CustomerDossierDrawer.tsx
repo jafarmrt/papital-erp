@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Building2, Users, Briefcase, Plus, PhoneCall, FileText, X, Edit2, TrendingUp, Award, ExternalLink, BookOpen, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react';
 import { Customer, CRMLead, CRMActivity } from '../../types';
 import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, formatPersianDate, formatPersianPhone } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { isRialCurrency } from '../../lib/rialDisplay';
 import { STAGES } from '../../hooks/useCRMData';
 import { fetchJson } from '../../api';
 import { serverPayableOf, payableDecimalsOf } from '../../lib/invoices/documentPayable';
@@ -34,8 +35,7 @@ export function CustomerDossierDrawer({
   onOpenActivityModal,
   onEditCustomer
 }: CustomerDossierDrawerProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
   const [activeTab, setActiveTab] = useState<'overview' | 'leads' | 'activities' | 'documents' | 'financials' | 'contacts'>('overview');
   const [documents, setDocuments] = useState<any[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
@@ -112,6 +112,10 @@ export function CustomerDossierDrawer({
 
   // v8.0.16 (TD-260): ارز مبالغ کارت حساب از خود گزارش (در نمای همه ارزها ریال)، نه ارز تعریف‌شده مشتری
   const ledgerCurrency = financialReport?.currency || (customer as any)?.currency || 'IRR';
+  // v9.0.275 (TD-667): مبالغ ریالی کارت حساب در واحد نمایش (ریال یا تومان)، ارز خارجی با همان ارز
+  const ledgerIsRial = isRialCurrency(ledgerCurrency);
+  const ledgerLbl = ledgerIsRial ? rial.label : formatCurrencyLabel(ledgerCurrency);
+  const ledgerNumber = (value: number) => (ledgerIsRial ? rial.number(value) : formatPersianPrice(value));
   const rawBalance = financialReport?.finalBalance || 0;
   const netBalance = Math.abs(rawBalance);
   const balanceType = financialReport 
@@ -208,7 +212,7 @@ export function CustomerDossierDrawer({
               <span className={`text-base font-black font-mono ${
                 balanceType === 'debit' ? 'text-rose-700' : balanceType === 'credit' ? 'text-emerald-700' : 'text-slate-800'
               }`}>
-                {formatPersianPrice(netBalance)} {formatCurrencyLabel(ledgerCurrency)}
+                {ledgerNumber(netBalance)} {ledgerLbl}
               </span>
               <span className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
                 balanceType === 'debit'
@@ -331,7 +335,7 @@ export function CustomerDossierDrawer({
                           <h4 className="font-black text-sm text-slate-900 mt-1">{lead.title}</h4>
                         </div>
                         <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
-                          {formatPersianPrice(lead.estimatedValue || 0)} {formatCurrencyLabel(lead.currency)}
+                          {rial.money(lead.estimatedValue || 0, lead.currency)}
                         </span>
                       </div>
 
@@ -461,7 +465,7 @@ export function CustomerDossierDrawer({
                           <span className={`px-2 py-0.5 rounded-md text-[10px] ${salesDocumentKindLabel(doc) === 'پیش‌فاکتور' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'}`}>{salesDocumentKindLabel(doc)}</span>
                         </td>
                         <td className="p-2.5 font-mono">{formatPersianDate(doc.date)}</td>
-                        <td className="p-2.5 font-bold font-mono text-emerald-800">{formatPersianPrice(serverPayableOf(doc), undefined, payableDecimalsOf(doc))} {formatCurrencyLabel(doc.currency)}</td>
+                        <td className="p-2.5 font-bold font-mono text-emerald-800">{isRialCurrency(doc.currency) ? rial.amount(serverPayableOf(doc)) : `${formatPersianPrice(serverPayableOf(doc), undefined, payableDecimalsOf(doc))} ${formatCurrencyLabel(doc.currency)}`}</td>
                         <td className="p-2.5">
                           <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded text-[10px]">{documentStatusLabelOf(doc.status)}</span>
                         </td>
@@ -503,8 +507,8 @@ export function CustomerDossierDrawer({
                     <span className="text-[10px] font-bold text-slate-500 block mb-1">مجموع گردش بدهکار (خرید/فاکتورها)</span>
                     <div className="flex items-center gap-1 text-rose-700 font-mono font-black text-sm">
                       <ArrowUpRight size={14} />
-                      <span>{formatPersianPrice(totalDebit)}</span>
-                      <span className="text-[10px] font-normal">{formatCurrencyLabel(ledgerCurrency)}</span>
+                      <span>{ledgerNumber(totalDebit)}</span>
+                      <span className="text-[10px] font-normal">{ledgerLbl}</span>
                     </div>
                   </div>
 
@@ -512,8 +516,8 @@ export function CustomerDossierDrawer({
                     <span className="text-[10px] font-bold text-slate-500 block mb-1">مجموع گردش بستانکار (دریافتی‌ها/واریز)</span>
                     <div className="flex items-center gap-1 text-emerald-700 font-mono font-black text-sm">
                       <ArrowDownLeft size={14} />
-                      <span>{formatPersianPrice(totalCredit)}</span>
-                      <span className="text-[10px] font-normal">{formatCurrencyLabel(ledgerCurrency)}</span>
+                      <span>{ledgerNumber(totalCredit)}</span>
+                      <span className="text-[10px] font-normal">{ledgerLbl}</span>
                     </div>
                   </div>
 
@@ -533,7 +537,7 @@ export function CustomerDossierDrawer({
                           ? 'text-emerald-700'
                           : 'text-slate-800'
                       }>
-                        {formatPersianPrice(netBalance)} {formatCurrencyLabel(ledgerCurrency)}
+                        {ledgerNumber(netBalance)} {ledgerLbl}
                       </span>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
                         balanceType === 'debit'
@@ -561,9 +565,9 @@ export function CustomerDossierDrawer({
                           <th className="p-2.5">شماره سند</th>
                           <th className="p-2.5">تاریخ سند</th>
                           <th className="p-2.5">شرح آرتیکل حسابداری</th>
-                          <th className="p-2.5 text-center">{`بدهکار (${curLbl})`}</th>
-                          <th className="p-2.5 text-center">{`بستانکار (${curLbl})`}</th>
-                          <th className="p-2.5 text-center">مانده پس از ردیف</th>
+                          <th className="p-2.5 text-center">{`بدهکار (${ledgerLbl})`}</th>
+                          <th className="p-2.5 text-center">{`بستانکار (${ledgerLbl})`}</th>
+                          <th className="p-2.5 text-center">{`مانده پس از ردیف (${ledgerLbl})`}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
@@ -587,13 +591,13 @@ export function CustomerDossierDrawer({
                                 {entry.description || '-'}
                               </td>
                               <td className="p-2.5 text-center font-mono text-rose-600">
-                                {entry.debit > 0 ? formatPersianPrice(entry.debit) : '-'}
+                                {entry.debit > 0 ? ledgerNumber(entry.debit) : '-'}
                               </td>
                               <td className="p-2.5 text-center font-mono text-emerald-600">
-                                {entry.credit > 0 ? formatPersianPrice(entry.credit) : '-'}
+                                {entry.credit > 0 ? ledgerNumber(entry.credit) : '-'}
                               </td>
                               <td className="p-2.5 text-center font-mono text-slate-900 font-black">
-                                {formatPersianPrice(Math.abs(entry.runningBalance || 0))}
+                                {ledgerNumber(Math.abs(entry.runningBalance || 0))}
                                 <span className="text-[10px] text-slate-400 font-normal mr-1">
                                   {entry.runningBalance > 0 ? '(بد)' : entry.runningBalance < 0 ? '(بس)' : '(تس)'}
                                 </span>

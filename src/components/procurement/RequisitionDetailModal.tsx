@@ -544,7 +544,7 @@ export function RequisitionDetailModal({
                 </div>
               )}
 
-              {/* v9.0.274 (TD-694): consolidated into another requisition; closed, no action */}
+              {/* v9.0.322 (TD-694): consolidated into another requisition; closed, no action */}
               {isConsolidated && (
                 <div className="w-full p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-900 font-bold flex items-center gap-2">
                   <Layers className="w-4 h-4 text-violet-600 shrink-0" />

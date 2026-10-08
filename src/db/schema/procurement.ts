@@ -23,7 +23,7 @@ export const purchaseRequisitions = pgTable('purchase_requisitions', {
   notes: text('notes').default(''),
   totalEstimatedAmount: moneyNumeric('total_estimated_amount', { precision: 18, scale: 2 }).default(sql`0`),
   items: jsonb('items').notNull().default([]),
-  /** v9.0.274 (TD-694, migration 0077): the requisition this one was consolidated into (status 'consolidated') */
+  /** v9.0.322 (TD-694, migration 0079): the requisition this one was consolidated into (status 'consolidated') */
   consolidatedIntoId: integer('consolidated_into_id').references((): AnyPgColumn => purchaseRequisitions.id),
   isDeleted: integer('is_deleted').default(0),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),

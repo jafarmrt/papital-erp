@@ -175,7 +175,7 @@ export class FactoryResetService {
       await wipe('document_ref_counters', documentRefCounters);
       await wipe('item_code_counters', itemCodeCounters);
 
-      // 4.5. Purchase Requisitions (AFTER documents: documents.procurement_requisition_id references them, v9.0.272 / TD-691;
+      // 4.5. Purchase Requisitions (AFTER documents: documents.procurement_requisition_id references them, v9.0.320 / TD-691;
       //      BEFORE workflowInstances, productionProjects and users)
       await wipe('purchase_requisitions', purchaseRequisitions);
 

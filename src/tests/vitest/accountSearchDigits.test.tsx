@@ -14,7 +14,7 @@ afterEach(() => cleanup());
 
 function search(text: string) {
   render(<AccountSearchSelect accounts={accounts as never} value="" onChange={() => {}} />);
-  const input = screen.getByPlaceholderText('انتخاب یا جستجوی کد/عنوان حساب...');
+  const input = screen.getByPlaceholderText('انتخاب یا جست‌وجوی کد/عنوان حساب...');
   fireEvent.focus(input);
   fireEvent.change(input, { target: { value: text } });
 }

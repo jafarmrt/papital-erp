@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { RotateCcw, AlertTriangle, ArrowRightLeft, Calendar, FileText, CheckCircle2, Sparkles } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, getTodayIsoDate } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber, getTodayIsoDate } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { Modal } from '../common/Modal';
 import type { JournalVoucher } from '../../types';
 import { JalaliDateInput } from '../common/JalaliDateInput';
@@ -28,7 +28,7 @@ export function VoucherReversalModal({
   voucher,
   onConfirm,
 }: VoucherReversalModalProps) {
-  const appCurrency = useAppCurrency();
+  const rial = useRialDisplay();
   const [date, setDate] = useState(() => getTodayIsoDate());
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,7 +99,7 @@ export function VoucherReversalModal({
                 مبلغ کل مورد برگشت
               </label>
               <div className="w-full px-3 py-2 text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono font-bold text-slate-800 dark:text-slate-200">
-                {formatPersianPrice(voucher.totalDebit, voucher.currency || appCurrency)}
+                {rial.money(voucher.totalDebit, voucher.currency)}
               </div>
             </div>
           </div>
@@ -180,14 +180,14 @@ export function VoucherReversalModal({
                       <td className="py-2 px-2.5 text-left font-mono text-slate-600 dark:text-slate-300">
                         {item.debit > 0 ? (
                           <span className="font-bold text-amber-600 dark:text-amber-400">
-                            {formatPersianPrice(item.debit)} (بستانکار)
+                            {rial.money(item.debit, item.currency || voucher.currency)} (بستانکار)
                           </span>
                         ) : '-'}
                       </td>
                       <td className="py-2 px-2.5 text-left font-mono text-slate-600 dark:text-slate-300">
                         {item.credit > 0 ? (
                           <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                            {formatPersianPrice(item.credit)} (بدهکار)
+                            {rial.money(item.credit, item.currency || voucher.currency)} (بدهکار)
                           </span>
                         ) : '-'}
                       </td>

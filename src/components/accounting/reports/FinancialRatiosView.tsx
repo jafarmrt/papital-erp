@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type React from 'react';
 import { Activity, Coins, TrendingUp, ShieldCheck, CheckCircle2, AlertTriangle, RefreshCw, BarChart2, Wallet, ArrowUpRight, ArrowDownRight, type LucideIcon } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber } from '../../../utils';
+import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../../utils';
+import { TREASURY_CURRENCIES } from '../../../lib/treasury/treasuryCurrency';
 import type { FinancialRatiosReport } from '../../../types';
 import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../../common/PillBadge';
 import { AsOfDateField, asOfCaption } from './ReportDateFields';
@@ -55,36 +56,36 @@ function buildRatioSections(r: FinancialRatiosReport | null): RatioSectionSpec[]
     : NO_VALUE);
   return [
     {
-      title: '۱. نسبت‌های نقدینگی (Liquidity Ratios)', icon: Wallet, iconClassName: 'text-indigo-600', gridClassName: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4',
+      title: '۱. نسبت‌های نقدینگی', icon: Wallet, iconClassName: 'text-indigo-600', gridClassName: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4',
       cards: [
-        { label: 'نسبت جاری (Current)', value: num(r?.currentRatio), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'دارایی جاری ÷ بدهی جاری (معیار: > ۱.۵)', statusKey: 'liquidity' },
-        { label: 'نسبت آنی / سریع (Quick)', value: num(r?.quickRatio), valueClassName: `${BIG} ${INDIGO}`, hint: '(دارایی جاری - کالا) ÷ بدهی جاری (معیار: > ۱.۰)' },
-        { label: 'نسبت نقدی (Cash Ratio)', value: num(r?.cashRatio), valueClassName: `${BIG} ${EMERALD}`, hint: 'موجودی نقد و بانک ÷ بدهی جاری' },
-        { label: 'سرمایه در گردش خالص (NWC)', value: price(r?.netWorkingCapital), valueClassName: `text-xl font-bold font-mono ${NEUTRAL}`, hint: 'دارایی جاری منهای بدهی جاری' },
+        { label: 'نسبت جاری', value: num(r?.currentRatio), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'دارایی جاری ÷ بدهی جاری (معیار: > ۱.۵)', statusKey: 'liquidity' },
+        { label: 'نسبت آنی (سریع)', value: num(r?.quickRatio), valueClassName: `${BIG} ${INDIGO}`, hint: '(دارایی جاری - کالا) ÷ بدهی جاری (معیار: > ۱.۰)' },
+        { label: 'نسبت نقدی', value: num(r?.cashRatio), valueClassName: `${BIG} ${EMERALD}`, hint: 'موجودی نقد و بانک ÷ بدهی جاری' },
+        { label: 'سرمایه در گردش خالص', value: price(r?.netWorkingCapital), valueClassName: `text-xl font-bold font-mono ${NEUTRAL}`, hint: 'دارایی جاری منهای بدهی جاری' },
       ],
     },
     {
-      title: '۲. نسبت‌های اهرمی و ساختار سرمایه (Solvency Ratios)', icon: ShieldCheck, iconClassName: 'text-amber-600', gridClassName: 'grid-cols-1 sm:grid-cols-3',
+      title: '۲. نسبت‌های اهرمی و ساختار سرمایه', icon: ShieldCheck, iconClassName: 'text-amber-600', gridClassName: 'grid-cols-1 sm:grid-cols-3',
       cards: [
-        { label: 'نسبت بدهی (Debt Ratio)', value: pct(r?.debtRatio), valueClassName: `${BIG} text-amber-600 dark:text-amber-400`, hint: 'کل بدهی‌ها به کل دارایی‌ها (معیار: < ۵۰٪)', statusKey: 'solvency' },
-        { label: 'نسبت بدهی به حقوق صاحبان سهام (D/E)', value: pct(r?.debtToEquityRatio), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'میزان اتکا به استقراض نسبت به سرمایه سهامداران' },
-        { label: 'نسبت مالکانه (Equity Ratio)', value: pct(r?.equityRatio), valueClassName: `${BIG} ${INDIGO}`, hint: 'سهم حقوق مالکانه از کل دارایی‌های شرکت' },
+        { label: 'نسبت بدهی', value: pct(r?.debtRatio), valueClassName: `${BIG} text-amber-600 dark:text-amber-400`, hint: 'کل بدهی‌ها به کل دارایی‌ها (معیار: < ۵۰٪)', statusKey: 'solvency' },
+        { label: 'نسبت بدهی به حقوق صاحبان سهام', value: pct(r?.debtToEquityRatio), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'میزان اتکا به استقراض نسبت به سرمایه سهامداران' },
+        { label: 'نسبت مالکانه', value: pct(r?.equityRatio), valueClassName: `${BIG} ${INDIGO}`, hint: 'سهم حقوق مالکانه از کل دارایی‌های شرکت' },
       ],
     },
     {
-      title: '۳. نسبت‌های سودآوری و بازدهی (Profitability Ratios)', icon: TrendingUp, iconClassName: 'text-emerald-600', gridClassName: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5',
+      title: '۳. نسبت‌های سودآوری و بازدهی', icon: TrendingUp, iconClassName: 'text-emerald-600', gridClassName: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5',
       cards: [
         { label: 'حاشیه سود ناخالص', value: pct(r?.grossMargin), valueClassName: `${BIG} ${EMERALD}`, hint: 'سود ناخالص ÷ کل درآمد فروش' },
         { label: 'حاشیه سود عملیاتی', value: pct(r?.operatingMargin), valueClassName: `${BIG} ${INDIGO}`, hint: 'سود عملیاتی ÷ درآمد فروش' },
         { label: 'حاشیه سود خالص', value: pct(r?.netProfitMargin), valueClassName: `${BIG} ${EMERALD}`, hint: 'سود خالص ÷ درآمد فروش', statusKey: 'profitability' },
-        { label: 'بازده دارایی‌ها (ROA)', value: pct(r?.returnOnAssets), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'سود خالص ÷ کل دارایی‌ها' },
-        { label: 'بازده حقوق صاحبان سهام (ROE)', value: pct(r?.returnOnEquity), valueClassName: `${BIG} ${INDIGO}`, hint: 'سود خالص ÷ کل حقوق مالکانه' },
+        { label: 'بازده دارایی‌ها', value: pct(r?.returnOnAssets), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'سود خالص ÷ کل دارایی‌ها' },
+        { label: 'بازده حقوق صاحبان سهام', value: pct(r?.returnOnEquity), valueClassName: `${BIG} ${INDIGO}`, hint: 'سود خالص ÷ کل حقوق مالکانه' },
       ],
     },
     {
-      title: '۴. نسبت‌های کارایی و گردش دارایی‌ها (Activity Ratios)', icon: BarChart2, iconClassName: 'text-blue-600', gridClassName: 'grid-cols-1 sm:grid-cols-3',
+      title: '۴. نسبت‌های کارایی و گردش دارایی‌ها', icon: BarChart2, iconClassName: 'text-blue-600', gridClassName: 'grid-cols-1 sm:grid-cols-3',
       cards: [
-        { label: 'گردش کل دارایی‌ها (Asset Turnover)', value: withSuffix(r?.assetTurnover, 'مرتبه'), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'درآمد فروش ÷ میانگین کل دارایی‌ها', statusKey: 'efficiency' },
+        { label: 'گردش کل دارایی‌ها', value: withSuffix(r?.assetTurnover, 'مرتبه'), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'درآمد فروش ÷ میانگین کل دارایی‌ها', statusKey: 'efficiency' },
         { label: 'گردش حساب‌های دریافتنی', value: withSuffix(r?.receivablesTurnover, 'مرتبه'), valueClassName: `${BIG} text-blue-600 dark:text-blue-400`, hint: 'درآمد فروش ÷ مطالبات و دریافتنی‌ها' },
         { label: 'دوره گردش کالا و انبار', value: withSuffix(r?.inventoryTurnoverDays, 'روز'), valueClassName: `${BIG} ${INDIGO}`, hint: 'مدت زمان متوسط تبدیل کالا به فروش' },
       ],
@@ -153,7 +154,7 @@ export function FinancialRatiosView({
             <Activity className="w-6 h-6" />
           </div>
           <div>
-            <h4 className="font-bold text-slate-900 dark:text-white text-base">داشبورد شاخص‌های سلامت مالی و نسبت‌ها (Financial Ratios)</h4>
+            <h4 className="font-bold text-slate-900 dark:text-white text-base">پیشخوان شاخص‌های سلامت مالی و نسبت‌ها</h4>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               تحلیل نقدینگی، اهرم مالی، سودآوری، کارایی و وضعیت تفکیکی ارزها
             </p>
@@ -166,7 +167,7 @@ export function FinancialRatiosView({
           {/* Currency Selector */}
           <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700/60 p-1 rounded-xl">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 px-2">ارز مبنا:</span>
-            {['all', 'IRR', 'USD', 'EUR', 'AED', 'GBP'].map((cur) => (
+            {['all', ...TREASURY_CURRENCIES].map((cur) => (
               <button
                 key={cur}
                 onClick={() => handleCurrencyChange(cur)}
@@ -176,7 +177,7 @@ export function FinancialRatiosView({
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
                 }`}
               >
-                {cur === 'all' ? 'همه ارزها' : cur}
+                {cur === 'all' ? 'همه ارزها' : formatCurrencyLabel(cur)}
               </button>
             ))}
           </div>
@@ -259,10 +260,10 @@ export function FinancialRatiosView({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="px-2.5 py-1 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-mono font-black text-xs rounded-lg">
-                      {cur.currency}
+                      {formatCurrencyLabel(cur.currency)}
                     </span>
                     <span className="text-xs text-slate-500 font-semibold">
-                      {cur.vouchersCount} سند
+                      {formatPersianNumber(cur.vouchersCount)} سند
                     </span>
                   </div>
                   <div className={`text-xs font-bold flex items-center gap-1 ${
@@ -276,15 +277,15 @@ export function FinancialRatiosView({
                 <div className="space-y-1.5 pt-1 border-t border-slate-200/50 dark:border-slate-700/40 text-xs">
                   <div className="flex justify-between text-slate-600 dark:text-slate-300">
                     <span>مجموع بدهکار:</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPersianPrice(cur.totalDebit)} {cur.currency}</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPersianPrice(cur.totalDebit, cur.currency)}</span>
                   </div>
                   <div className="flex justify-between text-slate-600 dark:text-slate-300">
                     <span>مجموع بستانکار:</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPersianPrice(cur.totalCredit)} {cur.currency}</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPersianPrice(cur.totalCredit, cur.currency)}</span>
                   </div>
                   <div className="flex justify-between text-slate-900 dark:text-white font-bold pt-1 border-t border-dashed border-slate-200 dark:border-slate-700">
                     <span>مانده خالص:</span>
-                    <span className="font-mono">{formatPersianPrice(Math.abs(cur.netBalance))} {cur.currency}</span>
+                    <span className="font-mono">{formatPersianPrice(Math.abs(cur.netBalance), cur.currency)}</span>
                   </div>
                 </div>
               </div>

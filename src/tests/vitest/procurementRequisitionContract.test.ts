@@ -4,7 +4,7 @@ import { canConsolidateRequisition, canDeleteRequisition, canEditRequisition, RE
 import { persianIssueMessage } from '../../lib/validationMessages';
 
 /**
- * v9.0.266 (TD-688، B10-01): قرارداد ثبت درخواست خرید همان بدنه‌ای است که سه فرم رابط می‌فرستند. پیش‌تر Zod مقدار را از
+ * v9.0.314 (TD-688، B10-01): قرارداد ثبت درخواست خرید همان بدنه‌ای است که سه فرم رابط می‌فرستند. پیش‌تر Zod مقدار را از
  * `quantity` و اولویت را از `low|medium|high|emergency` می‌خواست: هر سه فرم ۴۰۰ می‌گرفتند و بدنه پذیرفته‌شده مقدار صفر
  * ذخیره می‌کرد.
  */
@@ -66,7 +66,7 @@ describe('requisition delete button (TD-695)', () => {
   it('offers delete only for a requisition with no order, whatever its status', () => {
     expect(canDeleteRequisition({ status: 'pending', items: [row] })).toBe(true);
     expect(canDeleteRequisition({ status: 'rejected', items: [row] })).toBe(true);
-    // a partly ordered requisition (under_review before v9.0.267) and a cancelled one with a live order
+    // a partly ordered requisition (under_review before v9.0.315) and a cancelled one with a live order
     expect(canDeleteRequisition({ status: 'under_review', items: [{ ...row, orderedQty: 2, linkedDocumentIds: [11] }] })).toBe(false);
     expect(canDeleteRequisition({ status: 'rejected', items: [{ ...row, orderedQty: 5, linkedDocumentIds: [12] }] })).toBe(false);
     expect(canDeleteRequisition({ status: 'ordered', items: [row] })).toBe(false);

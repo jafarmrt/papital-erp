@@ -5,8 +5,8 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { X, FileText, Landmark, AlertCircle } from 'lucide-react';
 import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
-import { formatPersianNumber, formatPersianPrice, extractDateString, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber, extractDateString, formatCurrencyLabel, formatPersianPrice } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 
 interface PieceworkPayrollModalProps {
@@ -37,6 +37,9 @@ interface PieceworkPayrollModalProps {
   isSaving?: boolean;
 }
 
+/** v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده منفی نمی‌شوند (سرور هم رد می‌کند) */
+const nonNegativeInput = (raw: string): number => Math.max(0, Number(raw) || 0);
+
 export function PieceworkPayrollModal({
   isOpen,
   onClose,
@@ -61,8 +64,9 @@ export function PieceworkPayrollModal({
   setAdvanceDeduction,
   isSaving = false
 }: PieceworkPayrollModalProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  // ورودی مبلغ همیشه به ریال است (مبلغ ذخیره‌شده)
+  const inputCurLbl = formatCurrencyLabel('IRR');
 
   const [advanceBalance, setAdvanceBalance] = useState<{ outstandingAdvance: number; totalAdvances: number; totalDeducted: number } | null>(null);
   // v8.0.29 (TD-282، تصمیم مالک محصول): کسر مساعده بیش از مانده مساعده پذیرفته نمی‌شود (سرور هم رد می‌کند)
@@ -160,7 +164,7 @@ export function PieceworkPayrollModal({
               <div className="flex items-center justify-between text-xs font-bold">
                 <span className="text-slate-700">مجموع کارکرد:</span>
                 <span className="font-mono text-blue-700">
-                  {formatPersianPrice(payrollPreviewLogs.reduce((sum, l) => sum + (l.totalAmount || 0), 0), appCurrency)}
+                  {rial.amount(payrollPreviewLogs.reduce((sum, l) => sum + (l.totalAmount || 0), 0))}
                 </span>
               </div>
               {fixedRemainingHint && (
@@ -177,11 +181,12 @@ export function PieceworkPayrollModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">{`پاداش / اضافه کار (${curLbl})`}</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">{`پاداش / اضافه کار (${inputCurLbl})`}</label>
               <input
                 type="number"
+                min="0"
                 value={payrollBonuses}
-                onChange={(e) => setPayrollBonuses(Number(e.target.value))}
+                onChange={(e) => setPayrollBonuses(nonNegativeInput(e.target.value))}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
               />
             </div>
@@ -190,8 +195,9 @@ export function PieceworkPayrollModal({
               <label className="block text-xs font-bold text-slate-700 mb-1">سایر کسورات (بیمه/مالیات...)</label>
               <input
                 type="number"
+                min="0"
                 value={payrollDeductions}
-                onChange={(e) => setPayrollDeductions(Number(e.target.value))}
+                onChange={(e) => setPayrollDeductions(nonNegativeInput(e.target.value))}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
               />
             </div>
@@ -207,7 +213,7 @@ export function PieceworkPayrollModal({
                   onClick={() => setAdvanceDeduction?.(advanceBalance.outstandingAdvance)}
                   className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
                 >
-                  اعمال کل مانده مساعده ({formatPersianPrice(advanceBalance.outstandingAdvance)})
+                  اعمال کل مانده مساعده ({formatPersianPrice(advanceBalance.outstandingAdvance, 'IRR')})
                 </button>
               )}
             </div>
@@ -215,7 +221,7 @@ export function PieceworkPayrollModal({
               type="number"
               min="0"
               value={advanceDeduction || ''}
-              onChange={(e) => setAdvanceDeduction?.(Number(e.target.value) || 0)}
+              onChange={(e) => setAdvanceDeduction?.(nonNegativeInput(e.target.value))}
               placeholder="مبلغی که از مساعده قبلی پرسنل کسر می‌شود"
               className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
             />
@@ -225,7 +231,7 @@ export function PieceworkPayrollModal({
                   <Landmark size={13} className="text-indigo-600" />
                   مانده مساعده تسویه‌نشده پرسنل در سیستم:
                 </span>
-                <span className="font-mono font-black">{formatPersianPrice(advanceBalance.outstandingAdvance)}</span>
+                <span className="font-mono font-black">{rial.amount(advanceBalance.outstandingAdvance)}</span>
               </div>
             )}
             {advanceExceedsBalance && (
