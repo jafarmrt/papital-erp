@@ -3,7 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { AccountMappingService } from './accountMapping.service.js';
 
 /**
- * v10.0.1 (TD-964): the ledger side of the stock vs ledger health check. Stock is valued from the items (quantity ×
+ * v10.0.3 (TD-964): the ledger side of the stock vs ledger health check. Stock is valued from the items (quantity ×
  * weighted average cost), so the ledger side is the general account 14 without the work in progress account (mapping
  * `workInProgressCode`, default 1402): a remittance to production and a material allocation move value from stock into
  * work in progress, which no warehouse holds (the same rule as invariant I3). Approved and permanent vouchers make the

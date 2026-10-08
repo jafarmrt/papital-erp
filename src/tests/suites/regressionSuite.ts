@@ -10723,6 +10723,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runItemPerformanceTests(shouldRun));
   const { runItemExcelExportTests } = await import('../regression/itemExcelExportTests.js');
   results.push(...await runItemExcelExportTests(shouldRun));
+  // Series 10 D-01 (v10.0.1+): type and number cells of the item Excel import
+  const { runItemExcelCellTests } = await import('../regression/itemExcelCellTests.js');
+  results.push(...await runItemExcelCellTests(shouldRun));
 
   // Package 13 PR A (v9.0.231+): access and privacy of daily work logs
   const { runDailyLogAccessTests } = await import('../regression/dailyLogAccessTests.js');
