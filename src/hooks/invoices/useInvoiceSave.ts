@@ -2,7 +2,7 @@ import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-q
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
-import { invalidateDomains, invalidatePreset } from '../../lib/queryInvalidation';
+import { invalidatePreset } from '../../lib/queryInvalidation';
 import type { InvoiceDocumentDetails, InvoiceSavePayload, InvoiceSaveResponse } from '../../lib/invoices/invoiceForm';
 
 /**
@@ -26,17 +26,12 @@ interface InvoiceSaveDeps {
   discardDraft: () => Promise<void>;
 }
 
-/** کلیدهایی که ثبت یا ویرایش فاکتور/پیش‌فاکتور باطل می‌کند */
+/**
+ * کلیدهایی که ثبت یا ویرایش فاکتور/پیش‌فاکتور باطل می‌کند. v9.0.341 (TD-796): همان `documentChange` ثبت سند انبار و
+ * ابطال سند (به‌علاوه پرونده فروش، پروژه و طرف حساب)
+ */
 export async function invalidateAfterInvoiceSave(queryClient: QueryClient): Promise<void> {
-  await Promise.all([
-    // documents: فهرست فاکتورها و اسناد، پیش‌فاکتورهای باز، شماره بعدی سند و جزئیات سند
-    // transactions: کاردکس — accounting: سند حسابداری دوبل فاکتور نهایی
-    invalidateDomains(queryClient, ['documents', 'transactions', 'accounting']),
-    // items، dashboard، transfers، pendingMaterials (همان preset نهایی‌سازی و ابطال سند)
-    invalidatePreset(queryClient, 'inventoryChange'),
-    // رزرو موجودی پیش‌فاکتورها در فرم رسید/حواله انبار
-    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inventory.all }),
-  ]);
+  await invalidatePreset(queryClient, 'documentChange');
 }
 
 function saveErrorMessage(err: unknown): string {
@@ -60,7 +55,7 @@ async function loadPrintCopy(
     return await loadDocument(docId);
   } catch (err: unknown) {
     console.error(`Failed to load the print copy of document ${docId}:`, err);
-    toast.error('سند ثبت شد، اما نسخه چاپی آن بارگذاری نشد. آن را از «لیست اسناد و فاکتورها» چاپ کنید.', { duration: 6000 });
+    toast.error('سند ثبت شد، اما نسخه چاپی آن بارگذاری نشد. آن را از «فهرست اسناد و فاکتورها» چاپ کنید.', { duration: 6000 });
     return null;
   }
 }

@@ -19,17 +19,38 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.343 — Receive Items Needs an Order
+### v9.0.350 — Receive Items Needs an Order
 - **Fix (TD-699, B10-12, decision t4):** `receive_items` of a purchase requisition refuses a catalog row that was never ordered (409 REQUISITION_ROWS_NOT_ORDERED, «ابتدا سفارش خرید با تأمین‌کننده و قیمت صادر کنید») instead of a final receipt from the generic procurement supplier at the estimate, which posted donated-goods income (5204) with no supplier debt.
 
-### v9.0.342 — Requisition Consolidation Closes Its Sources
+### v9.0.349 — Requisition Consolidation Closes Its Sources
 - **Fix (TD-694, B10-07, decision t3):** `POST /procurement/consolidate` locks its sources in id order in one transaction, refuses a missing id (404 REQUISITION_NOT_FOUND) or a source that is approved, ordered, received, rejected or consolidated (409 REQUISITION_NOT_CONSOLIDATABLE), creates the consolidated requisition and marks each source `consolidated` with `consolidated_into_id` (migration 0083) and a terminated workflow; a consolidated requisition takes no action (409 REQUISITION_CONSOLIDATED).
 
-### v9.0.341 — Procurement Double Submission
+### v9.0.348 — Procurement Double Submission
 - **Fix (TD-693, B10-06):** `POST /procurement/requisitions`, `/requisitions/:id/convert-to-orders`, `/consolidate` and `/orders/:id/deliver` use `idempotency({ scope: 'procurement' })`, so a repeated submission with the browser's Idempotency-Key replays the first response instead of creating a second order or requisition.
 
-### v9.0.340 — Procurement Orders Linked to Requisitions
+### v9.0.347 — Procurement Orders Linked to Requisitions
 - **Fix (TD-691 / TD-698, B10-04 / B10-11):** a procurement order is a document with `documents.procurement_requisition_id` (migration 0082, backfilled only from an unambiguous requisition tag; the rest is listed by the health check `procurement_order_link_unresolved`); the order list, the desk summary and delivery read only linked documents (else 422 PROCUREMENT_ORDER_NOT_LINKED), and the list filters, counts and pages in SQL.
+
+### v9.0.346 — Persian Digits and Wording in Invoices and Stock Documents
+- **Wording:** invoice and stock document messages show numbers in Persian digits and currency names instead of codes, the receipt summary no longer claims stock waits for a finance approval, and the screens drop transliterations and English words (TD-803).
+
+### v9.0.345 — Settlement Account in the Invoice Currency
+- **Settlement:** the invoice settlement form lists and pre-selects only bank accounts and cash funds in the invoice's currency and names each account's currency (TD-802).
+
+### v9.0.344 — Document Type Names and the Sales Proforma Filter
+- **Documents list:** the details and workflow windows name every document type in Persian, the «sales proforma» filter also lists proformas saved as invoices, and production receipts can be filtered (TD-800).
+
+### v9.0.343 — Invoice List Cards Show Payable Totals
+- **List cards:** the sales, purchase and proforma cards above the documents list now add up the payable amount (net + VAT + service charge), the same figure each row shows (TD-798).
+
+### v9.0.342 — Document List Load Errors
+- **Document list errors:** a failed load of the invoices and documents list (no permission, server error) now shows the server's message with a retry button instead of «no document found» (TD-797).
+
+### v9.0.341 — Fresh Lists After Document Changes
+- **Cache refresh:** saving a stock document and voiding a document now refresh Kardex, vouchers, items, the dashboard, reservations, projects, sales leads and parties, and a settlement refreshes bank accounts and treasury (TD-796).
+
+### v9.0.340 — Document List Buttons by Permission
+- **Document list buttons:** settlement, notes edit, workflow and void are shown only to users holding the permission of the action they call, and a refused notes edit shows the server's reason (TD-795).
 
 ### v9.0.339 — Paged Document List
 - **Document list:** a list request without paging now answers one page of 50 documents with its total instead of the whole table, the full list comes only with `export=true`, and the stock count history and transfer tabs page through it (TD-787).

@@ -1,5 +1,6 @@
 import type { DocItemRow } from '../DocItemsTable';
 import { reservationMatchesListItem, type GlobalReservation, type StockDocProject } from '../../../lib/documents/stockReservations';
+import { formatPersianNumber } from '../../../utils';
 
 interface ProjectReservedItemsCardProps {
   project: StockDocProject;
@@ -23,7 +24,7 @@ export function ProjectReservedItemsCard({ project, reservedItems, docItems, onA
               اقلام رزرو شده انبار برای پروژه «{project.project_code || project.title}»
             </span>
             <span className="mr-2 text-[11px] font-mono text-purple-800 font-bold bg-purple-200/80 px-2 py-0.5 rounded-full border border-purple-300">
-              {reservedItems.length} قلم کالا فریز شده
+              {formatPersianNumber(reservedItems.length)} قلم کالای رزروشده
             </span>
           </div>
         </div>
@@ -34,7 +35,7 @@ export function ProjectReservedItemsCard({ project, reservedItems, docItems, onA
             onClick={onAddAll}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer self-start sm:self-auto"
           >
-            <span>➕ بارگذاری تمام اقلام فریز شده در حواله</span>
+            <span>➕ بارگذاری تمام اقلام رزروشده در حواله</span>
           </button>
         )}
       </div>
@@ -53,7 +54,7 @@ export function ProjectReservedItemsCard({ project, reservedItems, docItems, onA
                   </div>
                   <div className="text-[11px] text-slate-500 flex items-center gap-1 font-mono">
                     <span>رزرو:</span>
-                    <span className="text-emerald-700 font-bold">{rItem.reservedQty} {rItem.unit}</span>
+                    <span className="text-emerald-700 font-bold">{formatPersianNumber(rItem.reservedQty)} {rItem.unit}</span>
                   </div>
                 </div>
 
@@ -75,7 +76,7 @@ export function ProjectReservedItemsCard({ project, reservedItems, docItems, onA
         </div>
       ) : (
         <p className="text-xs text-purple-800">
-          برای این پروژه هیچ کالای فریز شده‌ای در انبار وجود ندارد یا اقلام رزروی پیش‌تر به طور کامل خارج شده‌اند. خروج کالا با اتکا به موجودی آزاد عمومی انبار انجام می‌شود.
+          برای این پروژه هیچ کالای رزروشده‌ای در انبار وجود ندارد یا اقلام رزروی پیش‌تر به طور کامل خارج شده‌اند. خروج کالا با اتکا به موجودی آزاد عمومی انبار انجام می‌شود.
         </p>
       )}
     </div>

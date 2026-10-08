@@ -6,6 +6,7 @@
  * (مثلاً ۰٫۱ + ۰٫۲ دلار دقیقاً ۰٫۳ می‌شود)؛ مقدار نامعتبر صفر حساب می‌شود.
  */
 import { fin } from '../financialDecimal';
+import { documentTypeTitle } from '../documents/documentTypeTitles';
 
 /** یک ردیف کالا در سند (پاسخ GET /documents/:id یا لیست) */
 export interface InvoiceListLine {
@@ -114,6 +115,8 @@ export interface InvoiceListSummary {
 /**
  * کارت‌های خلاصه بالای صفحه — V9 Phase 3: گروه‌بندی مبالغ بر اساس ارز هر سند
  * (رفع جمع‌شدن ارزهای ناهمگون در یک عدد واحد با برچسب ثابت «ریال»)
+ * v9.0.343 (TD-798، یافته B08-29): جمع هر کارت مبلغ قابل پرداخت (`documentPayableOf`: خالص + مالیات + هزینه خدمات)
+ * است، همان رقمی که ردیف هر سند نشان می‌دهد؛ پیش‌تر فقط خالص اقلام جمع می‌شد.
  */
 export function computeInvoiceListSummary(docs: InvoiceListDocument[]): InvoiceListSummary {
   const salesTotals: Record<string, number> = {};
@@ -129,7 +132,7 @@ export function computeInvoiceListSummary(docs: InvoiceListDocument[]): InvoiceL
   };
 
   for (const d of docs) {
-    const docAmount = documentAmountOf(d);
+    const docAmount = documentPayableOf(d);
     const cur = String(d.currency || 'IRR');
 
     if (d.status === 'proforma' || d.type === 'proforma') {
@@ -156,6 +159,18 @@ export function computeInvoiceListSummary(docs: InvoiceListDocument[]): InvoiceL
     proformaCount,
     otherCount
   };
+}
+
+/**
+ * v9.0.344 (TD-800، یافته B08-31): صافی «پیش‌فاکتور فروش». پیش‌فاکتور فروش دو شکل دارد: نوع `proforma` (کاربر بی مجوز
+ * `documents.finalize`) و نوع `invoice` با وضعیت `proforma`؛ پس این صافی وضعیت `proforma` را روی هر دو نوع فروش می‌خواهد
+ * (مثل فهرست پیش‌فاکتورهای باز فرم فاکتور)، نه فقط `type=proforma`. پیش‌فاکتور خرید (رسید با وضعیت `proforma`) در آن نیست.
+ */
+export const SALES_PROFORMA_FILTER = 'proforma';
+
+export function invoiceListTypeFilter(filterType: string, filterStatus: string): { type: string; types?: string; status: string } {
+  if (filterType === SALES_PROFORMA_FILTER) return { type: 'all', types: 'invoice,proforma', status: 'proforma' };
+  return { type: filterType, status: filterStatus };
 }
 
 export type InvoiceTypeBadgeKind = 'stock' | 'receipt' | 'invoice' | 'proforma' | 'remittance' | 'return' | 'waste';
@@ -229,14 +244,26 @@ export function detailsTitleOf(type: string | undefined): string {
   return type === 'receipt' ? 'رسید ورود و فاکتور خرید' : type === 'invoice' ? 'صورتحساب فروش کالا' : 'جزئیات سند انبارداری';
 }
 
+/**
+ * v9.0.344 (TD-800، یافته B08-31): نام فارسی نوع سند در پنجره جزئیات و گردش کار؛ پیش‌تر هر نوعی جز فاکتور و رسید
+ * (حواله، پیش‌فاکتور، برگشت، ضایعات، رسید تولید) با نام لاتین خامش نمایش داده می‌شد. نوع‌های جدول همان برچسب
+ * `INVOICE_TYPE_BADGES` را دارند و بقیه نام `DOCUMENT_TYPE_TITLES`.
+ */
+function documentTypeLabelOf(type: string): string {
+  const badge = (INVOICE_TYPE_BADGES as Record<string, { label: string } | undefined>)[type];
+  return type !== 'stock' && badge ? badge.label : documentTypeTitle(type);
+}
+
 /** «نوع سند» در کارت اطلاعات مودال جزئیات */
 export function detailsTypeLabelOf(type: string | undefined): string | undefined {
-  return type === 'receipt' ? 'رسید ورود (خرید کالا)' : type === 'invoice' ? 'فاکتور فروش' : type;
+  if (!type) return type;
+  return type === 'receipt' ? 'رسید ورود (خرید کالا)' : documentTypeLabelOf(type);
 }
 
 /** «نوع سند» در مودال گردش‌کار */
 export function workflowTypeLabelOf(type: string | undefined): string | undefined {
-  return type === 'invoice' ? 'فاکتور فروش' : type === 'receipt' ? 'رسید ورود' : type;
+  if (!type) return type;
+  return type === 'receipt' ? 'رسید ورود' : documentTypeLabelOf(type);
 }
 
 /** برچسب و رنگ‌های وضعیت تسویه در کارت تسویه مودال جزئیات */

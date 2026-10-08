@@ -39,7 +39,7 @@ export async function checkRequisitionActionFollowsWorkflow(): Promise<string[]>
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const id = await requisition(item.id, 10);
   await ProcurementService.executeWorkflowAction(id, 'approve_request', ADMIN);
-  // v9.0.343 (TD-699، ت۴): «دریافت کالا» فقط ردیف سفارش‌شده را می‌پذیرد
+  // v9.0.350 (TD-699، ت۴): «دریافت کالا» فقط ردیف سفارش‌شده را می‌پذیرد
   await ProcurementService.convertToPurchaseOrders({
     requisitionId: id,
     orderGroups: [{ supplierName: 'تامین‌کننده آزمون گردش‌کار', targetWarehouse: '', status: 'draft', items: [{ itemId: item.id, quantity: 10, unitPrice: 1000 }] }],

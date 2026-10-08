@@ -47,10 +47,10 @@ export function canEditRequisition(req: { status?: string | null; items?: Requis
   return EDITABLE_REQUISITION_STATUSES.has(String(req.status)) && !requisitionHasOrders(req);
 }
 
-/** v9.0.342 (TD-694، ت۳): وضعیت درخواستی که در درخواست دیگری تجمیع شده است؛ بسته است و هیچ اقدامی نمی‌پذیرد */
+/** v9.0.349 (TD-694، ت۳): وضعیت درخواستی که در درخواست دیگری تجمیع شده است؛ بسته است و هیچ اقدامی نمی‌پذیرد */
 export const CONSOLIDATED_REQUISITION_STATUS = 'consolidated';
 
-/** v9.0.342 (TD-694، B10-07، ت۳ الف): وضعیت‌های پیش از تأیید که درخواست در آن‌ها تجمیع می‌شود */
+/** v9.0.349 (TD-694، B10-07، ت۳ الف): وضعیت‌های پیش از تأیید که درخواست در آن‌ها تجمیع می‌شود */
 export const CONSOLIDATABLE_REQUISITION_STATUSES: ReadonlySet<string> = new Set(['pending', 'under_review', 'manager_approval']);
 
 /** درخواست فقط پیش از تأیید و وقتی هیچ ردیفش سفارش نشده تجمیع می‌شود؛ کادر انتخاب میز تدارکات همین را می‌خواند */
@@ -59,7 +59,7 @@ export function canConsolidateRequisition(req: { status?: string | null; items?:
 }
 
 /** v9.0.318 (TD-695، B10-08): درخواستی که سفارش یا دریافت شده حذف نمی‌شود؛ دکمه حذف میز تدارکات همین را می‌خواند.
- *  v9.0.342 (TD-694): درخواستِ تجمیع‌شده هم حذف نمی‌شود تا پیوندش به درخواست تجمیعی بماند. */
+ *  v9.0.349 (TD-694): درخواستِ تجمیع‌شده هم حذف نمی‌شود تا پیوندش به درخواست تجمیعی بماند. */
 const UNDELETABLE_REQUISITION_STATUSES: ReadonlySet<string> = new Set(['ordered', 'received', 'completed', CONSOLIDATED_REQUISITION_STATUS]);
 
 export function canDeleteRequisition(req: { status?: string | null; items?: RequisitionRowLike[] | null }): boolean {

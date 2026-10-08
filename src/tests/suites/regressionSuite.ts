@@ -9346,7 +9346,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         { itemId: item.id, quantity: 1, unitPrice: 0.2 },
       ]);
       docIds.push(receipt.document.id);
-      // v9.0.340 (TD-691): سفارش تدارکات سندی است که ستون پیوندش به درخواست خرید پر است
+      // v9.0.347 (TD-691): سفارش تدارکات سندی است که ستون پیوندش به درخواست خرید پر است
       const { purchaseRequisitions } = await import('../../db/schema.js');
       const [requisition] = await orm.insert(purchaseRequisitions)
         .values({ code: `TD239-${suffix}`, title: 'ERP-TEST-MARKER درخواست TD-239', items: [] }).returning({ id: purchaseRequisitions.id });
@@ -10390,7 +10390,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const [doc] = await orm.insert(documents).values({ type: 'remittance', date: '2026-01-10 00:00:00', refNumber: 'TD245-REF', projectId: project.id }).returning({ id: documents.id });
       await orm.insert(projectReservationReleases).values({ documentId: doc.id, projectId: project.id, itemId: item.id, qtyField: 'reservedQty', quantity: 1, reservationRow: {} });
       await orm.insert(refFiscalYearCorrections).values({ documentId: doc.id, docType: 'remittance', refNumber: 'TD245-REF', documentDate: '2026-01-10 00:00:00', oldFiscalYear: 1405, newFiscalYear: 1404, status: 'corrected' });
-      // v9.0.340 (TD-691): a procurement order points to its purchase requisition (fk_documents_procurement_requisition)
+      // v9.0.347 (TD-691): a procurement order points to its purchase requisition (fk_documents_procurement_requisition)
       const [requisition] = await orm.insert(purchaseRequisitions).values({ code: 'TD245-PR', title: 'درخواست TD-245', items: [] }).returning({ id: purchaseRequisitions.id });
       await orm.insert(documents).values({ type: 'receipt', date: '2026-01-11 00:00:00', refNumber: 'TD245-PO', procurementRequisitionId: requisition.id });
       const voucherNumber = await VoucherService.getNextVoucherNumber();
@@ -10734,7 +10734,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runWooNamesakeCustomerTests(shouldRun));
   const { runWooConnectionTestTests } = await import('../regression/wooConnectionTestTests.js');
   results.push(...await runWooConnectionTestTests(shouldRun));
-  // Package 10 PR B (v9.0.340+): procurement order link, duplicate submissions, consolidation, receiving
+  // Package 10 PR B (v9.0.347+): procurement order link, duplicate submissions, consolidation, receiving
   const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');
   results.push(...await runProcurementOrderTests(shouldRun));
 

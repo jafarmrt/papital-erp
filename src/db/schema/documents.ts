@@ -20,7 +20,7 @@ export const documents = pgTable('documents', {
   projectId: integer('project_id').references(baseRelations.productionProjectsId),
   // v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش؛ بهای ورود کالای برگشتی از گردش خروج همان فاکتور خوانده می‌شود
   returnOfDocumentId: integer('return_of_document_id').references((): AnyPgColumn => documents.id),
-  // v9.0.340 (TD-691، تصمیم ت۲ بسته ۱۰): درخواست خریدی که «تبدیل به سفارش» این سفارش را برایش صادر کرده است؛ فهرست،
+  // v9.0.347 (TD-691، تصمیم ت۲ بسته ۱۰): درخواست خریدی که «تبدیل به سفارش» این سفارش را برایش صادر کرده است؛ فهرست،
   // خلاصه و تحویل سفارش‌های تدارکات فقط سندهای دارای این پیوند را می‌بینند (مهاجرت 0082)
   procurementRequisitionId: integer('procurement_requisition_id').references(baseRelations.purchaseRequisitionsId),
   user: text('user'),

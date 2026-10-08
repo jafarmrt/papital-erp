@@ -22,7 +22,7 @@ const draft = {
   docItems: [{ item: { id: 3, type: 'product', code: 'P-3', name: 'گردنبند نقره', unit: 'عدد', current_stock: 5 }, quantity: 2, unitPrice: 1000, discount: 0 }],
 };
 const NETWORK_FAILURE = 'Network request failed';
-const printCopyFailed = 'سند ثبت شد، اما نسخه چاپی آن بارگذاری نشد. آن را از «لیست اسناد و فاکتورها» چاپ کنید.';
+const printCopyFailed = 'سند ثبت شد، اما نسخه چاپی آن بارگذاری نشد. آن را از «فهرست اسناد و فاکتورها» چاپ کنید.';
 
 function server() {
   fetchJson.mockImplementation((url: string, init?: Init) => {
