@@ -10718,6 +10718,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runWebhookRuleSeedTests(shouldRun));
   const { runWebhookSecretEditTests } = await import('../regression/webhookSecretEditTests.js');
   results.push(...await runWebhookSecretEditTests(shouldRun));
+  const { runWebhookKeyTimeoutTests } = await import('../regression/webhookKeyTimeoutTests.js');
+  results.push(...await runWebhookKeyTimeoutTests(shouldRun));
 
   return results;
 }

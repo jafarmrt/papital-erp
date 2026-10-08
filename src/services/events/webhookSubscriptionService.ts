@@ -5,6 +5,8 @@ import { logger } from '../../middleware/logger.js';
 import { BaseDomainEvent } from './domainEvents.js';
 import { assertSafeExternalUrl } from '../../lib/ssrfGuard.js';
 import { isEnteredSecret } from '../../lib/secrets/maskedSecret.js';
+import { resolveWebhookTimeoutMs, WEBHOOK_TIMEOUT_DEFAULT_MS } from '../../lib/events/webhookTimeout.js';
+import { ValidationError } from '../../errors/customErrors.js';
 import crypto from 'crypto';
 
 export interface CreateWebhookSubDTO {
@@ -16,6 +18,15 @@ export interface CreateWebhookSubDTO {
   isActive?: number;
   retryLimit?: number;
   timeoutMs?: number;
+  /** legacy body field, read only when `timeoutMs` is missing */
+  timeoutSeconds?: number;
+}
+
+/** v9.0.338 (TD-720): the entered timeout (`timeoutMs`, else legacy `timeoutSeconds`), refused outside 1-30 s */
+function webhookTimeoutOf(data: Partial<CreateWebhookSubDTO>): number | undefined {
+  const timeout = resolveWebhookTimeoutMs(data);
+  if (!timeout.ok) throw new ValidationError(timeout.message, undefined, 'WEBHOOK_TIMEOUT_INVALID');
+  return timeout.timeoutMs;
 }
 
 export class WebhookSubscriptionService {
@@ -124,7 +135,8 @@ export class WebhookSubscriptionService {
     // Validate target URL against SSRF (SEC-010)
     await assertSafeExternalUrl(targetUrl, { allowLocalEcho: true });
 
-    const secretKey = data.secretKey?.trim() || this.generateSecretKey();
+    const timeoutMs = webhookTimeoutOf(data);
+    const secretKey = isEnteredSecret(data.secretKey) ? data.secretKey.trim() : this.generateSecretKey();
     const eventPatterns = data.eventPatterns && data.eventPatterns.length > 0 ? data.eventPatterns : ['*'];
 
     let validUserId: number | null = null;
@@ -149,7 +161,7 @@ export class WebhookSubscriptionService {
         customHeaders: data.customHeaders || {},
         isActive: data.isActive !== undefined ? data.isActive : 1,
         retryLimit: data.retryLimit || 3,
-        timeoutMs: data.timeoutMs || 5000,
+        timeoutMs: timeoutMs ?? WEBHOOK_TIMEOUT_DEFAULT_MS,
         totalDeliveries: 0,
         successfulDeliveries: 0,
         failedDeliveries: 0,
@@ -171,6 +183,7 @@ export class WebhookSubscriptionService {
       throw new Error(`اشتراک وب‌هوک با شناسه ${id} یافت نشد.`);
     }
 
+    const timeoutMs = webhookTimeoutOf(data);
     const updateFields: Partial<typeof webhookSubscriptions.$inferInsert> = {
       updatedAt: new Date().toISOString()
     };
@@ -188,7 +201,7 @@ export class WebhookSubscriptionService {
     if (data.customHeaders !== undefined) updateFields.customHeaders = data.customHeaders;
     if (data.isActive !== undefined) updateFields.isActive = data.isActive;
     if (data.retryLimit !== undefined) updateFields.retryLimit = data.retryLimit;
-    if (data.timeoutMs !== undefined) updateFields.timeoutMs = data.timeoutMs;
+    if (timeoutMs !== undefined) updateFields.timeoutMs = timeoutMs;
 
     const [updated] = await orm
       .update(webhookSubscriptions)

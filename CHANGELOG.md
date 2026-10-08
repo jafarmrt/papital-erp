@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.338 — Server-Made Webhook Key and Entered Timeout
+- **Webhook key and timeout (TD-720):** the webhook form made the signing key in the browser with Math.random (about 16 base-36 characters), so the server's CSPRNG key never ran, and the create route read only timeoutSeconds, so every entered timeout became 10 seconds; the server now makes the key and stores the entered timeout of 1 to 30 seconds.
+
 ### v9.0.337 — Webhook Edit Keeps the Signing Key
 - **Webhook edit and ping (TD-719):** the edit form took the masked signing key from the list and every save, even a rename, stored the mask in place of the real key, breaking every receiver's HMAC check; an empty or masked key now keeps the stored one and a saved webhook is pinged with its own stored key.
 

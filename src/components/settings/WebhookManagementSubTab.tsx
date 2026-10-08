@@ -4,6 +4,7 @@ import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key
 import { formatPersianDate, errorMessageOf } from '../../utils';
 import { fetchJson } from '../../api';
 import { copyToClipboard } from '../../utils/clipboard';
+import { WEBHOOK_TIMEOUT_DEFAULT_MS, WEBHOOK_TIMEOUT_MAX_MS, WEBHOOK_TIMEOUT_MIN_MS } from '../../lib/events/webhookTimeout';
 
 interface WebhookSubscription {
   id: number;
@@ -151,7 +152,8 @@ export function WebhookManagementSubTab() {
     setFormData({
       name: '',
       targetUrl: '',
-      secretKey: `whsec_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`,
+      // v9.0.338 (TD-720): the server makes the signing key (crypto.randomBytes); the browser never generates one
+      secretKey: '',
       eventPatterns: ['*'],
       customHeadersJson: '{\n  "X-Custom-Auth": "erp-token"\n}',
       isActive: 1,
@@ -658,24 +660,11 @@ export function WebhookManagementSubTab() {
                   <div className="relative">
                     <input
                       type="text"
-                      required={!editingSub}
-                      placeholder={editingSub ? 'کلید ذخیره‌شده بی‌تغییر می‌ماند؛ برای تغییر، کلید تازه وارد کنید' : undefined}
+                      placeholder={editingSub ? 'کلید ذخیره‌شده بی‌تغییر می‌ماند؛ برای تغییر، کلید تازه وارد کنید' : 'خالی بماند تا کارساز کلید امن بسازد'}
                       value={formData.secretKey}
                       onChange={e => setFormData({ ...formData, secretKey: e.target.value })}
                       className="w-full font-mono text-[11px] bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3.5 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500 dir-ltr text-left"
                     />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFormData({
-                          ...formData,
-                          secretKey: `whsec_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`
-                        })
-                      }
-                      className="absolute right-2 top-2 p-1 text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline"
-                    >
-                      تولید جدید
-                    </button>
                   </div>
                 </div>
               </div>
@@ -761,11 +750,11 @@ export function WebhookManagementSubTab() {
                   <label className="font-semibold text-slate-700 dark:text-slate-300">مهلت پاسخ (میلی‌ثانیه):</label>
                   <input
                     type="number"
-                    min="1000"
-                    max="30000"
+                    min={WEBHOOK_TIMEOUT_MIN_MS}
+                    max={WEBHOOK_TIMEOUT_MAX_MS}
                     step="500"
                     value={formData.timeoutMs}
-                    onChange={e => setFormData({ ...formData, timeoutMs: parseInt(e.target.value, 10) || 5000 })}
+                    onChange={e => setFormData({ ...formData, timeoutMs: parseInt(e.target.value, 10) || WEBHOOK_TIMEOUT_DEFAULT_MS })}
                     className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200"
                   />
                 </div>

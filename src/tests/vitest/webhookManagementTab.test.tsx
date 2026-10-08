@@ -1,6 +1,7 @@
 /**
  * Package 15 PR b (webhook management tab, `src/components/settings/WebhookManagementSubTab.tsx`).
  * TD-719 (B15-17): the edit form took the masked key from GET and every save sent it back; «test ping» signed with it.
+ * TD-720 (B15-18): the create form made the signing key with `Math.random` (so the server's CSPRNG key never ran).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -54,5 +55,24 @@ describe('TD-719 webhook edit and ping never use the masked key', () => {
     fireEvent.click(await screen.findByText('تست پینگ و امضا'));
     await waitFor(() => expect(writes.some(w => w.url === '/events/webhooks/ping')).toBe(true));
     expect(writes.find(w => w.url === '/events/webhooks/ping')?.body).toEqual({ subscriptionId: 7 });
+  });
+});
+
+describe('TD-720 the create form leaves the signing key to the server', () => {
+  it('a new webhook is sent without a key and with the entered timeout, and Math.random is never called', async () => {
+    const writes = mockServer();
+    const random = vi.spyOn(Math, 'random');
+    render(<WebhookManagementSubTab />);
+    fireEvent.click(await screen.findByText('تعریف وب‌هوک جدید'));
+    fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه آنلاین ووکامرس'), { target: { value: 'شریک تازه' } });
+    fireEvent.change(screen.getByPlaceholderText('https://your-domain.com/api/webhook/receiver'), { target: { value: 'https://new.example.com/hook' } });
+    fireEvent.change(screen.getByDisplayValue('5000'), { target: { value: '12000' } });
+    fireEvent.click(screen.getByText('ایجاد و فعال‌سازی درگاه وب‌هوک'));
+    await waitFor(() => expect(writes.some(w => w.method === 'POST' && w.url === '/events/webhooks')).toBe(true));
+    const post = writes.find(w => w.method === 'POST' && w.url === '/events/webhooks');
+    expect(post?.body).not.toHaveProperty('secretKey');
+    expect(post?.body.timeoutMs).toBe(12000);
+    expect(random).not.toHaveBeenCalled();
+    random.mockRestore();
   });
 });

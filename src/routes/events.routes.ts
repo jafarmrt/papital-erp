@@ -13,7 +13,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { z } from 'zod';
 import { errorMessageOf } from '../utils.js';
-import { NotFoundError } from '../errors/customErrors.js';
+import { AppError, NotFoundError } from '../errors/customErrors.js';
 import { isEnteredSecret } from '../lib/secrets/maskedSecret.js';
 
 const eventIdParamSchema = z.object({
@@ -719,7 +719,7 @@ router.get('/webhooks/:id', authorizePermission('events.view'), validate(paramsI
 
 router.post('/webhooks', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
-    const { name, targetUrl, eventPatterns, secretKey, customHeaders, retryLimit, timeoutSeconds } = req.body;
+    const { name, targetUrl, eventPatterns, secretKey, customHeaders, retryLimit, timeoutMs, timeoutSeconds } = req.body;
 
     if (!name || !targetUrl || !eventPatterns || !Array.isArray(eventPatterns)) {
       return res.status(400).json({
@@ -738,7 +738,9 @@ router.post('/webhooks', authorizePermission('events.manage'), asyncHandler(asyn
         secretKey: secretKey?.trim() || undefined,
         customHeaders: customHeaders || {},
         retryLimit: retryLimit || 3,
-        timeoutMs: timeoutSeconds ? timeoutSeconds * 1000 : 10000
+        // v9.0.338 (TD-720): the form's timeoutMs (legacy timeoutSeconds), checked by the service; it used to become 10 s
+        timeoutMs,
+        timeoutSeconds
       },
       req.user?.id
     );
@@ -758,6 +760,7 @@ router.post('/webhooks', authorizePermission('events.manage'), asyncHandler(asyn
       data: newSub
     });
   } catch (error) {
+    if (error instanceof AppError) throw error;
     const isClientError = errorMessageOf(error)?.includes('SSRF') || errorMessageOf(error)?.includes('Disallowed') || errorMessageOf(error)?.includes('Invalid URL');
     res.status(isClientError ? 400 : 500).json({
       success: false,
@@ -778,6 +781,7 @@ router.put('/webhooks/:id', authorizePermission('events.manage'), validate(param
       data: updated
     });
   } catch (error) {
+    if (error instanceof AppError) throw error;
     const isClientError = errorMessageOf(error)?.includes('SSRF') || errorMessageOf(error)?.includes('Disallowed') || errorMessageOf(error)?.includes('Invalid URL');
     res.status(isClientError ? 400 : 500).json({
       success: false,
