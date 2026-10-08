@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.294 — v9.0.294 — Invoice List Cards Show Payable Totals
+- **List cards:** the sales, purchase and proforma cards above the documents list now add up the payable amount (net + VAT + service charge), the same figure each row shows (TD-798).
+
 ### v9.0.293 — v9.0.293 — Document List Load Errors
 - **Document list errors:** a failed load of the invoices and documents list (no permission, server error) now shows the server's message with a retry button instead of «no document found» (TD-797).
 

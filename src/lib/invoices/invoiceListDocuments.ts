@@ -114,6 +114,8 @@ export interface InvoiceListSummary {
 /**
  * کارت‌های خلاصه بالای صفحه — V9 Phase 3: گروه‌بندی مبالغ بر اساس ارز هر سند
  * (رفع جمع‌شدن ارزهای ناهمگون در یک عدد واحد با برچسب ثابت «ریال»)
+ * v9.0.294 (TD-798، یافته B08-29): جمع هر کارت مبلغ قابل پرداخت (`documentPayableOf`: خالص + مالیات + هزینه خدمات)
+ * است، همان رقمی که ردیف هر سند نشان می‌دهد؛ پیش‌تر فقط خالص اقلام جمع می‌شد.
  */
 export function computeInvoiceListSummary(docs: InvoiceListDocument[]): InvoiceListSummary {
   const salesTotals: Record<string, number> = {};
@@ -129,7 +131,7 @@ export function computeInvoiceListSummary(docs: InvoiceListDocument[]): InvoiceL
   };
 
   for (const d of docs) {
-    const docAmount = documentAmountOf(d);
+    const docAmount = documentPayableOf(d);
     const cur = String(d.currency || 'IRR');
 
     if (d.status === 'proforma' || d.type === 'proforma') {
