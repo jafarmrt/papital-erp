@@ -8,6 +8,7 @@ import { DeadLetterQueueService } from '../services/events/deadLetterQueueServic
 import { EventActionEngineService } from '../services/events/eventActionEngineService.js';
 import { evaluateRuleDraft, testStoredRule } from '../services/events/ruleDraftEvaluation.js';
 import { simulateDomainEvent } from '../services/events/eventSimulation.js';
+import { retryFailedOutboxEvents } from '../services/events/outboxRetry.js';
 import { WebhookSubscriptionService } from '../services/events/webhookSubscriptionService.js';
 import { EventSourcingReplayService } from '../services/events/eventSourcingReplayService.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -174,11 +175,15 @@ router.post(['/outbox/process-now', '/outbox/process'], authorizePermission('eve
 
 router.post('/outbox/retry-failed', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
-    await OutboxService.retryAllFailedEvents();
+    // v9.0.387 (TD-716): the DLQ rows of the retried events are resolved in the same transaction
+    const result = await retryFailedOutboxEvents({ userId: req.user?.id });
 
     res.json({
       success: true,
-      message: 'تمام رویدادهای ناموفق برای تلاش مجدد نشانه‌گذاری شدند.'
+      ...result,
+      message: result.skippedBusy.length > 0
+        ? `${result.retried.toLocaleString('fa-IR')} رویداد ناموفق دوباره در صف قرار گرفت؛ ${result.skippedBusy.length.toLocaleString('fa-IR')} رویداد که هم‌اکنون از صف خطا بازپخش می‌شود کنار ماند.`
+        : `${result.retried.toLocaleString('fa-IR')} رویداد ناموفق دوباره در صف قرار گرفت.`
     });
   } catch (error) {
     throw error;
@@ -188,7 +193,8 @@ router.post('/outbox/retry-failed', authorizePermission('events.manage'), asyncH
 router.post('/outbox/:eventId/retry', authorizePermission('events.manage'), validate(eventIdParamSchema), asyncHandler(async (req, res) => {
   try {
     const { eventId } = req.params;
-    await OutboxService.retryFailedEvent(eventId);
+    // v9.0.387 (TD-716): only a failed event (else 409), and its DLQ row is resolved in the same transaction
+    await retryFailedOutboxEvents({ eventId, userId: req.user?.id });
 
     res.json({
       success: true,
@@ -524,7 +530,8 @@ router.put('/dlq/:id/payload', authorizePermission('events.manage'), validate(pa
     const { payload } = req.body;
     const userId = req.user?.id;
 
-    const updated = await DeadLetterQueueService.editPayload(id, payload, userId);
+    // v9.0.387 (TD-716): under the row lock, never for a replayed row, audited with the request
+    const updated = await DeadLetterQueueService.editPayload(id, payload, { userId, req });
 
     res.json({
       success: true,

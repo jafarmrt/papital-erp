@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.387 — Dead Letter Payload Edit and Outbox Retry Are Consistent
+- **Dead letter edit and outbox retry (TD-716):** editing the payload of a replayed dead-letter row rewrote it and its completed outbox row with no lock or audit, and retrying a failed outbox event left its dead-letter row quarantined; a replayed row is now never edited (409 DLQ_EVENT_REPLAYED), an open row's edit runs under its row lock with an audit row and spares a completed outbox row, and the retry resolves the event's idle dead-letter rows in the same transaction and refuses an event that is not failed.
+
 ### v9.0.386 — Event Timeline Shows the Entity Own Rows
 - **Event timeline (TD-711):** the timeline compared «document» with the publisher's «Document», its picker gave the document number instead of the id, and audit rows of any entity whose id or description contained the id came back, also to a role without the audit-log permission; each entity type now maps to its event aggregate types and audit entity names (`TIMELINE_AGGREGATE_SCOPES`), outbox, dead-letter and audit rows match the exact id, and audit rows go only to holders of `audit_logs.view`.
 

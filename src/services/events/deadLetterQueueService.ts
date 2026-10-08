@@ -6,7 +6,9 @@ import { domainEventBus } from './domainEventBus.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
-import { ConflictError, NotFoundError } from '../../errors/customErrors.js';
+import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { logActivity } from '../../lib/auditLogger.js';
+import type { Request } from 'express';
 import { lockIdleDeadLetterRows, RESOLVED_STATUS_LABELS, withDeadLetterRowLock } from './deadLetterRowLock.js';
 import { deadLetterDeliveryJobId, replayDeliveryDeadLetter, requeueDeliveryDeadLetters } from './deadLetterDelivery.js';
 
@@ -249,30 +251,56 @@ export class DeadLetterQueueService {
 
   /**
    * Edit and fix the payload of a quarantined DLQ event before replay.
+   *
+   * v9.0.387 (TD-716, B15-14): the payload of a DLQ row is edited under the row's advisory lock (no concurrent replay),
+   * never for a replayed row (its event already ran: 409 `DLQ_EVENT_REPLAYED`), only as a JSON object, and the outbox row of
+   * the event is synced only while it has not completed. The edit and its audit row (before / after) run in one
+   * transaction. Before, any row was edited without a lock or an audit row, and a completed outbox row was rewritten.
    */
-  static async editPayload(id: number, newPayload: unknown, userId?: number) {
-    const record = await this.getById(id);
-    if (!record) {
-      throw new Error(`رکورد با شناسه ${id} در صف DLQ یافت نشد.`);
+  static async editPayload(id: number, newPayload: unknown, actor: { userId?: number; req?: Request } = {}) {
+    if (!newPayload || typeof newPayload !== 'object' || Array.isArray(newPayload)) {
+      throw new ValidationError('داده رویداد باید یک شیء JSON باشد.', { id }, 'DLQ_PAYLOAD_INVALID');
     }
+    return withDeadLetterRowLock(id, () => orm.transaction(async (tx) => {
+      const [record] = await tx.select().from(deadLetterEvents).where(eq(deadLetterEvents.id, id)).for('update');
+      if (!record) {
+        throw new NotFoundError(`رکورد با شناسه ${id} در صف DLQ یافت نشد.`);
+      }
+      if (record.status === 'replayed') {
+        throw new ConflictError(`رویداد #${id} صف خطا پیش‌تر بازپخش شده و اجرا شده است؛ داده آن دیگر اصلاح نمی‌شود.`, { id }, 'DLQ_EVENT_REPLAYED');
+      }
 
-    const [updated] = await orm
-      .update(deadLetterEvents)
-      .set({
-        payload: newPayload,
-        resolvedBy: userId || null
-      })
-      .where(eq(deadLetterEvents.id, id))
-      .returning();
+      const [updated] = await tx
+        .update(deadLetterEvents)
+        .set({ payload: newPayload })
+        .where(eq(deadLetterEvents.id, id))
+        .returning();
 
-    // If corresponding Outbox event exists, sync payload as well
-    await orm
-      .update(outboxEvents)
-      .set({ payload: newPayload })
-      .where(eq(outboxEvents.eventId, record.originalEventId));
+      // the outbox row of the event follows only while it has not completed (a completed event's history never changes)
+      const [outboxRow] = await tx
+        .select({ id: outboxEvents.id, status: outboxEvents.status })
+        .from(outboxEvents)
+        .where(eq(outboxEvents.eventId, record.originalEventId))
+        .for('update');
+      const outboxSynced = !!outboxRow && outboxRow.status !== 'completed';
+      if (outboxSynced) {
+        await tx.update(outboxEvents).set({ payload: newPayload }).where(eq(outboxEvents.id, outboxRow.id));
+      }
 
-    logger.info(`[DLQ] Updated payload for event #${id} by user ${userId || 'system'}`);
-    return updated;
+      await logActivity({
+        tx,
+        req: actor.req,
+        userId: actor.userId,
+        action: 'UPDATE',
+        entity: 'صف خطاهای قرنطینه (DLQ)',
+        entityId: id,
+        description: `اصلاح داده رویداد ${record.eventType} در صف خطا #${id}`,
+        details: { before: { payload: record.payload }, after: { payload: newPayload }, status: record.status, outboxSynced },
+      });
+
+      logger.info(`[DLQ] Updated payload for event #${id} by user ${actor.userId || 'system'}`);
+      return updated;
+    }));
   }
 
   /**

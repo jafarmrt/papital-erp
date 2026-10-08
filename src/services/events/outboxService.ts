@@ -460,40 +460,6 @@ export class OutboxService {
   }
 
   /**
-   * Reset a failed event for immediate retry.
-   */
-  static async retryFailedEvent(eventId: string): Promise<boolean> {
-    await orm
-      .update(outboxEvents)
-      .set({
-        status: 'pending',
-        retryCount: 0,
-        nextRetryAt: null,
-        lastError: null
-      })
-      .where(eq(outboxEvents.eventId, eventId));
-
-    return true;
-  }
-
-  /**
-   * Reset all failed events for batch retry.
-   */
-  static async retryAllFailedEvents(): Promise<number> {
-    await orm
-      .update(outboxEvents)
-      .set({
-        status: 'pending',
-        retryCount: 0,
-        nextRetryAt: null,
-        lastError: null
-      })
-      .where(eq(outboxEvents.status, 'failed'));
-
-    return 1;
-  }
-
-  /**
    * پاکسازی/بایگانی رویدادهای پردازش‌شده قدیمی‌تر از تعداد روز مشخص (پیش‌فرض ۳۰ روز)
    */
   static async purgeProcessedEvents(olderThanDays: number = 30): Promise<number> {

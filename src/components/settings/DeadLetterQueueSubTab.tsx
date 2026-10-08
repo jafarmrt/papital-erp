@@ -534,13 +534,16 @@ export function DeadLetterQueueSubTab() {
                               </button>
                             )}
 
-                            <button
-                              onClick={() => openEditModal(item)}
-                              className="p-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-lg transition-all"
-                              title="اصلاح داده و بازپخش"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
+                            {/* v9.0.387 (TD-716): a replayed event already ran; its payload is never edited */}
+                            {item.status !== 'replayed' && (
+                              <button
+                                onClick={() => openEditModal(item)}
+                                className="p-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-lg transition-all"
+                                title="اصلاح داده و بازپخش"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
 
                             {item.status === 'quarantined' && (
                               <button
