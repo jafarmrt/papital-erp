@@ -6,7 +6,8 @@ import { domainEventBus } from '../services/events/domainEventBus.js';
 import { OutboxService } from '../services/events/outboxService.js';
 import { DeadLetterQueueService } from '../services/events/deadLetterQueueService.js';
 import { EventActionEngineService } from '../services/events/eventActionEngineService.js';
-import { evaluateRuleDraft } from '../services/events/ruleDraftEvaluation.js';
+import { evaluateRuleDraft, testStoredRule } from '../services/events/ruleDraftEvaluation.js';
+import { simulateDomainEvent } from '../services/events/eventSimulation.js';
 import { WebhookSubscriptionService } from '../services/events/webhookSubscriptionService.js';
 import { EventSourcingReplayService } from '../services/events/eventSourcingReplayService.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -109,30 +110,11 @@ router.get('/domain-events', authorizePermission('events.view'), asyncHandler(as
   }
 }));
 
+// v9.0.385 (TD-708, decision t5 a): the simulation publishes nothing; it only shows which rules and webhooks the event reaches
 router.post('/domain-events/simulate', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
-  try {
-    const { eventType, aggregateType, aggregateId, payload } = req.body;
-    const user = req.user;
-
-    const event = await domainEventBus.publishEvent(
-      eventType || 'SimulatedTestEvent',
-      aggregateType || 'System',
-      aggregateId || 'TEST_01',
-      payload || { message: 'رویداد تستی آزمایشی با موفقیت در سیستم منتشر شد.' },
-      {
-        userId: user?.id,
-        userName: user?.username || 'مدیر سیستم'
-      }
-    );
-
-    res.json({
-      success: true,
-      message: 'رویداد دامنه‌ای با موفقیت منتشر و ثبت گردید.',
-      event
-    });
-  } catch (error) {
-    throw error;
-  }
+  const { eventType, aggregateType, aggregateId, payload } = req.body ?? {};
+  const result = await simulateDomainEvent({ eventType, aggregateType, aggregateId, payload }, { id: req.user?.id, username: req.user?.username });
+  res.json({ success: true, ...result });
 }));
 
 // =========================================================================
@@ -378,21 +360,15 @@ router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermissi
   }
 }));
 
+// v9.0.385 (TD-708, decision t5 a): a rule test evaluates the stored rule and shows what its action would do; it never runs it
 router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const { customEvent } = req.body;
-
-    const testResult = await EventActionEngineService.testRule(id, customEvent);
-
-    res.json({
-      success: true,
-      ...testResult,
-      rule: actionRuleView(testResult.rule)
-    });
-  } catch (error) {
-    throw error;
-  }
+  const id = parseInt(req.params.id, 10);
+  const testResult = await testStoredRule(id, req.body?.customEvent);
+  res.json({
+    success: true,
+    ...testResult,
+    rule: actionRuleView(testResult.rule)
+  });
 }));
 
 // v9.0.377 (TD-712): the draft is really evaluated (invalid draft → 422 RULE_DRAFT_INVALID) and nothing is sent or written
@@ -642,7 +618,7 @@ router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], au
       aggregateType: aggregateType || (event?.aggregateType) || 'document',
       aggregateId: String(aggregateId || (event?.aggregateId) || '1'),
       payload: payload || (event?.payload) || {},
-      dryRun: dryRun !== false,
+      dryRun,
       userId: req.user?.id,
       userName: req.user?.username
     });

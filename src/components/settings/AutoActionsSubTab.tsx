@@ -13,6 +13,7 @@ import {
 } from '../../hooks/queries/useEventQueries';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { ruleActionTypeLabel } from '../../lib/events/ruleActionTypes';
+import { actionPreviewLines } from '../../lib/events/eventSimulationContract';
 import { eventTypeLabel, isSubscribableEventPattern } from '../../lib/events/eventTypeCatalog';
 import { actionLogStatusLabel } from '../../lib/events/actionLogContract';
 
@@ -73,18 +74,16 @@ export function AutoActionsSubTab() {
     }
   };
 
+  // v9.0.385 (TD-708, decision t5 a): the test evaluates the stored rule on a sample event and only shows what its action
+  // would do; nothing is sent or written, so nothing is invalidated
   const handleTestRule = async (rule: ActionRule) => {
     try {
-      const data = await fetchJson<{ success?: boolean; status?: string; durationMs?: number }>(`/events/action-rules/${rule.id}/test`, {
+      const data = await fetchJson<{ conditionMatches?: boolean; message?: string; preview?: Record<string, unknown> }>(`/events/action-rules/${rule.id}/test`, {
         method: 'POST',
         body: JSON.stringify({})
       });
-      if (data?.success) {
-        showNotification(`تست قانون اجرا شد: وضعیت [${data.status}] (${data.durationMs}ms)`);
-        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-      } else {
-        showNotification('خطا در اجرای تست قانون', 'error');
-      }
+      const what = data?.conditionMatches ? actionPreviewLines(data.preview).join('؛ ') : '';
+      showNotification([data?.message || 'آزمایش قانون انجام شد؛ اقدام اجرا نشد.', what].filter(Boolean).join(' '));
     } catch (err: any) {
       showNotification(err?.message || 'خطا در ارتباط با سرور', 'error');
     }
@@ -407,10 +406,10 @@ export function AutoActionsSubTab() {
                         <button
                           onClick={() => handleTestRule(rule)}
                           className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-medium transition-colors"
-                          title="تست آنلاین با رویداد پیش‌فرض"
+                          title="آزمایش بی‌اثر با رویداد نمونه؛ چیزی فرستاده یا ثبت نمی‌شود"
                         >
                           <Play className="w-3.5 h-3.5" />
-                          <span>تست</span>
+                          <span>آزمایش</span>
                         </button>
 
                         <button

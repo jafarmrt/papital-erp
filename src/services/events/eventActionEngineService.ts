@@ -18,7 +18,6 @@ import { resolveRuleConfigSecrets } from './integrationSecrets.js';
 import { type RuleActionType } from '../../lib/events/ruleActionTypes.js';
 import { assertRuleActionTypeAllowed, assertRuleEventTypeAllowed } from './ruleActionTypeGuard.js';
 import type { ActionEngineStats, ActionLogPage } from '../../lib/events/actionLogContract.js';
-import { ruleSampleEvent } from './ruleSampleEvent.js';
 import { IntegrationDeliveryService, RULE_ACTION_MAX_ATTEMPTS, type DeliveryAttemptContext, type DeliveryAttemptOutcome } from './integrationDelivery.service.js';
 
 export interface RuleCondition {
@@ -672,28 +671,6 @@ export class EventActionEngineService {
       .returning();
 
     return updated;
-  }
-
-  /**
-   * Test execute rule with simulated event
-   */
-  public static async testRule(ruleId: number, customEvent?: BaseDomainEvent) {
-    const rule = await this.getRuleById(ruleId);
-    if (!rule) throw new Error('قانون مورد نظر یافت نشد.');
-
-    const sampleEvent: BaseDomainEvent = customEvent || ruleSampleEvent(rule.eventType);
-
-    const conditions = Array.isArray(rule.conditionsJson) ? rule.conditionsJson as RuleCondition[] : [];
-    const conditionMatches = this.evaluateConditions(conditions, sampleEvent);
-
-    const execution = await this.executeAction(rule, sampleEvent);
-
-    return {
-      rule,
-      sampleEvent,
-      conditionMatches,
-      execution
-    };
   }
 
   /**

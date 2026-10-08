@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { Zap, RefreshCw, Search, Filter, CheckCircle2, Send, Activity, Package, FileText, GitBranch, CreditCard, ChevronDown, ChevronUp, Clock, Inbox, AlertTriangle, Play, RotateCcw, Database, Sliders, AlertOctagon, History, Globe } from 'lucide-react';
+import { Zap, RefreshCw, Search, Filter, CheckCircle2, Activity, Package, FileText, GitBranch, CreditCard, ChevronDown, ChevronUp, Clock, Inbox, AlertTriangle, Play, RotateCcw, Database, Sliders, AlertOctagon, History, Globe } from 'lucide-react';
 import { formatPersianDate } from '../../utils';
 import { AutoActionsSubTab } from './AutoActionsSubTab';
 import { DeadLetterQueueSubTab } from './DeadLetterQueueSubTab';
 import { EventSourcingReplaySubTab } from './EventSourcingReplaySubTab';
 import { WebhookManagementSubTab } from './WebhookManagementSubTab';
+import { EventSimulationPanel } from './EventSimulationPanel';
 import {
   useDomainEventsQuery,
   useOutboxStatsQuery,
   useOutboxEventsQuery,
-  useSimulateEventMutation,
   useProcessOutboxMutation,
   useRetryFailedOutboxMutation,
   useRetrySingleOutboxEventMutation,
@@ -61,7 +61,6 @@ export function DomainEventsTab() {
   const isLoadingOutbox = isLoadingOutboxStats || isLoadingOutboxEvents;
 
   // Mutations
-  const simulateMutation = useSimulateEventMutation();
   const processOutboxMutation = useProcessOutboxMutation();
   const retryFailedMutation = useRetryFailedOutboxMutation();
   const retrySingleMutation = useRetrySingleOutboxEventMutation();
@@ -72,23 +71,6 @@ export function DomainEventsTab() {
   const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
     setNotificationMessage({ text, type });
     setTimeout(() => setNotificationMessage(null), 4500);
-  };
-
-  const handleSimulateTestEvent = async () => {
-    try {
-      await simulateMutation.mutateAsync({
-        eventType: 'SimulatedTestEvent',
-        aggregateType: 'System',
-        aggregateId: `TEST_${Math.floor(Math.random() * 9000 + 1000)}`,
-        payload: {
-          description: 'ارزیابی و تست عملکردی خط لوله انتشار رویدادهای سازمانی (Event Pipeline)',
-          timestamp: new Date().toISOString()
-        }
-      });
-      showNotification('رویداد آزمایشی با موفقیت در گذرگاه منتشر شد.');
-    } catch (err: any) {
-      showNotification(err?.message || 'خطا در انتشار رویداد آزمایشی', 'error');
-    }
   };
 
   const handleProcessOutboxNow = async () => {
@@ -566,14 +548,6 @@ export function DomainEventsTab() {
                 <span>به‌روزرسانی</span>
               </button>
 
-              <button
-                onClick={handleSimulateTestEvent}
-                disabled={simulateMutation.isPending}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all disabled:opacity-50"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>{simulateMutation.isPending ? 'در حال انتشار...' : 'انتشار رویداد آزمایشی'}</span>
-              </button>
             </div>
 
             <div className="relative w-full md:w-72">
@@ -587,6 +561,9 @@ export function DomainEventsTab() {
               />
             </div>
           </div>
+
+          {/* v9.0.385 (TD-708): a simulation with no effect replaces «انتشار رویداد آزمایشی» */}
+          <EventSimulationPanel />
 
           {/* Events List */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">

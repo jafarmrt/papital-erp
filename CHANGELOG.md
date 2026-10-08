@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.385 — Rule Test, Event Simulation and Replay Have No Effect
+- **No-effect test tools (TD-708):** the rule test and the event simulation ran real actions with sample data (notifications to recipients, audit rows, a validly signed webhook with a fake amount to an outside partner) and the timeline's live replay ran without confirmation; the rule test now evaluates the stored rule and only describes its action, the simulation publishes nothing and lists the matching rules and receiving webhooks, and live replay is refused (422 EVENT_REPLAY_LIVE_REMOVED).
+
 ### v9.0.384 — Rule Conditions Read Persian Digits
 - **Rule condition digits (TD-727):** the rule engine compared with Number(value), so a condition value typed with Persian digits or thousands separators (`gt "۱٬۰۰۰٬۰۰۰"`) never matched; the engine now reads both sides with `normalizeDecimalString` for numeric comparisons and equality with a number, and the rule editor saves such a value as a number and refuses one that is not a number.
 

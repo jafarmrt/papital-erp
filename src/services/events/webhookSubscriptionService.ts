@@ -476,7 +476,7 @@ export class WebhookSubscriptionService {
    * Pattern matcher for event subscriptions: '*', an exact event type, or a dotted prefix ('woocommerce.*'). Stored patterns
    * are «*» or published event types since v9.0.380 (TD-707).
    */
-  private static matchesPattern(eventType: string, patterns: string[] = ['*']): boolean {
+  public static matchesPattern(eventType: string, patterns: string[] = ['*']): boolean {
     if (!patterns || patterns.length === 0 || patterns.includes('*')) return true;
 
     for (const pattern of patterns) {

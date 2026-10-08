@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { StoredRuleActionType } from '../../lib/events/ruleActionTypes';
 import type { ActionEngineStats, ActionLogPage, ActionLogRow } from '../../lib/events/actionLogContract';
+import type { EventSimulationResult } from '../../lib/events/eventSimulationContract';
 
 export interface DomainEvent {
   eventId: string;
@@ -166,22 +167,15 @@ export function useActionLogsQuery(limit: number = 50, options?: { enabled?: boo
 }
 
 // Mutation: Simulate Domain Event
+// v9.0.385 (TD-708, decision t5 a): the simulation has no effect (nothing is published, sent or written), so nothing is
+// invalidated; the caller shows the rules and webhooks the event would have reached
 export function useSimulateEventMutation() {
-  const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async (payload: { eventType: string; aggregateType: string; aggregateId: string; payload: any }) => {
-      return fetchJson<{ success?: boolean; message?: string }>('/events/domain-events/simulate', {
+    mutationFn: async (body: { eventType: string; payload?: Record<string, unknown> }) => {
+      return fetchJson<EventSimulationResult & { success?: boolean }>('/events/domain-events/simulate', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-      toast.success('رویداد شبیه‌سازی‌شده با موفقیت منتشر و در Outbox ذخیره شد');
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'خطا در شبیه‌سازی انتشار رویداد');
     },
   });
 }

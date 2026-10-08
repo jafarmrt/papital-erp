@@ -110,7 +110,8 @@ export function EventSourcingReplaySubTab() {
     }
   }, [selectedType, selectedAggregateId]);
 
-  const handleSimulateOrReplay = async (item: TimelineItem, dryRun: boolean) => {
+  // v9.0.385 (TD-708, decision t5 a): the replay is only a simulation; the live replay of a made-up event is removed
+  const handleSimulateReplay = async (item: TimelineItem) => {
     setIsSimulating(true);
     setSimulationResult(null);
     try {
@@ -122,15 +123,12 @@ export function EventSourcingReplaySubTab() {
           aggregateType: selectedType,
           aggregateId: selectedAggregateId,
           payload: item.payload,
-          dryRun
+          dryRun: true
         })
       });
       if (data?.success) {
         setSimulationResult(data);
-        showToast(data.message || 'عملیات با موفقیت انجام شد.', 'success');
-        if (!dryRun) {
-          void fetchTimeline(selectedType, selectedAggregateId);
-        }
+        showToast(data.message || 'شبیه‌سازی بازپخش بی‌اثر انجام شد.', 'success');
       } else {
         showToast(data?.message || 'خطا در اجرای بازپخش', 'error');
       }
@@ -477,10 +475,10 @@ export function EventSourcingReplaySubTab() {
                   <span className="font-semibold text-slate-800 dark:text-slate-200 block mb-1">توضیحات عملکرد:</span>
                   <ul className="list-disc list-inside space-y-1 text-slate-500 dark:text-slate-400 text-[11px]">
                     <li>
-                      <strong>شبیه‌سازی آزمایشی:</strong> بدون تغییر پایگاه‌داده، ارزیابی می‌کند که کدام قوانین اکشن خودکار فعال می‌شدند.
+                      <strong>شبیه‌سازی بی‌اثر:</strong> بی هیچ تغییر، نشان می‌دهد کدام قانون خودکار با این رویداد جور می‌شد.
                     </li>
                     <li>
-                      <strong>بازپخش واقعی:</strong> رویداد را واقعاً در گذرگاه دامنه‌ای منتشر می‌کند و اکشن‌های فعال آن اجرا خواهند شد.
+                      رویداد دوباره منتشر نمی‌شود و هیچ اعلان، ممیزی یا وب‌هوکی فرستاده نمی‌شود.
                     </li>
                   </ul>
                 </div>
@@ -509,22 +507,12 @@ export function EventSourcingReplaySubTab() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleSimulateOrReplay(selectedEventForReplay, true)}
+                  onClick={() => handleSimulateReplay(selectedEventForReplay)}
                   disabled={isSimulating}
-                  className="px-4 py-2 text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-sm transition-all flex items-center gap-1.5"
+                  className="px-4 py-2 text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <ShieldCheck className={`w-3.5 h-3.5 ${isSimulating ? 'animate-spin' : ''}`} />
-                  <span>شبیه‌سازی آزمایشی (Dry-Run)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSimulateOrReplay(selectedEventForReplay, false)}
-                  disabled={isSimulating}
-                  className="px-4 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all flex items-center gap-1.5"
-                >
-                  <RotateCcw className={`w-3.5 h-3.5 ${isSimulating ? 'animate-spin' : ''}`} />
-                  <span>بازپخش زنده رویداد</span>
+                  <span>شبیه‌سازی بی‌اثر</span>
                 </button>
               </div>
             </div>
