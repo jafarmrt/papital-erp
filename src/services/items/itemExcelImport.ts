@@ -93,8 +93,9 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     push('کد کالا نامعتبر است (خالی می‌باشد).');
     return;
   }
-  if (fields.cellError) {
-    push(fields.cellError);
+  const cellError = fields.cellError ?? stock.cellError;
+  if (cellError) {
+    push(cellError);
     return;
   }
   // v9.0.156 (TD-651، تصمیم ت۳ و ت۵ الف): کالا فقط با کد پیدا می‌شود و کد هرگز از اکسل عوض نمی‌شود؛ پیش‌تر ردیفی با کد تازه

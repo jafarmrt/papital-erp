@@ -17,6 +17,9 @@ export async function runItemExcelCellTests(shouldRun: ShouldRun): Promise<TestC
     ['reg_excel_item_type_words_td_1010',
       'v10.0.1: the Excel import reads the plural and short type words and refuses an unknown type instead of making a product (TD-1010)',
       ['td1010', 'excel', 'migration'], typeWordsCase],
+    ['reg_excel_text_numbers_td_1011',
+      'v10.0.2: the Excel import reads stock and cost written as text with Persian digits or thousands separators and refuses text that is not a number (TD-1011)',
+      ['td1011', 'excel', 'migration'], textNumbersCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -61,6 +64,8 @@ async function makeCtx(): Promise<Ctx> {
 const CODE = 'کد کالا';
 const NAME = 'نام محصول';
 const TYPE = 'نوع کالا';
+const WAC = 'میانگین موزون بها';
+const TOTAL_STOCK = 'موجودی کل';
 
 function errorsOf(res: request.Response): Array<{ code?: string; message: string }> {
   return (res.body?.errors ?? []) as Array<{ code?: string; message: string }>;
@@ -96,4 +101,32 @@ async function typeWordsCase(ctx: Ctx): Promise<string> {
   if (errors.some(e => e.code === raw || e.code === product)) wrong.push(`known words got row errors: ${JSON.stringify(errors)}`);
   if (wrong.length > 0) throw new Error(wrong.join('; '));
   return 'plural and short type words are read; an unknown word is a row error naming the column';
+}
+
+/**
+ * TD-1011: on v10.0.1 a cost «۲۵٬۰۰۰» and a stock «۱۲» written as text were silently ignored, so the item was created
+ * with no stock and no cost; a cost that was not a number at all created the item without an error.
+ */
+async function textNumbersCase(ctx: Ctx): Promise<string> {
+  const s = ctx.serial();
+  const readable = `B-M-${s}`;
+  const unreadable = `B-S-${s}`;
+  const res = await ctx.importRows([
+    { [CODE]: readable, [NAME]: withTestMarker(`text numbers ${s}`), [TYPE]: 'ماده اولیه', [WAC]: '۲۵٬۰۰۰', [TOTAL_STOCK]: '۱۲' },
+    { [CODE]: unreadable, [NAME]: withTestMarker(`bad number ${s}`), [TYPE]: 'ماده اولیه', [WAC]: 'حدود ده هزار', [TOTAL_STOCK]: 3 },
+  ]);
+  const wrong: string[] = [];
+  if (res.status !== 200) wrong.push(`import answered ${res.status}`);
+  const rows = await orm.select({ code: items.code, wac: items.weightedAverageCost, stock: items.currentStock, isDeleted: items.isDeleted })
+    .from(items).where(inArray(items.code, [readable, unreadable]));
+  const live = new Map(rows.filter(r => r.isDeleted === 0).map(r => [r.code, r]));
+  const it = live.get(readable);
+  if (!it) wrong.push('the row with text numbers created no item');
+  else if (Number(it.wac) !== 25000 || Number(it.stock) !== 12) wrong.push(`text numbers read as cost ${Number(it.wac)} and stock ${Number(it.stock)}`);
+  if (live.has(unreadable)) wrong.push('a cost that is not a number still created the item');
+  const errors = errorsOf(res);
+  if (!errors.some(e => e.code === unreadable && e.message.includes(WAC))) wrong.push(`no row error naming the cost column: ${JSON.stringify(errors)}`);
+  if (errors.some(e => e.code === readable)) wrong.push(`readable numbers got row errors: ${JSON.stringify(errors)}`);
+  if (wrong.length > 0) throw new Error(wrong.join('; '));
+  return 'text numbers with Persian digits and separators are read; text that is not a number is a row error naming the column';
 }

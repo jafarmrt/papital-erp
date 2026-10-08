@@ -1,6 +1,8 @@
 import { Category, Item } from '../../types';
 import { PreviewRow } from './types';
-import { newItemTypeOf, parseItemTypeCell } from '../../lib/items/itemExcelCells';
+import { newItemTypeOf, parseItemTypeCell, parseNumberCell, stockColumnsOf } from '../../lib/items/itemExcelCells';
+import { WAC_COLUMNS } from '../../lib/items/excelPriceColumns';
+import { REORDER_POINT_COLUMNS } from '../../lib/items/itemExcelColumns';
 import { PRODUCT_CODE_FORMAT_HINT, PRODUCT_CODE_PATTERN, RAW_MATERIAL_CODE_FORMAT_HINT, RAW_MATERIAL_CODE_PATTERN } from '../../lib/items/itemCodeFormat';
 
 export interface ParsedExcelItem {
@@ -10,6 +12,12 @@ export interface ParsedExcelItem {
   name: string;
   category: string;
   type: string;
+}
+
+/** v10.0.2 (TD-1011): سلول‌های عددی که سرور رد می‌کند؛ ستون‌های موجودی از سرستون خوانده می‌شوند */
+function numberCellErrors(raw: Record<string, unknown>): Array<string | undefined> {
+  const groups: Array<readonly string[]> = [WAC_COLUMNS, REORDER_POINT_COLUMNS, ['وزن', 'weight'], ...stockColumnsOf(raw).map(h => [h])];
+  return groups.map(headers => parseNumberCell(raw, headers).error);
 }
 
 export function validateExcelRows(
@@ -58,7 +66,7 @@ export function validateExcelRows(
     // v10.0.1 (TD-1010): نوع کالای تازه با قاعده سرور (ستون نوع، وگرنه پالایش صفحه، وگرنه محصول)؛ پیش‌تر از دسته
     // خوانده می‌شد و پیش‌نمایش کدی را درست می‌دید که سرور با قالب نوع دیگر رد می‌کرد
     const typeCell = parseItemTypeCell(r.raw ?? {});
-    const cellErrors = typeCell.error ? [typeCell.error] : [];
+    const cellErrors = [typeCell.error, ...numberCellErrors(r.raw ?? {})].filter((e): e is string => !!e);
     issues.push(...cellErrors);
     const itemType = newItemTypeOf(typeCell.value, typeFilter);
 
