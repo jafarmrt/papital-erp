@@ -6,6 +6,7 @@ import { InsufficientStockError, ValidationError } from '../../errors/customErro
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
 import { normalizeDateToDbTimestamp } from '../../utils.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { STOCK_BACKDATE_PERMISSION } from '../../lib/permissions/documentPermissions.js';
 import { createLedgerLocationResolver } from './warehouseResolver.js';
 
 /**
@@ -19,7 +20,7 @@ import { createLedgerLocationResolver } from './warehouseResolver.js';
  *
  * با این قاعده ترتیب تاریخ و ترتیب ثبت کاردکس یکی می‌ماند و بازسازی کاردکس با موتور زنده همخوان است (TD-258).
  */
-export const BACKDATE_PERMISSION = 'warehouse.backdate';
+export const BACKDATE_PERMISSION = STOCK_BACKDATE_PERMISSION;
 
 /** v9.0.79 (TD-483، تصمیم ت۱ بسته ۶): گردش با تاریخ پس از امروز کسب‌وکار، برای همه کاربران و همه مسیرها */
 export const FUTURE_MOVEMENT_CODE = 'STOCK_MOVEMENT_FUTURE_DATE';

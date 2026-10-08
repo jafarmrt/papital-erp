@@ -320,7 +320,8 @@ export async function checkDeliveryWithoutUserIdNotAttributedToUserOne(): Promis
   const reqId = await requisition([[item.id, 4]]);
   await ProcurementService.executeWorkflowAction(reqId, 'approve_request', ADMIN);
   const [order] = await draftOrders(reqId, [[[item.id, 4]]]);
-  await ProcurementService.deliverOrderToWarehouse(order, { username: 'انباردار آزمون اقدام خودکار' });
+  // v9.0.455 (TD-904): delivery asks the stock-in permission, so the user without an id still has a role that holds it
+  await ProcurementService.deliverOrderToWarehouse(order, { username: 'انباردار آزمون اقدام خودکار', role: ADMIN.role });
   await settle();
   const { instanceId, stateKey } = await requisitionState(reqId);
   if (stateKey !== 'received') problems.push(`The requisition step after full delivery is "${stateKey}", not "received"`);

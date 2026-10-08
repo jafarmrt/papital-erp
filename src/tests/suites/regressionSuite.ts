@@ -2637,6 +2637,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       // 0. مسیر publish (غیر Outbox) همچنان غیرمسدودکننده است و خطای هندلر را به فراخوان پرتاب نمی‌کند
       await domainEventBus.publish(domainEventBus.createEvent(fatalType, 'Item', '0', { probe: true }, {}));
 
+      // v9.0.458: earlier tests of the same run leave due outbox events behind and a batch takes only the oldest 100 by
+      // id, so the probe below was skipped once more than 100 were waiting. Drain them first so the batch reaches it.
+      for (let round = 0; round < 50; round++) {
+        if ((await OutboxService.processPendingBatch(100)).processed === 0) break;
+      }
+
       // 1. اولین تلاش: هندلر موفق اجرا می‌شود، هندلر ناپایدار شکست می‌خورد → pending با backoff آینده
       const ev = domainEventBus.createEvent(probeType, 'Item', '1', { probe: true }, {});
       createdEventIds.push(ev.eventId);
@@ -10855,6 +10861,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runSchemaDriftTests(shouldRun));
   const { runForeignKeyIndexTests } = await import('../regression/foreignKeyIndexTests.js');
   results.push(...await runForeignKeyIndexTests(shouldRun));
+
+  // Phase 5 PR «ب» (v9.0.457+): procurement receive items and order delivery
+  const { runProcurementReceiveTests } = await import('../regression/procurementReceiveTests.js');
+  results.push(...await runProcurementReceiveTests(shouldRun));
 
   return results;
 }

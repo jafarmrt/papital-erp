@@ -19,6 +19,18 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.458 — Procurement Finalizes Write the Document Audit Row
+- **Fix (TD-917, P5-P10):** order delivery and receive items write, in their transaction, one finalize audit row per order with the document id and the stored document before and after, like PUT /documents/:id/finalize, so the document timeline shows them.
+
+### v9.0.457 — Receive Items Does Not Close a Requisition With Open Rows
+- **Fix (TD-911, P5-P02):** receive items, like delivery, marks a requisition received only when every row is received or closed; otherwise it is 409 REQUISITION_ROWS_NOT_SETTLED naming the rows and the whole transition rolls back.
+
+### v9.0.456 — Workflow Approval Reads the Signer's Backdate Permission
+- **Fix (TD-928, P5-S-04):** a workflow transition that finalizes a document or receives goods takes warehouse.backdate from the signer's role (the delegator's for a deputy, always for the system admin), like PUT /documents/:id/finalize; it was never passed and a permitted backdated approval got 422.
+
+### v9.0.455 — Purchase Goods Enter Stock Only With warehouse.in
+- **Fix (TD-904, P5-P01):** a requisition transition into the received step (workflow route, inbox task, receive items) and order delivery ask the receipt's stock-in permission `warehouse.in`; workflow-only or procurement-only users get 403 and nothing moves, and the procurement page hides the buttons.
+
 ### v9.0.454 — Warehouse Keys for Project Stock Paths
 - **Fix (TD-923, P5-M08):** allocating material to a project asks `warehouse.out`, and releasing an allocation or delivering a project to stock asks `warehouse.in` as well, like the stock documents; `projects.edit` alone no longer moves stock.
 

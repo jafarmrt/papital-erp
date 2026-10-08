@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ProcurementOrder, PurchaseRequisition } from '../../types';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { PROCUREMENT_RECEIVE_PERMISSION } from '../../lib/permissions/procurementPermissions';
+import { documentTypeRecordPermission } from '../../lib/permissions/documentPermissions';
 
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
@@ -143,6 +145,50 @@ describe('procurement desk sections and buttons (TD-702)', () => {
     granted.add('procurement.approve');
     render(<RequisitionDetailModal isOpen requisition={pending} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
     expect(screen.queryByText('رد درخواست خرید')).not.toBeNull();
+  });
+});
+
+/**
+ * v9.0.455 (TD-904, P5-P01, product-owner decision t3 «الف»): goods enter stock only with the stock-in permission of the
+ * receipt document, so the delivery buttons show only when the user holds it besides the procurement key.
+ */
+describe('delivery buttons need the stock-in permission (TD-904)', () => {
+  const ROW_DELIVER = 'تایید تحویل به انبار';
+  const BULK_DELIVER = /تحویل کلیه اقلام به انبار/;
+  const LIST_DELIVER = 'تایید و تحویل به انبار';
+
+  it('the receive permission is the one a final receipt asks', () => {
+    expect(PROCUREMENT_RECEIVE_PERMISSION).toBe(documentTypeRecordPermission('receipt', 'final'));
+    expect(PROCUREMENT_RECEIVE_PERMISSION).toBe(documentTypeRecordPermission('purchase', 'final'));
+  });
+
+  it('the requisition detail offers delivery only with the stock-in permission', async () => {
+    fetchJson.mockResolvedValue({ success: true, data: [serverOrder] });
+    for (const key of ['procurement.view', 'procurement.manage', 'procurement.order']) granted.add(key);
+    const { unmount } = render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
+    await waitFor(() => expect(screen.queryAllByText(/R-1405-0009/).length).toBeGreaterThan(0));
+    expect(screen.queryByText(ROW_DELIVER)).toBeNull();
+    expect(screen.queryByText(BULK_DELIVER)).toBeNull();
+    unmount();
+    granted.add(PROCUREMENT_RECEIVE_PERMISSION);
+    render(<RequisitionDetailModal isOpen requisition={requisition} onClose={() => undefined} onRefresh={() => undefined} onOpenSplitOrder={() => undefined} />);
+    await waitFor(() => expect(screen.queryByText(ROW_DELIVER)).not.toBeNull());
+    expect(screen.queryByText(BULK_DELIVER)).not.toBeNull();
+  });
+
+  it('the order list offers delivery only with the stock-in permission and never shows a pending order as completed', async () => {
+    for (const key of ['procurement.view', 'procurement.order']) granted.add(key);
+    deskApi();
+    await deskRendered();
+    screen.getByText('۲. فاکتورهای خرید (در انتظار تحویل انبار)').click();
+    await waitFor(() => expect(screen.queryAllByText(/R-1405-0009/).length).toBeGreaterThan(0));
+    expect(screen.queryByText(LIST_DELIVER)).toBeNull();
+    expect(screen.queryByText('تکمیل شده')).toBeNull();
+    cleanup();
+    granted.add(PROCUREMENT_RECEIVE_PERMISSION);
+    await deskRendered();
+    screen.getByText('۲. فاکتورهای خرید (در انتظار تحویل انبار)').click();
+    await waitFor(() => expect(screen.queryByText(LIST_DELIVER)).not.toBeNull());
   });
 });
 
