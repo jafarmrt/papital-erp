@@ -93,6 +93,10 @@ async function importRow(ctx: ImportContext, row: Row, rowNum: number): Promise<
     push('کد کالا نامعتبر است (خالی می‌باشد).');
     return;
   }
+  if (fields.cellError) {
+    push(fields.cellError);
+    return;
+  }
   // v9.0.156 (TD-651، تصمیم ت۳ و ت۵ الف): کالا فقط با کد پیدا می‌شود و کد هرگز از اکسل عوض نمی‌شود؛ پیش‌تر ردیفی با کد تازه
   // و نام کالای موجود آن کالا را با نام پیدا می‌کرد و کدش (SKU ووکامرس) را بی‌صدا عوض می‌کرد
   const found = ctx.index.findByCode(code);

@@ -8,6 +8,7 @@ import { WAC_COLUMNS, extractRowPriceColumns, unknownPriceColumnMessage } from '
 import { REORDER_POINT_COLUMNS } from '../../lib/items/itemExcelColumns.js';
 import { parsePriceAmount, priceCurrencyOf } from '../../lib/items/priceInput.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
+import { newItemTypeOf, parseItemTypeCell } from '../../lib/items/itemExcelCells.js';
 export { codeFormatError } from '../../lib/items/itemCodeFormat.js';
 
 /**
@@ -36,6 +37,8 @@ export interface RowFields {
   size?: string;
   weight?: number;
   material?: string;
+  /** v10.0.1 (TD-1010): خطای نخستین سلول نادرست ردیف؛ آن‌گاه هیچ بخشی از ردیف ثبت نمی‌شود */
+  cellError?: string;
 }
 
 export function isBlankCell(v: unknown): boolean {
@@ -63,16 +66,12 @@ function numberCell(row: Row, headers: string[]): number | undefined {
   return Number.isNaN(n) ? undefined : n;
 }
 
-function typeCell(row: Row): 'product' | 'raw_material' | undefined {
-  const rawType = textCell(row, ['نوع کالا', 'نوع', 'type']);
-  if (rawType === 'ماده اولیه' || rawType === 'raw_material') return 'raw_material';
-  if (rawType === 'محصول نهایی' || rawType === 'product') return 'product';
-  return undefined;
-}
-
 export function readRowFields(row: Row): RowFields {
+  // v10.0.1 (TD-1010): «مواد اولیه» و «محصول» هم خوانده می‌شوند و نوشته ناشناخته خطای ردیف است، نه «محصول» بی‌صدا
+  const type = parseItemTypeCell(row);
   return {
-    itemType: typeCell(row),
+    itemType: type.value,
+    cellError: type.error,
     category: textCell(row, ['دسته‌بندی', 'دسته', 'category']),
     unit: textCell(row, ['واحد', 'واحد اندازه‌گیری', 'unit']),
     reorderPoint: numberCell(row, [...REORDER_POINT_COLUMNS]),
@@ -87,7 +86,7 @@ export function readRowFields(row: Row): RowFields {
 
 /** نوع کالای تازه: ستون نوع، وگرنه پالایش صفحه، وگرنه محصول */
 export function newItemType(fields: RowFields, typeFilter: string | undefined): 'product' | 'raw_material' {
-  return fields.itemType ?? (typeFilter === 'raw_material' ? 'raw_material' : 'product');
+  return newItemTypeOf(fields.itemType, typeFilter);
 }
 
 /**

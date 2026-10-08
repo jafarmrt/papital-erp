@@ -1,5 +1,6 @@
 import { Category, Item } from '../../types';
 import { PreviewRow } from './types';
+import { newItemTypeOf, parseItemTypeCell } from '../../lib/items/itemExcelCells';
 import { PRODUCT_CODE_FORMAT_HINT, PRODUCT_CODE_PATTERN, RAW_MATERIAL_CODE_FORMAT_HINT, RAW_MATERIAL_CODE_PATTERN } from '../../lib/items/itemCodeFormat';
 
 export interface ParsedExcelItem {
@@ -14,7 +15,8 @@ export interface ParsedExcelItem {
 export function validateExcelRows(
   rows: ParsedExcelItem[],
   catsList: Category[],
-  dbItems: Item[]
+  dbItems: Item[],
+  typeFilter = ''
 ): PreviewRow[] {
   // Count names in batch
   const nameCountsInBatch = new Map<string, number>();
@@ -53,8 +55,14 @@ export function validateExcelRows(
     let isDuplicateInBatch = false;
     let isDuplicateInDb = false;
 
+    // v10.0.1 (TD-1010): نوع کالای تازه با قاعده سرور (ستون نوع، وگرنه پالایش صفحه، وگرنه محصول)؛ پیش‌تر از دسته
+    // خوانده می‌شد و پیش‌نمایش کدی را درست می‌دید که سرور با قالب نوع دیگر رد می‌کرد
+    const typeCell = parseItemTypeCell(r.raw ?? {});
+    const cellErrors = typeCell.error ? [typeCell.error] : [];
+    issues.push(...cellErrors);
+    const itemType = newItemTypeOf(typeCell.value, typeFilter);
+
     // 1. Format & Prefix Validation
-    const itemType = matchedCat?.type || (r.type === 'محصول نهایی' || cleanCat.includes('محصول') ? 'product' : 'raw_material');
 
     if (!cleanCode) {
       hasPrefixMismatch = true;
@@ -103,6 +111,7 @@ export function validateExcelRows(
       hasPrefixMismatch,
       isDuplicateInBatch,
       isDuplicateInDb,
+      hasCellError: cellErrors.length > 0,
       issues
     };
   });
