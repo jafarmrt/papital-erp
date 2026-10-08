@@ -23,7 +23,7 @@ export default async function globalSetup(): Promise<void> {
     if (!status.isSetup) {
       await ensureOk('setup', await api.post('/api/setup', {
         headers: { 'x-setup-token': SETUP_TOKEN },
-        data: { ...E2E_ADMIN, fullName: 'مدیر آزمون سرتاسری' },
+        data: { ...E2E_ADMIN, fullName: 'مدیر آزمون سرتاسری', companyName: 'کارگاه آزمون سرتاسری' },
       }));
     }
     const login = await ensureOk('login', await api.post('/api/login', { data: E2E_ADMIN }));

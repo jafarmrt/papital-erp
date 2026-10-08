@@ -618,25 +618,27 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
       await orm.insert(users).values({ username: operatorUser, password: TEST_PASSWORD_HASH, fullName: 'اپراتور خروجی', role: 'operator', avatarUrl: '' });
       try {
         const adminSession = await getAdminSession();
-        const res = await request(app).get('/api/export-backup').set('Cookie', adminSession.cookie);
+        // v9.0.386 (TD-592): the export is a zip of NDJSON tables
+        const { readZipEntries, ndjsonRows, binaryParser } = await import('../fixtures/zipReader.js');
+        const res = await request(app).get('/api/export-backup').set('Cookie', adminSession.cookie).buffer(true).parse(binaryParser as never);
         if (res.status !== 200) {
-          throw new Error(`مسیر خروجی داده‌ها برای ادمین باید ۲۰۰ برگرداند (وضعیت ${res.status}).`);
+          throw new Error(`data export must answer 200 for the admin (status ${res.status}).`);
         }
-        const raw = JSON.stringify(res.body);
+        const entries = readZipEntries(res.body as Buffer);
+        const raw = [...entries.values()].map(b => b.toString('utf8')).join('\n');
         if (/\$2[aby]\$\d{2}\$/.test(raw)) {
-          throw new Error('خروجی داده‌ها نباید شامل هش رمز عبور bcrypt باشد.');
+          throw new Error('data export must not contain a bcrypt password hash.');
         }
         if (raw.includes(probeSecret) || raw.includes(probeNobitex)) {
-          throw new Error('خروجی داده‌ها نباید کلید محرمانه وب‌هوک یا رمز صرافی پرسنل را شامل شود.');
+          throw new Error('data export must not contain the webhook secret or the personnel exchange password.');
         }
-        const data = res.body?.data || {};
-        for (const table of ['journalVouchers', 'journalVoucherItems', 'accounts', 'cheques', 'treasuryTransactions', 'pieceworkPayrolls', 'itemWarehouseStocks']) {
-          if (!Array.isArray(data[table])) {
-            throw new Error(`جدول ${table} باید در خروجی داده‌ها وجود داشته باشد.`);
+        for (const table of ['journal_vouchers', 'journal_voucher_items', 'accounts', 'cheques', 'treasury_transactions', 'piecework_payrolls', 'item_warehouse_stocks']) {
+          if (!entries.has(`${table}.ndjson`)) {
+            throw new Error(`table ${table} must be in the data export.`);
           }
         }
-        if ((data.users || []).some((u: any) => Object.prototype.hasOwnProperty.call(u, 'password'))) {
-          throw new Error('ردیف‌های کاربران در خروجی نباید فیلد password داشته باشند.');
+        if (ndjsonRows(entries.get('users.ndjson')).some(u => Object.prototype.hasOwnProperty.call(u, 'password'))) {
+          throw new Error('user rows of the export must not have a password field.');
         }
 
         const { loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');

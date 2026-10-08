@@ -16,6 +16,6 @@ export function registerWorkflowDomainActions(): void {
   registerBankAccountWorkflowAction();
   registerVoucherWorkflowAction();
   registerRequisitionWorkflowAction();
-  // v9.0.379 (TD-826): approve or reject a raw material request
+  // v9.0.398 (TD-826): approve or reject a raw material request
   registerPendingMaterialWorkflowAction();
 }

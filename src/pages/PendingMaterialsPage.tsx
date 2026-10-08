@@ -43,7 +43,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
   const rejectMutation = useRejectPendingMaterialMutation();
   const updateMutation = useUpdatePendingMaterialMutation();
   const deleteMutation = useDeletePendingMaterialMutation();
-  // v9.0.378 (TD-825): each button by the permission its route asks; a reviewed request is only viewed
+  // v9.0.397 (TD-825): each button by the permission its route asks; a reviewed request is only viewed
   const canReview = useHasPermission('pending_materials.approve');
   const canDelete = useHasPermission('pending_materials.delete');
 
@@ -58,7 +58,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
   const [rejectionReason, setRejectionReason] = useState<string>('');
   const isSubmitting = approveMutation.isPending || rejectMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
-  // v9.0.377 (TD-824): فرم پنجره همان بدنه تأیید و ویرایش سرور است (کلیدهای camelCase)
+  // v9.0.396 (TD-824): فرم پنجره همان بدنه تأیید و ویرایش سرور است (کلیدهای camelCase)
   const [approveForm, setApproveForm] = useState<PendingMaterialForm>(EMPTY_PENDING_MATERIAL_FORM);
 
   const loadData = () => {

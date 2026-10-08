@@ -20,7 +20,7 @@ const emptyReport = {
   allReservationEntries: [],
 };
 
-// v9.0.375 (TD-821، یافته B07-05): گزارشی که ساخته نشد پنل خطا با «تلاش مجدد» است، نه صفحه‌ای با رزرو صفر. پیش‌تر صفحه فقط
+// v9.0.394 (TD-821، یافته B07-05): گزارشی که ساخته نشد پنل خطا با «تلاش مجدد» است، نه صفحه‌ای با رزرو صفر. پیش‌تر صفحه فقط
 // یک پیام گذرا نشان می‌داد و همه شمارنده‌ها «۰» می‌ماند، پس خطای خواندن رزرو با «هیچ رزروی نیست» یکی دیده می‌شد.
 describe('reserved items report shows a load error instead of zeros (TD-821)', () => {
   it('shows an error panel without the report, and the report after a successful retry', async () => {

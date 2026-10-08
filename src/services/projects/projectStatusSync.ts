@@ -2,15 +2,14 @@ import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { productionProjects, projectStages } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
-import { logActivity } from '../../lib/auditLogger.js';
-import { businessNowIsoDateTime } from '../../lib/businessClock.js';
-import { matrixProjectStatus, projectStatusLabel } from '../../lib/projects/projectStatus.js';
+import { logMatrixStatusChange } from './projectAudit.js';
+import { systemNowUtcIso } from '../../lib/businessClock.js';
+import { nextVersion } from '../../lib/occHelper.js';
+import { matrixProjectStatus } from '../../lib/projects/projectStatus.js';
 import { loadProjectProgressMatrix } from './projectProgressMatrix.js';
 
 type ProjectRow = typeof productionProjects.$inferSelect;
 type StageRow = typeof projectStages.$inferSelect;
-
-export const PROJECT_AUDIT_ENTITY = 'پروژه تولید';
 
 /** کاربر نوشتن برای ردیف ممیزی (`req` کاربر و IP را می‌دهد) */
 export interface ProjectActor {
@@ -34,6 +33,15 @@ export async function lockLiveProject(tx: DbExecutor, projectId: number): Promis
   return project;
 }
 
+/**
+ * v9.0.382 (TD-756): زمان تکمیل مرحله پس از یک نوشتن. یک ساعت برای همه مسیرها، ساعت UTC سرور با Z (`systemNowUtcIso`)؛
+ * مرحله‌ای که تکمیل‌شده بود زمانش را نگه می‌دارد و مرحله تکمیل‌نشده زمان تکمیل ندارد.
+ */
+export function stageCompletedAt(stage: Pick<StageRow, 'status' | 'completedAt'>, nextStatus: string, nowUtc: string): string | null {
+  if (nextStatus !== 'completed') return null;
+  return stage.status === 'completed' && stage.completedAt ? stage.completedAt : nowUtc;
+}
+
 export interface SyncedStage extends StageRow {
   completedSkusCount?: number;
   applicableSkusCount?: number;
@@ -54,7 +62,7 @@ export async function syncProjectFromMatrix(tx: DbExecutor, project: ProjectRow,
   const { stages: rawStages, matrix } = await loadProjectProgressMatrix(tx, project);
   if (rawStages.length === 0) return { project, stages: [], weightedProgress: matrix.weightedProgress };
 
-  const bizNow = await businessNowIsoDateTime();
+  const now = systemNowUtcIso();
   let anyProgress = false;
   let allStagesCompleted = true;
   const stages: SyncedStage[] = [];
@@ -72,7 +80,7 @@ export async function syncProjectFromMatrix(tx: DbExecutor, project: ProjectRow,
     if (completedCount > 0 || percent > 0) anyProgress = true;
     if (status !== 'completed') allStagesCompleted = false;
 
-    const completedAt = status === 'completed' ? (stg.completedAt || bizNow) : null;
+    const completedAt = stageCompletedAt(stg, status, now);
     if (stg.progressPercent !== percent || stg.status !== status) {
       await tx.update(projectStages).set({ progressPercent: percent, status, completedAt }).where(eq(projectStages.id, stg.id));
     }
@@ -85,27 +93,9 @@ export async function syncProjectFromMatrix(tx: DbExecutor, project: ProjectRow,
   });
   let current = project;
   if (nextStatus !== project.status) {
-    [current] = await tx.update(productionProjects).set({ status: nextStatus }).where(eq(productionProjects.id, project.id)).returning();
-    const before = projectStatusLabel(project.status);
-    const after = projectStatusLabel(nextStatus);
-    await logActivity({
-      tx,
-      req: actor.req,
-      userId: actor.userId,
-      username: actor.username,
-      userFullName: actor.userFullName,
-      action: 'UPDATE',
-      entity: PROJECT_AUDIT_ENTITY,
-      entityId: String(project.id),
-      description: `وضعیت پروژه تولید ${project.projectCode} با ماتریس پیشرفت از «${before}» به «${after}» تغییر کرد`,
-      details: {
-        before: { status: before },
-        after: { status: after },
-        changes: { status: { before, after } },
-        completedMatrixCells: matrix.completedCells,
-        totalMatrixCells: matrix.totalCells,
-      },
-    });
+    // v9.0.385 (TD-742): تغییر وضعیت با ماتریس هم نسخه پروژه را بالا می‌برد تا فرمی که پیش از آن باز شده وضعیت را برنگرداند
+    [current] = await tx.update(productionProjects).set({ status: nextStatus, version: nextVersion(project.version) }).where(eq(productionProjects.id, project.id)).returning();
+    await logMatrixStatusChange(tx, actor, project, nextStatus, matrix);
   }
 
   return { project: current, stages, weightedProgress: matrix.weightedProgress };

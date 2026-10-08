@@ -13,7 +13,7 @@ const items = [item(1, 'C1', 0), item(2, 'C2', 3), item(3, 'C3', 5)];
 const codes = (status: 'all' | 'zero' | 'below_reorder') =>
   filterReorderItems(items, { stockStatusFilter: status, selectedCategory: 'all', search: '' }).map(i => i.code);
 
-// v9.0.382 (TD-827، یافته B07-11، تصمیم ت۸): «زیر نقطه سفارش» کالاهای دارای موجودی تا نقطه سفارش را نشان می‌دهد. پیش‌تر شرط
+// v9.0.401 (TD-827، یافته B07-11، تصمیم ت۸): «زیر نقطه سفارش» کالاهای دارای موجودی تا نقطه سفارش را نشان می‌دهد. پیش‌تر شرط
 // وارونه بود و این گزینه همان کالاهای بی موجودی را نشان می‌داد (`below_reorder -> ["C1:0"]`).
 describe('reorder alert stock status filter (TD-827)', () => {
   it('shows each status once', () => {

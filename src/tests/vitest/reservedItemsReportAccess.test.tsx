@@ -31,7 +31,7 @@ const report: ReservedItemsFullReport = {
   allReservationEntries: [entry],
 };
 
-// v9.0.381 (TD-829، یافته B07-13، تصمیم ت۶ «الف»): بها و ارزش رزرو فقط برای خوانندگان بها و خریدار پیش‌فاکتور فقط برای
+// v9.0.400 (TD-829، یافته B07-13، تصمیم ت۶ «الف»): بها و ارزش رزرو فقط برای خوانندگان بها و خریدار پیش‌فاکتور فقط برای
 // دارندگان «مشاهده اسناد»؛ پیش‌تر هر خواننده گزارش بها و خریدار پیش‌فاکتورهای همه مشتریان را می‌دید.
 describe('reserved items report by reader (TD-829)', () => {
   it('drops cost and buyer for a reader without their keys', () => {

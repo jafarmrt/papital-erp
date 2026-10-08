@@ -31,7 +31,7 @@ const renderPage = (rows: unknown[]) => {
   render(<QueryClientProvider client={client}><MemoryRouter><PendingMaterialsPage user={{ id: 1, username: 'viewer' } as never} /></MemoryRouter></QueryClientProvider>);
 };
 
-// v9.0.378 (TD-825، یافته B07-09): هر دکمه با مجوز مسیری که صدا می‌زند نشان داده می‌شود و درخواست بررسی‌شده فقط دیده می‌شود.
+// v9.0.397 (TD-825، یافته B07-09): هر دکمه با مجوز مسیری که صدا می‌زند نشان داده می‌شود و درخواست بررسی‌شده فقط دیده می‌شود.
 // پیش‌تر «تأیید»، «رد» و «حذف» برای هر بیننده و «حذف» برای درخواست تأییدشده هم نشان داده می‌شد.
 describe('pending material page buttons (TD-825)', () => {
   it('shows a viewer without review keys only the view button', async () => {

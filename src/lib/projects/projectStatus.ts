@@ -21,6 +21,20 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
 export const projectStatusLabel = (status: string | null | undefined): string =>
   (PROJECT_STATUS_LABELS as Record<string, string>)[String(status ?? '')] ?? String(status ?? '');
 
+/** اولویت‌های پروژه (همان گزینه‌های فرم پروژه؛ v9.0.380، TD-754) */
+export const PROJECT_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+export type ProjectPriority = typeof PROJECT_PRIORITIES[number];
+
+export const PROJECT_PRIORITY_LABELS: Record<ProjectPriority, string> = {
+  low: 'کم',
+  medium: 'متوسط',
+  high: 'زیاد',
+  urgent: 'فوری / اضطراری',
+};
+
+export const projectPriorityLabel = (priority: string | null | undefined): string =>
+  (PROJECT_PRIORITY_LABELS as Record<string, string>)[String(priority ?? '')] ?? String(priority ?? '');
+
 /** وضعیت‌های مرحله پروژه (همان وضعیت‌های خانه ماتریس پیشرفت) */
 export const STAGE_STATUSES = ['pending', 'in_progress', 'completed', 'blocked'] as const;
 export type StageStatus = typeof STAGE_STATUSES[number];
@@ -31,6 +45,9 @@ export const STAGE_STATUS_LABELS: Record<StageStatus, string> = {
   completed: 'تکمیل‌شده',
   blocked: 'متوقف / مانع',
 };
+
+export const stageStatusLabel = (status: string | null | undefined): string =>
+  (STAGE_STATUS_LABELS as Record<string, string>)[String(status ?? '')] ?? String(status ?? '');
 
 /** بزرگ‌ترین شماره مرحله (ستون integer؛ v9.0.368، TD-755) */
 export const MAX_STAGE_ORDER = 10000;

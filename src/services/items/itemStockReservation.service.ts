@@ -104,7 +104,7 @@ const RESERVATION_ITEM_COLUMNS = {
 };
 type ReservationItemRow = Pick<typeof items.$inferSelect, 'id' | 'code' | 'name' | 'category' | 'unit' | 'currentStock' | 'weightedAverageCost'>;
 
-/** v9.0.375 (TD-821): متن یک مقدار ذخیره‌شده در JSONB؛ عدد متن می‌شود و هر چیز دیگر (شیء، آرایه، null) خالی است */
+/** v9.0.394 (TD-821): متن یک مقدار ذخیره‌شده در JSONB؛ عدد متن می‌شود و هر چیز دیگر (شیء، آرایه، null) خالی است */
 const rowText = (v: unknown): string => (typeof v === 'string' ? v.trim() : typeof v === 'number' && Number.isFinite(v) ? String(v) : '');
 
 /** شناسه کالای ردیف ذخیره‌شده: عدد صحیح مثبت یا متن رقمی، وگرنه هیچ */
@@ -127,7 +127,7 @@ interface ProjectReservationRowRef {
   raw: InventoryControlItem;
 }
 
-/** v9.0.375 (TD-821): ردیف رزرو پروژه‌ای که به هیچ کالای فعالی نمی‌رسد */
+/** v9.0.394 (TD-821): ردیف رزرو پروژه‌ای که به هیچ کالای فعالی نمی‌رسد */
 export interface UnmatchedProjectReservationRow {
   projectId: number;
   projectCode: string | null;
@@ -139,7 +139,7 @@ export interface UnmatchedProjectReservationRow {
 }
 
 /**
- * v9.0.376 (TD-831): فقط پروژه‌های فعال ثبت نهایی‌شده با آرایه رزرو ناخالی خوانده می‌شوند؛ قاعده خود رزرو همان
+ * v9.0.395 (TD-831): فقط پروژه‌های فعال ثبت نهایی‌شده با آرایه رزرو ناخالی خوانده می‌شوند؛ قاعده خود رزرو همان
  * `reservingProjectRows` است (TD-817).
  */
 async function readReservingProjectRows(client: DbExecutor): Promise<ProjectReservationRowRef[]> {
@@ -201,7 +201,7 @@ function refMayMatch(row: ProjectReservationRowRef, keys: { ids: Set<number>; co
   return (row.itemId !== null && keys.ids.has(row.itemId)) || keys.codes.has(itemCodeKey(row.code)) || keys.names.has(itemNameKey(row.name));
 }
 
-/** v9.0.376 (TD-831): فقط کالاهای فعالی که ردیف‌ها به آن‌ها اشاره می‌کنند، با نمایه‌های کلید کد و نام (TD-653) */
+/** v9.0.395 (TD-831): فقط کالاهای فعالی که ردیف‌ها به آن‌ها اشاره می‌کنند، با نمایه‌های کلید کد و نام (TD-653) */
 async function readItemsForProjectRows(client: DbExecutor, rows: ProjectReservationRowRef[]): Promise<ReservationItemRow[]> {
   const ids = [...new Set(rows.map(r => r.itemId).filter((id): id is number => id !== null))];
   const codes = [...new Set(rows.map(r => itemCodeKey(r.code)).filter(Boolean))];
@@ -460,13 +460,13 @@ export class ItemStockReservationService {
    *
    * v9.0.206 (TD-663، B05-17): با `scope.itemIds` فقط رزرو همان کالاها ساخته می‌شود (فهرست کالا یک صفحه را می‌خواهد).
    *
-   * v9.0.375 (TD-821، یافته B07-05): این گزارش همیشه fail-closed است (`throwOnError` فقط `true` می‌پذیرد): خطای ساختن آن به
+   * v9.0.394 (TD-821، یافته B07-05): این گزارش همیشه fail-closed است (`throwOnError` فقط `true` می‌پذیرد): خطای ساختن آن به
    * فراخواننده می‌رسد و هیچ‌جا «بی رزرو» خوانده نمی‌شود. پیش‌تر فهرست کالا، فروشگاه اینترنتی و گزارش رزروها خطا را می‌بلعیدند و
    * رزرو صفر می‌دیدند، در حالی که یک ردیف ذخیره‌شده با کد یا نام عددی (`.trim` روی عدد) هر حواله و فاکتور خروجی را با ۵۰۰ رد
    * می‌کرد. ردیف پروژه با متن امن خوانده می‌شود (`rowText`) و ردیفی که به هیچ کالای فعالی نمی‌رسد کنار گذاشته و در بررسی سلامت
    * مالی فهرست می‌شود (`unmatchedProjectReservationRows`)؛ دیگر به نام «کالای سفارشی» با کد خودش رزرو نمی‌سازد.
    *
-   * v9.0.376 (TD-831، یافته B07-15): خواندن‌ها به اندازه پرسش است: ردیف‌های پیش‌فاکتور با یک پرس‌وجوی پیوندی (و با scope فقط
+   * v9.0.395 (TD-831، یافته B07-15): خواندن‌ها به اندازه پرسش است: ردیف‌های پیش‌فاکتور با یک پرس‌وجوی پیوندی (و با scope فقط
    * کالاهای آن)، پروژه‌ها فقط آن‌ها که ثبت نهایی شده‌اند و رزرو ذخیره‌شده دارند، و کالاها فقط آن‌ها که ردیف‌ها به آن‌ها اشاره
    * می‌کنند (شناسه، کلید کد، کلید نام) — هرگز همه کالاها؛ با scope فقط ردیف‌هایی که می‌توانند به کالاهای scope برسند. بی scope
    * خلاصه فقط برای کالاهای رزروشده ساخته می‌شود. پیش‌تر هر حواله خروجی همه پیش‌فاکتورها، همه پروژه‌ها و (با هر پروژه رزروی)
@@ -510,7 +510,7 @@ export class ItemStockReservationService {
       const qty = Number(line.quantity || 0);
       if (qty <= 0) continue;
       if (!summaryItems.has(line.item.id)) summaryItems.set(line.item.id, line.item);
-      // v9.0.380 (TD-823): the reservation is valued at the item's cost in IRR, never at the proforma's sale price and currency
+      // v9.0.399 (TD-823): the reservation is valued at the item's cost in IRR, never at the proforma's sale price and currency
       const cost = fin(line.item.weightedAverageCost);
       allReservationEntries.push({
         id: `proforma-${line.documentId}-${line.item.id}`,
@@ -541,7 +541,7 @@ export class ItemStockReservationService {
     for (const row of candidates) {
       // v9.0.374 (TD-822): شناسه کالا بر کد و نام مقدم است (ردیف رزرو سرور همیشه شناسه دارد)
       const matched = findProjectItemMatch({ itemId: row.itemId, code: row.code, name: row.name }, rowItems);
-      // v9.0.375 (TD-821): ردیفی که به کالای فعالی نمی‌رسد رزرو نمی‌کند و در بررسی سلامت فهرست می‌شود
+      // v9.0.394 (TD-821): ردیفی که به کالای فعالی نمی‌رسد رزرو نمی‌کند و در بررسی سلامت فهرست می‌شود
       if (!matched || (scopeIds && !scopeIds.has(matched.id))) continue;
       if (!summaryItems.has(matched.id)) summaryItems.set(matched.id, matched);
       const cost = fin(matched.weightedAverageCost);
@@ -633,7 +633,7 @@ export class ItemStockReservationService {
   }
 
   /**
-   * v9.0.375 (TD-821): ردیف‌های رزرو پروژه‌های ثبت نهایی‌شده که مقدار مثبت دارند ولی به هیچ کالای فعالی (شناسه، کلید کد،
+   * v9.0.394 (TD-821): ردیف‌های رزرو پروژه‌های ثبت نهایی‌شده که مقدار مثبت دارند ولی به هیچ کالای فعالی (شناسه، کلید کد،
    * کلید نام) نمی‌رسند. گزارش رزروها آن‌ها را کنار می‌گذارد؛ بررسی سلامت مالی فهرستشان می‌کند و هیچ‌کدام خودکار تغییر نمی‌کند.
    */
   static async unmatchedProjectReservationRows(executor?: DbExecutor): Promise<UnmatchedProjectReservationRow[]> {
@@ -647,7 +647,7 @@ export class ItemStockReservationService {
 
   /**
    * رزرو هر کالا (پیش‌فاکتور فروش و پروژه ثبت نهایی‌شده)، با شناسه کالا کلید خورده (v9.0.374، TD-822؛ پیش‌تر کد بزرگ‌شده).
-   * v9.0.375 (TD-821): خطای خواندن رزرو به فراخواننده می‌رسد (فهرست کالا خطا می‌دهد، نه رزرو صفر).
+   * v9.0.394 (TD-821): خطای خواندن رزرو به فراخواننده می‌رسد (فهرست کالا خطا می‌دهد، نه رزرو صفر).
    */
   static async getReservedStocksMap(scope?: ReservationScope): Promise<Record<string, ReservedStockInfo>> {
     const report = await ItemStockReservationService.getReservedStockDetails(undefined, true, scope);

@@ -11,7 +11,7 @@ import type { HealthCheckTestResult } from '../../types.js';
  * - پروژه ثبت نهایی‌نشده‌ای که رزرو ذخیره‌شده دارد: این رزرو دیگر شمرده نمی‌شود.
  * v9.0.372 (TD-820، تصمیم ت۴): پروژه ثبت نهایی‌شده‌ای که ردیف رزروش پیش از تبدیل واحد ساخته شده است (واحد درخواست با
  * واحد کالا فرق دارد و ضریب تبدیل ندارد): مقدار رزرو به واحد ردیف کنترل گرفته شده است.
- * v9.0.375 (TD-821): پروژه ثبت نهایی‌شده‌ای که ردیف رزروی با مقدار مثبت دارد که به هیچ کالای فعالی (شناسه، کد، نام) نمی‌رسد:
+ * v9.0.394 (TD-821): پروژه ثبت نهایی‌شده‌ای که ردیف رزروی با مقدار مثبت دارد که به هیچ کالای فعالی (شناسه، کد، نام) نمی‌رسد:
  * این ردیف رزرو نمی‌کند و `reservedRows` شمار همین ردیف‌هاست.
  */
 export type ProjectReservationIssueKind =
@@ -85,7 +85,7 @@ export async function findProjectReservationIssues(executor: DbExecutor = orm): 
     kind: r.kind as ProjectReservationIssueKind,
     reservedRows: Number(r.reservedRows) || 0,
   }));
-  // v9.0.375 (TD-821): همان قاعده تطبیق گزارش رزروها (findProjectItemMatch)، نه یک بازنویسی SQL از آن
+  // v9.0.394 (TD-821): همان قاعده تطبیق گزارش رزروها (findProjectItemMatch)، نه یک بازنویسی SQL از آن
   const { ItemStockReservationService } = await import('../items/itemStockReservation.service.js');
   const unmatched = new Map<number, ProjectReservationIssue>();
   for (const row of await ItemStockReservationService.unmatchedProjectReservationRows(executor)) {

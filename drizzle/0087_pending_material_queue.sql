@@ -1,10 +1,10 @@
--- Drizzle Migration 0085: the raw material request queue (v9.0.378 / TD-825, finding B07-09, product-owner decision t5 «الف»)
+-- Drizzle Migration 0087: the raw material request queue (v9.0.397 / TD-825, finding B07-09, product-owner decision t5 «الف»)
 --
--- 1) pending_materials.item_id: the item an approval made. From v9.0.378 an approval creates the item through the item
+-- 1) pending_materials.item_id: the item an approval made. From v9.0.397 an approval creates the item through the item
 --    service and writes its id here in the same transaction; requests approved earlier keep a null link (they are never
 --    matched to an item by code, which was not unique).
--- 2) Sending a request needs the new key pending_materials.create (requires pending_materials.view); until v9.0.377 any
---    signed-in user could send one. The project's «custom material», which becomes a request in v9.0.379, created the item
+-- 2) Sending a request needs the new key pending_materials.create (requires pending_materials.view); until v9.0.396 any
+--    signed-in user could send one. The project's «custom material», which becomes a request in v9.0.398, created the item
 --    with products.create, so a role holding products.create gets pending_materials.create and pending_materials.view.
 --    Only missing keys are added (in this order), nothing is removed, the system admin role is skipped (its permissions are
 --    computed). Every changed role gets one activity_logs row (entity «نقش و دسترسی», username system) with the permissions

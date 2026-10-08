@@ -1,10 +1,10 @@
-import { sql, eq, and } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { items, outboxEvents } from '../../db/schema.js';
 import { validateDbSchema } from '../../db/migrator.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { DeadLetterQueueService } from '../events/deadLetterQueueService.js';
-import { SystemHealthService } from './systemHealth.service.js';
+import { SystemHealthService, stuckOutboxCondition } from './systemHealth.service.js';
 import { StockReconciliationService } from '../inventory/stockReconciliation.service.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
@@ -62,6 +62,21 @@ export function inventoryKardexCheck(
   };
 }
 
+/**
+ * v9.0.392 (TD-622، B01-42، تصمیم ت۸): پیام نتیجه دکمه‌های صف رویدادها، با رقم فارسی و بی «Outbox» و «Processing».
+ */
+export function requeueResultMessage(count: number): string {
+  return count > 0
+    ? `${toPersianDigits(count, 0)} رویداد ناموفق به صف ارسال رویدادها برگشت و دوباره اجرا می‌شود.`
+    : 'هیچ رویداد ناموفقی در صف نبود.';
+}
+
+export function stuckResetResultMessage(count: number): string {
+  return count > 0
+    ? `${toPersianDigits(count, 0)} رویداد مانده در صف ارسال دوباره اجرا می‌شود.`
+    : 'هیچ رویدادی بیش از پنج دقیقه در صف ارسال نمانده بود.';
+}
+
 export class SystemReconciliationService {
   /** Automated System Integrity & Reconciliation Scan */
   static async runIntegrityScan(): Promise<IntegrityScanResult> {
@@ -72,19 +87,23 @@ export class SystemReconciliationService {
     checks.push({
       id: 'db_schema',
       category: 'پایگاه‌داده',
-      title: 'ارزیابی ساختار و ایندکس‌های PostgreSQL',
+      title: 'ساختار جدول‌های پایگاه‌داده',
       status: schemaReport.valid ? 'ok' : 'warning',
-      details: schemaReport.valid ? 'تمامی جداول و لایه‌های ایندکس منطبق با Schema رسمی هستند.' : `تعداد ${schemaReport.missingTables.length} جدول ناموجود یافت شد.`
+      details: schemaReport.valid
+        ? 'همه جدول‌های لازم سامانه در پایگاه‌داده هستند.'
+        : `${toPersianDigits(schemaReport.missingTables.length, 0)} جدول لازم سامانه در پایگاه‌داده نیست.`
     });
 
     // Check 2: Outbox & DLQ Quarantine Check
     const dlqCount = await SystemHealthService.countDeadLetterEvents();
     checks.push({
       id: 'outbox_dlq',
-      category: 'صف رویدادها (Outbox / DLQ)',
-      title: 'سلامت صف پیام‌ها و قرنطینه خطاها',
+      category: 'صف رویدادها',
+      title: 'رویدادهای ناموفق',
       status: dlqCount === 0 ? 'ok' : 'warning',
-      details: dlqCount === 0 ? 'هیچ رویدادی در صف قرنطینه DLQ دچار خطا نشده است.' : `تعداد ${dlqCount} رویداد ناموفق در صف قرنطینه DLQ موجود است که نیازمند بازبینی/Replay است.`
+      details: dlqCount === 0
+        ? 'هیچ رویداد ناموفقی در صف نیست.'
+        : `${toPersianDigits(dlqCount, 0)} رویداد ناموفق در صف رویدادهای ناموفق مانده است؛ آن‌ها را بررسی کنید و در صورت نیاز دوباره اجرا کنید.`
     });
 
     // Check 3: Accounting Journal Vouchers Integrity
@@ -92,10 +111,12 @@ export class SystemReconciliationService {
     const unbalancedCount = (await SystemHealthService.findUnbalancedVouchers()).length;
     checks.push({
       id: 'accounting_vouchers',
-      category: 'حسابداری دوبل',
-      title: 'موازنه بدهکار/بستانکار اسناد حسابداری',
+      category: 'حسابداری دوطرفه',
+      title: 'تراز بدهکار و بستانکار اسناد حسابداری',
       status: unbalancedCount === 0 ? 'ok' : 'error',
-      details: unbalancedCount === 0 ? 'تمام اسناد حسابداری ثبت‌شده ۱۰۰٪ تراز و متوازن هستند.' : `تعداد ${unbalancedCount} سند ناهمتراز شناسایی شد که مجموع بدهکار و بستانکار آنها برابر نیست.`
+      details: unbalancedCount === 0
+        ? 'همه اسناد حسابداری ثبت‌شده تراز هستند.'
+        : `${toPersianDigits(unbalancedCount, 0)} سند حسابداری تراز نیست؛ جمع بدهکار و بستانکار آن‌ها برابر نیست.`
     });
 
     // Check 4: Inventory Items Count & Stock Consistency
@@ -107,10 +128,12 @@ export class SystemReconciliationService {
     const overdueCount = await SystemHealthService.countOverdueSlaTasks();
     checks.push({
       id: 'workflow_sla',
-      category: 'فرآیندها و SLA',
-      title: 'پایش زمان‌سنجی و مهلت تاییدات فرآیندها',
+      category: 'گردش کار',
+      title: 'مهلت انجام کارهای گردش کار',
       status: overdueCount === 0 ? 'ok' : 'warning',
-      details: overdueCount === 0 ? 'تمامی کارتابل‌های تایید در مهلت SLA مجاز خود قرار دارند.' : `تعداد ${overdueCount} وظیفه ارجاع‌شده در کارتابل‌ها از مهلت قانونی SLA عبور کرده‌اند.`
+      details: overdueCount === 0
+        ? 'همه کارهای کارتابل در مهلت انجام خود هستند.'
+        : `${toPersianDigits(overdueCount, 0)} کار در کارتابل از مهلت انجام خود گذشته است.`
     });
 
     // Compute Health Score Percentage
@@ -136,7 +159,7 @@ export class SystemReconciliationService {
         action: 'RESTORE',
         entity: 'رویدادهای سیستم',
         entityId: 'dlq_requeue',
-        description: `بازگردانی ${result.requeuedCount} رویداد حل‌نشده قرنطینه DLQ به صف Outbox`,
+        description: `بازگرداندن ${toPersianDigits(result.requeuedCount, 0)} رویداد ناموفق به صف ارسال رویدادها برای اجرای دوباره`,
         details: {
           requeuedCount: result.requeuedCount,
           reinsertedEventIds: result.reinsertedEventIds,
@@ -157,7 +180,7 @@ export class SystemReconciliationService {
     return orm.transaction(async (tx) => {
       const reset = await tx.update(outboxEvents)
         .set({ status: 'pending', retryCount: 0 })
-        .where(and(eq(outboxEvents.status, 'processing'), sql`occurred_at < now() - interval '5 minutes'`))
+        .where(stuckOutboxCondition())
         .returning({ id: outboxEvents.id, eventId: outboxEvents.eventId });
       await logActivity({
         tx,
@@ -167,7 +190,7 @@ export class SystemReconciliationService {
         action: 'UPDATE',
         entity: 'رویدادهای سیستم',
         entityId: 'outbox_stuck_reset',
-        description: `بازنشانی ${reset.length} رویداد متوقف‌شده Outbox از حالت processing به pending`,
+        description: `اجرای دوباره ${toPersianDigits(reset.length, 0)} رویداد مانده در صف ارسال رویدادها`,
         details: {
           resetCount: reset.length,
           eventIds: reset.map(r => r.eventId),

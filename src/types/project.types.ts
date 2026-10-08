@@ -256,6 +256,8 @@ export interface ProductionProject {
   custom_stages?: string[];
   customStages?: string[];
   attachments?: FinancialAttachment[];
+  /** v9.0.385 (TD-742): نسخه رکورد که `PUT /projects/:id` می‌خواهد */
+  version?: number;
   // Joined or calculated fields
   item_image?: string;
   progress_percent?: number;

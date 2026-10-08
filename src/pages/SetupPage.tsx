@@ -7,6 +7,8 @@ import { compressTo300KB } from '../utils/imageCompression';
 import { MIN_PASSWORD_LENGTH, passwordLengthError } from '../lib/auth/passwordPolicy';
 import { FULL_NAME_MAX_LENGTH } from '../lib/users/profileFields';
 import { RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../lib/rialDisplay';
+import { SETUP_TOKEN_REQUIRED_MESSAGE, SETUP_USERNAME_MIN_LENGTH, SETUP_USERNAME_TOO_SHORT_MESSAGE, setupCompanyNameError } from '../lib/auth/setupRules';
+import { errorMessageOf } from '../utils';
 
 interface SetupPageProps {
   onLogin: (user: User, token: string) => void;
@@ -16,6 +18,8 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  // v9.0.393 (TD-621، B01-41): خطای رمز راه‌اندازی زیر همان فیلد در گام ۱ نشان داده می‌شود
+  const [tokenError, setTokenError] = useState('');
 
   // Step 1: Admin Account State & Setup Security Token (SEC-012)
   const [setupToken, setSetupToken] = useState(() => {
@@ -33,7 +37,8 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
   const [showPassword, setShowPassword] = useState(false);
 
   // Step 2: Business & Invoice Details State
-  const [companyName, setCompanyName] = useState('سامانه جامع ERP پاپیتال');
+  // v9.0.392 (TD-622، تصمیم ت۸): نام شرکت روی سربرگ فاکتور چاپ می‌شود؛ پیش‌فرض ندارد و اجباری است
+  const [companyName, setCompanyName] = useState('');
   const [warehouseName, setWarehouseName] = useState('انبار مرکزی');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -61,13 +66,17 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
   const handleNextStep = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
+    if (!setupToken.trim()) {
+      setTokenError(SETUP_TOKEN_REQUIRED_MESSAGE);
+      return;
+    }
     if (!fullName.trim()) {
       setError('لطفاً نام و نام خانوادگی مدیر را وارد کنید');
       return;
     }
-    if (!username.trim() || username.length < 3) {
-      setError('نام کاربری باید حداقل ۳ کاراکتر باشد');
+    if (username.trim().length < SETUP_USERNAME_MIN_LENGTH) {
+      setError(SETUP_USERNAME_TOO_SHORT_MESSAGE);
       return;
     }
     // v9.0.217 (TD-532): همان کمینه مشترک سرور (۸ نویسه)، نه ۶
@@ -87,6 +96,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const companyError = setupCompanyNameError(companyName);
+    if (companyError) {
+      setError(companyError);
+      return;
+    }
     setIsSaving(true);
 
     try {
@@ -94,7 +108,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
         fullName: fullName.trim(),
         username: username.trim(),
         password,
-        companyName: companyName.trim() || 'سامانه جامع ERP پاپیتال',
+        companyName: companyName.trim(),
         warehouseName: warehouseName.trim() || 'انبار مرکزی',
         phone: phone.trim(),
         address: address.trim(),
@@ -112,11 +126,18 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
       });
 
       if (res.success) {
-        toast.success('سامانه با موفقیت راه‌اندازی شد. خوش آمدید!');
+        toast.success('سامانه راه‌اندازی شد. خوش آمدید.');
         onLogin(res.user, res.token);
       }
-    } catch (err: any) {
-      setError(err.message || 'خطا در راه‌اندازی اولیه سامانه');
+    } catch (err) {
+      const message = errorMessageOf(err) || 'راه‌اندازی اولیه انجام نشد. دوباره تلاش کنید.';
+      // رمز راه‌اندازی نادرست یا تعیین‌نشده (۴۰۱): بازگشت به گام ۱ و پیام زیر فیلد رمز، نه در گامی که این فیلد را ندارد
+      if ((err as { status?: unknown } | null)?.status === 401) {
+        setTokenError(message);
+        setStep(1);
+      } else {
+        setError(message);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -146,7 +167,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
             <div className="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg mb-3">
               <Shield size={28} />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">راه‌اندازی اولیه سامانه جامع مدیریت و ERP پاپیتال</h1>
+            <h1 className="text-2xl font-bold tracking-tight">راه‌اندازی اولیه سامانه جامع مدیریت پاپیتال</h1>
             <p className="text-slate-400 text-sm mt-1">پیکربندی حساب مدیر ارشد و اطلاعات کارگاه / سازمان</p>
           </div>
 
@@ -194,7 +215,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  رمز راه‌اندازی (ERP_SETUP_TOKEN) <span className="text-red-500">*</span>
+                  رمز راه‌اندازی <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <KeyRound className="absolute right-3 top-3 text-slate-400" size={18} />
@@ -202,13 +223,24 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     required
                     type="text"
                     value={setupToken}
-                    onChange={e => setSetupToken(e.target.value)}
+                    onChange={e => { setSetupToken(e.target.value); setTokenError(''); }}
                     dir="ltr"
-                    placeholder="مقدار متغیر محیطی ERP_SETUP_TOKEN"
-                    className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    placeholder="رمزی که در کارساز تعیین شده است"
+                    aria-invalid={tokenError ? true : undefined}
+                    aria-describedby={tokenError ? 'setup-token-error' : undefined}
+                    className={`w-full pr-10 pl-3 py-2.5 bg-white border rounded-xl text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
+                      tokenError ? 'border-red-400' : 'border-slate-300'
+                    }`}
                   />
                 </div>
-                <p className="text-xs text-slate-500 mt-1">برای حفاظت از راه‌اندازی اولیه، رمزی را که در کارساز تعیین شده است وارد کنید.</p>
+                {tokenError && (
+                  <p id="setup-token-error" role="alert" className="text-xs text-red-600 font-medium mt-1">{tokenError}</p>
+                )}
+                <p className="text-xs text-slate-500 mt-1">
+                  برای حفاظت از راه‌اندازی اولیه، رمزی را که در کارساز تعیین شده است وارد کنید. این رمز مقدار{' '}
+                  <code dir="ltr" className="font-mono bg-slate-100 px-1 rounded">ERP_SETUP_TOKEN</code> در پرونده{' '}
+                  <code dir="ltr" className="font-mono bg-slate-100 px-1 rounded">.env</code> کارساز است.
+                </p>
               </div>
 
               <div>
@@ -237,11 +269,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     value={username}
                     onChange={e => setUsername(e.target.value)}
                     dir="ltr"
-                    placeholder="admin"
+                    placeholder="به حروف لاتین"
                     className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   />
                 </div>
-                <p className="text-xs text-slate-500 mt-1">نام کاربری ورود به سامانه (حداقل ۳ حرف انگلیسی)</p>
+                <p className="text-xs text-slate-500 mt-1">نام کاربری ورود به سامانه، دست‌کم ۳ نویسه به حروف لاتین</p>
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
@@ -343,7 +375,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                       type="text"
                       value={phone}
                       onChange={e => setPhone(e.target.value)}
-                      placeholder="02188888888"
+                      placeholder="مثال: ۰۲۱۸۸۸۸۸۸۸۸"
                       className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     />
                   </div>
@@ -399,7 +431,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                   <div className="flex items-center gap-3">
                     {logoPreview ? (
                       <div className="relative w-16 h-16 border rounded-xl overflow-hidden bg-white p-1 shrink-0 flex items-center justify-center">
-                        <img src={logoPreview} alt="Logo Preview" className="max-w-full max-h-full object-contain" />
+                        <img src={logoPreview} alt="پیش‌نمایش لوگو" className="max-w-full max-h-full object-contain" />
                         <button
                           type="button"
                           onClick={() => setLogoPreview('')}
@@ -438,7 +470,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                   className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-8 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
                 >
                   <CheckCircle2 size={18} />
-                  <span>{isSaving ? 'در حال ایجاد سامانه...' : 'تکمیل و ورود به سامانه'}</span>
+                  <span>{isSaving ? 'در حال راه‌اندازی سامانه…' : 'تکمیل و ورود به سامانه'}</span>
                 </button>
               </div>
             </form>

@@ -26,7 +26,7 @@ const fieldOf = (label: string): HTMLInputElement => {
 
 const request = { id: 7, code: 'PM-7', name: 'سنگ نمونه', unit: 'عدد', category: 'سنگ', status: 'pending', weightedAverageCost: 1000, reorderPoint: 0, projectTitle: 'پروژه', requestedBy: 'کاربر' };
 
-// v9.0.377 (TD-824، یافته B07-08): «تأیید و افزودن به انبار» بها و نقطه سفارشی را می‌فرستد که بررسی‌کننده وارد کرده است، با همان
+// v9.0.396 (TD-824، یافته B07-08): «تأیید و افزودن به انبار» بها و نقطه سفارشی را می‌فرستد که بررسی‌کننده وارد کرده است، با همان
 // کلیدهایی که طرح سرور می‌خواند. پیش‌تر بدنه `weighted_average_cost` و `reorder_point` داشت و سرور آن‌ها را دور می‌ریخت.
 describe('pending material approval body (TD-824)', () => {
   it('sends the edited cost and reorder point in the keys the route schema accepts', async () => {

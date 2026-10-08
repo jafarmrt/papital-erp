@@ -48,7 +48,7 @@ export function AddMaterialModal({
   handleCategoryChangeForCustom,
   handleAddCustomMaterial
 }: AddMaterialModalProps) {
-  // v9.0.379 (TD-826): a new material is only a request to the warehouse queue, offered by the key its route asks
+  // v9.0.398 (TD-826): a new material is only a request to the warehouse queue, offered by the key its route asks
   const canRequestMaterial = useHasPermission('pending_materials.create');
   if (!isOpen) return null;
 

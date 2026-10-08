@@ -22,7 +22,7 @@ import { listReorderAlerts } from '../services/items/reorderAlerts.service.js';
 const router = Router();
 
 // GET /items/reorder-alerts
-// v9.0.385 (TD-843): free stock (stock − reservations) against the reorder point, with the open purchases shown as «در راه»
+// v9.0.404 (TD-843): free stock (stock − reservations) against the reorder point, with the open purchases shown as «در راه»
 router.get('/items/reorder-alerts', authorizePermission(...READ_PERMISSIONS.itemReorderAlerts), asyncHandler(async (req, res) => {
   res.json(await listReorderAlerts({
     type: typeof req.query.type === 'string' ? req.query.type : undefined,

@@ -35,10 +35,10 @@ export default function ReservedItemsReportPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'items' | 'ledger'>('items');
   const [expandedItemCode, setExpandedItemCode] = useState<string | null>(null);
-  // v9.0.375 (TD-821): a failed report is an error panel, never a page of zero reservations
+  // v9.0.394 (TD-821): a failed report is an error panel, never a page of zero reservations
   const [loadError, setLoadError] = useState<Error | null>(null);
 
-  // v9.0.381 (TD-829): the server sends cost and value only to item cost readers; their columns follow `access`
+  // v9.0.400 (TD-829): the server sends cost and value only to item cost readers; their columns follow `access`
   const showCost = data?.access?.cost !== false;
   const columnCount = showCost ? 10 : 9;
 
@@ -135,7 +135,7 @@ export default function ReservedItemsReportPage() {
     });
   }, [data, searchQuery, sourceFilter, categoryFilter]);
 
-  // v9.0.383 (TD-828): a real xlsx file with a Persian name and Jalali date, rows built in lib/inventory/reservedItemsExport
+  // v9.0.402 (TD-828): a real xlsx file with a Persian name and Jalali date, rows built in lib/inventory/reservedItemsExport
   const handleExportExcel = () => {
     if (!data) return;
     try {

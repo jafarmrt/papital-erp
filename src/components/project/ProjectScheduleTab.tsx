@@ -13,6 +13,7 @@ import { extractDateString, errorMessageOf, isoToJalaliDate, formatPersianDate, 
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
+import { useProjectVersion } from '../../hooks/useProjectVersion';
 import {
   isScheduleRowLogged, scheduleLogItem, withPieceworkTask, withScheduleLogLink, withScheduleRowIds,
   type ScheduleLogItem, type ScheduleRowRef
@@ -34,6 +35,7 @@ export default function ProjectScheduleTab({
 }: ProjectScheduleTabProps) {
   const rial = useRialDisplay();
   const [saving, setSaving] = useState<boolean>(false);
+  const projectVersion = useProjectVersion(project);
   const [personnelList, setPersonnelList] = useState<any[]>(initialPersonnelList);
   const [pieceworkTasksList, setPieceworkTasksList] = useState<any[]>(initialPieceworkTasksList);
   const [workflowPresets, setWorkflowPresets] = useState<WorkflowPreset[]>(DEFAULT_WORKFLOW_PRESETS);
@@ -376,15 +378,16 @@ export default function ProjectScheduleTab({
   const saveSchedulesForLogging = async (): Promise<ProjectStageSchedulesMap | null> => {
     const withIds = withScheduleRowIds(schedulesMap, () => `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
     setSchedulesMap(withIds);
-    const res = await fetchJson<{ id?: number }>(`/projects/${project.id}`, {
+    const res = await fetchJson<{ id?: number; version?: number }>(`/projects/${project.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage_schedules: withIds })
+      body: JSON.stringify({ stage_schedules: withIds, version: projectVersion.version })
     });
     if (!res?.id) {
       toast.error('برنامه کارگاه پیش از ثبت کارکرد ذخیره نشد.');
       return null;
     }
+    projectVersion.remember(res);
     return withIds;
   };
 
@@ -394,6 +397,8 @@ export default function ProjectScheduleTab({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items })
     });
+    // v9.0.385 (TD-742): ثبت کارکرد شناسه آن را در ردیف برنامه می‌نویسد و نسخه پروژه را بالا می‌برد؛ ذخیره بعدی با نسخه تازه می‌رود
+    projectVersion.remember(await fetchJson(`/projects/${project.id}`).catch(() => null));
     return Array.isArray(res?.insertedIds) ? res.insertedIds : [];
   };
 
@@ -517,11 +522,13 @@ export default function ProjectScheduleTab({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          stage_schedules: schedulesMap
+          stage_schedules: schedulesMap,
+          version: projectVersion.version
         })
       });
 
       if (res && res.id) {
+        projectVersion.remember(res);
         toast.success('برنامه‌ریزی کارگاه و تخصیص پرسنل با موفقیت ذخیره شد');
         onUpdate();
       } else {

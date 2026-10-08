@@ -10,13 +10,13 @@ import { postDoc, runReservationCases } from './stockReservationTests.js';
 export async function runReservedItemsReportTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_reserved_items_cost_basis_td_823',
-      'v9.0.380: every reservation is valued at the item cost in IRR, a foreign proforma included, and no sale price is reported (TD-823)',
+      'v9.0.399: every reservation is valued at the item cost in IRR, a foreign proforma included, and no sale price is reported (TD-823)',
       ['td823', 'reservation', 'package7'], costBasisCase],
     ['reg_reserved_items_reader_scope_td_829',
-      'v9.0.381: the report gives cost and value only to item cost readers and a proforma buyer only to documents.view; other readers see quantities and sources (TD-829)',
+      'v9.0.400: the report gives cost and value only to item cost readers and a proforma buyer only to documents.view; other readers see quantities and sources (TD-829)',
       ['td829', 'reservation', 'security', 'package7'], readerScopeCase],
     ['reg_reorder_alert_free_stock_td_843',
-      'v9.0.385: the reorder alert compares free stock (stock minus reservations) with the reorder point and shows open purchases as in transit only (TD-843)',
+      'v9.0.404: the reorder alert compares free stock (stock minus reservations) with the reorder point and shows open purchases as in transit only (TD-843)',
       ['td843', 'reservation', 'reorder', 'package7'], reorderFreeStockCase],
   ]);
 }

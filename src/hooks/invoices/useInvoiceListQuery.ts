@@ -18,7 +18,7 @@ export function useInvoiceListQuery() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [pageSize, setPageSize] = useState(50);
 
-  // v9.0.383 (TD-828): a link may open the list searched by a document number (`/invoices?search=1001`, the reserved items
+  // v9.0.402 (TD-828): a link may open the list searched by a document number (`/invoices?search=1001`, the reserved items
   // report); the address is read once when the list opens
   useEffect(() => {
     const fromAddress = invoiceListSearchFromAddress(window.location.search);

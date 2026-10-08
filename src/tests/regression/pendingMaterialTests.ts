@@ -12,19 +12,19 @@ import { transit, wfUser } from '../invariants/workflowScenarioHelpers.js';
 export async function runPendingMaterialTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_pending_material_approve_body_td_824',
-      'v9.0.377: the approval reads the cost and reorder point the reviewer typed; the old snake_case keys are refused instead of dropped (TD-824)',
+      'v9.0.396: the approval reads the cost and reorder point the reviewer typed; the old snake_case keys are refused instead of dropped (TD-824)',
       ['td824', 'pending_materials', 'package7'], approveBodyCase],
     ['reg_pending_material_submit_rules_td_825',
-      'v9.0.378: sending a request needs pending_materials.create, numbers are read like every money field and an inline image becomes a file (TD-825)',
+      'v9.0.397: sending a request needs pending_materials.create, numbers are read like every money field and an inline image becomes a file (TD-825)',
       ['td825', 'pending_materials', 'package7'], submitRulesCase],
     ['reg_pending_material_review_once_td_825',
-      'v9.0.378: a reviewed request is never approved, rejected or deleted again, and the approval links its one item with audit rows (TD-825)',
+      'v9.0.397: a reviewed request is never approved, rejected or deleted again, and the approval links its one item with audit rows (TD-825)',
       ['td825', 'pending_materials', 'package7'], reviewOnceCase],
     ['reg_pending_material_concurrent_approval_td_825',
-      'v9.0.378: two concurrent approvals of one request make one item; a code taken in another letter case is refused (TD-825)',
+      'v9.0.397: two concurrent approvals of one request make one item; a code taken in another letter case is refused (TD-825)',
       ['td825', 'pending_materials', 'package7'], concurrentApprovalCase],
     ['reg_pending_material_workflow_td_826',
-      'v9.0.379: a request starts the active pending-material workflow, its approve and reject steps review the request, a direct review closes the workflow and the project must exist (TD-826)',
+      'v9.0.398: a request starts the active pending-material workflow, its approve and reject steps review the request, a direct review closes the workflow and the project must exist (TD-826)',
       ['td826', 'pending_materials', 'workflow', 'package7'], workflowCase],
   ]);
 }

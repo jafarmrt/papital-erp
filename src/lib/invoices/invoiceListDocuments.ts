@@ -282,7 +282,7 @@ export function detailsRemainingOf(doc: InvoiceListDocument): number {
   return doc.remainingAmount !== undefined ? doc.remainingAmount : Math.max(0, fin(documentPayableOf(doc)).subtract(doc.paidAmount).toNumber());
 }
 
-/** v9.0.383 (TD-828): the search a link put in the documents list address (`?search=`), or '' */
+/** v9.0.402 (TD-828): the search a link put in the documents list address (`?search=`), or '' */
 export function invoiceListSearchFromAddress(locationSearch: string): string {
   return (new URLSearchParams(locationSearch).get('search') ?? '').trim();
 }

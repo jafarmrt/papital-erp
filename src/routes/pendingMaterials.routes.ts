@@ -13,7 +13,7 @@ import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
 
-/** v9.0.378 (TD-825): the reviewer or sender whose name the service writes into the audit row, inside its transaction */
+/** v9.0.397 (TD-825): the reviewer or sender whose name the service writes into the audit row, inside its transaction */
 const actorOf = (req: Request): PendingMaterialActor => ({ req, userId: req.user?.id, username: req.user?.username });
 
 // GET /api/pending-materials - List pending raw materials
@@ -71,7 +71,7 @@ router.get('/pending-materials', authenticateToken, authorizePermission(...READ_
 }));
 
 // POST /api/pending-materials - Submit a new pending material (from project inventory control)
-// v9.0.378 (TD-825): sending a request needs pending_materials.create (before, any signed-in user); the request and its audit
+// v9.0.397 (TD-825): sending a request needs pending_materials.create (before, any signed-in user); the request and its audit
 // row are written in one transaction
 router.post('/pending-materials', authenticateToken, authorizePermission('pending_materials.create'), validate(createPendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
   const inserted = await PendingMaterialsService.submitPendingMaterial({
@@ -86,7 +86,7 @@ router.post('/pending-materials', authenticateToken, authorizePermission('pendin
 }));
 
 // PUT /api/pending-materials/:id/approve - Approve and register in official warehouse inventory
-// v9.0.378 (TD-825): one transaction under the request row lock, only from pending (409), the item made by the item service
+// v9.0.397 (TD-825): one transaction under the request row lock, only from pending (409), the item made by the item service
 router.put('/pending-materials/:id/approve', authenticateToken, authorizePermission('pending_materials.approve'), validate(approvePendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
   const { officialItem: newItem } = await PendingMaterialsService.approvePendingMaterial(Number(req.params.id), req.body ?? {}, actorOf(req));
   res.json({
@@ -111,7 +111,7 @@ router.put('/pending-materials/:id', authenticateToken, authorizePermission('pen
   res.json({ message: 'مشخصات ماده اولیه به‌روزرسانی شد' });
 }));
 
-// DELETE /api/pending-materials/:id - Delete pending material (only while pending, v9.0.378)
+// DELETE /api/pending-materials/:id - Delete pending material (only while pending, v9.0.397)
 router.delete('/pending-materials/:id', authenticateToken, authorizePermission('pending_materials.delete'), validate(paramsIdSchema), asyncHandler(async (req: Request, res: Response) => {
   await PendingMaterialsService.deletePendingMaterial(Number(req.params.id), actorOf(req));
   res.json({ message: 'ماده اولیه حذف شد' });

@@ -5,7 +5,7 @@ import { AppError, BusinessLogicError, ConflictError, NotFoundError, ValidationE
 import { deliveredProjectQuantities, describeOverDeliveries, findOverDeliveries, plannedProjectProducts, type ProjectOverDelivery } from './projects/projectDeliveryCap.js';
 import { withOrderedLocks } from '../lib/lockOrder.js';
 import { DocumentService } from './document.service.js';
-import { businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
+import { businessTodayIsoDate, systemNowUtcIso } from '../lib/businessClock.js';
 import { requireStorageDate, optionalStorageDate } from '../lib/storageDate.js';
 import { AttachmentStorageService } from './attachments/attachmentStorage.service.js';
 import { resolveServerInventoryControl } from './projects/serverInventoryControl.js';
@@ -13,10 +13,14 @@ import { assignProjectCode } from './projects/projectCode.js';
 import { keepScheduleLogLinks } from '../lib/projects/scheduleWorkLog.js';
 import { hasMatrixProducts, matrixProducts } from '../lib/projects/progressMatrix.js';
 import { loadProjectProgressMatrix, productProgressView, progressMatrixStatus, type ProgressMatrixStatus } from './projects/projectProgressMatrix.js';
-import { actorName, lockLiveProject, syncProjectFromMatrix, type ProjectActor, type ProjectStatusSyncResult, type SyncedStage } from './projects/projectStatusSync.js';
+import { actorName, lockLiveProject, stageCompletedAt, syncProjectFromMatrix, type ProjectActor, type ProjectStatusSyncResult, type SyncedStage } from './projects/projectStatusSync.js';
 import { logActivity } from '../lib/auditLogger.js';
+import { logProjectUpdate, logStageChange } from './projects/projectAudit.js';
 import { MAX_STAGE_ORDER } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
+import { normalizeDecimalString } from '../lib/numericInput.js';
+import { nextVersion } from '../lib/occHelper.js';
+import { assertProjectVersion, projectVersionConflict } from './projects/projectVersion.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -61,6 +65,8 @@ export interface UpdateProjectInput {
   stageSchedules?: unknown;
   customStages?: unknown[];
   attachments?: unknown[];
+  /** v9.0.385 (TD-742): نسخه‌ای که فرم از آن ساخته شده؛ مسیر `PUT /projects/:id` همیشه می‌فرستد */
+  expectedVersion?: number;
 }
 
 export interface AddProjectToInventoryInput {
@@ -87,6 +93,46 @@ export interface AddProjectToInventoryResult {
   refNumber: string | null;
   /** v8.0.72 (TD-327): کالاهایی که با دلیل بیش از برنامه تحویل شدند */
   overDeliveries: ProjectOverDelivery[];
+}
+
+/** عدد ورودی با رقم فارسی و جداکننده؛ خالی یعنی فرستاده نشده (undefined) و نامعتبر null */
+const decimalOf = (value: unknown): number | null | undefined => {
+  if (value === undefined || value === null) return undefined;
+  const text = normalizeDecimalString(String(value));
+  if (text === '') return undefined;
+  const num = Number(text);
+  return Number.isFinite(num) ? num : null;
+};
+
+/**
+ * v9.0.381 (TD-741): مقدار پروژه عددی بزرگ‌تر از صفر است (رقم فارسی خوانده می‌شود)؛ پیش‌تر «۱۲» ستون مقدار را NaN می‌کرد.
+ * خالی یعنی بی‌تغییر (در ساخت: ۱).
+ */
+export function projectQuantity(value: unknown): number | undefined {
+  const num = decimalOf(value);
+  if (num === undefined) return undefined;
+  if (num === null || num <= 0) {
+    throw new ValidationError(`مقدار پروژه باید عددی بزرگ‌تر از صفر باشد (مقدار دریافتی: ${String(value)})`, undefined, 'PROJECT_QUANTITY_INVALID');
+  }
+  return num;
+}
+
+/** v9.0.381 (TD-741): یک ردیف «ورود به انبار»: کالا، مقدار مثبت و بهای اختیاری نامنفی، وگرنه ۴۲۲ با شماره ردیف */
+function deliveryLine(entry: AddProjectToInventoryInput['itemsToAdd'][number], index: number): { itemId: number; qty: number; unitPrice: string | null } {
+  const row = `ردیف ${toPersianDigits(index + 1)} ورود به انبار`;
+  const itemId = Number(entry.itemId);
+  if (!Number.isInteger(itemId) || itemId <= 0) {
+    throw new ValidationError(`${row}: کالای تحویلی مشخص نیست`, { row: index + 1 }, 'PROJECT_DELIVERY_LINE_INVALID');
+  }
+  const qty = decimalOf(entry.quantity);
+  if (qty === undefined || qty === null || qty <= 0) {
+    throw new ValidationError(`${row}: مقدار تحویل باید عددی بزرگ‌تر از صفر باشد (مقدار دریافتی: ${String(entry.quantity ?? '')})`, { row: index + 1 }, 'PROJECT_DELIVERY_LINE_INVALID');
+  }
+  const price = decimalOf(entry.unitPrice);
+  if (price === null || (price !== undefined && price < 0)) {
+    throw new ValidationError(`${row}: بهای واحد باید عددی نامنفی باشد (مقدار دریافتی: ${String(entry.unitPrice)})`, { row: index + 1 }, 'PROJECT_DELIVERY_LINE_INVALID');
+  }
+  return { itemId, qty, unitPrice: price === undefined ? null : normalizeDecimalString(String(entry.unitPrice)) };
 }
 
 export class ProjectService {
@@ -127,7 +173,7 @@ export class ProjectService {
       itemId: validItemId,
       itemCode: input.itemCode || '',
       itemName: input.itemName || '',
-      quantity: input.quantity ? Number(input.quantity) : 1,
+      quantity: projectQuantity(input.quantity) ?? 1,
       unit: input.unit || 'عدد',
       // v7.0.135 (TD-232): تاریخ شروع و پایان پروژه و مراحل میلادی ISO؛ ورودی شمسی تبدیل و نامعتبر 422
       startDate: requireStorageDate(input.startDate, 'تاریخ شروع پروژه'),
@@ -193,8 +239,11 @@ export class ProjectService {
     if (!existing) {
       throw new NotFoundError('پروژه یافت نشد');
     }
+    // v9.0.385 (TD-742، تصمیم ت۳ الف): ویرایش از نسخه کهنه ۴۰۹ است و هر ذخیره نسخه را یکی بالا می‌برد؛ پیش‌تر ذخیره دوم دو
+    // کاربر ذخیره اول را بی‌صدا پاک می‌کرد
+    if (input.expectedVersion !== undefined) assertProjectVersion(existing, input.expectedVersion);
 
-    const updateData: Record<string, unknown> = {};
+    const updateData: Record<string, unknown> = { version: nextVersion(existing.version) };
     if (input.title !== undefined) updateData.title = input.title.trim();
 
     if (input.projectCode !== undefined && input.projectCode !== null && String(input.projectCode).trim()) {
@@ -223,7 +272,8 @@ export class ProjectService {
 
     if (input.itemCode !== undefined) updateData.itemCode = input.itemCode;
     if (input.itemName !== undefined) updateData.itemName = input.itemName;
-    if (input.quantity !== undefined) updateData.quantity = Number(input.quantity);
+    const quantity = projectQuantity(input.quantity);
+    if (quantity !== undefined) updateData.quantity = quantity;
     if (input.unit !== undefined) updateData.unit = input.unit;
     if (input.startDate !== undefined) updateData.startDate = optionalStorageDate(input.startDate, 'تاریخ شروع پروژه');
     if (input.endDate !== undefined) updateData.endDate = optionalStorageDate(input.endDate, 'تاریخ پایان پروژه');
@@ -243,12 +293,17 @@ export class ProjectService {
       updateData.attachments = await AttachmentStorageService.normalizeForRecord(executor, 'production_project', id, input.attachments);
     }
 
-    const [current] = await executor.update(productionProjects).set(updateData).where(eq(productionProjects.id, id)).returning();
+    const [current] = await executor.update(productionProjects).set(updateData)
+      .where(and(eq(productionProjects.id, id), eq(productionProjects.version, existing.version))).returning();
+    if (!current) throw projectVersionConflict(id, existing.version);
 
     // v9.0.364 (TD-739): تکمیل دستی پروژه با همان قاعده ماتریس، درون همین تراکنش و روی ردیف ذخیره‌شده
     if (input.status === 'completed' && existing.status !== 'completed') {
       ProjectService.assertMatrixCompleted(progressMatrixStatus(await loadProjectProgressMatrix(executor, current)));
     }
+
+    // v9.0.383 (TD-757): ردیف ممیزی ویرایش با پیش و پس فیلدهای تغییرکرده، با همین تراکنش
+    await logProjectUpdate(executor, actor, existing, current);
 
     // v9.0.365 (TD-738): ویرایش پروژه (محصولات، کالای اصلی) مراحل و وضعیت را زیر همین قفل با ماتریس همگام می‌کند
     const synced = await syncProjectFromMatrix(executor, current, actor);
@@ -332,14 +387,13 @@ export class ProjectService {
       const lines: Array<{ itemId: number; quantity: number; unitPrice: string; location: string }> = [];
       const lineNotes: string[] = [];
 
-      for (const entry of input.itemsToAdd) {
-        const itemId = Number(entry.itemId);
-        const qty = Number(entry.quantity);
-        if (!itemId || !qty || qty <= 0) continue;
-
+      for (const [index, entry] of input.itemsToAdd.entries()) {
+        // v9.0.381 (TD-741): ردیف بی کالا، با مقدار غیرمثبت یا بهای نامعتبر کل تحویل را با ۴۲۲ رد می‌کند؛ پیش‌تر بی‌صدا کنار
+        // گذاشته می‌شد (پاسخ ۲۰۰ «با موفقیت افزوده شدند» با صفر قلم) و بهای نامعتبر به میانگین موزون برمی‌گشت
+        const { itemId, qty, unitPrice } = deliveryLine(entry, index);
         let effectiveUnitPrice: string;
-        if (entry.unitPrice !== undefined && entry.unitPrice !== null && !isNaN(Number(entry.unitPrice))) {
-          effectiveUnitPrice = String(entry.unitPrice);
+        if (unitPrice !== null) {
+          effectiveUnitPrice = unitPrice;
         } else {
           const [itemRow] = await tx.select({ weightedAverageCost: items.weightedAverageCost }).from(items).where(eq(items.id, itemId));
           effectiveUnitPrice = itemRow?.weightedAverageCost ? itemRow.weightedAverageCost.toString() : '0';
@@ -382,7 +436,7 @@ export class ProjectService {
 
       if (input.markCompleted) {
         ProjectService.assertMatrixCompleted(await ProjectService.getProgressMatrixStatus(id, tx));
-        await tx.update(productionProjects).set({ status: 'completed' }).where(eq(productionProjects.id, id));
+        await tx.update(productionProjects).set({ status: 'completed', version: nextVersion(proj.version) }).where(eq(productionProjects.id, id));
       }
 
       return { addedCount: lines.length, projectCode: proj.projectCode, documentId, refNumber, overDeliveries };
@@ -408,7 +462,7 @@ export class ProjectService {
     executor: DbExecutor = orm
   ): Promise<SyncedStage> {
     return executor.transaction(async (tx) => {
-      await lockLiveProject(tx, projectId);
+      const project = await lockLiveProject(tx, projectId);
       const nextOrder = await ProjectService.nextStageOrder(tx, projectId);
 
       const [newStage] = await tx.insert(projectStages).values({
@@ -426,7 +480,10 @@ export class ProjectService {
       }).returning();
 
       const synced = await ProjectService.syncLockedProject(tx, projectId, actor);
-      return synced.stages.find(st => st.id === newStage.id) ?? newStage;
+      const stage = synced.stages.find(st => st.id === newStage.id) ?? newStage;
+      // v9.0.383 (TD-757): افزودن مرحله ردیف ممیزی با پس مرحله دارد، با همین تراکنش
+      await logStageChange(tx, actor, 'CREATE', project, null, stage);
+      return stage;
     });
   }
 
@@ -562,10 +619,7 @@ export class ProjectService {
       }
       if (data.status !== undefined) {
         updateData.status = data.status;
-        if (data.status === 'completed') {
-          updateData.progressPercent = 100;
-          updateData.completedAt = new Date().toISOString();
-        }
+        if (data.status === 'completed') updateData.progressPercent = 100;
       }
       if (data.startDate !== undefined) updateData.startDate = optionalStorageDate(data.startDate, 'تاریخ شروع مرحله');
       if (data.endDate !== undefined) updateData.endDate = optionalStorageDate(data.endDate, 'تاریخ پایان مرحله');
@@ -580,12 +634,17 @@ export class ProjectService {
         updateData.progressPercent = p;
         if (p === 100 && existing.status !== 'completed') {
           updateData.status = 'completed';
-          updateData.completedAt = new Date().toISOString();
         } else if (p > 0 && p < 100 && existing.status === 'pending') {
           updateData.status = 'in_progress';
         }
       }
       if (data.notes !== undefined) updateData.notes = data.notes;
+      // v9.0.382 (TD-756): زمان تکمیل مرحله با یک ساعت، ساعت UTC سرور (`systemNowUtcIso`، مانند همگام‌ساز ماتریس)؛ پیش‌تر
+      // این مسیر UTC با Z و همگام‌ساز ساعت دیواری تهران بی منطقه می‌نوشت (۲۱۰ دقیقه اختلاف). مرحله تکمیل‌شده زمانش را نگه
+      // می‌دارد و مرحله‌ای که از «تکمیل‌شده» بیرون می‌رود زمان تکمیل ندارد.
+      if (updateData.status !== undefined) {
+        updateData.completedAt = stageCompletedAt(existing, String(updateData.status), systemNowUtcIso());
+      }
 
       const [updated] = await tx
         .update(projectStages)
@@ -594,7 +653,10 @@ export class ProjectService {
         .returning();
 
       const synced = await ProjectService.syncLockedProject(tx, projectId, actor);
-      return synced.stages.find(st => st.id === stageId) ?? updated;
+      const stage = synced.stages.find(st => st.id === stageId) ?? updated;
+      // v9.0.383 (TD-757): ویرایش مرحله ردیف ممیزی با پیش و پس دارد، با همین تراکنش
+      await logStageChange(tx, actor, 'UPDATE', project, existing, stage);
+      return stage;
     });
   }
 
@@ -609,7 +671,7 @@ export class ProjectService {
     executor: DbExecutor = orm
   ): Promise<typeof projectStages.$inferSelect> {
     return executor.transaction(async (tx) => {
-      await lockLiveProject(tx, projectId);
+      const project = await lockLiveProject(tx, projectId);
       const [existing] = await tx
         .select()
         .from(projectStages)
@@ -629,6 +691,8 @@ export class ProjectService {
           .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.stageOrder, existing.stageOrder), eq(projectProductStageProgress.isDeleted, 0)));
       }
       await ProjectService.syncLockedProject(tx, projectId, actor);
+      // v9.0.383 (TD-757): حذف مرحله ردیف ممیزی با پیش مرحله دارد، با همین تراکنش
+      await logStageChange(tx, actor, 'DELETE', project, existing, null);
       return existing;
     });
   }
@@ -663,7 +727,8 @@ export class ProjectService {
         .orderBy(asc(projectStages.stageOrder), asc(projectStages.id));
       for (const st of liveStages) if (!stageTitles.has(st.stageOrder)) stageTitles.set(st.stageOrder, st.title);
 
-      const bizNow = await businessNowIsoDateTime();
+      // v9.0.382 (TD-756): مهر تیک ماتریس ساعت UTC سرور است، نه ساعت دیواری تهران بی منطقه
+      const updatedAt = systemNowUtcIso();
       let applied = 0;
       let skippedInvalid = 0;
 
@@ -691,7 +756,7 @@ export class ProjectService {
           stageOrder,
           stageTitle,
           status: u.status,
-          updatedAt: bizNow,
+          updatedAt,
           updatedByName: currentUser,
           isDeleted: 0
         }).onConflictDoUpdate({
@@ -700,7 +765,7 @@ export class ProjectService {
             status: u.status,
             stageTitle,
             quantity: product.quantity,
-            updatedAt: bizNow,
+            updatedAt,
             updatedByName: currentUser,
             isDeleted: 0
           }

@@ -11,10 +11,10 @@ import { createProject, globalSection, postDoc, reservedOf, runReservationCases 
 export async function runStockReservationReadTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_reservation_fail_closed_td_821',
-      'v9.0.375: a malformed or unmatched reservation row is skipped and listed instead of breaking every exit, and every reader that allows an exit or shows stock fails closed (TD-821)',
+      'v9.0.394: a malformed or unmatched reservation row is skipped and listed instead of breaking every exit, and every reader that allows an exit or shows stock fails closed (TD-821)',
       ['td821', 'reservation', 'failclosed', 'package7'], failClosedCase],
     ['reg_reservation_scoped_reads_td_831',
-      'v9.0.376: the exit gate, the item list and the online shop read only the proformas, projects and items of the items they ask for (TD-831)',
+      'v9.0.395: the exit gate, the item list and the online shop read only the proformas, projects and items of the items they ask for (TD-831)',
       ['td831', 'reservation', 'performance', 'package7'], scopedReadsCase],
   ]);
 }

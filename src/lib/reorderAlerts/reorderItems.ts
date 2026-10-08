@@ -13,11 +13,11 @@ export interface ReorderItem {
   image?: string;
   thumbnail?: string;
   current_stock: number;
-  /** v9.0.385 (TD-843): reserved by sales proformas and finalized projects */
+  /** v9.0.404 (TD-843): reserved by sales proformas and finalized projects */
   reserved_qty?: number;
-  /** v9.0.385 (TD-843): current_stock − reserved_qty; the alert, the deficit and «بی موجودی» read it */
+  /** v9.0.404 (TD-843): current_stock − reserved_qty; the alert, the deficit and «بی موجودی» read it */
   free_stock?: number;
-  /** v9.0.385 (TD-843): on open purchase documents (draft or proforma); shown only */
+  /** v9.0.404 (TD-843): on open purchase documents (draft or proforma); shown only */
   in_transit_qty?: number;
   reorder_point: number;
   weighted_average_cost: number;
@@ -35,7 +35,7 @@ export interface ReorderModalItem {
   name: string;
   code: string;
   unit: string;
-  /** v9.0.385 (TD-843): the alert's free stock (stock − reservations) */
+  /** v9.0.404 (TD-843): the alert's free stock (stock − reservations) */
   current_stock: number;
   reorder_point: number;
   deficit: number;
@@ -57,7 +57,7 @@ export interface ReorderProjectProduct {
 export type StockStatusFilter = 'all' | 'zero' | 'below_reorder';
 
 /**
- * v9.0.382 (TD-827، یافته B07-11، تصمیم ت۸): هر کالای هشدار یا «بی موجودی» است یا «زیر نقطه سفارش» (موجودی مثبت و حداکثر
+ * v9.0.401 (TD-827، یافته B07-11، تصمیم ت۸): هر کالای هشدار یا «بی موجودی» است یا «زیر نقطه سفارش» (موجودی مثبت و حداکثر
  * نقطه سفارش، چون سرور فقط همین‌ها را می‌فرستد) و پالایش وضعیت همین را می‌سنجد. پیش‌تر «زیر آستانه» کالای دارای موجودی را
  * کنار می‌گذاشت و همان کالاهای بی موجودی را نشان می‌داد.
  */
@@ -68,7 +68,7 @@ export const STOCK_STATUS_FILTER_LABELS: Record<StockStatusFilter, string> = {
 };
 
 /**
- * v9.0.385 (TD-843، تصمیم ت۷ «الف»): موجودی آزاد (موجودی − رزروها) که هشدار با آن سنجیده می‌شود؛ پاسخ پیش از این نسخه
+ * v9.0.404 (TD-843، تصمیم ت۷ «الف»): موجودی آزاد (موجودی − رزروها) که هشدار با آن سنجیده می‌شود؛ پاسخ پیش از این نسخه
  * فقط موجودی کل دارد
  */
 export const freeStockOf = (item: Pick<ReorderItem, 'free_stock' | 'current_stock'>): number =>

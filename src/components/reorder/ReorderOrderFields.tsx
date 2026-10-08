@@ -33,7 +33,7 @@ interface ReorderOrderFieldsProps {
 const FIELD = 'w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none';
 
 /**
- * v9.0.384 (TD-830، یافته B07-14): فیلدهای مودال سفارش خرید از هشدار نقطه سفارش. انبار مقصد سند مستقیم از فهرست انبارهای
+ * v9.0.403 (TD-830، یافته B07-14): فیلدهای مودال سفارش خرید از هشدار نقطه سفارش. انبار مقصد سند مستقیم از فهرست انبارهای
  * فعال (`/warehouses`) انتخاب می‌شود و تاریخ با `JalaliDateInput` و حالت ISO است (AGENTS §۱.۱۰). پیش‌تر انبار setter نداشت
  * و کالا همیشه به انبار پیش‌فرض می‌رفت، و تاریخ یک کادر متنی بود که سند مستقیم اصلاً نشانش نمی‌داد.
  */

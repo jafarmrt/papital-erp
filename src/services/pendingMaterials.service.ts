@@ -61,7 +61,7 @@ export interface PendingMaterialActor {
   req?: Request;
   userId?: number;
   username?: string;
-  /** v9.0.379 (TD-826): the change comes from a transition of the request's own workflow, which stays open for it */
+  /** v9.0.398 (TD-826): the change comes from a transition of the request's own workflow, which stays open for it */
   viaWorkflow?: boolean;
 }
 
@@ -70,7 +70,7 @@ type PendingMaterialRow = typeof pendingMaterials.$inferSelect;
 const ENTITY = 'ماده اولیه';
 const STATUS_LABELS: Record<string, string> = { pending: 'در انتظار تأیید', approved: 'تأییدشده', rejected: 'ردشده' };
 
-/** v9.0.378 (TD-825): a number of the request; the route schema read it with `decimalInput` and refused a negative one */
+/** v9.0.397 (TD-825): a number of the request; the route schema read it with `decimalInput` and refused a negative one */
 const quantityOf = (value: number | string | undefined, fallback: number): number => {
   if (value === undefined || value === '') return fallback;
   const parsed = Number(value);
@@ -104,7 +104,7 @@ export function pendingMaterialAuditSnapshot(row: PendingMaterialRow) {
 }
 
 /**
- * v9.0.378 (TD-825، یافته B07-09): ردیف درخواست زنده با قفل `FOR UPDATE`. تأیید، رد، ویرایش و حذف هر کدام در یک تراکنش با
+ * v9.0.397 (TD-825، یافته B07-09): ردیف درخواست زنده با قفل `FOR UPDATE`. تأیید، رد، ویرایش و حذف هر کدام در یک تراکنش با
  * همین قفل اجرا می‌شوند، پس دو بررسی هم‌زمان یک درخواست پشت سر هم می‌روند و دومی وضعیت تازه را می‌بیند.
  */
 async function lockLiveRequest(tx: DbExecutor, id: number): Promise<PendingMaterialRow> {
@@ -130,7 +130,7 @@ function assertStillPending(row: PendingMaterialRow, action: string): void {
 }
 
 /**
- * v9.0.379 (TD-826، تصمیم ت۵): تأیید، رد یا حذف مستقیم فرایند در جریان درخواست را در همان تراکنش می‌بندد (پس از قفل ردیف
+ * v9.0.398 (TD-826، تصمیم ت۵): تأیید، رد یا حذف مستقیم فرایند در جریان درخواست را در همان تراکنش می‌بندد (پس از قفل ردیف
  * درخواست، همان ترتیب «موجودیت ← نمونه» انتقال گردش کار)، مثل سندی که بیرون از گردش کار قطعی می‌شود
  */
 async function closeOpenWorkflow(tx: DbExecutor, id: number, actor: PendingMaterialActor, actionTitle: string): Promise<void> {
@@ -142,7 +142,7 @@ async function closeOpenWorkflow(tx: DbExecutor, id: number, actor: PendingMater
 }
 
 /**
- * v9.0.379 (TD-826): پروژه درخواست زنده است و عنوانش از خود پروژه خوانده می‌شود (۴۲۲ برای پروژه ناموجود یا حذف‌شده)؛ پیش‌تر
+ * v9.0.398 (TD-826): پروژه درخواست زنده است و عنوانش از خود پروژه خوانده می‌شود (۴۲۲ برای پروژه ناموجود یا حذف‌شده)؛ پیش‌تر
  * عنوان از بدنه درخواست می‌آمد.
  */
 async function requestProject(tx: DbExecutor, projectId: number | string | null | undefined): Promise<{ id: number | null; title: string }> {
@@ -173,7 +173,7 @@ export class PendingMaterialsService {
 
   /**
    * Submits a new pending raw material from project control.
-   * v9.0.378 (TD-825): no `TEMP-<ms>` code (the reviewer gives the code), numbers come validated by the route schema and an
+   * v9.0.397 (TD-825): no `TEMP-<ms>` code (the reviewer gives the code), numbers come validated by the route schema and an
    * inline image is stored as a file; the request and its audit row are written in one transaction.
    */
   static async submitPendingMaterial(
@@ -217,7 +217,7 @@ export class PendingMaterialsService {
         description: `ثبت درخواست ماده اولیه "${inserted.name}" جهت بررسی انباردار`,
         details: { after: pendingMaterialAuditSnapshot(inserted) }
       });
-      // v9.0.379 (TD-826): with an active «pending_material» definition the request's workflow starts in the same transaction
+      // v9.0.398 (TD-826): with an active «pending_material» definition the request's workflow starts in the same transaction
       await WorkflowEngineService.maybeStartWorkflow({
         entityType: 'pending_material', entityId: inserted.id, userId: actor.userId, userName: actor.username, tx,
       });
@@ -227,7 +227,7 @@ export class PendingMaterialsService {
 
   /**
    * Approves a pending material and registers it into the official items catalog.
-   * v9.0.378 (TD-825, finding B07-09): one transaction under the request row lock and only from `pending` (409
+   * v9.0.397 (TD-825, finding B07-09): one transaction under the request row lock and only from `pending` (409
    * `PENDING_MATERIAL_NOT_PENDING`). The item is made by `ItemCatalogService.createItem` (code and name unique case-insensitively,
    * code series counter, image to a file) and its id stays on the request (`item_id`); the item's CREATE row and the
    * request's UPDATE row are written in the same transaction. Before, two approvals made two items with one code and an
@@ -301,7 +301,7 @@ export class PendingMaterialsService {
 
   /**
    * Rejects a pending material request.
-   * v9.0.378 (TD-825): only from `pending`, under the row lock, with its audit row in the same transaction.
+   * v9.0.397 (TD-825): only from `pending`, under the row lock, with its audit row in the same transaction.
    */
   static async rejectPendingMaterial(
     id: number,
@@ -333,7 +333,7 @@ export class PendingMaterialsService {
 
   /**
    * Updates details of a pending material (only while pending; TD-302).
-   * v9.0.378 (TD-825): under the row lock, with its audit row in the same transaction.
+   * v9.0.397 (TD-825): under the row lock, with its audit row in the same transaction.
    */
   static async updatePendingMaterial(
     id: number,
@@ -375,7 +375,7 @@ export class PendingMaterialsService {
 
   /**
    * Soft-deletes a pending material.
-   * v9.0.378 (TD-825): only while pending (a reviewed request is the record of its item or its rejection), under the row
+   * v9.0.397 (TD-825): only while pending (a reviewed request is the record of its item or its rejection), under the row
    * lock, with its audit row in the same transaction.
    */
   static async deletePendingMaterial(

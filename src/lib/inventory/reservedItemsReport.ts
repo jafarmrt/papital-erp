@@ -2,7 +2,7 @@
  * The reserved items report (`GET /inventory/reserved-items`), shared by the server (`ItemStockReservationService`) and the
  * page (`ReservedItemsReportPage`).
  *
- * v9.0.380 (TD-823، یافته B07-07، تصمیم ت۶ «الف»): ارزش هر رزرو همیشه به بهای تمام‌شده و ریال است: مقدار × میانگین موزون
+ * v9.0.399 (TD-823، یافته B07-07، تصمیم ت۶ «الف»): ارزش هر رزرو همیشه به بهای تمام‌شده و ریال است: مقدار × میانگین موزون
  * بهای کالا (`unitCost` / `totalCost`)، برای پیش‌فاکتور و پروژه یکسان. پیش‌تر ارزش پیش‌فاکتور مقدار × قیمت فروش به ارز همان سند
  * بود و ارزش پروژه مقدار × بها، و جمع، مبلغ دلاری خام را با ریال جمع می‌زد (۲ × ۱۰۰ دلار ← ۲۰۰ «ریال»)؛ `buyPrice` و
  * `sellPrice` خلاصه هر دو همان بها بودند و یک فیلد `weightedAverageCost` جایشان را گرفت.
@@ -65,12 +65,12 @@ export interface ReservedItemsFullReport {
   summaryMetrics: ReservedItemsSummaryMetrics;
   itemSummaries: ItemReservedReportSummary[];
   allReservationEntries: ReservedItemDetail[];
-  /** v9.0.381 (TD-829): what the reader may see; the server leaves out what it may not */
+  /** v9.0.400 (TD-829): what the reader may see; the server leaves out what it may not */
   access?: ReservedItemsReportAccess;
 }
 
 /**
- * v9.0.381 (TD-829، یافته B07-13، تصمیم ت۶ «الف»): بها و ارزش رزرو فقط برای خوانندگان بها در P05 ت۱۰-۲ (`products.view`،
+ * v9.0.400 (TD-829، یافته B07-13، تصمیم ت۶ «الف»): بها و ارزش رزرو فقط برای خوانندگان بها در P05 ت۱۰-۲ (`products.view`،
  * `products.edit_price`، مجوزهای انبار و `accounting.*`) و نام خریدار پیش‌فاکتور فقط برای دارندگان `documents.view`؛ دیگر
  * خوانندگان گزارش مقدار و منبع را می‌بینند. پیش‌تر هر خواننده گزارش (از جمله `documents.create` و `reports.view`) بهای کالا،
  * قیمت فروش و خریدار پیش‌فاکتورهای همه مشتریان را می‌گرفت.

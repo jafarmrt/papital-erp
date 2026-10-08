@@ -51,7 +51,7 @@ function openDirectFinal(item: ReorderModalItem) {
 const submit = () => fireEvent.click(screen.getByText('ثبت سند خرید انبار'));
 const sentPayload = () => (mutate.mock.calls[0][0] as { payload: Record<string, unknown> }).payload;
 
-// v9.0.384 (TD-830، یافته B07-14): رسید نهایی از هشدار نقطه سفارش با بهای صفر برای کالای بی میانگین موزون بها رد می‌شود و
+// v9.0.403 (TD-830، یافته B07-14): رسید نهایی از هشدار نقطه سفارش با بهای صفر برای کالای بی میانگین موزون بها رد می‌شود و
 // برای کالای دارای بها فقط با تأیید «کالای اهدایی» پذیرفته می‌شود؛ انبار مقصد و تاریخ (ISO با JalaliDateInput) انتخاب‌شدنی‌اند.
 // پیش‌تر رسید نهایی ۱۰ × ۰ بی هشدار ثبت می‌شد، انبار setter نداشت و تاریخ کادر متنی شمسی بود.
 describe('reorder purchase receipt at price zero, warehouse and date (TD-830)', () => {

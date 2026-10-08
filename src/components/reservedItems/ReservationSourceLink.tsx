@@ -3,7 +3,7 @@ import { ExternalLink } from 'lucide-react';
 import { reservationSourcePath } from '../../lib/inventory/reservedItemsExport';
 import type { ReservedItemDetail } from '../../lib/inventory/reservedItemsReport';
 
-/** v9.0.383 (TD-828): opens the reservation's source in a page that reads it from the address */
+/** v9.0.402 (TD-828): opens the reservation's source in a page that reads it from the address */
 export function ReservationSourceLink({ entry }: { entry: Pick<ReservedItemDetail, 'sourceType' | 'sourceRef' | 'sourceId'> }) {
   const proforma = entry.sourceType === 'proforma';
   return (

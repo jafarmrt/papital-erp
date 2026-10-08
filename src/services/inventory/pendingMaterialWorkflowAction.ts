@@ -14,7 +14,7 @@ const approvesRequest = (t: WorkflowActionTarget) => t.toStateKey === 'approved'
 const rejectsRequest = (t: WorkflowActionTarget) => t.toStateKey === 'rejected';
 
 /**
- * v9.0.379 (TD-826، یافته B07-10، تصمیم ت۵ «الف»): گام «تأییدشده» یا اقدام خودکار `APPROVE_PENDING_MATERIAL` درخواست را
+ * v9.0.398 (TD-826، یافته B07-10، تصمیم ت۵ «الف»): گام «تأییدشده» یا اقدام خودکار `APPROVE_PENDING_MATERIAL` درخواست را
  * در همان تراکنش انتقال تأیید می‌کند (کالا از مسیر تعریف کالا و با همان قاعده‌های تأیید مستقیم) و گام «ردشده» آن را رد
  * می‌کند؛ خطای تأیید (کد تکراری، درخواست بررسی‌شده) انتقال را رد می‌کند. پیش‌تر هیچ اقدامی برای `pending_material` ثبت
  * نبود و گام‌های گردش کار درخواست را تغییر نمی‌دادند.

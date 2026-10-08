@@ -124,7 +124,7 @@ export const releaseAllocationSchema = z.object({
 });
 
 // GET /api/inventory/reserved-items - Comprehensive report of reserved items
-// v9.0.381 (TD-829): cost and value only for item cost readers, a proforma's buyer only for documents.view
+// v9.0.400 (TD-829): cost and value only for item cost readers, a proforma's buyer only for documents.view
 router.get('/reserved-items', authorizePermission(...READ_PERMISSIONS.reservedItems), asyncHandler(async (req, res) => {
   const report = await ItemsService.getReservedStockDetails();
   res.json(reservedItemsReportForAccess(report, {

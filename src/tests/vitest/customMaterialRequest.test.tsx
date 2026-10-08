@@ -19,7 +19,7 @@ afterEach(() => { cleanup(); fetchJson.mockReset(); held.clear(); });
 const project = { id: 42, title: 'پروژه آزمون', inventory_control: { sections: [] } } as unknown as ProductionProject;
 const submitEvent = { preventDefault: () => undefined } as unknown as FormEvent;
 
-// v9.0.379 (TD-826، یافته B07-10، تصمیم ت۵ «الف»): «ماده سفارشی» کنترل پروژه درخواست به صف بررسی انبار می‌فرستد و کالا نمی‌سازد.
+// v9.0.398 (TD-826، یافته B07-10، تصمیم ت۵ «الف»): «ماده سفارشی» کنترل پروژه درخواست به صف بررسی انبار می‌فرستد و کالا نمی‌سازد.
 // پیش‌تر فرم مستقیم `POST /api/items` می‌زد، با موجودی اولیه، و صف و تأیید انباردار را دور می‌زد.
 describe('project custom material request (TD-826)', () => {
   it('sends a pending-material request the route schema accepts, never an item', async () => {

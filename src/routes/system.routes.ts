@@ -4,6 +4,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission, userHasRoleOrPermission, requireSystemAdmin } from '../middleware/authorize.js';
 import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 import { logger } from '../middleware/logger.js';
+import { errorMessageOf } from '../utils.js';
 import { z } from 'zod';
 import { validate, storageDateParam } from '../middleware/validate.js';
 import { parsePagination } from '../lib/pagination.js';
@@ -11,11 +12,11 @@ import { logActivity, extractClientIp, purgeOldAuditLogs, checkAuditLogIntegrity
 import { BUILD_INFO } from '../lib/version.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
 import { SystemSettingsService } from '../services/settings/systemSettings.service.js';
-import { DataExportService } from '../services/system/dataExport.service.js';
+import { DataExportService, type DataExportOptions } from '../services/system/dataExport.service.js';
 import { ActivityLogQueryService } from '../services/system/activityLogQuery.service.js';
 import { FactoryResetService } from '../services/system/factoryReset.service.js';
 import { SystemHealthService } from '../services/system/systemHealth.service.js';
-import { SystemReconciliationService } from '../services/system/systemReconciliation.service.js';
+import { SystemReconciliationService, requeueResultMessage, stuckResetResultMessage } from '../services/system/systemReconciliation.service.js';
 import { GlobalSearchService } from '../services/system/globalSearch.service.js';
 import { DateCalendarReportService } from '../services/system/dateCalendarReport.service.js';
 
@@ -62,6 +63,22 @@ export const purgeActivityLogsSchema = z.object({
       .positive('مدت نگه‌داشت باید مثبت باشد').max(36500, 'مدت نگه‌داشت حداکثر ۳۶۵۰۰ روز است').optional(),
     // v9.0.212 (TD-522، تصمیم ت۴ الف): خاموش کردن حفاظت و پاک کردن زودتر از ۹۰ روز گزینه‌ای ندارد؛ کلید ناشناخته ۴۰۰ است
   }).strict().optional()
+});
+
+// v9.0.386 (TD-592): سجل ممیزی فقط با گزینه جدا و یک بازه تاریخ روزهای کسب‌وکار در خروجی داده می‌آید
+export const dataExportQuerySchema = z.object({
+  query: z.object({
+    activityLogs: z.enum(['0', '1'], { message: 'گزینه سجل ممیزی باید ۰ یا ۱ باشد' }).optional(),
+    from: storageDateParam,
+    to: storageDateParam,
+  }).superRefine((q, ctx) => {
+    if (q.activityLogs !== '1') return;
+    if (!q.from) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['from'], message: 'برای خروجی سجل ممیزی تاریخ آغاز بازه را وارد کنید' });
+    if (!q.to) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['to'], message: 'برای خروجی سجل ممیزی تاریخ پایان بازه را وارد کنید' });
+    if (q.from && q.to && q.from > q.to) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['to'], message: 'تاریخ پایان بازه سجل ممیزی پیش از تاریخ آغاز آن است' });
+    }
+  }).optional()
 });
 
 export const reconciliationFixSchema = z.object({
@@ -220,7 +237,7 @@ router.get('/system/health', requireSystemAdmin, asyncHandler(async (req, res) =
   // 1. Check DB Connection & Latency
   const dbStatus = await SystemHealthService.checkDatabase();
 
-  // 2. Check Write Permissions on public/uploads
+  // 2. Check that the attachment and image directories are writable (read-only check)
   const storageStatus = SystemHealthService.checkStorage();
 
   // 3. Subsystem Health Checks (Outbox, DLQ, Vouchers, Workflow)
@@ -239,7 +256,6 @@ router.get('/system/health', requireSystemAdmin, asyncHandler(async (req, res) =
     outbox: subsystems.outbox,
     accounting: subsystems.accounting,
     workflow: subsystems.workflow,
-    observability: { status: 'ok', contextTracing: true },
     network: {
       isHttps,
       protocol: req.protocol,
@@ -294,11 +310,11 @@ router.post('/system/reconciliation-fix', requireSystemAdmin, validate(reconcili
 
   if (action === 'requeue_dlq') {
     const requeuedCount = await SystemReconciliationService.requeueDeadLetterEvents(actor);
-    return res.json({ success: true, requeuedCount, message: `تعداد ${requeuedCount} رویداد از صف قرنطینه به صف پردازش Outbox منتقل شدند.` });
+    return res.json({ success: true, requeuedCount, message: requeueResultMessage(requeuedCount) });
   }
 
   const resetCount = await SystemReconciliationService.resetStuckOutboxEvents(actor);
-  return res.json({ success: true, resetCount, message: `تعداد ${resetCount} رویداد متوقف‌شده در حالت Processing با موفقیت بازنشانی شدند.` });
+  return res.json({ success: true, resetCount, message: stuckResetResultMessage(resetCount) });
 }));
 
 // (v4.0.29) توابع assertTestEndpointsAllowed/assertTestEndpointsEnabled حذف شدند —
@@ -341,9 +357,13 @@ router.get('/global-search', asyncHandler(async (req, res) => {
 // Export full database dump as JSON
 // v7.0.29 (TD-188 / audit P1-6): خروجی امن داده‌ها (بدون هش رمز، رمز صرافی پرسنل و کلیدهای محرمانه؛
 // شامل دفاتر حسابداری و کارمزدی) — نسخه پشتیبان قابل بازگردانی نیست؛ پشتیبان واقعی: scripts/backup.sh
-router.get('/export-backup', requireSystemAdmin, asyncHandler(async (req, res) => {
-  const exportData = await DataExportService.buildExport();
-  const tableCount = Object.keys((exportData.data as Record<string, unknown>) || {}).length;
+// v9.0.386 (TD-592، تصمیم ت۷ الف): خروجی zip جریانی، جدول‌به‌جدول و دسته‌به‌دسته؛ سجل ممیزی فقط با گزینه و بازه تاریخ
+router.get('/export-backup', requireSystemAdmin, validate(dataExportQuerySchema), asyncHandler(async (req, res) => {
+  const query = req.query as { activityLogs?: string; from?: string; to?: string };
+  const options: DataExportOptions = query.activityLogs === '1' && query.from && query.to
+    ? { activityLogs: { from: query.from, to: query.to } }
+    : {};
+  const tables = DataExportService.tableNames(options);
 
   await logActivity({
     userId: req.user?.id,
@@ -351,14 +371,24 @@ router.get('/export-backup', requireSystemAdmin, asyncHandler(async (req, res) =
     userFullName: req.user?.full_name || '',
     action: 'EXPORT',
     entity: 'سیستم:خروجی_داده‌ها',
-    description: `دریافت خروجی داده‌های کسب‌وکاری شامل ${tableCount} جدول (بدون رمزهای عبور و کلیدهای محرمانه)`,
+    description: options.activityLogs
+      ? `دریافت خروجی داده‌های کسب‌وکاری شامل ${tables.length} جدول، همراه سجل ممیزی ${options.activityLogs.from} تا ${options.activityLogs.to} (بدون رمزهای عبور و کلیدهای محرمانه)`
+      : `دریافت خروجی داده‌های کسب‌وکاری شامل ${tables.length} جدول، بی سجل ممیزی (بدون رمزهای عبور و کلیدهای محرمانه)`,
+    details: { tables, activityLogs: options.activityLogs ?? null },
     ipAddress: extractClientIp(req)
   });
 
-  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Type', 'application/zip');
   // TD-245: تاریخ نام فایل، تاریخ امروز کسب‌وکار (منطقه زمانی توافقی) است، نه تاریخ UTC
   res.setHeader('Content-Disposition', `attachment; filename="${await DataExportService.buildExportFileName()}"`);
-  res.json(exportData);
+  try {
+    await DataExportService.writeExport(res, options);
+  } catch (err) {
+    logger.error('Data export stopped before the archive was finished', { error: errorMessageOf(err) });
+    // پس از آغاز جریان پاسخ کد وضعیت ندارد؛ بستن اتصال دانلود ناقص را برای مرورگر آشکار می‌کند
+    if (!res.headersSent) throw err;
+    res.destroy();
+  }
 }));
 
 export default router;

@@ -29,11 +29,11 @@ export function ReorderPurchaseModal({
   const [orderTarget, setOrderTarget] = useState<'requisition' | 'direct_document'>('requisition');
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<Priority>('normal');
-  // v9.0.384 (TD-830): ISO, shown with JalaliDateInput
+  // v9.0.403 (TD-830): ISO, shown with JalaliDateInput
   const [requiredDate, setRequiredDate] = useState(() => getTodayIsoDate());
   const [supplierName, setSupplierName] = useState('');
   const [docStatus, setDocStatus] = useState<DocStatus>('draft');
-  // v9.0.384 (TD-830): '' = the first active warehouse, which is the default warehouse (lowest id)
+  // v9.0.403 (TD-830): '' = the first active warehouse, which is the default warehouse (lowest id)
   const [targetWarehouse, setTargetWarehouse] = useState('');
   const [donatedConfirmed, setDonatedConfirmed] = useState(false);
   const { data: warehouses = [] } = useWarehousesQuery();
