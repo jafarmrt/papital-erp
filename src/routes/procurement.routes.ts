@@ -21,9 +21,10 @@ router.use(authenticateToken);
 
 /**
  * GET /api/procurement/inbox/summary
- * Procurement Desk metrics summary
+ * Procurement Desk metrics summary. v9.0.352 (TD-702): the same readers as the requisition list (every key that opens
+ * the desk page); it took procurement.view only and its 403 emptied the desk for projects.view
  */
-router.get('/inbox/summary', authorizePermission('procurement.view'), asyncHandler(async (_req, res) => {
+router.get('/inbox/summary', authorizePermission(...READ_PERMISSIONS.purchaseRequisitions), asyncHandler(async (_req, res) => {
   const summary = await ProcurementService.getInboxSummary();
   res.json({ success: true, data: summary });
 }));
@@ -35,22 +36,9 @@ router.get('/inbox/summary', authorizePermission('procurement.view'), asyncHandl
 router.get('/requisitions', authorizePermission(...READ_PERMISSIONS.purchaseRequisitions), validate(listRequisitionsSchema), asyncHandler(async (req, res) => {
   const { status, projectId, priority, search, page, limit } = req.query as z.infer<typeof listRequisitionsSchema>['query'];
 
-  const result = await ProcurementService.getRequisitions({
-    status: status && status !== 'all' ? String(status) : undefined,
-    projectId: projectId ? Number(projectId) : undefined,
-    priority: priority ? String(priority) : undefined,
-    search: search ? String(search) : undefined,
-    page: Number(page) || 1,
-    limit: Number(limit) || 50
-  });
-
-  res.json({
-    success: true,
-    data: result.data,
-    total: result.total,
-    page: Number(page) || 1,
-    limit: Number(limit) || 50
-  });
+  const result = await ProcurementService.getRequisitions({ status, projectId, priority, search, page, limit });
+  // v9.0.353 (TD-697): the page and limit the service used, not the ones asked for
+  res.json({ success: true, data: result.data, total: result.total, page: result.page, limit: result.limit });
 }));
 
 /**
@@ -190,21 +178,8 @@ router.post('/consolidate', authorizePermission('procurement.manage'), idempoten
 router.get('/orders', authorizePermission(...READ_PERMISSIONS.procurementOrders), validate(listProcurementOrdersSchema), asyncHandler(async (req, res) => {
   const { status, requisitionId, search, page, limit } = req.query as z.infer<typeof listProcurementOrdersSchema>['query'];
 
-  const result = await ProcurementService.getProcurementOrders({
-    status: status ? String(status) : undefined,
-    requisitionId: requisitionId ? Number(requisitionId) : undefined,
-    search: search ? String(search) : undefined,
-    page: Number(page) || 1,
-    limit: Number(limit) || 50
-  });
-
-  res.json({
-    success: true,
-    data: result.data,
-    total: result.total,
-    page: Number(page) || 1,
-    limit: Number(limit) || 50
-  });
+  const result = await ProcurementService.getProcurementOrders({ status, requisitionId, search, page, limit });
+  res.json({ success: true, data: result.data, total: result.total, page: result.page, limit: result.limit });
 }));
 
 /**

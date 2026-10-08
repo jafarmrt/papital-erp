@@ -2,19 +2,27 @@ import { z } from 'zod';
 import { decimalInput } from '../middleware/validate.js';
 import { fin } from '../lib/financialDecimal.js';
 import { REQUISITION_MAX_ROWS, REQUISITION_PRIORITIES } from '../lib/procurement/requisitionFields.js';
+import {
+  PROCUREMENT_LIST_DEFAULT_LIMIT, PROCUREMENT_LIST_MAX_LIMIT, PROCUREMENT_ORDER_STATUS_FILTERS, REQUISITION_STATUS_FILTER_KEYS,
+} from '../lib/procurement/procurementLists.js';
 
 // ==========================================
 // Zod Validation Schemas (TD-161 Remediation)
 // ==========================================
 
+/**
+ * v9.0.353 (TD-697، B10-10): وضعیت از فیلترهای `REQUISITION_STATUS_FILTERS` (وضعیت‌هایی که نوشته می‌شوند و گروه‌ها)، اولویت
+ * از `REQUISITION_PRIORITIES` و سقف صفحه `PROCUREMENT_LIST_MAX_LIMIT`، همان که سرویس به کار می‌برد. پیش‌تر وضعیت‌های
+ * نوشته‌نشده پذیرفته و `under_review` / `received` رد می‌شدند، و اولویت‌های فرم (`urgent`، `normal`) ۴۰۰ می‌گرفتند.
+ */
 export const listRequisitionsSchema = z.object({
   query: z.object({
-    status: z.enum(['draft', 'pending', 'approved', 'rejected', 'ordered', 'delivered', 'cancelled', 'consolidated', 'all']).optional(),
+    status: z.enum(REQUISITION_STATUS_FILTER_KEYS).optional(),
     projectId: z.coerce.number().int().positive().optional(),
-    priority: z.enum(['low', 'medium', 'high', 'emergency']).optional(),
+    priority: z.enum([...REQUISITION_PRIORITIES, 'all']).optional(),
     search: z.string().max(120).optional(),
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(200).default(50),
+    limit: z.coerce.number().int().min(1).max(PROCUREMENT_LIST_MAX_LIMIT).default(PROCUREMENT_LIST_DEFAULT_LIMIT),
   }).passthrough(),
 }).passthrough();
 
@@ -33,8 +41,10 @@ export const requisitionRowSchema = z.object({
   itemName: z.string().max(300).optional(),
   category: z.string().max(200).optional(),
   unit: z.string().max(50).optional(),
-  requestedQty: decimalInput('مقدار درخواستی')
-    .refine(v => v !== undefined && fin(v).isPositive(), 'مقدار درخواستی باید بیشتر از صفر باشد'),
+  // v9.0.355 (TD-901، ت۵): مقدار نیامده یا خالی پیام خودش را دارد؛ پیش‌تر «مقدار مقدار درخواستی درست نیست» می‌آمد
+  requestedQty: z.preprocess(v => v ?? '', decimalInput('مقدار درخواستی'))
+    .refine(v => v !== undefined, 'مقدار درخواستی را وارد کنید')
+    .refine(v => v === undefined || fin(v).isPositive(), 'مقدار درخواستی باید بیشتر از صفر باشد'),
   unitPriceEstimate: decimalInput('برآورد قیمت واحد')
     .refine(v => v === undefined || !fin(v).isNegative(), 'برآورد قیمت واحد نمی‌تواند منفی باشد')
     .optional(),
@@ -88,7 +98,7 @@ export const workflowActionSchema = z.object({
     id: z.string().regex(/^\d+$/, 'شناسه نامعتبر است')
   }),
   body: z.object({
-    actionKey: z.string().min(1, 'کلید اکشن گردش کار الزامی است').max(100),
+    actionKey: z.string().min(1, 'کلید اقدام گردش کار را بفرستید').max(100),
     comment: z.string().max(1000).optional()
   })
 });
@@ -138,10 +148,10 @@ export const consolidateRequisitionsSchema = z.object({
 
 export const listProcurementOrdersSchema = z.object({
   query: z.object({
-    status: z.string().optional(),
+    status: z.enum(PROCUREMENT_ORDER_STATUS_FILTERS).optional(),
     requisitionId: z.coerce.number().int().positive().optional(),
     search: z.string().max(120).optional(),
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(200).default(50)
+    limit: z.coerce.number().int().min(1).max(PROCUREMENT_LIST_MAX_LIMIT).default(PROCUREMENT_LIST_DEFAULT_LIMIT)
   }).passthrough()
 }).passthrough();

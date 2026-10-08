@@ -77,6 +77,9 @@ export interface PurchaseRequisition {
   /** v9.0.349 (TD-694): درخواستی که این درخواست در آن تجمیع شد (وضعیت `consolidated`) و کد آن */
   consolidatedIntoId?: number | null;
   consolidatedIntoCode?: string | null;
+  /** v9.0.353 (TD-697): شمار سفارش‌های زنده درخواست و سفارش‌های در انتظار تحویل (از سرور، شمرده در SQL) */
+  ordersCount?: number;
+  pendingDeliveryOrdersCount?: number;
   isDeleted?: number;
   is_deleted?: number;
   createdAt?: string;
@@ -97,14 +100,13 @@ export interface ProcurementOrderItem {
   location?: string;
 }
 
+/** سفارش تدارکات، همان شکل پاسخ `GET /procurement/orders` (`listProcurementOrders`)؛ شماره در refNumber و تأمین‌کننده در supplierName */
 export interface ProcurementOrder {
   id: number;
   refNumber: string;
-  orderNumber?: string;
   docType: string;
   status: 'draft' | 'final';
   date: string;
-  orderDate?: string;
   supplierName: string;
   notes: string;
   requisitionId?: number | null;
@@ -115,4 +117,18 @@ export interface ProcurementOrder {
   itemsCount: number;
   items: ProcurementOrderItem[];
   user?: string;
+}
+
+/** خلاصه میز تدارکات، همان پاسخ `GET /procurement/inbox/summary` (`ProcurementService.getInboxSummary`) */
+export interface ProcurementInboxSummary {
+  totalRequisitions: number;
+  pendingCount: number;
+  underReviewCount: number;
+  managerApprovalCount: number;
+  orderedCount: number;
+  receivedCount: number;
+  urgentCount: number;
+  pendingDeliveryOrdersCount: number;
+  deliveredOrdersCount: number;
+  totalOrdersCount: number;
 }

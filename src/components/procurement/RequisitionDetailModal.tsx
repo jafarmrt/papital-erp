@@ -1,18 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, FileText, CheckCircle2, AlertTriangle, ShoppingCart, UserCheck, Check, Ban, Loader2, PackageCheck, Truck, Layers } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { PurchaseRequisition, Item, User, ProcurementOrder } from '../../types';
+import { PurchaseRequisition, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 import { PillBadge } from '../common/PillBadge';
+import { useProcurementAccess } from '../../hooks/procurement/useProcurementAccess';
+import { canOrderRequisition } from '../../lib/procurement/requisitionFields';
 import { REQUISITION_PRIORITY_DETAIL_BADGES, REQUISITION_PRIORITY_DETAIL_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 
 interface RequisitionDetailModalProps {
   isOpen: boolean;
   requisition: PurchaseRequisition;
-  warehouseItems: Item[];
-  currentUser?: User | null;
   onClose: () => void;
   onRefresh: () => void;
   onOpenSplitOrder: (req: PurchaseRequisition) => void;
@@ -21,8 +21,6 @@ interface RequisitionDetailModalProps {
 export function RequisitionDetailModal({
   isOpen,
   requisition,
-  warehouseItems,
-  currentUser,
   onClose,
   onRefresh,
   onOpenSplitOrder
@@ -35,6 +33,8 @@ export function RequisitionDetailModal({
   const [deliveryModalOrder, setDeliveryModalOrder] = useState<ProcurementOrder | null>(null);
   const [bulkDeliveryOrders, setBulkDeliveryOrders] = useState<ProcurementOrder[] | null>(null);
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
+  // v9.0.352 (TD-702، B10-15): هر دکمه با مجوز API خودش؛ پیش‌تر همه دکمه‌ها برای هر بیننده‌ای نشان داده می‌شد
+  const access = useProcurementAccess();
 
   const loadLinkedOrders = useCallback(async () => {
     if (!requisition?.id) return;
@@ -130,6 +130,7 @@ export function RequisitionDetailModal({
   const isReceivedStage = statusStr === 'received' || statusStr === 'completed';
   const isRejectedStage = statusStr === 'rejected' || statusStr === 'cancelled';
   const isConsolidated = statusStr === 'consolidated';
+  const canOrderThis = canOrderRequisition(requisition, access);
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi">
@@ -359,14 +360,14 @@ export function RequisitionDetailModal({
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                   <span>هنوز فاکتور خریدی برای این درخواست صادر نشده است.</span>
                 </div>
-                <button
+                {canOrderThis && <button
                   type="button"
                   onClick={() => onOpenSplitOrder(requisition)}
                   className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0"
                 >
                   <ShoppingCart className="w-3.5 h-3.5" />
                   صدور فاکتور تامین‌کننده
-                </button>
+                </button>}
               </div>
             ) : (
               <div className="space-y-2">
@@ -385,15 +386,16 @@ export function RequisitionDetailModal({
                     >
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
+                          {/* v9.0.351 (TD-701): شماره و تاریخ سفارش از refNumber و date پاسخ سرور */}
                           <span className="font-mono font-bold text-xs text-slate-900">
-                            فاکتور خرید #{order.orderNumber}
+                            فاکتور خرید {order.refNumber}
                           </span>
                           <span className="font-bold text-xs text-slate-700">
                             تامین‌کننده: {order.supplierName}
                           </span>
-                          {order.orderDate && (
+                          {order.date && (
                             <span className="text-[11px] text-slate-400 font-mono">
-                              ({order.orderDate})
+                              ({formatPersianDate(order.date)})
                             </span>
                           )}
                         </div>
@@ -418,7 +420,7 @@ export function RequisitionDetailModal({
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                             تحویل انبار شده (رسید قطعی)
                           </span>
-                        ) : (
+                        ) : access.canDeliver && (
                           <button
                             type="button"
                             disabled={isDelivering || isActing}
@@ -467,7 +469,7 @@ export function RequisitionDetailModal({
               {/* If pending / under_review / manager_approval (Stage 1) */}
               {isPendingStage && (
                 <>
-                  <button
+                  {access.canApprove && <button
                     type="button"
                     disabled={isActing}
                     onClick={() => handleWorkflowAction('approve_request')}
@@ -475,18 +477,18 @@ export function RequisitionDetailModal({
                   >
                     <Check className="w-4 h-4" />
                     تایید و صدور دستور خرید
-                  </button>
+                  </button>}
 
-                  <button
+                  {canOrderThis && <button
                     type="button"
                     onClick={() => onOpenSplitOrder(requisition)}
                     className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
                   >
                     <ShoppingCart className="w-4 h-4" />
                     تفکیک تامین‌کننده و صدور پیش‌فاکتور
-                  </button>
+                  </button>}
 
-                  <button
+                  {access.canApprove && <button
                     type="button"
                     disabled={isActing}
                     onClick={() => handleWorkflowAction('reject_request')}
@@ -494,14 +496,14 @@ export function RequisitionDetailModal({
                   >
                     <Ban className="w-4 h-4" />
                     رد درخواست خرید
-                  </button>
+                  </button>}
                 </>
               )}
 
               {/* If ordered (Stage 2) */}
               {isOrderedStage && (
                 <>
-                  <button
+                  {access.canDeliver && <button
                     type="button"
                     disabled={isActing}
                     onClick={handleOpenDeliverBulkModal}
@@ -513,18 +515,18 @@ export function RequisitionDetailModal({
                       <CheckCircle2 className="w-4 h-4" />
                     )}
                     تایید خرید و تحویل کلیه اقلام به انبار
-                  </button>
+                  </button>}
 
-                  <button
+                  {canOrderThis && <button
                     type="button"
                     onClick={() => onOpenSplitOrder(requisition)}
                     className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
                   >
                     <FileText className="w-4 h-4" />
                     مشاهده / ثبت فاکتور تامین‌کننده
-                  </button>
+                  </button>}
 
-                  <button
+                  {access.canApprove && <button
                     type="button"
                     disabled={isActing}
                     onClick={() => handleWorkflowAction('cancel_order')}
@@ -532,7 +534,7 @@ export function RequisitionDetailModal({
                   >
                     <Ban className="w-4 h-4" />
                     لغو / رد سفارش خرید
-                  </button>
+                  </button>}
                 </>
               )}
 
@@ -561,14 +563,14 @@ export function RequisitionDetailModal({
                     <Ban className="w-4 h-4 text-rose-600 shrink-0" />
                     این درخواست خرید رد شده یا لغو گردیده است.
                   </div>
-                  <button
+                  {access.canApprove && <button
                     type="button"
                     disabled={isActing}
                     onClick={() => handleWorkflowAction('reopen')}
                     className="px-3 py-1.5 bg-white border border-rose-300 hover:bg-rose-100 text-rose-800 text-xs font-bold rounded-lg transition-all cursor-pointer"
                   >
                     بازگشایی و بررسی مجدد
-                  </button>
+                  </button>}
                 </div>
               )}
             </div>

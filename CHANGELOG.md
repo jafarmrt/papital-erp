@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.355 — Persian Procurement Wording and Field Errors
+- **Fix (TD-901, decision ت۵):** procurement UI says «مواد», «فهرست کالا», «سند حسابداری», «بسته» and «اقدام» (no «(Requisitions)»); requisition form and server Zod errors show under their field (`apiFieldErrors`), and server messages name actions in Persian (`requisitionActionLabel`) with Persian digits.
+
+### v9.0.354 — Requisition Item Picker With Server Search
+- **Fix (TD-700, B10-13):** the requisition form picks items with `SearchableSelect` over the item pick list (`/items/options`, server search) instead of a plain `<select>` of the items the desk had loaded; the desk no longer preloads items.
+
+### v9.0.353 — Procurement Desk Pages and Server Filters
+- **Fix (TD-697, B10-10):** the requisition list takes the statuses it writes and their groups (`REQUISITION_STATUS_FILTERS`: open, ordered, received, rejected, consolidated), the form priorities, item-name search in SQL and one shared limit (`PROCUREMENT_LIST_MAX_LIMIT`, answered as used); each requisition carries its order counts; the desk pages requisitions and orders on the server.
+
+### v9.0.352 — Procurement Desk Sections and Buttons by Permission
+- **Fix (TD-702, B10-15):** the procurement desk loads its summary, requisitions, orders and items one by one (`useProcurementDeskData`), so one refused or failed section shows its own error and the others still show; `GET /procurement/inbox/summary` opens for both page keys (`READ_PERMISSIONS.purchaseRequisitions`) and is listed among the page's APIs; each button follows the permission of its API (`useProcurementAccess`).
+
+### v9.0.351 — Order Number and Supplier in Procurement Dialogs
+- **Fix (TD-701, B10-14):** the delivery confirmation and the requisition detail read `refNumber`, `date` and `supplierName` of `GET /procurement/orders` instead of `orderNumber`, `orderDate` and `buyerName`, which the server never sends; the confirmation no longer shows «تامین‌کننده تدارکات» for every order.
+
 ### v9.0.350 — Receive Items Needs an Order
 - **Fix (TD-699, B10-12, decision t4):** `receive_items` of a purchase requisition refuses a catalog row that was never ordered (409 REQUISITION_ROWS_NOT_ORDERED, «ابتدا سفارش خرید با تأمین‌کننده و قیمت صادر کنید») instead of a final receipt from the generic procurement supplier at the estimate, which posted donated-goods income (5204) with no supplier debt.
 

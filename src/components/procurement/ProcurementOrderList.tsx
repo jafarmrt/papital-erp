@@ -2,11 +2,21 @@ import React, { useState, useMemo } from 'react';
 import { PackageCheck, Clock, CheckCircle2, Building2, Search, Truck, FileText, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { ProcurementOrder } from '../../types';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
+import { ProcurementPager } from './ProcurementPager';
 
 interface ProcurementOrderListProps {
+  /** v9.0.353 (TD-697): یک صفحه از سفارش‌های همین زبانه، فیلترشده در سرور */
   orders: ProcurementOrder[];
+  total: number;
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  search: string;
+  onSearchChange: (search: string) => void;
   isLoading: boolean;
-  onDeliverOrder?: (orderId: number, orderRef: string) => Promise<void> | void;
+  /** v9.0.352 (TD-702): پیام خطای بارگذاری سفارش‌ها، به‌جای «هیچ فاکتوری … نیست» */
+  error?: string;
+  onDeliverOrder?: (orderId: number) => Promise<void> | void;
   deliveringOrderId?: number | null;
   onViewRequisition?: (requisitionId: number) => void;
   type: 'active' | 'delivered';
@@ -14,30 +24,22 @@ interface ProcurementOrderListProps {
 
 export function ProcurementOrderList({
   orders,
+  total,
+  page,
+  pageSize,
+  onPageChange,
+  search,
+  onSearchChange,
   isLoading,
+  error,
   onDeliverOrder,
   deliveringOrderId,
   onViewRequisition,
   type
 }: ProcurementOrderListProps) {
-  const [searchTerm, setSearchTerm] = useState('');
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
-
-  const filteredOrders = useMemo(() => {
-    return orders.filter(o => {
-      if (type === 'active' && o.status === 'final') return false;
-      if (type === 'delivered' && o.status !== 'final') return false;
-
-      if (!searchTerm.trim()) return true;
-      const q = searchTerm.trim().toLowerCase();
-      const mRef = (o.refNumber || '').toLowerCase().includes(q);
-      const mSupplier = (o.supplierName || '').toLowerCase().includes(q);
-      const mReq = (o.requisitionCode || '').toLowerCase().includes(q);
-      const mProject = (o.projectName || '').toLowerCase().includes(q);
-      const mItems = o.items.some(i => (i.itemName || '').toLowerCase().includes(q) || (i.itemCode || '').toLowerCase().includes(q));
-      return mRef || mSupplier || mReq || mProject || mItems;
-    });
-  }, [orders, type, searchTerm]);
+  const searchTerm = search;
+  const filteredOrders = useMemo(() => (Array.isArray(orders) ? orders : []), [orders]);
 
   const totalAmount = useMemo(() => {
     return filteredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
@@ -65,7 +67,7 @@ export function ProcurementOrderList({
           <p className="leading-relaxed opacity-90">
             {type === 'active'
               ? 'این اسناد مربوط به سفارش‌هایی است که از درخواست‌های خرید تفکیک شده و برای تامین‌کنندگان صادر گردیده‌اند. پس از وصول فیزیکی اقلام، با کلیک بر روی دکمه «تایید و تحویل به انبار»، رسید قطعی صادر شده و موجودی کاردکس انبار به صورت رسمی افزایش می‌یابد.'
-              : 'این اقلام با موفقیت تحویل انباردار گردیده، در موجودی کاردکس ثبت رسمی شده و اسناد دوبل حسابداری آنها صادر گردیده است.'}
+              : 'این اقلام با موفقیت تحویل انباردار گردیده، در موجودی کاردکس ثبت رسمی شده و سند حسابداری آنها صادر گردیده است.'}
           </p>
         </div>
       </div>
@@ -78,17 +80,17 @@ export function ProcurementOrderList({
             type="text"
             placeholder="جستجو در شماره فاکتور، نام تامین‌کننده، کد درخواست خرید مرجع، پروژه یا اقلام..."
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={e => onSearchChange(e.target.value)}
             className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
           />
         </div>
 
         <div className="flex items-center gap-4 text-slate-600 font-bold">
           <div>
-            تعداد اسناد: <span className="text-slate-900 font-mono font-black">{formatPersianNumber(filteredOrders.length)}</span>
+            تعداد اسناد: <span className="text-slate-900 font-mono font-black">{formatPersianNumber(total)}</span>
           </div>
           <div>
-            مجموع مبلغ: <span className="text-amber-800 font-mono font-black text-sm">{formatPersianPrice(totalAmount)}</span>
+            مجموع مبلغ این صفحه: <span className="text-amber-800 font-mono font-black text-sm">{formatPersianPrice(totalAmount)}</span>
           </div>
         </div>
       </div>
@@ -98,6 +100,10 @@ export function ProcurementOrderList({
         {isLoading ? (
           <div className="p-12 text-center text-slate-500 text-xs">
             در حال بارگذاری فاکتورهای خرید...
+          </div>
+        ) : error ? (
+          <div className="p-12 text-center text-rose-800 text-xs font-bold">
+            فاکتورهای خرید بارگذاری نشد: {error}
           </div>
         ) : filteredOrders.length === 0 ? (
           <div className="p-12 text-center text-slate-400 text-xs">
@@ -132,7 +138,7 @@ export function ProcurementOrderList({
                     <React.Fragment key={order.id}>
                       <tr className={`hover:bg-slate-50/70 transition-colors ${isExpanded ? 'bg-amber-50/30' : ''}`}>
                         <td className="p-3 text-center font-mono text-slate-400">
-                          {idx + 1}
+                          {formatPersianNumber((page - 1) * pageSize + idx + 1)}
                         </td>
 
                         <td className="p-3">
@@ -216,7 +222,7 @@ export function ProcurementOrderList({
                             <button
                               type="button"
                               disabled={isDelivering}
-                              onClick={() => onDeliverOrder(order.id, order.refNumber)}
+                              onClick={() => onDeliverOrder(order.id)}
                               className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer mx-auto disabled:opacity-50"
                               title="تایید رسید کالا و ثبت در کاردکس انبار"
                             >
@@ -291,6 +297,7 @@ export function ProcurementOrderList({
             </table>
           </div>
         )}
+        <ProcurementPager page={page} pageSize={pageSize} total={total} shown={filteredOrders.length} isLoading={isLoading} onPageChange={onPageChange} noun="سند" />
       </div>
     </div>
   );

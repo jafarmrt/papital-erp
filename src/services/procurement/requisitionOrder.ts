@@ -1,5 +1,6 @@
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import type { PurchaseRequisitionItemRow } from '../../types.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 
 export interface OverOrderLine {
   itemId: number;
@@ -49,8 +50,10 @@ export function findOverOrders(
 }
 
 /** متن هشدار سفارش بیش از درخواست برای پیام خطا، یادداشت درخواست و گزارش فعالیت */
+/** v9.0.355 (TD-901، ت۵): مقدارها با رقم فارسی؛ پیش‌تر پیام سفارش بیش از درخواست رقم لاتین داشت */
 export function describeOverOrders(overOrders: OverOrderLine[]): string {
+  const n = (value: number) => toPersianDigits(value, 3);
   return overOrders
-    .map(o => `«${o.itemName}»: درخواست ${o.requested}، سفارش‌شده پیشین ${o.orderedBefore}، این سفارش ${o.ordering} (${o.excess} بیش از درخواست)`)
+    .map(o => `«${o.itemName}»: درخواست ${n(o.requested)}، سفارش‌شده پیشین ${n(o.orderedBefore)}، این سفارش ${n(o.ordering)} (${n(o.excess)} بیش از درخواست)`)
     .join('؛ ');
 }

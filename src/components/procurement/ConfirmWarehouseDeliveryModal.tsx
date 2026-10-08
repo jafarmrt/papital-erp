@@ -2,6 +2,11 @@ import React from 'react';
 import { PackageCheck, Warehouse, FileText, CheckCircle2, X, Loader2, Building2 } from 'lucide-react';
 import { formatPersianNumber, formatPersianPrice, formatPersianDate } from '../../utils';
 
+/**
+ * v9.0.351 (TD-701، B10-14): سفارش همان شکلی است که `GET /procurement/orders` برمی‌گرداند و تأمین‌کننده از `supplierName`
+ * می‌آید. پیش‌تر `buyerName` خوانده می‌شد که سرور نمی‌فرستد، و تأیید تحویل به‌جای تأمین‌کننده سفارش «تامین‌کننده
+ * تدارکات» نشان می‌داد.
+ */
 export interface ConfirmWarehouseDeliveryModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -10,7 +15,7 @@ export interface ConfirmWarehouseDeliveryModalProps {
   order: {
     id: number;
     refNumber?: string | null;
-    buyerName?: string | null;
+    supplierName?: string | null;
     location?: string | null;
     totalAmount?: number | null;
     itemsCount?: number | null;
@@ -28,7 +33,7 @@ export interface ConfirmWarehouseDeliveryModalProps {
   bulkOrders?: Array<{
     id: number;
     refNumber?: string | null;
-    buyerName?: string | null;
+    supplierName?: string | null;
     totalAmount?: number | null;
   }>;
 }
@@ -104,7 +109,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
                   <span className="text-slate-500 block">تامین‌کننده / فروشنده:</span>
                   <span className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
                     <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                    {order.buyerName || 'تامین‌کننده تدارکات'}
+                    {order.supplierName || '---'}
                   </span>
                 </div>
                 <div>
@@ -158,7 +163,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
                 {bulkOrders.map(bo => (
                   <div key={bo.id} className="flex justify-between items-center py-0.5 border-b border-slate-50 last:border-0">
                     <span className="font-mono font-bold text-slate-800">{bo.refNumber}</span>
-                    <span className="text-slate-600 truncate max-w-[140px]">{bo.buyerName}</span>
+                    <span className="text-slate-600 truncate max-w-[140px]">{bo.supplierName}</span>
                     <span className="font-mono font-black text-amber-800">{formatPersianPrice(bo.totalAmount || 0)}</span>
                   </div>
                 ))}
@@ -179,7 +184,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
             <ul className="list-disc list-inside space-y-1 pr-1 text-emerald-900/90 leading-relaxed">
               <li>ثبت رسمی وضعیت سند به عنوان <strong>رسید قطعی ورود کالا به انبار</strong>.</li>
               <li>افزایش آنی موجودی و ثبت رویداد ورود در <strong>کاردکس رسمی انبار</strong>.</li>
-              <li>صدور خودکار <strong>سند دوبل حسابداری</strong> (بدهکار: موجودی انبار / بستانکار: بستانکاران تجاری).</li>
+              <li>صدور خودکار <strong>سند حسابداری</strong> (بدهکار: موجودی انبار / بستانکار: بستانکاران تجاری).</li>
               <li>به‌روزرسانی و تکمیل خودکار وظیفه مربوطه در <strong>کارتابل گردش‌کار و تاییدات</strong>.</li>
             </ul>
           </div>
