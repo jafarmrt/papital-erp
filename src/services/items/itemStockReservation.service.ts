@@ -132,6 +132,12 @@ export interface ReservationScope {
   itemIds: number[];
 }
 
+/** v9.0.352 (TD-822): کلید خلاصه رزرو؛ شناسه کالا، وگرنه (ردیف بی کالای شناخته‌شده) کد بزرگ‌شده */
+function reservationSummaryKey(itemId: unknown, code: unknown): string {
+  const id = Number(itemId);
+  return Number.isInteger(id) && id > 0 ? `id:${id}` : `code:${String(code ?? '').trim().toUpperCase()}`;
+}
+
 function emptyReservationReport(): ReservedItemsFullReport {
   return {
     summaryMetrics: { totalReservedItemsCount: 0, totalReservedQty: 0, totalReservedValue: 0, proformaReservationsCount: 0, projectReservationsCount: 0 },
@@ -513,8 +519,9 @@ export class ItemStockReservationService {
           if (reservedQty <= 0) continue;
 
           const rowName = item.itemName || item.name;
-          const matchedDbItem = (code ? itemsByCodeMap.get(code.toUpperCase()) : null) 
-            || (item.itemId ? itemsByIdMap.get(Number(item.itemId)) : null)
+          // v9.0.352 (TD-822): شناسه کالا بر کد و نام مقدم است (ردیف رزرو سرور همیشه شناسه دارد)
+          const matchedDbItem = (item.itemId ? itemsByIdMap.get(Number(item.itemId)) : null)
+            || (code ? itemsByCodeMap.get(code.toUpperCase()) : null)
             || (rowName ? itemsByNameMap.get(rowName.trim().toLowerCase()) : null);
           if (scopeIds && !(matchedDbItem && scopeIds.has(matchedDbItem.id))) continue;
           const price = fin(matchedDbItem ? matchedDbItem.weightedAverageCost : item.unitPrice);
@@ -541,11 +548,12 @@ export class ItemStockReservationService {
       }
 
       // 3. Group by Item
+      // v9.0.352 (TD-822): خلاصه با شناسه کالا کلید می‌خورد؛ پیش‌تر کد بزرگ‌شده کلید بود و دو کالا با کدهای هم‌حرف
+      // (یا «ß» و «SS») یک خلاصه داشتند و رزرو یکی به دیگری می‌رسید
       const itemSummariesMap = new Map<string, ItemReservedReportSummary>();
 
       for (const it of summaryItems) {
-        const normCode = (it.code || '').trim().toUpperCase();
-        itemSummariesMap.set(normCode, {
+        itemSummariesMap.set(reservationSummaryKey(it.id, it.code), {
           itemId: it.id,
           itemCode: it.code,
           itemName: it.name,
@@ -571,8 +579,8 @@ export class ItemStockReservationService {
         if (entry.sourceType === 'proforma') proformaCount++;
         if (entry.sourceType === 'project') projectCount++;
 
-        const normCode = (entry.itemCode || '').trim().toUpperCase();
-        let summary = itemSummariesMap.get(normCode);
+        const summaryKey = reservationSummaryKey(entry.itemId, entry.itemCode);
+        let summary = itemSummariesMap.get(summaryKey);
 
         if (!summary) {
           summary = {
@@ -591,7 +599,7 @@ export class ItemStockReservationService {
             totalReservedValue: 0,
             reservations: []
           };
-          itemSummariesMap.set(normCode, summary);
+          itemSummariesMap.set(summaryKey, summary);
         }
 
         if (entry.sourceType === 'proforma') {
@@ -634,7 +642,7 @@ export class ItemStockReservationService {
   }
 
   /**
-   * Calculates reserved stock quantities by item code across all non-completed/non-cancelled active production projects and active proformas.
+   * رزرو هر کالا (پیش‌فاکتور فروش و پروژه ثبت نهایی‌شده)، با شناسه کالا کلید خورده (v9.0.352، TD-822؛ پیش‌تر کد بزرگ‌شده).
    */
   static async getReservedStocksMap(scope?: ReservationScope): Promise<Record<string, ReservedStockInfo>> {
     try {
@@ -642,9 +650,9 @@ export class ItemStockReservationService {
       const map: Record<string, ReservedStockInfo> = {};
 
       for (const summary of report.itemSummaries) {
-        const code = (summary.itemCode || '').trim().toUpperCase();
-        if (!code) continue;
-        map[code] = {
+        const itemId = Number(summary.itemId);
+        if (!Number.isInteger(itemId) || itemId <= 0) continue;
+        map[String(itemId)] = {
           totalReserved: summary.totalReservedQty,
           reservations: summary.reservations.map(r => ({
             projectId: r.sourceId,

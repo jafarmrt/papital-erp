@@ -22,6 +22,9 @@ export async function runStockReservationTests(shouldRun: ShouldRun): Promise<Te
     ['reg_reservation_free_stock_at_finalize_td_819',
       'v9.0.351: finalizing a project reserves only the stock no one else holds and stores the shortage; concurrent finalizes never reserve the same stock twice (TD-819)',
       ['td819', 'reservation', 'project', 'shortage', 'package7'], freeStockAtFinalizeCase],
+    ['reg_reservation_keyed_by_item_td_822',
+      'v9.0.352: the reservation summary is keyed by item id, so two items whose codes fold to one key keep their own reservations in the report, the item list and the exit gate (TD-822)',
+      ['td822', 'reservation', 'summary', 'package7'], keyedByItemCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -319,4 +322,39 @@ async function freeStockAtFinalizeCase(h: Harness, wrong: string[]): Promise<str
   if (over.join(',') !== `${d}:10/50`) wrong.push(`the health check lists over-reserved items ${JSON.stringify(over)}, expected only item ${d} (stock 10, reserved 50)`);
   await h.q(`UPDATE production_projects SET is_deleted = 1 WHERE id = $1`, [legacy.id]);
   return 'stock 30: the second project needing 30 reserves nothing and stores a shortage of 30, so the first can issue its remittance; with a proforma of 6 a project reserves the 4 free units and the proforma still finalizes; concurrent finalizes reserve 30 in total; a legacy over-reservation is listed by the health check';
+}
+
+/**
+ * B07-06 (TD-822): summaries were keyed by the code upper-cased in JavaScript. «p7ß-…» and «P7SS-…» are two codes for the
+ * database key (upper(btrim(code)) keeps «ß»), so both items exist without dropping uq_items_code_active, but JavaScript
+ * upper-cases «ß» to «SS» and gave both one summary: the same collision as two legacy items with codes differing in case.
+ */
+async function keyedByItemCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const lower = await f.item(10);
+  const upper = await f.item(10);
+  await h.q(`UPDATE items SET code = $1 WHERE id = $2`, [`p7ß-${h.tag}`, lower]);
+  await h.q(`UPDATE items SET code = $1 WHERE id = $2`, [`P7SS-${h.tag}`, upper]);
+  const proforma = await postDoc(h, f, 'invoice', 'proforma', lower, 6);
+  if (proforma.status !== 200) throw new Error(`setup: the sales proforma answered ${brief(proforma)}`);
+
+  const { ItemStockReservationService } = await import('../../services/items/itemStockReservation.service.js');
+  const report = await ItemStockReservationService.getReservedStockDetails(undefined, true);
+  const reservedIn = (id: number) => report.itemSummaries.filter(s => Number(s.itemId) === id).reduce((t, s) => t + Number(s.totalReservedQty), 0);
+  if (reservedIn(lower) !== 6 || reservedIn(upper) !== 0) wrong.push(`the full report gives the proforma's item ${reservedIn(lower)} and the other item ${reservedIn(upper)}, expected 6 and 0`);
+
+  const list = await h.get(`/api/items?search=${encodeURIComponent(h.tag)}&limit=50`);
+  const rows = (Array.isArray((list.body as { data?: unknown })?.data) ? (list.body as { data: Array<Record<string, unknown>> }).data : []);
+  const listed = (id: number) => Number(rows.find(r => Number(r.id) === id)?.reserved_stock);
+  if (listed(lower) !== 6 || listed(upper) !== 0) wrong.push(`GET /items shows reserved ${listed(lower)} and ${listed(upper)}, expected 6 and 0`);
+
+  // one invoice with both items: the free 4 of the proforma's item and all 10 of the other item
+  const sale = await h.post('/api/documents', f.doc('invoice', 'final', [
+    { itemId: lower, quantity: 4, unit_price: 5_000, location: f.wh },
+    { itemId: upper, quantity: 10, unit_price: 5_000, location: f.wh },
+  ]));
+  if (sale.status !== 200) wrong.push(`a final invoice of 4 free units of one item and 10 of the other answered ${brief(sale)}, expected 200`);
+  const over = await postDoc(h, f, 'invoice', 'final', lower, 1);
+  if (over.status !== 400) wrong.push(`one more unit of the proforma's item answered ${brief(over)}, expected 400`);
+  return 'two items whose codes fold to one key: the proforma of 6 stays on its own item in the report, GET /items and the exit gate';
 }

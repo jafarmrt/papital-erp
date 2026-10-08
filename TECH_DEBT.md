@@ -74,7 +74,6 @@
 | TD-702 | تدارکات (بسته ۱۰) | P3 (B10-15) — میز تدارکات چهار درخواست را در یک `Promise.all` می‌خواند و `GET /procurement/inbox/summary` فقط `procurement.view` را می‌پذیرد: دارنده `projects.view` که صفحه را می‌بیند میز خالی می‌گیرد؛ دکمه‌های اقدام هیچ مجوزی نمی‌سنجند | ProcurementDesk.tsx، RequisitionDetailModal.tsx، procurement.routes.ts | open (P3) |
 | TD-901 | تدارکات (بسته ۱۰) | P3 (ت۵، مشاهده‌های O19 و O20) — واژه‌ها و پیام‌های رابط تدارکات: «(Requisitions)»، «متریال»، «کاتالوگ»، «سند دوبل»، «پک»، «کلید اکشن گردش کار»، کلید انگلیسی اقدام در پیام خطا («cancel_order»)، رقم لاتین `describeOverOrders` و خطای اعتبارسنجی فقط در toast، نه زیر فیلد | ProcurementDesk.tsx، CreateRequisitionModal.tsx، ConfirmWarehouseDeliveryModal.tsx، ProcurementOrderList.tsx، SplitOrderModal.tsx، procurement.routes.ts، procurement.service.ts، requisitionOrder.ts | open (P3، تصمیم ت۵) |
 | TD-821 | برنامه‌ریزی موجودی (بسته ۷)؛ اثر روی ۸، ۱۱ و ۱۵ | P2 (B07-05) — یک ردیف خراب (`itemCode` عددی) در کنترل یک پروژه: `.trim()` روی کد عددی ردیف خطا می‌دهد؛ فاکتور نهایی ۱ عدد از کالای دیگر ← ۵۰۰ و نهایی‌سازی پیش‌نویس و پیش‌فاکتور هم ۵۰۰ (TD-775)، در حالی که گزارش رزرو، `GET /items` (`reserved_stock 0`) و همگام‌سازی فروشگاه آنلاین همه رزروها را صفر می‌بینند (fail-open، A02-17) | itemStockReservation.service.ts، shopWarehouse.ts، items.crud.routes.ts، ReservedItemsReportPage.tsx | open (P2) |
-| TD-822 | برنامه‌ریزی موجودی (بسته ۷) | P2 (B07-06) — خلاصه رزرو با کد بزرگ‌شده کلید می‌خورد؛ دو کالا با کدهای هم‌حرف رزرو یکدیگر را می‌گیرند: `p07case_x` و `P07CASE_X` هر دو موجودی ۱۰ و پیش‌فاکتور ۶ عدد از L ← گزارش و `GET /items`: L بی رزرو و U رزرو ۶؛ شاخص `uq_items_code_active` (TD-653) فقط روی داده بی تکرار ساخته شده است | itemStockReservation.service.ts | open (P2) |
 | TD-823 | برنامه‌ریزی موجودی (بسته ۷) | P2 (B07-07) — ارزش رزرو ارز خارجی را با ریال جمع می‌زند و قیمت فروش و بهای تمام‌شده را با هم: WAC ۴۰۰٬۰۰۰، پیش‌فاکتور دلاری ۲ × ۱۰۰ دلار ← ۲۰۰، پیش‌فاکتور ریالی ۱ × ۹۰۰٬۰۰۰ ← ۹۰۰٬۰۰۰ و پروژه ۳ × ۴۰۰٬۰۰۰؛ جمع ۲٬۱۰۰٬۲۰۰ «ریال» به‌جای ۲٬۴۰۰٬۰۰۰ به بها؛ `buyPrice` و `sellPrice` هر دو WAC‌اند | itemStockReservation.service.ts، ReservedItemsReportPage.tsx | open (P2، تصمیم ت۶ الف) |
 | TD-824 | برنامه‌ریزی موجودی (بسته ۷) | P2 (B07-08) — ویرایش‌های مودال «تأیید و افزودن به انبار» برای WAC و نقطه سفارش دور ریخته می‌شوند: بدنه تأیید `weighted_average_cost` و `reorder_point` دارد و طرح route `weightedAverageCost` و `reorderPoint` می‌خواند؛ WAC ۱٬۰۰۰ ← ۷۵٬۰۰۰ و نقطه سفارش ۱۲ در مودال، کالای ساخته‌شده WAC ۱٬۰۰۰ و نقطه سفارش ۰ | PendingMaterialsPage.tsx، pendingMaterials.routes.ts | open (P2) |
 | TD-825 | برنامه‌ریزی موجودی (بسته ۷)؛ اثر روی ۲ و ۵ | P2 (B07-09) — صف مواد اولیه: وضعیت، هم‌زمانی و ورودی کنترل نمی‌شوند: نقش بی مجوز درخواست با نقطه سفارش «۱۲» ← ۲۰۱ و `reorder_point 0`؛ درخواست تأییدشده رد و با کد دیگر دوباره تأیید ← دو کالا از یک درخواست؛ حذف درخواست تأییدشده ← ۲۰۰؛ کد `TEMP-<ms>`؛ تصویر ۱٫۵ مگابایتی درون `items.image`؛ درج مستقیم در `items` بیرون از `ItemCatalogService` و ممیزی بی جزئیات | pendingMaterials.service.ts، pendingMaterials.routes.ts، routeAccessPolicy.ts | open (P2، تصمیم ت۵ الف) |
@@ -90,8 +89,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۶۹ ردیف
-- **آرشیو شده (resolved):** ۷۰۰ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۶۸ ردیف
+- **آرشیو شده (resolved):** ۷۰۱ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -100,5 +99,5 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.351 — TD-819 (ثبت نهایی فقط موجودی آزاد را رزرو می‌کند، P1) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.352 — TD-822 (رزرو با شناسه کالا، P2) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
 *v9.0.313 — نسخه مستند بسته ۱۰ (خرید و تدارکات): TD-688 تا TD-702 و TD-901 (تصمیم ت۵) باز شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

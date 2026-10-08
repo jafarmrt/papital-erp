@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.352 — Reservations Keyed by Item Id
+- **Reservations (TD-822, B07-06):** reservation summaries, the reserved stock map and the item list key reservations by item id instead of the upper-cased code, so two items whose codes differ only in case keep their own reservations.
+
 ### v9.0.351 — Project Finalize Reserves Free Stock Only
 - **Reservations (TD-819, B07-03, decision t3):** finalizing a project reserves min(need, stock minus the reservations of others) under a new advisory lock (91011), stores the shortage in reservationShortages (shown on the purchase tab), and the health check lists items reserved above their stock.
 

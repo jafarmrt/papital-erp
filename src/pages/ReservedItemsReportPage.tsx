@@ -442,9 +442,11 @@ export default function ReservedItemsReportPage() {
                   </tr>
                 ) : (
                   filteredItemSummaries.map((summary) => {
-                    const isExpanded = expandedItemCode === summary.itemCode;
+                    // v9.0.352 (TD-822): each summary is one item, keyed by its id
+                    const rowKey = summary.itemId ? `id:${summary.itemId}` : `code:${summary.itemCode}`;
+                    const isExpanded = expandedItemCode === rowKey;
                     return (
-                      <React.Fragment key={summary.itemCode || summary.itemId}>
+                      <React.Fragment key={rowKey}>
                         <tr className={`hover:bg-slate-50 transition-colors ${isExpanded ? 'bg-amber-50/40' : ''}`}>
                           <td className="p-3.5 font-mono font-bold text-slate-900">
                             {summary.itemCode || '---'}
@@ -497,7 +499,7 @@ export default function ReservedItemsReportPage() {
                           </td>
                           <td className="p-3.5 text-center print:hidden">
                             <button
-                              onClick={() => setExpandedItemCode(isExpanded ? null : summary.itemCode)}
+                              onClick={() => setExpandedItemCode(isExpanded ? null : rowKey)}
                               className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
                               title={isExpanded ? "بستن جزئیات" : "مشاهده ریز رزروها"}
                             >
