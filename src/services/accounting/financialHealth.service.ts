@@ -34,6 +34,7 @@ import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from
 import { buildDocumentIntegrityHealthTest, findDocumentIntegrityGaps } from '../documents/documentConstraintHealth.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
+import { buildProjectStageHealthTest, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
@@ -1209,6 +1210,10 @@ export class FinancialHealthService {
     const consolidationSourcesTest = buildConsolidationSourcesHealthTest(await findOpenLegacyConsolidationSources());
     overallScore += consolidationSourcesTest.scoreImpact;
     tests.push(consolidationSourcesTest);
+    // آزمون ۴۴: v9.0.367 (TD-737، TD-753) شماره مرحله زنده تکراری یک پروژه و مرحله پروژه ناموجود (مهاجرت 0084؛ فقط فهرست)
+    const projectStageTest = buildProjectStageHealthTest(await findProjectStageIntegrity());
+    overallScore += projectStageTest.scoreImpact;
+    tests.push(projectStageTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
