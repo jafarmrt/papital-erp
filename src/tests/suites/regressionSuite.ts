@@ -10853,5 +10853,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runForeignKeyIndexTests } = await import('../regression/foreignKeyIndexTests.js');
   results.push(...await runForeignKeyIndexTests(shouldRun));
 
+  // Phase 5 PR «ج» (v9.0.451+): treasury rows linked to documents and payroll payment dates
+  const { runTreasuryPayrollPhase5Tests } = await import('../regression/treasuryPayrollPhase5Tests.js');
+  results.push(...await runTreasuryPayrollPhase5Tests(shouldRun));
+
   return results;
 }

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.451 — Settlement Receipts and Payments Carry the Document's Party
+- **Fix (TD-907, P5-S-01 / P5-P06):** a receipt or payment recorded against a document without a party id takes the document's party id and current name, so the party's account card and delete guard still see it after a rename; the invoice settlement form sends the party id too.
+
 ### v9.0.450 — Terminal Output Is English
 - **Fix (TD-625, B01-45):** scripts, the session hook, test names, test runner labels and failure messages print English; server error logs show the status, code and route, and the user's Persian message stays in the response and the JSON log file.
 

@@ -49,6 +49,37 @@ export async function resolveTreasuryPartyName(
 }
 
 /**
+ * v9.0.451 (TD-907، یافته P5-S-01 / P5-P06، قاعده TD-778 و TD-416): دریافت یا پرداختی که به سند وصل است و شناسه طرف حساب
+ * ندارد (فرم تسویه فاکتور فقط نام خریدار سند را می‌فرستاد) شناسه طرف حساب سند و نام کنونی او را می‌گیرد. پیش‌تر ردیف ۱۲۰۱
+ * یا ۳۰۰۱ سند حسابداری آن با `detailed_id` تهی و فقط نام ثبت می‌شد و پس از تغییر نام طرف حساب از کارت حساب و نگهبان حذف
+ * او بیرون می‌افتاد. فقط وقتی طرف حساب ردیف همان سوی سند است (مشتری برای دریافت، تأمین‌کننده برای پرداخت)، نام فرستاده‌شده
+ * نام خریدار سند یا نام کنونی طرف حساب آن است (نام بی فاصله دو سر؛ نام طرف حساب دیگر مانند پیش با
+ * `TREASURY_DOCUMENT_PARTY_MISMATCH` رد می‌شود، نه آنکه به طرف سند نوشته شود) و رکورد طرف حساب سند حذف نشده و از همان نوع
+ * (یا «هر دو») است؛ وگرنه `null` و همان قاعده نام پیشین (سند بی طرف حساب، TD-417). سند `FOR SHARE` خوانده می‌شود، مانند
+ * `assertTreasuryDocumentLink`؛ فراخواننده پیش‌تر حساب بانکی را قفل کرده است.
+ */
+export async function documentPartyOfTreasuryLink(tx: DbExecutor, link: {
+  type: 'receipt' | 'payment';
+  documentId: number;
+  partyType: string;
+  partyName: string;
+}): Promise<{ id: number; name: string } | null> {
+  const expectedParty = link.type === 'receipt' ? 'customer' : 'supplier';
+  if (link.partyType !== expectedParty) return null;
+  const [doc] = await tx.select({ partyId: documents.partyId, buyerName: documents.buyerName }).from(documents)
+    .where(and(eq(documents.id, link.documentId), eq(documents.isDeleted, 0)))
+    .for('share');
+  if (!doc?.partyId) return null;
+  const [party] = await tx.select({ id: customers.id, name: customers.name, partyType: customers.partyType }).from(customers)
+    .where(and(eq(customers.id, doc.partyId), eq(customers.isDeleted, 0)));
+  const kind = party ? (party.partyType || 'customer') : null;
+  if (!party || (kind !== link.partyType && kind !== 'both')) return null;
+  const sentName = (link.partyName ?? '').trim();
+  if (sentName !== (doc.buyerName ?? '').trim() && sentName !== party.name.trim()) return null;
+  return { id: party.id, name: party.name };
+}
+
+/**
  * سند پیوسته فعال است (باطل‌نشده)، دریافت به سند فروش و پرداخت به سند خرید است، طرف حساب مشتری یا تأمین‌کننده همان سوی
  * سند است و طرف حساب سند همان است: شناسه طرف حساب سند (v9.0.336، TD-778)، و در سند پیشین بی شناسه نام خریدار برابر نام طرف
  * حساب (قاعده TD-417: نام بی فاصله دو سر). سند `FOR SHARE` قفل می‌شود تا تا

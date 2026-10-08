@@ -6,7 +6,7 @@ import { VoucherService } from '../voucher.service.js';
 import { resolveTreasuryExchangeRate } from './treasuryExchangeRate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
 import { needsChosenContraAccount, normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
-import { assertTreasuryDocumentLink, resolveTreasuryPartyName } from './treasuryLinks.js';
+import { assertTreasuryDocumentLink, documentPartyOfTreasuryLink, resolveTreasuryPartyName } from './treasuryLinks.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../../lib/lockOrder.js';
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType } from '../../events/domainEvents.js';
@@ -255,11 +255,18 @@ export class TreasuryTransactionService {
         .where(and(eq(bankAccounts.id, data.bankAccountId), eq(bankAccounts.isDeleted, 0)))
         .for('update');
       if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
+      // v9.0.451 (TD-907): ردیف وصل به سند بی شناسه طرف حساب (فرم تسویه فاکتور) شناسه طرف حساب سند و نام کنونی او را
+      // می‌گیرد تا ردیف سند حسابداری و ردیف خزانه با تغییر نام از کارت حساب و نگهبان حذف طرف حساب بیرون نیفتند
+      const documentParty = data.documentId && !data.partyId
+        ? await documentPartyOfTreasuryLink(txEngine, { type: data.type, documentId: data.documentId, partyType, partyName: data.partyName })
+        : null;
+      const partyId = data.partyId || documentParty?.id || null;
+      const partyName = documentParty?.name ?? data.partyName;
       // v9.0.83 (TD-501، B04-05): شناسه طرف حساب در جدول همان نوع، و سند پیوسته فعال، هم‌سو و با همان طرف حساب
-      const partyCurrentName = await resolveTreasuryPartyName(txEngine, partyType, data.partyId);
+      const partyCurrentName = await resolveTreasuryPartyName(txEngine, partyType, partyId);
       if (data.documentId) {
         await assertTreasuryDocumentLink(txEngine, {
-          type: data.type, documentId: data.documentId, partyType, partyId: data.partyId ?? null, partyName: partyCurrentName ?? data.partyName,
+          type: data.type, documentId: data.documentId, partyType, partyId, partyName: partyCurrentName ?? partyName,
         });
       }
 
@@ -303,7 +310,7 @@ export class TreasuryTransactionService {
         const treasuryDetailedId: number | null = bank.id;
         const treasuryDetailedName = bank.title;
 
-        const descText = data.description || `${data.type === 'receipt' ? 'دریافت' : 'پرداخت'} ${data.method === 'cash' ? 'نقدی' : data.method === 'pos' ? 'کارتخوان' : 'حواله بانکی'} از/به ${data.partyName}`;
+        const descText = data.description || `${data.type === 'receipt' ? 'دریافت' : 'پرداخت'} ${data.method === 'cash' ? 'نقدی' : data.method === 'pos' ? 'کارتخوان' : 'حواله بانکی'} از/به ${partyName}`;
         
         const debitAccountId = data.type === 'receipt' ? treasuryAccountId : contraAccountId;
         const creditAccountId = data.type === 'receipt' ? contraAccountId : treasuryAccountId;
@@ -321,8 +328,8 @@ export class TreasuryTransactionService {
             {
               accountId: debitAccountId!,
               detailedType: data.type === 'receipt' ? treasuryDetailedType : (data.partyType || 'other'),
-              detailedId: data.type === 'receipt' ? treasuryDetailedId : data.partyId,
-              detailedName: data.type === 'receipt' ? treasuryDetailedName : data.partyName,
+              detailedId: data.type === 'receipt' ? treasuryDetailedId : partyId,
+              detailedName: data.type === 'receipt' ? treasuryDetailedName : partyName,
               debit: amount,
               credit: 0,
               currency: txCurrency,
@@ -332,8 +339,8 @@ export class TreasuryTransactionService {
             {
               accountId: creditAccountId!,
               detailedType: data.type === 'receipt' ? (data.partyType || 'other') : treasuryDetailedType,
-              detailedId: data.type === 'receipt' ? data.partyId : treasuryDetailedId,
-              detailedName: data.type === 'receipt' ? data.partyName : treasuryDetailedName,
+              detailedId: data.type === 'receipt' ? partyId : treasuryDetailedId,
+              detailedName: data.type === 'receipt' ? partyName : treasuryDetailedName,
               debit: 0,
               credit: amount,
               currency: txCurrency,
@@ -355,8 +362,8 @@ export class TreasuryTransactionService {
         exchangeRate: money(txExchangeRate),
         bankAccountId: data.bankAccountId,
         partyType,
-        partyId: data.partyId || null,
-        partyName: data.partyName.trim(),
+        partyId,
+        partyName: partyName.trim(),
         purpose: party.purpose,
         contraAccountId: party.contraAccountId,
         trackingNumber: data.trackingNumber?.trim() || '',
