@@ -176,7 +176,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
 
   // 1. Clear workflow dependencies & instances
   try {
-    // v9.0.320 (TD-691): orders point to their requisition (fk_documents_procurement_requisition); unlink them first
+    // v9.0.340 (TD-691): orders point to their requisition (fk_documents_procurement_requisition); unlink them first
     await orm.execute(sql`UPDATE documents SET procurement_requisition_id = NULL WHERE procurement_requisition_id IN (SELECT id FROM purchase_requisitions WHERE code ILIKE 'PR-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%')`);
     await orm.execute(sql`DELETE FROM purchase_requisitions WHERE code ILIKE 'PR-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%'`);
     await orm.execute(sql`UPDATE purchase_requisitions SET workflow_instance_id = NULL`);

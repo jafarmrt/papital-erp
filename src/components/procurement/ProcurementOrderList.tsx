@@ -5,7 +5,7 @@ import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../.
 import { ProcurementPager } from './ProcurementPager';
 
 interface ProcurementOrderListProps {
-  /** v9.0.326 (TD-697): یک صفحه از سفارش‌های همین زبانه، فیلترشده در سرور */
+  /** v9.0.346 (TD-697): یک صفحه از سفارش‌های همین زبانه، فیلترشده در سرور */
   orders: ProcurementOrder[];
   total: number;
   page: number;
@@ -14,7 +14,7 @@ interface ProcurementOrderListProps {
   search: string;
   onSearchChange: (search: string) => void;
   isLoading: boolean;
-  /** v9.0.325 (TD-702): پیام خطای بارگذاری سفارش‌ها، به‌جای «هیچ فاکتوری … نیست» */
+  /** v9.0.345 (TD-702): پیام خطای بارگذاری سفارش‌ها، به‌جای «هیچ فاکتوری … نیست» */
   error?: string;
   onDeliverOrder?: (orderId: number) => Promise<void> | void;
   deliveringOrderId?: number | null;

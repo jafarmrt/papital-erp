@@ -1,23 +1,29 @@
 import { Eye } from 'lucide-react';
 import { formatPersianNumber, formatPersianDate } from '../../utils';
+import type { DocumentListPager as Pager } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
+import { DocumentListPager } from './DocumentListPager';
 
 interface PastAuditReportsTabProps {
   auditDocsLoading: boolean;
   auditDocs: any[];
   handleViewAudit: (docId: number) => void;
+  /** v9.0.339 (TD-787): صفحه جاری سوابق (۵۰ سند در هر صفحه) */
+  pager?: Pager;
 }
 
 export function PastAuditReportsTab({
   auditDocsLoading,
   auditDocs,
-  handleViewAudit
+  handleViewAudit,
+  pager
 }: PastAuditReportsTabProps) {
+  const rowOffset = pager ? (pager.page - 1) * pager.pageSize : 0;
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
       <div className="p-4 border-b border-slate-100 flex items-center justify-between">
         <h3 className="font-bold text-slate-800 text-sm">سوابق و تاریخچه اسناد انبارگردانی صادرشده</h3>
         <span className="text-xs text-slate-500 font-mono">
-          تعداد اسناد: {formatPersianNumber(auditDocs.length)}
+          تعداد اسناد: {formatPersianNumber(pager ? pager.total : auditDocs.length)}
         </span>
       </div>
 
@@ -50,7 +56,7 @@ export function PastAuditReportsTab({
             ) : (
               auditDocs.map((doc, idx) => (
                 <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="py-3 px-3 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
+                  <td className="py-3 px-3 text-center font-mono text-slate-400">{formatPersianNumber(rowOffset + idx + 1)}</td>
                   <td className="py-3 px-3 font-mono font-bold text-blue-600">{doc.refNumber || `#${doc.id}`}</td>
                   <td className="py-3 px-3 font-mono">{formatPersianDate(doc.date)}</td>
                   <td className="py-3 px-3 font-bold text-slate-700">{doc.location || 'انبار مرکزی'}</td>
@@ -71,6 +77,7 @@ export function PastAuditReportsTab({
           </tbody>
         </table>
       </div>
+      {pager && <DocumentListPager pager={pager} shown={auditDocs.length} loading={auditDocsLoading} noun="سند انبارگردانی" />}
     </div>
   );
 }

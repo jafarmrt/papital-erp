@@ -6,6 +6,8 @@ import { User } from '../../types';
 import { extractDateString, errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { exchangeRateError } from '../../components/documents/ExchangeRateField';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { refNumberToSend } from '../../lib/documents/documentRefRules';
+import { selectedPartyId } from '../../lib/documents/partySelection';
 import type { StockDocumentForm } from './useStockDocumentForm';
 import type { StockDocumentReferenceData } from './useStockDocumentReferenceData';
 
@@ -23,9 +25,9 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
   const queryClient = useQueryClient();
   const { warehouses } = refData;
   const {
-    actionType, docType, refNumber, date, location, buyerName, currency, exchangeRate, returnInvoiceId, returnVatPercent, setReturnVatPercent,
-    notes, docItems, selectedProjectId, selectedProjectObj, attachments, getItemReservationSummary,
-    setIsSaving, setDocItems, fetchNextRef, setReturnInvoiceRef, setReturnInvoiceId, setBuyerName,
+    actionType, docType, refNumber, suggestedRef, date, location, buyerName, currency, exchangeRate, returnInvoiceId, returnVatPercent, setReturnVatPercent,
+    notes, docItems, selectedProjectId, selectedProjectObj, attachments, getItemReservationSummary, selectedSupplierObj,
+    setIsSaving, setDocItems, fetchNextRef, changeReturnInvoiceRef, setBuyerName,
     setSelectedSupplierObj, setNotes, setUnitPrice, setQuantity, setSelectedProjectId,
     setSelectedProjectObj, setAttachments, setCurrency, setExchangeRate,
   } = form;
@@ -95,10 +97,13 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
         body: JSON.stringify({
           docType,
           status: 'final',
-          refNumber,
+          // v9.0.327 (TD-783): برگشت از فروش و شماره پیشنهادی دست‌نخورده «auto»؛ سرور شماره آزاد سری را می‌دهد
+          refNumber: refNumberToSend(docType, refNumber, suggestedRef),
           date: formattedDate,
           user: currentUser.full_name || currentUser.username,
           location,
+          // v9.0.336 (TD-778): طرف حساب ورود با شناسه انتخابگر؛ برگشت با فاکتور مرجع طرف حساب فاکتور را از سرور می‌گیرد
+          partyId: actionType === 'in' && returnInvoiceId === null ? selectedPartyId(selectedSupplierObj?.id) : undefined,
           buyer_name: buyerName,
           notes: finalNotes,
           inOut: actionType,
@@ -134,8 +139,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
 
       setDocItems([]);
       void fetchNextRef();
-      setReturnInvoiceRef('');
-      setReturnInvoiceId(null);
+      changeReturnInvoiceRef('');
       setReturnVatPercent('');
       setBuyerName('');
       setSelectedSupplierObj(null);

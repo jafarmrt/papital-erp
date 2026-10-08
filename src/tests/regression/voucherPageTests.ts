@@ -38,7 +38,7 @@ async function scopeStart() {
 async function finalDocument(api: Api, docType: 'receipt' | 'invoice', itemId: number, quantity: number, unitPrice: number): Promise<number> {
   const wh = await getDefaultWarehouseCode(orm);
   const res = await api.post('/api/documents', {
-    docType, inOut: docType === 'receipt' ? 'in' : 'out', status: 'final', refNumber: `${docType === 'receipt' ? 'R' : 'I'}-${tag()}`,
+    docType, inOut: docType === 'receipt' ? 'in' : 'out', status: 'final', refNumber: docType === 'receipt' ? `R-${tag()}` : 'auto',
     date: await businessTodayIsoDate(), buyer_name: docType === 'receipt' ? 'Voucher page supplier' : 'Voucher page customer', location: wh,
     items: [{ itemId, quantity, unit_price: unitPrice }],
   });
@@ -334,7 +334,7 @@ export async function runVoucherPageTests(shouldRun: ShouldRun): Promise<TestCas
       await finalDocument(api, 'receipt', y.id, 10, 1000);
       const invoice = await finalDocument(api, 'invoice', y.id, 2, 5000);
       for (const [docType, inOut] of [['invoice', 'out'], ['receipt', 'in']] as const) {
-        const res = await api.post('/api/documents', { docType, inOut, status: 'proforma', refNumber: `P-${tag()}`, date: today, buyer_name: 'Automation party', location: wh, items: [{ itemId: y.id, quantity: 1, unit_price: 5000 }] });
+        const res = await api.post('/api/documents', { docType, inOut, status: 'proforma', refNumber: docType === 'receipt' ? `P-${tag()}` : 'auto', date: today, buyer_name: 'Automation party', location: wh, items: [{ itemId: y.id, quantity: 1, unit_price: 5000 }] });
         if (res.status !== 200 && res.status !== 201) problems.push(`${docType} proforma: ${brief(res)}`);
       }
       // two stock counts: one with a valued shortage (voucher on 7012), one of an item without WAC (no voucher, none needed)

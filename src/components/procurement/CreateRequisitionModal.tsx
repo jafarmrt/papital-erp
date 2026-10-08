@@ -40,7 +40,7 @@ export function CreateRequisitionModal({
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [items, setItems] = useState<NewRequisitionRow[]>(() => [newRow(0)]);
-  // v9.0.328 (TD-901، ت۵): خطای هر فیلد (بررسی فرم یا Zod سرور) زیر همان فیلد؛ پیش‌تر فقط در اعلان می‌آمد
+  // v9.0.348 (TD-901، ت۵): خطای هر فیلد (بررسی فرم یا Zod سرور) زیر همان فیلد؛ پیش‌تر فقط در اعلان می‌آمد
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const hasErrors = Object.keys(fieldErrors).length > 0;
 
@@ -64,7 +64,7 @@ export function CreateRequisitionModal({
     setFieldErrors(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith('items'))));
   };
 
-  // v9.0.327 (TD-700، B10-13): کالا از فهرست انتخاب کالا با جست‌وجوی سرور برگزیده می‌شود
+  // v9.0.347 (TD-700، B10-13): کالا از فهرست انتخاب کالا با جست‌وجوی سرور برگزیده می‌شود
   const handleSelectWarehouseItem = (rowId: string, matched: Item | undefined) => {
     if (!matched) return;
     const index = items.findIndex(i => i.id === rowId);

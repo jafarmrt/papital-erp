@@ -13,7 +13,7 @@ interface ProcurementPagerProps {
   noun: string;
 }
 
-/** v9.0.326 (TD-697): نوار صفحه‌بندی فهرست‌های میز تدارکات؛ صفحه‌ها از سرور خوانده می‌شوند */
+/** v9.0.346 (TD-697): نوار صفحه‌بندی فهرست‌های میز تدارکات؛ صفحه‌ها از سرور خوانده می‌شوند */
 export function ProcurementPager({ page, pageSize, total, shown, isLoading, onPageChange, noun }: ProcurementPagerProps) {
   const pages = procurementPageCount(total, pageSize);
   if (total <= pageSize && page === 1) return null;

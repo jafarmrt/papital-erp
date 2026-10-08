@@ -7,7 +7,7 @@ const pending: PillBadgeVariant = { label: 'در انتظار بررسی و تا
 const ordered: PillBadgeVariant = { label: 'تایید شده (در حال خرید)', className: `${STATUS_BASE} bg-sky-100 text-sky-900`, icon: ShoppingCart, iconClassName: 'w-3.5 h-3.5 text-sky-600' };
 const received: PillBadgeVariant = { label: 'خرید و تحویل انبار شده', className: `${STATUS_BASE} bg-emerald-100 text-emerald-900`, icon: CheckCircle2, iconClassName: 'w-3.5 h-3.5 text-emerald-600' };
 const rejected: PillBadgeVariant = { label: 'رد شده / لغو', className: `${STATUS_BASE} bg-rose-100 text-rose-900`, icon: Ban, iconClassName: 'w-3.5 h-3.5 text-rose-600' };
-/** v9.0.322 (TD-694): درخواستی که در درخواست تجمیعی دیگری آمده و بسته است */
+/** v9.0.342 (TD-694): درخواستی که در درخواست تجمیعی دیگری آمده و بسته است */
 const consolidated: PillBadgeVariant = { label: 'تجمیع‌شده', className: `${STATUS_BASE} bg-violet-100 text-violet-900`, icon: Layers, iconClassName: 'w-3.5 h-3.5 text-violet-600' };
 
 export const REQUISITION_STATUS_BADGES: PillBadgeVariants = {

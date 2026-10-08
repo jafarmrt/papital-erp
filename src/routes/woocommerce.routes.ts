@@ -16,6 +16,9 @@ import { shopSellableStocks } from '../services/woocommerce/shopWarehouse.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { assertSafeExternalUrl } from '../lib/ssrfGuard.js';
+import { ValidationError } from '../errors/customErrors.js';
+import { resolveWcTestCredentials } from '../lib/woocommerce/wcConnectionTest.js';
+import { readWcConnectionSettings } from '../services/woocommerce/wcConnectionSettings.js';
 
 const router = Router();
 
@@ -31,11 +34,12 @@ const syncItemSchema = z.object({
   })
 });
 
+// v9.0.333 (TD-723): هر سه اختیاری‌اند؛ کلید واردنشده یا ماسک‌شده از تنظیمات ذخیره‌شده خوانده می‌شود (resolveWcTestCredentials)
 const testConnectionSchema = z.object({
   body: z.object({
-    url: z.string().min(1, 'آدرس سایت الزامی است'),
-    consumerKey: z.string().min(1, 'کلید مشتری الزامی است'),
-    consumerSecret: z.string().min(1, 'رمز مشتری الزامی است')
+    url: z.string().max(500).optional(),
+    consumerKey: z.string().max(500).optional(),
+    consumerSecret: z.string().max(500).optional()
   })
 });
 
@@ -264,16 +268,7 @@ router.post('/sync-order-by-id', authorizePermission('woocommerce.manage'), vali
   try {
     const { orderId } = req.body;
 
-    const settingsRows = await orm.select().from(appSettings).where(
-      sql`key IN ('wc_store_url', 'wc_consumer_key', 'wc_consumer_secret')`
-    );
-
-    let url = '', key = '', secret = '';
-    settingsRows.forEach(row => {
-      if (row.key === 'wc_store_url') url = row.value;
-      if (row.key === 'wc_consumer_key') key = row.value;
-      if (row.key === 'wc_consumer_secret') secret = row.value;
-    });
+    const { url, consumerKey: key, consumerSecret: secret } = await readWcConnectionSettings();
 
     if (!url || !key || !secret) {
       return res.status(400).json({ error: 'تنظیمات اتصال به ووکامرس تکمیل نشده است.' });
@@ -293,16 +288,7 @@ router.post('/sync-item', authorizePermission('woocommerce.manage'), validate(sy
   try {
     const { itemId } = req.body;
 
-    const settingsRows = await orm.select().from(appSettings).where(
-      sql`key IN ('wc_store_url', 'wc_consumer_key', 'wc_consumer_secret')`
-    );
-
-    let url = '', key = '', secret = '';
-    settingsRows.forEach(row => {
-      if (row.key === 'wc_store_url') url = row.value;
-      if (row.key === 'wc_consumer_key') key = row.value;
-      if (row.key === 'wc_consumer_secret') secret = row.value;
-    });
+    const { url, consumerKey: key, consumerSecret: secret } = await readWcConnectionSettings();
 
     if (!url || !key || !secret) {
       return res.status(400).json({ error: 'تنظیمات ووکامرس تکمیل نشده است. ابتدا به صفحه تنظیمات > اتصال به ووکامرس بروید.' });
@@ -341,16 +327,7 @@ router.post('/sync-item', authorizePermission('woocommerce.manage'), validate(sy
 // Bulk sync all active ERP items' stock to WooCommerce
 router.post('/sync-all-stocks', authorizePermission('woocommerce.manage'), asyncHandler(async (req, res) => {
   try {
-    const settingsRows = await orm.select().from(appSettings).where(
-      sql`key IN ('wc_store_url', 'wc_consumer_key', 'wc_consumer_secret')`
-    );
-
-    let url = '', key = '', secret = '';
-    settingsRows.forEach(row => {
-      if (row.key === 'wc_store_url') url = row.value;
-      if (row.key === 'wc_consumer_key') key = row.value;
-      if (row.key === 'wc_consumer_secret') secret = row.value;
-    });
+    const { url, consumerKey: key, consumerSecret: secret } = await readWcConnectionSettings();
 
     if (!url || !key || !secret) {
       return res.status(400).json({ error: 'تنظیمات کلیدهای دسترسی ووکامرس در سیستم پیکربندی نشده است.' });
@@ -405,7 +382,10 @@ router.post('/sync-all-stocks', authorizePermission('woocommerce.manage'), async
 // Test Connection
 router.post('/test-connection', authorizePermission('woocommerce.manage'), validate(testConnectionSchema), asyncHandler(async (req, res) => {
   try {
-    const { url, consumerKey, consumerSecret } = req.body;
+    // v9.0.333 (TD-723): غیرمدیر کلیدها را «********» می‌بیند و نمی‌فرستد؛ کلید ذخیره‌شده فقط با نشانی ذخیره‌شده به کار می‌رود
+    const resolved = resolveWcTestCredentials(req.body, await readWcConnectionSettings());
+    if (!resolved.ok) throw new ValidationError(resolved.message, undefined, resolved.code);
+    const { url, consumerKey, consumerSecret } = resolved.credentials;
 
     // V3.0.7 (TD-057): مسیر test-connection یک URL کاربر-محور را fetch می‌کند و
     // باید از گارد SSRF عبور کند (قبلاً بدون گارد بود). echo محلی مجاز نیست.

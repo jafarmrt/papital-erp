@@ -159,10 +159,11 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       if (wrong.length > 0) throw new Error(wrong.map(([n, got, want]) => `${n}: ${got} (انتظار ${want})`).join('، '));
       return `${checks.length} بررسی`;
     }),
-    record('sec_piecework_log_permission_td_300', 'حوزه H: ثبت کارکرد کارمزدی با مجوز «ثبت کارکرد پرسنل»؛ نرخ دستی فقط برای مدیر پرسنل یا تعرفه‌ها (TD-300)', 'real_database', async () => {
+    record('sec_piecework_log_permission_td_300', 'حوزه H: ثبت کارکرد کارمزدی با مجوز «ثبت کارکرد پرسنل»؛ نرخ دستی فقط برای مدیر تعرفه‌ها (TD-300، TD-805)', 'real_database', async () => {
       const logger = await userWith(['daily_logs.view', 'daily_logs.create']);
       const operator = await userWith(['piecework.view', 'piecework.log']);
-      const manager = await userWith(['personnel.manage']);
+      // v9.0.320 (TD-805): نرخ دستی با «مدیریت عناوین کاری و نرخ‌های پایه»، نه «مدیریت کامل پرسنل»
+      const manager = await userWith(['piecework.view', 'piecework.log', 'piecework.manage_tasks']);
       const [person] = await orm.insert(personnel).values({ fullName: 'td300 آزمون', personnelCode: `TD300-${Date.now()}` }).returning();
       const [task] = await orm.insert(pieceworkTasks).values({ code: `TD300-${Date.now()}`, title: `td300-${Date.now()}`, defaultRate: money(1000) }).returning();
       try {
@@ -276,7 +277,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       const item = await createTestItem({ currentStock: 5 });
       const [clerkRow] = await orm.select({ username: users.username, fullName: users.fullName }).from(users).where(eq(users.id, clerk.id));
       const res = await send(clerk.session, 'post', '/api/documents', {
-        docType: 'invoice', refNumber: `TD307-${Date.now()}`, date: new Date().toISOString().split('T')[0], status: 'draft', inOut: 'out',
+        docType: 'invoice', refNumber: 'auto', date: new Date().toISOString().split('T')[0], status: 'draft', inOut: 'out',
         buyer_name: 'td307', user: 'مدیر عامل (جعلی)', items: [{ itemId: item.id, quantity: 1, unit_price: 1000 }]
       });
       const docId = Number(res.body?.docId ?? res.body?.id ?? res.body?.data?.id);

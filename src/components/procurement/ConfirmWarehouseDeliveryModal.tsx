@@ -3,7 +3,7 @@ import { PackageCheck, Warehouse, FileText, CheckCircle2, X, Loader2, Building2 
 import { formatPersianNumber, formatPersianPrice, formatPersianDate } from '../../utils';
 
 /**
- * v9.0.324 (TD-701، B10-14): سفارش همان شکلی است که `GET /procurement/orders` برمی‌گرداند و تأمین‌کننده از `supplierName`
+ * v9.0.344 (TD-701، B10-14): سفارش همان شکلی است که `GET /procurement/orders` برمی‌گرداند و تأمین‌کننده از `supplierName`
  * می‌آید. پیش‌تر `buyerName` خوانده می‌شد که سرور نمی‌فرستد، و تأیید تحویل به‌جای تأمین‌کننده سفارش «تامین‌کننده
  * تدارکات» نشان می‌داد.
  */

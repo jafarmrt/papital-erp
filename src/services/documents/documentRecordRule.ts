@@ -5,6 +5,8 @@ import {
 } from '../../lib/permissions/documentPermissions.js';
 import { documentStockDirection, isRecordableDocumentType } from '../../lib/documents/documentDirection.js';
 import { ValidationError } from '../../errors/customErrors.js';
+import { isAutoRefNumber, isServerSeriesDocumentType } from '../../lib/documents/documentRefRules.js';
+import { documentTypeTitle } from '../../lib/documents/documentTypeTitles.js';
 
 /**
  * v9.0.125 (TD-541 / TD-771): وضعیت و جهت سندی که ثبت یا نهایی می‌شود، با همان قاعده‌ای که `createDocumentWithDetails` و
@@ -13,9 +15,18 @@ import { ValidationError } from '../../errors/customErrors.js';
  *
  * v9.0.238 (TD-770، تصمیم ت۲ «الف» بسته ۸): جهت گردش فقط از نوع سند (`documentStockDirection`)، در ثبت و نهایی‌سازی؛
  * `inOut` ناسازگار با نوع ۴۲۲ است (نه نادیده) تا فراخواننده‌ای که جهت دیگری می‌فرستد خطایش را ببیند، انتقال بین انبارها
- * از مسیر ثبت سند پذیرفته نمی‌شود، و نوع ناشناخته فقط سربرگ بی‌ردیف است (کالایی جابه‌جا نمی‌کند؛ route فقط نوع‌های ثبت‌شدنی
- * را می‌پذیرد و آزمون‌های شماره‌گذاری سری جدا را با سربرگ نوع ساختگی می‌سازند).
+ * از مسیر ثبت سند پذیرفته نمی‌شود، و از v9.0.338 (TD-786) نوع یا وضعیت ناشناخته هیچ‌گاه ثبت نمی‌شود (پیش‌تر سربرگ بی‌ردیف
+ * نوع ساختگی ثبت می‌شد؛ پایگاه‌داده هم اکنون قید `chk_documents_type` و `chk_documents_status` دارد).
  */
+
+/** وضعیت‌های سند (قید `chk_documents_status`، مهاجرت 0081) */
+export const DOCUMENT_STATUSES: readonly DocumentRecordStatus[] = ['draft', 'proforma', 'final'];
+
+export function assertDocumentStatus(status: string): void {
+  if (!(DOCUMENT_STATUSES as readonly string[]).includes(status)) {
+    throw new ValidationError(`وضعیت سند «${status}» شناخته نیست؛ وضعیت فقط پیش‌نویس، پیش‌فاکتور یا قطعی است.`, { status }, 'DOCUMENT_STATUS_INVALID');
+  }
+}
 
 /** وضعیت سند تازه: وضعیت فرستاده‌شده، وگرنه پیش‌فاکتور برای نوع پیش‌فاکتور و قطعی برای بقیه */
 export function createdDocumentStatus(docType: string, status?: string | null): DocumentRecordStatus {
@@ -25,15 +36,15 @@ export function createdDocumentStatus(docType: string, status?: string | null): 
 
 /**
  * سند از این نوع با این `inOut` ثبت‌شدنی است: نوع جهت‌دار یا انبارگردانی، و `inOut` (اگر آمده) همان جهت نوع. انبارگردانی جهت
- * نوعی ندارد و `inOut` آن خوانده نمی‌شود. انتقال هرگز پذیرفته نمی‌شود؛ نوع ناشناخته فقط وقتی سند ردیف ندارد (`hasLines`
- * false)، چون ردیفش جهت گردش و سند حسابداری ندارد.
+ * نوعی ندارد و `inOut` آن خوانده نمی‌شود. انتقال هرگز پذیرفته نمی‌شود. v9.0.338 (TD-786): نوع ناشناخته حتی بی ردیف هم ثبت
+ * نمی‌شود (پیش‌تر سند بی ردیفِ هر نوعی ثبت می‌شد)؛ قید `chk_documents_type` پایگاه‌داده هم همین را می‌خواهد.
  */
-export function assertRecordableDocument(docType: string, inOut?: string | null, hasLines = true): void {
-  if (docType === 'transfer' || (hasLines && !isRecordableDocumentType(docType))) {
+export function assertRecordableDocument(docType: string, inOut?: string | null): void {
+  if (docType === 'transfer' || !isRecordableDocumentType(docType)) {
     throw new ValidationError(
       docType === 'transfer'
         ? 'انتقال بین انبارها فقط از صفحه «انتقال بین انبارها» ثبت می‌شود.'
-        : `نوع سند «${docType}» جهت گردش کالا ندارد و ردیف کالا نمی‌پذیرد.`,
+        : `نوع سند «${docType}» شناخته نیست؛ سند فقط از نوع‌های رسید، خرید، فاکتور، پیش‌فاکتور، برگشت، حواله، ضایعات، انبارگردانی و رسید تولید ثبت می‌شود.`,
       { docType },
       'DOCUMENT_TYPE_NOT_RECORDABLE',
     );
@@ -47,6 +58,34 @@ export function assertRecordableDocument(docType: string, inOut?: string | null,
       'DOCUMENT_DIRECTION_MISMATCH',
     );
   }
+}
+
+/**
+ * v9.0.327 (TD-783، یافته B08-14، تصمیم ت۹ «الف» بسته ۸): شماره فاکتور فروش و برگشت از فروش فقط از سری سرور است؛ شماره
+ * دستی برای این دو نوع در ثبت و ویرایش ۴۲۲ `DOCUMENT_REF_SERVER_SERIES` است (`refNumber` باید خالی یا «auto» باشد).
+ */
+export function assertManualRefAllowed(docType: string, requested: unknown): void {
+  if (!isServerSeriesDocumentType(docType) || isAutoRefNumber(requested)) return;
+  throw new ValidationError(
+    `شماره ${documentTypeTitle(docType)} فقط از سری فاکتورهای سرور داده می‌شود و دستی نوشته یا عوض نمی‌شود؛ شماره را خالی بگذارید.`,
+    { docType, refNumber: requested ?? null },
+    'DOCUMENT_REF_SERVER_SERIES',
+  );
+}
+
+/**
+ * v9.0.325 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): رسید تولید فقط از «ورود به انبار» پروژه ثبت می‌شود
+ * (`ProjectService.addProjectToInventory`، TD-285)، جایی که پروژه، سقف مقدار برنامه با دلیل (TD-327) و بهای تحویل سنجیده
+ * می‌شود. `POST /documents` و نهایی‌سازی رسید تولید پیش‌نویس آن را ۴۲۲ می‌دهند؛ پیش‌تر از این مسیر رسید تولید بی پروژه،
+ * فراتر از برنامه و روی پروژه لغوشده ثبت می‌شد و کالای در جریان ساخت بی پروژه بستانکار می‌شد.
+ */
+export function assertNotProjectDelivery(docType: string, refNumber?: string | null): void {
+  if (docType !== 'production_receipt') return;
+  throw new ValidationError(
+    `${refNumber ? `رسید تولید «${refNumber}» قطعی نمی‌شود؛ ` : ''}رسید تولید فقط از «ورود به انبار» همان پروژه ثبت می‌شود تا پروژه، سقف مقدار برنامه و بهای تحویل سنجیده شود.`,
+    { docType },
+    'PRODUCTION_RECEIPT_PROJECT_ONLY',
+  );
 }
 
 /**

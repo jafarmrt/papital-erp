@@ -329,7 +329,7 @@ async function deliveryWorkflowCase(h: Harness, wrong: string[]): Promise<string
   } as never));
   const rows = (await f.requisition(legacy.id)).items.map(r => ({ ...r, orderedQty: 2, remainingQty: 0, status: 'ordered', linkedDocumentIds: [legacyDoc] }));
   await h.q(`UPDATE purchase_requisitions SET items = $2::jsonb, status = 'under_review' WHERE id = $1`, [legacy.id, JSON.stringify(rows)]);
-  // v9.0.320 (TD-691): the order is linked to its requisition, as migration 0078 links a tagged legacy order
+  // v9.0.340 (TD-691): the order is linked to its requisition, as migration 0082 links a tagged legacy order
   await h.q(`UPDATE documents SET procurement_requisition_id = $2 WHERE id = $1`, [legacyDoc, legacy.id]);
   const legacyDelivery = await f.deliver(legacyDoc, withoutWarehouse);
   if (legacyDelivery.status !== 409 || legacyDelivery.body.code !== 'REQUISITION_NOT_APPROVED') wrong.push(`order of an unapproved requisition: ${legacyDelivery.status} ${String(legacyDelivery.body.code)}`);

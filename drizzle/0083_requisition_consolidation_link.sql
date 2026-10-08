@@ -1,4 +1,4 @@
--- Drizzle Migration 0079: link a consolidated purchase requisition to the requisition it went into (v9.0.322 / TD-694,
+-- Drizzle Migration 0083: link a consolidated purchase requisition to the requisition it went into (v9.0.342 / TD-694,
 -- finding B10-07, product-owner decision t3 of package 10, option A)
 --
 -- Consolidation used to create the new requisition outside any transaction and leave its sources open (pending, or even

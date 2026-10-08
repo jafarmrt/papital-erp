@@ -21,7 +21,7 @@ router.use(authenticateToken);
 
 /**
  * GET /api/procurement/inbox/summary
- * Procurement Desk metrics summary. v9.0.325 (TD-702): the same readers as the requisition list (every key that opens
+ * Procurement Desk metrics summary. v9.0.345 (TD-702): the same readers as the requisition list (every key that opens
  * the desk page); it took procurement.view only and its 403 emptied the desk for projects.view
  */
 router.get('/inbox/summary', authorizePermission(...READ_PERMISSIONS.purchaseRequisitions), asyncHandler(async (_req, res) => {
@@ -37,7 +37,7 @@ router.get('/requisitions', authorizePermission(...READ_PERMISSIONS.purchaseRequ
   const { status, projectId, priority, search, page, limit } = req.query as z.infer<typeof listRequisitionsSchema>['query'];
 
   const result = await ProcurementService.getRequisitions({ status, projectId, priority, search, page, limit });
-  // v9.0.326 (TD-697): the page and limit the service used, not the ones asked for
+  // v9.0.346 (TD-697): the page and limit the service used, not the ones asked for
   res.json({ success: true, data: result.data, total: result.total, page: result.page, limit: result.limit });
 }));
 
@@ -53,7 +53,7 @@ router.get('/requisitions/:id', authorizePermission(...READ_PERMISSIONS.purchase
 
 /**
  * POST /api/procurement/requisitions
- * Create purchase requisition. v9.0.321 (TD-693): create, convert to orders, consolidate and deliver take the
+ * Create purchase requisition. v9.0.341 (TD-693): create, convert to orders, consolidate and deliver take the
  * Idempotency-Key the browser sends, so a repeated submission replays the first response instead of running again.
  */
 router.post('/requisitions', authorizePermission('procurement.create', 'projects.edit'), idempotency({ scope: 'procurement' }), validate(createRequisitionSchema), asyncHandler(async (req, res) => {
@@ -173,7 +173,7 @@ router.post('/consolidate', authorizePermission('procurement.manage'), idempoten
 
 /**
  * GET /api/procurement/orders
- * v9.0.320 (TD-691): only documents linked to a requisition (documents.procurement_requisition_id), paged in SQL
+ * v9.0.340 (TD-691): only documents linked to a requisition (documents.procurement_requisition_id), paged in SQL
  */
 router.get('/orders', authorizePermission(...READ_PERMISSIONS.procurementOrders), validate(listProcurementOrdersSchema), asyncHandler(async (req, res) => {
   const { status, requisitionId, search, page, limit } = req.query as z.infer<typeof listProcurementOrdersSchema>['query'];
@@ -184,7 +184,7 @@ router.get('/orders', authorizePermission(...READ_PERMISSIONS.procurementOrders)
 
 /**
  * POST /api/procurement/orders/:id/deliver
- * Deliver a procurement order to the warehouse (finalizes it, moves stock in, updates Kardex); v9.0.320 (TD-691): only
+ * Deliver a procurement order to the warehouse (finalizes it, moves stock in, updates Kardex); v9.0.340 (TD-691): only
  * a document linked to a requisition, else 422 PROCUREMENT_ORDER_NOT_LINKED
  */
 router.post('/orders/:id/deliver', authorizePermission('procurement.order', 'procurement.manage'), idempotency({ scope: 'procurement' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {

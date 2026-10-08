@@ -8,6 +8,7 @@ import { SearchableSelect } from '../SearchableSelect';
 import { formatPersianNumber, extractDateString, formatCurrencyLabel, formatPersianPrice } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
+import { PayrollDeductionsField, deductionsNeedDescription } from './PayrollDeductionsField';
 
 interface PieceworkPayrollModalProps {
   isOpen: boolean;
@@ -24,6 +25,8 @@ interface PieceworkPayrollModalProps {
   setPayrollBonuses: (val: number) => void;
   payrollDeductions: number;
   setPayrollDeductions: (val: number) => void;
+  payrollDeductionsDescription?: string;
+  setPayrollDeductionsDescription?: (val: string) => void;
   payrollNotes: string;
   setPayrollNotes: (val: string) => void;
   payrollPreviewLogs: PieceworkLog[];
@@ -55,6 +58,8 @@ export function PieceworkPayrollModal({
   setPayrollBonuses,
   payrollDeductions,
   setPayrollDeductions,
+  payrollDeductionsDescription = '',
+  setPayrollDeductionsDescription = () => undefined,
   payrollNotes,
   setPayrollNotes,
   payrollPreviewLogs,
@@ -191,16 +196,8 @@ export function PieceworkPayrollModal({
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">سایر کسورات (بیمه/مالیات...)</label>
-              <input
-                type="number"
-                min="0"
-                value={payrollDeductions}
-                onChange={(e) => setPayrollDeductions(nonNegativeInput(e.target.value))}
-                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
-              />
-            </div>
+            <PayrollDeductionsField amount={payrollDeductions} onAmountChange={setPayrollDeductions} description={payrollDeductionsDescription}
+              onDescriptionChange={setPayrollDeductionsDescription} currencyLabel={rial.label} />
           </div>
 
           {/* V1.9.0: کسر از مساعده/وام پرسنلی */}
@@ -270,7 +267,8 @@ export function PieceworkPayrollModal({
             <button
               type="submit"
               // V10-4.4: برای پرسنل حقوق ثابت/ترکیبی، خالی بودن لیست کارکرد مانع صدور نیست
-              disabled={(payrollPreviewLogs.length === 0 && !allowNoLogs) || advanceExceedsBalance || isSaving}
+              disabled={(payrollPreviewLogs.length === 0 && !allowNoLogs) || advanceExceedsBalance
+                || deductionsNeedDescription(payrollDeductions, payrollDeductionsDescription) || isSaving}
               className="px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
             >
               {isSaving ? (

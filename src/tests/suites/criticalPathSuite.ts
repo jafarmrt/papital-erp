@@ -147,7 +147,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
         .set(authHeaders())
         .send({
           docType: 'invoice',
-          refNumber: `CP-FIN-${Date.now()}`,
+          refNumber: 'auto',
           date: new Date().toISOString().split('T')[0],
           status: 'draft',
           inOut: 'out',
@@ -254,7 +254,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
       const key = `CP-IDEM-${Date.now()}`;
       const payload = {
         docType: 'invoice',
-        refNumber: `CP-IDEM-${Date.now()}`,
+        refNumber: 'auto',
         date: new Date().toISOString().split('T')[0],
         status: 'draft',
         inOut: 'out',

@@ -1434,6 +1434,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Package 14, PR د (from TD-462): approval inbox rows
   const { runWorkflowInboxTests } = await import('../security/workflowInboxTests.js');
   results.push(...await runWorkflowInboxTests(shouldRunAccess));
+  // Package 12 payroll, PR «ج» (from TD-805): each payroll action asks the key of its own name
+  const { runPieceworkPermissionTests } = await import('../security/pieceworkPermissionTests.js');
+  results.push(...await runPieceworkPermissionTests(shouldRunAccess));
   // Package 1, PR «ب» (TD-582, TD-595, TD-597, TD-599, TD-602): the HTTP edge
   const { runEdgeHardeningTests } = await import('../security/edgeHardeningChecks.js');
   results.push(...await runEdgeHardeningTests(shouldRunAccess));

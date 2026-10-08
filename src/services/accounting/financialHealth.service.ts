@@ -30,6 +30,8 @@ import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCateg
 import { buildProcurementOrderLinkHealthTest, findUnresolvedProcurementOrderLinks } from '../procurement/procurementOrderLinks.js';
 import { buildConsolidationSourcesHealthTest, findOpenLegacyConsolidationSources } from '../procurement/consolidationSourceHealth.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
+import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from '../documents/documentParty.js';
+import { buildDocumentIntegrityHealthTest, findDocumentIntegrityGaps } from '../documents/documentConstraintHealth.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
@@ -69,7 +71,7 @@ export function buildPieceworkTaskCodeHealthTest(
   return {
     id: 'piecework_task_code_uniqueness',
     category: 'system',
-    title: 'یکتایی کد عناوین کاری پرکیسی',
+    title: 'یکتایی کد عناوین کاری کارمزدی',
     description: 'دو عنوان کاری فعال نباید کد یکسان داشته باشند (بدون توجه به حروف بزرگ/کوچک و فاصله)؛ پایگاه‌داده با ایندکس یکتا از کد تکراری جلوگیری می‌کند',
     status: duplicateCodeCount > 0 || !uniqueIndexPresent ? 'warning' : 'healthy',
     scoreImpact: -penalty,
@@ -1195,11 +1197,15 @@ export class FinancialHealthService {
     tests.push(personnelRateTest);
     // آزمون ۳۹: v9.0.286 (TD-554) کسورات فیش حقوق که سندهای پیشین در ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» گذاشته‌اند (فقط فهرست)
     tests.push(buildPayslipDeductionsHealthTest(await findPayslipDeductionsInPrepayments()));
-    // آزمون ۴۰: v9.0.320 (TD-691) سند با برچسب یا ردیف درخواست خرید که پیوند سفارش تدارکاتش روشن نیست (فقط فهرست)
+    // آزمون ۴۰: v9.0.336 (TD-778) سند فروش و خرید با نام خریدار و بی شناسه طرف حساب (فقط فهرست، بی بازنویسی)
+    tests.push(buildUnlinkedPartyDocumentHealthTest(await findUnlinkedPartyDocuments()));
+    // آزمون ۴۱: v9.0.338 (TD-786) قید پایگاه‌داده سند و ردیف سند اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)
+    tests.push(buildDocumentIntegrityHealthTest(await findDocumentIntegrityGaps()));
+    // آزمون ۴۲: v9.0.340 (TD-691) سند با برچسب یا ردیف درخواست خرید که پیوند سفارش تدارکاتش روشن نیست (فقط فهرست)
     const procurementOrderLinkTest = buildProcurementOrderLinkHealthTest(await findUnresolvedProcurementOrderLinks());
     overallScore += procurementOrderLinkTest.scoreImpact;
     tests.push(procurementOrderLinkTest);
-    // آزمون ۴۱: v9.0.322 (TD-694) منبع تجمیع قدیمی که هنوز باز است و می‌تواند دوباره سفارش داده شود (فقط فهرست)
+    // آزمون ۴۳: v9.0.342 (TD-694) منبع تجمیع قدیمی که هنوز باز است و می‌تواند دوباره سفارش داده شود (فقط فهرست)
     const consolidationSourcesTest = buildConsolidationSourcesHealthTest(await findOpenLegacyConsolidationSources());
     overallScore += consolidationSourcesTest.scoreImpact;
     tests.push(consolidationSourcesTest);
