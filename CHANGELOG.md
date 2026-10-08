@@ -19,6 +19,15 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.322 — Payment From a Payslip Offers Its Remainder
+- **Payment From a Payslip Offers Its Remainder (TD-814):** the pay button inside a payslip sent no paid amount, so a partly paid payslip's payment form offered the whole net, which the server refused; it now sends the paid amount and status, as the payslip list does.
+
+### v9.0.321 — Custom Rate Readers Follow Decision t3
+- **Custom Rate Readers Follow Decision t3 (TD-806):** a personnel's custom rates opened only for piecework.view, piecework.log and personnel.manage, so the rate writer (piecework.manage_tasks) and the payroll issuers and payers could not read them; they now open for exactly the decision t3 list, while projects.view and settings.manage read only titles and categories.
+
+### v9.0.320 — Each Payroll Action Asks Its Own Key
+- **Each Payroll Action Asks Its Own Key (TD-805):** personnel.manage alone set custom rates and issued, paid, voided and deleted payrolls while piecework.payroll could not issue one; titles, categories and rates now ask piecework.manage_tasks, work logs piecework.log, payrolls piecework.payroll and payments the new piecework.pay; migration 0078 gives existing roles the keys of what they did, and every button follows the same key.
+
 ### v9.0.319 — Requisition Edit Before Approval
 - **Fix (TD-696, B10-09):** `PUT /procurement/requisitions/:id` edits only an unapproved (or rejected) requisition without orders (else 409 REQUISITION_NOT_EDITABLE), in one transaction under the row lock, with the create contract, the stored row ids kept and a before/after audit row.
 

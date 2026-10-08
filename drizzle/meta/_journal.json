@@ -547,6 +547,13 @@
       "when": 1793120000000,
       "tag": "0077_payroll_deductions_account",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793130000000,
+      "tag": "0078_piecework_action_permissions",
+      "breakpoints": true
     }
   ]
 }
