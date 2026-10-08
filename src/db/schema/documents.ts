@@ -22,6 +22,8 @@ export const documents = pgTable('documents', {
   returnOfDocumentId: integer('return_of_document_id').references((): AnyPgColumn => documents.id),
   user: text('user'),
   notes: text('notes'),
+  // v9.0.336 (TD-778، تصمیم ت۶ الف بسته ۸): طرف حساب سند فروش و خرید با شناسه (مهاجرت 0080)؛ نام خریدار فقط برای نمایش است
+  partyId: integer('party_id').references(baseRelations.customersId),
   buyerName: text('buyer_name').default(''),
   buyerCity: text('buyer_city').default(''),
   buyerPhone: text('buyer_phone').default(''),

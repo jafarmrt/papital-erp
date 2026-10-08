@@ -12,6 +12,7 @@ import { stockCountVariances } from '../inventory/stockCountSheet.js';
 import { createLedgerLocationResolver } from '../inventory/warehouseResolver.js';
 import { fetchSettlementRows, settledAmount } from './documentSettlement.js';
 import type { SettlementRow } from './documentSettlement.js';
+import { documentPartyCondition } from './documentParty.js';
 import type { 
   GetDocumentsFilter, 
   FormattedDocument, 
@@ -40,6 +41,9 @@ export class DocumentQueryService {
     }
     if (filter.buyerName !== undefined) {
       conditions.push(sql`btrim(${documents.buyerName}) = ${filter.buyerName.trim()}::text`);
+    }
+    if (filter.party) {
+      conditions.push(documentPartyCondition(filter.party));
     }
     if (filter.status && filter.status !== 'all') {
       conditions.push(eq(documents.status, filter.status));

@@ -50,16 +50,19 @@ export async function resolveTreasuryPartyName(
 
 /**
  * سند پیوسته فعال است (باطل‌نشده)، دریافت به سند فروش و پرداخت به سند خرید است، طرف حساب مشتری یا تأمین‌کننده همان سوی
- * سند است و نام خریدار سند با نام طرف حساب برابر است (قاعده TD-417: نام بی فاصله دو سر). سند `FOR SHARE` قفل می‌شود تا تا
+ * سند است و طرف حساب سند همان است: شناسه طرف حساب سند (v9.0.336، TD-778)، و در سند پیشین بی شناسه نام خریدار برابر نام طرف
+ * حساب (قاعده TD-417: نام بی فاصله دو سر). سند `FOR SHARE` قفل می‌شود تا تا
  * پایان ثبت باطل نشود؛ فراخواننده پیش‌تر حساب بانکی را قفل کرده است (سطح ۱۰ پیش از سطح ۶۰).
  */
 export async function assertTreasuryDocumentLink(tx: DbExecutor, link: {
   type: 'receipt' | 'payment';
   documentId: number;
   partyType: string;
+  /** v9.0.336 (TD-778): شناسه طرف حساب دریافت یا پرداخت؛ سند دارای طرف حساب فقط با همان شناسه وصل می‌شود */
+  partyId?: number | null;
   partyName: string;
 }): Promise<void> {
-  const [doc] = await tx.select({ refNumber: documents.refNumber, type: documents.type, buyerName: documents.buyerName })
+  const [doc] = await tx.select({ refNumber: documents.refNumber, type: documents.type, buyerName: documents.buyerName, partyId: documents.partyId })
     .from(documents)
     .where(and(eq(documents.id, link.documentId), eq(documents.isDeleted, 0)))
     .for('share');
@@ -84,6 +87,19 @@ export async function assertTreasuryDocumentLink(tx: DbExecutor, link: {
       undefined,
       'TREASURY_DOCUMENT_PARTY_MISMATCH',
     );
+  }
+  // v9.0.336 (TD-778، تصمیم ت۶ الف): دریافت یا پرداخت با شناسه طرف حساب به سند دارای شناسه فقط با همان شناسه وصل می‌شود و
+  // نام سند فقط نمایش است. سند پیشین بی شناسه، یا ثبت بی شناسه طرف حساب (فرم تسویه فاکتور نام خود سند را می‌فرستد)، با قاعده
+  // نام (TD-417)
+  if (doc.partyId !== null && doc.partyId !== undefined && link.partyId) {
+    if (Number(link.partyId) !== Number(doc.partyId)) {
+      throw new ValidationError(
+        `طرف حساب «${link.partyName.trim()}» با طرف سند «${doc.refNumber}» («${(doc.buyerName ?? '').trim()}») یکی نیست.`,
+        undefined,
+        'TREASURY_DOCUMENT_PARTY_MISMATCH',
+      );
+    }
+    return;
   }
   if ((doc.buyerName ?? '').trim() !== link.partyName.trim()) {
     throw new ValidationError(

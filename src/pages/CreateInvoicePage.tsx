@@ -22,6 +22,7 @@ import { currencyChangeError, lineDiscountError, pricesForCurrency } from '../li
 import { printLineAmounts } from '../lib/invoices/invoicePrintTotals';
 import { amountDecimalsOf } from '../lib/invoices/invoiceListDocuments';
 import { addInvoiceLine, customerLocationLabel, EDIT_FINAL_REFUSED, finalStatusOptionNote, invoiceFormFromDocument, invoiceLineLocations, isSalesFormDocType, lineLocationOf, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
+import { selectedPartyId } from '../lib/documents/partySelection';
 import type { InvoiceListDocument } from '../lib/invoices/invoiceListDocuments';
 import { Sparkles } from 'lucide-react';
 import { ExchangeRateField, exchangeRateError } from '../components/documents/ExchangeRateField';
@@ -156,6 +157,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       setRefNumber(form.refNumber);
       if (form.date) setDate(form.date);
       buyer.setBuyer(form);
+      // v9.0.336 (TD-778): انتخابگر خریدار از شناسه طرف حساب سند، نه تطبیق نام
+      if (form.partyId) setSelectedCustomerId(String(form.partyId));
       setNotes(form.notes);
       setCurrency(form.currency);
       setExchangeRate(form.exchangeRate);
@@ -224,6 +227,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       const s = locationState.state as Record<string, string | number | undefined>;
       const str = (v: string | number | undefined) => (v === undefined ? '' : String(v));
       if (s.buyerName) setBuyerName(str(s.buyerName));
+      if (selectedPartyId(s.customerId)) setSelectedCustomerId(str(s.customerId));
       if (s.buyerPhone) setBuyerPhone(str(s.buyerPhone));
       if (s.buyerAddress) setBuyerAddress(str(s.buyerAddress));
       const uniqueLoc = customerLocationLabel({ province: str(s.buyerProvince || s.province), city: str(s.buyerCity || s.city) });
@@ -238,7 +242,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       // v9.0.299 (TD-789): وضعیت مسیریابی یک بار خوانده می‌شود تا پرونده فروش به سندهای بعدی این صفحه نرسد
       void navigate(locationState.pathname, { replace: true, state: null });
     }
-  }, [locationState.state, locationState.pathname, navigate, canFinalizeSales, setBuyerName, setBuyerPhone, setBuyerAddress, setBuyerCity]);
+  }, [locationState.state, locationState.pathname, navigate, canFinalizeSales, setBuyerName, setSelectedCustomerId, setBuyerPhone, setBuyerAddress, setBuyerCity]);
 
   const handleItemSelect = (val: string, rawItem?: Item) => {
     setSelectedItem(val);
@@ -367,6 +371,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       date: formattedDate,
       user: currentUser.full_name,
       inOut: 'out' as const,
+      // v9.0.336 (TD-778، تصمیم ت۶ الف): طرف حساب با شناسه انتخابگر؛ نام فقط نمایش است
+      partyId: selectedPartyId(selectedCustomerId),
       buyer_name: buyerName,
       buyer_city: buyerCity,
       buyer_phone: buyerPhone,

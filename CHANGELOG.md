@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.339 — Paged Document List
+- **Document list:** a list request without paging now answers one page of 50 documents with its total instead of the whole table, the full list comes only with `export=true`, and the stock count history and transfer tabs page through it (TD-787).
+
+### v9.0.338 — Database Rules for Documents
+- **Document constraints:** the database now refuses an unknown document type or status and a negative line quantity, price or discount; the document service refuses an unknown type or status even without lines, legacy rows are listed by the health check and a duplicate index on the project link was removed (TD-786).
+
+### v9.0.337 — One Audit Row per Document Change
+- **Document audit trail:** creating, editing, finalizing, changing the notes of and voiding a document each write one audit row in the same transaction with the stored document before and after; a void writes one row instead of two and the invoice event carries the buyer name (TD-785).
+
+### v9.0.336 — The Party of a Document by Id
+- **Document party:** a sales or purchase document now keeps its party by id; the voucher, the customer dossier, the treasury link and the party delete guard follow the id whatever the buyer name, a return takes its invoice's party, and old documents were linked by exact name, the rest listed by the health check (TD-778).
+
+### v9.0.335 — Document Treasury Rows Only for Treasury Readers
+- **Document read scope:** a document's receipts and payments (tracking number, bank account, description) are now shown only to treasury readers; other document readers see only the paid amount, the balance and the settlement status (TD-781).
+
 ### v9.0.334 — WooCommerce Bulk Stock Sync Reports Failed Items
 - **WooCommerce bulk stock sync (TD-724):** the bulk stock sync showed the server's green message even when no item was updated; a failed item is now an error message with the counts and the first errors, and the WooCommerce order tables show a load error (403 / 500) instead of «no orders yet» (WooCommerce half of TD-730).
 
