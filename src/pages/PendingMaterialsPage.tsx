@@ -26,6 +26,7 @@ import {
 } from '../hooks/queries';
 import { WorkflowStepperWidget } from '../components/workflow/WorkflowStepperWidget';
 import { MaterialNameField, MaterialUnitSelect, MaterialNumberField, MaterialAttributeFields } from '../components/project/materialFormFields';
+import { EMPTY_PENDING_MATERIAL_FORM, pendingMaterialFormOf, type PendingMaterialForm } from '../lib/pendingMaterials/pendingMaterialForm';
 
 const COMMON_UNITS = [
   'عدد', 'برگ', 'کیلوگرم', 'گرم', 'متر', 'سانتی‌متر', 'مترمربع', 'لیتر', 'میلی‌لیتر',
@@ -53,19 +54,8 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
   const [rejectionReason, setRejectionReason] = useState<string>('');
   const isSubmitting = approveMutation.isPending || rejectMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
-  // Form state for approve/edit
-  const [approveForm, setApproveForm] = useState({
-    code: '',
-    name: '',
-    category: '',
-    unit: 'عدد',
-    weighted_average_cost: 0,
-    reorder_point: 0,
-    color: '',
-    weight: 0,
-    material: '',
-    size: ''
-  });
+  // v9.0.377 (TD-824): فرم پنجره همان بدنه تأیید و ویرایش سرور است (کلیدهای camelCase)
+  const [approveForm, setApproveForm] = useState<PendingMaterialForm>(EMPTY_PENDING_MATERIAL_FORM);
 
   const loadData = () => {
     void refetch();
@@ -94,39 +84,14 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
   // Open Approval Modal
   const handleOpenApproveModal = (item: PendingMaterial) => {
     setSelectedItem(item);
-    setApproveForm({
-      code: item.code || '',
-      name: item.name || '',
-      category: item.category || (categories[0]?.name || 'عمومی'),
-      unit: item.unit || 'عدد',
-      weighted_average_cost: item.weightedAverageCost || item.weighted_average_cost || 0,
-      reorder_point: item.reorderPoint || item.reorder_point || 0,
-      color: item.color || '',
-      weight: item.weight || 0,
-      material: item.material || '',
-      size: item.size || ''
-    });
+    setApproveForm(pendingMaterialFormOf(item, categories[0]?.name || 'عمومی'));
     setIsApproveModalOpen(true);
   };
 
   // Save edits without changing status
   const handleSaveEditsOnly = () => {
     if (!selectedItem) return;
-    updateMutation.mutate({
-      id: selectedItem.id,
-      payload: {
-        code: approveForm.code,
-        name: approveForm.name,
-        category: approveForm.category,
-        unit: approveForm.unit,
-        weightedAverageCost: approveForm.weighted_average_cost,
-        reorderPoint: approveForm.reorder_point,
-        color: approveForm.color,
-        weight: approveForm.weight,
-        material: approveForm.material,
-        size: approveForm.size
-      }
-    }, {
+    updateMutation.mutate({ id: selectedItem.id, payload: approveForm }, {
       onSuccess: () => {
         setIsApproveModalOpen(false);
         setSelectedItem(null);
@@ -592,8 +557,8 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
 
                 <MaterialNameField label="عنوان کامل ماده اولیه *" value={approveForm.name} onChange={(v) => setApproveForm({ ...approveForm, name: v })} />
                 <MaterialUnitSelect value={approveForm.unit} onChange={(v) => setApproveForm({ ...approveForm, unit: v })} units={COMMON_UNITS} />
-                <MaterialNumberField label="نقطه سفارش اولیه" value={approveForm.reorder_point} onChange={(v) => setApproveForm({ ...approveForm, reorder_point: v })} />
-                <MaterialNumberField label="قیمت / هزینه واحد تخمینی" value={approveForm.weighted_average_cost} onChange={(v) => setApproveForm({ ...approveForm, weighted_average_cost: v })} />
+                <MaterialNumberField label="نقطه سفارش اولیه" value={approveForm.reorderPoint} onChange={(v) => setApproveForm({ ...approveForm, reorderPoint: v })} />
+                <MaterialNumberField label="قیمت / هزینه واحد تخمینی" value={approveForm.weightedAverageCost} onChange={(v) => setApproveForm({ ...approveForm, weightedAverageCost: v })} />
                 <MaterialAttributeFields
                   color={approveForm.color}
                   material={approveForm.material}

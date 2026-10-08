@@ -117,7 +117,7 @@
   "src/hooks/queries/useCustomerQueries.ts": 3,
   "src/hooks/queries/useEventQueries.ts": 12,
   "src/hooks/queries/useItemQueries.ts": 3,
-  "src/hooks/queries/usePendingMaterialsQueries.ts": 6,
+  "src/hooks/queries/usePendingMaterialsQueries.ts": 4,
   "src/hooks/queries/usePersonnelQueries.ts": 3,
   "src/hooks/queries/useProjectQueries.ts": 1,
   "src/hooks/queries/useSettingsQueries.ts": 9,

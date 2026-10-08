@@ -10764,6 +10764,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runStockReservationTests(shouldRun));
   const { runStockReservationReadTests } = await import('../regression/stockReservationReadTests.js');
   results.push(...await runStockReservationReadTests(shouldRun));
+  // Package 7 PR C (v9.0.377+): the raw material request queue
+  const { runPendingMaterialTests } = await import('../regression/pendingMaterialTests.js');
+  results.push(...await runPendingMaterialTests(shouldRun));
 
   return results;
 }

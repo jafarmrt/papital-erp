@@ -7,78 +7,12 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
-import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema } from '../middleware/validate.js';
+import { approvePendingMaterialSchema, createPendingMaterialSchema, rejectPendingMaterialSchema, updatePendingMaterialSchema } from './pendingMaterials.schemas.js';
 import { PendingMaterialsService } from '../services/pendingMaterials.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
-
-const createPendingMaterialSchema = z.object({
-  body: z.object({
-    name: z.string().min(1, 'عنوان ماده اولیه الزامی است'),
-    code: z.string().optional(),
-    unit: z.string().optional(),
-    category: z.string().optional(),
-    projectId: z.union([z.number(), z.string(), z.null()]).optional(),
-    projectTitle: z.string().optional(),
-    reorderPoint: z.union([z.number(), z.string()]).optional(),
-    weightedAverageCost: z.union([z.number(), z.string()]).optional(),
-    color: z.string().optional(),
-    weight: z.union([z.number(), z.string()]).optional(),
-    material: z.string().optional(),
-    size: z.string().optional(),
-    image: z.string().optional(),
-    thumbnail: z.string().optional()
-  })
-});
-
-const approvePendingMaterialSchema = z.object({
-  body: z.object({
-    code: z.string().optional(),
-    name: z.string().optional(),
-    unit: z.string().optional(),
-    category: z.string().optional(),
-    reorderPoint: z.union([z.number(), z.string()]).optional(),
-    weightedAverageCost: z.union([z.number(), z.string()]).optional(),
-    color: z.string().optional(),
-    weight: z.union([z.number(), z.string()]).optional(),
-    material: z.string().optional(),
-    size: z.string().optional(),
-    image: z.string().optional(),
-    thumbnail: z.string().optional()
-  }).optional(),
-  params: z.object({
-    id: numericIdString
-  })
-});
-
-const rejectPendingMaterialSchema = z.object({
-  body: z.object({
-    rejectionReason: z.string().optional()
-  }).optional(),
-  params: z.object({
-    id: numericIdString
-  })
-});
-
-const updatePendingMaterialSchema = z.object({
-  body: z.object({
-    code: z.string().optional(),
-    name: z.string().optional(),
-    unit: z.string().optional(),
-    category: z.string().optional(),
-    reorderPoint: z.union([z.number(), z.string()]).optional(),
-    weightedAverageCost: z.union([z.number(), z.string()]).optional(),
-    color: z.string().optional(),
-    weight: z.union([z.number(), z.string()]).optional(),
-    material: z.string().optional(),
-    size: z.string().optional()
-  }),
-  params: z.object({
-    id: numericIdString
-  })
-});
 
 // GET /api/pending-materials - List pending raw materials
 router.get('/pending-materials', authenticateToken, authorizePermission(...READ_PERMISSIONS.pendingMaterials), asyncHandler(async (req: Request, res: Response) => {
