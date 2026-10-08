@@ -256,7 +256,6 @@ router.get('/system/health', requireSystemAdmin, asyncHandler(async (req, res) =
     outbox: subsystems.outbox,
     accounting: subsystems.accounting,
     workflow: subsystems.workflow,
-    observability: { status: 'ok', contextTracing: true },
     network: {
       isHttps,
       protocol: req.protocol,

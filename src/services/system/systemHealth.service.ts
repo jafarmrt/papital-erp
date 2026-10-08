@@ -7,6 +7,10 @@ import { unresolvedDeadLetterCondition } from '../events/deadLetterQueueService.
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { logger } from '../../middleware/logger.js';
 import { errorMessageOf } from '../../utils.js';
+import {
+  SUBSYSTEM_UNKNOWN_MESSAGES, type SubsystemStatus, type OutboxHealth, type AccountingHealth, type WorkflowHealth,
+  type SubsystemHealth,
+} from '../../lib/system/subsystemHealth.js';
 
 /**
  * V3.0.7 (TD-065): بررسی سلامت زیرساخت برای صفحه وضعیت سیستم (GET /system/health، فقط ادمین):
@@ -27,10 +31,22 @@ export interface StorageHealth {
   message: string;
 }
 
-export interface SubsystemHealth {
-  outbox: { pendingCount: number; dlqCount: number; status: string };
-  accounting: { totalVouchers: number; unbalancedVouchers: number; status: string };
-  workflow: { activeInstances: number; overdueSlaTasks: number; status: string };
+/**
+ * v9.0.358 (TD-593): هر زیرسامانه جدا سنجیده می‌شود (قرارداد مشترک `src/lib/system/subsystemHealth.ts`)؛ پرس‌وجوی
+ * شکست‌خورده `status: 'unknown'`، شمارنده‌های null و پیام فارسی می‌دهد، نه صفر و «سالم». متن خطا فقط در لاگ می‌آید.
+ */
+export type { SubsystemStatus, OutboxHealth, AccountingHealth, WorkflowHealth, SubsystemHealth };
+
+/** Runs one subsystem check; a failed query becomes `unknown` with a Persian message, never zeros and `ok` */
+async function measureSubsystem<T extends { status: SubsystemStatus }>(
+  subsystem: string, check: () => Promise<T>, unknown: T
+): Promise<T> {
+  try {
+    return await check();
+  } catch (err) {
+    logger.warn('Health check of a subsystem failed', { subsystem, error: errorMessageOf(err) });
+    return unknown;
+  }
 }
 
 export class SystemHealthService {
@@ -97,35 +113,28 @@ export class SystemHealthService {
     return storageStatus;
   }
 
-  /** 3. Subsystem Health Checks (Outbox, DLQ, Vouchers, Workflow) */
+  /** 3. Subsystem Health Checks (Outbox, DLQ, Vouchers, Workflow), each with its own failure state */
   static async collectSubsystemMetrics(): Promise<SubsystemHealth> {
-    const outboxMetrics = { pendingCount: 0, dlqCount: 0, status: 'ok' };
-    const accountingMetrics = { totalVouchers: 0, unbalancedVouchers: 0, status: 'ok' };
-    const workflowMetrics = { activeInstances: 0, overdueSlaTasks: 0, status: 'ok' };
-
-    try {
+    const outbox = await measureSubsystem<OutboxHealth>('outbox', async () => {
       const [pendingRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(outboxEvents).where(eq(outboxEvents.status, 'pending'));
       const dlqCount = await this.countDeadLetterEvents();
-      outboxMetrics.pendingCount = pendingRes?.count || 0;
-      outboxMetrics.dlqCount = dlqCount;
-      if (outboxMetrics.dlqCount > 0) outboxMetrics.status = 'warning';
+      return { pendingCount: pendingRes?.count || 0, dlqCount, status: dlqCount > 0 ? 'warning' : 'ok' };
+    }, { pendingCount: null, dlqCount: null, status: 'unknown', message: SUBSYSTEM_UNKNOWN_MESSAGES.outbox });
 
+    const accounting = await measureSubsystem<AccountingHealth>('accounting', async () => {
       const [vouchersRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(journalVouchers)
         .where(eq(journalVouchers.isDeleted, 0));
-      accountingMetrics.totalVouchers = vouchersRes?.count || 0;
-      accountingMetrics.unbalancedVouchers = (await this.findUnbalancedVouchers()).length;
-      if (accountingMetrics.unbalancedVouchers > 0) accountingMetrics.status = 'error';
+      const unbalancedVouchers = (await this.findUnbalancedVouchers()).length;
+      return { totalVouchers: vouchersRes?.count || 0, unbalancedVouchers, status: unbalancedVouchers > 0 ? 'error' : 'ok' };
+    }, { totalVouchers: null, unbalancedVouchers: null, status: 'unknown', message: SUBSYSTEM_UNKNOWN_MESSAGES.accounting });
 
+    const workflow = await measureSubsystem<WorkflowHealth>('workflow', async () => {
       const [wfRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(workflowInstances).where(eq(workflowInstances.status, 'IN_PROGRESS'));
       const overdueSlaTasks = await this.countOverdueSlaTasks();
-      workflowMetrics.activeInstances = wfRes?.count || 0;
-      workflowMetrics.overdueSlaTasks = overdueSlaTasks;
-      if (workflowMetrics.overdueSlaTasks > 0) workflowMetrics.status = 'warning';
-    } catch (err) {
-      logger.warn({ message: 'Health Check Subsystems Warning', error: err });
-    }
+      return { activeInstances: wfRes?.count || 0, overdueSlaTasks, status: overdueSlaTasks > 0 ? 'warning' : 'ok' };
+    }, { activeInstances: null, overdueSlaTasks: null, status: 'unknown', message: SUBSYSTEM_UNKNOWN_MESSAGES.workflow });
 
-    return { outbox: outboxMetrics, accounting: accountingMetrics, workflow: workflowMetrics };
+    return { outbox, accounting, workflow };
   }
 
   /** 5. Memory & Runtime */

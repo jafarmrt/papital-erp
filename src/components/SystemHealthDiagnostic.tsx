@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
-import { getDisplayTimezoneClient, errorMessageOf, formatPersianNumber } from '../utils';
-import { Database, HardDrive, ShieldCheck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Cpu, Send, FileText, GitPullRequest, Wrench, Play, Activity } from 'lucide-react';
+import { getDisplayTimezoneClient, errorMessageOf } from '../utils';
+import { Database, HardDrive, ShieldCheck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Cpu, Wrench, Play, Activity } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { SubsystemHealthCards } from './system/SubsystemHealthCards';
+import type { AccountingHealth, OutboxHealth, WorkflowHealth } from '../lib/system/subsystemHealth';
 
 interface HealthData {
   database: {
@@ -16,25 +18,9 @@ interface HealthData {
     uploadsPath: string;
     message: string;
   };
-  outbox?: {
-    pendingCount: number;
-    dlqCount: number;
-    status: string;
-  };
-  accounting?: {
-    totalVouchers: number;
-    unbalancedVouchers: number;
-    status: string;
-  };
-  workflow?: {
-    activeInstances: number;
-    overdueSlaTasks: number;
-    status: string;
-  };
-  observability?: {
-    status: string;
-    contextTracing: boolean;
-  };
+  outbox?: OutboxHealth;
+  accounting?: AccountingHealth;
+  workflow?: WorkflowHealth;
   network: {
     isHttps: boolean;
     protocol: string;
@@ -221,75 +207,8 @@ export default function SystemHealthDiagnostic() {
           </div>
         </div>
 
-        {/* CARD 2: OUTBOX / DLQ QUEUE */}
-        <div className={`p-4 border rounded-xl transition-all ${
-          (health.outbox?.dlqCount || 0) === 0 ? 'bg-emerald-50/50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800' : 'bg-amber-50/50 border-amber-200'
-        }`}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 font-bold text-sm text-slate-800 dark:text-slate-100">
-              <Send size={18} className={(health.outbox?.dlqCount || 0) === 0 ? 'text-emerald-600' : 'text-amber-600'} />
-              <span>صف رویدادها و قرنطینه</span>
-            </div>
-            {(health.outbox?.dlqCount || 0) === 0 ? (
-              <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                <CheckCircle2 size={12} /> روان
-              </span>
-            ) : (
-              <span className="bg-amber-100 text-amber-800 text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                <AlertTriangle size={12} /> {health.outbox?.dlqCount} قرنطینه
-              </span>
-            )}
-          </div>
-          <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300 mb-2">
-            <div className="flex justify-between">
-              <span>رویدادهای در صف ارسال:</span>
-              <span className="font-bold">{health.outbox?.pendingCount || 0}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>صف خطاهای قرنطینه:</span>
-              <span className={`font-bold ${(health.outbox?.dlqCount || 0) > 0 ? 'text-rose-600' : ''}`}>{health.outbox?.dlqCount || 0}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* CARD 3: ACCOUNTING VOUCHERS */}
-        <div className="p-4 border rounded-xl bg-slate-50 dark:bg-gray-900/50 border-slate-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 font-bold text-sm text-slate-800 dark:text-slate-100">
-              <FileText size={18} className="text-indigo-600" />
-              <span>حسابداری دوبل و اسناد</span>
-            </div>
-            <span className="bg-indigo-100 text-indigo-800 text-[11px] font-bold px-2.5 py-1 rounded-full">
-              {health.accounting?.totalVouchers || 0} سند
-            </span>
-          </div>
-          <p className={`text-xs mb-2 ${(health.accounting?.unbalancedVouchers || 0) > 0 ? 'text-rose-600 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>
-            {(health.accounting?.unbalancedVouchers || 0) > 0
-              ? `${formatPersianNumber(health.accounting?.unbalancedVouchers)} سند ناتراز (اختلاف بدهکار و بستانکار بیش از ۰٫۰۱) یافت شد.`
-              : 'همه اسناد فعال تراز هستند.'}
-          </p>
-        </div>
-
-        {/* CARD 4: WORKFLOW & SLA */}
-        <div className="p-4 border rounded-xl bg-slate-50 dark:bg-gray-900/50 border-slate-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 font-bold text-sm text-slate-800 dark:text-slate-100">
-              <GitPullRequest size={18} className="text-purple-600" />
-              <span>گردش‌کار و مهلت‌های زمانی</span>
-            </div>
-            <span className="bg-purple-100 text-purple-800 text-[11px] font-bold px-2.5 py-1 rounded-full">
-              {health.workflow?.activeInstances || 0} در جریان
-            </span>
-          </div>
-          <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
-            <div className="flex justify-between">
-              <span>اقدامات منقضی‌شده طبق مهلت:</span>
-              <span className={`font-bold ${(health.workflow?.overdueSlaTasks || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                {health.workflow?.overdueSlaTasks || 0} وظیفه
-              </span>
-            </div>
-          </div>
-        </div>
+        {/* CARDS 2-4: event queue, voucher balance, workflow (each with its own unknown state, TD-593) */}
+        <SubsystemHealthCards outbox={health.outbox} accounting={health.accounting} workflow={health.workflow} />
 
         {/* CARD 5: STORAGE / UPLOADS */}
         <div className={`p-4 border rounded-xl transition-all ${

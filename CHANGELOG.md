@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.358 — Health Page Reports a Failed Check as Unknown
+- **Fix (TD-593, B01-13):** the system health page measures the event queue, voucher balance and workflow separately; a failed query is `unknown` with null counts and a Persian message instead of zeros and `ok`, the constant `observability` field is gone, and the page shows «نامعلوم» with its own color.
+
 ### v9.0.357 — Data Export Holds Every Promised Table
 - **Fix (TD-624, B01-44, decision ت۷):** the export reads one table list shared with the settings card (`DATA_EXPORT_TABLES`): project allocations and stage progress, pending materials, piecework tasks and rates, fiscal periods, item opening rows, attachment metadata, workflow tables and event rules were added; every other table is left out with a reason in the manifest, and Vitest fails on an unclassified table.
 
