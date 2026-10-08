@@ -22,6 +22,8 @@ export interface ModalProps {
   hideHeader?: boolean;
   id?: string;
   ariaLabel?: string;
+  /** Stacking layer of the backdrop; a dialog opened from another window passes a higher one. */
+  layerClassName?: string;
 }
 
 const sizeClasses: Record<ModalSize, string> = {
@@ -59,6 +61,7 @@ export function Modal({
   hideHeader = false,
   id,
   ariaLabel,
+  layerClassName = 'z-50',
 }: ModalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -97,7 +100,7 @@ export function Modal({
   return (
     <div
       id={id ? `${id}-backdrop` : undefined}
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs transition-opacity duration-200"
+      className={`fixed inset-0 ${layerClassName} flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs transition-opacity duration-200`}
       onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"

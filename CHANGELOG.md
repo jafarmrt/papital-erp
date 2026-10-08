@@ -20,6 +20,12 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.9 — End-to-End Tests for Four Business Flows
+- **I-02:** Playwright tests drive purchase, project production and delivery, payslip and payment, and treasury and cheque from the browser down to stock, Kardex and voucher rows.
+
+### v10.0.8 — Confirmation Dialog Above the Payslip Payment Window
+- **TD-1040:** the confirmation opened under the payslip payment window, so no payslip could be paid from the UI; it now opens above every window.
+
 ### v10.0.7 — Stock vs Ledger Health Check Leaves Work in Progress Out
 - **TD-964:** the financial health check compares the warehouse value with account 14 without the work in progress account (1402), shows the work in progress balance apart and reports the share of draft vouchers.
 
