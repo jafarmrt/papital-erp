@@ -10,14 +10,14 @@ import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdmi
  * is red on the version before each fix.
  */
 
-type Row = Record<string, unknown>;
-type Client = Awaited<ReturnType<typeof sandboxAdminClient>>;
-const brief = (body: unknown) => String(JSON.stringify(body)).slice(0, 240);
-const q = async (sql: string, params: unknown[] = []): Promise<Row[]> => (await pool.query(sql, params)).rows;
+export type Row = Record<string, unknown>;
+export type Client = Awaited<ReturnType<typeof sandboxAdminClient>>;
+export const brief = (body: unknown) => String(JSON.stringify(body)).slice(0, 240);
+export const q = async (sql: string, params: unknown[] = []): Promise<Row[]> => (await pool.query(sql, params)).rows;
 
-interface ProjectOptions { products?: Array<{ itemId: number; qty: number }>; itemId?: number; stages?: string[] }
+export interface ProjectOptions { products?: Array<{ itemId: number; qty: number }>; itemId?: number; stages?: string[] }
 
-async function newProject(api: Client, opts: ProjectOptions): Promise<{ id: number; stages: Array<{ id: number }> }> {
+export async function newProject(api: Client, opts: ProjectOptions): Promise<{ id: number; stages: Array<{ id: number }> }> {
   const today = await businessTodayIsoDate();
   const body: Row = {
     title: `TD-P11 ${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, start_date: today, end_date: today, quantity: 5,
@@ -30,7 +30,7 @@ async function newProject(api: Client, opts: ProjectOptions): Promise<{ id: numb
   return res.body as { id: number; stages: Array<{ id: number }> };
 }
 
-const projectStatus = async (id: number) => String((await q('SELECT status FROM production_projects WHERE id = $1', [id]))[0]?.status);
+export const projectStatus = async (id: number) => String((await q('SELECT status FROM production_projects WHERE id = $1', [id]))[0]?.status);
 
 const tickAll = (api: Client, projectId: number, itemId: number, orders: number[]) =>
   api.put(`/api/projects/${projectId}/product-progress`, { items: orders.map(order => ({ item_id: itemId, stage_order: order, status: 'completed' })) });

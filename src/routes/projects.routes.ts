@@ -14,7 +14,7 @@ import { validate, paramsIdSchema, numericIdString, decimalInput } from '../midd
 import { ProjectService } from '../services/projects.service.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { PRODUCT_PROGRESS_STATUSES, type ProductProgressStatus } from '../lib/projects/progressMatrix.js';
-import { MAX_STAGE_ORDER } from '../lib/projects/projectStatus.js';
+import { MAX_STAGE_ORDER, PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
 
 const router = Router();
@@ -40,9 +40,10 @@ const createProjectSchema = z.object({
     unit: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
-    priority: z.string().optional(),
+    // v9.0.338 (TD-754): وضعیت و اولویت فقط از فهرست رابط؛ پیش‌تر متن آزاد («Completed»، «خیلی فوری») ذخیره می‌شد
+    priority: z.enum(PROJECT_PRIORITIES).optional(),
     description: z.string().optional(),
-    initial_stages: z.array(z.record(z.string(), z.unknown())).optional(),
+    initial_stages: z.array(z.object({ status: z.enum(STAGE_STATUSES).optional() }).catchall(z.unknown())).optional(),
     products: z.array(z.unknown()).optional(),
     inventory_control: z.unknown().optional(),
     inventoryControl: z.unknown().optional(),
@@ -67,8 +68,8 @@ const updateProjectSchema = z.object({
     unit: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
-    status: z.string().optional(),
-    priority: z.string().optional(),
+    status: z.enum(PROJECT_STATUSES).optional(),
+    priority: z.enum(PROJECT_PRIORITIES).optional(),
     description: z.string().optional(),
     products: z.array(z.unknown()).optional(),
     inventory_control: z.unknown().optional(),
@@ -122,7 +123,7 @@ const addProjectToInventorySchema = z.object({
 const createProjectStageSchema = z.object({
   body: z.object({
     title: z.string().min(1, 'عنوان مرحله الزامی است'),
-    status: z.string().optional(),
+    status: z.enum(STAGE_STATUSES).optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
     assigned_personnel: z.array(z.unknown()).optional(),
@@ -144,7 +145,7 @@ const updateProjectStageSchema = z.object({
   body: z.object({
     title: z.string().optional(),
     stage_order: stageOrderInput.optional(),
-    status: z.string().optional(),
+    status: z.enum(STAGE_STATUSES).optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
     assigned_personnel: z.array(z.unknown()).optional(),

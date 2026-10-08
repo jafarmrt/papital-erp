@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.338 — v9.0.338 — Project Status and Priority Lists
+- **Project Status and Priority Lists (TD-754):** a project status or priority and a stage status were free text («Completed», «خیلی فوری» and «تمام» were stored, and such a project fell out of every status filter); they are now `z.enum` of the UI lists in `lib/projects/projectStatus.ts` (400 otherwise), and the financial health check lists legacy values (`project_status_values`) without rewriting them.
+
 ### v9.0.337 — v9.0.337 — Stage Number and Percent Input
 - **Stage Number and Percent Input (TD-755):** a text stage number or percent answered 500 with the SQL text and a manual duplicate number was stored; the stage route now reads them with `decimalInput` (a positive whole number, a whole percent 0 to 100, Persian digits accepted), a number another stage holds is 409 `STAGE_ORDER_TAKEN`, and a renumbered stage carries its matrix ticks.
 

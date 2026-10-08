@@ -21,6 +21,10 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
 export const projectStatusLabel = (status: string | null | undefined): string =>
   (PROJECT_STATUS_LABELS as Record<string, string>)[String(status ?? '')] ?? String(status ?? '');
 
+/** اولویت‌های پروژه (همان گزینه‌های فرم پروژه؛ v9.0.338، TD-754) */
+export const PROJECT_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+export type ProjectPriority = typeof PROJECT_PRIORITIES[number];
+
 /** وضعیت‌های مرحله پروژه (همان وضعیت‌های خانه ماتریس پیشرفت) */
 export const STAGE_STATUSES = ['pending', 'in_progress', 'completed', 'blocked'] as const;
 export type StageStatus = typeof STAGE_STATUSES[number];
