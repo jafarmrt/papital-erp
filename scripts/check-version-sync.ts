@@ -9,10 +9,10 @@ import { findChangelogSeriesViolations } from '../src/data/changelogs/seriesGuar
  * ====================================================
  * تمامی منابع اعلام نسخه باید همیشه همگام باشند:
  *   1) "version" در package.json (مرجع یگانه؛ خوانده‌شده توسط src/lib/version.ts و /health)
- *   2) مدخل نخست چنج‌لاگ فعال (SYSTEM_UPDATES[0].version در ACTIVE_CHANGELOG.file — از v9.0.0 فایل 9.ts)
+ *   2) مدخل نخست چنج‌لاگ فعال (SYSTEM_UPDATES[0].version در ACTIVE_CHANGELOG.file — از v10.0.0 فایل 10.ts)
  *   3) مانیفست استقرار deploy/k8s/erp-deployment.yaml
  *   4) هدر مستندات README.md
- * v8.0.0: نسخه در سری فعال است و سری‌های بسته‌شده منجمدند (از v9.0.0: 7.ts و 8.ts) (src/data/changelogs/seriesGuard.ts).
+ * v8.0.0: نسخه در سری فعال است و سری‌های بسته‌شده منجمدند (از v10.0.0: 7.ts، 8.ts و 9.ts) (src/data/changelogs/seriesGuard.ts).
  */
 
 function fail(message: string): never {

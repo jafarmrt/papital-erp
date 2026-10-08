@@ -288,6 +288,11 @@
 | TD-249 | Trial Balance Level «all» Rejected | صفحه صورت‌ها و گزارش‌های مالی تراز آزمایشی را با `level=all` (نمای درختی ۴ سطحی، پیش‌فرض صفحه) می‌خواند؛ `trialBalanceQuerySchema` فقط group/general/subsidiary/detailed را می‌پذیرفت و صفحه با «خطای اعتبارسنجی: (level) Invalid option» باز می‌شد، در حالی که `AccountingReportService.getTrialBalance` از all و tree پشتیبانی می‌کند (گزارش کاربر، ۱۱ مهر ۱۴۰۵) | src/routes/accounting/reports.schemas.ts | resolved (v7.0.138) — enum سطح all و tree را هم می‌پذیرد؛ سطح نامعتبر همچنان 400؛ تست reg_trial_balance_level_all_td_249 |
 | TD-189 | Plaintext Third-Party Credential | ستون `personnel.nobitex_password` رمز حساب صرافی پرسنل را به‌صورت متن ساده در پایگاه‌داده نگه می‌دارد (از v7.0.29 در خروجی داده‌ها حذف می‌شود، اما در دیتابیس و احتمالاً پاسخ‌های API پرسنل باقی است) | src/db/schema/personnel.ts:34 | resolved (v7.0.139، تصمیم مالک محصول ۱۱ مهر ۱۴۰۵: رمزنگاری) — `src/lib/secretBox.ts`: AES-256-GCM با کلید جدای `ERP_SECRETS_KEY` (scrypt، حداقل ۳۲ نویسه)، قالب `enc:v1:`؛ ثبت و ویرایش پرسنل رمزنگاری می‌کند (بدون کلید 503 و هرگز ذخیره ساده)، خواندن فقط برای کاربر مجاز باز می‌کند و متن رمزشده بیرون نمی‌رود؛ ذخیره فرم با رمز خالی وقتی کاربر رمز را نمی‌بیند آن را پاک نمی‌کند؛ رمزهای ساده قدیمی با `npm run secrets:encrypt -- --apply`؛ پاسخ API برای کاربر مجاز مثل قبل متن ساده است؛ تست reg_personnel_secret_encryption_td_189 |
 
+## 🧭 نسخه ۱۰ — بدهی‌ها و مشاهده‌های سری ۹ و پیشنهادهای بهبود (V10_MASTER_ROADMAP.md) — آرشیو
+
+| ID | حوزه | شرح | منبع (فایل) | وضعیت |
+|----|------|-----|--------------|-------|
+
 ## 🧭 نسخه ۹ — ممیزی پایداری (docs/audit/STABILITY_AUDIT_V9.md) — آرشیو
 
 | ID | حوزه | شرح | منبع (فایل) | وضعیت |
