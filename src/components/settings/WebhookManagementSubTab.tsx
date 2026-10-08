@@ -188,7 +188,7 @@ export function WebhookManagementSubTab() {
   const handleSaveSubscription = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.targetUrl.trim()) {
-      showToast('نام درگاه و آدرس URL مقصد الزامی است.', 'error');
+      showToast('نام درگاه و نشانی مقصد را وارد کنید.', 'error');
       return;
     }
 
@@ -198,7 +198,7 @@ export function WebhookManagementSubTab() {
         parsedHeaders = JSON.parse(formData.customHeadersJson);
       }
     } catch (err) {
-      showToast('فرمت JSON هدرهای سفارشی نامعتبر است.', 'error');
+      showToast('سرآیندهای سفارشی باید یک شیء JSON معتبر باشند.', 'error');
       return;
     }
 
@@ -290,10 +290,10 @@ export function WebhookManagementSubTab() {
       if (data?.success) {
         showToast(`آزمایش اتصال موفق بود (پاسخ ${toPersianDigits(data.statusCode)}، تأخیر ${formatPersianNumber(data.durationMs ?? 0)} میلی‌ثانیه)${keyNote}`, 'success');
       } else {
-        showToast(`${data?.message || 'خطا در تست پینگ وب‌هوک'}${keyNote}`, 'error');
+        showToast(`${data?.message || 'آزمایش اتصال وب‌هوک ناموفق بود'}${keyNote}`, 'error');
       }
     } catch (err) {
-      showToast(errorMessageOf(err) || 'خطای ارتباط در تست پینگ', 'error');
+      showToast(errorMessageOf(err) || 'آزمایش اتصال انجام نشد. دوباره تلاش کنید.', 'error');
     } finally {
       if (subId) setPingTestingId(null);
     }
@@ -406,7 +406,7 @@ export function WebhookManagementSubTab() {
           <div className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
             {stats ? `${formatPersianNumber(stats.successRate)}٪` : '۱۰۰٪'}
           </div>
-          <p className="text-xs text-slate-400 mt-1">همراه با اعتبارسنجی امضای SHA256</p>
+          <p className="text-xs text-slate-400 mt-1">همراه با امضای HMAC-SHA256</p>
         </div>
       </div>
 
@@ -417,10 +417,10 @@ export function WebhookManagementSubTab() {
         <div>
           <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Globe className="w-4 h-4 text-indigo-500" />
-            <span>درگاه‌های وب‌هوک و اشتراک سرویس‌های بیرونی</span>
+            <span>درگاه‌های وب‌هوک و اشتراک سامانه‌های بیرونی</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            ارسال Real-time رویدادهای دامنه‌ای به سامانه‌های خارجی (ووکامرس، لجستیک، حسابداری ابری) با امضای HMAC-SHA256.
+            ارسال رویدادهای سامانه به سامانه‌های بیرونی (ووکامرس، باربری، حسابداری ابری) با امضای HMAC-SHA256.
           </p>
         </div>
 
@@ -497,7 +497,7 @@ export function WebhookManagementSubTab() {
                         className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
                       >
                         <Send className={`w-3.5 h-3.5 ${isTestingPing ? 'animate-spin' : ''}`} />
-                        <span>تست پینگ و امضا</span>
+                        <span>آزمایش اتصال و امضا</span>
                       </button>
                     )}
 
@@ -509,7 +509,7 @@ export function WebhookManagementSubTab() {
                       className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
                     >
                       <Activity className="w-3.5 h-3.5" />
-                      <span>لاگ تحویل ({formatPersianNumber(sub.totalDeliveries || 0)})</span>
+                      <span>گزارش تحویل ({formatPersianNumber(sub.totalDeliveries || 0)})</span>
                     </button>
 
                     {canManage && (
@@ -589,7 +589,7 @@ export function WebhookManagementSubTab() {
           <div className="flex items-center gap-2">
             <Send className="w-4 h-4 text-indigo-500" />
             <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-              لاگ‌های اخیر تحویل وب‌هوک
+              گزارش‌های اخیر تحویل وب‌هوک
             </h4>
           </div>
           <button
@@ -597,7 +597,7 @@ export function WebhookManagementSubTab() {
             className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
           >
             <RefreshCw className="w-3 h-3" />
-            <span>تازه‌سازی لاگ‌ها</span>
+            <span>تازه‌سازی گزارش‌ها</span>
           </button>
         </div>
 
@@ -618,7 +618,7 @@ export function WebhookManagementSubTab() {
               {deliveries.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-slate-400">
-                    هنوز لاگ تحویلی ثبت نشده است.
+                    هنوز تحویلی ثبت نشده است.
                   </td>
                 </tr>
               ) : (
@@ -641,7 +641,7 @@ export function WebhookManagementSubTab() {
                       {deliv.status === 'success' ? (
                         <span className="text-emerald-600 dark:text-emerald-400 font-medium">موفق</span>
                       ) : deliv.status === 'timeout' ? (
-                        <span className="text-amber-600 dark:text-amber-400 font-medium">Timeout</span>
+                        <span className="text-amber-600 dark:text-amber-400 font-medium">پایان مهلت</span>
                       ) : (
                         <span className="text-rose-600 dark:text-rose-400 font-medium">ناموفق</span>
                       )}
@@ -670,7 +670,7 @@ export function WebhookManagementSubTab() {
                   {editingSub ? `ویرایش درگاه وب‌هوک "${editingSub.name}"` : 'تعریف درگاه جدید وب‌هوک'}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  پیکربندی آدرس مقصد، رویدادهای مشترک و کلید امنیتی جهت امضای امنیتی
+                  پیکربندی نشانی مقصد، رویدادهای اشتراک و کلید امضا
                 </p>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
@@ -685,7 +685,7 @@ export function WebhookManagementSubTab() {
                   <input
                     type="text"
                     required
-                    placeholder="مثال: فروشگاه آنلاین ووکامرس"
+                    placeholder="مثال: فروشگاه برخط ووکامرس"
                     value={formData.name}
                     onChange={e => setFormData({ ...formData, name: e.target.value })}
                     className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3.5 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
@@ -726,7 +726,7 @@ export function WebhookManagementSubTab() {
                     })}
                     className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-medium"
                   >
-                    تست اتصال
+                    آزمایش اتصال
                   </button>
                 </div>
               </div>
@@ -759,7 +759,7 @@ export function WebhookManagementSubTab() {
 
               {/* Custom Headers JSON */}
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700 dark:text-slate-300">هدرهای سفارشی HTTP:</label>
+                <label className="font-semibold text-slate-700 dark:text-slate-300">سرآیندهای سفارشی:</label>
                 <textarea
                   rows={3}
                   value={formData.customHeadersJson}

@@ -45,7 +45,7 @@ describe('TD-733 the events page states its real status', () => {
   it('a stopped background processor is shown as stopped, without the green pulse', async () => {
     mockServer(false);
     renderTab();
-    fireEvent.click(screen.getByText('صندوق ارسال رویدادها'));
+    fireEvent.click(screen.getByText('صف ارسال رویداد'));
     const label = await screen.findByText('پردازشگر پس‌زمینه متوقف است');
     const dot = label.previousElementSibling as HTMLElement;
     expect(dot.className).not.toContain('bg-emerald-500');
@@ -55,14 +55,14 @@ describe('TD-733 the events page states its real status', () => {
   it('a running background processor is shown as running', async () => {
     mockServer(true);
     renderTab();
-    fireEvent.click(screen.getByText('صندوق ارسال رویدادها'));
+    fireEvent.click(screen.getByText('صف ارسال رویداد'));
     expect(await screen.findByText('پردازشگر پس‌زمینه فعال است')).toBeTruthy();
   });
 
   it('processing the outbox by hand is announced once, in the tab banner', async () => {
     mockServer(true);
     renderTab();
-    fireEvent.click(screen.getByText('صندوق ارسال رویدادها'));
+    fireEvent.click(screen.getByText('صف ارسال رویداد'));
     fireEvent.click(await screen.findByText('پردازش دستی دسته'));
     expect(await screen.findByText('پردازش دسته انجام شد.')).toBeTruthy();
     expect(toast.success).not.toHaveBeenCalled();

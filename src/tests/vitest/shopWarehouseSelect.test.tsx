@@ -15,7 +15,7 @@ describe('online shop warehouse select (TD-293)', () => {
   it('offers the default warehouse and the active warehouses only', () => {
     render(<ShopWarehouseSelect value="" onChange={() => undefined} warehouses={warehouses} />);
     const options = Array.from(screen.getByLabelText('انبار فروشگاه اینترنتی').querySelectorAll('option')).map(o => o.textContent);
-    expect(options).toEqual(['انبار پیش‌فرض سیستم', 'انبار مرکزی (WH1)', 'انبار فروشگاه (SHOP)']);
+    expect(options).toEqual(['انبار پیش‌فرض سامانه', 'انبار مرکزی (WH1)', 'انبار فروشگاه (SHOP)']);
   });
 
   it('reports the chosen warehouse code', () => {

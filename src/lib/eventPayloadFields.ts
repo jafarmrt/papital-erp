@@ -75,14 +75,14 @@ const TREASURY_LABELS: Record<keyof TreasuryEventPayload, string> = {
 
 const WORKFLOW_LABELS: Record<keyof WorkflowEventPayload, string> = {
   instanceId: 'شناسه فرایند',
-  workflowCode: 'کد ورکفلو',
-  entityType: 'نوع رکورد',
-  entityId: 'شناسه رکورد',
+  workflowCode: 'کد گردش کار',
+  entityType: 'نوع موجودیت',
+  entityId: 'شناسه موجودیت',
   fromStateKey: 'کلید مرحله قبلی',
   toStateKey: 'کلید مرحله جدید',
   actionKey: 'کلید اقدام',
   actionTitle: 'عنوان اقدام',
-  approvalRuleType: 'نوع قاعده تایید',
+  approvalRuleType: 'نوع قاعده تأیید',
   collectedSignatures: 'امضاهای ثبت‌شده',
   requiredThreshold: 'امضاهای لازم',
   isCompleted: 'پایان یافته',
@@ -138,8 +138,8 @@ const PAYLOAD_LABELS_BY_EVENT: Record<string, Record<string, string>> = {
 /** فیلدهای پوشش رویداد که در همه رویدادها هست */
 export const COMMON_EVENT_FIELDS: EventFieldOption[] = [
   { path: 'eventType', label: 'نوع رویداد' },
-  { path: 'aggregateType', label: 'نوع رکورد' },
-  { path: 'aggregateId', label: 'شناسه رکورد' },
+  { path: 'aggregateType', label: 'نوع موجودیت' },
+  { path: 'aggregateId', label: 'شناسه موجودیت' },
   { path: 'metadata.userName', label: 'کاربر انجام‌دهنده' },
 ];
 

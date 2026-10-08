@@ -83,7 +83,7 @@ export function DomainEventsTab() {
       const res = await processOutboxMutation.mutateAsync();
       showNotification(res?.message || 'پردازش دسته با موفقیت انجام شد.');
     } catch (err) {
-      showNotification(errorMessageOf(err) || 'خطا در پردازش صندوق خروجی', 'error');
+      showNotification(errorMessageOf(err) || 'پردازش صف ارسال رویداد انجام نشد.', 'error');
     }
   };
 
@@ -162,10 +162,10 @@ export function DomainEventsTab() {
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-800 dark:text-white">
-                معماری رویدادها، اکشن‌های خودکار و صندوق خروجی (Events & Automation)
+                رویدادها، اقدام‌های خودکار و صف ارسال رویداد
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                مدیریت قوانین هوشمند واکنش به رخدادها، تضمین اتمیک بودن تراکنش‌ها و گذرگاه رویدادهای زنده دامنه‌ای
+                مدیریت قانون‌های واکنش خودکار به رویدادها، ثبت رویداد در همان تراکنش سند و گذرگاه رویدادهای زنده
               </p>
             </div>
           </div>
@@ -194,7 +194,7 @@ export function DomainEventsTab() {
             }`}
           >
             <Inbox className="w-3.5 h-3.5" />
-            <span>صندوق ارسال رویدادها</span>
+            <span>صف ارسال رویداد</span>
           </button>
 
           <button
@@ -206,7 +206,7 @@ export function DomainEventsTab() {
             }`}
           >
             <AlertOctagon className="w-3.5 h-3.5 text-rose-500" />
-            <span>صف خطاهای قرنطینه</span>
+            <span>صف خطا</span>
           </button>
 
           <button
@@ -279,7 +279,7 @@ export function DomainEventsTab() {
           {/* Outbox KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-              <div className="text-xs text-slate-500 dark:text-slate-400">کل رکوردهای صندوق خروجی</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">کل رویدادهای صف ارسال</div>
               <div className="text-xl font-bold text-slate-800 dark:text-white mt-1">
                 {outboxStats?.total ? outboxStats.total.toLocaleString('fa-IR') : '۰'}
               </div>
@@ -305,11 +305,11 @@ export function DomainEventsTab() {
               <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                 {(outboxStats?.completed || 0).toLocaleString('fa-IR')}
               </div>
-              <div className="text-[11px] text-slate-500 mt-1">تحویل به مشترکین سیستم</div>
+              <div className="text-[11px] text-slate-500 mt-1">تحویل به مشترکان سامانه</div>
             </div>
 
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-              <div className="text-xs text-slate-500 dark:text-slate-400">ناموفق با تلاش مجدد (Backoff)</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">ناموفق، با تلاش دوباره</div>
               <div className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">
                 {(outboxStats?.failed || 0).toLocaleString('fa-IR')}
               </div>
@@ -351,7 +351,7 @@ export function DomainEventsTab() {
                 className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all disabled:opacity-50"
               >
                 <Play className={`w-3.5 h-3.5 ${processOutboxMutation.isPending ? 'animate-spin' : ''}`} />
-                <span>{processOutboxMutation.isPending ? 'در حال اجرا...' : 'پردازش دستی دسته'}</span>
+                <span>{processOutboxMutation.isPending ? 'در حال اجرا…' : 'پردازش دستی دسته'}</span>
               </button>
               )}
 
@@ -373,7 +373,7 @@ export function DomainEventsTab() {
                 type="text"
                 value={outboxSearchQuery}
                 onChange={(e) => setOutboxSearchQuery(e.target.value)}
-                placeholder="جستجو در EventId، نوع، خطا..."
+                placeholder="جست‌وجو در شناسه رویداد، نوع یا خطا…"
                 className="w-full text-xs pr-8 pl-3 py-1.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none"
               />
             </div>
@@ -383,17 +383,17 @@ export function DomainEventsTab() {
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                رویدادهای ذخیره‌شده در جدول outbox_events ({filteredOutbox.length.toLocaleString('fa-IR')} مورد)
+                رویدادهای ذخیره‌شده در صف ارسال ({filteredOutbox.length.toLocaleString('fa-IR')} مورد)
               </span>
               <span className="text-[11px] text-slate-400 flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                <span>پایش دوره‌ای هر ۳ ثانیه توسط ورکر پس‌زمینه</span>
+                <span>پایش دوره‌ای هر ۳ ثانیه با پردازشگر پس‌زمینه</span>
               </span>
             </div>
 
             {filteredOutbox.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs">
-                هیچ رویدادی با فیلتر انتخابی در صندوق خروجی یافت نشد.
+                هیچ رویدادی با پالایش انتخابی در صف ارسال یافت نشد.
               </div>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
@@ -445,7 +445,7 @@ export function DomainEventsTab() {
                               disabled={retryingEventId === evt.eventId}
                               className="px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 rounded-lg transition-all"
                             >
-                              {retryingEventId === evt.eventId ? 'در حال ارسال...' : 'تلاش مجدد'}
+                              {retryingEventId === evt.eventId ? 'در حال ارسال…' : 'تلاش مجدد'}
                             </button>
                           )}
                           <div className="text-left dir-ltr text-[11px] text-slate-400">
@@ -464,10 +464,10 @@ export function DomainEventsTab() {
                         <div className="mt-3.5 pt-3.5 border-t border-slate-100 dark:border-slate-700 text-xs space-y-2">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300 mb-2">
                             <div>
-                              <span className="font-bold">شناسه دیتابیس (Primary Key):</span> #{toPersianDigits(evt.id)}
+                              <span className="font-bold">شناسه ردیف در پایگاه‌داده:</span> #{toPersianDigits(evt.id)}
                             </div>
                             <div>
-                              <span className="font-bold">زمان تلاش بعدی (Backoff Time):</span>{' '}
+                              <span className="font-bold">زمان تلاش بعدی:</span>{' '}
                               {evt.nextRetryAt ? formatPersianDate(evt.nextRetryAt) : 'بلافاصله یا موفق'}
                             </div>
                           </div>
@@ -512,7 +512,7 @@ export function DomainEventsTab() {
             </div>
 
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-              <div className="text-xs text-slate-500 dark:text-slate-400">تغییرات فرآیند و ورکفلو</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">تغییرات فرایند و گردش کار</div>
               <div className="text-xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
                 {(stats?.eventCounts?.['WorkflowTransitioned'] || 0).toLocaleString('fa-IR')}
               </div>
@@ -539,13 +539,13 @@ export function DomainEventsTab() {
                   className="text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-1.5 focus:outline-none"
                 >
                   <option value="ALL">همه انواع رویدادها</option>
-                  <option value="WorkflowTransitioned">تغییر وضعیت گردش‌کار</option>
+                  <option value="WorkflowTransitioned">تغییر وضعیت گردش کار</option>
                   <option value="StockReceived">ورود کالا به انبار</option>
                   <option value="StockIssued">خروج کالا از انبار</option>
-                  <option value="InvoiceApproved">تایید فاکتور فروش</option>
-                  <option value="PurchaseApproved">تایید فاکتور خرید</option>
+                  <option value="InvoiceApproved">تأیید فاکتور فروش</option>
+                  <option value="PurchaseApproved">تأیید فاکتور خرید</option>
                   <option value="TreasuryTransactionApproved">تراکنش خزانه‌داری و مالی</option>
-                  <option value="SimulatedTestEvent">رویدادهای تستی و پایش</option>
+                  <option value="SimulatedTestEvent">رویدادهای آزمایشی و پایش</option>
                 </select>
               </div>
 
@@ -566,7 +566,7 @@ export function DomainEventsTab() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="جستجو در شناسه، کاربر یا محتوا..."
+                placeholder="جست‌وجو در شناسه، کاربر یا محتوا…"
                 className="w-full text-xs pr-8 pl-3 py-1.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none"
               />
             </div>
@@ -579,7 +579,7 @@ export function DomainEventsTab() {
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                فهرست آخرین رویدادهای زنده سیستم ({filteredEvents.length.toLocaleString('fa-IR')} مورد)
+                فهرست آخرین رویدادهای زنده سامانه ({filteredEvents.length.toLocaleString('fa-IR')} مورد)
               </span>
               <span className="text-[11px] text-slate-400 flex items-center gap-1">
                 <Clock className="w-3 h-3" />
@@ -589,7 +589,7 @@ export function DomainEventsTab() {
 
             {filteredEvents.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs">
-                هیچ رویدادی با فیلترهای انتخابی یافت نشد.
+                هیچ رویدادی با پالایش انتخابی یافت نشد.
               </div>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
@@ -615,7 +615,7 @@ export function DomainEventsTab() {
                               </span>
                             </div>
                             <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                              عامل: <span className="text-slate-700 dark:text-slate-200 font-medium">{evt.metadata?.userName || 'سیستم'}</span>
+                              عامل: <span className="text-slate-700 dark:text-slate-200 font-medium">{evt.metadata?.userName || 'سامانه'}</span>
                               {' '}| شناسه رویداد: <span className="font-mono text-[11px]">{evt.eventId}</span>
                             </div>
                           </div>

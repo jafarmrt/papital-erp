@@ -59,7 +59,7 @@ describe('TD-730 the event tabs show the server reason of a refused request', ()
     fireEvent.click(await screen.findByTitle('اصلاح داده و بازپخش'));
     fireEvent.click(screen.getByText('صرفاً ذخیره تغییرات'));
     expect(await screen.findByText(reason)).toBeTruthy();
-    expect(screen.queryByText(/فرمت JSON/)).toBeNull();
+    expect(screen.queryByText(/قالب JSON/)).toBeNull();
   });
 
   it('a payload that does not parse is still named a JSON format error and is not sent', async () => {
@@ -68,7 +68,7 @@ describe('TD-730 the event tabs show the server reason of a refused request', ()
     fireEvent.click(await screen.findByTitle('اصلاح داده و بازپخش'));
     fireEvent.change(screen.getByDisplayValue(/documentId/), { target: { value: '{ broken' } });
     fireEvent.click(screen.getByText('صرفاً ذخیره تغییرات'));
-    expect(await screen.findByText(/فرمت JSON وارد شده نامعتبر است/)).toBeTruthy();
+    expect(await screen.findByText(/قالب JSON داده رویداد نامعتبر است/)).toBeTruthy();
     expect(vi.mocked(fetchJson).mock.calls.some(([, opts]) => (opts?.method || 'GET') !== 'GET')).toBe(false);
   });
 

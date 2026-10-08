@@ -211,7 +211,7 @@ export function EventSourcingReplaySubTab() {
               </span>
             </h3>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-2xl">
-              بازسازی سیر تکامل هر موجودیت از اولین لحظه ایجاد تا کنون، بررسی جامع رخدادهای زنجیره‌ای Outbox و Audit، و امکان شبیه‌سازی بازپخش زمان‌بندی‌شده (Dry-Run).
+              بازسازی سیر هر موجودیت از لحظه ایجاد تا کنون، بررسی رویدادهای صف ارسال و سابقه ممیزی آن، و شبیه‌سازی بازپخش بی‌اثر.
             </p>
           </div>
         </div>
@@ -245,11 +245,11 @@ export function EventSourcingReplaySubTab() {
         {/* Search and Specific Instance Dropdown */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">جستجوی موجودیت مورد نظر:</label>
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">جست‌وجوی موجودیت:</label>
             <div className="relative">
               <input
                 type="text"
-                placeholder="جستجو با کد یا عنوان (مثال: فاکتور، کالا، مشتری)..."
+                placeholder="جست‌وجو با کد یا عنوان (مثال: فاکتور، کالا، مشتری)…"
                 value={searchKeyword}
                 onChange={e => setSearchKeyword(e.target.value)}
                 className="w-full text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl pr-9 pl-4 py-2.5 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
@@ -282,7 +282,7 @@ export function EventSourcingReplaySubTab() {
           <div className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-indigo-500" />
             <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-              خط زمان رویدادها (Event Stream Timeline) - {selectedType} #{selectedAggregateId || '...'}
+              خط زمان رویدادها: {selectedType} #{selectedAggregateId || '...'}
             </h4>
           </div>
           <span className="text-xs text-slate-400 font-mono">
@@ -299,7 +299,7 @@ export function EventSourcingReplaySubTab() {
         {isLoadingTimeline ? (
           <div className="p-12 text-center text-slate-400">
             <RotateCcw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
-            در حال بازخوانی خط زمان رویدادهای موجودیت...
+            در حال بازخوانی خط زمان رویدادهای موجودیت…
           </div>
         ) : !selectedAggregateId ? (
           <div className="p-12 text-center text-slate-400">
@@ -386,7 +386,7 @@ export function EventSourcingReplaySubTab() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
                             <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-                              داده‌های رویداد (Payload):
+                              داده رویداد:
                             </span>
                             <pre className="text-[11px] font-mono bg-slate-950 text-slate-100 p-2.5 rounded-xl overflow-x-auto max-h-40 dir-ltr text-left">
                               {JSON.stringify(item.payload, null, 2)}
@@ -395,7 +395,7 @@ export function EventSourcingReplaySubTab() {
 
                           <div>
                             <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-                              فراداده‌ها (Metadata & Context):
+                              فراداده رویداد:
                             </span>
                             <pre className="text-[11px] font-mono bg-slate-950 text-emerald-400 p-2.5 rounded-xl overflow-x-auto max-h-40 dir-ltr text-left">
                               {JSON.stringify(item.metadata, null, 2)}
@@ -431,7 +431,7 @@ export function EventSourcingReplaySubTab() {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Play className="w-4 h-4 text-indigo-500" />
-                  موتور بازپخش و شبیه‌سازی رویداد (Time-Travel Replay)
+                  موتور بازپخش و شبیه‌سازی رویداد
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
                   رویداد <span className="font-mono text-indigo-400">{selectedEventForReplay.eventType}</span> برای {selectedType}#{selectedAggregateId}
@@ -462,7 +462,7 @@ export function EventSourcingReplaySubTab() {
                     <Sparkles className="w-4 h-4" />
                     <span>{simulationResult.message}</span>
                   </div>
-                  <div>کل قوانین اکشن ارزیابی‌شده: {formatPersianNumber(simulationResult.evaluatedRulesCount ?? 0)} قانون</div>
+                  <div>کل قانون‌های ارزیابی‌شده: {formatPersianNumber(simulationResult.evaluatedRulesCount ?? 0)} قانون</div>
                   <div>قوانین منطبق‌شده جهت اجرا: {formatPersianNumber(simulationResult.matchedRulesCount ?? 0)} قانون</div>
                 </div>
 

@@ -88,7 +88,7 @@ export function DeadLetterQueueSubTab() {
       if (data?.success) {
         setItems(Array.isArray(data.data) ? data.data : []);
       } else {
-        showToast(data?.message || 'خطا در دریافت لیست DLQ', 'error');
+        showToast(data?.message || 'فهرست صف خطا بارگذاری نشد.', 'error');
       }
     } catch (err) {
       // v9.0.394 (TD-730): the server's own reason is shown, never a fixed text
@@ -175,7 +175,7 @@ export function DeadLetterQueueSubTab() {
   };
 
   const handlePurgeResolved = async () => {
-    if (!(await confirmAction({ title: 'پاکسازی صف پیام‌های مرده', message: 'آیا از پاکسازی تمام رکوردهای حل‌شده یا نادیده‌گرفته‌شده اطمینان دارید؟' }))) return;
+    if (!(await confirmAction({ title: 'پاکسازی صف خطا', message: 'رویدادهای بازپخش‌شده و صرف‌نظرشده از صف خطا پاک شوند؟' }))) return;
     setIsPurging(true);
     try {
       const data = await fetchJson<{ success?: boolean; message?: string }>('/events/dlq/purge', {
@@ -208,7 +208,7 @@ export function DeadLetterQueueSubTab() {
     try {
       parsed = JSON.parse(editedPayloadJson);
     } catch (err) {
-      setJsonError('فرمت JSON وارد شده نامعتبر است: ' + errorMessageOf(err));
+      setJsonError('قالب JSON داده رویداد نامعتبر است: ' + errorMessageOf(err));
       return;
     }
     setJsonError(null);
@@ -221,7 +221,7 @@ export function DeadLetterQueueSubTab() {
       });
 
       if (!data?.success) {
-        showToast(data?.message || 'خطا در ذخیره تغییرات بدنه', 'error');
+        showToast(data?.message || 'داده رویداد ذخیره نشد.', 'error');
         setIsSavingPayload(false);
         return;
       }
@@ -229,13 +229,13 @@ export function DeadLetterQueueSubTab() {
       if (andReplay) {
         await handleReplaySingle(editingItem.id);
       } else {
-        showToast('بدنه رویداد با موفقیت به‌روزرسانی شد.', 'success');
+        showToast('داده رویداد ذخیره شد.', 'success');
         void fetchEvents();
       }
 
       setEditingItem(null);
     } catch (err) {
-      setJsonError(errorMessageOf(err) || 'ذخیره بدنه رویداد انجام نشد.');
+      setJsonError(errorMessageOf(err) || 'داده رویداد ذخیره نشد.');
     } finally {
       setIsSavingPayload(false);
     }
@@ -283,7 +283,7 @@ export function DeadLetterQueueSubTab() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">در قرنطینه (Quarantined)</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">در قرنطینه</span>
             <div className="p-2 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl">
               <AlertOctagon className="w-5 h-5" />
             </div>
@@ -296,7 +296,7 @@ export function DeadLetterQueueSubTab() {
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">بازپخش موفق (Replayed)</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">بازپخش‌شده</span>
             <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
               <CheckCircle2 className="w-5 h-5" />
             </div>
@@ -309,7 +309,7 @@ export function DeadLetterQueueSubTab() {
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">صرف‌نظر شده (Dismissed)</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">صرف‌نظرشده</span>
             <div className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl">
               <XCircle className="w-5 h-5" />
             </div>
@@ -322,7 +322,7 @@ export function DeadLetterQueueSubTab() {
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">کل خطاهای ماندگار (Total DLQ)</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">کل رویدادهای صف خطا</span>
             <div className="p-2 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
               <Layers className="w-5 h-5" />
             </div>
@@ -360,16 +360,16 @@ export function DeadLetterQueueSubTab() {
               className="bg-transparent text-xs font-medium text-slate-700 dark:text-slate-200 outline-none"
             >
               <option value="all">تمام منابع</option>
-              <option value="outbox">صندوق برون‌رو (Outbox)</option>
-              <option value="action_engine">موتور اکشن‌ها (Action Engine)</option>
-              <option value="webhook">وب‌هوک‌ها (Webhooks)</option>
+              <option value="outbox">صف ارسال رویداد</option>
+              <option value="action_engine">موتور واکنش خودکار</option>
+              <option value="webhook">وب‌هوک‌ها</option>
             </select>
           </div>
 
           <form onSubmit={handleSearch} className="relative flex-1 min-w-[200px]">
             <input
               type="text"
-              placeholder="جستجو در شناسه، نوع رویداد یا متن خطا..."
+              placeholder="جست‌وجو در شناسه، نوع رویداد یا متن خطا…"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl pr-9 pl-4 py-2 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
@@ -396,7 +396,7 @@ export function DeadLetterQueueSubTab() {
               onClick={handlePurgeResolved}
               disabled={isPurging}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl transition-all"
-              title="پاکسازی رکوردهای حل‌شده یا رد‌شده"
+              title="پاکسازی ردیف‌های بازپخش‌شده یا صرف‌نظرشده"
             >
               <Trash2 className="w-3.5 h-3.5 text-slate-500" />
               <span>پاکسازی حل‌شده‌ها</span>
@@ -433,7 +433,7 @@ export function DeadLetterQueueSubTab() {
                   </button>}
                 </th>
                 <th className="p-3 font-semibold">شناسه رویداد / نوع</th>
-                <th className="p-3 font-semibold">موجودیت (Aggregate)</th>
+                <th className="p-3 font-semibold">موجودیت</th>
                 <th className="p-3 font-semibold">منبع و تلاش</th>
                 <th className="p-3 font-semibold">علت شکست و قرنطینه</th>
                 <th className="p-3 font-semibold">وضعیت</th>
@@ -446,7 +446,7 @@ export function DeadLetterQueueSubTab() {
                 <tr>
                   <td colSpan={8} className="p-12 text-center text-slate-400">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
-                    در حال دریافت داده‌های صف Dead Letter...
+                    در حال بارگذاری صف خطا…
                   </td>
                 </tr>
               ) : items.length === 0 ? (
@@ -497,9 +497,9 @@ export function DeadLetterQueueSubTab() {
                         <td className="p-3">
                           <div className="text-slate-700 dark:text-slate-300 font-medium">
                             {item.source === 'outbox'
-                              ? 'صندوق Outbox'
+                              ? 'صف ارسال رویداد'
                               : item.source === 'action_engine'
-                              ? 'موتور اکشن‌ها'
+                              ? 'موتور واکنش خودکار'
                               : item.source === 'webhook'
                               ? 'وب‌هوک مقصد'
                               : item.source}
@@ -573,7 +573,7 @@ export function DeadLetterQueueSubTab() {
                             <button
                               onClick={() => setExpandedId(isExpanded ? null : item.id)}
                               className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
-                              title="مشاهده جزئیات Payload"
+                              title="نمایش داده رویداد"
                             >
                               {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                             </button>
@@ -588,13 +588,13 @@ export function DeadLetterQueueSubTab() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
                                 <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                                  <span>بدنه رویداد (Payload):</span>
+                                  <span>داده رویداد:</span>
                                   {canManage && item.status !== 'replayed' && (
                                     <button
                                       onClick={() => openEditModal(item)}
                                       className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
                                     >
-                                      <Edit3 className="w-3 h-3" /> ویرایش Payload
+                                      <Edit3 className="w-3 h-3" /> ویرایش داده رویداد
                                     </button>
                                   )}
                                 </div>
@@ -604,7 +604,7 @@ export function DeadLetterQueueSubTab() {
                               </div>
 
                               <div>
-                                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">ردیابی خطا (Error Stack Trace):</div>
+                                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">ردیابی خطا:</div>
                                 <div className="text-[11px] font-mono bg-rose-950/20 border border-rose-900/40 text-rose-300 p-3 rounded-xl overflow-x-auto max-h-56 dir-ltr text-left">
                                   {item.errorStack || item.failureReason || 'ردیابی ذخیره نشده است.'}
                                 </div>
@@ -637,7 +637,7 @@ export function DeadLetterQueueSubTab() {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Edit3 className="w-4 h-4 text-indigo-500" />
-                  اصلاح بدنه رویداد #{toPersianDigits(editingItem.id)} ({editingItem.eventType})
+                  اصلاح داده رویداد #{toPersianDigits(editingItem.id)} ({editingItem.eventType})
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
                   مقادیر معیوب را اصلاح کنید و سپس رویداد را در گذرگاه دامنه‌ای بازپخش نمایید.
@@ -655,7 +655,7 @@ export function DeadLetterQueueSubTab() {
             )}
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">محتوای JSON بدنه (Payload):</label>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">داده رویداد (JSON):</label>
               <textarea
                 rows={12}
                 value={editedPayloadJson}

@@ -63,10 +63,10 @@ describe('TD-721 action logs and stats follow the server contract', () => {
   it('the logs view lists the execution with its rule, event, status, duration and result', async () => {
     mockServer();
     render(<AutoActionsSubTab />, { wrapper });
-    const logsTab = await screen.findByText(/لاگ‌های اجرا/);
+    const logsTab = await screen.findByText(/گزارش اجرا/);
     await waitFor(() => expect(logsTab.textContent).toContain('(۷)'));
     fireEvent.click(logsTab);
-    expect(screen.queryByText(/هنوز هیچ لاگ اجرایی/)).toBeNull();
+    expect(screen.queryByText(/هنوز هیچ گزارش اجرایی/)).toBeNull();
     const row = await screen.findByText(/وب‌هوک فاکتور/);
     expect(row.textContent).not.toContain('InvoiceApproved');
     const body = document.body.textContent ?? '';

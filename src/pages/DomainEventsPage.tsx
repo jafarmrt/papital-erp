@@ -17,17 +17,17 @@ export default function DomainEventsPage() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-800">رویدادها و اتوماسیون سازمانی</h1>
+              <h1 className="text-xl font-bold text-slate-800">رویدادها و خودکارسازی سازمانی</h1>
             </div>
             <p className="text-slate-500 text-xs mt-1">
-              مدیریت رویدادهای سیستمی، قوانین واکنش خودکار، صف خطاهای قرنطینه، بازپخش رویدادها و وب‌هوک‌های ارتباطی
+              مدیریت رویدادهای سامانه، قاعده‌های واکنش خودکار، صف خطا، بازپخش رویدادها و وب‌هوک‌ها
             </p>
           </div>
         </div>
 
         <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
           <ShieldCheck size={15} className="text-emerald-600" />
-          <span>سیستم مدیریت رویدادهای سازمانی</span>
+          <span>مدیریت رویدادهای سازمانی</span>
         </div>
       </div>
 

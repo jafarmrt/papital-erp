@@ -81,19 +81,19 @@ async function changeButtonsShown(): Promise<string[]> {
   const check = (label: string, present: boolean) => { if (present) shown.push(label); };
 
   await screen.findByText('اعلان فاکتور');
-  check('add rule', !!screen.queryByText('افزودن قانون اکشن جدید'));
+  check('add rule', !!screen.queryByText('افزودن قانون خودکار'));
   check('toggle rule', !!screen.queryByTitle('غیرفعال‌سازی'));
   check('test rule', !!screen.queryByText('آزمایش'));
   check('edit rule', !!screen.queryByTitle('ویرایش قانون'));
   check('delete rule', !!screen.queryByTitle('حذف قانون'));
 
-  fireEvent.click(screen.getByText('صندوق ارسال رویدادها'));
+  fireEvent.click(screen.getByText('صف ارسال رویداد'));
   await screen.findByText('evt-1', { exact: false });
   check('process outbox', !!screen.queryByText('پردازش دستی دسته'));
   check('retry all failed', !!screen.queryByText(/تلاش مجدد تمام خطاهای ارسال/));
   check('retry one', !!screen.queryByText('تلاش مجدد'));
 
-  fireEvent.click(screen.getByText('صف خطاهای قرنطینه'));
+  fireEvent.click(screen.getByText('صف خطا'));
   await screen.findByText('timeout');
   check('purge dead letters', !!screen.queryByText('پاکسازی حل‌شده‌ها'));
   check('replay dead letter', !!screen.queryByTitle('بازپخش فوری رویداد'));
@@ -108,7 +108,7 @@ async function changeButtonsShown(): Promise<string[]> {
   await screen.findByText('فروشگاه شریک');
   check('add webhook', !!screen.queryByText('تعریف وب‌هوک جدید'));
   check('toggle webhook', !(screen.getByText('فعال').closest('button') as HTMLButtonElement).disabled);
-  check('ping webhook', !!screen.queryByText('تست پینگ و امضا'));
+  check('ping webhook', !!screen.queryByText('آزمایش اتصال و امضا'));
   check('edit webhook', !!screen.queryByTitle('ویرایش تنظیمات'));
   check('delete webhook', !!screen.queryByTitle('حذف درگاه'));
   check('rotate webhook key', !!screen.queryByText('ساخت کلید تازه'));

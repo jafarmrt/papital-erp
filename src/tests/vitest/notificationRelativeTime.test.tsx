@@ -40,7 +40,7 @@ describe('TD-725 notification relative time', () => {
     vi.setSystemTime(NOW);
     notifState.list = [{ id: 1, type: 'mention', title: 'اشاره تازه', message: 'متن', link: '', is_read: 0, created_at: '2026-10-06 10:00:00' }];
     render(<MemoryRouter><NotificationBell /></MemoryRouter>);
-    fireEvent.click(screen.getByTitle('اعلان‌ها و منشن‌ها'));
+    fireEvent.click(screen.getByTitle('اعلان‌ها و اشاره‌ها'));
     expect(screen.getByText('همین الان')).toBeTruthy();
     expect(screen.queryByText(/ساعت پیش/)).toBeNull();
   });

@@ -87,7 +87,7 @@ describe('TD-732 numbers in the events screens use Persian digits', () => {
   it('the outbox list writes «attempt N of 5» in one digit script', async () => {
     mockServer();
     render(withQueryClient(<DomainEventsTab />));
-    fireEvent.click(screen.getByText('صندوق ارسال رویدادها'));
+    fireEvent.click(screen.getByText('صف ارسال رویداد'));
     expect(await screen.findByText('تلاش ۳ از ۵')).toBeTruthy();
     expect(screen.getByText(/تلاش مجدد تمام خطاهای ارسال \(۱\)/)).toBeTruthy();
     expect(screen.queryByText(/#12/)).toBeNull();
@@ -109,7 +109,7 @@ describe('TD-732 numbers in the events screens use Persian digits', () => {
   it('the notification bell counts unread notifications in Persian digits', () => {
     render(<MemoryRouter><NotificationBell /></MemoryRouter>);
     expect(screen.getByText('۳')).toBeTruthy();
-    fireEvent.click(screen.getByTitle('اعلان‌ها و منشن‌ها'));
+    fireEvent.click(screen.getByTitle('اعلان‌ها و اشاره‌ها'));
     expect(screen.getByText('۳ خوانده‌نشده')).toBeTruthy();
   });
 });

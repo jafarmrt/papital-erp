@@ -31,7 +31,7 @@ describe('TD-728 the webhook form saves once', () => {
     });
     render(<WebhookManagementSubTab />);
     fireEvent.click(await screen.findByText('تعریف وب‌هوک جدید'));
-    fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه آنلاین ووکامرس'), { target: { value: 'شریک تازه' } });
+    fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه برخط ووکامرس'), { target: { value: 'شریک تازه' } });
     fireEvent.change(screen.getByPlaceholderText('https://your-domain.com/api/webhook/receiver'), { target: { value: 'https://new.example.com/hook' } });
     const submit = screen.getByText(CREATE).closest('button') as HTMLButtonElement;
     fireEvent.click(submit);

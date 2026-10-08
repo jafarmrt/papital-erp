@@ -41,7 +41,7 @@ describe('TD-731 timeline aggregate search', () => {
   it('typing two letters quickly asks the server once, for the settled keyword', async () => {
     const { searches } = mockServer();
     render(<EventSourcingReplaySubTab />);
-    const input = screen.getByPlaceholderText(/جستجو با کد یا عنوان/);
+    const input = screen.getByPlaceholderText(/جست‌وجو با کد یا عنوان/);
     fireEvent.change(input, { target: { value: 'ف' } });
     fireEvent.change(input, { target: { value: 'فا' } });
     expect(searches).toEqual([]);
@@ -51,7 +51,7 @@ describe('TD-731 timeline aggregate search', () => {
   it('a late answer for an older keyword does not overwrite the list of the newer keyword', async () => {
     const { pending, searches } = mockServer();
     render(<EventSourcingReplaySubTab />);
-    const input = screen.getByPlaceholderText(/جستجو با کد یا عنوان/);
+    const input = screen.getByPlaceholderText(/جست‌وجو با کد یا عنوان/);
     fireEvent.change(input, { target: { value: 'ف' } });
     await waitFor(() => expect(searches).toEqual(['ف']));
     fireEvent.change(input, { target: { value: 'فا' } });

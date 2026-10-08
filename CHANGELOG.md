@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.398 — Persian Wording in the Events Screens
+- **Events wording (TD-734):** the events, webhook, dead-letter, notification and WooCommerce screens use the words of decision t9 («اقدام», «آزمایش», «گزارش», «داده رویداد», «صف ارسال رویداد», «صف خطا», «سرآیند», «اشاره») instead of «اکشن», «تست», «لاگ», Outbox and Payload; «وب‌هوک» is the third allowed loanword, WordPress labels stay only in parentheses, and the WooCommerce secret is no longer called optional.
+
 ### v9.0.397 — Persian Digits in the Events Screens
 - **Persian digits (TD-732):** counts, percentages and durations in the events, webhook, dead-letter, WooCommerce and notification screens were written with Latin digits («بازپخش 1 مورد», «%۸۶», «120ms», «تلاش 3/۵»); they now use `formatPersianNumber` / `toPersianDigits`, «٪» after the number and «میلی‌ثانیه».
 

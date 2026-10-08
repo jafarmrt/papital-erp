@@ -80,7 +80,7 @@ export function AutoActionsSubTab() {
   });
 
   const handleDeleteRule = async (id: number) => {
-    if (!(await confirmAction({ title: 'حذف قانون اکشن', message: 'آیا از حذف این قانون اکشن اطمینان دارید؟' }))) return;
+    if (!(await confirmAction({ title: 'حذف قانون خودکار', message: 'این قانون خودکار حذف شود؟' }))) return;
 
     try {
       await fetchJson(`/events/action-rules/${id}`, {
@@ -104,7 +104,7 @@ export function AutoActionsSubTab() {
       const what = data?.conditionMatches ? actionPreviewLines(data.preview).join('؛ ') : '';
       showNotification([data?.message || 'آزمایش قانون انجام شد؛ اقدام اجرا نشد.', what].filter(Boolean).join(' '));
     } catch (err) {
-      showNotification(errorMessageOf(err) || 'خطا در ارتباط با سرور', 'error');
+      showNotification(errorMessageOf(err) || 'ارتباط با کارساز برقرار نشد.', 'error');
     }
   });
 
@@ -140,7 +140,7 @@ export function AutoActionsSubTab() {
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
             <Bell className="w-3 h-3" />
-            <span>اعلان سیستم</span>
+            <span>اعلان درون‌برنامه</span>
           </span>
         );
       case 'sms_simulation':
@@ -289,7 +289,7 @@ export function AutoActionsSubTab() {
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>لاگ‌های اجرا ({logsTotal.toLocaleString('fa-IR')})</span>
+                <span>گزارش اجرا ({logsTotal.toLocaleString('fa-IR')})</span>
               </button>
             </div>
 
@@ -313,7 +313,7 @@ export function AutoActionsSubTab() {
               className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
             >
               <Plus className="w-4 h-4" />
-              <span>افزودن قانون اکشن جدید</span>
+              <span>افزودن قانون خودکار</span>
             </button>
             )}
           </div>
@@ -329,7 +329,7 @@ export function AutoActionsSubTab() {
                 <Search className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="جستجو در نام قانون، رویداد یا توضیحات..."
+                  placeholder="جست‌وجو در نام قانون، رویداد یا توضیحات…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-3 pr-9 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white"
@@ -354,7 +354,7 @@ export function AutoActionsSubTab() {
                 >
                   <option value="ALL">همه انواع اقدام</option>
                   <option value="webhook">وب‌هوک</option>
-                  <option value="in_app_notification">اعلان سیستم</option>
+                  <option value="in_app_notification">اعلان درون‌برنامه</option>
                   <option value="sms_simulation">{ruleActionTypeLabel('sms_simulation')}</option>
                   <option value="workflow_trigger">{ruleActionTypeLabel('workflow_trigger')}</option>
                   <option value="audit_log">ممیزی ویژه</option>
@@ -480,7 +480,7 @@ export function AutoActionsSubTab() {
           <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
             {logs.length === 0 ? (
               <div className="p-12 text-center text-slate-400 text-xs">
-                هنوز هیچ لاگ اجرایی برای اکشن‌های خودکار ثبت نشده است.
+                هنوز هیچ گزارش اجرایی برای اقدام‌های خودکار ثبت نشده است.
               </div>
             ) : (
               logs.map((log) => {

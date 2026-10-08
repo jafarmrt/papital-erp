@@ -70,7 +70,7 @@ export default function NotificationBell() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all focus:outline-hidden"
-        title="اعلان‌ها و منشن‌ها"
+        title="اعلان‌ها و اشاره‌ها"
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
@@ -85,7 +85,7 @@ export default function NotificationBell() {
           <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Bell className="w-4 h-4 text-amber-400" />
-              <span className="text-xs font-bold">اعلان‌ها و منشن‌های شما</span>
+              <span className="text-xs font-bold">اعلان‌ها و اشاره‌های شما</span>
               {unreadCount > 0 && (
                 <span className="bg-amber-500/20 text-amber-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-amber-500/30">
                   {formatPersianNumber(unreadCount)} خوانده‌نشده
@@ -176,7 +176,7 @@ export default function NotificationBell() {
               }}
               className="text-[11px] font-bold text-blue-600 hover:text-blue-700 transition-colors inline-flex items-center gap-1"
             >
-              مشاهده تمام گزارش‌های روزانه و منشن‌ها
+              مشاهده همه گزارش‌های روزانه و اشاره‌ها
               <ExternalLink className="w-3 h-3" />
             </button>
           </div>

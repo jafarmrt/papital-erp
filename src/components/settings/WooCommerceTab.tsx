@@ -89,9 +89,9 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
 
   const handleCopyWebhook = () => {
     void copyToClipboard(webhookUrl).then(ok => {
-      if (!ok) { toast.error('کپی در کلیپ‌بورد ممکن نشد'); return; }
+      if (!ok) { toast.error('کپی نشد. نشانی را دستی انتخاب و کپی کنید.'); return; }
       setCopiedWebhook(true);
-      toast.success('آدرس وب‌هوک کپی شد');
+      toast.success('نشانی وب‌هوک کپی شد');
       setTimeout(() => setCopiedWebhook(false), 2500);
     });
   };
@@ -105,16 +105,16 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           تنظیمات اتصال به فروشگاه ووکامرس (WooCommerce REST API)
         </h3>
         <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-          برای اتصال سیستم به فروشگاه وردپرسی، آدرس سایت و کلیدهای دسترسی (Consumer Key و Consumer Secret) را که از مسیر{' '}
-          <strong>ووکامرس &gt; پیکربندی &gt; پیشرفته &gt; REST API</strong> دریافت کرده‌اید وارد کنید.
+          برای اتصال سامانه به فروشگاه وردپرسی، نشانی سایت و کلیدهای دسترسی (Consumer Key و Consumer Secret) را که از مسیر{' '}
+          <strong>ووکامرس &gt; پیکربندی &gt; پیشرفته &gt; واسط برنامه‌نویسی (REST API)</strong> دریافت کرده‌اید وارد کنید.
         </p>
 
         {!access.connection && (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">آدرس سایت و کلیدهای دسترسی را فقط مدیر سیستم تغییر می‌دهد.</p>
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">نشانی سایت و کلیدهای دسترسی را فقط مدیر سامانه تغییر می‌دهد.</p>
         )}
         <fieldset disabled={!access.connection} className="grid md:grid-cols-2 gap-6 mb-6">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1 text-slate-700">آدرس سایت (URL)</label>
+            <label className="block text-sm font-medium mb-1 text-slate-700">نشانی سایت</label>
             <input
               type="url"
               value={wcStoreUrl}
@@ -123,7 +123,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
               placeholder="https://yoursite.com"
               dir="ltr"
             />
-            <p className="text-xs text-slate-500 mt-1">آدرس اصلی سایت بدون / در انتها.</p>
+            <p className="text-xs text-slate-500 mt-1">نشانی اصلی سایت، بدون / در انتها.</p>
           </div>
 
           <div>
@@ -163,7 +163,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             ) : (
               <div className="w-4 h-4 flex items-center justify-center">🌐</div>
             )}
-            تست اتصال به سایت
+            آزمایش اتصال به سایت
           </button>
           )}
           {(access.connection || access.shopWarehouse) && (
@@ -172,7 +172,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             disabled={isSaving || isTestingWc}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
           >
-            {isSaving ? 'در حال ذخیره...' : 'ذخیره تنظیمات ووکامرس'}
+            {isSaving ? 'در حال ذخیره…' : 'ذخیره تنظیمات ووکامرس'}
           </button>
           )}
         </div>
@@ -187,12 +187,12 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           </div>
           <span className="bg-blue-100 text-blue-800 text-[11px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1">
             <ShieldCheck size={12} />
-            HMAC & Idempotency
+            امضا و جلوگیری از ثبت دوباره
           </span>
         </div>
 
         <p className="text-xs text-blue-900 leading-relaxed">
-          جهت ثبت خودکار فاکتور فروش و کسر از موجودی انبار به محض خرید مشتری در سایت، آدرس وب‌هوک زیر را در ووکامرس وارد کنید:
+          جهت ثبت خودکار فاکتور فروش و کسر از موجودی انبار به محض خرید مشتری در سایت، نشانی وب‌هوک زیر را در ووکامرس وارد کنید:
         </p>
 
         <div className="flex items-center gap-2 bg-white border border-blue-200 rounded-lg p-2">
@@ -207,7 +207,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors shrink-0 font-medium"
           >
             {copiedWebhook ? <Check size={14} /> : <Copy size={14} />}
-            {copiedWebhook ? 'کپی شد' : 'کپی آدرس وب‌هوک'}
+            {copiedWebhook ? 'کپی شد' : 'کپی نشانی وب‌هوک'}
           </button>
         </div>
 
@@ -215,7 +215,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
         <fieldset disabled={!access.connection} className="bg-white/90 border border-blue-200 rounded-lg p-3 space-y-2">
           <label className="block text-xs font-bold text-blue-950 flex items-center gap-1.5">
             <Key size={14} className="text-amber-600" />
-            کلید محرمانه امضای دیجیتال وب‌هوک (Webhook Secret Key)
+            کلید محرمانه امضای وب‌هوک (Secret)
           </label>
           <input
             type="password"
@@ -223,11 +223,11 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             value={wcWebhookSecret}
             onChange={(e) => setWcWebhookSecret(e.target.value)}
             className="w-full border border-slate-300 rounded px-3 py-1.5 text-xs font-mono bg-slate-50 text-left outline-none focus:ring-1 focus:ring-blue-500"
-            placeholder="کد محرمانه ایجادشده در ووکامرس (اختیاری جهت راستی‌آزمایی HMAC SHA-256)"
+            placeholder="کد محرمانه‌ای که در ووکامرس برای این وب‌هوک ساخته‌اید"
             dir="ltr"
           />
           <p className="text-[11px] text-slate-500 leading-normal">
-            در صورت تنظیم این کلید در ووکامرس و سیستم، تمام وب‌هوک‌های دریافتی از نظر اصالت فرستنده با امضای HMAC SHA-256 اعتبارسنجی می‌شوند.
+            سفارش‌ها فقط با این کلید پردازش می‌شوند: امضای هر وب‌هوک دریافتی (HMAC SHA-256) با آن بررسی می‌شود.
           </p>
         </fieldset>
 
@@ -242,7 +242,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             <li>روی دکمه <strong>«افزودن وب‌هوک»</strong> کلیک کنید.</li>
             <li><strong>نام:</strong> دلخواه (مثلاً: <code>همگام‌سازی فاکتور انبار</code>)، <strong>وضعیت:</strong> <code>فعال (Active)</code>.</li>
             <li><strong>موضوع (Topic):</strong> حتماً <code>سفارش بروزرسانی شد (Order Updated)</code> را انتخاب کنید؛ فاکتور فقط پس از پرداخت (وضعیت «در حال انجام» یا «تکمیل‌شده») صادر و با لغو سفارش ابطال می‌شود و این تغییر وضعیت‌ها فقط با این موضوع ارسال می‌شوند. افزودن وب‌هوک جداگانه برای <code>سفارش ایجاد شد</code> اختیاری است.</li>
-            <li><strong>نشانی تحویل (Delivery URL):</strong> آدرس وب‌هوک عمومی کپی‌شده در بالا را پیست کنید.</li>
+            <li><strong>نشانی تحویل (Delivery URL):</strong> نشانی وب‌هوک را که در بالا کپی کردید بچسبانید.</li>
             <li><strong>کد محرمانه (Secret):</strong> همان کدی را که در کادر بالا وارد کردید بگذارید؛ بدون این کد سفارش‌ها پردازش نمی‌شوند.</li>
           </ol>
         </div>
@@ -258,7 +258,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             همگام‌سازی دسته‌ای موجودی کل کالاها
           </div>
           <p className="text-xs text-emerald-900 leading-relaxed">
-            بروزرسانی یکباره موجودی انبار تمام محصولات دارای کد SKU در فروشگاه آنلاین ووکامرس:
+            به‌روزرسانی یک‌باره موجودی همه محصولات دارای شناسه محصول (SKU) در فروشگاه برخط ووکامرس:
           </p>
           <button
             onClick={handleSyncAllStocks}
@@ -270,7 +270,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             ) : (
               <RefreshCw size={14} />
             )}
-            {isSyncingAllStocks ? 'در حال ارسال موجودی تمام کالاها...' : 'همگام‌سازی موجودی کل کالاها با سایت'}
+            {isSyncingAllStocks ? 'در حال ارسال موجودی همه کالاها…' : 'همگام‌سازی موجودی کل کالاها با سایت'}
           </button>
         </div>
 
@@ -352,14 +352,14 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
                   <th className="p-3 font-semibold">کد سفارش ووکامرس</th>
                   <th className="p-3 font-semibold">وضعیت پردازش</th>
                   <th className="p-3 font-semibold">نام خریدار</th>
-                  <th className="p-3 font-semibold">فاکتور صادرشده ERP</th>
+                  <th className="p-3 font-semibold">فاکتور صادرشده در سامانه</th>
                   <th className="p-3 font-semibold">زمان بروزرسانی</th>
                   <th className="p-3 font-semibold">جزئیات / خطا</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {wcOrderLogs.length === 0 ? (
-                  <WcListEmptyRow colSpan={6} error={wcOrderLogsError} emptyText="هنوز هیچ سابقه پردازش سفارشی در سیستم ثبت نشده است." />
+                  <WcListEmptyRow colSpan={6} error={wcOrderLogsError} emptyText="هنوز هیچ سفارشی از ووکامرس پردازش نشده است." />
                 ) : (
                   wcOrderLogs.map((log: any, idx: number) => (
                     <tr key={`wc-log-${log.id || idx}-${idx}`} className="hover:bg-slate-50/80">
@@ -368,7 +368,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
                         <WcOrderLogStatusBadge status={String(log.status || '')} />
                       </td>
                       <td className="p-3 font-medium">
-                        {log.buyerName || 'خریدار آنلاین'}
+                        {log.buyerName || 'خریدار برخط'}
                       </td>
                       <td className="p-3 font-mono font-bold text-blue-600 dir-ltr text-right">
                         {log.erpDocumentId ? `#${log.erpDocumentId}` : '—'}
@@ -392,7 +392,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                 <tr>
-                  <th className="p-3 font-semibold">شماره فاکتور ERP</th>
+                  <th className="p-3 font-semibold">شماره فاکتور در سامانه</th>
                   <th className="p-3 font-semibold">توضیحات و شماره سفارش</th>
                   <th className="p-3 font-semibold">نام خریدار</th>
                   <th className="p-3 font-semibold">تاریخ ثبت</th>
@@ -407,7 +407,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
                     <tr key={`wc-doc-${doc.id || idx}-${idx}`} className="hover:bg-slate-50/80">
                       <td className="p-3 font-bold text-blue-600 dir-ltr text-right">#{doc.refNumber}</td>
                       <td className="p-3 font-medium">{doc.notes || 'سفارش ووکامرس'}</td>
-                      <td className="p-3">{doc.buyerName || 'خریدار آنلاین'}</td>
+                      <td className="p-3">{doc.buyerName || 'خریدار برخط'}</td>
                       <td className="p-3 text-slate-500">{formatPersianDate(doc.date)}</td>
                       <td className="p-3 text-center">
                         <span className="bg-emerald-100 text-emerald-800 text-[11px] px-2 py-0.5 rounded-full font-medium">
@@ -431,13 +431,13 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
         </div>
         <ul className="list-disc list-inside space-y-1.5 leading-relaxed text-amber-800">
           <li>
-            <strong>دسترسی کلید API:</strong> هنگام ساخت کلید در مسیر <em>ووکامرس &gt; پیکربندی &gt; پیشرفته &gt; REST API</em>، حتماً دسترسی را روی <strong>«خواندن/نوشتن» (Read/Write)</strong> قرار دهید.
+            <strong>دسترسی کلید (API):</strong> هنگام ساخت کلید در مسیر <em>ووکامرس &gt; پیکربندی &gt; پیشرفته &gt; واسط برنامه‌نویسی (REST API)</em>، حتماً دسترسی را روی <strong>«خواندن/نوشتن» (Read/Write)</strong> قرار دهید.
           </li>
           <li>
-            <strong>پیوندهای یکتا (Permalinks):</strong> در پیشخوان وردپرس به مسیر <em>تنظیمات &gt; پیوندهای یکتا</em> بروید و آن را روی حالت <strong>«نام نوشته» (Post Name)</strong> ذخیره کنید. (روی حالت «ساده» API کار نمی‌کند).
+            <strong>پیوندهای یکتا (Permalinks):</strong> در پیشخوان وردپرس به مسیر <em>تنظیمات &gt; پیوندهای یکتا</em> بروید و آن را روی حالت <strong>«نام نوشته» (Post Name)</strong> ذخیره کنید. (در حالت «ساده»، اتصال برقرار نمی‌شود.)
           </li>
           <li>
-            <strong>تطابق کد محصول (SKU):</strong> برای کسر خودکار انبار، کد کالای تعریف شده در ERP باید با کد محصول (SKU) در سایت وردپرسی یکسان باشد.
+            <strong>تطابق شناسه محصول (SKU):</strong> برای کسر خودکار انبار، کد کالا در سامانه باید با شناسه محصول (SKU) در سایت وردپرسی یکسان باشد.
           </li>
         </ul>
       </div>

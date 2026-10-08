@@ -153,7 +153,7 @@ describe('TD-730 WooCommerce order lists show a load error instead of «no order
     await waitFor(() => expect(result.current.syncedWcOrdersError).toBe(serverFailure));
     renderTab(result.current);
     expect(screen.getByRole('alert').textContent).toBe(`این فهرست خوانده نشد: ${forbidden}`);
-    expect(screen.queryByText('هنوز هیچ سابقه پردازش سفارشی در سیستم ثبت نشده است.')).toBeNull();
+    expect(screen.queryByText('هنوز هیچ سفارشی از ووکامرس پردازش نشده است.')).toBeNull();
   });
 
   it('an empty list that loaded still says no orders, and a processed order note is not styled as an error', async () => {
@@ -188,7 +188,18 @@ describe('TD-710 the WooCommerce webhook secret is a password field', () => {
     const { result } = renderHook(() => useSettings(), { wrapper });
     await waitFor(() => expect(result.current.wcWebhookSecret).toBe(MASKED_SECRET_VALUE));
     renderTab(result.current);
-    const secretField = screen.getByPlaceholderText(/کد محرمانه ایجادشده در ووکامرس/) as HTMLInputElement;
+    const secretField = screen.getByPlaceholderText(/کد محرمانه‌ای که در ووکامرس/) as HTMLInputElement;
     expect(secretField.type).toBe('password');
+  });
+
+  // v9.0.398 (TD-734): the order webhook refuses every order while no secret is set, so the tab never calls it optional
+  it('the secret field and its help say orders are processed only with the secret', async () => {
+    mockServer();
+    const { result } = renderHook(() => useSettings(), { wrapper });
+    await waitFor(() => expect(result.current.wcWebhookSecret).toBe(MASKED_SECRET_VALUE));
+    renderTab(result.current);
+    const secretField = screen.getByPlaceholderText(/کد محرمانه‌ای که در ووکامرس/) as HTMLInputElement;
+    expect(secretField.placeholder).not.toMatch(/اختیاری/);
+    expect(screen.getByText(/سفارش‌ها فقط با این کلید پردازش می‌شوند/)).toBeTruthy();
   });
 });
