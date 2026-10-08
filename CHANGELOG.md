@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.2 — v10.0.2 — Simulator runs treasury, cheques, payroll, purchasing, allocation, approval and year closing (TD-982, I-01)
+- The business-year simulator gains eleven operations through the application services and a `--close-year` option; TD-982 is resolved and the first year closing of a simulated year found TD-1030 (a foreign sale voucher off by one rial).
+
 ### v10.0.1 — v10.0.1 — Business invariants I7, I8, I9, I11, I12 and I17–I20 (TD-982, I-01)
 - Nine new read-only business invariants (project reservation, party receivable, cheque transitions, closed fiscal year, unique numbers, rial balance, posting accounts, reservation within stock, VAT payable) with checks that break a row and expect it reported; TD-982 stays open for the simulator operations.
 

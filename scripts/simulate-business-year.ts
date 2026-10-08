@@ -9,7 +9,7 @@ import { runBusinessYearSimulation, SimulationResult } from '../src/tests/simula
 /**
  * v8.0.1 — اجرای شبیه‌ساز «یک سال کاری» روی PostgreSQL واقعی، هر بذر در یک اسکیمای ایزوله تازه (V8_MASTER_ROADMAP.md).
  *
- *   npm run simulate:year -- --seeds=1,2,3 --steps=400 [--check-every=10] [--verbose] [--report=dist/sim.json]
+ *   npm run simulate:year -- --seeds=1,2,3 --steps=400 [--check-every=10] [--verbose] [--close-year] [--report=dist/sim.json]
  *
  * همان محیط تست CI لازم است (DATABASE_URL واقعی، NODE_ENV=test). هر بذر اسکیمای خودش را می‌سازد و در پایان حذف می‌کند،
  * پس ناوردایی‌ها روی پایگاه‌داده‌ای بررسی می‌شوند که فقط داده همین شبیه‌سازی را دارد. کد خروج ۱ یعنی دست‌کم یک نقض.
@@ -20,7 +20,7 @@ function argValue(name: string): string | undefined {
   return process.argv.slice(2).find(a => a.startsWith(prefix))?.slice(prefix.length);
 }
 
-async function runSeed(seed: number, steps: number, checkEvery: number, verbose: boolean): Promise<SimulationResult> {
+async function runSeed(seed: number, steps: number, checkEvery: number, verbose: boolean, closeFiscalYear: boolean): Promise<SimulationResult> {
   const ctx = await setupTestSchema();
   try {
     await bootstrapTestMasterData();
@@ -28,6 +28,7 @@ async function runSeed(seed: number, steps: number, checkEvery: number, verbose:
       seed,
       steps,
       checkEvery,
+      closeFiscalYear,
       log: verbose ? (line: string) => console.log(`  [${seed}] ${line}`) : undefined,
     });
   } finally {
@@ -40,6 +41,8 @@ async function main(): Promise<void> {
   const steps = Number(argValue('steps') ?? 300);
   const checkEvery = Number(argValue('check-every') ?? 10);
   const verbose = process.argv.includes('--verbose');
+  // v10.0.2 (TD-982): approve the year's drafts and close 1404 after the last step, then check I11
+  const closeYear = process.argv.includes('--close-year');
   const reportPath = argValue('report');
 
   await assertRealTestDatabase();
@@ -47,9 +50,16 @@ async function main(): Promise<void> {
   const results: SimulationResult[] = [];
   for (const seed of seeds) {
     console.log(`\n▶ Simulating seed ${seed} (${steps} steps)`);
-    const result = await runSeed(seed, steps, checkEvery, verbose);
+    const result = await runSeed(seed, steps, checkEvery, verbose, closeYear);
     results.push(result);
     console.log(`  Operations: ${result.counts.ok} succeeded, ${result.counts.rejected} rejected, ${result.counts.skipped} without action`);
+    const byOp = new Map<string, Record<'ok' | 'rejected' | 'skipped', number>>();
+    for (const s of result.steps) {
+      const c = byOp.get(s.op) ?? { ok: 0, rejected: 0, skipped: 0 };
+      c[s.outcome]++;
+      byOp.set(s.op, c);
+    }
+    for (const [op, c] of [...byOp].sort()) console.log(`    ${op}: ${c.ok} ok, ${c.rejected} rejected, ${c.skipped} skipped`);
     console.log(`  Final gap between inventory value and the general ledger: ${result.finalInventoryGap} rials`);
     if (result.findings.length === 0) {
       console.log('  ✅ No invariant violated');

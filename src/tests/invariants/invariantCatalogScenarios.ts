@@ -60,10 +60,10 @@ async function invoice(wh: string, itemId: number, partyId: number, date: string
   });
 }
 
-/** A treasury account with a ledger account of its own under 1003 (a posting account, so I18 holds on its rows) */
+/** A treasury account with a subsidiary ledger account of its own under general account 10 (a posting account, so I18 holds) */
 async function cashBox(type: 'cash' | 'bank' = 'cash'): Promise<number> {
   const [ledger] = await orm.insert(accounts).values({
-    code: `1003${tag('')}`, name: `ERP-TEST-MARKER I-01 ${type} ledger`, level: 'subsidiary', parentId: await accountIdByCode('1003'),
+    code: `10${tag('')}`, name: `ERP-TEST-MARKER I-01 ${type} ledger`, level: 'subsidiary', parentId: await accountIdByCode('10'),
     accountType: 'asset', nature: 'debit', isSystem: 0, isActive: 1, isDeleted: 0,
   }).returning({ id: accounts.id });
   const bank = await BankAccountService.createBankAccount({

@@ -50,7 +50,8 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
     const res = await pool.query<StockRow>(
       `SELECT item_id, warehouse_code, current_stock::text AS current_stock FROM item_warehouse_stocks
         WHERE item_id = ANY($1::int[]) AND current_stock > 0 ORDER BY item_id, warehouse_id`,
-      [scope.itemIds]
+      // v10.0.2 (TD-982): only the dated operations' own items; the project items move on business today
+      [items.map(i => i.id)]
     );
     return res.rows;
   };
