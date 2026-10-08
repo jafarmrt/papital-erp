@@ -18,6 +18,7 @@ import {
 } from '../components/project/projectInventoryUtils';
 import { errorMessageOf, formatPersianNumber } from '../utils';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
+import { useProjectVersion } from './useProjectVersion';
 import { directConversionRate } from '../lib/projects/unitConversion';
 import { storedReservationShortages } from '../lib/projects/projectReservationState';
 import type { ReservationShortage } from '../lib/projects/projectReservation';
@@ -36,6 +37,7 @@ export function useProjectInventory(
   onUpdate?: () => void
 ) {
   const [saving, setSaving] = useState(false);
+  const projectVersion = useProjectVersion(project);
   const [activeStepTab, setActiveStepTab] = useState(0);
 
   const [isFinalized, setIsFinalized] = useState<boolean>(!!project.inventory_control?.isFinalized);
@@ -683,7 +685,8 @@ export function useProjectInventory(
           manualPurchaseItems,
           isFinalized: true,
           lastUpdated: new Date().toISOString()
-        }
+        },
+        version: projectVersion.version
       };
 
       const saved = await fetchJson<SavedProjectInventory>(`/api/projects/${project.id}`, {
@@ -692,6 +695,7 @@ export function useProjectInventory(
         body: JSON.stringify(payload)
       });
 
+      projectVersion.remember(saved);
       setIsFinalized(true);
       setFinalizedAt(saved?.inventory_control?.finalizedAt);
       setReservedItems(savedReservedItems(saved));
@@ -721,14 +725,15 @@ export function useProjectInventory(
           manualPurchaseItems,
           isFinalized: false,
           lastUpdated: new Date().toISOString()
-        }
+        },
+        version: projectVersion.version
       };
 
-      await fetchJson(`/api/projects/${project.id}`, {
+      projectVersion.remember(await fetchJson(`/api/projects/${project.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      });
+      }));
 
       setIsFinalized(false);
       setFinalizedAt(undefined);
@@ -761,7 +766,8 @@ export function useProjectInventory(
           manualPurchaseItems,
           isFinalized,
           lastUpdated: new Date().toISOString()
-        }
+        },
+        version: projectVersion.version
       };
 
       const saved = await fetchJson<SavedProjectInventory>(`/api/projects/${project.id}`, {
@@ -770,6 +776,7 @@ export function useProjectInventory(
         body: JSON.stringify(payload)
       });
 
+      projectVersion.remember(saved);
       setReservedItems(savedReservedItems(saved));
       setReservationShortages(storedReservationShortages(saved?.inventory_control));
       toast.success('اطلاعات کنترل موجودی با موفقیت ذخیره شد.');

@@ -14,8 +14,10 @@ import { validate, paramsIdSchema, numericIdString, decimalInput } from '../midd
 import { ProjectService } from '../services/projects.service.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { PRODUCT_PROGRESS_STATUSES, type ProductProgressStatus } from '../lib/projects/progressMatrix.js';
-import { MAX_STAGE_ORDER } from '../lib/projects/projectStatus.js';
+import { MAX_STAGE_ORDER, PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
+import { ValidationError } from '../errors/customErrors.js';
+import { PROJECT_VERSION_REQUIRED_MESSAGE } from '../lib/projects/projectVersion.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -36,13 +38,15 @@ const createProjectSchema = z.object({
     item_id: z.union([z.number(), z.string(), z.null()]).optional(),
     item_code: z.string().optional(),
     item_name: z.string().optional(),
-    quantity: z.union([z.number(), z.string()]).optional(),
+    // v9.0.381 (TD-741): رقم فارسی خوانده می‌شود و متن ۴۰۰ است؛ پیش‌تر «۱۲» ستون مقدار را NaN می‌کرد
+    quantity: decimalInput('مقدار پروژه').optional(),
     unit: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
-    priority: z.string().optional(),
+    // v9.0.380 (TD-754): وضعیت و اولویت فقط از فهرست رابط؛ پیش‌تر متن آزاد («Completed»، «خیلی فوری») ذخیره می‌شد
+    priority: z.enum(PROJECT_PRIORITIES).optional(),
     description: z.string().optional(),
-    initial_stages: z.array(z.record(z.string(), z.unknown())).optional(),
+    initial_stages: z.array(z.object({ status: z.enum(STAGE_STATUSES).optional() }).catchall(z.unknown())).optional(),
     products: z.array(z.unknown()).optional(),
     inventory_control: z.unknown().optional(),
     inventoryControl: z.unknown().optional(),
@@ -54,8 +58,12 @@ const createProjectSchema = z.object({
   })
 });
 
+const recordVersion = z.coerce.number().int('نسخه رکورد پروژه باید عدد صحیح باشد').positive('نسخه رکورد پروژه باید مثبت باشد');
+
 const updateProjectSchema = z.object({
   body: z.object({
+    // v9.0.385 (TD-742، تصمیم ت۳ الف): نسخه‌ای که فرم از آن ساخته شده الزامی است؛ ناهمخوانی ۴۰۹ OCC_CONFLICT
+    version: recordVersion.optional(),
     title: z.string().optional(),
     project_code: z.string().optional(),
     customer_id: z.union([z.number(), z.string(), z.null()]).optional(),
@@ -63,12 +71,13 @@ const updateProjectSchema = z.object({
     item_id: z.union([z.number(), z.string(), z.null()]).optional(),
     item_code: z.string().optional(),
     item_name: z.string().optional(),
-    quantity: z.union([z.number(), z.string()]).optional(),
+    // v9.0.381 (TD-741): رقم فارسی خوانده می‌شود و متن ۴۰۰ است؛ پیش‌تر «۱۲» ستون مقدار را NaN می‌کرد
+    quantity: decimalInput('مقدار پروژه').optional(),
     unit: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
-    status: z.string().optional(),
-    priority: z.string().optional(),
+    status: z.enum(PROJECT_STATUSES).optional(),
+    priority: z.enum(PROJECT_PRIORITIES).optional(),
     description: z.string().optional(),
     products: z.array(z.unknown()).optional(),
     inventory_control: z.unknown().optional(),
@@ -78,7 +87,9 @@ const updateProjectSchema = z.object({
     custom_stages: z.array(z.unknown()).optional(),
     customStages: z.array(z.unknown()).optional(),
     attachments: z.array(z.unknown()).optional(),
-  }),
+    // v9.0.384 (TD-740، تصمیم ت۲ الف): مراحل با ویرایش پروژه تغییر نمی‌کنند؛ فرستادن آن‌ها ۴۲۲ است، نه دور ریختن بی‌صدا
+    initial_stages: z.unknown().optional(),
+  }).refine(b => b.version !== undefined, { message: PROJECT_VERSION_REQUIRED_MESSAGE, path: ['version'] }),
   params: z.object({
     id: z.string().regex(/^\d+$/, 'شناسه پروژه نامعتبر است')
   })
@@ -103,12 +114,13 @@ const addProjectToInventorySchema = z.object({
     }
     return val;
   }, z.object({
+    // v9.0.381 (TD-741): مقدار و بها با رقم فارسی خوانده می‌شوند و متن ۴۰۰ است؛ ردیف بی مقدار مثبت ۴۲۲ می‌گیرد، نه رد بی‌صدا
     itemsToAdd: z.array(z.object({
       itemId: z.union([z.number(), z.string()]),
-      quantity: z.union([z.number(), z.string()]),
+      quantity: decimalInput('مقدار تحویل'),
       location: z.string().optional(),
       notes: z.string().optional(),
-      unitPrice: z.union([z.number(), z.string()]).optional()
+      unitPrice: decimalInput('بهای واحد تحویل').optional()
     })).min(1, 'حداقل یک محصول برای ورود به انبار الزامی است'),
     markCompleted: z.boolean().optional(),
     // v8.0.72 (TD-327): دلیل تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه
@@ -122,7 +134,7 @@ const addProjectToInventorySchema = z.object({
 const createProjectStageSchema = z.object({
   body: z.object({
     title: z.string().min(1, 'عنوان مرحله الزامی است'),
-    status: z.string().optional(),
+    status: z.enum(STAGE_STATUSES).optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
     assigned_personnel: z.array(z.unknown()).optional(),
@@ -144,7 +156,7 @@ const updateProjectStageSchema = z.object({
   body: z.object({
     title: z.string().optional(),
     stage_order: stageOrderInput.optional(),
-    status: z.string().optional(),
+    status: z.enum(STAGE_STATUSES).optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
     assigned_personnel: z.array(z.unknown()).optional(),
@@ -306,6 +318,7 @@ export interface ProjectLike {
   attachments?: unknown;
   isDeleted?: number | null;
   is_deleted?: number | null;
+  version?: number | null;
   itemImage?: string | null;
   itemThumbnail?: string | null;
   item_image?: string | null;
@@ -374,6 +387,8 @@ export function formatProject(
     customStages,
     attachments,
     isDeleted,
+    // v9.0.385 (TD-742): نسخه‌ای که ویرایش بعدی می‌فرستد
+    version: p.version ?? 1,
     itemImage,
     stages,
     totalStages,
@@ -574,12 +589,18 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
+    if (req.body.initial_stages !== undefined) {
+      throw new ValidationError(
+        'مراحل پروژه با ویرایش پروژه تغییر نمی‌کنند؛ افزودن، تغییر نام، جابه‌جایی و حذف مرحله را در بخش مراحل جزئیات پروژه انجام دهید.',
+        undefined, 'PROJECT_STAGES_READ_ONLY'
+      );
+    }
 
     const { 
       title, customer_id, customer_name, item_id, item_code, item_name, 
       quantity, unit, start_date, end_date, status, priority, description,
       products, inventory_control, inventoryControl, stage_schedules, stageSchedules,
-      custom_stages, customStages, attachments, project_code
+      custom_stages, customStages, attachments, project_code, version
     } = req.body;
 
     // v9.0.364 (TD-739): بررسی تکمیل با قاعده مشترک ماتریس درون تراکنش updateProject است
@@ -602,22 +623,13 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
       inventoryControl: inventoryControl ?? inventory_control,
       stageSchedules: stageSchedules ?? stage_schedules,
       customStages: customStages ?? custom_stages,
-      attachments
+      attachments,
+      expectedVersion: version
     }, undefined, { req });
 
     const rawStages = await orm.select().from(projectStages).where(and(eq(projectStages.projectId, id), eq(projectStages.isDeleted, 0))).orderBy(asc(projectStages.stageOrder));
 
-    const currentUser = req.user?.username || 'سیستم';
-    await logActivity({
-      userId: req.user?.id,
-      username: currentUser,
-      userFullName: req.user?.full_name || currentUser,
-      action: 'UPDATE',
-      entity: 'پروژه تولید',
-      entityId: String(id),
-      description: `بروزرسانی مشخصات پروژه تولید ${updated.projectCode} (${updated.title})`
-    });
-
+    // v9.0.383 (TD-757): ردیف ممیزی ویرایش با پیش و پس درون تراکنش updateProject نوشته می‌شود
     res.json(formatProject(updated, rawStages));
   } catch (err) {
     throw err;

@@ -258,14 +258,14 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
       if (await logCount(w4) !== 0) problems.push(`refused schedule rows saved ${await logCount(w4)} logs`);
 
       // 5) saving the schedule from the browser neither drops nor forges a link
-      const [before] = await orm.select({ s: productionProjects.stageSchedules }).from(productionProjects).where(eq(productionProjects.id, project));
+      const [before] = await orm.select({ s: productionProjects.stageSchedules, v: productionProjects.version }).from(productionProjects).where(eq(productionProjects.id, project));
       const sent = JSON.parse(JSON.stringify(before?.s ?? {})) as Record<string, Record<string, { tasks: Array<Record<string, unknown>> }>>;
       for (const t of sent['1']['prod-main'].tasks) {
         if (t.id === 'row-a') delete t.pieceworkLogId;
         if (t.id === 'row-c') t.pieceworkLogId = firstId;
       }
       sent['1']['prod-main'].tasks.push({ id: 'row-d', taskId: task, taskTitle: 'schedule row', assignedPersonnelId: w4, quantity: 1, isLoggedToPiecework: true });
-      const put = await admin.put(`/api/projects/${project}`, { stage_schedules: sent });
+      const put = await admin.put(`/api/projects/${project}`, { stage_schedules: sent, version: before?.v });
       if (put.status !== 200) problems.push(`saving the schedule answered ${put.status} ${brief(put.body)}`);
       const [rowA, rowC, rowD] = [await rowOf('row-a'), await rowOf('row-c'), await rowOf('row-d')];
       if (Number(rowA?.pieceworkLogId) !== firstId) problems.push(`saving the schedule without row A's link left ${String(rowA?.pieceworkLogId)}, expected ${firstId}`);

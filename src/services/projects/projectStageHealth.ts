@@ -91,3 +91,67 @@ export function buildProjectStageHealthTest(integrity: ProjectStageIntegrity): H
     },
   };
 }
+
+export interface ProjectFreeTextValue {
+  kind: 'project_status' | 'project_priority' | 'stage_status';
+  id: number;
+  projectId: number;
+  projectCode: string;
+  value: string;
+}
+
+/**
+ * v9.0.380 (TD-754): پروژه و مرحله‌ای که پیش از فهرست‌های بسته وضعیت یا اولویتی بیرون از رابط گرفته‌اند (مثل «Completed»)؛
+ * از همه پالایه‌های وضعیت بیرون می‌افتند. خودکار تغییر نمی‌کنند و فقط فهرست می‌شوند.
+ */
+export async function findProjectFreeTextValues(statuses: readonly string[], priorities: readonly string[], stageStatuses: readonly string[], db: DbExecutor = orm): Promise<ProjectFreeTextValue[]> {
+  const list = (values: readonly string[]) => sql.join(values.map(v => sql`${v}`), sql`, `);
+  return rowsOf(await db.execute(sql`
+    SELECT 'project_status' AS kind, p.id, p.id AS project_id, p.project_code, COALESCE(p.status, '') AS value
+      FROM production_projects p WHERE p.is_deleted = 0 AND COALESCE(p.status, '') NOT IN (${list(statuses)})
+    UNION ALL
+    SELECT 'project_priority', p.id, p.id, p.project_code, COALESCE(p.priority, '')
+      FROM production_projects p WHERE p.is_deleted = 0 AND COALESCE(p.priority, '') NOT IN (${list(priorities)})
+    UNION ALL
+    SELECT 'stage_status', s.id, s.project_id, COALESCE(p.project_code, ''), COALESCE(s.status, '')
+      FROM project_stages s JOIN production_projects p ON p.id = s.project_id
+      WHERE s.is_deleted = 0 AND p.is_deleted = 0 AND COALESCE(s.status, '') NOT IN (${list(stageStatuses)})
+    ORDER BY 3, 1, 2
+  `)).map(r => ({
+    kind: r.kind as ProjectFreeTextValue['kind'],
+    id: Number(r.id),
+    projectId: Number(r.project_id),
+    projectCode: String(r.project_code ?? ''),
+    value: String(r.value ?? ''),
+  }));
+}
+
+const FREE_TEXT_KIND_LABELS: Record<ProjectFreeTextValue['kind'], string> = {
+  project_status: 'وضعیت پروژه',
+  project_priority: 'اولویت پروژه',
+  stage_status: 'وضعیت مرحله',
+};
+
+export function buildProjectValueHealthTest(values: ProjectFreeTextValue[]): HealthCheckTestResult {
+  const count = values.length;
+  return {
+    id: 'project_status_values',
+    category: 'system',
+    title: 'وضعیت و اولویت پروژه بیرون از فهرست',
+    description: 'وضعیت و اولویت پروژه و وضعیت مرحله فقط از فهرست رابط پذیرفته می‌شوند. پیش از نسخه ۹.۰.۳۸۰ متن آزاد هم ذخیره می‌شد و چنین پروژه‌ای از پالایه‌های وضعیت بیرون می‌افتاد؛ این ردیف‌ها خودکار تغییر نمی‌کنند',
+    status: count > 0 ? 'warning' : 'healthy',
+    scoreImpact: -Math.min(5, count),
+    count,
+    message: count > 0
+      ? `${toPersianDigits(count)} پروژه یا مرحله وضعیت یا اولویتی بیرون از فهرست دارد؛ آن را در صفحه پروژه از فهرست انتخاب و ذخیره کنید.`
+      : 'وضعیت و اولویت همه پروژه‌ها و وضعیت همه مراحل از فهرست رابط است.',
+    items: values.map(v => ({
+      id: v.id,
+      code: v.projectCode || `پروژه #${toPersianDigits(v.projectId)}`,
+      title: `${FREE_TEXT_KIND_LABELS[v.kind]}: «${v.value}»`,
+      subtitle: v.kind === 'stage_status' ? `مرحله #${toPersianDigits(v.id)}` : '',
+      details: 'مقدار بیرون از فهرست رابط (TD-754).',
+    })),
+    metrics: { freeTextValues: count },
+  };
+}

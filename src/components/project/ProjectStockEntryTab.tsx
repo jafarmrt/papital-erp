@@ -203,8 +203,9 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       return;
     }
 
-    const qty = producedQuantities[product.id] || product.quantity || 1;
-    if (qty <= 0) {
+    // v9.0.381 (TD-741): مقدار صفر خطاست و به مقدار برنامه پروژه برنمی‌گردد
+    const qty = producedQuantities[product.id] ?? product.quantity ?? 1;
+    if (!(qty > 0)) {
       toast.error('مقدار تحویل باید بزرگتر از صفر باشد');
       return;
     }
@@ -251,10 +252,16 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
 
   // Batch Delivery for selected items or all valid items
   const handleBatchAddToInventory = async (targetProducts: ProjectProductItem[]) => {
+    // v9.0.381 (TD-741): محصول با مقدار صفر یا نامعتبر کل تحویل را نگه می‌دارد و بی‌صدا کنار گذاشته نمی‌شود
+    const zeroQty = targetProducts.find(p => !((producedQuantities[p.id] ?? p.quantity ?? 1) > 0));
+    if (zeroQty) {
+      toast.error(`مقدار تحویل «${zeroQty.item_name}» باید بزرگ‌تر از صفر باشد`);
+      return;
+    }
     const validItems = targetProducts
       .map(p => {
         const itemId = p.item_id || project.item_id;
-        const qty = producedQuantities[p.id] || p.quantity || 1;
+        const qty = producedQuantities[p.id] ?? p.quantity ?? 1;
         const cost = unitCosts[p.id];
         return {
           itemId: Number(itemId),

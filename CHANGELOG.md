@@ -19,6 +19,24 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.385 — Project Optimistic Lock
+- **Project Optimistic Lock (TD-742, decision t3 A):** two users saving one project overwrote each other silently; `PUT /projects/:id` now requires the `version` the form was built from (400 without it), refuses a stale one with 409 `OCC_CONFLICT`, and every save, matrix status change and delivery completion raises the version; the edit form and the project tabs send and track it.
+
+### v9.0.384 — Stages Read-Only in the Project Edit Form
+- **Stages Read-Only in the Project Edit Form (TD-740, decision t2 A):** stages edited in «ویرایش پروژه» answered 200 and were silently dropped; the edit form now shows them read-only with a button to the stages section of the project detail, sends no `initial_stages`, and `PUT /projects/:id` refuses stages with 422 `PROJECT_STAGES_READ_ONLY`.
+
+### v9.0.383 — Project and Stage Audit Rows
+- **Project and Stage Audit Rows (TD-757):** a project edit was logged with `details: {}` outside its transaction and stage add, edit and delete wrote no audit row; `projectAudit.ts` now logs the project edit with before and after of the changed fields and every stage write under «مرحله پروژه تولید» (retained), each with the write's `tx`.
+
+### v9.0.382 — One Clock for Stage Completion
+- **One Clock for Stage Completion (TD-756):** a stage edit wrote `completed_at` in UTC with Z while the matrix sync and the matrix tick wrote the Tehran wall clock without a zone (210 minutes apart); every path now writes the server UTC time (`systemNowUtcIso`) through `stageCompletedAt`, a completed stage keeps its time and a reopened stage has none.
+
+### v9.0.381 — Project Delivery and Quantity Input
+- **Project Delivery and Quantity Input (TD-741):** a delivery quantity in Persian digits or below zero answered 200 «با موفقیت افزوده شدند» with nothing recorded, a Persian-digit unit price fell back to the WAC and a Persian-digit project quantity was stored as NaN; delivery and project quantities and prices now go through `decimalInput`, an invalid line is 422 `PROJECT_DELIVERY_LINE_INVALID` and a non-positive project quantity 422 `PROJECT_QUANTITY_INVALID`.
+
+### v9.0.380 — Project Status and Priority Lists
+- **Project Status and Priority Lists (TD-754):** a project status or priority and a stage status were free text («Completed», «خیلی فوری» and «تمام» were stored, and such a project fell out of every status filter); they are now `z.enum` of the UI lists in `lib/projects/projectStatus.ts` (400 otherwise), and the financial health check lists legacy values (`project_status_values`) without rewriting them.
+
 ### v9.0.379 — Rule and Webhook Counters Under the Row Lock
 - **Rule and subscription counters (TD-718):** a rule's execution count and a webhook subscription's delivery counters were written from the row read before the action, so concurrent executions were lost (10 runs counted 3); they are now read under the row lock and written in the transaction of the attempt's log row.
 

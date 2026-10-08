@@ -81,6 +81,12 @@ export async function storedReservation(h: Harness, projectId: number): Promise<
   return Array.isArray(row?.r) ? (row.r as Array<Record<string, unknown>>) : [];
 }
 
+/** v9.0.385 (TD-742): a project edit sends the stored version it was built from */
+async function putProject(h: Harness, projectId: number, body: Record<string, unknown>) {
+  const [row] = await h.q('SELECT version FROM production_projects WHERE id = $1', [projectId]);
+  return h.put(`/api/projects/${projectId}`, { ...body, version: Number(row?.version) });
+}
+
 async function postDoc(h: Harness, f: Fixture, type: string, status: string, itemId: number, quantity: number, price = 5_000) {
   return h.post('/api/documents', f.doc(type, status, [{ itemId, quantity, unit_price: price, location: f.wh }]));
 }
@@ -137,7 +143,7 @@ async function finalizedProjectOnlyCase(h: Harness, wrong: string[]): Promise<st
   const invB = { sections: globalSection([await material(b)]), manualPurchaseItems: [], isFinalized: true };
   const pb = await createProject(h, invB);
   if ((await reservedOf(b)).project !== 8) wrong.push(`a finalized project needing 8 of 10 reserves ${(await reservedOf(b)).project}, expected 8`);
-  const unfreeze = await h.put(`/api/projects/${pb}`, { inventory_control: { ...invB, isFinalized: false } });
+  const unfreeze = await putProject(h, pb, { inventory_control: { ...invB, isFinalized: false } });
   if (unfreeze.status !== 200) throw new Error(`setup: unfreeze answered ${brief(unfreeze)}`);
   await expectFree(b, 'the same project after leaving the frozen state', 5);
 
@@ -215,7 +221,7 @@ async function unitConversionCase(h: Harness, wrong: string[]): Promise<string> 
     wrong.push(`creating a finalized project with 2 kilograms of a gram item and no conversion answered ${brief(createFinal)}, expected 422 PROJECT_RESERVATION_UNIT_MISMATCH`);
   }
   const pc = await createProject(h, { ...invC, isFinalized: false });
-  const finalizeC = await h.put(`/api/projects/${pc}`, { inventory_control: { ...invC, isFinalized: true } });
+  const finalizeC = await putProject(h, pc, { inventory_control: { ...invC, isFinalized: true } });
   if (finalizeC.status !== 422 || (finalizeC.body as { code?: string })?.code !== 'PROJECT_RESERVATION_UNIT_MISMATCH') {
     wrong.push(`finalizing it answered ${brief(finalizeC)}, expected 422 PROJECT_RESERVATION_UNIT_MISMATCH`);
   }
@@ -259,7 +265,7 @@ async function freeStockAtFinalizeCase(h: Harness, wrong: string[]): Promise<str
     return globalSection([{ itemCode: it.code, name: it.name, unit: 'عدد', requiredQty: qty }]);
   };
   const finalize = async (projectId: number, sections: unknown) =>
-    h.put(`/api/projects/${projectId}`, { inventory_control: { sections, manualPurchaseItems: [], isFinalized: true } });
+    putProject(h, projectId, { inventory_control: { sections, manualPurchaseItems: [], isFinalized: true } });
 
   // (a) stock 30, project A then project B each needing 30: A reserves 30, B reserves nothing and stores a shortage of 30
   const a = await f.item(30);
@@ -297,7 +303,7 @@ async function freeStockAtFinalizeCase(h: Harness, wrong: string[]): Promise<str
   const forged = await createProject(h, { sections: secB, manualPurchaseItems: [], isFinalized: false, reservationShortages: [{ itemId: b, shortQty: 99 }] });
   const [storedForged] = await h.q(`SELECT inventory_control->'reservationShortages' AS s FROM production_projects WHERE id = $1`, [forged]);
   if (storedForged?.s != null) wrong.push(`a shortage sent in the body was stored: ${JSON.stringify(storedForged.s)}`);
-  const unfreeze = await h.put(`/api/projects/${pb}`, { inventory_control: { sections: secA, manualPurchaseItems: [], isFinalized: false } });
+  const unfreeze = await putProject(h, pb, { inventory_control: { sections: secA, manualPurchaseItems: [], isFinalized: false } });
   if (unfreeze.status !== 200 || shortagesOf(unfreeze.body).length !== 0) wrong.push(`unfreezing B answered ${brief(unfreeze)}, expected 200 without a shortage`);
 
   // (d) two projects finalized at the same moment share stock 30 instead of both reserving it

@@ -37,7 +37,8 @@ import {
 } from '../projects/projectReservationHealth.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
-import { buildProjectStageHealthTest, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
+import { buildProjectStageHealthTest, buildProjectValueHealthTest, findProjectFreeTextValues, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
+import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/projects/projectStatus.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
@@ -1226,6 +1227,10 @@ export class FinancialHealthService {
     const retiredRuleTest = buildRetiredRuleActionHealthTest(await findRetiredActionRules());
     overallScore += retiredRuleTest.scoreImpact;
     tests.push(retiredRuleTest);
+    // آزمون ۴۸: v9.0.380 (TD-754) وضعیت و اولویت پروژه و وضعیت مرحله بیرون از فهرست رابط (فقط فهرست)
+    const projectValueTest = buildProjectValueHealthTest(await findProjectFreeTextValues(PROJECT_STATUSES, PROJECT_PRIORITIES, STAGE_STATUSES));
+    overallScore += projectValueTest.scoreImpact;
+    tests.push(projectValueTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
