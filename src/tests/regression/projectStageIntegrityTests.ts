@@ -223,5 +223,34 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
     }));
   }
 
+  const inputId = 'reg_project_stage_input_td_755';
+  if (shouldRun(inputId, 'td755', 'projects', 'package11')) {
+    await runCase(results, inputId, 'v9.0.337: an invalid stage number or percent is a Persian 400 without SQL text, a number held by another stage is 409 STAGE_ORDER_TAKEN, and a renumbered stage keeps its ticks (TD-755)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const item = await createTestItem({ type: 'product' });
+      const manual = await newProject(api, {});
+      const stageUrl = (projectId: number, stageId: number) => `/api/projects/${projectId}/stages/${stageId}`;
+
+      for (const body of [{ stage_order: 'abc' }, { progress_percent: 'نیمه' }, { progress_percent: 150 }, { stage_order: 0 }]) {
+        const res = await api.put(stageUrl(manual.id, manual.stages[0].id), body);
+        if (res.status !== 400 || JSON.stringify(res.body).includes('Failed query')) problems.push(`${brief(body)} answered ${res.status} ${brief(res.body)}, expected 400 without SQL text`);
+      }
+      const taken = await api.put(stageUrl(manual.id, manual.stages[1].id), { stage_order: 1 });
+      if (taken.status !== 409 || taken.body?.code !== 'STAGE_ORDER_TAKEN') problems.push(`giving stage 2 the number 1 answered ${taken.status} ${brief(taken.body)}, expected 409 STAGE_ORDER_TAKEN`);
+      const persian = await api.put(stageUrl(manual.id, manual.stages[2].id), { stage_order: '۸' });
+      if (persian.status !== 200 || Number(persian.body?.stage_order ?? persian.body?.stageOrder) !== 8) problems.push(`a Persian-digit number answered ${persian.status} ${brief(persian.body)}, expected 200 with number 8`);
+
+      const matrix = await newProject(api, { products: [{ itemId: item.id, qty: 1 }] });
+      await tickAll(api, matrix.id, item.id, [2]);
+      const moved = await api.put(stageUrl(matrix.id, matrix.stages[1].id), { stage_order: 7 });
+      const view = await api.get(`/api/projects/${matrix.id}/product-progress`);
+      const cell = (view.body?.data?.products?.[0]?.progress ?? []).find((c: Row) => Number(c.stage_order) === 7);
+      if (moved.status !== 200 || cell?.status !== 'completed') problems.push(`renumbering the ticked stage to 7 answered ${moved.status} and left its cell ${brief(cell)}, expected the tick to follow`);
+      assertNoProblems(problems);
+      return 'invalid input 400; taken number 409; Persian digits read; ticks follow a renumbered stage';
+    }));
+  }
+
   return results;
 }

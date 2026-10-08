@@ -32,6 +32,9 @@ export const STAGE_STATUS_LABELS: Record<StageStatus, string> = {
   blocked: 'متوقف / مانع',
 };
 
+/** بزرگ‌ترین شماره مرحله (ستون integer؛ v9.0.337، TD-755) */
+export const MAX_STAGE_ORDER = 10000;
+
 /** وضعیت‌هایی که فقط کاربر تعیین می‌کند و همگام‌ساز ماتریس تغییر نمی‌دهد */
 export const MATRIX_HELD_PROJECT_STATUSES: readonly string[] = ['paused', 'cancelled'];
 

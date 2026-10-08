@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.337 — v9.0.337 — Stage Number and Percent Input
+- **Stage Number and Percent Input (TD-755):** a text stage number or percent answered 500 with the SQL text and a manual duplicate number was stored; the stage route now reads them with `decimalInput` (a positive whole number, a whole percent 0 to 100, Persian digits accepted), a number another stage holds is 409 `STAGE_ORDER_TAKEN`, and a renumbered stage carries its matrix ticks.
+
 ### v9.0.336 — v9.0.336 — Stage Numbers Never Reused
 - **Stage Numbers Never Reused (TD-737, TD-753):** a new stage took «live stages + 1», so after a deletion it reused a number and inherited the deleted stage's ticks (a project stayed completed with no work) and two stages could share a number; numbering now follows every number the project used under the project lock, a deleted stage drops its ticks, and migration 0080 adds a partial unique index and a foreign key to the project.
 

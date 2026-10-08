@@ -1,7 +1,7 @@
 import { eq, and, asc, ne, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { productionProjects, projectStages, items, customers, projectProductStageProgress, documents, projectBomAllocations } from '../db/schema.js';
-import { AppError, BusinessLogicError, NotFoundError, ValidationError } from '../errors/customErrors.js';
+import { AppError, BusinessLogicError, ConflictError, NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { deliveredProjectQuantities, describeOverDeliveries, findOverDeliveries, plannedProjectProducts, type ProjectOverDelivery } from './projects/projectDeliveryCap.js';
 import { withOrderedLocks } from '../lib/lockOrder.js';
 import { DocumentService } from './document.service.js';
@@ -15,6 +15,8 @@ import { hasMatrixProducts, matrixProducts } from '../lib/projects/progressMatri
 import { loadProjectProgressMatrix, productProgressView, progressMatrixStatus, type ProgressMatrixStatus } from './projects/projectProgressMatrix.js';
 import { actorName, lockLiveProject, syncProjectFromMatrix, type ProjectActor, type ProjectStatusSyncResult, type SyncedStage } from './projects/projectStatusSync.js';
 import { logActivity } from '../lib/auditLogger.js';
+import { MAX_STAGE_ORDER } from '../lib/projects/projectStatus.js';
+import { toPersianDigits } from '../utils/persianNumber.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -444,6 +446,37 @@ export class ProjectService {
   }
 
   /**
+   * v9.0.337 (TD-755): شماره تازه مرحله، زیر قفل ردیف پروژه. شماره‌ای که مرحله زنده دیگری دارد یا ردیف پیشرفت مرحله‌ای
+   * حذف‌شده روی آن مانده است با ۴۰۹ `STAGE_ORDER_TAKEN` رد می‌شود (پیش‌تر دو مرحله شماره ۱ می‌گرفتند)، و تیک‌های زنده
+   * مرحله با آن جابه‌جا می‌شوند، مگر مرحله زنده دیگری (داده قدیمی) شماره پیشین را هم دارد.
+   */
+  private static async moveStageOrder(tx: DbExecutor, stage: typeof projectStages.$inferSelect, target: number): Promise<number> {
+    if (!Number.isSafeInteger(target) || target < 1 || target > MAX_STAGE_ORDER) {
+      throw new ValidationError(`شماره مرحله باید عدد صحیح ۱ تا ${toPersianDigits(MAX_STAGE_ORDER)} باشد`, { stageOrder: target }, 'STAGE_ORDER_INVALID');
+    }
+    const [holder] = await tx.select({ id: projectStages.id, title: projectStages.title }).from(projectStages)
+      .where(and(eq(projectStages.projectId, stage.projectId), eq(projectStages.stageOrder, target), eq(projectStages.isDeleted, 0), ne(projectStages.id, stage.id)))
+      .limit(1);
+    if (holder) {
+      throw new ConflictError(`شماره ${toPersianDigits(target)} به مرحله «${holder.title}» همین پروژه داده شده است؛ شماره دیگری انتخاب کنید.`, { stageOrder: target, stageId: holder.id }, 'STAGE_ORDER_TAKEN');
+    }
+    const [usedByDeleted] = await tx.select({ id: projectProductStageProgress.id }).from(projectProductStageProgress)
+      .where(and(eq(projectProductStageProgress.projectId, stage.projectId), eq(projectProductStageProgress.stageOrder, target)))
+      .limit(1);
+    if (usedByDeleted) {
+      throw new ConflictError(`شماره ${toPersianDigits(target)} پیش‌تر به مرحله‌ای حذف‌شده از این پروژه داده شده و پیشرفت آن ثبت مانده است؛ شماره دیگری انتخاب کنید.`, { stageOrder: target }, 'STAGE_ORDER_TAKEN');
+    }
+    const [sharer] = await tx.select({ id: projectStages.id }).from(projectStages)
+      .where(and(eq(projectStages.projectId, stage.projectId), eq(projectStages.stageOrder, stage.stageOrder), eq(projectStages.isDeleted, 0), ne(projectStages.id, stage.id)))
+      .limit(1);
+    if (!sharer) {
+      await tx.update(projectProductStageProgress).set({ stageOrder: target })
+        .where(and(eq(projectProductStageProgress.projectId, stage.projectId), eq(projectProductStageProgress.stageOrder, stage.stageOrder), eq(projectProductStageProgress.isDeleted, 0)));
+    }
+    return target;
+  }
+
+  /**
    * v9.0.333 (TD-739): وضعیت ماتریس پیشرفت با قاعده مشترک (محصولات پروژه، وگرنه کالای اصلی)
    */
   static async getProgressMatrixStatus(projectId: number, executor: DbExecutor = orm): Promise<ProgressMatrixStatus> {
@@ -521,7 +554,12 @@ export class ProjectService {
 
       const updateData: Record<string, unknown> = {};
       if (data.title !== undefined) updateData.title = data.title.trim();
-      if (data.stageOrder !== undefined) updateData.stageOrder = Number(data.stageOrder);
+      if (data.stageOrder !== undefined && Number(data.stageOrder) !== existing.stageOrder) {
+        updateData.stageOrder = await ProjectService.moveStageOrder(tx, existing, Number(data.stageOrder));
+      }
+      if (data.progressPercent !== undefined && !(Number.isInteger(Number(data.progressPercent)) && Number(data.progressPercent) >= 0 && Number(data.progressPercent) <= 100)) {
+        throw new ValidationError('درصد پیشرفت مرحله باید عدد صحیح ۰ تا ۱۰۰ باشد', { progressPercent: data.progressPercent }, 'STAGE_PERCENT_INVALID');
+      }
       if (data.status !== undefined) {
         updateData.status = data.status;
         if (data.status === 'completed') {

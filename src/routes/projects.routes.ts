@@ -10,10 +10,12 @@ import { parsePickListLimit } from '../lib/pagination.js';
 import { listProjectPicks } from '../services/projects/projectPickList.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
 import { ProjectService } from '../services/projects.service.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { PRODUCT_PROGRESS_STATUSES, type ProductProgressStatus } from '../lib/projects/progressMatrix.js';
+import { MAX_STAGE_ORDER } from '../lib/projects/projectStatus.js';
+import { toPersianDigits } from '../utils/persianNumber.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -132,16 +134,22 @@ const createProjectStageSchema = z.object({
   })
 });
 
+// v9.0.337 (TD-755): شماره مرحله عدد صحیح مثبت و درصد پیشرفت عدد صحیح ۰ تا ۱۰۰؛ پیش‌تر متن نامعتبر ۵۰۰ با متن SQL می‌داد
+const stageOrderInput = decimalInput('شماره مرحله')
+  .refine(v => v === undefined || (/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= MAX_STAGE_ORDER), `شماره مرحله باید عدد صحیح ۱ تا ${toPersianDigits(MAX_STAGE_ORDER)} باشد`);
+const stagePercentInput = decimalInput('درصد پیشرفت مرحله')
+  .refine(v => v === undefined || (/^\d+$/.test(v) && Number(v) <= 100), 'درصد پیشرفت مرحله باید عدد صحیح ۰ تا ۱۰۰ باشد');
+
 const updateProjectStageSchema = z.object({
   body: z.object({
     title: z.string().optional(),
-    stage_order: z.union([z.number(), z.string()]).optional(),
+    stage_order: stageOrderInput.optional(),
     status: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
     assigned_personnel: z.array(z.unknown()).optional(),
     required_resources: z.array(z.unknown()).optional(),
-    progress_percent: z.union([z.number(), z.string()]).optional(),
+    progress_percent: stagePercentInput.optional(),
     notes: z.string().optional()
   }),
   params: z.object({
@@ -719,13 +727,13 @@ router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit')
     // v9.0.334 (TD-738): ویرایش مرحله و همگام‌سازی مراحل و وضعیت پروژه در یک تراکنش زیر قفل پروژه
     const updatedStage = await ProjectService.updateStage(projectId, stageId, {
       title,
-      stageOrder: stage_order,
+      stageOrder: stage_order === undefined ? undefined : Number(stage_order),
       status,
       startDate: start_date,
       endDate: end_date,
       assignedPersonnel: assigned_personnel,
       requiredResources: required_resources,
-      progressPercent: progress_percent,
+      progressPercent: progress_percent === undefined ? undefined : Number(progress_percent),
       notes
     }, { req });
 
