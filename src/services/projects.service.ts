@@ -19,6 +19,8 @@ import { logProjectUpdate, logStageChange } from './projects/projectAudit.js';
 import { MAX_STAGE_ORDER } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
 import { normalizeDecimalString } from '../lib/numericInput.js';
+import { nextVersion } from '../lib/occHelper.js';
+import { assertProjectVersion, projectVersionConflict } from './projects/projectVersion.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -63,6 +65,8 @@ export interface UpdateProjectInput {
   stageSchedules?: unknown;
   customStages?: unknown[];
   attachments?: unknown[];
+  /** v9.0.343 (TD-742): نسخه‌ای که فرم از آن ساخته شده؛ مسیر `PUT /projects/:id` همیشه می‌فرستد */
+  expectedVersion?: number;
 }
 
 export interface AddProjectToInventoryInput {
@@ -235,8 +239,11 @@ export class ProjectService {
     if (!existing) {
       throw new NotFoundError('پروژه یافت نشد');
     }
+    // v9.0.343 (TD-742، تصمیم ت۳ الف): ویرایش از نسخه کهنه ۴۰۹ است و هر ذخیره نسخه را یکی بالا می‌برد؛ پیش‌تر ذخیره دوم دو
+    // کاربر ذخیره اول را بی‌صدا پاک می‌کرد
+    if (input.expectedVersion !== undefined) assertProjectVersion(existing, input.expectedVersion);
 
-    const updateData: Record<string, unknown> = {};
+    const updateData: Record<string, unknown> = { version: nextVersion(existing.version) };
     if (input.title !== undefined) updateData.title = input.title.trim();
 
     if (input.projectCode !== undefined && input.projectCode !== null && String(input.projectCode).trim()) {
@@ -286,7 +293,9 @@ export class ProjectService {
       updateData.attachments = await AttachmentStorageService.normalizeForRecord(executor, 'production_project', id, input.attachments);
     }
 
-    const [current] = await executor.update(productionProjects).set(updateData).where(eq(productionProjects.id, id)).returning();
+    const [current] = await executor.update(productionProjects).set(updateData)
+      .where(and(eq(productionProjects.id, id), eq(productionProjects.version, existing.version))).returning();
+    if (!current) throw projectVersionConflict(id, existing.version);
 
     // v9.0.333 (TD-739): تکمیل دستی پروژه با همان قاعده ماتریس، درون همین تراکنش و روی ردیف ذخیره‌شده
     if (input.status === 'completed' && existing.status !== 'completed') {
@@ -427,7 +436,7 @@ export class ProjectService {
 
       if (input.markCompleted) {
         ProjectService.assertMatrixCompleted(await ProjectService.getProgressMatrixStatus(id, tx));
-        await tx.update(productionProjects).set({ status: 'completed' }).where(eq(productionProjects.id, id));
+        await tx.update(productionProjects).set({ status: 'completed', version: nextVersion(proj.version) }).where(eq(productionProjects.id, id));
       }
 
       return { addedCount: lines.length, projectCode: proj.projectCode, documentId, refNumber, overDeliveries };

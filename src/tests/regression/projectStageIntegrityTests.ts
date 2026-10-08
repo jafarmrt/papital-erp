@@ -32,6 +32,10 @@ export async function newProject(api: Client, opts: ProjectOptions): Promise<{ i
 
 export const projectStatus = async (id: number) => String((await q('SELECT status FROM production_projects WHERE id = $1', [id]))[0]?.status);
 
+/** v9.0.343 (TD-742): a project edit sends the version it was built from; tests edit from the stored version */
+export const projectVersion = async (id: number) => Number((await q('SELECT version FROM production_projects WHERE id = $1', [id]))[0]?.version);
+export const editProject = async (api: Client, id: number, body: Row) => api.put(`/api/projects/${id}`, { ...body, version: await projectVersion(id) });
+
 const tickAll = (api: Client, projectId: number, itemId: number, orders: number[]) =>
   api.put(`/api/projects/${projectId}/product-progress`, { items: orders.map(order => ({ item_id: itemId, stage_order: order, status: 'completed' })) });
 
@@ -65,7 +69,7 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
 
       const other = await newProject(api, { products: [{ itemId: item.id, qty: 2 }] });
       await api.put(`/api/projects/${other.id}/product-progress`, { items: [{ item_id: item.id, stage_order: 1, status: 'completed' }] });
-      const early = await api.put(`/api/projects/${other.id}`, { status: 'completed' });
+      const early = await editProject(api, other.id, { status: 'completed' });
       if (early.status !== 422 || early.body?.code !== 'PROJECT_MATRIX_INCOMPLETE' || !String(early.body?.error ?? early.body?.message ?? '').includes('1 از 3')) {
         problems.push(`completing a project with 1 of 3 cells answered ${early.status} ${brief(early.body)}, expected 422 PROJECT_MATRIX_INCOMPLETE naming 1 of 3`);
       }
@@ -92,7 +96,7 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
       if (lastAfter !== 'تکمیل‌شده') problems.push(`the matrix status change left audit rows ${brief(audit)}, expected the last one to end on the completed label`);
 
       // پروژه لغوشده با ماتریس کامل: خواندن و تیک دوباره وضعیت را تغییر نمی‌دهند و تحویل همچنان رد می‌شود
-      const cancel = await api.put(`/api/projects/${done.id}`, { status: 'cancelled' });
+      const cancel = await editProject(api, done.id, { status: 'cancelled' });
       if (cancel.status !== 200) problems.push(`cancelling the project answered ${cancel.status} ${brief(cancel.body)}`);
       const readProject = await reader.get(`/api/projects/${done.id}`);
       const readMatrix = await reader.get(`/api/projects/${done.id}/product-progress`);
@@ -105,7 +109,7 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
 
       // پروژه متوقف‌شده با تیک کامل متوقف می‌ماند
       const paused = await newProject(api, { products: [{ itemId: item.id, qty: 1 }], stages: ['برش'] });
-      await api.put(`/api/projects/${paused.id}`, { status: 'paused' });
+      await editProject(api, paused.id, { status: 'paused' });
       await tickAll(api, paused.id, item.id, [1]);
       if (await projectStatus(paused.id) !== 'paused') problems.push(`ticking a paused project changed it to ${await projectStatus(paused.id)}`);
 

@@ -524,7 +524,11 @@ export default function ProjectsPage() {
       <ProjectDetailModal
         projectId={selectedProjectId}
         isOpen={isDetailOpen}
-        onClose={() => setIsDetailOpen(false)}
+        onClose={() => {
+          setIsDetailOpen(false);
+          // v9.0.343 (TD-742): زبانه‌های جزئیات نسخه پروژه را بالا برده‌اند؛ فرم ویرایش از فهرست تازه باز می‌شود
+          loadInitialData();
+        }}
         onUpdate={loadInitialData}
         onEditProject={(p) => {
           setIsDetailOpen(false);

@@ -16,6 +16,7 @@ import { StageStatusField } from './project/StageStatusField';
 import { hasMatrixProducts } from '../lib/projects/progressMatrix';
 import { WorkflowStepperWidget } from './workflow/WorkflowStepperWidget';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
+import { useProjectVersion } from '../hooks/useProjectVersion';
 
 interface ProjectDetailModalProps {
   projectId: number | null;
@@ -35,6 +36,7 @@ export default function ProjectDetailModal({
   initialTab = 'overview'
 }: ProjectDetailModalProps) {
   const [project, setProject] = useState<ProductionProject | null>(null);
+  const projectVersion = useProjectVersion(project);
   const [loading, setLoading] = useState<boolean>(false);
   // Fullscreen state with local storage persistence
   const [isFullscreen, setIsFullscreen] = useState<boolean>(() => {
@@ -792,11 +794,11 @@ export default function ProjectDetailModal({
                       attachments={Array.isArray(project.attachments) ? project.attachments : []}
                       onChange={async (newAttachments) => {
                         try {
-                          await fetchJson(`/projects/${project.id}`, {
+                          projectVersion.remember(await fetchJson(`/projects/${project.id}`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ attachments: newAttachments })
-                          });
+                            body: JSON.stringify({ attachments: newAttachments, version: projectVersion.version })
+                          }));
                           toast.success('پیوست‌های پروژه به‌روزرسانی شد');
                           void loadProjectData();
                           onUpdate();

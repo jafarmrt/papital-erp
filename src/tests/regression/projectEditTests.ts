@@ -1,9 +1,10 @@
 import { createTestItem } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
 import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/projects/projectStatus.js';
+import { PROJECT_VERSION_CONFLICT_MESSAGE } from '../../lib/projects/projectVersion.js';
 import { buildProjectValueHealthTest, findProjectFreeTextValues } from '../../services/projects/projectStageHealth.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
-import { brief, newProject, q } from './projectStageIntegrityTests.js';
+import { brief, editProject, newProject, q } from './projectStageIntegrityTests.js';
 
 /**
  * Package 11 (project control and production), PR «ب»: project edit and input — status and priority lists, delivery
@@ -30,7 +31,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
       const stored = async () => (await q('SELECT status, priority FROM production_projects WHERE id = $1', [project.id]))[0] ?? {};
 
       for (const body of [{ status: 'Completed' }, { status: 'تمام شده' }, { priority: 'خیلی فوری' }, { priority: 'normal' }]) {
-        const res = await api.put(`/api/projects/${project.id}`, body);
+        const res = await editProject(api, project.id, body);
         if (res.status !== 400) problems.push(`PUT project ${JSON.stringify(body)} answered ${res.status} ${brief(res.body)}, expected 400`);
       }
       const after = await stored();
@@ -47,7 +48,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
       const stageStatuses = (await q('SELECT status FROM project_stages WHERE project_id = $1 AND is_deleted = 0', [project.id])).map(r => String(r.status));
       if (stageStatuses.some(s => !(STAGE_STATUSES as readonly string[]).includes(s))) problems.push(`a refused stage status was stored: ${stageStatuses.join(', ')}`);
 
-      const valid = await api.put(`/api/projects/${project.id}`, { status: 'paused', priority: 'urgent' });
+      const valid = await editProject(api, project.id, { status: 'paused', priority: 'urgent' });
       if (valid.status !== 200) problems.push(`PUT project with status paused and priority urgent answered ${valid.status} ${brief(valid.body)}, expected 200`);
 
       const clean = buildProjectValueHealthTest(await findProjectFreeTextValues(PROJECT_STATUSES, PROJECT_PRIORITIES, STAGE_STATUSES));
@@ -96,7 +97,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
       const stored = created.body?.id ? (await q('SELECT quantity::text AS quantity FROM production_projects WHERE id = $1', [created.body.id]))[0]?.quantity : null;
       if (created.status !== 201 || Number(stored) !== 12) problems.push(`creating a project with quantity 12 in Persian digits answered ${created.status} ${brief(created.body)} and stored ${stored}, expected 12`);
       for (const quantity of [0, '-1']) {
-        const res = await api.put(`/api/projects/${project.id}`, { quantity });
+        const res = await editProject(api, project.id, { quantity });
         if (res.status !== 422 || res.body?.code !== 'PROJECT_QUANTITY_INVALID') problems.push(`PUT project quantity ${quantity} answered ${res.status} ${brief(res.body)}, expected 422 PROJECT_QUANTITY_INVALID`);
       }
       const kept = (await q('SELECT quantity::text AS quantity FROM production_projects WHERE id = $1', [project.id]))[0]?.quantity;
@@ -157,7 +158,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
       const auditRows = async (entity: string, entityId: number | string) => q(
         'SELECT action, details FROM activity_logs WHERE entity = $1 AND entity_id = $2 ORDER BY id', [entity, String(entityId)]);
 
-      const edit = await api.put(`/api/projects/${project.id}`, { title: 'TD-757 renamed', priority: 'high' });
+      const edit = await editProject(api, project.id, { title: 'TD-757 renamed', priority: 'high' });
       if (edit.status !== 200) problems.push(`editing the project answered ${edit.status} ${brief(edit.body)}`);
       const projectRows = (await auditRows('پروژه تولید', project.id)).filter(r => r.action === 'UPDATE');
       const changes = (projectRows[projectRows.length - 1]?.details as { changes?: Record<string, { before: unknown; after: unknown }> } | undefined)?.changes ?? {};
@@ -183,7 +184,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
       }
 
       const before = (await auditRows('پروژه تولید', project.id)).length;
-      const refused = await api.put(`/api/projects/${project.id}`, { title: 'TD-757 refused', start_date: '1404/12/31' });
+      const refused = await editProject(api, project.id, { title: 'TD-757 refused', start_date: '1404/12/31' });
       const after = (await auditRows('پروژه تولید', project.id)).length;
       if (refused.status < 400 || after !== before) problems.push(`a refused project edit answered ${refused.status} and left ${after - before} new audit rows, expected an error and none`);
       assertNoProblems(problems);
@@ -200,7 +201,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
       const stageTitles = async () => (await q('SELECT title FROM project_stages WHERE project_id = $1 AND is_deleted = 0 ORDER BY stage_order', [project.id])).map(r => String(r.title));
       const before = await stageTitles();
 
-      const res = await api.put(`/api/projects/${project.id}`, {
+      const res = await editProject(api, project.id, {
         title: 'TD-740 edited',
         initial_stages: ['A', 'B', 'C', 'D'].map((title, i) => ({ title: `stage ${title}`, stage_order: i + 1 })),
       });
@@ -210,10 +211,50 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
       const after = await stageTitles();
       if (JSON.stringify(after) !== JSON.stringify(before)) problems.push(`the stages changed from ${JSON.stringify(before)} to ${JSON.stringify(after)}`);
 
-      const plain = await api.put(`/api/projects/${project.id}`, { title: 'TD-740 edited' });
+      const plain = await editProject(api, project.id, { title: 'TD-740 edited' });
       if (plain.status !== 200) problems.push(`a project edit without stages answered ${plain.status} ${brief(plain.body)}, expected 200`);
       assertNoProblems(problems);
       return 'stages in a project edit refused with 422 and left as they were; an edit without stages saved';
+    }));
+  }
+
+  const versionId = 'reg_project_version_occ_td_742';
+  if (shouldRun(versionId, 'td742', 'projects', 'package11')) {
+    await runCase(results, versionId, 'v9.0.343: a project edit sends the version it was built from; without it 400, from a stale version 409 OCC_CONFLICT with nothing stored; every save and a status change by the progress matrix raise the version (TD-742)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const item = await createTestItem({ type: 'product' });
+      const project = await newProject(api, { products: [{ itemId: item.id, qty: 1 }], stages: ['cut'] });
+      const stored = async () => (await q('SELECT title, version FROM production_projects WHERE id = $1', [project.id]))[0] ?? {};
+
+      const opened = await api.get(`/api/projects/${project.id}`);
+      const v1 = Number(opened.body?.version);
+      if (opened.status !== 200 || v1 !== 1) problems.push(`GET project answered ${opened.status} with version ${String(opened.body?.version)}, expected 1`);
+
+      const missing = await api.put(`/api/projects/${project.id}`, { title: 'TD-742 no version' });
+      if (missing.status !== 400) problems.push(`an edit without a version answered ${missing.status} ${brief(missing.body)}, expected 400`);
+
+      // two users opened version 1: the first save wins, the second is refused and stores nothing
+      const first = await api.put(`/api/projects/${project.id}`, { title: 'TD-742 first', version: v1 });
+      if (first.status !== 200 || Number(first.body?.version) !== v1 + 1) problems.push(`the first save answered ${first.status} with version ${String(first.body?.version)}, expected 200 and ${v1 + 1}`);
+      const second = await api.put(`/api/projects/${project.id}`, { title: 'TD-742 second', version: v1 });
+      if (second.status !== 409 || second.body?.code !== 'OCC_CONFLICT' || String(second.body?.error ?? second.body?.message ?? '') !== PROJECT_VERSION_CONFLICT_MESSAGE) {
+        problems.push(`the second save from the old version answered ${second.status} ${brief(second.body)}, expected 409 OCC_CONFLICT with the project message`);
+      }
+      const afterSecond = await stored();
+      if (afterSecond.title !== 'TD-742 first' || Number(afterSecond.version) !== v1 + 1) problems.push(`after the refused save the project is ${brief(afterSecond)}, expected the first title at version ${v1 + 1}`);
+
+      // the progress matrix completes the project: the version moves, so a form opened before cannot undo the status
+      const tick = await api.put(`/api/projects/${project.id}/product-progress`, { items: [{ item_id: item.id, stage_order: 1, status: 'completed' }] });
+      if (tick.status !== 200 || tick.body?.project_status !== 'completed') problems.push(`ticking the only cell answered ${tick.status} ${brief(tick.body)}, expected project_status completed`);
+      const afterTick = Number((await stored()).version);
+      if (afterTick <= v1 + 1) problems.push(`the matrix status change left version ${afterTick}, expected above ${v1 + 1}`);
+      const stale = await api.put(`/api/projects/${project.id}`, { status: 'in_progress', version: v1 + 1 });
+      if (stale.status !== 409) problems.push(`a save from before the matrix completion answered ${stale.status} ${brief(stale.body)}, expected 409`);
+      const fresh = await api.put(`/api/projects/${project.id}`, { title: 'TD-742 fresh', version: afterTick });
+      if (fresh.status !== 200 || Number(fresh.body?.version) !== afterTick + 1) problems.push(`a save from the current version answered ${fresh.status} with version ${String(fresh.body?.version)}, expected 200 and ${afterTick + 1}`);
+      assertNoProblems(problems);
+      return 'missing version 400; stale version 409 with nothing stored; saves and the matrix status change raise the version';
     }));
   }
 

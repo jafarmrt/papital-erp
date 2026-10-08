@@ -272,10 +272,11 @@ export function useProjectForm({
 
       const url = projectToEdit ? `/projects/${projectToEdit.id}` : '/projects';
       const method = projectToEdit ? 'PUT' : 'POST';
+      // v9.0.343 (TD-742، تصمیم ت۳ الف): ویرایش نسخه‌ای را می‌فرستد که فرم از آن باز شد؛ تغییر هم‌زمان دیگری ۴۰۹ است
       const res = await fetchJson(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(projectToEdit ? { ...payload, version: projectToEdit.version } : payload)
       });
 
       if (res && (res.id || res.success)) {

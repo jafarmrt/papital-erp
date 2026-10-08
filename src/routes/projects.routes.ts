@@ -17,6 +17,7 @@ import { PRODUCT_PROGRESS_STATUSES, type ProductProgressStatus } from '../lib/pr
 import { MAX_STAGE_ORDER, PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
 import { ValidationError } from '../errors/customErrors.js';
+import { PROJECT_VERSION_REQUIRED_MESSAGE } from '../lib/projects/projectVersion.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -57,8 +58,12 @@ const createProjectSchema = z.object({
   })
 });
 
+const recordVersion = z.coerce.number().int('نسخه رکورد پروژه باید عدد صحیح باشد').positive('نسخه رکورد پروژه باید مثبت باشد');
+
 const updateProjectSchema = z.object({
   body: z.object({
+    // v9.0.343 (TD-742، تصمیم ت۳ الف): نسخه‌ای که فرم از آن ساخته شده الزامی است؛ ناهمخوانی ۴۰۹ OCC_CONFLICT
+    version: recordVersion.optional(),
     title: z.string().optional(),
     project_code: z.string().optional(),
     customer_id: z.union([z.number(), z.string(), z.null()]).optional(),
@@ -84,7 +89,7 @@ const updateProjectSchema = z.object({
     attachments: z.array(z.unknown()).optional(),
     // v9.0.342 (TD-740، تصمیم ت۲ الف): مراحل با ویرایش پروژه تغییر نمی‌کنند؛ فرستادن آن‌ها ۴۲۲ است، نه دور ریختن بی‌صدا
     initial_stages: z.unknown().optional(),
-  }),
+  }).refine(b => b.version !== undefined, { message: PROJECT_VERSION_REQUIRED_MESSAGE, path: ['version'] }),
   params: z.object({
     id: z.string().regex(/^\d+$/, 'شناسه پروژه نامعتبر است')
   })
@@ -313,6 +318,7 @@ export interface ProjectLike {
   attachments?: unknown;
   isDeleted?: number | null;
   is_deleted?: number | null;
+  version?: number | null;
   itemImage?: string | null;
   itemThumbnail?: string | null;
   item_image?: string | null;
@@ -381,6 +387,8 @@ export function formatProject(
     customStages,
     attachments,
     isDeleted,
+    // v9.0.343 (TD-742): نسخه‌ای که ویرایش بعدی می‌فرستد
+    version: p.version ?? 1,
     itemImage,
     stages,
     totalStages,
@@ -592,7 +600,7 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
       title, customer_id, customer_name, item_id, item_code, item_name, 
       quantity, unit, start_date, end_date, status, priority, description,
       products, inventory_control, inventoryControl, stage_schedules, stageSchedules,
-      custom_stages, customStages, attachments, project_code
+      custom_stages, customStages, attachments, project_code, version
     } = req.body;
 
     // v9.0.333 (TD-739): بررسی تکمیل با قاعده مشترک ماتریس درون تراکنش updateProject است
@@ -615,7 +623,8 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
       inventoryControl: inventoryControl ?? inventory_control,
       stageSchedules: stageSchedules ?? stage_schedules,
       customStages: customStages ?? custom_stages,
-      attachments
+      attachments,
+      expectedVersion: version
     }, undefined, { req });
 
     const rawStages = await orm.select().from(projectStages).where(and(eq(projectStages.projectId, id), eq(projectStages.isDeleted, 0))).orderBy(asc(projectStages.stageOrder));

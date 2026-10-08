@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.343 — v9.0.343 — Project Optimistic Lock
+- **Project Optimistic Lock (TD-742, decision t3 A):** two users saving one project overwrote each other silently; `PUT /projects/:id` now requires the `version` the form was built from (400 without it), refuses a stale one with 409 `OCC_CONFLICT`, and every save, matrix status change and delivery completion raises the version; the edit form and the project tabs send and track it.
+
 ### v9.0.342 — v9.0.342 — Stages Read-Only in the Project Edit Form
 - **Stages Read-Only in the Project Edit Form (TD-740, decision t2 A):** stages edited in «ویرایش پروژه» answered 200 and were silently dropped; the edit form now shows them read-only with a button to the stages section of the project detail, sends no `initial_stages`, and `PUT /projects/:id` refuses stages with 422 `PROJECT_STAGES_READ_ONLY`.
 

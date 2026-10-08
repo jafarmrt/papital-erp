@@ -4,6 +4,7 @@ import { productionProjects, projectStages } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { logMatrixStatusChange } from './projectAudit.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
+import { nextVersion } from '../../lib/occHelper.js';
 import { matrixProjectStatus } from '../../lib/projects/projectStatus.js';
 import { loadProjectProgressMatrix } from './projectProgressMatrix.js';
 
@@ -92,7 +93,8 @@ export async function syncProjectFromMatrix(tx: DbExecutor, project: ProjectRow,
   });
   let current = project;
   if (nextStatus !== project.status) {
-    [current] = await tx.update(productionProjects).set({ status: nextStatus }).where(eq(productionProjects.id, project.id)).returning();
+    // v9.0.343 (TD-742): تغییر وضعیت با ماتریس هم نسخه پروژه را بالا می‌برد تا فرمی که پیش از آن باز شده وضعیت را برنگرداند
+    [current] = await tx.update(productionProjects).set({ status: nextStatus, version: nextVersion(project.version) }).where(eq(productionProjects.id, project.id)).returning();
     await logMatrixStatusChange(tx, actor, project, nextStatus, matrix);
   }
 
