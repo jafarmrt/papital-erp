@@ -1,0 +1,23 @@
+/**
+ * v9.0.296 (TD-802، یافته B08-33): حساب تسویه فاکتور به ارز همان فاکتور. سرور تراکنش خزانه‌ای را که ارزش با ارز حساب
+ * فرق کند رد می‌کند (`createTreasuryTransaction`)، پس فرم تسویه فقط حساب‌های هم‌ارز را نشان می‌دهد و از میان آن‌ها
+ * نخست بانک یا کارت‌خوان را از پیش برمی‌گزیند؛ پیش‌تر نخستین حساب بی توجه به ارز انتخاب می‌شد. حساب بی ارز ریالی است
+ * (همان قاعده `/accounting/bank-accounts/options`).
+ */
+export interface SettlementAccountChoice {
+  id: number;
+  type?: string;
+  currency?: string | null;
+}
+
+export const accountCurrencyOf = (account: SettlementAccountChoice): string => account.currency || 'IRR';
+
+export function settlementAccountsFor<T extends SettlementAccountChoice>(accounts: readonly T[], currency: string): T[] {
+  return accounts.filter(account => accountCurrencyOf(account) === currency);
+}
+
+export function defaultSettlementAccountId(accounts: readonly SettlementAccountChoice[], currency: string): number | '' {
+  const usable = settlementAccountsFor(accounts, currency);
+  const preferred = usable.find(account => account.type === 'pos' || account.type === 'bank') ?? usable[0];
+  return preferred ? preferred.id : '';
+}

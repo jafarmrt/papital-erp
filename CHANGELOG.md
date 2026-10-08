@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.296 — v9.0.296 — Settlement Account in the Invoice Currency
+- **Settlement:** the invoice settlement form lists and pre-selects only bank accounts and cash funds in the invoice's currency and names each account's currency (TD-802).
+
 ### v9.0.295 — v9.0.295 — Document Type Names and the Sales Proforma Filter
 - **Documents list:** the details and workflow windows name every document type in Persian, the «sales proforma» filter also lists proformas saved as invoices, and production receipts can be filtered (TD-800).
 
