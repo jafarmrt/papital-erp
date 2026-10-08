@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layers, Plus, Trash2, ArrowUp, ArrowDown, Archive, ArchiveRestore } from 'lucide-react';
 import { WorkflowPreset } from '../../constants/presets';
 import { fetchJson } from '../../api';
-import { formatPersianNumber } from '../../utils';
+import { errorMessageOf, formatPersianNumber } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
 
@@ -48,6 +48,8 @@ export function WorkflowPresetsTab({
         }
       } catch (err) {
         console.error('Failed to load piecework tasks:', err);
+        // v9.0.398 (TD-766): فهرست خالی عناوین کارمزدی با شکست خواندن یکی نیست
+        if (isMounted) toast.error(errorMessageOf(err) || 'خطا در دریافت عناوین کارمزدی');
       } finally {
         if (isMounted) setLoadingTasks(false);
       }

@@ -139,6 +139,7 @@ export default function ProjectDetailModal({
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
       console.error('Error fetching auxiliary project data:', err);
+      toast.error(errorMessageOf(err) || 'خطا در دریافت اطلاعات کمکی پروژه');
     }
   };
 
@@ -810,8 +811,8 @@ export default function ProjectDetailModal({
                           toast.success('پیوست‌های پروژه به‌روزرسانی شد');
                           void loadProjectData();
                           onUpdate();
-                        } catch (err: any) {
-                          toast.error(err.message || 'خطا در ذخیره پیوست‌ها');
+                        } catch (err) {
+                          toast.error(errorMessageOf(err) || 'خطا در ذخیره پیوست‌ها');
                         }
                       }}
                       title="پیوست‌ها و اسناد سفارش مشتری (فایل اکسل سفارش، فاکتور، طرح یا تصویر نمونه)"

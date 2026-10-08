@@ -175,6 +175,8 @@ export function useProjectInventory(
           fetchJson<any>('/api/categories', { signal: controller.signal }),
           fetchJson<any>('/api/settings', { signal: controller.signal }).catch((err) => {
             if (err?.name === 'AbortError') throw err;
+            // v9.0.398 (TD-766): شکست خواندن تنظیمات گفته می‌شود و الگوی پیش‌فرض به کار می‌رود
+            toast.error('الگوی بخش‌های کنترل موجودی از تنظیمات دریافت نشد؛ الگوی پیش‌فرض به کار رفت');
             return null;
           })
         ]);
@@ -202,7 +204,10 @@ export function useProjectInventory(
                 setPresetSections(parsed);
                 presets = parsed;
               }
-            } catch { /* تنظیمات خراب → پیش‌فرض‌ها باقی می‌مانند */ }
+            } catch {
+              // تنظیمات خراب → پیش‌فرض‌ها باقی می‌مانند و کاربر می‌داند
+              toast.error('الگوی بخش‌های کنترل موجودی در تنظیمات خوانا نیست؛ الگوی پیش‌فرض به کار رفت');
+            }
           }
         }
 
@@ -254,9 +259,11 @@ export function useProjectInventory(
       } else {
         setCustomMaterialForm(prev => ({ ...prev, category: catName, itemCode: `${prefix}001` }));
       }
-    } catch (err: any) {
+    } catch (err) {
+      // v9.0.398 (TD-766): پیش‌تر بی‌صدا «پیشوند۰۰۱» گذاشته می‌شد که شاید کد کالای دیگری باشد
       console.error('Failed to generate item code for custom material:', err);
-      setCustomMaterialForm(prev => ({ ...prev, category: catName, itemCode: `${prefix}001` }));
+      setCustomMaterialForm(prev => ({ ...prev, category: catName, itemCode: '' }));
+      toast.error(`${errorMessageOf(err) || 'کد پیشنهادی کالا دریافت نشد'}؛ کد را دستی وارد کنید`);
     }
   };
 

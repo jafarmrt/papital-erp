@@ -74,8 +74,10 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
           missingMatrixCells: 0
         });
       }
-    } catch {
+    } catch (err) {
+      // v9.0.398 (TD-766): شکست خواندن ماتریس پیشرفت گفته می‌شود، نه مثل ماتریس ناتمام
       setMatrixStatus(prev => ({ ...prev, loading: false }));
+      toast.error(errorMessageOf(err) || 'خطا در دریافت ماتریس پیشرفت پروژه');
     }
   }, [project.id, markCompleted]);
 
@@ -246,8 +248,8 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       } else {
         toast.error(res?.error || 'خطا در ثبت ورود به انبار');
       }
-    } catch (err: any) {
-      if (!askOverDeliveryReason(err, body)) toast.error(err.message || 'خطا در ارتباط با سرور');
+    } catch (err) {
+      if (!askOverDeliveryReason(err, body)) toast.error(errorMessageOf(err) || 'خطا در ارتباط با سرور');
     } finally {
       setSubmitting(false);
     }
@@ -313,8 +315,8 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       } else {
         toast.error(res?.error || 'خطا در ثبت دسته‌ای محصولات به انبار');
       }
-    } catch (err: any) {
-      if (!askOverDeliveryReason(err, body)) toast.error(err.message || 'خطا در ارتباط با سرور');
+    } catch (err) {
+      if (!askOverDeliveryReason(err, body)) toast.error(errorMessageOf(err) || 'خطا در ارتباط با سرور');
     } finally {
       setBatchSubmitting(false);
     }

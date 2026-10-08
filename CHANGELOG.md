@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.398 — Project Read Failures Are Shown
+- **Project Read Failures Are Shown (TD-766):** several project screen reads only logged their failure, so it looked like empty data, and a failed item code suggestion became `PREFIX001`; each failure now shows its message (`errorMessageOf`) and the code stays empty.
+
 ### v9.0.397 — Timeline Axis From Today
 - **Timeline Axis From Today (TD-765):** with no start date anywhere the project timeline axis started at `1404*365+31`, a different unit from its day numbers since 1970, so stage bars collapsed to the minimum width; it now starts today in the same unit.
 

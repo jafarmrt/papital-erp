@@ -68,6 +68,8 @@ export default function ProjectScheduleTab({
           fetchJson('/settings', { signal: controller.signal }).catch((err) => {
             if (err?.name === 'AbortError') throw err;
             console.error('Failed to load settings in schedule tab:', err);
+            // v9.0.398 (TD-766): شکست خواندن دیگر مثل «بی الگو» دیده نمی‌شود
+            toast.error('الگوهای گردش کار از تنظیمات دریافت نشد؛ الگوی پیش‌فرض به کار رفت');
             return [];
           }),
           initialPersonnelList.length === 0
@@ -98,6 +100,7 @@ export default function ProjectScheduleTab({
               }
             } catch (e) {
               console.error('Error parsing workflow presets setting', e);
+              toast.error('الگوهای گردش کار در تنظیمات خوانا نیستند؛ الگوی پیش‌فرض به کار رفت');
             }
           }
         }
@@ -365,6 +368,8 @@ export default function ProjectScheduleTab({
       setRecordedLogs(list);
     } catch (err) {
       console.error('Failed to load project piecework logs:', err);
+      // v9.0.398 (TD-766): فهرست خالی کارکردها با شکست خواندن یکی نیست
+      toast.error(errorMessageOf(err) || 'خطا در دریافت کارکردهای ثبت‌شده پروژه');
     } finally {
       setLoadingLogs(false);
     }
