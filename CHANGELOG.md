@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.342 — v9.0.342 — Stages Read-Only in the Project Edit Form
+- **Stages Read-Only in the Project Edit Form (TD-740, decision t2 A):** stages edited in «ویرایش پروژه» answered 200 and were silently dropped; the edit form now shows them read-only with a button to the stages section of the project detail, sends no `initial_stages`, and `PUT /projects/:id` refuses stages with 422 `PROJECT_STAGES_READ_ONLY`.
+
 ### v9.0.341 — v9.0.341 — Project and Stage Audit Rows
 - **Project and Stage Audit Rows (TD-757):** a project edit was logged with `details: {}` outside its transaction and stage add, edit and delete wrote no audit row; `projectAudit.ts` now logs the project edit with before and after of the changed fields and every stage write under «مرحله پروژه تولید» (retained), each with the write's `tx`.
 

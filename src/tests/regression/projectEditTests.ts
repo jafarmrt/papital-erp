@@ -191,5 +191,31 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
     }));
   }
 
+  const stagesId = 'reg_project_edit_stages_read_only_td_740';
+  if (shouldRun(stagesId, 'td740', 'projects', 'package11')) {
+    await runCase(results, stagesId, 'v9.0.342: editing a project never changes its stages; stages sent with a project edit are a 422 PROJECT_STAGES_READ_ONLY instead of a 200 that silently drops them (TD-740)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const project = await newProject(api, {});
+      const stageTitles = async () => (await q('SELECT title FROM project_stages WHERE project_id = $1 AND is_deleted = 0 ORDER BY stage_order', [project.id])).map(r => String(r.title));
+      const before = await stageTitles();
+
+      const res = await api.put(`/api/projects/${project.id}`, {
+        title: 'TD-740 edited',
+        initial_stages: ['A', 'B', 'C', 'D'].map((title, i) => ({ title: `stage ${title}`, stage_order: i + 1 })),
+      });
+      if (res.status !== 422 || res.body?.code !== 'PROJECT_STAGES_READ_ONLY') problems.push(`a project edit with four new stages answered ${res.status} ${brief(res.body)}, expected 422 PROJECT_STAGES_READ_ONLY`);
+      const title = String((await q('SELECT title FROM production_projects WHERE id = $1', [project.id]))[0]?.title);
+      if (title === 'TD-740 edited') problems.push('the refused edit still stored the new title');
+      const after = await stageTitles();
+      if (JSON.stringify(after) !== JSON.stringify(before)) problems.push(`the stages changed from ${JSON.stringify(before)} to ${JSON.stringify(after)}`);
+
+      const plain = await api.put(`/api/projects/${project.id}`, { title: 'TD-740 edited' });
+      if (plain.status !== 200) problems.push(`a project edit without stages answered ${plain.status} ${brief(plain.body)}, expected 200`);
+      assertNoProblems(problems);
+      return 'stages in a project edit refused with 422 and left as they were; an edit without stages saved';
+    }));
+  }
+
   return results;
 }

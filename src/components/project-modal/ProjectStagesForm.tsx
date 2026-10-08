@@ -2,6 +2,7 @@ import React from 'react';
 import { Workflow, Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { WorkflowPreset } from '../../constants/presets';
 import { ProjectStage } from './types';
+import { toPersianDigits } from '../../utils';
 
 interface ProjectStagesFormProps {
   stages: ProjectStage[];
@@ -12,6 +13,12 @@ interface ProjectStagesFormProps {
   onRemoveStage: (index: number) => void;
   onStageTitleChange: (index: number, newTitle: string) => void;
   onMoveStage: (index: number, direction: 'up' | 'down') => void;
+  /**
+   * v9.0.342 (TD-740، تصمیم ت۲ الف): در ویرایش پروژه مراحل فقط نمایش داده می‌شوند و فرستاده نمی‌شوند؛ افزودن، تغییر نام،
+   * جابه‌جایی و حذف مرحله فقط از بخش مراحل جزئیات پروژه است که تیک‌های پیشرفت را هم درست جابه‌جا می‌کند.
+   */
+  readOnly?: boolean;
+  onOpenStages?: () => void;
 }
 
 export const ProjectStagesForm: React.FC<ProjectStagesFormProps> = ({
@@ -22,8 +29,11 @@ export const ProjectStagesForm: React.FC<ProjectStagesFormProps> = ({
   onAddStage,
   onRemoveStage,
   onStageTitleChange,
-  onMoveStage
+  onMoveStage,
+  readOnly = false,
+  onOpenStages
 }) => {
+  if (readOnly) return <ProjectStagesReadOnly stages={stages} onOpenStages={onOpenStages} />;
   return (
     <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
@@ -114,3 +124,32 @@ export const ProjectStagesForm: React.FC<ProjectStagesFormProps> = ({
     </div>
   );
 };
+
+const ProjectStagesReadOnly: React.FC<{ stages: ProjectStage[]; onOpenStages?: () => void }> = ({ stages, onOpenStages }) => (
+  <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 space-y-3">
+    <h3 className="text-xs font-bold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-2">
+      <Workflow size={14} className="text-blue-600" />
+      فرآیند و مراحل گام‌به‌گام تولید ({toPersianDigits(stages.length)} مرحله)
+    </h3>
+    <ol className="space-y-1.5">
+      {stages.map((stage, idx) => (
+        <li key={idx} className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+          <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 text-xs flex items-center justify-center shrink-0">{toPersianDigits(idx + 1)}</span>
+          {stage.title}
+        </li>
+      ))}
+    </ol>
+    <p className="text-2xs text-slate-600 leading-5">
+      مراحل پروژه ثبت‌شده در این فرم تغییر نمی‌کنند. افزودن، تغییر نام، جابه‌جایی و حذف مرحله را در بخش مراحل جزئیات پروژه انجام دهید تا پیشرفت ثبت‌شده هر مرحله با آن جابه‌جا شود.
+    </p>
+    {onOpenStages && (
+      <button
+        type="button"
+        onClick={onOpenStages}
+        className="w-full border border-blue-300 bg-white hover:bg-blue-50 text-blue-700 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer"
+      >
+        باز کردن مراحل در جزئیات پروژه
+      </button>
+    )}
+  </div>
+);

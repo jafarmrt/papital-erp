@@ -244,7 +244,7 @@ export function useProjectForm({
     if (!title.trim()) return toast.error('لطفاً عنوان پروژه را وارد کنید');
     if (!formatPickerDate(startDate)) return toast.error('انتخاب تاریخ شروع پروژه اجباری است');
     if (!formatPickerDate(endDate)) return toast.error('انتخاب تاریخ تحویل (پایان) پروژه اجباری است');
-    if (stages.length === 0) return toast.error('حداقل یک مرحله برای فرآیند تولید تعیین کنید');
+    if (!projectToEdit && stages.length === 0) return toast.error('حداقل یک مرحله برای فرآیند تولید تعیین کنید');
 
     // Duplicate check in products list
     const selectedItemIds = productsList.map(p => p.item_id).filter((id): id is number => id !== null && id !== undefined);
@@ -266,7 +266,8 @@ export function useProjectForm({
         priority,
         description,
         stages,
-        attachments
+        attachments,
+        includeStages: !projectToEdit
       });
 
       const url = projectToEdit ? `/projects/${projectToEdit.id}` : '/projects';

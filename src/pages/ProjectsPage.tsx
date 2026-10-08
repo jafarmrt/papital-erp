@@ -514,6 +514,10 @@ export default function ProjectsPage() {
         customersList={customersList}
         itemsList={itemsList}
         onSuccess={loadInitialData}
+        onOpenStages={(p) => {
+          setIsModalOpen(false);
+          handleOpenDetailModal(p.id, 'overview');
+        }}
       />
 
       {/* Project Detail & Stage Manager Drawer */}

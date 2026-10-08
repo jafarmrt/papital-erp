@@ -16,6 +16,7 @@ import { idempotency } from '../middleware/idempotency.js';
 import { PRODUCT_PROGRESS_STATUSES, type ProductProgressStatus } from '../lib/projects/progressMatrix.js';
 import { MAX_STAGE_ORDER, PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
+import { ValidationError } from '../errors/customErrors.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -81,6 +82,8 @@ const updateProjectSchema = z.object({
     custom_stages: z.array(z.unknown()).optional(),
     customStages: z.array(z.unknown()).optional(),
     attachments: z.array(z.unknown()).optional(),
+    // v9.0.342 (TD-740، تصمیم ت۲ الف): مراحل با ویرایش پروژه تغییر نمی‌کنند؛ فرستادن آن‌ها ۴۲۲ است، نه دور ریختن بی‌صدا
+    initial_stages: z.unknown().optional(),
   }),
   params: z.object({
     id: z.string().regex(/^\d+$/, 'شناسه پروژه نامعتبر است')
@@ -578,6 +581,12 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
+    if (req.body.initial_stages !== undefined) {
+      throw new ValidationError(
+        'مراحل پروژه با ویرایش پروژه تغییر نمی‌کنند؛ افزودن، تغییر نام، جابه‌جایی و حذف مرحله را در بخش مراحل جزئیات پروژه انجام دهید.',
+        undefined, 'PROJECT_STAGES_READ_ONLY'
+      );
+    }
 
     const { 
       title, customer_id, customer_name, item_id, item_code, item_name, 
