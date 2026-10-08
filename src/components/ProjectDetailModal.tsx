@@ -3,7 +3,9 @@ import { X, Check, Calendar, User, Package, Users, Layers, CheckCircle2, Edit3, 
 import { ProductionProject, ProjectStage, Item } from '../types';
 import { fetchJson } from '../api';
 import toast from 'react-hot-toast';
-import { toPersianDigits, formatPersianNumber, errorMessageOf, isoToJalaliDate, formatPersianDate } from '../utils';
+import { toPersianDigits, formatPersianNumber, errorMessageOf, toStorageDate, formatPersianDate } from '../utils';
+import { JalaliDateInput } from './common/JalaliDateInput';
+import { storedReservationShortages } from '../lib/projects/projectReservationState';
 import { FinancialAttachmentUploader } from './accounting/FinancialAttachmentUploader';
 
 // Tab Components
@@ -158,8 +160,9 @@ export default function ProjectDetailModal({
     setStageTitle(stg.title);
     setStageStatus(stg.status);
     setStageProgress(stg.progress_percent || 0);
-    setStageStartDate(isoToJalaliDate(stg.start_date) || stg.start_date || '');
-    setStageEndDate(isoToJalaliDate(stg.end_date) || stg.end_date || '');
+    // v9.0.395 (TD-763): تاریخ مرحله در فرم ISO است و با تقویم شمسی انتخاب می‌شود (پیش‌تر متن آزاد با نمونه ۱۴۰۳)
+    setStageStartDate(toStorageDate(stg.start_date || '') || '');
+    setStageEndDate(toStorageDate(stg.end_date || '') || '');
     setPersonnelInput(Array.isArray(stg.assigned_personnel) ? stg.assigned_personnel.join(', ') : '');
     setResourcesInput(Array.isArray(stg.required_resources) ? stg.required_resources.join(', ') : '');
     setStageNotes(stg.notes || '');
@@ -239,7 +242,8 @@ export default function ProjectDetailModal({
 
   // Dynamic indicators for tab badges
   const reservedCount = project?.inventory_control?.reservedItems?.length || 0;
-  const purchaseCount = project?.inventory_control?.purchaseOrderItems?.length || 0;
+  // v9.0.395 (TD-763): «قلم کسری» کمبود رزروی است که سرور هنگام ثبت نهایی نوشته (پیش‌تر فیلدی را می‌خواند که کسی نمی‌نوشت)
+  const purchaseCount = storedReservationShortages(project?.inventory_control).length;
   const stagesCount = project?.stages?.length || 0;
   const completedStagesCount = project?.stages?.filter(s => s.status === 'completed').length || project?.completed_stages || 0;
   const productsCount = productsList.length;
@@ -725,22 +729,20 @@ export default function ProjectDetailModal({
 
                                   <div>
                                     <label className="block text-[11px] font-bold text-slate-700 mb-1">تاریخ شروع</label>
-                                    <input
-                                      type="text"
+                                    <JalaliDateInput
                                       value={stageStartDate}
-                                      onChange={(e) => setStageStartDate(e.target.value)}
-                                      placeholder="۱۴۰۳/۰۶/۱۵"
+                                      onChange={setStageStartDate}
+                                      placeholder="انتخاب تاریخ"
                                       className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-mono text-slate-900 bg-white"
                                     />
                                   </div>
 
                                   <div>
                                     <label className="block text-[11px] font-bold text-slate-700 mb-1">تاریخ پایان / تحویل</label>
-                                    <input
-                                      type="text"
+                                    <JalaliDateInput
                                       value={stageEndDate}
-                                      onChange={(e) => setStageEndDate(e.target.value)}
-                                      placeholder="۱۴۰۳/۰۶/۲۰"
+                                      onChange={setStageEndDate}
+                                      placeholder="انتخاب تاریخ"
                                       className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-mono text-slate-900 bg-white"
                                     />
                                   </div>

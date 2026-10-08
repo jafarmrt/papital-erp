@@ -185,6 +185,6 @@
   "src/tests/testRunner.ts": 1,
   "src/types/auth.types.ts": 1,
   "src/types/inventory.types.ts": 1,
-  "src/types/project.types.ts": 2,
+  "src/types/project.types.ts": 1,
   "src/utils/dateUtils.ts": 3
 }

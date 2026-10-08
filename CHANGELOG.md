@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.395 — Stage Dates by the Jalali Picker and the Shortage Badge
+- **Stage Dates by the Jalali Picker and the Shortage Badge (TD-763, TD-762):** stage dates in the project detail were free text with a 1403 sample and the shortage badge read a field nobody writes; the dates now use `JalaliDateInput` and the badge counts the reservation shortages written at finalize. TD-762 had been fixed by TD-891 / TD-892 and gets a guard test.
+
 ### v9.0.394 — Paused and Cancelled Projects on the Kanban
 - **Paused and Cancelled Projects on the Kanban (TD-761):** the kanban had three columns, so paused and cancelled projects were hidden in the default view, and the status filter had no cancelled option; a fourth column and the full status list fix both.
 

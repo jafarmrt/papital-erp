@@ -170,7 +170,6 @@ export interface ProjectInventoryControl {
   productRequirements?: Record<string, ProductInventoryRequirement>;
   purchaseList?: PurchaseListItem[];
   manualPurchaseItems?: PurchaseListItem[];
-  purchaseOrderItems?: any[];
   isFinalized?: boolean;
   isReserved?: boolean;
   finalizedAt?: string;
