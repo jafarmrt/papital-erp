@@ -135,7 +135,7 @@ export class SystemSettingsService {
     );
   }
 
-  /** v9.0.340 (TD-898): the system admin's answer carries the WooCommerce keys decrypted, never their ciphertext */
+  /** v9.0.361 (TD-898): the system admin's answer carries the WooCommerce keys decrypted, never their ciphertext */
   static revealSettingSecrets<T extends { key: string; value: string }>(settings: T[]): T[] {
     return revealSettingSecrets(settings);
   }
@@ -171,7 +171,7 @@ export class SystemSettingsService {
           continue;
         }
         const value = normalizeSettingValue(item.key, item.value);
-        // v9.0.340 (TD-898): an encrypted key is compared by its plain value; one that cannot be decrypted counts as changed
+        // v9.0.361 (TD-898): an encrypted key is compared by its plain value; one that cannot be decrypted counts as changed
         const before = readSettingValue(item.key, current.get(item.key));
         if (before !== undefined && before !== null && before === value) {
           continue;

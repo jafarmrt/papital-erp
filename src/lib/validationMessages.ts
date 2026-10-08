@@ -158,7 +158,7 @@ export const FIELD_LABELS: Record<string, string> = {
   itemCode: 'کد کالا',
   requiredDate: 'تاریخ نیاز',
   projectId: 'پروژه',
-  // v9.0.337 (TD-719): فیلدهای وب‌هوک
+  // v9.0.358 (TD-719): فیلدهای وب‌هوک
   targetUrl: 'نشانی مقصد',
   secretKey: 'کلید امضا',
   customHeaders: 'سرآیندهای سفارشی',

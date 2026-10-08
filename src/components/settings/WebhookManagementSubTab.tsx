@@ -76,7 +76,7 @@ export function WebhookManagementSubTab() {
   const [deliveries, setDeliveries] = useState<WebhookDeliveryLog[]>([]);
   const [stats, setStats] = useState<WebhookStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  // v9.0.339 (TD-710): the signing key is shown once, after create or «ساخت کلید تازه»; every list answer masks it
+  // v9.0.360 (TD-710): the signing key is shown once, after create or «ساخت کلید تازه»; every list answer masks it
   const [revealedSecret, setRevealedSecret] = useState<RevealedWebhookSecret | null>(null);
   const [selectedSubForDeliveries, setSelectedSubForDeliveries] = useState<number | null>(null);
 
@@ -154,7 +154,7 @@ export function WebhookManagementSubTab() {
     setFormData({
       name: '',
       targetUrl: '',
-      // v9.0.338 (TD-720): the server makes the signing key (crypto.randomBytes); the browser never generates one
+      // v9.0.359 (TD-720): the server makes the signing key (crypto.randomBytes); the browser never generates one
       secretKey: '',
       eventPatterns: ['*'],
       customHeadersJson: '{\n  "X-Custom-Auth": "erp-token"\n}',
@@ -171,7 +171,7 @@ export function WebhookManagementSubTab() {
     setFormData({
       name: sub.name,
       targetUrl: sub.targetUrl,
-      // v9.0.337 (TD-719): the stored key never enters the form; an empty field keeps it on save
+      // v9.0.358 (TD-719): the stored key never enters the form; an empty field keeps it on save
       secretKey: '',
       eventPatterns: sub.eventPatterns || ['*'],
       customHeadersJson: JSON.stringify(sub.customHeaders || {}, null, 2),
@@ -267,7 +267,7 @@ export function WebhookManagementSubTab() {
     }
   };
 
-  /** v9.0.337 (TD-719): a saved webhook is pinged by its id, so the server signs with the stored key, never the masked one */
+  /** v9.0.358 (TD-719): a saved webhook is pinged by its id, so the server signs with the stored key, never the masked one */
   const handlePingTest = async (request: WebhookPingRequest, subId?: number) => {
     if (subId) setPingTestingId(subId);
     setPingResult(null);

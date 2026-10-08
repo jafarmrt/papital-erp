@@ -244,7 +244,7 @@ router.get(['/action-rules', '/rules'], authorizePermission('events.view'), asyn
 
     res.json({
       success: true,
-      // v9.0.339 (TD-710): the rule token and header values never reach a reader (events.view), admin included
+      // v9.0.360 (TD-710): the rule token and header values never reach a reader (events.view), admin included
       data: (Array.isArray(rules) ? rules : []).map(actionRuleView)
     });
   } catch (error) {
@@ -665,7 +665,7 @@ router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], au
 // 6. Webhook Subscriptions & Deliveries Pipeline
 // =========================================================================
 
-// v9.0.339 (TD-710, decision t6 a): the signing key and the custom header values are masked in every answer, for every
+// v9.0.360 (TD-710, decision t6 a): the signing key and the custom header values are masked in every answer, for every
 // user and the system admin too (`webhookSubscriptionView`); the key is shown once, by create and rotate-secret only.
 
 router.get('/webhooks/stats', authorizePermission('events.view'), asyncHandler(async (req, res) => {
@@ -731,7 +731,7 @@ router.post('/webhooks', authorizePermission('events.manage'), asyncHandler(asyn
         secretKey: secretKey?.trim() || undefined,
         customHeaders: customHeaders || {},
         retryLimit: retryLimit || 3,
-        // v9.0.338 (TD-720): the form's timeoutMs (legacy timeoutSeconds), checked by the service; it used to become 10 s
+        // v9.0.359 (TD-720): the form's timeoutMs (legacy timeoutSeconds), checked by the service; it used to become 10 s
         timeoutMs,
         timeoutSeconds
       },
@@ -833,7 +833,7 @@ router.post('/webhooks/:id/rotate-secret', authorizePermission('events.manage'),
 }));
 
 router.post('/webhooks/ping', authorizePermission('events.manage'), validate(webhookPingSchema), asyncHandler(async (req, res) => {
-  // v9.0.337 (TD-719): a saved webhook is pinged with its stored signing key (`subscriptionId`), never with the masked key
+  // v9.0.358 (TD-719): a saved webhook is pinged with its stored signing key (`subscriptionId`), never with the masked key
   // the browser holds; a draft without an entered key is signed with a one-time key, never a fixed 'test_secret_key'
   const { targetUrl, secretKey, customHeaders, subscriptionId } = req.body as z.infer<typeof webhookPingSchema>['body'];
   const stored = subscriptionId ? await WebhookSubscriptionService.getSubscriptionById(subscriptionId) : null;
@@ -850,7 +850,7 @@ router.post('/webhooks/ping', authorizePermission('events.manage'), validate(web
       : WebhookSubscriptionService.generateSecretKey();
   // the stored custom headers go only to the stored address
   const headers = customHeaders ?? (stored && url === stored.targetUrl ? stored.customHeaders : undefined);
-  // v9.0.340 (TD-898): a stored key or header the current ERP_SECRETS_KEY cannot decrypt is never sent
+  // v9.0.361 (TD-898): a stored key or header the current ERP_SECRETS_KEY cannot decrypt is never sent
   const usesStoredKey = keySource === 'stored';
   const usesStoredHeaders = !customHeaders && headers !== undefined;
   if (stored && (usesStoredKey || usesStoredHeaders)) {

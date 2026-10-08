@@ -26,6 +26,8 @@ export interface WooOrderBuyer {
 }
 
 export interface WooOrderCustomer {
+  /** v9.0.336 (TD-778): شناسه طرف حساب؛ فاکتور با آن به طرف حساب وصل می‌شود */
+  id: number;
   /** نام ذخیره‌شده طرف حساب؛ همان نامی که فاکتور می‌گیرد */
   name: string;
   /** یادداشت فارسی برای گزارش سفارش (فقط وقتی برای خریدار هم‌نام طرف حساب تازه ساخته شد) */
@@ -41,10 +43,10 @@ async function findOrderCustomer(tx: DbExecutor, buyer: WooOrderBuyer): Promise<
   const row = phoneMatchKey(buyer.buyerPhone)
     ? await findActiveCustomerByPhone(buyer.buyerPhone, tx)
     : await findActiveCustomerByName(buyer.buyerName, tx);
-  return row ? { name: row.name, note: '' } : null;
+  return row ? { id: row.id, name: row.name, note: '' } : null;
 }
 
-async function newCustomerTarget(tx: DbExecutor, wcOrderId: string, buyer: WooOrderBuyer): Promise<WooOrderCustomer> {
+async function newCustomerTarget(tx: DbExecutor, wcOrderId: string, buyer: WooOrderBuyer): Promise<Omit<WooOrderCustomer, 'id'>> {
   const namesake = phoneMatchKey(buyer.buyerPhone) ? await findActiveCustomerByName(buyer.buyerName, tx) : undefined;
   if (!namesake) return { name: buyer.buyerName.trim(), note: '' };
   const name = namesakeCustomerName(buyer.buyerName, buyer.buyerPhone);
@@ -74,6 +76,7 @@ export async function resolveWooOrderCustomer(
     if (found) return found;
     const target = await newCustomerTarget(tx, wcOrderId, buyer);
     try {
+      let createdId = 0;
       await tx.transaction(async (sp) => {
         const [created] = await sp.insert(customers).values({
           name: target.name,
@@ -91,8 +94,9 @@ export async function resolveWooOrderCustomer(
           description: `ثبت خودکار طرف حساب «${target.name}» از سفارش ووکامرس #${wcOrderId}`,
           details: { after: { id: created.id, name: target.name, phone: buyer.buyerPhone, city: buyer.buyerCity }, namesake: target.note || undefined },
         });
+        createdId = created.id;
       });
-      return target;
+      return { ...target, id: createdId };
     } catch (err) {
       // سفارش هم‌زمان دیگری همین طرف حساب را ساخت؛ تطبیق یک بار دیگر، حالا با ردیف commitشده او
       if (attempt === 0 && isCustomerNameUniqueViolation(err)) continue;

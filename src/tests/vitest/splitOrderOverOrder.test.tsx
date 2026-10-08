@@ -26,7 +26,7 @@ const requisition = {
   items: [{ id: 'r1', itemId: 9, itemCode: 'RM-9', itemName: 'سنگ فیروزه', unit: 'عدد', requestedQty: 10, orderedQty: 0, remainingQty: 10, unitPriceEstimate: 1000 }],
 } as unknown as PurchaseRequisition;
 
-const renderModal = () => render(<SplitOrderModal isOpen requisition={requisition} warehouseItems={[]} onClose={() => undefined} onSuccess={() => undefined} />);
+const renderModal = () => render(<SplitOrderModal isOpen requisition={requisition} onClose={() => undefined} onSuccess={() => undefined} />);
 const submit = () => fireEvent.click(screen.getByText('ثبت و صدور سفارش‌های خرید تفکیکی'));
 const sentBody = () => JSON.parse(String((fetchJson.mock.calls[0][1] as { body: string }).body)) as Record<string, unknown>;
 

@@ -7,6 +7,7 @@ import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { formatPersianPrice, toPersianDigits } from '../../utils/persianNumber.js';
 import { PARTY_DETAILED_TYPES, partyDetailedRowsCondition } from '../accounting/partyDetailedRows.js';
 import { voucherItemCurrencySql } from '../accounting/voucherItemAmount.js';
+import { documentPartyCondition } from '../documents/documentParty.js';
 
 /**
  * v9.0.10 (TD-431، تصمیم مالک محصول ت۴ الف): طرف حسابی که مانده یا کار باز دارد حذف نمی‌شود. پیش‌تر حذف نرم بی هیچ
@@ -54,10 +55,11 @@ export async function findCustomerDeleteBlockers(party: Party, db: DbExecutor): 
     .where(and(eq(journalVouchers.isDeleted, 0), eq(journalVoucherItems.isDeleted, 0), eq(journalVouchers.status, 'draft'), partyRows))
     .orderBy(asc(journalVouchers.voucherNumber));
 
-  const openDocuments = name ? await db.select({ refNumber: documents.refNumber })
+  // v9.0.336 (TD-778): سند با شناسه طرف حساب، و سند پیشین بی شناسه با نام برابر
+  const openDocuments = await db.select({ refNumber: documents.refNumber })
     .from(documents)
-    .where(and(eq(documents.isDeleted, 0), inArray(documents.status, OPEN_DOCUMENT_STATUSES), sql`btrim(${documents.buyerName}) = ${name}::text`))
-    .orderBy(asc(documents.id)) : [];
+    .where(and(eq(documents.isDeleted, 0), inArray(documents.status, OPEN_DOCUMENT_STATUSES), documentPartyCondition({ id: party.id, legacyName: name })))
+    .orderBy(asc(documents.id));
 
   const activeLeads = await db.select({ title: crmLeads.title })
     .from(crmLeads)

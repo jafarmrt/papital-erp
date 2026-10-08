@@ -14,7 +14,7 @@ import { invalidateSettingsCache } from '../../lib/memoryCache.js';
  * the WooCommerce webhook secret and every webhook subscription's signing key and custom header values are stored with
  * `encryptSecret` and decrypted only inside the server; a value the current ERP_SECRETS_KEY cannot decrypt is never sent
  * (failed delivery, 503 on ping and on the WooCommerce connection, the WooCommerce webhook fails); without the key nothing
- * new is stored (503); `npm run secrets:encrypt` encrypts legacy plain values. On v9.0.339 all of them were plain text in
+ * new is stored (503); `npm run secrets:encrypt` encrypts legacy plain values. On v9.0.360 all of them were plain text in
  * `app_settings` and `webhook_subscriptions`, readable from any backup or database reader.
  */
 const WC_KEYS = ['wc_consumer_key', 'wc_consumer_secret', 'wc_webhook_secret', 'wc_store_url'] as const;
@@ -37,7 +37,7 @@ export async function runIntegrationSecretsAtRestTests(shouldRun: (id: string, .
   const id = 'reg_integration_secrets_encrypted_at_rest_td_898';
   if (!shouldRun(id, 'td898', 'secrets', 'webhook', 'woocommerce', 'package15')) return results;
 
-  const name = 'v9.0.340: WooCommerce keys and webhook signing keys and headers are stored encrypted, used decrypted inside the server and never sent when they cannot be decrypted (TD-898)';
+  const name = 'v9.0.361: WooCommerce keys and webhook signing keys and headers are stored encrypted, used decrypted inside the server and never sent when they cannot be decrypted (TD-898)';
   const tStart = Date.now();
   const savedEnvKey = process.env.ERP_SECRETS_KEY;
   const savedPort = process.env.PORT;

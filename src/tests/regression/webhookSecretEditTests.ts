@@ -8,7 +8,7 @@ import { decryptSecret } from '../../lib/secretBox.js';
 
 /**
  * Package 15 (events and integrations), TD-719 / B15-17: editing a webhook keeps its signing key when the form sends the
- * masked key, and «test ping» of a saved webhook signs with the stored key. On v9.0.336 a non-admin manager's save sent the
+ * masked key, and «test ping» of a saved webhook signs with the stored key. On v9.0.357 a non-admin manager's save sent the
  * masked «****…abcd» back and the service stored it, so every receiver's HMAC check broke, and the ping needed the key in the
  * body (the masked one, or the fixed 'test_secret_key'). fetch is stubbed, so no request leaves the test.
  */
@@ -17,7 +17,7 @@ export async function runWebhookSecretEditTests(shouldRun: (id: string, ...extra
   const id = 'reg_webhook_edit_keeps_signing_key_and_ping_uses_it_td_719';
   if (!shouldRun(id, 'td719', 'b15-17', 'webhook', 'package15')) return results;
 
-  const name = 'v9.0.337: a webhook edit with the masked key keeps the stored signing key and the ping of a saved webhook signs with it (TD-719)';
+  const name = 'v9.0.358: a webhook edit with the masked key keeps the stored signing key and the ping of a saved webhook signs with it (TD-719)';
   const tStart = Date.now();
   const storedKey = 'whsec_td719_stored_signing_key_0123456789abcdef';
   const targetUrl = 'https://partner-td719.example.com/hooks/erp';
@@ -43,7 +43,7 @@ export async function runWebhookSecretEditTests(shouldRun: (id: string, ...extra
       name: 'td719 partner', targetUrl, secretKey: storedKey, eventPatterns: ['*'], customHeaders: { 'X-Partner-Id': 'td719' },
     });
     subscriptionId = sub.id;
-    // the key is stored encrypted since v9.0.340 (TD-898)
+    // the key is stored encrypted since v9.0.361 (TD-898)
     const storedKeyNow = async () => decryptSecret((await orm.select({ k: webhookSubscriptions.secretKey }).from(webhookSubscriptions)
       .where(eq(webhookSubscriptions.id, subscriptionId)))[0]?.k);
     const wrong: string[] = [];

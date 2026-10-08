@@ -25,7 +25,7 @@ export interface CreateWebhookSubDTO {
   timeoutSeconds?: number;
 }
 
-/** v9.0.338 (TD-720): the entered timeout (`timeoutMs`, else legacy `timeoutSeconds`), refused outside 1-30 s */
+/** v9.0.359 (TD-720): the entered timeout (`timeoutMs`, else legacy `timeoutSeconds`), refused outside 1-30 s */
 function webhookTimeoutOf(data: Partial<CreateWebhookSubDTO>): number | undefined {
   const timeout = resolveWebhookTimeoutMs(data);
   if (!timeout.ok) throw new ValidationError(timeout.message, undefined, 'WEBHOOK_TIMEOUT_INVALID');
@@ -33,7 +33,7 @@ function webhookTimeoutOf(data: Partial<CreateWebhookSubDTO>): number | undefine
 }
 
 type WebhookSubscriptionRow = typeof webhookSubscriptions.$inferSelect;
-/** v9.0.340 (TD-898): a subscription with its signing key and header values decrypted, for use inside the server only */
+/** v9.0.361 (TD-898): a subscription with its signing key and header values decrypted, for use inside the server only */
 export type OpenWebhookSubscription = OpenedWebhookSubscription<WebhookSubscriptionRow>;
 
 export class WebhookSubscriptionService {
@@ -145,9 +145,9 @@ export class WebhookSubscriptionService {
 
     const timeoutMs = webhookTimeoutOf(data);
     const secretKey = isEnteredSecret(data.secretKey) ? data.secretKey.trim() : this.generateSecretKey();
-    // v9.0.339 (TD-710): a masked header value of a new webhook has no stored value to stand for
+    // v9.0.360 (TD-710): a masked header value of a new webhook has no stored value to stand for
     const customHeaders = resolveMaskedHeaders(data.customHeaders, {}, true);
-    // v9.0.340 (TD-898, decision t7 a): the key and every header value are stored encrypted; without ERP_SECRETS_KEY 503
+    // v9.0.361 (TD-898, decision t7 a): the key and every header value are stored encrypted; without ERP_SECRETS_KEY 503
     const sealedKey = encryptSecret(secretKey);
     const sealedHeaders = sealHeaders(customHeaders);
     const eventPatterns = data.eventPatterns && data.eventPatterns.length > 0 ? data.eventPatterns : ['*'];
@@ -208,11 +208,11 @@ export class WebhookSubscriptionService {
       await assertSafeExternalUrl(targetUrl, { allowLocalEcho: true });
       updateFields.targetUrl = targetUrl;
     }
-    // v9.0.337 (TD-719): an empty or masked key («****…abcd», «********») keeps the stored key; the edit form used to send the
+    // v9.0.358 (TD-719): an empty or masked key («****…abcd», «********») keeps the stored key; the edit form used to send the
     // masked key back and every save replaced the real signing key with the mask
     if (isEnteredSecret(data.secretKey)) updateFields.secretKey = encryptSecret(data.secretKey.trim());
     if (data.eventPatterns !== undefined) updateFields.eventPatterns = data.eventPatterns;
-    // v9.0.339 (TD-710): responses mask header values, so «********» keeps the stored value, only for the stored address
+    // v9.0.360 (TD-710): responses mask header values, so «********» keeps the stored value, only for the stored address
     if (data.customHeaders !== undefined) updateFields.customHeaders = sealHeaders(resolveMaskedHeaders(data.customHeaders, current.customHeaders, sameTarget));
     else assertHeadersReenteredForNewTarget(current.customHeaders, sameTarget);
     if (data.isActive !== undefined) updateFields.isActive = data.isActive;
@@ -230,7 +230,7 @@ export class WebhookSubscriptionService {
   }
 
   /**
-   * v9.0.339 (TD-710): a new server-made signing key; the route shows it once, every other answer masks it.
+   * v9.0.360 (TD-710): a new server-made signing key; the route shows it once, every other answer masks it.
    */
   static async rotateSecret(id: number) {
     const [updated] = await orm
@@ -327,7 +327,7 @@ export class WebhookSubscriptionService {
       metadata: event.metadata || {}
     };
 
-    // v9.0.340 (TD-898): a key or header that the current ERP_SECRETS_KEY cannot decrypt is never sent (nor an empty-key
+    // v9.0.361 (TD-898): a key or header that the current ERP_SECRETS_KEY cannot decrypt is never sent (nor an empty-key
     // signature); the delivery is recorded as failed with the reason and not retried
     if (sub.unreadableSecrets.length > 0) {
       logger.error(`[Webhook Dispatcher] Subscription #${sub.id} skipped: ${sub.unreadableSecrets.join(', ')} cannot be decrypted with the current ERP_SECRETS_KEY`);
@@ -506,7 +506,7 @@ export class WebhookSubscriptionService {
         headers,
         body: payloadString,
         signal: controller.signal,
-        // v9.0.335 (TD-704): like a real delivery, a redirect is never followed, so the guard above cannot be bypassed by a 302
+        // v9.0.356 (TD-704): like a real delivery, a redirect is never followed, so the guard above cannot be bypassed by a 302
         redirect: 'manual'
       });
 

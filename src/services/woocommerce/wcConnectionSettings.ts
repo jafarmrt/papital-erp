@@ -17,7 +17,7 @@ export async function readWcConnectionSettings(executor: DbExecutor = orm): Prom
   const valueOf = (key: string) => rows.find(r => r.key === key)?.value ?? '';
   return {
     url: valueOf('wc_store_url'),
-    // v9.0.340 (TD-898): stored encrypted; a key the current ERP_SECRETS_KEY cannot decrypt is 503, never sent
+    // v9.0.361 (TD-898): stored encrypted; a key the current ERP_SECRETS_KEY cannot decrypt is 503, never sent
     consumerKey: openSettingSecret('wc_consumer_key', valueOf('wc_consumer_key')),
     consumerSecret: openSettingSecret('wc_consumer_secret', valueOf('wc_consumer_secret')),
   };

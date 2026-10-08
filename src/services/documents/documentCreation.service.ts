@@ -1,5 +1,5 @@
 import { eq, and, inArray } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, productionProjects } from '../../db/schema.js';
 import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import { requireDocumentTimestamp, resolveDocumentTimestamp } from '../../lib/storageDate.js';
@@ -32,8 +32,10 @@ import { releaseReservationsForDocument, type ProjectReservationRelease } from '
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 import { money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
-import { assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
+import { assertDocumentStatus, assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
+import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
+import { documentAuditSnapshot, type DocumentAuditChange } from './documentAudit.js';
 
 type DocumentLineRow = typeof documentItems.$inferInsert;
 
@@ -50,19 +52,25 @@ async function insertDocumentLines(tx: DbClient, rows: DocumentLineRow[]): Promi
 export class DocumentCreationService {
   /**
    * Updates the notes of a specific document.
+   * v9.0.337 (TD-785): در تراکنش فراخواننده و با سند پیش و پس از تغییر، تا ردیف ممیزی همان تراکنش نوشته شود
+   * (پیش‌تر یادداشت سند قطعی بی هیچ ردیف ممیزی عوض می‌شد)
    */
-  static async updateDocumentNotes(id: number, notes: string): Promise<void> {
-    await orm.transaction(async (tx) => {
+  static async updateDocumentNotes(id: number, notes: string, externalTx?: DbExecutor): Promise<DocumentAuditChange> {
+    const execute = async (tx: DbExecutor): Promise<DocumentAuditChange> => {
       const [doc] = await tx.select().from(documents).where(and(eq(documents.id, id), eq(documents.isDeleted, 0))).for('update');
       if (!doc) throw new NotFoundError('سند مورد نظر یافت نشد.');
+      const before = await documentAuditSnapshot(tx, id);
       await tx.update(documents).set({ notes, version: nextVersion(doc.version) }).where(eq(documents.id, id));
-    });
+      return { before, after: await documentAuditSnapshot(tx, id) };
+    };
+    return externalTx ? execute(externalTx) : orm.transaction(execute);
   }
 
   /**
    * Updates an existing document (proforma or draft) and its line items.
+   * v9.0.337 (TD-785): در تراکنش فراخواننده؛ سند پیش از تغییر زیر قفل ردیف و پس از تغییر برای ردیف ممیزی برمی‌گردد
    */
-  static async updateDocument(id: number, body: UpdateDocumentInput): Promise<void> {
+  static async updateDocument(id: number, body: UpdateDocumentInput, externalTx?: DbExecutor): Promise<DocumentAuditChange> {
     const { 
       refNumber, date, user,
       buyer_name, buyer_city, buyer_phone, buyer_address,
@@ -73,8 +81,9 @@ export class DocumentCreationService {
     if (Array.isArray(docLines)) assertLineDiscountsWithinAmount(docLines);
 
     const leadTarget = documentLeadLinkOf(body.crmLeadId);
+    const requestedPartyId = parseDocumentPartyId(body.partyId);
 
-    await orm.transaction(async (tx) => {
+    const execute = async (tx: DbExecutor): Promise<DocumentAuditChange> => {
       // v9.0.323 (TD-776): پیوند پرونده فروش درون همین تراکنش؛ پرونده‌ها پیش از ردیف سند قفل و سنجیده می‌شوند (۴۲۲ پیش از
       // هر نوشتن). پیش‌فاکتور بودن از نوع سند و وضعیت پس از این ویرایش است.
       let leadLock: LockedDocumentLeads | null = null;
@@ -102,6 +111,7 @@ export class DocumentCreationService {
       if (existingDoc.status === 'final') {
         throw new ValidationError('امکان ویرایش مستقیم سند نهایی‌شده وجود ندارد.');
       }
+      const before = await documentAuditSnapshot(tx, id);
 
       if (status === 'final') {
         throw new ValidationError(
@@ -191,6 +201,20 @@ export class DocumentCreationService {
         existing: existingDoc.exchangeRate,
       });
 
+      // v9.0.336 (TD-778، تصمیم ت۶ الف): طرف حساب با شناسه؛ بی شناسه و با نام تازه دوباره یافته می‌شود، وگرنه همان می‌ماند.
+      // برگشت با فاکتور مرجع طرف حساب همان فاکتور را نگه می‌دارد
+      const returnInvoiceId = existingDoc.type === 'return' && existingDoc.returnOfDocumentId ? Number(existingDoc.returnOfDocumentId) : null;
+      const nameChanged = buyer_name !== undefined && buyer_name !== existingDoc.buyerName;
+      const party = requestedPartyId !== undefined || nameChanged
+        ? await resolveDocumentParty(tx, {
+          docType: existingDoc.type,
+          partyId: requestedPartyId === undefined && returnInvoiceId !== null ? await returnInvoicePartyId(tx, returnInvoiceId) : requestedPartyId,
+          // شناسه تازه بی نام: نام طرف حساب تازه، نه نام طرف حساب پیشین
+          buyerName: buyer_name ?? (requestedPartyId ? '' : existingDoc.buyerName ?? ''),
+        })
+        : { partyId: existingDoc.partyId ?? null, buyerName: existingDoc.buyerName ?? '' };
+      if (returnInvoiceId !== null && requestedPartyId !== undefined) await assertReturnPartyOfInvoice(tx, returnInvoiceId, party.partyId);
+
       // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
       const storedAttachments = body.attachments !== undefined
         ? await AttachmentStorageService.normalizeForRecord(tx, 'document', id, body.attachments, user || existingDoc.user || '')
@@ -203,7 +227,8 @@ export class DocumentCreationService {
         date: newDocDate ?? existingDoc.date,
         user: user || existingDoc.user,
         notes: notes !== undefined ? notes : existingDoc.notes,
-        buyerName: buyer_name !== undefined ? buyer_name : existingDoc.buyerName,
+        partyId: party.partyId,
+        buyerName: party.buyerName,
         buyerCity: buyer_city !== undefined ? buyer_city : existingDoc.buyerCity,
         buyerPhone: buyer_phone !== undefined ? buyer_phone : existingDoc.buyerPhone,
         buyerAddress: buyer_address !== undefined ? buyer_address : existingDoc.buyerAddress,
@@ -263,7 +288,9 @@ export class DocumentCreationService {
       if (leadLock) {
         await applyDocumentLeadLink(tx, { id, refNumber: nextRefNumber, isProforma: leadDocIsProforma }, leadLock, user || existingDoc.user || 'سیستم');
       }
-    });
+      return { before, after: await documentAuditSnapshot(tx, id) };
+    };
+    return externalTx ? execute(externalTx) : orm.transaction(execute);
   }
 
   /**
@@ -290,9 +317,10 @@ export class DocumentCreationService {
     const docType = rawDocType || rawType || 'invoice';
     // v9.0.238 (TD-770، تصمیم ت۲ الف): جهت گردش فقط از نوع سند؛ `inOut` ناسازگار ۴۲۲، انتقال پذیرفته نمی‌شود و نوع ناشناخته
     // ردیف نمی‌گیرد. پیش‌تر «رسید» با `inOut: out` کالا را خارج و سند حسابداری خرید صادر می‌کرد، و `transfer` بی ردیف مقصد خارج می‌کرد
-    assertRecordableDocument(docType, inOut, Array.isArray(docLines) && docLines.length > 0);
+    assertRecordableDocument(docType, inOut);
     // P0-02 (F17 & ACC-03): تعیین امن وضعیت سند؛ پیش‌فاکتور هرگز نباید به عنوان سند نهایی ثبت شود
     const docStatus = status || (docType === 'proforma' ? 'proforma' : 'final');
+    assertDocumentStatus(docStatus);
 
     if (docType === 'proforma' && docStatus === 'final') {
       throw new ValidationError('پیش‌فاکتور نمی‌تواند مستقیماً با وضعیت نهایی (final) صادر شود. لطفاً پیش‌فاکتور را صادر کرده و سپس از طریق فرآیند نهایی‌سازی اقدام فرمایید.');
@@ -337,6 +365,7 @@ export class DocumentCreationService {
     assertLineDiscountsWithinAmount(docLines);
 
     const finalBuyerName = buyerName || buyer_name || '';
+    const requestedPartyId = parseDocumentPartyId(body.partyId);
     const finalBuyerCity = buyerCity || buyer_city || '';
     const finalBuyerPhone = buyerPhone || buyer_phone || '';
     const finalBuyerAddress = buyerAddress || buyer_address || '';
@@ -384,6 +413,17 @@ export class DocumentCreationService {
         currency: docCurrency,
         input: returnTerms ? { exchangeRate: returnTerms.exchangeRate } : body,
       });
+      // v9.0.336 (TD-778، تصمیم ت۶ الف): طرف حساب با شناسه؛ برگشت با فاکتور مرجع طرف حساب همان فاکتور را می‌گیرد
+      const party = await resolveDocumentParty(tx, {
+        docType,
+        partyId: requestedPartyId === undefined && returnOfDocumentId !== null
+          ? await returnInvoicePartyId(tx, returnOfDocumentId)
+          : requestedPartyId,
+        buyerName: finalBuyerName,
+      });
+      if (returnOfDocumentId !== null && requestedPartyId !== undefined) {
+        await assertReturnPartyOfInvoice(tx, returnOfDocumentId, party.partyId);
+      }
 
       const [insertedDoc] = await tx.insert(documents).values({
         type: docType,
@@ -392,7 +432,8 @@ export class DocumentCreationService {
         date: normalizedDocDate,
         user,
         notes: finalNotes,
-        buyerName: finalBuyerName,
+        partyId: party.partyId,
+        buyerName: party.buyerName,
         buyerCity: finalBuyerCity,
         buyerPhone: finalBuyerPhone,
         buyerAddress: finalBuyerAddress,
@@ -587,7 +628,8 @@ export class DocumentCreationService {
             documentId: docId,
             refNumber: String(finalRefNumber),
             docType,
-            buyerName: buyer_name || '',
+            // v9.0.337 (TD-785): نام ذخیره‌شده خریدار (پیش‌تر فقط `buyer_name`؛ با `buyerName` یا شناسه طرف حساب خالی بود)
+            buyerName: party.buyerName || '',
             currency: docCurrency,
             itemCount: docLines?.length || 0,
             status: docStatus
@@ -603,7 +645,7 @@ export class DocumentCreationService {
           {
             documentId: docId,
             refNumber: String(finalRefNumber),
-            supplierName: buyer_name || '',
+            supplierName: party.buyerName || '',
             currency: docCurrency,
             itemCount: docLines?.length || 0,
             status: docStatus

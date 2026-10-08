@@ -8,7 +8,7 @@ import { decryptSecret } from '../../lib/secretBox.js';
 /**
  * Package 15 (events and integrations), TD-710 / B15-08 (decision t6 a): the webhook signing key, the rule token and the
  * partner header values are masked in every answer, for every user and the admin too; the key is shown once, by create and
- * rotate-secret; a masked value on save keeps the stored one, only for the stored address. On v9.0.338 the toggle and PUT
+ * rotate-secret; a masked value on save keeps the stored one, only for the stored address. On v9.0.359 the toggle and PUT
  * answers returned the full key to an events.manage holder, and an events.view reader saw the partner API token in
  * `customHeaders` and the rule's `secretToken` (in the rule list and the replay simulation too).
  */
@@ -22,7 +22,7 @@ export async function runWebhookSecretMaskTests(shouldRun: (id: string, ...extra
   const id = 'reg_webhook_secrets_masked_in_every_response_td_710';
   if (!shouldRun(id, 'td710', 'b15-08', 'webhook', 'package15')) return results;
 
-  const name = 'v9.0.339: webhook key, rule token and partner headers are masked in every answer, shown once on create and rotate, and kept on a masked save (TD-710)';
+  const name = 'v9.0.360: webhook key, rule token and partner headers are masked in every answer, shown once on create and rotate, and kept on a masked save (TD-710)';
   const tStart = Date.now();
   const roleIds: number[] = [];
   const userIds: number[] = [];
@@ -82,7 +82,7 @@ export async function runWebhookSecretMaskTests(shouldRun: (id: string, ...extra
     const otherUrl = await send(manager, 'put', `/api/events/webhooks/${subId}`, { targetUrl: 'https://collector-td710.example.com/x', customHeaders: { Authorization: MASK } });
     const urlOnly = await send(manager, 'put', `/api/events/webhooks/${subId}`, { targetUrl: 'https://collector-td710.example.com/x' });
     const [subRow] = await orm.select().from(webhookSubscriptions).where(eq(webhookSubscriptions.id, subId));
-    // stored encrypted since v9.0.340 (TD-898)
+    // stored encrypted since v9.0.361 (TD-898)
     if (keepHeaders.status !== 200 || decryptSecret((subRow?.customHeaders as Record<string, string>)?.Authorization) !== PARTNER_TOKEN) {
       wrong.push(`masked header same address: ${keepHeaders.status}, stored ${JSON.stringify(subRow?.customHeaders)}`);
     }

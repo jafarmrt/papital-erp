@@ -228,7 +228,7 @@ export function isEchoSimulatorEnvironment(env: NodeJS.ProcessEnv = process.env)
 }
 
 /**
- * v9.0.335 (TD-704، B15-02، تصمیم مالک محصول ت۴ الف): شبیه‌ساز echo فقط در آزمون و توسعه (`NODE_ENV` برابر `test` یا
+ * v9.0.356 (TD-704، B15-02، تصمیم مالک محصول ت۴ الف): شبیه‌ساز echo فقط در آزمون و توسعه (`NODE_ENV` برابر `test` یا
  * `development`)، فقط روی درگاه خود همین کارساز (`PORT`، پیش‌فرض ۳۰۰۰) و فقط با مسیر دقیق `LOCAL_ECHO_PATH`.
  */
 export function isLocalEchoTarget(parsed: URL, env: NodeJS.ProcessEnv = process.env): boolean {
@@ -266,7 +266,7 @@ export async function assertSafeExternalUrl(url: string, options?: { allowLocalE
   const hostname = parsed.hostname.toLowerCase();
   const cleanHostname = hostname.replace(/^\[|\]$/g, '');
   
-  // v9.0.335 (TD-704): the echo simulator exception holds only in test / development, only for this server's own port and
+  // v9.0.356 (TD-704): the echo simulator exception holds only in test / development, only for this server's own port and
   // only for the exact echo path; before, any loopback port with "/webhook-echo" anywhere in its path passed in production too
   if (options?.allowLocalEcho && isLocalEchoTarget(parsed)) {
     return;

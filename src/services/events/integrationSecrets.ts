@@ -2,7 +2,7 @@ import { ValidationError } from '../../errors/customErrors.js';
 import { isMaskedSecret, maskHeaderValues, maskSecretValue } from '../../lib/secrets/maskedSecret.js';
 
 /**
- * v9.0.339 (TD-710، B15-08، تصمیم مالک محصول ت۶ الف): کلید امضای وب‌هوک، توکن قانون وب‌هوک و مقدار سرآیندهای شریک
+ * v9.0.360 (TD-710، B15-08، تصمیم مالک محصول ت۶ الف): کلید امضای وب‌هوک، توکن قانون وب‌هوک و مقدار سرآیندهای شریک
  * در هیچ پاسخی، برای هیچ کاربری حتی مدیر سیستم، نمی‌آیند. کلید امضا فقط یک بار، در پاسخ ساخت یا «ساخت کلید تازه»، دیده می‌شود.
  * پیش‌تر `GET /webhooks` فقط برای غیرمدیر کلید را می‌پوشاند و پاسخ toggle و PUT کلید کامل را می‌داد، و دارنده `events.view`
  * توکن API شریک (`customHeaders`) و توکن قانون (`actionConfigJson.secretToken`) را می‌دید.

@@ -7,7 +7,7 @@ import { decryptSecret } from '../../lib/secretBox.js';
 
 /**
  * Package 15 (events and integrations), TD-720 / B15-18: a webhook created without a key gets the server's CSPRNG key, and
- * the timeout the form sends (`timeoutMs`) is stored, within 1 to 30 seconds. On v9.0.337 the create route read only
+ * the timeout the form sends (`timeoutMs`) is stored, within 1 to 30 seconds. On v9.0.358 the create route read only
  * `timeoutSeconds`, so every entered timeout silently became 10 seconds, and any number was accepted on edit.
  */
 export async function runWebhookKeyTimeoutTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -15,7 +15,7 @@ export async function runWebhookKeyTimeoutTests(shouldRun: (id: string, ...extra
   const id = 'reg_webhook_server_key_and_entered_timeout_td_720';
   if (!shouldRun(id, 'td720', 'b15-18', 'webhook', 'package15')) return results;
 
-  const name = 'v9.0.338: a new webhook gets the server-made signing key and the entered timeout, and an out-of-range timeout is refused (TD-720)';
+  const name = 'v9.0.359: a new webhook gets the server-made signing key and the entered timeout, and an out-of-range timeout is refused (TD-720)';
   const tStart = Date.now();
   const namePrefix = 'td720 webhook';
   try {
@@ -33,7 +33,7 @@ export async function runWebhookKeyTimeoutTests(shouldRun: (id: string, ...extra
       : [];
     if (created.status !== 201 || !row) wrong.push(`create: ${created.status} ${JSON.stringify(created.body).slice(0, 200)}`);
     else {
-      // stored encrypted since v9.0.340 (TD-898)
+      // stored encrypted since v9.0.361 (TD-898)
       const key = decryptSecret(row.secretKey) ?? '';
       if (!/^whsec_[0-9a-f]{48}$/.test(key)) wrong.push(`server key not made: ${key.slice(0, 10)}`);
       if (row.timeoutMs !== 15000) wrong.push(`entered timeout 15000 stored as ${row.timeoutMs}`);

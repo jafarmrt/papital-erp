@@ -71,7 +71,7 @@ describe('DocumentsPage — stock receipt / remittance form (TD-080 part 3 chara
     expect(screen.getByText('واحد پول (ارز سند)')).toBeTruthy();
     expect(screen.queryByText('پروژه مربوطه (جهت خروج)')).toBeNull();
     expect(await screen.findByDisplayValue('RC-1001')).toBeTruthy();
-    expect(await screen.findByText('اقلام رزرو شده انبار (1 کالا)')).toBeTruthy();
+    expect(await screen.findByText('اقلام رزرو شده انبار (۱ کالا)')).toBeTruthy();
     expect(await screen.findByText('📦 انبار مرکزی')).toBeTruthy();
     expect(fetchJson).toHaveBeenCalledWith('/documents/next-ref?type=receipt', expect.anything());
   });
@@ -101,11 +101,11 @@ describe('DocumentsPage — stock receipt / remittance form (TD-080 part 3 chara
     renderPage();
     fireEvent.click(screen.getByText('خروج از انبار (حواله مصرف)'));
     await screen.findByText('پروژه PRJ-7 - گردنبند سفارشی');
-    await screen.findByText('اقلام رزرو شده انبار (1 کالا)');
+    await screen.findByText('اقلام رزرو شده انبار (۱ کالا)');
     const projectSelect = screen.getByDisplayValue('— خروج عمومی (بدون تخصیص به پروژه) —');
     fireEvent.change(projectSelect, { target: { value: '7' } });
     expect(await screen.findByText('اقلام رزرو شده انبار برای پروژه «PRJ-7»')).toBeTruthy();
-    expect(screen.getByText('1 قلم کالا فریز شده')).toBeTruthy();
+    expect(screen.getByText('۱ قلم کالای رزروشده')).toBeTruthy();
     // v9.0.139 (TD-889): پروژه برگزیده از فهرست انتخاب می‌آید، نه از پرونده کامل پروژه
     expect(fetchJson.mock.calls.some(([url]) => String(url).startsWith('/projects/7'))).toBe(false);
     await screen.findByText('+ افزودن');
@@ -125,14 +125,14 @@ describe('DocumentsPage — stock receipt / remittance form (TD-080 part 3 chara
     renderPage();
     fireEvent.click(screen.getByText('خروج از انبار (حواله مصرف)'));
     await screen.findByText('پروژه PRJ-7 - گردنبند سفارشی');
-    await screen.findByText('اقلام رزرو شده انبار (1 کالا)');
+    await screen.findByText('اقلام رزرو شده انبار (۱ کالا)');
     await screen.findByText('📦 انبار دوم');
     fireEvent.change(screen.getByDisplayValue('— خروج عمومی (بدون تخصیص به پروژه) —'), { target: { value: '7' } });
-    fireEvent.click(await screen.findByText('➕ بارگذاری تمام اقلام فریز شده در حواله'));
+    fireEvent.click(await screen.findByText('➕ بارگذاری تمام اقلام رزروشده در حواله'));
     expect(screen.queryByText('✓ در سند')).toBeNull();
     expect(submitButton('ثبت نهایی و صدور حواله خروج').disabled).toBe(true);
     fireEvent.change(screen.getByDisplayValue('📦 انبار مرکزی'), { target: { value: 'WH2' } });
-    fireEvent.click(screen.getByText('➕ بارگذاری تمام اقلام فریز شده در حواله'));
+    fireEvent.click(screen.getByText('➕ بارگذاری تمام اقلام رزروشده در حواله'));
     expect(await screen.findByText('✓ در سند')).toBeTruthy();
     expect(submitButton('ثبت نهایی و صدور حواله خروج').disabled).toBe(false);
   });

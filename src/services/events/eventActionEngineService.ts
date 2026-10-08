@@ -120,7 +120,7 @@ export class EventActionEngineService {
 
     let targetUrl = this.interpolateTemplate(webhookConfig.url, event);
     if (targetUrl.startsWith('/')) {
-      // v9.0.335 (TD-704): this server's own port, the only port the echo exception of the SSRF guard accepts
+      // v9.0.356 (TD-704): this server's own port, the only port the echo exception of the SSRF guard accepts
       targetUrl = `http://127.0.0.1:${process.env.PORT || 3000}${targetUrl}`;
     }
 
@@ -137,7 +137,7 @@ export class EventActionEngineService {
       ...(webhookConfig.headers || {})
     };
 
-    // v9.0.336 (TD-715): the system's own echo token authenticates only this server's echo simulator; a rule that holds it
+    // v9.0.357 (TD-715): the system's own echo token authenticates only this server's echo simulator; a rule that holds it
     // (boot used to copy it into every webhook rule without a token) never sends it to another address
     let systemTokenWithheld = false;
     if (webhookConfig.secretToken) {
@@ -519,7 +519,7 @@ export class EventActionEngineService {
     try {
       const webhookSecret = await EventActionEngineService.getWebhookSecretToken();
 
-      // v9.0.336 (TD-715، تصمیم ت۴ الف): قانون‌های موجود هرگز در راه‌اندازی بازنویسی نمی‌شوند. پیش‌تر نشانی هر قانونی که
+      // v9.0.357 (TD-715، تصمیم ت۴ الف): قانون‌های موجود هرگز در راه‌اندازی بازنویسی نمی‌شوند. پیش‌تر نشانی هر قانونی که
       // `example.com` یا `httpbin.org` را جایی در خود داشت به شبیه‌ساز محلی تغییر می‌کرد و توکن سامانه در هر قانون وب‌هوک
       // بی توکن گذاشته می‌شد و به نشانی بیرونی آن فرستاده می‌شد
       const existing = await orm.select({ id: eventActionRules.id }).from(eventActionRules).limit(1);
@@ -560,7 +560,7 @@ export class EventActionEngineService {
           },
           isActive: 1
         },
-        // v9.0.336 (TD-715): the echo simulator answers only in test / development (TD-704), so only there is its rule seeded
+        // v9.0.357 (TD-715): the echo simulator answers only in test / development (TD-704), so only there is its rule seeded
         ...(isEchoSimulatorEnvironment() ? [{
           name: 'وب‌هوک تایید فاکتور فروش (شبیه‌ساز یکپارچگی)',
           description: 'ارسال وب‌هوک HTTP POST به سرور بیرونی / اتوماسیون سازمانی هنگام تایید نهایی فاکتور فروش',
@@ -657,7 +657,7 @@ export class EventActionEngineService {
       eventType: data.eventType,
       conditionsJson: data.conditionsJson || [],
       actionType: data.actionType,
-      // v9.0.339 (TD-710): a masked token or header value of a new rule has no stored value to stand for
+      // v9.0.360 (TD-710): a masked token or header value of a new rule has no stored value to stand for
       actionConfigJson: resolveRuleConfigSecrets(data.actionConfigJson || {}, {}) as CreateRuleInput['actionConfigJson'],
       isActive: data.isActive ?? 1,
       executionCount: 0,
@@ -684,7 +684,7 @@ export class EventActionEngineService {
     if (data.conditionsJson !== undefined) updatePayload.conditionsJson = data.conditionsJson;
     if (data.actionType !== undefined) updatePayload.actionType = data.actionType;
     if (data.actionConfigJson !== undefined) {
-      // v9.0.339 (TD-710): responses mask the token and header values; «********» keeps the stored value for the same address
+      // v9.0.360 (TD-710): responses mask the token and header values; «********» keeps the stored value for the same address
       const current = await this.getRuleById(id);
       updatePayload.actionConfigJson = resolveRuleConfigSecrets(data.actionConfigJson, current?.actionConfigJson);
     }

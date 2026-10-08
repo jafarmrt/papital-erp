@@ -5,7 +5,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 /**
  * Package 15 (events and integrations), TD-704 / B15-02 (decision t4 a): the webhook connection test never follows a
  * redirect, and the SSRF guard's echo-simulator exception holds only in test / development, on this server's own port and
- * for the exact echo path. On v9.0.334 a ping to an allowed address that answered 302 returned the internal service's body,
+ * for the exact echo path. On v9.0.355 a ping to an allowed address that answered 302 returned the internal service's body,
  * and any loopback port whose path contained "/webhook-echo" passed the guard, in production too.
  */
 export async function runWebhookSsrfEchoTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -13,7 +13,7 @@ export async function runWebhookSsrfEchoTests(shouldRun: (id: string, ...extra: 
   const id = 'reg_webhook_ping_redirect_and_echo_scope_td_704';
   if (!shouldRun(id, 'td704', 'b15-02', 'ssrf', 'webhook', 'package15')) return results;
 
-  const name = 'v9.0.335: webhook ping does not follow a redirect and the echo exception holds only for this server\'s port and path outside production (TD-704)';
+  const name = 'v9.0.356: webhook ping does not follow a redirect and the echo exception holds only for this server\'s port and path outside production (TD-704)';
   const tStart = Date.now();
   const internalHits: string[] = [];
   const internal = http.createServer((req, res) => {

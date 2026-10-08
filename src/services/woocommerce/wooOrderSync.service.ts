@@ -428,6 +428,8 @@ export class WooOrderSyncService {
           user: WC_BOT_USER,
           inOut: 'out',
           status: 'final',
+          // v9.0.336 (TD-778، B15-01): فاکتور به همان مشتری تطبیق‌یافته یا ساخته‌شده با شناسه وصل می‌شود
+          partyId: orderCustomer.id,
           buyer_name: invoiceBuyerName,
           buyer_phone: buyer.buyerPhone,
           buyer_city: buyer.buyerCity,

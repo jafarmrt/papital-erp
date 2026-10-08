@@ -351,7 +351,7 @@ export class EventSourcingReplayService {
         actionType: rule.actionType,
         conditions: rule.conditionsJson,
         matched: isMatched,
-        // v9.0.339 (TD-710): the rule token and header values are masked here too
+        // v9.0.360 (TD-710): the rule token and header values are masked here too
         actionConfig: actionRuleView(rule).actionConfigJson,
         simulatedOutcome: isMatched
           ? `قانون با موفقیت منطبق شد و اکشن ${rule.actionType} ${dryRun ? 'شبیه‌سازی' : 'اجرا'} گردید.`

@@ -8,7 +8,7 @@ export interface RevealedWebhookSecret {
 }
 
 /**
- * v9.0.339 (TD-710، تصمیم ت۶ الف): کلید امضای وب‌هوک فقط یک بار، پس از ساخت درگاه یا «ساخت کلید تازه»، نشان داده می‌شود؛
+ * v9.0.360 (TD-710، تصمیم ت۶ الف): کلید امضای وب‌هوک فقط یک بار، پس از ساخت درگاه یا «ساخت کلید تازه»، نشان داده می‌شود؛
  * همه پاسخ‌های دیگر آن را پوشیده برمی‌گردانند.
  */
 export function WebhookSecretRevealPanel({ secret, onClose }: { secret: RevealedWebhookSecret | null; onClose: () => void }) {

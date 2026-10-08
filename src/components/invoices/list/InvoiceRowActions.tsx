@@ -1,5 +1,5 @@
 import { Printer, Trash2, Eye, CreditCard, GitBranch } from 'lucide-react';
-import { ActionMenu } from '../../ActionMenu';
+import { ActionMenu, type ActionMenuItem } from '../../ActionMenu';
 import type { InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
 import type { InvoiceListActions } from '../../../hooks/invoices/useInvoiceListActions';
 
@@ -12,11 +12,34 @@ interface InvoiceRowActionsProps {
 
 /** TD-080 (بخش ۳): ستون «عملیات» یک ردیف (تسویه سریع، جزئیات، چاپ، گردش‌کار، ابطال) */
 export function InvoiceRowActions({ doc, isCommercial, settlementStatus, actions }: InvoiceRowActionsProps) {
-  const { setSettlementDoc, handleOpenDetails, handlePrint, setWorkflowDoc, handleDeleteDoc } = actions;
+  const { access, setSettlementDoc, handleOpenDetails, handlePrint, setWorkflowDoc, handleDeleteDoc } = actions;
+  // v9.0.340 (TD-795): هر گزینه فقط با مجوز API خودش
+  const menuItems: ActionMenuItem[] = [
+    {
+      label: 'چاپ سند / فاکتور رسمی',
+      icon: Printer,
+      onClick: () => { void handlePrint(doc.id); },
+    },
+  ];
+  if (access.workflow) {
+    menuItems.push({
+      label: 'چرخه تأییدات و گردش کار',
+      icon: GitBranch,
+      onClick: () => setWorkflowDoc(doc),
+    });
+  }
+  if (access.void) {
+    menuItems.push({
+      label: 'ابطال / حذف سند',
+      icon: Trash2,
+      onClick: () => { void handleDeleteDoc(doc.id, doc.ref_number); },
+      variant: 'danger',
+    });
+  }
   return (
     <td className="p-3 text-center whitespace-nowrap">
       <div className="flex items-center justify-center gap-1">
-        {isCommercial && doc.status === 'final' && (
+        {isCommercial && doc.status === 'final' && access.settle && (
           <button 
             onClick={() => setSettlementDoc(doc)} 
             className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1 font-bold ${
@@ -42,24 +65,7 @@ export function InvoiceRowActions({ doc, isCommercial, settlementStatus, actions
         <ActionMenu
           align="left"
           title="عملیات سند"
-          items={[
-            {
-              label: 'چاپ سند / فاکتور رسمی',
-              icon: Printer,
-              onClick: () => { void handlePrint(doc.id); },
-            },
-            {
-              label: 'چرخه تاییدات و گردش کار',
-              icon: GitBranch,
-              onClick: () => setWorkflowDoc(doc),
-            },
-            {
-              label: 'ابطال / حذف سند',
-              icon: Trash2,
-              onClick: () => { void handleDeleteDoc(doc.id, doc.ref_number); },
-              variant: 'danger',
-            },
-          ]}
+          items={menuItems}
         />
       </div>
     </td>
