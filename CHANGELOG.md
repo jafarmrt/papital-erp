@@ -19,6 +19,27 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.346 — Persian Digits and Wording in Invoices and Stock Documents
+- **Wording:** invoice and stock document messages show numbers in Persian digits and currency names instead of codes, the receipt summary no longer claims stock waits for a finance approval, and the screens drop transliterations and English words (TD-803).
+
+### v9.0.345 — Settlement Account in the Invoice Currency
+- **Settlement:** the invoice settlement form lists and pre-selects only bank accounts and cash funds in the invoice's currency and names each account's currency (TD-802).
+
+### v9.0.344 — Document Type Names and the Sales Proforma Filter
+- **Documents list:** the details and workflow windows name every document type in Persian, the «sales proforma» filter also lists proformas saved as invoices, and production receipts can be filtered (TD-800).
+
+### v9.0.343 — Invoice List Cards Show Payable Totals
+- **List cards:** the sales, purchase and proforma cards above the documents list now add up the payable amount (net + VAT + service charge), the same figure each row shows (TD-798).
+
+### v9.0.342 — Document List Load Errors
+- **Document list errors:** a failed load of the invoices and documents list (no permission, server error) now shows the server's message with a retry button instead of «no document found» (TD-797).
+
+### v9.0.341 — Fresh Lists After Document Changes
+- **Cache refresh:** saving a stock document and voiding a document now refresh Kardex, vouchers, items, the dashboard, reservations, projects, sales leads and parties, and a settlement refreshes bank accounts and treasury (TD-796).
+
+### v9.0.340 — Document List Buttons by Permission
+- **Document list buttons:** settlement, notes edit, workflow and void are shown only to users holding the permission of the action they call, and a refused notes edit shows the server's reason (TD-795).
+
 ### v9.0.339 — Paged Document List
 - **Document list:** a list request without paging now answers one page of 50 documents with its total instead of the whole table, the full list comes only with `export=true`, and the stock count history and transfer tabs page through it (TD-787).
 

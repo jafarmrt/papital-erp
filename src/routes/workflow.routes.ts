@@ -3,7 +3,7 @@ import { WorkflowEngineService } from '../services/workflow/workflowEngineServic
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
-import { WORKFLOW_ENTITY_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { WORKFLOW_ENTITY_READ_PERMISSIONS, WORKFLOW_WIDGET_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { ForbiddenError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -158,7 +158,7 @@ router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'w
  * GET /api/workflow/instance/:entityType/:entityId
  * Get active workflow instance, current state, available actions, and history
  */
-router.get('/instance/:entityType/:entityId', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(entityParamSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.get('/instance/:entityType/:entityId', authorizePermission(...WORKFLOW_WIDGET_PERMISSIONS), validate(entityParamSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const { entityType, entityId } = req.params;
     const userId = req.user?.id;
