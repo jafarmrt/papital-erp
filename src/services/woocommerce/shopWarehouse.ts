@@ -28,15 +28,18 @@ export async function resolveShopWarehouseCode(tx: DbExecutor): Promise<string> 
 /**
  * موجودی قابل فروش هر کالا در انبار فروشگاه، با همان قاعده‌ای که فاکتور خروج می‌سنجد: کمینه (موجودی همان انبار، موجودی کل
  * منهای رزروها) — ItemStockReservationService.computeSellable.
+ *
+ * v9.0.375 (TD-821) و v9.0.376 (TD-831): رزرو فقط برای همین کالاها خوانده می‌شود و خطای خواندن آن همگام‌سازی را رد می‌کند؛
+ * پیش‌تر گزارش همه کالاها ساخته و خطایش بلعیده می‌شد و فروشگاه موجودی بی رزرو می‌گرفت.
  */
 export async function shopSellableStocks(tx: DbExecutor, itemIds: number[]): Promise<{ warehouseCode: string; sellable: Map<number, number> }> {
   const warehouseCode = await resolveShopWarehouseCode(tx);
-  // v9.0.375 (TD-821): خطای خواندن رزرو همگام‌سازی را رد می‌کند؛ پیش‌تر بلعیده می‌شد و فروشگاه موجودی بی رزرو می‌گرفت
-  const report = await ItemStockReservationService.getReservedStockDetails(tx, true);
+  const report = await ItemStockReservationService.getReservedStockDetails(tx, true, { itemIds });
+  const summaryById = new Map(report.itemSummaries.map(s => [Number(s.itemId), s]));
   const stocks = await ItemWarehouseStockService.getStocksForItems(tx, itemIds);
   const sellable = new Map<number, number>();
   for (const itemId of itemIds) {
-    const summary = report.itemSummaries.find(s => s.itemId === itemId);
+    const summary = summaryById.get(itemId);
     sellable.set(itemId, ItemStockReservationService.computeSellable(summary, stocks.get(itemId)?.byCode ?? {}, { location: warehouseCode }).sellable);
   }
   return { warehouseCode, sellable };

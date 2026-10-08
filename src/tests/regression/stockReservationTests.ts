@@ -8,8 +8,7 @@ import { brief, fixture, type Fixture } from './documentEntryTests.js';
  * package 7 review and is red on the code before its fix.
  */
 export async function runStockReservationTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
-  const results: TestCaseResult[] = [];
-  const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
+  return runReservationCases(shouldRun, [
     ['reg_reservation_sales_proforma_only_td_818',
       'v9.0.370: only a sales proforma (invoice or proforma type in proforma status) reserves stock; a purchase proforma and a draft do not (TD-818)',
       ['td818', 'reservation', 'proforma', 'package7'], salesProformaOnlyCase],
@@ -25,10 +24,15 @@ export async function runStockReservationTests(shouldRun: ShouldRun): Promise<Te
     ['reg_reservation_keyed_by_item_td_822',
       'v9.0.374: the reservation summary is keyed by item id, so two items whose codes fold to one key keep their own reservations in the report, the item list and the exit gate (TD-822)',
       ['td822', 'reservation', 'summary', 'package7'], keyedByItemCase],
-    ['reg_reservation_fail_closed_td_821',
-      'v9.0.375: a malformed or unmatched reservation row is skipped and listed instead of breaking every exit, and every reader that allows an exit or shows stock fails closed (TD-821)',
-      ['td821', 'reservation', 'failclosed', 'package7'], failClosedCase],
-  ];
+  ]);
+}
+
+/** [test id, test name, filter tags, case]; a case pushes what is wrong and returns its details */
+export type ReservationCase = [string, string, string[], (h: Harness, wrong: string[]) => Promise<string>];
+
+/** Runs each case selected by the filter on its own harness */
+export async function runReservationCases(shouldRun: ShouldRun, cases: ReservationCase[]): Promise<TestCaseResult[]> {
+  const results: TestCaseResult[] = [];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
     const tStart = Date.now();
@@ -84,7 +88,7 @@ export async function storedReservation(h: Harness, projectId: number): Promise<
   return Array.isArray(row?.r) ? (row.r as Array<Record<string, unknown>>) : [];
 }
 
-async function postDoc(h: Harness, f: Fixture, type: string, status: string, itemId: number, quantity: number, price = 5_000) {
+export async function postDoc(h: Harness, f: Fixture, type: string, status: string, itemId: number, quantity: number, price = 5_000) {
   return h.post('/api/documents', f.doc(type, status, [{ itemId, quantity, unit_price: price, location: f.wh }]));
 }
 
@@ -360,66 +364,5 @@ async function keyedByItemCase(h: Harness, wrong: string[]): Promise<string> {
   const over = await postDoc(h, f, 'invoice', 'final', lower, 1);
   if (over.status !== 400) wrong.push(`one more unit of the proforma's item answered ${brief(over)}, expected 400`);
   return 'two items whose codes fold to one key: the proforma of 6 stays on its own item in the report, GET /items and the exit gate';
-}
-
-/** B07-05 (TD-821): one bad row in one project broke every exit (500) while the item list and the online shop saw no reservation at all */
-async function failClosedCase(h: Harness, wrong: string[]): Promise<string> {
-  const f = await fixture(h);
-  const a = await f.item(10);
-  const b = await f.item(10);
-  const other = await f.item(10);
-  const proforma = await postDoc(h, f, 'invoice', 'proforma', a, 6);
-  if (proforma.status !== 200) throw new Error(`setup: the sales proforma answered ${brief(proforma)}`);
-  // a finalized project with a numeric code nobody has and a row whose code and name are numbers but whose id is item b
-  const [bad] = await h.q(
-    `INSERT INTO production_projects (project_code, title, status, version, inventory_control)
-     VALUES ($1, 'P7 broken rows', 'in_progress', 1, $2::jsonb) RETURNING id`,
-    [`P7-BR-${h.tag}`, JSON.stringify({ isFinalized: true, finalizedAt: '2026-01-01T00:00:00Z', reservedItems: [
-      { itemCode: 987654321, reservedQty: 3, unit: 'عدد' },
-      { itemId: b, itemCode: 12345, itemName: 777, category: 5, reservedQty: 2, unit: 'عدد' },
-    ] })],
-  );
-  try {
-    const sale = await postDoc(h, f, 'invoice', 'final', other, 1);
-    if (sale.status !== 200) wrong.push(`a final invoice of an unrelated item answered ${brief(sale)}, expected 200`);
-    if ((await reservedOf(b)).project !== 2) wrong.push(`the row with item b's id reserves ${(await reservedOf(b)).project}, expected 2`);
-
-    const list = await h.get(`/api/items?search=${encodeURIComponent(h.tag)}&limit=50`);
-    const rows = Array.isArray((list.body as { data?: unknown })?.data) ? (list.body as { data: Array<Record<string, unknown>> }).data : [];
-    const reservedA = Number(rows.find(r => Number(r.id) === a)?.reserved_stock);
-    if (list.status !== 200 || reservedA !== 6) wrong.push(`GET /items answered ${list.status} with item a reserved ${reservedA}, expected 200 and 6`);
-
-    const { orm } = await import('../../db/drizzle.js');
-    const { shopSellableStocks } = await import('../../services/woocommerce/shopWarehouse.js');
-    const shop = await shopSellableStocks(orm, [a]);
-    if (shop.sellable.get(a) !== 4) wrong.push(`the online shop sees ${shop.sellable.get(a)} sellable units of item a, expected 4`);
-
-    const report = await h.get('/api/inventory/reserved-items');
-    const entries = ((report.body as { allReservationEntries?: Array<{ sourceId?: number; itemId?: number }> })?.allReservationEntries ?? [])
-      .filter(e => Number(e.sourceId) === Number(bad.id));
-    if (report.status !== 200 || entries.length !== 1 || Number(entries[0].itemId) !== b) {
-      wrong.push(`the reservation report answered ${report.status} with the broken project's entries ${JSON.stringify(entries)}, expected only item b's row`);
-    }
-
-    const { findProjectReservationIssues } = await import('../../services/projects/projectReservationHealth.js');
-    const kinds = (await findProjectReservationIssues()).filter(i => i.projectId === Number(bad.id)).map(i => i.kind);
-    if (kinds.join(',') !== 'reservation_row_unmatched') wrong.push(`the health check lists the broken project as ${JSON.stringify(kinds)}, expected reservation_row_unmatched`);
-
-    // a reader that fails is an error, never "no reservation": the reserved stock map and the item list pass it on
-    const { ItemStockReservationService } = await import('../../services/items/itemStockReservation.service.js');
-    const original = ItemStockReservationService.getReservedStockDetails;
-    ItemStockReservationService.getReservedStockDetails = async () => { throw new Error('simulated reservation read failure'); };
-    try {
-      const mapResult = await ItemStockReservationService.getReservedStocksMap({ itemIds: [a] }).then(() => 'resolved', () => 'rejected');
-      if (mapResult !== 'rejected') wrong.push('the reserved stock map resolved while the reservation read failed, expected it to reject');
-      const failedList = await h.get(`/api/items?search=${encodeURIComponent(h.tag)}&limit=50`);
-      if (failedList.status < 500) wrong.push(`GET /items answered ${failedList.status} while the reservation read failed, expected an error`);
-    } finally {
-      ItemStockReservationService.getReservedStockDetails = original;
-    }
-  } finally {
-    await h.q(`UPDATE production_projects SET is_deleted = 1 WHERE id = $1`, [bad.id]);
-  }
-  return 'a project with a numeric-code row nobody has and a numeric-name row with an item id: unrelated sales pass, the id row reserves 2, the item list and the online shop still see the proforma of 6, the unmatched row is listed by the health check, and a failing read is an error';
 }
 

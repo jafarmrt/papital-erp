@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.376 — Scoped Reservation Reads
+- **Reservations (TD-831, B07-15):** the reservation report reads sales proforma lines in one joined query, only finalized projects with stored rows and only the items those rows name; scoped reads (exit gate, item list, online shop) read only what may reach their items.
+
 ### v9.0.375 — Reservation Readers Fail Closed
 - **Reservations (TD-821, B07-05):** a stored project reservation row is read as text and a row that reaches no live item is skipped and listed by the financial health check; the item list, the online shop sync and the reservation report fail closed instead of showing zero reservations.
 

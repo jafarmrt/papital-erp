@@ -10759,9 +10759,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runProcurementDeskTests } = await import('../regression/procurementDeskTests.js');
   results.push(...await runProcurementDeskTests(shouldRun));
 
-  // Package 7 PR A (v9.0.370+): which documents and projects reserve stock, and how much
+  // Package 7 PR A (v9.0.370+): which documents and projects reserve stock, and how much; PR B (v9.0.375+): how they are read
   const { runStockReservationTests } = await import('../regression/stockReservationTests.js');
   results.push(...await runStockReservationTests(shouldRun));
+  const { runStockReservationReadTests } = await import('../regression/stockReservationReadTests.js');
+  results.push(...await runStockReservationReadTests(shouldRun));
 
   return results;
 }
