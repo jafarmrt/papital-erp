@@ -23,7 +23,7 @@ going forward.
 ### v10.0.0 — Closure of Version 9 & Launch of Version 10
 - **Version 9 Closure:** Concluded and archived the v9.x series (`v9.0.0` through `v9.0.461`). `V9_MASTER_ROADMAP.md` is archived with a closing report (section 10: phase 5 review of the sales, purchase, project production and payroll flows); `src/data/changelogs/9.ts` is frozen.
 - **Phase 5 Findings and Observations:** `docs/audit/STABILITY_AUDIT_V9.md` section 18 records the 53 phase 5 findings; TD-904 – TD-956 hold one row each, the 41 not fixed by other changes stay open, and the series 9 observations are kept in the new ledger `docs/audit/V9_OBSERVATIONS.md` with 43 open rows TD-957 – TD-999 (`AGENTS.md` §23 exception).
-- **Version 10 Mission:** `V10_MASTER_ROADMAP.md` — fix the open debt and observations of series 9 and the improvement and development proposals the product owner chooses; new debt rows start at TD-1000.
+- **Version 10 Mission:** `V10_MASTER_ROADMAP.md` — fix the open debt and observations of series 9 and the 27 improvement and development items the product owner chose (roadmap section 3.3; no electronic tax invoicing); new debt rows start at TD-1000.
 - **Governance:** `npm run check:version` now also rejects any change to the closed 9.x series; release paperwork and `npm run release:renumber` follow the active series 10.
 
 ---
