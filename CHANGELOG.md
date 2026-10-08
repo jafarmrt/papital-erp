@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.431 — Webhook Deliveries and Rule Logs Follow Their Declared ON DELETE
+- **Fix (TD-611, B01-31):** webhook deliveries and rule action logs get the foreign keys the schema declares; deleting a subscription or a rule is one audited transaction that also closes its queued jobs.
+
 ### v9.0.430 — Print Signatures Keep Their Step Title; Foreign Key Exceptions Documented
 - **Fix (TD-612, B01-32):** the document print signature reads the step title from the instance's own snapshot, so a workflow design save no longer drops it; columns kept without a foreign key on purpose are listed with their reason and a test checks the schema against the database.
 

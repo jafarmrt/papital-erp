@@ -18,6 +18,7 @@ import { resolveRuleConfigSecrets } from './integrationSecrets.js';
 import { type RuleActionType } from '../../lib/events/ruleActionTypes.js';
 import { assertRuleActionTypeAllowed, assertRuleEventTypeAllowed } from './ruleActionTypeGuard.js';
 import type { ActionEngineStats, ActionLogPage } from '../../lib/events/actionLogContract.js';
+import { deleteEventActionRule, type IntegrationDeleteActor } from './integrationParentDelete.js';
 import { ruleSampleEvent } from './ruleSampleEvent.js';
 import { IntegrationDeliveryService, RULE_ACTION_MAX_ATTEMPTS, type DeliveryAttemptContext, type DeliveryAttemptOutcome } from './integrationDelivery.service.js';
 
@@ -646,11 +647,11 @@ export class EventActionEngineService {
   }
 
   /**
-   * Delete rule
+   * Delete rule: v9.0.431 (TD-611) one transaction; its logs stay with rule_id set to null (SET NULL), audit row with tx.
    */
-  public static async deleteRule(id: number) {
-    await orm.delete(eventActionRules).where(eq(eventActionRules.id, id));
-    return { success: true };
+  public static async deleteRule(id: number, actor: IntegrationDeleteActor = {}) {
+    const result = await deleteEventActionRule(id, actor);
+    return { success: true, ...result };
   }
 
   /**

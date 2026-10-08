@@ -36,10 +36,26 @@ export interface ConditionalConstraintRule {
   create: string;
   /** پس از ساختن، مثل مهاجرت (ایندکس جایگزین‌شده) */
   afterCreate?: (schema: string) => ReturnType<typeof sql>;
+  /**
+   * v9.0.431 (TD-611، B01-31، تصمیم ت۶ الف): کلید خارجی‌ای که مهاجرتش آن را NOT VALID می‌افزاید (برای ردیف تازه برقرار) و فقط
+   * روی داده پاک تأیید می‌کند. تا تأیید نشده جاافتاده شمرده می‌شود؛ «ساختن» آن را اگر نباشد با `create` (NOT VALID) می‌افزاید و
+   * سپس با VALIDATE CONSTRAINT تأیید می‌کند.
+   */
+  addedNotValid?: boolean;
 }
 
 const orphanCount = (child: string, column: string, parent: string) =>
   `SELECT COUNT(*)::int AS n FROM ${child} c WHERE c.${column} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ${parent} p WHERE p.id = c.${column})`;
+
+/** کلید خارجی‌ای که مهاجرتش آن را NOT VALID می‌افزاید و فقط روی داده پاک تأیید می‌کند */
+const notValidForeignKey = (rule: {
+  name: string; table: string; column: string; parent: string; onDelete: 'NO ACTION' | 'CASCADE' | 'SET NULL';
+  migration: string; label: string; blockerUnit: string;
+}): ConditionalConstraintRule => ({
+  name: rule.name, kind: 'foreign_key', table: rule.table, migration: rule.migration, label: rule.label,
+  blockerUnit: rule.blockerUnit, blockerCount: orphanCount(rule.table, rule.column, rule.parent), addedNotValid: true,
+  create: `ALTER TABLE ${rule.table} ADD CONSTRAINT ${rule.name} FOREIGN KEY (${rule.column}) REFERENCES ${rule.parent}(id) ON DELETE ${rule.onDelete} NOT VALID`,
+});
 
 export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] = [
   {
@@ -96,32 +112,54 @@ export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] 
     // مثل 0015: ایندکس قدیمی بی سال مالی فقط وقتی برداشته می‌شود که ایندکس تازه ساخته شده باشد
     afterCreate: (schema) => sql`DROP INDEX IF EXISTS ${sql.identifier(schema)}.uq_documents_type_ref_number_active`,
   },
+  // v9.0.431 (TD-611): webhook deliveries and rule action logs, with the ON DELETE the Drizzle schema declares
+  notValidForeignKey({
+    name: 'fk_webhook_deliveries_subscription', table: 'webhook_deliveries', column: 'subscription_id',
+    parent: 'webhook_subscriptions', onDelete: 'CASCADE', migration: '0089',
+    label: 'پیوند ردیف تحویل وب‌هوک به اشتراک', blockerUnit: 'ردیف تحویل با اشتراک ناموجود',
+  }),
+  notValidForeignKey({
+    name: 'fk_event_action_logs_rule', table: 'event_action_logs', column: 'rule_id',
+    parent: 'event_action_rules', onDelete: 'SET NULL', migration: '0089',
+    label: 'پیوند گزارش اجرای قانون خودکار به قانون', blockerUnit: 'گزارش اجرا با قانون ناموجود',
+  }),
 ];
 
 type Executor = Pick<DbTransaction, 'execute'> | typeof orm;
 
 const firstNumber = (rows: unknown[], key: string) => Number((rows[0] as Record<string, unknown> | undefined)?.[key] ?? 0);
 
-async function isPresent(db: Executor, rule: ConditionalConstraintRule): Promise<boolean> {
-  const res = rule.kind === 'foreign_key'
-    ? await db.execute(sql`SELECT COUNT(*)::int AS n FROM pg_constraint WHERE conname = ${rule.name} AND connamespace = current_schema()::regnamespace`)
-    : await db.execute(sql`SELECT COUNT(*)::int AS n FROM pg_indexes WHERE indexname = ${rule.name} AND schemaname = current_schema()`);
-  return firstNumber(res.rows, 'n') > 0;
+type Presence = 'present' | 'unvalidated' | 'missing';
+
+async function presenceOf(db: Executor, rule: ConditionalConstraintRule): Promise<Presence> {
+  if (rule.kind === 'foreign_key') {
+    const res = await db.execute(sql`SELECT convalidated FROM pg_constraint WHERE conname = ${rule.name} AND connamespace = current_schema()::regnamespace`);
+    const row = res.rows[0] as { convalidated?: boolean } | undefined;
+    if (!row) return 'missing';
+    return row.convalidated === false ? 'unvalidated' : 'present';
+  }
+  const res = await db.execute(sql`SELECT COUNT(*)::int AS n FROM pg_indexes WHERE indexname = ${rule.name} AND schemaname = current_schema()`);
+  return firstNumber(res.rows, 'n') > 0 ? 'present' : 'missing';
 }
 
-async function entryFor(db: Executor, rule: ConditionalConstraintRule): Promise<ConditionalConstraintEntry> {
+async function entryFor(db: Executor, rule: ConditionalConstraintRule, presence: Presence): Promise<ConditionalConstraintEntry> {
   const blockers = firstNumber((await db.execute(sql.raw(rule.blockerCount))).rows, 'n');
   return {
     name: rule.name, kind: rule.kind, table: rule.table, migration: rule.migration, label: rule.label,
     state: blockers > 0 ? 'blocked' : 'ready', blockers, blockerUnit: rule.blockerUnit,
+    ...(presence === 'unvalidated' ? { unvalidated: true } : {}),
   };
 }
 
-/** قیدهای شرطی که در اسکیمای جاری نیستند، هر کدام با شمار آنچه ساختنش را ناممکن می‌کند */
+/**
+ * قیدهای شرطی که در اسکیمای جاری نیستند، یا (کلید خارجی NOT VALID، v9.0.431) هنوز تأیید نشده‌اند، هر کدام با شمار آنچه
+ * ساختن یا تأییدش را ناممکن می‌کند
+ */
 export async function findMissingConditionalConstraints(db: Executor = orm): Promise<ConditionalConstraintEntry[]> {
   const entries: ConditionalConstraintEntry[] = [];
   for (const rule of CONDITIONAL_CONSTRAINT_RULES) {
-    if (!(await isPresent(db, rule))) entries.push(await entryFor(db, rule));
+    const presence = await presenceOf(db, rule);
+    if (presence !== 'present') entries.push(await entryFor(db, rule, presence));
   }
   return entries;
 }
@@ -132,19 +170,19 @@ export function buildConditionalConstraintsHealthTest(entries: ConditionalConstr
     id: 'conditional_constraints_missing',
     category: 'system',
     title: 'قیدها و ایندکس‌های یکتای جاافتاده مهاجرت‌ها',
-    description: 'مهاجرت‌ها پیوند ردیف کاردکس و ردیف سند به کالا و سند و حساب، و یکتایی شناسه صیاد، کد حساب و شماره سند را فقط روی داده پاک می‌سازند. قیدی که به سبب داده ناپاک ساخته نشده اینجا با علتش می‌آید؛ داده خودکار عوض نمی‌شود',
+    description: 'مهاجرت‌ها برخی قیدها (پیوند ردیف‌ها به جدول مرجعشان، و یکتایی شناسه صیاد، کد حساب و شماره سند) را فقط روی داده پاک می‌سازند یا تأیید می‌کنند. قیدی که به سبب داده ناپاک ساخته یا تأیید نشده اینجا با علتش می‌آید؛ داده خودکار عوض نمی‌شود',
     status: entries.length > 0 ? 'warning' : 'healthy',
     scoreImpact: 0,
     count: entries.length,
     message: entries.length === 0
       ? 'همه قیدها و ایندکس‌های یکتای شرطی مهاجرت‌ها برقرارند.'
-      : `${toPersianDigits(entries.length, 0)} قید یا ایندکس یکتای مهاجرت‌ها در پایگاه‌داده نیست${blocked > 0 ? `؛ ساختن ${toPersianDigits(blocked, 0)} مورد پیش از اصلاح داده ممکن نیست` : ''}. مدیر سامانه آن‌ها را از «عملیات سامانه» می‌سازد.`,
+      : `${toPersianDigits(entries.length, 0)} قید یا ایندکس یکتای مهاجرت‌ها در پایگاه‌داده نیست یا تأیید نشده${blocked > 0 ? `؛ ساختن یا تأیید ${toPersianDigits(blocked, 0)} مورد پیش از اصلاح داده ممکن نیست` : ''}. مدیر سامانه آن‌ها را از «عملیات سامانه» می‌سازد.`,
     items: entries.map((e, index) => ({
       id: index + 1,
       code: e.name,
       title: e.label,
       subtitle: e.state === 'blocked' ? `${toPersianDigits(e.blockers, 0)} ${e.blockerUnit}` : 'آماده ساختن',
-      details: `${conditionalConstraintCause(e)} (مهاجرت ${toPersianDigits(e.migration, 0)}، TD-589)`,
+      details: `${conditionalConstraintCause(e)} (مهاجرت ${toPersianDigits(e.migration, 0)})`,
     })),
     metrics: { conditionalConstraintsMissing: entries.length, conditionalConstraintsBlocked: blocked },
   };
@@ -178,7 +216,8 @@ export async function buildConditionalConstraints(apply: boolean, actor: Conditi
       const rule = CONDITIONAL_CONSTRAINT_RULES.find(r => r.name === entry.name)!;
       try {
         await tx.transaction(async (sp) => {
-          await sp.execute(sql.raw(rule.create));
+          if (!entry.unvalidated) await sp.execute(sql.raw(rule.create));
+          if (rule.addedNotValid) await sp.execute(sql.raw(`ALTER TABLE ${rule.table} VALIDATE CONSTRAINT ${rule.name}`));
           if (rule.afterCreate) await sp.execute(rule.afterCreate(schema));
         });
         result.built.push(entry.name);

@@ -18,6 +18,11 @@ export interface ConditionalConstraintEntry {
   /** شمار ردیف‌های یتیم یا گروه‌های تکراری که ساختن را ناممکن می‌کنند */
   blockers: number;
   blockerUnit: string;
+  /**
+   * v9.0.431 (TD-611): کلید خارجی‌ای که مهاجرتش آن را NOT VALID افزوده و هنوز تأیید نشده؛ برای ردیف‌های تازه برقرار است و
+   * «ساختن» فقط ردیف‌های قدیمی را با آن می‌سنجد (VALIDATE CONSTRAINT)
+   */
+  unvalidated?: boolean;
 }
 
 export interface ConditionalConstraintBuildResult {
@@ -34,9 +39,11 @@ export const CONDITIONAL_CONSTRAINTS_BUSY_MESSAGE = 'ساختن قیدهای ج�
 
 /** چرا قید ساخته نشده و چه باید کرد */
 export function conditionalConstraintCause(entry: ConditionalConstraintEntry): string {
+  const done = entry.unvalidated ? 'تأیید' : 'ساخته';
+  const prefix = entry.unvalidated ? 'قید برای ردیف‌های تازه برقرار است؛ ' : '';
   return entry.state === 'blocked'
-    ? `${toPersianDigits(entry.blockers, 0)} ${entry.blockerUnit}؛ پس از اصلاح داده با «ساختن قیدهای جاافتاده» ساخته می‌شود.`
-    : 'داده پاک است؛ با «ساختن قیدهای جاافتاده» در «عملیات سامانه» ساخته می‌شود.';
+    ? `${prefix}${toPersianDigits(entry.blockers, 0)} ${entry.blockerUnit}؛ پس از اصلاح داده با «ساختن قیدهای جاافتاده» ${done} می‌شود.`
+    : `${prefix}داده پاک است؛ با «ساختن قیدهای جاافتاده» در «عملیات سامانه» ${done} می‌شود.`;
 }
 
 /** پیام نتیجه پیش‌نمایش یا اجرا برای مدیر سامانه */
