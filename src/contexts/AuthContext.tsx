@@ -183,7 +183,7 @@ export function useHasPermission(permission: string): boolean {
 }
 
 /**
- * v9.0.291 (TD-795): آیا کاربر جاری یکی از این مجوزها را دارد (گارد «یکی کافی است» سرور، مانند ویجت گردش کار)؛ همان
+ * v9.0.340 (TD-795): آیا کاربر جاری یکی از این مجوزها را دارد (گارد «یکی کافی است» سرور، مانند ویجت گردش کار)؛ همان
  * قاعده `useHasPermission` و بیرون از AuthProvider false.
  */
 export function useHasAnyPermission(permissions: readonly string[]): boolean {

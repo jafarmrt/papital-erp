@@ -3,7 +3,6 @@ import { X, Award } from 'lucide-react';
 import { PieceworkTask } from '../../types';
 import { TaskFormData } from '../../hooks/usePiecework';
 import { formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 
@@ -30,8 +29,8 @@ export function PieceworkTaskModal({
   isSaving = false,
   categories: propCategories = []
 }: PieceworkTaskModalProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  // ورودی نرخ همیشه به ریال است (مبلغ ذخیره‌شده)
+  const curLbl = formatCurrencyLabel('IRR');
   const [categories, setCategories] = useState<{ id: number | string; name: string }[]>([]);
   const [loadingCategories, setLoadingCategories] = useState<boolean>(false);
 
@@ -78,7 +77,7 @@ export function PieceworkTaskModal({
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
             <Award className="w-4 h-4 text-blue-600" />
-            <span>{editingTask ? 'ویرایش عنوان کاری پرکیسی' : 'افزودن عنوان کاری پرکیسی جدید'}</span>
+            <span>{editingTask ? 'ویرایش عنوان کاری کارمزدی' : 'افزودن عنوان کاری کارمزدی جدید'}</span>
           </h2>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-full cursor-pointer">
             <X className="w-4 h-4" />
@@ -146,7 +145,7 @@ export function PieceworkTaskModal({
             <FinancialAmountInput
               value={taskFormData.defaultRate}
               onChange={(val) => setTaskFormData(prev => ({ ...prev, defaultRate: val }))}
-              currency={appCurrency}
+              currency="IRR"
               variant="compact"
               showWordsBadge={true}
               className="w-full"

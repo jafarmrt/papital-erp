@@ -1,17 +1,12 @@
 import { FolderKanban } from 'lucide-react';
-import { formatPersianNumber, formatPersianPrice } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
-interface ProjectCostSummaryItem {
-  projectId: number | null;
-  title: string;
-  totalCost: number;
-  logCount: number;
-  personnelSet: Set<string>;
-}
+import type { WorkLogProjectCost } from '../../lib/piecework/workLogList';
 
 interface PieceworkProjectCostsTabProps {
-  projectCostsSummary: ProjectCostSummaryItem[];
+  /** v9.0.330 (TD-811): جمع SQL هر پروژه روی همه کارکردهای زنده */
+  projectCostsSummary: WorkLogProjectCost[];
   totalLoggedAmount: number;
 }
 
@@ -19,21 +14,21 @@ export function PieceworkProjectCostsTab({
   projectCostsSummary,
   totalLoggedAmount
 }: PieceworkProjectCostsTabProps) {
-  const appCurrency = useAppCurrency();
+  const rial = useRialDisplay();
   return (
     <div className="space-y-4">
       {/* Overview Banner */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h3 className="text-xs font-black text-slate-900">گزارش بهای تمام‌شده دستمزد پروژه‌ها (Project Labor Cost)</h3>
+          <h3 className="text-xs font-black text-slate-900">گزارش بهای تمام‌شده دستمزد پروژه‌ها</h3>
           <p className="text-[11px] text-slate-500">
-            سهم هزینه‌های پرکیسی و دستمزد پرداخت‌شده مستقیم برای هر پروژه تولیدی کارگاه
+            سهم هزینه‌های کارمزدی و دستمزد پرداخت‌شده مستقیم برای هر پروژه تولیدی کارگاه
           </p>
         </div>
 
         <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100 text-indigo-900 font-bold text-xs">
           <span>کل هزینه کارکرد:</span>
-          <span className="font-mono">{formatPersianPrice(totalLoggedAmount, appCurrency)}</span>
+          <span className="font-mono">{rial.amount(totalLoggedAmount)}</span>
         </div>
       </div>
 
@@ -42,7 +37,7 @@ export function PieceworkProjectCostsTab({
         {projectCostsSummary.map((item, idx) => {
           const sharePercent = totalLoggedAmount > 0 ? (item.totalCost / totalLoggedAmount) * 100 : 0;
           return (
-            <div key={idx} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+            <div key={item.projectId ?? `none-${idx}`} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
@@ -72,7 +67,7 @@ export function PieceworkProjectCostsTab({
               <div className="pt-2 border-t border-slate-100 space-y-1.5 text-xs font-bold">
                 <div className="flex justify-between text-slate-600">
                   <span>مجموع هزینه دستمزد:</span>
-                  <span className="font-mono text-indigo-700 font-black">{formatPersianPrice(item.totalCost, appCurrency)}</span>
+                  <span className="font-mono text-indigo-700 font-black">{rial.amount(item.totalCost)}</span>
                 </div>
 
                 <div className="flex justify-between text-slate-500 text-[11px]">
@@ -82,7 +77,7 @@ export function PieceworkProjectCostsTab({
 
                 <div className="flex justify-between text-slate-500 text-[11px]">
                   <span>تعداد پرسنل فعال در پروژه:</span>
-                  <span className="font-mono">{formatPersianNumber(item.personnelSet.size)} نفر</span>
+                  <span className="font-mono">{formatPersianNumber(item.personnelCount)} نفر</span>
                 </div>
               </div>
             </div>

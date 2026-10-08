@@ -7,7 +7,7 @@ import { SearchProvider } from '../../SearchContext';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { User } from '../../types';
 
-// v9.0.292 (TD-796, finding B08-27): saving a stock document and voiding a document refresh what the document changes
+// v9.0.341 (TD-796, finding B08-27): saving a stock document and voiding a document refresh what the document changes
 // (Kardex, vouchers, items, dashboard, reservations, projects, sales leads, parties); a settlement refreshes the bank
 // accounts, treasury and the party card
 const fetchJson = vi.fn();

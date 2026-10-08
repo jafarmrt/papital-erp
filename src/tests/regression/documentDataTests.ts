@@ -11,19 +11,19 @@ export async function runDocumentDataTests(shouldRun: ShouldRun): Promise<TestCa
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_document_settlements_by_permission_td_781',
-      'v9.0.286: a document gives its treasury rows (number, method, tracking number, bank account, description) only to treasury readers; other readers get the paid amount, the balance and the settlement status (TD-781)',
+      'v9.0.335: a document gives its treasury rows (number, method, tracking number, bank account, description) only to treasury readers; other readers get the paid amount, the balance and the settlement status (TD-781)',
       ['td781', 'documents', 'treasury', 'settlements', 'package8'], settlementsByPermissionCase],
     ['reg_document_party_by_id_td_778',
-      'v9.0.287: a sales or purchase document keeps its party by id: the voucher, the dossier, the treasury link and the party delete guard follow the id whatever the buyer name, a return takes its invoice\'s party, and the migration links old documents by exact name (TD-778)',
+      'v9.0.336: a sales or purchase document keeps its party by id: the voucher, the dossier, the treasury link and the party delete guard follow the id whatever the buyer name, a return takes its invoice\'s party, and the migration links old documents by exact name (TD-778)',
       ['td778', 'documents', 'party', 'customers', 'package8'], documentPartyByIdCase],
     ['reg_document_audit_trail_td_785',
-      'v9.0.288: every change of a document writes one audit row in its own transaction with the stored document before and after: create, edit, finalize, a final invoice\'s notes and a void (one DELETE row), and the invoice event carries the buyer name (TD-785)',
+      'v9.0.337: every change of a document writes one audit row in its own transaction with the stored document before and after: create, edit, finalize, a final invoice\'s notes and a void (one DELETE row), and the invoice event carries the buyer name (TD-785)',
       ['td785', 'documents', 'audit', 'package8'], documentAuditTrailCase],
     ['reg_document_check_constraints_td_786',
-      'v9.0.289: the database refuses an unknown document type or status and a negative line quantity, unit price or discount (a counted zero stays possible), the service refuses an unknown type or status, a legacy row leaves its constraint NOT VALID and is listed by the health check, and documents.project_id has one index (TD-786)',
+      'v9.0.338: the database refuses an unknown document type or status and a negative line quantity, unit price or discount (a counted zero stays possible), the service refuses an unknown type or status, a legacy row leaves its constraint NOT VALID and is listed by the health check, and documents.project_id has one index (TD-786)',
       ['td786', 'documents', 'constraint', 'package8'], documentCheckConstraintsCase],
     ['reg_document_list_paged_td_787',
-      'v9.0.290: GET /documents always answers one page (50 documents by default, also for limit=0) with its total, and only export=true returns the whole list (TD-787)',
+      'v9.0.339: GET /documents always answers one page (50 documents by default, also for limit=0) with its total, and only export=true returns the whole list (TD-787)',
       ['td787', 'documents', 'pagination', 'performance', 'package8'], documentListPagedCase],
   ];
   for (const [id, name, tags, run] of cases) {
@@ -193,7 +193,7 @@ async function documentPartyByIdCase(h: Harness, wrong: string[]): Promise<strin
 
   // 7) the migration links an old document to the single live party of exactly its name
   const { existsSync, readFileSync } = await import('node:fs');
-  const migration = 'drizzle/0076_document_party_id.sql';
+  const migration = 'drizzle/0080_document_party_id.sql';
   const backfill = existsSync(migration)
     ? readFileSync(migration, 'utf8').split('--> statement-breakpoint').find(part => part.includes('SELECT erp_update_with_unvalidated_checks('))
     : undefined;

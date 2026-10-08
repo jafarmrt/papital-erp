@@ -5,7 +5,7 @@ import InvoicesListPage from '../../pages/InvoicesListPage';
 import { SearchProvider } from '../../SearchContext';
 import { detailsTypeLabelOf, workflowTypeLabelOf } from '../../lib/invoices/invoiceListDocuments';
 
-// v9.0.295 (TD-800, finding B08-31): every document type has a Persian name in the details and workflow windows, and the
+// v9.0.344 (TD-800, finding B08-31): every document type has a Persian name in the details and workflow windows, and the
 // «sales proforma» filter finds proformas saved as type invoice too
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));

@@ -6,7 +6,7 @@ import { SearchProvider } from '../../SearchContext';
 
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
-// v9.0.291 (TD-795): the row buttons follow their API permission; this characterization runs as a user holding every key
+// v9.0.340 (TD-795): the row buttons follow their API permission; this characterization runs as a user holding every key
 vi.mock('../../contexts/AuthContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../contexts/AuthContext')>()),
   useHasPermission: () => true,

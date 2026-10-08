@@ -6,7 +6,7 @@ import { DocItemsTable } from '../../components/documents/DocItemsTable';
 import { reservationSourceLabel } from '../../hooks/documents/stockDocumentItemActions';
 import type { Item } from '../../types';
 
-// v9.0.297 (TD-803, finding B08-34): Persian text of the sales and stock document UI has no transliteration from the
+// v9.0.346 (TD-803, finding B08-34): Persian text of the sales and stock document UI has no transliteration from the
 // review table, no English word, numbers inside messages in Persian digits, and the receipt summary says what the page does
 
 const ROOT = join(__dirname, '..', '..');

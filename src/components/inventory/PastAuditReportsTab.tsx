@@ -7,7 +7,7 @@ interface PastAuditReportsTabProps {
   auditDocsLoading: boolean;
   auditDocs: any[];
   handleViewAudit: (docId: number) => void;
-  /** v9.0.290 (TD-787): صفحه جاری سوابق (۵۰ سند در هر صفحه) */
+  /** v9.0.339 (TD-787): صفحه جاری سوابق (۵۰ سند در هر صفحه) */
   pager?: Pager;
 }
 

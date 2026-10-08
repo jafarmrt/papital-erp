@@ -4,12 +4,16 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { Search, Plus, Edit2, Trash2, CheckCircle2, Clock, FolderKanban } from 'lucide-react';
 import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
-import { formatPersianPrice, formatQuantityOrTime, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatQuantityOrTime, formatPersianDate, extractDateString } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
+import { PieceworkLogsPagination, type PieceworkLogsPaginationState } from './PieceworkLogsPagination';
 
 interface PieceworkLogsTabProps {
   logsList: PieceworkLog[];
   loading: boolean;
+  /** v9.0.330 (TD-811): یک صفحه از کارکردهای فیلترشده در سرور */
+  pagination?: PieceworkLogsPaginationState;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   selectedPersonnelFilter: string | number;
@@ -32,6 +36,7 @@ interface PieceworkLogsTabProps {
 export function PieceworkLogsTab({
   logsList,
   loading,
+  pagination,
   searchQuery,
   onSearchChange,
   selectedPersonnelFilter,
@@ -50,8 +55,10 @@ export function PieceworkLogsTab({
   onEditLog,
   onDeleteLog
 }: PieceworkLogsTabProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
+  // v9.0.320 (TD-805): ثبت، ویرایش و حذف کارکرد با «ثبت و ویرایش کارکرد پرسنل»
+  const { canLog } = usePieceworkPermissions();
   return (
     <div className="space-y-4">
       {/* Filter Bar */}
@@ -68,13 +75,15 @@ export function PieceworkLogsTab({
             />
           </div>
 
-          <button
-            onClick={onOpenAddModal}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-          >
-            <Plus size={16} />
-            <span>ثبت کارکرد پرسنل</span>
-          </button>
+          {canLog && (
+            <button
+              onClick={onOpenAddModal}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <Plus size={16} />
+              <span>ثبت کارکرد پرسنل</span>
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
@@ -216,10 +225,10 @@ export function PieceworkLogsTab({
                         {formatQuantityOrTime(log.quantity, log.unit)}
                       </td>
                       <td className="p-3 text-center font-mono text-slate-600">
-                        {formatPersianPrice(log.unitRate)}
+                        {rial.number(log.unitRate)}
                       </td>
                       <td className="p-3 text-center font-mono text-blue-700 font-black">
-                        {formatPersianPrice(log.totalAmount)}
+                        {rial.number(log.totalAmount)}
                       </td>
                       <td className="p-3 text-center">
                         {isPending ? (
@@ -236,7 +245,7 @@ export function PieceworkLogsTab({
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          {isPending && (
+                          {isPending && canLog && (
                             <>
                               <button
                                 onClick={() => onEditLog(log)}
@@ -263,6 +272,7 @@ export function PieceworkLogsTab({
             </tbody>
           </table>
         </div>
+        {pagination && <PieceworkLogsPagination state={pagination} loading={loading} />}
       </div>
     </div>
   );

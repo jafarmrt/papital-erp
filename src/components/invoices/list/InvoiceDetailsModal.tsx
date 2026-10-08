@@ -13,7 +13,7 @@ interface InvoiceDetailsModalProps {
   setSettlementDoc: (doc: InvoiceListDocument | null) => void;
   printFromDetails: (docId: number) => void;
   loadData: () => void;
-  /** v9.0.291 (TD-795): دکمه تسویه فقط با مجوز خزانه */
+  /** v9.0.340 (TD-795): دکمه تسویه فقط با مجوز خزانه */
   canSettle: boolean;
 }
 

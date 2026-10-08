@@ -13,7 +13,7 @@ interface InvoiceRowActionsProps {
 /** TD-080 (بخش ۳): ستون «عملیات» یک ردیف (تسویه سریع، جزئیات، چاپ، گردش‌کار، ابطال) */
 export function InvoiceRowActions({ doc, isCommercial, settlementStatus, actions }: InvoiceRowActionsProps) {
   const { access, setSettlementDoc, handleOpenDetails, handlePrint, setWorkflowDoc, handleDeleteDoc } = actions;
-  // v9.0.291 (TD-795): هر گزینه فقط با مجوز API خودش
+  // v9.0.340 (TD-795): هر گزینه فقط با مجوز API خودش
   const menuItems: ActionMenuItem[] = [
     {
       label: 'چاپ سند / فاکتور رسمی',

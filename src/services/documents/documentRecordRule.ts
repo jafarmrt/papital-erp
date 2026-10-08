@@ -15,11 +15,11 @@ import { documentTypeTitle } from '../../lib/documents/documentTypeTitles.js';
  *
  * v9.0.238 (TD-770، تصمیم ت۲ «الف» بسته ۸): جهت گردش فقط از نوع سند (`documentStockDirection`)، در ثبت و نهایی‌سازی؛
  * `inOut` ناسازگار با نوع ۴۲۲ است (نه نادیده) تا فراخواننده‌ای که جهت دیگری می‌فرستد خطایش را ببیند، انتقال بین انبارها
- * از مسیر ثبت سند پذیرفته نمی‌شود، و از v9.0.289 (TD-786) نوع یا وضعیت ناشناخته هیچ‌گاه ثبت نمی‌شود (پیش‌تر سربرگ بی‌ردیف
+ * از مسیر ثبت سند پذیرفته نمی‌شود، و از v9.0.338 (TD-786) نوع یا وضعیت ناشناخته هیچ‌گاه ثبت نمی‌شود (پیش‌تر سربرگ بی‌ردیف
  * نوع ساختگی ثبت می‌شد؛ پایگاه‌داده هم اکنون قید `chk_documents_type` و `chk_documents_status` دارد).
  */
 
-/** وضعیت‌های سند (قید `chk_documents_status`، مهاجرت 0077) */
+/** وضعیت‌های سند (قید `chk_documents_status`، مهاجرت 0081) */
 export const DOCUMENT_STATUSES: readonly DocumentRecordStatus[] = ['draft', 'proforma', 'final'];
 
 export function assertDocumentStatus(status: string): void {
@@ -36,7 +36,7 @@ export function createdDocumentStatus(docType: string, status?: string | null): 
 
 /**
  * سند از این نوع با این `inOut` ثبت‌شدنی است: نوع جهت‌دار یا انبارگردانی، و `inOut` (اگر آمده) همان جهت نوع. انبارگردانی جهت
- * نوعی ندارد و `inOut` آن خوانده نمی‌شود. انتقال هرگز پذیرفته نمی‌شود. v9.0.289 (TD-786): نوع ناشناخته حتی بی ردیف هم ثبت
+ * نوعی ندارد و `inOut` آن خوانده نمی‌شود. انتقال هرگز پذیرفته نمی‌شود. v9.0.338 (TD-786): نوع ناشناخته حتی بی ردیف هم ثبت
  * نمی‌شود (پیش‌تر سند بی ردیفِ هر نوعی ثبت می‌شد)؛ قید `chk_documents_type` پایگاه‌داده هم همین را می‌خواهد.
  */
 export function assertRecordableDocument(docType: string, inOut?: string | null): void {
@@ -61,7 +61,7 @@ export function assertRecordableDocument(docType: string, inOut?: string | null)
 }
 
 /**
- * v9.0.285 (TD-783، یافته B08-14، تصمیم ت۹ «الف» بسته ۸): شماره فاکتور فروش و برگشت از فروش فقط از سری سرور است؛ شماره
+ * v9.0.327 (TD-783، یافته B08-14، تصمیم ت۹ «الف» بسته ۸): شماره فاکتور فروش و برگشت از فروش فقط از سری سرور است؛ شماره
  * دستی برای این دو نوع در ثبت و ویرایش ۴۲۲ `DOCUMENT_REF_SERVER_SERIES` است (`refNumber` باید خالی یا «auto» باشد).
  */
 export function assertManualRefAllowed(docType: string, requested: unknown): void {
@@ -74,7 +74,7 @@ export function assertManualRefAllowed(docType: string, requested: unknown): voi
 }
 
 /**
- * v9.0.283 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): رسید تولید فقط از «ورود به انبار» پروژه ثبت می‌شود
+ * v9.0.325 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): رسید تولید فقط از «ورود به انبار» پروژه ثبت می‌شود
  * (`ProjectService.addProjectToInventory`، TD-285)، جایی که پروژه، سقف مقدار برنامه با دلیل (TD-327) و بهای تحویل سنجیده
  * می‌شود. `POST /documents` و نهایی‌سازی رسید تولید پیش‌نویس آن را ۴۲۲ می‌دهند؛ پیش‌تر از این مسیر رسید تولید بی پروژه،
  * فراتر از برنامه و روی پروژه لغوشده ثبت می‌شد و کالای در جریان ساخت بی پروژه بستانکار می‌شد.

@@ -19,74 +19,221 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.297 — v9.0.297 — Persian Digits and Wording in Invoices and Stock Documents
+### v9.0.346 — Persian Digits and Wording in Invoices and Stock Documents
 - **Wording:** invoice and stock document messages show numbers in Persian digits and currency names instead of codes, the receipt summary no longer claims stock waits for a finance approval, and the screens drop transliterations and English words (TD-803).
 
-### v9.0.296 — v9.0.296 — Settlement Account in the Invoice Currency
+### v9.0.345 — Settlement Account in the Invoice Currency
 - **Settlement:** the invoice settlement form lists and pre-selects only bank accounts and cash funds in the invoice's currency and names each account's currency (TD-802).
 
-### v9.0.295 — v9.0.295 — Document Type Names and the Sales Proforma Filter
+### v9.0.344 — Document Type Names and the Sales Proforma Filter
 - **Documents list:** the details and workflow windows name every document type in Persian, the «sales proforma» filter also lists proformas saved as invoices, and production receipts can be filtered (TD-800).
 
-### v9.0.294 — v9.0.294 — Invoice List Cards Show Payable Totals
+### v9.0.343 — Invoice List Cards Show Payable Totals
 - **List cards:** the sales, purchase and proforma cards above the documents list now add up the payable amount (net + VAT + service charge), the same figure each row shows (TD-798).
 
-### v9.0.293 — v9.0.293 — Document List Load Errors
+### v9.0.342 — Document List Load Errors
 - **Document list errors:** a failed load of the invoices and documents list (no permission, server error) now shows the server's message with a retry button instead of «no document found» (TD-797).
 
-### v9.0.292 — v9.0.292 — Fresh Lists After Document Changes
+### v9.0.341 — Fresh Lists After Document Changes
 - **Cache refresh:** saving a stock document and voiding a document now refresh Kardex, vouchers, items, the dashboard, reservations, projects, sales leads and parties, and a settlement refreshes bank accounts and treasury (TD-796).
 
-### v9.0.291 — v9.0.291 — Document List Buttons by Permission
+### v9.0.340 — Document List Buttons by Permission
 - **Document list buttons:** settlement, notes edit, workflow and void are shown only to users holding the permission of the action they call, and a refused notes edit shows the server's reason (TD-795).
 
-### v9.0.290 — v9.0.290 — Paged Document List
+### v9.0.339 — Paged Document List
 - **Document list:** a list request without paging now answers one page of 50 documents with its total instead of the whole table, the full list comes only with `export=true`, and the stock count history and transfer tabs page through it (TD-787).
 
-### v9.0.289 — v9.0.289 — Database Rules for Documents
+### v9.0.338 — Database Rules for Documents
 - **Document constraints:** the database now refuses an unknown document type or status and a negative line quantity, price or discount; the document service refuses an unknown type or status even without lines, legacy rows are listed by the health check and a duplicate index on the project link was removed (TD-786).
 
-### v9.0.288 — v9.0.288 — One Audit Row per Document Change
+### v9.0.337 — One Audit Row per Document Change
 - **Document audit trail:** creating, editing, finalizing, changing the notes of and voiding a document each write one audit row in the same transaction with the stored document before and after; a void writes one row instead of two and the invoice event carries the buyer name (TD-785).
 
-### v9.0.287 — v9.0.287 — The Party of a Document by Id
+### v9.0.336 — The Party of a Document by Id
 - **Document party:** a sales or purchase document now keeps its party by id; the voucher, the customer dossier, the treasury link and the party delete guard follow the id whatever the buyer name, a return takes its invoice's party, and old documents were linked by exact name, the rest listed by the health check (TD-778).
 
-### v9.0.286 — v9.0.286 — Document Treasury Rows Only for Treasury Readers
+### v9.0.335 — Document Treasury Rows Only for Treasury Readers
 - **Document read scope:** a document's receipts and payments (tracking number, bank account, description) are now shown only to treasury readers; other document readers see only the paid amount, the balance and the settlement status (TD-781).
 
-### v9.0.285 — v9.0.285 — Sales Document Numbers Only From the Server Series
+### v9.0.334 — WooCommerce Bulk Stock Sync Reports Failed Items
+- **WooCommerce bulk stock sync (TD-724):** the bulk stock sync showed the server's green message even when no item was updated; a failed item is now an error message with the counts and the first errors, and the WooCommerce order tables show a load error (403 / 500) instead of «no orders yet» (WooCommerce half of TD-730).
+
+### v9.0.333 — WooCommerce Connection Test With Stored Keys
+- **WooCommerce connection test (TD-723):** a non-admin sees the WooCommerce keys masked and the test button sent the mask as the keys, so the test always failed; the browser now leaves out an empty or masked key and the server uses the stored key, only at the stored store address.
+
+### v9.0.332 — WooCommerce Namesake Buyers Get Their Own Customer
+- **WooCommerce namesake buyers (TD-703):** a WooCommerce buyer whose name belongs to another customer with another phone gets a new customer named «name (phone)», so the sale is no longer debited to the existing customer's receivable; a name that differs only in letter case matches the stored customer, and the order log reports the distinct customer.
+
+### v9.0.331 — Package 15 Events and Integrations Audit Documentation
+- **Package 15 Audit:** section 15 of the V9 stability audit records the events, webhooks, automatic rules, dead-letter queue, notifications and WooCommerce package: 32 proven findings (one P1, a WooCommerce order of a namesake posted to the existing customer's receivable, and eighteen P2, among them a webhook test that follows redirects to internal addresses and delivery failures that never retry) opened as TD-703..TD-734 with the product-owner decisions. Documentation only.
+
+### v9.0.330 — Work Log List Paged and Filtered on the Server
+- **Work Log List Paged and Filtered on the Server (TD-811):** the piecework page loaded every work log ever recorded on each open and after each change (about 30 MB and 2.3 s for a workshop year) and filtered and summed it in the browser; `GET /piecework/logs` now filters in SQL and returns one page with the count and sum of every match, the page opens on the current Jalali month, `/piecework/logs/summary` sums the cards and project costs in SQL, and the «settled» filter now finds the logs on a payslip.
+
+### v9.0.329 — Payslip Deductions Need a Description
+- **Payslip Deductions Need a Description (TD-861):** the «سایر کسورات» box was labelled as insurance or tax although nothing computes either, and its amount reached the employee deductions payable account with no word on what it was; deductions above zero now need a description, stored with the payslip (migration 0079), printed on it and written into the deductions voucher row (account 3205).
+
+### v9.0.328 — Payslip Shows Its Real State, Monthly Fixed Salary and Company Name
+- **Payslip Shows Its Real State, Monthly Fixed Salary and Company Name (TD-815):** the payslip printed «۱ دوره ماهانه» for any fixed salary, called draft and approved payslips both ready to pay and carried a fixed company name, and «فیش‌های حقوقی من» showed a partly paid payslip as a draft with the currency twice; payslips now use one set of status labels, one fixed-salary row per Jalali month, the company name setting and an advance deduction column, and the UI says «کارمزدی» and «چاپ».
+
+### v9.0.327 — Sales Document Numbers Only From the Server Series
 - **Document numbers:** a sales invoice or sales return number now comes only from the server series; a stock document may keep a manual number, but a taken one is refused instead of being silently replaced, a manual number no longer moves the series, and the audit log records the stored number (TD-783).
 
-### v9.0.284 — v9.0.284 — The Reference Invoice of a Sales Return by Fiscal Year
+### v9.0.326 — The Reference Invoice of a Sales Return by Fiscal Year
 - **Sales returns:** the reference invoice lookup now finds only final invoices with one indexed query and knows the fiscal year: a number used in two years asks which year, so last year's invoice can be returned against, and each lookup error shows its real cause (TD-782).
 
-### v9.0.283 — v9.0.283 — A Production Receipt Comes Only From the Project Delivery
+### v9.0.325 — A Production Receipt Comes Only From the Project Delivery
 - **Production:** a production receipt is now recorded only through the project's «ورود به انبار», where the project, its planned quantity and its delivery cost are checked; the stock document page no longer offers it and `POST /documents` or finalizing a draft one is refused (TD-780, decision ت۷).
 
-### v9.0.282 — v9.0.282 — Stock Count Lines Need a Count and One Line per Item and Warehouse
+### v9.0.324 — Stock Count Lines Need a Count and One Line per Item and Warehouse
 - **Inventory:** a stock count line without a count is now refused instead of being counted as zero, a repeated item in the same warehouse is refused instead of being adjusted twice, and the count document shows each warehouse's own variance and book stock (TD-777).
 
-### v9.0.281 — v9.0.281 — A Document Edit Links Its Sales Lead Under the Lead Lock
+### v9.0.323 — A Document Edit Links Its Sales Lead Under the Lead Lock
 - **Sales:** `PUT /documents/:id` with `crmLeadId` now links or unlinks the sales lead inside the edit transaction under the lead lock: a missing lead or a lead with another proforma is 422 before anything is saved, and an unlinked lead is released for a new proforma; before, the link was written after the edit, without the one-proforma rule (TD-776).
 
-### v9.0.280 — v9.0.280 — Editing a Proforma Does Not Offer to Finalize It
+### v9.0.322 — Payment From a Payslip Offers Its Remainder
+- **Payment From a Payslip Offers Its Remainder (TD-814):** the pay button inside a payslip sent no paid amount, so a partly paid payslip's payment form offered the whole net, which the server refused; it now sends the paid amount and status, as the payslip list does.
+
+### v9.0.321 — Custom Rate Readers Follow Decision t3
+- **Custom Rate Readers Follow Decision t3 (TD-806):** a personnel's custom rates opened only for piecework.view, piecework.log and personnel.manage, so the rate writer (piecework.manage_tasks) and the payroll issuers and payers could not read them; they now open for exactly the decision t3 list, while projects.view and settings.manage read only titles and categories.
+
+### v9.0.320 — Each Payroll Action Asks Its Own Key
+- **Each Payroll Action Asks Its Own Key (TD-805):** personnel.manage alone set custom rates and issued, paid, voided and deleted payrolls while piecework.payroll could not issue one; titles, categories and rates now ask piecework.manage_tasks, work logs piecework.log, payrolls piecework.payroll and payments the new piecework.pay; migration 0078 gives existing roles the keys of what they did, and every button follows the same key.
+
+### v9.0.319 — Requisition Edit Before Approval
+- **Fix (TD-696, B10-09):** `PUT /procurement/requisitions/:id` edits only an unapproved (or rejected) requisition without orders (else 409 REQUISITION_NOT_EDITABLE), in one transaction under the row lock, with the create contract, the stored row ids kept and a before/after audit row.
+
+### v9.0.318 — Requisitions With Orders Are Not Deleted
+- **Fix (TD-695, B10-08):** a purchase requisition with a live purchase order is not deleted (409 REQUISITION_HAS_ORDERS naming the orders), under the requisition row lock with the workflow terminated in the same transaction; the desk shows the delete button only for a requisition without orders.
+
+### v9.0.317 — Delivery Through the Workflow
+- **Fix (TD-692, B10-05):** delivering a procurement order runs the receive transition in the delivery transaction with the deliverer's role and permissions, a refused transition refuses the delivery, an order of an unapproved requisition is delivered only after approval (decision t1), and the direct writes to workflow_instances, workflow_pending_approvals and workflow_tasks are gone (Vitest ratchet workflowTableWrites).
+
+### v9.0.316 — Requisition Received After Every Row
+- **Fix (TD-690, B10-03):** delivering an order marks its purchase requisition received only when no live order is left undelivered and every row is received or was closed at ordering; a row closed at ordering carries `closed` and is never received without an order.
+
+### v9.0.315 — Requisition Orders Need Approval
+- **Fix (TD-689, B10-02, decision t1):** a purchase requisition is ordered only from its approved step; for an unapproved one, a holder of the approval right first runs the approval transition in their own name, others get 409 REQUISITION_NOT_APPROVED; the workflow step moves only through executeTransition (the direct step writes of the conversion, A02-15, are gone).
+
+### v9.0.314 — Purchase Requisition Contract
+- **Fix (TD-688, B10-01):** the procurement desk, project shortage and reorder alert forms record purchase requisitions again; one contract for create and edit (requested quantity above zero, catalog item or item name, priority urgent/high/normal/low), and a body without a quantity is refused instead of storing zero.
+
+### v9.0.313 — Package 10 Procurement Audit
+- **Audit (package 10):** purchasing and procurement section of the stability audit report: 15 proven findings opened as TD-688..TD-702 plus TD-901 (decision t5) with the product-owner decisions t1-t5; documentation only.
+
+### v9.0.312 — v9.0.312 — Production Error Answers Keep 4xx Details
+- **Production error details (TD-594):** in production a 4xx answer keeps its details, so the over-delivery and over-order prompts list their items, and a broken request body gets a Persian message with its own code.
+
+### v9.0.311 — v9.0.311 — Print Cleanup Runs Once
+- **Print cleanup (TD-684):** printing cleans up once, keeps the print window's own state while it is open and no longer overwrites a newer page title, so the next Ctrl+P still prints only the document.
+
+### v9.0.310 — v9.0.310 — Card and Sheba Fields Keep the Caret After Backspace
+- **Card and Sheba caret (TD-682):** Backspace on a separator removes the digit before it and leaves the caret there instead of moving it to the end of the field.
+
+### v9.0.309 — v9.0.309 — Searchable Select Shows the Label of a Preselected Value
+- **Preselected picker label (TD-680):** a searchable picker filled from a draft, a sales file or a name match shows the chosen buyer instead of an empty box, and its search request no longer sends `limit` twice.
+
+### v9.0.308 — v9.0.308 — Idempotency Key Kept While the Server Still Runs a Save
+- **Idempotency key kept (TD-679):** when the browser stops waiting for a save the server is still running, it keeps the key, so a resend gets that save's result instead of starting a second, unguarded one.
+
+### v9.0.307 — v9.0.307 — Saves Are Not Resent Automatically After a Lost Connection
+- **No automatic resend of saves (TD-670):** after a network error only reads are retried automatically; a save tells the user to check whether it was recorded, and a resend by the user carries the same idempotency key.
+
+### v9.0.306 — v9.0.306 — Form Drafts Expire
+- **Form draft expiry (TD-676):** a draft lives 1 to 90 days, an expired draft no longer offers «restore», and a daily job soft-deletes expired drafts.
+
+### v9.0.305 — v9.0.305 — Draft Routes Validate Their Input and Hide Database Errors
+- **Form draft errors (TD-677):** a draft's type and key are checked against a pattern and a length cap, and a database error goes to the global error handler instead of returning the raw SQL text with status 400.
+
+### v9.0.304 — Editing a Proforma Does Not Offer to Finalize It
 - **Sales:** while a proforma is edited, «فاکتور نهایی» is closed with the reason that a proforma is finalized by its approval, and the item codes of its lines are shown; before, the option led to a false stock shortage message and the codes were empty (TD-801).
 
-### v9.0.279 — v9.0.279 — A Failed Print Copy No Longer Leaves the Invoice Form Filled
+### v9.0.303 — A Failed Print Copy No Longer Leaves the Invoice Form Filled
 - **Sales:** when the print copy of a just-saved invoice fails to load, the save still counts: the user is told to print it from the document list and the form is cleared; before, the save showed as failed, the form stayed filled and a second click created a second invoice (TD-794).
 
-### v9.0.278 — v9.0.278 — A Sales Proforma Prints as a Sales Document
+### v9.0.302 — A Sales Proforma Prints as a Sales Document
 - **Sales:** a sales proforma stored as type `proforma` (recorded by a user without the finalize permission) now prints with the sales title and the seller and buyer boxes; before, it printed as a stock document without the buyer's address and phone (TD-793).
 
-### v9.0.277 — v9.0.277 — Sales Form Lists Only Sales Proformas, Page by Page
+### v9.0.301 — Sales Form Lists Only Sales Proformas, Page by Page
 - **Sales:** the open proformas of the sales invoice form are now only sales proformas (`GET /documents` takes `types=invoice,proforma`), read twenty at a time with a count and paging; before, purchase proformas were listed and edited there and the list was cut at 1,000 without notice (TD-792).
 
-### v9.0.276 — v9.0.276 — Proforma Edit Keeps the Warehouse of Its Lines
+### v9.0.300 — Proforma Edit Keeps the Warehouse of Its Lines
 - **Sales:** editing a proforma now reads each line's warehouse and saves the line there; before, every edit silently moved all lines (and their reservation) to the first warehouse (TD-790).
 
-### v9.0.275 — v9.0.275 — Sales Invoice Form Resets Every Field
+### v9.0.299 — Sales Invoice Form Resets Every Field
 - **Sales:** clearing the sales invoice form (after a save or a cancelled edit) now puts the type, status, warehouse, date, currency, rate and sales lead back to their start values, and the form edits only sales documents; before, a cancelled edit of a purchase proforma made the next sale a receipt and a sales lead stuck to later documents (TD-789).
+
+### v9.0.298 — Voucher Row Menu Offers Only Accepted Actions
+- **Voucher Row Menu (P2, decision t8):** the menu offers per status only what the server accepts (no direct edit of an approved voucher, no correction of a permanent one, no reverse or correct of a reversal), a voucher with a source or of a year-end closing shows why it is locked, and the finalize confirmation promises no correction path (TD-568).
+
+### v9.0.297 — Automation Status Counts Final Documents Only
+- **Voucher Automation Status (P2):** the panel counts only final documents, takes a stock count as automatic when it has a valued difference and a transfer as without financial effect, reaches 100% only with every needed voucher, and warns only for types missing one (TD-560).
+
+### v9.0.296 — Batch Finalize Reports Its Real Count
+- **Batch Finalize Count (P3):** batch finalize returns only the vouchers it made permanent and lists each refused id with its reason (missing, deleted, already permanent, closed year, unbalanced); the message and the audit row say the same (TD-556).
+
+### v9.0.295 — Voucher Edits Need Their Version
+- **Voucher Edit Lock and Audit (P3):** a voucher edit sends the version it read (400 without, 409 `OCC_CONFLICT` when stale), a deleted voucher is never edited, and voucher and account edit and delete audit rows carry before and after (TD-555).
+
+### v9.0.294 — Vouchers of a Source Change Only Through Their Source
+- **Source Vouchers Locked on the Voucher Page (P2, decision t8):** a voucher issued by a document, treasury transaction, cheque, payroll or BOM allocation, and its reversal, is only approved and finalized from the voucher page; delete, edit, back to draft, reverse and correct answer 409 `VOUCHER_HAS_SOURCE` and the list shows each voucher's source (TD-552).
+
+### v9.0.293 — v9.0.293 — Dashboard Banner Uses the Display Time Zone
+- **Dashboard banner clock (TD-683):** the banner's date, clock and greeting follow the display time zone setting, so a device set to another zone no longer shows yesterday's date around midnight in Tehran.
+
+### v9.0.292 — v9.0.292 — Dashboard Calendar Weekdays for Far Months
+- **Dashboard calendar (TD-681):** the weekday of a month's first day comes from the calendar conversion, so months more than about 13 months away no longer start on Saturday.
+
+### v9.0.291 — v9.0.291 — Global Search Finds the Exact Name and Arabic Letters
+- **Global search (TD-675):** results come exact match first, then names that start with the text, then the rest; Arabic «ي» / «ك» and Persian digits match their Persian and Latin forms in both the search text and the stored names.
+
+### v9.0.290 — v9.0.290 — Dashboard Reads Sales Data Only With Its Permission
+- **Dashboard sales data (TD-674):** the dashboard reads sales files and recent activities only for holders of `crm.view`, and no longer loads parties, personnel, users or sales statistics it never shows.
+
+### v9.0.289 — v9.0.289 — Warehouse Dashboard Counts the Kardex Ledger
+- **Dashboard movement figures (TD-671):** recent documents count documents, not Kardex rows; a voided document and its reversal and warehouse transfers no longer count as consumption; the day windows follow the business time zone.
+
+### v9.0.288 — Report Digits, Currency Names and Today
+- **Accounting Report Digits (P3):** the journal book and the ratios show Persian digits, currencies are named, and the party statement and account explorer take today from the business time zone (TD-580).
+
+### v9.0.287 — Persian Wording in the Accounting UI
+- **Accounting UI Wording (P3):** the accounting screens have no English words or loanwords («دوبل», «آرتیکل», «داشبورد») and the voucher form button says it saves a draft (TD-579).
+
+### v9.0.286 — Payslip Deductions Get Their Own Account
+- **Payslip Deductions Account (P2):** payslip deductions credit the new standard account 3205 «employee deductions payable» instead of 3202 «customer prepayments»; migration 0077 adds it to existing charts, past vouchers stay and the health check lists what is left on 3202 (TD-554).
+
+### v9.0.285 — Work Log and Payslip Writes Are Audited
+- **Work Log and Payslip Writes Are Audited (TD-810):** editing a work log from 400,000 to 20,000,000 rials or deleting it left no trace, a batch wrote one «ثبت N ردیف» row without ids, and payslip rows were written after commit with no details, no IP and the raw status code; every log create, edit and delete and every payslip issue, status change and delete now writes its own audit row in its transaction with the request IP, before / after (changed fields on edit) and Persian status labels.
+
+### v9.0.284 — Personnel Custom Rates Are Unique, Checked and Audited
+- **Personnel Custom Rates Are Unique, Checked and Audited (TD-809):** a personnel custom rate was saved without a transaction, so concurrent saves made two active rows and the rates page and a work log read different rates; it is now saved under the personnel row lock with one active row per personnel and task (migration 0076), a negative rate or a missing personnel or task is refused, and every change writes a rate history row and an audit row with before and after.
+
+### v9.0.283 — Workshop Schedule Logs Are Dated by the Work Day
+- **Workshop Schedule Logs Are Dated by the Work Day (TD-747):** «ثبت کارمزد» in the project workshop schedule dated a work log by the row or project start date, so today's work landed in another payroll month; the tab now has a Jalali work-date picker defaulting to today in the display time zone, and both the row and the stage batch log use it.
+
+### v9.0.282 — A Workshop Schedule Row Is Logged Once
+- **A Workshop Schedule Row Is Logged Once (TD-736):** the «logged» flag of a workshop schedule row lived only in the browser, so reopening the tab logged and paid the same work twice; the server now writes the log id into the schedule row under the project row lock, refuses a second or concurrent log of the row with 409, and frees the row when its log is deleted or moved.
+
+### v9.0.281 — Workshop Schedule Logs Take the Server Rate
+- **Workshop Schedule Logs Take the Server Rate (TD-735):** the project workshop schedule read the task rate from a key the server never sends and posted work logs at rate 0; it now sends no rate, and the server gives a log posted from a schedule row the personnel custom rate, else the task base rate.
+
+### v9.0.280 — Work Logs Are Checked Before They Are Saved
+- **Work Logs Are Checked Before They Are Saved (TD-812):** a work log needs positive ids, a quantity above zero or hh:mm, a non-negative manual rate and live personnel, task and project; a batch is one transaction, so a bad row saves nothing, and editing a log follows the same rules.
+
+### v9.0.279 — Piecework Base Rate Is Non-Negative
+- **Piecework Base Rate Is Non-Negative (TD-813):** a task's base rate is a non-negative number in the task form, the API and the Excel import; a text or negative rate is refused and an Excel row with one is listed in the import errors instead of being saved as 0 or below zero.
+
+### v9.0.278 — v9.0.278 — Approved Persian Words in the Shell and Settings
+- **Shell wording (TD-686):** the sidebar, top bar, dashboard, settings, setup and connection error messages use the owner's Persian glossary instead of transliterations and English words; only «کاردکس», «ترنسفر» and «وبهوک» stay transliterated.
+
+### v9.0.277 — v9.0.277 — Receipts Page Opens for Those Who Record Its Documents
+- **Receipts page access (B16-04, TD-668 follow-up):** the stock in/out page opens for `warehouse.in`, `warehouse.out` or `documents.finalize`, the keys saving its documents asks, instead of `documents.view` / `documents.create`, which opened the page but could not save.
+
+### v9.0.276 — v9.0.276 — Settings Values Are Validated
+- **Settings validation (TD-672):** movement days must be whole numbers from 1 to 3650 with fast < slow < dead and the currency setting is rial or toman (422 otherwise); the dashboard falls back to the defaults 30 / 90 / 180 when a stored value is invalid.
+
+### v9.0.275 — v9.0.275 — Currency Setting Is the Rial Display Unit
+- **Rial display unit (TD-667):** the currency setting is now only the display unit of rial amounts, rial or toman (toman = rial ÷ 10); a record with its own foreign currency keeps it, and amount inputs and Excel exports stay in rial.
 
 ### v9.0.274 — v9.0.274 — A Sales Return Gives Back Its Share of the Invoice VAT
 - **Documents:** a sales return of an invoice takes that invoice's VAT percent and its share of the invoice VAT for the returned net, so a full return in parts gives back exactly the invoice VAT, and its voucher debits VAT payable; before, a full return of a 1,000,000 invoice at 10% left the customer owing 100,000 and VAT payable 100,000 too high (TD-774).

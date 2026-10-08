@@ -124,7 +124,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
       .then((res: any) => {
         const list: BankAccount[] = Array.isArray(res) ? res : (res?.data || []);
         setBankAccounts(list);
-        // v9.0.296 (TD-802): پیش‌فرض از حساب‌های هم‌ارز فاکتور (بانک یا کارت‌خوان مقدم)
+        // v9.0.345 (TD-802): پیش‌فرض از حساب‌های هم‌ارز فاکتور (بانک یا کارت‌خوان مقدم)
         setSelectedAccountId(defaultSettlementAccountId(list, doc.currency || 'IRR'));
       })
       .catch((err) => {

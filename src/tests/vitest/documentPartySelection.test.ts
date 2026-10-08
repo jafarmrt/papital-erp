@@ -3,7 +3,7 @@ import { selectedPartyId } from '../../lib/documents/partySelection';
 import { invoiceFormFromDocument } from '../../lib/invoices/invoiceForm';
 
 /**
- * v9.0.287 (TD-778, finding B08-09): the invoice form and the stock document page send the party picked in the picker as
+ * v9.0.336 (TD-778, finding B08-09): the invoice form and the stock document page send the party picked in the picker as
  * `partyId`, and editing a stored invoice restores the picker from the document's party id instead of matching the name.
  */
 describe('document party selection (TD-778)', () => {

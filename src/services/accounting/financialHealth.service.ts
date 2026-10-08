@@ -17,6 +17,7 @@ import {
 import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
 import { buildForeignRateHealthTest, findVouchersWithoutForeignRate } from './voucherForeignRateHealth.js';
 import { buildPayrollVoucherHealthTest, findPayrollVoucherMismatches } from '../piecework/payrollVoucherHealth.js';
+import { buildPersonnelRateHealthTest, findDuplicatePersonnelRates, hasPersonnelRateUniqueIndex } from '../piecework/personnelRate.js';
 import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
 import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
 import {
@@ -24,6 +25,7 @@ import {
   findAccountMappingIssues, findDeletedAccountsWithVoucherRows, findNonLatinAccountCodes, findVouchersOnNonPostingAccounts,
 } from './chartOfAccountsHealth.js';
 import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
+import { buildPayslipDeductionsHealthTest, findPayslipDeductionsInPrepayments } from './payrollDeductionHealth.js';
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from '../documents/documentParty.js';
@@ -67,7 +69,7 @@ export function buildPieceworkTaskCodeHealthTest(
   return {
     id: 'piecework_task_code_uniqueness',
     category: 'system',
-    title: 'یکتایی کد عناوین کاری پرکیسی',
+    title: 'یکتایی کد عناوین کاری کارمزدی',
     description: 'دو عنوان کاری فعال نباید کد یکسان داشته باشند (بدون توجه به حروف بزرگ/کوچک و فاصله)؛ پایگاه‌داده با ایندکس یکتا از کد تکراری جلوگیری می‌کند',
     status: duplicateCodeCount > 0 || !uniqueIndexPresent ? 'warning' : 'healthy',
     scoreImpact: -penalty,
@@ -1186,9 +1188,16 @@ export class FinancialHealthService {
     tests.push(categoryIntegrityTest);
     // آزمون ۳۷: v9.0.266 (TD-804) فیش حقوقی با پاداش یا کسورات منفی، بی سند یا ناهمخوان با سند (فقط فهرست، بی بازنویسی)
     tests.push(buildPayrollVoucherHealthTest(await findPayrollVoucherMismatches()));
-    // آزمون ۳۸: v9.0.287 (TD-778) سند فروش و خرید با نام خریدار و بی شناسه طرف حساب (فقط فهرست، بی بازنویسی)
+    // آزمون ۳۸: v9.0.284 (TD-809) بیش از یک نرخ اختصاصی فعال برای یک پرسنل و عنوان کار (مهاجرت 0076؛ فقط فهرست)
+    const [duplicatePersonnelRates, personnelRateIndexPresent] = await Promise.all([findDuplicatePersonnelRates(), hasPersonnelRateUniqueIndex()]);
+    const personnelRateTest = buildPersonnelRateHealthTest(duplicatePersonnelRates, personnelRateIndexPresent);
+    overallScore += personnelRateTest.scoreImpact;
+    tests.push(personnelRateTest);
+    // آزمون ۳۹: v9.0.286 (TD-554) کسورات فیش حقوق که سندهای پیشین در ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» گذاشته‌اند (فقط فهرست)
+    tests.push(buildPayslipDeductionsHealthTest(await findPayslipDeductionsInPrepayments()));
+    // آزمون ۴۰: v9.0.336 (TD-778) سند فروش و خرید با نام خریدار و بی شناسه طرف حساب (فقط فهرست، بی بازنویسی)
     tests.push(buildUnlinkedPartyDocumentHealthTest(await findUnlinkedPartyDocuments()));
-    // آزمون ۳۹: v9.0.289 (TD-786) قید پایگاه‌داده سند و ردیف سند اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)
+    // آزمون ۴۱: v9.0.338 (TD-786) قید پایگاه‌داده سند و ردیف سند اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)
     tests.push(buildDocumentIntegrityHealthTest(await findDocumentIntegrityGaps()));
 
     // =========================================================================

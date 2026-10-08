@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import InvoicesListPage from '../../pages/InvoicesListPage';
 import { SearchProvider } from '../../SearchContext';
 
-// v9.0.293 (TD-797, finding B08-28): a failed documents list read shows the server's message and a retry button, never the
+// v9.0.342 (TD-797, finding B08-28): a failed documents list read shows the server's message and a retry button, never the
 // «no document matches the filters» empty state
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));

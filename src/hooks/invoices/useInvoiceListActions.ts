@@ -23,7 +23,7 @@ export function useInvoiceListActions(loadData: () => void) {
   const [, setDetailsLoading] = useState(false);
   const [, setPrintLoading] = useState(false);
   const detailsRequestRef = useRef<AbortController | null>(null);
-  // v9.0.291 (TD-795): دکمه‌های ردیف و پنجره جزئیات با مجوز API خودشان
+  // v9.0.340 (TD-795): دکمه‌های ردیف و پنجره جزئیات با مجوز API خودشان
   const access = useInvoiceRowAccess();
   const queryClient = useQueryClient();
 
@@ -38,7 +38,7 @@ export function useInvoiceListActions(loadData: () => void) {
       setEditingNotesId(null);
     } catch (err) {
       console.error(err);
-      // v9.0.291 (TD-795): دلیل سرور (مثلاً نداشتن مجوز ویرایش سند) نمایش داده می‌شود، نه پیام کلی
+      // v9.0.340 (TD-795): دلیل سرور (مثلاً نداشتن مجوز ویرایش سند) نمایش داده می‌شود، نه پیام کلی
       toast.error(errorMessageOf(err) || 'خطا در به‌روزرسانی توضیحات');
     }
   };
@@ -86,7 +86,7 @@ export function useInvoiceListActions(loadData: () => void) {
     try {
       await fetchJson(`/documents/${id}`, { method: 'DELETE' });
       toast.success('سند / پیش‌فاکتور با موفقیت ابطال و حذف گردید.');
-      // v9.0.292 (TD-796): ابطال کاردکس، سند حسابداری، کالاها، رزرو، پروژه و پرونده فروش را هم عوض می‌کند
+      // v9.0.341 (TD-796): ابطال کاردکس، سند حسابداری، کالاها، رزرو، پروژه و پرونده فروش را هم عوض می‌کند
       loadData();
       void invalidatePreset(queryClient, 'documentChange');
     } catch (err) {
@@ -106,7 +106,7 @@ export function useInvoiceListActions(loadData: () => void) {
   };
 
   const handleSettlementSuccess = () => {
-    // v9.0.292 (TD-796): تسویه حساب‌های بانکی، خزانه، سند حسابداری و کارت حساب طرف حساب را هم عوض می‌کند
+    // v9.0.341 (TD-796): تسویه حساب‌های بانکی، خزانه، سند حسابداری و کارت حساب طرف حساب را هم عوض می‌کند
     loadData();
     void invalidatePreset(queryClient, 'settlementChange');
     if (selectedDocDetails && settlementDoc && selectedDocDetails.id === settlementDoc.id) {

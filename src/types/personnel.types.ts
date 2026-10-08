@@ -127,6 +127,8 @@ export interface PieceworkPayroll {
   advance_deduction?: number;
   totalBonuses: number;
   totalDeductions: number;
+  // v9.0.329 (TD-861): شرح «سایر کسورات»
+  deductionsDescription?: string;
   netPayable: number;
   // V4.0.33: پرداخت چندمرحله‌ای حقوق
   paidAmount?: number;

@@ -32,7 +32,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
     setSelectedProjectObj, setAttachments, setCurrency, setExchangeRate,
   } = form;
 
-  // v9.0.292 (TD-796، یافته B08-27): همان فهرست‌هایی که ثبت فاکتور باطل می‌کند (اسناد، کاردکس، سند حسابداری، کالاها، پیشخوان،
+  // v9.0.341 (TD-796، یافته B08-27): همان فهرست‌هایی که ثبت فاکتور باطل می‌کند (اسناد، کاردکس، سند حسابداری، کالاها، پیشخوان،
   // رزروها، پروژه، پرونده فروش و طرف حساب)؛ پیش‌تر فقط پروژه، طرف حساب، کالا و رزرو تازه می‌شدند
   const reloadReferenceLists = () => {
     void invalidatePreset(queryClient, 'documentChange');
@@ -95,12 +95,12 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
         body: JSON.stringify({
           docType,
           status: 'final',
-          // v9.0.285 (TD-783): برگشت از فروش و شماره پیشنهادی دست‌نخورده «auto»؛ سرور شماره آزاد سری را می‌دهد
+          // v9.0.327 (TD-783): برگشت از فروش و شماره پیشنهادی دست‌نخورده «auto»؛ سرور شماره آزاد سری را می‌دهد
           refNumber: refNumberToSend(docType, refNumber, suggestedRef),
           date: formattedDate,
           user: currentUser.full_name || currentUser.username,
           location,
-          // v9.0.287 (TD-778): طرف حساب ورود با شناسه انتخابگر؛ برگشت با فاکتور مرجع طرف حساب فاکتور را از سرور می‌گیرد
+          // v9.0.336 (TD-778): طرف حساب ورود با شناسه انتخابگر؛ برگشت با فاکتور مرجع طرف حساب فاکتور را از سرور می‌گیرد
           partyId: actionType === 'in' && returnInvoiceId === null ? selectedPartyId(selectedSupplierObj?.id) : undefined,
           buyer_name: buyerName,
           notes: finalNotes,
@@ -125,7 +125,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
         if (releasedQty > 0) {
           toast.success(`سند خروج با موفقیت ثبت شد و تعداد ${formatPersianNumber(releasedQty)} عدد از اقلام رزرو شده پروژه «${selectedProjectObj.project_code || selectedProjectObj.title}» کسر گردید.`);
         } else {
-          // v9.0.297 (TD-803): سند انبار نهایی ثبت می‌شود و گردش کاری آغاز نمی‌شود
+          // v9.0.346 (TD-803): سند انبار نهایی ثبت می‌شود و گردش کاری آغاز نمی‌شود
           toast.success('سند حواله خروج ثبت و موجودی انبار به‌روزرسانی شد.');
         }
       } else {

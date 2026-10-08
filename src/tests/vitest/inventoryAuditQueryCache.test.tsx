@@ -86,7 +86,7 @@ describe('InventoryAuditPage — React Query cache', () => {
     fireEvent.change(input, { target: { value: '8' } });
     fireEvent.click(screen.getByRole('button', { name: /ثبت نهایی سند انبارگردانی/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'ثبت قطعی انبارگردانی' }));
-    // v9.0.285 (TD-783): the sheet sends "auto" and shows the number the server stored
+    // v9.0.327 (TD-783): the sheet sends "auto" and shows the number the server stored
     expect(await screen.findByText('سند انبارگردانی با شماره AUD-2002 با موفقیت ثبت و موجودی انبار به‌روزرسانی شد.')).toBeTruthy();
 
     const post = fetchJson.mock.calls.find(([url, init]) => url === '/documents' && init?.method === 'POST');

@@ -6,7 +6,7 @@ import { SearchProvider } from '../../SearchContext';
 import { INVOICE_ROW_ACTION_PERMISSIONS } from '../../lib/invoices/invoiceRowAccess';
 import { READ_PERMISSIONS, WORKFLOW_WIDGET_PERMISSIONS } from '../../lib/recordReadPermissions';
 
-// v9.0.291 (TD-795, finding B08-26): each row button of the documents list is shown only with the permission of the API it
+// v9.0.340 (TD-795, finding B08-26): each row button of the documents list is shown only with the permission of the API it
 // calls, and a refused notes edit shows the server's reason
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));

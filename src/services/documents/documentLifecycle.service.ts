@@ -50,7 +50,7 @@ export class DocumentLifecycleService {
     options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number; allowBackdate?: boolean }
   ): Promise<DocumentAuditChange | null> {
     const isStrict = options?.strict !== false;
-    // v9.0.288 (TD-785): سند پیش از نهایی‌سازی (زیر قفل) و پس از آن برای ردیف ممیزی؛ `null` اگر سند از پیش قطعی بود
+    // v9.0.337 (TD-785): سند پیش از نهایی‌سازی (زیر قفل) و پس از آن برای ردیف ممیزی؛ `null` اگر سند از پیش قطعی بود
     let auditBefore: DocumentAuditSnapshot | null = null;
 
     const execute = async (tx: DbExecutor): Promise<DocumentAuditChange | null> => {
@@ -74,7 +74,7 @@ export class DocumentLifecycleService {
       if (docPeek.type === 'audit') {
         throw new ValidationError(`سند انبارگردانی «${docPeek.refNumber || id}» نهایی‌سازی نمی‌شود؛ انبارگردانی هنگام ثبت اعمال شده است. برای اصلاح، آن را ابطال و دوباره ثبت کنید.`);
       }
-      // v9.0.283 (TD-780، تصمیم ت۷ الف): رسید تولید پیش‌نویس (از پیش از این نسخه) قطعی نمی‌شود؛ تحویل فقط از مسیر پروژه
+      // v9.0.325 (TD-780، تصمیم ت۷ الف): رسید تولید پیش‌نویس (از پیش از این نسخه) قطعی نمی‌شود؛ تحویل فقط از مسیر پروژه
       assertNotProjectDelivery(docPeek.type, docPeek.refNumber || String(id));
 
       // Pre-flight: verify line items existence and validity
@@ -342,7 +342,7 @@ export class DocumentLifecycleService {
       await assertVoidHasNoReturns(tx, { id: doc.id, refNumber: doc.refNumber });
       // v9.0.272 (TD-779، ت۴ الف): و نه سندی که دریافت یا پرداخت زنده خزانه دارد (۴۰۹ با فهرست آن‌ها)
       await assertVoidHasNoTreasuryRows(tx, { id: doc.id, refNumber: doc.refNumber });
-      // v9.0.288 (TD-785): سند و ردیف‌هایش پیش از ابطال برای تنها ردیف ممیزی ابطال
+      // v9.0.337 (TD-785): سند و ردیف‌هایش پیش از ابطال برای تنها ردیف ممیزی ابطال
       const auditBefore = await documentAuditSnapshot(tx, id);
 
       const deletedByUser = user || doc.user || 'system';
@@ -487,7 +487,7 @@ export class DocumentLifecycleService {
       }
 
       // 5. Audit log — v8.0.77 (TD-324): در همان تراکنش (پیش‌تر اتصال دوم استخر و ردیف ممیزی ماندگار حتی با برگشت ابطال)
-      // v9.0.288 (TD-785): تنها ردیف ابطال (مسیر کاربر دیگر ردیف دومی نمی‌نویسد)، با سند پیش از ابطال از پایگاه‌داده
+      // v9.0.337 (TD-785): تنها ردیف ابطال (مسیر کاربر دیگر ردیف دومی نمی‌نویسد)، با سند پیش از ابطال از پایگاه‌داده
       await logActivity({
         tx,
         userId: audit?.actor?.userId,

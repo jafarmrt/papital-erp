@@ -6,7 +6,7 @@ interface InvoiceListTableProps {
   safeDocs: InvoiceListDocument[];
   loading: boolean;
   actions: InvoiceListActions;
-  /** v9.0.293 (TD-797): پیام خطای دریافت فهرست و تلاش دوباره */
+  /** v9.0.342 (TD-797): پیام خطای دریافت فهرست و تلاش دوباره */
   loadError?: string | null;
   onRetry?: () => void;
 }

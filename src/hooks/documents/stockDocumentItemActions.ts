@@ -11,7 +11,7 @@ import type { StockDocumentForm } from './useStockDocumentForm';
  */
 /**
  * v7.0.102 (TD-233): ردیف رزرو پیش‌فاکتور در پیام سقف خروج «پیش‌فاکتور» نامیده می‌شود، نه «پروژه».
- * v9.0.297 (TD-803): مقدار با رقم فارسی («(۴ عدد)»)، مثل همه عددهای پیام‌های این فایل.
+ * v9.0.346 (TD-803): مقدار با رقم فارسی («(۴ عدد)»)، مثل همه عددهای پیام‌های این فایل.
  */
 export function reservationSourceLabel(r: GlobalReservation): string {
   const kind = r.sourceType === 'proforma' ? 'پیش‌فاکتور' : 'پروژه';

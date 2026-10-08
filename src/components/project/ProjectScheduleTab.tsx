@@ -9,8 +9,14 @@ import {
 } from '../../types';
 import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
-import { extractDateString, formatPersianPrice, errorMessageOf, isoToJalaliDate, formatPersianDate } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { extractDateString, errorMessageOf, isoToJalaliDate, formatPersianDate, getTodayIsoDate } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
+import {
+  isScheduleRowLogged, scheduleLogItem, withPieceworkTask, withScheduleLogLink, withScheduleRowIds,
+  type ScheduleLogItem, type ScheduleRowRef
+} from '../../lib/projects/scheduleWorkLog';
 import toast from 'react-hot-toast';
 
 interface ProjectScheduleTabProps {
@@ -26,7 +32,7 @@ export default function ProjectScheduleTab({
   pieceworkTasksList: initialPieceworkTasksList = [],
   onUpdate
 }: ProjectScheduleTabProps) {
-  const appCurrency = useAppCurrency();
+  const rial = useRialDisplay();
   const [saving, setSaving] = useState<boolean>(false);
   const [personnelList, setPersonnelList] = useState<any[]>(initialPersonnelList);
   const [pieceworkTasksList, setPieceworkTasksList] = useState<any[]>(initialPieceworkTasksList);
@@ -45,6 +51,10 @@ export default function ProjectScheduleTab({
   const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
   const [loggingTaskId, setLoggingTaskId] = useState<string | null>(null);
   const [batchLoggingStageId, setBatchLoggingStageId] = useState<number | null>(null);
+  // v9.0.283 (TD-747، تصمیم ت۶ الف بسته ۱۱): روز کارکرد «ثبت کارمزد»، پیش‌فرض امروز در منطقه زمانی نمایش؛ نه تاریخ شروع کار یا پروژه
+  const [logDate, setLogDate] = useState<string>(() => getTodayIsoDate());
+  // v9.0.320 (TD-805): «ثبت کارمزد» همان کلید API ثبت کارکرد را می‌پرسد
+  const { canLog } = usePieceworkPermissions();
 
   // Load latest presets and personnel if missing
   useEffect(() => {
@@ -295,13 +305,8 @@ export default function ProjectScheduleTab({
 
       if (field === 'taskId') {
         const found = pieceworkTasksList.find(pt => pt.id === Number(val));
-        if (found) {
-          t.taskId = found.id;
-          t.taskTitle = found.title;
-          t.defaultRate = found.default_rate || 0;
-          t.unit = found.unit || 'عدد';
-          t.estimatedCost = (t.quantity || 0) * (t.defaultRate || 0);
-        }
+        // v9.0.281 (TD-735): نرخ پایه از `defaultRate` سرور (پیش‌تر `default_rate` که سرور نمی‌فرستد، پس نرخ ۰ می‌شد)
+        if (found) Object.assign(t, withPieceworkTask(t, found));
       }
 
       if (field === 'assignedPersonnelId') {
@@ -366,6 +371,36 @@ export default function ProjectScheduleTab({
     void fetchProjectPieceworkLogs();
   }, [project.id]);
 
+  // v9.0.282 (TD-736، تصمیم ت۵ الف): پیش از ثبت کارکرد، برنامه (با شناسه هر ردیف) ذخیره می‌شود تا سرور ردیف را بسنجد و
+  // شناسه کارکرد را در همان ردیف بنویسد؛ ردیف ثبت‌شده دوباره ثبت نمی‌شود (۴۰۹) و وضعیت دکمه از همان شناسه خوانده می‌شود
+  const saveSchedulesForLogging = async (): Promise<ProjectStageSchedulesMap | null> => {
+    const withIds = withScheduleRowIds(schedulesMap, () => `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+    setSchedulesMap(withIds);
+    const res = await fetchJson<{ id?: number }>(`/projects/${project.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage_schedules: withIds })
+    });
+    if (!res?.id) {
+      toast.error('برنامه کارگاه پیش از ثبت کارکرد ذخیره نشد.');
+      return null;
+    }
+    return withIds;
+  };
+
+  const postScheduleLogs = async (items: ScheduleLogItem[]): Promise<number[]> => {
+    const res = await fetchJson<{ insertedIds?: number[] }>('/piecework/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    });
+    return Array.isArray(res?.insertedIds) ? res.insertedIds : [];
+  };
+
+  const markRowsLogged = (links: Array<{ ref: ScheduleRowRef; logId: number }>) => {
+    setSchedulesMap(prev => links.reduce((map, l) => withScheduleLogLink(map, l.ref, l.logId), prev));
+  };
+
   // Log single task to Piecework Logs
   const handleLogSingleTaskToPiecework = async (
     stageId: number,
@@ -389,110 +424,72 @@ export default function ProjectScheduleTab({
     const taskKey = task.id || `${stageId}-${productId}-${taskIdx}`;
     setLoggingTaskId(taskKey);
 
+    let saved: ProjectStageSchedulesMap | null = null;
     try {
-      const payload = {
-        items: [
-          {
-            personnelId: task.assignedPersonnelId,
-            taskId: task.taskId,
-            projectId: project.id,
-            date: task.startDate || new Date().toLocaleDateString('fa-IR'),
-            quantity: Number(task.quantity),
-            unitRate: Number(task.defaultRate) || 0,
-            notes: `کارکرد پروژه ${project.project_code || project.title} - ${task.taskTitle}`
-          }
-        ]
-      };
-
-      const res = await fetchJson<{ status: string; insertedCount?: number }>('/piecework/logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res?.status === 'ok' || (res as any)?.insertedCount) {
-        toast.success(`کارکرد «${task.taskTitle}» برای ${task.assignedPersonnelName || 'پرسنل'} در ماژول کارمزدی ثبت شد.`);
-
-        // Mark task as logged
-        updateProductSchedule(stageId, productId, prev => {
-          const tasks = [...(prev.tasks || [])];
-          if (tasks[taskIdx]) {
-            tasks[taskIdx] = { ...tasks[taskIdx], isLoggedToPiecework: true };
-          }
-          return { ...prev, tasks };
-        });
-
-        void fetchProjectPieceworkLogs();
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در ثبت کارکرد کارمزدی');
+      saved = await saveSchedulesForLogging();
+      const row = saved?.[stageId]?.[productId]?.tasks?.[taskIdx];
+      if (!row?.id) return;
+      const ref: ScheduleRowRef = { stageId, productId, rowId: row.id };
+      // v9.0.281 (TD-735): بی نرخ؛ سرور نرخ اختصاصی پرسنل یا نرخ پایه عنوان کار را می‌گذارد
+      const [logId] = await postScheduleLogs([scheduleLogItem({
+        projectId: project.id,
+        ref,
+        row,
+        date: logDate || getTodayIsoDate(),
+        notes: `کارکرد پروژه ${project.project_code || project.title} - ${row.taskTitle}`
+      })]);
+      toast.success(`کارکرد «${row.taskTitle}» برای ${row.assignedPersonnelName || 'پرسنل'} در ماژول کارمزدی ثبت شد.`);
+      if (logId) markRowsLogged([{ ref, logId }]);
+      void fetchProjectPieceworkLogs();
+    } catch (err) {
+      toast.error(errorMessageOf(err) || 'خطا در ثبت کارکرد کارمزدی');
     } finally {
       setLoggingTaskId(null);
+      // برنامه ذخیره‌نشده با بارگذاری دوباره از دست نمی‌رود
+      if (saved) onUpdate();
     }
   };
 
   // Batch log all unlogged tasks in a stage
   const handleBatchLogStageTasks = async (stageId: number, stageTitle: string) => {
-    const stageSchedules = schedulesMap[stageId] || {};
-    const itemsToLog: any[] = [];
-    const targetsToUpdate: { productId: string; taskIdx: number }[] = [];
-
-    Object.entries(stageSchedules).forEach(([prodId, pSched]) => {
-      const schedule = pSched as ProductStageSchedule;
-      (schedule?.tasks || []).forEach((t, idx) => {
-        if (t.assignedPersonnelId && t.taskId && Number(t.quantity) > 0 && !t.isLoggedToPiecework) {
-          itemsToLog.push({
-            personnelId: t.assignedPersonnelId,
-            taskId: t.taskId,
-            projectId: project.id,
-            date: t.startDate || new Date().toLocaleDateString('fa-IR'),
-            quantity: Number(t.quantity),
-            unitRate: Number(t.defaultRate) || 0,
-            notes: `کارکرد مرحله «${stageTitle}» پروژه ${project.project_code || project.title} - ${t.taskTitle}`
-          });
-          targetsToUpdate.push({ productId: prodId, taskIdx: idx });
-        }
-      });
-    });
-
-    if (itemsToLog.length === 0) {
+    const loggable = (t: TaskAssignmentItem) => Boolean(t.assignedPersonnelId && t.taskId && Number(t.quantity) > 0 && !isScheduleRowLogged(t));
+    const hasLoggable = Object.values(schedulesMap[stageId] || {}).some(sched => (sched?.tasks || []).some(loggable));
+    if (!hasLoggable) {
       toast.error('هیچ وظیفه ثبت‌نشده‌ای با پرسنل و عنوان کارمزدی معتبر در این مرحله یافت نشد.');
       return;
     }
 
     setBatchLoggingStageId(stageId);
+    let saved: ProjectStageSchedulesMap | null = null;
     try {
-      const res = await fetchJson<{ status: string; insertedCount?: number }>('/piecework/logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: itemsToLog })
+      saved = await saveSchedulesForLogging();
+      if (!saved) return;
+      const refs: ScheduleRowRef[] = [];
+      const itemsToLog: ScheduleLogItem[] = [];
+      Object.entries(saved[stageId] || {}).forEach(([prodId, sched]) => {
+        ((sched?.tasks || []) as TaskAssignmentItem[]).forEach(t => {
+          if (!t.id || !loggable(t)) return;
+          const ref: ScheduleRowRef = { stageId, productId: prodId, rowId: t.id };
+          refs.push(ref);
+          itemsToLog.push(scheduleLogItem({
+            projectId: project.id,
+            ref,
+            row: t,
+            date: logDate || getTodayIsoDate(),
+            notes: `کارکرد مرحله «${stageTitle}» پروژه ${project.project_code || project.title} - ${t.taskTitle}`
+          }));
+        });
       });
 
-      if (res?.status === 'ok' || (res as any)?.insertedCount) {
-        toast.success(`تعداد ${itemsToLog.length} رکورد کارکرد برای مرحله «${stageTitle}» با موفقیت ثبت شد.`);
-
-        // Mark all these tasks as logged
-        setSchedulesMap(prev => {
-          const next = { ...prev };
-          const stg = { ...(next[stageId] || {}) };
-          targetsToUpdate.forEach(({ productId, taskIdx }) => {
-            if (stg[productId]) {
-              stg[productId] = {
-                ...stg[productId],
-                tasks: ((stg[productId] as any).tasks || []).map((tk: any, i: number) => i === taskIdx ? { ...tk, isLoggedToPiecework: true } : tk)
-              };
-            }
-          });
-          next[stageId] = stg;
-          return next;
-        });
-
-        void fetchProjectPieceworkLogs();
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در ثبت گروهی کارکردها');
+      const ids = await postScheduleLogs(itemsToLog);
+      toast.success(`تعداد ${itemsToLog.length} رکورد کارکرد برای مرحله «${stageTitle}» با موفقیت ثبت شد.`);
+      markRowsLogged(refs.map((ref, i) => ({ ref, logId: ids[i] })).filter(l => Boolean(l.logId)));
+      void fetchProjectPieceworkLogs();
+    } catch (err) {
+      toast.error(errorMessageOf(err) || 'خطا در ثبت گروهی کارکردها');
     } finally {
       setBatchLoggingStageId(null);
+      if (saved) onUpdate();
     }
   };
 
@@ -567,7 +564,7 @@ export default function ProjectScheduleTab({
           <div>
             <span className="text-[10px] text-slate-400 block">برآورد کل دستمزد:</span>
             <span className="text-base font-bold font-mono text-emerald-400">
-              {formatPersianPrice(totalLaborBudget, appCurrency)}
+              {rial.amount(totalLaborBudget)}
             </span>
           </div>
 
@@ -581,6 +578,21 @@ export default function ProjectScheduleTab({
           </button>
         </div>
       </div>
+
+      {/* v9.0.283 (TD-747): تاریخ کارکردهایی که این زبانه به حقوق می‌فرستد */}
+      {canLog && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 flex flex-wrap items-center gap-2">
+          <Calendar className="w-4 h-4 text-emerald-700 shrink-0" />
+          <span className="font-bold text-emerald-900 text-[11px]">تاریخ کارکرد برای «ثبت کارمزد»:</span>
+          <JalaliDateInput
+            value={logDate}
+            onChange={iso => setLogDate(iso || getTodayIsoDate())}
+            containerClassName="w-36"
+            className="w-full px-2 py-1 text-xs border border-emerald-300 rounded-lg bg-white text-center"
+          />
+          <span className="text-[10px] text-emerald-800">کارکرد با همین تاریخ در حقوق ماه آن حساب می‌شود؛ پیش‌فرض امروز است.</span>
+        </div>
+      )}
 
       {/* Breakdown per Stage */}
       <div className="space-y-5">
@@ -610,20 +622,22 @@ export default function ProjectScheduleTab({
 
                 <div className="flex items-center gap-2">
                   {/* Batch Register Piecework Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleBatchLogStageTasks(stg.id, stg.title)}
-                    disabled={batchLoggingStageId === stg.id}
-                    className="px-2.5 py-1 text-[11px] font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
-                    title="ثبت یکباره تمامی وظایف پرسنل‌دار این مرحله به عنوان کارکرد کارمزدی"
-                  >
-                    {batchLoggingStageId === stg.id ? (
-                      <RefreshCw className="w-3 h-3 text-emerald-600 animate-spin" />
-                    ) : (
-                      <Coins className="w-3 h-3 text-emerald-600" />
-                    )}
-                    <span>ثبت گروهی کارکرد مرحله</span>
-                  </button>
+                  {canLog && (
+                    <button
+                      type="button"
+                      onClick={() => handleBatchLogStageTasks(stg.id, stg.title)}
+                      disabled={batchLoggingStageId === stg.id}
+                      className="px-2.5 py-1 text-[11px] font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                      title="ثبت یکباره تمامی وظایف پرسنل‌دار این مرحله به عنوان کارکرد کارمزدی"
+                    >
+                      {batchLoggingStageId === stg.id ? (
+                        <RefreshCw className="w-3 h-3 text-emerald-600 animate-spin" />
+                      ) : (
+                        <Coins className="w-3 h-3 text-emerald-600" />
+                      )}
+                      <span>ثبت گروهی کارکرد مرحله</span>
+                    </button>
+                  )}
 
                   {/* Preset Template Apply Button */}
                   <button
@@ -796,16 +810,16 @@ export default function ProjectScheduleTab({
                                   {/* Estimated Cost & Piecework Action */}
                                   <div className="sm:col-span-2 flex items-center justify-between gap-1">
                                     <span className="font-mono font-bold text-emerald-700 text-xs">
-                                      {formatPersianPrice(task.estimatedCost || 0, appCurrency)}
+                                      {rial.amount(task.estimatedCost || 0)}
                                     </span>
                                     
                                     {/* Action to log to piecework */}
-                                    {task.isLoggedToPiecework ? (
+                                    {isScheduleRowLogged(task) ? (
                                       <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-bold flex items-center gap-0.5" title="در کارکرد کارمزدی ثبت شده است">
                                         <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                                         <span>ثبت‌شده</span>
                                       </span>
-                                    ) : (
+                                    ) : canLog && (
                                       <button
                                         type="button"
                                         disabled={!task.assignedPersonnelId || !task.taskId || loggingTaskId === (task.id || `${stg.id}-${p.id}-${tIdx}`)}
@@ -823,16 +837,16 @@ export default function ProjectScheduleTab({
                                     )}
                                   </div>
 
-                                  {/* Delete */}
+                                  {/* Delete (v9.0.282، TD-736: ردیف ثبت‌شده حذف نمی‌شود تا پیوند کارکردش نماند) */}
                                   <div className="sm:col-span-1 text-center">
-                                    <button
+                                    {!isScheduleRowLogged(task) && <button
                                       type="button"
                                       onClick={() => handleRemoveTask(stg.id, p.id, tIdx)}
                                       className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
                                       title="حذف این وظیفه"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                    </button>}
                                   </div>
                                 </div>
                               );
@@ -897,21 +911,21 @@ export default function ProjectScheduleTab({
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <span className="text-slate-500 block text-[11px]">کل برآورد بودجه دستمزد:</span>
                 <span className="font-bold font-mono text-slate-800 text-sm mt-0.5 block">
-                  {formatPersianPrice(totalLaborBudget, appCurrency)}
+                  {rial.amount(totalLaborBudget)}
                 </span>
               </div>
 
               <div className="p-3 bg-emerald-50/70 rounded-xl border border-emerald-200">
                 <span className="text-emerald-700 block text-[11px]">مجموع کارمزدهای قطعی ثبت‌شده:</span>
                 <span className="font-bold font-mono text-emerald-900 text-sm mt-0.5 block">
-                  {formatPersianPrice(totalActualRecordedCost, appCurrency)}
+                  {rial.amount(totalActualRecordedCost)}
                 </span>
               </div>
 
               <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200">
                 <span className="text-amber-800 block text-[11px]">انحراف از برآورد اولیه:</span>
                 <span className={`font-bold font-mono text-sm mt-0.5 block ${totalActualRecordedCost > totalLaborBudget ? 'text-rose-600' : 'text-slate-700'}`}>
-                  {formatPersianPrice(Math.abs(totalActualRecordedCost - totalLaborBudget), appCurrency)}
+                  {rial.amount(Math.abs(totalActualRecordedCost - totalLaborBudget))}
                   <span className="text-[10px] font-sans mr-1">
                     {totalActualRecordedCost > totalLaborBudget ? '(مازاد بر بودجه)' : '(باقی‌مانده تا سقف بودجه)'}
                   </span>
@@ -949,9 +963,9 @@ export default function ProjectScheduleTab({
                         {log.taskTitle || log.task_title || log.taskCode || log.notes || 'کارکرد کارمزدی'}
                       </td>
                       <td className="p-2 text-center font-mono font-bold text-slate-800">{qty}</td>
-                      <td className="p-2 text-center font-mono text-slate-600">{formatPersianPrice(rate, appCurrency)}</td>
+                      <td className="p-2 text-center font-mono text-slate-600">{rial.amount(rate)}</td>
                       <td className="p-2 text-center font-mono font-bold text-emerald-700">
-                        {formatPersianPrice(qty * rate, appCurrency)}
+                        {rial.amount(qty * rate)}
                       </td>
                     </tr>
                   );

@@ -4,7 +4,7 @@ import { InvoiceListKpiCards } from '../../components/invoices/list/InvoiceListK
 import { computeInvoiceListSummary, documentPayableOf, type InvoiceListDocument } from '../../lib/invoices/invoiceListDocuments';
 import { formatPersianNumber } from '../../utils';
 
-// v9.0.294 (TD-798, finding B08-29): the KPI cards sum the payable amount (net + VAT + service charge), the same figure each row shows
+// v9.0.343 (TD-798, finding B08-29): the KPI cards sum the payable amount (net + VAT + service charge), the same figure each row shows
 const invoiceWithVat: InvoiceListDocument = {
   id: 1, type: 'invoice', status: 'final', currency: 'IRR', totalAmount: 1_000_000, vatAmount: 100_000, serviceChargeAmount: 0, payableAmount: 1_100_000,
 };

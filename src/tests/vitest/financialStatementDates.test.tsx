@@ -70,7 +70,7 @@ describe('each financial statement has its own date in its header (TD-566)', () 
     expect(fetchJson.mock.calls.at(-1)![0]).toBe('/accounting/reports/financial-ratios?');
     fireEvent.change(screen.getByLabelText('امروز'), { target: { value: '2026-03-20' } });
     await waitFor(() => expect(fetchJson.mock.calls.at(-1)![0]).toBe('/accounting/reports/financial-ratios?asOfDate=2026-03-20'));
-    fireEvent.click(screen.getByText('USD'));
+    fireEvent.click(screen.getByText('دلار'));
     await waitFor(() => expect(fetchJson.mock.calls.at(-1)![0]).toBe('/accounting/reports/financial-ratios?asOfDate=2026-03-20&currency=USD'));
     expect(screen.getByText('تا تاریخ ۱۴۰۴/۱۲/۲۹')).toBeTruthy();
   });

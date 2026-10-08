@@ -42,7 +42,7 @@ export function InvoiceListFilters({ query }: { query: InvoiceListQueryState }) 
         <option value="production_receipt">رسید تولید و تحویل محصول</option>
       </select>
 
-      {/* Status Filter — v9.0.295 (TD-800): «پیش‌فاکتور فروش» خودش وضعیت پیش‌فاکتور را می‌خواهد */}
+      {/* Status Filter — v9.0.344 (TD-800): «پیش‌فاکتور فروش» خودش وضعیت پیش‌فاکتور را می‌خواهد */}
       <select
         value={filterType === SALES_PROFORMA_FILTER ? 'proforma' : filterStatus}
         onChange={(e) => setFilterStatus(e.target.value)}

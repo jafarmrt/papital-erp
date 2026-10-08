@@ -794,7 +794,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     );
 
     // Create test document records so foreign key constraint in transactions is satisfied
-    // v9.0.289 (TD-786): documents.type has a CHECK constraint; a remittance is the stock-out document type
+    // v9.0.338 (TD-786): documents.type has a CHECK constraint; a remittance is the stock-out document type
     const [testDoc1] = await orm.insert(documents).values({
       type: 'remittance',
       refNumber: 'DOC-TEST-NEG-1',

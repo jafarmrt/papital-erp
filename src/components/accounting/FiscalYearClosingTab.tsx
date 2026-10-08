@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Scale, RefreshCw, ShieldCheck, Check, Layers, Printer, ChevronDown, ChevronUp } from 'lucide-react';
-import { formatPersianPrice, toPersianDigits, formatPersianDate, formatCurrencyLabel, errorMessageOf } from '../../utils';
+import { toPersianDigits, formatPersianDate, errorMessageOf } from '../../utils';
 import { fiscalClosingJalaliDates } from '../../lib/fiscalClosingDates';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { FiscalYearClosingPreview, FiscalYearClosingResult, JournalVoucher, FiscalClosingAccountRow } from '../../types';
 import toast from 'react-hot-toast';
 import { useExecuteFiscalClosing, useFiscalClosingPreview, useFiscalClosingYears } from '../../hooks/accounting/useFiscalClosing';
@@ -18,8 +18,8 @@ interface FiscalYearClosingTabProps {
 }
 
 export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYearClosingTabProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
   // v9.0.228 (TD-567): دکمه اجرای بستن فقط برای دارنده کلید API آن؛ پیش‌تر مدیر، مدیر مالی و حسابدار آن را می‌دیدند و ۴۰۳ می‌گرفتند
   const canExecuteClosing = useHasPermission(FISCAL_CLOSE_PERMISSION);
   // v9.0.161 (TD-543، تصمیم ت۱ مالک محصول): فقط سال‌های تمام‌شده از سرور؛ سال جاری و آینده بسته نمی‌شوند. پیش‌تر فرم سال جاری
@@ -258,7 +258,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
                   <span className="font-bold text-slate-700 dark:text-slate-300">
-                    {formatPersianPrice(v.total_debit || v.totalDebit, appCurrency)}
+                    {rial.amount(v.total_debit || v.totalDebit)}
                   </span>
                   {onPrintVoucher && (
                     <button
@@ -283,7 +283,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
             <div className="space-y-1">
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">جمع کل درآمدها</span>
               <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                {formatPersianPrice(safeTotalRevenue, appCurrency)}
+                {rial.amount(safeTotalRevenue)}
               </div>
               <span className="text-[11px] text-slate-400">
                 {toPersianDigits(revenuesList.length)} حساب درآمدی
@@ -298,7 +298,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
             <div className="space-y-1">
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">جمع کل هزینه‌ها</span>
               <div className="text-lg font-black text-rose-600 dark:text-rose-400">
-                {formatPersianPrice(safeTotalExpenses, appCurrency)}
+                {rial.amount(safeTotalExpenses)}
               </div>
               <span className="text-[11px] text-slate-400">
                 {toPersianDigits(expensesList.length)} حساب هزینه‌ای
@@ -315,7 +315,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                 {isNetProfitPositive ? 'سود خالص سال' : 'زیان خالص سال'}
               </span>
               <div className={`text-lg font-black ${isNetProfitPositive ? 'text-indigo-600 dark:text-indigo-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                {formatPersianPrice(Math.abs(safeNetProfit), appCurrency)}
+                {rial.amount(Math.abs(safeNetProfit))}
               </div>
               <span className="text-[11px] text-slate-400">
                 قابل انتقال به سود (زیان) انباشته
@@ -436,7 +436,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                           <td className="p-3 text-center text-slate-500">بستانکار</td>
                           <td className="p-3 text-center font-bold text-indigo-600 dark:text-indigo-400">بدهکار در سند</td>
                           <td className="p-3 text-left font-bold text-slate-800 dark:text-slate-200">
-                            {formatPersianPrice(rev.balance || rev.amount || 0)}
+                            {rial.number(rev.balance || rev.amount || 0)}
                           </td>
                         </tr>
                       ))}
@@ -454,7 +454,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                           <td className="p-3 text-center text-slate-500">بدهکار</td>
                           <td className="p-3 text-center font-bold text-amber-600 dark:text-amber-400">بستانکار در سند</td>
                           <td className="p-3 text-left font-bold text-slate-800 dark:text-slate-200">
-                            {formatPersianPrice(exp.balance || exp.amount || 0)}
+                            {rial.number(exp.balance || exp.amount || 0)}
                           </td>
                         </tr>
                       ))}
@@ -494,7 +494,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
               </div>
               <div className="flex items-center gap-4">
                 <span className={`text-xs font-black ${isNetProfitPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {formatPersianPrice(Math.abs(safeNetProfit), appCurrency)}
+                  {rial.amount(Math.abs(safeNetProfit))}
                 </span>
                 {expandedSections.step2 ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
               </div>
@@ -504,7 +504,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
               <div className="p-5">
                 <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 space-y-3">
                   <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-200 dark:border-slate-700">
-                    <span className="text-slate-500 dark:text-slate-400">شرح سند دوبل:</span>
+                    <span className="text-slate-500 dark:text-slate-400">شرح سند حسابداری:</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200">
                       بستن حساب خلاصه سود و زیان سال مالی {toPersianDigits(selectedYear)} به سود (زیان) انباشته
                     </span>
@@ -581,7 +581,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                           </td>
                           <td className="p-3 text-center font-bold text-amber-600 dark:text-amber-400">بستانکار در اختتامیه</td>
                           <td className="p-3 text-left font-bold text-slate-800 dark:text-slate-200">
-                            {formatPersianPrice(asset.balance || asset.amount || 0)}
+                            {rial.number(asset.balance || asset.amount || 0)}
                           </td>
                         </tr>
                       ))}
@@ -598,7 +598,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                           </td>
                           <td className="p-3 text-center font-bold text-indigo-600 dark:text-indigo-400">بدهکار در اختتامیه</td>
                           <td className="p-3 text-left font-bold text-slate-800 dark:text-slate-200">
-                            {formatPersianPrice(item.balance || item.amount || 0)}
+                            {rial.number(item.balance || item.amount || 0)}
                           </td>
                         </tr>
                       ))}
@@ -735,7 +735,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>صدور سند انتقال سود/زیان سال ({formatPersianPrice(Math.abs(safeNetProfit), appCurrency)}) به سود انباشته</span>
+                <span>صدور سند انتقال سود/زیان سال ({rial.amount(Math.abs(safeNetProfit))}) به سود انباشته</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />

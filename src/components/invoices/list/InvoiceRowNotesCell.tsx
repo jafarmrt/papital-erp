@@ -35,7 +35,7 @@ export function InvoiceRowNotesCell({ doc, actions }: { doc: InvoiceListDocument
           <span className="text-slate-600 text-[11px] line-clamp-2 leading-relaxed" title={doc.notes}>
             {doc.notes || <span className="text-slate-300">-</span>}
           </span>
-          {/* v9.0.291 (TD-795): ویرایش توضیحات فقط با مجوز ویرایش سند */}
+          {/* v9.0.340 (TD-795): ویرایش توضیحات فقط با مجوز ویرایش سند */}
           {access.editNotes && <button 
             onClick={() => startEditingNotes(doc)} 
             className="opacity-0 group-hover:opacity-100 text-blue-600 hover:text-blue-800 p-1 cursor-pointer transition-opacity rounded hover:bg-blue-50 shrink-0"

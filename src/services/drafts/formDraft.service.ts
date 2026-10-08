@@ -1,7 +1,18 @@
 import { orm } from '../../db/drizzle.js';
 import { formDrafts } from '../../db/schema.js';
-import { eq, and, sql, desc, lt } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
+import { ValidationError } from '../../errors/customErrors.js';
+import { ADVISORY_LOCK_KEYS, withAdvisoryLock } from '../../lib/advisoryLock.js';
+import { DRAFT_EXPIRY_DAYS, isValidDraftExpiryDays } from '../../lib/drafts/draftRules.js';
+
+/**
+ * v9.0.306 (TD-676، B16-12): پیش‌نویس زنده هنوز منقضی نشده است. ردیف قدیمی بی `expires_at` تا ۳۰ روز پس از آخرین ذخیره
+ * زنده است. زمان‌های سرور UTC و بی منطقه ذخیره می‌شوند (AGENTS §22)، پس با `now()` به UTC مقایسه می‌شوند.
+ */
+const liveDraft = sql`COALESCE(${formDrafts.expiresAt}, ${formDrafts.updatedAt} + make_interval(days => ${DRAFT_EXPIRY_DAYS.default})) > (now() AT TIME ZONE 'UTC')`;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface SaveDraftInput {
   userId?: number | null;
@@ -41,21 +52,21 @@ export class FormDraftService {
       draftKey = 'default',
       payload,
       summary = '',
-      expiresInDays = 30
+      expiresInDays = DRAFT_EXPIRY_DAYS.default
     } = input;
 
     if (!entityType) {
-      throw new Error('entityType الزامی است');
+      throw new ValidationError('نوع پیش‌نویس الزامی است', undefined, 'DRAFT_ENTITY_TYPE_REQUIRED');
     }
 
     if (!payload || typeof payload !== 'object') {
-      throw new Error('محتوای پیش‌نویس (payload) معتبر نیست');
+      throw new ValidationError('محتوای پیش‌نویس معتبر نیست', undefined, 'DRAFT_PAYLOAD_INVALID');
     }
 
-    // Calculate expiry date
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + expiresInDays);
-    const expiresAtIso = expiresAt.toISOString();
+    if (!isValidDraftExpiryDays(expiresInDays)) {
+      throw new ValidationError(`ماندگاری پیش‌نویس باید عدد صحیحی از ۱ تا ۹۰ روز باشد`, undefined, 'DRAFT_EXPIRY_INVALID');
+    }
+    const expiresAtIso = new Date(Date.now() + expiresInDays * DAY_MS).toISOString();
 
     // Check if an existing active draft exists
     let existing;
@@ -144,7 +155,8 @@ export class FormDraftService {
             eq(formDrafts.userId, userId),
             sql`${formDrafts.entityType} = ${entityType}::text`,
             sql`${formDrafts.draftKey} = ${draftKey}::text`,
-            eq(formDrafts.isDeleted, 0)
+            eq(formDrafts.isDeleted, 0),
+            liveDraft
           )
         )
         .orderBy(desc(formDrafts.updatedAt))
@@ -157,7 +169,8 @@ export class FormDraftService {
             sql`${formDrafts.sessionId} = ${sessionId}::text`,
             sql`${formDrafts.entityType} = ${entityType}::text`,
             sql`${formDrafts.draftKey} = ${draftKey}::text`,
-            eq(formDrafts.isDeleted, 0)
+            eq(formDrafts.isDeleted, 0),
+            liveDraft
           )
         )
         .orderBy(desc(formDrafts.updatedAt))
@@ -175,7 +188,7 @@ export class FormDraftService {
       return [];
     }
 
-    const conditions = [eq(formDrafts.isDeleted, 0)];
+    const conditions = [eq(formDrafts.isDeleted, 0), liveDraft];
 
     if (userId) {
       conditions.push(eq(formDrafts.userId, userId));
@@ -249,23 +262,44 @@ export class FormDraftService {
   }
 
   /**
-   * Clean up expired drafts
+   * v9.0.306 (TD-676): soft-deletes every draft that is no longer live; returns the number of drafts removed.
    */
-  static async cleanupExpiredDrafts() {
-    try {
-      const now = new Date().toISOString();
-      const res = await orm.update(formDrafts)
-        .set({ isDeleted: 1 })
-        .where(
-          and(
-            eq(formDrafts.isDeleted, 0),
-            lt(formDrafts.expiresAt, now)
-          )
-        );
-      return res;
-    } catch (e: unknown) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      logger.error('Error cleaning up expired drafts:', errMsg);
+  static async cleanupExpiredDrafts(): Promise<number> {
+    const removed = await orm.update(formDrafts)
+      .set({ isDeleted: 1 })
+      .where(and(eq(formDrafts.isDeleted, 0), sql`NOT (${liveDraft})`))
+      .returning({ id: formDrafts.id });
+    return removed.length;
+  }
+
+  /** One cleanup at a time across processes (advisory lock 91031); a concurrent run returns null. */
+  static async runCleanupExclusive(): Promise<number | null> {
+    const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.FORM_DRAFT_CLEANUP, () => this.cleanupExpiredDrafts());
+    return outcome.acquired ? outcome.result : null;
+  }
+
+  private static cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+  private static runCleanupInBackground(): void {
+    this.runCleanupExclusive()
+      .then((count) => {
+        if (count) logger.info(`[Form drafts] Soft-deleted ${count} expired draft(s)`);
+      })
+      .catch((err: unknown) => logger.error(`[Form drafts] Expired draft cleanup failed: ${err instanceof Error ? err.message : String(err)}`));
+  }
+
+  /** Daily cleanup of expired drafts: once at start, then every `intervalMs`. */
+  static startCleanup(intervalMs: number = DAY_MS): void {
+    if (this.cleanupTimer) return;
+    this.runCleanupInBackground();
+    this.cleanupTimer = setInterval(() => this.runCleanupInBackground(), intervalMs);
+    logger.info(`[Form drafts] Expired draft cleanup started with interval ${intervalMs}ms`);
+  }
+
+  static stopCleanup(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
     }
   }
 }

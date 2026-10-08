@@ -21,7 +21,7 @@ const NO_WAREHOUSES: WarehouseItem[] = [];
 const NO_CUSTOMERS: Customer[] = [];
 const NO_PROFORMAS: InvoiceListDocument[] = [];
 
-/** پیش‌فاکتورهای فروش باز صفحه صدور فاکتور، صفحه‌به‌صفحه (v9.0.277، TD-792) */
+/** پیش‌فاکتورهای فروش باز صفحه صدور فاکتور، صفحه‌به‌صفحه (v9.0.301، TD-792) */
 export function useOpenProformasQuery(page: number) {
   return useQuery<OpenProformasPage>({
     queryKey: [...QUERY_KEYS.documents.openProformas(), page],

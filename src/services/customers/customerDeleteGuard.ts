@@ -55,7 +55,7 @@ export async function findCustomerDeleteBlockers(party: Party, db: DbExecutor): 
     .where(and(eq(journalVouchers.isDeleted, 0), eq(journalVoucherItems.isDeleted, 0), eq(journalVouchers.status, 'draft'), partyRows))
     .orderBy(asc(journalVouchers.voucherNumber));
 
-  // v9.0.287 (TD-778): سند با شناسه طرف حساب، و سند پیشین بی شناسه با نام برابر
+  // v9.0.336 (TD-778): سند با شناسه طرف حساب، و سند پیشین بی شناسه با نام برابر
   const openDocuments = await db.select({ refNumber: documents.refNumber })
     .from(documents)
     .where(and(eq(documents.isDeleted, 0), inArray(documents.status, OPEN_DOCUMENT_STATUSES), documentPartyCondition({ id: party.id, legacyName: name })))

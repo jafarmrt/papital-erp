@@ -4,7 +4,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 
 export interface DocumentFilters {
   type?: string;
-  /** v9.0.295 (TD-800): چند نوع با ویرگول (`invoice,proforma`)، به جای `type` */
+  /** v9.0.344 (TD-800): چند نوع با ویرگول (`invoice,proforma`)، به جای `type` */
   types?: string;
   status?: string;
   search?: string;

@@ -27,7 +27,7 @@ export async function runSalesDocumentTests(shouldRun: ShouldRun): Promise<TestC
       'v9.0.274: a sales return of an invoice takes the invoice VAT in proportion to the returned net (cumulative, so a full return gives all of it back) and its voucher debits VAT payable; a return without an invoice takes the user percent (TD-774)',
       ['td774', 'documents', 'return', 'vat', 'package8'], returnVatFromInvoiceCase],
     ['reg_document_list_types_filter_td_792',
-      'v9.0.277: GET /documents takes a list of types (types=invoice,proforma), so the open sales proformas leave out a purchase proforma; an unknown type is 400 and every listed type must be readable (TD-792)',
+      'v9.0.301: GET /documents takes a list of types (types=invoice,proforma), so the open sales proformas leave out a purchase proforma; an unknown type is 400 and every listed type must be readable (TD-792)',
       ['td792', 'documents', 'list', 'proforma', 'package8'], documentListTypesCase],
   ];
   for (const [id, name, tags, run] of cases) {

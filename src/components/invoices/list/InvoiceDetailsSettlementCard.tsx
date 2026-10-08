@@ -5,7 +5,7 @@ import { detailsRemainingOf, detailsSettlementViewOf, type InvoiceListDocument }
 interface InvoiceDetailsSettlementCardProps {
   selectedDocDetails: InvoiceListDocument;
   setSettlementDoc: (doc: InvoiceListDocument | null) => void;
-  /** v9.0.291 (TD-795): دکمه تسویه فقط با مجوز خزانه */
+  /** v9.0.340 (TD-795): دکمه تسویه فقط با مجوز خزانه */
   canSettle: boolean;
 }
 

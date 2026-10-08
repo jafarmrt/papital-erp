@@ -52,7 +52,7 @@ async function insertDocumentLines(tx: DbClient, rows: DocumentLineRow[]): Promi
 export class DocumentCreationService {
   /**
    * Updates the notes of a specific document.
-   * v9.0.288 (TD-785): در تراکنش فراخواننده و با سند پیش و پس از تغییر، تا ردیف ممیزی همان تراکنش نوشته شود
+   * v9.0.337 (TD-785): در تراکنش فراخواننده و با سند پیش و پس از تغییر، تا ردیف ممیزی همان تراکنش نوشته شود
    * (پیش‌تر یادداشت سند قطعی بی هیچ ردیف ممیزی عوض می‌شد)
    */
   static async updateDocumentNotes(id: number, notes: string, externalTx?: DbExecutor): Promise<DocumentAuditChange> {
@@ -68,7 +68,7 @@ export class DocumentCreationService {
 
   /**
    * Updates an existing document (proforma or draft) and its line items.
-   * v9.0.288 (TD-785): در تراکنش فراخواننده؛ سند پیش از تغییر زیر قفل ردیف و پس از تغییر برای ردیف ممیزی برمی‌گردد
+   * v9.0.337 (TD-785): در تراکنش فراخواننده؛ سند پیش از تغییر زیر قفل ردیف و پس از تغییر برای ردیف ممیزی برمی‌گردد
    */
   static async updateDocument(id: number, body: UpdateDocumentInput, externalTx?: DbExecutor): Promise<DocumentAuditChange> {
     const { 
@@ -84,7 +84,7 @@ export class DocumentCreationService {
     const requestedPartyId = parseDocumentPartyId(body.partyId);
 
     const execute = async (tx: DbExecutor): Promise<DocumentAuditChange> => {
-      // v9.0.281 (TD-776): پیوند پرونده فروش درون همین تراکنش؛ پرونده‌ها پیش از ردیف سند قفل و سنجیده می‌شوند (۴۲۲ پیش از
+      // v9.0.323 (TD-776): پیوند پرونده فروش درون همین تراکنش؛ پرونده‌ها پیش از ردیف سند قفل و سنجیده می‌شوند (۴۲۲ پیش از
       // هر نوشتن). پیش‌فاکتور بودن از نوع سند و وضعیت پس از این ویرایش است.
       let leadLock: LockedDocumentLeads | null = null;
       let leadDocIsProforma = false;
@@ -133,7 +133,7 @@ export class DocumentCreationService {
       // سال مالی دیگری برود شماره بعدی همان سال را می‌گیرد (مگر شماره تازه‌ای داده شده باشد). پیش‌تر شماره و سال
       // شماره‌گذاری سال قبل می‌ماند.
       const newDocDate = date ? requireDocumentTimestamp(date, 'سند') : null;
-      // v9.0.285 (TD-783، تصمیم ت۹ الف): شماره سند فروش (فاکتور، برگشت) فقط از سری سرور است و در ویرایش عوض نمی‌شود؛ شماره
+      // v9.0.327 (TD-783، تصمیم ت۹ الف): شماره سند فروش (فاکتور، برگشت) فقط از سری سرور است و در ویرایش عوض نمی‌شود؛ شماره
       // دستی تازه سند انبار اگر در همان نوع و سال گرفته شده باشد ۴۰۹ با پیام فارسی (پیش‌تر خطای کلی «مقدار تکراری»)
       const requestedRef = isAutoRefNumber(refNumber) ? null : String(refNumber).trim();
       const refChanged = requestedRef !== null && requestedRef !== String(existingDoc.refNumber);
@@ -201,7 +201,7 @@ export class DocumentCreationService {
         existing: existingDoc.exchangeRate,
       });
 
-      // v9.0.287 (TD-778، تصمیم ت۶ الف): طرف حساب با شناسه؛ بی شناسه و با نام تازه دوباره یافته می‌شود، وگرنه همان می‌ماند.
+      // v9.0.336 (TD-778، تصمیم ت۶ الف): طرف حساب با شناسه؛ بی شناسه و با نام تازه دوباره یافته می‌شود، وگرنه همان می‌ماند.
       // برگشت با فاکتور مرجع طرف حساب همان فاکتور را نگه می‌دارد
       const returnInvoiceId = existingDoc.type === 'return' && existingDoc.returnOfDocumentId ? Number(existingDoc.returnOfDocumentId) : null;
       const nameChanged = buyer_name !== undefined && buyer_name !== existingDoc.buyerName;
@@ -413,7 +413,7 @@ export class DocumentCreationService {
         currency: docCurrency,
         input: returnTerms ? { exchangeRate: returnTerms.exchangeRate } : body,
       });
-      // v9.0.287 (TD-778، تصمیم ت۶ الف): طرف حساب با شناسه؛ برگشت با فاکتور مرجع طرف حساب همان فاکتور را می‌گیرد
+      // v9.0.336 (TD-778، تصمیم ت۶ الف): طرف حساب با شناسه؛ برگشت با فاکتور مرجع طرف حساب همان فاکتور را می‌گیرد
       const party = await resolveDocumentParty(tx, {
         docType,
         partyId: requestedPartyId === undefined && returnOfDocumentId !== null
@@ -446,7 +446,7 @@ export class DocumentCreationService {
         attachments: [],
         projectId: finalProjectId ?? undefined,
         returnOfDocumentId,
-        // v9.0.281 (TD-776): پیوند پرونده فروش همراه درج سند (route پرونده را پیش از سند قفل و سنجیده است)
+        // v9.0.323 (TD-776): پیوند پرونده فروش همراه درج سند (route پرونده را پیش از سند قفل و سنجیده است)
         crmLeadId: documentLeadLinkOf(body.crmLeadId) ?? undefined,
         isDeleted: 0
       }).returning({ id: documents.id });
@@ -475,7 +475,7 @@ export class DocumentCreationService {
         // TD-164: حذف کوئری‌های تکراری N+1 انبار در حلقه انبارگردانی
         const resolveWh = await createWarehouseResolver(tx);
 
-        // v9.0.282 (TD-777): هر ردیف شمارش دارد و هر (کالا، انبار) یک ردیف؛ پیش از هر گردش انبار
+        // v9.0.324 (TD-777): هر ردیف شمارش دارد و هر (کالا، انبار) یک ردیف؛ پیش از هر گردش انبار
         assertStockCountLines(docLines.map(line => {
           const target = auditItemMap.get(Number(line.itemId));
           return {
@@ -628,7 +628,7 @@ export class DocumentCreationService {
             documentId: docId,
             refNumber: String(finalRefNumber),
             docType,
-            // v9.0.288 (TD-785): نام ذخیره‌شده خریدار (پیش‌تر فقط `buyer_name`؛ با `buyerName` یا شناسه طرف حساب خالی بود)
+            // v9.0.337 (TD-785): نام ذخیره‌شده خریدار (پیش‌تر فقط `buyer_name`؛ با `buyerName` یا شناسه طرف حساب خالی بود)
             buyerName: party.buyerName || '',
             currency: docCurrency,
             itemCount: docLines?.length || 0,

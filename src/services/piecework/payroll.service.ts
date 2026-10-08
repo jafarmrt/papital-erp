@@ -15,6 +15,8 @@ import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payr
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { workLogFreeOfLivePayroll } from './workLogPayrollLink.js';
+import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './pieceworkAudit.js';
+import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
 
 /**
  * چرخه عمر فیش حقوقی پرکیسی: صدور، تغییر وضعیت، همگام‌سازی سند و ابطال.
@@ -39,10 +41,14 @@ export interface GeneratePayrollInput {
   totalBonuses?: AmountInput;
   deductions?: AmountInput;
   totalDeductions?: AmountInput;
+  /** شرح «سایر کسورات»؛ با کسورات بالای صفر الزامی (TD-861) */
+  deductionsDescription?: string;
   advanceDeduction?: AmountInput;
   notes?: string;
   userId?: number;
   username: string;
+  /** درخواست Express برای IP ردیف ممیزی (TD-810) */
+  req?: unknown;
 }
 
 export interface UpdatePayrollStatusInput {
@@ -50,12 +56,13 @@ export interface UpdatePayrollStatusInput {
   notes?: string;
   userId?: number;
   username: string;
+  req?: unknown;
 }
 
 export class PieceworkPayrollService {
   /** صدور فیش حقوقی جدید برای یک پرسنل در بازه تاریخ. */
   static async generatePayroll(input: GeneratePayrollInput) {
-    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, advanceDeduction: reqAdvanceDeduction, notes } = input;
+    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, deductionsDescription, advanceDeduction: reqAdvanceDeduction, notes } = input;
     const currentUserId = input.userId;
     const currentUsername = input.username;
 
@@ -88,6 +95,16 @@ export class PieceworkPayrollService {
         `${negativeParts.join('، ')} فیش نمی‌تواند منفی باشد؛ کاهش حقوق را در «کسورات» و افزایش را در «پاداش» وارد کنید.`,
         undefined,
         'PAYROLL_NEGATIVE_COMPONENT'
+      );
+    }
+    // v9.0.329 (TD-861، تصمیم ت۵ الف): «سایر کسورات» بی شرح صادر نمی‌شود. پیش‌تر کادر «(بیمه/مالیات...)» نام داشت ولی چیزی
+    // حساب نمی‌کرد، و مبلغ بی هیچ توضیحی به حساب ۳۲۰۲ می‌رفت.
+    const deductionsNote = totDeductionsFin.isPositive() ? String(deductionsDescription ?? '').trim() : '';
+    if (totDeductionsFin.isPositive() && !deductionsNote) {
+      throw new ValidationError(
+        'برای «سایر کسورات» شرح بنویسید، مثلاً بابت چه چیزی کسر می‌شود.',
+        undefined,
+        'PAYROLL_DEDUCTIONS_DESCRIPTION_REQUIRED'
       );
     }
 
@@ -219,6 +236,7 @@ export class PieceworkPayrollService {
         totalFixedAmount: fixedPortion,
         totalBonuses: totBonuses,
         totalDeductions: totDeductions,
+        deductionsDescription: deductionsNote,
         advanceDeduction,
         netPayable: net,
         fixedSalaryMonths,
@@ -248,6 +266,8 @@ export class PieceworkPayrollService {
         tx,
         { strict: true }
       );
+      // v9.0.285 (TD-810): ردیف ممیزی صدور با عکس فیش، کارکردها و سند، در همان تراکنش
+      await auditPayrollIssued(tx, newPayroll, { personnelName: pInfo.fullName, logIds, voucher: autoVoucher }, { req: input.req, userId: currentUserId, username: currentUsername });
 
       return {
         status: 201,
@@ -274,7 +294,8 @@ export class PieceworkPayrollService {
     const targetStatus = status ? String(status).trim().toLowerCase() : '';
     if (targetStatus && !MANUAL_PAYROLL_STATUSES.has(targetStatus)) {
       throw new ValidationError(
-        `وضعیت «${status}» برای فیش حقوقی مجاز نیست؛ فقط «پیش‌نویس» (draft) و «تأییدشده» (approved) دستی تنظیم می‌شوند. پرداخت از «ثبت پرداخت» و ابطال از «حذف فیش» انجام می‌شود.`
+        // v9.0.328 (TD-815): پیام وضعیت را با برچسب فارسی می‌گوید، نه کد آن
+        `وضعیت «${payrollStatusLabel(targetStatus)}» برای فیش حقوقی مجاز نیست؛ فقط «پیش‌نویس» و «تأییدشده» دستی تنظیم می‌شوند. پرداخت از «ثبت پرداخت» و ابطال از «ابطال فیش» انجام می‌شود.`
       );
     }
 
@@ -315,6 +336,8 @@ export class PieceworkPayrollService {
           { strict: true }
         );
       }
+      // v9.0.285 (TD-810): قبل و بعد فیلدهای تغییرکرده و وضعیت با برچسب فارسی (پیش‌تر «به «draft»» پس از commit)
+      await auditPayrollUpdated(tx, pay, { ...pay, ...updates } as typeof pay, autoVoucher, { req: input.req, userId: currentUserId, username: currentUsername });
 
       return {
         status: 200,
@@ -359,6 +382,7 @@ export class PieceworkPayrollService {
       username?: string;
       reason?: string;
       externalTx?: DbExecutor;
+      req?: unknown;
     }
   ): Promise<typeof pieceworkPayrolls.$inferSelect> {
     const operatorName = options?.username || 'سیستم';
@@ -431,10 +455,11 @@ export class PieceworkPayrollService {
       }
 
       // Unlink logs back to pending
-      await tx
+      const freedLogs = await tx
         .update(pieceworkLogs)
         .set({ payrollId: null, status: 'pending' })
-        .where(eq(pieceworkLogs.payrollId, payrollId));
+        .where(eq(pieceworkLogs.payrollId, payrollId))
+        .returning({ id: pieceworkLogs.id });
 
       // Soft delete payroll
       const [updatedPay] = await tx
@@ -442,6 +467,13 @@ export class PieceworkPayrollService {
         .set({ isDeleted: 1 })
         .where(eq(pieceworkPayrolls.id, payrollId))
         .returning();
+
+      // v9.0.285 (TD-810): عکس فیش، دلیل، سندهای باطل‌شده و کارکردهای آزادشده در همان تراکنش
+      await auditPayrollDeleted(tx, pay, {
+        reason,
+        voidedVoucherIds: linkedVouchers.map(v => v.id),
+        freedLogIds: freedLogs.map(l => l.id),
+      }, { req: options?.req, userId: operatorId ?? undefined, username: operatorName });
 
       return updatedPay || pay;
     };

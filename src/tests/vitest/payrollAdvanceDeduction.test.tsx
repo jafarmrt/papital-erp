@@ -3,8 +3,9 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 
 let outstandingAdvance = 0;
 vi.mock('../../api', () => ({ fetchJson: async () => ({ outstandingAdvance, totalAdvances: outstandingAdvance, totalDeducted: 0 }) }));
-vi.mock('../../hooks/useAppCurrency', () => ({ useAppCurrency: () => 'IRR' }));
+vi.mock('../../hooks/useAppCurrency', () => ({ useAppCurrency: () => 'IRR', useRialDisplay: () => rialDisplayOf('IRR') }));
 
+import { rialDisplayOf } from '../../lib/rialDisplay';
 import { PieceworkPayrollModal } from '../../components/piecework/PieceworkPayrollModal';
 
 afterEach(cleanup);

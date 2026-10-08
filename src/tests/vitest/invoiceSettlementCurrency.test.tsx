@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { InvoiceSettlementModal } from '../../components/invoices/InvoiceSettlementModal';
 import { defaultSettlementAccountId, settlementAccountsFor } from '../../lib/invoices/settlementAccounts';
 
-// v9.0.296 (TD-802, finding B08-33): the settlement form offers and pre-selects only accounts in the invoice's currency
+// v9.0.345 (TD-802, finding B08-33): the settlement form offers and pre-selects only accounts in the invoice's currency
 // (the server refuses a treasury row in another currency) and names each account's currency
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
