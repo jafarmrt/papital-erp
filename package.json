@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "9.0.423",
+  "version": "9.0.443",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -20,6 +20,7 @@
     "attachments:cleanup": "tsx scripts/cleanup-attachments.ts",
     "dates:report": "tsx scripts/date-calendar-report.ts",
     "secrets:encrypt": "tsx scripts/encrypt-personnel-secrets.ts",
+    "users:lock-plain-passwords": "tsx scripts/lock-plain-passwords.ts",
     "db:cleanup-test": "tsx scripts/cleanup-test-data.ts",
     "lint": "tsc --noEmit",
     "db:studio": "drizzle-kit studio",

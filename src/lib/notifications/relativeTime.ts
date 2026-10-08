@@ -2,7 +2,7 @@ import { serverTimestampToUtcIso } from '../serverTimestamp';
 import { toPersianDigits } from '../../utils/persianNumber';
 
 /**
- * v9.0.416 (TD-725، B15-23): زمان نسبی اعلان («همین الان»، «۵ دقیقه پیش») از زمان سرور UTC؛ مقدار بی‌منطقه با Z خوانده
+ * v9.0.436 (TD-725، B15-23): زمان نسبی اعلان («همین الان»، «۵ دقیقه پیش») از زمان سرور UTC؛ مقدار بی‌منطقه با Z خوانده
  * می‌شود و عدد با رقم فارسی است. پیش‌تر رشته بی‌منطقه ساعت منطقه توافقی خوانده می‌شد و اعلان تازه «3 ساعت پیش» بود.
  */
 export function notificationRelativeTime(timeStr: string | null | undefined, now: Date = new Date()): string {

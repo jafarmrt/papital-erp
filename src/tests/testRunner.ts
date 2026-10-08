@@ -153,8 +153,8 @@ function isTestCleanupAllowed(): boolean {
 }
 
 export const MOCK_DATABASE_REFUSAL =
-  'FATAL: DATABASE_URL is missing/placeholder — test runner would run against the in-memory mock pool ' +
-  'and produce misleading results. Configure a real PostgreSQL DATABASE_URL and re-run.';
+  'FATAL: DATABASE_URL is missing/placeholder — the test runner needs a real PostgreSQL database and never runs on the ' +
+  'in-memory demo database. Configure a real PostgreSQL DATABASE_URL and re-run.';
 
 /**
  * V3.0.9 (TD-063) + v7.0.38 (P2-12): fail-fast شفاف روی DB جعلی برای همه لایه‌ها، از جمله unit.
@@ -162,8 +162,10 @@ export const MOCK_DATABASE_REFUSAL =
  * اسکیمای تست و داده پایه را می‌سازد؛ روی mockPool همه این‌ها «۰ → ۰» و PASS جعلی گزارش می‌شدند.
  */
 export async function assertRealTestDatabase(): Promise<void> {
-  const { isMockDatabase } = await import('../db/drizzle.js');
-  if (isMockDatabase()) {
+  // v9.0.428 (TD-616): a missing DATABASE_URL is no longer the demo database but a refused mode; both stop the runner
+  const { getDatabaseMode } = await import('../db/drizzle.js');
+  const kind = getDatabaseMode().kind;
+  if (kind !== 'url' && kind !== 'sql_host') {
     throw new Error(MOCK_DATABASE_REFUSAL);
   }
 }

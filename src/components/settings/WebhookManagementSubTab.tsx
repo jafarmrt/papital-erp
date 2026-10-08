@@ -68,7 +68,7 @@ const AVAILABLE_EVENT_PRESETS = [
 ];
 
 export function WebhookManagementSubTab() {
-  // v9.0.415 (TD-722): create, edit, delete, toggle, ping and key rotation are guarded by events.manage
+  // v9.0.435 (TD-722): create, edit, delete, toggle, ping and key rotation are guarded by events.manage
   const canManage = useHasPermission('events.manage');
   const [subscriptions, setSubscriptions] = useState<WebhookSubscription[]>([]);
   const [deliveries, setDeliveries] = useState<WebhookDeliveryLog[]>([]);
@@ -94,7 +94,7 @@ export function WebhookManagementSubTab() {
 
   // Ping Test State
   const [pingTestingId, setPingTestingId] = useState<number | null>(null);
-  // v9.0.417 (TD-728): the form is sent once; a second click while it is saving does nothing
+  // v9.0.437 (TD-728): the form is sent once; a second click while it is saving does nothing
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
   const [, setPingResult] = useState<any | null>(null);
@@ -124,7 +124,7 @@ export function WebhookManagementSubTab() {
         setSubscriptions(Array.isArray(data.data) ? data.data : []);
       }
     } catch (err) {
-      // v9.0.419 (TD-730): the server's own reason is shown, never a fixed text
+      // v9.0.439 (TD-730): the server's own reason is shown, never a fixed text
       showToast(errorMessageOf(err) || 'فهرست وب‌هوک‌ها بارگذاری نشد.', 'error');
     } finally {
       setIsLoading(false);

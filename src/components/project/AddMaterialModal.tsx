@@ -3,7 +3,7 @@ import {
   Database, X, Search, Plus, Filter, AlertCircle, Info, ArrowRight 
 } from 'lucide-react';
 import { Item, Category, ProjectInventoryControlSectionData } from '../../types';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, toPersianDigits } from '../../utils';
 import { COMMON_UNITS } from './projectInventoryUtils';
 import { MaterialNameField, MaterialUnitSelect, MaterialNumberField, MaterialAttributeFields } from './materialFormFields';
 import { useHasPermission } from '../../contexts/AuthContext';
@@ -84,7 +84,7 @@ export function AddMaterialModal({
             }`}
           >
             <Search className="w-4 h-4" />
-            انتخاب از انبار ({filteredWarehouseItems.length} ماده اولیه موجود)
+            انتخاب از انبار ({toPersianDigits(filteredWarehouseItems.length)} ماده اولیه موجود)
           </button>
 
           {canRequestMaterial && <button

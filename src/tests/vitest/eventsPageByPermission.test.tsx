@@ -1,6 +1,6 @@
 /**
- * v9.0.415 (TD-722, B15-20 / FE-03): the events page opens with the permission of its route and API (`events.view`) and
- * shows a change button only to holders of `events.manage`, the key every change route of `/events` asks. On v9.0.414 the
+ * v9.0.435 (TD-722, B15-20 / FE-03): the events page opens with the permission of its route and API (`events.view`) and
+ * shows a change button only to holders of `events.manage`, the key every change route of `/events` asks. On v9.0.434 the
  * page was guarded by the role codes admin / manager: a holder of events.view with another role saw the menu entry and the
  * route and then got «عدم دسترسی», and no button was hidden by events.manage.
  */

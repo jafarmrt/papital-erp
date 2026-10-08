@@ -1,6 +1,6 @@
 /**
- * v9.0.410 (TD-708, B15-06 / FE-09, decision t5 a): the rule test, the event simulation and the timeline replay have no
- * effect. On v9.0.409 the timeline offered «بازپخش زنده رویداد» (dryRun false, no confirmation, repeatable), the events tab
+ * v9.0.430 (TD-708, B15-06 / FE-09, decision t5 a): the rule test, the event simulation and the timeline replay have no
+ * effect. On v9.0.429 the timeline offered «بازپخش زنده رویداد» (dryRun false, no confirmation, repeatable), the events tab
  * published a made-up «SimulatedTestEvent» to the live handlers, and the rule test reported the real action's status.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -12,7 +12,7 @@ import { EventSourcingReplaySubTab } from '../../components/settings/EventSourci
 import { EventSimulationPanel } from '../../components/settings/EventSimulationPanel';
 import { AutoActionsSubTab } from '../../components/settings/AutoActionsSubTab';
 
-// v9.0.415 (TD-722): the change buttons show only for holders of events.manage
+// v9.0.435 (TD-722): the change buttons show only for holders of events.manage
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
 vi.mock('../../api', async () => {
   const actual = await vi.importActual<typeof import('../../api')>('../../api');

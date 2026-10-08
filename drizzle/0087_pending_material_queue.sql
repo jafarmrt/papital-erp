@@ -14,7 +14,7 @@ ALTER TABLE pending_materials ADD COLUMN IF NOT EXISTS item_id integer;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_pending_materials_item_id') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_pending_materials_item_id' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE pending_materials
       ADD CONSTRAINT fk_pending_materials_item_id FOREIGN KEY (item_id) REFERENCES items(id);
   END IF;

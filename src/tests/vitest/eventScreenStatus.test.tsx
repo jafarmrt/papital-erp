@@ -1,7 +1,7 @@
 /**
- * v9.0.421 (TD-733, B15-31 / FE-19, FE-20, FE-25, FE-26): the events page says what is true. A stopped background
+ * v9.0.441 (TD-733, B15-31 / FE-19, FE-20, FE-25, FE-26): the events page says what is true. A stopped background
  * processor is shown as stopped (red, no pulse), an outbox action is announced once (the tab's banner, no second toast from
- * the mutation hook), and the live events label names the interval the list really refreshes at. On v9.0.420 a stopped
+ * the mutation hook), and the live events label names the interval the list really refreshes at. On v9.0.440 a stopped
  * processor showed the green pulse with «ورکر در حال پایش», every outbox action showed a banner and a toast, and the label
  * said «هر ۸ ثانیه» while the list refreshed every 10 seconds.
  */

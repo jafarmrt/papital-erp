@@ -3,4 +3,8 @@
 -- src/data/changelogs/*.ts هستند (تاریخ‌های جلالی حفظ می‌شوند) و تنها
 -- مصرف‌کننده جدول (ReleaseGate) اکنون مستقیماً SYSTEM_UPDATES را می‌خواند.
 
-DROP TABLE IF EXISTS changelogs;
+-- TD-590: the table is named in the current schema, never found along the search path
+DO $$
+BEGIN
+  EXECUTE format('DROP TABLE IF EXISTS %I.changelogs', current_schema());
+END $$;

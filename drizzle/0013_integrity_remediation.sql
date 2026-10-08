@@ -4,12 +4,12 @@
 DO $$
 BEGIN
   -- 1. Project stages updated_at and trigger
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='project_stages' AND column_name='updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='project_stages' AND column_name='updated_at' AND table_schema = current_schema()) THEN
     ALTER TABLE project_stages ADD COLUMN updated_at timestamp DEFAULT now();
   END IF;
 
   DROP TRIGGER IF EXISTS trg_project_stages_updated_at ON project_stages;
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'set_updated_at') THEN
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'set_updated_at' AND pronamespace = current_schema()::regnamespace) THEN
     CREATE TRIGGER trg_project_stages_updated_at BEFORE UPDATE ON project_stages FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 

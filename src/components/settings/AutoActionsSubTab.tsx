@@ -20,7 +20,7 @@ import { useHasPermission } from '../../contexts/AuthContext';
 
 export function AutoActionsSubTab() {
   const queryClient = useQueryClient();
-  // v9.0.415 (TD-722): adding, editing, deleting, switching and testing a rule ask events.manage on the server
+  // v9.0.435 (TD-722): adding, editing, deleting, switching and testing a rule ask events.manage on the server
   const canManage = useHasPermission('events.manage');
   const { data: rules = [], isLoading: isLoadingRules, refetch: refetchRules } = useActionRulesQuery();
   const { data: stats = null, refetch: refetchStats } = useActionStatsQuery();
@@ -39,7 +39,7 @@ export function AutoActionsSubTab() {
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const [activeView, setActiveView] = useState<'rules' | 'logs'>('rules');
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  // v9.0.418 (TD-729): a rule's switch and test button wait for their answer before they can be pressed again
+  // v9.0.438 (TD-729): a rule's switch and test button wait for their answer before they can be pressed again
   const [pendingRuleIds, setPendingRuleIds] = useState<number[]>([]);
   const pendingRef = useRef(new Set<string>());
   const runOnce = async (key: string, ruleId: number, run: () => Promise<void>) => {
@@ -63,7 +63,7 @@ export function AutoActionsSubTab() {
     await Promise.all([refetchRules(), refetchStats(), refetchLogs()]);
   };
 
-  // v9.0.418 (TD-729): the switch sends the state it shows the user will get, never a two-way toggle
+  // v9.0.438 (TD-729): the switch sends the state it shows the user will get, never a two-way toggle
   const handleToggleRule = (rule: ActionRule) => runOnce(`toggle-${rule.id}`, rule.id, async () => {
     try {
       const data = await fetchJson<{ success?: boolean; message?: string }>(`/events/action-rules/${rule.id}/toggle`, {
@@ -93,7 +93,7 @@ export function AutoActionsSubTab() {
     }
   };
 
-  // v9.0.410 (TD-708, decision t5 a): the test evaluates the stored rule on a sample event and only shows what its action
+  // v9.0.430 (TD-708, decision t5 a): the test evaluates the stored rule on a sample event and only shows what its action
   // would do; nothing is sent or written, so nothing is invalidated
   const handleTestRule = (rule: ActionRule) => runOnce(`test-${rule.id}`, rule.id, async () => {
     try {

@@ -11,10 +11,10 @@ ALTER TABLE documents ADD COLUMN IF NOT EXISTS vat_amount numeric(18, 4) NOT NUL
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_documents_vat_percent_range') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_documents_vat_percent_range' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE documents ADD CONSTRAINT chk_documents_vat_percent_range CHECK (vat_percent >= 0 AND vat_percent <= 100);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_documents_vat_amount_non_negative') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_documents_vat_amount_non_negative' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE documents ADD CONSTRAINT chk_documents_vat_amount_non_negative CHECK (vat_amount >= 0);
   END IF;
 END $$;

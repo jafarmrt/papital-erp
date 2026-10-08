@@ -15,11 +15,11 @@ ALTER TABLE treasury_transactions ADD COLUMN IF NOT EXISTS contra_account_id int
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_treasury_transactions_purpose') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_treasury_transactions_purpose' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE treasury_transactions ADD CONSTRAINT chk_treasury_transactions_purpose
       CHECK (purpose IS NULL OR purpose IN ('settlement', 'advance', 'other'));
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_treasury_transactions_contra_account') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_treasury_transactions_contra_account' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE treasury_transactions ADD CONSTRAINT fk_treasury_transactions_contra_account
       FOREIGN KEY (contra_account_id) REFERENCES accounts(id);
   END IF;

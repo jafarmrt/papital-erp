@@ -29,6 +29,7 @@ import { buildPayslipDeductionsHealthTest, findPayslipDeductionsInPrepayments } 
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildProcurementOrderLinkHealthTest, findUnresolvedProcurementOrderLinks } from '../procurement/procurementOrderLinks.js';
 import { buildConsolidationSourcesHealthTest, findOpenLegacyConsolidationSources } from '../procurement/consolidationSourceHealth.js';
+import { buildConditionalConstraintsHealthTest, findMissingConditionalConstraints } from '../system/conditionalConstraints.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from '../documents/documentParty.js';
 import { buildDocumentIntegrityHealthTest, findDocumentIntegrityGaps } from '../documents/documentConstraintHealth.js';
@@ -1237,7 +1238,9 @@ export class FinancialHealthService {
     const unpublishedEventRuleTest = buildUnpublishedRuleEventHealthTest(await findRulesWithUnpublishedEvent());
     overallScore += unpublishedEventRuleTest.scoreImpact;
     tests.push(unpublishedEventRuleTest);
-    // آزمون ۵۰: v9.0.414 (TD-717) یادآوری سررسید پیگیری تکراری برای یک کاربر و پیوند (مهاجرت 0089؛ فقط فهرست)
+    // آزمون ۵۰: v9.0.427 (TD-589) قید و ایندکس یکتای شرطی مهاجرت‌ها که روی داده ناپاک ساخته نشده (فهرست با علت؛ ساختن دستی)
+    tests.push(buildConditionalConstraintsHealthTest(await findMissingConditionalConstraints()));
+    // آزمون ۵۱: v9.0.434 (TD-717) یادآوری سررسید پیگیری تکراری برای یک کاربر و پیوند (مهاجرت 0089؛ فقط فهرست)
     const [duplicateDueReminders, dueReminderIndexPresent] = await Promise.all([findDuplicateDueReminders(), hasDueReminderUniqueIndex()]);
     const dueReminderTest = buildDueReminderHealthTest(duplicateDueReminders, dueReminderIndexPresent);
     overallScore += dueReminderTest.scoreImpact;

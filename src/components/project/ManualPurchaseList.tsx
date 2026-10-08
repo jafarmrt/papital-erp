@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { ShoppingCart, Plus, Printer, CheckCircle2, Trash2, FilePlus, ExternalLink } from 'lucide-react';
 import { ProductionProject, PurchaseListItem, Item } from '../../types';
 import { COMMON_UNITS } from './projectInventoryUtils';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianDate, formatPersianNumber, toPersianDigits } from '../../utils';
 import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 import { ReservationShortageList } from './ReservationShortageList';
 import type { ReservationShortage } from '../../lib/projects/projectReservation';
+import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 
 interface ManualPurchaseListProps {
   project: ProductionProject;
@@ -35,6 +36,8 @@ export function ManualPurchaseList({
   handleUpdateProcurementStatus
 }: ManualPurchaseListProps) {
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
+  // v9.0.417 (TD-752): خرید کسری فقط با کلید ثبت درخواست خرید
+  const { canRequestPurchase } = useProjectPermissions();
   const [lastCreatedOrderDoc, setLastCreatedOrderDoc] = useState<any>(null);
 
   // V3.1.46 (TD-070): رزروها فقط از منبع زنده (سرویس رزرو/تخصیص BOM) —
@@ -72,7 +75,7 @@ export function ManualPurchaseList({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 print:hidden">
-          {shortfallCount > 0 && (
+          {shortfallCount > 0 && canRequestPurchase && (
             <button
               type="button"
               onClick={() => setIsCreateOrderModalOpen(true)}
@@ -80,7 +83,7 @@ export function ManualPurchaseList({
               title="ثبت سند پیش‌نویس سفارش خرید یا پیش‌فاکتور برای کسری‌های این پروژه"
             >
               <FilePlus className="w-4 h-4 text-emerald-100" />
-              صدور سفارش خرید ({shortfallCount} کسری)
+              صدور سفارش خرید ({toPersianDigits(shortfallCount)} کسری)
             </button>
           )}
 
@@ -140,11 +143,11 @@ export function ManualPurchaseList({
               </div>
               <div>
                 <h4 className="font-bold text-purple-950 text-sm">اقلام رزرو شده در انبار برای این پروژه</h4>
-                <p className="text-xs text-purple-700">این اقلام در انبار اصلی فریز شده و فقط جهت صدور حواله خروج همین پروژه اختصاص دارند.</p>
+                <p className="text-xs text-purple-700">این اقلام در انبار اصلی رزرو شده و فقط جهت صدور حواله خروج همین پروژه اختصاص دارند.</p>
               </div>
             </div>
             <span className="px-3 py-1 bg-purple-200 text-purple-950 rounded-full text-xs font-bold font-mono self-start sm:self-center">
-              {effectiveReservedItems.length} کالا رزرو شده
+              {toPersianDigits(effectiveReservedItems.length)} کالا رزرو شده
             </span>
           </div>
 
@@ -177,11 +180,11 @@ export function ManualPurchaseList({
                         {rItem.originalQty} {rItem.originalUnit || rItem.unit}
                       </td>
                       <td className="p-2.5 text-center text-slate-500 font-mono dir-ltr">
-                        {rItem.reservedAt ? new Date(rItem.reservedAt).toLocaleDateString('fa-IR') : '---'}
+                        {rItem.reservedAt ? formatPersianDate(rItem.reservedAt) : '---'}
                       </td>
                       <td className="p-2.5 text-center">
                         <span className="px-2 py-0.5 bg-purple-100 text-purple-900 font-bold rounded-md text-[10px] border border-purple-200">
-                          فریز شده در انبار
+                          رزروشده در انبار
                         </span>
                       </td>
                     </tr>
@@ -191,7 +194,7 @@ export function ManualPurchaseList({
             </div>
           ) : (
             <div className="text-xs text-purple-800 p-3 bg-white rounded-xl border border-purple-200 text-center">
-              هنوز هیچ کالایی برای این پروژه رزرو نشده است. با کلیک روی «ثبت نهایی و فریز انبار» موجودی‌ها رزرو خواهند شد.
+              هنوز هیچ کالایی برای این پروژه رزرو نشده است. با کلیک روی «ثبت نهایی و رزرو انبار» موجودی‌ها رزرو خواهند شد.
             </div>
           )}
         </div>

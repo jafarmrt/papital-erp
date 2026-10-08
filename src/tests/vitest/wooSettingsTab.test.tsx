@@ -192,7 +192,7 @@ describe('TD-710 the WooCommerce webhook secret is a password field', () => {
     expect(secretField.type).toBe('password');
   });
 
-  // v9.0.423 (TD-734): the order webhook refuses every order while no secret is set, so the tab never calls it optional
+  // v9.0.443 (TD-734): the order webhook refuses every order while no secret is set, so the tab never calls it optional
   it('the secret field and its help say orders are processed only with the secret', async () => {
     mockServer();
     const { result } = renderHook(() => useSettings(), { wrapper });

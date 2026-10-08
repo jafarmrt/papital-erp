@@ -3,6 +3,7 @@ import { RefreshCw, Layers, Package, CheckCircle2, Circle, Clock, Ban, Save, Inf
 import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';
 import { toPersianDigits } from '../../utils';
+import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 
 // V3.1.5 — تب «پیشرفت به تفکیک کد کالا» (ماتریسی SKU × مرحله + فیلتر، انتخاب ردیف و عملیات دسته‌ای)
 // مدل: هر ردیف = یک SKU (کد کالا × کمیت)؛ وضعیت هر مرحله دودویی (تمام/ناتمام)؛
@@ -57,6 +58,8 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<ProductProgressResponse | null>(null);
+  // v9.0.417 (TD-752): تیک ماتریس با `PUT /projects/:id/product-progress` و کلید `projects.edit` ثبت می‌شود
+  const { canEdit } = useProjectPermissions();
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -108,6 +111,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
   };
 
   const toggleStatus = (p: ProductProgressRowData, order: number) => {
+    if (!canEdit) return;
     const key = `${p.item_id}|${order}`;
     const current = resolveStatus(p, order);
     const next: ProductProgressRow['status'] = current === 'completed' ? 'pending' : 'completed';
@@ -168,7 +172,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
 
   // Bulk operation: Set all stages for selected SKUs
   const setAllStagesForSelectedSkus = (status: ProductProgressRow['status']) => {
-    if (selectedSkuIds.size === 0) return;
+    if (!canEdit || selectedSkuIds.size === 0) return;
     setDirty(prev => {
       const m = new Map(prev);
       for (const p of products) {
@@ -185,6 +189,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
 
   // Bulk operation: Set specific stage for all applicable SKUs
   const setStageForAllSkus = (order: number, status: ProductProgressRow['status']) => {
+    if (!canEdit) return;
     setDirty(prev => {
       const m = new Map(prev);
       for (const p of products) {
@@ -349,13 +354,15 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
                     <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                   </div>
                   <div className="flex items-center justify-between mt-1 text-[9px] text-slate-400">
-                    <button
-                      onClick={() => setStageForAllSkus(s.stage_order, 'completed')}
-                      className="text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
-                      title="تمام کردن این مرحله برای همه اقلام اعمال‌شده"
-                    >
-                      تمام همه
-                    </button>
+                    {canEdit ? (
+                      <button
+                        onClick={() => setStageForAllSkus(s.stage_order, 'completed')}
+                        className="text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
+                        title="تمام کردن این مرحله برای همه اقلام اعمال‌شده"
+                      >
+                        تمام همه
+                      </button>
+                    ) : <span />}
                     <span>{toPersianDigits(done)}/{toPersianDigits(applicable)}</span>
                   </div>
                 </div>
@@ -381,6 +388,9 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
                 <p className="text-[10px] text-slate-500">
                   کنترل و تیک‌زدن همزمان وضعیت تکمیل مراحل، فیلتر سریع و عملیات گروهی
                 </p>
+                {!canEdit && (
+                  <p className="text-[10px] font-bold text-amber-700 mt-0.5">فقط مشاهده: تیک‌زدن مراحل مجوز «ویرایش پروژه و مراحل تولید» می‌خواهد.</p>
+                )}
               </div>
             </div>
 
@@ -459,7 +469,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
             </div>
 
             {/* Batch Action Toolbar when rows are selected */}
-            {selectedSkuIds.size > 0 && (
+            {canEdit && selectedSkuIds.size > 0 && (
               <div className="flex items-center gap-1.5 bg-amber-100/80 border border-amber-300/80 px-2.5 py-1 rounded-xl text-[11px] animate-fadeIn">
                 <span className="font-bold text-amber-950">
                   {toPersianDigits(selectedSkuIds.size)} ردیف انتخاب شده:
@@ -518,14 +528,16 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
                     <div className="flex flex-col items-center gap-0.5">
                       <span className="text-[9px] text-slate-400 font-mono">{toPersianDigits(s.stage_order)}</span>
                       <span className="truncate max-w-[80px]" title={s.title}>{s.title}</span>
-                      <button
-                        type="button"
-                        onClick={() => setStageForAllSkus(s.stage_order, 'completed')}
-                        className="text-[9px] text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
-                        title={`تکمیل مرحله «${s.title}» برای همه کالاها`}
-                      >
-                        ✓ همه
-                      </button>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => setStageForAllSkus(s.stage_order, 'completed')}
+                          className="text-[9px] text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
+                          title={`تکمیل مرحله «${s.title}» برای همه کالاها`}
+                        >
+                          ✓ همه
+                        </button>
+                      )}
                     </div>
                   </th>
                 ))}
@@ -534,14 +546,16 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
                     <div className="flex flex-col items-center gap-0.5">
                       <span className="text-[9px] text-amber-600 font-mono">{toPersianDigits(s.stage_order)} ◇</span>
                       <span className="truncate max-w-[80px] text-amber-800" title={`${s.title} (اختیاری — برای برخی اقلام)`}>{s.title}</span>
-                      <button
-                        type="button"
-                        onClick={() => setStageForAllSkus(s.stage_order, 'completed')}
-                        className="text-[9px] text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
-                        title={`تکمیل مرحله اختیاری «${s.title}» برای همه کالاها`}
-                      >
-                        ✓ همه
-                      </button>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => setStageForAllSkus(s.stage_order, 'completed')}
+                          className="text-[9px] text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
+                          title={`تکمیل مرحله اختیاری «${s.title}» برای همه کالاها`}
+                        >
+                          ✓ همه
+                        </button>
+                      )}
                     </div>
                   </th>
                 ))}
@@ -608,7 +622,8 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
                             {applicable ? (
                               <button
                                 onClick={() => toggleStatus(p, s.stage_order)}
-                                className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-colors cursor-pointer ${
+                                disabled={!canEdit}
+                                className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-colors cursor-pointer disabled:cursor-default ${
                                   st === 'completed'
                                     ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 hover:bg-emerald-200'
                                     : st === 'in_progress'
@@ -636,7 +651,8 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
                             {applicable ? (
                               <button
                                 onClick={() => toggleStatus(p, s.stage_order)}
-                                className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-colors cursor-pointer ${
+                                disabled={!canEdit}
+                                className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-colors cursor-pointer disabled:cursor-default ${
                                   st === 'completed'
                                     ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 hover:bg-emerald-200'
                                     : st === 'in_progress'

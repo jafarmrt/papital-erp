@@ -1,13 +1,13 @@
 /**
- * v9.0.412 (TD-716, B15-14 / FE-18): the dead-letter tab offers «اصلاح داده و بازپخش» only for a row that has not been
- * replayed. On v9.0.411 it was offered for every status, including a replayed event that already ran.
+ * v9.0.432 (TD-716, B15-14 / FE-18): the dead-letter tab offers «اصلاح داده و بازپخش» only for a row that has not been
+ * replayed. On v9.0.431 it was offered for every status, including a replayed event that already ran.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { fetchJson } from '../../api';
 import { DeadLetterQueueSubTab } from '../../components/settings/DeadLetterQueueSubTab';
 
-// v9.0.415 (TD-722): the change buttons show only for holders of events.manage
+// v9.0.435 (TD-722): the change buttons show only for holders of events.manage
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
 vi.mock('../../api', async () => {
   const actual = await vi.importActual<typeof import('../../api')>('../../api');

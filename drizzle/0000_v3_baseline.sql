@@ -1160,31 +1160,31 @@ CREATE INDEX IF NOT EXISTS idx_notif_read ON notifications (is_read);
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_items_stocks_object') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_items_stocks_object' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE items ADD CONSTRAINT chk_items_stocks_object CHECK (stocks IS NULL OR jsonb_typeof(stocks) = 'object');
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_pp_inv_control_object') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_pp_inv_control_object' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE production_projects ADD CONSTRAINT chk_pp_inv_control_object CHECK (inventory_control IS NULL OR jsonb_typeof(inventory_control) = 'object');
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_cheques_history_array') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_cheques_history_array' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE cheques ADD CONSTRAINT chk_cheques_history_array CHECK (status_history IS NULL OR jsonb_typeof(status_history) = 'array');
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_wi_dsl_object') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_wi_dsl_object' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE workflow_instances ADD CONSTRAINT chk_wi_dsl_object CHECK (snapshot_dsl IS NULL OR jsonb_typeof(snapshot_dsl) = 'object');
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_items_wac_nonneg') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_items_wac_nonneg' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE items ADD CONSTRAINT chk_items_wac_nonneg CHECK (weighted_average_cost >= 0);
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_bank_balance_nonneg') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_bank_balance_nonneg' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE bank_accounts ADD CONSTRAINT chk_bank_balance_nonneg CHECK (initial_balance >= 0 AND current_balance >= 0);
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_tt_amount_pos') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_tt_amount_pos' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE treasury_transactions ADD CONSTRAINT chk_tt_amount_pos CHECK (amount > 0);
   END IF;
 END $$;
@@ -1213,7 +1213,7 @@ $$ LANGUAGE plpgsql;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_sync_item_current_stock') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_sync_item_current_stock' AND tgrelid = 'items'::regclass) THEN
     CREATE TRIGGER trg_sync_item_current_stock
     BEFORE INSERT OR UPDATE OF stocks, current_stock ON items
     FOR EACH ROW
@@ -1231,91 +1231,91 @@ $$ LANGUAGE plpgsql;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_users_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_users_updated_at' AND tgrelid = 'users'::regclass) THEN
     CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_personnel_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_personnel_updated_at' AND tgrelid = 'personnel'::regclass) THEN
     CREATE TRIGGER trg_personnel_updated_at BEFORE UPDATE ON personnel FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_treasury_transactions_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_treasury_transactions_updated_at' AND tgrelid = 'treasury_transactions'::regclass) THEN
     CREATE TRIGGER trg_treasury_transactions_updated_at BEFORE UPDATE ON treasury_transactions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_workflow_instances_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_workflow_instances_updated_at' AND tgrelid = 'workflow_instances'::regclass) THEN
     CREATE TRIGGER trg_workflow_instances_updated_at BEFORE UPDATE ON workflow_instances FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_item_prices_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_item_prices_updated_at' AND tgrelid = 'item_prices'::regclass) THEN
     CREATE TRIGGER trg_item_prices_updated_at BEFORE UPDATE ON item_prices FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_project_stages_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_project_stages_updated_at' AND tgrelid = 'project_stages'::regclass) THEN
     CREATE TRIGGER trg_project_stages_updated_at BEFORE UPDATE ON project_stages FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_transfers_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_transfers_updated_at' AND tgrelid = 'transfers'::regclass) THEN
     CREATE TRIGGER trg_transfers_updated_at BEFORE UPDATE ON transfers FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_crm_leads_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_crm_leads_updated_at' AND tgrelid = 'crm_leads'::regclass) THEN
     CREATE TRIGGER trg_crm_leads_updated_at BEFORE UPDATE ON crm_leads FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_accounting_settings_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_accounting_settings_updated_at' AND tgrelid = 'accounting_settings'::regclass) THEN
     CREATE TRIGGER trg_accounting_settings_updated_at BEFORE UPDATE ON accounting_settings FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_event_action_rules_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_event_action_rules_updated_at' AND tgrelid = 'event_action_rules'::regclass) THEN
     CREATE TRIGGER trg_event_action_rules_updated_at BEFORE UPDATE ON event_action_rules FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_webhook_subscriptions_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_webhook_subscriptions_updated_at' AND tgrelid = 'webhook_subscriptions'::regclass) THEN
     CREATE TRIGGER trg_webhook_subscriptions_updated_at BEFORE UPDATE ON webhook_subscriptions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_woocommerce_order_logs_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_woocommerce_order_logs_updated_at' AND tgrelid = 'woocommerce_order_logs'::regclass) THEN
     CREATE TRIGGER trg_woocommerce_order_logs_updated_at BEFORE UPDATE ON woocommerce_order_logs FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_form_drafts_updated_at') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_form_drafts_updated_at' AND tgrelid = 'form_drafts'::regclass) THEN
     CREATE TRIGGER trg_form_drafts_updated_at BEFORE UPDATE ON form_drafts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;

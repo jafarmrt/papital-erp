@@ -1,6 +1,6 @@
 /**
- * v9.0.422 (TD-732, B15-30 / FE-17): the events, webhook, dead-letter and notification screens write numbers in Persian
- * digits, a percent as «۸۶٪» and a duration in «میلی‌ثانیه». On v9.0.421 they showed «بازپخش 1 مورد», «تلاش 3/۵»
+ * v9.0.442 (TD-732, B15-30 / FE-17): the events, webhook, dead-letter and notification screens write numbers in Persian
+ * digits, a percent as «۸۶٪» and a duration in «میلی‌ثانیه». On v9.0.441 they showed «بازپخش 1 مورد», «تلاش 3/۵»
  * (two digit scripts in one label), «%۸۶», «120ms», «200» and «3 خوانده‌نشده».
  */
 import type { ReactNode } from 'react';

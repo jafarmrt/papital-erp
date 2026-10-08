@@ -2,7 +2,7 @@ import { Zap, ShieldCheck } from 'lucide-react';
 import { DomainEventsTab } from '../components/settings/DomainEventsTab';
 
 /**
- * v9.0.415 (TD-722، B15-20): صفحه رویدادها را همان مجوز مسیر و API (`events.view`، `PAGE_ACCESS['/domain-events']`) باز
+ * v9.0.435 (TD-722، B15-20): صفحه رویدادها را همان مجوز مسیر و API (`events.view`، `PAGE_ACCESS['/domain-events']`) باز
  * می‌کند و دکمه‌های تغییر فقط برای دارنده `events.manage` نشان داده می‌شوند؛ پیش‌تر صفحه با کد نقش (`admin` / `manager`)
  * گارد شده بود، پس دارنده `events.view` با نقش دیگر فهرست و مسیر را می‌دید و پیام «عدم دسترسی» می‌گرفت.
  */

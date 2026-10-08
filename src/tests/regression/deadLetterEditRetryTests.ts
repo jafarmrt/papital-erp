@@ -7,7 +7,7 @@ import { activityLogs, deadLetterEvents, outboxEvents } from '../../db/schema.js
 /**
  * Package 15 (events and integrations), TD-716 / B15-14: the payload of a replayed DLQ row is never edited, an edit of an
  * open row is locked and audited and touches the outbox row only while it has not completed, and «تلاش دوباره» of a
- * failed outbox event resolves its DLQ row in the same transaction and never re-runs a completed event. On v9.0.411 the
+ * failed outbox event resolves its DLQ row in the same transaction and never re-runs a completed event. On v9.0.431 the
  * payload of a replayed row and of its completed outbox row were both rewritten with no audit row, retrying left the DLQ
  * row quarantined, and a completed event could be retried.
  */
@@ -16,7 +16,7 @@ export async function runDeadLetterEditRetryTests(shouldRun: (id: string, ...ext
   const id = 'reg_dlq_payload_edit_and_outbox_retry_td_716';
   if (!shouldRun(id, 'td716', 'b15-14', 'dlq', 'outbox', 'package15')) return results;
 
-  const name = 'v9.0.412: a replayed DLQ row is never edited, an open row\'s edit is audited and spares a completed outbox row, and an outbox retry resolves its DLQ row and refuses a completed event (TD-716)';
+  const name = 'v9.0.432: a replayed DLQ row is never edited, an open row\'s edit is audited and spares a completed outbox row, and an outbox retry resolves its DLQ row and refuses a completed event (TD-716)';
   const tStart = Date.now();
   const tag = `td716_${Date.now()}`;
   const eventIds: string[] = [];

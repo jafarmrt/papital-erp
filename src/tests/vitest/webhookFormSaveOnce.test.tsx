@@ -1,5 +1,5 @@
 /**
- * v9.0.417 (TD-728, B15-26 / FE-05): the webhook form is sent once. On v9.0.416 its submit button was never disabled, so a
+ * v9.0.437 (TD-728, B15-26 / FE-05): the webhook form is sent once. On v9.0.436 its submit button was never disabled, so a
  * double click sent two POSTs and made two subscriptions, and every event was then delivered twice.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';

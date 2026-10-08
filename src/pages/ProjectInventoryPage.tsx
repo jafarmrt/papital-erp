@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { 
   ShoppingCart, ArrowRight, Layers, RefreshCw,
-  Search, Box,
+  Box,
   BarChart2
 } from 'lucide-react';
 import { ProductionProject, Item, User } from '../types';
@@ -11,6 +11,8 @@ import { formatPersianNumber, formatPersianDate } from '../utils';
 import toast from 'react-hot-toast';
 import ProjectInventoryTab from '../components/project/ProjectInventoryTab';
 import { PICK_LIST_URLS, type ProjectPick } from '../lib/permissions/pickLists';
+import { projectStatusLabel } from '../lib/projects/projectStatus';
+import { SearchableSelect } from '../components/SearchableSelect';
 
 export default function ProjectInventoryPage({ user }: { user?: User }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -25,7 +27,6 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
   const [itemsList, setItemsList] = useState<Item[]>([]);
   const [loadingProjects, setLoadingProjects] = useState<boolean>(true);
   const [loadingProjectDetail, setLoadingProjectDetail] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Load list of all production projects
   const loadProjects = async (signal?: AbortSignal) => {
@@ -100,16 +101,11 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
     setSearchParams({ projectId: String(id) });
   };
 
-  // Filter projects for selector dropdown
-  const filteredProjects = projects.filter(p => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      p.title?.toLowerCase().includes(q) ||
-      p.project_code?.toLowerCase().includes(q) ||
-      p.customer_name?.toLowerCase().includes(q)
-    );
-  });
+  // v9.0.423 (TD-767): انتخاب پروژه با فهرست جست‌وجوپذیر؛ برچسب وضعیت از فهرست بسته وضعیت‌ها
+  const projectOptions = projects.map(p => ({
+    value: p.id,
+    label: `[${p.project_code}] ${p.title} - مشتری: ${p.customer_name || 'عمومی'} (${projectStatusLabel(p.status)})`,
+  }));
 
   return (
     <div className="space-y-6 pb-12">
@@ -122,7 +118,7 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
             </div>
             <div>
               <h1 className="text-base font-black text-slate-900 flex items-center gap-2">
-                برنامه‌ریزی کنترل موجودی، BOM و لیست خرید پروژه
+                برنامه‌ریزی کنترل موجودی، فهرست مواد و خرید پروژه
                 <span className="bg-amber-100 text-amber-900 text-[10px] px-2 py-0.5 rounded-full font-bold">صفحه اختصاصی</span>
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -142,9 +138,9 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
           </div>
         </div>
 
-        {/* Project Switcher & Search Bar */}
+        {/* Project Switcher */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center bg-slate-50/80 p-3 rounded-xl border border-slate-200/80">
-          <div className="md:col-span-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="md:col-span-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <label className="text-xs font-bold text-slate-700 shrink-0 flex items-center gap-1.5">
               <Layers size={16} className="text-blue-600" />
               انتخاب پروژه فعال:
@@ -156,30 +152,14 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
                 در حال بارگذاری لیست پروژه‌ها...
               </div>
             ) : (
-              <select
+              <SearchableSelect
+                className="flex-1"
                 value={selectedProjectId || ''}
-                onChange={e => handleSelectProject(Number(e.target.value))}
-                className="flex-1 bg-white border border-slate-300 font-bold text-xs text-slate-900 rounded-xl px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:outline-none cursor-pointer shadow-2xs"
-              >
-                {filteredProjects.map(p => (
-                  <option key={p.id} value={p.id}>
-                    [{p.project_code}] {p.title} - مشتری: {p.customer_name || 'عمومی'} ({p.status === 'completed' ? 'تکمیل‌شده' : 'در حال انجام'})
-                  </option>
-                ))}
-              </select>
+                onChange={value => { if (value) handleSelectProject(Number(value)); }}
+                options={projectOptions}
+                placeholder="انتخاب پروژه"
+              />
             )}
-          </div>
-
-          {/* Quick Search inside selector */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="فیلتر منوی پروژه‌ها..."
-              className="w-full pl-3 pr-9 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
-            />
           </div>
         </div>
       </div>
@@ -188,7 +168,7 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
       {loadingProjectDetail ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
           <RefreshCw className="w-8 h-8 animate-spin text-amber-600" />
-          <span className="font-bold text-sm">در حال بارگذاری ماتریس BOM و اطلاعات کنترل موجودی پروژه...</span>
+          <span className="font-bold text-sm">در حال بارگذاری فهرست مواد و کنترل موجودی پروژه...</span>
         </div>
       ) : !project ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 space-y-3">

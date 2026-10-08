@@ -8,7 +8,7 @@ import { activityLogs, eventActionLogs, eventActionRules, integrationDeliveryJob
  * Package 15 (events and integrations), TD-708 / B15-06 (decision t5 a): the rule «test» button, the event simulation and
  * the timeline replay have no effect. A rule test evaluates the stored rule on a sample event and shows what its action
  * would do; the simulation publishes nothing and lists the matching rules and webhook subscriptions; the live replay is
- * removed. On v9.0.409 a rule test ran the real action (a real notification and an audit row such as «تراکنش کلان»), the
+ * removed. On v9.0.429 a rule test ran the real action (a real notification and an audit row such as «تراکنش کلان»), the
  * simulation published any type and payload to the live handlers (a validly signed webhook to an outside partner), and the
  * replay published with `dryRun: false`.
  */
@@ -17,7 +17,7 @@ export async function runRuleTestSimulationTests(shouldRun: (id: string, ...extr
   const id = 'reg_rule_test_and_simulation_have_no_effect_td_708';
   if (!shouldRun(id, 'td708', 'b15-06', 'action-rule', 'package15')) return results;
 
-  const name = 'v9.0.410: rule test, event simulation and timeline replay evaluate only, with no notification, audit row, delivery or published event (TD-708)';
+  const name = 'v9.0.430: rule test, event simulation and timeline replay evaluate only, with no notification, audit row, delivery or published event (TD-708)';
   const tStart = Date.now();
   const ruleIds: number[] = [];
   let subscriptionId: number | null = null;

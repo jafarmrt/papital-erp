@@ -17,11 +17,11 @@ ALTER TABLE cheques ADD COLUMN IF NOT EXISTS party_account_id integer;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_cheques_purpose') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_cheques_purpose' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE cheques ADD CONSTRAINT chk_cheques_purpose
       CHECK (purpose IS NULL OR purpose IN ('settlement', 'advance', 'other'));
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_cheques_party_account') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_cheques_party_account' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE cheques ADD CONSTRAINT fk_cheques_party_account
       FOREIGN KEY (party_account_id) REFERENCES accounts(id);
   END IF;

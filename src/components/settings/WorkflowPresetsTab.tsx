@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Layers, Plus, Trash2, ArrowUp, ArrowDown, Archive, ArchiveRestore } from 'lucide-react';
 import { WorkflowPreset } from '../../constants/presets';
 import { fetchJson } from '../../api';
-import { formatPersianNumber } from '../../utils';
+import { errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { SearchableSelect } from '../SearchableSelect';
 import { toast } from 'react-hot-toast';
 
 interface PieceworkTask {
@@ -48,6 +49,8 @@ export function WorkflowPresetsTab({
         }
       } catch (err) {
         console.error('Failed to load piecework tasks:', err);
+        // v9.0.422 (TD-766): فهرست خالی عناوین کارمزدی با شکست خواندن یکی نیست
+        if (isMounted) toast.error(errorMessageOf(err) || 'خطا در دریافت عناوین کارمزدی');
       } finally {
         if (isMounted) setLoadingTasks(false);
       }
@@ -134,7 +137,7 @@ export function WorkflowPresetsTab({
               }`}
             >
               <Archive size={14} />
-              {showArchived ? 'پنهان‌سازی آرشیوشده‌ها' : `مشاهده آرشیو (${archivedCount})`}
+              {showArchived ? 'پنهان‌سازی آرشیوشده‌ها' : `مشاهده آرشیو (${toPersianDigits(archivedCount)})`}
             </button>
           )}
           <button
@@ -257,7 +260,7 @@ export function WorkflowPresetsTab({
                   {/* Stages List inside this preset */}
                   <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-slate-700">مراحل فرآیند ({p.stages.length} مرحله):</span>
+                      <span className="text-xs font-bold text-slate-700">مراحل فرآیند ({toPersianDigits(p.stages.length)} مرحله):</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -382,7 +385,7 @@ export function WorkflowPresetsTab({
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1.5">
                                   <span className="font-bold text-slate-800 text-[11px]">
-                                    عناوین کاری / کارمزدهای الگوی این مرحله ({stgTasks.length} مورد)
+                                    عناوین کاری / کارمزدهای الگوی این مرحله ({toPersianDigits(stgTasks.length)} مورد)
                                   </span>
                                   <span className="text-[10px] text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200">
                                     خوانده‌شده از ماژول حقوق و دستمزد
@@ -393,10 +396,12 @@ export function WorkflowPresetsTab({
                               {/* Task Selector from Piecework Tasks */}
                               <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-amber-200">
                                 <span className="text-xs font-semibold text-slate-600 shrink-0">افزودن عنوان کاری:</span>
-                                <select
-                                  defaultValue=""
-                                  onChange={(e) => {
-                                    const selectedId = Number(e.target.value);
+                                {/* v9.0.423 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه عناوین کاری */}
+                                <SearchableSelect
+                                  className="flex-1"
+                                  value=""
+                                  onChange={(value) => {
+                                    const selectedId = Number(value);
                                     if (!selectedId) return;
                                     const selectedTask = availableTasks.find((t) => t.id === selectedId);
                                     if (!selectedTask) return;
@@ -408,7 +413,6 @@ export function WorkflowPresetsTab({
                                     // Check if already added
                                     if (currentTasks.some((t) => t.taskId === selectedTask.id || t.taskTitle === selectedTask.title)) {
                                       toast.error('این عنوان کاری قبلاً به این مرحله اضافه شده است');
-                                      e.target.value = '';
                                       return;
                                     }
 
@@ -426,17 +430,13 @@ export function WorkflowPresetsTab({
                                     }
 
                                     setWorkflowPresets(copy);
-                                    e.target.value = '';
                                   }}
-                                  className="flex-1 text-xs border border-slate-300 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                >
-                                  <option value="">-- انتخاب از عناوین کاری تعریف‌شده در حقوق و دستمزد --</option>
-                                  {availableTasks.map((t) => (
-                                    <option key={t.id} value={t.id}>
-                                      {t.title} ({t.category} - واحد: {t.unit || 'عدد'} - نرخ پایه: {rial.amount(t.defaultRate)})
-                                    </option>
-                                  ))}
-                                </select>
+                                  options={availableTasks.map((t) => ({
+                                    value: t.id,
+                                    label: `${t.title} (${t.category} - واحد: ${t.unit || 'عدد'} - نرخ پایه: ${rial.amount(t.defaultRate)})`,
+                                  }))}
+                                  placeholder="انتخاب از عناوین کاری تعریف‌شده در حقوق و دستمزد"
+                                />
                               </div>
 
                               {stgTasks.length > 0 ? (

@@ -11,7 +11,7 @@ import { containsLikePattern } from '../../lib/sqlLike.js';
 import { actionRuleView } from './integrationSecrets.js';
 import { timelineAggregateScope } from './timelineAggregates.js';
 
-/** v9.0.410 (TD-708): the live replay of a made-up event is removed */
+/** v9.0.430 (TD-708): the live replay of a made-up event is removed */
 export const EVENT_REPLAY_LIVE_REMOVED = 'EVENT_REPLAY_LIVE_REMOVED';
 
 export interface TimelineEventItem {
@@ -97,7 +97,7 @@ export class EventSourcingReplayService {
             .orderBy(desc(documents.id))
             .limit(limit);
 
-          // v9.0.411 (TD-711): the id is the document id the events carry, never its number
+          // v9.0.431 (TD-711): the id is the document id the events carry, never its number
           return rows.map(r => ({
             id: String(r.id),
             title: `سند شماره ${r.code || r.id} (${r.extra || r.type || 'بدون نام'})`
@@ -200,7 +200,7 @@ export class EventSourcingReplayService {
   /**
    * Builds a full chronological Event Sourcing timeline for a single aggregate instance.
    *
-   * v9.0.411 (TD-711, B15-09): events match the aggregate types their publishers write (case-insensitive) and the exact
+   * v9.0.431 (TD-711, B15-09): events match the aggregate types their publishers write (case-insensitive) and the exact
    * aggregate id; audit rows are read only for the section's own entity names and the exact id, and only when the caller
    * holds `audit_logs.view` (`includeAudit`, computed in the route), the permission of the audit log itself.
    */
@@ -301,7 +301,7 @@ export class EventSourcingReplayService {
   /**
    * Simulates a Time-Travel Replay of a historical domain event.
    *
-   * v9.0.410 (TD-708, B15-06, decision t5 a): the replay only evaluates the rules; the live replay (`dryRun: false`), which
+   * v9.0.430 (TD-708, B15-06, decision t5 a): the replay only evaluates the rules; the live replay (`dryRun: false`), which
    * published a made-up event to the live handlers, is removed and refused with 422 `EVENT_REPLAY_LIVE_REMOVED`.
    */
   static async simulateEventReplay(params: {

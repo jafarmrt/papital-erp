@@ -1,6 +1,6 @@
 /**
- * v9.0.416 (TD-725, B15-23 / FE-11): the notification bell reads a server time as UTC and prints its relative time with
- * Persian digits (`notificationRelativeTime` in `src/lib/notifications/relativeTime.ts`). On v9.0.415 a zone-less server
+ * v9.0.436 (TD-725, B15-23 / FE-11): the notification bell reads a server time as UTC and prints its relative time with
+ * Persian digits (`notificationRelativeTime` in `src/lib/notifications/relativeTime.ts`). On v9.0.435 a zone-less server
  * time was read as the browser's own wall clock, so in a Tehran browser a notification made 30 seconds ago said
  * «3 ساعت پیش», with a Latin digit.
  */

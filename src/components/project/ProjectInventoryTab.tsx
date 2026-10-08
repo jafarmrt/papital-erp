@@ -9,6 +9,8 @@ import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 import { AddMaterialModal } from './AddMaterialModal';
 import { UnitConversionModal } from './UnitConversionModal';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
+import { formatPersianNumber, toPersianDigits } from '../../utils';
+import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 
 interface ProjectInventoryTabProps {
   project: any;
@@ -27,6 +29,8 @@ export function ProjectInventoryTab({
 
   // Active Main Tab: 'control' (Tree View + Global Supplies) vs 'purchase' (Consolidated Purchase List)
   const [activeMainTab, setActiveMainTab] = useState<'control' | 'purchase'>('control');
+  // v9.0.417 (TD-752): ذخیره و ثبت نهایی با `projects.edit` (کلید `PUT /projects/:id`)، خرید کسری با کلید درخواست خرید
+  const { canEdit, canRequestPurchase } = useProjectPermissions();
 
   const {
     saving,
@@ -135,7 +139,7 @@ export function ProjectInventoryTab({
                 <h3 className="font-bold text-base text-white">کنترل موجودی و تامین مواد اولیه پروژه</h3>
                 {isFinalized && (
                   <span className="px-2.5 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/40 rounded-full font-bold text-[10px] flex items-center gap-1">
-                    🔒 ثبت نهایی و فریز شده در انبار
+                    🔒 ثبت نهایی و رزروشده در انبار
                   </span>
                 )}
               </div>
@@ -146,7 +150,11 @@ export function ProjectInventoryTab({
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
-            {isFinalized ? (
+            {!canEdit ? (
+              <span className="px-3 py-1.5 bg-slate-800 text-slate-300 border border-slate-700 rounded-xl text-[11px] font-bold">
+                فقط مشاهده؛ ذخیره کنترل موجودی مجوز «ویرایش پروژه و مراحل تولید» می‌خواهد
+              </span>
+            ) : isFinalized ? (
               <button
                 type="button"
                 onClick={handleUnfinalizeReservation}
@@ -154,7 +162,7 @@ export function ProjectInventoryTab({
                 className="px-3.5 py-2 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Unlock className="w-4 h-4 text-purple-300" />
-                لغو فریز و باز کردن رزرو
+                لغو ثبت نهایی و آزاد کردن رزرو
               </button>
             ) : (
               <button
@@ -164,7 +172,7 @@ export function ProjectInventoryTab({
                 className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
               >
                 <Lock className="w-4 h-4 text-purple-200" />
-                ثبت نهایی و فریز انبار
+                ثبت نهایی و رزرو انبار
               </button>
             )}
 
@@ -178,15 +186,17 @@ export function ProjectInventoryTab({
               <span>چاپ لیست خرید</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handleSaveInventoryControl}
-              disabled={saving}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
-            >
-              <Save className="w-4 h-4" />
-              {saving ? 'در حال ذخیره...' : 'ذخیره فرم'}
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={handleSaveInventoryControl}
+                disabled={saving}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'در حال ذخیره...' : 'ذخیره فرم'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -197,7 +207,7 @@ export function ProjectInventoryTab({
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               میزان آماده‌باش و موجود بودن مواد اولیه:
             </span>
-            <span className="text-amber-400 font-mono text-sm">{materialProgress}%</span>
+            <span className="text-amber-400 font-mono text-sm">{formatPersianNumber(materialProgress)}٪</span>
           </div>
           <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700">
             <div 
@@ -266,7 +276,7 @@ export function ProjectInventoryTab({
                 </h3>
               </div>
               <span className="text-xs text-slate-500">
-                {products.length} محصول در سفارش
+                {toPersianDigits(products.length)} محصول در سفارش
               </span>
             </div>
 
@@ -295,7 +305,7 @@ export function ProjectInventoryTab({
             handleAddNewSectionOnTheFly={handleAddNewSectionOnTheFly}
             handleRemoveSectionOnTheFly={handleRemoveSectionOnTheFly}
             handleUpdateSectionDescription={handleUpdateSectionDescription}
-            handlePurchaseSection={handlePurchaseSection}
+            handlePurchaseSection={canRequestPurchase ? handlePurchaseSection : undefined}
           />
 
           {/* Quick Jump Banner to Purchase List */}
@@ -307,7 +317,7 @@ export function ProjectInventoryTab({
                 </div>
                 <div>
                   <h4 className="font-bold text-xs text-amber-950">
-                    تعداد {purchaseList.length} قلم کالا دارای کسری موجودی یا نیاز به خرید شناسایی شد.
+                    تعداد {toPersianDigits(purchaseList.length)} قلم کالا دارای کسری موجودی یا نیاز به خرید شناسایی شد.
                   </h4>
                   <p className="text-[11px] text-amber-800 mt-0.5">
                     کسری‌های استخراج‌شده از ساختار درختی و اقلام عمومی در لیست تجمیعی خرید آماده ثبت هستند.

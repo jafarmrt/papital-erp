@@ -1,5 +1,5 @@
 -- Drizzle Migration 0089: dismissing a notification keeps its row, and a due reminder is unique per user and link
--- (v9.0.414 / TD-717, product-owner decision t8 a)
+-- (v9.0.434 / TD-717, product-owner decision t8 a)
 --
 -- «حذف» in the notification bell deleted the row, and the CRM due reminder was created by "read, then write" on every
 -- GET /notifications and GET /notifications/unread-count with no constraint and no transaction: four concurrent requests

@@ -34,7 +34,7 @@ interface DLQStats {
 }
 
 export function DeadLetterQueueSubTab() {
-  // v9.0.415 (TD-722): replay, edit, dismiss and purge call routes guarded by events.manage
+  // v9.0.435 (TD-722): replay, edit, dismiss and purge call routes guarded by events.manage
   const canManage = useHasPermission('events.manage');
   const [items, setItems] = useState<DeadLetterItem[]>([]);
   const [stats, setStats] = useState<DLQStats | null>(null);
@@ -91,7 +91,7 @@ export function DeadLetterQueueSubTab() {
         showToast(data?.message || 'فهرست صف خطا بارگذاری نشد.', 'error');
       }
     } catch (err) {
-      // v9.0.419 (TD-730): the server's own reason is shown, never a fixed text
+      // v9.0.439 (TD-730): the server's own reason is shown, never a fixed text
       showToast(errorMessageOf(err) || 'فهرست صف خطا بارگذاری نشد.', 'error');
     } finally {
       setIsLoading(false);
@@ -203,7 +203,7 @@ export function DeadLetterQueueSubTab() {
 
   const saveEditedPayloadAndReplay = async (andReplay: boolean = false) => {
     if (!editingItem) return;
-    // v9.0.419 (TD-730): only a parse error is a JSON format error; a server refusal shows the server's reason
+    // v9.0.439 (TD-730): only a parse error is a JSON format error; a server refusal shows the server's reason
     let parsed: unknown;
     try {
       parsed = JSON.parse(editedPayloadJson);
@@ -548,7 +548,7 @@ export function DeadLetterQueueSubTab() {
                               </button>
                             )}
 
-                            {/* v9.0.412 (TD-716): a replayed event already ran; its payload is never edited */}
+                            {/* v9.0.432 (TD-716): a replayed event already ran; its payload is never edited */}
                             {canManage && item.status !== 'replayed' && (
                               <button
                                 onClick={() => openEditModal(item)}

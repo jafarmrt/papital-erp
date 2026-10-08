@@ -4,9 +4,9 @@ import { orm } from '../../db/drizzle.js';
 import { crmActivities, crmLeads, notifications, users } from '../../db/schema.js';
 
 /**
- * v9.0.414 (TD-717, B15-15, decision t8 a): dismissing a notification keeps its row (dismissed_at) and hides it from the
+ * v9.0.434 (TD-717, B15-15, decision t8 a): dismissing a notification keeps its row (dismissed_at) and hides it from the
  * bell and its counter, a dismissed due reminder never comes back, and concurrent bell requests make one reminder
- * (unique index uq_notifications_due_reminder, insert ON CONFLICT DO NOTHING). On v9.0.413 the delete removed the row and
+ * (unique index uq_notifications_due_reminder, insert ON CONFLICT DO NOTHING). On v9.0.433 the delete removed the row and
  * the next bell request made the reminder again, and four concurrent requests could make two.
  */
 export async function runNotificationDismissTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -14,7 +14,7 @@ export async function runNotificationDismissTests(shouldRun: (id: string, ...ext
   const id = 'reg_notification_dismiss_and_unique_reminder_td_717';
   if (!shouldRun(id, 'td717', 'notifications', 'reminder', 'package15')) return results;
 
-  const name = 'v9.0.414: a dismissed notification is kept but not listed or counted, a dismissed due reminder never comes back, and concurrent bell requests make one reminder (TD-717)';
+  const name = 'v9.0.434: a dismissed notification is kept but not listed or counted, a dismissed due reminder never comes back, and concurrent bell requests make one reminder (TD-717)';
   const tStart = Date.now();
   const { createHarness } = await import('../security/workflowTestHarness.js');
   const h = await createHarness();

@@ -1420,6 +1420,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   results.push(...await runAccessPackageTwoPageTests(shouldRunAccess));
   const { runAccessPackageTwoInstallTests } = await import('../security/accessPackageTwoInstallTests.js');
   results.push(...await runAccessPackageTwoInstallTests(shouldRunAccess));
+  // Package 1 second half (v9.0.429, TD-617): the boot leaves passwords alone, the one-off script locks non-bcrypt values
+  const { runPlainPasswordLockTests } = await import('../security/plainPasswordLockTests.js');
+  results.push(...await runPlainPasswordLockTests(shouldRunAccess));
   // Package 2 M6 (from TD-887): pick lists for forms, full lists by the section's own permission
   const { runAccessPackageTwoPickListTests } = await import('../security/accessPackageTwoPickListTests.js');
   results.push(...await runAccessPackageTwoPickListTests(shouldRunAccess));

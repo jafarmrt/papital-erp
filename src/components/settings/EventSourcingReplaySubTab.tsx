@@ -5,7 +5,7 @@ import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { useDebounce } from '../../hooks/useDebounce';
 
-/** v9.0.420 (TD-731): the aggregate search waits this long after the last keystroke before it asks the server. */
+/** v9.0.440 (TD-731): the aggregate search waits this long after the last keystroke before it asks the server. */
 export const AGGREGATE_SEARCH_DELAY_MS = 350;
 
 interface AggregateTypeOption {
@@ -31,7 +31,7 @@ interface TimelineItem {
 }
 
 export function EventSourcingReplaySubTab() {
-  // v9.0.415 (TD-722): the replay simulation route is guarded by events.manage
+  // v9.0.435 (TD-722): the replay simulation route is guarded by events.manage
   const canManage = useHasPermission('events.manage');
   const [types, setTypes] = useState<AggregateTypeOption[]>([]);
   const [selectedType, setSelectedType] = useState<string>('document');
@@ -41,7 +41,7 @@ export function EventSourcingReplaySubTab() {
   
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
-  // v9.0.411 (TD-711): audit rows come only to holders of the audit log permission; the server says whether they were read
+  // v9.0.431 (TD-711): audit rows come only to holders of the audit log permission; the server says whether they were read
   const [auditIncluded, setAuditIncluded] = useState(true);
   const [expandedTimelineId, setExpandedTimelineId] = useState<string | number | null>(null);
 
@@ -69,7 +69,7 @@ export function EventSourcingReplaySubTab() {
     }
   };
 
-  // v9.0.420 (TD-731): one request per settled keyword; a newer keyword or type aborts the older request, so a late answer
+  // v9.0.440 (TD-731): one request per settled keyword; a newer keyword or type aborts the older request, so a late answer
   // never overwrites the newer list
   const searchAggregates = async (type: string, keyword: string, signal: AbortSignal) => {
     if (!type) return;
@@ -104,7 +104,7 @@ export function EventSourcingReplaySubTab() {
         showToast(data?.message || 'خطا در بارگذاری خط زمان رویدادها', 'error');
       }
     } catch (err) {
-      // v9.0.419 (TD-730): the server's own reason is shown, never a fixed text
+      // v9.0.439 (TD-730): the server's own reason is shown, never a fixed text
       showToast(errorMessageOf(err) || 'خط زمان بارگذاری نشد.', 'error');
     } finally {
       setIsLoadingTimeline(false);
@@ -128,7 +128,7 @@ export function EventSourcingReplaySubTab() {
     }
   }, [selectedType, selectedAggregateId]);
 
-  // v9.0.410 (TD-708, decision t5 a): the replay is only a simulation; the live replay of a made-up event is removed
+  // v9.0.430 (TD-708, decision t5 a): the replay is only a simulation; the live replay of a made-up event is removed
   const handleSimulateReplay = async (item: TimelineItem) => {
     setIsSimulating(true);
     setSimulationResult(null);

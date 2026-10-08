@@ -13,7 +13,7 @@
 
 DO $$
 BEGIN
-  IF to_regclass('uq_personnel_code_active') IS NULL THEN
+  IF to_regclass(format('%I.%I', current_schema(), 'uq_personnel_code_active')) IS NULL THEN
     IF EXISTS (
       SELECT 1 FROM personnel WHERE is_deleted = 0 AND btrim(personnel_code) <> ''
       GROUP BY lower(btrim(personnel_code)) HAVING COUNT(*) > 1

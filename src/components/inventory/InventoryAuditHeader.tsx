@@ -1,5 +1,7 @@
 import { ShieldCheck, RotateCcw, ArrowLeftRight, ClipboardCheck, Layers, Boxes, type LucideIcon } from 'lucide-react';
 import type { InventoryAuditTab } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
+import { useHasAnyPermission } from '../../contexts/AuthContext';
+import { READ_PERMISSIONS } from '../../lib/recordReadPermissions';
 
 /** سربرگ صفحه انبارگردانی: عنوان، دکمه‌های بازسازی موجودی و حواله انتقال، و زبانه‌ها */
 
@@ -19,7 +21,12 @@ interface InventoryAuditHeaderProps {
   onOpenTransfer: () => void;
 }
 
+/** v9.0.415 (TD-760): زبانه تخصیص مواد فقط برای کسی که API آن (`GET /inventory/allocations`) را می‌خواند */
+export const useCanSeeBomAllocations = () => useHasAnyPermission(READ_PERMISSIONS.bomAllocations);
+
 export function InventoryAuditHeader({ activeTab, onTabChange, discrepancyItems, onOpenRebuild, onOpenTransfer }: InventoryAuditHeaderProps) {
+  const canSeeAllocations = useCanSeeBomAllocations();
+  const tabs = TABS.filter(tab => tab.id !== 'bom_allocations' || canSeeAllocations);
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -59,7 +66,7 @@ export function InventoryAuditHeader({ activeTab, onTabChange, discrepancyItems,
 
       {/* Tab Buttons */}
       <div className="flex items-center gap-2 pt-3 overflow-x-auto text-xs font-semibold">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => onTabChange(id)}

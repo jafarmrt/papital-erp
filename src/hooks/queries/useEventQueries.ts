@@ -70,7 +70,7 @@ export interface ActionRule {
 export type ActionLog = ActionLogRow;
 export type ActionStats = ActionEngineStats;
 
-/** v9.0.421 (TD-733): the live events list refreshes this often; the tab's label reads the same constant. */
+/** v9.0.441 (TD-733): the live events list refreshes this often; the tab's label reads the same constant. */
 export const DOMAIN_EVENTS_REFRESH_MS = 10000;
 
 // Live Domain Events Query
@@ -169,7 +169,7 @@ export function useActionLogsQuery(limit: number = 50, options?: { enabled?: boo
 }
 
 // Mutation: Simulate Domain Event
-// v9.0.410 (TD-708, decision t5 a): the simulation has no effect (nothing is published, sent or written), so nothing is
+// v9.0.430 (TD-708, decision t5 a): the simulation has no effect (nothing is published, sent or written), so nothing is
 // invalidated; the caller shows the rules and webhooks the event would have reached
 export function useSimulateEventMutation() {
   return useMutation({
@@ -192,7 +192,7 @@ export function useProcessOutboxMutation() {
         method: 'POST',
       });
     },
-    // v9.0.421 (TD-733): the events tab announces the result once, in its own banner
+    // v9.0.441 (TD-733): the events tab announces the result once, in its own banner
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
     },
@@ -209,7 +209,7 @@ export function useRetryFailedOutboxMutation() {
         method: 'POST',
       });
     },
-    // v9.0.421 (TD-733): the events tab announces the result once, in its own banner
+    // v9.0.441 (TD-733): the events tab announces the result once, in its own banner
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
     },
@@ -226,7 +226,7 @@ export function useRetrySingleOutboxEventMutation() {
         method: 'POST',
       });
     },
-    // v9.0.421 (TD-733): the events tab announces the result once, in its own banner
+    // v9.0.441 (TD-733): the events tab announces the result once, in its own banner
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
     },

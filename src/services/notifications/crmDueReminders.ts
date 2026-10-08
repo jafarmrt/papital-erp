@@ -6,7 +6,7 @@ import { isoToJalaliDate, toPersianDigits } from '../../utils.js';
 import { dueFollowupCondition } from '../crm/crmFollowups.js';
 
 /**
- * v9.0.413 (TD-709، B15-07): پیگیری سررسیدشده‌ای که زنگ اعلان به یک کاربر یادآوری می‌کند فقط پیگیری خود اوست: مسئولی که
+ * v9.0.433 (TD-709، B15-07): پیگیری سررسیدشده‌ای که زنگ اعلان به یک کاربر یادآوری می‌کند فقط پیگیری خود اوست: مسئولی که
  * شناسه پرسنلش (`assigned_personnel_id`) به همین کاربر پیوند دارد، و برای ردیف قدیمی بی شناسه، نام مسئول (یا ثبت‌کننده)
  * بریده‌شده که دقیقاً نام کامل یا نام کاربری اوست؛ هرگز «شامل». پیش‌تر کاربر «علی» یادآوری پیگیری «علیرضا …» را با عنوان
  * پیگیری و نام مشتری می‌گرفت.
@@ -38,11 +38,11 @@ export async function generateCrmDueReminders(userId: number): Promise<void> {
         eq(notifications.userId, userId),
         eq(notifications.link, notifLink),
         // v7.0.132: اعلان «تسک جدید» همین پیوند را دارد و پیش‌تر جلوی یادآوری سررسید را می‌گرفت
-        // v9.0.414 (TD-717): یادآوری کنارگذاشته (dismissed_at) هم شمرده می‌شود، پس دوباره ساخته نمی‌شود
+        // v9.0.434 (TD-717): یادآوری کنارگذاشته (dismissed_at) هم شمرده می‌شود، پس دوباره ساخته نمی‌شود
         eq(notifications.type, 'crm_due_task'),
       ));
     if (existing) continue;
-    // v9.0.414 (TD-717): uq_notifications_due_reminder makes a concurrent second insert a no-op
+    // v9.0.434 (TD-717): uq_notifications_due_reminder makes a concurrent second insert a no-op
     await orm.insert(notifications).values({
       userId,
       senderId: null,

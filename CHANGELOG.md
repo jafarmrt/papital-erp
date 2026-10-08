@@ -19,47 +19,107 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.423 — Persian Wording in the Events Screens
+### v9.0.443 — Persian Wording in the Events Screens
 - **Events wording (TD-734):** the events, webhook, dead-letter, notification and WooCommerce screens use the words of decision t9 («اقدام», «آزمایش», «گزارش», «داده رویداد», «صف ارسال رویداد», «صف خطا», «سرآیند», «اشاره») instead of «اکشن», «تست», «لاگ», Outbox and Payload; «وب‌هوک» is the third allowed loanword, WordPress labels stay only in parentheses, and the WooCommerce secret is no longer called optional.
 
-### v9.0.422 — Persian Digits in the Events Screens
+### v9.0.442 — Persian Digits in the Events Screens
 - **Persian digits (TD-732):** counts, percentages and durations in the events, webhook, dead-letter, WooCommerce and notification screens were written with Latin digits («بازپخش 1 مورد», «%۸۶», «120ms», «تلاش 3/۵»); they now use `formatPersianNumber` / `toPersianDigits`, «٪» after the number and «میلی‌ثانیه».
 
-### v9.0.421 — Events Page States Its Real Status
+### v9.0.441 — Events Page States Its Real Status
 - **Events page status (TD-733):** a stopped outbox worker showed the green pulse, each outbox action was announced by a banner and a toast, the live list label said 8 seconds for a 10-second refresh and the WooCommerce order log header promised amounts; each now states what is true.
 
-### v9.0.420 — Timeline Aggregate Search Settles
+### v9.0.440 — Timeline Aggregate Search Settles
 - **Timeline search (TD-731):** the event timeline's aggregate search sent a request per keystroke and a late answer overwrote the newer list; it now waits for the keyword to settle (`useDebounce`) and aborts the older request.
 
-### v9.0.419 — Event Screens Show the Server Reason
+### v9.0.439 — Event Screens Show the Server Reason
 - **Event error messages (TD-730):** the dead-letter, webhook, rule, outbox and timeline tabs showed fixed texts for refused requests (losing the server's 409 «in replay» or SSRF reason) and called any refusal of a dead-letter payload edit a JSON format error; every catch now shows the server's message and only a parse error is a JSON format error.
 
-### v9.0.418 — Rule Switch Sends Its Target State
+### v9.0.438 — Rule Switch Sends Its Target State
 - **Rule switch (TD-729):** the automatic rule switch flipped the state on every call, so a double click put the rule back (with two success messages) and no change was audited; the switch now sends `{ active }` (`setRuleActive` under the rule row lock: a repeat changes nothing, each change one audit row in its transaction) and the switch and the test button wait for their answer.
 
-### v9.0.417 — Webhook Form Saves Once
+### v9.0.437 — Webhook Form Saves Once
 - **Webhook form double submit (TD-728):** the webhook form's submit button was never disabled, so a double click made two subscriptions and every event was delivered twice; the form now sends once (`isSaving` with a ref guard) and the button stays disabled until the answer.
 
-### v9.0.416 — Event, Notification and WooCommerce Log Times in UTC
+### v9.0.436 — Event, Notification and WooCommerce Log Times in UTC
 - **Server times of package 15 (TD-725):** the events routes, the notification list and the WooCommerce order log sent zone-less UTC timestamps, so a Tehran browser showed them 3.5 hours early (the previous day before 03:30) and a new notification said «3 ساعت پیش»; they now carry a Z (`utcTimestampResponses` / `withUtcTimestampKeys`), stored event payloads are sent as stored, and the bell prints its relative time from UTC with Persian digits.
 
-### v9.0.415 — Events Page by Permission
+### v9.0.435 — Events Page by Permission
 - **Events page access (TD-722):** the events page was guarded by the role codes admin / manager while its menu entry and route asked `events.view`, so a holder of events.view with another role got «عدم دسترسی»; the page now opens with `events.view` and every change button of its sub-tabs (rules, outbox, dead letters, timeline replay, webhooks, event simulation) shows only for `events.manage`, the key each change route asks.
 
-### v9.0.414 — Dismissed Notifications Stay Dismissed
+### v9.0.434 — Dismissed Notifications Stay Dismissed
 - **Notification dismissal (TD-717):** deleting a notification removed its row and the due reminder was made by read-then-write on every bell and counter request, so a deleted reminder came back and concurrent requests made two; «حذف» now sets `dismissed_at` (migration 0089), the bell and its counter skip dismissed rows, and the reminder insert is ON CONFLICT DO NOTHING on the partial unique index `uq_notifications_due_reminder` (created only on clean data; older duplicates listed by the financial health check).
 
-### v9.0.413 — Due Follow-up Reminder Reaches Only Its Assignee
+### v9.0.433 — Due Follow-up Reminder Reaches Only Its Assignee
 - **Due reminder recipient (TD-709):** the notification bell matched a follow-up's assignee with «contains», so a user named «علی» got the reminder (title and customer) of «علی رضایی»'s follow-up; the reminder now goes to the user linked to the assigned personnel, or for a legacy row without a personnel id to the user whose full name or username equals the trimmed assignee (else logger) exactly.
 
-### v9.0.412 — Dead Letter Payload Edit and Outbox Retry Are Consistent
+### v9.0.432 — Dead Letter Payload Edit and Outbox Retry Are Consistent
 - **Dead letter edit and outbox retry (TD-716):** editing the payload of a replayed dead-letter row rewrote it and its completed outbox row with no lock or audit, and retrying a failed outbox event left its dead-letter row quarantined; a replayed row is now never edited (409 DLQ_EVENT_REPLAYED), an open row's edit runs under its row lock with an audit row and spares a completed outbox row, and the retry resolves the event's idle dead-letter rows in the same transaction and refuses an event that is not failed.
 
-### v9.0.411 — Event Timeline Shows the Entity Own Rows
+### v9.0.431 — Event Timeline Shows the Entity Own Rows
 - **Event timeline (TD-711):** the timeline compared «document» with the publisher's «Document», its picker gave the document number instead of the id, and audit rows of any entity whose id or description contained the id came back, also to a role without the audit-log permission; each entity type now maps to its event aggregate types and audit entity names (`TIMELINE_AGGREGATE_SCOPES`), outbox, dead-letter and audit rows match the exact id, and audit rows go only to holders of `audit_logs.view`.
 
-### v9.0.410 — Rule Test, Event Simulation and Replay Have No Effect
+### v9.0.430 — Rule Test, Event Simulation and Replay Have No Effect
 - **No-effect test tools (TD-708):** the rule test and the event simulation ran real actions with sample data (notifications to recipients, audit rows, a validly signed webhook with a fake amount to an outside partner) and the timeline's live replay ran without confirmation; the rule test now evaluates the stored rule and only describes its action, the simulation publishes nothing and lists the matching rules and receiving webhooks, and live replay is refused (422 EVENT_REPLAY_LIVE_REMOVED).
+
+### v9.0.429 — Non-bcrypt Passwords Are Locked, Never Turned Into Passwords
+- **Fix (TD-617, B01-37):** the boot no longer hashes stored non-bcrypt values into working passwords; a one-off script locks them with a required reset, ended sessions and an audit row.
+
+### v9.0.428 — No Silent Demo Database Without DATABASE_URL
+- **Fix (TD-616, B01-36):** SQL_HOST alone reaches PostgreSQL, the in-memory demo database starts only with ERP_DEMO_MODE=1 outside production, and a server without a database refuses to start.
+
+### v9.0.427 — Skipped Migration Constraints Are Reported and Built by Hand
+- **Fix (TD-589, B01-09):** the migrator reports a constraint or index a migration left out, the financial health check lists each missing one with its cause, and the system admin builds it once the data is clean.
+
+### v9.0.426 — Migrations Check Objects in Their Own Schema
+- **Fix (TD-610, B01-30):** every existence check of the migrations looks only in the current schema, so a test schema built beside a migrated one gets every constraint, index and trigger, among them the non-negative stock guard.
+
+### v9.0.425 — Migrations Drop Objects in Their Own Schema
+- **Fix (TD-590, B01-10):** every DROP ... IF EXISTS of the migrations names the current schema, so building an isolated test schema no longer drops the public index `idx_idemp_user_scope_key` (and with it every idempotent request) on a development or staging database.
+
+### v9.0.424 — Persian Wording on the Project Screens
+- **Persian Wording on the Project Screens (TD-769):** the project screens and server messages used BOM, «فریز», «گانت», «سرور» and other loanwords and showed counts and percents in Latin digits; they now follow the approved glossary (owner decision t10) with Persian digits and «٪».
+
+### v9.0.423 — Searchable Project, Item and Task Pickers
+- **Searchable Project, Item and Task Pickers (TD-767):** six package-11 pickers were native selects over whole entity lists (projects, raw materials, warehouse items, piecework tasks); they are now `SearchableSelect`, and the project inventory picker labels each status from the closed status list.
+
+### v9.0.422 — Project Read Failures Are Shown
+- **Project Read Failures Are Shown (TD-766):** several project screen reads only logged their failure, so it looked like empty data, and a failed item code suggestion became `PREFIX001`; each failure now shows its message (`errorMessageOf`) and the code stays empty.
+
+### v9.0.421 — Timeline Axis From Today
+- **Timeline Axis From Today (TD-765):** with no start date anywhere the project timeline axis started at `1404*365+31`, a different unit from its day numbers since 1970, so stage bars collapsed to the minimum width; it now starts today in the same unit.
+
+### v9.0.420 — Project Dates Through the Jalali Date Input
+- **Project Dates Through the Jalali Date Input (TD-764):** the project form and the product schedule used `react-multi-date-picker` directly and the purchase required date was free text; all now use `JalaliDateInput` with ISO state, and the reservation date is shown with `formatPersianDate`.
+
+### v9.0.419 — Stage Dates by the Jalali Picker and the Shortage Badge
+- **Stage Dates by the Jalali Picker and the Shortage Badge (TD-763, TD-762):** stage dates in the project detail were free text with a 1403 sample and the shortage badge read a field nobody writes; the dates now use `JalaliDateInput` and the badge counts the reservation shortages written at finalize. TD-762 had been fixed by TD-891 / TD-892 and gets a guard test.
+
+### v9.0.418 — Paused and Cancelled Projects on the Kanban
+- **Paused and Cancelled Projects on the Kanban (TD-761):** the kanban had three columns, so paused and cancelled projects were hidden in the default view, and the status filter had no cancelled option; a fourth column and the full status list fix both.
+
+### v9.0.417 — Project Buttons by Their API Keys
+- **Project Buttons by Their API Keys (TD-752):** no project screen asked a permission, so a user holding only `projects.view` filled forms and got 403; the project list, detail, inventory control, delivery, progress matrix, workshop schedule and material allocation buttons now follow the keys their routes ask, defined once in `projectPermissions.ts`.
+
+### v9.0.416 — Project Purchase Orders Through Procurement
+- **Project Purchase Orders Through Procurement (TD-745, decision ت۸ ب):** the project purchase window built its own `PO-…` number, took free-text supplier and warehouse and could post a final receipt; its direct mode now records the project requisition and converts it into one draft procurement order with the server number, a listed supplier and warehouse, for holders of the create, order and approve keys only.
+
+### v9.0.415 — Allocation Read Errors and Tab Access
+- **Allocation Read Errors and Tab Access (TD-760):** a refused allocation read (403) showed as an empty list and the tab opened for `audit.view`, which the API refuses; the tab now shows the error with a retry and appears only for `READ_PERMISSIONS.bomAllocations`, the keys of `GET /inventory/allocations`.
+
+### v9.0.414 — Purchase Row Status Kept
+- **Purchase Row Status Kept (TD-750):** the purchase list row id (`code_…` / `name_…`) never matched a section row, so a chosen procurement status was lost and state was changed in place; `withProcurementStatus` now updates every section row of that code or name immutably with a functional update.
+
+### v9.0.413 — Inventory Control Presets in the Project
+- **Inventory Control Presets in the Project (TD-748):** preset sections keep their materials in `items`, which the project tab, purchase list, material progress and reservation never read (default preset: empty purchase list, 100% progress, no reservation); they now become project rows (`projectSectionsFromPreset`) in the tab and on the server before saving and reserving.
+
+### v9.0.412 — Paged Project List
+- **Paged Project List (TD-743):** `GET /projects` returned every project with every JSON field twice (312 projects, 9.1 MB) and ignored `page`; it is now one summary page `{ data, total, page, limit, statusCounts }` filtered in SQL, details only in `GET /projects/:id`, and the projects page pages, filters on the server and opens the edit form with the fresh record.
+
+### v9.0.411 — Allocation From the Warehouse Shown
+- **Allocation From the Warehouse Shown (TD-751):** the material allocation form showed the first warehouse but sent `main`; it now opens on the default warehouse (active, lowest id, TD-203) and sends it.
+
+### v9.0.410 — No Material for a Closed Project
+- **No Material for a Closed Project (TD-759, decision t9 A):** material was allocated to a cancelled project; allocating to a cancelled or completed project is now 422 `PROJECT_CLOSED_FOR_ALLOCATION` with no stock moved, releasing earlier allocations stays possible, a project with an open allocation is not cancelled (like delete, TD-412), and the allocation form offers only open projects.
 
 ### v9.0.409 — Rule Conditions Read Persian Digits
 - **Rule condition digits (TD-727):** the rule engine compared with Number(value), so a condition value typed with Persian digits or thousands separators (`gt "۱٬۰۰۰٬۰۰۰"`) never matched; the engine now reads both sides with `normalizeDecimalString` for numeric comparisons and equality with a number, and the rule editor saves such a value as a number and refuses one that is not a number.

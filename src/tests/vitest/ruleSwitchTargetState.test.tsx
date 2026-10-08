@@ -1,6 +1,6 @@
 /**
- * v9.0.418 (TD-729, B15-27 / FE-10): a rule's switch sends the state it shows the user will get (`{ active }`) and waits
- * for its answer, and so does the rule test button. On v9.0.417 the switch sent an empty two-way toggle and neither button
+ * v9.0.438 (TD-729, B15-27 / FE-10): a rule's switch sends the state it shows the user will get (`{ active }`) and waits
+ * for its answer, and so does the rule test button. On v9.0.437 the switch sent an empty two-way toggle and neither button
  * waited, so a double click flipped the rule twice and ran the test twice.
  */
 import type { ReactNode } from 'react';

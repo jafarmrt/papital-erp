@@ -12,7 +12,7 @@
 
 DO $$
 BEGIN
-  IF to_regclass('uq_workflow_instances_open_entity') IS NULL THEN
+  IF to_regclass(format('%I.%I', current_schema(), 'uq_workflow_instances_open_entity')) IS NULL THEN
     IF EXISTS (
       SELECT 1 FROM workflow_instances WHERE status = 'IN_PROGRESS'
       GROUP BY entity_type, entity_id HAVING COUNT(*) > 1

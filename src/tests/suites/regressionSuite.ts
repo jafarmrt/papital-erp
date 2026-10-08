@@ -10605,6 +10605,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR e: the chart of accounts and the account mapping (TD-546 ...)
   const { runChartOfAccountsTests } = await import('../regression/chartOfAccountsTests.js');
   results.push(...await runChartOfAccountsTests(shouldRun));
+  // Package 1 PR d: conditional migration constraints listed and built by hand (TD-589)
+  const { runConditionalConstraintTests } = await import('../regression/conditionalConstraintTests.js');
+  results.push(...await runConditionalConstraintTests(shouldRun));
+  // Package 1 PR d: database mode at start (TD-616)
+  const { runDatabaseModeTests } = await import('../regression/databaseModeTests.js');
+  results.push(...await runDatabaseModeTests(shouldRun));
   // Package 3 PR d: accounting report access, party statements and the journal book (TD-547 ...)
   const { runAccountingReportAccessTests } = await import('../regression/accountingReportAccessTests.js');
   results.push(...await runAccountingReportAccessTests(shouldRun));
@@ -10629,6 +10635,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 11 PR b (v9.0.380 on): project edit and input — status lists, delivery input, stage clock, audit, version (TD-754 ...)
   const { runProjectEditTests } = await import('../regression/projectEditTests.js');
   results.push(...await runProjectEditTests(shouldRun));
+  // Package 11 PR c (v9.0.410 on): project list, purchase document and material allocation
+  const { runProjectPurchaseAllocationTests } = await import('../regression/projectPurchaseAllocationTests.js');
+  results.push(...await runProjectPurchaseAllocationTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
@@ -10773,7 +10782,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runDocumentEventAmountTests } = await import('../regression/documentEventAmountTests.js');
   results.push(...await runDocumentEventAmountTests(shouldRun));
 
-  // Package 15 PR e (v9.0.410+): test tools, timeline, dead-letter queue and notifications
+  // Package 15 PR e (v9.0.430+): test tools, timeline, dead-letter queue and notifications
   const { runRuleTestSimulationTests } = await import('../regression/ruleTestSimulationTests.js');
   results.push(...await runRuleTestSimulationTests(shouldRun));
   const { runEventTimelineTests } = await import('../regression/eventTimelineTests.js');
