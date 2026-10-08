@@ -4,7 +4,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ConfirmModal, { CONFIRM_LAYER_CLASS } from '../../components/ConfirmModal';
 
-// v10.0.1 (TD-1040): the confirmation dialog (confirmAction) opened under the payslip payment window (z-[90]),
+// v10.0.8 (TD-1040): the confirmation dialog (confirmAction) opened under the payslip payment window (z-[90]),
 // so «ثبت تسویه کامل» could not be confirmed. A confirmation stacks above every full-screen window of the app.
 
 const ROOT = join(__dirname, '..', '..');

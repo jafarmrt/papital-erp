@@ -20,11 +20,32 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.0.2 — v10.0.2 — آزمون سرتاسری چهار جریان کسب‌وکار
-- آزمون‌های Playwright برای خرید، تولید پروژه و تحویل، فیش حقوق و پرداخت، و خزانه و چک، از رابط کاربر تا ردیف‌های سند حسابداری (I-02).
+### v10.0.9 — End-to-End Tests for Four Business Flows
+- **I-02:** Playwright tests drive purchase, project production and delivery, payslip and payment, and treasury and cheque from the browser down to stock, Kardex and voucher rows.
 
-### v10.0.1 — v10.0.1 — پنجره تأیید بالای پنجره‌های دیگر
-- پنجره تأیید پرداخت فیش حقوق زیر پنجره پرداخت پنهان بود و فیش از رابط پرداخت نمی‌شد؛ پنجره تأیید اکنون بالای همه پنجره‌ها باز می‌شود (TD-1040).
+### v10.0.8 — Confirmation Dialog Above the Payslip Payment Window
+- **TD-1040:** the confirmation opened under the payslip payment window, so no payslip could be paid from the UI; it now opens above every window.
+
+### v10.0.7 — Stock vs Ledger Health Check Leaves Work in Progress Out
+- **TD-964:** the financial health check compares the warehouse value with account 14 without the work in progress account (1402), shows the work in progress balance apart and reports the share of draft vouchers.
+
+### v10.0.6 — هشدار خودکار از کار افتادن برنامه، دیسک، پشتیبان و صف رویدادها
+- `scripts/monitor.sh` هر پنج دقیقه سلامت، دیسک، سن پشتیبان و صف رویدادها را می‌سنجد و با ربات بله یا تلگرام یا ایمیل هشدار می‌دهد (TD-1021).
+
+### v10.0.5 — سنجه‌های صف رویداد و تحویل در /metrics
+- `/metrics` صف خطای حل‌نشده، رویدادهای ناموفق و گیرکرده و تحویل‌های یکپارچه‌سازی را می‌دهد و خطای خواندن را پنهان نمی‌کند (OBS-R2-11).
+
+### v10.0.4 — رونوشت رمزگذاری‌شده پشتیبان در گوگل‌درایو
+- پشتیبان روزانه و `.env` با `ERP_SECRETS_KEY` با rclone crypt به گوگل‌درایو می‌روند؛ شکست رونوشت کد ۳ (TD-957).
+
+### v10.0.3 — زمان‌بندی خودکار پشتیبان روزانه و پایش در نصب
+- `install.sh` با `scripts/install-ops-cron.sh` پشتیبان روزانه و پایش پنج‌دقیقه‌ای را در cron می‌گذارد (TD-1020).
+
+### v10.0.2 — عدد متنی در ورود اکسل کالا
+- ورود اکسل کالا بها و موجودی نوشته‌شده با ارقام فارسی یا جداکننده هزارگان را می‌خواند و متنی را که عدد نیست خطای ردیف می‌کند (TD-1011).
+
+### v10.0.1 — ستون نوع در ورود اکسل کالا
+- ورود اکسل کالا «مواد اولیه» و «محصول» را می‌خواند و نوع ناشناخته را خطای ردیف می‌کند؛ پیش‌نمایش نوع را مثل سرور تعیین می‌کند (TD-1010).
 
 ### v10.0.0 — Closure of Version 9 & Launch of Version 10
 - **Version 9 Closure:** Concluded and archived the v9.x series (`v9.0.0` through `v9.0.461`). `V9_MASTER_ROADMAP.md` is archived with a closing report (section 10: phase 5 review of the sales, purchase, project production and payroll flows); `src/data/changelogs/9.ts` is frozen.

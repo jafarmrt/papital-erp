@@ -2,7 +2,7 @@ import { AlertTriangle } from 'lucide-react';
 import { Modal, ModalFooterActions } from './common/Modal';
 
 /**
- * v10.0.1 (TD-1040): a confirmation is asked from inside other windows (the payslip payment window is z-[90]), so it
+ * v10.0.8 (TD-1040): a confirmation is asked from inside other windows (the payslip payment window is z-[90]), so it
  * stacks above every window of the app (highest z-[110]) and below only the startup overlay and open pick lists.
  */
 export const CONFIRM_LAYER_CLASS = 'z-[200]';
