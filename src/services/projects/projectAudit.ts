@@ -113,6 +113,7 @@ export async function logStageChange(
   after: StageRow | null,
 ): Promise<void> {
   const stage = (after ?? before) as StageRow;
+  const auditAction: 'CREATE' | 'UPDATE' | 'DELETE' = action;
   const b = before ? stageAuditSnapshot(before) : null;
   const a = after ? stageAuditSnapshot(after) : null;
   const changes: Record<string, { before: unknown; after: unknown }> = {};
@@ -122,7 +123,7 @@ export async function logStageChange(
   await logActivity({
     tx,
     ...actorFields(actor),
-    action,
+    action: auditAction,
     entity: PROJECT_STAGE_AUDIT_ENTITY,
     entityId: String(stage.id),
     description: `مرحله «${stage.title}» (شماره ${toPersianDigits(stage.stageOrder)}) پروژه تولید ${project.projectCode} ${STAGE_ACTION_TEXT[action]}`,
