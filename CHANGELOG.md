@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.1 — Stock vs Ledger Health Check Leaves Work in Progress Out
+- **TD-964:** the financial health check compares the warehouse value with account 14 without the work in progress account (1402), shows the work in progress balance apart and reports the share of draft vouchers.
+
 ### v10.0.0 — Closure of Version 9 & Launch of Version 10
 - **Version 9 Closure:** Concluded and archived the v9.x series (`v9.0.0` through `v9.0.461`). `V9_MASTER_ROADMAP.md` is archived with a closing report (section 10: phase 5 review of the sales, purchase, project production and payroll flows); `src/data/changelogs/9.ts` is frozen.
 - **Phase 5 Findings and Observations:** `docs/audit/STABILITY_AUDIT_V9.md` section 18 records the 53 phase 5 findings; TD-904 – TD-956 hold one row each, the 41 not fixed by other changes stay open, and the series 9 observations are kept in the new ledger `docs/audit/V9_OBSERVATIONS.md` with 43 open rows TD-957 – TD-999 (`AGENTS.md` §23 exception).
