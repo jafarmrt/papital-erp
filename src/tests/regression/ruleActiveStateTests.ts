@@ -6,7 +6,7 @@ import { activityLogs, eventActionRules } from '../../db/schema.js';
 /**
  * Package 15 (events and integrations), TD-729 / B15-27: switching an automatic rule on or off sends the target state
  * (`{ active }`), under the rule row lock: a repeat or a concurrent second request changes nothing, and each change writes
- * one audit row with before / after in its transaction. On v9.0.392 the route flipped the state on every call, so two
+ * one audit row with before / after in its transaction. On v9.0.417 the route flipped the state on every call, so two
  * clicks put the rule back where it was (with two success messages) and no change was audited.
  */
 export async function runRuleActiveStateTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -14,7 +14,7 @@ export async function runRuleActiveStateTests(shouldRun: (id: string, ...extra: 
   const id = 'reg_rule_active_target_state_td_729';
   if (!shouldRun(id, 'td729', 'b15-27', 'rules', 'package15')) return results;
 
-  const name = 'v9.0.393: an automatic rule is switched to a target state under its row lock, a repeat changes nothing and each change is audited (TD-729)';
+  const name = 'v9.0.418: an automatic rule is switched to a target state under its row lock, a repeat changes nothing and each change is audited (TD-729)';
   const tStart = Date.now();
   const { createHarness } = await import('../security/workflowTestHarness.js');
   const h = await createHarness();

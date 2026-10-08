@@ -1,5 +1,5 @@
 /**
- * v9.0.380 (TD-707, B15-05, decision t3 a): the event types the webhook form and the rule editor offer
+ * v9.0.405 (TD-707, B15-05, decision t3 a): the event types the webhook form and the rule editor offer
  * (PUBLISHED_EVENT_TYPES) are exactly the types the server publishes. Every `createEvent(` / `publishEvent(` call in
  * production server code is read and its event type resolved (a DomainEventType member, a string literal, or a local
  * constant built from them); a type offered but never published, or published but not offered, fails the test.

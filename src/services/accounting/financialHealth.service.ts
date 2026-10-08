@@ -37,7 +37,8 @@ import {
 } from '../projects/projectReservationHealth.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
-import { buildProjectStageHealthTest, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
+import { buildProjectStageHealthTest, buildProjectValueHealthTest, findProjectFreeTextValues, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
+import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/projects/projectStatus.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
@@ -1228,11 +1229,15 @@ export class FinancialHealthService {
     const retiredRuleTest = buildRetiredRuleActionHealthTest(await findRetiredActionRules());
     overallScore += retiredRuleTest.scoreImpact;
     tests.push(retiredRuleTest);
-    // آزمون ۴۸: v9.0.381 (TD-726) قانون‌های خودکار با رویدادی که سامانه منتشر نمی‌کند (هرگز اجرا نشده‌اند؛ فقط فهرست)
+    // آزمون ۴۸: v9.0.380 (TD-754) وضعیت و اولویت پروژه و وضعیت مرحله بیرون از فهرست رابط (فقط فهرست)
+    const projectValueTest = buildProjectValueHealthTest(await findProjectFreeTextValues(PROJECT_STATUSES, PROJECT_PRIORITIES, STAGE_STATUSES));
+    overallScore += projectValueTest.scoreImpact;
+    tests.push(projectValueTest);
+    // آزمون ۴۹: v9.0.406 (TD-726) قانون‌های خودکار با رویدادی که سامانه منتشر نمی‌کند (هرگز اجرا نشده‌اند؛ فقط فهرست)
     const unpublishedEventRuleTest = buildUnpublishedRuleEventHealthTest(await findRulesWithUnpublishedEvent());
     overallScore += unpublishedEventRuleTest.scoreImpact;
     tests.push(unpublishedEventRuleTest);
-    // آزمون ۴۹: v9.0.389 (TD-717) یادآوری سررسید پیگیری تکراری برای یک کاربر و پیوند (مهاجرت 0088؛ فقط فهرست)
+    // آزمون ۵۰: v9.0.414 (TD-717) یادآوری سررسید پیگیری تکراری برای یک کاربر و پیوند (مهاجرت 0089؛ فقط فهرست)
     const [duplicateDueReminders, dueReminderIndexPresent] = await Promise.all([findDuplicateDueReminders(), hasDueReminderUniqueIndex()]);
     const dueReminderTest = buildDueReminderHealthTest(duplicateDueReminders, dueReminderIndexPresent);
     overallScore += dueReminderTest.scoreImpact;

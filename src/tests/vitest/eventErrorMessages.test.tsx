@@ -1,7 +1,7 @@
 /**
- * v9.0.394 (TD-730 rest, B15-28 / FE-12): the dead-letter and webhook tabs show the server's own reason when a request is
+ * v9.0.419 (TD-730 rest, B15-28 / FE-12): the dead-letter and webhook tabs show the server's own reason when a request is
  * refused (a 409 of a dead letter already being replayed, a 403, a 400 of a webhook delete) and a payload edit names a JSON
- * format error only when the text does not parse. On v9.0.393 these catches showed fixed texts («خطای شبکه در بازپخش
+ * format error only when the text does not parse. On v9.0.418 these catches showed fixed texts («خطای شبکه در بازپخش
  * دسته‌ای», «خطا در حذف وب‌هوک») and a server refusal of a payload edit was shown as «فرمت JSON وارد شده نامعتبر است».
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';

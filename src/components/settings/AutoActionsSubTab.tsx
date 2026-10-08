@@ -20,7 +20,7 @@ import { useHasPermission } from '../../contexts/AuthContext';
 
 export function AutoActionsSubTab() {
   const queryClient = useQueryClient();
-  // v9.0.390 (TD-722): adding, editing, deleting, switching and testing a rule ask events.manage on the server
+  // v9.0.415 (TD-722): adding, editing, deleting, switching and testing a rule ask events.manage on the server
   const canManage = useHasPermission('events.manage');
   const { data: rules = [], isLoading: isLoadingRules, refetch: refetchRules } = useActionRulesQuery();
   const { data: stats = null, refetch: refetchStats } = useActionStatsQuery();
@@ -39,7 +39,7 @@ export function AutoActionsSubTab() {
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const [activeView, setActiveView] = useState<'rules' | 'logs'>('rules');
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  // v9.0.393 (TD-729): a rule's switch and test button wait for their answer before they can be pressed again
+  // v9.0.418 (TD-729): a rule's switch and test button wait for their answer before they can be pressed again
   const [pendingRuleIds, setPendingRuleIds] = useState<number[]>([]);
   const pendingRef = useRef(new Set<string>());
   const runOnce = async (key: string, ruleId: number, run: () => Promise<void>) => {
@@ -63,7 +63,7 @@ export function AutoActionsSubTab() {
     await Promise.all([refetchRules(), refetchStats(), refetchLogs()]);
   };
 
-  // v9.0.393 (TD-729): the switch sends the state it shows the user will get, never a two-way toggle
+  // v9.0.418 (TD-729): the switch sends the state it shows the user will get, never a two-way toggle
   const handleToggleRule = (rule: ActionRule) => runOnce(`toggle-${rule.id}`, rule.id, async () => {
     try {
       const data = await fetchJson<{ success?: boolean; message?: string }>(`/events/action-rules/${rule.id}/toggle`, {
@@ -93,7 +93,7 @@ export function AutoActionsSubTab() {
     }
   };
 
-  // v9.0.385 (TD-708, decision t5 a): the test evaluates the stored rule on a sample event and only shows what its action
+  // v9.0.410 (TD-708, decision t5 a): the test evaluates the stored rule on a sample event and only shows what its action
   // would do; nothing is sent or written, so nothing is invalidated
   const handleTestRule = (rule: ActionRule) => runOnce(`test-${rule.id}`, rule.id, async () => {
     try {
@@ -407,7 +407,7 @@ export function AutoActionsSubTab() {
                               {rule.name}
                             </span>
                             {getActionBadge(rule.actionType)}
-                            {/* v9.0.381 (TD-726): the event's Persian label; a type nothing publishes is marked */}
+                            {/* v9.0.406 (TD-726): the event's Persian label; a type nothing publishes is marked */}
                             <span title={rule.eventType} className={`text-[11px] px-2 py-0.5 rounded-md ${isSubscribableEventPattern(rule.eventType) ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'}`}>
                               {isSubscribableEventPattern(rule.eventType) ? eventTypeLabel(rule.eventType) : `${rule.eventType} (منتشر نمی‌شود)`}
                             </span>
@@ -543,7 +543,7 @@ export function AutoActionsSubTab() {
                             <span className="font-bold">خطای اجرا:</span> {log.errorMessage}
                           </div>
                         )}
-                        {/* v9.0.383 (TD-721): the stored outcome of the action (the log keeps no request copy) */}
+                        {/* v9.0.408 (TD-721): the stored outcome of the action (the log keeps no request copy) */}
                         <div className="font-mono text-[11px]">
                           <span className="text-slate-500 font-sans text-xs font-bold block mb-1">نتیجه اقدام:</span>
                           <div className="bg-slate-900 text-slate-100 p-3 rounded-xl overflow-x-auto text-left dir-ltr">

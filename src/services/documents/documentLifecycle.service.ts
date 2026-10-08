@@ -253,7 +253,7 @@ export class DocumentLifecycleService {
                 documentId: id,
                 refNumber: finalRefNumber,
                 docType: targetType,
-                // v9.0.382 (TD-713): the payable amount of the finalized document (the event used to carry no amount)
+                // v9.0.407 (TD-713): the payable amount of the finalized document (the event used to carry no amount)
                 ...await documentEventAmounts(tx, id),
                 buyerName: doc.buyerName || '',
                 currency: doc.currency || 'IRR',

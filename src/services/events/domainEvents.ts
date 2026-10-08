@@ -78,7 +78,7 @@ export interface BaseDomainEvent<T = unknown> {
 // -------------------------------------------------------------
 
 /**
- * v9.0.382 (TD-713, B15-11): the amounts of a sales or purchase document event, read from the stored document in the
+ * v9.0.407 (TD-713, B15-11): the amounts of a sales or purchase document event, read from the stored document in the
  * transaction that records the event (`documentEventAmounts`): totalAmount is the payable amount in the document's own
  * currency (net of active lines + VAT + service charge, AGENTS §6), totalAmountIrr the same in rials at the document's
  * rate (null for a foreign document without any rate). The invoice event used to carry no amount at all.

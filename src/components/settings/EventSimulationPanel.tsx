@@ -9,7 +9,7 @@ import { errorMessageOf } from '../../utils';
 const EVENT_TYPE_GROUPS = publishedEventTypesByCategory();
 
 /**
- * v9.0.385 (TD-708, B15-06, decision t5 a): «شبیه‌سازی بی‌اثر» of a published event type. Nothing is published, sent or
+ * v9.0.410 (TD-708, B15-06, decision t5 a): «شبیه‌سازی بی‌اثر» of a published event type. Nothing is published, sent or
  * written; the panel shows which active rules would match and what their actions would do, and which webhook subscriptions
  * would receive it. Before, «انتشار رویداد آزمایشی» published a made-up event to the live handlers.
  */

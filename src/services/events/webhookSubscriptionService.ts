@@ -152,7 +152,7 @@ export class WebhookSubscriptionService {
     // v9.0.361 (TD-898, decision t7 a): the key and every header value are stored encrypted; without ERP_SECRETS_KEY 503
     const sealedKey = encryptSecret(secretKey);
     const sealedHeaders = sealHeaders(customHeaders);
-    // v9.0.380 (TD-707): only «*» and the event types the server publishes; a dotted pattern used to match nothing
+    // v9.0.405 (TD-707): only «*» and the event types the server publishes; a dotted pattern used to match nothing
     const eventPatterns = resolveEventPatterns(data.eventPatterns);
 
     let validUserId: number | null = null;
@@ -474,7 +474,7 @@ export class WebhookSubscriptionService {
 
   /**
    * Pattern matcher for event subscriptions: '*', an exact event type, or a dotted prefix ('woocommerce.*'). Stored patterns
-   * are «*» or published event types since v9.0.380 (TD-707).
+   * are «*» or published event types since v9.0.405 (TD-707).
    */
   public static matchesPattern(eventType: string, patterns: string[] = ['*']): boolean {
     if (!patterns || patterns.length === 0 || patterns.includes('*')) return true;

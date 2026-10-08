@@ -6,7 +6,7 @@ import { isSubscribableEventPattern } from '../../lib/events/eventTypeCatalog.js
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
- * v9.0.381 (TD-726، تصمیم ت۳ الف): قانون‌های خودکاری که رویداد فعال‌کننده‌شان را سامانه منتشر نمی‌کند (`InvoiceCancelled`،
+ * v9.0.406 (TD-726، تصمیم ت۳ الف): قانون‌های خودکاری که رویداد فعال‌کننده‌شان را سامانه منتشر نمی‌کند (`InvoiceCancelled`،
  * `ChequeStatusChanged`، `ProjectStageCompleted`، `CustomerCreated` … که ویرایشگر پیش‌تر پیشنهاد می‌داد). چنین قانونی هرگز
  * اجرا نشده است؛ داده بازنویسی نمی‌شود و قانون فقط فهرست می‌شود تا رویدادش عوض یا خودش حذف شود.
  */

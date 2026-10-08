@@ -242,7 +242,7 @@ router.get('/order-logs', authorizePermission('woocommerce.view'), asyncHandler(
       .orderBy(desc(woocommerceOrderLogs.id))
       .limit(100);
 
-    // v9.0.391 (TD-725): the log times go to the WooCommerce tab with a Z (AGENTS §1.10)
+    // v9.0.416 (TD-725): the log times go to the WooCommerce tab with a Z (AGENTS §1.10)
     res.json(withUtcTimestampKeys(logs, WOO_ORDER_LOG_TIMESTAMP_KEYS));
   } catch (error) {
     throw error;

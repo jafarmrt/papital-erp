@@ -1,4 +1,4 @@
--- Drizzle Migration 0087: webhook subscription event patterns use the real event types (v9.0.380 / TD-707, product-owner decision t3 a)
+-- Drizzle Migration 0088: webhook subscription event patterns use the real event types (v9.0.405 / TD-707, product-owner decision t3 a)
 --
 -- The webhook form offered dotted patterns («document.invoiced», «inventory.*», «treasury.*» …) while every event the
 -- server publishes has a PascalCase type («InvoiceApproved», «StockIssued» …), so a subscription with such a pattern

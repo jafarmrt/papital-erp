@@ -2,7 +2,7 @@ import { ValidationError } from '../../errors/customErrors.js';
 import { ALL_EVENTS_PATTERN, unknownEventPatterns } from '../../lib/events/eventTypeCatalog.js';
 
 /**
- * v9.0.380 (TD-707، B15-05، تصمیم ت۳ الف): الگوهای رویداد اشتراک وب‌هوک فقط «همه رویدادها» (`*`) یا نوع‌های منتشرشونده
+ * v9.0.405 (TD-707، B15-05، تصمیم ت۳ الف): الگوهای رویداد اشتراک وب‌هوک فقط «همه رویدادها» (`*`) یا نوع‌های منتشرشونده
  * `PUBLISHED_EVENT_TYPES` هستند؛ الگوی دیگر (مثل `document.invoiced` که با هیچ رویدادی جور نمی‌شد) ۴۲۲
  * `WEBHOOK_EVENT_PATTERN_UNKNOWN` است. فهرست خالی یا دارای `*` همان «همه رویدادها» است و تکرارها حذف می‌شوند.
  */

@@ -168,6 +168,8 @@ export const WORKFLOW_ENTITY_READ_PERMISSIONS: Readonly<Record<string, readonly 
   item: READ_PERMISSIONS.items,
   bank_account: READ_PERMISSIONS.bankAccounts,
   purchase_requisition: READ_PERMISSIONS.purchaseRequisitions,
+  // v9.0.398 (TD-826): the widget of the raw material request queue
+  pending_material: READ_PERMISSIONS.pendingMaterials,
 };
 
 /** مجوز خواندن رکوردهای دارای پیوست (نوع رکورد در file_attachments) */

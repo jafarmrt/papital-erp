@@ -252,7 +252,7 @@ export class DeadLetterQueueService {
   /**
    * Edit and fix the payload of a quarantined DLQ event before replay.
    *
-   * v9.0.387 (TD-716, B15-14): the payload of a DLQ row is edited under the row's advisory lock (no concurrent replay),
+   * v9.0.412 (TD-716, B15-14): the payload of a DLQ row is edited under the row's advisory lock (no concurrent replay),
    * never for a replayed row (its event already ran: 409 `DLQ_EVENT_REPLAYED`), only as a JSON object, and the outbox row of
    * the event is synced only while it has not completed. The edit and its audit row (before / after) run in one
    * transaction. Before, any row was edited without a lock or an audit row, and a completed outbox row was rewritten.

@@ -34,7 +34,7 @@ function text(value: unknown): string {
 }
 
 /**
- * v9.0.385 (TD-708، B15-06، تصمیم ت۵ الف): آنچه اقدام یک قانون برای رویداد *انجام می‌داد* (نشانی و روش وب‌هوک، متن و شمار
+ * v9.0.410 (TD-708، B15-06، تصمیم ت۵ الف): آنچه اقدام یک قانون برای رویداد *انجام می‌داد* (نشانی و روش وب‌هوک، متن و شمار
  * گیرندگان اعلان، متن ممیزی)، بی هیچ ارسال، اعلان یا ممیزی. مشترک «ارزیابی پیش‌نویس»، «آزمایش» قانون ذخیره‌شده و
  * «شبیه‌سازی رویداد».
  */
@@ -105,7 +105,7 @@ export async function evaluateRuleDraft(draft: unknown, options: { payload?: unk
 
   const eventType = text(rule.eventType);
   if (!eventType) errors.push('نوع رویداد قانون تعیین نشده است.');
-  // v9.0.381 (TD-726): only «*» and the event types the server publishes; a declared but never published type never fires
+  // v9.0.406 (TD-726): only «*» and the event types the server publishes; a declared but never published type never fires
   else if (!isSubscribableEventPattern(eventType)) errors.push(`رویداد «${eventType}» در سامانه منتشر نمی‌شود و قانون آن هرگز اجرا نمی‌شود.`);
 
   const actionType = rule.actionType;
@@ -147,7 +147,7 @@ export interface StoredRuleTest extends RuleDraftEvaluation {
 }
 
 /**
- * v9.0.385 (TD-708، B15-06، تصمیم ت۵ الف): «آزمایش» قانون ذخیره‌شده (`POST /events/action-rules/:id/test`) همان ارزیابی
+ * v9.0.410 (TD-708، B15-06، تصمیم ت۵ الف): «آزمایش» قانون ذخیره‌شده (`POST /events/action-rules/:id/test`) همان ارزیابی
  * بی‌اثر پیش‌نویس است، روی قانون ذخیره‌شده: شرط‌ها روی رویداد نمونه (یا payload فرستاده‌شده) ارزیابی می‌شوند و آنچه اقدام
  * انجام می‌داد فقط نشان داده می‌شود. پیش‌تر اقدام واقعی اجرا می‌شد و اعلان، ممیزی یا وب‌هوک امضاشده با داده ساختگی می‌ساخت.
  */

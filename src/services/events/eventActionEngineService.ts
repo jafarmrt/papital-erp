@@ -618,7 +618,7 @@ export class EventActionEngineService {
       // v9.0.377 (TD-712): a rule of a removed action type stays inactive until its action type is changed
       const nextActive = data.isActive !== undefined ? Number(data.isActive) === 1 : current.isActive === 1;
       assertRuleActionTypeAllowed(data.actionType ?? current.actionType, { active: nextActive, changingType: data.actionType !== undefined && data.actionType !== current.actionType });
-      // v9.0.381 (TD-726): a rule is saved active only with an event type the server publishes
+      // v9.0.406 (TD-726): a rule is saved active only with an event type the server publishes
       assertRuleEventTypeAllowed(data.eventType ?? current.eventType, { active: nextActive, changingType: data.eventType !== undefined && data.eventType !== current.eventType });
     }
     const updatePayload: Record<string, unknown> = {
@@ -687,7 +687,7 @@ export class EventActionEngineService {
       .from(eventActionLogs)
       .where(whereClause);
 
-    // v9.0.383 (TD-721): the shared contract the «اقدام‌های خودکار» tab reads
+    // v9.0.408 (TD-721): the shared contract the «اقدام‌های خودکار» tab reads
     return {
       data: logs.map(log => ({
         id: log.id,

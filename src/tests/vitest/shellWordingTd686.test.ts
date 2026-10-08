@@ -13,7 +13,7 @@ const SHELL_UI = [
   'components/layout/TopBar.tsx', 'components/layout/menuConfig.ts', 'components/dashboard/CustomizableShortcuts.tsx',
   'components/dashboard/InteractiveJalaliCalendar.tsx', 'pages/Dashboard.tsx', 'pages/ChangelogPage.tsx',
   'data/appInfoAndChangelog.ts', 'components/settings/settingsNavigationConfig.ts', 'components/settings/SystemConfigTab.tsx',
-  'components/settings/GeneralSettingsTab.tsx', 'pages/SettingsPage.tsx', 'components/GlobalHeaderSearch.tsx', 'pages/SetupPage.tsx',
+  'components/settings/GeneralSettingsTab.tsx', 'components/settings/DataExportCard.tsx', 'pages/SettingsPage.tsx', 'components/GlobalHeaderSearch.tsx', 'pages/SetupPage.tsx',
 ];
 const REPLACED = /داشبورد|ورکفلو|ورک‌فلو|تسک|متریال|آلارم|دیتابیس|سیستم|منو(?!ی[^\s])|فیلتر|سرور|پروفایل|آنلاین|آپلود|اتوماسیون|استراتژی|ماژول|پروتکل|توکن|فلگ|کانفیگ|اندپوینت|فرانت|بک‌اند|باندل|ری‌استارت/;
 const ENGLISH = /TOMAN|Toman|Drag & Drop|Paste \(|\bKB\b|Tech Stack|AGENTS\.md|⌘K|Invalid time value/;

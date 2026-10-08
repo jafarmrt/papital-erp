@@ -1,6 +1,6 @@
 import { Search } from 'lucide-react';
 import { formatPersianNumber } from '../../utils';
-import type { StockStatusFilter } from '../../lib/reorderAlerts/reorderItems';
+import { STOCK_STATUS_FILTER_LABELS, type StockStatusFilter } from '../../lib/reorderAlerts/reorderItems';
 
 interface ReorderFiltersBarProps {
   search: string;
@@ -40,12 +40,13 @@ export function ReorderFiltersBar({
         <div>
           <select
             value={stockStatusFilter}
+            aria-label="وضعیت موجودی"
             onChange={(e) => onStockStatusChange(e.target.value as StockStatusFilter)}
             className="w-full p-2 border rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="all">همه وضعیت‌ها (موجودی صفر و دارای کسری)</option>
-            <option value="zero">فقط کالاهای کاملاً ناموجود (موجودی صفر)</option>
-            <option value="below_reorder">فقط کالاهای دارای موجودی کم (زیر آستانه)</option>
+            {(Object.keys(STOCK_STATUS_FILTER_LABELS) as StockStatusFilter[]).map(status => (
+              <option key={status} value={status}>{STOCK_STATUS_FILTER_LABELS[status]}</option>
+            ))}
           </select>
         </div>
 

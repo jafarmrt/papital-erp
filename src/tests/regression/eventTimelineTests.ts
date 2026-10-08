@@ -6,7 +6,7 @@ import { brief, fixture } from './documentEntryTests.js';
  * Package 15 (events and integrations), TD-711 / B15-09: the event timeline of an entity shows its own events and audit
  * rows. The picker gives the entity id the events carry, outbox and dead-letter rows match the publisher's aggregate type
  * and the exact id, and audit rows are read only for the section's own entity names and the exact id, only for holders of
- * `audit_logs.view`. On v9.0.385 the picker gave the document number, the outbox query compared «document» with
+ * `audit_logs.view`. On v9.0.410 the picker gave the document number, the outbox query compared «document» with
  * «Document» and found nothing, and audit rows of any entity whose id or description contained the id came back, also to a
  * role holding only `events.view`.
  */
@@ -15,7 +15,7 @@ export async function runEventTimelineTests(shouldRun: ShouldRun): Promise<TestC
   const id = 'reg_event_timeline_own_events_and_audit_td_711';
   if (!shouldRun(id, 'td711', 'b15-09', 'events', 'timeline', 'package15')) return results;
 
-  const name = 'v9.0.386: the event timeline shows the entity\'s own outbox events and audit rows, and audit rows only to holders of the audit log permission (TD-711)';
+  const name = 'v9.0.411: the event timeline shows the entity\'s own outbox events and audit rows, and audit rows only to holders of the audit log permission (TD-711)';
   const tStart = Date.now();
   let h: Harness | undefined;
   const noiseTag = `td711_${Date.now()}`;

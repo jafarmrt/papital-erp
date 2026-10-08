@@ -29,7 +29,7 @@ const OUTBOX_STATUS_BADGES: PillBadgeVariants = {
 };
 
 export function DomainEventsTab() {
-  // v9.0.390 (TD-722): every change in this page asks events.manage on the server, so only its holders see the buttons
+  // v9.0.415 (TD-722): every change in this page asks events.manage on the server, so only its holders see the buttons
   const canManage = useHasPermission('events.manage');
   const [activeSubTab, setActiveSubTab] = useState<'rules' | 'outbox' | 'dlq' | 'replay' | 'webhooks' | 'events'>('rules');
   
@@ -283,7 +283,7 @@ export function DomainEventsTab() {
               <div className="text-xl font-bold text-slate-800 dark:text-white mt-1">
                 {outboxStats?.total ? outboxStats.total.toLocaleString('fa-IR') : '۰'}
               </div>
-              {/* v9.0.396 (TD-733): a stopped background processor is shown as stopped, never with the green pulse */}
+              {/* v9.0.421 (TD-733): a stopped background processor is shown as stopped, never with the green pulse */}
               {outboxStats && (
                 <div className={`text-[11px] mt-1 flex items-center gap-1 ${outboxStats.workerRunning ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                   <span className={`w-2 h-2 rounded-full ${outboxStats.workerRunning ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
@@ -572,7 +572,7 @@ export function DomainEventsTab() {
             </div>
           </div>
 
-          {/* v9.0.385 (TD-708): a simulation with no effect replaces «انتشار رویداد آزمایشی» */}
+          {/* v9.0.410 (TD-708): a simulation with no effect replaces «انتشار رویداد آزمایشی» */}
           {canManage && <EventSimulationPanel />}
 
           {/* Events List */}

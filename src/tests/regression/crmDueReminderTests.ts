@@ -4,9 +4,9 @@ import { orm } from '../../db/drizzle.js';
 import { crmActivities, crmLeads, notifications, personnel, users } from '../../db/schema.js';
 
 /**
- * v9.0.388 (TD-709, B15-07): the notification bell reminds a user only of their own due follow-ups: the assignee's
+ * v9.0.413 (TD-709, B15-07): the notification bell reminds a user only of their own due follow-ups: the assignee's
  * personnel record linked to that user, else (a legacy row without a personnel id) the trimmed assignee or logger name
- * exactly equal to the user's full name or username; never «contains». On v9.0.387 a user named «علی» got the reminder
+ * exactly equal to the user's full name or username; never «contains». On v9.0.412 a user named «علی» got the reminder
  * of «علی رضایی»'s follow-up (with its title and customer), the follow-up of the personnel linked to them was missed, and
  * a follow-up of another personnel whose name text held their name reached them.
  */
@@ -15,7 +15,7 @@ export async function runCrmDueReminderTests(shouldRun: (id: string, ...extra: s
   const id = 'reg_crm_due_reminder_own_followups_td_709';
   if (!shouldRun(id, 'td709', 'notifications', 'crm', 'reminder', 'package15')) return results;
 
-  const name = 'v9.0.388: the CRM due reminder reaches only the assignee: linked personnel id, else exact trimmed name, never a name that only contains it (TD-709)';
+  const name = 'v9.0.413: the CRM due reminder reaches only the assignee: linked personnel id, else exact trimmed name, never a name that only contains it (TD-709)';
   const tStart = Date.now();
   const { createHarness } = await import('../security/workflowTestHarness.js');
   const h = await createHarness();

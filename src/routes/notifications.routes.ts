@@ -21,7 +21,7 @@ const notifParamSchema = z.object({
   })
 });
 
-// v9.0.388 (TD-709): only the user's own due follow-ups (linked personnel id, else the exact trimmed name), never «contains»
+// v9.0.413 (TD-709): only the user's own due follow-ups (linked personnel id, else the exact trimmed name), never «contains»
 async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
   try {
     await generateCrmDueReminders(userId);
@@ -37,7 +37,7 @@ router.get('/notifications', asyncHandler(async (req, res) => {
 
   await checkAndGenerateCrmTaskDueNotifications(userId);
 
-  // v9.0.389 (TD-717): a dismissed notification is kept but never listed
+  // v9.0.414 (TD-717): a dismissed notification is kept but never listed
   const userNotifs = await orm
     .select()
     .from(notifications)
@@ -58,7 +58,7 @@ router.get('/notifications', asyncHandler(async (req, res) => {
     created_at: n.createdAt
   }));
 
-  // v9.0.391 (TD-725): the creation time goes to the bell with a Z, so a new notification is «همین الان»
+  // v9.0.416 (TD-725): the creation time goes to the bell with a Z, so a new notification is «همین الان»
   res.json(withUtcTimestampKeys(mapped, NOTIFICATION_TIMESTAMP_KEYS));
 }));
 
@@ -69,7 +69,7 @@ router.get('/notifications/unread-count', asyncHandler(async (req, res) => {
 
   await checkAndGenerateCrmTaskDueNotifications(userId);
 
-  // v9.0.389 (TD-717): counted in SQL, without dismissed notifications
+  // v9.0.414 (TD-717): counted in SQL, without dismissed notifications
   const [unread] = await orm
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(notifications)
@@ -106,7 +106,7 @@ router.put('/notifications/read-all', asyncHandler(async (req, res) => {
 }));
 
 // Dismiss a notification
-// v9.0.389 (TD-717, decision t8 a): the row is kept with dismissed_at, so a dismissed due reminder never comes back
+// v9.0.414 (TD-717, decision t8 a): the row is kept with dismissed_at, so a dismissed due reminder never comes back
 router.delete('/notifications/:id', validate(notifParamSchema), asyncHandler(async (req, res) => {
   const userId = req.user?.id;
   if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');

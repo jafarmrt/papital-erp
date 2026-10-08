@@ -2,6 +2,7 @@ import { registerBankAccountWorkflowAction } from '../accounting/treasury/bankAc
 import { registerVoucherWorkflowAction } from '../accounting/voucherWorkflowAction.js';
 import { registerDocumentWorkflowAction } from '../documents/documentWorkflowAction.js';
 import { registerItemOpeningWorkflowAction } from '../inventory/itemOpeningWorkflowAction.js';
+import { registerPendingMaterialWorkflowAction } from '../inventory/pendingMaterialWorkflowAction.js';
 import { registerRequisitionWorkflowAction } from '../procurement/requisitionWorkflowAction.js';
 
 /**
@@ -15,4 +16,6 @@ export function registerWorkflowDomainActions(): void {
   registerBankAccountWorkflowAction();
   registerVoucherWorkflowAction();
   registerRequisitionWorkflowAction();
+  // v9.0.398 (TD-826): approve or reject a raw material request
+  registerPendingMaterialWorkflowAction();
 }

@@ -5,8 +5,8 @@ import type { HealthCheckTestResult } from '../../types.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
- * v9.0.389 (TD-717، B15-15، تصمیم ت۸ الف): یادآوری سررسید پیگیری (`crm_due_task`) برای هر کاربر و پیوند یکتاست؛ ایندکس
- * یکتای جزئی `uq_notifications_due_reminder` (مهاجرت 0088) فقط روی داده بی تکرار ساخته شد. یادآوری‌های تکراری پیشین
+ * v9.0.414 (TD-717، B15-15، تصمیم ت۸ الف): یادآوری سررسید پیگیری (`crm_due_task`) برای هر کاربر و پیوند یکتاست؛ ایندکس
+ * یکتای جزئی `uq_notifications_due_reminder` (مهاجرت 0089) فقط روی داده بی تکرار ساخته شد. یادآوری‌های تکراری پیشین
  * (ساخته‌شده با درخواست‌های هم‌زمان زنگ و شمارنده) پاک نمی‌شوند و این‌جا فهرست می‌شوند.
  */
 export const DUE_REMINDER_UNIQUE_INDEX = 'uq_notifications_due_reminder';

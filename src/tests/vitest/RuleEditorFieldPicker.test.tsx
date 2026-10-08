@@ -20,7 +20,7 @@ const rule: RuleFormData = {
 describe('event field picker (TD-085 part 3)', () => {
   it('lists the payload fields of the event with Persian labels, then the common fields', () => {
     const fields = eventFieldOptions('InvoiceApproved');
-    expect(fields).toContainEqual({ path: 'payload.totalAmount', label: 'مبلغ قابل پرداخت' }); // v9.0.382 (TD-713): the payable amount
+    expect(fields).toContainEqual({ path: 'payload.totalAmount', label: 'مبلغ قابل پرداخت' }); // v9.0.407 (TD-713): the payable amount
     expect(fields.at(-1)).toEqual({ path: 'metadata.userName', label: 'کاربر انجام‌دهنده' });
     expect(eventFieldOptions('*').map((f) => f.path)).toEqual(['eventType', 'aggregateType', 'aggregateId', 'metadata.userName']);
   });

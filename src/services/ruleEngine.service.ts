@@ -114,7 +114,7 @@ export class RuleEngineService {
       case '==':
       case 'eq':
       case 'equal':
-        // v9.0.384 (TD-727): a number equals a value typed with Persian digits or thousands separators
+        // v9.0.409 (TD-727): a number equals a value typed with Persian digits or thousands separators
         passed = numericRuleEquality(actualValue, targetValue) ?? String(actualValue ?? '') === String(targetValue ?? '');
         reason = passed ? `مقدار ${actualValue} برابر با ${targetValue} است` : `مقدار واقعی (${actualValue}) برابر با (${targetValue}) نیست`;
         break;
@@ -126,7 +126,7 @@ export class RuleEngineService {
         reason = passed ? `مقدار ${actualValue} مخالف ${targetValue} است` : `مقدار واقعی (${actualValue}) برابر با (${targetValue}) است`;
         break;
 
-      // v9.0.384 (TD-727, B15-25): both sides are read with Persian / Arabic digits and thousands separators
+      // v9.0.409 (TD-727, B15-25): both sides are read with Persian / Arabic digits and thousands separators
       // (`ruleComparableNumber`); `Number('۱۰۰۰۰۰۰')` and `Number('1,000,000')` were NaN, so the rule never matched
       case '>':
       case 'gt':

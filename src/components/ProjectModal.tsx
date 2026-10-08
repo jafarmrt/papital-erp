@@ -6,7 +6,7 @@ import { ProjectProductsForm } from './project-modal/ProjectProductsForm';
 import { ProjectStagesForm } from './project-modal/ProjectStagesForm';
 
 export default function ProjectModal(props: ProjectModalProps) {
-  const { isOpen, onClose, projectToEdit } = props;
+  const { isOpen, onClose, projectToEdit, onOpenStages } = props;
 
   const {
     projectCode,
@@ -115,6 +115,8 @@ export default function ProjectModal(props: ProjectModalProps) {
             onRemoveStage={handleRemoveStage}
             onStageTitleChange={handleStageTitleChange}
             onMoveStage={handleMoveStage}
+            readOnly={Boolean(projectToEdit)}
+            onOpenStages={projectToEdit && onOpenStages ? () => onOpenStages(projectToEdit) : undefined}
           />
 
           {/* Footer Action Buttons */}

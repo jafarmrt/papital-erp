@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// v9.0.398 (TD-734, B15-32, decision t9 a): the events, webhook, notification and WooCommerce UI text uses the decided
+// v9.0.423 (TD-734, B15-32, decision t9 a): the events, webhook, notification and WooCommerce UI text uses the decided
 // Persian words. «وب‌هوک» is the third allowed loanword; «اقدام», «آزمایش», «گزارش», «داده رویداد», «صف ارسال رویداد»,
 // «صف خطا», «پردازشگر پس‌زمینه», «سرآیند», «آزمایش اتصال», «کلید», «اشاره» and «خودکارسازی» replace the old words, and
 // the shell glossary applies too («سامانه», «کارساز», «برخط», «پایگاه‌داده», «جست‌وجو», «نشانی», «پالایش»). An English

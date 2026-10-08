@@ -100,7 +100,7 @@ const REORDER_LABELS: Record<keyof InventoryReorderAlertPayload, string> = {
   alertMessage: 'متن هشدار',
 };
 
-// v9.0.382 (TD-713): fields of the WooCommerce order events (wooOrderSync.service.ts)
+// v9.0.407 (TD-713): fields of the WooCommerce order events (wooOrderSync.service.ts)
 const WOO_SYNCED_LABELS: Record<string, string> = {
   wcOrderId: 'شماره سفارش ووکامرس',
   docId: 'شناسه فاکتور',
@@ -116,7 +116,7 @@ const WOO_VOIDED_LABELS: Record<string, string> = {
   wcStatus: 'وضعیت سفارش در ووکامرس',
 };
 
-// v9.0.382 (TD-713): one entry per event type the server publishes (PUBLISHED_EVENT_TYPES); types that nothing publishes
+// v9.0.407 (TD-713): one entry per event type the server publishes (PUBLISHED_EVENT_TYPES); types that nothing publishes
 // (InvoiceCancelled, PurchaseReceived, ChequeStatusChanged …) are gone
 const PAYLOAD_LABELS_BY_EVENT: Record<string, Record<string, string>> = {
   InvoiceCreated: INVOICE_LABELS,

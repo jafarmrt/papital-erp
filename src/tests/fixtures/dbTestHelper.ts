@@ -278,6 +278,8 @@ export async function cleanupAllTestFixtures(): Promise<void> {
     await orm.execute(sql`DELETE FROM document_items WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND})`);
     await orm.execute(sql`DELETE FROM transactions WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND})`);
     await orm.execute(sql`DELETE FROM item_prices WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND})`);
+    // v9.0.397 (TD-825): a raw material request links the item its approval made
+    await orm.execute(sql`DELETE FROM pending_materials WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND})`);
     await orm.execute(sql`DELETE FROM items WHERE ${TEST_ITEM_COND}`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning item fixtures: ${err.message}`);

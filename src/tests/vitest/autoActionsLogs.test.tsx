@@ -1,5 +1,5 @@
 /**
- * v9.0.383 (TD-721, B15-19 / FE-01, FE-02): the «اقدام‌های خودکار» tab reads the action log page and the engine stats with
+ * v9.0.408 (TD-721, B15-19 / FE-01, FE-02): the «اقدام‌های خودکار» tab reads the action log page and the engine stats with
  * the server's contract (`src/lib/events/actionLogContract.ts`). The hook read `res.logs` while the server sends `data`, the
  * rows read `durationMs` / `requestPayloadJson` instead of `executionDurationMs` / `result`, and the cards read `totalLogs` /
  * `avgDurationMs` instead of `logsTotal` / `avgLatencyMs`: with 7 executions at 120 ms the cards showed 0 and 0 and the list

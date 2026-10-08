@@ -91,7 +91,7 @@ router.all('/webhook-echo', asyncHandler(async (req, res) => {
 
 // Enforce authentication on all event routes
 router.use(authenticateToken);
-// v9.0.391 (TD-725): server timestamps in every events answer carry a Z (AGENTS §1.10)
+// v9.0.416 (TD-725): server timestamps in every events answer carry a Z (AGENTS §1.10)
 router.use(utcTimestampResponses(EVENT_TIMESTAMP_KEYS, EVENT_OPAQUE_KEYS));
 
 // =========================================================================
@@ -116,7 +116,7 @@ router.get('/domain-events', authorizePermission('events.view'), asyncHandler(as
   }
 }));
 
-// v9.0.385 (TD-708, decision t5 a): the simulation publishes nothing; it only shows which rules and webhooks the event reaches
+// v9.0.410 (TD-708, decision t5 a): the simulation publishes nothing; it only shows which rules and webhooks the event reaches
 router.post('/domain-events/simulate', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   const { eventType, aggregateType, aggregateId, payload } = req.body ?? {};
   const result = await simulateDomainEvent({ eventType, aggregateType, aggregateId, payload }, { id: req.user?.id, username: req.user?.username });
@@ -180,7 +180,7 @@ router.post(['/outbox/process-now', '/outbox/process'], authorizePermission('eve
 
 router.post('/outbox/retry-failed', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
-    // v9.0.387 (TD-716): the DLQ rows of the retried events are resolved in the same transaction
+    // v9.0.412 (TD-716): the DLQ rows of the retried events are resolved in the same transaction
     const result = await retryFailedOutboxEvents({ userId: req.user?.id });
 
     res.json({
@@ -198,7 +198,7 @@ router.post('/outbox/retry-failed', authorizePermission('events.manage'), asyncH
 router.post('/outbox/:eventId/retry', authorizePermission('events.manage'), validate(eventIdParamSchema), asyncHandler(async (req, res) => {
   try {
     const { eventId } = req.params;
-    // v9.0.387 (TD-716): only a failed event (else 409), and its DLQ row is resolved in the same transaction
+    // v9.0.412 (TD-716): only a failed event (else 409), and its DLQ row is resolved in the same transaction
     await retryFailedOutboxEvents({ eventId, userId: req.user?.id });
 
     res.json({
@@ -356,7 +356,7 @@ router.delete(['/action-rules/:id', '/rules/:id'], authorizePermission('events.m
   }
 }));
 
-// v9.0.393 (TD-729): the body names the target state ({ active }); a repeat changes nothing
+// v9.0.418 (TD-729): the body names the target state ({ active }); a repeat changes nothing
 const ruleActiveSchema = z.object({
   params: z.object({ id: numericIdString }).passthrough(),
   body: z.object({ active: z.boolean({ message: 'وضعیت هدف قانون (active) باید درست یا نادرست باشد.' }) }),
@@ -374,7 +374,7 @@ router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermissi
   });
 }));
 
-// v9.0.385 (TD-708, decision t5 a): a rule test evaluates the stored rule and shows what its action would do; it never runs it
+// v9.0.410 (TD-708, decision t5 a): a rule test evaluates the stored rule and shows what its action would do; it never runs it
 router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const testResult = await testStoredRule(id, req.body?.customEvent);
@@ -538,7 +538,7 @@ router.put('/dlq/:id/payload', authorizePermission('events.manage'), validate(pa
     const { payload } = req.body;
     const userId = req.user?.id;
 
-    // v9.0.387 (TD-716): under the row lock, never for a replayed row, audited with the request
+    // v9.0.412 (TD-716): under the row lock, never for a replayed row, audited with the request
     const updated = await DeadLetterQueueService.editPayload(id, payload, { userId, req });
 
     res.json({
@@ -611,7 +611,7 @@ router.get(['/event-sourcing/timeline', '/timeline'], authorizePermission('event
       return res.status(400).json({ success: false, message: 'پارامترهای type و id الزامی هستند.' });
     }
 
-    // v9.0.386 (TD-711): audit rows only for holders of the audit log permission, computed here, never read from the request
+    // v9.0.411 (TD-711): audit rows only for holders of the audit log permission, computed here, never read from the request
     const auditIncluded = await can(req.user, 'audit_logs.view');
     const timeline = await EventSourcingReplayService.getAggregateTimeline(type, id, { includeAudit: auditIncluded });
 

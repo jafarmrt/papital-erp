@@ -1,5 +1,5 @@
 /**
- * v9.0.383 (TD-721، B15-19): قرارداد یگانه گزارش اجرای قانون‌های خودکار و شاخص‌های موتور، مشترک سرور
+ * v9.0.408 (TD-721، B15-19): قرارداد یگانه گزارش اجرای قانون‌های خودکار و شاخص‌های موتور، مشترک سرور
  * (`EventActionEngineService.getLogs` / `getStats`) و رابط («اقدام‌های خودکار»). پیش‌تر رابط `res.logs`، `durationMs`،
  * `requestPayloadJson`، `totalLogs` و `avgDurationMs` می‌خواند در حالی که سرور `data`، `executionDurationMs`، `result`،
  * `logsTotal` و `avgLatencyMs` می‌فرستاد، پس فهرست همیشه خالی و کارت‌ها همیشه ۰ بودند.

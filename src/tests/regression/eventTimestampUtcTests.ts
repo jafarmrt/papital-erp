@@ -10,7 +10,7 @@ import {
  * Package 15 (events and integrations), TD-725 / B15-23: server timestamps (zone-less `timestamp` columns holding UTC) go
  * to the browser with a Z from the events routes (outbox, dead letters, rules, action logs, timeline, webhooks and their
  * deliveries), the notification list and the WooCommerce order log; a stored event payload is sent exactly as stored, so
- * a dead-letter edit never rewrites it. On v9.0.390 every one of them went without a zone, so a Tehran browser showed
+ * a dead-letter edit never rewrites it. On v9.0.415 every one of them went without a zone, so a Tehran browser showed
  * each time 3.5 hours early (and the previous day before 03:30) and a new notification said «3 ساعت پیش».
  */
 const SERVER_TS = '2026-10-06 21:00:00';
@@ -21,7 +21,7 @@ export async function runEventTimestampUtcTests(shouldRun: (id: string, ...extra
   const id = 'reg_event_timestamps_utc_td_725';
   if (!shouldRun(id, 'td725', 'b15-23', 'timestamps', 'notifications', 'package15')) return results;
 
-  const name = 'v9.0.391: events, notification and WooCommerce order log answers send server timestamps with a Z and leave stored event payloads as stored (TD-725)';
+  const name = 'v9.0.416: events, notification and WooCommerce order log answers send server timestamps with a Z and leave stored event payloads as stored (TD-725)';
   const tStart = Date.now();
   const { createHarness } = await import('../security/workflowTestHarness.js');
   const h = await createHarness();

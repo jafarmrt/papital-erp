@@ -1,7 +1,7 @@
 /**
- * v9.0.395 (TD-731, B15-29 / FE-21): the timeline tab's aggregate search waits for the user to stop typing and asks the
+ * v9.0.420 (TD-731, B15-29 / FE-21): the timeline tab's aggregate search waits for the user to stop typing and asks the
  * server once for the settled keyword, and a newer keyword aborts the older request, so a late answer for an older keyword
- * never overwrites the list of a newer one. On v9.0.394 every keystroke sent a request and the last answer to arrive won:
+ * never overwrites the list of a newer one. On v9.0.419 every keystroke sent a request and the last answer to arrive won:
  * the answer for «ف» arriving after the answer for «فا» replaced its list.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
