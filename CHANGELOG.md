@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.381 — Reserved Items by Reader
+- **Reserved items report (TD-829, B07-13):** cost and value go only to item cost readers and a proforma buyer only to documents.view holders; other readers see quantities and sources.
+
 ### v9.0.380 — Reserved Items at Cost
 - **Reserved items report (TD-823, B07-07):** every reservation is valued at quantity × the item WAC in IRR, for proformas in any currency and projects alike; the proforma sale price is no longer reported.
 

@@ -12,6 +12,9 @@ export async function runReservedItemsReportTests(shouldRun: ShouldRun): Promise
     ['reg_reserved_items_cost_basis_td_823',
       'v9.0.380: every reservation is valued at the item cost in IRR, a foreign proforma included, and no sale price is reported (TD-823)',
       ['td823', 'reservation', 'package7'], costBasisCase],
+    ['reg_reserved_items_reader_scope_td_829',
+      'v9.0.381: the report gives cost and value only to item cost readers and a proforma buyer only to documents.view; other readers see quantities and sources (TD-829)',
+      ['td829', 'reservation', 'security', 'package7'], readerScopeCase],
   ]);
 }
 
@@ -65,4 +68,51 @@ async function costBasisCase(h: Harness, wrong: string[]): Promise<string> {
   } finally {
     await h.q('UPDATE production_projects SET is_deleted = 1 WHERE id = $1', [projectId]);
   }
+}
+
+/**
+ * B07-13 (TD-829): a role with only documents.create, documents.view, reports.view or warehouse.in got the item WAC, the
+ * proforma price and the buyer of every customer's proforma.
+ */
+async function readerScopeCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const a = await f.item(10, 123_456);
+  const buyer = `P8 party ${h.tag}`;
+  const proforma = await postDoc(h, f, 'invoice', 'proforma', a, 2, 777_000);
+  if (proforma.status !== 200) throw new Error(`setup: the proforma answered ${brief(proforma)}`);
+
+  const expectations: Array<[string[], boolean, boolean]> = [
+    [['documents.create'], false, false],
+    [['reports.view'], false, false],
+    [['documents.view'], false, true],
+    [['warehouse.in'], true, false],
+    [['products.view'], true, false],
+    [['accounting.view', 'reports.view'], true, false],
+  ];
+  const seen: string[] = [];
+  for (const [keys, cost, withBuyer] of expectations) {
+    const session = await h.sessionWith(keys);
+    const res = await h.get('/api/inventory/reserved-items', session);
+    const body = res.body as { itemSummaries?: ReportSummary[]; summaryMetrics?: Record<string, unknown>; access?: { cost?: boolean; buyer?: boolean } };
+    const summary = (body?.itemSummaries ?? []).find(s => Number(s.itemId) === a);
+    const entry = summary?.reservations?.find(e => e.sourceType === 'proforma');
+    if (res.status !== 200 || !summary || !entry) {
+      wrong.push(`${keys.join('+')}: the report answered ${brief(res)} without the proforma`);
+      continue;
+    }
+    const text = JSON.stringify(summary);
+    const hasCost = 'unitCost' in entry || 'totalCost' in entry || 'weightedAverageCost' in summary || 'totalReservedCost' in summary
+      || 'totalReservedCost' in (body.summaryMetrics ?? {}) || text.includes('123456');
+    const hasBuyer = text.includes(buyer);
+    if (hasCost !== cost) wrong.push(`${keys.join('+')}: cost ${hasCost ? 'shown' : 'hidden'}, expected ${cost ? 'shown' : 'hidden'}`);
+    if (hasBuyer !== withBuyer) wrong.push(`${keys.join('+')}: the buyer is ${hasBuyer ? 'shown' : 'hidden'}, expected ${withBuyer ? 'shown' : 'hidden'}`);
+    if (text.includes('777000')) wrong.push(`${keys.join('+')}: the proforma sale price 777000 is in the report`);
+    if (body.access?.cost !== cost || body.access?.buyer !== withBuyer) wrong.push(`${keys.join('+')}: access ${JSON.stringify(body.access)}, expected cost ${cost} and buyer ${withBuyer}`);
+    if (Number(entry.reservedQty) !== 2) wrong.push(`${keys.join('+')}: the proforma reserves ${String(entry.reservedQty)}, expected 2`);
+    seen.push(`${keys.join('+')}: cost ${hasCost}, buyer ${hasBuyer}`);
+  }
+  const outsider = await h.sessionWith(['crm.view']);
+  const denied = await h.get('/api/inventory/reserved-items', outsider);
+  if (denied.status !== 403) wrong.push(`crm.view alone answered ${denied.status}, expected 403`);
+  return seen.join('; ');
 }

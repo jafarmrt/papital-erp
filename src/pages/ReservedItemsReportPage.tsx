@@ -36,6 +36,10 @@ export default function ReservedItemsReportPage() {
   // v9.0.375 (TD-821): a failed report is an error panel, never a page of zero reservations
   const [loadError, setLoadError] = useState<Error | null>(null);
 
+  // v9.0.381 (TD-829): the server sends cost and value only to item cost readers; their columns follow `access`
+  const showCost = data?.access?.cost !== false;
+  const columnCount = showCost ? 10 : 9;
+
   const loadReport = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
@@ -217,7 +221,7 @@ export default function ReservedItemsReportPage() {
       </div>
 
       {/* KPI Cards Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${showCost ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-slate-500">تنوع اقلام رزروی</span>
@@ -248,6 +252,7 @@ export default function ReservedItemsReportPage() {
           </div>
         </div>
 
+        {showCost && (
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-slate-500">بهای تمام‌شده رزرو</span>
@@ -262,6 +267,7 @@ export default function ReservedItemsReportPage() {
             <span className="text-[11px] text-slate-400 mt-1 inline-block">مقدار رزرو × میانگین موزون بها</span>
           </div>
         </div>
+        )}
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
@@ -400,14 +406,14 @@ export default function ReservedItemsReportPage() {
                   <th className="p-3.5 text-center">رزرو پروژه</th>
                   <th className="p-3.5 text-center">مجموع رزرو</th>
                   <th className="p-3.5 text-center">موجودی آزاد (قابل خروج)</th>
-                  <th className="p-3.5 text-left">{`بهای تمام‌شده رزرو (${curLbl})`}</th>
+                  {showCost && <th className="p-3.5 text-left">{`بهای تمام‌شده رزرو (${curLbl})`}</th>}
                   <th className="p-3.5 text-center print:hidden">جزئیات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {filteredItemSummaries.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-slate-400">
+                    <td colSpan={columnCount} className="p-8 text-center text-slate-400">
                       هیچ کالای رزرو شده‌ای متناسب با فیلترهای انتخابی یافت نشد.
                     </td>
                   </tr>
@@ -465,9 +471,11 @@ export default function ReservedItemsReportPage() {
                               {formatPersianNumber(summary.availableStock)} {summary.unit}
                             </span>
                           </td>
-                          <td className="p-3.5 text-left font-mono font-bold text-slate-900">
-                            {rial.number(summary.totalReservedCost ?? 0)}
-                          </td>
+                          {showCost && (
+                            <td className="p-3.5 text-left font-mono font-bold text-slate-900">
+                              {rial.number(summary.totalReservedCost ?? 0)}
+                            </td>
+                          )}
                           <td className="p-3.5 text-center print:hidden">
                             <button
                               onClick={() => setExpandedItemCode(isExpanded ? null : rowKey)}
@@ -482,7 +490,7 @@ export default function ReservedItemsReportPage() {
                         {/* Expandable Rows Details */}
                         {isExpanded && (
                           <tr className="bg-amber-50/30 print:bg-transparent">
-                            <td colSpan={10} className="p-4 border-t border-amber-100">
+                            <td colSpan={columnCount} className="p-4 border-t border-amber-100">
                               <div className="bg-white p-4 rounded-xl border border-amber-200 space-y-3 shadow-xs">
                                 <h4 className="font-bold text-slate-800 text-xs flex items-center gap-2">
                                   <Lock size={14} className="text-amber-600" />
@@ -496,7 +504,7 @@ export default function ReservedItemsReportPage() {
                                         <th className="p-2">کد / مرجع</th>
                                         <th className="p-2">عنوان / خریدار</th>
                                         <th className="p-2 text-center">مقدار رزرو</th>
-                                        <th className="p-2 text-left">{`بهای تمام‌شده (${curLbl})`}</th>
+                                        {showCost && <th className="p-2 text-left">{`بهای تمام‌شده (${curLbl})`}</th>}
                                         <th className="p-2 text-center">تاریخ</th>
                                         <th className="p-2 text-center print:hidden">عملیات</th>
                                       </tr>
@@ -518,7 +526,7 @@ export default function ReservedItemsReportPage() {
                                           <td className="p-2 text-center font-bold text-amber-700">
                                             {formatPersianNumber(res.reservedQty)} {res.unit}
                                           </td>
-                                          <td className="p-2 text-left font-mono">{rial.number(res.totalCost ?? 0)}</td>
+                                          {showCost && <td className="p-2 text-left font-mono">{rial.number(res.totalCost ?? 0)}</td>}
                                           <td className="p-2 text-center text-slate-500">{formatPersianDate(res.date)}</td>
                                           <td className="p-2 text-center print:hidden">
                                             {res.sourceType === 'proforma' ? (
@@ -570,7 +578,7 @@ export default function ReservedItemsReportPage() {
                   <th className="p-3.5">نام کالا</th>
                   <th className="p-3.5">دسته‌بندی</th>
                   <th className="p-3.5 text-center">مقدار رزرو</th>
-                  <th className="p-3.5 text-left">{`بهای تمام‌شده (${curLbl})`}</th>
+                  {showCost && <th className="p-3.5 text-left">{`بهای تمام‌شده (${curLbl})`}</th>}
                   <th className="p-3.5 text-center">تاریخ</th>
                   <th className="p-3.5 text-center print:hidden">لینک مستند</th>
                 </tr>
@@ -578,7 +586,7 @@ export default function ReservedItemsReportPage() {
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {filteredLedgerEntries.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-slate-400">
+                    <td colSpan={columnCount} className="p-8 text-center text-slate-400">
                       هیچ پرونده رزروی متناسب با فیلترها یافت نشد.
                     </td>
                   </tr>
@@ -614,9 +622,11 @@ export default function ReservedItemsReportPage() {
                           {formatPersianNumber(entry.reservedQty)} {entry.unit}
                         </span>
                       </td>
-                      <td className="p-3.5 text-left font-mono font-bold text-slate-900">
-                        {rial.number(entry.totalCost ?? 0)}
-                      </td>
+                      {showCost && (
+                        <td className="p-3.5 text-left font-mono font-bold text-slate-900">
+                          {rial.number(entry.totalCost ?? 0)}
+                        </td>
+                      )}
                       <td className="p-3.5 text-center text-slate-500">
                         {formatPersianDate(entry.date)}
                       </td>

@@ -10,7 +10,7 @@ import { RESERVING_DOCUMENT_STATUS, RESERVING_DOCUMENT_TYPES } from '../../lib/d
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { reservingProjectRows, storedReservationRows } from '../../lib/projects/projectReservationState.js';
 import { findProjectItemMatch, itemCodeKey, itemNameKey } from '../../lib/projects/projectItemMatch.js';
-import type { ItemReservedReportSummary, ReservedItemDetail, ReservedItemsFullReport } from '../../lib/inventory/reservedItemsReport.js';
+import { proformaSourceTitle, type ItemReservedReportSummary, type ReservedItemDetail, type ReservedItemsFullReport } from '../../lib/inventory/reservedItemsReport.js';
 
 export type { ItemReservedReportSummary, ReservedItemDetail, ReservedItemsFullReport };
 
@@ -518,7 +518,7 @@ export class ItemStockReservationService {
         sourceLabel: 'پیش‌فاکتور فروش',
         sourceId: line.documentId,
         sourceRef: line.refNumber || `PRO-${line.documentId}`,
-        sourceTitle: line.buyerName ? `پیش‌فاکتور ${line.refNumber} (${line.buyerName})` : `پیش‌فاکتور ${line.refNumber}`,
+        sourceTitle: proformaSourceTitle(line.refNumber || `PRO-${line.documentId}`, line.buyerName),
         buyerOrCustomer: line.buyerName || 'مشتری',
         itemId: line.item.id,
         itemCode: (line.item.code || '').trim(),
