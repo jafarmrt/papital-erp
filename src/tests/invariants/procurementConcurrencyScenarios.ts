@@ -1,6 +1,7 @@
 import { pool } from '../../db/drizzle.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { ProcurementService } from '../../services/procurement.service.js';
+import { REQUISITION_UNSETTLED_HINT } from '../../services/procurement/requisitionReceiveAction.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 import { createTestItem } from '../fixtures/factories.js';
 import type { InvariantScope } from './businessInvariants.js';
@@ -110,12 +111,17 @@ export async function checkRequisitionReceivedOnce(wh: string): Promise<string[]
   if (!receiveAgain?.includes(ALREADY_RECEIVED)) problems.push(`receiving a received requisition again was not refused (${receiveAgain ?? 'accepted'})`);
   await expectStock(seqItem, seq, 10, 'receive then convert');
 
-  // ۳) سفارش ۶ از ۱۰ و سپس دریافت کالا: مقدار دریافتی همان ۶ است
+  // ۳) سفارش ۶ از ۱۰ و سپس دریافت کالا: v9.0.457 (TD-911) رد می‌شود و چیزی جابه‌جا نمی‌شود؛ تحویل همان سفارش ۶ عدد را وارد
+  // انبار می‌کند، مقدار دریافتی همان ۶ است و درخواست باز می‌ماند
   const partialItem = await newItem();
   const partial = await requisition(partialItem, 10);
-  await order(partial, partialItem, 6, wh);
-  await receiveItems(partial);
-  await expectStock(partialItem, partial, 6, 'partial order then receive');
+  const partialOrder = await order(partial, partialItem, 6, wh);
+  const partialReceive = await rejection(() => receiveItems(partial));
+  if (!partialReceive?.includes(REQUISITION_UNSETTLED_HINT)) problems.push(`receive items with 4 of 10 neither ordered nor closed was not refused (${partialReceive ? 'another error' : 'accepted'})`);
+  if ((await itemState(partialItem)).stock !== 0 || (await requisitionRow(partial)).status === 'received') problems.push('the refused partial receive moved stock or the requisition');
+  await ProcurementService.deliverOrderToWarehouse(partialOrder, ADMIN);
+  await expectStock(partialItem, partial, 6, 'partial order delivered');
+  if ((await requisitionRow(partial)).status === 'received') problems.push('delivering 6 of 10 marked the requisition received');
 
   // ۴) دو دریافت هم‌زمان درخواستی که نمونه گردش‌کار ندارد (درخواست قدیمی)
   const legacyItem = await newItem();

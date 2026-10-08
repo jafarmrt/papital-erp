@@ -229,11 +229,14 @@ export function ProcurementOrderList({
                               <PackageCheck className="w-4 h-4" />
                               <span>{isDelivering ? 'در حال تحویل...' : 'تایید و تحویل به انبار'}</span>
                             </button>
-                          ) : (
+                          ) : order.status === 'final' ? (
                             <span className="text-emerald-700 font-bold text-[11px] flex items-center justify-center gap-1">
                               <Check className="w-3.5 h-3.5" />
                               تکمیل شده
                             </span>
+                          ) : (
+                            // v9.0.455 (TD-904): an order the user may not deliver is not shown as completed
+                            <span className="text-slate-400 text-[11px]">—</span>
                           )}
                         </td>
                       </tr>

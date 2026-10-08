@@ -19,14 +19,38 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.453 — Payroll Payments Follow the Treasury Date Rule
+### v9.0.461 — Payroll Payments Follow the Treasury Date Rule
 - **Fix (TD-927, P5-W04):** a payroll payment dated after the business today is refused with 422 `TREASURY_DATE_IN_FUTURE` and nothing is written, like every other treasury write; the payment form sends an ISO date from the Jalali picker.
 
-### v9.0.452 — Treasury Rows Link Only to Documents of Their Currency
+### v9.0.460 — Treasury Rows Link Only to Documents of Their Currency
 - **Fix (TD-908, P5-P08 / P5-S-06):** a new receipt or payment is linked only to a document in its own currency (422 `TREASURY_DOCUMENT_CURRENCY_MISMATCH`, nothing written), the same rule the relink already had; a rial row no longer settles a foreign-currency document.
 
-### v9.0.451 — Settlement Receipts and Payments Carry the Document's Party
+### v9.0.459 — Settlement Receipts and Payments Carry the Document's Party
 - **Fix (TD-907, P5-S-01 / P5-P06):** a receipt or payment recorded against a document without a party id takes the document's party id and current name, so the party's account card and delete guard still see it after a rename; the invoice settlement form sends the party id too.
+
+### v9.0.458 — Procurement Finalizes Write the Document Audit Row
+- **Fix (TD-917, P5-P10):** order delivery and receive items write, in their transaction, one finalize audit row per order with the document id and the stored document before and after, like PUT /documents/:id/finalize, so the document timeline shows them.
+
+### v9.0.457 — Receive Items Does Not Close a Requisition With Open Rows
+- **Fix (TD-911, P5-P02):** receive items, like delivery, marks a requisition received only when every row is received or closed; otherwise it is 409 REQUISITION_ROWS_NOT_SETTLED naming the rows and the whole transition rolls back.
+
+### v9.0.456 — Workflow Approval Reads the Signer's Backdate Permission
+- **Fix (TD-928, P5-S-04):** a workflow transition that finalizes a document or receives goods takes warehouse.backdate from the signer's role (the delegator's for a deputy, always for the system admin), like PUT /documents/:id/finalize; it was never passed and a permitted backdated approval got 422.
+
+### v9.0.455 — Purchase Goods Enter Stock Only With warehouse.in
+- **Fix (TD-904, P5-P01):** a requisition transition into the received step (workflow route, inbox task, receive items) and order delivery ask the receipt's stock-in permission `warehouse.in`; workflow-only or procurement-only users get 403 and nothing moves, and the procurement page hides the buttons.
+
+### v9.0.454 — Warehouse Keys for Project Stock Paths
+- **Fix (TD-923, P5-M08):** allocating material to a project asks `warehouse.out`, and releasing an allocation or delivering a project to stock asks `warehouse.in` as well, like the stock documents; `projects.edit` alone no longer moves stock.
+
+### v9.0.453 — No Zero-Cost Entry for an Item Without Cost
+- **Fix (TD-906, TD-916, P5-M04 / P5-P09):** a final receipt, its finalize, a procurement delivery and a project delivery refuse a zero-cost line of an item that has no weighted average cost yet (422), so such an item never enters stock unsellable.
+
+### v9.0.452 — Material Allocation Deducts the Project Reservation
+- **Fix (TD-918, P5-M01):** allocating material to a project deducts the project's reservation like its remittance, and releasing the allocation restores exactly what was deducted (migration 0095).
+
+### v9.0.451 — Material Allocation Passes the Sellable Gate
+- **Fix (TD-905, P5-M02):** allocating material to a project checks sellable stock like a remittance, so it no longer takes the stock another project or a sales proforma has reserved.
 
 ### v9.0.450 — Terminal Output Is English
 - **Fix (TD-625, B01-45):** scripts, the session hook, test names, test runner labels and failure messages print English; server error logs show the status, code and route, and the user's Persian message stays in the response and the JSON log file.

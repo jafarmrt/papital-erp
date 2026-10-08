@@ -300,22 +300,23 @@ async function deliveryWorkflowCase(h: Harness, wrong: string[]): Promise<string
   const { workflowInstanceId } = await f.requisition(req.id);
   const [inst] = await h.q(`SELECT snapshot_dsl FROM workflow_instances WHERE id = $1`, [workflowInstanceId]);
   const snapshot = inst.snapshot_dsl as { transitions: Row[] };
-  for (const t of snapshot.transitions) if (t.actionKey === 'receive_items') t.requiredPermission = 'warehouse.in';
+  // v9.0.455 (TD-904): delivery itself asks warehouse.in, so the receive step here asks another key the deliverer lacks
+  for (const t of snapshot.transitions) if (t.actionKey === 'receive_items') t.requiredPermission = 'inventory.reconcile';
   await h.q(`UPDATE workflow_instances SET snapshot_dsl = $2::jsonb WHERE id = $1`, [workflowInstanceId, JSON.stringify(snapshot)]);
 
-  const withoutWarehouse = await h.sessionWith(['procurement.view', 'procurement.order']);
+  const withoutWarehouse = await h.sessionWith(['procurement.view', 'procurement.order', 'warehouse.view', 'warehouse.in']);
   const refused = await f.deliver(docId, withoutWarehouse);
   const flow = await f.workflow(req.id);
-  if (refused.status !== 403 || refused.body.code !== 'WF_PERMISSION_REQUIRED') wrong.push(`delivery without warehouse.in: ${refused.status} ${String(refused.body.code)}`);
+  if (refused.status !== 403 || refused.body.code !== 'WF_PERMISSION_REQUIRED') wrong.push(`delivery refused by the receive step: ${refused.status} ${String(refused.body.code)}`);
   if (await f.docStatus(docId) !== 'draft' || await f.stock(x.id) !== 0) wrong.push(`refused delivery changed the order or stock: ${await f.docStatus(docId)}, stock ${await f.stock(x.id)}`);
   if (flow.status !== 'IN_PROGRESS' || flow.step !== 'ordered') wrong.push(`refused delivery moved the workflow: ${flow.status}/${flow.step}`);
 
-  const warehouseUser = await h.sessionWith(['procurement.view', 'procurement.order', 'warehouse.in']);
+  const warehouseUser = await h.sessionWith(['procurement.view', 'procurement.order', 'warehouse.view', 'warehouse.in', 'inventory.reconcile']);
   const accepted = await f.deliver(docId, warehouseUser);
   const done = await f.workflow(req.id);
   const receive = done.history.find(r => r.action_key === 'receive_items');
   if (accepted.status !== 200 || done.status !== 'COMPLETED' || Number(receive?.performed_by) !== warehouseUser.userId) {
-    wrong.push(`delivery with warehouse.in: ${accepted.status}, workflow ${done.status}, receive by ${String(receive?.performed_by)}`);
+    wrong.push(`delivery with the receive step permission: ${accepted.status}, workflow ${done.status}, receive by ${String(receive?.performed_by)}`);
   }
   if (await f.stock(x.id) !== 4) wrong.push(`stock after delivery ${await f.stock(x.id)}, expected 4`);
 
@@ -335,7 +336,7 @@ async function deliveryWorkflowCase(h: Harness, wrong: string[]): Promise<string
   if (legacyDelivery.status !== 409 || legacyDelivery.body.code !== 'REQUISITION_NOT_APPROVED') wrong.push(`order of an unapproved requisition: ${legacyDelivery.status} ${String(legacyDelivery.body.code)}`);
   if (await f.docStatus(legacyDoc) !== 'draft') wrong.push('the order of the unapproved requisition was finalized');
   // a holder of the approval right approves it in their own name and then delivers (the TD-390 rule)
-  const approverDelivery = await f.deliver(legacyDoc, await h.sessionWith(['procurement.view', 'procurement.order', 'procurement.approve']));
+  const approverDelivery = await f.deliver(legacyDoc, await h.sessionWith(['procurement.view', 'procurement.order', 'procurement.approve', 'warehouse.view', 'warehouse.in']));
   const legacyFlow = await f.workflow(legacy.id);
   if (approverDelivery.status !== 200 || await f.docStatus(legacyDoc) !== 'final' || !legacyFlow.history.some(r => r.action_key === 'approve_request')) {
     wrong.push(`approver delivery of the unapproved requisition: ${approverDelivery.status}, order ${await f.docStatus(legacyDoc)}, workflow ${legacyFlow.step}`);

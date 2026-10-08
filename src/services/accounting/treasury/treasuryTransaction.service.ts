@@ -255,7 +255,7 @@ export class TreasuryTransactionService {
         .where(and(eq(bankAccounts.id, data.bankAccountId), eq(bankAccounts.isDeleted, 0)))
         .for('update');
       if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
-      // v9.0.451 (TD-907): ردیف وصل به سند بی شناسه طرف حساب (فرم تسویه فاکتور) شناسه طرف حساب سند و نام کنونی او را
+      // v9.0.459 (TD-907): ردیف وصل به سند بی شناسه طرف حساب (فرم تسویه فاکتور) شناسه طرف حساب سند و نام کنونی او را
       // می‌گیرد تا ردیف سند حسابداری و ردیف خزانه با تغییر نام از کارت حساب و نگهبان حذف طرف حساب بیرون نیفتند
       const documentParty = data.documentId && !data.partyId
         ? await documentPartyOfTreasuryLink(txEngine, { type: data.type, documentId: data.documentId, partyType, partyName: data.partyName })
@@ -264,7 +264,7 @@ export class TreasuryTransactionService {
       const partyName = documentParty?.name ?? data.partyName;
       const txCurrency = data.currency || bank.currency || 'IRR';
       // v9.0.83 (TD-501، B04-05): شناسه طرف حساب در جدول همان نوع، و سند پیوسته فعال، هم‌سو و با همان طرف حساب؛
-      // v9.0.452 (TD-908): و با همان ارز ردیف، مانند «وصل دوباره»
+      // v9.0.460 (TD-908): و با همان ارز ردیف، مانند «وصل دوباره»
       const partyCurrentName = await resolveTreasuryPartyName(txEngine, partyType, partyId);
       if (data.documentId) {
         await assertTreasuryDocumentLink(txEngine, {

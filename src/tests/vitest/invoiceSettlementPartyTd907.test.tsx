@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { InvoiceSettlementModal } from '../../components/invoices/InvoiceSettlementModal';
 
-// v9.0.451 (TD-907, finding P5-S-01 / P5-P06): the settlement form sends the document's party id with the receipt or
+// v9.0.459 (TD-907, finding P5-S-01 / P5-P06): the settlement form sends the document's party id with the receipt or
 // payment, so the voucher row carries the party id and stays on the party's account card after a rename
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));

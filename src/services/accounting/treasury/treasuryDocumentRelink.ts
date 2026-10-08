@@ -14,7 +14,7 @@ import { assertTreasuryDocumentLink, resolveTreasuryPartyName } from './treasury
  * و این مسیر راه کاربر برای جدا کردن آن دریافت است.
  *
  * قفل‌ها به ترتیب سطح: حساب بانکی (۱۰)، سند تازه `FOR SHARE` (۶۰، در `assertTreasuryDocumentLink`)، ردیف خزانه (۸۰).
- * سند تازه همان قاعده ثبت دریافت را دارد (TD-501): فعال، هم‌سو، با همان طرف حساب؛ و ارز آن همان ارز ردیف است (از v9.0.452،
+ * سند تازه همان قاعده ثبت دریافت را دارد (TD-501): فعال، هم‌سو، با همان طرف حساب؛ و ارز آن همان ارز ردیف است (از v9.0.460،
  * TD-908، همین سنجش در `assertTreasuryDocumentLink` و برای ثبت هم).
  */
 
@@ -57,7 +57,7 @@ export async function relinkTreasuryDocument(params: {
         partyType: before.partyType || 'other',
         partyId: before.partyId ?? null,
         partyName: partyName ?? before.partyName,
-        // v9.0.452 (TD-908): سنجش ارز همان قاعده ثبت است (`assertTreasuryDocumentLink`)
+        // v9.0.460 (TD-908): سنجش ارز همان قاعده ثبت است (`assertTreasuryDocumentLink`)
         currency: before.currency,
       });
     }

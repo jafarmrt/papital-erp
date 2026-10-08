@@ -2637,6 +2637,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       // 0. مسیر publish (غیر Outbox) همچنان غیرمسدودکننده است و خطای هندلر را به فراخوان پرتاب نمی‌کند
       await domainEventBus.publish(domainEventBus.createEvent(fatalType, 'Item', '0', { probe: true }, {}));
 
+      // v9.0.458: earlier tests of the same run leave due outbox events behind and a batch takes only the oldest 100 by
+      // id, so the probe below was skipped once more than 100 were waiting. Drain them first so the batch reaches it.
+      for (let round = 0; round < 50; round++) {
+        if ((await OutboxService.processPendingBatch(100)).processed === 0) break;
+      }
+
       // 1. اولین تلاش: هندلر موفق اجرا می‌شود، هندلر ناپایدار شکست می‌خورد → pending با backoff آینده
       const ev = domainEventBus.createEvent(probeType, 'Item', '1', { probe: true }, {});
       createdEventIds.push(ev.eventId);
@@ -10830,6 +10836,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 7 PR D (v9.0.399+): the reserved items report and the reorder alerts
   const { runReservedItemsReportTests } = await import('../regression/reservedItemsReportTests.js');
   results.push(...await runReservedItemsReportTests(shouldRun));
+  // Series 9 phase 5 PR «الف» (v9.0.451+): the side paths that move project stock follow the stock document rules
+  const { runProjectStockGateTests } = await import('../regression/projectStockGateTests.js');
+  results.push(...await runProjectStockGateTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
@@ -10853,7 +10862,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runForeignKeyIndexTests } = await import('../regression/foreignKeyIndexTests.js');
   results.push(...await runForeignKeyIndexTests(shouldRun));
 
-  // Phase 5 PR «ج» (v9.0.451+): treasury rows linked to documents and payroll payment dates
+  // Phase 5 PR «ب» (v9.0.457+): procurement receive items and order delivery
+  const { runProcurementReceiveTests } = await import('../regression/procurementReceiveTests.js');
+  results.push(...await runProcurementReceiveTests(shouldRun));
+
+  // Phase 5 PR «ج» (v9.0.459+): treasury rows linked to documents and payroll payment dates
   const { runTreasuryPayrollPhase5Tests } = await import('../regression/treasuryPayrollPhase5Tests.js');
   results.push(...await runTreasuryPayrollPhase5Tests(shouldRun));
 

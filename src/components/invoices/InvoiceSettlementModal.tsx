@@ -62,7 +62,7 @@ interface InvoiceSettlementModalProps {
     ref_number?: string;
     buyerName?: string | null;
     buyer_name?: string | null;
-    /** v9.0.451 (TD-907): طرف حساب سند با شناسه (TD-778)؛ دریافت یا پرداخت با همین شناسه ثبت می‌شود */
+    /** v9.0.459 (TD-907): طرف حساب سند با شناسه (TD-778)؛ دریافت یا پرداخت با همین شناسه ثبت می‌شود */
     partyId?: number | null;
     type?: string;
     currency?: string;
@@ -179,7 +179,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
         currency,
         bankAccountId: Number(selectedAccountId),
         partyType: isPurchase ? 'supplier' : 'customer',
-        // v9.0.451 (TD-907): شناسه طرف حساب سند تا ردیف سند حسابداری با تغییر نام طرف حساب از کارت او بیرون نیفتد
+        // v9.0.459 (TD-907): شناسه طرف حساب سند تا ردیف سند حسابداری با تغییر نام طرف حساب از کارت او بیرون نیفتد
         partyId: doc.partyId ?? undefined,
         partyName: partyName.trim() || (isPurchase ? 'تامین‌کننده' : 'مشتری'),
         trackingNumber: trackingNumber.trim() || undefined,

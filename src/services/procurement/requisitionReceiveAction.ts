@@ -2,8 +2,14 @@ import { and, asc, eq, inArray, or } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents } from '../../db/schema.js';
 import { DocumentService } from '../document.service.js';
-import { ConflictError, ValidationError } from '../../errors/customErrors.js';
-import { applyDeliveredLines, isClosedRequisitionRow, type RequisitionItemWithReceipt } from './requisitionReceipt.js';
+import { documentAuditDetails } from '../documents/documentAudit.js';
+import { logActivity } from '../../lib/auditLogger.js';
+import { ConflictError, ForbiddenError, ValidationError } from '../../errors/customErrors.js';
+import { can } from '../../middleware/authorize.js';
+import { permissionDefinition } from '../../lib/permissions/permissionCatalog.js';
+import { PROCUREMENT_RECEIVE_PERMISSION } from '../../lib/permissions/procurementPermissions.js';
+import { formatPersianNumber } from '../../utils/persianNumber.js';
+import { applyDeliveredLines, isClosedRequisitionRow, isSettledRequisitionRow, type RequisitionItemWithReceipt } from './requisitionReceipt.js';
 
 /** v8.0.10 (TD-267): انواع سندی که مسیر تحویل تدارکات به انبار نهایی می‌کند (فقط ورود کالا) */
 export const PROCUREMENT_INCOMING_TYPES = ['receipt', 'purchase'];
@@ -21,6 +27,20 @@ export function assertProcurementIncomingDocument(doc: { id: number; type: strin
   }
 }
 
+/**
+ * v9.0.455 (TD-904، یافته P5-P01، تصمیم ت۳ الف): تحویل سفارش تدارکات به انبار، افزون بر مجوز تدارکات، همان مجوز ثبت قطعی
+ * سند رسید را می‌خواهد. پیش‌تر `procurement.manage` یا `procurement.order` به‌تنهایی سفارش را قطعی و کالا را وارد انبار
+ * می‌کرد، در حالی که همان کاربر `PUT /documents/:id/finalize` را ۴۰۳ می‌گرفت. بیرون از تراکنش سنجیده می‌شود (TD-324).
+ */
+export async function assertMayReceiveIntoStock(user: { role?: string } | undefined, orderLabel: string): Promise<void> {
+  if (await can(user, PROCUREMENT_RECEIVE_PERMISSION)) return;
+  const title = permissionDefinition(PROCUREMENT_RECEIVE_PERMISSION)?.title ?? PROCUREMENT_RECEIVE_PERMISSION;
+  throw new ForbiddenError(
+    `تحویل سفارش خرید «${orderLabel}» به انبار مجوز «${title}» را هم می‌خواهد؛ کالا فقط با همان مجوز سند رسید وارد انبار می‌شود.`,
+    { permission: PROCUREMENT_RECEIVE_PERMISSION }, 'PROCUREMENT_RECEIVE_PERMISSION_REQUIRED',
+  );
+}
+
 interface ReceivedRequisition {
   id: number;
   code: string;
@@ -30,6 +50,8 @@ interface ReceivedRequisition {
 
 interface ReceiveOptions {
   username: string;
+  /** v9.0.458 (TD-917): کاربر انجام‌دهنده اقدام، برای ردیف ممیزی نهایی‌سازی هر سفارش */
+  userId?: number;
   allowBackdate: boolean;
   assertIncoming: (doc: { id: number; type: string | null; refNumber: string | null }) => void;
 }
@@ -92,7 +114,21 @@ export async function receiveRequisitionItems(
   for (const doc of orderDocs) {
     if (doc.status === 'final') continue;
     opts.assertIncoming(doc);
-    await DocumentService.finalizeDocument(doc.id, opts.username, tx, { allowBackdate: opts.allowBackdate });
+    const change = await DocumentService.finalizeDocument(doc.id, opts.username, tx, { allowBackdate: opts.allowBackdate });
+    // v9.0.458 (TD-917، یافته P5-P10): ردیف ممیزی نهایی‌سازی هر سفارش با شناسه سند و سند پیش و پس از آن، با همین تراکنش،
+    // همان ردیف `PUT /documents/:id/finalize` (TD-785). پیش‌تر «دریافت کالا» هیچ ردیفی نمی‌نوشت و خط زمانی سند آن را نمی‌دید.
+    if (change) {
+      await logActivity({
+        tx,
+        userId: opts.userId,
+        username: opts.username,
+        action: 'UPDATE',
+        entity: 'اسناد انبار',
+        entityId: doc.id,
+        description: `نهایی‌سازی سفارش خرید ${change.after?.refNumber || doc.refNumber || doc.id} با «دریافت کالا»ی درخواست خرید ${req.code}`,
+        details: { ...documentAuditDetails(change.before, change.after), operation: 'RECEIVE_REQUISITION_ITEMS', documentId: doc.id, requisitionCode: req.code },
+      });
+    }
   }
   const requisitionDocIds = new Set(orderDocs.map(doc => doc.id));
 
@@ -123,8 +159,30 @@ export async function receiveRequisitionItems(
       eq(documents.status, 'final')
     ));
   const stockRows = rows.map(row => row.itemId ? { ...row, receivedQty: 0 } : row);
-  return applyDeliveredLines(stockRows, lines).map(row => row.itemId ? row : {
+  const received = applyDeliveredLines(stockRows, lines).map(row => row.itemId ? row : {
     // ردیف بی‌کالا (خدمت یا کالای سفارشی) وارد انبار نمی‌شود و با همین اقدام دریافت‌شده است
     ...row, receivedQty: row.requestedQty, remainingQty: 0, status: 'received' as const,
   });
+  assertRequisitionSettled(req.code, received);
+  return received;
 }
+
+/**
+ * v9.0.457 (TD-911، یافته P5-P02): درخواست فقط وقتی «دریافت‌شده» می‌شود که هر ردیفش به اندازه درخواست دریافت یا بسته شده
+ * باشد (`isSettledRequisitionRow`، همان قاعده تحویل سفارش در TD-690). پیش‌تر «دریافت کالا» پس از سفارش ۶ از ۱۰ درخواست را
+ * «دریافت‌شده» می‌کرد و ۴ عدد مانده دیگر سفارش داده نمی‌شد (۴۰۹)، در حالی که تحویل همان سفارش درخواست را باز نگه می‌داشت.
+ * خطا کل انتقال را برمی‌گرداند: سفارشی قطعی و کالایی وارد انبار نمی‌شود.
+ */
+function assertRequisitionSettled(code: string, rows: RequisitionItemWithReceipt[]): void {
+  const open = rows.filter(row => !isSettledRequisitionRow(row));
+  if (open.length === 0) return;
+  const quantity = (value: unknown) => formatPersianNumber(Number(value || 0), 4) || '۰';
+  const names = open.map(row => `«${row.itemName || row.itemCode || row.itemId}» (${quantity(row.receivedQty)} از ${quantity(row.requestedQty)} دریافت می‌شود)`);
+  throw new ConflictError(
+    `درخواست خرید ${code} با این اقدام کامل دریافت نمی‌شود: ${names.join('، ')}. ${REQUISITION_UNSETTLED_HINT}`,
+    { rowIds: open.map(row => row.id) }, 'REQUISITION_ROWS_NOT_SETTLED',
+  );
+}
+
+/** v9.0.457 (TD-911): راهنمای پیام رد «دریافت کالا»ی درخواستی که ردیف باز دارد */
+export const REQUISITION_UNSETTLED_HINT = 'مانده را سفارش دهید، یا هنگام صدور سفارش «تکمیل و بستن پرونده درخواست خرید» را بزنید؛ برای ورود کالای سفارش‌های صادرشده و باز ماندن درخواست، سفارش را از فهرست سفارش‌ها تحویل دهید.';

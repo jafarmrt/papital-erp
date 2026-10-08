@@ -1446,6 +1446,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Package 1 PR «ج»: startup gate, pool readiness, access log, circular log values, /health build details
   const { runStartupMonitoringTests } = await import('../security/startupMonitoringChecks.js');
   results.push(...await runStartupMonitoringTests(shouldRunAccess));
+  // Phase 5 PR «ب» (from TD-904): paths that move stock ask the warehouse permission of the stock document
+  const { runProcurementStockPermissionTests } = await import('../security/procurementStockPermissionTests.js');
+  results.push(...await runProcurementStockPermissionTests(shouldRunAccess));
 
   return results;
 }

@@ -79,7 +79,7 @@ export async function runTreasuryPayrollPhase5Tests(shouldRun: ShouldRun): Promi
 
   const partyId = 'reg_treasury_document_party_td_907';
   if (shouldRun(partyId, 'td907', 'treasury', 'settlement', 'party', 'phase5')) {
-    await runCase(results, partyId, 'v9.0.451: a receipt or payment linked to a document without a party id takes the document\'s party id and current name, so the party\'s account card and delete guard still see it after a rename; a legacy document without a party keeps the exact-name rule (TD-907)', async () => inFiscalSandbox(async () => {
+    await runCase(results, partyId, 'v9.0.459: a receipt or payment linked to a document without a party id takes the document\'s party id and current name, so the party\'s account card and delete guard still see it after a rename; a legacy document without a party keeps the exact-name rule (TD-907)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const today = await businessTodayIsoDate();
@@ -180,7 +180,7 @@ export async function runTreasuryPayrollPhase5Tests(shouldRun: ShouldRun): Promi
 
   const currencyId = 'reg_treasury_document_currency_td_908';
   if (shouldRun(currencyId, 'td908', 'treasury', 'currency', 'settlement', 'phase5')) {
-    await runCase(results, currencyId, 'v9.0.452: a new receipt or payment is linked only to a document of its own currency (422 TREASURY_DOCUMENT_CURRENCY_MISMATCH, nothing written), as the relink already was; a matching currency still settles the document (TD-908)', async () => inFiscalSandbox(async () => {
+    await runCase(results, currencyId, 'v9.0.460: a new receipt or payment is linked only to a document of its own currency (422 TREASURY_DOCUMENT_CURRENCY_MISMATCH, nothing written), as the relink already was; a matching currency still settles the document (TD-908)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const today = await businessTodayIsoDate();
@@ -243,7 +243,7 @@ export async function runTreasuryPayrollPhase5Tests(shouldRun: ShouldRun): Promi
 
   const payDateId = 'reg_payroll_payment_future_date_td_927';
   if (shouldRun(payDateId, 'td927', 'payroll', 'payment', 'date', 'phase5')) {
-    await runCase(results, payDateId, 'v9.0.453: a payroll payment date follows the treasury date rule: a date after the business today is 422 TREASURY_DATE_IN_FUTURE and a non-existent day 422, with nothing written; today, a past date and an empty date (today) still pay (TD-927)', async () => inFiscalSandbox(async () => {
+    await runCase(results, payDateId, 'v9.0.461: a payroll payment date follows the treasury date rule: a date after the business today is 422 TREASURY_DATE_IN_FUTURE and a non-existent day 422, with nothing written; today, a past date and an empty date (today) still pay (TD-927)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const today = await businessTodayIsoDate();

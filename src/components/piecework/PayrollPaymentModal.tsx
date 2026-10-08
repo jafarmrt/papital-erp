@@ -44,7 +44,7 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
   const [bankAccountId, setBankAccountId] = useState<string>('');
   const [method, setMethod] = useState<string>('bank_transfer');
   const [payAmount, setPayAmount] = useState<number>(0);
-  // v9.0.453 (TD-927): تاریخ پرداخت ISO از `JalaliDateInput`؛ تاریخ پس از امروز را کارساز با پیام خودش رد می‌کند
+  // v9.0.461 (TD-927): تاریخ پرداخت ISO از `JalaliDateInput`؛ تاریخ پس از امروز را کارساز با پیام خودش رد می‌کند
   const [paymentDate, setPaymentDate] = useState<string>(getTodayIsoDate());
   const [paymentReference, setPaymentReference] = useState<string>('');
   const [notes, setNotes] = useState<string>('');

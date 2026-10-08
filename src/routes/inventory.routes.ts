@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { authorizePermission, can, requirePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -13,7 +13,7 @@ import { KardexBackfillService } from '../services/inventory/kardexBackfill.serv
 import { WarehouseStockReconciliationService } from '../services/inventory/warehouseStockReconciliation.service.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { BOM_ALLOCATE_PERMISSIONS, BOM_CONSUME_PERMISSIONS, BOM_RELEASE_PERMISSIONS } from '../lib/permissions/projectPermissions.js';
+import { BOM_ALLOCATE_PERMISSIONS, BOM_CONSUME_PERMISSIONS, BOM_RELEASE_PERMISSIONS, PROJECT_STOCK_IN_PERMISSIONS } from '../lib/permissions/projectPermissions.js';
 import { WAC_CORRECTION_PERMISSION } from '../lib/inventoryAudit/wacCorrection.js';
 import { ITEM_COST_READ_PERMISSIONS, RESERVATION_BUYER_READ_PERMISSIONS, reservedItemsReportForAccess } from '../lib/inventory/reservedItemsReport.js';
 import type { AuthUserPayload } from '../types.js';
@@ -426,6 +426,7 @@ router.get(
 router.post(
   '/allocations/allocate',
   // حوزه H (TD-298): تخصیص کالا را از انبار خارج و سند ۱۴۰۲ صادر می‌کند؛ مجوز مشاهده کافی نیست
+  // v9.0.454 (TD-923): مانند حواله `warehouse.out` می‌خواهد
   authorizePermission(...BOM_ALLOCATE_PERMISSIONS),
   idempotency({ scope: 'inventory' }),
   validate(projectAllocateSchema),
@@ -495,6 +496,8 @@ router.post(
 router.post(
   '/allocations/:id/release',
   authorizePermission(...BOM_RELEASE_PERMISSIONS),
+  // v9.0.454 (TD-923): آزادسازی کالا را به انبار برمی‌گرداند و مانند رسید `warehouse.in` هم می‌خواهد
+  requirePermission(...PROJECT_STOCK_IN_PERMISSIONS),
   idempotency({ scope: 'inventory' }),
   validate(releaseAllocationSchema),
   asyncHandler(async (req, res) => {
