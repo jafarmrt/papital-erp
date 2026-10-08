@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { executePrint } from '../../utils/printHelper';
 
-// v9.0.300 (TD-684، B16-20): پاک‌سازی چاپ یک بار اجرا می‌شود و کلاس و عنوان تازه‌تر را پاک نمی‌کند
+// v9.0.311 (TD-684، B16-20): پاک‌سازی چاپ یک بار اجرا می‌شود و کلاس و عنوان تازه‌تر را پاک نمی‌کند
 beforeEach(() => {
   vi.useFakeTimers();
   // a blocking print like Chrome: afterprint fires before print() returns

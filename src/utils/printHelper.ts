@@ -27,7 +27,7 @@ export function executePrint(options: PrintOptions = {}): void {
     }
   }
 
-  // v9.0.300 (TD-684، B16-20): کلاسی که پنجره چاپ باز (`useDocumentPrint`) گذاشته بود همان‌جا می‌ماند، پاک‌سازی یک بار اجرا
+  // v9.0.311 (TD-684، B16-20): کلاسی که پنجره چاپ باز (`useDocumentPrint`) گذاشته بود همان‌جا می‌ماند، پاک‌سازی یک بار اجرا
   // می‌شود و عنوانی که پس از چاپ عوض شده دوباره نوشته نمی‌شود. پیش‌تر `afterprint` و زمان‌سنج ۲ ثانیه‌ای هر دو پاک‌سازی
   // می‌کردند: `onAfterPrint` دو بار صدا زده می‌شد و Ctrl+P بعدی با پنجره هنوز باز کل صفحه را چاپ می‌کرد.
   const classWasSet = document.body.classList.contains('printing-doc');

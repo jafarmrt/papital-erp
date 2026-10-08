@@ -59,7 +59,7 @@ async function startServer() {
         OutboxService.startOutboxWorker(3000);
         // v7.0.101 (TD-085 بند ۴): یادآوری یک‌باره مهلت کارهای تاییدی به مسئول کار
         WorkflowSlaReminderService.start(60_000);
-        // v9.0.295 (TD-676): daily soft cleanup of expired form drafts
+        // v9.0.306 (TD-676): daily soft cleanup of expired form drafts
         FormDraftService.startCleanup();
         markStartupComplete();
         migrationSucceeded = true;

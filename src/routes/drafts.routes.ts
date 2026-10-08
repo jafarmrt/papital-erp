@@ -9,7 +9,7 @@ import { DRAFT_DEFAULT_KEY, DRAFT_EXPIRY_DAYS, DRAFT_ENTITY_TYPE_PATTERN, DRAFT_
 const router = Router();
 router.use(authenticateToken);
 
-// v9.0.294 (TD-677، B16-13): نوع و کلید پیش‌نویس با الگو و سقف طول؛ خطای پایگاه‌داده به errorHandler می‌رسد و متن SQL
+// v9.0.305 (TD-677، B16-13): نوع و کلید پیش‌نویس با الگو و سقف طول؛ خطای پایگاه‌داده به errorHandler می‌رسد و متن SQL
 // را به مرورگر نمی‌دهد (پیش‌تر هر خطا با پیام خامش و وضعیت ۴۰۰ برمی‌گشت)
 const entityTypeField = z.string().regex(DRAFT_ENTITY_TYPE_PATTERN, 'نوع پیش‌نویس فقط حروف کوچک لاتین، رقم، «_» و «-» تا ۴۰ نویسه است');
 const draftKeyField = z.string().regex(DRAFT_KEY_PATTERN, 'کلید پیش‌نویس فقط حروف لاتین، رقم، «_» و «-» تا ۶۴ نویسه است');

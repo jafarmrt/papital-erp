@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { BankCardInput } from '../../components/common/BankCardInput';
 import { ShebaInput } from '../../components/common/ShebaInput';
 
-// v9.0.299 (TD-682، B16-18): Backspace روی جداکننده رقم قبلی را حذف می‌کند و مکان‌نما همان‌جا می‌ماند
+// v9.0.310 (TD-682، B16-18): Backspace روی جداکننده رقم قبلی را حذف می‌کند و مکان‌نما همان‌جا می‌ماند
 afterEach(cleanup);
 
 function Card() {

@@ -47,7 +47,7 @@ describe('کلید تکرار درخواست از محتوای ارسال (TD-32
   it('ارسال دوباره کاربر پس از خطای شبکه همان کلید را دارد و پس از پاسخ موفق کلید تازه', async () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
     await expect(fetchJson('/accounting/treasury', pay(500))).rejects.toThrow(UNCONFIRMED_MUTATION_MESSAGE);
-    // v9.0.296 (TD-670): ثبت خودکار دوباره فرستاده نمی‌شود
+    // v9.0.307 (TD-670): ثبت خودکار دوباره فرستاده نمی‌شود
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     const lostKey = sentKey(0);

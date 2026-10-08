@@ -12,7 +12,7 @@ export async function runFormDraftRouteErrorsTests(shouldRun: (id: string, ...ex
   const id = 'reg_form_draft_route_errors_td_677';
   if (!shouldRun(id, 'td677', 'b16-13', 'drafts', 'package16')) return results;
 
-  const name = 'v9.0.294: the drafts routes validate type and key and never return raw database errors (TD-677)';
+  const name = 'v9.0.305: the drafts routes validate type and key and never return raw database errors (TD-677)';
   const tStart = Date.now();
   const previousEnv = process.env.NODE_ENV;
   try {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchJson, setCsrfToken, IN_FLIGHT_STILL_RUNNING_MESSAGE } from '../../api';
 import { resetSubmissionKeys, submissionKeyFor } from '../../lib/submissionKey';
 
-// v9.0.297 (TD-679، B16-15): پس از پایان انتظار برای ۴۰۹ «در حال پردازش» کلید تکرار آزاد نمی‌شود
+// v9.0.308 (TD-679، B16-15): پس از پایان انتظار برای ۴۰۹ «در حال پردازش» کلید تکرار آزاد نمی‌شود
 const fetchMock = vi.fn();
 const inFlight = () => ({
   ok: false, status: 409,

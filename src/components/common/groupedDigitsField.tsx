@@ -57,7 +57,7 @@ export function restoreCaretAfterDigits(
 /**
  * Backspace درست پس از جداکننده: به‌جای گیر کردن روی جداکننده، رقم قبلی را حذف می‌کند.
  * رقم‌های تازه (حداکثر maxDigits) و شمار رقم‌های پیش از مکان‌نما را برمی‌گرداند؛ null یعنی رویداد به حالت عادی رها شود.
- * v9.0.299 (TD-682، B16-18): فراخواننده مکان‌نما را با `caretDigits` سر جای رقم حذف‌شده برمی‌گرداند؛ پیش‌تر به آخر کادر می‌رفت.
+ * v9.0.310 (TD-682، B16-18): فراخواننده مکان‌نما را با `caretDigits` سر جای رقم حذف‌شده برمی‌گرداند؛ پیش‌تر به آخر کادر می‌رفت.
  */
 export function digitsAfterSeparatorBackspace(
   e: React.KeyboardEvent<HTMLInputElement>,

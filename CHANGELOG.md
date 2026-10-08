@@ -19,29 +19,62 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.301 — v9.0.301 — Production Error Answers Keep 4xx Details
+### v9.0.312 — v9.0.312 — Production Error Answers Keep 4xx Details
 - **Production error details (TD-594):** in production a 4xx answer keeps its details, so the over-delivery and over-order prompts list their items, and a broken request body gets a Persian message with its own code.
 
-### v9.0.300 — v9.0.300 — Print Cleanup Runs Once
+### v9.0.311 — v9.0.311 — Print Cleanup Runs Once
 - **Print cleanup (TD-684):** printing cleans up once, keeps the print window's own state while it is open and no longer overwrites a newer page title, so the next Ctrl+P still prints only the document.
 
-### v9.0.299 — v9.0.299 — Card and Sheba Fields Keep the Caret After Backspace
+### v9.0.310 — v9.0.310 — Card and Sheba Fields Keep the Caret After Backspace
 - **Card and Sheba caret (TD-682):** Backspace on a separator removes the digit before it and leaves the caret there instead of moving it to the end of the field.
 
-### v9.0.298 — v9.0.298 — Searchable Select Shows the Label of a Preselected Value
+### v9.0.309 — v9.0.309 — Searchable Select Shows the Label of a Preselected Value
 - **Preselected picker label (TD-680):** a searchable picker filled from a draft, a sales file or a name match shows the chosen buyer instead of an empty box, and its search request no longer sends `limit` twice.
 
-### v9.0.297 — v9.0.297 — Idempotency Key Kept While the Server Still Runs a Save
+### v9.0.308 — v9.0.308 — Idempotency Key Kept While the Server Still Runs a Save
 - **Idempotency key kept (TD-679):** when the browser stops waiting for a save the server is still running, it keeps the key, so a resend gets that save's result instead of starting a second, unguarded one.
 
-### v9.0.296 — v9.0.296 — Saves Are Not Resent Automatically After a Lost Connection
+### v9.0.307 — v9.0.307 — Saves Are Not Resent Automatically After a Lost Connection
 - **No automatic resend of saves (TD-670):** after a network error only reads are retried automatically; a save tells the user to check whether it was recorded, and a resend by the user carries the same idempotency key.
 
-### v9.0.295 — v9.0.295 — Form Drafts Expire
+### v9.0.306 — v9.0.306 — Form Drafts Expire
 - **Form draft expiry (TD-676):** a draft lives 1 to 90 days, an expired draft no longer offers «restore», and a daily job soft-deletes expired drafts.
 
-### v9.0.294 — v9.0.294 — Draft Routes Validate Their Input and Hide Database Errors
+### v9.0.305 — v9.0.305 — Draft Routes Validate Their Input and Hide Database Errors
 - **Form draft errors (TD-677):** a draft's type and key are checked against a pattern and a length cap, and a database error goes to the global error handler instead of returning the raw SQL text with status 400.
+
+### v9.0.304 — Editing a Proforma Does Not Offer to Finalize It
+- **Sales:** while a proforma is edited, «فاکتور نهایی» is closed with the reason that a proforma is finalized by its approval, and the item codes of its lines are shown; before, the option led to a false stock shortage message and the codes were empty (TD-801).
+
+### v9.0.303 — A Failed Print Copy No Longer Leaves the Invoice Form Filled
+- **Sales:** when the print copy of a just-saved invoice fails to load, the save still counts: the user is told to print it from the document list and the form is cleared; before, the save showed as failed, the form stayed filled and a second click created a second invoice (TD-794).
+
+### v9.0.302 — A Sales Proforma Prints as a Sales Document
+- **Sales:** a sales proforma stored as type `proforma` (recorded by a user without the finalize permission) now prints with the sales title and the seller and buyer boxes; before, it printed as a stock document without the buyer's address and phone (TD-793).
+
+### v9.0.301 — Sales Form Lists Only Sales Proformas, Page by Page
+- **Sales:** the open proformas of the sales invoice form are now only sales proformas (`GET /documents` takes `types=invoice,proforma`), read twenty at a time with a count and paging; before, purchase proformas were listed and edited there and the list was cut at 1,000 without notice (TD-792).
+
+### v9.0.300 — Proforma Edit Keeps the Warehouse of Its Lines
+- **Sales:** editing a proforma now reads each line's warehouse and saves the line there; before, every edit silently moved all lines (and their reservation) to the first warehouse (TD-790).
+
+### v9.0.299 — Sales Invoice Form Resets Every Field
+- **Sales:** clearing the sales invoice form (after a save or a cancelled edit) now puts the type, status, warehouse, date, currency, rate and sales lead back to their start values, and the form edits only sales documents; before, a cancelled edit of a purchase proforma made the next sale a receipt and a sales lead stuck to later documents (TD-789).
+
+### v9.0.298 — Voucher Row Menu Offers Only Accepted Actions
+- **Voucher Row Menu (P2, decision t8):** the menu offers per status only what the server accepts (no direct edit of an approved voucher, no correction of a permanent one, no reverse or correct of a reversal), a voucher with a source or of a year-end closing shows why it is locked, and the finalize confirmation promises no correction path (TD-568).
+
+### v9.0.297 — Automation Status Counts Final Documents Only
+- **Voucher Automation Status (P2):** the panel counts only final documents, takes a stock count as automatic when it has a valued difference and a transfer as without financial effect, reaches 100% only with every needed voucher, and warns only for types missing one (TD-560).
+
+### v9.0.296 — Batch Finalize Reports Its Real Count
+- **Batch Finalize Count (P3):** batch finalize returns only the vouchers it made permanent and lists each refused id with its reason (missing, deleted, already permanent, closed year, unbalanced); the message and the audit row say the same (TD-556).
+
+### v9.0.295 — Voucher Edits Need Their Version
+- **Voucher Edit Lock and Audit (P3):** a voucher edit sends the version it read (400 without, 409 `OCC_CONFLICT` when stale), a deleted voucher is never edited, and voucher and account edit and delete audit rows carry before and after (TD-555).
+
+### v9.0.294 — Vouchers of a Source Change Only Through Their Source
+- **Source Vouchers Locked on the Voucher Page (P2, decision t8):** a voucher issued by a document, treasury transaction, cheque, payroll or BOM allocation, and its reversal, is only approved and finalized from the voucher page; delete, edit, back to draft, reverse and correct answer 409 `VOUCHER_HAS_SOURCE` and the list shows each voucher's source (TD-552).
 
 ### v9.0.293 — v9.0.293 — Dashboard Banner Uses the Display Time Zone
 - **Dashboard banner clock (TD-683):** the banner's date, clock and greeting follow the display time zone setting, so a device set to another zone no longer shows yesterday's date around midnight in Tehran.

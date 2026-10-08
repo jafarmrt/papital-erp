@@ -23,12 +23,12 @@ interface SearchableSelectProps {
   fetchUrl?: string; // e.g. "/items"
   mapResultToOption?: (item: any) => Option; // Function to convert response to Option
   maxResults?: number;
-  /** v9.0.298 (TD-680): برچسب مقدار ازپیش‌انتخاب‌شده‌ای که هنوز در نتایج `fetchUrl` نیامده است (مثلاً نام خریدار) */
+  /** v9.0.309 (TD-680): برچسب مقدار ازپیش‌انتخاب‌شده‌ای که هنوز در نتایج `fetchUrl` نیامده است (مثلاً نام خریدار) */
   valueLabel?: string;
 }
 
 /**
- * v9.0.298 (TD-680، B16-16): نشانی جست‌وجوی فهرست انتخاب؛ `search` و `limit` جایگزین همان پارامترهای `fetchUrl` می‌شوند،
+ * v9.0.309 (TD-680، B16-16): نشانی جست‌وجوی فهرست انتخاب؛ `search` و `limit` جایگزین همان پارامترهای `fetchUrl` می‌شوند،
  * نه افزوده (پیش‌تر `/customers?limit=1000&search=&limit=50` ساخته می‌شد و سرور ۱٬۰۰۰ ردیف می‌خواند).
  */
 export function pickListRequestUrl(fetchUrl: string, search: string, limit: number): string {
@@ -190,7 +190,7 @@ export function SearchableSelect({
 
   const displayOptions = fetchUrl ? asyncOptions : filteredPropOptions;
   const valStr = safeStr(value);
-  // v9.0.298 (TD-680): مقدار ازپیش‌انتخاب‌شده برچسبش را از نتایج `fetchUrl` هم می‌گیرد، سپس از `valueLabel`؛ هرگز متن خالی
+  // v9.0.309 (TD-680): مقدار ازپیش‌انتخاب‌شده برچسبش را از نتایج `fetchUrl` هم می‌گیرد، سپس از `valueLabel`؛ هرگز متن خالی
   const foundOpt = propOptions.find(o => safeStr(o?.value) === valStr) ?? asyncOptions.find(o => safeStr(o?.value) === valStr);
   const currentLabel = !valStr ? placeholder : (foundOpt?.label || (chosen?.value === valStr ? chosen.label : '') || valueLabel || placeholder);
 

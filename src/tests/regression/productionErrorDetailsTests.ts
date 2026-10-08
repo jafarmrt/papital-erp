@@ -4,7 +4,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 /**
  * Package 1 finding B01-14 fixed in package 16, TD-594: in production a 4xx answer keeps its `details` (the
  * over-delivery prompt lists its items from them) and only 5xx details stay hidden; body-parser errors get a Persian
- * message and their own code. On v9.0.300 the same 422 had `details=undefined` with NODE_ENV=production, a broken JSON
+ * message and their own code. On v9.0.311 the same 422 had `details=undefined` with NODE_ENV=production, a broken JSON
  * body answered 400 «Unexpected end of JSON input» with code INTERNAL_ERROR (the 6 MB body check guards the TD-641 413).
  */
 export async function runProductionErrorDetailsTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -12,7 +12,7 @@ export async function runProductionErrorDetailsTests(shouldRun: (id: string, ...
   const id = 'reg_production_error_details_td_594';
   if (!shouldRun(id, 'td594', 'b01-14', 'errors', 'package16')) return results;
 
-  const name = 'v9.0.301: production 4xx answers keep details and body-parser errors are Persian with their own code (TD-594)';
+  const name = 'v9.0.312: production 4xx answers keep details and body-parser errors are Persian with their own code (TD-594)';
   const tStart = Date.now();
   const previousEnv = process.env.NODE_ENV;
   try {

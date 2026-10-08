@@ -6,7 +6,7 @@ import { formDrafts, users } from '../../db/schema.js';
 
 /**
  * Package 16 (dashboard and shell), TD-676 / B16-12: a form draft lives 1 to 90 days, an expired draft is not returned,
- * and the daily cleanup soft-deletes expired drafts. On v9.0.294 `expiresInDays: -10` was saved and returned, a 31-day-old
+ * and the daily cleanup soft-deletes expired drafts. On v9.0.305 `expiresInDays: -10` was saved and returned, a 31-day-old
  * draft with a past `expires_at` still offered «restore», `expiresInDays: 1e9` failed with «Invalid time value» and
  * nothing called the cleanup.
  */
@@ -15,7 +15,7 @@ export async function runFormDraftExpiryTests(shouldRun: (id: string, ...extra: 
   const id = 'reg_form_draft_expiry_td_676';
   if (!shouldRun(id, 'td676', 'b16-12', 'drafts', 'package16')) return results;
 
-  const name = 'v9.0.295: expired form drafts are not returned and the daily cleanup removes them (TD-676)';
+  const name = 'v9.0.306: expired form drafts are not returned and the daily cleanup removes them (TD-676)';
   const tStart = Date.now();
   const draftIds: number[] = [];
   try {

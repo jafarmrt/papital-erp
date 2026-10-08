@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchJson, setCsrfToken } from '../../api';
 import { resetSubmissionKeys } from '../../lib/submissionKey';
 
-// v9.0.296 (TD-670، B16-06، تصمیم ت۳-الف): پس از قطع ارتباط فقط GET خودکار دوباره فرستاده می‌شود
+// v9.0.307 (TD-670، B16-06، تصمیم ت۳-الف): پس از قطع ارتباط فقط GET خودکار دوباره فرستاده می‌شود
 const fetchMock = vi.fn();
 const ok = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body), headers: { get: () => null } });
 

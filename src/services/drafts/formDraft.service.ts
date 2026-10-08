@@ -7,7 +7,7 @@ import { ADVISORY_LOCK_KEYS, withAdvisoryLock } from '../../lib/advisoryLock.js'
 import { DRAFT_EXPIRY_DAYS, isValidDraftExpiryDays } from '../../lib/drafts/draftRules.js';
 
 /**
- * v9.0.295 (TD-676، B16-12): پیش‌نویس زنده هنوز منقضی نشده است. ردیف قدیمی بی `expires_at` تا ۳۰ روز پس از آخرین ذخیره
+ * v9.0.306 (TD-676، B16-12): پیش‌نویس زنده هنوز منقضی نشده است. ردیف قدیمی بی `expires_at` تا ۳۰ روز پس از آخرین ذخیره
  * زنده است. زمان‌های سرور UTC و بی منطقه ذخیره می‌شوند (AGENTS §22)، پس با `now()` به UTC مقایسه می‌شوند.
  */
 const liveDraft = sql`COALESCE(${formDrafts.expiresAt}, ${formDrafts.updatedAt} + make_interval(days => ${DRAFT_EXPIRY_DAYS.default})) > (now() AT TIME ZONE 'UTC')`;
@@ -262,7 +262,7 @@ export class FormDraftService {
   }
 
   /**
-   * v9.0.295 (TD-676): soft-deletes every draft that is no longer live; returns the number of drafts removed.
+   * v9.0.306 (TD-676): soft-deletes every draft that is no longer live; returns the number of drafts removed.
    */
   static async cleanupExpiredDrafts(): Promise<number> {
     const removed = await orm.update(formDrafts)
