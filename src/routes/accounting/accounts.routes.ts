@@ -64,7 +64,7 @@ router.post('/accounting/accounts', authorizePermission('accounting.coa'), valid
 
 router.put('/accounting/accounts/:id', authorizePermission('accounting.coa'), validate(updateAccountSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const before = await accountAuditRow(orm, id); // v9.0.290 (TD-555، B03-13): ممیزی مقدار پیش و پس
+  const before = await accountAuditRow(orm, id); // v9.0.295 (TD-555، B03-13): ممیزی مقدار پیش و پس
   const updated = await AccountingService.updateAccount(id, req.body);
   await logActivity({
     userId: req.user?.id,
@@ -82,7 +82,7 @@ router.put('/accounting/accounts/:id', authorizePermission('accounting.coa'), va
 
 router.delete('/accounting/accounts/:id', authorizePermission('accounting.coa'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const before = await accountAuditRow(orm, id); // v9.0.290 (TD-555): ممیزی حذف کل حساب را دارد
+  const before = await accountAuditRow(orm, id); // v9.0.295 (TD-555): ممیزی حذف کل حساب را دارد
   const result = await AccountingService.deleteAccount(id);
   await logActivity({
     userId: req.user?.id,

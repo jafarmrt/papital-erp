@@ -76,7 +76,7 @@ router.post('/accounting/vouchers', authorizePermission('accounting.vouchers'), 
 router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(updateVoucherSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const { version, ...changes } = req.body;
-  // v9.0.290 (TD-555، B03-13): پیش از ویرایش خوانده می‌شود؛ ویرایش با نسخه خوانده‌شده فقط همین حالت را تغییر می‌دهد (نسخه دیگر ۴۰۹)
+  // v9.0.295 (TD-555، B03-13): پیش از ویرایش خوانده می‌شود؛ ویرایش با نسخه خوانده‌شده فقط همین حالت را تغییر می‌دهد (نسخه دیگر ۴۰۹)
   const before = await AccountingService.getJournalVoucherById(id);
   const voucher = await AccountingService.updateJournalVoucher(id, { ...changes, manualEntry: true, expectedVersion: version }); // v9.0.190 (TD-551)
   await logActivity({
@@ -95,7 +95,7 @@ router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'
 
 router.delete('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const before = await AccountingService.getJournalVoucherById(id); // v9.0.290 (TD-555): ممیزی حذف کل سند را دارد
+  const before = await AccountingService.getJournalVoucherById(id); // v9.0.295 (TD-555): ممیزی حذف کل سند را دارد
   const result = await AccountingService.deleteJournalVoucher(id);
   await logActivity({
     userId: req.user?.id,
@@ -120,7 +120,7 @@ router.post('/accounting/vouchers/:id/reverse', authorizePermission('accounting.
     reason,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
-    manualEntry: true, // v9.0.289 (TD-552، ت۸): سند منشأدار فقط با ابطال منشأ برمی‌گردد
+    manualEntry: true, // v9.0.294 (TD-552، ت۸): سند منشأدار فقط با ابطال منشأ برمی‌گردد
   });
 
   await logActivity({
@@ -217,7 +217,7 @@ router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounti
     entity: 'journal_voucher',
     entityId: ids.join(','),
     description: `قطعی‌سازی گروهی ${result.finalizedCount} سند حسابداری`,
-    // v9.0.291 (TD-556): شناسه‌های قطعی‌شده و ردشده‌ها جدا؛ پیش‌تر همه شناسه‌های فرستاده‌شده «قطعی‌شده» ثبت می‌شد
+    // v9.0.296 (TD-556): شناسه‌های قطعی‌شده و ردشده‌ها جدا؛ پیش‌تر همه شناسه‌های فرستاده‌شده «قطعی‌شده» ثبت می‌شد
     details: { requestedIds: ids, finalizedIds: result.ids, refused: result.refused },
     ipAddress: req.ip || '',
   });

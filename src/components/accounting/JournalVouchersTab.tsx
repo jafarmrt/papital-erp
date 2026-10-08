@@ -225,7 +225,7 @@ export function JournalVouchersTab({
     setConfirmAction({ kind: 'revert_to_draft', voucher });
   };
 
-  // v9.0.293 (TD-568): کارهای منوی ردیف از voucherRowActions؛ همان قاعده سرور
+  // v9.0.298 (TD-568): کارهای منوی ردیف از voucherRowActions؛ همان قاعده سرور
   const handleRowAction = (action: VoucherRowAction, voucher: JournalVoucher) => {
     setOpenMenuVoucherId(null);
     if (action === 'edit') onEditVoucher(voucher);
@@ -412,7 +412,7 @@ export function JournalVouchersTab({
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${voucherTypeBadge(voucher.voucherType)}`}>
                             {voucherTypeLabel(voucher.voucherType)}
                           </span>
-                          {/* v9.0.289 (TD-552): منشأ سند خودکار؛ چنین سندی فقط از منشأ تغییر می‌کند */}
+                          {/* v9.0.294 (TD-552): منشأ سند خودکار؛ چنین سندی فقط از منشأ تغییر می‌کند */}
                           {voucherSourceLabel(voucher.sourceKind) && (
                             <span className="block mt-1 text-[10px] text-slate-500 dark:text-slate-400">منشأ: {voucherSourceLabel(voucher.sourceKind)}</span>
                           )}

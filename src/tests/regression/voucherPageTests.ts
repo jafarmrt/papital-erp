@@ -81,7 +81,7 @@ export async function runVoucherPageTests(shouldRun: ShouldRun): Promise<TestCas
 
   const sourceId = 'reg_source_voucher_locked_on_voucher_page_td_552';
   if (shouldRun(sourceId, 'td552', 'voucher', 'source', 'package3')) {
-    await runCase(results, sourceId, 'v9.0.289: the voucher of a document, a treasury transaction or a reversal of one is only approved and finalized from the voucher page; delete, edit, back to draft, reverse and correct are 409 VOUCHER_HAS_SOURCE, the page reads its source, and voiding the document still works (TD-552)', async () => inFiscalSandbox(async () => {
+    await runCase(results, sourceId, 'v9.0.294: the voucher of a document, a treasury transaction or a reversal of one is only approved and finalized from the voucher page; delete, edit, back to draft, reverse and correct are 409 VOUCHER_HAS_SOURCE, the page reads its source, and voiding the document still works (TD-552)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const scope = await scopeStart();
@@ -186,7 +186,7 @@ export async function runVoucherPageTests(shouldRun: ShouldRun): Promise<TestCas
 
   const versionId = 'reg_voucher_edit_version_and_audit_td_555';
   if (shouldRun(versionId, 'td555', 'voucher', 'occ', 'audit', 'package3')) {
-    await runCase(results, versionId, 'v9.0.290: a voucher edit needs the version it read (400 without, 409 OCC_CONFLICT when stale), a deleted voucher is not edited and gets no live rows, and voucher and account edits and deletes are audited with before and after (TD-555)', async () => inFiscalSandbox(async () => {
+    await runCase(results, versionId, 'v9.0.295: a voucher edit needs the version it read (400 without, 409 OCC_CONFLICT when stale), a deleted voucher is not edited and gets no live rows, and voucher and account edits and deletes are audited with before and after (TD-555)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const acc = await accountIdsByCode('7003', '1001', '70');
@@ -252,7 +252,7 @@ export async function runVoucherPageTests(shouldRun: ShouldRun): Promise<TestCas
 
   const batchId = 'reg_batch_finalize_real_count_and_refusals_td_556';
   if (shouldRun(batchId, 'td556', 'voucher', 'finalize', 'package3')) {
-    await runCase(results, batchId, 'v9.0.291: batch finalize counts only the vouchers it made permanent and lists each refused id with its reason: missing, deleted, already permanent, closed fiscal year, unbalanced (TD-556)', async () => inFiscalSandbox(async () => {
+    await runCase(results, batchId, 'v9.0.296: batch finalize counts only the vouchers it made permanent and lists each refused id with its reason: missing, deleted, already permanent, closed fiscal year, unbalanced (TD-556)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const acc = await accountIdsByCode('7004', '1001');
@@ -315,7 +315,7 @@ export async function runVoucherPageTests(shouldRun: ShouldRun): Promise<TestCas
 
   const automationId = 'reg_automation_status_final_documents_td_560';
   if (shouldRun(automationId, 'td560', 'voucher', 'automation', 'package3')) {
-    await runCase(results, automationId, 'v9.0.292: the automation status counts only final documents, takes a stock count as automatic when it has a valued difference, shows a transfer as without financial effect, and lists only the types that miss a voucher (TD-560)', async () => inFiscalSandbox(async () => {
+    await runCase(results, automationId, 'v9.0.297: the automation status counts only final documents, takes a stock count as automatic when it has a valued difference, shows a transfer as without financial effect, and lists only the types that miss a voucher (TD-560)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const today = await businessTodayIsoDate();

@@ -121,3 +121,19 @@ export function jalaliMonthLabel(monthKey: string): string {
 export function isStorageDate(value: unknown): boolean {
   return typeof value === 'string' && value !== '' && toStorageDate(value) === value;
 }
+
+/**
+ * v9.0.292 (TD-681، B16-17): روز هفته روز اول ماه شمسی (۰ = شنبه … ۶ = جمعه) و شمار روزهای ماه، با همان تبدیل
+ * `jalaliToGregorian`، برای هر سالی. پیش‌تر تقویم پیشخوان آغاز ماه را با جست‌وجوی ±۴۰۰ روزه دور امروز پیدا می‌کرد و بیرون
+ * از آن شنبه می‌گرفت (آذر ۱۴۰۶ به بعد از مهر ۱۴۰۵).
+ */
+export function jalaliMonthFirstWeekday(jy: number, jm: number): number {
+  const [gy, gm, gd] = jalaliToGregorian(jy, jm, 1);
+  return (new Date(Date.UTC(gy, gm - 1, gd)).getUTCDay() + 1) % 7;
+}
+
+export function jalaliMonthLength(jy: number, jm: number): number {
+  const [gy, gm, gd] = jalaliToGregorian(jy, jm, 1);
+  const [ny, nm, nd] = jm === 12 ? jalaliToGregorian(jy + 1, 1, 1) : jalaliToGregorian(jy, jm + 1, 1);
+  return Math.round((Date.UTC(ny, nm - 1, nd) - Date.UTC(gy, gm - 1, gd)) / 86400000);
+}

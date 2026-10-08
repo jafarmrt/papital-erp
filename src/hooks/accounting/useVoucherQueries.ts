@@ -133,7 +133,7 @@ export function useVoucherMutations() {
   const batchFinalizeVouchers = useMutation<(BatchFinalizeResult & { message?: string }) | null, unknown, number[]>({
     mutationFn: (ids) => fetchJson('/accounting/vouchers/batch-finalize', { method: 'POST', body: JSON.stringify({ ids }) }),
     onSuccess: (res) => {
-      // v9.0.291 (TD-556): سندی که قطعی نشد با دلیلش گفته می‌شود و پیام موفقیت ساده نمی‌گیرد
+      // v9.0.296 (TD-556): سندی که قطعی نشد با دلیلش گفته می‌شود و پیام موفقیت ساده نمی‌گیرد
       const message = res?.message || (res ? batchFinalizeMessage(res) : 'اسناد با موفقیت قطعی و دائم شدند');
       if (Array.isArray(res?.refused) && res.refused.length > 0) toast.error(message, { duration: 8000 });
       else toast.success(message);
