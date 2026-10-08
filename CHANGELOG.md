@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.340 — WooCommerce and Webhook Keys Encrypted at Rest
+- **Integration secrets at rest (TD-898):** the WooCommerce consumer key and secret, the WooCommerce webhook secret and every webhook subscription's signing key and custom header values are now stored with `encryptSecret` (`ERP_SECRETS_KEY`) and decrypted only inside the server; a value that cannot be decrypted is never sent, and legacy plain values are encrypted with `npm run secrets:encrypt -- --apply`.
+
 ### v9.0.339 — Webhook Keys and Partner Tokens Masked in Every Answer
 - **Webhook secrets (TD-710):** the webhook toggle and edit answers returned the full signing key to a non-admin manager, and any events viewer saw the partner API token in custom headers and the token of webhook rules; the key, rule token and header values are now masked in every answer for every user, and the key is shown once, after create or rotation.
 

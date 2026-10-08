@@ -4,6 +4,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { roles, users, webhookSubscriptions } from '../../db/schema.js';
+import { decryptSecret } from '../../lib/secretBox.js';
 
 /**
  * Package 15 (events and integrations), TD-719 / B15-17: editing a webhook keeps its signing key when the form sends the
@@ -42,8 +43,9 @@ export async function runWebhookSecretEditTests(shouldRun: (id: string, ...extra
       name: 'td719 partner', targetUrl, secretKey: storedKey, eventPatterns: ['*'], customHeaders: { 'X-Partner-Id': 'td719' },
     });
     subscriptionId = sub.id;
-    const storedKeyNow = async () => (await orm.select({ k: webhookSubscriptions.secretKey }).from(webhookSubscriptions)
-      .where(eq(webhookSubscriptions.id, subscriptionId)))[0]?.k;
+    // the key is stored encrypted since v9.0.340 (TD-898)
+    const storedKeyNow = async () => decryptSecret((await orm.select({ k: webhookSubscriptions.secretKey }).from(webhookSubscriptions)
+      .where(eq(webhookSubscriptions.id, subscriptionId)))[0]?.k);
     const wrong: string[] = [];
 
     // 1. a save with the masked key (old non-admin mask, full mask, empty) keeps the stored key

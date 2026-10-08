@@ -15,6 +15,7 @@ import { errorMessageOf } from '../utils.js';
 import { AppError, NotFoundError } from '../errors/customErrors.js';
 import { isEnteredSecret } from '../lib/secrets/maskedSecret.js';
 import { actionRuleView, webhookSubscriptionView } from '../services/events/integrationSecrets.js';
+import { assertWebhookSecretsReadable } from '../services/events/webhookSecretStorage.js';
 
 const eventIdParamSchema = z.object({
   params: z.object({
@@ -848,7 +849,15 @@ router.post('/webhooks/ping', authorizePermission('events.manage'), validate(web
     : keySource === 'stored' ? stored!.secretKey
       : WebhookSubscriptionService.generateSecretKey();
   // the stored custom headers go only to the stored address
-  const headers = customHeaders ?? (stored && url === stored.targetUrl ? (stored.customHeaders as Record<string, string>) : undefined);
+  const headers = customHeaders ?? (stored && url === stored.targetUrl ? stored.customHeaders : undefined);
+  // v9.0.340 (TD-898): a stored key or header the current ERP_SECRETS_KEY cannot decrypt is never sent
+  const usesStoredKey = keySource === 'stored';
+  const usesStoredHeaders = !customHeaders && headers !== undefined;
+  if (stored && (usesStoredKey || usesStoredHeaders)) {
+    assertWebhookSecretsReadable({
+      unreadableSecrets: stored.unreadableSecrets.filter(f => (f === 'secretKey' ? usesStoredKey : usesStoredHeaders)),
+    });
+  }
 
   const pingResult = await WebhookSubscriptionService.pingTest(url, signingKey, headers);
   res.json({ ...pingResult, keySource });

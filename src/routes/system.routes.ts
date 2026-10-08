@@ -121,7 +121,7 @@ router.get('/settings', asyncHandler(async (req, res) => {
   const safeSettings = await SystemSettingsService.getAllSettings();
   const isAdmin = req.user?.role === SYSTEM_ADMIN_ROLE;
   if (isAdmin) {
-    res.json(safeSettings);
+    res.json(SystemSettingsService.revealSettingSecrets(safeSettings));
     return;
   }
   res.json(SystemSettingsService.maskSensitiveSettings(safeSettings));

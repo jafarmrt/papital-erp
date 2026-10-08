@@ -3,6 +3,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { eventActionRules, roles, users, webhookSubscriptions } from '../../db/schema.js';
+import { decryptSecret } from '../../lib/secretBox.js';
 
 /**
  * Package 15 (events and integrations), TD-710 / B15-08 (decision t6 a): the webhook signing key, the rule token and the
@@ -81,7 +82,8 @@ export async function runWebhookSecretMaskTests(shouldRun: (id: string, ...extra
     const otherUrl = await send(manager, 'put', `/api/events/webhooks/${subId}`, { targetUrl: 'https://collector-td710.example.com/x', customHeaders: { Authorization: MASK } });
     const urlOnly = await send(manager, 'put', `/api/events/webhooks/${subId}`, { targetUrl: 'https://collector-td710.example.com/x' });
     const [subRow] = await orm.select().from(webhookSubscriptions).where(eq(webhookSubscriptions.id, subId));
-    if (keepHeaders.status !== 200 || (subRow?.customHeaders as Record<string, string>)?.Authorization !== PARTNER_TOKEN) {
+    // stored encrypted since v9.0.340 (TD-898)
+    if (keepHeaders.status !== 200 || decryptSecret((subRow?.customHeaders as Record<string, string>)?.Authorization) !== PARTNER_TOKEN) {
       wrong.push(`masked header same address: ${keepHeaders.status}, stored ${JSON.stringify(subRow?.customHeaders)}`);
     }
     for (const [label, res] of [['masked header other address', otherUrl], ['other address without headers', urlOnly]] as const) {
@@ -93,7 +95,7 @@ export async function runWebhookSecretMaskTests(shouldRun: (id: string, ...extra
     const rotated = await send(manager, 'post', `/api/events/webhooks/${subId}/rotate-secret`, {});
     const newKey = String(rotated.body?.data?.secretKey ?? '');
     const [afterRotate] = await orm.select({ k: webhookSubscriptions.secretKey }).from(webhookSubscriptions).where(eq(webhookSubscriptions.id, subId));
-    if (rotated.status !== 200 || !/^whsec_[0-9a-f]{48}$/.test(newKey) || newKey === createdKey || afterRotate?.k !== newKey) {
+    if (rotated.status !== 200 || !/^whsec_[0-9a-f]{48}$/.test(newKey) || newKey === createdKey || decryptSecret(afterRotate?.k) !== newKey) {
       wrong.push(`rotate: ${rotated.status} new key ${newKey.slice(0, 10)}, stored ${String(afterRotate?.k).slice(0, 10)}`);
     }
 

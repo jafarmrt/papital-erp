@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # v9.0.187 (TD-609): adds the generated secrets a production .env needs and does not have yet; existing values are
 # never changed. install.sh runs it on a new and on an existing .env.
-#   ERP_SECRETS_KEY           encrypts third-party passwords at rest (src/lib/secretBox.ts; without it they are refused)
+#   ERP_SECRETS_KEY           encrypts third-party passwords, WooCommerce keys and webhook secrets at rest
+#                             (src/lib/secretBox.ts; v9.0.340, TD-898; without it new ones are refused)
 #   ERP_WEBHOOK_SECRET_TOKEN  signs outgoing webhooks (X-ERP-Signature-256)
 # Usage: bash scripts/ensure-env-secrets.sh <path/to/.env>
 # Keep ERP_SECRETS_KEY with the backups: encrypted values cannot be read without it.

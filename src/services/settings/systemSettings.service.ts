@@ -5,6 +5,7 @@ import { ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { SYSTEM_ADMIN_SETTING_KEYS } from '../../lib/settings/settingKeyAccess.js';
 import { logActivity } from '../../lib/auditLogger.js';
+import { readSettingValue, revealSettingSecrets, sealSettingValue } from './settingSecrets.js';
 import { invalidateSettingsCache, appSettingsCache } from '../../lib/memoryCache.js';
 import {
   MOVEMENT_DAY_KEYS, currencySettingError, isMovementDayKey, movementDaysError, readMovementDays
@@ -134,6 +135,11 @@ export class SystemSettingsService {
     );
   }
 
+  /** v9.0.340 (TD-898): the system admin's answer carries the WooCommerce keys decrypted, never their ciphertext */
+  static revealSettingSecrets<T extends { key: string; value: string }>(settings: T[]): T[] {
+    return revealSettingSecrets(settings);
+  }
+
   static isKnownSettingKey(key: string): boolean {
     return BUSINESS_SETTING_KEYS.has(key) || ADMIN_ONLY_SETTING_KEYS.has(key);
   }
@@ -152,7 +158,7 @@ export class SystemSettingsService {
       throw new ValidationError(`کلید(های) تنظیمات ناشناخته: ${unknownKeys.join('، ')}`);
     }
 
-    const changes: Array<{ key: string; before: string | undefined; after: string }> = [];
+    const changes: Array<{ key: string; before: string | undefined; after: string; stored: string }> = [];
     const ignoredMaskedKeys: string[] = [];
 
     await orm.transaction(async (tx) => {
@@ -165,14 +171,16 @@ export class SystemSettingsService {
           continue;
         }
         const value = normalizeSettingValue(item.key, item.value);
-        const before = current.get(item.key);
-        if (before !== undefined && before === value) {
+        // v9.0.340 (TD-898): an encrypted key is compared by its plain value; one that cannot be decrypted counts as changed
+        const before = readSettingValue(item.key, current.get(item.key));
+        if (before !== undefined && before !== null && before === value) {
           continue;
         }
 
         await assertKeyPermission(item.key, actor);
         await validateSettingValue(item.key, value);
-        changes.push({ key: item.key, before, after: value });
+        // encrypted before any write, so a missing ERP_SECRETS_KEY (503) saves nothing
+        changes.push({ key: item.key, before: before ?? undefined, after: value, stored: sealSettingValue(item.key, value) });
       }
 
       // v9.0.276 (TD-672، تصمیم ت۴): سه روز گردش با هم سنجیده می‌شوند (مقدار تازه، وگرنه ذخیره‌شده) و هیچ‌چیز نوشته نمی‌شود اگر نادرست باشند
@@ -186,8 +194,8 @@ export class SystemSettingsService {
       }
 
       for (const change of changes) {
-        await tx.insert(appSettings).values({ key: change.key, value: change.after })
-          .onConflictDoUpdate({ target: appSettings.key, set: { value: change.after } });
+        await tx.insert(appSettings).values({ key: change.key, value: change.stored })
+          .onConflictDoUpdate({ target: appSettings.key, set: { value: change.stored } });
       }
     });
 

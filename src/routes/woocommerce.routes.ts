@@ -19,6 +19,7 @@ import { assertSafeExternalUrl } from '../lib/ssrfGuard.js';
 import { ValidationError } from '../errors/customErrors.js';
 import { resolveWcTestCredentials } from '../lib/woocommerce/wcConnectionTest.js';
 import { readWcConnectionSettings } from '../services/woocommerce/wcConnectionSettings.js';
+import { openSettingSecret } from '../services/settings/settingSecrets.js';
 
 const router = Router();
 
@@ -141,7 +142,8 @@ const handleWebhookPingOrPayload = async (req: Request, res: Response) => {
 
     // 2. HMAC SHA-256 Signature Verification if Secret Key is configured
     const secretRow = await orm.select().from(appSettings).where(eq(appSettings.key, 'wc_webhook_secret')).limit(1);
-    const webhookSecret = secretRow[0]?.value?.trim() || '';
+    // v9.0.340 (TD-898): stored encrypted; a secret that cannot be decrypted fails the request (answered 200 below), never unsigned
+    const webhookSecret = openSettingSecret('wc_webhook_secret', secretRow[0]?.value).trim();
 
     if (webhookSecret) {
       const signatureHeader = (req.headers['x-wc-webhook-signature'] || '').toString().trim();

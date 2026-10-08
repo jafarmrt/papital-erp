@@ -5,7 +5,7 @@
 #
 # Environment & Secrets:
 #   DATABASE_URL: Service container PostgreSQL 16
-#   JWT_SECRET, ERP_SETUP_TOKEN, METRICS_TOKEN: Test credentials
+#   JWT_SECRET, ERP_SETUP_TOKEN, METRICS_TOKEN, ERP_SECRETS_KEY: Test credentials
 #   REGISTRY_USER / REGISTRY_TOKEN: Optional container registry credentials
 
 name: CI/CD Pipeline
@@ -107,6 +107,7 @@ jobs:
           JWT_SECRET: test-jwt-secret-at-least-32-characters-long-1234
           ERP_SETUP_TOKEN: test_setup_token_at_least_16_chars_long
           METRICS_TOKEN: test_metrics_token_for_ci_pipeline_1234
+          ERP_SECRETS_KEY: test-secrets-key-at-least-32-characters-long-1234
           NODE_ENV: test
           ERP_ALLOW_TEST_CLEANUP: '1'
           ERP_TEST_SCHEMA_ISOLATION: '1'
@@ -165,6 +166,7 @@ jobs:
           JWT_SECRET: test-jwt-secret-at-least-32-characters-long-1234
           ERP_SETUP_TOKEN: test_setup_token_at_least_16_chars_long
           METRICS_TOKEN: test_metrics_token_for_ci_pipeline_1234
+          ERP_SECRETS_KEY: test-secrets-key-at-least-32-characters-long-1234
           NODE_ENV: test
           ERP_ALLOW_TEST_CLEANUP: '1'
           ERP_TEST_SCHEMA_ISOLATION: '1'

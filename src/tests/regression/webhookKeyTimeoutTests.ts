@@ -3,6 +3,7 @@ import { eq, inArray, like } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { webhookSubscriptions } from '../../db/schema.js';
+import { decryptSecret } from '../../lib/secretBox.js';
 
 /**
  * Package 15 (events and integrations), TD-720 / B15-18: a webhook created without a key gets the server's CSPRNG key, and
@@ -32,7 +33,9 @@ export async function runWebhookKeyTimeoutTests(shouldRun: (id: string, ...extra
       : [];
     if (created.status !== 201 || !row) wrong.push(`create: ${created.status} ${JSON.stringify(created.body).slice(0, 200)}`);
     else {
-      if (!/^whsec_[0-9a-f]{48}$/.test(row.secretKey)) wrong.push(`server key not made: ${row.secretKey}`);
+      // stored encrypted since v9.0.340 (TD-898)
+      const key = decryptSecret(row.secretKey) ?? '';
+      if (!/^whsec_[0-9a-f]{48}$/.test(key)) wrong.push(`server key not made: ${key.slice(0, 10)}`);
       if (row.timeoutMs !== 15000) wrong.push(`entered timeout 15000 stored as ${row.timeoutMs}`);
     }
 
