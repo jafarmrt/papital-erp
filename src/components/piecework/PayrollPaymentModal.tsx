@@ -3,13 +3,11 @@ import toast from 'react-hot-toast';
 import { Landmark, BanknoteArrowUp, CheckCircle2, AlertCircle } from 'lucide-react';
 import { fetchJson } from '../../api';
 import type { BankAccountOption } from '../../types';
-import { getTodayJalaliDate, extractDateString, formatPersianPrice } from '../../utils';
+import { getTodayIsoDate, formatPersianPrice } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
 import { PayrollPaymentHistory } from './PayrollPaymentHistory';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
+import { JalaliDateInput } from '../common/JalaliDateInput';
 
 // V4.0.33: مودال واحد «پرداخت حقوق (کامل یا چندمرحله‌ای)»
 // ثبت فقط با انتخاب حساب خزانه/بانک تا تراکنش مالی + سند تسویه اتمیک صادر شود.
@@ -46,7 +44,8 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
   const [bankAccountId, setBankAccountId] = useState<string>('');
   const [method, setMethod] = useState<string>('bank_transfer');
   const [payAmount, setPayAmount] = useState<number>(0);
-  const [paymentDate, setPaymentDate] = useState<string>(getTodayJalaliDate());
+  // v9.0.453 (TD-927): تاریخ پرداخت ISO از `JalaliDateInput`؛ تاریخ پس از امروز را کارساز با پیام خودش رد می‌کند
+  const [paymentDate, setPaymentDate] = useState<string>(getTodayIsoDate());
   const [paymentReference, setPaymentReference] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
@@ -290,14 +289,10 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ پرداخت</label>
-                    <DatePicker
+                    <JalaliDateInput
                       value={paymentDate}
-                      onChange={(d: any) => setPaymentDate(extractDateString(d))}
-                      calendar={persian}
-                      locale={persian_fa}
-                      calendarPosition="bottom-right"
-                      inputClass="w-full border border-slate-300 rounded-xl px-2 py-2 text-xs text-center bg-white outline-none focus:ring-2 focus:ring-blue-500"
-                      containerClassName="w-full"
+                      onChange={setPaymentDate}
+                      className="w-full border border-slate-300 rounded-xl px-2 py-2 text-xs text-center bg-white outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>

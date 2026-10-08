@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.453 — Payroll Payments Follow the Treasury Date Rule
+- **Fix (TD-927, P5-W04):** a payroll payment dated after the business today is refused with 422 `TREASURY_DATE_IN_FUTURE` and nothing is written, like every other treasury write; the payment form sends an ISO date from the Jalali picker.
+
 ### v9.0.452 — Treasury Rows Link Only to Documents of Their Currency
 - **Fix (TD-908, P5-P08 / P5-S-06):** a new receipt or payment is linked only to a document in its own currency (422 `TREASURY_DOCUMENT_CURRENCY_MISMATCH`, nothing written), the same rule the relink already had; a rial row no longer settles a foreign-currency document.
 

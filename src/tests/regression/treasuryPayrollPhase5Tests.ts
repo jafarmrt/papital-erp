@@ -3,8 +3,10 @@ import { orm } from '../../db/drizzle.js';
 import { accounts, customers } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { getDefaultWarehouseCode } from '../../services/inventory/warehouseResolver.js';
+import { isoToJalaliDate } from '../../utils/calendarDate.js';
 import { createTestCustomer, createTestItem } from '../fixtures/factories.js';
 import { miscContraAccountId } from '../fixtures/treasuryParty.js';
+import { addLog, newTask, newWorker } from '../invariants/payrollScenarios.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 import { type Row, q } from './projectStageIntegrityTests.js';
@@ -236,6 +238,62 @@ export async function runTreasuryPayrollPhase5Tests(shouldRun: ShouldRun): Promi
 
       assertNoProblems(problems);
       return 'Rial payments on the USD receipt refused with 422 (with and without a party id) and nothing written; a 100 USD payment settled 100; moving a rial row onto it is still 422.';
+    }));
+  }
+
+  const payDateId = 'reg_payroll_payment_future_date_td_927';
+  if (shouldRun(payDateId, 'td927', 'payroll', 'payment', 'date', 'phase5')) {
+    await runCase(results, payDateId, 'v9.0.453: a payroll payment date follows the treasury date rule: a date after the business today is 422 TREASURY_DATE_IN_FUTURE and a non-existent day 422, with nothing written; today, a past date and an empty date (today) still pay (TD-927)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const today = await businessTodayIsoDate();
+      const worker = await newWorker('TD-927 worker');
+      await addLog(worker, await newTask(), '2026-04-08', 900_000);
+      const issued = await api.post('/api/piecework/payrolls/generate', { personnelId: worker, startDate: '2026-04-01', endDate: '2026-04-30' });
+      const payrollId = Number((issued.body as { id?: unknown } | undefined)?.id);
+      if ((issued.status !== 200 && issued.status !== 201) || !payrollId) throw new Error(`setup: payslip ${brief(issued)}`);
+      const bankId = await fundedBank(api, 'IRR', 5_000_000);
+      const pay = (body: Record<string, unknown>) => api.post(`/api/piecework/payrolls/${payrollId}/register-payment`, { bankAccountId: bankId, method: 'bank_transfer', ...body });
+      const snapshot = async () => JSON.stringify({
+        bank: (await q('SELECT current_balance::text AS b FROM bank_accounts WHERE id = $1', [bankId]))[0]?.b,
+        payroll: (await q('SELECT status, paid_amount::text AS paid, payment_date FROM piecework_payrolls WHERE id = $1', [payrollId]))[0],
+        treasury: num((await q('SELECT count(*)::int AS n FROM treasury_transactions'))[0]?.n),
+        vouchers: num((await q('SELECT count(*)::int AS n FROM journal_vouchers WHERE is_deleted = 0'))[0]?.n),
+      });
+      const datesOf = async (res: Res) => {
+        const body = res.body as { transactionId?: unknown; voucherId?: unknown } | undefined;
+        const [row] = await q('SELECT date FROM treasury_transactions WHERE id = $1', [Number(body?.transactionId)]);
+        const [voucher] = await q('SELECT date FROM journal_vouchers WHERE id = $1', [Number(body?.voucherId)]);
+        return `${String(row?.date)} ${String(voucher?.date)}`;
+      };
+
+      // a date after the business today (ISO or Jalali) and a non-existent day write nothing (finding P5-W04)
+      const before = await snapshot();
+      const future = new Date(Date.parse(`${today}T00:00:00Z`) + 24 * 86_400_000).toISOString().slice(0, 10);
+      for (const date of [future, isoToJalaliDate(future)]) {
+        const res = await pay({ amount: 300_000, paymentDate: date });
+        if (res.status !== 422 || codeOf(res) !== 'TREASURY_DATE_IN_FUTURE') problems.push(`a payment dated ${date} (today ${today}) answered ${brief(res)}, expected 422 TREASURY_DATE_IN_FUTURE`);
+      }
+      const missingDay = await pay({ amount: 300_000, paymentDate: '1404/12/30' });
+      if (missingDay.status !== 422) problems.push(`a payment dated on a non-existent day answered ${brief(missingDay)}, expected 422`);
+      const after = await snapshot();
+      if (after !== before) problems.push(`the refused payments changed the data: ${before} -> ${after}`);
+
+      // today, a past date and an empty date (the business today) still pay
+      const todayPay = await pay({ amount: 300_000, paymentDate: today });
+      if (todayPay.status !== 200) problems.push(`a payment dated today answered ${brief(todayPay)}, expected 200`);
+      else if (await datesOf(todayPay) !== `${today} ${today}`) problems.push(`the payment dated today stored ${await datesOf(todayPay)}, expected ${today} for the row and the voucher`);
+      const pastPay = await pay({ amount: 300_000, paymentDate: '2026-05-01' });
+      if (pastPay.status !== 200) problems.push(`a payment dated 2026-05-01 answered ${brief(pastPay)}, expected 200`);
+      else if (await datesOf(pastPay) !== '2026-05-01 2026-05-01') problems.push(`the past payment stored ${await datesOf(pastPay)}, expected 2026-05-01`);
+      const emptyPay = await pay({ paymentDate: '' });
+      if (emptyPay.status !== 200) problems.push(`a payment without a date answered ${brief(emptyPay)}, expected 200`);
+      else if (await datesOf(emptyPay) !== `${today} ${today}`) problems.push(`the payment without a date stored ${await datesOf(emptyPay)}, expected today ${today}`);
+      const [paid] = await q('SELECT status, paid_amount::text AS paid FROM piecework_payrolls WHERE id = $1', [payrollId]);
+      if (paid?.status !== 'paid' || num(paid?.paid) !== 900_000) problems.push(`the payslip is ${JSON.stringify(paid)} after three payments, expected paid 900000`);
+
+      assertNoProblems(problems);
+      return `Payments dated ${future} (ISO and Jalali) refused with 422 TREASURY_DATE_IN_FUTURE and a non-existent day with 422, nothing written; payments dated today, 2026-05-01 and without a date paid the 900,000 payslip.`;
     }));
   }
 
