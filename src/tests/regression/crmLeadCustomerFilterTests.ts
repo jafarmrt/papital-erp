@@ -13,7 +13,7 @@ export async function runCrmLeadCustomerFilterTests(shouldRun: (id: string, ...e
   const id = 'reg_crm_lead_filter_by_customer_id_td_429';
   if (!shouldRun(id, 'td429', 'crm', 'lead', 'filter', 'package9')) return results;
 
-  const name = 'v9.0.15: فیلتر «مشتری» پرونده‌های فروش با شناسه طرف حساب کار می‌کند و پرونده قدیمی بی شناسه را فقط با نام برابر می‌آورد؛ پرونده‌ای که نام رابط دارد پیدا می‌شود (TD-429)';
+  const name = 'v9.0.15: the customer filter of sales leads works by party id and brings an old lead without an id only by an equal name; a lead with a contact name is found (TD-429)';
   const tStart = Date.now();
   const customerIds: number[] = [];
   const leadIds: number[] = [];
@@ -47,13 +47,13 @@ export async function runCrmLeadCustomerFilterTests(shouldRun: (id: string, ...e
     const got = rows.map(r => r.id).sort((a, b) => a - b);
     const want = [linked, legacy].sort((a, b) => a - b);
     if (res.status !== 200 || JSON.stringify(got) !== JSON.stringify(want)) {
-      wrong.push(`فیلتر مشتری با «${params.toString()}» پرونده‌های ${JSON.stringify(got)} را داد (${res.status})، نه ${JSON.stringify(want)}`);
+      wrong.push(`the customer filter with "${params.toString()}" returned the sales files ${JSON.stringify(got)} (${res.status}), not ${JSON.stringify(want)}`);
     }
 
-    if (wrong.length > 0) throw new Error(wrong.join('، '));
+    if (wrong.length > 0) throw new Error(wrong.join(', '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'پرونده با رابط «آقای صادقی» و پرونده قدیمی هم‌نام آمدند؛ پرونده‌های طرف حساب دیگر نیامدند',
+      details: 'the file with contact "Mr. Sadeghi" and the old file with the same name were returned; files of the other party were not',
     }));
   } catch (err) {
     results.push(makeTestCase({

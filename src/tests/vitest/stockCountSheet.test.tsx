@@ -25,6 +25,9 @@ const WAREHOUSES = [
   { id: 1, code: 'main', name: 'انبار مرکزی', is_active: 1 },
   { id: 2, code: 'shop', name: 'فروشگاه', is_active: 1 },
 ];
+/** Server error messages that the page shows as they are */
+const unknownWarehouseMessage = (raw: string) => `انبار «${raw}» تعریف نشده یا غیرفعال است.`;
+const BOOK_STOCK_CHANGED = 'موجودی دفتری این کالاها پس از بارگذاری برگه انبارگردانی تغییر کرده است: «سنگ فیروزه» (A-501): برگه 10، اکنون 12.';
 let stock: Record<string, number> = {};
 let staleOnce = false;
 const posted: Array<Record<string, unknown>> = [];
@@ -42,7 +45,7 @@ function server(url: string, init?: RequestInitLike): Promise<unknown> {
   if (url.startsWith('/documents/audit-items')) {
     const raw = decodeURIComponent(url.split('location=')[1] ?? '');
     const code = resolveWarehouse(raw);
-    if (!code) return Promise.reject(Object.assign(new Error(`انبار «${raw}» تعریف نشده یا غیرفعال است.`), { code: 'VALIDATION_ERROR', status: 422 }));
+    if (!code) return Promise.reject(Object.assign(new Error(unknownWarehouseMessage(raw)), { code: 'VALIDATION_ERROR', status: 422 }));
     return Promise.resolve([{ id: 501, code: 'A-501', name: 'سنگ فیروزه', unit: 'عدد', category: 'سنگ', type: 'raw_material', system_stock: stock[code] ?? 0, physical_stock: '', location: code }]);
   }
   if (url === '/documents' && method === 'POST') {
@@ -51,7 +54,7 @@ function server(url: string, init?: RequestInitLike): Promise<unknown> {
     if (staleOnce) {
       staleOnce = false;
       stock = { ...stock, main: 12 };
-      return Promise.reject(Object.assign(new Error('موجودی دفتری این کالاها پس از بارگذاری برگه انبارگردانی تغییر کرده است: «سنگ فیروزه» (A-501): برگه 10، اکنون 12.'), { code: 'AUDIT_BOOK_STOCK_CHANGED', status: 409 }));
+      return Promise.reject(Object.assign(new Error(BOOK_STOCK_CHANGED), { code: 'AUDIT_BOOK_STOCK_CHANGED', status: 409 }));
     }
     return Promise.resolve({ success: true, docId: 90 });
   }

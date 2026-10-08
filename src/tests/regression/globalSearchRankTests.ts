@@ -42,8 +42,8 @@ export async function runGlobalSearchRankTests(shouldRun: (id: string, ...extra:
     const wrong: string[] = [];
     if (exact.customers[0]?.name !== base) wrong.push(`search «${base}» listed first «${exact.customers[0]?.name ?? 'nothing'}», expected the exact name`);
     if (exact.customers.some(c => c.name === `شرکت ${base}`)) wrong.push('a name that only contains the text came before names that start with it');
-    if (!arabic.customers.some(c => c.name === `شرکت کیان${tag}`)) wrong.push('an Arabic «كيان» with Persian digits found no «کیان»');
-    if (!persian.items.some(i => i.id === itemIds[0])) wrong.push('a Persian «یاقوت» found no item stored with an Arabic «ياقوت»');
+    if (!arabic.customers.some(c => c.name === `شرکت کیان${tag}`)) wrong.push('a search for "Kian" in Arabic letters with Persian digits found no name with "Kian" in Persian letters');
+    if (!persian.items.some(i => i.id === itemIds[0])) wrong.push('a search for "Yaqut" in Persian letters found no item stored with "Yaqut" in Arabic letters');
 
     if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({

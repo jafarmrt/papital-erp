@@ -11,7 +11,7 @@ describe('item price input', () => {
     for (const bad of [0, -500000, 'abc', '', '0', '-1', null, undefined, Number.NaN]) expect(parsePriceAmount(bad)).toBeNull();
   });
 
-  it('accepts only the supported currencies; empty and «ریال» are IRR', () => {
+  it('accepts only the supported currencies; empty and Persian "rial" are IRR', () => {
     expect(priceCurrencyOf('usd')).toBe('USD');
     expect(priceCurrencyOf('')).toBe('IRR');
     expect(priceCurrencyOf('ریال')).toBe('IRR');

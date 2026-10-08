@@ -43,9 +43,9 @@ export async function checkVoidsOfSharedItemNoDeadlock(wh: string): Promise<stri
   const outcomes = await raceBehindRowLock('items', [item.id], invoices.map(id => () => DocumentService.deleteDocument(id, 'inv')));
   const problems = outcomeProblems(invoices.map(id => `ابطال فاکتور ${id}`), outcomes, () => false);
   const { stock, wac } = await itemState(item.id);
-  if (stock !== 20) problems.push(`موجودی پس از ابطال هشت فاکتور ${stock} است، نه ۲۰`);
-  if (wac !== '100000') problems.push(`میانگین موزون پس از ابطال ${wac} است، نه ۱۰۰٬۰۰۰`);
-  problems.push(...await invariantProblems(scope, 'پس از ابطال هم‌زمان'));
+  if (stock !== 20) problems.push(`stock after voiding eight invoices is ${stock}, not 20`);
+  if (wac !== '100000') problems.push(`weighted average cost after the void is ${wac}, not 100,000`);
+  problems.push(...await invariantProblems(scope, 'after concurrent voids'));
   return problems;
 }
 
@@ -84,7 +84,7 @@ export async function checkMixedStockPathsNoDeadlock(wh: string): Promise<string
   const problems = outcomeProblems(ops.map(([label]) => label), outcomes,
     (label, message) => (label.startsWith('برگشت از فروش') && (message.includes('ابطال') || message.includes('قابل برگشت')))
       || (label.startsWith('ابطال فاکتورِ مرجع برگشت') && message.includes('برگشت از فروش ابطال‌نشده دارد')));
-  problems.push(...await invariantProblems(scope, 'پس از گردش‌های هم‌زمان'));
+  problems.push(...await invariantProblems(scope, 'after concurrent movements'));
   return problems;
 }
 
@@ -120,11 +120,11 @@ export async function checkVoidKardexOrderMatchesLive(wh: string): Promise<strin
   try {
     await voidOutcome;
   } catch (err) {
-    problems.push(`ابطال فاکتور رد شد: ${getErrorMessage(err)}`);
+    problems.push(`voiding the invoice was refused: ${getErrorMessage(err)}`);
   }
   const { stock } = await itemState(item.id);
-  if (stock !== 11) problems.push(`موجودی پایانی ${stock} است، نه ۱۱`);
-  problems.push(...await invariantProblems(scope, 'پس از ابطال پشت قفل'));
+  if (stock !== 11) problems.push(`final stock is ${stock}, not 11`);
+  problems.push(...await invariantProblems(scope, 'after a void behind the lock'));
   return problems;
 }
 

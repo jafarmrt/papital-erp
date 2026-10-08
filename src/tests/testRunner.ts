@@ -17,21 +17,21 @@ import { runBusinessLogicAuditTests } from './suites/businessLogicAuditSuite.js'
 import { runBusinessInvariantTests } from './suites/businessInvariantSuite.js';
 
 const LAYER_LABELS: Record<TestLayer, string> = {
-  unit: 'تست‌های واحد (Unit Tests)',
-  integration: 'تست‌های یکپارچه‌سازی (Integration Tests)',
-  api: 'تست‌های رابط‌های برقراری ارتباط (API Tests)',
-  database: 'تست‌های لایه دیتابیس (Database Tests)',
-  workflow: 'تست‌های موتور ورکفلو (Workflow Tests)',
-  concurrency: 'تست‌های همزمانی و قفل‌گذاری (Concurrency Tests)',
-  security: 'تست‌های امنیت و مجوزها (Security Tests)',
-  regression: 'تست‌های بازگشتی و پایداری (Regression Tests)',
-  e2e: 'تست‌های سناریوهای سرتاسری (Subphase 14.1 E2E Journeys)',
-  recovery: 'آزمون‌های بازیابی، خودترمیمی و تطبیق داده‌ها (Subphase 14.2 Recovery & Reconciliation)',
-  penetration: 'آزمون‌های نفوذ واقعی HTTP (Phase 8 Penetration Suite — TST-004/005)',
-  critical_path: 'آزمون‌های یکپارچگی مسیرهای بحرانی (Phase 8 Critical Path Suite — TST-006)',
-  document_integrity: 'آزمون‌های یکپارچگی اسناد و انبار (Document Integrity Suite)',
-  business_logic: 'آزمون‌های ممیزی منطق کسب‌وکار (Business Logic Audit Suite)',
-  business_invariants: 'ناوردایی‌های منطق کاری و شبیه‌ساز یک سال کاری (v8 Business Invariants)'
+  unit: 'Unit Tests',
+  integration: 'Integration Tests',
+  api: 'API Tests',
+  database: 'Database Tests',
+  workflow: 'Workflow Tests',
+  concurrency: 'Concurrency Tests',
+  security: 'Security Tests',
+  regression: 'Regression Tests',
+  e2e: 'E2E Journeys (Subphase 14.1)',
+  recovery: 'Recovery & Reconciliation (Subphase 14.2)',
+  penetration: 'Penetration Suite (Phase 8, TST-004/005)',
+  critical_path: 'Critical Path Suite (Phase 8, TST-006)',
+  document_integrity: 'Document Integrity Suite',
+  business_logic: 'Business Logic Audit Suite',
+  business_invariants: 'Business Invariants and One-Year Simulation (v8)'
 };
 
 const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
@@ -312,7 +312,7 @@ export class Phase21TestRunner {
             executionType: 'simulation_logic' as const,
             passed: false,
             durationMs: 0,
-            details: 'این سناریو در اجرای جاری اجرا نگردیده است (NOT_RUN).'
+            details: 'This scenario was not run in the current run (NOT_RUN).'
           };
         }
         return null;

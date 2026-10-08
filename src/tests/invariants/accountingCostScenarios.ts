@@ -43,9 +43,9 @@ export async function checkWasteAccountFromMapping(wh: string): Promise<string[]
   const named = await pool.query<{ code: string; name: string }>(
     `SELECT code, name FROM accounts WHERE code IN ('6001', '6003', '6004') AND is_deleted = 0 ORDER BY code`);
   const names = new Map(named.rows.map(r => [r.code, r.name]));
-  if (names.get('6001') !== 'بهای تمام‌شده کالای فروش‌رفته') problems.push(`نام حساب ۶۰۰۱: «${names.get('6001') ?? '-'}»`);
-  if (names.get('6004') !== 'ضایعات و افت کیفی') problems.push(`حساب ۶۰۰۴ «ضایعات و افت کیفی» نیست: «${names.get('6004') ?? '-'}»`);
-  if ((names.get('6003') ?? '').includes('ضایعات')) problems.push(`نام ۶۰۰۳ هنوز ضایعات دارد: «${names.get('6003')}»`);
+  if (names.get('6001') !== 'بهای تمام‌شده کالای فروش‌رفته') problems.push(`Name of account 6001: "${names.get('6001') ?? '-'}"`);
+  if (names.get('6004') !== 'ضایعات و افت کیفی') problems.push(`Account 6004 is not "waste and quality loss": "${names.get('6004') ?? '-'}"`);
+  if ((names.get('6003') ?? '').includes('ضایعات')) problems.push(`The name of 6003 still mentions waste: "${names.get('6003')}"`);
 
   const mark = await watermarks();
   const material = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
@@ -53,8 +53,8 @@ export async function checkWasteAccountFromMapping(wh: string): Promise<string[]
   await receive(material.id, 10, 1000, wh, '2026-06-01');
   const standard = await outflow('waste', material.id, 1, wh, '2026-06-02');
   const net = await voucherNetByCode(standard);
-  if (net.get('6004') !== '1000') problems.push(`ضایعات با نگاشت پیش‌فرض ۶۰۰۴ را ۱۰۰۰ بدهکار نکرد: ${JSON.stringify([...net])}`);
-  if (net.has('6003')) problems.push('سند ضایعات هنوز حساب ثابت ۶۰۰۳ را گرفت');
+  if (net.get('6004') !== '1000') problems.push(`Waste with the default mapping did not debit 6004 with 1000: ${JSON.stringify([...net])}`);
+  if (net.has('6003')) problems.push('The waste voucher still used the fixed account 6003');
 
   const previous = await AccountMappingService.getMappings();
   const [parent] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, '60'), eq(accounts.isDeleted, 0)));
@@ -66,11 +66,11 @@ export async function checkWasteAccountFromMapping(wh: string): Promise<string[]
     await AccountMappingService.saveMappings({ wasteExpenseAccountCode: code });
     const mapped = await outflow('waste', material.id, 2, wh, '2026-06-03');
     const mappedNet = await voucherNetByCode(mapped);
-    if (mappedNet.get(code) !== '2000') problems.push(`ضایعات با نگاشت سفارشی حساب ${code} را ۲۰۰۰ بدهکار نکرد: ${JSON.stringify([...mappedNet])}`);
+    if (mappedNet.get(code) !== '2000') problems.push(`Waste with a custom mapping did not debit account ${code} with 2000: ${JSON.stringify([...mappedNet])}`);
   } finally {
     await AccountMappingService.saveMappings({ wasteExpenseAccountCode: previous.wasteExpenseAccountCode });
   }
-  problems.push(...await invariantProblems(scope, 'پس از اسناد ضایعات'));
+  problems.push(...await invariantProblems(scope, 'after the waste documents'));
   return problems;
 }
 
@@ -104,11 +104,11 @@ export async function checkOutflowVoucherAtKardexCost(wh: string): Promise<strin
   const remNet = await voucherNetByCode(remittance);
   const expectRem: Array<[string, string]> = [['1402', '7000'], ['1401', '-2000'], ['1403', '-5000']];
   for (const [code, expected] of expectRem) {
-    if (remNet.get(code) !== expected) problems.push(`حواله پس از همگام‌سازی دوباره: ${code} = ${remNet.get(code) ?? '0'}، انتظار ${expected} (بهای کاردکس)`);
+    if (remNet.get(code) !== expected) problems.push(`Remittance after re-sync: ${code} = ${remNet.get(code) ?? '0'}, expected ${expected} (Kardex cost)`);
   }
   const wasteNet = await voucherNetByCode(waste);
-  if (wasteNet.get('1401') !== '-3000') problems.push(`ضایعات پس از همگام‌سازی دوباره: ۱۴۰۱ = ${wasteNet.get('1401') ?? '0'}، انتظار -3000 (بهای کاردکس)`);
-  problems.push(...await invariantProblems(scope, 'پس از همگام‌سازی دوباره حواله و ضایعات'));
+  if (wasteNet.get('1401') !== '-3000') problems.push(`Waste after re-sync: 1401 = ${wasteNet.get('1401') ?? '0'}, expected -3000 (Kardex cost)`);
+  problems.push(...await invariantProblems(scope, 'after re-syncing the remittance and waste'));
   return problems;
 }
 
@@ -129,9 +129,9 @@ export async function checkHealthValuationAtWacOnly(wh: string): Promise<string[
   await orm.insert(itemPrices).values({ itemId: item.id, title: 'قیمت فروش آزمون TD-401', price: money(1000000), currency: 'IRR', isDeleted: 0 });
   const after = await metricsOf();
   if (String(after.warehouseValuation) !== String(before.warehouseValuation)) {
-    problems.push(`قیمت فهرست فروش ارزش انبار را از ${String(before.warehouseValuation)} به ${String(after.warehouseValuation)} برد`);
+    problems.push(`The sales price list moved the warehouse value from ${String(before.warehouseValuation)} to ${String(after.warehouseValuation)}`);
   }
-  if (!(Number(after.unvaluedStockCount) >= 1)) problems.push(`کالای دارای موجودی بی‌WAC شمرده نشد: ${String(after.unvaluedStockCount)}`);
+  if (!(Number(after.unvaluedStockCount) >= 1)) problems.push(`The item with stock and no WAC was not counted: ${String(after.unvaluedStockCount)}`);
   return problems;
 }
 
@@ -157,19 +157,19 @@ export async function checkPayrollVoucherExactAmounts(): Promise<string[]> {
   const byCode = new Map(rows.rows.map(r => [r.code, fin(r.debit).subtract(r.credit).toString()]));
   const expected: Array<[string, string]> = [['6002', amounts.piecework], ['6003', '1.1114'], ['3205', '-0.0001'], ['3201', '-12345678901235.6791']];
   for (const [code, value] of expected) {
-    if (byCode.get(code) !== value) problems.push(`ردیف ${code} سند فیش ${byCode.get(code) ?? '0'}، انتظار ${value}`);
+    if (byCode.get(code) !== value) problems.push(`Row ${code} of the payslip voucher ${byCode.get(code) ?? '0'}, expected ${value}`);
   }
   return problems;
 }
 
 /** جدول آزمون‌های گروه حسابداری و بهای تمام‌شده در سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const ACCOUNTING_COST_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
-  ['inv_td_413_waste_account_from_mapping', 'v8.0.114: ۶۰۰۱ «بهای تمام‌شده کالای فروش‌رفته» نام دارد و سند ضایعات حساب «ضایعات و افت کیفی» (۶۰۰۴) یا حساب نگاشت‌شده را بدهکار می‌کند، نه سربار ۶۰۰۳ (TD-413، گزینه الف)',
-    checkWasteAccountFromMapping, 'نام‌ها درست؛ ضایعات ۱۰۰۰ به ۶۰۰۴ و با نگاشت سفارشی ۲۰۰۰ به همان حساب'],
-  ['inv_td_400_outflow_voucher_at_kardex_cost', 'v8.0.115: سند حسابداری حواله و ضایعات به بهای کاردکس همان سند است و رسید تازه و همگام‌سازی دوباره عددش را عوض نمی‌کند (TD-400)',
-    checkOutflowVoucherAtKardexCost, 'حواله ۷۰۰۰ (مواد ۲۰۰۰، محصول ۵۰۰۰) و ضایعات ۳۰۰۰ پس از تغییر WAC ماندند'],
-  ['inv_td_401_health_valuation_at_wac_only', 'v8.0.116: ارزش انبار در بررسی سلامت مالی فقط به WAC است و قیمت فهرست فروش کالای بی‌WAC آن را عوض نمی‌کند (TD-401)',
-    checkHealthValuationAtWacOnly, 'قیمت فروش ۱٬۰۰۰٬۰۰۰ ارزش انبار را عوض نکرد؛ کالای بی‌WAC شمرده شد'],
-  ['inv_td_402_payroll_voucher_exact_amounts', 'v8.0.117: سند فیش حقوق مبالغ فیش را دقیق می‌گیرد، حتی مبلغ چهارده‌رقمی با چهار رقم اعشار (TD-402)',
-    () => checkPayrollVoucherExactAmounts(), 'ردیف‌ها دقیقاً ۱۲۳۴۵۶۷۸۹۰۱۲۳۴٫۵۶۷۸، ۱٫۱۱۱۴، ۰٫۰۰۰۱ و ۱۲۳۴۵۶۷۸۹۰۱۲۳۵٫۶۷۹۱'],
+  ['inv_td_413_waste_account_from_mapping', 'v8.0.114: 6001 is named "cost of goods sold" and the waste voucher debits the "waste and quality loss" account (6004) or the mapped account, not overhead 6003 (TD-413, option A)',
+    checkWasteAccountFromMapping, 'Names correct; waste 1000 to 6004 and, with a custom mapping, 2000 to that account'],
+  ['inv_td_400_outflow_voucher_at_kardex_cost', 'v8.0.115: the remittance and waste journal voucher is at the Kardex cost of the same document, and a new receipt or a re-sync does not change its amount (TD-400)',
+    checkOutflowVoucherAtKardexCost, 'Remittance 7000 (materials 2000, product 5000) and waste 3000 stayed after the WAC change'],
+  ['inv_td_401_health_valuation_at_wac_only', 'v8.0.116: warehouse value in the financial health check is at WAC only and the sales price list of an item without WAC does not change it (TD-401)',
+    checkHealthValuationAtWacOnly, 'A sales price of 1,000,000 did not change the warehouse value; the item without WAC was counted'],
+  ['inv_td_402_payroll_voucher_exact_amounts', 'v8.0.117: the payslip voucher takes the payslip amounts exactly, even a fourteen-digit amount with four decimals (TD-402)',
+    () => checkPayrollVoucherExactAmounts(), 'Rows exactly 12345678901234.5678, 1.1114, 0.0001 and 12345678901235.6791'],
 ];

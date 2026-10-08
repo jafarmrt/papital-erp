@@ -162,7 +162,7 @@ export async function runPieceworkPermissionTests(shouldRun: ShouldRun): Promise
     await runCase(results, {
       id: 'sec_piecework_rate_readers_td_806',
       name: 'v9.0.321: a personnel custom rate is read by the piecework keys and the payroll amount readers only (TD-806)',
-      details: 'decision t3 «الف»: GET /piecework/personnel-rates/:id answers piecework.view, piecework.log, piecework.manage_tasks, piecework.payroll, piecework.pay, personnel.manage and accounting.treasury with the rate, and projects.view and settings.manage with 403; those two still read task titles and categories, and get no work log without a project id',
+      details: 'decision t3 "A": GET /piecework/personnel-rates/:id answers piecework.view, piecework.log, piecework.manage_tasks, piecework.payroll, piecework.pay, personnel.manage and accounting.treasury with the rate, and projects.view and settings.manage with 403; those two still read task titles and categories, and get no work log without a project id',
     }, async (h, wrong) => {
       const worker = await newWorker('کارگر آزمون خواننده نرخ');
       const taskId = await newTask();

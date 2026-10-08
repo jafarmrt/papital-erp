@@ -20,7 +20,7 @@ describe('personnel Excel import cells (TD-436)', () => {
     expect(parseNationalityCell(' افغانستانی ')).toBe('افغانستانی');
   });
 
-  it('labels an empty cell «بدون تغییر» only for an existing personnel', () => {
+  it('labels an empty cell "unchanged" only for an existing personnel', () => {
     expect(personnelCellLabel(undefined, true, 'فعال')).toBe('بدون تغییر');
     expect(personnelCellLabel(undefined, false, 'فعال')).toBe('فعال');
     expect(personnelCellLabel('مرخصی', true, 'فعال')).toBe('مرخصی');

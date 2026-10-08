@@ -3,7 +3,7 @@ import { computeVoucherCurrencyBalance, voucherRowCurrency, voucherRowRate } fro
 
 // v9.0.190 (TD-551, B03-09, decision t7): the currency, rate and balance of manual voucher rows, shared by the server and the form.
 describe('manual voucher currency balance (TD-551)', () => {
-  it('a row takes its own currency, else the voucher currency, else IRR; empty and «ریال» are IRR', () => {
+  it('a row takes its own currency, else the voucher currency, else IRR; empty and the Persian word "rial" are IRR', () => {
     expect(voucherRowCurrency('usd', 'EUR')).toBe('USD');
     expect(voucherRowCurrency('', 'EUR')).toBe('EUR');
     expect(voucherRowCurrency(undefined, undefined)).toBe('IRR');

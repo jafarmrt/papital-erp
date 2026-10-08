@@ -43,7 +43,7 @@ describe('voucher print currency and type (TD-573)', () => {
     expect(text).not.toContain('صد ریال');
   });
 
-  it('settlement and adjustment vouchers print their own type, not «عمومی»', () => {
+  it('settlement and adjustment vouchers print their own type, not "general"', () => {
     expect(printText(voucher({ voucherType: 'settlement' }))).toContain('نوع سند: تسویه');
     cleanup();
     expect(printText(voucher({ voucherType: 'adjustment' }))).toContain('نوع سند: اصلاحی / برگشت');

@@ -36,10 +36,10 @@ async function expectIrr(problems: string[], label: string, documentId: number, 
   const net = await irrNetByCode(documentId);
   for (const [code, amount] of Object.entries(expected)) {
     const actual = net.get(code) ?? '0';
-    if (!fin(actual).equals(amount)) problems.push(`${label}: گردش ریالی ${code} ${actual}، انتظار دقیقاً ${amount}`);
+    if (!fin(actual).equals(amount)) problems.push(`${label}: rial movement of ${code} is ${actual}, expected exactly ${amount}`);
   }
   const totals = await foreignTotals(documentId);
-  if (!fin(totals.debit).equals(fin(totals.credit))) problems.push(`${label}: سند ارزی تراز نیست (بدهکار ${totals.debit}، بستانکار ${totals.credit})`);
+  if (!fin(totals.debit).equals(fin(totals.credit))) problems.push(`${label}: foreign-currency voucher is not balanced (debit ${totals.debit}, credit ${totals.credit})`);
 }
 
 /**
@@ -61,17 +61,17 @@ export async function checkForeignCostRowsExactInIrr(wh: string): Promise<string
   // فروش دلاری یک عدد با WAC ۱۰۰٬۰۰۰ ← بهای تمام‌شده و موجودی دقیقاً ۱۰۰٬۰۰۰ ریال (۰٫۱۶۶۷ دلار)
   await doc({ docType: 'receipt', inOut: 'in' }, [{ itemId: product.id, quantity: 3, unitPrice: 100000 }], '2026-09-01');
   const sale = await doc({ docType: 'invoice', inOut: 'out', ...USD }, [{ itemId: product.id, quantity: 1, unitPrice: 2 }], '2026-09-02');
-  await expectIrr(problems, 'فروش دلاری', sale, { '6001': 100000, '1403': -100000 });
+  await expectIrr(problems, 'dollar sale', sale, { '6001': 100000, '1403': -100000 });
 
   // برگشت دلاری همان یک عدد ← موجودی و بهای تمام‌شده دقیقاً ۱۰۰٬۰۰۰ ریال برمی‌گردد
   const salesReturn = await doc({ docType: 'return', inOut: 'in', returnOfDocumentId: sale, ...USD },
     [{ itemId: product.id, quantity: 1, unitPrice: 2 }], '2026-09-03');
-  await expectIrr(problems, 'برگشت دلاری', salesReturn, { '1403': 100000, '6001': -100000 });
+  await expectIrr(problems, 'dollar sales return', salesReturn, { '1403': 100000, '6001': -100000 });
 
   // رسید دلاری کالای رایگان (WAC ۱۰۰٬۰۰۰) ← موجودی و درآمد کالای اهدایی دقیقاً ۱۰۰٬۰۰۰ ریال
   await doc({ docType: 'receipt', inOut: 'in' }, [{ itemId: material.id, quantity: 2, unitPrice: 100000 }], '2026-09-01');
   const free = await doc({ docType: 'receipt', inOut: 'in', ...USD }, [{ itemId: material.id, quantity: 1, unitPrice: 0 }], '2026-09-02');
-  await expectIrr(problems, 'کالای رایگان دلاری', free, { '1401': 100000, '5204': -100000 });
+  await expectIrr(problems, 'free goods on a dollar receipt', free, { '1401': 100000, '5204': -100000 });
 
   // خرید دلاری ترکیبی با نرخ ۷۰۰٬۰۰۰: ۱ × ۰٫۵ دلار (۳۵۰٬۰۰۰ ریال، WAC ← ۱۶۲٬۵۰۰) و ۱ عدد رایگان (به WAC ۱۶۲٬۵۰۰ =
   // ۰٫۲۳۲۱ دلار؛ با نرخ سند ۱۶۲٬۴۷۰ ریال می‌شد)
@@ -79,8 +79,8 @@ export async function checkForeignCostRowsExactInIrr(wh: string): Promise<string
     { itemId: material.id, quantity: 1, unitPrice: 0.5 },
     { itemId: material.id, quantity: 1, unitPrice: 0 },
   ], '2026-09-03');
-  await expectIrr(problems, 'خرید دلاری ترکیبی', mixed, { '1401': 512500, '3001': -350000, '5204': -162500 });
+  await expectIrr(problems, 'mixed dollar purchase', mixed, { '1401': 512500, '3001': -350000, '5204': -162500 });
 
-  problems.push(...await invariantProblems(scope, 'پس از اسناد ارزی'));
+  problems.push(...await invariantProblems(scope, 'after the foreign-currency documents'));
   return problems;
 }

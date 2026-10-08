@@ -15,7 +15,7 @@ export async function runCustomerDossierDocumentsTests(shouldRun: (id: string, .
   const id = 'reg_customer_dossier_documents_by_buyer_td_417';
   if (!shouldRun(id, 'td417', 'customer', 'dossier', 'crm', 'package9')) return results;
 
-  const name = 'v9.0.6: اسناد پرونده مشتری فقط اسناد فروش با نام خریدار برابرند؛ سند خریدار هم‌نام، یادداشت دارای نام و رسید انبار نمی‌آیند (TD-417)';
+  const name = 'v9.0.6: the customer dossier documents are only sales documents with an equal buyer name; a namesake buyer\'s document, a note holding the name and a warehouse receipt do not appear (TD-417)';
   const tStart = Date.now();
   const customerIds: number[] = [];
   const roleIds: number[] = [];
@@ -60,17 +60,17 @@ export async function runCustomerDossierDocumentsTests(shouldRun: (id: string, .
 
     const wrong: string[] = [];
     const res = await get(`/api/customers/${a.id}/documents`);
-    if (res.status !== 200) throw new Error(`اسناد پرونده A وضعیت ${res.status} داد: ${JSON.stringify(res.body).slice(0, 200)}`);
+    if (res.status !== 200) throw new Error(`documents of dossier A returned status ${res.status}: ${JSON.stringify(res.body).slice(0, 200)}`);
     const ids = (Array.isArray(res.body?.data) ? res.body.data : []).map((d: { id: number }) => Number(d.id)).sort((x: number, y: number) => x - y);
     const expected = [...own].sort((x, y) => x - y);
-    if (JSON.stringify(ids) !== JSON.stringify(expected)) wrong.push(`اسناد پرونده A ${JSON.stringify(ids)} است، نه ${JSON.stringify(expected)}`);
+    if (JSON.stringify(ids) !== JSON.stringify(expected)) wrong.push(`documents of dossier A are ${JSON.stringify(ids)}, not ${JSON.stringify(expected)}`);
     const leaked = foreign.filter(f => ids.includes(f));
-    if (leaked.length > 0) wrong.push(`${leaked.length} سند دیگران یا رسید انبار در پرونده A آمد`);
-    if (res.body?.total !== 3) wrong.push(`شمار اسناد پرونده A ${res.body?.total} است، نه ۳`);
+    if (leaked.length > 0) wrong.push(`${leaked.length} documents of others or warehouse receipts appeared in dossier A`);
+    if (res.body?.total !== 3) wrong.push(`document count of dossier A is ${res.body?.total}, not 3`);
 
     const bRes = await get(`/api/customers/${b.id}/documents`);
     const bIds = (Array.isArray(bRes.body?.data) ? bRes.body.data : []).map((d: { id: number }) => Number(d.id));
-    if (JSON.stringify(bIds) !== JSON.stringify([foreign[0]])) wrong.push(`اسناد پرونده B ${JSON.stringify(bIds)} است، نه [${foreign[0]}]`);
+    if (JSON.stringify(bIds) !== JSON.stringify([foreign[0]])) wrong.push(`documents of dossier B are ${JSON.stringify(bIds)}, not [${foreign[0]}]`);
 
     // دسترسی: همان مجوزهای فهرست اسناد (نقش فقط ارتباط با مشتری پرونده را می‌بیند)؛ طرف حساب ناموجود ۴۰۴
     const crmRole = await createTestRole({ permissions: ['crm.view'] });
@@ -78,14 +78,14 @@ export async function runCustomerDossierDocumentsTests(shouldRun: (id: string, .
     const crmUser = await createTestUser({ role: crmRole.code });
     userIds.push(crmUser.id);
     const viaCrm = await get(`/api/customers/${a.id}/documents`, await loginTestUserWithSession(app, crmUser.username));
-    if (viaCrm.status !== 200) wrong.push(`دارنده crm.view اسناد پرونده را با ${viaCrm.status} نگرفت`);
+    if (viaCrm.status !== 200) wrong.push(`the crm.view holder did not get the dossier documents (${viaCrm.status})`);
     const missing = await get('/api/customers/987654321/documents');
-    if (missing.status !== 404) wrong.push(`اسناد طرف حساب ناموجود ${missing.status} داد، نه ۴۰۴`);
+    if (missing.status !== 404) wrong.push(`documents of a missing party returned ${missing.status}, not 404`);
 
-    if (wrong.length > 0) throw new Error(wrong.join('، '));
+    if (wrong.length > 0) throw new Error(wrong.join(', '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'پرونده A: فاکتور نهایی، پیش‌فاکتور و پیش‌نویس خودش (۳)؛ بی فاکتور B، فاکتوری که نام A در یادداشتش بود و رسید انبار؛ پرونده B فقط سند خودش؛ crm.view ۲۰۰، ناموجود ۴۰۴',
+      details: 'dossier A: its own final invoice, proforma and draft (3); not the invoice of B, the invoice with the name of A in its notes, or the warehouse receipt; dossier B only its own document; crm.view 200, missing 404',
     }));
   } catch (err) {
     results.push(makeTestCase({

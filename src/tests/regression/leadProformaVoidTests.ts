@@ -13,7 +13,7 @@ export async function runLeadProformaVoidTests(shouldRun: (id: string, ...extra:
   const id = 'reg_lead_proforma_void_reopens_won_td_423';
   if (!shouldRun(id, 'td423', 'crm', 'proforma', 'void', 'package9')) return results;
 
-  const name = 'v9.0.12: ابطال پیش‌فاکتور پرونده، یا فاکتوری که از آن نهایی شده، پرونده «فروش موفق» را به «پیش‌فاکتور و پیشنهاد» برمی‌گرداند و برای پیش‌فاکتور تازه باز می‌کند؛ ابطال ردشده پرونده را دست نمی‌زند (TD-423)';
+  const name = 'v9.0.12: voiding a lead\'s proforma, or the invoice finalized from it, moves a won lead back to proposal and frees it for a new proforma; a refused void leaves the lead alone (TD-423)';
   const tStart = Date.now();
   const leadIds: number[] = [];
   try {
@@ -43,18 +43,18 @@ export async function runLeadProformaVoidTests(shouldRun: (id: string, ...extra:
         items: [{ itemId: item.id, quantity: 1, unit_price: 3_000_000, location: wh }], crmLeadId: leadId,
       });
       const docId = Number(res.body?.id ?? res.body?.docId);
-      if (res.status !== 201 && res.status !== 200) throw new Error(`صدور پیش‌فاکتور ${res.status} داد: ${JSON.stringify(res.body).slice(0, 200)}`);
+      if (res.status !== 201 && res.status !== 200) throw new Error(`Issuing the proforma returned ${res.status}: ${JSON.stringify(res.body).slice(0, 200)}`);
       return docId;
     };
     const markWon = async (leadId: number, label: string) => {
       const res = await send(request(app).put(`/api/crm/leads/${leadId}`)).send({ stage: 'won' });
-      if (res.status !== 200) wrong.push(`${label}: انتقال به «فروش موفق» ${res.status} داد`);
+      if (res.status !== 200) wrong.push(`${label}: moving to "won" returned ${res.status}`);
     };
     const leadOf = async (leadId: number) => (await orm.select().from(crmLeads).where(eq(crmLeads.id, leadId)))[0];
     const expectLead = async (leadId: number, label: string, want: { stage: string; status: string; hasProforma: number; proformaId: number | null }) => {
       const lead = await leadOf(leadId);
       const got = { stage: lead.stage, status: lead.status, hasProforma: lead.hasProforma, proformaId: lead.proformaId };
-      if (JSON.stringify(got) !== JSON.stringify(want)) wrong.push(`${label}: پرونده ${JSON.stringify(got)} است، نه ${JSON.stringify(want)}`);
+      if (JSON.stringify(got) !== JSON.stringify(want)) wrong.push(`${label}: the sales file is ${JSON.stringify(got)}, not ${JSON.stringify(want)}`);
     };
 
     // ۱) پیش‌فاکتور ← «فروش موفق» ← ابطال پیش‌فاکتور: پرونده به «پیشنهاد» برمی‌گردد و یادداشت دارد
@@ -62,22 +62,22 @@ export async function runLeadProformaVoidTests(shouldRun: (id: string, ...extra:
     const proformaId = await issueProforma(wonLead);
     await markWon(wonLead, 'پرونده ۱');
     const voided = await send(request(app).delete(`/api/documents/${proformaId}`));
-    if (voided.status !== 200) wrong.push(`ابطال پیش‌فاکتور ${voided.status} داد`);
-    await expectLead(wonLead, 'ابطال پیش‌فاکتور پرونده موفق', { stage: 'proposal', status: 'active', hasProforma: 0, proformaId: null });
+    if (voided.status !== 200) wrong.push(`Voiding the proforma returned ${voided.status}`);
+    await expectLead(wonLead, 'voiding the proforma of a won sales file', { stage: 'proposal', status: 'active', hasProforma: 0, proformaId: null });
     const notes = await orm.select({ title: crmActivities.title, description: crmActivities.description }).from(crmActivities)
       .where(and(eq(crmActivities.leadId, wonLead), eq(crmActivities.isDeleted, 0)));
     if (!notes.some(n => n.title === 'ابطال پیش‌فاکتور' && String(n.description).includes('به «پیش‌فاکتور و پیشنهاد» برگشت'))) {
-      wrong.push(`یادداشت برگشت پرونده ثبت نشد: ${JSON.stringify(notes.map(n => n.title))}`);
+      wrong.push(`The sales file reversal note was not recorded: ${JSON.stringify(notes.map(n => n.title))}`);
     }
     // پرونده دوباره پیش‌فاکتور می‌پذیرد
-    const again = await issueProforma(wonLead).catch((e: unknown) => { wrong.push(`پیش‌فاکتور دوباره رد شد: ${String(e)}`); return 0; });
-    if (again) await expectLead(wonLead, 'پیش‌فاکتور دوباره', { stage: 'proposal', status: 'active', hasProforma: 1, proformaId: again });
+    const again = await issueProforma(wonLead).catch((e: unknown) => { wrong.push(`The new proforma was refused: ${String(e)}`); return 0; });
+    if (again) await expectLead(wonLead, 'a new proforma after the void', { stage: 'proposal', status: 'active', hasProforma: 1, proformaId: again });
 
     // ۲) پرونده‌ای که هنوز «پیشنهاد» است فقط آزاد می‌شود
     const openLead = await newLead('انگشتر');
     const openProforma = await issueProforma(openLead);
     await send(request(app).delete(`/api/documents/${openProforma}`));
-    await expectLead(openLead, 'ابطال پیش‌فاکتور پرونده باز', { stage: 'proposal', status: 'active', hasProforma: 0, proformaId: null });
+    await expectLead(openLead, 'voiding the proforma of an open sales file', { stage: 'proposal', status: 'active', hasProforma: 0, proformaId: null });
 
     // ۳) پیش‌فاکتور نهایی‌شده به فاکتور ← «فروش موفق» ← ابطال فاکتور
     const invoicedLead = await newLead('گردنبند');
@@ -85,8 +85,8 @@ export async function runLeadProformaVoidTests(shouldRun: (id: string, ...extra:
     await DocumentService.finalizeDocument(invoiceId, 'td423');
     await markWon(invoicedLead, 'پرونده ۳');
     const voidedInvoice = await send(request(app).delete(`/api/documents/${invoiceId}`));
-    if (voidedInvoice.status !== 200) wrong.push(`ابطال فاکتور ${voidedInvoice.status} داد`);
-    await expectLead(invoicedLead, 'ابطال فاکتور حاصل از پیش‌فاکتور', { stage: 'proposal', status: 'active', hasProforma: 0, proformaId: null });
+    if (voidedInvoice.status !== 200) wrong.push(`Voiding the invoice returned ${voidedInvoice.status}`);
+    await expectLead(invoicedLead, 'voiding the invoice finalized from the proforma', { stage: 'proposal', status: 'active', hasProforma: 0, proformaId: null });
 
     // ۴) ابطال ردشده (رسیدی که کالایش فروخته شده، TD-265) پرونده را دست نمی‌زند: آزادسازی در همان تراکنش ابطال است
     const fresh = await createTestItem({ type: 'product' });
@@ -101,13 +101,13 @@ export async function runLeadProformaVoidTests(shouldRun: (id: string, ...extra:
     const lockedLead = await newLead('رسید مصرف‌شده');
     await orm.update(crmLeads).set({ hasProforma: 1, proformaId: receiptId, stage: 'won', status: 'won' }).where(eq(crmLeads.id, lockedLead));
     const refused = await send(request(app).delete(`/api/documents/${receiptId}`));
-    if (refused.status < 400) wrong.push(`ابطال رسید مصرف‌شده ${refused.status} داد، نه رد`);
-    await expectLead(lockedLead, 'ابطال ردشده', { stage: 'won', status: 'won', hasProforma: 1, proformaId: receiptId });
+    if (refused.status < 400) wrong.push(`Voiding the consumed receipt returned ${refused.status}, not a refusal`);
+    await expectLead(lockedLead, 'a refused void', { stage: 'won', status: 'won', hasProforma: 1, proformaId: receiptId });
 
-    if (wrong.length > 0) throw new Error(wrong.join('، '));
+    if (wrong.length > 0) throw new Error(wrong.join(', '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'ابطال پیش‌فاکتور و فاکتور حاصل از آن پرونده موفق را به «پیشنهاد» برگرداند و پیش‌فاکتور تازه پذیرفته شد؛ ابطال ردشده پرونده را نگه داشت',
+      details: 'Voiding the proforma and the invoice made from it moved the won sales file back to "proposal" and a new proforma was accepted; a refused void kept the sales file',
     }));
   } catch (err) {
     results.push(makeTestCase({

@@ -24,14 +24,14 @@ export function findCompactRuleViolations(entries: AIUpdateLog[]): string[] {
     const v = e.version;
     const changes = Array.isArray(e.changes) ? e.changes : [];
     const fixes = Array.isArray(e.fixes) ? e.fixes : [];
-    if ((e.title || '').length > L.titleMaxChars) violations.push(`${v}: عنوان بیش از ${L.titleMaxChars} نویسه`);
-    if ((e.summary || '').length > L.summaryMaxChars) violations.push(`${v}: خلاصه بیش از ${L.summaryMaxChars} نویسه (${e.summary.length})`);
-    if (changes.length === 0) violations.push(`${v}: بدون تغییر`);
-    if (changes.length > L.maxChanges) violations.push(`${v}: بیش از ${L.maxChanges} تغییر (${changes.length})`);
-    if (fixes.length > L.maxFixes) violations.push(`${v}: بیش از ${L.maxFixes} رفع باگ (${fixes.length})`);
+    if ((e.title || '').length > L.titleMaxChars) violations.push(`${v}: title longer than ${L.titleMaxChars} characters`);
+    if ((e.summary || '').length > L.summaryMaxChars) violations.push(`${v}: summary longer than ${L.summaryMaxChars} characters (${e.summary.length})`);
+    if (changes.length === 0) violations.push(`${v}: no changes`);
+    if (changes.length > L.maxChanges) violations.push(`${v}: more than ${L.maxChanges} changes (${changes.length})`);
+    if (fixes.length > L.maxFixes) violations.push(`${v}: more than ${L.maxFixes} fixes (${fixes.length})`);
     for (const item of [...changes, ...fixes]) {
-      if (item.length > L.itemMaxChars) violations.push(`${v}: ردیف بیش از ${L.itemMaxChars} نویسه: «${item.slice(0, 40)}…»`);
-      if (ROUTINE_ITEM_PATTERN.test(item)) violations.push(`${v}: ردیف تکراری ارتقای نسخه: «${item.slice(0, 40)}…»`);
+      if (item.length > L.itemMaxChars) violations.push(`${v}: item longer than ${L.itemMaxChars} characters: "${item.slice(0, 40)}…"`);
+      if (ROUTINE_ITEM_PATTERN.test(item)) violations.push(`${v}: routine version-bump item: "${item.slice(0, 40)}…"`);
     }
   }
   return violations;

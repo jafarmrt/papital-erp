@@ -26,7 +26,7 @@ function renderLedger(selected: number) {
 // v9.0.118 (TD-574, B03-32): the ledger printed «مانده ابتدای دوره» twice (its own row and the server's) and its title read
 // `accountName`, which the server never sends, so it said only «دفتر معین حساب».
 describe('account card view (TD-574)', () => {
-  it('prints the server opening row once, numbers the first voucher row ۱ and names the account in the title', () => {
+  it('prints the server opening row once, numbers the first voucher row 1 in Persian digits and names the account in the title', () => {
     const { container } = renderLedger(1101);
     expect(screen.getAllByText('مانده ابتدای دوره')).toHaveLength(1);
     expect(screen.getByRole('heading', { level: 4 }).textContent?.trim()).toBe('دفتر حساب معین 1101 - صندوق');

@@ -288,7 +288,7 @@ export async function runAccessPackageTwoWorkflowTests(shouldRun: ShouldRun): Pr
           }
         }
         if (reviews.some(r => Number((r.details as Row).instanceId) === finished)) wrong.push('a completed instance was listed for review');
-        if (reviews.some(r => r.entity !== 'نقش و دسترسی')) wrong.push('a review row is not under the entity «نقش و دسترسی»');
+        if (reviews.some(r => r.entity !== 'نقش و دسترسی')) wrong.push('a review row is not under the "role and access" audit entity');
 
         const { findWorkflowRoleReviews } = await import('../../services/workflow/workflowRoleReview.js');
         const db = drizzle(client) as unknown as DbExecutor;

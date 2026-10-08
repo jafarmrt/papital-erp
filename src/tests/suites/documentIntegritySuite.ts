@@ -51,26 +51,26 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
       threw = true;
       errMessage = String(err?.message || '');
       if (!(err instanceof ValidationError)) {
-        throw new Error(`خطای پرتاب‌شده از نوع ValidationError نیست: ${err?.constructor?.name}`);
+        throw new Error(`thrown error is not a ValidationError: ${err?.constructor?.name}`);
       }
     }
 
     if (!threw) {
-      throw new Error('updateDocument با status=final خطا صادر نکرد — حفره دور زدن نهایی‌سازی بازگشته است!');
+      throw new Error('updateDocument with status=final threw no error — the finalization bypass hole is back!');
     }
     if (!errMessage.includes('نهایی')) {
-      throw new Error(`پیام خطای گذار به final نامعتبر است: ${errMessage}`);
+      throw new Error(`error message of the transition to final is invalid: ${errMessage}`);
     }
 
     // بررسی اینکه سند همچنان draft باقی مانده
     const [afterDoc] = await orm.select().from(documents).where(eq(documents.id, docId));
     if (!afterDoc || afterDoc.status !== 'draft') {
-      throw new Error('وضعیت سند پس از رد گذار به final تغییر کرده است!');
+      throw new Error('document status changed after the transition to final was refused!');
     }
     // موجودی نباید کسر شده باشد (کاردکس خالی)
     const txRows = await orm.select().from(transactions).where(eq(transactions.documentId, docId));
     if (txRows.length > 0) {
-      throw new Error('تراکنش انبار برای سند draft ثبت شده — نشت مسیر نهایی‌سازی!');
+      throw new Error('stock transaction recorded for a draft document — finalization path leak!');
     }
 
     // پاکسازی آرمانی soft-delete
@@ -79,18 +79,18 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
     results.push(makeTestCase({
       id: 'v9_put_finalization_bypass_blocked',
       scenarioId: 'v9_finalization_bypass_blocked',
-      name: 'V9: مسدودسازی دور زدن نهایی‌سازی سند از مسیر ویرایش (Finalization Bypass)',
+      name: 'V9: blocks bypassing document finalization through the edit path (Finalization Bypass)',
       layer: 'regression',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t1Start,
-      details: 'گذار وضعیت draft→final از مسیر updateDocument با ValidationError رد شد؛ سند دست‌نخورده و بدون هیچ گردش انبار باقی ماند.'
+      details: 'draft→final transition through updateDocument was refused with ValidationError; the document stayed untouched with no stock movement.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'v9_put_finalization_bypass_blocked',
       scenarioId: 'v9_finalization_bypass_blocked',
-      name: 'V9: مسدودسازی دور زدن نهایی‌سازی سند از مسیر ویرایش (Finalization Bypass)',
+      name: 'V9: blocks bypassing document finalization through the edit path (Finalization Bypass)',
       layer: 'regression',
       executionType: 'real_database',
       passed: false,
@@ -135,38 +135,38 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
         rejected = true;
         msg = String(err?.message || '');
         if (!(err instanceof ValidationError)) {
-          throw new Error(`رد ${attempt.label} با خطای غیر Validation انجام شد: ${err?.constructor?.name}`);
+          throw new Error(`refusal of ${attempt.label} happened with a non-Validation error: ${err?.constructor?.name}`);
         }
       }
       if (!rejected) {
-        throw new Error(`${attempt.label} در applyStockMovement رد نشد — خطر خرابی WAC و جهت انبار!`);
+        throw new Error(`${attempt.label} was not refused in applyStockMovement — risk of corrupting WAC and stock direction!`);
       }
       if (!msg.includes(attempt.expectContains)) {
-        throw new Error(`پیام رد ${attempt.label} نامعتبر است: ${msg}`);
+        throw new Error(`refusal message of ${attempt.label} is invalid: ${msg}`);
       }
     }
 
     // موجودی باید دست‌نخورده باشد
     const [itemAfter] = await orm.select({ currentStock: items.currentStock }).from(items).where(eq(items.id, item.id));
     if (Number(itemAfter?.currentStock ?? 0) !== 50) {
-      throw new Error(`موجودی کالا پس از تلاش‌های ناموفق تغییر کرد: ${itemAfter?.currentStock}`);
+      throw new Error(`item stock changed after the failed attempts: ${itemAfter?.currentStock}`);
     }
 
     results.push(makeTestCase({
       id: 'v9_negative_item_validation',
       scenarioId: 'v9_negative_item_validation',
-      name: 'V9: اعتبارسنجی مقدار مثبت و قیمت غیرمنفی در گردش انبار (applyStockMovement Guard)',
+      name: 'V9: positive quantity and non-negative price check on stock movements (applyStockMovement Guard)',
       layer: 'regression',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t2Start,
-      details: 'هر سه حالت مخرب (تعداد منفی، تعداد صفر، قیمت منفی) با ValidationError رد شدند و موجودی کالا دست‌نخورده ماند.'
+      details: 'all three harmful cases (negative quantity, zero quantity, negative price) were refused with ValidationError and the item stock stayed untouched.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'v9_negative_item_validation',
       scenarioId: 'v9_negative_item_validation',
-      name: 'V9: اعتبارسنجی مقدار مثبت و قیمت غیرمنفی در گردش انبار (applyStockMovement Guard)',
+      name: 'V9: positive quantity and non-negative price check on stock movements (applyStockMovement Guard)',
       layer: 'regression',
       executionType: 'real_database',
       passed: false,
@@ -207,7 +207,7 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
         eq(journalVouchers.isDeleted, 0)
       ));
     if (!originalVoucher) {
-      throw new Error('سند حسابداری متناظر فاکتور نهایی ایجاد نشد (نگاشت حساب‌ها)');
+      throw new Error('journal voucher of the final invoice was not created (account mapping)');
     }
 
     // v8.0.2 (TD-251): فقط سند تأییدشده هنگام ابطال سند معکوس می‌گیرد؛ سند پیش‌نویس حذف نرم می‌شود
@@ -229,12 +229,12 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
 
     const reversal = reversalVouchers.find(v => String(v.referenceNumber || '').startsWith(`REV-V${originalVoucher.voucherNumber}`));
     if (!reversal) {
-      throw new Error('سند معکوس (REV-V) پس از حذف سند نهایی صادر نشد — واگرایی دفاتر از انبار!');
+      throw new Error('reversal voucher (REV-V) was not issued after deleting the final document — ledgers diverge from the warehouse!');
     }
     // مبالغ جابجا شده: بدهکار/بستانکار معکوس اصلی
     if (Math.abs(Number(reversal.totalDebit) - Number(originalVoucher.totalCredit)) > 1 ||
         Math.abs(Number(reversal.totalCredit) - Number(originalVoucher.totalDebit)) > 1) {
-      throw new Error('مبالغ سند معکوس با معکوس مبالغ سند اصلی مطابقت ندارد');
+      throw new Error('reversal voucher amounts do not match the reversed amounts of the original voucher');
     }
 
     // تراکنش‌های معکوس کاردکس با reversalOfId
@@ -243,14 +243,14 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
       .where(and(eq(transactions.documentId, docId)));
     const withReversalRef = kardexReversals.filter(t => (t as any).reversalOfId);
     if (withReversalRef.length === 0) {
-      throw new Error('تراکنش معکوس کاردکس با reversal_of_id ثبت نشد (DB-009 نقض شد)');
+      throw new Error('Kardex reversal transaction with reversal_of_id was not recorded (DB-009 violated)');
     }
 
     // جفت‌سازی دقیق: برای هر تراکنش اصلی حذف‌شده، یک ردیف فعال معکوس با نوع وارونه و همان مقدار
     const originals = kardexReversals.filter(t => t.isDeleted === 1 && !((t as any).reversalOfId));
     const reversalsActive = kardexReversals.filter(t => t.isDeleted === 0 && (t as any).reversalOfId);
     if (originals.length === 0) {
-      throw new Error('هیچ تراکنش اصلی حذف‌شده‌ای برای سند یافت نشد');
+      throw new Error('no deleted original transaction found for the document');
     }
     for (const orig of originals) {
       const pair = reversalsActive.find(r =>
@@ -259,31 +259,31 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
         Math.abs(Number(r.quantity) - Number(orig.quantity)) < 0.0001
       );
       if (!pair) {
-        throw new Error(`جفت معکوس برای تراکنش #${orig.id} (${orig.type} ${orig.quantity}) یافت نشد`);
+        throw new Error(`reversal pair for transaction #${orig.id} (${orig.type} ${orig.quantity}) not found`);
       }
     }
 
     // اقلام سند soft-delete شده باشند
     const diRows = await orm.select().from(documentItems).where(eq(documentItems.documentId, docId));
     if (diRows.some(d => d.isDeleted !== 1)) {
-      throw new Error('اقلام سند پس از حذف کاملاً soft-delete نشده‌اند');
+      throw new Error('document lines were not fully soft-deleted after delete');
     }
 
     results.push(makeTestCase({
       id: 'v9_document_delete_accounting_reversal',
       scenarioId: 'v9_document_delete_accounting_reversal',
-      name: 'V9: صدور سند معکوس حسابداری و تراکنش‌های معکوس کاردکس هنگام حذف سند نهایی (DB-009)',
+      name: 'V9: deleting a final document issues a reversal journal voucher and Kardex reversal transactions (DB-009)',
       layer: 'regression',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t3Start,
-      details: `حذف سند نهایی #${docId} سند برگشت شماره ${reversal.voucherNumber} (${reversal.referenceNumber}) با مبالغ معکوس صادر کرد؛ ${withReversalRef.length} تراکنش معکوس کاردکس با reversal_of_id ثبت شد.`
+      details: `deleting final document #${docId} issued reversal voucher number ${reversal.voucherNumber} (${reversal.referenceNumber}) with reversed amounts; ${withReversalRef.length} Kardex reversal transactions recorded with reversal_of_id.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'v9_document_delete_accounting_reversal',
       scenarioId: 'v9_document_delete_accounting_reversal',
-      name: 'V9: صدور سند معکوس حسابداری و تراکنش‌های معکوس کاردکس هنگام حذف سند نهایی (DB-009)',
+      name: 'V9: deleting a final document issues a reversal journal voucher and Kardex reversal transactions (DB-009)',
       layer: 'regression',
       executionType: 'real_database',
       passed: false,
@@ -301,30 +301,30 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
     const r1 = await DocumentService.peekNextRef(type);
     const r2 = await DocumentService.peekNextRef(type);
     if (r1 !== r2) {
-      throw new Error(`دو فراخوانی متوالی peek مقادیر متفاوت برگرداند: ${r1} سپس ${r2} — شمارنده می‌سوزد!`);
+      throw new Error(`two consecutive peek calls returned different values: ${r1} then ${r2} — the counter burns numbers!`);
     }
 
     // اکنون getNextRef واقعاً افزایش می‌دهد
     const consumed = await DocumentService.getNextRef(type);
     if (Number(consumed) < Number(r1)) {
-      throw new Error(`getNextRef شماره کوچکتر از peek برگرداند: peek=${r1}, consume=${consumed}`);
+      throw new Error(`getNextRef returned a number lower than peek: peek=${r1}, consume=${consumed}`);
     }
 
     results.push(makeTestCase({
       id: 'v9_peek_next_ref_non_destructive',
       scenarioId: 'v9_peek_next_ref_non_destructive',
-      name: 'V9: نگاه غیرمخرب شماره بعدی سند (Peek بدون سوختن شماره)',
+      name: 'V9: non-destructive peek of the next document number (peek without burning a number)',
       layer: 'regression',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t4Start,
-      details: `دو peek متوالی هر دو «${r1}» برگرداندند (بدون کاهش شمارنده) و getNextRef بعدی «${consumed}» را مصرف کرد.`
+      details: `two consecutive peeks both returned "${r1}" (counter not advanced) and the next getNextRef consumed "${consumed}".`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'v9_peek_next_ref_non_destructive',
       scenarioId: 'v9_peek_next_ref_non_destructive',
-      name: 'V9: نگاه غیرمخرب شماره بعدی سند (Peek بدون سوختن شماره)',
+      name: 'V9: non-destructive peek of the next document number (peek without burning a number)',
       layer: 'regression',
       executionType: 'real_database',
       passed: false,
@@ -349,35 +349,35 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
     for (const c of checks) {
       const got = parsePagination(c.q, { page: 1, limit: 50 });
       if (got.page !== c.exp.page || got.limit !== c.exp.limit) {
-        throw new Error(`${c.label}: انتظار page=${c.exp.page},limit=${c.exp.limit} | دریافتی page=${got.page},limit=${got.limit}`);
+        throw new Error(`${c.label}: expected page=${c.exp.page},limit=${c.exp.limit} | got page=${got.page},limit=${got.limit}`);
       }
       const expectedOffset = (c.exp.page - 1) * c.exp.limit;
       if (got.offset !== expectedOffset) {
-        throw new Error(`${c.label}: offset غلط (${got.offset} بجای ${expectedOffset})`);
+        throw new Error(`${c.label}: wrong offset (${got.offset} instead of ${expectedOffset})`);
       }
     }
 
     // حداقل نسوزد: تولید عدد صفحات سالم
     const dumpCheck = parsePagination({ limit: '1000000' }, { page: 1, limit: 50 });
     if (dumpCheck.limit > MAX_PAGE_LIMIT) {
-      throw new Error('dump کل جدول هنوز ممکن است!');
+      throw new Error('dumping the whole table is still possible!');
     }
 
     results.push(makeTestCase({
       id: 'v9_pagination_nan_safe',
       scenarioId: 'v9_pagination_nan_safe',
-      name: 'V9: صفحه‌بندی NaN-Safe با سقف حداکثر (parsePagination)',
+      name: 'V9: NaN-safe pagination with a maximum cap (parsePagination)',
       layer: 'regression',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t5Start,
-      details: `پنج ترکیب ورودی مخرب/معتبر صحت‌سنجی شد؛ سقف MAX_PAGE_LIMIT=${MAX_PAGE_LIMIT}.`
+      details: `five harmful/valid input combinations verified; cap MAX_PAGE_LIMIT=${MAX_PAGE_LIMIT}.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'v9_pagination_nan_safe',
       scenarioId: 'v9_pagination_nan_safe',
-      name: 'V9: صفحه‌بندی NaN-Safe با سقف حداکثر (parsePagination)',
+      name: 'V9: NaN-safe pagination with a maximum cap (parsePagination)',
       layer: 'regression',
       executionType: 'simulation_logic',
       passed: false,
@@ -446,10 +446,10 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
     const resA = mkRes();
     await runAuth(reqA, resA);
     if (!reqA.__nextCalled) {
-      throw new Error(`توکن هم‌نسخه رد شد: ${resA.statusCodeCaptured} ${JSON.stringify(resA.bodyCaptured).slice(0, 200)}`);
+      throw new Error(`same-version token was refused: ${resA.statusCodeCaptured} ${JSON.stringify(resA.bodyCaptured).slice(0, 200)}`);
     }
     if (reqA.user?.role !== 'accountant') {
-      throw new Error('نقش کاربر از دیتابیس بازخوانی نشد (زمان تغییر نقش نباید منتظر انقضای JWT بمانیم)');
+      throw new Error('user role was not reloaded from the database (a role change must not wait for JWT expiry)');
     }
 
     // Case B: توکن با tokenVersion قدیمی باید 401 شود (ابطال نشست)
@@ -461,7 +461,7 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
     const resB = mkRes();
     await runAuth(reqB, resB);
     if (reqB.__nextCalled || resB.statusCodeCaptured !== 401) {
-      throw new Error('نشست با tokenVersion کهنه مسدود نشد — نقش‌های باطل‌شده تا انقضای JWT زنده می‌مانند!');
+      throw new Error('session with a stale tokenVersion was not blocked — revoked roles stay alive until JWT expiry!');
     }
 
     // Case C: کاربر soft-deleted حتی با توکن معتبر باید 401 شود
@@ -470,7 +470,7 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
     const resC = mkRes();
     await runAuth(reqC, resC);
     if (reqC.__nextCalled || resC.statusCodeCaptured !== 401) {
-      throw new Error('کاربر soft-deleted با توکن معتبر عبور کرد!');
+      throw new Error('soft-deleted user passed with a valid token!');
     }
 
     // Cleanup
@@ -479,18 +479,18 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
     results.push(makeTestCase({
       id: 'v9_auth_live_session_validation',
       scenarioId: 'v9_auth_live_session_validation',
-      name: 'V9: اعتبارسنجی زنده نشست — ابطال tokenVersion و رد کاربر Soft-Deleted (V9-014)',
+      name: 'V9: live session validation — tokenVersion revocation and refusal of a soft-deleted user (V9-014)',
       layer: 'regression',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t6Start,
-      details: 'سه سناریو: توکن هم‌نسخه عبور کرد و نقش زنده از DB خوانده شد؛ توکن نسخه ۶ با 401 رد شد؛ کاربر حذف‌شده با 401 مسدود گشت.'
+      details: 'three scenarios: a same-version token passed and the live role was read from the DB; a version 6 token was refused with 401; a deleted user was blocked with 401.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'v9_auth_live_session_validation',
       scenarioId: 'v9_auth_live_session_validation',
-      name: 'V9: اعتبارسنجی زنده نشست — ابطال tokenVersion و رد کاربر Soft-Deleted (V9-014)',
+      name: 'V9: live session validation — tokenVersion revocation and refusal of a soft-deleted user (V9-014)',
       layer: 'regression',
       executionType: 'real_database',
       passed: false,
@@ -521,7 +521,7 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
     };
     const parsedValid = await documentCreateSchema.parseAsync(validDocPayload);
     if (!parsedValid.body || parsedValid.body.items[0].itemId !== 10) {
-      throw new Error('شِمای سند باید itemId رشته‌ای معتبر را به عدد تبدیل کند.');
+      throw new Error('document schema must convert a valid string itemId to a number.');
     }
 
     // Case 2: رد سند بدون اقلام (آرایه خالی)
@@ -539,7 +539,7 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
       emptyItemsThrew = true;
     }
     if (!emptyItemsThrew) {
-      throw new Error('شِمای سند باید ایجاد سند با آرایه خالی اقلام را مسدود کند.');
+      throw new Error('document schema must block creating a document with an empty items array.');
     }
 
     // Case 3: رد سند با قیمت منفی یا تخفیف منفی
@@ -557,7 +557,7 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
       negativePriceThrew = true;
     }
     if (!negativePriceThrew) {
-      throw new Error('شِمای سند باید اقلام با قیمت منفی را مسدود کند.');
+      throw new Error('document schema must block items with a negative price.');
     }
 
     // Case 4: رد تلاش برای تغییر وضعیت به 'final' در ویرایش عادی (Bypass Guard)
@@ -573,7 +573,7 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
       updateFinalThrew = true;
     }
     if (!updateFinalThrew) {
-      throw new Error('شِمای ویرایش سند باید تغییر وضعیت به final را رد کند.');
+      throw new Error('document edit schema must refuse a status change to final.');
     }
 
     // Case 5: اعتبارسنجی فیلترهای کوئری لیست اسناد
@@ -586,24 +586,24 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
       }
     });
     if (!validQuery.query || validQuery.query.type !== 'invoice') {
-      throw new Error('شِمای کوئری اسناد باید پارامترهای مجاز را به درستی بپذیرد.');
+      throw new Error('documents query schema must accept the allowed parameters correctly.');
     }
 
     results.push(makeTestCase({
       id: 'v4_document_runtime_contracts_guard',
       scenarioId: 'v4_document_runtime_contracts_guard',
-      name: 'قراردادهای زمان اجرای اسناد و فاکتورها با Zod (زیرفاز ۴.۲)',
+      name: 'runtime contracts of documents and invoices with Zod (subphase 4.2)',
       layer: 'regression',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t7Start,
-      details: 'تمامی اعتبارسنجی‌های صلب ساختار اسناد، اقلام نامنفی، شماره عطف، فیلترهای کوئری و حفاظت از وضعیت‌های فاکتور با موفقیت تایید شدند.'
+      details: 'all strict checks of document structure, non-negative lines, reference number, query filters and invoice status protection verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'v4_document_runtime_contracts_guard',
       scenarioId: 'v4_document_runtime_contracts_guard',
-      name: 'قراردادهای زمان اجرای اسناد و فاکتورها با Zod (زیرفاز ۴.۲)',
+      name: 'runtime contracts of documents and invoices with Zod (subphase 4.2)',
       layer: 'regression',
       executionType: 'simulation_logic',
       passed: false,

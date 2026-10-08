@@ -58,7 +58,7 @@ export async function defineWorkflow(spec: WfSpec): Promise<Wf> {
   const code = `WFG_${tag}`;
   const entityType = `wfg_${tag}`;
   const saved = await WorkflowDefinitionService.saveWorkflowDefinition(payloadOf(spec, code, entityType));
-  if (!saved) throw new Error('تعریف گردش‌کار آزمون ذخیره نشد');
+  if (!saved) throw new Error('the test workflow definition was not saved');
   const stateId: Record<string, number> = {};
   for (const s of saved.states) stateId[s.stateKey] = s.id;
   const transitionId: Record<string, number> = {};

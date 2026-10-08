@@ -34,13 +34,13 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     results.push(makeTestCase({
       id: 'e2e_db_readiness_check',
       scenarioId: 'db_readiness',
-      name: 'پایش اتصال پایگاه‌داده جهت اجرای تست‌های E2E',
+      name: 'Database connection check for running the E2E tests',
       layer: 'e2e',
       executionType: 'real_database',
       passed: false,
       status: 'BLOCKED',
       durationMs: 0,
-      error: 'اتصال به دیتابیس برقرار نگردید'
+      error: 'Could not connect to the database'
     }));
     return results;
   }
@@ -89,7 +89,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       ]
     });
     const purchaseDoc = await DocumentService.getDocumentById(purchaseDocId);
-    if (!purchaseDoc) throw new Error('فاکتور خرید یافت نشد');
+    if (!purchaseDoc) throw new Error('Purchase invoice not found');
 
     // Step 2: Verify Inventory stock increment & Weighted Average Cost (WAC) recalculation
     // Initial: 100 @ 50,000 = 5,000,000
@@ -102,11 +102,11 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     const weightedAvgCost1 = Number(updatedMaterial?.weightedAverageCost || 0);
 
     if (!updatedMaterial || currentStock1 !== 200 || weightedAvgCost1 !== 55000) {
-      throw new Error(`محاسبه میانگین موزون (WAC) یا موجودی جدید انبار با خطا مواجه شد. موجودی: ${updatedMaterial?.currentStock}, قیمت میانگین: ${updatedMaterial?.weightedAverageCost}`);
+      throw new Error(`weighted average cost (WAC) or new warehouse stock calculation failed. stock: ${updatedMaterial?.currentStock}, average price: ${updatedMaterial?.weightedAverageCost}`);
     }
 
     if (stockMovements.length !== 1 || stockMovements[0].type !== 'in' || Number(stockMovements[0].quantity) !== 100) {
-      throw new Error('تراکنش ورود به انبار در کاردکس ثبت نگردید');
+      throw new Error('The warehouse receipt movement was not recorded in the Kardex');
     }
 
     // Step 3: Create double-entry Accounting Journal Voucher for Purchase
@@ -131,21 +131,21 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'e2e_journey_1_purchase_receipt_inventory_accounting',
         scenarioId: 'e2e_purchase_receipt_inventory_accounting',
-        name: 'چرخه کامل ۱: خرید -> رسید انبار -> به‌روزرسانی موجودی/WAC -> سند حسابداری',
+        name: 'Full journey 1: purchase -> warehouse receipt -> stock/WAC update -> journal voucher',
         layer: 'e2e',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - j1Start,
-        details: `فاکتور خرید #${purchaseDoc.refNumber} ثبت گردید؛ موجودی به ۲۰۰ گرم افزایش و WAC به ۵۵,۰۰۰ ریال به‌روزرسانی شد. سند حسابداری متوازن به مبلغ ۶,۰۰۰,۰۰۰ ریال صادر گردید.`
+        details: `Purchase invoice #${purchaseDoc.refNumber} recorded; stock rose to 200 grams and WAC was updated to 55,000 rials. A balanced journal voucher of 6,000,000 rials was issued.`
       }));
     } else {
-      throw new Error('صدور یا تراز سند حسابداری خرید در دیتابیس با خطا مواجه شد');
+      throw new Error('Issuing or balancing the purchase journal voucher in the database failed');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'e2e_journey_1_purchase_receipt_inventory_accounting',
       scenarioId: 'e2e_purchase_receipt_inventory_accounting',
-      name: 'چرخه کامل ۱: خرید -> رسید انبار -> به‌روزرسانی موجودی/WAC -> سند حسابداری',
+      name: 'Full journey 1: purchase -> warehouse receipt -> stock/WAC update -> journal voucher',
       layer: 'e2e',
       executionType: 'real_database',
       passed: false,
@@ -189,7 +189,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       ]
     });
     const salesDoc = await DocumentService.getDocumentById(salesDocId);
-    if (!salesDoc) throw new Error('فاکتور فروش یافت نشد');
+    if (!salesDoc) throw new Error('Sales invoice not found');
 
     // Step 2: Start Workflow Approval
     const wf = await createTestWorkflow({
@@ -229,14 +229,14 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     const currentStock2 = Number(updatedProduct?.currentStock || 0);
 
     if (!updatedProduct || currentStock2 !== 10) {
-      throw new Error(`کسر موجودی انبار پس از خروج فاکتور فروش ناموفق بود. موجودی: ${updatedProduct?.currentStock}`);
+      throw new Error(`deducting warehouse stock after the sales invoice issue failed. stock: ${updatedProduct?.currentStock}`);
     }
 
     // Step 4: Auto-Create Accounting Journal Voucher for Sales Invoice
     const autoVoucher = await VoucherSyncService.autoCreateVoucherForInvoice(salesDoc.id);
 
     if (!autoVoucher || !autoVoucher.voucherNumber) {
-      throw new Error('صدور سند حسابداری خودکار برای فاکتور فروش با خطا مواجه شد');
+      throw new Error('Issuing the automatic journal voucher for the sales invoice failed');
     }
 
     // v7.0.24 (TD-174): از v5.0.17 (TD-120) سند فروش علاوه بر دریافتنی/درآمد، ردیف‌های بهای تمام‌شده
@@ -254,30 +254,30 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     const expectedSales = 5 * 2500000;
     const expectedCogs = 5 * Number(updatedProduct.weightedAverageCost || 0);
     if (Number(autoVoucher.totalDebit) !== Number(autoVoucher.totalCredit)) {
-      throw new Error(`سند خودکار فروش متوازن نیست: بدهکار ${autoVoucher.totalDebit} / بستانکار ${autoVoucher.totalCredit}`);
+      throw new Error(`the automatic sales voucher is not balanced: debit ${autoVoucher.totalDebit} / credit ${autoVoucher.totalCredit}`);
     }
     if (sumFor(receivableAcc?.id, 'debit') !== expectedSales || sumFor(revenueAcc?.id, 'credit') !== expectedSales) {
-      throw new Error(`ردیف‌های دریافتنی/درآمد سند خودکار فروش باید ${expectedSales} باشند (دریافتنی: ${sumFor(receivableAcc?.id, 'debit')}، درآمد: ${sumFor(revenueAcc?.id, 'credit')})`);
+      throw new Error(`the receivable/revenue rows of the automatic sales voucher must be ${expectedSales} (receivable: ${sumFor(receivableAcc?.id, 'debit')}, revenue: ${sumFor(revenueAcc?.id, 'credit')})`);
     }
     if (sumFor(cogsAcc?.id, 'debit') !== expectedCogs) {
-      throw new Error(`ردیف بهای تمام‌شده سند خودکار فروش باید ${expectedCogs} باشد (مقدار: ${sumFor(cogsAcc?.id, 'debit')})`);
+      throw new Error(`the cost of sales row of the automatic sales voucher must be ${expectedCogs} (value: ${sumFor(cogsAcc?.id, 'debit')})`);
     }
 
     results.push(makeTestCase({
       id: 'e2e_journey_2_sales_approval_stockissue_accounting',
       scenarioId: 'e2e_sales_approval_stockissue_accounting',
-      name: 'چرخه کامل ۲: فاکتور فروش -> تصویب فرآیند کاری -> کسر انبار -> ثبت سند خودکار حسابداری',
+      name: 'Full journey 2: sales invoice -> workflow approval -> warehouse deduction -> automatic journal voucher',
       layer: 'e2e',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - j2Start,
-      details: `فاکتور فروش #${salesDoc.refNumber} تایید گردید؛ موجودی ۵ عدد کسر شد (۱۰ عدد باقیمانده) و سند حسابداری #${autoVoucher.voucherNumber} با دریافتنی/درآمد ۱۲,۵۰۰,۰۰۰ ریال و ردیف بهای تمام‌شده متوازن صادر گردید.`
+      details: `Sales invoice #${salesDoc.refNumber} approved; 5 units were deducted from stock (10 units left) and journal voucher #${autoVoucher.voucherNumber} was issued with receivable/revenue of 12,500,000 rials and a balanced cost of sales row.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'e2e_journey_2_sales_approval_stockissue_accounting',
       scenarioId: 'e2e_sales_approval_stockissue_accounting',
-      name: 'چرخه کامل ۲: فاکتور فروش -> تصویب فرآیند کاری -> کسر انبار -> ثبت سند خودکار حسابداری',
+      name: 'Full journey 2: sales invoice -> workflow approval -> warehouse deduction -> automatic journal voucher',
       layer: 'e2e',
       executionType: 'real_database',
       passed: false,
@@ -305,7 +305,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
 
     const activeDelegations = await WorkflowDelegationService.getDelegations({ userId: userA.id });
     if (!activeDelegations || activeDelegations.length === 0) {
-      throw new Error('تایید تفویض اختیارات در بازه زمانی تعیین‌شده انجام نشد');
+      throw new Error('Delegation approval within the set time window did not happen');
     }
 
     // Step 2: Create Workflow with Parallel Approval
@@ -333,7 +333,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
 
     // Step 3: Reject transition path
     const rejectTrans = wf.transitions.find(t => t.actionKey === 'reject_doc');
-    if (!rejectTrans) throw new Error('انتقال رد درخواست یافت نشد');
+    if (!rejectTrans) throw new Error('Reject transition of the request not found');
 
     await WorkflowTransitionExecutor.executeTransition({
       instanceId: instance.id,
@@ -356,21 +356,21 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'e2e_journey_3_workflow_approve_reject_delegate_parallel',
         scenarioId: 'e2e_workflow_approve_reject_delegate_parallel',
-        name: 'چرخه کامل ۳: موتور فرآیند کاری -> تفویض اختیار -> تایید موازی/رد -> سوابق تاریخچه',
+        name: 'Full journey 3: workflow engine -> delegation -> parallel approval/rejection -> history records',
         layer: 'e2e',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - j3Start,
-        details: `تفویض اختیار از کاربر ${userA.username} به ${userB.username} تایید شد؛ درخواست در فرآیند شماره #${instance.id} به وضعیت ردشده منتقل و سوابق ثبت شد.`
+        details: `Delegation from user ${userA.username} to ${userB.username} verified; the request in process #${instance.id} moved to rejected and the records were saved.`
       }));
     } else {
-      throw new Error('انتقال وضعیت فرآیند کاری به حالت پایانی (ردشده) با خطا مواجه گردید');
+      throw new Error('Moving the workflow status to the final (rejected) state failed');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'e2e_journey_3_workflow_approve_reject_delegate_parallel',
       scenarioId: 'e2e_workflow_approve_reject_delegate_parallel',
-      name: 'چرخه کامل ۳: موتور فرآیند کاری -> تفویض اختیار -> تایید موازی/رد -> سوابق تاریخچه',
+      name: 'Full journey 3: workflow engine -> delegation -> parallel approval/rejection -> history records',
       layer: 'e2e',
       executionType: 'real_database',
       passed: false,
@@ -406,7 +406,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     });
 
     if (lockAcquire.action !== 'PROCESS_NEW') {
-      throw new Error('قفل Idempotency بابت رویداد وب‌هوک ووکامرس صادر نشد');
+      throw new Error('The Idempotency lock for the WooCommerce webhook event was not issued');
     }
 
     // Step 2: Auto-Create Sales Document & Stock Deduction from WooCommerce Order Payload
@@ -430,7 +430,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       ]
     });
     const wooDoc = await DocumentService.getDocumentById(wooDocId);
-    if (!wooDoc) throw new Error('فاکتور ووکامرس یافت نشد');
+    if (!wooDoc) throw new Error('WooCommerce invoice not found');
 
     // Step 3: Complete Idempotency record
     await IdempotencyService.complete({
@@ -445,7 +445,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     const currentStock4 = Number(updatedWooItem?.currentStock || 0);
 
     if (!updatedWooItem || currentStock4 !== 23) {
-      throw new Error(`کسر انبار سفارش آنلاین ووکامرس انجام نشد. موجودی: ${updatedWooItem?.currentStock}`);
+      throw new Error(`warehouse deduction for the online WooCommerce order did not happen. stock: ${updatedWooItem?.currentStock}`);
     }
 
     // Step 5: Duplicate Retry Test (Must Return Cached Response)
@@ -458,24 +458,24 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     });
 
     if (retryAcquire.action !== 'RETURN_CACHED' || retryAcquire.statusCode !== 200) {
-      throw new Error('جلوگیری از ثبت تکراری سفارش ووکامرس (Idempotency) کار نکرد');
+      throw new Error('Duplicate WooCommerce order prevention (Idempotency) did not work');
     }
 
     results.push(makeTestCase({
       id: 'e2e_journey_4_woocommerce_webhook_document_stock_audit',
       scenarioId: 'e2e_woocommerce_webhook_document_stock_audit',
-      name: 'چرخه کامل ۴: وب‌هوک ووکامرس -> قفل یکتایی (Idempotency) -> صدور فاکتور -> کسر انبار -> لاگ فعالیت',
+      name: 'Full journey 4: WooCommerce webhook -> uniqueness lock (Idempotency) -> invoice issue -> warehouse deduction -> activity log',
       layer: 'e2e',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - j4Start,
-      details: `سفارش ووکامرس با شماره #${wooDoc.refNumber} پردازش شد؛ موجودی کالای SKU به ۲۳ عدد کاهش یافت و تلاش مجدد ارسال وب‌هوک با پاسخ ذخیره‌شده بدون دوبله‌شدن کسر انبار مسدود گردید.`
+      details: `WooCommerce order #${wooDoc.refNumber} processed; the SKU item stock fell to 23 units and a webhook retry was blocked with the stored response without a duplicate warehouse deduction.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'e2e_journey_4_woocommerce_webhook_document_stock_audit',
       scenarioId: 'e2e_woocommerce_webhook_document_stock_audit',
-      name: 'چرخه کامل ۴: وب‌هوک ووکامرس -> قفل یکتایی (Idempotency) -> صدور فاکتور -> کسر انبار -> لاگ فعالیت',
+      name: 'Full journey 4: WooCommerce webhook -> uniqueness lock (Idempotency) -> invoice issue -> warehouse deduction -> activity log',
       layer: 'e2e',
       executionType: 'real_database',
       passed: false,
@@ -516,7 +516,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     const payrollVoucher = await VoucherSyncService.autoCreateVoucherForPayroll(payroll.id);
 
     if (!payrollVoucher || !payrollVoucher.voucherNumber || Number(payrollVoucher.totalDebit) !== 9000000) {
-      throw new Error('صدور سند حسابداری کارزد دستمزد حقوق با خطا مواجه شد');
+      throw new Error('Issuing the piecework wage payroll journal voucher failed');
     }
 
     // Step 3: Verify Voucher items in DB
@@ -525,24 +525,24 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     const totalCredit = voucherItems.reduce((acc, i) => acc + (Number(i.credit) || 0), 0);
 
     if (totalDebit !== 9000000 || totalCredit !== 9000000) {
-      throw new Error(`سند حقوق صادر شده تراز نیست. بدهکار: ${totalDebit}, بستانکار: ${totalCredit}`);
+      throw new Error(`the issued payroll voucher is not balanced. debit: ${totalDebit}, credit: ${totalCredit}`);
     }
 
     results.push(makeTestCase({
       id: 'e2e_journey_5_piecework_payroll_accounting_posting',
       scenarioId: 'e2e_piecework_payroll_accounting_posting',
-      name: 'چرخه کامل ۵: حقوق و دستمزد کارمزدی -> صدور خودکار سند حسابداری -> تراز دفتر کل',
+      name: 'Full journey 5: piecework payroll -> automatic journal voucher -> general ledger balance',
       layer: 'e2e',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - j5Start,
-      details: `فیش حقوقی شماره #${payroll.payrollNumber} برای ${worker.fullName} تایید شد و سند حسابداری دوبل متوازن شماره #${payrollVoucher.voucherNumber} به مبلغ ۹,۰۰۰,۰۰۰ ریال صادر گردید.`
+      details: `Payslip #${payroll.payrollNumber} for ${worker.fullName} was approved and balanced double-entry journal voucher #${payrollVoucher.voucherNumber} of 9,000,000 rials was issued.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'e2e_journey_5_piecework_payroll_accounting_posting',
       scenarioId: 'e2e_piecework_payroll_accounting_posting',
-      name: 'چرخه کامل ۵: حقوق و دستمزد کارمزدی -> صدور خودکار سند حسابداری -> تراز دفتر کل',
+      name: 'Full journey 5: piecework payroll -> automatic journal voucher -> general ledger balance',
       layer: 'e2e',
       executionType: 'real_database',
       passed: false,

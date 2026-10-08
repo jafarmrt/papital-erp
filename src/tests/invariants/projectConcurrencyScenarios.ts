@@ -48,38 +48,39 @@ export async function checkProjectDeliveryCapped(wh: string): Promise<string[]> 
   const outcomes = await raceBehindRowLock<unknown>('production_projects', [raced], [
     () => deliver(raced, racedItem.id, 5, wh), () => deliver(raced, racedItem.id, 5, wh),
   ]);
-  problems.push(...outcomeProblems(['تحویل اول', 'تحویل دوم'], outcomes, (_label, message) => message.includes('بیش از مقدار برنامه‌ریزی‌شده')));
+  const overPlanRefusal = (_label: string, message: string) => message.includes('بیش از مقدار برنامه‌ریزی‌شده');
+  problems.push(...outcomeProblems(['first delivery', 'second delivery'], outcomes, overPlanRefusal));
   const accepted = outcomes.filter(o => o.status === 'fulfilled').length;
-  if (accepted !== 1) problems.push(`از دو تحویل هم‌زمان کل پروژه ${accepted} پذیرفته شد، نه یکی`);
+  if (accepted !== 1) problems.push(`${accepted} of two concurrent whole-project deliveries were accepted, not one`);
   const raceStock = (await itemState(racedItem.id)).stock;
-  if (raceStock !== 5) problems.push(`موجودی پس از دو تحویل هم‌زمان پروژه ۵ عددی ${raceStock} است، نه ۵`);
+  if (raceStock !== 5) problems.push(`Stock after two concurrent deliveries of the 5-unit project is ${raceStock}, not 5`);
 
   // ۲) پشت هم: ۳ و ۳ بی‌دلیل رد، با دلیل پذیرفته و دلیل در سند رسید تولید
   const seqItem = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   const seq = await projectWith('پروژه آزمون تحویل پشت هم', seqItem.id, 5);
   await deliver(seq, seqItem.id, 3, wh);
   const second = await rejection(() => deliver(seq, seqItem.id, 3, wh));
-  if (!second?.includes('دلیل')) problems.push(`تحویل دوم بیش از برنامه بی‌دلیل رد نشد (${second ?? 'پذیرفته شد'})`);
+  if (!second?.includes('دلیل')) problems.push(`a second over-plan delivery without a reason was not refused (${second ?? 'accepted'})`);
   const withReason = await deliver(seq, seqItem.id, 3, wh, 'سفارش اضافه مشتری');
   const over = withReason.overDeliveries ?? [];
-  if (over.length !== 1 || over[0].excess !== 1) problems.push(`تحویل با دلیل مقدار اضافه را ۱ نشمرد (${JSON.stringify(over)})`);
+  if (over.length !== 1 || over[0].excess !== 1) problems.push(`The delivery with a reason did not count the excess as 1 (${JSON.stringify(over)})`);
   const notes = await pool.query<{ notes: string }>('SELECT notes FROM documents WHERE id = $1', [withReason.documentId ?? 0]);
-  if (!notes.rows[0]?.notes?.includes('سفارش اضافه مشتری')) problems.push('دلیل تحویل بیش از برنامه در سند رسید تولید ثبت نشد');
+  if (!notes.rows[0]?.notes?.includes('سفارش اضافه مشتری')) problems.push('The reason for the over-plan delivery was not recorded on the production receipt document');
   const seqStock = (await itemState(seqItem.id)).stock;
-  if (seqStock !== 6) problems.push(`موجودی پس از تحویل ۳ و ۳ (با دلیل) ${seqStock} است، نه ۶`);
+  if (seqStock !== 6) problems.push(`Stock after deliveries of 3 and 3 (with a reason) is ${seqStock}, not 6`);
 
   // ۳) پروژه لغوشده و کالای بیرون از پروژه
   const cancelledItem = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   const cancelled = await projectWith('پروژه آزمون لغوشده', cancelledItem.id, 5);
   await pool.query(`UPDATE production_projects SET status = 'cancelled' WHERE id = $1`, [cancelled]);
   const cancelledRefusal = await rejection(() => deliver(cancelled, cancelledItem.id, 1, wh));
-  if (!cancelledRefusal?.includes('لغو')) problems.push(`تحویل پروژه لغوشده رد نشد (${cancelledRefusal ?? 'پذیرفته شد'})`);
+  if (!cancelledRefusal?.includes('لغو')) problems.push(`delivery of a cancelled project was not refused (${cancelledRefusal ?? 'accepted'})`);
   const strayItem = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   const strayRefusal = await rejection(() => deliver(seq, strayItem.id, 1, wh));
-  if (!strayRefusal?.includes('از محصولات پروژه')) problems.push(`تحویل کالای بیرون از پروژه رد نشد (${strayRefusal ?? 'پذیرفته شد'})`);
-  for (const [item, label] of [[cancelledItem.id, 'پروژه لغوشده'], [strayItem.id, 'کالای بیرون از پروژه']] as const) {
+  if (!strayRefusal?.includes('از محصولات پروژه')) problems.push(`delivery of an item outside the project was not refused (${strayRefusal ?? 'accepted'})`);
+  for (const [item, label] of [[cancelledItem.id, 'the cancelled project item'], [strayItem.id, 'the item outside the project']] as const) {
     const { stock } = await itemState(item);
-    if (stock !== 0) problems.push(`موجودی ${label} پس از تحویل ردشده ${stock} است، نه صفر`);
+    if (stock !== 0) problems.push(`Stock of ${label} after the refused delivery is ${stock}, not zero`);
   }
   return problems;
 }

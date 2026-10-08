@@ -132,7 +132,8 @@ export async function runAccountingReportAccessTests(shouldRun: ShouldRun): Prom
         expect('customer B by id', await statement(`partyId=${b.id}&partyType=customer`), { rows: 1, debit: 600_000, credit: 0, balance: 600_000 });
         expect('personnel with A\'s id', await statement(`partyId=${p.id}&partyType=personnel`), { rows: 2, debit: 2_500_000, credit: 2_500_000, balance: 0 });
         expect('personnel by its exact name', await statement(`partyName=${encodeURIComponent(p.name)}&partyType=personnel`), { rows: 2, debit: 2_500_000, credit: 2_500_000, balance: 0 });
-        expect('a name no party has, contained in two names', await statement(`partyName=${encodeURIComponent('مشتری رضایی')}`), { rows: 0, debit: 0, credit: 0, balance: 0 });
+        const containedName = 'مشتری رضایی';
+        expect('a name no party has, contained in two names', await statement(`partyName=${encodeURIComponent(containedName)}`), { rows: 0, debit: 0, credit: 0, balance: 0 });
 
         // the customer page's card (TD-416) and the accounting statement agree
         const card = await admin.get(`/api/customers/${a.id}/account-card`);

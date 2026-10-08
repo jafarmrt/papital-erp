@@ -46,30 +46,30 @@ export async function checkReturnWithinSold(wh: string): Promise<string[]> {
   const invoice = await sell(item.id, 5, wh, '2025-12-11');
 
   const tooMuch = await rejection(() => giveBack(item.id, 6, wh, '2025-12-12', invoice));
-  if (!tooMuch?.includes('قابل برگشت')) problems.push(`برگشت ۶ از فاکتور ۵ عددی رد نشد (${tooMuch ?? 'پذیرفته شد'})`);
+  if (!tooMuch?.includes('قابل برگشت')) problems.push(`return of 6 from an invoice of 5 was not refused (${tooMuch ?? 'accepted'})`);
   const partial = await rejection(() => giveBack(item.id, 2, wh, '2025-12-12', invoice));
-  if (partial) problems.push(`برگشت ۲ از ۵ رد شد: ${partial}`);
+  if (partial) problems.push(`return of 2 out of 5 was refused: ${partial}`);
   const rest = await rejection(() => giveBack(item.id, 3, wh, '2025-12-13', invoice));
-  if (rest) problems.push(`برگشت ۳ باقی‌مانده رد شد: ${rest}`);
+  if (rest) problems.push(`return of the remaining 3 was refused: ${rest}`);
   const again = await rejection(() => giveBack(item.id, 1, wh, '2025-12-13', invoice));
-  if (!again?.includes('قابل برگشت')) problems.push(`برگشت دوباره پس از برگشت کامل فاکتور رد نشد (${again ?? 'پذیرفته شد'})`);
+  if (!again?.includes('قابل برگشت')) problems.push(`another return after the whole invoice was returned was not refused (${again ?? 'accepted'})`);
   const afterRefusals = await itemState(item.id);
-  if (afterRefusals.stock !== 20) problems.push(`موجودی پس از برگشت‌های مجاز و ردشده ${afterRefusals.stock} است، نه ۲۰`);
+  if (afterRefusals.stock !== 20) problems.push(`stock after the allowed and refused returns is ${afterRefusals.stock}, not 20`);
 
   // پیش‌نویس بیش از سقف ثبت می‌شود (موجودی تغییر نمی‌کند) ولی نهایی‌سازی آن رد می‌شود
   const draft = await giveBack(item.id, 1, wh, '2025-12-14', invoice, 'draft');
   const finalizeOver = await rejection(() => DocumentService.finalizeDocument(draft, 'inv'));
-  if (!finalizeOver?.includes('قابل برگشت')) problems.push(`نهایی‌سازی برگشت بیش از سقف رد نشد (${finalizeOver ?? 'پذیرفته شد'})`);
+  if (!finalizeOver?.includes('قابل برگشت')) problems.push(`finalizing a return above the cap was not refused (${finalizeOver ?? 'accepted'})`);
 
   // ابطال برگشت ۲ عددی، همان مقدار را دوباره قابل برگشت می‌کند
   const [partialReturn] = (await pool.query<{ id: number }>(
     `SELECT id FROM documents WHERE return_of_document_id = $1 AND is_deleted = 0 AND status = 'final' ORDER BY id LIMIT 1`, [invoice])).rows;
   if (partialReturn) await DocumentService.deleteDocument(partialReturn.id, 'inv');
   const finalizeAfterVoid = await rejection(() => DocumentService.finalizeDocument(draft, 'inv'));
-  if (finalizeAfterVoid) problems.push(`پس از ابطال یک برگشت، نهایی‌سازی برگشت در سقف رد شد: ${finalizeAfterVoid}`);
+  if (finalizeAfterVoid) problems.push(`after voiding a return, finalizing a return within the cap was refused: ${finalizeAfterVoid}`);
   const { stock } = await itemState(item.id);
-  if (stock !== 19) problems.push(`موجودی پایانی ${stock} است، نه ۱۹`);
+  if (stock !== 19) problems.push(`final stock is ${stock}, not 19`);
 
-  problems.push(...await invariantProblems(scope, 'پایان سناریوی برگشت از فروش'));
+  problems.push(...await invariantProblems(scope, 'end of the sales return scenario'));
   return problems;
 }

@@ -10,9 +10,11 @@ describe('TypeScript strict mode (audit P3-3)', () => {
   });
 });
 
+const STOCK_SHORT = 'موجودی کافی نیست';
+
 describe('errorMessageOf (catch variables are unknown under strict)', () => {
   it('returns the message of an Error or an error-like object', () => {
-    expect(errorMessageOf(new Error('موجودی کافی نیست'))).toBe('موجودی کافی نیست');
+    expect(errorMessageOf(new Error(STOCK_SHORT))).toBe(STOCK_SHORT);
     expect(errorMessageOf({ message: 'خطای سرور' })).toBe('خطای سرور');
   });
 

@@ -18,7 +18,7 @@ import { findChangelogSeriesViolations } from '../src/data/changelogs/seriesGuar
 function fail(message: string): never {
   console.error('❌ Version Sync Check FAILED (TD-111):');
   console.error(`   ${message}`);
-  console.error(`   راه‌حل: تمامی منابع نسخه (package.json، چنج‌لاگ فعال ${ACTIVE_CHANGELOG.file}، k8s manifest و README) را همگام کنید.`);
+  console.error(`   Fix: bring every version source in sync (package.json, the active changelog ${ACTIVE_CHANGELOG.file}, the k8s manifest and README).`);
   process.exit(1);
 }
 
@@ -29,18 +29,18 @@ function main(): void {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
     pkgVersion = String(pkg?.version || '').trim().replace(/^v/, '');
   } catch {
-    fail('package.json خوانده نشد یا فیلد version ندارد.');
+    fail('package.json could not be read or has no version field.');
   }
-  if (!pkgVersion) fail('فیلد "version" در package.json خالی است.');
+  if (!pkgVersion) fail('The "version" field in package.json is empty.');
 
   const topEntry = SYSTEM_UPDATES[0];
-  if (!topEntry) fail(`SYSTEM_UPDATES خالی است — چنج‌لاگ فعال (${ACTIVE_CHANGELOG.file}) مدخل ندارد.`);
+  if (!topEntry) fail(`SYSTEM_UPDATES is empty: the active changelog (${ACTIVE_CHANGELOG.file}) has no entry.`);
   const changelogVersion = String(topEntry.version || '').trim().replace(/^v/, '');
-  if (!changelogVersion) fail('مدخل نخست SYSTEM_UPDATES فیلد version ندارد.');
+  if (!changelogVersion) fail('The first SYSTEM_UPDATES entry has no version field.');
 
   // 1) همگامی package.json و changelog
   if (pkgVersion !== changelogVersion) {
-    fail(`واگرایی نسخه — package.json: «${pkgVersion}» در برابر SYSTEM_UPDATES[0]: «${changelogVersion}»`);
+    fail(`Version mismatch: package.json "${pkgVersion}" vs SYSTEM_UPDATES[0] "${changelogVersion}"`);
   }
 
   // 2) بررسی مانیفست K8s
@@ -51,10 +51,10 @@ function main(): void {
     // و مقدار کهنه آن باعث گزارش نسخه اشتباه در /health می‌شد (قبلاً شرط OR بود).
     const appVersionMatch = k8sContent.match(/name:\s*APP_VERSION\s*\n\s*value:\s*"([^"]+)"/);
     if (!k8sContent.includes(`erp:v${pkgVersion}`)) {
-      fail(`واگرایی تگ ایمیج در مانیفست کوبرنتیز deploy/k8s/erp-deployment.yaml — نسخه مورد انتظار: erp:v${pkgVersion}`);
+      fail(`Image tag mismatch in the Kubernetes manifest deploy/k8s/erp-deployment.yaml; expected: erp:v${pkgVersion}`);
     }
     if (appVersionMatch && appVersionMatch[1] !== pkgVersion) {
-      fail(`واگرایی APP_VERSION در مانیفست کوبرنتیز — مقدار فعلی «${appVersionMatch[1]}»، مورد انتظار «${pkgVersion}»`);
+      fail(`APP_VERSION mismatch in the Kubernetes manifest: current "${appVersionMatch[1]}", expected "${pkgVersion}"`);
     }
   }
 
@@ -63,20 +63,20 @@ function main(): void {
   if (fs.existsSync(readmePath)) {
     const readmeContent = fs.readFileSync(readmePath, 'utf-8');
     if (!readmeContent.includes(`نسخه مستقر: \`v${pkgVersion}\``)) {
-      fail(`واگرایی نسخه در هدر README.md — نسخه مورد انتظار: v${pkgVersion}`);
+      fail(`Version mismatch in the README.md header; expected: v${pkgVersion}`);
     }
   }
 
   // 3) v8.0.0: نسخه در سری فعال، مدخل‌های فایل فعال در همان سری و بدون تکرار، سری‌های بسته‌شده منجمد
   const seriesViolations = findChangelogSeriesViolations(pkgVersion, ACTIVE_CHANGELOG, CLOSED_CHANGELOG_SERIES);
   if (seriesViolations.length > 0) {
-    fail(`سری‌های چنج‌لاگ ناسازگارند:\n   - ${seriesViolations.slice(0, 15).join('\n   - ')}`);
+    fail(`The changelog series are inconsistent:\n   - ${seriesViolations.slice(0, 15).join('\n   - ')}`);
   }
 
   // 4) v7.0.54: قاعده چنج‌لاگ کوتاه سری فعال (فقط تغییرات مهم و باگ‌های مهم و بحرانی)
   const compactViolations = findCompactRuleViolations(ACTIVE_CHANGELOG.updates);
   if (compactViolations.length > 0) {
-    fail(`چنج‌لاگ ${ACTIVE_CHANGELOG.file} از قاعده مدخل کوتاه (src/data/changelogs/compactRule.ts) پیروی نمی‌کند:\n   - ${compactViolations.slice(0, 15).join('\n   - ')}`);
+    fail(`The changelog ${ACTIVE_CHANGELOG.file} breaks the short entry rule (src/data/changelogs/compactRule.ts):\n   - ${compactViolations.slice(0, 15).join('\n   - ')}`);
   }
 
   console.log(`✅ Version Sync OK (TD-111): package.json == SYSTEM_UPDATES[0] == k8s (image + APP_VERSION) == README == v${pkgVersion}`);

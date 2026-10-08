@@ -63,7 +63,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   // TST-004 / JWT Forgery — fallback secret must be rejected (SEC-003)
   // ===============================================================
   await runCase(results, 'pen_jwt_forgery', 'jwt_forgery_rejected',
-    'پن‌تست: جعل توکن ادمین با secret توسعه‌ای باید رد شود',
+    'Pentest: a forged admin token signed with the development secret is rejected',
     async () => {
       const forged = jwt.sign(
         { id: 1, username: 'admin', role: 'admin' },
@@ -73,13 +73,13 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         .get('/api/users')
         .set('Cookie', `auth_token=${forged}`);
       if (res.status !== 401) {
-        throw new Error(`توکن جعلی با secret fallback پذیرفته شد! status=${res.status}`);
+        throw new Error(`A forged token signed with the fallback secret was accepted! status=${res.status}`);
       }
       return 'توکن جعلی با secret توسعه‌ای با 401 رد شد.';
     });
 
   await runCase(results, 'pen_jwt_expired', 'jwt_forgery_rejected',
-    'پن‌تست: توکن منقضی‌شده باید 401 برگرداند',
+    'Pentest: an expired token returns 401',
     async () => {
       const expired = jwt.sign(
         { id: 1, username: 'admin', role: 'admin' },
@@ -90,7 +90,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         .get('/api/users')
         .set('Cookie', `auth_token=${expired}`);
       if (res.status !== 401) {
-        throw new Error(`توکن منقضی پذیرفته شد! status=${res.status}`);
+        throw new Error(`An expired token was accepted! status=${res.status}`);
       }
       return 'توکن منقضی‌شده با 401 رد شد.';
     });
@@ -99,7 +99,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   // CSRF Protection (SEC-006) — cookie session without csrf header
   // ===============================================================
   await runCase(results, 'pen_csrf_missing_token', 'csrf_enforced',
-    'پن‌تست: درخواست POST با کوکی معتبر ولی بدون هدر CSRF باید 403 شود',
+    'Pentest: a POST request with a valid cookie but no CSRF header returns 403',
     async () => {
       if (!adminCookie) throw new Error('admin cookie in hand nist');
       const res = await request(app)
@@ -108,36 +108,36 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         .set('Cookie', adminCookie)
         .send({ name: 'CSRF Probe' });
       if (![403].includes(res.status)) {
-        throw new Error(`CSRF block نشد! status=${res.status}`);
+        throw new Error(`CSRF was not blocked! status=${res.status}`);
       }
       return `درخواست بین-سایتی بدون توکن CSRF با ${res.status} مسدود شد.`;
     });
 
   // v7.0.41 (audit P2-11): توکن نشست فقط با الگوریتم HS256 پذیرفته شود
   await runCase(results, 'pen_jwt_algorithm_pinned', 'jwt_forgery_rejected',
-    'پن‌تست: توکن نشست با کلید درست ولی الگوریتم دیگر (HS512) باید رد شود',
+    'Pentest: a session token with the right key but another algorithm (HS512) is rejected',
     async () => {
-      if (!adminCookie) throw new Error('کوکی ادمین برای آزمون در دسترس نیست');
+      if (!adminCookie) throw new Error('The admin cookie is not available for the test');
       const original = jwt.decode(adminCookie.replace(/^auth_token=/, '')) as Record<string, unknown> | null;
-      if (!original?.id) throw new Error('محتوای توکن نشست ادمین قابل خواندن نیست');
+      if (!original?.id) throw new Error('The admin session token content cannot be read');
       const { iat: _iat, exp: _exp, ...claims } = original;
       const otherAlg = jwt.sign(claims, process.env.JWT_SECRET as string, { algorithm: 'HS512', expiresIn: '1h' });
       const control = await request(app).get('/api/auth/me').set('Cookie', adminCookie);
       const res = await request(app).get('/api/auth/me').set('Cookie', `auth_token=${otherAlg}`);
       if (control.status !== 200) {
-        throw new Error(`نشست اصلی ادمین باید پذیرفته شود: status=${control.status}`);
+        throw new Error(`The original admin session must be accepted: status=${control.status}`);
       }
       if (res.status !== 401) {
-        throw new Error(`توکن امضاشده با HS512 پذیرفته شد! status=${res.status}`);
+        throw new Error(`A token signed with HS512 was accepted! status=${res.status}`);
       }
       return 'همان ادعاهای نشست با الگوریتم HS512 با 401 رد شد و نشست HS256 پذیرفته ماند.';
     });
 
   // v7.0.41 (audit P2-11): توکن CSRF در زمان ثابت مقایسه شود
   await runCase(results, 'pen_csrf_constant_time_compare', 'csrf_enforced',
-    'پن‌تست: توکن CSRF نادرست رد شود و مقایسه آن در زمان ثابت (timingSafeEqual) انجام شود',
+    'Pentest: a wrong CSRF token is rejected and compared in constant time (timingSafeEqual)',
     async () => {
-      if (!adminCookie) throw new Error('کوکی ادمین برای آزمون در دسترس نیست');
+      if (!adminCookie) throw new Error('The admin cookie is not available for the test');
       const cryptoModule = (await import('crypto')).default as unknown as { timingSafeEqual: (a: NodeJS.ArrayBufferView, b: NodeJS.ArrayBufferView) => boolean };
       const nodeCrypto = await import('crypto');
       const probeToken = 'f'.repeat(64);
@@ -161,22 +161,22 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         cryptoModule.timingSafeEqual = originalTimingSafeEqual;
       }
       if (res.status !== 403) {
-        throw new Error(`توکن CSRF نادرست رد نشد! status=${res.status}`);
+        throw new Error(`A wrong CSRF token was not rejected! status=${res.status}`);
       }
       if (constantTimeCalls === 0) {
-        throw new Error('توکن CSRF با مقایسه معمولی رشته (غیر زمان‌ثابت) سنجیده شد');
+        throw new Error('The CSRF token was checked with a plain (non constant-time) string comparison');
       }
       return `توکن CSRF نادرست با 403 رد شد و مقایسه با timingSafeEqual (${constantTimeCalls} فراخوانی) انجام شد.`;
     });
 
   // v7.0.43 (audit P3-11): مسیر API ناموجود باید 404 JSON بدهد، نه صفحه برنامه
   await runCase(results, 'pen_unknown_api_route_json_404', 'unknown_api_route_json_404',
-    'پن‌تست: مسیر API ناموجود برای کاربر واردشده پاسخ 404 با بدنه JSON بدهد',
+    'Pentest: an unknown API route returns 404 with a JSON body for a logged-in user',
     async () => {
-      if (!adminCookie) throw new Error('کوکی ادمین برای آزمون در دسترس نیست');
+      if (!adminCookie) throw new Error('The admin cookie is not available for the test');
       const res = await request(app).get('/api/__no_such_endpoint_p3_11').set('Cookie', adminCookie);
       if (res.status !== 404 || !String(res.headers['content-type'] || '').includes('application/json') || !res.body?.error) {
-        throw new Error(`پاسخ مسیر ناموجود باید 404 JSON باشد: status=${res.status} type=${res.headers['content-type']}`);
+        throw new Error(`The unknown route response must be a 404 JSON: status=${res.status} type=${res.headers['content-type']}`);
       }
       return 'مسیر API ناموجود پاسخ 404 با بدنه JSON گرفت و به برنامه تک‌صفحه‌ای نرسید.';
     });
@@ -185,31 +185,31 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   // SQL Injection — parameterized routes & queries must hold
   // ===============================================================
   await runCase(results, 'pen_sqli_param_route', 'sqli_blocked',
-    'پن‌تست: تزریق SQL در مسیر /api/items/:id نباید جدول users را حذف کند',
+    'Pentest: SQL injection in the /api/items/:id route does not drop the users table',
     async () => {
       const res = await request(app)
         .get('/api/items/1%3B%20DROP%20TABLE%20users%3B%20--')
         .set('Cookie', adminCookie);
       if (res.status >= 500) {
-        throw new Error(`سرور با خطای 500 شکست خورد: ${JSON.stringify(res.body).slice(0, 200)}`);
+        throw new Error(`The server failed with a 500 error: ${JSON.stringify(res.body).slice(0, 200)}`);
       }
       // v7.0.24 (TD-174): نام بدون پیشوند اسکیما تا در اجرای ایزوله CI جدول users اسکیمای فعال بررسی شود
       const probe = await orm.execute(sql`SELECT to_regclass('users') IS NOT NULL AS exists`);
       const rows: any[] = (probe as any).rows || [];
       if (!rows[0]?.exists) {
-        throw new Error('جدول users حذف شده است!');
+        throw new Error('The users table was dropped!');
       }
       return `مسیر تزریقی بدون خطای سرور پاسخ داد (${res.status}) و یکپارچگی جدول users حفظ شد.`;
     });
 
   await runCase(results, 'pen_sqli_query_filter', 'sqli_blocked',
-    'پن‌تست: تزریق SQL در فیلتر name مشتریان باید امن پردازش شود',
+    'Pentest: SQL injection in the customers name filter is handled safely',
     async () => {
       const res = await request(app)
         .get(`/api/customers?name=${encodeURIComponent("' OR '1'='1")}`)
         .set('Cookie', adminCookie);
       if (res.status >= 500) {
-        throw new Error(`کوئری تزریقی باعث 500 شد`);
+        throw new Error(`The injected query caused a 500`);
       }
       return `فیلتر تزریقی بدون خطا (${res.status}) و بدون افشای داده پردازش شد.`;
     });
@@ -218,7 +218,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   // XSS — stored payload must be sanitized on persistence
   // ===============================================================
   await runCase(results, 'pen_xss_customer_name', 'xss_sanitized',
-    'پن‌تست: payload اسکریپت در نام مشتری نباید خام ذخیره/بازگردانی شود',
+    'Pentest: a script payload in a customer name is not stored/returned raw',
     async () => {
       await ensureAdminTestUser();
       session = await getAdminSession();
@@ -234,14 +234,14 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         .send({ name: xssPayload });
 
       if (createRes.status === 403) {
-        throw new Error('CSRF session token معتبر نبود — تست به هندلر نرسید');
+        throw new Error('The CSRF session token was invalid; the test did not reach the handler');
       }
       if (createRes.status !== 200 && createRes.status !== 201) {
-        throw new Error(`ایجاد مشتری شکست خورد: ${createRes.status} ${JSON.stringify(createRes.body).slice(0, 200)}`);
+        throw new Error(`Customer creation failed: ${createRes.status} ${JSON.stringify(createRes.body).slice(0, 200)}`);
       }
       const created = createRes.body?.data ?? createRes.body;
       const getId = created?.id;
-      if (!getId) throw new Error('شناسه مشتری بازنگشت');
+      if (!getId) throw new Error('The customer id was not returned');
 
       const getRes = await request(app)
         .get(`/api/customers/${getId}`)
@@ -249,7 +249,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
       const body = JSON.stringify(getRes.body || {});
       if (body.includes('<script>')) {
         await orm.execute(sql`DELETE FROM customers WHERE id = ${getId}`);
-        throw new Error('payload اسکریپت بدون پاکسازی بازگردانده شد!');
+        throw new Error('The script payload was returned without sanitizing!');
       }
 
       // Cleanup
@@ -261,7 +261,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   // SSRF — webhook subscription targeting cloud metadata must fail
   // ===============================================================
   await runCase(results, 'pen_ssrf_metadata_block', 'ssrf_blocked',
-    'پن‌تست: اشتراک وب‌هوک به IP داخلی Cloud Metadata باید رد شود',
+    'Pentest: a webhook subscription to the internal Cloud Metadata IP is rejected',
     async () => {
       if (!adminCookie) throw new Error('admin cookie in hand nist');
       const res = await request(app)
@@ -275,7 +275,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
           eventPatterns: ['InvoiceApproved']
         });
       if (res.status === 403) {
-        throw new Error('CSRF session token معتبر نبود — تست به گارد SSRF نرسید');
+        throw new Error('The CSRF session token was invalid; the test did not reach the SSRF guard');
       }
       if (res.status >= 200 && res.status < 300 && res.body?.id) {
         // If creation succeeded, the delivery layer must still refuse dispatch.
@@ -283,7 +283,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
           .set('x-csrf-token', session.csrfToken)
           .set('Origin', 'http://localhost:3000')
           .set('Cookie', adminCookie);
-        throw new Error('اشتراک وب‌هوک با URL متادیتا ایجاد شد — گارد SSRF ناقص است');
+        throw new Error('A webhook subscription with the metadata URL was created; the SSRF guard is incomplete');
       }
       return `گارد SSRF فعال است؛ درخواست با ${res.status} رد شد.`;
     });
@@ -292,7 +292,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   // Rate Limit Bypass — XFF spoofing must NOT defeat brute-force lock
   // ===============================================================
   await runCase(results, 'pen_rate_limit_xff_bypass', 'rate_limit_no_bypass',
-    'پن‌تست: چرخش X-Forwarded-For نباید قفل brute-force لاگین را دور بزند',
+    'Pentest: rotating X-Forwarded-For does not bypass the login brute-force lock',
     async () => {
       const rlProbeUser = `pen_rl_probe_${Date.now()}`;
       await orm.insert(users).values({
@@ -326,7 +326,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
       }
       const tooMany = responses.filter(r => r.status === 429).length;
       if (tooMany === 0) {
-        throw new Error(`هیچ 429ای صادر نشد — مهاجم می‌تواند با جعل XFF محدودیت را دور بزند (${responses.map(r => r.status).join(',')})`);
+        throw new Error(`No 429 was returned; an attacker can bypass the limit by forging XFF (${responses.map(r => r.status).join(',')})`);
       }
       return `${tooMany} درخواست از ${attempts} تلاش با 429 مسدود شد — قفل brute-force با چرخش XFF دور زده نمی‌شود (کاربر پروب سینتتیک؛ ادمین واقعی دست‌نخورده).`;
     });
@@ -335,17 +335,17 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   // v7.0.23 (TD-181 / audit P0-5): trust only known proxies for the client IP
   // ===============================================================
   await runCase(results, 'pen_trust_proxy_untrusted_peer', 'rate_limit_no_bypass',
-    'پن‌تست: X-Forwarded-For از کلاینت مستقیم (غیرپراکسی) نباید معتبر شمرده شود و TRUST_PROXY=true ممنوع است',
+    'Pentest: X-Forwarded-For from a direct (non-proxy) client is not trusted and TRUST_PROXY=true is forbidden',
     async () => {
       const trustFn = app.get('trust proxy fn') as (addr: string, i: number) => boolean;
       if (typeof trustFn !== 'function') {
-        throw new Error('تابع trust proxy در اپلیکیشن Express پیکربندی نشده است.');
+        throw new Error('The trust proxy function is not configured in the Express application.');
       }
       if (trustFn('203.0.113.7', 0) !== false) {
-        throw new Error('آدرس عمومی 203.0.113.7 نباید به‌عنوان پراکسی قابل‌اعتماد پذیرفته شود (جعل XFF ممکن می‌شود).');
+        throw new Error('The public address 203.0.113.7 must not be accepted as a trusted proxy (XFF forgery would become possible).');
       }
       if (trustFn('127.0.0.1', 0) !== true) {
-        throw new Error('Nginx محلی (loopback) باید پراکسی قابل‌اعتماد باشد تا IP واقعی کلاینت استخراج شود.');
+        throw new Error('Local Nginx (loopback) must be a trusted proxy so the real client IP is extracted.');
       }
       const { resolveTrustProxySetting } = await import('../../lib/trustProxy.js');
       let unsafeRejected = false;
@@ -355,14 +355,14 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         unsafeRejected = true;
       }
       if (!unsafeRejected) {
-        throw new Error('مقدار ناامن TRUST_PROXY=true باید رد شود.');
+        throw new Error('The unsafe value TRUST_PROXY=true must be rejected.');
       }
       return 'آدرس‌های عمومی پراکسی محسوب نمی‌شوند، loopback قابل‌اعتماد است و TRUST_PROXY=true رد می‌شود.';
     });
 
   // v7.0.41 (TD-182): IP لاگ ممیزی نباید از مقدار ابتدای X-Forwarded-For که در کنترل کلاینت است خوانده شود
   await runCase(results, 'pen_audit_ip_not_spoofable', 'rate_limit_no_bypass',
-    'پن‌تست: IP ثبت‌شده در لاگ ممیزی از پراکسی قابل‌اعتماد گرفته شود، نه از X-Forwarded-For جعلی کلاینت',
+    'Pentest: the IP recorded in the audit log comes from the trusted proxy, not from a forged client X-Forwarded-For',
     async () => {
       const { activityLogs } = await import('../../db/schema.js');
       const probeUser = `pen_ip_probe_${Date.now()}`;
@@ -372,19 +372,19 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         .set('X-Forwarded-For', '203.0.113.66, 198.51.100.7')
         .send({ username: probeUser, password: 'wrong-password-ip-probe' });
       if (res.status !== 401) {
-        throw new Error(`ورود ناموفق باید 401 بدهد: status=${res.status}`);
+        throw new Error(`A failed login must return 401: status=${res.status}`);
       }
       const [log] = await orm.select({ ip: activityLogs.ipAddress }).from(activityLogs)
         .where(eq(activityLogs.username, probeUser)).limit(1);
-      if (!log) throw new Error('لاگ ممیزی ورود ناموفق ثبت نشد');
+      if (!log) throw new Error('The audit log of the failed login was not recorded');
       if (log.ip !== '198.51.100.7') {
-        throw new Error(`IP لاگ ممیزی باید آدرس اعلام‌شده پراکسی قابل‌اعتماد (198.51.100.7) باشد، نه «${log.ip}»`);
+        throw new Error(`The audit log IP must be the address reported by the trusted proxy (198.51.100.7), not "${log.ip}"`);
       }
       return 'IP جعلی ابتدای X-Forwarded-For نادیده گرفته شد و آدرس اعلام‌شده پراکسی قابل‌اعتماد در لاگ ممیزی ثبت شد.';
     });
 
   await runCase(results, 'pen_login_limiter_per_client_behind_proxy', 'rate_limit_no_bypass',
-    'پن‌تست: پشت پراکسی، ورودهای موفق شمرده نشوند و brute-force یک کلاینت سایر کاربران را مسدود نکند',
+    'Pentest: behind a proxy, successful logins are not counted and one client brute-forcing does not block other users',
     async () => {
       const { resetLoginRateLimiter } = await import('../../app.js');
       const okUser = `pen_rl_ok_${Date.now()}`;
@@ -404,7 +404,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
             .set('X-Forwarded-For', '198.51.100.10')
             .send({ username: okUser, password: TEST_PASSWORD });
           if (res.status !== 200) {
-            throw new Error(`ورود موفق شماره ${i + 1} نباید محدود شود (وضعیت ${res.status}) — ورودهای موفق نباید سطل محدودیت را پر کنند.`);
+            throw new Error(`Successful login number ${i + 1} must not be limited (status ${res.status}); successful logins must not fill the limiter bucket.`);
           }
         }
 
@@ -421,7 +421,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
           }
         }
         if (!throttledA) {
-          throw new Error('brute-force کلاینت A پس از ۱۰ تلاش ناموفق باید با 429 مسدود شود.');
+          throw new Error('Client A brute-forcing must be blocked with 429 after 10 failed attempts.');
         }
 
         // 3. Client B behind the same proxy must still be able to log in
@@ -430,7 +430,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
           .set('X-Forwarded-For', '198.51.100.77')
           .send({ username: okUser, password: TEST_PASSWORD });
         if (resB.status !== 200) {
-          throw new Error(`کاربر B پشت همان پراکسی نباید به‌خاطر brute-force کلاینت A مسدود شود (وضعیت ${resB.status}).`);
+          throw new Error(`User B behind the same proxy must not be blocked because of client A brute-forcing (status ${resB.status}).`);
         }
       } finally {
         await orm.delete(users).where(eq(users.username, okUser));
@@ -443,7 +443,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   // v7.0.26 (TD-184 / audit P1-3): key-level settings authorization & masked-secret protection
   // ===============================================================
   await runCase(results, 'pen_settings_key_level_authorization', 'settings_key_authorization',
-    'پن‌تست: مدیر تنظیمات کسب‌وکاری را ذخیره کند، کلیدهای محرمانه با ******** بازنویسی نشوند و فقط ادمین آن‌ها را تغییر دهد',
+    'Pentest: a manager saves business settings, secret keys are not overwritten with ******** and only the admin changes them',
     async () => {
       const { appSettings } = await import('../../db/schema.js');
       const { inArray } = await import('drizzle-orm');
@@ -455,7 +455,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
       };
       try {
         await upsert('wc_consumer_secret', 'cs_real_secret_value');
-        await upsert('company_name', 'شرکت آزمون قبل');
+        await upsert('company_name', 'Test Company Before');
         await upsert('wc_store_url', 'https://shop.example.com');
         await orm.insert(users).values({ username: managerUser, password: TEST_PASSWORD_HASH, fullName: 'مدیر آزمون', role: 'manager', avatarUrl: '' });
         const { invalidateSettingsCache } = await import('../../lib/memoryCache.js');
@@ -467,7 +467,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         const getRes = await request(app).get('/api/settings').set('Cookie', mgr.cookie);
         const maskedRow = (Array.isArray(getRes.body) ? getRes.body : []).find((s: any) => s.key === 'wc_consumer_secret');
         if (maskedRow?.value !== '********') {
-          throw new Error(`کلید محرمانه برای مدیر باید ماسک شود (مقدار: ${maskedRow?.value})`);
+          throw new Error(`The secret key must be masked for the manager (value: ${maskedRow?.value})`);
         }
 
         // 2. Manager re-submits the whole form (masked secret + the retired test-endpoints flag of an old form, v7.0.85) and changes the company name
@@ -479,25 +479,25 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
             { key: 'wc_store_url', value: 'https://shop.example.com' }
           ] });
         if (saveRes.status !== 200 || JSON.stringify(saveRes.body?.changedKeys) !== JSON.stringify(['company_name'])) {
-          throw new Error(`ذخیره تنظیمات توسط مدیر باید موفق و فقط company_name تغییر کند: ${saveRes.status} ${JSON.stringify(saveRes.body).slice(0, 200)}`);
+          throw new Error(`Saving settings by the manager must succeed and change only company_name: ${saveRes.status} ${JSON.stringify(saveRes.body).slice(0, 200)}`);
         }
         const [secretAfter] = await orm.select().from(appSettings).where(eq(appSettings.key, 'wc_consumer_secret'));
         if (secretAfter?.value !== 'cs_real_secret_value') {
-          throw new Error('مقدار واقعی کلید محرمانه نباید با ******** بازنویسی شود.');
+          throw new Error('The real value of the secret key must not be overwritten with ********.');
         }
 
         // 3. Manager must not change secret integration keys or the store URL
         const forbiddenRes = await request(app).post('/api/settings').set('Cookie', mgr.cookie).set('X-CSRF-Token', mgr.csrfToken)
           .send({ settings: [{ key: 'wc_store_url', value: 'https://attacker.example.net' }] });
         if (forbiddenRes.status !== 403) {
-          throw new Error(`تغییر آدرس فروشگاه ووکامرس توسط مدیر باید 403 بگیرد (وضعیت ${forbiddenRes.status}).`);
+          throw new Error(`Changing the WooCommerce store URL by the manager must get 403 (status ${forbiddenRes.status}).`);
         }
 
         // 4. Unknown keys are rejected
         const unknownRes = await request(app).post('/api/settings').set('Cookie', mgr.cookie).set('X-CSRF-Token', mgr.csrfToken)
           .send({ settings: [{ key: 'negative_stock_policy', value: 'allowed' }] });
         if (unknownRes.status < 400 || unknownRes.status >= 500) {
-          throw new Error(`کلید ناشناخته باید رد شود (وضعیت ${unknownRes.status}).`);
+          throw new Error(`An unknown key must be rejected (status ${unknownRes.status}).`);
         }
 
         // 5. Admin can change a secret key
@@ -508,7 +508,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         // v9.0.361 (TD-898): stored encrypted
         const { decryptSecret } = await import('../../lib/secretBox.js');
         if (adminRes.status !== 200 || decryptSecret(secretRotated?.value) !== 'cs_rotated_by_admin') {
-          throw new Error(`ادمین باید بتواند کلید محرمانه را تغییر دهد (وضعیت ${adminRes.status}).`);
+          throw new Error(`The admin must be able to change the secret key (status ${adminRes.status}).`);
         }
         return 'مدیر تنظیمات کسب‌وکاری را ذخیره کرد، مقدار ماسک نادیده گرفته شد، تغییر کلید محرمانه توسط مدیر 403 گرفت، کلید ناشناخته رد شد و ادمین کلید محرمانه را تغییر داد.';
       } finally {
@@ -526,7 +526,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   // v7.0.27 (TD-185 / audit P1-4): JWT is not exposed in the login response body by default
   // ===============================================================
   await runCase(results, 'pen_login_token_not_in_body', 'token_not_exposed_in_body',
-    'پن‌تست: توکن JWT به‌صورت پیش‌فرض در بدنه پاسخ ورود برگردانده نشود (فقط کوکی HttpOnly)',
+    'Pentest: the JWT is not returned in the login response body by default (HttpOnly cookie only)',
     async () => {
       const probeUser = `pen_tok_${Date.now()}`;
       const previousFlag = process.env.EXPOSE_TOKEN_IN_BODY;
@@ -536,16 +536,16 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         const res = await request(app).post('/api/auth/login').set('X-Forwarded-For', '198.51.100.91').send({ username: probeUser, password: TEST_PASSWORD });
         const setCookie = String(res.headers['set-cookie'] || '');
         if (res.status !== 200 || !setCookie.includes('auth_token=') || !/HttpOnly/i.test(setCookie)) {
-          throw new Error(`ورود موفق باید کوکی HttpOnly صادر کند (وضعیت ${res.status}).`);
+          throw new Error(`A successful login must issue an HttpOnly cookie (status ${res.status}).`);
         }
         if (Object.prototype.hasOwnProperty.call(res.body || {}, 'token')) {
-          throw new Error('بدنه پاسخ ورود نباید شامل فیلد token باشد (AGENTS.md §5).');
+          throw new Error('The login response body must not contain a token field (AGENTS.md §5).');
         }
 
         process.env.EXPOSE_TOKEN_IN_BODY = 'true';
         const resFlag = await request(app).post('/api/auth/login').set('X-Forwarded-For', '198.51.100.92').send({ username: probeUser, password: TEST_PASSWORD });
         if (resFlag.status !== 200 || typeof resFlag.body?.token !== 'string' || resFlag.body.token.length < 20) {
-          throw new Error('با EXPOSE_TOKEN_IN_BODY=true (سازگاری پیش‌نمایش) باید فیلد token برگردانده شود.');
+          throw new Error('With EXPOSE_TOKEN_IN_BODY=true (preview compatibility) the token field must be returned.');
         }
         return 'به‌صورت پیش‌فرض فقط کوکی HttpOnly صادر شد و فیلد token در بدنه نبود؛ با فلگ سازگاری، token برگردانده شد.';
       } finally {
@@ -559,7 +559,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   // v7.0.28 (TD-186 / audit P1-5): login failures must not reveal whether a username exists
   // ===============================================================
   await runCase(results, 'pen_login_uniform_responses', 'login_uniform_responses',
-    'پن‌تست: پاسخ ورود ناموفق برای کاربر موجود و ناموجود یکسان باشد و قفل تدریجی برای هر دو اعمال شود',
+    'Pentest: a failed login response is the same for an existing and a missing user and the progressive lock applies to both',
     async () => {
       const { resetLoginRateLimiter } = await import('../../app.js');
       const { resetPhantomLockouts } = await import('../../services/auth/loginSecurity.service.js');
@@ -575,10 +575,10 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         const realFirst = await attempt(realUser, '198.51.100.101');
         const ghostFirst = await attempt(ghostUser, '198.51.100.102');
         if (realFirst.status !== 401 || ghostFirst.status !== 401 || JSON.stringify(realFirst.body) !== JSON.stringify(ghostFirst.body)) {
-          throw new Error(`پاسخ ورود ناموفق باید یکسان باشد: ${realFirst.status} ${JSON.stringify(realFirst.body)} / ${ghostFirst.status} ${JSON.stringify(ghostFirst.body)}`);
+          throw new Error(`The failed login response must be the same: ${realFirst.status} ${JSON.stringify(realFirst.body)} / ${ghostFirst.status} ${JSON.stringify(ghostFirst.body)}`);
         }
         if (/تلاش باقی/.test(String(realFirst.body?.error || ''))) {
-          throw new Error('پیام خطا نباید تعداد تلاش‌های باقی‌مانده را افشا کند.');
+          throw new Error('The error message must not reveal the number of remaining attempts.');
         }
 
         // 2. After the threshold both get the same 429 progressive lock (1 minute)
@@ -591,7 +591,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         }
         if (realLocked?.status !== 429 || ghostLocked?.status !== 429 || realLocked.body?.remainingMinutes !== 1 || ghostLocked.body?.remainingMinutes !== 1
           || realLocked.body?.error !== ghostLocked.body?.error) {
-          throw new Error(`پس از ۵ تلاش ناموفق هر دو باید قفل یکسان ۱ دقیقه‌ای بگیرند: ${realLocked?.status}/${ghostLocked?.status} ${JSON.stringify(realLocked?.body)} ${JSON.stringify(ghostLocked?.body)}`);
+          throw new Error(`After 5 failed attempts both must get the same 1-minute lock: ${realLocked?.status}/${ghostLocked?.status} ${JSON.stringify(realLocked?.body)} ${JSON.stringify(ghostLocked?.body)}`);
         }
         return 'پیام و وضعیت خطای ورود برای کاربر موجود و ناموجود یکسان بود و پس از ۵ تلاش هر دو قفل تدریجی یکسان ۱ دقیقه‌ای گرفتند.';
       } finally {
@@ -605,7 +605,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   // v7.0.29 (TD-188 / audit P1-6): data export never contains credentials or secrets
   // ===============================================================
   await runCase(results, 'pen_data_export_no_secrets', 'data_export_no_secrets',
-    'پن‌تست: خروجی داده‌ها شامل هش رمز، رمز صرافی پرسنل و کلیدهای محرمانه نباشد و دفاتر حسابداری را داشته باشد',
+    'Pentest: the data export holds no password hash, personnel exchange password or secret keys and includes the accounting books',
     async () => {
       const { appSettings, personnel } = await import('../../db/schema.js');
       const secretKey = 'wc_webhook_secret';
@@ -645,7 +645,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         const op = await loginTestUserWithSession(app, operatorUser);
         const forbidden = await request(app).get('/api/export-backup').set('Cookie', op.cookie);
         if (forbidden.status !== 403) {
-          throw new Error(`کاربر غیرادمین نباید به خروجی داده‌ها دسترسی داشته باشد (وضعیت ${forbidden.status}).`);
+          throw new Error(`A non-admin user must not access the data export (status ${forbidden.status}).`);
         }
         return 'خروجی داده‌ها بدون هش رمز، رمز صرافی و کلید محرمانه و همراه با دفاتر حسابداری و کارمزدی تولید شد و برای غیرادمین 403 بود.';
       } finally {
@@ -663,7 +663,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   // Path Traversal — /uploads must never escape its root
   // ===============================================================
   await runCase(results, 'pen_path_traversal_uploads', 'path_traversal_blocked',
-    'پن‌تست: Path Traversal روی /uploads نباید به فایلهای سیستمی دسترسی دهد',
+    'Pentest: Path Traversal on /uploads gives no access to system files',
     async () => {
       const probes = [
         '/uploads/..%2f..%2f..%2fetc%2fpasswd',
@@ -673,7 +673,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
       for (const p of probes) {
         const res = await request(app).get(p);
         if (res.status === 200 && String(res.text || '').includes('root:')) {
-          throw new Error(`نشت فایل سیستمی از طریق ${p}`);
+          throw new Error(`System file leaked through ${p}`);
         }
       }
       return 'هیچ‌یک از پروب‌های traversal به محتوای خارج از ریشه uploads دسترسی نیافتند.';

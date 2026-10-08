@@ -22,13 +22,13 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     results.push(makeTestCase({
       id: 'int_db_readiness_check',
       scenarioId: 'db_readiness',
-      name: 'بررسی آمادگی و اتصال به پایگاه داده PostgreSQL',
+      name: 'PostgreSQL database readiness and connection check',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
       status: 'BLOCKED',
       durationMs: 0,
-      error: 'اتصال به دیتابیس برقرار نشد'
+      error: 'Could not connect to the database'
     }));
     return results;
   }
@@ -71,7 +71,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
 
     // Execute transition: draft -> review
     const submitTransition = wf.transitions.find(t => t.fromStateId === wf.states['draft'].id);
-    if (!submitTransition) throw new Error('انتقال اولیه پیدا نشد');
+    if (!submitTransition) throw new Error('Initial transition not found');
 
     await WorkflowTransitionExecutor.executeTransition({
       instanceId: instance.id,
@@ -95,21 +95,21 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'int_workflow_approval_postgres',
         scenarioId: 'workflow_approval_postgres',
-        name: 'تایید فرآیند کاری در دیتابیس واقعی PostgreSQL (Workflow Approval with PostgreSQL)',
+        name: 'Workflow approval on a real PostgreSQL database',
         layer: 'integration',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t1Start,
-        details: `فرآیند شماره #${instance.id} در PostgreSQL به وضعیت '${wf.states['review'].title}' منتقل شد و سوابق ثبت گردید.`
+        details: `Workflow instance #${instance.id} moved to state '${wf.states['review'].title}' in PostgreSQL and its history was recorded.`
       }));
     } else {
-      throw new Error(`بروزرسانی وضعیت فرآیند در PostgreSQL انجام نشد (وضعیت فعلی: ${updatedInstance?.currentStateId})`);
+      throw new Error(`Workflow state update in PostgreSQL failed (current state: ${updatedInstance?.currentStateId})`);
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_workflow_approval_postgres',
       scenarioId: 'workflow_approval_postgres',
-      name: 'تایید فرآیند کاری در دیتابیس واقعی PostgreSQL (Workflow Approval with PostgreSQL)',
+      name: 'Workflow approval on a real PostgreSQL database',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -147,21 +147,21 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'int_concurrent_stock_issues_postgres',
         scenarioId: 'concurrent_stock_issues_postgres',
-        name: 'صدور همزمان دو حواله خروج با تراکنش‌های واقعی دیتابیس (Two Concurrent Stock Issues - Real Transactions)',
+        name: 'Two concurrent stock remittances with real database transactions',
         layer: 'integration',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t2Start,
-        details: 'تراکنش اول با موفقیت کسر گردید (موجودی: ۳) و تراکنش همزمان دوم به دلیل عدم تکافوی موجودی با قفل اتمیک لغو شد.'
+        details: 'The first transaction deducted stock (stock: 3) and the concurrent second one was rejected under the atomic lock for insufficient stock.'
       }));
     } else {
-      throw new Error(`رفتار همزمانی انبار نامعتبر است: موفق=${fulfilledCount}, ناموفق=${rejectedCount}, موجودی نهایی=${finalItem?.currentStock}`);
+      throw new Error(`Invalid warehouse concurrency behaviour: succeeded=${fulfilledCount}, failed=${rejectedCount}, final stock=${finalItem?.currentStock}`);
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_concurrent_stock_issues_postgres',
       scenarioId: 'concurrent_stock_issues_postgres',
-      name: 'صدور همزمان دو حواله خروج با تراکنش‌های واقعی دیتابیس (Two Concurrent Stock Issues - Real Transactions)',
+      name: 'Two concurrent stock remittances with real database transactions',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -211,21 +211,21 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'int_concurrent_workflow_transitions_postgres',
         scenarioId: 'concurrent_workflow_transitions_postgres',
-        name: 'انتقال وضعیت همزمان دو درخواست روی یک نمونه ورکفلو (Two Concurrent Workflow Transitions)',
+        name: 'Two concurrent transition requests on one workflow instance',
         layer: 'integration',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t3Start,
-        details: 'دقیقاً یک درخواست انتقال انجام پذیرفت و درخواست همزمان دوم به دلیل عدم انطباق وضعیت قبلی لغو شد.'
+        details: 'Exactly one transition request succeeded and the concurrent second one was rejected because the previous state no longer matched.'
       }));
     } else {
-      throw new Error(`نتایج تداخل همزمان ورکفلو غیرمنتظره است: موفق=${successes}, خطا=${failures}`);
+      throw new Error(`Unexpected concurrent workflow results: succeeded=${successes}, failed=${failures}`);
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_concurrent_workflow_transitions_postgres',
       scenarioId: 'concurrent_workflow_transitions_postgres',
-      name: 'انتقال وضعیت همزمان دو درخواست روی یک نمونه ورکفلو (Two Concurrent Workflow Transitions)',
+      name: 'Two concurrent transition requests on one workflow instance',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -279,21 +279,21 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'int_balanced_voucher_postgres',
         scenarioId: 'balanced_voucher_postgres',
-        name: 'اعتبارسنجی و ثبت سند حسابداری متوازن در دیتابیس (Balanced Accounting Voucher)',
+        name: 'Validating and saving a balanced journal voucher in the database',
         layer: 'integration',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t4Start,
-        details: 'سند متوازن (بدهکار = بستانکار = ۲۵۰,۰۰۰) در دیتابیس ثبت شد و صدور سند ناهمتراز به دقت متوقف گردید.'
+        details: 'The balanced voucher (debit = credit = 250,000) was saved in the database and the unbalanced voucher was refused.'
       }));
     } else {
-      throw new Error('ترازشسنجی یا ماندگاری سند حسابداری در دیتابیس با خطا مواجه شد');
+      throw new Error('Balance check or persistence of the journal voucher in the database failed');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_balanced_voucher_postgres',
       scenarioId: 'balanced_voucher_postgres',
-      name: 'اعتبارسنجی و ثبت سند حسابداری متوازن در دیتابیس (Balanced Accounting Voucher)',
+      name: 'Validating and saving a balanced journal voucher in the database',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -340,21 +340,21 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'int_voucher_reversal_postgres',
         scenarioId: 'voucher_reversal_postgres',
-        name: 'صدور و ثبت سند اصلاحی/معکوس در حسابداری (Voucher Reversal in PostgreSQL)',
+        name: 'Issuing and saving a correction/reversal journal voucher in PostgreSQL',
         layer: 'integration',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t5Start,
-        details: `سند معکوس شماره #${reversalDb.voucherNumber} با جابجایی مبالغ بدهکار/بستانکار و ارجاع به سند اصلی #${originalVoucher.voucherNumber} صادر شد.`
+        details: `Reversal voucher #${reversalDb.voucherNumber} was issued with debit/credit swapped and a reference to original voucher #${originalVoucher.voucherNumber}.`
       }));
     } else {
-      throw new Error('صدور سند معکوس مقادیر بدهکار و بستانکار را به درستی معکوس نکرد');
+      throw new Error('The reversal voucher did not swap the debit and credit amounts correctly');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_voucher_reversal_postgres',
       scenarioId: 'voucher_reversal_postgres',
-      name: 'صدور و ثبت سند اصلاحی/معکوس در حسابداری (Voucher Reversal in PostgreSQL)',
+      name: 'Issuing and saving a correction/reversal journal voucher in PostgreSQL',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -379,7 +379,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     });
 
     if (firstAcquire.action !== 'PROCESS_NEW') {
-      throw new Error(`درخواست اول به جای PROCESS_NEW مقدار ${firstAcquire.action} بازگرداند`);
+      throw new Error(`The first request returned ${firstAcquire.action} instead of PROCESS_NEW`);
     }
 
     // Mark completion
@@ -407,21 +407,21 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'int_woocommerce_webhook_idempotency',
         scenarioId: 'woocommerce_webhook_idempotency',
-        name: 'بررسی یکتایی و عدم تکرار وب‌هوک ووکامرس با Idempotency Key (WooCommerce Webhook Idempotency)',
+        name: 'WooCommerce webhook idempotency with an Idempotency Key',
         layer: 'integration',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t6Start,
-        details: 'تلاش تکراری وب‌هوک ووکامرس شناسایی شد و پاسخ ذخیره‌شده بدون صدور سند تکراری بازگردانده شد.'
+        details: 'The repeated WooCommerce webhook attempt was detected and the stored response was returned without issuing a duplicate document.'
       }));
     } else {
-      throw new Error(`مکانیزم Idempotency برای وب‌هوک دوم کار نکرد: ${secondAcquire.action}`);
+      throw new Error(`Idempotency did not work for the second webhook: ${secondAcquire.action}`);
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_woocommerce_webhook_idempotency',
       scenarioId: 'woocommerce_webhook_idempotency',
-      name: 'بررسی یکتایی و عدم تکرار وب‌هوک ووکامرس با Idempotency Key (WooCommerce Webhook Idempotency)',
+      name: 'WooCommerce webhook idempotency with an Idempotency Key',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -463,21 +463,21 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'int_outbox_processing_retries',
         scenarioId: 'outbox_processing_retries',
-        name: 'پردازش رویدادهای صف Outbox و مدیریت بازآزمایی‌ها (Outbox Processing and Retries)',
+        name: 'Outbox queue event processing and retries',
         layer: 'integration',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t7Start,
-        details: `رویداد Outbox [${eventId}] با موفقیت پردازش شد و وضعیت آن در دیتابیس به 'processed' تغییر یافت.`
+        details: `Outbox event [${eventId}] was processed and its database status changed to 'processed'.`
       }));
     } else {
-      throw new Error(`پردازش Outbox ناموفق بود: پردازش شده=${processed}, وضعیت در DB=${outboxRow?.status}`);
+      throw new Error(`Outbox processing failed: processed=${processed}, DB status=${outboxRow?.status}`);
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_outbox_processing_retries',
       scenarioId: 'outbox_processing_retries',
-      name: 'پردازش رویدادهای صف Outbox و مدیریت بازآزمایی‌ها (Outbox Processing and Retries)',
+      name: 'Outbox queue event processing and retries',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -509,7 +509,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     }
 
     if (!unbalancedBlocked) {
-      throw new Error('سیستم نباید ثبت سند نامتوازن (عدم تعادل بدهکار و بستانکار) را مجاز بداند');
+      throw new Error('The system must not allow saving an unbalanced voucher (debit not equal to credit)');
     }
 
     // Invariant 2: Create a balanced permanent voucher and test immutability
@@ -547,7 +547,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     }
 
     if (!directEditBlocked || !directDeleteBlocked) {
-      throw new Error('اسناد ثبت‌شده و قطعی باید در برابر ویرایش و حذف مستقیم محافظت شوند');
+      throw new Error('Posted and permanent vouchers must be protected against direct edit and delete');
     }
 
     // Invariant 3 (v7.0.24 / TD-174): طبق قاعده C-03 & P0-06 سرویس اسناد، سند «قطعی» قابل ابطال/بازثبت نیست
@@ -568,7 +568,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       }
     }
     if (!permanentRepostBlocked) {
-      throw new Error('سند قطعی نباید قابل ابطال و بازثبت باشد (قاعده C-03 & P0-06).');
+      throw new Error('A permanent voucher must not be voidable and repostable (rule C-03 & P0-06).');
     }
 
     // Invariant 4: Repost Workflow on an approved (not yet permanent) voucher
@@ -602,24 +602,24 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     );
 
     if (!isRepostValid) {
-      throw new Error('فرآیند ابطال و بازثبت (Repost) ساختار ارجاع و مقادیر سند را به درستی ایجاد نکرد');
+      throw new Error('Void and repost did not build the voucher references and amounts correctly');
     }
 
     results.push(makeTestCase({
       id: 'int_ledger_invariants_and_repost',
       scenarioId: 'ledger_invariants_and_repost',
-      name: 'انطباق و اعتبارسنجی الزامات تغییرناپذیری دفتر کل و فرآیند ابطال و بازثبت (Ledger Invariants & Repost)',
+      name: 'General ledger immutability invariants and void-and-repost',
       layer: 'integration',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t8Start,
-      details: 'عدم تعادل اسناد، ویرایش مستقیم اسناد قطعی‌شده و حذف مستقیم مسدود شدند؛ فرآیند ابطال و بازثبت با موفقیت انجام شد.'
+      details: 'Unbalanced vouchers, direct edits of permanent vouchers and direct deletes were blocked; void and repost succeeded.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_ledger_invariants_and_repost',
       scenarioId: 'ledger_invariants_and_repost',
-      name: 'انطباق و اعتبارسنجی الزامات تغییرناپذیری دفتر کل و فرآیند ابطال و بازثبت (Ledger Invariants & Repost)',
+      name: 'General ledger immutability invariants and void-and-repost',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -638,7 +638,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     const retainedEarningsAcc = await AccountingService.resolveConceptualAccount('retainedEarningsCode');
 
     if (!wageAcc || !payableAcc || !summaryProfitAcc || !retainedEarningsAcc) {
-      throw new Error('حل نگاشت مفهومی سرفصل‌های حسابداری پیش‌فرض با خطا مواجه شد');
+      throw new Error('Resolving the default account mapping concepts failed');
     }
 
     // 2. Test updating conceptual mapping
@@ -654,24 +654,24 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     });
 
     if (preview.year !== 1403 || typeof preview.netProfit !== 'number') {
-      throw new Error('پیش‌نمایش بستن سال مالی ساختار نامعتبر بازگرداند');
+      throw new Error('The fiscal year closing preview returned an invalid structure');
     }
 
     results.push(makeTestCase({
       id: 'int_period_closing_and_conceptual_mappings',
       scenarioId: 'period_closing_and_conceptual_mappings',
-      name: 'نگاشت مفهومی سرفصل‌ها و اعتبارسنجی فرآیند بستن سال مالی (Period Closing & Conceptual Mappings)',
+      name: 'Account mapping concepts and fiscal year closing validation',
       layer: 'integration',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t9Start,
-      details: 'نگاشت مفهومی سرفصل‌ها (دستمزد مستقیم، حقوق پرداختنی، خلاصه سود/زیان) با موفقیت بازخوانی و اعمال شدند و پیش‌نمایش بستن دوره مالی اعتبارسنجی شد.'
+      details: 'Account mapping concepts (direct wages, wages payable, income summary) were read and applied, and the fiscal period closing preview was validated.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_period_closing_and_conceptual_mappings',
       scenarioId: 'period_closing_and_conceptual_mappings',
-      name: 'نگاشت مفهومی سرفصل‌ها و اعتبارسنجی فرآیند بستن سال مالی (Period Closing & Conceptual Mappings)',
+      name: 'Account mapping concepts and fiscal year closing validation',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -692,36 +692,36 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       !ratios.status ||
       !Array.isArray(ratios.currencyBreakdowns)
     ) {
-      throw new Error('محاسبه نسبت‌های مالی و تفکیک ارزی ساختار نامعتبر بازگرداند');
+      throw new Error('Financial ratios and currency breakdown returned an invalid structure');
     }
 
     // 2. Verify Multi-Currency Portfolio Summary
     const multiCur = await AccountingService.getMultiCurrencySummary();
     if (!Array.isArray(multiCur.currencies) || typeof multiCur.totalCurrenciesCount !== 'number') {
-      throw new Error('گزارش وضعیت ارزی ساختار نامعتبر بازگرداند');
+      throw new Error('The currency position report returned an invalid structure');
     }
 
     // 3. Verify Trial Balance with Currency filter
     const trialIrr = await AccountingService.getTrialBalance({ level: 'general', currency: 'IRR' });
     if (!Array.isArray(trialIrr)) {
-      throw new Error('تراز آزمایشی با فیلتر ارزی بازگردانده نشد');
+      throw new Error('The trial balance with a currency filter was not returned');
     }
 
     results.push(makeTestCase({
       id: 'int_multi_currency_financials_and_ratios',
       scenarioId: 'multi_currency_financials_and_ratios',
-      name: 'محاسبه نسبت‌های مالی استاندارد و گزارشات چندارزی (Multi-Currency Financials & Ratios)',
+      name: 'Standard financial ratios and multi-currency reports',
       layer: 'integration',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t10Start,
-      details: `نسبت‌های مالی (${ratios.currentRatio} جاری، ${ratios.debtRatio}٪ بدهی) و وضعیت پرتفوی چندارزی (${multiCur.totalCurrenciesCount} ارز فعال) با موفقیت محاسبه شدند.`
+      details: `Financial ratios (current ${ratios.currentRatio}, debt ${ratios.debtRatio}%) and the multi-currency portfolio (${multiCur.totalCurrenciesCount} active currencies) were computed.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_multi_currency_financials_and_ratios',
       scenarioId: 'multi_currency_financials_and_ratios',
-      name: 'محاسبه نسبت‌های مالی استاندارد و گزارشات چندارزی (Multi-Currency Financials & Ratios)',
+      name: 'Standard financial ratios and multi-currency reports',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -739,31 +739,31 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     // 1. Audit report generation
     const report = await InventoryIntegrityService.getIntegrityReport();
     if (!report.summary || !Array.isArray(report.audits) || !Array.isArray(report.warehouses)) {
-      throw new Error('گزارش سلامت ۳ جانبه انبار ساختار نامعتبر بازگرداند.');
+      throw new Error('The three-way warehouse health report returned an invalid structure.');
     }
 
     // 2. Test single item rebuild from ledger
     const testItem = await createTestItem({ currentStock: 50 });
     const rebuildRes = await InventoryIntegrityService.rebuildItemFromLedger(testItem.id);
     if (!rebuildRes || typeof rebuildRes.afterStock !== 'number') {
-      throw new Error('بازسازی موجودی از روی کاردکس ناموفق بود.');
+      throw new Error('Rebuilding stock from the Kardex failed.');
     }
 
     results.push(makeTestCase({
       id: 'int_inventory_integrity_3way_reconciliation',
       scenarioId: 'inventory_integrity_3way_reconciliation',
-      name: 'تطبیق ۳ جانبه موجودی و بازسازی از کاردکس (3-Way Inventory Integrity & Kardex Rebuild)',
+      name: 'Three-way stock reconciliation and rebuild from the Kardex',
       layer: 'integration',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t11Start,
-      details: `تطبیق ۳ جانبه با موفقیت ارزیابی شد (${report.summary.totalItems} کالا، ${report.warehouses.length} انبار، شاخص سلامت: ${report.summary.healthScorePercentage}٪).`
+      details: `Three-way reconciliation evaluated (${report.summary.totalItems} items, ${report.warehouses.length} warehouses, health score: ${report.summary.healthScorePercentage}%).`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_inventory_integrity_3way_reconciliation',
       scenarioId: 'inventory_integrity_3way_reconciliation',
-      name: 'تطبیق ۳ جانبه موجودی و بازسازی از کاردکس (3-Way Inventory Integrity & Kardex Rebuild)',
+      name: 'Three-way stock reconciliation and rebuild from the Kardex',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -782,7 +782,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     await NegativeStockPolicyService.setPolicy('forbidden');
     const policy = await NegativeStockPolicyService.getPolicy();
     if (policy !== 'forbidden') {
-      throw new Error('تنظیم سیاست موجودی منفی ناموفق بود.');
+      throw new Error('Setting the negative stock policy failed.');
     }
 
     const testItem2 = await createTestItem({ currentStock: 5 });
@@ -810,7 +810,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     });
 
     if (checkForbidden.allowed !== false || checkForbidden.wouldBeNegative !== true) {
-      throw new Error('سیاست ممنوعیت موجودی منفی جلوی کسر بیش از موجودی را نگرفت.');
+      throw new Error('The negative stock ban did not stop a deduction above stock.');
     }
 
     // Check applyStockMovement with forbidden policy throws
@@ -834,7 +834,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       applyForbiddenError = true;
     }
     if (!applyForbiddenError) {
-      throw new Error('در سیاست forbidden عملیات applyStockMovement خطای عدم موجودی صادر نکرد.');
+      throw new Error('Under the forbidden policy applyStockMovement raised no insufficient stock error.');
     }
 
     // 2. v7.0.22 (TD-180 / audit P0-3): only 'forbidden' may be selected
@@ -845,7 +845,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       setAllowedRejected = err?.code === 'VALIDATION_ERROR' || err?.statusCode === 400 || err?.statusCode === 422;
     }
     if (!setAllowedRejected) {
-      throw new Error('انتخاب سیاست «مجاز» باید با خطای اعتبارسنجی رد شود (فقط «ممنوعیت کامل» مجاز است).');
+      throw new Error('Choosing the "allowed" policy must be refused with a validation error (only "fully forbidden" is allowed).');
     }
 
     // 3. A legacy stored value ('allowed') must be ignored: the effective policy stays 'forbidden'
@@ -854,7 +854,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     try {
       const legacyPolicy = await NegativeStockPolicyService.getPolicy();
       if (legacyPolicy !== 'forbidden') {
-        throw new Error(`مقدار قدیمی ذخیره‌شده «allowed» نباید سیاست مؤثر را تغییر دهد (مقدار فعلی: ${legacyPolicy}).`);
+        throw new Error(`A legacy stored "allowed" value must not change the effective policy (current value: ${legacyPolicy}).`);
       }
       let legacyErrorCode = '';
       try {
@@ -876,7 +876,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
         legacyErrorCode = String(err?.code || err?.errorCode || err?.cause?.code || '');
       }
       if (legacyErrorCode !== 'INSUFFICIENT_STOCK') {
-        throw new Error(`با مقدار قدیمی «allowed» کسر بیش از موجودی باید با خطای INSUFFICIENT_STOCK رد شود (کد دریافتی: ${legacyErrorCode || 'بدون خطا'}).`);
+        throw new Error(`with the legacy value "allowed" a deduction above stock must be refused with INSUFFICIENT_STOCK (code received: ${legacyErrorCode || 'no error'}).`);
       }
     } finally {
       await NegativeStockPolicyService.setPolicy('forbidden');
@@ -884,7 +884,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
 
     const [unchangedItem2] = await orm.select().from(items).where(eq(items.id, testItem2.id));
     if (Number(unchangedItem2.currentStock) !== 5) {
-      throw new Error(`موجودی کالا پس از رد کسر غیرمجاز نباید تغییر کند. مقدار فعلی: ${unchangedItem2.currentStock}`);
+      throw new Error(`Item stock must not change after the refused deduction. Current value: ${unchangedItem2.currentStock}`);
     }
 
     // 4. Defense in depth: a raw CHECK violation on item_warehouse_stocks is normalized to INSUFFICIENT_STOCK
@@ -904,24 +904,24 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       checkViolationCode = normalizeError(err).code;
     }
     if (checkViolationCode !== 'INSUFFICIENT_STOCK') {
-      throw new Error(`نقض قید chk_iws_current_stock_non_negative باید به خطای خوانای INSUFFICIENT_STOCK نگاشت شود (کد دریافتی: ${checkViolationCode || 'بدون خطا'}).`);
+      throw new Error(`a chk_iws_current_stock_non_negative violation must map to a readable INSUFFICIENT_STOCK error (code received: ${checkViolationCode || 'no error'}).`);
     }
 
     results.push(makeTestCase({
       id: 'int_inventory_negative_stock_policy',
       scenarioId: 'inventory_negative_stock_policy',
-      name: 'اعمال سیاست کنترل موجودی منفی (Negative Stock Policy Enforcement)',
+      name: 'Negative stock policy enforcement',
       layer: 'integration',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t12Start,
-      details: 'سیاست «ممنوعیت کامل» اعمال شد؛ انتخاب «مجاز» رد شد؛ مقدار قدیمی ذخیره‌شده نادیده گرفته شد و نقض قید دیتابیس به خطای خوانای کسری موجودی نگاشت شد (TD-180).'
+      details: 'The "fully forbidden" policy applied; choosing "allowed" was refused; the legacy stored value was ignored and the database constraint violation mapped to a readable stock shortage error (TD-180).'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_inventory_negative_stock_policy',
       scenarioId: 'inventory_negative_stock_policy',
-      name: 'اعمال سیاست کنترل موجودی منفی (Negative Stock Policy Enforcement)',
+      name: 'Negative stock policy enforcement',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -966,18 +966,18 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     });
 
     if (allocResult.allocatedCount !== 1 || allocResult.allocations.length === 0) {
-      throw new Error('تخصیص مواد به پروژه ناموفق بود.');
+      throw new Error('Allocating materials to the project failed.');
     }
 
     const allocRecord = allocResult.allocations[0];
     if (!allocRecord.sourceTransactionId) {
-      throw new Error('شناسه تراکنش کاردکس مبداء در تخصیص ثبت نشد.');
+      throw new Error('The source Kardex transaction id was not recorded on the allocation.');
     }
 
     // Verify traceability retrieval
     const projectAllocs = await ProjectBomAllocationService.getProjectAllocations(proj.id);
     if (projectAllocs.length !== 1 || projectAllocs[0].sourceTransactionId !== allocRecord.sourceTransactionId) {
-      throw new Error('شناسنامه ردگیری تخصیص به درستی استخراج نشد.');
+      throw new Error('The allocation trace record was not extracted correctly.');
     }
 
     // Test releasing allocation back to warehouse
@@ -986,24 +986,24 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     });
 
     if (releaseRes.status !== 'released') {
-      throw new Error('آزادسازی تخصیص به انبار ناموفق بود.');
+      throw new Error('Releasing the allocation back to the warehouse failed.');
     }
 
     results.push(makeTestCase({
       id: 'int_project_bom_allocation_traceability',
       scenarioId: 'project_bom_allocation_traceability',
-      name: 'تخصیص مواد اولیه BOM با ردگیری منبع تراکنش (Project BOM Allocation & Traceability)',
+      name: 'BOM raw material allocation with source transaction traceability',
       layer: 'integration',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t13Start,
-      details: `تخصیص مواد با کسر اتمیک انبار، ثبت شناسه تراکنش کاردکس (TX-${allocRecord.sourceTransactionId}) و قابلیت آزادسازی با موفقیت تأیید گردید.`
+      details: `Material allocation with an atomic warehouse deduction, the recorded Kardex transaction id (TX-${allocRecord.sourceTransactionId}) and release were confirmed.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_project_bom_allocation_traceability',
       scenarioId: 'project_bom_allocation_traceability',
-      name: 'تخصیص مواد اولیه BOM با ردگیری منبع تراکنش (Project BOM Allocation & Traceability)',
+      name: 'BOM raw material allocation with source transaction traceability',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -1044,7 +1044,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     const voucherRes = await VoucherSyncService.autoCreateVoucherForPayroll(payroll.id);
 
     if (!voucherRes || !voucherRes.voucherNumber) {
-      throw new Error('صدور خودکار سند حسابداری دوبل برای تسویه دستمزد کارمزدی ناموفق بود.');
+      throw new Error('Automatic issue of the double-entry journal voucher for the piecework wage settlement failed.');
     }
 
     // Verify CRM Customer Accounting Read Model
@@ -1062,24 +1062,24 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     });
 
     if (typeof custAccountCard.finalBalance !== 'number') {
-      throw new Error('فراخوانی دفتر تفصیلی مشتری از مدل خواندنی حسابداری ناموفق بود.');
+      throw new Error('Reading the customer detailed ledger from the accounting read model failed.');
     }
 
     results.push(makeTestCase({
       id: 'int_payroll_voucher_and_crm_accounting_read_model',
       scenarioId: 'payroll_voucher_and_crm_accounting_read_model',
-      name: 'همگام‌سازی سند دوبل دستمزد کارمزدی و مدل خواندنی حسابداری CRM (Payroll Voucher Sync & CRM Read Model)',
+      name: 'Piecework wage double-entry voucher sync and the CRM accounting read model',
       layer: 'integration',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t14Start,
-      details: `سند حسابداری #${voucherRes.voucherNumber} با تراز دقیق بدهکار/بستانکار برای فیش #${payroll.payrollNumber} صادر شد و دفتر تفصیلی مشتری از مدل خواندنی با موفقیت بازخوانی گردید.`
+      details: `Journal voucher #${voucherRes.voucherNumber} was issued with balanced debit/credit for payslip #${payroll.payrollNumber} and the customer detailed ledger was read from the read model.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_payroll_voucher_and_crm_accounting_read_model',
       scenarioId: 'payroll_voucher_and_crm_accounting_read_model',
-      name: 'همگام‌سازی سند دوبل دستمزد کارمزدی و مدل خواندنی حسابداری CRM (Payroll Voucher Sync & CRM Read Model)',
+      name: 'Piecework wage double-entry voucher sync and the CRM accounting read model',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -1134,33 +1134,33 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     });
 
     if (receiptAllocResult.allocatedCount !== 1 || receiptAllocResult.allocations.length === 0) {
-      throw new Error('تخصیص مستقیم ردیف‌های رسید انبار به BOM ناموفق بود.');
+      throw new Error('Direct allocation of warehouse receipt lines to the BOM failed.');
     }
 
     const [allocMovement] = await orm.select().from(transactions).where(eq(transactions.id, receiptAllocResult.allocations[0].sourceTransactionId ?? 0));
     if (allocMovement?.type !== 'out' || Number(allocMovement.quantity) !== 10) {
-      throw new Error('تخصیص از رسید ۱۰ واحد را از انبار خارج نکرد.');
+      throw new Error('The allocation from the receipt did not move 10 units out of the warehouse.');
     }
     const [afterItem] = await orm.select({ currentStock: items.currentStock }).from(items).where(eq(items.id, rawMat.id));
     if (Number(afterItem?.currentStock) !== 10) {
-      throw new Error(`موجودی پس از تخصیص از رسید ${afterItem?.currentStock}، انتظار ۱۰`);
+      throw new Error(`Stock after allocation from the receipt is ${afterItem?.currentStock}, expected 10`);
     }
 
     results.push(makeTestCase({
       id: 'int_project_bom_receipt_allocation',
       scenarioId: 'project_bom_receipt_allocation',
-      name: 'تخصیص آنی ردیف‌های رسید انبار به BOM پروژه (Project BOM Receipt Direct Allocation)',
+      name: 'Direct allocation of warehouse receipt lines to the project BOM',
       layer: 'integration',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t15Start,
-      details: `تخصیص ۱۰ واحد از رسید انبار #${rcptMovement.id} مواد را از انبار خارج کرد و در BOM پروژه ثبت شد.`
+      details: `Allocating 10 units from warehouse receipt #${rcptMovement.id} moved the materials out of the warehouse and recorded them in the project BOM.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_project_bom_receipt_allocation',
       scenarioId: 'project_bom_receipt_allocation',
-      name: 'تخصیص آنی ردیف‌های رسید انبار به BOM پروژه (Project BOM Receipt Direct Allocation)',
+      name: 'Direct allocation of warehouse receipt lines to the project BOM',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -1193,51 +1193,51 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     });
 
     if (!saveRes?.success || !saveRes.draft?.id) {
-      throw new Error('ذخیره پیش‌نویس در سرور با خطا مواجه شد');
+      throw new Error('Saving the draft on the server failed');
     }
 
     // Fetch draft
     const retrieved = await FormDraftService.getDraft('voucher', 'test_voucher_draft_01', user.id);
 
     if (!retrieved || (retrieved.payload as any)?.description !== draftPayload.description) {
-      throw new Error('بازیابی پیش‌نویس از سرور ناموفق بود یا محتوا مطابقت ندارد');
+      throw new Error('Retrieving the draft from the server failed or its content does not match');
     }
 
     // List drafts
     const userDrafts = await FormDraftService.listUserDrafts(user.id);
     if (!Array.isArray(userDrafts) || userDrafts.length === 0) {
-      throw new Error('لیست پیش‌نویس‌های کاربر خالی است');
+      throw new Error('The user draft list is empty');
     }
 
     // Soft delete
     const deleted = await FormDraftService.deleteDraft('voucher', 'test_voucher_draft_01', user.id);
 
     if (!deleted) {
-      throw new Error('حذف پیش‌نویس از سرور ناموفق بود');
+      throw new Error('Deleting the draft from the server failed');
     }
 
     // Verify deleted
     const postDelete = await FormDraftService.getDraft('voucher', 'test_voucher_draft_01', user.id);
 
     if (postDelete !== null) {
-      throw new Error('پیش‌نویس حذف‌شده هنوز در دسترس است');
+      throw new Error('The deleted draft is still available');
     }
 
     results.push(makeTestCase({
       id: 'int_server_backed_form_drafts_lifecycle',
       scenarioId: 'server_backed_form_drafts',
-      name: 'چرخه کامل پیش‌نویس‌های متمرکز سرور (Server-Backed Drafts Lifecycle)',
+      name: 'Full lifecycle of server-backed form drafts',
       layer: 'integration',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t16Start,
-      details: 'ذخیره، بازیابی، دریافت لیست، به‌روزرسانی و حذف امن پیش‌نویس‌های فرم‌های حساس حسابداری و فاکتور در PostgreSQL تأیید گردید.'
+      details: 'Saving, retrieving, listing, updating and safely deleting drafts of sensitive accounting and invoice forms in PostgreSQL were confirmed.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_server_backed_form_drafts_lifecycle',
       scenarioId: 'server_backed_form_drafts',
-      name: 'چرخه کامل پیش‌نویس‌های متمرکز سرور (Server-Backed Drafts Lifecycle)',
+      name: 'Full lifecycle of server-backed form drafts',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,
@@ -1249,34 +1249,34 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
   // 17. Structured Error Contract Verification (code, message, details)
   const t17Start = Date.now();
   try {
-    const stockErr = new InsufficientStockError('موجودی انبار مرکزی بابت کالا ۱۰۰۱ ناکافی است', { itemId: 1001, requested: 50, available: 12 });
+    const stockErr = new InsufficientStockError('Central warehouse stock of item 1001 is insufficient', { itemId: 1001, requested: 50, available: 12 });
     const normalizedStock = normalizeError(stockErr);
 
     if (normalizedStock.code !== 'INSUFFICIENT_STOCK' || normalizedStock.statusCode !== 400) {
-      throw new Error(`کد خطای استاندارد انبار داری نادرست است: ${normalizedStock.code}`);
+      throw new Error(`Wrong standard warehouse error code: ${normalizedStock.code}`);
     }
 
     const voucherErr = new UnbalancedVoucherError();
     const normalizedVoucher = normalizeError(voucherErr);
     if (normalizedVoucher.code !== 'ACCOUNTING_UNBALANCED') {
-      throw new Error(`کد خطای عدم موازنه سند نادرست است: ${normalizedVoucher.code}`);
+      throw new Error(`Wrong unbalanced voucher error code: ${normalizedVoucher.code}`);
     }
 
     results.push(makeTestCase({
       id: 'int_structured_error_contract',
       scenarioId: 'structured_error_contract',
-      name: 'قرارداد ساختاریافته خطاهای API (Structured Error Contract: code, message, details)',
+      name: 'Structured API error contract (code, message, details)',
       layer: 'integration',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t17Start,
-      details: 'ساختار یکپارچه خطاهای API شامل کدهای ثابت استاندارد (کدهای INSUFFICIENT_STOCK, ACCOUNTING_UNBALANCED) تأیید گردید.'
+      details: 'The unified API error structure with fixed standard codes (INSUFFICIENT_STOCK, ACCOUNTING_UNBALANCED) was confirmed.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'int_structured_error_contract',
       scenarioId: 'structured_error_contract',
-      name: 'قرارداد ساختاریافته خطاهای API (Structured Error Contract: code, message, details)',
+      name: 'Structured API error contract (code, message, details)',
       layer: 'integration',
       executionType: 'real_database',
       passed: false,

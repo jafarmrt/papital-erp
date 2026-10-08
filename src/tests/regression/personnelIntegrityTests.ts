@@ -47,7 +47,7 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
 
   const importId = 'reg_personnel_import_keeps_status_td_436';
   if (shouldRun(importId, 'td436', 'personnel', 'excel', 'package12')) {
-    await runCase(results, importId, 'v9.0.25: ورود اکسل با «به‌روزرسانی» خانه خالی جنسیت، وضعیت همکاری و ملیت را «بی تغییر» می‌گیرد؛ پیش‌فرض فقط برای پرسنل تازه است (TD-436)', async (ids) => {
+    await runCase(results, importId, 'v9.0.25: in the Excel import an empty gender, employment status or nationality cell means unchanged on update; the default is only for a new personnel (TD-436)', async (ids) => {
       const { send } = await adminClient();
       const tag = tagOf();
       const code = `IMP-${tag}`;
@@ -55,38 +55,38 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
         firstName: 'مریم', lastName: `اکسل ${tag}`, personnelCode: code, gender: 'زن', employmentStatus: 'قطع همکاری',
         nationality: 'افغانستانی', endDate: '2026-03-11', terminationReason: 'پایان قرارداد',
       });
-      if (created.status !== 201) throw new Error(`ثبت پرسنل ${created.status} داد`);
+      if (created.status !== 201) throw new Error(`Personnel create returned ${created.status}`);
       ids.push(Number(created.body.id));
       const wrong: string[] = [];
       // ۱) ستون‌ها نیامده، ۲) ستون‌ها با خانه خالی (شکل ارسال پیش‌نمایش)
       for (const [label, extra] of [['بی ستون', {}], ['خانه خالی', { gender: '', employmentStatus: '', nationality: '' }]] as const) {
         const res = await send('post', '/api/personnel/bulk-import', { rows: [{ personnelCode: code, firstName: 'مریم', lastName: `اکسل ${tag}`, phone: '09351234567', ...extra }] });
-        if (res.status !== 200 || res.body?.updatedCount !== 1) wrong.push(`${label}: ورود ${res.status} ${JSON.stringify(res.body).slice(0, 120)}`);
+        if (res.status !== 200 || res.body?.updatedCount !== 1) wrong.push(`${label}: import ${res.status} ${JSON.stringify(res.body).slice(0, 120)}`);
         const [row] = await orm.select().from(personnel).where(eq(personnel.id, Number(created.body.id)));
         if (row.gender !== 'زن' || row.employmentStatus !== 'قطع همکاری' || row.nationality !== 'افغانستانی') {
-          wrong.push(`${label}: ${row.gender}، ${row.employmentStatus}، ${row.nationality} شد`);
+          wrong.push(`${label}: became ${row.gender}, ${row.employmentStatus}, ${row.nationality}`);
         }
-        if (row.phone !== '09351234567') wrong.push(`${label}: تلفن ${row.phone} شد`);
+        if (row.phone !== '09351234567') wrong.push(`${label}: phone became ${row.phone}`);
       }
       // ۳) مقدار صریح جایگزین می‌شود
       await send('post', '/api/personnel/bulk-import', { rows: [{ personnelCode: code, firstName: 'مریم', employmentStatus: 'فعال' }] });
       const [after] = await orm.select().from(personnel).where(eq(personnel.id, Number(created.body.id)));
-      if (after.employmentStatus !== 'فعال') wrong.push(`وضعیت صریح «فعال» ${after.employmentStatus} شد`);
+      if (after.employmentStatus !== 'فعال') wrong.push(`explicit status "active" became ${after.employmentStatus}`);
       // ۴) پرسنل تازه بی این ستون‌ها پیش‌فرض می‌گیرد
       const fresh = await send('post', '/api/personnel/bulk-import', { rows: [{ personnelCode: `${code}-N`, firstName: 'تازه', lastName: `اکسل ${tag}` }] });
       const [newRow] = await orm.select().from(personnel).where(and(eq(personnel.personnelCode, `${code}-N`), eq(personnel.isDeleted, 0)));
       if (newRow) ids.push(newRow.id);
       if (fresh.status !== 200 || !newRow || newRow.gender !== 'مرد' || newRow.employmentStatus !== 'فعال' || newRow.nationality !== 'ایرانی') {
-        wrong.push(`پرسنل تازه: ${fresh.status} ${JSON.stringify(newRow ? [newRow.gender, newRow.employmentStatus, newRow.nationality] : null)}`);
+        wrong.push(`new personnel: ${fresh.status} ${JSON.stringify(newRow ? [newRow.gender, newRow.employmentStatus, newRow.nationality] : null)}`);
       }
-      if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+      if (wrong.length > 0) throw new Error(wrong.join('; '));
       return 'خانه خالی و ستون نیامده: زن، قطع همکاری، افغانستانی ماند و تلفن به‌روز شد؛ مقدار صریح جایگزین شد؛ پرسنل تازه پیش‌فرض گرفت';
     });
   }
 
   const auditId = 'reg_personnel_audit_snapshot_td_437';
   if (shouldRun(auditId, 'td437', 'personnel', 'audit', 'package12')) {
-    await runCase(results, auditId, 'v9.0.26: ممیزی پرسنل مقدار قبل و بعد فیلدهای تغییرکرده و IP را دارد، بی رمز نوبیتکس؛ ورود اکسل برای هر پرسنل ردیف خود را می‌نویسد (TD-437)', async (ids) => {
+    await runCase(results, auditId, 'v9.0.26: the personnel audit row has the before and after of the changed fields and the IP, without the Nobitex password; the Excel import writes one row per personnel (TD-437)', async (ids) => {
       const { send } = await adminClient();
       const tag = tagOf();
       const previousKey = process.env.ERP_SECRETS_KEY;
@@ -99,7 +99,7 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
           firstName: 'زهرا', lastName: `ممیزی ${tag}`, personnelCode: `AUD-${tag}`, salaryType: 'monthly_fixed', monthlySalary: 45000000,
           shebaNumber: 'IR120120000000001234567890', nobitexPassword: 'Old#437',
         });
-        if (created.status !== 201) throw new Error(`ثبت پرسنل ${created.status} داد`);
+        if (created.status !== 201) throw new Error(`Personnel create returned ${created.status}`);
         const pid = Number(created.body.id);
         ids.push(pid);
         const put = await send('put', `/api/personnel/${pid}`, {
@@ -107,41 +107,41 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
           firstName: 'زهرا', lastName: `ممیزی ${tag}`, salaryType: 'monthly_fixed', monthlySalary: 60000000,
           shebaNumber: 'IR550560000000009876543210', nobitexPassword: 'New#437',
         });
-        if (put.status !== 200) throw new Error(`ویرایش پرسنل ${put.status} داد`);
+        if (put.status !== 200) throw new Error(`Personnel edit returned ${put.status}`);
         const logs = await logsOf(pid);
         const create = logs.find(l => l.action === 'CREATE');
         const update = logs.find(l => l.action === 'UPDATE');
         const cd = (create?.details ?? {}) as { after?: Record<string, unknown> };
-        if (Number(cd.after?.monthlySalary) !== 45000000) wrong.push(`ردیف ثبت مقدار بعد ندارد: ${JSON.stringify(create?.details).slice(0, 120)}`);
+        if (Number(cd.after?.monthlySalary) !== 45000000) wrong.push(`the create row has no after value: ${JSON.stringify(create?.details).slice(0, 120)}`);
         const ud = (update?.details ?? {}) as { before?: Record<string, unknown>; after?: Record<string, unknown>; nobitexPasswordChanged?: boolean };
-        if (Number(ud.before?.monthlySalary) !== 45000000 || Number(ud.after?.monthlySalary) !== 60000000) wrong.push(`حقوق قبل و بعد ${JSON.stringify(ud).slice(0, 160)}`);
+        if (Number(ud.before?.monthlySalary) !== 45000000 || Number(ud.after?.monthlySalary) !== 60000000) wrong.push(`salary before and after ${JSON.stringify(ud).slice(0, 160)}`);
         // v9.0.213 (TD-530، تصمیم ت۷ الف): شبا تا ۴ رقم آخر پوشیده است و تغییرش دیده می‌شود
-        if (ud.before?.shebaNumber !== '****7890' || ud.after?.shebaNumber !== '****3210') wrong.push(`شبای قبل و بعد ${JSON.stringify([ud.before?.shebaNumber, ud.after?.shebaNumber])}`);
-        if (ud.before && 'firstName' in ud.before) wrong.push('فیلد تغییرنکرده در ممیزی آمد');
-        if (ud.nobitexPasswordChanged !== true) wrong.push('تغییر رمز نوبیتکس علامت نخورد');
+        if (ud.before?.shebaNumber !== '****7890' || ud.after?.shebaNumber !== '****3210') wrong.push(`Sheba before and after ${JSON.stringify([ud.before?.shebaNumber, ud.after?.shebaNumber])}`);
+        if (ud.before && 'firstName' in ud.before) wrong.push('an unchanged field appears in the audit log');
+        if (ud.nobitexPasswordChanged !== true) wrong.push('the Nobitex password change is not flagged');
         const raw = JSON.stringify(logs.map(l => l.details));
-        if (raw.includes('Old#437') || raw.includes('New#437') || raw.includes('enc:v1:')) wrong.push('رمز نوبیتکس یا متن رمزشده در ممیزی آمد');
-        if (!create?.ipAddress || !update?.ipAddress) wrong.push(`IP ثبت نشد (ثبت «${create?.ipAddress}»، ویرایش «${update?.ipAddress}»)`);
+        if (raw.includes('Old#437') || raw.includes('New#437') || raw.includes('enc:v1:')) wrong.push('the Nobitex password or its encrypted text appears in the audit log');
+        if (!create?.ipAddress || !update?.ipAddress) wrong.push(`IP not recorded (create "${create?.ipAddress}", edit "${update?.ipAddress}")`);
 
         // ورود اکسل: ردیف ممیزی برای هر پرسنل ساخته‌شده یا به‌روزشده
         const imp = await send('post', '/api/personnel/bulk-import', { rows: [
           { personnelCode: `AUD-${tag}`, firstName: 'زهرا', phone: '09121112233' },
           { personnelCode: `AUD-${tag}-N`, firstName: 'تازه', lastName: `ممیزی ${tag}` },
         ] });
-        if (imp.status !== 200) throw new Error(`ورود اکسل ${imp.status} داد`);
+        if (imp.status !== 200) throw new Error(`Excel import returned ${imp.status}`);
         const [fresh] = await orm.select({ id: personnel.id }).from(personnel).where(and(eq(personnel.personnelCode, `AUD-${tag}-N`), eq(personnel.isDeleted, 0)));
         if (fresh) ids.push(fresh.id);
         const importUpdate = (await logsOf(pid)).filter(l => l.action === 'UPDATE').pop();
         const iu = (importUpdate?.details ?? {}) as { before?: Record<string, unknown>; after?: Record<string, unknown> };
-        if (iu.before?.phone !== '' || iu.after?.phone !== '09121112233') wrong.push(`ورود اکسل ردیف ممیزی به‌روزرسانی با تلفن قبل و بعد نساخت ${JSON.stringify(iu).slice(0, 120)}`);
-        if (!fresh || !(await logsOf(fresh.id)).some(l => l.action === 'CREATE')) wrong.push('ورود اکسل برای پرسنل تازه ردیف ممیزی نساخت');
+        if (iu.before?.phone !== '' || iu.after?.phone !== '09121112233') wrong.push(`Excel import did not create an update audit row with the phone before and after ${JSON.stringify(iu).slice(0, 120)}`);
+        if (!fresh || !(await logsOf(fresh.id)).some(l => l.action === 'CREATE')) wrong.push('Excel import did not create an audit row for the new personnel');
 
         // حذف: مقدار قبل
         await send('delete', `/api/personnel/${pid}`);
         const del = (await logsOf(pid)).find(l => l.action === 'DELETE');
-        if (Number(((del?.details ?? {}) as { before?: Record<string, unknown> }).before?.monthlySalary) !== 60000000) wrong.push('ردیف حذف مقدار قبل ندارد');
+        if (Number(((del?.details ?? {}) as { before?: Record<string, unknown> }).before?.monthlySalary) !== 60000000) wrong.push('the delete row has no before value');
 
-        if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+        if (wrong.length > 0) throw new Error(wrong.join('; '));
         return 'ثبت (بعد)، ویرایش (فقط حقوق و شبای قبل و بعد، علامت تغییر رمز بی متن رمز)، IP، یک ردیف برای هر پرسنل ورود اکسل و حذف (قبل)';
       } finally {
         if (previousKey === undefined) delete process.env.ERP_SECRETS_KEY; else process.env.ERP_SECRETS_KEY = previousKey;
@@ -151,7 +151,7 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
 
   const salaryId = 'reg_personnel_salary_decimal_input_td_438';
   if (shouldRun(salaryId, 'td438', 'personnel', 'salary', 'package12')) {
-    await runCase(results, salaryId, 'v9.0.27: حقوق ماهانه پرسنل با decimalInput خوانده می‌شود: متن و منفی رد می‌شود، ارقام فارسی پذیرفته و خانه خالی صفر است (TD-438)', async (ids) => {
+    await runCase(results, salaryId, 'v9.0.27: the monthly salary is read with decimalInput: text and negatives are refused, Persian digits accepted and an empty field is zero (TD-438)', async (ids) => {
       const { send } = await adminClient();
       const tag = tagOf();
       const wrong: string[] = [];
@@ -165,36 +165,36 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
         const res = await send('post', '/api/personnel', { ...base(n), monthlySalary: value });
         const made = await countOf(n);
         ids.push(...made);
-        if (res.status !== 400 || made.length > 0) wrong.push(`ثبت با «${value}»: ${res.status} و ${made.length} پرسنل`);
+        if (res.status !== 400 || made.length > 0) wrong.push(`create with "${value}": ${res.status} and ${made.length} personnel`);
       }
       // ۲) ارقام فارسی و جداکننده هزارگان پذیرفته می‌شود؛ خانه خالی صفر است
       const fa = await send('post', '/api/personnel', { ...base('فارسی'), monthlySalary: '۴۵٬۰۰۰٬۰۰۰' });
       if (fa.status === 201) ids.push(Number(fa.body.id));
-      if (fa.status !== 201 || await salaryOf(Number(fa.body.id)) !== 45000000) wrong.push(`ثبت با «۴۵٬۰۰۰٬۰۰۰»: ${fa.status}`);
+      if (fa.status !== 201 || await salaryOf(Number(fa.body.id)) !== 45000000) wrong.push(`create with Persian-digit "45,000,000": ${fa.status}`);
       const empty = await send('post', '/api/personnel', { ...base('خالی'), monthlySalary: '' });
       if (empty.status === 201) ids.push(Number(empty.body.id));
-      if (empty.status !== 201 || await salaryOf(Number(empty.body.id)) !== 0) wrong.push(`ثبت با خانه خالی: ${empty.status}`);
+      if (empty.status !== 201 || await salaryOf(Number(empty.body.id)) !== 0) wrong.push(`create with an empty cell: ${empty.status}`);
 
       // ۳) ویرایش: متن و منفی رد می‌شود و حقوق دست نمی‌خورد؛ نیامدن فیلد حقوق را نگه می‌دارد؛ خانه خالی صفر می‌کند
       if (fa.status === 201) {
         const pid = Number(fa.body.id);
         for (const value of ['abc', '-5000000']) {
           const res = await send('put', `/api/personnel/${pid}`, { version: await personnelVersion(pid), ...base('فارسی'), monthlySalary: value });
-          if (res.status !== 400 || await salaryOf(pid) !== 45000000) wrong.push(`ویرایش با «${value}»: ${res.status} و حقوق ${await salaryOf(pid)}`);
+          if (res.status !== 400 || await salaryOf(pid) !== 45000000) wrong.push(`edit with "${value}": ${res.status} and salary ${await salaryOf(pid)}`);
         }
         const keep = await send('put', `/api/personnel/${pid}`, { version: await personnelVersion(pid), ...base('فارسی'), jobTitle: 'زرگر' });
-        if (keep.status !== 200 || await salaryOf(pid) !== 45000000) wrong.push(`ویرایش بی فیلد حقوق: ${keep.status} و حقوق ${await salaryOf(pid)}`);
+        if (keep.status !== 200 || await salaryOf(pid) !== 45000000) wrong.push(`edit without the salary field: ${keep.status} and salary ${await salaryOf(pid)}`);
         const clear = await send('put', `/api/personnel/${pid}`, { version: await personnelVersion(pid), ...base('فارسی'), monthlySalary: '' });
-        if (clear.status !== 200 || await salaryOf(pid) !== 0) wrong.push(`ویرایش با خانه خالی: ${clear.status} و حقوق ${await salaryOf(pid)}`);
+        if (clear.status !== 200 || await salaryOf(pid) !== 0) wrong.push(`edit with an empty cell: ${clear.status} and salary ${await salaryOf(pid)}`);
       }
-      if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+      if (wrong.length > 0) throw new Error(wrong.join('; '));
       return 'متن و منفی در ثبت و ویرایش ۴۰۰ بی تغییر؛ ارقام فارسی ۴۵٬۰۰۰٬۰۰۰ پذیرفته؛ خانه خالی صفر؛ نیامدن فیلد حقوق را نگه داشت';
     });
   }
 
   const codeId = 'reg_personnel_code_unique_td_439';
   if (shouldRun(codeId, 'td439', 'personnel', 'code', 'concurrency', 'package12')) {
-    await runCase(results, codeId, 'v9.0.28: کد پرسنلی میان پرسنل فعال یکتاست (بی حساسیت به حروف و فاصله)، با ایندکس یکتای جزئی؛ ثبت هم‌زمان یک پرسنل می‌سازد و تکرار قدیمی را بازرس سلامت می‌یابد (TD-439)', async (ids) => {
+    await runCase(results, codeId, 'v9.0.28: the personnel code is unique among active personnel (ignoring case and spaces) with a partial unique index; a concurrent create makes one personnel and the health check finds old duplicates (TD-439)', async (ids) => {
       const { send } = await adminClient();
       const tag = tagOf();
       const code = `PC-${tag}`;
@@ -208,21 +208,21 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
       const made = await activeWithCode();
       ids.push(...made);
       const statuses = burst.map(r => r.status).sort().join(',');
-      if (made.length !== 1 || statuses !== '201,400,400,400,400') wrong.push(`ثبت هم‌زمان ${made.length} پرسنل فعال با یک کد ساخت (وضعیت‌ها ${statuses})`);
-      if (burst.some(r => r.status === 400 && !String(r.body?.error ?? '').includes('کد پرسنلی'))) wrong.push(`پیام تکرار فارسی نیست: ${JSON.stringify(burst.find(r => r.status === 400)?.body).slice(0, 120)}`);
+      if (made.length !== 1 || statuses !== '201,400,400,400,400') wrong.push(`concurrent create made ${made.length} active personnel with one code (statuses ${statuses})`);
+      if (burst.some(r => r.status === 400 && !String(r.body?.error ?? '').includes('کد پرسنلی'))) wrong.push(`the duplicate message is not in Persian: ${JSON.stringify(burst.find(r => r.status === 400)?.body).slice(0, 120)}`);
 
       // ۲) ویرایش پرسنل دیگر به همین کد با حروف کوچک رد می‌شود
       const other = await send('post', '/api/personnel', { firstName: 'دیگر', lastName: tag, personnelCode: `${code}-B` });
       if (other.status === 201) ids.push(Number(other.body.id));
       const put = await send('put', `/api/personnel/${other.body.id}`, { version: await personnelVersion(other.body.id), firstName: 'دیگر', lastName: tag, personnelCode: ` ${code.toLowerCase()}` });
-      if (put.status !== 400) wrong.push(`ویرایش به کد تکراری ${put.status} داد`);
+      if (put.status !== 400) wrong.push(`edit to a duplicate code returned ${put.status}`);
 
       // ۳) ورود اکسل همان کد را با حروف دیگر پرسنل موجود می‌شناسد، نه پرسنل تازه
       const imp = await send('post', '/api/personnel/bulk-import', { rows: [{ personnelCode: ` ${code.toLowerCase()} `, firstName: 'هم‌زمان', phone: '09131234567' }] });
       const afterImport = await activeWithCode();
       ids.push(...afterImport.filter(x => !ids.includes(x)));
       if (imp.status !== 200 || imp.body?.createdCount !== 0 || imp.body?.updatedCount !== 1 || afterImport.length !== 1) {
-        wrong.push(`ورود اکسل با کد ${JSON.stringify(imp.body).slice(0, 120)} و ${afterImport.length} پرسنل فعال`);
+        wrong.push(`Excel import by code: ${JSON.stringify(imp.body).slice(0, 120)} and ${afterImport.length} active personnel`);
       }
 
       // ۴) کد پرسنل حذف‌شده دوباره قابل استفاده است
@@ -230,7 +230,7 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
         await send('delete', `/api/personnel/${made[0]}`);
         const reuse = await send('post', '/api/personnel', { firstName: 'جانشین', lastName: tag, personnelCode: code });
         if (reuse.status === 201) ids.push(Number(reuse.body.id));
-        if (reuse.status !== 201) wrong.push(`کد پرسنل حذف‌شده ${reuse.status} داد`);
+        if (reuse.status !== 201) wrong.push(`the code of a deleted personnel returned ${reuse.status}`);
       }
 
       // ۵) تکرار قدیمی (پایگاه‌داده‌ای که مهاجرت 0054 ایندکس را نساخت) در بازرس سلامت
@@ -241,29 +241,29 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
           const { findDuplicatePersonnelCodes, buildPersonnelCodeHealthTest } = await import('../../services/personnel/personnelCode.js');
           const dups = await findDuplicatePersonnelCodes(tx);
           const health = buildPersonnelCodeHealthTest(dups, false);
-          if (!dups.some(r => r.id === dup.id) || health.status !== 'warning' || health.count < 1) wrong.push(`بازرس سلامت کد تکراری را نیافت ${JSON.stringify({ n: dups.length, status: health.status })}`);
+          if (!dups.some(r => r.id === dup.id) || health.status !== 'warning' || health.count < 1) wrong.push(`the health check did not find the duplicate code ${JSON.stringify({ n: dups.length, status: health.status })}`);
           tx.rollback();
         }).catch((err: unknown) => {
           if (!(err instanceof Error && err.message.toLowerCase().includes('rollback'))) throw err;
         });
       } catch (err) {
-        wrong.push(`کد تکراری قدیمی: ${err instanceof Error ? err.message : String(err)}`);
+        wrong.push(`old duplicate code: ${err instanceof Error ? err.message : String(err)}`);
       }
 
       // ۶) بازرس سلامت روی داده تمیز: قید در پایگاه‌داده هست
       const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
       const report = await FinancialHealthService.runHealthCheck();
       const check = report.tests.find(t => t.id === 'personnel_code_uniqueness');
-      if (!check || check.metrics?.uniqueIndexPresent !== 1) wrong.push(`آزمون سلامت کد پرسنلی ${JSON.stringify(check?.metrics ?? null)}`);
+      if (!check || check.metrics?.uniqueIndexPresent !== 1) wrong.push(`personnel code health test ${JSON.stringify(check?.metrics ?? null)}`);
 
-      if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+      if (wrong.length > 0) throw new Error(wrong.join('; '));
       return 'پنج ثبت هم‌زمان یک پرسنل (چهار ۴۰۰ فارسی)؛ ویرایش به کد تکراری ۴۰۰؛ ورود اکسل کد با حروف دیگر را به‌روزرسانی کرد؛ کد پرسنل حذف‌شده آزاد؛ تکرار قدیمی در بازرس سلامت';
     });
   }
 
   const deleteId = 'reg_personnel_delete_guard_td_441';
   if (shouldRun(deleteId, 'td441', 'personnel', 'delete', 'package12')) {
-    await runCase(results, deleteId, 'v9.0.29: پرسنل دارای فیش تسویه‌نشده، کارکرد بی فیش، مانده حساب دائم یا سند پیش‌نویس حذف نمی‌شود (۴۰۹ با دلیل و پیشنهاد «قطع همکاری»)؛ پرسنل تسویه‌شده حذف می‌شود (TD-441)', async (ids) => {
+    await runCase(results, deleteId, 'v9.0.29: a personnel with an unsettled payslip, a work log without a payslip, a permanent account balance or a draft voucher is not deleted (409 with reasons and the end-of-employment suggestion); a settled personnel is deleted (TD-441)', async (ids) => {
       const { send } = await adminClient();
       const { VoucherService } = await import('../../services/accounting/voucher.service.js');
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
@@ -277,13 +277,13 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
       try {
         const accountOf = async (type: string) => {
           const [a] = await orm.select({ id: accounts.id }).from(accounts).where(eq(accounts.accountType, type)).orderBy(accounts.id).limit(1);
-          if (!a) throw new Error(`حسابی از نوع ${type} نیست`);
+          if (!a) throw new Error(`no account of type ${type}`);
           return a.id;
         };
         const [assetAcc, liabilityAcc, expenseAcc] = [await accountOf('asset'), await accountOf('liability'), await accountOf('expense')];
         const person = async (label: string) => {
           const res = await send('post', '/api/personnel', { firstName: label, lastName: `حذف ${tag}`, personnelCode: `DEL-${tag}-${ids.length}` });
-          if (res.status !== 201) throw new Error(`ثبت پرسنل ${res.status} داد`);
+          if (res.status !== 201) throw new Error(`Personnel create returned ${res.status}`);
           ids.push(Number(res.body.id));
           return { id: Number(res.body.id), fullName: String(res.body.fullName) };
         };
@@ -301,11 +301,15 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
         };
         const isActive = async (pid: number) => (await orm.select({ id: personnel.id }).from(personnel)
           .where(and(eq(personnel.id, pid), eq(personnel.isDeleted, 0)))).length === 1;
+        // reasons the server's delete refusal names (compared with its Persian message)
+        const WORK_LOG_REASON = 'کارکرد';
+        const BALANCE_REASON = 'مانده حساب';
+        const DRAFT_VOUCHER_REASON = 'سند حسابداری پیش‌نویس';
         const expectRefused = async (pid: number, label: string, mustMention: string) => {
           const res = await send('delete', `/api/personnel/${pid}`);
           const message = String(res.body?.error ?? res.body?.message ?? '');
-          if (res.status !== 409 || !message.includes(mustMention) || !message.includes('قطع همکاری')) wrong.push(`${label}: حذف ${res.status} با پیام «${message.slice(0, 160)}»`);
-          if (!(await isActive(pid))) wrong.push(`${label}: پرسنل حذف شد`);
+          if (res.status !== 409 || !message.includes(mustMention) || !message.includes('قطع همکاری')) wrong.push(`${label}: delete ${res.status} with message "${message.slice(0, 160)}"`);
+          if (!(await isActive(pid))) wrong.push(`${label}: personnel was deleted`);
         };
 
         // ۱) فیش تأییدشده پرداخت‌نشده ۸۷٬۰۰۰٬۰۰۰ ریالی
@@ -314,7 +318,7 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
           payrollNumber: `PAY-DEL-${tag}`, personnelId: unpaid.id, startDate: today, endDate: today, title: 'فیش آزمون', netPayable: money(87000000), status: 'approved',
         }).returning({ id: pieceworkPayrolls.id });
         payrollIds.push(pay.id);
-        await expectRefused(unpaid.id, 'پرسنل با فیش تأییدشده پرداخت‌نشده', `PAY-DEL-${tag}`);
+        await expectRefused(unpaid.id, 'personnel with an approved unpaid payslip', `PAY-DEL-${tag}`);
 
         // ۲) کارکرد بی فیش
         const worker = await person('کارکرددار');
@@ -322,17 +326,17 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
         taskId = task.id;
         const [log] = await orm.insert(pieceworkLogs).values({ personnelId: worker.id, taskId: task.id, date: today, quantity: 3, unitRate: money(100000), totalAmount: money(300000) }).returning({ id: pieceworkLogs.id });
         logIds.push(log.id);
-        await expectRefused(worker.id, 'پرسنل با کارکرد بی فیش', 'کارکرد');
+        await expectRefused(worker.id, 'personnel with a work log without a payslip', WORK_LOG_REASON);
 
         // ۳) مانده مساعده در سند تأییدشده (حساب دائم)
         const advance = await person('مساعده‌دار');
         await voucher('approved', [{ accountId: assetAcc, debit: 5000000, credit: 0, personnelId: advance.id }, { accountId: liabilityAcc, debit: 0, credit: 5000000 }]);
-        await expectRefused(advance.id, 'پرسنل با مانده مساعده', 'مانده حساب');
+        await expectRefused(advance.id, 'personnel with an advance balance', BALANCE_REASON);
 
         // ۴) سند حسابداری پیش‌نویس
         const drafted = await person('پیش‌نویس‌دار');
         await voucher('draft', [{ accountId: expenseAcc, debit: 2000000, credit: 0, personnelId: drafted.id }, { accountId: liabilityAcc, debit: 0, credit: 2000000, personnelId: drafted.id }]);
-        await expectRefused(drafted.id, 'پرسنل با سند پیش‌نویس', 'سند حسابداری پیش‌نویس');
+        await expectRefused(drafted.id, 'personnel with a draft voucher', DRAFT_VOUCHER_REASON);
 
         // ۵) تسویه‌شده: فیش پرداخت‌شده، هزینه حقوق (حساب موقت) و بدهی پرداخت‌شده ← حذف آزاد است
         const settled = await person('تسویه‌شده');
@@ -343,9 +347,9 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
         await voucher('approved', [{ accountId: expenseAcc, debit: 4000000, credit: 0, personnelId: settled.id }, { accountId: liabilityAcc, debit: 0, credit: 4000000, personnelId: settled.id }]);
         await voucher('approved', [{ accountId: liabilityAcc, debit: 4000000, credit: 0, personnelId: settled.id }, { accountId: assetAcc, debit: 0, credit: 4000000 }]);
         const freed = await send('delete', `/api/personnel/${settled.id}`);
-        if (freed.status !== 200 || await isActive(settled.id)) wrong.push(`پرسنل تسویه‌شده با ${freed.status} حذف نشد: ${JSON.stringify(freed.body).slice(0, 160)}`);
+        if (freed.status !== 200 || await isActive(settled.id)) wrong.push(`settled personnel was not deleted (${freed.status}): ${JSON.stringify(freed.body).slice(0, 160)}`);
 
-        if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+        if (wrong.length > 0) throw new Error(wrong.join('; '));
         return 'فیش تأییدشده پرداخت‌نشده، کارکرد بی فیش، مانده مساعده و سند پیش‌نویس هر یک ۴۰۹ با دلیل و «قطع همکاری»؛ پرسنل با فیش پرداخت‌شده و فقط مانده هزینه حذف شد';
       } finally {
         if (voucherIds.length > 0) {
@@ -361,14 +365,14 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
 
   const occId = 'reg_personnel_edit_occ_td_442';
   if (shouldRun(occId, 'td442', 'personnel', 'occ', 'concurrency', 'package12')) {
-    await runCase(results, occId, 'v9.0.30: ویرایش پرسنل نسخه فرم را می‌فرستد؛ نسخه کهنه یا ویرایش هم‌زمان ۴۰۹ OCC_CONFLICT است و تغییر نخست پاک نمی‌شود؛ ویرایش بی نسخه ۴۰۰ (TD-442)', async (ids) => {
+    await runCase(results, occId, 'v9.0.30: a personnel edit sends the form\'s version; a stale version or concurrent edit is 409 OCC_CONFLICT and the first change is kept; an edit without a version is 400 (TD-442)', async (ids) => {
       const { send, app, admin } = await adminClient();
       const tag = tagOf();
       const wrong: string[] = [];
       const created = await send('post', '/api/personnel', {
         firstName: 'نرگس', lastName: `نسخه ${tag}`, personnelCode: `OCC-${tag}`, salaryType: 'monthly_fixed', monthlySalary: 40000000, phone: '09121110000',
       });
-      if (created.status !== 201) throw new Error(`ثبت پرسنل ${created.status} داد`);
+      if (created.status !== 201) throw new Error(`Personnel create returned ${created.status}`);
       const pid = Number(created.body.id);
       ids.push(pid);
       const detail = async () => (await request(app).get(`/api/personnel/${pid}`).set('Cookie', admin.cookie)).body as Record<string, unknown>;
@@ -377,19 +381,19 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
 
       // ۱) بی نسخه ۴۰۰ و بی تغییر
       const noVersion = await send('put', `/api/personnel/${pid}`, form({ monthlySalary: 1 }));
-      if (noVersion.status !== 400 || Number((await row()).monthlySalary) !== 40000000) wrong.push(`ویرایش بی نسخه ${noVersion.status} داد`);
+      if (noVersion.status !== 400 || Number((await row()).monthlySalary) !== 40000000) wrong.push(`edit without a version returned ${noVersion.status}`);
 
       // ۲) دو مدیر فرم را با یک نسخه باز می‌کنند؛ ذخیره دوم تغییر حقوق اولی را پاک نمی‌کند
       const v1 = Number((await detail()).version);
-      if (!Number.isInteger(v1) || v1 < 1) wrong.push(`جزئیات نسخه ندارد: ${v1}`);
+      if (!Number.isInteger(v1) || v1 < 1) wrong.push(`detail has no version: ${v1}`);
       const first = await send('put', `/api/personnel/${pid}`, form({ version: v1, monthlySalary: 52000000, phone: '09121110000' }));
       const second = await send('put', `/api/personnel/${pid}`, form({ version: v1, monthlySalary: 40000000, phone: '09129990000' }));
       const afterTwo = await row();
-      if (first.status !== 200) wrong.push(`ذخیره نخست ${first.status} داد`);
-      if (second.status !== 409 || second.body?.code !== 'OCC_CONFLICT') wrong.push(`ذخیره با نسخه کهنه ${second.status} ${JSON.stringify(second.body).slice(0, 120)}`);
-      if (Number(afterTwo.monthlySalary) !== 52000000 || afterTwo.phone !== '09121110000') wrong.push(`تغییر نخست پاک شد: حقوق ${afterTwo.monthlySalary}، تلفن ${afterTwo.phone}`);
+      if (first.status !== 200) wrong.push(`first save returned ${first.status}`);
+      if (second.status !== 409 || second.body?.code !== 'OCC_CONFLICT') wrong.push(`save with a stale version ${second.status} ${JSON.stringify(second.body).slice(0, 120)}`);
+      if (Number(afterTwo.monthlySalary) !== 52000000 || afterTwo.phone !== '09121110000') wrong.push(`the first change was lost: salary ${afterTwo.monthlySalary}, phone ${afterTwo.phone}`);
       const v2 = Number((await detail()).version);
-      if (v2 !== v1 + 1) wrong.push(`نسخه پس از ذخیره ${v2} است، نه ${v1 + 1}`);
+      if (v2 !== v1 + 1) wrong.push(`version after save is ${v2}, not ${v1 + 1}`);
 
       // ۳) دو ذخیره هم‌زمان با یک نسخه: یکی ۲۰۰، دیگری ۴۰۹
       const race = await Promise.all([
@@ -397,15 +401,15 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
         send('put', `/api/personnel/${pid}`, form({ version: v2, monthlySalary: 62000000 })),
       ]);
       const statuses = race.map(r => r.status).sort().join(',');
-      if (statuses !== '200,409') wrong.push(`دو ذخیره هم‌زمان ${statuses} دادند`);
+      if (statuses !== '200,409') wrong.push(`two concurrent saves returned ${statuses}`);
 
       // ۴) ورود اکسل نسخه را جلو می‌برد، پس فرم بازشده پیش از آن کهنه است
       const v3 = Number((await detail()).version);
       await send('post', '/api/personnel/bulk-import', { rows: [{ personnelCode: `OCC-${tag}`, firstName: 'نرگس', jobTitle: 'مونتاژکار' }] });
       const staleAfterImport = await send('put', `/api/personnel/${pid}`, form({ version: v3, monthlySalary: 1000 }));
-      if (staleAfterImport.status !== 409) wrong.push(`فرم کهنه پس از ورود اکسل ${staleAfterImport.status} داد`);
+      if (staleAfterImport.status !== 409) wrong.push(`stale form after Excel import returned ${staleAfterImport.status}`);
 
-      if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+      if (wrong.length > 0) throw new Error(wrong.join('; '));
       return 'بی نسخه ۴۰۰؛ ذخیره با نسخه کهنه ۴۰۹ OCC_CONFLICT و حقوق ذخیره نخست ماند؛ نسخه یکی جلو رفت؛ دو ذخیره هم‌زمان ۲۰۰ و ۴۰۹؛ ورود اکسل فرم پیشین را کهنه کرد';
     });
   }

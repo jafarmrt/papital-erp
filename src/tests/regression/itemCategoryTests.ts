@@ -108,7 +108,7 @@ async function softDeleteAuditCase(ctx: Ctx): Promise<string> {
 
   // c) reset brings a deleted default category back instead of adding a second one, and is audited
   const [def] = await orm.select().from(categories).where(and(eq(categories.name, 'سایر اقلام'), eq(categories.isDeleted, 0)));
-  if (!def) throw new Error('default category «سایر اقلام» missing');
+  if (!def) throw new Error('default category "other items" missing');
   await orm.update(categories).set({ isDeleted: 1 }).where(eq(categories.id, def.id));
   const reset = await ctx.send('post', '/api/categories/reset-defaults');
   const sameName = await orm.select({ id: categories.id, isDeleted: categories.isDeleted }).from(categories).where(eq(categories.name, 'سایر اقلام'));

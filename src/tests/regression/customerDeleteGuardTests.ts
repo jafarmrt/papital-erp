@@ -14,12 +14,19 @@ export async function runCustomerDeleteGuardTests(shouldRun: (id: string, ...ext
   const id = 'reg_customer_delete_refused_with_open_items_td_431';
   if (!shouldRun(id, 'td431', 'customer', 'delete', 'crm', 'package9')) return results;
 
-  const name = 'v9.0.10: طرف حساب دارای مانده، سند حسابداری پیش‌نویس، سند پیش‌نویس یا پیش‌فاکتور، پرونده فروش فعال، پروژه باز یا چک باز حذف نمی‌شود (۴۰۹ با دلیل)؛ طرف حسابی که فقط کار بسته دارد حذف می‌شود (TD-431)';
+  const name = 'v9.0.10: a party with a balance, a draft journal voucher, a draft or proforma document, an active lead, an open project or an open cheque is not deleted (409 with reasons); a party with only closed business is deleted (TD-431)';
   const tStart = Date.now();
   const customerIds: number[] = [];
   const leadIds: number[] = [];
   const projectIds: number[] = [];
   const chequeIds: number[] = [];
+  // reasons the server's delete refusal names (compared with its Persian message)
+  const DRAFT_VOUCHER_REASON = 'سند حسابداری پیش‌نویس';
+  const BALANCE_REASON = 'مانده حساب';
+  const PROFORMA_REASON = 'پیش‌فاکتور';
+  const ACTIVE_LEAD_REASON = 'پرونده فروش فعال';
+  const OPEN_PROJECT_REASON = 'پروژه باز';
+  const OPEN_CHEQUE_REASON = 'چک باز';
   try {
     const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
     const { createTestCustomer, createTestItem } = await import('../fixtures/factories.js');
@@ -61,41 +68,41 @@ export async function runCustomerDeleteGuardTests(shouldRun: (id: string, ...ext
     const expectRefused = async (customerId: number, label: string, mustMention: string) => {
       const res = await del(customerId);
       const message = String(res.body?.error ?? res.body?.message ?? '');
-      if (res.status !== 409 || !message.includes(mustMention)) wrong.push(`${label}: حذف ${res.status} داد با پیام «${message.slice(0, 160)}»، نه ۴۰۹ با «${mustMention}»`);
-      if (!(await isActive(customerId))) wrong.push(`${label}: طرف حساب حذف شد`);
+      if (res.status !== 409 || !message.includes(mustMention)) wrong.push(`${label}: delete returned ${res.status} with message "${message.slice(0, 160)}", not 409 with "${mustMention}"`);
+      if (!(await isActive(customerId))) wrong.push(`${label}: the party was deleted`);
     };
 
     // ۱) فاکتور نهایی: نخست سند حسابداری پیش‌نویس، پس از تأیید مانده ۳٬۰۰۰٬۰۰۰ حذف را رد می‌کند
     const debtor = await party('گالری فیروزه', 1);
     const invoiceId = await doc({ buyerName: debtor.name, status: 'final' });
-    await expectRefused(debtor.id, 'طرف حساب با فاکتور نهایی و سند پیش‌نویس', 'سند حسابداری پیش‌نویس');
+    await expectRefused(debtor.id, 'a party with a final invoice and a draft voucher', DRAFT_VOUCHER_REASON);
     await orm.update(journalVouchers).set({ status: 'approved' }).where(and(eq(journalVouchers.sourceDocumentId, invoiceId), eq(journalVouchers.isDeleted, 0)));
-    await expectRefused(debtor.id, 'طرف حساب با مانده سند تأییدشده', 'مانده حساب');
+    await expectRefused(debtor.id, 'a party with a balance from an approved voucher', BALANCE_REASON);
 
     // ۲) پیش‌نویس و پیش‌فاکتور با همان نام خریدار
     const drafted = await party('بوتیک یاقوت', 2);
     await doc({ buyerName: ` ${drafted.name} `, status: 'proforma' });
-    await expectRefused(drafted.id, 'طرف حساب با پیش‌فاکتور', 'پیش‌فاکتور');
+    await expectRefused(drafted.id, 'a party with a proforma', PROFORMA_REASON);
 
     // ۳) پرونده فروش فعال
     const prospect = await party('خانم صالحی', 3);
     const [lead] = await orm.insert(crmLeads).values({ title: `فرصت ${tag}`, customerId: prospect.id, customerName: prospect.name, status: 'active' }).returning({ id: crmLeads.id });
     leadIds.push(lead.id);
-    await expectRefused(prospect.id, 'طرف حساب با پرونده فروش فعال', 'پرونده فروش فعال');
+    await expectRefused(prospect.id, 'a party with an active sales file', ACTIVE_LEAD_REASON);
 
     // ۴) پروژه باز
     const client = await party('سفارش‌دهنده سرویس', 4);
     const [project] = await orm.insert(productionProjects).values({ projectCode: `TD431-${tag}`, title: `سرویس ${tag}`, customerId: client.id, customerName: client.name, status: 'in_progress' }).returning({ id: productionProjects.id });
     projectIds.push(project.id);
-    await expectRefused(client.id, 'طرف حساب با پروژه باز', 'پروژه باز');
+    await expectRefused(client.id, 'a party with an open project', OPEN_PROJECT_REASON);
 
     // ۵) چک باز (با شناسه) و چک قدیمی بی‌شناسه با همان نام
     const drawer = await party('صادرکننده چک', 5);
     await cheque(drawer.id, drawer.name, 'in_treasury', '1');
-    await expectRefused(drawer.id, 'طرف حساب با چک در خزانه', 'چک باز');
+    await expectRefused(drawer.id, 'a party with a cheque in the treasury', OPEN_CHEQUE_REASON);
     const legacy = await party('چک قدیمی', 6);
     await cheque(null, legacy.name, 'bounced', '2');
-    await expectRefused(legacy.id, 'طرف حساب با چک برگشتی بی‌شناسه', 'چک باز');
+    await expectRefused(legacy.id, 'a party with a bounced cheque without a party id', OPEN_CHEQUE_REASON);
 
     // ۶) فقط کار بسته: پرونده بردشده، پروژه تمام‌شده، چک وصول‌شده، پیش‌نویس باطل‌شده ← حذف آزاد است
     const settled = await party('مشتری تسویه‌شده', 7);
@@ -107,16 +114,16 @@ export async function runCustomerDeleteGuardTests(shouldRun: (id: string, ...ext
     const voidedDraft = await doc({ buyerName: settled.name });
     await DocumentService.deleteDocument(voidedDraft, 'td431');
     const freed = await del(settled.id);
-    if (freed.status !== 200 || (await isActive(settled.id))) wrong.push(`طرف حساب بی کار باز با ${freed.status} حذف نشد: ${JSON.stringify(freed.body).slice(0, 160)}`);
+    if (freed.status !== 200 || (await isActive(settled.id))) wrong.push(`the party without open business was not deleted (${freed.status}): ${JSON.stringify(freed.body).slice(0, 160)}`);
 
     // وضعیت‌های باز چک همان وضعیت‌های دارای گام بعدی در ماشین وضعیت چک‌اند
     const derived = Object.entries(CHEQUE_TRANSITIONS).filter(([, next]) => next.length > 0).map(([s]) => s).sort();
-    if (JSON.stringify([...OPEN_CHEQUE_STATUSES].sort()) !== JSON.stringify(derived)) wrong.push(`وضعیت‌های باز چک ${JSON.stringify(OPEN_CHEQUE_STATUSES)} است، نه ${JSON.stringify(derived)}`);
+    if (JSON.stringify([...OPEN_CHEQUE_STATUSES].sort()) !== JSON.stringify(derived)) wrong.push(`open cheque statuses are ${JSON.stringify(OPEN_CHEQUE_STATUSES)}, not ${JSON.stringify(derived)}`);
 
-    if (wrong.length > 0) throw new Error(wrong.join('، '));
+    if (wrong.length > 0) throw new Error(wrong.join(', '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'سند پیش‌نویس، مانده تأییدشده، پیش‌فاکتور، پرونده فعال، پروژه باز، چک در خزانه و چک برگشتی بی‌شناسه هر یک ۴۰۹ با دلیل دادند و طرف حساب ماند؛ طرف حساب با کار بسته ۲۰۰',
+      details: 'A draft document, an approved balance, a proforma, an active sales file, an open project, a cheque in the treasury and a bounced cheque without an id each returned 409 with a reason and the party stayed; a party with only closed business 200',
     }));
   } catch (err) {
     results.push(makeTestCase({

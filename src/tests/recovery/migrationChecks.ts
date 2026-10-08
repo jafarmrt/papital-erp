@@ -67,20 +67,20 @@ export async function checkSkippedMigrationRefused(): Promise<string[]> {
     // ساعت امروز (مثل drizzle-kit generate) از `when` ساختگیِ آینده‌ی دفتر عقب است
     const { last } = migrationsCopyWithProbe(root, tag, 'CREATE TABLE k_skip_probe (id integer);', l => Math.min(Date.now(), l - 60_000));
     const skipped = await runMigrationsIn(root);
-    if (skipped.success) v.push(`مهاجرت ${tag} با when کوچک‌تر از آخرین مهاجرت اجراشده بی‌صدا رد شد و اجرا «موفق» گزارش شد`);
-    else if (!skipped.errors.join(' ').includes(tag)) v.push(`خطای مهاجرت نام ${tag} را نمی‌گوید: ${skipped.errors.join('; ')}`);
-    if (await tableExists(inner.schema, 'k_skip_probe')) v.push('مهاجرت ردشده اجرا شد');
+    if (skipped.success) v.push(`migration ${tag} with a when below the last applied migration was silently skipped and the run was reported "successful"`);
+    else if (!skipped.errors.join(' ').includes(tag)) v.push(`migration error does not name ${tag}: ${skipped.errors.join('; ')}`);
+    if (await tableExists(inner.schema, 'k_skip_probe')) v.push('the skipped migration was applied');
 
     // همان مهاجرت با when بزرگ‌تر از آخرین: عادی اجرا می‌شود
     fs.rmSync(root, { recursive: true, force: true });
     fs.mkdirSync(root);
     migrationsCopyWithProbe(root, tag, 'CREATE TABLE k_skip_probe (id integer);', () => last + 3_600_000);
     const normal = await runMigrationsIn(root);
-    if (!normal.success || !(await tableExists(inner.schema, 'k_skip_probe'))) v.push(`مهاجرت تازه با when بزرگ‌تر اجرا نشد: ${normal.errors.join('; ')}`);
+    if (!normal.success || !(await tableExists(inner.schema, 'k_skip_probe'))) v.push(`new migration with a greater when was not applied: ${normal.errors.join('; ')}`);
 
     // پایگاه‌داده جلوتر از این نسخه (همان مهاجرت آزمایشی اجرا شده ولی در دفتر کد نیست): اجرا رد می‌شود
     const ahead = await runMigrations();
-    if (ahead.success) v.push('پایگاه‌داده‌ای که مهاجرت تازه‌تر از این نسخه دارد بی‌هشدار پذیرفته شد');
+    if (ahead.success) v.push('a database with a migration newer than this build was accepted without a warning');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     await inner.teardown();
@@ -94,10 +94,10 @@ export async function checkMigrationSession(): Promise<string[]> {
   const fresh = await setupTestSchema({ migrate: async () => ({ success: true, appliedCount: 0, errors: [] }) });
   try {
     const [a, b] = await Promise.all([runMigrations(), runMigrations()]);
-    if (!a.success || !b.success) v.push(`دو اجرای هم‌زمان مهاجرت: یکی شکست خورد (${[...a.errors, ...b.errors].join('; ').slice(0, 200)})`);
+    if (!a.success || !b.success) v.push(`two concurrent migration runs: one failed (${[...a.errors, ...b.errors].join('; ').slice(0, 200)})`);
     const rows = await pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM "${fresh.schema}".__drizzle_migrations`);
     const known = readJournal(path.join(REPO_ROOT, 'drizzle')).entries.length;
-    if (rows.rows[0]?.n !== known) v.push(`دفتر مهاجرت پس از دو اجرای هم‌زمان ${rows.rows[0]?.n} ردیف دارد (انتظار ${known})`);
+    if (rows.rows[0]?.n !== known) v.push(`migration journal has ${rows.rows[0]?.n} rows after two concurrent runs (expected ${known})`);
   } finally {
     await fresh.teardown();
   }
@@ -109,10 +109,10 @@ export async function checkMigrationSession(): Promise<string[]> {
     migrationsCopyWithProbe(root, tag, `CREATE TABLE k_session_probe AS SELECT current_setting('statement_timeout') AS st;`, l => l + 3_600_000);
     const r = await runMigrationsIn(root);
     if (!r.success) {
-      v.push(`مهاجرت آزمایشی اجرا نشد: ${r.errors.join('; ')}`);
+      v.push(`test migration did not run: ${r.errors.join('; ')}`);
     } else {
       const st = await pool.query<{ st: string }>(`SELECT st FROM "${inner.schema}".k_session_probe`);
-      if (st.rows[0]?.st !== '0') v.push(`مهاجرت با مهلت دستور ${st.rows[0]?.st} اجرا شد (انتظار ۰ = بی‌مهلت)`);
+      if (st.rows[0]?.st !== '0') v.push(`migration ran with statement timeout ${st.rows[0]?.st} (expected 0 = no timeout)`);
     }
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -152,14 +152,14 @@ export async function checkUpgradeFromV70137(): Promise<string[]> {
     migrationsCopyUpTo(root, Number.MAX_SAFE_INTEGER);
     const upgrade = await runMigrationsIn(root);
     if (!upgrade.success) {
-      v.push(`ارتقا از v7.0.137 شکست خورد: ${upgrade.errors.join('; ').slice(0, 300)}`);
+      v.push(`upgrade from v7.0.137 failed: ${upgrade.errors.join('; ').slice(0, 300)}`);
       return v;
     }
     const rows = (await q(`SELECT voucher_number, date, source_cheque_id IS NOT NULL AS linked FROM $S.journal_vouchers WHERE voucher_number IN (990001, 990002) ORDER BY 1`)).rows as Array<{ date: string; linked: boolean }>;
-    if (rows.length !== 2 || !rows.every(r => r.linked)) v.push('سندهای چک سال بسته به چک پیوند نخوردند');
-    if (rows.map(r => r.date).join(',') !== '1402/12/25,1402/12/27') v.push(`تاریخ سندهای ردشده عوض شد: ${rows.map(r => r.date).join(',')}`);
+    if (rows.length !== 2 || !rows.every(r => r.linked)) v.push('cheque vouchers of the closed year were not linked to their cheque');
+    if (rows.map(r => r.date).join(',') !== '1402/12/25,1402/12/27') v.push(`dates of the refused vouchers changed: ${rows.map(r => r.date).join(',')}`);
     const after = await check();
-    if (after?.convalidated !== false || after.def !== before.def) v.push('قید تاریخ سند پس از ارتقا همان قید NOT VALID قبلی نیست');
+    if (after?.convalidated !== false || after.def !== before.def) v.push('the document date constraint after the upgrade is not the same earlier NOT VALID constraint');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     await fresh.teardown();

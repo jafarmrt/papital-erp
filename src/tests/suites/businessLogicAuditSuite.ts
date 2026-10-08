@@ -61,7 +61,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t1,
-        details: `پاکت کاردکس برای کالای ${anyItem.code} با ${envelope.entries.length} ردیف مطابق قرارداد {item, summary, entries} بود.`
+        details: `Kardex envelope for item ${anyItem.code} with ${envelope.entries.length} rows matched the contract {item, summary, entries}.`
       }));
     }
   } catch (err: any) {
@@ -99,7 +99,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t2,
-      details: `۸ درخواست موازی تولید کد، ۸ کد یکتا و قالب‌درست برگرداند (سری: ${resultsArr[0].serial} تا ${resultsArr[7].serial}).`
+      details: `8 parallel code generation requests returned 8 unique, well-formed codes (series: ${resultsArr[0].serial} to ${resultsArr[7].serial}).`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
@@ -200,7 +200,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t3,
-        details: 'ثبت پرداخت دوباره برای فیش paid با ConflictError مسدود شد — قفل پرداخت خزانه‌ای فعال است.'
+        details: 'a second payment on a paid payslip was blocked with ConflictError — the treasury payment lock is active.'
       }));
     }
   } catch (err: any) {
@@ -254,7 +254,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t5,
-      details: 'cleanupAllTestFixtures بدون پرچم ERP_ALLOW_TEST_CLEANUP=1 هیچ داده‌ای را حذف نکرد (canary سالم ماند).'
+      details: 'cleanupAllTestFixtures deleted no data without the ERP_ALLOW_TEST_CLEANUP=1 flag (the canary stayed intact).'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
@@ -400,7 +400,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t7,
-      details: 'نگارش همزمان (Dual-Write) ستون‌های date_iso و تبدیل دقیق تاریخ‌های شمسی به میلادی استاندارد در گزارش کار، کارکرد پرکیسی و فعالیت‌های CRM با موفقیت اعتبارسنجی شد.'
+      details: 'dual-write of the date_iso columns and exact Jalali-to-Gregorian date conversion in daily logs, piecework work logs and CRM activities verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
@@ -526,7 +526,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t8,
-      details: 'تضمین شکست سریع و پرتاب استثنای صلب (ValidationError/NotFoundError) در صورت نقص کدینگ یا خطای سند، و تضمین ثبت اتمیک سند افتتاحیه برای حساب‌های خزانه‌داری با موجودی اولیه اعتبارسنجی شد.'
+      details: 'fail-fast with a strict exception (ValidationError/NotFoundError) on a coding gap or document error, and atomic opening voucher recording for treasury accounts with an opening balance, verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
@@ -753,7 +753,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t9,
-      details: 'ارکستراسیون صلب ۳ مرحله‌ای نهایی‌سازی اسناد (ثبت سند، تحرک کاردکس انبار با حفظ WAC، صدور سند دوبل خودکار با رعایت قاعده DB-008 و rollback کامل در صورت خطا) با موفقیت اعتبارسنجی شد.'
+      details: 'strict 3-step document finalization orchestration (record the document, Kardex stock movement keeping WAC, automatic double-entry voucher under rule DB-008, and full rollback on error) verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
@@ -897,7 +897,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
 
     const [checkCritEntity] = await orm.select().from(activityLogs).where(eq(activityLogs.id, criticalEntityLog.id));
     if (!checkCritEntity) {
-      throw new Error('Critical audit log with entity "تنظیمات سیستم" was erroneously purged');
+      throw new Error('Critical audit log with entity "system settings" was erroneously purged');
     }
 
     // 4. Test Audit Log Integrity Check
@@ -914,7 +914,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t10,
-      details: 'سیاست نگه‌داشت ممیزی ۹۰ روزه (D-2)، حفاظت خودکار از لاگ‌های بحرانی (DELETE و تنظیمات)، پاکسازی هدفمند لاگ‌های عادی، ثبت اتمیک با strict=true و چک یکپارچگی سیستمی با موفقیت اعتبارسنجی شد.'
+      details: '90-day audit retention policy (D-2), automatic protection of critical logs (DELETE and settings), targeted purge of normal logs, atomic recording with strict=true and the system integrity check verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({

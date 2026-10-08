@@ -29,8 +29,8 @@ export async function checkWorkflowDocumentAmountInRials(): Promise<string[]> {
   // فاکتور ۱۰۰ دلاری با نرخ ۵۰۰٬۰۰۰ و ۱۰ دلار مالیات: ۵۵٬۰۰۰٬۰۰۰ ریال
   const usd = await createTestDocument({ status: 'draft', currency: 'USD', exchangeRate: money(500000), vatAmount: money(10) }, [{ itemId: item.id, quantity: 2, unitPrice: 50 }]);
   const usdContext = await getEntityContext('document', String(usd.document.id));
-  if (Number(usdContext.amount) !== 55_000_000) problems.push(`مبلغ فاکتور ۱۱۰ دلاری با نرخ ۵۰۰٬۰۰۰ ${String(usdContext.amount)} شد، نه ۵۵٬۰۰۰٬۰۰۰ ریال`);
-  if (!rulePasses('amount', 'gt', 10_000_000, usdContext)) problems.push('فاکتور ۵۵ میلیون ریالی از شرط «مبلغ بیشتر از ۱۰ میلیون ریال» رد نشد');
+  if (Number(usdContext.amount) !== 55_000_000) problems.push(`amount of a 110 dollar invoice at rate 500,000 became ${String(usdContext.amount)}, not 55,000,000 rial`);
+  if (!rulePasses('amount', 'gt', 10_000_000, usdContext)) problems.push('a 55 million rial invoice did not pass the condition "amount greater than 10 million rial"');
 
   // فاکتور ریالی: خالص ۱٬۰۰۰٬۰۰۰، مالیات ۱۰۰٬۰۰۰، هزینه ارسال ۵۰٬۰۰۰؛ ردیف حذف‌شده شمرده نمی‌شود
   const irr = await createTestDocument({ status: 'draft', vatAmount: money(100000), serviceChargeAmount: money(50000) },
@@ -39,7 +39,7 @@ export async function checkWorkflowDocumentAmountInRials(): Promise<string[]> {
   const removed = lines.find(l => money(l.unitPrice ?? 0).equals(9_000_000));
   if (removed) await orm.update(documentItems).set({ isDeleted: 1 }).where(eq(documentItems.id, removed.id));
   const irrContext = await getEntityContext('document', String(irr.document.id));
-  if (Number(irrContext.amount) !== 1_150_000) problems.push(`مبلغ فاکتور ریالی با مالیات و هزینه ارسال ${String(irrContext.amount)} شد، نه ۱٬۱۵۰٬۰۰۰`);
+  if (Number(irrContext.amount) !== 1_150_000) problems.push(`amount of a rial invoice with tax and shipping became ${String(irrContext.amount)}, not 1,150,000`);
 
   // سند ارزی بی نرخ (نه روی سند، نه در تنظیمات): مبلغ ریالی نامعلوم است و هیچ شرط مبلغی نمی‌گذرد
   const currency = 'XTS';
@@ -47,7 +47,7 @@ export async function checkWorkflowDocumentAmountInRials(): Promise<string[]> {
   const noRate = await createTestDocument({ status: 'draft', currency }, [{ itemId: item.id, quantity: 1, unitPrice: 100 }]);
   const noRateContext = await getEntityContext('document', String(noRate.document.id));
   for (const [op, value] of [['lte', 1_000_000_000], ['lt', 1_000_000_000], ['gt', 0], ['gte', 0]] as const) {
-    if (rulePasses('amount', op, value, noRateContext)) problems.push(`سند ارزی بی نرخ از شرط «مبلغ ${op} ${value}» گذشت (مبلغ ${String(noRateContext.amount)})`);
+    if (rulePasses('amount', op, value, noRateContext)) problems.push(`a foreign-currency document without a rate passed the condition "amount ${op} ${value}" (amount ${String(noRateContext.amount)})`);
   }
   return problems;
 }
@@ -95,10 +95,10 @@ export async function checkRequisitionStepNotRewritten(): Promise<string[]> {
     const prev = history[i - 1];
     const row = history[i];
     if (row.from !== null && row.from !== prev.to) {
-      problems.push(`گام فرایند بی ثبت در تاریخچه عوض شد: «${prev.action}» به گام #${prev.to ?? '-'} رسید و «${row.action}» از گام #${row.from} اجرا شد`);
+      problems.push(`workflow step changed without a history row: "${prev.action}" reached step #${prev.to ?? '-'} and "${row.action}" ran from step #${row.from}`);
     }
   }
-  if (!history.some(r => r.action === 'approve_request')) problems.push(`تأیید درخواست پیش از دریافت در تاریخچه نیامد (${history.map(r => r.action).join('، ')})`);
+  if (!history.some(r => r.action === 'approve_request')) problems.push(`the requisition approval before receipt is missing from the history (${history.map(r => r.action).join(', ')})`);
 
   // وضعیت «دریافت‌شده» با گامِ «در انتظار»: هیچ اقدامی پذیرفته نمی‌شود و گام بی تاریخچه جابه‌جا نمی‌شود
   const received = await requisitionWithWorkflow(item.id, 2);
@@ -107,9 +107,9 @@ export async function checkRequisitionStepNotRewritten(): Promise<string[]> {
   const historyBefore = (await stepHistory(received.instanceId)).length;
   for (const action of ['reject_request', 'approve_request']) {
     const status = await refusalStatus(() => ProcurementService.executeWorkflowAction(received.id, action, ADMIN));
-    if (status !== 409) problems.push(`اقدام «${action}» روی درخواستِ دریافت‌شده ${status === null ? 'پذیرفته شد' : `با کد ${status} رد شد`}، نه ۴۰۹`);
+    if (status !== 409) problems.push(`action "${action}" on a received requisition ${status === null ? 'was accepted' : `was refused with code ${status}`}, not 409`);
   }
-  if ((await currentStep(received.instanceId)) !== stepBefore) problems.push('گام درخواستِ دریافت‌شده بی انتقال بازنویسی شد');
-  if ((await stepHistory(received.instanceId)).length !== historyBefore) problems.push('اقدام ردشده روی درخواستِ دریافت‌شده در تاریخچه ردیف افزود');
+  if ((await currentStep(received.instanceId)) !== stepBefore) problems.push('step of the received requisition was overwritten without a transition');
+  if ((await stepHistory(received.instanceId)).length !== historyBefore) problems.push('the refused action on the received requisition added a history row');
   return problems;
 }

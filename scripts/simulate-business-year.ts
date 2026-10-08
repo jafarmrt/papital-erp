@@ -46,30 +46,30 @@ async function main(): Promise<void> {
 
   const results: SimulationResult[] = [];
   for (const seed of seeds) {
-    console.log(`\n▶ شبیه‌سازی بذر ${seed} (${steps} گام)`);
+    console.log(`\n▶ Simulating seed ${seed} (${steps} steps)`);
     const result = await runSeed(seed, steps, checkEvery, verbose);
     results.push(result);
-    console.log(`  عملیات: ${result.counts.ok} موفق، ${result.counts.rejected} ردشده، ${result.counts.skipped} بدون اقدام`);
-    console.log(`  اختلاف نهایی ارزش انبار و دفتر کل: ${result.finalInventoryGap} ریال`);
+    console.log(`  Operations: ${result.counts.ok} succeeded, ${result.counts.rejected} rejected, ${result.counts.skipped} without action`);
+    console.log(`  Final gap between inventory value and the general ledger: ${result.finalInventoryGap} rials`);
     if (result.findings.length === 0) {
-      console.log('  ✅ هیچ ناوردایی نقض نشد');
+      console.log('  ✅ No invariant violated');
     } else {
-      console.log(`  ❌ ${result.findings.length} نقض:`);
+      console.log(`  ❌ ${result.findings.length} violations:`);
       for (const f of result.findings) {
-        console.log(`   - [${f.invariant}] ${f.key} (گام ${f.firstStep}، ${f.firstOp}): ${f.message}`);
-        if (f.expected !== undefined || f.actual !== undefined) console.log(`       مورد انتظار: ${f.expected ?? '-'} | واقعی: ${f.actual ?? '-'}`);
+        console.log(`   - [${f.invariant}] ${f.key} (step ${f.firstStep}, ${f.firstOp}): ${f.message}`);
+        if (f.expected !== undefined || f.actual !== undefined) console.log(`       expected: ${f.expected ?? '-'} | actual: ${f.actual ?? '-'}`);
         const stepRecord = result.steps.find(s => s.step === f.firstStep);
-        if (stepRecord) console.log(`       گام ${stepRecord.step}: ${stepRecord.detail}`);
+        if (stepRecord) console.log(`       step ${stepRecord.step}: ${stepRecord.detail}`);
       }
     }
   }
 
   if (reportPath) {
     fs.writeFileSync(path.resolve(process.cwd(), reportPath), JSON.stringify(results, null, 2), 'utf-8');
-    console.log(`\n📁 گزارش: ${reportPath}`);
+    console.log(`\n📁 Report: ${reportPath}`);
   }
   const total = results.reduce((s, r) => s + r.findings.length, 0);
-  console.log(`\n${total === 0 ? '✅' : '❌'} مجموع نقض‌ها در ${results.length} بذر: ${total}`);
+  console.log(`\n${total === 0 ? '✅' : '❌'} Total violations across ${results.length} seeds: ${total}`);
   process.exit(total === 0 ? 0 : 1);
 }
 

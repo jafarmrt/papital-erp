@@ -18,7 +18,7 @@ describe('party type cell of the customer Excel import (TD-421)', () => {
     expect(parsePartyTypeCell('مشتری')).toBe('customer');
   });
 
-  it('labels an empty cell «بدون تغییر» on an existing party and «مشتری» on a new one', () => {
+  it('labels an empty cell "unchanged" on an existing party and "customer" on a new one', () => {
     expect(partyTypeCellLabel(undefined, true)).toBe('بدون تغییر');
     expect(partyTypeCellLabel(undefined, false)).toBe('مشتری');
     expect(partyTypeCellLabel('supplier', true)).toBe('تامین‌کننده');

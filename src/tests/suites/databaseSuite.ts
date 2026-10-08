@@ -23,29 +23,29 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'db_read_calculate_update',
         scenarioId: 'db_readiness',
-        name: 'الگوی Read-Calculate-Update جهت جلوگیری از خطای Parameter Casting',
+        name: 'Read-Calculate-Update pattern to prevent the Parameter Casting error',
         layer: 'database',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t1Start,
-        details: 'به‌روزرسانی رکورد با خواندن ابتدایی و استفاده از ORM با موفقیت انجام شد.'
+        details: 'record update with an initial read through the ORM succeeded.'
       }));
     } else {
       results.push(makeTestCase({
         id: 'db_read_calculate_update',
         scenarioId: 'db_readiness',
-        name: 'الگوی Read-Calculate-Update جهت جلوگیری از خطای Parameter Casting',
+        name: 'Read-Calculate-Update pattern to prevent the Parameter Casting error',
         layer: 'database',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t1Start,
-        details: 'تنظیمات موجود نبود، اما متد ORM تست گردید.'
+        details: 'settings were missing, but the ORM method was tested.'
       }));
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_read_calculate_update',
-      name: 'الگوی Read-Calculate-Update جهت جلوگیری از خطای Parameter Casting',
+      name: 'Read-Calculate-Update pattern to prevent the Parameter Casting error',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -65,17 +65,17 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'db_explicit_text_cast',
-      name: 'بررسی Casting صریح رشته‌ها (::text) در کوئری‌های Drizzle',
+      name: 'explicit string casting (::text) in Drizzle queries',
       layer: 'database',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t2Start,
-      details: 'کوئری با کست صریح ::text بدون ابهام تایپی در PostgreSQL اجرا گردید.'
+      details: 'query with an explicit ::text cast ran in PostgreSQL without type ambiguity.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_explicit_text_cast',
-      name: 'بررسی Casting صریح رشته‌ها (::text) در کوئری‌های Drizzle',
+      name: 'explicit string casting (::text) in Drizzle queries',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -93,17 +93,17 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'db_soft_delete_filter',
-      name: 'تضمین اعمال فیلتر Soft Delete بر روی جداول اصلی سیستم',
+      name: 'Soft Delete filter is applied on the main system tables',
       layer: 'database',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t3Start,
-      details: `تعداد ${activeItems.length} کالا با فیلتر فعال از دیتابیس دریافت شدند.`
+      details: `${activeItems.length} items fetched from the database with the active filter.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_soft_delete_filter',
-      name: 'تضمین اعمال فیلتر Soft Delete بر روی جداول اصلی سیستم',
+      name: 'Soft Delete filter is applied on the main system tables',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -118,19 +118,19 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     const schemaValidation = await validateDbSchema();
     results.push(makeTestCase({
       id: 'db_schema_parity_validation',
-      name: 'تطبیق و یکپارچگی ساختار دیتابیس با منبع واحد حقیقت (Single Source of Truth)',
+      name: 'database structure matches the single source of truth (Single Source of Truth)',
       layer: 'database',
       executionType: 'real_database',
       passed: schemaValidation.valid,
       durationMs: Date.now() - t4Start,
       details: schemaValidation.valid 
-        ? `تمام ۵۰ جدول اصلی و تایپ‌های عددی مالی NUMERIC(18,4) تایید گردیدند.`
+        ? `all 50 main tables and NUMERIC(18,4) financial numeric types verified.`
         : `کسری جداول: ${schemaValidation.missingTables.join(', ') || 'ندارد'} | ستون‌های غیردقیق: ${schemaValidation.floatColumns.join(', ') || 'ندارد'}`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_schema_parity_validation',
-      name: 'تطبیق و یکپارچگی ساختار دیتابیس با منبع واحد حقیقت (Single Source of Truth)',
+      name: 'database structure matches the single source of truth (Single Source of Truth)',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -158,17 +158,17 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'db_constraints_indexes_validation',
-      name: 'اعتبارسنجی قیدهای یکتایی بیزینس و شروط اعتبارسنجی مالی (Constraints & Indexes)',
+      name: 'business uniqueness constraints and financial validation checks (Constraints & Indexes)',
       layer: 'database',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t5Start,
-      details: `قیدهای نامنفی مالی و ایندکس‌های یکتایی فعال روی شناسه‌های بیزینس (Accounts, Bank Accounts, Documents, Vouchers) تایید گردیدند.`
+      details: `non-negative financial constraints and active unique indexes on business ids (Accounts, Bank Accounts, Documents, Vouchers) verified.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_constraints_indexes_validation',
-      name: 'اعتبارسنجی قیدهای یکتایی بیزینس و شروط اعتبارسنجی مالی (Constraints & Indexes)',
+      name: 'business uniqueness constraints and financial validation checks (Constraints & Indexes)',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -216,17 +216,17 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'db_test_infrastructure_factories',
-      name: 'زیرساخت فکتوری‌ها و جداسازی داده‌های تست با Transaction Rollback (Subphase 4.1)',
+      name: 'factory infrastructure and test data isolation with Transaction Rollback (Subphase 4.1)',
       layer: 'database',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t6Start,
-      details: 'تولید ساختاریافته فکتوری‌ها (User, Customer, Item, Document, Voucher, Workflow) و ایزوله‌سازی کامل دیتابیس با Rollback تایید گردید.'
+      details: 'structured factory generation (User, Customer, Item, Document, Voucher, Workflow) and full database isolation with Rollback verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_test_infrastructure_factories',
-      name: 'زیرساخت فکتوری‌ها و جداسازی داده‌های تست با Transaction Rollback (Subphase 4.1)',
+      name: 'factory infrastructure and test data isolation with Transaction Rollback (Subphase 4.1)',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -246,7 +246,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     `);
     const nullPricesCount = Number((nullPricesRes as any)?.rows?.[0]?.cnt || 0);
     if (nullPricesCount > 0) {
-      throw new Error(`تعداد ${nullPricesCount} رکورد در جدول transactions دارای unit_price یا total_price تهی (NULL) می‌باشند.`);
+      throw new Error(`${nullPricesCount} records in table transactions have a NULL unit_price or total_price.`);
     }
 
     // 2. Verify composite indexes exist
@@ -257,7 +257,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     `);
     const idxCount = (indexesRes as any)?.rows?.length || 0;
     if (idxCount < 2) {
-      throw new Error(`ایندکس‌های کامپوزیت tx_item_date_id_active و tx_item_loc_active یافت نشدند (تعداد یافت‌شده: ${idxCount}).`);
+      throw new Error(`composite indexes tx_item_date_id_active and tx_item_loc_active not found (found: ${idxCount}).`);
     }
 
     // 3. Kardex query performance test
@@ -273,17 +273,17 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'db_transactions_kardex_indexes',
-      name: 'تایید معیار‌های پذیرش DB-005 و DB-015 (ستون‌های غیر-NULL قیمت، ایندکس‌های کامپوزیت و کارایی کاردکس)',
+      name: 'DB-005 and DB-015 acceptance criteria (non-NULL price columns, composite indexes and Kardex performance)',
       layer: 'database',
       executionType: 'real_database',
       passed: kardexDurationMs < 250,
       durationMs: Date.now() - t7Start,
-      details: `تمام رکوردهای transactions دارای unit_price و total_price غیر-NULL هستند | ایندکس‌های کامپوزیت فعال هستند | زمان اجرای کوئری کاردکس: ${kardexDurationMs}ms (کمتر از 250ms WAN).`
+      details: `all transactions records have non-NULL unit_price and total_price | composite indexes are active | Kardex query time: ${kardexDurationMs}ms (under 250ms WAN).`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_transactions_kardex_indexes',
-      name: 'تایید معیار‌های پذیرش DB-005 و DB-015 (ستون‌های غیر-NULL قیمت، ایندکس‌های کامپوزیت و کارایی کاردکس)',
+      name: 'DB-005 and DB-015 acceptance criteria (non-NULL price columns, composite indexes and Kardex performance)',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -349,24 +349,24 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     });
 
     if (rebuildRes1.newStock !== 15) {
-      throw new Error(`موجودی پس از بازسازی باید ۱۵ باشد، اما ${rebuildRes1.newStock} محاسبه شد.`);
+      throw new Error(`stock after rebuild should be 15, but ${rebuildRes1.newStock} was computed.`);
     }
     // v9.0.90 (TD-487): بازسازی WAC را تغییر نمی‌دهد و بازپخش کاردکس را گزارش می‌کند؛ اصلاح WAC جداست و سند پیش‌نویس دارد
     if (rebuildRes1.replayWac !== 1500 || rebuildRes1.newWac !== 99999 || !rebuildRes1.wacDiffers) {
-      throw new Error(`بازپخش کاردکس باید WAC ۱۵۰۰ را گزارش کند و WAC ۹۹۹۹۹ دست نخورد، اما ${JSON.stringify({ replay: rebuildRes1.replayWac, wac: rebuildRes1.newWac })}`);
+      throw new Error(`Kardex replay should report WAC 1500 and leave WAC 99999 untouched, but got ${JSON.stringify({ replay: rebuildRes1.replayWac, wac: rebuildRes1.newWac })}`);
     }
     const corrected = await KardexWacRecalculatorService.correctItemWacFromLedger(testItem.id, { userId: testUser.id, user: testUser.username });
     if (corrected.newWac !== 1500 || !corrected.voucherId) {
-      throw new Error(`اصلاح WAC باید ۱۵۰۰ و سند اختلاف ارزش بدهد: ${JSON.stringify(corrected)}`);
+      throw new Error(`WAC correction should give 1500 and a value difference voucher: ${JSON.stringify(corrected)}`);
     }
 
     // Verify DB record directly
     const [updatedItem1] = await orm.select().from(items).where(eq(items.id, testItem.id));
     if (Number(updatedItem1.currentStock) !== 15 || Number(updatedItem1.weightedAverageCost) !== 1500) {
-      throw new Error(`مقادیر ثبت شده در دیتابیس با خروجی همخوانی ندارد: موجودی ${updatedItem1.currentStock}، WAC ${updatedItem1.weightedAverageCost}`);
+      throw new Error(`values stored in the database do not match the output: stock ${updatedItem1.currentStock}, WAC ${updatedItem1.weightedAverageCost}`);
     }
     if (!updatedItem1.lastKardexRebuildAt) {
-      throw new Error('ستون last_kardex_rebuild_at پس از بازسازی پر نشده است.');
+      throw new Error('column last_kardex_rebuild_at was not filled after the rebuild.');
     }
 
     // Add another out transaction of 15 to make stock 0
@@ -389,11 +389,11 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     });
 
     if (rebuildRes2.newStock !== 0) {
-      throw new Error(`موجودی پس از خروج کامل باید ۰ باشد، اما ${rebuildRes2.newStock} است.`);
+      throw new Error(`stock after a full outflow should be 0, but is ${rebuildRes2.newStock}.`);
     }
     // V6 (TD-136): در صورت صفر شدن موجودی با خروج کالا، آخرین نرخ میانگین موزون معتبر (1500) حفظ می‌شود
     if (rebuildRes2.newWac !== 1500 || rebuildRes2.replayWac !== 1500) {
-      throw new Error(`میانگین موزون کالای با موجودی ۰ باید آخرین نرخ معتبر (۱۵۰۰) را حفظ کند، اما ${rebuildRes2.newWac} / ${rebuildRes2.replayWac} است.`);
+      throw new Error(`weighted average cost of an item with stock 0 should keep the last valid rate (1500), but is ${rebuildRes2.newWac} / ${rebuildRes2.replayWac}.`);
     }
 
     // Verify Audit log was recorded
@@ -403,22 +403,22 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
       .where(and(eq(activityLogs.entity, 'کالا'), eq(activityLogs.entityId, String(testItem.id))));
 
     if (auditEntries.length < 2) {
-      throw new Error(`لاگ حسابرسی ثبت نشده است (تعداد یافت‌شده: ${auditEntries.length})`);
+      throw new Error(`audit log was not recorded (found: ${auditEntries.length})`);
     }
 
     results.push(makeTestCase({
       id: 'db_kardex_wac_recalculation_validation',
-      name: 'محاسبه دقیق میانگین موزون قیمت (WAC)، ریست موجودی صفر و ثبت لاگ حسابرسی (DB-005 Part 2)',
+      name: 'exact weighted average cost (WAC) calculation, zero-stock reset and audit log recording (DB-005 Part 2)',
       layer: 'database',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t8Start,
-      details: 'محاسبه فرمول WAC = SUM(qty*price)/SUM(qty) در ورودی‌های چندگانه، صفر شدن WAC در موجودی صفر، به‌روزرسانی last_kardex_rebuild_at و ثبت سوابق حسابرسی با موفقیت تأیید گردید.'
+      details: 'WAC = SUM(qty*price)/SUM(qty) over multiple receipts, WAC reset at zero stock, last_kardex_rebuild_at update and audit log recording verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_kardex_wac_recalculation_validation',
-      name: 'محاسبه دقیق میانگین موزون قیمت (WAC)، ریست موجودی صفر و ثبت لاگ حسابرسی (DB-005 Part 2)',
+      name: 'exact weighted average cost (WAC) calculation, zero-stock reset and audit log recording (DB-005 Part 2)',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -436,7 +436,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     const { createTestWarehouse } = await import('../fixtures/factories.js');
     const columns: any = await orm.execute(sql`SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'items' AND column_name = 'stocks'`);
     if ((columns.rows ?? columns).length > 0) {
-      throw new Error('ستون items.stocks هنوز وجود دارد');
+      throw new Error('column items.stocks still exists');
     }
 
     const [mainWh] = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
@@ -469,21 +469,21 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
 
     await orm.delete(iws).where(eq(iws.itemId, insertedItem.id));
     await orm.delete(items).where(eq(items.id, insertedItem.id));
-    if (checks.length > 0) throw new Error(checks.join('؛ '));
+    if (checks.length > 0) throw new Error(checks.join('; '));
 
     results.push(makeTestCase({
       id: 'db_stock_consistency_trigger_validation',
-      name: 'v7.0.48: موجودی کل کالا همیشه برابر مجموع جدول موجودی انبارها با تریگر PostgreSQL (DB-004 / TD-214)',
+      name: 'v7.0.48: item total stock always equals the sum of the warehouse stock table through a PostgreSQL trigger (DB-004 / TD-214)',
       layer: 'database',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t9Start,
-      details: 'ستون items.stocks وجود ندارد؛ current_stock با درج، تغییر و حذف ردیف‌های item_warehouse_stocks به‌روز شد و نوشتن مستقیم ۹۹۹ به مجموع جدول اصلاح شد.'
+      details: 'column items.stocks does not exist; current_stock followed insert, update and delete of item_warehouse_stocks rows, and a direct write of 999 was corrected to the table sum.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_stock_consistency_trigger_validation',
-      name: 'v7.0.48: موجودی کل کالا همیشه برابر مجموع جدول موجودی انبارها با تریگر PostgreSQL (DB-004 / TD-214)',
+      name: 'v7.0.48: item total stock always equals the sum of the warehouse stock table through a PostgreSQL trigger (DB-004 / TD-214)',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -505,13 +505,13 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
 
     const foundIndexes = (indexCheck.rows || []).map((r: any) => r.indexname);
     if (!foundIndexes.includes('tx_item_date_id_active')) {
-      throw new Error('ایندکس کامپوزیت tx_item_date_id_active بر روی جدول transactions یافت نشد.');
+      throw new Error('composite index tx_item_date_id_active not found on table transactions.');
     }
     if (!foundIndexes.includes('tx_item_loc_active')) {
-      throw new Error('ایندکس کامپوزیت tx_item_loc_active بر روی جدول transactions یافت نشد.');
+      throw new Error('composite index tx_item_loc_active not found on table transactions.');
     }
     if (!foundIndexes.includes('tx_item_active_date')) {
-      throw new Error('ایندکس کامپوزیت tx_item_active_date بر روی جدول transactions یافت نشد.');
+      throw new Error('composite index tx_item_active_date not found on table transactions.');
     }
 
     // 2. Execute EXPLAIN query on Kardex lookup to verify optimizer plan
@@ -537,17 +537,17 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'db_kardex_composite_indexes_validation',
-      name: 'ایندکس‌های ترکیبی بهینه برای کاردکس و حذف ایندکس‌های تکراری (DB-015)',
+      name: 'optimal composite indexes for the Kardex and removal of duplicate indexes (DB-015)',
       layer: 'database',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t10Start,
-      details: `ایندکس‌های کامپوزیت tx_item_date_id_active، tx_item_loc_active و tx_item_active_date با موفقیت تأیید شدند. زمان اجرای کوئری کاردکس: ${queryDurationMs.toFixed(2)} میلی‌ثانیه.`
+      details: `composite indexes tx_item_date_id_active, tx_item_loc_active and tx_item_active_date verified. Kardex query time: ${queryDurationMs.toFixed(2)} ms.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_kardex_composite_indexes_validation',
-      name: 'ایندکس‌های ترکیبی بهینه برای کاردکس و حذف ایندکس‌های تکراری (DB-015)',
+      name: 'optimal composite indexes for the Kardex and removal of duplicate indexes (DB-015)',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -562,7 +562,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     // 1. Create a dummy document with a line item and transaction
     const [testItem] = await orm.select().from(items).where(eq(items.isDeleted, 0)).limit(1);
     if (!testItem) {
-      throw new Error('هیچ کالایی برای ساخت سند تست یافت نشد.');
+      throw new Error('no item found to build the test document.');
     }
 
     // v9.0.238 (TD-770): نوع ساختگی دیگر ردیف نمی‌گیرد؛ پیش‌نویس رسید کالایی جابه‌جا نمی‌کند
@@ -581,7 +581,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     // Verify created
     const createdDoc = await DocumentService.getDocumentById(testDocId);
     if (!createdDoc) {
-      throw new Error(`سند تست #${testDocId} ایجاد نشد.`);
+      throw new Error(`test document #${testDocId} was not created.`);
     }
 
     // 2. Perform Soft Delete Cascade
@@ -590,17 +590,17 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     // 3. Verify Document is marked as deleted with deletedAt & deletedBy
     const [rawDoc] = await orm.select().from(documents).where(eq(documents.id, testDocId));
     if (!rawDoc || rawDoc.isDeleted !== 1) {
-      throw new Error(`سند #${testDocId} پس از حذف دارای is_deleted=1 نشد.`);
+      throw new Error(`document #${testDocId} did not get is_deleted=1 after delete.`);
     }
     if (!rawDoc.deletedAt || rawDoc.deletedBy !== 'soft_delete_tester') {
-      throw new Error(`ستون‌های deleted_at یا deleted_by روی سند #${testDocId} به‌درستی ست نشدند.`);
+      throw new Error(`columns deleted_at or deleted_by were not set correctly on document #${testDocId}.`);
     }
 
     // 4. Verify DocumentItems cascade soft-delete
     const rawItems = await orm.select().from(documentItems).where(eq(documentItems.documentId, testDocId));
     for (const di of rawItems) {
       if (di.isDeleted !== 1) {
-        throw new Error(`آیتم سند ID ${di.id} پس از حذف سند دارای is_deleted=1 نشد.`);
+        throw new Error(`document item ID ${di.id} did not get is_deleted=1 after the document was deleted.`);
       }
     }
 
@@ -608,29 +608,29 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     const rawTxs = await orm.select().from(transactions).where(eq(transactions.documentId, testDocId));
     for (const txRecord of rawTxs) {
       if (txRecord.isDeleted !== 1) {
-        throw new Error(`تراکنش ID ${txRecord.id} پس از حذف سند دارای is_deleted=1 نشد.`);
+        throw new Error(`transaction ID ${txRecord.id} did not get is_deleted=1 after the document was deleted.`);
       }
     }
 
     // 6. Verify getDocumentById returns null for soft-deleted doc
     const fetchedAfter = await DocumentService.getDocumentById(testDocId);
     if (fetchedAfter !== null) {
-      throw new Error(`سند حذف‌شده #${testDocId} توسط getDocumentById برگردانده شد.`);
+      throw new Error(`deleted document #${testDocId} was returned by getDocumentById.`);
     }
 
     results.push(makeTestCase({
       id: 'db_soft_delete_cascade_validation',
-      name: 'مدیریت Soft-delete Cascade بر روی document_items و transactions (DB-017)',
+      name: 'Soft-delete Cascade on document_items and transactions (DB-017)',
       layer: 'database',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t11Start,
-      details: `حذف آبشاری سند #${testDocId}، آیتم‌های سند (${rawItems.length}) و تراکنش‌ها (${rawTxs.length}) با موفقیت و ثبت deleted_at/deleted_by تایید شد.`
+      details: `cascade delete of document #${testDocId}, its items (${rawItems.length}) and transactions (${rawTxs.length}) succeeded with deleted_at/deleted_by recorded.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_soft_delete_cascade_validation',
-      name: 'مدیریت Soft-delete Cascade بر روی document_items و transactions (DB-017)',
+      name: 'Soft-delete Cascade on document_items and transactions (DB-017)',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -664,12 +664,12 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
       if (flat.includes('chk_pp_inv_control_object') || flat.includes('violates check constraint')) {
         invalidJsonRejected = true;
       } else {
-        throw new Error(`شکست ناکارآمد در درج JSON غیرمجاز: ${flat}`);
+        throw new Error(`invalid JSON insert failed in an unexpected way: ${flat}`);
       }
     }
 
     if (!invalidJsonRejected) {
-      throw new Error('درج پروژه با inventory_control غیرمجاز (آرایه به جای آبجکت) توسط قید chk_pp_inv_control_object رد نشد!');
+      throw new Error('project insert with an invalid inventory_control (array instead of object) was not refused by constraint chk_pp_inv_control_object!');
     }
 
     // 2. Test negative weighted_average_cost in items (should fail check constraint chk_items_wac_nonneg)
@@ -683,12 +683,12 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
       if (flat.includes('chk_items_wac_nonneg') || flat.includes('violates check constraint')) {
         invalidWacRejected = true;
       } else {
-        throw new Error(`شکست ناکارآمد در درج میانگین موزون منفی: ${flat}`);
+        throw new Error(`negative weighted average cost insert failed in an unexpected way: ${flat}`);
       }
     }
 
     if (!invalidWacRejected) {
-      throw new Error('درج کالا با weighted_average_cost منفی (-100) توسط قید chk_items_wac_nonneg رد نشد!');
+      throw new Error('item insert with a negative weighted_average_cost (-100) was not refused by constraint chk_items_wac_nonneg!');
     }
 
     // 3. TD-165: Test negative current_stock in item_warehouse_stocks (should fail check constraint chk_iws_current_stock_non_negative)
@@ -712,29 +712,29 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
       if (flat.includes('chk_iws_current_stock_non_negative') || flat.includes('violates check constraint')) {
         invalidStockRejected = true;
       } else {
-        throw new Error(`شکست ناکارآمد در درج موجودی منفی انبار: ${flat}`);
+        throw new Error(`negative warehouse stock insert failed in an unexpected way: ${flat}`);
       }
     }
 
     if (!invalidStockRejected) {
-      throw new Error('درج موجودی منفی در item_warehouse_stocks (-10) توسط قید chk_iws_current_stock_non_negative مسدود نشد!');
+      throw new Error('negative stock insert into item_warehouse_stocks (-10) was not blocked by constraint chk_iws_current_stock_non_negative!');
     }
 
     results.push(makeTestCase({
       id: 'db_jsonb_and_financial_check_constraints_validation',
       scenarioId: 'db_jsonb_and_financial_check_constraints',
-      name: 'اعتبارسنجی قیود CHECK روی ستون‌های JSONB و مبالغ مالی (DB-020)',
+      name: 'CHECK constraints on JSONB columns and financial amounts (DB-020)',
       layer: 'database',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t12Start,
-      details: 'درج‌های غیرمجاز با JSONB آرایه‌ای به جای آبجکت و weighted_average_cost منفی توسط قیود CHECK پایگاه داده مسدود شدند.'
+      details: 'invalid inserts with an array JSONB instead of an object and a negative weighted_average_cost were blocked by database CHECK constraints.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_jsonb_and_financial_check_constraints_validation',
       scenarioId: 'db_jsonb_and_financial_check_constraints',
-      name: 'اعتبارسنجی قیود CHECK روی ستون‌های JSONB و مبالغ مالی (DB-020)',
+      name: 'CHECK constraints on JSONB columns and financial amounts (DB-020)',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -771,14 +771,14 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
       .where(eq(users.id, insertedUser.id));
 
     if (!userAfterUpdate1.updatedAt) {
-      throw new Error('مقدار updated_at پس از UPDATE کاربر به صورت خودکار مقداردهی نشد!');
+      throw new Error('updated_at was not set automatically after a user UPDATE!');
     }
 
     const t1Time = new Date(userAfterUpdate1.updatedAt).getTime();
     const initialTime = initialUpdatedAt ? new Date(initialUpdatedAt).getTime() : 0;
 
     if (t1Time <= initialTime) {
-      throw new Error(`زمان updated_at جدید (${userAfterUpdate1.updatedAt}) از زمان قبلی (${initialUpdatedAt}) بزرگتر یا مساوی نبود!`);
+      throw new Error(`new updated_at (${userAfterUpdate1.updatedAt}) was not greater than or equal to the previous one (${initialUpdatedAt})!`);
     }
 
     // 3. Update user passing an old manual timestamp to test trigger override
@@ -796,7 +796,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
 
     const t2Time = new Date(userAfterUpdate2?.updatedAt || '').getTime();
     if (t2Time < t1Time || (userAfterUpdate2?.updatedAt && userAfterUpdate2.updatedAt.startsWith('2000'))) {
-      throw new Error(`تریگر set_updated_at مقدار دستی ۲000-01-01 را با زمان فعلی NOW() جایگزین نکرد! (مقدار فعلی: ${userAfterUpdate2?.updatedAt})`);
+      throw new Error(`trigger set_updated_at did not replace the manual value 2000-01-01 with NOW()! (current value: ${userAfterUpdate2?.updatedAt})`);
     }
 
     // Clean up
@@ -805,18 +805,18 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     results.push(makeTestCase({
       id: 'db_updated_at_triggers_validation',
       scenarioId: 'db_updated_at_triggers',
-      name: 'اعتبارسنجی عملکرد تریگر خودکار set_updated_at در UPDATE (DB-021)',
+      name: 'automatic set_updated_at trigger on UPDATE (DB-021)',
       layer: 'database',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t13Start,
-      details: 'تریگر BEFORE UPDATE روی users به صورت خودکار updated_at را به NOW() به روز رسانی کرده و مقادیر دستی قدیمی را جایگزین نمود.'
+      details: 'BEFORE UPDATE trigger on users set updated_at to NOW() automatically and replaced old manual values.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_updated_at_triggers_validation',
       scenarioId: 'db_updated_at_triggers',
-      name: 'اعتبارسنجی عملکرد تریگر خودکار set_updated_at در UPDATE (DB-021)',
+      name: 'automatic set_updated_at trigger on UPDATE (DB-021)',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -851,7 +851,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     results.push(makeTestCase({
       id: 'db_on_conflict_targets_have_unique_index',
       scenarioId: 'db_readiness',
-      name: 'ایندکس یکتای متناظر برای همه اهداف ON CONFLICT',
+      name: 'every ON CONFLICT target has a matching unique index',
       layer: 'database',
       executionType: 'real_database',
       passed: missing.length === 0,
@@ -862,7 +862,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     results.push(makeTestCase({
       id: 'db_on_conflict_targets_have_unique_index',
       scenarioId: 'db_readiness',
-      name: 'ایندکس یکتای متناظر برای همه اهداف ON CONFLICT',
+      name: 'every ON CONFLICT target has a matching unique index',
       layer: 'database',
       executionType: 'real_database',
       passed: false,

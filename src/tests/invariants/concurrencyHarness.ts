@@ -82,17 +82,17 @@ export async function raceBehindRowLock<T>(
 export function outcomeProblems(labels: string[], outcomes: PromiseSettledResult<unknown>[], allowed: (label: string, message: string) => boolean): string[] {
   const problems: string[] = [];
   const deadlocks = outcomes.filter(o => o.status === 'rejected' && isDeadlock(o.reason)).length;
-  if (deadlocks > 0) problems.push(`${deadlocks} عملیات از ${outcomes.length} با بن‌بست (40P01) شکست خورد`);
+  if (deadlocks > 0) problems.push(`${deadlocks} of ${outcomes.length} operations failed with a deadlock (40P01)`);
   outcomes.forEach((o, i) => {
     if (o.status !== 'rejected' || isDeadlock(o.reason)) return;
     const message = getErrorMessage(o.reason);
-    if (!allowed(labels[i], message)) problems.push(`${labels[i]} رد شد: ${message.slice(0, 160)}`);
+    if (!allowed(labels[i], message)) problems.push(`${labels[i]} was refused: ${message.slice(0, 160)}`);
   });
   return problems;
 }
 
 export async function accountIdByCode(code: string): Promise<number> {
   const [row] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, code), eq(accounts.isDeleted, 0)));
-  if (!row) throw new Error(`حساب ${code} در کدینگ آزمون نیست`);
+  if (!row) throw new Error(`account ${code} is not in the test chart of accounts`);
   return row.id;
 }

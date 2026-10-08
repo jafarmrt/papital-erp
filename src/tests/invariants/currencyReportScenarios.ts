@@ -20,7 +20,7 @@ async function approveDocumentVouchers(documentId: number): Promise<void> {
 }
 
 function expectAmount(problems: string[], label: string, actual: number | undefined, expected: number): void {
-  if (actual === undefined || !fin(actual).equals(expected)) problems.push(`${label}: ${actual ?? '-'}، انتظار ${expected}`);
+  if (actual === undefined || !fin(actual).equals(expected)) problems.push(`${label}: ${actual ?? '-'}, expected ${expected}`);
 }
 
 /**
@@ -49,24 +49,24 @@ export async function checkReportsConvertForeignRows(wh: string): Promise<string
   const card = (currency?: string, startDate?: string) =>
     AccountingReportService.getDetailedAccountCard({ accountId: receivable.id, detailedName: buyer, currency, startDate });
   const all = await card();
-  expectAmount(problems, 'کارت حساب همه ارزها، جمع بدهکار', all.totalDebit, 2200000);
-  expectAmount(problems, 'کارت حساب همه ارزها، مانده', all.finalBalance, 2200000);
-  if (all.currency !== 'IRR') problems.push(`ارز مبالغ کارت حساب همه ارزها ${all.currency ?? '-'}، انتظار IRR`);
+  expectAmount(problems, 'all-currencies account card, total debit', all.totalDebit, 2200000);
+  expectAmount(problems, 'all-currencies account card, balance', all.finalBalance, 2200000);
+  if (all.currency !== 'IRR') problems.push(`currency of the all-currencies account card amounts is ${all.currency ?? '-'}, expected IRR`);
   const usdRow = all.items.find(r => r.originalCurrency === 'USD');
   if (!usdRow || !fin(usdRow.debit).equals(1200000) || !fin(usdRow.originalDebit ?? 0).equals(2) || usdRow.currency !== 'IRR') {
-    problems.push(`ردیف دلاری کارت حساب: ${JSON.stringify(usdRow ?? null)}، انتظار ۱٬۲۰۰٬۰۰۰ ریال از ۲ دلار`);
+    problems.push(`dollar row of the account card: ${JSON.stringify(usdRow ?? null)}, expected 1,200,000 rials from 2 dollars`);
   }
   const usd = await card('USD');
-  expectAmount(problems, 'کارت حساب دلاری، جمع بدهکار', usd.totalDebit, 2);
-  if (usd.items.length !== 1) problems.push(`کارت حساب دلاری ${usd.items.length} ردیف دارد، انتظار یک ردیف`);
-  expectAmount(problems, 'کارت حساب ریالی، جمع بدهکار', (await card('IRR')).totalDebit, 1000000);
-  expectAmount(problems, 'کارت حساب همه ارزها، مانده ابتدای دوره', (await card(undefined, '2026-07-04')).openingBalance, 2200000);
+  expectAmount(problems, 'dollar account card, total debit', usd.totalDebit, 2);
+  if (usd.items.length !== 1) problems.push(`the dollar account card has ${usd.items.length} rows, expected one row`);
+  expectAmount(problems, 'rial account card, total debit', (await card('IRR')).totalDebit, 1000000);
+  expectAmount(problems, 'all-currencies account card, opening balance', (await card(undefined, '2026-07-04')).openingBalance, 2200000);
 
   const party = (currency?: string, startDate?: string) => AccountingReportService.getDetailedPartyLedger({ partyName: buyer, currency, startDate });
   const partyAll = await party();
-  expectAmount(problems, 'صورت‌حساب طرف‌حساب همه ارزها، جمع بدهکار', partyAll.totalDebit, 2200000);
-  expectAmount(problems, 'صورت‌حساب طرف‌حساب دلاری، جمع بدهکار', (await party('USD')).totalDebit, 2);
-  expectAmount(problems, 'صورت‌حساب طرف‌حساب همه ارزها، مانده ابتدای دوره', (await party(undefined, '2026-07-04')).openingBalance, 2200000);
+  expectAmount(problems, 'all-currencies party statement, total debit', partyAll.totalDebit, 2200000);
+  expectAmount(problems, 'dollar party statement, total debit', (await party('USD')).totalDebit, 2);
+  expectAmount(problems, 'all-currencies party statement, opening balance', (await party(undefined, '2026-07-04')).openingBalance, 2200000);
 
   // رسید خرید دلاری ۱۰ × ۲ دلار با نرخ ۶۰۰٬۰۰۰ ← مانده دفتر کل موجودی ۱۲٬۰۰۰٬۰۰۰ ریال بالا می‌رود
   const material = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
@@ -76,6 +76,6 @@ export async function checkReportsConvertForeignRows(wh: string): Promise<string
     currency: 'USD', exchangeRate: RATE, items: [{ itemId: material.id, quantity: 10, unitPrice: 2, location: wh }],
   }));
   const after = await healthMetric('inventory_reconciliation', 'ledgerValuation');
-  expectAmount(problems, 'بررسی سلامت مالی، تغییر مانده دفتر کل موجودی', Math.round(after - before), 12000000);
+  expectAmount(problems, 'financial health check, change in the inventory general ledger balance', Math.round(after - before), 12000000);
   return problems;
 }

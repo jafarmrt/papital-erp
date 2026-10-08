@@ -38,7 +38,7 @@ function renderTab() {
 // v9.0.116 (TD-566, B03-24): the balance sheet and the ratios had no as-of date (always «today»), and the income statement had no
 // period control of its own: it silently took the trial balance dates and showed no period.
 describe('each financial statement has its own date in its header (TD-566)', () => {
-  it('balance sheet: «تا امروز» by default, then the chosen date is requested and shown', () => {
+  it('balance sheet: "as of today" by default, then the chosen date is requested and shown', () => {
     const p = renderTab();
     fireEvent.click(screen.getByText('ترازنامه اساسی'));
     expect(p.onFetchBalanceSheet).toHaveBeenLastCalledWith(undefined, false);

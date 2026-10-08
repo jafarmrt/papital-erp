@@ -20,7 +20,11 @@ import ts from 'typescript';
  *   (`violations.push(...)`, `errors.push(...)`, `v.push(...)`) with a Persian literal, since these end up printed;
  * - tests: a Vitest / Playwright name (`describe`, `it`, `test`), and a runner test name: the `name` (or `title`,
  *   `description`) of an object whose `id` is a test id or that has a `layer`, the Persian element of a tuple that
- *   starts with a test id, and a Persian argument of a call that also takes a test id.
+ *   starts with a test id, and a Persian argument of a call that also takes a test id (or a constant holding one);
+ *   a name given through a constant (`name: testName`) counts once, at the constant's Persian declaration;
+ * - runner tests (`src/tests/` outside `src/tests/vitest/`): a call to an assertion helper (`check(...)`,
+ *   `expect(...)`, `expectStatus(...)`, `assertInvariant(...)`) with a Persian literal, since its label or message is
+ *   printed when the test fails. Persian that a test compares with the application's output goes in a named constant.
  * Not counted (they stay Persian): comments, user-facing text (UI, API error messages), text a script writes into a
  * file (changelog, TECH_DEBT.md), and test data that is not a test name.
  */
@@ -36,6 +40,8 @@ const NAME_KEYS = new Set(['name', 'title', 'description']);
 /** Lists of messages that a script or test prints when it fails */
 const MESSAGE_LISTS = /^(v|violations|errors|issues|problems|failures|warnings)$/;
 const FAIL_CALLS = new Set(['fail', 'die', 'abort']);
+/** Assertion helpers of the database test runner, whose label or message is printed when a test fails */
+const ASSERTION_HELPER = /^(check|expect|assert)([A-Z]\w*)?$/;
 
 /** Changelog entries are data shown in the app, not terminal output (the guards next to them are counted) */
 const CHANGELOG_DATA = /^src\/data\/changelogs\/(\d+|archive_[\w]+)\.ts$/;
@@ -122,7 +128,10 @@ export function countSourceSites(file: string, source: string): number {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, kind);
   const terminalErrors = /^(scripts\/|src\/data\/changelogs\/|src\/tests\/|e2e\/)/.test(file);
   const tests = /^(src\/tests\/|e2e\/)/.test(file) || /\.(test|spec)\.tsx?$/.test(file);
+  const runnerTests = file.startsWith('src/tests/') && !file.startsWith('src/tests/vitest/');
   let count = 0;
+  /** Declarations of the constants that test cases use as their name (`name: testName`) */
+  const nameConstants = new Set<ts.VariableDeclaration>();
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node)) {
       const callee = node.expression;
@@ -130,9 +139,11 @@ export function countSourceSites(file: string, source: string): number {
         if (anyPersian(node.arguments)) count++;
       } else if (terminalErrors && isMessageCall(callee)) {
         if (anyPersian(node.arguments)) count++;
+      } else if (runnerTests && ts.isIdentifier(callee) && ASSERTION_HELPER.test(callee.text)) {
+        if (anyPersian(node.arguments)) count++;
       } else if (tests && isTestNameCall(node.expression)) {
         if (node.arguments[0] && anyPersian([node.arguments[0]])) count++;
-      } else if (tests && node.arguments.some(a => TEST_ID.test(stringValue(a) ?? ''))) {
+      } else if (tests && node.arguments.some(isTestIdArgument)) {
         if (node.arguments.some(a => hasPersian(stringValue(a) ?? ''))) count++;
       }
     } else if (ts.isNewExpression(node) && terminalErrors) {
@@ -142,9 +153,17 @@ export function countSourceSites(file: string, source: string): number {
       const props = new Map<string, ts.Expression>();
       for (const p of node.properties) {
         if (ts.isPropertyAssignment(p) && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name))) props.set(p.name.text, p.initializer);
+        else if (ts.isShorthandPropertyAssignment(p)) props.set(p.name.text, p.name);
       }
       const isTestCase = TEST_ID.test(stringValue(props.get('id')) ?? '') || props.has('layer');
       if (isTestCase && [...NAME_KEYS].some(k => hasPersian(stringValue(props.get(k)) ?? ''))) count++;
+      if (isTestCase) {
+        for (const k of NAME_KEYS) {
+          const value = props.get(k);
+          const declaration = value && ts.isIdentifier(value) ? enclosingDeclaration(value) : undefined;
+          if (declaration) nameConstants.add(declaration);
+        }
+      }
     } else if (tests && ts.isArrayLiteralExpression(node)) {
       const [first, ...rest] = node.elements;
       if (TEST_ID.test(stringValue(first) ?? '') && rest.some(e => hasPersian(stringValue(e) ?? ''))) count++;
@@ -152,7 +171,27 @@ export function countSourceSites(file: string, source: string): number {
     ts.forEachChild(node, visit);
   };
   visit(sf);
-  return count;
+  return count + [...nameConstants].filter(d => d.initializer && literalTexts(d.initializer).some(hasPersian)).length;
+}
+
+/** A test id literal, or a constant that holds one (`runCase(results, importId, ...)`) */
+function isTestIdArgument(arg: ts.Expression): boolean {
+  if (TEST_ID.test(stringValue(arg) ?? '')) return true;
+  const declaration = ts.isIdentifier(arg) ? enclosingDeclaration(arg) : undefined;
+  return TEST_ID.test(stringValue(declaration?.initializer) ?? '');
+}
+
+/** The declaration an identifier refers to: the nearest enclosing block (or the file) that declares that name */
+function enclosingDeclaration(id: ts.Identifier): ts.VariableDeclaration | undefined {
+  for (let scope: ts.Node | undefined = id.parent; scope; scope = scope.parent) {
+    if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) continue;
+    for (const statement of scope.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      const found = statement.declarationList.declarations.find(d => ts.isIdentifier(d.name) && d.name.text === id.text);
+      if (found) return found;
+    }
+  }
+  return undefined;
 }
 
 export function countFileSites(file: string, source: string): number {

@@ -62,19 +62,19 @@ export function routeAccessPolicyViolations(rows: RouteGuardRow[], catalogKeys: 
   for (const row of rows) {
     const key = `${row.method} ${row.path}`;
     if (!row.authenticated) {
-      if (!PUBLIC_ROUTES.has(key)) violations.push(`${key}: بدون احراز هویت`);
+      if (!PUBLIC_ROUTES.has(key)) violations.push(`${key}: no authentication`);
       continue;
     }
     if (row.guards.length === 0) {
-      if (!LOGIN_ONLY_ROUTES.has(key)) violations.push(`${key}: فقط ورود، بدون مجوز`);
+      if (!LOGIN_ONLY_ROUTES.has(key)) violations.push(`${key}: login only, no permission`);
       continue;
     }
     // هر گارد «یکی کافی است» است و گاردهای پشت هم همه لازم‌اند: اگر هر گارد یک مجوز «مشاهده» بپذیرد، دارنده فقط مشاهده می‌گذرد
     if (MUTATION_METHODS.has(row.method) && row.guards.every(g => g.some(isViewPermission))) {
-      violations.push(`${key}: تغییر با مجوز مشاهده (${formatGuards(row)})`);
+      violations.push(`${key}: mutation with a view permission (${formatGuards(row)})`);
     }
     for (const entry of row.guards.flat()) {
-      if (entry.includes('.') && !catalogKeys.has(entry)) violations.push(`${key}: مجوز «${entry}» در کاتالوگ نیست`);
+      if (entry.includes('.') && !catalogKeys.has(entry)) violations.push(`${key}: permission "${entry}" is not in the catalog`);
     }
     // v9.0.107 (TD-516): کد نقش فقط به شکل گارد تنهای «مدیر سیستم» و فقط روی فهرست تأییدشده
     const adminOnly = row.guards.some(g => g.length === 1 && g[0] === SYSTEM_ADMIN_ROLE);
@@ -118,22 +118,22 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
   };
 
   const cases = [
-    record('sec_route_access_policy_td_298', 'حوزه H: جدول «مسیر ← مجوز» — احراز هویت، فهرست مسیرهای فقط‌ورود، تغییر بی مجوز مشاهده، کلید مجوز از کاتالوگ (TD-298 / TD-304)', 'real_code', async () => {
+    record('sec_route_access_policy_td_298', 'area H: "route -> permission" table — authentication, login-only route list, no mutation with a view permission, permission keys from the catalog (TD-298 / TD-304)', 'real_code', async () => {
       const rows = buildRouteGuardTable(app);
-      if (rows.length < 300) throw new Error(`جدول مسیرها ناقص است (${rows.length} مسیر)`);
+      if (rows.length < 300) throw new Error(`route table is incomplete (${rows.length} routes)`);
       const violations = routeAccessPolicyViolations(rows, catalogKeys);
-      if (violations.length > 0) throw new Error(`${violations.length} تخلف: ${violations.join(' | ')}`);
+      if (violations.length > 0) throw new Error(`${violations.length} violations: ${violations.join(' | ')}`);
       return `${rows.length} مسیر بی‌تخلف`;
     }),
-    record('sec_view_permission_cannot_mutate_td_298', 'حوزه H: مجوز مشاهده تخصیص مواد BOM و شروع فرآیند را باز نمی‌کند (TD-298)', 'real_database', async () => {
+    record('sec_view_permission_cannot_mutate_td_298', 'area H: a view permission does not open BOM material allocation or workflow start (TD-298)', 'real_database', async () => {
       const viewer = await userWith(['warehouse.view', 'projects.view', 'workflow.view', 'products.view']);
       const allocate = await send(viewer.session, 'post', '/api/inventory/allocations/allocate', { projectId: 999999999, allocations: [{ itemId: 999999999, quantity: 1 }] });
       const start = await send(viewer.session, 'post', '/api/workflow/start', { workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: 999999999 });
       const wrong = [[allocate.status, 'allocate'], [start.status, 'workflow/start']].filter(([st]) => st !== 403);
-      if (wrong.length > 0) throw new Error(`دارنده فقط مشاهده رد نشد: ${wrong.map(([st, n]) => `${n} ${st}`).join('، ')}`);
-      return 'هر دو 403';
+      if (wrong.length > 0) throw new Error(`a view-only holder was not refused: ${wrong.map(([st, n]) => `${n} ${st}`).join(', ')}`);
+      return 'both 403';
     }),
-    record('sec_user_manager_cannot_grant_admin_td_299', 'حوزه H: دارنده users.manage نقش مدیر سیستم نمی‌دهد و حساب مدیر را تغییر یا حذف نمی‌کند (TD-299)', 'real_database', async () => {
+    record('sec_user_manager_cannot_grant_admin_td_299', 'area H: a users.manage holder does not grant the system admin role and does not change or delete an admin account (TD-299)', 'real_database', async () => {
       // از v9.0.129 (TD-520) مدیر کاربران فقط نقشی را می‌دهد که همه کلیدهایش را دارد
       const manager = await userWith(['users.manage', 'daily_logs.view']);
       const admin = await createTestUser({ role: 'admin' });
@@ -157,10 +157,10 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       if (createPlain.body?.id) createdUserIds.push(Number(createPlain.body.id));
       if (createAdmin.body?.id) createdUserIds.push(Number(createAdmin.body.id));
       const wrong = checks.filter(([, got, want]) => got !== want);
-      if (wrong.length > 0) throw new Error(wrong.map(([n, got, want]) => `${n}: ${got} (انتظار ${want})`).join('، '));
+      if (wrong.length > 0) throw new Error(wrong.map(([n, got, want]) => `${n}: ${got} (expected ${want})`).join(', '));
       return `${checks.length} بررسی`;
     }),
-    record('sec_piecework_log_permission_td_300', 'حوزه H: ثبت کارکرد کارمزدی با مجوز «ثبت کارکرد پرسنل»؛ نرخ دستی فقط برای مدیر تعرفه‌ها (TD-300، TD-805)', 'real_database', async () => {
+    record('sec_piecework_log_permission_td_300', 'area H: piecework work logs need the "personnel work log" permission; a manual rate only for the rates manager (TD-300, TD-805)', 'real_database', async () => {
       const logger = await userWith(['daily_logs.view', 'daily_logs.create']);
       const operator = await userWith(['piecework.view', 'piecework.log']);
       // v9.0.320 (TD-805): نرخ دستی با «مدیریت عناوین کاری و نرخ‌های پایه»، نه «مدیریت کامل پرسنل»
@@ -170,15 +170,15 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       try {
         const body = { personnelId: person.id, taskId: task.id, date: '2026-10-01', quantity: 2, unitRate: 50000000 };
         const byLogger = await send(logger.session, 'post', '/api/piecework/logs', body);
-        if (byLogger.status !== 403) throw new Error(`کاربر ثبت گزارش روزانه کارکرد ثبت کرد (${byLogger.status})`);
+        if (byLogger.status !== 403) throw new Error(`a daily-log user recorded a work log (${byLogger.status})`);
         const byOperator = await send(operator.session, 'post', '/api/piecework/logs', body);
-        if (byOperator.status !== 201) throw new Error(`دارنده piecework.log رد شد (${byOperator.status}: ${JSON.stringify(byOperator.body).slice(0, 200)})`);
+        if (byOperator.status !== 201) throw new Error(`piecework.log holder refused (${byOperator.status}: ${JSON.stringify(byOperator.body).slice(0, 200)})`);
         const [opLog] = await orm.select({ unitRate: pieceworkLogs.unitRate }).from(pieceworkLogs).where(eq(pieceworkLogs.personnelId, person.id));
-        if (!money(opLog.unitRate).equals(1000)) throw new Error(`نرخ دستی اپراتور ${opLog.unitRate} ثبت شد، انتظار نرخ پایه 1000`);
+        if (!money(opLog.unitRate).equals(1000)) throw new Error(`operator manual rate ${opLog.unitRate} recorded, expected base rate 1000`);
         await orm.delete(pieceworkLogs).where(eq(pieceworkLogs.personnelId, person.id));
         const byManager = await send(manager.session, 'post', '/api/piecework/logs', { ...body, unitRate: 2000 });
         const [mgrLog] = await orm.select({ unitRate: pieceworkLogs.unitRate }).from(pieceworkLogs).where(eq(pieceworkLogs.personnelId, person.id));
-        if (byManager.status !== 201 || !money(mgrLog?.unitRate ?? 0).equals(2000)) throw new Error(`نرخ دستی مدیر پرسنل پذیرفته نشد (${byManager.status}، ${mgrLog?.unitRate})`);
+        if (byManager.status !== 201 || !money(mgrLog?.unitRate ?? 0).equals(2000)) throw new Error(`personnel manager manual rate not accepted (${byManager.status}, ${mgrLog?.unitRate})`);
         return 'daily_logs.create ← 403؛ اپراتور نرخ پایه؛ مدیر پرسنل نرخ دستی';
       } finally {
         await orm.delete(pieceworkLogs).where(eq(pieceworkLogs.personnelId, person.id));
@@ -186,7 +186,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         await orm.delete(personnel).where(eq(personnel.id, person.id));
       }
     }),
-    record('sec_daily_log_by_id_visibility_td_301', 'حوزه H: دریافت تکی گزارش کار همان قاعده محرمانگی فهرست را دارد (TD-301)', 'real_database', async () => {
+    record('sec_daily_log_by_id_visibility_td_301', 'area H: fetching one daily log by id follows the same privacy rule as the list (TD-301)', 'real_database', async () => {
       const author = await userWith(['daily_logs.view', 'daily_logs.create']);
       const other = await userWith(['daily_logs.view', 'daily_logs.create']);
       const [log] = await orm.insert(dailyWorkLogs).values({
@@ -196,14 +196,14 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       try {
         const byOther = await send(other.session, 'get', `/api/daily-logs/${log.id}`);
         const byAuthor = await send(author.session, 'get', `/api/daily-logs/${log.id}`);
-        if (byOther.status !== 404) throw new Error(`گزارش محرمانه به کاربر دیگر داده شد (${byOther.status})`);
-        if (byAuthor.status !== 200) throw new Error(`نویسنده گزارش خود را نگرفت (${byAuthor.status})`);
+        if (byOther.status !== 404) throw new Error(`a private log was given to another user (${byOther.status})`);
+        if (byAuthor.status !== 200) throw new Error(`author did not get their own log (${byAuthor.status})`);
         return 'دیگری 404، نویسنده 200';
       } finally {
         await orm.delete(dailyWorkLogs).where(eq(dailyWorkLogs.id, log.id));
       }
     }),
-    record('sec_pending_material_edit_td_302', 'حوزه H: ویرایش درخواست ماده اولیه فقط با مجوز تأیید و فقط پیش از بررسی (TD-302)', 'real_database', async () => {
+    record('sec_pending_material_edit_td_302', 'area H: editing a material request needs the approve permission and only before review (TD-302)', 'real_database', async () => {
       const logger = await userWith(['daily_logs.view', 'daily_logs.create']);
       const approver = await userWith(['pending_materials.view', 'pending_materials.approve']);
       const [pending] = await orm.insert(pendingMaterials).values({ code: `TD302-${Date.now()}`, name: 'td302', unit: 'عدد', status: 'pending' }).returning();
@@ -213,16 +213,16 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         const byApprover = await send(approver.session, 'put', `/api/pending-materials/${pending.id}`, { name: 'td302 ویرایش' });
         const reviewedEdit = await send(approver.session, 'put', `/api/pending-materials/${reviewed.id}`, { name: 'td302 پس از رد' });
         const wrong: string[] = [];
-        if (byLogger.status !== 403) wrong.push(`کاربر بی‌مجوز: ${byLogger.status} (انتظار 403)`);
-        if (byApprover.status !== 200) wrong.push(`تأییدکننده: ${byApprover.status} (انتظار 200)`);
-        if (reviewedEdit.status !== 409) wrong.push(`درخواست ردشده: ${reviewedEdit.status} (انتظار 409)`);
-        if (wrong.length > 0) throw new Error(wrong.join('، '));
+        if (byLogger.status !== 403) wrong.push(`user without permission: ${byLogger.status} (expected 403)`);
+        if (byApprover.status !== 200) wrong.push(`approver: ${byApprover.status} (expected 200)`);
+        if (reviewedEdit.status !== 409) wrong.push(`rejected request: ${reviewedEdit.status} (expected 409)`);
+        if (wrong.length > 0) throw new Error(wrong.join(', '));
         return 'بی‌مجوز 403، تأییدکننده 200، بررسی‌شده 409';
       } finally {
         await orm.delete(pendingMaterials).where(inArray(pendingMaterials.id, [pending.id, reviewed.id]));
       }
     }),
-    record('sec_payroll_amount_read_scope_td_303', 'حوزه H: پرداخت‌های فیش و مانده مساعده فقط با مجوز خواندن فیش‌ها (TD-303)', 'real_database', async () => {
+    record('sec_payroll_amount_read_scope_td_303', 'area H: payslip payments and advance balance only with the payslip read permission (TD-303)', 'real_database', async () => {
       const production = await userWith(['personnel.view', 'projects.view', 'piecework.view']);
       const payroll = await userWith(['piecework.payroll']);
       const urls = ['/api/piecework/payrolls/999999999/payments', '/api/piecework/personnel/999999999/advance-balance'];
@@ -230,13 +230,13 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       for (const url of urls) {
         const denied = await send(production.session, 'get', url);
         const allowed = await send(payroll.session, 'get', url);
-        if (denied.status !== 403) wrong.push(`personnel.view ${url}: ${denied.status} (انتظار 403)`);
+        if (denied.status !== 403) wrong.push(`personnel.view ${url}: ${denied.status} (expected 403)`);
         if (allowed.status === 403) wrong.push(`piecework.payroll ${url}: 403`);
       }
-      if (wrong.length > 0) throw new Error(wrong.join('، '));
+      if (wrong.length > 0) throw new Error(wrong.join(', '));
       return 'personnel.view ← 403، piecework.payroll مجاز';
     }),
-    record('sec_role_permissions_from_catalog_td_304', 'حوزه H: نقش فقط مجوزهای کاتالوگ را می‌گیرد، نه «*» یا کلید ناشناخته (TD-304)', 'real_database', async () => {
+    record('sec_role_permissions_from_catalog_td_304', 'area H: a role gets only catalog permissions, not "*" or an unknown key (TD-304)', 'real_database', async () => {
       // از v9.0.129 (TD-520) مدیر نقش‌ها فقط کلیدی را به نقش می‌دهد که خودش دارد
       const roleAdmin = await userWith(['roles.manage', 'daily_logs.view']);
       const suffix = Date.now();
@@ -245,13 +245,13 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       const valid = await send(roleAdmin.session, 'post', '/api/roles', { name: 'td304', code: `td304_ok_${suffix}`, permissions: ['daily_logs.view'] });
       for (const r of [star, unknown, valid]) if (r.body?.id) createdRoleIds.push(Number(r.body.id));
       const wrong: string[] = [];
-      if (star.status !== 400) wrong.push(`«*»: ${star.status} (انتظار 400)`);
-      if (unknown.status !== 400) wrong.push(`کلید ناشناخته: ${unknown.status} (انتظار 400)`);
-      if (valid.status !== 200) wrong.push(`کلید کاتالوگ: ${valid.status} (انتظار 200)`);
-      if (wrong.length > 0) throw new Error(wrong.join('، '));
+      if (star.status !== 400) wrong.push(`"*": ${star.status} (expected 400)`);
+      if (unknown.status !== 400) wrong.push(`unknown key: ${unknown.status} (expected 400)`);
+      if (valid.status !== 200) wrong.push(`catalog key: ${valid.status} (expected 200)`);
+      if (wrong.length > 0) throw new Error(wrong.join(', '));
       return '«*» و ناشناخته 400، کاتالوگ 200';
     }),
-    record('sec_item_edit_keeps_wac_td_305', 'حوزه H: ویرایش کالای دارای موجودی WAC را بازنویسی نمی‌کند (TD-305)', 'real_database', async () => {
+    record('sec_item_edit_keeps_wac_td_305', 'area H: editing an item with stock does not overwrite its WAC (TD-305)', 'real_database', async () => {
       const editor = await userWith(['products.view', 'products.edit']);
       const { createTestItem } = await import('../fixtures/factories.js');
       const item = await createTestItem({ weightedAverageCost: 50000, currentStock: 10 });
@@ -262,17 +262,17 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         const same = await send(editor.session, 'put', `/api/items/${item.id}`, { ...base, weighted_average_cost: 50000.4 });
         const [afterSame] = await orm.select({ wac: items.weightedAverageCost }).from(items).where(eq(items.id, item.id));
         const wrong: string[] = [];
-        if (forged.status !== 422) wrong.push(`WAC تازه: ${forged.status} (انتظار 422)`);
-        if (!money(afterForged.wac).equals(50000)) wrong.push(`WAC پس از ویرایش ${afterForged.wac} شد`);
-        if (same.status !== 200) wrong.push(`همان WAC: ${same.status} (انتظار 200)`);
-        if (!money(afterSame.wac).equals(50000)) wrong.push(`WAC پس از ویرایش هم‌مقدار ${afterSame.wac} شد`);
-        if (wrong.length > 0) throw new Error(wrong.join('، '));
+        if (forged.status !== 422) wrong.push(`new WAC: ${forged.status} (expected 422)`);
+        if (!money(afterForged.wac).equals(50000)) wrong.push(`WAC after edit became ${afterForged.wac}`);
+        if (same.status !== 200) wrong.push(`same WAC: ${same.status} (expected 200)`);
+        if (!money(afterSame.wac).equals(50000)) wrong.push(`WAC after an edit with the same value became ${afterSame.wac}`);
+        if (wrong.length > 0) throw new Error(wrong.join(', '));
         return 'WAC تازه 422، هم‌مقدار 200، WAC همان 50000';
       } finally {
         await orm.update(items).set({ isDeleted: 1 }).where(eq(items.id, item.id));
       }
     }),
-    record('sec_document_user_from_session_td_307', 'حوزه H: نام ثبت‌کننده سند از نشست است نه از بدنه درخواست (TD-307)', 'real_database', async () => {
+    record('sec_document_user_from_session_td_307', 'area H: the document author name comes from the session, not from the request body (TD-307)', 'real_database', async () => {
       const clerk = await userWith(['documents.view', 'documents.create']);
       const { createTestItem } = await import('../fixtures/factories.js');
       const item = await createTestItem({ currentStock: 5 });
@@ -283,34 +283,34 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       });
       const docId = Number(res.body?.docId ?? res.body?.id ?? res.body?.data?.id);
       try {
-        if (res.status !== 200 && res.status !== 201) throw new Error(`ثبت سند شکست خورد (${res.status}): ${JSON.stringify(res.body).slice(0, 200)}`);
+        if (res.status !== 200 && res.status !== 201) throw new Error(`document save failed (${res.status}): ${JSON.stringify(res.body).slice(0, 200)}`);
         const [doc] = await orm.select({ user: documents.user }).from(documents).where(eq(documents.id, docId));
         const expected = clerkRow.fullName || clerkRow.username;
-        if (doc?.user !== expected) throw new Error(`ثبت‌کننده سند «${doc?.user}» شد، انتظار «${expected}»`);
+        if (doc?.user !== expected) throw new Error(`document author became "${doc?.user}", expected "${expected}"`);
         return `ثبت‌کننده «${expected}»`;
       } finally {
         if (docId) await orm.update(documents).set({ isDeleted: 1 }).where(eq(documents.id, docId));
         await orm.update(items).set({ isDeleted: 1 }).where(eq(items.id, item.id));
       }
     }),
-    record('sec_voucher_approved_on_create_td_308', 'حوزه H: سند حسابداری که تأییدشده ساخته می‌شود تأییدکننده دارد (TD-308)', 'real_database', async () => {
+    record('sec_voucher_approved_on_create_td_308', 'area H: a journal voucher created as approved has an approver (TD-308)', 'real_database', async () => {
       const accountant = await userWith(['accounting.view', 'accounting.vouchers']);
       // v9.0.198 (TD-549): a manual voucher row goes only on a posting account (active subsidiary or detailed, no active sub-account)
       const accountRows = await orm.select({ id: accounts.id }).from(accounts)
         .where(and(eq(accounts.isDeleted, 0), eq(accounts.isActive, 1), inArray(accounts.level, ['subsidiary', 'detailed']),
           sql`NOT EXISTS (SELECT 1 FROM accounts c WHERE c.parent_id = ${accounts.id} AND c.is_deleted = 0 AND c.is_active = 1)`))
         .orderBy(asc(accounts.id)).limit(2);
-      if (accountRows.length < 2) throw new Error('حداقل دو سرفصل لازم است');
+      if (accountRows.length < 2) throw new Error('at least two ledger accounts are needed');
       const res = await send(accountant.session, 'post', '/api/accounting/vouchers', {
         date: new Date().toISOString().split('T')[0], voucherType: 'general', status: 'approved', description: `TD308-${Date.now()}`,
         items: [{ accountId: accountRows[0].id, debit: 1000, credit: 0 }, { accountId: accountRows[1].id, debit: 0, credit: 1000 }]
       });
       const voucherId = Number(res.body?.id);
       try {
-        if (res.status !== 201) throw new Error(`ثبت سند شکست خورد (${res.status}): ${JSON.stringify(res.body).slice(0, 200)}`);
+        if (res.status !== 201) throw new Error(`document save failed (${res.status}): ${JSON.stringify(res.body).slice(0, 200)}`);
         const [row] = await orm.select({ approvedById: journalVouchers.approvedById }).from(journalVouchers).where(eq(journalVouchers.id, voucherId));
-        if (row?.approvedById !== accountant.id) throw new Error(`تأییدکننده ${row?.approvedById ?? 'خالی'} شد، انتظار ${accountant.id}`);
-        return 'تأییدکننده = ثبت‌کننده';
+        if (row?.approvedById !== accountant.id) throw new Error(`approver is ${row?.approvedById ?? 'empty'}, expected ${accountant.id}`);
+        return 'approver = recorder';
       } finally {
         if (voucherId) {
           await orm.delete(journalVoucherItems).where(eq(journalVoucherItems.voucherId, voucherId));
@@ -318,7 +318,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         }
       }
     }),
-    record('sec_crm_won_needs_proforma_td_309', 'حوزه H: «فروش موفق» بی پیش‌فاکتور نه با ساخت پرونده و نه با وضعیت won (TD-309)', 'real_database', async () => {
+    record('sec_crm_won_needs_proforma_td_309', 'area H: no "won sale" without a proforma, neither on sales file create nor with status won (TD-309)', 'real_database', async () => {
       const seller = await userWith(['crm.view', 'crm.manage', 'customers.view']);
       const stamp = Date.now();
       const createdLeadIds: number[] = [];
@@ -328,14 +328,14 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         const lead = await send(seller.session, 'post', '/api/crm/leads', { title: `TD309-${stamp}`, customerName: `TD309 ${stamp}` });
         const leadId = Number(lead.body?.id ?? lead.body?.data?.id);
         if (leadId) createdLeadIds.push(leadId);
-        if (lead.status !== 200 && lead.status !== 201) throw new Error(`ساخت پرونده عادی شکست خورد (${lead.status})`);
+        if (lead.status !== 200 && lead.status !== 201) throw new Error(`creating a normal sales file failed (${lead.status})`);
         const statusWon = await send(seller.session, 'put', `/api/crm/leads/${leadId}`, { status: 'won' });
         const [row] = await orm.select({ status: crmLeads.status, stage: crmLeads.stage }).from(crmLeads).where(eq(crmLeads.id, leadId));
         const wrong: string[] = [];
-        if (wonOnCreate.status !== 400) wrong.push(`ساخت پرونده «فروش موفق»: ${wonOnCreate.status} (انتظار 400)`);
-        if (statusWon.status !== 400) wrong.push(`وضعیت won بی پیش‌فاکتور: ${statusWon.status} (انتظار 400)`);
-        if (row?.status === 'won') wrong.push('وضعیت پرونده won شد');
-        if (wrong.length > 0) throw new Error(wrong.join('، '));
+        if (wonOnCreate.status !== 400) wrong.push(`creating a "won sale" sales file: ${wonOnCreate.status} (expected 400)`);
+        if (statusWon.status !== 400) wrong.push(`status won without a proforma: ${statusWon.status} (expected 400)`);
+        if (row?.status === 'won') wrong.push('sales file status became won');
+        if (wrong.length > 0) throw new Error(wrong.join(', '));
         return 'هر دو 400';
       } finally {
         if (createdLeadIds.length > 0) {
@@ -344,7 +344,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         }
       }
     }),
-    record('sec_project_reservation_from_server_td_306', 'حوزه H: رزرو پروژه را سرور از بخش‌های کنترل موجودی می‌سازد نه از بدنه درخواست (TD-306)', 'real_database', async () => {
+    record('sec_project_reservation_from_server_td_306', 'area H: the server builds the project reservation from the inventory control sections, not from the request body (TD-306)', 'real_database', async () => {
       const planner = await userWith(['projects.view', 'projects.edit']);
       const { createTestItem } = await import('../fixtures/factories.js');
       const item = await createTestItem({ currentStock: 10 });
@@ -368,13 +368,13 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         const afterResave = await reservedOf();
         const wrong: string[] = [];
         for (const [n, r] of [['پیش‌نویس', draft], ['ثبت نهایی', finalize], ['ذخیره دوباره', resave]] as const) {
-          if (r.status !== 200) wrong.push(`${n}: ${r.status} (انتظار 200)`);
+          if (r.status !== 200) wrong.push(`${n}: ${r.status} (expected 200)`);
         }
         const isServerReservation = (list: Array<{ itemId?: number; reservedQty?: number }>) => list.length === 1 && list[0].itemId === item.id && Number(list[0].reservedQty) === 3;
-        if (afterDraft.length !== 0) wrong.push(`رزرو پیش‌نویس از بدنه ذخیره شد: ${JSON.stringify(afterDraft)}`);
-        if (!isServerReservation(afterFinal)) wrong.push(`رزرو ثبت نهایی ${JSON.stringify(afterFinal)} شد، انتظار ۳ عدد از بخش‌ها`);
-        if (!isServerReservation(afterResave)) wrong.push(`ذخیره دوباره رزرو را به ${JSON.stringify(afterResave)} تغییر داد`);
-        if (wrong.length > 0) throw new Error(wrong.join('، '));
+        if (afterDraft.length !== 0) wrong.push(`draft reservation was saved from the request body: ${JSON.stringify(afterDraft)}`);
+        if (!isServerReservation(afterFinal)) wrong.push(`final reservation became ${JSON.stringify(afterFinal)}, expected 3 units from the sections`);
+        if (!isServerReservation(afterResave)) wrong.push(`saving again changed the reservation to ${JSON.stringify(afterResave)}`);
+        if (wrong.length > 0) throw new Error(wrong.join(', '));
         return 'رزرو بدنه نادیده؛ ثبت نهایی ۳ عدد از بخش‌ها؛ ذخیره دوباره رزرو را نگه داشت';
       } finally {
         await orm.update(productionProjects).set({ isDeleted: 1 }).where(eq(productionProjects.id, project.id));

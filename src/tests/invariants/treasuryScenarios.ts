@@ -23,7 +23,7 @@ const CHEQUE_BASE = { bankName: 'ملت', issueDate: '2026-03-01', dueDate: '202
 
 async function accountIdByCode(code: string): Promise<number> {
   const [row] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, code), eq(accounts.isDeleted, 0)));
-  if (!row) throw new Error(`حساب ${code} در کدینگ آزمون نیست`);
+  if (!row) throw new Error(`account ${code} is not in the test chart of accounts`);
   return row.id;
 }
 
@@ -78,15 +78,15 @@ export async function checkChequeDeleteKeepsOtherCheques(): Promise<string[]> {
   const first = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: number, amount: 1000000, partyName: 'مشتری آزمون چک الف' });
   const second = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: number, amount: 2000000, partyName: 'مشتری آزمون چک ب', bankName: 'صادرات' });
   await ChequeLifecycleService.updateChequeStatus(second.id, { status: 'in_collection', actionDate: '2026-03-10', username: 'inv' });
-  if (await activeVoucherCount(second.id) !== 2) problems.push(`چک دوم باید دو سند پیوندشده داشته باشد (ثبت و در جریان وصول): ${await activeVoucherCount(second.id)}`);
+  if (await activeVoucherCount(second.id) !== 2) problems.push(`the second cheque must have two linked vouchers (registration and in collection): ${await activeVoucherCount(second.id)}`);
 
   await ChequeLifecycleService.deleteCheque(first.id, { username: 'inv' });
-  if (await activeVoucherCount(first.id) !== 0) problems.push('حذف چک اول سند خودش را باطل نکرد');
-  if (await activeVoucherCount(second.id) !== 2) problems.push(`حذف چک اول اسناد چک دوم با همان شماره را باطل کرد (اسناد فعال چک دوم: ${await activeVoucherCount(second.id)})`);
+  if (await activeVoucherCount(first.id) !== 0) problems.push('Deleting the first cheque did not void its own voucher');
+  if (await activeVoucherCount(second.id) !== 2) problems.push(`deleting the first cheque voided the vouchers of the second cheque with the same number (active vouchers of the second cheque: ${await activeVoucherCount(second.id)})`);
   // فقط چک دوم مانده: ۲٬۰۰۰٬۰۰۰ در جریان وصول، اسناد نزد صندوق صفر، بستانکار مشتری ۲٬۰۰۰٬۰۰۰
   const nets = { '1101': await irrNet('1101', mark), '1102': await irrNet('1102', mark), '1201': await irrNet('1201', mark) };
   if (!fin(nets['1101']).isZero() || !fin(nets['1102']).equals(2000000) || !fin(nets['1201']).equals(-2000000)) {
-    problems.push(`دفتر کل پس از حذف چک اول: ${JSON.stringify(nets)}، انتظار ۱۱۰۱=۰، ۱۱۰۲=۲٬۰۰۰٬۰۰۰، ۱۲۰۱=−۲٬۰۰۰٬۰۰۰`);
+    problems.push(`general ledger after deleting the first cheque: ${JSON.stringify(nets)}, expected 1101=0, 1102=2,000,000, 1201=-2,000,000`);
   }
 
   // سند قدیمی بی‌پیوند (ثبت پیش از v8.0.19) برای شماره‌ای که چک دیگری هم دارد: حذف رد می‌شود و چیزی باطل نمی‌شود
@@ -101,10 +101,10 @@ export async function checkChequeDeleteKeepsOtherCheques(): Promise<string[]> {
   } catch (err) {
     refusal = getErrorMessage(err);
   }
-  if (!refusal?.includes('پیوند ندارد')) problems.push(`حذف چک با سند قدیمی بی‌پیوندِ شماره مشترک رد نشد (${refusal ?? 'پذیرفته شد'})`);
+  if (!refusal?.includes('پیوند ندارد')) problems.push(`deleting a cheque with an unlinked legacy voucher of a shared number was not refused (${refusal ?? 'accepted'})`);
   const legacyActive = await pool.query<{ n: string }>(
     `SELECT COUNT(*)::text AS n FROM journal_vouchers WHERE reference_module = 'cheque' AND reference_number = $1 AND is_deleted = 0`, [legacyNumber]);
-  if (Number(legacyActive.rows[0]?.n ?? 0) !== 3) problems.push(`اسناد شماره مشترک پس از حذف ردشده باید ۳ سند فعال باشند: ${legacyActive.rows[0]?.n}`);
+  if (Number(legacyActive.rows[0]?.n ?? 0) !== 3) problems.push(`the vouchers of the shared number must still be 3 active vouchers after the refused delete: ${legacyActive.rows[0]?.n}`);
   return problems;
 }
 
@@ -137,7 +137,7 @@ export async function checkForeignTreasuryUsesRate(wh: string): Promise<string[]
     `SELECT COALESCE(SUM(ROUND(i.debit * COALESCE(NULLIF(i.exchange_rate, 0), 1), 0) - ROUND(i.credit * COALESCE(NULLIF(i.exchange_rate, 0), 1), 0)), 0)::text AS n
        FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
       WHERE v.is_deleted = 0 AND i.is_deleted = 0 AND a.code = '1201' AND i.detailed_name = $1 AND v.id > $2`, [buyer, mark]);
-  if (!fin(buyerNet.rows[0]?.n ?? 0).isZero()) problems.push(`تسویه فاکتور دلاری بی نرخ صریح حساب مشتری را به ریال نبست: مانده ${buyerNet.rows[0]?.n}`);
+  if (!fin(buyerNet.rows[0]?.n ?? 0).isZero()) problems.push(`settling a dollar invoice without an explicit rate did not close the customer account in rials: balance ${buyerNet.rows[0]?.n}`);
 
   // ج) تراکنش یورویی بدون نرخ (نه صریح، نه فاکتور، نه تنظیمات) رد می‌شود
   const eurCash = await BankAccountService.createBankAccount({ title: `صندوق یورویی ${tag('E')}`, type: 'cash', accountId: await accountIdByCode('1002'), initialBalance: 0, currency: 'EUR' });
@@ -147,7 +147,7 @@ export async function checkForeignTreasuryUsesRate(wh: string): Promise<string[]
   } catch (err) {
     refusal = getErrorMessage(err);
   }
-  if (!refusal?.includes('نرخ تسعیر')) problems.push(`تراکنش ارزی بدون نرخ رد نشد (${refusal ?? 'پذیرفته شد'})`);
+  if (!refusal?.includes('نرخ تسعیر')) problems.push(`foreign-currency transaction without an exchange rate was not refused (${refusal ?? 'accepted'})`);
 
   // د) انتقال ۵۰ دلار از صندوق به بانک دلاری با نرخ ۶۰۰٬۰۰۰
   await TreasuryTransactionService.createTreasuryTransfer({
@@ -158,7 +158,7 @@ export async function checkForeignTreasuryUsesRate(wh: string): Promise<string[]
   const expected: Record<string, number> = { '1002': 31300000, '1004': 30000000 };
   for (const [code, amount] of Object.entries(expected)) {
     const actual = await irrNet(code, mark);
-    if (!fin(actual).equals(amount)) problems.push(`گردش ریالی ${code}: ${actual}، انتظار ${amount}`);
+    if (!fin(actual).equals(amount)) problems.push(`rial movement of ${code}: ${actual}, expected ${amount}`);
   }
   return problems;
 }
@@ -173,26 +173,26 @@ export async function checkPaidChequeBounceRestoresSupplier(): Promise<string[]>
   const expect = async (label: string, mark: number, expected: Record<string, number>) => {
     for (const [code, amount] of Object.entries(expected)) {
       const actual = await irrNet(code, mark);
-      if (!fin(actual).equals(amount)) problems.push(`${label}: گردش ${code} ${actual}، انتظار ${amount}`);
+      if (!fin(actual).equals(amount)) problems.push(`${label}: movement of ${code} ${actual}, expected ${amount}`);
     }
   };
 
   // صدور چک ۵۰۰٬۰۰۰ (بدهکار تأمین‌کننده، بستانکار ۳۱۰۱) و برگشت آن ← هر دو حساب صفر
   let mark = await voucherWatermark();
   const bounced = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: tag('P'), amount: 500000, partyName: 'تامین‌کننده آزمون برگشت', bankAccountId: bank.id });
-  await expect('پس از صدور چک پرداختی', mark, { '3101': -500000, '3001': 500000 });
+  await expect('after issuing a paid cheque', mark, { '3101': -500000, '3001': 500000 });
   await ChequeLifecycleService.updateChequeStatus(bounced.id, { status: 'bounced', actionDate: '2026-04-02', username: 'inv' });
-  await expect('پس از برگشت چک پرداختی', mark, { '3101': 0, '3001': 0 });
+  await expect('after a paid cheque bounces', mark, { '3101': 0, '3001': 0 });
   await ChequeLifecycleService.updateChequeStatus(bounced.id, { status: 'returned', actionDate: '2026-04-03', username: 'inv' });
-  await expect('پس از عودت چک پرداختی برگشتی', mark, { '3101': 0, '3001': 0 });
+  await expect('after returning a bounced paid cheque', mark, { '3101': 0, '3001': 0 });
 
   // حذف چک پرداختی برگشتی هر دو سند را باطل می‌کند و دفتر صفر می‌ماند
   mark = await voucherWatermark();
   const removed = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: tag('P'), amount: 200000, partyName: 'تامین‌کننده آزمون حذف', bankAccountId: bank.id });
   await ChequeLifecycleService.updateChequeStatus(removed.id, { status: 'bounced', actionDate: '2026-04-02', username: 'inv' });
   await ChequeLifecycleService.deleteCheque(removed.id, { username: 'inv' });
-  await expect('پس از حذف چک پرداختی برگشتی', mark, { '3101': 0, '3001': 0 });
-  if (await activeVoucherCount(removed.id) !== 0) problems.push('حذف چک پرداختی برگشتی سندهایش را باطل نکرد');
+  await expect('after deleting a bounced paid cheque', mark, { '3101': 0, '3001': 0 });
+  if (await activeVoucherCount(removed.id) !== 0) problems.push('Deleting the bounced paid cheque did not void its vouchers');
   return problems;
 }
 
@@ -205,16 +205,16 @@ export async function checkReturnedChequeMovesToCustomer(): Promise<string[]> {
   const expect = async (label: string, mark: number, expected: Record<string, number>) => {
     for (const [code, amount] of Object.entries(expected)) {
       const actual = await irrNet(code, mark);
-      if (!fin(actual).equals(amount)) problems.push(`${label}: گردش ${code} ${actual}، انتظار ${amount}`);
+      if (!fin(actual).equals(amount)) problems.push(`${label}: movement of ${code} ${actual}, expected ${amount}`);
     }
   };
   // دریافت چک ۳۰۰٬۰۰۰ (بدهکار ۱۱۰۱، بستانکار ۱۲۰۱)، برگشت (بدهکار ۱۱۰۳، بستانکار ۱۱۰۱) و عودت (بدهکار ۱۲۰۱، بستانکار ۱۱۰۳)
   let mark = await voucherWatermark();
   const cheque = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('R'), amount: 300000, partyName: 'مشتری آزمون عودت' });
   await ChequeLifecycleService.updateChequeStatus(cheque.id, { status: 'bounced', actionDate: '2026-04-02', username: 'inv' });
-  await expect('پس از برگشت', mark, { '1101': 0, '1103': 300000, '1201': -300000 });
+  await expect('after the bounce', mark, { '1101': 0, '1103': 300000, '1201': -300000 });
   await ChequeLifecycleService.updateChequeStatus(cheque.id, { status: 'returned', actionDate: '2026-04-03', username: 'inv' });
-  await expect('پس از عودت', mark, { '1101': 0, '1103': 0, '1201': 0 });
+  await expect('after returning it to the drawer', mark, { '1101': 0, '1103': 0, '1201': 0 });
 
   // چک در جریان وصولی که برگشت خورد و عودت شد: همان نتیجه
   mark = await voucherWatermark();
@@ -222,12 +222,12 @@ export async function checkReturnedChequeMovesToCustomer(): Promise<string[]> {
   await ChequeLifecycleService.updateChequeStatus(viaBank.id, { status: 'in_collection', actionDate: '2026-03-20', username: 'inv' });
   await ChequeLifecycleService.updateChequeStatus(viaBank.id, { status: 'bounced', actionDate: '2026-04-02', username: 'inv' });
   await ChequeLifecycleService.updateChequeStatus(viaBank.id, { status: 'returned', actionDate: '2026-04-03', username: 'inv' });
-  await expect('پس از عودت چک در جریان وصول', mark, { '1101': 0, '1102': 0, '1103': 0, '1201': 0 });
+  await expect('after returning a cheque that was in collection', mark, { '1101': 0, '1102': 0, '1103': 0, '1201': 0 });
 
   // حذف چک عودت‌شده: همه اسنادش باطل و دفتر صفر
   await ChequeLifecycleService.deleteCheque(viaBank.id, { username: 'inv' });
-  if (await activeVoucherCount(viaBank.id) !== 0) problems.push('حذف چک عودت‌شده سندهایش را باطل نکرد');
-  await expect('پس از حذف چک عودت‌شده', mark, { '1101': 0, '1102': 0, '1103': 0, '1201': 0 });
+  if (await activeVoucherCount(viaBank.id) !== 0) problems.push('Deleting the returned cheque did not void its vouchers');
+  await expect('after deleting the returned cheque', mark, { '1101': 0, '1102': 0, '1103': 0, '1201': 0 });
   return problems;
 }
 
@@ -245,13 +245,13 @@ export async function checkForeignChequeRefused(): Promise<string[]> {
   } catch (err) {
     refusal = getErrorMessage(err);
   }
-  if (!refusal?.includes('چک ارزی')) problems.push(`چک دلاری رد نشد (${refusal ?? 'پذیرفته شد'})`);
+  if (!refusal?.includes('چک ارزی')) problems.push(`USD cheque was not refused (${refusal ?? 'accepted'})`);
   const rows = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM cheques WHERE cheque_number = $1', [number]);
-  if (Number(rows.rows[0]?.n ?? 0) !== 0) problems.push('رکورد چک دلاری ساخته شد');
+  if (Number(rows.rows[0]?.n ?? 0) !== 0) problems.push('A dollar cheque record was created');
   const vouchers = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM journal_vouchers WHERE id > $1 AND is_deleted = 0', [mark]);
-  if (Number(vouchers.rows[0]?.n ?? 0) !== 0) problems.push('برای چک دلاری سند حسابداری صادر شد');
+  if (Number(vouchers.rows[0]?.n ?? 0) !== 0) problems.push('A journal voucher was issued for the dollar cheque');
   const rial = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('R'), amount: 100000, partyName: 'مشتری ریالی آزمون' });
-  if (await activeVoucherCount(rial.id) !== 1) problems.push('چک ریالی مثل قبل سند ثبت نگرفت');
+  if (await activeVoucherCount(rial.id) !== 1) problems.push('The rial cheque did not get its registration voucher as before');
   return problems;
 }
 
@@ -275,15 +275,15 @@ export async function checkClearedChequeKeepsBankSynced(): Promise<string[]> {
   await approveDraftsAfter(mark);
 
   const [paidRow] = await orm.select({ bankAccountId: cheques.bankAccountId }).from(cheques).where(eq(cheques.id, paid.id));
-  if (paidRow?.bankAccountId !== bank.id) problems.push(`چک پرداختی وصول‌شده حساب بانکی خود را نگه نداشت (${paidRow?.bankAccountId ?? 'null'})`);
+  if (paidRow?.bankAccountId !== bank.id) problems.push(`the cleared paid cheque did not keep its bank account (${paidRow?.bankAccountId ?? 'null'})`);
 
   const listed = (await BankAccountService.getBankAccounts()).find(b => b.id === bank.id);
   const report = (await BankAccountService.getBankReconciliationReport()).accounts.find(b => b.id === bank.id);
   for (const [label, row] of [['فهرست حساب‌ها', listed], ['گزارش تطبیق', report]] as const) {
-    if (!row) { problems.push(`${label}: حساب آزمون یافت نشد`); continue; }
-    if (!fin(row.treasuryBalance ?? 0).equals(2400000)) problems.push(`${label}: مانده خزانه ${row.treasuryBalance}، انتظار ۲٬۴۰۰٬۰۰۰`);
-    if (!fin(row.ledgerBalance ?? 0).equals(2400000)) problems.push(`${label}: مانده دفتر ${row.ledgerBalance}، انتظار ۲٬۴۰۰٬۰۰۰`);
-    if (row.syncStatus !== 'synced') problems.push(`${label}: وضعیت حساب ${row.syncStatus}، انتظار synced`);
+    if (!row) { problems.push(`${label}: test account not found`); continue; }
+    if (!fin(row.treasuryBalance ?? 0).equals(2400000)) problems.push(`${label}: treasury balance ${row.treasuryBalance}, expected 2,400,000`);
+    if (!fin(row.ledgerBalance ?? 0).equals(2400000)) problems.push(`${label}: ledger balance ${row.ledgerBalance}, expected 2,400,000`);
+    if (row.syncStatus !== 'synced') problems.push(`${label}: account status ${row.syncStatus}, expected synced`);
   }
   return problems;
 }
@@ -303,17 +303,17 @@ export async function checkChequeClearingNeedsLedgerAccount(): Promise<string[]>
   } catch (err) {
     refusal = getErrorMessage(err);
   }
-  if (!refusal?.includes('حساب معین') || !refusal.includes(unlinked.title)) problems.push(`وصول به حساب بانکی بی‌سرفصل با نام آن حساب رد نشد (${refusal ?? 'پذیرفته شد'})`);
+  if (!refusal?.includes('حساب معین') || !refusal.includes(unlinked.title)) problems.push(`clearing into a bank account without a ledger account was not refused with that account's name (${refusal ?? 'accepted'})`);
   const [row] = await orm.select({ status: cheques.status }).from(cheques).where(eq(cheques.id, cheque.id));
-  if (row?.status !== 'received') problems.push(`وضعیت چک پس از وصول ردشده ${row?.status}، انتظار received`);
+  if (row?.status !== 'received') problems.push(`cheque status after the refused clearing is ${row?.status}, expected received`);
   const bankRow = (await BankAccountService.getBankAccounts()).find(b => b.id === unlinked.id);
-  if (!fin(bankRow?.currentBalance ?? 0).isZero()) problems.push(`مانده حساب بی‌سرفصل ${bankRow?.currentBalance}، انتظار ۰`);
-  if (!fin(await irrNet('1101', mark)).isZero()) problems.push('وصول ردشده سند اسناد دریافتنی صادر کرد');
+  if (!fin(bankRow?.currentBalance ?? 0).isZero()) problems.push(`balance of the account without a ledger account is ${bankRow?.currentBalance}, expected 0`);
+  if (!fin(await irrNet('1101', mark)).isZero()) problems.push('The refused clearing issued a notes receivable voucher');
 
   if (row?.status !== 'received') return problems;
   const linked = await bankWithOwnLedgerAccount('بانک سرفصل‌دار آزمون');
   await ChequeLifecycleService.updateChequeStatus(cheque.id, { status: 'passed', bankAccountId: linked.id, actionDate: '2026-04-02', username: 'inv' });
-  if (!fin(await irrNet('1101', mark)).equals(-400000)) problems.push(`وصول به حساب سرفصل‌دار اسناد دریافتنی را نبست (گردش ۱۱۰۱: ${await irrNet('1101', mark)})`);
+  if (!fin(await irrNet('1101', mark)).equals(-400000)) problems.push(`clearing into the account with a ledger account did not close notes receivable (1101 movement: ${await irrNet('1101', mark)})`);
   return problems;
 }
 
@@ -334,9 +334,9 @@ export async function checkTreasuryChequeMethodRefused(): Promise<string[]> {
   } catch (err) {
     refusal = getErrorMessage(err);
   }
-  if (!refusal?.includes('دفتر چک')) problems.push(`روش چک در فرم خزانه رد نشد (${refusal ?? 'پذیرفته شد'})`);
-  if (await countRows() !== 0) problems.push('روش چک ردشده تراکنش خزانه ساخت');
-  if (!fin(await irrNet('1101', mark)).isZero()) problems.push('روش چک ردشده اسناد دریافتنی را بدهکار کرد');
+  if (!refusal?.includes('دفتر چک')) problems.push(`cheque method in the treasury form was not refused (${refusal ?? 'accepted'})`);
+  if (await countRows() !== 0) problems.push('The refused cheque method created a treasury transaction');
+  if (!fin(await irrNet('1101', mark)).isZero()) problems.push('The refused cheque method debited notes receivable');
 
   // تراکنش چکی پیشین (ثبت‌شده پیش از v8.0.26): مانده حساب را تغییر نداده بود و سندش ۱۱۰۱ را گرفته بود
   const [legacy] = await orm.insert(treasuryTransactions).values({
@@ -345,18 +345,18 @@ export async function checkTreasuryChequeMethodRefused(): Promise<string[]> {
   }).returning({ id: treasuryTransactions.id });
   const synced = async (label: string) => {
     const row = (await BankAccountService.getBankAccounts()).find(b => b.id === bank.id);
-    if (!fin(row?.treasuryBalance ?? -1).isZero()) problems.push(`${label}: مانده خزانه ${row?.treasuryBalance}، انتظار ۰`);
-    if (row?.syncStatus !== 'synced') problems.push(`${label}: وضعیت حساب ${row?.syncStatus}، انتظار synced`);
+    if (!fin(row?.treasuryBalance ?? -1).isZero()) problems.push(`${label}: treasury balance ${row?.treasuryBalance}, expected 0`);
+    if (row?.syncStatus !== 'synced') problems.push(`${label}: account status ${row?.syncStatus}, expected synced`);
   };
   await synced('تراکنش چکی پیشین');
   try {
     await TreasuryTransactionService.voidTreasuryTransaction(legacy.id, { reason: 'آزمون ابطال تراکنش چکی پیشین', username: 'inv' });
   } catch (err) {
-    problems.push(`تراکنش چکی پیشین ابطال نشد (${getErrorMessage(err)})`);
+    problems.push(`the earlier cheque-method transaction was not voided (${getErrorMessage(err)})`);
   }
   await synced('پس از ابطال تراکنش چکی پیشین');
   const [bankRow] = await orm.select({ currentBalance: bankAccounts.currentBalance }).from(bankAccounts).where(eq(bankAccounts.id, bank.id));
-  if (!fin(bankRow?.currentBalance ?? -1).isZero()) problems.push(`مانده ذخیره‌شده حساب پس از ابطال ${bankRow?.currentBalance}، انتظار ۰`);
+  if (!fin(bankRow?.currentBalance ?? -1).isZero()) problems.push(`stored account balance after the void is ${bankRow?.currentBalance}, expected 0`);
   return problems;
 }
 
@@ -386,30 +386,30 @@ export async function checkChequeReconciliationMatchesLedger(): Promise<string[]
     for (const code of codes) {
       const b = base.map.get(code)!;
       const n = now.map.get(code)!;
-      if (!n.discrepancy.equals(b.discrepancy)) problems.push(`${label}: مغایرت ${code} از ${b.discrepancy} به ${n.discrepancy} رسید`);
+      if (!n.discrepancy.equals(b.discrepancy)) problems.push(`${label}: discrepancy of ${code} went from ${b.discrepancy} to ${n.discrepancy}`);
       const delta = n.ledger.subtract(b.ledger);
-      if (!delta.equals(ledgerDelta[code] ?? 0)) problems.push(`${label}: تغییر مانده دفتری ${code} ${delta}، انتظار ${ledgerDelta[code] ?? 0}`);
+      if (!delta.equals(ledgerDelta[code] ?? 0)) problems.push(`${label}: ledger balance change of ${code} is ${delta}, expected ${ledgerDelta[code] ?? 0}`);
     }
     const paidDelta = now.paidOpen.subtract(base.paidOpen);
-    if (!paidDelta.equals(paidOpenDelta)) problems.push(`${label}: تغییر «چک‌های پرداختی باز» ${paidDelta}، انتظار ${paidOpenDelta}`);
+    if (!paidDelta.equals(paidOpenDelta)) problems.push(`${label}: change of "open paid cheques" is ${paidDelta}, expected ${paidOpenDelta}`);
   };
 
   const bank = await bankWithOwnLedgerAccount('بانک آزمون آشتی چک');
   const paid = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: tag('P'), amount: 500000, partyName: 'تامین‌کننده آزمون آشتی', bankAccountId: bank.id });
-  await expectStep('صدور چک پرداختی', { '3101': 500000 }, 500000);
+  await expectStep('issuing a paid cheque', { '3101': 500000 }, 500000);
   await ChequeLifecycleService.updateChequeStatus(paid.id, { status: 'bounced', actionDate: '2026-04-02', username: 'inv' });
-  await expectStep('برگشت چک پرداختی', {}, 0);
+  await expectStep('a paid cheque bounces', {}, 0);
   await ChequeLifecycleService.updateChequeStatus(paid.id, { status: 'returned', actionDate: '2026-04-03', username: 'inv' });
-  await expectStep('عودت چک پرداختی برگشتی', {}, 0);
+  await expectStep('returning a bounced paid cheque', {}, 0);
 
   const received = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('R'), amount: 300000, partyName: 'مشتری آزمون آشتی' });
-  await expectStep('دریافت چک', { '1101': 300000 }, 0);
+  await expectStep('receiving a cheque', { '1101': 300000 }, 0);
   await ChequeLifecycleService.updateChequeStatus(received.id, { status: 'in_collection', actionDate: '2026-03-20', username: 'inv' });
-  await expectStep('واگذاری چک به بانک', { '1102': 300000 }, 0);
+  await expectStep('handing the cheque to the bank for collection', { '1102': 300000 }, 0);
   await ChequeLifecycleService.updateChequeStatus(received.id, { status: 'bounced', actionDate: '2026-04-02', username: 'inv' });
-  await expectStep('برگشت چک دریافتی', { '1103': 300000 }, 0);
+  await expectStep('a received cheque bounces', { '1103': 300000 }, 0);
   await ChequeLifecycleService.updateChequeStatus(received.id, { status: 'returned', actionDate: '2026-04-03', username: 'inv' });
-  await expectStep('عودت چک دریافتی برگشتی', {}, 0);
+  await expectStep('returning a bounced received cheque', {}, 0);
   return problems;
 }
 

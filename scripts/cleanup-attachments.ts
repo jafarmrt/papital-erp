@@ -12,14 +12,14 @@ import { AttachmentOrphanCleanupService } from '../src/services/attachments/atta
 async function main(): Promise<void> {
   const apply = process.argv.includes('--apply');
   const report = await AttachmentOrphanCleanupService.cleanupOrphanFiles({ apply, actor: 'cli:attachments-cleanup' });
-  console.log(apply ? '✅ پاک‌سازی پیوست‌ها انجام شد' : '🔎 اجرای آزمایشی (بدون تغییر) — برای پاک‌سازی واقعی: npm run attachments:cleanup -- --apply');
-  console.log(`   فایل‌های بررسی‌شده: ${report.scannedFiles}`);
-  console.log(`   بدون ثبت: ${report.unregistered.files} فایل (${(report.unregistered.bytes / 1024 / 1024).toFixed(2)} MB)، پاک‌شده: ${report.unregistered.removed}`);
-  console.log(`   بدون ثبت تازه‌تر از ${report.minAgeMinutes} دقیقه (دست نخورد): ${report.recentUnregistered}`);
-  console.log(`   جداشده از رکورد (نگه داشته شد): ${report.detached.files} فایل (${(report.detached.bytes / 1024 / 1024).toFixed(2)} MB)`);
-  if (report.missingOnDisk > 0) console.log(`   ⚠️ ردیف ثبت‌شده بدون فایل روی دیسک: ${report.missingOnDisk}`);
+  console.log(apply ? '✅ Attachment cleanup done' : '🔎 Dry run (no changes); for a real cleanup: npm run attachments:cleanup -- --apply');
+  console.log(`   Files scanned: ${report.scannedFiles}`);
+  console.log(`   Unregistered: ${report.unregistered.files} files (${(report.unregistered.bytes / 1024 / 1024).toFixed(2)} MB), removed: ${report.unregistered.removed}`);
+  console.log(`   Unregistered and newer than ${report.minAgeMinutes} minutes (left alone): ${report.recentUnregistered}`);
+  console.log(`   Detached from their record (kept): ${report.detached.files} files (${(report.detached.bytes / 1024 / 1024).toFixed(2)} MB)`);
+  if (report.missingOnDisk > 0) console.log(`   ⚠️ Registered rows without a file on disk: ${report.missingOnDisk}`);
   if (report.failures.length > 0) {
-    console.error(`❌ ${report.failures.length} فایل پاک نشد:`);
+    console.error(`❌ ${report.failures.length} files were not removed:`);
     for (const f of report.failures) console.error(`   - ${f.path}: ${f.error}`);
     process.exitCode = 1;
   }

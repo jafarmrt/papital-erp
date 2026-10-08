@@ -59,23 +59,23 @@ export async function checkBankAccountMaintenanceLocked(): Promise<string[]> {
   const edited = await newBank(100);
   const setInitial = () => BankAccountService.updateBankAccount(edited.id, { title: edited.title, initialBalance: 150, username: 'inv' });
   const edits = await raceBehindRowLock<unknown>('bank_accounts', [edited.id], [setInitial, setInitial]);
-  problems.push(...outcomeProblems(['ویرایش اول', 'ویرایش دوم'], edits, () => false));
+  problems.push(...outcomeProblems(['first edit', 'second edit'], edits, () => false));
   const afterEdit = await bankRow(edited.id);
-  if (afterEdit.current !== 150 || afterEdit.initial !== 150) problems.push(`پس از دو ویرایش هم‌زمان ۱۰۰ ← ۱۵۰ موجودی جاری ${afterEdit.current} و مانده اول دوره ${afterEdit.initial} است، نه ۱۵۰`);
+  if (afterEdit.current !== 150 || afterEdit.initial !== 150) problems.push(`after two concurrent edits 100 -> 150, current balance is ${afterEdit.current} and opening balance is ${afterEdit.initial}, not 150`);
   const adjustments = await adjustmentVouchers(edited.id);
-  if (adjustments !== 1) problems.push(`${adjustments} سند اصلاحی مانده اول دوره صادر شد، نه یکی`);
+  if (adjustments !== 1) problems.push(`${adjustments} opening balance adjustment vouchers were issued, not one`);
 
   // ۲) کد خودکار هم‌زمان یکتا، و کد دستی تکراری رد
   const created = await Promise.allSettled(Array.from({ length: 5 }, () => newBank(0, 'pos')));
   const codes = created.filter((o): o is PromiseFulfilledResult<Awaited<ReturnType<typeof newBank>>> => o.status === 'fulfilled').map(o => o.value.code);
-  if (codes.length !== 5) problems.push(`از پنج حساب کارت‌خوان هم‌زمان ${codes.length} ساخته شد`);
-  if (new Set(codes).size !== codes.length) problems.push(`کد خودکار حساب‌های هم‌زمان تکراری شد (${codes.join('، ')})`);
+  if (codes.length !== 5) problems.push(`of five concurrent POS accounts, ${codes.length} were created`);
+  if (new Set(codes).size !== codes.length) problems.push(`concurrent accounts got duplicate automatic codes (${codes.join(', ')})`);
   const customCode = tag('CUSTOM');
   await newBank(0, 'bank', customCode);
   const duplicate = await refusal(() => newBank(0, 'bank', customCode.toLowerCase()));
-  if (!duplicate?.includes('ثبت شده است')) problems.push(`کد دستی تکراری رد نشد (${duplicate ?? 'پذیرفته شد'})`);
+  if (!duplicate?.includes('ثبت شده است')) problems.push(`duplicate manual code was not refused (${duplicate ?? 'accepted'})`);
   const takenByEdit = await refusal(() => BankAccountService.updateBankAccount(edited.id, { code: customCode, username: 'inv' }));
-  if (!takenByEdit?.includes('ثبت شده است')) problems.push(`ویرایش کد به کد حساب دیگر رد نشد (${takenByEdit ?? 'پذیرفته شد'})`);
+  if (!takenByEdit?.includes('ثبت شده است')) problems.push(`editing the code to another account's code was not refused (${takenByEdit ?? 'accepted'})`);
 
   // ۳) حذف هم‌زمان با ثبت دریافت: حساب حذف‌شده با تراکنش فعال نمی‌ماند
   const busy = await newBank(0);
@@ -84,11 +84,12 @@ export async function checkBankAccountMaintenanceLocked(): Promise<string[]> {
     type: 'receipt', method: 'bank_transfer', amount: 1000, bankAccountId: busy.id, partyType: 'other', contraAccountId, partyName: 'واریز آزمون حذف', date: '2026-04-01', username: 'inv',
   });
   const outcomes = await raceBehindRowLock<unknown>('bank_accounts', [busy.id], [receipt, () => BankAccountService.deleteBankAccount(busy.id)], { staggered: true });
-  problems.push(...outcomeProblems(['ثبت دریافت', 'حذف حساب'], outcomes,
-    (label, message) => (label === 'حذف حساب' && message.includes('تراکنش ثبت شده')) || (label === 'ثبت دریافت' && message.includes('یافت نشد'))));
+  const expectedRefusal = (label: string, message: string) =>
+    (label === 'delete account' && message.includes('تراکنش ثبت شده')) || (label === 'record receipt' && message.includes('یافت نشد'));
+  problems.push(...outcomeProblems(['record receipt', 'delete account'], outcomes, expectedRefusal));
   const busyRow = await bankRow(busy.id);
   const busyTx = await activeTransactions(busy.id);
-  if (busyRow.isDeleted === 1 && busyTx > 0) problems.push(`حساب حذف‌شده ${busyTx} تراکنش فعال دارد`);
+  if (busyRow.isDeleted === 1 && busyTx > 0) problems.push(`deleted account has ${busyTx} active transactions`);
 
   // ۴) حسابی که چک وصول‌شده دارد حذف نمی‌شود
   const chequeBank = await newBank(0);
@@ -98,7 +99,7 @@ export async function checkBankAccountMaintenanceLocked(): Promise<string[]> {
   });
   await ChequeLifecycleService.updateChequeStatus(cheque.id, { status: 'passed', bankAccountId: chequeBank.id, actionDate: '2026-04-02', username: 'inv' });
   const withCheque = await refusal(() => BankAccountService.deleteBankAccount(chequeBank.id));
-  if (!withCheque?.includes('چک ثبت شده')) problems.push(`حذف حساب دارای چک وصول‌شده رد نشد (${withCheque ?? 'پذیرفته شد'})`);
-  if ((await bankRow(chequeBank.id)).isDeleted !== 0) problems.push('حساب دارای چک وصول‌شده حذف شد');
+  if (!withCheque?.includes('چک ثبت شده')) problems.push(`deleting an account with a cleared cheque was not refused (${withCheque ?? 'accepted'})`);
+  if ((await bankRow(chequeBank.id)).isDeleted !== 0) problems.push('account with a cleared cheque was deleted');
   return problems;
 }

@@ -52,7 +52,7 @@ afterEach(() => cleanup());
 const typeSelects = () => screen.getAllByLabelText('نوع تفصیلی') as HTMLSelectElement[];
 
 describe('voucher detailed types (TD-569)', () => {
-  it('the voucher form offers the server types; a stored «custom» row is «متفرقه» (other) and a project row is sent with its id and label', async () => {
+  it('the voucher form offers the server types; a stored "custom" row is "miscellaneous" (other) and a project row is sent with its id and label', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<QueryClientProvider client={client()}><NewVoucherModal isOpen onClose={() => {}} accounts={accounts as never} customers={customers as never}
       personnelList={[]} onSave={onSave} editingVoucher={voucher('draft')} /></QueryClientProvider>);

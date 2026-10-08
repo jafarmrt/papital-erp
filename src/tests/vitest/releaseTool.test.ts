@@ -117,7 +117,7 @@ describe('scripts/release.ts (v9.0.0)', () => {
   });
 
   it('refuses a version outside the active series, a dash-prefixed CHANGELOG line and a reused TD id', () => {
-    expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ version: 'v8.0.129' }), ACTIVE)).toThrow(/سری فعال 9/);
+    expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ version: 'v8.0.129' }), ACTIVE)).toThrow(/active series 9/);
     expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ mdLine: '- یک خط.' }), ACTIVE)).toThrow(/mdLine/);
     expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ openRows: [row('TD-413')] }), ACTIVE)).toThrow(/TD-413/);
     expect(() => applyRelease(memoryFiles(fixture([])), baseSpec({ td: 'TD-999', archiveRow: row('TD-999') }), ACTIVE)).toThrow(/TD-999/);

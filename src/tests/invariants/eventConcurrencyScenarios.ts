@@ -82,40 +82,40 @@ export async function checkDlqReplayedOnce(): Promise<string[]> {
     await handler.reached(1);
     second = settle(DeadLetterQueueService.replayEvent(row.id));
     const secondEarly = await Promise.race([second, handler.reached(2).then(() => null)]);
-    if (secondEarly === null) problems.push('بازپخش دوم هم‌زمان گرداننده رویداد را دوباره اجرا کرد');
+    if (secondEarly === null) problems.push('The concurrent second replay ran the event handler again');
     else if (secondEarly.ok || !secondEarly.message.includes('در حال بازپخش')) {
-      problems.push(`بازپخش دوم هم‌زمان با پیام «در حال بازپخش» رد نشد (${secondEarly.ok ? 'پذیرفته شد' : secondEarly.message})`);
+      problems.push(`the concurrent second replay was not refused with the message "being replayed" (${secondEarly.ok ? 'accepted' : secondEarly.message})`);
     }
     const requeued = await requeuedIdsDryRun();
-    if (requeued.includes(row.id)) problems.push('بازگردانی گروهی به Outbox رویداد در حال بازپخش را هم برداشت');
+    if (requeued.includes(row.id)) problems.push('The bulk requeue to the Outbox also took the event being replayed');
     const dismiss = await settle(DeadLetterQueueService.dismissEvent(row.id));
-    if (dismiss.ok) problems.push('صرف‌نظر هم‌زمان با بازپخش پذیرفته شد');
+    if (dismiss.ok) problems.push('A dismiss concurrent with the replay was accepted');
   } finally {
     handler.release();
   }
   const outcomes = await Promise.all([first, second]);
-  if (!outcomes[0].ok) problems.push(`بازپخش اول پذیرفته نشد (${outcomes[0].message})`);
+  if (!outcomes[0].ok) problems.push(`The first replay was not accepted (${outcomes[0].message})`);
   const accepted = outcomes.filter(o => o.ok).length;
-  if (accepted !== 1) problems.push(`از دو بازپخش هم‌زمان ${accepted} پذیرفته شد، نه یکی`);
-  if (handler.runs() !== 1) problems.push(`گرداننده رویداد ${handler.runs()} بار اجرا شد، نه یک بار`);
+  if (accepted !== 1) problems.push(`${accepted} of two concurrent replays were accepted, not one`);
+  if (handler.runs() !== 1) problems.push(`The event handler ran ${handler.runs()} times, not once`);
   const afterRace = await statusOf(row.id);
-  if (afterRace !== 'replayed') problems.push(`وضعیت پس از بازپخش «${afterRace}» است، نه replayed`);
+  if (afterRace !== 'replayed') problems.push(`Status after the replay is "${afterRace}", not replayed`);
 
   // ۲) پشت هم: رویداد بازپخش‌شده دوباره بازپخش یا صرف‌نظر نمی‌شود
   const again = await settle(DeadLetterQueueService.replayEvent(row.id));
-  if (again.ok || !again.message.includes('پیش‌تر بازپخش')) problems.push(`بازپخش دوباره رویداد بازپخش‌شده رد نشد (${again.ok ? 'پذیرفته شد' : again.message})`);
+  if (again.ok || !again.message.includes('پیش‌تر بازپخش')) problems.push(`replaying an already replayed event again was not refused (${again.ok ? 'accepted' : again.message})`);
   const lateDismiss = await settle(DeadLetterQueueService.dismissEvent(row.id));
-  if (lateDismiss.ok) problems.push('صرف‌نظر از رویداد بازپخش‌شده پذیرفته شد');
-  if (handler.runs() !== 1) problems.push(`پس از بازپخش دوباره گرداننده ${handler.runs()} بار اجرا شده است، نه یک بار`);
+  if (lateDismiss.ok) problems.push('Dismissing a replayed event was accepted');
+  if (handler.runs() !== 1) problems.push(`After the repeated replay the handler has run ${handler.runs()} times, not once`);
   const final = await statusOf(row.id);
-  if (final !== 'replayed') problems.push(`وضعیت نهایی «${final}» است، نه replayed`);
+  if (final !== 'replayed') problems.push(`Final status is "${final}", not replayed`);
 
   // ۳) رویداد صرف‌نظرشده را می‌توان یک بار بازپخش کرد
   const dismissedRow = await quarantine(eventType, `${tag}_d`);
   const dismissed = await settle(DeadLetterQueueService.dismissEvent(dismissedRow.id));
-  if (!dismissed.ok) problems.push(`صرف‌نظر از رویداد قرنطینه پذیرفته نشد (${dismissed.message})`);
+  if (!dismissed.ok) problems.push(`Dismissing a quarantined event was not accepted (${dismissed.message})`);
   const replayDismissed = await settle(DeadLetterQueueService.replayEvent(dismissedRow.id));
-  if (!replayDismissed.ok) problems.push(`بازپخش رویداد صرف‌نظرشده پذیرفته نشد (${replayDismissed.message})`);
-  if (handler.runs() !== 2) problems.push(`بازپخش رویداد صرف‌نظرشده گرداننده را یک بار اجرا نکرد (جمع اجراها ${handler.runs()}، نه ۲)`);
+  if (!replayDismissed.ok) problems.push(`Replaying a dismissed event was not accepted (${replayDismissed.message})`);
+  if (handler.runs() !== 2) problems.push(`Replaying the dismissed event did not run the handler once (total runs ${handler.runs()}, not 2)`);
   return problems;
 }

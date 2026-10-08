@@ -4,6 +4,10 @@ import { replayKardexWac, wacDiffersFromReplay } from '../../services/inventory/
 import type { InvariantScope, InvariantViolation } from './businessInvariants.js';
 import { QTY_TOLERANCE, rows } from './ledgerRows.js';
 
+/** Parts of the I13 message that the known-findings classifier and the void probe read */
+export const I13_NEGATIVE_HISTORY = 'has a negative balance in date order in one warehouse';
+export const I13_VOIDED_INCOMING = 'because a consumed incoming row was voided';
+
 interface KardexAllRow extends Record<string, unknown> {
   id: number;
   item_id: number;
@@ -87,16 +91,16 @@ export async function checkKardexRebuildWac(scope: InvariantScope): Promise<Inva
         invariant: 'I13_kardex_rebuild_wac',
         key: `item:${it.id}`,
         message: byVoid
-          ? `کاردکس کالا ${it.id} به ترتیب تاریخ در یک انبار مانده منفی دارد، چون ورودیِ مصرف‌شده‌ای ابطال شده است`
-          : `کاردکس کالا ${it.id} به ترتیب تاریخ در یک انبار مانده منفی دارد`,
-        expected: 'مانده نامنفی در ترتیب تاریخ',
-        actual: 'مانده منفی',
+          ? `Kardex of item ${it.id} ${I13_NEGATIVE_HISTORY}, ${I13_VOIDED_INCOMING}`
+          : `Kardex of item ${it.id} ${I13_NEGATIVE_HISTORY}`,
+        expected: 'non-negative balance in date order',
+        actual: 'negative balance',
       });
     } else if (wacDiffersFromReplay(liveWac, replay.wac, it.current_stock)) {
       violations.push({
         invariant: 'I13_kardex_rebuild_wac',
         key: `item:${it.id}`,
-        message: `بازسازی کاردکس WAC کالا ${it.id} را تغییر می‌دهد`,
+        message: `Kardex rebuild changes the WAC of item ${it.id}`,
         expected: liveWac.toString(),
         actual: replay.wac.round(4).toString(),
       });

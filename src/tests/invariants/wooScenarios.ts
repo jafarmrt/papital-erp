@@ -133,12 +133,12 @@ export async function checkWooRialUnits(): Promise<string[]> {
     const id = wooOrderId();
     const result = await WooOrderSyncService.handleOrder(wooOrder(id, 'processing', item.code, 1, amount, { currency }));
     if (result.status !== 'processed' || !result.docId) {
-      problems.push(`${currency}: سفارش فاکتور نشد (${result.message.slice(0, 160)})`);
+      problems.push(`${currency}: the order was not invoiced (${result.message.slice(0, 160)})`);
       continue;
     }
     const [doc] = await orm.select({ currency: documents.currency }).from(documents).where(eq(documents.id, result.docId));
     const debit = await customerDebitOf(result.docId);
-    if (doc?.currency !== 'IRR' || debit !== rial) problems.push(`${currency}: فاکتور ${doc?.currency} با بدهکار مشتری ${debit}، انتظار IRR و ${rial}`);
+    if (doc?.currency !== 'IRR' || debit !== rial) problems.push(`${currency}: invoice ${doc?.currency} with customer debit ${debit}, expected IRR and ${rial}`);
   }
   return problems;
 }
@@ -160,12 +160,12 @@ export async function checkWooPhoneMatchesCustomer(): Promise<string[]> {
     order.billing = { ...order.billing, phone };
     const result = await WooOrderSyncService.handleOrder(order);
     const [doc] = await orm.select({ buyerName: documents.buyerName }).from(documents).where(eq(documents.id, result.docId ?? 0));
-    if (doc?.buyerName !== existing.name) problems.push(`تلفن «${phone}»: فاکتور به نام ${doc?.buyerName ?? result.message.slice(0, 80)}، انتظار ${existing.name}`);
+    if (doc?.buyerName !== existing.name) problems.push(`phone "${phone}": invoice in the name of ${doc?.buyerName ?? result.message.slice(0, 80)}, expected ${existing.name}`);
   }
   const duplicates = await pool.query<{ n: string }>(
     `SELECT COUNT(*)::text AS n FROM customers WHERE is_deleted = 0 AND id <> $1 AND regexp_replace(translate(phone, '۰۱۲۳۴۵۶۷۸۹', '0123456789'), '[^0-9]', '', 'g') LIKE $2`,
     [existing.id, `%912${suffix}`]);
-  if (Number(duplicates.rows[0].n) !== 0) problems.push(`${duplicates.rows[0].n} مشتری تکراری با همان تلفن ساخته شد`);
+  if (Number(duplicates.rows[0].n) !== 0) problems.push(`${duplicates.rows[0].n} duplicate customers were created with the same phone`);
 
   // تلفن دیگری (رقم آخر متفاوت) مشتری تازه می‌سازد
   const other = wooOrder(wooOrderId(), 'processing', item.code, 1, 1000);
@@ -173,7 +173,7 @@ export async function checkWooPhoneMatchesCustomer(): Promise<string[]> {
   other.billing = { ...other.billing, phone: otherPhone };
   const otherResult = await WooOrderSyncService.handleOrder(other);
   const [otherDoc] = await orm.select({ buyerName: documents.buyerName }).from(documents).where(eq(documents.id, otherResult.docId ?? 0));
-  if (otherDoc?.buyerName === existing.name) problems.push(`تلفن دیگر «${otherPhone}» به همان مشتری نسبت داده شد`);
+  if (otherDoc?.buyerName === existing.name) problems.push(`another phone "${otherPhone}" was assigned to the same customer`);
   return problems;
 }
 
@@ -200,13 +200,13 @@ export async function checkWooExactLineTotals(): Promise<string[]> {
   for (const c of cases) {
     const result = await WooOrderSyncService.handleOrder(c.order);
     if (result.status !== 'processed' || !result.docId) {
-      problems.push(`${c.label}: فاکتور نشد (${result.message.slice(0, 160)})`);
+      problems.push(`${c.label}: not invoiced (${result.message.slice(0, 160)})`);
       continue;
     }
     const lines = (await invoiceLines(result.docId)).map(l => `${l.q}×${Number(l.p)}`).join('|');
     const debit = await customerDebitOf(result.docId);
-    if (debit !== c.debit) problems.push(`${c.label}: بدهکار مشتری ${debit}، انتظار ${c.debit}`);
-    if (lines !== c.lines) problems.push(`${c.label}: سطرها ${lines}، انتظار ${c.lines}`);
+    if (debit !== c.debit) problems.push(`${c.label}: customer debit ${debit}, expected ${c.debit}`);
+    if (lines !== c.lines) problems.push(`${c.label}: lines ${lines}, expected ${c.lines}`);
   }
   return problems;
 }
@@ -235,13 +235,13 @@ export async function checkWooNegativeFeeAsLineDiscount(): Promise<string[]> {
   });
   const run = async (label: string, order: WcOrderPayload, debit: number, discounts: string, serviceCharge: number) => {
     const result = await WooOrderSyncService.handleOrder(order);
-    if (result.status !== 'processed' || !result.docId) return problems.push(`${label}: فاکتور نشد (${result.message.slice(0, 160)})`);
+    if (result.status !== 'processed' || !result.docId) return problems.push(`${label}: not invoiced (${result.message.slice(0, 160)})`);
     const [doc] = await orm.select({ service: documents.serviceChargeAmount }).from(documents).where(eq(documents.id, result.docId));
     const got = (await lineDiscounts(result.docId)).join('|');
-    if (got !== discounts) problems.push(`${label}: تخفیف سطرها ${got}، انتظار ${discounts}`);
-    if (Number(doc?.service ?? 0) !== serviceCharge) problems.push(`${label}: هزینه خدمات ${doc?.service}، انتظار ${serviceCharge}`);
+    if (got !== discounts) problems.push(`${label}: line discounts ${got}, expected ${discounts}`);
+    if (Number(doc?.service ?? 0) !== serviceCharge) problems.push(`${label}: service charge ${doc?.service}, expected ${serviceCharge}`);
     const customer = await customerDebitOf(result.docId);
-    if (customer !== debit) problems.push(`${label}: بدهکار مشتری ${customer}، انتظار ${debit}`);
+    if (customer !== debit) problems.push(`${label}: customer debit ${customer}, expected ${debit}`);
   };
 
   await run('تخفیف ۴۰۰ روی ۱۰۰۰ و ۳۰۰۰', twoLines(wooOrderId(), 1000, 3000, { total: '3600', fee_lines: [{ name: 'تخفیف', total: '-400' }] }), 3600, '100|300', 0);
@@ -251,7 +251,7 @@ export async function checkWooNegativeFeeAsLineDiscount(): Promise<string[]> {
   const tooMuch = await WooOrderSyncService.handleOrder(wooOrder(wooOrderId(), 'processing', a.code, 1, 500, {
     total: '100', shipping_lines: [{ total: '200' }], fee_lines: [{ name: 'تخفیف', total: '-600' }],
   }));
-  if (tooMuch.status !== 'failed' || !tooMuch.message.includes('تخفیف کارمزدی')) problems.push(`تخفیف بیش از جمع اقلام رد نشد (${tooMuch.status}: ${tooMuch.message.slice(0, 120)})`);
+  if (tooMuch.status !== 'failed' || !tooMuch.message.includes('تخفیف کارمزدی')) problems.push(`a discount above the item total was not refused (${tooMuch.status}: ${tooMuch.message.slice(0, 120)})`);
   return problems;
 }
 
@@ -267,23 +267,23 @@ export async function checkWooChangedOrderFlagged(): Promise<string[]> {
   const edited = wooOrderId();
   const first = await WooOrderSyncService.handleOrder(wooOrder(edited, 'processing', item.code, 2, 2000));
   const same = await WooOrderSyncService.handleOrder(wooOrder(edited, 'completed', item.code, 2, 2000));
-  if (same.status !== 'processed') problems.push(`همان سفارش با وضعیت completed: ${same.status}، انتظار processed`);
+  if (same.status !== 'processed') problems.push(`same order with status completed: ${same.status}, expected processed`);
   const changed = await WooOrderSyncService.handleOrder(wooOrder(edited, 'processing', item.code, 3, 3000));
   const editedLog = await logOf(edited);
-  if (changed.status !== 'needs_review' || editedLog?.status !== 'needs_review') problems.push(`سفارش ویرایش‌شده: ${changed.status} / لاگ ${editedLog?.status}، انتظار needs_review`);
-  if (!String(editedLog?.errorMessage || '').includes('اقلام یا مبلغ سفارش عوض شده')) problems.push(`پیام تفاوت ویرایش: ${String(editedLog?.errorMessage || '').slice(0, 120)}`);
-  if (editedLog?.erpDocumentId !== first.docId) problems.push(`فاکتور لاگ ${editedLog?.erpDocumentId}، انتظار ${first.docId}`);
+  if (changed.status !== 'needs_review' || editedLog?.status !== 'needs_review') problems.push(`edited order: ${changed.status} / log ${editedLog?.status}, expected needs_review`);
+  if (!String(editedLog?.errorMessage || '').includes('اقلام یا مبلغ سفارش عوض شده')) problems.push(`edit difference message: ${String(editedLog?.errorMessage || '').slice(0, 120)}`);
+  if (editedLog?.erpDocumentId !== first.docId) problems.push(`log invoice ${editedLog?.erpDocumentId}, expected ${first.docId}`);
   const qty = await pool.query<{ q: string }>('SELECT COALESCE(SUM(quantity), 0)::text AS q FROM document_items WHERE document_id = $1 AND is_deleted = 0', [first.docId ?? 0]);
-  if (Number(qty.rows[0].q) !== 2) problems.push(`مقدار فاکتور ${qty.rows[0].q}، انتظار ۲ (فاکتور دست نمی‌خورد)`);
+  if (Number(qty.rows[0].q) !== 2) problems.push(`invoice quantity ${qty.rows[0].q}, expected 2 (the invoice is not touched)`);
   const again = await WooOrderSyncService.handleOrder(wooOrder(edited, 'completed', item.code, 3, 3000));
-  if (again.status !== 'needs_review' || (again.docId && again.docId !== first.docId)) problems.push(`وب‌هوک بعدی سفارش در حال بررسی: ${again.status} / ${again.docId}`);
+  if (again.status !== 'needs_review' || (again.docId && again.docId !== first.docId)) problems.push(`next webhook of the order under review: ${again.status} / ${again.docId}`);
 
   const refunded = wooOrderId();
   await WooOrderSyncService.handleOrder(wooOrder(refunded, 'processing', item.code, 2, 2000));
   const refund = await WooOrderSyncService.handleOrder(wooOrder(refunded, 'completed', item.code, 2, 2000, { refunds: [{ id: 1, reason: 'یک قلم آسیب دید', total: '-1000' }] }));
   const refundLog = await logOf(refunded);
   if (refund.status !== 'needs_review' || !String(refundLog?.errorMessage || '').includes('استرداد تازه به مبلغ 1000')) {
-    problems.push(`استرداد جزئی: ${refund.status} / ${String(refundLog?.errorMessage || '').slice(0, 120)}`);
+    problems.push(`partial refund: ${refund.status} / ${String(refundLog?.errorMessage || '').slice(0, 120)}`);
   }
   return problems;
 }
@@ -358,10 +358,10 @@ export async function checkWooShopWarehouse(): Promise<string[]> {
     await withSettings({ wc_shop_warehouse: shop.code, wc_store_url: store.url, wc_consumer_key: 'ck_test', wc_consumer_secret: 'cs_test' }, async () => {
       const result = await WooOrderSyncService.handleOrder(wooOrder(wooOrderId(), 'processing', onlyShop.code, 2, 2000));
       if (result.status !== 'processed' || !result.docId) {
-        problems.push(`سفارش کالای انبار فروشگاه فاکتور نشد (${result.message.slice(0, 160)})`);
+        problems.push(`the order for a shop warehouse item was not invoiced (${result.message.slice(0, 160)})`);
       } else {
         const loc = await pool.query<{ l: string }>('SELECT location AS l FROM document_items WHERE document_id = $1 AND is_deleted = 0', [result.docId]);
-        if (loc.rows[0]?.l !== shop.code) problems.push(`انبار سطر فاکتور «${loc.rows[0]?.l}»، انتظار «${shop.code}»`);
+        if (loc.rows[0]?.l !== shop.code) problems.push(`invoice line warehouse "${loc.rows[0]?.l}", expected "${shop.code}"`);
       }
 
       const request = (await import('supertest')).default;
@@ -370,16 +370,16 @@ export async function checkWooShopWarehouse(): Promise<string[]> {
       const session = await getAdminSession();
       for (const item of [reserved, mostlyDefault]) {
         const res = await request(app).post('/api/woocommerce/sync-item').set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send({ itemId: item.id });
-        if (res.status !== 200) problems.push(`همگام‌سازی کالای ${item.code}: ${res.status} ${JSON.stringify(res.body).slice(0, 120)}`);
+        if (res.status !== 200) problems.push(`sync of item ${item.code}: ${res.status} ${JSON.stringify(res.body).slice(0, 120)}`);
       }
-      if (store.pushed.get(502) !== 3) problems.push(`موجودی ارسالی کالای رزروشده ${store.pushed.get(502)}، انتظار ۳ (۵ منهای ۲ رزرو)`);
-      if (store.pushed.get(503) !== 1) problems.push(`موجودی ارسالی کالای انبار پیش‌فرض ${store.pushed.get(503)}، انتظار ۱ (فقط انبار فروشگاه)`);
+      if (store.pushed.get(502) !== 3) problems.push(`pushed stock of the reserved item ${store.pushed.get(502)}, expected 3 (5 minus 2 reserved)`);
+      if (store.pushed.get(503) !== 1) problems.push(`pushed stock of the default warehouse item ${store.pushed.get(503)}, expected 1 (shop warehouse only)`);
 
       store.pushed.clear();
       const all = await request(app).post('/api/woocommerce/sync-all-stocks').set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send({});
-      if (all.status !== 200) problems.push(`همگام‌سازی دسته‌ای: ${all.status}`);
+      if (all.status !== 200) problems.push(`bulk sync: ${all.status}`);
       if (store.pushed.get(501) !== 3 || store.pushed.get(502) !== 3 || store.pushed.get(503) !== 1) {
-        problems.push(`همگام‌سازی دسته‌ای: ${[501, 502, 503].map(id => store.pushed.get(id)).join('، ')}، انتظار ۳، ۳، ۱`);
+        problems.push(`bulk sync: ${[501, 502, 503].map(id => store.pushed.get(id)).join(', ')}, expected 3, 3, 1`);
       }
     });
   } finally {

@@ -6,6 +6,7 @@ import { KardexWacRecalculatorService } from '../../services/inventory/kardexWac
 import { getErrorMessage } from '../../utils/formatters.js';
 import { createTestItem, createTestWarehouse } from '../fixtures/factories.js';
 import { checkBusinessInvariants, type InvariantScope } from './businessInvariants.js';
+import { I13_VOIDED_INCOMING } from './kardexRebuildInvariant.js';
 import { invariantProblems, itemState, receive, watermarks } from './scenarioHelpers.js';
 
 /**
@@ -43,45 +44,45 @@ export async function checkBackdatedStockMovement(wh: string): Promise<string[]>
   const scope: InvariantScope = { ...mark, itemIds: [item.id] };
   const stockIs = async (expected: number, when: string) => {
     const { stock } = await itemState(item.id);
-    if (stock !== expected) problems.push(`${when}: موجودی ${stock}، انتظار ${expected}`);
+    if (stock !== expected) problems.push(`${when}: stock ${stock}, expected ${expected}`);
   };
   await receive(item.id, 10, 100000, wh, '2025-08-01');
   await receive(item.id, 5, 100000, wh, '2025-08-10');
 
   const unpermitted = await rejection(() => sell(item.id, 4, wh, '2025-08-05'));
-  if (!unpermitted?.includes('تاریخ گذشته')) problems.push(`فروش با تاریخ پیش از آخرین گردش بی‌مجوز رد نشد (${unpermitted ?? 'پذیرفته شد'})`);
-  await stockIs(15, 'پس از فروش ردشده');
+  if (!unpermitted?.includes('تاریخ گذشته')) problems.push(`sale dated before the last movement without the permission was not refused (${unpermitted ?? 'accepted'})`);
+  await stockIs(15, 'after the refused sale');
 
   const permitted = await rejection(() => sell(item.id, 4, wh, '2025-08-05', true));
-  if (permitted) problems.push(`فروش با تاریخ گذشته با مجوز و موجودی کافی تا آن تاریخ رد شد: ${permitted}`);
-  await stockIs(11, 'پس از فروش مجاز با تاریخ گذشته');
+  if (permitted) problems.push(`backdated sale with the permission and enough stock up to that date was refused: ${permitted}`);
+  await stockIs(11, 'after the permitted backdated sale');
 
   const beforeStock = await rejection(() => sell(item.id, 2, wh, '2025-07-25', true));
-  if (!beforeStock?.includes('منفی')) problems.push(`فروش با مجوز ولی پیش از ورود کالا رد نشد (${beforeStock ?? 'پذیرفته شد'})`);
+  if (!beforeStock?.includes('منفی')) problems.push(`sale with the permission but dated before the item came in was not refused (${beforeStock ?? 'accepted'})`);
 
   const sameDay = await rejection(() => sell(item.id, 1, wh, '2025-08-10'));
-  if (sameDay) problems.push(`فروش هم‌روز با آخرین گردش رد شد: ${sameDay}`);
+  if (sameDay) problems.push(`sale on the same day as the last movement was refused: ${sameDay}`);
 
   const voided = await sell(item.id, 2, wh, '2025-08-12');
   await DocumentService.deleteDocument(voided, 'inv');
   const reissue = await rejection(() => sell(item.id, 2, wh, '2025-08-11'));
-  if (reissue) problems.push(`ثبت دوباره پس از ابطال با تاریخ پیش از سند ابطال‌شده رد شد: ${reissue}`);
-  await stockIs(8, 'پس از ابطال و ثبت دوباره');
+  if (reissue) problems.push(`re-recording after a void, dated before the voided document, was refused: ${reissue}`);
+  await stockIs(8, 'after the void and re-recording');
 
   const draftId = await sell(item.id, 1, wh, '2025-08-02', false, 'draft');
   const finalizeUnpermitted = await rejection(() => DocumentService.finalizeDocument(draftId, 'inv'));
-  if (!finalizeUnpermitted?.includes('تاریخ گذشته')) problems.push(`نهایی‌سازی پیش‌نویس با تاریخ گذشته بی‌مجوز رد نشد (${finalizeUnpermitted ?? 'پذیرفته شد'})`);
+  if (!finalizeUnpermitted?.includes('تاریخ گذشته')) problems.push(`finalizing a backdated draft without the permission was not refused (${finalizeUnpermitted ?? 'accepted'})`);
   const finalizePermitted = await rejection(() => DocumentService.finalizeDocument(draftId, 'inv', undefined, { allowBackdate: true }));
-  if (finalizePermitted) problems.push(`نهایی‌سازی پیش‌نویس با تاریخ گذشته با مجوز رد شد: ${finalizePermitted}`);
-  await stockIs(7, 'پس از نهایی‌سازی مجاز');
+  if (finalizePermitted) problems.push(`finalizing a backdated draft with the permission was refused: ${finalizePermitted}`);
+  await stockIs(7, 'after the permitted finalize');
 
   const second = await createTestWarehouse();
   const transfer = await rejection(() => InventoryIntegrityService.executeWarehouseTransfer({
     itemId: item.id, fromLocation: wh, toLocation: second.code, quantity: 1, date: '2025-08-03', user: 'inv',
   }));
-  if (!transfer?.includes('تاریخ گذشته')) problems.push(`انتقال با تاریخ گذشته بی‌مجوز رد نشد (${transfer ?? 'پذیرفته شد'})`);
+  if (!transfer?.includes('تاریخ گذشته')) problems.push(`backdated transfer without the permission was not refused (${transfer ?? 'accepted'})`);
 
-  problems.push(...await invariantProblems(scope, 'پایان سناریوی تاریخ'));
+  problems.push(...await invariantProblems(scope, 'end of the date scenario'));
   return problems;
 }
 
@@ -97,7 +98,7 @@ export async function probeVoidConsumedReceipt(wh: string): Promise<boolean> {
   await receive(item.id, 10, 100000, wh, '2025-10-03');
   if (await rejection(() => DocumentService.deleteDocument(first, 'inv'))) return false;
   const violations = await checkBusinessInvariants({ ...mark, itemIds: [item.id] });
-  return violations.some(v => v.invariant === 'I13_kardex_rebuild_wac' && v.message.includes('ابطال'));
+  return violations.some(v => v.invariant === 'I13_kardex_rebuild_wac' && v.message.includes(I13_VOIDED_INCOMING));
 }
 
 /**
@@ -116,24 +117,24 @@ export async function checkVoidConsumedReceiptRefused(wh: string): Promise<strin
 
   const refused = await rejection(() => DocumentService.deleteDocument(consumed, 'inv'));
   const saleRef = await refOf(sale);
-  if (!refused?.includes('مصرف') || !refused.includes(saleRef)) problems.push(`ابطال رسیدِ مصرف‌شده با نام سند مصرف‌کننده (${saleRef}) رد نشد (${refused ?? 'پذیرفته شد'})`);
+  if (!refused?.includes('مصرف') || !refused.includes(saleRef)) problems.push(`voiding a consumed receipt was not refused with the consuming document's number (${saleRef}) (${refused ?? 'accepted'})`);
   const afterRefused = await itemState(item.id);
   if (afterRefused.stock !== before.stock || afterRefused.wac !== before.wac || await isDeleted(consumed)) {
-    problems.push(`ابطال ردشده اثر گذاشت: ${JSON.stringify({ before, afterRefused })}`);
+    problems.push(`the refused void had an effect: ${JSON.stringify({ before, afterRefused })}`);
   }
 
   // رسید بعدی مصرف نشده (فروش را رسید اول پوشش می‌دهد): ابطال آزاد است
   const laterVoid = await rejection(() => DocumentService.deleteDocument(later, 'inv'));
-  if (laterVoid) problems.push(`ابطال رسیدِ مصرف‌نشده رد شد: ${laterVoid}`);
+  if (laterVoid) problems.push(`void of the unconsumed receipt was refused: ${laterVoid}`);
   // سند خروجی همیشه ابطال‌پذیر است؛ پس از آن رسید اول دیگر مصرف‌شده نیست
   const saleVoid = await rejection(() => DocumentService.deleteDocument(sale, 'inv'));
-  if (saleVoid) problems.push(`ابطال فاکتور فروش رد شد: ${saleVoid}`);
+  if (saleVoid) problems.push(`void of the sales invoice was refused: ${saleVoid}`);
   const consumedVoid = await rejection(() => DocumentService.deleteDocument(consumed, 'inv'));
-  if (consumedVoid) problems.push(`ابطال رسید پس از ابطال فروشِ مصرف‌کننده رد شد: ${consumedVoid}`);
+  if (consumedVoid) problems.push(`void of the receipt after voiding the consuming sale was refused: ${consumedVoid}`);
   const { stock } = await itemState(item.id);
-  if (stock !== 0) problems.push(`موجودی پس از ابطال همه اسناد ${stock} است، نه صفر`);
+  if (stock !== 0) problems.push(`stock after voiding all documents is ${stock}, not zero`);
 
-  problems.push(...await invariantProblems(scope, 'پایان سناریوی ابطال ورودی'));
+  problems.push(...await invariantProblems(scope, 'end of the incoming void scenario'));
   return problems;
 }
 
@@ -185,17 +186,17 @@ export async function checkRebuildMatchesLiveEngine(wh: string): Promise<string[
   await sell(backdatedItem.id, 4, wh, '2025-09-12');
   await receive(backdatedItem.id, 5, 400000, wh, '2025-09-05', true);
 
-  problems.push(...await invariantProblems(scope, 'پیش از بازسازی'));
+  problems.push(...await invariantProblems(scope, 'before rebuild'));
   for (const [label, itemId] of [['ابطال رسید فروخته‌شده', voidedReceiptItem.id], ['رسید با تاریخ گذشته', backdatedItem.id]] as const) {
     const before = await itemState(itemId);
     const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(itemId, { user: 'inv' });
     const after = await itemState(itemId);
     // v9.0.90 (TD-487): بازسازی فقط مقدار را می‌سازد؛ WAC بازپخش کاردکس که گزارش می‌کند همان WAC زنده است
     if (after.stock !== before.stock || fin(rebuilt.replayWac).subtract(fin(before.wac)).abs().greaterThan(fin(0.01))) {
-      problems.push(`${label}: بازسازی کاردکس موجودی را تغییر داد یا بازپخش به WAC دیگری رسید (${before.wac} × ${before.stock} ← ${rebuilt.replayWac} × ${after.stock})`);
+      problems.push(`${label}: Kardex rebuild changed the stock or the replay reached another WAC (${before.wac} × ${before.stock} -> ${rebuilt.replayWac} × ${after.stock})`);
     }
   }
-  problems.push(...await invariantProblems(scope, 'پس از بازسازی'));
+  problems.push(...await invariantProblems(scope, 'after rebuild'));
   return problems;
 }
 
@@ -217,23 +218,23 @@ export async function checkRunningKardexShowsVoided(wh: string): Promise<string[
   const { stock, wac } = await itemState(item.id);
   const last = report.entries[report.entries.length - 1];
   if (!last || last.runningBalance !== stock || report.summary.netBalance !== stock) {
-    problems.push(`مانده پایانی گزارش ${last?.runningBalance}/${report.summary.netBalance} با موجودی ${stock} یکی نیست`);
+    problems.push(`report closing balance ${last?.runningBalance}/${report.summary.netBalance} does not equal stock ${stock}`);
   }
-  if (last && last.runningLocationStock !== stock) problems.push(`مانده انبار در ردیف پایانی ${last.runningLocationStock}، انتظار ${stock}`);
+  if (last && last.runningLocationStock !== stock) problems.push(`warehouse balance on the last row ${last.runningLocationStock}, expected ${stock}`);
   const voided = report.entries.filter(e => e.isVoided);
   const reversals = report.entries.filter(e => e.isReversal);
-  if (voided.length !== 2 || reversals.length !== 2) problems.push(`دو ردیف باطل‌شده و دو ردیف معکوس انتظار می‌رفت: ${voided.length} / ${reversals.length}`);
+  if (voided.length !== 2 || reversals.length !== 2) problems.push(`two voided rows and two reversal rows were expected: ${voided.length} / ${reversals.length}`);
   if (report.summary.totalIn !== 10 || report.summary.totalOut !== 0) {
-    problems.push(`جمع ورود/خروج باید فقط گردش واقعی باشد (۱۰ / ۰): ${report.summary.totalIn} / ${report.summary.totalOut}`);
+    problems.push(`in/out totals must count only real movements (10 / 0): ${report.summary.totalIn} / ${report.summary.totalOut}`);
   }
-  if (report.entries.some(e => e.runningBalance < 0)) problems.push('مانده جاری گزارش جایی منفی شد');
-  if (!last || fin(last.runningWac).subtract(fin(wac)).abs().greaterThan(fin(0.01))) problems.push(`WAC پایانی گزارش ${last?.runningWac} با WAC کالا ${wac} یکی نیست`);
+  if (report.entries.some(e => e.runningBalance < 0)) problems.push('report running balance went negative somewhere');
+  if (!last || fin(last.runningWac).subtract(fin(wac)).abs().greaterThan(fin(0.01))) problems.push(`report closing WAC ${last?.runningWac} does not equal the item WAC ${wac}`);
   // WAC هر ردیف = WAC موتور زنده بلافاصله پس از ثبت همان ردیف (رسید ۵ × ۱۶۰٬۰۰۰ پس از ۱۰ × ۱۰۰٬۰۰۰ ← ۱۲۰٬۰۰۰)
   const extraRow = report.entries.find(e => e.isVoided && e.type === 'in');
   if (!extraRow || fin(extraRow.runningWac).subtract(fin(120000)).abs().greaterThan(fin(0.01))) {
-    problems.push(`WAC ردیف رسید ابطال‌شده باید WAC پس از ثبت آن (۱۲۰٬۰۰۰) باشد: ${extraRow?.runningWac}`);
+    problems.push(`WAC of the voided receipt row must be the WAC after it was recorded (120,000): ${extraRow?.runningWac}`);
   }
-  if (Math.abs(report.summary.valuation - stock * Number(wac)) > 0.01) problems.push(`ارزش خلاصه ${report.summary.valuation}، انتظار ${stock * Number(wac)}`);
+  if (Math.abs(report.summary.valuation - stock * Number(wac)) > 0.01) problems.push(`summary value ${report.summary.valuation}, expected ${stock * Number(wac)}`);
   return problems;
 }
 
@@ -268,12 +269,12 @@ export async function checkReplayStartsAtZeroWac(wh: string): Promise<string[]> 
   ];
   for (const [label, itemId, wac] of expected) {
     const live = await itemState(itemId);
-    if (!fin(live.wac).equals(fin(wac))) problems.push(`${label}: WAC زنده ${live.wac}، انتظار ${wac}`);
+    if (!fin(live.wac).equals(fin(wac))) problems.push(`${label}: live WAC ${live.wac}, expected ${wac}`);
   }
-  problems.push(...await invariantProblems(scope, 'پیش از بازسازی'));
+  problems.push(...await invariantProblems(scope, 'before rebuild'));
   for (const [label, itemId, wac] of expected) {
     const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(itemId, { user: 'inv' });
-    if (fin(rebuilt.replayWac).subtract(fin(wac)).abs().greaterThan(fin(0.01))) problems.push(`${label}: بازپخش کاردکس WAC را ${rebuilt.replayWac} داد، انتظار ${wac}`);
+    if (fin(rebuilt.replayWac).subtract(fin(wac)).abs().greaterThan(fin(0.01))) problems.push(`${label}: Kardex replay gave WAC ${rebuilt.replayWac}, expected ${wac}`);
   }
   return problems;
 }

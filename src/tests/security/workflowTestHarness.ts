@@ -95,7 +95,7 @@ export async function runCase(
     h = await createHarness();
     const wrong: string[] = [];
     await body(h, wrong);
-    if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+    if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({ id: meta.id, name: meta.name, layer: 'security', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart, details: meta.details }));
   } catch (err) {
     results.push(makeTestCase({

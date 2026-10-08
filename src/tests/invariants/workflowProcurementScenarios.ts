@@ -47,10 +47,10 @@ export async function checkRequisitionActionFollowsWorkflow(): Promise<string[]>
   await ProcurementService.executeWorkflowAction(id, 'receive_items', ADMIN);
   for (const action of ['reopen', 'reject_request', 'approve_request']) {
     const error = await refusal(() => ProcurementService.executeWorkflowAction(id, action, ADMIN));
-    if (!error) problems.push(`اقدام «${action}» روی درخواستِ دریافت‌شده پذیرفته شد`);
+    if (!error) problems.push(`Action "${action}" on a received requisition was accepted`);
     const after = await requisitionState(id);
     if (after.status !== 'received' || after.stateKey !== 'received') {
-      problems.push(`پس از «${action}» درخواستِ دریافت‌شده «${after.status}» و گام «${after.stateKey}» شد`);
+      problems.push(`After "${action}" the received requisition became "${after.status}" and the step "${after.stateKey}"`);
       break;
     }
   }
@@ -59,18 +59,18 @@ export async function checkRequisitionActionFollowsWorkflow(): Promise<string[]>
     requisitionId: id,
     orderGroups: [{ supplierName: 'تامین‌کننده آزمون گردش‌کار', targetWarehouse: '', status: 'final', items: [{ itemId: item.id, quantity: 10, unitPrice: 1000 }] }],
   } as Parameters<typeof ProcurementService.convertToPurchaseOrders>[0], ADMIN));
-  if (!reorder) problems.push('درخواستِ دریافت‌شده پس از بازگشایی دوباره به سفارش تبدیل شد');
+  if (!reorder) problems.push('The received requisition was converted to an order again after reopening');
   const { stock } = await itemState(item.id);
-  if (stock !== 10) problems.push(`موجودی کالای درخواست ۱۰ عددی ${stock} است، نه ۱۰`);
+  if (stock !== 10) problems.push(`Stock of the item of the 10-unit requisition is ${stock}, not 10`);
 
   // درخواست ردشده با «تأیید» میان‌بر سفارش نمی‌شود؛ فقط «بازگشایی» دارد
   const rejected = await requisition(item.id, 5);
   await ProcurementService.executeWorkflowAction(rejected, 'reject_request', ADMIN);
-  if (!(await refusal(() => ProcurementService.executeWorkflowAction(rejected, 'approve_request', ADMIN)))) problems.push('«تأیید» درخواستِ ردشده بی بازگشایی پذیرفته شد');
+  if (!(await refusal(() => ProcurementService.executeWorkflowAction(rejected, 'approve_request', ADMIN)))) problems.push('"Approve" on a rejected requisition without reopening was accepted');
   const reopenError = await refusal(() => ProcurementService.executeWorkflowAction(rejected, 'reopen', ADMIN));
-  if (reopenError) problems.push(`«بازگشایی» درخواستِ ردشده رد شد: ${reopenError}`);
+  if (reopenError) problems.push(`"Reopen" of the rejected requisition was refused: ${reopenError}`);
   const reopened = await requisitionState(rejected);
-  if (reopened.status !== 'pending' || reopened.stateKey !== 'pending') problems.push(`درخواستِ بازگشایی‌شده «${reopened.status}» و گام «${reopened.stateKey}» است`);
+  if (reopened.status !== 'pending' || reopened.stateKey !== 'pending') problems.push(`The reopened requisition is "${reopened.status}" and the step "${reopened.stateKey}"`);
   return problems;
 }
 
@@ -102,10 +102,10 @@ export async function checkReceiveApprovesInReceiverName(): Promise<string[]> {
   const history = await pool.query<{ action_key: string; performed_by: number | null }>(
     'SELECT action_key, performed_by FROM workflow_history_logs WHERE instance_id = $1 ORDER BY id', [instanceId]);
   const approval = history.rows.find(r => r.action_key === 'approve_request');
-  if (!approval) problems.push(`تأیید درخواست هنگام دریافت در تاریخچه ثبت نشد (${history.rows.map(r => r.action_key).join('، ') || 'خالی'})`);
-  else if (approval.performed_by !== receiver.id) problems.push(`تأیید هنگام دریافت به نام کاربر #${approval.performed_by ?? '-'} ثبت شد، نه دریافت‌کننده`);
-  if ((await requisitionState(id)).status !== 'received') problems.push('درخواست پس از تأیید و دریافت «دریافت‌شده» نشد');
-  if ((await itemState(item.id)).stock !== 4) problems.push('کالای درخواست تأییدشده هنگام دریافت وارد انبار نشد');
+  if (!approval) problems.push(`the requisition approval at receipt was not recorded in the history (${history.rows.map(r => r.action_key).join(', ') || 'empty'})`);
+  else if (approval.performed_by !== receiver.id) problems.push(`The approval at receipt was recorded in the name of user #${approval.performed_by ?? '-'}, not the receiver`);
+  if ((await requisitionState(id)).status !== 'received') problems.push('The requisition did not become "received" after approval and receipt');
+  if ((await itemState(item.id)).stock !== 4) problems.push('The items of the requisition approved at receipt did not enter the warehouse');
 
   // گام تأییدی که نقش مدیر می‌خواهد: دریافت‌کننده بی آن نقش رد می‌شود و کالایی وارد انبار نمی‌شود
   const guarded = await requisition(item.id, 6);
@@ -117,9 +117,9 @@ export async function checkReceiveApprovesInReceiverName(): Promise<string[]> {
   for (const t of dsl.transitions) if (t.actionKey === 'approve_request') t.requiredRole = 'manager';
   await pool.query('UPDATE workflow_instances SET snapshot_dsl = $2 WHERE id = $1', [guardedInstance, JSON.stringify(dsl)]);
   const status = await refusalStatus(() => ProcurementService.executeWorkflowAction(guarded, 'receive_items', asReceiver));
-  if (status !== 403) problems.push(`دریافت درخواستِ تأییدنشده توسط کاربر بی نقش تأیید ${status === null ? 'پذیرفته شد' : `با کد ${status} رد شد`}، نه ۴۰۳`);
+  if (status !== 403) problems.push(`receiving an unapproved requisition by a user without the approving role ${status === null ? 'was accepted' : `was refused with code ${status}`}, not 403`);
   const after = await requisitionState(guarded);
-  if (after.status !== 'pending' || after.stateKey !== 'pending') problems.push(`درخواست پس از دریافت ردشده «${after.status}» و گام «${after.stateKey}» است`);
-  if ((await itemState(item.id)).stock !== 4) problems.push('کالای درخواستِ تأییدنشده بی اجازه تأیید وارد انبار شد');
+  if (after.status !== 'pending' || after.stateKey !== 'pending') problems.push(`After the refused receipt the requisition is "${after.status}" and the step "${after.stateKey}"`);
+  if ((await itemState(item.id)).stock !== 4) problems.push('The items of the unapproved requisition entered the warehouse without approval rights');
   return problems;
 }

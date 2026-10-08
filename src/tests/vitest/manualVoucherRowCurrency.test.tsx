@@ -75,7 +75,7 @@ describe('manual voucher row currency and rate (TD-564)', () => {
     expect(savedRows(onSave)).toEqual(['USD@600000:100/0', 'USD@600000:0/100']);
   });
 
-  it('the currency list is the treasury list; «تومان» is not offered', () => {
+  it('the currency list is the treasury list; "toman" is not offered', () => {
     fetchJson.mockResolvedValue({});
     renderNew();
     const select = screen.getByDisplayValue('ریال (IRR)') as HTMLSelectElement;

@@ -121,7 +121,7 @@ async function checkThreeWayStock(scope: InvariantScope): Promise<InvariantViola
       violations.push({
         invariant: 'I2_three_way_stock',
         key: `item:${it.id}`,
-        message: `موجودی سه‌طرفه کالا ${it.id} یکی نیست (items.current_stock / item_warehouse_stocks / کاردکس)`,
+        message: `three-way stock of item ${it.id} does not match (items.current_stock / item_warehouse_stocks / Kardex)`,
         expected: kardex.toString(),
         actual: `${cached.toString()} / ${table.toString()}`,
       });
@@ -138,7 +138,7 @@ async function checkThreeWayStock(scope: InvariantScope): Promise<InvariantViola
       violations.push({
         invariant: 'I2_warehouse_stock',
         key: `item-wh:${key}`,
-        message: `موجودی انبار ${key} با مانده کاردکس همان انبار یکی نیست`,
+        message: `warehouse stock ${key} does not match the Kardex balance of the same warehouse`,
         expected: kardex.toString(),
         actual: table.toString(),
       });
@@ -229,7 +229,7 @@ async function checkOneVoucherPerDocument(scope: InvariantScope): Promise<Invari
       violations.push({
         invariant: 'I4_one_voucher_per_document',
         key: `doc:${d.id}`,
-        message: `سند ${d.type} شماره ${d.ref_number}${d.is_deleted ? ' (ابطال‌شده)' : ''} ${count} سند حسابداری فعال دارد`,
+        message: `${d.type} document ${d.ref_number}${d.is_deleted ? ' (voided)' : ''} has ${count} active journal vouchers`,
         expected: '1',
         actual: String(count),
       });
@@ -251,7 +251,7 @@ async function checkOneVoucherPerDocument(scope: InvariantScope): Promise<Invari
     violations.push({
       invariant: 'I4_one_voucher_per_document',
       key: `doc-void:${r.id}`,
-      message: `سند ابطال‌شده ${r.ref_number} روی حساب ${r.account_id} اثر خالص غیرصفر دارد`,
+      message: `voided document ${r.ref_number} has a nonzero net effect on account ${r.account_id}`,
       expected: '0',
       actual: r.net,
     });
@@ -307,7 +307,7 @@ async function checkInvoiceReceivable(scope: InvariantScope): Promise<InvariantV
       violations.push({
         invariant: 'I5_invoice_receivable',
         key: `doc:${inv.id}`,
-        message: `بدهکاری مشتری فاکتور ${inv.ref_number} با مبلغ قابل پرداخت آن یکی نیست`,
+        message: `customer debit of invoice ${inv.ref_number} does not match its payable amount`,
         expected: payable.toString(),
         actual: debit.toString(),
       });

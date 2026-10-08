@@ -134,7 +134,7 @@ export async function seedFixtureItemStocks(itemId: number, stocks: Record<strin
     if (qty <= 0) continue;
     const k = key.trim().toLowerCase();
     const wh = !k ? defaultWh : all.find((w: any) => w.code.toLowerCase() === k) ?? all.find((w: any) => (w.name || '').trim().toLowerCase() === k);
-    if (!wh) throw new Error(`seedFixtureItemStocks: انبار «${key}» وجود ندارد`);
+    if (!wh) throw new Error(`seedFixtureItemStocks: warehouse "${key}" does not exist`);
     const prev = qtyByWarehouse.get(wh.id);
     qtyByWarehouse.set(wh.id, { code: wh.code, qty: (prev?.qty ?? 0) + qty });
   }

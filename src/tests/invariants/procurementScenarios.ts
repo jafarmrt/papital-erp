@@ -49,9 +49,9 @@ export async function checkProcurementDeliveryIncomingOnly(wh: string): Promise<
   }
   const proformaRow = await docRow(salesProforma);
   if (!refused?.includes('سند خرید نیست') || proformaRow?.type !== 'proforma' || proformaRow.status !== 'proforma') {
-    problems.push(`تحویل تدارکات پیش‌فاکتور فروش را رد نکرد (${refused ?? 'پذیرفته شد'}؛ ${JSON.stringify(proformaRow)})`);
+    problems.push(`procurement delivery did not refuse a sales proforma (${refused ?? 'accepted'}; ${JSON.stringify(proformaRow)})`);
   }
-  if ((await itemState(item.id)).stock !== 10) problems.push('تحویل ردشده موجودی را تغییر داد');
+  if ((await itemState(item.id)).stock !== 10) problems.push('the refused delivery changed the stock');
 
   // ب) «پیش‌فاکتور خرید» تدارکات: رسید با وضعیت پیش‌فاکتور؛ تحویلش ورود کالاست، نه فروش
   const requisition = await ProcurementService.createRequisition({
@@ -64,11 +64,11 @@ export async function checkProcurementDeliveryIncomingOnly(wh: string): Promise<
   }, USER);
   const orderId = Number(createdDocuments[0]?.id);
   const orderRow = await docRow(orderId);
-  if (orderRow?.type !== 'receipt' || orderRow.status !== 'proforma') problems.push(`پیش‌فاکتور خرید تدارکات باید رسید با وضعیت پیش‌فاکتور باشد: ${JSON.stringify(orderRow)}`);
+  if (orderRow?.type !== 'receipt' || orderRow.status !== 'proforma') problems.push(`a procurement purchase proforma must be a receipt with status proforma: ${JSON.stringify(orderRow)}`);
   await ProcurementService.deliverOrderToWarehouse(orderId, USER);
   const afterDelivery = await itemState(item.id);
-  if (afterDelivery.stock !== 14) problems.push(`تحویل پیش‌فاکتور خرید باید ۴ عدد وارد انبار کند: موجودی ${afterDelivery.stock}، انتظار ۱۴`);
-  if (await salesAccountLines(orderId) > 0) problems.push('تحویل پیش‌فاکتور خرید سند فروش (درآمد فروش یا بهای تمام‌شده) ساخت');
+  if (afterDelivery.stock !== 14) problems.push(`delivering the purchase proforma must bring 4 units into the warehouse: stock ${afterDelivery.stock}, expected 14`);
+  if (await salesAccountLines(orderId) > 0) problems.push('delivering the purchase proforma created a sales voucher (sales revenue or cost of sales)');
 
   // ج) نهایی‌سازی سند نوع purchase ورود کالاست (همان قاعده ثبت سند)
   const purchaseDraft = await DocumentService.createDocument({
@@ -77,9 +77,9 @@ export async function checkProcurementDeliveryIncomingOnly(wh: string): Promise<
   });
   await DocumentService.finalizeDocument(purchaseDraft, 'inv');
   const afterPurchase = await itemState(item.id);
-  if (afterPurchase.stock !== 16) problems.push(`نهایی‌سازی سند خرید (purchase) باید ۲ عدد وارد انبار کند: موجودی ${afterPurchase.stock}، انتظار ۱۶`);
+  if (afterPurchase.stock !== 16) problems.push(`finalizing the purchase document (purchase) must bring 2 units into the warehouse: stock ${afterPurchase.stock}, expected 16`);
 
-  problems.push(...await invariantProblems(scope, 'پایان سناریوی تدارکات'));
+  problems.push(...await invariantProblems(scope, 'end of the procurement scenario'));
   return problems;
 }
 
@@ -119,13 +119,13 @@ export async function checkSplitOrderFormAccepted(): Promise<string[]> {
   const lines = await pool.query<{ location: string; status: string }>(
     `SELECT di.location, d.status FROM document_items di JOIN documents d ON d.id = di.document_id
       WHERE di.item_id = $1 AND di.is_deleted = 0 AND d.is_deleted = 0 AND d.id = ANY($2::int[])`, [item.id, created]);
-  if (lines.rows.length !== 1) problems.push(`سفارش ساخته‌شده ${lines.rows.length} سطر دارد، انتظار ۱`);
+  if (lines.rows.length !== 1) problems.push(`the created order has ${lines.rows.length} lines, expected 1`);
   else {
-    if (lines.rows[0].location !== target.code) problems.push(`انبار مقصد سفارش «${lines.rows[0].location}»، انتظار «${target.code}»`);
-    if (lines.rows[0].status !== 'draft') problems.push(`وضعیت سفارش ${lines.rows[0].status}، انتظار draft`);
+    if (lines.rows[0].location !== target.code) problems.push(`order target warehouse "${lines.rows[0].location}", expected "${target.code}"`);
+    if (lines.rows[0].status !== 'draft') problems.push(`order status ${lines.rows[0].status}, expected draft`);
   }
   const ordered = (await ProcurementService.getRequisitionById(req.id)).items as unknown as Array<{ orderedQty?: number }>;
-  if (Number(ordered[0]?.orderedQty ?? 0) !== 5) problems.push(`مقدار سفارش‌شده درخواست ${ordered[0]?.orderedQty}، انتظار ۵`);
+  if (Number(ordered[0]?.orderedQty ?? 0) !== 5) problems.push(`requisition ordered quantity ${ordered[0]?.orderedQty}, expected 5`);
   return problems;
 }
 
@@ -155,39 +155,39 @@ export async function checkRequisitionOverOrderNeedsReason(wh: string): Promise<
   // درخواست ۱۰ کامل سفارش داده می‌شود (بی‌دلیل، چون بیش از درخواست نیست)
   const full = await ProcurementService.createRequisition({ title: 'درخواست آزمون سفارش دوباره', items: [{ itemId: item.id, requestedQty: 10, unitPriceEstimate: 1000 } as never] }, USER);
   const first = await refusal(() => convert(full.id, [group(10)]));
-  if (first) problems.push(`سفارش ۱۰ از ۱۰ رد شد: ${first}`);
+  if (first) problems.push(`ordering 10 of 10 was refused: ${first}`);
 
   const again = await refusal(() => convert(full.id, [group(10)]));
-  if (!again?.includes('دلیل')) problems.push(`سفارش دوباره درخواستِ کامل‌سفارش‌شده بی‌دلیل رد نشد (${again ?? 'پذیرفته شد'})`);
+  if (!again?.includes('دلیل')) problems.push(`ordering a fully ordered requisition again without a reason was not refused (${again ?? 'accepted'})`);
   const form = await postSplitOrderForm(full.id, { orderGroups: [{ ...group(10), docType: 'receipt', status: 'draft', items: [{ itemId: item.id, itemName: item.name, quantity: 10, unitPrice: 1000 }] }] });
-  if (form.status !== 422 || form.body.code !== 'OVER_ORDER_REASON_REQUIRED') problems.push(`فرم بی‌دلیل: ${form.status} / ${String(form.body.code)}، انتظار 422 / OVER_ORDER_REASON_REQUIRED`);
+  if (form.status !== 422 || form.body.code !== 'OVER_ORDER_REASON_REQUIRED') problems.push(`form without a reason: ${form.status} / ${String(form.body.code)}, expected 422 / OVER_ORDER_REASON_REQUIRED`);
   const refused = await requisitionState(full.id);
-  if (refused.ordered !== 10 || refused.orders.length !== 1) problems.push(`پس از ردها: سفارش‌شده ${refused.ordered} در ${refused.orders.length} سند، انتظار ۱۰ در ۱ سند`);
+  if (refused.ordered !== 10 || refused.orders.length !== 1) problems.push(`after the refusals: ordered ${refused.ordered} in ${refused.orders.length} documents, expected 10 in 1 document`);
 
   const reason = 'حداقل تیراژ تامین‌کننده';
   const withReason = await refusal(() => convert(full.id, [group(4)], reason));
-  if (withReason) problems.push(`سفارش اضافه با دلیل رد شد: ${withReason}`);
+  if (withReason) problems.push(`extra order with a reason was refused: ${withReason}`);
   const accepted = await requisitionState(full.id);
   const record = accepted.overOrders[0];
-  if (accepted.ordered !== 14) problems.push(`سفارش‌شده پس از سفارش اضافه ${accepted.ordered}، انتظار ۱۴`);
-  if (!record || record.quantity !== 4 || record.reason !== reason || record.documentIds.length !== 1) problems.push(`ثبت سفارش اضافه روی ردیف: ${JSON.stringify(accepted.overOrders)}`);
-  if (!accepted.notes.includes(reason)) problems.push('دلیل سفارش اضافه در یادداشت درخواست نیامد');
+  if (accepted.ordered !== 14) problems.push(`ordered after the extra order ${accepted.ordered}, expected 14`);
+  if (!record || record.quantity !== 4 || record.reason !== reason || record.documentIds.length !== 1) problems.push(`extra order record on the row: ${JSON.stringify(accepted.overOrders)}`);
+  if (!accepted.notes.includes(reason)) problems.push('extra order reason did not appear in the requisition notes');
   const extraOrder = accepted.orders.find(o => o.id === record?.documentIds[0]);
-  if (!extraOrder?.notes.includes(reason)) problems.push('دلیل سفارش اضافه در یادداشت سند سفارش نیامد');
+  if (!extraOrder?.notes.includes(reason)) problems.push('extra order reason did not appear in the order document notes');
 
   // بیشتر از مانده: فقط اضافه (۲ از ۷) دلیل‌دار است
   const partial = await ProcurementService.createRequisition({ title: 'درخواست آزمون مانده', items: [{ itemId: item.id, requestedQty: 5, unitPriceEstimate: 1000 } as never] }, USER);
   const partialRefusal = await refusal(() => convert(partial.id, [group(7)]));
-  if (!partialRefusal?.includes('۲ بیش از درخواست')) problems.push(`سفارش ۷ برای ۵ بی‌دلیل: ${partialRefusal ?? 'پذیرفته شد'}، انتظار رد با «۲ بیش از درخواست»`);
+  if (!partialRefusal?.includes('۲ بیش از درخواست')) problems.push(`ordering 7 of 5 without a reason: ${partialRefusal ?? 'accepted'}; expected a refusal naming the excess of 2`);
   await convert(partial.id, [group(7)], 'پک ۷ تایی');
   const partialState = await requisitionState(partial.id);
-  if (partialState.overOrders[0]?.quantity !== 2) problems.push(`مقدار ثبت‌شده سفارش اضافه ${partialState.overOrders[0]?.quantity}، انتظار ۲`);
+  if (partialState.overOrders[0]?.quantity !== 2) problems.push(`recorded extra order quantity ${partialState.overOrders[0]?.quantity}, expected 2`);
 
   // تبدیل یک‌جا: بسته دوم با کالای ناموجود شکست می‌خورد و سفارش بسته اول هم نمی‌ماند
   const atomic = await ProcurementService.createRequisition({ title: 'درخواست آزمون یک‌جا', items: [{ itemId: item.id, requestedQty: 5, unitPriceEstimate: 1000 } as never] }, USER);
   const broken = await refusal(() => convert(atomic.id, [group(5), group(1, 2_000_000_000)], 'آزمون شکست'));
   const atomicState = await requisitionState(atomic.id);
-  if (!broken) problems.push('تبدیل با کالای ناموجود پذیرفته شد');
-  if (atomicState.orders.length !== 0 || atomicState.ordered !== 0) problems.push(`پس از شکست بسته دوم: ${atomicState.orders.length} سند و سفارش‌شده ${atomicState.ordered}، انتظار ۰ و ۰`);
+  if (!broken) problems.push('conversion with a non-existent item was accepted');
+  if (atomicState.orders.length !== 0 || atomicState.ordered !== 0) problems.push(`after the second package failed: ${atomicState.orders.length} documents and ordered ${atomicState.ordered}, expected 0 and 0`);
   return problems;
 }

@@ -29,7 +29,7 @@ describe('draft documents in the invoices list', () => {
     expect(summary.otherCount).toBe(2);
   });
 
-  it('details card shows پیش‌نویس for a draft', () => {
+  it('details card shows the Persian "draft" label for a draft', () => {
     render(<InvoiceDetailsInfoCards selectedDocDetails={{ id: 5, type: 'invoice', status: 'draft', currency: 'IRR' }} />);
     expect(screen.getByText('پیش‌نویس')).toBeTruthy();
     expect(screen.queryByText('نهایی‌شده')).toBeNull();

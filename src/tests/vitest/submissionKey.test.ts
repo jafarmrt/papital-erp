@@ -29,8 +29,8 @@ afterEach(() => {
   setCsrfToken(null);
 });
 
-describe('کلید تکرار درخواست از محتوای ارسال (TD-329)', () => {
-  it('دو ارسال هم‌زمان یک محتوا یک کلید می‌گیرند و محتوای دیگر کلید دیگر', async () => {
+describe('Request idempotency key from the submitted content (TD-329)', () => {
+  it('two concurrent submissions of the same content get one key and other content gets another key', async () => {
     let release: () => void = () => undefined;
     const gate = new Promise<void>(resolve => { release = resolve; });
     fetchMock.mockImplementation(async () => { await gate; return reply(201, { id: 1 }); });
@@ -44,7 +44,7 @@ describe('کلید تکرار درخواست از محتوای ارسال (TD-32
     expect(sentKey(2)).not.toBe(sentKey(0));
   });
 
-  it('ارسال دوباره کاربر پس از خطای شبکه همان کلید را دارد و پس از پاسخ موفق کلید تازه', async () => {
+  it('a user resubmission after a network error keeps the same key, and a successful response gives a new key', async () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
     await expect(fetchJson('/accounting/treasury', pay(500))).rejects.toThrow(UNCONFIRMED_MUTATION_MESSAGE);
     // v9.0.307 (TD-670): ثبت خودکار دوباره فرستاده نمی‌شود
@@ -59,7 +59,7 @@ describe('کلید تکرار درخواست از محتوای ارسال (TD-32
     expect(sentKey(1)).not.toBe(lostKey);
   });
 
-  it('پاسخ ۴۰۹ «در حال پردازش» با همان کلید منتظر نتیجه درخواست اول می‌ماند', async () => {
+  it('a 409 "in progress" response waits with the same key for the result of the first request', async () => {
     fetchMock
       .mockResolvedValueOnce(reply(409, { code: 'IDEMPOTENCY_IN_FLIGHT', error: 'درخواست تکراری در حال پردازش است.' }, { 'Retry-After': '0.5' }))
       .mockResolvedValueOnce(reply(201, { id: 12, amount: 300 }));
@@ -69,7 +69,7 @@ describe('کلید تکرار درخواست از محتوای ارسال (TD-32
     expect(sentKey(1)).toBe(sentKey(0));
   });
 
-  it('پاسخ خطای برنامه کلید را آزاد می‌کند و options فراخواننده تغییر نمی‌کند', async () => {
+  it('an application error response releases the key and the caller options are not changed', async () => {
     const options = pay(400);
     fetchMock.mockResolvedValueOnce(reply(422, { error: 'موجودی کافی نیست', code: 'VALIDATION_ERROR' }));
     await expect(fetchJson('/accounting/treasury', options)).rejects.toThrow('موجودی کافی نیست');

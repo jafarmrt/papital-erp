@@ -53,7 +53,7 @@ function main(): void {
   try {
     report = JSON.parse(raw);
   } catch {
-    console.error('❌ Audit Gate: خروجی npm audit قابل پارس نیست (JSON نامعتبر).');
+    console.error('❌ Audit Gate: the npm audit output cannot be parsed (invalid JSON).');
     process.exit(1);
   }
 
@@ -78,7 +78,7 @@ function main(): void {
       const id = advisoryId(via.url);
       const line = `${pkg} [${via.severity || vuln.severity}] ${id} ${via.title || ''}`.trim();
       if (ALLOWED_ADVISORIES[id]) {
-        allowed.push(`${line} → استثنای ثبت‌شده: ${ALLOWED_ADVISORIES[id]}`);
+        allowed.push(`${line} → registered exception: ${ALLOWED_ADVISORIES[id]}`);
       } else {
         blocking.push(line);
       }
@@ -88,12 +88,12 @@ function main(): void {
   for (const line of allowed) console.warn(`⚠️  ${line}`);
 
   if (blocking.length > 0) {
-    console.error('❌ Audit Gate FAILED — آسیب‌پذیری High/Critical ثبت‌نشده در وابستگی‌های رانتایم:');
+    console.error('❌ Audit Gate FAILED: High/Critical vulnerabilities without a registered exception in runtime dependencies:');
     for (const line of blocking) console.error(`   - ${line}`);
     process.exit(1);
   }
 
-  console.log(`✅ Audit Gate OK — بدون آسیب‌پذیری High/Critical ثبت‌نشده (${allowed.length} استثنای ثبت‌شده).`);
+  console.log(`✅ Audit Gate OK: no High/Critical vulnerability without a registered exception (${allowed.length} registered exceptions).`);
 }
 
 main();

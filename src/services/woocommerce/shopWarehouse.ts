@@ -20,7 +20,7 @@ export async function resolveShopWarehouseCode(tx: DbExecutor): Promise<string> 
   if (wanted) {
     const [wh] = await tx.select({ code: warehouses.code }).from(warehouses).where(and(eq(warehouses.code, wanted), eq(warehouses.isActive, 1)));
     if (wh) return wh.code;
-    logger.warn({ message: `[WooCommerce] انبار فروشگاه «${wanted}» فعال نیست یا وجود ندارد؛ انبار پیش‌فرض به کار رفت.` });
+    logger.warn({ message: `[WooCommerce] shop warehouse "${wanted}" is inactive or missing; the default warehouse was used.` });
   }
   return (await getDefaultWarehouseCode(tx)) ?? 'main';
 }

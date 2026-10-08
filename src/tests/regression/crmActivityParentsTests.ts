@@ -14,7 +14,7 @@ export async function runCrmActivityParentsTests(shouldRun: (id: string, ...extr
   const id = 'reg_crm_activity_parents_exist_td_426';
   if (!shouldRun(id, 'td426', 'crm', 'activity', 'package9')) return results;
 
-  const name = 'v9.0.17: اقدام CRM با پرونده فروش یا طرف حساب ناموجود یا حذف‌شده با ۴۲۲ رد می‌شود و ردیفی ثبت نمی‌شود؛ شناسه متنی ۵۰۰ نمی‌دهد؛ اقدام با والد معتبر ثبت می‌شود (TD-426)';
+  const name = 'v9.0.17: a CRM activity with a missing or deleted lead or party is refused with 422 and no row is written; a text id gives no 500; an activity with valid parents is saved (TD-426)';
   const tStart = Date.now();
   const tag = `TD426-${String(Date.now()).slice(-6)}`;
   const leadIds: number[] = [];
@@ -54,17 +54,17 @@ export async function runCrmActivityParentsTests(shouldRun: (id: string, ...extr
       if (!statuses.includes(res.status)) wrong.push(`${label}: ${res.status}، نه ${statuses.join(' یا ')}`);
     }
     const stored = await orm.select({ id: crmActivities.id }).from(crmActivities).where(like(crmActivities.title, containsLikePattern(tag)));
-    if (stored.length > 0) wrong.push(`${stored.length} اقدام با والد نامعتبر ذخیره شد`);
+    if (stored.length > 0) wrong.push(`${stored.length} activities with an invalid parent were saved`);
 
     const ok = await post({ title: `اقدام معتبر ${tag}`, leadId: String(lead.id), customerId: party.id });
     if (ok.status !== 201 || ok.body?.leadId !== lead.id || ok.body?.customerId !== party.id) {
-      wrong.push(`اقدام با والد معتبر ${ok.status} داد (${JSON.stringify({ leadId: ok.body?.leadId, customerId: ok.body?.customerId })})`);
+      wrong.push(`An activity with a valid parent returned ${ok.status} (${JSON.stringify({ leadId: ok.body?.leadId, customerId: ok.body?.customerId })})`);
     }
 
-    if (wrong.length > 0) throw new Error(wrong.join('، '));
+    if (wrong.length > 0) throw new Error(wrong.join(', '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'پرونده و طرف حساب ناموجود یا حذف‌شده ۴۲۲ و بی ردیف؛ اقدام با پرونده و طرف حساب معتبر ۲۰۱',
+      details: 'A missing or deleted sales file or party is 422 with no row saved; an activity with a valid sales file and party is 201',
     }));
   } catch (err) {
     results.push(makeTestCase({

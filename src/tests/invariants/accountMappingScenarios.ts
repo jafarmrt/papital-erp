@@ -70,7 +70,7 @@ export async function checkVouchersFollowAccountMapping(wh: string): Promise<str
 
     const net = await netByAccountCode([receipt, production, sale, salesReturn, remittance]);
     for (const code of ['1401', '1403', '3001', '1201']) {
-      if (net.has(code)) problems.push(`حساب پیش‌فرض ${code} با وجود نگاشت سفارشی سطر گرفت (خالص ${net.get(code)})`);
+      if (net.has(code)) problems.push(`default account ${code} got rows despite the custom mapping (net ${net.get(code)})`);
     }
     // مواد: ۱۰ × ۱۰۰٬۰۰۰ − فروش ۴ + برگشت ۱ − حواله ۱ ← ۶ × ۱۰۰٬۰۰۰
     const expectations: Array<[string, string, string]> = [
@@ -80,16 +80,16 @@ export async function checkVouchersFollowAccountMapping(wh: string): Promise<str
     ];
     for (const [label, code, expected] of expectations) {
       const actual = net.get(code) ?? '0';
-      if (!fin(actual).equals(fin(expected))) problems.push(`${label} (${code}): خالص ${actual}، انتظار ${expected}`);
+      if (!fin(actual).equals(fin(expected))) problems.push(`${label} (${code}): net ${actual}, expected ${expected}`);
     }
     const receivable = fin(net.get(receivables.code) ?? 0);
     const saleDebit = await pool.query<{ d: string }>(
       `SELECT COALESCE(SUM(i.debit), 0)::text AS d FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id
         WHERE v.source_document_id = $1 AND v.is_deleted = 0 AND i.is_deleted = 0 AND i.account_id = $2`, [sale, receivables.id]);
     if (!fin(saleDebit.rows[0]?.d ?? 0).isPositive() || !receivable.lessThan(fin(saleDebit.rows[0]?.d ?? 0))) {
-      problems.push(`برگشت از فروش بدهکاران نگاشت‌شده را بستانکار نکرد: بدهکار فروش ${saleDebit.rows[0]?.d ?? 0}، خالص ${receivable.toString()}`);
+      problems.push(`the sales return did not credit the mapped receivables: sale debit ${saleDebit.rows[0]?.d ?? 0}, net ${receivable.toString()}`);
     }
-    problems.push(...await invariantProblems(scope, 'اسناد با نگاشت سفارشی'));
+    problems.push(...await invariantProblems(scope, 'documents with a custom mapping'));
   } finally {
     const restore: Pick<ConceptualAccountMappingConfig, MappedConcept> = {
       inventoryRawMaterialsCode: previous.inventoryRawMaterialsCode,

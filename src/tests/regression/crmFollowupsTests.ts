@@ -16,7 +16,7 @@ export async function runCrmFollowupsTests(shouldRun: (id: string, ...extra: str
   const id = 'reg_crm_open_followups_no_activity_range_td_428';
   if (!shouldRun(id, 'td428', 'crm', 'followup', 'package9')) return results;
 
-  const name = 'v9.0.14: پیگیری‌های باز بی بازه تاریخ اقدام و با صفحه‌بندی از سرور می‌آیند؛ پیگیری معوقِ اقدام ۴۰ روز پیش در فهرست «امروز و معوق» هست و شمار آن با کارت آمار یکی است (TD-428)';
+  const name = 'v9.0.14: open follow-ups come from the server paged and without an activity date range; a follow-up overdue from an activity 40 days ago is in the today and overdue list and its count matches the stats card (TD-428)';
   const tStart = Date.now();
   const activityIds: number[] = [];
   const personnelIds: number[] = [];
@@ -58,34 +58,34 @@ export async function runCrmFollowupsTests(shouldRun: (id: string, ...extra: str
     const search = `search=${encodeURIComponent(tag)}`;
 
     const due = await get(`/api/crm/followups?status=pending&due=due&${search}`);
-    if (due.status !== 200) throw new Error(`/api/crm/followups پاسخ ${due.status} داد (مسیر پیگیری‌های باز نیست)`);
+    if (due.status !== 200) throw new Error(`/api/crm/followups returned ${due.status} (the open follow-ups route is missing)`);
     if (JSON.stringify(idsOf(due.body)) !== JSON.stringify([oldOverdue, legacyAssignee])) {
-      wrong.push(`«امروز و معوق» ${JSON.stringify(idsOf(due.body))} آمد، نه [${oldOverdue}, ${legacyAssignee}] به ترتیب سررسید`);
+      wrong.push(`"Today and overdue" returned ${JSON.stringify(idsOf(due.body))}, not [${oldOverdue}, ${legacyAssignee}] in due-date order`);
     }
     const open = await get(`/api/crm/followups?${search}`);
-    if (JSON.stringify(idsOf(open.body)) !== JSON.stringify([oldOverdue, legacyAssignee, future])) wrong.push(`پیگیری‌های باز ${JSON.stringify(idsOf(open.body))} آمد`);
+    if (JSON.stringify(idsOf(open.body)) !== JSON.stringify([oldOverdue, legacyAssignee, future])) wrong.push(`Open follow-ups returned ${JSON.stringify(idsOf(open.body))}`);
     const completed = await get(`/api/crm/followups?status=completed&${search}`);
-    if (JSON.stringify(idsOf(completed.body)) !== JSON.stringify([done])) wrong.push(`پیگیری‌های انجام‌شده ${JSON.stringify(idsOf(completed.body))} آمد`);
-    if ([...idsOf(open.body), ...idsOf(completed.body)].includes(removed)) wrong.push('پیگیری حذف‌شده در فهرست آمد');
+    if (JSON.stringify(idsOf(completed.body)) !== JSON.stringify([done])) wrong.push(`Completed follow-ups returned ${JSON.stringify(idsOf(completed.body))}`);
+    if ([...idsOf(open.body), ...idsOf(completed.body)].includes(removed)) wrong.push('A deleted follow-up appeared in the list');
 
     const byAssignee = await get(`/api/crm/followups?assignedPersonnelId=${person.id}&${search}`);
-    if (JSON.stringify(idsOf(byAssignee.body)) !== JSON.stringify([oldOverdue, legacyAssignee])) wrong.push(`فیلتر مسئول ${JSON.stringify(idsOf(byAssignee.body))} داد`);
+    if (JSON.stringify(idsOf(byAssignee.body)) !== JSON.stringify([oldOverdue, legacyAssignee])) wrong.push(`The assignee filter returned ${JSON.stringify(idsOf(byAssignee.body))}`);
 
     const page1 = await get(`/api/crm/followups?${search}&limit=2&page=1`);
     const page2 = await get(`/api/crm/followups?${search}&limit=2&page=2`);
     if (page1.body.total !== 3 || page1.body.totalPages !== 2 || JSON.stringify([...idsOf(page1.body), ...idsOf(page2.body)]) !== JSON.stringify([oldOverdue, legacyAssignee, future])) {
-      wrong.push(`صفحه‌بندی: total=${page1.body.total}، صفحه‌ها=${page1.body.totalPages}، ردیف‌ها ${JSON.stringify([idsOf(page1.body), idsOf(page2.body)])}`);
+      wrong.push(`Paging: total=${page1.body.total}, pages=${page1.body.totalPages}, rows ${JSON.stringify([idsOf(page1.body), idsOf(page2.body)])}`);
     }
 
     // فهرست پیش‌فرض صفحه (بازه ۳۰ روزه اقدام) آن را نداشت؛ شمار سرور با کارت آمار یکی است
     const stats = await get('/api/crm/stats');
-    if (due.body.dueCount !== stats.body.pendingFollowupsCount) wrong.push(`dueCount=${due.body.dueCount} با کارت آمار ${String(stats.body.pendingFollowupsCount)} یکی نیست`);
-    if (open.body.openCount !== stats.body.openFollowupsCount) wrong.push(`openCount=${open.body.openCount} با شمار زبانه ${String(stats.body.openFollowupsCount)} یکی نیست`);
+    if (due.body.dueCount !== stats.body.pendingFollowupsCount) wrong.push(`dueCount=${due.body.dueCount} does not match the stats card ${String(stats.body.pendingFollowupsCount)}`);
+    if (open.body.openCount !== stats.body.openFollowupsCount) wrong.push(`openCount=${open.body.openCount} does not match the tab count ${String(stats.body.openFollowupsCount)}`);
 
-    if (wrong.length > 0) throw new Error(wrong.join('، '));
+    if (wrong.length > 0) throw new Error(wrong.join(', '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'پیگیری معوق اقدام ۴۰ روز پیش در «امروز و معوق»؛ وضعیت، مسئول (شناسه و نام قدیمی)، جست‌وجو و صفحه‌بندی در سرور؛ شمارها با کارت آمار یکی',
+      details: 'An overdue follow-up of an activity 40 days ago is in "today and overdue"; status, assignee (id and legacy name), search and paging run on the server; counts match the stats card',
     }));
   } catch (err) {
     results.push(makeTestCase({

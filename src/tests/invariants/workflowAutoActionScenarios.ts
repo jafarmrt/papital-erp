@@ -110,19 +110,19 @@ export async function checkRefusedReceiveLeavesNoTrace(): Promise<string[]> {
   try {
     const error = await refusal(() => ProcurementService.executeWorkflowAction(reqId, 'receive_items', ADMIN));
     await settle();
-    if (!error) problems.push(`«دریافت کالا» با سفارش ماندهٔ سال مالی بسته ${CLOSED_YEAR} پذیرفته شد`);
+    if (!error) problems.push(`"Receive goods" with an order left in the closed fiscal year ${CLOSED_YEAR} was accepted`);
     const after = await requisitionState(reqId);
-    if (after.status !== 'ordered' || after.stateKey !== 'ordered') problems.push(`پس از دریافتِ ردشده درخواست «${after.status}» و گام «${after.stateKey}» است، نه «ordered»`);
+    if (after.status !== 'ordered' || after.stateKey !== 'ordered') problems.push(`After the refused receipt the requisition is "${after.status}" and the step "${after.stateKey}", not "ordered"`);
     for (const [label, id] of [['اول', orderA], ['دوم', orderB]] as const) {
       const status = await documentStatus(id);
-      if (status !== 'draft') problems.push(`سفارش ${label} پس از دریافتِ ردشده «${status}» شد`);
+      if (status !== 'draft') problems.push(`Order ${label} became "${status}" after the refused receipt`);
     }
     const { stock } = await itemState(x.id);
-    if (stock !== 0) problems.push(`کالای سفارش اول پس از دریافتِ ردشده ${stock} واحد موجودی گرفت`);
+    if (stock !== 0) problems.push(`The item of the first order got ${stock} units of stock after the refused receipt`);
     const kardex = await kardexRows(x.id);
-    if (kardex !== 0) problems.push(`کالای سفارش اول پس از دریافتِ ردشده ${kardex} ردیف کاردکس دارد`);
+    if (kardex !== 0) problems.push(`The item of the first order has ${kardex} Kardex rows after the refused receipt`);
     const vouchers = await documentVouchers(orderA);
-    if (vouchers !== 0) problems.push(`سفارش اول پس از دریافتِ ردشده ${vouchers} سند حسابداری دارد`);
+    if (vouchers !== 0) problems.push(`The first order has ${vouchers} journal vouchers after the refused receipt`);
   } finally {
     await reopen();
   }
@@ -151,23 +151,23 @@ export async function checkTransitionEffectsFollowCommit(): Promise<string[]> {
     await WorkflowTransitionExecutor.executeTransition({
       instanceId, transitionId: approve.id, userName: ADMIN.username, userRole: ADMIN.role, userPermissions: [], tx,
     });
-    throw new Error('برگشت عمدی تراکنش آزمون');
+    throw new Error('Intentional test transaction rollback');
   })));
-  if (!rolledBack.result) problems.push('تراکنش آزمون برنگشت');
+  if (!rolledBack.result) problems.push('The test transaction did not roll back');
   const afterRollback = await requisitionState(reqId);
-  if (afterRollback.status !== 'pending' || afterRollback.stateKey !== 'pending') problems.push(`پس از انتقالِ برگشت‌خورده درخواست «${afterRollback.status}» و گام «${afterRollback.stateKey}» است، نه «pending»`);
-  if (await auditRows() !== 0) problems.push('انتقالِ برگشت‌خورده لاگ فعالیت گردش‌کار گذاشت');
-  if (await outboxRows() !== 0) problems.push('انتقالِ برگشت‌خورده ردیف outbox گذاشت');
-  if (rolledBack.events.length > 0) problems.push(`انتقالِ برگشت‌خورده درون‌فرایندی منتشر شد (${rolledBack.events.join('، ')})`);
+  if (afterRollback.status !== 'pending' || afterRollback.stateKey !== 'pending') problems.push(`After the rolled-back transition the requisition is "${afterRollback.status}" and the step "${afterRollback.stateKey}", not "pending"`);
+  if (await auditRows() !== 0) problems.push('The rolled-back transition left a workflow activity log');
+  if (await outboxRows() !== 0) problems.push('The rolled-back transition left an outbox row');
+  if (rolledBack.events.length > 0) problems.push(`the rolled-back transition was published in-process (${rolledBack.events.join(', ')})`);
 
   const committed = await inProcessWorkflowEvents(instanceId, () => ProcurementService.executeWorkflowAction(reqId, 'approve_request', ADMIN));
   const afterCommit = await requisitionState(reqId);
-  if (afterCommit.status !== 'ordered' || afterCommit.stateKey !== 'ordered') problems.push(`پس از تأیید درخواست «${afterCommit.status}» و گام «${afterCommit.stateKey}» است، نه «ordered»`);
+  if (afterCommit.status !== 'ordered' || afterCommit.stateKey !== 'ordered') problems.push(`After approval the requisition is "${afterCommit.status}" and the step "${afterCommit.stateKey}", not "ordered"`);
   const outbox = await outboxRows();
-  if (outbox !== 1) problems.push(`انتقالِ ثبت‌شده ${outbox} ردیف WorkflowTransitioned در outbox دارد، نه ۱`);
-  if (committed.events.length > 0) problems.push(`انتقالِ ثبت‌شده جدا از outbox درون‌فرایندی هم منتشر شد (${committed.events.join('، ')})`);
+  if (outbox !== 1) problems.push(`The committed transition has ${outbox} WorkflowTransitioned outbox rows, not 1`);
+  if (committed.events.length > 0) problems.push(`the committed transition was also published in-process, apart from the outbox (${committed.events.join(', ')})`);
   const audits = await auditRows();
-  if (audits !== 1) problems.push(`انتقالِ ثبت‌شده ${audits} لاگ فعالیت گردش‌کار دارد، نه ۱`);
+  if (audits !== 1) problems.push(`The committed transition has ${audits} workflow activity logs, not 1`);
   return problems;
 }
 
@@ -204,19 +204,19 @@ export async function checkDocumentApprovalFinalizesInTransaction(): Promise<str
 
   const short = await approveDraft(5);
   await settle();
-  if (!short.error) problems.push('تأیید نهایی فاکتوری که موجودی کالایش کافی نیست پذیرفته شد');
+  if (!short.error) problems.push('Final approval of an invoice whose item stock is insufficient was accepted');
   const shortInstance = await instanceStatus(short.instanceId);
-  if (shortInstance !== 'IN_PROGRESS') problems.push(`گردش‌کار فاکتورِ قطعی‌نشده «${shortInstance}» شد`);
-  if (await documentStatus(short.docId) !== 'draft') problems.push('فاکتورِ تأییدِ ردشده پیش‌نویس نماند');
-  if ((await itemState(item.id)).stock !== 2) problems.push('موجودی کالا پس از تأییدِ ردشده عوض شد');
+  if (shortInstance !== 'IN_PROGRESS') problems.push(`The workflow of the non-finalized invoice became "${shortInstance}"`);
+  if (await documentStatus(short.docId) !== 'draft') problems.push('The invoice whose approval was refused did not stay draft');
+  if ((await itemState(item.id)).stock !== 2) problems.push('Item stock changed after the refused approval');
 
   const ok = await approveDraft(1);
-  if (ok.error) problems.push(`تأیید نهایی فاکتور با موجودی کافی رد شد: ${ok.error}`);
+  if (ok.error) problems.push(`Final approval of an invoice with enough stock was refused: ${ok.error}`);
   else {
     // بی‌درنگ پس از پاسخ: قطعی‌سازی جزء همان تراکنش است، نه کاری که بعداً برسد
-    if (await documentStatus(ok.docId) !== 'final') problems.push('فاکتور در پاسخ تأیید نهایی هنوز قطعی نیست');
-    if ((await itemState(item.id)).stock !== 1) problems.push('موجودی کالا در پاسخ تأیید نهایی کم نشد');
-    if (await documentVouchers(ok.docId) !== 1) problems.push('فاکتور در پاسخ تأیید نهایی سند حسابداری ندارد');
+    if (await documentStatus(ok.docId) !== 'final') problems.push('The invoice is not yet final in the final approval response');
+    if ((await itemState(item.id)).stock !== 1) problems.push('Item stock did not decrease in the final approval response');
+    if (await documentVouchers(ok.docId) !== 1) problems.push('The invoice has no journal voucher in the final approval response');
   }
   return problems;
 }
@@ -241,11 +241,11 @@ export async function checkVoucherApprovalRefusedWhenStatusCannotChange(): Promi
     instanceId: instance.id, transitionId: wf.transitions[0].id, userId: user.id, userName: user.username, userRole: 'admin', userPermissions: ['*'],
   }));
   await settle();
-  if (!error) problems.push('تأیید گردش‌کار سند حسابداری دائم پذیرفته شد');
+  if (!error) problems.push('Workflow approval of a permanent journal voucher was accepted');
   const row = await pool.query<{ current_state_id: number }>('SELECT current_state_id FROM workflow_instances WHERE id = $1', [instance.id]);
-  if (row.rows[0]?.current_state_id !== wf.states.draft.id) problems.push('گام گردش‌کار سند دائم پس از تأییدِ ردشده جابه‌جا شد');
+  if (row.rows[0]?.current_state_id !== wf.states.draft.id) problems.push('The workflow step of the permanent voucher moved after the refused approval');
   const status = (await pool.query<{ status: string }>('SELECT status FROM journal_vouchers WHERE id = $1', [voucher.id])).rows[0]?.status;
-  if (status !== 'permanent') problems.push(`سند حسابداری دائم «${status}» شد`);
+  if (status !== 'permanent') problems.push(`The permanent journal voucher became "${status}"`);
   return problems;
 }
 
@@ -281,18 +281,18 @@ export async function checkOpeningApprovalsFollowTransaction(): Promise<string[]
   });
   const rolledBack = await refusal(() => orm.transaction(async (tx) => {
     await approve(itemInstance.id, itemWf.transitions[0].id, tx);
-    throw new Error('برگشت عمدی تراکنش آزمون');
+    throw new Error('Intentional test transaction rollback');
   }));
   await settle();
-  if (!rolledBack) problems.push('تراکنش آزمون برنگشت');
+  if (!rolledBack) problems.push('The test transaction did not roll back');
   const afterRollback = await itemOpenings();
-  if (afterRollback !== 0) problems.push(`تأییدِ برگشت‌خورده کالا ${afterRollback} سند افتتاحیه گذاشت`);
+  if (afterRollback !== 0) problems.push(`The rolled-back item approval left ${afterRollback} opening vouchers`);
   const approved = await refusal(() => approve(itemInstance.id, itemWf.transitions[0].id));
-  if (approved) problems.push(`تأیید نهایی کالا رد شد: ${approved}`);
+  if (approved) problems.push(`Final item approval was refused: ${approved}`);
   else {
     // بی‌درنگ پس از پاسخ: صدور جزء همان تراکنش است
     const afterCommit = await itemOpenings();
-    if (afterCommit !== 1) problems.push(`کالا در پاسخ تأیید نهایی ${afterCommit} سند افتتاحیه دارد، نه ۱`);
+    if (afterCommit !== 1) problems.push(`The item has ${afterCommit} opening vouchers in the final approval response, not 1`);
   }
 
   const bank = await pool.query<{ id: number }>(
@@ -305,8 +305,8 @@ export async function checkOpeningApprovalsFollowTransaction(): Promise<string[]
   });
   const bankError = await refusal(() => approve(bankInstance.id, bankWf.transitions[0].id));
   await settle();
-  if (!bankError) problems.push('تأیید حساب خزانه‌ای که مانده اول دوره دارد ولی سرفصل معین ندارد پذیرفته شد');
-  if (await stateOf(bankInstance.id) !== bankWf.states.draft.id) problems.push('گام گردش‌کار حساب خزانه پس از تأییدِ ردشده جابه‌جا شد');
+  if (!bankError) problems.push('Approval of a treasury account with an opening balance but no subsidiary ledger account was accepted');
+  if (await stateOf(bankInstance.id) !== bankWf.states.draft.id) problems.push('The treasury account workflow step moved after the refused approval');
   return problems;
 }
 
@@ -323,14 +323,14 @@ export async function checkDeliveryWithoutUserIdNotAttributedToUserOne(): Promis
   await ProcurementService.deliverOrderToWarehouse(order, { username: 'انباردار آزمون اقدام خودکار' });
   await settle();
   const { instanceId, stateKey } = await requisitionState(reqId);
-  if (stateKey !== 'received') problems.push(`گام درخواست پس از تحویل کامل «${stateKey}» است، نه «received»`);
+  if (stateKey !== 'received') problems.push(`The requisition step after full delivery is "${stateKey}", not "received"`);
   const history = await pool.query<{ performed_by: number | null }>(
     `SELECT performed_by FROM workflow_history_logs WHERE instance_id = $1 AND action_key = 'receive_items'`, [instanceId]);
-  if (history.rows.length !== 1) problems.push(`تحویل کامل ${history.rows.length} ردیف تاریخچه «receive_items» ساخت، نه ۱`);
-  else if (history.rows[0].performed_by !== null) problems.push(`گام «دریافت‌شده» به نام کاربر #${history.rows[0].performed_by} ثبت شد`);
+  if (history.rows.length !== 1) problems.push(`Full delivery created ${history.rows.length} "receive_items" history rows, not 1`);
+  else if (history.rows[0].performed_by !== null) problems.push(`The "received" step was recorded in the name of user #${history.rows[0].performed_by}`);
   const audit = await pool.query<{ user_id: number | null }>(
     `SELECT user_id FROM activity_logs WHERE details->>'operation' = 'DELIVER_PROCUREMENT_ORDER' AND details->>'documentId' = $1`, [String(order)]);
-  if (audit.rows.length !== 1) problems.push(`تحویل سفارش ${audit.rows.length} لاگ فعالیت دارد، نه ۱`);
-  else if (audit.rows[0].user_id !== null) problems.push(`لاگ تحویل به نام کاربر #${audit.rows[0].user_id} ثبت شد`);
+  if (audit.rows.length !== 1) problems.push(`The order delivery has ${audit.rows.length} activity logs, not 1`);
+  else if (audit.rows[0].user_id !== null) problems.push(`The delivery log was recorded in the name of user #${audit.rows[0].user_id}`);
   return problems;
 }

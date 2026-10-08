@@ -123,14 +123,14 @@ async function main(): Promise<void> {
       .map(r => ({ ...r, messages: r.messages.filter(m => !m.ruleId) }))
       .filter(r => r.messages.length > 0);
     console.error(await formatter.format(fatalOnly));
-    console.error(`❌ ESLint: ${fatal} خطای پارس`);
+    console.error(`❌ ESLint: ${fatal} parse errors`);
     process.exit(1);
   }
 
   const blocking = findBlockingErrors(results, process.cwd());
   if (blocking.length > 0) {
-    for (const b of blocking) console.error(`❌ ${b.file}:${b.line} ${b.ruleId}${b.suppressed ? ' (خاموش‌شده با eslint-disable)' : ''}`);
-    console.error('این قاعده در این مسیر خطاست و فایل پایه آن را نمی‌پذیرد (any در مسیرهای پول و انبار سرور ممنوع است).');
+    for (const b of blocking) console.error(`❌ ${b.file}:${b.line} ${b.ruleId}${b.suppressed ? ' (silenced with eslint-disable)' : ''}`);
+    console.error('This rule is an error in this path and the baseline does not accept it (any is forbidden in the server money and stock paths).');
     process.exit(1);
   }
 
@@ -139,12 +139,12 @@ async function main(): Promise<void> {
     const grown = compareAnyByFile(anyCounts, previousAny).increased;
     if (fs.existsSync(anyBaselinePath) && grown.length > 0) {
       for (const g of grown) console.error(`❌ ${g.file}: any ${g.baseline} → ${g.current}`);
-      console.error('فایل پایه any فقط می‌تواند کم شود؛ any تازه را رفع کنید.');
+      console.error('The any baseline may only shrink; fix the new any.');
       process.exit(1);
     }
     fs.writeFileSync(baselinePath, JSON.stringify(sortedCounts(counts), null, 2) + '\n');
     fs.writeFileSync(anyBaselinePath, JSON.stringify(sortedCounts(anyCounts), null, 2) + '\n');
-    console.log(`✅ فایل پایه ESLint به‌روز شد: ${JSON.stringify(sortedCounts(counts))}، any: ${totalOf(anyCounts)} در ${Object.keys(anyCounts).length} فایل`);
+    console.log(`✅ ESLint baseline updated: ${JSON.stringify(sortedCounts(counts))}, any: ${totalOf(anyCounts)} in ${Object.keys(anyCounts).length} files`);
     return;
   }
 
@@ -159,8 +159,8 @@ async function main(): Promise<void> {
       .filter(r => grownFiles.has(path.relative(process.cwd(), r.filePath).split(path.sep).join('/')))
       .map(r => ({ ...r, messages: r.messages.filter(m => m.ruleId === ANY_RULE) }));
     console.error(await formatter.format(relevant));
-    for (const i of anyChange.increased) console.error(`❌ ${i.file}: any ${i.baseline} → ${i.current}${i.baseline === 0 ? ' (فایل تازه یا بدون any باید صفر بماند)' : ''}`);
-    console.error('هیچ فایلی نمی‌تواند any بیشتری بگیرد (any خاموش‌شده با eslint-disable هم شمرده می‌شود).');
+    for (const i of anyChange.increased) console.error(`❌ ${i.file}: any ${i.baseline} → ${i.current}${i.baseline === 0 ? ' (a new file or a file without any must stay at zero)' : ''}`);
+    console.error('No file may gain an any (an any silenced with eslint-disable counts too).');
     process.exit(1);
   }
   if (increased.length > 0) {
@@ -170,17 +170,17 @@ async function main(): Promise<void> {
       .map(r => ({ ...r, messages: r.messages.filter(m => m.ruleId && rules.has(m.ruleId)) }))
       .filter(r => r.messages.length > 0);
     console.error(await formatter.format(relevant));
-    for (const i of increased) console.error(`❌ ${i.rule}: ${i.baseline} → ${i.current} (افزایش ${i.current - i.baseline})`);
-    console.error('تخلف تازه را رفع کنید؛ فایل پایه فقط می‌تواند کم شود.');
+    for (const i of increased) console.error(`❌ ${i.rule}: ${i.baseline} → ${i.current} (up ${i.current - i.baseline})`);
+    console.error('Fix the new violation; the baseline may only shrink.');
     process.exit(1);
   }
   if (decreased.length > 0 || anyChange.decreased.length > 0) {
     for (const d of decreased) console.error(`⬇️  ${d.rule}: ${d.baseline} → ${d.current}`);
     for (const d of anyChange.decreased) console.error(`⬇️  ${d.file}: any ${d.baseline} → ${d.current}`);
-    console.error('❌ تخلفات کم شده‌اند؛ برای قفل‌کردن بهبود `npm run lint:eslint -- --update` را اجرا و eslint-baseline.json و eslint-any-baseline.json را commit کنید.');
+    console.error('❌ Violations went down; to lock in the improvement run `npm run lint:eslint -- --update` and commit eslint-baseline.json and eslint-any-baseline.json.');
     process.exit(1);
   }
-  console.log(`✅ ESLint ratchet OK: ${JSON.stringify(sortedCounts(counts))}، any: ${totalOf(anyCounts)} در ${Object.keys(anyCounts).length} فایل`);
+  console.log(`✅ ESLint ratchet OK: ${JSON.stringify(sortedCounts(counts))}, any: ${totalOf(anyCounts)} in ${Object.keys(anyCounts).length} files`);
 }
 
 if (process.argv[1]?.endsWith('eslint-ratchet.ts') || process.argv[1]?.endsWith('eslint-ratchet.js')) {

@@ -13,7 +13,7 @@ export async function runCustomerImportPartyTypeTests(shouldRun: (id: string, ..
   const id = 'reg_customer_import_keeps_party_type_td_421';
   if (!shouldRun(id, 'td421', 'customer', 'excel', 'import', 'package9')) return results;
 
-  const name = 'v9.0.9: ستون نوع خالی در درون‌ریزی اکسل نوع طرف حساب موجود را عوض نمی‌کند و رکورد تازه را «مشتری» می‌سازد؛ «تأمین‌کننده» با همزه و «هر دو (مشتری و تامین‌کننده)» درست خوانده می‌شوند (TD-421)';
+  const name = 'v9.0.9: an empty type cell in the Excel import keeps an existing party\'s type and makes a new record a customer; supplier with hamza and «both (customer and supplier)» are read correctly (TD-421)';
   const tStart = Date.now();
   const customerIds: number[] = [];
   try {
@@ -42,7 +42,7 @@ export async function runCustomerImportPartyTypeTests(shouldRun: (id: string, ..
       ],
     });
     if (res.status !== 200 || res.body?.updatedCount !== 3 || res.body?.createdCount !== 3 || (res.body?.errors ?? []).length !== 0) {
-      throw new Error(`درون‌ریزی ${res.status} داد: به‌روز ${res.body?.updatedCount}، تازه ${res.body?.createdCount}، خطا ${JSON.stringify(res.body?.errors ?? res.body).slice(0, 200)}`);
+      throw new Error(`import returned ${res.status}: updated ${res.body?.updatedCount}, new ${res.body?.createdCount}, errors ${JSON.stringify(res.body?.errors ?? res.body).slice(0, 200)}`);
     }
 
     const rows = await orm.select({ id: customers.id, name: customers.name, partyType: customers.partyType, city: customers.city, supplierCategory: customers.supplierCategory })
@@ -51,21 +51,21 @@ export async function runCustomerImportPartyTypeTests(shouldRun: (id: string, ..
     const byName = new Map(rows.map(r => [r.name, r]));
     const expectType = (n: string, type: string, why: string) => {
       const got = byName.get(n)?.partyType;
-      if (got !== type) wrong.push(`${why}: نوع «${n}» ${String(got)} شد، نه ${type}`);
+      if (got !== type) wrong.push(`${why}: type of "${n}" became ${String(got)}, not ${type}`);
     };
-    expectType(supplier.name, 'supplier', 'تأمین‌کننده با ردیف فقط نام و شهر');
-    expectType(both.name, 'both', 'طرف حساب «هر دو» با نوع خالی');
-    expectType(switched.name, 'customer', 'نوع صریح «مشتری» روی تأمین‌کننده');
-    expectType(fresh.plain, 'customer', 'ردیف تازه بی نوع');
-    expectType(fresh.hamza, 'supplier', 'ردیف تازه با «تأمین‌کننده» (همزه)');
-    expectType(fresh.dual, 'both', 'ردیف تازه با «هر دو (مشتری و تامین‌کننده)»');
+    expectType(supplier.name, 'supplier', 'a supplier with a row of only name and city');
+    expectType(both.name, 'both', 'a "both" party with an empty type');
+    expectType(switched.name, 'customer', 'an explicit "customer" type on a supplier');
+    expectType(fresh.plain, 'customer', 'a new row without a type');
+    expectType(fresh.hamza, 'supplier', 'a new row with "supplier" (spelled with hamza)');
+    expectType(fresh.dual, 'both', 'a new row with "both (customer and supplier)"');
     const s = byName.get(supplier.name);
-    if (s?.city !== 'اصفهان' || s?.supplierCategory !== 'سنگ') wrong.push(`شهر و دسته تأمین‌کننده ${s?.city} / ${s?.supplierCategory} شد`);
+    if (s?.city !== 'اصفهان' || s?.supplierCategory !== 'سنگ') wrong.push(`supplier city and category became ${s?.city} / ${s?.supplierCategory}`);
 
-    if (wrong.length > 0) throw new Error(wrong.join('، '));
+    if (wrong.length > 0) throw new Error(wrong.join(', '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'تأمین‌کننده و «هر دو» با نوع خالی نوع خود را نگه داشتند و شهرشان به‌روز شد؛ «مشتری» صریح نوع را عوض کرد؛ ردیف تازه بی نوع مشتری، با «تأمین‌کننده» تأمین‌کننده و با «هر دو (...)» هر دو شد',
+      details: 'supplier and "both" with an empty type kept their type and their city was updated; an explicit "customer" changed the type; a new row with no type became customer, with "supplier" supplier and with "both (...)" both',
     }));
   } catch (err) {
     results.push(makeTestCase({

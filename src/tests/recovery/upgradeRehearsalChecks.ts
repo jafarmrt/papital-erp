@@ -56,36 +56,36 @@ export async function checkUpgradeRehearsal(ctx: RehearsalCtx): Promise<string[]
 
   const harmless = await rehearse('rehearsal-ok', 'CREATE TABLE k_rehearsal_probe (id integer);');
   if (harmless.code !== 0 || !harmless.output.includes('migrations: 1 applied') || !harmless.output.includes('SUCCESS')) {
-    v.push(`تمرین ارتقا با مهاجرت بی‌اثر نگذشت (کد ${harmless.code}): ${harmless.output.slice(-400)}`);
+    v.push(`The upgrade rehearsal with a no-op migration did not pass (code ${harmless.code}): ${harmless.output.slice(-400)}`);
   }
 
   const stockChange = await rehearse('rehearsal-stock', `UPDATE item_warehouse_stocks SET current_stock = current_stock + 1
     WHERE id = (SELECT min(id) FROM item_warehouse_stocks WHERE current_stock > 0);`);
-  if (stockChange.code === 0) v.push('مهاجرتی که موجودی کالا را عوض می‌کند در تمرین «امن» شناخته شد');
-  else if (!/item .+ in warehouse .+: \S+ → \S+/.test(stockChange.output)) v.push(`تمرین، کالای عوض‌شده را نام نبرد: ${stockChange.output.slice(-400)}`);
+  if (stockChange.code === 0) v.push('A migration that changes item stock was judged "safe" by the rehearsal');
+  else if (!/item .+ in warehouse .+: \S+ → \S+/.test(stockChange.output)) v.push(`The rehearsal did not name the changed item: ${stockChange.output.slice(-400)}`);
 
   const broken = await rehearse('rehearsal-broken', 'SELECT 1 / 0;');
-  if (broken.code === 0 || !broken.output.includes('migrations FAILED')) v.push(`مهاجرت خراب در تمرین رد نشد (کد ${broken.code}): ${broken.output.slice(-300)}`);
+  if (broken.code === 0 || !broken.output.includes('migrations FAILED')) v.push(`The rehearsal did not refuse a broken migration (code ${broken.code}): ${broken.output.slice(-300)}`);
 
   // پایگاه‌داده برنامه دست نخورده و رونوشت‌ها حذف شده‌اند
   const sourceAfter = await querySql<{ s: string; probe: boolean }>(ctx.cluster.appUrl,
     `SELECT COALESCE(SUM(current_stock), 0)::text AS s, to_regclass('k_rehearsal_probe') IS NOT NULL AS probe FROM item_warehouse_stocks`);
-  if (sourceAfter[0]?.s !== sourceStock[0]?.s || sourceAfter[0]?.probe) v.push('تمرین ارتقا پایگاه‌داده برنامه را تغییر داد');
+  if (sourceAfter[0]?.s !== sourceStock[0]?.s || sourceAfter[0]?.probe) v.push('The upgrade rehearsal changed the app database');
   const leftover = (await drillDatabases()).filter(d => !before.includes(d));
-  if (leftover.length > 0) v.push(`رونوشت تمرین حذف نشد: ${leftover.join(', ')}`);
+  if (leftover.length > 0) v.push(`The rehearsal copy was not dropped: ${leftover.join(', ')}`);
 
   // بخش TypeScript هرگز روی پایگاه‌داده‌ای جز رونوشت تمرین مهاجرت نمی‌دهد
   const direct = await runCommand(path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx'), [path.join(REPO_ROOT, 'scripts', 'upgrade-rehearsal.ts')], {
     cwd: path.join(ctx.cluster.tmpDir, 'rehearsal-ok'), env: { ...env, DATABASE_URL: ctx.cluster.appUrl },
   });
-  if (direct.code === 0 || !direct.output.includes('REFUSED')) v.push(`اجرای مستقیم تمرین روی پایگاه‌داده برنامه رد نشد (کد ${direct.code})`);
+  if (direct.code === 0 || !direct.output.includes('REFUSED')) v.push(`Running the rehearsal directly on the app database was not refused (code ${direct.code})`);
 
   // update.sh --rehearse تمرین را پیش از راه‌اندازی دوباره اجرا می‌کند و بی پشتیبان پیش از استقرار پذیرفته نمی‌شود
   const update = fs.readFileSync(path.join(REPO_ROOT, 'update.sh'), 'utf8');
-  if (!update.includes('bash scripts/upgrade-rehearsal.sh "$PRE_DEPLOY_DUMP"')) v.push('update.sh --rehearse تمرین ارتقا را روی پشتیبان پیش از استقرار اجرا نمی‌کند');
+  if (!update.includes('bash scripts/upgrade-rehearsal.sh "$PRE_DEPLOY_DUMP"')) v.push('update.sh --rehearse does not run the upgrade rehearsal on the backup before deploying');
   const noBackup = await runCommand('bash', [path.join(REPO_ROOT, 'update.sh'), '--rehearse', '--no-backup'], {
     cwd: ctx.cluster.tmpDir, env: { ...env, APP_DIR: ctx.cluster.tmpDir },
   });
-  if (noBackup.code !== 1 || !noBackup.output.includes('--no-backup')) v.push(`update.sh --rehearse --no-backup رد نشد (کد ${noBackup.code})`);
+  if (noBackup.code !== 1 || !noBackup.output.includes('--no-backup')) v.push(`update.sh --rehearse --no-backup was not refused (code ${noBackup.code})`);
   return v;
 }

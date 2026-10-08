@@ -2,13 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const OVER = { itemId: 42, itemName: 'گردنبند آزمون', unit: 'عدد', planned: 5, delivered: 5, requested: 2, excess: 2 };
+/** The server's refusal that the tab shows as it is */
+const OVER_DELIVERY_MESSAGE = 'تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه';
 let deliveries = 0;
 const fetchJson = vi.fn(async (url: string, _opts?: { method?: string; body?: string }) => {
   if (url.endsWith('/product-progress')) return { summary: { total_matrix_cells: 0, completed_matrix_cells: 0, all_matrix_completed: false } };
   if (url.endsWith('/add-to-inventory')) {
     deliveries++;
     if (deliveries === 1) {
-      throw Object.assign(new Error('تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه'), { code: 'OVER_DELIVERY_REASON_REQUIRED', status: 422, details: { overDeliveries: [OVER] } });
+      throw Object.assign(new Error(OVER_DELIVERY_MESSAGE), { code: 'OVER_DELIVERY_REASON_REQUIRED', status: 422, details: { overDeliveries: [OVER] } });
     }
     return { success: true, addedCount: 1, refNumber: 'PR-9' };
   }

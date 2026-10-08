@@ -29,22 +29,22 @@ export async function checkTransitionRequiredPermission(): Promise<string[]> {
 
   const blocked = await startWf(wf);
   const status = await refusalStatus(() => transit(blocked, wf.transitionId.approve, without));
-  if (status !== 403) problems.push(`کاربر بی مجوز «${permission}» انتقال را ${status === null ? 'اجرا کرد' : `با کد ${status} رد شد`}، نه ۴۰۳`);
+  if (status !== 403) problems.push(`a user without the permission "${permission}" ${status === null ? 'ran the transition' : `was refused with code ${status}`}, not 403`);
   const [task] = await tasksOf(blocked);
-  if (task && (await refusalStatus(() => runTask(task.id, without))) === null) problems.push('کاربر بی مجوز کار کارتابل را اجرا کرد');
-  if ((await instanceRow(blocked)).status !== 'IN_PROGRESS') problems.push('فرایند با اقدام کاربر بی مجوز پیش رفت');
+  if (task && (await refusalStatus(() => runTask(task.id, without))) === null) problems.push('a user without permission ran the inbox task');
+  if ((await instanceRow(blocked)).status !== 'IN_PROGRESS') problems.push('the workflow advanced on the action of a user without permission');
   const offered = await WorkflowTransitionExecutor.getAvailableTransitions(blocked, wf.stateId.draft, without.role, without.id, undefined, undefined, undefined, []);
-  if (offered.some(t => t.id === wf.transitionId.approve)) problems.push('انتقال نیازمند مجوز به کاربر بی مجوز پیشنهاد شد');
+  if (offered.some(t => t.id === wf.transitionId.approve)) problems.push('a transition that needs a permission was offered to a user without it');
   const check = await WorkflowTransitionExecutor.checkCanTransition({ instanceId: blocked, transitionId: wf.transitionId.approve, userRole: without.role, userPermissions: [] });
-  if (check.allowed) problems.push('بررسی امکان انتقال برای کاربر بی مجوز «مجاز» برگرداند');
+  if (check.allowed) problems.push('the transition check returned "allowed" for a user without permission');
 
   for (const [label, user] of [['نقش دارای مجوز', withRole], ['مجوز خود کاربر', withOwn], ['ادمین', admin]] as const) {
     const instanceId = await startWf(wf);
     const offeredTo = await WorkflowTransitionExecutor.getAvailableTransitions(instanceId, wf.stateId.draft, user.role, user.id, undefined, undefined, undefined, user.permissions);
-    if (!offeredTo.some(t => t.id === wf.transitionId.approve)) problems.push(`انتقال به ${label} پیشنهاد نشد`);
+    if (!offeredTo.some(t => t.id === wf.transitionId.approve)) problems.push(`the transition was not offered to ${label}`);
     const refused = await refusalStatus(() => transit(instanceId, wf.transitionId.approve, user));
-    if (refused !== null) problems.push(`${label} انتقال را اجرا نکرد (کد ${refused})`);
-    else if ((await instanceRow(instanceId)).status !== 'COMPLETED') problems.push(`فرایند با اقدام ${label} تمام نشد`);
+    if (refused !== null) problems.push(`${label} did not run the transition (code ${refused})`);
+    else if ((await instanceRow(instanceId)).status !== 'COMPLETED') problems.push(`the workflow did not finish on the action of ${label}`);
   }
   return problems;
 }
@@ -69,23 +69,23 @@ export async function checkInitiatorExcludedStep(): Promise<string[]> {
 
   const instanceId = await startWf(wf, uniqueTag(), initiator);
   const status = await refusalStatus(() => transit(instanceId, wf.transitionId.approve, initiator));
-  if (status !== 403) problems.push(`آغازکننده گام «آغازکننده تأیید نکند» را ${status === null ? 'اجرا کرد' : `با کد ${status} رد شد`}، نه ۴۰۳`);
+  if (status !== 403) problems.push(`the initiator ${status === null ? 'ran the step' : `was refused with code ${status}`} on an "initiator may not approve" step, not 403`);
   const [task] = await tasksOf(instanceId);
-  if (task && (await refusalStatus(() => runTask(task.id, initiator))) === null) problems.push('آغازکننده کار گام را از کارتابل اجرا کرد');
-  if (task && (await refusalStatus(() => runTask(task.id, deputy))) === null) problems.push('جانشین آغازکننده کار گام را به نام او اجرا کرد');
+  if (task && (await refusalStatus(() => runTask(task.id, initiator))) === null) problems.push('the initiator ran the step task from the inbox');
+  if (task && (await refusalStatus(() => runTask(task.id, deputy))) === null) problems.push('the deputy of the initiator ran the step task in their name');
   const inbox = await WorkflowTaskService.getMyTasks({ userId: initiator.id, userRole: initiator.role });
-  if (inbox.data.some(t => t.instanceId === instanceId)) problems.push('کار گام در کارتابل آغازکننده آمد');
+  if (inbox.data.some(t => t.instanceId === instanceId)) problems.push('the step task appeared in the inbox of the initiator');
   const offered = await WorkflowTransitionExecutor.getAvailableTransitions(instanceId, wf.stateId.draft, initiator.role, initiator.id, undefined, undefined, undefined, initiator.permissions);
-  if (offered.length > 0) problems.push('گام «آغازکننده تأیید نکند» به آغازکننده پیشنهاد شد');
+  if (offered.length > 0) problems.push('the "initiator does not approve" step was offered to the initiator');
   const colleagueInbox = await WorkflowTaskService.getMyTasks({ userId: colleague.id, userRole: colleague.role });
-  if (!colleagueInbox.data.some(t => t.instanceId === instanceId)) problems.push('کار گام در کارتابل همکار هم‌نقش نیامد');
-  if (await refusalStatus(() => transit(instanceId, wf.transitionId.approve, colleague)) !== null) problems.push('همکار هم‌نقش گام را اجرا نکرد');
-  if ((await instanceRow(instanceId)).status !== 'COMPLETED') problems.push('فرایند با امضای همکار تمام نشد');
+  if (!colleagueInbox.data.some(t => t.instanceId === instanceId)) problems.push('the step task did not appear in the inbox of a colleague with the same role');
+  if (await refusalStatus(() => transit(instanceId, wf.transitionId.approve, colleague)) !== null) problems.push('a colleague with the same role did not run the step');
+  if ((await instanceRow(instanceId)).status !== 'COMPLETED') problems.push('the workflow did not finish with the signature of the colleague');
 
   const byAdmin = await startWf(wf, uniqueTag(), admin);
-  if (await refusalStatus(() => transit(byAdmin, wf.transitionId.approve, admin)) !== null) problems.push('ادمین گام فرایند خودش را اجرا نکرد');
+  if (await refusalStatus(() => transit(byAdmin, wf.transitionId.approve, admin)) !== null) problems.push('the admin did not run the step of their own workflow');
   const plain = await defineWorkflow(spec(false));
   const plainInstance = await startWf(plain, uniqueTag(), initiator);
-  if (await refusalStatus(() => transit(plainInstance, plain.transitionId.approve, initiator)) !== null) problems.push('گام بی تیک برای آغازکننده بسته شد');
+  if (await refusalStatus(() => transit(plainInstance, plain.transitionId.approve, initiator)) !== null) problems.push('a step without the option was closed for the initiator');
   return problems;
 }
