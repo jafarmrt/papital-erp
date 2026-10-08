@@ -13,6 +13,23 @@ export function serverTimestampToUtcIso(value: string | null | undefined): strin
   return match ? `${match[1]}T${match[2]}Z` : String(value);
 }
 
+/**
+ * v9.0.391 (TD-725، B15-23): مقدار کلیدهای `keys` در هر عمق پاسخ، اگر زمان سرور بی‌منطقه باشد، به ISO با Z تبدیل می‌شود
+ * (همان قاعده TD-468 گردش کار)؛ کلید دیگر، تاریخ کسب‌وکار (YYYY-MM-DD) و زمانی که منطقه دارد دست نمی‌خورد. داده
+ * کلیدهای `opaqueKeys` (مانند payload رویداد که کاربر ویرایش و بازپخش می‌کند) همان‌طور که ذخیره شده می‌رود.
+ */
+export function withUtcTimestampKeys<T>(value: T, keys: ReadonlySet<string>, opaqueKeys?: ReadonlySet<string>): T {
+  if (Array.isArray(value)) return value.map((v) => withUtcTimestampKeys(v, keys, opaqueKeys)) as T;
+  if (!value || typeof value !== 'object' || value instanceof Date) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+    if (opaqueKeys?.has(key)) out[key] = v;
+    else if (typeof v === 'string' && keys.has(key) && SERVER_TIMESTAMP.test(v.trim())) out[key] = serverTimestampToUtcIso(v);
+    else out[key] = withUtcTimestampKeys(v, keys, opaqueKeys);
+  }
+  return out as T;
+}
+
 function zoneOffsetMs(instantMs: number, timeZone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',

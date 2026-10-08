@@ -20,6 +20,8 @@ import { ValidationError } from '../errors/customErrors.js';
 import { resolveWcTestCredentials } from '../lib/woocommerce/wcConnectionTest.js';
 import { readWcConnectionSettings } from '../services/woocommerce/wcConnectionSettings.js';
 import { openSettingSecret } from '../services/settings/settingSecrets.js';
+import { withUtcTimestampKeys } from '../lib/serverTimestamp.js';
+import { WOO_ORDER_LOG_TIMESTAMP_KEYS } from '../services/events/eventTimestamps.js';
 
 const router = Router();
 
@@ -240,7 +242,8 @@ router.get('/order-logs', authorizePermission('woocommerce.view'), asyncHandler(
       .orderBy(desc(woocommerceOrderLogs.id))
       .limit(100);
 
-    res.json(logs);
+    // v9.0.391 (TD-725): the log times go to the WooCommerce tab with a Z (AGENTS §1.10)
+    res.json(withUtcTimestampKeys(logs, WOO_ORDER_LOG_TIMESTAMP_KEYS));
   } catch (error) {
     throw error;
   }

@@ -19,6 +19,8 @@ import { AppError, NotFoundError } from '../errors/customErrors.js';
 import { isEnteredSecret } from '../lib/secrets/maskedSecret.js';
 import { actionRuleView, webhookSubscriptionView } from '../services/events/integrationSecrets.js';
 import { assertWebhookSecretsReadable } from '../services/events/webhookSecretStorage.js';
+import { utcTimestampResponses } from '../middleware/utcTimestampResponses.js';
+import { EVENT_OPAQUE_KEYS, EVENT_TIMESTAMP_KEYS } from '../services/events/eventTimestamps.js';
 
 const eventIdParamSchema = z.object({
   params: z.object({
@@ -88,6 +90,8 @@ router.all('/webhook-echo', asyncHandler(async (req, res) => {
 
 // Enforce authentication on all event routes
 router.use(authenticateToken);
+// v9.0.391 (TD-725): server timestamps in every events answer carry a Z (AGENTS §1.10)
+router.use(utcTimestampResponses(EVENT_TIMESTAMP_KEYS, EVENT_OPAQUE_KEYS));
 
 // =========================================================================
 // 1. Domain Events Inspection & Simulation (EDA Telemetry)

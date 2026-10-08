@@ -10780,6 +10780,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runCrmDueReminderTests(shouldRun));
   const { runNotificationDismissTests } = await import('../regression/notificationDismissTests.js');
   results.push(...await runNotificationDismissTests(shouldRun));
+  const { runEventTimestampUtcTests } = await import('../regression/eventTimestampUtcTests.js');
+  results.push(...await runEventTimestampUtcTests(shouldRun));
 
   // Package 10 PR B (v9.0.347+): procurement order link, duplicate submissions, consolidation, receiving
   const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');

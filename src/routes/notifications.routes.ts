@@ -9,6 +9,8 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { UnauthorizedError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
 import { generateCrmDueReminders } from '../services/notifications/crmDueReminders.js';
+import { withUtcTimestampKeys } from '../lib/serverTimestamp.js';
+import { NOTIFICATION_TIMESTAMP_KEYS } from '../services/events/eventTimestamps.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -56,7 +58,8 @@ router.get('/notifications', asyncHandler(async (req, res) => {
     created_at: n.createdAt
   }));
 
-  res.json(mapped);
+  // v9.0.391 (TD-725): the creation time goes to the bell with a Z, so a new notification is «همین الان»
+  res.json(withUtcTimestampKeys(mapped, NOTIFICATION_TIMESTAMP_KEYS));
 }));
 
 // Get unread notification count

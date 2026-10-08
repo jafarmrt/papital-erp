@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.391 — Event, Notification and WooCommerce Log Times in UTC
+- **Server times of package 15 (TD-725):** the events routes, the notification list and the WooCommerce order log sent zone-less UTC timestamps, so a Tehran browser showed them 3.5 hours early (the previous day before 03:30) and a new notification said «3 ساعت پیش»; they now carry a Z (`utcTimestampResponses` / `withUtcTimestampKeys`), stored event payloads are sent as stored, and the bell prints its relative time from UTC with Persian digits.
+
 ### v9.0.390 — Events Page by Permission
 - **Events page access (TD-722):** the events page was guarded by the role codes admin / manager while its menu entry and route asked `events.view`, so a holder of events.view with another role got «عدم دسترسی»; the page now opens with `events.view` and every change button of its sub-tabs (rules, outbox, dead letters, timeline replay, webhooks, event simulation) shows only for `events.manage`, the key each change route asks.
 

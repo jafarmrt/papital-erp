@@ -10,6 +10,7 @@ import {
   useDeleteNotificationMutation
 } from '../hooks/queries';
 import { useClickOutside } from '../hooks/useClickOutside';
+import { notificationRelativeTime } from '../lib/notifications/relativeTime';
 
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -61,23 +62,7 @@ export default function NotificationBell() {
     }
   };
 
-  const formatRelativeTime = (timeStr?: string) => {
-    if (!timeStr) return '';
-    try {
-      const date = new Date(timeStr);
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      if (diffMins < 1) return 'همین الان';
-      if (diffMins < 60) return `${diffMins} دقیقه پیش`;
-      const diffHours = Math.floor(diffMins / 60);
-      if (diffHours < 24) return `${diffHours} ساعت پیش`;
-      const diffDays = Math.floor(diffHours / 24);
-      return `${diffDays} روز پیش`;
-    } catch (e) {
-      return timeStr.slice(0, 10);
-    }
-  };
+  const formatRelativeTime = (timeStr?: string) => notificationRelativeTime(timeStr);
 
   return (
     <div className="relative" ref={menuRef}>
