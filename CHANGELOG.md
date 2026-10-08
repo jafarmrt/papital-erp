@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.380 — Reserved Items at Cost
+- **Reserved items report (TD-823, B07-07):** every reservation is valued at quantity × the item WAC in IRR, for proformas in any currency and projects alike; the proforma sale price is no longer reported.
+
 ### v9.0.379 — Project Material Requests Through the Queue
 - **Raw material requests (TD-826, B07-10):** project control sends a request instead of creating an item; a request starts the pending-material workflow, whose approve and reject steps review it, and a direct review closes the open instance.
 

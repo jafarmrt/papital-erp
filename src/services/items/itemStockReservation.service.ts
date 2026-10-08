@@ -10,60 +10,14 @@ import { RESERVING_DOCUMENT_STATUS, RESERVING_DOCUMENT_TYPES } from '../../lib/d
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { reservingProjectRows, storedReservationRows } from '../../lib/projects/projectReservationState.js';
 import { findProjectItemMatch, itemCodeKey, itemNameKey } from '../../lib/projects/projectItemMatch.js';
+import type { ItemReservedReportSummary, ReservedItemDetail, ReservedItemsFullReport } from '../../lib/inventory/reservedItemsReport.js';
 
-export interface ReservedItemDetail {
-  id: string;
-  sourceType: 'proforma' | 'project';
-  sourceLabel: string;
-  sourceId: number;
-  sourceRef: string;
-  sourceTitle: string;
-  buyerOrCustomer: string;
-  itemId?: number;
-  itemCode: string;
-  itemName: string;
-  category: string;
-  unit: string;
-  reservedQty: number;
-  unitPrice: number;
-  totalValue: number;
-  date: string;
-}
+export type { ItemReservedReportSummary, ReservedItemDetail, ReservedItemsFullReport };
 
 export interface SellableStockContext {
   location: string;            // کد انبار (پس از resolveWarehouseCode)
   excludeDocumentId?: number;  // سندی که در حال نهایی‌شدن است (رزرو خودش حساب نشود)
   projectId?: number | null;   // رزرو همین پروژه آزاد است
-}
-
-export interface ItemReservedReportSummary {
-  itemId?: number;
-  itemCode: string;
-  itemName: string;
-  category: string;
-  unit: string;
-  currentStock: number;
-  stocks?: Record<string, number>;
-  buyPrice: number;
-  sellPrice: number;
-  proformaReservedQty: number;
-  projectReservedQty: number;
-  totalReservedQty: number;
-  availableStock: number;
-  totalReservedValue: number;
-  reservations: ReservedItemDetail[];
-}
-
-export interface ReservedItemsFullReport {
-  summaryMetrics: {
-    totalReservedItemsCount: number;
-    totalReservedQty: number;
-    totalReservedValue: number;
-    proformaReservationsCount: number;
-    projectReservationsCount: number;
-  };
-  itemSummaries: ItemReservedReportSummary[];
-  allReservationEntries: ReservedItemDetail[];
 }
 
 export interface ReservedStockInfo {
@@ -263,7 +217,7 @@ async function readItemsForProjectRows(client: DbExecutor, rows: ProjectReservat
 
 function emptyReservationReport(): ReservedItemsFullReport {
   return {
-    summaryMetrics: { totalReservedItemsCount: 0, totalReservedQty: 0, totalReservedValue: 0, proformaReservationsCount: 0, projectReservationsCount: 0 },
+    summaryMetrics: { totalReservedItemsCount: 0, totalReservedQty: 0, totalReservedCost: 0, proformaReservationsCount: 0, projectReservationsCount: 0 },
     itemSummaries: [],
     allReservationEntries: [],
   };
@@ -537,7 +491,6 @@ export class ItemStockReservationService {
         buyerName: documents.buyerName,
         date: documents.date,
         quantity: documentItems.quantity,
-        unitPrice: documentItems.unitPrice,
         item: RESERVATION_ITEM_COLUMNS,
       })
       .from(documentItems)
@@ -557,8 +510,8 @@ export class ItemStockReservationService {
       const qty = Number(line.quantity || 0);
       if (qty <= 0) continue;
       if (!summaryItems.has(line.item.id)) summaryItems.set(line.item.id, line.item);
-      // v7.0.113 (TD-239): ارزش رزرو با FinancialDecimal (AGENTS §1.8)
-      const price = fin(line.unitPrice);
+      // v9.0.380 (TD-823): the reservation is valued at the item's cost in IRR, never at the proforma's sale price and currency
+      const cost = fin(line.item.weightedAverageCost);
       allReservationEntries.push({
         id: `proforma-${line.documentId}-${line.item.id}`,
         sourceType: 'proforma',
@@ -573,8 +526,8 @@ export class ItemStockReservationService {
         category: line.item.category || 'عمومی',
         unit: line.item.unit || 'عدد',
         reservedQty: qty,
-        unitPrice: price.toNumber(),
-        totalValue: price.multiply(qty).toNumber(),
+        unitCost: cost.toNumber(),
+        totalCost: cost.multiply(qty).toNumber(),
         date: line.date || new Date().toISOString()
       });
     }
@@ -591,7 +544,7 @@ export class ItemStockReservationService {
       // v9.0.375 (TD-821): ردیفی که به کالای فعالی نمی‌رسد رزرو نمی‌کند و در بررسی سلامت فهرست می‌شود
       if (!matched || (scopeIds && !scopeIds.has(matched.id))) continue;
       if (!summaryItems.has(matched.id)) summaryItems.set(matched.id, matched);
-      const price = fin(matched.weightedAverageCost);
+      const cost = fin(matched.weightedAverageCost);
       allReservationEntries.push({
         id: `project-${row.projectId}-${matched.id}-${row.index}`,
         sourceType: 'project',
@@ -606,8 +559,8 @@ export class ItemStockReservationService {
         category: rowText(row.raw.category) || matched.category || 'عمومی',
         unit: rowText(row.raw.convertedUnit) || rowText(row.raw.warehouseUnit) || rowText(row.raw.unit) || matched.unit || 'عدد',
         reservedQty: row.qty,
-        unitPrice: price.toNumber(),
-        totalValue: price.multiply(row.qty).toNumber(),
+        unitCost: cost.toNumber(),
+        totalCost: cost.multiply(row.qty).toNumber(),
         date: row.createdAt || new Date().toISOString()
       });
     }
@@ -628,13 +581,12 @@ export class ItemStockReservationService {
         unit: it.unit || 'عدد',
         currentStock: Number(it.currentStock || 0),
         stocks: tableStockMap.get(it.id)?.byCode ?? {},
-        buyPrice: fin(it.weightedAverageCost).toNumber(),
-        sellPrice: fin(it.weightedAverageCost).toNumber(),
+        weightedAverageCost: fin(it.weightedAverageCost).toNumber(),
         proformaReservedQty: 0,
         projectReservedQty: 0,
         totalReservedQty: 0,
         availableStock: Number(it.currentStock || 0),
-        totalReservedValue: 0,
+        totalReservedCost: 0,
         reservations: []
       });
     }
@@ -657,8 +609,7 @@ export class ItemStockReservationService {
 
       summary.totalReservedQty += entry.reservedQty;
       summary.availableStock = Math.max(0, summary.currentStock - summary.totalReservedQty);
-      const val = entry.totalValue || fin(summary.sellPrice).multiply(entry.reservedQty).toNumber();
-      summary.totalReservedValue = fin(summary.totalReservedValue).add(val).toNumber();
+      summary.totalReservedCost = fin(summary.totalReservedCost).add(entry.totalCost ?? 0).toNumber();
       summary.reservations.push(entry);
     }
 
@@ -666,13 +617,13 @@ export class ItemStockReservationService {
 
     const totalReservedItemsCount = itemSummaries.filter(s => s.totalReservedQty > 0).length;
     const totalReservedQty = allReservationEntries.reduce((sum, e) => sum + e.reservedQty, 0);
-    const totalReservedValue = allReservationEntries.reduce((sum, e) => sum.add(e.totalValue), fin(0)).toNumber();
+    const totalReservedCost = allReservationEntries.reduce((sum, e) => sum.add(e.totalCost ?? 0), fin(0)).toNumber();
 
     return {
       summaryMetrics: {
         totalReservedItemsCount,
         totalReservedQty,
-        totalReservedValue,
+        totalReservedCost,
         proformaReservationsCount: proformaCount,
         projectReservationsCount: projectCount
       },

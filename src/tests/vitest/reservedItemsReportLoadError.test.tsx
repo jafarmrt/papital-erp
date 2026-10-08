@@ -15,7 +15,7 @@ import ReservedItemsReportPage from '../../pages/ReservedItemsReportPage';
 afterEach(() => { cleanup(); fetchJson.mockReset(); });
 
 const emptyReport = {
-  summaryMetrics: { totalReservedItemsCount: 0, totalReservedQty: 0, totalReservedValue: 0, proformaReservationsCount: 0, projectReservationsCount: 0 },
+  summaryMetrics: { totalReservedItemsCount: 0, totalReservedQty: 0, totalReservedCost: 0, proformaReservationsCount: 0, projectReservationsCount: 0 },
   itemSummaries: [],
   allReservationEntries: [],
 };
