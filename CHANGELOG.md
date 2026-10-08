@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.384 — Rule Conditions Read Persian Digits
+- **Rule condition digits (TD-727):** the rule engine compared with Number(value), so a condition value typed with Persian digits or thousands separators (`gt "۱٬۰۰۰٬۰۰۰"`) never matched; the engine now reads both sides with `normalizeDecimalString` for numeric comparisons and equality with a number, and the rule editor saves such a value as a number and refuses one that is not a number.
+
 ### v9.0.383 — Rule Execution Log and Stats Are Shown
 - **Rule execution log (TD-721):** the «لاگ‌های اجرا» view of the automatic actions tab was always empty and its cards always 0, because the hook read `logs` / `totalLogs` / `avgDurationMs` while the server sends `data` / `logsTotal` / `avgLatencyMs`; both now share one contract (`actionLogContract.ts`) and each row shows the rule, event, status, duration and result.
 

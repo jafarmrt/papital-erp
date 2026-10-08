@@ -7,6 +7,7 @@ import { eventFieldOptions } from '../../lib/eventPayloadFields';
 import { EventFieldChips } from './EventFieldChips';
 import { isRetiredRuleActionType, retiredRuleActionMessage, type RuleActionType, type StoredRuleActionType } from '../../lib/events/ruleActionTypes';
 import { ALL_EVENTS_LABEL, ALL_EVENTS_PATTERN, eventTypeLabel, isSubscribableEventPattern, publishedEventTypesByCategory } from '../../lib/events/eventTypeCatalog';
+import { checkRuleConditionValue } from '../../lib/events/ruleConditionValue';
 
 export interface RuleCondition {
   field: string;
@@ -97,6 +98,10 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
   const fieldOptions = eventFieldOptions(formData.eventType);
   const canInsertIntoMessage = formData.actionType === 'in_app_notification';
   const retiredAction = isRetiredRuleActionType(formData.actionType);
+  // v9.0.384 (TD-727): a numeric comparison takes Persian digits and thousands separators and is saved as a number
+  const conditionChecks = formData.conditionsJson.map(cond =>
+    checkRuleConditionValue(cond.operator, cond.value, fieldOptions.find(f => f.path === cond.field)?.label ?? cond.field));
+  const hasConditionError = conditionChecks.some(c => c.error !== null);
   const unpublishedEvent = !isSubscribableEventPattern(formData.eventType);
   const insertIntoMessageTemplate = (path: string) => {
     setFormData(prev => {
@@ -166,11 +171,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) return;
+    if (!formData.name.trim() || hasConditionError) return;
 
     try {
       setIsSaving(true);
-      await onSave(formData);
+      await onSave({ ...formData, conditionsJson: formData.conditionsJson.map((cond, idx) => ({ ...cond, value: conditionChecks[idx].value })) });
       onClose();
     } finally {
       setIsSaving(false);
@@ -363,8 +368,13 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                         placeholder="مقدار مورد انتظار"
                         value={cond.value}
                         onChange={(e) => handleConditionChange(idx, 'value', e.target.value)}
+                        aria-label="مقدار شرط"
+                        aria-invalid={conditionChecks[idx].error !== null}
                         className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white"
                       />
+                      {conditionChecks[idx].error && (
+                        <p role="alert" className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">{conditionChecks[idx].error}</p>
+                      )}
                     </div>
 
                     {/* Delete */}
@@ -648,7 +658,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
               </button>
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={isSaving || hasConditionError}
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors disabled:opacity-50"
               >
                 {isSaving ? 'در حال ذخیره‌سازی...' : 'ذخیره قانون خودکار'}
