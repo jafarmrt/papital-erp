@@ -183,7 +183,7 @@ export class ProcurementService {
   }
 
   /**
-   * ثبت یک درخواست خرید درون تراکنش فراخواننده، با آغاز گردش کار و ردیف ممیزی؛ ثبت از فرم‌ها و تجمیع (v9.0.322، TD-694)
+   * ثبت یک درخواست خرید درون تراکنش فراخواننده، با آغاز گردش کار و ردیف ممیزی؛ ثبت از فرم‌ها و تجمیع (v9.0.342، TD-694)
    * هر دو از این‌جا می‌گذرند. `auditDetails` به جزئیات ردیف ممیزی افزوده می‌شود.
    */
   static async insertRequisition(
@@ -499,7 +499,7 @@ export class ProcurementService {
         throw new NotFoundError(`درخواست خرید با شناسه #${requisitionId} یافت نشد.`);
       }
       const req = toRequisitionDto(locked);
-      // v9.0.322 (TD-694): گردش کار درخواستِ تجمیع‌شده خاتمه یافته است و نمونه تازه‌ای برایش ساخته نمی‌شود
+      // v9.0.342 (TD-694): گردش کار درخواستِ تجمیع‌شده خاتمه یافته است و نمونه تازه‌ای برایش ساخته نمی‌شود
       assertRequisitionNotConsolidated(req);
       if (isReceive && RECEIVED_REQUISITION_STATUSES.has(req.status)) {
         throw new ConflictError(`درخواست خرید ${req.code} قبلاً دریافت شده است و کالای آن دوباره وارد انبار نمی‌شود.`);
@@ -741,6 +741,8 @@ export class ProcurementService {
           docType,
           date: today,
           status: docStatus,
+          // v9.0.336 (TD-778، O25 بسته ۱۰): سفارش به تأمین‌کننده انتخاب‌شده با شناسه وصل می‌شود؛ بی شناسه با نام یکتا
+          partyId: group.supplierId ?? undefined,
           buyer_name: supplierName,
           notes: docNotes,
           location: warehouseLoc,
@@ -751,7 +753,7 @@ export class ProcurementService {
           externalTx: tx
         });
 
-        // v9.0.320 (TD-691، ت۲): پیوند سفارش به درخواست در ستون؛ فهرست، خلاصه و تحویل تدارکات فقط همین سندها را می‌بینند
+        // v9.0.340 (TD-691، ت۲): پیوند سفارش به درخواست در ستون؛ فهرست، خلاصه و تحویل تدارکات فقط همین سندها را می‌بینند
         await tx.update(documents).set({ procurementRequisitionId: req.id }).where(eq(documents.id, createdDocId));
         const [createdDocRecord] = await tx.select().from(documents).where(eq(documents.id, createdDocId));
         createdDocuments.push(createdDocRecord || { id: createdDocId, refNumber: `DOC-${createdDocId}` });
@@ -861,7 +863,7 @@ export class ProcurementService {
     newTitle: string | undefined,
     user: { id?: number; username?: string }
   ): Promise<PurchaseRequisition> {
-    // v9.0.322 (TD-694، B10-07، ت۳ الف): قفل منبع‌ها به ترتیب شناسه، ساخت درخواست تجمیعی و بستن منبع‌ها با پیوند و خاتمه
+    // v9.0.342 (TD-694، B10-07، ت۳ الف): قفل منبع‌ها به ترتیب شناسه، ساخت درخواست تجمیعی و بستن منبع‌ها با پیوند و خاتمه
     // گردش کار، همه در یک تراکنش. پیش‌تر تجمیع بی تراکنش و قفل بود، منبع‌ها (حتی دریافت‌شده) باز می‌ماندند و شناسه
     // ناموجود بی‌صدا کنار گذاشته می‌شد.
     return orm.transaction(async (tx) => {
@@ -882,7 +884,7 @@ export class ProcurementService {
   }
 
   /**
-   * سفارش‌های خرید تدارکات (سندهای دارای پیوند درخواست؛ فیلتر و صفحه‌بندی در SQL، v9.0.320، TD-691 / TD-698)
+   * سفارش‌های خرید تدارکات (سندهای دارای پیوند درخواست؛ فیلتر و صفحه‌بندی در SQL، v9.0.340، TD-691 / TD-698)
    */
   static async getProcurementOrders(params: ProcurementOrderListParams): Promise<{ data: ProcurementOrder[]; total: number; page: number; limit: number }> {
     return listProcurementOrders(params);
@@ -908,7 +910,7 @@ export class ProcurementService {
       };
     }
     assertProcurementIncomingDocument(doc);
-    // v9.0.320 (TD-691، B10-04، ت۲): فقط سفارشی که «تبدیل به سفارش» برای درخواستی صادر کرده از این مسیر نهایی می‌شود؛
+    // v9.0.340 (TD-691، B10-04، ت۲): فقط سفارشی که «تبدیل به سفارش» برای درخواستی صادر کرده از این مسیر نهایی می‌شود؛
     // پیش‌تر هر رسید پیش‌نویس انبار با مجوز تدارکات نهایی می‌شد (ورود کالا، کاردکس و سند حسابداری) در حالی که نهایی‌سازی
     // سند خود `documents.edit` یا `warehouse.in` می‌خواهد
     const linkedReqId = doc.procurementRequisitionId ?? null;
@@ -1056,13 +1058,13 @@ export class ProcurementService {
       else if (r.status === 'ordered') orderedCount++;
       else if (r.status === 'received') receivedCount++;
 
-      // v9.0.322 (TD-694): درخواستِ تجمیع‌شده بسته است و فوری شمرده نمی‌شود
+      // v9.0.342 (TD-694): درخواستِ تجمیع‌شده بسته است و فوری شمرده نمی‌شود
       if (r.priority === 'urgent' && r.status !== 'received' && r.status !== 'rejected' && r.status !== 'consolidated') {
         urgentCount++;
       }
     }
 
-    // v9.0.320 (TD-691): فقط سفارش‌های دارای پیوند درخواست؛ پیش‌تر هر رسید و پیش‌فاکتور فروش هم شمرده می‌شد
+    // v9.0.340 (TD-691): فقط سفارش‌های دارای پیوند درخواست؛ پیش‌تر هر رسید و پیش‌فاکتور فروش هم شمرده می‌شد
     const orders = await procurementOrderCounts();
 
     return {

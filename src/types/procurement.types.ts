@@ -74,7 +74,7 @@ export interface PurchaseRequisition {
   totalEstimatedAmount?: number;
   total_estimated_amount?: number;
   items: PurchaseRequisitionItemRow[];
-  /** v9.0.322 (TD-694): درخواستی که این درخواست در آن تجمیع شد (وضعیت `consolidated`) و کد آن */
+  /** v9.0.342 (TD-694): درخواستی که این درخواست در آن تجمیع شد (وضعیت `consolidated`) و کد آن */
   consolidatedIntoId?: number | null;
   consolidatedIntoCode?: string | null;
   isDeleted?: number;

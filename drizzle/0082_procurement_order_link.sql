@@ -1,4 +1,4 @@
--- Drizzle Migration 0078: link a procurement purchase order to its purchase requisition (v9.0.320 / TD-691, finding
+-- Drizzle Migration 0082: link a procurement purchase order to its purchase requisition (v9.0.340 / TD-691, finding
 -- B10-04, product-owner decision t2 of package 10, option A)
 --
 -- A procurement order used to be recognised by text: the procurement order list, the desk summary and "deliver to

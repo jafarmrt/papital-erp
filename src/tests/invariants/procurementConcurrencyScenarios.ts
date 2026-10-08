@@ -33,7 +33,7 @@ async function order(requisitionId: number, itemId: number, quantity: number, wh
   return res.createdDocuments[0].id;
 }
 
-/** v9.0.323 (TD-699): پیام رد «دریافت کالا»ی ردیف سفارش‌نشده */
+/** v9.0.343 (TD-699): پیام رد «دریافت کالا»ی ردیف سفارش‌نشده */
 const NOT_ORDERED_HINT = 'ابتدا سفارش خرید با تأمین‌کننده و قیمت صادر کنید';
 
 const receiveItems = (requisitionId: number, user: typeof ADMIN = ADMIN) =>
@@ -88,13 +88,13 @@ export async function checkRequisitionReceivedOnce(wh: string): Promise<string[]
   const raced = await requisition(racedItem, 10);
   const racedCode = (await pool.query<{ code: string }>('SELECT code FROM purchase_requisitions WHERE id = $1', [raced])).rows[0].code;
   const outcomes = await raceBehindRowLock<unknown>('purchase_requisitions', [raced], [() => receiveItems(raced), () => order(raced, racedItem, 10, wh)]);
-  // v9.0.323 (TD-699): «دریافت کالا» پیش از سفارش رد می‌شود (ابتدا سفارش خرید)؛ پس از سفارش، سفارش را نهایی می‌کند
+  // v9.0.343 (TD-699): «دریافت کالا» پیش از سفارش رد می‌شود (ابتدا سفارش خرید)؛ پس از سفارش، سفارش را نهایی می‌کند
   problems.push(...outcomeProblems(['دریافت کالا', 'تبدیل به سفارش'], outcomes, (label, message) =>
     (label === 'تبدیل به سفارش' && message.includes('قبلاً دریافت')) || (label === 'دریافت کالا' && message.includes(NOT_ORDERED_HINT))));
   await deliverOpenOrders(racedCode);
   await expectStock(racedItem, raced, 10, 'دریافت و تبدیل هم‌زمان');
 
-  // ۲) دریافت کالای سفارش‌نشده رد می‌شود (v9.0.323، TD-699، ت۴)؛ پس از سفارش، دریافت و سپس تبدیل دوباره
+  // ۲) دریافت کالای سفارش‌نشده رد می‌شود (v9.0.343، TD-699، ت۴)؛ پس از سفارش، دریافت و سپس تبدیل دوباره
   const seqItem = await newItem();
   const seq = await requisition(seqItem, 10);
   const beforeOrder = await rejection(() => receiveItems(seq));

@@ -28,8 +28,9 @@ import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
 import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows } from './voidDependents.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { proformaInvoiceTarget } from './proformaInvoice.js';
-import { stockDirectionOf } from './documentRecordRule.js';
+import { assertNotProjectDelivery, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
+import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
 
 export class DocumentLifecycleService {
   /**
@@ -47,10 +48,12 @@ export class DocumentLifecycleService {
     user?: string,
     externalTx?: DbExecutor,
     options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number; allowBackdate?: boolean }
-  ): Promise<void> {
+  ): Promise<DocumentAuditChange | null> {
     const isStrict = options?.strict !== false;
+    // v9.0.337 (TD-785): سند پیش از نهایی‌سازی (زیر قفل) و پس از آن برای ردیف ممیزی؛ `null` اگر سند از پیش قطعی بود
+    let auditBefore: DocumentAuditSnapshot | null = null;
 
-    const execute = async (tx: DbExecutor): Promise<void> => {
+    const execute = async (tx: DbExecutor): Promise<DocumentAuditChange | null> => {
       // Step 1: Pre-flight lookup & validation without holding locks
       const [docPeek] = await tx.select({
         id: documents.id,
@@ -64,13 +67,15 @@ export class DocumentLifecycleService {
       if (!docPeek) throw new NotFoundError(`سند با شناسه ${id} یافت نشد`);
       if (docPeek.status === 'final') {
         logger.info({ message: `[DocumentLifecycleService.finalizeDocument] Document #${id} already finalized — skipping (concurrent call prevention)`, documentId: id });
-        return;
+        return null;
       }
       // v8.0.3 (TD-263): انبارگردانی هنگام ثبت موجودی را اصلاح کرده است؛ نهایی‌سازی آن کل مقدار شمارش‌شده را
       // دوباره از انبار خارج می‌کرد. انبارگردانی پیش‌نویسِ پیش از v8.0.3 نهایی نمی‌شود (ابطال و ثبت دوباره).
       if (docPeek.type === 'audit') {
         throw new ValidationError(`سند انبارگردانی «${docPeek.refNumber || id}» نهایی‌سازی نمی‌شود؛ انبارگردانی هنگام ثبت اعمال شده است. برای اصلاح، آن را ابطال و دوباره ثبت کنید.`);
       }
+      // v9.0.325 (TD-780، تصمیم ت۷ الف): رسید تولید پیش‌نویس (از پیش از این نسخه) قطعی نمی‌شود؛ تحویل فقط از مسیر پروژه
+      assertNotProjectDelivery(docPeek.type, docPeek.refNumber || String(id));
 
       // Pre-flight: verify line items existence and validity
       const rawLines = await tx.select({
@@ -122,6 +127,7 @@ export class DocumentLifecycleService {
             logger.info({ message: `[DocumentLifecycleService.finalizeDocument] Document #${id} already finalized — skipping (concurrent call prevention)`, documentId: id });
             return;
           }
+          auditBefore = await documentAuditSnapshot(tx, id);
 
           const docLines = await tx.select().from(documentItems)
             .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
@@ -292,20 +298,17 @@ export class DocumentLifecycleService {
           }
         }
       );
+      return auditBefore ? { before: auditBefore, after: await documentAuditSnapshot(tx, id) } : null;
     };
 
-    if (externalTx) {
-      await execute(externalTx);
-    } else {
-      await orm.transaction(execute);
-    }
+    return externalTx ? execute(externalTx) : orm.transaction(execute);
   }
 
   /**
    * Soft deletes a document and performs a cascade soft-delete on associated documentItems and transactions,
    * reverting any finalized inventory changes and recording audit logs.
    */
-  static async deleteDocument(id: number, user?: string, externalTx?: DbExecutor): Promise<void> {
+  static async deleteDocument(id: number, user?: string, externalTx?: DbExecutor, audit?: DocumentVoidAudit): Promise<void> {
     const execute = async (tx: DbExecutor): Promise<void> => {
       const [peek] = await tx.select({ projectId: documents.projectId }).from(documents)
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
@@ -339,6 +342,8 @@ export class DocumentLifecycleService {
       await assertVoidHasNoReturns(tx, { id: doc.id, refNumber: doc.refNumber });
       // v9.0.272 (TD-779، ت۴ الف): و نه سندی که دریافت یا پرداخت زنده خزانه دارد (۴۰۹ با فهرست آن‌ها)
       await assertVoidHasNoTreasuryRows(tx, { id: doc.id, refNumber: doc.refNumber });
+      // v9.0.337 (TD-785): سند و ردیف‌هایش پیش از ابطال برای تنها ردیف ممیزی ابطال
+      const auditBefore = await documentAuditSnapshot(tx, id);
 
       const deletedByUser = user || doc.user || 'system';
       // V10-1.1: زمان حذف/برگشت‌ها از ساعت توافقی (بدون Z تا مقایسه لغوی ستون date سازگار بماند)
@@ -482,17 +487,22 @@ export class DocumentLifecycleService {
       }
 
       // 5. Audit log — v8.0.77 (TD-324): در همان تراکنش (پیش‌تر اتصال دوم استخر و ردیف ممیزی ماندگار حتی با برگشت ابطال)
+      // v9.0.337 (TD-785): تنها ردیف ابطال (مسیر کاربر دیگر ردیف دومی نمی‌نویسد)، با سند پیش از ابطال از پایگاه‌داده
       await logActivity({
         tx,
-        username: deletedByUser,
+        userId: audit?.actor?.userId,
+        username: audit?.actor?.username || deletedByUser,
+        userFullName: audit?.actor?.userFullName,
+        ipAddress: audit?.actor?.ipAddress,
         action: 'DELETE',
         entity: 'اسناد انبار',
         entityId: id,
-        description: `حذف (Soft-Delete Cascade) سند انبار شماره "${doc.refNumber || id}" (نوع: ${doc.type || ''})`,
+        description: `ابطال سند شماره "${doc.refNumber || id}" (نوع: ${doc.type || ''}، خریدار: ${doc.buyerName || '—'})${audit?.note ? ` — ${audit.note}` : ''}`,
         details: {
           documentId: id,
           refNumber: doc.refNumber,
           docType: doc.type,
+          before: auditBefore,
           deletedAt: nowIso,
           deletedBy: deletedByUser
         }

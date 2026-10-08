@@ -1,20 +1,24 @@
 import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { authorizePermission, can, requirePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { PayrollPaymentService } from '../services/accounting/payrollPayment.service.js';
 import { PayrollPaymentVoidService } from '../services/accounting/payrollPaymentVoid.service.js';
 import { PieceworkService, PieceworkReadService, PayrollReadService, PieceworkPayrollService } from '../services/piecework.service.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, decimalInput, storageDateParam } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { PIECEWORK_LOG_PERMISSION, PIECEWORK_PAY_PERMISSION, PIECEWORK_PAYROLL_PERMISSION, PIECEWORK_TASKS_PERMISSION } from '../lib/permissions/pieceworkPermissions.js';
 import { ForbiddenError } from '../errors/customErrors.js';
 import { fin } from '../lib/financialDecimal.js';
 import { parseWorkQuantity } from '../lib/piecework/workQuantity.js';
+import { WORK_LOG_PAGE_SIZE } from '../lib/piecework/workLogList.js';
+import { parsePagination } from '../lib/pagination.js';
+import { pageWorkLogs, workLogSummary } from '../services/piecework/workLogList.js';
 
 const router = Router();
 
@@ -31,7 +35,7 @@ const nonNegativeAmount = (label: string) =>
 const createPieceworkTaskSchema = z.object({
   body: z.object({
     code: z.string().optional(),
-    title: z.string().min(1, 'عنوان کاری پرکیسی الزامی است'),
+    title: z.string().min(1, 'عنوان کاری کارمزدی الزامی است'),
     category: z.string().optional(),
     defaultRate: nonNegativeAmount('نرخ پایه').optional(),
     unit: z.string().optional(),
@@ -43,7 +47,7 @@ const updatePieceworkTaskSchema = z.object({
   body: z.object({
     // TD-246: کد جدید (خالی = کد فعلی بماند)؛ کد عنوان فعال دیگر با خطای ۴۰۹ رد می‌شود
     code: z.string().optional(),
-    title: z.string().min(1, 'عنوان کاری پرکیسی الزامی است').optional(),
+    title: z.string().min(1, 'عنوان کاری کارمزدی الزامی است').optional(),
     category: z.string().optional(),
     defaultRate: nonNegativeAmount('نرخ پایه').optional(),
     unit: z.string().optional(),
@@ -140,6 +144,25 @@ const updatePieceworkLogSchema = z.object({
   })
 });
 
+/**
+ * v9.0.330 (TD-811، B12P-08): فیلترهای فهرست کارکرد در SQL. `page` که بیاید یک صفحه با شمار و جمع همه منطبق‌ها
+ * برمی‌گردد (صفحه کارمزدی)؛ بی آن همه منطبق‌ها، مثل پیش (کارکردهای یک پروژه، پیش‌نمایش صدور فیش).
+ */
+const listPieceworkLogsSchema = z.object({
+  query: z.object({
+    personnelId: z.string().trim().regex(/^(all|[1-9]\d*)$/i, 'پرسنل فیلتر باید شناسه عددی یا «all» باشد').optional(),
+    projectId: z.string().trim().regex(/^(all|none|[1-9]\d*)$/i, 'پروژه فیلتر باید شناسه عددی، «none» یا «all» باشد').optional(),
+    status: z.string().trim().max(30).optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
+    search: z.string().max(100, 'عبارت جستجو حداکثر ۱۰۰ نویسه است').optional(),
+    page: z.string().regex(/^[1-9]\d*$/, 'شماره صفحه باید عدد صحیح مثبت باشد').optional(),
+    limit: z.string().regex(/^[1-9]\d*$/, 'اندازه صفحه باید عدد صحیح مثبت باشد').optional(),
+  }).passthrough(),
+}).passthrough();
+
+type ListPieceworkLogsQuery = z.infer<typeof listPieceworkLogsSchema>['query'];
+
 const generatePieceworkPayrollSchema = z.object({
   body: z.object({
     personnelId: z.union([z.number(), z.string()]),
@@ -150,6 +173,8 @@ const generatePieceworkPayrollSchema = z.object({
     totalBonuses: nonNegativeAmount('پاداش').optional(),
     deductions: nonNegativeAmount('کسورات').optional(),
     totalDeductions: nonNegativeAmount('کسورات').optional(),
+    // v9.0.329 (TD-861): شرح «سایر کسورات»؛ با کسورات بالای صفر الزامی است (سرویس، ۴۲۲)
+    deductionsDescription: z.string().max(500, 'شرح سایر کسورات حداکثر ۵۰۰ نویسه است').optional(),
     advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
     notes: z.string().optional(),
   })
@@ -243,7 +268,7 @@ router.get('/piecework/tasks/:id/history', authorizePermission(...READ_PERMISSIO
 }));
 
 // POST /api/piecework/tasks - Create new task
-router.post('/piecework/tasks', authorizePermission('personnel.manage'), validate(createPieceworkTaskSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/tasks', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(createPieceworkTaskSchema), asyncHandler(async (req, res) => {
   try {
     const { code, title, category, defaultRate, unit, description } = req.body;
 
@@ -264,7 +289,7 @@ router.post('/piecework/tasks', authorizePermission('personnel.manage'), validat
       action: 'CREATE',
       entity: 'عنوان پرکیسی',
       entityId: newTask.id,
-      description: `تعریف عنوان کاری پرکیسی جدید «${newTask.title}» با کد «${newTask.code}»`
+      description: `تعریف عنوان کاری کارمزدی جدید «${newTask.title}» با کد «${newTask.code}»`
     });
 
     res.status(201).json(newTask);
@@ -275,7 +300,7 @@ router.post('/piecework/tasks', authorizePermission('personnel.manage'), validat
 }));
 
 // POST /api/piecework/tasks/import-excel - Bulk import piecework tasks
-router.post('/piecework/tasks/import-excel', authorizePermission('personnel.manage'), asyncHandler(async (req, res) => {
+router.post('/piecework/tasks/import-excel', requirePermission(PIECEWORK_TASKS_PERMISSION), asyncHandler(async (req, res) => {
   try {
     const { rows, mode = 'upsert' } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -294,7 +319,7 @@ router.post('/piecework/tasks/import-excel', authorizePermission('personnel.mana
       username: req.user?.username || 'سیستم',
       action: 'IMPORT',
       entity: 'عناوین پرکیسی',
-      description: `واردات اکسل عناوین کاری پرکیسی (${result.createdCount} عنوان جدید، ${result.updatedCount} عنوان ویرایش‌شده، شیوه: ${mode})`
+      description: `ورود اکسل عناوین کاری کارمزدی (${result.createdCount} عنوان جدید، ${result.updatedCount} عنوان ویرایش‌شده، شیوه: ${mode})`
     });
 
     // v9.0.279 (TD-813): ردیف‌های ثبت‌نشده (نرخ متن یا منفی) با شماره ردیف و دلیل در `errors`
@@ -314,7 +339,7 @@ router.post('/piecework/tasks/import-excel', authorizePermission('personnel.mana
 }));
 
 // POST /api/piecework/tasks/clear-defaults or clear-all
-router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], authorizePermission('personnel.manage'), asyncHandler(async (req, res) => {
+router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], requirePermission(PIECEWORK_TASKS_PERMISSION), asyncHandler(async (req, res) => {
   try {
     const count = await PieceworkService.clearAllTasks({
       userId: req.user?.id,
@@ -326,7 +351,7 @@ router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], a
       username: req.user?.username || 'سیستم',
       action: 'DELETE',
       entity: 'عناوین پرکیسی',
-      description: `پاکسازی کلی عناوین کاری پرکیسی (${count} مورد حذف شدند)`
+      description: `پاکسازی کلی عناوین کاری کارمزدی (${count} مورد حذف شدند)`
     });
 
     res.json({
@@ -341,7 +366,7 @@ router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], a
 }));
 
 // PUT /api/piecework/tasks/:id - Update task
-router.put('/piecework/tasks/:id', authorizePermission('personnel.manage'), validate(updatePieceworkTaskSchema), asyncHandler(async (req, res) => {
+router.put('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(updatePieceworkTaskSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { code, title, category, defaultRate, unit, description, isActive } = req.body;
@@ -365,7 +390,7 @@ router.put('/piecework/tasks/:id', authorizePermission('personnel.manage'), vali
       action: 'UPDATE',
       entity: 'عنوان پرکیسی',
       entityId: id,
-      description: `ویرایش عنوان کاری پرکیسی «${existing.title}»${current.code !== existing.code ? ` (کد «${existing.code}» به «${current.code}»)` : ''}`
+      description: `ویرایش عنوان کاری کارمزدی «${existing.title}»${current.code !== existing.code ? ` (کد «${existing.code}» به «${current.code}»)` : ''}`
     });
 
     res.json({ status: 'ok', message: 'عنوان کاری با موفقیت به‌روزرسانی شد' });
@@ -376,7 +401,7 @@ router.put('/piecework/tasks/:id', authorizePermission('personnel.manage'), vali
 }));
 
 // DELETE /api/piecework/tasks/:id
-router.delete('/piecework/tasks/:id', authorizePermission('personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const existing = await PieceworkService.deleteTask(id, {
@@ -390,7 +415,7 @@ router.delete('/piecework/tasks/:id', authorizePermission('personnel.manage'), v
       action: 'DELETE',
       entity: 'عنوان پرکیسی',
       entityId: id,
-      description: `حذف عنوان کاری پرکیسی «${existing.title}»`
+      description: `حذف عنوان کاری کارمزدی «${existing.title}»`
     });
 
     res.json({ status: 'ok', message: 'عنوان کاری حذف شد' });
@@ -401,7 +426,7 @@ router.delete('/piecework/tasks/:id', authorizePermission('personnel.manage'), v
 }));
 
 // POST /api/piecework/tasks/:id/restore - Restore an archived/deleted task
-router.post('/piecework/tasks/:id/restore', authorizePermission('personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/tasks/:id/restore', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const existing = await PieceworkService.restoreTask(id, {
@@ -415,7 +440,7 @@ router.post('/piecework/tasks/:id/restore', authorizePermission('personnel.manag
       action: 'UPDATE',
       entity: 'عنوان پرکیسی',
       entityId: id,
-      description: `بازیابی عنوان کاری پرکیسی «${existing.title}» از بایگانی`
+      description: `بازیابی عنوان کاری کارمزدی «${existing.title}» از بایگانی`
     });
 
     res.json({ status: 'ok', message: 'عنوان کاری با موفقیت بازیابی شد' });
@@ -442,7 +467,7 @@ router.get('/piecework/categories', authorizePermission(...READ_PERMISSIONS.piec
 }));
 
 // POST /api/piecework/categories
-router.post('/piecework/categories', authorizePermission('personnel.manage', 'settings.manage'), validate(createTaskCategorySchema), asyncHandler(async (req, res) => {
+router.post('/piecework/categories', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(createTaskCategorySchema), asyncHandler(async (req, res) => {
   try {
     const { name, description } = req.body;
     const inserted = await PieceworkService.createCategory({ name, description });
@@ -464,7 +489,7 @@ router.post('/piecework/categories', authorizePermission('personnel.manage', 'se
 }));
 
 // PUT /api/piecework/categories/:id
-router.put('/piecework/categories/:id', authorizePermission('personnel.manage', 'settings.manage'), validate(updateTaskCategorySchema), asyncHandler(async (req, res) => {
+router.put('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), validate(updateTaskCategorySchema), asyncHandler(async (req, res) => {
   try {
     const rawId = req.params.id;
     const { name, description } = req.body;
@@ -488,7 +513,7 @@ router.put('/piecework/categories/:id', authorizePermission('personnel.manage', 
 }));
 
 // DELETE /api/piecework/categories/:id
-router.delete('/piecework/categories/:id', authorizePermission('personnel.manage', 'settings.manage'), asyncHandler(async (req, res) => {
+router.delete('/piecework/categories/:id', requirePermission(PIECEWORK_TASKS_PERMISSION), asyncHandler(async (req, res) => {
   try {
     const rawId = req.params.id;
     const result = await PieceworkService.deleteCategory(rawId);
@@ -527,7 +552,7 @@ router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:person
 }));
 
 // POST /api/piecework/personnel-rates - Set or update custom rate
-router.post(['/piecework/personnel-rates', '/piecework/rates'], authorizePermission('personnel.manage'), validate(setPersonnelRateSchema), asyncHandler(async (req, res) => {
+router.post(['/piecework/personnel-rates', '/piecework/rates'], requirePermission(PIECEWORK_TASKS_PERMISSION), validate(setPersonnelRateSchema), asyncHandler(async (req, res) => {
   try {
     const { personnelId, taskId, customRate } = req.body;
     const saved = await PieceworkService.setPersonnelRate({ personnelId, taskId, customRate }, { req });
@@ -544,35 +569,43 @@ router.post(['/piecework/personnel-rates', '/piecework/rates'], authorizePermiss
 
 // GET /api/piecework/logs - List work logs
 // v9.0.142 (TD-892، ت۱۰ الف): کارکرد همه پرسنل فقط با مجوز کارمزدی؛ مشاهده پروژه فقط کارکردهای یک پروژه را می‌خواند
-router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkLogs, ...READ_PERMISSIONS.projectPieceworkLogs), asyncHandler(async (req, res) => {
-  const { personnelId, projectId, startDate, endDate, status } = req.query;
+router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkLogs, ...READ_PERMISSIONS.projectPieceworkLogs), validate(listPieceworkLogsSchema), asyncHandler(async (req, res) => {
+  const { personnelId, projectId, startDate, endDate, status, search, page } = req.query as ListPieceworkLogsQuery;
   if (!(await can(req.user, ...READ_PERMISSIONS.pieceworkLogs))) {
     const projId = Number(projectId);
     if (!Number.isInteger(projId) || projId <= 0) {
       throw new ForbiddenError('کارکرد همه پرسنل مجوز کارمزدی را می‌خواهد؛ مشاهده پروژه فقط کارکردهای یک پروژه را نشان می‌دهد.', undefined, 'PIECEWORK_LOGS_PROJECT_ONLY');
     }
   }
+  const filters = { personnelId, projectId, startDate, endDate, status, search };
   try {
-    const rows = await PieceworkReadService.listWorkLogs({ personnelId, projectId, startDate, endDate, status });
-
-    res.json(rows);
+    if (page !== undefined) {
+      const paging = parsePagination(req.query as Record<string, unknown>, { limit: WORK_LOG_PAGE_SIZE });
+      return res.json(await pageWorkLogs(filters, paging.page, Math.max(1, paging.limit)));
+    }
+    res.json(await PieceworkReadService.listWorkLogs(filters));
   } catch (err) {
     logger.error({ message: 'Error fetching piecework logs', error: err });
     throw err;
   }
 }));
 
+// GET /api/piecework/logs/summary - v9.0.330 (TD-811): کارت‌های صفحه و «هزینه پروژه‌ها»، جمع SQL روی همه کارکردهای زنده
+router.get('/piecework/logs/summary', authorizePermission(...READ_PERMISSIONS.pieceworkLogs), asyncHandler(async (_req, res) => {
+  res.json(await workLogSummary());
+}));
+
 // POST /api/piecework/logs - Record work logs (Supports single or batch array)
 // حوزه H (TD-300): ثبت کارکرد مبلغ فیش را می‌سازد؛ مجوزش «ثبت کارکرد پرسنل» است نه «ثبت گزارش کار روزانه»
-router.post('/piecework/logs', authorizePermission('personnel.manage', 'piecework.log'), validate(createPieceworkLogsSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/logs', requirePermission(PIECEWORK_LOG_PERMISSION), validate(createPieceworkLogsSchema), asyncHandler(async (req, res) => {
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
 
     const items = Array.isArray(req.body.items) ? req.body.items : [req.body];
-    // حوزه H (TD-300، گزینه پیشنهادی «نرخ از سرور»): نرخ دستی فقط برای مدیر پرسنل یا مدیر تعرفه‌ها؛ دیگران نرخ
-    // اختصاصی پرسنل یا نرخ پایه عنوان کار را می‌گیرند (logWorkEntries با نرخ خالی همین را می‌خواند)
-    const canSetRate = await userHasRoleOrPermission(req.user, 'personnel.manage', 'piecework.manage_tasks');
+    // حوزه H (TD-300، گزینه پیشنهادی «نرخ از سرور»): نرخ دستی فقط برای مدیر تعرفه‌ها؛ دیگران نرخ اختصاصی پرسنل یا نرخ
+    // پایه عنوان کار را می‌گیرند (logWorkEntries با نرخ خالی همین را می‌خواند). v9.0.320 (TD-805): «مدیریت کامل پرسنل» دیگر نه
+    const canSetRate = await can(req.user, PIECEWORK_TASKS_PERMISSION);
 
     if (items.length === 0) {
       return res.status(400).json({ error: 'حداقل یک ردیف کارکرد انتخاب کنید' });
@@ -598,12 +631,15 @@ router.post('/piecework/logs', authorizePermission('personnel.manage', 'piecewor
 }));
 
 // PUT /api/piecework/logs/:id - Update work log
-router.put('/piecework/logs/:id', authorizePermission('personnel.manage'), validate(updatePieceworkLogSchema), asyncHandler(async (req, res) => {
+router.put('/piecework/logs/:id', requirePermission(PIECEWORK_LOG_PERMISSION), validate(updatePieceworkLogSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { date, quantity, unitRate, notes, projectId } = req.body;
+    // v9.0.320 (TD-805): ویرایش کارکرد با «ثبت و ویرایش کارکرد» است، ولی نرخ دستی همان قاعده ثبت را دارد: بی مدیریت تعرفه‌ها
+    // نرخ کارکرد همان که بود می‌ماند (پیش‌تر ویرایش فقط برای «مدیریت کامل پرسنل» بود که نرخ را آزادانه عوض می‌کرد)
+    const canSetRate = await can(req.user, PIECEWORK_TASKS_PERMISSION);
 
-    await PieceworkService.updateWorkLog(id, { date, quantity, unitRate, notes, projectId }, undefined, { req });
+    await PieceworkService.updateWorkLog(id, { date, quantity, unitRate: canSetRate ? unitRate : undefined, notes, projectId }, undefined, { req });
 
     res.json({ status: 'ok', message: 'کارکرد ویرایش شد' });
   } catch (err) {
@@ -613,7 +649,7 @@ router.put('/piecework/logs/:id', authorizePermission('personnel.manage'), valid
 }));
 
 // DELETE /api/piecework/logs/:id - Delete work log
-router.delete('/piecework/logs/:id', authorizePermission('personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/piecework/logs/:id', requirePermission(PIECEWORK_LOG_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     await PieceworkService.deleteWorkLog(id, undefined, { req });
@@ -688,11 +724,11 @@ router.get('/piecework/payrolls/:id', authorizePermission(...READ_PERMISSIONS.pa
 }));
 
 // POST /api/piecework/payrolls - Generate new payroll for personnel
-router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorizePermission('personnel.manage'), idempotency({ scope: 'payroll' }), validate(generatePieceworkPayrollSchema), asyncHandler(async (req, res) => {
+router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePermission(PIECEWORK_PAYROLL_PERMISSION), idempotency({ scope: 'payroll' }), validate(generatePieceworkPayrollSchema), asyncHandler(async (req, res) => {
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
-    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, advanceDeduction: reqAdvanceDeduction, notes } = req.body;
+    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, deductionsDescription, advanceDeduction: reqAdvanceDeduction, notes } = req.body;
 
     const result = await PieceworkPayrollService.generatePayroll({
       personnelId,
@@ -703,6 +739,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorizePe
       totalBonuses,
       deductions,
       totalDeductions,
+      deductionsDescription,
       advanceDeduction: reqAdvanceDeduction,
       notes,
       userId: currentUserId,
@@ -730,7 +767,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorizePe
 }));
 
 // PUT /api/piecework/payrolls/:id/status - Update status or mark as paid
-router.put('/piecework/payrolls/:id/status', authorizePermission('personnel.manage'), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
+router.put('/piecework/payrolls/:id/status', requirePermission(PIECEWORK_PAYROLL_PERMISSION), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { status, notes } = req.body;
@@ -763,7 +800,7 @@ router.put('/piecework/payrolls/:id/status', authorizePermission('personnel.mana
 }));
 
 // POST /api/piecework/payrolls/:id/register-payment — V10-4.4: مسیر یگانه پرداخت حقوق
-router.post('/piecework/payrolls/:id/register-payment', authorizePermission('personnel.manage'), idempotency({ scope: 'payroll' }), validate(registerPayrollPaymentSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/payrolls/:id/register-payment', requirePermission(PIECEWORK_PAY_PERMISSION), idempotency({ scope: 'payroll' }), validate(registerPayrollPaymentSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { bankAccountId, method, amount, paymentDate, paymentReference, notes } = req.body;
@@ -808,7 +845,7 @@ router.post('/piecework/payrolls/:id/register-payment', authorizePermission('per
 }));
 
 // POST /api/piecework/payrolls/:id/payments/:transactionId/void — v8.0.31 (TD-283، تصمیم مالک محصول): ابطال یک پرداخت فیش
-router.post('/piecework/payrolls/:id/payments/:transactionId/void', authorizePermission('personnel.manage'), idempotency({ scope: 'payroll' }), validate(voidPayrollPaymentSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/payrolls/:id/payments/:transactionId/void', requirePermission(PIECEWORK_PAY_PERMISSION), idempotency({ scope: 'payroll' }), validate(voidPayrollPaymentSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const result = await PayrollPaymentVoidService.voidPayrollPayment({
     payrollId: id,
@@ -863,7 +900,7 @@ router.get('/piecework/personnel/:id/advance-balance', authorizePermission(...RE
 }));
 
 // POST /api/piecework/payrolls/:id/sync-voucher - Explicitly sync accounting journal voucher for payroll
-router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecework.payroll', 'personnel.manage'), idempotency({ scope: 'payroll' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.post('/piecework/payrolls/:id/sync-voucher', requirePermission(PIECEWORK_PAYROLL_PERMISSION), idempotency({ scope: 'payroll' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -888,7 +925,7 @@ router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecewo
 }));
 
 // DELETE /api/piecework/payrolls/:id - Cancel/delete payroll and un-link logs
-router.delete('/piecework/payrolls/:id', authorizePermission('personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/piecework/payrolls/:id', requirePermission(PIECEWORK_PAYROLL_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
   const deletedPayroll = await PieceworkPayrollService.deletePayroll(id, {

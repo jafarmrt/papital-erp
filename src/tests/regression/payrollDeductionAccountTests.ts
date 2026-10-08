@@ -95,7 +95,7 @@ export async function runPayrollDeductionAccountTests(shouldRun: ShouldRun): Pro
       const task = await newTask();
       const worker = await newWorker('TD-554 worker');
       await addLog(worker, task, '2026-04-05', 1_000_000);
-      const pay = await admin.post('/api/piecework/payrolls/generate', { personnelId: worker, ...PERIOD, deductions: 150000 });
+      const pay = await admin.post('/api/piecework/payrolls/generate', { personnelId: worker, ...PERIOD, deductions: 150000, deductionsDescription: 'قسط وام' });
       if (pay.status !== 200 && pay.status !== 201) problems.push(`the payslip answered ${pay.status} ${brief(pay.body)}`);
       const on3205 = await personNet('3205', worker);
       const on3202 = await personNet('3202', worker);
@@ -107,7 +107,7 @@ export async function runPayrollDeductionAccountTests(shouldRun: ShouldRun): Pro
       await storeMappings({ ...saved, employeeDeductionsPayableAccountCode: '3202' });
       const legacyWorker = await newWorker('TD-554 legacy worker');
       await addLog(legacyWorker, task, '2026-04-06', 2_000_000);
-      const legacyPay = await admin.post('/api/piecework/payrolls/generate', { personnelId: legacyWorker, ...PERIOD, deductions: 300000 });
+      const legacyPay = await admin.post('/api/piecework/payrolls/generate', { personnelId: legacyWorker, ...PERIOD, deductions: 300000, deductionsDescription: 'قسط وام' });
       if (legacyPay.status !== 200 && legacyPay.status !== 201) problems.push(`the legacy payslip answered ${legacyPay.status} ${brief(legacyPay.body)}`);
       await storeMappings({ ...saved, employeeDeductionsPayableAccountCode: '3205' });
       if (!fin(await personNet('3202', legacyWorker)).equals(-300000)) problems.push(`the legacy deductions on 3202 are ${await personNet('3202', legacyWorker)}, expected credit 300,000 left as posted`);

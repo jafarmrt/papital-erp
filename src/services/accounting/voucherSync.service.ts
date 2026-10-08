@@ -3,7 +3,6 @@ import {
   documents, 
   documentItems, 
   journalVouchers, 
-  customers, 
   personnel, 
   pieceworkPayrolls, 
   items, 
@@ -22,6 +21,7 @@ import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financi
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { salesReturnKardexUnitCosts } from '../documents/salesReturnCost.js';
+import { documentVoucherPartyId } from '../documents/documentParty.js';
 import { kardexInCostByItem } from './productionReceiptCost.js';
 import { documentOutflowCost } from './outflowVoucherCost.js';
 import { foreignCostRow, irrToForeignAmount, rowExchangeRate } from './foreignCostRow.js';
@@ -193,12 +193,8 @@ export class VoucherSyncService {
       return null;
     }
 
-    let matchedCustomerId: number | null = null;
-    if (doc.buyerName) {
-      const [matchedCust] = await executor.select().from(customers)
-        .where(and(eq(customers.name, doc.buyerName.trim()), eq(customers.isDeleted, 0)));
-      if (matchedCust) matchedCustomerId = matchedCust.id;
-    }
+    // v9.0.336 (TD-778، تصمیم ت۶ الف): طرف حساب از شناسه سند؛ سند پیشین بی شناسه با برابری دقیق نام
+    const matchedCustomerId = await documentVoucherPartyId(executor, doc);
 
     // V10-1.1 & V5.0.17: fallback تاریخ ۱۰ کاراکتری ایمن
     const docDate = doc.date ? String(doc.date).slice(0, 10) : await businessTodayIsoDate();
@@ -553,12 +549,8 @@ export class VoucherSyncService {
     const finishedGoodsAcc = (await AccountMappingService.getInventoryFinishedGoodsAccount(tx)) || allAccs.find(a => a.code === '1403');
     const supplierAcc = (await AccountMappingService.getTradePayablesAccount(tx)) || allAccs.find(a => a.code === '3001');
 
-    let matchedSupplierId: number | null = null;
-    if (doc.buyerName && doc.type !== 'production_receipt') {
-      const [matchedCust] = await executor.select().from(customers)
-        .where(and(eq(customers.name, doc.buyerName.trim()), eq(customers.isDeleted, 0)));
-      if (matchedCust) matchedSupplierId = matchedCust.id;
-    }
+    // v9.0.336 (TD-778): تأمین‌کننده از شناسه سند؛ سند پیشین بی شناسه با برابری دقیق نام
+    const matchedSupplierId = doc.type !== 'production_receipt' ? await documentVoucherPartyId(executor, doc) : null;
 
     let matchedProjectId: number | null = doc.projectId ? Number(doc.projectId) : null;
     let matchedProjectName: string = '';
@@ -1011,12 +1003,8 @@ export class VoucherSyncService {
       }
       const customerReturnCredit = totalReturnAmountNum.add(returnVatNum).round(4);
 
-      let matchedCustomerId: number | null = null;
-      if (doc.buyerName) {
-        const [matchedCust] = await executor.select().from(customers)
-          .where(and(eq(customers.name, doc.buyerName.trim()), eq(customers.isDeleted, 0)));
-        if (matchedCust) matchedCustomerId = matchedCust.id;
-      }
+      // v9.0.336 (TD-778): مشتری برگشت از شناسه سند؛ سند پیشین بی شناسه با برابری دقیق نام
+      const matchedCustomerId = await documentVoucherPartyId(executor, doc);
 
       voucherType = 'sales';
       voucherDescription = `سند برگشت از فروش / مرجوعی شماره ${doc.refNumber} - مشتری: ${doc.buyerName || 'مشتری'}`;
@@ -1301,7 +1289,7 @@ export class VoucherSyncService {
         debit: pieceworkAmount,
         credit: 0,
         currency: 'IRR',
-        description: `هزینه دستمزد تولیدی پرکیسی فیش ${pay.payrollNumber}`
+        description: `هزینه دستمزد تولیدی کارمزدی فیش ${pay.payrollNumber}`
       });
     }
     // سهم هزینه حقوق ثابت (+ پاداش/اضافه‌کار)
@@ -1357,7 +1345,8 @@ export class VoucherSyncService {
           debit: 0,
           credit: otherDeductions,
           currency: 'IRR',
-          description: `سایر کسورات فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})`
+          // v9.0.329 (TD-861): شرح کسورات فیش در ردیف کسورات حقوق پرداختنی می‌آید (فیش پیش از آن شرح ندارد)
+          description: `سایر کسورات فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})${pay.deductionsDescription ? `: ${pay.deductionsDescription}` : ''}`
         });
         allocatedCredits = allocatedCredits.add(otherDeductions);
       } else if (isStrict) {
@@ -1389,7 +1378,7 @@ export class VoucherSyncService {
       date: pay.endDate || await businessTodayIsoDate(),
       voucherType: 'payroll',
       status: 'draft',
-      description: `ثبت هزینه و محاسبه حقوق و کارمزد پرکیسی ${pay.title} - پرسنل: ${pers?.fullName || 'پرسنل'} (${pay.payrollNumber})`,
+      description: `ثبت هزینه و محاسبه حقوق و کارمزد ${pay.title} - پرسنل: ${pers?.fullName || 'پرسنل'} (${pay.payrollNumber})`,
       referenceModule: 'payroll',
       referenceId: pay.id,
       referenceNumber: pay.payrollNumber,

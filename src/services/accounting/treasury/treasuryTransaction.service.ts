@@ -259,7 +259,7 @@ export class TreasuryTransactionService {
       const partyCurrentName = await resolveTreasuryPartyName(txEngine, partyType, data.partyId);
       if (data.documentId) {
         await assertTreasuryDocumentLink(txEngine, {
-          type: data.type, documentId: data.documentId, partyType, partyName: partyCurrentName ?? data.partyName,
+          type: data.type, documentId: data.documentId, partyType, partyId: data.partyId ?? null, partyName: partyCurrentName ?? data.partyName,
         });
       }
 

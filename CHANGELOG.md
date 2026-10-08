@@ -19,17 +19,77 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.323 — Receive Items Needs an Order
+### v9.0.343 — Receive Items Needs an Order
 - **Fix (TD-699, B10-12, decision t4):** `receive_items` of a purchase requisition refuses a catalog row that was never ordered (409 REQUISITION_ROWS_NOT_ORDERED, «ابتدا سفارش خرید با تأمین‌کننده و قیمت صادر کنید») instead of a final receipt from the generic procurement supplier at the estimate, which posted donated-goods income (5204) with no supplier debt.
 
-### v9.0.322 — Requisition Consolidation Closes Its Sources
-- **Fix (TD-694, B10-07, decision t3):** `POST /procurement/consolidate` locks its sources in id order in one transaction, refuses a missing id (404 REQUISITION_NOT_FOUND) or a source that is approved, ordered, received, rejected or consolidated (409 REQUISITION_NOT_CONSOLIDATABLE), creates the consolidated requisition and marks each source `consolidated` with `consolidated_into_id` (migration 0079) and a terminated workflow; a consolidated requisition takes no action (409 REQUISITION_CONSOLIDATED).
+### v9.0.342 — Requisition Consolidation Closes Its Sources
+- **Fix (TD-694, B10-07, decision t3):** `POST /procurement/consolidate` locks its sources in id order in one transaction, refuses a missing id (404 REQUISITION_NOT_FOUND) or a source that is approved, ordered, received, rejected or consolidated (409 REQUISITION_NOT_CONSOLIDATABLE), creates the consolidated requisition and marks each source `consolidated` with `consolidated_into_id` (migration 0083) and a terminated workflow; a consolidated requisition takes no action (409 REQUISITION_CONSOLIDATED).
 
-### v9.0.321 — Procurement Double Submission
+### v9.0.341 — Procurement Double Submission
 - **Fix (TD-693, B10-06):** `POST /procurement/requisitions`, `/requisitions/:id/convert-to-orders`, `/consolidate` and `/orders/:id/deliver` use `idempotency({ scope: 'procurement' })`, so a repeated submission with the browser's Idempotency-Key replays the first response instead of creating a second order or requisition.
 
-### v9.0.320 — Procurement Orders Linked to Requisitions
-- **Fix (TD-691 / TD-698, B10-04 / B10-11):** a procurement order is a document with `documents.procurement_requisition_id` (migration 0078, backfilled only from an unambiguous requisition tag; the rest is listed by the health check `procurement_order_link_unresolved`); the order list, the desk summary and delivery read only linked documents (else 422 PROCUREMENT_ORDER_NOT_LINKED), and the list filters, counts and pages in SQL.
+### v9.0.340 — Procurement Orders Linked to Requisitions
+- **Fix (TD-691 / TD-698, B10-04 / B10-11):** a procurement order is a document with `documents.procurement_requisition_id` (migration 0082, backfilled only from an unambiguous requisition tag; the rest is listed by the health check `procurement_order_link_unresolved`); the order list, the desk summary and delivery read only linked documents (else 422 PROCUREMENT_ORDER_NOT_LINKED), and the list filters, counts and pages in SQL.
+
+### v9.0.339 — Paged Document List
+- **Document list:** a list request without paging now answers one page of 50 documents with its total instead of the whole table, the full list comes only with `export=true`, and the stock count history and transfer tabs page through it (TD-787).
+
+### v9.0.338 — Database Rules for Documents
+- **Document constraints:** the database now refuses an unknown document type or status and a negative line quantity, price or discount; the document service refuses an unknown type or status even without lines, legacy rows are listed by the health check and a duplicate index on the project link was removed (TD-786).
+
+### v9.0.337 — One Audit Row per Document Change
+- **Document audit trail:** creating, editing, finalizing, changing the notes of and voiding a document each write one audit row in the same transaction with the stored document before and after; a void writes one row instead of two and the invoice event carries the buyer name (TD-785).
+
+### v9.0.336 — The Party of a Document by Id
+- **Document party:** a sales or purchase document now keeps its party by id; the voucher, the customer dossier, the treasury link and the party delete guard follow the id whatever the buyer name, a return takes its invoice's party, and old documents were linked by exact name, the rest listed by the health check (TD-778).
+
+### v9.0.335 — Document Treasury Rows Only for Treasury Readers
+- **Document read scope:** a document's receipts and payments (tracking number, bank account, description) are now shown only to treasury readers; other document readers see only the paid amount, the balance and the settlement status (TD-781).
+
+### v9.0.334 — WooCommerce Bulk Stock Sync Reports Failed Items
+- **WooCommerce bulk stock sync (TD-724):** the bulk stock sync showed the server's green message even when no item was updated; a failed item is now an error message with the counts and the first errors, and the WooCommerce order tables show a load error (403 / 500) instead of «no orders yet» (WooCommerce half of TD-730).
+
+### v9.0.333 — WooCommerce Connection Test With Stored Keys
+- **WooCommerce connection test (TD-723):** a non-admin sees the WooCommerce keys masked and the test button sent the mask as the keys, so the test always failed; the browser now leaves out an empty or masked key and the server uses the stored key, only at the stored store address.
+
+### v9.0.332 — WooCommerce Namesake Buyers Get Their Own Customer
+- **WooCommerce namesake buyers (TD-703):** a WooCommerce buyer whose name belongs to another customer with another phone gets a new customer named «name (phone)», so the sale is no longer debited to the existing customer's receivable; a name that differs only in letter case matches the stored customer, and the order log reports the distinct customer.
+
+### v9.0.331 — Package 15 Events and Integrations Audit Documentation
+- **Package 15 Audit:** section 15 of the V9 stability audit records the events, webhooks, automatic rules, dead-letter queue, notifications and WooCommerce package: 32 proven findings (one P1, a WooCommerce order of a namesake posted to the existing customer's receivable, and eighteen P2, among them a webhook test that follows redirects to internal addresses and delivery failures that never retry) opened as TD-703..TD-734 with the product-owner decisions. Documentation only.
+
+### v9.0.330 — Work Log List Paged and Filtered on the Server
+- **Work Log List Paged and Filtered on the Server (TD-811):** the piecework page loaded every work log ever recorded on each open and after each change (about 30 MB and 2.3 s for a workshop year) and filtered and summed it in the browser; `GET /piecework/logs` now filters in SQL and returns one page with the count and sum of every match, the page opens on the current Jalali month, `/piecework/logs/summary` sums the cards and project costs in SQL, and the «settled» filter now finds the logs on a payslip.
+
+### v9.0.329 — Payslip Deductions Need a Description
+- **Payslip Deductions Need a Description (TD-861):** the «سایر کسورات» box was labelled as insurance or tax although nothing computes either, and its amount reached the employee deductions payable account with no word on what it was; deductions above zero now need a description, stored with the payslip (migration 0079), printed on it and written into the deductions voucher row (account 3205).
+
+### v9.0.328 — Payslip Shows Its Real State, Monthly Fixed Salary and Company Name
+- **Payslip Shows Its Real State, Monthly Fixed Salary and Company Name (TD-815):** the payslip printed «۱ دوره ماهانه» for any fixed salary, called draft and approved payslips both ready to pay and carried a fixed company name, and «فیش‌های حقوقی من» showed a partly paid payslip as a draft with the currency twice; payslips now use one set of status labels, one fixed-salary row per Jalali month, the company name setting and an advance deduction column, and the UI says «کارمزدی» and «چاپ».
+
+### v9.0.327 — Sales Document Numbers Only From the Server Series
+- **Document numbers:** a sales invoice or sales return number now comes only from the server series; a stock document may keep a manual number, but a taken one is refused instead of being silently replaced, a manual number no longer moves the series, and the audit log records the stored number (TD-783).
+
+### v9.0.326 — The Reference Invoice of a Sales Return by Fiscal Year
+- **Sales returns:** the reference invoice lookup now finds only final invoices with one indexed query and knows the fiscal year: a number used in two years asks which year, so last year's invoice can be returned against, and each lookup error shows its real cause (TD-782).
+
+### v9.0.325 — A Production Receipt Comes Only From the Project Delivery
+- **Production:** a production receipt is now recorded only through the project's «ورود به انبار», where the project, its planned quantity and its delivery cost are checked; the stock document page no longer offers it and `POST /documents` or finalizing a draft one is refused (TD-780, decision ت۷).
+
+### v9.0.324 — Stock Count Lines Need a Count and One Line per Item and Warehouse
+- **Inventory:** a stock count line without a count is now refused instead of being counted as zero, a repeated item in the same warehouse is refused instead of being adjusted twice, and the count document shows each warehouse's own variance and book stock (TD-777).
+
+### v9.0.323 — A Document Edit Links Its Sales Lead Under the Lead Lock
+- **Sales:** `PUT /documents/:id` with `crmLeadId` now links or unlinks the sales lead inside the edit transaction under the lead lock: a missing lead or a lead with another proforma is 422 before anything is saved, and an unlinked lead is released for a new proforma; before, the link was written after the edit, without the one-proforma rule (TD-776).
+
+### v9.0.322 — Payment From a Payslip Offers Its Remainder
+- **Payment From a Payslip Offers Its Remainder (TD-814):** the pay button inside a payslip sent no paid amount, so a partly paid payslip's payment form offered the whole net, which the server refused; it now sends the paid amount and status, as the payslip list does.
+
+### v9.0.321 — Custom Rate Readers Follow Decision t3
+- **Custom Rate Readers Follow Decision t3 (TD-806):** a personnel's custom rates opened only for piecework.view, piecework.log and personnel.manage, so the rate writer (piecework.manage_tasks) and the payroll issuers and payers could not read them; they now open for exactly the decision t3 list, while projects.view and settings.manage read only titles and categories.
+
+### v9.0.320 — Each Payroll Action Asks Its Own Key
+- **Each Payroll Action Asks Its Own Key (TD-805):** personnel.manage alone set custom rates and issued, paid, voided and deleted payrolls while piecework.payroll could not issue one; titles, categories and rates now ask piecework.manage_tasks, work logs piecework.log, payrolls piecework.payroll and payments the new piecework.pay; migration 0078 gives existing roles the keys of what they did, and every button follows the same key.
 
 ### v9.0.319 — Requisition Edit Before Approval
 - **Fix (TD-696, B10-09):** `PUT /procurement/requisitions/:id` edits only an unapproved (or rejected) requisition without orders (else 409 REQUISITION_NOT_EDITABLE), in one transaction under the row lock, with the create contract, the stored row ids kept and a before/after audit row.

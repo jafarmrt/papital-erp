@@ -1,5 +1,6 @@
 import type { DbExecutor } from '../db/drizzle.js';
 import type { DecimalValue } from '../lib/financialDecimal.js';
+import type { DocumentAuditChange, DocumentVoidAudit } from './documents/documentAudit.js';
 import { 
   DocumentRefNumberService, 
   DocumentStockEngine, 
@@ -50,15 +51,15 @@ export class DocumentService {
   /**
    * Updates the notes of a specific document.
    */
-  static async updateDocumentNotes(id: number, notes: string): Promise<void> {
-    return DocumentCreationService.updateDocumentNotes(id, notes);
+  static async updateDocumentNotes(id: number, notes: string, externalTx?: DbExecutor): Promise<DocumentAuditChange> {
+    return DocumentCreationService.updateDocumentNotes(id, notes, externalTx);
   }
 
   /**
    * Updates an existing document (proforma or draft) and its line items.
    */
-  static async updateDocument(id: number, body: UpdateDocumentInput): Promise<void> {
-    return DocumentCreationService.updateDocument(id, body);
+  static async updateDocument(id: number, body: UpdateDocumentInput, externalTx?: DbExecutor): Promise<DocumentAuditChange> {
+    return DocumentCreationService.updateDocument(id, body, externalTx);
   }
 
   /**
@@ -168,15 +169,15 @@ export class DocumentService {
     user?: string,
     externalTx?: DbExecutor,
     options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number; allowBackdate?: boolean }
-  ): Promise<void> {
+  ): Promise<DocumentAuditChange | null> {
     return DocumentLifecycleService.finalizeDocument(id, user, externalTx, options);
   }
 
   /**
    * Soft deletes a document and performs a cascade soft-delete on associated documentItems and transactions.
    */
-  static async deleteDocument(id: number, user?: string, externalTx?: DbExecutor): Promise<void> {
-    return DocumentLifecycleService.deleteDocument(id, user, externalTx);
+  static async deleteDocument(id: number, user?: string, externalTx?: DbExecutor, audit?: DocumentVoidAudit): Promise<void> {
+    return DocumentLifecycleService.deleteDocument(id, user, externalTx, audit);
   }
 
   /**

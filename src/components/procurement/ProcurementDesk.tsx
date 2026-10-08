@@ -171,7 +171,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
 
   const handleSelectAll = (select: boolean) => {
     if (select) {
-      // v9.0.322 (TD-694): فقط درخواست تأییدنشده و بی سفارش تجمیع می‌شود
+      // v9.0.342 (TD-694): فقط درخواست تأییدنشده و بی سفارش تجمیع می‌شود
       setSelectedIds(filteredRequisitions.filter(canConsolidateRequisition).map(r => r.id));
     } else {
       setSelectedIds([]);

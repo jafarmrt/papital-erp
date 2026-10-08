@@ -1,6 +1,6 @@
-import { sql, eq, and, desc, inArray, gte, lte, or, ilike } from 'drizzle-orm';
+import { sql, eq, and, desc, inArray, gte, lte, or, ilike, isNull } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { documents, documentItems, items, transactions, treasuryTransactions } from '../../db/schema.js';
+import { documents, documentItems, items, transactions, treasuryTransactions, warehouses } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import type { Money } from '../../lib/money.js';
 import type { DecimalValue, FinancialDecimal } from '../../lib/financialDecimal.js';
@@ -8,8 +8,11 @@ import { MAX_PAGE_LIMIT } from '../../lib/pagination.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { transferLocationsByDocument } from '../inventory/transferDocumentLocations.js';
+import { stockCountVariances } from '../inventory/stockCountSheet.js';
+import { createLedgerLocationResolver } from '../inventory/warehouseResolver.js';
 import { fetchSettlementRows, settledAmount } from './documentSettlement.js';
 import type { SettlementRow } from './documentSettlement.js';
+import { documentPartyCondition } from './documentParty.js';
 import type { 
   GetDocumentsFilter, 
   FormattedDocument, 
@@ -38,6 +41,9 @@ export class DocumentQueryService {
     }
     if (filter.buyerName !== undefined) {
       conditions.push(sql`btrim(${documents.buyerName}) = ${filter.buyerName.trim()}::text`);
+    }
+    if (filter.party) {
+      conditions.push(documentPartyCondition(filter.party));
     }
     if (filter.status && filter.status !== 'all') {
       conditions.push(eq(documents.status, filter.status));
@@ -209,17 +215,27 @@ export class DocumentQueryService {
       WHERE di.document_id = ${doc.id} AND (di.is_deleted IS NULL OR di.is_deleted = 0)
     `);
 
-    const txs = doc.type === 'audit'
-      ? await orm.select().from(transactions).where(eq(transactions.documentId, doc.id))
-      : [];
+    // v9.0.324 (TD-777): انحراف ردیف انبارگردانی با کلید (کالا، انبار) از ردیف‌های فعال و غیرمعکوس کاردکس همین سند
+    let auditVarianceOf: (itemId: number, location: unknown) => number = () => 0;
+    if (doc.type === 'audit') {
+      const ledgerRows = await orm.select({ itemId: transactions.itemId, type: transactions.type, quantity: transactions.quantity, location: transactions.location })
+        .from(transactions)
+        .where(and(eq(transactions.documentId, doc.id), eq(transactions.isDeleted, 0), isNull(transactions.reversalOfId)));
+      const resolveLocation = createLedgerLocationResolver(
+        await orm.select({ id: warehouses.id, code: warehouses.code, name: warehouses.name, isActive: warehouses.isActive }).from(warehouses),
+      );
+      const keyOf = (location: unknown) => {
+        const wh = resolveLocation(location);
+        return wh ? `wh:${wh.id}` : `raw:${String(location ?? '').trim().toLowerCase()}`;
+      };
+      const variances = stockCountVariances(ledgerRows.map(r => ({ ...r, itemId: Number(r.itemId) })), keyOf);
+      auditVarianceOf = (itemId, location) => variances.get(`${itemId}|${keyOf(location)}`) ?? 0;
+    }
 
     const rows = (itemsResult.rows || []) as Array<Record<string, unknown>>;
 
     const formattedItems: FormattedDocumentItem[] = rows.map((row: Record<string, unknown>) => {
-      const matchingTx = txs.find(t => t.itemId === Number(row.item_id));
-      const variance = matchingTx 
-        ? (matchingTx.type === 'in' ? matchingTx.quantity : -matchingTx.quantity)
-        : 0;
+      const variance = auditVarianceOf(Number(row.item_id), row.location);
       const itemName = (row.name as string) || (row.item_name as string) || (row.code as string) || 'کالا';
       return {
         document_id: Number(row.document_id),

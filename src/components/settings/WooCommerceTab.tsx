@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { formatPersianDateTime, formatPersianDate } from '../../utils';
 import { WcOrderLogStatusBadge } from './WcOrderLogStatusBadge';
 import { ShopWarehouseSelect } from './ShopWarehouseSelect';
+import { WcListEmptyRow } from './WcListEmptyRow';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 import { copyToClipboard } from '../../utils/clipboard';
 
@@ -29,6 +30,9 @@ interface WooCommerceTabProps {
   handleSyncManualOrder: (e: React.FormEvent) => void;
   syncedWcOrders: any[];
   wcOrderLogs: any[];
+  /** v9.0.334 (TD-730): خطای خواندن هر فهرست؛ خالی یعنی خوانده شد */
+  syncedWcOrdersError?: string;
+  wcOrderLogsError?: string;
   loadSyncedWcOrders: () => void;
   handleSyncAllStocks: () => void;
   isSyncingAllStocks: boolean;
@@ -69,6 +73,8 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
   handleSyncManualOrder,
   syncedWcOrders,
   wcOrderLogs,
+  syncedWcOrdersError = '',
+  wcOrderLogsError = '',
   loadSyncedWcOrders,
   handleSyncAllStocks,
   isSyncingAllStocks,
@@ -352,11 +358,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {wcOrderLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-6 text-center text-slate-400">
-                      هنوز هیچ سابقه پردازش سفارشی در سیستم ثبت نشده است.
-                    </td>
-                  </tr>
+                  <WcListEmptyRow colSpan={6} error={wcOrderLogsError} emptyText="هنوز هیچ سابقه پردازش سفارشی در سیستم ثبت نشده است." />
                 ) : (
                   wcOrderLogs.map((log: any, idx: number) => (
                     <tr key={`wc-log-${log.id || idx}-${idx}`} className="hover:bg-slate-50/80">
@@ -375,7 +377,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
                       </td>
                       <td className="p-3 text-slate-600 max-w-xs truncate" title={log.errorMessage || ''}>
                         {log.errorMessage ? (
-                          <span className="text-rose-600 font-mono text-[11px]">{log.errorMessage}</span>
+                          <span className={`${log.status === 'failed' ? 'text-rose-600' : 'text-slate-600'} text-[11px]`}>{log.errorMessage}</span>
                         ) : (
                           <span className="text-slate-400">—</span>
                         )}
@@ -398,11 +400,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {syncedWcOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-6 text-center text-slate-400">
-                      هنوز هیچ سفارشی از ووکامرس ثبت نشده است.
-                    </td>
-                  </tr>
+                  <WcListEmptyRow colSpan={5} error={syncedWcOrdersError} emptyText="هنوز هیچ سفارشی از ووکامرس ثبت نشده است." />
                 ) : (
                   syncedWcOrders.map((doc: any, idx: number) => (
                     <tr key={`wc-doc-${doc.id || idx}-${idx}`} className="hover:bg-slate-50/80">

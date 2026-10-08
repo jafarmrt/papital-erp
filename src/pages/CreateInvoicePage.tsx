@@ -22,6 +22,7 @@ import { currencyChangeError, lineDiscountError, pricesForCurrency } from '../li
 import { printLineAmounts } from '../lib/invoices/invoicePrintTotals';
 import { amountDecimalsOf } from '../lib/invoices/invoiceListDocuments';
 import { addInvoiceLine, customerLocationLabel, EDIT_FINAL_REFUSED, finalStatusOptionNote, invoiceFormFromDocument, invoiceLineLocations, isSalesFormDocType, lineLocationOf, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
+import { selectedPartyId } from '../lib/documents/partySelection';
 import type { InvoiceListDocument } from '../lib/invoices/invoiceListDocuments';
 import { Sparkles } from 'lucide-react';
 import { ExchangeRateField, exchangeRateError } from '../components/documents/ExchangeRateField';
@@ -52,7 +53,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   // v9.0.300 (TD-790): پیش‌فاکتور چندانباره در ویرایش؛ هر ردیف انبار خودش را نگه می‌دارد
   const [multiWarehouseEdit, setMultiWarehouseEdit] = useState(false);
 
-  // شماره سند = شماره بعدی سرور تا وقتی کاربر یا پیش‌فاکتور ویرایشی شماره دیگری نگذاشته باشد (null = شماره سرور)
+  // شماره سند = شماره بعدی سرور، یا شماره پیش‌فاکتوری که ویرایش می‌شود (null = شماره سرور)؛ v9.0.327 (TD-783): فقط نمایشی
   const [refOverride, setRefNumber] = useState<string | null>(null);
   const refNumber = refOverride ?? nextRef;
   const [date, setDate] = useState<string>(() => getTodayJalaliDate());
@@ -156,6 +157,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       setRefNumber(form.refNumber);
       if (form.date) setDate(form.date);
       buyer.setBuyer(form);
+      // v9.0.336 (TD-778): انتخابگر خریدار از شناسه طرف حساب سند، نه تطبیق نام
+      if (form.partyId) setSelectedCustomerId(String(form.partyId));
       setNotes(form.notes);
       setCurrency(form.currency);
       setExchangeRate(form.exchangeRate);
@@ -224,6 +227,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       const s = locationState.state as Record<string, string | number | undefined>;
       const str = (v: string | number | undefined) => (v === undefined ? '' : String(v));
       if (s.buyerName) setBuyerName(str(s.buyerName));
+      if (selectedPartyId(s.customerId)) setSelectedCustomerId(str(s.customerId));
       if (s.buyerPhone) setBuyerPhone(str(s.buyerPhone));
       if (s.buyerAddress) setBuyerAddress(str(s.buyerAddress));
       const uniqueLoc = customerLocationLabel({ province: str(s.buyerProvince || s.province), city: str(s.buyerCity || s.city) });
@@ -238,7 +242,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       // v9.0.299 (TD-789): وضعیت مسیریابی یک بار خوانده می‌شود تا پرونده فروش به سندهای بعدی این صفحه نرسد
       void navigate(locationState.pathname, { replace: true, state: null });
     }
-  }, [locationState.state, locationState.pathname, navigate, canFinalizeSales, setBuyerName, setBuyerPhone, setBuyerAddress, setBuyerCity]);
+  }, [locationState.state, locationState.pathname, navigate, canFinalizeSales, setBuyerName, setSelectedCustomerId, setBuyerPhone, setBuyerAddress, setBuyerCity]);
 
   const handleItemSelect = (val: string, rawItem?: Item) => {
     setSelectedItem(val);
@@ -362,10 +366,13 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     const payload = {
       docType,
       status,
-      refNumber,
+      // v9.0.327 (TD-783): شماره از سری سرور؛ در ویرایش «auto» یعنی همان شماره ذخیره‌شده
+      refNumber: 'auto',
       date: formattedDate,
       user: currentUser.full_name,
       inOut: 'out' as const,
+      // v9.0.336 (TD-778، تصمیم ت۶ الف): طرف حساب با شناسه انتخابگر؛ نام فقط نمایش است
+      partyId: selectedPartyId(selectedCustomerId),
       buyer_name: buyerName,
       buyer_city: buyerCity,
       buyer_phone: buyerPhone,
@@ -497,8 +504,9 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               )}
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1 text-slate-500">شماره سند / رفرنس (اتومات)</label>
-              <input required type="text" value={refNumber} onChange={e => setRefNumber(e.target.value)} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-left font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" dir="ltr" />
+              {/* v9.0.327 (TD-783، تصمیم ت۹ الف): شماره فقط از سری سرور؛ سند تازه شماره را هنگام ثبت می‌گیرد */}
+              <label className="block text-xs font-medium mb-1 text-slate-500">شماره سند (از سری سرور)</label>
+              <input type="text" value={refNumber} readOnly title="شماره هنگام ثبت از سری فاکتورهای سرور داده می‌شود" className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-left font-mono text-slate-500 bg-slate-50 focus:outline-none" dir="ltr" />
             </div>
             <div>
               <label className="block text-xs font-medium mb-1 text-slate-500">تاریخ</label>
