@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { activityLogs, eventActionRules } from '../../db/schema.js';
@@ -30,7 +30,8 @@ export async function runRuleActiveStateTests(shouldRun: (id: string, ...extra: 
     const url = `/api/events/action-rules/${ruleId}/toggle`;
     const stateOf = async () => (await orm.select({ isActive: eventActionRules.isActive }).from(eventActionRules).where(eq(eventActionRules.id, ruleId)))[0]?.isActive;
     const audits = async () => orm.select({ details: activityLogs.details }).from(activityLogs)
-      .where(and(eq(activityLogs.entity, `قانون واکنش خودکار #${ruleId}`), eq(activityLogs.entityId, String(ruleId))));
+      .where(and(eq(activityLogs.entity, `قانون واکنش خودکار #${ruleId}`), eq(activityLogs.entityId, String(ruleId))))
+      .orderBy(asc(activityLogs.id));
 
     const on = await h.post(url, { active: true }, manager);
     if (on.status !== 200 || on.body?.changed !== true || await stateOf() !== 1) wrong.push(`switch on: ${on.status} changed ${on.body?.changed}, state ${await stateOf()}`);

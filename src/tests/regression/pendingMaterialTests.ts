@@ -150,10 +150,11 @@ async function concurrentApprovalCase(h: Harness, wrong: string[]): Promise<stri
     h.put(`/api/pending-materials/${id}/approve`, { code: `${code}-${side}`, name: `ERP-TEST-MARKER ${code} ${side}` })));
   const statuses = results.map(r => r.status).sort();
   if (statuses.join('/') !== '200/409') wrong.push(`two concurrent approvals answered ${results.map(briefBody).join(' and ')}, expected 200 and 409`);
-  const made = await h.q('SELECT id FROM items WHERE code IN ($1, $2) AND is_deleted = 0', [`${code}-A`, `${code}-B`]);
+  const made = await h.q('SELECT id, code FROM items WHERE code IN ($1, $2) AND is_deleted = 0', [`${code}-A`, `${code}-B`]);
   if (made.length !== 1) wrong.push(`the request made ${made.length} items, expected 1`);
 
-  const otherCase = await pendingRow(h, { code: `${code}-A`.toLowerCase() });
+  // the code of whichever approval won the race, in another letter case
+  const otherCase = await pendingRow(h, { code: String(made[0]?.code ?? `${code}-A`).toLowerCase() });
   const clash = await h.put(`/api/pending-materials/${otherCase}/approve`, {});
   if (clash.status !== 409) wrong.push(`a code differing only in letter case answered ${briefBody(clash)}, expected 409`);
   return `concurrent ${statuses.join('/')}; items ${made.length}; other case ${clash.status}`;
