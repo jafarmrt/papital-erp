@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.398 — Non-bcrypt Passwords Are Locked, Never Turned Into Passwords
+- **Fix (TD-617, B01-37):** the boot no longer hashes stored non-bcrypt values into working passwords; a one-off script locks them with a required reset, ended sessions and an audit row.
+
 ### v9.0.397 — No Silent Demo Database Without DATABASE_URL
 - **Fix (TD-616, B01-36):** SQL_HOST alone reaches PostgreSQL, the in-memory demo database starts only with ERP_DEMO_MODE=1 outside production, and a server without a database refuses to start.
 

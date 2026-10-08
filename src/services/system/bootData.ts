@@ -1,6 +1,5 @@
 import { runMigrations } from '../../db/migrator.js';
 import { runSeedWithLock } from '../../db/seed.js';
-import { migratePlainPasswords } from '../../db/migratePlainPasswords.js';
 import { warmDisplayTimezone } from '../../lib/businessClock.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { EventActionEngineService } from '../events/eventActionEngineService.js';
@@ -19,7 +18,8 @@ export async function prepareDatabaseAtBoot(): Promise<void> {
   // متغیر ALLOW_SEED_IN_PRODUCTION بازنشسته شد
   const seed = await runSeedWithLock();
   if (!seed.success) throw new Error(`Base data seed failed: ${seed.message}`);
-  await migratePlainPasswords();
+  // v9.0.398 (TD-617, decision t4 «الف»): the boot never touches passwords; non-bcrypt values are locked by the one-off
+  // `npm run users:lock-plain-passwords`, never turned into working passwords
   await seedDefaultEngines();
   // v8.0.77 (TD-324): کش منطقه زمانی پیش از اولین درخواست، بیرون از هر تراکنش پر می‌شود
   await warmDisplayTimezone();
