@@ -53,7 +53,7 @@ export default function ProjectScheduleTab({
   const [batchLoggingStageId, setBatchLoggingStageId] = useState<number | null>(null);
   // v9.0.283 (TD-747، تصمیم ت۶ الف بسته ۱۱): روز کارکرد «ثبت کارمزد»، پیش‌فرض امروز در منطقه زمانی نمایش؛ نه تاریخ شروع کار یا پروژه
   const [logDate, setLogDate] = useState<string>(() => getTodayIsoDate());
-  // v9.0.286 (TD-805): «ثبت کارمزد» همان کلید API ثبت کارکرد را می‌پرسد
+  // v9.0.320 (TD-805): «ثبت کارمزد» همان کلید API ثبت کارکرد را می‌پرسد
   const { canLog } = usePieceworkPermissions();
 
   // Load latest presets and personnel if missing

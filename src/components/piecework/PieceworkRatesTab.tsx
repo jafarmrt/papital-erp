@@ -25,7 +25,7 @@ export function PieceworkRatesTab({
   const rial = useRialDisplay();
   const curLbl = rial.label;
   const inputCurLbl = formatCurrencyLabel('IRR');
-  // v9.0.286 (TD-805): نرخ اختصاصی با «مدیریت عناوین کاری و نرخ‌های پایه» نوشته می‌شود؛ دیگران فقط می‌بینند
+  // v9.0.320 (TD-805): نرخ اختصاصی با «مدیریت عناوین کاری و نرخ‌های پایه» نوشته می‌شود؛ دیگران فقط می‌بینند
   const { canManageTasks } = usePieceworkPermissions();
   return (
     <div className="space-y-4">

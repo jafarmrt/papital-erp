@@ -43,7 +43,7 @@ export function PieceworkTasksTab({
 }: PieceworkTasksTabProps) {
   const rial = useRialDisplay();
   const curLbl = rial.label;
-  // v9.0.286 (TD-805): تعریف، ویرایش، حذف، بازیابی و بارگذاری اکسل عناوین با «مدیریت عناوین کاری و نرخ‌های پایه»
+  // v9.0.320 (TD-805): تعریف، ویرایش، حذف، بازیابی و بارگذاری اکسل عناوین با «مدیریت عناوین کاری و نرخ‌های پایه»
   const { canManageTasks } = usePieceworkPermissions();
 
   return (

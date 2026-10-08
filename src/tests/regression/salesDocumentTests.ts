@@ -4,8 +4,9 @@ import { brief, fixture } from './documentEntryTests.js';
 
 /**
  * Package 8 (documents and invoices), PR B: the money of sales documents (zero-price invoices, voiding an invoice that has
- * returns or receipts, the VAT and amount of a sales return), through the real Express routes with real sessions. Each case
- * reproduces a finding of the package 8 review and is red on the code before its fix.
+ * returns or receipts, the VAT and amount of a sales return); PR C: the server side of the sales invoice form (the open
+ * proforma list). Through the real Express routes with real sessions. Each case reproduces a finding of the package 8
+ * review and is red on the code before its fix.
  */
 export async function runSalesDocumentTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -25,6 +26,9 @@ export async function runSalesDocumentTests(shouldRun: ShouldRun): Promise<TestC
     ['reg_return_vat_from_invoice_td_774',
       'v9.0.274: a sales return of an invoice takes the invoice VAT in proportion to the returned net (cumulative, so a full return gives all of it back) and its voucher debits VAT payable; a return without an invoice takes the user percent (TD-774)',
       ['td774', 'documents', 'return', 'vat', 'package8'], returnVatFromInvoiceCase],
+    ['reg_document_list_types_filter_td_792',
+      'v9.0.301: GET /documents takes a list of types (types=invoice,proforma), so the open sales proformas leave out a purchase proforma; an unknown type is 400 and every listed type must be readable (TD-792)',
+      ['td792', 'documents', 'list', 'proforma', 'package8'], documentListTypesCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -393,4 +397,36 @@ async function returnVatFromInvoiceCase(h: Harness, wrong: string[]): Promise<st
     if (vat.amount !== 50_000 || payable !== 50_000) wrong.push(`the return without an invoice stored VAT ${JSON.stringify(vat)} and debited VAT payable ${payable}, expected 50,000 and 50,000`);
   }
   return 'a full return of 1,000,000 at 10% gives back 100,000 VAT (customer and VAT payable net 0), another percent is 422; VAT 100 over 3 units returns as 33, 34 and 33 (the draft keeps 33 on finalize); a USD return of 1 of 2 x 100 less 20 at 10% debits 9 USD at 600,000; a return without an invoice at 10% of 500,000 debits 50,000';
+}
+
+/** B08-23 (TD-792): the open proformas of the sales form were read without a type, so a purchase proforma was edited there */
+async function documentListTypesCase(h: Harness, wrong: string[]): Promise<string> {
+  const { createTestDocument } = await import('../fixtures/factories.js');
+  const sales = (await createTestDocument({ type: 'proforma', status: 'proforma', refNumber: `PF8C${h.tag}` })).document;
+  const salesInvoice = (await createTestDocument({ type: 'invoice', status: 'proforma', refNumber: `PI8C${h.tag}` })).document;
+  const purchase = (await createTestDocument({ type: 'receipt', status: 'proforma', refNumber: `PR8C${h.tag}` })).document;
+  const ids = (body: unknown): number[] => {
+    const list = Array.isArray((body as { data?: unknown })?.data) ? (body as { data: Array<{ id: unknown }> }).data : [];
+    return list.map(r => Number(r.id));
+  };
+
+  const list = await h.get('/api/documents?status=proforma&types=invoice,proforma&page=1&limit=1000');
+  const listed = ids(list.body);
+  if (list.status !== 200) wrong.push(`the sales proforma list answered ${brief(list)}, expected 200`);
+  else {
+    if (!listed.includes(sales.id) || !listed.includes(salesInvoice.id)) wrong.push(`the sales proforma list ${JSON.stringify(listed)} misses proforma ${sales.id} or invoice proforma ${salesInvoice.id}`);
+    if (listed.includes(purchase.id)) wrong.push(`the sales proforma list carries the purchase proforma ${purchase.id}`);
+    if (typeof (list.body as { total?: unknown }).total !== 'number') wrong.push('the paged list carries no total');
+  }
+
+  const unknown = await h.get('/api/documents?status=proforma&types=invoice,bogus');
+  if (unknown.status !== 400) wrong.push(`types with an unknown type answered ${brief(unknown)}, expected 400`);
+
+  const counter = await h.sessionWith(['audit.view']);
+  const own = await h.get('/api/documents?types=audit,transfer&page=1&limit=50', counter);
+  if (own.status !== 200) wrong.push(`audit.view listing types=audit,transfer answered ${brief(own)}, expected 200`);
+  const mixed = await h.get('/api/documents?types=audit,invoice&page=1&limit=50', counter);
+  if (mixed.status !== 403) wrong.push(`audit.view listing types=audit,invoice answered ${brief(mixed)}, expected 403`);
+
+  return 'GET /documents?status=proforma&types=invoice,proforma lists the sales proforma and the invoice proforma with a total and leaves out the purchase (receipt) proforma; types=invoice,bogus is 400; audit.view lists types=audit,transfer and is refused types=audit,invoice';
 }

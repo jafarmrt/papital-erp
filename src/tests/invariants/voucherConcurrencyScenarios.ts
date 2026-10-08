@@ -119,7 +119,9 @@ export async function checkReversalLifecycle(wh: string): Promise<string[]> {
   await VoucherService.setVoucherStatus(invoiceVoucher, 'approved');
   await DocumentService.deleteDocument(invoiceId, 'inv');
   const invoiceToDraft = await rejection(() => VoucherService.setVoucherStatus(invoiceVoucher, 'draft'));
-  if (!invoiceToDraft?.includes('سند برگشت فعال')) problems.push(`سند فاکتور ابطال‌شده به پیش‌نویس برگشت (${invoiceToDraft ?? 'پذیرفته شد'})`);
+  // v9.0.294 (TD-552): سند منشأدار پیش از سنجش سند برگشت با قفل منشأ رد می‌شود؛ هر دو رد همان تضمین TD-323 است
+  const refusedToDraft = invoiceToDraft?.includes('سند برگشت فعال') || invoiceToDraft?.includes('سند انبار یا فاکتور را ابطال');
+  if (!refusedToDraft) problems.push(`سند فاکتور ابطال‌شده به پیش‌نویس برگشت (${invoiceToDraft ?? 'پذیرفته شد'})`);
   const deleteVoucher = await rejection(() => VoucherService.deleteJournalVoucher(invoiceVoucher));
   if (!deleteVoucher) problems.push('سند فاکتور ابطال‌شده حذف شد');
   const live = await pool.query<{ n: number }>('SELECT COUNT(*)::int AS n FROM journal_vouchers WHERE id = $1 AND is_deleted = 0 AND status = \'approved\'', [invoiceVoucher]);

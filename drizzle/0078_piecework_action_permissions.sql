@@ -1,9 +1,9 @@
--- Drizzle Migration 0077: every payroll action asks its own permission key (v9.0.286 / TD-805, B12P-02,
+-- Drizzle Migration 0078: every payroll action asks its own permission key (v9.0.320 / TD-805, B12P-02,
 -- product-owner decision t2 «الف», migration rule of the permission model §4.4)
 --
--- Until v9.0.285 personnel.manage («مدیریت کامل پرسنل») alone wrote every piecework record: task titles and categories,
+-- Until v9.0.319 personnel.manage («مدیریت کامل پرسنل») alone wrote every piecework record: task titles and categories,
 -- base and custom rates, work log edits and deletes, payroll issue, status, voucher, payment, payment void and delete;
--- categories were also written by settings.manage. The piecework keys did not do what their titles say. From v9.0.286:
+-- categories were also written by settings.manage. The piecework keys did not do what their titles say. From v9.0.320:
 --   piecework.manage_tasks  titles, categories, Excel import, base and custom rates, a manual work log rate
 --   piecework.log           create, edit and delete a work log that no live payroll holds
 --   piecework.payroll       issue, status, voucher sync and delete of a payroll
@@ -43,7 +43,7 @@ SELECT 'system', 'سیستم', 'UPDATE', 'نقش و دسترسی', c.id::text,
   format('مهاجرت مجوزهای حقوق و دستمزد: نقش "%s" کلیدهای کارمزدی کارهایی را که پیش‌تر با «مدیریت کامل پرسنل» یا «مدیریت تنظیمات» می‌کرد به‌صورت تیک گرفت', c.name),
   jsonb_build_object('roleId', c.id, 'roleName', c.name, 'roleCode', c.code, 'reason', c.reason,
     'beforePermissions', c.before, 'afterPermissions', c.before || to_jsonb(c.added),
-    'addedPermissions', to_jsonb(c.added), 'migration', '0077_piecework_action_permissions'),
+    'addedPermissions', to_jsonb(c.added), 'migration', '0078_piecework_action_permissions'),
   '', now() AT TIME ZONE 'UTC'
 FROM tmp_piecework_action_roles c
 ORDER BY c.id;

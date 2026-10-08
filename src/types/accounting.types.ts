@@ -1,3 +1,4 @@
+import type { VoucherSourceKind } from '../lib/accounting/voucherSource';
 export type AccountLevel = 'group' | 'general' | 'subsidiary' | 'detailed';
 export type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense' | 'cost_of_sales';
 export type AccountNature = 'debit' | 'credit' | 'both';
@@ -97,6 +98,10 @@ export interface JournalVoucher {
   sourcePayrollId?: number | null;
   /** v9.0.159 (TD-545): سال مالی‌ای که «بستن سال مالی» این سند اختتامیه یا افتتاحیه را برایش صادر کرده است */
   sourceFiscalYear?: number | null;
+  /** v9.0.294 (TD-552، ت۸): منشأ سند خودکار (یا منشأ سندی که این سند برگشت آن است)؛ null برای سند دستی */
+  sourceKind?: VoucherSourceKind | null;
+  /** v9.0.295 (TD-555): نسخه سند برای ویرایش هم‌زمان (۴۰۹ OCC_CONFLICT) */
+  version?: number;
   currency?: string | null;
   createdById?: number | null;
   created_by_id?: number | null;

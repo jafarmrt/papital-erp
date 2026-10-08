@@ -48,7 +48,7 @@ export function usePiecework() {
     (Array.isArray(userPermissions?.permissions) &&
       READ_PERMISSIONS.payrolls.some(p => userPermissions.permissions.includes(p)))
   );
-  // حوزه H (TD-300): نرخ دستی کارکرد فقط برای مدیر تعرفه‌ها (همان قاعده سرور، در ثبت و ویرایش؛ v9.0.286، TD-805)
+  // حوزه H (TD-300): نرخ دستی کارکرد فقط برای مدیر تعرفه‌ها (همان قاعده سرور، در ثبت و ویرایش؛ v9.0.320، TD-805)
   const { canManageTasks: canSetLogRate } = usePieceworkPermissions();
 
   // Core Data Lists

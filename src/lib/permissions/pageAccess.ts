@@ -36,7 +36,7 @@ export const SETTINGS_TAB_ACCESS = {
   inventory_integrity: { gate: anyOf('inventory.reconcile'), api: ['GET /api/inventory/negative-stock-policy', 'PUT /api/inventory/negative-stock-policy'] },
   inventory_control: { gate: anyOf('settings.manage'), api: ['GET /api/settings', 'POST /api/settings'] },
   projects: { gate: anyOf('settings.manage'), api: ['GET /api/settings', 'POST /api/settings', 'GET /api/piecework/tasks'] },
-  // v9.0.286 (TD-805): زبانه عناوین و دسته‌های کاری همان کلید نوشتن آن‌ها را می‌پرسد
+  // v9.0.320 (TD-805): زبانه عناوین و دسته‌های کاری همان کلید نوشتن آن‌ها را می‌پرسد
   task_titles: { gate: anyOf('piecework.manage_tasks'), api: ['GET /api/piecework/tasks', 'POST /api/piecework/tasks'] },
   woocommerce: { gate: anyOf('woocommerce.view'), api: ['GET /api/woocommerce/synced-orders', 'GET /api/woocommerce/order-logs'] },
   health: { gate: 'system_admin', api: ['GET /api/system/health'] },

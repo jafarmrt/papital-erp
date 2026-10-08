@@ -18,6 +18,9 @@ import { assertVoucherRowsBalanced, isVoucherBalancedForFinalize, resolveManualV
 // v7.0.49 (audit P2-5): ثابت یگانه تلورانس تراز؛ v7.0.76 به src/lib/voucherBalance.ts منتقل شد تا فرم‌ها هم آن را بخوانند
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { assertPostingAccounts } from './postingAccounts.js';
+import { assertVoucherWithoutSource, voucherSourceKinds } from './voucherSource.js';
+import { checkOccVersion } from '../../lib/occHelper.js';
+import type { BatchFinalizeResult } from '../../lib/accounting/voucherBatch.js';
 export { VOUCHER_BALANCE_TOLERANCE };
 
 /** v7.0.72 (audit P3-5): حداکثر ردیف در هر INSERT چندردیفی (۱۲ پارامتر در هر ردیف، زیر سقف ۶۵۵۳۵ پارامتر PostgreSQL) */
@@ -166,8 +169,10 @@ export class VoucherService {
       }
     }
 
+    const sourceKinds = await voucherSourceKinds(orm, voucherIds); // v9.0.294 (TD-552، ت۸)
     const data: JournalVoucher[] = rawList.map(v => ({
       ...v,
+      sourceKind: sourceKinds.get(v.id) ?? null,
       voucher_number: v.voucherNumber,
       manual_voucher_number: v.manualVoucherNumber || '',
       voucher_type: v.voucherType as JournalVoucher['voucherType'],
@@ -215,9 +220,11 @@ export class VoucherService {
     .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
     .where(and(eq(journalVoucherItems.voucherId, id), eq(journalVoucherItems.isDeleted, 0)))
     .orderBy(asc(journalVoucherItems.rowOrder));
+    const sourceKind = (await voucherSourceKinds(executor, [id])).get(id) ?? null; // v9.0.294 (TD-552، ت۸)
 
     return {
       ...v,
+      sourceKind,
       attachments: (Array.isArray(v.attachments) ? v.attachments : []) as FinancialAttachment[],
       description: v.description || '',
       voucher_number: v.voucherNumber,
@@ -367,6 +374,8 @@ export class VoucherService {
     attachments?: unknown[];
     /** v9.0.190 (TD-551، ت۷): ویرایش سند دستی از مسیر اسناد؛ فقط مسیر آن را می‌گذارد */
     manualEntry?: boolean;
+    /** v9.0.295 (TD-555، B03-13): نسخه‌ای که ویرایشگر خوانده است؛ مسیر اسناد آن را الزامی می‌خواهد */
+    expectedVersion?: number;
     items?: {
       accountId: number;
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
@@ -380,8 +389,16 @@ export class VoucherService {
     }[];
   }, externalTx?: DbExecutor): Promise<JournalVoucher> {
     const executeWork = async (tx: DbExecutor) => {
-      const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
+      // v9.0.295 (TD-555، B03-13): سند حذف‌شده خوانده نمی‌شود؛ پیش‌تر ویرایش آن ردیف‌های زنده زیر سند حذف‌شده می‌نوشت و ۴۰۴ می‌داد
+      const [existing] = await tx.select().from(journalVouchers)
+        .where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
+      // v9.0.294 (TD-552، ت۸): سند منشأدار از صفحه اسناد ویرایش نمی‌شود؛ صدور دوباره سند پیش‌نویس از منشأ (VoucherSync) آزاد است
+      if (data.manualEntry) await assertVoucherWithoutSource(tx, existing, 'ویرایش نمی‌شود');
+      // v9.0.295 (TD-555): نسخه کهنه ۴۰۹ OCC_CONFLICT؛ پیش‌تر ذخیره دوم دو حسابدار ذخیره اول را بی‌صدا پاک می‌کرد
+      if (data.expectedVersion !== undefined) {
+        checkOccVersion(existing, { entityType: 'journal_voucher', entityId: id, expectedVersion: data.expectedVersion });
+      }
       // P2-03: انجماد اسناد تاییدشده (approved) و دائم (permanent) — ویرایش مستقیم منحصراً برای اسناد با وضعیت پیش‌نویس (draft) مجاز است
       if (existing.status !== 'draft') {
         const statusLabel = existing.status === 'approved' ? 'تاییدشده' : existing.status === 'permanent' ? 'دائم و قطعی' : existing.status;
@@ -439,7 +456,8 @@ export class VoucherService {
         ...(storedAttachments !== undefined ? { attachments: storedAttachments } : {}),
         totalDebit: money(sumDebit),
         totalCredit: money(sumCredit),
-      }).where(eq(journalVouchers.id, id));
+        version: existing.version + 1, // v9.0.295 (TD-555)
+      }).where(and(eq(journalVouchers.id, id), eq(journalVouchers.version, existing.version)));
     };
 
     if (externalTx) {
@@ -457,6 +475,7 @@ export class VoucherService {
     return await orm.transaction(async (tx) => {
       const [existing] = await tx.select().from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
+      await assertVoucherWithoutSource(tx, existing, 'حذف نمی‌شود'); // v9.0.294 (TD-552، ت۸)
       await this.assertNoActiveReversal(tx, existing, 'حذف نمی‌شود');
       if (existing.status === 'permanent') {
         throw new BusinessLogicError('اسناد دائم و قطعی‌شده حسابداری قابل حذف مستقیم نیستند. برای بی‌اثر کردن سند، از گزینه «صدور سند برگشتی (ابطال سند)» استفاده نمایید.');
@@ -578,6 +597,8 @@ export class VoucherService {
       allowReversalOfReversal?: boolean;
       /** فقط بازگشایی سال مالی: سند بستن سال را برمی‌گرداند (برگشت نوع و پیوند همان سال را می‌گیرد) */
       allowYearEndClosing?: boolean;
+      /** v9.0.294 (TD-552، ت۸): برگشت از صفحه اسناد حسابداری؛ سند منشأدار فقط با ابطال منشأ برمی‌گردد */
+      manualEntry?: boolean;
     }
   ): Promise<JournalVoucher> {
 
@@ -591,6 +612,7 @@ export class VoucherService {
 
       // v9.0.160 (TD-559): سند بستن سال فقط با بازگشایی همان سال برمی‌گردد (پیوند، نه نوع سند)
       if (!params.allowYearEndClosing) this.assertNotYearEndClosing(original, 'مستقیم ابطال نمی‌شود');
+      if (params.manualEntry) await assertVoucherWithoutSource(tx, original, 'برگشت نمی‌خورد'); // v9.0.294 (TD-552، ت۸)
       // v8.0.70 (TD-323، قاعده TD-251): سند پیش‌نویس سند معکوس تأییدشده نمی‌گیرد؛ پیش‌تر می‌گرفت و دفاتر تأییدشده فقط
       // سند معکوس را می‌دیدند
       if (original.status === 'draft') {
@@ -735,6 +757,8 @@ export class VoucherService {
         .for('update');
       if (!lockedOriginal) throw new NotFoundError('سند مبدا یافت نشد یا قبلاً حذف شده است');
       const original = await this.getJournalVoucherById(params.voucherId, tx);
+      // v9.0.294 (TD-552، ت۸): سند منشأدار فقط با ابطال و صدور دوباره منشأ اصلاح می‌شود
+      await assertVoucherWithoutSource(tx, original, 'اصلاح نمی‌شود');
 
       // C-03 & P0-06: اسناد قطعی (permanent) از نظر قانونی و سیستمی غیرقابل ابطال یا اصلاح هستند
       if (original.status === 'permanent') {
@@ -898,6 +922,7 @@ export class VoucherService {
       const original = await this.getJournalVoucherById(params.voucherId, tx);
       if (!original) throw new Error('سند مبدا جهت بازثبت یافت نشد');
       if (original.isDeleted === 1 || original.is_deleted === 1) throw new Error('سند مبدا حذف شده است');
+      await assertVoucherWithoutSource(tx, original, 'ابطال و بازثبت نمی‌شود'); // v9.0.294 (TD-552، ت۸)
 
       // C-03 & P0-06: اسناد قطعی (permanent) به هیچ وجه قابل ابطال یا بازثبت نیستند
       if (original.status === 'permanent') {
@@ -1055,29 +1080,37 @@ export class VoucherService {
 
   /**
    * Batch Finalize Vouchers
+   * v9.0.296 (TD-556، B03-14): شمار واقعی اسناد قطعی‌شده و فهرست ردشده‌ها با دلیل (ناموجود، حذف‌شده، پیش‌تر قطعی، سال
+   * مالی بسته، نامتراز). پیش‌تر `finalizedCount` تعداد شناسه‌های فرستاده‌شده بود: [پیش‌نویس، دائم، حذف‌شده، ناموجود] →
+   * «۴ سند قطعی شد» در حالی که فقط یکی تغییر کرد.
    */
-  static async finalizeJournalVouchers(ids: number[], userId?: number, username?: string): Promise<{ finalizedCount: number; ids: number[] }> {
-    if (!ids || ids.length === 0) return { finalizedCount: 0, ids: [] };
+  static async finalizeJournalVouchers(ids: number[], userId?: number, username?: string): Promise<BatchFinalizeResult> {
+    if (!ids || ids.length === 0) return { finalizedCount: 0, ids: [], refused: [] };
 
     // Deadlock Prevention: Always sort IDs in ascending order before row-level locking
     const sortedIds = Array.from(new Set(ids.map(Number))).filter(id => !isNaN(id) && id > 0).sort((a, b) => a - b);
+    const finalized: number[] = [];
+    const refused: BatchFinalizeResult['refused'] = [];
 
     await orm.transaction(async (tx) => {
       for (const id of sortedIds) {
         const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
-        if (existing && existing.isDeleted === 0 && existing.status !== 'permanent') {
-          await this.checkFiscalPeriodOpen(existing.date, tx);
-          if (await isVoucherBalancedForFinalize(tx, existing)) {
-            await tx.update(journalVouchers).set({
-              status: 'permanent',
-              approvedById: userId || null,
-            }).where(eq(journalVouchers.id, id));
-          }
-        }
+        if (!existing) { refused.push({ id, voucherNumber: null, reason: 'سند یافت نشد' }); continue; }
+        const refuse = (reason: string) => refused.push({ id, voucherNumber: existing.voucherNumber, reason });
+        if (existing.isDeleted !== 0) { refuse('سند حذف شده است'); continue; }
+        if (existing.status === 'permanent') { refuse('سند پیش‌تر قطعی شده است'); continue; }
+        if (await this.isPeriodClosed(existing.date, tx)) { refuse('سال مالی سند بسته است'); continue; }
+        await this.checkFiscalPeriodOpen(existing.date, tx);
+        if (!(await isVoucherBalancedForFinalize(tx, existing))) { refuse('سند تراز نیست'); continue; }
+        await tx.update(journalVouchers).set({
+          status: 'permanent',
+          approvedById: userId || null,
+        }).where(eq(journalVouchers.id, id));
+        finalized.push(id);
       }
     });
 
-    return { finalizedCount: sortedIds.length, ids: sortedIds };
+    return { finalizedCount: finalized.length, ids: finalized, refused };
   }
 
   /**
@@ -1121,6 +1154,8 @@ export class VoucherService {
     const [existing] = await tx.select().from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
     if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
     if (status === 'draft' && existing.status !== 'draft') {
+      // v9.0.294 (TD-552، ت۸): سند منشأدار به پیش‌نویس برنمی‌گردد (صفحه اسناد و گردش کار سند)؛ پیش‌تر برمی‌گشت و ویرایش می‌شد
+      await assertVoucherWithoutSource(tx, existing, 'به پیش‌نویس برنمی‌گردد');
       this.assertNotYearEndClosing(existing, 'به پیش‌نویس برنمی‌گردد'); // v9.0.121 (TD-559)
       await this.assertNoActiveReversal(tx, existing, 'به پیش‌نویس برنمی‌گردد');
     }

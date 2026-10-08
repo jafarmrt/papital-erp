@@ -43,7 +43,7 @@ const renderRates = () => render(
   <PieceworkRatesTab personnelSelectOptions={[]} selectedPersonnelForRates={7} onSelectPersonnel={noop} tasksList={[TASK]} customRatesMap={{}} onSaveCustomRate={noop} />,
 );
 
-// v9.0.286 (TD-805, B12P-02, decision t2 «الف»): a payroll button shows only for the key its API asks
+// v9.0.320 (TD-805, B12P-02, decision t2 «الف»): a payroll button shows only for the key its API asks
 describe('payroll buttons follow their API keys (TD-805)', () => {
   it('work log add, edit and delete need piecework.log', () => {
     grant({ canManageTasks: true, canIssuePayroll: true, canPay: true });

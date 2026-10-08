@@ -96,7 +96,7 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
           problems.push(`${perm} pick list row is missing title / currency / hasLedgerAccount: ${JSON.stringify(row)}`);
         }
       }
-      // v9.0.286 (TD-805): payroll payment asks piecework.pay; personnel.manage covers the personnel dossier only
+      // v9.0.320 (TD-805): payroll payment asks piecework.pay; personnel.manage covers the personnel dossier only
       const payroll = await sessionWith(['piecework.view', 'piecework.pay']);
       const payrollOptions = await payroll.get('/api/accounting/bank-accounts/options');
       if (payrollOptions.status !== 200) problems.push(`piecework.pay (payroll payment) pick list returned ${payrollOptions.status}`);

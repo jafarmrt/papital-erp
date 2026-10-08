@@ -247,7 +247,7 @@ export function PieceworkExcelModal({
 
               </div>
 
-              {/* Upload Drop Zone — v9.0.286 (TD-805): فقط با «مدیریت عناوین کاری و نرخ‌های پایه» */}
+              {/* Upload Drop Zone — v9.0.320 (TD-805): فقط با «مدیریت عناوین کاری و نرخ‌های پایه» */}
               {canManageTasks ? (
                 <div
                   onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}

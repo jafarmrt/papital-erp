@@ -9,7 +9,7 @@ import { runCase, type Harness, type ShouldRun } from './workflowTestHarness.js'
 
 /**
  * Package 12 payroll, PR «ج» (TD-805, B12P-02, product-owner decision t2 «الف»): every payroll action asks the key of its
- * own name, through the real Express routes. Each case is red on the code before v9.0.286.
+ * own name, through the real Express routes. Each case is red on the code before v9.0.320.
  */
 
 type Session = Awaited<ReturnType<Harness['sessionWith']>>;
@@ -20,7 +20,7 @@ export async function runPieceworkPermissionTests(shouldRun: ShouldRun): Promise
   if (shouldRun('sec_piecework_action_permissions_td_805', 'security', 'td805', 'piecework', 'payroll', 'permissions', 'package12')) {
     await runCase(results, {
       id: 'sec_piecework_action_permissions_td_805',
-      name: 'v9.0.286: each payroll action asks its own key; personnel.manage alone writes no piecework record (TD-805)',
+      name: 'v9.0.320: each payroll action asks its own key; personnel.manage alone writes no piecework record (TD-805)',
       details: 'roles holding only personnel.manage, only settings.manage or another piecework key get 403 on task titles, categories, custom rates, work log create/edit/delete, payroll issue/status/voucher/delete and payment/void; piecework.manage_tasks writes titles, categories and rates; piecework.log writes logs and its manual rate is ignored on create and edit; piecework.payroll issues, re-statuses and deletes the payroll; piecework.pay reads the bank pick list, pays and voids the payment',
     }, async (h, wrong) => {
       const sessions = {
@@ -122,12 +122,12 @@ export async function runPieceworkPermissionTests(shouldRun: ShouldRun): Promise
   if (shouldRun('sec_piecework_action_permissions_migration_td_805', 'security', 'td805', 'piecework', 'permissions', 'migration', 'package12')) {
     await runCase(results, {
       id: 'sec_piecework_action_permissions_migration_td_805',
-      name: 'v9.0.286: migration 0077 gives roles the piecework keys of what they did through personnel.manage or settings.manage, and logs it (TD-805)',
+      name: 'v9.0.320: migration 0078 gives roles the piecework keys of what they did through personnel.manage or settings.manage, and logs it (TD-805)',
       details: 'a personnel.manage role gets piecework.view, manage_tasks, log, payroll and pay; a role already holding some gets only the missing ones; a settings.manage role gets piecework.view and manage_tasks; a role with neither key is untouched; one activity_logs row per changed role with before, after and added keys',
     }, async (h, wrong) => {
       const { runMigrationRolledBack } = await import('./workflowLifecycleTests.js');
       const codes = { manager: `td805_pm_${h.tag}`, partial: `td805_part_${h.tag}`, settings: `td805_set_${h.tag}`, plain: `td805_plain_${h.tag}` };
-      const outcome = await runMigrationRolledBack('0077_piecework_action_permissions.sql', async (q) => {
+      const outcome = await runMigrationRolledBack('0078_piecework_action_permissions.sql', async (q) => {
         await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES
           ($1, $1, '["personnel.view","personnel.manage"]'::jsonb, 0),
           ($2, $2, '["piecework.view","piecework.log","personnel.manage"]'::jsonb, 0),
@@ -135,12 +135,12 @@ export async function runPieceworkPermissionTests(shouldRun: ShouldRun): Promise
           ($4, $4, '["projects.view","piecework.view"]'::jsonb, 0)`, [codes.manager, codes.partial, codes.settings, codes.plain]);
       }, async (q) => ({
         roles: await q(`SELECT id, code, permissions FROM roles WHERE code = ANY($1::text[])`, [Object.values(codes)]),
-        logs: await q(`SELECT entity_id, details FROM activity_logs WHERE details->>'migration' = '0077_piecework_action_permissions' AND entity_id = ANY(
+        logs: await q(`SELECT entity_id, details FROM activity_logs WHERE details->>'migration' = '0078_piecework_action_permissions' AND entity_id = ANY(
           SELECT id::text FROM roles WHERE code = ANY($1::text[])) ORDER BY id`, [Object.values(codes)]),
       }));
       const permsOf = (code: string) => JSON.stringify(outcome.roles.find(r => r.code === code)?.permissions ?? null);
       const expect = (code: string, perms: string[]) => {
-        if (permsOf(code) !== JSON.stringify(perms)) wrong.push(`${code} after 0077: ${permsOf(code)}, expected ${JSON.stringify(perms)}`);
+        if (permsOf(code) !== JSON.stringify(perms)) wrong.push(`${code} after 0078: ${permsOf(code)}, expected ${JSON.stringify(perms)}`);
       };
       expect(codes.manager, ['personnel.view', 'personnel.manage', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll', 'piecework.pay']);
       expect(codes.partial, ['piecework.view', 'piecework.log', 'personnel.manage', 'piecework.manage_tasks', 'piecework.payroll', 'piecework.pay']);
@@ -161,7 +161,7 @@ export async function runPieceworkPermissionTests(shouldRun: ShouldRun): Promise
   if (shouldRun('sec_piecework_rate_readers_td_806', 'security', 'td806', 'piecework', 'rates', 'permissions', 'package12')) {
     await runCase(results, {
       id: 'sec_piecework_rate_readers_td_806',
-      name: 'v9.0.287: a personnel custom rate is read by the piecework keys and the payroll amount readers only (TD-806)',
+      name: 'v9.0.321: a personnel custom rate is read by the piecework keys and the payroll amount readers only (TD-806)',
       details: 'decision t3 «الف»: GET /piecework/personnel-rates/:id answers piecework.view, piecework.log, piecework.manage_tasks, piecework.payroll, piecework.pay, personnel.manage and accounting.treasury with the rate, and projects.view and settings.manage with 403; those two still read task titles and categories, and get no work log without a project id',
     }, async (h, wrong) => {
       const worker = await newWorker('کارگر آزمون خواننده نرخ');

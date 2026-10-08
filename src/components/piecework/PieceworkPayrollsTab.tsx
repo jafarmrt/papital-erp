@@ -28,7 +28,7 @@ export function PieceworkPayrollsTab({
 }: PieceworkPayrollsTabProps) {
   const rial = useRialDisplay();
   const curLbl = rial.label;
-  // v9.0.286 (TD-805): صدور، تأیید، سند و ابطال فیش با «محاسبه و صدور فیش حقوقی»؛ پرداخت با «پرداخت و ابطال پرداخت فیش»
+  // v9.0.320 (TD-805): صدور، تأیید، سند و ابطال فیش با «محاسبه و صدور فیش حقوقی»؛ پرداخت با «پرداخت و ابطال پرداخت فیش»
   const { canIssuePayroll, canPay } = usePieceworkPermissions();
   const [syncingId, setSyncingId] = useState<number | null>(null);
   // V10-4.4: پرداخت فقط از مودال خزانه‌ای
@@ -277,7 +277,7 @@ export function PieceworkPayrollsTab({
   );
 }
 
-/** وضعیت فیش برای کاربری که دکمه آن کار را ندارد (v9.0.286، TD-805) */
+/** وضعیت فیش برای کاربری که دکمه آن کار را ندارد (v9.0.320، TD-805) */
 function StatusChip({ label }: { label: string }) {
   return (
     <span className="px-2.5 py-1 bg-slate-50 text-slate-500 border border-slate-200 rounded-lg text-[10px] inline-flex items-center gap-1 font-bold">

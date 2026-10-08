@@ -6,7 +6,7 @@
  * v7.0.59 (TD-223، تصمیم مالک محصول، فقط مجوزهای موجود): بقیه مسیرهای خواندن.
  */
 /**
- * خوانندگان مبالغ حقوق (فیش، پرداخت و مانده مساعده). v9.0.286 (TD-805): پرداخت‌کننده فیش (`piecework.pay`) فیشی را که
+ * خوانندگان مبالغ حقوق (فیش، پرداخت و مانده مساعده). v9.0.320 (TD-805): پرداخت‌کننده فیش (`piecework.pay`) فیشی را که
  * پرداخت می‌کند می‌بیند.
  */
 const PAYROLL_AMOUNT_READERS = ['piecework.payroll', 'piecework.pay', 'personnel.manage', 'accounting.treasury'] as const;
@@ -104,12 +104,12 @@ export const READ_PERMISSIONS = {
   ],
   /**
    * کارکرد، تعرفه‌ها، عناوین و دسته‌های کارمزدی. `personnel.manage` پیش‌تر همین‌ها را می‌نوشت و فهرستی را که ذخیره می‌کرد
-   * نمی‌خواند (v9.0.131، TD-668)؛ از v9.0.286 (TD-805) نوشتن آن‌ها با `piecework.manage_tasks` است و `personnel.manage` فقط می‌خواند.
+   * نمی‌خواند (v9.0.131، TD-668)؛ از v9.0.320 (TD-805) نوشتن آن‌ها با `piecework.manage_tasks` است و `personnel.manage` فقط می‌خواند.
    */
   pieceworkReference: ['piecework.view', 'piecework.log', 'piecework.manage_tasks', 'projects.view', 'settings.manage', 'personnel.manage'],
   /**
    * کارکرد همه پرسنل با نرخ و مبلغ (`GET /piecework/logs`) فقط برای صفحه کارمزدی و مدیر پرسنل (v9.0.142، TD-892؛ پیش‌تر
-   * مشاهده پروژه و مدیریت تنظیمات هم کارکرد همه پرسنل را می‌خواندند). ویرایش و حذف کارکرد از v9.0.286 (TD-805) با `piecework.log` است.
+   * مشاهده پروژه و مدیریت تنظیمات هم کارکرد همه پرسنل را می‌خواندند). ویرایش و حذف کارکرد از v9.0.320 (TD-805) با `piecework.log` است.
    */
   pieceworkLogs: ['piecework.view', 'piecework.log', 'personnel.manage'],
   /** کارکردهای یک پروژه (`GET /piecework/logs?projectId=`، زبانه زمان‌بندی پروژه) */
@@ -117,7 +117,7 @@ export const READ_PERMISSIONS = {
   /**
    * نرخ‌های اختصاصی یک پرسنل (`GET /piecework/personnel-rates/:id`): فرم ثبت کارکرد، زبانه نرخ‌ها (نویسنده آن
    * `piecework.manage_tasks`) و خوانندگان مبالغ حقوق؛ مشاهده پروژه و مدیریت تنظیمات فقط عنوان‌ها و دسته‌ها را می‌خوانند
-   * (v9.0.287، TD-806، B12P-03، تصمیم ت۳ «الف»)
+   * (v9.0.321، TD-806، B12P-03، تصمیم ت۳ «الف»)
    */
   pieceworkRates: ['piecework.view', 'piecework.log', 'piecework.manage_tasks', ...PAYROLL_AMOUNT_READERS],
   /** فیش‌های حقوق و کارمزد با مبالغ (فیش خود کاربر از /piecework/payrolls/mine) */
@@ -135,7 +135,7 @@ export const READ_PERMISSIONS = {
   bankAccounts: ['accounting.treasury', 'accounting.reports', 'accounting.view'],
   /**
    * فهرست انتخاب حساب‌های خزانه (`/accounting/bank-accounts/options`، بی شماره و مانده): فرم تسویه فاکتور، دفتر چک،
-   * سند حسابداری و پرداخت حقوق (`piecework.pay`، مجوز ثبت پرداخت فیش؛ تا v9.0.285 `personnel.manage`، TD-805)
+   * سند حسابداری و پرداخت حقوق (`piecework.pay`، مجوز ثبت پرداخت فیش؛ تا v9.0.319 `personnel.manage`، TD-805)
    */
   bankAccountOptions: [
     'accounting.treasury', 'accounting.cheques', 'accounting.vouchers', 'accounting.reports', 'accounting.view',

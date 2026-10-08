@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import type { Customer, ItemPrice } from '../../types';
@@ -7,6 +7,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import { useWarehousesQuery, type WarehouseItem } from '../queries/useSettingsQueries';
 import { listFromResponse, type InvoiceDocumentDetails } from '../../lib/invoices/invoiceForm';
 import type { InvoiceListDocument } from '../../lib/invoices/invoiceListDocuments';
+import { openProformasPageOf, openProformasUrl, type OpenProformasPage } from '../../lib/invoices/openProformas';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 
 /**
@@ -20,14 +21,13 @@ const NO_WAREHOUSES: WarehouseItem[] = [];
 const NO_CUSTOMERS: Customer[] = [];
 const NO_PROFORMAS: InvoiceListDocument[] = [];
 
-/** پیش‌فاکتورهای باز صفحه صدور فاکتور (GET /documents?status=proforma&limit=1000) */
-export function useOpenProformasQuery() {
-  return useQuery<InvoiceListDocument[]>({
-    queryKey: QUERY_KEYS.documents.openProformas(),
-    queryFn: async ({ signal }) => listFromResponse<InvoiceListDocument>(
-      await fetchJson<unknown>('/documents?status=proforma&limit=1000', { signal }),
-    ),
+/** پیش‌فاکتورهای فروش باز صفحه صدور فاکتور، صفحه‌به‌صفحه (v9.0.301، TD-792) */
+export function useOpenProformasQuery(page: number) {
+  return useQuery<OpenProformasPage>({
+    queryKey: [...QUERY_KEYS.documents.openProformas(), page],
+    queryFn: async ({ signal }) => openProformasPageOf(await fetchJson<unknown>(openProformasUrl(page), { signal })),
     staleTime: FIVE_MINUTES,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -63,7 +63,8 @@ export function useInvoiceReferenceData(docType: string) {
     queryFn: async ({ signal }) => listFromResponse<Customer>(await fetchJson<unknown>(PICK_LIST_URLS.customers, { signal })),
     staleTime: FIVE_MINUTES,
   });
-  const proformasQuery = useOpenProformasQuery();
+  const [proformasPage, setProformasPage] = useState(1);
+  const proformasQuery = useOpenProformasQuery(proformasPage);
   // شماره بعدی سند همیشه تازه خوانده می‌شود (staleTime صفر): شماره کش‌شده ممکن است در این فاصله مصرف شده باشد
   const nextRefQuery = useQuery<string>({
     queryKey: QUERY_KEYS.documents.nextRef(docType),
@@ -107,7 +108,10 @@ export function useInvoiceReferenceData(docType: string) {
   return {
     warehouses: warehousesQuery.data ?? NO_WAREHOUSES,
     customersList: customersQuery.data ?? NO_CUSTOMERS,
-    proformas: proformasQuery.data ?? NO_PROFORMAS,
+    proformas: proformasQuery.data?.rows ?? NO_PROFORMAS,
+    proformasTotal: proformasQuery.data?.total ?? 0,
+    proformasPage,
+    setProformasPage,
     nextRef: nextRefQuery.data ?? '',
     loadDocument,
     refreshProformas,

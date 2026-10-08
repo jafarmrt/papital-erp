@@ -22,7 +22,7 @@ interface PayrollPaymentHistoryProps {
   loading: boolean;
   /** فیش تسویه‌شده: سابقه باز نمایش داده می‌شود */
   initiallyOpen: boolean;
-  /** v9.0.286 (TD-805): ابطال پرداخت فقط با «پرداخت و ابطال پرداخت فیش» */
+  /** v9.0.320 (TD-805): ابطال پرداخت فقط با «پرداخت و ابطال پرداخت فیش» */
   canVoid: boolean;
   onVoided: () => void;
 }

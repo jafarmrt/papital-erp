@@ -14,7 +14,7 @@ export async function runAccessPackageTwoPageTests(shouldRun: ShouldRun): Promis
     await runCase(results, {
       id: 'sec_page_access_matches_api_td_668',
       name: 'v9.0.114: every key that opens a page or settings tab passes the guards of its main API (TD-668)',
-      details: 'for every row of PAGE_ACCESS and SETTINGS_TAB_ACCESS: each named API exists in the Express routers; each key of the page passes every guard of each API; a system-admin-only page or tab has system-admin-only APIs; a holder of piecework.manage_tasks alone opens the task-titles settings tab and reads its list (GET /api/piecework/tasks 200; personnel.manage until v9.0.285, TD-805)',
+      details: 'for every row of PAGE_ACCESS and SETTINGS_TAB_ACCESS: each named API exists in the Express routers; each key of the page passes every guard of each API; a system-admin-only page or tab has system-admin-only APIs; a holder of piecework.manage_tasks alone opens the task-titles settings tab and reads its list (GET /api/piecework/tasks 200; personnel.manage until v9.0.319, TD-805)',
     }, async (h, wrong) => {
       const { buildRouteGuardTable } = await import('../../lib/routeGuardTable.js');
       const { SYSTEM_ADMIN_ROLE } = await import('../../lib/permissions/permissionCatalog.js');

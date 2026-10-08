@@ -1,63 +1,62 @@
 import { terminateOpenWorkflows } from './workflow/workflowTermination.js';
 import { sql, eq, and, desc, inArray, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { purchaseRequisitions, productionProjects, documentRefCounters, items, documents, documentItems, workflowInstances, workflowStates, workflowTransitions, workflowPendingApprovals, workflowTasks } from '../db/schema.js';
+import { purchaseRequisitions, documentRefCounters, items, documents, documentItems, workflowInstances } from '../db/schema.js';
 import { businessFiscalYear, businessTodayIsoDate } from '../lib/businessClock.js';
-import { errorMessageOf } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { AppError, ValidationError, NotFoundError, ConflictError } from '../errors/customErrors.js';
-import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from './workflow/workflowTransitionExecutor.js';
+import { WorkflowTransitionExecutor } from './workflow/workflowTransitionExecutor.js';
 import { hasWorkflowTransitionAction } from './workflow/workflowTransitionActions.js';
-import { isUsableSnapshot } from './workflow/workflowSnapshot.js';
 import { DocumentService } from './document.service.js';
 import { userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from './inventory/stockMovementDate.js';
 
-/** اقدام‌های گردش‌کار «دریافت کالا»ی درخواست خرید */
-const RECEIVE_ACTION_KEYS = ['receive_items', 'mark_received', 'receive'];
+/** v9.0.315 (TD-689): مجوزهایی که درخواست خرید را تأیید می‌کنند (همان گارد مسیر اقدام گردش‌کار) */
+const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve', 'procurement.manage'];
 /** v8.0.71 (TD-326): درخواست ردشده دریافت یا سفارش داده نمی‌شود، مگر پس از بازگشایی */
 const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
-import { applyDeliveredLines, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
-import { assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES } from './procurement/requisitionReceiveAction.js';
+import { applyDeliveredLines, isSettledRequisitionRow, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
+import { assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES, requisitionOrderDocuments } from './procurement/requisitionReceiveAction.js';
 import { describeOverOrders, findOverOrders } from './procurement/requisitionOrder.js';
 import { money } from '../lib/money.js';
 import { fin } from '../lib/financialDecimal.js';
+import { canEditRequisition, REQUISITION_PRIORITIES, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
+import {
+  ensureRequisitionApproved, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY, requisitionFlow, requisitionWorkflowGraph, transitionFromStep,
+  type RequisitionActor, type WorkflowStateRef, type WorkflowTransitionRef,
+} from './procurement/requisitionApproval.js';
+import { buildRequisitionRows, resolveRequisitionProject, type RequisitionRowFields } from './procurement/requisitionRows.js';
 
 type DbClient = DbExecutor;
 
-/** فیلدهای وضعیت ورکفلو که این سرویس می‌خواند (از تصویر فرایند یا جدول workflow_states) */
-type WorkflowStateRef = Pick<WorkflowStateSnapshot, 'id' | 'stateKey' | 'title'>;
-/** فیلدهای انتقال ورکفلو که این سرویس می‌خواند (از تصویر فرایند یا جدول workflow_transitions) */
-type WorkflowTransitionRef = Pick<WorkflowTransitionSnapshot, 'id' | 'fromStateId' | 'toStateId' | 'actionKey' | 'title'>;
 
 /** ردیف درخواست خرید پس از تحویل انبار (receivedQty در ردیف JSONB نوشته می‌شود) */
 
 /** سند خرید صادرشده از درخواست: ردیف documents، یا شناسه و شماره وقتی ردیف خوانده نشد */
 type CreatedProcurementDocument = typeof documents.$inferSelect | { id: number; refNumber: string };
 
+/** v9.0.314 (TD-688): بدنه ثبت درخواست خرید (قرارداد `createRequisitionSchema`) */
 export interface CreateRequisitionInput {
   title: string;
   projectId?: number | null;
-  projectCode?: string;
-  projectName?: string;
-  priority?: 'urgent' | 'high' | 'normal' | 'low';
+  priority?: RequisitionPriority;
   requiredDate?: string;
   notes?: string;
-  items: PurchaseRequisitionItemRow[];
+  items: RequisitionRowFields[];
 }
 
+/** v9.0.319 (TD-696): بدنه ویرایش درخواست خرید (قرارداد `updateRequisitionSchema`)؛ فیلدی که نیامده بی تغییر می‌ماند */
 export interface UpdateRequisitionInput {
   title?: string;
-  priority?: 'urgent' | 'high' | 'normal' | 'low';
+  projectId?: number | null;
+  priority?: RequisitionPriority;
   requiredDate?: string;
   notes?: string;
-  items?: PurchaseRequisitionItemRow[];
-  assignedToId?: number | null;
-  assignedToName?: string;
+  items?: RequisitionRowFields[];
 }
 
 export interface GetRequisitionsFilter {
@@ -183,53 +182,25 @@ export class ProcurementService {
       throw new ValidationError('حداقل یک قلم کالا برای درخواست خرید باید مشخص شود.');
     }
 
-    // Sanitize and calculate totals — v7.0.113 (TD-239): مبلغ با FinancialDecimal (AGENTS §1.8)
-    let totalEst = fin(0);
-    const sanitizedItems: PurchaseRequisitionItemRow[] = input.items.map((item, idx) => {
-      const qty = Number(item.requestedQty || item.requested_qty || 0);
-      const price = Number(item.unitPriceEstimate || item.unit_price_estimate || 0);
-      totalEst = totalEst.add(fin(qty).multiply(price));
-      return {
-        id: item.id || `item-${Date.now()}-${idx}`,
-        itemId: item.itemId ?? item.item_id ?? null,
-        itemCode: item.itemCode || item.item_code || '',
-        itemName: item.itemName || item.item_name || 'کالای سفارشی',
-        category: item.category || '',
-        unit: item.unit || 'عدد',
-        requestedQty: qty,
-        orderedQty: 0,
-        remainingQty: qty,
-        unitPriceEstimate: price,
-        targetSupplierId: item.targetSupplierId ?? item.target_supplier_id ?? null,
-        targetSupplierName: item.targetSupplierName || item.target_supplier_name || '',
-        status: 'pending',
-        linkedDocumentIds: [],
-        notes: item.notes || ''
-      };
-    });
-
-    let projectCode = input.projectCode || '';
-    let projectName = input.projectName || '';
-
-    if (input.projectId && (!projectCode || !projectName)) {
-      const [proj] = await orm.select().from(productionProjects).where(eq(productionProjects.id, input.projectId));
-      if (proj) {
-        projectCode = proj.projectCode || '';
-        projectName = proj.title || '';
-      }
+    const priority = input.priority ?? 'normal';
+    if (!(REQUISITION_PRIORITIES as readonly string[]).includes(priority)) {
+      throw new ValidationError('اولویت درخواست خرید یکی از «فوری»، «بالا»، «عادی» یا «پایین» است.');
     }
 
     const createdReq = await orm.transaction(async (tx) => {
+      // v9.0.314 (TD-688): ردیف‌ها و پروژه با یک قاعده برای ثبت و ویرایش؛ مقدار جمع برآورد با FinancialDecimal (AGENTS §1.8)
+      const { rows: sanitizedItems, total: totalEst } = await buildRequisitionRows(tx, input.items);
+      const { projectId, projectCode, projectName } = await resolveRequisitionProject(tx, input.projectId);
       const code = await this.generateRequisitionCode(tx);
 
       const [inserted] = await tx.insert(purchaseRequisitions).values({
         code,
         title: input.title.trim(),
-        projectId: input.projectId || null,
+        projectId,
         projectCode,
         projectName,
         status: 'pending',
-        priority: input.priority || 'normal',
+        priority,
         // v7.0.135 (TD-232): تاریخ نیاز میلادی ISO (پیش‌فرض امروز کسب‌وکار)
         requiredDate: requireStorageDate(input.requiredDate, 'تاریخ نیاز') || await businessTodayIsoDate(),
         requestedById: user.id || null,
@@ -357,84 +328,90 @@ export class ProcurementService {
 
   /**
    * Update requisition items, assignments, or estimates
+   *
+   * v9.0.319 (TD-696، B10-09): ویرایش فقط پیش از تأیید (یا پس از رد) و برای درخواستی که هیچ ردیفش سفارش نشده، در یک
+   * تراکنش و زیر قفل ردیف درخواست؛ وگرنه ۴۰۹ `REQUISITION_NOT_EDITABLE`. ردیف‌ها با همان قرارداد ثبت ساخته می‌شوند
+   * (`buildRequisitionRows`) و شناسه ردیف ذخیره‌شده نگه داشته می‌شود؛ ممیزی پیش و پس از ویرایش با همان `tx`. پیش‌تر
+   * ویرایش در هر وضعیتی، بی تراکنش، مقدار درخواستی، سفارش‌شده و دریافتی را صفر و پیوند سفارش‌ها را پاک می‌کرد.
    */
   static async updateRequisition(
     id: number,
     updates: UpdateRequisitionInput,
     user: { id?: number; username?: string }
   ): Promise<PurchaseRequisition> {
-    const existing = await this.getRequisitionById(id);
-
-    let newItems = existing.items;
-    let newTotalEst = fin(existing.totalEstimatedAmount);
-
-    if (updates.items && Array.isArray(updates.items)) {
-      newTotalEst = fin(0);
-      newItems = updates.items.map((item, idx) => {
-        const qty = Number(item.requestedQty || item.requested_qty || 0);
-        const ordered = Number(item.orderedQty || item.ordered_qty || 0);
-        const price = Number(item.unitPriceEstimate || item.unit_price_estimate || 0);
-        newTotalEst = newTotalEst.add(fin(qty).multiply(price));
-        return {
-          id: item.id || `item-${Date.now()}-${idx}`,
-          itemId: item.itemId ?? item.item_id ?? null,
-          itemCode: item.itemCode || item.item_code || '',
-          itemName: item.itemName || item.item_name || 'کالای سفارشی',
-          category: item.category || '',
-          unit: item.unit || 'عدد',
-          requestedQty: qty,
-          orderedQty: ordered,
-          remainingQty: Math.max(0, qty - ordered),
-          unitPriceEstimate: price,
-          targetSupplierId: item.targetSupplierId ?? item.target_supplier_id ?? null,
-          targetSupplierName: item.targetSupplierName || item.target_supplier_name || '',
-          status: item.status || (ordered >= qty ? 'ordered' : 'pending'),
-          linkedDocumentIds: item.linkedDocumentIds || item.linked_document_ids || [],
-          notes: item.notes || ''
-        };
-      });
+    if (updates.priority !== undefined && !(REQUISITION_PRIORITIES as readonly string[]).includes(updates.priority)) {
+      throw new ValidationError('اولویت درخواست خرید یکی از «فوری»، «بالا»، «عادی» یا «پایین» است.');
     }
-
-    const [updated] = await orm.update(purchaseRequisitions).set({
-      title: updates.title !== undefined ? updates.title.trim() : existing.title,
-      priority: updates.priority || existing.priority,
-      requiredDate: (updates.requiredDate ? requireStorageDate(updates.requiredDate, 'تاریخ نیاز') : '') || existing.requiredDate,
-      notes: updates.notes !== undefined ? updates.notes : existing.notes,
-      items: newItems,
-      totalEstimatedAmount: money(newTotalEst),
-      assignedToId: updates.assignedToId !== undefined ? updates.assignedToId : existing.assignedToId,
-      assignedToName: updates.assignedToName !== undefined ? updates.assignedToName : existing.assignedToName,
-      updatedAt: new Date().toISOString()
-    }).where(eq(purchaseRequisitions.id, id)).returning();
-
-    await logActivity({
-      userId: user.id,
-      username: user.username || 'سیستم',
-      action: 'UPDATE',
-      entity: 'درخواست خرید',
-      entityId: id,
-      description: `ویرایش درخواست خرید ${updated.code}`,
-      details: {
-        code: updated.code,
-        before: { title: existing.title, itemsCount: existing.items.length },
-        after: { title: updated.title, itemsCount: newItems.length, totalEstimatedAmount: newTotalEst.toNumber() }
+    if (updates.title !== undefined && !updates.title.trim()) {
+      throw new ValidationError('عنوان درخواست خرید را وارد کنید.');
+    }
+    return orm.transaction(async (tx) => {
+      const [locked] = await tx.select().from(purchaseRequisitions)
+        .where(and(eq(purchaseRequisitions.id, id), eq(purchaseRequisitions.isDeleted, 0)))
+        .for('update');
+      if (!locked) throw new NotFoundError(`درخواست خرید با شناسه #${id} یافت نشد.`);
+      const existing = toRequisitionDto(locked);
+      const liveOrders = await requisitionOrderDocuments(tx, { code: locked.code, items: locked.items as RequisitionItemWithReceipt[] });
+      if (!canEditRequisition(existing) || liveOrders.length > 0) {
+        throw new ConflictError(
+          `درخواست خرید ${existing.code} پس از تأیید یا صدور سفارش ویرایش نمی‌شود؛ برای تغییر، درخواست را رد و دوباره باز کنید.`,
+          { status: existing.status }, 'REQUISITION_NOT_EDITABLE',
+        );
       }
-    });
 
-    return toRequisitionDto(updated);
+      const storedRowIds = new Set((Array.isArray(existing.items) ? existing.items : []).map(row => String(row.id ?? '')).filter(Boolean));
+      const rebuilt = updates.items === undefined ? null : await buildRequisitionRows(tx, updates.items, storedRowIds);
+      const project = updates.projectId === undefined ? null : await resolveRequisitionProject(tx, updates.projectId);
+
+      const [updated] = await tx.update(purchaseRequisitions).set({
+        title: updates.title !== undefined ? updates.title.trim() : existing.title,
+        priority: updates.priority ?? existing.priority,
+        requiredDate: (updates.requiredDate ? requireStorageDate(updates.requiredDate, 'تاریخ نیاز') : '') || existing.requiredDate,
+        notes: updates.notes !== undefined ? updates.notes : existing.notes,
+        ...(project ? { projectId: project.projectId, projectCode: project.projectCode, projectName: project.projectName } : {}),
+        ...(rebuilt ? { items: rebuilt.rows, totalEstimatedAmount: money(rebuilt.total) } : {}),
+        updatedAt: new Date().toISOString()
+      }).where(eq(purchaseRequisitions.id, id)).returning();
+      const after = toRequisitionDto(updated);
+
+      const snapshot = (r: PurchaseRequisition) => ({
+        title: r.title, priority: r.priority, requiredDate: r.requiredDate, notes: r.notes, projectId: r.projectId ?? null,
+        totalEstimatedAmount: r.totalEstimatedAmount, items: r.items,
+      });
+      await logActivity({
+        tx,
+        userId: user.id,
+        username: user.username || 'سیستم',
+        action: 'UPDATE',
+        entity: 'درخواست خرید',
+        entityId: id,
+        description: `ویرایش درخواست خرید ${updated.code}`,
+        details: { code: updated.code, before: snapshot(existing), after: snapshot(after) }
+      });
+
+      return after;
+    });
   }
 
   /**
    * Delete requisition (soft delete)
    */
   static async deleteRequisition(id: number, user: { id?: number; username?: string }): Promise<void> {
-    const existing = await this.getRequisitionById(id);
     // v9.0.40 (TD-447، ت۵): حذف و بستن فرایند در جریان درخواست در یک تراکنش، زیر قفل ردیف درخواست (وضعیت زیر قفل دوباره خوانده می‌شود)
     await orm.transaction(async (tx) => {
-      const [locked] = await tx.select({ status: purchaseRequisitions.status }).from(purchaseRequisitions)
+      const [locked] = await tx.select().from(purchaseRequisitions)
         .where(and(eq(purchaseRequisitions.id, id), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');
       if (!locked) throw new NotFoundError('درخواست خرید یافت نشد.');
+      // v9.0.318 (TD-695، B10-08): درخواستی که سند سفارش زنده دارد حذف نمی‌شود. پیش‌تر فقط وضعیت «سفارش‌شده» و
+      // «دریافت‌شده» رد می‌شد: درخواستِ بخشی‌سفارش‌شده یا لغوشده حذف می‌شد و سفارشش بی درخواست تحویل می‌شد
+      const liveOrders = await requisitionOrderDocuments(tx, { code: locked.code, items: locked.items as RequisitionItemWithReceipt[] });
+      if (liveOrders.length > 0) {
+        throw new ConflictError(
+          `درخواست خرید ${locked.code} سفارش خرید ثبت‌شده دارد (${liveOrders.map(o => o.refNumber || String(o.id)).join('، ')}) و حذف نمی‌شود؛ ابتدا سفارش‌ها را باطل کنید.`,
+          { documentIds: liveOrders.map(o => o.id) }, 'REQUISITION_HAS_ORDERS',
+        );
+      }
       if (locked.status === 'ordered' || locked.status === 'received') {
         throw new ValidationError('درخواست‌های خریدی که سفارش آنها صادر شده یا کالا تحویل شده قابل حذف نیستند.');
       }
@@ -454,8 +431,8 @@ export class ProcurementService {
         action: 'DELETE',
         entity: 'درخواست خرید',
         entityId: id,
-        description: `حذف درخواست خرید ${existing.code}`,
-        details: { code: existing.code, title: existing.title },
+        description: `حذف درخواست خرید ${locked.code}`,
+        details: { code: locked.code, title: locked.title, before: toRequisitionDto(locked) },
         tx,
       });
     });
@@ -469,11 +446,7 @@ export class ProcurementService {
     wfInst: Pick<typeof workflowInstances.$inferSelect, 'snapshotDsl' | 'workflowDefinitionId'>,
     db: DbExecutor = orm
   ): Promise<{ states: WorkflowStateRef[]; transitions: WorkflowTransitionRef[] }> {
-    const snapshot = wfInst.snapshotDsl as WorkflowSnapshotDsl | null;
-    if (isUsableSnapshot(snapshot)) return { states: snapshot.states ?? [], transitions: snapshot.transitions ?? [] };
-    const states = await db.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wfInst.workflowDefinitionId));
-    const transitions = await db.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, wfInst.workflowDefinitionId));
-    return { states, transitions };
+    return requisitionWorkflowGraph(wfInst, db);
   }
 
   /**
@@ -674,7 +647,7 @@ export class ProcurementService {
    */
   static async convertToPurchaseOrders(
     params: ConvertToOrdersInput,
-    user: { id?: number; username?: string; role?: string }
+    user: RequisitionActor
   ): Promise<{ createdDocuments: CreatedProcurementDocument[]; requisition: PurchaseRequisition }> {
     const { requisitionId, orderGroups } = params;
     if (!orderGroups || !Array.isArray(orderGroups) || orderGroups.length === 0) {
@@ -683,6 +656,8 @@ export class ProcurementService {
     const overOrderReason = params.overOrderReason?.trim() || '';
     const username = user.username || 'کارشناس تدارکات';
     const today = await businessTodayIsoDate();
+    // v9.0.315 (TD-689، ت۱): حق تأیید پیش از تراکنش سنجیده می‌شود (TD-324: بی اتصال دوم درون تراکنش)
+    const mayApprove = await userHasRoleOrPermission(user, ...REQUISITION_APPROVE_PERMISSIONS);
 
     const converted = await orm.transaction(async (tx) => {
       const [locked] = await tx.select().from(purchaseRequisitions)
@@ -700,6 +675,12 @@ export class ProcurementService {
       if (CLOSED_REQUISITION_STATUSES.has(req.status)) {
         throw new ConflictError(`درخواست خرید ${req.code} رد شده است و سفارش داده نمی‌شود؛ ابتدا درخواست را بازگشایی کنید.`);
       }
+      // v9.0.315 (TD-689، ت۱): سفارش فقط از گام «تأییدشده»؛ دارنده حق تأیید نخست تأیید را به نام خودش اجرا می‌کند
+      await ensureRequisitionApproved(tx, req, user, {
+        mayApprove,
+        comment: 'تأیید هنگام صدور سفارش خرید',
+        snapshotData: { id: req.id, code: req.code, totalAmount: Number(req.totalEstimatedAmount || 0), priority: req.priority, status: req.status },
+      });
       const updatedItems = (Array.isArray(req.items) ? req.items : []).map(it => ({ ...it }));
 
       const overOrders = findOverOrders(updatedItems, orderGroups.flatMap(g => g.items || []));
@@ -793,18 +774,18 @@ export class ProcurementService {
 
       if (shouldCloseRequisition) {
         // If closing formally, mark remaining items as closed/ordered with optional note
+        // v9.0.316 (TD-690): ردیف بسته‌شده نشان `closed` می‌گیرد؛ دیگر سفارش داده و بی سفارش دریافت نمی‌شود
         for (const item of updatedItems) {
           if ((item.remainingQty || 0) > 0) {
             item.remainingQty = 0;
             item.status = 'ordered';
+            item.closed = true;
             if (params.closureReason) {
               item.closureNote = params.closureReason;
             }
           }
         }
       }
-
-      const newStatus = shouldCloseRequisition ? 'ordered' : 'under_review';
 
       let updatedReqNotes = req.notes || '';
       if (overOrders.length > 0) {
@@ -814,71 +795,34 @@ export class ProcurementService {
         updatedReqNotes = `${updatedReqNotes}\n[تکمیل/بستن خرید: ${params.closureReason}]`.trim();
       }
 
+      // v9.0.315 (TD-689): وضعیت درخواست فقط از گام گردش‌کار می‌آید (applyRequisitionTransition)؛ تبدیل گام را جابه‌جا
+      // نمی‌کند. پیش‌تر تبدیل بخشی وضعیت را «در حال بررسی» و تراکنش دومی گام را مستقیم «در انتظار» می‌نوشت (A02-15)
       const [finalUpdatedReq] = await tx.update(purchaseRequisitions).set({
-        status: newStatus,
         items: updatedItems,
         notes: updatedReqNotes,
         updatedAt: new Date().toISOString()
       }).where(eq(purchaseRequisitions.id, req.id)).returning();
 
-      return { req, createdDocuments, finalUpdatedReq, newStatus, overOrders };
-    });
-    const { req, createdDocuments, finalUpdatedReq, newStatus, overOrders } = converted;
+      await logActivity({
+        tx,
+        userId: user.id,
+        username: user.username || 'سیستم',
+        action: 'UPDATE',
+        entity: 'درخواست خرید',
+        entityId: req.id,
+        description: `تبدیل و صدور ${createdDocuments.length} سفارش خرید برای درخواست ${req.code}${overOrders.length > 0 ? ` (سفارش بیش از درخواست با دلیل: ${overOrderReason})` : ''}`,
+        details: {
+          code: req.code,
+          createdDocsCount: createdDocuments.length,
+          docNumbers: createdDocuments.map(d => d.refNumber || d.id),
+          status: finalUpdatedReq.status,
+          ...(overOrders.length > 0 ? { overOrders, overOrderReason } : {})
+        }
+      });
 
-    // Keep workflow instance state synchronized with new status
-    // v8.0.71 (TD-326): زیر قفل درخواست و فقط اگر وضعیت درخواست هنوز همان است؛ پیش‌تر نمونه تنبل بی‌قفل ساخته می‌شد و
-    // «دریافت کالا»ی هم‌زمان نمونه دومی می‌ساخت. خطای گردش‌کار تبدیل ثبت‌شده را برنمی‌گرداند.
-    if (newStatus === 'ordered' || newStatus === 'under_review') {
-      try {
-        await orm.transaction(async (tx) => {
-          const [current] = await tx.select({ status: purchaseRequisitions.status, workflowInstanceId: purchaseRequisitions.workflowInstanceId })
-            .from(purchaseRequisitions).where(eq(purchaseRequisitions.id, req.id)).for('update');
-          if (!current || current.status !== newStatus) return;
-          let wfId = current.workflowInstanceId;
-          if (!wfId) {
-            const instance = await WorkflowTransitionExecutor.startInstance({
-              workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
-              entityType: 'purchase_requisition',
-              entityId: String(req.id),
-              userId: user.id,
-              userName: user.username,
-              tx
-            });
-            wfId = instance.id;
-            await tx.update(purchaseRequisitions).set({ workflowInstanceId: wfId }).where(eq(purchaseRequisitions.id, req.id));
-          }
-          const [wf] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, wfId));
-          if (!wf) return;
-          const wStates = await tx.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wf.workflowDefinitionId));
-          const targetStateKey = newStatus === 'ordered' ? 'ordered' : 'pending';
-          const targetState = wStates.find(s => s.stateKey === targetStateKey);
-          if (targetState && wf.currentStateId !== targetState.id) {
-            await tx.update(workflowInstances).set({
-              currentStateId: targetState.id,
-              updatedAt: new Date().toISOString()
-            }).where(eq(workflowInstances.id, wf.id));
-          }
-        });
-      } catch (wfErr) {
-        logger.warn({ message: `[Procurement] Error syncing workflow for req #${req.id}: ${errorMessageOf(wfErr)}` });
-      }
-    }
-
-    await logActivity({
-      userId: user.id,
-      username: user.username || 'سیستم',
-      action: 'UPDATE',
-      entity: 'درخواست خرید',
-      entityId: req.id,
-      description: `تبدیل و صدور ${createdDocuments.length} سفارش خرید برای درخواست ${req.code}${overOrders.length > 0 ? ` (سفارش بیش از درخواست با دلیل: ${overOrderReason})` : ''}`,
-      details: {
-        code: req.code,
-        createdDocsCount: createdDocuments.length,
-        docNumbers: createdDocuments.map(d => d.refNumber || d.id),
-        newStatus,
-        ...(overOrders.length > 0 ? { overOrders, overOrderReason } : {})
-      }
+      return { createdDocuments, finalUpdatedReq };
     });
+    const { createdDocuments, finalUpdatedReq } = converted;
 
     return {
       createdDocuments,
@@ -1120,7 +1064,7 @@ export class ProcurementService {
    */
   static async deliverOrderToWarehouse(
     documentId: number,
-    user: { id?: number; username?: string; role?: string }
+    user: RequisitionActor
   ): Promise<{ success: boolean; message: string }> {
     const [doc] = await orm.select().from(documents).where(and(eq(documents.id, documentId), eq(documents.isDeleted, 0)));
     if (!doc) {
@@ -1137,6 +1081,8 @@ export class ProcurementService {
 
     // v8.0.4 (TD-257): سفارشی که تاریخش پیش از آخرین گردش کالاست فقط با مجوز همین کاربر به انبار تحویل می‌شود
     const allowBackdate = await userHasRoleOrPermission(user, BACKDATE_PERMISSION);
+    // v9.0.317 (TD-692): حق تأیید پیش از تراکنش سنجیده می‌شود (TD-324)
+    const mayApprove = await userHasRoleOrPermission(user, ...REQUISITION_APPROVE_PERMISSIONS);
     const reqCode = doc.notes?.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/)?.[1]?.trim() ?? null;
 
     // v8.0.36 (TD-290): نهایی‌سازی سند و به‌روزرسانی مقدار دریافتی درخواست خرید در یک تراکنش و زیر قفل ردیف درخواست.
@@ -1144,115 +1090,88 @@ export class ProcurementService {
     // درخواست مقدار دریافتیِ دیگری را بازنویسی می‌کرد. مقدار هر کالا هم جمع همه سطرهای فعال سند است، نه فقط سطر اول.
     // قفل درخواست پیش از نهایی‌سازی گرفته و وضعیت سند زیر همان قفل دوباره خوانده می‌شود، تا تحویل دوباره همین سفارش (که
     // نهایی‌سازی‌اش بی‌صدا رد می‌شود) مقدار دریافتی را دو بار نشمارد.
-    const delivery = await orm.transaction(async (tx) => {
+    //
+    // v9.0.317 (TD-692، B10-05): انتقال «دریافت کالا» در همین تراکنش و با نقش و مجوز تحویل‌دهنده اجرا می‌شود و شکستش کل
+    // تحویل را برمی‌گرداند؛ سفارش درخواستِ تأییدنشده تحویل نمی‌شود (ت۱). پیش‌تر انتقال پس از commit، بی نقش و مجوز اجرا
+    // می‌شد و شکستش با نوشتن مستقیم `workflow_instances` (COMPLETED)، حذف `workflow_pending_approvals` و بستن
+    // `workflow_tasks` دور زده می‌شد (A02-03، A02-04، A02-08).
+    await orm.transaction(async (tx) => {
       const linkedReqId = await ProcurementService.findDeliveredOrderRequisitionId(tx, reqCode, documentId);
       const [lockedReq] = linkedReqId === null ? [] : await tx.select().from(purchaseRequisitions)
         .where(and(eq(purchaseRequisitions.id, linkedReqId), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');
       const [current] = await tx.select({ status: documents.status }).from(documents).where(eq(documents.id, documentId));
-      if (current?.status === 'final') return { linkedReq: null, allDelivered: false };
+      if (current?.status === 'final') return;
+
+      const alreadyReceived = !!lockedReq && RECEIVED_REQUISITION_STATUSES.has(lockedReq.status);
+      if (lockedReq && !alreadyReceived) {
+        if (CLOSED_REQUISITION_STATUSES.has(lockedReq.status)) {
+          throw new ConflictError(`درخواست خرید ${lockedReq.code} رد شده است و سفارش آن به انبار تحویل نمی‌شود؛ ابتدا درخواست را بازگشایی کنید.`, undefined, 'REQUISITION_NOT_APPROVED');
+        }
+        await ensureRequisitionApproved(tx, lockedReq, user, {
+          mayApprove,
+          comment: `تأیید هنگام تحویل سفارش خرید ${doc.refNumber}`,
+          allowBackdate,
+          snapshotData: { id: lockedReq.id, code: lockedReq.code, priority: lockedReq.priority, status: lockedReq.status },
+        });
+      }
 
       await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات', tx, { allowBackdate });
-      if (!lockedReq) return null;
 
-      const allDocIds = new Set<number>();
-      for (const it of ((lockedReq.items || []) as PurchaseRequisitionItemRow[])) {
-        if (Array.isArray(it.linkedDocumentIds)) {
-          for (const dId of it.linkedDocumentIds) {
-            allDocIds.add(Number(dId));
+      if (lockedReq) {
+        const docLines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity }).from(documentItems)
+          .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
+        const updatedReqItems = applyDeliveredLines((lockedReq.items || []) as RequisitionItemWithReceipt[], docLines);
+        await tx.update(purchaseRequisitions).set({
+          items: updatedReqItems,
+          updatedAt: new Date().toISOString()
+        }).where(eq(purchaseRequisitions.id, lockedReq.id));
+
+        // v9.0.316 (TD-690، B10-03): درخواست فقط وقتی «دریافت‌شده» است که هیچ سفارش زنده‌اش نهایی‌نشده نمانده و هر ردیف
+        // دریافت یا بسته شده است. پیش‌تر فقط سندهای موجود درخواست سنجیده می‌شد: تحویل تنها سفارشِ درخواستی که بخشی‌اش
+        // سفارش شده بود، درخواست را «دریافت‌شده» می‌کرد و ردیف‌های مانده دیگر سفارش داده نمی‌شدند
+        const openOrders = (await requisitionOrderDocuments(tx, { code: lockedReq.code, items: updatedReqItems }))
+          .filter(order => order.status !== 'final');
+        if (!alreadyReceived && openOrders.length === 0 && updatedReqItems.every(isSettledRequisitionRow)) {
+          // وضعیت «دریافت‌شده» را اقدام پس از انتقال (applyRequisitionTransition) در همین تراکنش می‌نویسد
+          const flow = await requisitionFlow(tx, lockedReq, user);
+          const receive = transitionFromStep(flow, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY);
+          if (!receive) {
+            throw new ConflictError(
+              `گردش کار درخواست خرید ${lockedReq.code} از گام «${flow.stepTitle || flow.stepKey}» اقدامی به «دریافت‌شده» ندارد؛ طرح گردش کار را بررسی کنید.`,
+              undefined, 'WF_ACTION_NOT_IN_STEP',
+            );
           }
+          await WorkflowTransitionExecutor.executeTransition({
+            instanceId: flow.instance.id,
+            transitionId: receive.id,
+            userId: user.id,
+            userName: user.username,
+            userRole: user.role,
+            userPermissions: user.permissions || [],
+            comment: `تحویل و ورود کالا به انبار با سفارش خرید ${doc.refNumber}`,
+            snapshotData: { id: lockedReq.id, code: lockedReq.code, priority: lockedReq.priority, status: lockedReq.status },
+            allowBackdate,
+            tx,
+          });
         }
       }
-      const otherDocs = await tx.select({ id: documents.id }).from(documents).where(and(
-        ilike(documents.notes, containsLikePattern(lockedReq.code)),
-        eq(documents.isDeleted, 0)
-      ));
-      for (const od of otherDocs) {
-        allDocIds.add(od.id);
-      }
 
-      let allDelivered = true;
-      if (allDocIds.size > 0) {
-        const checkDocs = await tx.select({ id: documents.id, status: documents.status }).from(documents).where(and(
-          inArray(documents.id, Array.from(allDocIds)),
-          eq(documents.isDeleted, 0)
-        ));
-        allDelivered = checkDocs.every(cd => cd.id === documentId || cd.status === 'final');
-      }
-
-      const docLines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity }).from(documentItems)
-        .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
-      const updatedReqItems = applyDeliveredLines((lockedReq.items || []) as RequisitionItemWithReceipt[], docLines);
-
-      await tx.update(purchaseRequisitions).set({
-        items: updatedReqItems,
-        status: allDelivered ? 'received' : lockedReq.status,
-        updatedAt: new Date().toISOString()
-      }).where(eq(purchaseRequisitions.id, lockedReq.id));
-
-      return { linkedReq: lockedReq, allDelivered };
-    });
-    const linkedReq = delivery?.linkedReq ?? null;
-    const allDelivered = delivery?.allDelivered ?? false;
-
-    if (linkedReq && allDelivered && linkedReq.workflowInstanceId) {
-      const [wfInst] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
-      if (wfInst && wfInst.status === 'IN_PROGRESS') {
-        const { states, transitions } = await this.workflowGraphOf(wfInst);
-        const receivedState = states.find(s => s.stateKey === 'received');
-        const trToReceived = transitions.find(t => t.fromStateId === wfInst.currentStateId && t.toStateId === receivedState?.id);
-
-        if (trToReceived) {
-          try {
-            await WorkflowTransitionExecutor.executeTransition({
-              instanceId: wfInst.id,
-              transitionId: trToReceived.id,
-              // v9.0.2 (TD-415): بی شناسه کاربر، انتقال به نام کاربر ۱ ثبت نمی‌شود
-              userId: user.id,
-              userName: user.username || 'انباردار تحویل‌گیرنده',
-              comment: `تحویل و ورود خودکار اقلام به انبار با فاکتور خرید ${doc.refNumber}`
-            });
-          } catch (trErr) {
-            logger.warn({ message: `[Procurement] Error executing workflow transition on delivery: ${errorMessageOf(trErr)}` });
-            if (receivedState) {
-              await orm.update(workflowInstances).set({
-                currentStateId: receivedState.id,
-                status: 'COMPLETED',
-                updatedAt: new Date().toISOString()
-              }).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
-              await orm.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, linkedReq.workflowInstanceId));
-              await orm.update(workflowTasks)
-                .set({ status: 'completed', completedAt: new Date().toISOString() })
-                .where(and(eq(workflowTasks.instanceId, linkedReq.workflowInstanceId), eq(workflowTasks.status, 'pending')));
-            }
-          }
-        } else if (receivedState) {
-          await orm.update(workflowInstances).set({
-            currentStateId: receivedState.id,
-            status: 'COMPLETED',
-            updatedAt: new Date().toISOString()
-          }).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
-          await orm.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, linkedReq.workflowInstanceId));
-          await orm.update(workflowTasks)
-            .set({ status: 'completed', completedAt: new Date().toISOString() })
-            .where(and(eq(workflowTasks.instanceId, linkedReq.workflowInstanceId), eq(workflowTasks.status, 'pending')));
+      await logActivity({
+        tx,
+        userId: user.id,
+        username: user.username || 'سیستم تدارکات',
+        action: 'UPDATE',
+        entity: 'document',
+        description: `تحویل فاکتور خرید ${doc.refNumber} به انبار و صدور رسید قطعی`,
+        details: {
+          operation: 'DELIVER_PROCUREMENT_ORDER',
+          documentId,
+          refNumber: doc.refNumber,
+          supplierName: doc.buyerName,
+          linkedRequisitionCode: reqCode || lockedReq?.code
         }
-      }
-    }
-
-    await logActivity({
-      userId: user.id,
-      username: user.username || 'سیستم تدارکات',
-      action: 'UPDATE',
-      entity: 'document',
-      description: `تحویل فاکتور خرید ${doc.refNumber} به انبار و صدور رسید قطعی`,
-      details: {
-        operation: 'DELIVER_PROCUREMENT_ORDER',
-        documentId,
-        refNumber: doc.refNumber,
-        supplierName: doc.buyerName,
-        linkedRequisitionCode: reqCode || linkedReq?.code
-      }
+      });
     });
 
     return {

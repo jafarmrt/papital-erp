@@ -53,7 +53,7 @@ export function PieceworkLogsTab({
 }: PieceworkLogsTabProps) {
   const rial = useRialDisplay();
   const curLbl = rial.label;
-  // v9.0.286 (TD-805): ثبت، ویرایش و حذف کارکرد با «ثبت و ویرایش کارکرد پرسنل»
+  // v9.0.320 (TD-805): ثبت، ویرایش و حذف کارکرد با «ثبت و ویرایش کارکرد پرسنل»
   const { canLog } = usePieceworkPermissions();
   return (
     <div className="space-y-4">

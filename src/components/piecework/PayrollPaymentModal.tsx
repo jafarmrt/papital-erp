@@ -34,7 +34,7 @@ const METHOD_OPTIONS = [
 ] as const;
 
 export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPaymentModalProps) {
-  // v9.0.286 (TD-805): ثبت و ابطال پرداخت با «پرداخت و ابطال پرداخت فیش»؛ دیگر خوانندگان فیش فقط سابقه را می‌بینند
+  // v9.0.320 (TD-805): ثبت و ابطال پرداخت با «پرداخت و ابطال پرداخت فیش»؛ دیگر خوانندگان فیش فقط سابقه را می‌بینند
   const { canPay } = usePieceworkPermissions();
   const [bankAccounts, setBankAccounts] = useState<BankAccountOption[]>([]);
   const [previousPayments, setPreviousPayments] = useState<any[]>([]);

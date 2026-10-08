@@ -17,7 +17,7 @@ afterEach(cleanup);
 
 const noop = () => undefined;
 
-// v9.0.288 (TD-814, B12P-11): the pay button inside a payslip gives the payment form what was already paid
+// v9.0.322 (TD-814, B12P-11): the pay button inside a payslip gives the payment form what was already paid
 describe('the payment form opened from a payslip takes its remainder (TD-814)', () => {
   it('a partly paid payslip of 1,000,000 with 600,000 paid offers 400,000, not the whole net', () => {
     const payroll: PieceworkPayroll = {

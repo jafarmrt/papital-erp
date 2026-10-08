@@ -31,7 +31,7 @@ export function PieceworkPayslipModal({
   const curLbl = rial.label;
   // V10-4.4: مودال پرداخت خزانه‌ای
   const [paymentTarget, setPaymentTarget] = useState<PaymentTarget | null>(null);
-  // v9.0.286 (TD-805): تأیید و ابطال فیش با «محاسبه و صدور فیش حقوقی»، پرداخت با «پرداخت و ابطال پرداخت فیش»
+  // v9.0.320 (TD-805): تأیید و ابطال فیش با «محاسبه و صدور فیش حقوقی»، پرداخت با «پرداخت و ابطال پرداخت فیش»
   const { canIssuePayroll, canPay } = usePieceworkPermissions();
   if (!viewingPayroll) return null;
 
@@ -58,7 +58,7 @@ export function PieceworkPayslipModal({
               <button
                 onClick={() => {
                   // V10-4.4: پرداخت فقط از مودال خزانه‌ای
-                  // v9.0.288 (TD-814): پرداخت‌شده و وضعیت هم می‌رود تا فرم همان مانده فیش را بگیرد، نه کل خالص
+                  // v9.0.322 (TD-814): پرداخت‌شده و وضعیت هم می‌رود تا فرم همان مانده فیش را بگیرد، نه کل خالص
                   setPaymentTarget({
                     id: viewingPayroll.id,
                     payrollNumber: viewingPayroll.payrollNumber,

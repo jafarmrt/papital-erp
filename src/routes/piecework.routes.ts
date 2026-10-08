@@ -572,7 +572,7 @@ router.post('/piecework/logs', requirePermission(PIECEWORK_LOG_PERMISSION), vali
 
     const items = Array.isArray(req.body.items) ? req.body.items : [req.body];
     // حوزه H (TD-300، گزینه پیشنهادی «نرخ از سرور»): نرخ دستی فقط برای مدیر تعرفه‌ها؛ دیگران نرخ اختصاصی پرسنل یا نرخ
-    // پایه عنوان کار را می‌گیرند (logWorkEntries با نرخ خالی همین را می‌خواند). v9.0.286 (TD-805): «مدیریت کامل پرسنل» دیگر نه
+    // پایه عنوان کار را می‌گیرند (logWorkEntries با نرخ خالی همین را می‌خواند). v9.0.320 (TD-805): «مدیریت کامل پرسنل» دیگر نه
     const canSetRate = await can(req.user, PIECEWORK_TASKS_PERMISSION);
 
     if (items.length === 0) {
@@ -603,7 +603,7 @@ router.put('/piecework/logs/:id', requirePermission(PIECEWORK_LOG_PERMISSION), v
   try {
     const id = Number(req.params.id);
     const { date, quantity, unitRate, notes, projectId } = req.body;
-    // v9.0.286 (TD-805): ویرایش کارکرد با «ثبت و ویرایش کارکرد» است، ولی نرخ دستی همان قاعده ثبت را دارد: بی مدیریت تعرفه‌ها
+    // v9.0.320 (TD-805): ویرایش کارکرد با «ثبت و ویرایش کارکرد» است، ولی نرخ دستی همان قاعده ثبت را دارد: بی مدیریت تعرفه‌ها
     // نرخ کارکرد همان که بود می‌ماند (پیش‌تر ویرایش فقط برای «مدیریت کامل پرسنل» بود که نرخ را آزادانه عوض می‌کرد)
     const canSetRate = await can(req.user, PIECEWORK_TASKS_PERMISSION);
 

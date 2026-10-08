@@ -227,7 +227,7 @@ export async function runFiscalClosingTests(shouldRun: ShouldRun): Promise<TestC
       const opening = await admin.post('/api/accounting/vouchers', body({ voucherType: 'opening', referenceNumber: 'OPEN-BAL-1395', date: firstDay }));
       if (opening.status !== 201 || opening.body?.voucherType !== 'opening') problems.push(`manual opening voucher: ${opening.status} ${opening.body?.voucherType}`);
       const draft = await admin.post('/api/accounting/vouchers', body({ status: 'draft' }));
-      await refused('edit a draft to closing type', await admin.put(`/api/accounting/vouchers/${draft.body?.id}`, { voucherType: 'closing' }), 400, 'بستن سال مالی');
+      await refused('edit a draft to closing type', await admin.put(`/api/accounting/vouchers/${draft.body?.id}`, { voucherType: 'closing', version: draft.body?.version }), 400, 'بستن سال مالی');
       await VoucherService.deleteJournalVoucher(Number(draft.body?.id));
 
       // legacy rows the old form saved: a manual «CLOSING-1395» and a manual opening saved as closing type

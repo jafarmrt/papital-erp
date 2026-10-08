@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Users, Search, Calendar, Printer, Download, RefreshCw, CheckCircle2, AlertCircle, User, Building, Briefcase, ChevronDown, X } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatPersianCode, formatCurrencyLabel, toStorageDate, getTodayIsoDate, getPastJalaliDate, isoToJalaliDate, jalaliMonthStart, jalaliYearBounds } from '../../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatPersianCode, formatCurrencyLabel, toStorageDate, getTodayIsoDate, getTodayJalaliDate, getPastJalaliDate, isoToJalaliDate, jalaliMonthStart, jalaliYearBounds } from '../../../utils';
+import { TREASURY_CURRENCIES } from '../../../lib/treasury/treasuryCurrency';
+import { partyStatementFileName } from '../../../lib/accounting/accountingExport';
 import toast from 'react-hot-toast';
 import type { PartyOption } from '../../../types';
 import { usePartiesQuery, usePartyLedgerReport, type PartyLedgerParams } from '../../../hooks/accounting/usePartyProjectReportQueries';
@@ -160,7 +162,8 @@ export function PartyLedgerReportView({
     }
 
     const partyName = reportData.party?.name || selectedParty?.name || 'طرف_حساب';
-    const filename = `صورت_حساب_${partyName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    // v9.0.288 (TD-580): تاریخ امروز منطقه زمانی توافقی، نه روز UTC مرورگر
+    const filename = partyStatementFileName(partyName, getTodayJalaliDate());
 
     const headers = ['ردیف', 'تاریخ', 'شماره سند', 'شماره دستی', 'شرح عملیات', 'کد حساب', 'نام حساب معین', 'بدهکار', 'بستانکار', 'مانده لحظه‌ای', 'نوع مانده', 'ارز'];
     const rows = reportData.items.map(it => [
@@ -181,7 +184,7 @@ export function PartyLedgerReportView({
     // Prepend UTF-8 BOM \uFEFF for correct Persian display in Microsoft Excel
     const csvContent = '\uFEFF' + [
       [`"صورت‌حساب تفصیلی طرف‌حساب: ${partyName}"`],
-      [`"تاریخ صدور گزارش: ${new Date().toLocaleDateString('fa-IR')}"`],
+      [`"تاریخ صدور گزارش: ${formatPersianDate(getTodayIsoDate())}"`],
       [`"مانده ابتدای دوره: ${reportData.openingBalance} (${reportData.openingBalanceType})"`],
       [`"جمع گردش بدهکار: ${reportData.totalDebit}"`, `"جمع گردش بستانکار: ${reportData.totalCredit}"`],
       [`"مانده نهایی: ${reportData.finalBalance} (${reportData.finalBalanceType})"`],
@@ -283,7 +286,7 @@ export function PartyLedgerReportView({
                       )}
                     </>
                   ) : (
-                    <span className="text-slate-400">جستجو و انتخاب طرف‌حساب...</span>
+                    <span className="text-slate-400">جست‌وجو و انتخاب طرف‌حساب...</span>
                   )}
                 </div>
                 <div className="flex items-center gap-1">
@@ -352,7 +355,7 @@ export function PartyLedgerReportView({
                     <Search className="w-3.5 h-3.5 absolute right-3 top-2.5 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="جستجوی نام یا شماره تماس..."
+                      placeholder="جست‌وجوی نام یا شماره تماس..."
                       value={partySearchQuery}
                       onChange={(e) => setPartySearchQuery(e.target.value)}
                       className="w-full pr-8 pl-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500"
@@ -483,10 +486,7 @@ export function PartyLedgerReportView({
               className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white"
             >
               <option value="all">همه ارزها</option>
-              <option value="IRR">ریال (IRR)</option>
-              <option value="USD">دلار (USD)</option>
-              <option value="EUR">یورو (EUR)</option>
-              <option value="AED">درهم (AED)</option>
+              {TREASURY_CURRENCIES.map(c => <option key={c} value={c}>{formatCurrencyLabel(c)}</option>)}
             </select>
           </div>
         </div>
@@ -513,7 +513,7 @@ export function PartyLedgerReportView({
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-700 pb-4">
               <div>
                 <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 block mb-1">
-                  سامانه مدیریت منابع سازمانی و حسابداری (ERP)
+                  سامانه مدیریت منابع سازمانی و حسابداری
                 </span>
                 <h2 className="text-xl font-black text-slate-900 dark:text-white">
                   صورت‌حساب مالی طرف‌حساب
@@ -521,7 +521,7 @@ export function PartyLedgerReportView({
               </div>
 
               <div className="text-left sm:text-right space-y-1 text-xs text-slate-500 dark:text-slate-400 font-mono">
-                <div>تاریخ صدور گزارش: <span className="font-bold text-slate-800 dark:text-slate-200">{new Date().toLocaleDateString('fa-IR')}</span></div>
+                <div>تاریخ صدور گزارش: <span className="font-bold text-slate-800 dark:text-slate-200">{formatPersianDate(getTodayIsoDate())}</span></div>
                 <div>
                   بازه زمانی: <span className="font-bold text-slate-800 dark:text-slate-200">
                     {reportData.startDate ? formatPersianDate(reportData.startDate) : 'ابتدای دوره'} الی {reportData.endDate ? formatPersianDate(reportData.endDate) : 'امروز'}

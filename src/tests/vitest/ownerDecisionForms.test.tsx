@@ -6,7 +6,7 @@ vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: { method?: string;
 
 const granted = { value: false };
 vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => granted.value && key === 'accounting.treasury_no_voucher' }));
-// v9.0.286 (TD-805): the payroll buttons follow their keys; this test grants all of them
+// v9.0.320 (TD-805): the payroll buttons follow their keys; this test grants all of them
 vi.mock('../../hooks/usePieceworkPermissions', () => ({
   usePieceworkPermissions: () => ({ canManageTasks: true, canLog: true, canIssuePayroll: true, canPay: true }),
 }));
