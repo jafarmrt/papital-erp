@@ -11,6 +11,13 @@ import { brief, newProject, q } from './projectStageIntegrityTests.js';
  * Express routes and PostgreSQL in an isolated schema and is red on the version before each fix.
  */
 
+interface AuditDetails {
+  projectId?: number;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  changes?: Record<string, { before: unknown; after: unknown }>;
+}
+
 export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
 
@@ -138,6 +145,49 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
       if (reopened.status !== 'in_progress' || (reopened.completed_at ?? '') !== '') problems.push(`a reopened stage is ${reopened.status} with completion time ${reopened.completed_at}, expected in_progress without one`);
       assertNoProblems(problems);
       return 'matrix and manual completion times and tick times in server UTC; kept on resave, cleared on reopen';
+    }));
+  }
+
+  const auditId = 'reg_project_stage_audit_td_757';
+  if (shouldRun(auditId, 'td757', 'projects', 'package11')) {
+    await runCase(results, auditId, 'v9.0.341: a project edit is audited with before and after of the changed fields, and adding, editing and deleting a stage each write an audit row with the stage before and after, inside the write transaction (TD-757)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const project = await newProject(api, {});
+      const auditRows = async (entity: string, entityId: number | string) => q(
+        'SELECT action, details FROM activity_logs WHERE entity = $1 AND entity_id = $2 ORDER BY id', [entity, String(entityId)]);
+
+      const edit = await api.put(`/api/projects/${project.id}`, { title: 'TD-757 renamed', priority: 'high' });
+      if (edit.status !== 200) problems.push(`editing the project answered ${edit.status} ${brief(edit.body)}`);
+      const projectRows = (await auditRows('پروژه تولید', project.id)).filter(r => r.action === 'UPDATE');
+      const changes = (projectRows[projectRows.length - 1]?.details as { changes?: Record<string, { before: unknown; after: unknown }> } | undefined)?.changes ?? {};
+      if (changes.title?.after !== 'TD-757 renamed' || !String(changes.title?.before ?? '').startsWith('TD-P11') || changes.priority?.before !== 'متوسط' || changes.priority?.after !== 'زیاد' || 'description' in changes) {
+        problems.push(`the project edit audit row carries changes ${JSON.stringify(changes)}, expected only title and priority with before and after`);
+      }
+
+      const added = await api.post(`/api/projects/${project.id}/stages`, { title: 'TD-757 stage' });
+      const stageId = Number(added.body?.id);
+      if (added.status !== 201 || !stageId) problems.push(`adding a stage answered ${added.status} ${brief(added.body)}`);
+      await api.put(`/api/projects/${project.id}/stages/${stageId}`, { title: 'TD-757 stage renamed', notes: 'n' });
+      await api.del(`/api/projects/${project.id}/stages/${stageId}`);
+      const stageRows = await auditRows('مرحله پروژه تولید', stageId);
+      const [create, update, remove] = stageRows as Array<{ action: string; details?: AuditDetails }>;
+      if (stageRows.length !== 3 || create?.action !== 'CREATE' || create.details?.after?.title !== 'TD-757 stage' || create.details?.projectId !== project.id) {
+        problems.push(`stage add audit rows ${brief(stageRows)}, expected CREATE with the stage after and the project id`);
+      }
+      if (update?.action !== 'UPDATE' || update.details?.changes?.title?.after !== 'TD-757 stage renamed' || update.details?.changes?.title?.before !== 'TD-757 stage' || update.details?.changes?.status) {
+        problems.push(`stage edit audit row ${brief(update)}, expected UPDATE with only the changed fields`);
+      }
+      if (remove?.action !== 'DELETE' || remove.details?.before?.title !== 'TD-757 stage renamed' || remove.details?.after) {
+        problems.push(`stage delete audit row ${brief(remove)}, expected DELETE with the stage before`);
+      }
+
+      const before = (await auditRows('پروژه تولید', project.id)).length;
+      const refused = await api.put(`/api/projects/${project.id}`, { title: 'TD-757 refused', start_date: '1404/12/31' });
+      const after = (await auditRows('پروژه تولید', project.id)).length;
+      if (refused.status < 400 || after !== before) problems.push(`a refused project edit answered ${refused.status} and left ${after - before} new audit rows, expected an error and none`);
+      assertNoProblems(problems);
+      return 'project edit, stage add, edit and delete audited with before and after inside their transaction';
     }));
   }
 

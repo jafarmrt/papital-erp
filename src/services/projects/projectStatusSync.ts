@@ -2,15 +2,13 @@ import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { productionProjects, projectStages } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
-import { logActivity } from '../../lib/auditLogger.js';
+import { logMatrixStatusChange } from './projectAudit.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
-import { matrixProjectStatus, projectStatusLabel } from '../../lib/projects/projectStatus.js';
+import { matrixProjectStatus } from '../../lib/projects/projectStatus.js';
 import { loadProjectProgressMatrix } from './projectProgressMatrix.js';
 
 type ProjectRow = typeof productionProjects.$inferSelect;
 type StageRow = typeof projectStages.$inferSelect;
-
-export const PROJECT_AUDIT_ENTITY = 'پروژه تولید';
 
 /** کاربر نوشتن برای ردیف ممیزی (`req` کاربر و IP را می‌دهد) */
 export interface ProjectActor {
@@ -95,26 +93,7 @@ export async function syncProjectFromMatrix(tx: DbExecutor, project: ProjectRow,
   let current = project;
   if (nextStatus !== project.status) {
     [current] = await tx.update(productionProjects).set({ status: nextStatus }).where(eq(productionProjects.id, project.id)).returning();
-    const before = projectStatusLabel(project.status);
-    const after = projectStatusLabel(nextStatus);
-    await logActivity({
-      tx,
-      req: actor.req,
-      userId: actor.userId,
-      username: actor.username,
-      userFullName: actor.userFullName,
-      action: 'UPDATE',
-      entity: PROJECT_AUDIT_ENTITY,
-      entityId: String(project.id),
-      description: `وضعیت پروژه تولید ${project.projectCode} با ماتریس پیشرفت از «${before}» به «${after}» تغییر کرد`,
-      details: {
-        before: { status: before },
-        after: { status: after },
-        changes: { status: { before, after } },
-        completedMatrixCells: matrix.completedCells,
-        totalMatrixCells: matrix.totalCells,
-      },
-    });
+    await logMatrixStatusChange(tx, actor, project, nextStatus, matrix);
   }
 
   return { project: current, stages, weightedProgress: matrix.weightedProgress };

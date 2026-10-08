@@ -611,17 +611,7 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
 
     const rawStages = await orm.select().from(projectStages).where(and(eq(projectStages.projectId, id), eq(projectStages.isDeleted, 0))).orderBy(asc(projectStages.stageOrder));
 
-    const currentUser = req.user?.username || 'سیستم';
-    await logActivity({
-      userId: req.user?.id,
-      username: currentUser,
-      userFullName: req.user?.full_name || currentUser,
-      action: 'UPDATE',
-      entity: 'پروژه تولید',
-      entityId: String(id),
-      description: `بروزرسانی مشخصات پروژه تولید ${updated.projectCode} (${updated.title})`
-    });
-
+    // v9.0.341 (TD-757): ردیف ممیزی ویرایش با پیش و پس درون تراکنش updateProject نوشته می‌شود
     res.json(formatProject(updated, rawStages));
   } catch (err) {
     throw err;

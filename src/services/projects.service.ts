@@ -15,6 +15,7 @@ import { hasMatrixProducts, matrixProducts } from '../lib/projects/progressMatri
 import { loadProjectProgressMatrix, productProgressView, progressMatrixStatus, type ProgressMatrixStatus } from './projects/projectProgressMatrix.js';
 import { actorName, lockLiveProject, stageCompletedAt, syncProjectFromMatrix, type ProjectActor, type ProjectStatusSyncResult, type SyncedStage } from './projects/projectStatusSync.js';
 import { logActivity } from '../lib/auditLogger.js';
+import { logProjectUpdate, logStageChange } from './projects/projectAudit.js';
 import { MAX_STAGE_ORDER } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
 import { normalizeDecimalString } from '../lib/numericInput.js';
@@ -292,6 +293,9 @@ export class ProjectService {
       ProjectService.assertMatrixCompleted(progressMatrixStatus(await loadProjectProgressMatrix(executor, current)));
     }
 
+    // v9.0.341 (TD-757): ردیف ممیزی ویرایش با پیش و پس فیلدهای تغییرکرده، با همین تراکنش
+    await logProjectUpdate(executor, actor, existing, current);
+
     // v9.0.334 (TD-738): ویرایش پروژه (محصولات، کالای اصلی) مراحل و وضعیت را زیر همین قفل با ماتریس همگام می‌کند
     const synced = await syncProjectFromMatrix(executor, current, actor);
     return { previous: existing, current: synced.project };
@@ -449,7 +453,7 @@ export class ProjectService {
     executor: DbExecutor = orm
   ): Promise<SyncedStage> {
     return executor.transaction(async (tx) => {
-      await lockLiveProject(tx, projectId);
+      const project = await lockLiveProject(tx, projectId);
       const nextOrder = await ProjectService.nextStageOrder(tx, projectId);
 
       const [newStage] = await tx.insert(projectStages).values({
@@ -467,7 +471,10 @@ export class ProjectService {
       }).returning();
 
       const synced = await ProjectService.syncLockedProject(tx, projectId, actor);
-      return synced.stages.find(st => st.id === newStage.id) ?? newStage;
+      const stage = synced.stages.find(st => st.id === newStage.id) ?? newStage;
+      // v9.0.341 (TD-757): افزودن مرحله ردیف ممیزی با پس مرحله دارد، با همین تراکنش
+      await logStageChange(tx, actor, 'CREATE', project, null, stage);
+      return stage;
     });
   }
 
@@ -637,7 +644,10 @@ export class ProjectService {
         .returning();
 
       const synced = await ProjectService.syncLockedProject(tx, projectId, actor);
-      return synced.stages.find(st => st.id === stageId) ?? updated;
+      const stage = synced.stages.find(st => st.id === stageId) ?? updated;
+      // v9.0.341 (TD-757): ویرایش مرحله ردیف ممیزی با پیش و پس دارد، با همین تراکنش
+      await logStageChange(tx, actor, 'UPDATE', project, existing, stage);
+      return stage;
     });
   }
 
@@ -652,7 +662,7 @@ export class ProjectService {
     executor: DbExecutor = orm
   ): Promise<typeof projectStages.$inferSelect> {
     return executor.transaction(async (tx) => {
-      await lockLiveProject(tx, projectId);
+      const project = await lockLiveProject(tx, projectId);
       const [existing] = await tx
         .select()
         .from(projectStages)
@@ -672,6 +682,8 @@ export class ProjectService {
           .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.stageOrder, existing.stageOrder), eq(projectProductStageProgress.isDeleted, 0)));
       }
       await ProjectService.syncLockedProject(tx, projectId, actor);
+      // v9.0.341 (TD-757): حذف مرحله ردیف ممیزی با پیش مرحله دارد، با همین تراکنش
+      await logStageChange(tx, actor, 'DELETE', project, existing, null);
       return existing;
     });
   }

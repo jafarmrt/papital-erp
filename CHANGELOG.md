@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.341 — v9.0.341 — Project and Stage Audit Rows
+- **Project and Stage Audit Rows (TD-757):** a project edit was logged with `details: {}` outside its transaction and stage add, edit and delete wrote no audit row; `projectAudit.ts` now logs the project edit with before and after of the changed fields and every stage write under «مرحله پروژه تولید» (retained), each with the write's `tx`.
+
 ### v9.0.340 — v9.0.340 — One Clock for Stage Completion
 - **One Clock for Stage Completion (TD-756):** a stage edit wrote `completed_at` in UTC with Z while the matrix sync and the matrix tick wrote the Tehran wall clock without a zone (210 minutes apart); every path now writes the server UTC time (`systemNowUtcIso`) through `stageCompletedAt`, a completed stage keeps its time and a reopened stage has none.
 
