@@ -129,7 +129,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
       })
       .catch((err) => {
         console.error('Failed to load bank accounts', err);
-        toast.error('خطا در دریافت لیست حساب‌های بانکی و صندوق‌ها');
+        toast.error('خطا در دریافت فهرست حساب‌های بانکی و صندوق‌ها');
       })
       .finally(() => {
         setIsLoadingAccounts(false);
@@ -283,7 +283,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                 <Banknote size={15} className="text-emerald-600" />
-                <span>مبلغ پرداختی این نوبت ({currency === 'IRR' ? 'ریال' : currency})</span>
+                <span>مبلغ پرداختی این نوبت ({formatCurrencyLabel(currency)})</span>
                 <span className="text-rose-500">*</span>
               </label>
 

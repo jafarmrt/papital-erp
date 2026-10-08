@@ -55,7 +55,7 @@ async function loadPrintCopy(
     return await loadDocument(docId);
   } catch (err: unknown) {
     console.error(`Failed to load the print copy of document ${docId}:`, err);
-    toast.error('سند ثبت شد، اما نسخه چاپی آن بارگذاری نشد. آن را از «لیست اسناد و فاکتورها» چاپ کنید.', { duration: 6000 });
+    toast.error('سند ثبت شد، اما نسخه چاپی آن بارگذاری نشد. آن را از «فهرست اسناد و فاکتورها» چاپ کنید.', { duration: 6000 });
     return null;
   }
 }

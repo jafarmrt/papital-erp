@@ -59,7 +59,7 @@ export function InvoiceListTable({ safeDocs, loading, actions, loadError, onRetr
           {!loading && !loadError && safeDocs.length === 0 && (
             <tr>
               <td colSpan={10} className="p-12 text-center text-slate-400 text-xs">
-                سندی مطابق فیلترهای انتخابی یا عبارت جستجو یافت نشد.
+                سندی مطابق شرط‌های جستجو یافت نشد.
               </td>
             </tr>
           )}

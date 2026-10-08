@@ -1,6 +1,6 @@
 import { Plus, Package } from 'lucide-react';
 import { Item } from '../../../types';
-import { formatPersianNumber } from '../../../utils';
+import { formatCurrencyLabel, formatPersianNumber, formatPersianPrice } from '../../../utils';
 import { SearchableSelect } from '../../SearchableSelect';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
 import { PICK_LIST_URLS } from '../../../lib/permissions/pickLists';
@@ -60,26 +60,26 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
               mapResultToOption={(it: Item) => {
                 const { totalReservedQty, reservedForOtherProjects, reservedForSelectedProject, locationStock, maxAllowedForExit } = getItemReservationSummary(it);
 
-                let label = `${it.code} - ${it.name} (موجودی فعلی: ${it.current_stock} ${it.unit})`;
+                let label = `${it.code} - ${it.name} (موجودی فعلی: ${formatPersianNumber(it.current_stock)} ${it.unit})`;
 
                 if (actionType === 'out') {
                   // v9.0.242 (TD-799): سقف خروج از موجودی انبار انتخاب‌شده هم کم است
                   if (locationStock !== Number(it.current_stock)) {
-                    label += ` | 🏬 موجودی انبار مبدا: ${locationStock} ${it.unit}`;
+                    label += ` | 🏬 موجودی انبار مبدا: ${formatPersianNumber(locationStock)} ${it.unit}`;
                   }
                   if (totalReservedQty > 0) {
                     if (reservedForOtherProjects > 0) {
-                      label += ` | 🔒 رزرو سایر مصارف: ${reservedForOtherProjects} ${it.unit}`;
+                      label += ` | 🔒 رزرو سایر مصارف: ${formatPersianNumber(reservedForOtherProjects)} ${it.unit}`;
                     }
                     if (reservedForSelectedProject > 0) {
-                      label += ` | 🟢 سهم رزرو این پروژه: ${reservedForSelectedProject} ${it.unit}`;
+                      label += ` | 🟢 سهم رزرو این پروژه: ${formatPersianNumber(reservedForSelectedProject)} ${it.unit}`;
                     }
-                    label += ` | ▫️ سقف مجاز خروج: ${maxAllowedForExit} ${it.unit}`;
+                    label += ` | ▫️ سقف مجاز خروج: ${formatPersianNumber(maxAllowedForExit)} ${it.unit}`;
                   } else {
-                    label += ` | ▫️ مجاز جهت خروج: ${maxAllowedForExit} ${it.unit}`;
+                    label += ` | ▫️ مجاز جهت خروج: ${formatPersianNumber(maxAllowedForExit)} ${it.unit}`;
                   }
                 } else if (it.purchase_price) {
-                  label += ` | فی خرید قبلی: ${Number(it.purchase_price).toLocaleString('fa-IR')} ${currency}`;
+                  label += ` | فی خرید قبلی: ${formatPersianPrice(it.purchase_price, undefined, 4)} ${formatCurrencyLabel(currency)}`;
                 }
 
                 return {
@@ -111,7 +111,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
           {actionType === 'in' && (
             <div className="md:col-span-3">
               <label className="block text-xs font-bold mb-1.5 text-slate-700">
-                قیمت خرید واحد (فی - {currency})
+                قیمت خرید واحد (فی - {formatCurrencyLabel(currency)})
               </label>
               <input 
                 type="number" 

@@ -40,7 +40,7 @@ export function InvoiceDetailsModal({ selectedDocDetails, setSelectedDocDetails,
                 </span>
               </h3>
               <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                تاریخ ثبت: {formatPersianDate(selectedDocDetails.date)} | ثبت توسط: {selectedDocDetails.user || 'سیستم'}
+                تاریخ ثبت: {formatPersianDate(selectedDocDetails.date)} | ثبت توسط: {selectedDocDetails.user || 'سامانه'}
               </p>
             </div>
           </div>

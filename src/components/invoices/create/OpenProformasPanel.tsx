@@ -106,7 +106,7 @@ export function OpenProformasPanel({ proformas, total, page, onPageChange, editi
                 entityType="document"
                 entityId={workflowModalDoc.id}
                 workflowCode="DOC_APPROVAL_WORKFLOW"
-                title="اقدامات و ترنزیشن‌های گردش‌کار"
+                title="اقدام‌های گردش کار"
                 onStateChange={onWorkflowStateChange}
               />
             </div>

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.297 — v9.0.297 — Persian Digits and Wording in Invoices and Stock Documents
+- **Wording:** invoice and stock document messages show numbers in Persian digits and currency names instead of codes, the receipt summary no longer claims stock waits for a finance approval, and the screens drop transliterations and English words (TD-803).
+
 ### v9.0.296 — v9.0.296 — Settlement Account in the Invoice Currency
 - **Settlement:** the invoice settlement form lists and pre-selects only bank accounts and cash funds in the invoice's currency and names each account's currency (TD-802).
 

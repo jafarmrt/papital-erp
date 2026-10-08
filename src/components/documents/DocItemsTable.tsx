@@ -1,5 +1,5 @@
 import { Lock, AlertTriangle, Trash2, Package, ShoppingCart, Edit3 } from 'lucide-react';
-import { formatPersianPrice } from '../../utils';
+import { formatCurrencyLabel, formatPersianNumber, formatPersianPrice } from '../../utils';
 import { Item } from '../../types';
 
 export interface DocItemRow {
@@ -68,7 +68,7 @@ export function DocItemsTable({
               {actionType === 'in' && (
                 <>
                   <th className="p-3 text-center">قیمت خرید واحد (فی)</th>
-                  <th className="p-3 text-center">مبلغ کل ردیف ({currencyLabel})</th>
+                  <th className="p-3 text-center">مبلغ کل ردیف ({formatCurrencyLabel(currencyLabel)})</th>
                 </>
               )}
               {actionType === 'out' && <th className="p-3 text-center">وضعیت تخصیص رزرو</th>}
@@ -119,7 +119,7 @@ export function DocItemsTable({
                         <div className="text-[10px] text-slate-500 flex items-center gap-2">
                           <span>دسته: {d.item.category || 'عمومی'}</span>
                           {d.item.current_stock !== undefined && (
-                            <span className="font-mono">موجودی: {d.item.current_stock} {d.item.unit}</span>
+                            <span className="font-mono">موجودی: {formatPersianNumber(d.item.current_stock)} {d.item.unit}</span>
                           )}
                         </div>
                       </div>
@@ -170,7 +170,7 @@ export function DocItemsTable({
                       {resSummary.reservedForSelectedProject > 0 ? (
                         <span className="px-2.5 py-1 bg-purple-100 text-purple-950 rounded-lg border border-purple-300 font-bold inline-flex items-center gap-1">
                           <Lock size={12} />
-                          <span>از سهم رزرو پروژه ({resSummary.reservedForSelectedProject} {d.item.unit})</span>
+                          <span>از سهم رزرو پروژه ({formatPersianNumber(resSummary.reservedForSelectedProject)} {d.item.unit})</span>
                         </span>
                       ) : resSummary.reservedForOtherProjects > 0 ? (
                         <span className="px-2.5 py-1 bg-amber-100 text-amber-950 rounded-lg border border-amber-300 font-bold inline-flex items-center gap-1">
@@ -209,9 +209,10 @@ export function DocItemsTable({
               <ShoppingCart size={20} />
             </div>
             <div>
-              <h4 className="font-bold text-emerald-950 text-sm">خلاصه رسید خرید مواد اولیه و کالا (فرآیند متصل به ورکفلو)</h4>
+              <h4 className="font-bold text-emerald-950 text-sm">خلاصه رسید خرید مواد اولیه و کالا</h4>
               <p className="text-xs text-emerald-700">
-                پس از ثبت نهایی، گردش کار تاییدات مالی آغاز گردیده، سند دوبل خرید و پرداخت توسط حسابداری صادر و پس از تایید مدیر مالی موجودی انبار به‌روزرسانی می‌شود.
+                {/* v9.0.297 (TD-803، یافته B08-34): صفحه رسید را نهایی ثبت می‌کند و موجودی در همان درخواست تغییر می‌کند */}
+                موجودی با ثبت نهایی به‌روزرسانی می‌شود؛ سند حسابداری تا تأیید حسابدار پیش‌نویس است.
               </p>
             </div>
           </div>

@@ -11,7 +11,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
     address: string;
     logo: string;
   }>({
-    name: 'سامانه جامع ERP و مدیریت کارگاه پاپیتال',
+    name: 'سامانه جامع مدیریت کارگاه پاپیتال',
     phone: '',
     address: '',
     logo: ''
@@ -26,7 +26,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
         const rawSettings: { key: string; value: string }[] = Array.isArray(res?.settings)
           ? res.settings
           : (Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []));
-        const name = res?.companyName || rawSettings.find(s => s.key === 'company_name')?.value || 'سامانه جامع ERP و مدیریت کارگاه پاپیتال';
+        const name = res?.companyName || rawSettings.find(s => s.key === 'company_name')?.value || 'سامانه جامع مدیریت کارگاه پاپیتال';
         const phone = rawSettings.find(s => s.key === 'company_phone')?.value || '';
         const address = rawSettings.find(s => s.key === 'company_address')?.value || '';
         const logo = res?.companyLogo || rawSettings.find(s => s.key === 'company_logo')?.value || '';
@@ -88,7 +88,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
       >
         <div className="flex items-center gap-3">
           {companyInfo.logo && (
-            <img src={companyInfo.logo} alt="Logo" className="w-8 h-8 object-contain bg-white rounded p-0.5" />
+            <img src={companyInfo.logo} alt="نشان شرکت" className="w-8 h-8 object-contain bg-white rounded p-0.5" />
           )}
           <span>{title}</span>
           {isProforma && <span className="text-xs bg-amber-400 text-amber-950 px-2 py-0.5 rounded font-bold mr-2">پیش‌فاکتور</span>}

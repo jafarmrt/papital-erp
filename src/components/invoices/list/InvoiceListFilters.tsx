@@ -6,7 +6,7 @@ import { extractDateString } from '../../../utils';
 import type { InvoiceListQueryState } from '../../../hooks/invoices/useInvoiceListQuery';
 import { SALES_PROFORMA_FILTER } from '../../../lib/invoices/invoiceListDocuments';
 
-/** TD-080 (بخش ۳): نوار فیلتر لیست اسناد (جستجو، نوع، وضعیت، بازه تاریخ، پاک کردن فیلترها) */
+/** TD-080 (بخش ۳): نوار فیلتر لیست اسناد (جستجو، نوع، وضعیت، بازه تاریخ، پاک کردن شرط‌های جستجو) */
 export function InvoiceListFilters({ query }: { query: InvoiceListQueryState }) {
   const {
     search, setSearch, filterType, setFilterType, filterStatus, setFilterStatus,
@@ -85,7 +85,7 @@ export function InvoiceListFilters({ query }: { query: InvoiceListQueryState }) 
             onClick={clearFilters}
             className="text-xs text-rose-600 hover:text-rose-800 font-bold px-2.5 py-1.5 bg-rose-50 rounded-xl border border-rose-200 cursor-pointer transition-colors"
           >
-            پاک کردن فیلترها
+            پاک کردن شرط‌های جستجو
           </button>
         )}
       </div>

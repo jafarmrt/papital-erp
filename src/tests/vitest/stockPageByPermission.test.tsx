@@ -63,7 +63,7 @@ const submitButton = () => screen.getByText(/ثبت نهایی و صدور/).clo
 
 async function addReservedItemToRemittance() {
   await screen.findByText('پروژه PRJ-7 - گردنبند سفارشی');
-  await screen.findByText('اقلام رزرو شده انبار (1 کالا)');
+  await screen.findByText('اقلام رزرو شده انبار (۱ کالا)');
   fireEvent.change(screen.getByDisplayValue('— خروج عمومی (بدون تخصیص به پروژه) —'), { target: { value: '7' } });
   fireEvent.click(await screen.findByText('+ افزودن'));
   await screen.findByText('✓ در سند');

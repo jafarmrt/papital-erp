@@ -13,7 +13,7 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
-const EMPTY = 'سندی مطابق فیلترهای انتخابی یا عبارت جستجو یافت نشد.';
+const EMPTY = 'سندی مطابق شرط‌های جستجو یافت نشد.';
 
 function renderPage() {
   render(
