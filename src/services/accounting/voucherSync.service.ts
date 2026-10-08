@@ -1357,7 +1357,7 @@ export class VoucherSyncService {
           debit: 0,
           credit: otherDeductions,
           currency: 'IRR',
-          // v9.0.324 (TD-861): شرح کسورات فیش در ردیف کسورات حقوق پرداختنی می‌آید (فیش پیش از آن شرح ندارد)
+          // v9.0.329 (TD-861): شرح کسورات فیش در ردیف کسورات حقوق پرداختنی می‌آید (فیش پیش از آن شرح ندارد)
           description: `سایر کسورات فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})${pay.deductionsDescription ? `: ${pay.deductionsDescription}` : ''}`
         });
         allocatedCredits = allocatedCredits.add(otherDeductions);

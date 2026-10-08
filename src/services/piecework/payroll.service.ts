@@ -97,7 +97,7 @@ export class PieceworkPayrollService {
         'PAYROLL_NEGATIVE_COMPONENT'
       );
     }
-    // v9.0.324 (TD-861، تصمیم ت۵ الف): «سایر کسورات» بی شرح صادر نمی‌شود. پیش‌تر کادر «(بیمه/مالیات...)» نام داشت ولی چیزی
+    // v9.0.329 (TD-861، تصمیم ت۵ الف): «سایر کسورات» بی شرح صادر نمی‌شود. پیش‌تر کادر «(بیمه/مالیات...)» نام داشت ولی چیزی
     // حساب نمی‌کرد، و مبلغ بی هیچ توضیحی به حساب ۳۲۰۲ می‌رفت.
     const deductionsNote = totDeductionsFin.isPositive() ? String(deductionsDescription ?? '').trim() : '';
     if (totDeductionsFin.isPositive() && !deductionsNote) {
@@ -294,7 +294,7 @@ export class PieceworkPayrollService {
     const targetStatus = status ? String(status).trim().toLowerCase() : '';
     if (targetStatus && !MANUAL_PAYROLL_STATUSES.has(targetStatus)) {
       throw new ValidationError(
-        // v9.0.323 (TD-815): پیام وضعیت را با برچسب فارسی می‌گوید، نه کد آن
+        // v9.0.328 (TD-815): پیام وضعیت را با برچسب فارسی می‌گوید، نه کد آن
         `وضعیت «${payrollStatusLabel(targetStatus)}» برای فیش حقوقی مجاز نیست؛ فقط «پیش‌نویس» و «تأییدشده» دستی تنظیم می‌شوند. پرداخت از «ثبت پرداخت» و ابطال از «ابطال فیش» انجام می‌شود.`
       );
     }

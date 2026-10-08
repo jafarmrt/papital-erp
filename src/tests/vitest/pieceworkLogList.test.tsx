@@ -41,7 +41,7 @@ function HookProbe() {
 }
 const logRequests = () => requested.filter(u => u.startsWith('/piecework/logs') && !u.startsWith('/piecework/logs/summary'));
 
-// v9.0.325 (TD-811, B12P-08): the piecework page reads one page of work logs for the current Jalali month from the server
+// v9.0.330 (TD-811, B12P-08): the piecework page reads one page of work logs for the current Jalali month from the server
 describe('piecework work log list is paged on the server (TD-811)', () => {
   it('asks for the current Jalali month, one page at a time, and never the whole ledger', async () => {
     render(<HookProbe />);

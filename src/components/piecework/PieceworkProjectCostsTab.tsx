@@ -5,7 +5,7 @@ import { useRialDisplay } from '../../hooks/useAppCurrency';
 import type { WorkLogProjectCost } from '../../lib/piecework/workLogList';
 
 interface PieceworkProjectCostsTabProps {
-  /** v9.0.325 (TD-811): جمع SQL هر پروژه روی همه کارکردهای زنده */
+  /** v9.0.330 (TD-811): جمع SQL هر پروژه روی همه کارکردهای زنده */
   projectCostsSummary: WorkLogProjectCost[];
   totalLoggedAmount: number;
 }

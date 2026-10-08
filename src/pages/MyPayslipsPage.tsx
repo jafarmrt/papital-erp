@@ -8,7 +8,7 @@ import { PieceworkPayslipModal } from '../components/piecework/PieceworkPayslipM
 import { payrollStatusLabel } from '../lib/payroll/payrollStatusLabels';
 import { isPayablePayrollStatus } from '../lib/payroll/payrollPayable';
 
-// v9.0.323 (TD-815، B12P-12): برچسب‌ها همان برچسب‌های مشترک وضعیت فیش‌اند؛ پیش‌تر «نیمه‌پرداخت» در فهرست نبود و «پیش‌نویس» دیده می‌شد
+// v9.0.328 (TD-815، B12P-12): برچسب‌ها همان برچسب‌های مشترک وضعیت فیش‌اند؛ پیش‌تر «نیمه‌پرداخت» در فهرست نبود و «پیش‌نویس» دیده می‌شد
 const statusMeta: Record<string, { cls: string; icon: typeof BadgeCheck }> = {
   draft: { cls: 'bg-slate-100 text-slate-600 border-slate-200', icon: Clock },
   approved: { cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock },

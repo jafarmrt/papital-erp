@@ -59,7 +59,7 @@ export function usePiecework() {
   const [projectsList, setProjectsList] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // v9.0.325 (TD-811): فهرست کارکرد، فیلترها و جمع‌ها از سرور؛ پس از هر ثبت، ویرایش یا حذف دوباره خوانده می‌شوند
+  // v9.0.330 (TD-811): فهرست کارکرد، فیلترها و جمع‌ها از سرور؛ پس از هر ثبت، ویرایش یا حذف دوباره خوانده می‌شوند
   const [logsReloadKey, setLogsReloadKey] = useState<number>(0);
   const logList = usePieceworkLogList(logsReloadKey);
 
@@ -110,7 +110,7 @@ export function usePiecework() {
   const [payrollTitle, setPayrollTitle] = useState<string>('');
   const [payrollBonuses, setPayrollBonuses] = useState<number>(0);
   const [payrollDeductions, setPayrollDeductions] = useState<number>(0);
-  // v9.0.324 (TD-861): شرح «سایر کسورات»؛ کسورات بالای صفر بی آن صادر نمی‌شود
+  // v9.0.329 (TD-861): شرح «سایر کسورات»؛ کسورات بالای صفر بی آن صادر نمی‌شود
   const [payrollDeductionsDescription, setPayrollDeductionsDescription] = useState<string>('');
   // V1.9.0: کسر از مساعده/وام پرسنلی — بستانکار حساب مساعده در سند تسویه
   const [payrollAdvanceDeduction, setPayrollAdvanceDeduction] = useState<number>(0);
@@ -545,7 +545,7 @@ export function usePiecework() {
     setIsPayrollModalOpen(true);
   };
 
-  // Preview pending logs for payroll issuance (v9.0.325، TD-811: از سرور)
+  // Preview pending logs for payroll issuance (v9.0.330، TD-811: از سرور)
   const payrollPreviewLogs = usePayrollPreviewLogs(isPayrollModalOpen, payrollPersonnelId, payrollStartDate, payrollEndDate, logsReloadKey);
 
   // V10-4.4: آیا پرسنل انتخاب‌شده برای صدور فیش به سهم حقوق ثابت نیازمند ردیف کارکرد نیست؟

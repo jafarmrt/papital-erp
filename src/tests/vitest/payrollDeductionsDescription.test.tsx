@@ -29,7 +29,7 @@ const renderForm = (deductions: number, description: string) => render(
 );
 const submit = () => screen.getByText('تایید و صدور فیش حقوقی').closest('button') as HTMLButtonElement;
 
-// v9.0.324 (TD-861, owner decision t5): other deductions carry a description and claim no insurance or tax computation
+// v9.0.329 (TD-861, owner decision t5): other deductions carry a description and claim no insurance or tax computation
 describe('the deductions box needs a description (TD-861)', () => {
   it('drops the insurance and tax label and blocks issuing deductions without a description', () => {
     renderForm(150000, '');

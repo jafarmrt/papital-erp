@@ -27,7 +27,7 @@ const payslip = (over: Partial<PieceworkPayroll>): PieceworkPayroll => ({
 const viewPayslip = (p: PieceworkPayroll) =>
   render(<PieceworkPayslipModal viewingPayroll={p} onClose={noop} onUpdateStatus={noop} onDeletePayroll={noop} />);
 
-// v9.0.323 (TD-815, B12P-12): the payslip and «فیش‌های حقوقی من» show the real state, the fixed salary per month and the company name
+// v9.0.328 (TD-815, B12P-12): the payslip and «فیش‌های حقوقی من» show the real state, the fixed salary per month and the company name
 describe('payslip view and my payslips (TD-815)', () => {
   it('lists the fixed salary month by month instead of one monthly period row', () => {
     viewPayslip(payslip({

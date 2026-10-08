@@ -197,7 +197,7 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
 
   const deductionNoteId = 'reg_payroll_deductions_description_td_861';
   if (shouldRun(deductionNoteId, 'td861', 'payroll', 'payslip', 'deductions', 'package12')) {
-    await runCase(results, deductionNoteId, 'v9.0.324: other deductions above zero need a description (422 PAYROLL_DEDUCTIONS_DESCRIPTION_REQUIRED, nothing written); the description is stored, returned with the payslip and written into the deductions voucher row (TD-861)', async () => inFiscalSandbox(async () => {
+    await runCase(results, deductionNoteId, 'v9.0.329: other deductions above zero need a description (422 PAYROLL_DEDUCTIONS_DESCRIPTION_REQUIRED, nothing written); the description is stored, returned with the payslip and written into the deductions voucher row (TD-861)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const task = await newTask();

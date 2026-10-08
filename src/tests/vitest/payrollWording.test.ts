@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-// v9.0.323 (TD-815, B12P-12, owner decision t6): one word for one idea. Persian UI and server text says «کارمزدی», never
+// v9.0.328 (TD-815, B12P-12, owner decision t6): one word for one idea. Persian UI and server text says «کارمزدی», never
 // «پرکیسی»; print buttons say «چاپ», not «پرینت»; piecework screens have no «Template» and messages carry no raw status code.
 
 const ROOT = join(__dirname, '..', '..');

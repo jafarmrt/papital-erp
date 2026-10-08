@@ -121,7 +121,7 @@ export class PieceworkReadService {
       .orderBy(asc(pieceworkPersonnelRates.id));
   }
 
-  /** کارکردهای روزانه با نام پرسنل، عنوان کار و پروژه؛ فیلترها در SQL (v9.0.325، TD-811، `workLogList.ts`). */
+  /** کارکردهای روزانه با نام پرسنل، عنوان کار و پروژه؛ فیلترها در SQL (v9.0.330، TD-811، `workLogList.ts`). */
   static async listWorkLogs(filters: WorkLogListFilters) {
     return listWorkLogs(filters);
   }

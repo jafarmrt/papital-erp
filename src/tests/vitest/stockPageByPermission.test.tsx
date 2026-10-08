@@ -76,7 +76,7 @@ describe('stock document page follows the record permission of each type, not th
         expect(stockPageRecordPermission(docType)).toBe(permissionToCreateDocument({ docType, status: 'final' }));
       }
     }
-    expect(stockPageAccess(k => k === 'warehouse.in').types).toEqual({ in: ['receipt', 'production_receipt'], out: [] });
+    expect(stockPageAccess(k => k === 'warehouse.in').types).toEqual({ in: ['receipt'], out: [] });
     expect(stockPageAccess(k => k === 'warehouse.out').types).toEqual({ in: [], out: ['remittance', 'waste'] });
     expect(stockPageAccess(k => k === 'documents.finalize').types).toEqual({ in: ['return'], out: [] });
     expect(stockPageAccess(() => false).directions).toEqual([]);
@@ -84,7 +84,7 @@ describe('stock document page follows the record permission of each type, not th
 
   it('a production manager with warehouse.in alone is offered receipts only, not a sales return or the remittance side', async () => {
     renderPage('production_manager', ['warehouse.view', 'warehouse.in', 'documents.view']);
-    await waitFor(() => expect(typeValues()).toEqual(['receipt', 'production_receipt']));
+    await waitFor(() => expect(typeValues()).toEqual(['receipt']));
     expect(toggle('خروج از انبار (حواله مصرف)').disabled).toBe(true);
     expect(toggle('ورود به انبار (رسید انبار)').disabled).toBe(false);
     expect(screen.queryByRole('alert')).toBeNull();
@@ -115,5 +115,19 @@ describe('stock document page follows the record permission of each type, not th
     expect(typeValues()).toEqual(['return']);
     await waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/documents/next-ref?type=return', expect.anything()));
     expect(screen.queryByRole('note')).toBeNull();
+  });
+});
+
+// v9.0.325 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): محصول پروژه فقط از «ورود به انبار» همان پروژه وارد انبار می‌شود
+describe('stock document page never offers a production receipt (TD-780)', () => {
+  it('no permission set makes the stock page offer a production receipt', () => {
+    expect(Object.values(STOCK_PAGE_DOC_TYPES).flat()).not.toContain('production_receipt');
+    expect(stockPageAccess(() => true).types.in).toEqual(['receipt', 'return']);
+  });
+
+  it('a holder of every record permission sees only purchase receipts and sales returns on the in side', async () => {
+    renderPage('manager', ['warehouse.view', 'warehouse.in', 'warehouse.out', 'documents.view', 'documents.finalize']);
+    await waitFor(() => expect(typeValues()).toEqual(['receipt', 'return']));
+    expect(screen.queryByText('رسید انبار تولید (تحویل محصولات ساخته‌شده)')).toBeNull();
   });
 });

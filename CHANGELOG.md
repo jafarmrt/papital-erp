@@ -19,14 +19,29 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.325 — Work Log List Paged and Filtered on the Server
+### v9.0.330 — Work Log List Paged and Filtered on the Server
 - **Work Log List Paged and Filtered on the Server (TD-811):** the piecework page loaded every work log ever recorded on each open and after each change (about 30 MB and 2.3 s for a workshop year) and filtered and summed it in the browser; `GET /piecework/logs` now filters in SQL and returns one page with the count and sum of every match, the page opens on the current Jalali month, `/piecework/logs/summary` sums the cards and project costs in SQL, and the «settled» filter now finds the logs on a payslip.
 
-### v9.0.324 — Payslip Deductions Need a Description
-- **Payslip Deductions Need a Description (TD-861):** the «سایر کسورات» box was labelled as insurance or tax although nothing computes either, and its amount reached account 3202 with no word on what it was; deductions above zero now need a description, stored with the payslip (migration 0079), printed on it and written into the 3202 voucher row.
+### v9.0.329 — Payslip Deductions Need a Description
+- **Payslip Deductions Need a Description (TD-861):** the «سایر کسورات» box was labelled as insurance or tax although nothing computes either, and its amount reached the employee deductions payable account with no word on what it was; deductions above zero now need a description, stored with the payslip (migration 0079), printed on it and written into the deductions voucher row (account 3205).
 
-### v9.0.323 — Payslip Shows Its Real State, Monthly Fixed Salary and Company Name
+### v9.0.328 — Payslip Shows Its Real State, Monthly Fixed Salary and Company Name
 - **Payslip Shows Its Real State, Monthly Fixed Salary and Company Name (TD-815):** the payslip printed «۱ دوره ماهانه» for any fixed salary, called draft and approved payslips both ready to pay and carried a fixed company name, and «فیش‌های حقوقی من» showed a partly paid payslip as a draft with the currency twice; payslips now use one set of status labels, one fixed-salary row per Jalali month, the company name setting and an advance deduction column, and the UI says «کارمزدی» and «چاپ».
+
+### v9.0.327 — Sales Document Numbers Only From the Server Series
+- **Document numbers:** a sales invoice or sales return number now comes only from the server series; a stock document may keep a manual number, but a taken one is refused instead of being silently replaced, a manual number no longer moves the series, and the audit log records the stored number (TD-783).
+
+### v9.0.326 — The Reference Invoice of a Sales Return by Fiscal Year
+- **Sales returns:** the reference invoice lookup now finds only final invoices with one indexed query and knows the fiscal year: a number used in two years asks which year, so last year's invoice can be returned against, and each lookup error shows its real cause (TD-782).
+
+### v9.0.325 — A Production Receipt Comes Only From the Project Delivery
+- **Production:** a production receipt is now recorded only through the project's «ورود به انبار», where the project, its planned quantity and its delivery cost are checked; the stock document page no longer offers it and `POST /documents` or finalizing a draft one is refused (TD-780, decision ت۷).
+
+### v9.0.324 — Stock Count Lines Need a Count and One Line per Item and Warehouse
+- **Inventory:** a stock count line without a count is now refused instead of being counted as zero, a repeated item in the same warehouse is refused instead of being adjusted twice, and the count document shows each warehouse's own variance and book stock (TD-777).
+
+### v9.0.323 — A Document Edit Links Its Sales Lead Under the Lead Lock
+- **Sales:** `PUT /documents/:id` with `crmLeadId` now links or unlinks the sales lead inside the edit transaction under the lead lock: a missing lead or a lead with another proforma is 422 before anything is saved, and an unlinked lead is released for a new proforma; before, the link was written after the edit, without the one-proforma rule (TD-776).
 
 ### v9.0.322 — Payment From a Payslip Offers Its Remainder
 - **Payment From a Payslip Offers Its Remainder (TD-814):** the pay button inside a payslip sent no paid amount, so a partly paid payslip's payment form offered the whole net, which the server refused; it now sends the paid amount and status, as the payslip list does.

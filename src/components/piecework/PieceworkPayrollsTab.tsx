@@ -86,7 +86,7 @@ export function PieceworkPayrollsTab({
                 <th className="p-3 text-center">{`مبلغ کارکرد (${curLbl})`}</th>
                 <th className="p-3 text-center">{`پاداش / مزایا (${curLbl})`}</th>
                 <th className="p-3 text-center">{`کسورات (${curLbl})`}</th>
-                {/* v9.0.323 (TD-815): بی این ستون «کارکرد + پاداش − کسورات» با «خالص» نمی‌خواند */}
+                {/* v9.0.328 (TD-815): بی این ستون «کارکرد + پاداش − کسورات» با «خالص» نمی‌خواند */}
                 <th className="p-3 text-center">{`کسر مساعده (${curLbl})`}</th>
                 <th className="p-3 text-center">{`خالص پرداختی (${curLbl})`}</th>
                 <th className="p-3 text-center">وضعیت پرداخت</th>

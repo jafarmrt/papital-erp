@@ -36,7 +36,7 @@ const payrollAmountColumns = {
   advanceDeduction: pieceworkPayrolls.advanceDeduction,
   totalBonuses: pieceworkPayrolls.totalBonuses,
   totalDeductions: pieceworkPayrolls.totalDeductions,
-  // v9.0.324 (TD-861): شرح «سایر کسورات» برای فیش چاپی
+  // v9.0.329 (TD-861): شرح «سایر کسورات» برای فیش چاپی
   deductionsDescription: pieceworkPayrolls.deductionsDescription,
   netPayable: pieceworkPayrolls.netPayable,
 };
@@ -83,7 +83,7 @@ export class PayrollReadService {
   /** فهرست فیش‌ها همراه با اطلاعات سند حسابداری متصل (بدون پنهان‌سازی اطلاعات حساس؛ آن در روت انجام می‌شود). */
   static async listPayrolls(filters: PayrollListFilters) {
     const { personnelId, status } = filters;
-    // v9.0.325 (TD-811، B12P-08): فیلتر پرسنل و وضعیت در SQL؛ پیش‌تر همه فیش‌ها خوانده و در حافظه فیلتر می‌شد
+    // v9.0.330 (TD-811، B12P-08): فیلتر پرسنل و وضعیت در SQL؛ پیش‌تر همه فیش‌ها خوانده و در حافظه فیلتر می‌شد
     const conditions: SQL[] = [eq(pieceworkPayrolls.isDeleted, 0)];
     const isAll = (v: unknown) => v === undefined || v === null || v === '' || String(v).toLowerCase() === 'all';
     if (!isAll(personnelId)) {

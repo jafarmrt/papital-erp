@@ -27,7 +27,7 @@ export async function runWorkLogListTests(shouldRun: ShouldRun): Promise<TestCas
 
   const listId = 'reg_piecework_log_list_in_sql_td_811';
   if (shouldRun(listId, 'td811', 'piecework', 'package12')) {
-    await runCase(results, listId, 'v9.0.325: GET /piecework/logs filters by personnel, project («none» included), settled state, Jalali range and search in SQL and returns one page with the count and sum of every match; /piecework/logs/summary sums the cards and project costs in SQL (TD-811)', async () => inFiscalSandbox(async () => {
+    await runCase(results, listId, 'v9.0.330: GET /piecework/logs filters by personnel, project («none» included), settled state, Jalali range and search in SQL and returns one page with the count and sum of every match; /piecework/logs/summary sums the cards and project costs in SQL (TD-811)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const admin = await sandboxAdminClient();
       const [w1, w2, task] = [await newWorker('TD-811 first'), await newWorker('TD-811 second'), await newTask()];

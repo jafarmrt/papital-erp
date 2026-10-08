@@ -145,7 +145,7 @@ const updatePieceworkLogSchema = z.object({
 });
 
 /**
- * v9.0.325 (TD-811، B12P-08): فیلترهای فهرست کارکرد در SQL. `page` که بیاید یک صفحه با شمار و جمع همه منطبق‌ها
+ * v9.0.330 (TD-811، B12P-08): فیلترهای فهرست کارکرد در SQL. `page` که بیاید یک صفحه با شمار و جمع همه منطبق‌ها
  * برمی‌گردد (صفحه کارمزدی)؛ بی آن همه منطبق‌ها، مثل پیش (کارکردهای یک پروژه، پیش‌نمایش صدور فیش).
  */
 const listPieceworkLogsSchema = z.object({
@@ -173,7 +173,7 @@ const generatePieceworkPayrollSchema = z.object({
     totalBonuses: nonNegativeAmount('پاداش').optional(),
     deductions: nonNegativeAmount('کسورات').optional(),
     totalDeductions: nonNegativeAmount('کسورات').optional(),
-    // v9.0.324 (TD-861): شرح «سایر کسورات»؛ با کسورات بالای صفر الزامی است (سرویس، ۴۲۲)
+    // v9.0.329 (TD-861): شرح «سایر کسورات»؛ با کسورات بالای صفر الزامی است (سرویس، ۴۲۲)
     deductionsDescription: z.string().max(500, 'شرح سایر کسورات حداکثر ۵۰۰ نویسه است').optional(),
     advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
     notes: z.string().optional(),
@@ -590,7 +590,7 @@ router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkL
   }
 }));
 
-// GET /api/piecework/logs/summary - v9.0.325 (TD-811): کارت‌های صفحه و «هزینه پروژه‌ها»، جمع SQL روی همه کارکردهای زنده
+// GET /api/piecework/logs/summary - v9.0.330 (TD-811): کارت‌های صفحه و «هزینه پروژه‌ها»، جمع SQL روی همه کارکردهای زنده
 router.get('/piecework/logs/summary', authorizePermission(...READ_PERMISSIONS.pieceworkLogs), asyncHandler(async (_req, res) => {
   res.json(await workLogSummary());
 }));

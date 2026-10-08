@@ -7,7 +7,7 @@ import { containsLikePattern } from '../../lib/sqlLike.js';
 import type { WorkLogListFilters, WorkLogPage, WorkLogSummary } from '../../lib/piecework/workLogList.js';
 
 /**
- * v9.0.325 (TD-811، B12P-08): فهرست کارکرد با فیلتر، صفحه‌بندی و جمع در SQL. پیش‌تر کل جدول با سه join خوانده و در
+ * v9.0.330 (TD-811، B12P-08): فهرست کارکرد با فیلتر، صفحه‌بندی و جمع در SQL. پیش‌تر کل جدول با سه join خوانده و در
  * جاوااسکریپت فیلتر می‌شد (فیلتر پرسنل هم کل جدول را می‌خواند: ۲٬۰۰۰ ردیف در ۱٬۰۷۹ میلی‌ثانیه از ۶۰٬۰۰۰).
  */
 

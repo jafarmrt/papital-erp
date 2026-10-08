@@ -12,7 +12,7 @@ import { useCompanyName } from '../../hooks/useCompanyName';
 
 type PaymentTarget = NonNullable<ComponentProps<typeof PayrollPaymentModal>['payroll']>;
 
-// v9.0.323 (TD-815): سربرگ فیش همان برچسب‌های وضعیت فهرست‌ها را دارد؛ پیش‌تر پیش‌نویس و تأییدشده هر دو «آماده پرداخت» بودند
+// v9.0.328 (TD-815): سربرگ فیش همان برچسب‌های وضعیت فهرست‌ها را دارد؛ پیش‌تر پیش‌نویس و تأییدشده هر دو «آماده پرداخت» بودند
 const STATUS_BADGE_CLASS: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700',
   approved: 'bg-indigo-100 text-indigo-800',
@@ -173,7 +173,7 @@ export function PieceworkPayslipModal({
                     <td className="p-2 text-center font-bold">{rial.number(item.totalAmount)}</td>
                   </tr>
                 ))}
-                {/* ردیف‌های حقوق ثابت، یکی برای هر ماه شمسی (v9.0.323، TD-815) */}
+                {/* ردیف‌های حقوق ثابت، یکی برای هر ماه شمسی (v9.0.328، TD-815) */}
                 {fixedRows.map((row, idx) => (
                   <tr key={`fixed-${idx}`} className="bg-indigo-50/60">
                     <td className="p-2 border-l border-slate-200 text-slate-500">{formatPersianNumber((viewingPayroll.items?.length || 0) + idx + 1)}</td>
@@ -222,7 +222,7 @@ export function PieceworkPayslipModal({
                 </div>
               )}
               <div className="flex justify-between font-bold text-red-700">
-                {/* v9.0.324 (TD-861): شرح کسورات کنار مبلغ آن */}
+                {/* v9.0.329 (TD-861): شرح کسورات کنار مبلغ آن */}
                 <span>سایر کسورات{viewingPayroll.deductionsDescription ? ` (${viewingPayroll.deductionsDescription})` : ''}:</span>
                 <span className="font-mono">-{rial.amount(viewingPayroll.totalDeductions || 0)}</span>
               </div>

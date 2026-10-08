@@ -93,13 +93,14 @@ export function summarizeAudit(list: AuditSheetItem[]): AuditSummary {
 /** بدنه POST /documents برای سند انبارگردانی نهایی */
 export function buildAuditPayload(
   list: AuditSheetItem[],
-  opts: { nextRef: string; location: string; locationLabel?: string; notes: string; user: User | null | undefined },
+  opts: { location: string; locationLabel?: string; notes: string; user: User | null | undefined },
 ): AuditSavePayload {
   // location کد انبار است (TD-480)؛ نام انبار فقط در توضیح پیش‌فرض سند
-  const { nextRef, location, locationLabel, notes, user } = opts;
+  const { location, locationLabel, notes, user } = opts;
   return {
     docType: 'audit',
-    refNumber: nextRef,
+    // v9.0.327 (TD-783): شماره برگه فقط نمایشی است؛ سرور شماره آزاد بعدی سری را می‌دهد تا دو برگه هم‌زمان ۴۰۹ شماره تکراری نگیرند
+    refNumber: 'auto',
     date: getTodayIsoDate(), // v8.0.49 (TD-312): روز تهران، نه روز UTC
     location,
     user: user?.full_name || user?.username || 'انباردار',

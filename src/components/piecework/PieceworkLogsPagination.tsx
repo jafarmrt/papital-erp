@@ -12,7 +12,7 @@ export interface PieceworkLogsPaginationState {
   onPageChange: (page: number) => void;
 }
 
-/** v9.0.325 (TD-811): نوار صفحه‌بندی فهرست کارکرد؛ شمار و جمع مبلغ همه منطبق‌ها از سرور */
+/** v9.0.330 (TD-811): نوار صفحه‌بندی فهرست کارکرد؛ شمار و جمع مبلغ همه منطبق‌ها از سرور */
 export function PieceworkLogsPagination({ state, loading }: { state: PieceworkLogsPaginationState; loading: boolean }) {
   const rial = useRialDisplay();
   const { page, pageCount, total, totalAmount, onPageChange } = state;

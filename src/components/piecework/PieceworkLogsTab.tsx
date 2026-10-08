@@ -12,7 +12,7 @@ import { PieceworkLogsPagination, type PieceworkLogsPaginationState } from './Pi
 interface PieceworkLogsTabProps {
   logsList: PieceworkLog[];
   loading: boolean;
-  /** v9.0.325 (TD-811): یک صفحه از کارکردهای فیلترشده در سرور */
+  /** v9.0.330 (TD-811): یک صفحه از کارکردهای فیلترشده در سرور */
   pagination?: PieceworkLogsPaginationState;
   searchQuery: string;
   onSearchChange: (q: string) => void;
