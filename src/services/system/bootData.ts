@@ -4,7 +4,6 @@ import { migratePlainPasswords } from '../../db/migratePlainPasswords.js';
 import { warmDisplayTimezone } from '../../lib/businessClock.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { EventActionEngineService } from '../events/eventActionEngineService.js';
-import { WebhookSubscriptionService } from '../events/webhookSubscriptionService.js';
 
 /**
  * v9.0.133 (TD-591): کارهای داده‌ای بوت، به همان ترتیب `server.ts`، در یک تابع تا آزمون نصب تازه همان مسیر را روی
@@ -22,7 +21,7 @@ export async function prepareDatabaseAtBoot(): Promise<void> {
   await migratePlainPasswords();
   await WorkflowEngineService.seedDefaultWorkflows();
   await EventActionEngineService.seedDefaultRules();
-  await WebhookSubscriptionService.seedDefaultSubscriptions();
+  // v9.0.380 (TD-707): no demo webhook subscription is seeded; the two seeded ones sent to example.com addresses
   // v8.0.77 (TD-324): کش منطقه زمانی پیش از اولین درخواست، بیرون از هر تراکنش پر می‌شود
   await warmDisplayTimezone();
 }

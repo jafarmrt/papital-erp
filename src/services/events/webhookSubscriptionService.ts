@@ -10,6 +10,7 @@ import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { assertHeadersReenteredForNewTarget, resolveMaskedHeaders } from './integrationSecrets.js';
 import { encryptSecret } from '../../lib/secretBox.js';
 import { openWebhookSubscription, sealHeaders, UNREADABLE_WEBHOOK_SECRET_MESSAGE, type OpenedWebhookSubscription } from './webhookSecretStorage.js';
+import { assertActivatableEventPatterns, resolveEventPatterns } from './webhookEventPatterns.js';
 import { IntegrationDeliveryService, webhookMaxAttempts, type DeliveryAttemptContext, type DeliveryAttemptOutcome } from './integrationDelivery.service.js';
 import crypto from 'crypto';
 
@@ -151,7 +152,8 @@ export class WebhookSubscriptionService {
     // v9.0.361 (TD-898, decision t7 a): the key and every header value are stored encrypted; without ERP_SECRETS_KEY 503
     const sealedKey = encryptSecret(secretKey);
     const sealedHeaders = sealHeaders(customHeaders);
-    const eventPatterns = data.eventPatterns && data.eventPatterns.length > 0 ? data.eventPatterns : ['*'];
+    // v9.0.380 (TD-707): only «*» and the event types the server publishes; a dotted pattern used to match nothing
+    const eventPatterns = resolveEventPatterns(data.eventPatterns);
 
     let validUserId: number | null = null;
     if (userId && typeof userId === 'number' && userId > 0) {
@@ -212,7 +214,8 @@ export class WebhookSubscriptionService {
     // v9.0.358 (TD-719): an empty or masked key («****…abcd», «********») keeps the stored key; the edit form used to send the
     // masked key back and every save replaced the real signing key with the mask
     if (isEnteredSecret(data.secretKey)) updateFields.secretKey = encryptSecret(data.secretKey.trim());
-    if (data.eventPatterns !== undefined) updateFields.eventPatterns = data.eventPatterns;
+    if (data.eventPatterns !== undefined) updateFields.eventPatterns = resolveEventPatterns(data.eventPatterns);
+    else if (data.isActive === 1 && current.isActive !== 1) assertActivatableEventPatterns(current.eventPatterns);
     // v9.0.360 (TD-710): responses mask header values, so «********» keeps the stored value, only for the stored address
     if (data.customHeaders !== undefined) updateFields.customHeaders = sealHeaders(resolveMaskedHeaders(data.customHeaders, current.customHeaders, sameTarget));
     else assertHeadersReenteredForNewTarget(current.customHeaders, sameTarget);
@@ -254,6 +257,7 @@ export class WebhookSubscriptionService {
     }
 
     const newActiveState = current.isActive === 1 ? 0 : 1;
+    if (newActiveState === 1) assertActivatableEventPatterns(current.eventPatterns);
     const [updated] = await orm
       .update(webhookSubscriptions)
       .set({
@@ -469,7 +473,8 @@ export class WebhookSubscriptionService {
   }
 
   /**
-   * Pattern matcher for event subscriptions (supports wildcard '*', 'document.*', exact 'document.invoiced').
+   * Pattern matcher for event subscriptions: '*', an exact event type, or a dotted prefix ('woocommerce.*'). Stored patterns
+   * are «*» or published event types since v9.0.380 (TD-707).
    */
   private static matchesPattern(eventType: string, patterns: string[] = ['*']): boolean {
     if (!patterns || patterns.length === 0 || patterns.includes('*')) return true;
@@ -603,46 +608,6 @@ export class WebhookSubscriptionService {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Webhook Deliveries Get Error] ${errMsg}`);
       return { data: [], total: 0, limit: 50, offset: 0 };
-    }
-  }
-
-  /**
-   * Seed default subscriptions if none exist.
-   */
-  static async seedDefaultSubscriptions() {
-    try {
-      const countRes = await orm.select({ count: count() }).from(webhookSubscriptions);
-      if (Number(countRes[0]?.count) > 0) return;
-
-      const defaults: CreateWebhookSubDTO[] = [
-        {
-          name: 'سامانه فروشگاه آنلاین ووکامرس (WooCommerce Webhook Bridge)',
-          targetUrl: 'https://shop.example.com/wp-json/erp/v1/webhook',
-          secretKey: this.generateSecretKey(),
-          eventPatterns: ['document.invoiced', 'inventory.stock_in', 'inventory.stock_out', 'inventory.stock_alert'],
-          isActive: 1,
-          retryLimit: 3,
-          timeoutMs: 5000
-        },
-        {
-          name: 'پورتال ارسال و لجستیک همکار (Logistics & Delivery Hub)',
-          targetUrl: 'https://logistics.example.com/api/v1/shipments/events',
-          secretKey: this.generateSecretKey(),
-          eventPatterns: ['document.settled', 'inventory.stock_out'],
-          isActive: 0,
-          retryLimit: 3,
-          timeoutMs: 5000
-        }
-      ];
-
-      for (const d of defaults) {
-        await this.createSubscription(d);
-      }
-
-      logger.info(`[Webhook Subscriptions] Seeded ${defaults.length} default webhook subscriptions.`);
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Webhook Seed Error] ${errMsg}`);
     }
   }
 }

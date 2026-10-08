@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.380 — Webhook Subscriptions Use the Published Event Types
+- **Webhook event patterns (TD-707):** the webhook form offered dotted patterns (document.invoiced, inventory.*) that matched no event the server publishes, so such subscriptions received nothing; the form now offers only the published types with Persian labels and «همه رویدادها», the server refuses any other pattern (422), stored subscriptions were converted with a mapping table (old lists recorded, unmappable or example.com ones deactivated), and the two demo subscriptions are no longer seeded.
+
 ### v9.0.379 — Rule and Webhook Counters Under the Row Lock
 - **Rule and subscription counters (TD-718):** a rule's execution count and a webhook subscription's delivery counters were written from the row read before the action, so concurrent executions were lost (10 runs counted 3); they are now read under the row lock and written in the transaction of the attempt's log row.
 

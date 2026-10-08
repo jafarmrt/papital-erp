@@ -272,7 +272,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         .send({
           name: `pen-ssrf-${Date.now()}`,
           targetUrl: 'http://169.254.169.254/latest/meta-data/',
-          eventPatterns: ['document.*']
+          eventPatterns: ['InvoiceApproved']
         });
       if (res.status === 403) {
         throw new Error('CSRF session token معتبر نبود — تست به گارد SSRF نرسید');

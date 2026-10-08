@@ -2,6 +2,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
+import { setProbeEventPatterns } from '../fixtures/eventProbe.js';
 import { orm, pool } from '../../db/drizzle.js';
 import { eventActionLogs, eventActionRules, webhookDeliveries, webhookSubscriptions } from '../../db/schema.js';
 
@@ -40,9 +41,10 @@ export async function runIntegrationCounterLockTests(shouldRun: (id: string, ...
     }).returning({ id: eventActionRules.id });
     ruleId = rule.id;
     const sub = await WebhookSubscriptionService.createSubscription({
-      name: `${tag} sub`, targetUrl: `http://127.0.0.1:${port}/api/events/webhook-echo`, eventPatterns: ['Td718.Probe'], timeoutMs: 3000,
+      name: `${tag} sub`, targetUrl: `http://127.0.0.1:${port}/api/events/webhook-echo`, eventPatterns: ['*'], timeoutMs: 3000,
     });
     subId = sub.id;
+    await setProbeEventPatterns(subId, ['Td718.Probe']);
 
     const now = new Date().toISOString();
     const eventOf = (i: number) => ({
