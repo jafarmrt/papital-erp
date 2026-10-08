@@ -4,7 +4,7 @@ import { errorMessageOf, extractDateString } from '../../utils';
 import { useSearch } from '../../SearchContext';
 import { useDocumentsQuery } from '../queries';
 import { QUERY_KEYS } from '../../lib/queryKeys';
-import { computeInvoiceListSummary, type InvoiceListDocument, type InvoiceListResponse } from '../../lib/invoices/invoiceListDocuments';
+import { computeInvoiceListSummary, invoiceListTypeFilter, type InvoiceListDocument, type InvoiceListResponse } from '../../lib/invoices/invoiceListDocuments';
 
 /**
  * TD-080 (بخش ۳): جستجو، فیلترها، صفحه‌بندی و کوئری لیست اسناد — منتقل‌شده بدون تغییر از InvoicesListPage.
@@ -33,12 +33,15 @@ export function useInvoiceListQuery() {
   const queryClient = useQueryClient();
 
   // V4 Phase 6.2 (یافته U-1): تغذیه کوئری سرور با debouncedSearchQuery به جای کی‌استروک‌های خام
+  // v9.0.295 (TD-800): «پیش‌فاکتور فروش» = وضعیت پیش‌فاکتور روی نوع‌های فاکتور و پیش‌فاکتور
+  const typeFilter = invoiceListTypeFilter(filterType, filterStatus);
   const docsQuery = useDocumentsQuery({
     page,
     limit: pageSize,
     search: debouncedSearchQuery,
-    type: filterType,
-    status: filterStatus,
+    type: typeFilter.type,
+    types: typeFilter.types,
+    status: typeFilter.status,
     startDate: extractDateString(startDate) || undefined,
     endDate: extractDateString(endDate) || undefined,
   });

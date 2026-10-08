@@ -4,6 +4,7 @@ import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { extractDateString } from '../../../utils';
 import type { InvoiceListQueryState } from '../../../hooks/invoices/useInvoiceListQuery';
+import { SALES_PROFORMA_FILTER } from '../../../lib/invoices/invoiceListDocuments';
 
 /** TD-080 (بخش ۳): نوار فیلتر لیست اسناد (جستجو، نوع، وضعیت، بازه تاریخ، پاک کردن فیلترها) */
 export function InvoiceListFilters({ query }: { query: InvoiceListQueryState }) {
@@ -34,17 +35,19 @@ export function InvoiceListFilters({ query }: { query: InvoiceListQueryState }) 
         <option value="all">همه انواع سند (خرید، فروش، انبار)</option>
         <option value="receipt">رسید ورود / خرید کالا و مواد</option>
         <option value="invoice">فاکتور فروش کالا</option>
-        <option value="proforma">پیش‌فاکتور فروش</option>
+        <option value={SALES_PROFORMA_FILTER}>پیش‌فاکتور فروش</option>
         <option value="remittance">حواله خروج / مصرف</option>
         <option value="return">برگشت از فروش</option>
         <option value="waste">حواله ضایعات</option>
+        <option value="production_receipt">رسید تولید و تحویل محصول</option>
       </select>
 
-      {/* Status Filter */}
+      {/* Status Filter — v9.0.295 (TD-800): «پیش‌فاکتور فروش» خودش وضعیت پیش‌فاکتور را می‌خواهد */}
       <select
-        value={filterStatus}
+        value={filterType === SALES_PROFORMA_FILTER ? 'proforma' : filterStatus}
         onChange={(e) => setFilterStatus(e.target.value)}
-        className="text-xs border border-slate-300 rounded-xl px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 font-medium"
+        disabled={filterType === SALES_PROFORMA_FILTER}
+        className="text-xs border border-slate-300 rounded-xl px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 font-medium disabled:bg-slate-100 disabled:cursor-not-allowed"
       >
         <option value="all">همه وضعیت‌ها</option>
         <option value="final">نهایی شده (تایید انبار و مالی)</option>

@@ -141,7 +141,7 @@ describe('labels', () => {
     expect(detailsTitleOf('waste')).toBe('جزئیات سند انبارداری');
     expect(detailsTypeLabelOf('receipt')).toBe('رسید ورود (خرید کالا)');
     expect(detailsTypeLabelOf('invoice')).toBe('فاکتور فروش');
-    expect(detailsTypeLabelOf('waste')).toBe('waste');
+    expect(detailsTypeLabelOf('waste')).toBe('حواله ضایعات');
     expect(workflowTypeLabelOf('invoice')).toBe('فاکتور فروش');
     expect(workflowTypeLabelOf('receipt')).toBe('رسید ورود');
     expect(workflowTypeLabelOf(undefined)).toBeUndefined();

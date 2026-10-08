@@ -4,6 +4,8 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 
 export interface DocumentFilters {
   type?: string;
+  /** v9.0.295 (TD-800): چند نوع با ویرگول (`invoice,proforma`)، به جای `type` */
+  types?: string;
   status?: string;
   search?: string;
   startDate?: string;
@@ -18,6 +20,7 @@ export function useDocumentsQuery(filters: DocumentFilters) {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filters.type && filters.type !== 'all') params.set('type', filters.type);
+      if (filters.types) params.set('types', filters.types);
       if (filters.status && filters.status !== 'all') params.set('status', filters.status);
       if (filters.search?.trim()) params.set('search', filters.search.trim());
       if (filters.startDate) params.set('startDate', filters.startDate);
