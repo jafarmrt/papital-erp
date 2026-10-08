@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.382 — Below Reorder Point Filter
+- **Reorder alerts (TD-827, B07-11):** the «زیر نقطه سفارش» filter shows items with stock up to the reorder point instead of the out-of-stock ones.
+
 ### v9.0.381 — Reserved Items by Reader
 - **Reserved items report (TD-829, B07-13):** cost and value go only to item cost readers and a proforma buyer only to documents.view holders; other readers see quantities and sources.
 

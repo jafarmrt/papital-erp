@@ -49,6 +49,21 @@ export interface ReorderProjectProduct {
 
 export type StockStatusFilter = 'all' | 'zero' | 'below_reorder';
 
+/**
+ * v9.0.382 (TD-827، یافته B07-11، تصمیم ت۸): هر کالای هشدار یا «بی موجودی» است یا «زیر نقطه سفارش» (موجودی مثبت و حداکثر
+ * نقطه سفارش، چون سرور فقط همین‌ها را می‌فرستد) و پالایش وضعیت همین را می‌سنجد. پیش‌تر «زیر آستانه» کالای دارای موجودی را
+ * کنار می‌گذاشت و همان کالاهای بی موجودی را نشان می‌داد.
+ */
+export const STOCK_STATUS_FILTER_LABELS: Record<StockStatusFilter, string> = {
+  all: 'همه',
+  zero: 'بی موجودی',
+  below_reorder: 'زیر نقطه سفارش',
+};
+
+export function stockStatusOf(item: Pick<ReorderItem, 'is_zero_stock' | 'current_stock'>): Exclude<StockStatusFilter, 'all'> {
+  return item.is_zero_stock || !(Number(item.current_stock) > 0) ? 'zero' : 'below_reorder';
+}
+
 export interface ReorderFilters {
   stockStatusFilter: StockStatusFilter;
   selectedCategory: string;
@@ -73,8 +88,7 @@ export function filterReorderItems(items: ReorderItem[], { stockStatusFilter, se
   const safeItems = Array.isArray(items) ? items : [];
   return safeItems.filter(it => {
     // Stock status filter
-    if (stockStatusFilter === 'zero' && !it.is_zero_stock) return false;
-    if (stockStatusFilter === 'below_reorder' && it.current_stock > 0) return false;
+    if (stockStatusFilter !== 'all' && stockStatusOf(it) !== stockStatusFilter) return false;
 
     // Category filter
     if (selectedCategory !== 'all' && it.category !== selectedCategory) return false;
