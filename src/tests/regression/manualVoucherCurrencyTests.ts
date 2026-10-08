@@ -136,7 +136,7 @@ export async function runManualVoucherCurrencyTests(shouldRun: ShouldRun): Promi
       if (tomanRow.status !== 400) problems.push(`TOMAN row: ${tomanRow.status} ${JSON.stringify(tomanRow.body).slice(0, 200)}, expected 400`);
       const tomanEdit = await admin.post('/api/accounting/vouchers', { ...base, status: 'draft', items: [row(acc['1001'], 10, 0), row(acc['4001'], 0, 10)] });
       if (tomanEdit.status === 201) {
-        const put = await admin.put(`/api/accounting/vouchers/${tomanEdit.body.id}`, { currency: 'TOMAN', items: [row(acc['1001'], 10, 0, { currency: 'IRR' }), row(acc['4001'], 0, 10, { currency: 'IRR' })] });
+        const put = await admin.put(`/api/accounting/vouchers/${tomanEdit.body.id}`, { version: tomanEdit.body.version, currency: 'TOMAN', items: [row(acc['1001'], 10, 0, { currency: 'IRR' }), row(acc['4001'], 0, 10, { currency: 'IRR' })] });
         if (put.status !== 400) problems.push(`TOMAN on edit: ${put.status}, expected 400`);
       } else problems.push(`a plain rial draft answered ${tomanEdit.status}`);
       const vouchersAfterRefusals = (await orm.select({ id: journalVouchers.id }).from(journalVouchers)).length;

@@ -1,9 +1,10 @@
 import React from 'react';
-import { Factory, RefreshCw, FileWarning, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Factory, RefreshCw, MinusCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { formatPersianNumber } from '../../../utils';
 import { useAutomationStatusQuery } from '../../../hooks/accounting/useAccountingAuditQueries';
 
-// V10-6.1: پنل وضعیت اتوماسیون صدور اسناد دوبل — پوشش واقعی voucherها به تفکیک نوع سند
+// V10-6.1: پنل وضعیت صدور خودکار اسناد حسابداری به تفکیک نوع سند. v9.0.297 (TD-560): فقط اسناد نهایی، انبارگردانی
+// خودکار و انتقال بی اثر مالی؛ هشدار فقط برای نوعی که سند نهایی بی سند حسابداری دارد
 export const AutomationStatusView: React.FC = () => {
   // React Query: با بسته شدن زیرتب درخواست لغو می‌شود؛ خطا مثل قبل پیام جداگانه ندارد
   const automationQuery = useAutomationStatusQuery();
@@ -36,7 +37,7 @@ export const AutomationStatusView: React.FC = () => {
       {summary && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
-            <p className="text-xs text-slate-500 dark:text-slate-400">کل اسناد نهایی و پیش‌فاکتورها</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">اسناد نهایی نیازمند سند حسابداری</p>
             <p className="text-xl font-black text-slate-800 dark:text-white mt-1 font-mono">{formatPersianNumber(summary.totalDocs)}</p>
           </div>
           <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
@@ -52,11 +53,13 @@ export const AutomationStatusView: React.FC = () => {
         </div>
       )}
 
-      {summary && summary.gapTypes.length > 0 && (
+      {summary && Array.isArray(summary.missingTypes) && summary.missingTypes.length > 0 && (
         <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 flex items-start gap-3 no-print">
           <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-            <strong>نوع‌های بی سند خودکار:</strong> برای «{summary.gapTypes.join('، ')}» هنوز سناریوی پیش‌نویس ← تایید ← صدور خودکار سند حسابداری پیاده‌سازی نشده است. این اسناد نیازمند صدور دستی سند حسابداری هستند.
+            <strong>اسناد نهایی بی سند حسابداری:</strong>{' '}
+            {summary.missingTypes.map(t => `«${t.label}» ${formatPersianNumber(t.missingVoucher)} سند`).join('، ')}.
+            {' '}پیش از صدور سند دستی، در «بازرس سلامت مالی» بررسی کنید؛ سند دستی برای سندی که بعداً سند خودکار بگیرد، اثر را دو بار در دفاتر می‌نشاند.
           </div>
         </div>
       )}
@@ -66,7 +69,8 @@ export const AutomationStatusView: React.FC = () => {
           <thead>
             <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-black">
               <th className="p-3">نوع سند</th>
-              <th className="p-3 text-center">تعداد اسناد</th>
+              <th className="p-3 text-center">اسناد نهایی</th>
+              <th className="p-3 text-center">نیازمند سند</th>
               <th className="p-3 text-center">دارای سند حسابداری</th>
               <th className="p-3 text-center">بی سند حسابداری</th>
               <th className="p-3 text-center">وضعیت صدور خودکار</th>
@@ -74,28 +78,29 @@ export const AutomationStatusView: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-bold">
             {loading ? (
-              <tr><td colSpan={5} className="p-8 text-center text-slate-400 animate-pulse">در حال محاسبه...</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-slate-400 animate-pulse">در حال محاسبه...</td></tr>
             ) : report.length === 0 ? (
-              <tr><td colSpan={5} className="p-8 text-center text-slate-400">داده‌ای یافت نشد.</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-slate-400">داده‌ای یافت نشد.</td></tr>
             ) : (
               report.map(r => (
                 <tr key={r.docType} className="hover:bg-slate-50/60 dark:hover:bg-slate-900/40">
                   <td className="p-3 text-slate-800 dark:text-slate-200">{r.label}</td>
                   <td className="p-3 text-center font-mono text-slate-700 dark:text-slate-300">{formatPersianNumber(r.totalDocs)}</td>
+                  <td className="p-3 text-center font-mono text-slate-700 dark:text-slate-300">{formatPersianNumber(r.needVoucher)}</td>
                   <td className="p-3 text-center font-mono text-emerald-600">{formatPersianNumber(r.withVoucher)}</td>
                   <td className={`p-3 text-center font-mono ${r.missingVoucher > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
                     {formatPersianNumber(r.missingVoucher)}
                   </td>
                   <td className="p-3 text-center">
-                    {r.autoSupported ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-[10px]">
-                        <CheckCircle2 size={11} />
-                        خودکار
+                    {r.voucherRule === 'none' ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-500 border border-slate-200 dark:border-slate-700 text-[10px]">
+                        <MinusCircle size={11} />
+                        بی اثر مالی
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-500 border border-slate-200 dark:border-slate-700 text-[10px]">
-                        <FileWarning size={11} />
-                        دستی / فاز آینده
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-[10px]">
+                        <CheckCircle2 size={11} />
+                        {r.voucherRule === 'valued_difference' ? 'خودکار، برای اختلاف ارزش‌دار' : 'خودکار'}
                       </span>
                     )}
                   </td>

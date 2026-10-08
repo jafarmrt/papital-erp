@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.298 — Voucher Row Menu Offers Only Accepted Actions
+- **Voucher Row Menu (P2, decision t8):** the menu offers per status only what the server accepts (no direct edit of an approved voucher, no correction of a permanent one, no reverse or correct of a reversal), a voucher with a source or of a year-end closing shows why it is locked, and the finalize confirmation promises no correction path (TD-568).
+
+### v9.0.297 — Automation Status Counts Final Documents Only
+- **Voucher Automation Status (P2):** the panel counts only final documents, takes a stock count as automatic when it has a valued difference and a transfer as without financial effect, reaches 100% only with every needed voucher, and warns only for types missing one (TD-560).
+
+### v9.0.296 — Batch Finalize Reports Its Real Count
+- **Batch Finalize Count (P3):** batch finalize returns only the vouchers it made permanent and lists each refused id with its reason (missing, deleted, already permanent, closed year, unbalanced); the message and the audit row say the same (TD-556).
+
+### v9.0.295 — Voucher Edits Need Their Version
+- **Voucher Edit Lock and Audit (P3):** a voucher edit sends the version it read (400 without, 409 `OCC_CONFLICT` when stale), a deleted voucher is never edited, and voucher and account edit and delete audit rows carry before and after (TD-555).
+
+### v9.0.294 — Vouchers of a Source Change Only Through Their Source
+- **Source Vouchers Locked on the Voucher Page (P2, decision t8):** a voucher issued by a document, treasury transaction, cheque, payroll or BOM allocation, and its reversal, is only approved and finalized from the voucher page; delete, edit, back to draft, reverse and correct answer 409 `VOUCHER_HAS_SOURCE` and the list shows each voucher's source (TD-552).
+
 ### v9.0.293 — v9.0.293 — Dashboard Banner Uses the Display Time Zone
 - **Dashboard banner clock (TD-683):** the banner's date, clock and greeting follow the display time zone setting, so a device set to another zone no longer shows yesterday's date around midnight in Tehran.
 
