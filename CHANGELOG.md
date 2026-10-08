@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.334 — v9.0.334 — Project Status Only on Writes
+- **Project Status Only on Writes (TD-738, decision 1a):** reading a project ran the progress sync without a lock or audit row, so a cancelled project with a full matrix became completed on one GET by a warehouse reader and its delivery was accepted; the sync now runs only inside the tick, stage and project-edit transactions under the project row lock, never changes a cancelled or paused project, and audits each status change.
+
 ### v9.0.333 — v9.0.333 — One Progress Matrix Rule
 - **One Progress Matrix Rule (TD-739):** the product × stage progress matrix had three copies that disagreed: a project defined by its main item showed no matrix row and its ticks were skipped, yet its completion was refused as «0 of 3»; the view, the ticks, the completion check (now 422 `PROJECT_MATRIX_INCOMPLETE` inside the project save) and the status sync share `computeProgressMatrix`.
 

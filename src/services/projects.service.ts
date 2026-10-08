@@ -13,6 +13,8 @@ import { assignProjectCode } from './projects/projectCode.js';
 import { keepScheduleLogLinks } from '../lib/projects/scheduleWorkLog.js';
 import { matrixProducts } from '../lib/projects/progressMatrix.js';
 import { loadProjectProgressMatrix, productProgressView, progressMatrixStatus, type ProgressMatrixStatus } from './projects/projectProgressMatrix.js';
+import { actorName, lockLiveProject, syncProjectFromMatrix, type ProjectActor, type ProjectStatusSyncResult, type SyncedStage } from './projects/projectStatusSync.js';
+import { logActivity } from '../lib/auditLogger.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -172,16 +174,18 @@ export class ProjectService {
   static async updateProject(
     id: number,
     input: UpdateProjectInput,
-    executor: DbExecutor = orm
+    executor: DbExecutor = orm,
+    actor: ProjectActor = {}
   ): Promise<{ previous: typeof productionProjects.$inferSelect; current: typeof productionProjects.$inferSelect }> {
     // v8.0.58 (TD-306): قفل سطری پروژه تا رزرو فعلی (پس از کسر حواله خروج هم‌زمان) از دست نرود
-    return executor.transaction(tx => ProjectService.updateProjectLocked(id, input, tx));
+    return executor.transaction(tx => ProjectService.updateProjectLocked(id, input, tx, actor));
   }
 
   private static async updateProjectLocked(
     id: number,
     input: UpdateProjectInput,
-    executor: DbExecutor
+    executor: DbExecutor,
+    actor: ProjectActor
   ): Promise<{ previous: typeof productionProjects.$inferSelect; current: typeof productionProjects.$inferSelect }> {
     const [existing] = await executor.select().from(productionProjects).where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0))).for('update');
     if (!existing) {
@@ -244,7 +248,9 @@ export class ProjectService {
       ProjectService.assertMatrixCompleted(progressMatrixStatus(await loadProjectProgressMatrix(executor, current)));
     }
 
-    return { previous: existing, current: current || { ...existing, ...updateData } };
+    // v9.0.334 (TD-738): ویرایش پروژه (محصولات، کالای اصلی) مراحل و وضعیت را زیر همین قفل با ماتریس همگام می‌کند
+    const synced = await syncProjectFromMatrix(executor, current, actor);
+    return { previous: existing, current: synced.project };
   }
 
   /**
@@ -383,6 +389,7 @@ export class ProjectService {
 
   /**
    * Adds a stage to a project
+   * v9.0.334 (TD-738): زیر قفل ردیف پروژه و با همگام‌سازی مراحل و وضعیت در همان تراکنش (مرحله تازه خانه‌های تازه دارد)
    */
   static async addStage(
     projectId: number,
@@ -395,30 +402,35 @@ export class ProjectService {
       requiredResources?: unknown[];
       notes?: string;
     },
+    actor: ProjectActor = {},
     executor: DbExecutor = orm
-  ): Promise<typeof projectStages.$inferSelect> {
-    const existingStages = await executor
-      .select()
-      .from(projectStages)
-      .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)));
+  ): Promise<SyncedStage> {
+    return executor.transaction(async (tx) => {
+      await lockLiveProject(tx, projectId);
+      const existingStages = await tx
+        .select()
+        .from(projectStages)
+        .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)));
 
-    const nextOrder = existingStages.length + 1;
+      const nextOrder = existingStages.length + 1;
 
-    const [newStage] = await executor.insert(projectStages).values({
-      projectId,
-      stageOrder: nextOrder,
-      title: data.title.trim(),
-      status: data.status || 'pending',
-      startDate: requireStorageDate(data.startDate, 'تاریخ شروع مرحله'),
-      endDate: requireStorageDate(data.endDate, 'تاریخ پایان مرحله'),
-      assignedPersonnel: Array.isArray(data.assignedPersonnel) ? data.assignedPersonnel : [],
-      requiredResources: Array.isArray(data.requiredResources) ? data.requiredResources : [],
-      progressPercent: data.status === 'completed' ? 100 : 0,
-      notes: data.notes || '',
-      isDeleted: 0
-    }).returning();
+      const [newStage] = await tx.insert(projectStages).values({
+        projectId,
+        stageOrder: nextOrder,
+        title: data.title.trim(),
+        status: data.status || 'pending',
+        startDate: requireStorageDate(data.startDate, 'تاریخ شروع مرحله'),
+        endDate: requireStorageDate(data.endDate, 'تاریخ پایان مرحله'),
+        assignedPersonnel: Array.isArray(data.assignedPersonnel) ? data.assignedPersonnel : [],
+        requiredResources: Array.isArray(data.requiredResources) ? data.requiredResources : [],
+        progressPercent: data.status === 'completed' ? 100 : 0,
+        notes: data.notes || '',
+        isDeleted: 0
+      }).returning();
 
-    return newStage;
+      const synced = await ProjectService.syncLockedProject(tx, projectId, actor);
+      return synced.stages.find(st => st.id === newStage.id) ?? newStage;
+    });
   }
 
   /**
@@ -452,6 +464,7 @@ export class ProjectService {
 
   /**
    * Updates a project stage and syncs status
+   * v9.0.334 (TD-738): ویرایش و همگام‌سازی در یک تراکنش زیر قفل ردیف پروژه
    */
   static async updateStage(
     projectId: number,
@@ -467,79 +480,91 @@ export class ProjectService {
       progressPercent?: number;
       notes?: string;
     },
+    actor: ProjectActor = {},
     executor: DbExecutor = orm
-  ): Promise<typeof projectStages.$inferSelect> {
-    const [existing] = await executor
-      .select()
-      .from(projectStages)
-      .where(and(eq(projectStages.id, stageId), eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)));
+  ): Promise<SyncedStage> {
+    return executor.transaction(async (tx) => {
+      await lockLiveProject(tx, projectId);
+      const [existing] = await tx
+        .select()
+        .from(projectStages)
+        .where(and(eq(projectStages.id, stageId), eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)));
 
-    if (!existing) {
-      throw new NotFoundError('مرحله یافت نشد');
-    }
-
-    const updateData: Record<string, unknown> = {};
-    if (data.title !== undefined) updateData.title = data.title.trim();
-    if (data.stageOrder !== undefined) updateData.stageOrder = Number(data.stageOrder);
-    if (data.status !== undefined) {
-      updateData.status = data.status;
-      if (data.status === 'completed') {
-        updateData.progressPercent = 100;
-        updateData.completedAt = new Date().toISOString();
+      if (!existing) {
+        throw new NotFoundError('مرحله یافت نشد');
       }
-    }
-    if (data.startDate !== undefined) updateData.startDate = optionalStorageDate(data.startDate, 'تاریخ شروع مرحله');
-    if (data.endDate !== undefined) updateData.endDate = optionalStorageDate(data.endDate, 'تاریخ پایان مرحله');
-    if (data.assignedPersonnel !== undefined) {
-      updateData.assignedPersonnel = Array.isArray(data.assignedPersonnel) ? data.assignedPersonnel : [];
-    }
-    if (data.requiredResources !== undefined) {
-      updateData.requiredResources = Array.isArray(data.requiredResources) ? data.requiredResources : [];
-    }
-    if (data.progressPercent !== undefined) {
-      const p = Math.min(100, Math.max(0, Number(data.progressPercent)));
-      updateData.progressPercent = p;
-      if (p === 100 && existing.status !== 'completed') {
-        updateData.status = 'completed';
-        updateData.completedAt = new Date().toISOString();
-      } else if (p > 0 && p < 100 && existing.status === 'pending') {
-        updateData.status = 'in_progress';
+
+      const updateData: Record<string, unknown> = {};
+      if (data.title !== undefined) updateData.title = data.title.trim();
+      if (data.stageOrder !== undefined) updateData.stageOrder = Number(data.stageOrder);
+      if (data.status !== undefined) {
+        updateData.status = data.status;
+        if (data.status === 'completed') {
+          updateData.progressPercent = 100;
+          updateData.completedAt = new Date().toISOString();
+        }
       }
-    }
-    if (data.notes !== undefined) updateData.notes = data.notes;
+      if (data.startDate !== undefined) updateData.startDate = optionalStorageDate(data.startDate, 'تاریخ شروع مرحله');
+      if (data.endDate !== undefined) updateData.endDate = optionalStorageDate(data.endDate, 'تاریخ پایان مرحله');
+      if (data.assignedPersonnel !== undefined) {
+        updateData.assignedPersonnel = Array.isArray(data.assignedPersonnel) ? data.assignedPersonnel : [];
+      }
+      if (data.requiredResources !== undefined) {
+        updateData.requiredResources = Array.isArray(data.requiredResources) ? data.requiredResources : [];
+      }
+      if (data.progressPercent !== undefined) {
+        const p = Math.min(100, Math.max(0, Number(data.progressPercent)));
+        updateData.progressPercent = p;
+        if (p === 100 && existing.status !== 'completed') {
+          updateData.status = 'completed';
+          updateData.completedAt = new Date().toISOString();
+        } else if (p > 0 && p < 100 && existing.status === 'pending') {
+          updateData.status = 'in_progress';
+        }
+      }
+      if (data.notes !== undefined) updateData.notes = data.notes;
 
-    const [updated] = await executor
-      .update(projectStages)
-      .set(updateData)
-      .where(eq(projectStages.id, stageId))
-      .returning();
+      const [updated] = await tx
+        .update(projectStages)
+        .set(updateData)
+        .where(eq(projectStages.id, stageId))
+        .returning();
 
-    return updated;
+      const synced = await ProjectService.syncLockedProject(tx, projectId, actor);
+      return synced.stages.find(st => st.id === stageId) ?? updated;
+    });
   }
 
   /**
    * Soft deletes a stage from a project
+   * v9.0.334 (TD-738): حذف و همگام‌سازی در یک تراکنش زیر قفل ردیف پروژه
    */
   static async deleteStage(
     projectId: number,
     stageId: number,
+    actor: ProjectActor = {},
     executor: DbExecutor = orm
   ): Promise<typeof projectStages.$inferSelect> {
-    const [existing] = await executor
-      .select()
-      .from(projectStages)
-      .where(and(eq(projectStages.id, stageId), eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)));
+    return executor.transaction(async (tx) => {
+      await lockLiveProject(tx, projectId);
+      const [existing] = await tx
+        .select()
+        .from(projectStages)
+        .where(and(eq(projectStages.id, stageId), eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)));
 
-    if (!existing) {
-      throw new NotFoundError('مرحله یافت نشد');
-    }
+      if (!existing) {
+        throw new NotFoundError('مرحله یافت نشد');
+      }
 
-    await executor.update(projectStages).set({ isDeleted: 1 }).where(eq(projectStages.id, stageId));
-    return existing;
+      await tx.update(projectStages).set({ isDeleted: 1 }).where(eq(projectStages.id, stageId));
+      await ProjectService.syncLockedProject(tx, projectId, actor);
+      return existing;
+    });
   }
 
   /**
    * Bulk updates product physical progress matrix
+   * v9.0.334 (TD-738): تیک‌ها، ردیف ممیزی و همگام‌سازی مراحل و وضعیت در یک تراکنش زیر قفل ردیف پروژه
    */
   static async updateProductProgress(
     projectId: number,
@@ -549,173 +574,87 @@ export class ProjectService {
       stageTitle?: string;
       status: string;
     }>,
-    currentUser: string = 'سیستم',
+    actor: ProjectActor = {},
     executor: DbExecutor = orm
-  ): Promise<{ applied: number; skippedInvalid: number }> {
-    const [project] = await executor
-      .select()
-      .from(productionProjects)
-      .where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
+  ): Promise<{ applied: number; skippedInvalid: number; projectStatus: string; weightedProgress: number }> {
+    return executor.transaction(async (tx) => {
+      const project = await lockLiveProject(tx, projectId);
+      const currentUser = actorName(actor);
 
-    if (!project) {
-      throw new NotFoundError('پروژه یافت نشد');
-    }
-
-    // v9.0.333 (TD-739): محصولات ماتریس با همان قاعده نمایش و بررسی تکمیل (پروژه تک‌کالایی: کالای اصلی)
-    const productByItemId = new Map<number, ReturnType<typeof matrixProducts>[number]>();
-    for (const p of matrixProducts(project)) {
-      if (p.itemId !== null && !productByItemId.has(p.itemId)) productByItemId.set(p.itemId, p);
-    }
-    const stageTitles = new Map<number, string>();
-    const liveStages = await executor.select({ stageOrder: projectStages.stageOrder, title: projectStages.title }).from(projectStages)
-      .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)))
-      .orderBy(asc(projectStages.stageOrder), asc(projectStages.id));
-    for (const st of liveStages) if (!stageTitles.has(st.stageOrder)) stageTitles.set(st.stageOrder, st.title);
-
-    const bizNow = await businessNowIsoDateTime();
-    let applied = 0;
-    let skippedInvalid = 0;
-
-    for (const u of updates) {
-      const itemId = Number(u.itemId);
-      const stageOrder = Number(u.stageOrder);
-      if (!Number.isFinite(itemId) || itemId <= 0 || !Number.isFinite(stageOrder) || stageOrder <= 0) {
-        skippedInvalid++;
-        continue;
+      // v9.0.333 (TD-739): محصولات ماتریس با همان قاعده نمایش و بررسی تکمیل (پروژه تک‌کالایی: کالای اصلی)
+      const productByItemId = new Map<number, ReturnType<typeof matrixProducts>[number]>();
+      for (const p of matrixProducts(project)) {
+        if (p.itemId !== null && !productByItemId.has(p.itemId)) productByItemId.set(p.itemId, p);
       }
-      const product = productByItemId.get(itemId);
-      if (!product) {
-        skippedInvalid++;
-        continue;
-      }
+      const stageTitles = new Map<number, string>();
+      const liveStages = await tx.select({ stageOrder: projectStages.stageOrder, title: projectStages.title }).from(projectStages)
+        .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)))
+        .orderBy(asc(projectStages.stageOrder), asc(projectStages.id));
+      for (const st of liveStages) if (!stageTitles.has(st.stageOrder)) stageTitles.set(st.stageOrder, st.title);
 
-      const stageTitle = stageTitles.get(stageOrder) || String(u.stageTitle || '').trim() || `مرحله ${stageOrder}`;
+      const bizNow = await businessNowIsoDateTime();
+      let applied = 0;
+      let skippedInvalid = 0;
 
-      const itemCode = product.itemCode;
-      const itemName = product.itemName;
-      const qty = product.quantity;
-
-      await executor.insert(projectProductStageProgress).values({
-        projectId,
-        itemId,
-        itemCode,
-        itemName,
-        quantity: qty,
-        stageOrder,
-        stageTitle,
-        status: u.status,
-        updatedAt: bizNow,
-        updatedByName: currentUser,
-        isDeleted: 0
-      }).onConflictDoUpdate({
-        target: [projectProductStageProgress.projectId, projectProductStageProgress.itemId, projectProductStageProgress.stageOrder],
-        set: {
-          status: u.status,
-          stageTitle,
-          quantity: qty,
-          updatedAt: bizNow,
-          updatedByName: currentUser
+      for (const u of updates) {
+        const itemId = Number(u.itemId);
+        const stageOrder = Number(u.stageOrder);
+        if (!Number.isFinite(itemId) || itemId <= 0 || !Number.isFinite(stageOrder) || stageOrder <= 0) {
+          skippedInvalid++;
+          continue;
         }
-      });
-      applied++;
-    }
+        const product = productByItemId.get(itemId);
+        if (!product) {
+          skippedInvalid++;
+          continue;
+        }
 
-    return { applied, skippedInvalid };
+        const stageTitle = stageTitles.get(stageOrder) || String(u.stageTitle || '').trim() || `مرحله ${stageOrder}`;
+
+        await tx.insert(projectProductStageProgress).values({
+          projectId,
+          itemId,
+          itemCode: product.itemCode,
+          itemName: product.itemName,
+          quantity: product.quantity,
+          stageOrder,
+          stageTitle,
+          status: u.status,
+          updatedAt: bizNow,
+          updatedByName: currentUser,
+          isDeleted: 0
+        }).onConflictDoUpdate({
+          target: [projectProductStageProgress.projectId, projectProductStageProgress.itemId, projectProductStageProgress.stageOrder],
+          set: {
+            status: u.status,
+            stageTitle,
+            quantity: product.quantity,
+            updatedAt: bizNow,
+            updatedByName: currentUser
+          }
+        });
+        applied++;
+      }
+
+      await logActivity({
+        tx,
+        req: actor.req,
+        userId: actor.userId,
+        username: actor.username,
+        userFullName: actor.userFullName,
+        action: 'UPDATE',
+        entity: 'پیشرفت به تفکیک کد کالا',
+        entityId: String(projectId),
+        description: `بروزرسانی پیشرفت ماتریسی SKU×مرحله پروژه ${project.projectCode || projectId}: ${applied} تغییر اعمال شد`
+      });
+
+      const synced = await syncProjectFromMatrix(tx, project, actor);
+      return { applied, skippedInvalid, projectStatus: String(synced.project.status), weightedProgress: synced.weightedProgress };
+    });
   }
 
-  /**
-   * Automatically synchronizes stage progress and project status based on product matrix
-   * v9.0.333 (TD-739): خانه‌ها و شمارش هر مرحله از قاعده مشترک ماتریس (`loadProjectProgressMatrix`)
-   */
-  static async syncProjectStagesAndStatusFromProductProgress(
-    projectId: number,
-    executor: DbExecutor = orm
-  ) {
-    const [project] = await executor
-      .select()
-      .from(productionProjects)
-      .where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
-    if (!project) return null;
-
-    const { stages: rawStages, matrix } = await loadProjectProgressMatrix(executor, project);
-    if (rawStages.length === 0) return { project, stages: [] };
-
-    const bizNow = await businessNowIsoDateTime();
-    let anyProgressDetected = false;
-    let allStagesCompleted = rawStages.length > 0;
-    const updatedStages: (typeof rawStages[number] & { completedSkusCount?: number; applicableSkusCount?: number })[] = [];
-
-    for (const [index, stg] of rawStages.entries()) {
-      const applicableCount = matrix.stageCounts[index].applicableCount;
-      const completedCount = matrix.stageCounts[index].completedCount;
-
-      let calculatedPercent = 0;
-      let calculatedStatus = 'pending';
-
-      if (applicableCount > 0) {
-        calculatedPercent = Math.round((completedCount / applicableCount) * 100);
-        if (completedCount === applicableCount) {
-          calculatedStatus = 'completed';
-        } else if (completedCount > 0) {
-          calculatedStatus = 'in_progress';
-        } else {
-          calculatedStatus = stg.status === 'blocked' ? 'blocked' : 'pending';
-        }
-      } else {
-        calculatedPercent = Number(stg.progressPercent || 0);
-        calculatedStatus = stg.status || 'pending';
-      }
-
-      if (completedCount > 0 || calculatedPercent > 0) {
-        anyProgressDetected = true;
-      }
-      if (calculatedStatus !== 'completed') {
-        allStagesCompleted = false;
-      }
-
-      const completedAt = calculatedStatus === 'completed' ? (stg.completedAt || bizNow) : null;
-
-      if (stg.progressPercent !== calculatedPercent || stg.status !== calculatedStatus) {
-        await executor.update(projectStages).set({
-          progressPercent: calculatedPercent,
-          status: calculatedStatus,
-          completedAt
-        }).where(eq(projectStages.id, stg.id));
-      }
-
-      updatedStages.push({
-        ...stg,
-        progressPercent: calculatedPercent,
-        status: calculatedStatus,
-        completedAt,
-        completedSkusCount: completedCount,
-        applicableSkusCount: applicableCount
-      });
-    }
-
-    const weightedProgress = matrix.weightedProgress;
-    const isOverallCompleted = matrix.allProductsDone || (allStagesCompleted && rawStages.length > 0);
-
-    let newProjectStatus = project.status;
-    if (isOverallCompleted) {
-      newProjectStatus = 'completed';
-    } else if (anyProgressDetected || weightedProgress > 0) {
-      if (project.status === 'planned' || project.status === 'completed') {
-        newProjectStatus = 'in_progress';
-      }
-    } else if (!anyProgressDetected && weightedProgress === 0 && project.status === 'completed') {
-      newProjectStatus = 'in_progress';
-    }
-
-    if (newProjectStatus !== project.status) {
-      await executor.update(productionProjects).set({ status: newProjectStatus }).where(eq(productionProjects.id, projectId));
-      project.status = newProjectStatus;
-    }
-
-    return {
-      project,
-      stages: updatedStages,
-      weightedProgress
-    };
+  /** همگام‌سازی مراحل و وضعیت پروژه‌ای که همین تراکنش قفل کرده است (ردیف پس از نوشتن دوباره خوانده می‌شود) */
+  private static async syncLockedProject(tx: DbExecutor, projectId: number, actor: ProjectActor): Promise<ProjectStatusSyncResult> {
+    return syncProjectFromMatrix(tx, await lockLiveProject(tx, projectId), actor);
   }
 }

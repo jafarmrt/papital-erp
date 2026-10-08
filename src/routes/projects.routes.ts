@@ -479,9 +479,7 @@ router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.produ
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
 
-    // همگام‌سازی اتوماتیک مراحل و وضعیت پروژه با پیشرفت SKUها
-    await syncProjectStagesAndStatusFromProductProgress(id);
-
+    // v9.0.334 (TD-738): خواندن پروژه هرگز وضعیت آن یا مراحلش را نمی‌نویسد؛ همگام‌سازی فقط در مسیرهای نوشتن است
     const [projData] = await orm
       .select({
         project: productionProjects,
@@ -597,7 +595,7 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
       stageSchedules: stageSchedules ?? stage_schedules,
       customStages: customStages ?? custom_stages,
       attachments
-    });
+    }, undefined, { req });
 
     const rawStages = await orm.select().from(projectStages).where(and(eq(projectStages.projectId, id), eq(projectStages.isDeleted, 0))).orderBy(asc(projectStages.stageOrder));
 
@@ -696,7 +694,7 @@ router.post('/projects/:id/stages', authorizePermission('projects.edit'), valida
       assignedPersonnel: assigned_personnel,
       requiredResources: required_resources,
       notes
-    });
+    }, { req });
 
     res.status(201).json(formatStage(newStage));
   } catch (err) {
@@ -718,7 +716,8 @@ router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit')
       assigned_personnel, required_resources, progress_percent, notes 
     } = req.body;
 
-    await ProjectService.updateStage(projectId, stageId, {
+    // v9.0.334 (TD-738): ویرایش مرحله و همگام‌سازی مراحل و وضعیت پروژه در یک تراکنش زیر قفل پروژه
+    const updatedStage = await ProjectService.updateStage(projectId, stageId, {
       title,
       stageOrder: stage_order,
       status,
@@ -728,14 +727,7 @@ router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit')
       requiredResources: required_resources,
       progressPercent: progress_percent,
       notes
-    });
-
-    // همگام‌سازی مجدد و خودکار مراحل و وضعیت پروژه بر اساس پیشرفت SKUها
-    const syncRes: any = await syncProjectStagesAndStatusFromProductProgress(projectId);
-    const targetStage = syncRes?.stages?.find((s: any) => s.id === stageId);
-    const [updatedStage] = targetStage 
-      ? [targetStage] 
-      : await orm.select().from(projectStages).where(eq(projectStages.id, stageId));
+    }, { req });
 
     res.json(formatStage(updatedStage));
   } catch (err) {
@@ -749,7 +741,7 @@ router.delete('/projects/:id/stages/:stageId', authorizePermission('projects.edi
     const projectId = parseInt(req.params.id, 10);
     const stageId = parseInt(req.params.stageId, 10);
 
-    await ProjectService.deleteStage(projectId, stageId);
+    await ProjectService.deleteStage(projectId, stageId, { req });
 
     res.json({ success: true, message: 'مرحله با موفقیت حذف شد' });
   } catch (err) {
@@ -757,19 +749,13 @@ router.delete('/projects/:id/stages/:stageId', authorizePermission('projects.edi
   }
 }));
 
-// همگام‌سازی خودکار درصد پیشرفت و وضعیت هر مرحله و کل پروژه بر اساس ماتریس SKUها
-export const syncProjectStagesAndStatusFromProductProgress = ProjectService.syncProjectStagesAndStatusFromProductProgress;
-
-
 // GET /api/projects/:id/product-progress — ماتریس کامل پیشرفت SKUها
 router.get('/projects/:id/product-progress', authorizePermission('projects.view', 'projects.edit', 'projects.create', 'warehouse.view', 'documents.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
 
-    // همگام‌سازی پیش از پاسخ
-    await syncProjectStagesAndStatusFromProductProgress(projectId);
-
+    // v9.0.334 (TD-738): فقط خواندن؛ وضعیت مراحل و پروژه را مسیرهای نوشتن همگام می‌کنند
     // v9.0.333 (TD-739): ماتریس با قاعده مشترک (پروژه تک‌کالایی: کالای اصلی)
     const view = await ProjectService.getProductProgressView(projectId);
     if (!view) return res.status(404).json({ error: 'پروژه یافت نشد' });
@@ -803,10 +789,10 @@ router.put('/projects/:id/product-progress', authorizePermission('projects.edit'
     const projectId = parseInt(req.params.id, 10);
     if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
 
-    const currentUser = req.user?.username || 'سیستم';
     const updates = req.body.items as Array<{ item_id: number | string; stage_order: number | string; stage_title?: string; status: ProductProgressStatus }>;
 
-    const { applied, skippedInvalid } = await ProjectService.updateProductProgress(
+    // v9.0.334 (TD-738): تیک‌ها، ردیف ممیزی و همگام‌سازی مراحل و وضعیت در یک تراکنش زیر قفل پروژه
+    const { applied, skippedInvalid, projectStatus, weightedProgress } = await ProjectService.updateProductProgress(
       projectId,
       updates.map(u => ({
         itemId: Number(u.item_id),
@@ -814,30 +800,15 @@ router.put('/projects/:id/product-progress', authorizePermission('projects.edit'
         stageTitle: u.stage_title,
         status: u.status
       })),
-      currentUser
+      { req }
     );
-
-    const [project] = await orm.select({ projectCode: productionProjects.projectCode, status: productionProjects.status }).from(productionProjects).where(eq(productionProjects.id, projectId));
-
-    await logActivity({
-      userId: req.user?.id,
-      username: currentUser,
-      userFullName: req.user?.full_name || '',
-      action: 'UPDATE',
-      entity: 'پیشرفت به تفکیک کد کالا',
-      entityId: String(projectId),
-      description: `بروزرسانی پیشرفت ماتریسی SKU×مرحله پروژه ${project?.projectCode || projectId}: ${applied} تغییر اعمال شد`
-    });
-
-    // همگام‌سازی اتوماتیک مراحل و وضعیت پروژه
-    const syncResult = await syncProjectStagesAndStatusFromProductProgress(projectId);
 
     res.json({ 
       success: true, 
       applied, 
       skipped_invalid: skippedInvalid,
-      project_status: syncResult?.project?.status || project.status,
-      weighted_progress_percent: syncResult?.weightedProgress || 0
+      project_status: projectStatus,
+      weighted_progress_percent: weightedProgress
     });
   } catch (err) {
     throw err;
