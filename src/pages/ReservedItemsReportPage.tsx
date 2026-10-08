@@ -20,6 +20,7 @@ import { formatPersianNumber, formatPersianDate } from '../utils';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
+import { ErrorStateView } from '../components/common/ErrorStateView';
 
 interface ReservedItemDetail {
   id: string;
@@ -79,6 +80,8 @@ export default function ReservedItemsReportPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'items' | 'ledger'>('items');
   const [expandedItemCode, setExpandedItemCode] = useState<string | null>(null);
+  // v9.0.375 (TD-821): a failed report is an error panel, never a page of zero reservations
+  const [loadError, setLoadError] = useState<Error | null>(null);
 
   const loadReport = async (signal?: AbortSignal) => {
     setLoading(true);
@@ -86,11 +89,13 @@ export default function ReservedItemsReportPage() {
       const res = await fetchJson('/inventory/reserved-items', { signal });
       if (res) {
         setData(res);
+        setLoadError(null);
       }
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
       console.error('Error loading reserved items report:', err);
-      toast.error('خطا در دریافت گزارش اقلام رزروی');
+      setData(null);
+      setLoadError(err instanceof Error ? err : new Error(String(err)));
     } finally {
       setLoading(false);
     }
@@ -201,6 +206,19 @@ export default function ReservedItemsReportPage() {
   const handlePrint = () => {
     window.print();
   };
+
+  if (loadError && !loading) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <ErrorStateView
+          title="گزارش اقلام رزروی ساخته نشد"
+          description="رزروها خوانده نشد و هیچ عددی نشان داده نمی‌شود تا رزرو صفر به جای خطا دیده نشود. دوباره تلاش کنید؛ اگر خطا ماند، به مدیر سامانه خبر دهید."
+          error={loadError}
+          onRetry={() => loadReport()}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">

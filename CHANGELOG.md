@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.375 — Reservation Readers Fail Closed
+- **Reservations (TD-821, B07-05):** a stored project reservation row is read as text and a row that reaches no live item is skipped and listed by the financial health check; the item list, the online shop sync and the reservation report fail closed instead of showing zero reservations.
+
 ### v9.0.374 — Reservations Keyed by Item Id
 - **Reservations (TD-822, B07-06):** reservation summaries, the reserved stock map and the item list key reservations by item id instead of the upper-cased code, so two items whose codes differ only in case keep their own reservations.
 

@@ -31,7 +31,8 @@ export async function resolveShopWarehouseCode(tx: DbExecutor): Promise<string> 
  */
 export async function shopSellableStocks(tx: DbExecutor, itemIds: number[]): Promise<{ warehouseCode: string; sellable: Map<number, number> }> {
   const warehouseCode = await resolveShopWarehouseCode(tx);
-  const report = await ItemStockReservationService.getReservedStockDetails(tx);
+  // v9.0.375 (TD-821): خطای خواندن رزرو همگام‌سازی را رد می‌کند؛ پیش‌تر بلعیده می‌شد و فروشگاه موجودی بی رزرو می‌گرفت
+  const report = await ItemStockReservationService.getReservedStockDetails(tx, true);
   const stocks = await ItemWarehouseStockService.getStocksForItems(tx, itemIds);
   const sellable = new Map<number, number>();
   for (const itemId of itemIds) {
