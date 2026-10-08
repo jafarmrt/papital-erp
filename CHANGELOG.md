@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.340 — v9.0.340 — One Clock for Stage Completion
+- **One Clock for Stage Completion (TD-756):** a stage edit wrote `completed_at` in UTC with Z while the matrix sync and the matrix tick wrote the Tehran wall clock without a zone (210 minutes apart); every path now writes the server UTC time (`systemNowUtcIso`) through `stageCompletedAt`, a completed stage keeps its time and a reopened stage has none.
+
 ### v9.0.339 — v9.0.339 — Project Delivery and Quantity Input
 - **Project Delivery and Quantity Input (TD-741):** a delivery quantity in Persian digits or below zero answered 200 «با موفقیت افزوده شدند» with nothing recorded, a Persian-digit unit price fell back to the WAC and a Persian-digit project quantity was stored as NaN; delivery and project quantities and prices now go through `decimalInput`, an invalid line is 422 `PROJECT_DELIVERY_LINE_INVALID` and a non-positive project quantity 422 `PROJECT_QUANTITY_INVALID`.
 

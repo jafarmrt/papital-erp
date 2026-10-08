@@ -5,7 +5,7 @@ import { AppError, BusinessLogicError, ConflictError, NotFoundError, ValidationE
 import { deliveredProjectQuantities, describeOverDeliveries, findOverDeliveries, plannedProjectProducts, type ProjectOverDelivery } from './projects/projectDeliveryCap.js';
 import { withOrderedLocks } from '../lib/lockOrder.js';
 import { DocumentService } from './document.service.js';
-import { businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
+import { businessTodayIsoDate, systemNowUtcIso } from '../lib/businessClock.js';
 import { requireStorageDate, optionalStorageDate } from '../lib/storageDate.js';
 import { AttachmentStorageService } from './attachments/attachmentStorage.service.js';
 import { resolveServerInventoryControl } from './projects/serverInventoryControl.js';
@@ -13,7 +13,7 @@ import { assignProjectCode } from './projects/projectCode.js';
 import { keepScheduleLogLinks } from '../lib/projects/scheduleWorkLog.js';
 import { hasMatrixProducts, matrixProducts } from '../lib/projects/progressMatrix.js';
 import { loadProjectProgressMatrix, productProgressView, progressMatrixStatus, type ProgressMatrixStatus } from './projects/projectProgressMatrix.js';
-import { actorName, lockLiveProject, syncProjectFromMatrix, type ProjectActor, type ProjectStatusSyncResult, type SyncedStage } from './projects/projectStatusSync.js';
+import { actorName, lockLiveProject, stageCompletedAt, syncProjectFromMatrix, type ProjectActor, type ProjectStatusSyncResult, type SyncedStage } from './projects/projectStatusSync.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { MAX_STAGE_ORDER } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
@@ -603,10 +603,7 @@ export class ProjectService {
       }
       if (data.status !== undefined) {
         updateData.status = data.status;
-        if (data.status === 'completed') {
-          updateData.progressPercent = 100;
-          updateData.completedAt = new Date().toISOString();
-        }
+        if (data.status === 'completed') updateData.progressPercent = 100;
       }
       if (data.startDate !== undefined) updateData.startDate = optionalStorageDate(data.startDate, 'تاریخ شروع مرحله');
       if (data.endDate !== undefined) updateData.endDate = optionalStorageDate(data.endDate, 'تاریخ پایان مرحله');
@@ -621,12 +618,17 @@ export class ProjectService {
         updateData.progressPercent = p;
         if (p === 100 && existing.status !== 'completed') {
           updateData.status = 'completed';
-          updateData.completedAt = new Date().toISOString();
         } else if (p > 0 && p < 100 && existing.status === 'pending') {
           updateData.status = 'in_progress';
         }
       }
       if (data.notes !== undefined) updateData.notes = data.notes;
+      // v9.0.340 (TD-756): زمان تکمیل مرحله با یک ساعت، ساعت UTC سرور (`systemNowUtcIso`، مانند همگام‌ساز ماتریس)؛ پیش‌تر
+      // این مسیر UTC با Z و همگام‌ساز ساعت دیواری تهران بی منطقه می‌نوشت (۲۱۰ دقیقه اختلاف). مرحله تکمیل‌شده زمانش را نگه
+      // می‌دارد و مرحله‌ای که از «تکمیل‌شده» بیرون می‌رود زمان تکمیل ندارد.
+      if (updateData.status !== undefined) {
+        updateData.completedAt = stageCompletedAt(existing, String(updateData.status), systemNowUtcIso());
+      }
 
       const [updated] = await tx
         .update(projectStages)
@@ -704,7 +706,8 @@ export class ProjectService {
         .orderBy(asc(projectStages.stageOrder), asc(projectStages.id));
       for (const st of liveStages) if (!stageTitles.has(st.stageOrder)) stageTitles.set(st.stageOrder, st.title);
 
-      const bizNow = await businessNowIsoDateTime();
+      // v9.0.340 (TD-756): مهر تیک ماتریس ساعت UTC سرور است، نه ساعت دیواری تهران بی منطقه
+      const updatedAt = systemNowUtcIso();
       let applied = 0;
       let skippedInvalid = 0;
 
@@ -732,7 +735,7 @@ export class ProjectService {
           stageOrder,
           stageTitle,
           status: u.status,
-          updatedAt: bizNow,
+          updatedAt,
           updatedByName: currentUser,
           isDeleted: 0
         }).onConflictDoUpdate({
@@ -741,7 +744,7 @@ export class ProjectService {
             status: u.status,
             stageTitle,
             quantity: product.quantity,
-            updatedAt: bizNow,
+            updatedAt,
             updatedByName: currentUser,
             isDeleted: 0
           }

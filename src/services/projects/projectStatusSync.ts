@@ -3,7 +3,7 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { productionProjects, projectStages } from '../../db/schema.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
-import { businessNowIsoDateTime } from '../../lib/businessClock.js';
+import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { matrixProjectStatus, projectStatusLabel } from '../../lib/projects/projectStatus.js';
 import { loadProjectProgressMatrix } from './projectProgressMatrix.js';
 
@@ -34,6 +34,15 @@ export async function lockLiveProject(tx: DbExecutor, projectId: number): Promis
   return project;
 }
 
+/**
+ * v9.0.340 (TD-756): زمان تکمیل مرحله پس از یک نوشتن. یک ساعت برای همه مسیرها، ساعت UTC سرور با Z (`systemNowUtcIso`)؛
+ * مرحله‌ای که تکمیل‌شده بود زمانش را نگه می‌دارد و مرحله تکمیل‌نشده زمان تکمیل ندارد.
+ */
+export function stageCompletedAt(stage: Pick<StageRow, 'status' | 'completedAt'>, nextStatus: string, nowUtc: string): string | null {
+  if (nextStatus !== 'completed') return null;
+  return stage.status === 'completed' && stage.completedAt ? stage.completedAt : nowUtc;
+}
+
 export interface SyncedStage extends StageRow {
   completedSkusCount?: number;
   applicableSkusCount?: number;
@@ -54,7 +63,7 @@ export async function syncProjectFromMatrix(tx: DbExecutor, project: ProjectRow,
   const { stages: rawStages, matrix } = await loadProjectProgressMatrix(tx, project);
   if (rawStages.length === 0) return { project, stages: [], weightedProgress: matrix.weightedProgress };
 
-  const bizNow = await businessNowIsoDateTime();
+  const now = systemNowUtcIso();
   let anyProgress = false;
   let allStagesCompleted = true;
   const stages: SyncedStage[] = [];
@@ -72,7 +81,7 @@ export async function syncProjectFromMatrix(tx: DbExecutor, project: ProjectRow,
     if (completedCount > 0 || percent > 0) anyProgress = true;
     if (status !== 'completed') allStagesCompleted = false;
 
-    const completedAt = status === 'completed' ? (stg.completedAt || bizNow) : null;
+    const completedAt = stageCompletedAt(stg, status, now);
     if (stg.progressPercent !== percent || stg.status !== status) {
       await tx.update(projectStages).set({ progressPercent: percent, status, completedAt }).where(eq(projectStages.id, stg.id));
     }

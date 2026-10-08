@@ -99,5 +99,47 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
     }));
   }
 
+  const clockId = 'reg_project_stage_completion_clock_td_756';
+  if (shouldRun(clockId, 'td756', 'projects', 'package11')) {
+    await runCase(results, clockId, 'v9.0.340: a stage completion time and a matrix tick time are written with one clock, the server UTC time with Z; a completed stage keeps its time and a reopened stage has none (TD-756)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const utcNow = (value: unknown, label: string) => {
+        const text = String(value ?? '');
+        const ms = Date.parse(text);
+        if (!/(Z|[+-]\d{2}:?\d{2})$/.test(text) || !Number.isFinite(ms) || Math.abs(ms - Date.now()) > 120_000) {
+          problems.push(`${label} is "${text}", expected the server UTC time with a zone (now ${new Date().toISOString()})`);
+        }
+      };
+      const stageRow = async (id: number) => (await q('SELECT status, completed_at FROM project_stages WHERE id = $1', [id]))[0] ?? {};
+
+      const item = await createTestItem({ type: 'product' });
+      const matrix = await newProject(api, { products: [{ itemId: item.id, qty: 2 }] });
+      const tick = await api.put(`/api/projects/${matrix.id}/product-progress`, { items: [{ item_id: item.id, stage_order: 1, status: 'completed' }] });
+      if (tick.status !== 200) problems.push(`ticking stage 1 answered ${tick.status} ${brief(tick.body)}`);
+      const synced = await stageRow(matrix.stages[0].id);
+      if (synced.status !== 'completed') problems.push(`the ticked stage status is ${synced.status}, expected completed`);
+      utcNow(synced.completed_at, 'the completion time the matrix sync wrote');
+      const cell = (await q('SELECT updated_at FROM project_product_stage_progress WHERE project_id = $1 AND stage_order = 1', [matrix.id]))[0];
+      utcNow(cell?.updated_at, 'the matrix tick time');
+
+      const manual = await newProject(api, {});
+      const stageId = manual.stages[0].id;
+      const done = await api.put(`/api/projects/${manual.id}/stages/${stageId}`, { status: 'completed' });
+      if (done.status !== 200) problems.push(`completing a manual stage answered ${done.status} ${brief(done.body)}`);
+      const first = await stageRow(stageId);
+      utcNow(first.completed_at, 'the completion time of a manual stage');
+      await new Promise(resolve => setTimeout(resolve, 20));
+      await api.put(`/api/projects/${manual.id}/stages/${stageId}`, { title: 'برش نهایی', status: 'completed' });
+      const again = await stageRow(stageId);
+      if (again.completed_at !== first.completed_at) problems.push(`saving a completed stage again moved its completion time from ${first.completed_at} to ${again.completed_at}`);
+      await api.put(`/api/projects/${manual.id}/stages/${stageId}`, { status: 'in_progress' });
+      const reopened = await stageRow(stageId);
+      if (reopened.status !== 'in_progress' || (reopened.completed_at ?? '') !== '') problems.push(`a reopened stage is ${reopened.status} with completion time ${reopened.completed_at}, expected in_progress without one`);
+      assertNoProblems(problems);
+      return 'matrix and manual completion times and tick times in server UTC; kept on resave, cleared on reopen';
+    }));
+  }
+
   return results;
 }
