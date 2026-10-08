@@ -128,7 +128,7 @@
   "src/hooks/useDailyLogs.ts": 6,
   "src/hooks/useEntitySelectors.ts": 6,
   "src/hooks/usePiecework.ts": 8,
-  "src/hooks/useProjectInventory.ts": 20,
+  "src/hooks/useProjectInventory.ts": 18,
   "src/hooks/useServerDraft.ts": 4,
   "src/hooks/useSettings.ts": 9,
   "src/lib/auditLogger.ts": 4,

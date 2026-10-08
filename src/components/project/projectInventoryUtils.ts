@@ -15,6 +15,40 @@ export const roundToOneDecimal = (val: number | undefined | null): number => {
   return Math.round((Number(val) + Number.EPSILON) * 10) / 10;
 };
 
+/**
+ * v9.0.390 (TD-750، B11-16): شناسه ردیف فهرست خرید از کد ماده، وگرنه نام آن؛ ردیف‌های بخش‌ها با کد یا نام یکسان یک ردیف‌اند.
+ * تغییر وضعیت تدارکات ردیف با همین شناسه به همه ردیف‌های آن در بخش‌ها می‌رسد (`withProcurementStatus`).
+ */
+export const purchaseRowKey = (code: string | undefined, name: string | undefined): string =>
+  code ? `code_${code}` : `name_${(name || '').trim().toLowerCase()}`;
+
+type ProcurementStatus = NonNullable<PurchaseListItem['procurementStatus']>;
+
+/** وضعیت تدارکات همه ردیف‌های بخش‌ها که در فهرست خرید ردیف `rowKey` می‌شوند؛ بخش‌ها و ردیف‌ها کپی می‌شوند، نه تغییر درجا */
+export const withProcurementStatus = (
+  sections: ProjectInventoryControlSectionData[],
+  rowKey: string,
+  status: ProcurementStatus
+): ProjectInventoryControlSectionData[] => sections.map(sec => {
+  if (sec.checkType === 'per_item' && sec.perItemResults) {
+    let changed = false;
+    const perItemResults = Object.fromEntries(Object.entries(sec.perItemResults).map(([productId, rows]) => [
+      productId,
+      Object.fromEntries(Object.entries(rows || {}).map(([rowId, row]) => {
+        if (!row || purchaseRowKey(row.itemCode, row.name) !== rowKey) return [rowId, row];
+        changed = true;
+        return [rowId, { ...row, procurementStatus: status }];
+      })),
+    ]));
+    return changed ? { ...sec, perItemResults } : sec;
+  }
+  if (sec.checkType === 'global' && sec.globalItems) {
+    if (!sec.globalItems.some(g => purchaseRowKey(g.itemCode, g.name) === rowKey)) return sec;
+    return { ...sec, globalItems: sec.globalItems.map(g => (purchaseRowKey(g.itemCode, g.name) === rowKey ? { ...g, procurementStatus: status } : g)) };
+  }
+  return sec;
+});
+
 export const buildConsolidatedPurchaseList = (
   sections: ProjectInventoryControlSectionData[],
   products: ProjectProductItem[],
@@ -71,7 +105,7 @@ export const buildConsolidatedPurchaseList = (
           const shortfall = Math.max(0, reqQty - currentStock);
 
           if (itemRes.status === 'needs_procurement' || shortfall > 0) {
-            const key = effectiveCode ? `code_${effectiveCode}` : `name_${effectiveName.trim().toLowerCase()}`;
+            const key = purchaseRowKey(effectiveCode, effectiveName);
 
             if (!map[key]) {
               map[key] = {
@@ -110,7 +144,7 @@ export const buildConsolidatedPurchaseList = (
         const shortfall = Math.max(0, reqQty - stQty);
 
         if (gItem.status === 'needs_procurement' || shortfall > 0) {
-          const key = gItem.itemCode ? `code_${gItem.itemCode}` : `name_${gItem.name.trim().toLowerCase()}`;
+          const key = purchaseRowKey(gItem.itemCode, gItem.name);
 
           if (!map[key]) {
             map[key] = {

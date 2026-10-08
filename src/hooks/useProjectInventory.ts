@@ -14,7 +14,8 @@ import { DEFAULT_INVENTORY_CONTROL_SECTIONS } from '../constants/inventoryContro
 import { 
   buildConsolidatedPurchaseList, 
   calculateMaterialProgress, 
-  roundToOneDecimal
+  roundToOneDecimal,
+  withProcurementStatus
 } from '../components/project/projectInventoryUtils';
 import { errorMessageOf, formatPersianNumber } from '../utils';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
@@ -645,28 +646,10 @@ export function useProjectInventory(
     toast.success(`ضریب تبدیل unit_conversion ثبت شد: ${originalQty} ${conversionTarget.originalUnit} ➔ ${finalConvertedQty} ${targetUnit}`);
   };
 
-  const handleUpdateItemProcurementStatus = (itemId: string, newStatus: any) => {
-    const updated = sections.map(sec => {
-      if (sec.checkType === 'per_item' && sec.perItemResults) {
-        const newPer = { ...sec.perItemResults };
-        Object.keys(newPer).forEach(pId => {
-          if (newPer[pId][itemId]) {
-            newPer[pId][itemId] = { ...newPer[pId][itemId], procurementStatus: newStatus };
-          }
-        });
-        return { ...sec, perItemResults: newPer };
-      } else if (sec.checkType === 'global' && sec.globalItems) {
-        const newG = sec.globalItems.map(g => {
-          if (g.itemId === itemId || g.itemCode === itemId) {
-            return { ...g, procurementStatus: newStatus };
-          }
-          return g;
-        });
-        return { ...sec, globalItems: newG };
-      }
-      return sec;
-    });
-    setSections(updated);
+  // v9.0.390 (TD-750): شناسه ردیف فهرست خرید (`code_…` / `name_…`) به ردیف‌های بخش‌ها می‌رسد و state درجا تغییر نمی‌کند؛
+  // به‌روزرسانی تابعی است تا چند ردیف سفارش‌داده‌شده پشت سر هم یکدیگر را پاک نکنند
+  const handleUpdateItemProcurementStatus = (rowKey: string, newStatus: NonNullable<PurchaseListItem['procurementStatus']>) => {
+    setSections(prev => withProcurementStatus(prev, rowKey, newStatus));
   };
 
   // Compute purchase list
@@ -823,13 +806,7 @@ export function useProjectInventory(
   };
 
   const handleUpdateManualPurchaseItem = (id: string, field: keyof PurchaseListItem, value: any) => {
-    const updated = manualPurchaseItems.map(item => {
-      if (item.id === id) {
-        return { ...item, [field]: value };
-      }
-      return item;
-    });
-    setManualPurchaseItems(updated);
+    setManualPurchaseItems(prev => prev.map(item => (item.id === id ? { ...item, [field]: value } : item)));
   };
 
   const handleRemoveManualPurchaseItem = (id: string) => {
@@ -837,7 +814,7 @@ export function useProjectInventory(
     toast.success('آیتم دستی حذف شد.');
   };
 
-  const handleUpdateProcurementStatus = (itemId: string, newStatus: any) => {
+  const handleUpdateProcurementStatus = (itemId: string, newStatus: NonNullable<PurchaseListItem['procurementStatus']>) => {
     if (itemId.startsWith('manual_')) {
       handleUpdateManualPurchaseItem(itemId, 'procurementStatus', newStatus);
     } else {

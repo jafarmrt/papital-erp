@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.390 — Purchase Row Status Kept
+- **Purchase Row Status Kept (TD-750):** the purchase list row id (`code_…` / `name_…`) never matched a section row, so a chosen procurement status was lost and state was changed in place; `withProcurementStatus` now updates every section row of that code or name immutably with a functional update.
+
 ### v9.0.389 — Inventory Control Presets in the Project
 - **Inventory Control Presets in the Project (TD-748):** preset sections keep their materials in `items`, which the project tab, purchase list, material progress and reservation never read (default preset: empty purchase list, 100% progress, no reservation); they now become project rows (`projectSectionsFromPreset`) in the tab and on the server before saving and reserving.
 
