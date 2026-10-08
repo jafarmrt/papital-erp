@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { AlertOctagon, RefreshCw, Search, Filter, RotateCcw, CheckCircle2, XCircle, Trash2, Edit3, AlertTriangle, Layers, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
-import { formatPersianDate, errorMessageOf } from '../../utils';
+import { formatPersianDate, errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
 import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
 
@@ -160,7 +160,7 @@ export function DeadLetterQueueSubTab() {
         body: JSON.stringify({ ids: selectedIds })
       });
       if (data?.success) {
-        showToast(`بازپخش موفق: ${data.succeeded} از ${data.total} رویداد با موفقیت بازپخش شد.`, 'success');
+        showToast(`بازپخش موفق: ${formatPersianNumber(data.succeeded ?? 0)} از ${formatPersianNumber(data.total ?? 0)} رویداد با موفقیت بازپخش شد.`, 'success');
         setSelectedIds([]);
         void fetchStats();
         void fetchEvents();
@@ -387,7 +387,7 @@ export function DeadLetterQueueSubTab() {
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition-all disabled:opacity-50"
             >
               <RotateCcw className={`w-3.5 h-3.5 ${isBatchReplaying ? 'animate-spin' : ''}`} />
-              <span>بازپخش {selectedIds.length} مورد</span>
+              <span>بازپخش {formatPersianNumber(selectedIds.length)} مورد</span>
             </button>
           )}
 
@@ -504,7 +504,7 @@ export function DeadLetterQueueSubTab() {
                               ? 'وب‌هوک مقصد'
                               : item.source}
                           </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">تعداد تلاش: {item.retryCount} بار</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">تعداد تلاش: {formatPersianNumber(item.retryCount ?? 0)} بار</div>
                         </td>
 
                         <td className="p-3 max-w-xs">
@@ -637,7 +637,7 @@ export function DeadLetterQueueSubTab() {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Edit3 className="w-4 h-4 text-indigo-500" />
-                  اصلاح بدنه رویداد #{editingItem.id} ({editingItem.eventType})
+                  اصلاح بدنه رویداد #{toPersianDigits(editingItem.id)} ({editingItem.eventType})
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
                   مقادیر معیوب را اصلاح کنید و سپس رویداد را در گذرگاه دامنه‌ای بازپخش نمایید.

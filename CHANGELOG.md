@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.397 — Persian Digits in the Events Screens
+- **Persian digits (TD-732):** counts, percentages and durations in the events, webhook, dead-letter, WooCommerce and notification screens were written with Latin digits («بازپخش 1 مورد», «%۸۶», «120ms», «تلاش 3/۵»); they now use `formatPersianNumber` / `toPersianDigits`, «٪» after the number and «میلی‌ثانیه».
+
 ### v9.0.396 — Events Page States Its Real Status
 - **Events page status (TD-733):** a stopped outbox worker showed the green pulse, each outbox action was announced by a banner and a toast, the live list label said 8 seconds for a 10-second refresh and the WooCommerce order log header promised amounts; each now states what is true.
 

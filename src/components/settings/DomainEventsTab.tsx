@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Zap, RefreshCw, Search, Filter, CheckCircle2, Activity, Package, FileText, GitBranch, CreditCard, ChevronDown, ChevronUp, Clock, Inbox, AlertTriangle, Play, RotateCcw, Database, Sliders, AlertOctagon, History, Globe } from 'lucide-react';
-import { formatPersianDate, errorMessageOf, toPersianDigits } from '../../utils';
+import { formatPersianDate, errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
+import { OUTBOX_MAX_ATTEMPTS } from '../../lib/events/outboxAttempts';
 import { AutoActionsSubTab } from './AutoActionsSubTab';
 import { DeadLetterQueueSubTab } from './DeadLetterQueueSubTab';
 import { EventSourcingReplaySubTab } from './EventSourcingReplaySubTab';
@@ -361,7 +362,7 @@ export function DomainEventsTab() {
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100 transition-all disabled:opacity-50"
                 >
                   <RotateCcw className={`w-3.5 h-3.5 ${retryFailedMutation.isPending ? 'animate-spin' : ''}`} />
-                  <span>تلاش مجدد تمام خطاهای ارسال ({outboxStats?.failed})</span>
+                  <span>تلاش مجدد تمام خطاهای ارسال ({formatPersianNumber(outboxStats?.failed ?? 0)})</span>
                 </button>
               )}
             </div>
@@ -419,7 +420,7 @@ export function DomainEventsTab() {
                               <PillBadge variants={OUTBOX_STATUS_BADGES} value={evt.status} />
                               {evt.retryCount > 0 && (
                                 <span className="text-[10px] px-2 py-0.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 rounded-md font-bold">
-                                  تلاش {evt.retryCount}/۵
+                                  تلاش {formatPersianNumber(evt.retryCount ?? 0)} از {formatPersianNumber(OUTBOX_MAX_ATTEMPTS)}
                                 </span>
                               )}
                             </div>
@@ -463,7 +464,7 @@ export function DomainEventsTab() {
                         <div className="mt-3.5 pt-3.5 border-t border-slate-100 dark:border-slate-700 text-xs space-y-2">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300 mb-2">
                             <div>
-                              <span className="font-bold">شناسه دیتابیس (Primary Key):</span> #{evt.id}
+                              <span className="font-bold">شناسه دیتابیس (Primary Key):</span> #{toPersianDigits(evt.id)}
                             </div>
                             <div>
                               <span className="font-bold">زمان تلاش بعدی (Backoff Time):</span>{' '}

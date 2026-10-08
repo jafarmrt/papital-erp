@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { History, Play, RotateCcw, Search, CheckCircle2, AlertTriangle, FileText, Package, Users, Landmark, Layers, GitBranch, Clock, ShieldCheck, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react';
-import { formatPersianDate, errorMessageOf } from '../../utils';
+import { formatPersianDate, errorMessageOf, formatPersianNumber } from '../../utils';
 import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -462,8 +462,8 @@ export function EventSourcingReplaySubTab() {
                     <Sparkles className="w-4 h-4" />
                     <span>{simulationResult.message}</span>
                   </div>
-                  <div>کل قوانین اکشن ارزیابی‌شده: {simulationResult.evaluatedRulesCount} قانون</div>
-                  <div>قوانین منطبق‌شده جهت اجرا: {simulationResult.matchedRulesCount} قانون</div>
+                  <div>کل قوانین اکشن ارزیابی‌شده: {formatPersianNumber(simulationResult.evaluatedRulesCount ?? 0)} قانون</div>
+                  <div>قوانین منطبق‌شده جهت اجرا: {formatPersianNumber(simulationResult.matchedRulesCount ?? 0)} قانون</div>
                 </div>
 
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">

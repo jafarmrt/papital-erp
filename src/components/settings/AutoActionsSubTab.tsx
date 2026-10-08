@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Zap, Plus, RefreshCw, Search, Globe, Bell, Smartphone, GitBranch, ShieldCheck, CheckCircle2, XCircle, AlertCircle, Play, Edit3, Trash2, ToggleLeft, ToggleRight, Clock, Activity, FileText, ChevronDown, ChevronUp } from 'lucide-react';
-import { formatPersianDate, errorMessageOf } from '../../utils';
+import { formatPersianDate, errorMessageOf, formatPersianNumber } from '../../utils';
 import { fetchJson } from '../../api';
 import { RuleEditorModal, RuleFormData } from './RuleEditorModal';
 import {
@@ -419,7 +419,7 @@ export function AutoActionsSubTab() {
 
                           <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-400 mt-2">
                             <span>
-                              شروط: <span className="font-bold text-slate-600 dark:text-slate-300">{conditionCount === 0 ? 'بدون شرط (همه)' : `${conditionCount} شرط`}</span>
+                              شروط: <span className="font-bold text-slate-600 dark:text-slate-300">{conditionCount === 0 ? 'بدون شرط (همه)' : `${formatPersianNumber(conditionCount)} شرط`}</span>
                             </span>
                             <span>•</span>
                             <span>

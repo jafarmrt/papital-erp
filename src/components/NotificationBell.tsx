@@ -10,6 +10,7 @@ import {
   useDeleteNotificationMutation
 } from '../hooks/queries';
 import { useClickOutside } from '../hooks/useClickOutside';
+import { formatPersianNumber } from '../utils';
 import { notificationRelativeTime } from '../lib/notifications/relativeTime';
 
 export default function NotificationBell() {
@@ -74,7 +75,7 @@ export default function NotificationBell() {
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-bold text-[10px] w-5 h-5 rounded-full flex items-center justify-center animate-pulse border-2 border-white shadow-xs">
-            {unreadCount > 9 ? '+۹' : unreadCount}
+            {unreadCount > 9 ? '+۹' : formatPersianNumber(unreadCount)}
           </span>
         )}
       </button>
@@ -87,7 +88,7 @@ export default function NotificationBell() {
               <span className="text-xs font-bold">اعلان‌ها و منشن‌های شما</span>
               {unreadCount > 0 && (
                 <span className="bg-amber-500/20 text-amber-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-amber-500/30">
-                  {unreadCount} خوانده‌نشده
+                  {formatPersianNumber(unreadCount)} خوانده‌نشده
                 </span>
               )}
             </div>

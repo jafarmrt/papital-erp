@@ -48,7 +48,7 @@ describe('TD-730 the event tabs show the server reason of a refused request', ()
     const { container } = render(<DeadLetterQueueSubTab />);
     await screen.findByText('timeout');
     fireEvent.click(container.querySelector('thead button') as HTMLButtonElement);
-    fireEvent.click(screen.getByText('بازپخش 1 مورد'));
+    fireEvent.click(screen.getByText('بازپخش ۱ مورد'));
     expect(await screen.findByText(reason)).toBeTruthy();
   });
 

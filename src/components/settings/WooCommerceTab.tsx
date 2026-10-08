@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FolderTree, ShoppingBag, Copy, Check, RefreshCw, Key, ShieldCheck, Database, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { formatPersianDateTime, formatPersianDate } from '../../utils';
+import { formatPersianDateTime, formatPersianDate, formatPersianNumber } from '../../utils';
 import { WcOrderLogStatusBadge } from './WcOrderLogStatusBadge';
 import { ShopWarehouseSelect } from './ShopWarehouseSelect';
 import { WcListEmptyRow } from './WcListEmptyRow';
@@ -320,7 +320,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
               }`}
             >
               <FileText size={14} />
-              سوابق ممیزی سفارشات ({wcOrderLogs.length})
+              سوابق ممیزی سفارشات ({formatPersianNumber(wcOrderLogs.length)})
             </button>
             <button
               onClick={() => setActiveLogSubTab('invoices')}
@@ -331,7 +331,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
               }`}
             >
               <ShoppingBag size={14} />
-              فاکتورهای صادرشده ({syncedWcOrders.length})
+              فاکتورهای صادرشده ({formatPersianNumber(syncedWcOrders.length)})
             </button>
           </div>
 

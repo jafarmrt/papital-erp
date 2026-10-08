@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ALL_EVENTS_LABEL, ALL_EVENTS_PATTERN, PUBLISHED_EVENT_TYPES, eventTypeLabel } from '../../lib/events/eventTypeCatalog';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Trash2, Edit3, Shield, Activity } from 'lucide-react';
-import { formatPersianDate, errorMessageOf } from '../../utils';
+import { formatPersianDate, errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
 import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
 import { isEnteredSecret } from '../../lib/secrets/maskedSecret';
@@ -288,7 +288,7 @@ export function WebhookManagementSubTab() {
       setPingResult(data);
       const keyNote = data?.keySource === 'temporary' ? ' (امضا با کلید موقت؛ کلید درگاه پس از ذخیره ساخته می‌شود)' : '';
       if (data?.success) {
-        showToast(`تست پینگ موفق (${data.statusCode} OK) - تاخیر: ${data.durationMs}ms${keyNote}`, 'success');
+        showToast(`آزمایش اتصال موفق بود (پاسخ ${toPersianDigits(data.statusCode)}، تأخیر ${formatPersianNumber(data.durationMs ?? 0)} میلی‌ثانیه)${keyNote}`, 'success');
       } else {
         showToast(`${data?.message || 'خطا در تست پینگ وب‌هوک'}${keyNote}`, 'error');
       }
@@ -404,7 +404,7 @@ export function WebhookManagementSubTab() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-            {stats ? `%${stats.successRate.toLocaleString('fa-IR')}` : '%۱۰۰'}
+            {stats ? `${formatPersianNumber(stats.successRate)}٪` : '۱۰۰٪'}
           </div>
           <p className="text-xs text-slate-400 mt-1">همراه با اعتبارسنجی امضای SHA256</p>
         </div>
@@ -509,7 +509,7 @@ export function WebhookManagementSubTab() {
                       className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
                     >
                       <Activity className="w-3.5 h-3.5" />
-                      <span>لاگ تحویل ({sub.totalDeliveries || 0})</span>
+                      <span>لاگ تحویل ({formatPersianNumber(sub.totalDeliveries || 0)})</span>
                     </button>
 
                     {canManage && (
@@ -634,7 +634,7 @@ export function WebhookManagementSubTab() {
                             : 'text-rose-600 dark:text-rose-400'
                         }
                       >
-                        {deliv.statusCode || 'N/A'}
+                        {deliv.statusCode ? toPersianDigits(deliv.statusCode) : '—'}
                       </span>
                     </td>
                     <td className="p-2.5">
@@ -646,7 +646,7 @@ export function WebhookManagementSubTab() {
                         <span className="text-rose-600 dark:text-rose-400 font-medium">ناموفق</span>
                       )}
                     </td>
-                    <td className="p-2.5 font-mono text-slate-500">{deliv.durationMs}ms</td>
+                    <td className="p-2.5 text-slate-500">{formatPersianNumber(deliv.durationMs ?? 0)} میلی‌ثانیه</td>
                     <td className="p-2.5 font-mono text-[10px] text-slate-400 max-w-[120px] truncate" title={deliv.signature}>
                       {deliv.signature ? deliv.signature.substring(0, 16) + '...' : '-'}
                     </td>
