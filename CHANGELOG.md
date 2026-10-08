@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.394 — Migrations Drop Objects in Their Own Schema
+- **Fix (TD-590, B01-10):** every DROP ... IF EXISTS of the migrations names the current schema, so building an isolated test schema no longer drops the public index `idx_idemp_user_scope_key` (and with it every idempotent request) on a development or staging database.
+
 ### v9.0.393 — Setup Token Checked on Step 1
 - **Fix (TD-621, B01-41):** step 1 of the setup wizard needs the setup token, and a wrong token takes the wizard back to step 1 with the message under the token field; the password half was fixed by TD-532.
 

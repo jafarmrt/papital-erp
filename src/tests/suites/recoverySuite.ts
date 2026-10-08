@@ -8,6 +8,7 @@ import { checkMigrationSession, checkSkippedMigrationRefused, checkUpgradeFromV7
 import { checkUpdateWaitsForStartup } from '../recovery/updateScriptChecks.js';
 import { runDeploySafetyChecks } from '../recovery/deploySafetyChecks.js';
 import { runToolingChecks } from '../recovery/toolingChecks.js';
+import { checkTestSchemaKeepsPublic } from '../recovery/schemaIsolationChecks.js';
 
 /** حوزه K (v8.0.81 به بعد): مهاجرت، به‌روزرسانی، پشتیبان و بازیابی با اسکریپت‌ها و پایگاه‌داده واقعی */
 async function runMigrationAndBackupChecks(results: TestCaseResult[]): Promise<void> {
@@ -20,6 +21,8 @@ async function runMigrationAndBackupChecks(results: TestCaseResult[]): Promise<v
       checkUpgradeFromV70137, 'ارتقا از سطح 0044 با سند ردشده انجام شد؛ پیوند چک ثبت، تاریخ و قید NOT VALID دست‌نخورده ماند'],
     ['rec_td_365_update_waits_for_startup', 'v8.0.83: update.sh فقط پس از پایان مهاجرت‌ها و راه‌اندازی (/health/startup) و نسخه درست موفقیت اعلام می‌کند (TD-365)',
       checkUpdateWaitsForStartup, 'در حال مهاجرت و نسخه کهنه رد شد، راه‌افتاده با نسخه درست پذیرفته شد؛ آرگومان ناشناخته پیام روشن داد'],
+    ['rec_td_590_test_schema_keeps_public', 'v9.0.394: building an isolated test schema drops no index or function of the same name in public (TD-590)',
+      checkTestSchemaKeepsPublic, 'Every public index and function named by a migration DROP survived a nested test schema'],
   ];
   const outcomes: RecoveryCheckOutcome[] = [];
   for (const [id, name, fn, info] of single) {

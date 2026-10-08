@@ -193,4 +193,8 @@ BEGIN
 END $$;
 
 -- پاکسازی تابع موقت
-DROP FUNCTION IF EXISTS _repair_jalali_to_gregorian(text);
+-- TD-590: named in the current schema, never found along the search path
+DO $$
+BEGIN
+  EXECUTE format('DROP FUNCTION IF EXISTS %I._repair_jalali_to_gregorian(text)', current_schema());
+END $$;

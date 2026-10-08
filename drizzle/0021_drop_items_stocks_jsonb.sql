@@ -25,9 +25,16 @@ ON CONFLICT (item_id) DO NOTHING;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS trg_sync_item_current_stock ON items;
 --> statement-breakpoint
-DROP FUNCTION IF EXISTS sync_item_current_stock();
+-- TD-590: both functions are named in the current schema, never found along the search path
+DO $$
+BEGIN
+  EXECUTE format('DROP FUNCTION IF EXISTS %I.sync_item_current_stock()', current_schema());
+END $$;
 --> statement-breakpoint
-DROP FUNCTION IF EXISTS erp_backfill_item_warehouse_stocks(integer, text);
+DO $$
+BEGIN
+  EXECUTE format('DROP FUNCTION IF EXISTS %I.erp_backfill_item_warehouse_stocks(integer, text)', current_schema());
+END $$;
 --> statement-breakpoint
 WITH table_totals AS (
   SELECT i.id AS item_id,

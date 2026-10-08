@@ -48,5 +48,6 @@ BEGIN
   END LOOP;
 
   CREATE INDEX IF NOT EXISTS idx_docs_project ON documents (project_id);
-  DROP INDEX IF EXISTS idx_documents_project_id;
+  -- TD-590: named in the current schema, never found along the search path
+  EXECUTE format('DROP INDEX IF EXISTS %I.idx_documents_project_id', current_schema());
 END $$;
