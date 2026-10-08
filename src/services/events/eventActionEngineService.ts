@@ -17,6 +17,7 @@ import { assertNotificationPermission, permissionHolderUserIds, roleMemberUserId
 import { resolveRuleConfigSecrets } from './integrationSecrets.js';
 import { type RuleActionType } from '../../lib/events/ruleActionTypes.js';
 import { assertRuleActionTypeAllowed, assertRuleEventTypeAllowed } from './ruleActionTypeGuard.js';
+import type { ActionEngineStats, ActionLogPage } from '../../lib/events/actionLogContract.js';
 import { ruleSampleEvent } from './ruleSampleEvent.js';
 import { IntegrationDeliveryService, RULE_ACTION_MAX_ATTEMPTS, type DeliveryAttemptContext, type DeliveryAttemptOutcome } from './integrationDelivery.service.js';
 
@@ -698,7 +699,7 @@ export class EventActionEngineService {
   /**
    * Get action execution logs with pagination
    */
-  public static async getLogs(filter?: { ruleId?: number; status?: string; eventType?: string; limit?: number; offset?: number }) {
+  public static async getLogs(filter?: { ruleId?: number; status?: string; eventType?: string; limit?: number; offset?: number }): Promise<ActionLogPage> {
     const limit = Math.min(filter?.limit || 50, 100);
     const offset = filter?.offset || 0;
 
@@ -730,8 +731,21 @@ export class EventActionEngineService {
       .from(eventActionLogs)
       .where(whereClause);
 
+    // v9.0.383 (TD-721): the shared contract the «اقدام‌های خودکار» tab reads
     return {
-      data: logs,
+      data: logs.map(log => ({
+        id: log.id,
+        ruleId: log.ruleId,
+        ruleName: log.ruleName ?? '',
+        eventId: log.eventId,
+        eventType: log.eventType,
+        actionType: log.actionType,
+        status: log.status,
+        result: log.result ?? {},
+        errorMessage: log.errorMessage ?? '',
+        executionDurationMs: log.executionDurationMs ?? 0,
+        executedAt: log.executedAt,
+      })),
       total: count || 0,
       limit,
       offset
@@ -741,7 +755,7 @@ export class EventActionEngineService {
   /**
    * Telemetry stats for auto actions engine
    */
-  public static async getStats() {
+  public static async getStats(): Promise<ActionEngineStats> {
     const [rulesCount] = await orm.select({ count: sql<number>`count(*)::int` }).from(eventActionRules);
     const [activeRulesCount] = await orm.select({ count: sql<number>`count(*)::int` }).from(eventActionRules).where(eq(eventActionRules.isActive, 1));
     const [totalExecs] = await orm.select({ sum: sql<number>`COALESCE(sum(${eventActionRules.executionCount}), 0)::int` }).from(eventActionRules);

@@ -14,12 +14,15 @@ import {
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { ruleActionTypeLabel } from '../../lib/events/ruleActionTypes';
 import { eventTypeLabel, isSubscribableEventPattern } from '../../lib/events/eventTypeCatalog';
+import { actionLogStatusLabel } from '../../lib/events/actionLogContract';
 
 export function AutoActionsSubTab() {
   const queryClient = useQueryClient();
   const { data: rules = [], isLoading: isLoadingRules, refetch: refetchRules } = useActionRulesQuery();
   const { data: stats = null, refetch: refetchStats } = useActionStatsQuery();
-  const { data: logs = [], isLoading: isLoadingLogs, refetch: refetchLogs } = useActionLogsQuery(50);
+  const { data: logPage, isLoading: isLoadingLogs, refetch: refetchLogs } = useActionLogsQuery(50);
+  const logs = logPage?.logs ?? [];
+  const logsTotal = logPage?.total ?? 0;
   
   const isLoading = isLoadingRules || isLoadingLogs;
   const [searchQuery, setSearchQuery] = useState('');
@@ -203,7 +206,7 @@ export function AutoActionsSubTab() {
           <div>
             <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">مجموع اجراهای خودکار</span>
             <div className="text-xl font-bold text-slate-800 dark:text-white mt-1">
-              {(stats?.totalLogs ?? 0).toLocaleString('fa-IR')} <span className="text-xs text-slate-400 font-normal">مرتبه</span>
+              {(stats?.logsTotal ?? 0).toLocaleString('fa-IR')} <span className="text-xs text-slate-400 font-normal">مرتبه</span>
             </div>
           </div>
           <div className="p-2.5 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 rounded-xl">
@@ -216,7 +219,7 @@ export function AutoActionsSubTab() {
           <div>
             <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">نرخ موفقیت عملیات</span>
             <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-              {stats?.successRate !== undefined ? stats.successRate : 100}%
+              {(stats?.successRate ?? 100).toLocaleString('fa-IR')}٪
             </div>
           </div>
           <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-xl">
@@ -229,7 +232,7 @@ export function AutoActionsSubTab() {
           <div>
             <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">میانگین تأخیر پاسخ</span>
             <div className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">
-              {(stats?.avgDurationMs ?? 0).toLocaleString('fa-IR')} <span className="text-xs text-slate-400 font-normal">میلی‌ثانیه</span>
+              {(stats?.avgLatencyMs ?? 0).toLocaleString('fa-IR')} <span className="text-xs text-slate-400 font-normal">میلی‌ثانیه</span>
             </div>
           </div>
           <div className="p-2.5 bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 rounded-xl">
@@ -268,7 +271,7 @@ export function AutoActionsSubTab() {
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>لاگ‌های اجرا ({logs.length.toLocaleString('fa-IR')})</span>
+                <span>لاگ‌های اجرا ({logsTotal.toLocaleString('fa-IR')})</span>
               </button>
             </div>
 
@@ -470,7 +473,7 @@ export function AutoActionsSubTab() {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-slate-800 dark:text-white">
-                              قانون #{log.ruleId} ➔ {log.eventType}
+                              {log.ruleName || `قانون #${(log.ruleId ?? 0).toLocaleString('fa-IR')}`} ➔ {eventTypeLabel(log.eventType)}
                             </span>
                             {getActionBadge(log.actionType)}
                             <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${
@@ -480,13 +483,13 @@ export function AutoActionsSubTab() {
                                   ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
                                   : 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300'
                             }`}>
-                              {log.status === 'success' ? 'موفق' : log.status === 'condition_unmatched' ? 'شرط عدم تطابق' : 'خطا'}
+                              {actionLogStatusLabel(log.status)}
                             </span>
                           </div>
 
                           <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                             شناسه رویداد: <span className="font-mono text-[11px]">{log.eventId}</span>
-                            {' '}| مدت اجرا: <span className="font-bold">{log.durationMs}ms</span>
+                            {' '}| مدت اجرا: <span className="font-bold">{log.executionDurationMs.toLocaleString('fa-IR')} میلی‌ثانیه</span>
                           </div>
                         </div>
                       </div>
@@ -506,18 +509,11 @@ export function AutoActionsSubTab() {
                             <span className="font-bold">خطای اجرا:</span> {log.errorMessage}
                           </div>
                         )}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-mono text-[11px]">
-                          <div>
-                            <span className="text-slate-500 font-sans text-xs font-bold block mb-1">داده‌های ارسالی رویداد:</span>
-                            <div className="bg-slate-900 text-slate-100 p-3 rounded-xl overflow-x-auto text-left dir-ltr">
-                              <pre>{JSON.stringify(log.requestPayloadJson, null, 2)}</pre>
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 font-sans text-xs font-bold block mb-1">پاسخ / خروجی اقدام:</span>
-                            <div className="bg-slate-900 text-slate-100 p-3 rounded-xl overflow-x-auto text-left dir-ltr">
-                              <pre>{JSON.stringify(log.responsePayloadJson, null, 2)}</pre>
-                            </div>
+                        {/* v9.0.383 (TD-721): the stored outcome of the action (the log keeps no request copy) */}
+                        <div className="font-mono text-[11px]">
+                          <span className="text-slate-500 font-sans text-xs font-bold block mb-1">نتیجه اقدام:</span>
+                          <div className="bg-slate-900 text-slate-100 p-3 rounded-xl overflow-x-auto text-left dir-ltr">
+                            <pre>{JSON.stringify(log.result, null, 2)}</pre>
                           </div>
                         </div>
                       </div>

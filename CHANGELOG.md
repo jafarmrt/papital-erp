@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.383 — Rule Execution Log and Stats Are Shown
+- **Rule execution log (TD-721):** the «لاگ‌های اجرا» view of the automatic actions tab was always empty and its cards always 0, because the hook read `logs` / `totalLogs` / `avgDurationMs` while the server sends `data` / `logsTotal` / `avgLatencyMs`; both now share one contract (`actionLogContract.ts`) and each row shows the rule, event, status, duration and result.
+
 ### v9.0.382 — Invoice and Purchase Events Carry the Payable Amount
 - **Document event amounts (TD-713):** the invoice event carried no amount, so a rule on payload.totalAmount never ran and the audit wrote «به مبلغ undefined»; invoice and purchase events now carry the payable amount (net of lines + VAT + service charge) in the document currency and in rials, on create and on finalize, and the rule editor offers these fields.
 

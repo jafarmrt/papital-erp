@@ -3,6 +3,7 @@ import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { StoredRuleActionType } from '../../lib/events/ruleActionTypes';
+import type { ActionEngineStats, ActionLogPage, ActionLogRow } from '../../lib/events/actionLogContract';
 
 export interface DomainEvent {
   eventId: string;
@@ -65,30 +66,9 @@ export interface ActionRule {
   updatedAt: string;
 }
 
-export interface ActionLog {
-  id: number;
-  ruleId: number;
-  eventId: string;
-  eventType: string;
-  actionType: string;
-  status: 'success' | 'failed' | 'condition_unmatched' | 'skipped';
-  requestPayloadJson: any;
-  responsePayloadJson: any;
-  errorMessage?: string;
-  durationMs: number;
-  executedAt: string;
-}
-
-export interface ActionStats {
-  totalRules: number;
-  activeRules: number;
-  totalLogs: number;
-  successLogs: number;
-  failedLogs: number;
-  unmatchedLogs: number;
-  successRate: number;
-  avgDurationMs: number;
-}
+// v9.0.383 (TD-721): the server's own contract (src/lib/events/actionLogContract.ts)
+export type ActionLog = ActionLogRow;
+export type ActionStats = ActionEngineStats;
 
 // Live Domain Events Query
 export function useDomainEventsQuery(filter: string = 'ALL', options?: { enabled?: boolean; refetchInterval?: number | false }) {
@@ -171,11 +151,13 @@ export function useActionStatsQuery(options?: { enabled?: boolean; refetchInterv
 
 // Action Logs Query
 export function useActionLogsQuery(limit: number = 50, options?: { enabled?: boolean; refetchInterval?: number | false }) {
-  return useQuery<ActionLog[]>({
+  return useQuery<{ logs: ActionLog[]; total: number }>({
     queryKey: QUERY_KEYS.events.actionLogs(limit),
     queryFn: async ({ signal }) => {
-      const res = await fetchJson<{ success?: boolean; logs?: ActionLog[] }>(`/events/action-logs?limit=${limit}`, { signal });
-      return Array.isArray(res?.logs) ? res.logs : [];
+      // v9.0.383 (TD-721): the server sends { data, total }; the hook used to read `logs`, so the list was always empty
+      const res = await fetchJson<Partial<ActionLogPage>>(`/events/action-logs?limit=${limit}`, { signal });
+      const logs = Array.isArray(res?.data) ? res.data : [];
+      return { logs, total: Number(res?.total ?? logs.length) };
     },
     staleTime: 10000,
     enabled: options?.enabled ?? true,
