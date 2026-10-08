@@ -5,125 +5,13 @@ import { authorizePermission } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { ProcurementService } from '../services/procurement.service.js';
+import {
+  consolidateRequisitionsSchema, convertToOrdersSchema, createRequisitionSchema, listProcurementOrdersSchema, listRequisitionsSchema,
+  updateRequisitionSchema, workflowActionSchema,
+} from './procurement.schemas.js';
 
 const router = Router();
 router.use(authenticateToken);
-
-// ==========================================
-// Zod Validation Schemas (TD-161 Remediation)
-// ==========================================
-
-const listRequisitionsSchema = z.object({
-  query: z.object({
-    status: z.enum(['draft', 'pending', 'approved', 'rejected', 'ordered', 'delivered', 'cancelled', 'all']).optional(),
-    projectId: z.coerce.number().int().positive().optional(),
-    priority: z.enum(['low', 'medium', 'high', 'emergency']).optional(),
-    search: z.string().max(120).optional(),
-    page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(200).default(50),
-  }).passthrough(),
-}).passthrough();
-
-const createRequisitionSchema = z.object({
-  body: z.object({
-    projectId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number), z.null()]).optional(),
-    title: z.string().max(200).optional(),
-    priority: z.enum(['low', 'medium', 'high', 'emergency']).default('medium').optional(),
-    requiredDate: z.string().max(50).optional(),
-    notes: z.string().max(3000).optional(),
-    items: z.array(z.object({
-      itemId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]),
-      quantity: z.union([z.number().positive(), z.string().transform(Number)]),
-      requiredDate: z.string().max(50).optional(),
-      unitPriceEstimate: z.union([z.number().nonnegative(), z.string().transform(Number)]).optional(),
-      notes: z.string().max(1000).optional(),
-    })).min(1, 'حداقل یک قلم کالا برای درخواست خرید الزامی است')
-  })
-});
-
-const updateRequisitionSchema = z.object({
-  params: z.object({
-    id: z.string().regex(/^\d+$/, 'شناسه نامعتبر است')
-  }),
-  body: z.object({
-    projectId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number), z.null()]).optional(),
-    title: z.string().max(200).optional(),
-    priority: z.enum(['low', 'medium', 'high', 'emergency']).optional(),
-    requiredDate: z.string().max(50).optional(),
-    notes: z.string().max(3000).optional(),
-    items: z.array(z.object({
-      id: z.number().int().positive().optional(),
-      itemId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]),
-      quantity: z.union([z.number().positive(), z.string().transform(Number)]),
-      requiredDate: z.string().max(50).optional(),
-      unitPriceEstimate: z.union([z.number().nonnegative(), z.string().transform(Number)]).optional(),
-      notes: z.string().max(1000).optional(),
-    })).optional()
-  })
-});
-
-const workflowActionSchema = z.object({
-  params: z.object({
-    id: z.string().regex(/^\d+$/, 'شناسه نامعتبر است')
-  }),
-  body: z.object({
-    actionKey: z.string().min(1, 'کلید اکشن گردش کار الزامی است').max(100),
-    comment: z.string().max(1000).optional()
-  })
-});
-
-const convertToOrdersSchema = z.object({
-  params: z.object({
-    id: z.string().regex(/^\d+$/, 'شناسه نامعتبر است')
-  }),
-  body: z.object({
-    // v8.0.37 (TD-291): همان بدنه‌ای که فرم «تقسیم سفارش» می‌فرستد. پیش‌تر شناسه عددی ردیف درخواست (که فرم نمی‌فرستد و
-    // شناسه ردیف درخواست رشته است) الزامی بود و هر ثبت فرم با خطای ۴۰۰ رد می‌شد؛ انبار مقصد و وضعیت بسته هم از بدنه حذف می‌شد.
-    // وضعیت بسته فقط پیش‌نویس یا پیش‌فاکتور است؛ ورود کالا به انبار از مسیر «تحویل به انبار» است.
-    orderGroups: z.array(z.object({
-      supplierId: z.union([z.number().int().positive(), z.null()]).optional(),
-      supplierName: z.string().max(200).optional(),
-      targetWarehouse: z.string().max(100).optional(),
-      docType: z.enum(['receipt', 'proforma']).optional(),
-      status: z.enum(['draft', 'proforma']).optional(),
-      items: z.array(z.object({
-        requisitionItemId: z.union([z.number().int().positive(), z.string().max(100)]).optional(),
-        itemId: z.number().int().positive(),
-        itemCode: z.string().max(100).optional(),
-        itemName: z.string().max(300).optional(),
-        unit: z.string().max(50).optional(),
-        quantity: z.number().positive(),
-        unitPrice: z.number().nonnegative(),
-        location: z.string().optional(),
-        notes: z.string().max(500).optional()
-      })).min(1, 'حداقل یک قلم برای گروه سفارش الزامی است'),
-      notes: z.string().max(1000).optional(),
-      currency: z.string().default('IRR').optional()
-    })).min(1, 'حداقل یک گروه سفارش خرید الزامی است'),
-    closeRequisition: z.boolean().optional(),
-    closureReason: z.string().max(500).optional(),
-    // v8.0.38 (TD-289): دلیل سفارش بیش از درخواست (بی آن، سفارش بیش از مانده درخواست رد می‌شود)
-    overOrderReason: z.string().max(500).optional(),
-    notes: z.string().max(1000).optional()
-  })
-});
-
-const consolidateRequisitionsSchema = z.object({
-  body: z.object({
-    requisitionIds: z.array(z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)])).min(2, 'حداقل ۲ درخواست خرید برای تجمیع الزامی است'),
-    title: z.string().max(200).optional()
-  })
-});
-
-const listProcurementOrdersSchema = z.object({
-  query: z.object({
-    status: z.string().optional(),
-    requisitionId: z.coerce.number().int().positive().optional(),
-    search: z.string().max(120).optional(),
-    page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(200).default(50)
-  }).passthrough()
-}).passthrough();
 
 // ==========================================
 // Route Endpoints
@@ -262,7 +150,8 @@ router.post('/requisitions/:id/convert-to-orders', authorizePermission('procurem
   }, {
     id: req.user!.id,
     username: req.user!.username,
-    role: req.user!.role
+    role: req.user!.role,
+    permissions: req.user!.permissions || []
   });
 
   res.json({
@@ -325,7 +214,8 @@ router.post('/orders/:id/deliver', authorizePermission('procurement.order', 'pro
   const result = await ProcurementService.deliverOrderToWarehouse(id, {
     id: req.user!.id,
     username: req.user!.username,
-    role: req.user!.role
+    role: req.user!.role,
+    permissions: req.user!.permissions || []
   });
 
   res.json(result);

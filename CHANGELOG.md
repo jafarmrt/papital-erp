@@ -19,6 +19,27 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.319 — Requisition Edit Before Approval
+- **Fix (TD-696, B10-09):** `PUT /procurement/requisitions/:id` edits only an unapproved (or rejected) requisition without orders (else 409 REQUISITION_NOT_EDITABLE), in one transaction under the row lock, with the create contract, the stored row ids kept and a before/after audit row.
+
+### v9.0.318 — Requisitions With Orders Are Not Deleted
+- **Fix (TD-695, B10-08):** a purchase requisition with a live purchase order is not deleted (409 REQUISITION_HAS_ORDERS naming the orders), under the requisition row lock with the workflow terminated in the same transaction; the desk shows the delete button only for a requisition without orders.
+
+### v9.0.317 — Delivery Through the Workflow
+- **Fix (TD-692, B10-05):** delivering a procurement order runs the receive transition in the delivery transaction with the deliverer's role and permissions, a refused transition refuses the delivery, an order of an unapproved requisition is delivered only after approval (decision t1), and the direct writes to workflow_instances, workflow_pending_approvals and workflow_tasks are gone (Vitest ratchet workflowTableWrites).
+
+### v9.0.316 — Requisition Received After Every Row
+- **Fix (TD-690, B10-03):** delivering an order marks its purchase requisition received only when no live order is left undelivered and every row is received or was closed at ordering; a row closed at ordering carries `closed` and is never received without an order.
+
+### v9.0.315 — Requisition Orders Need Approval
+- **Fix (TD-689, B10-02, decision t1):** a purchase requisition is ordered only from its approved step; for an unapproved one, a holder of the approval right first runs the approval transition in their own name, others get 409 REQUISITION_NOT_APPROVED; the workflow step moves only through executeTransition (the direct step writes of the conversion, A02-15, are gone).
+
+### v9.0.314 — Purchase Requisition Contract
+- **Fix (TD-688, B10-01):** the procurement desk, project shortage and reorder alert forms record purchase requisitions again; one contract for create and edit (requested quantity above zero, catalog item or item name, priority urgent/high/normal/low), and a body without a quantity is refused instead of storing zero.
+
+### v9.0.313 — Package 10 Procurement Audit
+- **Audit (package 10):** purchasing and procurement section of the stability audit report: 15 proven findings opened as TD-688..TD-702 plus TD-901 (decision t5) with the product-owner decisions t1-t5; documentation only.
+
 ### v9.0.312 — v9.0.312 — Production Error Answers Keep 4xx Details
 - **Production error details (TD-594):** in production a 4xx answer keeps its details, so the over-delivery and over-order prompts list their items, and a broken request body gets a Persian message with its own code.
 

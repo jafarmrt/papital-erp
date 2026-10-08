@@ -7670,7 +7670,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }
 
       // ۳) درخواست خرید بدون تاریخ نیاز ← امروز ISO
-      const req = await ProcurementService.createRequisition({ title: 'ERP-TEST-MARKER درخواست TD-232', items: [{ itemName: 'آزمون', quantity: 1, unit: 'عدد' } as never] }, { username: 'ERP-TEST-MARKER' });
+      const req = await ProcurementService.createRequisition({ title: 'ERP-TEST-MARKER درخواست TD-232', items: [{ itemName: 'آزمون', requestedQty: 1, unit: 'عدد' }] }, { username: 'ERP-TEST-MARKER' });
       requisitionId = req.id;
       const [reqRow] = await orm.select({ d: purchaseRequisitions.requiredDate }).from(purchaseRequisitions).where(eq(purchaseRequisitions.id, req.id));
       if (reqRow.d !== await businessTodayIsoDate()) violations.push(`تاریخ نیاز پیش‌فرض: ${reqRow.d}`);
@@ -10696,6 +10696,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runFormDraftExpiryTests(shouldRun));
   const { runProductionErrorDetailsTests } = await import('../regression/productionErrorDetailsTests.js');
   results.push(...await runProductionErrorDetailsTests(shouldRun));
+  // Package 10 PR A (v9.0.314+): purchase requisition contract, approval gate, delivery, delete and edit
+  const { runProcurementRequisitionTests } = await import('../regression/procurementRequisitionTests.js');
+  results.push(...await runProcurementRequisitionTests(shouldRun));
 
   return results;
 }
