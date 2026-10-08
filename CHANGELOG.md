@@ -20,8 +20,20 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.0.3 — Stock vs Ledger Health Check Leaves Work in Progress Out
+### v10.0.7 — Stock vs Ledger Health Check Leaves Work in Progress Out
 - **TD-964:** the financial health check compares the warehouse value with account 14 without the work in progress account (1402), shows the work in progress balance apart and reports the share of draft vouchers.
+
+### v10.0.6 — هشدار خودکار از کار افتادن برنامه، دیسک، پشتیبان و صف رویدادها
+- `scripts/monitor.sh` هر پنج دقیقه سلامت، دیسک، سن پشتیبان و صف رویدادها را می‌سنجد و با ربات بله یا تلگرام یا ایمیل هشدار می‌دهد (TD-1021).
+
+### v10.0.5 — سنجه‌های صف رویداد و تحویل در /metrics
+- `/metrics` صف خطای حل‌نشده، رویدادهای ناموفق و گیرکرده و تحویل‌های یکپارچه‌سازی را می‌دهد و خطای خواندن را پنهان نمی‌کند (OBS-R2-11).
+
+### v10.0.4 — رونوشت رمزگذاری‌شده پشتیبان در گوگل‌درایو
+- پشتیبان روزانه و `.env` با `ERP_SECRETS_KEY` با rclone crypt به گوگل‌درایو می‌روند؛ شکست رونوشت کد ۳ (TD-957).
+
+### v10.0.3 — زمان‌بندی خودکار پشتیبان روزانه و پایش در نصب
+- `install.sh` با `scripts/install-ops-cron.sh` پشتیبان روزانه و پایش پنج‌دقیقه‌ای را در cron می‌گذارد (TD-1020).
 
 ### v10.0.2 — عدد متنی در ورود اکسل کالا
 - ورود اکسل کالا بها و موجودی نوشته‌شده با ارقام فارسی یا جداکننده هزارگان را می‌خواند و متنی را که عدد نیست خطای ردیف می‌کند (TD-1011).

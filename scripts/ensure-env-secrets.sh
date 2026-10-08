@@ -4,8 +4,9 @@
 #   ERP_SECRETS_KEY           encrypts third-party passwords, WooCommerce keys and webhook secrets at rest
 #                             (src/lib/secretBox.ts; v9.0.361, TD-898; without it new ones are refused)
 #   ERP_WEBHOOK_SECRET_TOKEN  signs outgoing webhooks (X-ERP-Signature-256)
+#   METRICS_TOKEN             lets scripts/monitor.sh read /metrics (v10.0.6, TD-1021); the service reads it at start
 # Usage: bash scripts/ensure-env-secrets.sh <path/to/.env>
-# Keep ERP_SECRETS_KEY with the backups: encrypted values cannot be read without it.
+# ERP_SECRETS_KEY travels inside the encrypted off-server copy of .env (scripts/backup-offsite.sh, v10.0.4, TD-957).
 set -euo pipefail
 
 ENV_FILE="${1:?usage: ensure-env-secrets.sh <path/to/.env>}"
@@ -13,7 +14,7 @@ ENV_FILE="${1:?usage: ensure-env-secrets.sh <path/to/.env>}"
 command -v openssl >/dev/null 2>&1 || { echo "ERROR: openssl is required to generate secrets" >&2; exit 1; }
 
 added=0
-for key in ERP_SECRETS_KEY ERP_WEBHOOK_SECRET_TOKEN; do
+for key in ERP_SECRETS_KEY ERP_WEBHOOK_SECRET_TOKEN METRICS_TOKEN; do
   if grep -qE "^${key}=.+" "$ENV_FILE"; then
     continue
   fi

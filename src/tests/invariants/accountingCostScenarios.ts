@@ -203,6 +203,6 @@ export const ACCOUNTING_COST_CHECKS: Array<[string, string, (wh: string) => Prom
     checkHealthValuationAtWacOnly, 'A sales price of 1,000,000 did not change the warehouse value; the item without WAC was counted'],
   ['inv_td_402_payroll_voucher_exact_amounts', 'v8.0.117: the payslip voucher takes the payslip amounts exactly, even a fourteen-digit amount with four decimals (TD-402)',
     () => checkPayrollVoucherExactAmounts(), 'Rows exactly 12345678901234.5678, 1.1114, 0.0001 and 12345678901235.6791'],
-  ['inv_td_964_health_ledger_excludes_wip', 'v10.0.3: the stock vs ledger health check leaves work in progress (1402) out of the ledger value and reports the draft voucher share (TD-964)',
+  ['inv_td_964_health_ledger_excludes_wip', 'v10.0.7: the stock vs ledger health check leaves work in progress (1402) out of the ledger value and reports the draft voucher share (TD-964)',
     checkHealthLedgerExcludesWorkInProgress, 'Ledger moved 6000 with the warehouse; work in progress 4000 shown apart; draft share 6000 before approval'],
 ];

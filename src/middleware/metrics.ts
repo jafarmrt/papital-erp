@@ -1,8 +1,11 @@
 import promClient from 'prom-client';
 import { Request, Response, NextFunction } from 'express';
 import { orm, pool } from '../db/drizzle.js';
-import { outboxEvents } from '../db/schema.js';
+import { integrationDeliveryJobs, outboxEvents } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
+import { SystemHealthService } from '../services/system/systemHealth.service.js';
+import { logger } from './logger.js';
+import { errorMessageOf } from '../utils.js';
 
 // Collect default metrics (GC, event loop, memory, etc.)
 const collectDefaultMetrics = promClient.collectDefaultMetrics;
@@ -40,6 +43,37 @@ export const dbPoolWaiting = new promClient.Gauge({
 export const outboxQueueDepth = new promClient.Gauge({
   name: 'outbox_queue_depth',
   help: 'Number of pending events in outbox',
+});
+
+// v10.0.5 (OBS-R2-11): the queues an operator must act on, read on every scrape; scripts/monitor.sh alerts on them
+export const queueMetricsUp = new promClient.Gauge({
+  name: 'erp_queue_metrics_up',
+  help: '1 when the queue gauges below were read on this scrape, 0 when the read failed (their values are then stale)',
+});
+
+export const deadLetterUnresolved = new promClient.Gauge({
+  name: 'erp_dead_letter_unresolved',
+  help: 'Unresolved dead-letter events (neither replayed nor dismissed), failed integration deliveries included',
+});
+
+export const outboxFailed = new promClient.Gauge({
+  name: 'erp_outbox_failed',
+  help: 'Outbox events in status failed',
+});
+
+export const outboxStuck = new promClient.Gauge({
+  name: 'erp_outbox_stuck',
+  help: 'Outbox events stuck in processing for more than five minutes',
+});
+
+export const integrationDeliveriesRetrying = new promClient.Gauge({
+  name: 'erp_integration_deliveries_retrying',
+  help: 'Integration deliveries (webhook, rule action) waiting for another attempt after a failed one',
+});
+
+export const integrationDeliveriesFailed = new promClient.Gauge({
+  name: 'erp_integration_deliveries_failed',
+  help: 'Integration deliveries that failed for good (each is also an unresolved dead-letter row until handled)',
 });
 
 export const outboxProcessingDuration = new promClient.Histogram({
@@ -99,13 +133,33 @@ export const updateDbPoolMetrics = () => {
   dbPoolWaiting.set(waiting);
 };
 
+/**
+ * v10.0.5 (OBS-R2-11): the outbox depth and the queue gauges. A failed read sets `erp_queue_metrics_up` to 0 and is
+ * logged, never swallowed (the previous `catch {}` left the gauges at their old values with nothing to tell).
+ */
 export const updateOutboxMetrics = async () => {
   try {
-    const [result] = await orm.select({ count: sql<number>`count(*)` })
-      .from(outboxEvents)
+    const [pending] = await orm.select({ count: sql<number>`count(*)::int` }).from(outboxEvents)
       .where(eq(outboxEvents.status, 'pending'));
-    outboxQueueDepth.set(result ? Number(result.count || 0) : 0);
-  } catch {}
+    const [failed] = await orm.select({ count: sql<number>`count(*)::int` }).from(outboxEvents)
+      .where(eq(outboxEvents.status, 'failed'));
+    const [deliveries] = await orm.select({
+      retrying: sql<number>`count(*) FILTER (WHERE ${integrationDeliveryJobs.status} = 'pending' AND ${integrationDeliveryJobs.attempts} > 0)::int`,
+      failed: sql<number>`count(*) FILTER (WHERE ${integrationDeliveryJobs.status} = 'failed')::int`,
+    }).from(integrationDeliveryJobs);
+    const dlq = await SystemHealthService.countDeadLetterEvents();
+    const stuck = await SystemHealthService.countStuckOutboxEvents();
+    outboxQueueDepth.set(Number(pending?.count ?? 0));
+    outboxFailed.set(Number(failed?.count ?? 0));
+    integrationDeliveriesRetrying.set(Number(deliveries?.retrying ?? 0));
+    integrationDeliveriesFailed.set(Number(deliveries?.failed ?? 0));
+    deadLetterUnresolved.set(dlq);
+    outboxStuck.set(stuck);
+    queueMetricsUp.set(1);
+  } catch (err) {
+    queueMetricsUp.set(0);
+    logger.error(`[Metrics] queue gauges could not be read: ${errorMessageOf(err)}`);
+  }
 };
 
 // Function to record duration
