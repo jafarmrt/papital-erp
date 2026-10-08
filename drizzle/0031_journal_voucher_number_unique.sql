@@ -17,7 +17,7 @@ BEGIN
     PERFORM setval('journal_voucher_number_seq', max_number, true);
   END IF;
 
-  IF to_regclass('uq_jv_voucher_number') IS NULL THEN
+  IF to_regclass(format('%I.%I', current_schema(), 'uq_jv_voucher_number')) IS NULL THEN
     IF EXISTS (SELECT 1 FROM journal_vouchers GROUP BY voucher_number HAVING COUNT(*) > 1) THEN
       RAISE NOTICE 'journal_vouchers has duplicate voucher numbers; uq_jv_voucher_number not created (see the financial health check)';
     ELSE

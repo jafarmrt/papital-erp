@@ -64,7 +64,7 @@ BEGIN
   ) d;
 
   IF dup_count = 0 THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'uq_documents_type_fy_ref_active') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'uq_documents_type_fy_ref_active' AND schemaname = current_schema()) THEN
       EXECUTE 'CREATE UNIQUE INDEX uq_documents_type_fy_ref_active ON documents (type, ref_fiscal_year, ref_number) WHERE is_deleted = 0 AND length(ref_number) > 0';
       RAISE NOTICE 'TD-178: unique index uq_documents_type_fy_ref_active created';
     END IF;

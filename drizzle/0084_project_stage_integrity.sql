@@ -17,7 +17,7 @@
 
 DO $$
 BEGIN
-  IF to_regclass('uq_project_stages_order_active') IS NULL THEN
+  IF to_regclass(format('%I.%I', current_schema(), 'uq_project_stages_order_active')) IS NULL THEN
     IF EXISTS (
       SELECT 1 FROM project_stages WHERE is_deleted = 0 GROUP BY project_id, stage_order HAVING COUNT(*) > 1
     ) THEN

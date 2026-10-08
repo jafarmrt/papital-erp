@@ -13,7 +13,7 @@
 
 DO $$
 BEGIN
-  IF to_regclass('uq_items_code_active') IS NULL THEN
+  IF to_regclass(format('%I.%I', current_schema(), 'uq_items_code_active')) IS NULL THEN
     IF EXISTS (
       SELECT 1 FROM items WHERE is_deleted = 0 GROUP BY upper(btrim(code)) HAVING COUNT(*) > 1
     ) THEN
@@ -22,7 +22,7 @@ BEGIN
       CREATE UNIQUE INDEX uq_items_code_active ON items (upper(btrim(code))) WHERE is_deleted = 0;
     END IF;
   END IF;
-  IF to_regclass('uq_items_name_active') IS NULL THEN
+  IF to_regclass(format('%I.%I', current_schema(), 'uq_items_name_active')) IS NULL THEN
     IF EXISTS (
       SELECT 1 FROM items WHERE is_deleted = 0 GROUP BY lower(btrim(name)) HAVING COUNT(*) > 1
     ) THEN

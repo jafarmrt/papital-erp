@@ -180,13 +180,13 @@ END $$;
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'chk_documents_date_gregorian'
+    SELECT 1 FROM pg_constraint WHERE conname = 'chk_documents_date_gregorian' AND connamespace = current_schema()::regnamespace
   ) THEN
     ALTER TABLE documents ADD CONSTRAINT chk_documents_date_gregorian CHECK (date IS NULL OR date::text = '' OR (SUBSTRING(trim(date::text) FROM 1 FOR 4) ~ '^[0-9]{4}$' AND SUBSTRING(trim(date::text) FROM 1 FOR 4)::int >= 1900));
   END IF;
 
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'chk_transactions_date_gregorian'
+    SELECT 1 FROM pg_constraint WHERE conname = 'chk_transactions_date_gregorian' AND connamespace = current_schema()::regnamespace
   ) THEN
     ALTER TABLE transactions ADD CONSTRAINT chk_transactions_date_gregorian CHECK (date IS NULL OR date::text = '' OR (SUBSTRING(trim(date::text) FROM 1 FOR 4) ~ '^[0-9]{4}$' AND SUBSTRING(trim(date::text) FROM 1 FOR 4)::int >= 1900));
   END IF;

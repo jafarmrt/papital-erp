@@ -8,7 +8,7 @@ import { checkMigrationSession, checkSkippedMigrationRefused, checkUpgradeFromV7
 import { checkUpdateWaitsForStartup } from '../recovery/updateScriptChecks.js';
 import { runDeploySafetyChecks } from '../recovery/deploySafetyChecks.js';
 import { runToolingChecks } from '../recovery/toolingChecks.js';
-import { checkTestSchemaKeepsPublic } from '../recovery/schemaIsolationChecks.js';
+import { checkNestedSchemaComplete, checkTestSchemaKeepsPublic } from '../recovery/schemaIsolationChecks.js';
 
 /** حوزه K (v8.0.81 به بعد): مهاجرت، به‌روزرسانی، پشتیبان و بازیابی با اسکریپت‌ها و پایگاه‌داده واقعی */
 async function runMigrationAndBackupChecks(results: TestCaseResult[]): Promise<void> {
@@ -23,6 +23,8 @@ async function runMigrationAndBackupChecks(results: TestCaseResult[]): Promise<v
       checkUpdateWaitsForStartup, 'در حال مهاجرت و نسخه کهنه رد شد، راه‌افتاده با نسخه درست پذیرفته شد؛ آرگومان ناشناخته پیام روشن داد'],
     ['rec_td_590_test_schema_keeps_public', 'v9.0.394: building an isolated test schema drops no index or function of the same name in public (TD-590)',
       checkTestSchemaKeepsPublic, 'Every public index and function named by a migration DROP survived a nested test schema'],
+    ['rec_td_610_nested_schema_complete', 'v9.0.395: a test schema built beside a migrated one has every constraint, index and trigger the migrations name (TD-610)',
+      checkNestedSchemaComplete, 'The nested test schema has every migration-named object of the suite schema and every index public also holds'],
   ];
   const outcomes: RecoveryCheckOutcome[] = [];
   for (const [id, name, fn, info] of single) {

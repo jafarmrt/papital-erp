@@ -12,7 +12,7 @@
 
 DO $$
 BEGIN
-  IF to_regclass('uq_ptask_code_active') IS NULL THEN
+  IF to_regclass(format('%I.%I', current_schema(), 'uq_ptask_code_active')) IS NULL THEN
     IF EXISTS (
       SELECT 1 FROM piecework_tasks WHERE is_deleted = 0 GROUP BY lower(btrim(code)) HAVING COUNT(*) > 1
     ) THEN

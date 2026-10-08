@@ -18,7 +18,7 @@ ALTER TABLE documents ADD COLUMN IF NOT EXISTS party_id integer;
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_documents_party') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_documents_party' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE documents ADD CONSTRAINT fk_documents_party FOREIGN KEY (party_id) REFERENCES customers(id);
   END IF;
 END $$;

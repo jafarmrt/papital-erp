@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.395 — Migrations Check Objects in Their Own Schema
+- **Fix (TD-610, B01-30):** every existence check of the migrations looks only in the current schema, so a test schema built beside a migrated one gets every constraint, index and trigger, among them the non-negative stock guard.
+
 ### v9.0.394 — Migrations Drop Objects in Their Own Schema
 - **Fix (TD-590, B01-10):** every DROP ... IF EXISTS of the migrations names the current schema, so building an isolated test schema no longer drops the public index `idx_idemp_user_scope_key` (and with it every idempotent request) on a development or staging database.
 
