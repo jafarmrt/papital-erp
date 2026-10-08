@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.397 — No Silent Demo Database Without DATABASE_URL
+- **Fix (TD-616, B01-36):** SQL_HOST alone reaches PostgreSQL, the in-memory demo database starts only with ERP_DEMO_MODE=1 outside production, and a server without a database refuses to start.
+
 ### v9.0.396 — Skipped Migration Constraints Are Reported and Built by Hand
 - **Fix (TD-589, B01-09):** the migrator reports a constraint or index a migration left out, the financial health check lists each missing one with its cause, and the system admin builds it once the data is clean.
 

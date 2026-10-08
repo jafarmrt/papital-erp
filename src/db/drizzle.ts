@@ -5,17 +5,17 @@ import pkg from 'pg';
 import fs from 'fs';
 import { logger } from '../middleware/logger.js';
 import { mockPool } from './mockPool.js';
+import { resolveDatabaseMode, type DatabaseMode } from './databaseMode.js';
 
 const { Pool } = pkg;
 
-const rawDbUrl = (process.env.DATABASE_URL || '').trim();
-const isPlaceholderDbUrl = !rawDbUrl ||
-  rawDbUrl.includes('@host:') ||
-  rawDbUrl.includes('user:password@host') ||
-  rawDbUrl === 'postgresql://user:password@host:5432/dbname';
+// v9.0.397 (TD-616, decision t4 «الف»): SQL_HOST, a real DATABASE_URL, the in-memory demo only with ERP_DEMO_MODE=1
+// outside production, otherwise refused (the server does not start). Never an automatic fallback to the demo database.
+const databaseMode: DatabaseMode = resolveDatabaseMode(process.env);
+const rawDbUrl = databaseMode.kind === 'url' ? databaseMode.url : '';
 
 let realPool: pkg.Pool | null = null;
-let useMock = isPlaceholderDbUrl;
+const useMock = databaseMode.kind === 'demo';
 
 const maxPoolSize = parseInt(process.env.DB_POOL_MAX || '20', 10);
 const idleTimeoutMillis = parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10);
@@ -41,66 +41,46 @@ const sslConfig = isSsl ? {
   ca: (caPath && fs.existsSync(caPath)) ? fs.readFileSync(caPath, 'utf8') : undefined,
 } : undefined;
 
-if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
-  try {
-    if (process.env.SQL_HOST) {
-      realPool = new Pool({
-        host: process.env.SQL_HOST,
-        user: process.env.SQL_USER,
-        password: process.env.SQL_PASSWORD,
-        database: process.env.SQL_DB_NAME,
-        ssl: (process.env.SQL_SSL === 'true' || process.env.POSTGRES_SSL === 'true') ? sslConfig : undefined,
-        options: SESSION_STARTUP_OPTIONS,
-        max: maxPoolSize,
-        idleTimeoutMillis,
-        connectionTimeoutMillis,
-        keepAlive: true,
-        keepAliveInitialDelayMillis: 10000,
-        allowExitOnIdle: false,
-      });
-    } else {
-      realPool = new Pool({
-        connectionString: rawDbUrl,
-        ssl: sslConfig,
-        options: SESSION_STARTUP_OPTIONS,
-        max: maxPoolSize,
-        idleTimeoutMillis,
-        connectionTimeoutMillis,
-        keepAlive: true,
-        keepAliveInitialDelayMillis: 10000,
-        allowExitOnIdle: false,
-      });
-    }
-
-    if (/[?&]options=/.test(rawDbUrl)) {
-      logger.warn({ message: '[PostgreSQL Pool] DATABASE_URL has its own "options" parameter; session timeouts (DB_STATEMENT_TIMEOUT / DB_IDLE_IN_TX_TIMEOUT) and TimeZone=UTC must be included in it.' });
-    }
-
-    realPool.on('connect', (client: pkg.PoolClient) => {
-      client.on('error', (err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (
-          msg.includes('terminating connection') ||
-          msg.includes('Connection terminated') ||
-          msg.includes('connection terminated') ||
-          msg.includes('read ECONNRESET') ||
-          msg.includes('socket closed') ||
-          msg.includes('idle-in-transaction') ||
-          msg.includes('canceling statement due to statement timeout') ||
-          msg.includes('timeout')
-        ) {
-          logger.warn({ message: `[PostgreSQL Client Warning] Handled connection termination: ${msg}` });
-          return;
-        }
-        logger.error({ message: '[PostgreSQL Client Error]', error: err });
-      });
+if (databaseMode.kind === 'sql_host' || databaseMode.kind === 'url') {
+  if (databaseMode.kind === 'sql_host') {
+    realPool = new Pool({
+      host: process.env.SQL_HOST,
+      user: process.env.SQL_USER,
+      password: process.env.SQL_PASSWORD,
+      database: process.env.SQL_DB_NAME,
+      ssl: (process.env.SQL_SSL === 'true' || process.env.POSTGRES_SSL === 'true') ? sslConfig : undefined,
+      options: SESSION_STARTUP_OPTIONS,
+      max: maxPoolSize,
+      idleTimeoutMillis,
+      connectionTimeoutMillis,
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10000,
+      allowExitOnIdle: false,
     });
+  } else {
+    realPool = new Pool({
+      connectionString: rawDbUrl,
+      ssl: sslConfig,
+      options: SESSION_STARTUP_OPTIONS,
+      max: maxPoolSize,
+      idleTimeoutMillis,
+      connectionTimeoutMillis,
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10000,
+      allowExitOnIdle: false,
+    });
+  }
 
-    realPool.on('error', (err: unknown) => {
+  if (/[?&]options=/.test(rawDbUrl)) {
+    logger.warn({ message: '[PostgreSQL Pool] DATABASE_URL has its own "options" parameter; session timeouts (DB_STATEMENT_TIMEOUT / DB_IDLE_IN_TX_TIMEOUT) and TimeZone=UTC must be included in it.' });
+  }
+
+  realPool.on('connect', (client: pkg.PoolClient) => {
+    client.on('error', (err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       if (
-        msg.includes('Connection terminated unexpectedly') ||
         msg.includes('terminating connection') ||
+        msg.includes('Connection terminated') ||
         msg.includes('connection terminated') ||
         msg.includes('read ECONNRESET') ||
         msg.includes('socket closed') ||
@@ -108,42 +88,57 @@ if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
         msg.includes('canceling statement due to statement timeout') ||
         msg.includes('timeout')
       ) {
-        logger.warn({ message: `[PostgreSQL Pool Warning] Handled pool error: ${msg}` });
+        logger.warn({ message: `[PostgreSQL Client Warning] Handled connection termination: ${msg}` });
         return;
       }
-      logger.error({ message: 'Unexpected error on PostgreSQL pool client', error: err });
+      logger.error({ message: '[PostgreSQL Client Error]', error: err });
     });
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    // V3.0.6 (BUG-10): در Production هرگز به mockPool حافظه‌ای سقوط نمی‌کنیم —
-    // نوشتن داده مالی در RAM یعنی از بین رفتن کامل آن با اولین restart.
-    if (process.env.NODE_ENV === 'production') {
-      logger.error({ message: `FATAL: Failed to initialize PostgreSQL pool in production: ${errorMsg}` });
-      throw new Error(`Database initialization failed in production: ${errorMsg}`);
+  });
+
+  realPool.on('error', (err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      msg.includes('Connection terminated unexpectedly') ||
+      msg.includes('terminating connection') ||
+      msg.includes('connection terminated') ||
+      msg.includes('read ECONNRESET') ||
+      msg.includes('socket closed') ||
+      msg.includes('idle-in-transaction') ||
+      msg.includes('canceling statement due to statement timeout') ||
+      msg.includes('timeout')
+    ) {
+      logger.warn({ message: `[PostgreSQL Pool Warning] Handled pool error: ${msg}` });
+      return;
     }
-    logger.warn({ message: `Failed to initialize real PostgreSQL pool: ${errorMsg}. Using in-memory mock.` });
-    useMock = true;
-  }
-} else {
-  if (process.env.NODE_ENV === 'production') {
-    logger.error({ message: 'FATAL: DATABASE_URL is missing or placeholder in production. Refusing in-memory mock fallback.' });
-    throw new Error('DATABASE_URL must be configured in production — in-memory mock fallback is disabled.');
-  }
-  logger.info({ message: 'ℹ️ Placeholder or unconfigured DATABASE_URL. Running in-memory demo database mode.' });
-  useMock = true;
+    logger.error({ message: 'Unexpected error on PostgreSQL pool client', error: err });
+  });
+} else if (databaseMode.kind === 'demo') {
+  logger.warn({ message: '[Database] ERP_DEMO_MODE=1: running on the in-memory demo database (user admin / admin); every record is lost on restart.' });
+}
+
+/** The pool of a refused configuration: every query fails with the reason, so nothing runs on a missing database */
+function refusedPool(reason: string): pkg.Pool {
+  const fail = () => Promise.reject(new Error(reason));
+  const target = {
+    query: fail, connect: fail, end: () => Promise.resolve(),
+    on: () => target, once: () => target, removeListener: () => target,
+    totalCount: 0, idleCount: 0, waitingCount: 0,
+  };
+  Object.setPrototypeOf(target, Pool.prototype);
+  return target as unknown as pkg.Pool;
 }
 
 if (useMock && mockPool) {
   Object.setPrototypeOf(mockPool, Pool.prototype);
 }
 
-const activeTarget = (!useMock && realPool) ? realPool : (mockPool as unknown as pkg.Pool);
+const activeTarget: pkg.Pool = realPool ?? (useMock ? (mockPool as unknown as pkg.Pool)
+  : refusedPool(databaseMode.kind === 'refused' ? databaseMode.reason : 'no database'));
 
 const pool: pkg.Pool = new Proxy(activeTarget, {
   get: (_target, prop: string | symbol) => {
-    const active = (!useMock && realPool) ? realPool : mockPool;
-    const val = (active as unknown as Record<string | symbol, unknown>)[prop];
-    return typeof val === 'function' ? (val as (...args: unknown[]) => unknown).bind(active) : val;
+    const val = (activeTarget as unknown as Record<string | symbol, unknown>)[prop];
+    return typeof val === 'function' ? (val as (...args: unknown[]) => unknown).bind(activeTarget) : val;
   }
 });
 
@@ -154,6 +149,11 @@ const pool: pkg.Pool = new Proxy(activeTarget, {
  */
 export function isMockDatabase(): boolean {
   return useMock;
+}
+
+/** v9.0.397 (TD-616): the database mode the process started with (`refused` carries the reason the server stops on) */
+export function getDatabaseMode(): DatabaseMode {
+  return databaseMode;
 }
 
 const orm = drizzle(pool, { schema });

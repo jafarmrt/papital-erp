@@ -10608,6 +10608,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 1 PR d: conditional migration constraints listed and built by hand (TD-589)
   const { runConditionalConstraintTests } = await import('../regression/conditionalConstraintTests.js');
   results.push(...await runConditionalConstraintTests(shouldRun));
+  // Package 1 PR d: database mode at start (TD-616)
+  const { runDatabaseModeTests } = await import('../regression/databaseModeTests.js');
+  results.push(...await runDatabaseModeTests(shouldRun));
   // Package 3 PR d: accounting report access, party statements and the journal book (TD-547 ...)
   const { runAccountingReportAccessTests } = await import('../regression/accountingReportAccessTests.js');
   results.push(...await runAccountingReportAccessTests(shouldRun));

@@ -14,7 +14,7 @@ import { OutboxService } from './src/services/events/outboxService.js';
 import { IntegrationDeliveryService } from './src/services/events/integrationDelivery.service.js';
 import { WorkflowSlaReminderService } from './src/services/workflow/workflowSlaReminderService.js';
 import { FormDraftService } from './src/services/drafts/formDraft.service.js';
-import { pool } from './src/db/drizzle.js';
+import { pool, getDatabaseMode } from './src/db/drizzle.js';
 import { decideProcessErrorAction, processErrorMessage } from './src/lib/processErrorPolicy.js';
 
 async function startServer() {
@@ -30,6 +30,14 @@ async function startServer() {
     } catch {
       // good — tests are not bundled
     }
+  }
+
+  // v9.0.397 (TD-616, decision t4 «الف»): without DATABASE_URL (or SQL_HOST) the server does not start in any environment;
+  // the in-memory demo database runs only with an explicit ERP_DEMO_MODE=1 outside production
+  const databaseMode = getDatabaseMode();
+  if (databaseMode.kind === 'refused') {
+    logger.error(`FATAL: ${databaseMode.reason}`);
+    process.exit(1);
   }
 
   // Initialize dev JWT_SECRET in non-production if not explicitly provided
