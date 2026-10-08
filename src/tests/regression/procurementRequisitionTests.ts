@@ -300,7 +300,7 @@ async function deliveryWorkflowCase(h: Harness, wrong: string[]): Promise<string
   const { workflowInstanceId } = await f.requisition(req.id);
   const [inst] = await h.q(`SELECT snapshot_dsl FROM workflow_instances WHERE id = $1`, [workflowInstanceId]);
   const snapshot = inst.snapshot_dsl as { transitions: Row[] };
-  // v9.0.451 (TD-904): delivery itself asks warehouse.in, so the receive step here asks another key the deliverer lacks
+  // v9.0.455 (TD-904): delivery itself asks warehouse.in, so the receive step here asks another key the deliverer lacks
   for (const t of snapshot.transitions) if (t.actionKey === 'receive_items') t.requiredPermission = 'inventory.reconcile';
   await h.q(`UPDATE workflow_instances SET snapshot_dsl = $2::jsonb WHERE id = $1`, [workflowInstanceId, JSON.stringify(snapshot)]);
 

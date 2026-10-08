@@ -16,7 +16,7 @@ export interface ProcurementAccess {
   /** اقدام گردش کار درخواست (`POST /requisitions/:id/workflow-action`)؛ تأیید هنگام صدور سفارش هم همین را می‌خواهد (TD-689) */
   canApprove: boolean;
   /**
-   * تحویل سفارش به انبار (`POST /orders/:id/deliver`)؛ از v9.0.451 (TD-904، ت۳ الف) افزون بر مجوز تدارکات، مجوز ثبت قطعی
+   * تحویل سفارش به انبار (`POST /orders/:id/deliver`)؛ از v9.0.455 (TD-904، ت۳ الف) افزون بر مجوز تدارکات، مجوز ثبت قطعی
    * سند رسید («ثبت ورود کالا») را هم می‌خواهد که سرویس تحویل می‌سنجد
    */
   canDeliver: boolean;

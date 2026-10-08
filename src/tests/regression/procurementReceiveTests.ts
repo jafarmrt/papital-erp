@@ -11,10 +11,10 @@ export async function runProcurementReceiveTests(shouldRun: ShouldRun): Promise<
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_procurement_receive_unsettled_rows_td_911',
-      'v9.0.453: receive items does not mark a requisition received while a row is neither received nor closed; the whole transition rolls back, as delivery does (TD-911)',
+      'v9.0.457: receive items does not mark a requisition received while a row is neither received nor closed; the whole transition rolls back, as delivery does (TD-911)',
       ['td911', 'p5-p02', 'procurement', 'workflow', 'receive', 'phase5'], unsettledReceiveCase],
     ['reg_procurement_finalize_audit_td_917',
-      'v9.0.454: order delivery and receive items write one finalize audit row per order with its document id and the stored document before and after, like PUT /documents/:id/finalize, and the document timeline shows it (TD-917)',
+      'v9.0.458: order delivery and receive items write one finalize audit row per order with its document id and the stored document before and after, like PUT /documents/:id/finalize, and the document timeline shows it (TD-917)',
       ['td917', 'p5-p10', 'procurement', 'audit', 'receive', 'phase5'], finalizeAuditCase],
   ];
   for (const [id, name, tags, run] of cases) {

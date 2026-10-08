@@ -88,7 +88,7 @@ async function linkedOrdersCase(h: Harness, wrong: string[]): Promise<string> {
     wrong.push(`plain receipt in the procurement order list: ${listed.status}, total ${String(listed.body?.total)}, ids ${rows.map(r => r.id).join(',')}`);
   }
 
-  // v9.0.451 (TD-904): delivery also asks the stock-in permission of the receipt document
+  // v9.0.455 (TD-904): delivery also asks the stock-in permission of the receipt document
   const manager = await h.sessionWith(['procurement.view', 'procurement.manage', 'warehouse.view', 'warehouse.in']);
   const delivered = await f.deliver(receipt.id, manager);
   if (delivered.status !== 422 || delivered.body?.code !== 'PROCUREMENT_ORDER_NOT_LINKED') wrong.push(`delivery of a plain receipt: ${delivered.status} ${String(delivered.body?.code)}`);

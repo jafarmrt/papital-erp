@@ -235,7 +235,7 @@ export function ProcurementOrderList({
                               تکمیل شده
                             </span>
                           ) : (
-                            // v9.0.451 (TD-904): an order the user may not deliver is not shown as completed
+                            // v9.0.455 (TD-904): an order the user may not deliver is not shown as completed
                             <span className="text-slate-400 text-[11px]">—</span>
                           )}
                         </td>

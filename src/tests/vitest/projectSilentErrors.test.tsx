@@ -19,7 +19,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 vi.mock('../../hooks/useProjectPermissions', () => ({
   useProjectPermissions: () => ({
-    canCreate: true, canEdit: true, canDelete: true, canAllocate: true, canConsumeAllocation: true, canReleaseAllocation: true, canRequestPurchase: true,
+    canCreate: true, canEdit: true, canDelete: true, canAllocate: true, canConsumeAllocation: true, canReleaseAllocation: true, canDeliver: true, canRequestPurchase: true,
   }),
 }));
 vi.mock('../../hooks/useAppCurrency', async () => {

@@ -28,7 +28,7 @@ export function assertProcurementIncomingDocument(doc: { id: number; type: strin
 }
 
 /**
- * v9.0.451 (TD-904، یافته P5-P01، تصمیم ت۳ الف): تحویل سفارش تدارکات به انبار، افزون بر مجوز تدارکات، همان مجوز ثبت قطعی
+ * v9.0.455 (TD-904، یافته P5-P01، تصمیم ت۳ الف): تحویل سفارش تدارکات به انبار، افزون بر مجوز تدارکات، همان مجوز ثبت قطعی
  * سند رسید را می‌خواهد. پیش‌تر `procurement.manage` یا `procurement.order` به‌تنهایی سفارش را قطعی و کالا را وارد انبار
  * می‌کرد، در حالی که همان کاربر `PUT /documents/:id/finalize` را ۴۰۳ می‌گرفت. بیرون از تراکنش سنجیده می‌شود (TD-324).
  */
@@ -50,7 +50,7 @@ interface ReceivedRequisition {
 
 interface ReceiveOptions {
   username: string;
-  /** v9.0.454 (TD-917): کاربر انجام‌دهنده اقدام، برای ردیف ممیزی نهایی‌سازی هر سفارش */
+  /** v9.0.458 (TD-917): کاربر انجام‌دهنده اقدام، برای ردیف ممیزی نهایی‌سازی هر سفارش */
   userId?: number;
   allowBackdate: boolean;
   assertIncoming: (doc: { id: number; type: string | null; refNumber: string | null }) => void;
@@ -115,7 +115,7 @@ export async function receiveRequisitionItems(
     if (doc.status === 'final') continue;
     opts.assertIncoming(doc);
     const change = await DocumentService.finalizeDocument(doc.id, opts.username, tx, { allowBackdate: opts.allowBackdate });
-    // v9.0.454 (TD-917، یافته P5-P10): ردیف ممیزی نهایی‌سازی هر سفارش با شناسه سند و سند پیش و پس از آن، با همین تراکنش،
+    // v9.0.458 (TD-917، یافته P5-P10): ردیف ممیزی نهایی‌سازی هر سفارش با شناسه سند و سند پیش و پس از آن، با همین تراکنش،
     // همان ردیف `PUT /documents/:id/finalize` (TD-785). پیش‌تر «دریافت کالا» هیچ ردیفی نمی‌نوشت و خط زمانی سند آن را نمی‌دید.
     if (change) {
       await logActivity({
@@ -168,7 +168,7 @@ export async function receiveRequisitionItems(
 }
 
 /**
- * v9.0.453 (TD-911، یافته P5-P02): درخواست فقط وقتی «دریافت‌شده» می‌شود که هر ردیفش به اندازه درخواست دریافت یا بسته شده
+ * v9.0.457 (TD-911، یافته P5-P02): درخواست فقط وقتی «دریافت‌شده» می‌شود که هر ردیفش به اندازه درخواست دریافت یا بسته شده
  * باشد (`isSettledRequisitionRow`، همان قاعده تحویل سفارش در TD-690). پیش‌تر «دریافت کالا» پس از سفارش ۶ از ۱۰ درخواست را
  * «دریافت‌شده» می‌کرد و ۴ عدد مانده دیگر سفارش داده نمی‌شد (۴۰۹)، در حالی که تحویل همان سفارش درخواست را باز نگه می‌داشت.
  * خطا کل انتقال را برمی‌گرداند: سفارشی قطعی و کالایی وارد انبار نمی‌شود.
@@ -184,5 +184,5 @@ function assertRequisitionSettled(code: string, rows: RequisitionItemWithReceipt
   );
 }
 
-/** v9.0.453 (TD-911): راهنمای پیام رد «دریافت کالا»ی درخواستی که ردیف باز دارد */
+/** v9.0.457 (TD-911): راهنمای پیام رد «دریافت کالا»ی درخواستی که ردیف باز دارد */
 export const REQUISITION_UNSETTLED_HINT = 'مانده را سفارش دهید، یا هنگام صدور سفارش «تکمیل و بستن پرونده درخواست خرید» را بزنید؛ برای ورود کالای سفارش‌های صادرشده و باز ماندن درخواست، سفارش را از فهرست سفارش‌ها تحویل دهید.';

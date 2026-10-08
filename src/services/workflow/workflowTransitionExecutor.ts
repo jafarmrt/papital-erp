@@ -520,7 +520,7 @@ export class WorkflowTransitionExecutor {
     snapshotData?: Record<string, unknown>;
     /**
      * v9.0.2 (TD-415): مجوز تاریخ گذشته‌ای که فراخواننده برای همین کاربر سنجیده است، برای اقدام خودکار پس از انتقال.
-     * v9.0.452 (TD-928): بی آن، موتور همان مجوز را از امضاکننده (یا نقش تفویض‌کننده) می‌خواند.
+     * v9.0.456 (TD-928): بی آن، موتور همان مجوز را از امضاکننده (یا نقش تفویض‌کننده) می‌خواند.
      */
     allowBackdate?: boolean;
     tx?: DbClient;
@@ -619,12 +619,12 @@ export class WorkflowTransitionExecutor {
       const entityPermissions = await workflowActionPermissions(instance.entityType, { toStateKey: toState.stateKey, autoActionKey: transition.autoActionKey || '' }, { tx, entityId: instance.entityId });
       if (entityPermissions.length > 0) {
         if (!isSystemAdminRole(signerRole) && !entityPermissions.some(p => signerHeld.includes(p))) {
-          // v9.0.451 (TD-904): نام فارسی مجوز در پیام، کلید آن در جزئیات
+          // v9.0.455 (TD-904): نام فارسی مجوز در پیام، کلید آن در جزئیات
           const titles = entityPermissions.map(p => permissionDefinition(p)?.title ?? p);
           throw new ForbiddenError(`اقدام «${transition.title}» یکی از مجوزهای «${titles.join('، ')}» را می‌خواهد.`, { permissions: entityPermissions }, 'WF_ENTITY_PERMISSION_REQUIRED');
         }
       }
-      // v9.0.452 (TD-928، یافته P5-S-04، تصمیم ت۳ الف فاز ۵): مجوز تاریخ گذشته اقدام دامنه (قطعی‌سازی سند، دریافت کالا)
+      // v9.0.456 (TD-928، یافته P5-S-04، تصمیم ت۳ الف فاز ۵): مجوز تاریخ گذشته اقدام دامنه (قطعی‌سازی سند، دریافت کالا)
       // از همان امضاکننده (یا نقش تفویض‌کننده) خوانده می‌شود، مانند `PUT /documents/:id/finalize`؛ هرگز از بدنه درخواست.
       // پیش‌تر فقط فراخواننده تدارکات آن را می‌فرستاد و تأیید سند تاریخ گذشته از گردش کار حتی برای دارنده مجوز ۴۲۲ بود.
       const allowBackdate = params.allowBackdate === true || isSystemAdminRole(signerRole) || signerHeld.includes(STOCK_BACKDATE_PERMISSION);

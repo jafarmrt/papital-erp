@@ -92,7 +92,7 @@ export async function checkReceiveApprovesInReceiverName(): Promise<string[]> {
   const problems: string[] = [];
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const receiver = await wfUser(`wfg_store_${uniqueTag()}`, []);
-  // v9.0.451 (TD-904): the receive step asks the stock-in permission of the receipt document
+  // v9.0.455 (TD-904): the receive step asks the stock-in permission of the receipt document
   const asReceiver = { id: receiver.id, username: receiver.name, role: receiver.role, permissions: ['warehouse.in'] };
 
   const id = await requisition(item.id, 4);

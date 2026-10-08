@@ -149,7 +149,7 @@ describe('procurement desk sections and buttons (TD-702)', () => {
 });
 
 /**
- * v9.0.451 (TD-904, P5-P01, product-owner decision t3 «الف»): goods enter stock only with the stock-in permission of the
+ * v9.0.455 (TD-904, P5-P01, product-owner decision t3 «الف»): goods enter stock only with the stock-in permission of the
  * receipt document, so the delivery buttons show only when the user holds it besides the procurement key.
  */
 describe('delivery buttons need the stock-in permission (TD-904)', () => {

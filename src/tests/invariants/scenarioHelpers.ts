@@ -1,4 +1,4 @@
-import { pool } from '../../db/drizzle.js';
+import { orm, pool } from '../../db/drizzle.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { DocumentService } from '../../services/document.service.js';
 import { checkBusinessInvariants, type InvariantScope } from './businessInvariants.js';
@@ -40,4 +40,15 @@ export async function receive(itemId: number, quantity: number, unitPrice: numbe
     items: [{ itemId, quantity, unitPrice, location: wh }],
   }, { allowBackdate });
   return docId;
+}
+
+/**
+ * A zero-cost stock entry of an item without a weighted average cost, written straight through the stock engine as rows
+ * recorded before v9.0.453 are: since then a receipt, purchase or production receipt document refuses such a line
+ * (TD-906 / TD-916, `INCOMING_LINE_WITHOUT_COST`), but legacy rows stay and the replay and the health check still read them.
+ */
+export async function legacyZeroCostEntry(itemId: number, quantity: number, wh: string, date: string, documentType = 'receipt'): Promise<void> {
+  await orm.transaction(async (tx) => DocumentService.applyStockMovement(tx, {
+    itemId, inOut: 'in', quantity, price: 0, date, documentType, documentRef: `LEGACY-ZERO-${itemId}`, user: 'inv', targetLoc: wh,
+  }));
 }

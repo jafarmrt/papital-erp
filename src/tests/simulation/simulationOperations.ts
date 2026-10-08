@@ -246,7 +246,10 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
   const productionReceipt = async (dayIndex: number): Promise<OpOutcome> => {
     const product = pick(items.filter(i => i.type === 'product'));
     const quantity = between(1, 10);
-    const unitPrice = chance(0.5) && allowZeroPrice ? 0 : await priceFor(product.id, false);
+    // v9.0.453 (TD-906): a zero-price entry is only the donated-goods case of an item that already has a WAC; one without
+    // a WAC is refused and would leave the product without any row
+    const hasWac = Number((await pool.query<{ wac: string }>(`SELECT COALESCE(weighted_average_cost, 0)::text AS wac FROM items WHERE id = $1`, [product.id])).rows[0]?.wac ?? 0) > 0;
+    const unitPrice = chance(0.5) && allowZeroPrice && hasWac ? 0 : await priceFor(product.id, false);
     const id = await createDoc({
       docType: 'production_receipt', inOut: 'in', dayIndex,
       lines: [{ itemId: product.id, quantity, unitPrice, location: pick(warehouses) }],

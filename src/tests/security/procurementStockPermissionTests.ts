@@ -14,7 +14,7 @@ export async function runProcurementStockPermissionTests(shouldRun: ShouldRun): 
   if (shouldRun('sec_procurement_receive_warehouse_in_td_904', 'security', 'td904', 'p5-p01', 'procurement', 'workflow', 'permissions', 'phase5')) {
     await runCase(results, {
       id: 'sec_procurement_receive_warehouse_in_td_904',
-      name: 'v9.0.451: receiving a requisition\'s goods into stock asks warehouse.in on every path: workflow transition, inbox task, procurement workflow action and order delivery (TD-904)',
+      name: 'v9.0.455: receiving a requisition\'s goods into stock asks warehouse.in on every path: workflow transition, inbox task, procurement workflow action and order delivery (TD-904)',
       details: 'workflow.view + workflow.execute (transition route and inbox task), procurement.approve (receive items) and procurement.manage / procurement.order (deliver) without warehouse.in get 403 and the stock, Kardex rows, order status, vouchers, requisition status and workflow step stay as they were; the same keys plus warehouse.in receive the goods',
     }, async (h, wrong) => {
       const f = await fixture(h);
@@ -73,7 +73,7 @@ export async function runProcurementStockPermissionTests(shouldRun: ShouldRun): 
   if (shouldRun('sec_workflow_document_backdate_td_928', 'security', 'td928', 'p5-s-04', 'workflow', 'documents', 'permissions', 'phase5')) {
     await runCase(results, {
       id: 'sec_workflow_document_backdate_td_928',
-      name: 'v9.0.452: the document approval workflow finalizes a backdated draft for a signer holding warehouse.backdate, read from the signer\'s role (the delegator\'s for a deputy), like PUT /documents/:id/finalize (TD-928)',
+      name: 'v9.0.456: the document approval workflow finalizes a backdated draft for a signer holding warehouse.backdate, read from the signer\'s role (the delegator\'s for a deputy), like PUT /documents/:id/finalize (TD-928)',
       details: 'draft invoice dated yesterday, item received 7 days ago and today: direct approval by a signer without warehouse.backdate is 422 STOCK_MOVEMENT_BACKDATED and nothing moves; with it the invoice is final with one Kardex out row; a deputy signs with the delegator\'s permission, not their own',
     }, async (h, wrong) => {
       const approver = ['workflow.view', 'workflow.approve', 'workflow.admin', 'documents.view', 'documents.finalize', 'warehouse.view'];

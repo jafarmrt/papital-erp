@@ -111,7 +111,7 @@ export async function checkRequisitionReceivedOnce(wh: string): Promise<string[]
   if (!receiveAgain?.includes(ALREADY_RECEIVED)) problems.push(`receiving a received requisition again was not refused (${receiveAgain ?? 'accepted'})`);
   await expectStock(seqItem, seq, 10, 'receive then convert');
 
-  // ۳) سفارش ۶ از ۱۰ و سپس دریافت کالا: v9.0.453 (TD-911) رد می‌شود و چیزی جابه‌جا نمی‌شود؛ تحویل همان سفارش ۶ عدد را وارد
+  // ۳) سفارش ۶ از ۱۰ و سپس دریافت کالا: v9.0.457 (TD-911) رد می‌شود و چیزی جابه‌جا نمی‌شود؛ تحویل همان سفارش ۶ عدد را وارد
   // انبار می‌کند، مقدار دریافتی همان ۶ است و درخواست باز می‌ماند
   const partialItem = await newItem();
   const partial = await requisition(partialItem, 10);

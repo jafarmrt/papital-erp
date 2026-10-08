@@ -4,9 +4,9 @@ import { orm } from '../db/drizzle.js';
 import { productionProjects, projectStages, items } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission, requirePermission } from '../middleware/authorize.js';
 import { READ_PERMISSIONS, RECORD_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { PROJECT_CREATE_PERMISSIONS, PROJECT_DELETE_PERMISSIONS, PROJECT_EDIT_PERMISSIONS } from '../lib/permissions/projectPermissions.js';
+import { PROJECT_CREATE_PERMISSIONS, PROJECT_DELETE_PERMISSIONS, PROJECT_EDIT_PERMISSIONS, PROJECT_STOCK_IN_PERMISSIONS } from '../lib/permissions/projectPermissions.js';
 import { parsePickListLimit } from '../lib/pagination.js';
 import { listProjectPicks } from '../services/projects/projectPickList.js';
 import { listProjectPage } from '../services/projects/projectList.js';
@@ -585,7 +585,8 @@ router.put('/projects/:id', authorizePermission(...PROJECT_EDIT_PERMISSIONS), va
 }));
 
 // POST /api/projects/:id/add-to-inventory - Add produced project products to warehouse stock
-router.post('/projects/:id/add-to-inventory', authorizePermission(...PROJECT_EDIT_PERMISSIONS), idempotency({ scope: 'project_delivery' }), validate(addProjectToInventorySchema), asyncHandler(async (req, res) => {
+// v9.0.454 (TD-923): the delivery is a final production receipt, so it also asks the receipt's warehouse.in
+router.post('/projects/:id/add-to-inventory', authorizePermission(...PROJECT_EDIT_PERMISSIONS), requirePermission(...PROJECT_STOCK_IN_PERMISSIONS), idempotency({ scope: 'project_delivery' }), validate(addProjectToInventorySchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { itemsToAdd, markCompleted, overDeliveryReason } = req.body;

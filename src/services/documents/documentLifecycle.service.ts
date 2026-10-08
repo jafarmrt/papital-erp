@@ -6,6 +6,7 @@ import { businessNowIsoDateTime, businessTodayIsoDate, resolveJalaliFiscalYear }
 import { resolveDocumentVat } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { netLineUnitPrice } from './purchaseLineCost.js';
+import { assertIncomingLinesHaveCost } from './incomingLineCost.js';
 import { assertReturnWithinSold, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import { enforceReturnInvoiceTerms } from './salesReturnPrice.js';
 import { resolveReturnVatFromInvoice } from './salesReturnVat.js';
@@ -179,20 +180,21 @@ export class DocumentLifecycleService {
           const returnUnitCosts = targetType === 'return'
             ? await resolveSalesReturnUnitCosts(tx, doc.returnOfDocumentId ?? null, docLines.map(l => l.itemId))
             : null;
+          // v7.0.69 (TD-227): قیمت سند ارزی با نرخ تسعیر سند به ریال تبدیل می‌شود (WAC ریالی است)
+          // v8.0.9 (TD-250): ورود با قیمت خالص پس از تخفیف ردیف (همان مبلغ سند حسابداری خرید)
+          const stockUnitPriceOf = (item: (typeof docLines)[number]) => returnUnitCosts?.get(item.itemId) ?? stockUnitPriceInIrr(
+            inOut === 'in' ? netLineUnitPrice(item.unitPrice ?? 0, Number(item.quantity), item.discount) : (item.unitPrice ?? 0), doc.currency, finalExchangeRate);
+          // v9.0.453 (TD-906 / TD-916، تصمیم ت۲ الف): کالای بی میانگین موزون بها با بهای صفر نهایی نمی‌شود (تحویل سفارش تدارکات هم)
+          if (inOut === 'in') await assertIncomingLinesHaveCost(tx, targetType, docLines.map(item => ({ itemId: item.itemId, unitCostIrr: stockUnitPriceOf(item) })));
           for (const item of docLines) {
             const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : '');
-            const qty = Number(item.quantity);
-            // v7.0.69 (TD-227): قیمت سند ارزی با نرخ تسعیر سند به ریال تبدیل می‌شود (WAC ریالی است)
-            // v8.0.9 (TD-250): ورود با قیمت خالص پس از تخفیف ردیف (همان مبلغ سند حسابداری خرید)
-            const linePrice = inOut === 'in' ? netLineUnitPrice(item.unitPrice ?? 0, qty, item.discount) : (item.unitPrice ?? 0);
-            const price = returnUnitCosts?.get(item.itemId) ?? stockUnitPriceInIrr(linePrice, doc.currency, finalExchangeRate);
 
             await DocumentStockEngine.applyStockMovement(tx, {
               itemId: item.itemId,
               documentId: id,
               inOut,
-              quantity: qty,
-              price,
+              quantity: Number(item.quantity),
+              price: stockUnitPriceOf(item),
               date: finalDate,
               documentType: targetType,
               documentRef: finalRefNumber,

@@ -7,7 +7,7 @@ import { getErrorMessage } from '../../utils/formatters.js';
 import { createTestItem, createTestWarehouse } from '../fixtures/factories.js';
 import { checkBusinessInvariants, type InvariantScope } from './businessInvariants.js';
 import { I13_VOIDED_INCOMING } from './kardexRebuildInvariant.js';
-import { invariantProblems, itemState, receive, watermarks } from './scenarioHelpers.js';
+import { invariantProblems, itemState, legacyZeroCostEntry, receive, watermarks } from './scenarioHelpers.js';
 
 /**
  * v8.0.4 — سناریوهای سخت‌گیرانه قاعده تاریخ گردش انبار (TD-257) و همخوانی بازسازی کاردکس با موتور زنده (TD-258).
@@ -256,7 +256,8 @@ export async function checkReplayStartsAtZeroWac(wh: string): Promise<string[]> 
   });
 
   // رسید تولید ۱۰ × ۰ (ارزش صفر) و رسید ۹ × ۱۴۵٬۸۷۹ ← WAC ۶۹٬۱۰۰٫۵۷۸۹ (بذر ۴ شبیه‌ساز)
-  await production(freeFirst.id, 10, '2025-10-01');
+  // v9.0.453 (TD-906): سند رسید تولید این ردیف را دیگر نمی‌پذیرد؛ ورود صفر کالای بی‌WAC ردیف پیشین کاردکس است
+  await legacyZeroCostEntry(freeFirst.id, 10, wh, '2025-10-01', 'production_receipt');
   await receive(freeFirst.id, 9, 145879, wh, '2025-10-02');
   // WAC اولیه ۵۰٬۰۰۰، رسید تولید ۴ × ۰ (به همان WAC) و رسید ۴ × ۷۰٬۰۰۰ ← WAC ۶۰٬۰۰۰
   await production(opening.id, 4, '2025-10-01');

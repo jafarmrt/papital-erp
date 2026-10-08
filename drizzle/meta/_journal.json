@@ -666,6 +666,13 @@
       "when": 1793890000000,
       "tag": "0094_foreign_key_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1793900000000,
+      "tag": "0095_reservation_release_allocation",
+      "breakpoints": true
     }
   ]
 }
