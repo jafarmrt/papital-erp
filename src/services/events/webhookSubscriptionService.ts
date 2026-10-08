@@ -4,6 +4,12 @@ import { eq, desc, count } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { BaseDomainEvent } from './domainEvents.js';
 import { assertSafeExternalUrl } from '../../lib/ssrfGuard.js';
+import { isEnteredSecret } from '../../lib/secrets/maskedSecret.js';
+import { resolveWebhookTimeoutMs, WEBHOOK_TIMEOUT_DEFAULT_MS } from '../../lib/events/webhookTimeout.js';
+import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { assertHeadersReenteredForNewTarget, resolveMaskedHeaders } from './integrationSecrets.js';
+import { encryptSecret } from '../../lib/secretBox.js';
+import { openWebhookSubscription, sealHeaders, UNREADABLE_WEBHOOK_SECRET_MESSAGE, type OpenedWebhookSubscription } from './webhookSecretStorage.js';
 import crypto from 'crypto';
 
 export interface CreateWebhookSubDTO {
@@ -15,7 +21,20 @@ export interface CreateWebhookSubDTO {
   isActive?: number;
   retryLimit?: number;
   timeoutMs?: number;
+  /** legacy body field, read only when `timeoutMs` is missing */
+  timeoutSeconds?: number;
 }
+
+/** v9.0.359 (TD-720): the entered timeout (`timeoutMs`, else legacy `timeoutSeconds`), refused outside 1-30 s */
+function webhookTimeoutOf(data: Partial<CreateWebhookSubDTO>): number | undefined {
+  const timeout = resolveWebhookTimeoutMs(data);
+  if (!timeout.ok) throw new ValidationError(timeout.message, undefined, 'WEBHOOK_TIMEOUT_INVALID');
+  return timeout.timeoutMs;
+}
+
+type WebhookSubscriptionRow = typeof webhookSubscriptions.$inferSelect;
+/** v9.0.361 (TD-898): a subscription with its signing key and header values decrypted, for use inside the server only */
+export type OpenWebhookSubscription = OpenedWebhookSubscription<WebhookSubscriptionRow>;
 
 export class WebhookSubscriptionService {
   /**
@@ -89,12 +108,13 @@ export class WebhookSubscriptionService {
   /**
    * List all registered webhook subscriptions.
    */
-  static async getSubscriptions() {
+  static async getSubscriptions(): Promise<OpenWebhookSubscription[]> {
     try {
-      return await orm
+      const rows = await orm
         .select()
         .from(webhookSubscriptions)
         .orderBy(desc(webhookSubscriptions.id));
+      return rows.map(row => openWebhookSubscription(row));
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Webhook Get Subscriptions Error] ${errMsg}`);
@@ -105,14 +125,14 @@ export class WebhookSubscriptionService {
   /**
    * Get single subscription by ID.
    */
-  static async getSubscriptionById(id: number) {
+  static async getSubscriptionById(id: number): Promise<OpenWebhookSubscription | null> {
     const records = await orm
       .select()
       .from(webhookSubscriptions)
       .where(eq(webhookSubscriptions.id, id))
       .limit(1);
 
-    return records[0] || null;
+    return records[0] ? openWebhookSubscription(records[0]) : null;
   }
 
   /**
@@ -123,7 +143,13 @@ export class WebhookSubscriptionService {
     // Validate target URL against SSRF (SEC-010)
     await assertSafeExternalUrl(targetUrl, { allowLocalEcho: true });
 
-    const secretKey = data.secretKey?.trim() || this.generateSecretKey();
+    const timeoutMs = webhookTimeoutOf(data);
+    const secretKey = isEnteredSecret(data.secretKey) ? data.secretKey.trim() : this.generateSecretKey();
+    // v9.0.360 (TD-710): a masked header value of a new webhook has no stored value to stand for
+    const customHeaders = resolveMaskedHeaders(data.customHeaders, {}, true);
+    // v9.0.361 (TD-898, decision t7 a): the key and every header value are stored encrypted; without ERP_SECRETS_KEY 503
+    const sealedKey = encryptSecret(secretKey);
+    const sealedHeaders = sealHeaders(customHeaders);
     const eventPatterns = data.eventPatterns && data.eventPatterns.length > 0 ? data.eventPatterns : ['*'];
 
     let validUserId: number | null = null;
@@ -143,12 +169,12 @@ export class WebhookSubscriptionService {
       .values({
         name: data.name.trim(),
         targetUrl: targetUrl,
-        secretKey: secretKey,
+        secretKey: sealedKey,
         eventPatterns: eventPatterns,
-        customHeaders: data.customHeaders || {},
+        customHeaders: sealedHeaders,
         isActive: data.isActive !== undefined ? data.isActive : 1,
         retryLimit: data.retryLimit || 3,
-        timeoutMs: data.timeoutMs || 5000,
+        timeoutMs: timeoutMs ?? WEBHOOK_TIMEOUT_DEFAULT_MS,
         totalDeliveries: 0,
         successfulDeliveries: 0,
         failedDeliveries: 0,
@@ -158,7 +184,7 @@ export class WebhookSubscriptionService {
       .returning();
 
     logger.info(`[Webhook Subscriptions] Created subscription #${inserted.id} "${inserted.name}" for URL: ${inserted.targetUrl}`);
-    return inserted;
+    return openWebhookSubscription(inserted);
   }
 
   /**
@@ -170,22 +196,28 @@ export class WebhookSubscriptionService {
       throw new Error(`اشتراک وب‌هوک با شناسه ${id} یافت نشد.`);
     }
 
+    const timeoutMs = webhookTimeoutOf(data);
     const updateFields: Partial<typeof webhookSubscriptions.$inferInsert> = {
       updatedAt: new Date().toISOString()
     };
 
     if (data.name !== undefined) updateFields.name = data.name.trim();
+    const sameTarget = data.targetUrl === undefined || data.targetUrl.trim() === current.targetUrl;
     if (data.targetUrl !== undefined) {
       const targetUrl = data.targetUrl.trim();
       await assertSafeExternalUrl(targetUrl, { allowLocalEcho: true });
       updateFields.targetUrl = targetUrl;
     }
-    if (data.secretKey !== undefined && data.secretKey.trim() !== '') updateFields.secretKey = data.secretKey.trim();
+    // v9.0.358 (TD-719): an empty or masked key («****…abcd», «********») keeps the stored key; the edit form used to send the
+    // masked key back and every save replaced the real signing key with the mask
+    if (isEnteredSecret(data.secretKey)) updateFields.secretKey = encryptSecret(data.secretKey.trim());
     if (data.eventPatterns !== undefined) updateFields.eventPatterns = data.eventPatterns;
-    if (data.customHeaders !== undefined) updateFields.customHeaders = data.customHeaders;
+    // v9.0.360 (TD-710): responses mask header values, so «********» keeps the stored value, only for the stored address
+    if (data.customHeaders !== undefined) updateFields.customHeaders = sealHeaders(resolveMaskedHeaders(data.customHeaders, current.customHeaders, sameTarget));
+    else assertHeadersReenteredForNewTarget(current.customHeaders, sameTarget);
     if (data.isActive !== undefined) updateFields.isActive = data.isActive;
     if (data.retryLimit !== undefined) updateFields.retryLimit = data.retryLimit;
-    if (data.timeoutMs !== undefined) updateFields.timeoutMs = data.timeoutMs;
+    if (timeoutMs !== undefined) updateFields.timeoutMs = timeoutMs;
 
     const [updated] = await orm
       .update(webhookSubscriptions)
@@ -194,7 +226,21 @@ export class WebhookSubscriptionService {
       .returning();
 
     logger.info(`[Webhook Subscriptions] Updated subscription #${id} "${updated.name}"`);
-    return updated;
+    return openWebhookSubscription(updated);
+  }
+
+  /**
+   * v9.0.360 (TD-710): a new server-made signing key; the route shows it once, every other answer masks it.
+   */
+  static async rotateSecret(id: number) {
+    const [updated] = await orm
+      .update(webhookSubscriptions)
+      .set({ secretKey: encryptSecret(this.generateSecretKey()), updatedAt: new Date().toISOString() })
+      .where(eq(webhookSubscriptions.id, id))
+      .returning();
+    if (!updated) throw new NotFoundError('اشتراک وب‌هوک یافت نشد.', undefined, 'WEBHOOK_NOT_FOUND');
+    logger.info(`[Webhook Subscriptions] Rotated the signing key of subscription #${id}`);
+    return openWebhookSubscription(updated);
   }
 
   /**
@@ -216,7 +262,7 @@ export class WebhookSubscriptionService {
       .where(eq(webhookSubscriptions.id, id))
       .returning();
 
-    return updated;
+    return openWebhookSubscription(updated);
   }
 
   /**
@@ -241,7 +287,7 @@ export class WebhookSubscriptionService {
 
       if (subs.length === 0) return;
 
-      for (const sub of subs) {
+      for (const sub of subs.map(row => openWebhookSubscription(row))) {
         if (!this.matchesPattern(event.eventType, sub.eventPatterns as string[])) {
           continue;
         }
@@ -262,7 +308,7 @@ export class WebhookSubscriptionService {
    * Delivers single event to subscriber with retry and signature calculation.
    */
   private static async deliverToSubscriber(
-    sub: typeof webhookSubscriptions.$inferSelect,
+    sub: OpenWebhookSubscription,
     event: BaseDomainEvent,
     attempt: number = 1
   ): Promise<void> {
@@ -280,6 +326,14 @@ export class WebhookSubscriptionService {
       payload: event.payload || {},
       metadata: event.metadata || {}
     };
+
+    // v9.0.361 (TD-898): a key or header that the current ERP_SECRETS_KEY cannot decrypt is never sent (nor an empty-key
+    // signature); the delivery is recorded as failed with the reason and not retried
+    if (sub.unreadableSecrets.length > 0) {
+      logger.error(`[Webhook Dispatcher] Subscription #${sub.id} skipped: ${sub.unreadableSecrets.join(', ')} cannot be decrypted with the current ERP_SECRETS_KEY`);
+      await this.recordDelivery(sub, event, { nowIso, statusCode: 0, status: 'failed', responseText: '', errorMessage: UNREADABLE_WEBHOOK_SECRET_MESSAGE, signature: '', attempt, durationMs: 0 });
+      return;
+    }
 
     const payloadString = JSON.stringify(webhookBody);
     const signature = this.calculateSignature(payloadString, sub.secretKey);
@@ -344,38 +398,9 @@ export class WebhookSubscriptionService {
     }
 
     const durationMs = Date.now() - startTime;
+    await this.recordDelivery(sub, event, { nowIso, statusCode, status, responseText, errorMessage, signature, attempt, durationMs });
 
-    // Log delivery
-    await orm.insert(webhookDeliveries).values({
-      subscriptionId: sub.id,
-      subscriptionName: sub.name,
-      eventId: event.eventId,
-      eventType: event.eventType,
-      targetUrl: sub.targetUrl,
-      statusCode: statusCode,
-      status: status,
-      responseBody: responseText,
-      errorMessage: errorMessage,
-      signature: signature,
-      attempt: attempt,
-      durationMs: durationMs,
-      createdAt: nowIso
-    });
-
-    // Update Subscription counters
     const isSuccess = status === 'success';
-    await orm
-      .update(webhookSubscriptions)
-      .set({
-        totalDeliveries: (sub.totalDeliveries || 0) + 1,
-        successfulDeliveries: isSuccess ? (sub.successfulDeliveries || 0) + 1 : (sub.successfulDeliveries || 0),
-        failedDeliveries: !isSuccess ? (sub.failedDeliveries || 0) + 1 : (sub.failedDeliveries || 0),
-        lastDeliveryAt: nowIso,
-        lastStatus: status,
-        lastError: isSuccess ? '' : errorMessage
-      })
-      .where(eq(webhookSubscriptions.id, sub.id));
-
     if (!isSuccess && attempt < (sub.retryLimit || 3)) {
       // Exponential retry: 2s, 4s, 8s
       const delay = Math.pow(2, attempt) * 1000;
@@ -383,6 +408,45 @@ export class WebhookSubscriptionService {
         this.deliverToSubscriber(sub, event, attempt + 1).catch(() => {});
       }, delay);
     }
+  }
+
+  /** Delivery log row and the subscription's counters */
+  private static async recordDelivery(
+    sub: OpenWebhookSubscription,
+    event: BaseDomainEvent,
+    d: {
+      nowIso: string; statusCode: number; status: 'success' | 'failed' | 'timeout';
+      responseText: string; errorMessage: string; signature: string; attempt: number; durationMs: number;
+    }
+  ): Promise<void> {
+    await orm.insert(webhookDeliveries).values({
+      subscriptionId: sub.id,
+      subscriptionName: sub.name,
+      eventId: event.eventId,
+      eventType: event.eventType,
+      targetUrl: sub.targetUrl,
+      statusCode: d.statusCode,
+      status: d.status,
+      responseBody: d.responseText,
+      errorMessage: d.errorMessage,
+      signature: d.signature,
+      attempt: d.attempt,
+      durationMs: d.durationMs,
+      createdAt: d.nowIso
+    });
+
+    const isSuccess = d.status === 'success';
+    await orm
+      .update(webhookSubscriptions)
+      .set({
+        totalDeliveries: (sub.totalDeliveries || 0) + 1,
+        successfulDeliveries: isSuccess ? (sub.successfulDeliveries || 0) + 1 : (sub.successfulDeliveries || 0),
+        failedDeliveries: !isSuccess ? (sub.failedDeliveries || 0) + 1 : (sub.failedDeliveries || 0),
+        lastDeliveryAt: d.nowIso,
+        lastStatus: d.status,
+        lastError: isSuccess ? '' : d.errorMessage
+      })
+      .where(eq(webhookSubscriptions.id, sub.id));
   }
 
   /**
@@ -441,11 +505,23 @@ export class WebhookSubscriptionService {
         method: 'POST',
         headers,
         body: payloadString,
-        signal: controller.signal
+        signal: controller.signal,
+        // v9.0.356 (TD-704): like a real delivery, a redirect is never followed, so the guard above cannot be bypassed by a 302
+        redirect: 'manual'
       });
 
-      const responseText = await response.text();
       const durationMs = Date.now() - startTime;
+      if (response.status >= 300 && response.status < 400) {
+        return {
+          success: false,
+          statusCode: response.status,
+          durationMs,
+          signature,
+          responseBody: '',
+          message: `نشانی مقصد با کد ${response.status} به نشانی دیگری ارجاع داد؛ ارجاع برای امنیت دنبال نمی‌شود و نشانی نهایی را مستقیم وارد کنید.`
+        };
+      }
+      const responseText = await response.text();
 
       return {
         success: response.ok,

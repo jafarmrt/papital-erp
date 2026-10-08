@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
-import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Copy, Check, Trash2, Edit3, Shield, Activity } from 'lucide-react';
-import { formatPersianDate } from '../../utils';
+import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Trash2, Edit3, Shield, Activity } from 'lucide-react';
+import { formatPersianDate, errorMessageOf } from '../../utils';
 import { fetchJson } from '../../api';
-import { copyToClipboard } from '../../utils/clipboard';
+import { isEnteredSecret } from '../../lib/secrets/maskedSecret';
+import { WebhookSecretRevealPanel, type RevealedWebhookSecret } from './WebhookSecretRevealPanel';
+import { WEBHOOK_TIMEOUT_DEFAULT_MS, WEBHOOK_TIMEOUT_MAX_MS, WEBHOOK_TIMEOUT_MIN_MS } from '../../lib/events/webhookTimeout';
 
 interface WebhookSubscription {
   id: number;
@@ -22,6 +24,12 @@ interface WebhookSubscription {
   lastStatus?: string;
   lastError?: string;
   createdAt: string;
+}
+
+interface WebhookPingRequest {
+  targetUrl?: string;
+  secretKey?: string;
+  subscriptionId?: number;
 }
 
 interface WebhookDeliveryLog {
@@ -68,7 +76,8 @@ export function WebhookManagementSubTab() {
   const [deliveries, setDeliveries] = useState<WebhookDeliveryLog[]>([]);
   const [stats, setStats] = useState<WebhookStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [copiedKeyId, setCopiedKeyId] = useState<number | null>(null);
+  // v9.0.360 (TD-710): the signing key is shown once, after create or «ساخت کلید تازه»; every list answer masks it
+  const [revealedSecret, setRevealedSecret] = useState<RevealedWebhookSecret | null>(null);
   const [selectedSubForDeliveries, setSelectedSubForDeliveries] = useState<number | null>(null);
 
   // Modal State
@@ -145,7 +154,8 @@ export function WebhookManagementSubTab() {
     setFormData({
       name: '',
       targetUrl: '',
-      secretKey: `whsec_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`,
+      // v9.0.359 (TD-720): the server makes the signing key (crypto.randomBytes); the browser never generates one
+      secretKey: '',
       eventPatterns: ['*'],
       customHeadersJson: '{\n  "X-Custom-Auth": "erp-token"\n}',
       isActive: 1,
@@ -161,7 +171,8 @@ export function WebhookManagementSubTab() {
     setFormData({
       name: sub.name,
       targetUrl: sub.targetUrl,
-      secretKey: sub.secretKey,
+      // v9.0.358 (TD-719): the stored key never enters the form; an empty field keeps it on save
+      secretKey: '',
       eventPatterns: sub.eventPatterns || ['*'],
       customHeadersJson: JSON.stringify(sub.customHeaders || {}, null, 2),
       isActive: sub.isActive,
@@ -192,7 +203,7 @@ export function WebhookManagementSubTab() {
     const payload = {
       name: formData.name.trim(),
       targetUrl: formData.targetUrl.trim(),
-      secretKey: formData.secretKey.trim(),
+      ...(formData.secretKey.trim() ? { secretKey: formData.secretKey.trim() } : {}),
       eventPatterns: formData.eventPatterns,
       customHeaders: parsedHeaders,
       isActive: formData.isActive,
@@ -204,13 +215,16 @@ export function WebhookManagementSubTab() {
       const url = editingSub ? `/events/webhooks/${editingSub.id}` : '/events/webhooks';
       const method = editingSub ? 'PUT' : 'POST';
 
-      const data = await fetchJson<{ success?: boolean; message?: string }>(url, {
+      const data = await fetchJson<{ success?: boolean; message?: string; data?: { name?: string; secretKey?: string } }>(url, {
         method,
         body: JSON.stringify(payload)
       });
 
       if (data?.success) {
         showToast(data.message || 'درگاه وب‌هوک با موفقیت ذخیره شد.', 'success');
+        if (!editingSub && isEnteredSecret(data.data?.secretKey)) {
+          setRevealedSecret({ name: data.data?.name || payload.name, secretKey: data.data.secretKey });
+        }
         setIsModalOpen(false);
         void fetchStats();
         void fetchSubscriptions();
@@ -218,7 +232,7 @@ export function WebhookManagementSubTab() {
         showToast(data?.message || 'خطا در ذخیره‌سازی وب‌هوک', 'error');
       }
     } catch (err) {
-      showToast('خطای شبکه در ذخیره‌سازی', 'error');
+      showToast(errorMessageOf(err) || 'خطای شبکه در ذخیره‌سازی', 'error');
     }
   };
 
@@ -253,34 +267,45 @@ export function WebhookManagementSubTab() {
     }
   };
 
-  const handlePingTest = async (targetUrl: string, secretKey: string, subId?: number) => {
+  /** v9.0.358 (TD-719): a saved webhook is pinged by its id, so the server signs with the stored key, never the masked one */
+  const handlePingTest = async (request: WebhookPingRequest, subId?: number) => {
     if (subId) setPingTestingId(subId);
     setPingResult(null);
     try {
-      const data = await fetchJson<{ success?: boolean; statusCode?: number; durationMs?: number; message?: string }>('/events/webhooks/ping', {
+      const data = await fetchJson<{ success?: boolean; statusCode?: number; durationMs?: number; message?: string; keySource?: string }>('/events/webhooks/ping', {
         method: 'POST',
-        body: JSON.stringify({ targetUrl, secretKey })
+        body: JSON.stringify(request)
       });
       setPingResult(data);
+      const keyNote = data?.keySource === 'temporary' ? ' (امضا با کلید موقت؛ کلید درگاه پس از ذخیره ساخته می‌شود)' : '';
       if (data?.success) {
-        showToast(`تست پینگ موفق (${data.statusCode} OK) - تاخیر: ${data.durationMs}ms`, 'success');
+        showToast(`تست پینگ موفق (${data.statusCode} OK) - تاخیر: ${data.durationMs}ms${keyNote}`, 'success');
       } else {
-        showToast(data?.message || 'خطا در تست پینگ وب‌هوک', 'error');
+        showToast(`${data?.message || 'خطا در تست پینگ وب‌هوک'}${keyNote}`, 'error');
       }
     } catch (err) {
-      showToast('خطای ارتباط در تست پینگ', 'error');
+      showToast(errorMessageOf(err) || 'خطای ارتباط در تست پینگ', 'error');
     } finally {
       if (subId) setPingTestingId(null);
     }
   };
 
-  const copySecretKey = (id: number, key: string) => {
-    void copyToClipboard(key).then(ok => {
-      if (!ok) { showToast('کپی در کلیپ‌بورد ممکن نشد', 'error'); return; }
-      setCopiedKeyId(id);
-      showToast('کلید امنیتی با موفقیت در کلیپ‌بورد کپی شد.', 'success');
-      setTimeout(() => setCopiedKeyId(null), 2500);
-    });
+  const handleRotateSecret = async (sub: WebhookSubscription) => {
+    if (!(await confirmAction({
+      title: 'ساخت کلید امضای تازه',
+      message: `کلید فعلی درگاه «${sub.name}» دیگر معتبر نیست و سامانه مقصد تا گرفتن کلید تازه امضای رویدادها را نمی‌پذیرد. ادامه می‌دهید؟`
+    }))) return;
+    try {
+      const data = await fetchJson<{ success?: boolean; message?: string; data?: { name?: string; secretKey?: string } }>(`/events/webhooks/${sub.id}/rotate-secret`, {
+        method: 'POST'
+      });
+      if (data?.success && isEnteredSecret(data.data?.secretKey)) {
+        setRevealedSecret({ name: data.data?.name || sub.name, secretKey: data.data.secretKey });
+        showToast(data.message || 'کلید امضای تازه ساخته شد.', 'success');
+      }
+    } catch (err) {
+      showToast(errorMessageOf(err) || 'ساخت کلید امضای تازه ممکن نشد.', 'error');
+    }
   };
 
   const toggleEventPattern = (pattern: string) => {
@@ -376,6 +401,8 @@ export function WebhookManagementSubTab() {
         </div>
       </div>
 
+      <WebhookSecretRevealPanel secret={revealedSecret} onClose={() => setRevealedSecret(null)} />
+
       {/* Control Action Bar */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         <div>
@@ -452,7 +479,7 @@ export function WebhookManagementSubTab() {
                   {/* Actions & Buttons */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
-                      onClick={() => handlePingTest(sub.targetUrl, sub.secretKey, sub.id)}
+                      onClick={() => handlePingTest({ subscriptionId: sub.id }, sub.id)}
                       disabled={isTestingPing}
                       className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
                     >
@@ -500,11 +527,11 @@ export function WebhookManagementSubTab() {
                       </span>
                     </div>
                     <button
-                      onClick={() => copySecretKey(sub.id, sub.secretKey)}
-                      className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded"
-                      title="کپی کلید امنیتی"
+                      onClick={() => void handleRotateSecret(sub)}
+                      className="p-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline rounded shrink-0"
+                      title="ساخت کلید امضای تازه"
                     >
-                      {copiedKeyId === sub.id ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      ساخت کلید تازه
                     </button>
                   </div>
 
@@ -649,23 +676,11 @@ export function WebhookManagementSubTab() {
                   <div className="relative">
                     <input
                       type="text"
-                      required
+                      placeholder={editingSub ? 'کلید ذخیره‌شده بی‌تغییر می‌ماند؛ برای تغییر، کلید تازه وارد کنید' : 'خالی بماند تا کارساز کلید امن بسازد'}
                       value={formData.secretKey}
                       onChange={e => setFormData({ ...formData, secretKey: e.target.value })}
                       className="w-full font-mono text-[11px] bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3.5 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500 dir-ltr text-left"
                     />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFormData({
-                          ...formData,
-                          secretKey: `whsec_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`
-                        })
-                      }
-                      className="absolute right-2 top-2 p-1 text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline"
-                    >
-                      تولید جدید
-                    </button>
                   </div>
                 </div>
               </div>
@@ -683,7 +698,11 @@ export function WebhookManagementSubTab() {
                   />
                   <button
                     type="button"
-                    onClick={() => handlePingTest(formData.targetUrl, formData.secretKey)}
+                    onClick={() => handlePingTest({
+                      targetUrl: formData.targetUrl.trim(),
+                      ...(formData.secretKey.trim() ? { secretKey: formData.secretKey.trim() } : {}),
+                      ...(editingSub ? { subscriptionId: editingSub.id } : {})
+                    })}
                     className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-medium"
                   >
                     تست اتصال
@@ -727,6 +746,11 @@ export function WebhookManagementSubTab() {
                   onChange={e => setFormData({ ...formData, customHeadersJson: e.target.value })}
                   className="w-full font-mono text-[11px] p-2.5 bg-slate-950 text-emerald-400 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 dir-ltr text-left"
                 />
+                {editingSub && (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    مقدار سرآیندهای ذخیره‌شده پوشیده است و «********» یعنی همان مقدار ذخیره‌شده بماند. اگر نشانی مقصد را تغییر می‌دهید، مقدار سرآیندها را دوباره وارد کنید.
+                  </p>
+                )}
               </div>
 
               {/* Advanced Settings Row */}
@@ -747,11 +771,11 @@ export function WebhookManagementSubTab() {
                   <label className="font-semibold text-slate-700 dark:text-slate-300">مهلت پاسخ (میلی‌ثانیه):</label>
                   <input
                     type="number"
-                    min="1000"
-                    max="30000"
+                    min={WEBHOOK_TIMEOUT_MIN_MS}
+                    max={WEBHOOK_TIMEOUT_MAX_MS}
                     step="500"
                     value={formData.timeoutMs}
-                    onChange={e => setFormData({ ...formData, timeoutMs: parseInt(e.target.value, 10) || 5000 })}
+                    onChange={e => setFormData({ ...formData, timeoutMs: parseInt(e.target.value, 10) || WEBHOOK_TIMEOUT_DEFAULT_MS })}
                     className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200"
                   />
                 </div>

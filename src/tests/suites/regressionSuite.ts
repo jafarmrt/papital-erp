@@ -10734,6 +10734,20 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runWooNamesakeCustomerTests(shouldRun));
   const { runWooConnectionTestTests } = await import('../regression/wooConnectionTestTests.js');
   results.push(...await runWooConnectionTestTests(shouldRun));
+  // Package 15 PR b (v9.0.356+): webhook secrets and SSRF
+  const { runWebhookSsrfEchoTests } = await import('../regression/webhookSsrfEchoTests.js');
+  results.push(...await runWebhookSsrfEchoTests(shouldRun));
+  const { runWebhookRuleSeedTests } = await import('../regression/webhookRuleSeedTests.js');
+  results.push(...await runWebhookRuleSeedTests(shouldRun));
+  const { runWebhookSecretEditTests } = await import('../regression/webhookSecretEditTests.js');
+  results.push(...await runWebhookSecretEditTests(shouldRun));
+  const { runWebhookKeyTimeoutTests } = await import('../regression/webhookKeyTimeoutTests.js');
+  results.push(...await runWebhookKeyTimeoutTests(shouldRun));
+  const { runWebhookSecretMaskTests } = await import('../regression/webhookSecretMaskTests.js');
+  results.push(...await runWebhookSecretMaskTests(shouldRun));
+  const { runIntegrationSecretsAtRestTests } = await import('../regression/integrationSecretsAtRestTests.js');
+  results.push(...await runIntegrationSecretsAtRestTests(shouldRun));
+
   // Package 10 PR B (v9.0.347+): procurement order link, duplicate submissions, consolidation, receiving
   const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');
   results.push(...await runProcurementOrderTests(shouldRun));

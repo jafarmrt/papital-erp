@@ -7,8 +7,10 @@
  * تغییر نمی‌دهد (TD-668) نتواند کلیدها را به سایت دیگری بفرستد.
  */
 
+import { MASKED_SECRET_VALUE } from '../secrets/maskedSecret';
+
 /** مقدار ماسک کلیدهای محرمانه در پاسخ GET /settings برای غیرمدیر (همان `MASKED_SETTING_VALUE` کارساز) */
-export const MASKED_SECRET_VALUE = '********';
+export { MASKED_SECRET_VALUE };
 
 export interface WcConnectionFields {
   url: string;

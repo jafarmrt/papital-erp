@@ -218,7 +218,8 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             کلید محرمانه امضای دیجیتال وب‌هوک (Webhook Secret Key)
           </label>
           <input
-            type="text"
+            type="password"
+            autoComplete="new-password"
             value={wcWebhookSecret}
             onChange={(e) => setWcWebhookSecret(e.target.value)}
             className="w-full border border-slate-300 rounded px-3 py-1.5 text-xs font-mono bg-slate-50 text-left outline-none focus:ring-1 focus:ring-blue-500"

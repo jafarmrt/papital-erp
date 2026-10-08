@@ -505,7 +505,9 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         const adminRes = await request(app).post('/api/settings').set('Cookie', adminSession.cookie).set('X-CSRF-Token', adminSession.csrfToken)
           .send({ settings: [{ key: 'wc_consumer_secret', value: 'cs_rotated_by_admin' }] });
         const [secretRotated] = await orm.select().from(appSettings).where(eq(appSettings.key, 'wc_consumer_secret'));
-        if (adminRes.status !== 200 || secretRotated?.value !== 'cs_rotated_by_admin') {
+        // v9.0.361 (TD-898): stored encrypted
+        const { decryptSecret } = await import('../../lib/secretBox.js');
+        if (adminRes.status !== 200 || decryptSecret(secretRotated?.value) !== 'cs_rotated_by_admin') {
           throw new Error(`ادمین باید بتواند کلید محرمانه را تغییر دهد (وضعیت ${adminRes.status}).`);
         }
         return 'مدیر تنظیمات کسب‌وکاری را ذخیره کرد، مقدار ماسک نادیده گرفته شد، تغییر کلید محرمانه توسط مدیر 403 گرفت، کلید ناشناخته رد شد و ادمین کلید محرمانه را تغییر داد.';

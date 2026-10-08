@@ -19,6 +19,24 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.361 — WooCommerce and Webhook Keys Encrypted at Rest
+- **Integration secrets at rest (TD-898):** the WooCommerce consumer key and secret, the WooCommerce webhook secret and every webhook subscription's signing key and custom header values are now stored with `encryptSecret` (`ERP_SECRETS_KEY`) and decrypted only inside the server; a value that cannot be decrypted is never sent, and legacy plain values are encrypted with `npm run secrets:encrypt -- --apply`.
+
+### v9.0.360 — Webhook Keys and Partner Tokens Masked in Every Answer
+- **Webhook secrets (TD-710):** the webhook toggle and edit answers returned the full signing key to a non-admin manager, and any events viewer saw the partner API token in custom headers and the token of webhook rules; the key, rule token and header values are now masked in every answer for every user, and the key is shown once, after create or rotation.
+
+### v9.0.359 — Server-Made Webhook Key and Entered Timeout
+- **Webhook key and timeout (TD-720):** the webhook form made the signing key in the browser with Math.random (about 16 base-36 characters), so the server's CSPRNG key never ran, and the create route read only timeoutSeconds, so every entered timeout became 10 seconds; the server now makes the key and stores the entered timeout of 1 to 30 seconds.
+
+### v9.0.358 — Webhook Edit Keeps the Signing Key
+- **Webhook edit and ping (TD-719):** the edit form took the masked signing key from the list and every save, even a rename, stored the mask in place of the real key, breaking every receiver's HMAC check; an empty or masked key now keeps the stored one and a saved webhook is pinged with its own stored key.
+
+### v9.0.357 — Server Start No Longer Rewrites Webhook Rules
+- **Webhook rules at start (TD-715):** every server start turned a webhook rule URL containing «example.com» into the local echo simulator and put the system's echo token into every webhook rule without one, which then sent it to the external address; saved rules are now left as they are and the system token goes only to the server's own echo simulator.
+
+### v9.0.356 — Webhook Connection Test Never Reaches an Internal Service
+- **Webhook SSRF guard (TD-704):** the webhook connection test followed redirects and showed the internal service's answer, and the local echo exception opened any loopback port in production too; the test no longer follows a redirect, and the echo simulator passes only in test and development, on the server's own port and exact path.
+
 ### v9.0.355 — Persian Procurement Wording and Field Errors
 - **Fix (TD-901, decision ت۵):** procurement UI says «مواد», «فهرست کالا», «سند حسابداری», «بسته» and «اقدام» (no «(Requisitions)»); requisition form and server Zod errors show under their field (`apiFieldErrors`), and server messages name actions in Persian (`requisitionActionLabel`) with Persian digits.
 
