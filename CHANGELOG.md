@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.452 — Material Allocation Deducts the Project Reservation
+- **Fix (TD-918, P5-M01):** allocating material to a project deducts the project's reservation like its remittance, and releasing the allocation restores exactly what was deducted (migration 0095).
+
 ### v9.0.451 — Material Allocation Passes the Sellable Gate
 - **Fix (TD-905, P5-M02):** allocating material to a project checks sellable stock like a remittance, so it no longer takes the stock another project or a sales proforma has reserved.
 

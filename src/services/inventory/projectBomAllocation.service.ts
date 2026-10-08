@@ -16,6 +16,7 @@ import { DomainEventType } from '../events/domainEvents.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { assertOutflowWithinSellable } from '../documents/documentSellableGate.js';
+import { releaseReservationsForAllocation, restoreReservationsForAllocation } from '../documents/projectReservationRelease.js';
 
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { isProjectOpenForAllocation, projectStatusLabel } from '../../lib/projects/projectStatus.js';
@@ -263,6 +264,17 @@ async function postAllocationVoucher(txEngine: DbExecutor, record: ProjectBomAll
   });
 }
 
+/**
+ * v9.0.452 (TD-918، یافته P5-M01): تخصیص، مانند حواله خروج همان پروژه (TD-233)، رزرو پروژه را به اندازه مقدار خود کم می‌کند و
+ * کسر با شماره تخصیص ثبت می‌شود تا آزادسازی همان را برگرداند (TD-237). پیش‌تر پس از تخصیص ۶ از رزرو ۱۰، رزرو هنوز ۱۰ بود و
+ * پروژه کالایی را که برده بود دوباره نگه می‌داشت: با رسیدن کالای تازه، فروش ۱ واحد با «رزرو سایر مصارف ۶» رد می‌شد.
+ */
+async function deductProjectReservation(txEngine: DbExecutor, project: ProjectRow, record: ProjectBomAllocationRecord, operator: AllocationOperator): Promise<void> {
+  await releaseReservationsForAllocation(
+    txEngine, project.id, record.id, [{ itemId: record.itemId, quantity: record.quantity }], operator.name, operator.id ?? undefined
+  );
+}
+
 /** فهرست تخصیص‌ها با ردیف کاردکس منبع (جدیدترین اول) */
 async function listAllocations(conditions: SQL[]): Promise<ProjectBomAllocationRecord[]> {
   const rawList = await orm
@@ -351,6 +363,7 @@ export class ProjectBomAllocationService {
           operator,
         });
         await postAllocationVoucher(txEngine, record, project, item, operator);
+        await deductProjectReservation(txEngine, project, record, operator);
         results.push(record);
       }
 
@@ -416,6 +429,7 @@ export class ProjectBomAllocationService {
           operator,
         });
         await postAllocationVoucher(txEngine, record, project, item, operator);
+        await deductProjectReservation(txEngine, project, record, operator);
         results.push(record);
       }
 
@@ -485,10 +499,14 @@ export class ProjectBomAllocationService {
 
     const executeRelease = async (txEngine: DbExecutor) => {
       // Pre-read allocation to get itemId for locking in hierarchy order: Items (Level 40) -> Production (Level 50)
-      const [preAlloc] = await txEngine.select({ itemId: projectBomAllocations.itemId }).from(projectBomAllocations).where(eq(projectBomAllocations.id, allocationId));
+      // v9.0.452 (TD-918): the project row before the allocation row, as the reservation restore locks it
+      const [preAlloc] = await txEngine
+        .select({ itemId: projectBomAllocations.itemId, projectId: projectBomAllocations.projectId })
+        .from(projectBomAllocations).where(eq(projectBomAllocations.id, allocationId));
       if (preAlloc?.itemId) {
         await withOrderedLocks(txEngine, [
           { table: items, id: preAlloc.itemId, name: 'items' },
+          { table: productionProjects, id: preAlloc.projectId, name: 'productionProjects' },
           { table: projectBomAllocations, id: allocationId, name: 'projectBomAllocations' }
         ], async () => true);
       }
@@ -546,6 +564,10 @@ export class ProjectBomAllocationService {
           notes: `${reason} (تخصیص شماره ${alloc.id})`,
         });
       }
+
+      // v9.0.452 (TD-918): the project's reservation this allocation deducted comes back to the project (rule of TD-237);
+      // an allocation before v9.0.452 deducted none and restores nothing
+      await restoreReservationsForAllocation(txEngine, alloc.id, operatorName, opts?.userId);
 
       // 3. Mark allocation as released
       const releasedAt = new Date().toISOString();
