@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { sql, eq, and, gt, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { items, transactions, users, appSettings, warehouses, itemWarehouseStocks } from '../db/schema.js';
+import { items, users, appSettings, warehouses, itemWarehouseStocks } from '../db/schema.js';
 import { resolveMovementDays } from '../lib/settings/settingValues.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { getMonthlyMovementTrends } from '../services/inventory/monthlyMovementTrend.js';
+import { dashboardMovementRows, recentDocumentCount } from '../services/inventory/dashboardMovementStats.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -31,7 +32,8 @@ router.get('/stats', authorizePermission('reports.view', 'warehouse.view'), asyn
     const [{ count: totalProducts }] = await orm.select({ count: sql<number>`count(*)` }).from(items).where(and(eq(items.type, 'product'), eq(items.isDeleted, 0)));
     const [{ count: totalMaterials }] = await orm.select({ count: sql<number>`count(*)` }).from(items).where(and(eq(items.type, 'raw_material'), eq(items.isDeleted, 0)));
     const [{ count: lowStock }] = await orm.select({ count: sql<number>`count(*)` }).from(items).where(and(eq(items.isDeleted, 0), sql`${items.currentStock} <= COALESCE(${items.reorderPoint}, 5)`));
-    const [{ count: recentTx }] = await orm.select({ count: sql<number>`count(*)` }).from(transactions).where(and(eq(transactions.isDeleted, 0), sql`${transactions.date}::timestamp >= (current_date - interval '7 days')`));
+    // v9.0.289 (TD-671): شمار سند، نه ردیف کاردکس؛ بی ردیف ابطال‌شده و معکوس آن؛ هفت روز تا امروزِ ساعت توافقی
+    const recentTx = await recentDocumentCount(7);
     // V9-2.2: شمارش فقط کاربران فعال (حذف‌شده‌های نرم مستثنی)
     const [{ count: userCount }] = await orm.select({ count: sql<number>`count(*)` }).from(users).where(eq(users.isDeleted, 0));
 
@@ -67,54 +69,8 @@ router.get('/dashboard-bi-stats', authorizePermission('reports.view', 'warehouse
       id: items.id, name: items.name, code: items.code, current_stock: items.currentStock, reorder_point: items.reorderPoint, unit: items.unit, type: items.type
     }).from(items).where(and(eq(items.isDeleted, 0), sql`${items.currentStock} <= ${items.reorderPoint}`, gt(items.reorderPoint, 0))).orderBy(items.currentStock);
 
-    const fastMovingResult = await orm.execute(sql`
-      SELECT i.id, i.name, i.code, i.unit, SUM(t.quantity) as total_qty, i.current_stock
-      FROM ${transactions} t
-      JOIN ${items} i ON t.item_id = i.id
-      WHERE t.type = 'out' AND t.is_deleted = 0 AND t.date::timestamp >= current_date - (${fastDays}::int * interval '1 day')
-      GROUP BY i.id, i.name, i.code, i.unit, i.current_stock
-      ORDER BY total_qty DESC
-      LIMIT 5
-    `);
-    const fastMoving = fastMovingResult.rows;
-
-    const slowMovingResult = await orm.execute(sql`
-      SELECT i.id, i.name, i.code, i.current_stock, i.unit, i.weighted_average_cost
-      FROM ${items} i
-      LEFT JOIN ${transactions} t_slow ON i.id = t_slow.item_id 
-        AND t_slow.type = 'out' 
-        AND t_slow.is_deleted = 0 
-        AND t_slow.date::timestamp >= current_date - (${slowDays}::int * interval '1 day')
-      JOIN (
-        SELECT DISTINCT item_id FROM ${transactions}
-        WHERE type = 'out' AND is_deleted = 0 AND date::timestamp >= current_date - (${deadDays}::int * interval '1 day')
-      ) t_dead ON i.id = t_dead.item_id
-      WHERE i.is_deleted = 0 AND i.current_stock > 0 
-        AND t_slow.id IS NULL
-      ORDER BY i.current_stock DESC
-      LIMIT 5
-    `);
-    const slowMoving = slowMovingResult.rows;
-
-    const deadStockResult = await orm.execute(sql`
-      SELECT i.id, i.name, i.code, i.current_stock, i.unit, i.weighted_average_cost
-      FROM ${items} i
-      LEFT JOIN ${transactions} t_dead ON i.id = t_dead.item_id 
-        AND t_dead.type = 'out' 
-        AND t_dead.is_deleted = 0 
-        AND t_dead.date::timestamp >= current_date - (${deadDays}::int * interval '1 day')
-      JOIN (
-        SELECT item_id FROM ${transactions}
-        WHERE type = 'in' AND is_deleted = 0
-        GROUP BY item_id
-        HAVING min(date::timestamp) < current_date - (${deadDays}::int * interval '1 day')
-      ) t_in ON i.id = t_in.item_id
-      WHERE i.is_deleted = 0 AND i.current_stock > 0 
-        AND t_dead.id IS NULL
-      ORDER BY i.current_stock DESC
-      LIMIT 5
-    `);
-    const deadStock = deadStockResult.rows;
+    // v9.0.289 (TD-671): خروج‌های واقعی دفتر کاردکس، بی معکوس ابطال و انتقال بین انبارها، با بازه ساعت توافقی
+    const { fastMoving, slowMoving, deadStock } = await dashboardMovementRows({ fastDays, slowDays, deadDays });
 
     const valResult = await orm.execute(sql`
       SELECT SUM(current_stock * COALESCE(weighted_average_cost, 0)) as total_value

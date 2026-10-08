@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.293 — v9.0.293 — Dashboard Banner Uses the Display Time Zone
+- **Dashboard banner clock (TD-683):** the banner's date, clock and greeting follow the display time zone setting, so a device set to another zone no longer shows yesterday's date around midnight in Tehran.
+
+### v9.0.292 — v9.0.292 — Dashboard Calendar Weekdays for Far Months
+- **Dashboard calendar (TD-681):** the weekday of a month's first day comes from the calendar conversion, so months more than about 13 months away no longer start on Saturday.
+
+### v9.0.291 — v9.0.291 — Global Search Finds the Exact Name and Arabic Letters
+- **Global search (TD-675):** results come exact match first, then names that start with the text, then the rest; Arabic «ي» / «ك» and Persian digits match their Persian and Latin forms in both the search text and the stored names.
+
+### v9.0.290 — v9.0.290 — Dashboard Reads Sales Data Only With Its Permission
+- **Dashboard sales data (TD-674):** the dashboard reads sales files and recent activities only for holders of `crm.view`, and no longer loads parties, personnel, users or sales statistics it never shows.
+
+### v9.0.289 — v9.0.289 — Warehouse Dashboard Counts the Kardex Ledger
+- **Dashboard movement figures (TD-671):** recent documents count documents, not Kardex rows; a voided document and its reversal and warehouse transfers no longer count as consumption; the day windows follow the business time zone.
+
 ### v9.0.288 — Report Digits, Currency Names and Today
 - **Accounting Report Digits (P3):** the journal book and the ratios show Persian digits, currencies are named, and the party statement and account explorer take today from the business time zone (TD-580).
 
