@@ -15,6 +15,7 @@ import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../errors/customErrors.js';
+import { assertOutflowWithinSellable } from '../documents/documentSellableGate.js';
 
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { isProjectOpenForAllocation, projectStatusLabel } from '../../lib/projects/projectStatus.js';
@@ -151,6 +152,25 @@ async function lockProjectForAllocation(txEngine: DbExecutor, projectId: number,
   return { project, defaultWh: activeWHs[0]?.code || 'main' };
 }
 
+/**
+ * v9.0.451 (TD-905، یافته P5-M02): تخصیص مواد از همان درگاه «قابل فروش» حواله خروج می‌گذرد (TD-775): مقدار هر (کالا، انبار)
+ * با min(موجودی انبار، موجودی کل − رزرو دیگران) سنجیده می‌شود و رزرو خود همین پروژه آزاد است. پیش‌تر تخصیص فقط موجودی
+ * انبار را می‌دید: با ۱۰ واحد رزروشده پروژه دیگر، حواله ۶ واحدی ۴۰۰ می‌گرفت ولی تخصیص ۶ واحد پذیرفته می‌شد و رزرو پروژه
+ * دیگر یا پیش‌فاکتور فروش دیگر خروج نمی‌یافت. کالاها پیش از این قفل شده‌اند (`lockProjectForAllocation`).
+ */
+async function assertAllocationWithinSellable(
+  txEngine: DbExecutor,
+  projectId: number,
+  defaultWh: string,
+  lines: ReadonlyArray<{ itemId: number; quantity: number; location?: string }>
+): Promise<void> {
+  await assertOutflowWithinSellable(
+    txEngine,
+    lines.map(line => ({ itemId: line.itemId, quantity: line.quantity, location: line.location || defaultWh })),
+    { projectId }
+  );
+}
+
 async function lockActiveItem(txEngine: DbExecutor, itemId: number): Promise<ItemRow> {
   const [item] = await txEngine
     .select()
@@ -277,6 +297,7 @@ export class ProjectBomAllocationService {
 
     return inTransaction(params.externalTx, async (txEngine) => {
       const { project, defaultWh } = await lockProjectForAllocation(txEngine, params.projectId, params.allocations.map(a => a.itemId));
+      await assertAllocationWithinSellable(txEngine, project.id, defaultWh, params.allocations);
       const results: ProjectBomAllocationRecord[] = [];
 
       for (const req of params.allocations) {
@@ -360,6 +381,7 @@ export class ProjectBomAllocationService {
 
     return inTransaction(params.externalTx, async (txEngine) => {
       const { project, defaultWh } = await lockProjectForAllocation(txEngine, params.projectId, params.allocations.map(a => a.itemId));
+      await assertAllocationWithinSellable(txEngine, project.id, defaultWh, params.allocations);
       const results: ProjectBomAllocationRecord[] = [];
 
       for (const req of params.allocations) {

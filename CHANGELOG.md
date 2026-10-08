@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.451 — Material Allocation Passes the Sellable Gate
+- **Fix (TD-905, P5-M02):** allocating material to a project checks sellable stock like a remittance, so it no longer takes the stock another project or a sales proforma has reserved.
+
 ### v9.0.450 — Terminal Output Is English
 - **Fix (TD-625, B01-45):** scripts, the session hook, test names, test runner labels and failure messages print English; server error logs show the status, code and route, and the user's Persian message stays in the response and the JSON log file.
 
