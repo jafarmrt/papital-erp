@@ -15,13 +15,13 @@ import { customerSaveBody } from '../lib/customers/customerVersion';
 import { customerAccountCardUrl } from '../lib/customers/customerAccountCard';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
-import { formatPersianPrice, formatCurrencyLabel, formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate } from '../utils';
-import { useAppCurrency } from '../hooks/useAppCurrency';
+import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate } from '../utils';
+import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useHasPermission } from '../contexts/AuthContext';
 
 export default function CustomersPage({ user }: { user: User }) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
   const location = useLocation();
   const queryClient = useQueryClient();
   const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
@@ -678,14 +678,14 @@ export default function CustomersPage({ user }: { user: User }) {
                     <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl">
                       <span className="text-[11px] font-bold text-blue-800">مجموع بدهکار (پرداخت‌ها / فاکتور فروش)</span>
                       <p className="text-sm font-bold font-mono text-blue-900 mt-1">
-                        {formatPersianPrice(ledgerData.totalDebit || 0, appCurrency)}
+                        {rial.amount(ledgerData.totalDebit || 0)}
                       </p>
                     </div>
 
                     <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
                       <span className="text-[11px] font-bold text-amber-800">مجموع بستانکار (رسیدهای خرید)</span>
                       <p className="text-sm font-bold font-mono text-amber-900 mt-1">
-                        {formatPersianPrice(ledgerData.totalCredit || 0, appCurrency)}
+                        {rial.amount(ledgerData.totalCredit || 0)}
                       </p>
                     </div>
 
@@ -698,7 +698,7 @@ export default function CustomersPage({ user }: { user: User }) {
                         {(ledgerData.finalBalance || 0) < 0 ? 'مانده بستانکار (طلب شخص از ما)' : (ledgerData.finalBalance || 0) > 0 ? 'مانده بدهکار (بدهی شخص به ما)' : 'تراز حساب (تسویه کامل)'}
                       </span>
                       <p className="text-sm font-bold font-mono mt-1">
-                        {formatPersianPrice(Math.abs(ledgerData.finalBalance || 0), appCurrency)}
+                        {rial.amount(Math.abs(ledgerData.finalBalance || 0))}
                       </p>
                     </div>
                   </div>
@@ -724,10 +724,10 @@ export default function CustomersPage({ user }: { user: User }) {
                             <td className="p-2.5 text-center text-slate-700">{formatPersianDate(row.date)}</td>
                             <td className="p-2.5 text-center font-bold text-blue-700">#{row.voucherNumber}</td>
                             <td className="p-2.5 text-right font-sans text-slate-800">{row.itemDescription || row.description}</td>
-                            <td className="p-2.5 text-left text-blue-700 font-bold">{row.debit > 0 ? formatPersianPrice(row.debit) : '—'}</td>
-                            <td className="p-2.5 text-left text-amber-700 font-bold">{row.credit > 0 ? formatPersianPrice(row.credit) : '—'}</td>
+                            <td className="p-2.5 text-left text-blue-700 font-bold">{row.debit > 0 ? rial.number(row.debit) : '—'}</td>
+                            <td className="p-2.5 text-left text-amber-700 font-bold">{row.credit > 0 ? rial.number(row.credit) : '—'}</td>
                             <td className={`p-2.5 text-left font-bold ${row.runningBalance < 0 ? 'text-rose-600' : row.runningBalance > 0 ? 'text-emerald-600' : 'text-slate-500'}`}>
-                              {formatPersianPrice(Math.abs(row.runningBalance))} {row.runningBalance < 0 ? '(بس)' : row.runningBalance > 0 ? '(بد)' : ''}
+                              {rial.number(Math.abs(row.runningBalance))} {row.runningBalance < 0 ? '(بس)' : row.runningBalance > 0 ? '(بد)' : ''}
                             </td>
                           </tr>
                         ))}

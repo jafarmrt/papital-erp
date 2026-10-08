@@ -94,6 +94,8 @@ export const pieceworkTaskRateHistory = pgTable('piecework_task_rate_history', {
   changedByUsername: text('changed_by_username').default(''),
   effectiveDate: text('effective_date').notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  // v9.0.284 (TD-809، مهاجرت 0076): ردیف تغییر نرخ اختصاصی این پرسنل؛ تاریخچه نرخ پایه عنوان کار NULL است
+  personnelId: integer('personnel_id'),
 }, (table) => ({
   idx_ptrh_task: index('idx_ptrh_task').on(table.taskId),
   idx_ptrh_created: index('idx_ptrh_created').on(table.createdAt),

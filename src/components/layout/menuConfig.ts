@@ -63,7 +63,7 @@ export function getMenuGroups(
       title: 'اصلی',
       groupIcon: Compass,
       items: [
-        { name: 'داشبورد', path: '/', icon: LayoutDashboard, visible: open('/') },
+        { name: 'پیشخوان', path: '/', icon: LayoutDashboard, visible: open('/') },
         { name: 'کارتابل تاییدات و گردش کار', path: '/approval-inbox', icon: CheckSquare, visible: open('/approval-inbox') },
       ]
     },
@@ -137,7 +137,7 @@ export function getMenuGroups(
       title: 'مالی و حسابداری دوبل',
       groupIcon: Landmark,
       items: [
-        { name: 'داشبورد مالی', path: '/accounting/dashboard', icon: LayoutDashboard, visible: open('/accounting/dashboard') },
+        { name: 'پیشخوان مالی', path: '/accounting/dashboard', icon: LayoutDashboard, visible: open('/accounting/dashboard') },
         { name: 'مرور حساب‌ها (درخت و کاردکس)', path: '/accounting/explorer', icon: Layers, visible: open('/accounting/explorer') },
         { name: 'اسناد دوبل حسابداری', path: '/accounting/vouchers', icon: FileText, visible: open('/accounting/vouchers') },
         { name: 'خزانه‌داری و حساب‌های بانکی', path: '/accounting/treasury', icon: Building2, visible: open('/accounting/treasury') },
@@ -149,10 +149,10 @@ export function getMenuGroups(
     },
     {
       id: 'system',
-      title: 'مدیریت و سیستم',
+      title: 'مدیریت و سامانه',
       groupIcon: Settings,
       items: [
-        { name: 'رویدادها و اتوماسیون سازمانی', path: '/domain-events', icon: Zap, visible: open('/domain-events') },
+        { name: 'رویدادها و خودکارسازی سازمانی', path: '/domain-events', icon: Zap, visible: open('/domain-events') },
         { name: 'طراح فرایند و گردش کار', path: '/workflow-designer', icon: Workflow, visible: open('/workflow-designer') },
         { name: 'مدیریت کاربران و نقش‌ها', path: '/users', icon: Users, visible: open('/users') },
         { name: 'تنظیمات سامانه', path: '/settings', icon: Settings, visible: open('/settings') },

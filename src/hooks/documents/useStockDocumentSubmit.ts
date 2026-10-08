@@ -96,7 +96,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
         body: JSON.stringify({
           docType,
           status: 'final',
-          // v9.0.285 (TD-783): برگشت از فروش و شماره پیشنهادی دست‌نخورده «auto»؛ سرور شماره آزاد سری را می‌دهد
+          // v9.0.327 (TD-783): برگشت از فروش و شماره پیشنهادی دست‌نخورده «auto»؛ سرور شماره آزاد سری را می‌دهد
           refNumber: refNumberToSend(docType, refNumber, suggestedRef),
           date: formattedDate,
           user: currentUser.full_name || currentUser.username,

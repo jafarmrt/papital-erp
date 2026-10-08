@@ -19,7 +19,7 @@ export const DOCUMENT_REF_NOT_FOUND = 'DOCUMENT_REF_NOT_FOUND';
 const MAX_CANDIDATES = 20;
 
 /**
- * v9.0.284 (TD-782، یافته B08-13): سند قطعی فعال یک نوع با شماره‌اش، در سال مالی داده‌شده یا همه سال‌ها. شماره سند هر سال
+ * v9.0.326 (TD-782، یافته B08-13): سند قطعی فعال یک نوع با شماره‌اش، در سال مالی داده‌شده یا همه سال‌ها. شماره سند هر سال
  * از نو شروع می‌شود (`uq_documents_type_fy_ref_active` روی نوع، سال و شماره)، پس یک شماره در چند سال یک سند دارد: یکی
  * باشد شناسه‌اش برمی‌گردد، نباشد ۴۰۴ `DOCUMENT_REF_NOT_FOUND`، و چند تا باشد ۴۰۹ `DOCUMENT_REF_AMBIGUOUS` با فهرست سال‌ها تا
  * فرم سال را بپرسد. پیش‌تر همه اسناد آن نوع با ردیف‌ها و تسویه‌ها بار می‌شد و نخستین سند با آن شماره (همیشه سال جاری)
@@ -57,7 +57,7 @@ export async function findFinalDocumentIdByRef(input: { ref: string; type: strin
   return rows[0].id;
 }
 
-/** v9.0.285 (TD-783): نوع، شماره و وضعیت ذخیره‌شده سند، برای گزارش ممیزی و پاسخ ثبت و ویرایش (نه مقدار فرستاده‌شده) */
+/** v9.0.327 (TD-783): نوع، شماره و وضعیت ذخیره‌شده سند، برای گزارش ممیزی و پاسخ ثبت و ویرایش (نه مقدار فرستاده‌شده) */
 export async function storedDocumentHeader(db: Pick<typeof orm, 'select'>, docId: number): Promise<{ type: string; refNumber: string; status: string } | null> {
   const [row] = await db.select({ type: documents.type, refNumber: documents.refNumber, status: documents.status })
     .from(documents).where(eq(documents.id, docId));

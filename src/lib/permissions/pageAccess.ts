@@ -36,7 +36,8 @@ export const SETTINGS_TAB_ACCESS = {
   inventory_integrity: { gate: anyOf('inventory.reconcile'), api: ['GET /api/inventory/negative-stock-policy', 'PUT /api/inventory/negative-stock-policy'] },
   inventory_control: { gate: anyOf('settings.manage'), api: ['GET /api/settings', 'POST /api/settings'] },
   projects: { gate: anyOf('settings.manage'), api: ['GET /api/settings', 'POST /api/settings', 'GET /api/piecework/tasks'] },
-  task_titles: { gate: anyOf('personnel.manage'), api: ['GET /api/piecework/tasks', 'POST /api/piecework/tasks'] },
+  // v9.0.320 (TD-805): زبانه عناوین و دسته‌های کاری همان کلید نوشتن آن‌ها را می‌پرسد
+  task_titles: { gate: anyOf('piecework.manage_tasks'), api: ['GET /api/piecework/tasks', 'POST /api/piecework/tasks'] },
   woocommerce: { gate: anyOf('woocommerce.view'), api: ['GET /api/woocommerce/synced-orders', 'GET /api/woocommerce/order-logs'] },
   health: { gate: 'system_admin', api: ['GET /api/system/health'] },
   system_config: { gate: 'system_admin', api: [] },
@@ -69,7 +70,8 @@ export const PAGE_ACCESS = {
   '/inventory-status': { gate: anyOf('reports.view', 'warehouse.view'), api: ['GET /api/stats', 'GET /api/dashboard-bi-stats'] },
   '/products': { gate: anyOf('products.view'), api: ['GET /api/items'] },
   '/gallery': { gate: anyOf('products.view'), api: ['GET /api/items'] },
-  '/receipts': { gate: anyOf('warehouse.in', 'documents.view', 'documents.create'), api: ['GET /api/documents/next-ref', 'GET /api/customers/options', 'GET /api/items/options', 'GET /api/projects/options'] },
+  // v9.0.277 (TD-668 باقی‌مانده، B16-04 با بسته ۸ TD-791): صفحه را کسی باز می‌کند که یکی از نوع‌های آن را ثبت می‌کند
+  '/receipts': { gate: anyOf('warehouse.in', 'warehouse.out', 'documents.finalize'), api: ['GET /api/documents/next-ref', 'GET /api/customers/options', 'GET /api/items/options', 'GET /api/projects/options', 'POST /api/documents'] },
   '/pending-materials': { gate: anyOf('pending_materials.view', 'products.view'), api: ['GET /api/pending-materials'] },
   '/transfers': { gate: anyOf('products.view'), api: ['GET /api/transfers', 'GET /api/items/options'] },
   '/reorder-alerts': { gate: anyOf('products.view', 'warehouse.view'), api: ['GET /api/items/reorder-alerts'] },

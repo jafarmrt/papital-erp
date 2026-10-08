@@ -5,8 +5,8 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { X, FileText, Landmark, AlertCircle } from 'lucide-react';
 import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
-import { formatPersianNumber, formatPersianPrice, extractDateString, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber, extractDateString, formatCurrencyLabel, formatPersianPrice } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 
 interface PieceworkPayrollModalProps {
@@ -64,8 +64,9 @@ export function PieceworkPayrollModal({
   setAdvanceDeduction,
   isSaving = false
 }: PieceworkPayrollModalProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  // ورودی مبلغ همیشه به ریال است (مبلغ ذخیره‌شده)
+  const inputCurLbl = formatCurrencyLabel('IRR');
 
   const [advanceBalance, setAdvanceBalance] = useState<{ outstandingAdvance: number; totalAdvances: number; totalDeducted: number } | null>(null);
   // v8.0.29 (TD-282، تصمیم مالک محصول): کسر مساعده بیش از مانده مساعده پذیرفته نمی‌شود (سرور هم رد می‌کند)
@@ -163,7 +164,7 @@ export function PieceworkPayrollModal({
               <div className="flex items-center justify-between text-xs font-bold">
                 <span className="text-slate-700">مجموع کارکرد:</span>
                 <span className="font-mono text-blue-700">
-                  {formatPersianPrice(payrollPreviewLogs.reduce((sum, l) => sum + (l.totalAmount || 0), 0), appCurrency)}
+                  {rial.amount(payrollPreviewLogs.reduce((sum, l) => sum + (l.totalAmount || 0), 0))}
                 </span>
               </div>
               {fixedRemainingHint && (
@@ -180,7 +181,7 @@ export function PieceworkPayrollModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">{`پاداش / اضافه کار (${curLbl})`}</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">{`پاداش / اضافه کار (${inputCurLbl})`}</label>
               <input
                 type="number"
                 min="0"
@@ -212,7 +213,7 @@ export function PieceworkPayrollModal({
                   onClick={() => setAdvanceDeduction?.(advanceBalance.outstandingAdvance)}
                   className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
                 >
-                  اعمال کل مانده مساعده ({formatPersianPrice(advanceBalance.outstandingAdvance)})
+                  اعمال کل مانده مساعده ({formatPersianPrice(advanceBalance.outstandingAdvance, 'IRR')})
                 </button>
               )}
             </div>
@@ -230,7 +231,7 @@ export function PieceworkPayrollModal({
                   <Landmark size={13} className="text-indigo-600" />
                   مانده مساعده تسویه‌نشده پرسنل در سیستم:
                 </span>
-                <span className="font-mono font-black">{formatPersianPrice(advanceBalance.outstandingAdvance)}</span>
+                <span className="font-mono font-black">{rial.amount(advanceBalance.outstandingAdvance)}</span>
               </div>
             )}
             {advanceExceedsBalance && (

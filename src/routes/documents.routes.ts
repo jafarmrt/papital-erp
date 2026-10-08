@@ -205,7 +205,7 @@ export const paramsRefSchema = z.object({
   params: z.object({
     ref: z.string().min(1, 'شماره سند الزامی است')
   }),
-  // v9.0.284 (TD-782): نوع سند الزامی و سال مالی اختیاری (خالی = همه سال‌ها)
+  // v9.0.326 (TD-782): نوع سند الزامی و سال مالی اختیاری (خالی = همه سال‌ها)
   query: z.object({
     type: z.enum(DOCUMENT_LIST_TYPES, { error: 'نوع سند نامعتبر است' }),
     fiscalYear: z.coerce.number().int('سال مالی باید عدد صحیح باشد').min(1300, 'سال مالی نامعتبر است').max(1600, 'سال مالی نامعتبر است').optional(),
@@ -226,7 +226,7 @@ export const nextRefQuerySchema = z.object({
   }).passthrough()
 }).passthrough();
 
-/** v9.0.277 (TD-792): `types=invoice,proforma` فهرست را به چند نوع محدود می‌کند */
+/** v9.0.301 (TD-792): `types=invoice,proforma` فهرست را به چند نوع محدود می‌کند */
 function documentListTypes(raw: unknown): string[] | undefined {
   if (typeof raw !== 'string') return undefined;
   const types = raw.split(',').map(t => t.trim()).filter(Boolean);
@@ -278,9 +278,9 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   const requestedType = String(req.body.docType);
   // v9.0.238 (TD-770): جهت گردش از نوع سند؛ `inOut` ناسازگار پیش از سنجش مجوز ۴۲۲ می‌گیرد
   assertRecordableDocument(requestedType, req.body.inOut);
-  // v9.0.283 (TD-780، تصمیم ت۷ الف): رسید تولید فقط از «ورود به انبار» پروژه
+  // v9.0.325 (TD-780، تصمیم ت۷ الف): رسید تولید فقط از «ورود به انبار» پروژه
   assertNotProjectDelivery(requestedType);
-  // v9.0.285 (TD-783، تصمیم ت۹ الف): شماره فاکتور فروش و برگشت فقط از سری سرور
+  // v9.0.327 (TD-783، تصمیم ت۹ الف): شماره فاکتور فروش و برگشت فقط از سری سرور
   assertManualRefAllowed(requestedType, req.body.refNumber);
   const recordStatus = createdDocumentStatus(requestedType, req.body.status);
   await assertMayRecordDocument(req.user, permissionToCreateDocument(req.body),
@@ -313,7 +313,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   // (پیش‌تر بررسی بی قفل پیش از تراکنش و علامت‌گذاری پس از commit؛ پیش‌فاکتورهای هم‌زمان همه ثبت می‌شدند)
   const { docId: newDocId, projectReservation, stored } = await orm.transaction(async (tx) => {
     const lead = isProforma && targetLeadId ? await lockLeadForNewProforma(tx, targetLeadId) : null;
-    // V10-4.3 / v9.0.281 (TD-776): پیوند رسمی سند به پرونده فروش همراه درج سند در سرویس (نه نوشتن جدا از route)
+    // V10-4.3 / v9.0.323 (TD-776): پیوند رسمی سند به پرونده فروش همراه درج سند در سرویس (نه نوشتن جدا از route)
     const created = await DocumentService.createDocumentWithDetails({ ...req.body, crmLeadId: targetLeadId, user: sessionUserLabel(req.user), externalTx: tx }, { userId: req.user?.id, allowBackdate });
     if (lead) await markLeadProforma(tx, lead, created.docId, req.user?.full_name || 'سیستم');
     // v9.0.39 (TD-446، ت۴): فقط سند فروش پیش‌نویس یا پیش‌فاکتور، در همین تراکنش، وارد گردش کار تأیید می‌شود و خطای شروع
@@ -327,7 +327,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
         tx,
       });
     }
-    // v9.0.285 (TD-783): گزارش ممیزی و پاسخ نوع، شماره و وضعیتی را دارند که ذخیره شد (نه آنچه فرستاده شد)
+    // v9.0.327 (TD-783): گزارش ممیزی و پاسخ نوع، شماره و وضعیتی را دارند که ذخیره شد (نه آنچه فرستاده شد)
     return { ...created, stored: await storedDocumentHeader(tx, created.docId) };
   });
   const title = docTypeTitles[stored?.type ?? req.body.docType] || 'سند انبار';
@@ -404,7 +404,7 @@ router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.doc
   const type = String(req.query.type);
   const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documentRecord);
   assertDocumentTypeReadable(readable, type);
-  // v9.0.284 (TD-782): یک کوئری روی شاخص (نوع، سال، شماره) و فقط سند قطعی فعال؛ چند سال با یک شماره ۴۰۹ با فهرست سال‌ها.
+  // v9.0.326 (TD-782): یک کوئری روی شاخص (نوع، سال، شماره) و فقط سند قطعی فعال؛ چند سال با یک شماره ۴۰۹ با فهرست سال‌ها.
   // پیش‌تر همه اسناد نوع بار می‌شد و سند سال جاری همیشه برنده بود
   const fiscalYear = req.query.fiscalYear === undefined ? null : Number(req.query.fiscalYear);
   const docId = await findFinalDocumentIdByRef({ ref: req.params.ref, type, fiscalYear, typeTitle: docTypeTitles[type] ?? 'سند' });
@@ -487,10 +487,10 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
 
 router.put('/documents/:id', authorizePermission('documents.edit'), validate(documentUpdateSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
-  // v9.0.281 (TD-776): پیوند پرونده فروش (`crmLeadId`، null = قطع) درون تراکنش ویرایش و زیر قفل پرونده؛ پیش‌تر پس از commit
+  // v9.0.323 (TD-776): پیوند پرونده فروش (`crmLeadId`، null = قطع) درون تراکنش ویرایش و زیر قفل پرونده؛ پیش‌تر پس از commit
   // ویرایش، بی قفل و بی قاعده «یک پیش‌فاکتور برای هر پرونده» نوشته می‌شد
   await DocumentService.updateDocument(docId, { ...req.body, user: sessionUserLabel(req.user) });
-  // v9.0.285 (TD-783): گزارش ممیزی شماره و وضعیت ذخیره‌شده پس از ویرایش را می‌نویسد
+  // v9.0.327 (TD-783): گزارش ممیزی شماره و وضعیت ذخیره‌شده پس از ویرایش را می‌نویسد
   const stored = await storedDocumentHeader(orm, docId);
 
   await logActivity({

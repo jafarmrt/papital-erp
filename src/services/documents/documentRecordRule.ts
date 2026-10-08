@@ -52,7 +52,7 @@ export function assertRecordableDocument(docType: string, inOut?: string | null,
 }
 
 /**
- * v9.0.285 (TD-783، یافته B08-14، تصمیم ت۹ «الف» بسته ۸): شماره فاکتور فروش و برگشت از فروش فقط از سری سرور است؛ شماره
+ * v9.0.327 (TD-783، یافته B08-14، تصمیم ت۹ «الف» بسته ۸): شماره فاکتور فروش و برگشت از فروش فقط از سری سرور است؛ شماره
  * دستی برای این دو نوع در ثبت و ویرایش ۴۲۲ `DOCUMENT_REF_SERVER_SERIES` است (`refNumber` باید خالی یا «auto» باشد).
  */
 export function assertManualRefAllowed(docType: string, requested: unknown): void {
@@ -65,7 +65,7 @@ export function assertManualRefAllowed(docType: string, requested: unknown): voi
 }
 
 /**
- * v9.0.283 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): رسید تولید فقط از «ورود به انبار» پروژه ثبت می‌شود
+ * v9.0.325 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): رسید تولید فقط از «ورود به انبار» پروژه ثبت می‌شود
  * (`ProjectService.addProjectToInventory`، TD-285)، جایی که پروژه، سقف مقدار برنامه با دلیل (TD-327) و بهای تحویل سنجیده
  * می‌شود. `POST /documents` و نهایی‌سازی رسید تولید پیش‌نویس آن را ۴۲۲ می‌دهند؛ پیش‌تر از این مسیر رسید تولید بی پروژه،
  * فراتر از برنامه و روی پروژه لغوشده ثبت می‌شد و کالای در جریان ساخت بی پروژه بستانکار می‌شد.

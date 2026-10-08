@@ -1,6 +1,6 @@
 import { FolderKanban } from 'lucide-react';
-import { formatPersianNumber, formatPersianPrice } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 interface ProjectCostSummaryItem {
   projectId: number | null;
@@ -19,7 +19,7 @@ export function PieceworkProjectCostsTab({
   projectCostsSummary,
   totalLoggedAmount
 }: PieceworkProjectCostsTabProps) {
-  const appCurrency = useAppCurrency();
+  const rial = useRialDisplay();
   return (
     <div className="space-y-4">
       {/* Overview Banner */}
@@ -33,7 +33,7 @@ export function PieceworkProjectCostsTab({
 
         <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100 text-indigo-900 font-bold text-xs">
           <span>کل هزینه کارکرد:</span>
-          <span className="font-mono">{formatPersianPrice(totalLoggedAmount, appCurrency)}</span>
+          <span className="font-mono">{rial.amount(totalLoggedAmount)}</span>
         </div>
       </div>
 
@@ -72,7 +72,7 @@ export function PieceworkProjectCostsTab({
               <div className="pt-2 border-t border-slate-100 space-y-1.5 text-xs font-bold">
                 <div className="flex justify-between text-slate-600">
                   <span>مجموع هزینه دستمزد:</span>
-                  <span className="font-mono text-indigo-700 font-black">{formatPersianPrice(item.totalCost, appCurrency)}</span>
+                  <span className="font-mono text-indigo-700 font-black">{rial.amount(item.totalCost)}</span>
                 </div>
 
                 <div className="flex justify-between text-slate-500 text-[11px]">

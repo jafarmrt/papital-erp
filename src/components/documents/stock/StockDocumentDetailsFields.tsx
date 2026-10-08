@@ -61,7 +61,7 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
 
         <div>
           <label className="block text-xs font-bold mb-1.5 text-slate-700">شماره سند / رفرنس</label>
-          {/* v9.0.285 (TD-783، تصمیم ت۹ الف): شماره برگشت از فروش فقط از سری سرور است */}
+          {/* v9.0.327 (TD-783، تصمیم ت۹ الف): شماره برگشت از فروش فقط از سری سرور است */}
           <input 
             required 
             type="text" 

@@ -1,7 +1,8 @@
-import { eq, and, or, ilike } from 'drizzle-orm';
+import { eq, and, or, asc, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { items, customers, documents, productionProjects } from '../../db/schema.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
+import { containsLikePattern, startsWithLikePattern } from '../../lib/sqlLike.js';
+import { normalizeSearchText, SEARCH_FOLD_FROM, SEARCH_FOLD_TO } from '../../lib/search/searchText.js';
 import { logger } from '../../middleware/logger.js';
 
 /**
@@ -9,7 +10,26 @@ import { logger } from '../../middleware/logger.js';
  * v7.0.53 (audit P2-10): هر بخش فقط وقتی جستجو می‌شود که کاربر مجوز مشاهده همان بخش را داشته باشد
  * (بررسی مجوز در روت انجام می‌شود و این‌جا فقط پرچم آن می‌رسد)؛ بخش بدون مجوز خالی است، نه خطا.
  * خطای هر بخش فقط لاگ می‌شود و آن بخش خالی برمی‌گردد. نویسه‌های % و _ ورودی escape می‌شوند.
+ * v9.0.291 (TD-675، B16-11): متن ستون و متن جست‌وجو هر دو با `normalizeSearchText` یکسان می‌شوند (ي/ك/ى عربی و ارقام فارسی
+ * و عربی)، و نتیجه به ترتیب «برابر، سپس آغاز با، سپس شامل» و بعد کوتاه‌ترین نام می‌آید. پیش‌تر بی ترتیب بود، پس با پنج نام
+ * «علی …» خودِ «علی» در پنج نتیجه نمی‌آمد و «كيان» عربی «کیان» را نمی‌یافت.
  */
+
+/** ستون یکسان‌شده برای مقایسه، همان `normalizeSearchText` در SQL */
+function folded(column: AnyColumn): SQL {
+  return sql`translate(lower(coalesce(${column}, '')), ${SEARCH_FOLD_FROM}, ${SEARCH_FOLD_TO})`;
+}
+
+function matchesAny(columns: AnyColumn[], pattern: string): SQL {
+  return or(...columns.map(column => sql`${folded(column)} LIKE ${pattern}`)) as SQL;
+}
+
+/** ۰ برابر، ۱ آغاز با، ۲ شامل؛ روی ستون‌های اصلی هر بخش */
+function matchRank(columns: AnyColumn[], q: string): SQL {
+  const starts = startsWithLikePattern(q);
+  return sql`CASE WHEN ${or(...columns.map(column => sql`${folded(column)} = ${q}`))} THEN 0
+    WHEN ${matchesAny(columns, starts)} THEN 1 ELSE 2 END`;
+}
 
 export interface GlobalSearchScope {
   items: boolean;
@@ -63,7 +83,8 @@ export interface GlobalSearchResult {
 export class GlobalSearchService {
   /** `q` is the trimmed, non-empty search text. */
   static async search(q: string, scope: GlobalSearchScope): Promise<GlobalSearchResult> {
-    const searchTerm = containsLikePattern(q);
+    const query = normalizeSearchText(q);
+    const searchTerm = containsLikePattern(query);
 
     // 1. Products & Raw Materials
     let matchingItems: GlobalSearchItem[] = [];
@@ -83,15 +104,10 @@ export class GlobalSearchService {
         .where(
           and(
             eq(items.isDeleted, 0),
-            or(
-              ilike(items.name, searchTerm),
-              ilike(items.code, searchTerm),
-              ilike(items.category, searchTerm),
-              ilike(items.material, searchTerm),
-              ilike(items.color, searchTerm)
-            )
+            matchesAny([items.name, items.code, items.category, items.material, items.color], searchTerm)
           )
         )
+        .orderBy(matchRank([items.name, items.code], query), sql`length(${items.name})`, asc(items.id))
         .limit(10);
       } catch (e) {
         logger.error({ message: 'Error fetching search items', error: e });
@@ -113,14 +129,10 @@ export class GlobalSearchService {
         .where(
           and(
             eq(customers.isDeleted, 0),
-            or(
-              ilike(customers.name, searchTerm),
-              ilike(customers.city, searchTerm),
-              ilike(customers.province, searchTerm),
-              ilike(customers.phone, searchTerm)
-            )
+            matchesAny([customers.name, customers.city, customers.province, customers.phone], searchTerm)
           )
         )
+        .orderBy(matchRank([customers.name], query), sql`length(${customers.name})`, asc(customers.id))
         .limit(5);
       } catch (e) {
         logger.error({ message: 'Error fetching search customers', error: e });
@@ -142,13 +154,10 @@ export class GlobalSearchService {
         .where(
           and(
             eq(documents.isDeleted, 0),
-            or(
-              ilike(documents.refNumber, searchTerm),
-              ilike(documents.buyerName, searchTerm),
-              ilike(documents.notes, searchTerm)
-            )
+            matchesAny([documents.refNumber, documents.buyerName, documents.notes], searchTerm)
           )
         )
+        .orderBy(matchRank([documents.refNumber, documents.buyerName], query), sql`${documents.date} DESC`, asc(documents.id))
         .limit(5);
       } catch (e) {
         logger.error({ message: 'Error fetching search documents', error: e });
@@ -170,13 +179,10 @@ export class GlobalSearchService {
         .where(
           and(
             eq(productionProjects.isDeleted, 0),
-            or(
-              ilike(productionProjects.title, searchTerm),
-              ilike(productionProjects.projectCode, searchTerm),
-              ilike(productionProjects.customerName, searchTerm)
-            )
+            matchesAny([productionProjects.title, productionProjects.projectCode, productionProjects.customerName], searchTerm)
           )
         )
+        .orderBy(matchRank([productionProjects.projectCode, productionProjects.title], query), sql`length(${productionProjects.title})`, asc(productionProjects.id))
         .limit(5);
       } catch (e) {
         logger.error({ message: 'Error fetching search projects', error: e });

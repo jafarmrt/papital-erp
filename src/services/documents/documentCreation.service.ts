@@ -75,7 +75,7 @@ export class DocumentCreationService {
     const leadTarget = documentLeadLinkOf(body.crmLeadId);
 
     await orm.transaction(async (tx) => {
-      // v9.0.281 (TD-776): پیوند پرونده فروش درون همین تراکنش؛ پرونده‌ها پیش از ردیف سند قفل و سنجیده می‌شوند (۴۲۲ پیش از
+      // v9.0.323 (TD-776): پیوند پرونده فروش درون همین تراکنش؛ پرونده‌ها پیش از ردیف سند قفل و سنجیده می‌شوند (۴۲۲ پیش از
       // هر نوشتن). پیش‌فاکتور بودن از نوع سند و وضعیت پس از این ویرایش است.
       let leadLock: LockedDocumentLeads | null = null;
       let leadDocIsProforma = false;
@@ -123,7 +123,7 @@ export class DocumentCreationService {
       // سال مالی دیگری برود شماره بعدی همان سال را می‌گیرد (مگر شماره تازه‌ای داده شده باشد). پیش‌تر شماره و سال
       // شماره‌گذاری سال قبل می‌ماند.
       const newDocDate = date ? requireDocumentTimestamp(date, 'سند') : null;
-      // v9.0.285 (TD-783، تصمیم ت۹ الف): شماره سند فروش (فاکتور، برگشت) فقط از سری سرور است و در ویرایش عوض نمی‌شود؛ شماره
+      // v9.0.327 (TD-783، تصمیم ت۹ الف): شماره سند فروش (فاکتور، برگشت) فقط از سری سرور است و در ویرایش عوض نمی‌شود؛ شماره
       // دستی تازه سند انبار اگر در همان نوع و سال گرفته شده باشد ۴۰۹ با پیام فارسی (پیش‌تر خطای کلی «مقدار تکراری»)
       const requestedRef = isAutoRefNumber(refNumber) ? null : String(refNumber).trim();
       const refChanged = requestedRef !== null && requestedRef !== String(existingDoc.refNumber);
@@ -405,7 +405,7 @@ export class DocumentCreationService {
         attachments: [],
         projectId: finalProjectId ?? undefined,
         returnOfDocumentId,
-        // v9.0.281 (TD-776): پیوند پرونده فروش همراه درج سند (route پرونده را پیش از سند قفل و سنجیده است)
+        // v9.0.323 (TD-776): پیوند پرونده فروش همراه درج سند (route پرونده را پیش از سند قفل و سنجیده است)
         crmLeadId: documentLeadLinkOf(body.crmLeadId) ?? undefined,
         isDeleted: 0
       }).returning({ id: documents.id });
@@ -434,7 +434,7 @@ export class DocumentCreationService {
         // TD-164: حذف کوئری‌های تکراری N+1 انبار در حلقه انبارگردانی
         const resolveWh = await createWarehouseResolver(tx);
 
-        // v9.0.282 (TD-777): هر ردیف شمارش دارد و هر (کالا، انبار) یک ردیف؛ پیش از هر گردش انبار
+        // v9.0.324 (TD-777): هر ردیف شمارش دارد و هر (کالا، انبار) یک ردیف؛ پیش از هر گردش انبار
         assertStockCountLines(docLines.map(line => {
           const target = auditItemMap.get(Number(line.itemId));
           return {

@@ -102,7 +102,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
               {isModuleLoadError
                 ? 'نسخه جدیدی از سامانه منتشر شده است. لطفاً جهت بارگذاری آخرین فایل‌ها روی دکمه بارگذاری مجدد کلیک کنید.'
-                : (this.props.description || 'در پردازش یا نمایش اطلاعات این صفحه مشکلی رخ داده است. می‌توانید با دکمه تلاش مجدد یا بازگشت به داشبورد به کار خود ادامه دهید.')}
+                : (this.props.description || 'در پردازش یا نمایش اطلاعات این صفحه مشکلی رخ داده است. می‌توانید با دکمه تلاش مجدد یا بازگشت به پیشخوان به کار خود ادامه دهید.')}
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
@@ -130,7 +130,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs transition-colors flex items-center gap-2 cursor-pointer"
               >
                 <Home size={14} />
-                <span>بازگشت به داشبورد</span>
+                <span>بازگشت به پیشخوان</span>
               </button>
             </div>
 

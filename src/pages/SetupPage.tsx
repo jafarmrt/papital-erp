@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 import { compressTo300KB } from '../utils/imageCompression';
 import { MIN_PASSWORD_LENGTH, passwordLengthError } from '../lib/auth/passwordPolicy';
 import { FULL_NAME_MAX_LENGTH } from '../lib/users/profileFields';
+import { RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../lib/rialDisplay';
 
 interface SetupPageProps {
   onLogin: (user: User, token: string) => void;
@@ -111,11 +112,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
       });
 
       if (res.success) {
-        toast.success('سیستم با موفقیت راه‌اندازی شد. خوش آمدید!');
+        toast.success('سامانه با موفقیت راه‌اندازی شد. خوش آمدید!');
         onLogin(res.user, res.token);
       }
     } catch (err: any) {
-      setError(err.message || 'خطا در راه‌اندازی اولیه سیستم');
+      setError(err.message || 'خطا در راه‌اندازی اولیه سامانه');
     } finally {
       setIsSaving(false);
     }
@@ -186,7 +187,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
               <div className="border-b pb-3 mb-4">
                 <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                   <UserIcon size={20} className="text-blue-600" />
-                  تعیین مشخصات مدیر ارشد سیستم
+                  تعیین مشخصات مدیر ارشد سامانه
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">اطلاعات ورود مدیر برای دسترسی کامل به تمامی امکانات مدیریت، انبار، تولید و مالی</p>
               </div>
@@ -207,7 +208,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   />
                 </div>
-                <p className="text-xs text-slate-500 mt-1">برای حفاظت از راه‌اندازی اولیه، رمزی را که در سرور تعیین شده است وارد کنید.</p>
+                <p className="text-xs text-slate-500 mt-1">برای حفاظت از راه‌اندازی اولیه، رمزی را که در کارساز تعیین شده است وارد کنید.</p>
               </div>
 
               <div>
@@ -240,7 +241,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   />
                 </div>
-                <p className="text-xs text-slate-500 mt-1">نام کاربری ورود به سیستم (حداقل ۳ حرف انگلیسی)</p>
+                <p className="text-xs text-slate-500 mt-1">نام کاربری ورود به سامانه (حداقل ۳ حرف انگلیسی)</p>
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
@@ -380,7 +381,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">واحد پول اصلی فاکتورها</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">واحد نمایش مبالغ ریالی</label>
                   <div className="relative">
                     <DollarSign className="absolute right-3 top-3 text-slate-400" size={18} />
                     <select
@@ -388,11 +389,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                       onChange={e => setCurrency(e.target.value)}
                       className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     >
-                      <option value="IRR">ریال (IRR)</option>
-                      <option value="TOMAN">تومان</option>
-                      <option value="USD">دلار ($)</option>
-                      <option value="EUR">یورو (€)</option>
-                      <option value="AED">درهم (AED)</option>
+                      {RIAL_DISPLAY_UNITS.map(unit => <option key={unit} value={unit}>{RIAL_DISPLAY_UNIT_LABELS[unit]}</option>)}
                     </select>
                   </div>
                 </div>
@@ -441,7 +438,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                   className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-8 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
                 >
                   <CheckCircle2 size={18} />
-                  <span>{isSaving ? 'در حال ایجاد سیستم...' : 'تکمیل و ورود به سامانه'}</span>
+                  <span>{isSaving ? 'در حال ایجاد سامانه...' : 'تکمیل و ورود به سامانه'}</span>
                 </button>
               </div>
             </form>

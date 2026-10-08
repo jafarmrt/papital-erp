@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { X, FileSpreadsheet, Upload, Download, CheckCircle2, AlertTriangle, Loader2, Check } from 'lucide-react';
 import { PieceworkTask } from '../../types';
-import { formatPersianNumber, formatPersianPrice, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import {
   downloadPieceworkTemplate,
   exportPieceworkTasksToExcel,
@@ -25,8 +26,9 @@ export function PieceworkExcelModal({
   tasksList,
   onSuccess
 }: PieceworkExcelModalProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
+  const { canManageTasks } = usePieceworkPermissions();
 
   const [step, setStep] = useState<'upload' | 'preview' | 'result'>('upload');
   const [parsedRows, setParsedRows] = useState<ParsedPieceworkRow[]>([]);
@@ -39,6 +41,7 @@ export function PieceworkExcelModal({
     createdCount: number;
     updatedCount: number;
     message: string;
+    errors: Array<{ row: number; title: string; message: string }>;
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -125,6 +128,7 @@ export function PieceworkExcelModal({
         message: string;
         createdCount: number;
         updatedCount: number;
+        errors?: Array<{ row: number; title: string; message: string }>;
       }>('/piecework/tasks/import-excel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -134,7 +138,8 @@ export function PieceworkExcelModal({
       setImportResult({
         createdCount: res.createdCount,
         updatedCount: res.updatedCount,
-        message: res.message
+        message: res.message,
+        errors: Array.isArray(res.errors) ? res.errors : []
       });
       setStep('result');
       onSuccess();
@@ -242,43 +247,49 @@ export function PieceworkExcelModal({
 
               </div>
 
-              {/* Upload Drop Zone */}
-              <div
-                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50/80 hover:bg-blue-50/30 transition-all rounded-3xl p-8 flex flex-col items-center justify-center text-center cursor-pointer group space-y-3"
-              >
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept=".xlsx,.xls,.csv"
-                  className="hidden"
-                />
+              {/* Upload Drop Zone — v9.0.320 (TD-805): فقط با «مدیریت عناوین کاری و نرخ‌های پایه» */}
+              {canManageTasks ? (
+                <div
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50/80 hover:bg-blue-50/30 transition-all rounded-3xl p-8 flex flex-col items-center justify-center text-center cursor-pointer group space-y-3"
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".xlsx,.xls,.csv"
+                    className="hidden"
+                  />
                 
-                <div className="p-4 bg-white rounded-2xl shadow-sm border border-slate-200 group-hover:scale-105 group-hover:border-blue-400 transition-all text-blue-600">
-                  {isProcessing ? (
-                    <Loader2 size={32} className="animate-spin text-blue-600" />
-                  ) : (
-                    <Upload size={32} />
-                  )}
-                </div>
+                  <div className="p-4 bg-white rounded-2xl shadow-sm border border-slate-200 group-hover:scale-105 group-hover:border-blue-400 transition-all text-blue-600">
+                    {isProcessing ? (
+                      <Loader2 size={32} className="animate-spin text-blue-600" />
+                    ) : (
+                      <Upload size={32} />
+                    )}
+                  </div>
 
-                <div>
-                  <h4 className="text-sm font-black text-slate-800">
-                    برای بارگذاری، فایل اکسل را اینجا بکشید یا کلیک کنید
-                  </h4>
-                  <p className="text-xs text-slate-500 font-medium mt-1">
-                    فرمت‌های مجاز: XLSX, XLS, CSV
-                  </p>
-                </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-800">
+                      برای بارگذاری، فایل اکسل را اینجا بکشید یا کلیک کنید
+                    </h4>
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      فرمت‌های مجاز: XLSX, XLS, CSV
+                    </p>
+                  </div>
 
-                <div className="inline-flex items-center gap-2 text-[11px] font-bold text-slate-400 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
-                  <span>ستون‌های شناسایی‌شده:</span>
-                  <span className="text-slate-600">کد کار، عنوان کار، دسته‌بندی، نرخ پایه، واحد سنجش، توضیحات</span>
+                  <div className="inline-flex items-center gap-2 text-[11px] font-bold text-slate-400 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
+                    <span>ستون‌های شناسایی‌شده:</span>
+                    <span className="text-slate-600">کد کار، عنوان کار، دسته‌بندی، نرخ پایه، واحد سنجش، توضیحات</span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs font-bold text-amber-800">
+                  بارگذاری اکسل عناوین مجوز «مدیریت عناوین کاری و نرخ‌های پایه» را می‌خواهد؛ الگو و خروجی اکسل در دسترس است.
+                </div>
+              )}
 
             </div>
           )}
@@ -412,7 +423,7 @@ export function PieceworkExcelModal({
                         </td>
                         <td className="p-2.5 text-center text-slate-600">{r.unit}</td>
                         <td className="p-2.5 text-left font-mono text-blue-700">
-                          {formatPersianPrice(r.defaultRate)}
+                          {rial.number(r.defaultRate)}
                         </td>
                         <td className="p-2.5 text-slate-500 text-[11px] truncate max-w-xs">{r.description || '—'}</td>
                       </tr>
@@ -454,6 +465,17 @@ export function PieceworkExcelModal({
                   </div>
                 </div>
               </div>
+
+              {/* v9.0.279 (TD-813): ردیف‌هایی که سرور ثبت نکرد، با دلیل */}
+              {importResult && importResult.errors.length > 0 && (
+                <ul className="w-full max-w-lg text-right text-xs bg-rose-50 border border-rose-200 rounded-2xl px-4 py-3 space-y-1">
+                  {importResult.errors.map(e => (
+                    <li key={e.row} className="text-rose-800 font-bold">
+                      {`ردیف ${formatPersianNumber(e.row)} (${e.title}): ${e.message}`}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 

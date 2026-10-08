@@ -24,7 +24,7 @@ export function AccountSearchSelect({
   value,
   onChange,
   onAdvance,
-  placeholder = 'انتخاب یا جستجوی کد/عنوان حساب...',
+  placeholder = 'انتخاب یا جست‌وجوی کد/عنوان حساب...',
   className = '',
   autoFocus = false,
   inputRef: externalInputRef,

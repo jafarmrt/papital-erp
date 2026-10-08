@@ -145,7 +145,7 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
 
       // ۳) درخواست خرید (فرایند را ثبت می‌سازد) ← حذف
       const reqItem = await createTestItem({ type: 'raw_material', code: `WF447R-${h.tag}` } as never);
-      const reqRes = await h.post('/api/procurement/requisitions', { title: `درخواست آزمون ۴۴۷ ${h.tag}`, items: [{ itemId: reqItem.id, itemName: reqItem.name, quantity: 2, unit: 'عدد' }] });
+      const reqRes = await h.post('/api/procurement/requisitions', { title: `درخواست آزمون ۴۴۷ ${h.tag}`, items: [{ itemId: reqItem.id, itemName: reqItem.name, requestedQty: 2, unit: 'عدد' }] });
       const reqId = Number(reqRes.body?.id ?? reqRes.body?.data?.id);
       if (!(reqId > 0)) wrong.push(`ثبت درخواست خرید ${reqRes.status} داد: ${JSON.stringify(reqRes.body).slice(0, 160)}`);
       else {

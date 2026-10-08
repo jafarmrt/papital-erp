@@ -157,7 +157,7 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
       // 4) editing a draft and correcting an approved voucher follow the same rule
       const draft = await admin.post('/api/accounting/vouchers', { ...base, status: 'draft', items: pair(acc['1201'], acc['5001'], 400_000) });
       if (draft.status !== 201) problems.push(`a valid draft answered ${draft.status}`);
-      else refused('editing a draft onto 14', await admin.put(`/api/accounting/vouchers/${draft.body.id}`, { ...base, status: 'draft', items: pair(acc['14'], acc['5001'], 400_000) }));
+      else refused('editing a draft onto 14', await admin.put(`/api/accounting/vouchers/${draft.body.id}`, { ...base, status: 'draft', version: draft.body.version, items: pair(acc['14'], acc['5001'], 400_000) }));
       const approved = await admin.post('/api/accounting/vouchers', { ...base, items: pair(acc['1201'], acc['5001'], 500_000) });
       if (approved.status !== 201) problems.push(`a valid approved voucher answered ${approved.status}`);
       else {

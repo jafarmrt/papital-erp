@@ -87,5 +87,6 @@ describe('terminal_english_ratchet_td_625: Persian terminal output may only shri
     const { errors, stale } = compareWithBaseline(currentState(), baseline);
     expect(errors).toEqual([]);
     expect(stale).toEqual([]);
-  });
+    // reads every source file of the repository (about 3 s alone); the 5 s default timed out on a loaded CI runner
+  }, 30_000);
 });

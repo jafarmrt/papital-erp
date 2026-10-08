@@ -71,7 +71,7 @@ export class DocumentLifecycleService {
       if (docPeek.type === 'audit') {
         throw new ValidationError(`سند انبارگردانی «${docPeek.refNumber || id}» نهایی‌سازی نمی‌شود؛ انبارگردانی هنگام ثبت اعمال شده است. برای اصلاح، آن را ابطال و دوباره ثبت کنید.`);
       }
-      // v9.0.283 (TD-780، تصمیم ت۷ الف): رسید تولید پیش‌نویس (از پیش از این نسخه) قطعی نمی‌شود؛ تحویل فقط از مسیر پروژه
+      // v9.0.325 (TD-780، تصمیم ت۷ الف): رسید تولید پیش‌نویس (از پیش از این نسخه) قطعی نمی‌شود؛ تحویل فقط از مسیر پروژه
       assertNotProjectDelivery(docPeek.type, docPeek.refNumber || String(id));
 
       // Pre-flight: verify line items existence and validity

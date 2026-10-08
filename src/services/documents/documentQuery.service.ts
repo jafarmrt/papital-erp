@@ -211,7 +211,7 @@ export class DocumentQueryService {
       WHERE di.document_id = ${doc.id} AND (di.is_deleted IS NULL OR di.is_deleted = 0)
     `);
 
-    // v9.0.282 (TD-777): انحراف ردیف انبارگردانی با کلید (کالا، انبار) از ردیف‌های فعال و غیرمعکوس کاردکس همین سند
+    // v9.0.324 (TD-777): انحراف ردیف انبارگردانی با کلید (کالا، انبار) از ردیف‌های فعال و غیرمعکوس کاردکس همین سند
     let auditVarianceOf: (itemId: number, location: unknown) => number = () => 0;
     if (doc.type === 'audit') {
       const ledgerRows = await orm.select({ itemId: transactions.itemId, type: transactions.type, quantity: transactions.quantity, location: transactions.location })

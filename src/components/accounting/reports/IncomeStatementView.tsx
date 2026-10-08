@@ -32,7 +32,7 @@ export function IncomeStatementView({
         <div className="flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-emerald-600" />
           <div>
-            <h4 className="font-bold text-slate-900 dark:text-white text-sm">صورت سود و زیان دوره‌ای (Income Statement)</h4>
+            <h4 className="font-bold text-slate-900 dark:text-white text-sm">صورت سود و زیان دوره‌ای</h4>
             <p className="text-xs text-slate-500">گزارش درآمدهای عملیاتی، بهای تمام شده، سود ناخالص و سود خالص دوره</p>
             <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mt-0.5">{periodCaption(startDate, endDate)}</p>
           </div>
