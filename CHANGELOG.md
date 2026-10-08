@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.357 — Data Export Holds Every Promised Table
+- **Fix (TD-624, B01-44, decision ت۷):** the export reads one table list shared with the settings card (`DATA_EXPORT_TABLES`): project allocations and stage progress, pending materials, piecework tasks and rates, fiscal periods, item opening rows, attachment metadata, workflow tables and event rules were added; every other table is left out with a reason in the manifest, and Vitest fails on an unclassified table.
+
 ### v9.0.356 — Streamed Zip Data Export
 - **Fix (TD-592, B01-12, decision ت۷):** the data export streams a zip with one NDJSON file per table, read in primary-key batches with back-pressure, and a manifest of row counts; the audit log comes only with `activityLogs=1` and a business-day range. Before, one unbounded `SELECT *` per table and one `res.json` (950,000 audit rows: 3 GiB of memory, `/health/live` waited 13 s).
 

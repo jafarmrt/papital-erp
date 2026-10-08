@@ -14,6 +14,7 @@ vi.mock('../../components/common/JalaliDateInput', () => ({
 
 import { DataExportCard } from '../../components/settings/DataExportCard';
 import { dataExportRangeError, dataExportUrl } from '../../lib/system/dataExport';
+import { dataExportGroupLabels } from '../../lib/system/dataExportTables';
 
 // v9.0.356 (TD-592, decision t7 a): the export card asks for the audit log separately with a date range, the server names
 // the zip file, and only the system admin (the guard of the route) sees the card.
@@ -45,6 +46,12 @@ describe('data export card (TD-592)', () => {
     fireEvent.change(from, { target: { value: '2026-10-09' } });
     expect(screen.getByRole('alert').textContent).toContain('پیش از تاریخ آغاز');
     expect(screen.getByText('دانلود خروجی داده‌ها').closest('a')).toBeNull();
+  });
+
+  it('lists the data groups the export actually holds (TD-624)', () => {
+    const { container } = render(<DataExportCard />);
+    for (const label of dataExportGroupLabels()) expect(container.textContent).toContain(label);
+    expect(container.textContent).toContain('گردش کار');
   });
 
   it('is not shown to a user who is not the system admin', () => {

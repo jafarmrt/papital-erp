@@ -4,11 +4,12 @@ import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useIsSystemAdmin } from '../../contexts/AuthContext';
 import { getTodayIsoDate } from '../../utils/dateUtils';
 import { dataExportRangeError, dataExportUrl } from '../../lib/system/dataExport';
+import { dataExportGroupLabels } from '../../lib/system/dataExportTables';
 
 /**
  * v9.0.356 (TD-592، تصمیم ت۷ الف): کارت خروجی داده‌های کسب‌وکاری. خروجی یک فایل zip است، هر جدول یک فایل؛ سجل ممیزی
  * فقط با گزینه جدا و یک بازه تاریخ. مسیر سرور فقط برای مدیر سامانه است، پس کارت هم فقط برای او نشان داده می‌شود؛
- * نام فایل را سرور با تاریخ امروز کسب‌وکار می‌دهد.
+ * نام فایل را سرور با تاریخ امروز کسب‌وکار می‌دهد. v9.0.357 (TD-624): فهرست داده‌ها از گروه‌های `DATA_EXPORT_TABLES` است.
  */
 export function DataExportCard() {
   const isSystemAdmin = useIsSystemAdmin();
@@ -27,7 +28,7 @@ export function DataExportCard() {
         <Database className="text-emerald-600" size={18} /> خروجی داده‌های کسب‌وکاری
       </h3>
       <p className="text-xs text-slate-600 leading-relaxed">
-        این فایل شامل اطلاعات کالاها، انبار، اسناد، مشتریان، پروژه‌ها، دفاتر حسابداری و کارمزدی برای گزارش‌گیری و بایگانی است. رمزهای عبور و کلیدهای محرمانه در آن ذخیره نمی‌شوند.
+        این فایل برای گزارش‌گیری و بایگانی است و این داده‌ها را دارد: {dataExportGroupLabels().join('؛ ')}. رمزهای عبور و کلیدهای محرمانه در آن ذخیره نمی‌شوند.
       </p>
       <p className="text-xs text-slate-600 leading-relaxed">
         خروجی یک فایل فشرده zip است: هر جدول یک فایل جدا (هر سطر یک ردیف) و فهرست جدول‌ها با شمار ردیف‌ها در پرونده راهنمای آن.

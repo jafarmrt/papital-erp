@@ -1,19 +1,14 @@
 import type { Writable } from 'stream';
 import { and, asc, getTableColumns, gt, sql, type SQL } from 'drizzle-orm';
-import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
+import type { PgColumn } from 'drizzle-orm/pg-core';
 import { orm } from '../../db/drizzle.js';
-import {
-  users, personnel, customers, items, categories, warehouses, itemPrices, itemWarehouseStocks,
-  productionProjects, projectStages, transfers, crmLeads, crmActivities, dailyWorkLogs,
-  documents, documentItems, transactions, activityLogs, appSettings, roles,
-  accounts, journalVouchers, journalVoucherItems, bankAccounts, cheques, treasuryTransactions, accountingSettings,
-  pieceworkLogs, pieceworkPayrolls, purchaseRequisitions,
-} from '../../db/schema.js';
+import { activityLogs } from '../../db/schema.js';
+import { DATA_EXPORT_ACTIVITY_LOG_TABLE, DATA_EXPORT_EXCLUDED_TABLES, DATA_EXPORT_TABLES } from '../../lib/system/dataExportTables.js';
+import { DATA_EXPORT_TABLE_SOURCES, type ExportTableSpec, type Row } from './dataExportSources.js';
 import { BUILD_INFO } from '../../lib/version.js';
 import { businessNowIsoDateTime, businessTodayIsoDate, getDisplayTimezone, systemNowUtcIso } from '../../lib/businessClock.js';
 import { zonedDayRangeUtc } from '../../lib/serverTimestamp.js';
 import { ZipStreamWriter } from '../../lib/zipStream.js';
-import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
 /**
  * v7.0.29 (TD-188 / audit P1-6) — Safe business-data export (NOT a restorable backup)
@@ -25,25 +20,13 @@ import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js
  * می‌شود، دسته‌به‌دسته با cursor روی کلید اصلی (`DATA_EXPORT_BATCH_SIZE` ردیف در هر پرس‌وجو) و با رعایت فشار
  * برگشتی پاسخ، پس حافظه پردازه به اندازه یک دسته است. `activity_logs` فقط با گزینه جدا و یک بازه تاریخ می‌آید.
  * `manifest.json` (آخرین فایل) قالب، نسخه، شمار ردیف هر جدول و فیلدهای کنارگذاشته را دارد.
+ *
+ * v9.0.357 (TD-624): جدول‌ها از فهرست یگانه `DATA_EXPORT_TABLES` می‌آیند (پروژه و تخصیص، کارمزدی، دوره مالی، گردش کار،
+ * قاعده رویداد و فراداده پیوست افزوده شدند) و جدول‌های کنارگذاشته با دلیل در `manifest.json` نوشته می‌شوند.
  */
 
 export const DATA_EXPORT_FORMAT = 'papital-erp/data-export@3';
 export const DATA_EXPORT_BATCH_SIZE = 1000;
-
-type Row = Record<string, unknown>;
-
-interface ExportTableSpec {
-  /** database table name; the entry is `<name>.ndjson` */
-  name: string;
-  table: PgTable;
-  /** properties of the primary key, in key order (the cursor) */
-  key: string[];
-  /** projection; default every column */
-  columns?: Record<string, PgColumn>;
-  where?: SQL;
-  /** rows kept (small tables only; counted after the filter) */
-  keep?: (row: Row) => boolean;
-}
 
 export interface DataExportOptions {
   /** include `activity_logs` of these business days (ISO dates, both inclusive) */
@@ -59,6 +42,7 @@ export interface DataExportManifest {
   buildInfo: typeof BUILD_INFO;
   notice: string;
   excludedFields: string[];
+  excludedTables: Record<string, string>;
   activityLogs: { included: false } | { included: true; from: string; to: string };
   tables: Array<{ name: string; file: string; rows: number }>;
 }
@@ -73,55 +57,13 @@ const NOTICE = 'این فایل خروجی داده‌های کسب‌وکاری
   + 'یک لحظه یگانه از پایگاه‌داده نیست. رمزهای عبور و کلیدهای محرمانه در آن وجود ندارد. پشتیبان واقعی با '
   + 'scripts/backup.sh گرفته و با scripts/restore.sh بازگردانی می‌شود.';
 
-function withoutColumns(table: PgTable, omit: string[]): Record<string, PgColumn> {
-  const columns: Record<string, PgColumn> = { ...getTableColumns(table) };
-  for (const name of omit) delete columns[name];
-  return columns;
-}
-
 /** Tables of the export, in file order (activity logs are added only on request) */
 function exportTableSpecs(): ExportTableSpec[] {
-  const byId = (name: string, table: PgTable): ExportTableSpec => ({ name, table, key: ['id'] });
-  return [
-    // Users WITHOUT password hash, lockout state or token version
-    {
-      name: 'users', table: users, key: ['id'],
-      columns: {
-        id: users.id, username: users.username, fullName: users.fullName, role: users.role,
-        avatarUrl: users.avatarUrl, isDeleted: users.isDeleted, updatedAt: users.updatedAt,
-      },
-    },
-    byId('roles', roles),
-    // Personnel WITHOUT the third-party exchange password (TD-189)
-    { name: 'personnel', table: personnel, key: ['id'], columns: withoutColumns(personnel, ['nobitexPassword']) },
-    byId('customers', customers),
-    byId('categories', categories),
-    byId('warehouses', warehouses),
-    byId('items', items),
-    byId('item_prices', itemPrices),
-    byId('item_warehouse_stocks', itemWarehouseStocks),
-    byId('documents', documents),
-    byId('document_items', documentItems),
-    byId('transactions', transactions),
-    byId('transfers', transfers),
-    byId('production_projects', productionProjects),
-    byId('project_stages', projectStages),
-    byId('purchase_requisitions', purchaseRequisitions),
-    byId('crm_leads', crmLeads),
-    byId('crm_activities', crmActivities),
-    byId('daily_work_logs', dailyWorkLogs),
-    byId('accounts', accounts),
-    byId('journal_vouchers', journalVouchers),
-    byId('journal_voucher_items', journalVoucherItems),
-    byId('bank_accounts', bankAccounts),
-    byId('cheques', cheques),
-    byId('treasury_transactions', treasuryTransactions),
-    byId('accounting_settings', accountingSettings),
-    byId('piecework_logs', pieceworkLogs),
-    byId('piecework_payrolls', pieceworkPayrolls),
-    // Settings WITHOUT secrets (WooCommerce keys, webhook secrets, tokens)
-    { name: 'app_settings', table: appSettings, key: ['key'], keep: row => !SENSITIVE_SETTING_PATTERN.test(String(row.key)) },
-  ];
+  return DATA_EXPORT_TABLES.map(({ table: name }) => {
+    const source = DATA_EXPORT_TABLE_SOURCES[name];
+    if (!source) throw new Error(`Data export: no table source for ${name}`);
+    return { name, ...source };
+  });
 }
 
 /** `(key...) > (last...)`: the rows after the previous batch */
@@ -160,7 +102,7 @@ export class DataExportService {
 
   /** Tables the export writes with these options (database names) */
   static tableNames(options: DataExportOptions = {}): string[] {
-    return [...exportTableSpecs().map(s => s.name), ...(options.activityLogs ? ['activity_logs'] : [])];
+    return [...DATA_EXPORT_TABLES.map(t => t.table), ...(options.activityLogs ? [DATA_EXPORT_ACTIVITY_LOG_TABLE] : [])];
   }
 
   /**
@@ -173,7 +115,7 @@ export class DataExportService {
     if (options.activityLogs) {
       const range = zonedDayRangeUtc(options.activityLogs.from, options.activityLogs.to, await getDisplayTimezone());
       specs.push({
-        name: 'activity_logs', table: activityLogs, key: ['id'],
+        name: DATA_EXPORT_ACTIVITY_LOG_TABLE, table: activityLogs, key: ['id'],
         where: and(sql`${activityLogs.timestamp} >= ${range.from}`, sql`${activityLogs.timestamp} < ${range.before}`),
       });
     }
@@ -195,6 +137,7 @@ export class DataExportService {
       buildInfo: BUILD_INFO,
       notice: NOTICE,
       excludedFields: EXCLUDED_FIELDS,
+      excludedTables: { ...DATA_EXPORT_EXCLUDED_TABLES },
       activityLogs: options.activityLogs ? { included: true, ...options.activityLogs } : { included: false },
       tables,
     };

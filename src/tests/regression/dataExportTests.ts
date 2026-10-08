@@ -9,6 +9,10 @@ import { TestCaseResult, makeTestCase } from '../types.js';
  * for a date range. On v9.0.355 the route answered `application/json` named `.json` with `activityLogs` always inside.
  */
 export async function runDataExportTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
+  return [...await runStreamedZipTest(shouldRun), ...await runDataExportCoverageTest(shouldRun)];
+}
+
+async function runStreamedZipTest(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const id = 'reg_data_export_streamed_zip_td_592';
   if (!shouldRun(id, 'td592', 'b01-12', 'export', 'package1')) return results;
@@ -96,4 +100,69 @@ export async function runDataExportTests(shouldRun: (id: string, ...extra: strin
     }));
   }
   return results;
+}
+
+/**
+ * Package 1 finding B01-44, TD-624 (decision t7 a): the export missed tables the settings card promised (project
+ * allocations, piecework tasks and rates, fiscal periods, attachment metadata, workflow, event rules), so work logs
+ * pointed at tasks without a name or rate. On v9.0.356 the manifest had none of them.
+ */
+async function runDataExportCoverageTest(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
+  const id = 'reg_data_export_table_coverage_td_624';
+  if (!shouldRun(id, 'td624', 'b01-44', 'export', 'package1')) return [];
+  const name = 'v9.0.357: data export holds project, piecework, fiscal period, workflow, event rule and attachment tables (TD-624)';
+  const tStart = Date.now();
+  try {
+    const { readZipEntries, ndjsonRows } = await import('../fixtures/zipReader.js');
+    const { DataExportService } = await import('../../services/system/dataExport.service.js');
+    const { createTestItem, createTestVoucher } = await import('../fixtures/factories.js');
+    const { pool } = await import('../../db/drizzle.js');
+    const wrong: string[] = [];
+    const tag = Date.now().toString(36);
+
+    // three opening rows of one voucher: a composite key (voucher_id, item_id) read two rows per query
+    const { voucher } = await createTestVoucher({ description: `td624 ${tag}` });
+    const itemIds: number[] = [];
+    for (let i = 0; i < 3; i++) itemIds.push((await createTestItem({ code: `TD624-${tag}-${i}` })).id);
+    for (const itemId of itemIds) {
+      await pool.query(`INSERT INTO item_opening_voucher_items (voucher_id, item_id, amount) VALUES ($1, $2, 1000)`, [voucher.id, itemId]);
+    }
+    await pool.query(`INSERT INTO task_categories (name) VALUES ($1)`, [`td624 ${tag}`]);
+    const period = await pool.query(`INSERT INTO fiscal_periods (fiscal_year, status) VALUES (1391, 'open') ON CONFLICT DO NOTHING RETURNING fiscal_year`);
+
+    const { PassThrough } = await import('stream');
+    const out = new PassThrough();
+    const chunks: Buffer[] = [];
+    out.on('data', (c: Buffer) => chunks.push(c));
+    const manifest = await DataExportService.writeExport(out, { batchSize: 2 });
+    const entries = readZipEntries(Buffer.concat(chunks));
+
+    const names = manifest.tables.map(t => t.name);
+    for (const table of [
+      'project_bom_allocations', 'project_product_stage_progress', 'pending_materials', 'piecework_tasks',
+      'piecework_personnel_rates', 'piecework_task_rate_history', 'task_categories', 'fiscal_periods', 'file_attachments',
+      'workflow_definitions', 'workflow_states', 'workflow_transitions', 'workflow_instances', 'event_action_rules',
+    ]) {
+      if (!names.includes(table) || !entries.has(`${table}.ndjson`)) wrong.push(`${table} missing`);
+    }
+    const opening = ndjsonRows(entries.get('item_opening_voucher_items.ndjson')).filter(r => Number(r.voucherId) === voucher.id);
+    if (opening.length !== 3) wrong.push(`opening rows of the voucher with batches of 2: ${opening.length} (expected 3)`);
+    if (!ndjsonRows(entries.get('task_categories.ndjson')).some(r => r.name === `td624 ${tag}`)) wrong.push('task category missing');
+    if (!ndjsonRows(entries.get('fiscal_periods.ndjson')).some(r => Number(r.fiscalYear) === 1391)) wrong.push('fiscal period 1391 missing');
+    if (!manifest.excludedTables?.webhook_subscriptions) wrong.push('manifest does not list the left-out tables');
+
+    await pool.query(`DELETE FROM item_opening_voucher_items WHERE voucher_id = $1`, [voucher.id]);
+    await pool.query(`DELETE FROM task_categories WHERE name = $1`, [`td624 ${tag}`]);
+    if (period.rowCount) await pool.query(`DELETE FROM fiscal_periods WHERE fiscal_year = 1391`);
+    if (wrong.length > 0) throw new Error(wrong.join('; '));
+    return [makeTestCase({
+      id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+      details: `${manifest.tables.length} tables; composite-key rows read across batches; left-out tables listed with a reason`,
+    })];
+  } catch (err) {
+    return [makeTestCase({
+      id, name, layer: 'regression', executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+      error: err instanceof Error ? err.message : String(err),
+    })];
+  }
 }
