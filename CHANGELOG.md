@@ -19,6 +19,18 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.334 — WooCommerce Bulk Stock Sync Reports Failed Items
+- **WooCommerce bulk stock sync (TD-724):** the bulk stock sync showed the server's green message even when no item was updated; a failed item is now an error message with the counts and the first errors, and the WooCommerce order tables show a load error (403 / 500) instead of «no orders yet» (WooCommerce half of TD-730).
+
+### v9.0.333 — WooCommerce Connection Test With Stored Keys
+- **WooCommerce connection test (TD-723):** a non-admin sees the WooCommerce keys masked and the test button sent the mask as the keys, so the test always failed; the browser now leaves out an empty or masked key and the server uses the stored key, only at the stored store address.
+
+### v9.0.332 — WooCommerce Namesake Buyers Get Their Own Customer
+- **WooCommerce namesake buyers (TD-703):** a WooCommerce buyer whose name belongs to another customer with another phone gets a new customer named «name (phone)», so the sale is no longer debited to the existing customer's receivable; a name that differs only in letter case matches the stored customer, and the order log reports the distinct customer.
+
+### v9.0.331 — Package 15 Events and Integrations Audit Documentation
+- **Package 15 Audit:** section 15 of the V9 stability audit records the events, webhooks, automatic rules, dead-letter queue, notifications and WooCommerce package: 32 proven findings (one P1, a WooCommerce order of a namesake posted to the existing customer's receivable, and eighteen P2, among them a webhook test that follows redirects to internal addresses and delivery failures that never retry) opened as TD-703..TD-734 with the product-owner decisions. Documentation only.
+
 ### v9.0.330 — Work Log List Paged and Filtered on the Server
 - **Work Log List Paged and Filtered on the Server (TD-811):** the piecework page loaded every work log ever recorded on each open and after each change (about 30 MB and 2.3 s for a workshop year) and filtered and summed it in the browser; `GET /piecework/logs` now filters in SQL and returns one page with the count and sum of every match, the page opens on the current Jalali month, `/piecework/logs/summary` sums the cards and project costs in SQL, and the «settled» filter now finds the logs on a payslip.
 

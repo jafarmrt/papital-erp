@@ -3,6 +3,9 @@ import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
 import { normalizeRialDisplayUnit } from '../lib/rialDisplay';
 import { movementDaysError } from '../lib/settings/settingValues';
+import { wcTestConnectionBody } from '../lib/woocommerce/wcConnectionTest';
+import { stockSyncOutcome } from '../lib/woocommerce/stockSyncOutcome';
+import { errorMessageOf } from '../utils/formatters';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset } from '../constants/presets';
 import { DEFAULT_INVENTORY_CONTROL_SECTIONS, InventoryControlPresetSection } from '../constants/inventoryControlPresets';
 import {
@@ -23,6 +26,19 @@ import { settingsKeys } from '../lib/queryKeys';
 const MASKED_SETTING_VALUE = '********';
 
 export type Warehouse = WarehouseItem;
+
+// v9.0.334 (TD-730، نیمه ووکامرس): خطای خواندن (۴۰۳، ۵۰۰) نگه داشته و در جدول نشان داده می‌شود، نه «هنوز هیچ سفارشی ثبت نشده است»
+function loadWcList(endpoint: string, setRows: (rows: unknown[]) => void, setError: (message: string) => void, signal?: AbortSignal) {
+  fetchJson(endpoint, { signal })
+    .then((res) => {
+      setRows(Array.isArray(res) ? res : []);
+      setError('');
+    })
+    .catch((err) => {
+      if (err?.name === 'AbortError') return;
+      setError(errorMessageOf(err) || 'خواندن فهرست از کارساز ممکن نشد.');
+    });
+}
 
 export { settingsKeys };
 
@@ -105,6 +121,8 @@ export function useSettings() {
   const [wcShopWarehouse, setWcShopWarehouse] = useState('');
   const [syncedWcOrders, setSyncedWcOrders] = useState<any[]>([]);
   const [wcOrderLogs, setWcOrderLogs] = useState<any[]>([]);
+  const [syncedWcOrdersError, setSyncedWcOrdersError] = useState('');
+  const [wcOrderLogsError, setWcOrderLogsError] = useState('');
   const [manualOrderId, setManualOrderId] = useState('');
   const [isSyncingManualOrder, setIsSyncingManualOrder] = useState(false);
   const [isSyncingAllStocks, setIsSyncingAllStocks] = useState(false);
@@ -193,16 +211,8 @@ export function useSettings() {
   }, [settingsData]);
 
   const loadSyncedWcOrders = (signal?: AbortSignal) => {
-    fetchJson('/woocommerce/synced-orders', { signal })
-      .then(setSyncedWcOrders)
-      .catch((err) => {
-        if (err?.name === 'AbortError') return;
-      });
-    fetchJson('/woocommerce/order-logs', { signal })
-      .then(setWcOrderLogs)
-      .catch((err) => {
-        if (err?.name === 'AbortError') return;
-      });
+    loadWcList('/woocommerce/synced-orders', setSyncedWcOrders, setSyncedWcOrdersError, signal);
+    loadWcList('/woocommerce/order-logs', setWcOrderLogs, setWcOrderLogsError, signal);
   };
 
   useEffect(() => {
@@ -216,7 +226,10 @@ export function useSettings() {
     try {
       const res = await fetchJson('/woocommerce/sync-all-stocks', { method: 'POST' });
       if (res.success) {
-        toast.success(res.message || 'همگام‌سازی موجودی کل کالاها با موفقیت انجام شد');
+        // v9.0.334 (TD-724): کالای ناموفق پیام خطا با شمار و نخستین خطاها می‌گیرد، نه پیام سبز سرور
+        const outcome = stockSyncOutcome(res);
+        if (outcome.tone === 'error') toast.error(outcome.message, { duration: 15000 });
+        else toast.success(outcome.message);
       } else {
         toast.error(res.error || 'خطا در همگام‌سازی دسته‌ای موجودی‌ها');
       }
@@ -253,13 +266,14 @@ export function useSettings() {
   const handleTestWcConnection = async () => {
     setIsTestingWc(true);
     try {
+      // v9.0.333 (TD-723): کلید ماسک‌شده («********») یا خالی فرستاده نمی‌شود؛ کارساز کلید ذخیره‌شده را به کار می‌برد
       const res = await fetchJson('/woocommerce/test-connection', {
         method: 'POST',
-        body: JSON.stringify({
+        body: JSON.stringify(wcTestConnectionBody({
           url: wcStoreUrl,
           consumerKey: wcConsumerKey,
           consumerSecret: wcConsumerSecret
-        })
+        }))
       });
       if (res.success) {
         toast.success(res.message || 'ارتباط برقرار شد');
@@ -408,6 +422,7 @@ export function useSettings() {
     wcWebhookSecret, setWcWebhookSecret,
     wcShopWarehouse, setWcShopWarehouse,
     wcOrderLogs,
+    wcOrderLogsError,
     isSyncingAllStocks,
     handleSyncAllStocks,
     showCatModal, setShowCatModal,
@@ -438,6 +453,7 @@ export function useSettings() {
     isTestingWc,
     handleTestWcConnection,
     syncedWcOrders,
+    syncedWcOrdersError,
     manualOrderId, setManualOrderId,
     isSyncingManualOrder,
     handleSyncManualOrder,
