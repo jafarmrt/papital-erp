@@ -19,6 +19,15 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.330 — Work Log List Paged and Filtered on the Server
+- **Work Log List Paged and Filtered on the Server (TD-811):** the piecework page loaded every work log ever recorded on each open and after each change (about 30 MB and 2.3 s for a workshop year) and filtered and summed it in the browser; `GET /piecework/logs` now filters in SQL and returns one page with the count and sum of every match, the page opens on the current Jalali month, `/piecework/logs/summary` sums the cards and project costs in SQL, and the «settled» filter now finds the logs on a payslip.
+
+### v9.0.329 — Payslip Deductions Need a Description
+- **Payslip Deductions Need a Description (TD-861):** the «سایر کسورات» box was labelled as insurance or tax although nothing computes either, and its amount reached the employee deductions payable account with no word on what it was; deductions above zero now need a description, stored with the payslip (migration 0079), printed on it and written into the deductions voucher row (account 3205).
+
+### v9.0.328 — Payslip Shows Its Real State, Monthly Fixed Salary and Company Name
+- **Payslip Shows Its Real State, Monthly Fixed Salary and Company Name (TD-815):** the payslip printed «۱ دوره ماهانه» for any fixed salary, called draft and approved payslips both ready to pay and carried a fixed company name, and «فیش‌های حقوقی من» showed a partly paid payslip as a draft with the currency twice; payslips now use one set of status labels, one fixed-salary row per Jalali month, the company name setting and an advance deduction column, and the UI says «کارمزدی» and «چاپ».
+
 ### v9.0.327 — Sales Document Numbers Only From the Server Series
 - **Document numbers:** a sales invoice or sales return number now comes only from the server series; a stock document may keep a manual number, but a taken one is refused instead of being silently replaced, a manual number no longer moves the series, and the audit log records the stored number (TD-783).
 

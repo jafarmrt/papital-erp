@@ -43,7 +43,7 @@ export async function checkPayrollNetEqualsVoucher(): Promise<string[]> {
     type: 'payment', method: 'bank_transfer', amount: 200000, bankAccountId: bankId, partyType: 'personnel', partyId: worker, partyName: fullName,
     purpose: 'advance', date: '2026-04-02', username: 'inv',
   });
-  const issued = await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD, bonuses: 50000, deductions: 150000, advanceDeduction: 200000 });
+  const issued = await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD, bonuses: 50000, deductions: 150000, deductionsDescription: 'TD-804 deduction', advanceDeduction: 200000 });
   if (!issued.payroll || !fin(issued.payroll.netPayable).equals(700000)) problems.push(`payslip with all parts: ${issued.payroll?.netPayable ?? issued.error}, expected net 700,000`);
 
   // negative parts are refused before anything is written

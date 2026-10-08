@@ -1,4 +1,4 @@
-import { eq, and, asc, desc, inArray } from 'drizzle-orm';
+import { eq, and, asc, desc, inArray, sql, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { personnelIdsOfUser } from '../personnel/personnelUserLink.js';
 import { pieceworkLogs, pieceworkPayrolls, pieceworkTasks, personnel, journalVouchers, treasuryTransactions, bankAccounts } from '../../db/schema.js';
@@ -36,6 +36,8 @@ const payrollAmountColumns = {
   advanceDeduction: pieceworkPayrolls.advanceDeduction,
   totalBonuses: pieceworkPayrolls.totalBonuses,
   totalDeductions: pieceworkPayrolls.totalDeductions,
+  // v9.0.329 (TD-861): شرح «سایر کسورات» برای فیش چاپی
+  deductionsDescription: pieceworkPayrolls.deductionsDescription,
   netPayable: pieceworkPayrolls.netPayable,
 };
 
@@ -81,8 +83,17 @@ export class PayrollReadService {
   /** فهرست فیش‌ها همراه با اطلاعات سند حسابداری متصل (بدون پنهان‌سازی اطلاعات حساس؛ آن در روت انجام می‌شود). */
   static async listPayrolls(filters: PayrollListFilters) {
     const { personnelId, status } = filters;
+    // v9.0.330 (TD-811، B12P-08): فیلتر پرسنل و وضعیت در SQL؛ پیش‌تر همه فیش‌ها خوانده و در حافظه فیلتر می‌شد
+    const conditions: SQL[] = [eq(pieceworkPayrolls.isDeleted, 0)];
+    const isAll = (v: unknown) => v === undefined || v === null || v === '' || String(v).toLowerCase() === 'all';
+    if (!isAll(personnelId)) {
+      const pId = Number(personnelId);
+      // شناسه نامعتبر مثل پیش هیچ فیشی نمی‌آورد
+      conditions.push(Number.isSafeInteger(pId) ? eq(pieceworkPayrolls.personnelId, pId) : sql`false`);
+    }
+    if (!isAll(status)) conditions.push(eq(pieceworkPayrolls.status, String(status)));
 
-    let rows = await orm.select({
+    const rows = await orm.select({
       ...payrollHeadColumns,
       ...payrollPersonnelColumns,
       ...payrollAmountColumns,
@@ -91,17 +102,8 @@ export class PayrollReadService {
     })
     .from(pieceworkPayrolls)
     .innerJoin(personnel, eq(pieceworkPayrolls.personnelId, personnel.id))
-    .where(eq(pieceworkPayrolls.isDeleted, 0))
+    .where(and(...conditions))
     .orderBy(desc(pieceworkPayrolls.id));
-
-    if (personnelId && String(personnelId) !== 'ALL') {
-      const pId = Number(personnelId);
-      rows = rows.filter(r => r.personnelId === pId);
-    }
-
-    if (status && String(status) !== 'ALL') {
-      rows = rows.filter(r => r.status === String(status));
-    }
 
     // Attach linked journal voucher info
     // TD-242: فقط اسناد فیش‌های همین فهرست، از پیوند صریح source_payroll_id (یا سند قدیمی بدون پیوند با الگوی دقیق

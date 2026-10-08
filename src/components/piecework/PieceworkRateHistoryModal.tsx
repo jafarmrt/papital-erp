@@ -157,7 +157,7 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
                     </span>
                   </>
                 ) : (
-                  'گاه‌شمار کامل تغییرات نرخ‌ها و عناوین پرکیسی'
+                  'گاه‌شمار کامل تغییرات نرخ‌ها و عناوین کارمزدی'
                 )}
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">

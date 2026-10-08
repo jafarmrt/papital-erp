@@ -19,10 +19,17 @@ export function PieceworkPayrollPage() {
     activeTab,
     setActiveTab,
     tasksList,
-    logsList,
     payrollsList,
     loading,
     loadData,
+    logs,
+    logsTotal,
+    logsFilteredAmount,
+    logsPage,
+    logsPageCount,
+    setLogsPage,
+    logsLoading,
+    logSummary,
     selectedPersonnelFilter,
     setSelectedPersonnelFilter,
     selectedProjectFilter,
@@ -76,6 +83,8 @@ export function PieceworkPayrollPage() {
     setPayrollBonuses,
     payrollDeductions,
     setPayrollDeductions,
+    payrollDeductionsDescription,
+    setPayrollDeductionsDescription,
     payrollNotes,
     setPayrollNotes,
     payrollFixedIncluded,
@@ -115,11 +124,7 @@ export function PieceworkPayrollPage() {
     handleViewPayslip,
     handleUpdatePayrollStatus,
     handleDeletePayroll,
-    filteredLogs,
-    projectCostsSummary,
     filteredTasks,
-    totalLoggedAmount,
-    pendingLoggedAmount,
     taskCategories,
     canViewPayrolls,
     canSetLogRate
@@ -144,8 +149,8 @@ export function PieceworkPayrollPage() {
 
       {/* KPI Stats Cards */}
       <PieceworkStatsCards
-        totalLoggedAmount={totalLoggedAmount}
-        pendingLoggedAmount={pendingLoggedAmount}
+        totalLoggedAmount={logSummary.totalAmount}
+        pendingLoggedAmount={logSummary.pendingAmount}
         payrollsCount={payrollsList.length}
         tasksCount={tasksList.length}
       />
@@ -154,7 +159,7 @@ export function PieceworkPayrollPage() {
       <PieceworkTabsNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        logsCount={logsList.length}
+        logsCount={logSummary.logCount}
         tasksCount={tasksList.length}
         payrollsCount={payrollsList.length}
         showPayrolls={canViewPayrolls}
@@ -163,8 +168,9 @@ export function PieceworkPayrollPage() {
       {/* TAB 1: WORK LOGS */}
       {activeTab === 'logs' && (
         <PieceworkLogsTab
-          logsList={filteredLogs}
-          loading={loading}
+          logsList={logs}
+          loading={loading || logsLoading}
+          pagination={{ page: logsPage, pageCount: logsPageCount, total: logsTotal, totalAmount: logsFilteredAmount, onPageChange: setLogsPage }}
           searchQuery={logSearchQuery}
           onSearchChange={setLogSearchQuery}
           selectedPersonnelFilter={selectedPersonnelFilter}
@@ -234,8 +240,8 @@ export function PieceworkPayrollPage() {
       {/* TAB 5: PROJECT LABOR COSTS */}
       {activeTab === 'project-costs' && (
         <PieceworkProjectCostsTab
-          projectCostsSummary={projectCostsSummary}
-          totalLoggedAmount={totalLoggedAmount}
+          projectCostsSummary={logSummary.projects}
+          totalLoggedAmount={logSummary.totalAmount}
         />
       )}
 
@@ -293,6 +299,8 @@ export function PieceworkPayrollPage() {
         setPayrollBonuses={setPayrollBonuses}
         payrollDeductions={payrollDeductions}
         setPayrollDeductions={setPayrollDeductions}
+        payrollDeductionsDescription={payrollDeductionsDescription}
+        setPayrollDeductionsDescription={setPayrollDeductionsDescription}
         payrollNotes={payrollNotes}
         setPayrollNotes={setPayrollNotes}
         payrollPreviewLogs={payrollPreviewLogs}

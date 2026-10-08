@@ -8,6 +8,7 @@ import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { fetchJson } from '../../api';
 import { PayrollPaymentModal } from './PayrollPaymentModal';
 import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable';
+import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels';
 
 interface PieceworkPayrollsTabProps {
   payrollsList: PieceworkPayroll[];
@@ -85,6 +86,8 @@ export function PieceworkPayrollsTab({
                 <th className="p-3 text-center">{`مبلغ کارکرد (${curLbl})`}</th>
                 <th className="p-3 text-center">{`پاداش / مزایا (${curLbl})`}</th>
                 <th className="p-3 text-center">{`کسورات (${curLbl})`}</th>
+                {/* v9.0.328 (TD-815): بی این ستون «کارکرد + پاداش − کسورات» با «خالص» نمی‌خواند */}
+                <th className="p-3 text-center">{`کسر مساعده (${curLbl})`}</th>
                 <th className="p-3 text-center">{`خالص پرداختی (${curLbl})`}</th>
                 <th className="p-3 text-center">وضعیت پرداخت</th>
                 <th className="p-3 text-center">سند حسابداری دوبل</th>
@@ -94,7 +97,7 @@ export function PieceworkPayrollsTab({
             <tbody className="divide-y divide-slate-100 font-bold">
               {payrollsList.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-slate-400">
+                  <td colSpan={11} className="p-8 text-center text-slate-400">
                     هنوز فیش حقوقی صادر نشده است.
                   </td>
                 </tr>
@@ -129,6 +132,7 @@ export function PieceworkPayrollsTab({
                       <td className="p-3 text-center font-mono text-rose-600">
                         -{rial.number(payroll.totalDeductions || 0)}
                       </td>
+                      <td className="p-3 text-center font-mono text-indigo-600">-{rial.number(payroll.advanceDeduction || 0)}</td>
                       <td className="p-3 text-center font-mono text-blue-700 font-black text-sm">
                         {rial.number(payroll.netPayable)}
                       </td>
@@ -160,7 +164,7 @@ export function PieceworkPayrollsTab({
                             )}
                           </div>
                         ) : !isPayablePayrollStatus(payroll.status) && !canIssuePayroll ? (
-                          <StatusChip label="پیش‌نویس" />
+                          <StatusChip label={payrollStatusLabel(payroll.status)} />
                         ) : !isPayablePayrollStatus(payroll.status) ? (
                           // v9.0.269 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود
                           <button
@@ -172,7 +176,7 @@ export function PieceworkPayrollsTab({
                             تأیید فیش
                           </button>
                         ) : !canPay ? (
-                          <StatusChip label="در انتظار پرداخت" />
+                          <StatusChip label={payrollStatusLabel(payroll.status)} />
                         ) : (
                           <button
                             onClick={() => setPaymentTarget(payroll)}
@@ -211,7 +215,7 @@ export function PieceworkPayrollsTab({
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => onViewPayslip(payroll.id)}
-                            title="مشاهده فیش و پرینت"
+                            title="مشاهده و چاپ فیش"
                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer"
                           >
                             <Printer size={16} />
@@ -231,7 +235,7 @@ export function PieceworkPayrollsTab({
                     </tr>
                     {hasFixedRow && (
                       <tr className="bg-indigo-50/40">
-                        <td colSpan={10} className="p-2.5 border-b border-indigo-100">
+                        <td colSpan={11} className="p-2.5 border-b border-indigo-100">
                           <div className="flex flex-col gap-0.5">
                             {fixedAmount > 0 && (
                               <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-800">

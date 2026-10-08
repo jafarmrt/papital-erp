@@ -77,7 +77,7 @@ export function PieceworkTaskModal({
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
             <Award className="w-4 h-4 text-blue-600" />
-            <span>{editingTask ? 'ویرایش عنوان کاری پرکیسی' : 'افزودن عنوان کاری پرکیسی جدید'}</span>
+            <span>{editingTask ? 'ویرایش عنوان کاری کارمزدی' : 'افزودن عنوان کاری کارمزدی جدید'}</span>
           </h2>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-full cursor-pointer">
             <X className="w-4 h-4" />
