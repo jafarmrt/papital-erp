@@ -10697,5 +10697,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runProductionErrorDetailsTests } = await import('../regression/productionErrorDetailsTests.js');
   results.push(...await runProductionErrorDetailsTests(shouldRun));
 
+  // Package 15 PR a (v9.0.314+): WooCommerce
+  const { runWooNamesakeCustomerTests } = await import('../regression/wooNamesakeCustomerTests.js');
+  results.push(...await runWooNamesakeCustomerTests(shouldRun));
+
   return results;
 }
