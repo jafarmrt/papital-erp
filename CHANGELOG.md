@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.388 — Due Follow-up Reminder Reaches Only Its Assignee
+- **Due reminder recipient (TD-709):** the notification bell matched a follow-up's assignee with «contains», so a user named «علی» got the reminder (title and customer) of «علی رضایی»'s follow-up; the reminder now goes to the user linked to the assigned personnel, or for a legacy row without a personnel id to the user whose full name or username equals the trimmed assignee (else logger) exactly.
+
 ### v9.0.387 — Dead Letter Payload Edit and Outbox Retry Are Consistent
 - **Dead letter edit and outbox retry (TD-716):** editing the payload of a replayed dead-letter row rewrote it and its completed outbox row with no lock or audit, and retrying a failed outbox event left its dead-letter row quarantined; a replayed row is now never edited (409 DLQ_EVENT_REPLAYED), an open row's edit runs under its row lock with an audit row and spares a completed outbox row, and the retry resolves the event's idle dead-letter rows in the same transaction and refuses an event that is not failed.
 

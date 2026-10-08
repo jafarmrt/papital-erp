@@ -1,16 +1,14 @@
 import { Router } from 'express';
 import { eq, desc, and } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { notifications, crmActivities, users } from '../db/schema.js';
+import { notifications } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { isoToJalaliDate, toPersianDigits } from '../utils.js';
-import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { z } from 'zod';
 import { validate, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { UnauthorizedError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
-import { dueFollowupCondition } from '../services/crm/crmFollowups.js';
+import { generateCrmDueReminders } from '../services/notifications/crmDueReminders.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -21,62 +19,10 @@ const notifParamSchema = z.object({
   })
 });
 
+// v9.0.388 (TD-709): only the user's own due follow-ups (linked personnel id, else the exact trimmed name), never «contains»
 async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
   try {
-    const [u] = await orm.select().from(users).where(eq(users.id, userId));
-    if (!u) return;
-
-    const userFullName = (u.fullName || '').trim();
-    const username = (u.username || '').trim();
-
-    // v7.0.132 (TD-232): سررسید پیگیری میلادی ISO ذخیره می‌شود و فقط با «امروز» میلادی مقایسه می‌شود.
-    // پیش‌تر «1405/08/01» (آینده) با «2026-10-03» مقایسه متنی می‌شد و همان روز ثبت، سررسیدشده اعلام می‌شد.
-    const todayIso = await businessTodayIsoDate();
-
-    // v9.0.16 (TD-425): همان شرط آمار و فهرست «امروز و معوق»؛ پیگیری پرونده حذف‌شده یادآوری نمی‌شود
-    const pendingActs = await orm
-      .select()
-      .from(crmActivities)
-      .where(dueFollowupCondition(todayIso));
-
-    for (const act of pendingActs) {
-      const assignee = (act.assignedTo || act.loggedBy || '').trim();
-      const isMyTask =
-        (userFullName && assignee.includes(userFullName)) ||
-        (username && assignee.includes(username)) ||
-        assignee === userFullName ||
-        assignee === username;
-
-      if (!isMyTask) continue;
-
-      const dueDate = toPersianDigits(isoToJalaliDate(act.nextFollowUpDate));
-
-      const notifLink = `/crm?activityId=${act.id}`;
-      const [existingNotif] = await orm
-        .select()
-        .from(notifications)
-        .where(
-          and(
-            eq(notifications.userId, userId),
-            eq(notifications.link, notifLink),
-            // v7.0.132: اعلان «تسک جدید» همین پیوند را دارد و پیش‌تر جلوی یادآوری سررسید را می‌گرفت
-            eq(notifications.type, 'crm_due_task')
-          )
-        );
-
-      if (!existingNotif) {
-        await orm.insert(notifications).values({
-          userId: userId,
-          senderId: null,
-          senderName: 'سامانه ارتباط با مشتری',
-          type: 'crm_due_task',
-          title: '⏰ سررسید پیگیری ارتباط با مشتری',
-          message: `سررسید پیگیری: "${act.nextFollowUpTask || act.title}" (تاریخ: ${dueDate})`,
-          link: notifLink,
-          isRead: 0
-        });
-      }
-    }
+    await generateCrmDueReminders(userId);
   } catch (err) {
     logger.error({ message: 'Error checking due CRM tasks notifications', error: err });
   }
