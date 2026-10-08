@@ -10815,6 +10815,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runForeignKeyPolicyTests(shouldRun));
   const { runEventParentDeleteTests } = await import('../regression/eventParentDeleteTests.js');
   results.push(...await runEventParentDeleteTests(shouldRun));
+  const { runUserForeignKeyTests } = await import('../regression/userForeignKeyTests.js');
+  results.push(...await runUserForeignKeyTests(shouldRun));
 
   return results;
 }

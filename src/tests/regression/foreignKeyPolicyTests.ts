@@ -23,20 +23,16 @@ import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdmi
 
 /** Declared references without a database constraint yet; each later release of PR 3 removes its keys */
 const PENDING_FOREIGN_KEYS: readonly string[] = [
-  'accounting_settings.account_id', 'bank_accounts.account_id', 'cheques.bank_account_id', 'cheques.created_by_id',
-  'cheques.voucher_id', 'crm_activities.assigned_personnel_id', 'crm_activities.customer_id', 'crm_activities.lead_id',
-  'crm_leads.assigned_personnel_id', 'crm_leads.customer_id', 'daily_work_logs.project_id', 'daily_work_logs.user_id',
-  'dead_letter_events.resolved_by', 'event_action_rules.created_by', 'form_drafts.user_id',
-  'item_prices.item_id', 'journal_vouchers.approved_by_id', 'journal_vouchers.created_by_id', 'notifications.sender_id',
-  'notifications.user_id', 'personnel.user_id', 'piecework_logs.created_by_id', 'piecework_logs.payroll_id',
-  'piecework_logs.personnel_id', 'piecework_logs.project_id', 'piecework_logs.task_id', 'piecework_payrolls.created_by_id',
+  'accounting_settings.account_id', 'bank_accounts.account_id', 'cheques.bank_account_id', 'cheques.voucher_id',
+  'crm_activities.assigned_personnel_id', 'crm_activities.customer_id', 'crm_activities.lead_id',
+  'crm_leads.assigned_personnel_id', 'crm_leads.customer_id', 'daily_work_logs.project_id', 'item_prices.item_id',
+  'piecework_logs.payroll_id', 'piecework_logs.personnel_id', 'piecework_logs.project_id', 'piecework_logs.task_id',
   'piecework_payrolls.personnel_id', 'piecework_personnel_rates.personnel_id', 'piecework_personnel_rates.task_id',
-  'piecework_task_rate_history.changed_by_user_id', 'piecework_task_rate_history.task_id', 'production_projects.customer_id',
-  'production_projects.item_id', 'project_bom_allocations.item_id', 'project_bom_allocations.project_id',
-  'project_bom_allocations.source_transaction_id', 'project_bom_allocations.user_id', 'transactions.document_id',
-  'treasury_transactions.bank_account_id', 'treasury_transactions.cheque_id', 'treasury_transactions.created_by_id',
-  'treasury_transactions.document_id', 'treasury_transactions.payroll_id', 'treasury_transactions.voucher_id',
-  'webhook_subscriptions.created_by',
+  'piecework_task_rate_history.task_id', 'production_projects.customer_id', 'production_projects.item_id',
+  'project_bom_allocations.item_id', 'project_bom_allocations.project_id',
+  'project_bom_allocations.source_transaction_id', 'transactions.document_id', 'treasury_transactions.bank_account_id',
+  'treasury_transactions.cheque_id', 'treasury_transactions.document_id', 'treasury_transactions.payroll_id',
+  'treasury_transactions.voucher_id',
 ];
 
 type DeclaredFk = { key: string; table: string; column: string; refTable: string; onDelete: string };

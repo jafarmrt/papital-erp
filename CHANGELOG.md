@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.432 — User Columns Get Their Foreign Keys
+- **Fix (TD-902, B01-31 / B01-32):** the sixteen columns declared as references to users get database foreign keys with their declared ON DELETE, validated on clean data and listed by the health check until validated.
+
 ### v9.0.431 — Webhook Deliveries and Rule Logs Follow Their Declared ON DELETE
 - **Fix (TD-611, B01-31):** webhook deliveries and rule action logs get the foreign keys the schema declares; deleting a subscription or a rule is one audited transaction that also closes its queued jobs.
 

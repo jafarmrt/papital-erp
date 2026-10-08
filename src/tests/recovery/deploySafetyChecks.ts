@@ -76,7 +76,8 @@ async function insertDeletableMarkers(url: string): Promise<void> {
     act AS (INSERT INTO crm_activities (type, title, lead_id) SELECT 'call', 'call', id FROM lead RETURNING id),
     proj AS (INSERT INTO production_projects (project_code, title) VALUES ('P01-MARK-PRJ', $1 || ' project') RETURNING id),
     stage AS (INSERT INTO project_stages (project_id, title) SELECT id, 's' FROM proj RETURNING id)
-    INSERT INTO daily_work_logs (user_id, username, date, title, content) VALUES (1, 'p01', '2026-01-05', $1 || ' log', 'c')`, [MARK]);
+    INSERT INTO daily_work_logs (user_id, username, date, title, content)
+      VALUES ((SELECT id FROM users ORDER BY id LIMIT 1), 'p01', '2026-01-05', $1 || ' log', 'c')`, [MARK]);
 }
 
 export async function checkCleanupScript(cluster: ScratchCluster): Promise<string[]> {
@@ -85,6 +86,10 @@ export async function checkCleanupScript(cluster: ScratchCluster): Promise<strin
   const run = (env: Record<string, string>, args: string[] = []) => runCommand(tsx, ['scripts/cleanup-test-data.ts', ...args],
     { env: scriptEnv({ DATABASE_URL: url, ERP_TEST_SCHEMA_ISOLATION: '0', ...env }), timeoutMs: 120_000 });
 
+  // the marker daily log needs an owner (a foreign key since v9.0.432); a user is never removed by the script, so it is
+  // part of the clean state
+  await querySql(url, `INSERT INTO users (username, password, full_name, role)
+    SELECT 'p01_owner', 'x', 'P01 owner', 'admin' WHERE NOT EXISTS (SELECT 1 FROM users)`);
   const clean = await manifest(url);
   await insertDeletableMarkers(url);
   const marked = await manifest(url);

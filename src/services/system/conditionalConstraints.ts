@@ -57,6 +57,26 @@ const notValidForeignKey = (rule: {
   create: `ALTER TABLE ${rule.table} ADD CONSTRAINT ${rule.name} FOREIGN KEY (${rule.column}) REFERENCES ${rule.parent}(id) ON DELETE ${rule.onDelete} NOT VALID`,
 });
 
+/** v9.0.432 (TD-902، مهاجرت 0090): ستون‌های کاربر، هر کدام با عنوانی که در فهرست قیدهای جاافتاده می‌آید */
+const USER_FOREIGN_KEYS: ReadonlyArray<readonly [table: string, column: string, label: string]> = [
+  ['cheques', 'created_by_id', 'پیوند ثبت‌کننده چک به کاربر'],
+  ['daily_work_logs', 'user_id', 'پیوند گزارش کار روزانه به کاربر'],
+  ['dead_letter_events', 'resolved_by', 'پیوند رسیدگی‌کننده صف خطا به کاربر'],
+  ['event_action_rules', 'created_by', 'پیوند سازنده قانون خودکار به کاربر'],
+  ['form_drafts', 'user_id', 'پیوند پیش‌نویس فرم به کاربر'],
+  ['journal_vouchers', 'approved_by_id', 'پیوند تأییدکننده سند حسابداری به کاربر'],
+  ['journal_vouchers', 'created_by_id', 'پیوند ثبت‌کننده سند حسابداری به کاربر'],
+  ['notifications', 'sender_id', 'پیوند فرستنده اعلان به کاربر'],
+  ['notifications', 'user_id', 'پیوند گیرنده اعلان به کاربر'],
+  ['personnel', 'user_id', 'پیوند پرسنل به کاربر سامانه'],
+  ['piecework_logs', 'created_by_id', 'پیوند ثبت‌کننده کارکرد به کاربر'],
+  ['piecework_payrolls', 'created_by_id', 'پیوند صادرکننده فیش حقوقی به کاربر'],
+  ['piecework_task_rate_history', 'changed_by_user_id', 'پیوند تغییردهنده نرخ کارمزد به کاربر'],
+  ['project_bom_allocations', 'user_id', 'پیوند تخصیص‌دهنده مواد پروژه به کاربر'],
+  ['treasury_transactions', 'created_by_id', 'پیوند ثبت‌کننده تراکنش خزانه به کاربر'],
+  ['webhook_subscriptions', 'created_by', 'پیوند سازنده اشتراک وب‌هوک به کاربر'],
+];
+
 export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] = [
   {
     name: 'fk_transactions_item_id', kind: 'foreign_key', table: 'transactions', migration: '0001',
@@ -123,6 +143,11 @@ export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] 
     parent: 'event_action_rules', onDelete: 'SET NULL', migration: '0089',
     label: 'پیوند گزارش اجرای قانون خودکار به قانون', blockerUnit: 'گزارش اجرا با قانون ناموجود',
   }),
+  // v9.0.432 (TD-902): user columns (users are only soft-deleted); the workflow engine's user columns stay without a key
+  ...USER_FOREIGN_KEYS.map(([table, column, label]) => notValidForeignKey({
+    name: `fk_${table}_${column}`, table, column, parent: 'users', onDelete: table === 'form_drafts' ? 'CASCADE' : 'NO ACTION',
+    migration: '0090', label, blockerUnit: 'ردیف با کاربر ناموجود',
+  })),
 ];
 
 type Executor = Pick<DbTransaction, 'execute'> | typeof orm;

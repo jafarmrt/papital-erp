@@ -631,6 +631,13 @@
       "when": 1793580000000,
       "tag": "0089_event_foreign_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1793680000000,
+      "tag": "0090_user_foreign_keys",
+      "breakpoints": true
     }
   ]
 }
