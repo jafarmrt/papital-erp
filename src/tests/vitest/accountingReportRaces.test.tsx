@@ -115,7 +115,7 @@ describe('report views pass an abortable signal (P3-8)', () => {
 
     fireEvent.click(screen.getByText('نسبت‌ها و سلامت مالی'));
     await waitFor(() => expect(signalsOf('financial-ratios')).toHaveLength(1));
-    fireEvent.click(await screen.findByText('USD'));
+    fireEvent.click(await screen.findByText('دلار'));
     await waitFor(() => expect(signalsOf('financial-ratios')).toHaveLength(2));
     const ratios = signalsOf('financial-ratios');
     expect(fetchJson.mock.calls.filter(([url]) => String(url).includes('financial-ratios'))[1][0]).toBe('/accounting/reports/financial-ratios?currency=USD');

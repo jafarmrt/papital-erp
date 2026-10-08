@@ -27,7 +27,7 @@ export function TopBar({
         <button
           onClick={onToggleSidebar}
           className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
-          title={isSidebarCollapsed ? "باز کردن منوی کناری" : "جمع کردن منوی کناری"}
+          title={isSidebarCollapsed ? "باز کردن فهرست کناری" : "جمع کردن فهرست کناری"}
         >
           <Menu size={20} />
         </button>
@@ -39,7 +39,7 @@ export function TopBar({
         <button
           onClick={onOpenProfile}
           className="flex items-center gap-2 sm:gap-3 p-1.5 pl-2 sm:pl-3 rounded-2xl hover:bg-slate-100 transition-all border border-transparent hover:border-slate-200 group text-right cursor-pointer"
-          title="مشاهده و تغییر پروفایل شخصی"
+          title="مشاهده و تغییر نمایه شخصی"
         >
           <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-900 border-2 border-amber-400 text-amber-400 font-black flex items-center justify-center shadow-sm overflow-hidden shrink-0 group-hover:scale-105 transition-transform">
             {user.avatar_url ? (

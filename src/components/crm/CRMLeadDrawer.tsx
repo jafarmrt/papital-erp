@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { Edit3, Trash2, Clock, Check, FileText, Search, Package, Copy, Building2 } from 'lucide-react';
 import { CRMLead, CRMActivity, Item } from '../../types';
 import { getActivityTypeBadge } from './CRMFollowupsView';
-import { formatPersianPrice, formatPersianNumber, formatPersianPhone, formatPersianDate } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber, formatPersianPhone, formatPersianDate } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { copyToClipboard } from '../../utils/clipboard';
@@ -33,7 +33,7 @@ export function CRMLeadDrawer({
   onConvertToInvoice,
   onOpenCustomerDossier
 }: CRMLeadDrawerProps) {
-  const appCurrency = useAppCurrency();
+  const rial = useRialDisplay();
   const [activeTab, setActiveTab] = useState<'activities' | 'stock'>('activities');
   const [items, setItems] = useState<Item[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -138,7 +138,7 @@ export function CRMLeadDrawer({
             </div>
             <div>
               <span className="text-slate-400 block text-[10px]">ارزش تخمینی:</span>
-              <span className="font-black text-amber-600 block mt-0.5">{formatPersianPrice(selectedLeadDrawer.estimatedValue, selectedLeadDrawer.currency)}</span>
+              <span className="font-black text-amber-600 block mt-0.5">{rial.money(selectedLeadDrawer.estimatedValue, selectedLeadDrawer.currency)}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px]">فروشنده مسئول:</span>
@@ -396,7 +396,7 @@ export function CRMLeadDrawer({
                       {/* Quick copy info */}
                       <div className="flex items-center justify-between pt-1 text-[10px] text-slate-500">
                         <span>
-                          {item.sales_price ? `قیمت پایه: ${formatPersianPrice(item.sales_price, appCurrency)}` : 'بدون قیمت ثبت شده'}
+                          {item.sales_price ? `قیمت پایه: ${rial.amount(item.sales_price)}` : 'بدون قیمت ثبت شده'}
                         </span>
                         <button
                           onClick={() => {

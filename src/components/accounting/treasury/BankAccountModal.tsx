@@ -12,6 +12,7 @@ interface BankAccountModalProps {
   onClose: () => void;
   editingBank: BankAccount | null;
   accounts: Account[];
+  /** واحد نمایش مبالغ ریالی؛ موجودی اولیه همیشه به ارز خود حساب وارد می‌شود */
   appCurrency: string;
   onSave: (data: any, editingId?: number) => Promise<void>;
 }
@@ -21,7 +22,6 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   onClose,
   editingBank,
   accounts,
-  appCurrency,
   onSave,
 }) => {
   const [formData, setFormData] = useState({
@@ -126,7 +126,6 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   };
 
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
-  const curLbl = formatCurrencyLabel(formData.currency || appCurrency);
 
   // فیلتر هوشمند سرفصل‌های معین حسابداری متناسب با نوع حساب خزانه
   const treasuryAccountFilter = (acc: Account): boolean => {
@@ -356,7 +355,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
             <FinancialAmountInput
               label="موجودی اولیه"
               value={formData.initialBalance}
-              currency={curLbl}
+              currency={formData.currency || 'IRR'}
               onChange={val => setFormData({ ...formData, initialBalance: val })}
               placeholder="0"
               showWordsBadge={true}

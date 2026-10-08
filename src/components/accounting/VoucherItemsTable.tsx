@@ -78,9 +78,9 @@ export function VoucherItemsTable({
           <thead>
             <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold">
               <th className="py-2.5 px-3 w-10 text-center">#</th>
-              <th className="py-2.5 px-3 w-72">کد و عنوان حساب معین * (جستجوی سریع)</th>
+              <th className="py-2.5 px-3 w-72">کد و عنوان حساب معین * (جست‌وجوی سریع)</th>
               <th className="py-2.5 px-3 w-52">تفصیلی / شخص</th>
-              <th className="py-2.5 px-3">شرح آرتیکل</th>
+              <th className="py-2.5 px-3">شرح ردیف</th>
               <th className="py-2.5 px-3 w-32">ارز و نرخ</th>
               <th className="py-2.5 px-3 w-40 text-left">بدهکار</th>
               <th className="py-2.5 px-3 w-40 text-left">بستانکار</th>

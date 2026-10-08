@@ -54,7 +54,7 @@ export function VoucherPrintModal({
 
             <div className="w-2/4 text-center">
               <h1 className="text-lg font-black tracking-tight">{companyName}</h1>
-              <h2 className="text-base font-bold mt-1 text-slate-700">سند حسابداری (دوبل)</h2>
+              <h2 className="text-base font-bold mt-1 text-slate-700">سند حسابداری</h2>
               <div className="text-[11px] text-slate-500 mt-0.5">نوع سند: {typeLabel}</div>
               {amounts.rate !== null && (
                 <div className="text-[11px] text-slate-500 mt-0.5">ارز سند: {currencyLabel}، نرخ هر {currencyLabel} {formatPersianPrice(amounts.rate)} ریال</div>
@@ -87,7 +87,7 @@ export function VoucherPrintModal({
               <tr className="bg-slate-100 font-bold border-b border-slate-400">
                 <th className="border border-slate-300 p-2 text-center w-12">ردیف</th>
                 <th className="border border-slate-300 p-2 w-32">کد معین/تفصیلی</th>
-                <th className="border border-slate-300 p-2">عنوان حساب / شرح آرتیکل</th>
+                <th className="border border-slate-300 p-2">عنوان حساب / شرح ردیف</th>
                 <th className="border border-slate-300 p-2 text-left w-36">بدهکار ({currencyLabel})</th>
                 <th className="border border-slate-300 p-2 text-left w-36">بستانکار ({currencyLabel})</th>
               </tr>

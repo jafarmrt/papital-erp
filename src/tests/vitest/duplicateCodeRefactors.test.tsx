@@ -19,11 +19,11 @@ describe('FinancialRatiosView (data-driven cards)', () => {
       currencyBreakdowns: [],
     } as unknown as FinancialRatiosReport;
     const { container } = render(<FinancialRatiosView ratiosData={report} onFetchFinancialRatios={() => {}} />);
-    for (const title of ['۱. نسبت‌های نقدینگی (Liquidity Ratios)', '۲. نسبت‌های اهرمی و ساختار سرمایه (Solvency Ratios)', '۳. نسبت‌های سودآوری و بازدهی (Profitability Ratios)', '۴. نسبت‌های کارایی و گردش دارایی‌ها (Activity Ratios)']) {
+    for (const title of ['۱. نسبت‌های نقدینگی', '۲. نسبت‌های اهرمی و ساختار سرمایه', '۳. نسبت‌های سودآوری و بازدهی', '۴. نسبت‌های کارایی و گردش دارایی‌ها']) {
       expect(screen.getByText(title)).toBeTruthy();
     }
     expect(container.querySelectorAll('.shadow-xs.space-y-2').length).toBe(15);
-    expect(screen.getByText('نسبت جاری (Current)')).toBeTruthy();
+    expect(screen.getByText('نسبت جاری')).toBeTruthy();
     expect(screen.getByText('دارایی جاری ÷ بدهی جاری (معیار: > ۱.۵)')).toBeTruthy();
     expect(screen.getByText('کل بدهی‌ها به کل دارایی‌ها (معیار: < ۵۰٪)')).toBeTruthy();
     expect(screen.getByText('۴۲٪')).toBeTruthy();

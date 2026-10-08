@@ -1,6 +1,6 @@
 import { ShieldCheck, Layers, AlertTriangle, TrendingDown, DollarSign, Warehouse, Search, Download, RefreshCw, RotateCcw, CheckCircle2, Eye } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import type { InventoryIntegrityReport, ItemIntegrityAuditResult } from '../../types';
 import { integrityStatusLabel, integrityVariance, isIntegrityItemSynchronized } from '../../lib/inventoryAudit/integrityReport';
 
@@ -31,8 +31,8 @@ export function Inventory3WayIntegrityTab({
   onOpenKardexModal,
   onExportExcel
 }: Inventory3WayIntegrityTabProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
   return (
     <div className="space-y-6">
       {/* Summary KPI Cards */}
@@ -118,7 +118,7 @@ export function Inventory3WayIntegrityTab({
           </div>
           <div className="mt-3">
             <div className="text-lg font-black text-slate-900 font-mono truncate">
-              {formatPersianPrice(integrityReport?.summary?.totalInventoryValuationStored || 0)}
+              {rial.number(integrityReport?.summary?.totalInventoryValuationStored || 0)}
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">{`${curLbl} (بر پایه میانگین موزون بها)`}</div>
           </div>
@@ -243,7 +243,7 @@ export function Inventory3WayIntegrityTab({
                   مانده گردش کاردکس
                 </th>
                 <th className="py-3 px-3 text-center">مغایرت مقداری</th>
-                <th className="py-3 px-3 text-center">میانگین موزون بها</th>
+                <th className="py-3 px-3 text-center">{`میانگین موزون بها (${curLbl})`}</th>
                 <th className="py-3 px-3 text-center">وضعیت انطباق</th>
                 <th className="py-3 px-3 text-center">عملیات</th>
               </tr>
@@ -326,10 +326,10 @@ export function Inventory3WayIntegrityTab({
 
                       {/* WAC */}
                       <td className="py-3 px-3 text-center font-mono text-slate-700">
-                        <div>{formatPersianPrice(item.recordedWac)}</div>
+                        <div>{rial.number(item.recordedWac)}</div>
                         {wacMismatch && (
                           <div className="text-[10px] text-amber-600" title="بازپخش کاردکس">
-                            بازپخش کاردکس: {formatPersianPrice(item.computedWac)}
+                            بازپخش کاردکس: {rial.number(item.computedWac)}
                           </div>
                         )}
                       </td>

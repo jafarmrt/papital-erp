@@ -6,8 +6,8 @@ import { Calculator, X, FolderKanban, Plus, Trash2 } from 'lucide-react';
 import { PieceworkLog, PieceworkTask } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { BatchLogRow } from '../../hooks/usePiecework';
-import { formatPersianPrice, formatQuantityOrTime, parseQuantityOrTime, extractDateString, formatCurrencyLabel, isoToJalaliDate } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatQuantityOrTime, parseQuantityOrTime, extractDateString, formatCurrencyLabel, isoToJalaliDate } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 
 interface PieceworkLogModalProps {
@@ -60,8 +60,9 @@ export function PieceworkLogModal({
   isSaving = false,
   canSetRate = true
 }: PieceworkLogModalProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  // ورودی نرخ همیشه به ریال است (مبلغ ذخیره‌شده)
+  const inputCurLbl = formatCurrencyLabel('IRR');
   if (!isOpen) return null;
 
   return (
@@ -139,11 +140,11 @@ export function PieceworkLogModal({
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">{`نرخ واحد (${curLbl})`}</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">{`نرخ واحد (${inputCurLbl})`}</label>
                   <FinancialAmountInput
                     value={editingLog.unitRate}
                     onChange={(val) => setEditingLog(prev => prev ? { ...prev, unitRate: val } : null)}
-                    currency={appCurrency}
+                    currency="IRR"
                     variant="compact"
                     showWordsBadge={false}
                     className="w-full"
@@ -280,7 +281,7 @@ export function PieceworkLogModal({
                         </div>
 
                         <div className="w-full sm:w-28">
-                          <label className="block text-[10px] font-bold text-slate-500 mb-1">{`نرخ واحد (${curLbl})`}</label>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1">{`نرخ واحد (${inputCurLbl})`}</label>
                           <FinancialAmountInput
                             value={row.unitRate}
                             onChange={(val) => {
@@ -289,7 +290,7 @@ export function PieceworkLogModal({
                               setBatchLogRows(newRows);
                             }}
                             readOnly={!canSetRate}
-                            currency={appCurrency}
+                            currency="IRR"
                             variant="table"
                             placeholder="0"
                             className="w-full"
@@ -300,7 +301,7 @@ export function PieceworkLogModal({
 
                         {rowTotal > 0 && (
                           <div className="text-left font-mono font-bold text-xs text-blue-700 whitespace-nowrap shrink-0">
-                            {formatPersianPrice(rowTotal)}
+                            {rial.amount(rowTotal)}
                           </div>
                         )}
 

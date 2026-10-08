@@ -4,6 +4,7 @@ import { Search, ChevronDown, Loader2 } from 'lucide-react';
 import { cn } from '../utils';
 import { fetchJson } from '../api';
 import { useClickOutside } from '../hooks/useClickOutside';
+import { normalizeSearchText } from '../lib/search/searchText';
 
 interface Option {
   value: string | number;
@@ -141,26 +142,17 @@ export function SearchableSelect({
 
   const limit = maxResults || 4;
 
-  const normalizeSearch = (str: string) => {
-    if (!str) return '';
-    return str
-      .toLowerCase()
-      .replace(/ي/g, 'ی')
-      .replace(/ك/g, 'ک')
-      .replace(/[۰-۹]/g, d => String.fromCharCode(d.charCodeAt(0) - 1728))
-      .trim();
-  };
-
+  // v9.0.291 (TD-675): همان یکسان‌سازی جست‌وجوی سراسری سرور
   const filteredPropOptions = React.useMemo(() => {
     if (!search.trim()) {
       return propOptions.slice(0, limit);
     }
-    const query = normalizeSearch(search);
-    const matches = propOptions.filter(opt => normalizeSearch(opt.label).includes(query));
+    const query = normalizeSearchText(search);
+    const matches = propOptions.filter(opt => normalizeSearchText(opt.label).includes(query));
     
     matches.sort((a, b) => {
-      const aLabel = normalizeSearch(a.label);
-      const bLabel = normalizeSearch(b.label);
+      const aLabel = normalizeSearchText(a.label);
+      const bLabel = normalizeSearchText(b.label);
       const aStarts = aLabel.startsWith(query);
       const bStarts = bLabel.startsWith(query);
       if (aStarts && !bStarts) return -1;
