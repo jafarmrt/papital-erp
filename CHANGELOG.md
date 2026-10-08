@@ -19,6 +19,24 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.374 — Reservations Keyed by Item Id
+- **Reservations (TD-822, B07-06):** reservation summaries, the reserved stock map and the item list key reservations by item id instead of the upper-cased code, so two items whose codes differ only in case keep their own reservations.
+
+### v9.0.373 — Project Finalize Reserves Free Stock Only
+- **Reservations (TD-819, B07-03, decision t3):** finalizing a project reserves min(need, stock minus the reservations of others) under a new advisory lock (91011), stores the shortage in reservationShortages (shown on the purchase tab), and the health check lists items reserved above their stock.
+
+### v9.0.372 — Project Reservations Convert Units
+- **Reservations (TD-820, B07-04, decision t4):** a project need is converted to the item unit with the row's own conversion rate before it is reserved and summed per item; a row in another unit without a valid conversion refuses the finalize with 422 PROJECT_RESERVATION_UNIT_MISMATCH; a directly entered conversion rate is no longer rounded to zero.
+
+### v9.0.371 — Only Finalized Projects Reserve Stock
+- **Reservations (TD-817, B07-01, decision t2):** only the stored reservation of a finalized project reserves stock; the reader no longer rebuilds an empty reservation from the sections or the purchase list, so a draft or unfrozen project reserves nothing and a consumed reservation stays consumed; legacy projects are listed by the health check.
+
+### v9.0.370 — Only Sales Proformas Reserve Stock
+- **Reservations (TD-818, B07-02, decision t1):** only a sales proforma (type invoice or proforma in proforma status) reserves stock; a purchase proforma (receipt in proforma status) and any draft reserve nothing, so a purchase order no longer blocks the sale of free stock.
+
+### v9.0.369 — Package 7 Inventory Planning Audit
+- **Audit (package 7):** inventory planning section of the stability audit report: 15 proven findings opened as TD-817..TD-831 plus TD-843 (decision t7) with the product-owner decisions t1-t8; documentation only.
+
 ### v9.0.368 — v9.0.368 — Stage Number and Percent Input
 - **Stage Number and Percent Input (TD-755):** a text stage number or percent answered 500 with the SQL text and a manual duplicate number was stored; the stage route now reads them with `decimalInput` (a positive whole number, a whole percent 0 to 100, Persian digits accepted), a number another stage holds is 409 `STAGE_ORDER_TAKEN`, and a renumbered stage carries its matrix ticks.
 

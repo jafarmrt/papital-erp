@@ -8891,7 +8891,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           title: `ERP-TEST-MARKER پروژه رزرو TD-233 ${suffix}`,
           status: 'in_progress',
           version: 1,
-          inventoryControl: { isReserved: true, reservedItems },
+          inventoryControl: { isFinalized: true, isReserved: true, reservedItems },
         }).returning();
         projectIds.push(p.id);
         return p.id;
@@ -9132,7 +9132,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           title: `ERP-TEST-MARKER پروژه رزرو TD-237 ${suffix}`,
           status: 'in_progress',
           version: 1,
-          inventoryControl: { isReserved: true, reservedItems },
+          inventoryControl: { isFinalized: true, isReserved: true, reservedItems },
         }).returning();
         projectIds.push(p.id);
         return p.id;
@@ -10758,6 +10758,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 10 PR C (v9.0.351+): what the procurement desk reads and shows
   const { runProcurementDeskTests } = await import('../regression/procurementDeskTests.js');
   results.push(...await runProcurementDeskTests(shouldRun));
+
+  // Package 7 PR A (v9.0.370+): which documents and projects reserve stock, and how much
+  const { runStockReservationTests } = await import('../regression/stockReservationTests.js');
+  results.push(...await runStockReservationTests(shouldRun));
 
   return results;
 }

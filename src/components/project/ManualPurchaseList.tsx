@@ -4,12 +4,15 @@ import { ProductionProject, PurchaseListItem, Item } from '../../types';
 import { COMMON_UNITS } from './projectInventoryUtils';
 import { formatPersianNumber } from '../../utils';
 import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
+import { ReservationShortageList } from './ReservationShortageList';
+import type { ReservationShortage } from '../../lib/projects/projectReservation';
 
 interface ManualPurchaseListProps {
   project: ProductionProject;
   purchaseList: PurchaseListItem[];
   isFinalized: boolean;
   reservedItems?: any[];
+  reservationShortages?: ReservationShortage[];
   warehouseItems?: Item[];
   handleAddManualPurchaseRow: () => void;
   handlePrintPurchaseListWithCheck: () => void;
@@ -23,6 +26,7 @@ export function ManualPurchaseList({
   purchaseList,
   isFinalized,
   reservedItems,
+  reservationShortages = [],
   warehouseItems = [],
   handleAddManualPurchaseRow,
   handlePrintPurchaseListWithCheck,
@@ -192,6 +196,8 @@ export function ManualPurchaseList({
           )}
         </div>
       )}
+
+      <ReservationShortageList shortages={reservationShortages} />
 
       {purchaseList.length === 0 ? (
         <div className="p-8 text-center bg-emerald-50 border border-emerald-200 rounded-2xl space-y-2">
