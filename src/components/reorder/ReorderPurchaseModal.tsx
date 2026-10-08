@@ -120,7 +120,7 @@ export function ReorderPurchaseModal({
             unit: it.unit || 'عدد',
             requestedQty: Number(it.orderQty),
             unitPriceEstimate: Number(it.unitPrice || 0),
-            notes: `کسری نقطه سفارش: موجودی فعلی ${it.current_stock} / حد آستانه ${it.reorder_point}`
+            notes: `کسری نقطه سفارش: موجودی آزاد ${it.current_stock} / حد آستانه ${it.reorder_point}`
           }))
         }
       };
@@ -285,7 +285,7 @@ export function ReorderPurchaseModal({
                   <tr>
                     <th className="p-2.5 text-center w-12">ردیف</th>
                     <th className="p-2.5">کد و نام کالا</th>
-                    <th className="p-2.5 text-center w-20">موجودی فعلی</th>
+                    <th className="p-2.5 text-center w-20">موجودی آزاد</th>
                     <th className="p-2.5 text-center w-20">نقطه سفارش</th>
                     <th className="p-2.5 text-center w-20">میزان کسری</th>
                     <th className="p-2.5 text-center w-28">مقدار سفارش</th>

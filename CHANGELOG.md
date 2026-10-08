@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.385 — Reorder Alert on Free Stock
+- **Reorder alerts (TD-843, decision t7):** free stock (stock minus reservations) is compared with the reorder point; open purchases are shown as «در راه».
+
 ### v9.0.384 — Reorder Purchase Receipt at Price Zero
 - **Reorder alerts (TD-830, B07-14):** a final receipt at price zero needs «کالای اهدایی» and is refused for an item without cost; the warehouse and the Jalali date can be chosen.
 

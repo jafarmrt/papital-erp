@@ -15,6 +15,9 @@ export async function runReservedItemsReportTests(shouldRun: ShouldRun): Promise
     ['reg_reserved_items_reader_scope_td_829',
       'v9.0.381: the report gives cost and value only to item cost readers and a proforma buyer only to documents.view; other readers see quantities and sources (TD-829)',
       ['td829', 'reservation', 'security', 'package7'], readerScopeCase],
+    ['reg_reorder_alert_free_stock_td_843',
+      'v9.0.385: the reorder alert compares free stock (stock minus reservations) with the reorder point and shows open purchases as in transit only (TD-843)',
+      ['td843', 'reservation', 'reorder', 'package7'], reorderFreeStockCase],
   ]);
 }
 
@@ -115,4 +118,48 @@ async function readerScopeCase(h: Harness, wrong: string[]): Promise<string> {
   const denied = await h.get('/api/inventory/reserved-items', outsider);
   if (denied.status !== 403) wrong.push(`crm.view alone answered ${denied.status}, expected 403`);
   return seen.join('; ');
+}
+
+type AlertRow = Record<string, unknown> & { id?: number };
+
+/**
+ * Decision t7 (TD-843): A 10 in stock with 8 reserved by a sales proforma has 2 free against a reorder point of 5 and got no
+ * alert; B 3 in stock with 4 on a draft receipt and 1 on a purchase proforma is alerted with 5 in transit and its deficit
+ * still 2; C 10 in stock fully reserved by a finalized project is «بی موجودی».
+ */
+async function reorderFreeStockCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const [a, b, c] = [await f.item(10), await f.item(3), await f.item(10)];
+  await h.q('UPDATE items SET reorder_point = 5 WHERE id = ANY($1::int[])', [[a, b, c]]);
+  const setup: Array<[string, string, number, number]> = [['invoice', 'proforma', a, 8], ['receipt', 'draft', b, 4], ['receipt', 'proforma', b, 1]];
+  for (const [type, status, itemId, qty] of setup) {
+    const res = await postDoc(h, f, type, status, itemId, qty);
+    if (res.status !== 200) throw new Error(`setup: ${type}/${status} answered ${brief(res)}`);
+  }
+  const projectId = await reservingProject(h, c, 10);
+  try {
+    const all = await h.get('/api/items/reorder-alerts');
+    const zero = await h.get('/api/items/reorder-alerts?zero_stock=true');
+    if (all.status !== 200 || zero.status !== 200) throw new Error(`the alerts answered ${brief(all)} / ${brief(zero)}`);
+    const rows = Array.isArray(all.body) ? (all.body as AlertRow[]) : [];
+    const zeroIds = (Array.isArray(zero.body) ? (zero.body as AlertRow[]) : []).map(r => Number(r.id));
+    const row = (id: number) => rows.find(r => Number(r.id) === id);
+    const expected: Array<[string, number, Record<string, number | boolean>]> = [
+      ['A', a, { current_stock: 10, reserved_qty: 8, free_stock: 2, in_transit_qty: 0, deficit: 3, is_zero_stock: false }],
+      ['B', b, { current_stock: 3, reserved_qty: 0, free_stock: 3, in_transit_qty: 5, deficit: 2, is_zero_stock: false }],
+      ['C', c, { current_stock: 10, reserved_qty: 10, free_stock: 0, in_transit_qty: 0, deficit: 5, is_zero_stock: true }],
+    ];
+    for (const [label, id, fields] of expected) {
+      const r = row(id);
+      if (!r) { wrong.push(`${label} (stock ${fields.current_stock}, free ${fields.free_stock}, reorder point 5) has no alert`); continue; }
+      for (const [key, value] of Object.entries(fields)) {
+        if (r[key] !== value && Number(r[key]) !== value) wrong.push(`${label}: ${key} ${String(r[key])}, expected ${String(value)}`);
+      }
+    }
+    if (!zeroIds.includes(c)) wrong.push('the out-of-stock filter leaves out C, whose whole stock is reserved');
+    if (zeroIds.includes(a) || zeroIds.includes(b)) wrong.push('the out-of-stock filter lists A or B, which have free stock');
+    return expected.map(([label, id]) => `${label}: free ${String(row(id)?.free_stock)}, in transit ${String(row(id)?.in_transit_qty)}, deficit ${String(row(id)?.deficit)}`).join('; ');
+  } finally {
+    await h.q('UPDATE production_projects SET is_deleted = 1 WHERE id = $1', [projectId]);
+  }
 }
