@@ -2,11 +2,15 @@
  * Package 15 PR b (webhook management tab, `src/components/settings/WebhookManagementSubTab.tsx`).
  * TD-719 (B15-17): the edit form took the masked key from GET and every save sent it back; «test ping» signed with it.
  * TD-720 (B15-18): the create form made the signing key with `Math.random` (so the server's CSPRNG key never ran).
+ * TD-710 (B15-08): the key is shown once (after create or rotate), and the rule token is a password field.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { fetchJson } from '../../api';
 import { WebhookManagementSubTab } from '../../components/settings/WebhookManagementSubTab';
+import { RuleEditorModal } from '../../components/settings/RuleEditorModal';
+
+vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn(async () => true) }));
 
 vi.mock('../../api', async () => {
   const actual = await vi.importActual<typeof import('../../api')>('../../api');
@@ -21,13 +25,13 @@ const subscription = {
   createdAt: '2026-10-01T10:00:00Z',
 };
 
-function mockServer() {
+function mockServer(answers: Record<string, unknown> = {}) {
   const writes: Array<{ url: string; method: string; body: Record<string, unknown> }> = [];
   vi.mocked(fetchJson).mockImplementation(async (url: string, opts?: RequestInit) => {
     const method = opts?.method || 'GET';
     if (method !== 'GET') {
       writes.push({ url, method, body: opts?.body ? JSON.parse(String(opts.body)) : {} });
-      return { success: true, statusCode: 200, durationMs: 5 };
+      return answers[`${method} ${url}`] ?? { success: true, statusCode: 200, durationMs: 5 };
     }
     if (url === '/events/webhooks') return { success: true, data: [subscription] };
     if (url === '/events/webhooks/stats') return { success: true, stats: null };
@@ -74,5 +78,36 @@ describe('TD-720 the create form leaves the signing key to the server', () => {
     expect(post?.body.timeoutMs).toBe(12000);
     expect(random).not.toHaveBeenCalled();
     random.mockRestore();
+  });
+});
+
+describe('TD-710 the signing key is shown once and secrets are password fields', () => {
+  it('the key a new webhook gets is shown once, with a copy button, after create', async () => {
+    mockServer({ 'POST /events/webhooks': { success: true, message: 'ساخته شد', data: { id: 8, name: 'شریک تازه', secretKey: 'whsec_shown_once_after_create' } } });
+    render(<WebhookManagementSubTab />);
+    fireEvent.click(await screen.findByText('تعریف وب‌هوک جدید'));
+    fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه آنلاین ووکامرس'), { target: { value: 'شریک تازه' } });
+    fireEvent.change(screen.getByPlaceholderText('https://your-domain.com/api/webhook/receiver'), { target: { value: 'https://new.example.com/hook' } });
+    fireEvent.click(screen.getByText('ایجاد و فعال‌سازی درگاه وب‌هوک'));
+    expect(await screen.findByText('whsec_shown_once_after_create')).toBeTruthy();
+    expect(screen.getByText(/فقط همین یک بار نشان داده می‌شود/)).toBeTruthy();
+    expect(screen.getByTitle('کپی کلید امضا')).toBeTruthy();
+  });
+
+  it('the rotate button asks the server for a new key and shows it once', async () => {
+    const writes = mockServer({ 'POST /events/webhooks/7/rotate-secret': { success: true, data: { id: 7, name: 'فروشگاه شریک', secretKey: 'whsec_rotated_new_key' } } });
+    render(<WebhookManagementSubTab />);
+    fireEvent.click(await screen.findByTitle('ساخت کلید امضای تازه'));
+    expect(await screen.findByText('whsec_rotated_new_key')).toBeTruthy();
+    expect(writes.find(w => w.url === '/events/webhooks/7/rotate-secret')?.method).toBe('POST');
+  });
+
+  it('the rule editor shows the stored token in a password field', () => {
+    mockServer();
+    render(<RuleEditorModal isOpen onClose={() => {}} onSave={async () => {}} initialRule={{
+      id: 3, name: 'قانون شریک', description: '', eventType: 'InvoiceApproved', conditionsJson: [], isActive: 1,
+      actionType: 'webhook', actionConfigJson: { url: 'https://partner.example.com/in', secretToken: '********' },
+    }} />);
+    expect((screen.getByDisplayValue('********') as HTMLInputElement).type).toBe('password');
   });
 });

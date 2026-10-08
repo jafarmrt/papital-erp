@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.339 — Webhook Keys and Partner Tokens Masked in Every Answer
+- **Webhook secrets (TD-710):** the webhook toggle and edit answers returned the full signing key to a non-admin manager, and any events viewer saw the partner API token in custom headers and the token of webhook rules; the key, rule token and header values are now masked in every answer for every user, and the key is shown once, after create or rotation.
+
 ### v9.0.338 — Server-Made Webhook Key and Entered Timeout
 - **Webhook key and timeout (TD-720):** the webhook form made the signing key in the browser with Math.random (about 16 base-36 characters), so the server's CSPRNG key never ran, and the create route read only timeoutSeconds, so every entered timeout became 10 seconds; the server now makes the key and stores the entered timeout of 1 to 30 seconds.
 

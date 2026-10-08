@@ -191,6 +191,7 @@
 | DELETE | `/api/events/webhooks/:id` | events.manage |
 | GET | `/api/events/webhooks/:id` | events.view |
 | PUT | `/api/events/webhooks/:id` | events.manage |
+| POST | `/api/events/webhooks/:id/rotate-secret` | events.manage |
 | POST | `/api/events/webhooks/:id/toggle` | events.manage |
 | GET | `/api/events/webhooks/deliveries` | events.view |
 | GET | `/api/events/webhooks/deliveries/list` | events.view |

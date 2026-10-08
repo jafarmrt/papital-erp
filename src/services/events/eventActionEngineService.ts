@@ -14,6 +14,7 @@ import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js
 import { LOCAL_ECHO_PATH, assertSafeExternalUrl, isEchoSimulatorEnvironment, isLocalEchoTarget } from '../../lib/ssrfGuard.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { assertNotificationPermission, permissionHolderUserIds, roleMemberUserIds } from '../notifications/notificationRecipients.js';
+import { resolveRuleConfigSecrets } from './integrationSecrets.js';
 
 export interface RuleCondition {
   field: string; // e.g. 'payload.totalAmount', 'payload.newStock', 'metadata.userRole', 'aggregateType'
@@ -656,7 +657,8 @@ export class EventActionEngineService {
       eventType: data.eventType,
       conditionsJson: data.conditionsJson || [],
       actionType: data.actionType,
-      actionConfigJson: data.actionConfigJson || {},
+      // v9.0.339 (TD-710): a masked token or header value of a new rule has no stored value to stand for
+      actionConfigJson: resolveRuleConfigSecrets(data.actionConfigJson || {}, {}) as CreateRuleInput['actionConfigJson'],
       isActive: data.isActive ?? 1,
       executionCount: 0,
       createdBy: userId || null,
@@ -681,7 +683,11 @@ export class EventActionEngineService {
     if (data.eventType !== undefined) updatePayload.eventType = data.eventType;
     if (data.conditionsJson !== undefined) updatePayload.conditionsJson = data.conditionsJson;
     if (data.actionType !== undefined) updatePayload.actionType = data.actionType;
-    if (data.actionConfigJson !== undefined) updatePayload.actionConfigJson = data.actionConfigJson;
+    if (data.actionConfigJson !== undefined) {
+      // v9.0.339 (TD-710): responses mask the token and header values; «********» keeps the stored value for the same address
+      const current = await this.getRuleById(id);
+      updatePayload.actionConfigJson = resolveRuleConfigSecrets(data.actionConfigJson, current?.actionConfigJson);
+    }
     if (data.isActive !== undefined) updatePayload.isActive = data.isActive;
 
     const [updated] = await orm.update(eventActionRules)

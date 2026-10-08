@@ -3,6 +3,7 @@
  * TD-723 (B15-21): «آزمایش اتصال» for a non-admin sent the masked keys «********» as credentials, so it always failed.
  * TD-724 (B15-22): the bulk stock sync showed only the server's green message while items failed.
  * TD-730 (B15-28, WooCommerce half): a 403 / 500 on the order lists was swallowed and the tables said «no orders yet».
+ * TD-710 (B15-08): the WooCommerce webhook secret was shown in a text field.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
@@ -163,5 +164,16 @@ describe('TD-730 WooCommerce order lists show a load error instead of «no order
     expect(result.current.wcOrderLogsError).toBe('');
     renderTab(result.current);
     expect(screen.getByText('طرف حساب تازه «علی (۰۹۳۵)» ساخته شد').className).not.toContain('text-rose-600');
+  });
+});
+
+describe('TD-710 the WooCommerce webhook secret is a password field', () => {
+  it('the secret field never shows the key as text', async () => {
+    mockServer();
+    const { result } = renderHook(() => useSettings(), { wrapper });
+    await waitFor(() => expect(result.current.wcWebhookSecret).toBe(MASKED_SECRET_VALUE));
+    renderTab(result.current);
+    const secretField = screen.getByPlaceholderText(/کد محرمانه ایجادشده در ووکامرس/) as HTMLInputElement;
+    expect(secretField.type).toBe('password');
   });
 });

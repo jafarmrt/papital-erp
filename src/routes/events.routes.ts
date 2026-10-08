@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
-import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 import { domainEventBus } from '../services/events/domainEventBus.js';
 import { OutboxService } from '../services/events/outboxService.js';
 import { DeadLetterQueueService } from '../services/events/deadLetterQueueService.js';
@@ -15,6 +14,7 @@ import { z } from 'zod';
 import { errorMessageOf } from '../utils.js';
 import { AppError, NotFoundError } from '../errors/customErrors.js';
 import { isEnteredSecret } from '../lib/secrets/maskedSecret.js';
+import { actionRuleView, webhookSubscriptionView } from '../services/events/integrationSecrets.js';
 
 const eventIdParamSchema = z.object({
   params: z.object({
@@ -243,7 +243,8 @@ router.get(['/action-rules', '/rules'], authorizePermission('events.view'), asyn
 
     res.json({
       success: true,
-      data: rules
+      // v9.0.339 (TD-710): the rule token and header values never reach a reader (events.view), admin included
+      data: (Array.isArray(rules) ? rules : []).map(actionRuleView)
     });
   } catch (error) {
     throw error;
@@ -261,7 +262,7 @@ router.get(['/action-rules/:id', '/rules/:id'], authorizePermission('events.view
 
     res.json({
       success: true,
-      data: rule
+      data: actionRuleView(rule)
     });
   } catch (error) {
     throw error;
@@ -306,7 +307,7 @@ router.post(['/action-rules', '/rules'], authorizePermission('events.manage'), a
     res.status(201).json({
       success: true,
       message: 'قانون اکشن خودکار با موفقیت ثبت گردید.',
-      data: newRule
+      data: actionRuleView(newRule)
     });
   } catch (error) {
     throw error;
@@ -330,7 +331,7 @@ router.put(['/action-rules/:id', '/rules/:id'], authorizePermission('events.mana
     res.json({
       success: true,
       message: 'قانون اکشن با موفقیت به‌روزرسانی شد.',
-      data: updatedRule
+      data: updatedRule ? actionRuleView(updatedRule) : updatedRule
     });
   } catch (error) {
     throw error;
@@ -368,7 +369,7 @@ router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermissi
     res.json({
       success: true,
       message: `وضعیت قانون به ${updatedRule.isActive ? 'فعال' : 'غیرفعال'} تغییر یافت.`,
-      data: updatedRule
+      data: actionRuleView(updatedRule)
     });
   } catch (error) {
     throw error;
@@ -384,7 +385,8 @@ router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('
 
     res.json({
       success: true,
-      ...testResult
+      ...testResult,
+      rule: actionRuleView(testResult.rule)
     });
   } catch (error) {
     throw error;
@@ -662,16 +664,8 @@ router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], au
 // 6. Webhook Subscriptions & Deliveries Pipeline
 // =========================================================================
 
-// V3.0.7 (TD-057): secret امضای وب‌هوک فقط برای مدیر برگردانده می‌شود؛ سایر
-// کاربران دارای events.view مقدار ماسک‌شده می‌بینند. (فرانت‌اند مدیریتی که
-// secret را ویرایش/ping می‌کند در عمل مختص ادمین است.)
-const MASKED_SECRET = '********';
-
-function maskSubscriptionSecret<T extends { secretKey?: string }>(sub: T, isAdmin: boolean): T {
-  if (isAdmin || !sub.secretKey) return sub;
-  const s = sub.secretKey;
-  return { ...sub, secretKey: s.length > 8 ? `${'*'.repeat(Math.max(s.length - 4, 4))}${s.slice(-4)}` : MASKED_SECRET };
-}
+// v9.0.339 (TD-710, decision t6 a): the signing key and the custom header values are masked in every answer, for every
+// user and the system admin too (`webhookSubscriptionView`); the key is shown once, by create and rotate-secret only.
 
 router.get('/webhooks/stats', authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
@@ -688,11 +682,9 @@ router.get('/webhooks/stats', authorizePermission('events.view'), asyncHandler(a
 router.get('/webhooks', authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const subs = await WebhookSubscriptionService.getSubscriptions();
-    const isAdmin = req.user?.role === SYSTEM_ADMIN_ROLE;
     res.json({
       success: true,
-      // V3.0.7 (TD-057): secret امضای وب‌هوک هرگز به کاربران غیرمدیر داده نمی‌شود
-      data: (Array.isArray(subs) ? subs : []).map(s => maskSubscriptionSecret(s, isAdmin))
+      data: (Array.isArray(subs) ? subs : []).map(s => webhookSubscriptionView(s))
     });
   } catch (error) {
     throw error;
@@ -710,7 +702,7 @@ router.get('/webhooks/:id', authorizePermission('events.view'), validate(paramsI
 
     res.json({
       success: true,
-      data: maskSubscriptionSecret(sub, req.user?.role === SYSTEM_ADMIN_ROLE)
+      data: webhookSubscriptionView(sub)
     });
   } catch (error) {
     throw error;
@@ -756,8 +748,8 @@ router.post('/webhooks', authorizePermission('events.manage'), asyncHandler(asyn
 
     res.status(201).json({
       success: true,
-      message: 'اشتراک وب‌هوک با موفقیت ایجاد شد.',
-      data: newSub
+      message: 'اشتراک وب‌هوک با موفقیت ایجاد شد. کلید امضا را همین حالا کپی کنید؛ دیگر نشان داده نمی‌شود.',
+      data: webhookSubscriptionView(newSub, { revealSecret: true })
     });
   } catch (error) {
     if (error instanceof AppError) throw error;
@@ -778,7 +770,7 @@ router.put('/webhooks/:id', authorizePermission('events.manage'), validate(param
     res.json({
       success: true,
       message: 'اشتراک وب‌هوک با موفقیت ویرایش شد.',
-      data: updated
+      data: webhookSubscriptionView(updated)
     });
   } catch (error) {
     if (error instanceof AppError) throw error;
@@ -813,11 +805,30 @@ router.post('/webhooks/:id/toggle', authorizePermission('events.manage'), valida
     res.json({
       success: true,
       message: `وضعیت وب‌هوک به ${updated.isActive ? 'فعال' : 'غیرفعال'} تغییر یافت.`,
-      data: updated
+      data: webhookSubscriptionView(updated)
     });
   } catch (error) {
     throw error;
   }
+}));
+
+router.post('/webhooks/:id/rotate-secret', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const rotated = await WebhookSubscriptionService.rotateSecret(id);
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username,
+    userFullName: req.user?.full_name || '',
+    action: 'UPDATE',
+    entity: `اشتراک وب‌هوک: ${rotated.name}`,
+    entityId: id,
+    description: `ساخت کلید امضای تازه برای اشتراک وب‌هوک «${rotated.name}»`
+  });
+  res.json({
+    success: true,
+    message: 'کلید امضای تازه ساخته شد. آن را همین حالا کپی کنید و به سامانه مقصد بدهید؛ این کلید دیگر نشان داده نمی‌شود.',
+    data: webhookSubscriptionView(rotated, { revealSecret: true })
+  });
 }));
 
 router.post('/webhooks/ping', authorizePermission('events.manage'), validate(webhookPingSchema), asyncHandler(async (req, res) => {

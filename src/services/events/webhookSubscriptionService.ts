@@ -6,7 +6,8 @@ import { BaseDomainEvent } from './domainEvents.js';
 import { assertSafeExternalUrl } from '../../lib/ssrfGuard.js';
 import { isEnteredSecret } from '../../lib/secrets/maskedSecret.js';
 import { resolveWebhookTimeoutMs, WEBHOOK_TIMEOUT_DEFAULT_MS } from '../../lib/events/webhookTimeout.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { assertHeadersReenteredForNewTarget, resolveMaskedHeaders } from './integrationSecrets.js';
 import crypto from 'crypto';
 
 export interface CreateWebhookSubDTO {
@@ -137,6 +138,8 @@ export class WebhookSubscriptionService {
 
     const timeoutMs = webhookTimeoutOf(data);
     const secretKey = isEnteredSecret(data.secretKey) ? data.secretKey.trim() : this.generateSecretKey();
+    // v9.0.339 (TD-710): a masked header value of a new webhook has no stored value to stand for
+    const customHeaders = resolveMaskedHeaders(data.customHeaders, {}, true);
     const eventPatterns = data.eventPatterns && data.eventPatterns.length > 0 ? data.eventPatterns : ['*'];
 
     let validUserId: number | null = null;
@@ -158,7 +161,7 @@ export class WebhookSubscriptionService {
         targetUrl: targetUrl,
         secretKey: secretKey,
         eventPatterns: eventPatterns,
-        customHeaders: data.customHeaders || {},
+        customHeaders,
         isActive: data.isActive !== undefined ? data.isActive : 1,
         retryLimit: data.retryLimit || 3,
         timeoutMs: timeoutMs ?? WEBHOOK_TIMEOUT_DEFAULT_MS,
@@ -189,6 +192,7 @@ export class WebhookSubscriptionService {
     };
 
     if (data.name !== undefined) updateFields.name = data.name.trim();
+    const sameTarget = data.targetUrl === undefined || data.targetUrl.trim() === current.targetUrl;
     if (data.targetUrl !== undefined) {
       const targetUrl = data.targetUrl.trim();
       await assertSafeExternalUrl(targetUrl, { allowLocalEcho: true });
@@ -198,7 +202,9 @@ export class WebhookSubscriptionService {
     // masked key back and every save replaced the real signing key with the mask
     if (isEnteredSecret(data.secretKey)) updateFields.secretKey = data.secretKey.trim();
     if (data.eventPatterns !== undefined) updateFields.eventPatterns = data.eventPatterns;
-    if (data.customHeaders !== undefined) updateFields.customHeaders = data.customHeaders;
+    // v9.0.339 (TD-710): responses mask header values, so «********» keeps the stored value, only for the stored address
+    if (data.customHeaders !== undefined) updateFields.customHeaders = resolveMaskedHeaders(data.customHeaders, current.customHeaders, sameTarget);
+    else assertHeadersReenteredForNewTarget(current.customHeaders, sameTarget);
     if (data.isActive !== undefined) updateFields.isActive = data.isActive;
     if (data.retryLimit !== undefined) updateFields.retryLimit = data.retryLimit;
     if (timeoutMs !== undefined) updateFields.timeoutMs = timeoutMs;
@@ -210,6 +216,20 @@ export class WebhookSubscriptionService {
       .returning();
 
     logger.info(`[Webhook Subscriptions] Updated subscription #${id} "${updated.name}"`);
+    return updated;
+  }
+
+  /**
+   * v9.0.339 (TD-710): a new server-made signing key; the route shows it once, every other answer masks it.
+   */
+  static async rotateSecret(id: number) {
+    const [updated] = await orm
+      .update(webhookSubscriptions)
+      .set({ secretKey: this.generateSecretKey(), updatedAt: new Date().toISOString() })
+      .where(eq(webhookSubscriptions.id, id))
+      .returning();
+    if (!updated) throw new NotFoundError('اشتراک وب‌هوک یافت نشد.', undefined, 'WEBHOOK_NOT_FOUND');
+    logger.info(`[Webhook Subscriptions] Rotated the signing key of subscription #${id}`);
     return updated;
   }
 

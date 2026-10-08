@@ -489,8 +489,10 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                         توکن امنیتی هدر
                       </label>
+                      {/* v9.0.339 (TD-710): a stored token comes back masked; «********» keeps it on save */}
                       <input
-                        type="text"
+                        type="password"
+                        autoComplete="new-password"
                         value={formData.actionConfigJson?.secretToken || ''}
                         onChange={(e) => setFormData(prev => ({
                           ...prev,

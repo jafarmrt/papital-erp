@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
-import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Copy, Check, Trash2, Edit3, Shield, Activity } from 'lucide-react';
+import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Trash2, Edit3, Shield, Activity } from 'lucide-react';
 import { formatPersianDate, errorMessageOf } from '../../utils';
 import { fetchJson } from '../../api';
-import { copyToClipboard } from '../../utils/clipboard';
+import { isEnteredSecret } from '../../lib/secrets/maskedSecret';
+import { WebhookSecretRevealPanel, type RevealedWebhookSecret } from './WebhookSecretRevealPanel';
 import { WEBHOOK_TIMEOUT_DEFAULT_MS, WEBHOOK_TIMEOUT_MAX_MS, WEBHOOK_TIMEOUT_MIN_MS } from '../../lib/events/webhookTimeout';
 
 interface WebhookSubscription {
@@ -75,7 +76,8 @@ export function WebhookManagementSubTab() {
   const [deliveries, setDeliveries] = useState<WebhookDeliveryLog[]>([]);
   const [stats, setStats] = useState<WebhookStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [copiedKeyId, setCopiedKeyId] = useState<number | null>(null);
+  // v9.0.339 (TD-710): the signing key is shown once, after create or «ساخت کلید تازه»; every list answer masks it
+  const [revealedSecret, setRevealedSecret] = useState<RevealedWebhookSecret | null>(null);
   const [selectedSubForDeliveries, setSelectedSubForDeliveries] = useState<number | null>(null);
 
   // Modal State
@@ -213,13 +215,16 @@ export function WebhookManagementSubTab() {
       const url = editingSub ? `/events/webhooks/${editingSub.id}` : '/events/webhooks';
       const method = editingSub ? 'PUT' : 'POST';
 
-      const data = await fetchJson<{ success?: boolean; message?: string }>(url, {
+      const data = await fetchJson<{ success?: boolean; message?: string; data?: { name?: string; secretKey?: string } }>(url, {
         method,
         body: JSON.stringify(payload)
       });
 
       if (data?.success) {
         showToast(data.message || 'درگاه وب‌هوک با موفقیت ذخیره شد.', 'success');
+        if (!editingSub && isEnteredSecret(data.data?.secretKey)) {
+          setRevealedSecret({ name: data.data?.name || payload.name, secretKey: data.data.secretKey });
+        }
         setIsModalOpen(false);
         void fetchStats();
         void fetchSubscriptions();
@@ -285,13 +290,22 @@ export function WebhookManagementSubTab() {
     }
   };
 
-  const copySecretKey = (id: number, key: string) => {
-    void copyToClipboard(key).then(ok => {
-      if (!ok) { showToast('کپی در کلیپ‌بورد ممکن نشد', 'error'); return; }
-      setCopiedKeyId(id);
-      showToast('کلید امنیتی با موفقیت در کلیپ‌بورد کپی شد.', 'success');
-      setTimeout(() => setCopiedKeyId(null), 2500);
-    });
+  const handleRotateSecret = async (sub: WebhookSubscription) => {
+    if (!(await confirmAction({
+      title: 'ساخت کلید امضای تازه',
+      message: `کلید فعلی درگاه «${sub.name}» دیگر معتبر نیست و سامانه مقصد تا گرفتن کلید تازه امضای رویدادها را نمی‌پذیرد. ادامه می‌دهید؟`
+    }))) return;
+    try {
+      const data = await fetchJson<{ success?: boolean; message?: string; data?: { name?: string; secretKey?: string } }>(`/events/webhooks/${sub.id}/rotate-secret`, {
+        method: 'POST'
+      });
+      if (data?.success && isEnteredSecret(data.data?.secretKey)) {
+        setRevealedSecret({ name: data.data?.name || sub.name, secretKey: data.data.secretKey });
+        showToast(data.message || 'کلید امضای تازه ساخته شد.', 'success');
+      }
+    } catch (err) {
+      showToast(errorMessageOf(err) || 'ساخت کلید امضای تازه ممکن نشد.', 'error');
+    }
   };
 
   const toggleEventPattern = (pattern: string) => {
@@ -386,6 +400,8 @@ export function WebhookManagementSubTab() {
           <p className="text-xs text-slate-400 mt-1">همراه با اعتبارسنجی امضای SHA256</p>
         </div>
       </div>
+
+      <WebhookSecretRevealPanel secret={revealedSecret} onClose={() => setRevealedSecret(null)} />
 
       {/* Control Action Bar */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
@@ -511,11 +527,11 @@ export function WebhookManagementSubTab() {
                       </span>
                     </div>
                     <button
-                      onClick={() => copySecretKey(sub.id, sub.secretKey)}
-                      className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded"
-                      title="کپی کلید امنیتی"
+                      onClick={() => void handleRotateSecret(sub)}
+                      className="p-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline rounded shrink-0"
+                      title="ساخت کلید امضای تازه"
                     >
-                      {copiedKeyId === sub.id ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      ساخت کلید تازه
                     </button>
                   </div>
 
@@ -730,6 +746,11 @@ export function WebhookManagementSubTab() {
                   onChange={e => setFormData({ ...formData, customHeadersJson: e.target.value })}
                   className="w-full font-mono text-[11px] p-2.5 bg-slate-950 text-emerald-400 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 dir-ltr text-left"
                 />
+                {editingSub && (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    مقدار سرآیندهای ذخیره‌شده پوشیده است و «********» یعنی همان مقدار ذخیره‌شده بماند. اگر نشانی مقصد را تغییر می‌دهید، مقدار سرآیندها را دوباره وارد کنید.
+                  </p>
+                )}
               </div>
 
               {/* Advanced Settings Row */}
