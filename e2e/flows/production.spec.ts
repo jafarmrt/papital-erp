@@ -42,8 +42,7 @@ interface Setup { raw: Json; product: Json; project: Json }
 let admin: AdminApi;
 let setup: Setup;
 
-test.beforeAll(async () => {
-  admin = await adminApi();
+async function prepare(): Promise<void> {
   const suffix = uniqueSuffix();
   const today = businessToday().iso;
   const raw = await admin.send('post', '/api/items', {
@@ -64,6 +63,11 @@ test.beforeAll(async () => {
     }],
   });
   setup = { raw: dataOf(raw), product: dataOf(product), project: dataOf(project) };
+}
+
+test.beforeAll(async () => {
+  admin = await adminApi();
+  await prepare();
 });
 
 test.afterAll(async () => {
