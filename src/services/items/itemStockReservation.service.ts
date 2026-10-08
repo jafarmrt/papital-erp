@@ -1,4 +1,4 @@
-import { sql, eq, and, or, inArray } from 'drizzle-orm';
+import { sql, eq, and, inArray } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, productionProjects, documents, documentItems } from '../../db/schema.js';
 import { logger } from '../../middleware/logger.js';
@@ -7,6 +7,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 
 import { fin } from '../../lib/financialDecimal.js';
+import { RESERVING_DOCUMENT_STATUS, RESERVING_DOCUMENT_TYPES } from '../../lib/documents/reservingDocuments.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 
 export interface ReservedItemDetail {
@@ -583,11 +584,9 @@ export class ItemStockReservationService {
         .from(documents)
         .where(and(
           eq(documents.isDeleted, 0),
-          or(
-            eq(documents.status, 'proforma'),
-            eq(documents.type, 'proforma')
-          ),
-          sql`${documents.status} NOT IN ('cancelled', 'final')`
+          // v9.0.348 (TD-818، تصمیم ت۱): فقط پیش‌فاکتور فروش؛ پیش‌فاکتور خرید و پیش‌نویس رزرو نمی‌کنند
+          inArray(documents.type, [...RESERVING_DOCUMENT_TYPES]),
+          eq(documents.status, RESERVING_DOCUMENT_STATUS)
         ));
 
       if (activeProformas.length > 0) {

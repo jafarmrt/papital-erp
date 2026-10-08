@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.348 — Only Sales Proformas Reserve Stock
+- **Reservations (TD-818, B07-02, decision t1):** only a sales proforma (type invoice or proforma in proforma status) reserves stock; a purchase proforma (receipt in proforma status) and any draft reserve nothing, so a purchase order no longer blocks the sale of free stock.
+
 ### v9.0.347 — Package 7 Inventory Planning Audit
 - **Audit (package 7):** inventory planning section of the stability audit report: 15 proven findings opened as TD-817..TD-831 plus TD-843 (decision t7) with the product-owner decisions t1-t8; documentation only.
 

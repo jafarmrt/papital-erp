@@ -10723,5 +10723,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runWooConnectionTestTests } = await import('../regression/wooConnectionTestTests.js');
   results.push(...await runWooConnectionTestTests(shouldRun));
 
+  // Package 7 PR A (v9.0.348+): which documents and projects reserve stock, and how much
+  const { runStockReservationTests } = await import('../regression/stockReservationTests.js');
+  results.push(...await runStockReservationTests(shouldRun));
+
   return results;
 }
