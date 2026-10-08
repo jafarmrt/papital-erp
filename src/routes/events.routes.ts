@@ -12,7 +12,7 @@ import { retryFailedOutboxEvents } from '../services/events/outboxRetry.js';
 import { WebhookSubscriptionService } from '../services/events/webhookSubscriptionService.js';
 import { EventSourcingReplayService } from '../services/events/eventSourcingReplayService.js';
 import { logActivity } from '../lib/auditLogger.js';
-import { validate, paramsIdSchema } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { z } from 'zod';
 import { errorMessageOf } from '../utils.js';
 import { AppError, NotFoundError } from '../errors/customErrors.js';
@@ -21,6 +21,7 @@ import { actionRuleView, webhookSubscriptionView } from '../services/events/inte
 import { assertWebhookSecretsReadable } from '../services/events/webhookSecretStorage.js';
 import { utcTimestampResponses } from '../middleware/utcTimestampResponses.js';
 import { EVENT_OPAQUE_KEYS, EVENT_TIMESTAMP_KEYS } from '../services/events/eventTimestamps.js';
+import { setRuleActive } from '../services/events/ruleActiveState.js';
 
 const eventIdParamSchema = z.object({
   params: z.object({
@@ -355,19 +356,22 @@ router.delete(['/action-rules/:id', '/rules/:id'], authorizePermission('events.m
   }
 }));
 
-router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const updatedRule = await EventActionEngineService.toggleRule(id);
+// v9.0.393 (TD-729): the body names the target state ({ active }); a repeat changes nothing
+const ruleActiveSchema = z.object({
+  params: z.object({ id: numericIdString }).passthrough(),
+  body: z.object({ active: z.boolean({ message: 'وضعیت هدف قانون (active) باید درست یا نادرست باشد.' }) }),
+}).passthrough();
 
-    res.json({
-      success: true,
-      message: `وضعیت قانون به ${updatedRule.isActive ? 'فعال' : 'غیرفعال'} تغییر یافت.`,
-      data: actionRuleView(updatedRule)
-    });
-  } catch (error) {
-    throw error;
-  }
+router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermission('events.manage'), validate(ruleActiveSchema), asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { rule, changed } = await setRuleActive(id, req.body.active === true, req);
+  const state = rule.isActive === 1 ? 'فعال' : 'غیرفعال';
+  res.json({
+    success: true,
+    changed,
+    message: changed ? `قانون «${rule.name}» ${state} شد.` : `قانون «${rule.name}» از پیش ${state} است.`,
+    data: actionRuleView(rule)
+  });
 }));
 
 // v9.0.385 (TD-708, decision t5 a): a rule test evaluates the stored rule and shows what its action would do; it never runs it

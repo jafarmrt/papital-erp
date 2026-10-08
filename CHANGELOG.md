@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.393 — Rule Switch Sends Its Target State
+- **Rule switch (TD-729):** the automatic rule switch flipped the state on every call, so a double click put the rule back (with two success messages) and no change was audited; the switch now sends `{ active }` (`setRuleActive` under the rule row lock: a repeat changes nothing, each change one audit row in its transaction) and the switch and the test button wait for their answer.
+
 ### v9.0.392 — Webhook Form Saves Once
 - **Webhook form double submit (TD-728):** the webhook form's submit button was never disabled, so a double click made two subscriptions and every event was delivered twice; the form now sends once (`isSaving` with a ref guard) and the button stays disabled until the answer.
 

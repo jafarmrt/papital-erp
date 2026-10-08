@@ -653,27 +653,6 @@ export class EventActionEngineService {
   }
 
   /**
-   * Toggle active state
-   */
-  public static async toggleRule(id: number) {
-    const rule = await this.getRuleById(id);
-    if (!rule) throw new Error('قانون مورد نظر یافت نشد.');
-
-    const newActive = rule.isActive === 1 ? 0 : 1;
-    assertRuleActionTypeAllowed(rule.actionType, { active: newActive === 1, changingType: false });
-    assertRuleEventTypeAllowed(rule.eventType, { active: newActive === 1, changingType: false });
-    const [updated] = await orm.update(eventActionRules)
-      .set({
-        isActive: newActive,
-        updatedAt: new Date().toISOString()
-      })
-      .where(eq(eventActionRules.id, id))
-      .returning();
-
-    return updated;
-  }
-
-  /**
    * Get action execution logs with pagination
    */
   public static async getLogs(filter?: { ruleId?: number; status?: string; eventType?: string; limit?: number; offset?: number }): Promise<ActionLogPage> {

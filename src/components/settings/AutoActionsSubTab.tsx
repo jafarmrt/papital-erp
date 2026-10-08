@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Zap, Plus, RefreshCw, Search, Globe, Bell, Smartphone, GitBranch, ShieldCheck, CheckCircle2, XCircle, AlertCircle, Play, Edit3, Trash2, ToggleLeft, ToggleRight, Clock, Activity, FileText, ChevronDown, ChevronUp } from 'lucide-react';
@@ -39,6 +39,20 @@ export function AutoActionsSubTab() {
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const [activeView, setActiveView] = useState<'rules' | 'logs'>('rules');
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  // v9.0.393 (TD-729): a rule's switch and test button wait for their answer before they can be pressed again
+  const [pendingRuleIds, setPendingRuleIds] = useState<number[]>([]);
+  const pendingRef = useRef(new Set<string>());
+  const runOnce = async (key: string, ruleId: number, run: () => Promise<void>) => {
+    if (pendingRef.current.has(key)) return;
+    pendingRef.current.add(key);
+    setPendingRuleIds(ids => [...ids, ruleId]);
+    try {
+      await run();
+    } finally {
+      pendingRef.current.delete(key);
+      setPendingRuleIds(ids => { const i = ids.indexOf(ruleId); return i < 0 ? ids : [...ids.slice(0, i), ...ids.slice(i + 1)]; });
+    }
+  };
 
   const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
     setNotification({ text, type });
@@ -49,10 +63,12 @@ export function AutoActionsSubTab() {
     await Promise.all([refetchRules(), refetchStats(), refetchLogs()]);
   };
 
-  const handleToggleRule = async (id: number) => {
+  // v9.0.393 (TD-729): the switch sends the state it shows the user will get, never a two-way toggle
+  const handleToggleRule = (rule: ActionRule) => runOnce(`toggle-${rule.id}`, rule.id, async () => {
     try {
-      const data = await fetchJson<{ success?: boolean; message?: string }>(`/events/action-rules/${id}/toggle`, {
-        method: 'POST'
+      const data = await fetchJson<{ success?: boolean; message?: string }>(`/events/action-rules/${rule.id}/toggle`, {
+        method: 'POST',
+        body: JSON.stringify({ active: rule.isActive !== 1 })
       });
       if (data?.success) {
         showNotification(data.message || 'وضعیت قانون به‌روز شد.');
@@ -61,7 +77,7 @@ export function AutoActionsSubTab() {
     } catch (err: any) {
       showNotification(err?.message || 'خطا در تغییر وضعیت قانون', 'error');
     }
-  };
+  });
 
   const handleDeleteRule = async (id: number) => {
     if (!(await confirmAction({ title: 'حذف قانون اکشن', message: 'آیا از حذف این قانون اکشن اطمینان دارید؟' }))) return;
@@ -79,7 +95,7 @@ export function AutoActionsSubTab() {
 
   // v9.0.385 (TD-708, decision t5 a): the test evaluates the stored rule on a sample event and only shows what its action
   // would do; nothing is sent or written, so nothing is invalidated
-  const handleTestRule = async (rule: ActionRule) => {
+  const handleTestRule = (rule: ActionRule) => runOnce(`test-${rule.id}`, rule.id, async () => {
     try {
       const data = await fetchJson<{ conditionMatches?: boolean; message?: string; preview?: Record<string, unknown> }>(`/events/action-rules/${rule.id}/test`, {
         method: 'POST',
@@ -90,7 +106,7 @@ export function AutoActionsSubTab() {
     } catch (err: any) {
       showNotification(err?.message || 'خطا در ارتباط با سرور', 'error');
     }
-  };
+  });
 
   const handleSaveRule = async (formData: RuleFormData) => {
     const isEdit = !!formData.id;
@@ -371,8 +387,9 @@ export function AutoActionsSubTab() {
                             </span>
                           ) : (
                           <button
-                            onClick={() => handleToggleRule(rule.id)}
-                            className="text-slate-400 hover:text-indigo-600 transition-colors"
+                            onClick={() => void handleToggleRule(rule)}
+                            disabled={pendingRuleIds.includes(rule.id)}
+                            className="text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-50"
                             title={rule.isActive === 1 ? 'غیرفعال‌سازی' : 'فعال‌سازی'}
                           >
                             {rule.isActive === 1 ? (
@@ -420,8 +437,9 @@ export function AutoActionsSubTab() {
                       {canManage && (
                       <div className="flex items-center gap-2 self-end md:self-center">
                         <button
-                          onClick={() => handleTestRule(rule)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-medium transition-colors"
+                          onClick={() => void handleTestRule(rule)}
+                          disabled={pendingRuleIds.includes(rule.id)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-medium transition-colors disabled:opacity-50"
                           title="آزمایش بی‌اثر با رویداد نمونه؛ چیزی فرستاده یا ثبت نمی‌شود"
                         >
                           <Play className="w-3.5 h-3.5" />
