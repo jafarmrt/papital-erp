@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq, desc, and, asc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { productionProjects, projectStages, items, projectProductStageProgress } from '../db/schema.js';
+import { productionProjects, projectStages, items } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { ProjectService } from '../services/projects.service.js';
 import { idempotency } from '../middleware/idempotency.js';
+import { PRODUCT_PROGRESS_STATUSES, type ProductProgressStatus } from '../lib/projects/progressMatrix.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -393,147 +394,6 @@ export function formatProject(
   };
 }
 
-// ============================================================================
-// V3.1.0 / V3.1.16 — پیشرفت ماتریسی SKU × مرحله و اعتبارسنجی تکمیل پروژه
-// ============================================================================
-
-export const PRODUCT_PROGRESS_STATUSES = ['pending', 'in_progress', 'completed', 'blocked'] as const;
-export type ProductProgressStatus = typeof PRODUCT_PROGRESS_STATUSES[number];
-
-export interface ProjectProductRow {
-  item_id?: number | null;
-  item_id_raw?: number | null;
-  itemId?: number | null;
-  item_code?: string;
-  itemCode?: string;
-  item_name?: string;
-  itemName?: string;
-  quantity?: number | string;
-  unit?: string;
-  selected_optional_stages?: string[];
-}
-
-export function resolveProductItemId(p: ProjectProductRow): number | null {
-  const raw = p.item_id ?? p.itemId ?? (p as unknown as { item_id_raw?: number }).item_id_raw;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
-}
-
-// محاسبه مراحل اعمال‌شده برای هر SKU:
-// عنوان‌هایی که در انتخاب‌های اختیاریِ «حداقل یک» محصول آمده‌اند = مراحل اختیاری؛
-// برای SKU فقط آن‌هایی اعمال می‌شوند که خودش انتخاب کرده است.
-export function computeApplicableStageOrders(product: ProjectProductRow, optionalTitles: Set<string>, allStages: { stageOrder: number; title: string }[]): number[] {
-  const selected = new Set((product.selected_optional_stages || []).map(t => String(t).trim()));
-  return allStages
-    .filter(s => !optionalTitles.has(s.title) || selected.has(s.title))
-    .map(s => s.stageOrder);
-}
-
-export interface ProjectProgressMatrixStatus {
-  allMatrixCompleted: boolean;
-  totalMatrixCells: number;
-  completedMatrixCells: number;
-  missingMatrixCells: number;
-  reason?: string;
-}
-
-// بررسی جامع وضعیت گزینه‌های ماتریس پیشرفت فیزیکی محصولات
-// تنها در صورتی true برمی‌گرداند که تمام گزینه‌های اعمال‌شده برای تمام SKUها تیک خورده باشند
-export async function getProjectProgressMatrixStatus(
-  projectId: number,
-  dbInstance: any = orm
-): Promise<ProjectProgressMatrixStatus> {
-  const [project] = await dbInstance
-    .select()
-    .from(productionProjects)
-    .where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
-
-  if (!project) {
-    return {
-      allMatrixCompleted: false,
-      totalMatrixCells: 0,
-      completedMatrixCells: 0,
-      missingMatrixCells: 0,
-      reason: 'پروژه یافت نشد'
-    };
-  }
-
-  const rawStages = await dbInstance
-    .select()
-    .from(projectStages)
-    .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)))
-    .orderBy(asc(projectStages.stageOrder));
-
-  if (rawStages.length === 0) {
-    return {
-      allMatrixCompleted: false,
-      totalMatrixCells: 0,
-      completedMatrixCells: 0,
-      missingMatrixCells: 0,
-      reason: 'هیچ مرحله‌ای برای پروژه تعریف نشده است'
-    };
-  }
-
-  let products = (Array.isArray(project.products) && project.products.length > 0 ? project.products : []) as ProjectProductRow[];
-  if (products.length === 0 && project.itemId) {
-    products = [{
-      item_id: project.itemId,
-      item_code: project.itemCode || '',
-      item_name: project.itemName || '',
-      quantity: project.quantity || 1,
-      unit: project.unit || 'عدد'
-    }];
-  }
-
-  if (products.length === 0) {
-    return {
-      allMatrixCompleted: false,
-      totalMatrixCells: 0,
-      completedMatrixCells: 0,
-      missingMatrixCells: 0,
-      reason: 'هیچ کد کالایی برای پروژه تعریف نشده است'
-    };
-  }
-
-  const progressRows = await dbInstance
-    .select()
-    .from(projectProductStageProgress)
-    .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.isDeleted, 0)));
-
-  const progressMap = new Map<string, typeof progressRows[number]>();
-  for (const row of progressRows) {
-    progressMap.set(`${row.itemId}|${row.stageOrder}`, row);
-  }
-
-  const optionalTitles = new Set(products.flatMap(p => (p.selected_optional_stages || []).map(t => String(t).trim())));
-  const stagesForCompute = rawStages.map((s: any) => ({ stageOrder: s.stageOrder, title: s.title }));
-
-  let totalMatrixCells = 0;
-  let completedMatrixCells = 0;
-
-  for (const p of products) {
-    const itemId = resolveProductItemId(p);
-    if (!itemId) continue;
-    const applicableOrders = computeApplicableStageOrders(p, optionalTitles, stagesForCompute);
-    for (const order of applicableOrders) {
-      totalMatrixCells++;
-      const key = `${itemId}|${order}`;
-      const row = progressMap.get(key);
-      if (row?.status === 'completed') {
-        completedMatrixCells++;
-      }
-    }
-  }
-
-  const allMatrixCompleted = totalMatrixCells > 0 && completedMatrixCells === totalMatrixCells;
-  return {
-    allMatrixCompleted,
-    totalMatrixCells,
-    completedMatrixCells,
-    missingMatrixCells: Math.max(0, totalMatrixCells - completedMatrixCells)
-  };
-}
-
 const projectPickListValidation = z.object({
   query: z.object({
     status: z.string().max(40).optional(),
@@ -716,15 +576,7 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
       custom_stages, customStages, attachments, project_code
     } = req.body;
 
-    if (status === 'completed') {
-      const matrixCheck = await getProjectProgressMatrixStatus(id, orm);
-      if (!matrixCheck.allMatrixCompleted) {
-        return res.status(400).json({
-          error: `امکان تغییر وضعیت پروژه به تکمیل‌شده وجود ندارد؛ هنوز تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات در بخش «پیشرفت به تفکیک کد کالا» تیک نخورده‌اند (${matrixCheck.completedMatrixCells} از ${matrixCheck.totalMatrixCells} مورد تکمیل شده است).`
-        });
-      }
-    }
-
+    // v9.0.333 (TD-739): بررسی تکمیل با قاعده مشترک ماتریس درون تراکنش updateProject است
     const { current: updated } = await ProjectService.updateProject(id, {
       title,
       projectCode: project_code,
@@ -918,108 +770,11 @@ router.get('/projects/:id/product-progress', authorizePermission('projects.view'
     // همگام‌سازی پیش از پاسخ
     await syncProjectStagesAndStatusFromProductProgress(projectId);
 
-    const [project] = await orm.select().from(productionProjects).where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
-    if (!project) return res.status(404).json({ error: 'پروژه یافت نشد' });
+    // v9.0.333 (TD-739): ماتریس با قاعده مشترک (پروژه تک‌کالایی: کالای اصلی)
+    const view = await ProjectService.getProductProgressView(projectId);
+    if (!view) return res.status(404).json({ error: 'پروژه یافت نشد' });
 
-    const stages = await orm.select().from(projectStages)
-      .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)))
-      .orderBy(asc(projectStages.stageOrder));
-
-    const products = (Array.isArray(project.products) ? project.products : []) as ProjectProductRow[];
-
-    const progressRows = await orm.select().from(projectProductStageProgress)
-      .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.isDeleted, 0)));
-
-    const progressMap = new Map<string, typeof progressRows[number]>();
-    for (const row of progressRows) {
-      progressMap.set(`${row.itemId}|${row.stageOrder}`, row);
-    }
-
-    const optionalTitles = new Set(products.flatMap(p => (p.selected_optional_stages || []).map(t => String(t).trim())));
-
-    const stageMeta = stages.map(s => ({ stage_order: s.stageOrder, title: s.title, status: s.status }));
-    const stagesForCompute = stages.map(s => ({ stageOrder: s.stageOrder, title: s.title }));
-    const allStageOrders = stages.map(s => s.stageOrder);
-
-    const productRows = products.map(p => {
-      const itemId = resolveProductItemId(p);
-      const applicableOrders = itemId
-        ? computeApplicableStageOrders(p, optionalTitles, stagesForCompute)
-        : [];
-      const qty = Number(p.quantity) || 0;
-      const code = p.item_code ?? p.itemCode ?? '';
-      const name = p.item_name ?? p.itemName ?? '';
-
-      let completedCount = 0;
-      const progress = applicableOrders.map(order => {
-        const stageInfo = stageMeta.find(s => s.stage_order === order);
-        const key = `${itemId}|${order}`;
-        const row = progressMap.get(key);
-        const status = row?.status || 'pending';
-        if (status === 'completed') completedCount++;
-        return {
-          stage_order: order,
-          stage_title: row?.stageTitle || stageInfo?.title || '',
-          status,
-          updated_at: row?.updatedAt || '',
-          updated_by_name: row?.updatedByName || ''
-        };
-      });
-      // مراحل پروژه که برای این SKU اعمال نمی‌شوند (اختیاری انتخاب‌نشده)
-      const excludedOrders = allStageOrders.filter(o => !applicableOrders.includes(o));
-      const percent = applicableOrders.length > 0 ? Math.round((completedCount / applicableOrders.length) * 100) : 0;
-
-      return {
-        item_id: itemId,
-        item_code: code,
-        item_name: name,
-        quantity: qty,
-        unit: p.unit || 'عدد',
-        applicable_stage_orders: applicableOrders,
-        excluded_stage_orders: excludedOrders,
-        progress,
-        completed_count: completedCount,
-        applicable_count: applicableOrders.length,
-        progress_percent: percent
-      };
-    });
-
-    // رول‌آپ وزن‌دار کل پروژه
-    const totalQty = productRows.reduce((acc, p) => acc + (Number(p.quantity) || 0), 0);
-    const weightedProgress = totalQty > 0
-      ? Math.round(productRows.reduce((acc, p) => acc + (p.progress_percent * (Number(p.quantity) || 0)), 0) / totalQty)
-      : 0;
-    const fullyCompletedSkus = productRows.filter(p => p.applicable_count > 0 && p.completed_count === p.applicable_count).length;
-
-    const totalMatrixCells = productRows.reduce((acc, p) => acc + (p.applicable_count || 0), 0);
-    const completedMatrixCells = productRows.reduce((acc, p) => acc + (p.completed_count || 0), 0);
-    const allMatrixCompleted = totalMatrixCells > 0 && completedMatrixCells === totalMatrixCells;
-
-    const perStageCounts = stageMeta.map(s => ({
-      stage_order: s.stage_order,
-      title: s.title,
-      completed_count: productRows.filter(p => p.applicable_stage_orders.includes(s.stage_order) && p.progress.some(pr => pr.stage_order === s.stage_order && pr.status === 'completed')).length,
-      applicable_skus: productRows.filter(p => p.applicable_stage_orders.includes(s.stage_order)).length
-    }));
-
-    res.json({
-      success: true,
-      data: {
-        stages: stageMeta,
-        products: productRows,
-        summary: {
-          total_skus: productRows.length,
-          total_quantity: totalQty,
-          weighted_progress_percent: weightedProgress,
-          fully_completed_skus: fullyCompletedSkus,
-          per_stage_counts: perStageCounts,
-          total_matrix_cells: totalMatrixCells,
-          completed_matrix_cells: completedMatrixCells,
-          all_matrix_completed: allMatrixCompleted,
-          missing_matrix_cells: Math.max(0, totalMatrixCells - completedMatrixCells)
-        }
-      }
-    });
+    res.json({ success: true, data: view });
   } catch (err) {
     throw err;
   }

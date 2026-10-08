@@ -11,6 +11,8 @@ import { AttachmentStorageService } from './attachments/attachmentStorage.servic
 import { resolveServerInventoryControl } from './projects/serverInventoryControl.js';
 import { assignProjectCode } from './projects/projectCode.js';
 import { keepScheduleLogLinks } from '../lib/projects/scheduleWorkLog.js';
+import { matrixProducts } from '../lib/projects/progressMatrix.js';
+import { loadProjectProgressMatrix, productProgressView, progressMatrixStatus, type ProgressMatrixStatus } from './projects/projectProgressMatrix.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -237,6 +239,11 @@ export class ProjectService {
 
     const [current] = await executor.update(productionProjects).set(updateData).where(eq(productionProjects.id, id)).returning();
 
+    // v9.0.333 (TD-739): تکمیل دستی پروژه با همان قاعده ماتریس، درون همین تراکنش و روی ردیف ذخیره‌شده
+    if (input.status === 'completed' && existing.status !== 'completed') {
+      ProjectService.assertMatrixCompleted(progressMatrixStatus(await loadProjectProgressMatrix(executor, current)));
+    }
+
     return { previous: existing, current: current || { ...existing, ...updateData } };
   }
 
@@ -366,10 +373,7 @@ export class ProjectService {
       }
 
       if (input.markCompleted) {
-        const matrixCheck = await ProjectService.getProgressMatrixStatus(id, tx);
-        if (!matrixCheck.allMatrixCompleted) {
-          throw new ValidationError(`امکان تغییر وضعیت پروژه به تکمیل‌شده وجود ندارد؛ هنوز تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات در بخش «پیشرفت به تفکیک کد کالا» تیک نخورده‌اند (${matrixCheck.completedMatrixCells} از ${matrixCheck.totalMatrixCells} مورد تکمیل شده است).`);
-        }
+        ProjectService.assertMatrixCompleted(await ProjectService.getProgressMatrixStatus(id, tx));
         await tx.update(productionProjects).set({ status: 'completed' }).where(eq(productionProjects.id, id));
       }
 
@@ -418,119 +422,32 @@ export class ProjectService {
   }
 
   /**
-   * Checks comprehensive status of product physical progress matrix
+   * v9.0.333 (TD-739): وضعیت ماتریس پیشرفت با قاعده مشترک (محصولات پروژه، وگرنه کالای اصلی)
    */
-  static async getProgressMatrixStatus(
-    projectId: number,
-    executor: DbExecutor = orm
-  ): Promise<{
-    allMatrixCompleted: boolean;
-    totalMatrixCells: number;
-    completedMatrixCells: number;
-    missingMatrixCells: number;
-    reason?: string;
-  }> {
-    const [project] = await executor
-      .select()
-      .from(productionProjects)
+  static async getProgressMatrixStatus(projectId: number, executor: DbExecutor = orm): Promise<ProgressMatrixStatus> {
+    const [project] = await executor.select().from(productionProjects)
       .where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
-
     if (!project) {
-      return {
-        allMatrixCompleted: false,
-        totalMatrixCells: 0,
-        completedMatrixCells: 0,
-        missingMatrixCells: 0,
-        reason: 'پروژه یافت نشد'
-      };
+      return { allMatrixCompleted: false, totalMatrixCells: 0, completedMatrixCells: 0, missingMatrixCells: 0, reason: 'پروژه یافت نشد' };
     }
+    return progressMatrixStatus(await loadProjectProgressMatrix(executor, project));
+  }
 
-    const rawStages = await executor
-      .select()
-      .from(projectStages)
-      .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)))
-      .orderBy(asc(projectStages.stageOrder));
-
-    if (rawStages.length === 0) {
-      return {
-        allMatrixCompleted: false,
-        totalMatrixCells: 0,
-        completedMatrixCells: 0,
-        missingMatrixCells: 0,
-        reason: 'هیچ مرحله‌ای برای پروژه تعریف نشده است'
-      };
-    }
-
-    let products = (Array.isArray(project.products) && project.products.length > 0 ? project.products : []) as Array<Record<string, unknown>>;
-    if (products.length === 0 && project.itemId) {
-      products = [{
-        item_id: project.itemId,
-        item_code: project.itemCode || '',
-        item_name: project.itemName || '',
-        quantity: project.quantity || 1,
-        unit: project.unit || 'عدد'
-      }];
-    }
-
-    if (products.length === 0) {
-      return {
-        allMatrixCompleted: false,
-        totalMatrixCells: 0,
-        completedMatrixCells: 0,
-        missingMatrixCells: 0,
-        reason: 'هیچ کد کالایی برای پروژه تعریف نشده است'
-      };
-    }
-
-    const progressRows = await executor
-      .select()
-      .from(projectProductStageProgress)
-      .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.isDeleted, 0)));
-
-    const progressMap = new Map<string, typeof progressRows[number]>();
-    for (const row of progressRows) {
-      progressMap.set(`${row.itemId}|${row.stageOrder}`, row);
-    }
-
-    const optionalTitles = new Set(
-      products.flatMap(p => {
-        const sel = p.selected_optional_stages || p.selectedOptionalStages;
-        return Array.isArray(sel) ? sel.map(t => String(t).trim()) : [];
-      })
+  static assertMatrixCompleted(check: ProgressMatrixStatus): void {
+    if (check.allMatrixCompleted) return;
+    throw new ValidationError(
+      `امکان تغییر وضعیت پروژه به تکمیل‌شده وجود ندارد؛ هنوز تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات در بخش «پیشرفت به تفکیک کد کالا» تیک نخورده‌اند (${check.completedMatrixCells} از ${check.totalMatrixCells} مورد تکمیل شده است).`,
+      { completedMatrixCells: check.completedMatrixCells, totalMatrixCells: check.totalMatrixCells },
+      'PROJECT_MATRIX_INCOMPLETE'
     );
-    const stagesForCompute = rawStages.map(s => ({ stageOrder: s.stageOrder, title: s.title }));
+  }
 
-    let totalMatrixCells = 0;
-    let completedMatrixCells = 0;
-
-    for (const p of products) {
-      const rawId = p.item_id ?? p.itemId ?? p.item_id_raw;
-      const itemId = Number(rawId);
-      if (!Number.isFinite(itemId) || itemId <= 0) continue;
-
-      const sel = p.selected_optional_stages || p.selectedOptionalStages;
-      const selected = new Set(Array.isArray(sel) ? sel.map(t => String(t).trim()) : []);
-      const applicableOrders = stagesForCompute
-        .filter(s => !optionalTitles.has(s.title) || selected.has(s.title))
-        .map(s => s.stageOrder);
-
-      for (const order of applicableOrders) {
-        totalMatrixCells++;
-        const key = `${itemId}|${order}`;
-        const row = progressMap.get(key);
-        if (row?.status === 'completed') {
-          completedMatrixCells++;
-        }
-      }
-    }
-
-    const allMatrixCompleted = totalMatrixCells > 0 && completedMatrixCells === totalMatrixCells;
-    return {
-      allMatrixCompleted,
-      totalMatrixCells,
-      completedMatrixCells,
-      missingMatrixCells: Math.max(0, totalMatrixCells - completedMatrixCells)
-    };
+  /** پاسخ ماتریس پیشرفت پروژه («پیشرفت به تفکیک کد کالا»)؛ null برای پروژه ناموجود */
+  static async getProductProgressView(projectId: number, executor: DbExecutor = orm): Promise<ReturnType<typeof productProgressView> | null> {
+    const [project] = await executor.select().from(productionProjects)
+      .where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
+    if (!project) return null;
+    return productProgressView(await loadProjectProgressMatrix(executor, project));
   }
 
   /**
@@ -644,15 +561,16 @@ export class ProjectService {
       throw new NotFoundError('پروژه یافت نشد');
     }
 
-    const products = (Array.isArray(project.products) ? project.products : []) as Array<Record<string, unknown>>;
-    const productByItemId = new Map<number, Record<string, unknown>>();
-    for (const p of products) {
-      const rawId = p.item_id ?? p.itemId ?? p.item_id_raw;
-      const id = Number(rawId);
-      if (Number.isFinite(id) && id > 0) {
-        productByItemId.set(id, p);
-      }
+    // v9.0.333 (TD-739): محصولات ماتریس با همان قاعده نمایش و بررسی تکمیل (پروژه تک‌کالایی: کالای اصلی)
+    const productByItemId = new Map<number, ReturnType<typeof matrixProducts>[number]>();
+    for (const p of matrixProducts(project)) {
+      if (p.itemId !== null && !productByItemId.has(p.itemId)) productByItemId.set(p.itemId, p);
     }
+    const stageTitles = new Map<number, string>();
+    const liveStages = await executor.select({ stageOrder: projectStages.stageOrder, title: projectStages.title }).from(projectStages)
+      .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)))
+      .orderBy(asc(projectStages.stageOrder), asc(projectStages.id));
+    for (const st of liveStages) if (!stageTitles.has(st.stageOrder)) stageTitles.set(st.stageOrder, st.title);
 
     const bizNow = await businessNowIsoDateTime();
     let applied = 0;
@@ -671,16 +589,11 @@ export class ProjectService {
         continue;
       }
 
-      const stageRow = await executor
-        .select({ id: projectStages.id, title: projectStages.title })
-        .from(projectStages)
-        .where(and(eq(projectStages.projectId, projectId), eq(projectStages.stageOrder, stageOrder), eq(projectStages.isDeleted, 0)))
-        .limit(1);
-      const stageTitle = stageRow[0]?.title || String(u.stageTitle || '').trim() || `مرحله ${stageOrder}`;
+      const stageTitle = stageTitles.get(stageOrder) || String(u.stageTitle || '').trim() || `مرحله ${stageOrder}`;
 
-      const itemCode = String(product.item_code ?? product.itemCode ?? '');
-      const itemName = String(product.item_name ?? product.itemName ?? '');
-      const qty = Number(product.quantity) || 0;
+      const itemCode = product.itemCode;
+      const itemName = product.itemName;
+      const qty = product.quantity;
 
       await executor.insert(projectProductStageProgress).values({
         projectId,
@@ -712,6 +625,7 @@ export class ProjectService {
 
   /**
    * Automatically synchronizes stage progress and project status based on product matrix
+   * v9.0.333 (TD-739): خانه‌ها و شمارش هر مرحله از قاعده مشترک ماتریس (`loadProjectProgressMatrix`)
    */
   static async syncProjectStagesAndStatusFromProductProgress(
     projectId: number,
@@ -723,71 +637,17 @@ export class ProjectService {
       .where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
     if (!project) return null;
 
-    const rawStages = await executor
-      .select()
-      .from(projectStages)
-      .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)))
-      .orderBy(asc(projectStages.stageOrder));
-
-    const products = (Array.isArray(project.products) ? project.products : []) as Array<Record<string, unknown>>;
+    const { stages: rawStages, matrix } = await loadProjectProgressMatrix(executor, project);
     if (rawStages.length === 0) return { project, stages: [] };
-
-    const progressRows = await executor
-      .select()
-      .from(projectProductStageProgress)
-      .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.isDeleted, 0)));
-
-    const progressMap = new Map<string, typeof progressRows[number]>();
-    for (const row of progressRows) {
-      progressMap.set(`${row.itemId}|${row.stageOrder}`, row);
-    }
-
-    const optionalTitles = new Set(
-      products.flatMap(p => {
-        const sel = p.selected_optional_stages || p.selectedOptionalStages;
-        return Array.isArray(sel) ? sel.map(t => String(t).trim()) : [];
-      })
-    );
-    const stagesForCompute = rawStages.map(s => ({ stageOrder: s.stageOrder, title: s.title }));
-
-    const productRows = products.map(p => {
-      const rawId = p.item_id ?? p.itemId ?? p.item_id_raw;
-      const itemId = Number(rawId);
-      const sel = p.selected_optional_stages || p.selectedOptionalStages;
-      const selected = new Set(Array.isArray(sel) ? sel.map(t => String(t).trim()) : []);
-      const applicableOrders = (Number.isFinite(itemId) && itemId > 0)
-        ? stagesForCompute.filter(s => !optionalTitles.has(s.title) || selected.has(s.title)).map(s => s.stageOrder)
-        : [];
-      let completedCount = 0;
-      for (const order of applicableOrders) {
-        const key = `${itemId}|${order}`;
-        const row = progressMap.get(key);
-        if (row?.status === 'completed') completedCount++;
-      }
-      const percent = applicableOrders.length > 0 ? Math.round((completedCount / applicableOrders.length) * 100) : 0;
-      return {
-        itemId,
-        quantity: Number(p.quantity) || 0,
-        applicableOrders,
-        completedCount,
-        percent
-      };
-    });
 
     const bizNow = await businessNowIsoDateTime();
     let anyProgressDetected = false;
     let allStagesCompleted = rawStages.length > 0;
     const updatedStages: (typeof rawStages[number] & { completedSkusCount?: number; applicableSkusCount?: number })[] = [];
 
-    for (const stg of rawStages) {
-      const applicableProducts = productRows.filter(p => p.itemId && p.applicableOrders.includes(stg.stageOrder));
-      const applicableCount = applicableProducts.length;
-      let completedCount = 0;
-      for (const p of applicableProducts) {
-        const key = `${p.itemId}|${stg.stageOrder}`;
-        const row = progressMap.get(key);
-        if (row?.status === 'completed') completedCount++;
-      }
+    for (const [index, stg] of rawStages.entries()) {
+      const applicableCount = matrix.stageCounts[index].applicableCount;
+      const completedCount = matrix.stageCounts[index].completedCount;
 
       let calculatedPercent = 0;
       let calculatedStatus = 'pending';
@@ -833,13 +693,8 @@ export class ProjectService {
       });
     }
 
-    const totalQty = productRows.reduce((acc, p) => acc + p.quantity, 0);
-    const weightedProgress = totalQty > 0
-      ? Math.round(productRows.reduce((acc, p) => acc + (p.percent * p.quantity), 0) / totalQty)
-      : 0;
-
-    const allProductsDone = productRows.length > 0 && productRows.every(p => p.applicableOrders.length > 0 && p.completedCount === p.applicableOrders.length);
-    const isOverallCompleted = allProductsDone || (allStagesCompleted && rawStages.length > 0);
+    const weightedProgress = matrix.weightedProgress;
+    const isOverallCompleted = matrix.allProductsDone || (allStagesCompleted && rawStages.length > 0);
 
     let newProjectStatus = project.status;
     if (isOverallCompleted) {
@@ -864,4 +719,3 @@ export class ProjectService {
     };
   }
 }
-

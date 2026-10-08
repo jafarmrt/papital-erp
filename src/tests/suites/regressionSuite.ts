@@ -10602,6 +10602,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 12 payroll PR d (v9.0.330 on): the work log list is filtered, paged and summed in SQL (TD-811)
   const { runWorkLogListTests } = await import('../regression/workLogListTests.js');
   results.push(...await runWorkLogListTests(shouldRun));
+  // Package 11 PR a (v9.0.333 on): progress matrix, project status on write only, stage numbering and input (TD-739 ...)
+  const { runProjectStageIntegrityTests } = await import('../regression/projectStageIntegrityTests.js');
+  results.push(...await runProjectStageIntegrityTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));

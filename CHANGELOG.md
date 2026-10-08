@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.333 — v9.0.333 — One Progress Matrix Rule
+- **One Progress Matrix Rule (TD-739):** the product × stage progress matrix had three copies that disagreed: a project defined by its main item showed no matrix row and its ticks were skipped, yet its completion was refused as «0 of 3»; the view, the ticks, the completion check (now 422 `PROJECT_MATRIX_INCOMPLETE` inside the project save) and the status sync share `computeProgressMatrix`.
+
 ### v9.0.332 — v9.0.332 — One Item-Matching Rule for Project Materials
 - **One Item-Matching Rule for Project Materials (TD-749, TD-768):** the project purchase list matched a material to a warehouse item by part of its name («کارتن» took the stock of «کارتن بسته‌بندی بزرگ» and left the purchase list) while the server reserved by exact name, and the rule was copied in ten places; the screens and the reservation now share `findProjectItemMatch` (item id, then code, then exact name; never a substring or an empty name).
 
