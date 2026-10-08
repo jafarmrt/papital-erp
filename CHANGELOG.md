@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.382 — Invoice and Purchase Events Carry the Payable Amount
+- **Document event amounts (TD-713):** the invoice event carried no amount, so a rule on payload.totalAmount never ran and the audit wrote «به مبلغ undefined»; invoice and purchase events now carry the payable amount (net of lines + VAT + service charge) in the document currency and in rials, on create and on finalize, and the rule editor offers these fields.
+
 ### v9.0.381 — Rules Trigger Only on Published Event Types
 - **Rule trigger events (TD-726):** the rule editor offered InvoiceCancelled, ChequeStatusChanged, ProjectStageCompleted and CustomerCreated, which nothing publishes, so such a rule was saved active and never ran; the editor now offers the published types with Persian labels and «همه رویدادها», the server refuses another type on create, switch, activation and active save (422), and stored rules of such types are listed by the health check.
 

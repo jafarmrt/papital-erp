@@ -23,7 +23,11 @@ const INVOICE_LABELS: Record<keyof InvoiceEventPayload, string> = {
   refNumber: 'شماره فاکتور',
   docType: 'نوع سند',
   buyerName: 'نام خریدار',
-  totalAmount: 'مبلغ کل',
+  totalAmount: 'مبلغ قابل پرداخت',
+  netAmount: 'خالص اقلام',
+  vatAmount: 'مالیات بر ارزش افزوده',
+  serviceChargeAmount: 'هزینه ارسال و خدمات',
+  totalAmountIrr: 'مبلغ قابل پرداخت به ریال',
   currency: 'ارز',
   itemCount: 'تعداد اقلام',
   status: 'وضعیت سند',
@@ -33,7 +37,11 @@ const PURCHASE_LABELS: Record<keyof PurchaseEventPayload, string> = {
   documentId: 'شناسه سند',
   refNumber: 'شماره فاکتور خرید',
   supplierName: 'نام تامین‌کننده',
-  totalAmount: 'مبلغ کل',
+  totalAmount: 'مبلغ قابل پرداخت',
+  netAmount: 'خالص اقلام',
+  vatAmount: 'مالیات بر ارزش افزوده',
+  serviceChargeAmount: 'هزینه ارسال و خدمات',
+  totalAmountIrr: 'مبلغ قابل پرداخت به ریال',
   currency: 'ارز',
   itemCount: 'تعداد اقلام',
   status: 'وضعیت سند',
@@ -92,26 +100,39 @@ const REORDER_LABELS: Record<keyof InventoryReorderAlertPayload, string> = {
   alertMessage: 'متن هشدار',
 };
 
+// v9.0.382 (TD-713): fields of the WooCommerce order events (wooOrderSync.service.ts)
+const WOO_SYNCED_LABELS: Record<string, string> = {
+  wcOrderId: 'شماره سفارش ووکامرس',
+  docId: 'شناسه فاکتور',
+  refNumber: 'شماره فاکتور',
+  buyerName: 'نام خریدار',
+  totalAmount: 'مبلغ سفارش',
+};
+
+const WOO_VOIDED_LABELS: Record<string, string> = {
+  wcOrderId: 'شماره سفارش ووکامرس',
+  docId: 'شناسه فاکتور',
+  refNumber: 'شماره فاکتور',
+  wcStatus: 'وضعیت سفارش در ووکامرس',
+};
+
+// v9.0.382 (TD-713): one entry per event type the server publishes (PUBLISHED_EVENT_TYPES); types that nothing publishes
+// (InvoiceCancelled, PurchaseReceived, ChequeStatusChanged …) are gone
 const PAYLOAD_LABELS_BY_EVENT: Record<string, Record<string, string>> = {
   InvoiceCreated: INVOICE_LABELS,
   InvoiceApproved: INVOICE_LABELS,
-  InvoiceCancelled: INVOICE_LABELS,
   PurchaseCreated: PURCHASE_LABELS,
   PurchaseApproved: PURCHASE_LABELS,
-  PurchaseReceived: PURCHASE_LABELS,
   StockReceived: STOCK_LABELS,
   StockIssued: STOCK_LABELS,
-  StockTransferred: STOCK_LABELS,
   StockAdjusted: STOCK_LABELS,
-  ItemStockModified: STOCK_LABELS,
   InventoryReorderAlert: REORDER_LABELS,
-  PaymentApproved: TREASURY_LABELS,
   TreasuryTransactionApproved: TREASURY_LABELS,
-  ChequeStatusChanged: TREASURY_LABELS,
   WorkflowTransitioned: WORKFLOW_LABELS,
-  WorkflowApprovalProgress: WORKFLOW_LABELS,
   WorkflowCompleted: WORKFLOW_LABELS,
   WorkflowRejected: WORKFLOW_LABELS,
+  'woocommerce.order.synced': WOO_SYNCED_LABELS,
+  'woocommerce.order.voided': WOO_VOIDED_LABELS,
 };
 
 /** فیلدهای پوشش رویداد که در همه رویدادها هست */

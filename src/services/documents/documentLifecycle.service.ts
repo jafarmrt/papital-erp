@@ -13,7 +13,8 @@ import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { domainEventBus } from '../events/domainEventBus.js';
-import { DomainEventType } from '../events/domainEvents.js';
+import { DomainEventType, type InvoiceEventPayload, type PurchaseEventPayload } from '../events/domainEvents.js';
+import { documentEventAmounts } from './documentEventAmount.js';
 import { OutboxService } from '../events/outboxService.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { VoucherService } from '../accounting/voucher.service.js';
@@ -244,7 +245,7 @@ export class DocumentLifecycleService {
           const safeUser = user || doc.user || 'system';
 
           if (isSales) {
-            const invEvent = domainEventBus.createEvent(
+            const invEvent = domainEventBus.createEvent<InvoiceEventPayload>(
               DomainEventType.INVOICE_APPROVED,
               'Document',
               String(id),
@@ -252,6 +253,8 @@ export class DocumentLifecycleService {
                 documentId: id,
                 refNumber: finalRefNumber,
                 docType: targetType,
+                // v9.0.382 (TD-713): the payable amount of the finalized document (the event used to carry no amount)
+                ...await documentEventAmounts(tx, id),
                 buyerName: doc.buyerName || '',
                 currency: doc.currency || 'IRR',
                 itemCount: docLines.length,
@@ -261,13 +264,14 @@ export class DocumentLifecycleService {
             );
             await OutboxService.saveToOutbox(tx, invEvent);
           } else if (isPurchase) {
-            const purchEvent = domainEventBus.createEvent(
+            const purchEvent = domainEventBus.createEvent<PurchaseEventPayload>(
               DomainEventType.PURCHASE_APPROVED,
               'Document',
               String(id),
               {
                 documentId: id,
                 refNumber: doc.refNumber,
+                ...await documentEventAmounts(tx, id),
                 supplierName: doc.buyerName || '',
                 currency: doc.currency || 'IRR',
                 itemCount: docLines.length,

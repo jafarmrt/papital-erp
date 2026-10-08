@@ -77,22 +77,34 @@ export interface BaseDomainEvent<T = unknown> {
 // Typed Domain Event Payloads
 // -------------------------------------------------------------
 
-export interface InvoiceEventPayload {
+/**
+ * v9.0.382 (TD-713, B15-11): the amounts of a sales or purchase document event, read from the stored document in the
+ * transaction that records the event (`documentEventAmounts`): totalAmount is the payable amount in the document's own
+ * currency (net of active lines + VAT + service charge, AGENTS §6), totalAmountIrr the same in rials at the document's
+ * rate (null for a foreign document without any rate). The invoice event used to carry no amount at all.
+ */
+export interface DocumentEventAmounts {
+  totalAmount: number;
+  netAmount: number;
+  vatAmount: number;
+  serviceChargeAmount: number;
+  totalAmountIrr: number | null;
+}
+
+export interface InvoiceEventPayload extends DocumentEventAmounts {
   documentId: number;
   refNumber: string;
   docType: 'invoice' | 'proforma';
   buyerName?: string;
-  totalAmount?: number;
   currency: string;
   itemCount: number;
   status: string;
 }
 
-export interface PurchaseEventPayload {
+export interface PurchaseEventPayload extends DocumentEventAmounts {
   documentId: number;
   refNumber: string;
   supplierName?: string;
-  totalAmount?: number;
   currency: string;
   itemCount: number;
   status: string;

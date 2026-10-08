@@ -20,7 +20,7 @@ const rule: RuleFormData = {
 describe('event field picker (TD-085 part 3)', () => {
   it('lists the payload fields of the event with Persian labels, then the common fields', () => {
     const fields = eventFieldOptions('InvoiceApproved');
-    expect(fields).toContainEqual({ path: 'payload.totalAmount', label: 'مبلغ کل' });
+    expect(fields).toContainEqual({ path: 'payload.totalAmount', label: 'مبلغ قابل پرداخت' }); // v9.0.382 (TD-713): the payable amount
     expect(fields.at(-1)).toEqual({ path: 'metadata.userName', label: 'کاربر انجام‌دهنده' });
     expect(eventFieldOptions('*').map((f) => f.path)).toEqual(['eventType', 'aggregateType', 'aggregateId', 'metadata.userName']);
   });
@@ -32,7 +32,7 @@ describe('event field picker (TD-085 part 3)', () => {
     const options = Array.from(container.querySelectorAll('#rule-event-fields option')).map((o) => (o as HTMLOptionElement).value);
     expect(options).toContain('payload.buyerName');
 
-    const chip = screen.getAllByTitle('افزودن به متن پیام').find((b) => b.textContent?.includes('مبلغ کل'));
+    const chip = screen.getAllByTitle('افزودن به متن پیام').find((b) => b.textContent?.includes('مبلغ قابل پرداخت'));
     expect(chip).toBeTruthy();
     fireEvent.click(chip as HTMLElement);
     const message = container.querySelector('textarea') as HTMLTextAreaElement;
