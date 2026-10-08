@@ -505,7 +505,9 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         const adminRes = await request(app).post('/api/settings').set('Cookie', adminSession.cookie).set('X-CSRF-Token', adminSession.csrfToken)
           .send({ settings: [{ key: 'wc_consumer_secret', value: 'cs_rotated_by_admin' }] });
         const [secretRotated] = await orm.select().from(appSettings).where(eq(appSettings.key, 'wc_consumer_secret'));
-        if (adminRes.status !== 200 || secretRotated?.value !== 'cs_rotated_by_admin') {
+        // v9.0.361 (TD-898): stored encrypted
+        const { decryptSecret } = await import('../../lib/secretBox.js');
+        if (adminRes.status !== 200 || decryptSecret(secretRotated?.value) !== 'cs_rotated_by_admin') {
           throw new Error(`ادمین باید بتواند کلید محرمانه را تغییر دهد (وضعیت ${adminRes.status}).`);
         }
         return 'مدیر تنظیمات کسب‌وکاری را ذخیره کرد، مقدار ماسک نادیده گرفته شد، تغییر کلید محرمانه توسط مدیر 403 گرفت، کلید ناشناخته رد شد و ادمین کلید محرمانه را تغییر داد.';
@@ -616,7 +618,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
       await orm.insert(users).values({ username: operatorUser, password: TEST_PASSWORD_HASH, fullName: 'اپراتور خروجی', role: 'operator', avatarUrl: '' });
       try {
         const adminSession = await getAdminSession();
-        // v9.0.356 (TD-592): the export is a zip of NDJSON tables
+        // v9.0.386 (TD-592): the export is a zip of NDJSON tables
         const { readZipEntries, ndjsonRows, binaryParser } = await import('../fixtures/zipReader.js');
         const res = await request(app).get('/api/export-backup').set('Cookie', adminSession.cookie).buffer(true).parse(binaryParser as never);
         if (res.status !== 200) {

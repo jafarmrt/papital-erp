@@ -8,6 +8,7 @@ import { containsLikePattern } from '../../lib/sqlLike.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { ConflictError, NotFoundError } from '../../errors/customErrors.js';
 import { lockIdleDeadLetterRows, RESOLVED_STATUS_LABELS, withDeadLetterRowLock } from './deadLetterRowLock.js';
+import { deadLetterDeliveryJobId, replayDeliveryDeadLetter, requeueDeliveryDeadLetters } from './deadLetterDelivery.js';
 
 /**
  * TD-245: وضعیت‌های «حل‌شده» صف قرنطینه — رویداد بازپخش‌شده یا صرف‌نظرشده دیگر خطای باز نیست.
@@ -296,40 +297,46 @@ export class DeadLetterQueueService {
 
     const payload = updatedPayload || record.payload;
     const nowIso = new Date().toISOString();
+    const deliveryJobId = deadLetterDeliveryJobId(record);
 
     try {
-      // 1. Construct DomainEvent
-      const domainEvent: BaseDomainEvent = {
-        eventId: record.originalEventId,
-        eventType: record.eventType,
-        aggregateType: record.aggregateType as AggregateType,
-        aggregateId: record.aggregateId,
-        payload: payload || {},
-        metadata: {
-          ...((record.metadata as Record<string, unknown>) || {}),
-          replayedAt: nowIso,
-          replayedBy: userId ?? null,
-          isReplay: true
-        } as unknown as BaseDomainEvent['metadata'],
-        occurredAt: record.quarantinedAt || nowIso
-      };
+      if (deliveryJobId !== null) {
+        // v9.0.378 (TD-705): only the failed delivery runs again, never the event's other deliveries or handlers
+        await replayDeliveryDeadLetter(deliveryJobId, payload);
+      } else {
+        // 1. Construct DomainEvent
+        const domainEvent: BaseDomainEvent = {
+          eventId: record.originalEventId,
+          eventType: record.eventType,
+          aggregateType: record.aggregateType as AggregateType,
+          aggregateId: record.aggregateId,
+          payload: payload || {},
+          metadata: {
+            ...((record.metadata as Record<string, unknown>) || {}),
+            replayedAt: nowIso,
+            replayedBy: userId ?? null,
+            isReplay: true
+          } as unknown as BaseDomainEvent['metadata'],
+          occurredAt: record.quarantinedAt || nowIso
+        };
 
-      // 2. v7.0.25 (TD-183 / audit P1-1): دیسپچ قابل‌ردیابی — قبلاً publish خطای هندلرها را می‌بلعید و
-      // بازپخش همیشه «موفق» گزارش می‌شد. هندلرهایی که قبلاً برای این رویداد موفق شده‌اند دوباره اجرا نمی‌شوند.
-      const [outboxRow] = await orm
-        .select({ completedHandlers: outboxEvents.completedHandlers })
-        .from(outboxEvents)
-        .where(eq(outboxEvents.eventId, record.originalEventId));
-      const previouslyCompleted = Array.isArray(outboxRow?.completedHandlers) ? outboxRow.completedHandlers : [];
-      const dispatch = await domainEventBus.dispatchTracked(domainEvent, previouslyCompleted);
-      if (outboxRow) {
-        await orm
-          .update(outboxEvents)
-          .set({ completedHandlers: dispatch.completedHandlers })
+        // 2. v7.0.25 (TD-183 / audit P1-1): دیسپچ قابل‌ردیابی — قبلاً publish خطای هندلرها را می‌بلعید و
+        // بازپخش همیشه «موفق» گزارش می‌شد. هندلرهایی که قبلاً برای این رویداد موفق شده‌اند دوباره اجرا نمی‌شوند.
+        const [outboxRow] = await orm
+          .select({ completedHandlers: outboxEvents.completedHandlers })
+          .from(outboxEvents)
           .where(eq(outboxEvents.eventId, record.originalEventId));
-      }
-      if (dispatch.failures.length > 0) {
-        throw new Error(dispatch.failures.map(f => `${f.handler}: ${f.error}`).join(' | '));
+        const previouslyCompleted = Array.isArray(outboxRow?.completedHandlers) ? outboxRow.completedHandlers : [];
+        const dispatch = await domainEventBus.dispatchTracked(domainEvent, previouslyCompleted);
+        if (outboxRow) {
+          await orm
+            .update(outboxEvents)
+            .set({ completedHandlers: dispatch.completedHandlers })
+            .where(eq(outboxEvents.eventId, record.originalEventId));
+        }
+        if (dispatch.failures.length > 0) {
+          throw new Error(dispatch.failures.map(f => `${f.handler}: ${f.error}`).join(' | '));
+        }
       }
 
       // 3. Mark DLQ as replayed
@@ -445,8 +452,11 @@ export class DeadLetterQueueService {
       return { requeuedCount: 0, dlqIds: [], originalEventIds: [], reinsertedEventIds: [], before: [] };
     }
 
-    const eventIds = pending.map(r => r.originalEventId);
-    const existingOutbox = await tx
+    // v9.0.378 (TD-705): a failed integration delivery goes back to its own delivery queue, not to the outbox
+    const outboxRows = await requeueDeliveryDeadLetters(tx, pending);
+
+    const eventIds = outboxRows.map(r => r.originalEventId);
+    const existingOutbox = eventIds.length === 0 ? [] : await tx
       .select({ eventId: outboxEvents.eventId, status: outboxEvents.status })
       .from(outboxEvents)
       .where(inArray(outboxEvents.eventId, eventIds))
@@ -461,7 +471,7 @@ export class DeadLetterQueueService {
         .where(inArray(outboxEvents.eventId, existingOutbox.map(r => r.eventId)));
     }
 
-    const missing = pending.filter(r => !outboxStatusById.has(r.originalEventId));
+    const missing = outboxRows.filter(r => !outboxStatusById.has(r.originalEventId));
     if (missing.length > 0) {
       await tx.insert(outboxEvents).values(missing.map(r => ({
         eventId: r.originalEventId,
@@ -485,7 +495,7 @@ export class DeadLetterQueueService {
     return {
       requeuedCount: pending.length,
       dlqIds,
-      originalEventIds: eventIds,
+      originalEventIds: pending.map(r => r.originalEventId),
       reinsertedEventIds: missing.map(r => r.originalEventId),
       before: pending.map(r => ({ id: r.id, originalEventId: r.originalEventId, status: r.status, outboxStatus: outboxStatusById.get(r.originalEventId) ?? null }))
     };

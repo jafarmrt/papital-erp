@@ -14,12 +14,12 @@ export async function runSystemHealthTests(shouldRun: ShouldRun): Promise<TestCa
 /**
  * Package 1 finding B01-13, TD-593: one try/catch around every subsystem query answered zeros with `status: 'ok'` when
  * any query failed, and `observability` was a constant `ok`. With one unbalanced voucher and a failing dead-letter
- * count, v9.0.357 answered `accounting {"totalVouchers":0,"unbalancedVouchers":0,"status":"ok"}`.
+ * count, v9.0.387 answered `accounting {"totalVouchers":0,"unbalancedVouchers":0,"status":"ok"}`.
  */
 async function runUnknownSubsystemTest(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const id = 'reg_system_health_unknown_subsystem_td_593';
   if (!shouldRun(id, 'td593', 'b01-13', 'health', 'package1')) return [];
-  const name = 'v9.0.358: a failed subsystem query is reported as unknown, the other subsystems keep their real state (TD-593)';
+  const name = 'v9.0.388: a failed subsystem query is reported as unknown, the other subsystems keep their real state (TD-593)';
   const tStart = Date.now();
   const { SystemHealthService } = await import('../../services/system/systemHealth.service.js');
   const realDlqCount = SystemHealthService.countDeadLetterEvents;
@@ -100,12 +100,12 @@ async function runUnknownSubsystemTest(shouldRun: ShouldRun): Promise<TestCaseRe
 /**
  * Package 1 finding B01-39, TD-619: the storage card checked public/uploads by writing a test file there on every
  * call, never the attachment root (ATTACHMENTS_DIR), so with an unwritable attachment directory a document with an
- * attachment failed with 500 while the card said `{"status":"ok","writable":true}` (v9.0.358).
+ * attachment failed with 500 while the card said `{"status":"ok","writable":true}` (v9.0.388).
  */
 async function runStorageDirectoriesTest(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const id = 'reg_system_health_storage_directories_td_619';
   if (!shouldRun(id, 'td619', 'b01-39', 'health', 'package1')) return [];
-  const name = 'v9.0.359: the storage card checks the attachment and image directories without writing to them (TD-619)';
+  const name = 'v9.0.389: the storage card checks the attachment and image directories without writing to them (TD-619)';
   const tStart = Date.now();
   const fs = await import('fs');
   const os = await import('os');
@@ -170,12 +170,12 @@ async function runStorageDirectoriesTest(shouldRun: ShouldRun): Promise<TestCase
  * Package 1 finding B01-43, TD-623: the queue buttons showed even with an empty queue because the page knew only the
  * failed-event count. The health answer now carries `stuckCount` (outbox events in processing for more than five
  * minutes), counted with the same condition the reset uses, so the page offers the reset only when it resets something.
- * On v9.0.360 `outbox.stuckCount` was missing.
+ * On v9.0.390 `outbox.stuckCount` was missing.
  */
 async function runStuckOutboxCountTest(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const id = 'reg_system_health_stuck_outbox_count_td_623';
   if (!shouldRun(id, 'td623', 'b01-43', 'health', 'outbox', 'package1')) return [];
-  const name = 'v9.0.361: the health page counts stuck outbox events with the condition the reset uses (TD-623)';
+  const name = 'v9.0.391: the health page counts stuck outbox events with the condition the reset uses (TD-623)';
   const tStart = Date.now();
   const eventId = `TD623-${Date.now().toString(36)}`;
   const { pool } = await import('../../db/drizzle.js');
@@ -222,7 +222,7 @@ async function runStuckOutboxCountTest(shouldRun: ShouldRun): Promise<TestCaseRe
 }
 
 /**
- * Package 1 finding B01-42, TD-622 (decision t8): the server texts of the health page and the setup wizard. v9.0.361
+ * Package 1 finding B01-42, TD-622 (decision t8): the server texts of the health page and the setup wizard. v9.0.391
  * answered «پایگاه‌داده PostgreSQL متصل و آماده است», «…در حالت Processing با موفقیت بازنشانی شدند» with Latin digits,
  * integrity checks naming «Schema», «Outbox / DLQ», «Replay» and «SLA», accepted a setup without a company name (which
  * then printed «سامانه جامع ERP پاپیتال» on invoices) and refused a concurrent setup with
@@ -231,7 +231,7 @@ async function runStuckOutboxCountTest(shouldRun: ShouldRun): Promise<TestCaseRe
 async function runServerWordingTest(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const id = 'reg_setup_health_server_wording_td_622';
   if (!shouldRun(id, 'td622', 'b01-42', 'health', 'setup', 'package1')) return [];
-  const name = 'v9.0.362: health, integrity check, queue reset and setup messages are Persian with Persian digits; setup needs a company name (TD-622)';
+  const name = 'v9.0.392: health, integrity check, queue reset and setup messages are Persian with Persian digits; setup needs a company name (TD-622)';
   const tStart = Date.now();
   const { pool } = await import('../../db/drizzle.js');
   const eventId = `td622-${Date.now()}`;

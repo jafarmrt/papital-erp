@@ -2,7 +2,7 @@ import zlib from 'zlib';
 import { crc32 } from '../../lib/zipStream.js';
 
 /**
- * v9.0.356 (TD-592): reads a whole ZIP buffer through its central directory (stored and DEFLATE entries) and checks
+ * v9.0.386 (TD-592): reads a whole ZIP buffer through its central directory (stored and DEFLATE entries) and checks
  * every entry's CRC and size, so a test sees exactly what an unzip tool would.
  */
 export function readZipEntries(buf: Buffer): Map<string, Buffer> {

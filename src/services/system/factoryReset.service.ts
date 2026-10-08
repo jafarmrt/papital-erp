@@ -105,7 +105,7 @@ export class FactoryResetService {
 
       // Re-seed the base data (categories, settings, chart of accounts, task categories, piecework tasks; roles are kept,
       // TD-245) and, as at boot, the default workflows, event rules and webhook subscriptions this reset wiped
-      // (v9.0.360, TD-620: before, they stayed missing until the next restart)
+      // (v9.0.390, TD-620: before, they stayed missing until the next restart)
       await runSeed();
       await seedDefaultEngines();
       this.invalidateCaches();

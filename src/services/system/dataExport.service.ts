@@ -16,12 +16,12 @@ import { ZipStreamWriter } from '../../lib/zipStream.js';
  * Credentials are never exported, and the payload states that real backups are taken with
  * `scripts/backup.sh` (pg_dump) and restored with `scripts/restore.sh`.
  *
- * v9.0.356 (TD-592، تصمیم ت۷ الف): خروجی دیگر یک JSON در حافظه نیست. هر جدول در یک فایل NDJSON درون zip نوشته
+ * v9.0.386 (TD-592، تصمیم ت۷ الف): خروجی دیگر یک JSON در حافظه نیست. هر جدول در یک فایل NDJSON درون zip نوشته
  * می‌شود، دسته‌به‌دسته با cursor روی کلید اصلی (`DATA_EXPORT_BATCH_SIZE` ردیف در هر پرس‌وجو) و با رعایت فشار
  * برگشتی پاسخ، پس حافظه پردازه به اندازه یک دسته است. `activity_logs` فقط با گزینه جدا و یک بازه تاریخ می‌آید.
  * `manifest.json` (آخرین فایل) قالب، نسخه، شمار ردیف هر جدول و فیلدهای کنارگذاشته را دارد.
  *
- * v9.0.357 (TD-624): جدول‌ها از فهرست یگانه `DATA_EXPORT_TABLES` می‌آیند (پروژه و تخصیص، کارمزدی، دوره مالی، گردش کار،
+ * v9.0.387 (TD-624): جدول‌ها از فهرست یگانه `DATA_EXPORT_TABLES` می‌آیند (پروژه و تخصیص، کارمزدی، دوره مالی، گردش کار،
  * قاعده رویداد و فراداده پیوست افزوده شدند) و جدول‌های کنارگذاشته با دلیل در `manifest.json` نوشته می‌شوند.
  */
 

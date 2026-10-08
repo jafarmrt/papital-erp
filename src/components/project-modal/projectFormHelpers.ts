@@ -80,7 +80,8 @@ export function buildProjectPayload({
   priority,
   description,
   stages,
-  attachments
+  attachments,
+  includeStages = true
 }: {
   projectCode: string;
   title: string;
@@ -93,6 +94,8 @@ export function buildProjectPayload({
   description: string;
   stages: ProjectStage[];
   attachments?: FinancialAttachment[];
+  /** v9.0.384 (TD-740، تصمیم ت۲ الف): مراحل فقط در ساخت پروژه فرستاده می‌شوند؛ ویرایش پروژه آن‌ها را نمی‌فرستد */
+  includeStages?: boolean;
 }) {
   const firstProduct = productsList[0];
   const totalQty = productsList.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
@@ -116,11 +119,13 @@ export function buildProjectPayload({
     description: description ? description.trim() : '',
     products: finalProducts,
     attachments: Array.isArray(attachments) ? attachments : [],
-    initial_stages: stages.map((s, idx) => ({
-      title: s.title ? s.title.trim() : `مرحله ${idx + 1}`,
-      stage_order: idx + 1,
-      assigned_personnel: s.assigned_personnel || [],
-      required_resources: s.required_resources || []
-    }))
+    ...(includeStages ? {
+      initial_stages: stages.map((s, idx) => ({
+        title: s.title ? s.title.trim() : `مرحله ${idx + 1}`,
+        stage_order: idx + 1,
+        assigned_personnel: s.assigned_personnel || [],
+        required_resources: s.required_resources || []
+      }))
+    } : {})
   };
 }

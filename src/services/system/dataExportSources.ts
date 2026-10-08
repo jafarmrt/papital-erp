@@ -15,7 +15,7 @@ import {
 import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
 /**
- * v9.0.357 (TD-624، تصمیم ت۷ الف): شیوه خواندن هر جدول خروجی داده‌ها (کلید cursor و، برای اطلاعات ورود، ستون‌های
+ * v9.0.387 (TD-624، تصمیم ت۷ الف): شیوه خواندن هر جدول خروجی داده‌ها (کلید cursor و، برای اطلاعات ورود، ستون‌های
  * مجاز). فهرست و ترتیب جدول‌ها از `DATA_EXPORT_TABLES` (`src/lib/system/dataExportTables.ts`) می‌آید.
  */
 
@@ -43,7 +43,7 @@ function withoutColumns(table: PgTable, omit: string[]): Record<string, PgColumn
 type TableSpecSource = Omit<ExportTableSpec, 'name'>;
 
 /**
- * How each exported table is read (v9.0.357, TD-624): its key and, for credentials, its projection. The table list and
+ * How each exported table is read (v9.0.387, TD-624): its key and, for credentials, its projection. The table list and
  * order come from `DATA_EXPORT_TABLES`; Vitest `dataExportTables.test.ts` checks that both name the same tables.
  */
 export const DATA_EXPORT_TABLE_SOURCES: Readonly<Record<string, TableSpecSource>> = {

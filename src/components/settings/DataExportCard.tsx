@@ -7,9 +7,9 @@ import { dataExportRangeError, dataExportUrl } from '../../lib/system/dataExport
 import { dataExportGroupLabels } from '../../lib/system/dataExportTables';
 
 /**
- * v9.0.356 (TD-592، تصمیم ت۷ الف): کارت خروجی داده‌های کسب‌وکاری. خروجی یک فایل zip است، هر جدول یک فایل؛ سجل ممیزی
+ * v9.0.386 (TD-592، تصمیم ت۷ الف): کارت خروجی داده‌های کسب‌وکاری. خروجی یک فایل zip است، هر جدول یک فایل؛ سجل ممیزی
  * فقط با گزینه جدا و یک بازه تاریخ. مسیر سرور فقط برای مدیر سامانه است، پس کارت هم فقط برای او نشان داده می‌شود؛
- * نام فایل را سرور با تاریخ امروز کسب‌وکار می‌دهد. v9.0.357 (TD-624): فهرست داده‌ها از گروه‌های `DATA_EXPORT_TABLES` است.
+ * نام فایل را سرور با تاریخ امروز کسب‌وکار می‌دهد. v9.0.387 (TD-624): فهرست داده‌ها از گروه‌های `DATA_EXPORT_TABLES` است.
  */
 export function DataExportCard() {
   const isSystemAdmin = useIsSystemAdmin();

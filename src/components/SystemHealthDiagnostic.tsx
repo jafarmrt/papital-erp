@@ -12,7 +12,7 @@ import type { AccountingHealth, OutboxHealth, WorkflowHealth } from '../lib/syst
 import type { StorageHealth } from '../lib/system/storageHealth';
 
 /**
- * صفحه سلامت سامانه (فقط مدیر سامانه). v9.0.358 تا v9.0.362 (TD-593، TD-619، TD-623، TD-622): هر بخش کارت خودش را دارد
+ * صفحه سلامت سامانه (فقط مدیر سامانه). v9.0.388 تا v9.0.392 (TD-593، TD-619، TD-623، TD-622): هر بخش کارت خودش را دارد
  * (`src/components/system/`)؛ متن‌ها فارسی و عددها با رقم فارسی‌اند.
  */
 interface HealthData {

@@ -65,7 +65,7 @@ export const purgeActivityLogsSchema = z.object({
   }).strict().optional()
 });
 
-// v9.0.356 (TD-592): سجل ممیزی فقط با گزینه جدا و یک بازه تاریخ روزهای کسب‌وکار در خروجی داده می‌آید
+// v9.0.386 (TD-592): سجل ممیزی فقط با گزینه جدا و یک بازه تاریخ روزهای کسب‌وکار در خروجی داده می‌آید
 export const dataExportQuerySchema = z.object({
   query: z.object({
     activityLogs: z.enum(['0', '1'], { message: 'گزینه سجل ممیزی باید ۰ یا ۱ باشد' }).optional(),
@@ -138,7 +138,7 @@ router.get('/settings', asyncHandler(async (req, res) => {
   const safeSettings = await SystemSettingsService.getAllSettings();
   const isAdmin = req.user?.role === SYSTEM_ADMIN_ROLE;
   if (isAdmin) {
-    res.json(safeSettings);
+    res.json(SystemSettingsService.revealSettingSecrets(safeSettings));
     return;
   }
   res.json(SystemSettingsService.maskSensitiveSettings(safeSettings));
@@ -357,7 +357,7 @@ router.get('/global-search', asyncHandler(async (req, res) => {
 // Export full database dump as JSON
 // v7.0.29 (TD-188 / audit P1-6): خروجی امن داده‌ها (بدون هش رمز، رمز صرافی پرسنل و کلیدهای محرمانه؛
 // شامل دفاتر حسابداری و کارمزدی) — نسخه پشتیبان قابل بازگردانی نیست؛ پشتیبان واقعی: scripts/backup.sh
-// v9.0.356 (TD-592، تصمیم ت۷ الف): خروجی zip جریانی، جدول‌به‌جدول و دسته‌به‌دسته؛ سجل ممیزی فقط با گزینه و بازه تاریخ
+// v9.0.386 (TD-592، تصمیم ت۷ الف): خروجی zip جریانی، جدول‌به‌جدول و دسته‌به‌دسته؛ سجل ممیزی فقط با گزینه و بازه تاریخ
 router.get('/export-backup', requireSystemAdmin, validate(dataExportQuerySchema), asyncHandler(async (req, res) => {
   const query = req.query as { activityLogs?: string; from?: string; to?: string };
   const options: DataExportOptions = query.activityLogs === '1' && query.from && query.to

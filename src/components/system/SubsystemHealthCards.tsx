@@ -7,7 +7,7 @@ import {
 } from '../../lib/system/subsystemHealth';
 
 /**
- * v9.0.358 (TD-593، B01-13): کارت‌های صف رویدادها، تراز اسناد و گردش کار صفحه سلامت. وضعیتی که سرور نتوانست بخواند
+ * v9.0.388 (TD-593، B01-13): کارت‌های صف رویدادها، تراز اسناد و گردش کار صفحه سلامت. وضعیتی که سرور نتوانست بخواند
  * («نامعلوم») رنگ و متن خودش را دارد و پیام سرور را نشان می‌دهد؛ هرگز «روان» یا «همه اسناد فعال تراز هستند» نمی‌گوید.
  */
 
@@ -131,7 +131,7 @@ function WorkflowCard({ workflow }: { workflow?: WorkflowHealth }) {
 
 export function SubsystemHealthCards({ outbox, accounting, workflow, outboxActions }: {
   outbox?: OutboxHealth; accounting?: AccountingHealth; workflow?: WorkflowHealth;
-  /** v9.0.361 (TD-623): the event queue buttons, shown inside the queue card */
+  /** v9.0.391 (TD-623): the event queue buttons, shown inside the queue card */
   outboxActions?: ReactNode;
 }) {
   return (

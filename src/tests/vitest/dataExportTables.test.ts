@@ -7,7 +7,7 @@ import {
 } from '../../lib/system/dataExportTables';
 import { DATA_EXPORT_TABLE_SOURCES } from '../../services/system/dataExportSources';
 
-// v9.0.357 (TD-624, B01-44, decision t7 a): every Drizzle table is either exported, the optional audit log, or left out
+// v9.0.387 (TD-624, B01-44, decision t7 a): every Drizzle table is either exported, the optional audit log, or left out
 // with a reason, so a new table is classified in the same change; the server reads exactly the listed tables.
 
 const schemaTables = (Object.values(schema) as unknown[])

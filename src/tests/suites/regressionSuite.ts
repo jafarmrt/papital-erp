@@ -8891,7 +8891,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           title: `ERP-TEST-MARKER پروژه رزرو TD-233 ${suffix}`,
           status: 'in_progress',
           version: 1,
-          inventoryControl: { isReserved: true, reservedItems },
+          inventoryControl: { isFinalized: true, isReserved: true, reservedItems },
         }).returning();
         projectIds.push(p.id);
         return p.id;
@@ -9132,7 +9132,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           title: `ERP-TEST-MARKER پروژه رزرو TD-237 ${suffix}`,
           status: 'in_progress',
           version: 1,
-          inventoryControl: { isReserved: true, reservedItems },
+          inventoryControl: { isFinalized: true, isReserved: true, reservedItems },
         }).returning();
         projectIds.push(p.id);
         return p.id;
@@ -10118,7 +10118,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       type Scan = { checks?: Array<{ id: string; details: string }> };
       const health = async () => { const r = await get('/api/system/health'); return { status: r.status, body: r.body as Health }; };
       const scan = async () => { const r = await get('/api/system/reconciliation-check'); return { status: r.status, body: r.body as Scan }; };
-      // v9.0.362 (TD-622): the details print counts in Persian digits; an ok check names no count
+      // v9.0.392 (TD-622): the details print counts in Persian digits; an ok check names no count
       const scanNumber = (s: Scan, id: string, re: RegExp) => {
         const details = (s.checks?.find(c => c.id === id)?.details ?? '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
         const m = details.match(re);
@@ -10623,6 +10623,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 12 payroll PR d (v9.0.330 on): the work log list is filtered, paged and summed in SQL (TD-811)
   const { runWorkLogListTests } = await import('../regression/workLogListTests.js');
   results.push(...await runWorkLogListTests(shouldRun));
+  // Package 11 PR a (v9.0.364 on): progress matrix, project status on write only, stage numbering and input (TD-739 ...)
+  const { runProjectStageIntegrityTests } = await import('../regression/projectStageIntegrityTests.js');
+  results.push(...await runProjectStageIntegrityTests(shouldRun));
+  // Package 11 PR b (v9.0.380 on): project edit and input — status lists, delivery input, stage clock, audit, version (TD-754 ...)
+  const { runProjectEditTests } = await import('../regression/projectEditTests.js');
+  results.push(...await runProjectEditTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
@@ -10735,6 +10741,30 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runWooNamesakeCustomerTests(shouldRun));
   const { runWooConnectionTestTests } = await import('../regression/wooConnectionTestTests.js');
   results.push(...await runWooConnectionTestTests(shouldRun));
+  // Package 15 PR b (v9.0.356+): webhook secrets and SSRF
+  const { runWebhookSsrfEchoTests } = await import('../regression/webhookSsrfEchoTests.js');
+  results.push(...await runWebhookSsrfEchoTests(shouldRun));
+  const { runWebhookRuleSeedTests } = await import('../regression/webhookRuleSeedTests.js');
+  results.push(...await runWebhookRuleSeedTests(shouldRun));
+  const { runWebhookSecretEditTests } = await import('../regression/webhookSecretEditTests.js');
+  results.push(...await runWebhookSecretEditTests(shouldRun));
+  const { runWebhookKeyTimeoutTests } = await import('../regression/webhookKeyTimeoutTests.js');
+  results.push(...await runWebhookKeyTimeoutTests(shouldRun));
+  const { runWebhookSecretMaskTests } = await import('../regression/webhookSecretMaskTests.js');
+  results.push(...await runWebhookSecretMaskTests(shouldRun));
+  const { runIntegrationSecretsAtRestTests } = await import('../regression/integrationSecretsAtRestTests.js');
+  results.push(...await runIntegrationSecretsAtRestTests(shouldRun));
+  const { runWebhookActionFailureTests } = await import('../regression/webhookActionFailureTests.js');
+  results.push(...await runWebhookActionFailureTests(shouldRun));
+  const { runBootActionHandlersTests } = await import('../regression/bootActionHandlersTests.js');
+  results.push(...await runBootActionHandlersTests(shouldRun));
+  const { runRetiredRuleActionTests } = await import('../regression/retiredRuleActionTests.js');
+  results.push(...await runRetiredRuleActionTests(shouldRun));
+  const { runIntegrationDeliveryRetryTests } = await import('../regression/integrationDeliveryRetryTests.js');
+  results.push(...await runIntegrationDeliveryRetryTests(shouldRun));
+  const { runIntegrationCounterLockTests } = await import('../regression/integrationCounterLockTests.js');
+  results.push(...await runIntegrationCounterLockTests(shouldRun));
+
   // Package 10 PR B (v9.0.347+): procurement order link, duplicate submissions, consolidation, receiving
   const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');
   results.push(...await runProcurementOrderTests(shouldRun));
@@ -10743,7 +10773,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runProcurementDeskTests } = await import('../regression/procurementDeskTests.js');
   results.push(...await runProcurementDeskTests(shouldRun));
 
-  // Package 1 second half PR 1 (v9.0.356+): data export, system health page, factory reset, setup wizard
+  // Package 7 PR A (v9.0.370+): which documents and projects reserve stock, and how much
+  const { runStockReservationTests } = await import('../regression/stockReservationTests.js');
+  results.push(...await runStockReservationTests(shouldRun));
+
+  // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
   results.push(...await runDataExportTests(shouldRun));
   const { runSystemHealthTests } = await import('../regression/systemHealthTests.js');

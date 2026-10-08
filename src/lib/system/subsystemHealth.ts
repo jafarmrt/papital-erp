@@ -1,5 +1,5 @@
 /**
- * v9.0.358 (TD-593، B01-13): قرارداد وضعیت زیرسامانه‌های صفحه سلامت، مشترک سرور (`systemHealth.service.ts`) و
+ * v9.0.388 (TD-593، B01-13): قرارداد وضعیت زیرسامانه‌های صفحه سلامت، مشترک سرور (`systemHealth.service.ts`) و
  * رابط (`SubsystemHealthCards`). هر زیرسامانه جدا سنجیده می‌شود؛ وقتی پرس‌وجوی خودش شکست بخورد وضعیت `unknown`
  * است، شمارنده‌ها null و پیامی فارسی همراه دارد، هرگز صفر و «سالم».
  */
@@ -9,7 +9,7 @@ export type SubsystemStatus = 'ok' | 'warning' | 'error' | 'unknown';
 export interface OutboxHealth {
   pendingCount: number | null;
   dlqCount: number | null;
-  /** v9.0.361 (TD-623): events stuck in processing for more than five minutes */
+  /** v9.0.391 (TD-623): events stuck in processing for more than five minutes */
   stuckCount?: number | null;
   status: SubsystemStatus;
   message?: string;
@@ -34,7 +34,7 @@ export const SUBSYSTEM_UNKNOWN_MESSAGES: Readonly<Record<keyof SubsystemHealth, 
 };
 
 /**
- * v9.0.362 (TD-622، B01-42، تصمیم ت۸): پیام کارت پایگاه‌داده، بی «PostgreSQL» و بی متن خام خطا (خطا فقط در گزارش خطاهای
+ * v9.0.392 (TD-622، B01-42، تصمیم ت۸): پیام کارت پایگاه‌داده، بی «PostgreSQL» و بی متن خام خطا (خطا فقط در گزارش خطاهای
  * کارساز، به انگلیسی).
  */
 export const DATABASE_HEALTH_MESSAGES = {

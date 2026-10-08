@@ -6,7 +6,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
  * Package 1 finding B01-12, TD-592 (decision t7 a): the data export was one unbounded `SELECT *` per table answered
  * with one `res.json` (950,000 audit rows: 750 MiB, 3 GiB of process memory, `/health/live` waited 13 s). Now it is a
  * streamed zip with one NDJSON file per table, read in key-ordered batches, and the audit log comes only on request
- * for a date range. On v9.0.355 the route answered `application/json` named `.json` with `activityLogs` always inside.
+ * for a date range. On v9.0.385 the route answered `application/json` named `.json` with `activityLogs` always inside.
  */
 export async function runDataExportTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   return [...await runStreamedZipTest(shouldRun), ...await runDataExportCoverageTest(shouldRun)];
@@ -17,7 +17,7 @@ async function runStreamedZipTest(shouldRun: (id: string, ...extra: string[]) =>
   const id = 'reg_data_export_streamed_zip_td_592';
   if (!shouldRun(id, 'td592', 'b01-12', 'export', 'package1')) return results;
 
-  const name = 'v9.0.356: data export is a streamed zip of NDJSON tables read in batches; audit log only for a date range (TD-592)';
+  const name = 'v9.0.386: data export is a streamed zip of NDJSON tables read in batches; audit log only for a date range (TD-592)';
   const tStart = Date.now();
   try {
     const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
@@ -105,12 +105,12 @@ async function runStreamedZipTest(shouldRun: (id: string, ...extra: string[]) =>
 /**
  * Package 1 finding B01-44, TD-624 (decision t7 a): the export missed tables the settings card promised (project
  * allocations, piecework tasks and rates, fiscal periods, attachment metadata, workflow, event rules), so work logs
- * pointed at tasks without a name or rate. On v9.0.356 the manifest had none of them.
+ * pointed at tasks without a name or rate. On v9.0.386 the manifest had none of them.
  */
 async function runDataExportCoverageTest(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   const id = 'reg_data_export_table_coverage_td_624';
   if (!shouldRun(id, 'td624', 'b01-44', 'export', 'package1')) return [];
-  const name = 'v9.0.357: data export holds project, piecework, fiscal period, workflow, event rule and attachment tables (TD-624)';
+  const name = 'v9.0.387: data export holds project, piecework, fiscal period, workflow, event rule and attachment tables (TD-624)';
   const tStart = Date.now();
   try {
     const { readZipEntries, ndjsonRows } = await import('../fixtures/zipReader.js');

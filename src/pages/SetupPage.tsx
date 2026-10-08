@@ -18,7 +18,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
-  // v9.0.363 (TD-621، B01-41): خطای رمز راه‌اندازی زیر همان فیلد در گام ۱ نشان داده می‌شود
+  // v9.0.393 (TD-621، B01-41): خطای رمز راه‌اندازی زیر همان فیلد در گام ۱ نشان داده می‌شود
   const [tokenError, setTokenError] = useState('');
 
   // Step 1: Admin Account State & Setup Security Token (SEC-012)
@@ -37,7 +37,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
   const [showPassword, setShowPassword] = useState(false);
 
   // Step 2: Business & Invoice Details State
-  // v9.0.362 (TD-622، تصمیم ت۸): نام شرکت روی سربرگ فاکتور چاپ می‌شود؛ پیش‌فرض ندارد و اجباری است
+  // v9.0.392 (TD-622، تصمیم ت۸): نام شرکت روی سربرگ فاکتور چاپ می‌شود؛ پیش‌فرض ندارد و اجباری است
   const [companyName, setCompanyName] = useState('');
   const [warehouseName, setWarehouseName] = useState('انبار مرکزی');
   const [phone, setPhone] = useState('');

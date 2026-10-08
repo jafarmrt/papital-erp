@@ -105,7 +105,7 @@ const setupSchema = z.object({
     username: z.string().trim().min(SETUP_USERNAME_MIN_LENGTH, SETUP_USERNAME_TOO_SHORT_MESSAGE),
     password: z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE),
     fullName: z.string().min(1, 'نام و نام خانوادگی الزامی است').max(FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE),
-    // v9.0.362 (TD-622، تصمیم ت۸): نام شرکت روی سربرگ فاکتور چاپ می‌شود؛ پیش‌فرض ندارد و اجباری است
+    // v9.0.392 (TD-622، تصمیم ت۸): نام شرکت روی سربرگ فاکتور چاپ می‌شود؛ پیش‌فرض ندارد و اجباری است
     companyName: z.string({ error: SETUP_COMPANY_NAME_REQUIRED_MESSAGE }).trim().min(1, SETUP_COMPANY_NAME_REQUIRED_MESSAGE),
     warehouseName: z.string().optional().default('انبار مرکزی'),
     phone: z.string().optional().default(''),

@@ -241,7 +241,7 @@ export function GeneralSettingsTab({
         </div>
       </div>
 
-      {/* v9.0.356 (TD-592): کارت خروجی داده‌ها، فقط برای مدیر سامانه */}
+      {/* v9.0.386 (TD-592): کارت خروجی داده‌ها، فقط برای مدیر سامانه */}
       <DataExportCard />
 
       <div className="flex justify-end pt-4 border-t border-slate-200">

@@ -19,7 +19,7 @@ import { getImageUploadsDir } from '../../lib/storage.js';
 
 /**
  * V3.0.7 (TD-065): بررسی سلامت زیرساخت برای صفحه وضعیت سیستم (GET /system/health، فقط ادمین):
- * اتصال و تأخیر پایگاه‌داده، قابلیت نوشتن پوشه‌های پیوست و تصویر (v9.0.359)، شاخص‌های صف رویداد / اسناد / فرآیند و حافظه.
+ * اتصال و تأخیر پایگاه‌داده، قابلیت نوشتن پوشه‌های پیوست و تصویر (v9.0.389)، شاخص‌های صف رویداد / اسناد / فرآیند و حافظه.
  * شمارنده‌های DLQ و وظایف معوق SLA با ممیزی یکپارچگی (SystemReconciliationService) مشترک‌اند.
  */
 
@@ -32,7 +32,7 @@ export interface DatabaseHealth {
 export type { StorageHealth };
 
 /**
- * v9.0.358 (TD-593): هر زیرسامانه جدا سنجیده می‌شود (قرارداد مشترک `src/lib/system/subsystemHealth.ts`)؛ پرس‌وجوی
+ * v9.0.388 (TD-593): هر زیرسامانه جدا سنجیده می‌شود (قرارداد مشترک `src/lib/system/subsystemHealth.ts`)؛ پرس‌وجوی
  * شکست‌خورده `status: 'unknown'`، شمارنده‌های null و پیام فارسی می‌دهد، نه صفر و «سالم». متن خطا فقط در لاگ می‌آید.
  */
 export type { SubsystemStatus, OutboxHealth, AccountingHealth, WorkflowHealth, SubsystemHealth };
@@ -84,7 +84,7 @@ function storageLocationHealth(kind: StorageLocationKind, dir: string): StorageL
 }
 
 /**
- * v9.0.361 (TD-623): an outbox event stuck in `processing` for more than five minutes. Shared by the count on the health
+ * v9.0.391 (TD-623): an outbox event stuck in `processing` for more than five minutes. Shared by the count on the health
  * page and the reset action (`SystemReconciliationService.resetStuckOutboxEvents`), so the page offers the reset only
  * when it would reset something.
  */
@@ -115,7 +115,7 @@ export class SystemHealthService {
       .orderBy(journalVouchers.id);
   }
 
-  /** v9.0.361 (TD-623): outbox events stuck in processing (what «اجرای دوباره رویدادهای مانده» would reset) */
+  /** v9.0.391 (TD-623): outbox events stuck in processing (what «اجرای دوباره رویدادهای مانده» would reset) */
   static async countStuckOutboxEvents(): Promise<number> {
     const [res] = await orm.select({ count: sql<number>`count(*)::int` }).from(outboxEvents).where(stuckOutboxCondition());
     return res?.count || 0;
@@ -130,7 +130,7 @@ export class SystemHealthService {
 
   /** 1. Check DB Connection & Latency */
   static async checkDatabase(): Promise<DatabaseHealth> {
-    // v9.0.362 (TD-622): Persian message without «PostgreSQL»; the raw error goes only to the server log
+    // v9.0.392 (TD-622): Persian message without «PostgreSQL»; the raw error goes only to the server log
     const dbStatus: DatabaseHealth = { status: 'ok', latencyMs: 0, message: DATABASE_HEALTH_MESSAGES.ok };
     try {
       const dbStart = Date.now();
@@ -146,7 +146,7 @@ export class SystemHealthService {
 
   /**
    * 2. Storage: the directories the app writes to (attachments root and image uploads), read-only.
-   * v9.0.359 (TD-619): checked public/uploads only (not ATTACHMENTS_DIR) and wrote a test file on every call.
+   * v9.0.389 (TD-619): checked public/uploads only (not ATTACHMENTS_DIR) and wrote a test file on every call.
    */
   static checkStorage(): StorageHealth {
     const locations = ([

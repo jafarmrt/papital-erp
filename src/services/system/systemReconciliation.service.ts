@@ -63,7 +63,7 @@ export function inventoryKardexCheck(
 }
 
 /**
- * v9.0.362 (TD-622، B01-42، تصمیم ت۸): پیام نتیجه دکمه‌های صف رویدادها، با رقم فارسی و بی «Outbox» و «Processing».
+ * v9.0.392 (TD-622، B01-42، تصمیم ت۸): پیام نتیجه دکمه‌های صف رویدادها، با رقم فارسی و بی «Outbox» و «Processing».
  */
 export function requeueResultMessage(count: number): string {
   return count > 0

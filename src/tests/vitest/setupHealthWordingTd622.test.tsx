@@ -10,8 +10,8 @@ import SystemHealthDiagnostic from '../../components/SystemHealthDiagnostic';
 import SetupPage from '../../pages/SetupPage';
 import { ClearDataModal } from '../../components/settings/SystemOperationsTab';
 
-// v9.0.362 (TD-622, B01-42, decision t8): the setup wizard, the health page and the factory reset dialog show no English
-// word or Latin digit; an environment variable name or a path appears only as code or technical detail. On v9.0.361 the
+// v9.0.392 (TD-622, B01-42, decision t8): the setup wizard, the health page and the factory reset dialog show no English
+// word or Latin digit; an environment variable name or a path appears only as code or technical detail. On v9.0.391 the
 // health page showed «PostgreSQL», «ms», «RAM Heap», «MB», «Node.js» and 13 numbers in Latin digits, the wizard showed
 // «ERP_SETUP_TOKEN», «ERP پاپیتال», «02188888888» and the default company «سامانه جامع ERP پاپیتال», and the reset
 // asked for «DELETE».

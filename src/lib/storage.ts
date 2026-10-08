@@ -24,7 +24,7 @@ export function isDataUrl(value: unknown): value is string {
  * production), and any `data:` value that is not a base64 image of an allowed format is refused instead of being
  * returned unchanged and stored in the record column. A value that is not a data URL (a stored path) is returned as is.
  */
-/** v9.0.359 (TD-619): the directory image fields are written to (also checked by the system health page) */
+/** v9.0.389 (TD-619): the directory image fields are written to (also checked by the system health page) */
 export function getImageUploadsDir(): string {
   return path.join(process.cwd(), 'public', 'uploads');
 }

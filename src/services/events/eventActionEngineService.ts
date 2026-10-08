@@ -11,9 +11,14 @@ import { BaseDomainEvent, DomainEventType } from './domainEvents.js';
 import { logger } from '../../middleware/logger.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
-import { assertSafeExternalUrl } from '../../lib/ssrfGuard.js';
+import { LOCAL_ECHO_PATH, assertSafeExternalUrl, isEchoSimulatorEnvironment, isLocalEchoTarget } from '../../lib/ssrfGuard.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { assertNotificationPermission, permissionHolderUserIds, roleMemberUserIds } from '../notifications/notificationRecipients.js';
+import { resolveRuleConfigSecrets } from './integrationSecrets.js';
+import { type RuleActionType } from '../../lib/events/ruleActionTypes.js';
+import { assertRuleActionTypeAllowed } from './ruleActionTypeGuard.js';
+import { ruleSampleEvent } from './ruleSampleEvent.js';
+import { IntegrationDeliveryService, RULE_ACTION_MAX_ATTEMPTS, type DeliveryAttemptContext, type DeliveryAttemptOutcome } from './integrationDelivery.service.js';
 
 export interface RuleCondition {
   field: string; // e.g. 'payload.totalAmount', 'payload.newStock', 'metadata.userRole', 'aggregateType'
@@ -21,7 +26,8 @@ export interface RuleCondition {
   value: unknown;
 }
 
-export type ActionType = 'webhook' | 'in_app_notification' | 'workflow_trigger' | 'sms_simulation' | 'audit_log';
+// v9.0.377 (TD-712): «workflow_trigger» and «sms_simulation» were removed (src/lib/events/ruleActionTypes.ts)
+export type ActionType = RuleActionType;
 
 export interface WebhookActionConfig {
   url: string;
@@ -44,19 +50,6 @@ export interface InAppNotificationConfig {
   notifType?: string; // 'system' | 'mention' | 'work_log_review'
 }
 
-export interface WorkflowTriggerConfig {
-  workflowCode: string;
-  entityType: string;
-  entityIdField: string; // e.g. 'payload.documentId'
-  commentTemplate?: string;
-}
-
-export interface SmsSimulationConfig {
-  recipientPhoneTemplate: string;
-  messageTemplate: string;
-  senderLine?: string;
-}
-
 export interface AuditLogActionConfig {
   category?: string;
   tag?: string;
@@ -69,7 +62,7 @@ export interface CreateRuleInput {
   eventType: string;
   conditionsJson: unknown;
   actionType: ActionType;
-  actionConfigJson: WebhookActionConfig | InAppNotificationConfig | WorkflowTriggerConfig | SmsSimulationConfig | AuditLogActionConfig | Record<string, unknown>;
+  actionConfigJson: WebhookActionConfig | InAppNotificationConfig | AuditLogActionConfig | Record<string, unknown>;
   isActive?: number;
 }
 
@@ -119,7 +112,8 @@ export class EventActionEngineService {
 
     let targetUrl = this.interpolateTemplate(webhookConfig.url, event);
     if (targetUrl.startsWith('/')) {
-      targetUrl = `http://127.0.0.1:3000${targetUrl}`;
+      // v9.0.356 (TD-704): this server's own port, the only port the echo exception of the SSRF guard accepts
+      targetUrl = `http://127.0.0.1:${process.env.PORT || 3000}${targetUrl}`;
     }
 
     await assertSafeExternalUrl(targetUrl, { allowLocalEcho: true });
@@ -135,8 +129,16 @@ export class EventActionEngineService {
       ...(webhookConfig.headers || {})
     };
 
+    // v9.0.357 (TD-715): the system's own echo token authenticates only this server's echo simulator; a rule that holds it
+    // (boot used to copy it into every webhook rule without a token) never sends it to another address
+    let systemTokenWithheld = false;
     if (webhookConfig.secretToken) {
-      headers['X-ERP-Signature-Token'] = webhookConfig.secretToken;
+      const systemToken = await this.readWebhookSecretToken();
+      if (systemToken && webhookConfig.secretToken === systemToken && !isLocalEchoTarget(new URL(targetUrl))) {
+        systemTokenWithheld = true;
+      } else {
+        headers['X-ERP-Signature-Token'] = webhookConfig.secretToken;
+      }
     }
 
     const controller = new AbortController();
@@ -185,7 +187,8 @@ export class EventActionEngineService {
         httpStatus: response.status,
         httpStatusText: response.statusText,
         ok: response.ok,
-        responseBody: resBody
+        responseBody: resBody,
+        ...(systemTokenWithheld ? { systemTokenWithheld: true } : {})
       };
 
       if (!response.ok) {
@@ -204,25 +207,8 @@ export class EventActionEngineService {
     } catch (fetchErr: unknown) {
       clearTimeout(timeoutId);
       const fetchError = fetchErr instanceof Error ? fetchErr : new Error(String(fetchErr));
-      if (
-        targetUrl.includes('webhook-echo') ||
-        targetUrl.includes('httpbin.org') ||
-        targetUrl.includes('example.com') ||
-        targetUrl.includes('localhost') ||
-        targetUrl.includes('127.0.0.1') ||
-        targetUrl.includes('webhook.site')
-      ) {
-        logger.info(`[EventActionEngine Webhook] Local/simulation fallback for ${targetUrl}`);
-        return {
-          resultData: {
-            targetUrl,
-            httpStatus: 200,
-            httpStatusText: 'OK (Simulated Fallback)',
-            ok: true,
-            responseBody: { success: true, message: 'وب‌هوک شبیه‌ساز با موفقیت دریافت گردید.' }
-          }
-        };
-      }
+      // v9.0.375 (TD-706، B15-04، تصمیم ت۴ الف): شکست ارسال همیشه شکست است؛ پیش‌تر نشانی‌ای که هرجای خود `webhook-echo`،
+      // `example.com`، `localhost`، `127.0.0.1`، `httpbin.org` یا `webhook.site` داشت پاسخ ساختگی «OK (Simulated Fallback)» می‌گرفت
       throw new Error(`خطای ارتباط با سرور وب‌هوک: ${fetchError.name === 'AbortError' ? 'Timeout (پایان مهلت زمانی)' : fetchError.message}`);
     }
   }
@@ -262,46 +248,6 @@ export class EventActionEngineService {
     }
 
     return { deliveredCount: targetUserIds.length, targetUserIds, title, message, link };
-  }
-
-  private static async executeWorkflowTriggerAction(
-    rule: typeof eventActionRules.$inferSelect,
-    event: BaseDomainEvent,
-    wfConfig: WorkflowTriggerConfig
-  ): Promise<unknown> {
-    const entityId = this.resolveField(wfConfig.entityIdField, event) || event.aggregateId;
-    const comment = wfConfig.commentTemplate
-      ? this.interpolateTemplate(wfConfig.commentTemplate, event)
-      : `تحریک خودکار بر پایه رویداد ${event.eventType}`;
-
-    return {
-      workflowCode: wfConfig.workflowCode,
-      entityType: wfConfig.entityType,
-      entityId: String(entityId),
-      comment,
-      triggered: true,
-      note: 'فرآیند با موفقیت جهت شروع/انتقال در صف قرار گرفت.'
-    };
-  }
-
-  private static async executeSmsSimulationAction(
-    rule: typeof eventActionRules.$inferSelect,
-    event: BaseDomainEvent,
-    smsConfig: SmsSimulationConfig
-  ): Promise<unknown> {
-    const recipientPhone = this.interpolateTemplate(smsConfig.recipientPhoneTemplate || '', event);
-    const message = this.interpolateTemplate(smsConfig.messageTemplate || '', event);
-    const senderLine = smsConfig.senderLine || '983000xxxx';
-
-    logger.info(`[SMS Dispatch Simulation] To: ${recipientPhone} | Line: ${senderLine} | Text: "${message}"`);
-    return {
-      simulated: true,
-      recipientPhone,
-      senderLine,
-      message,
-      dispatchStatus: 'SENT_TO_GATEWAY',
-      simulatedGatewayId: `sms_${Date.now()}`
-    };
   }
 
   private static async executeAuditLogAction(
@@ -356,16 +302,6 @@ export class EventActionEngineService {
           break;
         }
 
-        case 'workflow_trigger': {
-          resultData = await this.executeWorkflowTriggerAction(rule, event, config as unknown as WorkflowTriggerConfig);
-          break;
-        }
-
-        case 'sms_simulation': {
-          resultData = await this.executeSmsSimulationAction(rule, event, config as unknown as SmsSimulationConfig);
-          break;
-        }
-
         case 'audit_log': {
           resultData = await this.executeAuditLogAction(rule, event, config as unknown as AuditLogActionConfig);
           break;
@@ -393,73 +329,92 @@ export class EventActionEngineService {
   }
 
   /**
-   * Main processor invoked when any domain event occurs
+   * Main processor invoked when any domain event occurs.
+   * v9.0.378 (TD-705, decision t2 a): each matching active rule gets one durable delivery row (`rule_action` x event) and
+   * its first attempt runs here and is awaited; a failed action is retried by the delivery worker with a growing delay and
+   * after 5 attempts moved to the dead letter queue. An error reading the rules or writing the rows goes back to the outbox;
+   * a rule already recorded for the event is never run twice. Before, a failed action was only logged and never run again.
    */
   public static async processEvent(event: BaseDomainEvent): Promise<void> {
-    try {
-      // Find all active rules matching this event type or wildcard '*'
-      const activeRules = await orm.select()
-        .from(eventActionRules)
-        .where(
-          and(
-            eq(eventActionRules.isActive, 1),
-            sql`(${eventActionRules.eventType} = ${event.eventType} OR ${eventActionRules.eventType} = '*')`
-          )
-        );
-
-      if (activeRules.length === 0) {
-        return;
-      }
-
-      logger.info(`[EventActionEngine] Found ${activeRules.length} potential rules for event ${event.eventType} [${event.eventId}]`);
-
-      // Process matching rules in parallel
-      await Promise.allSettled(
-        activeRules.map(async (rule) => {
-          const conditions = Array.isArray(rule.conditionsJson) ? rule.conditionsJson as RuleCondition[] : [];
-          const matches = this.evaluateConditions(conditions, event);
-
-          if (!matches) {
-            return;
-          }
-
-          logger.info(`[EventActionEngine] Rule matched: "${rule.name}" (${rule.id}) -> executing ${rule.actionType}`);
-
-          // Execute action
-          const executionResult = await this.executeAction(rule, event);
-
-          // Update rule execution counters
-          await orm.update(eventActionRules)
-            .set({
-              executionCount: (rule.executionCount || 0) + 1,
-              lastExecutedAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            })
-            .where(eq(eventActionRules.id, rule.id));
-
-          // Insert execution log
-          await orm.insert(eventActionLogs).values({
-            ruleId: rule.id,
-            ruleName: rule.name,
-            eventId: event.eventId,
-            eventType: event.eventType,
-            actionType: rule.actionType,
-            status: executionResult.status,
-            result: executionResult.result || {},
-            errorMessage: executionResult.errorMessage || '',
-            executionDurationMs: executionResult.durationMs,
-            executedAt: new Date().toISOString()
-          });
-        })
+    const activeRules = await orm.select()
+      .from(eventActionRules)
+      .where(
+        and(
+          eq(eventActionRules.isActive, 1),
+          sql`(${eventActionRules.eventType} = ${event.eventType} OR ${eventActionRules.eventType} = '*')`
+        )
       );
-    } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error(`[EventActionEngine Process Error] Error processing event ${event.eventType}: ${error.message}`);
-      // v7.0.25 (TD-183): خطای سطح بالا (مثلاً شکست خواندن قوانین) پیش از اجرای هر اکشنی رخ می‌دهد؛
-      // پرتاب مجدد آن امن است و اجازه می‌دهد Outbox با backoff دوباره تلاش کند. شکست تک‌تک قوانین همچنان
-      // درون allSettled مدیریت و در event_action_logs ثبت می‌شود و باعث تکرار اکشن‌های موفق نمی‌شود.
-      throw error;
+
+    if (activeRules.length === 0) {
+      return;
     }
+
+    const jobIds: number[] = [];
+    for (const rule of activeRules) {
+      const conditions = Array.isArray(rule.conditionsJson) ? rule.conditionsJson as RuleCondition[] : [];
+      if (!this.evaluateConditions(conditions, event)) continue;
+      logger.info(`[EventActionEngine] Rule matched: "${rule.name}" (${rule.id}) -> recording ${rule.actionType} delivery for event ${event.eventType} [${event.eventId}]`);
+      const job = await IntegrationDeliveryService.enqueue('rule_action', rule.id, event, RULE_ACTION_MAX_ATTEMPTS);
+      jobIds.push(job.id);
+    }
+
+    // first attempts in parallel; a failure stays in its delivery row for the worker
+    const attempts = await Promise.allSettled(jobIds.map(id => IntegrationDeliveryService.runJob(id)));
+    for (const attempt of attempts) {
+      if (attempt.status === 'rejected') {
+        logger.error(`[EventActionEngine] A first rule action attempt failed to run: ${attempt.reason instanceof Error ? attempt.reason.message : String(attempt.reason)}`);
+      }
+    }
+  }
+
+  /**
+   * v9.0.378 (TD-705): one attempt of a rule's action for an event, with the rule as it is now; each attempt writes its
+   * own `event_action_logs` row. A deleted or inactive rule closes the delivery row.
+   */
+  public static async runRuleActionAttempt(ruleId: number, event: BaseDomainEvent, _context: DeliveryAttemptContext): Promise<DeliveryAttemptOutcome> {
+    const [rule] = await orm.select().from(eventActionRules).where(eq(eventActionRules.id, ruleId));
+    if (!rule) return { ok: false, cancelled: true, error: `قانون خودکار #${ruleId} حذف شده است.` };
+    if (rule.isActive !== 1) return { ok: false, cancelled: true, error: `قانون خودکار #${ruleId} غیرفعال است.` };
+
+    const executionResult = await this.executeAction(rule, event);
+
+    // v9.0.379 (TD-718): the counter is read under the rule's row lock (taken before the log row's foreign-key lock)
+    // and written in the transaction of the log row, so concurrent executions are all counted
+    await orm.transaction(async (tx) => {
+      const nowIso = new Date().toISOString();
+      const [locked] = await tx.select({ executionCount: eventActionRules.executionCount })
+        .from(eventActionRules)
+        .where(eq(eventActionRules.id, rule.id))
+        .for('update');
+      if (locked) {
+        await tx.update(eventActionRules)
+          .set({ executionCount: (locked.executionCount || 0) + 1, lastExecutedAt: nowIso, updatedAt: nowIso })
+          .where(eq(eventActionRules.id, rule.id));
+      }
+      await tx.insert(eventActionLogs).values({
+        ruleId: locked ? rule.id : null,
+        ruleName: rule.name,
+        eventId: event.eventId,
+        eventType: event.eventType,
+        actionType: rule.actionType,
+        status: executionResult.status,
+        result: executionResult.result || {},
+        errorMessage: executionResult.errorMessage || '',
+        executionDurationMs: executionResult.durationMs,
+        executedAt: nowIso
+      });
+    });
+
+    return executionResult.status === 'failed'
+      ? { ok: false, error: executionResult.errorMessage || 'خطای ناشناخته در اجرای اقدام' }
+      : { ok: true };
+  }
+
+  /** The system's webhook echo token without generating one (env, else the stored setting, else empty) */
+  private static async readWebhookSecretToken(): Promise<string> {
+    if (process.env.ERP_WEBHOOK_SECRET_TOKEN) return process.env.ERP_WEBHOOK_SECRET_TOKEN;
+    const [row] = await orm.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, 'erp_webhook_secret_token'));
+    return row?.value ?? '';
   }
 
   /**
@@ -501,29 +456,11 @@ export class EventActionEngineService {
     try {
       const webhookSecret = await EventActionEngineService.getWebhookSecretToken();
 
-      const existing = await orm.select().from(eventActionRules).limit(1);
-      if (existing.length > 0) {
-        // Migrate any existing webhook rules targeting httpbin.org or hardcoded legacy secrets
-        const webhookRules = await orm.select().from(eventActionRules).where(eq(eventActionRules.actionType, 'webhook'));
-        for (const rule of webhookRules) {
-          const cfg = (rule.actionConfigJson as Record<string, unknown>) || {};
-          let updated = false;
-          if (typeof cfg.url === 'string' && (cfg.url.includes('httpbin.org') || cfg.url.includes('example.com'))) {
-            cfg.url = 'http://127.0.0.1:3000/api/events/webhook-echo';
-            updated = true;
-          }
-          if (cfg.secretToken === 'erp_wh_secret_key_prod_v7' || !cfg.secretToken) {
-            cfg.secretToken = webhookSecret;
-            updated = true;
-          }
-          if (updated) {
-            await orm.update(eventActionRules)
-              .set({ actionConfigJson: cfg, updatedAt: new Date().toISOString() })
-              .where(eq(eventActionRules.id, rule.id));
-          }
-        }
-        return;
-      }
+      // v9.0.357 (TD-715، تصمیم ت۴ الف): قانون‌های موجود هرگز در راه‌اندازی بازنویسی نمی‌شوند. پیش‌تر نشانی هر قانونی که
+      // `example.com` یا `httpbin.org` را جایی در خود داشت به شبیه‌ساز محلی تغییر می‌کرد و توکن سامانه در هر قانون وب‌هوک
+      // بی توکن گذاشته می‌شد و به نشانی بیرونی آن فرستاده می‌شد
+      const existing = await orm.select({ id: eventActionRules.id }).from(eventActionRules).limit(1);
+      if (existing.length > 0) return;
 
       logger.info('[EventActionEngine] Seeding standard enterprise event automation rules...');
 
@@ -560,7 +497,8 @@ export class EventActionEngineService {
           },
           isActive: 1
         },
-        {
+        // v9.0.357 (TD-715): the echo simulator answers only in test / development (TD-704), so only there is its rule seeded
+        ...(isEchoSimulatorEnvironment() ? [{
           name: 'وب‌هوک تایید فاکتور فروش (شبیه‌ساز یکپارچگی)',
           description: 'ارسال وب‌هوک HTTP POST به سرور بیرونی / اتوماسیون سازمانی هنگام تایید نهایی فاکتور فروش',
           eventType: DomainEventType.INVOICE_APPROVED,
@@ -569,14 +507,14 @@ export class EventActionEngineService {
           ],
           actionType: 'webhook',
           actionConfigJson: {
-            url: 'http://127.0.0.1:3000/api/events/webhook-echo',
+            url: `http://127.0.0.1:${process.env.PORT || 3000}${LOCAL_ECHO_PATH}`,
             method: 'POST',
             timeoutMs: 5000,
             includeMetadata: true,
             secretToken: webhookSecret
           },
           isActive: 1
-        },
+        } satisfies CreateRuleInput] : []),
         {
           name: 'ثبت ممیزی تراکنش‌های کلان خزانه‌داری',
           description: 'ثبت لاگ ممیزی امنیتی اختصاصی برای کلیه تراکنش‌های واریز یا برداشت بالای ۵۰۰ میلیون ریال',
@@ -649,6 +587,7 @@ export class EventActionEngineService {
    * Create new rule
    */
   public static async createRule(data: CreateRuleInput, userId?: number) {
+    assertRuleActionTypeAllowed(data.actionType, { active: (data.isActive ?? 1) === 1, changingType: true });
     if (data.actionType === 'in_app_notification') assertNotificationPermission((data.actionConfigJson as InAppNotificationConfig | undefined)?.targetPermission);
     const [newRule] = await orm.insert(eventActionRules).values({
       name: data.name,
@@ -656,7 +595,8 @@ export class EventActionEngineService {
       eventType: data.eventType,
       conditionsJson: data.conditionsJson || [],
       actionType: data.actionType,
-      actionConfigJson: data.actionConfigJson || {},
+      // v9.0.360 (TD-710): a masked token or header value of a new rule has no stored value to stand for
+      actionConfigJson: resolveRuleConfigSecrets(data.actionConfigJson || {}, {}) as CreateRuleInput['actionConfigJson'],
       isActive: data.isActive ?? 1,
       executionCount: 0,
       createdBy: userId || null,
@@ -672,6 +612,12 @@ export class EventActionEngineService {
    */
   public static async updateRule(id: number, data: Partial<CreateRuleInput>) {
     if (data.actionConfigJson !== undefined) assertNotificationPermission((data.actionConfigJson as InAppNotificationConfig | undefined)?.targetPermission);
+    const current = await this.getRuleById(id);
+    if (current) {
+      // v9.0.377 (TD-712): a rule of a removed action type stays inactive until its action type is changed
+      const nextActive = data.isActive !== undefined ? Number(data.isActive) === 1 : current.isActive === 1;
+      assertRuleActionTypeAllowed(data.actionType ?? current.actionType, { active: nextActive, changingType: data.actionType !== undefined && data.actionType !== current.actionType });
+    }
     const updatePayload: Record<string, unknown> = {
       updatedAt: new Date().toISOString()
     };
@@ -681,7 +627,10 @@ export class EventActionEngineService {
     if (data.eventType !== undefined) updatePayload.eventType = data.eventType;
     if (data.conditionsJson !== undefined) updatePayload.conditionsJson = data.conditionsJson;
     if (data.actionType !== undefined) updatePayload.actionType = data.actionType;
-    if (data.actionConfigJson !== undefined) updatePayload.actionConfigJson = data.actionConfigJson;
+    if (data.actionConfigJson !== undefined) {
+      // v9.0.360 (TD-710): responses mask the token and header values; «********» keeps the stored value for the same address
+      updatePayload.actionConfigJson = resolveRuleConfigSecrets(data.actionConfigJson, current?.actionConfigJson);
+    }
     if (data.isActive !== undefined) updatePayload.isActive = data.isActive;
 
     const [updated] = await orm.update(eventActionRules)
@@ -708,6 +657,7 @@ export class EventActionEngineService {
     if (!rule) throw new Error('قانون مورد نظر یافت نشد.');
 
     const newActive = rule.isActive === 1 ? 0 : 1;
+    assertRuleActionTypeAllowed(rule.actionType, { active: newActive === 1, changingType: false });
     const [updated] = await orm.update(eventActionRules)
       .set({
         isActive: newActive,
@@ -726,39 +676,7 @@ export class EventActionEngineService {
     const rule = await this.getRuleById(ruleId);
     if (!rule) throw new Error('قانون مورد نظر یافت نشد.');
 
-    const sampleEvent: BaseDomainEvent = customEvent || {
-      eventId: `test_evt_${Date.now()}`,
-      eventType: rule.eventType === '*' ? DomainEventType.INVOICE_APPROVED : rule.eventType,
-      aggregateType: 'Document',
-      aggregateId: '101',
-      payload: {
-        documentId: 101,
-        refNumber: 'INV-1405-TEST',
-        docType: 'invoice',
-        buyerName: 'مشتری آزمایشی سیستم',
-        totalAmount: 150000000,
-        currency: 'IRR',
-        itemCount: 3,
-        status: 'final',
-        itemId: 5,
-        itemCode: 'RAW-001',
-        itemName: 'سنگ عقیق سیاه',
-        currentStock: 12,
-        reorderPoint: 20,
-        warehouseLocation: 'انبار مرکزی',
-        amount: 600000000,
-        workflowCode: 'INVOICE_APPROVAL',
-        toStateKey: 'PENDING_APPROVAL'
-      },
-      metadata: {
-        userId: 1,
-        userName: 'مدیر تستی',
-        userRole: SYSTEM_ADMIN_ROLE,
-        correlationId: `corr_${Date.now()}`,
-        timestamp: new Date().toISOString()
-      },
-      occurredAt: new Date().toISOString()
-    };
+    const sampleEvent: BaseDomainEvent = customEvent || ruleSampleEvent(rule.eventType);
 
     const conditions = Array.isArray(rule.conditionsJson) ? rule.conditionsJson as RuleCondition[] : [];
     const conditionMatches = this.evaluateConditions(conditions, sampleEvent);

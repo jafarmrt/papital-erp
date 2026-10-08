@@ -4,7 +4,6 @@
   "scripts/check-version-sync.ts": 11,
   "scripts/cleanup-attachments.ts": 7,
   "scripts/date-calendar-report.ts": 5,
-  "scripts/encrypt-personnel-secrets.ts": 5,
   "scripts/eslint-ratchet.ts": 11,
   "scripts/migrate-attachments.ts": 4,
   "scripts/release.ts": 21,

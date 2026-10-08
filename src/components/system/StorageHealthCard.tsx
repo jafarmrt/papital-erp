@@ -2,7 +2,7 @@ import { CheckCircle2, HardDrive, XCircle } from 'lucide-react';
 import { STORAGE_LOCATION_LABELS, type StorageHealth } from '../../lib/system/storageHealth';
 
 /**
- * v9.0.359 (TD-619، B01-39): کارت ذخیره‌سازی صفحه سلامت. هر پوشه‌ای که برنامه در آن می‌نویسد (پیوست‌ها و تصویرها) با
+ * v9.0.389 (TD-619، B01-39): کارت ذخیره‌سازی صفحه سلامت. هر پوشه‌ای که برنامه در آن می‌نویسد (پیوست‌ها و تصویرها) با
  * وضعیت و مسیر خودش؛ پاسخ سرور قدیمی بی فهرست پوشه‌ها «قابل نوشتن» خوانده نمی‌شود.
  */
 export function StorageHealthCard({ storage }: { storage?: StorageHealth }) {

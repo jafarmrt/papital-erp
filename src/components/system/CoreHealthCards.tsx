@@ -2,7 +2,7 @@ import { CheckCircle2, Cpu, Database, XCircle } from 'lucide-react';
 import { formatMegabytes, formatMilliseconds, formatUptime } from '../../lib/system/healthText';
 
 /**
- * v9.0.362 (TD-622، B01-42، تصمیم ت۸): کارت‌های پایگاه‌داده و حافظه صفحه سلامت، بی واژه انگلیسی و با رقم فارسی.
+ * v9.0.392 (TD-622، B01-42، تصمیم ت۸): کارت‌های پایگاه‌داده و حافظه صفحه سلامت، بی واژه انگلیسی و با رقم فارسی.
  * نسخه Node.js و سکو فقط در «جزئیات فنی» (`data-technical`) می‌آیند.
  */
 

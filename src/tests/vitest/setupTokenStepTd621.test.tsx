@@ -7,8 +7,8 @@ vi.mock('../../api', async (orig) => ({ ...(await orig<typeof import('../../api'
 
 import SetupPage from '../../pages/SetupPage';
 
-// v9.0.363 (TD-621, B01-41): step 1 of the setup wizard needs the setup token, and a wrong token (401 from POST /setup)
-// takes the wizard back to step 1 with the error under the token field. On v9.0.362 step 1 moved on with a blank token
+// v9.0.393 (TD-621, B01-41): step 1 of the setup wizard needs the setup token, and a wrong token (401 from POST /setup)
+// takes the wizard back to step 1 with the error under the token field. On v9.0.392 step 1 moved on with a blank token
 // and the 401 was shown on step 2, which has no token field. The password half (8 characters, as the server asks) was
 // fixed by TD-532 (v9.0.217) and is kept here as a guard.
 

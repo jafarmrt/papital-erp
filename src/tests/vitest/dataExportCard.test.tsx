@@ -16,7 +16,7 @@ import { DataExportCard } from '../../components/settings/DataExportCard';
 import { dataExportRangeError, dataExportUrl } from '../../lib/system/dataExport';
 import { dataExportGroupLabels } from '../../lib/system/dataExportTables';
 
-// v9.0.356 (TD-592, decision t7 a): the export card asks for the audit log separately with a date range, the server names
+// v9.0.386 (TD-592, decision t7 a): the export card asks for the audit log separately with a date range, the server names
 // the zip file, and only the system admin (the guard of the route) sees the card.
 
 afterEach(() => { cleanup(); admin.value = true; });

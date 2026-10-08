@@ -9,8 +9,8 @@ import SystemHealthDiagnostic from '../../components/SystemHealthDiagnostic';
 import { SubsystemHealthCards } from '../../components/system/SubsystemHealthCards';
 import { SUBSYSTEM_UNKNOWN_MESSAGES } from '../../lib/system/subsystemHealth';
 
-// v9.0.358 (TD-593, B01-13): a subsystem whose own query failed is shown as unknown with the server's message, never
-// as healthy; on v9.0.357 a failed outbox query showed «روان» and every voucher «تراز».
+// v9.0.388 (TD-593, B01-13): a subsystem whose own query failed is shown as unknown with the server's message, never
+// as healthy; on v9.0.387 a failed outbox query showed «روان» and every voucher «تراز».
 
 afterEach(() => { cleanup(); fetchJsonMock.mockReset(); });
 

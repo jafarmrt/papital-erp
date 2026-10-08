@@ -1,6 +1,6 @@
 /**
- * v9.0.360 (TD-620, B01-40): the factory reset card says what the reset does: roles are kept (TD-245) and the defaults
- * of a fresh install come back, event rules and webhook subscriptions included. On v9.0.359 it said the system roles
+ * v9.0.390 (TD-620, B01-40): the factory reset card says what the reset does: roles are kept (TD-245) and the defaults
+ * of a fresh install come back, event rules and webhook subscriptions included. On v9.0.389 it said the system roles
  * were reset and said nothing of the event rules, which stayed missing until a restart.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';

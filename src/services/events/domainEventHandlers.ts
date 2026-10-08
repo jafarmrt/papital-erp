@@ -15,7 +15,6 @@ import { items } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { EventActionEngineService } from './eventActionEngineService.js';
 import { WebhookSubscriptionService } from './webhookSubscriptionService.js';
-import { ActionHandlerService } from './actionHandlerService.js';
 
 /**
  * Register core system listeners for enterprise domain events
@@ -26,9 +25,6 @@ export function registerDomainEventHandlers(): void {
   // v7.0.25 (TD-183 / audit P1-1): هر هندلر نام پایدار دارد و خطا را (پس از لاگ) دوباره پرتاب می‌کند تا
   // Outbox بتواند شکست را تشخیص داده و فقط همان هندلر را با backoff دوباره اجرا کند. در مسیر `publish`
   // (غیر Outbox) پوشش گذرگاه همچنان خطا را می‌گیرد و فقط لاگ می‌کند (AGENTS.md §15).
-
-  // Initialize Subphase 8.3 Idempotent Action Handlers
-  ActionHandlerService.initializeBuiltInHandlers();
 
   // -------------------------------------------------------------
   // 0. Auto Action & Rule Engine (Phase 13)

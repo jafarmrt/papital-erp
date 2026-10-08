@@ -8,13 +8,13 @@ const LOW_STOCK_RULE_NAME = 'اعلان کسری موجودی به انبارد�
 /**
  * Package 1 finding B01-40, TD-620: the factory reset wiped the event rules and webhook subscriptions but ran only
  * `runSeed()`, so they stayed missing until the next restart (the low-stock alert to warehouse keepers was not sent).
- * On v9.0.359 a reset left 0 event rules and 0 webhook subscriptions; now it runs the boot's `seedDefaultEngines`.
+ * On v9.0.389 a reset left 0 event rules and 0 webhook subscriptions; now it runs the boot's `seedDefaultEngines`.
  * Runs in its own isolated schema, like reg_factory_reset_complete_td_245.
  */
 export async function runFactoryResetTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const id = 'reg_factory_reset_restores_default_engines_td_620';
   if (!shouldRun(id, 'td620', 'b01-40', 'factory', 'reset', 'package1')) return [];
-  const name = 'v9.0.360: a factory reset puts back the default workflows, event rules and webhook subscriptions and keeps the roles (TD-620)';
+  const name = 'v9.0.390: a factory reset puts back the default workflows, event rules and webhook subscriptions and keeps the roles (TD-620)';
   const tStart = Date.now();
   const fs = (await import('fs')).default;
   const os = (await import('os')).default;

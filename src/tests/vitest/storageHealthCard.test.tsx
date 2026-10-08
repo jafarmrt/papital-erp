@@ -3,8 +3,8 @@ import { cleanup, render } from '@testing-library/react';
 import { StorageHealthCard } from '../../components/system/StorageHealthCard';
 import { STORAGE_LOCATION_MESSAGES } from '../../lib/system/storageHealth';
 
-// v9.0.359 (TD-619, B01-39): the storage card shows each directory the app writes to (attachments and images) with its
-// own state; on v9.0.358 it showed only public/uploads and said «دسترسی کامل» while attachments could not be saved.
+// v9.0.389 (TD-619, B01-39): the storage card shows each directory the app writes to (attachments and images) with its
+// own state; on v9.0.388 it showed only public/uploads and said «دسترسی کامل» while attachments could not be saved.
 
 afterEach(cleanup);
 

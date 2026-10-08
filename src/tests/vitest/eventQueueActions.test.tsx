@@ -8,8 +8,8 @@ vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: (...a: unk
 
 import SystemHealthDiagnostic from '../../components/SystemHealthDiagnostic';
 
-// v9.0.361 (TD-623, B01-43, decision t8): replaying the failed events (third-party webhooks, notifications, workflows)
-// asks first and the queue buttons appear only when there is something to replay. On v9.0.360 one click on
+// v9.0.391 (TD-623, B01-43, decision t8): replaying the failed events (third-party webhooks, notifications, workflows)
+// asks first and the queue buttons appear only when there is something to replay. On v9.0.390 one click on
 // «بازیابی صف DLQ» posted at once, and both buttons showed with an empty queue.
 
 afterEach(() => { cleanup(); fetchJsonMock.mockReset(); confirmMock.mockReset(); });

@@ -4,6 +4,7 @@ import {
   Item, 
   ProjectProductItem 
 } from '../../types';
+import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 
 export const COMMON_UNITS = [
   'عدد', 'ریسه', 'برگ', 'کیلوگرم', 'متر', 'کارتن', 'ورق', 'رول', 'پک', 'لیتر', 'پارت', 'بسته', 'شاخه', 'طغره'
@@ -64,10 +65,7 @@ export const buildConsolidatedPurchaseList = (
           const reqQty = Number(itemRes.requiredQty !== undefined ? itemRes.requiredQty : 1);
           const reqUnit = itemRes.unit || 'عدد';
 
-          const matchWh = warehouseItems.find(i => 
-            (effectiveCode && i.code === effectiveCode) ||
-            (i.name && effectiveName && i.name.toLowerCase() === effectiveName.toLowerCase())
-          );
+          const matchWh = findProjectItemMatch({ code: effectiveCode, name: effectiveName }, warehouseItems);
 
           const currentStock = matchWh ? matchWh.current_stock : (itemRes.stockQty ?? 0);
           const shortfall = Math.max(0, reqQty - currentStock);
@@ -105,10 +103,8 @@ export const buildConsolidatedPurchaseList = (
       });
     } else if (sec.checkType === 'global' && sec.globalItems) {
       sec.globalItems.forEach(gItem => {
-        const matchWh = warehouseItems.find(i => 
-          (gItem.itemCode && i.code === gItem.itemCode) ||
-          (i.name && i.name.toLowerCase().includes(gItem.name.toLowerCase()))
-        );
+        // v9.0.363 (TD-749): نام دقیق، نه زیررشته؛ نام خالی هیچ کالایی را نمی‌گیرد
+        const matchWh = findProjectItemMatch({ code: gItem.itemCode, name: gItem.name }, warehouseItems);
         const stQty = matchWh ? matchWh.current_stock : (gItem.stockQty ?? 0);
         const reqQty = Number(gItem.requiredQty) || 0;
         const shortfall = Math.max(0, reqQty - stQty);

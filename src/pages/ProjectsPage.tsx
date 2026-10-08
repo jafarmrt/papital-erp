@@ -514,13 +514,21 @@ export default function ProjectsPage() {
         customersList={customersList}
         itemsList={itemsList}
         onSuccess={loadInitialData}
+        onOpenStages={(p) => {
+          setIsModalOpen(false);
+          handleOpenDetailModal(p.id, 'overview');
+        }}
       />
 
       {/* Project Detail & Stage Manager Drawer */}
       <ProjectDetailModal
         projectId={selectedProjectId}
         isOpen={isDetailOpen}
-        onClose={() => setIsDetailOpen(false)}
+        onClose={() => {
+          setIsDetailOpen(false);
+          // v9.0.385 (TD-742): زبانه‌های جزئیات نسخه پروژه را بالا برده‌اند؛ فرم ویرایش از فهرست تازه باز می‌شود
+          loadInitialData();
+        }}
         onUpdate={loadInitialData}
         onEditProject={(p) => {
           setIsDetailOpen(false);
