@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Calendar, Clock, CheckCircle2, PlayCircle, Tag, BarChart3 } from 'lucide-react';
 import { ProductionProject, ProjectStage, ProjectProductItem } from '../../types';
-import { toPersianDigits, toStorageDate, formatPersianDate } from '../../utils';
+import { toPersianDigits, toStorageDate, formatPersianDate, getTodayIsoDate } from '../../utils';
 import { PillBadge, type PillBadgeVariants } from '../common/PillBadge';
 
 // v7.0.86 (TD-108): نشان وضعیت مرحله در گانت (بر پایه وضعیت و درصد پیشرفت)
@@ -96,7 +96,9 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
       });
     });
 
-    if (!minDay) minDay = 1404 * 365 + 1 * 30 + 1;
+    // v9.0.397 (TD-765): بی هیچ تاریخ شروع، محور از امروز آغاز می‌شود، در همان واحد «روز از ۱۹۷۰»؛
+    // پیش‌تر ۱۴۰۴×۳۶۵ بود و محور با تاریخ‌های واقعی هزاران سال فاصله می‌گرفت
+    if (!minDay) minDay = parseDateToTimestamp(getTodayIsoDate()) ?? 0;
     if (!maxDay || maxDay <= minDay) maxDay = minDay + 30; // fallback 30 days span
 
     const totalDays = Math.max(1, maxDay - minDay);

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.397 — Timeline Axis From Today
+- **Timeline Axis From Today (TD-765):** with no start date anywhere the project timeline axis started at `1404*365+31`, a different unit from its day numbers since 1970, so stage bars collapsed to the minimum width; it now starts today in the same unit.
+
 ### v9.0.396 — Project Dates Through the Jalali Date Input
 - **Project Dates Through the Jalali Date Input (TD-764):** the project form and the product schedule used `react-multi-date-picker` directly and the purchase required date was free text; all now use `JalaliDateInput` with ISO state, and the reservation date is shown with `formatPersianDate`.
 
