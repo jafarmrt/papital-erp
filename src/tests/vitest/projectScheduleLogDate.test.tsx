@@ -29,8 +29,9 @@ vi.mock('../../hooks/usePieceworkPermissions', () => ({
   usePieceworkPermissions: () => ({ canManageTasks: false, canLog: true, canIssuePayroll: false, canPay: false }),
 }));
 vi.mock('../../components/common/JalaliDateInput', () => ({
-  JalaliDateInput: ({ value, onChange }: { value: string; onChange: (iso: string) => void }) => (
-    <input aria-label="work date" value={value} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} />
+  // v9.0.396 (TD-764): the product schedule dates use the same picker, labelled by their placeholder
+  JalaliDateInput: ({ value, onChange, placeholder }: { value: string; onChange: (iso: string) => void; placeholder?: string }) => (
+    <input aria-label={placeholder ?? 'work date'} value={value} onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} />
   ),
 }));
 

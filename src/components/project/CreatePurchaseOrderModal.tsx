@@ -3,7 +3,8 @@ import { ShoppingCart, FileText, CheckCircle2, AlertCircle, X, Loader2, Check } 
 import { toast } from 'react-hot-toast';
 import { ProductionProject, PurchaseListItem, Item } from '../../types';
 import { fetchJson } from '../../api';
-import { errorMessageOf, formatPersianPrice, getTodayJalaliDate } from '../../utils';
+import { errorMessageOf, formatPersianPrice, getTodayIsoDate } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useHasAnyPermission } from '../../contexts/AuthContext';
@@ -45,7 +46,8 @@ export function CreatePurchaseOrderModal({
 }: CreatePurchaseOrderModalProps) {
   const [orderMode, setOrderMode] = useState<'requisition' | 'direct_document'>('requisition');
   const [priority, setPriority] = useState<RequisitionPriority>('normal');
-  const [orderDate, setOrderDate] = useState<string>(() => getTodayJalaliDate());
+  // v9.0.396 (TD-764): تاریخ نیاز ISO است و با تقویم شمسی انتخاب می‌شود (پیش‌تر متن آزاد با نمونه 1405/01/01)
+  const [orderDate, setOrderDate] = useState<string>(() => getTodayIsoDate());
   const [supplierId, setSupplierId] = useState('');
   const [targetWarehouse, setTargetWarehouse] = useState('');
   const [notes, setNotes] = useState(
@@ -178,7 +180,7 @@ export function CreatePurchaseOrderModal({
         body: JSON.stringify(projectRequisitionBody(project.id, lines, {
           title: `${mode === 'direct_document' ? 'سفارش مستقیم' : 'کسری'} مواد پروژه ${projectLabel}`.trim(),
           priority,
-          requiredDate: orderDate.trim() || getTodayJalaliDate(),
+          requiredDate: orderDate || getTodayIsoDate(),
           notes: notes.trim(),
         })),
       });
@@ -299,11 +301,10 @@ export function CreatePurchaseOrderModal({
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
-                <input
-                  type="text"
-                  placeholder="1405/01/01"
+                <JalaliDateInput
                   value={orderDate}
-                  onChange={e => setOrderDate(e.target.value)}
+                  onChange={setOrderDate}
+                  placeholder="انتخاب تاریخ"
                   className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono focus:ring-2 focus:ring-amber-400 focus:outline-none"
                 />
               </div>

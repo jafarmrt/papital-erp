@@ -16,9 +16,10 @@ interface JalaliDateInputProps {
   className?: string;
   containerClassName?: string;
   calendarPosition?: string;
+  disabled?: boolean;
 }
 
-export function JalaliDateInput({ value, onChange, placeholder, className, containerClassName = 'w-full', calendarPosition = 'bottom-right' }: JalaliDateInputProps) {
+export function JalaliDateInput({ value, onChange, placeholder, className, containerClassName = 'w-full', calendarPosition = 'bottom-right', disabled }: JalaliDateInputProps) {
   return (
     <DatePicker
       value={isoToJalaliDate(value) || ''}
@@ -30,6 +31,7 @@ export function JalaliDateInput({ value, onChange, placeholder, className, conta
       placeholder={placeholder}
       inputClass={className}
       containerClassName={containerClassName}
+      disabled={disabled}
     />
   );
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Customer, Item, FinancialAttachment } from '../../types';
 import { fetchJson } from '../../api';
-import { getTodayJalaliDate, errorMessageOf, isoToJalaliDate } from '../../utils';
+import { getTodayIsoDate, errorMessageOf, toStorageDate } from '../../utils';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset } from '../../constants/presets';
 import { ProductRow, ProjectStage, ProjectModalProps } from './types';
 import {
@@ -27,8 +27,9 @@ export function useProjectForm({
   const [projectCode, setProjectCode] = useState<string>('');
   const [title, setTitle] = useState<string>('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
-  const [startDate, setStartDate] = useState<any>('');
-  const [endDate, setEndDate] = useState<any>('');
+  // v9.0.396 (TD-764): تاریخ‌های فرم ISO هستند و `JalaliDateInput` آن‌ها را شمسی نشان می‌دهد
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
   const [description, setDescription] = useState<string>('');
   const [attachments, setAttachments] = useState<FinancialAttachment[]>([]);
@@ -99,8 +100,8 @@ export function useProjectForm({
         setProjectCode(projectToEdit.project_code || '');
         setTitle(projectToEdit.title || '');
         setSelectedCustomerId(projectToEdit.customer_id || null);
-        setStartDate(isoToJalaliDate(projectToEdit.start_date) || projectToEdit.start_date || '');
-        setEndDate(isoToJalaliDate(projectToEdit.end_date) || projectToEdit.end_date || '');
+        setStartDate(toStorageDate(projectToEdit.start_date || '') || '');
+        setEndDate(toStorageDate(projectToEdit.end_date || '') || '');
         setPriority(projectToEdit.priority || 'medium');
         setDescription(projectToEdit.description || '');
         setStages(projectToEdit.stages?.map(s => ({
@@ -131,7 +132,7 @@ export function useProjectForm({
         } else {
           setProductsList([createInitialProductRow()]);
         }
-        setStartDate(getTodayJalaliDate());
+        setStartDate(getTodayIsoDate());
         setEndDate('');
         setPriority('medium');
         setDescription(initialProducts && initialProducts.length > 0 

@@ -1,15 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Users, Calendar, Plus, Trash2, Check, RefreshCw, Wrench, Tag, Calculator, Sparkles, Search, UserCheck, X, CheckCircle2, Coins, Briefcase } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { 
   ProductionProject, ProjectStage, ProjectProductItem, 
   TaskAssignmentItem, ProductStageSchedule, ProjectStageSchedulesMap 
 } from '../../types';
 import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
-import { extractDateString, errorMessageOf, isoToJalaliDate, formatPersianDate, getTodayIsoDate } from '../../utils';
+import { errorMessageOf, formatPersianDate, getTodayIsoDate, toStorageDate } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
@@ -705,36 +702,24 @@ export default function ProjectScheduleTab({
                           <div className="flex items-center gap-1 text-[11px] text-slate-600">
                             <Calendar className="w-3.5 h-3.5 text-blue-600" />
                             <span>از:</span>
-                            <DatePicker
-                              value={isoToJalaliDate(sched.startDate) || sched.startDate || ''}
-                              onChange={(val: any) => {
-                                const formatted = extractDateString(val);
-                                updateProductSchedule(stg.id, p.id, prev => ({ ...prev, startDate: formatted }));
-                              }}
-                              calendar={persian}
-                              locale={persian_fa}
-                              calendarPosition="bottom-right"
+                            <JalaliDateInput
+                              value={toStorageDate(sched.startDate || '') || ''}
+                              onChange={iso => updateProductSchedule(stg.id, p.id, prev => ({ ...prev, startDate: iso }))}
                               disabled={!canEdit}
                               placeholder="شروع..."
-                              inputClass="w-26 px-2 py-0.5 border border-slate-300 rounded-lg font-mono text-center text-xs bg-white cursor-pointer focus:ring-1 focus:ring-amber-500"
+                              className="w-26 px-2 py-0.5 border border-slate-300 rounded-lg font-mono text-center text-xs bg-white cursor-pointer focus:ring-1 focus:ring-amber-500"
                               containerClassName="inline-block"
                             />
                           </div>
 
                           <div className="flex items-center gap-1 text-[11px] text-slate-600">
                             <span>تا:</span>
-                            <DatePicker
-                              value={isoToJalaliDate(sched.endDate) || sched.endDate || ''}
-                              onChange={(val: any) => {
-                                const formatted = extractDateString(val);
-                                updateProductSchedule(stg.id, p.id, prev => ({ ...prev, endDate: formatted }));
-                              }}
-                              calendar={persian}
-                              locale={persian_fa}
-                              calendarPosition="bottom-right"
+                            <JalaliDateInput
+                              value={toStorageDate(sched.endDate || '') || ''}
+                              onChange={iso => updateProductSchedule(stg.id, p.id, prev => ({ ...prev, endDate: iso }))}
                               disabled={!canEdit}
                               placeholder="تحویل..."
-                              inputClass="w-26 px-2 py-0.5 border border-slate-300 rounded-lg font-mono text-center text-xs bg-white cursor-pointer focus:ring-1 focus:ring-amber-500"
+                              className="w-26 px-2 py-0.5 border border-slate-300 rounded-lg font-mono text-center text-xs bg-white cursor-pointer focus:ring-1 focus:ring-amber-500"
                               containerClassName="inline-block"
                             />
                           </div>

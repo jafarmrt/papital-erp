@@ -41,6 +41,7 @@ vi.mock('../../components/SearchableSelect', () => ({
 
 import { CreatePurchaseOrderModal } from '../../components/project/CreatePurchaseOrderModal';
 import { supplierPickOptions } from '../../lib/projects/projectPurchaseOrder';
+import { getTodayIsoDate } from '../../utils';
 
 const project = { id: 7, project_code: 'PRJ-7', title: 'گردنبند سفارشی' } as unknown as ProductionProject;
 const purchaseList = [
@@ -85,6 +86,8 @@ describe('direct purchase order from a project (TD-745)', () => {
     const [requisition, order] = calls();
     expect(requisition.url).toBe('/api/procurement/requisitions');
     expect(requisition.body).toMatchObject({ projectId: 7, items: [{ itemId: 9, requestedQty: 10, unitPriceEstimate: 1000 }] });
+    // v9.0.396 (TD-764): the required date is picked on the Jalali calendar and sent as ISO (it was Jalali text)
+    expect(requisition.body.requiredDate).toBe(getTodayIsoDate());
     expect(order.url).toBe('/api/procurement/requisitions/41/convert-to-orders');
     expect(order.body).toEqual({
       orderGroups: [expect.objectContaining({

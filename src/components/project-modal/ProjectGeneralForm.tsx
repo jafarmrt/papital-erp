@@ -1,10 +1,7 @@
 import React from 'react';
 import { Sparkles } from 'lucide-react';
-import DatePicker from 'react-multi-date-picker';
-import persian from 'react-date-object/calendars/persian';
-import persian_fa from 'react-date-object/locales/persian_fa';
 import { SearchableSelect } from '../SearchableSelect';
-import { extractDateString } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import { Customer, FinancialAttachment } from '../../types';
 import { FinancialAttachmentUploader } from '../accounting/FinancialAttachmentUploader';
 
@@ -16,10 +13,11 @@ interface ProjectGeneralFormProps {
   selectedCustomerId: number | null;
   selectedCustomer: Customer | undefined;
   activeCustomersList: Customer[];
-  startDate: any;
-  setStartDate: (val: any) => void;
-  endDate: any;
-  setEndDate: (val: any) => void;
+  /** v9.0.396 (TD-764): تاریخ ISO؛ کاربر تقویم شمسی می‌بیند */
+  startDate: string;
+  setStartDate: (iso: string) => void;
+  endDate: string;
+  setEndDate: (iso: string) => void;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   setPriority: (val: 'low' | 'medium' | 'high' | 'urgent') => void;
   description: string;
@@ -116,13 +114,10 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
             تاریخ شروع <span className="text-red-500">*</span>
           </label>
           <div className="relative">
-            <DatePicker
+            <JalaliDateInput
               value={startDate}
-              onChange={(val: any) => setStartDate(extractDateString(val))}
-              calendar={persian}
-              locale={persian_fa}
-              calendarPosition="bottom-right"
-              inputClass="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              onChange={setStartDate}
+              className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               placeholder="انتخاب تاریخ شروع"
             />
           </div>
@@ -134,13 +129,10 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
             تاریخ تحویل / پایان <span className="text-red-500">*</span>
           </label>
           <div className="relative">
-            <DatePicker
+            <JalaliDateInput
               value={endDate}
-              onChange={(val: any) => setEndDate(extractDateString(val))}
-              calendar={persian}
-              locale={persian_fa}
-              calendarPosition="bottom-right"
-              inputClass="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              onChange={setEndDate}
+              className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               placeholder="انتخاب تاریخ پایان"
             />
           </div>

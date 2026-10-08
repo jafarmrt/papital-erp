@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ShoppingCart, Plus, Printer, CheckCircle2, Trash2, FilePlus, ExternalLink } from 'lucide-react';
 import { ProductionProject, PurchaseListItem, Item } from '../../types';
 import { COMMON_UNITS } from './projectInventoryUtils';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianDate, formatPersianNumber } from '../../utils';
 import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 import { ReservationShortageList } from './ReservationShortageList';
 import type { ReservationShortage } from '../../lib/projects/projectReservation';
@@ -180,7 +180,7 @@ export function ManualPurchaseList({
                         {rItem.originalQty} {rItem.originalUnit || rItem.unit}
                       </td>
                       <td className="p-2.5 text-center text-slate-500 font-mono dir-ltr">
-                        {rItem.reservedAt ? new Date(rItem.reservedAt).toLocaleDateString('fa-IR') : '---'}
+                        {rItem.reservedAt ? formatPersianDate(rItem.reservedAt) : '---'}
                       </td>
                       <td className="p-2.5 text-center">
                         <span className="px-2 py-0.5 bg-purple-100 text-purple-900 font-bold rounded-md text-[10px] border border-purple-200">

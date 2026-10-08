@@ -1,4 +1,5 @@
 import { SearchableSelect } from '../SearchableSelect';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 
 interface ProjectDirectOrderFieldsProps {
@@ -55,11 +56,10 @@ export function ProjectDirectOrderFields(props: ProjectDirectOrderFieldsProps) {
 
       <div>
         <label className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
-        <input
-          type="text"
-          placeholder="1405/01/01"
+        <JalaliDateInput
           value={props.requiredDate}
-          onChange={e => props.onRequiredDateChange(e.target.value)}
+          onChange={props.onRequiredDateChange}
+          placeholder="انتخاب تاریخ"
           className={`${fieldClass} font-mono`}
         />
       </div>

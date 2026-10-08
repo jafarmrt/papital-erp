@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.396 — Project Dates Through the Jalali Date Input
+- **Project Dates Through the Jalali Date Input (TD-764):** the project form and the product schedule used `react-multi-date-picker` directly and the purchase required date was free text; all now use `JalaliDateInput` with ISO state, and the reservation date is shown with `formatPersianDate`.
+
 ### v9.0.395 — Stage Dates by the Jalali Picker and the Shortage Badge
 - **Stage Dates by the Jalali Picker and the Shortage Badge (TD-763, TD-762):** stage dates in the project detail were free text with a 1403 sample and the shortage badge read a field nobody writes; the dates now use `JalaliDateInput` and the badge counts the reservation shortages written at finalize. TD-762 had been fixed by TD-891 / TD-892 and gets a guard test.
 
