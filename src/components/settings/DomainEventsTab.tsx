@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Zap, RefreshCw, Search, Filter, CheckCircle2, Activity, Package, FileText, GitBranch, CreditCard, ChevronDown, ChevronUp, Clock, Inbox, AlertTriangle, Play, RotateCcw, Database, Sliders, AlertOctagon, History, Globe } from 'lucide-react';
-import { formatPersianDate } from '../../utils';
+import { formatPersianDate, errorMessageOf } from '../../utils';
 import { AutoActionsSubTab } from './AutoActionsSubTab';
 import { DeadLetterQueueSubTab } from './DeadLetterQueueSubTab';
 import { EventSourcingReplaySubTab } from './EventSourcingReplaySubTab';
@@ -80,8 +80,8 @@ export function DomainEventsTab() {
     try {
       const res = await processOutboxMutation.mutateAsync();
       showNotification(res?.message || 'پردازش دسته با موفقیت انجام شد.');
-    } catch (err: any) {
-      showNotification(err?.message || 'خطا در پردازش صندوق خروجی', 'error');
+    } catch (err) {
+      showNotification(errorMessageOf(err) || 'خطا در پردازش صندوق خروجی', 'error');
     }
   };
 
@@ -89,8 +89,8 @@ export function DomainEventsTab() {
     try {
       const res = await retryFailedMutation.mutateAsync();
       showNotification(res?.message || 'رویدادهای ناموفق برای ارسال مجدد آماده شدند.');
-    } catch (err: any) {
-      showNotification(err?.message || 'خطا در تلاش مجدد رویدادهای ناموفق', 'error');
+    } catch (err) {
+      showNotification(errorMessageOf(err) || 'خطا در تلاش مجدد رویدادهای ناموفق', 'error');
     }
   };
 
@@ -99,8 +99,8 @@ export function DomainEventsTab() {
       setRetryingEventId(eventId);
       const res = await retrySingleMutation.mutateAsync(eventId);
       showNotification(res?.message || `رویداد ${eventId} بازنشانی شد.`);
-    } catch (err: any) {
-      showNotification(err?.message || 'خطا در تلاش مجدد', 'error');
+    } catch (err) {
+      showNotification(errorMessageOf(err) || 'خطا در تلاش مجدد', 'error');
     } finally {
       setRetryingEventId(null);
     }

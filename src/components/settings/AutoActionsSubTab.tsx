@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Zap, Plus, RefreshCw, Search, Globe, Bell, Smartphone, GitBranch, ShieldCheck, CheckCircle2, XCircle, AlertCircle, Play, Edit3, Trash2, ToggleLeft, ToggleRight, Clock, Activity, FileText, ChevronDown, ChevronUp } from 'lucide-react';
-import { formatPersianDate } from '../../utils';
+import { formatPersianDate, errorMessageOf } from '../../utils';
 import { fetchJson } from '../../api';
 import { RuleEditorModal, RuleFormData } from './RuleEditorModal';
 import {
@@ -74,8 +74,8 @@ export function AutoActionsSubTab() {
         showNotification(data.message || 'وضعیت قانون به‌روز شد.');
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
       }
-    } catch (err: any) {
-      showNotification(err?.message || 'خطا در تغییر وضعیت قانون', 'error');
+    } catch (err) {
+      showNotification(errorMessageOf(err) || 'خطا در تغییر وضعیت قانون', 'error');
     }
   });
 
@@ -88,8 +88,8 @@ export function AutoActionsSubTab() {
       });
       showNotification('قانون با موفقیت حذف گردید.');
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-    } catch (err: any) {
-      showNotification(err?.message || 'خطا در حذف قانون', 'error');
+    } catch (err) {
+      showNotification(errorMessageOf(err) || 'خطا در حذف قانون', 'error');
     }
   };
 
@@ -103,8 +103,8 @@ export function AutoActionsSubTab() {
       });
       const what = data?.conditionMatches ? actionPreviewLines(data.preview).join('؛ ') : '';
       showNotification([data?.message || 'آزمایش قانون انجام شد؛ اقدام اجرا نشد.', what].filter(Boolean).join(' '));
-    } catch (err: any) {
-      showNotification(err?.message || 'خطا در ارتباط با سرور', 'error');
+    } catch (err) {
+      showNotification(errorMessageOf(err) || 'خطا در ارتباط با سرور', 'error');
     }
   });
 
@@ -121,8 +121,8 @@ export function AutoActionsSubTab() {
 
       showNotification(data?.message || 'قانون با موفقیت ذخیره گردید.');
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-    } catch (err: any) {
-      showNotification(err?.message || 'خطا در ذخیره‌سازی قانون', 'error');
+    } catch (err) {
+      showNotification(errorMessageOf(err) || 'خطا در ذخیره‌سازی قانون', 'error');
       throw err;
     }
   };

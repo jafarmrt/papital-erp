@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { History, Play, RotateCcw, Search, CheckCircle2, AlertTriangle, FileText, Package, Users, Landmark, Layers, GitBranch, Clock, ShieldCheck, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react';
-import { formatPersianDate } from '../../utils';
+import { formatPersianDate, errorMessageOf } from '../../utils';
 import { fetchJson } from '../../api';
 import { useHasPermission } from '../../contexts/AuthContext';
 
@@ -96,7 +96,8 @@ export function EventSourcingReplaySubTab() {
         showToast(data?.message || 'خطا در بارگذاری خط زمان رویدادها', 'error');
       }
     } catch (err) {
-      showToast('خطای شبکه در بارگذاری خط زمان', 'error');
+      // v9.0.394 (TD-730): the server's own reason is shown, never a fixed text
+      showToast(errorMessageOf(err) || 'خط زمان بارگذاری نشد.', 'error');
     } finally {
       setIsLoadingTimeline(false);
     }
@@ -139,7 +140,7 @@ export function EventSourcingReplaySubTab() {
         showToast(data?.message || 'خطا در اجرای بازپخش', 'error');
       }
     } catch (err) {
-      showToast('خطای سرور در بازپخش رویداد', 'error');
+      showToast(errorMessageOf(err) || 'شبیه‌سازی بازپخش انجام نشد.', 'error');
     } finally {
       setIsSimulating(false);
     }

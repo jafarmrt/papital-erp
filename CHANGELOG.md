@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.394 — Event Screens Show the Server Reason
+- **Event error messages (TD-730):** the dead-letter, webhook, rule, outbox and timeline tabs showed fixed texts for refused requests (losing the server's 409 «in replay» or SSRF reason) and called any refusal of a dead-letter payload edit a JSON format error; every catch now shows the server's message and only a parse error is a JSON format error.
+
 ### v9.0.393 — Rule Switch Sends Its Target State
 - **Rule switch (TD-729):** the automatic rule switch flipped the state on every call, so a double click put the rule back (with two success messages) and no change was audited; the switch now sends `{ active }` (`setRuleActive` under the rule row lock: a repeat changes nothing, each change one audit row in its transaction) and the switch and the test button wait for their answer.
 

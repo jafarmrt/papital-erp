@@ -91,7 +91,8 @@ export function DeadLetterQueueSubTab() {
         showToast(data?.message || 'خطا در دریافت لیست DLQ', 'error');
       }
     } catch (err) {
-      showToast('خطا در ارتباط با سرور', 'error');
+      // v9.0.394 (TD-730): the server's own reason is shown, never a fixed text
+      showToast(errorMessageOf(err) || 'فهرست صف خطا بارگذاری نشد.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -167,7 +168,7 @@ export function DeadLetterQueueSubTab() {
         showToast(data?.message || 'خطا در بازپخش دسته‌ای', 'error');
       }
     } catch (err) {
-      showToast('خطای شبکه در بازپخش دسته‌ای', 'error');
+      showToast(errorMessageOf(err) || 'بازپخش دسته‌ای انجام نشد.', 'error');
     } finally {
       setIsBatchReplaying(false);
     }
@@ -188,7 +189,7 @@ export function DeadLetterQueueSubTab() {
         showToast(data?.message || 'خطا در پاکسازی', 'error');
       }
     } catch (err) {
-      showToast('خطای شبکه در پاکسازی', 'error');
+      showToast(errorMessageOf(err) || 'پاکسازی انجام نشد.', 'error');
     } finally {
       setIsPurging(false);
     }
@@ -202,8 +203,16 @@ export function DeadLetterQueueSubTab() {
 
   const saveEditedPayloadAndReplay = async (andReplay: boolean = false) => {
     if (!editingItem) return;
+    // v9.0.394 (TD-730): only a parse error is a JSON format error; a server refusal shows the server's reason
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(editedPayloadJson);
+      parsed = JSON.parse(editedPayloadJson);
+    } catch (err) {
+      setJsonError('فرمت JSON وارد شده نامعتبر است: ' + errorMessageOf(err));
+      return;
+    }
+    setJsonError(null);
+    try {
       setIsSavingPayload(true);
 
       const data = await fetchJson<{ success?: boolean; message?: string }>(`/events/dlq/${editingItem.id}/payload`, {
@@ -226,7 +235,7 @@ export function DeadLetterQueueSubTab() {
 
       setEditingItem(null);
     } catch (err) {
-      setJsonError('فرمت JSON وارد شده نامعتبر است: ' + errorMessageOf(err));
+      setJsonError(errorMessageOf(err) || 'ذخیره بدنه رویداد انجام نشد.');
     } finally {
       setIsSavingPayload(false);
     }

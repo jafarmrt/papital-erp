@@ -124,7 +124,8 @@ export function WebhookManagementSubTab() {
         setSubscriptions(Array.isArray(data.data) ? data.data : []);
       }
     } catch (err) {
-      showToast('خطا در دریافت لیست وب‌هوک‌ها', 'error');
+      // v9.0.394 (TD-730): the server's own reason is shown, never a fixed text
+      showToast(errorMessageOf(err) || 'فهرست وب‌هوک‌ها بارگذاری نشد.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -255,7 +256,7 @@ export function WebhookManagementSubTab() {
         void fetchStats();
       }
     } catch (err) {
-      showToast('خطا در تغییر وضعیت وب‌هوک', 'error');
+      showToast(errorMessageOf(err) || 'وضعیت وب‌هوک تغییر نکرد.', 'error');
     }
   };
 
@@ -271,7 +272,7 @@ export function WebhookManagementSubTab() {
         void fetchStats();
       }
     } catch (err) {
-      showToast('خطا در حذف وب‌هوک', 'error');
+      showToast(errorMessageOf(err) || 'وب‌هوک حذف نشد.', 'error');
     }
   };
 
