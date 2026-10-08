@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.451 — Purchase Goods Enter Stock Only With warehouse.in
+- **Fix (TD-904, P5-P01):** a requisition transition into the received step (workflow route, inbox task, receive items) and order delivery ask the receipt's stock-in permission `warehouse.in`; workflow-only or procurement-only users get 403 and nothing moves, and the procurement page hides the buttons.
+
 ### v9.0.450 — Terminal Output Is English
 - **Fix (TD-625, B01-45):** scripts, the session hook, test names, test runner labels and failure messages print English; server error logs show the status, code and route, and the user's Persian message stays in the response and the JSON log file.
 

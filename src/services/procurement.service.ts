@@ -19,7 +19,7 @@ const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve', 'procurement.man
 const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
 import type { PurchaseRequisition, ProcurementOrder } from '../types.js';
 import { applyDeliveredLines, isSettledRequisitionRow, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
-import { assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES, requisitionOrderDocuments } from './procurement/requisitionReceiveAction.js';
+import { assertMayReceiveIntoStock, assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES, requisitionOrderDocuments } from './procurement/requisitionReceiveAction.js';
 import { describeOverOrders, findOverOrders } from './procurement/requisitionOrder.js';
 import { money } from '../lib/money.js';
 import { canEditRequisition, REQUISITION_PRIORITIES, requisitionActionLabel, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
@@ -868,6 +868,8 @@ export class ProcurementService {
       );
     }
 
+    // v9.0.451 (TD-904، ت۳ الف): ورود کالا مجوز ثبت قطعی سند رسید را هم می‌خواهد (گارد مسیر فقط مجوز تدارکات را می‌سنجد)
+    await assertMayReceiveIntoStock(user, String(doc.refNumber ?? doc.id));
     // v8.0.4 (TD-257): سفارشی که تاریخش پیش از آخرین گردش کالاست فقط با مجوز همین کاربر به انبار تحویل می‌شود
     const allowBackdate = await userHasRoleOrPermission(user, BACKDATE_PERMISSION);
     // v9.0.317 (TD-692): حق تأیید پیش از تراکنش سنجیده می‌شود (TD-324)

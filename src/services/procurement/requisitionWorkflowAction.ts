@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { purchaseRequisitions } from '../../db/schema.js';
-import { registerWorkflowTransitionAction, workflowEntityNumericId, type WorkflowTransitionEvent } from '../workflow/workflowTransitionActions.js';
+import { registerWorkflowTransitionAction, workflowEntityNumericId, type WorkflowActionTarget, type WorkflowTransitionEvent } from '../workflow/workflowTransitionActions.js';
+import { PROCUREMENT_RECEIVE_PERMISSION } from '../../lib/permissions/procurementPermissions.js';
 import type { RequisitionItemWithReceipt } from './requisitionReceipt.js';
 import { assertProcurementIncomingDocument, receiveRequisitionItems, RECEIVED_REQUISITION_STATUSES } from './requisitionReceiveAction.js';
 
@@ -57,12 +58,23 @@ export async function applyRequisitionTransition(tx: DbExecutor, event: Workflow
     .where(eq(purchaseRequisitions.id, req.id));
 }
 
+/**
+ * v9.0.451 (TD-904، یافته P5-P01، تصمیم ت۳ الف): گامی که درخواست را «دریافت‌شده» می‌کند کالای آن را وارد انبار می‌کند، پس
+ * از امضاکننده (یا نقش تفویض‌کننده) همان مجوز ثبت قطعی سند رسید را می‌خواهد، از هر مسیر انتقال: روت انتقال، کارتابل،
+ * «دریافت کالا»ی صفحه تدارکات و انتقال دریافتِ تحویل سفارش. پیش‌تر گام‌های پیش‌فرض مجوز لازم نداشتند و دارنده
+ * `workflow.execute` بی هیچ مجوز انبار کالا را وارد انبار می‌کرد.
+ */
+export function receivePermissionsOfStep(target: WorkflowActionTarget): string[] {
+  return requisitionStatusOfStep(target.toStateKey, '') === 'received' ? [PROCUREMENT_RECEIVE_PERMISSION] : [];
+}
+
 export function registerRequisitionWorkflowAction(): void {
   registerWorkflowTransitionAction(['purchase_requisition'], {
     lockEntity: async (tx, entityId) => {
       await lockRequisition(tx, entityId);
     },
     run: applyRequisitionTransition,
+    requiredPermissions: receivePermissionsOfStep,
     // v9.0.33 (TD-443): درخواست هست و حذف نشده است
     entityExists: async (tx, entityId) => {
       const id = workflowEntityNumericId(entityId);

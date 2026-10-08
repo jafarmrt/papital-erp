@@ -185,7 +185,8 @@ router.get('/orders', authorizePermission(...READ_PERMISSIONS.procurementOrders)
 /**
  * POST /api/procurement/orders/:id/deliver
  * Deliver a procurement order to the warehouse (finalizes it, moves stock in, updates Kardex); v9.0.347 (TD-691): only
- * a document linked to a requisition, else 422 PROCUREMENT_ORDER_NOT_LINKED
+ * a document linked to a requisition, else 422 PROCUREMENT_ORDER_NOT_LINKED. v9.0.451 (TD-904): the service also asks the
+ * stock-in permission of the receipt document (PROCUREMENT_RECEIVE_PERMISSION, 403 PROCUREMENT_RECEIVE_PERMISSION_REQUIRED)
  */
 router.post('/orders/:id/deliver', authorizePermission('procurement.order', 'procurement.manage'), idempotency({ scope: 'procurement' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);

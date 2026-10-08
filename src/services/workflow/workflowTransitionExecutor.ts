@@ -27,7 +27,7 @@ import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from
 import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workflowRuleText.js';
 import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels.js';
 import type { RuleExpression } from '../ruleEngine.service.js';
-import { isSystemAdminRole } from '../../lib/permissions/permissionCatalog.js';
+import { isSystemAdminRole, permissionDefinition } from '../../lib/permissions/permissionCatalog.js';
 
 type DbClient = typeof orm | Parameters<Parameters<typeof orm.transaction>[0]>[0];
 
@@ -615,7 +615,9 @@ export class WorkflowTransitionExecutor {
         const signerRole = (actingFor ? actingFor.fromRole : params.userRole || '').trim().toLowerCase();
         const signerHeld = actingFor ? await WorkflowTransitionExecutor.signerPermissions(actingFor.fromRole, [], tx) : userPermissions;
         if (!isSystemAdminRole(signerRole) && !entityPermissions.some(p => signerHeld.includes(p))) {
-          throw new ForbiddenError(`اقدام «${transition.title}» یکی از مجوزهای «${entityPermissions.join('، ')}» را می‌خواهد.`, undefined, 'WF_ENTITY_PERMISSION_REQUIRED');
+          // v9.0.451 (TD-904): نام فارسی مجوز در پیام، کلید آن در جزئیات
+          const titles = entityPermissions.map(p => permissionDefinition(p)?.title ?? p);
+          throw new ForbiddenError(`اقدام «${transition.title}» یکی از مجوزهای «${titles.join('، ')}» را می‌خواهد.`, { permissions: entityPermissions }, 'WF_ENTITY_PERMISSION_REQUIRED');
         }
       }
 

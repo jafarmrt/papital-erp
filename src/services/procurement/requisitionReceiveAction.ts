@@ -2,7 +2,10 @@ import { and, asc, eq, inArray, or } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents } from '../../db/schema.js';
 import { DocumentService } from '../document.service.js';
-import { ConflictError, ValidationError } from '../../errors/customErrors.js';
+import { ConflictError, ForbiddenError, ValidationError } from '../../errors/customErrors.js';
+import { can } from '../../middleware/authorize.js';
+import { permissionDefinition } from '../../lib/permissions/permissionCatalog.js';
+import { PROCUREMENT_RECEIVE_PERMISSION } from '../../lib/permissions/procurementPermissions.js';
 import { applyDeliveredLines, isClosedRequisitionRow, type RequisitionItemWithReceipt } from './requisitionReceipt.js';
 
 /** v8.0.10 (TD-267): انواع سندی که مسیر تحویل تدارکات به انبار نهایی می‌کند (فقط ورود کالا) */
@@ -19,6 +22,20 @@ export function assertProcurementIncomingDocument(doc: { id: number; type: strin
   if (!PROCUREMENT_INCOMING_TYPE_SET.has(String(doc.type))) {
     throw new ValidationError(`سند «${doc.refNumber ?? doc.id}» (نوع ${doc.type ?? '-'}) سند خرید نیست و از مسیر تحویل تدارکات به انبار نهایی نمی‌شود.`);
   }
+}
+
+/**
+ * v9.0.451 (TD-904، یافته P5-P01، تصمیم ت۳ الف): تحویل سفارش تدارکات به انبار، افزون بر مجوز تدارکات، همان مجوز ثبت قطعی
+ * سند رسید را می‌خواهد. پیش‌تر `procurement.manage` یا `procurement.order` به‌تنهایی سفارش را قطعی و کالا را وارد انبار
+ * می‌کرد، در حالی که همان کاربر `PUT /documents/:id/finalize` را ۴۰۳ می‌گرفت. بیرون از تراکنش سنجیده می‌شود (TD-324).
+ */
+export async function assertMayReceiveIntoStock(user: { role?: string } | undefined, orderLabel: string): Promise<void> {
+  if (await can(user, PROCUREMENT_RECEIVE_PERMISSION)) return;
+  const title = permissionDefinition(PROCUREMENT_RECEIVE_PERMISSION)?.title ?? PROCUREMENT_RECEIVE_PERMISSION;
+  throw new ForbiddenError(
+    `تحویل سفارش خرید «${orderLabel}» به انبار مجوز «${title}» را هم می‌خواهد؛ کالا فقط با همان مجوز سند رسید وارد انبار می‌شود.`,
+    { permission: PROCUREMENT_RECEIVE_PERMISSION }, 'PROCUREMENT_RECEIVE_PERMISSION_REQUIRED',
+  );
 }
 
 interface ReceivedRequisition {
