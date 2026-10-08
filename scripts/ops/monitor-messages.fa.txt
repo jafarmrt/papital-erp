@@ -1,0 +1,19 @@
+# Persian alert texts of scripts/monitor.sh (v10.0.6, O-03), one «key|text» per line; %s is filled in order.
+# They go to the owner's phone or mailbox, never to a terminal (AGENTS.md §6, terminal output is English).
+title|هشدار سامانه پاپیتال (%s)
+still|هنوز برقرار است: %s
+resolved|برطرف شد: %s
+app_down|برنامه پاسخ نمی‌دهد (بررسی آمادگی: %s).
+app_ok|برنامه پاسخ می‌دهد.
+disk_full|دیسک %s پر شده است: %s درصد.
+disk_ok|فضای دیسک %s کافی است.
+disk_unreadable|فضای دیسک %s خوانده نشد.
+backup_stale|آخرین پشتیبان روزانه روی سرور %s ساعت پیش گرفته شده است.
+backup_missing|هنوز هیچ پشتیبان روزانه‌ای روی سرور ثبت نشده است.
+backup_ok|پشتیبان روزانه روی سرور به‌روز است.
+offsite_stale|آخرین رونوشت پشتیبان در گوگل‌درایو %s ساعت پیش فرستاده شده است.
+offsite_missing|هنوز هیچ رونوشتی از پشتیبان به گوگل‌درایو نرفته است.
+offsite_ok|رونوشت پشتیبان در گوگل‌درایو به‌روز است.
+events_bad|صف رویدادها مشکل دارد: %s رویداد ناموفق در صف خطا و %s رویداد مانده در پردازش. صفحه «سلامت سامانه» را ببینید.
+events_unreadable|وضعیت صف رویدادها خوانده نشد (%s).
+events_ok|صف رویدادها سالم است.
