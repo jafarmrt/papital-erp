@@ -52,7 +52,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   // v9.0.300 (TD-790): پیش‌فاکتور چندانباره در ویرایش؛ هر ردیف انبار خودش را نگه می‌دارد
   const [multiWarehouseEdit, setMultiWarehouseEdit] = useState(false);
 
-  // شماره سند = شماره بعدی سرور تا وقتی کاربر یا پیش‌فاکتور ویرایشی شماره دیگری نگذاشته باشد (null = شماره سرور)
+  // شماره سند = شماره بعدی سرور، یا شماره پیش‌فاکتوری که ویرایش می‌شود (null = شماره سرور)؛ v9.0.327 (TD-783): فقط نمایشی
   const [refOverride, setRefNumber] = useState<string | null>(null);
   const refNumber = refOverride ?? nextRef;
   const [date, setDate] = useState<string>(() => getTodayJalaliDate());
@@ -362,7 +362,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     const payload = {
       docType,
       status,
-      refNumber,
+      // v9.0.327 (TD-783): شماره از سری سرور؛ در ویرایش «auto» یعنی همان شماره ذخیره‌شده
+      refNumber: 'auto',
       date: formattedDate,
       user: currentUser.full_name,
       inOut: 'out' as const,
@@ -497,8 +498,9 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               )}
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1 text-slate-500">شماره سند / رفرنس (اتومات)</label>
-              <input required type="text" value={refNumber} onChange={e => setRefNumber(e.target.value)} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-left font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" dir="ltr" />
+              {/* v9.0.327 (TD-783، تصمیم ت۹ الف): شماره فقط از سری سرور؛ سند تازه شماره را هنگام ثبت می‌گیرد */}
+              <label className="block text-xs font-medium mb-1 text-slate-500">شماره سند (از سری سرور)</label>
+              <input type="text" value={refNumber} readOnly title="شماره هنگام ثبت از سری فاکتورهای سرور داده می‌شود" className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-left font-mono text-slate-500 bg-slate-50 focus:outline-none" dir="ltr" />
             </div>
             <div>
               <label className="block text-xs font-medium mb-1 text-slate-500">تاریخ</label>

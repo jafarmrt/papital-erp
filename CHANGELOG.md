@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.327 — Sales Document Numbers Only From the Server Series
+- **Document numbers:** a sales invoice or sales return number now comes only from the server series; a stock document may keep a manual number, but a taken one is refused instead of being silently replaced, a manual number no longer moves the series, and the audit log records the stored number (TD-783).
+
+### v9.0.326 — The Reference Invoice of a Sales Return by Fiscal Year
+- **Sales returns:** the reference invoice lookup now finds only final invoices with one indexed query and knows the fiscal year: a number used in two years asks which year, so last year's invoice can be returned against, and each lookup error shows its real cause (TD-782).
+
+### v9.0.325 — A Production Receipt Comes Only From the Project Delivery
+- **Production:** a production receipt is now recorded only through the project's «ورود به انبار», where the project, its planned quantity and its delivery cost are checked; the stock document page no longer offers it and `POST /documents` or finalizing a draft one is refused (TD-780, decision ت۷).
+
+### v9.0.324 — Stock Count Lines Need a Count and One Line per Item and Warehouse
+- **Inventory:** a stock count line without a count is now refused instead of being counted as zero, a repeated item in the same warehouse is refused instead of being adjusted twice, and the count document shows each warehouse's own variance and book stock (TD-777).
+
+### v9.0.323 — A Document Edit Links Its Sales Lead Under the Lead Lock
+- **Sales:** `PUT /documents/:id` with `crmLeadId` now links or unlinks the sales lead inside the edit transaction under the lead lock: a missing lead or a lead with another proforma is 422 before anything is saved, and an unlinked lead is released for a new proforma; before, the link was written after the edit, without the one-proforma rule (TD-776).
+
 ### v9.0.322 — Payment From a Payslip Offers Its Remainder
 - **Payment From a Payslip Offers Its Remainder (TD-814):** the pay button inside a payslip sent no paid amount, so a partly paid payslip's payment form offered the whole net, which the server refused; it now sends the paid amount and status, as the payslip list does.
 

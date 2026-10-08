@@ -3,7 +3,10 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { permissionDefinition } from '../lib/permissions/permissionCatalog.js';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
-import { assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
+import { findFinalDocumentIdByRef, storedDocumentHeader } from '../services/documents/documentRefLookup.js';
+import { DOCUMENT_TYPE_TITLES } from '../lib/documents/documentTypeTitles.js';
+import { isAutoRefNumber } from '../lib/documents/documentRefRules.js';
+import { assertManualRefAllowed, assertNotProjectDelivery, assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, storageDateParam, decimalInput } from '../middleware/validate.js';
@@ -15,8 +18,6 @@ import { needsApprovalWorkflow } from '../services/documents/documentApprovalSco
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { orm } from '../db/drizzle.js';
-import { documents } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
 import { lockLeadForNewProforma, markLeadProforma, releaseLeadOfVoidedDocument } from '../services/crm/leadProforma.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
@@ -198,10 +199,17 @@ export const documentUpdateSchema = z.object({
   }).passthrough()
 }).passthrough();
 
+const DOCUMENT_LIST_TYPES = ['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste'] as const;
+
 export const paramsRefSchema = z.object({
   params: z.object({
     ref: z.string().min(1, 'شماره سند الزامی است')
-  })
+  }),
+  // v9.0.326 (TD-782): نوع سند الزامی و سال مالی اختیاری (خالی = همه سال‌ها)
+  query: z.object({
+    type: z.enum(DOCUMENT_LIST_TYPES, { error: 'نوع سند نامعتبر است' }),
+    fiscalYear: z.coerce.number().int('سال مالی باید عدد صحیح باشد').min(1300, 'سال مالی نامعتبر است').max(1600, 'سال مالی نامعتبر است').optional(),
+  }).passthrough(),
 });
 
 export const paramsDocIdOrRefSchema = z.object({
@@ -217,8 +225,6 @@ export const nextRefQuerySchema = z.object({
     })
   }).passthrough()
 }).passthrough();
-
-const DOCUMENT_LIST_TYPES = ['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste'] as const;
 
 /** v9.0.301 (TD-792): `types=invoice,proforma` فهرست را به چند نوع محدود می‌کند */
 function documentListTypes(raw: unknown): string[] | undefined {
@@ -258,17 +264,7 @@ router.get('/documents/next-ref', authorizePermission(...READ_PERMISSIONS.docume
   res.json({ nextRef });
 }));
 
-const docTypeTitles: Record<string, string> = {
-  receipt: 'رسید خرید مواد و کالا',
-  production_receipt: 'رسید تولید و تحویل محصول',
-  invoice: 'فاکتور فروش',
-  proforma: 'پیش‌فاکتور',
-  return: 'سند مرجوعی',
-  audit: 'سند انبارگردانی',
-  transfer: 'حواله انتقال',
-  remittance: 'حواله خروج',
-  waste: 'سند ضایعات'
-};
+const docTypeTitles = DOCUMENT_TYPE_TITLES;
 
 /** v9.0.125 (TD-541 / TD-771): کاربر مجوز این کار را دارد، وگرنه ۴۰۳ با نام فارسی مجوز */
 async function assertMayRecordDocument(user: AuthUserPayload | undefined, permission: string, action: string): Promise<void> {
@@ -282,6 +278,10 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   const requestedType = String(req.body.docType);
   // v9.0.238 (TD-770): جهت گردش از نوع سند؛ `inOut` ناسازگار پیش از سنجش مجوز ۴۲۲ می‌گیرد
   assertRecordableDocument(requestedType, req.body.inOut);
+  // v9.0.325 (TD-780، تصمیم ت۷ الف): رسید تولید فقط از «ورود به انبار» پروژه
+  assertNotProjectDelivery(requestedType);
+  // v9.0.327 (TD-783، تصمیم ت۹ الف): شماره فاکتور فروش و برگشت فقط از سری سرور
+  assertManualRefAllowed(requestedType, req.body.refNumber);
   const recordStatus = createdDocumentStatus(requestedType, req.body.status);
   await assertMayRecordDocument(req.user, permissionToCreateDocument(req.body),
     `ثبت ${docTypeTitles[requestedType] ?? 'سند'}${recordStatus === 'final' ? ' به‌صورت قطعی' : ''}`);
@@ -311,11 +311,10 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   const allowBackdate = await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION);
   // v9.0.13 (TD-424): «یک پیش‌فاکتور برای هر پرونده» زیر قفل ردیف پرونده و پیوند و علامت پرونده در همان تراکنش سند
   // (پیش‌تر بررسی بی قفل پیش از تراکنش و علامت‌گذاری پس از commit؛ پیش‌فاکتورهای هم‌زمان همه ثبت می‌شدند)
-  const { docId: newDocId, projectReservation } = await orm.transaction(async (tx) => {
+  const { docId: newDocId, projectReservation, stored } = await orm.transaction(async (tx) => {
     const lead = isProforma && targetLeadId ? await lockLeadForNewProforma(tx, targetLeadId) : null;
-    const created = await DocumentService.createDocumentWithDetails({ ...req.body, user: sessionUserLabel(req.user), externalTx: tx }, { userId: req.user?.id, allowBackdate });
-    // V10-4.3: لینک رسمی سند به پرونده CRM (صدور خودکار و دستی، هر دو مسیر از همین نقطه ست می‌کنند)
-    if (targetLeadId) await tx.update(documents).set({ crmLeadId: targetLeadId }).where(eq(documents.id, created.docId));
+    // V10-4.3 / v9.0.323 (TD-776): پیوند رسمی سند به پرونده فروش همراه درج سند در سرویس (نه نوشتن جدا از route)
+    const created = await DocumentService.createDocumentWithDetails({ ...req.body, crmLeadId: targetLeadId, user: sessionUserLabel(req.user), externalTx: tx }, { userId: req.user?.id, allowBackdate });
     if (lead) await markLeadProforma(tx, lead, created.docId, req.user?.full_name || 'سیستم');
     // v9.0.39 (TD-446، ت۴): فقط سند فروش پیش‌نویس یا پیش‌فاکتور، در همین تراکنش، وارد گردش کار تأیید می‌شود و خطای شروع
     // ثبت سند را رد می‌کند. پیش‌تر هر سند، حتی رسید و فاکتور قطعی، پس از commit و با خطای بلعیده فرایند می‌گرفت
@@ -328,9 +327,10 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
         tx,
       });
     }
-    return created;
+    // v9.0.327 (TD-783): گزارش ممیزی و پاسخ نوع، شماره و وضعیتی را دارند که ذخیره شد (نه آنچه فرستاده شد)
+    return { ...created, stored: await storedDocumentHeader(tx, created.docId) };
   });
-  const title = docTypeTitles[req.body.docType] || 'سند انبار';
+  const title = docTypeTitles[stored?.type ?? req.body.docType] || 'سند انبار';
 
   const hasDiscounts = (req.body.items || []).some((i: { discount?: unknown }) => Number(i.discount || 0) > 0);
   const totalLines = (req.body.items || []).length;
@@ -343,14 +343,15 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
     action: 'CREATE',
     entity: title,
     entityId: newDocId,
-    description: `ثبت ${title} جدید به شماره "${req.body.refNumber}" (${totalLines} قلم کالا${hasDiscounts ? ' همراه با تخفیف ویژه' : ''})`,
+    description: `ثبت ${title} جدید به شماره "${stored?.refNumber ?? ''}" (${totalLines} قلم کالا${hasDiscounts ? ' همراه با تخفیف ویژه' : ''})`,
     details: {
       after: {
         docId: newDocId,
-        docType: req.body.docType,
-        refNumber: req.body.refNumber,
+        docType: stored?.type ?? req.body.docType,
+        refNumber: stored?.refNumber ?? null,
+        ...(isAutoRefNumber(req.body.refNumber) ? {} : { requestedRefNumber: req.body.refNumber }),
         date: req.body.date,
-        status: req.body.status || 'draft',
+        status: stored?.status ?? req.body.status,
         buyerName: req.body.buyer_name,
         buyerPhone: req.body.buyer_phone,
         currency: req.body.currency || 'IRR',
@@ -363,7 +364,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
     }
   });
 
-  res.json({ success: true, docId: newDocId, projectReservation });
+  res.json({ success: true, docId: newDocId, refNumber: stored?.refNumber ?? null, projectReservation });
 }));
 
 // v9.0.140 (TD-890، ت۱۰ الف): فهرست کامل با مجوز بخش اسناد؛ مجوز انبارگردانی فقط فهرست سندهای شمارش و انتقال
@@ -400,17 +401,15 @@ router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...R
 }));
 
 router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.documentRecord, ...READ_PERMISSIONS.stockCountDocuments), validate(paramsRefSchema), asyncHandler(async (req, res) => {
-  const type = req.query.type as string;
+  const type = String(req.query.type);
   const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documentRecord);
   assertDocumentTypeReadable(readable, type);
-  const ref = req.params.ref;
-  const docsResult = await DocumentService.getDocuments(type);
-  const docList = Array.isArray(docsResult) ? docsResult : (docsResult?.data || []);
-  const docSummary = docList.find((d: { ref_number?: string; id?: number }) => d.ref_number === ref);
-  if (!docSummary) {
-    throw new NotFoundError('سند یافت نشد');
-  }
-  const doc = await DocumentService.getDocumentById(docSummary.id);
+  // v9.0.326 (TD-782): یک کوئری روی شاخص (نوع، سال، شماره) و فقط سند قطعی فعال؛ چند سال با یک شماره ۴۰۹ با فهرست سال‌ها.
+  // پیش‌تر همه اسناد نوع بار می‌شد و سند سال جاری همیشه برنده بود
+  const fiscalYear = req.query.fiscalYear === undefined ? null : Number(req.query.fiscalYear);
+  const docId = await findFinalDocumentIdByRef({ ref: req.params.ref, type, fiscalYear, typeTitle: docTypeTitles[type] ?? 'سند' });
+  const doc = await DocumentService.getDocumentById(docId);
+  if (!doc) throw new NotFoundError('سند یافت نشد');
   assertDocumentTypeReadable(readable, doc?.type);
   res.json(doc);
 }));
@@ -488,27 +487,25 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
 
 router.put('/documents/:id', authorizePermission('documents.edit'), validate(documentUpdateSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
+  // v9.0.323 (TD-776): پیوند پرونده فروش (`crmLeadId`، null = قطع) درون تراکنش ویرایش و زیر قفل پرونده؛ پیش‌تر پس از commit
+  // ویرایش، بی قفل و بی قاعده «یک پیش‌فاکتور برای هر پرونده» نوشته می‌شد
   await DocumentService.updateDocument(docId, { ...req.body, user: sessionUserLabel(req.user) });
-
-  // V10-4.3: امکان ست/به‌روزرسانی لینک CRM هنگام ویرایش (null = قطع لینک)
-  if ('crmLeadId' in req.body) {
-    const parsedLead = req.body.crmLeadId === null || String(req.body.crmLeadId).trim() === '' ? null : Number(req.body.crmLeadId);
-    if (!Number.isNaN(parsedLead)) {
-      await orm.update(documents).set({ crmLeadId: parsedLead }).where(eq(documents.id, docId));
-    }
-  }
+  // v9.0.327 (TD-783): گزارش ممیزی شماره و وضعیت ذخیره‌شده پس از ویرایش را می‌نویسد
+  const stored = await storedDocumentHeader(orm, docId);
 
   await logActivity({
     req,
     action: 'UPDATE',
     entity: 'اسناد انبار / پیش‌فاکتور',
     entityId: docId,
-    description: `ویرایش پیش‌فاکتور/سند شماره "${req.body.refNumber || docId}"`,
+    description: `ویرایش پیش‌فاکتور/سند شماره "${stored?.refNumber ?? docId}"`,
     details: {
       docId,
-      refNumber: req.body.refNumber,
+      refNumber: stored?.refNumber ?? null,
+      status: stored?.status ?? null,
       buyerName: req.body.buyer_name,
       notes: req.body.notes,
+      ...('crmLeadId' in req.body ? { crmLeadId: req.body.crmLeadId ?? null } : {}),
       itemsCount: req.body.items?.length || 0
     }
   });

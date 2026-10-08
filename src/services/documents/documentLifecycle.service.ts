@@ -28,7 +28,7 @@ import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
 import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows } from './voidDependents.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { proformaInvoiceTarget } from './proformaInvoice.js';
-import { stockDirectionOf } from './documentRecordRule.js';
+import { assertNotProjectDelivery, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 
 export class DocumentLifecycleService {
@@ -71,6 +71,8 @@ export class DocumentLifecycleService {
       if (docPeek.type === 'audit') {
         throw new ValidationError(`سند انبارگردانی «${docPeek.refNumber || id}» نهایی‌سازی نمی‌شود؛ انبارگردانی هنگام ثبت اعمال شده است. برای اصلاح، آن را ابطال و دوباره ثبت کنید.`);
       }
+      // v9.0.325 (TD-780، تصمیم ت۷ الف): رسید تولید پیش‌نویس (از پیش از این نسخه) قطعی نمی‌شود؛ تحویل فقط از مسیر پروژه
+      assertNotProjectDelivery(docPeek.type, docPeek.refNumber || String(id));
 
       // Pre-flight: verify line items existence and validity
       const rawLines = await tx.select({

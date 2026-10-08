@@ -161,7 +161,7 @@ describe('CreateInvoicePage — cancelling an edit puts every field back to its 
     fireEvent.click(screen.getByRole('button', { name: 'ثبت و صدور فاکتور' }));
     await waitFor(() => expect(bodiesOf('POST', '/documents')).toHaveLength(1));
     const body = bodiesOf('POST', '/documents')[0];
-    expect(body).toMatchObject({ docType: 'invoice', status: 'final', currency: 'IRR', exchangeRate: null, location: 'WH1', vatPercent: 0, refNumber: 'INV-1001' });
+    expect(body).toMatchObject({ docType: 'invoice', status: 'final', currency: 'IRR', exchangeRate: null, location: 'WH1', vatPercent: 0, refNumber: 'auto' });
     expect(body.crmLeadId).toBeUndefined();
   });
 });
