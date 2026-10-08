@@ -645,6 +645,13 @@
       "when": 1793780000000,
       "tag": "0091_business_foreign_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1793880000000,
+      "tag": "0092_stage_progress_not_null",
+      "breakpoints": true
     }
   ]
 }

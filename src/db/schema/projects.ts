@@ -1,4 +1,5 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, unique } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
 import { registerColumnRef, baseRelations } from './baseRelations';
@@ -53,6 +54,8 @@ export const projectStages = pgTable('project_stages', {
 }, (table) => ({
   idx_stage_proj: index('idx_stage_proj').on(table.projectId),
   idx_stage_order: index('idx_stage_order').on(table.stageOrder),
+  // v9.0.434 (TD-613): built by migration 0084 only on data without duplicates; declared so the schema matches the database
+  uq_project_stages_order_active: uniqueIndex('uq_project_stages_order_active').on(table.projectId, table.stageOrder).where(sql`${table.isDeleted} = 0`),
 }));
 
 // V3.1.0 — پیشرفت ماتریسی SKU × مرحله (به تفکیک هر کد کالا)
@@ -70,7 +73,8 @@ export const projectProductStageProgress = pgTable('project_product_stage_progre
   updatedByName: text('updated_by_name').default(''),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
-  uq_ppsp: unique('uq_ppsp_project_item_stage').on(table.projectId, table.itemId, table.stageOrder),
+  // v9.0.434 (TD-613): migration 0002 built a unique index, not a constraint
+  uq_ppsp: uniqueIndex('uq_ppsp_project_item_stage').on(table.projectId, table.itemId, table.stageOrder),
   idx_ppsp_item: index('idx_ppsp_item').on(table.projectId, table.itemId),
   idx_ppsp_order: index('idx_ppsp_order').on(table.projectId, table.stageOrder),
   idx_ppsp_deleted: index('idx_ppsp_deleted').on(table.isDeleted),

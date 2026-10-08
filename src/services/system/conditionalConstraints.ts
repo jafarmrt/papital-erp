@@ -42,6 +42,8 @@ export interface ConditionalConstraintRule {
    * سپس با VALIDATE CONSTRAINT تأیید می‌کند.
    */
   addedNotValid?: boolean;
+  /** v9.0.434 (TD-613): ستون قید `not_null` */
+  column?: string;
 }
 
 const orphanCount = (child: string, column: string, parent: string) =>
@@ -55,6 +57,13 @@ const notValidForeignKey = (rule: {
   name: rule.name, kind: 'foreign_key', table: rule.table, migration: rule.migration, label: rule.label,
   blockerUnit: rule.blockerUnit, blockerCount: orphanCount(rule.table, rule.column, rule.parent), addedNotValid: true,
   create: `ALTER TABLE ${rule.table} ADD CONSTRAINT ${rule.name} FOREIGN KEY (${rule.column}) REFERENCES ${rule.parent}(id) ON DELETE ${rule.onDelete} NOT VALID`,
+});
+
+/** v9.0.434 (TD-613، مهاجرت 0092): ستونی که Drizzle الزامی اعلام کرده و مهاجرت فقط روی داده بی مقدار تهی الزامی می‌کند */
+const notNullColumn = (table: string, column: string, label: string, migration: string): ConditionalConstraintRule => ({
+  name: `nn_${table}_${column}`, kind: 'not_null', table, column, migration, label, blockerUnit: 'ردیف بی مقدار',
+  blockerCount: `SELECT COUNT(*)::int AS n FROM ${table} WHERE ${column} IS NULL`,
+  create: `ALTER TABLE ${table} ALTER COLUMN ${column} SET NOT NULL`,
 });
 
 /** v9.0.432 (TD-902، مهاجرت 0090): ستون‌های کاربر، هر کدام با عنوانی که در فهرست قیدهای جاافتاده می‌آید */
@@ -190,6 +199,11 @@ export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] 
     name: `fk_${table}_${column}`, table, column, parent, onDelete: 'NO ACTION', migration: '0091', label,
     blockerUnit: `ردیف با ${parentNoun} ناموجود`,
   })),
+  // v9.0.434 (TD-613): required columns of the project stage progress
+  notNullColumn('project_product_stage_progress', 'item_code', 'الزام کد کالا در پیشرفت مرحله محصول پروژه', '0092'),
+  notNullColumn('project_product_stage_progress', 'quantity', 'الزام مقدار در پیشرفت مرحله محصول پروژه', '0092'),
+  notNullColumn('project_product_stage_progress', 'stage_title', 'الزام عنوان مرحله در پیشرفت مرحله محصول پروژه', '0092'),
+  notNullColumn('project_product_stage_progress', 'status', 'الزام وضعیت در پیشرفت مرحله محصول پروژه', '0092'),
 ];
 
 type Executor = Pick<DbTransaction, 'execute'> | typeof orm;
@@ -204,6 +218,11 @@ async function presenceOf(db: Executor, rule: ConditionalConstraintRule): Promis
     const row = res.rows[0] as { convalidated?: boolean } | undefined;
     if (!row) return 'missing';
     return row.convalidated === false ? 'unvalidated' : 'present';
+  }
+  if (rule.kind === 'not_null') {
+    const res = await db.execute(sql`SELECT is_nullable FROM information_schema.columns
+      WHERE table_schema = current_schema() AND table_name = ${rule.table} AND column_name = ${rule.column ?? ''}`);
+    return (res.rows[0] as { is_nullable?: string } | undefined)?.is_nullable === 'NO' ? 'present' : 'missing';
   }
   const res = await db.execute(sql`SELECT COUNT(*)::int AS n FROM pg_indexes WHERE indexname = ${rule.name} AND schemaname = current_schema()`);
   return firstNumber(res.rows, 'n') > 0 ? 'present' : 'missing';
@@ -237,7 +256,7 @@ export function buildConditionalConstraintsHealthTest(entries: ConditionalConstr
     id: 'conditional_constraints_missing',
     category: 'system',
     title: 'قیدها و ایندکس‌های یکتای جاافتاده مهاجرت‌ها',
-    description: 'مهاجرت‌ها برخی قیدها (پیوند ردیف‌ها به جدول مرجعشان، و یکتایی شناسه صیاد، کد حساب و شماره سند) را فقط روی داده پاک می‌سازند یا تأیید می‌کنند. قیدی که به سبب داده ناپاک ساخته یا تأیید نشده اینجا با علتش می‌آید؛ داده خودکار عوض نمی‌شود',
+    description: 'مهاجرت‌ها برخی قیدها (پیوند ردیف‌ها به جدول مرجعشان، یکتایی شناسه صیاد، کد حساب و شماره سند، و الزام مقدار چند ستون) را فقط روی داده پاک می‌سازند یا تأیید می‌کنند. قیدی که به سبب داده ناپاک ساخته یا تأیید نشده اینجا با علتش می‌آید؛ داده خودکار عوض نمی‌شود',
     status: entries.length > 0 ? 'warning' : 'healthy',
     scoreImpact: 0,
     count: entries.length,

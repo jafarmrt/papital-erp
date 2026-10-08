@@ -168,7 +168,7 @@ export const webhookDeliveries = pgTable('webhook_deliveries', {
   durationMs: integer('duration_ms').default(0),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
 }, (table) => ({
-  idx_whd_sub_status: index('idx_whd_sub_status').on(table.subscriptionId, table.status),
-  idx_whd_event_id: index('idx_whd_event_id').on(table.eventId),
-  idx_whd_created_at: index('idx_whd_created_at').on(table.createdAt)
+  // v9.0.434 (TD-613): the indexes migration 0000 built; the three declared before never existed in the database
+  idx_webhook_deliv_sub: index('idx_webhook_deliv_sub').on(table.subscriptionId, table.createdAt),
+  idx_webhook_deliv_event: index('idx_webhook_deliv_event').on(table.eventId),
 }));

@@ -24,6 +24,8 @@ export const accounts = pgTable('accounts', {
   idx_acc_level: index('idx_acc_level').on(table.level),
   idx_acc_type: index('idx_acc_type').on(table.accountType),
   idx_acc_deleted: index('idx_acc_deleted').on(table.isDeleted),
+  // v9.0.434 (TD-613): built by migration 0012 only on data without duplicates; declared so the schema matches the database
+  uq_accounts_code_active: uniqueIndex('uq_accounts_code_active').on(table.code).where(sql`${table.isDeleted} = 0`),
 }));
 
 export const journalVouchers = pgTable('journal_vouchers', {
@@ -79,6 +81,8 @@ export const journalVouchers = pgTable('journal_vouchers', {
   // v7.0.91 (TD-195): ایندکس یکتای uq_jv_voucher_number را مهاجرت 0031 فقط روی داده بدون شماره تکراری می‌سازد
   // (voucherNumberIntegrity.ts)؛ این ایندکس معمولی برای پایگاه‌داده‌ای است که ایندکس یکتا ساخته نشد
   idx_jv_number: index('idx_jv_number').on(table.voucherNumber),
+  // v9.0.434 (TD-613): built by migration 0031 only on data without duplicates; declared so the schema matches the database
+  uq_jv_voucher_number: uniqueIndex('uq_jv_voucher_number').on(table.voucherNumber),
   idx_jv_date: index('idx_jv_date').on(table.date),
   idx_jv_status: index('idx_jv_status').on(table.status),
   idx_jv_module: index('idx_jv_module').on(table.referenceModule),
@@ -215,6 +219,9 @@ export const cheques = pgTable('cheques', {
   idx_chq_status: index('idx_chq_status').on(table.status),
   idx_chq_sayad: index('idx_chq_sayad').on(table.sayadNumber),
   idx_chq_deleted: index('idx_chq_deleted').on(table.isDeleted),
+  // v9.0.434 (TD-613): built by migration 0012 only on data without duplicates; declared so the schema matches the database
+  uq_cheques_sayad_number_active: uniqueIndex('uq_cheques_sayad_number_active').on(table.sayadNumber)
+    .where(sql`${table.isDeleted} = 0 AND ${table.sayadNumber} IS NOT NULL AND ${table.sayadNumber} <> ''`),
 }));
 registerColumnRef('cheques.id', () => cheques.id);
 

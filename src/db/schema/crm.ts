@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { registerColumnRef, baseRelations } from './baseRelations';
 import { moneyNumeric } from './moneyColumn';
@@ -25,7 +25,8 @@ export const customers = pgTable('customers', {
   idx_customers_party_type: index('idx_customers_party_type').on(table.partyType),
   idx_customers_is_deleted: index('idx_customers_is_deleted').on(table.isDeleted),
   // v9.0.8 (TD-420): ایندکس یکتای جزئی uq_customers_name_active روی lower(btrim(name)) برای طرف حساب‌های فعال را مهاجرت 0052
-  // فقط روی داده بدون نام تکراری می‌سازد (src/services/customers/customerIdentity.ts)
+  // فقط روی داده بدون نام تکراری می‌سازد (src/services/customers/customerIdentity.ts)؛ v9.0.434 (TD-613): اعلام‌شده تا اسکیما با پایگاه‌داده بخواند
+  uq_customers_name_active: uniqueIndex('uq_customers_name_active').on(sql`lower(btrim(${table.name}))`).where(sql`${table.isDeleted} = 0`),
 }));
 registerColumnRef('customers.id', () => customers.id);
 

@@ -1,4 +1,5 @@
 import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // v9.0.51 (TD-461، B14-19، مهاجرت 0059): کلید خارجی فقط میان جدول‌های گردش کار که برنامه نگهشان می‌دارد. شناسه گام و اقدام
 // در فرایند، تاریخچه، کار و تأیید در انتظار از تصویر نسخه فرایند است (ذخیره طرح ردیف‌های گام و اقدام را عوض می‌کند) و
@@ -67,6 +68,8 @@ export const workflowInstances = pgTable('workflow_instances', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
 }, (table) => ({
   idx_wfi_entity: index('idx_wfi_entity').on(table.entityType, table.entityId),
+  // v9.0.434 (TD-613): built by migration 0056 only on data without duplicates; declared so the schema matches the database
+  uq_workflow_instances_open_entity: uniqueIndex('uq_workflow_instances_open_entity').on(table.entityType, table.entityId).where(sql`${table.status} = 'IN_PROGRESS'`),
 }));
 
 export const workflowPendingApprovals = pgTable('workflow_pending_approvals', {
@@ -132,7 +135,9 @@ export const workflowTasks = pgTable('workflow_tasks', {
 }, (table) => ({
   idx_wft_instance: index('idx_wft_instance').on(table.instanceId),
   idx_wft_assigned_user: index('idx_wft_assigned_user').on(table.assignedUserId),
-  idx_wft_status: index('idx_wft_status').on(table.status)
+  idx_wft_status: index('idx_wft_status').on(table.status),
+  // v9.0.434 (TD-613): index of migration 0032, declared so the schema matches the database
+  idx_wft_sla_due: index('idx_wft_sla_due').on(table.dueAt).where(sql`${table.status} = 'pending' AND ${table.slaRemindedAt} IS NULL`),
 }));
 
 // v7.0.101 (TD-085، تصمیم مالک محصول «بازگشایی با گزارش»): کارهای منقضی‌شده خودکار پیش از این نسخه و سرنوشت هرکدام (migration 0032)

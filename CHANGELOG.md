@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.434 — The Drizzle Schema Matches the Database
+- **Fix (TD-613, B01-33):** the Drizzle schema declares the ON DELETE actions, NOT NULL columns, indexes and unique indexes the migrations built, and a drift test refuses any new difference; four stage progress columns become NOT NULL on clean data.
+
 ### v9.0.433 — Business References Get Their Foreign Keys
 - **Fix (TD-903, B01-31 / B01-32):** the thirty references between business tables get database foreign keys (NO ACTION as declared), validated on clean data and listed by the health check until validated.
 

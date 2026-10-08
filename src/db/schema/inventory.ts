@@ -11,7 +11,10 @@ export const categories = pgTable('categories', {
   defaultUnit: text('default_unit').default('عدد'),
   // v9.0.204 (TD-659، ت۸ الف): حذف دسته نرم است (مهاجرت 0072)
   isDeleted: integer('is_deleted').notNull().default(0)
-});
+}, (table) => ({
+  // v9.0.434 (TD-613): built by migration 0073 only on data without duplicates; declared so the schema matches the database
+  uq_categories_name_active: uniqueIndex('uq_categories_name_active').on(sql`lower(btrim(${table.name}))`).where(sql`${table.isDeleted} = 0`),
+}));
 
 export const warehouses = pgTable('warehouses', {
   id: serial('id').primaryKey(),
@@ -86,7 +89,10 @@ export const items = pgTable('items', {
   idx_type_deleted: index('items_type_deleted').on(table.type, table.isDeleted),
   idx_code: index('items_code').on(table.code),
   idx_category: index('items_category').on(table.category),
-  nameTrgmIdx: index('items_name_trgm_idx').using('gin', sql`${table.name} gin_trgm_ops`)
+  nameTrgmIdx: index('items_name_trgm_idx').using('gin', sql`${table.name} gin_trgm_ops`),
+  // v9.0.434 (TD-613): built by migration 0070 only on data without duplicates; declared so the schema matches the database
+  uq_items_code_active: uniqueIndex('uq_items_code_active').on(sql`upper(btrim(${table.code}))`).where(sql`${table.isDeleted} = 0`),
+  uq_items_name_active: uniqueIndex('uq_items_name_active').on(sql`lower(btrim(${table.name}))`).where(sql`${table.isDeleted} = 0`),
 }));
 registerColumnRef('items.id', () => items.id);
 
@@ -158,7 +164,7 @@ export const pendingMaterials = pgTable('pending_materials', {
   unit: text('unit').notNull(),
   category: text('category').default(''),
   type: text('type').default('raw_material'),
-  projectId: integer('project_id').references(baseRelations.productionProjectsId),
+  projectId: integer('project_id').references(baseRelations.productionProjectsId, { onDelete: 'set null' }),
   projectTitle: text('project_title').default(''),
   requestedBy: text('requested_by').default(''),
   status: text('status').default('pending'), // 'pending', 'approved', 'rejected'

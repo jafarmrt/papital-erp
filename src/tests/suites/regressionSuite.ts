@@ -10826,6 +10826,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runUserForeignKeyTests(shouldRun));
   const { runBusinessForeignKeyTests } = await import('../regression/businessForeignKeyTests.js');
   results.push(...await runBusinessForeignKeyTests(shouldRun));
+  const { runSchemaDriftTests } = await import('../regression/schemaDriftTests.js');
+  results.push(...await runSchemaDriftTests(shouldRun));
 
   return results;
 }
