@@ -24,7 +24,7 @@ import { salesReturnKardexUnitCosts } from '../documents/salesReturnCost.js';
 import { documentVoucherPartyId } from '../documents/documentParty.js';
 import { kardexInCostByItem } from './productionReceiptCost.js';
 import { documentOutflowCost } from './outflowVoucherCost.js';
-import { foreignCostRow, irrToForeignAmount, rowExchangeRate } from './foreignCostRow.js';
+import { balancedCostRows, irrToForeignAmount, rateForRial, rowExchangeRate } from './foreignCostRow.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
 import type { JournalVoucher } from '../../types.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
@@ -317,12 +317,13 @@ export class VoucherSyncService {
 
     // TD-143 / v8.0.18 (TD-261): بهای ریالی کاردکس در فاکتور ارزی به ارز سند، با نرخ همان ردیف تا معادل ریالی ردیف دقیقاً
     // همان بهای کاردکس باشد (foreignCostRow)؛ بهای تمام‌شده جمع دو ردیف موجودی است تا سند ارزی تراز بماند
-    const fgRow = foreignCostRow(fgCost, exchangeRate);
-    const rmRow = foreignCostRow(rmCost, exchangeRate);
+    // v10.0.3 (TD-1030): each inventory row is worth its cost rounded to the rial and cost of sales exactly their sum, so the
+    // voucher balances in rials too (before, 4-decimal amounts and rates left it one rial out and the year closing refused it)
+    const { parts: [fgRow, rmRow], total: cogsRow } = balancedCostRows([fgCost, rmCost], exchangeRate);
     const fgCostNum = fgRow.amount;
     const rmCostNum = rmRow.amount;
-    const totalCogsNum = fgCostNum.add(rmCostNum).round(4);
-    const cogsRate = rowExchangeRate(fgCost.add(rmCost), totalCogsNum, exchangeRate);
+    const totalCogsNum = cogsRow.amount;
+    const cogsRate = cogsRow.exchangeRate;
 
     if (totalCogsNum.isPositive()) {
       if (!cogsAcc || (fgCostNum.isPositive() && !fgAcc) || (rmCostNum.isPositive() && !rmAcc)) {
@@ -530,15 +531,23 @@ export class VoucherSyncService {
     const finishedGoodsAmountNum = inventoryParts.finished.doc.add(kardexForeign.finished).round(4);
     const rawMaterialsIrr = inventoryParts.raw.doc.multiply(exchangeRate).add(inventoryParts.raw.irr);
     const finishedGoodsIrr = inventoryParts.finished.doc.multiply(exchangeRate).add(inventoryParts.finished.irr);
-    const rawMaterialsRate = rowExchangeRate(rawMaterialsIrr, rawMaterialsAmountNum, exchangeRate);
-    const finishedGoodsRate = rowExchangeRate(finishedGoodsIrr, finishedGoodsAmountNum, exchangeRate);
+    // v10.0.3 (TD-1030): each inventory row is worth its value rounded to the rial, and the opposite rows (work in progress,
+    // or the supplier at the document rate plus donated goods) exactly their sum, so the voucher balances in rials too
+    const rawMaterialsRial = rawMaterialsIrr.round(0);
+    const finishedGoodsRial = finishedGoodsIrr.round(0);
+    const rawMaterialsRate = rateForRial(rawMaterialsAmountNum, rawMaterialsRial, exchangeRate);
+    const finishedGoodsRate = rateForRial(finishedGoodsAmountNum, finishedGoodsRial, exchangeRate);
     // کالای رایگان (رسید و خرید): مبلغ ارزی همان بخش کاردکس دو ردیف موجودی، تا سند ارزی تراز بماند
     const freeGoodsAmountNum = isProductionDoc ? fin(0) : kardexForeign.raw.add(kardexForeign.finished).round(4);
-    const freeGoodsRate = rowExchangeRate(freeGoodsIrr, freeGoodsAmountNum, exchangeRate);
 
     const totalGross = fin(rawMaterialsAmountNum).add(finishedGoodsAmountNum).round(4);
     if (!totalGross.isPositive()) return null;
-    const totalGrossRate = rowExchangeRate(rawMaterialsIrr.add(finishedGoodsIrr), totalGross, exchangeRate);
+    const inventoryRial = (rawMaterialsAmountNum.isPositive() ? rawMaterialsRial : fin(0)).add(finishedGoodsAmountNum.isPositive() ? finishedGoodsRial : fin(0));
+    const totalGrossRate = rateForRial(totalGross, inventoryRial, exchangeRate);
+    const supplierRial = totalGross.subtract(freeGoodsAmountNum).round(4).multiply(exchangeRate).round(0);
+    const freeGoodsRate = freeGoodsAmountNum.isPositive()
+      ? rateForRial(freeGoodsAmountNum, inventoryRial.subtract(supplierRial), exchangeRate)
+      : rowExchangeRate(freeGoodsIrr, freeGoodsAmountNum, exchangeRate);
 
     const allAccs = await ChartOfAccountsService.getAllAccounts(tx);
     // v9.0.199 (TD-550، B03-08): پشتیبان فقط کد معین پیش‌فرض است، هرگز حساب کل (۱۴، ۳۰ و …)
@@ -975,14 +984,14 @@ export class VoucherSyncService {
       // TD-143, TD-145 & C-04: تسعیر ارزی بهای تمام‌شده مرجوعی در صورت ارزی بودن سند
       // v8.0.18 (TD-261): بهای ریالی کاردکس با نرخ همان ردیف (foreignCostRow)، تا معادل ریالی ردیف دقیقاً همان بهای کاردکس باشد
       const docExchangeRate = await VoucherSyncService.resolveVoucherExchangeRate(executor, doc, options?.exchangeRate);
-      const fgReturnRow = foreignCostRow(fgReturnCost, docExchangeRate);
-      const rmReturnRow = foreignCostRow(rmReturnCost, docExchangeRate);
+      // v10.0.3 (TD-1030): balanced in rials as well as in the document currency, like the sales voucher
+      const { parts: [fgReturnRow, rmReturnRow], total: returnCogsRow } = balancedCostRows([fgReturnCost, rmReturnCost], docExchangeRate);
 
       const totalReturnAmountNum = totalReturnAmount.round(4);
       const fgCostNum = fgReturnRow.amount;
       const rmCostNum = rmReturnRow.amount;
-      const totalCogsNum = fgCostNum.add(rmCostNum).round(4);
-      const returnCogsRate = rowExchangeRate(fgReturnCost.add(rmReturnCost), totalCogsNum, docExchangeRate);
+      const totalCogsNum = returnCogsRow.amount;
+      const returnCogsRate = returnCogsRow.exchangeRate;
 
       if (!salesReturnAcc || !customerAcc) {
         if (isStrict) {

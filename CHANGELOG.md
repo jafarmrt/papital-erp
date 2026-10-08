@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.3 — v10.0.3 — Foreign sale and purchase vouchers balance in rials, so their year closes (TD-1030)
+- Cost rows of a foreign-currency voucher take the 4-decimal rate that reaches their rial value exactly and the opposite row their sum, so the voucher balances in rials and the fiscal-year closing no longer refuses it by one rial.
+
 ### v10.0.2 — v10.0.2 — Simulator runs treasury, cheques, payroll, purchasing, allocation, approval and year closing (TD-982, I-01)
 - The business-year simulator gains eleven operations through the application services and a `--close-year` option; TD-982 is resolved and the first year closing of a simulated year found TD-1030 (a foreign sale voucher off by one rial).
 
