@@ -19,6 +19,24 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.304 — Editing a Proforma Does Not Offer to Finalize It
+- **Sales:** while a proforma is edited, «فاکتور نهایی» is closed with the reason that a proforma is finalized by its approval, and the item codes of its lines are shown; before, the option led to a false stock shortage message and the codes were empty (TD-801).
+
+### v9.0.303 — A Failed Print Copy No Longer Leaves the Invoice Form Filled
+- **Sales:** when the print copy of a just-saved invoice fails to load, the save still counts: the user is told to print it from the document list and the form is cleared; before, the save showed as failed, the form stayed filled and a second click created a second invoice (TD-794).
+
+### v9.0.302 — A Sales Proforma Prints as a Sales Document
+- **Sales:** a sales proforma stored as type `proforma` (recorded by a user without the finalize permission) now prints with the sales title and the seller and buyer boxes; before, it printed as a stock document without the buyer's address and phone (TD-793).
+
+### v9.0.301 — Sales Form Lists Only Sales Proformas, Page by Page
+- **Sales:** the open proformas of the sales invoice form are now only sales proformas (`GET /documents` takes `types=invoice,proforma`), read twenty at a time with a count and paging; before, purchase proformas were listed and edited there and the list was cut at 1,000 without notice (TD-792).
+
+### v9.0.300 — Proforma Edit Keeps the Warehouse of Its Lines
+- **Sales:** editing a proforma now reads each line's warehouse and saves the line there; before, every edit silently moved all lines (and their reservation) to the first warehouse (TD-790).
+
+### v9.0.299 — Sales Invoice Form Resets Every Field
+- **Sales:** clearing the sales invoice form (after a save or a cancelled edit) now puts the type, status, warehouse, date, currency, rate and sales lead back to their start values, and the form edits only sales documents; before, a cancelled edit of a purchase proforma made the next sale a receipt and a sales lead stuck to later documents (TD-789).
+
 ### v9.0.298 — Voucher Row Menu Offers Only Accepted Actions
 - **Voucher Row Menu (P2, decision t8):** the menu offers per status only what the server accepts (no direct edit of an approved voucher, no correction of a permanent one, no reverse or correct of a reversal), a voucher with a source or of a year-end closing shows why it is locked, and the finalize confirmation promises no correction path (TD-568).
 
