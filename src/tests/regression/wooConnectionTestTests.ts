@@ -15,7 +15,7 @@ export async function runWooConnectionTestTests(shouldRun: (id: string, ...extra
   const id = 'reg_woocommerce_test_connection_stored_keys_td_723';
   if (!shouldRun(id, 'td723', 'b15-21', 'woocommerce', 'package15')) return results;
 
-  const name = 'v9.0.315: WooCommerce test connection uses the stored keys only at the stored address and refuses incomplete settings (TD-723)';
+  const name = 'v9.0.322: WooCommerce test connection uses the stored keys only at the stored address and refuses incomplete settings (TD-723)';
   const tStart = Date.now();
   const keys = ['wc_store_url', 'wc_consumer_key', 'wc_consumer_secret'];
   const saved = await orm.select().from(appSettings).where(inArray(appSettings.key, keys));

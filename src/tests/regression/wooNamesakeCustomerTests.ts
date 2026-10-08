@@ -16,7 +16,7 @@ export async function runWooNamesakeCustomerTests(shouldRun: (id: string, ...ext
   const id = 'reg_woocommerce_namesake_customer_td_703';
   if (!shouldRun(id, 'td703', 'b15-01', 'woocommerce', 'customer', 'package15')) return results;
 
-  const name = 'v9.0.314: a WooCommerce namesake with another phone gets a distinct customer and a case variant matches the stored customer (TD-703)';
+  const name = 'v9.0.321: a WooCommerce namesake with another phone gets a distinct customer and a case variant matches the stored customer (TD-703)';
   const tStart = Date.now();
   const tag = String(Date.now()).slice(-7);
   const orderIds = [1, 2, 3, 4].map(n => `703${tag}${n}`);
