@@ -1,9 +1,10 @@
 import { eq } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { orm, pool } from '../../db/drizzle.js';
 import { personnel, pieceworkPayrolls } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
+import { AccountMappingService } from '../../services/accounting/accountMapping.service.js';
 import { FinancialHealthService } from '../../services/accounting/financialHealth.service.js';
 import { PieceworkPayrollService } from '../../services/piecework/payroll.service.js';
 import { findPayrollVoucherMismatches } from '../../services/piecework/payrollVoucherHealth.js';
@@ -71,7 +72,7 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
       }
 
       // 3) a valid payslip with bonuses and deductions: its voucher credits wages payable with exactly the net
-      const valid = await admin.post('/api/piecework/payrolls/generate', { personnelId: worker, ...PERIOD, bonuses: 50000, deductions: 150000 });
+      const valid = await admin.post('/api/piecework/payrolls/generate', { personnelId: worker, ...PERIOD, bonuses: 50000, deductions: 150000, deductionsDescription: 'TD-804 deduction' });
       if (valid.status !== 200 && valid.status !== 201) problems.push(`a valid payslip answered ${valid.status} ${brief(valid.body)}`);
       else {
         const payable = await personNet('3201', worker);
@@ -191,6 +192,66 @@ export async function runPayrollIntegrityTests(shouldRun: ShouldRun): Promise<Te
 
       assertNoProblems(problems);
       return 'The draft payslip refused with 409 and left unpaid, paid after approval, and the payment details of the paid payslip kept against a status request (400).';
+    }));
+  }
+
+  const deductionNoteId = 'reg_payroll_deductions_description_td_861';
+  if (shouldRun(deductionNoteId, 'td861', 'payroll', 'payslip', 'deductions', 'package12')) {
+    await runCase(results, deductionNoteId, 'v9.0.324: other deductions above zero need a description (422 PAYROLL_DEDUCTIONS_DESCRIPTION_REQUIRED, nothing written); the description is stored, returned with the payslip and written into the deductions voucher row (TD-861)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const task = await newTask();
+      const worker = await newWorker('TD-861 worker');
+      await addLog(worker, task, '2026-04-05', 1_000_000);
+
+      // 1) deductions without a description (missing or blank) are refused by the route and by the service; nothing is written
+      for (const extra of [{ deductions: 150000 }, { deductions: 150000, deductionsDescription: '   ' }]) {
+        const res = await admin.post('/api/piecework/payrolls/generate', { personnelId: worker, ...PERIOD, ...extra });
+        if (res.status !== 422 || codeOf(res.body) !== 'PAYROLL_DEDUCTIONS_DESCRIPTION_REQUIRED') {
+          problems.push(`generate with ${JSON.stringify(extra)} answered ${res.status} ${brief(res.body)}, expected 422 PAYROLL_DEDUCTIONS_DESCRIPTION_REQUIRED`);
+        }
+      }
+      try {
+        await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD, totalDeductions: 150000, username: 'reg' });
+        problems.push('the service accepted deductions without a description');
+      } catch (err) {
+        const e = err as { statusCode?: number; code?: string };
+        if (e.statusCode !== 422 || e.code !== 'PAYROLL_DEDUCTIONS_DESCRIPTION_REQUIRED') problems.push(`the service refused with ${e.statusCode} ${e.code}, expected 422 PAYROLL_DEDUCTIONS_DESCRIPTION_REQUIRED`);
+      }
+      if (await payrollCount(worker) !== 0) problems.push(`${await payrollCount(worker)} payslips were written without a deductions description`);
+
+      // 2) with a description: stored, returned with the payslip and written into the deductions row of its voucher
+      // (the employee deductions payable account of the mapping, 3205 since v9.0.286, TD-554)
+      const note = 'قسط وام صندوق کارگاه';
+      const issued = await admin.post('/api/piecework/payrolls/generate', { personnelId: worker, ...PERIOD, deductions: 150000, deductionsDescription: `  ${note} ` });
+      const issuedId = Number((issued.body as { id?: unknown } | undefined)?.id);
+      if ((issued.status !== 200 && issued.status !== 201) || !issuedId) problems.push(`the payslip with a description answered ${issued.status} ${brief(issued.body)}`);
+      else {
+        const [stored] = await orm.select({ d: pieceworkPayrolls.deductionsDescription }).from(pieceworkPayrolls).where(eq(pieceworkPayrolls.id, issuedId));
+        if (stored?.d !== note) problems.push(`stored description is «${stored?.d}», expected «${note}»`);
+        const detail = await admin.get(`/api/piecework/payrolls/${issuedId}`);
+        if ((detail.body as { deductionsDescription?: unknown } | undefined)?.deductionsDescription !== note) problems.push(`the payslip detail returned ${brief(detail.body)} without the description`);
+        const deductionsAccount = await AccountMappingService.getEmployeeDeductionsPayableAccount();
+        if (!deductionsAccount) problems.push('the employee deductions payable account is not in the chart');
+        const rows = await pool.query<{ description: string }>(
+          `SELECT i.description FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id
+            WHERE v.source_payroll_id = $1 AND v.is_deleted = 0 AND i.is_deleted = 0 AND i.account_id = $2`, [issuedId, deductionsAccount?.id ?? 0]);
+        if (rows.rows.length !== 1 || !rows.rows[0].description.includes(note)) problems.push(`deductions voucher rows (account ${deductionsAccount?.code}) ${JSON.stringify(rows.rows)} do not carry «${note}»`);
+      }
+
+      // 3) without deductions no description is needed and none is stored
+      const plain = await newWorker('TD-861 plain');
+      await addLog(plain, task, '2026-04-06', 500_000);
+      const noDeductions = await admin.post('/api/piecework/payrolls/generate', { personnelId: plain, ...PERIOD, deductionsDescription: 'unused' });
+      const plainId = Number((noDeductions.body as { id?: unknown } | undefined)?.id);
+      if ((noDeductions.status !== 200 && noDeductions.status !== 201) || !plainId) problems.push(`a payslip without deductions answered ${noDeductions.status} ${brief(noDeductions.body)}`);
+      else {
+        const [stored] = await orm.select({ d: pieceworkPayrolls.deductionsDescription }).from(pieceworkPayrolls).where(eq(pieceworkPayrolls.id, plainId));
+        if (stored?.d !== '') problems.push(`a payslip without deductions stored the description «${stored?.d}»`);
+      }
+
+      assertNoProblems(problems);
+      return 'Deductions without a description refused with 422 by the route (missing and blank) and the service with nothing written; the described payslip stored the trimmed description, returned it and wrote it into its deductions voucher row; a payslip without deductions stored none.';
     }));
   }
 

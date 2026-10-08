@@ -180,7 +180,7 @@ export function PieceworkExcelModal({
             <div>
               <h3 className="font-black text-base">مدیریت اکسل عناوین و نرخ‌های پایه کارها</h3>
               <p className="text-xs text-slate-300 font-medium mt-0.5">
-                {step === 'upload' && 'بارگذاری، دریافت فایل الگو یا استخراج اکسل عناوین پرکیسی'}
+                {step === 'upload' && 'بارگذاری، دریافت فایل الگو یا استخراج اکسل عناوین کارمزدی'}
                 {step === 'preview' && `پیش‌نمایش داده‌های استخراج‌شده از «${fileName}»`}
                 {step === 'result' && 'نتیجه نهایی بارگذاری و ثبت در دیتابیس'}
               </p>
@@ -209,7 +209,7 @@ export function PieceworkExcelModal({
                   <div>
                     <div className="flex items-center gap-2 text-blue-900 font-black text-sm mb-1.5">
                       <Download size={18} className="text-blue-600" />
-                      <span>دانلود فایل الگوی خام (Template)</span>
+                      <span>دانلود فایل الگوی خام</span>
                     </div>
                     <p className="text-xs text-blue-700 leading-relaxed font-medium">
                       جهت ورود داده‌ها بدون خطا، می‌توانید فایل نمونه آماده اکسل با ستون‌های استاندارد را دانلود کرده و مقادیر خود را در آن وارد نمایید.

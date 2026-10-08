@@ -1,8 +1,9 @@
 import { eq, and, asc, desc, isNull, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, personnel, taskCategories, productionProjects } from '../../db/schema.js';
+import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, taskCategories } from '../../db/schema.js';
 import { logger } from '../../middleware/logger.js';
-import { requireStorageDate } from '../../lib/storageDate.js';
+import type { WorkLogListFilters } from '../../lib/piecework/workLogList.js';
+import { listWorkLogs } from './workLogList.js';
 
 /**
  * خواندن عناوین کاری، تاریخچه نرخ، دسته‌بندی‌ها، نرخ‌های اختصاصی و کارکردهای پرکیسی.
@@ -15,13 +16,7 @@ export interface TaskListFilters {
   status?: unknown;
 }
 
-export interface WorkLogListFilters {
-  personnelId?: unknown;
-  projectId?: unknown;
-  startDate?: unknown;
-  endDate?: unknown;
-  status?: unknown;
-}
+export type { WorkLogListFilters };
 
 export class PieceworkReadService {
   /** عناوین کاری (فعال، بایگانی یا همه) با فیلتر دسته و جستجو. */
@@ -126,62 +121,8 @@ export class PieceworkReadService {
       .orderBy(asc(pieceworkPersonnelRates.id));
   }
 
-  /** کارکردهای روزانه با نام پرسنل، عنوان کار و پروژه، و فیلتر پرسنل/پروژه/بازه تاریخ/وضعیت. */
+  /** کارکردهای روزانه با نام پرسنل، عنوان کار و پروژه؛ فیلترها در SQL (v9.0.325، TD-811، `workLogList.ts`). */
   static async listWorkLogs(filters: WorkLogListFilters) {
-    const { personnelId, projectId, startDate, endDate, status } = filters;
-
-    let rows = await orm.select({
-      id: pieceworkLogs.id,
-      personnelId: pieceworkLogs.personnelId,
-      personnelName: personnel.fullName,
-      personnelCode: personnel.personnelCode,
-      taskId: pieceworkLogs.taskId,
-      taskTitle: pieceworkTasks.title,
-      taskCode: pieceworkTasks.code,
-      taskCategory: pieceworkTasks.category,
-      unit: pieceworkTasks.unit,
-      projectId: pieceworkLogs.projectId,
-      projectCode: productionProjects.projectCode,
-      projectTitle: productionProjects.title,
-      date: pieceworkLogs.date,
-      dateIso: pieceworkLogs.dateIso,
-      quantity: pieceworkLogs.quantity,
-      unitRate: pieceworkLogs.unitRate,
-      totalAmount: pieceworkLogs.totalAmount,
-      notes: pieceworkLogs.notes,
-      payrollId: pieceworkLogs.payrollId,
-      status: pieceworkLogs.status,
-      createdById: pieceworkLogs.createdById,
-      createdByUsername: pieceworkLogs.createdByUsername,
-      createdAt: pieceworkLogs.createdAt
-    })
-    .from(pieceworkLogs)
-    .innerJoin(personnel, eq(pieceworkLogs.personnelId, personnel.id))
-    .innerJoin(pieceworkTasks, eq(pieceworkLogs.taskId, pieceworkTasks.id))
-    .leftJoin(productionProjects, eq(pieceworkLogs.projectId, productionProjects.id))
-    .where(eq(pieceworkLogs.isDeleted, 0))
-    .orderBy(desc(pieceworkLogs.date), desc(pieceworkLogs.id));
-
-    if (personnelId && String(personnelId) !== 'ALL') {
-      const pId = Number(personnelId);
-      rows = rows.filter(r => r.personnelId === pId);
-    }
-
-    if (projectId && String(projectId) !== 'ALL') {
-      const projId = Number(projectId);
-      rows = rows.filter(r => r.projectId === projId);
-    }
-
-    // v7.0.134 (TD-232): تاریخ کارکرد میلادی ISO است؛ بازه شمسی ورودی ISO می‌شود (پیش‌تر هر ردیف میلادی از شرط «از تاریخ» رد می‌شد)
-    const sIso = requireStorageDate(startDate, 'از تاریخ');
-    const eIso = requireStorageDate(endDate, 'تا تاریخ');
-    if (sIso) rows = rows.filter(r => r.date >= sIso);
-    if (eIso) rows = rows.filter(r => r.date <= eIso);
-
-    if (status && String(status) !== 'ALL') {
-      rows = rows.filter(r => r.status === String(status));
-    }
-
-    return rows;
+    return listWorkLogs(filters);
   }
 }

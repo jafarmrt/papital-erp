@@ -5,11 +5,15 @@ import { PieceworkPayroll } from '../types';
 import { formatPersianDate, formatPersianNumber, formatPersianCode } from '../utils';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { PieceworkPayslipModal } from '../components/piecework/PieceworkPayslipModal';
+import { payrollStatusLabel } from '../lib/payroll/payrollStatusLabels';
+import { isPayablePayrollStatus } from '../lib/payroll/payrollPayable';
 
-const statusMeta: Record<string, { label: string; cls: string; icon: typeof BadgeCheck }> = {
-  draft: { label: 'پیش‌نویس', cls: 'bg-slate-100 text-slate-600 border-slate-200', icon: Clock },
-  approved: { label: 'صادر شده - در انتظار پرداخت', cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock },
-  paid: { label: 'پرداخت شده', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: BadgeCheck }
+// v9.0.323 (TD-815، B12P-12): برچسب‌ها همان برچسب‌های مشترک وضعیت فیش‌اند؛ پیش‌تر «نیمه‌پرداخت» در فهرست نبود و «پیش‌نویس» دیده می‌شد
+const statusMeta: Record<string, { cls: string; icon: typeof BadgeCheck }> = {
+  draft: { cls: 'bg-slate-100 text-slate-600 border-slate-200', icon: Clock },
+  approved: { cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock },
+  partially_paid: { cls: 'bg-orange-50 text-orange-700 border-orange-200', icon: Clock },
+  paid: { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: BadgeCheck }
 };
 
 export default function MyPayslipsPage() {
@@ -17,7 +21,6 @@ export default function MyPayslipsPage() {
   const [loading, setLoading] = useState(true);
   const [viewingPayroll, setViewingPayroll] = useState<PieceworkPayroll | null>(null);
   const rial = useRialDisplay();
-  const curLbl = rial.label;
 
   const loadPayslips = (signal?: AbortSignal) => {
     setLoading(true);
@@ -43,7 +46,8 @@ export default function MyPayslipsPage() {
   }, []);
 
   const paidCount = payslips.filter(p => p.status === 'paid').length;
-  const pendingCount = payslips.filter(p => p.status === 'approved').length;
+  // فیش تأییدشده و نیمه‌پرداخت هر دو هنوز پرداخت (یا مانده پرداخت) می‌خواهند
+  const pendingCount = payslips.filter(p => isPayablePayrollStatus(p.status)).length;
 
   return (
     <div className="space-y-5 max-w-6xl mx-auto pb-12 font-farsi text-right">
@@ -133,13 +137,13 @@ export default function MyPayslipsPage() {
                         </div>
                       </td>
                       <td className="p-3">
-                        <span className="font-black text-slate-900">{rial.number(p.netPayable)}</span>
-                        <div className="text-[10px] text-slate-400">{curLbl}</div>
+                        {/* واحد پول یک بار، همراه مبلغ (پیش‌تر «ریال» زیر مبلغ هم تکرار می‌شد) */}
+                        <span className="font-black text-slate-900">{rial.amount(p.netPayable)}</span>
                       </td>
                       <td className="p-3">
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-xs border ${meta.cls}`}>
                           <StatusIcon size={13} />
-                          {meta.label}
+                          {payrollStatusLabel(p.status)}
                         </span>
                         {p.status === 'paid' && p.paymentDate && (
                           <div className="text-[10px] text-slate-400 mt-1">پرداخت: {formatPersianDate(p.paymentDate)}</div>

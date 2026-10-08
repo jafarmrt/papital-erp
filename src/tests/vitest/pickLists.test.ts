@@ -63,7 +63,7 @@ const SECTIONS: Record<string, Section> = {
     fullList: 'pieceworkLogs',
     ownGroups: ['piecework.', 'personnel.manage'],
     fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/piecework\/logs(?:\?(?!projectId=)|['"`])/g,
-    ownPages: ['hooks/usePiecework.ts'],
+    ownPages: ['hooks/usePiecework.ts', 'hooks/usePieceworkLogList.ts'],
   },
 };
 

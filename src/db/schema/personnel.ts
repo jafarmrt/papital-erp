@@ -123,6 +123,8 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   totalPieceworkAmount: moneyNumeric('total_piecework_amount').notNull().default(sql`0`),
   totalBonuses: moneyNumeric('total_bonuses').default(sql`0`),
   totalDeductions: moneyNumeric('total_deductions').default(sql`0`),
+  // v9.0.324 (TD-861، تصمیم ت۵ الف): شرح «سایر کسورات» (مهاجرت 0079)؛ کسورات بالای صفر بی شرح صادر نمی‌شود
+  deductionsDescription: text('deductions_description').notNull().default(''),
   netPayable: moneyNumeric('net_payable').notNull(),
   // V10-4.4: سهم حقوق ثابت در این فیش (برای salaryType = monthly_fixed / mixed)
   totalFixedAmount: moneyNumeric('total_fixed_amount').default(sql`0`),
