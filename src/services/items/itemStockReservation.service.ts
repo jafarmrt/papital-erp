@@ -9,6 +9,7 @@ import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { RESERVING_DOCUMENT_STATUS, RESERVING_DOCUMENT_TYPES } from '../../lib/documents/reservingDocuments.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
+import { reservingProjectRows, storedReservationRows } from '../../lib/projects/projectReservationState.js';
 
 export interface ReservedItemDetail {
   id: string;
@@ -103,37 +104,12 @@ export function reservationQtyField(row: Partial<Record<ReservationQtyField, unk
   return RESERVATION_QTY_FIELDS.find(f => Number(row[f] || 0) > 0) ?? null;
 }
 
-/** ردیف مواد بخش‌های کنترل موجودی پروژه (JSONB فرم پروژه؛ نام‌های قدیمی code/itemName هم خوانده می‌شوند) */
-interface InventoryControlMaterialRow {
-  itemCode?: string;
-  code?: string;
-  name?: string;
-  itemName?: string;
-  category?: string;
-  unit?: string;
-  requiredQty?: number | string;
-  totalRequiredQty?: number | string;
-  procurementStatus?: string;
-}
-
-/** بخش کنترل موجودی پروژه: per_item (نتایج به ازای هر محصول) یا global (فهرست مشترک) */
-interface InventoryControlSection {
-  checkType?: string;
-  perItemResults?: Record<string, Record<string, InventoryControlMaterialRow | null | undefined> | null | undefined>;
-  globalItems?: Array<InventoryControlMaterialRow | null | undefined>;
-}
-
+/** کنترل موجودی پروژه (JSONB فرم پروژه): فقط رزرو ذخیره‌شده خوانده می‌شود (v9.0.349، TD-817) */
 interface InventoryControlData {
   isFinalized?: boolean;
   isReserved?: boolean;
   reservedItems?: InventoryControlItem[];
-  purchaseList?: InventoryControlItem[];
-  sections?: InventoryControlSection[];
-  manualPurchaseItems?: Array<InventoryControlMaterialRow | null | undefined>;
 }
-
-/** ستون‌های کالا که برای تبدیل تخصیص مواد پروژه به رزرو خوانده می‌شوند */
-type ReservationLookupItem = Pick<typeof items.$inferSelect, 'id' | 'code' | 'name' | 'category' | 'unit' | 'currentStock' | 'weightedAverageCost'>;
 
 type ReservationRowRef = { itemId?: unknown; itemCode?: unknown; itemName?: unknown };
 
@@ -165,165 +141,6 @@ function emptyReservationReport(): ReservedItemsFullReport {
 }
 
 export class ItemStockReservationService {
-  /**
-   * Derive reserved items for a project's inventory control bounded by warehouse stock.
-   */
-  static deriveProjectReservedItems(
-    invControl: InventoryControlData | null | undefined,
-    itemsByCodeMap: Map<string, ReservationLookupItem>,
-    itemsByNameMap: Map<string, ReservationLookupItem>,
-    itemsByIdMap: Map<number, ReservationLookupItem>
-  ): InventoryControlItem[] {
-    if (!invControl) return [];
-
-    if (Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0) {
-      return invControl.reservedItems;
-    }
-    if (Array.isArray(invControl.purchaseList) && invControl.purchaseList.length > 0) {
-      return invControl.purchaseList;
-    }
-    if (!invControl.isFinalized && !invControl.isReserved && (!invControl.sections || invControl.sections.length === 0)) {
-      return [];
-    }
-
-    const itemsList: InventoryControlItem[] = [];
-    if (Array.isArray(invControl.sections) && invControl.sections.length > 0) {
-      const allocMap = new Map<string, {
-        itemCode: string;
-        name: string;
-        category?: string;
-        unit?: string;
-        totalRequiredQty: number;
-      }>();
-
-      for (const sec of invControl.sections) {
-        if (sec.checkType === 'per_item' && sec.perItemResults) {
-          for (const prodId of Object.keys(sec.perItemResults)) {
-            const prodRes = sec.perItemResults[prodId] || {};
-            for (const itemId of Object.keys(prodRes)) {
-              const it = prodRes[itemId];
-              if (!it) continue;
-              const code = (it.itemCode || it.code || '').trim();
-              const name = (it.name || it.itemName || '').trim();
-              const reqQty = Number(it.requiredQty !== undefined ? it.requiredQty : 1);
-              if (reqQty <= 0) continue;
-              const key = code ? `C_${code.toUpperCase()}` : `N_${name.toLowerCase()}`;
-              const cur = allocMap.get(key) || {
-                itemCode: code,
-                name,
-                category: it.category,
-                unit: it.unit,
-                totalRequiredQty: 0
-              };
-              cur.totalRequiredQty += reqQty;
-              allocMap.set(key, cur);
-            }
-          }
-        } else if (sec.checkType === 'global' && Array.isArray(sec.globalItems)) {
-          for (const gIt of sec.globalItems) {
-            if (!gIt) continue;
-            const code = (gIt.itemCode || gIt.code || '').trim();
-            const name = (gIt.name || gIt.itemName || '').trim();
-            const reqQty = Number(gIt.requiredQty || 0);
-            if (reqQty <= 0) continue;
-            const key = code ? `C_${code.toUpperCase()}` : `N_${name.toLowerCase()}`;
-            const cur = allocMap.get(key) || {
-              itemCode: code,
-              name,
-              category: gIt.category,
-              unit: gIt.unit,
-              totalRequiredQty: 0
-            };
-            cur.totalRequiredQty += reqQty;
-            allocMap.set(key, cur);
-          }
-        }
-      }
-
-      if (Array.isArray(invControl.manualPurchaseItems)) {
-        for (const mIt of invControl.manualPurchaseItems) {
-          if (!mIt) continue;
-          if (mIt.procurementStatus === 'reserved' || invControl.isFinalized) {
-            const code = (mIt.itemCode || mIt.code || '').trim();
-            const name = (mIt.itemName || mIt.name || '').trim();
-            const reqQty = Number(mIt.totalRequiredQty || mIt.requiredQty || 0);
-            if (reqQty <= 0) continue;
-            const key = code ? `C_${code.toUpperCase()}` : `N_${name.toLowerCase()}`;
-            const cur = allocMap.get(key) || {
-              itemCode: code,
-              name,
-              category: mIt.category,
-              unit: mIt.unit,
-              totalRequiredQty: 0
-            };
-            cur.totalRequiredQty += reqQty;
-            allocMap.set(key, cur);
-          }
-        }
-      }
-
-      // Convert project material allocations into reservations bounded by warehouse current stock
-      for (const alloc of allocMap.values()) {
-        const matchedDbItem = (alloc.itemCode ? itemsByCodeMap.get(alloc.itemCode.toUpperCase()) : null)
-          || (alloc.name ? itemsByNameMap.get(alloc.name.toLowerCase()) : null);
-        if (matchedDbItem) {
-          const stock = Number(matchedDbItem.currentStock || 0);
-          if (stock > 0) {
-            const reservedQty = Math.min(stock, alloc.totalRequiredQty);
-            if (reservedQty > 0) {
-              itemsList.push({
-                itemId: matchedDbItem.id,
-                itemCode: matchedDbItem.code || alloc.itemCode,
-                itemName: matchedDbItem.name || alloc.name,
-                category: matchedDbItem.category || alloc.category,
-                unit: matchedDbItem.unit || alloc.unit,
-                reservedQty,
-                unitPrice: fin(matchedDbItem.weightedAverageCost).toNumber()
-              });
-            }
-          }
-        }
-      }
-    }
-
-    return itemsList;
-  }
-
-  /**
-   * Fetch active project's reserved items directly from DB.
-   */
-  static async getProjectReservedItems(targetProj: { id: number; inventoryControl: unknown }, executor: DbExecutor = orm): Promise<InventoryControlItem[]> {
-    const invControl = targetProj.inventoryControl as InventoryControlData | null;
-    if (!invControl) return [];
-    if (Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0) {
-      return invControl.reservedItems;
-    }
-
-    const allItems = await executor
-      .select({
-        id: items.id,
-        code: items.code,
-        name: items.name,
-        category: items.category,
-        unit: items.unit,
-        currentStock: items.currentStock,
-        weightedAverageCost: items.weightedAverageCost,
-      })
-      .from(items)
-      .where(eq(items.isDeleted, 0));
-
-    const itemsByCodeMap = new Map<string, typeof allItems[0]>();
-    const itemsByIdMap = new Map<number, typeof allItems[0]>();
-    const itemsByNameMap = new Map<string, typeof allItems[0]>();
-    for (const it of allItems) {
-      if (it.code) itemsByCodeMap.set(it.code.trim().toUpperCase(), it);
-      if (it.name) itemsByNameMap.set(it.name.trim().toLowerCase(), it);
-      itemsByIdMap.set(it.id, it);
-    }
-
-    return ItemStockReservationService.deriveProjectReservedItems(invControl, itemsByCodeMap, itemsByNameMap, itemsByIdMap);
-  }
-
   /**
    * TD-081 (v4.0.31): مسیر رسمی و یگانه آزادسازی رزروهای پروژه هنگام حواله خروج.
    * - jsonb `inventory_control.reservedItems` فقط از همین سرویس نوشته می‌شود (read-model نه write-path موازی)
@@ -381,9 +198,8 @@ export class ItemStockReservationService {
     });
 
     const invControl = (proj.inventoryControl as InventoryControlData) || {};
-    let reservedList: InventoryControlItem[] = Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0
-      ? [...invControl.reservedItems]
-      : await ItemStockReservationService.getProjectReservedItems(proj, tx);
+    // v9.0.349 (TD-817): فقط رزرو ذخیره‌شده کم می‌شود؛ رزرو خالی (مصرف‌شده یا هرگز ساخته‌نشده) از بخش‌ها دوباره ساخته نمی‌شود
+    const reservedList: InventoryControlItem[] = [...storedReservationRows<InventoryControlItem>(invControl)];
 
     // 3. مپینگ اقلام سند
     const rawItemIds = Array.from(new Set(
@@ -658,7 +474,7 @@ export class ItemStockReservationService {
         ));
 
       // v9.0.206 (TD-663): با scope، همه کالاها فقط برای تطبیق ردیف‌های پروژه لازم‌اند؛ بی پروژه فعال فقط کالاهای scope
-      const needsAllItems = !scopeIds || activeProjs.some(p => p.inventoryControl);
+      const needsAllItems = !scopeIds || activeProjs.some(p => reservingProjectRows(p.inventoryControl).length > 0);
       const allItems = await client
         .select({
           id: items.id,
@@ -685,10 +501,9 @@ export class ItemStockReservationService {
       }
 
       for (const proj of activeProjs) {
-        const invControl = proj.inventoryControl as InventoryControlData | null;
-        if (!invControl) continue;
-
-        const itemsList = ItemStockReservationService.deriveProjectReservedItems(invControl, itemsByCodeMap, itemsByNameMap, itemsByIdMap);
+        // v9.0.349 (TD-817، تصمیم ت۲): فقط رزرو ذخیره‌شده پروژه ثبت نهایی‌شده؛ پیش‌نویس، خارج‌شده از ثبت نهایی و رزرو مصرف‌شده هیچ
+        const itemsList = reservingProjectRows<InventoryControlItem>(proj.inventoryControl);
+        if (itemsList.length === 0) continue;
 
         for (let idx = 0; idx < itemsList.length; idx++) {
           const item = itemsList[idx];

@@ -32,12 +32,15 @@ describe('buildGlobalReservations', () => {
     ]);
   });
 
-  it('falls back to the projects\' inventory_control.reservedItems when the endpoint has no entries', () => {
+  it('falls back to the finalized projects\' inventory_control.reservedItems when the endpoint has no entries', () => {
     const projects = [
-      { id: 7, project_code: 'PRJ-7', title: 'گردنبند', inventory_control: { reservedItems: [{ itemId: 3, itemCode: 'RM-3', itemName: 'سنگ', reservedQty: 4, unit: 'عدد', reservedAt: '2026-10-01' }] } },
-      { id: 8, inventoryControl: { reservedItems: [{ itemCode: 'RM-4', reservedQty: '3' }] } },
-      { id: 9, project_code: 'PRJ-9', inventory_control: { reservedItems: [] } },
+      { id: 7, project_code: 'PRJ-7', title: 'گردنبند', inventory_control: { isFinalized: true, reservedItems: [{ itemId: 3, itemCode: 'RM-3', itemName: 'سنگ', reservedQty: 4, unit: 'عدد', reservedAt: '2026-10-01' }] } },
+      { id: 8, inventoryControl: { isFinalized: true, reservedItems: [{ itemCode: 'RM-4', reservedQty: '3' }] } },
+      { id: 9, project_code: 'PRJ-9', inventory_control: { isFinalized: true, reservedItems: [] } },
       { id: 10, project_code: 'PRJ-10' },
+      // v9.0.349 (TD-817): a stored reservation of a project that is not finalized reserves nothing
+      { id: 11, project_code: 'PRJ-11', inventory_control: { isFinalized: false, reservedItems: [{ itemCode: 'RM-5', reservedQty: 2 }] } },
+      { id: 12, project_code: 'PRJ-12', inventory_control: { reservedItems: [{ itemCode: 'RM-6', reservedQty: 2 }] } },
     ];
     const expected = [
       { sourceType: 'project', sourceLabel: 'پروژه', projectId: 7, projectCode: 'PRJ-7', projectTitle: 'گردنبند', itemId: 3, itemCode: 'RM-3', itemName: 'سنگ', reservedQty: 4, unit: 'عدد', reservedAt: '2026-10-01' },

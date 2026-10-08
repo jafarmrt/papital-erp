@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.349 — Only Finalized Projects Reserve Stock
+- **Reservations (TD-817, B07-01, decision t2):** only the stored reservation of a finalized project reserves stock; the reader no longer rebuilds an empty reservation from the sections or the purchase list, so a draft or unfrozen project reserves nothing and a consumed reservation stays consumed; legacy projects are listed by the health check.
+
 ### v9.0.348 — Only Sales Proformas Reserve Stock
 - **Reservations (TD-818, B07-02, decision t1):** only a sales proforma (type invoice or proforma in proforma status) reserves stock; a purchase proforma (receipt in proforma status) and any draft reserve nothing, so a purchase order no longer blocks the sale of free stock.
 

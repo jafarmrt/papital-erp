@@ -8891,7 +8891,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           title: `ERP-TEST-MARKER پروژه رزرو TD-233 ${suffix}`,
           status: 'in_progress',
           version: 1,
-          inventoryControl: { isReserved: true, reservedItems },
+          inventoryControl: { isFinalized: true, isReserved: true, reservedItems },
         }).returning();
         projectIds.push(p.id);
         return p.id;
@@ -9132,7 +9132,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           title: `ERP-TEST-MARKER پروژه رزرو TD-237 ${suffix}`,
           status: 'in_progress',
           version: 1,
-          inventoryControl: { isReserved: true, reservedItems },
+          inventoryControl: { isFinalized: true, isReserved: true, reservedItems },
         }).returning();
         projectIds.push(p.id);
         return p.id;

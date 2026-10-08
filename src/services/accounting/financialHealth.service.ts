@@ -30,6 +30,7 @@ import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCateg
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from '../documents/documentParty.js';
 import { buildDocumentIntegrityHealthTest, findDocumentIntegrityGaps } from '../documents/documentConstraintHealth.js';
+import { buildProjectReservationHealthTest, findProjectReservationIssues } from '../projects/projectReservationHealth.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
@@ -1199,6 +1200,8 @@ export class FinancialHealthService {
     tests.push(buildUnlinkedPartyDocumentHealthTest(await findUnlinkedPartyDocuments()));
     // آزمون ۴۱: v9.0.338 (TD-786) قید پایگاه‌داده سند و ردیف سند اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)
     tests.push(buildDocumentIntegrityHealthTest(await findDocumentIntegrityGaps()));
+    // آزمون ۴۲: v9.0.349 (TD-817) رزرو پروژه ناهمخوان با ثبت نهایی (پروژه‌های قدیمی؛ فقط فهرست، بی بازنویسی)
+    tests.push(buildProjectReservationHealthTest(await findProjectReservationIssues()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
