@@ -50,7 +50,7 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
     const res = await pool.query<StockRow>(
       `SELECT item_id, warehouse_code, current_stock::text AS current_stock FROM item_warehouse_stocks
         WHERE item_id = ANY($1::int[]) AND current_stock > 0 ORDER BY item_id, warehouse_id`,
-      // v10.0.8 (TD-982): only the dated operations' own items; the project items move on business today
+      // v10.0.11 (TD-982): only the dated operations' own items; the project items move on business today
       [items.map(i => i.id)]
     );
     return res.rows;
@@ -98,7 +98,7 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
   };
 
   /**
-   * v10.0.9 (TD-982): the year opens with one receipt of every simulator item on the first day, so no item of the run is
+   * v10.0.12 (TD-982): the year opens with one receipt of every simulator item on the first day, so no item of the run is
    * an unreferenced marker row however few steps run (`db:cleanup-test` would remove it, TD-581 check)
    */
   const openingReceipt = async (): Promise<number> => createDoc({

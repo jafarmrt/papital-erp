@@ -34,7 +34,7 @@ export type SimOperation =
   | 'production_receipt'
   | 'backdated_purchase'
   | 'backdated_sale'
-  // v10.0.8 (TD-982, I-01): treasury, cheques, payroll, purchasing, material allocation and approval
+  // v10.0.11 (TD-982, I-01): treasury, cheques, payroll, purchasing, material allocation and approval
   | 'treasury_receipt'
   | 'treasury_payment'
   | 'treasury_void'
@@ -67,7 +67,7 @@ export interface SimulationOptions {
   features?: { discounts?: boolean; foreignCurrency?: boolean; zeroPriceReceipts?: boolean };
   log?: (line: string) => void;
   /**
-   * v10.0.8 (TD-982): after the last step approve the simulator's draft vouchers and close the simulated year (1404) with
+   * v10.0.11 (TD-982): after the last step approve the simulator's draft vouchers and close the simulated year (1404) with
    * its opening voucher, then check I11. Only for a schema of its own (`npm run simulate:year`): in the shared suite
    * database other tests keep vouchers in 1404.
    */

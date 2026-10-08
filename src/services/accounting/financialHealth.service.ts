@@ -4,6 +4,7 @@ import { documents, legacyDateRepairs, refFiscalYearCorrections } from '../../db
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { readInventoryLedgerValues } from './inventoryLedgerValue.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } from './treasury/chequePartyAccount.js';
@@ -237,14 +238,8 @@ export class FinancialHealthService {
         WHERE is_deleted = 0;
       `),
 
-      // هـ: مانده دفاتر حسابداری در گروه ۱۴ (موجودی مواد و کالا)
-      orm.execute(sql`
-        SELECT 
-          COALESCE(SUM(vi.debit_irr - vi.credit_irr), 0)::text AS total_ledger_valuation
-        FROM (${IRR_VOUCHER_ITEMS}) vi
-        JOIN accounts a ON vi.account_id = a.id AND a.is_deleted = 0
-        WHERE a.code LIKE '14%';
-      `),
+      // هـ: مانده دفاتر حسابداری در گروه ۱۴ بی کالای در جریان ساخت، سهم سندهای پیش‌نویس جدا (v10.0.7، TD-964)
+      readInventoryLedgerValues(),
 
       // و: فاکتورهای نهایی بدون سند دوبل
       orm.execute(sql`
@@ -515,12 +510,11 @@ export class FinancialHealthService {
       unvalued_stock_count?: number;
       negative_stock_count?: number;
     };
-    const ledgerData = (inventoryLedgerRes.rows?.[0] || {}) as {
-      total_ledger_valuation?: string;
-    };
 
     const warehouseValDec = fin(physicalData.total_physical_valuation).round(0);
-    const ledgerValDec = fin(ledgerData.total_ledger_valuation).round(0);
+    const ledgerValDec = fin(inventoryLedgerRes.posted).round(0);
+    const draftLedgerVal = fin(inventoryLedgerRes.draft).round(0).toNumber();
+    const workInProgressVal = fin(inventoryLedgerRes.workInProgress).round(0).toNumber();
     const invDiscrepancyDec = warehouseValDec.subtract(ledgerValDec).abs();
     const warehouseVal = warehouseValDec.toNumber();
     const ledgerVal = ledgerValDec.toNumber();
@@ -539,7 +533,7 @@ export class FinancialHealthService {
         id: 'inventory_reconciliation',
         category: 'inventory',
         title: 'انطباق ریالی موجودی انبار با دفتر کل حسابداری',
-        description: 'بررسی هم‌خوانی ارزش کاردکس و موجودی کالای فیزیکی با سرفصل ۱۴ (موجودی مواد و کالا)',
+        description: 'بررسی هم‌خوانی ارزش کاردکس و موجودی کالای فیزیکی با سرفصل ۱۴ (موجودی مواد و کالا)، بی حساب کالای در جریان ساخت که بیرون از انبار است',
         status: 'healthy',
         scoreImpact: 0,
         count: 0,
@@ -551,6 +545,8 @@ export class FinancialHealthService {
           discrepancyPercent: invDiscrepancyPercent,
           negativeStockCount,
           unvaluedStockCount,
+          draftLedgerValuation: draftLedgerVal,
+          workInProgressValuation: workInProgressVal,
         },
       });
     } else {
@@ -590,10 +586,20 @@ export class FinancialHealthService {
         itemsList.push({
           id: 'inv_diff',
           title: 'اختلاف ریالی ارزش انبار و مانده دفتر کل کالا',
-          subtitle: `ارزش کاردکس انبار: ${formatPersianPrice(warehouseVal)} ریال | مانده دفتر کل (حساب ۱۴): ${formatPersianPrice(ledgerVal)} ریال`,
+          subtitle: `ارزش کاردکس انبار: ${formatPersianPrice(warehouseVal)} ریال | مانده دفتر کل (حساب ۱۴ بی کالای در جریان ساخت): ${formatPersianPrice(ledgerVal)} ریال | کالای در جریان ساخت: ${formatPersianPrice(workInProgressVal)} ریال`,
           amount: invDiscrepancy,
           discrepancy: invDiscrepancy,
           details: `درصد انحراف: ${invDiscrepancyPercent}٪ — علل متداول: فاکتورهای خرید بدون سند دوبل یا ثبت نشدن سند بهای تمام شده کالای فروش‌رفته (COGS).`,
+        });
+      }
+      if (invDiscrepancy > 1000 && draftLedgerVal !== 0) {
+        const gapAfterApproval = warehouseValDec.subtract(ledgerValDec).subtract(fin(draftLedgerVal)).abs().toNumber();
+        itemsList.push({
+          id: 'inv_draft_share',
+          title: 'سهم سندهای حسابداری پیش‌نویس',
+          subtitle: `سندهای پیش‌نویس ${formatPersianPrice(draftLedgerVal)} ریال روی حساب‌های موجودی دارند که تا تأیید در مانده دفتر کل شمرده نمی‌شود.`,
+          amount: Math.abs(draftLedgerVal),
+          details: `با تأیید این سندها اختلاف به ${formatPersianPrice(gapAfterApproval)} ریال می‌رسد.`,
         });
       }
 
@@ -601,7 +607,7 @@ export class FinancialHealthService {
         id: 'inventory_reconciliation',
         category: 'inventory',
         title: 'انطباق ریالی موجودی انبار با دفتر کل حسابداری',
-        description: 'بررسی هم‌خوانی ارزش کاردکس و موجودی کالای فیزیکی با سرفصل ۱۴ (موجودی مواد و کالا)',
+        description: 'بررسی هم‌خوانی ارزش کاردکس و موجودی کالای فیزیکی با سرفصل ۱۴ (موجودی مواد و کالا)، بی حساب کالای در جریان ساخت که بیرون از انبار است',
         status,
         scoreImpact: -penalty,
         count: (negativeStockCount > 0 ? 1 : 0) + (invDiscrepancy > 1000 ? 1 : 0),
@@ -617,6 +623,8 @@ export class FinancialHealthService {
           discrepancyPercent: invDiscrepancyPercent,
           negativeStockCount,
           unvaluedStockCount,
+          draftLedgerValuation: draftLedgerVal,
+          workInProgressValuation: workInProgressVal,
         },
       });
     }

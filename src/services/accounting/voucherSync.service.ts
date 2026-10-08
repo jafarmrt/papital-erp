@@ -317,7 +317,7 @@ export class VoucherSyncService {
 
     // TD-143 / v8.0.18 (TD-261): بهای ریالی کاردکس در فاکتور ارزی به ارز سند، با نرخ همان ردیف تا معادل ریالی ردیف دقیقاً
     // همان بهای کاردکس باشد (foreignCostRow)؛ بهای تمام‌شده جمع دو ردیف موجودی است تا سند ارزی تراز بماند
-    // v10.0.9 (TD-1030): each inventory row is worth its cost rounded to the rial and cost of sales exactly their sum, so the
+    // v10.0.12 (TD-1030): each inventory row is worth its cost rounded to the rial and cost of sales exactly their sum, so the
     // voucher balances in rials too (before, 4-decimal amounts and rates left it one rial out and the year closing refused it)
     const { parts: [fgRow, rmRow], total: cogsRow } = balancedCostRows([fgCost, rmCost], exchangeRate);
     const fgCostNum = fgRow.amount;
@@ -531,7 +531,7 @@ export class VoucherSyncService {
     const finishedGoodsAmountNum = inventoryParts.finished.doc.add(kardexForeign.finished).round(4);
     const rawMaterialsIrr = inventoryParts.raw.doc.multiply(exchangeRate).add(inventoryParts.raw.irr);
     const finishedGoodsIrr = inventoryParts.finished.doc.multiply(exchangeRate).add(inventoryParts.finished.irr);
-    // v10.0.9 (TD-1030): each inventory row is worth its value rounded to the rial, and the opposite rows (work in progress,
+    // v10.0.12 (TD-1030): each inventory row is worth its value rounded to the rial, and the opposite rows (work in progress,
     // or the supplier at the document rate plus donated goods) exactly their sum, so the voucher balances in rials too
     const rawMaterialsRial = rawMaterialsIrr.round(0);
     const finishedGoodsRial = finishedGoodsIrr.round(0);
@@ -984,7 +984,7 @@ export class VoucherSyncService {
       // TD-143, TD-145 & C-04: تسعیر ارزی بهای تمام‌شده مرجوعی در صورت ارزی بودن سند
       // v8.0.18 (TD-261): بهای ریالی کاردکس با نرخ همان ردیف (foreignCostRow)، تا معادل ریالی ردیف دقیقاً همان بهای کاردکس باشد
       const docExchangeRate = await VoucherSyncService.resolveVoucherExchangeRate(executor, doc, options?.exchangeRate);
-      // v10.0.9 (TD-1030): balanced in rials as well as in the document currency, like the sales voucher
+      // v10.0.12 (TD-1030): balanced in rials as well as in the document currency, like the sales voucher
       const { parts: [fgReturnRow, rmReturnRow], total: returnCogsRow } = balancedCostRows([fgReturnCost, rmReturnCost], docExchangeRate);
 
       const totalReturnAmountNum = totalReturnAmount.round(4);

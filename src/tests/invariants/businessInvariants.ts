@@ -33,17 +33,17 @@ export type InvariantId =
   | 'I4_one_voucher_per_document'
   | 'I5_invoice_receivable'
   | 'I6_void_trial_balance'
-  /** v10.0.7 (TD-982): project reservation rows never negative, only on finalized projects, deductions agree with sources */
+  /** v10.0.10 (TD-982): project reservation rows never negative, only on finalized projects, deductions agree with sources */
   | 'I7_project_reservation'
-  /** v10.0.7 (TD-982): receivable balance of a customer = invoices - returns - receipts - cheques */
+  /** v10.0.10 (TD-982): receivable balance of a customer = invoices - returns - receipts - cheques */
   | 'I8_customer_balance'
-  /** v10.0.7 (TD-982): cheque history is a chain of allowed transitions, each posting step has its voucher */
+  /** v10.0.10 (TD-982): cheque history is a chain of allowed transitions, each posting step has its voucher */
   | 'I9_cheque_transitions'
   /** v9.0.266 (TD-804): gross − deductions = net = wages payable credit of the payslip's voucher */
   | 'I10_payroll_net_equals_payable'
-  /** v10.0.7 (TD-982): a closed year balances to zero, its opening mirrors its closing, nothing is posted into it later */
+  /** v10.0.10 (TD-982): a closed year balances to zero, its opening mirrors its closing, nothing is posted into it later */
   | 'I11_fiscal_year_closing'
-  /** v10.0.7 (TD-982): document, voucher, treasury and payslip numbers are unique; a document is numbered in its own year */
+  /** v10.0.10 (TD-982): document, voucher, treasury and payslip numbers are unique; a document is numbered in its own year */
   | 'I12_unique_numbers'
   | 'I13_kardex_rebuild_wac'
   /** شبیه‌ساز: برگشت از فروش بیش از مقدار فروخته‌شده پذیرفته شد */
@@ -52,13 +52,13 @@ export type InvariantId =
   | 'I15_bank_balance_matches_ledger'
   /** v9.0.67 (TD-499): ردیف خزانه‌ای که اثر تراکنش باطل‌شده را بی سند برمی‌گرداند («احیا») نیست */
   | 'I16_no_revived_treasury_without_voucher'
-  /** v10.0.7 (TD-982): every voucher balances in rials (TD-260) and no foreign row lacks its own rate */
+  /** v10.0.10 (TD-982): every voucher balances in rials (TD-260) and no foreign row lacks its own rate */
   | 'I17_voucher_rial_balance'
-  /** v10.0.7 (TD-982): no live row on a deleted, group or general account, or one with active sub-accounts */
+  /** v10.0.10 (TD-982): no live row on a deleted, group or general account, or one with active sub-accounts */
   | 'I18_rows_on_posting_accounts'
-  /** v10.0.7 (TD-982): reservations of an item do not exceed its stock (reported after guarded steps only) */
+  /** v10.0.10 (TD-982): reservations of an item do not exceed its stock (reported after guarded steps only) */
   | 'I19_reservation_within_stock'
-  /** v10.0.7 (TD-982): VAT payable = VAT of final sales invoices - VAT of their returns */
+  /** v10.0.10 (TD-982): VAT payable = VAT of final sales invoices - VAT of their returns */
   | 'I20_vat_payable_matches_documents';
 
 export interface InvariantViolation {
@@ -80,15 +80,15 @@ export interface InvariantScope {
   bankAccountIds?: number[];
   /** v9.0.266 (TD-804): only payslips with a larger id (I10); without it I10 is not checked */
   payrollIdAfter?: number;
-  /** v10.0.7 (TD-982): customers whose receivable balance is checked (I8) */
+  /** v10.0.10 (TD-982): customers whose receivable balance is checked (I8) */
   partyIds?: number[];
-  /** v10.0.7 (TD-982): only cheques with a larger id (I9) */
+  /** v10.0.10 (TD-982): only cheques with a larger id (I9) */
   chequeIdAfter?: number;
-  /** v10.0.7 (TD-982): only treasury rows with a larger id (I12) */
+  /** v10.0.10 (TD-982): only treasury rows with a larger id (I12) */
   treasuryIdAfter?: number;
-  /** v10.0.7 (TD-982): projects whose reservation is checked (I7) */
+  /** v10.0.10 (TD-982): projects whose reservation is checked (I7) */
   projectIds?: number[];
-  /** v10.0.7 (TD-982): Jalali fiscal years checked by I11 when closed */
+  /** v10.0.10 (TD-982): Jalali fiscal years checked by I11 when closed */
   fiscalYears?: number[];
 }
 
@@ -373,7 +373,7 @@ export async function checkBusinessInvariants(scope: InvariantScope): Promise<In
 }
 
 /**
- * v10.0.7 (TD-982): I19 is not part of `checkBusinessInvariants`, because a stock count or a void may lower stock below a
+ * v10.0.10 (TD-982): I19 is not part of `checkBusinessInvariants`, because a stock count or a void may lower stock below a
  * reservation by design (TD-819); the simulator reports it only after a guarded step.
  */
 export async function checkGuardedReservations(scope: InvariantScope): Promise<InvariantViolation[]> {

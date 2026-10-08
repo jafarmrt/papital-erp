@@ -20,7 +20,7 @@ async function stocked(wh: string, type: 'product' | 'raw_material', quantity: n
 }
 
 /**
- * v10.0.9 (TD-1030): a USD sales invoice whose Kardex costs carry rial fractions (3 x 100,010 of finished goods and
+ * v10.0.12 (TD-1030): a USD sales invoice whose Kardex costs carry rial fractions (3 x 100,010 of finished goods and
  * 2 x 150,000.25 of raw materials, cost of sales 600,030.5) posts a voucher that balances in rials under the report rule
  * (TD-260: each foreign row at its own rate, rounded to the rial), so the year that holds it closes. Before, each cost row's
  * 4-decimal amount and rate made the cost of sales one rial short and the closing was refused.
@@ -56,6 +56,6 @@ export async function checkForeignSaleBalancesInRials(wh: string): Promise<strin
 }
 
 export const FOREIGN_ROUNDING_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
-  ['inv_td_1030_foreign_sale_rial_balance', 'v10.0.9: a USD sale with fractional rial costs posts a voucher balanced in rials and its year closes (TD-1030)',
+  ['inv_td_1030_foreign_sale_rial_balance', 'v10.0.12: a USD sale with fractional rial costs posts a voucher balanced in rials and its year closes (TD-1030)',
     checkForeignSaleBalancesInRials, 'USD sales voucher balanced to the rial and its year closed'],
 ];

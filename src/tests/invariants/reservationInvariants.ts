@@ -5,7 +5,7 @@ import type { InvariantViolation } from './businessInvariants.js';
 import { QTY_TOLERANCE, rows } from './ledgerRows.js';
 
 /**
- * v10.0.7 (TD-982, I-01) — reservation invariants, read-only:
+ * v10.0.10 (TD-982, I-01) — reservation invariants, read-only:
  *
  * I7 (V8 catalogue, V8_MASTER_ROADMAP.md §4) for the given projects:
  * - no stored reservation row holds a negative quantity (TD-233);

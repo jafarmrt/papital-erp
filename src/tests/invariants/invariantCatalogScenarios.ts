@@ -13,7 +13,7 @@ import { checkBusinessInvariants, checkGuardedReservations, type InvariantId, ty
 import { watermarks } from './scenarioHelpers.js';
 
 /**
- * v10.0.7 (TD-982, I-01) — one check per invariant added in series 10 (I7, I8, I9, I11, I12, I17-I20): the data a
+ * v10.0.10 (TD-982, I-01) — one check per invariant added in series 10 (I7, I8, I9, I11, I12, I17-I20): the data a
  * correct flow records passes, and a row broken by hand is reported under the expected invariant and key. Each broken
  * row is put back before the check returns, so later checks of the suite never read it.
  */
@@ -266,16 +266,16 @@ export async function checkReservationInvariants(wh: string): Promise<string[]> 
 }
 
 export const INVARIANT_CATALOG_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
-  ['inv_i8_i20_customer_balance_and_vat', 'v10.0.7: I8 customer receivable = invoices - returns - receipts - cheques and I20 VAT payable = invoice VAT - return VAT hold, and a broken row is reported (TD-982)',
+  ['inv_i8_i20_customer_balance_and_vat', 'v10.0.10: I8 customer receivable = invoices - returns - receipts - cheques and I20 VAT payable = invoice VAT - return VAT hold, and a broken row is reported (TD-982)',
     checkCustomerBalanceAndVat, 'invoice with VAT, return, receipt and cheque pass; raised receivable row and invoice VAT reported'],
-  ['inv_i9_cheque_transitions', 'v10.0.7: I9 a cheque history is a chain of allowed transitions with one voucher per posting step, and a broken history or lost voucher is reported (TD-982)',
+  ['inv_i9_cheque_transitions', 'v10.0.10: I9 a cheque history is a chain of allowed transitions with one voucher per posting step, and a broken history or lost voucher is reported (TD-982)',
     checkChequeTransitionChain, 'received, in collection, cleared passes; history and lost voucher reported'],
-  ['inv_i11_closed_year', 'v10.0.7: I11 a closed year balances to zero and its opening mirrors its closing, and a row changed after closing is reported (TD-982)',
+  ['inv_i11_closed_year', 'v10.0.10: I11 a closed year balances to zero and its opening mirrors its closing, and a row changed after closing is reported (TD-982)',
     checkClosedYearInvariant, 'two years closed in order pass; changed sales row reported'],
-  ['inv_i12_unique_numbers', 'v10.0.7: I12 a document is numbered in its own year and treasury numbers are unique, and a break of either is reported (TD-982)',
+  ['inv_i12_unique_numbers', 'v10.0.10: I12 a document is numbered in its own year and treasury numbers are unique, and a break of either is reported (TD-982)',
     checkNumberingInvariant, 'documents and treasury rows pass; wrong numbering year and duplicate treasury number reported'],
-  ['inv_i17_i18_ledger_rows', 'v10.0.7: I17 every voucher balances in rials with a rate on each foreign row and I18 no row sits on a non-posting account, and a broken row is reported (TD-982)',
+  ['inv_i17_i18_ledger_rows', 'v10.0.10: I17 every voucher balances in rials with a rate on each foreign row and I18 no row sits on a non-posting account, and a broken row is reported (TD-982)',
     checkLedgerRowInvariants, 'sales voucher passes; rateless row, unbalanced foreign row and group-account row reported'],
-  ['inv_i7_i19_reservations', 'v10.0.7: I7 project reservation deductions agree with their sources and rows are never negative, and I19 reservations above stock are reported (TD-982)',
+  ['inv_i7_i19_reservations', 'v10.0.10: I7 project reservation deductions agree with their sources and rows are never negative, and I19 reservations above stock are reported (TD-982)',
     checkReservationInvariants, 'remittance and void pass; unrestored deduction, negative and unfinalized rows and over-reservation reported'],
 ];

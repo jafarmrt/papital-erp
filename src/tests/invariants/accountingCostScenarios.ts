@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
-import { accounts, itemPrices, personnel, pieceworkPayrolls } from '../../db/schema.js';
+import { accounts, itemPrices, journalVouchers, personnel, pieceworkPayrolls } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { AccountMappingService } from '../../services/accounting/accountMapping.service.js';
@@ -163,6 +163,36 @@ export async function checkPayrollVoucherExactAmounts(): Promise<string[]> {
   return problems;
 }
 
+/**
+ * TD-964: the stock vs ledger health check compares the warehouse value with the inventory accounts only. Work in
+ * progress (1402) is outside the warehouse: a remittance to production or a material allocation moves value there, and
+ * the check counted it as stock, so every approved remittance left a warning. Draft vouchers stay out of the ledger
+ * value but their share is reported, so the gap that approving them closes is visible.
+ */
+export async function checkHealthLedgerExcludesWorkInProgress(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const metricsOf = async () => {
+    const report = await FinancialHealthService.runHealthCheck();
+    return report.tests.find(t => t.id === 'inventory_reconciliation')?.metrics ?? {};
+  };
+  const delta = (after: Record<string, unknown>, before: Record<string, unknown>, key: string) =>
+    fin(String(after[key] ?? 0)).subtract(fin(String(before[key] ?? 0))).toString();
+  const before = await metricsOf();
+  const material = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+  const receipt = await receive(material.id, 10, 1000, wh, '2026-06-20');
+  const remittance = await outflow('remittance', material.id, 4, wh, '2026-06-21');
+  const drafted = await metricsOf();
+  if (delta(drafted, before, 'warehouseValuation') !== '6000') problems.push(`Warehouse value moved by ${delta(drafted, before, 'warehouseValuation')}, expected 6000`);
+  if (delta(drafted, before, 'ledgerValuation') !== '0') problems.push(`Draft vouchers moved the ledger value by ${delta(drafted, before, 'ledgerValuation')}, expected 0`);
+  if (delta(drafted, before, 'draftLedgerValuation') !== '6000') problems.push(`Draft share moved by ${delta(drafted, before, 'draftLedgerValuation')}, expected 6000`);
+  await orm.update(journalVouchers).set({ status: 'approved' }).where(inArray(journalVouchers.sourceDocumentId, [receipt, remittance]));
+  const approved = await metricsOf();
+  if (delta(approved, before, 'ledgerValuation') !== '6000') problems.push(`Approved vouchers moved the ledger value by ${delta(approved, before, 'ledgerValuation')}, expected 6000 (work in progress counted as stock)`);
+  if (delta(approved, before, 'workInProgressValuation') !== '4000') problems.push(`Work in progress moved by ${delta(approved, before, 'workInProgressValuation')}, expected 4000`);
+  if (delta(approved, before, 'draftLedgerValuation') !== '0') problems.push(`Draft share after approval moved by ${delta(approved, before, 'draftLedgerValuation')}, expected 0`);
+  return problems;
+}
+
 /** جدول آزمون‌های گروه حسابداری و بهای تمام‌شده در سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const ACCOUNTING_COST_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
   ['inv_td_413_waste_account_from_mapping', 'v8.0.114: 6001 is named "cost of goods sold" and the waste voucher debits the "waste and quality loss" account (6004) or the mapped account, not overhead 6003 (TD-413, option A)',
@@ -173,4 +203,6 @@ export const ACCOUNTING_COST_CHECKS: Array<[string, string, (wh: string) => Prom
     checkHealthValuationAtWacOnly, 'A sales price of 1,000,000 did not change the warehouse value; the item without WAC was counted'],
   ['inv_td_402_payroll_voucher_exact_amounts', 'v8.0.117: the payslip voucher takes the payslip amounts exactly, even a fourteen-digit amount with four decimals (TD-402)',
     () => checkPayrollVoucherExactAmounts(), 'Rows exactly 12345678901234.5678, 1.1114, 0.0001 and 12345678901235.6791'],
+  ['inv_td_964_health_ledger_excludes_wip', 'v10.0.7: the stock vs ledger health check leaves work in progress (1402) out of the ledger value and reports the draft voucher share (TD-964)',
+    checkHealthLedgerExcludesWorkInProgress, 'Ledger moved 6000 with the warehouse; work in progress 4000 shown apart; draft share 6000 before approval'],
 ];

@@ -3,7 +3,7 @@ import type { InvariantViolation } from './businessInvariants.js';
 import { rows } from './ledgerRows.js';
 
 /**
- * v10.0.7 (TD-982, I-01) — I9 of the V8 catalogue (V8_MASTER_ROADMAP.md §4), read-only SQL over the live cheques above
+ * v10.0.10 (TD-982, I-01) — I9 of the V8 catalogue (V8_MASTER_ROADMAP.md §4), read-only SQL over the live cheques above
  * the watermark:
  * - the status history starts at the registration status (received / in_treasury), each step is a transition of
  *   CHEQUE_TRANSITIONS and the last step is the cheque's status;

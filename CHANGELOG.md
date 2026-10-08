@@ -20,14 +20,23 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.0.9 — Foreign sale and purchase vouchers balance in rials, so their year closes (TD-1030)
+### v10.0.12 — Foreign sale and purchase vouchers balance in rials, so their year closes (TD-1030)
 - Cost rows of a foreign-currency voucher take the 4-decimal rate that reaches their rial value exactly and the opposite row their sum, so the voucher balances in rials and the fiscal-year closing no longer refuses it by one rial.
 
-### v10.0.8 — Simulator runs treasury, cheques, payroll, purchasing, allocation, approval and year closing (TD-982, I-01)
+### v10.0.11 — Simulator runs treasury, cheques, payroll, purchasing, allocation, approval and year closing (TD-982, I-01)
 - The business-year simulator gains eleven operations through the application services and a `--close-year` option; TD-982 is resolved and the first year closing of a simulated year found TD-1030 (a foreign sale voucher off by one rial).
 
-### v10.0.7 — Business invariants I7, I8, I9, I11, I12 and I17–I20 (TD-982, I-01)
+### v10.0.10 — Business invariants I7, I8, I9, I11, I12 and I17–I20 (TD-982, I-01)
 - Nine new read-only business invariants (project reservation, party receivable, cheque transitions, closed fiscal year, unique numbers, rial balance, posting accounts, reservation within stock, VAT payable) with checks that break a row and expect it reported; TD-982 stays open for the simulator operations.
+
+### v10.0.9 — End-to-End Tests for Four Business Flows
+- **I-02:** Playwright tests drive purchase, project production and delivery, payslip and payment, and treasury and cheque from the browser down to stock, Kardex and voucher rows.
+
+### v10.0.8 — Confirmation Dialog Above the Payslip Payment Window
+- **TD-1040:** the confirmation opened under the payslip payment window, so no payslip could be paid from the UI; it now opens above every window.
+
+### v10.0.7 — Stock vs Ledger Health Check Leaves Work in Progress Out
+- **TD-964:** the financial health check compares the warehouse value with account 14 without the work in progress account (1402), shows the work in progress balance apart and reports the share of draft vouchers.
 
 ### v10.0.6 — هشدار خودکار از کار افتادن برنامه، دیسک، پشتیبان و صف رویدادها
 - `scripts/monitor.sh` هر پنج دقیقه سلامت، دیسک، سن پشتیبان و صف رویدادها را می‌سنجد و با ربات بله یا تلگرام یا ایمیل هشدار می‌دهد (TD-1021).

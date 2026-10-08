@@ -14,7 +14,7 @@ import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 import { isoDay, type OpOutcome, type SimRandom } from './simulationOperations.js';
 
 /**
- * v10.0.8 (TD-982, I-01) — treasury, cheque and payroll operations of the business-year simulator. Every operation goes
+ * v10.0.11 (TD-982, I-01) — treasury, cheque and payroll operations of the business-year simulator. Every operation goes
  * through the application services only, dated on the simulated day; a business refusal (AppError) is an allowed outcome.
  */
 

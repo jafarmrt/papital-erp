@@ -4,7 +4,7 @@ import type { InvariantViolation } from './businessInvariants.js';
 import { irrAmountSql, rows } from './ledgerRows.js';
 
 /**
- * v10.0.7 (TD-982, I-01) — I8 of the V8 catalogue (V8_MASTER_ROADMAP.md §4), read-only SQL for the given customers:
+ * v10.0.10 (TD-982, I-01) — I8 of the V8 catalogue (V8_MASTER_ROADMAP.md §4), read-only SQL for the given customers:
  *
  * the balance of «trade receivables» (mapped 1201) under the customer's own id (TD-416), over live vouchers of any status,
  * in rials (TD-260) equals what the business records say the customer owes:

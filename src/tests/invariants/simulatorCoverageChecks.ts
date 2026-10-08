@@ -2,7 +2,7 @@ import { createTestUser } from '../fixtures/factories.js';
 import { runBusinessYearSimulation, type SimOperation } from '../simulation/businessYearSimulator.js';
 
 /**
- * v10.0.8 (TD-982, I-01): the business-year simulator runs treasury, cheques, payroll, purchasing, material allocation and
+ * v10.0.11 (TD-982, I-01): the business-year simulator runs treasury, cheques, payroll, purchasing, material allocation and
  * the approval workflow through the application services, and a short run of them keeps every invariant: each new
  * operation succeeds at least once and the run reports no violation.
  */
@@ -32,6 +32,6 @@ export async function checkSimulatorRunsNewOperations(): Promise<string[]> {
 }
 
 export const SIMULATOR_COVERAGE_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
-  ['inv_sim_new_operations', 'v10.0.8: the simulator runs treasury, cheques, payroll, purchasing, material allocation and approval, each succeeds and no invariant is violated (TD-982)',
+  ['inv_sim_new_operations', 'v10.0.11: the simulator runs treasury, cheques, payroll, purchasing, material allocation and approval, each succeeds and no invariant is violated (TD-982)',
     () => checkSimulatorRunsNewOperations(), 'every new operation succeeded and the run kept every invariant'],
 ];

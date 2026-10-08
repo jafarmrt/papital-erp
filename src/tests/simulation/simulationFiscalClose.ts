@@ -9,7 +9,7 @@ import { checkBusinessInvariants, type InvariantScope, type InvariantViolation }
 export const SIMULATED_FISCAL_YEAR = 1404;
 
 /**
- * v10.0.8 (TD-982, I-01) — the end of a simulated year: the accountant approves the year's draft vouchers (TD-252) and
+ * v10.0.11 (TD-982, I-01) — the end of a simulated year: the accountant approves the year's draft vouchers (TD-252) and
  * closes the year with its opening voucher; the invariants are then checked with the closed year in scope (I11). A
  * refused closing is a finding of its own.
  */

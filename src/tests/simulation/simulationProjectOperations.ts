@@ -13,7 +13,7 @@ import type { OpOutcome, SimItem, SimRandom } from './simulationOperations.js';
 import type { SimParty } from './simulationFinanceOperations.js';
 
 /**
- * v10.0.8 (TD-982, I-01) — purchasing, material allocation and approval operations of the business-year simulator.
+ * v10.0.11 (TD-982, I-01) — purchasing, material allocation and approval operations of the business-year simulator.
  * Purchase orders, deliveries, allocations and approved proformas are dated by the server (business today, after every
  * simulated day), so these operations work on items of their own (`projectItems`): the dated operations never meet a
  * later movement of these items and stay forward-dated.

@@ -4,7 +4,7 @@ import type { InvariantViolation } from './businessInvariants.js';
 import { irrAmountSql, rows } from './ledgerRows.js';
 
 /**
- * v10.0.7 (TD-982, I-01) — I11 of the V8 catalogue (V8_MASTER_ROADMAP.md §4), read-only SQL for the given (Jalali) fiscal
+ * v10.0.10 (TD-982, I-01) — I11 of the V8 catalogue (V8_MASTER_ROADMAP.md §4), read-only SQL for the given (Jalali) fiscal
  * years that `fiscal_periods` marks closed:
  * - every account balances to zero in rials over the live vouchers dated up to the year's last day, closing vouchers
  *   included (temporary accounts are closed to profit and loss, the rest by the closing voucher; TD-310);
