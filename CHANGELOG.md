@@ -19,6 +19,24 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.449 — Every Foreign Key Column Has an Index
+- **Fix (TD-614, B01-34):** the 41 foreign key columns without an index leading with them get one (partial on IS NOT NULL when nullable), so a parent's rows and the delete check are read without a table scan; a test refuses a new unindexed key.
+
+### v9.0.448 — The Drizzle Schema Matches the Database
+- **Fix (TD-613, B01-33):** the Drizzle schema declares the ON DELETE actions, NOT NULL columns, indexes and unique indexes the migrations built, and a drift test refuses any new difference; four stage progress columns become NOT NULL on clean data.
+
+### v9.0.447 — Business References Get Their Foreign Keys
+- **Fix (TD-903, B01-31 / B01-32):** the thirty references between business tables get database foreign keys (NO ACTION as declared), validated on clean data and listed by the health check until validated.
+
+### v9.0.446 — User Columns Get Their Foreign Keys
+- **Fix (TD-902, B01-31 / B01-32):** the sixteen columns declared as references to users get database foreign keys with their declared ON DELETE, validated on clean data and listed by the health check until validated.
+
+### v9.0.445 — Webhook Deliveries and Rule Logs Follow Their Declared ON DELETE
+- **Fix (TD-611, B01-31):** webhook deliveries and rule action logs get the foreign keys the schema declares; deleting a subscription or a rule is one audited transaction that also closes its queued jobs.
+
+### v9.0.444 — Print Signatures Keep Their Step Title; Foreign Key Exceptions Documented
+- **Fix (TD-612, B01-32):** the document print signature reads the step title from the instance's own snapshot, so a workflow design save no longer drops it; columns kept without a foreign key on purpose are listed with their reason and a test checks the schema against the database.
+
 ### v9.0.443 — Persian Wording in the Events Screens
 - **Events wording (TD-734):** the events, webhook, dead-letter, notification and WooCommerce screens use the words of decision t9 («اقدام», «آزمایش», «گزارش», «داده رویداد», «صف ارسال رویداد», «صف خطا», «سرآیند», «اشاره») instead of «اکشن», «تست», «لاگ», Outbox and Payload; «وب‌هوک» is the third allowed loanword, WordPress labels stay only in parentheses, and the WooCommerce secret is no longer called optional.
 

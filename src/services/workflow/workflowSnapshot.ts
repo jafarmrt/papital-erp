@@ -35,6 +35,16 @@ export function snapshotTransitionsOf(snapshot: unknown): WorkflowTransitionSnap
   return isUsableSnapshot(dsl) ? dsl.transitions : undefined;
 }
 
+/**
+ * v9.0.444 (TD-612, B01-32): step id → title in an instance's snapshot (empty when the snapshot is not usable). History rows
+ * and the instance hold the step ids of their own snapshot, which a later design save removes from the live table.
+ */
+export function snapshotStateTitles(snapshot: unknown): Map<number, string> {
+  const dsl = snapshot as WorkflowSnapshotDsl | null | undefined;
+  if (!isUsableSnapshot(dsl)) return new Map();
+  return new Map(dsl.states!.filter(s => typeof s.title === 'string' && s.title.trim() !== '').map(s => [s.id, String(s.title)]));
+}
+
 /** تصویر کامل تعریف از جدول‌های جاری وضعیت و انتقال. */
 export async function buildDefinitionSnapshot(tx: DbClient, definitionId: number, version: number): Promise<WorkflowSnapshotDsl> {
   const [def] = await tx.select().from(workflowDefinitions).where(eq(workflowDefinitions.id, definitionId));

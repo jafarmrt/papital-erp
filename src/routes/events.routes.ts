@@ -336,16 +336,8 @@ router.put(['/action-rules/:id', '/rules/:id'], authorizePermission('events.mana
 router.delete(['/action-rules/:id', '/rules/:id'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    await EventActionEngineService.deleteRule(id);
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username,
-      userFullName: req.user?.full_name || '',
-      action: 'DELETE',
-      entity: `قانون واکنش خودکار #${id}`,
-      description: `حذف قانون شناسه #${id}`
-    });
+    // v9.0.445 (TD-611): the service writes the audit row in the delete transaction
+    await EventActionEngineService.deleteRule(id, { req });
 
     res.json({
       success: true,
@@ -773,7 +765,8 @@ router.put('/webhooks/:id', authorizePermission('events.manage'), validate(param
 router.delete('/webhooks/:id', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    await WebhookSubscriptionService.deleteSubscription(id);
+    // v9.0.445 (TD-611): one transaction with its deliveries, queued jobs and audit row
+    await WebhookSubscriptionService.deleteSubscription(id, { req });
 
     res.json({
       success: true,

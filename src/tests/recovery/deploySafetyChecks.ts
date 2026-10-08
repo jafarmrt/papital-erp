@@ -61,7 +61,7 @@ async function insertDeletableMarkers(url: string): Promise<void> {
     pay AS (INSERT INTO piecework_payrolls (payroll_number, personnel_id, start_date, end_date, title, net_payable)
       SELECT 'P01-MARK-1', id, '2026-01-01', '2026-01-31', $1 || ' payroll', 0 FROM per RETURNING id),
     plog AS (INSERT INTO piecework_logs (personnel_id, task_id, date, quantity, unit_rate, total_amount, notes, payroll_id)
-      SELECT per.id, 1, '2026-01-05', 1, 1, 1, $1, pay.id FROM per, pay RETURNING id),
+      SELECT per.id, (SELECT id FROM piecework_tasks ORDER BY id LIMIT 1), '2026-01-05', 1, 1, 1, $1, pay.id FROM per, pay RETURNING id),
     item AS (INSERT INTO items (type, name, code, unit) VALUES ('product', $1 || ' item', 'P01-MARK-ITEM', 'عدد') RETURNING id),
     price AS (INSERT INTO item_prices (item_id, title, price) SELECT id, 'p', 1 FROM item RETURNING id),
     doc AS (INSERT INTO documents (type, ref_number, date, notes, status) VALUES ('invoice', 'P01-MARK-DOC', now(), $1, 'draft') RETURNING id),
@@ -76,7 +76,8 @@ async function insertDeletableMarkers(url: string): Promise<void> {
     act AS (INSERT INTO crm_activities (type, title, lead_id) SELECT 'call', 'call', id FROM lead RETURNING id),
     proj AS (INSERT INTO production_projects (project_code, title) VALUES ('P01-MARK-PRJ', $1 || ' project') RETURNING id),
     stage AS (INSERT INTO project_stages (project_id, title) SELECT id, 's' FROM proj RETURNING id)
-    INSERT INTO daily_work_logs (user_id, username, date, title, content) VALUES (1, 'p01', '2026-01-05', $1 || ' log', 'c')`, [MARK]);
+    INSERT INTO daily_work_logs (user_id, username, date, title, content)
+      VALUES ((SELECT id FROM users ORDER BY id LIMIT 1), 'p01', '2026-01-05', $1 || ' log', 'c')`, [MARK]);
 }
 
 export async function checkCleanupScript(cluster: ScratchCluster): Promise<string[]> {
@@ -85,6 +86,12 @@ export async function checkCleanupScript(cluster: ScratchCluster): Promise<strin
   const run = (env: Record<string, string>, args: string[] = []) => runCommand(tsx, ['scripts/cleanup-test-data.ts', ...args],
     { env: scriptEnv({ DATABASE_URL: url, ERP_TEST_SCHEMA_ISOLATION: '0', ...env }), timeoutMs: 120_000 });
 
+  // the marker daily log needs an owner (a foreign key since v9.0.446) and the marker work log a task (v9.0.447); the
+  // script never removes users or tasks, so they are part of the clean state
+  await querySql(url, `INSERT INTO users (username, password, full_name, role)
+    SELECT 'p01_owner', 'x', 'P01 owner', 'admin' WHERE NOT EXISTS (SELECT 1 FROM users)`);
+  await querySql(url, `INSERT INTO piecework_tasks (code, title)
+    SELECT 'P01-TASK', 'P01 task' WHERE NOT EXISTS (SELECT 1 FROM piecework_tasks)`);
   const clean = await manifest(url);
   await insertDeletableMarkers(url);
   const marked = await manifest(url);

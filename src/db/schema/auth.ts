@@ -29,7 +29,7 @@ export const roles = pgTable('roles', {
 
 export const activityLogs = pgTable('activity_logs', {
   id: serial('id').primaryKey(),
-  userId: integer('user_id').references(() => users.id),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
   username: text('username').notNull(),
   userFullName: text('user_full_name').default(''),
   action: text('action').notNull(), // 'CREATE', 'UPDATE', 'DELETE', 'LOGIN', etc.
@@ -66,7 +66,7 @@ export const idempotencyKeys = pgTable('idempotency_keys', {
   requestPayload: jsonb('request_payload'),
   responseStatus: integer('response_status'),
   responseBody: jsonb('response_body'),
-  createdById: integer('created_by_id').references(() => users.id),
+  createdById: integer('created_by_id').references(() => users.id, { onDelete: 'set null' }),
   lockedAt: timestamp('locked_at', { mode: 'string' }),
   lockedUntil: timestamp('locked_until', { mode: 'string' }),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),

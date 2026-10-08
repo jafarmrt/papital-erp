@@ -4,7 +4,8 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
  * v9.0.427 (TD-589، B01-09، تصمیم ت۵ الف): قرارداد فهرست و ساختن قیدهای شرطی جاافتاده مهاجرت‌ها، مشترک سرور
  * (`src/services/system/conditionalConstraints.ts`) و کارت «قیدهای جاافتاده پایگاه‌داده» در «عملیات سامانه».
  */
-export type ConditionalConstraintKind = 'foreign_key' | 'unique_index';
+/** v9.0.448 (TD-613): `not_null` ستونی است که Drizzle الزامی اعلام کرده و مهاجرتش فقط روی داده بی مقدار تهی الزامی می‌کند */
+export type ConditionalConstraintKind = 'foreign_key' | 'unique_index' | 'not_null';
 
 export type ConditionalConstraintState = 'ready' | 'blocked';
 
@@ -15,9 +16,14 @@ export interface ConditionalConstraintEntry {
   migration: string;
   label: string;
   state: ConditionalConstraintState;
-  /** شمار ردیف‌های یتیم یا گروه‌های تکراری که ساختن را ناممکن می‌کنند */
+  /** شمار ردیف‌های یتیم، گروه‌های تکراری یا ردیف‌های بی مقدار که ساختن را ناممکن می‌کنند */
   blockers: number;
   blockerUnit: string;
+  /**
+   * v9.0.445 (TD-611): کلید خارجی‌ای که مهاجرتش آن را NOT VALID افزوده و هنوز تأیید نشده؛ برای ردیف‌های تازه برقرار است و
+   * «ساختن» فقط ردیف‌های قدیمی را با آن می‌سنجد (VALIDATE CONSTRAINT)
+   */
+  unvalidated?: boolean;
 }
 
 export interface ConditionalConstraintBuildResult {
@@ -34,9 +40,11 @@ export const CONDITIONAL_CONSTRAINTS_BUSY_MESSAGE = 'ساختن قیدهای ج�
 
 /** چرا قید ساخته نشده و چه باید کرد */
 export function conditionalConstraintCause(entry: ConditionalConstraintEntry): string {
+  const done = entry.unvalidated ? 'تأیید' : 'ساخته';
+  const prefix = entry.unvalidated ? 'قید برای ردیف‌های تازه برقرار است؛ ' : '';
   return entry.state === 'blocked'
-    ? `${toPersianDigits(entry.blockers, 0)} ${entry.blockerUnit}؛ پس از اصلاح داده با «ساختن قیدهای جاافتاده» ساخته می‌شود.`
-    : 'داده پاک است؛ با «ساختن قیدهای جاافتاده» در «عملیات سامانه» ساخته می‌شود.';
+    ? `${prefix}${toPersianDigits(entry.blockers, 0)} ${entry.blockerUnit}؛ پس از اصلاح داده با «ساختن قیدهای جاافتاده» ${done} می‌شود.`
+    : `${prefix}داده پاک است؛ با «ساختن قیدهای جاافتاده» در «عملیات سامانه» ${done} می‌شود.`;
 }
 
 /** پیام نتیجه پیش‌نمایش یا اجرا برای مدیر سامانه */

@@ -174,6 +174,8 @@ export class FactoryResetService {
       await wipe('project_reservation_releases', projectReservationReleases);
       await wipe('ref_fiscal_year_corrections', refFiscalYearCorrections);
       await wipe('document_items', documentItems);
+      // v9.0.447 (TD-903): project_bom_allocations.source_transaction_id references transactions (migration 0092)
+      await wipe('project_bom_allocations', projectBomAllocations);
       await wipe('transactions', transactions);
       await wipe('documents', documents);
       await wipe('document_ref_counters', documentRefCounters);
@@ -198,7 +200,6 @@ export class FactoryResetService {
       await wipe('piecework_logs', pieceworkLogs);
       await wipe('daily_work_logs', dailyWorkLogs);
       await wipe('project_product_stage_progress', projectProductStageProgress);
-      await wipe('project_bom_allocations', projectBomAllocations);
       await wipe('project_stages', projectStages);
       await wipe('production_projects', productionProjects);
 

@@ -12,6 +12,7 @@ import { encryptSecret } from '../../lib/secretBox.js';
 import { openWebhookSubscription, sealHeaders, UNREADABLE_WEBHOOK_SECRET_MESSAGE, type OpenedWebhookSubscription } from './webhookSecretStorage.js';
 import { assertActivatableEventPatterns, resolveEventPatterns } from './webhookEventPatterns.js';
 import { IntegrationDeliveryService, webhookMaxAttempts, type DeliveryAttemptContext, type DeliveryAttemptOutcome } from './integrationDelivery.service.js';
+import { deleteWebhookSubscription, type IntegrationDeleteActor } from './integrationParentDelete.js';
 import crypto from 'crypto';
 
 export interface CreateWebhookSubDTO {
@@ -271,12 +272,12 @@ export class WebhookSubscriptionService {
   }
 
   /**
-   * Delete subscription.
+   * Delete subscription: v9.0.445 (TD-611) one transaction with its deliveries (CASCADE), queued jobs and audit row.
    */
-  static async deleteSubscription(id: number) {
-    await orm.delete(webhookSubscriptions).where(eq(webhookSubscriptions.id, id));
-    logger.info(`[Webhook Subscriptions] Deleted subscription #${id}`);
-    return { success: true };
+  static async deleteSubscription(id: number, actor: IntegrationDeleteActor = {}) {
+    const result = await deleteWebhookSubscription(id, actor);
+    logger.info(`[Webhook Subscriptions] Deleted subscription #${id} with ${result.deliveriesRemoved} delivery row(s)`);
+    return { success: true, ...result };
   }
 
   /**

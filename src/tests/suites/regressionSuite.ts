@@ -2713,7 +2713,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const { getTestApp } = await import('../fixtures/httpTestHelper.js');
     const { postSignedWooWebhook, buildWooOrder } = await import('../fixtures/wooWebhookHelper.js');
     const { createTestItem, createTestCustomer } = await import('../fixtures/factories.js');
-    const { appSettings, woocommerceOrderLogs, customers } = await import('../../db/schema.js');
+    const { appSettings, woocommerceOrderLogs } = await import('../../db/schema.js');
     const secretKey = 'wc_webhook_secret';
     const [originalSecret] = await orm.select().from(appSettings).where(eq(appSettings.key, secretKey));
     const probeSecret = `whsec_td190_${Date.now()}`;
@@ -2862,12 +2862,17 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         .where(inArray(woocommerceOrderLogs.wcOrderId, orderIdList));
       await orm.delete(woocommerceOrderLogs).where(inArray(woocommerceOrderLogs.wcOrderId, orderIdList));
       const docIds = logs.map(l => l.docId).filter((v): v is number => typeof v === 'number');
+      // v9.0.447 (TD-903): a Kardex row keeps its document (fk_transactions_document_id) and a document its party, so an
+      // invoice that moved stock and its customer stay in the isolated test schema
       if (docIds.length > 0) {
-        await cleanTestTableData('document_items', 'document_id', docIds);
-        await cleanTestTableData('documents', 'id', docIds);
+        await orm.execute(sql`DELETE FROM document_items WHERE document_id = ANY(${sql.param(docIds)}::int[])
+          AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.document_id = document_items.document_id)`);
+        await orm.execute(sql`DELETE FROM documents WHERE id = ANY(${sql.param(docIds)}::int[])
+          AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.document_id = documents.id)`);
       }
       if (createdCustomerIds.length > 0) {
-        await orm.delete(customers).where(inArray(customers.id, createdCustomerIds));
+        await orm.execute(sql`DELETE FROM customers WHERE id = ANY(${sql.param(createdCustomerIds)}::int[])
+          AND NOT EXISTS (SELECT 1 FROM documents d WHERE d.party_id = customers.id)`);
       }
       if (originalSecret) {
         await orm.update(appSettings).set({ value: originalSecret.value }).where(eq(appSettings.key, secretKey));
@@ -5838,6 +5843,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await cleanTestTableData('project_stages', 'project_id', createdProjectIds);
       }
       if (createdTaskIds.length > 0) {
+        // v9.0.447 (TD-903): the rate change wrote a history row that references the task
+        await cleanTestTableData('piecework_task_rate_history', 'task_id', createdTaskIds);
         await cleanTestTableData('piecework_tasks', 'id', createdTaskIds);
       }
       if (createdCategoryNames.length > 0) {
@@ -10825,6 +10832,20 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runSystemHealthTests(shouldRun));
   const { runFactoryResetTests } = await import('../regression/factoryResetTests.js');
   results.push(...await runFactoryResetTests(shouldRun));
+
+  // Package 1 second half PR 3 (v9.0.444+): foreign keys of the schema and the database
+  const { runForeignKeyPolicyTests } = await import('../regression/foreignKeyPolicyTests.js');
+  results.push(...await runForeignKeyPolicyTests(shouldRun));
+  const { runEventParentDeleteTests } = await import('../regression/eventParentDeleteTests.js');
+  results.push(...await runEventParentDeleteTests(shouldRun));
+  const { runUserForeignKeyTests } = await import('../regression/userForeignKeyTests.js');
+  results.push(...await runUserForeignKeyTests(shouldRun));
+  const { runBusinessForeignKeyTests } = await import('../regression/businessForeignKeyTests.js');
+  results.push(...await runBusinessForeignKeyTests(shouldRun));
+  const { runSchemaDriftTests } = await import('../regression/schemaDriftTests.js');
+  results.push(...await runSchemaDriftTests(shouldRun));
+  const { runForeignKeyIndexTests } = await import('../regression/foreignKeyIndexTests.js');
+  results.push(...await runForeignKeyIndexTests(shouldRun));
 
   return results;
 }

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, varchar, primaryKey, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, uniqueIndex, varchar, primaryKey, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
@@ -15,7 +15,7 @@ export const documents = pgTable('documents', {
   refFiscalYear: integer('ref_fiscal_year'),
   date: timestamp('date', { withTimezone: false, mode: 'string' }).notNull(),
   // V10-4.3 / TD-169: لینک رسمی سند به پرونده فروش CRM — ارجاع از طریق baseRelations
-  crmLeadId: integer('crm_lead_id').references(baseRelations.crmLeadsId),
+  crmLeadId: integer('crm_lead_id').references(baseRelations.crmLeadsId, { onDelete: 'set null' }),
   // V3.1.46 (TD-070) / TD-169: لینک رسمی سند انبار/فاکتور به پروژه تولید — ارجاع از طریق baseRelations
   projectId: integer('project_id').references(baseRelations.productionProjectsId),
   // v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش؛ بهای ورود کالای برگشتی از گردش خروج همان فاکتور خوانده می‌شود
@@ -53,6 +53,14 @@ export const documents = pgTable('documents', {
   idx_docs_project: index('idx_docs_project').on(table.projectId),
   idx_docs_return_of_document: index('idx_docs_return_of_document').on(table.returnOfDocumentId),
   idx_docs_procurement_requisition: index('idx_docs_procurement_requisition').on(table.procurementRequisitionId).where(sql`procurement_requisition_id IS NOT NULL`),
+  // v9.0.448 (TD-613): indexes of migrations 0015 and 0080, declared so the schema matches the database; the unique one is
+  // built only on data without duplicate numbers
+  idx_docs_type_ref_fiscal_year: index('idx_docs_type_ref_fiscal_year').on(table.type, table.refFiscalYear),
+  uq_documents_type_fy_ref_active: uniqueIndex('uq_documents_type_fy_ref_active').on(table.type, table.refFiscalYear, table.refNumber)
+    .where(sql`${table.isDeleted} = 0 AND length(${table.refNumber}) > 0`),
+  idx_documents_party_id: index('idx_documents_party_id').on(table.partyId).where(sql`${table.partyId} IS NOT NULL`),
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
+  idx_documents_crm_lead_id: index('idx_documents_crm_lead_id').on(table.crmLeadId).where(sql`${table.crmLeadId} IS NOT NULL`),
 }));
 registerColumnRef('documents.id', () => documents.id);
 
@@ -67,7 +75,10 @@ export const refFiscalYearCorrections = pgTable('ref_fiscal_year_corrections', {
   newFiscalYear: integer('new_fiscal_year').notNull(),
   status: text('status').notNull(), // 'corrected' | 'conflict'
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-});
+}, (table) => ({
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
+  idx_ref_fiscal_year_corrections_document_id: index('idx_ref_fiscal_year_corrections_document_id').on(table.documentId),
+}));
 
 export const documentRefCounters = pgTable('document_ref_counters', {
   docType: varchar('doc_type', { length: 20 }).notNull(),
@@ -89,6 +100,8 @@ export const documentItems = pgTable('document_items', {
 }, (table) => ({
   idx_doc_id: index('doc_items_doc_id').on(table.documentId),
   idx_item_id: index('doc_items_item_id').on(table.itemId),
+  // v9.0.448 (TD-613): index of migration 0012, declared so the schema matches the database
+  idx_doc_items_deleted: index('idx_doc_items_deleted').on(table.isDeleted),
 }));
 
 export const formDrafts = pgTable('form_drafts', {
@@ -113,7 +126,7 @@ export const formDrafts = pgTable('form_drafts', {
 export const woocommerceOrderLogs = pgTable('woocommerce_order_logs', {
   id: serial('id').primaryKey(),
   wcOrderId: text('wc_order_id').notNull().unique(),
-  erpDocumentId: integer('erp_document_id').references(() => documents.id),
+  erpDocumentId: integer('erp_document_id').references(() => documents.id, { onDelete: 'set null' }),
   status: text('status').notNull(), // 'processed', 'failed', 'already_exists'
   buyerName: text('buyer_name').default(''),
   totalAmount: moneyNumeric('total_amount', { precision: 15, scale: 2 }).default(sql`0`),

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { registerColumnRef, baseRelations } from './baseRelations';
 import { moneyNumeric } from './moneyColumn';
@@ -25,7 +25,8 @@ export const customers = pgTable('customers', {
   idx_customers_party_type: index('idx_customers_party_type').on(table.partyType),
   idx_customers_is_deleted: index('idx_customers_is_deleted').on(table.isDeleted),
   // v9.0.8 (TD-420): ایندکس یکتای جزئی uq_customers_name_active روی lower(btrim(name)) برای طرف حساب‌های فعال را مهاجرت 0052
-  // فقط روی داده بدون نام تکراری می‌سازد (src/services/customers/customerIdentity.ts)
+  // فقط روی داده بدون نام تکراری می‌سازد (src/services/customers/customerIdentity.ts)؛ v9.0.448 (TD-613): اعلام‌شده تا اسکیما با پایگاه‌داده بخواند
+  uq_customers_name_active: uniqueIndex('uq_customers_name_active').on(sql`lower(btrim(${table.name}))`).where(sql`${table.isDeleted} = 0`),
 }));
 registerColumnRef('customers.id', () => customers.id);
 
@@ -60,6 +61,9 @@ export const crmLeads = pgTable('crm_leads', {
   idx_crm_assigned: index('idx_crm_assigned').on(table.assignedTo),
   idx_crm_deleted: index('idx_crm_deleted').on(table.isDeleted),
   idx_crm_proforma: index('idx_crm_proforma').on(table.proformaId),
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
+  idx_crm_leads_assigned_personnel_id: index('idx_crm_leads_assigned_personnel_id').on(table.assignedPersonnelId).where(sql`${table.assignedPersonnelId} IS NOT NULL`),
+  idx_crm_leads_customer_id: index('idx_crm_leads_customer_id').on(table.customerId).where(sql`${table.customerId} IS NOT NULL`),
 }));
 registerColumnRef('crmLeads.id', () => crmLeads.id);
 
@@ -91,6 +95,8 @@ export const crmActivities = pgTable('crm_activities', {
   idx_crm_act_date_iso: index('idx_crm_act_date_iso').on(table.activityDateIso),
   idx_crm_act_next_iso: index('idx_crm_act_next_iso').on(table.nextFollowUpDateIso),
   idx_crm_act_deleted: index('idx_crm_act_deleted').on(table.isDeleted),
+  // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
+  idx_crm_activities_assigned_personnel_id: index('idx_crm_activities_assigned_personnel_id').on(table.assignedPersonnelId).where(sql`${table.assignedPersonnelId} IS NOT NULL`),
 }));
 
 export const transfers = pgTable('transfers', {

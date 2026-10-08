@@ -631,6 +631,41 @@
       "when": 1793580000000,
       "tag": "0089_notification_dismissal",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1793590000000,
+      "tag": "0090_event_foreign_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1793680000000,
+      "tag": "0091_user_foreign_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1793780000000,
+      "tag": "0092_business_foreign_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1793880000000,
+      "tag": "0093_stage_progress_not_null",
+      "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1793890000000,
+      "tag": "0094_foreign_key_indexes",
+      "breakpoints": true
     }
   ]
 }
