@@ -395,7 +395,7 @@ router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('
   }
 }));
 
-// v9.0.364 (TD-712): the draft is really evaluated (invalid draft → 422 RULE_DRAFT_INVALID) and nothing is sent or written
+// v9.0.377 (TD-712): the draft is really evaluated (invalid draft → 422 RULE_DRAFT_INVALID) and nothing is sent or written
 router.post('/action-rules/test-draft', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   const evaluation = await evaluateRuleDraft(req.body?.rule);
   res.json({ success: true, ...evaluation, evaluatedConditions: evaluation.conditionMatches });

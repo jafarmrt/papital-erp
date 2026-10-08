@@ -4,7 +4,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
  * Package 15 (events and integrations), TD-706 / B15-04 (decision t4 a): a webhook rule action whose request fails is
- * recorded as failed. On v9.0.361 a failed fetch to an address containing "webhook-echo", "example.com", "localhost",
+ * recorded as failed. On v9.0.374 a failed fetch to an address containing "webhook-echo", "example.com", "localhost",
  * "127.0.0.1", "httpbin.org" or "webhook.site" anywhere returned the made-up result "200 OK (Simulated Fallback)".
  */
 export async function runWebhookActionFailureTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -12,7 +12,7 @@ export async function runWebhookActionFailureTests(shouldRun: (id: string, ...ex
   const id = 'reg_webhook_action_failure_not_simulated_td_706';
   if (!shouldRun(id, 'td706', 'b15-04', 'webhook', 'action', 'package15')) return results;
 
-  const name = 'v9.0.362: a webhook rule action whose request fails is recorded as failed, never as a simulated success (TD-706)';
+  const name = 'v9.0.375: a webhook rule action whose request fails is recorded as failed, never as a simulated success (TD-706)';
   const tStart = Date.now();
   const savedPort = process.env.PORT;
   const silent = http.createServer(() => { /* never answers: the action's own timeout must end the request */ });

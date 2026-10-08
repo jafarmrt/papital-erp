@@ -26,7 +26,7 @@ export interface RuleCondition {
   value: unknown;
 }
 
-// v9.0.364 (TD-712): «workflow_trigger» and «sms_simulation» were removed (src/lib/events/ruleActionTypes.ts)
+// v9.0.377 (TD-712): «workflow_trigger» and «sms_simulation» were removed (src/lib/events/ruleActionTypes.ts)
 export type ActionType = RuleActionType;
 
 export interface WebhookActionConfig {
@@ -207,7 +207,7 @@ export class EventActionEngineService {
     } catch (fetchErr: unknown) {
       clearTimeout(timeoutId);
       const fetchError = fetchErr instanceof Error ? fetchErr : new Error(String(fetchErr));
-      // v9.0.362 (TD-706، B15-04، تصمیم ت۴ الف): شکست ارسال همیشه شکست است؛ پیش‌تر نشانی‌ای که هرجای خود `webhook-echo`،
+      // v9.0.375 (TD-706، B15-04، تصمیم ت۴ الف): شکست ارسال همیشه شکست است؛ پیش‌تر نشانی‌ای که هرجای خود `webhook-echo`،
       // `example.com`، `localhost`، `127.0.0.1`، `httpbin.org` یا `webhook.site` داشت پاسخ ساختگی «OK (Simulated Fallback)» می‌گرفت
       throw new Error(`خطای ارتباط با سرور وب‌هوک: ${fetchError.name === 'AbortError' ? 'Timeout (پایان مهلت زمانی)' : fetchError.message}`);
     }
@@ -330,7 +330,7 @@ export class EventActionEngineService {
 
   /**
    * Main processor invoked when any domain event occurs.
-   * v9.0.365 (TD-705, decision t2 a): each matching active rule gets one durable delivery row (`rule_action` x event) and
+   * v9.0.378 (TD-705, decision t2 a): each matching active rule gets one durable delivery row (`rule_action` x event) and
    * its first attempt runs here and is awaited; a failed action is retried by the delivery worker with a growing delay and
    * after 5 attempts moved to the dead letter queue. An error reading the rules or writing the rows goes back to the outbox;
    * a rule already recorded for the event is never run twice. Before, a failed action was only logged and never run again.
@@ -368,7 +368,7 @@ export class EventActionEngineService {
   }
 
   /**
-   * v9.0.365 (TD-705): one attempt of a rule's action for an event, with the rule as it is now; each attempt writes its
+   * v9.0.378 (TD-705): one attempt of a rule's action for an event, with the rule as it is now; each attempt writes its
    * own `event_action_logs` row. A deleted or inactive rule closes the delivery row.
    */
   public static async runRuleActionAttempt(ruleId: number, event: BaseDomainEvent, _context: DeliveryAttemptContext): Promise<DeliveryAttemptOutcome> {
@@ -378,7 +378,7 @@ export class EventActionEngineService {
 
     const executionResult = await this.executeAction(rule, event);
 
-    // v9.0.366 (TD-718): the counter is read under the rule's row lock (taken before the log row's foreign-key lock)
+    // v9.0.379 (TD-718): the counter is read under the rule's row lock (taken before the log row's foreign-key lock)
     // and written in the transaction of the log row, so concurrent executions are all counted
     await orm.transaction(async (tx) => {
       const nowIso = new Date().toISOString();
@@ -614,7 +614,7 @@ export class EventActionEngineService {
     if (data.actionConfigJson !== undefined) assertNotificationPermission((data.actionConfigJson as InAppNotificationConfig | undefined)?.targetPermission);
     const current = await this.getRuleById(id);
     if (current) {
-      // v9.0.364 (TD-712): a rule of a removed action type stays inactive until its action type is changed
+      // v9.0.377 (TD-712): a rule of a removed action type stays inactive until its action type is changed
       const nextActive = data.isActive !== undefined ? Number(data.isActive) === 1 : current.isActive === 1;
       assertRuleActionTypeAllowed(data.actionType ?? current.actionType, { active: nextActive, changingType: data.actionType !== undefined && data.actionType !== current.actionType });
     }

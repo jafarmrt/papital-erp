@@ -32,8 +32,12 @@ import { buildConsolidationSourcesHealthTest, findOpenLegacyConsolidationSources
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from '../documents/documentParty.js';
 import { buildDocumentIntegrityHealthTest, findDocumentIntegrityGaps } from '../documents/documentConstraintHealth.js';
+import {
+  buildOverReservedHealthTest, buildProjectReservationHealthTest, findOverReservedItems, findProjectReservationIssues,
+} from '../projects/projectReservationHealth.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
+import { buildProjectStageHealthTest, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
@@ -1210,7 +1214,15 @@ export class FinancialHealthService {
     const consolidationSourcesTest = buildConsolidationSourcesHealthTest(await findOpenLegacyConsolidationSources());
     overallScore += consolidationSourcesTest.scoreImpact;
     tests.push(consolidationSourcesTest);
-    // آزمون ۴۴: v9.0.364 (TD-712) قانون‌های خودکار با اقدام حذف‌شده («تحریک گردش کار»، «پیامک»؛ مهاجرت 0084 غیرفعالشان کرد؛ فقط فهرست)
+    // آزمون ۴۴: v9.0.367 (TD-737، TD-753) شماره مرحله زنده تکراری یک پروژه و مرحله پروژه ناموجود (مهاجرت 0084؛ فقط فهرست)
+    const projectStageTest = buildProjectStageHealthTest(await findProjectStageIntegrity());
+    overallScore += projectStageTest.scoreImpact;
+    tests.push(projectStageTest);
+    // آزمون ۴۵: v9.0.371 (TD-817) رزرو پروژه ناهمخوان با ثبت نهایی (پروژه‌های قدیمی؛ فقط فهرست، بی بازنویسی)
+    tests.push(buildProjectReservationHealthTest(await findProjectReservationIssues()));
+    // آزمون ۴۶: v9.0.373 (TD-819) کالای بیش از موجودی رزروشده (فقط فهرست)
+    tests.push(buildOverReservedHealthTest(await findOverReservedItems()));
+    // آزمون ۴۷: v9.0.377 (TD-712) قانون‌های خودکار با اقدام حذف‌شده («تحریک گردش کار»، «پیامک»؛ مهاجرت 0085 غیرفعالشان کرد؛ فقط فهرست)
     const retiredRuleTest = buildRetiredRuleActionHealthTest(await findRetiredActionRules());
     overallScore += retiredRuleTest.scoreImpact;
     tests.push(retiredRuleTest);

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { fetchJson } from '../../api';
 import { RuleEditorModal, type RuleFormData } from '../../components/settings/RuleEditorModal';
 
-// v9.0.364 (TD-712, B15-10 / FE-24): the editor offers only live action types, says a stored rule's type was removed,
+// v9.0.377 (TD-712, B15-10 / FE-24): the editor offers only live action types, says a stored rule's type was removed,
 // and shows the server's own draft evaluation instead of a green «online test» result for any draft
 vi.mock('../../api', () => ({ fetchJson: vi.fn() }));
 

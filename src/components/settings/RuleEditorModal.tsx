@@ -19,7 +19,7 @@ export interface RuleFormData {
   description: string;
   eventType: string;
   conditionsJson: RuleCondition[];
-  // v9.0.364 (TD-712): a stored rule may still carry a removed type; the editor offers only live ones
+  // v9.0.377 (TD-712): a stored rule may still carry a removed type; the editor offers only live ones
   actionType: StoredRuleActionType;
   actionConfigJson: any;
   isActive: number;
@@ -598,7 +598,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
             </div>
           </div>
 
-          {/* Test Feedback Area: v9.0.364 (TD-712) the server's own evaluation, never a made-up success */}
+          {/* Test Feedback Area: v9.0.377 (TD-712) the server's own evaluation, never a made-up success */}
           {testResult && (
             testResult.status === 'error' ? (
               <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-2xl flex items-start gap-2.5 text-xs text-rose-800 dark:text-rose-200">

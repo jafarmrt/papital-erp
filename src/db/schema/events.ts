@@ -60,7 +60,7 @@ export const eventActionLogs = pgTable('event_action_logs', {
   idx_action_logs_event: index('idx_action_logs_event').on(table.eventId)
 }));
 
-// v9.0.364 (TD-712, migration 0084): rules whose action type was removed (workflow_trigger, sms_simulation), deactivated
+// v9.0.377 (TD-712, migration 0085): rules whose action type was removed (workflow_trigger, sms_simulation), deactivated
 export const eventActionRuleRetirements = pgTable('event_action_rule_retirements', {
   id: serial('id').primaryKey(),
   ruleId: integer('rule_id').notNull().unique(),
@@ -71,7 +71,7 @@ export const eventActionRuleRetirements = pgTable('event_action_rule_retirements
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
 });
 
-// v9.0.365 (TD-705, migration 0085): one durable row per delivery (webhook subscription x event, rule action x event)
+// v9.0.378 (TD-705, migration 0086): one durable row per delivery (webhook subscription x event, rule action x event)
 export const integrationDeliveryJobs = pgTable('integration_delivery_jobs', {
   id: serial('id').primaryKey(),
   kind: text('kind').notNull(),

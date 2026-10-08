@@ -10,7 +10,7 @@ import { activityLogs, eventActionRules, notifications } from '../../db/schema.j
  * Package 15 (events and integrations), TD-712 / B15-10 (decision t4 a): the rule actions «workflow_trigger» (did nothing,
  * reported «queued») and «sms_simulation» (wrote a log line) are removed. Migration *_retired_rule_actions deactivates
  * existing rules of those types and records them, the health check lists them, a rule is never created or activated
- * with them, and the draft evaluation really evaluates without any effect. On v9.0.363 the migration did not exist,
+ * with them, and the draft evaluation really evaluates without any effect. On v9.0.376 the migration did not exist,
  * such rules were created and run as «success», and test-draft answered success for an invalid operator and an unknown
  * event type.
  */
@@ -19,7 +19,7 @@ export async function runRetiredRuleActionTests(shouldRun: (id: string, ...extra
   const id = 'reg_retired_rule_actions_and_real_draft_evaluation_td_712';
   if (!shouldRun(id, 'td712', 'b15-10', 'action-rule', 'package15')) return results;
 
-  const name = 'v9.0.364: workflow-trigger and SMS rule actions retired (deactivated, listed, refused) and the draft evaluation really evaluates (TD-712)';
+  const name = 'v9.0.377: workflow-trigger and SMS rule actions retired (deactivated, listed, refused) and the draft evaluation really evaluates (TD-712)';
   const tStart = Date.now();
   const ruleIds: number[] = [];
   const tag = `td712_${Date.now()}`;

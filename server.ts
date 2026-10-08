@@ -58,7 +58,7 @@ async function startServer() {
         // بوت حذف شدند (زمان آماده‌شدن Pod با رشد داده خطی بود و چند Pod همزمان اسناد تکراری می‌ساختند).
         // اجرای دستی با قفل مشورتی: POST /api/accounting/quick-fix/sync-all-vouchers و POST /api/inventory/kardex-initial-backfill
         OutboxService.startOutboxWorker(3000);
-        // v9.0.365 (TD-705): retries of failed webhook and rule action deliveries, then the dead letter queue
+        // v9.0.378 (TD-705): retries of failed webhook and rule action deliveries, then the dead letter queue
         IntegrationDeliveryService.startWorker(5000);
         // v7.0.101 (TD-085 بند ۴): یادآوری یک‌باره مهلت کارهای تاییدی به مسئول کار
         WorkflowSlaReminderService.start(60_000);

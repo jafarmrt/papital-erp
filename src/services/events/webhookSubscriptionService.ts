@@ -276,7 +276,7 @@ export class WebhookSubscriptionService {
   }
 
   /**
-   * v9.0.365 (TD-705, decision t2 a): records one durable delivery row per matching active subscription and starts each
+   * v9.0.378 (TD-705, decision t2 a): records one durable delivery row per matching active subscription and starts each
    * first attempt without waiting for it; the delivery worker retries a failed one and after the subscription's retry
    * limit moves it to the dead letter queue. An error here (reading subscriptions, writing rows) goes back to the outbox,
    * which runs this handler again; a row already recorded for the event is never sent twice. Before, deliveries were
@@ -303,7 +303,7 @@ export class WebhookSubscriptionService {
   }
 
   /**
-   * v9.0.365 (TD-705): one attempt of a delivery row, with the subscription as it is now. Each attempt is one row in
+   * v9.0.378 (TD-705): one attempt of a delivery row, with the subscription as it is now. Each attempt is one row in
    * `webhook_deliveries`; the delivery id (`X-ERP-Delivery-Id`) stays the same across the attempts of one row, so the
    * receiver can recognise a repeat. A deleted or inactive subscription closes the row; a key the server cannot decrypt
    * fails it at once.
@@ -413,7 +413,7 @@ export class WebhookSubscriptionService {
   }
 
   /**
-   * Delivery log row and the subscription's counters. v9.0.366 (TD-718): the counters are read under the subscription's
+   * Delivery log row and the subscription's counters. v9.0.379 (TD-718): the counters are read under the subscription's
    * row lock, taken before the delivery row's foreign-key lock, and written in the transaction of the delivery row, so
    * concurrent deliveries are all counted (they were written from the row read before the request).
    */

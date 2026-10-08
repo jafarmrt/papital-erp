@@ -301,7 +301,7 @@ export class DeadLetterQueueService {
 
     try {
       if (deliveryJobId !== null) {
-        // v9.0.365 (TD-705): only the failed delivery runs again, never the event's other deliveries or handlers
+        // v9.0.378 (TD-705): only the failed delivery runs again, never the event's other deliveries or handlers
         await replayDeliveryDeadLetter(deliveryJobId, payload);
       } else {
         // 1. Construct DomainEvent
@@ -452,7 +452,7 @@ export class DeadLetterQueueService {
       return { requeuedCount: 0, dlqIds: [], originalEventIds: [], reinsertedEventIds: [], before: [] };
     }
 
-    // v9.0.365 (TD-705): a failed integration delivery goes back to its own delivery queue, not to the outbox
+    // v9.0.378 (TD-705): a failed integration delivery goes back to its own delivery queue, not to the outbox
     const outboxRows = await requeueDeliveryDeadLetters(tx, pending);
 
     const eventIds = outboxRows.map(r => r.originalEventId);

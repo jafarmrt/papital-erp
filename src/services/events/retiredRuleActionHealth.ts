@@ -6,7 +6,7 @@ import { RETIRED_RULE_ACTION_TYPES, ruleActionTypeLabel } from '../../lib/events
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
- * v9.0.364 (TD-712، تصمیم ت۴ الف): قانون‌هایی که نوع اقدامشان حذف شده است («تحریک گردش کار» و «پیامک»). مهاجرت 0084
+ * v9.0.377 (TD-712، تصمیم ت۴ الف): قانون‌هایی که نوع اقدامشان حذف شده است («تحریک گردش کار» و «پیامک»). مهاجرت 0085
  * آن‌ها را غیرفعال و در `event_action_rule_retirements` ثبت کرد؛ تا وقتی نوع اقدامشان عوض یا خودشان حذف نشده‌اند فهرست می‌شوند.
  */
 export interface RetiredActionRuleRow {

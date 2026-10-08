@@ -2,7 +2,7 @@ import { ValidationError } from '../../errors/customErrors.js';
 import { isRetiredRuleActionType, isRuleActionType, retiredRuleActionMessage } from '../../lib/events/ruleActionTypes.js';
 
 /**
- * v9.0.364 (TD-712، B15-10، تصمیم ت۴ الف): قانون خودکار فقط با اقدام زنده ساخته یا فعال می‌شود. قانون پیشینی با اقدام
+ * v9.0.377 (TD-712، B15-10، تصمیم ت۴ الف): قانون خودکار فقط با اقدام زنده ساخته یا فعال می‌شود. قانون پیشینی با اقدام
  * حذف‌شده («تحریک گردش کار» یا «پیامک») غیرفعال می‌ماند تا نوع اقدامش عوض شود؛ ویرایش دیگر آن تا وقتی غیرفعال است آزاد است.
  */
 export function assertRuleActionTypeAllowed(actionType: unknown, options: { active: boolean; changingType: boolean }): void {

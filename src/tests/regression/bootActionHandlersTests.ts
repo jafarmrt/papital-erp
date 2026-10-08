@@ -2,7 +2,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
  * Package 15 (events and integrations), TD-714 / B15-12 (decision t4 a): the server registers no demo action handler at
- * boot. On v9.0.362 `registerDomainEventHandlers` registered WorkflowInventorySyncActionHandler,
+ * boot. On v9.0.375 `registerDomainEventHandlers` registered WorkflowInventorySyncActionHandler,
  * InvoiceAccountingSyncActionHandler and InventoryReorderAlertActionHandler, which only logged but wrote a «successful
  * action handler» audit row (`voucherGenerated: true`) and an idempotency row for every invoice and stock issue.
  */
@@ -11,7 +11,7 @@ export async function runBootActionHandlersTests(shouldRun: (id: string, ...extr
   const id = 'reg_boot_registers_no_demo_action_handlers_td_714';
   if (!shouldRun(id, 'td714', 'b15-12', 'action-handler', 'package15')) return results;
 
-  const name = 'v9.0.363: server boot registers no demo action handler (TD-714)';
+  const name = 'v9.0.376: server boot registers no demo action handler (TD-714)';
   const tStart = Date.now();
   try {
     const { spawnSync } = await import('child_process');

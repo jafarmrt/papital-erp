@@ -8,6 +8,7 @@ import { ManualPurchaseList } from './ManualPurchaseList';
 import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 import { AddMaterialModal } from './AddMaterialModal';
 import { UnitConversionModal } from './UnitConversionModal';
+import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 
 interface ProjectInventoryTabProps {
   project: any;
@@ -31,6 +32,7 @@ export function ProjectInventoryTab({
     saving,
     isFinalized,
     reservedItems,
+    reservationShortages,
     isUnitConversionModalOpen,
     setIsUnitConversionModalOpen,
     conversionTarget,
@@ -86,10 +88,7 @@ export function ProjectInventoryTab({
     const bridged: PurchaseListItem[] = items
       .map((item, gIdx) => ({ item, gIdx }))
       .map(({ item, gIdx }) => {
-        const matchWh = (warehouseItems || []).find(i =>
-          (item.itemCode && i.code === item.itemCode) ||
-          (item.name && i.name.toLowerCase() === item.name.toLowerCase())
-        );
+        const matchWh = findProjectItemMatch({ code: item.itemCode, name: item.name }, warehouseItems);
         const currentStock = matchWh ? Number(matchWh.current_stock || 0) : Number(item.stockQty || 0);
         const requiredQty = Number(item.requiredQty || 1);
         const shortfall = Math.max(0, requiredQty - currentStock);
@@ -346,6 +345,7 @@ export function ProjectInventoryTab({
             purchaseList={purchaseList}
             isFinalized={isFinalized}
             reservedItems={reservedItems}
+            reservationShortages={reservationShortages}
             warehouseItems={warehouseItems}
             handleAddManualPurchaseRow={handleAddManualPurchaseRow}
             handlePrintPurchaseListWithCheck={handlePrintPurchaseListWithCheck}

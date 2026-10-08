@@ -19,20 +19,59 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.366 — Rule and Webhook Counters Under the Row Lock
+### v9.0.379 — Rule and Webhook Counters Under the Row Lock
 - **Rule and subscription counters (TD-718):** a rule's execution count and a webhook subscription's delivery counters were written from the row read before the action, so concurrent executions were lost (10 runs counted 3); they are now read under the row lock and written in the transaction of the attempt's log row.
 
-### v9.0.365 — Durable Retries for Webhook and Rule Action Deliveries
+### v9.0.378 — Durable Retries for Webhook and Rule Action Deliveries
 - **Integration deliveries (TD-705):** webhook retries were three in-memory timers lost on a restart, a failed rule action was never run again, the outbox handlers always reported success and nothing reached the dead letter queue; each delivery now has its own durable row, a worker retries it with a growing delay, after its cap it goes to the dead letter queue on its own row, and a replay runs only that delivery.
 
-### v9.0.364 — Fake Workflow and SMS Rule Actions Removed, Real Draft Evaluation
+### v9.0.377 — Fake Workflow and SMS Rule Actions Removed, Real Draft Evaluation
 - **Rule actions (TD-712):** the workflow-trigger action did nothing and reported "queued", the SMS action only wrote a log line, and the draft test of the rule editor answered success for any draft (an invalid operator, an unknown event, an empty address); both actions are removed, earlier rules of those types are deactivated and listed by the health check, and the draft test really evaluates the draft without sending or writing anything.
 
-### v9.0.363 — Demo Event Action Handlers Removed
+### v9.0.376 — Demo Event Action Handlers Removed
 - **Event action handlers (TD-714):** three demo handlers registered at boot only logged, yet wrote a "successful action handler" audit row (with voucherGenerated: true) and an idempotency row without expiry for every invoice, stock issue and reorder alert; boot no longer registers them.
 
-### v9.0.362 — A Webhook Action That Fails Is Recorded as Failed
+### v9.0.375 — A Webhook Action That Fails Is Recorded as Failed
 - **Webhook rule actions (TD-706):** a webhook rule action whose request failed (connection refused, no DNS, timeout) was recorded as a success with a made-up "200 OK (Simulated Fallback)" when its address contained webhook-echo, example.com, localhost, 127.0.0.1, httpbin.org or webhook.site anywhere; every failed request is now recorded as failed.
+
+### v9.0.374 — Reservations Keyed by Item Id
+- **Reservations (TD-822, B07-06):** reservation summaries, the reserved stock map and the item list key reservations by item id instead of the upper-cased code, so two items whose codes differ only in case keep their own reservations.
+
+### v9.0.373 — Project Finalize Reserves Free Stock Only
+- **Reservations (TD-819, B07-03, decision t3):** finalizing a project reserves min(need, stock minus the reservations of others) under a new advisory lock (91011), stores the shortage in reservationShortages (shown on the purchase tab), and the health check lists items reserved above their stock.
+
+### v9.0.372 — Project Reservations Convert Units
+- **Reservations (TD-820, B07-04, decision t4):** a project need is converted to the item unit with the row's own conversion rate before it is reserved and summed per item; a row in another unit without a valid conversion refuses the finalize with 422 PROJECT_RESERVATION_UNIT_MISMATCH; a directly entered conversion rate is no longer rounded to zero.
+
+### v9.0.371 — Only Finalized Projects Reserve Stock
+- **Reservations (TD-817, B07-01, decision t2):** only the stored reservation of a finalized project reserves stock; the reader no longer rebuilds an empty reservation from the sections or the purchase list, so a draft or unfrozen project reserves nothing and a consumed reservation stays consumed; legacy projects are listed by the health check.
+
+### v9.0.370 — Only Sales Proformas Reserve Stock
+- **Reservations (TD-818, B07-02, decision t1):** only a sales proforma (type invoice or proforma in proforma status) reserves stock; a purchase proforma (receipt in proforma status) and any draft reserve nothing, so a purchase order no longer blocks the sale of free stock.
+
+### v9.0.369 — Package 7 Inventory Planning Audit
+- **Audit (package 7):** inventory planning section of the stability audit report: 15 proven findings opened as TD-817..TD-831 plus TD-843 (decision t7) with the product-owner decisions t1-t8; documentation only.
+
+### v9.0.368 — v9.0.368 — Stage Number and Percent Input
+- **Stage Number and Percent Input (TD-755):** a text stage number or percent answered 500 with the SQL text and a manual duplicate number was stored; the stage route now reads them with `decimalInput` (a positive whole number, a whole percent 0 to 100, Persian digits accepted), a number another stage holds is 409 `STAGE_ORDER_TAKEN`, and a renumbered stage carries its matrix ticks.
+
+### v9.0.367 — v9.0.367 — Stage Numbers Never Reused
+- **Stage Numbers Never Reused (TD-737, TD-753):** a new stage took «live stages + 1», so after a deletion it reused a number and inherited the deleted stage's ticks (a project stayed completed with no work) and two stages could share a number; numbering now follows every number the project used under the project lock, a deleted stage drops its ticks, and migration 0084 adds a partial unique index and a foreign key to the project.
+
+### v9.0.366 — v9.0.366 — Manual Stage Status Only Without Products
+- **Manual Stage Status Only Without Products (TD-758, decision 1a):** in a project with a progress matrix a manual stage status or percent answered 200 and was silently reverted by the sync; it is now refused with 422 `STAGE_STATUS_FROM_MATRIX`, and the stage form asks for status and percent only in a project without products.
+
+### v9.0.365 — v9.0.365 — Project Status Only on Writes
+- **Project Status Only on Writes (TD-738, decision 1a):** reading a project ran the progress sync without a lock or audit row, so a cancelled project with a full matrix became completed on one GET by a warehouse reader and its delivery was accepted; the sync now runs only inside the tick, stage and project-edit transactions under the project row lock, never changes a cancelled or paused project, and audits each status change.
+
+### v9.0.364 — v9.0.364 — One Progress Matrix Rule
+- **One Progress Matrix Rule (TD-739):** the product × stage progress matrix had three copies that disagreed: a project defined by its main item showed no matrix row and its ticks were skipped, yet its completion was refused as «0 of 3»; the view, the ticks, the completion check (now 422 `PROJECT_MATRIX_INCOMPLETE` inside the project save) and the status sync share `computeProgressMatrix`.
+
+### v9.0.363 — v9.0.363 — One Item-Matching Rule for Project Materials
+- **One Item-Matching Rule for Project Materials (TD-749, TD-768):** the project purchase list matched a material to a warehouse item by part of its name («کارتن» took the stock of «کارتن بسته‌بندی بزرگ» and left the purchase list) while the server reserved by exact name, and the rule was copied in ten places; the screens and the reservation now share `findProjectItemMatch` (item id, then code, then exact name; never a substring or an empty name).
+
+### v9.0.362 — v9.0.362 — Package 11 Project Control Audit
+- **Audit (package 11):** project control and production section of the stability audit report: 35 proven findings, 30 of them opened as TD-737..TD-769 (TD-735, TD-736 and TD-747 were closed in package 12; B11-10 and B11-12 were fixed by TD-888 and TD-688) with the product-owner decisions t1-t10; documentation only.
 
 ### v9.0.361 — WooCommerce and Webhook Keys Encrypted at Rest
 - **Integration secrets at rest (TD-898):** the WooCommerce consumer key and secret, the WooCommerce webhook secret and every webhook subscription's signing key and custom header values are now stored with `encryptSecret` (`ERP_SECRETS_KEY`) and decrypted only inside the server; a value that cannot be decrypted is never sent, and legacy plain values are encrypted with `npm run secrets:encrypt -- --apply`.

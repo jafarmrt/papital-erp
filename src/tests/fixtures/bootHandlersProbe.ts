@@ -1,5 +1,5 @@
 /**
- * v9.0.363 (TD-714): the domain event handlers the server registers at boot (`registerDomainEventHandlers`, server.ts),
+ * v9.0.376 (TD-714): the domain event handlers the server registers at boot (`registerDomainEventHandlers`, server.ts),
  * run in a separate process so the test process's event bus stays free of them. Prints the action handlers registered.
  * Run by the test reg_boot_registers_no_demo_action_handlers_td_714.
  */

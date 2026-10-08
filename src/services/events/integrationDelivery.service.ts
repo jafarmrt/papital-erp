@@ -7,8 +7,8 @@ import { DeadLetterQueueService } from './deadLetterQueueService.js';
 import type { BaseDomainEvent } from './domainEvents.js';
 
 /**
- * v9.0.365 (TD-705, B15-03, product-owner decision t2 a): every delivery of an event to an integration has its own durable
- * row in `integration_delivery_jobs` (migration 0085): a webhook subscription x event (`webhook`) and a matching rule's
+ * v9.0.378 (TD-705, B15-03, product-owner decision t2 a): every delivery of an event to an integration has its own durable
+ * row in `integration_delivery_jobs` (migration 0086): a webhook subscription x event (`webhook`) and a matching rule's
  * action x event (`rule_action`), unique per (kind, target, event), so a delivery that succeeded is never sent again. The
  * outbox handlers only record these rows (their error still goes back to the outbox), the first attempt runs at once, and
  * this worker retries a failed one after a growing delay (`next_attempt_at`); after `max_attempts` the row is `failed` and

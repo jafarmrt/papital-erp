@@ -9,7 +9,7 @@ import { eventActionLogs, eventActionRules, webhookDeliveries, webhookSubscripti
  * Package 15 (events and integrations), TD-705 / B15-03 (decision t2 a): every delivery of an event (webhook subscription
  * x event, rule action x event) has its own durable row; a failed one is retried with a growing delay, reaches the dead
  * letter queue after its cap, and the replay runs only that delivery; a delivery that succeeded is never sent again. On
- * v9.0.364 webhook retries were three in-memory timers, a failed rule action was never run again, both outbox handlers
+ * v9.0.377 webhook retries were three in-memory timers, a failed rule action was never run again, both outbox handlers
  * always reported success and nothing reached the dead letter queue.
  */
 export async function runIntegrationDeliveryRetryTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -17,7 +17,7 @@ export async function runIntegrationDeliveryRetryTests(shouldRun: (id: string, .
   const id = 'reg_integration_delivery_retry_dead_letter_td_705';
   if (!shouldRun(id, 'td705', 'b15-03', 'webhook', 'outbox', 'dlq', 'package15')) return results;
 
-  const name = 'v9.0.365: a failed webhook or rule action delivery is retried from its own durable row, then dead-lettered and replayed alone (TD-705)';
+  const name = 'v9.0.378: a failed webhook or rule action delivery is retried from its own durable row, then dead-lettered and replayed alone (TD-705)';
   const tStart = Date.now();
   const tag = `td705_${Date.now()}`;
   const eventType = `Td705.Probe${Date.now()}`;

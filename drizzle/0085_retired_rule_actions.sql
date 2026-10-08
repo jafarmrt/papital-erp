@@ -1,4 +1,4 @@
--- Drizzle Migration 0084: rule actions «workflow_trigger» and «sms_simulation» retired (v9.0.364 / TD-712, product-owner decision t4 a)
+-- Drizzle Migration 0085: rule actions «workflow_trigger» and «sms_simulation» retired (v9.0.377 / TD-712, product-owner decision t4 a)
 --
 -- The «workflow_trigger» action of an automatic event rule did nothing and reported «queued», and «sms_simulation» only
 -- wrote a log line. Both action types were removed: a rule is created or activated only with an in-app notification,

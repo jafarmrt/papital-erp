@@ -4,7 +4,7 @@ import type { deadLetterEvents } from '../../db/schema.js';
 type DeadLetterRow = Pick<typeof deadLetterEvents.$inferSelect, 'source' | 'metadata'>;
 
 /**
- * v9.0.365 (TD-705): a dead letter row of one integration delivery (a webhook subscription or a rule action for one event)
+ * v9.0.378 (TD-705): a dead letter row of one integration delivery (a webhook subscription or a rule action for one event)
  * carries its delivery row in `metadata.deliveryJobId`; its replay and requeue run that delivery, never the whole event.
  */
 export function deadLetterDeliveryJobId(record: DeadLetterRow): number | null {

@@ -2,7 +2,7 @@ import { DomainEventType, type BaseDomainEvent } from './domainEvents.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 
 /**
- * The sample event a rule is tried against (the rule test and the draft evaluation, v9.0.364 TD-712): one payload that
+ * The sample event a rule is tried against (the rule test and the draft evaluation, v9.0.377 TD-712): one payload that
  * carries the fields of the invoice, stock, treasury and workflow events, under the rule's own event type («*» → invoice).
  */
 export function ruleSampleEvent(eventType: string): BaseDomainEvent {

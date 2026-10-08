@@ -1,4 +1,4 @@
--- Drizzle Migration 0085: durable delivery jobs for webhooks and rule actions (v9.0.365 / TD-705, product-owner decision t2 a)
+-- Drizzle Migration 0086: durable delivery jobs for webhooks and rule actions (v9.0.378 / TD-705, product-owner decision t2 a)
 --
 -- A webhook delivery to a subscription and a rule's action for one event were attempted in memory only: the event's
 -- outbox handlers reported success at once, webhook retries were three timers lost on a restart, a failed rule action

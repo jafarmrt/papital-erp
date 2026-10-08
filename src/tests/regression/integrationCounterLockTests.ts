@@ -8,7 +8,7 @@ import { eventActionLogs, eventActionRules, webhookDeliveries, webhookSubscripti
 /**
  * Package 15 (events and integrations), TD-718 / B15-16: a rule's execution counter and a webhook subscription's
  * delivery counters are read under the row's lock and written in the same transaction as the attempt's log row, so
- * concurrent attempts are all counted. On v9.0.365 each attempt wrote the count it had read before its action
+ * concurrent attempts are all counted. On v9.0.378 each attempt wrote the count it had read before its action
  * (10 concurrent executions left `execution_count` far below 10).
  */
 export async function runIntegrationCounterLockTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -16,7 +16,7 @@ export async function runIntegrationCounterLockTests(shouldRun: (id: string, ...
   const id = 'reg_integration_counters_under_row_lock_td_718';
   if (!shouldRun(id, 'td718', 'b15-16', 'webhook', 'action-rule', 'concurrency', 'package15')) return results;
 
-  const name = 'v9.0.366: concurrent rule executions and webhook deliveries are all counted on the rule and subscription (TD-718)';
+  const name = 'v9.0.379: concurrent rule executions and webhook deliveries are all counted on the rule and subscription (TD-718)';
   const tStart = Date.now();
   const tag = `td718_${Date.now()}`;
   const runs = 10;

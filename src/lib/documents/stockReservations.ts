@@ -1,5 +1,6 @@
 import type { Item } from '../../types';
 import { getSellableStock } from '../stockAvailability';
+import { reservingProjectRows } from '../projects/projectReservationState';
 
 /**
  * TD-080 (بخش ۳): منطق خالص رزرو کالا در فرم رسید/حواله انبار — منتقل‌شده بدون تغییر رفتار از DocumentsPage.
@@ -69,7 +70,7 @@ type MatchableItem = Pick<Item, 'id' | 'code' | 'name'>;
 
 /**
  * همه رزروهای سراسری: ردیف‌های /inventory/reserved-items، و اگر آن پاسخ هنوز آماده/خالی است
- * رزروهای inventory_control.reservedItems پروژه‌ها.
+ * رزروهای inventory_control.reservedItems پروژه‌های ثبت نهایی‌شده.
  */
 export function buildGlobalReservations(
   reservedItemsResponse: ReservedItemsResponse | null | undefined,
@@ -97,10 +98,11 @@ export function buildGlobalReservations(
     return list;
   }
 
-  // Fallback if reserved-items endpoint not ready yet:
+  // Fallback if reserved-items endpoint not ready yet.
+  // v9.0.371 (TD-817): only the stored reservation of a finalized project reserves, the server's own rule
   projectsList.forEach(p => {
-    const reservedItems = p.inventory_control?.reservedItems || p.inventoryControl?.reservedItems;
-    if (Array.isArray(reservedItems) && reservedItems.length > 0) {
+    const reservedItems = reservingProjectRows<StoredReservedItem>(p.inventory_control ?? p.inventoryControl);
+    if (reservedItems.length > 0) {
       reservedItems.forEach((rItem: StoredReservedItem) => {
         list.push({
           sourceType: 'project',
