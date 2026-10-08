@@ -10853,5 +10853,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runForeignKeyIndexTests } = await import('../regression/foreignKeyIndexTests.js');
   results.push(...await runForeignKeyIndexTests(shouldRun));
 
+  // Phase 5 PR «ب» (v9.0.453+): procurement receive items and order delivery
+  const { runProcurementReceiveTests } = await import('../regression/procurementReceiveTests.js');
+  results.push(...await runProcurementReceiveTests(shouldRun));
+
   return results;
 }

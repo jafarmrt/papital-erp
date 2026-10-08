@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.453 — Receive Items Does Not Close a Requisition With Open Rows
+- **Fix (TD-911, P5-P02):** receive items, like delivery, marks a requisition received only when every row is received or closed; otherwise it is 409 REQUISITION_ROWS_NOT_SETTLED naming the rows and the whole transition rolls back.
+
 ### v9.0.452 — Workflow Approval Reads the Signer's Backdate Permission
 - **Fix (TD-928, P5-S-04):** a workflow transition that finalizes a document or receives goods takes warehouse.backdate from the signer's role (the delegator's for a deputy, always for the system admin), like PUT /documents/:id/finalize; it was never passed and a permitted backdated approval got 422.
 
