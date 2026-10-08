@@ -77,6 +77,43 @@ const USER_FOREIGN_KEYS: ReadonlyArray<readonly [table: string, column: string, 
   ['webhook_subscriptions', 'created_by', 'پیوند سازنده اشتراک وب‌هوک به کاربر'],
 ];
 
+/**
+ * v9.0.433 (TD-903، مهاجرت 0091، قاعده TD-060): مرجع‌های میان جدول‌های کسب‌وکار؛ والدشان فقط حذف نرم می‌شود. هر ردیف: جدول، ستون،
+ * جدول مرجع، عنوان در فهرست و نام والد در شمار ردیف‌های ناسازگار
+ */
+const BUSINESS_FOREIGN_KEYS: ReadonlyArray<readonly [table: string, column: string, parent: string, label: string, parentNoun: string]> = [
+  ['accounting_settings', 'account_id', 'accounts', 'پیوند تنظیم حسابداری به حساب', 'حساب'],
+  ['bank_accounts', 'account_id', 'accounts', 'پیوند حساب خزانه به حساب دفتر کل', 'حساب'],
+  ['cheques', 'bank_account_id', 'bank_accounts', 'پیوند چک به حساب خزانه', 'حساب خزانه'],
+  ['cheques', 'voucher_id', 'journal_vouchers', 'پیوند چک به سند حسابداری', 'سند حسابداری'],
+  ['crm_activities', 'assigned_personnel_id', 'personnel', 'پیوند پیگیری به پرسنل مسئول', 'پرسنل'],
+  ['crm_activities', 'customer_id', 'customers', 'پیوند پیگیری به مشتری', 'مشتری'],
+  ['crm_activities', 'lead_id', 'crm_leads', 'پیوند پیگیری به پرونده فروش', 'پرونده فروش'],
+  ['crm_leads', 'assigned_personnel_id', 'personnel', 'پیوند پرونده فروش به پرسنل مسئول', 'پرسنل'],
+  ['crm_leads', 'customer_id', 'customers', 'پیوند پرونده فروش به مشتری', 'مشتری'],
+  ['daily_work_logs', 'project_id', 'production_projects', 'پیوند گزارش کار روزانه به پروژه', 'پروژه'],
+  ['item_prices', 'item_id', 'items', 'پیوند قیمت به کالا', 'کالا'],
+  ['piecework_logs', 'payroll_id', 'piecework_payrolls', 'پیوند کارکرد به فیش حقوقی', 'فیش حقوقی'],
+  ['piecework_logs', 'personnel_id', 'personnel', 'پیوند کارکرد به پرسنل', 'پرسنل'],
+  ['piecework_logs', 'project_id', 'production_projects', 'پیوند کارکرد به پروژه', 'پروژه'],
+  ['piecework_logs', 'task_id', 'piecework_tasks', 'پیوند کارکرد به عنوان کار', 'عنوان کار'],
+  ['piecework_payrolls', 'personnel_id', 'personnel', 'پیوند فیش حقوقی به پرسنل', 'پرسنل'],
+  ['piecework_personnel_rates', 'personnel_id', 'personnel', 'پیوند نرخ اختصاصی به پرسنل', 'پرسنل'],
+  ['piecework_personnel_rates', 'task_id', 'piecework_tasks', 'پیوند نرخ اختصاصی به عنوان کار', 'عنوان کار'],
+  ['piecework_task_rate_history', 'task_id', 'piecework_tasks', 'پیوند سابقه نرخ کارمزد به عنوان کار', 'عنوان کار'],
+  ['production_projects', 'customer_id', 'customers', 'پیوند پروژه به مشتری', 'مشتری'],
+  ['production_projects', 'item_id', 'items', 'پیوند پروژه به کالای اصلی', 'کالا'],
+  ['project_bom_allocations', 'item_id', 'items', 'پیوند تخصیص مواد پروژه به کالا', 'کالا'],
+  ['project_bom_allocations', 'project_id', 'production_projects', 'پیوند تخصیص مواد به پروژه', 'پروژه'],
+  ['project_bom_allocations', 'source_transaction_id', 'transactions', 'پیوند تخصیص مواد به ردیف کاردکس', 'ردیف کاردکس'],
+  ['transactions', 'document_id', 'documents', 'پیوند ردیف کاردکس به سند', 'سند'],
+  ['treasury_transactions', 'bank_account_id', 'bank_accounts', 'پیوند تراکنش خزانه به حساب خزانه', 'حساب خزانه'],
+  ['treasury_transactions', 'cheque_id', 'cheques', 'پیوند تراکنش خزانه به چک', 'چک'],
+  ['treasury_transactions', 'document_id', 'documents', 'پیوند تراکنش خزانه به سند', 'سند'],
+  ['treasury_transactions', 'payroll_id', 'piecework_payrolls', 'پیوند تراکنش خزانه به فیش حقوقی', 'فیش حقوقی'],
+  ['treasury_transactions', 'voucher_id', 'journal_vouchers', 'پیوند تراکنش خزانه به سند حسابداری', 'سند حسابداری'],
+];
+
 export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] = [
   {
     name: 'fk_transactions_item_id', kind: 'foreign_key', table: 'transactions', migration: '0001',
@@ -147,6 +184,11 @@ export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] 
   ...USER_FOREIGN_KEYS.map(([table, column, label]) => notValidForeignKey({
     name: `fk_${table}_${column}`, table, column, parent: 'users', onDelete: table === 'form_drafts' ? 'CASCADE' : 'NO ACTION',
     migration: '0090', label, blockerUnit: 'ردیف با کاربر ناموجود',
+  })),
+  // v9.0.433 (TD-903): business references, NO ACTION as declared
+  ...BUSINESS_FOREIGN_KEYS.map(([table, column, parent, label, parentNoun]) => notValidForeignKey({
+    name: `fk_${table}_${column}`, table, column, parent, onDelete: 'NO ACTION', migration: '0091', label,
+    blockerUnit: `ردیف با ${parentNoun} ناموجود`,
   })),
 ];
 

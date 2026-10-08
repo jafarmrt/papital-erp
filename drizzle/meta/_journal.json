@@ -638,6 +638,13 @@
       "when": 1793680000000,
       "tag": "0090_user_foreign_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1793780000000,
+      "tag": "0091_business_foreign_keys",
+      "breakpoints": true
     }
   ]
 }

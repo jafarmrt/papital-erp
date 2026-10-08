@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.433 — Business References Get Their Foreign Keys
+- **Fix (TD-903, B01-31 / B01-32):** the thirty references between business tables get database foreign keys (NO ACTION as declared), validated on clean data and listed by the health check until validated.
+
 ### v9.0.432 — User Columns Get Their Foreign Keys
 - **Fix (TD-902, B01-31 / B01-32):** the sixteen columns declared as references to users get database foreign keys with their declared ON DELETE, validated on clean data and listed by the health check until validated.
 

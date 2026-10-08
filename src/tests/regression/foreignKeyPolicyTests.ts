@@ -21,19 +21,8 @@ import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdmi
  *   here), and every documented exception of `FOREIGN_KEY_EXCEPTIONS` is a real column with neither.
  */
 
-/** Declared references without a database constraint yet; each later release of PR 3 removes its keys */
-const PENDING_FOREIGN_KEYS: readonly string[] = [
-  'accounting_settings.account_id', 'bank_accounts.account_id', 'cheques.bank_account_id', 'cheques.voucher_id',
-  'crm_activities.assigned_personnel_id', 'crm_activities.customer_id', 'crm_activities.lead_id',
-  'crm_leads.assigned_personnel_id', 'crm_leads.customer_id', 'daily_work_logs.project_id', 'item_prices.item_id',
-  'piecework_logs.payroll_id', 'piecework_logs.personnel_id', 'piecework_logs.project_id', 'piecework_logs.task_id',
-  'piecework_payrolls.personnel_id', 'piecework_personnel_rates.personnel_id', 'piecework_personnel_rates.task_id',
-  'piecework_task_rate_history.task_id', 'production_projects.customer_id', 'production_projects.item_id',
-  'project_bom_allocations.item_id', 'project_bom_allocations.project_id',
-  'project_bom_allocations.source_transaction_id', 'transactions.document_id', 'treasury_transactions.bank_account_id',
-  'treasury_transactions.cheque_id', 'treasury_transactions.document_id', 'treasury_transactions.payroll_id',
-  'treasury_transactions.voucher_id',
-];
+/** Declared references without a database constraint; empty since v9.0.433 (TD-903), so a new reference gets its key in its migration */
+const PENDING_FOREIGN_KEYS: readonly string[] = [];
 
 type DeclaredFk = { key: string; table: string; column: string; refTable: string; onDelete: string };
 
