@@ -12,6 +12,8 @@ import { RuleEditorModal } from '../../components/settings/RuleEditorModal';
 
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn(async () => true) }));
 
+// v9.0.435 (TD-722): the change buttons show only for holders of events.manage
+vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
 vi.mock('../../api', async () => {
   const actual = await vi.importActual<typeof import('../../api')>('../../api');
   return { ...actual, fetchJson: vi.fn() };
@@ -56,7 +58,7 @@ describe('TD-719 webhook edit and ping never use the masked key', () => {
   it('the row ping sends only the webhook id, so the server signs with the stored key', async () => {
     const writes = mockServer();
     render(<WebhookManagementSubTab />);
-    fireEvent.click(await screen.findByText('تست پینگ و امضا'));
+    fireEvent.click(await screen.findByText('آزمایش اتصال و امضا'));
     await waitFor(() => expect(writes.some(w => w.url === '/events/webhooks/ping')).toBe(true));
     expect(writes.find(w => w.url === '/events/webhooks/ping')?.body).toEqual({ subscriptionId: 7 });
   });
@@ -68,7 +70,7 @@ describe('TD-720 the create form leaves the signing key to the server', () => {
     const random = vi.spyOn(Math, 'random');
     render(<WebhookManagementSubTab />);
     fireEvent.click(await screen.findByText('تعریف وب‌هوک جدید'));
-    fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه آنلاین ووکامرس'), { target: { value: 'شریک تازه' } });
+    fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه برخط ووکامرس'), { target: { value: 'شریک تازه' } });
     fireEvent.change(screen.getByPlaceholderText('https://your-domain.com/api/webhook/receiver'), { target: { value: 'https://new.example.com/hook' } });
     fireEvent.change(screen.getByDisplayValue('5000'), { target: { value: '12000' } });
     fireEvent.click(screen.getByText('ایجاد و فعال‌سازی درگاه وب‌هوک'));
@@ -86,7 +88,7 @@ describe('TD-710 the signing key is shown once and secrets are password fields',
     mockServer({ 'POST /events/webhooks': { success: true, message: 'ساخته شد', data: { id: 8, name: 'شریک تازه', secretKey: 'whsec_shown_once_after_create' } } });
     render(<WebhookManagementSubTab />);
     fireEvent.click(await screen.findByText('تعریف وب‌هوک جدید'));
-    fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه آنلاین ووکامرس'), { target: { value: 'شریک تازه' } });
+    fireEvent.change(screen.getByPlaceholderText('مثال: فروشگاه برخط ووکامرس'), { target: { value: 'شریک تازه' } });
     fireEvent.change(screen.getByPlaceholderText('https://your-domain.com/api/webhook/receiver'), { target: { value: 'https://new.example.com/hook' } });
     fireEvent.click(screen.getByText('ایجاد و فعال‌سازی درگاه وب‌هوک'));
     expect(await screen.findByText('whsec_shown_once_after_create')).toBeTruthy();

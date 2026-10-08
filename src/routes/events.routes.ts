@@ -1,22 +1,27 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission, can } from '../middleware/authorize.js';
 import { domainEventBus } from '../services/events/domainEventBus.js';
 import { OutboxService } from '../services/events/outboxService.js';
 import { DeadLetterQueueService } from '../services/events/deadLetterQueueService.js';
 import { EventActionEngineService } from '../services/events/eventActionEngineService.js';
-import { evaluateRuleDraft } from '../services/events/ruleDraftEvaluation.js';
+import { evaluateRuleDraft, testStoredRule } from '../services/events/ruleDraftEvaluation.js';
+import { simulateDomainEvent } from '../services/events/eventSimulation.js';
+import { retryFailedOutboxEvents } from '../services/events/outboxRetry.js';
 import { WebhookSubscriptionService } from '../services/events/webhookSubscriptionService.js';
 import { EventSourcingReplayService } from '../services/events/eventSourcingReplayService.js';
 import { logActivity } from '../lib/auditLogger.js';
-import { validate, paramsIdSchema } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { z } from 'zod';
 import { errorMessageOf } from '../utils.js';
 import { AppError, NotFoundError } from '../errors/customErrors.js';
 import { isEnteredSecret } from '../lib/secrets/maskedSecret.js';
 import { actionRuleView, webhookSubscriptionView } from '../services/events/integrationSecrets.js';
 import { assertWebhookSecretsReadable } from '../services/events/webhookSecretStorage.js';
+import { utcTimestampResponses } from '../middleware/utcTimestampResponses.js';
+import { EVENT_OPAQUE_KEYS, EVENT_TIMESTAMP_KEYS } from '../services/events/eventTimestamps.js';
+import { setRuleActive } from '../services/events/ruleActiveState.js';
 
 const eventIdParamSchema = z.object({
   params: z.object({
@@ -86,6 +91,8 @@ router.all('/webhook-echo', asyncHandler(async (req, res) => {
 
 // Enforce authentication on all event routes
 router.use(authenticateToken);
+// v9.0.436 (TD-725): server timestamps in every events answer carry a Z (AGENTS §1.10)
+router.use(utcTimestampResponses(EVENT_TIMESTAMP_KEYS, EVENT_OPAQUE_KEYS));
 
 // =========================================================================
 // 1. Domain Events Inspection & Simulation (EDA Telemetry)
@@ -109,30 +116,11 @@ router.get('/domain-events', authorizePermission('events.view'), asyncHandler(as
   }
 }));
 
+// v9.0.430 (TD-708, decision t5 a): the simulation publishes nothing; it only shows which rules and webhooks the event reaches
 router.post('/domain-events/simulate', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
-  try {
-    const { eventType, aggregateType, aggregateId, payload } = req.body;
-    const user = req.user;
-
-    const event = await domainEventBus.publishEvent(
-      eventType || 'SimulatedTestEvent',
-      aggregateType || 'System',
-      aggregateId || 'TEST_01',
-      payload || { message: 'رویداد تستی آزمایشی با موفقیت در سیستم منتشر شد.' },
-      {
-        userId: user?.id,
-        userName: user?.username || 'مدیر سیستم'
-      }
-    );
-
-    res.json({
-      success: true,
-      message: 'رویداد دامنه‌ای با موفقیت منتشر و ثبت گردید.',
-      event
-    });
-  } catch (error) {
-    throw error;
-  }
+  const { eventType, aggregateType, aggregateId, payload } = req.body ?? {};
+  const result = await simulateDomainEvent({ eventType, aggregateType, aggregateId, payload }, { id: req.user?.id, username: req.user?.username });
+  res.json({ success: true, ...result });
 }));
 
 // =========================================================================
@@ -192,11 +180,15 @@ router.post(['/outbox/process-now', '/outbox/process'], authorizePermission('eve
 
 router.post('/outbox/retry-failed', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
-    await OutboxService.retryAllFailedEvents();
+    // v9.0.432 (TD-716): the DLQ rows of the retried events are resolved in the same transaction
+    const result = await retryFailedOutboxEvents({ userId: req.user?.id });
 
     res.json({
       success: true,
-      message: 'تمام رویدادهای ناموفق برای تلاش مجدد نشانه‌گذاری شدند.'
+      ...result,
+      message: result.skippedBusy.length > 0
+        ? `${result.retried.toLocaleString('fa-IR')} رویداد ناموفق دوباره در صف قرار گرفت؛ ${result.skippedBusy.length.toLocaleString('fa-IR')} رویداد که هم‌اکنون از صف خطا بازپخش می‌شود کنار ماند.`
+        : `${result.retried.toLocaleString('fa-IR')} رویداد ناموفق دوباره در صف قرار گرفت.`
     });
   } catch (error) {
     throw error;
@@ -206,7 +198,8 @@ router.post('/outbox/retry-failed', authorizePermission('events.manage'), asyncH
 router.post('/outbox/:eventId/retry', authorizePermission('events.manage'), validate(eventIdParamSchema), asyncHandler(async (req, res) => {
   try {
     const { eventId } = req.params;
-    await OutboxService.retryFailedEvent(eventId);
+    // v9.0.432 (TD-716): only a failed event (else 409), and its DLQ row is resolved in the same transaction
+    await retryFailedOutboxEvents({ eventId, userId: req.user?.id });
 
     res.json({
       success: true,
@@ -363,36 +356,33 @@ router.delete(['/action-rules/:id', '/rules/:id'], authorizePermission('events.m
   }
 }));
 
-router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const updatedRule = await EventActionEngineService.toggleRule(id);
+// v9.0.438 (TD-729): the body names the target state ({ active }); a repeat changes nothing
+const ruleActiveSchema = z.object({
+  params: z.object({ id: numericIdString }).passthrough(),
+  body: z.object({ active: z.boolean({ message: 'وضعیت هدف قانون (active) باید درست یا نادرست باشد.' }) }),
+}).passthrough();
 
-    res.json({
-      success: true,
-      message: `وضعیت قانون به ${updatedRule.isActive ? 'فعال' : 'غیرفعال'} تغییر یافت.`,
-      data: actionRuleView(updatedRule)
-    });
-  } catch (error) {
-    throw error;
-  }
+router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermission('events.manage'), validate(ruleActiveSchema), asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { rule, changed } = await setRuleActive(id, req.body.active === true, req);
+  const state = rule.isActive === 1 ? 'فعال' : 'غیرفعال';
+  res.json({
+    success: true,
+    changed,
+    message: changed ? `قانون «${rule.name}» ${state} شد.` : `قانون «${rule.name}» از پیش ${state} است.`,
+    data: actionRuleView(rule)
+  });
 }));
 
+// v9.0.430 (TD-708, decision t5 a): a rule test evaluates the stored rule and shows what its action would do; it never runs it
 router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const { customEvent } = req.body;
-
-    const testResult = await EventActionEngineService.testRule(id, customEvent);
-
-    res.json({
-      success: true,
-      ...testResult,
-      rule: actionRuleView(testResult.rule)
-    });
-  } catch (error) {
-    throw error;
-  }
+  const id = parseInt(req.params.id, 10);
+  const testResult = await testStoredRule(id, req.body?.customEvent);
+  res.json({
+    success: true,
+    ...testResult,
+    rule: actionRuleView(testResult.rule)
+  });
 }));
 
 // v9.0.377 (TD-712): the draft is really evaluated (invalid draft → 422 RULE_DRAFT_INVALID) and nothing is sent or written
@@ -548,7 +538,8 @@ router.put('/dlq/:id/payload', authorizePermission('events.manage'), validate(pa
     const { payload } = req.body;
     const userId = req.user?.id;
 
-    const updated = await DeadLetterQueueService.editPayload(id, payload, userId);
+    // v9.0.432 (TD-716): under the row lock, never for a replayed row, audited with the request
+    const updated = await DeadLetterQueueService.editPayload(id, payload, { userId, req });
 
     res.json({
       success: true,
@@ -620,12 +611,15 @@ router.get(['/event-sourcing/timeline', '/timeline'], authorizePermission('event
       return res.status(400).json({ success: false, message: 'پارامترهای type و id الزامی هستند.' });
     }
 
-    const timeline = await EventSourcingReplayService.getAggregateTimeline(type, id);
+    // v9.0.431 (TD-711): audit rows only for holders of the audit log permission, computed here, never read from the request
+    const auditIncluded = await can(req.user, 'audit_logs.view');
+    const timeline = await EventSourcingReplayService.getAggregateTimeline(type, id, { includeAudit: auditIncluded });
 
     res.json({
       success: true,
       data: timeline,
-      timeline
+      timeline,
+      auditIncluded
     });
   } catch (error) {
     throw error;
@@ -642,7 +636,7 @@ router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], au
       aggregateType: aggregateType || (event?.aggregateType) || 'document',
       aggregateId: String(aggregateId || (event?.aggregateId) || '1'),
       payload: payload || (event?.payload) || {},
-      dryRun: dryRun !== false,
+      dryRun,
       userId: req.user?.id,
       userName: req.user?.username
     });

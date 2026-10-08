@@ -1,16 +1,16 @@
 import { Router } from 'express';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, isNull, sql } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { notifications, crmActivities, users } from '../db/schema.js';
+import { notifications } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { isoToJalaliDate, toPersianDigits } from '../utils.js';
-import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { z } from 'zod';
 import { validate, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { UnauthorizedError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
-import { dueFollowupCondition } from '../services/crm/crmFollowups.js';
+import { generateCrmDueReminders } from '../services/notifications/crmDueReminders.js';
+import { withUtcTimestampKeys } from '../lib/serverTimestamp.js';
+import { NOTIFICATION_TIMESTAMP_KEYS } from '../services/events/eventTimestamps.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -21,62 +21,10 @@ const notifParamSchema = z.object({
   })
 });
 
+// v9.0.433 (TD-709): only the user's own due follow-ups (linked personnel id, else the exact trimmed name), never «contains»
 async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
   try {
-    const [u] = await orm.select().from(users).where(eq(users.id, userId));
-    if (!u) return;
-
-    const userFullName = (u.fullName || '').trim();
-    const username = (u.username || '').trim();
-
-    // v7.0.132 (TD-232): سررسید پیگیری میلادی ISO ذخیره می‌شود و فقط با «امروز» میلادی مقایسه می‌شود.
-    // پیش‌تر «1405/08/01» (آینده) با «2026-10-03» مقایسه متنی می‌شد و همان روز ثبت، سررسیدشده اعلام می‌شد.
-    const todayIso = await businessTodayIsoDate();
-
-    // v9.0.16 (TD-425): همان شرط آمار و فهرست «امروز و معوق»؛ پیگیری پرونده حذف‌شده یادآوری نمی‌شود
-    const pendingActs = await orm
-      .select()
-      .from(crmActivities)
-      .where(dueFollowupCondition(todayIso));
-
-    for (const act of pendingActs) {
-      const assignee = (act.assignedTo || act.loggedBy || '').trim();
-      const isMyTask =
-        (userFullName && assignee.includes(userFullName)) ||
-        (username && assignee.includes(username)) ||
-        assignee === userFullName ||
-        assignee === username;
-
-      if (!isMyTask) continue;
-
-      const dueDate = toPersianDigits(isoToJalaliDate(act.nextFollowUpDate));
-
-      const notifLink = `/crm?activityId=${act.id}`;
-      const [existingNotif] = await orm
-        .select()
-        .from(notifications)
-        .where(
-          and(
-            eq(notifications.userId, userId),
-            eq(notifications.link, notifLink),
-            // v7.0.132: اعلان «تسک جدید» همین پیوند را دارد و پیش‌تر جلوی یادآوری سررسید را می‌گرفت
-            eq(notifications.type, 'crm_due_task')
-          )
-        );
-
-      if (!existingNotif) {
-        await orm.insert(notifications).values({
-          userId: userId,
-          senderId: null,
-          senderName: 'سامانه ارتباط با مشتری',
-          type: 'crm_due_task',
-          title: '⏰ سررسید پیگیری ارتباط با مشتری',
-          message: `سررسید پیگیری: "${act.nextFollowUpTask || act.title}" (تاریخ: ${dueDate})`,
-          link: notifLink,
-          isRead: 0
-        });
-      }
-    }
+    await generateCrmDueReminders(userId);
   } catch (err) {
     logger.error({ message: 'Error checking due CRM tasks notifications', error: err });
   }
@@ -89,10 +37,11 @@ router.get('/notifications', asyncHandler(async (req, res) => {
 
   await checkAndGenerateCrmTaskDueNotifications(userId);
 
+  // v9.0.434 (TD-717): a dismissed notification is kept but never listed
   const userNotifs = await orm
     .select()
     .from(notifications)
-    .where(eq(notifications.userId, userId))
+    .where(and(eq(notifications.userId, userId), isNull(notifications.dismissedAt)))
     .orderBy(desc(notifications.createdAt))
     .limit(50);
 
@@ -109,7 +58,8 @@ router.get('/notifications', asyncHandler(async (req, res) => {
     created_at: n.createdAt
   }));
 
-  res.json(mapped);
+  // v9.0.436 (TD-725): the creation time goes to the bell with a Z, so a new notification is «همین الان»
+  res.json(withUtcTimestampKeys(mapped, NOTIFICATION_TIMESTAMP_KEYS));
 }));
 
 // Get unread notification count
@@ -119,12 +69,13 @@ router.get('/notifications/unread-count', asyncHandler(async (req, res) => {
 
   await checkAndGenerateCrmTaskDueNotifications(userId);
 
-  const unread = await orm
-    .select()
+  // v9.0.434 (TD-717): counted in SQL, without dismissed notifications
+  const [unread] = await orm
+    .select({ count: sql<number>`COUNT(*)::int` })
     .from(notifications)
-    .where(and(eq(notifications.userId, userId), eq(notifications.isRead, 0)));
+    .where(and(eq(notifications.userId, userId), eq(notifications.isRead, 0), isNull(notifications.dismissedAt)));
 
-  res.json({ count: unread.length });
+  res.json({ count: Number(unread?.count ?? 0) });
 }));
 
 // Mark one notification as read
@@ -154,15 +105,17 @@ router.put('/notifications/read-all', asyncHandler(async (req, res) => {
   res.json({ success: true });
 }));
 
-// Delete a notification
+// Dismiss a notification
+// v9.0.434 (TD-717, decision t8 a): the row is kept with dismissed_at, so a dismissed due reminder never comes back
 router.delete('/notifications/:id', validate(notifParamSchema), asyncHandler(async (req, res) => {
   const userId = req.user?.id;
   if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');
   const notifId = Number(req.params.id);
 
   await orm
-    .delete(notifications)
-    .where(and(eq(notifications.id, notifId), eq(notifications.userId, userId)));
+    .update(notifications)
+    .set({ dismissedAt: sql`now()` })
+    .where(and(eq(notifications.id, notifId), eq(notifications.userId, userId), isNull(notifications.dismissedAt)));
 
   res.json({ success: true });
 }));

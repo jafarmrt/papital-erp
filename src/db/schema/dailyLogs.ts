@@ -54,7 +54,11 @@ export const notifications = pgTable('notifications', {
   link: text('link').default(''),
   isRead: integer('is_read').default(0),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  // v9.0.434 (TD-717): «حذف» در زنگ اعلان ردیف را نگه می‌دارد و فقط این زمان (UTC کارساز) را می‌نویسد؛ اعلان کنارگذاشته فهرست و شمرده نمی‌شود
+  dismissedAt: timestamp('dismissed_at', { mode: 'string' }),
 }, (table) => ({
   idx_notif_user: index('idx_notif_user').on(table.userId),
   idx_notif_read: index('idx_notif_read').on(table.isRead),
+  // v9.0.434 (TD-717): ایندکس یکتای جزئی uq_notifications_due_reminder روی (user_id, type, link) یادآوری‌های crm_due_task
+  // (مهاجرت 0089، فقط روی داده بی تکرار ساخته شد؛ تکراری‌های قدیمی را بررسی سلامت مالی فهرست می‌کند)
 }));

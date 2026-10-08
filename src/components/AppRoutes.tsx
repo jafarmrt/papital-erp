@@ -247,7 +247,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         } />
         <Route path="/domain-events" element={
           <ProtectedRoute page="/domain-events" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
-            <DomainEventsPage currentUser={user} />
+            <DomainEventsPage />
           </ProtectedRoute>
         } />
         <Route path="/changelog" element={

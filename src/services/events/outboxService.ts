@@ -6,6 +6,8 @@ import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { domainEventBus } from './domainEventBus.js';
 import { DeadLetterQueueService } from './deadLetterQueueService.js';
 import { observeOutboxProcessing } from '../../middleware/metrics.js';
+import { OUTBOX_MAX_ATTEMPTS } from '../../lib/events/outboxAttempts.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 
 export interface OutboxQueryFilters {
   status?: string;
@@ -20,7 +22,7 @@ export class OutboxService {
   private static workerIntervalId: NodeJS.Timeout | null = null;
   private static recoveryIntervalId: NodeJS.Timeout | null = null;
   private static isProcessingBatch = false;
-  private static readonly MAX_RETRIES = 5;
+  private static readonly MAX_RETRIES = OUTBOX_MAX_ATTEMPTS;
 
   /**
    * رابط رسمی AGENTS §15 — ثبت رویداد دامنه داخل تراکنش کسب‌وکار
@@ -191,7 +193,7 @@ export class OutboxService {
             source: 'outbox',
             payload: rawEvent.payload,
             metadata: rawEvent.metadata,
-            failureReason: `اتمام سقف تلاش‌ها (${this.MAX_RETRIES} تلاش): ${failureMessage || 'خطای پردازش'}`,
+            failureReason: `اتمام سقف تلاش‌ها (${toPersianDigits(this.MAX_RETRIES)} تلاش): ${failureMessage || 'خطای پردازش'}`,
             errorStack: failureStack,
             retryCount: newRetryCount
           }).catch(dlqErr => {
@@ -457,40 +459,6 @@ export class OutboxService {
       page: Math.floor(offset / limit) + 1,
       limit
     };
-  }
-
-  /**
-   * Reset a failed event for immediate retry.
-   */
-  static async retryFailedEvent(eventId: string): Promise<boolean> {
-    await orm
-      .update(outboxEvents)
-      .set({
-        status: 'pending',
-        retryCount: 0,
-        nextRetryAt: null,
-        lastError: null
-      })
-      .where(eq(outboxEvents.eventId, eventId));
-
-    return true;
-  }
-
-  /**
-   * Reset all failed events for batch retry.
-   */
-  static async retryAllFailedEvents(): Promise<number> {
-    await orm
-      .update(outboxEvents)
-      .set({
-        status: 'pending',
-        retryCount: 0,
-        nextRetryAt: null,
-        lastError: null
-      })
-      .where(eq(outboxEvents.status, 'failed'));
-
-    return 1;
   }
 
   /**

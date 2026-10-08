@@ -72,7 +72,7 @@ export async function runRetiredRuleActionTests(shouldRun: (id: string, ...extra
     const createdRows = await orm.select({ id: eventActionRules.id }).from(eventActionRules).where(eq(eventActionRules.name, `${tag} new sms`));
     ruleIds.push(...createdRows.map(r => r.id));
     if (create.status !== 422 || create.body?.code !== 'RULE_ACTION_TYPE_RETIRED' || createdRows.length > 0) wrong.push(`create sms rule: ${create.status} ${create.body?.code}, rows ${createdRows.length}`);
-    const toggle = await send('post', `/api/events/action-rules/${wfId}/toggle`, {});
+    const toggle = await send('post', `/api/events/action-rules/${wfId}/toggle`, { active: true });
     if (toggle.status !== 422 || toggle.body?.code !== 'RULE_ACTION_TYPE_RETIRED') wrong.push(`toggle on: ${toggle.status} ${toggle.body?.code}`);
     const activate = await send('put', `/api/events/action-rules/${wfId}`, { isActive: 1 });
     if (activate.status !== 422) wrong.push(`PUT isActive 1: ${activate.status}`);

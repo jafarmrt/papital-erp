@@ -61,11 +61,11 @@ export async function runRuleEventTypeTests(shouldRun: (id: string, ...extra: st
     // 3. an active legacy rule is not saved active, an inactive one is editable, activation needs a published type
     const renameActive = await send('put', `/api/events/action-rules/${activeLegacy}`, { name: `${tag} renamed` });
     if (renameActive.status !== 422 || renameActive.body?.code !== 'RULE_EVENT_TYPE_UNKNOWN') wrong.push(`rename active legacy: ${renameActive.status} ${renameActive.body?.code}`);
-    const off = await send('post', `/api/events/action-rules/${activeLegacy}/toggle`, {});
+    const off = await send('post', `/api/events/action-rules/${activeLegacy}/toggle`, { active: false });
     if (off.status !== 200 || off.body?.data?.isActive !== 0) wrong.push(`toggle off: ${off.status} ${off.body?.data?.isActive}`);
     const renameInactive = await send('put', `/api/events/action-rules/${activeLegacy}`, { name: `${tag} renamed` });
     if (renameInactive.status !== 200) wrong.push(`rename inactive legacy: ${renameInactive.status} ${renameInactive.body?.message}`);
-    const on = await send('post', `/api/events/action-rules/${inactiveLegacy}/toggle`, {});
+    const on = await send('post', `/api/events/action-rules/${inactiveLegacy}/toggle`, { active: true });
     if (on.status !== 422 || on.body?.code !== 'RULE_EVENT_TYPE_UNKNOWN') wrong.push(`toggle on legacy: ${on.status} ${on.body?.code}`);
     const fixed = await send('put', `/api/events/action-rules/${inactiveLegacy}`, { eventType: 'StockIssued', isActive: 1 });
     if (fixed.status !== 200 || fixed.body?.data?.eventType !== 'StockIssued' || fixed.body?.data?.isActive !== 1) wrong.push(`choose event and activate: ${fixed.status} ${JSON.stringify(fixed.body?.data ?? fixed.body?.message)}`);

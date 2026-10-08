@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { History, Play, RotateCcw, Search, CheckCircle2, AlertTriangle, FileText, Package, Users, Landmark, Layers, GitBranch, Clock, ShieldCheck, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react';
-import { formatPersianDate } from '../../utils';
+import { formatPersianDate, errorMessageOf, formatPersianNumber } from '../../utils';
 import { fetchJson } from '../../api';
+import { useHasPermission } from '../../contexts/AuthContext';
+import { useDebounce } from '../../hooks/useDebounce';
+
+/** v9.0.440 (TD-731): the aggregate search waits this long after the last keystroke before it asks the server. */
+export const AGGREGATE_SEARCH_DELAY_MS = 350;
 
 interface AggregateTypeOption {
   type: string;
@@ -26,6 +31,8 @@ interface TimelineItem {
 }
 
 export function EventSourcingReplaySubTab() {
+  // v9.0.435 (TD-722): the replay simulation route is guarded by events.manage
+  const canManage = useHasPermission('events.manage');
   const [types, setTypes] = useState<AggregateTypeOption[]>([]);
   const [selectedType, setSelectedType] = useState<string>('document');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
@@ -34,6 +41,8 @@ export function EventSourcingReplaySubTab() {
   
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
+  // v9.0.431 (TD-711): audit rows come only to holders of the audit log permission; the server says whether they were read
+  const [auditIncluded, setAuditIncluded] = useState(true);
   const [expandedTimelineId, setExpandedTimelineId] = useState<string | number | null>(null);
 
   // Simulation & Replay Modal state
@@ -60,11 +69,14 @@ export function EventSourcingReplaySubTab() {
     }
   };
 
-  const searchAggregates = async (type: string, keyword: string = '') => {
+  // v9.0.440 (TD-731): one request per settled keyword; a newer keyword or type aborts the older request, so a late answer
+  // never overwrites the newer list
+  const searchAggregates = async (type: string, keyword: string, signal: AbortSignal) => {
     if (!type) return;
     try {
       const params = new URLSearchParams({ type, aggregateType: type, search: keyword, limit: '25' });
-      const data = await fetchJson<{ success?: boolean; data?: { id: string; title: string }[] }>(`/events/event-sourcing/aggregates?${params.toString()}`);
+      const data = await fetchJson<{ success?: boolean; data?: { id: string; title: string }[] }>(`/events/event-sourcing/aggregates?${params.toString()}`, { signal });
+      if (signal.aborted) return;
       if (data?.success) {
         const list = Array.isArray(data.data) ? data.data : [];
         setAggregateOptions(list);
@@ -73,6 +85,7 @@ export function EventSourcingReplaySubTab() {
         }
       }
     } catch (err) {
+      if (signal.aborted) return;
       console.error('Error searching aggregates:', err);
     }
   };
@@ -83,14 +96,16 @@ export function EventSourcingReplaySubTab() {
     setTimeline([]);
     try {
       const params = new URLSearchParams({ type, aggregateType: type, id: aggId, aggregateId: aggId });
-      const data = await fetchJson<{ success?: boolean; timeline?: TimelineItem[]; message?: string }>(`/events/event-sourcing/timeline?${params.toString()}`);
+      const data = await fetchJson<{ success?: boolean; timeline?: TimelineItem[]; auditIncluded?: boolean; message?: string }>(`/events/event-sourcing/timeline?${params.toString()}`);
       if (data?.success) {
         setTimeline(Array.isArray(data.timeline) ? data.timeline : []);
+        setAuditIncluded(data.auditIncluded !== false);
       } else {
         showToast(data?.message || 'خطا در بارگذاری خط زمان رویدادها', 'error');
       }
     } catch (err) {
-      showToast('خطای شبکه در بارگذاری خط زمان', 'error');
+      // v9.0.439 (TD-730): the server's own reason is shown, never a fixed text
+      showToast(errorMessageOf(err) || 'خط زمان بارگذاری نشد.', 'error');
     } finally {
       setIsLoadingTimeline(false);
     }
@@ -100,9 +115,12 @@ export function EventSourcingReplaySubTab() {
     void fetchTypes();
   }, []);
 
+  const debouncedKeyword = useDebounce(searchKeyword, AGGREGATE_SEARCH_DELAY_MS);
   useEffect(() => {
-    void searchAggregates(selectedType, searchKeyword);
-  }, [selectedType]);
+    const controller = new AbortController();
+    void searchAggregates(selectedType, debouncedKeyword, controller.signal);
+    return () => controller.abort();
+  }, [selectedType, debouncedKeyword]);
 
   useEffect(() => {
     if (selectedAggregateId) {
@@ -110,7 +128,8 @@ export function EventSourcingReplaySubTab() {
     }
   }, [selectedType, selectedAggregateId]);
 
-  const handleSimulateOrReplay = async (item: TimelineItem, dryRun: boolean) => {
+  // v9.0.430 (TD-708, decision t5 a): the replay is only a simulation; the live replay of a made-up event is removed
+  const handleSimulateReplay = async (item: TimelineItem) => {
     setIsSimulating(true);
     setSimulationResult(null);
     try {
@@ -122,20 +141,17 @@ export function EventSourcingReplaySubTab() {
           aggregateType: selectedType,
           aggregateId: selectedAggregateId,
           payload: item.payload,
-          dryRun
+          dryRun: true
         })
       });
       if (data?.success) {
         setSimulationResult(data);
-        showToast(data.message || 'عملیات با موفقیت انجام شد.', 'success');
-        if (!dryRun) {
-          void fetchTimeline(selectedType, selectedAggregateId);
-        }
+        showToast(data.message || 'شبیه‌سازی بازپخش بی‌اثر انجام شد.', 'success');
       } else {
         showToast(data?.message || 'خطا در اجرای بازپخش', 'error');
       }
     } catch (err) {
-      showToast('خطای سرور در بازپخش رویداد', 'error');
+      showToast(errorMessageOf(err) || 'شبیه‌سازی بازپخش انجام نشد.', 'error');
     } finally {
       setIsSimulating(false);
     }
@@ -195,7 +211,7 @@ export function EventSourcingReplaySubTab() {
               </span>
             </h3>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-2xl">
-              بازسازی سیر تکامل هر موجودیت از اولین لحظه ایجاد تا کنون، بررسی جامع رخدادهای زنجیره‌ای Outbox و Audit، و امکان شبیه‌سازی بازپخش زمان‌بندی‌شده (Dry-Run).
+              بازسازی سیر هر موجودیت از لحظه ایجاد تا کنون، بررسی رویدادهای صف ارسال و سابقه ممیزی آن، و شبیه‌سازی بازپخش بی‌اثر.
             </p>
           </div>
         </div>
@@ -229,16 +245,13 @@ export function EventSourcingReplaySubTab() {
         {/* Search and Specific Instance Dropdown */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">جستجوی موجودیت مورد نظر:</label>
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">جست‌وجوی موجودیت:</label>
             <div className="relative">
               <input
                 type="text"
-                placeholder="جستجو با کد یا عنوان (مثال: فاکتور، کالا، مشتری)..."
+                placeholder="جست‌وجو با کد یا عنوان (مثال: فاکتور، کالا، مشتری)…"
                 value={searchKeyword}
-                onChange={e => {
-                  setSearchKeyword(e.target.value);
-                  void searchAggregates(selectedType, e.target.value);
-                }}
+                onChange={e => setSearchKeyword(e.target.value)}
                 className="w-full text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl pr-9 pl-4 py-2.5 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
               />
               <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
@@ -269,7 +282,7 @@ export function EventSourcingReplaySubTab() {
           <div className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-indigo-500" />
             <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-              خط زمان رویدادها (Event Stream Timeline) - {selectedType} #{selectedAggregateId || '...'}
+              خط زمان رویدادها: {selectedType} #{selectedAggregateId || '...'}
             </h4>
           </div>
           <span className="text-xs text-slate-400 font-mono">
@@ -277,10 +290,16 @@ export function EventSourcingReplaySubTab() {
           </span>
         </div>
 
+        {!auditIncluded && selectedAggregateId && !isLoadingTimeline && (
+          <p className="mb-3 text-[11px] text-slate-500 dark:text-slate-400">
+            سطرهای سجل ممیزی فقط برای دارنده مجوز «مشاهده دفترچه سوابق تغییرات» نشان داده می‌شوند.
+          </p>
+        )}
+
         {isLoadingTimeline ? (
           <div className="p-12 text-center text-slate-400">
             <RotateCcw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
-            در حال بازخوانی خط زمان رویدادهای موجودیت...
+            در حال بازخوانی خط زمان رویدادهای موجودیت…
           </div>
         ) : !selectedAggregateId ? (
           <div className="p-12 text-center text-slate-400">
@@ -334,17 +353,19 @@ export function EventSourcingReplaySubTab() {
                           {formatPersianDate(item.occurredAt)}
                         </span>
 
-                        <button
-                          onClick={() => {
-                            setSelectedEventForReplay(item);
-                            setSimulationResult(null);
-                          }}
-                          className="px-2.5 py-1 text-[11px] font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition-all flex items-center gap-1"
-                          title="شبیه‌سازی و بازپخش رویداد"
-                        >
-                          <Play className="w-3 h-3" />
-                          <span>بازپخش</span>
-                        </button>
+                        {canManage && (
+                          <button
+                            onClick={() => {
+                              setSelectedEventForReplay(item);
+                              setSimulationResult(null);
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition-all flex items-center gap-1"
+                            title="شبیه‌سازی و بازپخش رویداد"
+                          >
+                            <Play className="w-3 h-3" />
+                            <span>بازپخش</span>
+                          </button>
+                        )}
 
                         <button
                           onClick={() => setExpandedTimelineId(isExpanded ? null : item.id)}
@@ -365,7 +386,7 @@ export function EventSourcingReplaySubTab() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
                             <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-                              داده‌های رویداد (Payload):
+                              داده رویداد:
                             </span>
                             <pre className="text-[11px] font-mono bg-slate-950 text-slate-100 p-2.5 rounded-xl overflow-x-auto max-h-40 dir-ltr text-left">
                               {JSON.stringify(item.payload, null, 2)}
@@ -374,7 +395,7 @@ export function EventSourcingReplaySubTab() {
 
                           <div>
                             <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-                              فراداده‌ها (Metadata & Context):
+                              فراداده رویداد:
                             </span>
                             <pre className="text-[11px] font-mono bg-slate-950 text-emerald-400 p-2.5 rounded-xl overflow-x-auto max-h-40 dir-ltr text-left">
                               {JSON.stringify(item.metadata, null, 2)}
@@ -410,7 +431,7 @@ export function EventSourcingReplaySubTab() {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Play className="w-4 h-4 text-indigo-500" />
-                  موتور بازپخش و شبیه‌سازی رویداد (Time-Travel Replay)
+                  موتور بازپخش و شبیه‌سازی رویداد
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
                   رویداد <span className="font-mono text-indigo-400">{selectedEventForReplay.eventType}</span> برای {selectedType}#{selectedAggregateId}
@@ -441,8 +462,8 @@ export function EventSourcingReplaySubTab() {
                     <Sparkles className="w-4 h-4" />
                     <span>{simulationResult.message}</span>
                   </div>
-                  <div>کل قوانین اکشن ارزیابی‌شده: {simulationResult.evaluatedRulesCount} قانون</div>
-                  <div>قوانین منطبق‌شده جهت اجرا: {simulationResult.matchedRulesCount} قانون</div>
+                  <div>کل قانون‌های ارزیابی‌شده: {formatPersianNumber(simulationResult.evaluatedRulesCount ?? 0)} قانون</div>
+                  <div>قوانین منطبق‌شده جهت اجرا: {formatPersianNumber(simulationResult.matchedRulesCount ?? 0)} قانون</div>
                 </div>
 
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
@@ -477,10 +498,10 @@ export function EventSourcingReplaySubTab() {
                   <span className="font-semibold text-slate-800 dark:text-slate-200 block mb-1">توضیحات عملکرد:</span>
                   <ul className="list-disc list-inside space-y-1 text-slate-500 dark:text-slate-400 text-[11px]">
                     <li>
-                      <strong>شبیه‌سازی آزمایشی:</strong> بدون تغییر پایگاه‌داده، ارزیابی می‌کند که کدام قوانین اکشن خودکار فعال می‌شدند.
+                      <strong>شبیه‌سازی بی‌اثر:</strong> بی هیچ تغییر، نشان می‌دهد کدام قانون خودکار با این رویداد جور می‌شد.
                     </li>
                     <li>
-                      <strong>بازپخش واقعی:</strong> رویداد را واقعاً در گذرگاه دامنه‌ای منتشر می‌کند و اکشن‌های فعال آن اجرا خواهند شد.
+                      رویداد دوباره منتشر نمی‌شود و هیچ اعلان، ممیزی یا وب‌هوکی فرستاده نمی‌شود.
                     </li>
                   </ul>
                 </div>
@@ -509,22 +530,12 @@ export function EventSourcingReplaySubTab() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleSimulateOrReplay(selectedEventForReplay, true)}
+                  onClick={() => handleSimulateReplay(selectedEventForReplay)}
                   disabled={isSimulating}
-                  className="px-4 py-2 text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-sm transition-all flex items-center gap-1.5"
+                  className="px-4 py-2 text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <ShieldCheck className={`w-3.5 h-3.5 ${isSimulating ? 'animate-spin' : ''}`} />
-                  <span>شبیه‌سازی آزمایشی (Dry-Run)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSimulateOrReplay(selectedEventForReplay, false)}
-                  disabled={isSimulating}
-                  className="px-4 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all flex items-center gap-1.5"
-                >
-                  <RotateCcw className={`w-3.5 h-3.5 ${isSimulating ? 'animate-spin' : ''}`} />
-                  <span>بازپخش زنده رویداد</span>
+                  <span>شبیه‌سازی بی‌اثر</span>
                 </button>
               </div>
             </div>

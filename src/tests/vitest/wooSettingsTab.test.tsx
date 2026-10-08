@@ -4,6 +4,7 @@
  * TD-724 (B15-22): the bulk stock sync showed only the server's green message while items failed.
  * TD-730 (B15-28, WooCommerce half): a 403 / 500 on the order lists was swallowed and the tables said «no orders yet».
  * TD-710 (B15-08): the WooCommerce webhook secret was shown in a text field.
+ * TD-733 (B15-31): the order log's buyer column was titled «نام خریدار / مبالغ» but shows no amount.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
@@ -152,7 +153,7 @@ describe('TD-730 WooCommerce order lists show a load error instead of «no order
     await waitFor(() => expect(result.current.syncedWcOrdersError).toBe(serverFailure));
     renderTab(result.current);
     expect(screen.getByRole('alert').textContent).toBe(`این فهرست خوانده نشد: ${forbidden}`);
-    expect(screen.queryByText('هنوز هیچ سابقه پردازش سفارشی در سیستم ثبت نشده است.')).toBeNull();
+    expect(screen.queryByText('هنوز هیچ سفارشی از ووکامرس پردازش نشده است.')).toBeNull();
   });
 
   it('an empty list that loaded still says no orders, and a processed order note is not styled as an error', async () => {
@@ -167,13 +168,38 @@ describe('TD-730 WooCommerce order lists show a load error instead of «no order
   });
 });
 
+describe('TD-733 the WooCommerce order log headers name what the rows show', () => {
+  it('the buyer column is not titled with amounts it does not show', async () => {
+    mockServer((url) => (url === '/woocommerce/order-logs'
+      ? [{ id: 1, wcOrderId: '77', status: 'processed', buyerName: 'خریدار', erpDocumentId: 9, errorMessage: '' }]
+      : undefined));
+    const { result } = renderHook(() => useSettings(), { wrapper });
+    await waitFor(() => expect(result.current.wcOrderLogs).toHaveLength(1));
+    renderTab(result.current);
+    const headers = screen.getAllByRole('columnheader').map(h => h.textContent);
+    expect(headers).toContain('نام خریدار');
+    expect(headers.some(h => String(h).includes('مبالغ'))).toBe(false);
+  });
+});
+
 describe('TD-710 the WooCommerce webhook secret is a password field', () => {
   it('the secret field never shows the key as text', async () => {
     mockServer();
     const { result } = renderHook(() => useSettings(), { wrapper });
     await waitFor(() => expect(result.current.wcWebhookSecret).toBe(MASKED_SECRET_VALUE));
     renderTab(result.current);
-    const secretField = screen.getByPlaceholderText(/کد محرمانه ایجادشده در ووکامرس/) as HTMLInputElement;
+    const secretField = screen.getByPlaceholderText(/کد محرمانه‌ای که در ووکامرس/) as HTMLInputElement;
     expect(secretField.type).toBe('password');
+  });
+
+  // v9.0.443 (TD-734): the order webhook refuses every order while no secret is set, so the tab never calls it optional
+  it('the secret field and its help say orders are processed only with the secret', async () => {
+    mockServer();
+    const { result } = renderHook(() => useSettings(), { wrapper });
+    await waitFor(() => expect(result.current.wcWebhookSecret).toBe(MASKED_SECRET_VALUE));
+    renderTab(result.current);
+    const secretField = screen.getByPlaceholderText(/کد محرمانه‌ای که در ووکامرس/) as HTMLInputElement;
+    expect(secretField.placeholder).not.toMatch(/اختیاری/);
+    expect(screen.getByText(/سفارش‌ها فقط با این کلید پردازش می‌شوند/)).toBeTruthy();
   });
 });

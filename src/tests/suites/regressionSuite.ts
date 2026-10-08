@@ -10782,6 +10782,22 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runDocumentEventAmountTests } = await import('../regression/documentEventAmountTests.js');
   results.push(...await runDocumentEventAmountTests(shouldRun));
 
+  // Package 15 PR e (v9.0.430+): test tools, timeline, dead-letter queue and notifications
+  const { runRuleTestSimulationTests } = await import('../regression/ruleTestSimulationTests.js');
+  results.push(...await runRuleTestSimulationTests(shouldRun));
+  const { runEventTimelineTests } = await import('../regression/eventTimelineTests.js');
+  results.push(...await runEventTimelineTests(shouldRun));
+  const { runDeadLetterEditRetryTests } = await import('../regression/deadLetterEditRetryTests.js');
+  results.push(...await runDeadLetterEditRetryTests(shouldRun));
+  const { runCrmDueReminderTests } = await import('../regression/crmDueReminderTests.js');
+  results.push(...await runCrmDueReminderTests(shouldRun));
+  const { runNotificationDismissTests } = await import('../regression/notificationDismissTests.js');
+  results.push(...await runNotificationDismissTests(shouldRun));
+  const { runEventTimestampUtcTests } = await import('../regression/eventTimestampUtcTests.js');
+  results.push(...await runEventTimestampUtcTests(shouldRun));
+  const { runRuleActiveStateTests } = await import('../regression/ruleActiveStateTests.js');
+  results.push(...await runRuleActiveStateTests(shouldRun));
+
   // Package 10 PR B (v9.0.347+): procurement order link, duplicate submissions, consolidation, receiving
   const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');
   results.push(...await runProcurementOrderTests(shouldRun));
