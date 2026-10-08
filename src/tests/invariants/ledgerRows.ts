@@ -39,3 +39,16 @@ export async function activeLedgerRows(itemIds: number[], order: 'id' | 'date'):
 export const isInRow = (t: KardexRow) => t.type === 'in' || t.type === 'transfer_in';
 export const isOutRow = (t: KardexRow) => t.type === 'out' || t.type === 'transfer_out';
 
+
+/**
+ * v10.0.1 (TD-982, I-01): a voucher row's amount in rials by the TD-260 rule (row currency, else the voucher's, else IRR;
+ * a foreign row at its own rate, rounded to the rial). `i` is journal_voucher_items, `v` journal_vouchers.
+ */
+export function irrAmountSql(column: string): string {
+  return `(CASE WHEN UPPER(COALESCE(NULLIF(i.currency, ''), NULLIF(v.currency, ''), 'IRR')) = 'IRR' THEN ${column}
+            ELSE ROUND(${column} * COALESCE(NULLIF(i.exchange_rate, 0), 1), 0) END)`;
+}
+
+/** A foreign voucher row whose own rate is empty, 0 or 1 (TD-551; the health check `voucher_foreign_rows_without_rate`) */
+export const FOREIGN_ROW_WITHOUT_RATE_SQL = `(UPPER(COALESCE(NULLIF(i.currency, ''), NULLIF(v.currency, ''), 'IRR')) <> 'IRR'
+  AND COALESCE(i.exchange_rate, 0) <= 1)`;
