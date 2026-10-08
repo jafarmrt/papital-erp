@@ -82,7 +82,7 @@ export const dataExportQuerySchema = z.object({
   }).optional()
 });
 
-// v9.0.396 (TD-589): ساختن قیدهای شرطی جاافتاده مهاجرت‌ها؛ بی `apply: true` فقط پیش‌نمایش
+// v9.0.427 (TD-589): ساختن قیدهای شرطی جاافتاده مهاجرت‌ها؛ بی `apply: true` فقط پیش‌نمایش
 export const conditionalConstraintsBuildSchema = z.object({
   body: z.object({
     apply: z.boolean({ message: 'گزینه اجرا باید درست یا نادرست باشد' }).optional(),
@@ -325,7 +325,7 @@ router.post('/system/reconciliation-fix', requireSystemAdmin, validate(reconcili
   return res.json({ success: true, resetCount, message: stuckResetResultMessage(resetCount) });
 }));
 
-// v9.0.396 (TD-589، تصمیم ت۵ الف): قیدها و ایندکس‌های یکتای شرطی مهاجرت‌ها که روی داده ناپاک ساخته نشده‌اند، با علت؛
+// v9.0.427 (TD-589، تصمیم ت۵ الف): قیدها و ایندکس‌های یکتای شرطی مهاجرت‌ها که روی داده ناپاک ساخته نشده‌اند، با علت؛
 // ساختن دستی پس از اصلاح داده، پیش‌فرض پیش‌نمایش، زیر قفل مشورتی و با ردیف ممیزی. داده هرگز خودکار عوض نمی‌شود.
 router.get('/system/conditional-constraints', requireSystemAdmin, asyncHandler(async (_req, res) => {
   res.json({ missing: await findMissingConditionalConstraints() });

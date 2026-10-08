@@ -3,7 +3,7 @@ import { pool } from '../src/db/drizzle.js';
 import { lockNonBcryptPasswords } from '../src/services/users/plainPasswordLock.js';
 
 /**
- * v9.0.398 (TD-617, decision t4 «الف»): one-off lock of stored passwords that are not bcrypt hashes (empty, plain text,
+ * v9.0.429 (TD-617, decision t4 «الف»): one-off lock of stored passwords that are not bcrypt hashes (empty, plain text,
  * a foreign hash or an old lock marker). The boot no longer converts them into working passwords.
  *   npm run users:lock-plain-passwords             <- preview: lists the users, changes nothing
  *   npm run users:lock-plain-passwords -- --apply  <- locks them: reset required, sessions ended, one audit row each

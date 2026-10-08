@@ -125,6 +125,8 @@ export const READ_PERMISSIONS = {
   transfers: ['products.view'],
   pendingMaterials: ['pending_materials.view', 'products.view'],
   reservedItems: ['products.view', 'reports.view', 'warehouse.view', 'warehouse.in', 'documents.view', 'documents.create'],
+  /** تخصیص‌های مواد اولیه به پروژه (`GET /inventory/allocations`)؛ زبانه «تخصیص مواد به پروژه‌ها» هم با همین‌ها دیده می‌شود (v9.0.415، TD-760) */
+  bomAllocations: ['warehouse.view', 'projects.view'],
   /** فهرست کامل کاربران و نقش‌ها (فهرست ساده نام‌ها /users/list-simple برای همه باز است) */
   userDirectory: ['users.manage', 'roles.manage', 'personnel.manage', 'workflow.manage', 'settings.manage'],
   permissionCatalog: ['roles.manage', 'users.manage'],
@@ -168,6 +170,8 @@ export const WORKFLOW_ENTITY_READ_PERMISSIONS: Readonly<Record<string, readonly 
   item: READ_PERMISSIONS.items,
   bank_account: READ_PERMISSIONS.bankAccounts,
   purchase_requisition: READ_PERMISSIONS.purchaseRequisitions,
+  // v9.0.398 (TD-826): the widget of the raw material request queue
+  pending_material: READ_PERMISSIONS.pendingMaterials,
 };
 
 /** مجوز خواندن رکوردهای دارای پیوست (نوع رکورد در file_attachments) */

@@ -281,7 +281,7 @@ export async function createApp(): Promise<express.Express> {
 
       res.status(200).json({
         status: 'ready',
-        // v9.0.397 (TD-616): the in-memory demo database says so, so a probe never mistakes it for PostgreSQL
+        // v9.0.428 (TD-616): the in-memory demo database says so, so a probe never mistakes it for PostgreSQL
         database: isMockDatabase() ? 'in_memory_demo' : 'postgresql',
         pool: { total, idle, waiting },
         timestamp: new Date().toISOString(),

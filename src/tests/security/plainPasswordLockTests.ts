@@ -5,10 +5,10 @@ import { runCase, type ShouldRun } from './workflowTestHarness.js';
 import { createScratchCluster, querySql, REPO_ROOT, runCommand } from '../recovery/scratchDatabase.js';
 
 /**
- * v9.0.398 (TD-617, B01-37, decision t4 «الف»): the boot never turns a stored non-bcrypt value into a working password;
+ * v9.0.429 (TD-617, B01-37, decision t4 «الف»): the boot never turns a stored non-bcrypt value into a working password;
  * the one-off `npm run users:lock-plain-passwords` previews by default and with `--apply` locks each such value (deleted
  * users too): lock marker instead of the value, reset required, token version advanced, one audit row per user without
- * the value. Red on v9.0.397, whose boot hashed every non-bcrypt string into a password and had no such script.
+ * the value. Red on v9.0.428, whose boot hashed every non-bcrypt string into a password and had no such script.
  */
 
 const TSX = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx');
@@ -23,7 +23,7 @@ export async function runPlainPasswordLockTests(shouldRun: ShouldRun): Promise<T
 
   await runCase(results, {
     id: 'sec_plain_password_lock_td_617',
-    name: 'v9.0.398: the boot leaves non-bcrypt passwords alone and the one-off script locks them with a reset and an audit row (TD-617)',
+    name: 'v9.0.429: the boot leaves non-bcrypt passwords alone and the one-off script locks them with a reset and an audit row (TD-617)',
     details: 'an empty database booted twice with users holding a plain password, an old lock marker, an argon2 hash, an empty value and a deleted user\'s plain password: the second boot changes none of them; the script preview changes nothing; --apply locks exactly those five (marker, reset required, token version + 1, one audit row each without the value) and leaves the bcrypt user alone; a second --apply locks nothing',
   }, async (_h, wrong) => {
     const cluster = await createScratchCluster('pwd617');

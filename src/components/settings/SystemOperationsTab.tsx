@@ -131,7 +131,7 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
         </div>
       </div>
 
-      {/* v9.0.396 (TD-589): قیدهای شرطی جاافتاده مهاجرت‌ها */}
+      {/* v9.0.427 (TD-589): قیدهای شرطی جاافتاده مهاجرت‌ها */}
       <ConditionalConstraintsCard />
 
       {/* Critical Operations Box */}

@@ -7,9 +7,13 @@ import { fetchJson } from '../../api';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useInventoryAuditSave';
-import { formatPersianDate, formatPersianNumber, parseCleanNumber, errorMessageOf, getTodayJalaliDate } from '../../utils';
+import { formatPersianDate, formatPersianNumber, parseCleanNumber, errorMessageOf, getTodayJalaliDate, toPersianDigits } from '../../utils';
 import { bomAllocationsExportFileName } from '../../lib/inventoryAudit/exportFileNames';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { isProjectOpenForAllocation } from '../../lib/projects/projectStatus';
+import { ErrorStateView } from '../common/ErrorStateView';
+import { SearchableSelect } from '../SearchableSelect';
+import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -18,8 +22,12 @@ interface ProjectBomAllocationsTabProps {
 export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps) {
   // تخصیص، مصرف و آزادسازی موجودی را تغییر می‌دهند: کش صفحات دیگر (کالاها، کاردکس، داشبورد، رزروها) باطل می‌شود
   const queryClient = useQueryClient();
+  // v9.0.417 (TD-752): تخصیص، مصرف و آزادسازی هر کدام با کلیدهای گارد API خودشان نشان داده می‌شوند
+  const { canAllocate, canConsumeAllocation, canReleaseAllocation } = useProjectPermissions();
   const [allocations, setAllocations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  // v9.0.415 (TD-760): خطای خواندن تخصیص‌ها (مثلاً ۴۰۳) پیام خودش را دارد، نه جدول خالی «هیچ تخصیصی یافت نشد»
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -60,8 +68,10 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
       const res = await fetchJson(`/inventory/allocations?${queryParams.toString()}`);
       setAllocations(res?.allocations || []);
+      setLoadError(null);
     } catch (err) {
-      console.error('Error loading allocations:', err);
+      setAllocations([]);
+      setLoadError(errorMessageOf(err) || 'خواندن تخصیص‌های مواد اولیه ممکن نشد.');
     } finally {
       setLoading(false);
     }
@@ -75,7 +85,8 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
       ]);
       const rawProjs = Array.isArray(projRes?.data) ? projRes.data : (Array.isArray(projRes) ? projRes : []);
       const rawItems = Array.isArray(itemsRes?.data) ? itemsRes.data : (Array.isArray(itemsRes) ? itemsRes : []);
-      setProjectsList(rawProjs);
+      // v9.0.410 (TD-759، تصمیم ت۹ الف): پروژه لغوشده یا تکمیل‌شده مواد تازه نمی‌گیرد و پیشنهاد نمی‌شود
+      setProjectsList(rawProjs.filter((p: { status?: string }) => isProjectOpenForAllocation(p.status)));
       setItemsList(rawItems);
     } catch (err) {
       console.error('Error loading metadata for allocation:', err);
@@ -96,7 +107,8 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
     setSelectedProjectId(projectsList[0]?.id || '');
     setSelectedItemId(itemsList[0]?.id || '');
     setAllocateQty('1');
-    setSelectedLocation('main');
+    // v9.0.411 (TD-751): انبار پیش‌فرض همان انبار فعال با کمترین شناسه (اولین ردیف فهرست، TD-203)، نه «main» که فهرست نشان نمی‌داد
+    setSelectedLocation(warehousesList[0]?.code ?? '');
     setAllocateNotes('');
     setShowAllocateModal(true);
   };
@@ -143,7 +155,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
   };
 
   const handleConsume = async (alloc: any) => {
-    if (!(await confirmAction({ title: 'مصرف قطعی تخصیص', message: `آیا از مصرف قطعی ${alloc.quantity} ${alloc.unit} کالای ${alloc.itemName} در پروژه ${alloc.projectCode} اطمینان دارید؟` }))) {
+    if (!(await confirmAction({ title: 'مصرف قطعی تخصیص', message: `آیا از مصرف قطعی ${formatPersianNumber(alloc.quantity)} ${alloc.unit} کالای ${alloc.itemName} در پروژه ${alloc.projectCode} اطمینان دارید؟` }))) {
       return;
     }
     try {
@@ -330,13 +342,15 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
             <span>تازه‌سازی</span>
           </button>
 
-          <button
-            onClick={handleOpenAllocateModal}
-            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
-          >
-            <Plus size={15} />
-            <span>تخصیص مواد به پروژه</span>
-          </button>
+          {canAllocate && (
+            <button
+              onClick={handleOpenAllocateModal}
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
+            >
+              <Plus size={15} />
+              <span>تخصیص مواد به پروژه</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -363,6 +377,12 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                   <td colSpan={9} className="py-8 text-center text-slate-400">
                     <RefreshCw className="animate-spin inline-block mr-2" size={16} />
                     در حال بارگذاری تخصیص‌های مواد اولیه…
+                  </td>
+                </tr>
+              ) : loadError ? (
+                <tr>
+                  <td colSpan={9} className="py-4">
+                    <ErrorStateView compact title={`تخصیص‌های مواد اولیه خوانده نشد: ${loadError}`} onRetry={loadAllocations} />
                   </td>
                 </tr>
               ) : allocations.length === 0 ? (
@@ -394,13 +414,13 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                     <td className="py-3 px-3 text-center">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-slate-100 text-slate-700 font-medium">
                         <Warehouse size={12} />
-                        {alloc.sourceLocation || 'main'}
+                        {alloc.sourceLocation || 'انبار پیش‌فرض'}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-center">
                       {alloc.sourceTransactionId ? (
                         <span className="font-mono text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-bold">
-                          TX-{alloc.sourceTransactionId}
+                          {toPersianDigits(alloc.sourceTransactionId)}
                         </span>
                       ) : (
                         <span className="text-slate-400">-</span>
@@ -447,20 +467,24 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
                         {alloc.status === 'allocated' && (
                           <>
-                            <button
-                              onClick={() => handleConsume(alloc)}
-                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                              title="ثبت مصرف قطعی در محصول"
-                            >
-                              مصرف شد
-                            </button>
-                            <button
-                              onClick={() => setReleaseTarget(alloc)}
-                              className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                              title="آزادسازی و عودت به انبار"
-                            >
-                              آزادسازی
-                            </button>
+                            {canConsumeAllocation && (
+                              <button
+                                onClick={() => handleConsume(alloc)}
+                                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                                title="ثبت مصرف قطعی در محصول"
+                              >
+                                مصرف شد
+                              </button>
+                            )}
+                            {canReleaseAllocation && (
+                              <button
+                                onClick={() => setReleaseTarget(alloc)}
+                                className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                                title="آزادسازی و عودت به انبار"
+                              >
+                                آزادسازی
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
@@ -512,7 +536,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                   <div>
                     <span className="text-slate-400">شناسه تراکنش: </span>
                     <span className="font-mono font-bold text-slate-800">
-                      TX-{selectedAllocForTrace.sourceTransactionId || '-'}
+                      {selectedAllocForTrace.sourceTransactionId ? toPersianDigits(selectedAllocForTrace.sourceTransactionId) : '-'}
                     </span>
                   </div>
                   <div>
@@ -633,35 +657,27 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
               {/* Project Select */}
               <div>
                 <label className="block text-slate-700 font-bold mb-1">پروژه تولید مقصد:</label>
-                <select
+                {/* v9.0.423 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه پروژه‌ها */}
+                <SearchableSelect
                   value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(Number(e.target.value))}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                >
-                  <option value="">-- انتخاب پروژه --</option>
-                  {projectsList.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.projectCode} - {p.title}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setSelectedProjectId(value ? Number(value) : '')}
+                  options={projectsList.map((p) => ({ value: p.id, label: `${p.projectCode} - ${p.title}` }))}
+                  placeholder="انتخاب پروژه"
+                />
               </div>
 
               {/* Raw Material Select */}
               <div>
                 <label className="block text-slate-700 font-bold mb-1">ماده اولیه / قطعه مصرفی:</label>
-                <select
+                <SearchableSelect
                   value={selectedItemId}
-                  onChange={(e) => setSelectedItemId(Number(e.target.value))}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                >
-                  <option value="">-- انتخاب ماده اولیه --</option>
-                  {itemsList.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} ({item.code}) - موجودی کل: {formatPersianNumber(item.currentStock || item.current_stock || 0)} {item.unit}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setSelectedItemId(value ? Number(value) : '')}
+                  options={itemsList.map((item) => ({
+                    value: item.id,
+                    label: `${item.name} (${item.code}) - موجودی کل: ${formatPersianNumber(item.currentStock || item.current_stock || 0)} ${item.unit ?? ''}`,
+                  }))}
+                  placeholder="انتخاب ماده اولیه"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">

@@ -21,11 +21,11 @@ async function runMigrationAndBackupChecks(results: TestCaseResult[]): Promise<v
       checkUpgradeFromV70137, 'ارتقا از سطح 0044 با سند ردشده انجام شد؛ پیوند چک ثبت، تاریخ و قید NOT VALID دست‌نخورده ماند'],
     ['rec_td_365_update_waits_for_startup', 'v8.0.83: update.sh فقط پس از پایان مهاجرت‌ها و راه‌اندازی (/health/startup) و نسخه درست موفقیت اعلام می‌کند (TD-365)',
       checkUpdateWaitsForStartup, 'در حال مهاجرت و نسخه کهنه رد شد، راه‌افتاده با نسخه درست پذیرفته شد؛ آرگومان ناشناخته پیام روشن داد'],
-    ['rec_td_590_test_schema_keeps_public', 'v9.0.394: building an isolated test schema drops no index or function of the same name in public (TD-590)',
+    ['rec_td_590_test_schema_keeps_public', 'v9.0.425: building an isolated test schema drops no index or function of the same name in public (TD-590)',
       checkTestSchemaKeepsPublic, 'Every public index and function named by a migration DROP survived a nested test schema'],
-    ['rec_td_610_nested_schema_complete', 'v9.0.395: a test schema built beside a migrated one has every constraint, index and trigger the migrations name (TD-610)',
+    ['rec_td_610_nested_schema_complete', 'v9.0.426: a test schema built beside a migrated one has every constraint, index and trigger the migrations name (TD-610)',
       checkNestedSchemaComplete, 'The nested test schema has every migration-named object of the suite schema and every index public also holds'],
-    ['rec_td_589_migration_notices_reported', 'v9.0.396: a migration that leaves a constraint or index out says so in the migrator warnings and log (TD-589)',
+    ['rec_td_589_migration_notices_reported', 'v9.0.427: a migration that leaves a constraint or index out says so in the migrator warnings and log (TD-589)',
       checkMigrationNoticesReported, 'The SKIPPED warning and the "not created" notice are in warnings; an ordinary notice is not'],
   ];
   const outcomes: RecoveryCheckOutcome[] = [];

@@ -1,7 +1,7 @@
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
- * v9.0.396 (TD-589، B01-09، تصمیم ت۵ الف): قرارداد فهرست و ساختن قیدهای شرطی جاافتاده مهاجرت‌ها، مشترک سرور
+ * v9.0.427 (TD-589، B01-09، تصمیم ت۵ الف): قرارداد فهرست و ساختن قیدهای شرطی جاافتاده مهاجرت‌ها، مشترک سرور
  * (`src/services/system/conditionalConstraints.ts`) و کارت «قیدهای جاافتاده پایگاه‌داده» در «عملیات سامانه».
  */
 export type ConditionalConstraintKind = 'foreign_key' | 'unique_index';

@@ -168,8 +168,8 @@ export async function checkUpgradeFromV70137(): Promise<string[]> {
 }
 
 /**
- * v9.0.396 (TD-589, B01-09): a migration that leaves a constraint or index out on unclean data says so with
- * `RAISE WARNING '... SKIPPED'`; the migrator now returns that notice in `warnings` and logs it. On v9.0.395 it listened
+ * v9.0.427 (TD-589, B01-09): a migration that leaves a constraint or index out on unclean data says so with
+ * `RAISE WARNING '... SKIPPED'`; the migrator now returns that notice in `warnings` and logs it. On v9.0.426 it listened
  * to no notice and answered `success: true, warnings: []`. An ordinary notice (an object created) stays out of `warnings`.
  */
 export async function checkMigrationNoticesReported(): Promise<string[]> {

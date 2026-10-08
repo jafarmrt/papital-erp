@@ -6,8 +6,8 @@ import { startsWithLikePattern } from '../../lib/sqlLike.js';
 import { isBcryptHash } from '../auth/loginSecurity.service.js';
 
 /**
- * v9.0.398 (TD-617, B01-37, decision t4 «الف»): a stored password that is not a bcrypt hash never logs in
- * (`verifyPasswordConstantWork`), but until v9.0.397 every boot turned it into a working bcrypt hash of that very string:
+ * v9.0.429 (TD-617, B01-37, decision t4 «الف»): a stored password that is not a bcrypt hash never logs in
+ * (`verifyPasswordConstantWork`), but until v9.0.428 every boot turned it into a working bcrypt hash of that very string:
  * a leaked plain password, a lock marker such as `!locked` and a foreign hash (`$argon2id$…`) all became passwords, for
  * deleted users too, with no reset and no audit row. The boot no longer touches passwords; this one-off pass (run by
  * `npm run users:lock-plain-passwords`, a preview unless `apply`) replaces each such value with a lock marker that no

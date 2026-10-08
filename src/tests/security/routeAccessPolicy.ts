@@ -33,7 +33,6 @@ export const LOGIN_ONLY_ROUTES = new Set([
   'GET /api/notifications', 'GET /api/notifications/unread-count', 'PUT /api/notifications/:id/read',
   'PUT /api/notifications/read-all', 'DELETE /api/notifications/:id',
   'GET /api/piecework/payrolls/mine',
-  'POST /api/pending-materials',
   'POST /api/drafts', 'GET /api/drafts/:entityType', 'GET /api/drafts', 'DELETE /api/drafts/:entityType', 'DELETE /api/drafts/id/:id',
   'GET /api/attachments/:id',
 ]);
@@ -50,7 +49,7 @@ export const SYSTEM_ADMIN_ONLY_ROUTES = new Set([
   'GET /api/system/reconciliation-check', 'POST /api/system/reconciliation-fix',
   // v9.0.112 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال فقط با مدیر سیستم
   'POST /api/warehouses/:id/reactivate',
-  // v9.0.396 (TD-589، تصمیم ت۵ الف): فهرست و ساختن دستی قیدهای شرطی جاافتاده مهاجرت‌ها
+  // v9.0.427 (TD-589، تصمیم ت۵ الف): فهرست و ساختن دستی قیدهای شرطی جاافتاده مهاجرت‌ها
   'GET /api/system/conditional-constraints', 'POST /api/system/conditional-constraints/build',
 ]);
 

@@ -7,7 +7,7 @@ import {
 } from '../../types';
 import { COMMON_UNITS } from './projectInventoryUtils';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, toPersianDigits } from '../../utils';
 import { MaterialNameCell, CurrentStockCell, ProcurementStatusCell, NotesCell, type OpenUnitConversionModalHandler } from './inventoryRowCells';
 
 interface ProductTreeInventoryCardsProps {
@@ -237,7 +237,7 @@ export function ProductTreeInventoryCards({
                         </span>
                         <span className={isExpanded ? 'text-slate-600' : 'text-slate-300'}>•</span>
                         <span className={isExpanded ? 'text-slate-300' : 'text-slate-500'}>
-                          {totalMaterialsCount} قلم مواد اولیه تعریف شده برای این کد
+                          {toPersianDigits(totalMaterialsCount)} قلم مواد اولیه تعریف شده برای این کد
                         </span>
                       </div>
                     </div>
@@ -249,12 +249,12 @@ export function ProductTreeInventoryCards({
                       isFullyAvailable ? (
                         <span className="px-2.5 py-1 bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-2xs">
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>تامین کامل ({totalMaterialsCount})</span>
+                          <span>تامین کامل ({toPersianDigits(totalMaterialsCount)})</span>
                         </span>
                       ) : (
                         <span className="px-2.5 py-1 bg-rose-500 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-2xs animate-pulse">
                           <AlertCircle className="w-3.5 h-3.5" />
-                          <span>{prodShortfallCount} قلم کسری انبار</span>
+                          <span>{toPersianDigits(prodShortfallCount)} قلم کسری انبار</span>
                         </span>
                       )
                     )}

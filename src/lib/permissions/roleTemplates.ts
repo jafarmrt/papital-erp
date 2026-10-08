@@ -29,7 +29,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'projects.view', 'projects.create', 'projects.edit', 'projects.delete', 'workflow.view', 'workflow.approve',
       'workflow.manage', 'events.view', 'events.manage', 'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all',
       'personnel.view', 'personnel.manage', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll',
-      'piecework.pay', 'personnel.view_sensitive', 'payroll.view_sensitive', 'pending_materials.view', 'pending_materials.approve', 'pending_materials.delete', 'procurement.view',
+      'piecework.pay', 'personnel.view_sensitive', 'payroll.view_sensitive', 'pending_materials.view', 'pending_materials.create', 'pending_materials.approve', 'pending_materials.delete', 'procurement.view',
       'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve', 'accounting.view', 'accounting.vouchers',
       'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports', 'woocommerce.view', 'woocommerce.manage',
       'audit_logs.view', 'settings.manage',
@@ -54,7 +54,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     permissions: [
       'products.view', 'products.create', 'products.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out',
       'warehouse.transfer', 'inventory.reconcile', 'documents.view', 'documents.edit', 'documents.finalize', 'audit.view',
-      'audit.create', 'audit.apply', 'pending_materials.view', 'pending_materials.approve', 'workflow.view', 'workflow.approve',
+      'audit.create', 'audit.apply', 'pending_materials.view', 'pending_materials.create', 'pending_materials.approve', 'workflow.view', 'workflow.approve',
       'workflow.execute', 'customers.view', 'projects.view', 'projects.edit', 'daily_logs.view', 'daily_logs.create',
     ],
   },
@@ -77,7 +77,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'products.view', 'products.create', 'products.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out',
       'projects.view', 'projects.create', 'projects.edit', 'projects.delete', 'workflow.view', 'workflow.approve',
       'workflow.execute', 'personnel.view', 'piecework.view', 'piecework.log', 'piecework.manage_tasks', 'pending_materials.view',
-      'pending_materials.approve', 'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all', 'reports.view',
+      'pending_materials.create', 'pending_materials.approve', 'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all', 'reports.view',
     ],
   },
   {

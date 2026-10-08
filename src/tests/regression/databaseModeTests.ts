@@ -7,7 +7,7 @@ import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, runCase } from './fiscalClosingTests.js';
 
 /**
- * v9.0.397 (TD-616, B01-36, decision t4 «الف»): which database a process uses. On v9.0.396 `SQL_HOST` alone ended in the
+ * v9.0.428 (TD-616, B01-36, decision t4 «الف»): which database a process uses. On v9.0.427 `SQL_HOST` alone ended in the
  * in-memory demo database (the SQL_HOST branch ran only with a real DATABASE_URL too), and a server without DATABASE_URL
  * outside production started that demo database with admin / admin by itself. Each case runs in its own process with
  * only the variables it names, so `.env` (which never overrides a variable already set, even empty) plays no part.
@@ -97,7 +97,7 @@ export async function runDatabaseModeTests(shouldRun: ShouldRun): Promise<TestCa
   const results: TestCaseResult[] = [];
   const id = 'reg_database_mode_td_616';
   if (shouldRun(id, 'TD-616', 'B01-36')) {
-    await runCase(results, id, 'v9.0.397: SQL_HOST reaches PostgreSQL and without a database the server refuses to start unless ERP_DEMO_MODE=1 outside production (TD-616)', scenario);
+    await runCase(results, id, 'v9.0.428: SQL_HOST reaches PostgreSQL and without a database the server refuses to start unless ERP_DEMO_MODE=1 outside production (TD-616)', scenario);
   }
   return results;
 }

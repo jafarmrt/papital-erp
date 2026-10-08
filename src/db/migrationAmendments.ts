@@ -5,20 +5,20 @@
  * (`planMigrations`) آن را «فایل اجراشده‌ای که بعداً عوض شده» گزارش نکند.
  */
 /**
- * v9.0.394 (TD-590): a migration that drops a schema object by an unqualified name with IF EXISTS looked it up along the
+ * v9.0.425 (TD-590): a migration that drops a schema object by an unqualified name with IF EXISTS looked it up along the
  * search path; inside an isolated test schema (search path test schema, public) a name missing there dropped the object
  * of the same name in `public`. These files now name the current schema; on a database whose only ERP schema is `public`
  * the result is the same.
  */
-const TD_590_REASON = 'v9.0.394 (TD-590): DROP ... IF EXISTS names the current schema; the unqualified name reached public through the search path when an isolated test schema was built';
+const TD_590_REASON = 'v9.0.425 (TD-590): DROP ... IF EXISTS names the current schema; the unqualified name reached public through the search path when an isolated test schema was built';
 
 /**
- * v9.0.395 (TD-610, B01-30): an existence check on a catalog (`pg_constraint`, `pg_indexes`, `pg_trigger`, ...) without
+ * v9.0.426 (TD-610, B01-30): an existence check on a catalog (`pg_constraint`, `pg_indexes`, `pg_trigger`, ...) without
  * its schema, or `to_regclass('<bare name>')`, found the object of the same name in `public` or in another test schema
  * and skipped it, so a test schema built beside a migrated one lacked 30 constraints and indexes. These files now check
  * their own schema; on a database whose only ERP schema is `public` the result is the same.
  */
-const TD_610_REASON = 'v9.0.395 (TD-610): catalog existence checks restrict the current schema; a bare check found the object in another schema and skipped it';
+const TD_610_REASON = 'v9.0.426 (TD-610): catalog existence checks restrict the current schema; a bare check found the object in another schema and skipped it';
 
 export const AMENDED_MIGRATIONS: Readonly<Record<string, { previousHashes: readonly string[]; reason: string }>> = {
   '0047_journal_voucher_source_cheque': {
@@ -135,6 +135,10 @@ export const AMENDED_MIGRATIONS: Readonly<Record<string, { previousHashes: reado
   },
   '0084_project_stage_integrity': {
     previousHashes: ['f9446471fb45b7fb55d49fd1c129b22b4c87ad51863a1393c6e7cc77fd5ae673'],
+    reason: TD_610_REASON,
+  },
+  '0087_pending_material_queue': {
+    previousHashes: ['fb6198f59be6f205320ce8c9f963fe0ab876595e3d2ed3e1fce98ebae3da703b'],
     reason: TD_610_REASON,
   },
 };

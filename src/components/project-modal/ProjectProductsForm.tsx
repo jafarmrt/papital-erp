@@ -2,7 +2,7 @@ import React from 'react';
 import { Layers, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import { SearchableSelect } from '../SearchableSelect';
 import { Item } from '../../types';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, toPersianDigits } from '../../utils';
 import { ProductRow } from './types';
 
 interface ProjectProductsFormProps {
@@ -29,7 +29,7 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
       <div className="flex items-center justify-between border-b border-slate-200 pb-2">
         <h3 className="text-xs font-bold text-slate-800 flex items-center gap-2">
           <Layers size={14} className="text-blue-600" />
-          اقلام و محصولات سفارش ({productsList.length} ردیف)
+          اقلام و محصولات سفارش ({toPersianDigits(productsList.length)} ردیف)
         </h3>
         <button
           type="button"
@@ -99,7 +99,7 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
                   type="text"
                   value={product.customer_code}
                   onChange={(e) => onUpdateProductRow(idx, 'customer_code', e.target.value)}
-                  placeholder="مثال: CUST-104"
+                  placeholder="کد سفارش نزد مشتری (اختیاری)"
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
                   dir="ltr"
                 />

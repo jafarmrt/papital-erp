@@ -9,10 +9,10 @@ import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient, sandboxClientWith } from './fiscalClosingTests.js';
 
 /**
- * v9.0.396 (TD-589, B01-09, decision t5 «الف»): the conditional constraints and unique indexes of migrations 0001, 0012
+ * v9.0.427 (TD-589, B01-09, decision t5 «الف»): the conditional constraints and unique indexes of migrations 0001, 0012
  * and 0015 that unclean data left out are listed by the financial health check with their cause, and the system admin
  * builds them by hand once the data is clean (preview by default, advisory lock, audit row). Data is never changed.
- * Red on v9.0.395, where nothing knew these names after the migration ran.
+ * Red on v9.0.426, where nothing knew these names after the migration ran.
  */
 
 const DUP_CODE = '958901';
@@ -115,7 +115,7 @@ export async function runConditionalConstraintTests(shouldRun: ShouldRun): Promi
   const results: TestCaseResult[] = [];
   const id = 'reg_conditional_constraints_td_589';
   if (shouldRun(id, 'TD-589', 'B01-09')) {
-    await runCase(results, id, 'v9.0.396: skipped migration constraints are listed with their cause and built by the system admin once the data is clean (TD-589)',
+    await runCase(results, id, 'v9.0.427: skipped migration constraints are listed with their cause and built by the system admin once the data is clean (TD-589)',
       () => inFiscalSandbox(scenario));
   }
   return results;

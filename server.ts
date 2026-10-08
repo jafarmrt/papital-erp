@@ -32,7 +32,7 @@ async function startServer() {
     }
   }
 
-  // v9.0.397 (TD-616, decision t4 «الف»): without DATABASE_URL (or SQL_HOST) the server does not start in any environment;
+  // v9.0.428 (TD-616, decision t4 «الف»): without DATABASE_URL (or SQL_HOST) the server does not start in any environment;
   // the in-memory demo database runs only with an explicit ERP_DEMO_MODE=1 outside production
   const databaseMode = getDatabaseMode();
   if (databaseMode.kind === 'refused') {

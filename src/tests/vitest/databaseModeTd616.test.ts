@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DATABASE_NOT_CONFIGURED, DEMO_MODE_REFUSED_IN_PRODUCTION, resolveDatabaseMode } from '../../db/databaseMode';
 
-// v9.0.397 (TD-616, B01-36, decision t4 «الف»): SQL_HOST, then a real DATABASE_URL, then the in-memory demo database only
+// v9.0.428 (TD-616, B01-36, decision t4 «الف»): SQL_HOST, then a real DATABASE_URL, then the in-memory demo database only
 // with ERP_DEMO_MODE=1 outside production; anything else is refused. Never an automatic fallback to the demo database.
 
 describe('database mode (TD-616)', () => {

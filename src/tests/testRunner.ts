@@ -162,7 +162,7 @@ export const MOCK_DATABASE_REFUSAL =
  * اسکیمای تست و داده پایه را می‌سازد؛ روی mockPool همه این‌ها «۰ → ۰» و PASS جعلی گزارش می‌شدند.
  */
 export async function assertRealTestDatabase(): Promise<void> {
-  // v9.0.397 (TD-616): a missing DATABASE_URL is no longer the demo database but a refused mode; both stop the runner
+  // v9.0.428 (TD-616): a missing DATABASE_URL is no longer the demo database but a refused mode; both stop the runner
   const { getDatabaseMode } = await import('../db/drizzle.js');
   const kind = getDatabaseMode().kind;
   if (kind !== 'url' && kind !== 'sql_host') {

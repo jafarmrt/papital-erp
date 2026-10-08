@@ -71,6 +71,20 @@ export const eventActionRuleRetirements = pgTable('event_action_rule_retirements
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
 });
 
+// v9.0.405 (TD-707, migration 0088): each stored webhook subscription whose event patterns were converted to published types
+export const webhookEventPatternRepairs = pgTable('webhook_event_pattern_repairs', {
+  id: serial('id').primaryKey(),
+  subscriptionId: integer('subscription_id').notNull().unique('uq_webhook_event_pattern_repairs_subscription'),
+  subscriptionName: text('subscription_name').notNull().default(''),
+  targetUrl: text('target_url').notNull().default(''),
+  oldPatterns: jsonb('old_patterns').notNull(),
+  newPatterns: jsonb('new_patterns').notNull(),
+  droppedPatterns: jsonb('dropped_patterns').notNull().default([]),
+  wasActive: integer('was_active').notNull(),
+  deactivated: integer('deactivated').notNull().default(0),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
+});
+
 // v9.0.378 (TD-705, migration 0086): one durable row per delivery (webhook subscription x event, rule action x event)
 export const integrationDeliveryJobs = pgTable('integration_delivery_jobs', {
   id: serial('id').primaryKey(),

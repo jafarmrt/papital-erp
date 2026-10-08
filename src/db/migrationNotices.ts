@@ -1,5 +1,5 @@
 /**
- * v9.0.396 (TD-589, B01-09, decision t5): the notices a migration raises when it leaves a constraint or index out
+ * v9.0.427 (TD-589, B01-09, decision t5): the notices a migration raises when it leaves a constraint or index out
  * because existing data is not clean (`RAISE WARNING '... SKIPPED'`, `RAISE NOTICE '... not created'`,
  * `... left NOT VALID`). PostgreSQL sends them to the client as notices; the migrator listened to none, so an upgraded
  * database answered `success: true, warnings: []` without `fk_transactions_item_id` or `uq_cheques_sayad_number_active`.

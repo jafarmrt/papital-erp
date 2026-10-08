@@ -4,7 +4,7 @@ import { pool } from '../../db/drizzle.js';
 import { setupTestSchema } from '../setup/testDb.js';
 
 /**
- * v9.0.394 (TD-590, B01-10): building an isolated test schema never touches `public`. The migrations run there with the
+ * v9.0.425 (TD-590, B01-10): building an isolated test schema never touches `public`. The migrations run there with the
  * search path `"<test schema>", public`; on v9.0.393 every DROP ... IF EXISTS of a name not yet in the test schema
  * dropped the object of the same name in `public` (0007 dropped public.idx_idemp_user_scope_key, after which every
  * idempotent POST of a development or staging database failed). The check puts an object of each dropped name in
@@ -55,8 +55,8 @@ export async function checkTestSchemaKeepsPublic(): Promise<string[]> {
 }
 
 /**
- * v9.0.395 (TD-610, B01-30): a test schema built beside a migrated one has every constraint, index and trigger the
- * migrations name. On v9.0.394 the catalog checks (`pg_constraint`, `pg_indexes`, `pg_trigger`, ... without a schema)
+ * v9.0.426 (TD-610, B01-30): a test schema built beside a migrated one has every constraint, index and trigger the
+ * migrations name. On v9.0.425 the catalog checks (`pg_constraint`, `pg_indexes`, `pg_trigger`, ... without a schema)
  * found the object in the suite's own schema and skipped it, and `to_regclass('<name>')` found it in `public`: the nested
  * schema lacked `chk_iws_current_stock_non_negative`, `uq_jv_voucher_number`, `uq_customers_name_active` and the `fk_*`
  * constraints of 0001 and 0005, among others. The check builds a nested schema while the suite's schema exists and an

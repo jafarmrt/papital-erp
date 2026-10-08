@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import type { HealthCheckTestResult } from '../../types.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
  * v9.0.371 (TD-817، یافته B07-01، تصمیم ت۲ بسته ۷): فقط رزرو ذخیره‌شده پروژه ثبت نهایی‌شده موجودی را رزرو می‌کند. پروژه‌هایی
@@ -11,8 +12,11 @@ import type { HealthCheckTestResult } from '../../types.js';
  * - پروژه ثبت نهایی‌نشده‌ای که رزرو ذخیره‌شده دارد: این رزرو دیگر شمرده نمی‌شود.
  * v9.0.372 (TD-820، تصمیم ت۴): پروژه ثبت نهایی‌شده‌ای که ردیف رزروش پیش از تبدیل واحد ساخته شده است (واحد درخواست با
  * واحد کالا فرق دارد و ضریب تبدیل ندارد): مقدار رزرو به واحد ردیف کنترل گرفته شده است.
+ * v9.0.394 (TD-821): پروژه ثبت نهایی‌شده‌ای که ردیف رزروی با مقدار مثبت دارد که به هیچ کالای فعالی (شناسه، کد، نام) نمی‌رسد:
+ * این ردیف رزرو نمی‌کند و `reservedRows` شمار همین ردیف‌هاست.
  */
-export type ProjectReservationIssueKind = 'finalized_without_reservation' | 'unfinalized_with_reservation' | 'reservation_unit_unconverted';
+export type ProjectReservationIssueKind =
+  'finalized_without_reservation' | 'unfinalized_with_reservation' | 'reservation_unit_unconverted' | 'reservation_row_unmatched';
 
 export interface ProjectReservationIssue {
   projectId: number;
@@ -24,15 +28,24 @@ export interface ProjectReservationIssue {
 }
 
 const ISSUE_LABELS: Record<ProjectReservationIssueKind, string> = {
-  finalized_without_reservation: 'ثبت نهایی پیش از رزرو سرور، بی رزرو ذخیره‌شده',
+  finalized_without_reservation: 'ثبت نهایی پیش از رزرو در سامانه، بی رزرو ذخیره‌شده',
   unfinalized_with_reservation: 'ثبت نهایی‌نشده با رزرو ذخیره‌شده',
   reservation_unit_unconverted: 'رزرو با واحد درخواست، بی تبدیل به واحد کالا',
+  reservation_row_unmatched: 'ردیف رزرو بی کالای شناخته‌شده',
 };
 
 const ISSUE_ADVICE: Record<ProjectReservationIssueKind, string> = {
   finalized_without_reservation: 'برای رزرو، پروژه را از ثبت نهایی خارج و دوباره ثبت نهایی کنید.',
   unfinalized_with_reservation: 'این رزرو شمرده نمی‌شود؛ با ثبت نهایی پروژه رزرو تازه ساخته می‌شود.',
   reservation_unit_unconverted: 'تبدیل واحد ردیف را ثبت کنید و پروژه را از ثبت نهایی خارج و دوباره ثبت نهایی کنید.',
+  reservation_row_unmatched: 'این ردیف رزرو نمی‌کند؛ کالای ردیف را در کنترل موجودی پروژه درست کنید و پروژه را از ثبت نهایی خارج و دوباره ثبت نهایی کنید.',
+};
+
+const ISSUE_TD: Record<ProjectReservationIssueKind, string> = {
+  finalized_without_reservation: 'TD-817',
+  unfinalized_with_reservation: 'TD-817',
+  reservation_unit_unconverted: 'TD-820',
+  reservation_row_unmatched: 'TD-821',
 };
 
 export async function findProjectReservationIssues(executor: DbExecutor = orm): Promise<ProjectReservationIssue[]> {
@@ -66,13 +79,24 @@ export async function findProjectReservationIssues(executor: DbExecutor = orm): 
             AND lower(btrim(r ->> 'originalUnit')) <> lower(btrim(r ->> 'unit'))
             AND NULLIF(btrim(COALESCE(r ->> 'conversionRate', '')), '') IS NULL)
      ORDER BY 1, 5`);
-  return ((res.rows ?? []) as Array<Record<string, unknown>>).map(r => ({
+  const issues: ProjectReservationIssue[] = ((res.rows ?? []) as Array<Record<string, unknown>>).map(r => ({
     projectId: Number(r.projectId),
     projectCode: (r.projectCode as string | null) ?? null,
     title: (r.title as string | null) ?? null,
     kind: r.kind as ProjectReservationIssueKind,
     reservedRows: Number(r.reservedRows) || 0,
   }));
+  // v9.0.394 (TD-821): همان قاعده تطبیق گزارش رزروها (findProjectItemMatch)، نه یک بازنویسی SQL از آن
+  const { ItemStockReservationService } = await import('../items/itemStockReservation.service.js');
+  const unmatched = new Map<number, ProjectReservationIssue>();
+  for (const row of await ItemStockReservationService.unmatchedProjectReservationRows(executor)) {
+    const issue = unmatched.get(row.projectId)
+      ?? { projectId: row.projectId, projectCode: row.projectCode, title: row.projectTitle, kind: 'reservation_row_unmatched' as const, reservedRows: 0 };
+    issue.reservedRows += 1;
+    unmatched.set(row.projectId, issue);
+  }
+  issues.push(...unmatched.values());
+  return issues.sort((a, b) => a.projectId - b.projectId || a.kind.localeCompare(b.kind));
 }
 
 export function buildProjectReservationHealthTest(issues: ProjectReservationIssue[]): HealthCheckTestResult {
@@ -81,24 +105,25 @@ export function buildProjectReservationHealthTest(issues: ProjectReservationIssu
     id: 'project_reservation_integrity',
     category: 'inventory',
     title: 'رزرو پروژه ناهمخوان با ثبت نهایی',
-    description: 'فقط رزرو ذخیره‌شده پروژه ثبت نهایی‌شده موجودی را رزرو می‌کند؛ پروژه‌های قدیمی ناهمخوان خودکار تغییر نمی‌کنند',
+    description: 'فقط رزرو ذخیره‌شده پروژه ثبت نهایی‌شده که به کالای فعالی می‌رسد موجودی را رزرو می‌کند؛ پروژه‌های قدیمی ناهمخوان خودکار تغییر نمی‌کنند',
     status: issues.length > 0 ? 'warning' : 'healthy',
     scoreImpact: 0,
     count: issues.length,
     message: issues.length > 0
-      ? `${issues.length} پروژه رزرو ناهمخوان با ثبت نهایی دارد. هیچ‌کدام خودکار تغییر نمی‌کند؛ راهنمای هر ردیف را ببینید.`
+      ? `${toPersianDigits(issues.length)} پروژه رزرو ناهمخوان با ثبت نهایی دارد. هیچ‌کدام خودکار تغییر نمی‌کند؛ راهنمای هر ردیف را ببینید.`
       : 'رزرو همه پروژه‌های فعال با ثبت نهایی آن‌ها همخوان است.',
     items: issues.map(i => ({
       id: i.projectId,
       code: i.projectCode || `PRJ-${i.projectId}`,
       title: i.title || `پروژه ${i.projectId}`,
       subtitle: ISSUE_LABELS[i.kind],
-      details: `${ISSUE_ADVICE[i.kind]} (${i.kind === 'reservation_unit_unconverted' ? 'TD-820' : 'TD-817'})`,
+      details: `${ISSUE_ADVICE[i.kind]} (${ISSUE_TD[i.kind]})`,
     })),
     metrics: {
       finalizedWithoutReservation: count('finalized_without_reservation'),
       unfinalizedWithReservation: count('unfinalized_with_reservation'),
       reservationUnitUnconverted: count('reservation_unit_unconverted'),
+      reservationRowUnmatched: count('reservation_row_unmatched'),
     },
   };
 }
@@ -145,7 +170,7 @@ export function buildOverReservedHealthTest(rows: OverReservedItem[]): HealthChe
     scoreImpact: 0,
     count: rows.length,
     message: rows.length > 0
-      ? `${rows.length} کالا بیش از موجودی رزرو شده است و دارندگان رزرو آن نمی‌توانند خروج بزنند. خودکار تغییر نمی‌کند؛ یکی از پروژه‌ها را از ثبت نهایی خارج و دوباره ثبت نهایی کنید یا پیش‌فاکتور را باطل کنید.`
+      ? `${toPersianDigits(rows.length)} کالا بیش از موجودی رزرو شده است و دارندگان رزرو آن نمی‌توانند خروج بزنند. خودکار تغییر نمی‌کند؛ یکی از پروژه‌ها را از ثبت نهایی خارج و دوباره ثبت نهایی کنید یا پیش‌فاکتور را باطل کنید.`
       : 'رزرو هیچ کالایی از موجودی آن بیشتر نیست.',
     items: rows.map(r => ({
       id: r.itemId,

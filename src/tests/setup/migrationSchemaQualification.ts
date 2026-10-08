@@ -1,5 +1,5 @@
 /**
- * v9.0.394 (TD-590, B01-10): finds the places in a migration that name a schema object without its schema and so act on
+ * v9.0.425 (TD-590, B01-10): finds the places in a migration that name a schema object without its schema and so act on
  * whatever the search path finds first. An isolated test schema runs the migrations with the search path
  * `"<test schema>", public`, so such a statement reached the object of the same name in `public`.
  *
@@ -7,14 +7,14 @@
  *   that has no schema. A table-scoped drop (`DROP TRIGGER ... ON t`, `ALTER TABLE t DROP CONSTRAINT`) acts on the
  *   table the migration just found in its own schema and is not counted. The migration names the current schema
  *   instead: `EXECUTE format('DROP INDEX IF EXISTS %I.<name>', current_schema())`.
- * - `catalog` (v9.0.395, TD-610, B01-30): an existence check on a catalog (`pg_constraint`, `pg_indexes`, `pg_class`,
+ * - `catalog` (v9.0.426, TD-610, B01-30): an existence check on a catalog (`pg_constraint`, `pg_indexes`, `pg_class`,
  *   `pg_trigger`, `pg_proc`, `pg_type`, `pg_tables`, `pg_views`, `pg_sequences`, `information_schema.*`) that does not
  *   restrict the schema. The catalogs hold every schema, so a constraint, index or trigger of the same name in `public`
  *   or in another test schema made the migration skip it: a test schema built beside a migrated one lacked 30
  *   constraints and indexes, among them `chk_iws_current_stock_non_negative`. The check restricts its own schema
  *   column (`connamespace = current_schema()::regnamespace`, `schemaname = current_schema()`, ...) or the table
  *   (`conrelid = '<table>'::regclass`, `tgrelid = '<table>'::regclass`).
- * - `regclass` (v9.0.395, TD-610): `to_regclass('<bare name>') IS [NOT] NULL` looks the name up along the search path and
+ * - `regclass` (v9.0.426, TD-610): `to_regclass('<bare name>') IS [NOT] NULL` looks the name up along the search path and
  *   finds the index in `public`; the check names the current schema
  *   (`to_regclass(format('%I.%I', current_schema(), '<name>'))`).
  */

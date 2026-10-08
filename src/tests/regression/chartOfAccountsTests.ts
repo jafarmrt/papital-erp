@@ -325,7 +325,7 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
       expect('creating 7096 again', await admin.post('/api/accounting/accounts', body('7096', 'TD-558 duplicate')), 409, 'ACCOUNT_CODE_TAKEN');
       expect('creating «70-96»', await admin.post('/api/accounting/accounts', body('70-96', 'TD-558 dash')), 400);
 
-      // 2) five concurrent requests with one code answered [201, 409, 500, 500, 500]. Since v9.0.395 (TD-610) migration 0012
+      // 2) five concurrent requests with one code answered [201, 409, 500, 500, 500]. Since v9.0.426 (TD-610) migration 0012
       // looks for uq_accounts_code_active in its own schema, so this sandbox schema has it like production.
       const burst = await Promise.all([1, 2, 3, 4, 5].map(i => admin.post('/api/accounting/accounts', body('7097', `TD-558 burst ${i}`))));
       const statuses = burst.map(r => r.status).sort();

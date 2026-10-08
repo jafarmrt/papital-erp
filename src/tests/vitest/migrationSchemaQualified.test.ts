@@ -3,10 +3,10 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 import { unqualifiedMigrationLookups } from '../setup/migrationSchemaQualification';
 
-// v9.0.394 (TD-590, B01-10): a migration never drops a schema object by an unqualified name with IF EXISTS. The name was
+// v9.0.425 (TD-590, B01-10): a migration never drops a schema object by an unqualified name with IF EXISTS. The name was
 // looked up along the search path, and an isolated test schema (search path test schema, public) dropped the object of
 // the same name in `public`; 0007 dropped public.idx_idemp_user_scope_key, after which every idempotent POST failed.
-// v9.0.395 (TD-610, B01-30): an existence check on a catalog restricts its own schema. The catalogs hold every schema, so a
+// v9.0.426 (TD-610, B01-30): an existence check on a catalog restricts its own schema. The catalogs hold every schema, so a
 // constraint, index or trigger of the same name in `public` or in another test schema made the migration skip it.
 
 const folder = path.join(process.cwd(), 'drizzle');

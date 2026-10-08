@@ -125,7 +125,7 @@ export async function runMigrations(options: RunMigrationsOptions = {}): Promise
 
   let client: pkg.PoolClient | undefined;
   let locked = false;
-  // v9.0.396 (TD-589): constraints and indexes a migration left out raise notices; they go into `warnings` and the log
+  // v9.0.427 (TD-589): constraints and indexes a migration left out raise notices; they go into `warnings` and the log
   const noticeWarnings: string[] = [];
   const onNotice = (notice: MigrationNotice) => {
     const warning = migrationNoticeWarning(notice);

@@ -147,6 +147,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     category: 'مواد اولیه در انتظار تایید',
     permissions: [
       { key: 'pending_materials.view', title: 'مشاهده درخواست‌های مواد اولیه', description: 'مشاهده پیشنهادها و ثبت مواد اولیه توسط کاربران' },
+      { key: 'pending_materials.create', title: 'ثبت درخواست ماده اولیه', description: 'فرستادن ماده سفارشی کنترل پروژه به صف بررسی انبار (کالا فقط با تأیید ساخته می‌شود)', requires: ['pending_materials.view'] },
       { key: 'pending_materials.approve', title: 'تایید و تبدیل به کالا/انبار', description: 'تایید درخواست‌های مواد اولیه و انتقال به انبار اصلی یا رد درخواست', requires: ['pending_materials.view'] },
       { key: 'pending_materials.delete', title: 'حذف درخواست مواد اولیه', description: 'حذف درخواست‌های مواد اولیه ثبت‌شده', requires: ['pending_materials.view'] },
     ]

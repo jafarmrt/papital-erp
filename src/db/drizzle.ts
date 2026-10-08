@@ -9,7 +9,7 @@ import { resolveDatabaseMode, type DatabaseMode } from './databaseMode.js';
 
 const { Pool } = pkg;
 
-// v9.0.397 (TD-616, decision t4 «الف»): SQL_HOST, a real DATABASE_URL, the in-memory demo only with ERP_DEMO_MODE=1
+// v9.0.428 (TD-616, decision t4 «الف»): SQL_HOST, a real DATABASE_URL, the in-memory demo only with ERP_DEMO_MODE=1
 // outside production, otherwise refused (the server does not start). Never an automatic fallback to the demo database.
 const databaseMode: DatabaseMode = resolveDatabaseMode(process.env);
 const rawDbUrl = databaseMode.kind === 'url' ? databaseMode.url : '';
@@ -151,7 +151,7 @@ export function isMockDatabase(): boolean {
   return useMock;
 }
 
-/** v9.0.397 (TD-616): the database mode the process started with (`refused` carries the reason the server stops on) */
+/** v9.0.428 (TD-616): the database mode the process started with (`refused` carries the reason the server stops on) */
 export function getDatabaseMode(): DatabaseMode {
   return databaseMode;
 }

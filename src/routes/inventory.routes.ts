@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -13,7 +13,9 @@ import { KardexBackfillService } from '../services/inventory/kardexBackfill.serv
 import { WarehouseStockReconciliationService } from '../services/inventory/warehouseStockReconciliation.service.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { BOM_ALLOCATE_PERMISSIONS, BOM_CONSUME_PERMISSIONS, BOM_RELEASE_PERMISSIONS } from '../lib/permissions/projectPermissions.js';
 import { WAC_CORRECTION_PERMISSION } from '../lib/inventoryAudit/wacCorrection.js';
+import { ITEM_COST_READ_PERMISSIONS, RESERVATION_BUYER_READ_PERMISSIONS, reservedItemsReportForAccess } from '../lib/inventory/reservedItemsReport.js';
 import type { AuthUserPayload } from '../types.js';
 
 const router = Router();
@@ -123,9 +125,13 @@ export const releaseAllocationSchema = z.object({
 });
 
 // GET /api/inventory/reserved-items - Comprehensive report of reserved items
+// v9.0.400 (TD-829): cost and value only for item cost readers, a proforma's buyer only for documents.view
 router.get('/reserved-items', authorizePermission(...READ_PERMISSIONS.reservedItems), asyncHandler(async (req, res) => {
   const report = await ItemsService.getReservedStockDetails();
-  res.json(report);
+  res.json(reservedItemsReportForAccess(report, {
+    cost: await can(req.user, ...ITEM_COST_READ_PERMISSIONS),
+    buyer: await can(req.user, ...RESERVATION_BUYER_READ_PERMISSIONS),
+  }));
 }));
 
 // GET /api/inventory/integrity-audit
@@ -397,7 +403,7 @@ router.put(
 // GET /api/inventory/allocations
 router.get(
   '/allocations',
-  authorizePermission('warehouse.view', 'projects.view'),
+  authorizePermission(...READ_PERMISSIONS.bomAllocations),
   validate(allocationsQuerySchema),
   asyncHandler(async (req, res) => {
     const projectId = req.query.projectId ? parseInt(req.query.projectId as string, 10) : undefined;
@@ -420,7 +426,7 @@ router.get(
 router.post(
   '/allocations/allocate',
   // حوزه H (TD-298): تخصیص کالا را از انبار خارج و سند ۱۴۰۲ صادر می‌کند؛ مجوز مشاهده کافی نیست
-  authorizePermission('projects.edit', 'warehouse.out'),
+  authorizePermission(...BOM_ALLOCATE_PERMISSIONS),
   idempotency({ scope: 'inventory' }),
   validate(projectAllocateSchema),
   asyncHandler(async (req, res) => {
@@ -453,7 +459,7 @@ router.post(
 // POST /api/inventory/allocations/:id/consume
 router.post(
   '/allocations/:id/consume',
-  authorizePermission('inventory.reconcile', 'projects.edit'),
+  authorizePermission(...BOM_CONSUME_PERMISSIONS),
   idempotency({ scope: 'inventory' }),
   validate(paramsIdSchema),
   asyncHandler(async (req, res) => {
@@ -488,7 +494,7 @@ router.post(
 // POST /api/inventory/allocations/:id/release
 router.post(
   '/allocations/:id/release',
-  authorizePermission('inventory.reconcile', 'projects.edit', 'warehouse.out'),
+  authorizePermission(...BOM_RELEASE_PERMISSIONS),
   idempotency({ scope: 'inventory' }),
   validate(releaseAllocationSchema),
   asyncHandler(async (req, res) => {

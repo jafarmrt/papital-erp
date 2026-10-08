@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { migrationNoticeWarning } from '../../db/migrationNotices';
 import { conditionalConstraintCause, conditionalConstraintsResultMessage, type ConditionalConstraintEntry } from '../../lib/system/conditionalConstraints';
 
-// v9.0.396 (TD-589, B01-09): the notices a migration raises when unclean data leaves a constraint or index out go into the
+// v9.0.427 (TD-589, B01-09): the notices a migration raises when unclean data leaves a constraint or index out go into the
 // migrator's warnings; ordinary notices (an object created, "does not exist, skipping") do not.
 
 describe('migration notices (TD-589)', () => {
