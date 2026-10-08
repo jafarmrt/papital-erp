@@ -1,4 +1,5 @@
 import { FileInput, FileOutput, Lock } from 'lucide-react';
+import { formatPersianNumber } from '../../../utils';
 
 interface StockDocumentHeaderProps {
   actionType: 'in' | 'out';
@@ -43,7 +44,7 @@ export function StockDocumentHeader({ actionType, totalReservedItemsCount, onTog
           className="flex items-center gap-2 px-3.5 py-2 bg-purple-50 hover:bg-purple-100/80 border border-purple-200 rounded-xl text-purple-950 font-bold text-xs transition-all shadow-2xs group cursor-pointer"
         >
           <Lock size={15} className="text-purple-600 group-hover:scale-110 transition-transform" />
-          <span>اقلام رزرو شده انبار ({totalReservedItemsCount} کالا)</span>
+          <span>اقلام رزرو شده انبار ({formatPersianNumber(totalReservedItemsCount)} کالا)</span>
         </button>
       </div>
     </div>

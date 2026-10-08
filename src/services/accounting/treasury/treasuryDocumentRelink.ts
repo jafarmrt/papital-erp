@@ -54,6 +54,7 @@ export async function relinkTreasuryDocument(params: {
         type: before.type === 'payment' ? 'payment' : 'receipt',
         documentId: params.documentId,
         partyType: before.partyType || 'other',
+        partyId: before.partyId ?? null,
         partyName: partyName ?? before.partyName,
       });
       // جمع تسویه سند فقط ردیف‌های ارز خودش را معنادار می‌شمارد

@@ -163,8 +163,8 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
     }
 
     const mapped = fetchedItems.map(it => {
-      const codeUpper = (it.code || '').trim().toUpperCase();
-      const resInfo = reservedMap[codeUpper] || { totalReserved: 0, reservations: [] };
+      // v9.0.374 (TD-822): رزرو با شناسه کالا، نه کد بزرگ‌شده
+      const resInfo = reservedMap[String(it.id)] || { totalReserved: 0, reservations: [] };
       const curStock = Number(it.currentStock || 0);
       const reservedStock = Number(resInfo.totalReserved || 0);
       const st: Record<string, number> = listStockMap.get(it.id)?.byCode ?? {};

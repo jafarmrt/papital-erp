@@ -6,6 +6,12 @@ import { SearchProvider } from '../../SearchContext';
 
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
+// v9.0.340 (TD-795): the row buttons follow their API permission; this characterization runs as a user holding every key
+vi.mock('../../contexts/AuthContext', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../contexts/AuthContext')>()),
+  useHasPermission: () => true,
+  useHasAnyPermission: () => true,
+}));
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
@@ -81,7 +87,7 @@ function rowOf(refText: string): HTMLElement {
 describe('InvoicesListPage — invoices list (TD-080 part 3 characterization)', () => {
   it('renders the KPI cards, the rows and the pagination summary from the documents list', async () => {
     renderPage();
-    expect(screen.getByText('لیست اسناد، فاکتورها و رسیدهای انبار')).toBeTruthy();
+    expect(screen.getByText('فهرست اسناد، فاکتورها و رسیدهای انبار')).toBeTruthy();
     expect(await screen.findByText('INV-۱۰۰۱')).toBeTruthy();
     expect(fetchJson).toHaveBeenCalledWith('/documents?page=1&limit=50');
 
@@ -115,11 +121,11 @@ describe('InvoicesListPage — invoices list (TD-080 part 3 characterization)', 
   it('refetches with the type filter and clears the filters', async () => {
     renderPage();
     await screen.findByText('INV-۱۰۰۱');
-    expect(screen.queryByText('پاک کردن فیلترها')).toBeNull();
+    expect(screen.queryByText('پاک کردن شرط‌های جستجو')).toBeNull();
     fireEvent.change(screen.getByDisplayValue('همه انواع سند (خرید، فروش، انبار)'), { target: { value: 'invoice' } });
     await waitFor(() => expect(fetchJson).toHaveBeenCalledWith('/documents?type=invoice&page=1&limit=50'));
-    fireEvent.click(screen.getByText('پاک کردن فیلترها'));
-    expect(screen.queryByText('پاک کردن فیلترها')).toBeNull();
+    fireEvent.click(screen.getByText('پاک کردن شرط‌های جستجو'));
+    expect(screen.queryByText('پاک کردن شرط‌های جستجو')).toBeNull();
     expect(screen.getByDisplayValue('همه انواع سند (خرید، فروش، انبار)')).toBeTruthy();
   });
 

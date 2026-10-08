@@ -58,7 +58,7 @@ const renderTab = () => render(
   <ProjectScheduleTab project={PROJECT} personnelList={[{ id: 7, fullName: 'پرسنل آزمون' }]} pieceworkTasksList={[{ id: 3, title: 'برش', defaultRate: 1000 }]} onUpdate={vi.fn()} />,
 );
 
-// v9.0.343 (TD-742, owner decision t3 A): a project save sends the version it was built from and the next save the newer one
+// v9.0.385 (TD-742, owner decision t3 A): a project save sends the version it was built from and the next save the newer one
 describe('project version on save (TD-742)', () => {
   it('reads only positive whole versions and keeps the newest', () => {
     expect(projectVersionOf(3)).toBe(3);

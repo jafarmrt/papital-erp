@@ -176,6 +176,8 @@ export async function cleanupAllTestFixtures(): Promise<void> {
 
   // 1. Clear workflow dependencies & instances
   try {
+    // v9.0.347 (TD-691): orders point to their requisition (fk_documents_procurement_requisition); unlink them first
+    await orm.execute(sql`UPDATE documents SET procurement_requisition_id = NULL WHERE procurement_requisition_id IN (SELECT id FROM purchase_requisitions WHERE code ILIKE 'PR-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%')`);
     await orm.execute(sql`DELETE FROM purchase_requisitions WHERE code ILIKE 'PR-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%'`);
     await orm.execute(sql`UPDATE purchase_requisitions SET workflow_instance_id = NULL`);
     await orm.execute(sql`DELETE FROM workflow_history_logs`);
@@ -292,6 +294,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
   try {
     await orm.execute(sql`DELETE FROM outbox_events`);
     await orm.execute(sql`DELETE FROM dead_letter_events`);
+    await orm.execute(sql`DELETE FROM integration_delivery_jobs`);
     await orm.execute(sql`DELETE FROM idempotency_keys`);
     await orm.execute(sql`DELETE FROM event_action_logs`);
     await orm.execute(sql`DELETE FROM activity_logs WHERE action ILIKE 'TEST%' OR details::text ILIKE '%E2E%' OR details::text ILIKE ${MARKER_PAT}`);

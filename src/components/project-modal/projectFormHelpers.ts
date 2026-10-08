@@ -94,7 +94,7 @@ export function buildProjectPayload({
   description: string;
   stages: ProjectStage[];
   attachments?: FinancialAttachment[];
-  /** v9.0.342 (TD-740، تصمیم ت۲ الف): مراحل فقط در ساخت پروژه فرستاده می‌شوند؛ ویرایش پروژه آن‌ها را نمی‌فرستد */
+  /** v9.0.384 (TD-740، تصمیم ت۲ الف): مراحل فقط در ساخت پروژه فرستاده می‌شوند؛ ویرایش پروژه آن‌ها را نمی‌فرستد */
   includeStages?: boolean;
 }) {
   const firstProduct = productsList[0];

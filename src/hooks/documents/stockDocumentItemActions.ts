@@ -1,4 +1,5 @@
 import { toast } from 'react-hot-toast';
+import { formatPersianNumber } from '../../utils';
 import { Item } from '../../types';
 import type { DocItemRow } from '../../components/documents/DocItemsTable';
 import { reservationMatchesListItem, type GlobalReservation } from '../../lib/documents/stockReservations';
@@ -8,10 +9,13 @@ import type { StockDocumentForm } from './useStockDocumentForm';
  * TD-080 (بخش ۳): کنترل‌کننده‌های اقلام فرم رسید/حواله انبار — منتقل‌شده بدون تغییر رفتار از DocumentsPage.
  * تابع ساده (بدون hook) است و در هر رندر با وضعیت تازه فرم ساخته می‌شود، مانند توابع داخلی صفحه اصلی.
  */
-/** v7.0.102 (TD-233): ردیف رزرو پیش‌فاکتور در پیام سقف خروج «پیش‌فاکتور» نامیده می‌شود، نه «پروژه» */
+/**
+ * v7.0.102 (TD-233): ردیف رزرو پیش‌فاکتور در پیام سقف خروج «پیش‌فاکتور» نامیده می‌شود، نه «پروژه».
+ * v9.0.346 (TD-803): مقدار با رقم فارسی («(۴ عدد)»)، مثل همه عددهای پیام‌های این فایل.
+ */
 export function reservationSourceLabel(r: GlobalReservation): string {
   const kind = r.sourceType === 'proforma' ? 'پیش‌فاکتور' : 'پروژه';
-  return `${kind} «${r.projectCode || r.projectTitle}» (${r.reservedQty} ${r.unit})`;
+  return `${kind} «${r.projectCode || r.projectTitle}» (${formatPersianNumber(r.reservedQty)} ${r.unit})`;
 }
 
 export function createStockDocumentItemActions(form: StockDocumentForm, itemsList: Item[]) {
@@ -48,7 +52,7 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
     for (const { item, quantity: reservedTotal } of qtyByItem.values()) {
       const { maxAllowedForExit } = getItemReservationSummary(item);
       const quantity = Math.min(reservedTotal, maxAllowedForExit);
-      if (quantity < reservedTotal) cappedItems.push(`«${item.name}» (${maxAllowedForExit} ${item.unit})`);
+      if (quantity < reservedTotal) cappedItems.push(`«${item.name}» (${formatPersianNumber(maxAllowedForExit)} ${item.unit})`);
       if (quantity <= 0) continue;
       itemsToAdd.push({
         item,
@@ -68,7 +72,7 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
         }
         return Array.from(newMap.values());
       });
-      toast.success(`تعداد ${itemsToAdd.length} قلم کالای رزرو شده به حواله خروج افزوده شد.`);
+      toast.success(`تعداد ${formatPersianNumber(itemsToAdd.length)} قلم کالای رزرو شده به حواله خروج افزوده شد.`);
     }
 
     if (cappedItems.length > 0) {
@@ -76,7 +80,7 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
     }
 
     if (missingItems.length > 0) {
-      toast(`کالاهای زیر در دیتابیس انبار به عنوان کالای فیزیکی فعال یافت نشدند: ${missingItems.join('، ')}`, { icon: '⚠️' });
+      toast(`کالاهای زیر در پایگاه داده انبار به عنوان کالای فیزیکی فعال یافت نشدند: ${missingItems.join('، ')}`, { icon: '⚠️' });
     }
   };
 
@@ -100,7 +104,7 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
       }];
     });
 
-    toast.success(`کالای «${matchedItem.name}» (${rItem.reservedQty} ${rItem.unit}) به اقلام حواله اضافه شد.`);
+    toast.success(`کالای «${matchedItem.name}» (${formatPersianNumber(rItem.reservedQty)} ${rItem.unit}) به اقلام حواله اضافه شد.`);
   };
 
   const handleItemSelect = (val: string, rawItem?: Item) => {
@@ -143,10 +147,10 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
             .join('، ');
 
           toast.error(
-            `خطا: امکان خروج بیش از ${maxAllowedForExit} ${it.unit} وجود ندارد!\nتعداد ${reservedForOtherProjects} ${it.unit} برای سایر پروژه‌ها و پیش‌فاکتورها (${otherProjTitles}) رزرو شده است و قابل خروج نمی‌باشد.`
+            `خطا: امکان خروج بیش از ${formatPersianNumber(maxAllowedForExit)} ${it.unit} وجود ندارد!\nتعداد ${formatPersianNumber(reservedForOtherProjects)} ${it.unit} برای سایر پروژه‌ها و پیش‌فاکتورها (${otherProjTitles}) رزرو شده است و قابل خروج نمی‌باشد.`
           );
         } else {
-          toast.error(`موجودی کافی نیست! موجودی قابل خروج: ${maxAllowedForExit} ${it.unit}`);
+          toast.error(`موجودی کافی نیست! موجودی قابل خروج: ${formatPersianNumber(maxAllowedForExit)} ${it.unit}`);
         }
         return;
       }
@@ -185,10 +189,10 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
             .join('، ');
 
           toast.error(
-            `خطا: حداکثر سقف مجاز خروج این کالا ${maxAllowedForExit} ${dItem.item.unit} است. ${reservedForOtherProjects} ${dItem.item.unit} برای ${otherProjTitles} رزرو است.`
+            `خطا: حداکثر سقف مجاز خروج این کالا ${formatPersianNumber(maxAllowedForExit)} ${dItem.item.unit} است. ${formatPersianNumber(reservedForOtherProjects)} ${dItem.item.unit} برای ${otherProjTitles} رزرو است.`
           );
         } else {
-          toast.error(`حداکثر موجودی قابل خروج ${maxAllowedForExit} ${dItem.item.unit} می‌باشد.`);
+          toast.error(`حداکثر موجودی قابل خروج ${formatPersianNumber(maxAllowedForExit)} ${dItem.item.unit} می‌باشد.`);
         }
         return;
       }

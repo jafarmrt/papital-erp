@@ -70,7 +70,7 @@ describe('remittance submit (TD-233)', () => {
     const post = fetchJson.mock.calls.find(([url, init]) => url === '/documents' && init?.method === 'POST');
     expect(JSON.parse(post?.[1].body).projectId).toBe(7);
     expect(fetchJson.mock.calls.some(([url, init]) => String(url).startsWith('/projects/') && init?.method === 'PUT')).toBe(false);
-    expect(vi.mocked(toast.success).mock.calls[0][0]).toContain('تعداد 2 عدد');
+    expect(vi.mocked(toast.success).mock.calls[0][0]).toContain('تعداد ۲ عدد');
   });
 });
 
@@ -87,11 +87,11 @@ describe('add all reserved items (TD-233)', () => {
     const update = setDocItems.mock.calls[0][0] as (prev: DocItemRow[]) => DocItemRow[];
     // 2 + 4 = 6 reserved, but only 5 in stock: the line is capped and the user is told why
     expect(update([]).map(r => [r.item.id, r.quantity])).toEqual([[3, 5]]);
-    expect(vi.mocked(toast).mock.calls[0][0]).toContain('«سنگ فیروزه» (5 عدد)');
+    expect(vi.mocked(toast).mock.calls[0][0]).toContain('«سنگ فیروزه» (۵ عدد)');
   });
 
   it('names a proforma reservation as a proforma in the exit-limit message', () => {
-    expect(reservationSourceLabel(reservation({ sourceType: 'proforma', projectCode: 'PF-1', reservedQty: 1 }))).toBe('پیش‌فاکتور «PF-1» (1 عدد)');
-    expect(reservationSourceLabel(reservation({ sourceType: 'project', projectCode: 'PRJ-8', reservedQty: 3 }))).toBe('پروژه «PRJ-8» (3 عدد)');
+    expect(reservationSourceLabel(reservation({ sourceType: 'proforma', projectCode: 'PF-1', reservedQty: 1 }))).toBe('پیش‌فاکتور «PF-1» (۱ عدد)');
+    expect(reservationSourceLabel(reservation({ sourceType: 'project', projectCode: 'PRJ-8', reservedQty: 3 }))).toBe('پروژه «PRJ-8» (۳ عدد)');
   });
 });

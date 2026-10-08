@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState, type SetStateAction } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { extractDateString } from '../../utils';
+import { errorMessageOf, extractDateString } from '../../utils';
 import { useSearch } from '../../SearchContext';
 import { useDocumentsQuery } from '../queries';
 import { QUERY_KEYS } from '../../lib/queryKeys';
-import { computeInvoiceListSummary, type InvoiceListDocument, type InvoiceListResponse } from '../../lib/invoices/invoiceListDocuments';
+import { computeInvoiceListSummary, invoiceListTypeFilter, type InvoiceListDocument, type InvoiceListResponse } from '../../lib/invoices/invoiceListDocuments';
 
 /**
  * TD-080 (بخش ۳): جستجو، فیلترها، صفحه‌بندی و کوئری لیست اسناد — منتقل‌شده بدون تغییر از InvoicesListPage.
@@ -33,12 +33,15 @@ export function useInvoiceListQuery() {
   const queryClient = useQueryClient();
 
   // V4 Phase 6.2 (یافته U-1): تغذیه کوئری سرور با debouncedSearchQuery به جای کی‌استروک‌های خام
+  // v9.0.344 (TD-800): «پیش‌فاکتور فروش» = وضعیت پیش‌فاکتور روی نوع‌های فاکتور و پیش‌فاکتور
+  const typeFilter = invoiceListTypeFilter(filterType, filterStatus);
   const docsQuery = useDocumentsQuery({
     page,
     limit: pageSize,
     search: debouncedSearchQuery,
-    type: filterType,
-    status: filterStatus,
+    type: typeFilter.type,
+    types: typeFilter.types,
+    status: typeFilter.status,
     startDate: extractDateString(startDate) || undefined,
     endDate: extractDateString(endDate) || undefined,
   });
@@ -46,6 +49,11 @@ export function useInvoiceListQuery() {
   const result = docsQuery.data as InvoiceListResponse | null | undefined;
   const totalPages = result?.totalPages || 1;
   const loading = docsQuery.isFetching;
+  // v9.0.342 (TD-797، یافته B08-28): خطای دریافت فهرست (مثلاً ۴۰۳ یا ۵۰۰) با پیام سرور نمایش داده می‌شود؛ پیش‌تر همان
+  // «سندی مطابق فیلترهای انتخابی … یافت نشد» فهرست خالی بود
+  const loadError = docsQuery.isError ? (errorMessageOf(docsQuery.error) || 'خطا در دریافت فهرست اسناد') : null;
+  const { refetch } = docsQuery;
+  const retryLoad = useCallback(() => { void refetch(); }, [refetch]);
 
   const loadData = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documents.all });
@@ -77,6 +85,7 @@ export function useInvoiceListQuery() {
     page, setPage,
     pageSize, setPageSize,
     safeDocs, totalItems, totalPages, loading,
+    loadError, retryLoad,
     summaryMetrics,
     hasActiveFilters, clearFilters,
     loadData,

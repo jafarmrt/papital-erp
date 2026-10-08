@@ -27,13 +27,21 @@ import {
 import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
 import { buildPayslipDeductionsHealthTest, findPayslipDeductionsInPrepayments } from './payrollDeductionHealth.js';
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
+import { buildProcurementOrderLinkHealthTest, findUnresolvedProcurementOrderLinks } from '../procurement/procurementOrderLinks.js';
+import { buildConsolidationSourcesHealthTest, findOpenLegacyConsolidationSources } from '../procurement/consolidationSourceHealth.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
+import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from '../documents/documentParty.js';
+import { buildDocumentIntegrityHealthTest, findDocumentIntegrityGaps } from '../documents/documentConstraintHealth.js';
+import {
+  buildOverReservedHealthTest, buildProjectReservationHealthTest, findOverReservedItems, findProjectReservationIssues,
+} from '../projects/projectReservationHealth.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildProjectStageHealthTest, buildProjectValueHealthTest, findProjectFreeTextValues, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
 import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/projects/projectStatus.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
+import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
 import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
@@ -1195,11 +1203,31 @@ export class FinancialHealthService {
     tests.push(personnelRateTest);
     // آزمون ۳۹: v9.0.286 (TD-554) کسورات فیش حقوق که سندهای پیشین در ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» گذاشته‌اند (فقط فهرست)
     tests.push(buildPayslipDeductionsHealthTest(await findPayslipDeductionsInPrepayments()));
-    // آزمون ۴۰: v9.0.336 (TD-737، TD-753) شماره مرحله زنده تکراری یک پروژه و مرحله پروژه ناموجود (مهاجرت 0080؛ فقط فهرست)
+    // آزمون ۴۰: v9.0.336 (TD-778) سند فروش و خرید با نام خریدار و بی شناسه طرف حساب (فقط فهرست، بی بازنویسی)
+    tests.push(buildUnlinkedPartyDocumentHealthTest(await findUnlinkedPartyDocuments()));
+    // آزمون ۴۱: v9.0.338 (TD-786) قید پایگاه‌داده سند و ردیف سند اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)
+    tests.push(buildDocumentIntegrityHealthTest(await findDocumentIntegrityGaps()));
+    // آزمون ۴۲: v9.0.347 (TD-691) سند با برچسب یا ردیف درخواست خرید که پیوند سفارش تدارکاتش روشن نیست (فقط فهرست)
+    const procurementOrderLinkTest = buildProcurementOrderLinkHealthTest(await findUnresolvedProcurementOrderLinks());
+    overallScore += procurementOrderLinkTest.scoreImpact;
+    tests.push(procurementOrderLinkTest);
+    // آزمون ۴۳: v9.0.349 (TD-694) منبع تجمیع قدیمی که هنوز باز است و می‌تواند دوباره سفارش داده شود (فقط فهرست)
+    const consolidationSourcesTest = buildConsolidationSourcesHealthTest(await findOpenLegacyConsolidationSources());
+    overallScore += consolidationSourcesTest.scoreImpact;
+    tests.push(consolidationSourcesTest);
+    // آزمون ۴۴: v9.0.367 (TD-737، TD-753) شماره مرحله زنده تکراری یک پروژه و مرحله پروژه ناموجود (مهاجرت 0084؛ فقط فهرست)
     const projectStageTest = buildProjectStageHealthTest(await findProjectStageIntegrity());
     overallScore += projectStageTest.scoreImpact;
     tests.push(projectStageTest);
-    // آزمون ۴۱: v9.0.338 (TD-754) وضعیت و اولویت پروژه و وضعیت مرحله بیرون از فهرست رابط (فقط فهرست)
+    // آزمون ۴۵: v9.0.371 (TD-817) رزرو پروژه ناهمخوان با ثبت نهایی (پروژه‌های قدیمی؛ فقط فهرست، بی بازنویسی)
+    tests.push(buildProjectReservationHealthTest(await findProjectReservationIssues()));
+    // آزمون ۴۶: v9.0.373 (TD-819) کالای بیش از موجودی رزروشده (فقط فهرست)
+    tests.push(buildOverReservedHealthTest(await findOverReservedItems()));
+    // آزمون ۴۷: v9.0.377 (TD-712) قانون‌های خودکار با اقدام حذف‌شده («تحریک گردش کار»، «پیامک»؛ مهاجرت 0085 غیرفعالشان کرد؛ فقط فهرست)
+    const retiredRuleTest = buildRetiredRuleActionHealthTest(await findRetiredActionRules());
+    overallScore += retiredRuleTest.scoreImpact;
+    tests.push(retiredRuleTest);
+    // آزمون ۴۸: v9.0.380 (TD-754) وضعیت و اولویت پروژه و وضعیت مرحله بیرون از فهرست رابط (فقط فهرست)
     const projectValueTest = buildProjectValueHealthTest(await findProjectFreeTextValues(PROJECT_STATUSES, PROJECT_PRIORITIES, STAGE_STATUSES));
     overallScore += projectValueTest.scoreImpact;
     tests.push(projectValueTest);

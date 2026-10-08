@@ -15,7 +15,7 @@ const payload = (includeStages?: boolean) => buildProjectPayload({
   ...(includeStages === undefined ? {} : { includeStages }),
 });
 
-// v9.0.342 (TD-740, owner decision t2 A): the project edit form shows the stages read-only and never sends them
+// v9.0.384 (TD-740, owner decision t2 A): the project edit form shows the stages read-only and never sends them
 describe('stages in the project edit form (TD-740)', () => {
   it('shows the stages without inputs and opens the stages section', () => {
     const onOpenStages = vi.fn();

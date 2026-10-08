@@ -34,7 +34,7 @@ export async function lockLiveProject(tx: DbExecutor, projectId: number): Promis
 }
 
 /**
- * v9.0.340 (TD-756): زمان تکمیل مرحله پس از یک نوشتن. یک ساعت برای همه مسیرها، ساعت UTC سرور با Z (`systemNowUtcIso`)؛
+ * v9.0.382 (TD-756): زمان تکمیل مرحله پس از یک نوشتن. یک ساعت برای همه مسیرها، ساعت UTC سرور با Z (`systemNowUtcIso`)؛
  * مرحله‌ای که تکمیل‌شده بود زمانش را نگه می‌دارد و مرحله تکمیل‌نشده زمان تکمیل ندارد.
  */
 export function stageCompletedAt(stage: Pick<StageRow, 'status' | 'completedAt'>, nextStatus: string, nowUtc: string): string | null {
@@ -54,7 +54,7 @@ export interface ProjectStatusSyncResult {
 }
 
 /**
- * v9.0.334 (TD-738، تصمیم ت۱ الف): درصد و وضعیت مراحل و وضعیت پروژه از ماتریس پیشرفت، فقط درون تراکنش یک نوشتن و پس
+ * v9.0.365 (TD-738، تصمیم ت۱ الف): درصد و وضعیت مراحل و وضعیت پروژه از ماتریس پیشرفت، فقط درون تراکنش یک نوشتن و پس
  * از قفل ردیف پروژه (`lockLiveProject`). «متوقف‌شده» و «لغوشده» تغییر نمی‌کنند و هر تغییر وضعیت پروژه یک ردیف ممیزی با
  * پیش و پس در همان تراکنش دارد. خواندن پروژه هرگز این تابع را اجرا نمی‌کند.
  */
@@ -93,7 +93,7 @@ export async function syncProjectFromMatrix(tx: DbExecutor, project: ProjectRow,
   });
   let current = project;
   if (nextStatus !== project.status) {
-    // v9.0.343 (TD-742): تغییر وضعیت با ماتریس هم نسخه پروژه را بالا می‌برد تا فرمی که پیش از آن باز شده وضعیت را برنگرداند
+    // v9.0.385 (TD-742): تغییر وضعیت با ماتریس هم نسخه پروژه را بالا می‌برد تا فرمی که پیش از آن باز شده وضعیت را برنگرداند
     [current] = await tx.update(productionProjects).set({ status: nextStatus, version: nextVersion(project.version) }).where(eq(productionProjects.id, project.id)).returning();
     await logMatrixStatusChange(tx, actor, project, nextStatus, matrix);
   }

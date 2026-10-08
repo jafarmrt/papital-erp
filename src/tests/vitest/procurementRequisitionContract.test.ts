@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRequisitionSchema, updateRequisitionSchema } from '../../routes/procurement.schemas';
-import { canDeleteRequisition, canEditRequisition, REQUISITION_PRIORITIES } from '../../lib/procurement/requisitionFields';
+import { canConsolidateRequisition, canDeleteRequisition, canEditRequisition, REQUISITION_PRIORITIES } from '../../lib/procurement/requisitionFields';
 import { persianIssueMessage } from '../../lib/validationMessages';
 
 /**
@@ -83,5 +83,20 @@ describe('requisition edit rule (TD-696)', () => {
     expect(canEditRequisition({ status: 'under_review', items: [row] })).toBe(false);
     expect(canEditRequisition({ status: 'received', items: [{ ...row, orderedQty: 8, receivedQty: 8, linkedDocumentIds: [11] }] })).toBe(false);
     expect(canEditRequisition({ status: 'pending', items: [{ ...row, orderedQty: 3, linkedDocumentIds: [12] }] })).toBe(false);
+  });
+});
+
+describe('requisition consolidation rule (TD-694)', () => {
+  const row = { itemId: 7, requestedQty: 4, orderedQty: 0, receivedQty: 0, linkedDocumentIds: [] as number[] };
+  it('consolidates only an unapproved requisition without orders, and a consolidated one is closed', () => {
+    expect(canConsolidateRequisition({ status: 'pending', items: [row] })).toBe(true);
+    expect(canConsolidateRequisition({ status: 'under_review', items: [row] })).toBe(true);
+    expect(canConsolidateRequisition({ status: 'ordered', items: [row] })).toBe(false);
+    expect(canConsolidateRequisition({ status: 'received', items: [{ ...row, orderedQty: 4, receivedQty: 4, linkedDocumentIds: [9] }] })).toBe(false);
+    expect(canConsolidateRequisition({ status: 'rejected', items: [row] })).toBe(false);
+    expect(canConsolidateRequisition({ status: 'pending', items: [{ ...row, orderedQty: 1, linkedDocumentIds: [10] }] })).toBe(false);
+    expect(canConsolidateRequisition({ status: 'consolidated', items: [row] })).toBe(false);
+    expect(canDeleteRequisition({ status: 'consolidated', items: [row] })).toBe(false);
+    expect(canEditRequisition({ status: 'consolidated', items: [row] })).toBe(false);
   });
 });

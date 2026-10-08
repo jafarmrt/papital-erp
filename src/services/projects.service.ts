@@ -65,7 +65,7 @@ export interface UpdateProjectInput {
   stageSchedules?: unknown;
   customStages?: unknown[];
   attachments?: unknown[];
-  /** v9.0.343 (TD-742): نسخه‌ای که فرم از آن ساخته شده؛ مسیر `PUT /projects/:id` همیشه می‌فرستد */
+  /** v9.0.385 (TD-742): نسخه‌ای که فرم از آن ساخته شده؛ مسیر `PUT /projects/:id` همیشه می‌فرستد */
   expectedVersion?: number;
 }
 
@@ -105,7 +105,7 @@ const decimalOf = (value: unknown): number | null | undefined => {
 };
 
 /**
- * v9.0.339 (TD-741): مقدار پروژه عددی بزرگ‌تر از صفر است (رقم فارسی خوانده می‌شود)؛ پیش‌تر «۱۲» ستون مقدار را NaN می‌کرد.
+ * v9.0.381 (TD-741): مقدار پروژه عددی بزرگ‌تر از صفر است (رقم فارسی خوانده می‌شود)؛ پیش‌تر «۱۲» ستون مقدار را NaN می‌کرد.
  * خالی یعنی بی‌تغییر (در ساخت: ۱).
  */
 export function projectQuantity(value: unknown): number | undefined {
@@ -117,7 +117,7 @@ export function projectQuantity(value: unknown): number | undefined {
   return num;
 }
 
-/** v9.0.339 (TD-741): یک ردیف «ورود به انبار»: کالا، مقدار مثبت و بهای اختیاری نامنفی، وگرنه ۴۲۲ با شماره ردیف */
+/** v9.0.381 (TD-741): یک ردیف «ورود به انبار»: کالا، مقدار مثبت و بهای اختیاری نامنفی، وگرنه ۴۲۲ با شماره ردیف */
 function deliveryLine(entry: AddProjectToInventoryInput['itemsToAdd'][number], index: number): { itemId: number; qty: number; unitPrice: string | null } {
   const row = `ردیف ${toPersianDigits(index + 1)} ورود به انبار`;
   const itemId = Number(entry.itemId);
@@ -239,7 +239,7 @@ export class ProjectService {
     if (!existing) {
       throw new NotFoundError('پروژه یافت نشد');
     }
-    // v9.0.343 (TD-742، تصمیم ت۳ الف): ویرایش از نسخه کهنه ۴۰۹ است و هر ذخیره نسخه را یکی بالا می‌برد؛ پیش‌تر ذخیره دوم دو
+    // v9.0.385 (TD-742، تصمیم ت۳ الف): ویرایش از نسخه کهنه ۴۰۹ است و هر ذخیره نسخه را یکی بالا می‌برد؛ پیش‌تر ذخیره دوم دو
     // کاربر ذخیره اول را بی‌صدا پاک می‌کرد
     if (input.expectedVersion !== undefined) assertProjectVersion(existing, input.expectedVersion);
 
@@ -297,15 +297,15 @@ export class ProjectService {
       .where(and(eq(productionProjects.id, id), eq(productionProjects.version, existing.version))).returning();
     if (!current) throw projectVersionConflict(id, existing.version);
 
-    // v9.0.333 (TD-739): تکمیل دستی پروژه با همان قاعده ماتریس، درون همین تراکنش و روی ردیف ذخیره‌شده
+    // v9.0.364 (TD-739): تکمیل دستی پروژه با همان قاعده ماتریس، درون همین تراکنش و روی ردیف ذخیره‌شده
     if (input.status === 'completed' && existing.status !== 'completed') {
       ProjectService.assertMatrixCompleted(progressMatrixStatus(await loadProjectProgressMatrix(executor, current)));
     }
 
-    // v9.0.341 (TD-757): ردیف ممیزی ویرایش با پیش و پس فیلدهای تغییرکرده، با همین تراکنش
+    // v9.0.383 (TD-757): ردیف ممیزی ویرایش با پیش و پس فیلدهای تغییرکرده، با همین تراکنش
     await logProjectUpdate(executor, actor, existing, current);
 
-    // v9.0.334 (TD-738): ویرایش پروژه (محصولات، کالای اصلی) مراحل و وضعیت را زیر همین قفل با ماتریس همگام می‌کند
+    // v9.0.365 (TD-738): ویرایش پروژه (محصولات، کالای اصلی) مراحل و وضعیت را زیر همین قفل با ماتریس همگام می‌کند
     const synced = await syncProjectFromMatrix(executor, current, actor);
     return { previous: existing, current: synced.project };
   }
@@ -388,7 +388,7 @@ export class ProjectService {
       const lineNotes: string[] = [];
 
       for (const [index, entry] of input.itemsToAdd.entries()) {
-        // v9.0.339 (TD-741): ردیف بی کالا، با مقدار غیرمثبت یا بهای نامعتبر کل تحویل را با ۴۲۲ رد می‌کند؛ پیش‌تر بی‌صدا کنار
+        // v9.0.381 (TD-741): ردیف بی کالا، با مقدار غیرمثبت یا بهای نامعتبر کل تحویل را با ۴۲۲ رد می‌کند؛ پیش‌تر بی‌صدا کنار
         // گذاشته می‌شد (پاسخ ۲۰۰ «با موفقیت افزوده شدند» با صفر قلم) و بهای نامعتبر به میانگین موزون برمی‌گشت
         const { itemId, qty, unitPrice } = deliveryLine(entry, index);
         let effectiveUnitPrice: string;
@@ -445,7 +445,7 @@ export class ProjectService {
 
   /**
    * Adds a stage to a project
-   * v9.0.334 (TD-738): زیر قفل ردیف پروژه و با همگام‌سازی مراحل و وضعیت در همان تراکنش (مرحله تازه خانه‌های تازه دارد)
+   * v9.0.365 (TD-738): زیر قفل ردیف پروژه و با همگام‌سازی مراحل و وضعیت در همان تراکنش (مرحله تازه خانه‌های تازه دارد)
    */
   static async addStage(
     projectId: number,
@@ -481,14 +481,14 @@ export class ProjectService {
 
       const synced = await ProjectService.syncLockedProject(tx, projectId, actor);
       const stage = synced.stages.find(st => st.id === newStage.id) ?? newStage;
-      // v9.0.341 (TD-757): افزودن مرحله ردیف ممیزی با پس مرحله دارد، با همین تراکنش
+      // v9.0.383 (TD-757): افزودن مرحله ردیف ممیزی با پس مرحله دارد، با همین تراکنش
       await logStageChange(tx, actor, 'CREATE', project, null, stage);
       return stage;
     });
   }
 
   /**
-   * v9.0.336 (TD-737): شماره مرحله تازه پس از هر شماره‌ای که پروژه به کار برده است (مراحل حذف‌شده و ردیف‌های پیشرفت هم
+   * v9.0.367 (TD-737): شماره مرحله تازه پس از هر شماره‌ای که پروژه به کار برده است (مراحل حذف‌شده و ردیف‌های پیشرفت هم
    * شمرده می‌شوند)، زیر قفل ردیف پروژه. پیش‌تر «تعداد مراحل زنده + ۱» بود: مرحله تازه شماره مرحله حذف‌شده و تیک‌هایش را
    * می‌گرفت و افزودن هم‌زمان یا پس از حذف مرحله میانی دو مرحله با یک شماره می‌ساخت.
    */
@@ -503,7 +503,7 @@ export class ProjectService {
   }
 
   /**
-   * v9.0.337 (TD-755): شماره تازه مرحله، زیر قفل ردیف پروژه. شماره‌ای که مرحله زنده دیگری دارد یا ردیف پیشرفت مرحله‌ای
+   * v9.0.368 (TD-755): شماره تازه مرحله، زیر قفل ردیف پروژه. شماره‌ای که مرحله زنده دیگری دارد یا ردیف پیشرفت مرحله‌ای
    * حذف‌شده روی آن مانده است با ۴۰۹ `STAGE_ORDER_TAKEN` رد می‌شود (پیش‌تر دو مرحله شماره ۱ می‌گرفتند)، و تیک‌های زنده
    * مرحله با آن جابه‌جا می‌شوند، مگر مرحله زنده دیگری (داده قدیمی) شماره پیشین را هم دارد.
    */
@@ -534,7 +534,7 @@ export class ProjectService {
   }
 
   /**
-   * v9.0.333 (TD-739): وضعیت ماتریس پیشرفت با قاعده مشترک (محصولات پروژه، وگرنه کالای اصلی)
+   * v9.0.364 (TD-739): وضعیت ماتریس پیشرفت با قاعده مشترک (محصولات پروژه، وگرنه کالای اصلی)
    */
   static async getProgressMatrixStatus(projectId: number, executor: DbExecutor = orm): Promise<ProgressMatrixStatus> {
     const [project] = await executor.select().from(productionProjects)
@@ -564,7 +564,7 @@ export class ProjectService {
 
   /**
    * Updates a project stage and syncs status
-   * v9.0.334 (TD-738): ویرایش و همگام‌سازی در یک تراکنش زیر قفل ردیف پروژه
+   * v9.0.365 (TD-738): ویرایش و همگام‌سازی در یک تراکنش زیر قفل ردیف پروژه
    */
   static async updateStage(
     projectId: number,
@@ -594,7 +594,7 @@ export class ProjectService {
         throw new NotFoundError('مرحله یافت نشد');
       }
 
-      // v9.0.335 (TD-758، تصمیم ت۱ الف): در پروژه دارای ماتریس پیشرفت وضعیت و درصد مرحله را فقط ماتریس تعیین می‌کند؛
+      // v9.0.366 (TD-758، تصمیم ت۱ الف): در پروژه دارای ماتریس پیشرفت وضعیت و درصد مرحله را فقط ماتریس تعیین می‌کند؛
       // مقدار دستی متفاوت رد می‌شود (پیش‌تر ۲۰۰ می‌گرفت و همگام‌ساز بی‌صدا برش می‌گرداند) و مقدار برابر نادیده می‌ماند
       if (hasMatrixProducts(project)) {
         const statusChanged = data.status !== undefined && data.status !== existing.status;
@@ -639,7 +639,7 @@ export class ProjectService {
         }
       }
       if (data.notes !== undefined) updateData.notes = data.notes;
-      // v9.0.340 (TD-756): زمان تکمیل مرحله با یک ساعت، ساعت UTC سرور (`systemNowUtcIso`، مانند همگام‌ساز ماتریس)؛ پیش‌تر
+      // v9.0.382 (TD-756): زمان تکمیل مرحله با یک ساعت، ساعت UTC سرور (`systemNowUtcIso`، مانند همگام‌ساز ماتریس)؛ پیش‌تر
       // این مسیر UTC با Z و همگام‌ساز ساعت دیواری تهران بی منطقه می‌نوشت (۲۱۰ دقیقه اختلاف). مرحله تکمیل‌شده زمانش را نگه
       // می‌دارد و مرحله‌ای که از «تکمیل‌شده» بیرون می‌رود زمان تکمیل ندارد.
       if (updateData.status !== undefined) {
@@ -654,7 +654,7 @@ export class ProjectService {
 
       const synced = await ProjectService.syncLockedProject(tx, projectId, actor);
       const stage = synced.stages.find(st => st.id === stageId) ?? updated;
-      // v9.0.341 (TD-757): ویرایش مرحله ردیف ممیزی با پیش و پس دارد، با همین تراکنش
+      // v9.0.383 (TD-757): ویرایش مرحله ردیف ممیزی با پیش و پس دارد، با همین تراکنش
       await logStageChange(tx, actor, 'UPDATE', project, existing, stage);
       return stage;
     });
@@ -662,7 +662,7 @@ export class ProjectService {
 
   /**
    * Soft deletes a stage from a project
-   * v9.0.334 (TD-738): حذف و همگام‌سازی در یک تراکنش زیر قفل ردیف پروژه
+   * v9.0.365 (TD-738): حذف و همگام‌سازی در یک تراکنش زیر قفل ردیف پروژه
    */
   static async deleteStage(
     projectId: number,
@@ -682,7 +682,7 @@ export class ProjectService {
       }
 
       await tx.update(projectStages).set({ isDeleted: 1 }).where(eq(projectStages.id, stageId));
-      // v9.0.336 (TD-737): تیک‌های مرحله حذف‌شده هم حذف نرم می‌شوند، مگر مرحله زنده دیگری (داده قدیمی) همان شماره را دارد
+      // v9.0.367 (TD-737): تیک‌های مرحله حذف‌شده هم حذف نرم می‌شوند، مگر مرحله زنده دیگری (داده قدیمی) همان شماره را دارد
       const [sameOrder] = await tx.select({ id: projectStages.id }).from(projectStages)
         .where(and(eq(projectStages.projectId, projectId), eq(projectStages.stageOrder, existing.stageOrder), eq(projectStages.isDeleted, 0), ne(projectStages.id, stageId)))
         .limit(1);
@@ -691,7 +691,7 @@ export class ProjectService {
           .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.stageOrder, existing.stageOrder), eq(projectProductStageProgress.isDeleted, 0)));
       }
       await ProjectService.syncLockedProject(tx, projectId, actor);
-      // v9.0.341 (TD-757): حذف مرحله ردیف ممیزی با پیش مرحله دارد، با همین تراکنش
+      // v9.0.383 (TD-757): حذف مرحله ردیف ممیزی با پیش مرحله دارد، با همین تراکنش
       await logStageChange(tx, actor, 'DELETE', project, existing, null);
       return existing;
     });
@@ -699,7 +699,7 @@ export class ProjectService {
 
   /**
    * Bulk updates product physical progress matrix
-   * v9.0.334 (TD-738): تیک‌ها، ردیف ممیزی و همگام‌سازی مراحل و وضعیت در یک تراکنش زیر قفل ردیف پروژه
+   * v9.0.365 (TD-738): تیک‌ها، ردیف ممیزی و همگام‌سازی مراحل و وضعیت در یک تراکنش زیر قفل ردیف پروژه
    */
   static async updateProductProgress(
     projectId: number,
@@ -716,7 +716,7 @@ export class ProjectService {
       const project = await lockLiveProject(tx, projectId);
       const currentUser = actorName(actor);
 
-      // v9.0.333 (TD-739): محصولات ماتریس با همان قاعده نمایش و بررسی تکمیل (پروژه تک‌کالایی: کالای اصلی)
+      // v9.0.364 (TD-739): محصولات ماتریس با همان قاعده نمایش و بررسی تکمیل (پروژه تک‌کالایی: کالای اصلی)
       const productByItemId = new Map<number, ReturnType<typeof matrixProducts>[number]>();
       for (const p of matrixProducts(project)) {
         if (p.itemId !== null && !productByItemId.has(p.itemId)) productByItemId.set(p.itemId, p);
@@ -727,7 +727,7 @@ export class ProjectService {
         .orderBy(asc(projectStages.stageOrder), asc(projectStages.id));
       for (const st of liveStages) if (!stageTitles.has(st.stageOrder)) stageTitles.set(st.stageOrder, st.title);
 
-      // v9.0.340 (TD-756): مهر تیک ماتریس ساعت UTC سرور است، نه ساعت دیواری تهران بی منطقه
+      // v9.0.382 (TD-756): مهر تیک ماتریس ساعت UTC سرور است، نه ساعت دیواری تهران بی منطقه
       const updatedAt = systemNowUtcIso();
       let applied = 0;
       let skippedInvalid = 0;
@@ -740,7 +740,7 @@ export class ProjectService {
           continue;
         }
         const product = productByItemId.get(itemId);
-        // v9.0.336 (TD-737): تیک فقط برای مرحله زنده؛ تیک شماره‌ای بی مرحله بعدها به مرحله تازه به ارث نمی‌رسد
+        // v9.0.367 (TD-737): تیک فقط برای مرحله زنده؛ تیک شماره‌ای بی مرحله بعدها به مرحله تازه به ارث نمی‌رسد
         const stageTitle = stageTitles.get(stageOrder);
         if (!product || stageTitle === undefined) {
           skippedInvalid++;

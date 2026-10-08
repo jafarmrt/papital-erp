@@ -12,6 +12,7 @@ import {
   useActionLogsQuery,
 } from '../../hooks/queries/useEventQueries';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { ruleActionTypeLabel } from '../../lib/events/ruleActionTypes';
 
 export function AutoActionsSubTab() {
   const queryClient = useQueryClient();
@@ -124,14 +125,14 @@ export function AutoActionsSubTab() {
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
             <Smartphone className="w-3 h-3" />
-            <span>پیامک خودکار</span>
+            <span>{ruleActionTypeLabel('sms_simulation')}</span>
           </span>
         );
       case 'workflow_trigger':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
             <GitBranch className="w-3 h-3" />
-            <span>تحریک گردش کار</span>
+            <span>{ruleActionTypeLabel('workflow_trigger')}</span>
           </span>
         );
       case 'audit_log':
@@ -329,8 +330,8 @@ export function AutoActionsSubTab() {
                   <option value="ALL">همه انواع اقدام</option>
                   <option value="webhook">وب‌هوک</option>
                   <option value="in_app_notification">اعلان سیستم</option>
-                  <option value="sms_simulation">پیامک خودکار</option>
-                  <option value="workflow_trigger">تحریک گردش کار</option>
+                  <option value="sms_simulation">{ruleActionTypeLabel('sms_simulation')}</option>
+                  <option value="workflow_trigger">{ruleActionTypeLabel('workflow_trigger')}</option>
                   <option value="audit_log">ممیزی ویژه</option>
                 </select>
               </div>

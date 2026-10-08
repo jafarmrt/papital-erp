@@ -1,4 +1,4 @@
-import { Ban, CheckCircle2, Clock, ShoppingCart } from 'lucide-react';
+import { Ban, CheckCircle2, Clock, Layers, ShoppingCart } from 'lucide-react';
 import type { PillBadgeVariant, PillBadgeVariants } from '../common/PillBadge';
 
 /** v7.0.86 (TD-108): نشان‌های درخواست خرید، مشترک میز تدارکات و جزئیات درخواست. */
@@ -7,12 +7,15 @@ const pending: PillBadgeVariant = { label: 'در انتظار بررسی و تا
 const ordered: PillBadgeVariant = { label: 'تایید شده (در حال خرید)', className: `${STATUS_BASE} bg-sky-100 text-sky-900`, icon: ShoppingCart, iconClassName: 'w-3.5 h-3.5 text-sky-600' };
 const received: PillBadgeVariant = { label: 'خرید و تحویل انبار شده', className: `${STATUS_BASE} bg-emerald-100 text-emerald-900`, icon: CheckCircle2, iconClassName: 'w-3.5 h-3.5 text-emerald-600' };
 const rejected: PillBadgeVariant = { label: 'رد شده / لغو', className: `${STATUS_BASE} bg-rose-100 text-rose-900`, icon: Ban, iconClassName: 'w-3.5 h-3.5 text-rose-600' };
+/** v9.0.349 (TD-694): درخواستی که در درخواست تجمیعی دیگری آمده و بسته است */
+const consolidated: PillBadgeVariant = { label: 'تجمیع‌شده', className: `${STATUS_BASE} bg-violet-100 text-violet-900`, icon: Layers, iconClassName: 'w-3.5 h-3.5 text-violet-600' };
 
 export const REQUISITION_STATUS_BADGES: PillBadgeVariants = {
   pending, under_review: pending, manager_approval: pending,
   ordered, approved: ordered,
   received, completed: received,
   rejected, cancelled: rejected,
+  consolidated,
 };
 /** وضعیت ناشناخته با همان متن خام نمایش داده می‌شود */
 export const REQUISITION_STATUS_FALLBACK: PillBadgeVariant = { className: 'px-2.5 py-1 bg-slate-100 text-slate-800 font-bold rounded-lg text-xs' };

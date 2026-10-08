@@ -12,7 +12,7 @@ export interface LoadedProgressMatrix {
 }
 
 /**
- * v9.0.333 (TD-739): مراحل زنده و ماتریس پیشرفت یک پروژه با قاعده مشترک `computeProgressMatrix`؛ نمایش، تیک،
+ * v9.0.364 (TD-739): مراحل زنده و ماتریس پیشرفت یک پروژه با قاعده مشترک `computeProgressMatrix`؛ نمایش، تیک،
  * بررسی تکمیل و همگام‌ساز وضعیت همه همین را می‌خوانند.
  */
 export async function loadProjectProgressMatrix(executor: DbExecutor, project: ProjectRow): Promise<LoadedProgressMatrix> {

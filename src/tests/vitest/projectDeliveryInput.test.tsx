@@ -23,7 +23,7 @@ const PROJECT = {
 
 const deliveryCalls = () => fetchJson.mock.calls.filter(([url]) => url.endsWith('/add-to-inventory'));
 
-// v9.0.339 (TD-741): a zero delivery quantity is an error, never the planned quantity
+// v9.0.381 (TD-741): a zero delivery quantity is an error, never the planned quantity
 describe('project delivery quantity (TD-741)', () => {
   it('refuses a zero quantity instead of delivering the planned quantity', async () => {
     render(<ProjectStockEntryTab project={PROJECT} onUpdate={vi.fn()} />);

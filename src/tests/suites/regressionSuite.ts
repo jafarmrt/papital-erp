@@ -2464,29 +2464,31 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_fiscal_year_ref_isolation_td_152_153', 'td152', 'td153', 'ref_counters', 'duplicate_refs')) {
     const t26Start = Date.now();
     const createdDocIds: number[] = [];
-    const testDocTypeInv = 'reg_test_inv';
-    const testDocTypeRec = 'reg_test_rec';
+    // v9.0.338 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in far past fiscal years (1390 and
+    // 1391) that no other case writes, and removes only those two counter rows
+    const testDocTypeInv = 'waste';
+    const testYears = [1390, 1391];
     try {
-      // 1. Setup existing synthetic document in fiscal year 1404 with high ref number '888'
-      // 1404/05/10 is approximately 2025-08-01
+      // 1. Setup existing synthetic document in fiscal year 1390 with high ref number '888'
+      // 1390/05/10 is approximately 2011-08-01
       const [doc1404] = await orm.insert(documents).values({
         type: testDocTypeInv,
         refNumber: '888',
-        date: '2025-08-01 10:00:00',
+        date: '2011-08-01 10:00:00',
         user: 'test-agent',
         status: 'final'
       }).returning({ id: documents.id });
       createdDocIds.push(doc1404.id);
 
-      // 2. TD-152: Peek and Next for fiscal year 1405 (a new year with no documents yet of this type)
-      // 1405/05/10 is approximately 2026-08-01
+      // 2. TD-152: Peek and Next for fiscal year 1391 (a new year with no documents yet of this type)
+      // 1391/05/10 is approximately 2012-08-01
       // Must return '1' (or startNumber), NOT '889'
-      const peek1405 = await DocumentService.peekNextRef(testDocTypeInv, '2026-08-01');
+      const peek1405 = await DocumentService.peekNextRef(testDocTypeInv, '2012-08-01');
       if (peek1405 !== '1') {
         throw new Error(`شماره پیش‌نمایش سال مالی جدید باید 1 باشد اما ${peek1405} برگردانده شد (عدم ایزولاسیون سال مالی TD-152)`);
       }
 
-      const next1405 = await DocumentService.getNextRef(testDocTypeInv, '2026-08-01');
+      const next1405 = await DocumentService.getNextRef(testDocTypeInv, '2012-08-01');
       if (next1405 !== '1') {
         throw new Error(`شماره عطف سال مالی جدید باید 1 باشد اما ${next1405} تولید شد`);
       }
@@ -2495,20 +2497,20 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const [doc1405] = await orm.insert(documents).values({
         type: testDocTypeInv,
         refNumber: next1405,
-        date: '2026-08-01 10:00:00',
+        date: '2012-08-01 10:00:00',
         user: 'test-agent',
         status: 'final'
       }).returning({ id: documents.id });
       createdDocIds.push(doc1405.id);
 
-      // Verify next for 1405 is now '2'
-      const next1405Again = await DocumentService.getNextRef(testDocTypeInv, '2026-08-01');
+      // Verify next for 1391 is now '2'
+      const next1405Again = await DocumentService.getNextRef(testDocTypeInv, '2012-08-01');
       if (next1405Again !== '2') {
         throw new Error(`شماره بعدی سال 1405 باید 2 باشد اما ${next1405Again} تولید شد`);
       }
 
-      // Also verify that for fiscal year 1404, cold start still sees '888' and yields '889'
-      const peek1404 = await DocumentService.peekNextRef(testDocTypeInv, '2025-08-01');
+      // Also verify that for fiscal year 1390, cold start still sees '888' and yields '889'
+      const peek1404 = await DocumentService.peekNextRef(testDocTypeInv, '2011-08-01');
       if (peek1404 !== '889') {
         throw new Error(`شماره پیش‌نمایش سال 1404 باید 889 باشد اما ${peek1404} برگردانده شد`);
       }
@@ -2538,8 +2540,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (createdDocIds.length > 0) {
         await cleanTestTableData('documents', 'id', createdDocIds);
       }
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocTypeInv));
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocTypeRec));
+      await orm.delete(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocTypeInv), inArray(documentRefCounters.fiscalYear, testYears)));
     }
   }
 
@@ -2547,12 +2548,14 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_fiscal_year_ref_unique_scope_td_178', 'td178', 'ref_counters', 'duplicate_refs', 'fiscal_year')) {
     const tStart = Date.now();
     const createdDocIds: number[] = [];
-    const testDocType = 'reg_test_fy178';
+    // v9.0.338 (TD-786): a real type (documents.type has a CHECK constraint) in fiscal years 1392 and 1393, which no other case writes
+    const testDocType = 'remittance';
+    const testYears = [1392, 1393];
     try {
-      // 1. شماره‌گذاری خودکار در سال ۱۴۰۴ و سپس سال ۱۴۰۵ — هر دو باید «1» باشند و هر دو با موفقیت درج شوند
-      const doc1404 = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2025-08-01', items: [], user: 'test-agent' });
+      // 1. شماره‌گذاری خودکار در سال ۱۳۹۲ و سپس سال ۱۳۹۳ — هر دو باید «1» باشند و هر دو با موفقیت درج شوند
+      const doc1404 = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2013-08-01', items: [], user: 'test-agent' });
       createdDocIds.push(doc1404);
-      const doc1405 = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-01', items: [], user: 'test-agent' });
+      const doc1405 = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2014-08-01', items: [], user: 'test-agent' });
       createdDocIds.push(doc1405);
 
       const rows = await orm
@@ -2561,18 +2564,18 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         .where(inArray(documents.id, createdDocIds));
       const r1404 = rows.find(r => r.id === doc1404);
       const r1405 = rows.find(r => r.id === doc1405);
-      if (r1404?.refNumber !== '1' || r1404?.refFiscalYear !== 1404) {
-        throw new Error(`سند سال ۱۴۰۴ باید شماره «1» و سال مالی 1404 داشته باشد: ${JSON.stringify(r1404)}`);
+      if (r1404?.refNumber !== '1' || r1404?.refFiscalYear !== 1392) {
+        throw new Error(`سند سال ۱۳۹۲ باید شماره «1» و سال مالی 1392 داشته باشد: ${JSON.stringify(r1404)}`);
       }
-      if (r1405?.refNumber !== '1' || r1405?.refFiscalYear !== 1405) {
-        throw new Error(`سند سال ۱۴۰۵ باید شماره «1» و سال مالی 1405 داشته باشد (برخورد بین‌سالی): ${JSON.stringify(r1405)}`);
+      if (r1405?.refNumber !== '1' || r1405?.refFiscalYear !== 1393) {
+        throw new Error(`سند سال ۱۳۹۳ باید شماره «1» و سال مالی 1393 داشته باشد (برخورد بین‌سالی): ${JSON.stringify(r1405)}`);
       }
 
       // 2. شماره تکراری در همان سال مالی همچنان باید توسط دیتابیس رد شود
       let sameYearRejected = false;
       try {
         const [dup] = await orm.insert(documents).values({
-          type: testDocType, refNumber: '1', refFiscalYear: 1405, date: '2026-09-01 10:00:00', user: 'test-agent', status: 'draft'
+          type: testDocType, refNumber: '1', refFiscalYear: 1393, date: '2014-09-01 10:00:00', user: 'test-agent', status: 'draft'
         }).returning({ id: documents.id });
         createdDocIds.push(dup.id);
       } catch {
@@ -2607,7 +2610,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (createdDocIds.length > 0) {
         await cleanTestTableData('documents', 'id', createdDocIds);
       }
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
+      await orm.delete(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocType), inArray(documentRefCounters.fiscalYear, testYears)));
     }
   }
 
@@ -3283,14 +3286,16 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_ref_counter_long_manual_ref_td_196', 'td196', 'ref_counters', 'refnumber')) {
     const tStart = Date.now();
     const createdDocIds: number[] = [];
-    const testDocType = 'reg_test_td196';
+    // v9.0.338 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in a fiscal year no other case writes
+    const testDocType = 'waste';
+    const testYear = 1394;
     try {
       // ۱) سند با شماره دستی ۱۳ رقمی پیش از اولین شماره خودکار این نوع سند در سال مالی
-      const manualId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-01', refNumber: `MAN-${1790882288234}`, items: [], user: 'test-agent' });
+      const manualId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2015-08-01', refNumber: `MAN-${1790882288234}`, items: [], user: 'test-agent' });
       createdDocIds.push(manualId);
       // ۲) شماره‌گذاری خودکار باید کار کند و از سقف شمارنده عبور نکند
-      const peek = await DocumentService.peekNextRef(testDocType, '2026-08-02');
-      const autoId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-02', items: [], user: 'test-agent' });
+      const peek = await DocumentService.peekNextRef(testDocType, '2015-08-02');
+      const autoId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2015-08-02', items: [], user: 'test-agent' });
       createdDocIds.push(autoId);
       const [autoDoc] = await orm.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, autoId));
       if (autoDoc?.refNumber !== '1' || peek !== '1') {
@@ -3321,7 +3326,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (createdDocIds.length > 0) {
         await cleanTestTableData('documents', 'id', createdDocIds);
       }
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
+      await orm.delete(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocType), eq(documentRefCounters.fiscalYear, testYear)));
     }
   }
 
@@ -3329,21 +3334,23 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_ref_counter_numeric_suffix_p3_10', 'p310', 'ref_counters', 'refnumber')) {
     const tStart = Date.now();
     const createdDocIds: number[] = [];
-    const testDocType = 'reg_test_p3_10';
+    // v9.0.338 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in a fiscal year no other case writes
+    const testDocType = 'waste';
+    const testYear = 1395;
     const testName = 'v7.0.60: شماره دستی «INV-1403-0005» شمارنده را به ۵ می‌برد، نه 14030005 (P3-10)';
     try {
       // ۱) همگام‌سازی شمارنده با شماره دستی در createDocument
-      const manualId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-01', refNumber: 'INV-1403-0005', items: [], user: 'test-agent' });
+      const manualId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2016-08-01', refNumber: 'INV-1403-0005', items: [], user: 'test-agent' });
       createdDocIds.push(manualId);
-      const autoId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-02', items: [], user: 'test-agent' });
+      const autoId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2016-08-02', items: [], user: 'test-agent' });
       createdDocIds.push(autoId);
       const [autoDoc] = await orm.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, autoId));
       if (autoDoc?.refNumber !== '6') {
         throw new Error(`شماره خودکار پس از «INV-1403-0005» باید «6» باشد: ${autoDoc?.refNumber}`);
       }
       // ۲) مقداردهی اولیه شمارنده از روی اسناد موجود (شروع سرد) نیز فقط پسوند عددی را می‌خواند
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
-      const peek = await DocumentService.peekNextRef(testDocType, '2026-08-03');
+      await orm.delete(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocType), eq(documentRefCounters.fiscalYear, testYear)));
+      const peek = await DocumentService.peekNextRef(testDocType, '2016-08-03');
       if (peek !== '7') {
         throw new Error(`پیش‌نمایش شماره پس از شروع سرد باید «7» باشد: ${peek}`);
       }
@@ -3372,7 +3379,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (createdDocIds.length > 0) {
         await cleanTestTableData('documents', 'id', createdDocIds);
       }
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
+      await orm.delete(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocType), eq(documentRefCounters.fiscalYear, testYear)));
     }
   }
 
@@ -3380,7 +3387,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_ref_fiscal_year_exact_nowruz_td_179', 'td179', 'nowruz', 'ref_fiscal_year')) {
     const tStart = Date.now();
     const createdDocIds: number[] = [];
-    const testDocType = 'reg_test_td179';
+    // v9.0.338 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in a fiscal year no other case writes
+    const testDocType = 'waste';
     const testName = 'v7.0.62: سند ۲۰ مارس ۲۰۲۴ (نوروز ۱۴۰۳) در سال ۱۴۰۳ شماره می‌خورد و ردیف‌های مرزی قدیمی با گزارش اصلاح می‌شوند (TD-179)';
     try {
       const violations: string[] = [];
@@ -3463,7 +3471,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await cleanTestTableData('ref_fiscal_year_corrections', 'document_id', createdDocIds);
         await cleanTestTableData('documents', 'id', createdDocIds);
       }
-      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
+      await orm.delete(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocType), inArray(documentRefCounters.fiscalYear, [1402, 1403])));
     }
   }
 
@@ -8883,7 +8891,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           title: `ERP-TEST-MARKER پروژه رزرو TD-233 ${suffix}`,
           status: 'in_progress',
           version: 1,
-          inventoryControl: { isReserved: true, reservedItems },
+          inventoryControl: { isFinalized: true, isReserved: true, reservedItems },
         }).returning();
         projectIds.push(p.id);
         return p.id;
@@ -9124,7 +9132,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           title: `ERP-TEST-MARKER پروژه رزرو TD-237 ${suffix}`,
           status: 'in_progress',
           version: 1,
-          inventoryControl: { isReserved: true, reservedItems },
+          inventoryControl: { isFinalized: true, isReserved: true, reservedItems },
         }).returning();
         projectIds.push(p.id);
         return p.id;
@@ -9323,6 +9331,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const suffix = `${Date.now()}`;
     const docIds: number[] = [];
     let itemId = 0;
+    let requisitionId = 0;
     try {
       const { createTestItem, createTestDocument } = await import('../fixtures/factories.js');
       const { ProcurementService } = await import('../../services/procurement.service.js');
@@ -9337,6 +9346,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         { itemId: item.id, quantity: 1, unitPrice: 0.2 },
       ]);
       docIds.push(receipt.document.id);
+      // v9.0.347 (TD-691): سفارش تدارکات سندی است که ستون پیوندش به درخواست خرید پر است
+      const { purchaseRequisitions } = await import('../../db/schema.js');
+      const [requisition] = await orm.insert(purchaseRequisitions)
+        .values({ code: `TD239-${suffix}`, title: 'ERP-TEST-MARKER درخواست TD-239', items: [] }).returning({ id: purchaseRequisitions.id });
+      requisitionId = requisition.id;
+      await orm.update(documents).set({ procurementRequisitionId: requisition.id }).where(eq(documents.id, receipt.document.id));
       const orders = await ProcurementService.getProcurementOrders({ search: receiptRef });
       const order = orders.data.find(o => o.id === receipt.document.id);
       if (!order) violations.push('سفارش خرید آزمایشی در فهرست نیامد');
@@ -9367,6 +9382,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await cleanTestTableData('document_items', 'document_id', docIds);
         await cleanTestTableData('documents', 'id', docIds);
       }
+      if (requisitionId) await cleanTestTableData('purchase_requisitions', 'id', [requisitionId]);
       if (itemId) await cleanTestTableData('items', 'id', [itemId]);
     }
   }
@@ -10351,7 +10367,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const schema = await import('../../db/schema.js');
       const {
         users, productionProjects, fiscalPeriods, fileAttachments, legacyDateRepairs, refFiscalYearCorrections,
-        workflowTaskReopenLog, projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks, activityLogs, roles
+        workflowTaskReopenLog, projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks, activityLogs, roles,
+        purchaseRequisitions
       } = schema;
 
       inner = await setupTestSchema();
@@ -10373,6 +10390,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const [doc] = await orm.insert(documents).values({ type: 'remittance', date: '2026-01-10 00:00:00', refNumber: 'TD245-REF', projectId: project.id }).returning({ id: documents.id });
       await orm.insert(projectReservationReleases).values({ documentId: doc.id, projectId: project.id, itemId: item.id, qtyField: 'reservedQty', quantity: 1, reservationRow: {} });
       await orm.insert(refFiscalYearCorrections).values({ documentId: doc.id, docType: 'remittance', refNumber: 'TD245-REF', documentDate: '2026-01-10 00:00:00', oldFiscalYear: 1405, newFiscalYear: 1404, status: 'corrected' });
+      // v9.0.347 (TD-691): a procurement order points to its purchase requisition (fk_documents_procurement_requisition)
+      const [requisition] = await orm.insert(purchaseRequisitions).values({ code: 'TD245-PR', title: 'درخواست TD-245', items: [] }).returning({ id: purchaseRequisitions.id });
+      await orm.insert(documents).values({ type: 'receipt', date: '2026-01-11 00:00:00', refNumber: 'TD245-PO', procurementRequisitionId: requisition.id });
       const voucherNumber = await VoucherService.getNextVoucherNumber();
       const [closing] = await orm.insert(journalVouchers).values({ voucherNumber, date: '2025-03-20', description: 'سند اختتامیه TD-245', voucherType: 'closing' }).returning({ id: journalVouchers.id });
       await orm.insert(fiscalPeriods).values({ fiscalYear: 1403, status: 'closed', closedAt: '2025-03-20 00:00:00', closedBy: 'td245_admin', closingVoucherId: closing.id });
@@ -10397,7 +10417,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const wipedTables = [
         'fiscal_periods', 'file_attachments', 'legacy_date_repairs', 'ref_fiscal_year_corrections', 'workflow_task_reopen_log',
         'project_reservation_releases', 'inventory_reconciliation_anomalies', 'item_warehouse_stocks',
-        'documents', 'journal_vouchers', 'production_projects', 'items', 'users'
+        'documents', 'journal_vouchers', 'production_projects', 'items', 'users', 'purchase_requisitions'
       ];
       const assertIntact = async (stage: string): Promise<void> => {
         for (const t of ['fiscal_periods', 'file_attachments', 'legacy_date_repairs', 'documents', 'users']) {
@@ -10602,10 +10622,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 12 payroll PR d (v9.0.330 on): the work log list is filtered, paged and summed in SQL (TD-811)
   const { runWorkLogListTests } = await import('../regression/workLogListTests.js');
   results.push(...await runWorkLogListTests(shouldRun));
-  // Package 11 PR a (v9.0.333 on): progress matrix, project status on write only, stage numbering and input (TD-739 ...)
+  // Package 11 PR a (v9.0.364 on): progress matrix, project status on write only, stage numbering and input (TD-739 ...)
   const { runProjectStageIntegrityTests } = await import('../regression/projectStageIntegrityTests.js');
   results.push(...await runProjectStageIntegrityTests(shouldRun));
-  // Package 11 PR b (v9.0.338 on): project edit and input — status lists, delivery input, stage clock, audit, version (TD-754 ...)
+  // Package 11 PR b (v9.0.380 on): project edit and input — status lists, delivery input, stage clock, audit, version (TD-754 ...)
   const { runProjectEditTests } = await import('../regression/projectEditTests.js');
   results.push(...await runProjectEditTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
@@ -10688,6 +10708,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 8 PR D (v9.0.323+): lead link of a document edit, stock count lines, production receipts, return lookup, numbers
   const { runDocumentIntegrityTests } = await import('../regression/documentIntegrityTests.js');
   results.push(...await runDocumentIntegrityTests(shouldRun));
+  // Package 8 PR E (v9.0.335+): the data of a document (treasury rows by permission)
+  const { runDocumentDataTests } = await import('../regression/documentDataTests.js');
+  results.push(...await runDocumentDataTests(shouldRun));
 
   // Package 13 PR B (v9.0.249+): reading daily work logs (list, statistics, timestamps)
   const { runDailyLogReadTests } = await import('../regression/dailyLogReadTests.js');
@@ -10711,6 +10734,47 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 10 PR A (v9.0.314+): purchase requisition contract, approval gate, delivery, delete and edit
   const { runProcurementRequisitionTests } = await import('../regression/procurementRequisitionTests.js');
   results.push(...await runProcurementRequisitionTests(shouldRun));
+
+  // Package 15 PR a (v9.0.332+): WooCommerce
+  const { runWooNamesakeCustomerTests } = await import('../regression/wooNamesakeCustomerTests.js');
+  results.push(...await runWooNamesakeCustomerTests(shouldRun));
+  const { runWooConnectionTestTests } = await import('../regression/wooConnectionTestTests.js');
+  results.push(...await runWooConnectionTestTests(shouldRun));
+  // Package 15 PR b (v9.0.356+): webhook secrets and SSRF
+  const { runWebhookSsrfEchoTests } = await import('../regression/webhookSsrfEchoTests.js');
+  results.push(...await runWebhookSsrfEchoTests(shouldRun));
+  const { runWebhookRuleSeedTests } = await import('../regression/webhookRuleSeedTests.js');
+  results.push(...await runWebhookRuleSeedTests(shouldRun));
+  const { runWebhookSecretEditTests } = await import('../regression/webhookSecretEditTests.js');
+  results.push(...await runWebhookSecretEditTests(shouldRun));
+  const { runWebhookKeyTimeoutTests } = await import('../regression/webhookKeyTimeoutTests.js');
+  results.push(...await runWebhookKeyTimeoutTests(shouldRun));
+  const { runWebhookSecretMaskTests } = await import('../regression/webhookSecretMaskTests.js');
+  results.push(...await runWebhookSecretMaskTests(shouldRun));
+  const { runIntegrationSecretsAtRestTests } = await import('../regression/integrationSecretsAtRestTests.js');
+  results.push(...await runIntegrationSecretsAtRestTests(shouldRun));
+  const { runWebhookActionFailureTests } = await import('../regression/webhookActionFailureTests.js');
+  results.push(...await runWebhookActionFailureTests(shouldRun));
+  const { runBootActionHandlersTests } = await import('../regression/bootActionHandlersTests.js');
+  results.push(...await runBootActionHandlersTests(shouldRun));
+  const { runRetiredRuleActionTests } = await import('../regression/retiredRuleActionTests.js');
+  results.push(...await runRetiredRuleActionTests(shouldRun));
+  const { runIntegrationDeliveryRetryTests } = await import('../regression/integrationDeliveryRetryTests.js');
+  results.push(...await runIntegrationDeliveryRetryTests(shouldRun));
+  const { runIntegrationCounterLockTests } = await import('../regression/integrationCounterLockTests.js');
+  results.push(...await runIntegrationCounterLockTests(shouldRun));
+
+  // Package 10 PR B (v9.0.347+): procurement order link, duplicate submissions, consolidation, receiving
+  const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');
+  results.push(...await runProcurementOrderTests(shouldRun));
+
+  // Package 10 PR C (v9.0.351+): what the procurement desk reads and shows
+  const { runProcurementDeskTests } = await import('../regression/procurementDeskTests.js');
+  results.push(...await runProcurementDeskTests(shouldRun));
+
+  // Package 7 PR A (v9.0.370+): which documents and projects reserve stock, and how much
+  const { runStockReservationTests } = await import('../regression/stockReservationTests.js');
+  results.push(...await runStockReservationTests(shouldRun));
 
   return results;
 }

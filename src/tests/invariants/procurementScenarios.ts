@@ -178,7 +178,7 @@ export async function checkRequisitionOverOrderNeedsReason(wh: string): Promise<
   // بیشتر از مانده: فقط اضافه (۲ از ۷) دلیل‌دار است
   const partial = await ProcurementService.createRequisition({ title: 'درخواست آزمون مانده', items: [{ itemId: item.id, requestedQty: 5, unitPriceEstimate: 1000 } as never] }, USER);
   const partialRefusal = await refusal(() => convert(partial.id, [group(7)]));
-  if (!partialRefusal?.includes('2 بیش از درخواست')) problems.push(`سفارش ۷ برای ۵ بی‌دلیل: ${partialRefusal ?? 'پذیرفته شد'}، انتظار رد با «2 بیش از درخواست»`);
+  if (!partialRefusal?.includes('۲ بیش از درخواست')) problems.push(`سفارش ۷ برای ۵ بی‌دلیل: ${partialRefusal ?? 'پذیرفته شد'}، انتظار رد با «۲ بیش از درخواست»`);
   await convert(partial.id, [group(7)], 'پک ۷ تایی');
   const partialState = await requisitionState(partial.id);
   if (partialState.overOrders[0]?.quantity !== 2) problems.push(`مقدار ثبت‌شده سفارش اضافه ${partialState.overOrders[0]?.quantity}، انتظار ۲`);

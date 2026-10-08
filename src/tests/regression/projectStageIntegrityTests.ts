@@ -32,7 +32,7 @@ export async function newProject(api: Client, opts: ProjectOptions): Promise<{ i
 
 export const projectStatus = async (id: number) => String((await q('SELECT status FROM production_projects WHERE id = $1', [id]))[0]?.status);
 
-/** v9.0.343 (TD-742): a project edit sends the version it was built from; tests edit from the stored version */
+/** v9.0.385 (TD-742): a project edit sends the version it was built from; tests edit from the stored version */
 export const projectVersion = async (id: number) => Number((await q('SELECT version FROM production_projects WHERE id = $1', [id]))[0]?.version);
 export const editProject = async (api: Client, id: number, body: Row) => api.put(`/api/projects/${id}`, { ...body, version: await projectVersion(id) });
 
@@ -49,7 +49,7 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
 
   const matrixId = 'reg_project_matrix_single_item_td_739';
   if (shouldRun(matrixId, 'td739', 'projects', 'package11')) {
-    await runCase(results, matrixId, 'v9.0.333: a project defined by its main item only shows, ticks and completes its progress matrix with the one shared rule; a manual completion with open cells is refused with PROJECT_MATRIX_INCOMPLETE (TD-739)', async () => inFiscalSandbox(async () => {
+    await runCase(results, matrixId, 'v9.0.364: a project defined by its main item only shows, ticks and completes its progress matrix with the one shared rule; a manual completion with open cells is refused with PROJECT_MATRIX_INCOMPLETE (TD-739)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const item = await createTestItem({ type: 'product' });
@@ -81,7 +81,7 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
 
   const writeOnlyId = 'reg_project_status_written_on_write_only_td_738';
   if (shouldRun(writeOnlyId, 'td738', 'projects', 'package11')) {
-    await runCase(results, writeOnlyId, 'v9.0.334: reading a project never writes its status; ticks, stage writes and project edits sync it under the project lock with an audit row and never change a cancelled or paused project (TD-738)', async () => inFiscalSandbox(async () => {
+    await runCase(results, writeOnlyId, 'v9.0.365: reading a project never writes its status; ticks, stage writes and project edits sync it under the project lock with an audit row and never change a cancelled or paused project (TD-738)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const reader = await sandboxClientWith(['warehouse.view', 'projects.view']);
@@ -127,7 +127,7 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
 
   const manualId = 'reg_project_stage_manual_status_td_758';
   if (shouldRun(manualId, 'td758', 'projects', 'package11')) {
-    await runCase(results, manualId, 'v9.0.335: a manual stage status or percent that differs from the matrix is refused with 422 STAGE_STATUS_FROM_MATRIX in a project with products, and stays manual in a project without products (TD-758)', async () => inFiscalSandbox(async () => {
+    await runCase(results, manualId, 'v9.0.366: a manual stage status or percent that differs from the matrix is refused with 422 STAGE_STATUS_FROM_MATRIX in a project with products, and stays manual in a project without products (TD-758)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const item = await createTestItem({ type: 'product' });
@@ -153,7 +153,7 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
 
   const orderId = 'reg_project_stage_order_td_737';
   if (shouldRun(orderId, 'td737', 'projects', 'package11')) {
-    await runCase(results, orderId, 'v9.0.336: a new stage is numbered after every number the project used, never inherits a deleted stage\'s ticks, concurrent adds get distinct numbers and the database refuses two live stages with one number (TD-737)', async () => inFiscalSandbox(async () => {
+    await runCase(results, orderId, 'v9.0.367: a new stage is numbered after every number the project used, never inherits a deleted stage\'s ticks, concurrent adds get distinct numbers and the database refuses two live stages with one number (TD-737)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const item = await createTestItem({ type: 'product' });
@@ -199,7 +199,7 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
 
   const fkId = 'reg_project_stage_project_fk_td_753';
   if (shouldRun(fkId, 'td753', 'projects', 'package11')) {
-    await runCase(results, fkId, 'v9.0.336: a stage is added only to a live project (404 otherwise), the database refuses a stage of a missing project and the health check reports the stage constraints (TD-753)', async () => inFiscalSandbox(async () => {
+    await runCase(results, fkId, 'v9.0.367: a stage is added only to a live project (404 otherwise), the database refuses a stage of a missing project and the health check reports the stage constraints (TD-753)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const today = await businessTodayIsoDate();
@@ -229,7 +229,7 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
 
   const inputId = 'reg_project_stage_input_td_755';
   if (shouldRun(inputId, 'td755', 'projects', 'package11')) {
-    await runCase(results, inputId, 'v9.0.337: an invalid stage number or percent is a Persian 400 without SQL text, a number held by another stage is 409 STAGE_ORDER_TAKEN, and a renumbered stage keeps its ticks (TD-755)', async () => inFiscalSandbox(async () => {
+    await runCase(results, inputId, 'v9.0.368: an invalid stage number or percent is a Persian 400 without SQL text, a number held by another stage is 409 STAGE_ORDER_TAKEN, and a renumbered stage keeps its ticks (TD-755)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const item = await createTestItem({ type: 'product' });

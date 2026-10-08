@@ -526,7 +526,7 @@ export default function ProjectsPage() {
         isOpen={isDetailOpen}
         onClose={() => {
           setIsDetailOpen(false);
-          // v9.0.343 (TD-742): زبانه‌های جزئیات نسخه پروژه را بالا برده‌اند؛ فرم ویرایش از فهرست تازه باز می‌شود
+          // v9.0.385 (TD-742): زبانه‌های جزئیات نسخه پروژه را بالا برده‌اند؛ فرم ویرایش از فهرست تازه باز می‌شود
           loadInitialData();
         }}
         onUpdate={loadInitialData}

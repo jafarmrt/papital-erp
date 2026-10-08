@@ -397,7 +397,7 @@ export default function ProjectScheduleTab({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items })
     });
-    // v9.0.343 (TD-742): ثبت کارکرد شناسه آن را در ردیف برنامه می‌نویسد و نسخه پروژه را بالا می‌برد؛ ذخیره بعدی با نسخه تازه می‌رود
+    // v9.0.385 (TD-742): ثبت کارکرد شناسه آن را در ردیف برنامه می‌نویسد و نسخه پروژه را بالا می‌برد؛ ذخیره بعدی با نسخه تازه می‌رود
     projectVersion.remember(await fetchJson(`/projects/${project.id}`).catch(() => null));
     return Array.isArray(res?.insertedIds) ? res.insertedIds : [];
   };

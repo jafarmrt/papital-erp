@@ -6,7 +6,7 @@ import { toPersianDigits } from '../../utils/persianNumber.js';
 import type { ProjectActor } from './projectStatusSync.js';
 
 /**
- * v9.0.341 (TD-757، AGENTS §5): ممیزی ویرایش پروژه و افزودن، ویرایش و حذف مرحله با پیش و پس، درون تراکنش همان نوشتن.
+ * v9.0.383 (TD-757، AGENTS §5): ممیزی ویرایش پروژه و افزودن، ویرایش و حذف مرحله با پیش و پس، درون تراکنش همان نوشتن.
  * پیش‌تر ویرایش پروژه با `details: {}` و بیرون از تراکنش ثبت می‌شد و مسیرهای مرحله هیچ ردیف ممیزی نداشتند.
  */
 export const PROJECT_AUDIT_ENTITY = 'پروژه تولید';
@@ -138,7 +138,7 @@ export async function logStageChange(
 }
 
 /**
- * v9.0.334 (TD-738): تغییر وضعیت پروژه با ماتریس پیشرفت (همگام‌ساز `syncProjectFromMatrix`)، با پیش و پس و شمار خانه‌ها،
+ * v9.0.365 (TD-738): تغییر وضعیت پروژه با ماتریس پیشرفت (همگام‌ساز `syncProjectFromMatrix`)، با پیش و پس و شمار خانه‌ها،
  * با `tx` همان نوشتن
  */
 export async function logMatrixStatusChange(

@@ -14,7 +14,7 @@ interface ProjectStagesFormProps {
   onStageTitleChange: (index: number, newTitle: string) => void;
   onMoveStage: (index: number, direction: 'up' | 'down') => void;
   /**
-   * v9.0.342 (TD-740، تصمیم ت۲ الف): در ویرایش پروژه مراحل فقط نمایش داده می‌شوند و فرستاده نمی‌شوند؛ افزودن، تغییر نام،
+   * v9.0.384 (TD-740، تصمیم ت۲ الف): در ویرایش پروژه مراحل فقط نمایش داده می‌شوند و فرستاده نمی‌شوند؛ افزودن، تغییر نام،
    * جابه‌جایی و حذف مرحله فقط از بخش مراحل جزئیات پروژه است که تیک‌های پیشرفت را هم درست جابه‌جا می‌کند.
    */
   readOnly?: boolean;

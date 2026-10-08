@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import InventoryAuditPage from '../../pages/InventoryAuditPage';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import { typedDocumentListUrl } from '../../lib/documents/documentListPage';
 import type { User } from '../../types';
 
 // صفحه انبارگردانی با React Query: ثبت سند انبارگردانی کش صفحات دیگری که موجودی نشان می‌دهند را باطل می‌کند
@@ -112,7 +113,7 @@ describe('InventoryAuditPage — React Query cache', () => {
         signals.set(url, init?.signal);
         return new Promise(() => undefined);
       }
-      if (url === '/documents?type=audit') {
+      if (url === typedDocumentListUrl('audit', 1)) {
         return Promise.resolve({ data: [{ id: 9, refNumber: 'AUD-9', date: '2026-10-01', location: LOCATION, user: 'انباردار' }] });
       }
       return Promise.resolve(baseResponse(url, init));

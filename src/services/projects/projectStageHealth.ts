@@ -4,7 +4,7 @@ import type { HealthCheckTestResult } from '../../types.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
- * v9.0.336 (TD-737، TD-753): یکتایی شماره مرحله زنده هر پروژه و کلید خارجی مرحله به پروژه (مهاجرت 0080). مهاجرت ایندکس
+ * v9.0.367 (TD-737، TD-753): یکتایی شماره مرحله زنده هر پروژه و کلید خارجی مرحله به پروژه (مهاجرت 0084). مهاجرت ایندکس
  * یکتا را فقط روی داده بی تکرار می‌سازد و کلید خارجی را NOT VALID می‌افزاید و فقط وقتی مرحله‌ای به پروژه ناموجود اشاره نکند
  * اعتبارسنجی می‌کند؛ ردیف‌های قدیمی دست نمی‌خورند و آنچه مانده این‌جا فهرست می‌شود.
  */
@@ -69,7 +69,7 @@ export function buildProjectStageHealthTest(integrity: ProjectStageIntegrity): H
     id: 'project_stage_integrity',
     category: 'system',
     title: 'یکتایی شماره مرحله پروژه',
-    description: 'هر پروژه برای هر شماره یک مرحله زنده دارد و هر مرحله به پروژه‌ای موجود اشاره می‌کند. پیش از نسخه ۹.۰.۳۳۶ مرحله تازه شماره مرحله حذف‌شده را می‌گرفت و تیک‌های آن را به ارث می‌برد؛ این ردیف‌ها خودکار تغییر نمی‌کنند',
+    description: 'هر پروژه برای هر شماره یک مرحله زنده دارد و هر مرحله به پروژه‌ای موجود اشاره می‌کند. پیش از نسخه ۹.۰.۳۶۷ مرحله تازه شماره مرحله حذف‌شده را می‌گرفت و تیک‌های آن را به ارث می‌برد؛ این ردیف‌ها خودکار تغییر نمی‌کنند',
     status: count > 0 || constraintsMissing ? 'warning' : 'healthy',
     scoreImpact: -Math.min(10, count * 2),
     count,
@@ -101,7 +101,7 @@ export interface ProjectFreeTextValue {
 }
 
 /**
- * v9.0.338 (TD-754): پروژه و مرحله‌ای که پیش از فهرست‌های بسته وضعیت یا اولویتی بیرون از رابط گرفته‌اند (مثل «Completed»)؛
+ * v9.0.380 (TD-754): پروژه و مرحله‌ای که پیش از فهرست‌های بسته وضعیت یا اولویتی بیرون از رابط گرفته‌اند (مثل «Completed»)؛
  * از همه پالایه‌های وضعیت بیرون می‌افتند. خودکار تغییر نمی‌کنند و فقط فهرست می‌شوند.
  */
 export async function findProjectFreeTextValues(statuses: readonly string[], priorities: readonly string[], stageStatuses: readonly string[], db: DbExecutor = orm): Promise<ProjectFreeTextValue[]> {
@@ -138,7 +138,7 @@ export function buildProjectValueHealthTest(values: ProjectFreeTextValue[]): Hea
     id: 'project_status_values',
     category: 'system',
     title: 'وضعیت و اولویت پروژه بیرون از فهرست',
-    description: 'وضعیت و اولویت پروژه و وضعیت مرحله فقط از فهرست رابط پذیرفته می‌شوند. پیش از نسخه ۹.۰.۳۳۸ متن آزاد هم ذخیره می‌شد و چنین پروژه‌ای از پالایه‌های وضعیت بیرون می‌افتاد؛ این ردیف‌ها خودکار تغییر نمی‌کنند',
+    description: 'وضعیت و اولویت پروژه و وضعیت مرحله فقط از فهرست رابط پذیرفته می‌شوند. پیش از نسخه ۹.۰.۳۸۰ متن آزاد هم ذخیره می‌شد و چنین پروژه‌ای از پالایه‌های وضعیت بیرون می‌افتاد؛ این ردیف‌ها خودکار تغییر نمی‌کنند',
     status: count > 0 ? 'warning' : 'healthy',
     scoreImpact: -Math.min(5, count),
     count,

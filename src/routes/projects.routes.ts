@@ -38,12 +38,12 @@ const createProjectSchema = z.object({
     item_id: z.union([z.number(), z.string(), z.null()]).optional(),
     item_code: z.string().optional(),
     item_name: z.string().optional(),
-    // v9.0.339 (TD-741): رقم فارسی خوانده می‌شود و متن ۴۰۰ است؛ پیش‌تر «۱۲» ستون مقدار را NaN می‌کرد
+    // v9.0.381 (TD-741): رقم فارسی خوانده می‌شود و متن ۴۰۰ است؛ پیش‌تر «۱۲» ستون مقدار را NaN می‌کرد
     quantity: decimalInput('مقدار پروژه').optional(),
     unit: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
-    // v9.0.338 (TD-754): وضعیت و اولویت فقط از فهرست رابط؛ پیش‌تر متن آزاد («Completed»، «خیلی فوری») ذخیره می‌شد
+    // v9.0.380 (TD-754): وضعیت و اولویت فقط از فهرست رابط؛ پیش‌تر متن آزاد («Completed»، «خیلی فوری») ذخیره می‌شد
     priority: z.enum(PROJECT_PRIORITIES).optional(),
     description: z.string().optional(),
     initial_stages: z.array(z.object({ status: z.enum(STAGE_STATUSES).optional() }).catchall(z.unknown())).optional(),
@@ -62,7 +62,7 @@ const recordVersion = z.coerce.number().int('نسخه رکورد پروژه با
 
 const updateProjectSchema = z.object({
   body: z.object({
-    // v9.0.343 (TD-742، تصمیم ت۳ الف): نسخه‌ای که فرم از آن ساخته شده الزامی است؛ ناهمخوانی ۴۰۹ OCC_CONFLICT
+    // v9.0.385 (TD-742، تصمیم ت۳ الف): نسخه‌ای که فرم از آن ساخته شده الزامی است؛ ناهمخوانی ۴۰۹ OCC_CONFLICT
     version: recordVersion.optional(),
     title: z.string().optional(),
     project_code: z.string().optional(),
@@ -71,7 +71,7 @@ const updateProjectSchema = z.object({
     item_id: z.union([z.number(), z.string(), z.null()]).optional(),
     item_code: z.string().optional(),
     item_name: z.string().optional(),
-    // v9.0.339 (TD-741): رقم فارسی خوانده می‌شود و متن ۴۰۰ است؛ پیش‌تر «۱۲» ستون مقدار را NaN می‌کرد
+    // v9.0.381 (TD-741): رقم فارسی خوانده می‌شود و متن ۴۰۰ است؛ پیش‌تر «۱۲» ستون مقدار را NaN می‌کرد
     quantity: decimalInput('مقدار پروژه').optional(),
     unit: z.string().optional(),
     start_date: z.string().optional(),
@@ -87,7 +87,7 @@ const updateProjectSchema = z.object({
     custom_stages: z.array(z.unknown()).optional(),
     customStages: z.array(z.unknown()).optional(),
     attachments: z.array(z.unknown()).optional(),
-    // v9.0.342 (TD-740، تصمیم ت۲ الف): مراحل با ویرایش پروژه تغییر نمی‌کنند؛ فرستادن آن‌ها ۴۲۲ است، نه دور ریختن بی‌صدا
+    // v9.0.384 (TD-740، تصمیم ت۲ الف): مراحل با ویرایش پروژه تغییر نمی‌کنند؛ فرستادن آن‌ها ۴۲۲ است، نه دور ریختن بی‌صدا
     initial_stages: z.unknown().optional(),
   }).refine(b => b.version !== undefined, { message: PROJECT_VERSION_REQUIRED_MESSAGE, path: ['version'] }),
   params: z.object({
@@ -114,7 +114,7 @@ const addProjectToInventorySchema = z.object({
     }
     return val;
   }, z.object({
-    // v9.0.339 (TD-741): مقدار و بها با رقم فارسی خوانده می‌شوند و متن ۴۰۰ است؛ ردیف بی مقدار مثبت ۴۲۲ می‌گیرد، نه رد بی‌صدا
+    // v9.0.381 (TD-741): مقدار و بها با رقم فارسی خوانده می‌شوند و متن ۴۰۰ است؛ ردیف بی مقدار مثبت ۴۲۲ می‌گیرد، نه رد بی‌صدا
     itemsToAdd: z.array(z.object({
       itemId: z.union([z.number(), z.string()]),
       quantity: decimalInput('مقدار تحویل'),
@@ -146,7 +146,7 @@ const createProjectStageSchema = z.object({
   })
 });
 
-// v9.0.337 (TD-755): شماره مرحله عدد صحیح مثبت و درصد پیشرفت عدد صحیح ۰ تا ۱۰۰؛ پیش‌تر متن نامعتبر ۵۰۰ با متن SQL می‌داد
+// v9.0.368 (TD-755): شماره مرحله عدد صحیح مثبت و درصد پیشرفت عدد صحیح ۰ تا ۱۰۰؛ پیش‌تر متن نامعتبر ۵۰۰ با متن SQL می‌داد
 const stageOrderInput = decimalInput('شماره مرحله')
   .refine(v => v === undefined || (/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= MAX_STAGE_ORDER), `شماره مرحله باید عدد صحیح ۱ تا ${toPersianDigits(MAX_STAGE_ORDER)} باشد`);
 const stagePercentInput = decimalInput('درصد پیشرفت مرحله')
@@ -387,7 +387,7 @@ export function formatProject(
     customStages,
     attachments,
     isDeleted,
-    // v9.0.343 (TD-742): نسخه‌ای که ویرایش بعدی می‌فرستد
+    // v9.0.385 (TD-742): نسخه‌ای که ویرایش بعدی می‌فرستد
     version: p.version ?? 1,
     itemImage,
     stages,
@@ -502,7 +502,7 @@ router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.produ
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
 
-    // v9.0.334 (TD-738): خواندن پروژه هرگز وضعیت آن یا مراحلش را نمی‌نویسد؛ همگام‌سازی فقط در مسیرهای نوشتن است
+    // v9.0.365 (TD-738): خواندن پروژه هرگز وضعیت آن یا مراحلش را نمی‌نویسد؛ همگام‌سازی فقط در مسیرهای نوشتن است
     const [projData] = await orm
       .select({
         project: productionProjects,
@@ -603,7 +603,7 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
       custom_stages, customStages, attachments, project_code, version
     } = req.body;
 
-    // v9.0.333 (TD-739): بررسی تکمیل با قاعده مشترک ماتریس درون تراکنش updateProject است
+    // v9.0.364 (TD-739): بررسی تکمیل با قاعده مشترک ماتریس درون تراکنش updateProject است
     const { current: updated } = await ProjectService.updateProject(id, {
       title,
       projectCode: project_code,
@@ -629,7 +629,7 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
 
     const rawStages = await orm.select().from(projectStages).where(and(eq(projectStages.projectId, id), eq(projectStages.isDeleted, 0))).orderBy(asc(projectStages.stageOrder));
 
-    // v9.0.341 (TD-757): ردیف ممیزی ویرایش با پیش و پس درون تراکنش updateProject نوشته می‌شود
+    // v9.0.383 (TD-757): ردیف ممیزی ویرایش با پیش و پس درون تراکنش updateProject نوشته می‌شود
     res.json(formatProject(updated, rawStages));
   } catch (err) {
     throw err;
@@ -736,7 +736,7 @@ router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit')
       assigned_personnel, required_resources, progress_percent, notes 
     } = req.body;
 
-    // v9.0.334 (TD-738): ویرایش مرحله و همگام‌سازی مراحل و وضعیت پروژه در یک تراکنش زیر قفل پروژه
+    // v9.0.365 (TD-738): ویرایش مرحله و همگام‌سازی مراحل و وضعیت پروژه در یک تراکنش زیر قفل پروژه
     const updatedStage = await ProjectService.updateStage(projectId, stageId, {
       title,
       stageOrder: stage_order === undefined ? undefined : Number(stage_order),
@@ -775,8 +775,8 @@ router.get('/projects/:id/product-progress', authorizePermission('projects.view'
     const projectId = parseInt(req.params.id, 10);
     if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
 
-    // v9.0.334 (TD-738): فقط خواندن؛ وضعیت مراحل و پروژه را مسیرهای نوشتن همگام می‌کنند
-    // v9.0.333 (TD-739): ماتریس با قاعده مشترک (پروژه تک‌کالایی: کالای اصلی)
+    // v9.0.365 (TD-738): فقط خواندن؛ وضعیت مراحل و پروژه را مسیرهای نوشتن همگام می‌کنند
+    // v9.0.364 (TD-739): ماتریس با قاعده مشترک (پروژه تک‌کالایی: کالای اصلی)
     const view = await ProjectService.getProductProgressView(projectId);
     if (!view) return res.status(404).json({ error: 'پروژه یافت نشد' });
 
@@ -811,7 +811,7 @@ router.put('/projects/:id/product-progress', authorizePermission('projects.edit'
 
     const updates = req.body.items as Array<{ item_id: number | string; stage_order: number | string; stage_title?: string; status: ProductProgressStatus }>;
 
-    // v9.0.334 (TD-738): تیک‌ها، ردیف ممیزی و همگام‌سازی مراحل و وضعیت در یک تراکنش زیر قفل پروژه
+    // v9.0.365 (TD-738): تیک‌ها، ردیف ممیزی و همگام‌سازی مراحل و وضعیت در یک تراکنش زیر قفل پروژه
     const { applied, skippedInvalid, projectStatus, weightedProgress } = await ProjectService.updateProductProgress(
       projectId,
       updates.map(u => ({

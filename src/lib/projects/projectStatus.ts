@@ -1,7 +1,7 @@
 /**
  * وضعیت‌های پروژه تولید و برچسب فارسی آن‌ها، مشترک میان سرور و مرورگر.
  *
- * v9.0.334 (TD-738، تصمیم ت۱ الف): وضعیت پروژه را ماتریس پیشرفت فقط در مسیرهای نوشتن (تیک ماتریس، افزودن، ویرایش و
+ * v9.0.365 (TD-738، تصمیم ت۱ الف): وضعیت پروژه را ماتریس پیشرفت فقط در مسیرهای نوشتن (تیک ماتریس، افزودن، ویرایش و
  * حذف مرحله، ویرایش پروژه) تعیین می‌کند و «متوقف‌شده» و «لغوشده» را هرگز تغییر نمی‌دهد. پیش‌تر خواندن پروژه
  * (`GET /projects/:id` و `/product-progress`) همگام‌ساز را بی قفل و ممیزی اجرا می‌کرد: پروژه لغوشده با ماتریس کامل با یک
  * `GET` کاربری که فقط مجوز خواندن داشت «تکمیل‌شده» و تحویل‌پذیر می‌شد.
@@ -21,7 +21,7 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
 export const projectStatusLabel = (status: string | null | undefined): string =>
   (PROJECT_STATUS_LABELS as Record<string, string>)[String(status ?? '')] ?? String(status ?? '');
 
-/** اولویت‌های پروژه (همان گزینه‌های فرم پروژه؛ v9.0.338، TD-754) */
+/** اولویت‌های پروژه (همان گزینه‌های فرم پروژه؛ v9.0.380، TD-754) */
 export const PROJECT_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 export type ProjectPriority = typeof PROJECT_PRIORITIES[number];
 
@@ -49,7 +49,7 @@ export const STAGE_STATUS_LABELS: Record<StageStatus, string> = {
 export const stageStatusLabel = (status: string | null | undefined): string =>
   (STAGE_STATUS_LABELS as Record<string, string>)[String(status ?? '')] ?? String(status ?? '');
 
-/** بزرگ‌ترین شماره مرحله (ستون integer؛ v9.0.337، TD-755) */
+/** بزرگ‌ترین شماره مرحله (ستون integer؛ v9.0.368، TD-755) */
 export const MAX_STAGE_ORDER = 10000;
 
 /** وضعیت‌هایی که فقط کاربر تعیین می‌کند و همگام‌ساز ماتریس تغییر نمی‌دهد */

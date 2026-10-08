@@ -24,7 +24,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
 
   const valuesId = 'reg_project_status_values_td_754';
   if (shouldRun(valuesId, 'td754', 'projects', 'package11')) {
-    await runCase(results, valuesId, 'v9.0.338: a project status or priority or a stage status outside the UI lists is a 400 and is not stored; legacy free-text values are listed by the health check (TD-754)', async () => inFiscalSandbox(async () => {
+    await runCase(results, valuesId, 'v9.0.380: a project status or priority or a stage status outside the UI lists is a 400 and is not stored; legacy free-text values are listed by the health check (TD-754)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const project = await newProject(api, {});
@@ -69,7 +69,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
 
   const deliveryId = 'reg_project_delivery_input_td_741';
   if (shouldRun(deliveryId, 'td741', 'projects', 'package11')) {
-    await runCase(results, deliveryId, 'v9.0.339: delivery quantity and unit price and the project quantity read Persian digits; a non-positive quantity or a negative price is a 422, never a silent 200 with nothing recorded (TD-741)', async () => inFiscalSandbox(async () => {
+    await runCase(results, deliveryId, 'v9.0.381: delivery quantity and unit price and the project quantity read Persian digits; a non-positive quantity or a negative price is a 422, never a silent 200 with nothing recorded (TD-741)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const item = await createTestItem({ type: 'product', weightedAverageCost: 100000 });
@@ -109,7 +109,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
 
   const clockId = 'reg_project_stage_completion_clock_td_756';
   if (shouldRun(clockId, 'td756', 'projects', 'package11')) {
-    await runCase(results, clockId, 'v9.0.340: a stage completion time and a matrix tick time are written with one clock, the server UTC time with Z; a completed stage keeps its time and a reopened stage has none (TD-756)', async () => inFiscalSandbox(async () => {
+    await runCase(results, clockId, 'v9.0.382: a stage completion time and a matrix tick time are written with one clock, the server UTC time with Z; a completed stage keeps its time and a reopened stage has none (TD-756)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const utcNow = (value: unknown, label: string) => {
@@ -151,7 +151,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
 
   const auditId = 'reg_project_stage_audit_td_757';
   if (shouldRun(auditId, 'td757', 'projects', 'package11')) {
-    await runCase(results, auditId, 'v9.0.341: a project edit is audited with before and after of the changed fields, and adding, editing and deleting a stage each write an audit row with the stage before and after, inside the write transaction (TD-757)', async () => inFiscalSandbox(async () => {
+    await runCase(results, auditId, 'v9.0.383: a project edit is audited with before and after of the changed fields, and adding, editing and deleting a stage each write an audit row with the stage before and after, inside the write transaction (TD-757)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const project = await newProject(api, {});
@@ -194,7 +194,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
 
   const stagesId = 'reg_project_edit_stages_read_only_td_740';
   if (shouldRun(stagesId, 'td740', 'projects', 'package11')) {
-    await runCase(results, stagesId, 'v9.0.342: editing a project never changes its stages; stages sent with a project edit are a 422 PROJECT_STAGES_READ_ONLY instead of a 200 that silently drops them (TD-740)', async () => inFiscalSandbox(async () => {
+    await runCase(results, stagesId, 'v9.0.384: editing a project never changes its stages; stages sent with a project edit are a 422 PROJECT_STAGES_READ_ONLY instead of a 200 that silently drops them (TD-740)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const project = await newProject(api, {});
@@ -220,7 +220,7 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
 
   const versionId = 'reg_project_version_occ_td_742';
   if (shouldRun(versionId, 'td742', 'projects', 'package11')) {
-    await runCase(results, versionId, 'v9.0.343: a project edit sends the version it was built from; without it 400, from a stale version 409 OCC_CONFLICT with nothing stored; every save and a status change by the progress matrix raise the version (TD-742)', async () => inFiscalSandbox(async () => {
+    await runCase(results, versionId, 'v9.0.385: a project edit sends the version it was built from; without it 400, from a stale version 409 OCC_CONFLICT with nothing stored; every save and a status change by the progress matrix raise the version (TD-742)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const item = await createTestItem({ type: 'product' });

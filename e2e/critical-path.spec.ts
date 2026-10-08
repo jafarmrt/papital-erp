@@ -27,7 +27,7 @@ test('login, issue a final sales invoice and see its journal voucher', async ({ 
   const numbers = page.locator('input[type=number]');
   await numbers.nth(0).fill('2');
   await numbers.nth(1).fill('750000');
-  await page.getByRole('button', { name: 'افزودن به لیست' }).click();
+  await page.getByRole('button', { name: 'افزودن به فهرست' }).click();
 
   const created = page.waitForResponse(r => r.url().endsWith('/api/documents') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'ثبت و صدور فاکتور' }).click();
