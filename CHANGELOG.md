@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.453 — No Zero-Cost Entry for an Item Without Cost
+- **Fix (TD-906, TD-916, P5-M04 / P5-P09):** a final receipt, its finalize, a procurement delivery and a project delivery refuse a zero-cost line of an item that has no weighted average cost yet (422), so such an item never enters stock unsellable.
+
 ### v9.0.452 — Material Allocation Deducts the Project Reservation
 - **Fix (TD-918, P5-M01):** allocating material to a project deducts the project's reservation like its remittance, and releasing the allocation restores exactly what was deducted (migration 0095).
 

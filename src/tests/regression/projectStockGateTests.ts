@@ -16,6 +16,9 @@ export async function runProjectStockGateTests(shouldRun: ShouldRun): Promise<Te
     ['reg_project_allocation_reservation_td_918',
       'v9.0.452: allocating material deducts the project\'s reservation like its remittance and releasing the allocation gives back exactly what was deducted (TD-918)',
       ['td918', 'allocation', 'reservation', 'phase5'], allocationReservationCase],
+    ['reg_incoming_without_cost_td_906',
+      'v9.0.453: an item without a weighted average cost never enters stock at zero cost: a final receipt, its finalize, a procurement delivery and a project delivery without a price are 422; a priced line and a zero-price line of an item with a cost pass (TD-906, TD-916)',
+      ['td906', 'td916', 'receipt', 'procurement', 'projects', 'cost', 'phase5'], incomingWithoutCostCase],
   ]);
 }
 
@@ -134,4 +137,72 @@ async function allocationReservationCase(h: Harness, wrong: string[]): Promise<s
   if ((await release(overId)).status !== 200) wrong.push('releasing the larger allocation failed');
   if (await storedQty(h, pb, b) !== 4) wrong.push(`releasing the allocation of 6 restores a reservation of ${await storedQty(h, pb, b)}, expected exactly the 4 deducted`);
   return 'an allocation deducts the project reservation with its own record; the release restores exactly that';
+}
+
+const kardexRows = async (h: Harness, itemId: number) => Number((await h.q('SELECT count(*)::int AS n FROM transactions WHERE item_id = $1', [itemId]))[0]?.n);
+const wacOf = async (h: Harness, itemId: number) => Number((await h.q('SELECT weighted_average_cost::float8 AS w FROM items WHERE id = $1', [itemId]))[0]?.w);
+
+/**
+ * P5-M04 / P5-P09 (TD-906 / TD-916, decision ت۲ الف): a project delivery without a price, a final receipt at zero and a
+ * procurement order estimated at zero brought an item without a weighted average cost into stock at zero cost (Kardex 0,
+ * voucher without rows); after that every sale and remittance of the item was refused. The reorder form (TD-830) was the
+ * only place that refused it.
+ */
+async function incomingWithoutCostCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const expectRefused = (label: string, res: { status: number; body?: unknown }) => {
+    const code = (res.body as { code?: unknown } | undefined)?.code;
+    if (res.status !== 422 || code !== 'INCOMING_LINE_WITHOUT_COST') wrong.push(`${label} answered ${brief(res)}, expected 422 INCOMING_LINE_WITHOUT_COST`);
+  };
+  const line = (itemId: number, quantity: number, unit_price: number, discount = 0) => [{ itemId, quantity, unit_price, discount, location: f.wh }];
+
+  // 1) POST /documents: a final receipt at zero, and a line whose discount nets it to zero
+  const n = await f.item(0, 0);
+  expectRefused('a final receipt at zero of an item without cost', await h.post('/api/documents', f.doc('receipt', 'final', line(n, 4, 0))));
+  expectRefused('a final receipt whose line discount nets the price to zero', await h.post('/api/documents', f.doc('receipt', 'final', line(n, 2, 500, 1000))));
+  if (await f.stock(n) !== 0 || await kardexRows(h, n) !== 0) wrong.push(`the refused receipts left stock ${await f.stock(n)} and ${await kardexRows(h, n)} Kardex rows`);
+
+  // 2) finalizing a draft receipt at zero is refused and the draft stays a draft
+  const draft = await h.post('/api/documents', f.doc('receipt', 'draft', line(n, 3, 0)));
+  if (draft.status !== 200) throw new Error(`setup: the draft receipt answered ${brief(draft)}`);
+  const draftId = Number((draft.body as { docId?: unknown }).docId);
+  expectRefused('finalizing a draft receipt at zero', await h.put(`/api/documents/${draftId}/finalize`, {}));
+  const [draftRow] = await h.q('SELECT status FROM documents WHERE id = $1', [draftId]);
+  if (draftRow?.status !== 'draft' || await f.stock(n) !== 0) wrong.push(`the refused finalize left the receipt ${String(draftRow?.status)} with stock ${await f.stock(n)}`);
+
+  // 3) a priced receipt passes; after it the item has a cost and a zero line is the donated-goods case of TD-268
+  const priced = await h.post('/api/documents', f.doc('receipt', 'final', line(n, 4, 2_000)));
+  if (priced.status !== 200 || await wacOf(h, n) !== 2_000) wrong.push(`a priced receipt answered ${brief(priced)} with WAC ${await wacOf(h, n)}, expected 200 and 2000`);
+  const donated = await h.post('/api/documents', f.doc('receipt', 'final', line(n, 1, 0)));
+  if (donated.status !== 200 || await f.stock(n) !== 5) wrong.push(`a zero-price receipt of an item with a cost answered ${brief(donated)} (stock ${await f.stock(n)}), expected 200 as donated goods`);
+
+  // 4) a procurement order estimated at zero is not delivered into stock
+  const { approvedRequisition, fixture: procurementFixture, formRow } = await import('./procurementRequisitionTests.js');
+  const pf = await procurementFixture(h);
+  const raw = await pf.item();
+  const requisition = await approvedRequisition(h, pf, [formRow(raw, 4, 0)]);
+  const converted = await h.post(`/api/procurement/requisitions/${requisition.id}/convert-to-orders`, {
+    orderGroups: [{ supplierName: `P5 supplier ${h.tag}`, targetWarehouse: pf.wh, docType: 'receipt', status: 'draft',
+      items: [{ itemId: raw.id, quantity: 4, unitPrice: 0, unit: 'عدد' }] }],
+  });
+  const orderId = Number(((converted.body as { data?: { createdDocuments?: Array<{ id?: unknown }> } })?.data?.createdDocuments ?? [])[0]?.id);
+  if (converted.status !== 200 || !Number.isInteger(orderId)) throw new Error(`setup: convert to orders answered ${brief(converted)}`);
+  expectRefused('delivering a procurement order at zero of an item without cost', await pf.deliver(orderId));
+  if (await pf.stock(raw.id) !== 0) wrong.push(`the refused delivery left stock ${await pf.stock(raw.id)}`);
+
+  // 5) a project delivery without a price of a finished good without cost
+  const product = await f.item(0, 0);
+  const projectRes = await h.post('/api/projects', {
+    title: `P5 delivery ${h.tag} ${Math.floor(Math.random() * 1e6)}`, start_date: f.today, end_date: f.today, quantity: 5,
+    products: [{ item_id: product, item_code: '', item_name: '', quantity: 5, unit: 'عدد' }],
+  });
+  const projectId = Number((projectRes.body as { id?: unknown }).id);
+  if (projectRes.status !== 201) throw new Error(`setup: project create answered ${brief(projectRes)}`);
+  const receiptsOf = async () => Number((await h.q(`SELECT count(*)::int AS n FROM documents WHERE project_id = $1 AND type = 'production_receipt' AND is_deleted = 0`, [projectId]))[0]?.n);
+  expectRefused('a project delivery without a price of an item without cost',
+    await h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 5, location: f.wh }] }));
+  if (await f.stock(product) !== 0 || await receiptsOf() !== 0) wrong.push(`the refused delivery left stock ${await f.stock(product)} and ${await receiptsOf()} production receipts`);
+  const pricedDelivery = await h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 5, unitPrice: 400_000, location: f.wh }] });
+  if (pricedDelivery.status !== 200 || await wacOf(h, product) !== 400_000) wrong.push(`a priced project delivery answered ${brief(pricedDelivery)} with WAC ${await wacOf(h, product)}, expected 200 and 400000`);
+  return 'zero-cost entry of an item without cost refused on create, finalize, procurement delivery and project delivery; priced and donated lines pass';
 }
