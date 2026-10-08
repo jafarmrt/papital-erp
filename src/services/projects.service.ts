@@ -11,7 +11,7 @@ import { AttachmentStorageService } from './attachments/attachmentStorage.servic
 import { resolveServerInventoryControl } from './projects/serverInventoryControl.js';
 import { assignProjectCode } from './projects/projectCode.js';
 import { keepScheduleLogLinks } from '../lib/projects/scheduleWorkLog.js';
-import { matrixProducts } from '../lib/projects/progressMatrix.js';
+import { hasMatrixProducts, matrixProducts } from '../lib/projects/progressMatrix.js';
 import { loadProjectProgressMatrix, productProgressView, progressMatrixStatus, type ProgressMatrixStatus } from './projects/projectProgressMatrix.js';
 import { actorName, lockLiveProject, syncProjectFromMatrix, type ProjectActor, type ProjectStatusSyncResult, type SyncedStage } from './projects/projectStatusSync.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -484,7 +484,7 @@ export class ProjectService {
     executor: DbExecutor = orm
   ): Promise<SyncedStage> {
     return executor.transaction(async (tx) => {
-      await lockLiveProject(tx, projectId);
+      const project = await lockLiveProject(tx, projectId);
       const [existing] = await tx
         .select()
         .from(projectStages)
@@ -492,6 +492,21 @@ export class ProjectService {
 
       if (!existing) {
         throw new NotFoundError('مرحله یافت نشد');
+      }
+
+      // v9.0.335 (TD-758، تصمیم ت۱ الف): در پروژه دارای ماتریس پیشرفت وضعیت و درصد مرحله را فقط ماتریس تعیین می‌کند؛
+      // مقدار دستی متفاوت رد می‌شود (پیش‌تر ۲۰۰ می‌گرفت و همگام‌ساز بی‌صدا برش می‌گرداند) و مقدار برابر نادیده می‌ماند
+      if (hasMatrixProducts(project)) {
+        const statusChanged = data.status !== undefined && data.status !== existing.status;
+        const percentChanged = data.progressPercent !== undefined && Number(data.progressPercent) !== Number(existing.progressPercent ?? 0);
+        if (statusChanged || percentChanged) {
+          throw new ValidationError(
+            `وضعیت و درصد پیشرفت مرحله «${existing.title}» از ماتریس «پیشرفت به تفکیک کد کالا» محاسبه می‌شود و دستی تغییر نمی‌کند؛ خانه‌های این مرحله را در ماتریس تیک بزنید.`,
+            { stageId, status: existing.status, progressPercent: existing.progressPercent },
+            'STAGE_STATUS_FROM_MATRIX'
+          );
+        }
+        data = { ...data, status: undefined, progressPercent: undefined };
       }
 
       const updateData: Record<string, unknown> = {};

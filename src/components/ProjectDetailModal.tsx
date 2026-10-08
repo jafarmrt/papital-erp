@@ -12,6 +12,8 @@ import ProjectScheduleTab from './project/ProjectScheduleTab';
 import ProjectGanttTab from './project/ProjectGanttTab';
 import ProjectStockEntryTab from './project/ProjectStockEntryTab';
 import ProjectProductProgressTab from './project/ProjectProductProgressTab';
+import { StageStatusField } from './project/StageStatusField';
+import { hasMatrixProducts } from '../lib/projects/progressMatrix';
 import { WorkflowStepperWidget } from './workflow/WorkflowStepperWidget';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 
@@ -158,6 +160,9 @@ export default function ProjectDetailModal({
     setStageNotes(stg.notes || '');
   };
 
+  // v9.0.335 (TD-758): وضعیت و درصد مرحله پروژه دارای ماتریس پیشرفت را فقط ماتریس تعیین می‌کند
+  const stagesFromMatrix = project ? hasMatrixProducts({ products: project.products, itemId: project.item_id }) : true;
+
   const handleSaveStage = async (stageId: number) => {
     if (savingStage) return;
 
@@ -178,8 +183,7 @@ export default function ProjectDetailModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: stageTitle,
-          status: stageStatus,
-          progress_percent: stageProgress,
+          ...(stagesFromMatrix ? {} : { status: stageStatus, progress_percent: stageProgress }),
           start_date: stageStartDate,
           end_date: stageEndDate,
           assigned_personnel: personnelArray,
@@ -560,10 +564,12 @@ export default function ProjectDetailModal({
                         <Layers className="w-4 h-4 text-blue-600" />
                         مراحل فرآیند کنترل پروژه و کارگاه ({toPersianDigits(project.stages?.length || 0)} مرحله)
                       </h3>
+                      {stagesFromMatrix && (
                       <span className="text-[11px] text-blue-700 font-medium bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                         پیشرفت و وضعیت مراحل به‌طور خودکار بر اساس ماتریس «پیشرفت به تفکیک کد کالا» محاسبه می‌شود
                       </span>
+                      )}
                     </div>
 
                     <div className="space-y-3">
@@ -669,6 +675,14 @@ export default function ProjectDetailModal({
                                     />
                                   </div>
 
+                                  {!stagesFromMatrix ? (
+                                    <StageStatusField
+                                      status={stageStatus}
+                                      progress={stageProgress}
+                                      onStatusChange={setStageStatus}
+                                      onProgressChange={setStageProgress}
+                                    />
+                                  ) : (
                                   <div className="bg-slate-100 border border-slate-200 rounded-xl p-2.5 space-y-1 sm:col-span-2">
                                     <div className="flex items-center justify-between">
                                       <label className="text-[11px] font-bold text-slate-700">وضعیت و درصد پیشرفت مرحله</label>
@@ -687,6 +701,7 @@ export default function ProjectDetailModal({
                                       * درصد پیشرفت و وضعیت بر اساس تکمیل کد کالاها در بخش «پیشرفت به تفکیک کد کالا» خودکار تنظیم می‌شود.
                                     </p>
                                   </div>
+                                  )}
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">

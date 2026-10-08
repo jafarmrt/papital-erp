@@ -118,6 +118,13 @@ export function matrixProducts(project: MatrixProjectSource): MatrixProduct[] {
   }];
 }
 
+/**
+ * v9.0.335 (TD-758، تصمیم ت۱ الف): پروژه‌ای که ماتریس پیشرفت دارد؛ وضعیت و درصد مراحلش را فقط ماتریس تعیین می‌کند و
+ * وضعیت دستی مرحله فقط برای پروژه بی محصول است.
+ */
+export const hasMatrixProducts = (project: MatrixProjectSource): boolean =>
+  matrixProducts(project).some(p => p.itemId !== null);
+
 export const matrixCellKey = (itemId: number, stageOrder: number): string => `${itemId}|${stageOrder}`;
 
 export function computeProgressMatrix(products: MatrixProduct[], stages: MatrixStage[], rows: MatrixProgressRow[]): ProgressMatrix {

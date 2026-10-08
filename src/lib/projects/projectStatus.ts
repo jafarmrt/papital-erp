@@ -21,6 +21,17 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
 export const projectStatusLabel = (status: string | null | undefined): string =>
   (PROJECT_STATUS_LABELS as Record<string, string>)[String(status ?? '')] ?? String(status ?? '');
 
+/** وضعیت‌های مرحله پروژه (همان وضعیت‌های خانه ماتریس پیشرفت) */
+export const STAGE_STATUSES = ['pending', 'in_progress', 'completed', 'blocked'] as const;
+export type StageStatus = typeof STAGE_STATUSES[number];
+
+export const STAGE_STATUS_LABELS: Record<StageStatus, string> = {
+  pending: 'در انتظار شروع',
+  in_progress: 'در حال انجام',
+  completed: 'تکمیل‌شده',
+  blocked: 'متوقف / مانع',
+};
+
 /** وضعیت‌هایی که فقط کاربر تعیین می‌کند و همگام‌ساز ماتریس تغییر نمی‌دهد */
 export const MATRIX_HELD_PROJECT_STATUSES: readonly string[] = ['paused', 'cancelled'];
 

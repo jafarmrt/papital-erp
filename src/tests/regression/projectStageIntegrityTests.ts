@@ -121,5 +121,31 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
     }));
   }
 
+  const manualId = 'reg_project_stage_manual_status_td_758';
+  if (shouldRun(manualId, 'td758', 'projects', 'package11')) {
+    await runCase(results, manualId, 'v9.0.335: a manual stage status or percent that differs from the matrix is refused with 422 STAGE_STATUS_FROM_MATRIX in a project with products, and stays manual in a project without products (TD-758)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const item = await createTestItem({ type: 'product' });
+      const stageRow = async (id: number) => (await q('SELECT status, progress_percent FROM project_stages WHERE id = $1', [id]))[0] ?? {};
+
+      const withProducts = await newProject(api, { products: [{ itemId: item.id, qty: 1 }] });
+      const first = withProducts.stages[0].id;
+      const forced = await api.put(`/api/projects/${withProducts.id}/stages/${first}`, { status: 'completed', progress_percent: 100 });
+      if (forced.status !== 422 || forced.body?.code !== 'STAGE_STATUS_FROM_MATRIX') problems.push(`a manual completed status in a matrix project answered ${forced.status} ${brief(forced.body)}, expected 422 STAGE_STATUS_FROM_MATRIX`);
+      const kept = await stageRow(first);
+      if (kept.status !== 'pending' || Number(kept.progress_percent) !== 0) problems.push(`the refused stage is ${brief(kept)}, expected pending 0`);
+      const same = await api.put(`/api/projects/${withProducts.id}/stages/${first}`, { title: 'برش لیزری', status: 'pending', progress_percent: 0 });
+      if (same.status !== 200 || same.body?.title !== 'برش لیزری') problems.push(`a title edit sending the unchanged status answered ${same.status} ${brief(same.body)}, expected 200`);
+
+      const manual = await newProject(api, { stages: ['طراحی'] });
+      const set = await api.put(`/api/projects/${manual.id}/stages/${manual.stages[0].id}`, { status: 'completed', progress_percent: 100 });
+      const manualRow = await stageRow(manual.stages[0].id);
+      if (set.status !== 200 || manualRow.status !== 'completed') problems.push(`a manual status in a project without products answered ${set.status} ${brief(set.body)} and stored ${brief(manualRow)}, expected completed`);
+      assertNoProblems(problems);
+      return 'matrix stage refuses a manual status; a project without products keeps it';
+    }));
+  }
+
   return results;
 }
