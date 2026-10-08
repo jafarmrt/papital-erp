@@ -1,14 +1,17 @@
 /**
  * Package 15 PR a (WooCommerce tab, `src/hooks/useSettings.ts` + `WooCommerceTab`).
  * TD-723 (B15-21): «آزمایش اتصال» for a non-admin sent the masked keys «********» as credentials, so it always failed.
+ * TD-724 (B15-22): the bulk stock sync showed only the server's green message while items failed.
+ * TD-730 (B15-28, WooCommerce half): a 403 / 500 on the order lists was swallowed and the tables said «no orders yet».
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { toast } from 'react-hot-toast';
-import { fetchJson } from '../../api';
+import { ApiError, fetchJson } from '../../api';
 import { useSettings } from '../../hooks/useSettings';
+import { WooCommerceTab } from '../../components/settings/WooCommerceTab';
 import { SYSTEM_ADMIN_SETTING_KEYS } from '../../lib/settings/settingKeyAccess';
 import { MASKED_SECRET_VALUE, resolveWcTestCredentials, wcTestConnectionBody } from '../../lib/woocommerce/wcConnectionTest';
 
@@ -94,5 +97,71 @@ describe('TD-723 WooCommerce connection test uses the stored keys instead of the
     expect(noStoredUrl.ok ? '' : noStoredUrl.code).toBe('WC_TEST_STORED_KEYS_OTHER_URL');
     const incomplete = resolveWcTestCredentials({}, { url: 'https://shop.example.org', consumerKey: '', consumerSecret: '' });
     expect(incomplete.ok ? '' : incomplete.code).toBe('WC_TEST_SETTINGS_INCOMPLETE');
+  });
+});
+
+describe('TD-724 bulk stock sync reports failed items', () => {
+  const failedBody = {
+    success: true, totalItems: 5, syncedCount: 0, failedCount: 4,
+    errors: ['خطا در SKU (A1): 401', 'خطا در SKU (A2): 401', 'خطا در SKU (A3): 401', 'خطا در SKU (A4): 401'],
+    message: 'همگام‌سازی دسته‌ای موجودی کل کالاها انجام شد. 0 کالا در ووکامرس به‌روزرسانی شدند.',
+  };
+
+  it('a response with failed items is an error toast with the counts and the first errors, never the green message', async () => {
+    mockServer((url) => (url === '/woocommerce/sync-all-stocks' ? failedBody : undefined));
+    const { result } = renderHook(() => useSettings(), { wrapper });
+    await act(async () => { await result.current.handleSyncAllStocks(); });
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    const message = String(vi.mocked(toast.error).mock.calls[0][0]);
+    expect(message).toContain('همگام‌سازی موجودی ۴ کالا شکست خورد');
+    expect(message).toContain('موجودی ۰ کالا به‌روز شد');
+    expect(message).toContain('۱ کالا با این کد در فروشگاه یافت نشد');
+    expect(message).toContain('خطا در SKU (A3): 401');
+    expect(message).not.toContain('خطا در SKU (A4)');
+    expect(message).toContain('و ۱ خطای دیگر');
+  });
+
+  it('a clean run is a success toast with the Persian count', async () => {
+    mockServer((url) => (url === '/woocommerce/sync-all-stocks' ? { success: true, totalItems: 2, syncedCount: 2, failedCount: 0, errors: [] } : undefined));
+    const { result } = renderHook(() => useSettings(), { wrapper });
+    await act(async () => { await result.current.handleSyncAllStocks(); });
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith('موجودی ۲ کالا در فروشگاه به‌روز شد.');
+  });
+});
+
+const noop = () => {};
+function renderTab(state: ReturnType<typeof useSettings>) {
+  const props = { ...state, warehouses: [], handleSaveSettings: noop, handleTestWcConnection: noop, handleSyncManualOrder: noop, loadSyncedWcOrders: noop, handleSyncAllStocks: noop };
+  return render(<WooCommerceTab {...(props as unknown as React.ComponentProps<typeof WooCommerceTab>)} />);
+}
+
+describe('TD-730 WooCommerce order lists show a load error instead of «no orders yet»', () => {
+  it('a 403 on the order log and a 500 on the invoices are kept and shown with the server message', async () => {
+    const forbidden = 'دسترسی غیرمجاز';
+    const serverFailure = 'خطای داخلی کارساز';
+    mockServer((url) => {
+      if (url === '/woocommerce/order-logs') return new ApiError(forbidden, 'AUTHORIZATION_ERROR', 403);
+      if (url === '/woocommerce/synced-orders') return new ApiError(serverFailure, 'INTERNAL_ERROR', 500);
+      return undefined;
+    });
+    const { result } = renderHook(() => useSettings(), { wrapper });
+    await waitFor(() => expect(result.current.wcOrderLogsError).toBe(forbidden));
+    await waitFor(() => expect(result.current.syncedWcOrdersError).toBe(serverFailure));
+    renderTab(result.current);
+    expect(screen.getByRole('alert').textContent).toBe(`این فهرست خوانده نشد: ${forbidden}`);
+    expect(screen.queryByText('هنوز هیچ سابقه پردازش سفارشی در سیستم ثبت نشده است.')).toBeNull();
+  });
+
+  it('an empty list that loaded still says no orders, and a processed order note is not styled as an error', async () => {
+    mockServer((url) => (url === '/woocommerce/order-logs'
+      ? [{ id: 1, wcOrderId: '77', status: 'processed', buyerName: 'خریدار', erpDocumentId: 9, errorMessage: 'طرف حساب تازه «علی (۰۹۳۵)» ساخته شد' }]
+      : undefined));
+    const { result } = renderHook(() => useSettings(), { wrapper });
+    await waitFor(() => expect(result.current.wcOrderLogs).toHaveLength(1));
+    expect(result.current.wcOrderLogsError).toBe('');
+    renderTab(result.current);
+    expect(screen.getByText('طرف حساب تازه «علی (۰۹۳۵)» ساخته شد').className).not.toContain('text-rose-600');
   });
 });
