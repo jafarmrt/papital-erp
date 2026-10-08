@@ -17,6 +17,9 @@ export async function runProcurementDeskTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_procurement_list_filters_td_697',
       'v9.0.278: the requisition list filters by the statuses it writes and their groups, searches item names, counts each requisition\'s orders in SQL and answers with the limit it used; the order list takes only its own status filters (TD-697)',
       ['td697', 'procurement', 'pagination', 'package10'], listFiltersCase],
+    ['reg_procurement_messages_td_901',
+      'v9.0.280: procurement errors name a workflow action by its Persian title, never its key, and a requisition row without a quantity gets its own Persian message on that field (TD-901)',
+      ['td901', 'procurement', 'wording', 'package10'], messagesCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -121,4 +124,24 @@ async function listFiltersCase(h: Harness, wrong: string[]): Promise<string> {
   const orders = await h.get('/api/procurement/orders?status=pending_delivery&limit=200');
   if (orders.status !== 200 || (orders.body as ListBody)?.limit !== 200) wrong.push(`orders limit=200 answered ${orders.status} with limit ${(orders.body as ListBody)?.limit}`);
   return 'status groups (received, open, ordered, rejected, consolidated), priority urgent, item-name search, order counts and limit 200 over 105 requisitions';
+}
+
+type ErrorBody = { message?: string; details?: { issues?: Array<{ path?: string; message?: string }> } };
+
+/** v9.0.280 (TD-901, decision t5): Persian workflow action names and a field-level message for a missing quantity */
+async function messagesCase(h: Harness, wrong: string[]): Promise<string> {
+  const missingQty = await h.post('/api/procurement/requisitions', { title: `پیام‌ها ${h.tag}`, items: [{ itemName: `کالای پیام ${h.tag}` }] });
+  const qtyIssue = (missingQty.body as ErrorBody)?.details?.issues?.find(issue => issue.path === 'body.items.0.requestedQty');
+  if (missingQty.status !== 400 || qtyIssue?.message !== 'مقدار درخواستی را وارد کنید') {
+    wrong.push(`a row without a quantity answered ${missingQty.status} with "${qtyIssue?.message ?? (missingQty.body as ErrorBody)?.message}"`);
+  }
+
+  const created = await h.post('/api/procurement/requisitions', { title: `پیام‌ها ${h.tag}`, items: [{ itemName: `کالای پیام ${h.tag}`, requestedQty: 2 }] });
+  const id = Number((created.body as { data?: { id?: unknown } })?.data?.id ?? 0);
+  if (created.status !== 201 && created.status !== 200) wrong.push(`requisition create answered ${created.status}`);
+  const action = await h.post(`/api/procurement/requisitions/${id}/workflow-action`, { actionKey: 'cancel_order' });
+  const message = String((action.body as ErrorBody)?.message ?? '');
+  if (action.status !== 409) wrong.push(`cancel_order on a pending requisition answered ${action.status}`);
+  if (message.includes('cancel_order') || !message.includes('لغو یا رد سفارش')) wrong.push(`the refusal names the action as: ${message}`);
+  return 'a missing quantity is reported on its field in Persian; a refused cancel_order names the action by its Persian title';
 }

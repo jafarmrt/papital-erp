@@ -22,7 +22,7 @@ import { applyDeliveredLines, isSettledRequisitionRow, type RequisitionItemWithR
 import { assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES, requisitionOrderDocuments } from './procurement/requisitionReceiveAction.js';
 import { describeOverOrders, findOverOrders } from './procurement/requisitionOrder.js';
 import { money } from '../lib/money.js';
-import { canEditRequisition, REQUISITION_PRIORITIES, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
+import { canEditRequisition, REQUISITION_PRIORITIES, requisitionActionLabel, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
 import {
   ensureRequisitionApproved, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY, requisitionFlow, requisitionWorkflowGraph, transitionFromStep,
   type RequisitionActor, type WorkflowStateRef, type WorkflowTransitionRef,
@@ -449,7 +449,7 @@ export class ProcurementService {
       // v8.0.124 (TD-405): کالای درخواستِ دریافت‌شده وارد انبار شده است؛ هیچ اقدام گردش‌کاری آن را برنمی‌گرداند، هر گامی
       // که نمونه گردش‌کار داشته باشد (پیش‌تر «خودترمیمی» گام را به «دریافت‌شده» می‌برد و همین جلوی اقدام را می‌گرفت)
       if (RECEIVED_REQUISITION_STATUSES.has(req.status)) {
-        throw new ConflictError(`درخواست خرید ${req.code} دریافت شده است و اقدام «${actionKey}» روی آن اجرا نمی‌شود.`, undefined, 'WF_ACTION_NOT_IN_STEP');
+        throw new ConflictError(`درخواست خرید ${req.code} دریافت شده است و اقدام «${requisitionActionLabel(actionKey)}» روی آن اجرا نمی‌شود.`, undefined, 'WF_ACTION_NOT_IN_STEP');
       }
       if (isReceive && CLOSED_REQUISITION_STATUSES.has(req.status)) {
         throw new ConflictError(`درخواست خرید ${req.code} رد شده است و کالای آن وارد انبار نمی‌شود؛ ابتدا درخواست را بازگشایی کنید.`);
@@ -537,10 +537,15 @@ export class ProcurementService {
       if (!matchedTransition) {
         // v8.0.99 (TD-379): اقدامی که انتقالی از گام جاری ندارد رد می‌شود. پیش‌تر «میان‌بر» وضعیت درخواست را مستقیم
         // عوض می‌کرد: درخواستِ دریافت‌شده «بازگشایی» و دوباره سفارش و وارد انبار می‌شد و درخواستِ ردشده بی بازگشایی تأیید.
-        const stepTitle = states.find(s => s.id === wfInst.currentStateId)?.title || req.status;
-        throw new ConflictError(`اقدام «${actionKey}» در گام فعلی درخواست خرید ${req.code} («${stepTitle}») مجاز نیست.`, undefined, 'WF_ACTION_NOT_IN_STEP');
+        // v9.0.280 (TD-901): نام اقدام و گام، نه کلید یا وضعیت انگلیسی آن‌ها
+        const stepTitle = states.find(s => s.id === wfInst.currentStateId)?.title;
+        const actionTitle = requisitionActionLabel(actionKey, transitions.find(t => t.actionKey === actionKey)?.title);
+        throw new ConflictError(
+          `اقدام «${actionTitle}» در گام فعلی درخواست خرید ${req.code}${stepTitle ? ` («${stepTitle}»)` : ''} مجاز نیست.`,
+          undefined, 'WF_ACTION_NOT_IN_STEP',
+        );
       }
-      const transitionTitle = matchedTransition.title || actionKey;
+      const transitionTitle = requisitionActionLabel(actionKey, matchedTransition.title);
       await WorkflowTransitionExecutor.executeTransition({
         instanceId: req.workflowInstanceId,
         transitionId: matchedTransition.id,

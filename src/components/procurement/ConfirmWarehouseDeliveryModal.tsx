@@ -184,7 +184,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
             <ul className="list-disc list-inside space-y-1 pr-1 text-emerald-900/90 leading-relaxed">
               <li>ثبت رسمی وضعیت سند به عنوان <strong>رسید قطعی ورود کالا به انبار</strong>.</li>
               <li>افزایش آنی موجودی و ثبت رویداد ورود در <strong>کاردکس رسمی انبار</strong>.</li>
-              <li>صدور خودکار <strong>سند دوبل حسابداری</strong> (بدهکار: موجودی انبار / بستانکار: بستانکاران تجاری).</li>
+              <li>صدور خودکار <strong>سند حسابداری</strong> (بدهکار: موجودی انبار / بستانکار: بستانکاران تجاری).</li>
               <li>به‌روزرسانی و تکمیل خودکار وظیفه مربوطه در <strong>کارتابل گردش‌کار و تاییدات</strong>.</li>
             </ul>
           </div>

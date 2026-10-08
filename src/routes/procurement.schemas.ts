@@ -41,8 +41,10 @@ export const requisitionRowSchema = z.object({
   itemName: z.string().max(300).optional(),
   category: z.string().max(200).optional(),
   unit: z.string().max(50).optional(),
-  requestedQty: decimalInput('مقدار درخواستی')
-    .refine(v => v !== undefined && fin(v).isPositive(), 'مقدار درخواستی باید بیشتر از صفر باشد'),
+  // v9.0.280 (TD-901، ت۵): مقدار نیامده یا خالی پیام خودش را دارد؛ پیش‌تر «مقدار مقدار درخواستی درست نیست» می‌آمد
+  requestedQty: z.preprocess(v => v ?? '', decimalInput('مقدار درخواستی'))
+    .refine(v => v !== undefined, 'مقدار درخواستی را وارد کنید')
+    .refine(v => v === undefined || fin(v).isPositive(), 'مقدار درخواستی باید بیشتر از صفر باشد'),
   unitPriceEstimate: decimalInput('برآورد قیمت واحد')
     .refine(v => v === undefined || !fin(v).isNegative(), 'برآورد قیمت واحد نمی‌تواند منفی باشد')
     .optional(),
@@ -96,7 +98,7 @@ export const workflowActionSchema = z.object({
     id: z.string().regex(/^\d+$/, 'شناسه نامعتبر است')
   }),
   body: z.object({
-    actionKey: z.string().min(1, 'کلید اکشن گردش کار الزامی است').max(100),
+    actionKey: z.string().min(1, 'کلید اقدام گردش کار را بفرستید').max(100),
     comment: z.string().max(1000).optional()
   })
 });

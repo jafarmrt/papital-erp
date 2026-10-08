@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.280 — Persian Procurement Wording and Field Errors
+- **Fix (TD-901, decision ت۵):** procurement UI says «مواد», «فهرست کالا», «سند حسابداری», «بسته» and «اقدام» (no «(Requisitions)»); requisition form and server Zod errors show under their field (`apiFieldErrors`), and server messages name actions in Persian (`requisitionActionLabel`) with Persian digits.
+
 ### v9.0.279 — Requisition Item Picker With Server Search
 - **Fix (TD-700, B10-13):** the requisition form picks items with `SearchableSelect` over the item pick list (`/items/options`, server search) instead of a plain `<select>` of the items the desk had loaded; the desk no longer preloads items.
 

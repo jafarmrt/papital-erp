@@ -223,7 +223,7 @@ export function ProcurementDesk() {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-black text-slate-900 flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-[11px] font-black">۱</span>
-                  درخواست‌های خرید (Requisitions)
+                  درخواست‌های خرید
                 </span>
                 <span className="text-xl font-black font-mono text-amber-700">
                   {countText(summary?.totalRequisitions)}

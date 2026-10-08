@@ -827,7 +827,7 @@ export function SplitOrderModal({
                     type="text"
                     value={closureNotes}
                     onChange={e => setClosureNotes(e.target.value)}
-                    placeholder="مثال: خرید ۳ واحد بیشتر به دلیل پک ۵ تایی تامین‌کننده..."
+                    placeholder="مثال: خرید ۳ واحد بیشتر به دلیل بسته ۵ تایی تامین‌کننده..."
                     className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
                   />
                 </div>

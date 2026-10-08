@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Loader2, Check, FileText } from 'lucide-react';
+import { X, Plus, Loader2, Check, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Item } from '../../types';
 import { fetchJson } from '../../api';
-import { getTodayJalaliDate, formatPersianPrice } from '../../utils';
-import { SearchableSelect } from '../SearchableSelect';
-import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { formatPersianNumber, formatPersianPrice, getErrorMessage, getTodayIsoDate } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
+import { apiFieldErrors } from '../../lib/apiFieldErrors';
+import {
+  REQUISITION_PRIORITIES, REQUISITION_PRIORITY_LABELS, requisitionFormErrors, type RequisitionPriority,
+} from '../../lib/procurement/requisitionFields';
+import { FieldError, RequisitionItemRowEditor, type NewRequisitionRow } from './RequisitionItemRowEditor';
 
 interface CreateRequisitionModalProps {
   isOpen: boolean;
@@ -13,19 +17,16 @@ interface CreateRequisitionModalProps {
   onSuccess: () => void;
 }
 
-/** گزینه انتخابگر کالا: نام و کد کالای فهرست انتخاب (`GET /items/options`) */
-const itemOption = (item: Item) => ({ value: item.id, label: `${item.name}${item.code ? ` (${item.code})` : ''}` });
-
-interface NewItemRow {
-  id: string;
-  itemId: number | null;
-  itemCode: string;
-  itemName: string;
-  unit: string;
-  requestedQty: number;
-  unitPriceEstimate: number;
-  notes: string;
-}
+const newRow = (suffix: string | number): NewRequisitionRow => ({
+  id: `item-${Date.now()}-${suffix}`,
+  itemId: null,
+  itemCode: '',
+  itemName: '',
+  unit: 'عدد',
+  requestedQty: 1,
+  unitPriceEstimate: 0,
+  notes: '',
+});
 
 export function CreateRequisitionModal({
   isOpen,
@@ -33,94 +34,65 @@ export function CreateRequisitionModal({
   onSuccess
 }: CreateRequisitionModalProps) {
   const [title, setTitle] = useState('');
-  const [priority, setPriority] = useState<'urgent' | 'high' | 'normal' | 'low'>('normal');
-  const [requiredDate, setRequiredDate] = useState(() => getTodayJalaliDate());
+  const [priority, setPriority] = useState<RequisitionPriority>('normal');
+  // تاریخ نیاز ISO است و با تقویم شمسی نشان داده می‌شود (TD-232)
+  const [requiredDate, setRequiredDate] = useState(() => getTodayIsoDate());
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const [items, setItems] = useState<NewItemRow[]>([
-    {
-      id: `item-${Date.now()}`,
-      itemId: null,
-      itemCode: '',
-      itemName: '',
-      unit: 'عدد',
-      requestedQty: 1,
-      unitPriceEstimate: 0,
-      notes: ''
-    }
-  ]);
+  const [items, setItems] = useState<NewRequisitionRow[]>(() => [newRow(0)]);
+  // v9.0.280 (TD-901، ت۵): خطای هر فیلد (بررسی فرم یا Zod سرور) زیر همان فیلد؛ پیش‌تر فقط در اعلان می‌آمد
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const hasErrors = Object.keys(fieldErrors).length > 0;
 
   if (!isOpen) return null;
 
+  const clearError = (key: string) => {
+    if (fieldErrors[key]) setFieldErrors(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)));
+  };
+
   const handleAddItem = () => {
-    setItems(prev => [
-      ...prev,
-      {
-        id: `item-${Date.now()}-${prev.length}`,
-        itemId: null,
-        itemCode: '',
-        itemName: '',
-        unit: 'عدد',
-        requestedQty: 1,
-        unitPriceEstimate: 0,
-        notes: ''
-      }
-    ]);
+    setItems(prev => [...prev, newRow(prev.length)]);
   };
 
   const handleRemoveItem = (id: string) => {
     if (items.length <= 1) {
-      toast.error('حداقل یک قلم کالا باید در درخواست خرید وجود داشته باشد.');
+      setFieldErrors(prev => ({ ...prev, items: 'دست‌کم یک قلم کالا برای درخواست خرید لازم است' }));
       return;
     }
     setItems(prev => prev.filter(i => i.id !== id));
+    // کلید خطای ردیف‌ها شماره ردیف است؛ با حذف ردیف شماره‌ها جابه‌جا می‌شوند
+    setFieldErrors(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith('items'))));
   };
 
-  // v9.0.279 (TD-700، B10-13): کالا از فهرست انتخاب کالا با جست‌وجوی سرور برگزیده می‌شود؛ پیش‌تر `<select>` ساده‌ای از
-  // کالاهای بارگذاری‌شده میز بود که پیش از TD-888 فقط ۵۰ کالا داشت و جست‌وجو نداشت
+  // v9.0.279 (TD-700، B10-13): کالا از فهرست انتخاب کالا با جست‌وجوی سرور برگزیده می‌شود
   const handleSelectWarehouseItem = (rowId: string, matched: Item | undefined) => {
     if (!matched) return;
-
-    setItems(prev => prev.map(i => {
-      if (i.id !== rowId) return i;
-      return {
-        ...i,
-        itemId: matched.id,
-        itemCode: matched.code || '',
-        itemName: matched.name,
-        unit: matched.unit || 'عدد',
-        unitPriceEstimate: Number(matched.weightedAverageCost ?? 0) || 0
-      };
+    const index = items.findIndex(i => i.id === rowId);
+    clearError(`items.${index}.itemName`);
+    setItems(prev => prev.map(i => i.id !== rowId ? i : {
+      ...i,
+      itemId: matched.id,
+      itemCode: matched.code || '',
+      itemName: matched.name,
+      unit: matched.unit || 'عدد',
+      unitPriceEstimate: Number(matched.weightedAverageCost ?? 0) || 0,
     }));
   };
 
-  const handleUpdateItemField = (rowId: string, field: keyof NewItemRow, val: any) => {
+  const handleUpdateItemField = <K extends keyof NewRequisitionRow>(rowId: string, field: K, val: NewRequisitionRow[K]) => {
+    clearError(`items.${items.findIndex(i => i.id === rowId)}.${String(field)}`);
     setItems(prev => prev.map(i => i.id === rowId ? { ...i, [field]: val } : i));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) {
-      toast.error('عنوان درخواست خرید الزامی است.');
-      return;
-    }
-
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      if (!it.itemName.trim()) {
-        toast.error(`نام کالا برای ردیف ${i + 1} الزامی است.`);
-        return;
-      }
-      if (it.requestedQty <= 0) {
-        toast.error(`مقدار درخواستی ردیف ${i + 1} باید بزرگتر از صفر باشد.`);
-        return;
-      }
-    }
+    const errors = requisitionFormErrors(title, items);
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     setIsSubmitting(true);
     try {
-      const res = await fetchJson<{ success: boolean; data?: any; message?: string }>('/api/procurement/requisitions', {
+      const res = await fetchJson<{ success: boolean; message?: string }>('/api/procurement/requisitions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -143,8 +115,10 @@ export function CreateRequisitionModal({
       toast.success(res.message || 'درخواست خرید با موفقیت ایجاد گردید.');
       onSuccess();
       onClose();
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در ثبت درخواست خرید');
+    } catch (err: unknown) {
+      const serverErrors = apiFieldErrors(err);
+      if (Object.keys(serverErrors).length > 0) setFieldErrors(serverErrors);
+      else toast.error(getErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -163,7 +137,7 @@ export function CreateRequisitionModal({
             </div>
             <div>
               <h3 className="font-black text-slate-900 text-base">ثبت درخواست خرید جدید</h3>
-              <p className="text-xs text-slate-500 mt-0.5">ایجاد درخواست خرید متریال، ابزارآلات و اقلام عمومی انبار</p>
+              <p className="text-xs text-slate-500 mt-0.5">ایجاد درخواست خرید مواد، ابزارآلات و اقلام عمومی انبار</p>
             </div>
           </div>
           <button
@@ -176,61 +150,67 @@ export function CreateRequisitionModal({
         </div>
 
         {/* Form Content */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-5">
+        <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto p-5 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
             <div className="sm:col-span-2">
-              <label className="block font-bold text-slate-700 mb-1">
+              <label htmlFor="requisition-title" className="block font-bold text-slate-700 mb-1">
                 عنوان درخواست خرید <span className="text-rose-500">*</span>:
               </label>
               <input
+                id="requisition-title"
                 type="text"
                 placeholder="مثلاً: خرید ورق‌های برنجی و مهره‌های فلزی طرح بهار"
                 value={title}
-                onChange={e => setTitle(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                onChange={e => { setTitle(e.target.value); clearError('title'); }}
+                aria-invalid={Boolean(fieldErrors.title)}
+                aria-describedby={fieldErrors.title ? 'requisition-title-error' : undefined}
+                className={`w-full p-2 bg-white border rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none ${fieldErrors.title ? 'border-rose-500' : 'border-slate-300'}`}
               />
+              <FieldError id="requisition-title-error" message={fieldErrors.title} />
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">اولویت خرید:</label>
+              <label htmlFor="requisition-priority" className="block font-bold text-slate-700 mb-1">اولویت خرید:</label>
               <select
+                id="requisition-priority"
                 value={priority}
-                onChange={e => setPriority(e.target.value as any)}
+                onChange={e => { setPriority(e.target.value as RequisitionPriority); clearError('priority'); }}
+                aria-invalid={Boolean(fieldErrors.priority)}
                 className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
               >
-                <option value="normal">عادی</option>
-                <option value="high">بالا</option>
-                <option value="urgent">فوری / اضطراری</option>
-                <option value="low">پایین</option>
+                {REQUISITION_PRIORITIES.map(p => <option key={p} value={p}>{REQUISITION_PRIORITY_LABELS[p]}</option>)}
               </select>
+              <FieldError id="requisition-priority-error" message={fieldErrors.priority} />
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
-              <input
-                type="text"
+              <label htmlFor="requisition-required-date" className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
+              <JalaliDateInput
                 value={requiredDate}
-                onChange={e => setRequiredDate(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                onChange={iso => { setRequiredDate(iso); clearError('requiredDate'); }}
+                placeholder="تاریخ نیاز"
               />
+              <FieldError id="requisition-required-date-error" message={fieldErrors.requiredDate} />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block font-bold text-slate-700 mb-1">توضیحات و مشخصات فنی:</label>
+              <label htmlFor="requisition-notes" className="block font-bold text-slate-700 mb-1">توضیحات و مشخصات فنی:</label>
               <input
+                id="requisition-notes"
                 type="text"
                 placeholder="برند، عیار، ابعاد یا ملاحظات بازرسی"
                 value={notes}
-                onChange={e => setNotes(e.target.value)}
+                onChange={e => { setNotes(e.target.value); clearError('notes'); }}
                 className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
               />
+              <FieldError id="requisition-notes-error" message={fieldErrors.notes} />
             </div>
           </div>
 
           {/* Items Section */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-900 text-sm">اقلام درخواستی ({items.length} قلم)</span>
+              <span className="font-bold text-slate-900 text-sm">اقلام درخواستی ({formatPersianNumber(items.length)} قلم)</span>
               <button
                 type="button"
                 onClick={handleAddItem}
@@ -240,13 +220,14 @@ export function CreateRequisitionModal({
                 افزودن سطر جدید
               </button>
             </div>
+            <FieldError id="requisition-items-error" message={fieldErrors.items} />
 
             <div className="overflow-x-auto border border-slate-200 rounded-xl">
               <table className="w-full text-xs text-right">
                 <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
                     <th className="p-2.5 text-center w-10">ردیف</th>
-                    <th className="p-2.5 w-56">انتخاب از انبار</th>
+                    <th className="p-2.5 w-56">انتخاب از فهرست کالا</th>
                     <th className="p-2.5">نام و مشخصات کالا</th>
                     <th className="p-2.5 text-center w-20">واحد</th>
                     <th className="p-2.5 text-center w-24">مقدار</th>
@@ -257,71 +238,15 @@ export function CreateRequisitionModal({
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {items.map((row, idx) => (
-                    <tr key={row.id} className="hover:bg-slate-50/50">
-                      <td className="p-2.5 text-center font-mono text-slate-400">{idx + 1}</td>
-                      <td className="p-2.5">
-                        <SearchableSelect
-                          value={row.itemId ?? ''}
-                          onChange={(_value, raw) => handleSelectWarehouseItem(row.id, raw as Item | undefined)}
-                          fetchUrl={PICK_LIST_URLS.items}
-                          mapResultToOption={itemOption}
-                          placeholder="جست‌وجو در فهرست کالا..."
-                        />
-                      </td>
-                      <td className="p-2.5">
-                        <input
-                          type="text"
-                          placeholder="نام کالا"
-                          value={row.itemName}
-                          onChange={e => handleUpdateItemField(row.id, 'itemName', e.target.value)}
-                          className="w-full p-1.5 bg-white border border-slate-300 rounded font-bold text-slate-800"
-                        />
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <input
-                          type="text"
-                          value={row.unit}
-                          onChange={e => handleUpdateItemField(row.id, 'unit', e.target.value)}
-                          className="w-16 p-1.5 bg-white border border-slate-300 rounded text-center text-slate-800"
-                        />
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <input
-                          type="number"
-                          min={0.001}
-                          step="any"
-                          value={row.requestedQty === 0 ? '' : row.requestedQty}
-                          onChange={e => handleUpdateItemField(row.id, 'requestedQty', e.target.value === '' ? 0 : Number(e.target.value))}
-                          placeholder="۱"
-                          className="w-20 p-1.5 bg-white border border-slate-300 rounded text-center font-mono font-bold text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                          dir="ltr"
-                        />
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <input
-                          type="number"
-                          min={0}
-                          step="any"
-                          value={row.unitPriceEstimate === 0 ? '' : row.unitPriceEstimate}
-                          onChange={e => handleUpdateItemField(row.id, 'unitPriceEstimate', e.target.value === '' ? 0 : Number(e.target.value))}
-                          placeholder="۰"
-                          className="w-28 p-1.5 bg-white border border-slate-300 rounded text-center font-mono text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                          dir="ltr"
-                        />
-                      </td>
-                      <td className="p-2.5 text-center font-mono font-bold text-amber-700">
-                        {formatPersianPrice(row.requestedQty * row.unitPriceEstimate)}
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveItem(row.id)}
-                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
+                    <RequisitionItemRowEditor
+                      key={row.id}
+                      row={row}
+                      index={idx}
+                      errors={fieldErrors}
+                      onSelectItem={handleSelectWarehouseItem}
+                      onChange={handleUpdateItemField}
+                      onRemove={handleRemoveItem}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -335,6 +260,12 @@ export function CreateRequisitionModal({
               {formatPersianPrice(totalEstimate)}
             </span>
           </div>
+
+          {hasErrors && (
+            <p role="alert" className="text-xs font-bold text-rose-600">
+              برخی فیلدها نیاز به اصلاح دارند؛ پیام هر خطا زیر همان فیلد آمده است.
+            </p>
+          )}
 
           {/* Action Buttons */}
           <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">

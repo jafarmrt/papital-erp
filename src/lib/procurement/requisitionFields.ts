@@ -94,3 +94,54 @@ export function canOrderRequisition(
     return Number(remaining) > 0;
   });
 }
+
+/**
+ * v9.0.280 (TD-901، ت۵): نام فارسی اقدام‌های گردش کار درخواست خرید (عنوان انتقال‌های گردش کار پیش‌فرض). پیام خطا نام
+ * اقدام را نشان می‌دهد، نه کلیدش؛ پیش‌تر «اقدام «cancel_order» … مجاز نیست» نمایش داده می‌شد.
+ */
+export const REQUISITION_ACTION_LABELS: Readonly<Record<string, string>> = {
+  approve_request: 'تأیید و صدور دستور خرید',
+  approve_order: 'تأیید سفارش',
+  direct_order: 'سفارش مستقیم',
+  direct_admin_order: 'سفارش مستقیم',
+  receive_items: 'تحویل و ورود به انبار',
+  mark_received: 'تحویل و ورود به انبار',
+  receive: 'تحویل و ورود به انبار',
+  reject_request: 'رد درخواست خرید',
+  cancel_order: 'لغو یا رد سفارش',
+  reopen: 'بازگشایی و بررسی دوباره',
+};
+
+/** نام اقدام: عنوان انتقال گردش کار، وگرنه نام فارسی کلید، وگرنه «اقدام درخواست‌شده»؛ هرگز خود کلید */
+export function requisitionActionLabel(actionKey: string, transitionTitle?: string | null): string {
+  const title = transitionTitle?.trim();
+  if (title) return title;
+  return REQUISITION_ACTION_LABELS[actionKey] ?? 'اقدام درخواست‌شده';
+}
+
+interface RequisitionFormRow {
+  itemId?: number | null;
+  itemName?: string;
+  requestedQty?: number | string | null;
+  unitPriceEstimate?: number | string | null;
+}
+
+/**
+ * v9.0.280 (TD-901، ت۵): خطاهای فرم ثبت درخواست خرید به تفکیک فیلد، با همان پیام و کلید Zod سرور (`createRequisitionSchema`)
+ * تا فرم هر پیام را زیر همان فیلد نشان دهد. کلید: `title`، `items` و `items.<ردیف>.<فیلد>`.
+ */
+export function requisitionFormErrors(title: string, rows: RequisitionFormRow[]): Record<string, string> {
+  const errors: Record<string, string> = {};
+  if (!title.trim()) errors.title = 'عنوان درخواست خرید را وارد کنید';
+  if (rows.length === 0) errors.items = 'دست‌کم یک قلم کالا برای درخواست خرید لازم است';
+  rows.forEach((row, index) => {
+    if ((row.itemId ?? null) === null && !String(row.itemName ?? '').trim()) {
+      errors[`items.${index}.itemName`] = 'برای هر ردیف کالایی از فهرست کالا انتخاب کنید یا نام کالا را بنویسید';
+    }
+    const qty = row.requestedQty === '' || row.requestedQty === null || row.requestedQty === undefined ? NaN : Number(row.requestedQty);
+    if (Number.isNaN(qty)) errors[`items.${index}.requestedQty`] = 'مقدار درخواستی را وارد کنید';
+    else if (!(qty > 0)) errors[`items.${index}.requestedQty`] = 'مقدار درخواستی باید بیشتر از صفر باشد';
+    if (Number(row.unitPriceEstimate || 0) < 0) errors[`items.${index}.unitPriceEstimate`] = 'برآورد قیمت واحد نمی‌تواند منفی باشد';
+  });
+  return errors;
+}
