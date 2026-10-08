@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.389 — Dismissed Notifications Stay Dismissed
+- **Notification dismissal (TD-717):** deleting a notification removed its row and the due reminder was made by read-then-write on every bell and counter request, so a deleted reminder came back and concurrent requests made two; «حذف» now sets `dismissed_at` (migration 0088), the bell and its counter skip dismissed rows, and the reminder insert is ON CONFLICT DO NOTHING on the partial unique index `uq_notifications_due_reminder` (created only on clean data; older duplicates listed by the financial health check).
+
 ### v9.0.388 — Due Follow-up Reminder Reaches Only Its Assignee
 - **Due reminder recipient (TD-709):** the notification bell matched a follow-up's assignee with «contains», so a user named «علی» got the reminder (title and customer) of «علی رضایی»'s follow-up; the reminder now goes to the user linked to the assigned personnel, or for a legacy row without a personnel id to the user whose full name or username equals the trimmed assignee (else logger) exactly.
 

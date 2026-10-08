@@ -38,9 +38,11 @@ export async function generateCrmDueReminders(userId: number): Promise<void> {
         eq(notifications.userId, userId),
         eq(notifications.link, notifLink),
         // v7.0.132: اعلان «تسک جدید» همین پیوند را دارد و پیش‌تر جلوی یادآوری سررسید را می‌گرفت
+        // v9.0.389 (TD-717): یادآوری کنارگذاشته (dismissed_at) هم شمرده می‌شود، پس دوباره ساخته نمی‌شود
         eq(notifications.type, 'crm_due_task'),
       ));
     if (existing) continue;
+    // v9.0.389 (TD-717): uq_notifications_due_reminder makes a concurrent second insert a no-op
     await orm.insert(notifications).values({
       userId,
       senderId: null,
@@ -50,6 +52,6 @@ export async function generateCrmDueReminders(userId: number): Promise<void> {
       message: `سررسید پیگیری: "${act.nextFollowUpTask || act.title}" (تاریخ: ${dueDate})`,
       link: notifLink,
       isRead: 0,
-    });
+    }).onConflictDoNothing();
   }
 }

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, isNull, sql } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { notifications } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -35,10 +35,11 @@ router.get('/notifications', asyncHandler(async (req, res) => {
 
   await checkAndGenerateCrmTaskDueNotifications(userId);
 
+  // v9.0.389 (TD-717): a dismissed notification is kept but never listed
   const userNotifs = await orm
     .select()
     .from(notifications)
-    .where(eq(notifications.userId, userId))
+    .where(and(eq(notifications.userId, userId), isNull(notifications.dismissedAt)))
     .orderBy(desc(notifications.createdAt))
     .limit(50);
 
@@ -65,12 +66,13 @@ router.get('/notifications/unread-count', asyncHandler(async (req, res) => {
 
   await checkAndGenerateCrmTaskDueNotifications(userId);
 
-  const unread = await orm
-    .select()
+  // v9.0.389 (TD-717): counted in SQL, without dismissed notifications
+  const [unread] = await orm
+    .select({ count: sql<number>`COUNT(*)::int` })
     .from(notifications)
-    .where(and(eq(notifications.userId, userId), eq(notifications.isRead, 0)));
+    .where(and(eq(notifications.userId, userId), eq(notifications.isRead, 0), isNull(notifications.dismissedAt)));
 
-  res.json({ count: unread.length });
+  res.json({ count: Number(unread?.count ?? 0) });
 }));
 
 // Mark one notification as read
@@ -100,15 +102,17 @@ router.put('/notifications/read-all', asyncHandler(async (req, res) => {
   res.json({ success: true });
 }));
 
-// Delete a notification
+// Dismiss a notification
+// v9.0.389 (TD-717, decision t8 a): the row is kept with dismissed_at, so a dismissed due reminder never comes back
 router.delete('/notifications/:id', validate(notifParamSchema), asyncHandler(async (req, res) => {
   const userId = req.user?.id;
   if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');
   const notifId = Number(req.params.id);
 
   await orm
-    .delete(notifications)
-    .where(and(eq(notifications.id, notifId), eq(notifications.userId, userId)));
+    .update(notifications)
+    .set({ dismissedAt: sql`now()` })
+    .where(and(eq(notifications.id, notifId), eq(notifications.userId, userId), isNull(notifications.dismissedAt)));
 
   res.json({ success: true });
 }));
