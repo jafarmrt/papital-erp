@@ -36,7 +36,8 @@ const createProjectSchema = z.object({
     item_id: z.union([z.number(), z.string(), z.null()]).optional(),
     item_code: z.string().optional(),
     item_name: z.string().optional(),
-    quantity: z.union([z.number(), z.string()]).optional(),
+    // v9.0.339 (TD-741): رقم فارسی خوانده می‌شود و متن ۴۰۰ است؛ پیش‌تر «۱۲» ستون مقدار را NaN می‌کرد
+    quantity: decimalInput('مقدار پروژه').optional(),
     unit: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
@@ -64,7 +65,8 @@ const updateProjectSchema = z.object({
     item_id: z.union([z.number(), z.string(), z.null()]).optional(),
     item_code: z.string().optional(),
     item_name: z.string().optional(),
-    quantity: z.union([z.number(), z.string()]).optional(),
+    // v9.0.339 (TD-741): رقم فارسی خوانده می‌شود و متن ۴۰۰ است؛ پیش‌تر «۱۲» ستون مقدار را NaN می‌کرد
+    quantity: decimalInput('مقدار پروژه').optional(),
     unit: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
@@ -104,12 +106,13 @@ const addProjectToInventorySchema = z.object({
     }
     return val;
   }, z.object({
+    // v9.0.339 (TD-741): مقدار و بها با رقم فارسی خوانده می‌شوند و متن ۴۰۰ است؛ ردیف بی مقدار مثبت ۴۲۲ می‌گیرد، نه رد بی‌صدا
     itemsToAdd: z.array(z.object({
       itemId: z.union([z.number(), z.string()]),
-      quantity: z.union([z.number(), z.string()]),
+      quantity: decimalInput('مقدار تحویل'),
       location: z.string().optional(),
       notes: z.string().optional(),
-      unitPrice: z.union([z.number(), z.string()]).optional()
+      unitPrice: decimalInput('بهای واحد تحویل').optional()
     })).min(1, 'حداقل یک محصول برای ورود به انبار الزامی است'),
     markCompleted: z.boolean().optional(),
     // v8.0.72 (TD-327): دلیل تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه

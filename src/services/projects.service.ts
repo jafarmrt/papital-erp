@@ -17,6 +17,7 @@ import { actorName, lockLiveProject, syncProjectFromMatrix, type ProjectActor, t
 import { logActivity } from '../lib/auditLogger.js';
 import { MAX_STAGE_ORDER } from '../lib/projects/projectStatus.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
+import { normalizeDecimalString } from '../lib/numericInput.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -89,6 +90,46 @@ export interface AddProjectToInventoryResult {
   overDeliveries: ProjectOverDelivery[];
 }
 
+/** عدد ورودی با رقم فارسی و جداکننده؛ خالی یعنی فرستاده نشده (undefined) و نامعتبر null */
+const decimalOf = (value: unknown): number | null | undefined => {
+  if (value === undefined || value === null) return undefined;
+  const text = normalizeDecimalString(String(value));
+  if (text === '') return undefined;
+  const num = Number(text);
+  return Number.isFinite(num) ? num : null;
+};
+
+/**
+ * v9.0.339 (TD-741): مقدار پروژه عددی بزرگ‌تر از صفر است (رقم فارسی خوانده می‌شود)؛ پیش‌تر «۱۲» ستون مقدار را NaN می‌کرد.
+ * خالی یعنی بی‌تغییر (در ساخت: ۱).
+ */
+export function projectQuantity(value: unknown): number | undefined {
+  const num = decimalOf(value);
+  if (num === undefined) return undefined;
+  if (num === null || num <= 0) {
+    throw new ValidationError(`مقدار پروژه باید عددی بزرگ‌تر از صفر باشد (مقدار دریافتی: ${String(value)})`, undefined, 'PROJECT_QUANTITY_INVALID');
+  }
+  return num;
+}
+
+/** v9.0.339 (TD-741): یک ردیف «ورود به انبار»: کالا، مقدار مثبت و بهای اختیاری نامنفی، وگرنه ۴۲۲ با شماره ردیف */
+function deliveryLine(entry: AddProjectToInventoryInput['itemsToAdd'][number], index: number): { itemId: number; qty: number; unitPrice: string | null } {
+  const row = `ردیف ${toPersianDigits(index + 1)} ورود به انبار`;
+  const itemId = Number(entry.itemId);
+  if (!Number.isInteger(itemId) || itemId <= 0) {
+    throw new ValidationError(`${row}: کالای تحویلی مشخص نیست`, { row: index + 1 }, 'PROJECT_DELIVERY_LINE_INVALID');
+  }
+  const qty = decimalOf(entry.quantity);
+  if (qty === undefined || qty === null || qty <= 0) {
+    throw new ValidationError(`${row}: مقدار تحویل باید عددی بزرگ‌تر از صفر باشد (مقدار دریافتی: ${String(entry.quantity ?? '')})`, { row: index + 1 }, 'PROJECT_DELIVERY_LINE_INVALID');
+  }
+  const price = decimalOf(entry.unitPrice);
+  if (price === null || (price !== undefined && price < 0)) {
+    throw new ValidationError(`${row}: بهای واحد باید عددی نامنفی باشد (مقدار دریافتی: ${String(entry.unitPrice)})`, { row: index + 1 }, 'PROJECT_DELIVERY_LINE_INVALID');
+  }
+  return { itemId, qty, unitPrice: price === undefined ? null : normalizeDecimalString(String(entry.unitPrice)) };
+}
+
 export class ProjectService {
   /**
    * Creates a production project along with its initial stages
@@ -127,7 +168,7 @@ export class ProjectService {
       itemId: validItemId,
       itemCode: input.itemCode || '',
       itemName: input.itemName || '',
-      quantity: input.quantity ? Number(input.quantity) : 1,
+      quantity: projectQuantity(input.quantity) ?? 1,
       unit: input.unit || 'عدد',
       // v7.0.135 (TD-232): تاریخ شروع و پایان پروژه و مراحل میلادی ISO؛ ورودی شمسی تبدیل و نامعتبر 422
       startDate: requireStorageDate(input.startDate, 'تاریخ شروع پروژه'),
@@ -223,7 +264,8 @@ export class ProjectService {
 
     if (input.itemCode !== undefined) updateData.itemCode = input.itemCode;
     if (input.itemName !== undefined) updateData.itemName = input.itemName;
-    if (input.quantity !== undefined) updateData.quantity = Number(input.quantity);
+    const quantity = projectQuantity(input.quantity);
+    if (quantity !== undefined) updateData.quantity = quantity;
     if (input.unit !== undefined) updateData.unit = input.unit;
     if (input.startDate !== undefined) updateData.startDate = optionalStorageDate(input.startDate, 'تاریخ شروع پروژه');
     if (input.endDate !== undefined) updateData.endDate = optionalStorageDate(input.endDate, 'تاریخ پایان پروژه');
@@ -332,14 +374,13 @@ export class ProjectService {
       const lines: Array<{ itemId: number; quantity: number; unitPrice: string; location: string }> = [];
       const lineNotes: string[] = [];
 
-      for (const entry of input.itemsToAdd) {
-        const itemId = Number(entry.itemId);
-        const qty = Number(entry.quantity);
-        if (!itemId || !qty || qty <= 0) continue;
-
+      for (const [index, entry] of input.itemsToAdd.entries()) {
+        // v9.0.339 (TD-741): ردیف بی کالا، با مقدار غیرمثبت یا بهای نامعتبر کل تحویل را با ۴۲۲ رد می‌کند؛ پیش‌تر بی‌صدا کنار
+        // گذاشته می‌شد (پاسخ ۲۰۰ «با موفقیت افزوده شدند» با صفر قلم) و بهای نامعتبر به میانگین موزون برمی‌گشت
+        const { itemId, qty, unitPrice } = deliveryLine(entry, index);
         let effectiveUnitPrice: string;
-        if (entry.unitPrice !== undefined && entry.unitPrice !== null && !isNaN(Number(entry.unitPrice))) {
-          effectiveUnitPrice = String(entry.unitPrice);
+        if (unitPrice !== null) {
+          effectiveUnitPrice = unitPrice;
         } else {
           const [itemRow] = await tx.select({ weightedAverageCost: items.weightedAverageCost }).from(items).where(eq(items.id, itemId));
           effectiveUnitPrice = itemRow?.weightedAverageCost ? itemRow.weightedAverageCost.toString() : '0';

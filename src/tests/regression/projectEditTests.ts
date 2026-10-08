@@ -1,3 +1,4 @@
+import { createTestItem } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
 import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/projects/projectStatus.js';
 import { buildProjectValueHealthTest, findProjectFreeTextValues } from '../../services/projects/projectStageHealth.js';
@@ -55,6 +56,46 @@ export async function runProjectEditTests(shouldRun: ShouldRun): Promise<TestCas
       if (leftAsIs.status !== 'Completed') problems.push('the health check rewrote a legacy status');
       assertNoProblems(problems);
       return 'free-text status, priority and stage status refused with 400; legacy values listed and left as they are';
+    }));
+  }
+
+  const deliveryId = 'reg_project_delivery_input_td_741';
+  if (shouldRun(deliveryId, 'td741', 'projects', 'package11')) {
+    await runCase(results, deliveryId, 'v9.0.339: delivery quantity and unit price and the project quantity read Persian digits; a non-positive quantity or a negative price is a 422, never a silent 200 with nothing recorded (TD-741)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const item = await createTestItem({ type: 'product', weightedAverageCost: 100000 });
+      const project = await newProject(api, { products: [{ itemId: item.id, qty: 5 }] });
+      const deliver = (line: Record<string, unknown>) => api.post(`/api/projects/${project.id}/add-to-inventory`, { itemsToAdd: [{ itemId: item.id, ...line }] });
+      const receiptLines = async () => q(
+        `SELECT di.quantity::text AS quantity, di.unit_price::text AS unit_price FROM documents d JOIN document_items di ON di.document_id = d.id
+          WHERE d.project_id = $1 AND d.type = 'production_receipt' AND d.is_deleted = 0 AND di.is_deleted = 0 ORDER BY di.id`, [project.id]);
+
+      for (const [line, code] of [[{ quantity: '-3' }, 'PROJECT_DELIVERY_LINE_INVALID'], [{ quantity: 0 }, 'PROJECT_DELIVERY_LINE_INVALID'], [{ quantity: 2, unitPrice: '-5' }, 'PROJECT_DELIVERY_LINE_INVALID']] as const) {
+        const res = await deliver(line);
+        if (res.status !== 422 || res.body?.code !== code) problems.push(`delivering ${JSON.stringify(line)} answered ${res.status} ${brief(res.body)}, expected 422 ${code}`);
+      }
+      const text = await deliver({ quantity: 'abc' });
+      if (text.status !== 400) problems.push(`delivering a text quantity answered ${text.status} ${brief(text.body)}, expected 400`);
+      if ((await receiptLines()).length !== 0) problems.push('a refused delivery recorded a production receipt');
+
+      const persian = await deliver({ quantity: '۲', unitPrice: '۱۵۰۰۰۰' });
+      const lines = await receiptLines();
+      if (persian.status !== 200 || persian.body?.addedCount !== 1 || lines.length !== 1 || Number(lines[0].quantity) !== 2 || Number(lines[0].unit_price) !== 150000) {
+        problems.push(`delivering quantity 2 at 150000 in Persian digits answered ${persian.status} ${brief(persian.body)} with receipt lines ${JSON.stringify(lines)}, expected 1 line of 2 at 150000`);
+      }
+
+      const created = await api.post('/api/projects', { title: `TD-741 ${Date.now()}`, quantity: '۱۲' });
+      const stored = created.body?.id ? (await q('SELECT quantity::text AS quantity FROM production_projects WHERE id = $1', [created.body.id]))[0]?.quantity : null;
+      if (created.status !== 201 || Number(stored) !== 12) problems.push(`creating a project with quantity 12 in Persian digits answered ${created.status} ${brief(created.body)} and stored ${stored}, expected 12`);
+      for (const quantity of [0, '-1']) {
+        const res = await api.put(`/api/projects/${project.id}`, { quantity });
+        if (res.status !== 422 || res.body?.code !== 'PROJECT_QUANTITY_INVALID') problems.push(`PUT project quantity ${quantity} answered ${res.status} ${brief(res.body)}, expected 422 PROJECT_QUANTITY_INVALID`);
+      }
+      const kept = (await q('SELECT quantity::text AS quantity FROM production_projects WHERE id = $1', [project.id]))[0]?.quantity;
+      if (Number(kept) !== 5) problems.push(`refused quantity edits left the project quantity at ${kept}, expected 5`);
+      assertNoProblems(problems);
+      return 'Persian-digit delivery recorded at its price; invalid lines and project quantities refused with 422';
     }));
   }
 
