@@ -45,3 +45,20 @@ describe('material allocation form (TD-759)', () => {
     expect(offered.some(t => t.includes('PRJ-CANCELLED') || t.includes('PRJ-DONE'))).toBe(false);
   });
 });
+
+// v9.0.387 (TD-751): the form draws from the warehouse it shows, the default (active, lowest id), never «main»
+describe('material allocation warehouse (TD-751)', () => {
+  it('allocates from the warehouse shown first', async () => {
+    const field = await openForm();
+    await waitFor(() => expect(within(field).getAllByRole('option').length).toBeGreaterThan(1));
+    fireEvent.change(within(field).getByRole('combobox'), { target: { value: '1' } });
+    const material = screen.getByText('ماده اولیه / قطعه مصرفی:').parentElement as HTMLElement;
+    fireEvent.change(within(material).getByRole('combobox'), { target: { value: '9' } });
+    const warehouse = screen.getByText('انبار مبداء کسر موجودی:').parentElement as HTMLElement;
+    expect((within(warehouse).getByRole('combobox') as HTMLSelectElement).value).toBe('WH-A');
+    fireEvent.click(screen.getByText('تأیید و ثبت تخصیص'));
+    await waitFor(() => expect(fetchJson.mock.calls.some(([url]) => url === '/inventory/allocations/allocate')).toBe(true));
+    const [, opts] = fetchJson.mock.calls.find(([url]) => url === '/inventory/allocations/allocate') ?? [];
+    expect(JSON.parse(opts?.body ?? '{}').allocations[0].location).toBe('WH-A');
+  });
+});

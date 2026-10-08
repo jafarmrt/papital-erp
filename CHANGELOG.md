@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.387 — Allocation From the Warehouse Shown
+- **Allocation From the Warehouse Shown (TD-751):** the material allocation form showed the first warehouse but sent `main`; it now opens on the default warehouse (active, lowest id, TD-203) and sends it.
+
 ### v9.0.386 — No Material for a Closed Project
 - **No Material for a Closed Project (TD-759, decision t9 A):** material was allocated to a cancelled project; allocating to a cancelled or completed project is now 422 `PROJECT_CLOSED_FOR_ALLOCATION` with no stock moved, releasing earlier allocations stays possible, a project with an open allocation is not cancelled (like delete, TD-412), and the allocation form offers only open projects.
 

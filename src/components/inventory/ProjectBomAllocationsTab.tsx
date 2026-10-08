@@ -98,7 +98,8 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
     setSelectedProjectId(projectsList[0]?.id || '');
     setSelectedItemId(itemsList[0]?.id || '');
     setAllocateQty('1');
-    setSelectedLocation('main');
+    // v9.0.387 (TD-751): انبار پیش‌فرض همان انبار فعال با کمترین شناسه (اولین ردیف فهرست، TD-203)، نه «main» که فهرست نشان نمی‌داد
+    setSelectedLocation(warehousesList[0]?.code ?? '');
     setAllocateNotes('');
     setShowAllocateModal(true);
   };
