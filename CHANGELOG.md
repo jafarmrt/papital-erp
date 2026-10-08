@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.430 — Print Signatures Keep Their Step Title; Foreign Key Exceptions Documented
+- **Fix (TD-612, B01-32):** the document print signature reads the step title from the instance's own snapshot, so a workflow design save no longer drops it; columns kept without a foreign key on purpose are listed with their reason and a test checks the schema against the database.
+
 ### v9.0.429 — Non-bcrypt Passwords Are Locked, Never Turned Into Passwords
 - **Fix (TD-617, B01-37):** the boot no longer hashes stored non-bcrypt values into working passwords; a one-off script locks them with a required reset, ended sessions and an audit row.
 

@@ -11,6 +11,7 @@ import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { orm } from '../../db/drizzle.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { workflowInstances, workflowHistoryLogs, workflowStates } from '../../db/schema.js';
+import { snapshotStateTitles } from '../../services/workflow/workflowSnapshot.js';
 import {
   type ValidatedQuery,
   dateRangeQuerySchema,
@@ -186,7 +187,7 @@ router.get('/accounting/doc-signatures', authorizePermission('accounting.reports
   // v7.0.127 (TD-247): همان نمونه‌ای که GET /workflow/instance/:entityType/:entityId نشان می‌دهد — جدیدترین بر اساس
   // created_at و در زمان برابر بزرگ‌ترین شناسه (پیش‌تر اولین ردیف بدون ORDER BY، که ترتیبش در PostgreSQL ثابت نیست)
   const [instance] = await orm
-    .select({ id: workflowInstances.id })
+    .select({ id: workflowInstances.id, snapshotDsl: workflowInstances.snapshotDsl })
     .from(workflowInstances)
     .where(and(eq(workflowInstances.entityType, 'document'), eq(workflowInstances.entityId, entityId)))
     .orderBy(desc(workflowInstances.createdAt), desc(workflowInstances.id))
@@ -202,6 +203,7 @@ router.get('/accounting/doc-signatures', authorizePermission('accounting.reports
       actionKey: workflowHistoryLogs.actionKey,
       actionTitle: workflowHistoryLogs.actionTitle,
       createdAt: workflowHistoryLogs.createdAt,
+      toStateId: workflowHistoryLogs.toStateId,
       stateTitle: workflowStates.title
     })
     .from(workflowHistoryLogs)
@@ -212,11 +214,14 @@ router.get('/accounting/doc-signatures', authorizePermission('accounting.reports
     ))
     .orderBy(workflowHistoryLogs.createdAt);
 
+  // v9.0.430 (TD-612, B01-32): the step title comes from the instance's own snapshot. Saving the design replaces the
+  // step rows and their ids, so the live table (kept only as a fallback for old snapshots) lost the title of an old step.
+  const snapshotTitles = snapshotStateTitles(instance.snapshotDsl);
   const signatures = logs
     .filter(l => (l.name || '').trim() !== '')
     .map(l => ({
       name: l.name,
-      roleTitle: l.stateTitle || l.actionTitle || 'تایید کننده',
+      roleTitle: (l.toStateId ? snapshotTitles.get(l.toStateId) : undefined) || l.stateTitle || l.actionTitle || 'تایید کننده',
       date: l.createdAt
     }))
     .slice(0, 3);
