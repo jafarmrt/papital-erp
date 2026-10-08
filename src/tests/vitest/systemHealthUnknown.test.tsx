@@ -16,7 +16,7 @@ afterEach(() => { cleanup(); fetchJsonMock.mockReset(); });
 
 const health = {
   database: { status: 'ok', latencyMs: 12, message: 'متصل' },
-  storage: { status: 'ok', writable: true, uploadsPath: '/srv/erp/attachments', message: 'قابل نوشتن' },
+  storage: { status: 'ok', writable: true, message: 'قابل نوشتن', locations: [] },
   outbox: { pendingCount: null, dlqCount: null, status: 'unknown', message: SUBSYSTEM_UNKNOWN_MESSAGES.outbox },
   accounting: { totalVouchers: 1250, unbalancedVouchers: 1, status: 'error' },
   workflow: { activeInstances: null, overdueSlaTasks: null, status: 'unknown', message: SUBSYSTEM_UNKNOWN_MESSAGES.workflow },

@@ -11,10 +11,15 @@ import {
   SUBSYSTEM_UNKNOWN_MESSAGES, type SubsystemStatus, type OutboxHealth, type AccountingHealth, type WorkflowHealth,
   type SubsystemHealth,
 } from '../../lib/system/subsystemHealth.js';
+import {
+  STORAGE_LOCATION_MESSAGES, STORAGE_SUMMARY_MESSAGES, type StorageHealth, type StorageLocationHealth, type StorageLocationKind,
+} from '../../lib/system/storageHealth.js';
+import { getAttachmentsRoot } from '../attachments/attachmentStorage.service.js';
+import { getImageUploadsDir } from '../../lib/storage.js';
 
 /**
  * V3.0.7 (TD-065): بررسی سلامت زیرساخت برای صفحه وضعیت سیستم (GET /system/health، فقط ادمین):
- * اتصال و تأخیر پایگاه‌داده، قابلیت نوشتن پوشه uploads، شاخص‌های صف رویداد / اسناد / فرآیند و حافظه.
+ * اتصال و تأخیر پایگاه‌داده، قابلیت نوشتن پوشه‌های پیوست و تصویر (v9.0.359)، شاخص‌های صف رویداد / اسناد / فرآیند و حافظه.
  * شمارنده‌های DLQ و وظایف معوق SLA با ممیزی یکپارچگی (SystemReconciliationService) مشترک‌اند.
  */
 
@@ -24,12 +29,7 @@ export interface DatabaseHealth {
   message: string;
 }
 
-export interface StorageHealth {
-  status: string;
-  writable: boolean;
-  uploadsPath: string;
-  message: string;
-}
+export type { StorageHealth };
 
 /**
  * v9.0.358 (TD-593): هر زیرسامانه جدا سنجیده می‌شود (قرارداد مشترک `src/lib/system/subsystemHealth.ts`)؛ پرس‌وجوی
@@ -47,6 +47,40 @@ async function measureSubsystem<T extends { status: SubsystemStatus }>(
     logger.warn('Health check of a subsystem failed', { subsystem, error: errorMessageOf(err) });
     return unknown;
   }
+}
+
+/**
+ * Whether the app can write into `dir`: the directory itself, or (when it does not exist yet, since the app creates it
+ * with mkdir -p) its nearest existing ancestor must be a writable directory. Nothing is created or written.
+ */
+export function directoryWriteProblem(dir: string): string | null {
+  let current = path.resolve(dir);
+  for (;;) {
+    let stat: fs.Stats | null = null;
+    try {
+      stat = fs.statSync(current);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') return errorMessageOf(err);
+    }
+    if (stat) {
+      if (!stat.isDirectory()) return `${current} is not a directory`;
+      try {
+        fs.accessSync(current, fs.constants.W_OK | fs.constants.X_OK);
+        return null;
+      } catch (err) {
+        return errorMessageOf(err);
+      }
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return `no existing directory above ${dir}`;
+    current = parent;
+  }
+}
+
+function storageLocationHealth(kind: StorageLocationKind, dir: string): StorageLocationHealth {
+  const problem = directoryWriteProblem(dir);
+  if (problem) logger.warn('Storage directory is not writable', { kind, path: dir, error: problem });
+  return { kind, path: dir, writable: !problem, message: STORAGE_LOCATION_MESSAGES[kind][problem ? 'error' : 'ok'] };
 }
 
 export class SystemHealthService {
@@ -93,24 +127,22 @@ export class SystemHealthService {
     return dbStatus;
   }
 
-  /** 2. Check Write Permissions on public/uploads */
+  /**
+   * 2. Storage: the directories the app writes to (attachments root and image uploads), read-only.
+   * v9.0.359 (TD-619): checked public/uploads only (not ATTACHMENTS_DIR) and wrote a test file on every call.
+   */
   static checkStorage(): StorageHealth {
-    const storageStatus = { status: 'ok', writable: true, uploadsPath: '', message: 'پوشه ذخیره‌سازی تصاویر قابل نوشتن است' };
-    try {
-      const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-      storageStatus.uploadsPath = uploadsDir;
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-      const testFile = path.join(uploadsDir, `.test-write-${Date.now()}`);
-      fs.writeFileSync(testFile, 'write-test');
-      fs.unlinkSync(testFile);
-    } catch (e) {
-      storageStatus.status = 'error';
-      storageStatus.writable = false;
-      storageStatus.message = `خطای دسترسی نوشتن به پوشه تصاویر: ${errorMessageOf(e)}`;
-    }
-    return storageStatus;
+    const locations = ([
+      ['attachments', getAttachmentsRoot()],
+      ['images', getImageUploadsDir()],
+    ] as Array<[StorageLocationKind, string]>).map(([kind, dir]) => storageLocationHealth(kind, dir));
+    const writable = locations.every(l => l.writable);
+    return {
+      status: writable ? 'ok' : 'error',
+      writable,
+      locations,
+      message: writable ? STORAGE_SUMMARY_MESSAGES.ok : STORAGE_SUMMARY_MESSAGES.error,
+    };
   }
 
   /** 3. Subsystem Health Checks (Outbox, DLQ, Vouchers, Workflow), each with its own failure state */

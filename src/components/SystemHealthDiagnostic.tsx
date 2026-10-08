@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
 import { getDisplayTimezoneClient, errorMessageOf } from '../utils';
-import { Database, HardDrive, ShieldCheck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Cpu, Wrench, Play, Activity } from 'lucide-react';
+import { Database, ShieldCheck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Cpu, Wrench, Play, Activity } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { SubsystemHealthCards } from './system/SubsystemHealthCards';
 import type { AccountingHealth, OutboxHealth, WorkflowHealth } from '../lib/system/subsystemHealth';
+import { StorageHealthCard } from './system/StorageHealthCard';
+import type { StorageHealth } from '../lib/system/storageHealth';
 
 interface HealthData {
   database: {
@@ -12,12 +14,7 @@ interface HealthData {
     latencyMs: number;
     message: string;
   };
-  storage: {
-    status: string;
-    writable: boolean;
-    uploadsPath: string;
-    message: string;
-  };
+  storage?: StorageHealth;
   outbox?: OutboxHealth;
   accounting?: AccountingHealth;
   workflow?: WorkflowHealth;
@@ -210,29 +207,8 @@ export default function SystemHealthDiagnostic() {
         {/* CARDS 2-4: event queue, voucher balance, workflow (each with its own unknown state, TD-593) */}
         <SubsystemHealthCards outbox={health.outbox} accounting={health.accounting} workflow={health.workflow} />
 
-        {/* CARD 5: STORAGE / UPLOADS */}
-        <div className={`p-4 border rounded-xl transition-all ${
-          health.storage.writable ? 'bg-emerald-50/50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800' : 'bg-red-50/50 border-red-200'
-        }`}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 font-bold text-sm text-slate-800 dark:text-slate-100">
-              <HardDrive size={18} className={health.storage.writable ? 'text-emerald-600' : 'text-red-600'} />
-              <span>ذخیره‌سازی تصاویر</span>
-            </div>
-            {health.storage.writable ? (
-              <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                <CheckCircle2 size={12} /> دسترسی کامل
-              </span>
-            ) : (
-              <span className="bg-red-100 text-red-800 text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                <XCircle size={12} /> خطای دسترسی
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-slate-600 dark:text-slate-300 mb-2 truncate" title={health.storage.uploadsPath}>
-            {health.storage.uploadsPath}
-          </p>
-        </div>
+        {/* CARD 5: attachment and image directories (TD-619) */}
+        <StorageHealthCard storage={health.storage} />
 
         {/* CARD 6: RUNTIME & MEMORY */}
         <div className="p-4 border rounded-xl bg-slate-50 dark:bg-gray-900/50 border-slate-200 dark:border-gray-700">

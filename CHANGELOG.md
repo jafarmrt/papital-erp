@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.359 — Storage Card Checks the Attachment Directory
+- **Fix (TD-619, B01-39):** the health page's storage card checks the attachment root (`ATTACHMENTS_DIR`) and the image uploads directory, each with its path, by permission only; it no longer writes a test file into `public/uploads` on every call or reports «writable» while attachments cannot be saved.
+
 ### v9.0.358 — Health Page Reports a Failed Check as Unknown
 - **Fix (TD-593, B01-13):** the system health page measures the event queue, voucher balance and workflow separately; a failed query is `unknown` with null counts and a Persian message instead of zeros and `ok`, the constant `observability` field is gone, and the page shows «نامعلوم» with its own color.
 

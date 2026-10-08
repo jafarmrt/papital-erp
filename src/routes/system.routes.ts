@@ -237,7 +237,7 @@ router.get('/system/health', requireSystemAdmin, asyncHandler(async (req, res) =
   // 1. Check DB Connection & Latency
   const dbStatus = await SystemHealthService.checkDatabase();
 
-  // 2. Check Write Permissions on public/uploads
+  // 2. Check that the attachment and image directories are writable (read-only check)
   const storageStatus = SystemHealthService.checkStorage();
 
   // 3. Subsystem Health Checks (Outbox, DLQ, Vouchers, Workflow)

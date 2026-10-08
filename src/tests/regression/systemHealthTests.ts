@@ -5,7 +5,7 @@ type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
 /** System health page findings of package 1 (B01-13, B01-39) */
 export async function runSystemHealthTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
-  return [...await runUnknownSubsystemTest(shouldRun)];
+  return [...await runUnknownSubsystemTest(shouldRun), ...await runStorageDirectoriesTest(shouldRun)];
 }
 
 /**
@@ -91,5 +91,74 @@ async function runUnknownSubsystemTest(shouldRun: ShouldRun): Promise<TestCaseRe
       await pool.query(`DELETE FROM journal_voucher_items WHERE voucher_id = $1`, [voucherId]);
       await pool.query(`DELETE FROM journal_vouchers WHERE id = $1`, [voucherId]);
     }
+  }
+}
+
+/**
+ * Package 1 finding B01-39, TD-619: the storage card checked public/uploads by writing a test file there on every
+ * call, never the attachment root (ATTACHMENTS_DIR), so with an unwritable attachment directory a document with an
+ * attachment failed with 500 while the card said `{"status":"ok","writable":true}` (v9.0.358).
+ */
+async function runStorageDirectoriesTest(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
+  const id = 'reg_system_health_storage_directories_td_619';
+  if (!shouldRun(id, 'td619', 'b01-39', 'health', 'package1')) return [];
+  const name = 'v9.0.359: the storage card checks the attachment and image directories without writing to them (TD-619)';
+  const tStart = Date.now();
+  const fs = await import('fs');
+  const os = await import('os');
+  const path = await import('path');
+  const savedDir = process.env.ATTACHMENTS_DIR;
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'td619-'));
+  try {
+    const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+    const app = await getTestApp();
+    const admin = await getAdminSession();
+    const wrong: string[] = [];
+    type Location = { kind: string; path: string; writable: boolean; message: string };
+    type Storage = { status?: string; writable?: boolean; locations?: Location[] };
+    const storage = async () => {
+      const res = await request(app).get('/api/system/health').set('Cookie', admin.cookie);
+      if (res.status !== 200) throw new Error(`health answered ${res.status}`);
+      return (res.body as { storage: Storage }).storage;
+    };
+    const location = (s: Storage, kind: string) => s.locations?.find(l => l.kind === kind);
+
+    // a path below a regular file: every attachment write fails with ENOTDIR
+    const blocker = path.join(scratch, 'not-a-directory');
+    fs.writeFileSync(blocker, 'x');
+    process.env.ATTACHMENTS_DIR = path.join(blocker, 'attachments');
+    const broken = await storage();
+    const att = location(broken, 'attachments');
+    if (broken.status !== 'error' || broken.writable !== false) {
+      wrong.push(`unwritable attachment directory reported as ${JSON.stringify({ status: broken.status, writable: broken.writable })}`);
+    }
+    if (!att || att.writable !== false || att.path !== process.env.ATTACHMENTS_DIR) {
+      wrong.push(`attachment location ${JSON.stringify(att)} (expected the ATTACHMENTS_DIR path, not writable)`);
+    }
+    if (att && /ENOTDIR|not a directory/i.test(att.message)) wrong.push('the file system error reached the page');
+    if (location(broken, 'images')?.writable !== true) wrong.push(`image directory reported as ${JSON.stringify(location(broken, 'images'))}`);
+
+    // a directory that does not exist yet under a writable one: writable, and the check creates nothing
+    const fresh = path.join(scratch, 'fresh', 'attachments');
+    process.env.ATTACHMENTS_DIR = fresh;
+    const ok = await storage();
+    if (ok.status !== 'ok' || location(ok, 'attachments')?.writable !== true) {
+      wrong.push(`a creatable attachment directory reported as ${JSON.stringify(ok)}`);
+    }
+    if (fs.existsSync(path.join(scratch, 'fresh'))) wrong.push('the health check created the attachment directory');
+
+    if (wrong.length > 0) throw new Error(wrong.join('; '));
+    return [makeTestCase({
+      id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+      details: 'unwritable ATTACHMENTS_DIR reported as an error with its path; a missing but creatable one as writable, untouched',
+    })];
+  } catch (err) {
+    return [makeTestCase({
+      id, name, layer: 'regression', executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+      error: err instanceof Error ? err.message : String(err),
+    })];
+  } finally {
+    if (savedDir === undefined) delete process.env.ATTACHMENTS_DIR; else process.env.ATTACHMENTS_DIR = savedDir;
+    fs.rmSync(scratch, { recursive: true, force: true });
   }
 }
