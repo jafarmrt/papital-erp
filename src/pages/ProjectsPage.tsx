@@ -25,6 +25,7 @@ import { QUERY_KEYS } from '../lib/queryKeys';
 import { PROJECT_LIST_PAGE_SIZE, projectStatusCountTotal, type ProjectListFilters, type ProjectListRow } from '../lib/projects/projectList';
 import { ProjectListPager } from '../components/project/ProjectListPager';
 import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../components/common/PillBadge';
+import { useProjectPermissions } from '../hooks/useProjectPermissions';
 
 // v7.0.86 (TD-108): نشان اولویت و وضعیت پروژه
 const PROJECT_PRIORITY_BASE = 'px-2 py-0.5 rounded font-bold text-[10px]';
@@ -76,6 +77,8 @@ export default function ProjectsPage() {
   const customersQuery = useCustomerOptionsQuery();
   const itemsQuery = useAllItemsQuery();
   const deleteProjectMutation = useDeleteProjectMutation();
+  // v9.0.393 (TD-752): تعریف، ویرایش و حذف فقط با کلید API خودشان
+  const { canCreate, canEdit, canDelete } = useProjectPermissions();
 
   const projects = useMemo(() => projectsQuery.data?.data ?? [], [projectsQuery.data]);
   const projectTotal = projectsQuery.data?.total ?? 0;
@@ -160,13 +163,15 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        <button
-          onClick={handleOpenCreateModal}
-          className="px-5 py-2.5 bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold rounded-2xl transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 text-xs"
-        >
-          <Plus className="w-4 h-4" />
-          تعریف پروژه جدید
-        </button>
+        {canCreate && (
+          <button
+            onClick={handleOpenCreateModal}
+            className="px-5 py-2.5 bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold rounded-2xl transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 text-xs"
+          >
+            <Plus className="w-4 h-4" />
+            تعریف پروژه جدید
+          </button>
+        )}
       </div>
 
       {/* Stats Bar */}
@@ -310,14 +315,18 @@ export default function ProjectsPage() {
         <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center space-y-3">
           <Layers className="w-12 h-12 text-slate-300 mx-auto" />
           <h3 className="text-sm font-bold text-slate-800">هیچ پروژه تولیدی یافت نشد</h3>
-          <p className="text-slate-500 text-xs">برای شروع می‌توانید یک پروژه جدید تعریف کنید.</p>
-          <button
-            onClick={handleOpenCreateModal}
-            className="px-4 py-2 bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            تعریف پروژه جدید
-          </button>
+          {canCreate && (
+            <>
+              <p className="text-slate-500 text-xs">برای شروع می‌توانید یک پروژه جدید تعریف کنید.</p>
+              <button
+                onClick={handleOpenCreateModal}
+                className="px-4 py-2 bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                تعریف پروژه جدید
+              </button>
+            </>
+          )}
         </div>
       ) : viewMode === 'kanban' ? (
         /* KANBAN BOARD VIEW */
@@ -342,8 +351,8 @@ export default function ProjectsPage() {
                     onDetail={() => handleOpenDetailModal(p.id, 'overview')}
                     onInventory={() => handleOpenDetailModal(p.id, 'inventory')}
                     onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
-                    onEdit={() => { void handleEditFromList(p.id); }}
-                    onDelete={() => handleDeleteProject(p.id, p.project_code)}
+                    onEdit={canEdit ? () => { void handleEditFromList(p.id); } : undefined}
+                    onDelete={canDelete ? () => handleDeleteProject(p.id, p.project_code) : undefined}
                     priorityBadge={<PillBadge variants={PROJECT_PRIORITY_BADGES} value={p.priority} fallback={PROJECT_PRIORITY_FALLBACK} />}
                   />
                 ))}
@@ -423,20 +432,24 @@ export default function ProjectsPage() {
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                           پیشرفت کدها
                         </button>
-                        <button
-                          onClick={() => { void handleEditFromList(p.id); }}
-                          className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
-                          title="ویرایش پروژه"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteProject(p.id, p.project_code)}
-                          className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-50"
-                          title="حذف پروژه"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => { void handleEditFromList(p.id); }}
+                            className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
+                            title="ویرایش پروژه"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDeleteProject(p.id, p.project_code)}
+                            className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-50"
+                            title="حذف پروژه"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -541,10 +554,10 @@ export default function ProjectsPage() {
           loadInitialData();
         }}
         onUpdate={loadInitialData}
-        onEditProject={(p) => {
+        onEditProject={canEdit ? (p) => {
           setIsDetailOpen(false);
           handleOpenEditModal(p);
-        }}
+        } : undefined}
         initialTab={detailInitialTab}
       />
     </div>
@@ -565,8 +578,9 @@ function ProjectKanbanCard({
   onDetail: () => void;
   onInventory?: () => void;
   onProductProgress?: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  /** بی ویرایش یا حذف (نبود مجوز)، دکمه‌اش نشان داده نمی‌شود (TD-752) */
+  onEdit?: () => void;
+  onDelete?: () => void;
   priorityBadge: React.ReactNode;
 }) {
   return (
@@ -648,20 +662,24 @@ function ProjectKanbanCard({
         </div>
 
         <div className="flex items-center gap-1">
-          <button
-            onClick={onEdit}
-            className="p-1 text-slate-400 hover:text-slate-700 rounded-lg"
-            title="ویرایش"
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-1 text-rose-400 hover:text-rose-600 rounded-lg"
-            title="حذف"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="p-1 text-slate-400 hover:text-slate-700 rounded-lg"
+              title="ویرایش"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="p-1 text-rose-400 hover:text-rose-600 rounded-lg"
+              title="حذف"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
     </div>

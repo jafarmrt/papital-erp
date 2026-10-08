@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.393 — Project Buttons by Their API Keys
+- **Project Buttons by Their API Keys (TD-752):** no project screen asked a permission, so a user holding only `projects.view` filled forms and got 403; the project list, detail, inventory control, delivery, progress matrix, workshop schedule and material allocation buttons now follow the keys their routes ask, defined once in `projectPermissions.ts`.
+
 ### v9.0.392 — Project Purchase Orders Through Procurement
 - **Project Purchase Orders Through Procurement (TD-745, decision ت۸ ب):** the project purchase window built its own `PO-…` number, took free-text supplier and warehouse and could post a final receipt; its direct mode now records the project requisition and converts it into one draft procurement order with the server number, a listed supplier and warehouse, for holders of the create, order and approve keys only.
 

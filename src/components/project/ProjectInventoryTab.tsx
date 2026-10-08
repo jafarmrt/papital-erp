@@ -9,6 +9,7 @@ import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 import { AddMaterialModal } from './AddMaterialModal';
 import { UnitConversionModal } from './UnitConversionModal';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
+import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 
 interface ProjectInventoryTabProps {
   project: any;
@@ -27,6 +28,8 @@ export function ProjectInventoryTab({
 
   // Active Main Tab: 'control' (Tree View + Global Supplies) vs 'purchase' (Consolidated Purchase List)
   const [activeMainTab, setActiveMainTab] = useState<'control' | 'purchase'>('control');
+  // v9.0.393 (TD-752): ذخیره و ثبت نهایی با `projects.edit` (کلید `PUT /projects/:id`)، خرید کسری با کلید درخواست خرید
+  const { canEdit, canRequestPurchase } = useProjectPermissions();
 
   const {
     saving,
@@ -146,7 +149,11 @@ export function ProjectInventoryTab({
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
-            {isFinalized ? (
+            {!canEdit ? (
+              <span className="px-3 py-1.5 bg-slate-800 text-slate-300 border border-slate-700 rounded-xl text-[11px] font-bold">
+                فقط مشاهده؛ ذخیره کنترل موجودی مجوز «ویرایش پروژه و مراحل تولید» می‌خواهد
+              </span>
+            ) : isFinalized ? (
               <button
                 type="button"
                 onClick={handleUnfinalizeReservation}
@@ -178,15 +185,17 @@ export function ProjectInventoryTab({
               <span>چاپ لیست خرید</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handleSaveInventoryControl}
-              disabled={saving}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
-            >
-              <Save className="w-4 h-4" />
-              {saving ? 'در حال ذخیره...' : 'ذخیره فرم'}
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={handleSaveInventoryControl}
+                disabled={saving}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'در حال ذخیره...' : 'ذخیره فرم'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -295,7 +304,7 @@ export function ProjectInventoryTab({
             handleAddNewSectionOnTheFly={handleAddNewSectionOnTheFly}
             handleRemoveSectionOnTheFly={handleRemoveSectionOnTheFly}
             handleUpdateSectionDescription={handleUpdateSectionDescription}
-            handlePurchaseSection={handlePurchaseSection}
+            handlePurchaseSection={canRequestPurchase ? handlePurchaseSection : undefined}
           />
 
           {/* Quick Jump Banner to Purchase List */}

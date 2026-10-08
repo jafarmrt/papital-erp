@@ -6,6 +6,7 @@ import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import toast from 'react-hot-toast';
 import { toPersianDigits, errorMessageOf } from '../../utils';
 import { ProjectOverDeliveryPrompt, overDeliveriesOf, type ProjectOverDeliveryView } from './ProjectOverDeliveryPrompt';
+import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 
 interface ProjectStockEntryTabProps {
   project: ProductionProject;
@@ -14,6 +15,8 @@ interface ProjectStockEntryTabProps {
 }
 
 export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate }: ProjectStockEntryTabProps) {
+  // v9.0.393 (TD-752): ورود به انبار با `projects.edit`، کلید `POST /projects/:id/add-to-inventory`
+  const { canEdit } = useProjectPermissions();
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [batchSubmitting, setBatchSubmitting] = useState<boolean>(false);
   // v8.0.72 (TD-327): تحویلی که سرور به‌خاطر بیش از برنامه بودن رد کرده و دلیلش
@@ -508,7 +511,11 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
           </div>
 
           <div className="flex items-center gap-2">
-            {selectedIds.size > 0 ? (
+            {!canEdit ? (
+              <span className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-bold text-[11px]">
+                فقط مشاهده؛ ورود به انبار مجوز «ویرایش پروژه و مراحل تولید» می‌خواهد
+              </span>
+            ) : selectedIds.size > 0 ? (
               <button
                 type="button"
                 onClick={() => handleBatchAddToInventory(selectedProducts)}
@@ -687,19 +694,21 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                   </div>
 
                   {/* Single Delivery Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleAddToInventory(p)}
-                    disabled={submitting || batchSubmitting}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 transition-all shadow-2xs hover:shadow disabled:opacity-50 shrink-0 cursor-pointer"
-                  >
-                    {submitting ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <ArrowDownRight className="w-3.5 h-3.5" />
-                    )}
-                    <span>ورود به انبار</span>
-                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => handleAddToInventory(p)}
+                      disabled={submitting || batchSubmitting}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 transition-all shadow-2xs hover:shadow disabled:opacity-50 shrink-0 cursor-pointer"
+                    >
+                      {submitting ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <ArrowDownRight className="w-3.5 h-3.5" />
+                      )}
+                      <span>ورود به انبار</span>
+                    </button>
+                  )}
                 </div>
               </div>
             );

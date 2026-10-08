@@ -12,6 +12,7 @@ import { bomAllocationsExportFileName } from '../../lib/inventoryAudit/exportFil
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 import { isProjectOpenForAllocation } from '../../lib/projects/projectStatus';
 import { ErrorStateView } from '../common/ErrorStateView';
+import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -20,6 +21,8 @@ interface ProjectBomAllocationsTabProps {
 export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps) {
   // تخصیص، مصرف و آزادسازی موجودی را تغییر می‌دهند: کش صفحات دیگر (کالاها، کاردکس، داشبورد، رزروها) باطل می‌شود
   const queryClient = useQueryClient();
+  // v9.0.393 (TD-752): تخصیص، مصرف و آزادسازی هر کدام با کلیدهای گارد API خودشان نشان داده می‌شوند
+  const { canAllocate, canConsumeAllocation, canReleaseAllocation } = useProjectPermissions();
   const [allocations, setAllocations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   // v9.0.391 (TD-760): خطای خواندن تخصیص‌ها (مثلاً ۴۰۳) پیام خودش را دارد، نه جدول خالی «هیچ تخصیصی یافت نشد»
@@ -338,13 +341,15 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
             <span>تازه‌سازی</span>
           </button>
 
-          <button
-            onClick={handleOpenAllocateModal}
-            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
-          >
-            <Plus size={15} />
-            <span>تخصیص مواد به پروژه</span>
-          </button>
+          {canAllocate && (
+            <button
+              onClick={handleOpenAllocateModal}
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
+            >
+              <Plus size={15} />
+              <span>تخصیص مواد به پروژه</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -461,20 +466,24 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
                         {alloc.status === 'allocated' && (
                           <>
-                            <button
-                              onClick={() => handleConsume(alloc)}
-                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                              title="ثبت مصرف قطعی در محصول"
-                            >
-                              مصرف شد
-                            </button>
-                            <button
-                              onClick={() => setReleaseTarget(alloc)}
-                              className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                              title="آزادسازی و عودت به انبار"
-                            >
-                              آزادسازی
-                            </button>
+                            {canConsumeAllocation && (
+                              <button
+                                onClick={() => handleConsume(alloc)}
+                                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                                title="ثبت مصرف قطعی در محصول"
+                              >
+                                مصرف شد
+                              </button>
+                            )}
+                            {canReleaseAllocation && (
+                              <button
+                                onClick={() => setReleaseTarget(alloc)}
+                                className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                                title="آزادسازی و عودت به انبار"
+                              >
+                                آزادسازی
+                              </button>
+                            )}
                           </>
                         )}
                       </div>

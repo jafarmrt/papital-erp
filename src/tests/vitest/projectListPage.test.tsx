@@ -17,6 +17,12 @@ const fetchJson = vi.fn(async (url: string, _opts?: FetchOpts): Promise<unknown>
 });
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
 vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() }, default: { success: vi.fn(), error: vi.fn() } }));
+// v9.0.393 (TD-752): buttons follow the project API keys; these tests act as a user who holds them
+vi.mock('../../hooks/useProjectPermissions', () => ({
+  useProjectPermissions: () => ({
+    canCreate: true, canEdit: true, canDelete: true, canAllocate: true, canConsumeAllocation: true, canReleaseAllocation: true, canRequestPurchase: true,
+  }),
+}));
 vi.mock('../../components/ProjectModal', () => ({
   default: ({ isOpen, projectToEdit }: { isOpen: boolean; projectToEdit: { description?: string } | null }) =>
     (isOpen ? <div data-testid="project-form">{projectToEdit?.description ?? 'new'}</div> : null),

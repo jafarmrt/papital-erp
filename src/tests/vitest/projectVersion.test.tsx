@@ -22,6 +22,12 @@ const fetchJson = vi.fn(async (url: string, opts?: FetchOpts) => {
 });
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+// v9.0.393 (TD-752): buttons follow the project API keys; these tests act as a user who holds them
+vi.mock('../../hooks/useProjectPermissions', () => ({
+  useProjectPermissions: () => ({
+    canCreate: true, canEdit: true, canDelete: true, canAllocate: true, canConsumeAllocation: true, canReleaseAllocation: true, canRequestPurchase: true,
+  }),
+}));
 vi.mock('../../hooks/useAppCurrency', async () => {
   const { rialDisplayOf } = await vi.importActual<typeof import('../../lib/rialDisplay')>('../../lib/rialDisplay');
   return { useAppCurrency: () => 'IRR', useRialDisplay: () => rialDisplayOf('IRR') };

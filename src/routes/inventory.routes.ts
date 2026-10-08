@@ -13,6 +13,7 @@ import { KardexBackfillService } from '../services/inventory/kardexBackfill.serv
 import { WarehouseStockReconciliationService } from '../services/inventory/warehouseStockReconciliation.service.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { BOM_ALLOCATE_PERMISSIONS, BOM_CONSUME_PERMISSIONS, BOM_RELEASE_PERMISSIONS } from '../lib/permissions/projectPermissions.js';
 import { WAC_CORRECTION_PERMISSION } from '../lib/inventoryAudit/wacCorrection.js';
 import type { AuthUserPayload } from '../types.js';
 
@@ -420,7 +421,7 @@ router.get(
 router.post(
   '/allocations/allocate',
   // حوزه H (TD-298): تخصیص کالا را از انبار خارج و سند ۱۴۰۲ صادر می‌کند؛ مجوز مشاهده کافی نیست
-  authorizePermission('projects.edit', 'warehouse.out'),
+  authorizePermission(...BOM_ALLOCATE_PERMISSIONS),
   idempotency({ scope: 'inventory' }),
   validate(projectAllocateSchema),
   asyncHandler(async (req, res) => {
@@ -453,7 +454,7 @@ router.post(
 // POST /api/inventory/allocations/:id/consume
 router.post(
   '/allocations/:id/consume',
-  authorizePermission('inventory.reconcile', 'projects.edit'),
+  authorizePermission(...BOM_CONSUME_PERMISSIONS),
   idempotency({ scope: 'inventory' }),
   validate(paramsIdSchema),
   asyncHandler(async (req, res) => {
@@ -488,7 +489,7 @@ router.post(
 // POST /api/inventory/allocations/:id/release
 router.post(
   '/allocations/:id/release',
-  authorizePermission('inventory.reconcile', 'projects.edit', 'warehouse.out'),
+  authorizePermission(...BOM_RELEASE_PERMISSIONS),
   idempotency({ scope: 'inventory' }),
   validate(releaseAllocationSchema),
   asyncHandler(async (req, res) => {

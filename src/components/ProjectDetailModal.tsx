@@ -17,6 +17,7 @@ import { hasMatrixProducts } from '../lib/projects/progressMatrix';
 import { WorkflowStepperWidget } from './workflow/WorkflowStepperWidget';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { useProjectVersion } from '../hooks/useProjectVersion';
+import { useProjectPermissions } from '../hooks/useProjectPermissions';
 
 interface ProjectDetailModalProps {
   projectId: number | null;
@@ -61,6 +62,8 @@ export default function ProjectDetailModal({
   // V3.1.0: initialTab صریح پیش‌فرض است — باگ ریست تب حذف شد (useEffect دوم
   // قبلاً به اجبار تب را به overview برمی‌گرداند و درخواست کاربر نادیده گرفته می‌شد)
   const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' | 'product_progress'>(initialTab);
+  // v9.0.393 (TD-752): ویرایش مرحله و پیوست فقط با `projects.edit`، کلید `PUT /projects/:id`
+  const { canEdit } = useProjectPermissions();
 
   useEffect(() => {
     if (initialTab && isOpen) {
@@ -636,14 +639,16 @@ export default function ProjectDetailModal({
                                     <span className="font-mono font-bold text-slate-700 text-xs">{formatPersianNumber(stg.progress_percent || 0)}٪</span>
                                   </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStartEditStage(stg)}
-                                    className="px-3 py-1.5 bg-white border border-slate-300 hover:border-blue-500 hover:bg-blue-50 text-blue-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5 text-blue-600" />
-                                    <span>ویرایش زمان‌بندی و پرسنل</span>
-                                  </button>
+                                  {canEdit && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartEditStage(stg)}
+                                      className="px-3 py-1.5 bg-white border border-slate-300 hover:border-blue-500 hover:bg-blue-50 text-blue-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                                      <span>ویرایش زمان‌بندی و پرسنل</span>
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             ) : (
@@ -791,6 +796,7 @@ export default function ProjectDetailModal({
                   {/* Attachments Section */}
                   <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 shadow-2xs">
                     <FinancialAttachmentUploader
+                      readOnly={!canEdit}
                       attachments={Array.isArray(project.attachments) ? project.attachments : []}
                       onChange={async (newAttachments) => {
                         try {

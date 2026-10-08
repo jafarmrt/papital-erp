@@ -6,6 +6,7 @@ import { formatPersianNumber } from '../../utils';
 import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 import { ReservationShortageList } from './ReservationShortageList';
 import type { ReservationShortage } from '../../lib/projects/projectReservation';
+import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 
 interface ManualPurchaseListProps {
   project: ProductionProject;
@@ -35,6 +36,8 @@ export function ManualPurchaseList({
   handleUpdateProcurementStatus
 }: ManualPurchaseListProps) {
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
+  // v9.0.393 (TD-752): خرید کسری فقط با کلید ثبت درخواست خرید
+  const { canRequestPurchase } = useProjectPermissions();
   const [lastCreatedOrderDoc, setLastCreatedOrderDoc] = useState<any>(null);
 
   // V3.1.46 (TD-070): رزروها فقط از منبع زنده (سرویس رزرو/تخصیص BOM) —
@@ -72,7 +75,7 @@ export function ManualPurchaseList({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 print:hidden">
-          {shortfallCount > 0 && (
+          {shortfallCount > 0 && canRequestPurchase && (
             <button
               type="button"
               onClick={() => setIsCreateOrderModalOpen(true)}

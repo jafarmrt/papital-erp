@@ -14,6 +14,7 @@ import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { useProjectVersion } from '../../hooks/useProjectVersion';
+import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import {
   isScheduleRowLogged, scheduleLogItem, withPieceworkTask, withScheduleLogLink, withScheduleRowIds,
   type ScheduleLogItem, type ScheduleRowRef
@@ -56,7 +57,10 @@ export default function ProjectScheduleTab({
   // v9.0.283 (TD-747، تصمیم ت۶ الف بسته ۱۱): روز کارکرد «ثبت کارمزد»، پیش‌فرض امروز در منطقه زمانی نمایش؛ نه تاریخ شروع کار یا پروژه
   const [logDate, setLogDate] = useState<string>(() => getTodayIsoDate());
   // v9.0.320 (TD-805): «ثبت کارمزد» همان کلید API ثبت کارکرد را می‌پرسد
-  const { canLog } = usePieceworkPermissions();
+  const { canLog: holdsPieceworkLog } = usePieceworkPermissions();
+  // v9.0.393 (TD-752): برنامه با `PUT /projects/:id` (`projects.edit`) ذخیره می‌شود و «ثبت کارمزد» پیش از ثبت کارکرد برنامه را ذخیره می‌کند
+  const { canEdit } = useProjectPermissions();
+  const canLog = holdsPieceworkLog && canEdit;
 
   // Load latest presets and personnel if missing
   useEffect(() => {
@@ -575,14 +579,18 @@ export default function ProjectScheduleTab({
             </span>
           </div>
 
-          <button
-            onClick={handleSaveSchedules}
-            disabled={saving}
-            className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md disabled:opacity-50 shrink-0 cursor-pointer"
-          >
-            {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            ذخیره برنامه‌ریزی
-          </button>
+          {canEdit ? (
+            <button
+              onClick={handleSaveSchedules}
+              disabled={saving}
+              className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md disabled:opacity-50 shrink-0 cursor-pointer"
+            >
+              {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              ذخیره برنامه‌ریزی
+            </button>
+          ) : (
+            <span className="text-[11px] font-bold text-amber-300 shrink-0">فقط مشاهده: ویرایش برنامه مجوز «ویرایش پروژه و مراحل تولید» می‌خواهد.</span>
+          )}
         </div>
       </div>
 
@@ -647,15 +655,17 @@ export default function ProjectScheduleTab({
                   )}
 
                   {/* Preset Template Apply Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleApplyStagePreset(stg.id, stg.title)}
-                    className="px-2.5 py-1 text-[11px] font-bold text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
-                    title="اعمال الگو و عناوین کاری تعریف‌شده در تنظیمات برای این مرحله"
-                  >
-                    <Sparkles className="w-3 h-3 text-indigo-600" />
-                    بارگذاری الگوی عناوین کاری {defaultTasksForStage.length > 0 ? `(${defaultTasksForStage.length} کار)` : ''}
-                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => handleApplyStagePreset(stg.id, stg.title)}
+                      className="px-2.5 py-1 text-[11px] font-bold text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                      title="اعمال الگو و عناوین کاری تعریف‌شده در تنظیمات برای این مرحله"
+                    >
+                      <Sparkles className="w-3 h-3 text-indigo-600" />
+                      بارگذاری الگوی عناوین کاری {defaultTasksForStage.length > 0 ? `(${defaultTasksForStage.length} کار)` : ''}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -704,6 +714,7 @@ export default function ProjectScheduleTab({
                               calendar={persian}
                               locale={persian_fa}
                               calendarPosition="bottom-right"
+                              disabled={!canEdit}
                               placeholder="شروع..."
                               inputClass="w-26 px-2 py-0.5 border border-slate-300 rounded-lg font-mono text-center text-xs bg-white cursor-pointer focus:ring-1 focus:ring-amber-500"
                               containerClassName="inline-block"
@@ -721,6 +732,7 @@ export default function ProjectScheduleTab({
                               calendar={persian}
                               locale={persian_fa}
                               calendarPosition="bottom-right"
+                              disabled={!canEdit}
                               placeholder="تحویل..."
                               inputClass="w-26 px-2 py-0.5 border border-slate-300 rounded-lg font-mono text-center text-xs bg-white cursor-pointer focus:ring-1 focus:ring-amber-500"
                               containerClassName="inline-block"
@@ -736,14 +748,16 @@ export default function ProjectScheduleTab({
                             <Wrench className="w-3.5 h-3.5 text-amber-600" />
                             عناوین کاری و پرسنل مجری ({sched.tasks?.length || 0} آیتم)
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleAddTask(stg.id, p.id)}
-                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[10px] rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
-                          >
-                            <Plus className="w-3 h-3" />
-                            افزودن کار دستی
-                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => handleAddTask(stg.id, p.id)}
+                              className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[10px] rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" />
+                              افزودن کار دستی
+                            </button>
+                          )}
                         </div>
 
                         {sched.tasks && sched.tasks.length > 0 ? (
@@ -755,6 +769,7 @@ export default function ProjectScheduleTab({
                                   {/* Piecework Task Select / Custom Input */}
                                   <div className="sm:col-span-4 flex items-center gap-1">
                                     <select
+                                      disabled={!canEdit}
                                       value={task.taskId ? String(task.taskId) : ''}
                                       onChange={(e) => handleUpdateTask(stg.id, p.id, tIdx, 'taskId', e.target.value)}
                                       className="w-full px-2 py-1 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-amber-500 bg-white"
@@ -769,6 +784,7 @@ export default function ProjectScheduleTab({
                                     {!task.taskId && (
                                       <input
                                         type="text"
+                                        disabled={!canEdit}
                                         value={task.taskTitle || ''}
                                         onChange={(e) => handleUpdateTask(stg.id, p.id, tIdx, 'taskTitle', e.target.value)}
                                         placeholder="یا عنوان دستی..."
@@ -781,6 +797,7 @@ export default function ProjectScheduleTab({
                                   <div className="sm:col-span-3">
                                     <button
                                       type="button"
+                                      disabled={!canEdit}
                                       onClick={() => {
                                         setPickingTarget({ stageId: stg.id, productId: p.id, taskIdx: tIdx });
                                         setPersonnelSearch('');
@@ -806,6 +823,7 @@ export default function ProjectScheduleTab({
                                     <input
                                       type="number"
                                       min="1"
+                                      disabled={!canEdit}
                                       value={task.quantity}
                                       onChange={(e) => handleUpdateTask(stg.id, p.id, tIdx, 'quantity', Number(e.target.value) || 0)}
                                       placeholder="تعداد"
@@ -846,7 +864,7 @@ export default function ProjectScheduleTab({
 
                                   {/* Delete (v9.0.282، TD-736: ردیف ثبت‌شده حذف نمی‌شود تا پیوند کارکردش نماند) */}
                                   <div className="sm:col-span-1 text-center">
-                                    {!isScheduleRowLogged(task) && <button
+                                    {canEdit && !isScheduleRowLogged(task) && <button
                                       type="button"
                                       onClick={() => handleRemoveTask(stg.id, p.id, tIdx)}
                                       className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
