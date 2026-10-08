@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.392 — Project Purchase Orders Through Procurement
+- **Project Purchase Orders Through Procurement (TD-745, decision ت۸ ب):** the project purchase window built its own `PO-…` number, took free-text supplier and warehouse and could post a final receipt; its direct mode now records the project requisition and converts it into one draft procurement order with the server number, a listed supplier and warehouse, for holders of the create, order and approve keys only.
+
 ### v9.0.391 — Allocation Read Errors and Tab Access
 - **Allocation Read Errors and Tab Access (TD-760):** a refused allocation read (403) showed as an empty list and the tab opened for `audit.view`, which the API refuses; the tab now shows the error with a retry and appears only for `READ_PERMISSIONS.bomAllocations`, the keys of `GET /inventory/allocations`.
 
