@@ -1,18 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, ShoppingCart, CheckCircle2, Loader2, Building2, FileText, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, errorMessageOf } from '../../utils';
-import { SearchableSelect } from '../SearchableSelect';
+import { formatPersianPrice, formatPersianNumber, getTodayIsoDate, errorMessageOf } from '../../utils';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
 import { useReorderSuppliersQuery } from '../../hooks/reorderAlerts/useReorderAlertsQueries';
 import { useReorderPurchaseSubmit, type ReorderPurchaseVariables } from '../../hooks/reorderAlerts/useReorderAlertsMutations';
-import { reorderPurchaseReceiptPayload } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
+import { receiptNeedsDonatedConfirmation, reorderPurchaseReceiptPayload, reorderReceiptPriceError } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
+import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
+import { ReorderOrderFields, type ReorderDocStatus as DocStatus, type ReorderPriority as Priority } from './ReorderOrderFields';
 
 export type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
-
-type Priority = 'urgent' | 'high' | 'normal' | 'low';
-type DocStatus = 'draft' | 'final';
 
 interface ReorderPurchaseModalProps {
   isOpen: boolean;
@@ -31,10 +29,15 @@ export function ReorderPurchaseModal({
   const [orderTarget, setOrderTarget] = useState<'requisition' | 'direct_document'>('requisition');
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<Priority>('normal');
-  const [requiredDate, setRequiredDate] = useState(() => getTodayJalaliDate());
+  // v9.0.384 (TD-830): ISO, shown with JalaliDateInput
+  const [requiredDate, setRequiredDate] = useState(() => getTodayIsoDate());
   const [supplierName, setSupplierName] = useState('');
   const [docStatus, setDocStatus] = useState<DocStatus>('draft');
-  const [targetWarehouse] = useState('');
+  // v9.0.384 (TD-830): '' = the first active warehouse, which is the default warehouse (lowest id)
+  const [targetWarehouse, setTargetWarehouse] = useState('');
+  const [donatedConfirmed, setDonatedConfirmed] = useState(false);
+  const { data: warehouses = [] } = useWarehousesQuery();
+  const warehouseCode = targetWarehouse || warehouses[0]?.code || '';
   const [notes, setNotes] = useState('');
   // ثبت با useMutation (ابطال کش تدارکات/اسناد/کالاها در خود hook)؛ دکمه ثبت تا پایان درخواست غیرفعال است
   const purchaseSubmit = useReorderPurchaseSubmit();
@@ -58,6 +61,7 @@ export function ReorderPurchaseModal({
       : `سفارش خرید کسری مواد اولیه انبار (${formatPersianNumber(count)} قلم)`
     );
     setNotes(`تامین کسری نقطه سفارش مواد اولیه از طریق میز کار هشدار انبار`);
+    setDonatedConfirmed(false);
   }, [isOpen, selectedItems]);
 
   const supplierOptions = useMemo(() => {
@@ -126,14 +130,19 @@ export function ReorderPurchaseModal({
         toast.error('انتخاب تامین‌کننده برای صدور مستقیم سند الزامی است.');
         return;
       }
+      const priceError = reorderReceiptPriceError({ status: docStatus, donatedConfirmed, items });
+      if (priceError) {
+        toast.error(priceError);
+        return;
+      }
       // v8.0.110 (TD-387): بدنه مطابق POST /documents (شماره از سرور، تأمین‌کننده در buyer_name، فی در unit_price)
       variables = {
         target: 'direct_document',
         payload: reorderPurchaseReceiptPayload({
           status: docStatus,
           supplierName,
-          warehouse: targetWarehouse,
-          date: requiredDate || getTodayJalaliDate(),
+          warehouse: warehouseCode,
+          date: requiredDate || getTodayIsoDate(),
           notes: notes.trim() || `تامین کسری نقطه سفارش انبار`,
           items,
         })
@@ -236,85 +245,28 @@ export function ReorderPurchaseModal({
           </div>
 
           {/* Form Fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-            <div className="sm:col-span-2">
-              <label className="block font-bold text-slate-700 mb-1">
-                عنوان سفارش / درخواست <span className="text-rose-500">*</span>:
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                required
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">اولویت نیاز:</label>
-              <select
-                value={priority}
-                onChange={e => setPriority(e.target.value as Priority)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              >
-                <option value="urgent">فوری / اضطراری</option>
-                <option value="high">مهم</option>
-                <option value="normal">عادی</option>
-                <option value="low">کم‌اولویت</option>
-              </select>
-            </div>
-
-            {orderTarget === 'direct_document' ? (
-              <>
-                <div className="sm:col-span-2">
-                  <label className="block font-bold text-slate-700 mb-1">
-                    نام تامین‌کننده / فروشنده <span className="text-rose-500">*</span>:
-                  </label>
-                  <SearchableSelect
-                    value={supplierName}
-                    onChange={setSupplierName}
-                    placeholder="-- انتخاب یا جستجوی طرف‌حساب --"
-                    options={supplierOptions}
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">نوع و وضعیت سند:</label>
-                  <select
-                    value={docStatus}
-                    onChange={e => setDocStatus(e.target.value as DocStatus)}
-                    className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                  >
-                    <option value="draft">پیش‌نویس سفارش خرید (عدم تغییر موجودی)</option>
-                    <option value="final">رسید قطعی ورود کالا به انبار (افزایش آنی موجودی)</option>
-                  </select>
-                </div>
-              </>
-            ) : (
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">تاریخ نیاز / تحویل:</label>
-                <input
-                  type="text"
-                  value={requiredDate}
-                  onChange={e => setRequiredDate(e.target.value)}
-                  placeholder="۱۴۰۵/۰۶/۲۰"
-                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono text-center focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                />
-              </div>
-            )}
-
-            <div className="sm:col-span-3">
-              <label className="block font-bold text-slate-700 mb-1">یادداشت و توضیحات:</label>
-              <input
-                type="text"
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                placeholder="توضیحات تکمیلی پیرامون سفارش یا توافقات با تامین‌کننده..."
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              />
-            </div>
-          </div>
+          <ReorderOrderFields
+            orderTarget={orderTarget}
+            title={title}
+            onTitleChange={setTitle}
+            priority={priority}
+            onPriorityChange={setPriority}
+            supplierName={supplierName}
+            onSupplierChange={setSupplierName}
+            supplierOptions={supplierOptions}
+            docStatus={docStatus}
+            onDocStatusChange={setDocStatus}
+            warehouses={warehouses}
+            warehouseCode={warehouseCode}
+            onWarehouseChange={setTargetWarehouse}
+            date={requiredDate}
+            onDateChange={setRequiredDate}
+            notes={notes}
+            onNotesChange={setNotes}
+            askDonated={receiptNeedsDonatedConfirmation(docStatus, items)}
+            donatedConfirmed={donatedConfirmed}
+            onDonatedChange={setDonatedConfirmed}
+          />
 
           {/* Items Table */}
           <div className="space-y-2">
