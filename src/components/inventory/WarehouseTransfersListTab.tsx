@@ -11,7 +11,7 @@ interface WarehouseTransfersListTabProps {
   /** v9.0.80 (TD-489): ابطال حواله با مسیر ابطال اسناد */
   onVoidTransfer: (transfer: { id: number; refNumber?: string }) => void;
   voidingId: number | null;
-  /** v9.0.290 (TD-787): صفحه جاری حواله‌ها (۵۰ سند در هر صفحه) */
+  /** v9.0.339 (TD-787): صفحه جاری حواله‌ها (۵۰ سند در هر صفحه) */
   pager?: Pager;
 }
 

@@ -7,6 +7,8 @@ import type { z } from 'zod';
 import { authorizePermission, requireSystemAdmin } from '../../middleware/authorize.js';
 import { AccountingService } from '../../services/accounting.service.js';
 import { AccountMappingService } from '../../services/accounting/accountMapping.service.js';
+import { accountAuditChanges, accountAuditRow, accountAuditSnapshot } from '../../services/accounting/accountingAudit.js';
+import { orm } from '../../db/drizzle.js';
 import { logActivity, extractClientIp } from '../../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
@@ -62,6 +64,7 @@ router.post('/accounting/accounts', authorizePermission('accounting.coa'), valid
 
 router.put('/accounting/accounts/:id', authorizePermission('accounting.coa'), validate(updateAccountSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
+  const before = await accountAuditRow(orm, id); // v9.0.295 (TD-555، B03-13): ممیزی مقدار پیش و پس
   const updated = await AccountingService.updateAccount(id, req.body);
   await logActivity({
     userId: req.user?.id,
@@ -71,7 +74,7 @@ router.put('/accounting/accounts/:id', authorizePermission('accounting.coa'), va
     entity: 'account',
     entityId: String(id),
     description: `ویرایش حساب: ${updated.name} (کد: ${updated.code})`,
-    details: { changes: req.body },
+    details: accountAuditChanges(before ?? {}, updated),
     ipAddress: req.ip || '',
   });
   res.json(updated);
@@ -79,6 +82,7 @@ router.put('/accounting/accounts/:id', authorizePermission('accounting.coa'), va
 
 router.delete('/accounting/accounts/:id', authorizePermission('accounting.coa'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
+  const before = await accountAuditRow(orm, id); // v9.0.295 (TD-555): ممیزی حذف کل حساب را دارد
   const result = await AccountingService.deleteAccount(id);
   await logActivity({
     userId: req.user?.id,
@@ -87,8 +91,8 @@ router.delete('/accounting/accounts/:id', authorizePermission('accounting.coa'),
     action: 'DELETE',
     entity: 'account',
     entityId: String(id),
-    description: `حذف حساب با شناسه ${id}`,
-    details: { id },
+    description: before ? `حذف حساب: ${before.name} (کد: ${before.code})` : `حذف حساب با شناسه ${id}`,
+    details: { before: before ? accountAuditSnapshot(before) : null },
     ipAddress: req.ip || '',
   });
   res.json(result);

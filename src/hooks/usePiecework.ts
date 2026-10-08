@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, FormEvent } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { fetchJson } from '../api';
 import { useAuth } from '../contexts/AuthContext';
+import { usePieceworkPermissions } from './usePieceworkPermissions';
+import { usePayrollPreviewLogs, usePieceworkLogList } from './usePieceworkLogList';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import {
@@ -47,28 +49,19 @@ export function usePiecework() {
     (Array.isArray(userPermissions?.permissions) &&
       READ_PERMISSIONS.payrolls.some(p => userPermissions.permissions.includes(p)))
   );
-  // حوزه H (TD-300): نرخ دستی کارکرد فقط برای مدیر پرسنل یا مدیر تعرفه‌ها (همان قاعده سرور)
-  const canSetLogRate = Boolean(
-    userPermissions?.isAdmin ||
-    (Array.isArray(userPermissions?.permissions) &&
-      ['personnel.manage', 'piecework.manage_tasks'].some(p => userPermissions.permissions.includes(p)))
-  );
+  // حوزه H (TD-300): نرخ دستی کارکرد فقط برای مدیر تعرفه‌ها (همان قاعده سرور، در ثبت و ویرایش؛ v9.0.320، TD-805)
+  const { canManageTasks: canSetLogRate } = usePieceworkPermissions();
 
   // Core Data Lists
   const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
   const [tasksList, setTasksList] = useState<PieceworkTask[]>([]);
-  const [logsList, setLogsList] = useState<PieceworkLog[]>([]);
   const [payrollsList, setPayrollsList] = useState<PieceworkPayroll[]>([]);
   const [projectsList, setProjectsList] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Filters for Logs
-  const [selectedPersonnelFilter, setSelectedPersonnelFilter] = useState<string | number>('all');
-  const [selectedProjectFilter, setSelectedProjectFilter] = useState<string | number>('all');
-  const [startDateFilter, setStartDateFilter] = useState<string>('');
-  const [endDateFilter, setEndDateFilter] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [logSearchQuery, setLogSearchQuery] = useState<string>('');
+  // v9.0.330 (TD-811): فهرست کارکرد، فیلترها و جمع‌ها از سرور؛ پس از هر ثبت، ویرایش یا حذف دوباره خوانده می‌شوند
+  const [logsReloadKey, setLogsReloadKey] = useState<number>(0);
+  const logList = usePieceworkLogList(logsReloadKey);
 
   // Filters for Tasks
   const [taskCategoryFilter, setTaskCategoryFilter] = useState<string>('all');
@@ -117,6 +110,8 @@ export function usePiecework() {
   const [payrollTitle, setPayrollTitle] = useState<string>('');
   const [payrollBonuses, setPayrollBonuses] = useState<number>(0);
   const [payrollDeductions, setPayrollDeductions] = useState<number>(0);
+  // v9.0.329 (TD-861): شرح «سایر کسورات»؛ کسورات بالای صفر بی آن صادر نمی‌شود
+  const [payrollDeductionsDescription, setPayrollDeductionsDescription] = useState<string>('');
   // V1.9.0: کسر از مساعده/وام پرسنلی — بستانکار حساب مساعده در سند تسویه
   const [payrollAdvanceDeduction, setPayrollAdvanceDeduction] = useState<number>(0);
   const [payrollNotes, setPayrollNotes] = useState<string>('');
@@ -129,10 +124,9 @@ export function usePiecework() {
   const loadData = async (signal?: AbortSignal, status: 'active' | 'archived' | 'all' = taskStatusFilter) => {
     setLoading(true);
     try {
-      const [pRes, tRes, lRes, payRes, projRes, catRes] = await Promise.all([
+      const [pRes, tRes, payRes, projRes, catRes] = await Promise.all([
         fetchJson('/personnel', { signal }),
         fetchJson(`/piecework/tasks?status=${status}`, { signal }),
-        fetchJson('/piecework/logs', { signal }),
         canViewPayrolls ? fetchJson('/piecework/payrolls', { signal }) : Promise.resolve([]),
         fetchJson(PICK_LIST_URLS.projects, { signal }).catch((err) => {
           if (err?.name === 'AbortError') throw err;
@@ -147,7 +141,6 @@ export function usePiecework() {
       ]);
       setPersonnelList(Array.isArray(pRes) ? pRes : []);
       setTasksList(Array.isArray(tRes) ? tRes : []);
-      setLogsList(Array.isArray(lRes) ? lRes : []);
       setPayrollsList(Array.isArray(payRes) ? payRes : []);
       const projectsArr = Array.isArray(projRes?.data) ? projRes.data : (Array.isArray(projRes) ? projRes : []);
       setProjectsList(projectsArr);
@@ -155,10 +148,16 @@ export function usePiecework() {
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
       console.error('Error loading piecework data:', err);
-      hotToast.error(err?.message || 'خطا در دریافت اطلاعات پرکیسی');
+      hotToast.error(err?.message || 'خطا در دریافت اطلاعات کارمزدی');
     } finally {
       setLoading(false);
     }
+  };
+
+  /** داده‌های صفحه و فهرست کارکرد را دوباره می‌خواند */
+  const reloadAll = () => {
+    void loadData();
+    setLogsReloadKey(k => k + 1);
   };
 
   const handleTaskStatusFilterChange = (status: 'active' | 'archived' | 'all') => {
@@ -346,7 +345,7 @@ export function usePiecework() {
       }
 
       setIsLogModalOpen(false);
-      void loadData();
+      reloadAll();
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در ثبت کارکرد');
     } finally {
@@ -359,7 +358,7 @@ export function usePiecework() {
       try {
         await fetchJson(`/piecework/logs/${id}`, { method: 'DELETE' });
         hotToast.success('ردیف کارکرد حذف شد');
-        void loadData();
+        reloadAll();
       } catch (err) {
         hotToast.error(errorMessageOf(err) || 'خطا در حذف کارکرد');
       }
@@ -413,7 +412,7 @@ export function usePiecework() {
       }
 
       setIsTaskModalOpen(false);
-      void loadData();
+      reloadAll();
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در ذخیره عنوان کاری');
     } finally {
@@ -429,7 +428,7 @@ export function usePiecework() {
       try {
         await fetchJson(`/piecework/tasks/${task.id}`, { method: 'DELETE' });
         hotToast.success('عنوان کاری به بایگانی منتقل شد و سوابق آن ذخیره گردید');
-        void loadData();
+        reloadAll();
       } catch (err: any) {
         hotToast.error(err?.message || 'خطا در حذف عنوان کاری');
       }
@@ -444,7 +443,7 @@ export function usePiecework() {
       try {
         await fetchJson(`/piecework/tasks/${task.id}/restore`, { method: 'POST' });
         hotToast.success('عنوان کاری با موفقیت بازیابی شد');
-        void loadData();
+        reloadAll();
       } catch (err: any) {
         hotToast.error(err?.message || 'خطا در بازیابی عنوان کاری');
       }
@@ -513,7 +512,7 @@ export function usePiecework() {
     }
   };
 
-  const handleSaveCustomRate = async (taskId: number, customRate: number) => {
+  const handleSaveCustomRate = async (taskId: number, customRate: string) => {
     if (!selectedPersonnelForRates) return;
     try {
       await fetchJson('/piecework/personnel-rates', {
@@ -525,7 +524,8 @@ export function usePiecework() {
           customRate
         })
       });
-      setCustomRatesMap(prev => ({ ...prev, [taskId]: customRate }));
+      // v9.0.284 (TD-809): نرخ نمایش‌داده همان است که سرور ذخیره کرد و کارکرد می‌گیرد
+      await loadCustomRates(Number(selectedPersonnelForRates));
       hotToast.success('نرخ اختصاصی ثبت شد');
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در ذخیره نرخ اختصاصی');
@@ -540,22 +540,13 @@ export function usePiecework() {
     setPayrollTitle('');
     setPayrollBonuses(0);
     setPayrollDeductions(0);
+    setPayrollDeductionsDescription('');
     setPayrollNotes('');
     setIsPayrollModalOpen(true);
   };
 
-  // Preview pending logs for payroll issuance
-  const payrollPreviewLogs = useMemo(() => {
-    if (!payrollPersonnelId || !payrollStartDate || !payrollEndDate) return [];
-    const safeLogs = Array.isArray(logsList) ? logsList : [];
-    return safeLogs.filter(l =>
-      l.personnelId === Number(payrollPersonnelId) &&
-      l.status === 'pending' &&
-      // v7.0.134 (TD-232): تاریخ کارکرد ISO است و بازه فیش شمسی انتخاب می‌شود
-      l.date >= (toStorageDate(payrollStartDate) || '') &&
-      l.date <= (toStorageDate(payrollEndDate) || '')
-    );
-  }, [logsList, payrollPersonnelId, payrollStartDate, payrollEndDate]);
+  // Preview pending logs for payroll issuance (v9.0.330، TD-811: از سرور)
+  const payrollPreviewLogs = usePayrollPreviewLogs(isPayrollModalOpen, payrollPersonnelId, payrollStartDate, payrollEndDate, logsReloadKey);
 
   // V10-4.4: آیا پرسنل انتخاب‌شده برای صدور فیش به سهم حقوق ثابت نیازمند ردیف کارکرد نیست؟
   const selectedPayrollPerson = (personnelList as any[]).find((p: any) => String(p.id) === String(payrollPersonnelId));
@@ -579,7 +570,7 @@ export function usePiecework() {
   const payrollFixedRemainingHint = useMemo<string | null>(() => {
     if (!payrollFixedShares || payrollFixedShares.months.length === 0) return null;
     if (!payrollFixedShares.total.isPositive()) {
-      return 'هشدار: سهم حقوق ثابت این بازه قبلاً در فیش(های) دیگر محاسبه شده است — در این فیش مبلغ ثابتی اضافه نمی‌شود و فقط کارکرد پرکیسی پرداخت خواهد شد.';
+      return 'هشدار: سهم حقوق ثابت این بازه قبلاً در فیش(های) دیگر محاسبه شده است — در این فیش مبلغ ثابتی اضافه نمی‌شود و فقط کارکرد کارمزدی پرداخت خواهد شد.';
     }
     const parts = payrollFixedShares.months.map(m => `${m.month}: ${m.days} از ${m.monthDays} روز (${formatPersianPrice(Number(m.amount))})`);
     return `سهم حقوق ثابت این فیش ${formatPersianPrice(payrollFixedShares.total.toNumber())} است — ${parts.join('، ')}.`;
@@ -604,7 +595,7 @@ export function usePiecework() {
     // v8.0.30 (TD-284): سهم ثابت هر ماه شمسیِ بازه به نسبت روزها — مطابق منطق سمت سرور
     if (payrollPreviewLogs.length === 0 && !(payrollFixedShares?.total.isPositive() ?? false)) {
       hotToast.error(payrollFixedShares && payrollFixedShares.months.length > 0
-        ? 'سهم حقوق ثابت این بازه قبلاً در فیش دیگری محاسبه شده و کارکرد پرکیسی معوقی هم در این بازه وجود ندارد'
+        ? 'سهم حقوق ثابت این بازه قبلاً در فیش دیگری محاسبه شده و کارکرد کارمزدی معوقی هم در این بازه وجود ندارد'
         : 'هیچ کارکرد تسویه‌نشده‌ای در این بازه یافت نشد');
       return;
     }
@@ -620,6 +611,7 @@ export function usePiecework() {
         totalBonuses: payrollBonuses || 0,
         deductions: payrollDeductions || 0,
         totalDeductions: payrollDeductions || 0,
+        deductionsDescription: payrollDeductions > 0 ? payrollDeductionsDescription.trim() : undefined,
         advanceDeduction: payrollAdvanceDeduction || 0,
         notes: payrollNotes || undefined
       };
@@ -632,7 +624,7 @@ export function usePiecework() {
 
       hotToast.success(`فیش حقوقی با موفقیت با شماره ${res.payrollNumber || ''} صادر شد`);
       setIsPayrollModalOpen(false);
-      void loadData();
+      reloadAll();
       setActiveTab('payrolls');
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در صدور فیش حقوقی');
@@ -661,7 +653,7 @@ export function usePiecework() {
       if (viewingPayroll && viewingPayroll.id === id) {
         setViewingPayroll(prev => prev ? { ...prev, status } : null);
       }
-      void loadData();
+      reloadAll();
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در به‌روزرسانی وضعیت فیش');
     }
@@ -675,58 +667,12 @@ export function usePiecework() {
         if (viewingPayroll && viewingPayroll.id === id) {
           setViewingPayroll(null);
         }
-        void loadData();
+        reloadAll();
       } catch (err) {
         hotToast.error(errorMessageOf(err) || 'خطا در ابطال فیش حقوقی');
       }
     }
   };
-
-  // Filtered Logs
-  const filteredLogs = useMemo(() => {
-    const safeLogs = Array.isArray(logsList) ? logsList : [];
-    return safeLogs.filter(log => {
-      const matchPersonnel = selectedPersonnelFilter === 'all' || log.personnelId === Number(selectedPersonnelFilter);
-      const matchProject = selectedProjectFilter === 'all' ||
-        (selectedProjectFilter === 'none' ? !log.projectId : log.projectId === Number(selectedProjectFilter));
-      const matchStatus = statusFilter === 'all' || log.status === statusFilter;
-      const matchStart = !startDateFilter || log.date >= (toStorageDate(startDateFilter) || '');
-      const matchEnd = !endDateFilter || log.date <= (toStorageDate(endDateFilter) || '');
-      const q = logSearchQuery.trim().toLowerCase();
-      const matchSearch = !q ||
-        (log.personnelName && log.personnelName.toLowerCase().includes(q)) ||
-        (log.taskTitle && log.taskTitle.toLowerCase().includes(q)) ||
-        (log.projectTitle && log.projectTitle.toLowerCase().includes(q));
-
-      return matchPersonnel && matchProject && matchStatus && matchStart && matchEnd && matchSearch;
-    });
-  }, [logsList, selectedPersonnelFilter, selectedProjectFilter, statusFilter, startDateFilter, endDateFilter, logSearchQuery]);
-
-  // Project Costs Summary
-  const projectCostsSummary = useMemo(() => {
-    const safeLogs = Array.isArray(logsList) ? logsList : [];
-    const map: Record<string, { projectId: number | null; title: string; totalCost: number; logCount: number; personnelSet: Set<string> }> = {};
-
-    safeLogs.forEach(log => {
-      const key = log.projectId ? String(log.projectId) : 'unassigned';
-      if (!map[key]) {
-        map[key] = {
-          projectId: log.projectId || null,
-          title: log.projectTitle || (log.projectId ? `پروژه #${log.projectId}` : 'بدون پروژه کارگاهی (عمومی)'),
-          totalCost: 0,
-          logCount: 0,
-          personnelSet: new Set()
-        };
-      }
-      map[key].totalCost += (log.totalAmount || 0);
-      map[key].logCount += 1;
-      if (log.personnelName) {
-        map[key].personnelSet.add(log.personnelName);
-      }
-    });
-
-    return Object.values(map).sort((a, b) => b.totalCost - a.totalCost);
-  }, [logsList]);
 
   // Filtered Tasks
   const filteredTasks = useMemo(() => {
@@ -741,17 +687,6 @@ export function usePiecework() {
     });
   }, [tasksList, taskCategoryFilter, taskSearchQuery]);
 
-  // Totals
-  const totalLoggedAmount = useMemo(() => {
-    const safeLogs = Array.isArray(logsList) ? logsList : [];
-    return safeLogs.reduce((sum, l) => sum + (l.totalAmount || 0), 0);
-  }, [logsList]);
-
-  const pendingLoggedAmount = useMemo(() => {
-    const safeLogs = Array.isArray(logsList) ? logsList : [];
-    return safeLogs.filter(l => l.status === 'pending').reduce((sum, l) => sum + (l.totalAmount || 0), 0);
-  }, [logsList]);
-
   return {
     canViewPayrolls,
     canSetLogRate,
@@ -759,23 +694,11 @@ export function usePiecework() {
     setActiveTab,
     personnelList,
     tasksList,
-    logsList,
     payrollsList,
     projectsList,
     loading,
-    loadData,
-    selectedPersonnelFilter,
-    setSelectedPersonnelFilter,
-    selectedProjectFilter,
-    setSelectedProjectFilter,
-    startDateFilter,
-    setStartDateFilter,
-    endDateFilter,
-    setEndDateFilter,
-    statusFilter,
-    setStatusFilter,
-    logSearchQuery,
-    setLogSearchQuery,
+    loadData: reloadAll,
+    ...logList,
     taskCategoryFilter,
     setTaskCategoryFilter,
     taskSearchQuery,
@@ -831,6 +754,8 @@ export function usePiecework() {
     setPayrollBonuses,
     payrollDeductions,
     setPayrollDeductions,
+    payrollDeductionsDescription,
+    setPayrollDeductionsDescription,
     payrollNotes,
     setPayrollNotes,
     payrollFixedIncluded,
@@ -866,10 +791,6 @@ export function usePiecework() {
     handleViewPayslip,
     handleUpdatePayrollStatus,
     handleDeletePayroll,
-    filteredLogs,
-    projectCostsSummary,
-    filteredTasks,
-    totalLoggedAmount,
-    pendingLoggedAmount
+    filteredTasks
   };
 }

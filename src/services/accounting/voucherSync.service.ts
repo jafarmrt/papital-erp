@@ -193,7 +193,7 @@ export class VoucherSyncService {
       return null;
     }
 
-    // v9.0.287 (TD-778، تصمیم ت۶ الف): طرف حساب از شناسه سند؛ سند پیشین بی شناسه با برابری دقیق نام
+    // v9.0.336 (TD-778، تصمیم ت۶ الف): طرف حساب از شناسه سند؛ سند پیشین بی شناسه با برابری دقیق نام
     const matchedCustomerId = await documentVoucherPartyId(executor, doc);
 
     // V10-1.1 & V5.0.17: fallback تاریخ ۱۰ کاراکتری ایمن
@@ -549,7 +549,7 @@ export class VoucherSyncService {
     const finishedGoodsAcc = (await AccountMappingService.getInventoryFinishedGoodsAccount(tx)) || allAccs.find(a => a.code === '1403');
     const supplierAcc = (await AccountMappingService.getTradePayablesAccount(tx)) || allAccs.find(a => a.code === '3001');
 
-    // v9.0.287 (TD-778): تأمین‌کننده از شناسه سند؛ سند پیشین بی شناسه با برابری دقیق نام
+    // v9.0.336 (TD-778): تأمین‌کننده از شناسه سند؛ سند پیشین بی شناسه با برابری دقیق نام
     const matchedSupplierId = doc.type !== 'production_receipt' ? await documentVoucherPartyId(executor, doc) : null;
 
     let matchedProjectId: number | null = doc.projectId ? Number(doc.projectId) : null;
@@ -1003,7 +1003,7 @@ export class VoucherSyncService {
       }
       const customerReturnCredit = totalReturnAmountNum.add(returnVatNum).round(4);
 
-      // v9.0.287 (TD-778): مشتری برگشت از شناسه سند؛ سند پیشین بی شناسه با برابری دقیق نام
+      // v9.0.336 (TD-778): مشتری برگشت از شناسه سند؛ سند پیشین بی شناسه با برابری دقیق نام
       const matchedCustomerId = await documentVoucherPartyId(executor, doc);
 
       voucherType = 'sales';
@@ -1289,7 +1289,7 @@ export class VoucherSyncService {
         debit: pieceworkAmount,
         credit: 0,
         currency: 'IRR',
-        description: `هزینه دستمزد تولیدی پرکیسی فیش ${pay.payrollNumber}`
+        description: `هزینه دستمزد تولیدی کارمزدی فیش ${pay.payrollNumber}`
       });
     }
     // سهم هزینه حقوق ثابت (+ پاداش/اضافه‌کار)
@@ -1309,7 +1309,7 @@ export class VoucherSyncService {
 
     // V4.0.33: تفکیک دقیق طرف بستانکار بر مبنای استاندارد حسابداری دوطرفه:
     // ۱. کسر از مساعده پرسنلی (بستانکار حساب 1301 مساعده)
-    // ۲. سایر کسورات پرداختنی (بستانکار حساب 3202 کسورات)
+    // ۲. کسورات حقوق پرداختنی (بستانکار حساب نگاشت‌شده، پیش‌فرض 3205؛ تا v9.0.274 پیش‌دریافت مشتری 3202، TD-554)
     // ۳. خالص حقوق پرداختنی (بستانکار حساب 3201 حقوق پرداختنی)
     const advanceDeduction = nonNegative(pay.advanceDeduction);
     const otherDeductions = nonNegative(pay.totalDeductions);
@@ -1345,11 +1345,12 @@ export class VoucherSyncService {
           debit: 0,
           credit: otherDeductions,
           currency: 'IRR',
-          description: `سایر کسورات فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})`
+          // v9.0.329 (TD-861): شرح کسورات فیش در ردیف کسورات حقوق پرداختنی می‌آید (فیش پیش از آن شرح ندارد)
+          description: `سایر کسورات فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})${pay.deductionsDescription ? `: ${pay.deductionsDescription}` : ''}`
         });
         allocatedCredits = allocatedCredits.add(otherDeductions);
       } else if (isStrict) {
-        throw new ValidationError(`حساب معین سایر کسورات پرداختنی (3202) جهت ثبت کسورات فیش ${pay.payrollNumber} یافت نشد.`);
+        throw new ValidationError(`حساب «کسورات حقوق پرداختنی» (نگاشت حساب‌ها، پیش‌فرض ۳۲۰۵) برای ثبت کسورات فیش ${pay.payrollNumber} یافت نشد.`);
       }
     }
 
@@ -1377,7 +1378,7 @@ export class VoucherSyncService {
       date: pay.endDate || await businessTodayIsoDate(),
       voucherType: 'payroll',
       status: 'draft',
-      description: `ثبت هزینه و محاسبه حقوق و کارمزد پرکیسی ${pay.title} - پرسنل: ${pers?.fullName || 'پرسنل'} (${pay.payrollNumber})`,
+      description: `ثبت هزینه و محاسبه حقوق و کارمزد ${pay.title} - پرسنل: ${pers?.fullName || 'پرسنل'} (${pay.payrollNumber})`,
       referenceModule: 'payroll',
       referenceId: pay.id,
       referenceNumber: pay.payrollNumber,

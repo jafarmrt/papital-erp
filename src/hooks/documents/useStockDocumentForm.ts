@@ -47,7 +47,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const [actionType, setActionType] = useState<'in' | 'out'>('in');
   const [docType, setDocType] = useState('receipt');
   const [refNumber, setRefNumber] = useState('');
-  // v9.0.285 (TD-783): شماره پیشنهادی سرور؛ همان شماره دست‌نخورده «auto» فرستاده می‌شود
+  // v9.0.327 (TD-783): شماره پیشنهادی سرور؛ همان شماره دست‌نخورده «auto» فرستاده می‌شود
   const [suggestedRef, setSuggestedRef] = useState('');
   const [date, setDate] = useState<string>(() => getTodayJalaliDate());
   const [location, setLocation] = useState('');
@@ -58,7 +58,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const [returnInvoiceRef, setReturnInvoiceRef] = useState('');
   // v7.0.81 (TD-230): شناسه فاکتور فروش اصلی؛ کالای برگشتی با بهای خروج همان فاکتور وارد انبار می‌شود
   const [returnInvoiceId, setReturnInvoiceId] = useState<number | null>(null);
-  // v9.0.284 (TD-782): فاکتورهای قطعی هم‌شماره در چند سال مالی، تا کاربر سال را انتخاب کند
+  // v9.0.326 (TD-782): فاکتورهای قطعی هم‌شماره در چند سال مالی، تا کاربر سال را انتخاب کند
   const [returnInvoiceCandidates, setReturnInvoiceCandidates] = useState<ReturnInvoiceCandidate[]>([]);
   // v9.0.274 (TD-774، تصمیم ت۵ الف): درصد مالیات برگشت بی فاکتور مرجع از کاربر؛ برگشت با فاکتور مرجع آن را از فاکتور دارد
   const [returnVatPercent, setReturnVatPercent] = useState<number | ''>('');
@@ -110,7 +110,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     setReturnInvoiceCandidates([]);
   };
 
-  // v9.0.284 (TD-782): فقط فاکتور قطعی؛ شماره‌ای که در چند سال مالی فاکتور دارد سال را می‌پرسد
+  // v9.0.326 (TD-782): فقط فاکتور قطعی؛ شماره‌ای که در چند سال مالی فاکتور دارد سال را می‌پرسد
   const handleFetchReturnInvoice = async (fiscalYear?: number | null) => {
     if (!returnInvoiceRef.trim()) return;
     try {

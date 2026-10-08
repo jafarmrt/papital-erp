@@ -100,7 +100,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
               )}
             </div>
             <p className="text-slate-500 text-xs mt-0.5">
-              {activeTabItem?.shortDesc || 'پیکربندی سیستم و مدیریت داده‌های پایه بر اساس ماژول‌های مرتبط'}
+              {activeTabItem?.shortDesc || 'پیکربندی سامانه و مدیریت داده‌های پایه بر اساس بخش‌های مرتبط'}
             </p>
           </div>
         </div>
@@ -272,6 +272,8 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
             handleSyncManualOrder={s.handleSyncManualOrder}
             syncedWcOrders={s.syncedWcOrders}
             wcOrderLogs={s.wcOrderLogs}
+            syncedWcOrdersError={s.syncedWcOrdersError}
+            wcOrderLogsError={s.wcOrderLogsError}
             loadSyncedWcOrders={s.loadSyncedWcOrders}
             handleSyncAllStocks={s.handleSyncAllStocks}
             isSyncingAllStocks={s.isSyncingAllStocks}
@@ -339,7 +341,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
 
       <ConfirmModal
         isOpen={s.whConfirmState.isOpen}
-        message="این انبار غیرفعال شود؟ مدیر سیستم می‌تواند آن را دوباره فعال کند."
+        message="این انبار غیرفعال شود؟ مدیر سامانه می‌تواند آن را دوباره فعال کند."
         onConfirm={s.executeWhDelete}
         onCancel={() => s.setWhConfirmState({ isOpen: false, whId: 0 })}
       />

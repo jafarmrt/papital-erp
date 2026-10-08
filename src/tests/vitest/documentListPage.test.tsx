@@ -6,7 +6,7 @@ import InventoryAuditPage from '../../pages/InventoryAuditPage';
 import { DOCUMENT_LIST_PAGE_SIZE, documentListPage, typedDocumentListUrl } from '../../lib/documents/documentListPage';
 import type { User } from '../../types';
 
-// v9.0.290 (TD-787): GET /documents always answers one page, so the stock count history and transfer tabs page through it
+// v9.0.339 (TD-787): GET /documents always answers one page, so the stock count history and transfer tabs page through it
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({
   fetchJson: (...args: unknown[]) => fetchJson(...args),

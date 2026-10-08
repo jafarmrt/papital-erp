@@ -24,7 +24,7 @@ const NEXT_REF_KEY = QUERY_KEYS.documents.nextRef('audit');
 const INTEGRITY_KEY = QUERY_KEYS.inventory.integrityAudit();
 // فهرست کالاهای مودال بازسازی موجودی (GET /items?limit=1000)؛ کلید جدا از فهرست‌های صفحه‌بندی‌شده کالا
 const REBUILD_ITEMS_KEY = QUERY_KEYS.items.list({ scope: 'inventory-rebuild', limit: 1000 });
-// v9.0.290 (TD-787): سوابق انبارگردانی و حواله‌ها صفحه‌به‌صفحه (۵۰ سند)؛ کلید کش هر صفحه همان پارامترهای درخواست است
+// v9.0.339 (TD-787): سوابق انبارگردانی و حواله‌ها صفحه‌به‌صفحه (۵۰ سند)؛ کلید کش هر صفحه همان پارامترهای درخواست است
 const typedDocsFilter = (type: string, page: number) => ({ type, page, limit: DOCUMENT_LIST_PAGE_SIZE });
 // آرایه‌های خالی ثابت تا محاسبات وابسته به لیست‌ها با هر رندر دوباره اجرا نشوند
 const NO_ROWS: AuditItemRow[] = [];

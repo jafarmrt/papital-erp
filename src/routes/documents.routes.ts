@@ -128,7 +128,7 @@ export const documentCreateSchema = z.object({
     notes: z.string().max(2000).nullable().optional(),
     location: z.string().max(100).nullable().optional(),
     crmLeadId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
-    // v9.0.287 (TD-778): طرف حساب سند فروش و خرید از انتخابگر (شناسه `customers`)
+    // v9.0.336 (TD-778): طرف حساب سند فروش و خرید از انتخابگر (شناسه `customers`)
     partyId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     projectId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     // v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش
@@ -189,7 +189,7 @@ export const documentUpdateSchema = z.object({
     location: z.string().max(100).nullable().optional(),
     // V10-4.3: پذیرش لینک رسمی CRM در ویرایش سند
     crmLeadId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
-    // v9.0.287 (TD-778): طرف حساب سند فروش و خرید از انتخابگر (شناسه `customers`)
+    // v9.0.336 (TD-778): طرف حساب سند فروش و خرید از انتخابگر (شناسه `customers`)
     partyId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     expectedVersion: z.number().int().positive().optional(),
     version: z.number().int().positive().optional(),
@@ -211,7 +211,7 @@ export const paramsRefSchema = z.object({
   params: z.object({
     ref: z.string().min(1, 'شماره سند الزامی است')
   }),
-  // v9.0.284 (TD-782): نوع سند الزامی و سال مالی اختیاری (خالی = همه سال‌ها)
+  // v9.0.326 (TD-782): نوع سند الزامی و سال مالی اختیاری (خالی = همه سال‌ها)
   query: z.object({
     type: z.enum(DOCUMENT_LIST_TYPES, { error: 'نوع سند نامعتبر است' }),
     fiscalYear: z.coerce.number().int('سال مالی باید عدد صحیح باشد').min(1300, 'سال مالی نامعتبر است').max(1600, 'سال مالی نامعتبر است').optional(),
@@ -232,7 +232,7 @@ export const nextRefQuerySchema = z.object({
   }).passthrough()
 }).passthrough();
 
-/** v9.0.277 (TD-792): `types=invoice,proforma` فهرست را به چند نوع محدود می‌کند */
+/** v9.0.301 (TD-792): `types=invoice,proforma` فهرست را به چند نوع محدود می‌کند */
 function documentListTypes(raw: unknown): string[] | undefined {
   if (typeof raw !== 'string') return undefined;
   const types = raw.split(',').map(t => t.trim()).filter(Boolean);
@@ -284,9 +284,9 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   const requestedType = String(req.body.docType);
   // v9.0.238 (TD-770): جهت گردش از نوع سند؛ `inOut` ناسازگار پیش از سنجش مجوز ۴۲۲ می‌گیرد
   assertRecordableDocument(requestedType, req.body.inOut);
-  // v9.0.283 (TD-780، تصمیم ت۷ الف): رسید تولید فقط از «ورود به انبار» پروژه
+  // v9.0.325 (TD-780، تصمیم ت۷ الف): رسید تولید فقط از «ورود به انبار» پروژه
   assertNotProjectDelivery(requestedType);
-  // v9.0.285 (TD-783، تصمیم ت۹ الف): شماره فاکتور فروش و برگشت فقط از سری سرور
+  // v9.0.327 (TD-783، تصمیم ت۹ الف): شماره فاکتور فروش و برگشت فقط از سری سرور
   assertManualRefAllowed(requestedType, req.body.refNumber);
   const recordStatus = createdDocumentStatus(requestedType, req.body.status);
   await assertMayRecordDocument(req.user, permissionToCreateDocument(req.body),
@@ -319,7 +319,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   // (پیش‌تر بررسی بی قفل پیش از تراکنش و علامت‌گذاری پس از commit؛ پیش‌فاکتورهای هم‌زمان همه ثبت می‌شدند)
   const { docId: newDocId, projectReservation, stored } = await orm.transaction(async (tx) => {
     const lead = isProforma && targetLeadId ? await lockLeadForNewProforma(tx, targetLeadId) : null;
-    // V10-4.3 / v9.0.281 (TD-776): پیوند رسمی سند به پرونده فروش همراه درج سند در سرویس (نه نوشتن جدا از route)
+    // V10-4.3 / v9.0.323 (TD-776): پیوند رسمی سند به پرونده فروش همراه درج سند در سرویس (نه نوشتن جدا از route)
     const created = await DocumentService.createDocumentWithDetails({ ...req.body, crmLeadId: targetLeadId, user: sessionUserLabel(req.user), externalTx: tx }, { userId: req.user?.id, allowBackdate });
     if (lead) await markLeadProforma(tx, lead, created.docId, req.user?.full_name || 'سیستم');
     // v9.0.39 (TD-446، ت۴): فقط سند فروش پیش‌نویس یا پیش‌فاکتور، در همین تراکنش، وارد گردش کار تأیید می‌شود و خطای شروع
@@ -333,7 +333,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
         tx,
       });
     }
-    // v9.0.285 (TD-783) / v9.0.288 (TD-785): ردیف ممیزی ثبت درون همین تراکنش و با سند ذخیره‌شده (نوع، شماره، وضعیت، طرف
+    // v9.0.327 (TD-783) / v9.0.337 (TD-785): ردیف ممیزی ثبت درون همین تراکنش و با سند ذخیره‌شده (نوع، شماره، وضعیت، طرف
     // حساب و ردیف‌ها از پایگاه‌داده)؛ پیش‌تر پس از commit و با بدنه درخواست به جای «پس از»
     const after = await documentAuditSnapshot(tx, created.docId);
     const title = docTypeTitles[after?.docType ?? req.body.docType] || 'سند انبار';
@@ -370,7 +370,7 @@ router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...R
   const endDate = req.query.endDate as string;
   // V3.1.46 (TD-070): فیلتر پروژه‌محور اسناد
   // V9-1.3: صفحه‌بندی NaN-safe با سقف — جلوگیری از dump کل جدول با limit نامعتبر/عظیم
-  // v9.0.290 (TD-787، یافته B08-18): فهرست همیشه صفحه‌بندی می‌شود (پیش‌فرض صفحه ۱ با ۵۰ سند، `limit=0` هم همان) و کل
+  // v9.0.339 (TD-787، یافته B08-18): فهرست همیشه صفحه‌بندی می‌شود (پیش‌فرض صفحه ۱ با ۵۰ سند، `limit=0` هم همان) و کل
   // فهرست فقط با `export=true`؛ پیش‌تر درخواست بی `page` و `limit` همه اسناد را با ردیف‌ها و تسویه‌هایشان برمی‌گرداند
   const isExport = String(req.query.export) === 'true';
   const parsed = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: DOCUMENT_LIST_PAGE_SIZE });
@@ -397,7 +397,7 @@ router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.doc
   const type = String(req.query.type);
   const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documentRecord);
   assertDocumentTypeReadable(readable, type);
-  // v9.0.284 (TD-782): یک کوئری روی شاخص (نوع، سال، شماره) و فقط سند قطعی فعال؛ چند سال با یک شماره ۴۰۹ با فهرست سال‌ها.
+  // v9.0.326 (TD-782): یک کوئری روی شاخص (نوع، سال، شماره) و فقط سند قطعی فعال؛ چند سال با یک شماره ۴۰۹ با فهرست سال‌ها.
   // پیش‌تر همه اسناد نوع بار می‌شد و سند سال جاری همیشه برنده بود
   const fiscalYear = req.query.fiscalYear === undefined ? null : Number(req.query.fiscalYear);
   const docId = await findFinalDocumentIdByRef({ ref: req.params.ref, type, fiscalYear, typeTitle: docTypeTitles[type] ?? 'سند' });
@@ -419,7 +419,7 @@ router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documentRec
   const doc = await DocumentService.getDocumentByIdOrRef(rawId);
   if (!doc) throw new NotFoundError(`سند با شناسه یا عطف ${rawId} یافت نشد`);
   assertDocumentTypeReadable(readable, doc.type);
-  // v9.0.286 (TD-781): ردیف‌های خزانه فقط برای خوانندگان خزانه
+  // v9.0.335 (TD-781): ردیف‌های خزانه فقط برای خوانندگان خزانه
   res.json(await documentForReader(req.user, doc));
 }));
 
@@ -456,7 +456,7 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
       comment: 'سند بیرون از گردش کار قطعی شد', userId: req.user?.id, userName: req.user?.full_name || req.user?.username,
     });
     // V10-2.2 (TD-020): سند دوبل حسابداری به صورت اتمیک درون تراکنش DocumentService.finalizeDocument صادر/به‌روزرسانی می‌شود
-    // v9.0.288 (TD-785): ردیف ممیزی درون همین تراکنش با سند پیش و پس از نهایی‌سازی؛ سندی که از پیش قطعی بود ردیفی نمی‌گیرد
+    // v9.0.337 (TD-785): ردیف ممیزی درون همین تراکنش با سند پیش و پس از نهایی‌سازی؛ سندی که از پیش قطعی بود ردیفی نمی‌گیرد
     if (change) {
       await logActivity({
         req,
@@ -475,9 +475,9 @@ router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 
 
 router.put('/documents/:id', authorizePermission('documents.edit'), validate(documentUpdateSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
-  // v9.0.281 (TD-776): پیوند پرونده فروش (`crmLeadId`، null = قطع) درون تراکنش ویرایش و زیر قفل پرونده؛ پیش‌تر پس از commit
+  // v9.0.323 (TD-776): پیوند پرونده فروش (`crmLeadId`، null = قطع) درون تراکنش ویرایش و زیر قفل پرونده؛ پیش‌تر پس از commit
   // ویرایش، بی قفل و بی قاعده «یک پیش‌فاکتور برای هر پرونده» نوشته می‌شد
-  // v9.0.288 (TD-785): ویرایش و ردیف ممیزی‌اش در یک تراکنش، با سند پیش (زیر قفل ردیف) و پس از ویرایش از پایگاه‌داده؛
+  // v9.0.337 (TD-785): ویرایش و ردیف ممیزی‌اش در یک تراکنش، با سند پیش (زیر قفل ردیف) و پس از ویرایش از پایگاه‌داده؛
   // پیش‌تر پس از commit و بی «پیش از»، با نام و یادداشت بدنه درخواست
   await orm.transaction(async (tx) => {
     const change = await DocumentService.updateDocument(docId, { ...req.body, user: sessionUserLabel(req.user) }, tx);
@@ -498,7 +498,7 @@ router.put('/documents/:id', authorizePermission('documents.edit'), validate(doc
 router.put('/documents/:id/notes', authorizePermission('documents.edit'), validate(updateDocumentNotesSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
   const { notes } = req.body;
-  // v9.0.288 (TD-785): یادداشت (حتی سند قطعی) فقط همراه ردیف ممیزی پیش و پس در همان تراکنش عوض می‌شود
+  // v9.0.337 (TD-785): یادداشت (حتی سند قطعی) فقط همراه ردیف ممیزی پیش و پس در همان تراکنش عوض می‌شود
   await orm.transaction(async (tx) => {
     const change = await DocumentService.updateDocumentNotes(docId, notes, tx);
     await logActivity({
@@ -526,7 +526,7 @@ router.delete('/documents/:id', authorizePermission('documents.delete'), validat
   const sessionUser: (AuthUserPayload & { name?: string }) | undefined = req.user;
   const currentUser = sessionUser?.username || sessionUser?.name || 'system';
   // v9.0.12 (TD-423): پرونده فروش سند در همان تراکنش ابطال، پیش از قفل کالاها و سند، آزاد می‌شود و «فروش موفق» برمی‌گردد
-  // v9.0.288 (TD-785): تنها ردیف ممیزی ابطال را سرویس درون همین تراکنش با سند پیش از ابطال می‌نویسد (پیش‌تر ردیف دومی
+  // v9.0.337 (TD-785): تنها ردیف ممیزی ابطال را سرویس درون همین تراکنش با سند پیش از ابطال می‌نویسد (پیش‌تر ردیف دومی
   // پس از commit از این مسیر)؛ آزاد شدن پرونده فروش به شرح همان ردیف می‌رود
   await orm.transaction(async (tx) => {
     const released = await releaseLeadOfVoidedDocument(tx, { id: docId, refNumber: beforeDoc.ref_number ?? null }, req.user?.full_name || req.user?.username || 'سیستم');

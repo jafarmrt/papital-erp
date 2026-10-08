@@ -1,4 +1,4 @@
--- Drizzle Migration 0076: the party of a document by id (v9.0.287 / TD-778, finding B08-09, product-owner decision t6 option A
+-- Drizzle Migration 0080: the party of a document by id (v9.0.336 / TD-778, finding B08-09, product-owner decision t6 option A
 -- of package 8)
 --
 -- A document knew its party only by the text of buyer_name. The sales and purchase vouchers, the customer dossier, the

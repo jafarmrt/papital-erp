@@ -1,5 +1,5 @@
--- Drizzle Migration 0077: CHECK constraints on documents and document lines, and one index on documents.project_id
--- (v9.0.289 / TD-786, finding B08-17)
+-- Drizzle Migration 0081: CHECK constraints on documents and document lines, and one index on documents.project_id
+-- (v9.0.338 / TD-786, finding B08-17)
 --
 -- Only the services checked that a document has a known type and status and that a document line has a non-negative
 -- quantity, unit price and discount; a direct write or a service bug could store anything. Each rule below is enforced by

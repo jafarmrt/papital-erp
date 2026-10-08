@@ -37,7 +37,7 @@ export function AccountingAuditChecklistView() {
   const report: FinancialHealthReport | null = healthQuery.data ?? null;
   const loading = healthQuery.isFetching;
   const error = healthQuery.isError
-    ? (healthQuery.error instanceof Error ? healthQuery.error.message : 'خطا در اسکن سلامت دفاتر حسابداری')
+    ? (healthQuery.error instanceof Error ? healthQuery.error.message : 'خطا در بررسی سلامت دفاتر حسابداری')
     : null;
   const [expandedTestIds, setExpandedTestIds] = useState<Record<string, boolean>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -69,7 +69,7 @@ export function AccountingAuditChecklistView() {
     try {
       // پس از صدور، گزارش سلامت (همراه دیگر کلیدهای اسناد حسابداری) دوباره خوانده می‌شود
       const res = await syncVouchers.mutateAsync();
-      setSyncMessage(res.message || 'اسناد دوبل فاکتورها با موفقیت صادر شدند.');
+      setSyncMessage(res.message || 'اسناد حسابداری فاکتورها صادر شد.');
     } catch (err: unknown) {
       setSyncMessage(err instanceof Error ? err.message : 'خطا در صدور خودکار اسناد');
     }
@@ -123,7 +123,7 @@ export function AccountingAuditChecklistView() {
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                پایش زنده و لحظه‌ای تراز اسناد دوبل، مانده خلاف ماهیت، انطباق ارزش کاردکس انبار و وضعیت چک‌ها
+                پایش زنده و لحظه‌ای تراز اسناد حسابداری، مانده خلاف ماهیت، انطباق ارزش کاردکس انبار و وضعیت چک‌ها
               </p>
             </div>
           </div>
@@ -134,7 +134,7 @@ export function AccountingAuditChecklistView() {
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition-all shadow-sm shadow-indigo-500/20 active:scale-98"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>اسکن مجدد زنده دفاتر</span>
+            <span>بررسی دوباره دفاتر</span>
           </button>
         </div>
 
@@ -203,13 +203,13 @@ export function AccountingAuditChecklistView() {
             <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-750/70 flex flex-col justify-center">
               <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
                 <Clock className="w-3 h-3 text-slate-400" />
-                زمان‌سنجی اسکن
+                زمان بررسی
               </span>
               <div className="text-xs text-slate-800 dark:text-slate-200 font-semibold mt-1">
                 تاریخ: {toPersianDigits(report.scannedAtJalali)}
               </div>
               <div className="text-[10px] text-slate-500 mt-0.5">
-                سرعت اسکن: {toPersianDigits(report.scanDurationMs)} میلی‌ثانیه
+                مدت بررسی: {toPersianDigits(report.scanDurationMs)} میلی‌ثانیه
               </div>
             </div>
           </div>
@@ -229,7 +229,7 @@ export function AccountingAuditChecklistView() {
                     </div>
                     <div>
                       <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                        اقدام سریع پیشنهادی: {toPersianDigits(unlinkedCount)} فاکتور نهایی فاقد سند دوبل
+                        اقدام سریع پیشنهادی: {toPersianDigits(unlinkedCount)} فاکتور نهایی بی سند حسابداری
                       </span>
                       <span className="text-[11px] text-slate-600 dark:text-slate-400 block mt-0.5">
                         می‌توانید با یک کلیک تمام اسناد حسابداری معوق را به‌صورت خودکار صادر نمایید.
@@ -264,7 +264,7 @@ export function AccountingAuditChecklistView() {
       <div className="flex items-center gap-1.5 border-b border-slate-200 dark:border-slate-700 pb-2 overflow-x-auto text-xs font-medium">
         {[
           { key: 'all', label: 'همه آزمون‌ها' },
-          { key: 'vouchers', label: 'تراز اسناد دوبل' },
+          { key: 'vouchers', label: 'تراز اسناد حسابداری' },
           { key: 'accounts', label: 'ماهیت حساب‌ها' },
           { key: 'inventory', label: 'انبار و کاردکس' },
           { key: 'documents', label: 'فاکتورها و اسناد تجاری' },
@@ -289,7 +289,7 @@ export function AccountingAuditChecklistView() {
         {loading && !report && (
           <div className="p-12 text-center text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-3">
             <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
-            <span>در حال اسکن جامع جداول مالی، اسناد دوبل و کاردکس انبار...</span>
+            <span>در حال بررسی جداول مالی، اسناد حسابداری و کاردکس انبار...</span>
           </div>
         )}
 
@@ -423,7 +423,7 @@ export function AccountingAuditChecklistView() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-slate-100 dark:border-slate-700/60">
             <div className="border border-slate-200/80 dark:border-slate-700/80 rounded-xl p-3.5 bg-slate-50/50 dark:bg-slate-750/50 space-y-2">
               <div className="flex items-center justify-between font-bold text-xs text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 pb-1.5">
-                <span>۱. کدینگ و اسناد دوبل حسابداری</span>
+                <span>۱. کدینگ و اسناد حسابداری</span>
                 <span className="text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded text-[10px]">۱۰۰٪ استاندارد</span>
               </div>
               <ul className="text-xs space-y-1.5 text-slate-600 dark:text-slate-300">
@@ -433,7 +433,7 @@ export function AccountingAuditChecklistView() {
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  اسناد دوبل با اعتبارسنجی تراز بودن بدهکار و بستانکار
+                  اسناد حسابداری با سنجش تراز بدهکار و بستانکار
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
@@ -475,7 +475,7 @@ export function AccountingAuditChecklistView() {
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  موتور مغایرت‌گیری هوشمند ۳ سطحی صورتحساب بانکی (Bank Reconciliation)
+                  مغایرت‌گیری سه‌سطحی صورت‌حساب بانکی
                 </li>
               </ul>
             </div>

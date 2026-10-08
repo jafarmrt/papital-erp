@@ -5,6 +5,12 @@
  * v7.0.56 (audit P2-9): سندهای حسابداری، خزانه، چک و پروژه.
  * v7.0.59 (TD-223، تصمیم مالک محصول، فقط مجوزهای موجود): بقیه مسیرهای خواندن.
  */
+/**
+ * خوانندگان مبالغ حقوق (فیش، پرداخت و مانده مساعده). v9.0.320 (TD-805): پرداخت‌کننده فیش (`piecework.pay`) فیشی را که
+ * پرداخت می‌کند می‌بیند.
+ */
+const PAYROLL_AMOUNT_READERS = ['piecework.payroll', 'piecework.pay', 'personnel.manage', 'accounting.treasury'] as const;
+
 export const READ_PERMISSIONS = {
   journalVouchers: ['accounting.vouchers', 'accounting.reports', 'accounting.view'],
   treasuryTransactions: ['accounting.treasury', 'accounting.reports', 'accounting.view'],
@@ -23,10 +29,11 @@ export const READ_PERMISSIONS = {
    * فهرست انتخاب پروژه (`GET /projects/options`، شناسه، کد، عنوان، وضعیت و نام مشتری): سند ورود و خروج انبار
    * (documents.view، documents.create، warehouse.in)، انبار پروژه و تخصیص مواد اولیه (warehouse.view، warehouse.out)،
    * کارکرد کارمزدی (piecework.view، piecework.log)، گزارش روزانه (daily_logs.view، daily_logs.create) و تفصیلی پروژه در
-   * سند حسابداری دستی و اصلاحی (accounting.vouchers، v9.0.193، TD-569)
+   * سند حسابداری دستی و اصلاحی (accounting.vouchers، v9.0.193، TD-569). v9.0.277 (B16-04): هر کلیدی که صفحه «ورود و خروج
+   * انبار» را باز می‌کند (`documents.finalize` هم) فهرست‌های انتخاب آن صفحه را هم می‌خواند.
    */
   projectOptions: [
-    'projects.view', 'documents.view', 'documents.create', 'warehouse.view', 'warehouse.in', 'warehouse.out',
+    'projects.view', 'documents.view', 'documents.create', 'documents.finalize', 'warehouse.view', 'warehouse.in', 'warehouse.out',
     'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create', 'accounting.vouchers',
   ],
   /** فهرست کامل طرف حساب‌ها (با یادداشت و نسخه رکورد) فقط با مجوز مشاهده همان بخش (v9.0.137، TD-887، ت۱۰ الف) */
@@ -34,9 +41,10 @@ export const READ_PERMISSIONS = {
   /**
    * فهرست انتخاب طرف حساب (`GET /customers/options`): فاکتور و حواله (documents.create)، رسید انبار (warehouse.in،
    * documents.view)، ارتباط با مشتری، پروژه، خرید، نقطه سفارش (products.view، warehouse.view) و فرم‌های حسابداری.
+   * v9.0.277 (B16-04): کلیدهای صفحه «ورود و خروج انبار» (warehouse.out، documents.finalize) هم.
    */
   customerOptions: [
-    'customers.view', 'documents.view', 'documents.create', 'warehouse.in', 'warehouse.view', 'products.view', 'crm.view',
+    'customers.view', 'documents.view', 'documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'warehouse.view', 'products.view', 'crm.view',
     'projects.view', 'procurement.view', 'accounting.view', 'accounting.reports', 'accounting.vouchers', 'accounting.treasury',
     'accounting.cheques',
   ],
@@ -57,10 +65,10 @@ export const READ_PERMISSIONS = {
   documentRecord: ['documents.view', 'documents.create', 'documents.edit', 'workflow.view'],
   /**
    * شماره بعدی سند (`/documents/next-ref`): فرم‌هایی که سند ثبت می‌کنند — فاکتور و حواله، رسید و حواله انبار، انبارگردانی
-   * و انتقال بین انبارها
+   * و انتقال بین انبارها (v9.0.277، B16-04: `documents.finalize` که صفحه ورود و خروج انبار را باز می‌کند)
    */
   documentNextRef: [
-    'documents.view', 'documents.create', 'documents.edit', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'audit.view',
+    'documents.view', 'documents.create', 'documents.edit', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'audit.view',
   ],
   /** برگه شمارش انبارگردانی (`/documents/audit-items`، موجودی دفتری هر کالا) */
   stockCountSheet: ['audit.view'],
@@ -74,11 +82,12 @@ export const READ_PERMISSIONS = {
   /**
    * فهرست انتخاب کالا (`GET /items/options`، بی نقطه سفارش، رزرو و نسخه؛ میانگین بها فقط با products.view): فاکتور و حواله
    * (documents.create)، ورود و خروج انبار (documents.view، warehouse.in)، انبارگردانی (audit.view)، پروژه و انبار پروژه
-   * (projects.view، warehouse.view)، خرید، ارتباط با مشتری و انتقال (products.view)
+   * (projects.view، warehouse.view)، خرید، ارتباط با مشتری و انتقال (products.view). v9.0.277 (B16-04): کلیدهای صفحه
+   * «ورود و خروج انبار» (warehouse.out، documents.finalize) هم.
    */
   itemOptions: [
-    'products.view', 'documents.view', 'documents.create', 'warehouse.view', 'warehouse.in', 'audit.view', 'projects.view',
-    'crm.view', 'procurement.view',
+    'products.view', 'documents.view', 'documents.create', 'documents.finalize', 'warehouse.view', 'warehouse.in', 'warehouse.out',
+    'audit.view', 'projects.view', 'crm.view', 'procurement.view',
   ],
   /** صفحه هشدار نقطه سفارش (همان کلیدهای صفحه در `PAGE_ACCESS`) */
   itemReorderAlerts: ['products.view', 'warehouse.view'],
@@ -94,21 +103,25 @@ export const READ_PERMISSIONS = {
     'documents.view', 'documents.create', 'warehouse.in'
   ],
   /**
-   * کارکرد، تعرفه‌ها، عناوین و دسته‌های کارمزدی. `personnel.manage` همین‌ها را می‌نویسد (عناوین کاری در زبانه تنظیمات،
-   * ثبت کارکرد) و پیش‌تر فهرستی را که ذخیره می‌کرد نمی‌خواند (v9.0.131، TD-668).
+   * کارکرد، تعرفه‌ها، عناوین و دسته‌های کارمزدی. `personnel.manage` پیش‌تر همین‌ها را می‌نوشت و فهرستی را که ذخیره می‌کرد
+   * نمی‌خواند (v9.0.131، TD-668)؛ از v9.0.320 (TD-805) نوشتن آن‌ها با `piecework.manage_tasks` است و `personnel.manage` فقط می‌خواند.
    */
   pieceworkReference: ['piecework.view', 'piecework.log', 'piecework.manage_tasks', 'projects.view', 'settings.manage', 'personnel.manage'],
   /**
-   * کارکرد همه پرسنل با نرخ و مبلغ (`GET /piecework/logs`) فقط برای صفحه کارمزدی و مدیر کارکرد (`personnel.manage`، ویرایش
-   * و حذف کارکرد) (v9.0.142، TD-892؛ پیش‌تر مشاهده پروژه و مدیریت تنظیمات هم کارکرد همه پرسنل را می‌خواندند)
+   * کارکرد همه پرسنل با نرخ و مبلغ (`GET /piecework/logs`) فقط برای صفحه کارمزدی و مدیر پرسنل (v9.0.142، TD-892؛ پیش‌تر
+   * مشاهده پروژه و مدیریت تنظیمات هم کارکرد همه پرسنل را می‌خواندند). ویرایش و حذف کارکرد از v9.0.320 (TD-805) با `piecework.log` است.
    */
   pieceworkLogs: ['piecework.view', 'piecework.log', 'personnel.manage'],
   /** کارکردهای یک پروژه (`GET /piecework/logs?projectId=`، زبانه زمان‌بندی پروژه) */
   projectPieceworkLogs: ['projects.view'],
-  /** نرخ‌های اختصاصی یک پرسنل: فرم ثبت کارکرد و پنجره نرخ‌های پرسنل */
-  pieceworkRates: ['piecework.view', 'piecework.log', 'personnel.manage'],
+  /**
+   * نرخ‌های اختصاصی یک پرسنل (`GET /piecework/personnel-rates/:id`): فرم ثبت کارکرد، زبانه نرخ‌ها (نویسنده آن
+   * `piecework.manage_tasks`) و خوانندگان مبالغ حقوق؛ مشاهده پروژه و مدیریت تنظیمات فقط عنوان‌ها و دسته‌ها را می‌خوانند
+   * (v9.0.321، TD-806، B12P-03، تصمیم ت۳ «الف»)
+   */
+  pieceworkRates: ['piecework.view', 'piecework.log', 'piecework.manage_tasks', ...PAYROLL_AMOUNT_READERS],
   /** فیش‌های حقوق و کارمزد با مبالغ (فیش خود کاربر از /piecework/payrolls/mine) */
-  payrolls: ['piecework.payroll', 'personnel.manage', 'accounting.treasury'],
+  payrolls: [...PAYROLL_AMOUNT_READERS],
   transfers: ['products.view'],
   pendingMaterials: ['pending_materials.view', 'products.view'],
   reservedItems: ['products.view', 'reports.view', 'warehouse.view', 'warehouse.in', 'documents.view', 'documents.create'],
@@ -122,11 +135,11 @@ export const READ_PERMISSIONS = {
   bankAccounts: ['accounting.treasury', 'accounting.reports', 'accounting.view'],
   /**
    * فهرست انتخاب حساب‌های خزانه (`/accounting/bank-accounts/options`، بی شماره و مانده): فرم تسویه فاکتور، دفتر چک،
-   * سند حسابداری و پرداخت حقوق (`personnel.manage`، مجوز ثبت پرداخت فیش)
+   * سند حسابداری و پرداخت حقوق (`piecework.pay`، مجوز ثبت پرداخت فیش؛ تا v9.0.319 `personnel.manage`، TD-805)
    */
   bankAccountOptions: [
     'accounting.treasury', 'accounting.cheques', 'accounting.vouchers', 'accounting.reports', 'accounting.view',
-    'warehouse.in', 'warehouse.out', 'documents.view', 'documents.create', 'personnel.manage'
+    'warehouse.in', 'warehouse.out', 'documents.view', 'documents.create', 'piecework.pay'
   ],
   /** درخواست‌های خرید (بی کد نقش؛ مدل مجوز بسته ۲) */
   purchaseRequisitions: ['procurement.view', 'projects.view'],

@@ -6,10 +6,10 @@ import type { HealthCheckTestResult } from '../../types.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
 
 /**
- * v9.0.287 (TD-778، یافته B08-09، تصمیم ت۶ الف بسته ۸): سند فروش و خرید طرف حسابش را با شناسه (`documents.party_id`) نگه
+ * v9.0.336 (TD-778، یافته B08-09، تصمیم ت۶ الف بسته ۸): سند فروش و خرید طرف حسابش را با شناسه (`documents.party_id`) نگه
  * می‌دارد و نام خریدار فقط برای نمایش است. پیش‌تر سند حسابداری، پرونده مشتری، پیوند خزانه و نگهبان حذف طرف حساب نام متنی
  * سند را با برابری دقیق می‌سنجیدند: «علي رضايي» (ی عربی) یا «ROSE GALLERY» ردیف بی تفصیلی می‌ساخت، کارت حساب و پرونده
- * خالی می‌ماندند و طرف حساب با همان طلب حذف می‌شد. سند پیشین بی شناسه (مهاجرت 0076 فقط نام یکتای برابر را پر کرد) همان
+ * خالی می‌ماندند و طرف حساب با همان طلب حذف می‌شد. سند پیشین بی شناسه (مهاجرت 0080 فقط نام یکتای برابر را پر کرد) همان
  * قاعده نام پیشین را نگه می‌دارد و در بررسی سلامت فهرست می‌شود.
  */
 
@@ -91,7 +91,7 @@ export function documentPartyCondition(party: { id: number; legacyName: string |
   return or(eq(documents.partyId, party.id), and(isNull(documents.partyId), sql`btrim(${documents.buyerName}) = ${name}::text`))!;
 }
 
-/** شناسه تفصیلی طرف حساب در سند حسابداری سند: ستون؛ سند پیشین بی شناسه با برابری دقیق نام (رفتار پیش از v9.0.287) */
+/** شناسه تفصیلی طرف حساب در سند حسابداری سند: ستون؛ سند پیشین بی شناسه با برابری دقیق نام (رفتار پیش از v9.0.336) */
 export async function documentVoucherPartyId(
   db: DbExecutor,
   doc: { partyId?: number | null; buyerName?: string | null },
@@ -113,7 +113,7 @@ export interface UnlinkedPartyDocument {
   date: string;
 }
 
-/** سند فعال فروش یا خرید با نام خریدار و بی شناسه طرف حساب (مهاجرت 0076 نامش را با یک طرف حساب یکتا نیافت) */
+/** سند فعال فروش یا خرید با نام خریدار و بی شناسه طرف حساب (مهاجرت 0080 نامش را با یک طرف حساب یکتا نیافت) */
 export async function findUnlinkedPartyDocuments(executor: DbExecutor = orm): Promise<UnlinkedPartyDocument[]> {
   const rows = await executor.select({
     id: documents.id, type: documents.type, refNumber: documents.refNumber, status: documents.status,

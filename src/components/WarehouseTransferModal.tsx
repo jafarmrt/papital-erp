@@ -29,7 +29,7 @@ export default function WarehouseTransferModal({
   // v7.0.136 (TD-232): امروز در منطقه زمانی کسب‌وکار (نه UTC) و انتخاب با تقویم شمسی؛ مقدار ISO می‌ماند
   const [date, setDate] = useState<string>(() => toStorageDate(getTodayJalaliDate()) || '');
   const [refNumber, setRefNumber] = useState<string>('');
-  // v9.0.285 (TD-783): شماره پیشنهادی سرور؛ دست‌نخورده «auto» فرستاده می‌شود
+  // v9.0.327 (TD-783): شماره پیشنهادی سرور؛ دست‌نخورده «auto» فرستاده می‌شود
   const [suggestedRef, setSuggestedRef] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 

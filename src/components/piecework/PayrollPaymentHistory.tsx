@@ -22,6 +22,8 @@ interface PayrollPaymentHistoryProps {
   loading: boolean;
   /** فیش تسویه‌شده: سابقه باز نمایش داده می‌شود */
   initiallyOpen: boolean;
+  /** v9.0.320 (TD-805): ابطال پرداخت فقط با «پرداخت و ابطال پرداخت فیش» */
+  canVoid: boolean;
   onVoided: () => void;
 }
 
@@ -29,7 +31,7 @@ interface PayrollPaymentHistoryProps {
  * سابقه پرداخت‌های یک فیش در پنجره پرداخت. v8.0.31 (TD-283، تصمیم مالک محصول — گزینه الف): هر پرداخت ابطال‌نشده با ذکر
  * دلیل ابطال می‌شود (POST /piecework/payrolls/:id/payments/:transactionId/void)؛ پرداخت ابطال‌شده با برچسب می‌ماند.
  */
-export function PayrollPaymentHistory({ payrollId, payments, loading, initiallyOpen, onVoided }: PayrollPaymentHistoryProps) {
+export function PayrollPaymentHistory({ payrollId, payments, loading, initiallyOpen, canVoid, onVoided }: PayrollPaymentHistoryProps) {
   const [open, setOpen] = useState(initiallyOpen);
   const [voidTarget, setVoidTarget] = useState<TreasuryTransaction | null>(null);
 
@@ -84,7 +86,7 @@ export function PayrollPaymentHistory({ payrollId, payments, loading, initiallyO
                 </span>
                 {p.status === 'voided' ? (
                   <span className="text-[10px] font-bold text-rose-600">ابطال‌شده</span>
-                ) : (
+                ) : canVoid && (
                   <button
                     type="button"
                     onClick={() => setVoidTarget(p as TreasuryTransaction)}

@@ -94,6 +94,8 @@ export const pieceworkTaskRateHistory = pgTable('piecework_task_rate_history', {
   changedByUsername: text('changed_by_username').default(''),
   effectiveDate: text('effective_date').notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  // v9.0.284 (TD-809، مهاجرت 0076): ردیف تغییر نرخ اختصاصی این پرسنل؛ تاریخچه نرخ پایه عنوان کار NULL است
+  personnelId: integer('personnel_id'),
 }, (table) => ({
   idx_ptrh_task: index('idx_ptrh_task').on(table.taskId),
   idx_ptrh_created: index('idx_ptrh_created').on(table.createdAt),
@@ -121,6 +123,8 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   totalPieceworkAmount: moneyNumeric('total_piecework_amount').notNull().default(sql`0`),
   totalBonuses: moneyNumeric('total_bonuses').default(sql`0`),
   totalDeductions: moneyNumeric('total_deductions').default(sql`0`),
+  // v9.0.329 (TD-861، تصمیم ت۵ الف): شرح «سایر کسورات» (مهاجرت 0079)؛ کسورات بالای صفر بی شرح صادر نمی‌شود
+  deductionsDescription: text('deductions_description').notNull().default(''),
   netPayable: moneyNumeric('net_payable').notNull(),
   // V10-4.4: سهم حقوق ثابت در این فیش (برای salaryType = monthly_fixed / mixed)
   totalFixedAmount: moneyNumeric('total_fixed_amount').default(sql`0`),

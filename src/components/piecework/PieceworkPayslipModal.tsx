@@ -1,10 +1,24 @@
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { X, FileText, Printer } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
-import { formatPersianPrice, formatQuantityOrTime, formatPersianDate, formatPersianNumber, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatQuantityOrTime, formatPersianDate, formatPersianNumber } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
+import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { PayrollPaymentModal } from './PayrollPaymentModal';
 import { isPayablePayrollStatus } from '../../lib/payroll/payrollPayable';
+import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels';
+import { payslipFixedSalaryRows } from '../../lib/payroll/payslipFixedSalaryRows';
+import { useCompanyName } from '../../hooks/useCompanyName';
+
+type PaymentTarget = NonNullable<ComponentProps<typeof PayrollPaymentModal>['payroll']>;
+
+// v9.0.328 (TD-815): سربرگ فیش همان برچسب‌های وضعیت فهرست‌ها را دارد؛ پیش‌تر پیش‌نویس و تأییدشده هر دو «آماده پرداخت» بودند
+const STATUS_BADGE_CLASS: Record<string, string> = {
+  draft: 'bg-slate-100 text-slate-700',
+  approved: 'bg-indigo-100 text-indigo-800',
+  partially_paid: 'bg-amber-100 text-amber-800',
+  paid: 'bg-emerald-100 text-emerald-800',
+};
 
 interface PieceworkPayslipModalProps {
   viewingPayroll: PieceworkPayroll | null;
@@ -24,11 +38,15 @@ export function PieceworkPayslipModal({
   onReload,
   readOnly = false
 }: PieceworkPayslipModalProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
   // V10-4.4: مودال پرداخت خزانه‌ای
-  const [paymentTarget, setPaymentTarget] = useState<{ id: number; payrollNumber: string; netPayable: number | string } | null>(null);
+  const [paymentTarget, setPaymentTarget] = useState<PaymentTarget | null>(null);
+  // v9.0.320 (TD-805): تأیید و ابطال فیش با «محاسبه و صدور فیش حقوقی»، پرداخت با «پرداخت و ابطال پرداخت فیش»
+  const { canIssuePayroll, canPay } = usePieceworkPermissions();
+  const companyName = useCompanyName();
   if (!viewingPayroll) return null;
+  const fixedRows = payslipFixedSalaryRows(viewingPayroll);
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -41,7 +59,7 @@ export function PieceworkPayslipModal({
           </div>
           <div className="flex items-center gap-2">
             {/* v9.0.269 (TD-816): فیش پیش‌نویس پرداخت نمی‌شود؛ نخست تأیید می‌شود */}
-            {!readOnly && viewingPayroll.status === 'draft' && (
+            {!readOnly && canIssuePayroll && viewingPayroll.status === 'draft' && (
               <button
                 onClick={() => onUpdateStatus(viewingPayroll.id, 'approved')}
                 className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer"
@@ -49,14 +67,17 @@ export function PieceworkPayslipModal({
                 تأیید فیش
               </button>
             )}
-            {!readOnly && isPayablePayrollStatus(viewingPayroll.status) && (
+            {!readOnly && canPay && isPayablePayrollStatus(viewingPayroll.status) && (
               <button
                 onClick={() => {
                   // V10-4.4: پرداخت فقط از مودال خزانه‌ای
+                  // v9.0.322 (TD-814): پرداخت‌شده و وضعیت هم می‌رود تا فرم همان مانده فیش را بگیرد، نه کل خالص
                   setPaymentTarget({
                     id: viewingPayroll.id,
                     payrollNumber: viewingPayroll.payrollNumber,
-                    netPayable: viewingPayroll.netPayable
+                    netPayable: viewingPayroll.netPayable,
+                    paidAmount: viewingPayroll.paidAmount,
+                    status: viewingPayroll.status
                   });
                 }}
                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer"
@@ -69,9 +90,9 @@ export function PieceworkPayslipModal({
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
             >
               <Printer className="w-4 h-4" />
-              <span>پرینت فیش</span>
+              <span>چاپ فیش</span>
             </button>
-            {!readOnly && (
+            {!readOnly && canIssuePayroll && (
               <button
                 onClick={() => onDeletePayroll(viewingPayroll.id)}
                 className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white rounded-xl text-xs font-bold cursor-pointer"
@@ -91,26 +112,16 @@ export function PieceworkPayslipModal({
           <div className="border-b-2 border-slate-900 pb-4 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-black text-slate-900">فیش کارکرد و حقوق پرسنل</h2>
-              <p className="text-xs text-slate-600 font-bold mt-1">مجموعه پاپیتال - کارگاه تولید زیورآلات و سفال</p>
+              {companyName && <p className="text-xs text-slate-600 font-bold mt-1">{companyName}</p>}
             </div>
             <div className="text-left font-mono text-xs space-y-1">
               <div>شماره فیش: <span className="font-bold">{formatPersianNumber(viewingPayroll.payrollNumber)}</span></div>
               <div>تاریخ صدور: <span className="font-bold">{formatPersianDate(viewingPayroll.createdAt)}</span></div>
               <div>بازه کارکرد: <span className="font-bold">{formatPersianDate(viewingPayroll.startDate)} تا {formatPersianDate(viewingPayroll.endDate)}</span></div>
               <div className="pt-1">
-                {viewingPayroll.status === 'paid' ? (
-                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-sans font-bold text-[10px]">
-                    ✓ پرداخت‌شده و تسویه کامل
-                  </span>
-                ) : viewingPayroll.status === 'partially_paid' ? (
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-sans font-bold text-[10px]">
-                    ⏳ پرداخت مرحله‌ای (مانده‌دار)
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded font-sans font-bold text-[10px]">
-                    آماده پرداخت
-                  </span>
-                )}
+                <span className={`px-2 py-0.5 rounded font-sans font-bold text-[10px] ${STATUS_BADGE_CLASS[viewingPayroll.status] ?? STATUS_BADGE_CLASS.draft}`}>
+                  وضعیت: {payrollStatusLabel(viewingPayroll.status)}
+                </span>
               </div>
             </div>
           </div>
@@ -137,7 +148,7 @@ export function PieceworkPayslipModal({
 
           {/* Items Breakdown Table */}
           <div>
-            <h3 className="text-xs font-black text-slate-800 mb-2">ریز مبانی محاسبه فیش (کارکرد پرکیسی و حقوق پایه):</h3>
+            <h3 className="text-xs font-black text-slate-800 mb-2">ریز مبانی محاسبه فیش (کارکرد کارمزدی و حقوق پایه):</h3>
             <table className="w-full text-right border-collapse text-xs border border-slate-300">
               <thead>
                 <tr className="bg-slate-100 border-b border-slate-300 text-slate-800 font-bold">
@@ -158,28 +169,28 @@ export function PieceworkPayslipModal({
                     <td className="p-2 border-l border-slate-200 text-center font-bold">
                       {formatQuantityOrTime(item.quantity, item.unit)}
                     </td>
-                    <td className="p-2 border-l border-slate-200 text-center">{formatPersianPrice(item.unitRate)}</td>
-                    <td className="p-2 text-center font-bold">{formatPersianPrice(item.totalAmount)}</td>
+                    <td className="p-2 border-l border-slate-200 text-center">{rial.number(item.unitRate)}</td>
+                    <td className="p-2 text-center font-bold">{rial.number(item.totalAmount)}</td>
                   </tr>
                 ))}
-                {/* ردیف توضیحی حقوق ثابت: مبنا و بابت مبلغ اضافه‌شده */}
-                {(Number(viewingPayroll.totalFixedAmount) || 0) > 0 && (
-                  <tr className="bg-indigo-50/60">
-                    <td className="p-2 border-l border-slate-200 text-slate-500">{formatPersianNumber((viewingPayroll.items?.length || 0) + 1)}</td>
+                {/* ردیف‌های حقوق ثابت، یکی برای هر ماه شمسی (v9.0.328، TD-815) */}
+                {fixedRows.map((row, idx) => (
+                  <tr key={`fixed-${idx}`} className="bg-indigo-50/60">
+                    <td className="p-2 border-l border-slate-200 text-slate-500">{formatPersianNumber((viewingPayroll.items?.length || 0) + idx + 1)}</td>
                     <td className="p-2 border-l border-slate-200 font-bold">
-                      {formatPersianDate(viewingPayroll.startDate)} تا {formatPersianDate(viewingPayroll.endDate)}
+                      {row.month || `${formatPersianDate(viewingPayroll.startDate)} تا ${formatPersianDate(viewingPayroll.endDate)}`}
                     </td>
                     <td className="p-2 border-l border-slate-200 font-sans font-bold text-indigo-800">
                       حقوق ثابت ماهانه — بابت حقوق پایه ثبت‌شده در پرونده پرسنلی
                     </td>
-                    <td className="p-2 border-l border-slate-200 text-center font-bold">۱ دوره ماهانه</td>
-                    <td className="p-2 border-l border-slate-200 text-center">{formatPersianPrice(viewingPayroll.totalFixedAmount)}</td>
-                    <td className="p-2 text-center font-bold text-indigo-800">+{formatPersianPrice(viewingPayroll.totalFixedAmount)}</td>
+                    <td className="p-2 border-l border-slate-200 text-center font-bold font-sans">{row.share}</td>
+                    <td className="p-2 border-l border-slate-200 text-center">—</td>
+                    <td className="p-2 text-center font-bold text-indigo-800">+{rial.number(row.amount)}</td>
                   </tr>
-                )}
+                ))}
                 {(!viewingPayroll.items || viewingPayroll.items.length === 0) && (Number(viewingPayroll.totalFixedAmount) || 0) <= 0 && (
                   <tr>
-                    <td colSpan={6} className="p-4 text-center text-slate-400 font-sans">در این دوره ردیف کارکرد پرکیسی ثبت نشده است.</td>
+                    <td colSpan={6} className="p-4 text-center text-slate-400 font-sans">در این دوره ردیف کارکرد کارمزدی ثبت نشده است.</td>
                   </tr>
                 )}
               </tbody>
@@ -188,7 +199,7 @@ export function PieceworkPayslipModal({
           <p className="text-[10px] text-slate-500 mt-1.5 leading-5">
             {(Number(viewingPayroll.totalFixedAmount) || 0) > 0
               ? `ردیف «حقوق ثابت ماهانه» بابت حقوق پایه ماهانه ثبت‌شده در پرونده پرسنلی (${viewingPayroll.personnelName}) برای دوره فوق اضافه شده است.`
-              : 'مبالغ این فیش صرفاً بر اساس ردیف‌های کارکرد پرکیسی (نرخ عناوین کاری) محاسبه شده است.'}
+              : 'مبالغ این فیش صرفاً بر اساس ردیف‌های کارکرد کارمزدی (نرخ عناوین کاری) محاسبه شده است.'}
           </p>
         </div>
 
@@ -197,44 +208,45 @@ export function PieceworkPayslipModal({
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2">
               <div className="flex justify-between font-bold">
                 <span>جمع کارکرد:</span>
-                <span className="font-mono">{formatPersianPrice(viewingPayroll.totalPieceworkAmount, appCurrency)}</span>
+                <span className="font-mono">{rial.amount(viewingPayroll.totalPieceworkAmount)}</span>
               </div>
               <div className="flex justify-between font-bold text-emerald-700">
                 <span>پاداش و اضافه کار:</span>
-                <span className="font-mono">+{formatPersianPrice(viewingPayroll.totalBonuses || 0, appCurrency)}</span>
+                <span className="font-mono">+{rial.amount(viewingPayroll.totalBonuses || 0)}</span>
               </div>
               {/* V10-4.4: تفکیک حقوق ثابت (در فیش‌های monthly_fixed / mixed) */}
               {(Number(viewingPayroll.totalFixedAmount) || 0) > 0 && (
                 <div className="flex justify-between font-bold text-indigo-700">
                   <span>سهم حقوق ثابت ماهانه:</span>
-                  <span className="font-mono">+{formatPersianPrice(viewingPayroll.totalFixedAmount, appCurrency)}</span>
+                  <span className="font-mono">+{rial.amount(viewingPayroll.totalFixedAmount)}</span>
                 </div>
               )}
               <div className="flex justify-between font-bold text-red-700">
-                <span>کسورات و سایر کسورات:</span>
-                <span className="font-mono">-{formatPersianPrice(viewingPayroll.totalDeductions || 0, appCurrency)}</span>
+                {/* v9.0.329 (TD-861): شرح کسورات کنار مبلغ آن */}
+                <span>سایر کسورات{viewingPayroll.deductionsDescription ? ` (${viewingPayroll.deductionsDescription})` : ''}:</span>
+                <span className="font-mono">-{rial.amount(viewingPayroll.totalDeductions || 0)}</span>
               </div>
               {/* V1.9.0: کسر از مساعده/وام پرسنلی */}
               {(Number(viewingPayroll.advanceDeduction) || 0) > 0 && (
                 <div className="flex justify-between font-bold text-indigo-700">
                   <span>کسر از مساعده و وام پرسنلی:</span>
-                  <span className="font-mono">-{formatPersianPrice(viewingPayroll.advanceDeduction, appCurrency)}</span>
+                  <span className="font-mono">-{rial.amount(viewingPayroll.advanceDeduction)}</span>
                 </div>
               )}
               <div className="pt-2 border-t border-slate-300 flex justify-between font-black text-sm text-slate-900">
                 <span>مبلغ خالص کل فیش:</span>
-                <span className="font-mono text-blue-800">{formatPersianPrice(viewingPayroll.netPayable, appCurrency)}</span>
+                <span className="font-mono text-blue-800">{rial.amount(viewingPayroll.netPayable)}</span>
               </div>
               {Number(viewingPayroll.paidAmount ?? (viewingPayroll as any).paid_amount ?? 0) > 0 && (
                 <div className="flex justify-between font-bold text-emerald-700 pt-1">
                   <span>پرداخت‌شده تاکنون:</span>
-                  <span className="font-mono">+{formatPersianPrice(Number(viewingPayroll.paidAmount ?? (viewingPayroll as any).paid_amount ?? 0), appCurrency)}</span>
+                  <span className="font-mono">+{rial.amount(Number(viewingPayroll.paidAmount ?? (viewingPayroll as any).paid_amount ?? 0))}</span>
                 </div>
               )}
               {viewingPayroll.status !== 'paid' && (
                 <div className="flex justify-between font-black text-sm text-amber-800 pt-1 border-t border-dashed border-slate-200">
                   <span>مانده قابل پرداخت:</span>
-                  <span className="font-mono">{formatPersianPrice(Math.max(0, Number(viewingPayroll.netPayable || 0) - Number(viewingPayroll.paidAmount ?? (viewingPayroll as any).paid_amount ?? 0)), appCurrency)}</span>
+                  <span className="font-mono">{rial.amount(Math.max(0, Number(viewingPayroll.netPayable || 0) - Number(viewingPayroll.paidAmount ?? (viewingPayroll as any).paid_amount ?? 0)))}</span>
                 </div>
               )}
             </div>

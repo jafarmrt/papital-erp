@@ -2464,7 +2464,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_fiscal_year_ref_isolation_td_152_153', 'td152', 'td153', 'ref_counters', 'duplicate_refs')) {
     const t26Start = Date.now();
     const createdDocIds: number[] = [];
-    // v9.0.289 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in far past fiscal years (1390 and
+    // v9.0.338 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in far past fiscal years (1390 and
     // 1391) that no other case writes, and removes only those two counter rows
     const testDocTypeInv = 'waste';
     const testYears = [1390, 1391];
@@ -2548,7 +2548,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_fiscal_year_ref_unique_scope_td_178', 'td178', 'ref_counters', 'duplicate_refs', 'fiscal_year')) {
     const tStart = Date.now();
     const createdDocIds: number[] = [];
-    // v9.0.289 (TD-786): a real type (documents.type has a CHECK constraint) in fiscal years 1392 and 1393, which no other case writes
+    // v9.0.338 (TD-786): a real type (documents.type has a CHECK constraint) in fiscal years 1392 and 1393, which no other case writes
     const testDocType = 'remittance';
     const testYears = [1392, 1393];
     try {
@@ -3286,7 +3286,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_ref_counter_long_manual_ref_td_196', 'td196', 'ref_counters', 'refnumber')) {
     const tStart = Date.now();
     const createdDocIds: number[] = [];
-    // v9.0.289 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in a fiscal year no other case writes
+    // v9.0.338 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in a fiscal year no other case writes
     const testDocType = 'waste';
     const testYear = 1394;
     try {
@@ -3334,7 +3334,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_ref_counter_numeric_suffix_p3_10', 'p310', 'ref_counters', 'refnumber')) {
     const tStart = Date.now();
     const createdDocIds: number[] = [];
-    // v9.0.289 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in a fiscal year no other case writes
+    // v9.0.338 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in a fiscal year no other case writes
     const testDocType = 'waste';
     const testYear = 1395;
     const testName = 'v7.0.60: شماره دستی «INV-1403-0005» شمارنده را به ۵ می‌برد، نه 14030005 (P3-10)';
@@ -3387,7 +3387,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   if (shouldRun('reg_ref_fiscal_year_exact_nowruz_td_179', 'td179', 'nowruz', 'ref_fiscal_year')) {
     const tStart = Date.now();
     const createdDocIds: number[] = [];
-    // v9.0.289 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in a fiscal year no other case writes
+    // v9.0.338 (TD-786): documents.type has a CHECK constraint, so the case uses a real type in a fiscal year no other case writes
     const testDocType = 'waste';
     const testName = 'v7.0.62: سند ۲۰ مارس ۲۰۲۴ (نوروز ۱۴۰۳) در سال ۱۴۰۳ شماره می‌خورد و ردیف‌های مرزی قدیمی با گزارش اصلاح می‌شوند (TD-179)';
     try {
@@ -7678,7 +7678,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }
 
       // ۳) درخواست خرید بدون تاریخ نیاز ← امروز ISO
-      const req = await ProcurementService.createRequisition({ title: 'ERP-TEST-MARKER درخواست TD-232', items: [{ itemName: 'آزمون', quantity: 1, unit: 'عدد' } as never] }, { username: 'ERP-TEST-MARKER' });
+      const req = await ProcurementService.createRequisition({ title: 'ERP-TEST-MARKER درخواست TD-232', items: [{ itemName: 'آزمون', requestedQty: 1, unit: 'عدد' }] }, { username: 'ERP-TEST-MARKER' });
       requisitionId = req.id;
       const [reqRow] = await orm.select({ d: purchaseRequisitions.requiredDate }).from(purchaseRequisitions).where(eq(purchaseRequisitions.id, req.id));
       if (reqRow.d !== await businessTodayIsoDate()) violations.push(`تاریخ نیاز پیش‌فرض: ${reqRow.d}`);
@@ -9961,7 +9961,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const base = { date: '1405/01/15', description: 'ERP-TEST-MARKER سند TD-247' };
       for (const [debit, want] of [[100.005, true], [100.01, true], [100.02, false]] as Array<[number, boolean]>) {
         const c = createVoucherSchema.safeParse({ body: { ...base, items: items(debit) } }).success;
-        const u = updateVoucherSchema.safeParse({ params: { id: '1' }, body: { items: items(debit) } }).success;
+        const u = updateVoucherSchema.safeParse({ params: { id: '1' }, body: { version: 1, items: items(debit) } }).success; // v9.0.295 (TD-555): ویرایش نسخه می‌خواهد
         const k = correctVoucherSchema.safeParse({ params: { id: '1' }, body: { reason: 'اصلاح آزمون', newItems: items(debit) } }).success;
         check(c === want && u === want && k === want, `طرح سند با بدهکار ${debit} و بستانکار 100 باید ${want ? 'پذیرفته' : 'رد'} شود (ایجاد ${c}، ویرایش ${u}، اصلاحی ${k})`);
       }
@@ -10598,6 +10598,18 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 12 payroll PR a (v9.0.266 on): payslip integrity (TD-804 ...)
   const { runPayrollIntegrityTests } = await import('../regression/payrollIntegrityTests.js');
   results.push(...await runPayrollIntegrityTests(shouldRun));
+  // Package 12 payroll PR b (v9.0.279 on): work logs, piecework rates and their audit (TD-813 ...)
+  const { runPieceworkEntryTests } = await import('../regression/pieceworkEntryTests.js');
+  results.push(...await runPieceworkEntryTests(shouldRun));
+  // Package 3 PR z (v9.0.286 on): payslip deductions account 3205 (TD-554)
+  const { runPayrollDeductionAccountTests } = await import('../regression/payrollDeductionAccountTests.js');
+  results.push(...await runPayrollDeductionAccountTests(shouldRun));
+  // Package 3 PR v (v9.0.294 on): automatic vouchers and the journal voucher page (TD-552 ...)
+  const { runVoucherPageTests } = await import('../regression/voucherPageTests.js');
+  results.push(...await runVoucherPageTests(shouldRun));
+  // Package 12 payroll PR d (v9.0.330 on): the work log list is filtered, paged and summed in SQL (TD-811)
+  const { runWorkLogListTests } = await import('../regression/workLogListTests.js');
+  results.push(...await runWorkLogListTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
@@ -10631,6 +10643,14 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.96, TD-496): the warehouse chart counts items with stock, not quantities of different units
   const { runWarehouseItemCountTests } = await import('../regression/warehouseItemCountTests.js');
   results.push(...await runWarehouseItemCountTests(shouldRun));
+  const { runSettingValuesTests } = await import('../regression/settingValuesTests.js');
+  results.push(...await runSettingValuesTests(shouldRun));
+  // Package 16 (v9.0.289, TD-671): the warehouse dashboard counts documents and real outflows of the Kardex ledger
+  const { runDashboardMovementStatsTests } = await import('../regression/dashboardMovementStatsTests.js');
+  results.push(...await runDashboardMovementStatsTests(shouldRun));
+  // Package 16 (v9.0.291, TD-675): global search ranks the exact name first and folds Arabic letters and digits
+  const { runGlobalSearchRankTests } = await import('../regression/globalSearchRankTests.js');
+  results.push(...await runGlobalSearchRankTests(shouldRun));
   // Package 6 (v9.0.110, TD-482): a warehouse code «default» is refused and reversals name a real warehouse
   const { runWarehouseReservedCodeTests } = await import('../regression/warehouseReservedCodeTests.js');
   results.push(...await runWarehouseReservedCodeTests(shouldRun));
@@ -10667,10 +10687,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 8 PR B (v9.0.270+): zero-price invoices, voids with dependents, sales return VAT and amounts
   const { runSalesDocumentTests } = await import('../regression/salesDocumentTests.js');
   results.push(...await runSalesDocumentTests(shouldRun));
-  // Package 8 PR D (v9.0.281+): lead link of a document edit, stock count lines, production receipts, return lookup, numbers
+  // Package 8 PR D (v9.0.323+): lead link of a document edit, stock count lines, production receipts, return lookup, numbers
   const { runDocumentIntegrityTests } = await import('../regression/documentIntegrityTests.js');
   results.push(...await runDocumentIntegrityTests(shouldRun));
-  // Package 8 PR E (v9.0.286+): the data of a document (treasury rows by permission)
+  // Package 8 PR E (v9.0.335+): the data of a document (treasury rows by permission)
   const { runDocumentDataTests } = await import('../regression/documentDataTests.js');
   results.push(...await runDocumentDataTests(shouldRun));
 
@@ -10685,6 +10705,23 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 13 PR D (v9.0.259+): work time and work mode of a daily log
   const { runDailyLogWorkTimeTests } = await import('../regression/dailyLogWorkTimeTests.js');
   results.push(...await runDailyLogWorkTimeTests(shouldRun));
+
+  // Package 16 PR d (v9.0.305+): drafts routes and expiry
+  const { runFormDraftRouteErrorsTests } = await import('../regression/formDraftRouteErrorsTests.js');
+  results.push(...await runFormDraftRouteErrorsTests(shouldRun));
+  const { runFormDraftExpiryTests } = await import('../regression/formDraftExpiryTests.js');
+  results.push(...await runFormDraftExpiryTests(shouldRun));
+  const { runProductionErrorDetailsTests } = await import('../regression/productionErrorDetailsTests.js');
+  results.push(...await runProductionErrorDetailsTests(shouldRun));
+  // Package 10 PR A (v9.0.314+): purchase requisition contract, approval gate, delivery, delete and edit
+  const { runProcurementRequisitionTests } = await import('../regression/procurementRequisitionTests.js');
+  results.push(...await runProcurementRequisitionTests(shouldRun));
+
+  // Package 15 PR a (v9.0.332+): WooCommerce
+  const { runWooNamesakeCustomerTests } = await import('../regression/wooNamesakeCustomerTests.js');
+  results.push(...await runWooNamesakeCustomerTests(shouldRun));
+  const { runWooConnectionTestTests } = await import('../regression/wooConnectionTestTests.js');
+  results.push(...await runWooConnectionTestTests(shouldRun));
 
   return results;
 }

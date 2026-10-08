@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Layers, Plus, Edit3, Trash2, Search, FolderPlus, Tag, X } from 'lucide-react';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, errorMessageOf } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber, formatCurrencyLabel, errorMessageOf } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 
@@ -24,8 +24,8 @@ interface PieceworkTask {
 }
 
 export function TaskTitlesSettingsTab() {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
   const [tasks, setTasks] = useState<PieceworkTask[]>([]);
   const [categories, setCategories] = useState<TaskCategory[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -345,7 +345,7 @@ export function TaskTitlesSettingsTab() {
                       )}
                     </td>
                     <td className="p-3.5 text-center font-bold font-mono text-blue-700">
-                      {formatPersianPrice(task.defaultRate)}
+                      {rial.number(task.defaultRate)}
                     </td>
                     <td className="p-3.5 text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -467,11 +467,11 @@ export function TaskTitlesSettingsTab() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">نرخ پایه ({formatCurrencyLabel(appCurrency)}) *</label>
+                  <label className="block font-bold text-slate-700 mb-1">نرخ پایه ({formatCurrencyLabel('IRR')}) *</label>
                   <FinancialAmountInput
                     value={taskForm.defaultRate}
                     onChange={(val) => setTaskForm({ ...taskForm, defaultRate: val })}
-                    currency={appCurrency}
+                    currency="IRR"
                     variant="compact"
                     showWordsBadge={true}
                     className="w-full"

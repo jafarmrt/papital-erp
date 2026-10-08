@@ -11,6 +11,10 @@ const fetchJson = vi.fn(async (url: string, _opts?: { method?: string; body?: st
   return { message: 'پرداخت ابطال شد' };
 });
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: { method?: string; body?: string }) => fetchJson(url, opts) }));
+// v9.0.320 (TD-805): the payroll buttons follow their keys; this test grants all of them
+vi.mock('../../hooks/usePieceworkPermissions', () => ({
+  usePieceworkPermissions: () => ({ canManageTasks: true, canLog: true, canIssuePayroll: true, canPay: true }),
+}));
 
 import { PayrollPaymentModal } from '../../components/piecework/PayrollPaymentModal';
 

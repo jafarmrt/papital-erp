@@ -69,7 +69,7 @@ describe('accounting date inputs (TD-578)', () => {
     const { container, onSave } = renderForm();
     fireEvent.click(await screen.findByText('بازیابی پیش‌نویس'));
     await waitFor(() => expect(jalaliInput(container)?.value).toBe('۱۴۰۵/۰۷/۱۴'));
-    fireEvent.click(screen.getByText('ثبت قطعی سند (Ctrl+S)'));
+    fireEvent.click(screen.getByText('ذخیره پیش‌نویس سند (Ctrl+S)'));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect((onSave.mock.calls[0][0] as { date: string }).date).toBe('2026-10-06');
   });

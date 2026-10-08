@@ -16,8 +16,8 @@ import {
   DollarSign,
 } from 'lucide-react';
 import { fetchJson } from '../api';
-import { formatPersianNumber, formatPersianPrice, formatPersianDate, formatCurrencyLabel } from '../utils';
-import { useAppCurrency } from '../hooks/useAppCurrency';
+import { formatPersianNumber, formatPersianDate } from '../utils';
+import { useRialDisplay } from '../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 
@@ -70,8 +70,8 @@ interface ReservedItemsFullReport {
 }
 
 export default function ReservedItemsReportPage() {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
   const [data, setData] = useState<ReservedItemsFullReport | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -182,7 +182,7 @@ export default function ReservedItemsReportPage() {
         csvContent += `"${s.itemCode}","${s.itemName}","${s.category}","${s.unit}",${s.currentStock},${s.proformaReservedQty},${s.projectReservedQty},${s.totalReservedQty},${s.availableStock},${s.totalReservedValue}\n`;
       });
     } else {
-      csvContent += 'کد کالا,نام کالا,دسته‌بندی,نوع منبع,شناسه مرجع,عنوان مرجع/مشتری,مقدار رزرو,واحد,قیمت واحد,ارزش کل,تاریخ ثبت\n';
+      csvContent += 'کد کالا,نام کالا,دسته‌بندی,نوع منبع,شناسه مرجع,عنوان مرجع/مشتری,مقدار رزرو,واحد,قیمت واحد (ریال),ارزش کل (ریال),تاریخ ثبت\n';
       filteredLedgerEntries.forEach(e => {
         csvContent += `"${e.itemCode}","${e.itemName}","${e.category}","${e.sourceLabel}","${e.sourceRef}","${e.sourceTitle}",${e.reservedQty},"${e.unit}",${e.unitPrice},${e.totalValue},"${formatPersianDate(e.date, { englishDigits: true })}"\n`;
       });
@@ -285,8 +285,8 @@ export default function ReservedItemsReportPage() {
             </div>
           </div>
           <div>
-            <div className="text-lg font-black text-slate-900 truncate" title={data ? formatPersianPrice(data.summaryMetrics.totalReservedValue) : '۰'}>
-              {data ? formatPersianPrice(data.summaryMetrics.totalReservedValue, appCurrency) : '۰'}
+            <div className="text-lg font-black text-slate-900 truncate" title={data ? rial.amount(data.summaryMetrics.totalReservedValue) : '۰'}>
+              {data ? rial.amount(data.summaryMetrics.totalReservedValue) : '۰'}
             </div>
             <span className="text-[11px] text-slate-400 mt-1 inline-block">ارزش برآورد شده اقلام</span>
           </div>
@@ -493,7 +493,7 @@ export default function ReservedItemsReportPage() {
                             </span>
                           </td>
                           <td className="p-3.5 text-left font-mono font-bold text-slate-900">
-                            {formatPersianPrice(summary.totalReservedValue)}
+                            {rial.number(summary.totalReservedValue)}
                           </td>
                           <td className="p-3.5 text-center print:hidden">
                             <button
@@ -523,7 +523,7 @@ export default function ReservedItemsReportPage() {
                                         <th className="p-2">کد / مرجع</th>
                                         <th className="p-2">عنوان / خریدار</th>
                                         <th className="p-2 text-center">مقدار رزرو</th>
-                                        <th className="p-2 text-left">ارزش کل</th>
+                                        <th className="p-2 text-left">{`ارزش کل (${curLbl})`}</th>
                                         <th className="p-2 text-center">تاریخ</th>
                                         <th className="p-2 text-center print:hidden">عملیات</th>
                                       </tr>
@@ -545,7 +545,7 @@ export default function ReservedItemsReportPage() {
                                           <td className="p-2 text-center font-bold text-amber-700">
                                             {formatPersianNumber(res.reservedQty)} {res.unit}
                                           </td>
-                                          <td className="p-2 text-left font-mono">{formatPersianPrice(res.totalValue, appCurrency)}</td>
+                                          <td className="p-2 text-left font-mono">{rial.number(res.totalValue)}</td>
                                           <td className="p-2 text-center text-slate-500">{formatPersianDate(res.date)}</td>
                                           <td className="p-2 text-center print:hidden">
                                             {res.sourceType === 'proforma' ? (
@@ -642,7 +642,7 @@ export default function ReservedItemsReportPage() {
                         </span>
                       </td>
                       <td className="p-3.5 text-left font-mono font-bold text-slate-900">
-                        {formatPersianPrice(entry.totalValue)}
+                        {rial.number(entry.totalValue)}
                       </td>
                       <td className="p-3.5 text-center text-slate-500">
                         {formatPersianDate(entry.date)}

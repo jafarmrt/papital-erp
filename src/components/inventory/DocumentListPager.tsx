@@ -3,7 +3,7 @@ import { formatPersianNumber } from '../../utils';
 import type { DocumentListPager as Pager } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
 
 /**
- * v9.0.290 (TD-787): نوار صفحه‌بندی سوابق انبارگردانی و حواله‌های انتقال (۵۰ سند در هر صفحه)؛ فقط وقتی بیش از یک صفحه
+ * v9.0.339 (TD-787): نوار صفحه‌بندی سوابق انبارگردانی و حواله‌های انتقال (۵۰ سند در هر صفحه)؛ فقط وقتی بیش از یک صفحه
  * هست یا کاربر روی صفحه‌ای جز اول است دیده می‌شود.
  */
 export function DocumentListPager({ pager, shown, loading, noun }: { pager: Pager; shown: number; loading: boolean; noun: string }) {
