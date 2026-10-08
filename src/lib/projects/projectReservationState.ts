@@ -6,6 +6,8 @@
  * این قاعده در سرور (گزارش رزروها و دروازه فروش) و در مرورگر (فرم سند انبار) یکی است.
  */
 
+import type { ReservationShortage } from './projectReservation.js';
+
 const asObject = (v: unknown): Record<string, unknown> | null =>
   (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 
@@ -23,4 +25,13 @@ export function storedReservationRows<T = Record<string, unknown>>(inventoryCont
 /** ردیف‌هایی که موجودی را رزرو می‌کنند: رزرو ذخیره‌شده پروژه ثبت نهایی‌شده، وگرنه هیچ */
 export function reservingProjectRows<T = Record<string, unknown>>(inventoryControl: unknown): T[] {
   return isProjectFinalized(inventoryControl) ? storedReservationRows<T>(inventoryControl) : [];
+}
+
+/**
+ * v9.0.351 (TD-819، تصمیم ت۳): کمبود رزرو پروژه که سرور هنگام ثبت نهایی نوشته است (`inventory_control.reservationShortages`):
+ * کالاهایی که موجودی آزادشان (کل − رزرو دیگران) کمتر از نیاز پروژه بود
+ */
+export function storedReservationShortages(inventoryControl: unknown): ReservationShortage[] {
+  const rows = asObject(inventoryControl)?.reservationShortages;
+  return Array.isArray(rows) ? rows.filter((r): r is ReservationShortage => !!asObject(r)) : [];
 }

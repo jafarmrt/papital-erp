@@ -19,6 +19,9 @@ export async function runStockReservationTests(shouldRun: ShouldRun): Promise<Te
     ['reg_reservation_unit_conversion_td_820',
       'v9.0.350: a project reserves its need converted to the item unit with the row\'s conversion rate; a row in another unit without a conversion refuses finalizing with 422 (TD-820)',
       ['td820', 'reservation', 'project', 'unit', 'package7'], unitConversionCase],
+    ['reg_reservation_free_stock_at_finalize_td_819',
+      'v9.0.351: finalizing a project reserves only the stock no one else holds and stores the shortage; concurrent finalizes never reserve the same stock twice (TD-819)',
+      ['td819', 'reservation', 'project', 'shortage', 'package7'], freeStockAtFinalizeCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -237,4 +240,83 @@ async function unitConversionCase(h: Harness, wrong: string[]): Promise<string> 
   if (kinds.join(',') !== `${legacy.id}:reservation_unit_unconverted`) wrong.push(`the health check lists ${JSON.stringify(kinds)}, expected only the legacy project as reservation_unit_unconverted`);
   await h.q(`UPDATE production_projects SET is_deleted = 1 WHERE id = $1`, [legacy.id]);
   return 'a project reserves 20 strings for 100 metres, 2,000 grams for 2 kilograms and 23 strings for 100 metres plus 3 strings; a row in kilograms of a gram item without a conversion refuses finalizing with 422; a legacy unconverted reservation is listed by the health check';
+}
+
+type Shortage = { itemId?: number; requiredQty?: number; reservedQty?: number; shortQty?: number; reservedByOthers?: number };
+const shortagesOf = (body: unknown): Shortage[] => {
+  const ic = (body as { inventory_control?: { reservationShortages?: unknown } })?.inventory_control;
+  return Array.isArray(ic?.reservationShortages) ? (ic.reservationShortages as Shortage[]) : [];
+};
+
+/** B07-03 (TD-819): finalizing reserved min(stock, need) without the reservations of others, so the holders blocked each other */
+async function freeStockAtFinalizeCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const need = async (itemId: number, qty: number) => {
+    const [it] = await h.q(`SELECT code, name FROM items WHERE id = $1`, [itemId]);
+    return globalSection([{ itemCode: it.code, name: it.name, unit: 'عدد', requiredQty: qty }]);
+  };
+  const finalize = async (projectId: number, sections: unknown) =>
+    h.put(`/api/projects/${projectId}`, { inventory_control: { sections, manualPurchaseItems: [], isFinalized: true } });
+
+  // (a) stock 30, project A then project B each needing 30: A reserves 30, B reserves nothing and stores a shortage of 30
+  const a = await f.item(30);
+  const secA = await need(a, 30);
+  const pa = await createProject(h, { sections: secA, manualPurchaseItems: [], isFinalized: false });
+  const pb = await createProject(h, { sections: secA, manualPurchaseItems: [], isFinalized: false });
+  const finA = await finalize(pa, secA);
+  if (finA.status !== 200 || shortagesOf(finA.body).length !== 0) wrong.push(`finalizing A answered ${brief(finA)}, expected 200 without a shortage`);
+  const finB = await finalize(pb, secA);
+  const shortB = shortagesOf(finB.body);
+  if (finB.status !== 200) wrong.push(`finalizing B answered ${brief(finB)}, expected 200`);
+  if (shortB.length !== 1 || Number(shortB[0].itemId) !== a || shortB[0].requiredQty !== 30 || shortB[0].reservedQty !== 0 || shortB[0].shortQty !== 30 || shortB[0].reservedByOthers !== 30) {
+    wrong.push(`B's shortage is ${JSON.stringify(shortB)}, expected item ${a}: need 30, reserved 0, short 30, held by others 30`);
+  }
+  const viewA = await reservedOf(a);
+  if (viewA.project !== 30) wrong.push(`stock 30 with two projects needing 30 reserves ${viewA.project} (${viewA.sources.join(', ')}), expected 30`);
+  const remA = await h.post('/api/documents', f.doc('remittance', 'final', [{ itemId: a, quantity: 1, unit_price: 0, location: f.wh }], { projectId: pa }));
+  if (remA.status !== 200) wrong.push(`A's own remittance of 1 answered ${brief(remA)}, expected 200`);
+  const [storedB] = await h.q(`SELECT inventory_control->'reservationShortages' AS s FROM production_projects WHERE id = $1`, [pb]);
+  if (!Array.isArray(storedB?.s) || storedB.s.length !== 1) wrong.push(`B's stored shortage is ${JSON.stringify(storedB?.s)}, expected one row`);
+
+  // (b) stock 10 with a sales proforma of 6: the project reserves the 4 free units and the proforma still finalizes
+  const b = await f.item(10);
+  const proforma = await postDoc(h, f, 'invoice', 'proforma', b, 6);
+  if (proforma.status !== 200) throw new Error(`setup: the sales proforma answered ${brief(proforma)}`);
+  const secB = await need(b, 10);
+  const pp = await createProject(h, { sections: secB, manualPurchaseItems: [], isFinalized: false });
+  const finP = await finalize(pp, secB);
+  const shortP = shortagesOf(finP.body);
+  if ((await reservedOf(b)).project !== 4 || shortP[0]?.shortQty !== 6) wrong.push(`with a proforma of 6 the project reserves ${(await reservedOf(b)).project} and stores ${JSON.stringify(shortP)}, expected 4 reserved and 6 short`);
+  const finProforma = await h.put(`/api/documents/${docIdOf(proforma)}/finalize`, {});
+  if (finProforma.status !== 200) wrong.push(`finalizing the earlier proforma answered ${brief(finProforma)}, expected 200`);
+
+  // (c) the shortage comes only from the server: one sent in the body is ignored, and unfreezing clears it
+  const forged = await createProject(h, { sections: secB, manualPurchaseItems: [], isFinalized: false, reservationShortages: [{ itemId: b, shortQty: 99 }] });
+  const [storedForged] = await h.q(`SELECT inventory_control->'reservationShortages' AS s FROM production_projects WHERE id = $1`, [forged]);
+  if (storedForged?.s != null) wrong.push(`a shortage sent in the body was stored: ${JSON.stringify(storedForged.s)}`);
+  const unfreeze = await h.put(`/api/projects/${pb}`, { inventory_control: { sections: secA, manualPurchaseItems: [], isFinalized: false } });
+  if (unfreeze.status !== 200 || shortagesOf(unfreeze.body).length !== 0) wrong.push(`unfreezing B answered ${brief(unfreeze)}, expected 200 without a shortage`);
+
+  // (d) two projects finalized at the same moment share stock 30 instead of both reserving it
+  const c = await f.item(30);
+  const secC = await need(c, 30);
+  const p1 = await createProject(h, { sections: secC, manualPurchaseItems: [], isFinalized: false });
+  const p2 = await createProject(h, { sections: secC, manualPurchaseItems: [], isFinalized: false });
+  const both = await Promise.all([finalize(p1, secC), finalize(p2, secC)]);
+  if (both.some(r => r.status !== 200)) wrong.push(`concurrent finalizes answered ${both.map(brief).join(' / ')}, expected 200 each`);
+  const viewC = await reservedOf(c);
+  if (viewC.project !== 30) wrong.push(`two projects finalized together against stock 30 reserve ${viewC.project} (${viewC.sources.join(', ')}), expected 30`);
+
+  // (e) a reservation above stock left by earlier versions is only listed by the health check
+  const { findOverReservedItems } = await import('../../services/projects/projectReservationHealth.js');
+  const d = await f.item(10);
+  const [legacy] = await h.q(
+    `INSERT INTO production_projects (project_code, title, status, version, inventory_control)
+     VALUES ($1, 'P7 legacy over', 'in_progress', 1, $2::jsonb) RETURNING id`,
+    [`P7-LO-${h.tag}-${d}`, JSON.stringify({ isFinalized: true, finalizedAt: '2026-01-01T00:00:00Z', reservedItems: [{ itemId: d, reservedQty: 50, unit: 'عدد' }] })],
+  );
+  const over = (await findOverReservedItems()).filter(r => [a, b, c, d].includes(r.itemId)).map(r => `${r.itemId}:${r.stock}/${r.reserved}`);
+  if (over.join(',') !== `${d}:10/50`) wrong.push(`the health check lists over-reserved items ${JSON.stringify(over)}, expected only item ${d} (stock 10, reserved 50)`);
+  await h.q(`UPDATE production_projects SET is_deleted = 1 WHERE id = $1`, [legacy.id]);
+  return 'stock 30: the second project needing 30 reserves nothing and stores a shortage of 30, so the first can issue its remittance; with a proforma of 6 a project reserves the 4 free units and the proforma still finalizes; concurrent finalizes reserve 30 in total; a legacy over-reservation is listed by the health check';
 }

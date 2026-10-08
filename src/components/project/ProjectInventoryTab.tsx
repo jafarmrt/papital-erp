@@ -31,6 +31,7 @@ export function ProjectInventoryTab({
     saving,
     isFinalized,
     reservedItems,
+    reservationShortages,
     isUnitConversionModalOpen,
     setIsUnitConversionModalOpen,
     conversionTarget,
@@ -346,6 +347,7 @@ export function ProjectInventoryTab({
             purchaseList={purchaseList}
             isFinalized={isFinalized}
             reservedItems={reservedItems}
+            reservationShortages={reservationShortages}
             warehouseItems={warehouseItems}
             handleAddManualPurchaseRow={handleAddManualPurchaseRow}
             handlePrintPurchaseListWithCheck={handlePrintPurchaseListWithCheck}

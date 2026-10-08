@@ -30,7 +30,9 @@ import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCateg
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from '../documents/documentParty.js';
 import { buildDocumentIntegrityHealthTest, findDocumentIntegrityGaps } from '../documents/documentConstraintHealth.js';
-import { buildProjectReservationHealthTest, findProjectReservationIssues } from '../projects/projectReservationHealth.js';
+import {
+  buildOverReservedHealthTest, buildProjectReservationHealthTest, findOverReservedItems, findProjectReservationIssues,
+} from '../projects/projectReservationHealth.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
@@ -1202,6 +1204,8 @@ export class FinancialHealthService {
     tests.push(buildDocumentIntegrityHealthTest(await findDocumentIntegrityGaps()));
     // آزمون ۴۲: v9.0.349 (TD-817) رزرو پروژه ناهمخوان با ثبت نهایی (پروژه‌های قدیمی؛ فقط فهرست، بی بازنویسی)
     tests.push(buildProjectReservationHealthTest(await findProjectReservationIssues()));
+    // آزمون ۴۳: v9.0.351 (TD-819) کالای بیش از موجودی رزروشده (فقط فهرست)
+    tests.push(buildOverReservedHealthTest(await findOverReservedItems()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

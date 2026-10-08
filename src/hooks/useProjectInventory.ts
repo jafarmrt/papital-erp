@@ -16,13 +16,15 @@ import {
   calculateMaterialProgress, 
   roundToOneDecimal
 } from '../components/project/projectInventoryUtils';
-import { errorMessageOf } from '../utils';
+import { errorMessageOf, formatPersianNumber } from '../utils';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { directConversionRate } from '../lib/projects/unitConversion';
+import { storedReservationShortages } from '../lib/projects/projectReservationState';
+import type { ReservationShortage } from '../lib/projects/projectReservation';
 
 /** پاسخ PUT /projects/:id؛ رزرو پروژه را سرور می‌نویسد (v8.0.58، TD-306) */
 interface SavedProjectInventory {
-  inventory_control?: { finalizedAt?: string; reservedItems?: unknown[] };
+  inventory_control?: { finalizedAt?: string; reservedItems?: unknown[]; reservationShortages?: unknown[] };
 }
 
 const savedReservedItems = (saved: SavedProjectInventory | null | undefined): unknown[] =>
@@ -39,6 +41,8 @@ export function useProjectInventory(
   const [isFinalized, setIsFinalized] = useState<boolean>(!!project.inventory_control?.isFinalized);
   const [finalizedAt, setFinalizedAt] = useState<string | undefined>(project.inventory_control?.finalizedAt);
   const [reservedItems, setReservedItems] = useState<any[]>(() => Array.isArray(project.inventory_control?.reservedItems) ? project.inventory_control.reservedItems : []);
+  // v9.0.351 (TD-819): کمبود رزرو هنگام ثبت نهایی، نوشته سرور
+  const [reservationShortages, setReservationShortages] = useState<ReservationShortage[]>(() => storedReservationShortages(project.inventory_control));
 
   // Unit Conversion Modal state
   const [isUnitConversionModalOpen, setIsUnitConversionModalOpen] = useState(false);
@@ -213,6 +217,7 @@ export function useProjectInventory(
     setIsFinalized(!!project.inventory_control?.isFinalized);
     setFinalizedAt(project.inventory_control?.finalizedAt);
     setReservedItems(Array.isArray(project.inventory_control?.reservedItems) ? project.inventory_control.reservedItems : []);
+    setReservationShortages(storedReservationShortages(project.inventory_control));
   }, [project]);
 
   // Category selection handler for generating item code
@@ -690,7 +695,12 @@ export function useProjectInventory(
       setIsFinalized(true);
       setFinalizedAt(saved?.inventory_control?.finalizedAt);
       setReservedItems(savedReservedItems(saved));
+      const shortages = storedReservationShortages(saved?.inventory_control);
+      setReservationShortages(shortages);
       toast.success('کنترل موجودی ثبت نهایی شد و اقلام در انبار فریز گردیدند.');
+      if (shortages.length > 0) {
+        toast(`${formatPersianNumber(shortages.length)} کالا کمتر از نیاز رزرو شد، چون بقیه موجودی را دیگران رزرو کرده‌اند؛ فهرست کمبود در «فهرست خرید» آمده است.`, { icon: '⚠️' });
+      }
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('Error finalizing inventory reservation:', err);
@@ -723,6 +733,7 @@ export function useProjectInventory(
       setIsFinalized(false);
       setFinalizedAt(undefined);
       setReservedItems([]);
+      setReservationShortages([]);
       toast.success('قفل فریز انبار برداشته شد.');
       if (onUpdate) onUpdate();
     } catch (err) {
@@ -760,6 +771,7 @@ export function useProjectInventory(
       });
 
       setReservedItems(savedReservedItems(saved));
+      setReservationShortages(storedReservationShortages(saved?.inventory_control));
       toast.success('اطلاعات کنترل موجودی با موفقیت ذخیره شد.');
       if (onUpdate) onUpdate();
     } catch (err) {
@@ -848,6 +860,7 @@ export function useProjectInventory(
     setFinalizedAt,
     reservedItems,
     setReservedItems,
+    reservationShortages,
     isUnitConversionModalOpen,
     setIsUnitConversionModalOpen,
     conversionTarget,

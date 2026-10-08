@@ -102,3 +102,58 @@ export function buildProjectReservationHealthTest(issues: ProjectReservationIssu
     },
   };
 }
+
+/**
+ * v9.0.351 (TD-819، تصمیم ت۳ بسته ۷): کالایی که جمع رزروهایش (پیش‌فاکتور فروش و پروژه ثبت نهایی‌شده) از موجودی کل بیشتر است.
+ * ثبت نهایی دیگر بیش از موجودی آزاد رزرو نمی‌کند؛ بیش‌رزرو پروژه‌های پیشین، یا کاهش موجودی پس از رزرو (شمارش انبار، ابطال
+ * رسید)، فقط این‌جا فهرست می‌شود و خودکار تغییر نمی‌کند: در بیش‌رزرو، «رزرو دیگران» هر دارنده به تنهایی همه موجودی را می‌پوشاند.
+ */
+export interface OverReservedItem {
+  itemId: number;
+  itemCode: string;
+  itemName: string;
+  unit: string;
+  stock: number;
+  reserved: number;
+  sources: string[];
+}
+
+export async function findOverReservedItems(executor: DbExecutor = orm): Promise<OverReservedItem[]> {
+  const { ItemStockReservationService } = await import('../items/itemStockReservation.service.js');
+  const report = await ItemStockReservationService.getReservedStockDetails(executor, true);
+  return report.itemSummaries
+    .filter(s => s.itemId && Number(s.totalReservedQty) > Number(s.currentStock))
+    .map(s => ({
+      itemId: Number(s.itemId),
+      itemCode: s.itemCode,
+      itemName: s.itemName,
+      unit: s.unit,
+      stock: Number(s.currentStock),
+      reserved: Number(s.totalReservedQty),
+      sources: s.reservations.map(r => `${r.sourceRef} (${r.reservedQty})`),
+    }))
+    .sort((a, b) => a.itemId - b.itemId);
+}
+
+export function buildOverReservedHealthTest(rows: OverReservedItem[]): HealthCheckTestResult {
+  return {
+    id: 'stock_reservation_exceeds_stock',
+    category: 'inventory',
+    title: 'رزرو بیش از موجودی',
+    description: 'جمع رزرو پیش‌فاکتورهای فروش و پروژه‌های ثبت نهایی‌شده یک کالا از موجودی کل آن بیشتر است',
+    status: rows.length > 0 ? 'warning' : 'healthy',
+    scoreImpact: 0,
+    count: rows.length,
+    message: rows.length > 0
+      ? `${rows.length} کالا بیش از موجودی رزرو شده است و دارندگان رزرو آن نمی‌توانند خروج بزنند. خودکار تغییر نمی‌کند؛ یکی از پروژه‌ها را از ثبت نهایی خارج و دوباره ثبت نهایی کنید یا پیش‌فاکتور را باطل کنید.`
+      : 'رزرو هیچ کالایی از موجودی آن بیشتر نیست.',
+    items: rows.map(r => ({
+      id: r.itemId,
+      code: r.itemCode,
+      title: r.itemName,
+      subtitle: `موجودی: ${r.stock} ${r.unit} | رزرو: ${r.reserved} ${r.unit}`,
+      details: `رزروها: ${r.sources.join('، ')} (TD-819)`,
+    })),
+    metrics: { overReservedItems: rows.length },
+  };
+}

@@ -9,6 +9,10 @@
  * ثبت‌شده روی خودش تبدیل می‌شود: نیاز به واحد کالا = مقدار لازم ÷ `conversionRate`، به شرط ضریب مثبت و `convertedUnit` خالی
  * یا برابر واحد کالا؛ `convertedQty` (گردشده) خوانده نمی‌شود. ردیف با واحد دیگر و بی تبدیل معتبر در
  * `unitMismatches` می‌آید و سرور ثبت نهایی را رد می‌کند. نیازها پس از تبدیل به ازای شناسه کالای تطبیق‌یافته جمع می‌شوند.
+ *
+ * v9.0.351 (TD-819، یافته B07-03، تصمیم ت۳ بسته ۷): رزرو هر کالا = min(نیاز، موجودی کل − رزرو دیگران) (اول بیاید، اول ببرد)؛
+ * رزرو دیگران (پیش‌فاکتورهای فروش و پروژه‌های ثبت نهایی‌شده دیگر) را سرور می‌دهد. هر کالایی که کمتر از نیازش رزرو شد در
+ * `shortages` می‌آید (کالای بی موجودی هم، با رزرو صفر).
  */
 
 import { fin, type FinancialDecimal } from '../financialDecimal.js';
@@ -50,9 +54,30 @@ export interface ReservationUnitMismatch {
   section?: string;
 }
 
+/** کالایی که ثبت نهایی کمتر از نیازش رزرو کرد (به واحد کالا) */
+export interface ReservationShortage {
+  itemId: number;
+  itemCode: string;
+  itemName: string;
+  unit: string;
+  requiredQty: number;
+  reservedQty: number;
+  shortQty: number;
+  /** موجودی کل کالا هنگام ثبت نهایی */
+  stock: number;
+  /** رزرو پیش‌فاکتورها و پروژه‌های دیگر هنگام ثبت نهایی */
+  reservedByOthers: number;
+}
+
 export interface ProjectReservationPlan {
   reserved: ProjectReservedItem[];
+  shortages: ReservationShortage[];
   unitMismatches: ReservationUnitMismatch[];
+}
+
+export interface ProjectReservationOptions {
+  /** رزرو دیگران به ازای شناسه کالا (پیش‌فاکتورهای فروش و پروژه‌های ثبت نهایی‌شده دیگر) */
+  reservedByOthers?: ReadonlyMap<number, number>;
 }
 
 type Row = Record<string, unknown>;
@@ -146,6 +171,7 @@ export function planProjectReservation(
   stockItems: ReservationStockItem[],
   manualPurchaseItems: unknown,
   reservedAt: string,
+  options: ProjectReservationOptions = {},
 ): ProjectReservationPlan {
   const needs = new Map<number, ItemNeed>();
   const mismatches = new Map<string, ReservationUnitMismatch>();
@@ -175,14 +201,22 @@ export function planProjectReservation(
   }
 
   const reserved: ProjectReservedItem[] = [];
+  const shortages: ReservationShortage[] = [];
   for (const need of needs.values()) {
     const { item } = need;
     const required = need.qty.round(4).toNumber();
     const stock = Number(item.currentStock) || 0;
-    if (stock <= 0) continue;
-    const reservedQty = Math.min(stock, required);
-    if (reservedQty <= 0) continue;
+    const others = Math.max(0, Number(options.reservedByOthers?.get(item.id)) || 0);
+    const free = Math.max(0, fin(stock).subtract(others).toNumber());
+    const reservedQty = Math.min(free, required);
     const unit = text(item.unit) || DEFAULT_ROW_UNIT;
+    if (reservedQty < required) {
+      shortages.push({
+        itemId: item.id, itemCode: text(item.code), itemName: text(item.name), unit, requiredQty: required, reservedQty,
+        shortQty: fin(required).subtract(reservedQty).toNumber(), stock, reservedByOthers: others,
+      });
+    }
+    if (reservedQty <= 0) continue;
     const single = need.conversions.size === 1 && need.rowUnits.size === 1 ? need.firstConversion : undefined;
     reserved.push({
       itemId: item.id,
@@ -197,7 +231,7 @@ export function planProjectReservation(
       reservedAt,
     });
   }
-  return { reserved, unitMismatches: [...mismatches.values()] };
+  return { reserved, shortages, unitMismatches: [...mismatches.values()] };
 }
 
 export function buildProjectReservation(
