@@ -10700,6 +10700,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 15 PR a (v9.0.314+): WooCommerce
   const { runWooNamesakeCustomerTests } = await import('../regression/wooNamesakeCustomerTests.js');
   results.push(...await runWooNamesakeCustomerTests(shouldRun));
+  const { runWooConnectionTestTests } = await import('../regression/wooConnectionTestTests.js');
+  results.push(...await runWooConnectionTestTests(shouldRun));
 
   return results;
 }

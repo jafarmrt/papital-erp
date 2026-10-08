@@ -75,7 +75,6 @@
 | TD-720 | امنیت رویدادها (بسته ۱۵) | P2 (B15-18) — کلید امضای وب‌هوک در مرورگر با `Math.random` ساخته می‌شود (حدود ۱۶ نویسه پایه ۳۶؛ با `Math.random = 0.5` کلید `whsec_ii`) و مولد امن سرور (TD-057) هرگز اجرا نمی‌شود؛ فرم `timeoutMs` می‌فرستد ولی route `timeoutSeconds` می‌خواند و مهلت بی‌صدا ۱۰ ثانیه می‌شود | WebhookManagementSubTab.tsx، events.routes.ts | open (P2) |
 | TD-721 | رابط رویدادها (بسته ۱۵) | P2 (B15-19) — «گزارش‌های اجرا» قانون‌ها همیشه خالی و شاخص‌ها همیشه ۰ است: هوک `res.logs` می‌خواند و سرور `data` می‌فرستد، ستون‌ها `durationMs` / `requestPayloadJson` به‌جای `executionDurationMs` / `result` و کارت‌ها `totalLogs` / `avgDurationMs` به‌جای `logsTotal` / `avgLatencyMs`: با ۷ اجرا و ۱۲۰ میلی‌ثانیه کارت‌ها ۰ و ۰ و فهرست «هنوز هیچ لاگ اجرایی ثبت نشده است» | useEventQueries.ts، AutoActionsSubTab.tsx | open (P2) |
 | TD-722 | رابط رویدادها (بسته ۱۵)؛ اثر روی ۲ | P2 (B15-20) — صفحه رویدادها با کد نقش (`admin` و `manager`) گارد شده، ولی فهرست و مسیر با `events.view`: دارنده `events.view` (`cfo_accountant` در seed و هر نقش سفارشی) فهرست را می‌بیند، از مسیر رد می‌شود و «عدم دسترسی» می‌گیرد؛ هیچ دکمه‌ای بر پایه `events.manage` پنهان نمی‌شود | DomainEventsPage.tsx، menuConfig.ts، AppRoutes.tsx | open (P2) |
-| TD-723 | ووکامرس (بسته ۱۵)؛ اثر روی ۱۶ | P2 (B15-21) — زبانه ووکامرس به غیرمدیر نشان داده می‌شود: کلیدها `********` برمی‌گردند و «تست اتصال» همین را به `/woocommerce/test-connection` می‌فرستد (`{ consumerKey: '********', consumerSecret: '********' }`) و همیشه خطای احراز هویت می‌گیرد، حتی وقتی کلیدهای ذخیره‌شده درست‌اند؛ کادرهای نشانی و کلید ویرایش‌پذیرند، ذخیره ۴۰۳ می‌دهد و تغییر انبار فروشگاه در همان ذخیره هم از بین می‌رود | WooCommerceTab.tsx، useSettings.ts | open (P2) |
 | TD-724 | ووکامرس (بسته ۱۵)؛ اثر روی ۱۶ | P2 (B15-22) — همگام‌سازی گروهی موجودی ووکامرس با شکست کالاها فقط پیام «موفق» نشان می‌دهد: `/woocommerce/sync-all-stocks` مقدارهای `failedCount` و `errors[]` را برمی‌گرداند ولی با `failedCount: 3, syncedCount: 0` فقط `toast.success` صدا زده شد (خطر فروش بیش از موجودی) | useSettings.ts، WooCommerceTab.tsx | open (P2) |
 | TD-725 | رابط رویدادها (بسته ۱۵) | P2 (B15-23) — زمان‌های سرور در صفحه‌های بسته ۱۵ بی تبدیل UTC نمایش داده می‌شوند (۱۳ محل؛ `serverTimestampToUtcIso` در routeهای بسته ۰ بار): با `TZ=Asia/Tehran`، `2026-10-06 21:00:00` (UTC) ۱۴۰۵/۰۷/۱۴ نمایش داده می‌شود به‌جای ۱۴۰۵/۰۷/۱۵ ساعت ۰۰:۳۰ و اعلان ۳۰ ثانیه پیش «3 ساعت پیش» | DomainEventsTab.tsx، AutoActionsSubTab.tsx، DeadLetterQueueSubTab.tsx، EventSourcingReplaySubTab.tsx، WebhookManagementSubTab.tsx، WooCommerceTab.tsx، NotificationBell.tsx | open (P2) |
 | TD-726 | رابط رویدادها (بسته ۱۵) | P2 (B15-24) — ویرایشگر قانون ۴ نوع رویداد پیشنهاد می‌کند که هیچ‌جا منتشر نمی‌شوند (`InvoiceCancelled`، `ChequeStatusChanged`، `ProjectStageCompleted`، `CustomerCreated`؛ محل انتشار ۰): قانون ذخیره‌شده برای آن‌ها هرگز اجرا نمی‌شود و کاربر پیامی نمی‌بیند | RuleEditorModal.tsx | open (P2، تصمیم ت۳ الف) |
@@ -92,8 +91,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۷۱ ردیف
-- **آرشیو شده (resolved):** ۶۶۵ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۷۰ ردیف
+- **آرشیو شده (resolved):** ۶۶۶ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -102,4 +101,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.314 — TD-703 (سفارش ووکامرس خریدار هم‌نام، P1) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.315 — TD-723 (آزمایش اتصال ووکامرس برای غیرمدیر، P2) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

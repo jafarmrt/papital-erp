@@ -3,6 +3,7 @@ import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
 import { normalizeRialDisplayUnit } from '../lib/rialDisplay';
 import { movementDaysError } from '../lib/settings/settingValues';
+import { wcTestConnectionBody } from '../lib/woocommerce/wcConnectionTest';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset } from '../constants/presets';
 import { DEFAULT_INVENTORY_CONTROL_SECTIONS, InventoryControlPresetSection } from '../constants/inventoryControlPresets';
 import {
@@ -253,13 +254,14 @@ export function useSettings() {
   const handleTestWcConnection = async () => {
     setIsTestingWc(true);
     try {
+      // v9.0.315 (TD-723): کلید ماسک‌شده («********») یا خالی فرستاده نمی‌شود؛ کارساز کلید ذخیره‌شده را به کار می‌برد
       const res = await fetchJson('/woocommerce/test-connection', {
         method: 'POST',
-        body: JSON.stringify({
+        body: JSON.stringify(wcTestConnectionBody({
           url: wcStoreUrl,
           consumerKey: wcConsumerKey,
           consumerSecret: wcConsumerSecret
-        })
+        }))
       });
       if (res.success) {
         toast.success(res.message || 'ارتباط برقرار شد');

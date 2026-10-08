@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.315 — v9.0.315 — WooCommerce Connection Test With Stored Keys
+- **WooCommerce connection test (TD-723):** a non-admin sees the WooCommerce keys masked and the test button sent the mask as the keys, so the test always failed; the browser now leaves out an empty or masked key and the server uses the stored key, only at the stored store address.
+
 ### v9.0.314 — v9.0.314 — WooCommerce Namesake Buyers Get Their Own Customer
 - **WooCommerce namesake buyers (TD-703):** a WooCommerce buyer whose name belongs to another customer with another phone gets a new customer named «name (phone)», so the sale is no longer debited to the existing customer's receivable; a name that differs only in letter case matches the stored customer, and the order log reports the distinct customer.
 
