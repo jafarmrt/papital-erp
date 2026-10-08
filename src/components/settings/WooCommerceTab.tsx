@@ -351,7 +351,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
                 <tr>
                   <th className="p-3 font-semibold">کد سفارش ووکامرس</th>
                   <th className="p-3 font-semibold">وضعیت پردازش</th>
-                  <th className="p-3 font-semibold">نام خریدار / مبالغ</th>
+                  <th className="p-3 font-semibold">نام خریدار</th>
                   <th className="p-3 font-semibold">فاکتور صادرشده ERP</th>
                   <th className="p-3 font-semibold">زمان بروزرسانی</th>
                   <th className="p-3 font-semibold">جزئیات / خطا</th>

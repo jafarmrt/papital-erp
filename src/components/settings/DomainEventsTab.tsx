@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Zap, RefreshCw, Search, Filter, CheckCircle2, Activity, Package, FileText, GitBranch, CreditCard, ChevronDown, ChevronUp, Clock, Inbox, AlertTriangle, Play, RotateCcw, Database, Sliders, AlertOctagon, History, Globe } from 'lucide-react';
-import { formatPersianDate, errorMessageOf } from '../../utils';
+import { formatPersianDate, errorMessageOf, toPersianDigits } from '../../utils';
 import { AutoActionsSubTab } from './AutoActionsSubTab';
 import { DeadLetterQueueSubTab } from './DeadLetterQueueSubTab';
 import { EventSourcingReplaySubTab } from './EventSourcingReplaySubTab';
 import { WebhookManagementSubTab } from './WebhookManagementSubTab';
 import { EventSimulationPanel } from './EventSimulationPanel';
 import {
+  DOMAIN_EVENTS_REFRESH_MS,
   useDomainEventsQuery,
   useOutboxStatsQuery,
   useOutboxEventsQuery,
@@ -281,10 +282,13 @@ export function DomainEventsTab() {
               <div className="text-xl font-bold text-slate-800 dark:text-white mt-1">
                 {outboxStats?.total ? outboxStats.total.toLocaleString('fa-IR') : '۰'}
               </div>
-              <div className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-1 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>{outboxStats?.workerRunning ? 'ورکر پس‌زمینه فعال' : 'ورکر در حال پایش'}</span>
-              </div>
+              {/* v9.0.396 (TD-733): a stopped background processor is shown as stopped, never with the green pulse */}
+              {outboxStats && (
+                <div className={`text-[11px] mt-1 flex items-center gap-1 ${outboxStats.workerRunning ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                  <span className={`w-2 h-2 rounded-full ${outboxStats.workerRunning ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
+                  <span>{outboxStats.workerRunning ? 'پردازشگر پس‌زمینه فعال است' : 'پردازشگر پس‌زمینه متوقف است'}</span>
+                </div>
+              )}
             </div>
 
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -578,7 +582,7 @@ export function DomainEventsTab() {
               </span>
               <span className="text-[11px] text-slate-400 flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                <span>به‌روزرسانی خودکار هر ۸ ثانیه</span>
+                <span>به‌روزرسانی خودکار هر {toPersianDigits(DOMAIN_EVENTS_REFRESH_MS / 1000)} ثانیه</span>
               </span>
             </div>
 

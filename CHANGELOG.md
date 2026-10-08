@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.396 — Events Page States Its Real Status
+- **Events page status (TD-733):** a stopped outbox worker showed the green pulse, each outbox action was announced by a banner and a toast, the live list label said 8 seconds for a 10-second refresh and the WooCommerce order log header promised amounts; each now states what is true.
+
 ### v9.0.395 — Timeline Aggregate Search Settles
 - **Timeline search (TD-731):** the event timeline's aggregate search sent a request per keystroke and a late answer overwrote the newer list; it now waits for the keyword to settle (`useDebounce`) and aborts the older request.
 

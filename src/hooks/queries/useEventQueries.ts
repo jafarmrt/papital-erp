@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
-import { toast } from 'react-hot-toast';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import type { StoredRuleActionType } from '../../lib/events/ruleActionTypes';
 import type { ActionEngineStats, ActionLogPage, ActionLogRow } from '../../lib/events/actionLogContract';
@@ -71,6 +70,9 @@ export interface ActionRule {
 export type ActionLog = ActionLogRow;
 export type ActionStats = ActionEngineStats;
 
+/** v9.0.396 (TD-733): the live events list refreshes this often; the tab's label reads the same constant. */
+export const DOMAIN_EVENTS_REFRESH_MS = 10000;
+
 // Live Domain Events Query
 export function useDomainEventsQuery(filter: string = 'ALL', options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery<{ events: DomainEvent[]; stats: DomainEventStats | null }>({
@@ -87,7 +89,7 @@ export function useDomainEventsQuery(filter: string = 'ALL', options?: { enabled
     },
     staleTime: 5000,
     enabled: options?.enabled ?? true,
-    refetchInterval: options?.refetchInterval ?? 10000,
+    refetchInterval: options?.refetchInterval ?? DOMAIN_EVENTS_REFRESH_MS,
   });
 }
 
@@ -190,12 +192,9 @@ export function useProcessOutboxMutation() {
         method: 'POST',
       });
     },
-    onSuccess: (res) => {
+    // v9.0.396 (TD-733): the events tab announces the result once, in its own banner
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-      toast.success(res?.message || 'صف رویدادها با موفقیت پردازش شد');
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'خطا در پردازش دستی صف Outbox');
     },
   });
 }
@@ -210,12 +209,9 @@ export function useRetryFailedOutboxMutation() {
         method: 'POST',
       });
     },
-    onSuccess: (res) => {
+    // v9.0.396 (TD-733): the events tab announces the result once, in its own banner
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-      toast.success(res?.message || 'رویدادهای ناموفق برای تلاش مجدد نشانه‌گذاری شدند');
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'خطا در بازنشانی تلاش مجدد رویدادهای ناموفق');
     },
   });
 }
@@ -230,12 +226,9 @@ export function useRetrySingleOutboxEventMutation() {
         method: 'POST',
       });
     },
-    onSuccess: (res) => {
+    // v9.0.396 (TD-733): the events tab announces the result once, in its own banner
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
-      toast.success(res?.message || 'رویداد برای تلاش مجدد زمان‌بندی شد');
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'خطا در تلاش مجدد رویداد');
     },
   });
 }

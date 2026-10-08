@@ -4,6 +4,7 @@
  * TD-724 (B15-22): the bulk stock sync showed only the server's green message while items failed.
  * TD-730 (B15-28, WooCommerce half): a 403 / 500 on the order lists was swallowed and the tables said «no orders yet».
  * TD-710 (B15-08): the WooCommerce webhook secret was shown in a text field.
+ * TD-733 (B15-31): the order log's buyer column was titled «نام خریدار / مبالغ» but shows no amount.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
@@ -164,6 +165,20 @@ describe('TD-730 WooCommerce order lists show a load error instead of «no order
     expect(result.current.wcOrderLogsError).toBe('');
     renderTab(result.current);
     expect(screen.getByText('طرف حساب تازه «علی (۰۹۳۵)» ساخته شد').className).not.toContain('text-rose-600');
+  });
+});
+
+describe('TD-733 the WooCommerce order log headers name what the rows show', () => {
+  it('the buyer column is not titled with amounts it does not show', async () => {
+    mockServer((url) => (url === '/woocommerce/order-logs'
+      ? [{ id: 1, wcOrderId: '77', status: 'processed', buyerName: 'خریدار', erpDocumentId: 9, errorMessage: '' }]
+      : undefined));
+    const { result } = renderHook(() => useSettings(), { wrapper });
+    await waitFor(() => expect(result.current.wcOrderLogs).toHaveLength(1));
+    renderTab(result.current);
+    const headers = screen.getAllByRole('columnheader').map(h => h.textContent);
+    expect(headers).toContain('نام خریدار');
+    expect(headers.some(h => String(h).includes('مبالغ'))).toBe(false);
   });
 });
 
