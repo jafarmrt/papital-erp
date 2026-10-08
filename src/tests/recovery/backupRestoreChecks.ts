@@ -30,6 +30,9 @@ interface Ctx {
 const NAMES: Array<[string, string, CriticalScenarioId | undefined, string]> = [
   ['rec_td_362_backup_from_any_directory', 'v8.0.84: a backup from any directory (such as cron) reads the database URL from the app .env and archives the attachment files too; an attachment record without the attachment directory does not produce a partial backup (TD-362)', undefined,
     'The backup from another directory used the app .env and the attachments were in the archive; a missing attachment directory refused the backup'],
+  ['rec_td_957_daily_backup_goes_offsite',
+    'v10.0.2: the daily backup copies its dump, manifest, attachment archive and the .env with ERP_SECRETS_KEY to the encrypted rclone remote and records both times; a failed copy keeps the local backup and exits 3 (TD-957)', undefined,
+    'The remote held the four files and the .env copy; daily_ok and offsite_ok were written; with a failing upload the run exited 3 and kept the local dump'],
   ['rec_td_361_restore_drill_compares_content', 'v8.0.85: the restore drill compares the restored database row by row with the content manifest of the same backup; a difference, an empty main table in a backup without a manifest and a missing attachment are refused (TD-361)', 'recovery_backup_restore',
     'The restore matched the manifest; a tampered manifest, an empty users table in a backup without a manifest and a missing attachment archive were refused'],
   ['rec_td_363_drill_with_installed_role', 'v8.0.86: the restore drill with the role install.sh creates (no CREATEDB) runs with the admin connection RESTORE_ADMIN_URL, and without it stops before doing anything with clear guidance (TD-363)', undefined,
@@ -94,6 +97,53 @@ async function checkBackupFromAnyDirectory(ctx: Ctx): Promise<string[]> {
     if (noAtt.code === 0) v.push('A backup with an attachment record but no attachment directory was reported "successful" (the attachments were silently left out)');
   } finally {
     fs.renameSync(path.join(appDir, 'public.hidden'), path.join(appDir, 'public'));
+  }
+  return v;
+}
+
+const FAKE_RCLONE = `#!/bin/bash
+case "$1" in
+  listremotes) echo "papital-crypt: crypt" ;;
+  copyto) [ "\${FAKE_RCLONE_FAIL:-}" != "copy" ] || exit 1; cp "$2" "$FAKE_REMOTE_DIR/\${3##*/}" ;;
+  lsl) for f in "$FAKE_REMOTE_DIR"/*; do [ -f "$f" ] && printf '%9d 2026-10-09 02:30:00.000000000 %s\\n' "$(stat -c %s "$f")" "\${f##*/}"; done; true ;;
+  delete) ;;
+  *) exit 1 ;;
+esac
+`;
+
+async function checkBackupGoesOffsite(ctx: Ctx): Promise<string[]> {
+  const v: string[] = [];
+  const { appDir, cluster } = ctx;
+  const root = path.join(cluster.tmpDir, 'offsite');
+  const binDir = path.join(root, 'bin');
+  const remoteDir = path.join(root, 'remote');
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.mkdirSync(remoteDir, { recursive: true });
+  fs.writeFileSync(path.join(binDir, 'rclone'), FAKE_RCLONE, { mode: 0o755 });
+  const envFile = path.join(appDir, '.env');
+  const envBefore = fs.readFileSync(envFile, 'utf8');
+  fs.writeFileSync(envFile, `${envBefore}ERP_SECRETS_KEY=offsite-check-key\nBACKUP_RCLONE_REMOTE=papital-crypt:erp\n`);
+  try {
+    const backupDir = path.join(root, 'backups');
+    const env = scriptEnv({ BACKUP_DIR: backupDir, PATH: `${binDir}:${process.env.PATH}`, FAKE_REMOTE_DIR: remoteDir });
+    const ok = await runCommand('bash', [path.join(appDir, 'scripts', 'backup.sh')], { cwd: cluster.tmpDir, env });
+    if (ok.code !== 0) return [`The daily backup with an off-server remote failed (code ${ok.code}): ${ok.output.slice(-300)}`];
+    const remote = fs.readdirSync(remoteDir).sort();
+    for (const suffix of ['.dump.gz', '.manifest', '_uploads.tar.gz', '.env']) {
+      if (!remote.some(f => f.endsWith(suffix))) v.push(`The off-server copy has no *${suffix} file (remote: ${remote.join(', ')})`);
+    }
+    const envCopy = remote.find(f => f.endsWith('.env'));
+    if (envCopy && !fs.readFileSync(path.join(remoteDir, envCopy), 'utf8').includes('ERP_SECRETS_KEY=offsite-check-key')) v.push('The .env copy does not carry ERP_SECRETS_KEY');
+    for (const status of ['daily_ok', 'offsite_ok']) {
+      if (!fs.existsSync(path.join(backupDir, `.last_${status}`))) v.push(`The status file .last_${status} was not written`);
+    }
+    const failDir = path.join(root, 'backups-fail');
+    const failed = await runCommand('bash', [path.join(appDir, 'scripts', 'backup.sh')], { cwd: cluster.tmpDir, env: { ...env, BACKUP_DIR: failDir, FAKE_RCLONE_FAIL: 'copy' } });
+    if (failed.code !== 3) v.push(`A failed off-server copy exited ${failed.code} (expected 3): ${failed.output.slice(-200)}`);
+    if (listBackups(failDir, '.dump.gz').length !== 1) v.push('A failed off-server copy did not keep the local dump');
+    if (fs.existsSync(path.join(failDir, '.last_offsite_ok'))) v.push('A failed off-server copy wrote offsite_ok');
+  } finally {
+    fs.writeFileSync(envFile, envBefore);
   }
   return v;
 }
@@ -209,6 +259,7 @@ export async function runBackupRestoreChecks(): Promise<RecoveryCheckOutcome[]> 
     const ctx: Ctx = { cluster, appDir: makeAppDir(cluster.tmpDir), dump: '' };
     const results: string[][] = [await checkBackupFromAnyDirectory(ctx)];
     if (!ctx.dump) return outcome([results[0], ...NAMES.slice(1).map(() => ['پشتیبانی برای بازیابی ساخته نشد'])]);
+    results.push(await checkBackupGoesOffsite(ctx));
     results.push(await checkDrillComparesContent(ctx));
     results.push(await checkDrillWithInstalledRole(ctx));
     results.push(await checkUpgradeRehearsal(ctx));

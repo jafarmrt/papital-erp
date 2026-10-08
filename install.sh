@@ -64,7 +64,8 @@ fi
 log "[1/7] Installing system dependencies (curl, git, OpenSSL, PostgreSQL, Node.js 22)..."
 
 $SUDO apt-get update -y
-$SUDO apt-get install -y curl git ca-certificates openssl gnupg
+# v10.0.2 (TD-957): rclone copies the daily backup off the server (scripts/backup-offsite.sh)
+$SUDO apt-get install -y curl git ca-certificates openssl gnupg rclone
 
 # PostgreSQL (>=14 required; add PGDG repo when distro version is older)
 PG_MAJOR="$(psql --version 2>/dev/null | grep -oE '^[0-9]+' | head -1 || true)"
@@ -178,6 +179,13 @@ $SUDO systemctl enable "$SERVICE_NAME"
 $SUDO systemctl restart "$SERVICE_NAME"
 success "systemd service ${SERVICE_NAME} enabled and started."
 
+# v10.0.1 (TD-1020): the daily backup and the five-minute monitor run from one cron file; the backup directory
+# belongs to the service user and only it can read it (scripts/backup.sh, TD-585)
+BACKUP_DIR_ENV="$(grep -E '^BACKUP_DIR=' .env | head -1 | cut -d= -f2- || true)"
+$SUDO install -d -m 700 -o "$(id -un)" "${BACKUP_DIR_ENV:-/var/backups/erp}"
+$SUDO env APP_DIR="$APP_DIR" bash scripts/install-ops-cron.sh "$(id -un)" || die "Could not install the backup and monitor schedule"
+success "Daily backup and monitor schedule installed (/etc/cron.d/papital-erp)."
+
 # ---------- 7) Health probe ----------
 log "[7/7] Waiting for health probe..."
 HEALTH_OK=0
@@ -202,5 +210,6 @@ log "  Setup wizard : http://localhost:${APP_PORT}/setup?token=<ERP_SETUP_TOKEN 
 log "  Service      : systemctl status ${SERVICE_NAME}"
 log "  Logs         : journalctl -u ${SERVICE_NAME} -f   |   installer log: $LOG_FILE"
 log "  Update later : ./update.sh   (never run db:push — migrations are automatic)"
+log "  Backups      : daily at 02:30 to /var/backups/erp; set up the encrypted Google Drive copy and alerts: docs/OFFSITE_BACKUP.md"
 log "==================================================================================="
 exit 0

@@ -6,10 +6,10 @@ import path from 'path';
 import { Writable } from 'stream';
 import request from 'supertest';
 import winston from 'winston';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm, pool } from '../../db/drizzle.js';
-import { users } from '../../db/schema.js';
+import { deadLetterEvents, integrationDeliveryJobs, outboxEvents, users } from '../../db/schema.js';
 import { generateToken } from '../../middleware/auth.js';
 import { logger } from '../../middleware/logger.js';
 import { getTestApp, ensureAdminTestUser } from '../fixtures/httpTestHelper.js';
@@ -98,6 +98,58 @@ async function checkPoolStatsLive(): Promise<string[]> {
   return v;
 }
 
+// ---------- OBS-R2-11 (v10.0.3) ----------
+const QUEUE_GAUGES = ['erp_queue_metrics_up', 'erp_dead_letter_unresolved', 'erp_outbox_failed', 'erp_outbox_stuck',
+  'erp_integration_deliveries_retrying', 'erp_integration_deliveries_failed'] as const;
+
+async function scrapeQueueGauges(token: string): Promise<Record<string, number | undefined>> {
+  const app = await getTestApp();
+  const res = await request(app).get('/metrics').set('Authorization', `Bearer ${token}`);
+  const lines = String(res.text ?? '').split('\n');
+  const out: Record<string, number | undefined> = {};
+  for (const name of QUEUE_GAUGES) {
+    const line = lines.find(l => l.startsWith(`${name} `));
+    out[name] = line === undefined ? undefined : Number(line.split(' ')[1]);
+  }
+  return out;
+}
+
+async function checkQueueGauges(): Promise<string[]> {
+  const v: string[] = [];
+  const token = await adminToken();
+  const tag = `obs_r2_11_${randomTag()}`;
+  const before = await scrapeQueueGauges(token);
+  for (const name of QUEUE_GAUGES) {
+    if (before[name] === undefined || Number.isNaN(before[name])) v.push(`/metrics has no ${name} gauge`);
+  }
+  if (v.length > 0) return v;
+  try {
+    await orm.insert(outboxEvents).values([
+      { eventId: `${tag}_failed`, eventType: 'InvoiceApproved', aggregateType: 'Document', aggregateId: '1', status: 'failed', payload: {} },
+      { eventId: `${tag}_stuck`, eventType: 'InvoiceApproved', aggregateType: 'Document', aggregateId: '1', status: 'processing', payload: {}, occurredAt: new Date(Date.now() - 3_600_000).toISOString() },
+    ]);
+    await orm.insert(deadLetterEvents).values({
+      originalEventId: `${tag}_dlq`, eventType: 'InvoiceApproved', aggregateType: 'Document', aggregateId: '1', source: 'outbox',
+      payload: {}, failureReason: 'monitoring test', status: 'quarantined',
+    });
+    await orm.insert(integrationDeliveryJobs).values([
+      { kind: 'webhook', targetId: 1, eventId: `${tag}_retrying`, eventType: 'InvoiceApproved', event: {}, status: 'pending', attempts: 1 },
+      { kind: 'webhook', targetId: 1, eventId: `${tag}_failed`, eventType: 'InvoiceApproved', event: {}, status: 'failed', attempts: 3 },
+    ]);
+    const after = await scrapeQueueGauges(token);
+    if (after.erp_queue_metrics_up !== 1) v.push(`erp_queue_metrics_up is ${String(after.erp_queue_metrics_up)} after a good read (expected 1)`);
+    for (const name of QUEUE_GAUGES.slice(1)) {
+      const diff = Number(after[name]) - Number(before[name]);
+      if (diff !== 1) v.push(`${name} went from ${String(before[name])} to ${String(after[name])} after one matching row was added (expected +1)`);
+    }
+  } finally {
+    await orm.delete(integrationDeliveryJobs).where(inArray(integrationDeliveryJobs.eventId, [`${tag}_retrying`, `${tag}_failed`]));
+    await orm.delete(deadLetterEvents).where(eq(deadLetterEvents.originalEventId, `${tag}_dlq`));
+    await orm.delete(outboxEvents).where(inArray(outboxEvents.eventId, [`${tag}_failed`, `${tag}_stuck`]));
+  }
+  return v;
+}
+
 // ---------- TD-598 ----------
 async function checkAccessLogAtProductionLevel(): Promise<string[]> {
   const app = await getTestApp();
@@ -173,6 +225,9 @@ const CASES: Array<[string, string, () => Promise<string[]>, string]> = [
   ['sec_td_596_pool_stats_live',
     'readiness and the pool gauges read the real connection pool (TD-596)',
     checkPoolStatsLive, 'with a held connection /health/ready and /metrics report a pool total above 0'],
+  ['sec_obs_r2_11_queue_gauges',
+    'v10.0.3: /metrics exports the unresolved dead-letter events, failed and stuck outbox events and retrying and failed integration deliveries, and whether they were read (OBS-R2-11)',
+    checkQueueGauges, 'each queue gauge rose by exactly one for one matching row; erp_queue_metrics_up was 1'],
   ['sec_td_598_access_log_at_production_level',
     'the HTTP access log is written at the production log level info (TD-598)',
     checkAccessLogAtProductionLevel, 'an access line reached the log at level info'],

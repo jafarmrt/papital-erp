@@ -172,7 +172,23 @@ if [ "$CRON_HIT" -eq 0 ] && [ -d /var/spool/cron/crontabs ] && grep -qs "backup.
 if [ "$CRON_HIT" -eq 1 ]; then
   ok "Backup cron entry found"
 else
-  bad "No backup cron entry found (Phase 6 of GO_LIVE_CHECKLIST.md)"
+  bad "No backup cron entry found (sudo bash scripts/install-ops-cron.sh <service-user>)"
+fi
+# v10.0.2 / v10.0.4 (O-02, O-03): the encrypted off-server copy and an alert channel of scripts/monitor.sh
+if [ -n "$(env_val BACKUP_RCLONE_REMOTE)" ]; then
+  ok "Off-server backup copy configured ($(env_val BACKUP_RCLONE_REMOTE))"
+else
+  warnc "No off-server backup copy: BACKUP_RCLONE_REMOTE is empty (docs/OFFSITE_BACKUP.md)"
+fi
+if { [ -n "$(env_val ALERT_BOT_TOKEN)" ] && [ -n "$(env_val ALERT_CHAT_ID)" ]; } || { [ -n "$(env_val ALERT_SMTP_URL)" ] && [ -n "$(env_val ALERT_EMAIL_TO)" ]; }; then
+  ok "Alert channel configured for scripts/monitor.sh"
+else
+  warnc "No alert channel for scripts/monitor.sh (ALERT_BOT_TOKEN/ALERT_CHAT_ID or ALERT_SMTP_URL/ALERT_EMAIL_TO)"
+fi
+if [ -e /etc/cron.d ] && grep -rqs "monitor.sh" /etc/cron.d 2>/dev/null; then
+  ok "Monitor cron entry found"
+else
+  warnc "No monitor cron entry (sudo bash scripts/install-ops-cron.sh <service-user>)"
 fi
 if [ -d "$APP_DIR/public/uploads" ]; then
   ok "Uploads directory present (included in backup.sh archives)"

@@ -36,7 +36,8 @@ export function runCommand(file: string, args: string[], options: { cwd?: string
 /** محیط فرمان بدون متغیرهای پایگاه‌داده برنامه (اسکریپت‌ها باید خودشان از .env بخوانند) */
 export function scriptEnv(extra: Record<string, string>): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const key of ['DATABASE_URL', 'ATTACHMENTS_DIR', 'UPLOADS_DIR', 'APP_DIR', 'BACKUP_DIR', 'RESTORE_ADMIN_URL', 'RESTORE_MODE', 'RESTORE_CONFIRM', 'RESTORE_KEEP', 'PGPASSWORD']) {
+  for (const key of ['DATABASE_URL', 'ATTACHMENTS_DIR', 'UPLOADS_DIR', 'APP_DIR', 'BACKUP_DIR', 'RESTORE_ADMIN_URL', 'RESTORE_MODE', 'RESTORE_CONFIRM', 'RESTORE_KEEP', 'PGPASSWORD',
+    'BACKUP_RCLONE_REMOTE', 'BACKUP_OFFSITE_KINDS', 'OFFSITE_RETENTION_DAYS', 'RCLONE_CONFIG']) {
     delete env[key];
   }
   return { ...env, ...extra };
@@ -122,7 +123,7 @@ export async function clientToolsMissing(): Promise<string | null> {
 /** پوشه برنامه آزمایشی: اسکریپت‌های واقعی مخزن، بی .env و بی پوشه بارگذاری‌ها (هر آزمون خودش می‌سازد) */
 export function makeAppDir(root: string): string {
   const appDir = path.join(root, 'app');
-  for (const rel of ['scripts/backup.sh', 'scripts/restore.sh', 'scripts/sql/backup-manifest.sql', 'drizzle/meta/_journal.json']) {
+  for (const rel of ['scripts/backup.sh', 'scripts/backup-offsite.sh', 'scripts/restore.sh', 'scripts/sql/backup-manifest.sql', 'drizzle/meta/_journal.json']) {
     const from = path.join(REPO_ROOT, rel);
     if (!fs.existsSync(from)) continue;
     fs.mkdirSync(path.dirname(path.join(appDir, rel)), { recursive: true });
