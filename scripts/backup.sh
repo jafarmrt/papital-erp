@@ -1,6 +1,7 @@
 #!/bin/bash
 # scripts/backup.sh — PHASE 9 (14.1) Production Backup Strategy
-# Full pg_dump backup with integrity verification, content manifest, optional offsite upload and retention cleanup.
+# Full pg_dump backup with integrity verification, content manifest, retention cleanup and (v10.0.4) an encrypted
+# off-server copy through scripts/backup-offsite.sh.
 #
 # Usage:
 #   ./scripts/backup.sh                                       # daily full backup (retention 30d)
@@ -12,8 +13,8 @@
 # so a cron line from any working directory backs up the database AND the attachment files. A database that has
 # attachment records but no attachment directory is a failed backup, never a silent database-only one.
 #
-# Cron example (/etc/cron.d/papital-erp-backup):
-#   0 2 * * * papital /opt/papital-erp/scripts/backup.sh >> /var/log/papital-backup.log 2>&1
+# v10.0.3 (TD-1020): the daily run is scheduled by scripts/install-ops-cron.sh (/etc/cron.d/papital-erp), which
+# install.sh runs.
 set -euo pipefail
 # v9.0.122 (TD-585): a backup holds every financial row, password hashes, salaries and all attachment files; it is
 # readable by its owner only (directory 0700, files 0600), like .env
@@ -160,17 +161,6 @@ pg_restore --list "$DUMP_TMP" >/dev/null 2>&1 \
   || fail "pg_restore --list: $DUMP_FILE.gz is NOT a valid pg_dump archive — keeping file for inspection"
 rm -f "$DUMP_TMP"
 
-# 3. Upload to offsite storage (optional, e.g. S3)
-if [ -n "${S3_BACKUP_BUCKET:-}" ]; then
-  OFFSITE_FILES=("$DUMP_FILE.gz" "$MANIFEST_FILE")
-  [ -z "$UPLOADS_ARCHIVE" ] || OFFSITE_FILES+=("$UPLOADS_ARCHIVE")
-  [ -z "$ATTACHMENTS_ARCHIVE" ] || OFFSITE_FILES+=("$ATTACHMENTS_ARCHIVE")
-  for f in "${OFFSITE_FILES[@]}"; do
-    aws s3 cp "$f" "s3://$S3_BACKUP_BUCKET/$(date +%Y/%m/%d)/" \
-      || log "WARNING: offsite upload failed for $f (backup still valid locally)"
-  done
-fi
-
 # 4. Cleanup old backups of this kind
 find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*.dump.gz" -mtime +"$RETENTION_DAYS" -delete
 find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*.manifest" -mtime +"$RETENTION_DAYS" -delete
@@ -179,10 +169,30 @@ find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*_attachments.tar.gz" -mtime +"$RET
 # v9.0.184 (TD-606): uncompressed dumps left by failed runs before that release
 find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*.dump" -mtime +"$RETENTION_DAYS" -delete
 BACKUP_DONE=1
+# v10.0.4 (TD-957): the time of the last good local backup, read by scripts/monitor.sh (backup age alert)
+echo "$(date +%s) $(basename "$BASE")" > "$BACKUP_DIR/.last_${BACKUP_KIND}_ok"
 
 # 5. Log
 [ -z "$UPLOADS_ARCHIVE" ] || log "Uploads archive created: $UPLOADS_ARCHIVE ($(du -h "$UPLOADS_ARCHIVE" | cut -f1))"
 [ -z "$ATTACHMENTS_ARCHIVE" ] || log "Attachments archive created: $ATTACHMENTS_ARCHIVE ($(du -h "$ATTACHMENTS_ARCHIVE" | cut -f1))"
 log "${BACKUP_KIND} backup completed: $DUMP_FILE.gz ($(du -h "$DUMP_FILE.gz" | cut -f1), $ATT_COUNT attachment(s), retention ${RETENTION_DAYS}d)"
+
+# 6. v10.0.4 (O-02, TD-957): the encrypted off-server copy (scripts/backup-offsite.sh) of the kinds in
+#    BACKUP_OFFSITE_KINDS (default: daily; update.sh's pre-deployment backup stays local and fast). A backup on the
+#    same disk is not a backup: when the copy fails the run exits 3 (the local backup is kept and complete), and
+#    without BACKUP_RCLONE_REMOTE it says so on every run.
+OFFSITE_REMOTE="${BACKUP_RCLONE_REMOTE:-$(env_file_value BACKUP_RCLONE_REMOTE)}"
+OFFSITE_KINDS="${BACKUP_OFFSITE_KINDS:-$(env_file_value BACKUP_OFFSITE_KINDS)}"
+OFFSITE_KINDS="${OFFSITE_KINDS:-daily}"
+case " ${OFFSITE_KINDS//,/ } " in
+  *" ${BACKUP_KIND} "*)
+    if [ -z "$OFFSITE_REMOTE" ]; then
+      log "WARNING: no off-server copy: BACKUP_RCLONE_REMOTE is not set in $APP_DIR/.env (docs/OFFSITE_BACKUP.md)"
+    elif ! BACKUP_DIR="$BACKUP_DIR" APP_DIR="$APP_DIR" BACKUP_RCLONE_REMOTE="$OFFSITE_REMOTE" bash "$APP_DIR/scripts/backup-offsite.sh" "$BASE"; then
+      log "Backup is complete locally, but its off-server copy FAILED"
+      exit 3
+    fi
+    ;;
+esac
 
 # Restore drill (see README «بازیابی از Backup»):  ./scripts/restore.sh $DUMP_FILE.gz

@@ -3,7 +3,7 @@ import type { InvariantScope, InvariantViolation } from './businessInvariants.js
 import { rows } from './ledgerRows.js';
 
 /**
- * v10.0.1 (TD-982, I-01) — I12 of the V8 catalogue (V8_MASTER_ROADMAP.md §4), read-only SQL: sequential numbers are unique
+ * v10.0.7 (TD-982, I-01) — I12 of the V8 catalogue (V8_MASTER_ROADMAP.md §4), read-only SQL: sequential numbers are unique
  * and never collide across fiscal years. For the rows above the watermarks:
  * - a live document's number is not held by another live document of its type and numbering year, and that numbering
  *   year is the Jalali year of the document's own date (TD-313);

@@ -41,7 +41,7 @@ export const isOutRow = (t: KardexRow) => t.type === 'out' || t.type === 'transf
 
 
 /**
- * v10.0.1 (TD-982, I-01): a voucher row's amount in rials by the TD-260 rule (row currency, else the voucher's, else IRR;
+ * v10.0.7 (TD-982, I-01): a voucher row's amount in rials by the TD-260 rule (row currency, else the voucher's, else IRR;
  * a foreign row at its own rate, rounded to the rial). `i` is journal_voucher_items, `v` journal_vouchers.
  */
 export function irrAmountSql(column: string): string {

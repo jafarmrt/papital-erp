@@ -22,7 +22,7 @@ export const DOMAIN_CHECKS: Array<[string, string, (wh: string) => Promise<strin
   ...WOO_DELETED_ORDER_CHECKS,
   ...TREASURY_BANK_CHECKS, // package 4, series 9 (v9.0.67 on)
   ...PAYROLL_INTEGRITY_CHECKS, // package 12 payroll, series 9 (v9.0.266 on)
-  ...INVARIANT_CATALOG_CHECKS, // I-01, series 10 (v10.0.1 on): each new invariant catches a broken row
-  ...FOREIGN_ROUNDING_CHECKS, // TD-1030 (v10.0.3): foreign sale vouchers balance in rials
-  ...SIMULATOR_COVERAGE_CHECKS, // I-01 (v10.0.2): the simulator's treasury, payroll, purchasing, allocation and approval operations
+  ...INVARIANT_CATALOG_CHECKS, // I-01, series 10 (v10.0.7 on): each new invariant catches a broken row
+  ...FOREIGN_ROUNDING_CHECKS, // TD-1030 (v10.0.9): foreign sale vouchers balance in rials
+  ...SIMULATOR_COVERAGE_CHECKS, // I-01 (v10.0.8): the simulator's treasury, payroll, purchasing, allocation and approval operations
 ];

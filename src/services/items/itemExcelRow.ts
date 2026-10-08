@@ -8,6 +8,7 @@ import { WAC_COLUMNS, extractRowPriceColumns, unknownPriceColumnMessage } from '
 import { REORDER_POINT_COLUMNS } from '../../lib/items/itemExcelColumns.js';
 import { parsePriceAmount, priceCurrencyOf } from '../../lib/items/priceInput.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
+import { newItemTypeOf, parseItemTypeCell, parseNumberCell } from '../../lib/items/itemExcelCells.js';
 export { codeFormatError } from '../../lib/items/itemCodeFormat.js';
 
 /**
@@ -36,6 +37,8 @@ export interface RowFields {
   size?: string;
   weight?: number;
   material?: string;
+  /** v10.0.1 (TD-1010) / v10.0.2 (TD-1011): خطای نخستین سلول نادرست ردیف؛ آن‌گاه هیچ بخشی از ردیف ثبت نمی‌شود */
+  cellError?: string;
 }
 
 export function isBlankCell(v: unknown): boolean {
@@ -55,39 +58,38 @@ function textCell(row: Row, headers: string[]): string | undefined {
   return v === undefined ? undefined : String(v).trim();
 }
 
-/** عدد سلول؛ سلول خالی یا ناعددی `undefined` (بی‌تغییر) */
-function numberCell(row: Row, headers: string[]): number | undefined {
-  const v = cell(row, headers);
-  if (v === undefined) return undefined;
-  const n = Number(v);
-  return Number.isNaN(n) ? undefined : n;
-}
-
-function typeCell(row: Row): 'product' | 'raw_material' | undefined {
-  const rawType = textCell(row, ['نوع کالا', 'نوع', 'type']);
-  if (rawType === 'ماده اولیه' || rawType === 'raw_material') return 'raw_material';
-  if (rawType === 'محصول نهایی' || rawType === 'product') return 'product';
-  return undefined;
+/**
+ * عدد سلول؛ سلول خالی `undefined` (بی‌تغییر). v10.0.2 (TD-1011): ارقام فارسی و جداکننده هزارگان خوانده می‌شوند و متنی
+ * که عدد نیست در `errors` می‌رود (خطای ردیف)؛ پیش‌تر بی‌صدا `undefined` می‌شد.
+ */
+function numberCell(row: Row, headers: readonly string[], errors: string[]): number | undefined {
+  const parsed = parseNumberCell(row, headers);
+  if (parsed.error) errors.push(parsed.error);
+  return parsed.value;
 }
 
 export function readRowFields(row: Row): RowFields {
-  return {
-    itemType: typeCell(row),
+  // v10.0.1 (TD-1010): «مواد اولیه» و «محصول» هم خوانده می‌شوند و نوشته ناشناخته خطای ردیف است، نه «محصول» بی‌صدا
+  const type = parseItemTypeCell(row);
+  const errors: string[] = type.error ? [type.error] : [];
+  const fields: RowFields = {
+    itemType: type.value,
     category: textCell(row, ['دسته‌بندی', 'دسته', 'category']),
     unit: textCell(row, ['واحد', 'واحد اندازه‌گیری', 'unit']),
-    reorderPoint: numberCell(row, [...REORDER_POINT_COLUMNS]),
-    weightedAverageCost: numberCell(row, [...WAC_COLUMNS]) ?? 0,
+    reorderPoint: numberCell(row, REORDER_POINT_COLUMNS, errors),
+    weightedAverageCost: numberCell(row, WAC_COLUMNS, errors) ?? 0,
     image: textCell(row, ['تصویر', 'آدرس عکس', 'image']),
     color: textCell(row, ['رنگ', 'color']),
     size: textCell(row, ['سایز', 'size']),
-    weight: numberCell(row, ['وزن', 'weight']),
+    weight: numberCell(row, ['وزن', 'weight'], errors),
     material: textCell(row, ['جنس', 'material']),
   };
+  return { ...fields, cellError: errors[0] };
 }
 
 /** نوع کالای تازه: ستون نوع، وگرنه پالایش صفحه، وگرنه محصول */
 export function newItemType(fields: RowFields, typeFilter: string | undefined): 'product' | 'raw_material' {
-  return fields.itemType ?? (typeFilter === 'raw_material' ? 'raw_material' : 'product');
+  return newItemTypeOf(fields.itemType, typeFilter);
 }
 
 /**
@@ -98,15 +100,19 @@ export function newItemType(fields: RowFields, typeFilter: string | undefined): 
 export interface RowStock {
   byWarehouse: Record<string, number>;
   total?: number;
+  /** v10.0.2 (TD-1011): سلول موجودی‌ای که عدد نیست؛ آن‌گاه ردیف ثبت نمی‌شود */
+  cellError?: string;
 }
 
 export function readRowStock(row: Row, whs: Warehouse[]): RowStock {
   const byWarehouse: Record<string, number> = {};
+  const errors: string[] = [];
   for (const w of whs) {
-    const v = numberCell(row, [`موجودی انبار ${w.name}`, `موجودی ${w.name}`, w.name, `stock_${w.code}`]);
+    const v = numberCell(row, [`موجودی انبار ${w.name}`, `موجودی ${w.name}`, w.name, `stock_${w.code}`], errors);
     if (v !== undefined) byWarehouse[w.code] = v;
   }
-  return { byWarehouse, total: numberCell(row, ['موجودی کل', 'موجودی فعلی', 'موجودی']) };
+  const total = numberCell(row, ['موجودی کل', 'موجودی فعلی', 'موجودی'], errors);
+  return { byWarehouse, total, cellError: errors[0] };
 }
 
 /** اختلاف موجودی هر انبار که ورود باید ثبت کند */

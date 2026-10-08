@@ -142,7 +142,7 @@ export async function checkRequisitionReceivedOnce(wh: string): Promise<string[]
   const backItem = await newItem();
   const back = await requisition(backItem, 10);
   const backOrder = await order(back, backItem, 10, wh);
-  // v10.0.1 (TD-982): the draft moves to 1404 with a number of that year, as the edit route would number it (TD-313);
+  // v10.0.7 (TD-982): the draft moves to 1404 with a number of that year, as the edit route would number it (TD-313);
   // the invariant I12 refuses a document numbered in another year than its date
   await pool.query(`UPDATE documents SET date = '2026-01-01', ref_fiscal_year = 1404, ref_number = 'TD326-' || id WHERE id = $1`, [backOrder]);
   await receive(backItem, 1, 1000, wh, await businessTodayIsoDate());

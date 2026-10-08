@@ -41,7 +41,7 @@ async function main(): Promise<void> {
   const steps = Number(argValue('steps') ?? 300);
   const checkEvery = Number(argValue('check-every') ?? 10);
   const verbose = process.argv.includes('--verbose');
-  // v10.0.2 (TD-982): approve the year's drafts and close 1404 after the last step, then check I11
+  // v10.0.8 (TD-982): approve the year's drafts and close 1404 after the last step, then check I11
   const closeYear = process.argv.includes('--close-year');
   const reportPath = argValue('report');
 

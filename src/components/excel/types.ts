@@ -17,6 +17,8 @@ export interface PreviewRow {
   hasPrefixMismatch: boolean;
   isDuplicateInBatch: boolean;
   isDuplicateInDb: boolean;
+  /** v10.0.1 (TD-1010): سلولی که سرور ردیف را برایش رد می‌کند */
+  hasCellError: boolean;
   issues: string[];
 }
 

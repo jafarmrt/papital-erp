@@ -20,14 +20,32 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
-### v10.0.3 — v10.0.3 — Foreign sale and purchase vouchers balance in rials, so their year closes (TD-1030)
+### v10.0.9 — Foreign sale and purchase vouchers balance in rials, so their year closes (TD-1030)
 - Cost rows of a foreign-currency voucher take the 4-decimal rate that reaches their rial value exactly and the opposite row their sum, so the voucher balances in rials and the fiscal-year closing no longer refuses it by one rial.
 
-### v10.0.2 — v10.0.2 — Simulator runs treasury, cheques, payroll, purchasing, allocation, approval and year closing (TD-982, I-01)
+### v10.0.8 — Simulator runs treasury, cheques, payroll, purchasing, allocation, approval and year closing (TD-982, I-01)
 - The business-year simulator gains eleven operations through the application services and a `--close-year` option; TD-982 is resolved and the first year closing of a simulated year found TD-1030 (a foreign sale voucher off by one rial).
 
-### v10.0.1 — v10.0.1 — Business invariants I7, I8, I9, I11, I12 and I17–I20 (TD-982, I-01)
+### v10.0.7 — Business invariants I7, I8, I9, I11, I12 and I17–I20 (TD-982, I-01)
 - Nine new read-only business invariants (project reservation, party receivable, cheque transitions, closed fiscal year, unique numbers, rial balance, posting accounts, reservation within stock, VAT payable) with checks that break a row and expect it reported; TD-982 stays open for the simulator operations.
+
+### v10.0.6 — هشدار خودکار از کار افتادن برنامه، دیسک، پشتیبان و صف رویدادها
+- `scripts/monitor.sh` هر پنج دقیقه سلامت، دیسک، سن پشتیبان و صف رویدادها را می‌سنجد و با ربات بله یا تلگرام یا ایمیل هشدار می‌دهد (TD-1021).
+
+### v10.0.5 — سنجه‌های صف رویداد و تحویل در /metrics
+- `/metrics` صف خطای حل‌نشده، رویدادهای ناموفق و گیرکرده و تحویل‌های یکپارچه‌سازی را می‌دهد و خطای خواندن را پنهان نمی‌کند (OBS-R2-11).
+
+### v10.0.4 — رونوشت رمزگذاری‌شده پشتیبان در گوگل‌درایو
+- پشتیبان روزانه و `.env` با `ERP_SECRETS_KEY` با rclone crypt به گوگل‌درایو می‌روند؛ شکست رونوشت کد ۳ (TD-957).
+
+### v10.0.3 — زمان‌بندی خودکار پشتیبان روزانه و پایش در نصب
+- `install.sh` با `scripts/install-ops-cron.sh` پشتیبان روزانه و پایش پنج‌دقیقه‌ای را در cron می‌گذارد (TD-1020).
+
+### v10.0.2 — عدد متنی در ورود اکسل کالا
+- ورود اکسل کالا بها و موجودی نوشته‌شده با ارقام فارسی یا جداکننده هزارگان را می‌خواند و متنی را که عدد نیست خطای ردیف می‌کند (TD-1011).
+
+### v10.0.1 — ستون نوع در ورود اکسل کالا
+- ورود اکسل کالا «مواد اولیه» و «محصول» را می‌خواند و نوع ناشناخته را خطای ردیف می‌کند؛ پیش‌نمایش نوع را مثل سرور تعیین می‌کند (TD-1010).
 
 ### v10.0.0 — Closure of Version 9 & Launch of Version 10
 - **Version 9 Closure:** Concluded and archived the v9.x series (`v9.0.0` through `v9.0.461`). `V9_MASTER_ROADMAP.md` is archived with a closing report (section 10: phase 5 review of the sales, purchase, project production and payroll flows); `src/data/changelogs/9.ts` is frozen.

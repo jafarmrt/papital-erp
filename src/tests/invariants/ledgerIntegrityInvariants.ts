@@ -5,7 +5,7 @@ import type { InvariantScope, InvariantViolation } from './businessInvariants.js
 import { FOREIGN_ROW_WITHOUT_RATE_SQL, irrAmountSql, rows } from './ledgerRows.js';
 
 /**
- * v10.0.1 (TD-982, I-01) — ledger invariants added in series 10 (read-only SQL over the vouchers above the watermark):
+ * v10.0.7 (TD-982, I-01) — ledger invariants added in series 10 (read-only SQL over the vouchers above the watermark):
  *
  * I17: every live voucher balances in rials by the TD-260 rule (a foreign row at its own rate), and no foreign row lacks a
  *      rate of its own (TD-551). I1 compares raw amounts, so a voucher of 100 USD against 100 IRR passed it.
