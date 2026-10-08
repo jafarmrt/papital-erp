@@ -71,12 +71,12 @@ describe('accounting buttons ask their own API key (TD-567)', () => {
   it('the dashboard offers the voucher, treasury and cheque forms only to holders of their keys', async () => {
     renderDashboard(['accounting.view', 'accounting.treasury']);
     expect(await screen.findByText('دریافت / پرداخت نقد و بانک')).toBeTruthy();
-    expect(screen.queryByText('ثبت سند دوبل جدید')).toBeNull();
+    expect(screen.queryByText('ثبت سند حسابداری جدید')).toBeNull();
     expect(screen.queryByText('ثبت چک جدید')).toBeNull();
     cleanup();
 
     renderDashboard(['accounting.view', 'accounting.vouchers', 'accounting.cheques']);
-    expect(await screen.findByText('ثبت سند دوبل جدید')).toBeTruthy();
+    expect(await screen.findByText('ثبت سند حسابداری جدید')).toBeTruthy();
     expect(screen.getByText('ثبت چک جدید')).toBeTruthy();
     expect(screen.queryByText('دریافت / پرداخت نقد و بانک')).toBeNull();
   });

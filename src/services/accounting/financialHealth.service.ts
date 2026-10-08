@@ -16,6 +16,8 @@ import {
 } from './fiscalClosingHealth.js';
 import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../items/itemPriceTitles.js';
 import { buildForeignRateHealthTest, findVouchersWithoutForeignRate } from './voucherForeignRateHealth.js';
+import { buildPayrollVoucherHealthTest, findPayrollVoucherMismatches } from '../piecework/payrollVoucherHealth.js';
+import { buildPersonnelRateHealthTest, findDuplicatePersonnelRates, hasPersonnelRateUniqueIndex } from '../piecework/personnelRate.js';
 import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
 import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
 import {
@@ -23,6 +25,7 @@ import {
   findAccountMappingIssues, findDeletedAccountsWithVoucherRows, findNonLatinAccountCodes, findVouchersOnNonPostingAccounts,
 } from './chartOfAccountsHealth.js';
 import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
+import { buildPayslipDeductionsHealthTest, findPayslipDeductionsInPrepayments } from './payrollDeductionHealth.js';
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
@@ -1181,6 +1184,15 @@ export class FinancialHealthService {
     const categoryIntegrityTest = buildCategoryIntegrityHealthTest(await findCategoryIntegrityIssues(), await hasCategoryNameUniqueIndex());
     overallScore += categoryIntegrityTest.scoreImpact;
     tests.push(categoryIntegrityTest);
+    // آزمون ۳۷: v9.0.266 (TD-804) فیش حقوقی با پاداش یا کسورات منفی، بی سند یا ناهمخوان با سند (فقط فهرست، بی بازنویسی)
+    tests.push(buildPayrollVoucherHealthTest(await findPayrollVoucherMismatches()));
+    // آزمون ۳۸: v9.0.284 (TD-809) بیش از یک نرخ اختصاصی فعال برای یک پرسنل و عنوان کار (مهاجرت 0076؛ فقط فهرست)
+    const [duplicatePersonnelRates, personnelRateIndexPresent] = await Promise.all([findDuplicatePersonnelRates(), hasPersonnelRateUniqueIndex()]);
+    const personnelRateTest = buildPersonnelRateHealthTest(duplicatePersonnelRates, personnelRateIndexPresent);
+    overallScore += personnelRateTest.scoreImpact;
+    tests.push(personnelRateTest);
+    // آزمون ۳۹: v9.0.286 (TD-554) کسورات فیش حقوق که سندهای پیشین در ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» گذاشته‌اند (فقط فهرست)
+    tests.push(buildPayslipDeductionsHealthTest(await findPayslipDeductionsInPrepayments()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

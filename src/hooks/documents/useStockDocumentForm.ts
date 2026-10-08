@@ -13,6 +13,7 @@ import {
   type StockDocProject,
 } from '../../lib/documents/stockReservations';
 import type { StockDocumentReferenceData } from './useStockDocumentReferenceData';
+import { invoiceReturnTerms } from '../../lib/documents/returnUnitPrice';
 
 interface ReturnInvoiceLine {
   item_id: number;
@@ -21,6 +22,15 @@ interface ReturnInvoiceLine {
   unit: string;
   quantity: number;
   unit_price?: number | string | null;
+  discount?: number | string | null;
+}
+
+interface ReturnInvoiceDocument {
+  id?: number;
+  buyer_name?: string;
+  currency?: string | null;
+  exchangeRate?: number | null;
+  items?: ReturnInvoiceLine[];
 }
 
 /**
@@ -43,6 +53,8 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const [returnInvoiceRef, setReturnInvoiceRef] = useState('');
   // v7.0.81 (TD-230): شناسه فاکتور فروش اصلی؛ کالای برگشتی با بهای خروج همان فاکتور وارد انبار می‌شود
   const [returnInvoiceId, setReturnInvoiceId] = useState<number | null>(null);
+  // v9.0.274 (TD-774، تصمیم ت۵ الف): درصد مالیات برگشت بی فاکتور مرجع از کاربر؛ برگشت با فاکتور مرجع آن را از فاکتور دارد
+  const [returnVatPercent, setReturnVatPercent] = useState<number | ''>('');
   const [notes, setNotes] = useState('');
 
   const [selectedItem, setSelectedItem] = useState('');
@@ -87,15 +99,25 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const handleFetchReturnInvoice = async () => {
     if (!returnInvoiceRef) return;
     try {
-      const doc = await fetchJson(`/documents/by-ref/${encodeURIComponent(returnInvoiceRef.trim())}?type=invoice`);
-      if (doc && doc.items) {
+      const doc = await fetchJson<ReturnInvoiceDocument>(`/documents/by-ref/${encodeURIComponent(returnInvoiceRef.trim())}?type=invoice`);
+      if (doc && Array.isArray(doc.items)) {
         setReturnInvoiceId(typeof doc.id === 'number' ? doc.id : null);
         setBuyerName(doc.buyer_name || '');
-        const newDocItems = doc.items.map((i: ReturnInvoiceLine) => ({
-          item: { id: i.item_id, name: i.name, code: i.code, unit: i.unit },
-          quantity: i.quantity,
-          unitPrice: Number(i.unit_price || 0)
-        }));
+        // v9.0.273 (TD-788، تصمیم ت۱۰ الف): ارز، نرخ و قیمت خالص هر واحد (پس از تخفیف ردیف، میانگین وزنی ردیف‌های یک کالا)
+        // از فاکتور؛ همان تابعی که سرور با آن می‌سنجد. پیش‌تر فقط قیمت پیش از تخفیف کپی می‌شد و ارز صفحه (ریال) فرستاده می‌شد
+        const invoiceLines = doc.items;
+        const terms = invoiceReturnTerms(invoiceLines.map(i => ({ itemId: Number(i.item_id), quantity: i.quantity, unitPrice: i.unit_price, discount: i.discount })));
+        const newDocItems: DocItemRow[] = [];
+        for (const [itemId, t] of terms) {
+          const i = invoiceLines.find(line => Number(line.item_id) === itemId);
+          newDocItems.push({
+            item: { id: itemId, name: i?.name ?? '', code: i?.code ?? '', unit: i?.unit ?? '' } as Item,
+            quantity: t.quantity.toNumber(),
+            unitPrice: t.netUnitPrice.toNumber(),
+          });
+        }
+        setCurrency(doc.currency || 'IRR');
+        setExchangeRate(doc.currency && doc.currency !== 'IRR' ? Number(doc.exchangeRate) || 0 : 0);
         setDocItems(newDocItems);
         setNotes(`برگشت از فاکتور فروش شماره ${returnInvoiceRef}`);
         toast.success('اقلام فاکتور مرجع با موفقیت بارگذاری شد.');
@@ -139,6 +161,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     // TD-234 (بند ۳): ارز و نرخ تسعیر هم مثل بقیه فرم پاک می‌شوند
     setCurrency('IRR');
     setExchangeRate(0);
+    setReturnVatPercent('');
   }, [actionType]);
 
   useEffect(() => {
@@ -175,6 +198,9 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     return docItems.reduce((acc, curr) => acc + Number(curr.quantity || 0), 0);
   }, [docItems]);
 
+  // v9.0.273 (TD-788): برگشتِ دارای فاکتور مرجع ارز، نرخ و قیمت را از فاکتور دارد و فرم آن‌ها را قفل می‌کند
+  const returnTermsLocked = docType === 'return' && returnInvoiceId !== null;
+
   return {
     actionType, setActionType,
     docType, setDocType,
@@ -187,6 +213,8 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     exchangeRate, setExchangeRate,
     returnInvoiceRef, setReturnInvoiceRef,
     returnInvoiceId, setReturnInvoiceId,
+    returnTermsLocked,
+    returnVatPercent, setReturnVatPercent,
     notes, setNotes,
     selectedItem, setSelectedItem,
     selectedItemObj, setSelectedItemObj,

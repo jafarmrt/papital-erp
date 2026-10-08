@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Sun, Sunrise, Sunset, Moon, RefreshCw, ShieldCheck, Scale, Leaf, HeartHandshake, Eye, Award, Users, HardHat, GraduationCap, Megaphone } from 'lucide-react';
-import { toPersianDigits, getTodayJalaliDate } from '../../utils';
+import { toPersianDigits, getTodayJalaliDate, displayClockNow } from '../../utils';
 import { User, FairTradePrinciple } from '../../types';
 
 interface PersonalBannerProps {
@@ -91,12 +91,9 @@ export function PersonalBanner({ user }: PersonalBannerProps) {
   });
 
   useEffect(() => {
+    // v9.0.293 (TD-683): ساعت منطقه زمانی نمایش، نه ساعت دستگاه
     const updateTime = () => {
-      const now = new Date();
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      const seconds = String(now.getSeconds()).padStart(2, '0');
-      setCurrentTime(`${toPersianDigits(hours)}:${toPersianDigits(minutes)}:${toPersianDigits(seconds)}`);
+      setCurrentTime(displayClockNow().time);
     };
 
     updateTime();
@@ -106,12 +103,7 @@ export function PersonalBanner({ user }: PersonalBannerProps) {
 
   useEffect(() => {
     try {
-      const now = new Date();
-      const dayName = new Intl.DateTimeFormat('fa-IR', { weekday: 'long' }).format(now);
-      const dayNum = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric' }).format(now);
-      const monthName = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'long' }).format(now);
-      const yearNum = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric' }).format(now);
-      setCurrentDateStr(`${dayName}، ${toPersianDigits(dayNum)} ${monthName} ${toPersianDigits(yearNum)}`);
+      setCurrentDateStr(displayClockNow().dateLabel);
     } catch {
       setCurrentDateStr(getTodayJalaliDate());
     }
@@ -119,7 +111,7 @@ export function PersonalBanner({ user }: PersonalBannerProps) {
 
   // Time of day greeting
   const getGreeting = () => {
-    const hour = new Date().getHours();
+    const hour = displayClockNow().hour;
     if (hour >= 5 && hour < 11) {
       return { text: 'صبح بخیر و پر از انگیزه', icon: Sunrise, bgGradient: 'from-amber-500/10 via-orange-500/5 to-transparent', iconColor: 'text-amber-500' };
     } else if (hour >= 11 && hour < 16) {

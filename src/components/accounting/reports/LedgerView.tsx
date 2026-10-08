@@ -81,7 +81,7 @@ export function LedgerView({
                 <th className="py-2.5 px-3 w-12 text-center border-l border-slate-200 dark:border-slate-700">#</th>
                 <th className="py-2.5 px-3 w-24 text-center border-l border-slate-200 dark:border-slate-700">تاریخ</th>
                 <th className="py-2.5 px-3 w-20 text-center border-l border-slate-200 dark:border-slate-700">شماره سند</th>
-                <th className="py-2.5 px-4 border-l border-slate-200 dark:border-slate-700">شرح آرتیکل</th>
+                <th className="py-2.5 px-4 border-l border-slate-200 dark:border-slate-700">شرح ردیف</th>
                 <th className="py-2.5 px-3 w-28 text-center border-l border-slate-200 dark:border-slate-700">تفصیلی</th>
                 <th className="py-2.5 px-3 w-32 text-left border-l border-slate-200 dark:border-slate-700">بدهکار</th>
                 <th className="py-2.5 px-3 w-32 text-left border-l border-slate-200 dark:border-slate-700">بستانکار</th>

@@ -13,7 +13,7 @@ import { DocumentService } from './document.service.js';
 import { userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from './inventory/stockMovementDate.js';
 
-/** v9.0.267 (TD-689): مجوزهایی که درخواست خرید را تأیید می‌کنند (همان گارد مسیر اقدام گردش‌کار) */
+/** v9.0.315 (TD-689): مجوزهایی که درخواست خرید را تأیید می‌کنند (همان گارد مسیر اقدام گردش‌کار) */
 const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve', 'procurement.manage'];
 /** v8.0.71 (TD-326): درخواست ردشده دریافت یا سفارش داده نمی‌شود، مگر پس از بازگشایی */
 const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
@@ -39,7 +39,7 @@ type DbClient = DbExecutor;
 /** سند خرید صادرشده از درخواست: ردیف documents، یا شناسه و شماره وقتی ردیف خوانده نشد */
 type CreatedProcurementDocument = typeof documents.$inferSelect | { id: number; refNumber: string };
 
-/** v9.0.266 (TD-688): بدنه ثبت درخواست خرید (قرارداد `createRequisitionSchema`) */
+/** v9.0.314 (TD-688): بدنه ثبت درخواست خرید (قرارداد `createRequisitionSchema`) */
 export interface CreateRequisitionInput {
   title: string;
   projectId?: number | null;
@@ -49,7 +49,7 @@ export interface CreateRequisitionInput {
   items: RequisitionRowFields[];
 }
 
-/** v9.0.271 (TD-696): بدنه ویرایش درخواست خرید (قرارداد `updateRequisitionSchema`)؛ فیلدی که نیامده بی تغییر می‌ماند */
+/** v9.0.319 (TD-696): بدنه ویرایش درخواست خرید (قرارداد `updateRequisitionSchema`)؛ فیلدی که نیامده بی تغییر می‌ماند */
 export interface UpdateRequisitionInput {
   title?: string;
   projectId?: number | null;
@@ -188,7 +188,7 @@ export class ProcurementService {
     }
 
     const createdReq = await orm.transaction(async (tx) => {
-      // v9.0.266 (TD-688): ردیف‌ها و پروژه با یک قاعده برای ثبت و ویرایش؛ مقدار جمع برآورد با FinancialDecimal (AGENTS §1.8)
+      // v9.0.314 (TD-688): ردیف‌ها و پروژه با یک قاعده برای ثبت و ویرایش؛ مقدار جمع برآورد با FinancialDecimal (AGENTS §1.8)
       const { rows: sanitizedItems, total: totalEst } = await buildRequisitionRows(tx, input.items);
       const { projectId, projectCode, projectName } = await resolveRequisitionProject(tx, input.projectId);
       const code = await this.generateRequisitionCode(tx);
@@ -329,7 +329,7 @@ export class ProcurementService {
   /**
    * Update requisition items, assignments, or estimates
    *
-   * v9.0.271 (TD-696، B10-09): ویرایش فقط پیش از تأیید (یا پس از رد) و برای درخواستی که هیچ ردیفش سفارش نشده، در یک
+   * v9.0.319 (TD-696، B10-09): ویرایش فقط پیش از تأیید (یا پس از رد) و برای درخواستی که هیچ ردیفش سفارش نشده، در یک
    * تراکنش و زیر قفل ردیف درخواست؛ وگرنه ۴۰۹ `REQUISITION_NOT_EDITABLE`. ردیف‌ها با همان قرارداد ثبت ساخته می‌شوند
    * (`buildRequisitionRows`) و شناسه ردیف ذخیره‌شده نگه داشته می‌شود؛ ممیزی پیش و پس از ویرایش با همان `tx`. پیش‌تر
    * ویرایش در هر وضعیتی، بی تراکنش، مقدار درخواستی، سفارش‌شده و دریافتی را صفر و پیوند سفارش‌ها را پاک می‌کرد.
@@ -403,7 +403,7 @@ export class ProcurementService {
         .where(and(eq(purchaseRequisitions.id, id), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');
       if (!locked) throw new NotFoundError('درخواست خرید یافت نشد.');
-      // v9.0.270 (TD-695، B10-08): درخواستی که سند سفارش زنده دارد حذف نمی‌شود. پیش‌تر فقط وضعیت «سفارش‌شده» و
+      // v9.0.318 (TD-695، B10-08): درخواستی که سند سفارش زنده دارد حذف نمی‌شود. پیش‌تر فقط وضعیت «سفارش‌شده» و
       // «دریافت‌شده» رد می‌شد: درخواستِ بخشی‌سفارش‌شده یا لغوشده حذف می‌شد و سفارشش بی درخواست تحویل می‌شد
       const liveOrders = await requisitionOrderDocuments(tx, { code: locked.code, items: locked.items as RequisitionItemWithReceipt[] });
       if (liveOrders.length > 0) {
@@ -656,7 +656,7 @@ export class ProcurementService {
     const overOrderReason = params.overOrderReason?.trim() || '';
     const username = user.username || 'کارشناس تدارکات';
     const today = await businessTodayIsoDate();
-    // v9.0.267 (TD-689، ت۱): حق تأیید پیش از تراکنش سنجیده می‌شود (TD-324: بی اتصال دوم درون تراکنش)
+    // v9.0.315 (TD-689، ت۱): حق تأیید پیش از تراکنش سنجیده می‌شود (TD-324: بی اتصال دوم درون تراکنش)
     const mayApprove = await userHasRoleOrPermission(user, ...REQUISITION_APPROVE_PERMISSIONS);
 
     const converted = await orm.transaction(async (tx) => {
@@ -675,7 +675,7 @@ export class ProcurementService {
       if (CLOSED_REQUISITION_STATUSES.has(req.status)) {
         throw new ConflictError(`درخواست خرید ${req.code} رد شده است و سفارش داده نمی‌شود؛ ابتدا درخواست را بازگشایی کنید.`);
       }
-      // v9.0.267 (TD-689، ت۱): سفارش فقط از گام «تأییدشده»؛ دارنده حق تأیید نخست تأیید را به نام خودش اجرا می‌کند
+      // v9.0.315 (TD-689، ت۱): سفارش فقط از گام «تأییدشده»؛ دارنده حق تأیید نخست تأیید را به نام خودش اجرا می‌کند
       await ensureRequisitionApproved(tx, req, user, {
         mayApprove,
         comment: 'تأیید هنگام صدور سفارش خرید',
@@ -774,7 +774,7 @@ export class ProcurementService {
 
       if (shouldCloseRequisition) {
         // If closing formally, mark remaining items as closed/ordered with optional note
-        // v9.0.268 (TD-690): ردیف بسته‌شده نشان `closed` می‌گیرد؛ دیگر سفارش داده و بی سفارش دریافت نمی‌شود
+        // v9.0.316 (TD-690): ردیف بسته‌شده نشان `closed` می‌گیرد؛ دیگر سفارش داده و بی سفارش دریافت نمی‌شود
         for (const item of updatedItems) {
           if ((item.remainingQty || 0) > 0) {
             item.remainingQty = 0;
@@ -795,7 +795,7 @@ export class ProcurementService {
         updatedReqNotes = `${updatedReqNotes}\n[تکمیل/بستن خرید: ${params.closureReason}]`.trim();
       }
 
-      // v9.0.267 (TD-689): وضعیت درخواست فقط از گام گردش‌کار می‌آید (applyRequisitionTransition)؛ تبدیل گام را جابه‌جا
+      // v9.0.315 (TD-689): وضعیت درخواست فقط از گام گردش‌کار می‌آید (applyRequisitionTransition)؛ تبدیل گام را جابه‌جا
       // نمی‌کند. پیش‌تر تبدیل بخشی وضعیت را «در حال بررسی» و تراکنش دومی گام را مستقیم «در انتظار» می‌نوشت (A02-15)
       const [finalUpdatedReq] = await tx.update(purchaseRequisitions).set({
         items: updatedItems,
@@ -1081,7 +1081,7 @@ export class ProcurementService {
 
     // v8.0.4 (TD-257): سفارشی که تاریخش پیش از آخرین گردش کالاست فقط با مجوز همین کاربر به انبار تحویل می‌شود
     const allowBackdate = await userHasRoleOrPermission(user, BACKDATE_PERMISSION);
-    // v9.0.269 (TD-692): حق تأیید پیش از تراکنش سنجیده می‌شود (TD-324)
+    // v9.0.317 (TD-692): حق تأیید پیش از تراکنش سنجیده می‌شود (TD-324)
     const mayApprove = await userHasRoleOrPermission(user, ...REQUISITION_APPROVE_PERMISSIONS);
     const reqCode = doc.notes?.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/)?.[1]?.trim() ?? null;
 
@@ -1091,7 +1091,7 @@ export class ProcurementService {
     // قفل درخواست پیش از نهایی‌سازی گرفته و وضعیت سند زیر همان قفل دوباره خوانده می‌شود، تا تحویل دوباره همین سفارش (که
     // نهایی‌سازی‌اش بی‌صدا رد می‌شود) مقدار دریافتی را دو بار نشمارد.
     //
-    // v9.0.269 (TD-692، B10-05): انتقال «دریافت کالا» در همین تراکنش و با نقش و مجوز تحویل‌دهنده اجرا می‌شود و شکستش کل
+    // v9.0.317 (TD-692، B10-05): انتقال «دریافت کالا» در همین تراکنش و با نقش و مجوز تحویل‌دهنده اجرا می‌شود و شکستش کل
     // تحویل را برمی‌گرداند؛ سفارش درخواستِ تأییدنشده تحویل نمی‌شود (ت۱). پیش‌تر انتقال پس از commit، بی نقش و مجوز اجرا
     // می‌شد و شکستش با نوشتن مستقیم `workflow_instances` (COMPLETED)، حذف `workflow_pending_approvals` و بستن
     // `workflow_tasks` دور زده می‌شد (A02-03، A02-04، A02-08).
@@ -1127,7 +1127,7 @@ export class ProcurementService {
           updatedAt: new Date().toISOString()
         }).where(eq(purchaseRequisitions.id, lockedReq.id));
 
-        // v9.0.268 (TD-690، B10-03): درخواست فقط وقتی «دریافت‌شده» است که هیچ سفارش زنده‌اش نهایی‌نشده نمانده و هر ردیف
+        // v9.0.316 (TD-690، B10-03): درخواست فقط وقتی «دریافت‌شده» است که هیچ سفارش زنده‌اش نهایی‌نشده نمانده و هر ردیف
         // دریافت یا بسته شده است. پیش‌تر فقط سندهای موجود درخواست سنجیده می‌شد: تحویل تنها سفارشِ درخواستی که بخشی‌اش
         // سفارش شده بود، درخواست را «دریافت‌شده» می‌کرد و ردیف‌های مانده دیگر سفارش داده نمی‌شدند
         const openOrders = (await requisitionOrderDocuments(tx, { code: lockedReq.code, items: updatedReqItems }))

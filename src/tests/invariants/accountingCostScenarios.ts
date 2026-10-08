@@ -155,7 +155,7 @@ export async function checkPayrollVoucherExactAmounts(): Promise<string[]> {
     `SELECT a.code, i.debit::text AS debit, i.credit::text AS credit FROM journal_voucher_items i JOIN accounts a ON a.id = i.account_id
       WHERE i.voucher_id = $1 AND i.is_deleted = 0 ORDER BY i.id`, [voucher.id]);
   const byCode = new Map(rows.rows.map(r => [r.code, fin(r.debit).subtract(r.credit).toString()]));
-  const expected: Array<[string, string]> = [['6002', amounts.piecework], ['6003', '1.1114'], ['3202', '-0.0001'], ['3201', '-12345678901235.6791']];
+  const expected: Array<[string, string]> = [['6002', amounts.piecework], ['6003', '1.1114'], ['3205', '-0.0001'], ['3201', '-12345678901235.6791']];
   for (const [code, value] of expected) {
     if (byCode.get(code) !== value) problems.push(`ردیف ${code} سند فیش ${byCode.get(code) ?? '0'}، انتظار ${value}`);
   }

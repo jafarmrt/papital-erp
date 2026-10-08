@@ -35,14 +35,14 @@ export async function newTask(): Promise<number> {
   return row.id;
 }
 
-async function addLog(personnelId: number, taskId: number, date: string, amount: number): Promise<void> {
+export async function addLog(personnelId: number, taskId: number, date: string, amount: number): Promise<void> {
   await orm.insert(pieceworkLogs).values({
     personnelId, taskId, date, dateIso: date, quantity: 1, unitRate: money(amount), totalAmount: money(amount), status: 'pending',
   });
 }
 
 /** گردش حساب برای تفصیلی یک پرسنل (اسناد و ردیف‌های فعال، همه وضعیت‌ها) */
-async function personNet(code: string, personnelId: number): Promise<string> {
+export async function personNet(code: string, personnelId: number): Promise<string> {
   const res = await pool.query<{ n: string }>(
     `SELECT COALESCE(SUM(i.debit - i.credit), 0)::text AS n FROM journal_voucher_items i
        JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
@@ -50,13 +50,13 @@ async function personNet(code: string, personnelId: number): Promise<string> {
   return fin(res.rows[0]?.n ?? 0).toString();
 }
 
-async function payrollCount(personnelId: number): Promise<number> {
+export async function payrollCount(personnelId: number): Promise<number> {
   const res = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM piecework_payrolls WHERE personnel_id = $1 AND is_deleted = 0', [personnelId]);
   return Number(res.rows[0]?.n ?? 0);
 }
 
 /** حساب بانکی با سرفصل اختصاصی زیر ۱۰۰۳ و مانده ۵٬۰۰۰٬۰۰۰ برای پرداخت حقوق */
-async function fundedBank(): Promise<number> {
+export async function fundedBank(): Promise<number> {
   const [parent] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, '1003'), eq(accounts.isDeleted, 0)));
   const [ledger] = await orm.insert(accounts).values({
     code: `1003${tag('')}`, name: 'بانک آزمون حقوق', level: 'subsidiary', parentId: parent?.id ?? null, accountType: 'asset', nature: 'debit', isSystem: 0, isActive: 1, isDeleted: 0,
@@ -72,7 +72,7 @@ async function generate(personnelId: number, extra: Record<string, unknown> = {}
   return PieceworkPayrollService.generatePayroll({ personnelId, ...PERIOD, ...extra });
 }
 
-async function refusalOf(fn: () => Promise<unknown>): Promise<string | null> {
+export async function refusalOf(fn: () => Promise<unknown>): Promise<string | null> {
   try {
     await fn();
     return null;

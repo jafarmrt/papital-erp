@@ -218,9 +218,22 @@ export const nextRefQuerySchema = z.object({
   }).passthrough()
 }).passthrough();
 
+const DOCUMENT_LIST_TYPES = ['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste'] as const;
+
+/** v9.0.301 (TD-792): `types=invoice,proforma` فهرست را به چند نوع محدود می‌کند */
+function documentListTypes(raw: unknown): string[] | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const types = raw.split(',').map(t => t.trim()).filter(Boolean);
+  return types.length > 0 ? types : undefined;
+}
+
 export const documentsQuerySchema = z.object({
   query: z.object({
-    type: z.enum(['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste']).optional(),
+    type: z.enum(DOCUMENT_LIST_TYPES).optional(),
+    types: z.string().max(200).refine(
+      raw => (documentListTypes(raw) ?? []).every(t => (DOCUMENT_LIST_TYPES as readonly string[]).includes(t)),
+      { message: 'فهرست نوع سند (types) فقط نوع‌های تعریف‌شده سند را می‌پذیرد، جدا شده با ویرگول.' },
+    ).optional(),
     status: z.enum(['draft', 'proforma', 'final']).optional(),
     search: z.string().max(100).optional(),
     startDate: storageDateParam,
@@ -356,7 +369,10 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
 // v9.0.140 (TD-890، ت۱۰ الف): فهرست کامل با مجوز بخش اسناد؛ مجوز انبارگردانی فقط فهرست سندهای شمارش و انتقال
 router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...READ_PERMISSIONS.stockCountDocuments), validate(documentsQuerySchema), asyncHandler(async (req, res) => {
   const type = req.query.type as string;
-  assertDocumentTypeReadable(await readableDocumentTypes(req.user, READ_PERMISSIONS.documents), type);
+  const types = documentListTypes(req.query.types);
+  const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documents);
+  if (!types || type) assertDocumentTypeReadable(readable, type);
+  for (const t of types ?? []) assertDocumentTypeReadable(readable, t);
   const status = req.query.status as string;
   const search = req.query.search as string;
   const startDate = req.query.startDate as string;
@@ -369,6 +385,7 @@ router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...R
 
   const result = await DocumentService.getDocuments({
     type,
+    types,
     status,
     search,
     startDate,

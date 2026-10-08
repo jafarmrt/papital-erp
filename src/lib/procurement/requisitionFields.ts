@@ -1,5 +1,5 @@
 /**
- * v9.0.266 (TD-688، B10-01): قرارداد یک‌جای درخواست خرید، مشترک سرور (Zod و سرویس) و مرورگر (فرم‌ها و میز تدارکات).
+ * v9.0.314 (TD-688، B10-01): قرارداد یک‌جای درخواست خرید، مشترک سرور (Zod و سرویس) و مرورگر (فرم‌ها و میز تدارکات).
  * پیش‌تر Zod اولویت را از `low|medium|high|emergency` و مقدار را از `quantity` می‌خواند، ولی فرم‌ها و سرویس
  * `urgent|high|normal|low` و `requestedQty` داشتند: هر ثبتی از فرم‌ها ۴۰۰ می‌گرفت و بدنه‌ای که از Zod می‌گذشت مقدار صفر
  * و نام «کالای سفارشی» ذخیره می‌کرد.
@@ -38,7 +38,7 @@ export function requisitionHasOrders(req: { items?: RequisitionRowLike[] | null 
 }
 
 /**
- * v9.0.271 (TD-696، B10-09): وضعیت‌هایی که درخواست در آن‌ها ویرایش می‌شود: پیش از تأیید (`pending`) یا پس از رد شدن
+ * v9.0.319 (TD-696، B10-09): وضعیت‌هایی که درخواست در آن‌ها ویرایش می‌شود: پیش از تأیید (`pending`) یا پس از رد شدن
  * (`rejected`)، و فقط وقتی هیچ ردیفی سفارش نشده است. پس از تأیید، ویرایش از بازگشت گردش کار (رد و بازگشایی) می‌گذرد.
  */
 export const EDITABLE_REQUISITION_STATUSES: ReadonlySet<string> = new Set(['pending', 'rejected']);
@@ -47,7 +47,7 @@ export function canEditRequisition(req: { status?: string | null; items?: Requis
   return EDITABLE_REQUISITION_STATUSES.has(String(req.status)) && !requisitionHasOrders(req);
 }
 
-/** v9.0.270 (TD-695، B10-08): درخواستی که سفارش یا دریافت شده حذف نمی‌شود؛ دکمه حذف میز تدارکات همین را می‌خواند */
+/** v9.0.318 (TD-695، B10-08): درخواستی که سفارش یا دریافت شده حذف نمی‌شود؛ دکمه حذف میز تدارکات همین را می‌خواند */
 const UNDELETABLE_REQUISITION_STATUSES: ReadonlySet<string> = new Set(['ordered', 'received', 'completed']);
 
 export function canDeleteRequisition(req: { status?: string | null; items?: RequisitionRowLike[] | null }): boolean {

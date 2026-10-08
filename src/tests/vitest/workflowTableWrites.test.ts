@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * v9.0.269 (TD-692، B10-05؛ A02-03، A02-04، A02-08): جدول‌های گردش‌کار را فقط موتور گردش‌کار می‌نویسد
+ * v9.0.317 (TD-692، B10-05؛ A02-03، A02-04، A02-08): جدول‌های گردش‌کار را فقط موتور گردش‌کار می‌نویسد
  * (`src/services/workflow/`)؛ دامنه‌ها گام را با `executeTransition` جابه‌جا و فرایند را با `terminateOpenWorkflows` می‌بندند.
  * پیش‌تر تحویل تدارکات وقتی انتقال «دریافت کالا» شکست می‌خورد، `workflow_instances` را مستقیم COMPLETED می‌کرد،
  * `workflow_pending_approvals` را فیزیکی حذف و `workflow_tasks` را می‌بست، و تبدیل به سفارش گام را مستقیم می‌نوشت.

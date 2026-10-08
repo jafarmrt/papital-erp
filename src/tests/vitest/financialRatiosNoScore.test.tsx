@@ -16,7 +16,7 @@ describe('financial ratios without data show no score (TD-575)', () => {
     expect(banner().textContent).not.toContain('از ۱۰۰');
     expect(banner().textContent).toContain('هنوز محاسبه نشده است');
     expect(container.textContent).not.toContain('بحرانی');
-    expect(screen.getByText('نسبت جاری (Current)').parentElement!.textContent).toContain('—');
+    expect(screen.getByText('نسبت جاری').parentElement!.textContent).toContain('—');
   });
 
   it('while loading it says so', () => {

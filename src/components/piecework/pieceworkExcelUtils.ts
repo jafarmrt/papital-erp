@@ -1,5 +1,6 @@
 import * as xlsx from 'xlsx';
 import { PieceworkTask } from '../../types';
+import { parsePieceworkRate } from '../../lib/piecework/pieceworkRate';
 
 export interface ParsedPieceworkRow {
   index: number;
@@ -111,6 +112,11 @@ export async function parsePieceworkExcelFile(file: File): Promise<ParsedPiecewo
     throw new Error('هیچ داده‌ای در برگه اکسل یافت نشد.');
   }
 
+  return parsePieceworkTaskRows(rawRows);
+}
+
+/** ردیف‌های خام برگه اکسل را به ردیف‌های سنجیده‌شده پیش‌نمایش تبدیل می‌کند */
+export function parsePieceworkTaskRows(rawRows: Array<Record<string, unknown>>): ParsedPieceworkRow[] {
   const parsedList: ParsedPieceworkRow[] = [];
 
   rawRows.forEach((row, idx) => {
@@ -153,14 +159,11 @@ export async function parsePieceworkExcelFile(file: File): Promise<ParsedPiecewo
       row['مبلغ'] ||
       row['Rate'] ||
       row['rate'] ||
-      row['defaultRate'] ||
-      0;
+      row['defaultRate'];
 
-    // Clean numeric value from comma, spaces, or Persian digits
-    let cleanRateStr = String(rawRate)
-      .replace(/[,٬\s]/g, '')
-      .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString());
-    const defaultRate = Number(cleanRateStr) || 0;
+    // v9.0.279 (TD-813): همان قاعده سرور؛ نرخ متن یا منفی ردیف را نامعتبر می‌کند (پیش‌تر منفی بی‌صدا صفر می‌شد)
+    const parsedRate = parsePieceworkRate(rawRate, 'نرخ پایه');
+    const defaultRate = parsedRate.ok ? Number(parsedRate.value ?? 0) : 0;
 
     const unit = String(
       row['واحد سنجش'] ||
@@ -182,8 +185,8 @@ export async function parsePieceworkExcelFile(file: File): Promise<ParsedPiecewo
     if (!title) {
       warnings.push('عنوان کاری خالی است (ردیف نادیده گرفته خواهد شد)');
     }
-    if (defaultRate < 0) {
-      warnings.push('نرخ پایه نمی‌تواند منفی باشد');
+    if (!parsedRate.ok) {
+      warnings.push(`${parsedRate.message} (ردیف بارگذاری نمی‌شود)`);
     }
 
     parsedList.push({
@@ -191,10 +194,10 @@ export async function parsePieceworkExcelFile(file: File): Promise<ParsedPiecewo
       code,
       title,
       category,
-      defaultRate: Math.max(0, defaultRate),
+      defaultRate,
       unit,
       description,
-      isValid: Boolean(title),
+      isValid: Boolean(title) && parsedRate.ok,
       warnings
     });
   });

@@ -1,8 +1,8 @@
 import { DollarSign, Save } from 'lucide-react';
 import { PieceworkTask } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
-import { formatPersianPrice, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatCurrencyLabel } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 interface PieceworkRatesTabProps {
   personnelSelectOptions: { value: string; label: string }[];
@@ -10,7 +10,7 @@ interface PieceworkRatesTabProps {
   onSelectPersonnel: (id: number | '') => void;
   tasksList: PieceworkTask[];
   customRatesMap: Record<number, number>;
-  onSaveCustomRate: (taskId: number, rate: number) => void;
+  onSaveCustomRate: (taskId: number, rate: string) => void;
 }
 
 export function PieceworkRatesTab({
@@ -21,8 +21,9 @@ export function PieceworkRatesTab({
   customRatesMap,
   onSaveCustomRate
 }: PieceworkRatesTabProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
+  const inputCurLbl = formatCurrencyLabel('IRR');
   return (
     <div className="space-y-4">
       {/* Personnel Selector Banner */}
@@ -62,7 +63,7 @@ export function PieceworkRatesTab({
                   <th className="p-3">دسته‌بندی</th>
                   <th className="p-3 text-center">واحد</th>
                   <th className="p-3 text-center">{`نرخ پایه سامانه (${curLbl})`}</th>
-                  <th className="p-3 text-center">{`نرخ اختصاصی این پرسنل (${curLbl})`}</th>
+                  <th className="p-3 text-center">{`نرخ اختصاصی این پرسنل (${inputCurLbl})`}</th>
                   <th className="p-3 text-center">عملیات</th>
                 </tr>
               </thead>
@@ -81,7 +82,7 @@ export function PieceworkRatesTab({
                       </td>
                       <td className="p-3 text-center text-slate-600">{task.unit || 'عدد'}</td>
                       <td className="p-3 text-center font-mono text-slate-600">
-                        {formatPersianPrice(task.defaultRate)}
+                        {rial.number(task.defaultRate)}
                       </td>
                       <td className="p-3 text-center">
                         <input
@@ -104,7 +105,8 @@ export function PieceworkRatesTab({
                           onClick={() => {
                             const input = document.getElementById(`custom-rate-${task.id}`) as HTMLInputElement;
                             if (input) {
-                              onSaveCustomRate(task.id, Number(input.value));
+                              // v9.0.284 (TD-809): متن خام به سرور می‌رود تا خالی یا منفی رد شود، نه صفر
+                              onSaveCustomRate(task.id, input.value);
                             }
                           }}
                           className="px-3 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition-all"

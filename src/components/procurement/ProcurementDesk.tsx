@@ -670,7 +670,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                                 </button>
                               )}
 
-                              {/* v9.0.270 (TD-695): حذف فقط برای درخواستی که سفارش یا دریافت نشده است */}
+                              {/* v9.0.318 (TD-695): حذف فقط برای درخواستی که سفارش یا دریافت نشده است */}
                               {canDeleteRequisition(req) && (
                                 <button
                                   type="button"

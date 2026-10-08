@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
 import { Wallet, FileText, Printer, BadgeCheck, Clock, Info } from 'lucide-react';
 import { PieceworkPayroll } from '../types';
-import { formatPersianPrice, formatPersianDate, formatPersianNumber, formatPersianCode, formatCurrencyLabel } from '../utils';
-import { useAppCurrency } from '../hooks/useAppCurrency';
+import { formatPersianDate, formatPersianNumber, formatPersianCode } from '../utils';
+import { useRialDisplay } from '../hooks/useAppCurrency';
 import { PieceworkPayslipModal } from '../components/piecework/PieceworkPayslipModal';
 
 const statusMeta: Record<string, { label: string; cls: string; icon: typeof BadgeCheck }> = {
@@ -16,8 +16,8 @@ export default function MyPayslipsPage() {
   const [payslips, setPayslips] = useState<PieceworkPayroll[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewingPayroll, setViewingPayroll] = useState<PieceworkPayroll | null>(null);
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
 
   const loadPayslips = (signal?: AbortSignal) => {
     setLoading(true);
@@ -133,7 +133,7 @@ export default function MyPayslipsPage() {
                         </div>
                       </td>
                       <td className="p-3">
-                        <span className="font-black text-slate-900">{formatPersianPrice(p.netPayable, appCurrency)}</span>
+                        <span className="font-black text-slate-900">{rial.number(p.netPayable)}</span>
                         <div className="text-[10px] text-slate-400">{curLbl}</div>
                       </td>
                       <td className="p-3">

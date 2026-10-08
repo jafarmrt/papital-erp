@@ -8,10 +8,14 @@ import { VoucherService } from '../accounting/voucher.service.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { PayrollPaymentService } from '../accounting/payrollPayment.service.js';
 import { computeFixedSalaryShares, describeFixedSalaryShares, priorFixedGrantsOf, type FixedSalaryMonthShare } from '../../lib/payroll/fixedSalaryProration.js';
+import { fixedSalaryPeriodEnd, payrollPeriodFutureError, serviceEndOf } from '../../lib/payroll/payrollPeriod.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { workLogFreeOfLivePayroll } from './workLogPayrollLink.js';
+import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './pieceworkAudit.js';
 
 /**
  * چرخه عمر فیش حقوقی پرکیسی: صدور، تغییر وضعیت، همگام‌سازی سند و ابطال.
@@ -40,16 +44,16 @@ export interface GeneratePayrollInput {
   notes?: string;
   userId?: number;
   username: string;
+  /** درخواست Express برای IP ردیف ممیزی (TD-810) */
+  req?: unknown;
 }
 
 export interface UpdatePayrollStatusInput {
   status?: string;
-  paymentDate?: string;
-  paymentMethod?: string;
-  paymentReference?: string;
   notes?: string;
   userId?: number;
   username: string;
+  req?: unknown;
 }
 
 export class PieceworkPayrollService {
@@ -65,6 +69,30 @@ export class PieceworkPayrollService {
     const eDate = requireStorageDate(endDate, 'تاریخ پایان دوره فیش');
     if (!sDate || !eDate || sDate > eDate) {
       throw new BadRequestError('بازه فیش معتبر نیست: تاریخ شروع و پایان الزامی است و شروع نباید بعد از پایان باشد');
+    }
+    // v9.0.268 (TD-808، تصمیم ت۴ الف): فیش دوره‌ای که هنوز تمام نشده صادر نمی‌شود. پیش‌تر فیش آذر در مهر صادر و تأیید شد و
+    // حقوق ثابت ماه‌های آینده پیشاپیش هزینه و بدهی شد.
+    const futureError = payrollPeriodFutureError(eDate, await businessTodayIsoDate());
+    if (futureError) throw new ValidationError(futureError, undefined, 'PAYROLL_PERIOD_IN_FUTURE');
+
+    const totBonusesFin = fin(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0));
+    const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
+    // v8.0.108 (TD-385): با fin (ارقام فارسی نرمال می‌شوند)؛ پیش‌تر Number('۵۰۰') NaN و کسر مساعده نادیده گرفته می‌شد
+    const advanceDeductionFin = fin(reqAdvanceDeduction ?? 0);
+    // v9.0.266 (TD-804، تصمیم ت۱ الف): پاداش، کسورات و کسر مساعده نامنفی‌اند؛ کاهش حقوق فقط از «کسورات» و افزایش فقط از
+    // «پاداش». پیش‌تر کسورات منفی خالص فیش را بالا می‌برد ولی سند آن را صفر می‌گرفت (پرداخت بیش از بستانکار ۳۲۰۱)، با ناخالص
+    // صفر فیش بی سند صادر می‌شد و کسر مساعده منفی بی‌صدا صفر می‌شد.
+    const negativeParts = [
+      totBonusesFin.isNegative() && 'پاداش',
+      totDeductionsFin.isNegative() && 'کسورات',
+      advanceDeductionFin.isNegative() && 'کسر مساعده',
+    ].filter(Boolean);
+    if (negativeParts.length > 0) {
+      throw new ValidationError(
+        `${negativeParts.join('، ')} فیش نمی‌تواند منفی باشد؛ کاهش حقوق را در «کسورات» و افزایش را در «پاداش» وارد کنید.`,
+        undefined,
+        'PAYROLL_NEGATIVE_COMPONENT'
+      );
     }
 
     // V4.0.4 (TD-091 / Subphase 3.1): کل چرخه صدور فیش، قفل ردیفی کارکردها، محاسبه مالی و سند دوبل داخل یک تراکنش واحد اتمیک
@@ -101,7 +129,17 @@ export class PieceworkPayrollService {
       let fixedPortionFin = fin(0);
       let fixedSalaryMonths: FixedSalaryMonthShare[] = [];
       let fixedDedupNote = '';
-      if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0)) {
+      // v9.0.268 (TD-808، تصمیم ت۴ الف): حقوق ثابت فقط تا تاریخ پایان همکاری (serviceEndOf)؛ دوره پس از آن بی حقوق ثابت
+      const serviceEnd = serviceEndOf(pInfo);
+      const fixedEnd = fixedSalaryPeriodEnd(sDate, eDate, serviceEnd);
+      if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && serviceEnd.kind === 'unknown') {
+        throw new ValidationError(
+          `${pInfo.fullName} «قطع همکاری» است ولی تاریخ پایان همکاری معتبری ندارد؛ پیش از صدور فیش با حقوق ثابت، تاریخ پایان همکاری را در پرونده پرسنل ثبت کنید.`,
+          undefined,
+          'PAYROLL_SERVICE_END_DATE_REQUIRED'
+        );
+      }
+      if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0) && fixedEnd !== null) {
         const priorFixedPayrolls = await tx.select({
           startDate: pieceworkPayrolls.startDate,
           totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
@@ -114,13 +152,19 @@ export class PieceworkPayrollService {
         ))
         .for('update');
 
-        const shares = computeFixedSalaryShares(pInfo.monthlySalary, sDate, eDate, priorFixedPayrolls.flatMap(priorFixedGrantsOf));
+        const shares = computeFixedSalaryShares(pInfo.monthlySalary, sDate, fixedEnd, priorFixedPayrolls.flatMap(priorFixedGrantsOf));
         fixedPortionFin = shares.total;
         fixedSalaryMonths = shares.months;
-        fixedDedupNote = describeFixedSalaryShares(shares.months, pInfo.monthlySalary);
+        fixedDedupNote = [
+          describeFixedSalaryShares(shares.months, pInfo.monthlySalary),
+          fixedEnd < eDate ? `حقوق ثابت تا پایان همکاری (${toPersianDigits(isoToJalaliDate(fixedEnd))})` : '',
+        ].filter(Boolean).join(' — ');
       }
 
       if (eligibleLogs.length === 0 && fixedPortionFin.lessThanOrEqual(0)) {
+        if (fixedIncluded && serviceEnd.kind === 'ended' && fixedEnd === null) {
+          return { status: 400, error: `همکاری ${pInfo.fullName} در ${toPersianDigits(isoToJalaliDate(serviceEnd.endIso))} پایان یافته است؛ این بازه حقوق ثابت ندارد و کارکرد معوقی هم در آن نیست.` };
+        }
         return { status: 400, error: 'هیچ کارکرد معوقی در این بازه زمانی برای پرسنل انتخاب‌شده پیدا نشد.' };
       }
 
@@ -129,11 +173,6 @@ export class PieceworkPayrollService {
       for (const log of eligibleLogs) {
         pieceworkTotalFin = pieceworkTotalFin.add(log.totalAmount || 0);
       }
-      const totBonusesFin = fin(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0));
-      const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
-      // v8.0.108 (TD-385): با fin (ارقام فارسی نرمال می‌شوند)؛ پیش‌تر Number('۵۰۰') NaN و کسر مساعده نادیده گرفته می‌شد
-      const requestedAdvance = fin(reqAdvanceDeduction ?? 0);
-      const advanceDeductionFin = requestedAdvance.isNegative() ? fin(0) : requestedAdvance;
 
       // v8.0.29 (TD-282، تصمیم مالک محصول — گزینه الف): کسر مساعده بیش از مانده مساعده تسویه‌نشده پرسنل (از دفتر کل) رد
       // می‌شود. پیش‌تر پذیرفته می‌شد؛ حساب مساعده پرسنل بستانکار (منفی) و خالص پرداختنی او بی‌دلیل کم می‌شد.
@@ -213,6 +252,8 @@ export class PieceworkPayrollService {
         tx,
         { strict: true }
       );
+      // v9.0.285 (TD-810): ردیف ممیزی صدور با عکس فیش، کارکردها و سند، در همان تراکنش
+      await auditPayrollIssued(tx, newPayroll, { personnelName: pInfo.fullName, logIds, voucher: autoVoucher }, { req: input.req, userId: currentUserId, username: currentUsername });
 
       return {
         status: 201,
@@ -225,7 +266,9 @@ export class PieceworkPayrollService {
 
   /** تغییر وضعیت فیش (به‌جز «paid» که فقط از مسیر خزانه‌داری مجاز است) و صدور/بررسی سند. */
   static async updatePayrollStatus(id: number, input: UpdatePayrollStatusInput) {
-    const { status, paymentDate, paymentMethod, paymentReference, notes } = input;
+    // v9.0.269 (TD-816): تاریخ، روش و شماره پیگیری پرداخت فقط از مسیر «ثبت پرداخت» نوشته می‌شود؛ پیش‌تر این مسیر آن‌ها را
+    // روی فیش پرداخت‌شده هم بازنویسی می‌کرد، حتی به «cheque» که TD-411 برای پرداخت حقوق ممنوع کرده است.
+    const { status, notes } = input;
 
     // V10-4.4: گذار وضعیت به «paid» دیگر مستقیم مجاز نیست — فقط از مسیر خزانه‌داری
     if (status && String(status).trim().toLowerCase() === 'paid') {
@@ -256,9 +299,6 @@ export class PieceworkPayrollService {
 
       const updates: Partial<typeof pieceworkPayrolls.$inferInsert> = {};
       if (targetStatus) updates.status = targetStatus;
-      if (paymentDate !== undefined) updates.paymentDate = requireStorageDate(paymentDate, 'تاریخ پرداخت فیش');
-      if (paymentMethod !== undefined) updates.paymentMethod = String(paymentMethod).trim();
-      if (paymentReference !== undefined) updates.paymentReference = String(paymentReference).trim();
       if (notes !== undefined) updates.notes = String(notes).trim();
 
       await tx.update(pieceworkPayrolls).set(updates).where(eq(pieceworkPayrolls.id, id));
@@ -281,6 +321,8 @@ export class PieceworkPayrollService {
           { strict: true }
         );
       }
+      // v9.0.285 (TD-810): قبل و بعد فیلدهای تغییرکرده و وضعیت با برچسب فارسی (پیش‌تر «به «draft»» پس از commit)
+      await auditPayrollUpdated(tx, pay, { ...pay, ...updates } as typeof pay, autoVoucher, { req: input.req, userId: currentUserId, username: currentUsername });
 
       return {
         status: 200,
@@ -325,6 +367,7 @@ export class PieceworkPayrollService {
       username?: string;
       reason?: string;
       externalTx?: DbExecutor;
+      req?: unknown;
     }
   ): Promise<typeof pieceworkPayrolls.$inferSelect> {
     const operatorName = options?.username || 'سیستم';
@@ -397,10 +440,11 @@ export class PieceworkPayrollService {
       }
 
       // Unlink logs back to pending
-      await tx
+      const freedLogs = await tx
         .update(pieceworkLogs)
         .set({ payrollId: null, status: 'pending' })
-        .where(eq(pieceworkLogs.payrollId, payrollId));
+        .where(eq(pieceworkLogs.payrollId, payrollId))
+        .returning({ id: pieceworkLogs.id });
 
       // Soft delete payroll
       const [updatedPay] = await tx
@@ -408,6 +452,13 @@ export class PieceworkPayrollService {
         .set({ isDeleted: 1 })
         .where(eq(pieceworkPayrolls.id, payrollId))
         .returning();
+
+      // v9.0.285 (TD-810): عکس فیش، دلیل، سندهای باطل‌شده و کارکردهای آزادشده در همان تراکنش
+      await auditPayrollDeleted(tx, pay, {
+        reason,
+        voidedVoucherIds: linkedVouchers.map(v => v.id),
+        freedLogIds: freedLogs.map(l => l.id),
+      }, { req: options?.req, userId: operatorId ?? undefined, username: operatorName });
 
       return updatedPay || pay;
     };

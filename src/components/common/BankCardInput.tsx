@@ -65,8 +65,10 @@ export const BankCardInput: React.FC<BankCardInputProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // جلوگیری از گیر کردن در خط تیره‌ها هنگام فشردن Backspace
-    const digits = digitsAfterSeparatorBackspace(e, inputRef.current, ' -', 16);
-    if (digits !== null) onChange(digits);
+    const removed = digitsAfterSeparatorBackspace(e, inputRef.current, ' -', 16);
+    if (removed === null) return;
+    onChange(removed.digits);
+    restoreCaretAfterDigits(inputRef, formatBankCard(removed.digits, ' - '), removed.caretDigits, removed.digits.length);
   };
 
   return (

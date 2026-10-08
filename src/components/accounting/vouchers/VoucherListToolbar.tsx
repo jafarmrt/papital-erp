@@ -114,7 +114,7 @@ export function VoucherListToolbar({ filters, statusCounts, onChange }: VoucherL
           <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="جستجو در شماره سند، شرح یا عطف..."
+            placeholder="جست‌وجو در شماره سند، شرح یا عطف..."
             value={filters.search}
             onChange={e => onChange({ search: e.target.value })}
             className="w-full pr-9 pl-3 py-2 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"

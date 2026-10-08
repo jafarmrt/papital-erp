@@ -11,22 +11,22 @@ export async function runProcurementRequisitionTests(shouldRun: ShouldRun): Prom
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_procurement_requisition_form_bodies_td_688',
-      'v9.0.266: POST /procurement/requisitions accepts the bodies of the three UI forms (requested quantity, item name, priority urgent/high/normal/low) and refuses a body without a quantity instead of storing zero (TD-688)',
+      'v9.0.314: POST /procurement/requisitions accepts the bodies of the three UI forms (requested quantity, item name, priority urgent/high/normal/low) and refuses a body without a quantity instead of storing zero (TD-688)',
       ['td688', 'procurement', 'requisition', 'contract', 'package10'], formBodiesCase],
     ['reg_procurement_convert_requires_approval_td_689',
-      'v9.0.267: an unapproved requisition is ordered only after its approval transition runs in the name of a user who may approve; a partial order never moves the workflow step back (TD-689)',
+      'v9.0.315: an unapproved requisition is ordered only after its approval transition runs in the name of a user who may approve; a partial order never moves the workflow step back (TD-689)',
       ['td689', 'procurement', 'workflow', 'approval', 'security', 'package10'], convertApprovalCase],
     ['reg_procurement_partial_delivery_td_690',
-      'v9.0.268: delivering the only order of a partly ordered requisition does not mark it received; it is received when every row is received or closed (TD-690)',
+      'v9.0.316: delivering the only order of a partly ordered requisition does not mark it received; it is received when every row is received or closed (TD-690)',
       ['td690', 'procurement', 'delivery', 'package10'], partialDeliveryCase],
     ['reg_procurement_delivery_through_workflow_td_692',
-      'v9.0.269: delivery runs the receive transition in its own transaction with the user role and permissions, a refused transition refuses the delivery, and an order of an unapproved requisition is not delivered (TD-692)',
+      'v9.0.317: delivery runs the receive transition in its own transaction with the user role and permissions, a refused transition refuses the delivery, and an order of an unapproved requisition is not delivered (TD-692)',
       ['td692', 'procurement', 'workflow', 'delivery', 'security', 'package10'], deliveryWorkflowCase],
     ['reg_procurement_delete_with_orders_td_695',
-      'v9.0.270: a requisition with a live purchase order is not deleted (TD-695)',
+      'v9.0.318: a requisition with a live purchase order is not deleted (TD-695)',
       ['td695', 'procurement', 'delete', 'package10'], deleteWithOrdersCase],
     ['reg_procurement_edit_before_approval_td_696',
-      'v9.0.271: PUT /procurement/requisitions/:id takes the stored row id, edits only an unapproved requisition without orders, and keeps ordered and received quantities and order links (TD-696)',
+      'v9.0.319: PUT /procurement/requisitions/:id takes the stored row id, edits only an unapproved requisition without orders, and keeps ordered and received quantities and order links (TD-696)',
       ['td696', 'procurement', 'edit', 'package10'], editCase],
   ];
   for (const [id, name, tags, run] of cases) {

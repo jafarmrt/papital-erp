@@ -21,7 +21,9 @@ import { resolveDocumentVat, parseVatInput, VAT_DOC_TYPES } from './documentVat.
 import { assertLineDiscountsWithinAmount } from './lineDiscount.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { netLineUnitPrice } from './purchaseLineCost.js';
-import { assertReturnableInvoice, assertReturnWithinSold, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
+import { assertReturnWithinSold, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
+import { enforceReturnInvoiceTerms } from './salesReturnPrice.js';
+import { resolveReturnVatFromInvoice } from './salesReturnVat.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
 import { releaseReservationsForDocument, type ProjectReservationRelease } from './projectReservationRelease.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
@@ -117,29 +119,48 @@ export class DocumentCreationService {
         }
       }
 
+      // v9.0.273 (TD-788، تصمیم ت۱۰ الف): پیش‌نویس برگشتِ دارای فاکتور مرجع هم ارز، نرخ و قیمت خالص را از همان فاکتور می‌گیرد
+      const returnTerms = existingDoc.type === 'return' && existingDoc.returnOfDocumentId
+        ? await enforceReturnInvoiceTerms(tx, Number(existingDoc.returnOfDocumentId), {
+          currency, rate: body, lines: Array.isArray(docLines) ? docLines : null,
+        })
+        : null;
+      const lines = returnTerms?.lines ?? docLines;
+      const docCurrency = returnTerms?.currency ?? (currency || existingDoc.currency);
+
       // v7.0.32 (TD-197 / audit P1-7): مالیات ساختاریافته پیش‌فاکتور/پیش‌نویس در ویرایش نیز ذخیره می‌شود؛
       // اگر فقط درصد داده شود یا اقلام تغییر کند، مبلغ از جمع خالص اقلام جدید (یا فعلی) دوباره محاسبه می‌شود.
       const vatInput = parseVatInput(body);
-      const linesChanged = Array.isArray(docLines);
-      let vatLines: Array<{ quantity: unknown; unitPrice?: unknown; unit_price?: unknown; price?: unknown; discount?: unknown }> = linesChanged ? docLines! : [];
+      const linesChanged = Array.isArray(lines);
+      let vatLines: Array<{ quantity: unknown; unitPrice?: unknown; unit_price?: unknown; price?: unknown; discount?: unknown }> = linesChanged ? lines! : [];
       if (!linesChanged && vatInput.vatPercent !== undefined) {
         vatLines = await tx.select({ quantity: documentItems.quantity, unitPrice: documentItems.unitPrice, discount: documentItems.discount })
           .from(documentItems)
           .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
       }
-      const docVat = resolveDocumentVat({
-        docType: existingDoc.type,
-        input: body,
-        lines: vatLines,
-        existing: { vatPercent: Number(existingDoc.vatPercent) || 0, vatAmount: existingDoc.vatAmount },
-        linesChanged,
-        currency: currency || existingDoc.currency,
-      });
+      // v9.0.274 (TD-774): پیش‌نویس برگشتِ دارای فاکتور مرجع مالیات را به نسبت از فاکتور می‌گیرد (ردیف‌های تازه یا ذخیره‌شده)
+      if (returnTerms && !linesChanged) {
+        vatLines = await tx.select({ quantity: documentItems.quantity, unitPrice: documentItems.unitPrice, discount: documentItems.discount })
+          .from(documentItems)
+          .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
+      }
+      const docVat = returnTerms
+        ? await resolveReturnVatFromInvoice(tx, {
+          invoiceId: Number(existingDoc.returnOfDocumentId), returnId: id, lines: vatLines, input: body, currency: docCurrency,
+        })
+        : resolveDocumentVat({
+          docType: existingDoc.type,
+          input: body,
+          lines: vatLines,
+          existing: { vatPercent: Number(existingDoc.vatPercent) || 0, vatAmount: existingDoc.vatAmount },
+          linesChanged,
+          currency: docCurrency,
+        });
 
       // v7.0.63 (TD-198): نرخ تسعیر ساختاریافته؛ برای ارز غیرریالی الزامی (ورودی یا نرخ ذخیره‌شده)
       const docExchangeRate = resolveDocumentExchangeRate({
-        currency: currency || existingDoc.currency,
-        input: body,
+        currency: docCurrency,
+        input: returnTerms ? { exchangeRate: returnTerms.exchangeRate } : body,
         existing: existingDoc.exchangeRate,
       });
 
@@ -160,7 +181,7 @@ export class DocumentCreationService {
         buyerPhone: buyer_phone !== undefined ? buyer_phone : existingDoc.buyerPhone,
         buyerAddress: buyer_address !== undefined ? buyer_address : existingDoc.buyerAddress,
         status: status || existingDoc.status,
-        currency: currency || existingDoc.currency,
+        currency: docCurrency,
         exchangeRate: docExchangeRate,
         vatPercent: docVat.vatPercent,
         vatAmount: docVat.vatAmount,
@@ -178,7 +199,7 @@ export class DocumentCreationService {
         });
       }
 
-      if (Array.isArray(docLines)) {
+      if (Array.isArray(lines)) {
         // V6.0.21 (TD-157): Soft-delete old line items instead of physical hard delete (RULE 09)
         await tx.update(documentItems).set({ isDeleted: 1 }).where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
@@ -186,7 +207,7 @@ export class DocumentCreationService {
         const resolveWh = await createWarehouseResolver(tx);
 
         const lineRows: DocumentLineRow[] = [];
-        for (const item of docLines) {
+        for (const item of lines) {
           const { itemId, quantity, unit_price, unitPrice, discount, location: itemLoc } = item;
           const price = unit_price ?? unitPrice ?? 0;
           const disc = discount || 0;
@@ -314,8 +335,24 @@ export class DocumentCreationService {
       // v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده در ستون‌های ساختاریافته ذخیره می‌شود و دیگر در متن
       // یادداشت نوشته/از آن خوانده نمی‌شود (پیش‌تر سند حسابداری مبلغ مالیات را با Regex از یادداشت استخراج می‌کرد).
       const finalNotes = notes || '';
-      const docVat = resolveDocumentVat({ docType, input: body, lines: docLines || [], currency: currency || 'IRR' });
-      const docExchangeRate = resolveDocumentExchangeRate({ currency: currency || 'IRR', input: body });
+      // v9.0.273 (TD-788، تصمیم ت۱۰ الف): برگشت با فاکتور مرجع ارز، نرخ و قیمت خالص هر واحد را از همان فاکتور می‌گیرد؛
+      // مقدار دیگر در بدنه ۴۲۲. فاکتور نهایی دیگر عوض نمی‌شود و ابطالش با برگشت زنده رد می‌شود (TD-773)، پس خواندن بی قفل بس است
+      const returnTerms = returnOfDocumentId !== null
+        ? await enforceReturnInvoiceTerms(tx, returnOfDocumentId, { currency, rate: body, lines: docLines || [] })
+        : null;
+      const docCurrency = returnTerms?.currency ?? (currency || 'IRR');
+      const lines = returnTerms?.lines ?? docLines;
+      // v8.0.8 (TD-253): برگشت نهایی با فاکتور مرجع از مانده قابل برگشت همان فاکتور بیشتر نمی‌شود؛ از v9.0.274 (TD-774) پیش از
+      // مالیات، چون قفل فاکتور برگشت‌های هم‌زمان را پشت سر هم می‌گذارد و مالیات هر برگشت از خالص برگشت‌های نهایی قبلی است
+      if (returnOfDocumentId !== null && docStatus === 'final') await assertReturnWithinSold(tx, returnOfDocumentId, lines);
+      // v9.0.274 (TD-774، تصمیم ت۵ الف): مالیات برگشتِ دارای فاکتور مرجع به نسبت از مالیات همان فاکتور
+      const docVat = returnOfDocumentId !== null
+        ? await resolveReturnVatFromInvoice(tx, { invoiceId: returnOfDocumentId, returnId: null, lines, input: body, currency: docCurrency })
+        : resolveDocumentVat({ docType, input: body, lines: lines || [], currency: docCurrency });
+      const docExchangeRate = resolveDocumentExchangeRate({
+        currency: docCurrency,
+        input: returnTerms ? { exchangeRate: returnTerms.exchangeRate } : body,
+      });
 
       const [insertedDoc] = await tx.insert(documents).values({
         type: docType,
@@ -329,7 +366,7 @@ export class DocumentCreationService {
         buyerPhone: finalBuyerPhone,
         buyerAddress: finalBuyerAddress,
         status: docStatus,
-        currency: currency || 'IRR',
+        currency: docCurrency,
         exchangeRate: docExchangeRate,
         vatPercent: docVat.vatPercent,
         vatAmount: docVat.vatAmount,
@@ -435,7 +472,7 @@ export class DocumentCreationService {
         // نوع سند (نه `inOut` بدنه) و جمع مقدار هر (کالا، انبار)، همان تابع نهایی‌سازی (documentSellableGate.ts)
         const stockDirection = stockDirectionOf(docType);
         if (docStatus === 'final' && stockDirection === 'out') {
-          await assertOutflowWithinSellable(tx, docLines, {
+          await assertOutflowWithinSellable(tx, lines, {
             docLocation,
             excludeDocumentId: body.excludeDocumentId ? Number(body.excludeDocumentId) : null,
             projectId: finalProjectId,
@@ -446,15 +483,11 @@ export class DocumentCreationService {
         // مرجع) وارد انبار می‌شود، نه با قیمت فروش
         let returnUnitCosts: Map<number, FinancialDecimal> | null = null;
         if (docType === 'return' && docStatus === 'final') {
-          // v8.0.8 (TD-253): برگشت نهایی با فاکتور مرجع از مانده قابل برگشت همان فاکتور بیشتر نمی‌شود
-          if (returnOfDocumentId !== null) await assertReturnWithinSold(tx, returnOfDocumentId, docLines);
-          returnUnitCosts = await resolveSalesReturnUnitCosts(tx, returnOfDocumentId, docLines.map(l => Number(l.itemId)));
-        } else if (returnOfDocumentId !== null) {
-          await assertReturnableInvoice(tx, returnOfDocumentId);
+          returnUnitCosts = await resolveSalesReturnUnitCosts(tx, returnOfDocumentId, lines.map(l => Number(l.itemId)));
         }
 
         const lineRows: DocumentLineRow[] = [];
-        for (const item of docLines) {
+        for (const item of lines) {
           const { itemId, quantity, unit_price, discount, location: itemLoc, price: directPrice, unitPrice: camelUnitPrice } = item;
           const price = unit_price !== undefined ? unit_price : (camelUnitPrice !== undefined ? camelUnitPrice : (directPrice || 0));
           const disc = discount || 0;
@@ -470,7 +503,7 @@ export class DocumentCreationService {
               // v7.0.69 (TD-227): قیمت سند ارزی با نرخ تسعیر سند به ریال تبدیل می‌شود (WAC ریالی است)
               // v8.0.9 (TD-250): ورود با قیمت خالص پس از تخفیف ردیف (همان مبلغ سند حسابداری خرید)
               price: returnUnitCosts?.get(Number(itemId)) ?? stockUnitPriceInIrr(
-                stockDirection === 'in' ? netLineUnitPrice(price, qty, disc) : price, currency || 'IRR', docExchangeRate),
+                stockDirection === 'in' ? netLineUnitPrice(price, qty, disc) : price, docCurrency, docExchangeRate),
               date: normalizedDocDate,
               documentType: docType,
               documentRef: String(finalRefNumber || ''),
@@ -494,7 +527,7 @@ export class DocumentCreationService {
 
         // v7.0.102 (TD-233): کسر رزرو پروژه در همان تراکنش خروج قطعی؛ خطا کل سند را برمی‌گرداند
         if (docStatus === 'final' && stockDirection === 'out' && finalProjectId !== null) {
-          projectReservation = await releaseReservationsForDocument(tx, finalProjectId, docId, docLines, user, actor.userId);
+          projectReservation = await releaseReservationsForDocument(tx, finalProjectId, docId, lines, user, actor.userId);
         }
       }
 
@@ -510,7 +543,7 @@ export class DocumentCreationService {
             refNumber: String(finalRefNumber),
             docType,
             buyerName: buyer_name || '',
-            currency: currency || 'IRR',
+            currency: docCurrency,
             itemCount: docLines?.length || 0,
             status: docStatus
           },
@@ -526,7 +559,7 @@ export class DocumentCreationService {
             documentId: docId,
             refNumber: String(finalRefNumber),
             supplierName: buyer_name || '',
-            currency: currency || 'IRR',
+            currency: docCurrency,
             itemCount: docLines?.length || 0,
             status: docStatus
           },

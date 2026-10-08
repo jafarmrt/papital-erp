@@ -28,7 +28,7 @@ export interface PurchaseRequisitionItemRow {
   notes?: string;
   closureNote?: string;
   closure_note?: string;
-  /** v9.0.268 (TD-690): ردیفی که هنگام صدور سفارش بسته شد؛ دیگر سفارش داده و بی سفارش دریافت نمی‌شود */
+  /** v9.0.316 (TD-690): ردیفی که هنگام صدور سفارش بسته شد؛ دیگر سفارش داده و بی سفارش دریافت نمی‌شود */
   closed?: boolean;
   /** v8.0.38 (TD-289): سفارش‌های بیش از درخواست این ردیف با دلیل ثبت‌شده */
   overOrders?: RequisitionOverOrderRecord[];

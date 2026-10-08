@@ -21,7 +21,7 @@ export const listRequisitionsSchema = z.object({
 const positiveIdOrNull = z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number), z.null()]).optional();
 
 /**
- * v9.0.266 (TD-688، B10-01): یک ردیف درخواست خرید، همان که سه فرم رابط می‌فرستند (میز تدارکات، کسری مواد پروژه، هشدار
+ * v9.0.314 (TD-688، B10-01): یک ردیف درخواست خرید، همان که سه فرم رابط می‌فرستند (میز تدارکات، کسری مواد پروژه، هشدار
  * نقطه سفارش) و ویرایش هم می‌خواند: مقدار درخواستی (`requestedQty`، بیشتر از صفر)، کالای فهرست (`itemId`) یا نام کالایی
  * بیرون از فهرست، کد، واحد و برآورد قیمت. پیش‌تر `quantity` الزامی بود و این فیلدها حذف می‌شدند؛ سرویس مقدار صفر ذخیره
  * می‌کرد. شناسه ردیف ذخیره‌شده رشته است (`item-…`).
@@ -66,7 +66,7 @@ export const createRequisitionSchema = z.object({
 
 export type CreateRequisitionBody = z.infer<typeof createRequisitionSchema>['body'];
 
-/** v9.0.271 (TD-696، B10-09): همان قرارداد ثبت؛ فیلدی که نیامده همان مقدار ذخیره‌شده را نگه می‌دارد */
+/** v9.0.319 (TD-696، B10-09): همان قرارداد ثبت؛ فیلدی که نیامده همان مقدار ذخیره‌شده را نگه می‌دارد */
 export const updateRequisitionSchema = z.object({
   params: z.object({
     id: z.string().regex(/^\d+$/, 'شناسه نامعتبر است')
