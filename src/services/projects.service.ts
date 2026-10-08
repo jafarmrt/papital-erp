@@ -1,4 +1,4 @@
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, ne, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { productionProjects, projectStages, items, customers, projectProductStageProgress, documents, projectBomAllocations } from '../db/schema.js';
 import { AppError, BusinessLogicError, NotFoundError, ValidationError } from '../errors/customErrors.js';
@@ -407,12 +407,7 @@ export class ProjectService {
   ): Promise<SyncedStage> {
     return executor.transaction(async (tx) => {
       await lockLiveProject(tx, projectId);
-      const existingStages = await tx
-        .select()
-        .from(projectStages)
-        .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)));
-
-      const nextOrder = existingStages.length + 1;
+      const nextOrder = await ProjectService.nextStageOrder(tx, projectId);
 
       const [newStage] = await tx.insert(projectStages).values({
         projectId,
@@ -431,6 +426,21 @@ export class ProjectService {
       const synced = await ProjectService.syncLockedProject(tx, projectId, actor);
       return synced.stages.find(st => st.id === newStage.id) ?? newStage;
     });
+  }
+
+  /**
+   * v9.0.336 (TD-737): شماره مرحله تازه پس از هر شماره‌ای که پروژه به کار برده است (مراحل حذف‌شده و ردیف‌های پیشرفت هم
+   * شمرده می‌شوند)، زیر قفل ردیف پروژه. پیش‌تر «تعداد مراحل زنده + ۱» بود: مرحله تازه شماره مرحله حذف‌شده و تیک‌هایش را
+   * می‌گرفت و افزودن هم‌زمان یا پس از حذف مرحله میانی دو مرحله با یک شماره می‌ساخت.
+   */
+  private static async nextStageOrder(tx: DbExecutor, projectId: number): Promise<number> {
+    const res = await tx.execute(sql`
+      SELECT GREATEST(
+        (SELECT COALESCE(MAX(stage_order), 0) FROM project_stages WHERE project_id = ${projectId}),
+        (SELECT COALESCE(MAX(stage_order), 0) FROM project_product_stage_progress WHERE project_id = ${projectId})
+      )::int AS used
+    `);
+    return Number((res.rows?.[0] as { used?: number } | undefined)?.used ?? 0) + 1;
   }
 
   /**
@@ -572,6 +582,14 @@ export class ProjectService {
       }
 
       await tx.update(projectStages).set({ isDeleted: 1 }).where(eq(projectStages.id, stageId));
+      // v9.0.336 (TD-737): تیک‌های مرحله حذف‌شده هم حذف نرم می‌شوند، مگر مرحله زنده دیگری (داده قدیمی) همان شماره را دارد
+      const [sameOrder] = await tx.select({ id: projectStages.id }).from(projectStages)
+        .where(and(eq(projectStages.projectId, projectId), eq(projectStages.stageOrder, existing.stageOrder), eq(projectStages.isDeleted, 0), ne(projectStages.id, stageId)))
+        .limit(1);
+      if (!sameOrder) {
+        await tx.update(projectProductStageProgress).set({ isDeleted: 1 })
+          .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.stageOrder, existing.stageOrder), eq(projectProductStageProgress.isDeleted, 0)));
+      }
       await ProjectService.syncLockedProject(tx, projectId, actor);
       return existing;
     });
@@ -619,12 +637,12 @@ export class ProjectService {
           continue;
         }
         const product = productByItemId.get(itemId);
-        if (!product) {
+        // v9.0.336 (TD-737): تیک فقط برای مرحله زنده؛ تیک شماره‌ای بی مرحله بعدها به مرحله تازه به ارث نمی‌رسد
+        const stageTitle = stageTitles.get(stageOrder);
+        if (!product || stageTitle === undefined) {
           skippedInvalid++;
           continue;
         }
-
-        const stageTitle = stageTitles.get(stageOrder) || String(u.stageTitle || '').trim() || `مرحله ${stageOrder}`;
 
         await tx.insert(projectProductStageProgress).values({
           projectId,
@@ -645,7 +663,8 @@ export class ProjectService {
             stageTitle,
             quantity: product.quantity,
             updatedAt: bizNow,
-            updatedByName: currentUser
+            updatedByName: currentUser,
+            isDeleted: 0
           }
         });
         applied++;

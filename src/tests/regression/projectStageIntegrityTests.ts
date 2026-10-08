@@ -147,5 +147,81 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
     }));
   }
 
+  const orderId = 'reg_project_stage_order_td_737';
+  if (shouldRun(orderId, 'td737', 'projects', 'package11')) {
+    await runCase(results, orderId, 'v9.0.336: a new stage is numbered after every number the project used, never inherits a deleted stage\'s ticks, concurrent adds get distinct numbers and the database refuses two live stages with one number (TD-737)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const item = await createTestItem({ type: 'product' });
+      const today = await businessTodayIsoDate();
+      const addStage = (projectId: number, title: string) => api.post(`/api/projects/${projectId}/stages`, { title, start_date: today, end_date: today });
+      const liveOrders = async (projectId: number) => (await q('SELECT stage_order FROM project_stages WHERE project_id = $1 AND is_deleted = 0 ORDER BY stage_order, id', [projectId])).map(r => Number(r.stage_order));
+
+      // سه مرحله تیک خورد، مرحله ۳ حذف شد و مرحله تازه افزوده شد
+      const ticked = await newProject(api, { products: [{ itemId: item.id, qty: 1 }] });
+      await tickAll(api, ticked.id, item.id, [1, 2, 3]);
+      await api.del(`/api/projects/${ticked.id}/stages/${ticked.stages[2].id}`);
+      const pack = await addStage(ticked.id, 'بسته‌بندی');
+      if (pack.status !== 201 || Number(pack.body?.stage_order ?? pack.body?.stageOrder) !== 4) problems.push(`the stage added after deleting stage 3 answered ${pack.status} ${brief(pack.body)}, expected number 4`);
+      const view = await api.get(`/api/projects/${ticked.id}/product-progress`);
+      const cell = (view.body?.data?.products?.[0]?.progress ?? []).find((c: Row) => c.stage_title === 'بسته‌بندی');
+      if (cell?.status !== 'pending') problems.push(`the new stage's matrix cell is ${brief(cell)}, expected pending`);
+      if (await projectStatus(ticked.id) === 'completed') problems.push('the project with a new open stage is still completed');
+      const deletedTicks = await q("SELECT count(*)::int AS n FROM project_product_stage_progress WHERE project_id = $1 AND stage_order = 3 AND is_deleted = 0", [ticked.id]);
+      if (Number(deletedTicks[0]?.n) !== 0) problems.push(`the deleted stage kept ${deletedTicks[0]?.n} live ticks`);
+
+      // حذف مرحله میانی و افزودن هم‌زمان
+      const middle = await newProject(api, { products: [{ itemId: item.id, qty: 1 }] });
+      await api.del(`/api/projects/${middle.id}/stages/${middle.stages[1].id}`);
+      await addStage(middle.id, 'رنگ‌کاری');
+      const after = await liveOrders(middle.id);
+      if (after.join(',') !== '1,3,4') problems.push(`after deleting the middle stage and adding one the numbers are ${after.join(',')}, expected 1,3,4`);
+      const burst = await Promise.all([1, 2, 3, 4, 5].map(n => addStage(middle.id, `هم‌زمان ${n}`)));
+      const orders = await liveOrders(middle.id);
+      if (burst.some(r => r.status !== 201) || new Set(orders).size !== orders.length) problems.push(`five concurrent adds answered ${burst.map(r => r.status).join(',')} with numbers ${orders.join(',')}, expected distinct numbers`);
+
+      // پایگاه‌داده دو مرحله زنده با یک شماره را رد می‌کند
+      let refused = false;
+      try {
+        await q("INSERT INTO project_stages (project_id, stage_order, title) VALUES ($1, 1, 'تکراری')", [middle.id]);
+      } catch (err) {
+        refused = String((err as { code?: string }).code) === '23505';
+      }
+      if (!refused) problems.push('a second live stage number 1 was stored');
+      assertNoProblems(problems);
+      return 'numbers never reused; deleted stage ticks dropped; concurrent adds distinct; unique index';
+    }));
+  }
+
+  const fkId = 'reg_project_stage_project_fk_td_753';
+  if (shouldRun(fkId, 'td753', 'projects', 'package11')) {
+    await runCase(results, fkId, 'v9.0.336: a stage is added only to a live project (404 otherwise), the database refuses a stage of a missing project and the health check reports the stage constraints (TD-753)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const today = await businessTodayIsoDate();
+      const gone = await newProject(api, { stages: ['طراحی'] });
+      await api.del(`/api/projects/${gone.id}`);
+      for (const id of [gone.id, 987654321]) {
+        const res = await api.post(`/api/projects/${id}/stages`, { title: 'مرحله یتیم', start_date: today, end_date: today });
+        if (res.status !== 404) problems.push(`adding a stage to project ${id} answered ${res.status} ${brief(res.body)}, expected 404`);
+      }
+      let refused = false;
+      try {
+        await q("INSERT INTO project_stages (project_id, stage_order, title) VALUES (987654321, 1, 'یتیم')");
+      } catch (err) {
+        refused = String((err as { code?: string }).code) === '23503';
+      }
+      if (!refused) problems.push('a stage of a missing project was stored');
+
+      const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
+      const check = (await FinancialHealthService.runHealthCheck()).tests.find(t => t.id === 'project_stage_integrity');
+      if (check?.status !== 'healthy' || check?.metrics?.projectForeignKeyValid !== 1 || check?.metrics?.orderIndexPresent !== 1) {
+        problems.push(`the health check reported ${brief(check)}, expected healthy with the index and a valid foreign key`);
+      }
+      assertNoProblems(problems);
+      return 'stage of a deleted or missing project refused by the service and the foreign key';
+    }));
+  }
+
   return results;
 }

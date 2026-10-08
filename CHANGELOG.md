@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.336 — v9.0.336 — Stage Numbers Never Reused
+- **Stage Numbers Never Reused (TD-737, TD-753):** a new stage took «live stages + 1», so after a deletion it reused a number and inherited the deleted stage's ticks (a project stayed completed with no work) and two stages could share a number; numbering now follows every number the project used under the project lock, a deleted stage drops its ticks, and migration 0080 adds a partial unique index and a foreign key to the project.
+
 ### v9.0.335 — v9.0.335 — Manual Stage Status Only Without Products
 - **Manual Stage Status Only Without Products (TD-758, decision 1a):** in a project with a progress matrix a manual stage status or percent answered 200 and was silently reverted by the sync; it is now refused with 422 `STAGE_STATUS_FROM_MATRIX`, and the stage form asks for status and percent only in a project without products.
 

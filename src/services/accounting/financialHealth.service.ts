@@ -30,6 +30,7 @@ import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCateg
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
+import { buildProjectStageHealthTest, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
@@ -1193,6 +1194,10 @@ export class FinancialHealthService {
     tests.push(personnelRateTest);
     // آزمون ۳۹: v9.0.286 (TD-554) کسورات فیش حقوق که سندهای پیشین در ۳۲۰۲ «پیش‌دریافت‌ها از مشتریان» گذاشته‌اند (فقط فهرست)
     tests.push(buildPayslipDeductionsHealthTest(await findPayslipDeductionsInPrepayments()));
+    // آزمون ۴۰: v9.0.336 (TD-737، TD-753) شماره مرحله زنده تکراری یک پروژه و مرحله پروژه ناموجود (مهاجرت 0080؛ فقط فهرست)
+    const projectStageTest = buildProjectStageHealthTest(await findProjectStageIntegrity());
+    overallScore += projectStageTest.scoreImpact;
+    tests.push(projectStageTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
