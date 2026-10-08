@@ -3,7 +3,7 @@ import { AIUpdateLog } from './types';
 
 /**
  * v8.0.0: گارد سری‌های چنج‌لاگ — سری فعال و سری‌های بسته‌شده (منجمد).
- * فقط اسکریپت `npm run check:version` و تست واحد unit_changelog_series_closure_v9 (از v9.0.0) از آن استفاده می‌کنند
+ * فقط اسکریپت `npm run check:version` و تست واحد unit_changelog_series_closure_v10 (از v10.0.0) از آن استفاده می‌کنند
  * (سمت مرورگر بارگذاری نمی‌شود، چون به crypto نیاز دارد).
  */
 export interface ClosedChangelogSeries {

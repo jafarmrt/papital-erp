@@ -12,12 +12,23 @@ going forward.
 | Client-bundled update center (archive) | `src/data/changelogs/archive_1_6.ts` | condensed `1.x.y` – `6.x.y` series (`v1.x` - `v6.0.28`), replaced `1.ts` … `6.ts` in v7.0.11 |
 | Client-bundled update center (archive) | `src/data/changelogs/7.ts` | closed `7.x.y` series (`v7.0.0` – `v7.0.140`), frozen in v8.0.0 (fingerprint checked by `npm run check:version`) |
 | Client-bundled update center (archive) | `src/data/changelogs/8.ts` | closed `8.x.y` series (`v8.0.0` – `v8.0.128`), frozen in v9.0.0 (fingerprint checked by `npm run check:version`) |
-| Client-bundled update center (active) | `src/data/changelogs/9.ts` | current `9.x.y` release series (`v9.0.0` onward); short entries, important points only (v7.0.54) |
+| Client-bundled update center (archive) | `src/data/changelogs/9.ts` | closed `9.x.y` series (`v9.0.0` – `v9.0.461`), frozen in v10.0.0 (fingerprint checked by `npm run check:version`) |
+| Client-bundled update center (active) | `src/data/changelogs/10.ts` | current `10.x.y` release series (`v10.0.0` onward); short entries, important points only (v7.0.54) |
 | Root archive (this file) | `CHANGELOG.md` | summary of the pre-reset history & milestones |
 
 ---
 
-## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
+## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
+
+### v10.0.0 — Closure of Version 9 & Launch of Version 10
+- **Version 9 Closure:** Concluded and archived the v9.x series (`v9.0.0` through `v9.0.461`). `V9_MASTER_ROADMAP.md` is archived with a closing report (section 10: phase 5 review of the sales, purchase, project production and payroll flows); `src/data/changelogs/9.ts` is frozen.
+- **Phase 5 Findings and Observations:** `docs/audit/STABILITY_AUDIT_V9.md` section 18 records the 53 phase 5 findings; TD-904 – TD-956 hold one row each, the 41 not fixed by other changes stay open, and the series 9 observations are kept in the new ledger `docs/audit/V9_OBSERVATIONS.md` with 43 open rows TD-957 – TD-999 (`AGENTS.md` §23 exception).
+- **Version 10 Mission:** `V10_MASTER_ROADMAP.md` — fix the open debt and observations of series 9 and the 27 improvement and development items the product owner chose (roadmap section 3.3; no electronic tax invoicing); new debt rows start at TD-1000.
+- **Governance:** `npm run check:version` now also rejects any change to the closed 9.x series; release paperwork and `npm run release:renumber` follow the active series 10.
+
+---
+
+## Version 9.x Series (Archived at v9.0.461)
 
 ### v9.0.461 — Payroll Payments Follow the Treasury Date Rule
 - **Fix (TD-927, P5-W04):** a payroll payment dated after the business today is refused with 422 `TREASURY_DATE_IN_FUTURE` and nothing is written, like every other treasury write; the payment form sends an ISO date from the Jalali picker.

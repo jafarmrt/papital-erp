@@ -4,14 +4,16 @@ import { v1To6Updates } from './archive_1_6';
 import { v7Updates } from './7';
 import { v8Updates } from './8';
 import { v9Updates } from './9';
+import { v10Updates } from './10';
 
 export type { AIUpdateLog };
 
 /**
- * تجمیع چنج‌لاگ‌های نسخه پایه 0.ts، آرشیو خلاصه سری‌های پیشین (۱ تا ۶)، سری‌های بسته‌شده ۷ (7.ts، منجمد در v7.0.140)
- * و ۸ (8.ts، منجمد در v8.0.128) و سری فعال ۹ در 9.ts
+ * تجمیع چنج‌لاگ‌های نسخه پایه 0.ts، آرشیو خلاصه سری‌های پیشین (۱ تا ۶)، سری‌های بسته‌شده ۷ (7.ts، منجمد در v7.0.140)،
+ * ۸ (8.ts، منجمد در v8.0.128) و ۹ (9.ts، منجمد در v10.0.0) و سری فعال ۱۰ در 10.ts
  */
 export const SYSTEM_UPDATES: AIUpdateLog[] = [
+  ...v10Updates,
   ...v9Updates,
   ...v8Updates,
   ...v7Updates,
@@ -20,13 +22,13 @@ export const SYSTEM_UPDATES: AIUpdateLog[] = [
 ];
 
 /**
- * v8.0.0: سری فعال چنج‌لاگ — هر نسخه تازه فقط به این فایل اضافه می‌شود (AGENTS.md §7، §13، §23). از v9.0.0 سری ۹.
- * در گذار به سری بعد فقط همین ثابت و CLOSED_CHANGELOG_SERIES عوض می‌شوند.
+ * v8.0.0: سری فعال چنج‌لاگ — هر نسخه تازه فقط به این فایل اضافه می‌شود (AGENTS.md §7، §13، §23). از v9.0.0 سری ۹
+ * و از v10.0.0 سری ۱۰. در گذار به سری بعد فقط همین ثابت و CLOSED_CHANGELOG_SERIES عوض می‌شوند.
  */
 export const ACTIVE_CHANGELOG = {
-  series: 9,
-  file: 'src/data/changelogs/9.ts',
-  updates: v9Updates,
+  series: 10,
+  file: 'src/data/changelogs/10.ts',
+  updates: v10Updates,
 };
 
 /**
@@ -47,5 +49,12 @@ export const CLOSED_CHANGELOG_SERIES = [
     entryCount: 129,
     sha256: '726c27f3f16d2dd0389b2444cc39f5959ea7a6befb4b5cab5ee9046ff8db39e6',
     updates: v8Updates,
+  },
+  {
+    series: 9,
+    finalVersion: 'v9.0.461',
+    entryCount: 462,
+    sha256: 'c1a79c201cdb1dd6b3317ed690dbb770d09338fa53dbff42bf453dbb9784bda2',
+    updates: v9Updates,
   },
 ];

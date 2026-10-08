@@ -190,3 +190,48 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
     expect(resolveHunks('a\n<<<<<<< HEAD\nb\n', () => [])).toBeNull();
   });
 });
+
+/** v10.0.0: series 10 is active; the tool reads a two-digit series from 10.ts and the «Version 10.x» section. */
+describe('scripts/release-renumber.ts with series 10 (v10.0.0)', () => {
+  const ACTIVE_10 = 'src/data/changelogs/10.ts';
+  const changelog10 = (...entries: string[]) =>
+    `import { AIUpdateLog } from './types';\n\nexport const v10Updates: AIUpdateLog[] = [\n${entries.join(',\n')}\n];\n`;
+  const md10 = (...blocks: string[]) =>
+    `# Changelog\n\n## Version 10.x Series (Active — see \`${ACTIVE_10}\`)\n\n${blocks.join('\n\n')}\n\n---\n\n## Version 9.x Series (Archived at v9.0.450)\n\n### v9.0.450 — last\n- old\n`;
+  const masterEntry = entry('v10.0.1', 'master');
+  const masterMd = '### v10.0.1 — Master\n- **M:** master line.';
+  const startMd = '### v10.0.0 — Start\n- **S:** start.';
+  const versionFiles = (v: string): Array<[string, string]> => [
+    ['package.json', pkg(v)], ['package-lock.json', lock(v)], ['deploy/k8s/erp-deployment.yaml', k8s(v)], ['README.md', readme(v)],
+  ];
+  const base = new Map<string, string>([
+    [ACTIVE_10, changelog10(masterEntry, entry('v10.0.0', 'start'))],
+    ['CHANGELOG.md', md10(masterMd, startMd)],
+    ...versionFiles('10.0.1'),
+  ]);
+  const ours = changelog10(entry('v10.0.1', 'branch'), entry('v10.0.0', 'start'));
+  const oursMd = md10('### v10.0.1 — Branch\n- **B:** see v10.0.1.', startMd);
+
+  it('resolves the release conflicts and moves the branch version after the base', () => {
+    const active = resolveReleaseConflict(ACTIVE_10, '', { ours, theirs: base.get(ACTIVE_10)! }, ACTIVE_10)!;
+    const changelogMd = resolveReleaseConflict('CHANGELOG.md', '', { ours: oursMd, theirs: base.get('CHANGELOG.md')! }, ACTIVE_10)!;
+    expect([...changelogMd.matchAll(/^### (v[\d.]+ — \w+)/gm)].map(m => m[1])).toEqual(['v10.0.1 — Branch', 'v10.0.1 — Master', 'v10.0.0 — Start', 'v9.0.450 — last']);
+    const current = new Map<string, string>([[ACTIVE_10, active], ['CHANGELOG.md', changelogMd], ...versionFiles('10.0.1')]);
+    const plan = planRenumber({
+      base: rel => base.get(rel) ?? null,
+      current: rel => current.get(rel) ?? null,
+      changed: [...current.keys()].filter(rel => base.get(rel) !== current.get(rel)),
+      activeFile: ACTIVE_10,
+    });
+    expect(plan.versions).toEqual([['v10.0.1', 'v10.0.2']]);
+    expect(plan.top).toBe('v10.0.2');
+    const order = [...plan.writes.get(ACTIVE_10)!.matchAll(/version: '(v[\d.]+)',\n {4}title: '([^']+)'/g)].map(m => `${m[1]} ${m[2]}`);
+    expect(order).toEqual(['v10.0.2 branch', 'v10.0.1 master', 'v10.0.0 start']);
+    const heads = [...plan.writes.get('CHANGELOG.md')!.matchAll(/^### (v[\d.]+ — \w+)/gm)].map(m => m[1]);
+    expect(heads).toEqual(['v10.0.2 — Branch', 'v10.0.1 — Master', 'v10.0.0 — Start', 'v9.0.450 — last']);
+    expect(plan.writes.get('CHANGELOG.md')).toContain('- **B:** see v10.0.2.');
+    expect(plan.writes.get('package.json')).toContain('"version": "10.0.2"');
+    expect(plan.writes.get('deploy/k8s/erp-deployment.yaml')).toBe(k8s('10.0.2'));
+    expect(plan.writes.get('README.md')).toBe(readme('10.0.2'));
+  });
+});
