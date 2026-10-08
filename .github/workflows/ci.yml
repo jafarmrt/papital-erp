@@ -266,8 +266,9 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Login → Sales Invoice → Journal Voucher
-        # سرور dist/server.cjs روی پایگاه‌داده خالی؛ مهاجرت و seed در شروع، مدیر از مسیر راه‌اندازی اولیه
+      - name: Critical Path, Fresh Install and the Four Business Flows (purchase, production, payroll, treasury)
+        # dist/server.cjs on an empty database; migrations and seed at start, admin from the setup route.
+        # e2e/flows/ (I-02) reads the ledger through E2E_DATABASE_URL; the whole suite runs in about 30 s.
         env:
           E2E_DATABASE_URL: postgresql://postgres:test@localhost:5432/erp_e2e
         run: npm run test:e2e
