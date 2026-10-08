@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { QUERY_KEYS } from '../../lib/queryKeys';
+import type { StoredRuleActionType } from '../../lib/events/ruleActionTypes';
 
 export interface DomainEvent {
   eventId: string;
@@ -55,7 +56,7 @@ export interface ActionRule {
   description: string;
   eventType: string;
   conditionsJson: any[];
-  actionType: 'webhook' | 'in_app_notification' | 'workflow_trigger' | 'sms_simulation' | 'audit_log';
+  actionType: StoredRuleActionType;
   actionConfigJson: any;
   isActive: number;
   executionCount: number;

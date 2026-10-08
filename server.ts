@@ -11,6 +11,7 @@ import { prepareDatabaseAtBoot } from './src/services/system/bootData.js';
 import { registerWorkflowDomainActions } from './src/services/system/workflowDomainActions.js';
 import { registerDomainEventHandlers } from './src/services/events/domainEventHandlers.js';
 import { OutboxService } from './src/services/events/outboxService.js';
+import { IntegrationDeliveryService } from './src/services/events/integrationDelivery.service.js';
 import { WorkflowSlaReminderService } from './src/services/workflow/workflowSlaReminderService.js';
 import { FormDraftService } from './src/services/drafts/formDraft.service.js';
 import { pool } from './src/db/drizzle.js';
@@ -57,6 +58,8 @@ async function startServer() {
         // بوت حذف شدند (زمان آماده‌شدن Pod با رشد داده خطی بود و چند Pod همزمان اسناد تکراری می‌ساختند).
         // اجرای دستی با قفل مشورتی: POST /api/accounting/quick-fix/sync-all-vouchers و POST /api/inventory/kardex-initial-backfill
         OutboxService.startOutboxWorker(3000);
+        // v9.0.365 (TD-705): retries of failed webhook and rule action deliveries, then the dead letter queue
+        IntegrationDeliveryService.startWorker(5000);
         // v7.0.101 (TD-085 بند ۴): یادآوری یک‌باره مهلت کارهای تاییدی به مسئول کار
         WorkflowSlaReminderService.start(60_000);
         // v9.0.306 (TD-676): daily soft cleanup of expired form drafts
@@ -125,6 +128,7 @@ async function startServer() {
       logger.info('[Shutdown] HTTP server closed');
 
       OutboxService.stopOutboxWorker();
+      IntegrationDeliveryService.stopWorker();
       WorkflowSlaReminderService.stop();
       FormDraftService.stopCleanup();
 

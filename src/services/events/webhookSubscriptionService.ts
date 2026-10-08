@@ -10,6 +10,7 @@ import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { assertHeadersReenteredForNewTarget, resolveMaskedHeaders } from './integrationSecrets.js';
 import { encryptSecret } from '../../lib/secretBox.js';
 import { openWebhookSubscription, sealHeaders, UNREADABLE_WEBHOOK_SECRET_MESSAGE, type OpenedWebhookSubscription } from './webhookSecretStorage.js';
+import { IntegrationDeliveryService, webhookMaxAttempts, type DeliveryAttemptContext, type DeliveryAttemptOutcome } from './integrationDelivery.service.js';
 import crypto from 'crypto';
 
 export interface CreateWebhookSubDTO {
@@ -275,45 +276,54 @@ export class WebhookSubscriptionService {
   }
 
   /**
-   * Dispatches a domain event to all matching active webhook subscriptions.
+   * v9.0.365 (TD-705, decision t2 a): records one durable delivery row per matching active subscription and starts each
+   * first attempt without waiting for it; the delivery worker retries a failed one and after the subscription's retry
+   * limit moves it to the dead letter queue. An error here (reading subscriptions, writing rows) goes back to the outbox,
+   * which runs this handler again; a row already recorded for the event is never sent twice. Before, deliveries were
+   * fire-and-forget with in-memory timers and every error was swallowed, so the outbox always counted this handler done.
    */
-  static async dispatchDomainEventToSubscribers(event: BaseDomainEvent) {
-    try {
-      // Find all active subscriptions
-      const subs = await orm
-        .select()
-        .from(webhookSubscriptions)
-        .where(eq(webhookSubscriptions.isActive, 1));
+  static async dispatchDomainEventToSubscribers(event: BaseDomainEvent): Promise<{ jobIds: number[]; attempts: Promise<unknown>[] }> {
+    const subs = await orm
+      .select()
+      .from(webhookSubscriptions)
+      .where(eq(webhookSubscriptions.isActive, 1));
 
-      if (subs.length === 0) return;
-
-      for (const sub of subs.map(row => openWebhookSubscription(row))) {
-        if (!this.matchesPattern(event.eventType, sub.eventPatterns as string[])) {
-          continue;
-        }
-
-        // Asynchronously deliver webhook
-        this.deliverToSubscriber(sub, event).catch(err => {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          logger.error(`[Webhook Dispatcher Error] Failed delivery to #${sub.id}: ${errMsg}`);
-        });
-      }
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Webhook Dispatcher Global Error] ${errMsg}`);
+    const jobIds: number[] = [];
+    const attempts: Promise<unknown>[] = [];
+    for (const sub of subs) {
+      if (!this.matchesPattern(event.eventType, sub.eventPatterns as string[])) continue;
+      const job = await IntegrationDeliveryService.enqueue('webhook', sub.id, event, webhookMaxAttempts(sub.retryLimit));
+      jobIds.push(job.id);
+      attempts.push(IntegrationDeliveryService.runJob(job.id).catch(err => {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        logger.error(`[Webhook Dispatcher Error] First attempt of delivery job #${job.id} to subscription #${sub.id} failed to run: ${errMsg}`);
+      }));
     }
+    return { jobIds, attempts };
   }
 
   /**
-   * Delivers single event to subscriber with retry and signature calculation.
+   * v9.0.365 (TD-705): one attempt of a delivery row, with the subscription as it is now. Each attempt is one row in
+   * `webhook_deliveries`; the delivery id (`X-ERP-Delivery-Id`) stays the same across the attempts of one row, so the
+   * receiver can recognise a repeat. A deleted or inactive subscription closes the row; a key the server cannot decrypt
+   * fails it at once.
    */
-  private static async deliverToSubscriber(
+  static async deliverJobAttempt(subscriptionId: number, event: BaseDomainEvent, context: DeliveryAttemptContext): Promise<DeliveryAttemptOutcome> {
+    const [row] = await orm.select().from(webhookSubscriptions).where(eq(webhookSubscriptions.id, subscriptionId));
+    if (!row) return { ok: false, cancelled: true, error: `اشتراک وب‌هوک #${subscriptionId} حذف شده است.` };
+    if (row.isActive !== 1) return { ok: false, cancelled: true, error: `اشتراک وب‌هوک #${subscriptionId} غیرفعال است.` };
+    return this.sendDelivery(openWebhookSubscription(row), event, context);
+  }
+
+  /** Sends one delivery to a subscriber with its signature and records the attempt */
+  private static async sendDelivery(
     sub: OpenWebhookSubscription,
     event: BaseDomainEvent,
-    attempt: number = 1
-  ): Promise<void> {
+    context: DeliveryAttemptContext
+  ): Promise<DeliveryAttemptOutcome> {
+    const attempt = context.attempt;
     const startTime = Date.now();
-    const deliveryId = `deliv_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const deliveryId = `whd_${context.jobId}`;
     const nowIso = new Date().toISOString();
 
     const webhookBody = {
@@ -332,7 +342,7 @@ export class WebhookSubscriptionService {
     if (sub.unreadableSecrets.length > 0) {
       logger.error(`[Webhook Dispatcher] Subscription #${sub.id} skipped: ${sub.unreadableSecrets.join(', ')} cannot be decrypted with the current ERP_SECRETS_KEY`);
       await this.recordDelivery(sub, event, { nowIso, statusCode: 0, status: 'failed', responseText: '', errorMessage: UNREADABLE_WEBHOOK_SECRET_MESSAGE, signature: '', attempt, durationMs: 0 });
-      return;
+      return { ok: false, retryable: false, error: UNREADABLE_WEBHOOK_SECRET_MESSAGE };
     }
 
     const payloadString = JSON.stringify(webhookBody);
@@ -399,18 +409,14 @@ export class WebhookSubscriptionService {
 
     const durationMs = Date.now() - startTime;
     await this.recordDelivery(sub, event, { nowIso, statusCode, status, responseText, errorMessage, signature, attempt, durationMs });
-
-    const isSuccess = status === 'success';
-    if (!isSuccess && attempt < (sub.retryLimit || 3)) {
-      // Exponential retry: 2s, 4s, 8s
-      const delay = Math.pow(2, attempt) * 1000;
-      setTimeout(() => {
-        this.deliverToSubscriber(sub, event, attempt + 1).catch(() => {});
-      }, delay);
-    }
+    return status === 'success' ? { ok: true } : { ok: false, error: errorMessage || status };
   }
 
-  /** Delivery log row and the subscription's counters */
+  /**
+   * Delivery log row and the subscription's counters. v9.0.366 (TD-718): the counters are read under the subscription's
+   * row lock, taken before the delivery row's foreign-key lock, and written in the transaction of the delivery row, so
+   * concurrent deliveries are all counted (they were written from the row read before the request).
+   */
   private static async recordDelivery(
     sub: OpenWebhookSubscription,
     event: BaseDomainEvent,
@@ -419,34 +425,47 @@ export class WebhookSubscriptionService {
       responseText: string; errorMessage: string; signature: string; attempt: number; durationMs: number;
     }
   ): Promise<void> {
-    await orm.insert(webhookDeliveries).values({
-      subscriptionId: sub.id,
-      subscriptionName: sub.name,
-      eventId: event.eventId,
-      eventType: event.eventType,
-      targetUrl: sub.targetUrl,
-      statusCode: d.statusCode,
-      status: d.status,
-      responseBody: d.responseText,
-      errorMessage: d.errorMessage,
-      signature: d.signature,
-      attempt: d.attempt,
-      durationMs: d.durationMs,
-      createdAt: d.nowIso
-    });
+    await orm.transaction(async (tx) => {
+      const [counters] = await tx
+        .select({
+          totalDeliveries: webhookSubscriptions.totalDeliveries,
+          successfulDeliveries: webhookSubscriptions.successfulDeliveries,
+          failedDeliveries: webhookSubscriptions.failedDeliveries,
+        })
+        .from(webhookSubscriptions)
+        .where(eq(webhookSubscriptions.id, sub.id))
+        .for('update');
+      if (!counters) return; // deleted meanwhile: its delivery rows go with it
 
-    const isSuccess = d.status === 'success';
-    await orm
-      .update(webhookSubscriptions)
-      .set({
-        totalDeliveries: (sub.totalDeliveries || 0) + 1,
-        successfulDeliveries: isSuccess ? (sub.successfulDeliveries || 0) + 1 : (sub.successfulDeliveries || 0),
-        failedDeliveries: !isSuccess ? (sub.failedDeliveries || 0) + 1 : (sub.failedDeliveries || 0),
-        lastDeliveryAt: d.nowIso,
-        lastStatus: d.status,
-        lastError: isSuccess ? '' : d.errorMessage
-      })
-      .where(eq(webhookSubscriptions.id, sub.id));
+      await tx.insert(webhookDeliveries).values({
+        subscriptionId: sub.id,
+        subscriptionName: sub.name,
+        eventId: event.eventId,
+        eventType: event.eventType,
+        targetUrl: sub.targetUrl,
+        statusCode: d.statusCode,
+        status: d.status,
+        responseBody: d.responseText,
+        errorMessage: d.errorMessage,
+        signature: d.signature,
+        attempt: d.attempt,
+        durationMs: d.durationMs,
+        createdAt: d.nowIso
+      });
+
+      const isSuccess = d.status === 'success';
+      await tx
+        .update(webhookSubscriptions)
+        .set({
+          totalDeliveries: (counters.totalDeliveries || 0) + 1,
+          successfulDeliveries: (counters.successfulDeliveries || 0) + (isSuccess ? 1 : 0),
+          failedDeliveries: (counters.failedDeliveries || 0) + (isSuccess ? 0 : 1),
+          lastDeliveryAt: d.nowIso,
+          lastStatus: d.status,
+          lastError: isSuccess ? '' : d.errorMessage
+        })
+        .where(eq(webhookSubscriptions.id, sub.id));
+    });
   }
 
   /**

@@ -36,6 +36,7 @@ import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanc
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
+import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
 import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
@@ -1209,6 +1210,10 @@ export class FinancialHealthService {
     const consolidationSourcesTest = buildConsolidationSourcesHealthTest(await findOpenLegacyConsolidationSources());
     overallScore += consolidationSourcesTest.scoreImpact;
     tests.push(consolidationSourcesTest);
+    // آزمون ۴۴: v9.0.364 (TD-712) قانون‌های خودکار با اقدام حذف‌شده («تحریک گردش کار»، «پیامک»؛ مهاجرت 0084 غیرفعالشان کرد؛ فقط فهرست)
+    const retiredRuleTest = buildRetiredRuleActionHealthTest(await findRetiredActionRules());
+    overallScore += retiredRuleTest.scoreImpact;
+    tests.push(retiredRuleTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

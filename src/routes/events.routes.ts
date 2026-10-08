@@ -6,6 +6,7 @@ import { domainEventBus } from '../services/events/domainEventBus.js';
 import { OutboxService } from '../services/events/outboxService.js';
 import { DeadLetterQueueService } from '../services/events/deadLetterQueueService.js';
 import { EventActionEngineService } from '../services/events/eventActionEngineService.js';
+import { evaluateRuleDraft } from '../services/events/ruleDraftEvaluation.js';
 import { WebhookSubscriptionService } from '../services/events/webhookSubscriptionService.js';
 import { EventSourcingReplayService } from '../services/events/eventSourcingReplayService.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -394,19 +395,10 @@ router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('
   }
 }));
 
+// v9.0.364 (TD-712): the draft is really evaluated (invalid draft → 422 RULE_DRAFT_INVALID) and nothing is sent or written
 router.post('/action-rules/test-draft', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
-  try {
-    const { rule } = req.body;
-    res.json({
-      status: 'success',
-      simulated: true,
-      message: 'ارزیابی آزمایشی شروط و فیلدها با موفقیت انجام شد.',
-      evaluatedConditions: true,
-      sampleRuleName: rule?.name || 'قانون پیش‌نویس'
-    });
-  } catch (error) {
-    throw error;
-  }
+  const evaluation = await evaluateRuleDraft(req.body?.rule);
+  res.json({ success: true, ...evaluation, evaluatedConditions: evaluation.conditionMatches });
 }));
 
 router.get(['/action-logs', '/action-rules/logs'], authorizePermission('events.view'), asyncHandler(async (req, res) => {

@@ -589,6 +589,20 @@
       "when": 1793180000000,
       "tag": "0083_requisition_consolidation_link",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1793280000000,
+      "tag": "0084_retired_rule_actions",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1793380000000,
+      "tag": "0085_integration_delivery_jobs",
+      "breakpoints": true
     }
   ]
 }

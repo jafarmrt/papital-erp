@@ -294,6 +294,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
   try {
     await orm.execute(sql`DELETE FROM outbox_events`);
     await orm.execute(sql`DELETE FROM dead_letter_events`);
+    await orm.execute(sql`DELETE FROM integration_delivery_jobs`);
     await orm.execute(sql`DELETE FROM idempotency_keys`);
     await orm.execute(sql`DELETE FROM event_action_logs`);
     await orm.execute(sql`DELETE FROM activity_logs WHERE action ILIKE 'TEST%' OR details::text ILIKE '%E2E%' OR details::text ILIKE ${MARKER_PAT}`);

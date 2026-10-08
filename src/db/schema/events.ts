@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, integer, jsonb, timestamp, index, unique } from 'drizzle-orm/pg-core';
 import { users } from './auth';
 
 export const outboxEvents = pgTable('outbox_events', {
@@ -58,6 +58,38 @@ export const eventActionLogs = pgTable('event_action_logs', {
 }, (table) => ({
   idx_action_logs_rule: index('idx_action_logs_rule').on(table.ruleId, table.executedAt),
   idx_action_logs_event: index('idx_action_logs_event').on(table.eventId)
+}));
+
+// v9.0.364 (TD-712, migration 0084): rules whose action type was removed (workflow_trigger, sms_simulation), deactivated
+export const eventActionRuleRetirements = pgTable('event_action_rule_retirements', {
+  id: serial('id').primaryKey(),
+  ruleId: integer('rule_id').notNull().unique(),
+  ruleName: text('rule_name').notNull().default(''),
+  actionType: text('action_type').notNull(),
+  wasActive: integer('was_active').notNull(),
+  actionConfig: jsonb('action_config'),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
+});
+
+// v9.0.365 (TD-705, migration 0085): one durable row per delivery (webhook subscription x event, rule action x event)
+export const integrationDeliveryJobs = pgTable('integration_delivery_jobs', {
+  id: serial('id').primaryKey(),
+  kind: text('kind').notNull(),
+  targetId: integer('target_id').notNull(),
+  eventId: text('event_id').notNull(),
+  eventType: text('event_type').notNull(),
+  event: jsonb('event').notNull(),
+  status: text('status').notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(5),
+  nextAttemptAt: timestamp('next_attempt_at', { mode: 'string' }).defaultNow(),
+  lockedAt: timestamp('locked_at', { mode: 'string' }),
+  lastError: text('last_error').notNull().default(''),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
+}, (table) => ({
+  uq_integration_delivery_jobs_target_event: unique('uq_integration_delivery_jobs_target_event').on(table.kind, table.targetId, table.eventId),
+  idx_integration_delivery_jobs_due: index('idx_integration_delivery_jobs_due').on(table.status, table.nextAttemptAt)
 }));
 
 export const deadLetterEvents = pgTable('dead_letter_events', {

@@ -175,46 +175,7 @@ export class ActionHandlerService {
     };
   }
 
-  /**
-   * Initialize built-in system action handlers
-   */
-  static initializeBuiltInHandlers(): void {
-    if (this.handlers.size > 0) return; // Prevent double initialization
-
-    // 1. Workflow Transition -> Inventory Sync Handler
-    this.registerHandler({
-      handlerName: 'WorkflowInventorySyncActionHandler',
-      eventType: DomainEventType.STOCK_ISSUED,
-      description: 'همگام‌سازی و اعمال تحویل کالا به انبار در خروج کالا متعاقب ورکفلو',
-      handlerFn: async (event) => {
-        const payload = (event.payload || {}) as Record<string, unknown>;
-        logger.info(`[ActionHandler:InventorySync] Processing stock issued event ${event.eventId}`);
-        return { inventoryUpdated: true, itemId: payload.itemId, qty: payload.quantity };
-      }
-    });
-
-    // 2. Invoice Approved -> Accounting Sync Handler
-    this.registerHandler({
-      handlerName: 'InvoiceAccountingSyncActionHandler',
-      eventType: DomainEventType.INVOICE_APPROVED,
-      description: 'صدور خودکار سند حسابداری تعهدی متعاقب تایید فاکتور فروش',
-      handlerFn: async (event) => {
-        const payload = (event.payload || {}) as Record<string, unknown>;
-        logger.info(`[ActionHandler:AccountingSync] Generating journal voucher for approved invoice ${payload.refNumber}`);
-        return { voucherGenerated: true, refNumber: payload.refNumber, amount: payload.totalAmount };
-      }
-    });
-
-    // 3. Inventory Reorder Alert -> Notification Action Handler
-    this.registerHandler({
-      handlerName: 'InventoryReorderAlertActionHandler',
-      eventType: DomainEventType.INVENTORY_REORDER_ALERT,
-      description: 'ارسال هشدار افت موجودی به مسئولین انبار و مدیریت تامین',
-      handlerFn: async (event) => {
-        const payload = (event.payload || {}) as Record<string, unknown>;
-        logger.info(`[ActionHandler:ReorderAlert] Alerting for item ${payload.itemCode} in ${payload.warehouseLocation}`);
-        return { alertSent: true, itemCode: payload.itemCode, stock: payload.currentStock };
-      }
-    });
-  }
+  // v9.0.363 (TD-714، B15-12، تصمیم ت۴ الف): سه handler نمایشی (همگام‌سازی انبار، سند حسابداری فاکتور، هشدار کسری) حذف شدند؛
+  // کاری جز لاگ نمی‌کردند ولی ممیزی «اجرای موفق» با `voucherGenerated: true` و برای هر رویداد ردیف idempotency می‌نوشتند.
+  // سند حسابداری را VoucherSync در تراکنش خود سند صادر می‌کند و هشدار کسری را قانون اعلان موتور اقدام‌ها می‌فرستد.
 }
