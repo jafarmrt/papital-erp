@@ -89,7 +89,7 @@ export async function runProjectStageIntegrityTests(shouldRun: ShouldRun): Promi
       if (tick.status !== 200 || tick.body?.project_status !== 'completed') problems.push(`ticking every cell answered ${tick.status} ${brief(tick.body)}, expected project_status completed`);
       const audit = await statusAuditRows(done.id);
       const lastAfter = (audit.at(-1)?.details as { after?: { status?: string } } | undefined)?.after?.status;
-      if (lastAfter !== 'تکمیل‌شده') problems.push(`the matrix status change left audit rows ${brief(audit)}, expected one ending «تکمیل‌شده»`);
+      if (lastAfter !== 'تکمیل‌شده') problems.push(`the matrix status change left audit rows ${brief(audit)}, expected the last one to end on the completed label`);
 
       // پروژه لغوشده با ماتریس کامل: خواندن و تیک دوباره وضعیت را تغییر نمی‌دهند و تحویل همچنان رد می‌شود
       const cancel = await api.put(`/api/projects/${done.id}`, { status: 'cancelled' });
