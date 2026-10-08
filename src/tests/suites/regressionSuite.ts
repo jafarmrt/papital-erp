@@ -10830,6 +10830,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 7 PR D (v9.0.399+): the reserved items report and the reorder alerts
   const { runReservedItemsReportTests } = await import('../regression/reservedItemsReportTests.js');
   results.push(...await runReservedItemsReportTests(shouldRun));
+  // Series 9 phase 5 PR «الف» (v9.0.451+): the side paths that move project stock follow the stock document rules
+  const { runProjectStockGateTests } = await import('../regression/projectStockGateTests.js');
+  results.push(...await runProjectStockGateTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');

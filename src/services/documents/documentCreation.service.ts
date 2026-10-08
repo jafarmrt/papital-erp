@@ -24,6 +24,7 @@ import { resolveDocumentVat, parseVatInput, VAT_DOC_TYPES } from './documentVat.
 import { assertLineDiscountsWithinAmount } from './lineDiscount.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { netLineUnitPrice } from './purchaseLineCost.js';
+import { assertIncomingLinesHaveCost } from './incomingLineCost.js';
 import { assertReturnWithinSold, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import { enforceReturnInvoiceTerms } from './salesReturnPrice.js';
 import { resolveReturnVatFromInvoice } from './salesReturnVat.js';
@@ -573,10 +574,26 @@ export class DocumentCreationService {
           returnUnitCosts = await resolveSalesReturnUnitCosts(tx, returnOfDocumentId, lines.map(l => Number(l.itemId)));
         }
 
+        const linePriceOf = (item: (typeof lines)[number]) => {
+          const { unit_price, price: directPrice, unitPrice: camelUnitPrice } = item;
+          return unit_price !== undefined ? unit_price : (camelUnitPrice !== undefined ? camelUnitPrice : (directPrice || 0));
+        };
+        // v7.0.69 (TD-227): قیمت سند ارزی با نرخ تسعیر سند به ریال تبدیل می‌شود (WAC ریالی است)
+        // v8.0.9 (TD-250): ورود با قیمت خالص پس از تخفیف ردیف (همان مبلغ سند حسابداری خرید)
+        const stockUnitPriceOf = (item: (typeof lines)[number]) => {
+          const price = linePriceOf(item);
+          return returnUnitCosts?.get(Number(item.itemId)) ?? stockUnitPriceInIrr(
+            stockDirection === 'in' ? netLineUnitPrice(price, Number(item.quantity), item.discount || 0) : price, docCurrency, docExchangeRate);
+        };
+        // v9.0.453 (TD-906 / TD-916، تصمیم ت۲ الف): کالای بی میانگین موزون بها با بهای صفر وارد انبار نمی‌شود
+        if (docStatus === 'final' && stockDirection === 'in') {
+          await assertIncomingLinesHaveCost(tx, docType, lines.map(item => ({ itemId: item.itemId, unitCostIrr: stockUnitPriceOf(item) })));
+        }
+
         const lineRows: DocumentLineRow[] = [];
         for (const item of lines) {
-          const { itemId, quantity, unit_price, discount, location: itemLoc, price: directPrice, unitPrice: camelUnitPrice } = item;
-          const price = unit_price !== undefined ? unit_price : (camelUnitPrice !== undefined ? camelUnitPrice : (directPrice || 0));
+          const { itemId, quantity, discount, location: itemLoc } = item;
+          const price = linePriceOf(item);
           const disc = discount || 0;
           const qty = Number(quantity);
           const targetLoc = resolveWh(itemLoc || docLocation || '');
@@ -587,10 +604,7 @@ export class DocumentCreationService {
               documentId: docId,
               inOut: stockDirection,
               quantity: qty,
-              // v7.0.69 (TD-227): قیمت سند ارزی با نرخ تسعیر سند به ریال تبدیل می‌شود (WAC ریالی است)
-              // v8.0.9 (TD-250): ورود با قیمت خالص پس از تخفیف ردیف (همان مبلغ سند حسابداری خرید)
-              price: returnUnitCosts?.get(Number(itemId)) ?? stockUnitPriceInIrr(
-                stockDirection === 'in' ? netLineUnitPrice(price, qty, disc) : price, docCurrency, docExchangeRate),
+              price: stockUnitPriceOf(item),
               date: normalizedDocDate,
               documentType: docType,
               documentRef: String(finalRefNumber || ''),

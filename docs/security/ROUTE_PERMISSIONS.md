@@ -206,8 +206,8 @@
 | GET | `/api/inventory/3way-integrity` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/allocations` | warehouse.view \| projects.view |
 | POST | `/api/inventory/allocations/:id/consume` | inventory.reconcile \| projects.edit |
-| POST | `/api/inventory/allocations/:id/release` | inventory.reconcile \| projects.edit \| warehouse.out |
-| POST | `/api/inventory/allocations/allocate` | projects.edit \| warehouse.out |
+| POST | `/api/inventory/allocations/:id/release` | inventory.reconcile \| projects.edit \| warehouse.out & warehouse.in |
+| POST | `/api/inventory/allocations/allocate` | warehouse.out |
 | POST | `/api/inventory/correct-wac` | inventory.wac_correct |
 | GET | `/api/inventory/integrity-audit` | warehouse.view \| inventory.reconcile \| audit.view |
 | GET | `/api/inventory/item-kardex/:itemId` | warehouse.view |
@@ -311,7 +311,7 @@
 | DELETE | `/api/projects/:id` | projects.delete |
 | GET | `/api/projects/:id` | projects.view \| warehouse.view |
 | PUT | `/api/projects/:id` | projects.edit |
-| POST | `/api/projects/:id/add-to-inventory` | projects.edit |
+| POST | `/api/projects/:id/add-to-inventory` | projects.edit & warehouse.in |
 | GET | `/api/projects/:id/product-progress` | projects.view \| projects.edit \| projects.create \| warehouse.view \| documents.view |
 | PUT | `/api/projects/:id/product-progress` | projects.edit |
 | POST | `/api/projects/:id/stages` | projects.edit |
