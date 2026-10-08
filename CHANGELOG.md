@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.331 — v9.0.331 — Package 11 Project Control Audit
+- **Audit (package 11):** project control and production section of the stability audit report: 35 proven findings, 30 of them opened as TD-737..TD-769 (TD-735, TD-736 and TD-747 were closed in package 12; B11-10 and B11-12 were fixed by TD-888 and TD-688) with the product-owner decisions t1-t10; documentation only.
+
 ### v9.0.330 — Work Log List Paged and Filtered on the Server
 - **Work Log List Paged and Filtered on the Server (TD-811):** the piecework page loaded every work log ever recorded on each open and after each change (about 30 MB and 2.3 s for a workshop year) and filtered and summed it in the browser; `GET /piecework/logs` now filters in SQL and returns one page with the count and sum of every match, the page opens on the current Jalali month, `/piecework/logs/summary` sums the cards and project costs in SQL, and the «settled» filter now finds the logs on a payslip.
 
