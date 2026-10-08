@@ -41,7 +41,7 @@ export const SETTINGS_TAB_ACCESS = {
   woocommerce: { gate: anyOf('woocommerce.view'), api: ['GET /api/woocommerce/synced-orders', 'GET /api/woocommerce/order-logs'] },
   health: { gate: 'system_admin', api: ['GET /api/system/health'] },
   system_config: { gate: 'system_admin', api: [] },
-  system: { gate: 'system_admin', api: [] },
+  system: { gate: 'system_admin', api: ['GET /api/system/conditional-constraints', 'POST /api/system/conditional-constraints/build'] },
 } as const satisfies Record<string, PageAccessRule>;
 
 export type SettingsTabId = keyof typeof SETTINGS_TAB_ACCESS;

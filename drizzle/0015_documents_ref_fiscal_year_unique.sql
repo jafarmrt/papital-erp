@@ -64,11 +64,12 @@ BEGIN
   ) d;
 
   IF dup_count = 0 THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'uq_documents_type_fy_ref_active') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'uq_documents_type_fy_ref_active' AND schemaname = current_schema()) THEN
       EXECUTE 'CREATE UNIQUE INDEX uq_documents_type_fy_ref_active ON documents (type, ref_fiscal_year, ref_number) WHERE is_deleted = 0 AND length(ref_number) > 0';
       RAISE NOTICE 'TD-178: unique index uq_documents_type_fy_ref_active created';
     END IF;
-    EXECUTE 'DROP INDEX IF EXISTS uq_documents_type_ref_number_active';
+    -- TD-590: named in the current schema, never found along the search path
+    EXECUTE format('DROP INDEX IF EXISTS %I.uq_documents_type_ref_number_active', current_schema());
     RAISE NOTICE 'TD-178: legacy cross-year index uq_documents_type_ref_number_active dropped';
   ELSE
     RAISE WARNING 'TD-178: % duplicate (type, ref_fiscal_year, ref_number) groups found — index swap SKIPPED, legacy index kept until data is repaired', dup_count;

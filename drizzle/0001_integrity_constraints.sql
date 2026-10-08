@@ -17,7 +17,7 @@ BEGIN
     GROUP BY type, ref_number HAVING COUNT(*) > 1
   ) d;
   IF dup_count = 0 THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'uq_documents_type_ref_number_active') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'uq_documents_type_ref_number_active' AND schemaname = current_schema()) THEN
       EXECUTE 'CREATE UNIQUE INDEX uq_documents_type_ref_number_active ON documents (type, ref_number) WHERE is_deleted = 0 AND length(ref_number) > 0';
       RAISE NOTICE 'TD-060: unique index uq_documents_type_ref_number_active created';
     END IF;
@@ -32,7 +32,7 @@ BEGIN
   FROM transactions t LEFT JOIN items i ON t.item_id = i.id
   WHERE i.id IS NULL;
   IF orphan_count = 0 THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_transactions_item_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_transactions_item_id' AND connamespace = current_schema()::regnamespace) THEN
       EXECUTE 'ALTER TABLE transactions ADD CONSTRAINT fk_transactions_item_id FOREIGN KEY (item_id) REFERENCES items(id)';
       RAISE NOTICE 'TD-060: FK fk_transactions_item_id created';
     END IF;
@@ -47,7 +47,7 @@ BEGIN
   FROM document_items d LEFT JOIN items i ON d.item_id = i.id
   WHERE i.id IS NULL;
   IF orphan_count = 0 THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_document_items_item_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_document_items_item_id' AND connamespace = current_schema()::regnamespace) THEN
       EXECUTE 'ALTER TABLE document_items ADD CONSTRAINT fk_document_items_item_id FOREIGN KEY (item_id) REFERENCES items(id)';
       RAISE NOTICE 'TD-060: FK fk_document_items_item_id created';
     END IF;
@@ -62,7 +62,7 @@ BEGIN
   FROM document_items d LEFT JOIN documents doc ON d.document_id = doc.id
   WHERE d.document_id IS NOT NULL AND doc.id IS NULL;
   IF orphan_count = 0 THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_document_items_document_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_document_items_document_id' AND connamespace = current_schema()::regnamespace) THEN
       EXECUTE 'ALTER TABLE document_items ADD CONSTRAINT fk_document_items_document_id FOREIGN KEY (document_id) REFERENCES documents(id)';
       RAISE NOTICE 'TD-060: FK fk_document_items_document_id created';
     END IF;
@@ -77,7 +77,7 @@ BEGIN
   FROM journal_voucher_items vi LEFT JOIN journal_vouchers v ON vi.voucher_id = v.id
   WHERE v.id IS NULL;
   IF orphan_count = 0 THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_journal_voucher_items_voucher_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_journal_voucher_items_voucher_id' AND connamespace = current_schema()::regnamespace) THEN
       EXECUTE 'ALTER TABLE journal_voucher_items ADD CONSTRAINT fk_journal_voucher_items_voucher_id FOREIGN KEY (voucher_id) REFERENCES journal_vouchers(id)';
       RAISE NOTICE 'TD-060: FK fk_journal_voucher_items_voucher_id created';
     END IF;
@@ -92,7 +92,7 @@ BEGIN
   FROM journal_voucher_items vi LEFT JOIN accounts a ON vi.account_id = a.id
   WHERE a.id IS NULL;
   IF orphan_count = 0 THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_journal_voucher_items_account_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_journal_voucher_items_account_id' AND connamespace = current_schema()::regnamespace) THEN
       EXECUTE 'ALTER TABLE journal_voucher_items ADD CONSTRAINT fk_journal_voucher_items_account_id FOREIGN KEY (account_id) REFERENCES accounts(id)';
       RAISE NOTICE 'TD-060: FK fk_journal_voucher_items_account_id created';
     END IF;

@@ -62,7 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_wftr_definition ON workflow_transitions (workflow
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF to_regclass('uq_wdv_definition_version') IS NULL THEN
+  IF to_regclass(format('%I.%I', current_schema(), 'uq_wdv_definition_version')) IS NULL THEN
     IF EXISTS (
       SELECT 1 FROM workflow_definition_versions GROUP BY definition_id, version HAVING COUNT(*) > 1
     ) THEN

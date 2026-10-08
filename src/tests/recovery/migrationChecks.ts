@@ -166,3 +166,41 @@ export async function checkUpgradeFromV70137(): Promise<string[]> {
   }
   return v;
 }
+
+/**
+ * v9.0.427 (TD-589, B01-09): a migration that leaves a constraint or index out on unclean data says so with
+ * `RAISE WARNING '... SKIPPED'`; the migrator now returns that notice in `warnings` and logs it. On v9.0.426 it listened
+ * to no notice and answered `success: true, warnings: []`. An ordinary notice (an object created) stays out of `warnings`.
+ */
+export async function checkMigrationNoticesReported(): Promise<string[]> {
+  const v: string[] = [];
+  const inner = await setupTestSchema();
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'erp-k-mig-'));
+  const skipped = 'TD-589 probe: 2 orphan probe rows - FK SKIPPED';
+  const leftOut = 'TD-589 probe: unique index not created';
+  const created = 'TD-589 probe: FK created';
+  try {
+    const tag = `${String(readJournal(path.join(REPO_ROOT, 'drizzle')).entries.length).padStart(4, '0')}_k_notice_probe`;
+    migrationsCopyWithProbe(root, tag, `DO $$ BEGIN
+  RAISE WARNING '${skipped}';
+  RAISE NOTICE '${leftOut}';
+  RAISE NOTICE '${created}';
+END $$;`, l => l + 3_600_000);
+    const r = await runMigrationsIn(root);
+    if (!r.success) {
+      v.push(`the probe migration failed: ${r.errors.join('; ')}`);
+    } else {
+      const warnings = r.warnings ?? [];
+      if (!warnings.includes(skipped)) v.push(`the migrator did not return the SKIPPED warning (warnings: ${JSON.stringify(warnings)})`);
+      if (!warnings.includes(leftOut)) v.push(`the migrator did not return the "not created" notice (warnings: ${JSON.stringify(warnings)})`);
+      if (warnings.includes(created)) v.push('the migrator returned an ordinary notice as a warning');
+    }
+    const again = await runMigrationsIn(root);
+    if (!again.success) v.push(`a later run without new migrations failed: ${again.errors.join('; ')}`);
+    if ((again.warnings ?? []).some(w => w.startsWith('TD-589 probe'))) v.push('a later run without new migrations returned the old warnings again');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    await inner.teardown();
+  }
+  return v;
+}

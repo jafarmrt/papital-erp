@@ -19,7 +19,7 @@ CREATE INDEX IF NOT EXISTS idx_ptrh_personnel ON piecework_task_rate_history (pe
 
 DO $$
 BEGIN
-  IF to_regclass('uq_piecework_personnel_rates_active') IS NULL THEN
+  IF to_regclass(format('%I.%I', current_schema(), 'uq_piecework_personnel_rates_active')) IS NULL THEN
     IF EXISTS (
       SELECT 1 FROM piecework_personnel_rates WHERE is_deleted = 0 GROUP BY personnel_id, task_id HAVING COUNT(*) > 1
     ) THEN

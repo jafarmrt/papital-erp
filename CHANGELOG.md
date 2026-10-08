@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.429 — Non-bcrypt Passwords Are Locked, Never Turned Into Passwords
+- **Fix (TD-617, B01-37):** the boot no longer hashes stored non-bcrypt values into working passwords; a one-off script locks them with a required reset, ended sessions and an audit row.
+
+### v9.0.428 — No Silent Demo Database Without DATABASE_URL
+- **Fix (TD-616, B01-36):** SQL_HOST alone reaches PostgreSQL, the in-memory demo database starts only with ERP_DEMO_MODE=1 outside production, and a server without a database refuses to start.
+
+### v9.0.427 — Skipped Migration Constraints Are Reported and Built by Hand
+- **Fix (TD-589, B01-09):** the migrator reports a constraint or index a migration left out, the financial health check lists each missing one with its cause, and the system admin builds it once the data is clean.
+
+### v9.0.426 — Migrations Check Objects in Their Own Schema
+- **Fix (TD-610, B01-30):** every existence check of the migrations looks only in the current schema, so a test schema built beside a migrated one gets every constraint, index and trigger, among them the non-negative stock guard.
+
+### v9.0.425 — Migrations Drop Objects in Their Own Schema
+- **Fix (TD-590, B01-10):** every DROP ... IF EXISTS of the migrations names the current schema, so building an isolated test schema no longer drops the public index `idx_idemp_user_scope_key` (and with it every idempotent request) on a development or staging database.
+
 ### v9.0.424 — Persian Wording on the Project Screens
 - **Persian Wording on the Project Screens (TD-769):** the project screens and server messages used BOM, «فریز», «گانت», «سرور» and other loanwords and showed counts and percents in Latin digits; they now follow the approved glossary (owner decision t10) with Persian digits and «٪».
 

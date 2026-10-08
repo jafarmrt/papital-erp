@@ -29,6 +29,7 @@ import { buildPayslipDeductionsHealthTest, findPayslipDeductionsInPrepayments } 
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildProcurementOrderLinkHealthTest, findUnresolvedProcurementOrderLinks } from '../procurement/procurementOrderLinks.js';
 import { buildConsolidationSourcesHealthTest, findOpenLegacyConsolidationSources } from '../procurement/consolidationSourceHealth.js';
+import { buildConditionalConstraintsHealthTest, findMissingConditionalConstraints } from '../system/conditionalConstraints.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from '../documents/documentParty.js';
 import { buildDocumentIntegrityHealthTest, findDocumentIntegrityGaps } from '../documents/documentConstraintHealth.js';
@@ -1236,6 +1237,8 @@ export class FinancialHealthService {
     const unpublishedEventRuleTest = buildUnpublishedRuleEventHealthTest(await findRulesWithUnpublishedEvent());
     overallScore += unpublishedEventRuleTest.scoreImpact;
     tests.push(unpublishedEventRuleTest);
+    // آزمون ۵۰: v9.0.427 (TD-589) قید و ایندکس یکتای شرطی مهاجرت‌ها که روی داده ناپاک ساخته نشده (فهرست با علت؛ ساختن دستی)
+    tests.push(buildConditionalConstraintsHealthTest(await findMissingConditionalConstraints()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

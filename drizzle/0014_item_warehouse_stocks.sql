@@ -60,7 +60,7 @@ BEGIN
   END LOOP;
 
   -- 5. Add database-level non-negative constraint
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_iws_current_stock_non_negative') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_iws_current_stock_non_negative' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE item_warehouse_stocks ADD CONSTRAINT chk_iws_current_stock_non_negative CHECK (current_stock >= 0);
   END IF;
 

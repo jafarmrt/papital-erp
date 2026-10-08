@@ -49,6 +49,8 @@ export const SYSTEM_ADMIN_ONLY_ROUTES = new Set([
   'GET /api/system/reconciliation-check', 'POST /api/system/reconciliation-fix',
   // v9.0.112 (TD-490، تصمیم ت۵ الف): فعال‌سازی دوباره انبار غیرفعال فقط با مدیر سیستم
   'POST /api/warehouses/:id/reactivate',
+  // v9.0.427 (TD-589، تصمیم ت۵ الف): فهرست و ساختن دستی قیدهای شرطی جاافتاده مهاجرت‌ها
+  'GET /api/system/conditional-constraints', 'POST /api/system/conditional-constraints/build',
 ]);
 
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

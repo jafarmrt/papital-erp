@@ -11,7 +11,7 @@ ALTER TABLE documents ADD COLUMN IF NOT EXISTS exchange_rate numeric(18, 4);
 --> statement-breakpoint
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_documents_exchange_rate_positive') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_documents_exchange_rate_positive' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE documents
       ADD CONSTRAINT chk_documents_exchange_rate_positive CHECK (exchange_rate IS NULL OR exchange_rate > 0);
   END IF;

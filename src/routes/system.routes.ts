@@ -19,6 +19,7 @@ import { SystemHealthService } from '../services/system/systemHealth.service.js'
 import { SystemReconciliationService, requeueResultMessage, stuckResetResultMessage } from '../services/system/systemReconciliation.service.js';
 import { GlobalSearchService } from '../services/system/globalSearch.service.js';
 import { DateCalendarReportService } from '../services/system/dateCalendarReport.service.js';
+import { buildConditionalConstraints, conditionalConstraintsResultMessage, findMissingConditionalConstraints } from '../services/system/conditionalConstraints.js';
 
 const router = Router();
 
@@ -79,6 +80,13 @@ export const dataExportQuerySchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['to'], message: 'تاریخ پایان بازه سجل ممیزی پیش از تاریخ آغاز آن است' });
     }
   }).optional()
+});
+
+// v9.0.427 (TD-589): ساختن قیدهای شرطی جاافتاده مهاجرت‌ها؛ بی `apply: true` فقط پیش‌نمایش
+export const conditionalConstraintsBuildSchema = z.object({
+  body: z.object({
+    apply: z.boolean({ message: 'گزینه اجرا باید درست یا نادرست باشد' }).optional(),
+  }),
 });
 
 export const reconciliationFixSchema = z.object({
@@ -315,6 +323,23 @@ router.post('/system/reconciliation-fix', requireSystemAdmin, validate(reconcili
 
   const resetCount = await SystemReconciliationService.resetStuckOutboxEvents(actor);
   return res.json({ success: true, resetCount, message: stuckResetResultMessage(resetCount) });
+}));
+
+// v9.0.427 (TD-589، تصمیم ت۵ الف): قیدها و ایندکس‌های یکتای شرطی مهاجرت‌ها که روی داده ناپاک ساخته نشده‌اند، با علت؛
+// ساختن دستی پس از اصلاح داده، پیش‌فرض پیش‌نمایش، زیر قفل مشورتی و با ردیف ممیزی. داده هرگز خودکار عوض نمی‌شود.
+router.get('/system/conditional-constraints', requireSystemAdmin, asyncHandler(async (_req, res) => {
+  res.json({ missing: await findMissingConditionalConstraints() });
+}));
+
+router.post('/system/conditional-constraints/build', requireSystemAdmin, validate(conditionalConstraintsBuildSchema), asyncHandler(async (req, res) => {
+  const { apply } = req.body as z.infer<typeof conditionalConstraintsBuildSchema>['body'];
+  const result = await buildConditionalConstraints(apply === true, {
+    userId: req.user?.id,
+    username: req.user?.username,
+    fullName: req.user?.full_name,
+    ipAddress: extractClientIp(req),
+  });
+  res.json({ ...result, message: conditionalConstraintsResultMessage(result) });
 }));
 
 // (v4.0.29) توابع assertTestEndpointsAllowed/assertTestEndpointsEnabled حذف شدند —

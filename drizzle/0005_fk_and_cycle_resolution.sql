@@ -12,7 +12,7 @@ BEGIN
   SET user_id = NULL
   WHERE user_id IS NOT NULL AND user_id NOT IN (SELECT id FROM users);
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_activity_logs_user_id') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_activity_logs_user_id' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE activity_logs
     ADD CONSTRAINT fk_activity_logs_user_id
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
@@ -27,7 +27,7 @@ BEGIN
   SET project_id = NULL
   WHERE project_id IS NOT NULL AND project_id NOT IN (SELECT id FROM production_projects);
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_pending_materials_project_id') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_pending_materials_project_id' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE pending_materials
     ADD CONSTRAINT fk_pending_materials_project_id
     FOREIGN KEY (project_id) REFERENCES production_projects(id) ON DELETE SET NULL;
@@ -42,7 +42,7 @@ BEGIN
   SET erp_document_id = NULL
   WHERE erp_document_id IS NOT NULL AND erp_document_id NOT IN (SELECT id FROM documents);
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_woocommerce_order_logs_erp_document_id') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_woocommerce_order_logs_erp_document_id' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE woocommerce_order_logs
     ADD CONSTRAINT fk_woocommerce_order_logs_erp_document_id
     FOREIGN KEY (erp_document_id) REFERENCES documents(id) ON DELETE SET NULL;
@@ -57,7 +57,7 @@ BEGIN
   SET created_by_id = NULL
   WHERE created_by_id IS NOT NULL AND created_by_id NOT IN (SELECT id FROM users);
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_idempotency_keys_created_by_id') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_idempotency_keys_created_by_id' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE idempotency_keys
     ADD CONSTRAINT fk_idempotency_keys_created_by_id
     FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE SET NULL;
@@ -72,7 +72,7 @@ BEGIN
   SET crm_lead_id = NULL
   WHERE crm_lead_id IS NOT NULL AND crm_lead_id NOT IN (SELECT id FROM crm_leads);
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_documents_crm_lead_id') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_documents_crm_lead_id' AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE documents
     ADD CONSTRAINT fk_documents_crm_lead_id
     FOREIGN KEY (crm_lead_id) REFERENCES crm_leads(id) ON DELETE SET NULL;
@@ -81,7 +81,7 @@ BEGIN
   -- ------------------------------------------------------------
   -- 6) Remove circular constraint if present on crm_leads.proforma_id
   -- ------------------------------------------------------------
-  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_crm_leads_proforma_id' OR conname = 'crm_leads_proforma_id_documents_id_fk') THEN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE (conname = 'fk_crm_leads_proforma_id' OR conname = 'crm_leads_proforma_id_documents_id_fk') AND connamespace = current_schema()::regnamespace) THEN
     ALTER TABLE crm_leads DROP CONSTRAINT IF EXISTS fk_crm_leads_proforma_id;
     ALTER TABLE crm_leads DROP CONSTRAINT IF EXISTS crm_leads_proforma_id_documents_id_fk;
   END IF;
