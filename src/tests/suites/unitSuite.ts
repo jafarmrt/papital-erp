@@ -390,8 +390,6 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const { ActionHandlerService } = await import('../../services/events/actionHandlerService.js');
     const { createDomainEvent, DomainEventType } = await import('../../services/events/domainEvents.js');
 
-    ActionHandlerService.initializeBuiltInHandlers();
-
     const sampleEvent = createDomainEvent({
       eventType: DomainEventType.INVOICE_APPROVED,
       aggregateType: 'Document',
@@ -441,7 +439,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       res2.status === 'skipped' &&
       res2.alreadyExecuted === true &&
       executionCallCount === 1 &&
-      stats.registeredHandlersCount >= 3 &&
+      stats.registeredHandlersCount >= 1 &&
       stats.skippedIdempotentCount >= 1
     ) {
       results.push(makeTestCase({

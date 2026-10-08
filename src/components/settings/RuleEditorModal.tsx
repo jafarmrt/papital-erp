@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog';
 import { NotificationRecipientField } from './NotificationRecipientField';
-import { X, Plus, Trash2, Globe, Bell, Smartphone, GitBranch, ShieldCheck, HelpCircle, Play, CheckCircle2, XCircle, Code } from 'lucide-react';
+import { X, Plus, Trash2, Globe, Bell, ShieldCheck, HelpCircle, Play, CheckCircle2, XCircle, AlertTriangle, Code } from 'lucide-react';
 import { fetchJson } from '../../api';
 import { eventFieldOptions } from '../../lib/eventPayloadFields';
 import { EventFieldChips } from './EventFieldChips';
+import { isRetiredRuleActionType, retiredRuleActionMessage, type RuleActionType, type StoredRuleActionType } from '../../lib/events/ruleActionTypes';
 
 export interface RuleCondition {
   field: string;
@@ -18,7 +19,8 @@ export interface RuleFormData {
   description: string;
   eventType: string;
   conditionsJson: RuleCondition[];
-  actionType: 'webhook' | 'in_app_notification' | 'workflow_trigger' | 'sms_simulation' | 'audit_log';
+  // v9.0.377 (TD-712): a stored rule may still carry a removed type; the editor offers only live ones
+  actionType: StoredRuleActionType;
   actionConfigJson: any;
   isActive: number;
 }
@@ -103,7 +105,8 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
 
   // v7.0.90 (TD-085 بند ۳): فیلدهای رویداد انتخاب‌شده برای شرط‌ها و متغیرهای متن پیام
   const fieldOptions = eventFieldOptions(formData.eventType);
-  const canInsertIntoMessage = formData.actionType === 'in_app_notification' || formData.actionType === 'sms_simulation';
+  const canInsertIntoMessage = formData.actionType === 'in_app_notification';
+  const retiredAction = isRetiredRuleActionType(formData.actionType);
   const insertIntoMessageTemplate = (path: string) => {
     setFormData(prev => {
       const current = String(prev.actionConfigJson?.messageTemplate || '');
@@ -137,11 +140,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
     });
   };
 
-  const handleActionTypeChange = (newType: RuleFormData['actionType']) => {
+  const handleActionTypeChange = (newType: RuleActionType) => {
     let defaultConfig: any = {};
     if (newType === 'webhook') {
       defaultConfig = {
-        url: 'https://httpbin.org/post',
+        url: '',
         method: 'POST',
         timeoutMs: 5000,
         secretToken: '',
@@ -154,19 +157,6 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
         messageTemplate: 'رویداد با موفقیت در سیستم ثبت گردید.',
         linkTemplate: '',
         notifType: 'system'
-      };
-    } else if (newType === 'sms_simulation') {
-      defaultConfig = {
-        recipientPhoneTemplate: '09120000000',
-        messageTemplate: 'سازمان: فاکتور {{payload.refNumber}} به مبلغ {{payload.totalAmount}} ریال تایید شد.',
-        senderLine: '30009988'
-      };
-    } else if (newType === 'workflow_trigger') {
-      defaultConfig = {
-        workflowCode: 'INVOICE_APPROVAL',
-        entityType: 'invoice',
-        entityIdField: 'payload.documentId',
-        commentTemplate: 'شروع خودکار بر پایه رویداد {{eventType}}'
       };
     } else if (newType === 'audit_log') {
       defaultConfig = {
@@ -397,12 +387,16 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
             </h4>
 
             {/* Action Type Select Buttons */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
+            {retiredAction && (
+              <div role="alert" className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>{retiredRuleActionMessage(formData.actionType)}</span>
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {[
                 { type: 'in_app_notification', label: 'اعلان درون‌برنامه', icon: Bell, color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/50' },
                 { type: 'webhook', label: 'ارسال وب‌هوک', icon: Globe, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/50' },
-                { type: 'sms_simulation', label: 'پیامک هوشمند', icon: Smartphone, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50' },
-                { type: 'workflow_trigger', label: 'تحریک گردش کار', icon: GitBranch, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/50' },
                 { type: 'audit_log', label: 'ثبت ممیزی ویژه', icon: ShieldCheck, color: 'text-slate-600 bg-slate-100 dark:bg-slate-800' }
               ].map(item => {
                 const isSelected = formData.actionType === item.type;
@@ -411,7 +405,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                   <button
                     key={item.type}
                     type="button"
-                    onClick={() => handleActionTypeChange(item.type as any)}
+                    onClick={() => handleActionTypeChange(item.type as RuleActionType)}
                     className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center gap-2 ${
                       isSelected 
                         ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 ring-2 ring-indigo-500/20' 
@@ -550,98 +544,6 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                 </div>
               )}
 
-              {/* SMS Simulation Form */}
-              {formData.actionType === 'sms_simulation' && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        شماره گیرنده یا متغیر
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.actionConfigJson?.recipientPhoneTemplate || ''}
-                        onChange={(e) => setFormData(prev => ({
-                          ...prev,
-                          actionConfigJson: { ...prev.actionConfigJson, recipientPhoneTemplate: e.target.value }
-                        }))}
-                        placeholder="مثال: 09120000000 یا {{payload.customerPhone}}"
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        سرشماره ارسال پیامک
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.actionConfigJson?.senderLine || '30009988'}
-                        onChange={(e) => setFormData(prev => ({
-                          ...prev,
-                          actionConfigJson: { ...prev.actionConfigJson, senderLine: e.target.value }
-                        }))}
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                      قالب متن پیامک
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={formData.actionConfigJson?.messageTemplate || ''}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        actionConfigJson: { ...prev.actionConfigJson, messageTemplate: e.target.value }
-                      }))}
-                      placeholder="متن پیامک ارسالی..."
-                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Workflow Trigger Form */}
-              {formData.actionType === 'workflow_trigger' && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        کد فرآیند گردش کار
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.actionConfigJson?.workflowCode || ''}
-                        onChange={(e) => setFormData(prev => ({
-                          ...prev,
-                          actionConfigJson: { ...prev.actionConfigJson, workflowCode: e.target.value }
-                        }))}
-                        placeholder="مثال: INVOICE_APPROVAL یا MATERIAL_QC"
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-800 dark:text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        فیلد شناسه موجودیت
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.actionConfigJson?.entityIdField || 'payload.documentId'}
-                        onChange={(e) => setFormData(prev => ({
-                          ...prev,
-                          actionConfigJson: { ...prev.actionConfigJson, entityIdField: e.target.value }
-                        }))}
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-800 dark:text-white"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Audit Log Form */}
               {formData.actionType === 'audit_log' && (
                 <div className="space-y-3">
@@ -696,7 +598,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
             </div>
           </div>
 
-          {/* Test Feedback Area */}
+          {/* Test Feedback Area: v9.0.377 (TD-712) the server's own evaluation, never a made-up success */}
           {testResult && (
             testResult.status === 'error' ? (
               <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-2xl flex items-start gap-2.5 text-xs text-rose-800 dark:text-rose-200">
@@ -705,11 +607,18 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                   <span className="font-bold">خطا در تست قانون:</span> {testResult.message}
                 </div>
               </div>
+            ) : testResult.conditionMatches === false ? (
+              <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-200">
+                <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-600 shrink-0" />
+                <div>
+                  <span className="font-bold">نتیجه تست آنلاین:</span> {testResult.message}
+                </div>
+              </div>
             ) : (
               <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl flex items-start gap-2.5 text-xs text-emerald-800 dark:text-emerald-200">
                 <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-600 shrink-0" />
                 <div>
-                  <span className="font-bold">نتیجه تست آنلاین:</span> {testResult.message || 'اقدام با موفقیت شبیه‌سازی و اعتبارسنجی شد.'}
+                  <span className="font-bold">نتیجه تست آنلاین:</span> {testResult.message}
                 </div>
               </div>
             )

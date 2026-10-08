@@ -10750,6 +10750,16 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runWebhookSecretMaskTests(shouldRun));
   const { runIntegrationSecretsAtRestTests } = await import('../regression/integrationSecretsAtRestTests.js');
   results.push(...await runIntegrationSecretsAtRestTests(shouldRun));
+  const { runWebhookActionFailureTests } = await import('../regression/webhookActionFailureTests.js');
+  results.push(...await runWebhookActionFailureTests(shouldRun));
+  const { runBootActionHandlersTests } = await import('../regression/bootActionHandlersTests.js');
+  results.push(...await runBootActionHandlersTests(shouldRun));
+  const { runRetiredRuleActionTests } = await import('../regression/retiredRuleActionTests.js');
+  results.push(...await runRetiredRuleActionTests(shouldRun));
+  const { runIntegrationDeliveryRetryTests } = await import('../regression/integrationDeliveryRetryTests.js');
+  results.push(...await runIntegrationDeliveryRetryTests(shouldRun));
+  const { runIntegrationCounterLockTests } = await import('../regression/integrationCounterLockTests.js');
+  results.push(...await runIntegrationCounterLockTests(shouldRun));
 
   // Package 10 PR B (v9.0.347+): procurement order link, duplicate submissions, consolidation, receiving
   const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');

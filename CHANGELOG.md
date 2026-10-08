@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.379 — Rule and Webhook Counters Under the Row Lock
+- **Rule and subscription counters (TD-718):** a rule's execution count and a webhook subscription's delivery counters were written from the row read before the action, so concurrent executions were lost (10 runs counted 3); they are now read under the row lock and written in the transaction of the attempt's log row.
+
+### v9.0.378 — Durable Retries for Webhook and Rule Action Deliveries
+- **Integration deliveries (TD-705):** webhook retries were three in-memory timers lost on a restart, a failed rule action was never run again, the outbox handlers always reported success and nothing reached the dead letter queue; each delivery now has its own durable row, a worker retries it with a growing delay, after its cap it goes to the dead letter queue on its own row, and a replay runs only that delivery.
+
+### v9.0.377 — Fake Workflow and SMS Rule Actions Removed, Real Draft Evaluation
+- **Rule actions (TD-712):** the workflow-trigger action did nothing and reported "queued", the SMS action only wrote a log line, and the draft test of the rule editor answered success for any draft (an invalid operator, an unknown event, an empty address); both actions are removed, earlier rules of those types are deactivated and listed by the health check, and the draft test really evaluates the draft without sending or writing anything.
+
+### v9.0.376 — Demo Event Action Handlers Removed
+- **Event action handlers (TD-714):** three demo handlers registered at boot only logged, yet wrote a "successful action handler" audit row (with voucherGenerated: true) and an idempotency row without expiry for every invoice, stock issue and reorder alert; boot no longer registers them.
+
+### v9.0.375 — A Webhook Action That Fails Is Recorded as Failed
+- **Webhook rule actions (TD-706):** a webhook rule action whose request failed (connection refused, no DNS, timeout) was recorded as a success with a made-up "200 OK (Simulated Fallback)" when its address contained webhook-echo, example.com, localhost, 127.0.0.1, httpbin.org or webhook.site anywhere; every failed request is now recorded as failed.
+
 ### v9.0.374 — Reservations Keyed by Item Id
 - **Reservations (TD-822, B07-06):** reservation summaries, the reserved stock map and the item list key reservations by item id instead of the upper-cased code, so two items whose codes differ only in case keep their own reservations.
 

@@ -40,6 +40,7 @@ import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../
 import { buildProjectStageHealthTest, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
+import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
 import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
@@ -1221,6 +1222,10 @@ export class FinancialHealthService {
     tests.push(buildProjectReservationHealthTest(await findProjectReservationIssues()));
     // آزمون ۴۶: v9.0.373 (TD-819) کالای بیش از موجودی رزروشده (فقط فهرست)
     tests.push(buildOverReservedHealthTest(await findOverReservedItems()));
+    // آزمون ۴۷: v9.0.377 (TD-712) قانون‌های خودکار با اقدام حذف‌شده («تحریک گردش کار»، «پیامک»؛ مهاجرت 0085 غیرفعالشان کرد؛ فقط فهرست)
+    const retiredRuleTest = buildRetiredRuleActionHealthTest(await findRetiredActionRules());
+    overallScore += retiredRuleTest.scoreImpact;
+    tests.push(retiredRuleTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
