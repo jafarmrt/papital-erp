@@ -3,7 +3,7 @@ import { ShoppingCart, FileText, CheckCircle2, AlertCircle, X, Loader2, Check } 
 import { toast } from 'react-hot-toast';
 import { ProductionProject, PurchaseListItem, Item } from '../../types';
 import { fetchJson } from '../../api';
-import { errorMessageOf, formatPersianPrice, getTodayIsoDate } from '../../utils';
+import { errorMessageOf, formatPersianPrice, getTodayIsoDate, toPersianDigits } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
@@ -322,7 +322,7 @@ export function CreatePurchaseOrderModal({
               </div>
 
               <div className="sm:col-span-3 text-[11px] text-amber-800 bg-amber-100/60 p-2.5 rounded-lg">
-                💡 این درخواست در کارتابل مسئول خرید و تدارکات ثبت شده و پس از استعلام قیمت و تایید مدیر وارد فاز سفارش‌گذاری و خرید خواهد شد.
+                💡 این درخواست در کارتابل مسئول خرید و تدارکات ثبت شده و پس از استعلام قیمت و تایید مدیر وارد مرحله سفارش‌گذاری و خرید خواهد شد.
               </div>
             </div>
           ) : (
@@ -344,9 +344,9 @@ export function CreatePurchaseOrderModal({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-800 text-sm">اقلام قابل سفارش ({orderRows.length} مورد کسری)</span>
+                <span className="font-bold text-slate-800 text-sm">اقلام قابل سفارش ({toPersianDigits(orderRows.length)} مورد کسری)</span>
                 <span className="text-xs text-slate-500">
-                  ({selectedRows.length} قلم انتخاب شده)
+                  ({toPersianDigits(selectedRows.length)} قلم انتخاب شده)
                 </span>
               </div>
               <div className="flex items-center gap-2 text-xs">
@@ -469,7 +469,7 @@ export function CreatePurchaseOrderModal({
             <div className="flex items-center gap-2 text-amber-900">
               <span className="font-bold">مجموع اقلام انتخابی:</span>
               <span className="px-2 py-0.5 bg-amber-200 text-amber-950 font-bold rounded-md font-mono">
-                {selectedRows.length} قلم
+                {toPersianDigits(selectedRows.length)} قلم
               </span>
             </div>
             <div className="flex items-center gap-2 text-amber-950">

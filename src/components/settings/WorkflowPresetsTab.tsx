@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layers, Plus, Trash2, ArrowUp, ArrowDown, Archive, ArchiveRestore } from 'lucide-react';
 import { WorkflowPreset } from '../../constants/presets';
 import { fetchJson } from '../../api';
-import { errorMessageOf, formatPersianNumber } from '../../utils';
+import { errorMessageOf, formatPersianNumber, toPersianDigits } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { SearchableSelect } from '../SearchableSelect';
 import { toast } from 'react-hot-toast';
@@ -137,7 +137,7 @@ export function WorkflowPresetsTab({
               }`}
             >
               <Archive size={14} />
-              {showArchived ? 'پنهان‌سازی آرشیوشده‌ها' : `مشاهده آرشیو (${archivedCount})`}
+              {showArchived ? 'پنهان‌سازی آرشیوشده‌ها' : `مشاهده آرشیو (${toPersianDigits(archivedCount)})`}
             </button>
           )}
           <button
@@ -260,7 +260,7 @@ export function WorkflowPresetsTab({
                   {/* Stages List inside this preset */}
                   <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-slate-700">مراحل فرآیند ({p.stages.length} مرحله):</span>
+                      <span className="text-xs font-bold text-slate-700">مراحل فرآیند ({toPersianDigits(p.stages.length)} مرحله):</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -385,7 +385,7 @@ export function WorkflowPresetsTab({
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1.5">
                                   <span className="font-bold text-slate-800 text-[11px]">
-                                    عناوین کاری / کارمزدهای الگوی این مرحله ({stgTasks.length} مورد)
+                                    عناوین کاری / کارمزدهای الگوی این مرحله ({toPersianDigits(stgTasks.length)} مورد)
                                   </span>
                                   <span className="text-[10px] text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200">
                                     خوانده‌شده از ماژول حقوق و دستمزد

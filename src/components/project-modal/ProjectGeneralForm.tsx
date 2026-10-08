@@ -64,7 +64,7 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
             type="text"
             value={projectCode}
             onChange={(e) => setProjectCode(e.target.value)}
-            placeholder="مثال: PRJ-1403-01 (خالی = خودکار)"
+            placeholder="خالی بماند تا کد خودکار بگیرد"
             className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
             dir="ltr"
           />

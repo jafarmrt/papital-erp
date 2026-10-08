@@ -7,7 +7,7 @@ import { fetchJson } from '../../api';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useInventoryAuditSave';
-import { formatPersianDate, formatPersianNumber, parseCleanNumber, errorMessageOf, getTodayJalaliDate } from '../../utils';
+import { formatPersianDate, formatPersianNumber, parseCleanNumber, errorMessageOf, getTodayJalaliDate, toPersianDigits } from '../../utils';
 import { bomAllocationsExportFileName } from '../../lib/inventoryAudit/exportFileNames';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 import { isProjectOpenForAllocation } from '../../lib/projects/projectStatus';
@@ -155,7 +155,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
   };
 
   const handleConsume = async (alloc: any) => {
-    if (!(await confirmAction({ title: 'مصرف قطعی تخصیص', message: `آیا از مصرف قطعی ${alloc.quantity} ${alloc.unit} کالای ${alloc.itemName} در پروژه ${alloc.projectCode} اطمینان دارید؟` }))) {
+    if (!(await confirmAction({ title: 'مصرف قطعی تخصیص', message: `آیا از مصرف قطعی ${formatPersianNumber(alloc.quantity)} ${alloc.unit} کالای ${alloc.itemName} در پروژه ${alloc.projectCode} اطمینان دارید؟` }))) {
       return;
     }
     try {
@@ -414,13 +414,13 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                     <td className="py-3 px-3 text-center">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-slate-100 text-slate-700 font-medium">
                         <Warehouse size={12} />
-                        {alloc.sourceLocation || 'main'}
+                        {alloc.sourceLocation || 'انبار پیش‌فرض'}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-center">
                       {alloc.sourceTransactionId ? (
                         <span className="font-mono text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-bold">
-                          TX-{alloc.sourceTransactionId}
+                          {toPersianDigits(alloc.sourceTransactionId)}
                         </span>
                       ) : (
                         <span className="text-slate-400">-</span>
@@ -536,7 +536,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                   <div>
                     <span className="text-slate-400">شناسه تراکنش: </span>
                     <span className="font-mono font-bold text-slate-800">
-                      TX-{selectedAllocForTrace.sourceTransactionId || '-'}
+                      {selectedAllocForTrace.sourceTransactionId ? toPersianDigits(selectedAllocForTrace.sourceTransactionId) : '-'}
                     </span>
                   </div>
                   <div>

@@ -39,7 +39,7 @@ export const ProjectStagesForm: React.FC<ProjectStagesFormProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
         <h3 className="text-xs font-bold text-slate-800 flex items-center gap-2">
           <Workflow size={14} className="text-blue-600" />
-          فرآیند و مراحل گام‌به‌گام تولید ({stages.length} مرحله)
+          فرآیند و مراحل گام‌به‌گام تولید ({toPersianDigits(stages.length)} مرحله)
         </h3>
         
         {/* Preset Selector */}

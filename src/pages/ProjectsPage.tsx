@@ -294,7 +294,7 @@ export default function ProjectsPage() {
             }`}
           >
             <Calendar className="w-3.5 h-3.5" />
-            زمان‌بندی و گانت
+            نمودار زمان‌بندی
           </button>
         </div>
       </div>
@@ -304,7 +304,7 @@ export default function ProjectsPage() {
         resetKeys={[viewMode]}
         onReset={() => loadInitialData()}
         title="خطا در نمایش نمای پروژه‌های تولید"
-        description="در پردازش و ترسیم کارت‌ها یا گانت‌پروژه‌ها مشکلی رخ داده است. می‌توانید دوباره تلاش کنید."
+        description="در پردازش و ترسیم کارت‌ها یا نمودار زمان‌بندی پروژه‌ها مشکلی رخ داده است. می‌توانید دوباره تلاش کنید."
       >
         {loading ? (
         <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center text-slate-500 flex flex-col items-center gap-2">
@@ -404,7 +404,7 @@ export default function ProjectsPage() {
                             style={{ width: `${p.progress_percent || 0}%` }}
                           />
                         </div>
-                        <span className="font-mono text-[11px] font-bold text-slate-600">{formatPersianNumber(p.progress_percent || 0)}%</span>
+                        <span className="font-mono text-[11px] font-bold text-slate-600">{formatPersianNumber(p.progress_percent || 0)}٪</span>
                       </div>
                     </td>
                     <td className="p-3.5"><PillBadge variants={PROJECT_STATUS_BADGES} value={p.status} fallback={PROJECT_STATUS_FALLBACK} /></td>
@@ -419,10 +419,10 @@ export default function ProjectsPage() {
                         <button
                           onClick={() => handleOpenDetailModal(p.id, 'inventory')}
                           className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-900 hover:bg-amber-100 font-bold transition-colors border border-amber-200/80 flex items-center gap-1 cursor-pointer"
-                          title="کنترل موجودی و لیست خرید BOM"
+                          title="کنترل موجودی و خرید فهرست مواد"
                         >
                           <ShoppingCart className="w-3.5 h-3.5 text-amber-600" />
-                          انبار و خرید BOM
+                          انبار و خرید فهرست مواد
                         </button>
                         <button
                           onClick={() => handleOpenDetailModal(p.id, 'product_progress')}
@@ -464,7 +464,7 @@ export default function ProjectsPage() {
           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <Calendar className="w-4 h-4 text-amber-500" />
-              زمان‌بندی و گانت چارت پروژه‌های تولید
+              نمودار زمان‌بندی پروژه‌های تولید
             </h3>
             <span className="text-slate-500 text-xs">نمایش روند زمان‌بندی و مراحل هر پروژه</span>
           </div>
@@ -505,7 +505,7 @@ export default function ProjectsPage() {
                       >
                         <div className="flex items-center justify-between text-[11px] font-bold">
                           <span>{idx + 1}. {stg.title}</span>
-                          <span>{formatPersianNumber(stg.progress_percent || 0)}%</span>
+                          <span>{formatPersianNumber(stg.progress_percent || 0)}٪</span>
                         </div>
                         <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1.5">
                           <div 
@@ -622,7 +622,7 @@ function ProjectKanbanCard({
       <div>
         <div className="flex items-center justify-between text-[11px] font-bold mb-1">
           <span className="text-slate-600">پیشرفت کل ({formatPersianNumber(project.completed_stages || 0)}/{formatPersianNumber(project.total_stages || 0)} مرحله)</span>
-          <span className="font-mono text-blue-600">{formatPersianNumber(project.progress_percent || 0)}%</span>
+          <span className="font-mono text-blue-600">{formatPersianNumber(project.progress_percent || 0)}٪</span>
         </div>
         <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
           <div 
@@ -644,10 +644,10 @@ function ProjectKanbanCard({
           <button
             onClick={onInventory || onDetail}
             className="text-amber-800 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded-lg font-bold text-[10px] flex items-center gap-1 border border-amber-200 cursor-pointer"
-            title="کنترل موجودی و لیست خرید BOM"
+            title="کنترل موجودی و خرید فهرست مواد"
           >
             <ShoppingCart className="w-3 h-3 text-amber-600" />
-            خرید BOM
+            خرید فهرست مواد
           </button>
           {onProductProgress && (
             <button

@@ -118,7 +118,7 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
             </div>
             <div>
               <h1 className="text-base font-black text-slate-900 flex items-center gap-2">
-                برنامه‌ریزی کنترل موجودی، BOM و لیست خرید پروژه
+                برنامه‌ریزی کنترل موجودی، فهرست مواد و خرید پروژه
                 <span className="bg-amber-100 text-amber-900 text-[10px] px-2 py-0.5 rounded-full font-bold">صفحه اختصاصی</span>
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -168,7 +168,7 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
       {loadingProjectDetail ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
           <RefreshCw className="w-8 h-8 animate-spin text-amber-600" />
-          <span className="font-bold text-sm">در حال بارگذاری ماتریس BOM و اطلاعات کنترل موجودی پروژه...</span>
+          <span className="font-bold text-sm">در حال بارگذاری فهرست مواد و کنترل موجودی پروژه...</span>
         </div>
       ) : !project ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 space-y-3">

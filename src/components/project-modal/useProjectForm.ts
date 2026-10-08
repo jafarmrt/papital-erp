@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Customer, Item, FinancialAttachment } from '../../types';
 import { fetchJson } from '../../api';
-import { getTodayIsoDate, errorMessageOf, toStorageDate } from '../../utils';
+import { getTodayIsoDate, errorMessageOf, toStorageDate, toPersianDigits } from '../../utils';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset } from '../../constants/presets';
 import { ProductRow, ProjectStage, ProjectModalProps } from './types';
 import {
@@ -136,7 +136,7 @@ export function useProjectForm({
         setEndDate('');
         setPriority('medium');
         setDescription(initialProducts && initialProducts.length > 0 
-          ? `پروژه تولید تعریف‌شده جهت جبران کسری نقطه سفارش محصولات در انبار (${initialProducts.length} قلم محصول)` 
+          ? `پروژه تولید تعریف‌شده جهت جبران کسری نقطه سفارش محصولات در انبار (${toPersianDigits(initialProducts.length)} قلم محصول)` 
           : '');
         setAttachments([]);
         const initialPreset = availablePresets[0];
@@ -288,7 +288,7 @@ export function useProjectForm({
         toast.error(res?.error || 'خطا در ذخیره‌سازی پروژه');
       }
     } catch (err) {
-      toast.error(errorMessageOf(err) || 'خطا در ارتباط با سرور');
+      toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
     } finally {
       setSaving(false);
     }

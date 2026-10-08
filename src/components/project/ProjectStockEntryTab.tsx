@@ -249,7 +249,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
         toast.error(res?.error || 'خطا در ثبت ورود به انبار');
       }
     } catch (err) {
-      if (!askOverDeliveryReason(err, body)) toast.error(errorMessageOf(err) || 'خطا در ارتباط با سرور');
+      if (!askOverDeliveryReason(err, body)) toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
     } finally {
       setSubmitting(false);
     }
@@ -316,7 +316,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
         toast.error(res?.error || 'خطا در ثبت دسته‌ای محصولات به انبار');
       }
     } catch (err) {
-      if (!askOverDeliveryReason(err, body)) toast.error(errorMessageOf(err) || 'خطا در ارتباط با سرور');
+      if (!askOverDeliveryReason(err, body)) toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
     } finally {
       setBatchSubmitting(false);
     }
@@ -346,7 +346,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       setSelectedIds(new Set());
       onUpdate();
     } catch (err) {
-      toast.error(errorMessageOf(err) || 'خطا در ارتباط با سرور');
+      toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
     } finally {
       setSubmitting(false);
     }

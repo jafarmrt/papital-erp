@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.400 — Persian Wording on the Project Screens
+- **Persian Wording on the Project Screens (TD-769):** the project screens and server messages used BOM, «فریز», «گانت», «سرور» and other loanwords and showed counts and percents in Latin digits; they now follow the approved glossary (owner decision t10) with Persian digits and «٪».
+
 ### v9.0.399 — Searchable Project, Item and Task Pickers
 - **Searchable Project, Item and Task Pickers (TD-767):** six package-11 pickers were native selects over whole entity lists (projects, raw materials, warehouse items, piecework tasks); they are now `SearchableSelect`, and the project inventory picker labels each status from the closed status list.
 

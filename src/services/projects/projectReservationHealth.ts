@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import type { HealthCheckTestResult } from '../../types.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
  * v9.0.371 (TD-817، یافته B07-01، تصمیم ت۲ بسته ۷): فقط رزرو ذخیره‌شده پروژه ثبت نهایی‌شده موجودی را رزرو می‌کند. پروژه‌هایی
@@ -24,7 +25,7 @@ export interface ProjectReservationIssue {
 }
 
 const ISSUE_LABELS: Record<ProjectReservationIssueKind, string> = {
-  finalized_without_reservation: 'ثبت نهایی پیش از رزرو سرور، بی رزرو ذخیره‌شده',
+  finalized_without_reservation: 'ثبت نهایی پیش از رزرو در سامانه، بی رزرو ذخیره‌شده',
   unfinalized_with_reservation: 'ثبت نهایی‌نشده با رزرو ذخیره‌شده',
   reservation_unit_unconverted: 'رزرو با واحد درخواست، بی تبدیل به واحد کالا',
 };
@@ -86,7 +87,7 @@ export function buildProjectReservationHealthTest(issues: ProjectReservationIssu
     scoreImpact: 0,
     count: issues.length,
     message: issues.length > 0
-      ? `${issues.length} پروژه رزرو ناهمخوان با ثبت نهایی دارد. هیچ‌کدام خودکار تغییر نمی‌کند؛ راهنمای هر ردیف را ببینید.`
+      ? `${toPersianDigits(issues.length)} پروژه رزرو ناهمخوان با ثبت نهایی دارد. هیچ‌کدام خودکار تغییر نمی‌کند؛ راهنمای هر ردیف را ببینید.`
       : 'رزرو همه پروژه‌های فعال با ثبت نهایی آن‌ها همخوان است.',
     items: issues.map(i => ({
       id: i.projectId,
@@ -145,7 +146,7 @@ export function buildOverReservedHealthTest(rows: OverReservedItem[]): HealthChe
     scoreImpact: 0,
     count: rows.length,
     message: rows.length > 0
-      ? `${rows.length} کالا بیش از موجودی رزرو شده است و دارندگان رزرو آن نمی‌توانند خروج بزنند. خودکار تغییر نمی‌کند؛ یکی از پروژه‌ها را از ثبت نهایی خارج و دوباره ثبت نهایی کنید یا پیش‌فاکتور را باطل کنید.`
+      ? `${toPersianDigits(rows.length)} کالا بیش از موجودی رزرو شده است و دارندگان رزرو آن نمی‌توانند خروج بزنند. خودکار تغییر نمی‌کند؛ یکی از پروژه‌ها را از ثبت نهایی خارج و دوباره ثبت نهایی کنید یا پیش‌فاکتور را باطل کنید.`
       : 'رزرو هیچ کالایی از موجودی آن بیشتر نیست.',
     items: rows.map(r => ({
       id: r.itemId,

@@ -164,7 +164,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h4 className="font-bold text-slate-900 text-sm">نمودار گانت، مسیر بحرانی و زمان‌بندی خط تولید</h4>
+                <h4 className="font-bold text-slate-900 text-sm">نمودار زمان‌بندی، مسیر بحرانی و برنامه خط تولید</h4>
                 <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 font-bold text-[10px] border border-amber-200">
                   {toPersianDigits(stages.length)} مرحله تولیدی
                 </span>
@@ -345,7 +345,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
             }`}
           >
             <Calendar className="w-3.5 h-3.5 text-blue-600" />
-            <span>نوار خط زمانی (Timeline)</span>
+            <span>نوار خط زمانی</span>
           </button>
         </div>
       </div>
@@ -358,7 +358,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
           </div>
           <h4 className="font-bold text-slate-800 text-sm">هیچ مرحله تولیدی برای این پروژه تعریف نشده است</h4>
           <p className="text-slate-500 text-xs max-w-md mx-auto leading-relaxed">
-            جهت نمایش نمودار گانت، ابتدا مراحل خط تولید را در تب خلاصه‌ی پروژه یا از طریق الگوهای گردش کار تعریف کنید.
+            برای نمایش نمودار زمان‌بندی، نخست مراحل خط تولید را در بخش خلاصه پروژه یا با الگوهای گردش کار تعریف کنید.
           </p>
         </div>
       ) : activeViewMode === 'timeline' ? (
@@ -366,7 +366,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4 shadow-2xs overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
-              <h4 className="font-bold text-slate-900 text-xs">خط زمانی تقویمی مراحل (Gantt Calendar Grid)</h4>
+              <h4 className="font-bold text-slate-900 text-xs">خط زمانی تقویمی مراحل</h4>
               <p className="text-[11px] text-slate-500">موقعیت و طول هر نوار بر مبنای تاریخ‌های شروع و پایان هر مرحله محاسبه شده است.</p>
             </div>
             <div className="flex items-center gap-3 text-[10px] text-slate-500">
@@ -427,7 +427,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
                         right: `${leftPercent}%`,
                         width: `${widthPercent}%`
                       }}
-                      title={`${stg.title}: پیشرفت ${prog}٪`}
+                      title={`${stg.title}: پیشرفت ${toPersianDigits(prog)}٪`}
                     >
                       <span className="truncate">{stg.title}</span>
                       <span className="font-mono font-bold">{toPersianDigits(prog)}٪</span>

@@ -607,7 +607,7 @@ router.post('/projects/:id/add-to-inventory', authorizePermission(...PROJECT_EDI
       action: 'UPDATE',
       entity: 'پروژه تولید',
       entityId: String(id),
-      description: `افزایش موجودی انبار بابت تحویل ${result.addedCount} قلم محصول از پروژه ${result.projectCode}${result.refNumber ? ` با رسید تولید ${result.refNumber}` : ''}${result.overDeliveries.length > 0 ? ` (تحویل بیش از برنامه با دلیل: ${overDeliveryReason})` : ''}`,
+      description: `افزایش موجودی انبار بابت تحویل ${toPersianDigits(result.addedCount)} قلم محصول از پروژه ${result.projectCode}${result.refNumber ? ` با رسید تولید ${result.refNumber}` : ''}${result.overDeliveries.length > 0 ? ` (تحویل بیش از برنامه با دلیل: ${overDeliveryReason})` : ''}`,
       ...(result.overDeliveries.length > 0 ? { details: { overDeliveries: result.overDeliveries, overDeliveryReason } } : {})
     });
 

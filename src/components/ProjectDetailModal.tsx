@@ -455,7 +455,7 @@ export default function ProjectDetailModal({
             }`}
           >
             <BarChart2 className="w-4 h-4 text-purple-600 shrink-0" />
-            <span>۵. زمان‌بندی (Gantt)</span>
+            <span>۵. نمودار زمان‌بندی</span>
           </button>
 
           <button

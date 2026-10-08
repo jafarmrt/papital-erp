@@ -67,7 +67,7 @@ export function useDeleteProjectMutation() {
       }
     },
     onError: (err: any) => {
-      toast.error(err?.message || 'خطا در ارتباط با سرور هنگام حذف پروژه');
+      toast.error(err?.message || 'خطا در ارتباط با سامانه هنگام حذف پروژه');
     },
   });
 }

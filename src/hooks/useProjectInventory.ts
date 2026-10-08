@@ -17,7 +17,7 @@ import {
   roundToOneDecimal,
   withProcurementStatus
 } from '../components/project/projectInventoryUtils';
-import { errorMessageOf, formatPersianNumber } from '../utils';
+import { errorMessageOf, formatPersianNumber, toPersianDigits } from '../utils';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { useProjectVersion } from './useProjectVersion';
 import { directConversionRate } from '../lib/projects/unitConversion';
@@ -650,7 +650,7 @@ export function useProjectInventory(
     }
 
     setIsUnitConversionModalOpen(false);
-    toast.success(`ضریب تبدیل unit_conversion ثبت شد: ${originalQty} ${conversionTarget.originalUnit} ➔ ${finalConvertedQty} ${targetUnit}`);
+    toast.success(`ضریب تبدیل واحد ثبت شد: ${toPersianDigits(originalQty)} ${conversionTarget.originalUnit} ➔ ${toPersianDigits(finalConvertedQty)} ${targetUnit}`);
   };
 
   // v9.0.390 (TD-750): شناسه ردیف فهرست خرید (`code_…` / `name_…`) به ردیف‌های بخش‌ها می‌رسد و state درجا تغییر نمی‌کند؛
@@ -671,11 +671,11 @@ export function useProjectInventory(
 
   const handleFinalizeAndReserveStock = async () => {
     if (isFinalized) {
-      toast.error('این لیست قبلا به نهایی رسیده و اقلام آن در انبار فریز شده‌اند.');
+      toast.error('این فهرست پیش‌تر ثبت نهایی شده و اقلام آن در انبار رزرو شده‌اند.');
       return;
     }
 
-    if (!(await confirmAction({ title: 'ثبت نهایی و فریز اقلام', message: 'آیا از ثبت نهایی و فریز اقلام رزرو شده در انبار اطمینان دارید؟ پس از ثبت نهایی، موجودی این اقلام به این پروژه اختصاص خواهد یافت.' }))) {
+    if (!(await confirmAction({ title: 'ثبت نهایی و رزرو اقلام', message: 'آیا از ثبت نهایی و رزرو اقلام در انبار اطمینان دارید؟ پس از ثبت نهایی، موجودی این اقلام به این پروژه اختصاص خواهد یافت.' }))) {
       return;
     }
 
@@ -704,21 +704,21 @@ export function useProjectInventory(
       setReservedItems(savedReservedItems(saved));
       const shortages = storedReservationShortages(saved?.inventory_control);
       setReservationShortages(shortages);
-      toast.success('کنترل موجودی ثبت نهایی شد و اقلام در انبار فریز گردیدند.');
+      toast.success('کنترل موجودی ثبت نهایی شد و اقلام در انبار رزرو شدند.');
       if (shortages.length > 0) {
         toast(`${formatPersianNumber(shortages.length)} کالا کمتر از نیاز رزرو شد، چون بقیه موجودی را دیگران رزرو کرده‌اند؛ فهرست کمبود در «فهرست خرید» آمده است.`, { icon: '⚠️' });
       }
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('Error finalizing inventory reservation:', err);
-      toast.error(errorMessageOf(err) || 'خطا در فریز و رزرو انبار');
+      toast.error(errorMessageOf(err) || 'خطا در ثبت نهایی و رزرو انبار');
     } finally {
       setSaving(false);
     }
   };
 
   const handleUnfinalizeReservation = async () => {
-    if (!(await confirmAction({ title: 'خروج از حالت فریز', message: 'آیا از خروج از حالت فریز و باز کردن قفل انبار مطمئن هستید؟' }))) return;
+    if (!(await confirmAction({ title: 'لغو ثبت نهایی', message: 'آیا از لغو ثبت نهایی و آزاد کردن رزرو انبار مطمئن هستید؟' }))) return;
 
     try {
       setSaving(true);
@@ -742,11 +742,11 @@ export function useProjectInventory(
       setFinalizedAt(undefined);
       setReservedItems([]);
       setReservationShortages([]);
-      toast.success('قفل فریز انبار برداشته شد.');
+      toast.success('رزرو انبار آزاد شد.');
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('Error unfreezing reservation:', err);
-      toast.error(errorMessageOf(err) || 'خطا در لغو فریز انبار');
+      toast.error(errorMessageOf(err) || 'خطا در آزاد کردن رزرو انبار');
     } finally {
       setSaving(false);
     }
@@ -818,7 +818,7 @@ export function useProjectInventory(
 
   const handleRemoveManualPurchaseItem = (id: string) => {
     setManualPurchaseItems(manualPurchaseItems.filter(i => i.id !== id));
-    toast.success('آیتم دستی حذف شد.');
+    toast.success('قلم دستی حذف شد.');
   };
 
   const handleUpdateProcurementStatus = (itemId: string, newStatus: NonNullable<PurchaseListItem['procurementStatus']>) => {

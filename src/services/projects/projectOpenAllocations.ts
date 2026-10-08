@@ -2,6 +2,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { projectBomAllocations } from '../../db/schema.js';
 import { BusinessLogicError } from '../../errors/customErrors.js';
+import { toPersianDigits } from '../../utils/persianNumber.js';
 
 /**
  * v8.0.121 (TD-412، تصمیم مالک محصول — گزینه الف): پروژه‌ای که تخصیص مواد باز دارد حذف نمی‌شود تا تخصیص‌ها آزاد شوند.
@@ -17,7 +18,7 @@ export async function assertNoOpenAllocations(tx: DbExecutor, project: { id: num
   if (open.length === 0) return;
   const list = open.slice(0, 5).map(a => `«${a.itemName}» (${a.itemCode}) ${a.quantity} ${a.unit || 'عدد'}`).join('، ');
   throw new BusinessLogicError(
-    `پروژه «${project.projectCode}» ${open.length} تخصیص مواد باز دارد (${list}${open.length > 5 ? '، …' : ''}) و ${refusal}؛ ابتدا تخصیص‌ها را از زبانه مواد پروژه آزاد کنید.`,
+    `پروژه «${project.projectCode}» ${toPersianDigits(open.length)} تخصیص مواد باز دارد (${list}${open.length > 5 ? '، …' : ''}) و ${refusal}؛ ابتدا تخصیص‌ها را از زبانه مواد پروژه آزاد کنید.`,
     { code: 'PROJECT_HAS_OPEN_ALLOCATIONS', openAllocations: open.length }
   );
 }
