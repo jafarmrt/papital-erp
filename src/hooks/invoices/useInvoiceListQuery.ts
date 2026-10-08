@@ -1,10 +1,10 @@
-import { useCallback, useMemo, useState, type SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useState, type SetStateAction } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { errorMessageOf, extractDateString } from '../../utils';
 import { useSearch } from '../../SearchContext';
 import { useDocumentsQuery } from '../queries';
 import { QUERY_KEYS } from '../../lib/queryKeys';
-import { computeInvoiceListSummary, invoiceListTypeFilter, type InvoiceListDocument, type InvoiceListResponse } from '../../lib/invoices/invoiceListDocuments';
+import { computeInvoiceListSummary, invoiceListSearchFromAddress, invoiceListTypeFilter, type InvoiceListDocument, type InvoiceListResponse } from '../../lib/invoices/invoiceListDocuments';
 
 /**
  * TD-080 (بخش ۳): جستجو، فیلترها، صفحه‌بندی و کوئری لیست اسناد — منتقل‌شده بدون تغییر از InvoicesListPage.
@@ -17,6 +17,13 @@ export function useInvoiceListQuery() {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [pageSize, setPageSize] = useState(50);
+
+  // v9.0.383 (TD-828): a link may open the list searched by a document number (`/invoices?search=1001`, the reserved items
+  // report); the address is read once when the list opens
+  useEffect(() => {
+    const fromAddress = invoiceListSearchFromAddress(window.location.search);
+    if (fromAddress) setSearch(fromAddress);
+  }, [setSearch]);
 
   // TD-235 (بند ۵): صفحه به کلید فیلترها گره خورده است؛ با تغییر فیلتر یا جستجو همان رندر صفحه ۱ را می‌خواهد
   // (پیش‌تر یک effect پس از رندر صفحه را ۱ می‌کرد و در این فاصله یک درخواست اضافه با صفحه قبلی می‌رفت).

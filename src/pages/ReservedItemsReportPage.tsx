@@ -12,16 +12,18 @@ import {
   ShoppingCart, 
   ChevronDown, 
   ChevronUp, 
-  ExternalLink,
   DollarSign,
 } from 'lucide-react';
 import { fetchJson } from '../api';
-import { formatPersianNumber, formatPersianDate } from '../utils';
+import { formatPersianNumber, formatPersianDate, getTodayJalaliDate } from '../utils';
+import * as xlsx from 'xlsx';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
-import { Link } from 'react-router-dom';
 import { ErrorStateView } from '../components/common/ErrorStateView';
 import type { ReservedItemsFullReport } from '../lib/inventory/reservedItemsReport';
+import { reservationEntryRows, reservedItemSummaryRows, reservedItemsExportFileName } from '../lib/inventory/reservedItemsExport';
+import { EXPORT_FAILED_MESSAGE } from '../lib/inventoryAudit/exportFileNames';
+import { ReservationSourceLink } from '../components/reservedItems/ReservationSourceLink';
 
 export default function ReservedItemsReportPage() {
   const rial = useRialDisplay();
@@ -133,31 +135,20 @@ export default function ReservedItemsReportPage() {
     });
   }, [data, searchQuery, sourceFilter, categoryFilter]);
 
-  const handleExportCSV = () => {
+  // v9.0.383 (TD-828): a real xlsx file with a Persian name and Jalali date, rows built in lib/inventory/reservedItemsExport
+  const handleExportExcel = () => {
     if (!data) return;
-
-    let csvContent = 'data:text/csv;charset=utf-8,\uFEFF';
-    
-    if (activeTab === 'items') {
-      csvContent += 'کد کالا,نام کالا,دسته‌بندی,واحد,موجودی کل انبار,سهم رزرو پیش‌فاکتور,سهم رزرو پروژه,مجموع رزرو,موجودی آزاد,بهای تمام‌شده رزرو (ریال)\n';
-      filteredItemSummaries.forEach(s => {
-        csvContent += `"${s.itemCode}","${s.itemName}","${s.category}","${s.unit}",${s.currentStock},${s.proformaReservedQty},${s.projectReservedQty},${s.totalReservedQty},${s.availableStock},${s.totalReservedCost ?? ''}\n`;
-      });
-    } else {
-      csvContent += 'کد کالا,نام کالا,دسته‌بندی,نوع منبع,شناسه مرجع,عنوان مرجع/مشتری,مقدار رزرو,واحد,میانگین موزون بها (ریال),بهای تمام‌شده (ریال),تاریخ ثبت\n';
-      filteredLedgerEntries.forEach(e => {
-        csvContent += `"${e.itemCode}","${e.itemName}","${e.category}","${e.sourceLabel}","${e.sourceRef}","${e.sourceTitle}",${e.reservedQty},"${e.unit}",${e.unitCost ?? ''},${e.totalCost ?? ''},"${formatPersianDate(e.date, { englishDigits: true })}"\n`;
-      });
+    try {
+      const rows = activeTab === 'items'
+        ? reservedItemSummaryRows(filteredItemSummaries, showCost)
+        : reservationEntryRows(filteredLedgerEntries, showCost, value => formatPersianDate(value, { englishDigits: true }));
+      const workbook = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(workbook, xlsx.utils.json_to_sheet(rows), activeTab === 'items' ? 'خلاصه کالاها' : 'ریز رزروها');
+      xlsx.writeFile(workbook, reservedItemsExportFileName(getTodayJalaliDate()));
+      toast.success('فایل اکسل اقلام رزروشده دریافت شد.');
+    } catch {
+      toast.error(EXPORT_FAILED_MESSAGE);
     }
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `reserved_items_report_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('فایل خروجی اکسل/CSV با موفقیت دریافت شد.');
   };
 
   const handlePrint = () => {
@@ -204,7 +195,7 @@ export default function ReservedItemsReportPage() {
             <span>به‌روزرسانی</span>
           </button>
           <button
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all cursor-pointer"
           >
             <Download size={15} />
@@ -529,23 +520,7 @@ export default function ReservedItemsReportPage() {
                                           {showCost && <td className="p-2 text-left font-mono">{rial.number(res.totalCost ?? 0)}</td>}
                                           <td className="p-2 text-center text-slate-500">{formatPersianDate(res.date)}</td>
                                           <td className="p-2 text-center print:hidden">
-                                            {res.sourceType === 'proforma' ? (
-                                              <Link
-                                                to={`/invoices?search=${res.sourceRef}`}
-                                                className="inline-flex items-center gap-1 text-purple-600 hover:text-purple-800 font-bold"
-                                              >
-                                                <span>مشاهده فاکتور</span>
-                                                <ExternalLink size={12} />
-                                              </Link>
-                                            ) : (
-                                              <Link
-                                                to={`/projects?projectId=${res.sourceId}`}
-                                                className="inline-flex items-center gap-1 text-cyan-600 hover:text-cyan-800 font-bold"
-                                              >
-                                                <span>مشاهده پروژه</span>
-                                                <ExternalLink size={12} />
-                                              </Link>
-                                            )}
+                                            <ReservationSourceLink entry={res} />
                                           </td>
                                         </tr>
                                       ))}
@@ -631,23 +606,7 @@ export default function ReservedItemsReportPage() {
                         {formatPersianDate(entry.date)}
                       </td>
                       <td className="p-3.5 text-center print:hidden">
-                        {entry.sourceType === 'proforma' ? (
-                          <Link
-                            to={`/invoices?search=${entry.sourceRef}`}
-                            className="inline-flex items-center gap-1 text-purple-600 hover:text-purple-800 font-bold"
-                          >
-                            <span>مشاهده فاکتور</span>
-                            <ExternalLink size={12} />
-                          </Link>
-                        ) : (
-                          <Link
-                            to={`/projects?projectId=${entry.sourceId}`}
-                            className="inline-flex items-center gap-1 text-cyan-600 hover:text-cyan-800 font-bold"
-                          >
-                            <span>مشاهده پروژه</span>
-                            <ExternalLink size={12} />
-                          </Link>
-                        )}
+                        <ReservationSourceLink entry={entry} />
                       </td>
                     </tr>
                   ))
