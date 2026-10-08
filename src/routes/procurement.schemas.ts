@@ -9,7 +9,7 @@ import { REQUISITION_MAX_ROWS, REQUISITION_PRIORITIES } from '../lib/procurement
 
 export const listRequisitionsSchema = z.object({
   query: z.object({
-    status: z.enum(['draft', 'pending', 'approved', 'rejected', 'ordered', 'delivered', 'cancelled', 'all']).optional(),
+    status: z.enum(['draft', 'pending', 'approved', 'rejected', 'ordered', 'delivered', 'cancelled', 'consolidated', 'all']).optional(),
     projectId: z.coerce.number().int().positive().optional(),
     priority: z.enum(['low', 'medium', 'high', 'emergency']).optional(),
     search: z.string().max(120).optional(),

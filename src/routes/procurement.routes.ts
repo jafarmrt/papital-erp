@@ -3,8 +3,10 @@ import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { idempotency } from '../middleware/idempotency.js';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { ProcurementService } from '../services/procurement.service.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import {
   consolidateRequisitionsSchema, convertToOrdersSchema, createRequisitionSchema, listProcurementOrdersSchema, listRequisitionsSchema,
   updateRequisitionSchema, workflowActionSchema,
@@ -30,7 +32,7 @@ router.get('/inbox/summary', authorizePermission('procurement.view'), asyncHandl
  * GET /api/procurement/requisitions
  * List purchase requisitions
  */
-router.get('/requisitions', authorizePermission('procurement.view', 'projects.view'), validate(listRequisitionsSchema), asyncHandler(async (req, res) => {
+router.get('/requisitions', authorizePermission(...READ_PERMISSIONS.purchaseRequisitions), validate(listRequisitionsSchema), asyncHandler(async (req, res) => {
   const { status, projectId, priority, search, page, limit } = req.query as z.infer<typeof listRequisitionsSchema>['query'];
 
   const result = await ProcurementService.getRequisitions({
@@ -55,7 +57,7 @@ router.get('/requisitions', authorizePermission('procurement.view', 'projects.vi
  * GET /api/procurement/requisitions/:id
  * Get single requisition
  */
-router.get('/requisitions/:id', authorizePermission('procurement.view', 'projects.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.get('/requisitions/:id', authorizePermission(...READ_PERMISSIONS.purchaseRequisitions), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const requisition = await ProcurementService.getRequisitionById(id);
   res.json({ success: true, data: requisition });
@@ -63,9 +65,10 @@ router.get('/requisitions/:id', authorizePermission('procurement.view', 'project
 
 /**
  * POST /api/procurement/requisitions
- * Create purchase requisition
+ * Create purchase requisition. v9.0.348 (TD-693): create, convert to orders, consolidate and deliver take the
+ * Idempotency-Key the browser sends, so a repeated submission replays the first response instead of running again.
  */
-router.post('/requisitions', authorizePermission('procurement.create', 'projects.edit'), validate(createRequisitionSchema), asyncHandler(async (req, res) => {
+router.post('/requisitions', authorizePermission('procurement.create', 'projects.edit'), idempotency({ scope: 'procurement' }), validate(createRequisitionSchema), asyncHandler(async (req, res) => {
   const created = await ProcurementService.createRequisition(req.body, {
     id: req.user!.id,
     username: req.user!.username,
@@ -136,7 +139,7 @@ router.post('/requisitions/:id/workflow-action', authorizePermission('procuremen
  * POST /api/procurement/requisitions/:id/convert-to-orders
  * Split & convert requisition into purchase documents
  */
-router.post('/requisitions/:id/convert-to-orders', authorizePermission('procurement.order'), validate(convertToOrdersSchema), asyncHandler(async (req, res) => {
+router.post('/requisitions/:id/convert-to-orders', authorizePermission('procurement.order'), idempotency({ scope: 'procurement' }), validate(convertToOrdersSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const { orderGroups, closeRequisition, closureReason, overOrderReason, notes } = req.body;
 
@@ -165,7 +168,7 @@ router.post('/requisitions/:id/convert-to-orders', authorizePermission('procurem
  * POST /api/procurement/consolidate
  * Consolidate multiple requisitions
  */
-router.post('/consolidate', authorizePermission('procurement.manage'), validate(consolidateRequisitionsSchema), asyncHandler(async (req, res) => {
+router.post('/consolidate', authorizePermission('procurement.manage'), idempotency({ scope: 'procurement' }), validate(consolidateRequisitionsSchema), asyncHandler(async (req, res) => {
   const { requisitionIds, title } = req.body;
 
   const result = await ProcurementService.consolidateRequisitions(requisitionIds, title, {
@@ -176,15 +179,15 @@ router.post('/consolidate', authorizePermission('procurement.manage'), validate(
   res.status(201).json({
     success: true,
     data: result,
-    message: `درخواست تجمیع‌شده ${result.code} با موفقیت ایجاد گردید.`
+    message: `درخواست تجمیعی ${result.code} ثبت شد و درخواست‌های منبع بسته شدند.`
   });
 }));
 
 /**
  * GET /api/procurement/orders
- * List purchase orders / invoices created through procurement
+ * v9.0.347 (TD-691): only documents linked to a requisition (documents.procurement_requisition_id), paged in SQL
  */
-router.get('/orders', authorizePermission('procurement.view', 'projects.view'), validate(listProcurementOrdersSchema), asyncHandler(async (req, res) => {
+router.get('/orders', authorizePermission(...READ_PERMISSIONS.procurementOrders), validate(listProcurementOrdersSchema), asyncHandler(async (req, res) => {
   const { status, requisitionId, search, page, limit } = req.query as z.infer<typeof listProcurementOrdersSchema>['query'];
 
   const result = await ProcurementService.getProcurementOrders({
@@ -206,9 +209,10 @@ router.get('/orders', authorizePermission('procurement.view', 'projects.view'), 
 
 /**
  * POST /api/procurement/orders/:id/deliver
- * Deliver a purchase order/invoice to warehouse (finalizes document, increases stock, updates Kardex)
+ * Deliver a procurement order to the warehouse (finalizes it, moves stock in, updates Kardex); v9.0.347 (TD-691): only
+ * a document linked to a requisition, else 422 PROCUREMENT_ORDER_NOT_LINKED
  */
-router.post('/orders/:id/deliver', authorizePermission('procurement.order', 'procurement.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.post('/orders/:id/deliver', authorizePermission('procurement.order', 'procurement.manage'), idempotency({ scope: 'procurement' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
   const result = await ProcurementService.deliverOrderToWarehouse(id, {

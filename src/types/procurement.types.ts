@@ -55,7 +55,7 @@ export interface PurchaseRequisition {
   project_code?: string;
   projectName?: string;
   project_name?: string;
-  status: 'pending' | 'under_review' | 'manager_approval' | 'ordered' | 'received' | 'rejected' | 'cancelled' | 'approved' | 'completed';
+  status: 'pending' | 'under_review' | 'manager_approval' | 'ordered' | 'received' | 'rejected' | 'cancelled' | 'approved' | 'completed' | 'consolidated';
   priority: 'urgent' | 'high' | 'normal' | 'low';
   requiredDate?: string;
   required_date?: string;
@@ -74,6 +74,9 @@ export interface PurchaseRequisition {
   totalEstimatedAmount?: number;
   total_estimated_amount?: number;
   items: PurchaseRequisitionItemRow[];
+  /** v9.0.349 (TD-694): درخواستی که این درخواست در آن تجمیع شد (وضعیت `consolidated`) و کد آن */
+  consolidatedIntoId?: number | null;
+  consolidatedIntoCode?: string | null;
   isDeleted?: number;
   is_deleted?: number;
   createdAt?: string;

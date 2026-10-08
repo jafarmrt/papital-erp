@@ -143,6 +143,11 @@ export const READ_PERMISSIONS = {
   ],
   /** درخواست‌های خرید (بی کد نقش؛ مدل مجوز بسته ۲) */
   purchaseRequisitions: ['procurement.view', 'projects.view'],
+  /**
+   * سفارش‌های خرید تدارکات (`GET /procurement/orders`): همان خوانندگان درخواست خرید، چون فهرست فقط سفارش‌هایی را دارد که
+   * برای درخواستی صادر شده‌اند (v9.0.347، TD-691، ت۲)؛ پیش‌تر هر رسید انبار با قیمت و تأمین‌کننده در آن بود
+   */
+  procurementOrders: ['procurement.view', 'projects.view'],
 } as const satisfies Record<string, readonly string[]>;
 
 /**

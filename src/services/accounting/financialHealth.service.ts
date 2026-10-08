@@ -27,6 +27,8 @@ import {
 import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
 import { buildPayslipDeductionsHealthTest, findPayslipDeductionsInPrepayments } from './payrollDeductionHealth.js';
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
+import { buildProcurementOrderLinkHealthTest, findUnresolvedProcurementOrderLinks } from '../procurement/procurementOrderLinks.js';
+import { buildConsolidationSourcesHealthTest, findOpenLegacyConsolidationSources } from '../procurement/consolidationSourceHealth.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from '../documents/documentParty.js';
 import { buildDocumentIntegrityHealthTest, findDocumentIntegrityGaps } from '../documents/documentConstraintHealth.js';
@@ -1199,6 +1201,14 @@ export class FinancialHealthService {
     tests.push(buildUnlinkedPartyDocumentHealthTest(await findUnlinkedPartyDocuments()));
     // آزمون ۴۱: v9.0.338 (TD-786) قید پایگاه‌داده سند و ردیف سند اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)
     tests.push(buildDocumentIntegrityHealthTest(await findDocumentIntegrityGaps()));
+    // آزمون ۴۲: v9.0.347 (TD-691) سند با برچسب یا ردیف درخواست خرید که پیوند سفارش تدارکاتش روشن نیست (فقط فهرست)
+    const procurementOrderLinkTest = buildProcurementOrderLinkHealthTest(await findUnresolvedProcurementOrderLinks());
+    overallScore += procurementOrderLinkTest.scoreImpact;
+    tests.push(procurementOrderLinkTest);
+    // آزمون ۴۳: v9.0.349 (TD-694) منبع تجمیع قدیمی که هنوز باز است و می‌تواند دوباره سفارش داده شود (فقط فهرست)
+    const consolidationSourcesTest = buildConsolidationSourcesHealthTest(await findOpenLegacyConsolidationSources());
+    overallScore += consolidationSourcesTest.scoreImpact;
+    tests.push(consolidationSourcesTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
