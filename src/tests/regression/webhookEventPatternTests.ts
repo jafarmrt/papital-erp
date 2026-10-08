@@ -12,7 +12,7 @@ import { webhookDeliveries, webhookSubscriptions } from '../../db/schema.js';
  * Package 15 (events and integrations), TD-707 / B15-05 (decision t3 a): webhook subscriptions use the event types the
  * server publishes. Migration *_webhook_event_patterns converts stored dotted patterns with a mapping table and records
  * the old list, deactivates a subscription left with no pattern or addressed to a documentation domain, and the service
- * refuses any other pattern. On v9.0.379 the migration did not exist, a dotted pattern was accepted and a subscription
+ * refuses any other pattern. On v9.0.404 the migration did not exist, a dotted pattern was accepted and a subscription
  * to «document.invoiced» received nothing for an approved invoice.
  */
 export async function runWebhookEventPatternTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -20,7 +20,7 @@ export async function runWebhookEventPatternTests(shouldRun: (id: string, ...ext
   const id = 'reg_webhook_event_patterns_real_types_td_707';
   if (!shouldRun(id, 'td707', 'b15-05', 'webhook', 'package15')) return results;
 
-  const name = 'v9.0.380: webhook subscriptions are converted to and accept only published event types, and a converted one receives the invoice event (TD-707)';
+  const name = 'v9.0.405: webhook subscriptions are converted to and accept only published event types, and a converted one receives the invoice event (TD-707)';
   const tStart = Date.now();
   const tag = `td707_${Date.now()}`;
   const savedPort = process.env.PORT;

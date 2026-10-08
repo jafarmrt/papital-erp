@@ -629,7 +629,7 @@ export class DocumentCreationService {
             documentId: docId,
             refNumber: String(finalRefNumber),
             docType,
-            // v9.0.382 (TD-713): the payable amount of the stored document (the event used to carry no amount)
+            // v9.0.407 (TD-713): the payable amount of the stored document (the event used to carry no amount)
             ...await documentEventAmounts(tx, docId),
             // v9.0.337 (TD-785): نام ذخیره‌شده خریدار (پیش‌تر فقط `buyer_name`؛ با `buyerName` یا شناسه طرف حساب خالی بود)
             buyerName: party.buyerName || '',

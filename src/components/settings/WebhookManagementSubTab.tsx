@@ -59,7 +59,7 @@ interface WebhookStats {
   successRate: number;
 }
 
-// v9.0.380 (TD-707, decision t3 a): only the event types the server publishes, with Persian labels, plus «همه رویدادها»;
+// v9.0.405 (TD-707, decision t3 a): only the event types the server publishes, with Persian labels, plus «همه رویدادها»;
 // the dotted presets (document.invoiced, inventory.* …) matched no event
 const AVAILABLE_EVENT_PRESETS = [
   { pattern: ALL_EVENTS_PATTERN, label: ALL_EVENTS_LABEL },

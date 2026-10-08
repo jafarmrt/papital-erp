@@ -34,7 +34,7 @@ interface RuleEditorModalProps {
   initialRule?: RuleFormData | null;
 }
 
-// v9.0.381 (TD-726, decision t3 a): only the event types the server publishes (PUBLISHED_EVENT_TYPES), with Persian labels,
+// v9.0.406 (TD-726, decision t3 a): only the event types the server publishes (PUBLISHED_EVENT_TYPES), with Persian labels,
 // and «همه رویدادها»; the editor used to offer InvoiceCancelled, ChequeStatusChanged, ProjectStageCompleted and
 // CustomerCreated, which nothing publishes, so such a rule never ran
 const EVENT_TYPE_GROUPS = publishedEventTypesByCategory();
@@ -98,7 +98,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
   const fieldOptions = eventFieldOptions(formData.eventType);
   const canInsertIntoMessage = formData.actionType === 'in_app_notification';
   const retiredAction = isRetiredRuleActionType(formData.actionType);
-  // v9.0.384 (TD-727): a numeric comparison takes Persian digits and thousands separators and is saved as a number
+  // v9.0.409 (TD-727): a numeric comparison takes Persian digits and thousands separators and is saved as a number
   const conditionChecks = formData.conditionsJson.map(cond =>
     checkRuleConditionValue(cond.operator, cond.value, fieldOptions.find(f => f.path === cond.field)?.label ?? cond.field));
   const hasConditionError = conditionChecks.some(c => c.error !== null);

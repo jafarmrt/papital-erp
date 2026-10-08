@@ -1,5 +1,5 @@
 /**
- * v9.0.380 (TD-707، B15-05، تصمیم ت۳ الف): فهرست یگانه نوع رویدادهایی که سرور واقعاً منتشر می‌کند، با برچسب فارسی.
+ * v9.0.405 (TD-707، B15-05، تصمیم ت۳ الف): فهرست یگانه نوع رویدادهایی که سرور واقعاً منتشر می‌کند، با برچسب فارسی.
  * فرم اشتراک وب‌هوک و ویرایشگر قانون فقط همین‌ها و «همه رویدادها» را پیشنهاد می‌کنند و سرور الگوی دیگری را نمی‌پذیرد.
  * پیش‌تر رابط الگوهای نقطه‌دار (`document.invoiced`، `inventory.*` …) پیشنهاد می‌کرد که با هیچ رویدادی جور نمی‌شدند.
  * آزمون Vitest `eventTypeCatalog.test.ts` می‌سنجد که هر نوع این فهرست جایی در کد سرور منتشر می‌شود و هر نوعی که منتشر
@@ -49,7 +49,7 @@ export function eventTypeLabel(value: string): string {
   return PUBLISHED_EVENT_TYPES.find(t => t.value === value)?.label ?? value;
 }
 
-/** نوع‌های منتشرشونده به ترتیب دسته، برای گروه‌های فهرست انتخاب (v9.0.381، TD-726) */
+/** نوع‌های منتشرشونده به ترتیب دسته، برای گروه‌های فهرست انتخاب (v9.0.406، TD-726) */
 export function publishedEventTypesByCategory(): { category: string; types: EventTypeOption[] }[] {
   const groups: { category: string; types: EventTypeOption[] }[] = [];
   for (const t of PUBLISHED_EVENT_TYPES) {

@@ -33,7 +33,6 @@ export const LOGIN_ONLY_ROUTES = new Set([
   'GET /api/notifications', 'GET /api/notifications/unread-count', 'PUT /api/notifications/:id/read',
   'PUT /api/notifications/read-all', 'DELETE /api/notifications/:id',
   'GET /api/piecework/payrolls/mine',
-  'POST /api/pending-materials',
   'POST /api/drafts', 'GET /api/drafts/:entityType', 'GET /api/drafts', 'DELETE /api/drafts/:entityType', 'DELETE /api/drafts/id/:id',
   'GET /api/attachments/:id',
 ]);
@@ -355,7 +354,9 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         const list = (row?.ic as { reservedItems?: Array<{ itemId?: number; reservedQty?: number }> } | null)?.reservedItems;
         return Array.isArray(list) ? list : [];
       };
-      const put = (inventoryControl: object) => send(planner.session, 'put', `/api/projects/${project.id}`, { inventory_control: inventoryControl });
+      // v9.0.385 (TD-742): each save sends the stored project version
+      const versionOf = async () => (await orm.select({ v: productionProjects.version }).from(productionProjects).where(eq(productionProjects.id, project.id)))[0]?.v;
+      const put = async (inventoryControl: object) => send(planner.session, 'put', `/api/projects/${project.id}`, { inventory_control: inventoryControl, version: await versionOf() });
       try {
         const draft = await put({ sections, isFinalized: false, reservedItems: forged });
         const afterDraft = await reservedOf();

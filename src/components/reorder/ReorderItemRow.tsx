@@ -1,7 +1,7 @@
 import { CheckSquare, Square, Package } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber } from '../../utils';
 import { SafeImage } from '../SafeImage';
-import { stockPercentOf, type ReorderItem } from '../../lib/reorderAlerts/reorderItems';
+import { freeStockOf, stockPercentOf, type ReorderItem } from '../../lib/reorderAlerts/reorderItems';
 import type { ReorderSectionTheme } from './reorderSectionThemes';
 
 interface ReorderItemRowProps {
@@ -58,8 +58,13 @@ export function ReorderItemRow({ item, theme, isSelected, onToggle, onAction, on
       <td className="p-3 text-center">
         <div className="inline-flex flex-col items-center">
           <span className={`font-mono font-extrabold text-sm ${item.is_zero_stock ? 'text-rose-600' : theme.stockText}`}>
-            {formatPersianNumber(item.current_stock)} {item.unit}
+            {formatPersianNumber(freeStockOf(item))} {item.unit}
           </span>
+          {Number(item.reserved_qty) > 0 && (
+            <span className="text-[10px] text-slate-500 mt-0.5">
+              موجودی {formatPersianNumber(item.current_stock)}، رزروشده {formatPersianNumber(Number(item.reserved_qty))}
+            </span>
+          )}
           <div className="w-16 bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1">
             <div
               style={{ width: `${stockPercent}%` }}
@@ -67,6 +72,10 @@ export function ReorderItemRow({ item, theme, isSelected, onToggle, onAction, on
             />
           </div>
         </div>
+      </td>
+
+      <td className="p-3 text-center font-mono text-slate-600">
+        {Number(item.in_transit_qty) > 0 ? `${formatPersianNumber(Number(item.in_transit_qty))} ${item.unit}` : '-'}
       </td>
 
       <td className="p-3 text-center font-mono font-bold text-slate-700">

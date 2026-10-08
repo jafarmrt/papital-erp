@@ -1,5 +1,5 @@
 /**
- * v9.0.382 (TD-713, B15-11): the fields the rule editor offers for an event are the fields of its real payload: the
+ * v9.0.407 (TD-713, B15-11): the fields the rule editor offers for an event are the fields of its real payload: the
  * invoice and purchase events carry the payable amount, every published type has its fields, and a type nothing
  * publishes has none.
  */

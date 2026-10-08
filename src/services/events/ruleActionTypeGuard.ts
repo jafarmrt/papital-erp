@@ -18,7 +18,7 @@ export function assertRuleActionTypeAllowed(actionType: unknown, options: { acti
 export const RULE_EVENT_TYPE_UNKNOWN = 'RULE_EVENT_TYPE_UNKNOWN';
 
 /**
- * v9.0.381 (TD-726، B15-24، تصمیم ت۳ الف): رویداد فعال‌کننده قانون «همه رویدادها» یا یکی از نوع‌هایی است که سامانه منتشر
+ * v9.0.406 (TD-726، B15-24، تصمیم ت۳ الف): رویداد فعال‌کننده قانون «همه رویدادها» یا یکی از نوع‌هایی است که سامانه منتشر
  * می‌کند (`PUBLISHED_EVENT_TYPES`). پیش‌تر ویرایشگر `InvoiceCancelled`، `ChequeStatusChanged`، `ProjectStageCompleted` و
  * `CustomerCreated` را پیشنهاد می‌کرد که هیچ‌جا منتشر نمی‌شوند و قانون آن‌ها هرگز اجرا نمی‌شد. قانون پیشینی با چنین رویدادی تا
  * وقتی غیرفعال است ویرایش می‌شود، ولی فعال نمی‌ماند و فعال نمی‌شود تا رویدادش عوض شود.

@@ -376,7 +376,7 @@ export function AutoActionsSubTab() {
                               {rule.name}
                             </span>
                             {getActionBadge(rule.actionType)}
-                            {/* v9.0.381 (TD-726): the event's Persian label; a type nothing publishes is marked */}
+                            {/* v9.0.406 (TD-726): the event's Persian label; a type nothing publishes is marked */}
                             <span title={rule.eventType} className={`text-[11px] px-2 py-0.5 rounded-md ${isSubscribableEventPattern(rule.eventType) ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'}`}>
                               {isSubscribableEventPattern(rule.eventType) ? eventTypeLabel(rule.eventType) : `${rule.eventType} (منتشر نمی‌شود)`}
                             </span>
@@ -509,7 +509,7 @@ export function AutoActionsSubTab() {
                             <span className="font-bold">خطای اجرا:</span> {log.errorMessage}
                           </div>
                         )}
-                        {/* v9.0.383 (TD-721): the stored outcome of the action (the log keeps no request copy) */}
+                        {/* v9.0.408 (TD-721): the stored outcome of the action (the log keeps no request copy) */}
                         <div className="font-mono text-[11px]">
                           <span className="text-slate-500 font-sans text-xs font-bold block mb-1">نتیجه اقدام:</span>
                           <div className="bg-slate-900 text-slate-100 p-3 rounded-xl overflow-x-auto text-left dir-ltr">

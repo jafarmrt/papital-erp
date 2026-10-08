@@ -54,6 +54,8 @@ export interface PendingMaterial {
   thumbnail?: string;
   rejectionReason?: string;
   rejection_reason?: string;
+  /** v9.0.397 (TD-825): the item the approval made */
+  itemId?: number | null;
   createdAt?: string;
   created_at?: string;
 }

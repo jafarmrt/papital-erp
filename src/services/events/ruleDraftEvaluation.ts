@@ -38,7 +38,7 @@ export async function evaluateRuleDraft(draft: unknown): Promise<RuleDraftEvalua
 
   const eventType = text(rule.eventType);
   if (!eventType) errors.push('نوع رویداد قانون تعیین نشده است.');
-  // v9.0.381 (TD-726): only «*» and the event types the server publishes; a declared but never published type never fires
+  // v9.0.406 (TD-726): only «*» and the event types the server publishes; a declared but never published type never fires
   else if (!isSubscribableEventPattern(eventType)) errors.push(`رویداد «${eventType}» در سامانه منتشر نمی‌شود و قانون آن هرگز اجرا نمی‌شود.`);
 
   const actionType = rule.actionType;

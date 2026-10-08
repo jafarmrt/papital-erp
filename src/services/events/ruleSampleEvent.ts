@@ -17,7 +17,7 @@ export function ruleSampleEvent(eventType: string): BaseDomainEvent {
       refNumber: 'INV-1405-TEST',
       docType: 'invoice',
       buyerName: 'مشتری آزمایشی سیستم',
-      // v9.0.382 (TD-713): the amounts a real invoice event carries
+      // v9.0.407 (TD-713): the amounts a real invoice event carries
       totalAmount: 150000000,
       netAmount: 137614679,
       vatAmount: 12385321,

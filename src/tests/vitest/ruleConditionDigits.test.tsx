@@ -1,5 +1,5 @@
 /**
- * v9.0.384 (TD-727, B15-25 / FE-23): a rule condition value typed with Persian digits or thousands separators matches. The
+ * v9.0.409 (TD-727, B15-25 / FE-23): a rule condition value typed with Persian digits or thousands separators matches. The
  * engine compared with `Number(value)`, so for an amount of 50,000,000 the conditions `gt "۱۰۰۰۰۰۰"`, `gt "1,000,000"` and
  * `gt "۱٬۰۰۰٬۰۰۰"` (and their `lt`) were all false and the rule never ran. The rule editor now saves a numeric comparison
  * as a number and refuses a value that is not a number.

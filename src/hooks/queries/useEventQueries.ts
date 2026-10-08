@@ -66,7 +66,7 @@ export interface ActionRule {
   updatedAt: string;
 }
 
-// v9.0.383 (TD-721): the server's own contract (src/lib/events/actionLogContract.ts)
+// v9.0.408 (TD-721): the server's own contract (src/lib/events/actionLogContract.ts)
 export type ActionLog = ActionLogRow;
 export type ActionStats = ActionEngineStats;
 
@@ -154,7 +154,7 @@ export function useActionLogsQuery(limit: number = 50, options?: { enabled?: boo
   return useQuery<{ logs: ActionLog[]; total: number }>({
     queryKey: QUERY_KEYS.events.actionLogs(limit),
     queryFn: async ({ signal }) => {
-      // v9.0.383 (TD-721): the server sends { data, total }; the hook used to read `logs`, so the list was always empty
+      // v9.0.408 (TD-721): the server sends { data, total }; the hook used to read `logs`, so the list was always empty
       const res = await fetchJson<Partial<ActionLogPage>>(`/events/action-logs?limit=${limit}`, { signal });
       const logs = Array.isArray(res?.data) ? res.data : [];
       return { logs, total: Number(res?.total ?? logs.length) };

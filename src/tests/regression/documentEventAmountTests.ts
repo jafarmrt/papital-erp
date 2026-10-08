@@ -5,7 +5,7 @@ import { brief, fixture } from './documentEntryTests.js';
 /**
  * Package 15 (events and integrations), TD-713 / B15-11: the sales and purchase document events carry the document's
  * payable amount (net of active lines + VAT + service charge, in the document currency, and in rials at its rate), read
- * from the stored document in the transaction that records the event. On v9.0.381 the invoice event payload had only
+ * from the stored document in the transaction that records the event. On v9.0.406 the invoice event payload had only
  * documentId, refNumber, docType, buyerName, currency, itemCount and status, so the seeded rule `payload.totalAmount gt 0`
  * never ran and the audit wrote «به مبلغ undefined».
  */
@@ -14,7 +14,7 @@ export async function runDocumentEventAmountTests(shouldRun: ShouldRun): Promise
   const id = 'reg_document_event_payable_amount_td_713';
   if (!shouldRun(id, 'td713', 'b15-11', 'events', 'documents', 'package15')) return results;
 
-  const name = 'v9.0.382: invoice and purchase events carry the payable amount (net + VAT + service) in the document currency and in rials, on create and on finalize (TD-713)';
+  const name = 'v9.0.407: invoice and purchase events carry the payable amount (net + VAT + service) in the document currency and in rials, on create and on finalize (TD-713)';
   const tStart = Date.now();
   let h: Harness | undefined;
   try {

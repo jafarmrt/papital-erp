@@ -13,6 +13,12 @@ export interface ReorderItem {
   image?: string;
   thumbnail?: string;
   current_stock: number;
+  /** v9.0.404 (TD-843): reserved by sales proformas and finalized projects */
+  reserved_qty?: number;
+  /** v9.0.404 (TD-843): current_stock − reserved_qty; the alert, the deficit and «بی موجودی» read it */
+  free_stock?: number;
+  /** v9.0.404 (TD-843): on open purchase documents (draft or proforma); shown only */
+  in_transit_qty?: number;
   reorder_point: number;
   weighted_average_cost: number;
   deficit: number;
@@ -29,6 +35,7 @@ export interface ReorderModalItem {
   name: string;
   code: string;
   unit: string;
+  /** v9.0.404 (TD-843): the alert's free stock (stock − reservations) */
   current_stock: number;
   reorder_point: number;
   deficit: number;
@@ -48,6 +55,28 @@ export interface ReorderProjectProduct {
 }
 
 export type StockStatusFilter = 'all' | 'zero' | 'below_reorder';
+
+/**
+ * v9.0.401 (TD-827، یافته B07-11، تصمیم ت۸): هر کالای هشدار یا «بی موجودی» است یا «زیر نقطه سفارش» (موجودی مثبت و حداکثر
+ * نقطه سفارش، چون سرور فقط همین‌ها را می‌فرستد) و پالایش وضعیت همین را می‌سنجد. پیش‌تر «زیر آستانه» کالای دارای موجودی را
+ * کنار می‌گذاشت و همان کالاهای بی موجودی را نشان می‌داد.
+ */
+export const STOCK_STATUS_FILTER_LABELS: Record<StockStatusFilter, string> = {
+  all: 'همه',
+  zero: 'بی موجودی',
+  below_reorder: 'زیر نقطه سفارش',
+};
+
+/**
+ * v9.0.404 (TD-843، تصمیم ت۷ «الف»): موجودی آزاد (موجودی − رزروها) که هشدار با آن سنجیده می‌شود؛ پاسخ پیش از این نسخه
+ * فقط موجودی کل دارد
+ */
+export const freeStockOf = (item: Pick<ReorderItem, 'free_stock' | 'current_stock'>): number =>
+  Number(item.free_stock ?? item.current_stock);
+
+export function stockStatusOf(item: Pick<ReorderItem, 'is_zero_stock' | 'current_stock' | 'free_stock'>): Exclude<StockStatusFilter, 'all'> {
+  return item.is_zero_stock || !(freeStockOf(item) > 0) ? 'zero' : 'below_reorder';
+}
 
 export interface ReorderFilters {
   stockStatusFilter: StockStatusFilter;
@@ -73,8 +102,7 @@ export function filterReorderItems(items: ReorderItem[], { stockStatusFilter, se
   const safeItems = Array.isArray(items) ? items : [];
   return safeItems.filter(it => {
     // Stock status filter
-    if (stockStatusFilter === 'zero' && !it.is_zero_stock) return false;
-    if (stockStatusFilter === 'below_reorder' && it.current_stock > 0) return false;
+    if (stockStatusFilter !== 'all' && stockStatusOf(it) !== stockStatusFilter) return false;
 
     // Category filter
     if (selectedCategory !== 'all' && it.category !== selectedCategory) return false;
@@ -102,7 +130,7 @@ export function toPurchaseModalItem(item: ReorderItem): ReorderModalItem {
     name: item.name,
     code: item.code,
     unit: item.unit,
-    current_stock: item.current_stock,
+    current_stock: freeStockOf(item),
     reorder_point: item.reorder_point,
     deficit: item.deficit,
     weighted_average_cost: item.weighted_average_cost,
@@ -125,6 +153,6 @@ export function toProjectProduct(item: ReorderItem): ReorderProjectProduct {
 /** درصد پر شدن نوار موجودی نسبت به نقطه سفارش */
 export function stockPercentOf(item: ReorderItem): number {
   return item.reorder_point > 0
-    ? Math.min(100, Math.round((item.current_stock / item.reorder_point) * 100))
+    ? Math.max(0, Math.min(100, Math.round((freeStockOf(item) / item.reorder_point) * 100)))
     : 0;
 }

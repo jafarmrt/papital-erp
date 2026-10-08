@@ -7,6 +7,8 @@ export interface ProjectModalProps {
   customersList: Customer[];
   itemsList: Item[];
   onSuccess: () => void;
+  /** v9.0.384 (TD-740): در ویرایش، دکمه بخش مراحل در جزئیات پروژه را باز می‌کند */
+  onOpenStages?: (project: ProductionProject) => void;
   initialProducts?: Array<{
     item_id: number;
     item_code: string;

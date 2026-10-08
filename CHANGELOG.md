@@ -19,20 +19,95 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.384 — Rule Conditions Read Persian Digits
+### v9.0.409 — Rule Conditions Read Persian Digits
 - **Rule condition digits (TD-727):** the rule engine compared with Number(value), so a condition value typed with Persian digits or thousands separators (`gt "۱٬۰۰۰٬۰۰۰"`) never matched; the engine now reads both sides with `normalizeDecimalString` for numeric comparisons and equality with a number, and the rule editor saves such a value as a number and refuses one that is not a number.
 
-### v9.0.383 — Rule Execution Log and Stats Are Shown
+### v9.0.408 — Rule Execution Log and Stats Are Shown
 - **Rule execution log (TD-721):** the «لاگ‌های اجرا» view of the automatic actions tab was always empty and its cards always 0, because the hook read `logs` / `totalLogs` / `avgDurationMs` while the server sends `data` / `logsTotal` / `avgLatencyMs`; both now share one contract (`actionLogContract.ts`) and each row shows the rule, event, status, duration and result.
 
-### v9.0.382 — Invoice and Purchase Events Carry the Payable Amount
+### v9.0.407 — Invoice and Purchase Events Carry the Payable Amount
 - **Document event amounts (TD-713):** the invoice event carried no amount, so a rule on payload.totalAmount never ran and the audit wrote «به مبلغ undefined»; invoice and purchase events now carry the payable amount (net of lines + VAT + service charge) in the document currency and in rials, on create and on finalize, and the rule editor offers these fields.
 
-### v9.0.381 — Rules Trigger Only on Published Event Types
+### v9.0.406 — Rules Trigger Only on Published Event Types
 - **Rule trigger events (TD-726):** the rule editor offered InvoiceCancelled, ChequeStatusChanged, ProjectStageCompleted and CustomerCreated, which nothing publishes, so such a rule was saved active and never ran; the editor now offers the published types with Persian labels and «همه رویدادها», the server refuses another type on create, switch, activation and active save (422), and stored rules of such types are listed by the health check.
 
-### v9.0.380 — Webhook Subscriptions Use the Published Event Types
+### v9.0.405 — Webhook Subscriptions Use the Published Event Types
 - **Webhook event patterns (TD-707):** the webhook form offered dotted patterns (document.invoiced, inventory.*) that matched no event the server publishes, so such subscriptions received nothing; the form now offers only the published types with Persian labels and «همه رویدادها», the server refuses any other pattern (422), stored subscriptions were converted with a mapping table (old lists recorded, unmappable or example.com ones deactivated), and the two demo subscriptions are no longer seeded.
+
+### v9.0.404 — Reorder Alert on Free Stock
+- **Reorder alerts (TD-843, decision t7):** free stock (stock minus reservations) is compared with the reorder point; open purchases are shown as «در راه».
+
+### v9.0.403 — Reorder Purchase Receipt at Price Zero
+- **Reorder alerts (TD-830, B07-14):** a final receipt at price zero needs «کالای اهدایی» and is refused for an item without cost; the warehouse and the Jalali date can be chosen.
+
+### v9.0.402 — Reserved Items Excel Export and Source Links
+- **Reserved items report (TD-828, B07-12):** «خروجی اکسل» writes a real xlsx file with a Persian name and Jalali date; source links open the searched documents list or the project inventory control.
+
+### v9.0.401 — Below Reorder Point Filter
+- **Reorder alerts (TD-827, B07-11):** the «زیر نقطه سفارش» filter shows items with stock up to the reorder point instead of the out-of-stock ones.
+
+### v9.0.400 — Reserved Items by Reader
+- **Reserved items report (TD-829, B07-13):** cost and value go only to item cost readers and a proforma buyer only to documents.view holders; other readers see quantities and sources.
+
+### v9.0.399 — Reserved Items at Cost
+- **Reserved items report (TD-823, B07-07):** every reservation is valued at quantity × the item WAC in IRR, for proformas in any currency and projects alike; the proforma sale price is no longer reported.
+
+### v9.0.398 — Project Material Requests Through the Queue
+- **Raw material requests (TD-826, B07-10):** project control sends a request instead of creating an item; a request starts the pending-material workflow, whose approve and reject steps review it, and a direct review closes the open instance.
+
+### v9.0.397 — Pending Material Review Once
+- **Raw material requests (TD-825, B07-09):** sending needs `pending_materials.create`; approve, reject, edit and delete run under the request row lock and only from pending; the item is made by the item service and linked on the request (migration 0087).
+
+### v9.0.396 — Pending Material Approval Body
+- **Raw material requests (TD-824, B07-08):** the approval and the edit of a request send one camelCase form; the route bodies are strict, so the old snake_case keys are a 400 instead of being dropped.
+
+### v9.0.395 — Scoped Reservation Reads
+- **Reservations (TD-831, B07-15):** the reservation report reads sales proforma lines in one joined query, only finalized projects with stored rows and only the items those rows name; scoped reads (exit gate, item list, online shop) read only what may reach their items.
+
+### v9.0.394 — Reservation Readers Fail Closed
+- **Reservations (TD-821, B07-05):** a stored project reservation row is read as text and a row that reaches no live item is skipped and listed by the financial health check; the item list, the online shop sync and the reservation report fail closed instead of showing zero reservations.
+
+### v9.0.393 — Setup Token Checked on Step 1
+- **Fix (TD-621, B01-41):** step 1 of the setup wizard needs the setup token, and a wrong token takes the wizard back to step 1 with the message under the token field; the password half was fixed by TD-532.
+
+### v9.0.392 — Setup Wizard and Health Page in Persian
+- **Fix (TD-622, B01-42, decision ت۸):** the setup wizard, the health page, its integrity check and the reset dialog show no English word or Latin digit; the company name has no default and is required by `POST /setup`, and the factory reset is confirmed by typing «حذف همه».
+
+### v9.0.391 — Event Queue Replay Asks First
+- **Fix (TD-623, B01-43, decision ت۸):** replaying the failed events or the events stuck in the send queue asks «… دوباره اجرا شوند؟» first, and each button shows only when its queue has events; the health answer carries `outbox.stuckCount`, counted with the reset's own condition.
+
+### v9.0.390 — Factory Reset Restores Event Rules and Subscriptions
+- **Fix (TD-620, B01-40):** after a factory reset the default workflows, event rules and webhook subscriptions are seeded again with the boot's `seedDefaultEngines`, so the low-stock alert works without a restart; the reset card names what is erased, what comes back and that roles are kept.
+
+### v9.0.389 — Storage Card Checks the Attachment Directory
+- **Fix (TD-619, B01-39):** the health page's storage card checks the attachment root (`ATTACHMENTS_DIR`) and the image uploads directory, each with its path, by permission only; it no longer writes a test file into `public/uploads` on every call or reports «writable» while attachments cannot be saved.
+
+### v9.0.388 — Health Page Reports a Failed Check as Unknown
+- **Fix (TD-593, B01-13):** the system health page measures the event queue, voucher balance and workflow separately; a failed query is `unknown` with null counts and a Persian message instead of zeros and `ok`, the constant `observability` field is gone, and the page shows «نامعلوم» with its own color.
+
+### v9.0.387 — Data Export Holds Every Promised Table
+- **Fix (TD-624, B01-44, decision ت۷):** the export reads one table list shared with the settings card (`DATA_EXPORT_TABLES`): project allocations and stage progress, pending materials, piecework tasks and rates, fiscal periods, item opening rows, attachment metadata, workflow tables and event rules were added; every other table is left out with a reason in the manifest, and Vitest fails on an unclassified table.
+
+### v9.0.386 — Streamed Zip Data Export
+- **Fix (TD-592, B01-12, decision ت۷):** the data export streams a zip with one NDJSON file per table, read in primary-key batches with back-pressure, and a manifest of row counts; the audit log comes only with `activityLogs=1` and a business-day range. Before, one unbounded `SELECT *` per table and one `res.json` (950,000 audit rows: 3 GiB of memory, `/health/live` waited 13 s).
+
+### v9.0.385 — Project Optimistic Lock
+- **Project Optimistic Lock (TD-742, decision t3 A):** two users saving one project overwrote each other silently; `PUT /projects/:id` now requires the `version` the form was built from (400 without it), refuses a stale one with 409 `OCC_CONFLICT`, and every save, matrix status change and delivery completion raises the version; the edit form and the project tabs send and track it.
+
+### v9.0.384 — Stages Read-Only in the Project Edit Form
+- **Stages Read-Only in the Project Edit Form (TD-740, decision t2 A):** stages edited in «ویرایش پروژه» answered 200 and were silently dropped; the edit form now shows them read-only with a button to the stages section of the project detail, sends no `initial_stages`, and `PUT /projects/:id` refuses stages with 422 `PROJECT_STAGES_READ_ONLY`.
+
+### v9.0.383 — Project and Stage Audit Rows
+- **Project and Stage Audit Rows (TD-757):** a project edit was logged with `details: {}` outside its transaction and stage add, edit and delete wrote no audit row; `projectAudit.ts` now logs the project edit with before and after of the changed fields and every stage write under «مرحله پروژه تولید» (retained), each with the write's `tx`.
+
+### v9.0.382 — One Clock for Stage Completion
+- **One Clock for Stage Completion (TD-756):** a stage edit wrote `completed_at` in UTC with Z while the matrix sync and the matrix tick wrote the Tehran wall clock without a zone (210 minutes apart); every path now writes the server UTC time (`systemNowUtcIso`) through `stageCompletedAt`, a completed stage keeps its time and a reopened stage has none.
+
+### v9.0.381 — Project Delivery and Quantity Input
+- **Project Delivery and Quantity Input (TD-741):** a delivery quantity in Persian digits or below zero answered 200 «با موفقیت افزوده شدند» with nothing recorded, a Persian-digit unit price fell back to the WAC and a Persian-digit project quantity was stored as NaN; delivery and project quantities and prices now go through `decimalInput`, an invalid line is 422 `PROJECT_DELIVERY_LINE_INVALID` and a non-positive project quantity 422 `PROJECT_QUANTITY_INVALID`.
+
+### v9.0.380 — Project Status and Priority Lists
+- **Project Status and Priority Lists (TD-754):** a project status or priority and a stage status were free text («Completed», «خیلی فوری» and «تمام» were stored, and such a project fell out of every status filter); they are now `z.enum` of the UI lists in `lib/projects/projectStatus.ts` (400 otherwise), and the financial health check lists legacy values (`project_status_values`) without rewriting them.
 
 ### v9.0.379 — Rule and Webhook Counters Under the Row Lock
 - **Rule and subscription counters (TD-718):** a rule's execution count and a webhook subscription's delivery counters were written from the row read before the action, so concurrent executions were lost (10 runs counted 3); they are now read under the row lock and written in the transaction of the attempt's log row.

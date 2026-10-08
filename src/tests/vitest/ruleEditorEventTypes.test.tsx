@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { RuleEditorModal, type RuleFormData } from '../../components/settings/RuleEditorModal';
 import { ALL_EVENTS_PATTERN, PUBLISHED_EVENT_TYPES } from '../../lib/events/eventTypeCatalog';
 
-// v9.0.381 (TD-726, B15-24 / FE-16, decision t3 a): the rule editor offers only «همه رویدادها» and the event types the
+// v9.0.406 (TD-726, B15-24 / FE-16, decision t3 a): the rule editor offers only «همه رویدادها» and the event types the
 // server publishes, with Persian labels; it used to offer InvoiceCancelled, ChequeStatusChanged, ProjectStageCompleted and
 // CustomerCreated, which nothing publishes. A stored rule of such a type shows the type and says it never runs.
 vi.mock('../../api', () => ({ fetchJson: vi.fn() }));

@@ -7,7 +7,7 @@ import { eventActionRules } from '../../db/schema.js';
 /**
  * Package 15 (events and integrations), TD-726 / B15-24 (decision t3 a): a rule's trigger event is «*» or a type the
  * server publishes. The editor used to offer InvoiceCancelled, ChequeStatusChanged, ProjectStageCompleted and
- * CustomerCreated, which nothing publishes, so such a rule was saved active and never ran. On v9.0.380 such rules were
+ * CustomerCreated, which nothing publishes, so such a rule was saved active and never ran. On v9.0.405 such rules were
  * created, renamed and activated with 200 and the draft evaluation accepted them, and nothing listed the stored ones.
  */
 export async function runRuleEventTypeTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -15,7 +15,7 @@ export async function runRuleEventTypeTests(shouldRun: (id: string, ...extra: st
   const id = 'reg_rule_event_type_published_only_td_726';
   if (!shouldRun(id, 'td726', 'b15-24', 'action-rule', 'package15')) return results;
 
-  const name = 'v9.0.381: a rule is created, kept active or activated only with an event type the server publishes, and stored ones are listed (TD-726)';
+  const name = 'v9.0.406: a rule is created, kept active or activated only with an event type the server publishes, and stored ones are listed (TD-726)';
   const tStart = Date.now();
   const tag = `td726_${Date.now()}`;
   try {

@@ -1,7 +1,8 @@
-import { Building2, List, Download, Database, Globe } from 'lucide-react';
+import { Building2, List, Globe } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { compressTo300KB } from '../../utils/imageCompression';
 import { RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../../lib/rialDisplay';
+import { DataExportCard } from './DataExportCard';
 
 const TIMEZONE_OPTIONS = [
   'Asia/Tehran',
@@ -240,28 +241,8 @@ export function GeneralSettingsTab({
         </div>
       </div>
 
-      {/* کارت پشتیبان‌گیری و خروجی دیتابیس */}
-      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 p-5 space-y-3 shadow-2xs">
-        <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-          <Database className="text-emerald-600" size={18} /> خروجی داده‌های کسب‌وکاری
-        </h3>
-        <p className="text-xs text-slate-600 leading-relaxed">
-          این فایل شامل اطلاعات کالاها، انبار، اسناد، مشتریان، پروژه‌ها، دفاتر حسابداری و کارمزدی برای گزارش‌گیری و بایگانی است. رمزهای عبور و کلیدهای محرمانه در آن ذخیره نمی‌شوند.
-        </p>
-        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
-          توجه: این فایل نسخه پشتیبان قابل بازگردانی نیست. پشتیبان کامل پایگاه‌داده باید توسط مدیر کارساز با اسکریپت پشتیبان‌گیری برنامه گرفته شود (راهنما در مستندات نصب).
-        </p>
-
-        <div className="pt-2">
-          <a
-            href="/api/export-backup"
-            download={`erp-data-export-${new Date().toISOString().split('T')[0]}.json`}
-            className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md w-full sm:w-auto inline-flex"
-          >
-            <Download size={18} /> دانلود خروجی داده‌ها
-          </a>
-        </div>
-      </div>
+      {/* v9.0.386 (TD-592): کارت خروجی داده‌ها، فقط برای مدیر سامانه */}
+      <DataExportCard />
 
       <div className="flex justify-end pt-4 border-t border-slate-200">
         <button
