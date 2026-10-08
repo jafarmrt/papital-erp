@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.389 — Inventory Control Presets in the Project
+- **Inventory Control Presets in the Project (TD-748):** preset sections keep their materials in `items`, which the project tab, purchase list, material progress and reservation never read (default preset: empty purchase list, 100% progress, no reservation); they now become project rows (`projectSectionsFromPreset`) in the tab and on the server before saving and reserving.
+
 ### v9.0.388 — Paged Project List
 - **Paged Project List (TD-743):** `GET /projects` returned every project with every JSON field twice (312 projects, 9.1 MB) and ignored `page`; it is now one summary page `{ data, total, page, limit, statusCounts }` filtered in SQL, details only in `GET /projects/:id`, and the projects page pages, filters on the server and opens the edit form with the fresh record.
 

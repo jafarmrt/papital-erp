@@ -22,11 +22,17 @@ import { useProjectVersion } from './useProjectVersion';
 import { directConversionRate } from '../lib/projects/unitConversion';
 import { storedReservationShortages } from '../lib/projects/projectReservationState';
 import type { ReservationShortage } from '../lib/projects/projectReservation';
+import { hasPresetShapedSections, projectSectionsFromPreset, type MaterialStockLookup } from '../lib/projects/inventoryControlSections';
+import { findProjectItemMatch } from '../lib/projects/projectItemMatch';
 
 /** پاسخ PUT /projects/:id؛ رزرو پروژه را سرور می‌نویسد (v8.0.58، TD-306) */
 interface SavedProjectInventory {
   inventory_control?: { finalizedAt?: string; reservedItems?: unknown[]; reservationShortages?: unknown[] };
 }
+
+/** v9.0.389 (TD-748): موجودی ماده الگو با قاعده مشترک تطبیق کالا */
+const materialStockLookup = (warehouseItems: readonly Item[]): MaterialStockLookup => material =>
+  findProjectItemMatch({ code: material.code, name: material.name }, warehouseItems)?.current_stock;
 
 const savedReservedItems = (saved: SavedProjectInventory | null | undefined): unknown[] =>
   Array.isArray(saved?.inventory_control?.reservedItems) ? saved.inventory_control.reservedItems : [];
@@ -112,11 +118,11 @@ export function useProjectInventory(
   }, [project]);
 
   // Main sections state
+  // v9.0.389 (TD-748): بخش الگو (مواد در items) به ردیف‌های پروژه برده می‌شود تا فهرست خرید، پیشرفت و رزرو آن را ببینند
   const [sections, setSections] = useState<ProjectInventoryControlSectionData[]>(() => {
-    if (project.inventory_control?.sections && project.inventory_control.sections.length > 0) {
-      return project.inventory_control.sections;
-    }
-    return DEFAULT_INVENTORY_CONTROL_SECTIONS as any;
+    const stored = project.inventory_control?.sections;
+    const source = Array.isArray(stored) && stored.length > 0 ? stored : DEFAULT_INVENTORY_CONTROL_SECTIONS;
+    return projectSectionsFromPreset(source, products, materialStockLookup(initialItemsList || []));
   });
 
   // Manual purchase items state
@@ -172,6 +178,7 @@ export function useProjectInventory(
           })
         ]);
 
+        const loadedItems: Item[] = itemsRes?.data && Array.isArray(itemsRes.data) ? itemsRes.data : (Array.isArray(itemsRes) ? itemsRes : []);
         if (itemsRes?.data && Array.isArray(itemsRes.data)) {
           setWarehouseItems(itemsRes.data);
         } else if (Array.isArray(itemsRes)) {
@@ -184,6 +191,7 @@ export function useProjectInventory(
           setAllCategories(catRes);
         }
 
+        let presets: unknown[] | null = null;
         if (settingsRes && Array.isArray(settingsRes)) {
           const invCtrlSetting = settingsRes.find((s: any) => s?.key === 'inventory_control_preset_sections');
           if (invCtrlSetting?.value) {
@@ -191,12 +199,17 @@ export function useProjectInventory(
               const parsed = JSON.parse(invCtrlSetting.value);
               if (Array.isArray(parsed) && parsed.length > 0) {
                 setPresetSections(parsed);
-                if (!project.inventory_control?.sections || project.inventory_control.sections.length === 0) {
-                  setSections(parsed);
-                }
+                presets = parsed;
               }
             } catch { /* تنظیمات خراب → پیش‌فرض‌ها باقی می‌مانند */ }
           }
+        }
+
+        // v9.0.389 (TD-748): پروژه بی بخش الگوی تنظیمات (یا پیش‌فرض) را می‌گیرد و بخش الگوی ذخیره‌شده ردیف پروژه؛ وضعیت هر ماده از موجودی
+        const stored = project.inventory_control?.sections;
+        const hasStored = Array.isArray(stored) && stored.length > 0;
+        if (!hasStored || hasPresetShapedSections(stored)) {
+          setSections(projectSectionsFromPreset(hasStored ? stored : (presets ?? DEFAULT_INVENTORY_CONTROL_SECTIONS), products, materialStockLookup(loadedItems)));
         }
       } catch (err: any) {
         if (err?.name === 'AbortError') return;
@@ -206,12 +219,12 @@ export function useProjectInventory(
     }
     void loadData();
     return () => { controller.abort(); };
-  }, [project.inventory_control]);
+  }, [project.inventory_control, products]);
 
   // Sync state if project changes
   useEffect(() => {
     if (project.inventory_control?.sections && project.inventory_control.sections.length > 0) {
-      setSections(project.inventory_control.sections);
+      setSections(projectSectionsFromPreset(project.inventory_control.sections, products));
     }
     if (project.inventory_control?.manualPurchaseItems) {
       setManualPurchaseItems(project.inventory_control.manualPurchaseItems);
@@ -220,7 +233,7 @@ export function useProjectInventory(
     setFinalizedAt(project.inventory_control?.finalizedAt);
     setReservedItems(Array.isArray(project.inventory_control?.reservedItems) ? project.inventory_control.reservedItems : []);
     setReservationShortages(storedReservationShortages(project.inventory_control));
-  }, [project]);
+  }, [project, products]);
 
   // Category selection handler for generating item code
   const handleCategoryChangeForCustom = async (catName: string) => {

@@ -8,6 +8,8 @@ import {
 import { ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
 import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { ValidationError } from '../../errors/customErrors.js';
+import { hasPresetShapedSections, projectSectionsFromPreset } from '../../lib/projects/inventoryControlSections.js';
+import { findProjectItemMatch } from '../../lib/projects/projectItemMatch.js';
 
 type InventoryControl = Record<string, unknown>;
 
@@ -72,18 +74,28 @@ export async function resolveServerInventoryControl(
   const wasFinal = prev.isFinalized === true;
   const nowFinal = rest.isFinalized === true;
 
+  const finalizing = nowFinal && !wasFinal;
+  // v9.0.373 (TD-819): ثبت نهایی‌های هم‌زمان پشت سر هم رزرو دیگران را می‌خوانند
+  if (finalizing) await executor.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.PROJECT_RESERVATION_FINALIZE}::bigint)`);
+  // v9.0.389 (TD-748): بخش الگو (مواد در `items`) با ردیف‌های پروژه ذخیره می‌شود تا رزرو و صفحه‌ها همان ردیف‌ها را بخوانند
+  const presetShaped = hasPresetShapedSections(rest.sections);
+  const stockItems: ReservationStockItem[] = finalizing || presetShaped
+    ? (await executor
+      .select({ id: items.id, code: items.code, name: items.name, category: items.category, unit: items.unit, currentStock: items.currentStock })
+      .from(items)
+      .where(eq(items.isDeleted, 0))).map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 }))
+    : [];
+  if (presetShaped) {
+    rest.sections = projectSectionsFromPreset(rest.sections, Array.isArray(products) ? products : [], material =>
+      findProjectItemMatch({ code: material.code, name: material.name }, stockItems)?.currentStock);
+  }
+
   let reservedItems: unknown[] = prevReserved;
   let finalizedAt: unknown = prev.finalizedAt;
   let shortages: unknown = prev.reservationShortages;
-  if (nowFinal && !wasFinal) {
-    // v9.0.373 (TD-819): ثبت نهایی‌های هم‌زمان پشت سر هم رزرو دیگران را می‌خوانند
-    await executor.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.PROJECT_RESERVATION_FINALIZE}::bigint)`);
-    const stockItems = await executor
-      .select({ id: items.id, code: items.code, name: items.name, category: items.category, unit: items.unit, currentStock: items.currentStock })
-      .from(items)
-      .where(eq(items.isDeleted, 0));
+  if (finalizing) {
     finalizedAt = systemNowUtcIso();
-    const plan = await planWithOthersReservations(rest, products, stockItems.map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 })), String(finalizedAt), executor);
+    const plan = await planWithOthersReservations(rest, products, stockItems, String(finalizedAt), executor);
     reservedItems = plan.reserved;
     shortages = plan.shortages;
   } else if (!nowFinal && wasFinal) {

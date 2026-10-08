@@ -141,5 +141,39 @@ export async function runProjectPurchaseAllocationTests(shouldRun: ShouldRun): P
     }));
   }
 
+  const presetId = 'reg_project_preset_sections_td_748';
+  if (shouldRun(presetId, 'td748', 'projects', 'package11')) {
+    await runCase(results, presetId, 'v9.0.389: inventory control sections in the preset shape (materials in items) are stored as project rows, per product for a code-by-code check and global otherwise, and finalizing reserves their materials (TD-748)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const held = await createTestItem({ type: 'raw_material', currentStock: 30 });
+      const missing = await createTestItem({ type: 'raw_material', currentStock: 0 });
+      const product = await createTestItem({ type: 'product' });
+      const project = await newProject(api, { products: [{ itemId: product.id, qty: 2 }] });
+      const sections = [
+        { id: 'secCode', title: 'کد به کد', checkType: 'per_item', items: [{ id: 'm_held', name: held.name, itemCode: held.code, unit: 'عدد' }] },
+        { id: 'secAll', title: 'کلی', checkType: 'global', items: [{ id: 'm_missing', name: missing.name, itemCode: missing.code, unit: 'عدد' }, { id: 'm_held2', name: held.name, itemCode: held.code, unit: 'عدد' }] },
+      ];
+      const res = await editProject(api, project.id, { inventory_control: { sections, isFinalized: true } });
+      if (res.status !== 200) problems.push(`finalizing with preset sections answered ${res.status} ${brief(res.body)}, expected 200`);
+      const stored = (await q('SELECT inventory_control FROM production_projects WHERE id = $1', [project.id]))[0]?.inventory_control as Row | undefined;
+      const [perItem, global] = (Array.isArray(stored?.sections) ? stored.sections : []) as Row[];
+      if (!perItem || 'items' in perItem || 'items' in (global ?? {})) problems.push(`the stored sections still keep their materials in items: ${brief(stored?.sections)}`);
+      const productRows = (perItem?.perItemResults as Record<string, Record<string, Row>> | undefined)?.[`prod_${product.id}`];
+      const heldRow = productRows?.m_held;
+      if (heldRow?.name !== held.name || Number(heldRow?.requiredQty) !== 1 || heldRow?.status !== 'available' || Number(heldRow?.stockQty) !== 30) {
+        problems.push(`the code-by-code row of the product is ${brief(heldRow ?? productRows ?? perItem?.perItemResults)}, expected the held material, required 1, stock 30, available`);
+      }
+      const globalRows = (Array.isArray(global?.globalItems) ? global.globalItems : []) as Row[];
+      const missingRow = globalRows.find(row => row.itemCode === missing.code);
+      if (globalRows.length !== 2 || missingRow?.status !== 'needs_procurement' || Number(missingRow?.requiredQty) !== 1) problems.push(`the global rows are ${brief(globalRows)}, expected two rows with the missing material to procure`);
+      const reserved = (Array.isArray(stored?.reservedItems) ? stored.reservedItems : []) as Row[];
+      const heldReserved = reserved.filter(row => Number(row.itemId) === held.id).reduce((sum, row) => sum + Number(row.reservedQty), 0);
+      if (heldReserved !== 2 || reserved.some(row => Number(row.itemId) === missing.id)) problems.push(`the reservation is ${brief(reserved)}, expected 2 of the held material (one per product and one global) and nothing of the missing one`);
+      assertNoProblems(problems);
+      return 'preset sections stored as project rows with stock status; finalizing reserves their materials';
+    }));
+  }
+
   return results;
 }
