@@ -1,6 +1,9 @@
 import type { TestCaseResult } from '../types.js';
 import type { Harness, ShouldRun } from '../security/workflowTestHarness.js';
 import { runReservationCases } from './stockReservationTests.js';
+import { WorkflowDefinitionService } from '../../services/workflow/workflowDefinitionService.js';
+import { hasWorkflowTransitionAction } from '../../services/workflow/workflowTransitionActions.js';
+import { transit, wfUser } from '../invariants/workflowScenarioHelpers.js';
 
 /**
  * Package 7 (inventory planning), PR C: the raw material request queue («مواد اولیه در انتظار تأیید»). Each case is red on
@@ -20,6 +23,9 @@ export async function runPendingMaterialTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_pending_material_concurrent_approval_td_825',
       'v9.0.378: two concurrent approvals of one request make one item; a code taken in another letter case is refused (TD-825)',
       ['td825', 'pending_materials', 'package7'], concurrentApprovalCase],
+    ['reg_pending_material_workflow_td_826',
+      'v9.0.379: a request starts the active pending-material workflow, its approve and reject steps review the request, a direct review closes the workflow and the project must exist (TD-826)',
+      ['td826', 'pending_materials', 'workflow', 'package7'], workflowCase],
   ]);
 }
 
@@ -151,4 +157,71 @@ async function concurrentApprovalCase(h: Harness, wrong: string[]): Promise<stri
   const clash = await h.put(`/api/pending-materials/${otherCase}/approve`, {});
   if (clash.status !== 409) wrong.push(`a code differing only in letter case answered ${briefBody(clash)}, expected 409`);
   return `concurrent ${statuses.join('/')}; items ${made.length}; other case ${clash.status}`;
+}
+
+/** The id of the request a POST answered with, or 0 */
+const createdId = (res: { body?: unknown }) => Number((res.body as { data?: { id?: unknown } })?.data?.id) || 0;
+
+/**
+ * B07-10 (TD-826): no action was registered for `pending_material`, a request started no workflow and project control
+ * built items straight through `POST /api/items`. With an active definition a request now starts its instance, the
+ * approve step makes the item and the reject step rejects it, and a direct review terminates the open instance.
+ */
+async function workflowCase(h: Harness, wrong: string[]): Promise<string> {
+  if (!hasWorkflowTransitionAction('pending_material')) wrong.push('no workflow transition action is registered for pending_material');
+  const others = await h.q(`UPDATE workflow_definitions SET is_active = 0 WHERE entity_type = 'pending_material' AND is_active = 1 RETURNING id`);
+  const saved = await WorkflowDefinitionService.saveWorkflowDefinition({
+    code: `PMWF_${h.tag}_${randomTail()}`, entityType: 'pending_material', title: `ERP-TEST-MARKER گردش کار ماده اولیه ${h.tag}`,
+    states: [
+      { stateKey: 'submitted', title: 'ثبت درخواست', stateType: 'initial', stepOrder: 1, slaHours: 24 },
+      { stateKey: 'approved', title: 'تأییدشده', stateType: 'terminal', stepOrder: 2, slaHours: 24 },
+      { stateKey: 'rejected', title: 'ردشده', stateType: 'terminal', stepOrder: 3, slaHours: 24 },
+    ],
+    transitions: [
+      { from: 'submitted', to: 'approved', actionKey: 'approve', title: 'تأیید', requiredRole: '', requiredPermission: 'pending_materials.approve', approvalRuleType: 'SINGLE', kValue: 1 },
+      { from: 'submitted', to: 'rejected', actionKey: 'reject', title: 'رد', requiredRole: '', requiredPermission: 'pending_materials.approve', approvalRuleType: 'SINGLE', kValue: 1 },
+    ],
+  });
+  const definitionId = Number(saved?.definition.id);
+  const transitionOf = (key: string) => Number(saved?.transitions.find(t => t.actionKey === key)?.id);
+  try {
+    const sender = await h.sessionWith(['pending_materials.view', 'pending_materials.create']);
+    const send = (code: string, extra: Record<string, unknown> = {}) => h.post('/api/pending-materials', {
+      name: `ERP-TEST-MARKER ماده ${h.tag} ${randomTail()}`, code, ...extra,
+    }, sender);
+    const instanceOf = async (id: number) => (await h.q(
+      `SELECT id, status FROM workflow_instances WHERE entity_type = 'pending_material' AND entity_id = $1 ORDER BY id DESC LIMIT 1`, [String(id)]))[0];
+    const reviewer = await wfUser('admin', ['pending_materials.approve']);
+
+    const viaWorkflow = createdId(await send(`PM826-${h.tag}-${randomTail()}`));
+    const started = viaWorkflow ? await instanceOf(viaWorkflow) : undefined;
+    if (!started) wrong.push(`a request with an active pending-material workflow started no instance (request ${viaWorkflow})`);
+    else {
+      await transit(Number(started.id), transitionOf('approve'), reviewer).catch((err: unknown) => wrong.push(`the approve step failed: ${String(err)}`));
+      const [row] = await h.q('SELECT status, item_id FROM pending_materials WHERE id = $1', [viaWorkflow]);
+      if (row?.status !== 'approved' || !Number(row?.item_id)) wrong.push(`after the approve step the request is ${String(row?.status)} with item ${String(row?.item_id)}, expected approved with its item`);
+    }
+
+    const rejected = createdId(await send(`PM826-${h.tag}-${randomTail()}`));
+    const rejectInstance = rejected ? await instanceOf(rejected) : undefined;
+    if (rejectInstance) {
+      await transit(Number(rejectInstance.id), transitionOf('reject'), reviewer).catch((err: unknown) => wrong.push(`the reject step failed: ${String(err)}`));
+      const [row] = await h.q('SELECT status, item_id FROM pending_materials WHERE id = $1', [rejected]);
+      if (row?.status !== 'rejected' || row?.item_id !== null) wrong.push(`after the reject step the request is ${String(row?.status)} with item ${String(row?.item_id)}, expected rejected without an item`);
+    }
+
+    const direct = createdId(await send(`PM826-${h.tag}-${randomTail()}`));
+    const approved = direct ? await h.put(`/api/pending-materials/${direct}/approve`, {}) : { status: 0 };
+    const closed = direct ? await instanceOf(direct) : undefined;
+    if (approved.status !== 200 || closed?.status !== 'TERMINATED') {
+      wrong.push(`a direct approval answered ${approved.status} and left the instance ${String(closed?.status)}, expected 200 and TERMINATED`);
+    }
+
+    const noProject = await send('', { projectId: 999999999 });
+    if (noProject.status !== 422) wrong.push(`a request for a missing project answered ${briefBody(noProject)}, expected 422`);
+    return `instance ${String(started?.status)}; reject step ${String(rejectInstance?.id ?? 'none')}; direct approval ${approved.status} → ${String(closed?.status)}; missing project ${noProject.status}`;
+  } finally {
+    await h.q('UPDATE workflow_definitions SET is_active = 0 WHERE id = $1', [definitionId]);
+    if (others.length) await h.q('UPDATE workflow_definitions SET is_active = 1 WHERE id = ANY($1::int[])', [others.map(r => Number(r.id))]);
+  }
 }

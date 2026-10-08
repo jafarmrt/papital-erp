@@ -1,12 +1,14 @@
 import { eq, and } from 'drizzle-orm';
 import type { Request } from 'express';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { pendingMaterials, items } from '../db/schema.js';
+import { pendingMaterials, items, productionProjects } from '../db/schema.js';
 import { NotFoundError, ConflictError, ValidationError } from '../errors/customErrors.js';
 import { moneyOr } from '../lib/money.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { isDataUrl, uploadBase64ToStorage } from '../lib/storage.js';
 import { ItemCatalogService } from './items/itemCatalog.service.js';
+import { WorkflowEngineService } from './workflow/workflowEngineService.js';
+import { terminateOpenWorkflows } from './workflow/workflowTermination.js';
 
 export interface CreatePendingMaterialInput {
   name: string;
@@ -59,6 +61,8 @@ export interface PendingMaterialActor {
   req?: Request;
   userId?: number;
   username?: string;
+  /** v9.0.379 (TD-826): the change comes from a transition of the request's own workflow, which stays open for it */
+  viaWorkflow?: boolean;
 }
 
 type PendingMaterialRow = typeof pendingMaterials.$inferSelect;
@@ -125,6 +129,33 @@ function assertStillPending(row: PendingMaterialRow, action: string): void {
   );
 }
 
+/**
+ * v9.0.379 (TD-826، تصمیم ت۵): تأیید، رد یا حذف مستقیم فرایند در جریان درخواست را در همان تراکنش می‌بندد (پس از قفل ردیف
+ * درخواست، همان ترتیب «موجودیت ← نمونه» انتقال گردش کار)، مثل سندی که بیرون از گردش کار قطعی می‌شود
+ */
+async function closeOpenWorkflow(tx: DbExecutor, id: number, actor: PendingMaterialActor, actionTitle: string): Promise<void> {
+  if (actor.viaWorkflow) return;
+  await terminateOpenWorkflows(tx, {
+    entityType: 'pending_material', entityId: id, actionKey: 'terminate', actionTitle, comment: actionTitle,
+    userId: actor.userId ?? null, userName: actor.username ?? null,
+  });
+}
+
+/**
+ * v9.0.379 (TD-826): پروژه درخواست زنده است و عنوانش از خود پروژه خوانده می‌شود (۴۲۲ برای پروژه ناموجود یا حذف‌شده)؛ پیش‌تر
+ * عنوان از بدنه درخواست می‌آمد.
+ */
+async function requestProject(tx: DbExecutor, projectId: number | string | null | undefined): Promise<{ id: number | null; title: string }> {
+  if (projectId === undefined || projectId === null || projectId === '') return { id: null, title: '' };
+  const id = Number(projectId);
+  const [project] = Number.isSafeInteger(id) && id > 0
+    ? await tx.select({ id: productionProjects.id, title: productionProjects.title }).from(productionProjects)
+      .where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0))).for('share')
+    : [];
+  if (!project) throw new ValidationError('پروژه این درخواست ماده اولیه پیدا نشد یا حذف شده است', { projectId }, 'PENDING_MATERIAL_PROJECT_INVALID');
+  return { id: project.id, title: project.title };
+}
+
 const inTransaction = <T>(externalTx: DbExecutor | undefined, work: (tx: DbExecutor) => Promise<T>): Promise<T> =>
   externalTx ? work(externalTx) : orm.transaction(work);
 
@@ -153,6 +184,7 @@ export class PendingMaterialsService {
     const image = await storedImage(input.image, 'image');
     const thumbnail = await storedImage(input.thumbnail, 'thumbnail');
     return inTransaction(externalTx, async (tx) => {
+      const project = await requestProject(tx, input.projectId);
       const [inserted] = await tx
         .insert(pendingMaterials)
         .values({
@@ -161,8 +193,8 @@ export class PendingMaterialsService {
           unit: input.unit?.trim() || 'عدد',
           category: input.category?.trim() || 'عمومی',
           type: 'raw_material',
-          projectId: input.projectId ? Number(input.projectId) : null,
-          projectTitle: input.projectTitle?.trim() || '',
+          projectId: project.id,
+          projectTitle: project.title,
           requestedBy: input.requestedBy || actor.username || 'کاربر سامانه',
           status: 'pending',
           reorderPoint: quantityOf(input.reorderPoint, 0),
@@ -185,6 +217,10 @@ export class PendingMaterialsService {
         description: `ثبت درخواست ماده اولیه "${inserted.name}" جهت بررسی انباردار`,
         details: { after: pendingMaterialAuditSnapshot(inserted) }
       });
+      // v9.0.379 (TD-826): with an active «pending_material» definition the request's workflow starts in the same transaction
+      await WorkflowEngineService.maybeStartWorkflow({
+        entityType: 'pending_material', entityId: inserted.id, userId: actor.userId, userName: actor.username, tx,
+      });
       return inserted;
     });
   }
@@ -206,6 +242,7 @@ export class PendingMaterialsService {
     return inTransaction(externalTx, async (tx) => {
       const existing = await lockLiveRequest(tx, id);
       assertStillPending(existing, 'تأیید');
+      await closeOpenWorkflow(tx, id, actor, 'بستن فرایند با تأیید مستقیم درخواست ماده اولیه');
 
       const code = (overrides.code ?? existing.code ?? '').trim();
       if (!code) throw new ValidationError('برای ثبت ماده اولیه در انبار، کد کالا را وارد کنید', undefined, 'PENDING_MATERIAL_CODE_REQUIRED');
@@ -275,6 +312,7 @@ export class PendingMaterialsService {
     return inTransaction(externalTx, async (tx) => {
       const existing = await lockLiveRequest(tx, id);
       assertStillPending(existing, 'رد');
+      await closeOpenWorkflow(tx, id, actor, 'بستن فرایند با رد مستقیم درخواست ماده اولیه');
       const reason = rejectionReason?.trim() || 'عدم تأیید توسط انباردار';
       const [rejected] = await tx.update(pendingMaterials)
         .set({ status: 'rejected', rejectionReason: reason })
@@ -348,6 +386,7 @@ export class PendingMaterialsService {
     return inTransaction(externalTx, async (tx) => {
       const existing = await lockLiveRequest(tx, id);
       assertStillPending(existing, 'حذف');
+      await closeOpenWorkflow(tx, id, actor, 'بستن فرایند با حذف درخواست ماده اولیه');
       await tx.update(pendingMaterials).set({ isDeleted: 1 }).where(eq(pendingMaterials.id, id));
 
       await logActivity({

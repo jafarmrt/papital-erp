@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.379 — Project Material Requests Through the Queue
+- **Raw material requests (TD-826, B07-10):** project control sends a request instead of creating an item; a request starts the pending-material workflow, whose approve and reject steps review it, and a direct review closes the open instance.
+
 ### v9.0.378 — Pending Material Review Once
 - **Raw material requests (TD-825, B07-09):** sending needs `pending_materials.create`; approve, reject, edit and delete run under the request row lock and only from pending; the item is made by the item service and linked on the request (migration 0085).
 

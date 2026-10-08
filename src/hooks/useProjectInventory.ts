@@ -21,6 +21,7 @@ import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { directConversionRate } from '../lib/projects/unitConversion';
 import { storedReservationShortages } from '../lib/projects/projectReservationState';
 import type { ReservationShortage } from '../lib/projects/projectReservation';
+import { EMPTY_CUSTOM_MATERIAL_FORM, pendingMaterialRequestOf, type CustomMaterialForm } from '../lib/pendingMaterials/customMaterialRequest';
 
 /** پاسخ PUT /projects/:id؛ رزرو پروژه را سرور می‌نویسد (v8.0.58، TD-306) */
 interface SavedProjectInventory {
@@ -140,21 +141,7 @@ export function useProjectInventory(
   const [codePrefix, setCodePrefix] = useState<string>('');
   const [codeNumber, setCodeNumber] = useState<string>('');
 
-  const [customMaterialForm, setCustomMaterialForm] = useState({
-    name: '',
-    category: '',
-    itemCode: '',
-    unit: 'عدد',
-    stockQty: 0,
-    requiredQty: 1,
-    weightedAverageCost: 0,
-    reorderPoint: 5,
-    color: '',
-    material: '',
-    size: '',
-    weight: 0,
-    notes: ''
-  });
+  const [customMaterialForm, setCustomMaterialForm] = useState<CustomMaterialForm>(EMPTY_CUSTOM_MATERIAL_FORM);
 
   // Fetch items & categories on mount
   useEffect(() => {
@@ -439,52 +426,19 @@ export function useProjectInventory(
       return;
     }
 
+    // v9.0.379 (TD-826): a request to the warehouse review queue, not an item; the item exists only after approval
     try {
-      const newItemPayload = {
-        name: customMaterialForm.name,
-        category: customMaterialForm.category,
-        code: customMaterialForm.itemCode,
-        type: 'raw_material',
-        unit: customMaterialForm.unit,
-        current_stock: customMaterialForm.stockQty || 0,
-        weighted_average_cost: customMaterialForm.weightedAverageCost || 0,
-        reorder_point: customMaterialForm.reorderPoint || 5,
-        color: customMaterialForm.color,
-        material: customMaterialForm.material,
-        size: customMaterialForm.size,
-        notes: customMaterialForm.notes,
-        is_active: 1
-      };
-
-      const res = await fetchJson<any>('/api/items', {
+      await fetchJson('/api/pending-materials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newItemPayload)
+        body: JSON.stringify(pendingMaterialRequestOf(customMaterialForm, project.id))
       });
-
-      const createdItem: Item = res.data || res;
-      setWarehouseItems(prev => [createdItem, ...prev]);
-
-      handleSelectWarehouseItem(createdItem);
-
-      setCustomMaterialForm({
-        name: '',
-        category: '',
-        itemCode: '',
-        unit: 'عدد',
-        stockQty: 0,
-        requiredQty: 1,
-        weightedAverageCost: 0,
-        reorderPoint: 5,
-        color: '',
-        material: '',
-        size: '',
-        weight: 0,
-        notes: ''
-      });
+      toast.success('درخواست ماده اولیه به صف بررسی انبار رفت. پس از تأیید انباردار، آن را از «انتخاب از انبار» برگزینید.');
+      setCustomMaterialForm(EMPTY_CUSTOM_MATERIAL_FORM);
+      setMaterialModalTab('warehouse');
     } catch (err) {
-      console.error('Error creating custom raw material:', err);
-      toast.error(errorMessageOf(err) || 'خطا در ثبت ماده اولیه جدید');
+      console.error('Error sending custom raw material request:', err);
+      toast.error(errorMessageOf(err) || 'خطا در ارسال درخواست ماده اولیه');
     }
   };
 
