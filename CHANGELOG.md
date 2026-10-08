@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.454 — Procurement Finalizes Write the Document Audit Row
+- **Fix (TD-917, P5-P10):** order delivery and receive items write, in their transaction, one finalize audit row per order with the document id and the stored document before and after, like PUT /documents/:id/finalize, so the document timeline shows them.
+
 ### v9.0.453 — Receive Items Does Not Close a Requisition With Open Rows
 - **Fix (TD-911, P5-P02):** receive items, like delivery, marks a requisition received only when every row is received or closed; otherwise it is 409 REQUISITION_ROWS_NOT_SETTLED naming the rows and the whole transition rolls back.
 

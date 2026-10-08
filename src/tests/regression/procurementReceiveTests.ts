@@ -13,6 +13,9 @@ export async function runProcurementReceiveTests(shouldRun: ShouldRun): Promise<
     ['reg_procurement_receive_unsettled_rows_td_911',
       'v9.0.453: receive items does not mark a requisition received while a row is neither received nor closed; the whole transition rolls back, as delivery does (TD-911)',
       ['td911', 'p5-p02', 'procurement', 'workflow', 'receive', 'phase5'], unsettledReceiveCase],
+    ['reg_procurement_finalize_audit_td_917',
+      'v9.0.454: order delivery and receive items write one finalize audit row per order with its document id and the stored document before and after, like PUT /documents/:id/finalize, and the document timeline shows it (TD-917)',
+      ['td917', 'p5-p10', 'procurement', 'audit', 'receive', 'phase5'], finalizeAuditCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -88,4 +91,53 @@ async function unsettledReceiveCase(h: Harness, wrong: string[]): Promise<string
     wrong.push(`receive items with a closed row: ${closedReceive.status} ${String(closedReceive.code ?? '')}, requisition ${closed.status}, stock ${await f.stock(z.id)},${await f.stock(w.id)}`);
   }
   return 'receive items with 4 of 10 neither ordered nor closed was 409 REQUISITION_ROWS_NOT_SETTLED from the procurement page and the workflow route and nothing moved; the remaining 4 were ordered and both orders received; a requisition whose other row was closed was received';
+}
+
+/** The order has one finalize audit row (its id, draft -> final, the acting user) and the document timeline shows it */
+async function expectFinalizeAudit(h: Harness, wrong: string[], label: string, docId: number, userId: number): Promise<void> {
+  const rows = await h.q(
+    `SELECT user_id, details->'before'->>'status' AS before_status, details->'after'->>'status' AS after_status
+       FROM activity_logs WHERE entity_id = $1 AND details->'after'->>'id' = $1 AND details->'after'->>'status' = 'final'`,
+    [String(docId)],
+  );
+  const seen = rows.map(r => `${String(r.before_status)}->${String(r.after_status)} by ${String(r.user_id)}`);
+  if (rows.length !== 1 || rows[0].before_status !== 'draft' || Number(rows[0].user_id) !== userId) {
+    wrong.push(`${label}: finalize audit rows of order ${docId}: [${seen.join(', ')}], expected one draft->final by ${userId}`);
+  }
+  const timeline = await h.get(`/api/events/event-sourcing/timeline?type=document&id=${docId}`);
+  const auditRows = (Array.isArray(timeline.body?.data) ? timeline.body.data : []) as Array<{ source?: string; metadata?: { entityId?: string } }>;
+  if (!auditRows.some(r => r.source === 'audit_log' && r.metadata?.entityId === String(docId))) wrong.push(`${label}: the timeline of order ${docId} has no audit row`);
+}
+
+async function finalizeAuditCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+
+  // order delivery: one finalize row per order, folded with the delivery details (operation, requisition)
+  const x = await f.item();
+  const deliverer = await h.sessionWith(['procurement.view', 'procurement.manage', 'warehouse.view', 'warehouse.in']);
+  const req = await approvedRequisition(h, f, [formRow(x, 4, 1000)]);
+  const order = await f.convert(req.id, [{ itemId: x.id, quantity: 4 }]);
+  const orderId = order.docIds[0];
+  if (order.status !== 200 || !orderId) throw new Error(`order 4: ${order.status}`);
+  const delivered = await f.deliver(orderId, deliverer);
+  if (delivered.status !== 200) wrong.push(`delivery: ${delivered.status} ${String(delivered.body.code ?? '')}`);
+  await expectFinalizeAudit(h, wrong, 'delivery', orderId, deliverer.userId);
+  const deliveryRows = await h.q(
+    `SELECT entity_id FROM activity_logs WHERE details->>'operation' = 'DELIVER_PROCUREMENT_ORDER' AND details->>'documentId' = $1`, [String(orderId)]);
+  if (deliveryRows.length !== 1 || deliveryRows[0].entity_id !== String(orderId)) {
+    wrong.push(`delivery rows of order ${orderId}: ${deliveryRows.length} with entity ids [${deliveryRows.map(r => JSON.stringify(r.entity_id)).join(', ')}], expected one with the document id`);
+  }
+
+  // receive items with two draft orders: each finalized order gets its own row
+  const y = await f.item();
+  const z = await f.item();
+  const receiver = await h.sessionWith(['procurement.view', 'procurement.approve', 'warehouse.view', 'warehouse.in']);
+  const req2 = await approvedRequisition(h, f, [formRow(y, 2, 1000), formRow(z, 3, 1000)]);
+  const first = await f.convert(req2.id, [{ itemId: y.id, quantity: 2 }]);
+  const second = await f.convert(req2.id, [{ itemId: z.id, quantity: 3 }]);
+  if (first.status !== 200 || second.status !== 200 || !first.docIds[0] || !second.docIds[0]) throw new Error(`orders: ${first.status} ${second.status}`);
+  const received = await f.action(req2.id, 'receive_items', receiver);
+  if (received.status !== 200) wrong.push(`receive items: ${received.status} ${String(received.code ?? '')}`);
+  for (const id of [first.docIds[0], second.docIds[0]]) await expectFinalizeAudit(h, wrong, 'receive items', id, receiver.userId);
+  return 'the delivered order and both orders finalized by receive items each had one draft->final audit row with the document id and the acting user, shown in the document timeline';
 }

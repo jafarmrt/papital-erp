@@ -2,6 +2,8 @@ import { and, asc, eq, inArray, or } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents } from '../../db/schema.js';
 import { DocumentService } from '../document.service.js';
+import { documentAuditDetails } from '../documents/documentAudit.js';
+import { logActivity } from '../../lib/auditLogger.js';
 import { ConflictError, ForbiddenError, ValidationError } from '../../errors/customErrors.js';
 import { can } from '../../middleware/authorize.js';
 import { permissionDefinition } from '../../lib/permissions/permissionCatalog.js';
@@ -48,6 +50,8 @@ interface ReceivedRequisition {
 
 interface ReceiveOptions {
   username: string;
+  /** v9.0.454 (TD-917): کاربر انجام‌دهنده اقدام، برای ردیف ممیزی نهایی‌سازی هر سفارش */
+  userId?: number;
   allowBackdate: boolean;
   assertIncoming: (doc: { id: number; type: string | null; refNumber: string | null }) => void;
 }
@@ -110,7 +114,21 @@ export async function receiveRequisitionItems(
   for (const doc of orderDocs) {
     if (doc.status === 'final') continue;
     opts.assertIncoming(doc);
-    await DocumentService.finalizeDocument(doc.id, opts.username, tx, { allowBackdate: opts.allowBackdate });
+    const change = await DocumentService.finalizeDocument(doc.id, opts.username, tx, { allowBackdate: opts.allowBackdate });
+    // v9.0.454 (TD-917، یافته P5-P10): ردیف ممیزی نهایی‌سازی هر سفارش با شناسه سند و سند پیش و پس از آن، با همین تراکنش،
+    // همان ردیف `PUT /documents/:id/finalize` (TD-785). پیش‌تر «دریافت کالا» هیچ ردیفی نمی‌نوشت و خط زمانی سند آن را نمی‌دید.
+    if (change) {
+      await logActivity({
+        tx,
+        userId: opts.userId,
+        username: opts.username,
+        action: 'UPDATE',
+        entity: 'اسناد انبار',
+        entityId: doc.id,
+        description: `نهایی‌سازی سفارش خرید ${change.after?.refNumber || doc.refNumber || doc.id} با «دریافت کالا»ی درخواست خرید ${req.code}`,
+        details: { ...documentAuditDetails(change.before, change.after), operation: 'RECEIVE_REQUISITION_ITEMS', documentId: doc.id, requisitionCode: req.code },
+      });
+    }
   }
   const requisitionDocIds = new Set(orderDocs.map(doc => doc.id));
 

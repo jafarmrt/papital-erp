@@ -5,6 +5,7 @@ import { purchaseRequisitions, documentRefCounters, documents, documentItems, wo
 import { businessFiscalYear, businessTodayIsoDate } from '../lib/businessClock.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { logActivity } from '../lib/auditLogger.js';
+import { documentAuditDetails } from './documents/documentAudit.js';
 import { logger } from '../middleware/logger.js';
 import { AppError, ValidationError, NotFoundError, ConflictError } from '../errors/customErrors.js';
 import { WorkflowTransitionExecutor } from './workflow/workflowTransitionExecutor.js';
@@ -911,7 +912,7 @@ export class ProcurementService {
         });
       }
 
-      await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات', tx, { allowBackdate });
+      const finalized = await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات', tx, { allowBackdate });
 
       const docLines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity }).from(documentItems)
         .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
@@ -950,14 +951,19 @@ export class ProcurementService {
         });
       }
 
+      // v9.0.454 (TD-917، یافته P5-P10): یک ردیف ممیزی نهایی‌سازی برای سفارش، با شناسه سند و سند ذخیره‌شده پیش و پس از
+      // نهایی‌سازی (همان ردیف `PUT /documents/:id/finalize`، TD-785) و جزئیات تحویل. پیش‌تر ردیف `document` بی شناسه سند و
+      // بی پیش و پس بود و خط زمانی سند آن را نمی‌دید.
       await logActivity({
         tx,
         userId: user.id,
         username: user.username || 'سیستم تدارکات',
         action: 'UPDATE',
-        entity: 'document',
-        description: `تحویل فاکتور خرید ${doc.refNumber} به انبار و صدور رسید قطعی`,
+        entity: 'اسناد انبار',
+        entityId: documentId,
+        description: `تحویل سفارش خرید ${doc.refNumber} به انبار و نهایی‌سازی رسید (درخواست خرید ${lockedReq.code})`,
         details: {
+          ...(finalized ? documentAuditDetails(finalized.before, finalized.after) : {}),
           operation: 'DELIVER_PROCUREMENT_ORDER',
           documentId,
           refNumber: doc.refNumber,
