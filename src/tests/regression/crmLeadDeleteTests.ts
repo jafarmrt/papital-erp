@@ -15,7 +15,7 @@ export async function runCrmLeadDeleteTests(shouldRun: (id: string, ...extra: st
   const id = 'reg_crm_lead_delete_guards_td_425';
   if (!shouldRun(id, 'td425', 'crm', 'lead', 'delete', 'package9')) return results;
 
-  const name = 'v9.0.16: حذف پرونده فروش ناموجود ۴۰۴ است و لاگ «حذف» نمی‌گیرد؛ پرونده دارای پیش‌فاکتور فعال حذف نمی‌شود؛ پیگیری پرونده حذف‌شده از آمار، فهرست‌ها و یادآور سررسید بیرون می‌رود (TD-425)';
+  const name = 'v9.0.16: deleting a missing sales lead is 404 with no delete audit row; a lead with an active proforma is not deleted; follow-ups of a deleted lead leave the stats, lists and due reminder (TD-425)';
   const tStart = Date.now();
   const leadIds: number[] = [];
   const activityIds: number[] = [];
@@ -36,10 +36,10 @@ export async function runCrmLeadDeleteTests(shouldRun: (id: string, ...extra: st
     const [maxRow] = await orm.select({ n: sql<string>`COALESCE(MAX(${crmLeads.id}), 0)::text` }).from(crmLeads);
     const missingId = Number(maxRow?.n ?? 0) + 1_000_000;
     const missing = await send(request(app).delete(`/api/crm/leads/${missingId}`));
-    if (missing.status !== 404) wrong.push(`حذف پرونده ناموجود ${missing.status} داد، نه ۴۰۴`);
+    if (missing.status !== 404) wrong.push(`deleting a missing sales file returned ${missing.status}, not 404`);
     const missingLogs = await orm.select({ id: activityLogs.id }).from(activityLogs)
       .where(and(eq(activityLogs.action, 'DELETE'), eq(activityLogs.entityId, String(missingId))));
-    if (missingLogs.length > 0) wrong.push(`حذف پرونده ناموجود ${missingLogs.length} ردیف لاگ «حذف» ساخت`);
+    if (missingLogs.length > 0) wrong.push(`deleting a missing sales file created ${missingLogs.length} "delete" log rows`);
 
     // ۲) پرونده با پیگیری معوق (مسئول همین کاربر): حذف آن را از آمار، فهرست‌ها و یادآور بیرون می‌برد
     const [lead] = await orm.insert(crmLeads).values({ title: `پرونده حذفی ${tag}`, customerName: `خریدار ${tag}` }).returning({ id: crmLeads.id });
@@ -52,21 +52,21 @@ export async function runCrmLeadDeleteTests(shouldRun: (id: string, ...extra: st
     const stats = async () => (await send(request(app).get('/api/crm/stats'))).body as StatsBody;
     const before = await stats();
     const removed = await send(request(app).delete(`/api/crm/leads/${lead.id}`));
-    if (removed.status !== 200) wrong.push(`حذف پرونده ${removed.status} داد`);
+    if (removed.status !== 200) wrong.push(`deleting the sales file returned ${removed.status}`);
     const after = await stats();
     if (after.pendingFollowupsCount !== Number(before.pendingFollowupsCount) - 1) {
-      wrong.push(`شمار پیگیری‌های سررسید پس از حذف ${String(after.pendingFollowupsCount)} است، نه ${Number(before.pendingFollowupsCount) - 1}`);
+      wrong.push(`due follow-up count after the delete is ${String(after.pendingFollowupsCount)}, not ${Number(before.pendingFollowupsCount) - 1}`);
     }
-    if (after.openFollowupsCount !== Number(before.openFollowupsCount) - 1) wrong.push(`شمار پیگیری‌های باز پس از حذف ${String(after.openFollowupsCount)} است`);
+    if (after.openFollowupsCount !== Number(before.openFollowupsCount) - 1) wrong.push(`open follow-up count after the delete is ${String(after.openFollowupsCount)}`);
     const followups = await send(request(app).get(`/api/crm/followups?search=${encodeURIComponent(tag)}`));
     const listed = Array.isArray(followups.body?.data) ? followups.body.data as Array<{ id: number }> : [];
-    if (listed.some(r => r.id === act.id)) wrong.push('پیگیری پرونده حذف‌شده در فهرست پیگیری‌ها ماند');
+    if (listed.some(r => r.id === act.id)) wrong.push('the follow-up of the deleted sales file stayed in the follow-up list');
     const activities = await send(request(app).get(`/api/crm/activities?pendingFollowupsOnly=true&limit=500`));
-    if (Array.isArray(activities.body) && (activities.body as Array<{ id: number }>).some(r => r.id === act.id)) wrong.push('پیگیری پرونده حذف‌شده در «پیگیری‌های در انتظار» ماند');
+    if (Array.isArray(activities.body) && (activities.body as Array<{ id: number }>).some(r => r.id === act.id)) wrong.push('the follow-up of the deleted sales file stayed in "pending follow-ups"');
     await send(request(app).get('/api/notifications'));
     const reminders = await orm.select({ id: notifications.id }).from(notifications)
       .where(and(eq(notifications.link, `/crm?activityId=${act.id}`), eq(notifications.type, 'crm_due_task')));
-    if (reminders.length > 0) wrong.push('یادآور سررسید برای پیگیری پرونده حذف‌شده اعلان ساخت');
+    if (reminders.length > 0) wrong.push('the due reminder created a notification for the follow-up of the deleted sales file');
 
     // ۳) پرونده دارای پیش‌فاکتور فعال: ۴۰۹ و پرونده می‌ماند؛ پس از ابطال پیش‌فاکتور حذف می‌شود
     const wh = (await getDefaultWarehouseCode(orm)) as string;
@@ -78,18 +78,18 @@ export async function runCrmLeadDeleteTests(shouldRun: (id: string, ...extra: st
       items: [{ itemId: item.id, quantity: 1, unit_price: 3_000_000, location: wh }], crmLeadId: withProforma.id,
     });
     const proformaId = Number(proforma.body?.id ?? proforma.body?.docId);
-    if (proforma.status !== 201 && proforma.status !== 200) throw new Error(`صدور پیش‌فاکتور ${proforma.status} داد`);
+    if (proforma.status !== 201 && proforma.status !== 200) throw new Error(`issuing the proforma returned ${proforma.status}`);
     const refused = await send(request(app).delete(`/api/crm/leads/${withProforma.id}`));
     const [kept] = await orm.select({ isDeleted: crmLeads.isDeleted }).from(crmLeads).where(eq(crmLeads.id, withProforma.id));
     if (refused.status !== 409 || kept.isDeleted !== 0) wrong.push(`حذف پرونده دارای پیش‌فاکتور فعال ${refused.status} داد و پرونده ${kept.isDeleted === 1 ? 'حذف شد' : 'ماند'}`);
     await send(request(app).delete(`/api/documents/${proformaId}`));
     const allowed = await send(request(app).delete(`/api/crm/leads/${withProforma.id}`));
-    if (allowed.status !== 200) wrong.push(`حذف پرونده پس از ابطال پیش‌فاکتور ${allowed.status} داد`);
+    if (allowed.status !== 200) wrong.push(`deleting the sales file after voiding the proforma returned ${allowed.status}`);
 
-    if (wrong.length > 0) throw new Error(wrong.join('، '));
+    if (wrong.length > 0) throw new Error(wrong.join(', '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'ناموجود ۴۰۴ بی لاگ؛ پیگیری پرونده حذف‌شده از آمار، فهرست‌ها و یادآور بیرون رفت؛ پیش‌فاکتور فعال حذف را با ۴۰۹ رد کرد',
+      details: 'missing file 404 with no log; the follow-up of the deleted file left the statistics, lists and reminder; an active proforma refused the delete with 409',
     }));
   } catch (err) {
     results.push(makeTestCase({

@@ -10,7 +10,7 @@ const banner = () => screen.getByText('امتیاز سلامت و پایداری
 // v9.0.119 (TD-575, B03-33): before any data arrived (or after an error) the ratios page showed a health score of «۷۵ از ۱۰۰»
 // and «بحرانی» on every status, numbers the server never sent.
 describe('financial ratios without data show no score (TD-575)', () => {
-  it('no data: no score, no «از ۱۰۰», no status badge and no ratio values', () => {
+  it('no data: no score, no "out of 100", no status badge and no ratio values', () => {
     const { container } = render(<FinancialRatiosView ratiosData={null} onFetchFinancialRatios={() => {}} />);
     expect(banner().textContent).not.toContain('۷۵');
     expect(banner().textContent).not.toContain('از ۱۰۰');

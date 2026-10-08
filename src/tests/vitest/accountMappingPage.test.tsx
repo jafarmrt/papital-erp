@@ -29,6 +29,8 @@ const chart = [
   account(1499, '1499', 'موجودی مواد کارگاه دوم', 'subsidiary', 14, 'asset'),
   account(5001, '5001', 'درآمد فروش محصولات', 'subsidiary', 50, 'revenue'),
 ];
+/** The server's refusal of a mapping that the page shows as it is */
+const MAPPING_REFUSAL = 'نگاشت حساب ذخیره نشد؛ «موجودی مواد اولیه» (کد ۵۰۰۱): نوع حساب باید دارایی باشد.';
 const mappings = Object.fromEntries(ACCOUNT_MAPPING_CONCEPTS.map(c => [c.key, c.defaultCode]));
 
 beforeEach(() => {
@@ -36,7 +38,7 @@ beforeEach(() => {
   toastFn.error.mockReset();
   fetchJson.mockImplementation(async (url: string, init?: { method?: string }) => {
     if (url === '/accounting/mappings' && init?.method === 'POST') {
-      throw new Error('نگاشت حساب ذخیره نشد؛ «موجودی مواد اولیه» (کد ۵۰۰۱): نوع حساب باید دارایی باشد.');
+      throw new Error(MAPPING_REFUSAL);
     }
     if (url === '/accounting/mappings') return { ...mappings, disabled: [], accountsCount: chart.length, chartHasAccounts: true };
     if (url === '/accounting/accounts') return chart;

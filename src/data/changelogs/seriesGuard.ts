@@ -45,31 +45,31 @@ export function findChangelogSeriesViolations(
   const violations: string[] = [];
 
   if (majorOf(pkgVersion) !== active.series) {
-    violations.push(`نسخه package.json «${stripV(pkgVersion)}» در سری فعال ${active.series} نیست (${active.file})`);
+    violations.push(`package.json version "${stripV(pkgVersion)}" is not in the active series ${active.series} (${active.file})`);
   }
 
   const seen = new Set<string>();
   for (const u of active.updates) {
     const v = stripV(u?.version);
-    if (majorOf(v) !== active.series) violations.push(`مدخل «${v}» در فایل فعال ${active.file} از سری ${active.series} نیست`);
-    if (seen.has(v)) violations.push(`نسخه تکراری «${v}» در ${active.file}`);
+    if (majorOf(v) !== active.series) violations.push(`entry "${v}" in the active file ${active.file} is not in series ${active.series}`);
+    if (seen.has(v)) violations.push(`duplicate version "${v}" in ${active.file}`);
     seen.add(v);
   }
 
   for (const c of closed) {
     const top = stripV(c.updates[0]?.version);
     if (top !== stripV(c.finalVersion)) {
-      violations.push(`سری بسته‌شده ${c.series} باید با v${stripV(c.finalVersion)} تمام شود، اما مدخل بالای آن «${top}» است`);
+      violations.push(`closed series ${c.series} must end at v${stripV(c.finalVersion)}, but its top entry is "${top}"`);
     }
     if (c.updates.length !== c.entryCount) {
-      violations.push(`سری بسته‌شده ${c.series} باید ${c.entryCount} مدخل داشته باشد، اما ${c.updates.length} مدخل دارد`);
+      violations.push(`closed series ${c.series} must have ${c.entryCount} entries, but has ${c.updates.length}`);
     }
     if (fingerprintChangelog(c.updates) !== c.sha256) {
-      violations.push(`چنج‌لاگ سری بسته‌شده ${c.series} تغییر کرده است؛ سری بسته‌شده منجمد است و تغییرات تازه در ${active.file} ثبت می‌شوند`);
+      violations.push(`the changelog of closed series ${c.series} has changed; a closed series is frozen and new changes go into ${active.file}`);
     }
     for (const u of active.updates) {
       if (c.updates.some(x => stripV(x.version) === stripV(u.version))) {
-        violations.push(`نسخه «${stripV(u.version)}» هم در سری فعال و هم در سری بسته‌شده ${c.series} آمده است`);
+        violations.push(`version "${stripV(u.version)}" is in both the active series and closed series ${c.series}`);
       }
     }
   }

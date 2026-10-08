@@ -48,18 +48,18 @@ export async function checkLineDiscountWithinAmount(wh: string): Promise<string[
     { itemId: a.id, quantity: 1, unitPrice: 1000, discount: 3000, location: wh },
     { itemId: b.id, quantity: 1, unitPrice: 5000, discount: 0, location: wh },
   ], 'final'), over);
-  if (finalMixed) problems.push(`فاکتور نهایی با تخفیف ردیف ۳۰۰۰ روی مبلغ ۱۰۰۰: ${finalMixed}`);
+  if (finalMixed) problems.push(`final invoice with line discount 3000 on amount 1000: ${finalMixed}`);
 
   const proforma = await refusedWith(() => salesInvoice([
     { itemId: a.id, quantity: 1, unitPrice: 1000, discount: 3000, location: wh },
   ], 'proforma'), over);
-  if (proforma) problems.push(`پیش‌فاکتور با تخفیف بیشتر از کل مبلغ: ${proforma}`);
+  if (proforma) problems.push(`proforma with a discount above the whole amount: ${proforma}`);
 
   const editable = await salesInvoice([{ itemId: a.id, quantity: 2, unitPrice: 1000, discount: 2000, location: wh }], 'proforma');
   const edited = await refusedWith(() => DocumentService.updateDocument(editable, {
     items: [{ itemId: a.id, quantity: 1, unitPrice: 1000, discount: 1500, location: wh }],
   }), over);
-  if (edited) problems.push(`ویرایش پیش‌فاکتور به تخفیف ۱۵۰۰ روی مبلغ ۱۰۰۰: ${edited}`);
+  if (edited) problems.push(`proforma edited to discount 1500 on amount 1000: ${edited}`);
 
   // تخفیف برابر مبلغ ردیف (کالای رایگان) پذیرفته می‌شود
   try {
@@ -68,15 +68,15 @@ export async function checkLineDiscountWithinAmount(wh: string): Promise<string[
       { itemId: b.id, quantity: 1, unitPrice: 5000, discount: 0, location: wh },
     ], 'final');
   } catch (err) {
-    problems.push(`فاکتور با تخفیف برابر مبلغ ردیف رد شد: ${getErrorMessage(err)}`);
+    problems.push(`an invoice with a discount equal to the line amount was refused: ${getErrorMessage(err)}`);
   }
   const negative = await pool.query<{ id: number }>(
     `SELECT d.id FROM documents d JOIN document_items i ON i.document_id = d.id AND i.is_deleted = 0
       WHERE d.id > $1 AND d.is_deleted = 0 AND i.discount > i.quantity * i.unit_price`,
     [mark.documentIdAfter]
   );
-  if (negative.rows.length > 0) problems.push(`سندهای ${negative.rows.map(r => r.id).join('، ')} ردیف با تخفیف بیشتر از مبلغ دارند`);
-  problems.push(...await invariantProblems(scope, 'پس از فاکتورهای تخفیف‌دار'));
+  if (negative.rows.length > 0) problems.push(`documents ${negative.rows.map(r => r.id).join(', ')} have a line with a discount above its amount`);
+  problems.push(...await invariantProblems(scope, 'after the discounted invoices'));
   return problems;
 }
 
@@ -97,23 +97,23 @@ export async function checkVatAmountMatchesPercent(wh: string): Promise<string[]
   const mismatch = 'یکی نیست';
 
   const created = await refusedWith(() => salesInvoice([line(1, 1000)], 'proforma', { vatPercent: 10, vatAmount: 1 }), mismatch);
-  if (created) problems.push(`پیش‌فاکتور با درصد ۱۰ و مالیات ۱ ریال: ${created}`);
+  if (created) problems.push(`proforma with 10 percent and VAT of 1 rial: ${created}`);
 
   const ok = await salesInvoice([line(1, 1000)], 'proforma', { vatPercent: 10, vatAmount: 100 });
   const okVat = await vatOf(ok);
-  if (Number(okVat.amount) !== 100) problems.push(`مالیات درست ۱۰۰ ذخیره نشد (${okVat.amount})`);
+  if (Number(okVat.amount) !== 100) problems.push(`the correct VAT of 100 was not stored (${okVat.amount})`);
 
   const edited = await refusedWith(() => DocumentService.updateDocument(ok, { vatPercent: 10, vatAmount: 5 }), mismatch);
-  if (edited) problems.push(`ویرایش پیش‌فاکتور به مالیات ۵ با درصد ۱۰: ${edited}`);
+  if (edited) problems.push(`proforma edited to VAT 5 with 10 percent: ${edited}`);
   await DocumentService.updateDocument(ok, { vatPercent: 9 });
-  if (Number((await vatOf(ok)).amount) !== 90) problems.push(`ویرایش فقط درصد به ۹، مالیات را ${(await vatOf(ok)).amount} کرد، نه ۹۰`);
+  if (Number((await vatOf(ok)).amount) !== 90) problems.push(`editing only the percent to 9 set the VAT to ${(await vatOf(ok)).amount}, not 90`);
 
   const finalized = await refusedWith(() => DocumentService.finalizeDocument(ok, 'inv', undefined, { vatPercent: 9, vatAmount: 0 }), mismatch);
-  if (finalized) problems.push(`نهایی‌سازی با درصد ۹ و مالیات صفر: ${finalized}`);
+  if (finalized) problems.push(`finalize with 9 percent and zero VAT: ${finalized}`);
 
   const amountOnly = await salesInvoice([line(1, 1000)], 'proforma', { vatAmount: 37 });
   const amountOnlyVat = await vatOf(amountOnly);
-  if (Number(amountOnlyVat.amount) !== 37 || Number(amountOnlyVat.percent) !== 0) problems.push(`مالیات صریح بی درصد ۳۷ ذخیره نشد (${amountOnlyVat.amount}، ${amountOnlyVat.percent}٪)`);
+  if (Number(amountOnlyVat.amount) !== 37 || Number(amountOnlyVat.percent) !== 0) problems.push(`the explicit VAT of 37 without a percent was not stored (${amountOnlyVat.amount}, ${amountOnlyVat.percent}%)`);
   return problems;
 }
 
@@ -126,10 +126,10 @@ export async function checkForeignVatRoundedToCents(wh: string): Promise<string[
   await receive(item.id, 10, 1000, wh, '2026-03-01');
   const problems: string[] = [];
   const usd = await salesInvoice([{ itemId: item.id, quantity: 1, unitPrice: 15.55, location: wh }], 'proforma', { currency: 'USD', exchangeRate: 600000, vatPercent: 9 });
-  if (Number((await vatOf(usd)).amount) !== 1.4) problems.push(`مالیات ۹٪ فاکتور ۱۵٫۵۵ دلاری ${(await vatOf(usd)).amount} ذخیره شد، نه ۱٫۴۰`);
+  if (Number((await vatOf(usd)).amount) !== 1.4) problems.push(`the 9% VAT of a 15.55 dollar invoice was stored as ${(await vatOf(usd)).amount}, not 1.40`);
   await DocumentService.updateDocument(usd, { items: [{ itemId: item.id, quantity: 2, unitPrice: 15.55, location: wh }] });
-  if (Number((await vatOf(usd)).amount) !== 2.8) problems.push(`پس از ویرایش به ۲ عدد مالیات ${(await vatOf(usd)).amount} شد، نه ۲٫۸۰`);
+  if (Number((await vatOf(usd)).amount) !== 2.8) problems.push(`after editing to 2 units the VAT became ${(await vatOf(usd)).amount}, not 2.80`);
   const irr = await salesInvoice([{ itemId: item.id, quantity: 1, unitPrice: 15, location: wh }], 'proforma', { vatPercent: 10 });
-  if (Number((await vatOf(irr)).amount) !== 2) problems.push(`مالیات ۱۰٪ فاکتور ۱۵ ریالی ${(await vatOf(irr)).amount} شد، نه ۲`);
+  if (Number((await vatOf(irr)).amount) !== 2) problems.push(`the 10% VAT of a 15 rial invoice became ${(await vatOf(irr)).amount}, not 2`);
   return problems;
 }

@@ -16,7 +16,7 @@ export async function runCustomerPhoneKeyTests(shouldRun: (id: string, ...extra:
   const id = 'reg_customer_phone_match_key_td_419';
   if (!shouldRun(id, 'td419', 'customer', 'phone', 'crm', 'package9')) return results;
 
-  const name = 'v9.0.7: یک شماره تلفن با نگارش دیگر (فاصله، ‎+98، ۰۰۹۸، ارقام فارسی، بی صفر اول) طرف حساب تازه نمی‌سازد؛ پرونده فروش، فرم و درون‌ریزی همان طرف حساب را می‌یابند (TD-419)';
+  const name = 'v9.0.7: the same phone number written another way (spaces, +98, 0098, Persian digits, no leading zero) creates no new party; the sales lead, the form and the import find the same party (TD-419)';
   const tStart = Date.now();
   const customerIds: number[] = [];
   const leadIds: number[] = [];
@@ -44,41 +44,41 @@ export async function runCustomerPhoneKeyTests(shouldRun: (id: string, ...extra:
     const formats = [`0912 ${tag.slice(0, 3)} ${tag.slice(3)}7`, `+98${key}`, toPersianDigits(p)];
     for (const [i, phone] of formats.entries()) {
       const lead = await send('post', '/api/crm/leads', { title: `فرصت ${tag}-${i}`, customerName: `مریم رضایی ${tag}`, phone, expectedCloseDate: today });
-      if (lead.status !== 201) throw new Error(`ثبت پرونده با «${phone}» ${lead.status} داد`);
+      if (lead.status !== 201) throw new Error(`creating a sales file with "${phone}" returned ${lead.status}`);
       leadIds.push(lead.body.id);
       const linked = Number(lead.body.customerId);
       if (linked !== c.id) {
         if (linked > 0) customerIds.push(linked);
-        wrong.push(`پرونده با «${phone}» به طرف حساب ${linked} پیوند خورد، نه ${c.id}`);
+        wrong.push(`sales file with "${phone}" was linked to party ${linked}, not ${c.id}`);
       }
-      if (String(lead.body.notes ?? '').includes('تلفن پرونده')) wrong.push(`برای «${phone}» اختلاف تلفن ثبت شد`);
+      if (String(lead.body.notes ?? '').includes('تلفن پرونده')) wrong.push(`a phone difference was recorded for "${phone}"`);
     }
 
     // ۲) فرم طرف حساب: ساخت با ۰۰۹۸ و ویرایش طرف حساب دیگر به ‎+98 تکراری است؛ ویرایش خود طرف حساب با نگارش دیگر شماره‌اش رد نمی‌شود
     const created = await send('post', '/api/customers', { name: `مشتری دیگر ${tag}`, phone: `0098 ${key}` });
     if (created.status === 200 && created.body?.id) customerIds.push(created.body.id);
-    if (created.status !== 400) wrong.push(`ساخت طرف حساب با ۰۰۹۸ همان شماره ${created.status} داد، نه ۴۰۰`);
+    if (created.status !== 400) wrong.push(`creating a party with the same number in 0098 form returned ${created.status}, not 400`);
     const d = await createTestCustomer({ name: `آقای نوری ${tag}`, phone: `0912${tag}8` });
     customerIds.push(d.id);
     const movedPhone = await send('put', `/api/customers/${d.id}`, { name: d.name, phone: `+98${key}`, version: d.version });
-    if (movedPhone.status !== 400) wrong.push(`ویرایش تلفن طرف حساب دیگر به همان شماره ${movedPhone.status} داد، نه ۴۰۰`);
+    if (movedPhone.status !== 400) wrong.push(`editing another party phone to the same number returned ${movedPhone.status}, not 400`);
     const own = await send('put', `/api/customers/${c.id}`, { name: c.name, phone: formats[0], version: c.version });
-    if (own.status !== 200) wrong.push(`ویرایش طرف حساب با نگارش دیگر شماره خودش ${own.status} داد`);
+    if (own.status !== 200) wrong.push(`editing a party with another spelling of its own number returned ${own.status}`);
 
     // ۳) درون‌ریزی: تلفنی که اکسل صفر اولش را انداخته همان طرف حساب است
     const imported = await send('post', '/api/customers/bulk-import', { rows: [{ name: `رضایی اکسل ${tag}`, phone: key }], updateIfExists: false });
     if (imported.status !== 200 || imported.body?.createdCount !== 0 || (imported.body?.errors ?? []).length !== 1) {
-      wrong.push(`درون‌ریزی همان شماره بی صفر اول: ${imported.status}، ساخته‌شده ${imported.body?.createdCount}، خطا ${(imported.body?.errors ?? []).length}`);
+      wrong.push(`import of the same number without a leading zero: ${imported.status}, created ${imported.body?.createdCount}, errors ${(imported.body?.errors ?? []).length}`);
     }
 
     const finalHolders = await holders();
     for (const h of finalHolders) if (!customerIds.includes(h)) customerIds.push(h);
-    if (JSON.stringify(finalHolders) !== JSON.stringify([c.id])) wrong.push(`طرف حساب‌های فعال این شماره ${JSON.stringify(finalHolders)} است، نه [${c.id}]`);
+    if (JSON.stringify(finalHolders) !== JSON.stringify([c.id])) wrong.push(`active parties with this number are ${JSON.stringify(finalHolders)}, not [${c.id}]`);
 
-    if (wrong.length > 0) throw new Error(wrong.join('، '));
+    if (wrong.length > 0) throw new Error(wrong.join(', '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'سه پرونده با فاصله، ‎+98 و ارقام فارسی به همان طرف حساب پیوند خوردند؛ فرم ساخت و جابه‌جایی شماره را ۴۰۰ داد و ویرایش خود طرف حساب ۲۰۰؛ درون‌ریزی بی صفر اول چیزی نساخت؛ یک طرف حساب فعال برای شماره',
+      details: 'three sales files with spaces, +98 and Persian digits linked to the same party; the create form and moving the number returned 400 and editing the party itself 200; import without a leading zero created nothing; one active party for the number',
     }));
   } catch (err) {
     results.push(makeTestCase({

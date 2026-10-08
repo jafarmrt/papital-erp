@@ -30,7 +30,7 @@ function buildApp(scope: string): TestApp {
     counts.set(key, run);
     const body = req.body as { amount?: number; slowMs?: number };
     if (body.slowMs) await sleep(body.slowMs);
-    if (path === '/pay' && !funded) throw new ValidationError('موجودی بانک برای این پرداخت کافی نیست');
+    if (path === '/pay' && !funded) throw new ValidationError('Bank balance is not enough for this payment');
     res.status(201).json({ success: true, path, run, amount: body.amount });
   });
   app.post('/pay', guard, handler('/pay'));
@@ -54,28 +54,28 @@ export async function checkIdempotencyKeyContract(): Promise<string[]> {
   const failedKey = `fail-${stamp}`;
   fund(false);
   const refused = await post('/pay', failedKey, { amount: 500 });
-  if (refused.status !== 422) problems.push(`پرداخت از بانک خالی ${refused.status} گرفت، نه ۴۲۲`);
+  if (refused.status !== 422) problems.push(`payment from the empty bank got ${refused.status}, not 422`);
   fund(true);
   const retried = await post('/pay', failedKey, { amount: 500 });
-  if (retried.status !== 201) problems.push(`تکرار پرداخت پس از واریز ${retried.status} گرفت (${String(retried.body?.error ?? retried.body?.code ?? '')})، نه ۲۰۱`);
-  if (runs('/pay', failedKey) !== 2) problems.push(`پرداخت ردشده و تکرارش ${runs('/pay', failedKey)} بار اجرا شد، نه دو بار`);
+  if (retried.status !== 201) problems.push(`the payment retry after funding got ${retried.status} (${String(retried.body?.error ?? retried.body?.code ?? '')}), not 201`);
+  if (runs('/pay', failedKey) !== 2) problems.push(`the refused payment and its retry ran ${runs('/pay', failedKey)} times, not twice`);
 
   // ۲) همان کلید با بدنه یا مسیر دیگر پاسخ کهنه نمی‌گیرد و اجرا هم نمی‌شود؛ همان درخواست پاسخ ذخیره‌شده را می‌گیرد
   const reusedKey = `reuse-${stamp}`;
   const first = await post('/pay', reusedKey, { amount: 1000 });
-  if (first.status !== 201) problems.push(`دریافت اول ${first.status} گرفت`);
+  if (first.status !== 201) problems.push(`the first receipt got ${first.status}`);
   const otherBody = await post('/pay', reusedKey, { amount: 2000 });
   if (otherBody.status !== 422 || otherBody.body?.code !== 'IDEMPOTENCY_KEY_REUSED') {
-    problems.push(`همان کلید با مبلغ ۲۰۰۰ به‌جای ۱۰۰۰ پاسخ ${otherBody.status} (${JSON.stringify(otherBody.body).slice(0, 120)}) گرفت، نه ۴۲۲ IDEMPOTENCY_KEY_REUSED`);
+    problems.push(`the same key with amount 2000 instead of 1000 got ${otherBody.status} (${JSON.stringify(otherBody.body).slice(0, 120)}), not 422 IDEMPOTENCY_KEY_REUSED`);
   }
   const otherPath = await post('/transfer', reusedKey, { amount: 1000 });
   if (otherPath.status !== 422 || otherPath.body?.code !== 'IDEMPOTENCY_KEY_REUSED') {
-    problems.push(`همان کلید روی مسیر انتقال پاسخ ${otherPath.status} (${JSON.stringify(otherPath.body).slice(0, 120)}) گرفت، نه ۴۲۲ IDEMPOTENCY_KEY_REUSED`);
+    problems.push(`the same key on the transfer path got ${otherPath.status} (${JSON.stringify(otherPath.body).slice(0, 120)}), not 422 IDEMPOTENCY_KEY_REUSED`);
   }
-  if (runs('/pay', reusedKey) !== 1) problems.push(`دریافت با کلید تکراری ${runs('/pay', reusedKey)} بار اجرا شد، نه یک بار`);
+  if (runs('/pay', reusedKey) !== 1) problems.push(`the receipt with a repeated key ran ${runs('/pay', reusedKey)} times, not once`);
   const same = await post('/pay', reusedKey, { amount: 1000 });
   if (same.status !== 201 || same.headers['x-idempotency-hit'] !== 'true' || same.body?.run !== 1) {
-    problems.push(`تکرار همان دریافت پاسخ ذخیره‌شده را نگرفت (${same.status}، اجرای ${String(same.body?.run)})`);
+    problems.push(`repeating the same receipt did not get the stored response (${same.status}, run ${String(same.body?.run)})`);
   }
 
   // ۳) درخواست طولانی‌تر از پنجره قفل (۱ ثانیه): تکرار هم‌زمان در جریان شمرده می‌شود و دوباره اجرا نمی‌شود
@@ -84,18 +84,18 @@ export async function checkIdempotencyKeyContract(): Promise<string[]> {
   await sleep(1500);
   const duplicate = await post('/pay', slowKey, { amount: 300, slowMs: 2500 });
   const slowRes = await slow;
-  if (slowRes.status !== 201) problems.push(`درخواست طولانی ${slowRes.status} گرفت`);
+  if (slowRes.status !== 201) problems.push(`the long request got ${slowRes.status}`);
   if (duplicate.status !== 409 || duplicate.body?.code !== 'IDEMPOTENCY_IN_FLIGHT') {
-    problems.push(`تکرار درخواست طولانی در میانه اجرا پاسخ ${duplicate.status} (${String(duplicate.body?.code ?? '')}) گرفت، نه ۴۰۹ در جریان`);
+    problems.push(`repeating the long request while it ran got ${duplicate.status} (${String(duplicate.body?.code ?? '')}), not 409 in flight`);
   }
-  if (runs('/pay', slowKey) !== 1) problems.push(`درخواست طولانی‌تر از پنجره قفل ${runs('/pay', slowKey)} بار اجرا شد، نه یک بار`);
+  if (runs('/pay', slowKey) !== 1) problems.push(`the request longer than the lock window ran ${runs('/pay', slowKey)} times, not once`);
 
   // ۴) پاسخ پیش از رسیدن به مرورگر ذخیره شده است: تکرار بلافاصله پس از پاسخ، پاسخ ذخیره‌شده را می‌گیرد نه ۴۰۹
   const quickKey = `quick-${stamp}`;
   await post('/pay', quickKey, { amount: 700 });
   const quick = await post('/pay', quickKey, { amount: 700 });
   if (quick.status !== 201 || quick.headers['x-idempotency-hit'] !== 'true') {
-    problems.push(`تکرار بلافاصله پس از پاسخ ${quick.status} گرفت، نه پاسخ ذخیره‌شده`);
+    problems.push(`a repeat right after the response got ${quick.status}, not the stored response`);
   }
   return problems;
 }

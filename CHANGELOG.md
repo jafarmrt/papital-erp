@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.450 — Terminal Output Is English
+- **Fix (TD-625, B01-45):** scripts, the session hook, test names, test runner labels and failure messages print English; server error logs show the status, code and route, and the user's Persian message stays in the response and the JSON log file.
+
 ### v9.0.449 — Every Foreign Key Column Has an Index
 - **Fix (TD-614, B01-34):** the 41 foreign key columns without an index leading with them get one (partial on IS NOT NULL when nullable), so a parent's rows and the delete check are read without a table scan; a test refuses a new unindexed key.
 

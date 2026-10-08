@@ -39,25 +39,25 @@ export async function checkUpdateWaitsForStartup(): Promise<string[]> {
   const env = { ...process.env, STARTUP_POLL_INTERVAL: '1' };
   try {
     const migrating = await runCommand('bash', [verify, String(server.port), '3', '8.0.999'], { env });
-    if (migrating.code === 0) v.push('سرور زنده ولی در حال مهاجرت (startup = 503) «راه‌افتاده» شمرده شد');
+    if (migrating.code === 0) v.push('A live server still migrating (startup = 503) was counted as "started"');
     state.started = true;
     const started = await runCommand('bash', [verify, String(server.port), '3', '8.0.999'], { env });
-    if (started.code !== 0) v.push(`سرور راه‌افتاده با نسخه درست رد شد (کد ${started.code}): ${started.output.slice(-200)}`);
+    if (started.code !== 0) v.push(`A started server with the right version was refused (code ${started.code}): ${started.output.slice(-200)}`);
     const otherVersion = await runCommand('bash', [verify, String(server.port), '3', '8.0.998'], { env });
-    if (otherVersion.code === 0) v.push('نسخه در حال اجرای دیگر (کهنه) پذیرفته شد');
+    if (otherVersion.code === 0) v.push('Another (stale) running version was accepted');
   } finally {
     await server.close();
   }
 
   const update = fs.readFileSync(path.join(REPO_ROOT, 'update.sh'), 'utf8');
-  if (!update.includes('scripts/verify-startup.sh')) v.push('update.sh پایان راه‌اندازی (/health/startup) را نمی‌سنجد');
-  if (/health\/live/.test(update)) v.push('update.sh هنوز /health/live را نشانه موفقیت می‌گیرد');
+  if (!update.includes('scripts/verify-startup.sh')) v.push('update.sh does not check the end of startup (/health/startup)');
+  if (/health\/live/.test(update)) v.push('update.sh still takes /health/live as the success signal');
 
   // آرگومان ناشناخته: پیام روشن و کد ۱، نه «die: command not found» (کد ۱۲۷)
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'erp-k-update-'));
   try {
     const bogus = await runCommand('bash', [path.join(REPO_ROOT, 'update.sh'), '--bogus-argument'], { cwd, env: { ...process.env, APP_DIR: cwd } });
-    if (bogus.code !== 1 || !bogus.output.includes('Unknown argument')) v.push(`update.sh با آرگومان ناشناخته کد ${bogus.code} داد: ${bogus.output.slice(-150)}`);
+    if (bogus.code !== 1 || !bogus.output.includes('Unknown argument')) v.push(`update.sh with an unknown argument returned code ${bogus.code}: ${bogus.output.slice(-150)}`);
   } finally {
     fs.rmSync(cwd, { recursive: true, force: true });
   }

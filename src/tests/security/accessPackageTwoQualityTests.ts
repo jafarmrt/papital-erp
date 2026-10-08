@@ -56,7 +56,7 @@ export async function runAccessPackageTwoQualityTests(shouldRun: ShouldRun): Pro
     await runCase(results, {
       id: 'sec_list_simple_role_name_td_534',
       name: 'v9.0.223: the simple user list gives the role\'s Persian name, never its code (TD-534)',
-      details: 'B02-19: GET /users/list-simple, open to every signed-in user, sent each user\'s role code (for example cfo_accountant) while GET /users was 403 for the same reader; now no row has a role code, each row carries the stored name of its role (the system admin «مدیر سیستم» when its role row has no name) and the user name stays for mentions',
+      details: 'B02-19: GET /users/list-simple, open to every signed-in user, sent each user\'s role code (for example cfo_accountant) while GET /users was 403 for the same reader; now no row has a role code, each row carries the stored name of its role (for the system admin, the default "system admin" name when its role row has no name) and the user name stays for mentions',
     }, async (h, wrong) => {
       const reader = await h.sessionWith(['daily_logs.create']);
       const res = await h.get('/api/users/list-simple', reader);
@@ -85,7 +85,7 @@ export async function runAccessPackageTwoQualityTests(shouldRun: ShouldRun): Pro
     await runCase(results, {
       id: 'sec_login_event_role_name_td_540',
       name: 'v9.0.224: the login event and the test-user health check name the role, not its code (TD-540)',
-      details: 'B02-25: the audit page showed the role code stored in a login event and the synthetic_test_users health check listed «نقش: <code>» with «(TD-521)»; now the login event stores roleName, the stored name of the role, beside the code, and the health check shows that name',
+      details: 'B02-25: the audit page showed the role code stored in a login event and the synthetic_test_users health check listed "role: <code>" with "(TD-521)"; now the login event stores roleName, the stored name of the role, beside the code, and the health check shows that name',
     }, async (h, wrong) => {
       const member = await h.sessionWith(['documents.view']);
       const [role] = await h.q('SELECT name FROM roles WHERE code = $1', [member.role]);

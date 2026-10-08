@@ -43,24 +43,24 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
 
     const [after] = await orm.select({ status: documents.status }).from(documents).where(eq(documents.id, raceDoc.id));
     if (transitionCount !== 1 || after?.status !== 'final') {
-      throw new Error(`گذار draft→final دقیقاً ۱ بار باید انجام شود؛ انجام‌شده: ${transitionCount}، وضعیت: ${after?.status}`);
+      throw new Error(`the draft->final transition must happen exactly once; happened: ${transitionCount}, status: ${after?.status}`);
     }
     results.push(makeTestCase({
       id: 'conc_simultaneous_approval',
       scenarioId: 'two_users_approve_simultaneously',
-      name: 'تایید همزمان دو کاربر روی یک کارتابل (Two users approve simultaneously)',
+      name: 'Two users approve one inbox item at the same time (Two users approve simultaneously)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t1Start,
-      details: 'دو تراکنش موازی واقعی PostgreSQL با قفل ردیفی (.for update): گذار draft→final دقیقاً یک‌بار اعمال شد (وضعیت نهایی=final).'
+      details: 'Two real parallel PostgreSQL transactions with a row lock (.for update): the draft->final transition was applied exactly once (final status=final).'
     }));
     try { await orm.delete(documents).where(eq(documents.id, raceDoc.id)); } catch { /* cleanup best-effort */ }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_simultaneous_approval',
       scenarioId: 'two_users_approve_simultaneously',
-      name: 'تایید همزمان دو کاربر روی یک کارتابل (Two users approve simultaneously)',
+      name: 'Two users approve one inbox item at the same time (Two users approve simultaneously)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: false,
@@ -106,24 +106,24 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
     // Precisely one transaction must win, and the other must be rejected for insufficient stock
     const validOutcome = (ok8 && blocked5 && finalStock === 2) || (ok5 && blocked8 && finalStock === 5);
     if (!validOutcome) {
-      throw new Error(`رقابت کسر واقعی: ok8=${ok8}, ok5=${ok5}, مسدود8=${blocked8}, مسدود5=${blocked5}, موجودی نهایی=${finalStock} (انتظار: دقیقا یک تراکنش موفق و دیگری مسدود)`);
+      throw new Error(`real deduction race: ok8=${ok8}, ok5=${ok5}, blocked8=${blocked8}, blocked5=${blocked5}, final stock=${finalStock} (expected: exactly one transaction succeeds and the other is blocked)`);
     }
     results.push(makeTestCase({
       id: 'conc_simultaneous_stock_issue',
       scenarioId: 'two_users_issue_same_stock',
-      name: 'حواله خروج همزمان دو کاربر از یک قلم کالا (Two users issue same stock)',
+      name: 'Two users issue a remittance for the same item at the same time (Two users issue same stock)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t2Start,
-      details: 'دو تراکنش موازی واقعی PostgreSQL روی کالای سینتتیک (موجودی ۱۰): کسر ۸ موفق، کسر ۵ به‌دلیل عدم کفایت مسدود، موجودی نهایی=۲.'
+      details: 'Two real parallel PostgreSQL transactions on a synthetic item (stock 10): deducting 8 succeeded, deducting 5 was blocked for insufficient stock, final stock=2.'
     }));
     try { await orm.delete(items).where(eq(items.id, raceItem.id)); } catch { /* cleanup best-effort */ }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_simultaneous_stock_issue',
       scenarioId: 'two_users_issue_same_stock',
-      name: 'حواله خروج همزمان دو کاربر از یک قلم کالا (Two users issue same stock)',
+      name: 'Two users issue a remittance for the same item at the same time (Two users issue same stock)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: false,
@@ -173,17 +173,17 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'conc_inventory_atomicity_wac',
-      name: 'چرخه حیات اتمیک موجودی و بهای تمام‌شده موزون (Atomic Inventory Lifecycle & WAC Integrity)',
+      name: 'Atomic stock lifecycle and weighted average cost (Atomic Inventory Lifecycle & WAC Integrity)',
       layer: 'concurrency',
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - t3Start,
-      details: 'چرخه ورود/خروج/انتقال با توابع واقعی production (FinancialMath.calculateWAC + fin decimal) اعتبارسنجی شد: WAC 12,500 و تطابق سه‌گانه انبارها.'
+      details: 'In/out/transfer cycle validated with the real production functions (FinancialMath.calculateWAC + fin decimal): WAC 12,500 and three-way warehouse match.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_inventory_atomicity_wac',
-      name: 'چرخه حیات اتمیک موجودی و بهای تمام‌شده موزون (Atomic Inventory Lifecycle & WAC Integrity)',
+      name: 'Atomic stock lifecycle and weighted average cost (Atomic Inventory Lifecycle & WAC Integrity)',
       layer: 'concurrency',
       executionType: 'real_code',
       passed: false,
@@ -286,17 +286,17 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'conc_deadlock_prevention_lock_ordering',
-      name: 'پیشگیری از بن‌بست و انضباط ترتیبی قفل‌ها (Deadlock Prevention & Lock Ordering)',
+      name: 'Deadlock prevention and lock ordering discipline (Deadlock Prevention & Lock Ordering)',
       layer: 'concurrency',
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - t4Start,
-      details: 'سلسله‌مراتب ایزولاسیون قفل‌ها، مرتب‌سازی صعودی کلیدها و عبور تراکنش واحد بدون Deadlock تایید گردید.'
+      details: 'Lock isolation hierarchy, ascending key ordering and a single transaction passing without deadlock verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_deadlock_prevention_lock_ordering',
-      name: 'پیشگیری از بن‌بست و انضباط ترتیبی قفل‌ها (Deadlock Prevention & Lock Ordering)',
+      name: 'Deadlock prevention and lock ordering discipline (Deadlock Prevention & Lock Ordering)',
       layer: 'concurrency',
       executionType: 'real_code',
       passed: false,
@@ -388,17 +388,17 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'conc_optimistic_concurrency_control',
-      name: 'کنترل همزمانی خوش‌بینانه و اعتبارسنجی نسخه (OCC & Version Stamping)',
+      name: 'Optimistic concurrency control and version validation (OCC & Version Stamping)',
       layer: 'concurrency',
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - t5Start,
-      details: 'تشخیص تداخل نسخه (Version Mismatch)، صدور خطای ۴۰۹ ساختاریافته و مکانیسم بازآزمایی خودکار با موفقیت تایید شد.'
+      details: 'Version conflict detection (Version Mismatch), a structured 409 error and the automatic retry mechanism verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_optimistic_concurrency_control',
-      name: 'کنترل همزمانی خوش‌بینانه و اعتبارسنجی نسخه (OCC & Version Stamping)',
+      name: 'Optimistic concurrency control and version validation (OCC & Version Stamping)',
       layer: 'concurrency',
       executionType: 'real_code',
       passed: false,
@@ -502,17 +502,17 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'conc_idempotency_engine_deduplication',
-      name: 'موتور جامع یکپارچه‌سازی و جلوگیری از درخواست تکراری (Idempotency Key Engine)',
+      name: 'Duplicate request prevention engine (Idempotency Key Engine)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t6Start,
-      details: 'انحصار قفل موقت (In-Progress Lock)، ممانعت از دوبار اجرا، و پاسخ‌دهی قطعی از حافظه نهان (Cached Response) تصدیق شد.'
+      details: 'Exclusive in-progress lock (In-Progress Lock), prevention of double execution and a definitive cached response (Cached Response) verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_idempotency_engine_deduplication',
-      name: 'موتور جامع یکپارچه‌سازی و جلوگیری از درخواست تکراری (Idempotency Key Engine)',
+      name: 'Duplicate request prevention engine (Idempotency Key Engine)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: false,
@@ -600,17 +600,17 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'conc_idempotency_triple_key_isolation',
-      name: 'ایزوله‌سازی سه‌گانه کلید ایدمپوتنسی (Triple-Key: User + Scope + Key)',
+      name: 'Three-part idempotency key isolation (Triple-Key: User + Scope + Key)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t6bStart,
-      details: 'تفکیک کامل دامنه‌ها و کاربران مستقل با کلید یکسان بدون تداخل و بدون نشت اطلاعات (TD-095) راستی‌آزمایی شد.'
+      details: 'Full separation of scopes and independent users with the same key, without conflict or data leak (TD-095), verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_idempotency_triple_key_isolation',
-      name: 'ایزوله‌سازی سه‌گانه کلید ایدمپوتنسی (Triple-Key: User + Scope + Key)',
+      name: 'Three-part idempotency key isolation (Triple-Key: User + Scope + Key)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: false,
@@ -663,19 +663,19 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
     const [afterDoc] = await orm.select({ status: documents.status }).from(documents).where(eq(documents.id, rlkDoc.id));
     const [afterItem] = await orm.select({ currentStock: items.currentStock }).from(items).where(eq(items.id, rlkItem.id));
     if (afterDoc?.status !== 'final') {
-      throw new Error(`وضعیت سند پس از finalize موازی: ${afterDoc?.status} (انتظار: final)`);
+      throw new Error(`document status after parallel finalize: ${afterDoc?.status} (expected: final)`);
     }
     if (Number(afterItem?.currentStock) !== 97) {
-      throw new Error(`موجودی کالا ${afterItem?.currentStock} کسر شد (انتظار: دقیقاً یک‌بار → 97)`);
+      throw new Error(`item stock was deducted to ${afterItem?.currentStock} (expected: exactly once -> 97)`);
     }
     results.push(makeTestCase({
       id: 'conc_finalize_document_row_locking',
-      name: 'قطعی‌سازی همزمان سند و قفل‌گذاری سطری (Concurrent Document Finalize with FOR UPDATE)',
+      name: 'Concurrent document finalize with row locking (Concurrent Document Finalize with FOR UPDATE)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t7Start,
-      details: '۵ finalizeDocument موازی واقعی: سند قطعی شد و موجودی از ۱۰۰ دقیقاً یک‌بار به ۹۷ کسر شد (بدون دوباره‌کسی).'
+      details: '5 real parallel finalizeDocument calls: the document became final and stock went from 100 to 97 exactly once (no double deduction).'
     }));
     // Cleanup (ترتیب فرزند→والد)
     try {
@@ -686,7 +686,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_finalize_document_row_locking',
-      name: 'قطعی‌سازی همزمان سند و قفل‌گذاری سطری (Concurrent Document Finalize with FOR UPDATE)',
+      name: 'Concurrent document finalize with row locking (Concurrent Document Finalize with FOR UPDATE)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: false,
@@ -717,21 +717,21 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
     const uniqueCount = new Set(generatedNumbers).size;
 
     if (uniqueCount !== 10 || generatedNumbers.length !== 10 || generatedNumbers.some(n => !Number.isFinite(n))) {
-      throw new Error(`ناهماهنگی در nextval واقعی: تعداد شماره‌های یکتا ${uniqueCount} از ۱۰ (مقادیر: ${generatedNumbers.join(',')})`);
+      throw new Error(`real nextval mismatch: ${uniqueCount} unique numbers out of 10 (values: ${generatedNumbers.join(',')})`);
     }
     results.push(makeTestCase({
       id: 'conc_voucher_number_sequence_atomic',
-      name: 'ارزیابی تولید اتمیک و بدون تداخل شماره سند حسابداری با PostgreSQL Sequence (DB-001)',
+      name: 'Atomic, conflict-free journal voucher number generation with a PostgreSQL Sequence (DB-001)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t8Start,
-      details: '۱۰ nextval موازی واقعی روی journal_voucher_number_seq همه یکتا بودند (بازه: از کوچک‌ترین تا بزرگ‌ترین).'
+      details: '10 real parallel nextval calls on journal_voucher_number_seq were all unique (range: from smallest to largest).'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_voucher_number_sequence_atomic',
-      name: 'ارزیابی تولید اتمیک و بدون تداخل شماره سند حسابداری با PostgreSQL Sequence (DB-001)',
+      name: 'Atomic, conflict-free journal voucher number generation with a PostgreSQL Sequence (DB-001)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: false,
@@ -754,21 +754,21 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
     ));
     const uniqueTxCount = new Set(txNumbers).size;
     if (uniqueTxCount !== 10 || txNumbers.some(x => !x.includes('-'))) {
-      throw new Error(`تعداد شماره‌های یکتای تراکنش خزانه‌داری برابر ${uniqueTxCount} بود (نمونه: ${txNumbers[0]})`);
+      throw new Error(`the number of unique treasury transaction numbers was ${uniqueTxCount} (sample: ${txNumbers[0]})`);
     }
     results.push(makeTestCase({
       id: 'conc_treasury_tx_number_sequence_unique',
-      name: 'ارزیابی تولید اتمیک و شاخص یکتایی شماره تراکنش خزانه‌داری با Sequence (DB-003)',
+      name: 'Atomic generation and uniqueness of treasury transaction numbers with a Sequence (DB-003)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t9Start,
-      details: '۱۰ nextval موازی واقعی روی treasury_tx_number_seq با فرمت REC/PAY همه یکتا صادر شدند.'
+      details: '10 real parallel nextval calls on treasury_tx_number_seq issued unique numbers in REC/PAY format.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_treasury_tx_number_sequence_unique',
-      name: 'ارزیابی تولید اتمیک و شاخص یکتایی شماره تراکنش خزانه‌داری با Sequence (DB-003)',
+      name: 'Atomic generation and uniqueness of treasury transaction numbers with a Sequence (DB-003)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: false,
@@ -797,20 +797,20 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
     if (uniqueDocRefSet.size === 10 && generatedDocRefs.length === 10) {
       results.push(makeTestCase({
         id: 'conc_doc_ref_counter_table_isolation',
-        name: 'ارزیابی تولید شماره سند (ref_number) همزمان با جدول Counter و حذف Lock Contention (DB-011)',
+        name: 'Concurrent document number (ref_number) generation with a counter table and no lock contention (DB-011)',
         layer: 'concurrency',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t10Start,
-        details: '۱۰ شماره مرجع سند همزمان بدون قفل‌شدن جدول اسناد و با استفاده از جدول document_ref_counters کاملاً یکتا صادر گردید.'
+        details: '10 concurrent document reference numbers were issued fully unique through document_ref_counters without locking the documents table.'
       }));
     } else {
-      throw new Error(`تعداد شماره‌های مرجع یکتا ${uniqueDocRefSet.size} از ۱۰ بود.`);
+      throw new Error(`there were ${uniqueDocRefSet.size} unique reference numbers out of 10.`);
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_doc_ref_counter_table_isolation',
-        name: 'ارزیابی تولید شماره سند (ref_number) همزمان با جدول Counter و حذف Lock Contention (DB-011)',
+        name: 'Concurrent document number (ref_number) generation with a counter table and no lock contention (DB-011)',
         layer: 'concurrency',
         executionType: 'real_database',
         passed: false,
@@ -847,21 +847,21 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'conc_lock_order_hierarchy_assertion',
         scenarioId: 'validate_lock_order_enforcement',
-        name: 'تضمین رعایت ترتیب قفل‌ها در Lock Acquisition (DB-018)',
+        name: 'Lock order is enforced on lock acquisition (DB-018)',
         layer: 'concurrency',
         executionType: 'real_code',
         passed: true,
         durationMs: Date.now() - t11Start,
-        details: 'تابع validateLockOrder نقض ترتیب قفل (Document قبل از Item) را کشف و خطا صادر کرد.'
+        details: 'validateLockOrder detected the lock order violation (Document before Item) and threw an error.'
       }));
     } else {
-      throw new Error('نقض ترتیب قفل‌ها توسط validateLockOrder کشف نشد.');
+      throw new Error('validateLockOrder did not detect the lock order violation.');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_lock_order_hierarchy_assertion',
       scenarioId: 'validate_lock_order_enforcement',
-      name: 'تضمین رعایت ترتیب قفل‌ها در Lock Acquisition (DB-018)',
+      name: 'Lock order is enforced on lock acquisition (DB-018)',
       layer: 'concurrency',
       executionType: 'real_code',
       passed: false,
@@ -972,24 +972,24 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
     }));
 
     if (successCount !== 1 || conflictCount !== 1) {
-      throw new Error(`رفتار همزمانی فیش نامعتبر است: موفقیت=${successCount} (انتظار: ۱)، تعارض=${conflictCount} (انتظار: ۱)`);
+      throw new Error(`payslip concurrency behaviour is invalid: success=${successCount} (expected: 1), conflict=${conflictCount} (expected: 1)`);
     }
 
     results.push(makeTestCase({
       id: 'conc_piecework_payroll_atomic_race_guard',
       scenarioId: 'piecework_payroll_concurrency_race_guard',
-      name: 'جلوگیری از صدور همزمان چند فیش روی کارکردهای معوق و توالی اتمیک (TD-091)',
+      name: 'Prevents issuing several payslips at once over pending work logs, with an atomic sequence (TD-091)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t12Start,
-      details: 'دو تراکنش همزمان برای صدور فیش روی کارکرد یکسان اجرا شدند: دقیقاً یک فیش با شماره سریال اتمیک صادر شد و تراکنش موازی به درستی از ادعای تکراری کارکرد جلوگیری کرد.'
+      details: 'Two concurrent transactions issued a payslip over the same work log: exactly one payslip was issued with an atomic serial number and the parallel transaction was correctly kept from claiming the work log again.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'conc_piecework_payroll_atomic_race_guard',
       scenarioId: 'piecework_payroll_concurrency_race_guard',
-      name: 'جلوگیری از صدور همزمان چند فیش روی کارکردهای معوق و توالی اتمیک (TD-091)',
+      name: 'Prevents issuing several payslips at once over pending work logs, with an atomic sequence (TD-091)',
       layer: 'concurrency',
       executionType: 'real_database',
       passed: false,

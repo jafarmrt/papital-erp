@@ -16,7 +16,7 @@ export async function runPartyBankInfoScopeTests(shouldRun: (id: string, ...extr
   const id = 'sec_party_bank_info_scope_td_433';
   if (!shouldRun(id, 'security', 'td433', 'customer', 'bank', 'package9')) return results;
 
-  const name = 'v9.0.21: فهرست طرف حساب‌ها (و خروجی آن) و «تبدیل به مشتری» اطلاعات بانکی را فقط به دارندگان customers.view، customers.manage یا یک مجوز accounting.* می‌دهند؛ انبار، اسناد، ارتباط با مشتری، پروژه و خرید طرف حساب را بی bankInfo می‌گیرند (TD-433)';
+  const name = 'v9.0.21: the party list (and its export) and convert to customer give bank details only to holders of customers.view, customers.manage or an accounting.* key; warehouse, documents, CRM, project and procurement get parties without bankInfo (TD-433)';
   const tStart = Date.now();
   const customerIds: number[] = [];
   const leadIds: number[] = [];
@@ -54,11 +54,11 @@ export async function runPartyBankInfoScopeTests(shouldRun: (id: string, ...extr
       const search = `search=${encodeURIComponent(party.name)}`;
       const pick = (rows: unknown) => (Array.isArray(rows) ? rows : []).find((r: { id?: number }) => r.id === party.id) as Record<string, unknown> | undefined;
       const options = await get(`/api/customers/options?${search}`);
-      if (options.status !== 200) throw new Error(`فهرست انتخاب طرف حساب‌ها ${options.status} داد`);
+      if (options.status !== 200) throw new Error(`party pick list returned ${options.status}`);
       if (!full) return [pick(options.body?.data)];
       const page = await get(`/api/customers?${search}`);
       const exported = await get(`/api/customers?export=true&${search}`);
-      if (page.status !== 200 || exported.status !== 200) throw new Error(`فهرست طرف حساب‌ها ${page.status}/${exported.status} داد`);
+      if (page.status !== 200 || exported.status !== 200) throw new Error(`party list returned ${page.status}/${exported.status}`);
       return [pick(options.body?.data), pick(page.body?.data), pick(exported.body)];
     };
     const hasBank = (row: Record<string, unknown> | undefined) => (row?.bankInfo as { shaba?: string } | undefined)?.shaba === bankInfo.shaba;
@@ -67,8 +67,8 @@ export async function runPartyBankInfoScopeTests(shouldRun: (id: string, ...extr
     // ۱) دارندگان مجوز خواندن فهرست بی مجوز طرف حساب یا حسابداری: ردیف هست، اطلاعات بانکی نیست
     for (const permission of ['warehouse.in', 'documents.view', 'documents.create', 'crm.view', 'projects.view', 'procurement.view']) {
       const rows = await listedRows(await sessionWith([permission]), false);
-      if (rows.some(r => r === undefined)) wrong.push(`${permission}: طرف حساب در فهرست نیامد`);
-      if (rows.some(hasAnyBankKey)) wrong.push(`${permission}: اطلاعات بانکی در فهرست یا خروجی آمد`);
+      if (rows.some(r => r === undefined)) wrong.push(`${permission}: party did not appear in the list`);
+      if (rows.some(hasAnyBankKey)) wrong.push(`${permission}: bank details appeared in the list or export`);
     }
 
     // ۲) customers.view، customers.manage، هر مجوز accounting.* و مدیر سامانه: اطلاعات بانکی کامل
@@ -80,22 +80,22 @@ export async function runPartyBankInfoScopeTests(shouldRun: (id: string, ...extr
     ];
     for (const [label, permissions] of allowed) {
       const rows = await listedRows(await sessionWith(permissions), permissions.includes('customers.view'));
-      if (!rows.every(hasBank)) wrong.push(`${label}: اطلاعات بانکی در فهرست یا خروجی نیامد`);
+      if (!rows.every(hasBank)) wrong.push(`${label}: bank details did not appear in the list or export`);
     }
-    if (!(await listedRows(admin, true)).every(hasBank)) wrong.push('مدیر سامانه اطلاعات بانکی را در فهرست یا خروجی نگرفت');
+    if (!(await listedRows(admin, true)).every(hasBank)) wrong.push('system admin did not get bank details in the list or export');
 
     // ۳) «تبدیل به مشتری» با نقش فقط ارتباط با مشتری: طرف حساب بی اطلاعات بانکی؛ مدیر سامانه با آن
     const convert = async (s: Session) => {
       const lead = await request(app).post('/api/crm/leads').set('Cookie', admin.cookie).set('x-csrf-token', admin.csrfToken)
         .send({ title: `پرونده بانکی ${tag}-${leadIds.length + 1}`, customerId: party.id, expectedCloseDate: today });
-      if (lead.status !== 201) throw new Error(`ثبت پرونده ${lead.status} داد`);
+      if (lead.status !== 201) throw new Error(`creating the sales file returned ${lead.status}`);
       leadIds.push(lead.body.id);
       const res = await request(app).post(`/api/crm/leads/${lead.body.id}/convert-to-customer`).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken).send({});
-      if (res.status !== 200 || res.body?.customer?.id !== party.id) throw new Error(`تبدیل به مشتری ${res.status} داد (طرف حساب ${res.body?.customer?.id})`);
+      if (res.status !== 200 || res.body?.customer?.id !== party.id) throw new Error(`convert to customer returned ${res.status} (party ${res.body?.customer?.id})`);
       return res.body.customer as Record<string, unknown>;
     };
-    if (hasAnyBankKey(await convert(await sessionWith(['crm.view', 'crm.manage'])))) wrong.push('«تبدیل به مشتری» با نقش فقط ارتباط با مشتری اطلاعات بانکی داد');
-    if (!hasBank(await convert(admin))) wrong.push('«تبدیل به مشتری» برای مدیر سامانه اطلاعات بانکی نداد');
+    if (hasAnyBankKey(await convert(await sessionWith(['crm.view', 'crm.manage'])))) wrong.push('"convert to customer" with a customer-relations-only role returned bank details');
+    if (!hasBank(await convert(admin))) wrong.push('"convert to customer" returned no bank details for the system admin');
 
     // ۴) فهرست مجاز همه مجوزهای accounting.* کاتالوگ را دارد (مجوز حسابداری تازه بی‌صدا جا نمی‌ماند)
     const listed = new Set<string>(PARTY_BANK_INFO_PERMISSIONS);
@@ -104,10 +104,10 @@ export async function runPartyBankInfoScopeTests(shouldRun: (id: string, ...extr
       .filter(k => !listed.has(k));
     if (missing.length > 0) wrong.push(`مجوزهای بی دسترسی به اطلاعات بانکی: ${missing.join('، ')}`);
 
-    if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+    if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'security', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'شش مجوز فرم‌ها فهرست انتخاب را بی bankInfo می‌گیرند (از v9.0.120)؛ customers.view، customers.manage، accounting.treasury، accounting.reports و مدیر با آن؛ «تبدیل به مشتری» نقش فقط CRM بی آن',
+      details: 'six form permissions get the pick list without bankInfo (since v9.0.120); customers.view, customers.manage, accounting.treasury, accounting.reports and the admin get it; "convert to customer" for a CRM-only role does not',
     }));
   } catch (err) {
     results.push(makeTestCase({

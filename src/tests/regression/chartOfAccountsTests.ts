@@ -207,7 +207,7 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
       const custom = await admin.post('/api/accounting/accounts', { code: '1499', name: 'TD-550 raw materials', level: 'subsidiary', parentId: acc['14'], accountType: 'asset', nature: 'debit' });
       if (custom.status !== 201) problems.push(`creating 1499 answered ${custom.status}`);
       const persian = await save({ inventoryRawMaterialsCode: '۱۴۹۹' });
-      if (persian.status !== 200 || await stored() !== '1499') problems.push(`«۱۴۹۹» answered ${persian.status}, stored ${await stored()}`);
+      if (persian.status !== 200 || await stored() !== '1499') problems.push(`"1499" in Persian digits answered ${persian.status}, stored ${await stored()}`);
       const disabledSave = await save({ inventoryRawMaterialsCode: '1401', salesRevenueAccountCode: '9999', disabled: ['salesRevenueAccountCode'] });
       if (disabledSave.status !== 200) problems.push(`a disabled concept with an unknown code answered ${disabledSave.status} ${JSON.stringify(disabledSave.body).slice(0, 160)}`);
       await save({ salesRevenueAccountCode: '5001', disabled: [] });
@@ -316,12 +316,14 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
       };
       const body = (code: string, name: string) => ({ code, name, level: 'subsidiary', parentId: acc['70'], accountType: 'expense', nature: 'debit' });
       const codeOf = async (id: number) => (await orm.select({ code: accounts.code }).from(accounts).where(eq(accounts.id, id)))[0]?.code;
+      const persian7096 = '۷۰۹۶';
+      const persian7099 = '۷۰۹۹';
 
       // 1) B03-16 S12: «۷۰۹۶» and «7096» became two accounts
       const persian = await admin.post('/api/accounting/accounts', body('۷۰۹۶', 'TD-558 Persian digits'));
-      expect('creating «۷۰۹۶»', persian, 201);
+      expect('creating 7096 in Persian digits', persian, 201);
       const id7096 = Number(persian.body?.id);
-      if (await codeOf(id7096) !== '7096') problems.push(`«۷۰۹۶» was stored as ${await codeOf(id7096)}`);
+      if (await codeOf(id7096) !== '7096') problems.push(`"7096" in Persian digits was stored as ${await codeOf(id7096)}`);
       expect('creating 7096 again', await admin.post('/api/accounting/accounts', body('7096', 'TD-558 duplicate')), 409, 'ACCOUNT_CODE_TAKEN');
       expect('creating «70-96»', await admin.post('/api/accounting/accounts', body('70-96', 'TD-558 dash')), 400);
 
@@ -334,7 +336,7 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
       // 3) a new code on edit was ignored and the form said «ویرایش شد»
       expect('changing the code of 7096', await admin.put(`/api/accounting/accounts/${id7096}`, { code: '7098', name: 'TD-558 renamed' }), 422, 'ACCOUNT_CODE_IMMUTABLE');
       if (await codeOf(id7096) !== '7096') problems.push('the refused code change still changed the code');
-      expect('saving 7096 with its own code in Persian digits', await admin.put(`/api/accounting/accounts/${id7096}`, { code: '۷۰۹۶', name: 'TD-558 renamed' }), 200);
+      expect('saving 7096 with its own code in Persian digits', await admin.put(`/api/accounting/accounts/${id7096}`, { code: persian7096, name: 'TD-558 renamed' }), 200);
 
       // 4) legacy codes written by earlier versions
       const [legacy] = await orm.insert(accounts).values({ code: '۷۰۹۹', name: 'TD-558 legacy', level: 'subsidiary', parentId: acc['70'], accountType: 'expense', nature: 'debit', isSystem: 0, isActive: 1, isDeleted: 0 }).returning({ id: accounts.id });
@@ -343,10 +345,10 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
       const listed = (before?.items ?? []).map(i => Number(i.id)).sort();
       if (before?.status !== 'warning' || listed.join(',') !== [legacy.id, twin.id].sort().join(',')) problems.push(`health check before the repair: ${JSON.stringify(before).slice(0, 300)}`);
       if (!before?.items?.find(i => Number(i.id) === twin.id)?.details?.includes('7096')) problems.push('the health check did not name the account that holds the twin code');
-      expect('creating 7099 beside legacy «۷۰۹۹»', await admin.post('/api/accounting/accounts', body('7099', 'TD-558 beside legacy')), 409, 'ACCOUNT_CODE_TAKEN');
-      expect('saving legacy «۷۰۹۹»', await admin.put(`/api/accounting/accounts/${legacy.id}`, { code: '۷۰۹۹', name: 'TD-558 legacy saved' }), 200);
-      if (await codeOf(legacy.id) !== '7099') problems.push(`legacy «۷۰۹۹» after saving: ${await codeOf(legacy.id)}`);
-      expect('saving legacy «۷۰۹۶» while 7096 exists', await admin.put(`/api/accounting/accounts/${twin.id}`, { code: '۷۰۹۶', name: 'TD-558 twin saved' }), 409, 'ACCOUNT_CODE_TAKEN');
+      expect('creating 7099 beside the legacy Persian-digit 7099', await admin.post('/api/accounting/accounts', body('7099', 'TD-558 beside legacy')), 409, 'ACCOUNT_CODE_TAKEN');
+      expect('saving the legacy Persian-digit 7099', await admin.put(`/api/accounting/accounts/${legacy.id}`, { code: persian7099, name: 'TD-558 legacy saved' }), 200);
+      if (await codeOf(legacy.id) !== '7099') problems.push(`legacy "7099" in Persian digits after saving: ${await codeOf(legacy.id)}`);
+      expect('saving the legacy Persian-digit 7096 while 7096 exists', await admin.put(`/api/accounting/accounts/${twin.id}`, { code: persian7096, name: 'TD-558 twin saved' }), 409, 'ACCOUNT_CODE_TAKEN');
       const after = (await FinancialHealthService.runHealthCheck()).tests.find(t => t.id === 'account_code_not_latin');
       if ((after?.items ?? []).map(i => Number(i.id)).join(',') !== String(twin.id)) problems.push(`health check after the repair: ${JSON.stringify(after?.items)}`);
 

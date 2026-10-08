@@ -20,7 +20,7 @@ export async function runPartyAccountCardTests(shouldRun: (id: string, ...extra:
   const id = 'reg_customer_account_card_by_party_td_416';
   if (!shouldRun(id, 'td416', 'customer', 'account_card', 'crm', 'package9')) return results;
 
-  const name = 'v9.0.4: کارت حساب طرف حساب با شناسه او گرفته می‌شود؛ مانده طرف حساب دیگری با نام مشابه جمع نمی‌شود و تغییر نام کارت را صفر نمی‌کند (TD-416)';
+  const name = 'v9.0.4: a party\'s account card is read by its id; another party\'s balance with a similar name is not added and a rename does not zero the card (TD-416)';
   const tStart = Date.now();
   const createdCustomerIds: number[] = [];
   const createdRoleIds: number[] = [];
@@ -42,7 +42,7 @@ export async function runPartyAccountCardTests(shouldRun: (id: string, ...extra:
     const wh = (await getDefaultWarehouseCode(orm)) as string;
     const receivable = await AccountMappingService.getTradeReceivablesAccount();
     const payable = await AccountMappingService.getTradePayablesAccount();
-    if (!receivable || !payable) throw new Error('حساب دریافتنی یا پرداختنی تجاری در نگاشت حساب‌ها نیست');
+    if (!receivable || !payable) throw new Error('The trade receivables or trade payables account is not in the account mapping');
 
     const finalInvoice = async (buyerName: string, unitPrice: number): Promise<void> => {
       const item = await createTestItem({ type: 'product', stocks: { [wh]: 5 }, weightedAverageCost: 100000 });
@@ -89,22 +89,22 @@ export async function runPartyAccountCardTests(shouldRun: (id: string, ...extra:
 
     // ۱) کارت A: ۱٬۰۰۰٬۰۰۰ + ۲۰۰٬۰۰۰ − ۴۰۰٬۰۰۰ = ۸۰۰٬۰۰۰؛ ردیف‌های B (با شناسه یا بی‌شناسه) نمی‌آیند
     const first = await card(a.id);
-    if (first.status !== 200) throw new Error(`کارت حساب A وضعیت ${first.status} داد: ${JSON.stringify(first.body).slice(0, 200)}`);
-    if (first.body.finalBalance !== 800_000) wrong.push(`مانده کارت A ${first.body.finalBalance} است، نه ۸۰۰٬۰۰۰`);
+    if (first.status !== 200) throw new Error(`account card A returned status ${first.status}: ${JSON.stringify(first.body).slice(0, 200)}`);
+    if (first.body.finalBalance !== 800_000) wrong.push(`card A balance is ${first.body.finalBalance}, not 800,000`);
     const foreign = ledgerRows(first.body).filter(r => r.detailedId === b.id || r.detailedName === b.name);
-    if (foreign.length > 0) wrong.push(`${foreign.length} ردیف B در کارت A آمد`);
-    if (ledgerRows(first.body).length !== 3) wrong.push(`کارت A ${ledgerRows(first.body).length} ردیف دارد، نه ۳`);
+    if (foreign.length > 0) wrong.push(`${foreign.length} rows of B appeared in card A`);
+    if (ledgerRows(first.body).length !== 3) wrong.push(`card A has ${ledgerRows(first.body).length} rows, not 3`);
 
     // ۲) کارت B فقط خودش: ۵٬۰۰۰٬۰۰۰ + ۷٬۰۰۰
     const second = await card(b.id);
-    if (second.body.finalBalance !== 5_007_000) wrong.push(`مانده کارت B ${second.body.finalBalance} است، نه ۵٬۰۰۷٬۰۰۰`);
+    if (second.body.finalBalance !== 5_007_000) wrong.push(`card B balance is ${second.body.finalBalance}, not 5,007,000`);
 
     // ۳) تغییر نام A با فرم طرف حساب: ردیف‌های شناسه‌دار می‌مانند (۱٬۰۰۰٬۰۰۰ − ۴۰۰٬۰۰۰)؛ ردیف بی‌شناسه نام قدیم را دارد
     const renamed = await request(app).put(`/api/customers/${a.id}`).set('Cookie', admin.cookie).set('x-csrf-token', admin.csrfToken)
       .send({ name: `علی کاظمی ${tag} (فروشگاه مرکزی)`, phone: a.phone, partyType: 'both', version: a.version });
-    if (renamed.status !== 200) throw new Error(`تغییر نام A وضعیت ${renamed.status} داد`);
+    if (renamed.status !== 200) throw new Error(`renaming A returned status ${renamed.status}`);
     const third = await card(a.id);
-    if (third.body.finalBalance !== 600_000) wrong.push(`پس از تغییر نام، مانده کارت A ${third.body.finalBalance} است، نه ۶۰۰٬۰۰۰`);
+    if (third.body.finalBalance !== 600_000) wrong.push(`after the rename, card A balance is ${third.body.finalBalance}, not 600,000`);
 
     // ۴) دسترسی: همان مجوزهای کارت حساب؛ دارنده فقط «ورود کالا» (انتخابگر طرف حساب) مانده را نمی‌بیند
     const viewerRole = await createTestRole({ permissions: ['customers.view'] });
@@ -115,17 +115,17 @@ export async function runPartyAccountCardTests(shouldRun: (id: string, ...extra:
     createdUserIds.push(viewer.id, picker.id);
     const viewerCard = await card(a.id, await loginTestUserWithSession(app, viewer.username));
     const pickerCard = await card(a.id, await loginTestUserWithSession(app, picker.username));
-    if (viewerCard.status !== 200) wrong.push(`دارنده customers.view کارت را با ${viewerCard.status} نگرفت`);
-    if (pickerCard.status !== 403) wrong.push(`دارنده فقط warehouse.in کارت را با ${pickerCard.status} گرفت، نه ۴۰۳`);
+    if (viewerCard.status !== 200) wrong.push(`the customers.view holder did not get the card (status ${viewerCard.status})`);
+    if (pickerCard.status !== 403) wrong.push(`a holder of only warehouse.in got the card with ${pickerCard.status}, not 403`);
 
     // ۵) طرف حساب ناموجود
     const missing = await get('/api/customers/987654321/account-card');
-    if (missing.status !== 404) wrong.push(`کارت طرف حساب ناموجود ${missing.status} داد، نه ۴۰۴`);
+    if (missing.status !== 404) wrong.push(`the card of a missing party returned ${missing.status}, not 404`);
 
-    if (wrong.length > 0) throw new Error(wrong.join('، '));
+    if (wrong.length > 0) throw new Error(wrong.join(', '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'کارت A با شناسه: ۸۰۰٬۰۰۰ (فروش، ردیف تأمین‌کننده و ردیف بی‌شناسه نام دقیق؛ بی ردیف B)؛ B: ۵٬۰۰۷٬۰۰۰؛ پس از تغییر نام ۶۰۰٬۰۰۰؛ customers.view ۲۰۰، warehouse.in ۴۰۳، ناموجود ۴۰۴',
+      details: 'Card A by id: 800,000 (sale, supplier row and id-less row with the exact name; no row of B); B: 5,007,000; after the rename 600,000; customers.view 200, warehouse.in 403, missing 404',
     }));
   } catch (err) {
     results.push(makeTestCase({

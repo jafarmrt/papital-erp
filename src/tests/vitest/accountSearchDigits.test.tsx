@@ -19,8 +19,11 @@ function search(text: string) {
   fireEvent.change(input, { target: { value: text } });
 }
 
+/** The cash account's code 1101 typed in each digit form */
+const CASH_CODE_FORMS: Array<[string, string]> = [['Persian digits', '۱۱۰۱'], ['Arabic digits', '١١٠١'], ['Latin digits', '1101']];
+
 describe('account picker digits (TD-571)', () => {
-  it.each([['۱۱۰۱'], ['١١٠١'], ['1101']])('«%s» finds «صندوق»', (text) => {
+  it.each(CASH_CODE_FORMS)('code 1101 in %s finds the cash account', (_form, text) => {
     search(text);
     expect(screen.getByText('صندوق')).toBeTruthy();
     expect(screen.queryByText('حسابی با این کد یا عنوان یافت نشد')).toBeNull();

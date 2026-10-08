@@ -59,19 +59,19 @@ async function raceWorkLogChange(change: Change, payrollFirst: boolean): Promise
   const [payrollOutcome, changeOutcome] = payrollFirst ? outcomes : [outcomes[1], outcomes[0]];
 
   const problems: string[] = [];
-  if (payrollOutcome.status === 'rejected') problems.push(`${label}: صدور فیش رد شد (${getErrorMessage(payrollOutcome.reason)})`);
-  if (payrollFirst && changeOutcome.status === 'fulfilled') problems.push(`${label}: کارکرد درج‌شده در فیش ${change === 'edit' ? 'ویرایش' : 'حذف'} شد`);
+  if (payrollOutcome.status === 'rejected') problems.push(`${label}: payslip issue was refused (${getErrorMessage(payrollOutcome.reason)})`);
+  if (payrollFirst && changeOutcome.status === 'fulfilled') problems.push(`${label}: a work log included in a payslip was ${change === 'edit' ? 'edited' : 'deleted'}`);
   if (payrollFirst && changeOutcome.status === 'rejected' && !getErrorMessage(changeOutcome.reason).includes('در فیش حقوقی درج شده')) {
-    problems.push(`${label}: تغییر با پیام «در فیش حقوقی درج شده» رد نشد (${getErrorMessage(changeOutcome.reason)})`);
+    problems.push(`${label}: the change was not refused with the message "included in a payslip" (${getErrorMessage(changeOutcome.reason)})`);
   }
-  if (!payrollFirst && changeOutcome.status === 'rejected') problems.push(`${label}: تغییر کارکرد پیش از فیش رد شد (${getErrorMessage(changeOutcome.reason)})`);
+  if (!payrollFirst && changeOutcome.status === 'rejected') problems.push(`${label}: changing the work log before the payslip was refused (${getErrorMessage(changeOutcome.reason)})`);
 
   const state = await payrollAgainstLogs(worker);
   const expected = payrollFirst ? '200000' : change === 'edit' ? '600000' : '100000';
-  if (state.payrolls !== 1) problems.push(`${label}: ${state.payrolls} فیش زنده، نه یکی`);
-  if (Number(state.total) !== Number(expected)) problems.push(`${label}: جمع کارمزدی فیش ${state.total} است، نه ${expected}`);
-  if (Number(state.linked) !== Number(state.total)) problems.push(`${label}: جمع کارکردهای پیوندشده ${state.linked} با فیش ${state.total} نمی‌خواند`);
-  if (state.deletedLinked > 0) problems.push(`${label}: ${state.deletedLinked} کارکرد حذف‌شده به فیش زنده پیوند دارد`);
+  if (state.payrolls !== 1) problems.push(`${label}: ${state.payrolls} live payslips, not one`);
+  if (Number(state.total) !== Number(expected)) problems.push(`${label}: payslip piecework total is ${state.total}, not ${expected}`);
+  if (Number(state.linked) !== Number(state.total)) problems.push(`${label}: total of linked work logs ${state.linked} does not match the payslip ${state.total}`);
+  if (state.deletedLinked > 0) problems.push(`${label}: ${state.deletedLinked} deleted work logs are linked to a live payslip`);
   return problems;
 }
 
@@ -97,12 +97,12 @@ export async function checkWorkLogFrozenInPayroll(): Promise<string[]> {
   try {
     await PieceworkService.updateWorkLog(log, { quantity: 1, unitRate: 300000 });
   } catch (err) {
-    problems.push(`کارکرد فیش حذف‌شده ویرایش نشد (${getErrorMessage(err)})`);
+    problems.push(`work log of a deleted payslip was not edited (${getErrorMessage(err)})`);
   }
   await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD });
   const state = await payrollAgainstLogs(worker);
   if (state.payrolls !== 1 || Number(state.total) !== 300000 || Number(state.linked) !== 300000) {
-    problems.push(`فیش تازه پس از ویرایش کارکرد فیش حذف‌شده ناهم‌خوان است (${JSON.stringify(state)})`);
+    problems.push(`new payslip after editing a work log of a deleted payslip is inconsistent (${JSON.stringify(state)})`);
   }
   return problems;
 }

@@ -57,11 +57,11 @@ export async function checkReportsIgnoreDeletedVoucherItems(wh: string): Promise
   });
   await VoucherSyncService.syncPurchaseInvoiceVoucher(receipt, { strict: true });
   const receiptVouchers = await activeVoucherIds(receipt);
-  if (await deletedItemCount(receiptVouchers) === 0) problems.push('پیش‌شرط: همگام‌سازی دوباره ردیف حذف‌شده‌ای نساخت');
+  if (await deletedItemCount(receiptVouchers) === 0) problems.push('precondition: re-sync created no deleted row');
   await VoucherService.approveJournalVouchers(receiptVouchers, undefined, 'inv');
   const ledgerAfter = await healthMetric('inventory_reconciliation', 'ledgerValuation');
   if (Math.round(ledgerAfter - ledgerBefore) !== 1000000) {
-    problems.push(`بررسی سلامت مالی: مانده دفتر کل موجودی ${Math.round(ledgerAfter - ledgerBefore)} ریال تغییر کرد، انتظار ۱٬۰۰۰٬۰۰۰`);
+    problems.push(`financial health check: the inventory general ledger balance changed by ${Math.round(ledgerAfter - ledgerBefore)} rial, expected 1,000,000`);
   }
 
   // رسید تولید پروژه ۵ × ۲۰۰٬۰۰۰ (بستانکار کالای در جریان ساخت با تفصیلی پروژه)، همگام‌سازی دوباره
@@ -72,10 +72,10 @@ export async function checkReportsIgnoreDeletedVoucherItems(wh: string): Promise
   await VoucherSyncService.syncPurchaseInvoiceVoucher(production, { strict: true });
   const summary = (await AccountingReportService.getProjectSummaryReport()).find(r => r.projectId === project.id);
   if (!summary || !fin(summary.totalCredit).equals(1000000) || summary.entriesCount !== 1) {
-    problems.push(`گزارش خلاصه پروژه: بستانکار ${summary?.totalCredit ?? '-'} در ${summary?.entriesCount ?? 0} ردیف، انتظار ۱٬۰۰۰٬۰۰۰ در یک ردیف`);
+    problems.push(`project summary report: credit ${summary?.totalCredit ?? '-'} in ${summary?.entriesCount ?? 0} rows, expected 1,000,000 in one row`);
   }
   const detail = await AccountingReportService.getProjectDetailReport(project.id);
-  if (detail.length !== 1) problems.push(`گزارش ریز پروژه ${detail.length} ردیف دارد، انتظار یک ردیف`);
+  if (detail.length !== 1) problems.push(`project detail report has ${detail.length} rows, expected one row`);
 
 
   // سند دستی پیش‌نویس: بدهکار حساب بانکی (تفصیلی بانک) ۳۰۰٬۰۰۰ و مساعده پرسنل ۵۰۰٬۰۰۰؛ ویرایش پیش از تأیید و سپس تأیید
@@ -98,8 +98,8 @@ export async function checkReportsIgnoreDeletedVoucherItems(wh: string): Promise
   await VoucherService.updateJournalVoucher(manual.id, { description: 'سند دستی آزمون TD-270 (ویرایش‌شده)', items: manualItems });
   await VoucherService.approveJournalVouchers([manual.id], undefined, 'inv');
   const bankRow = (await BankAccountService.getBankAccounts()).find(b => b.id === bank.id);
-  if (!bankRow || !fin(bankRow.ledgerBalance ?? 0).equals(300000)) problems.push(`مانده دفتری حساب بانکی ${bankRow?.ledgerBalance ?? '-'}، انتظار ۳۰۰٬۰۰۰`);
+  if (!bankRow || !fin(bankRow.ledgerBalance ?? 0).equals(300000)) problems.push(`bank account ledger balance ${bankRow?.ledgerBalance ?? '-'}, expected 300,000`);
   const advance = await PayrollPaymentService.getPersonnelAdvanceBalance(personnelId);
-  if (!fin(advance.totalAdvances).equals(500000)) problems.push(`مانده مساعده پرسنل ${advance.totalAdvances}، انتظار ۵۰۰٬۰۰۰`);
+  if (!fin(advance.totalAdvances).equals(500000)) problems.push(`personnel advance balance ${advance.totalAdvances}, expected 500,000`);
   return problems;
 }

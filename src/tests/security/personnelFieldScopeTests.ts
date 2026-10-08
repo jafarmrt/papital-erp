@@ -21,7 +21,7 @@ export async function runPersonnelFieldScopeTests(shouldRun: (id: string, ...ext
   const id = 'sec_personnel_field_scope_td_434';
   if (!shouldRun(id, 'security', 'td434', 'personnel', 'salary', 'package12')) return results;
 
-  const name = 'v9.0.23: فهرست و جزئیات پرسنل به خوانندگان فهرست انتخاب فقط شناسه، نام، کد، عنوان شغلی و وضعیت می‌دهند؛ پرونده کامل فقط personnel.view / personnel.manage، حقوق فقط دامنه مبالغ فیش و رمز نوبیتکس فقط در جزئیات (TD-434)';
+  const name = 'v9.0.23: the personnel list and detail give pick-list readers only id, name, code, job title and status; the full dossier only to personnel.view / personnel.manage, the salary only to payslip amount keys and the Nobitex password only in the detail (TD-434)';
   const tStart = Date.now();
   const personnelIds: number[] = [];
   const roleIds: number[] = [];
@@ -42,7 +42,7 @@ export async function runPersonnelFieldScopeTests(shouldRun: (id: string, ...ext
       address: 'تهران، خیابان آزمون، پلاک ۱', notes: 'یادداشت محرمانه مدیر', cardNumber: '6037991234567890',
       shebaNumber: 'IR120120000000001234567890', nobitexUsername: 'zahra_test', nobitexPassword: 'Secret#434',
     });
-    if (created.status !== 201) throw new Error(`ثبت پرسنل ${created.status} داد: ${JSON.stringify(created.body).slice(0, 160)}`);
+    if (created.status !== 201) throw new Error(`Creating personnel returned ${created.status}: ${JSON.stringify(created.body).slice(0, 160)}`);
     const pid = Number(created.body.id);
     personnelIds.push(pid);
 
@@ -62,7 +62,7 @@ export async function runPersonnelFieldScopeTests(shouldRun: (id: string, ...ext
     const read = async (s: Session, query = ''): Promise<{ listed?: Row; detail?: Row }> => {
       const list = await request(app).get(`/api/personnel${query}`).set('Cookie', s.cookie);
       const detail = await request(app).get(`/api/personnel/${pid}`).set('Cookie', s.cookie);
-      if (list.status !== 200 || detail.status !== 200) throw new Error(`فهرست/جزئیات پرسنل ${list.status}/${detail.status} داد`);
+      if (list.status !== 200 || detail.status !== 200) throw new Error(`Personnel list/detail returned ${list.status}/${detail.status}`);
       const listed = (Array.isArray(list.body) ? list.body : []).find((r: Row) => Number(r.id) === pid) as Row | undefined;
       return { listed, detail: detail.body as Row };
     };
@@ -76,9 +76,9 @@ export async function runPersonnelFieldScopeTests(shouldRun: (id: string, ...ext
     for (const [label, perms] of pickReaders) {
       const s = await sessionWith(perms);
       const { listed, detail } = await read(s);
-      if (!listed) { wrong.push(`${label}: پرسنل در فهرست نیامد`); continue; }
+      if (!listed) { wrong.push(`${label}: the personnel did not appear in the list`); continue; }
       if (listed.fullName !== `زهرا آزمون ${tag}` || listed.personnelCode !== `FS-${tag}` || listed.jobTitle !== 'زرگر' || listed.employmentStatus !== 'فعال') {
-        wrong.push(`${label}: فیلدهای انتخاب ناقص ${JSON.stringify(listed).slice(0, 160)}`);
+        wrong.push(`${label}: incomplete pick fields ${JSON.stringify(listed).slice(0, 160)}`);
       }
       for (const [where, row] of [['فهرست', listed], ['جزئیات', detail]] as const) {
         const keys = leaked(row, [...DOSSIER_KEYS, ...SALARY_KEYS, 'nobitexPassword']);
@@ -86,17 +86,17 @@ export async function runPersonnelFieldScopeTests(shouldRun: (id: string, ...ext
       }
       // جست‌وجو فقط روی فیلدهای دیدنی: کد ملی پرسنل را پیدا نمی‌کند
       const bySecret = await read(s, `?search=0012345679`);
-      if (bySecret.listed) wrong.push(`${label}: جست‌وجوی کد ملی پرسنل را یافت`);
+      if (bySecret.listed) wrong.push(`${label}: searching by national ID found the personnel`);
     }
 
     // ۲) personnel.view: پرونده کامل بی حقوق، کارت و شبا ماسک‌شده، بی رمز نوبیتکس
     {
       const { listed, detail } = await read(await sessionWith(['personnel.view']));
       for (const [where, row] of [['فهرست', listed], ['جزئیات', detail]] as const) {
-        if (row?.nationalId !== '0012345679' || row?.address !== 'تهران، خیابان آزمون، پلاک ۱') wrong.push(`personnel.view در ${where}: پرونده کامل نیامد`);
+        if (row?.nationalId !== '0012345679' || row?.address !== 'تهران، خیابان آزمون، پلاک ۱') wrong.push(`personnel.view in ${where}: the full dossier did not appear`);
         const keys = leaked(row, [...SALARY_KEYS, 'nobitexPassword']);
         if (keys.length > 0) wrong.push(`personnel.view در ${where}: ${keys.join('، ')}`);
-        if (row?.cardNumber === '6037991234567890') wrong.push(`personnel.view در ${where}: شماره کارت بی ماسک`);
+        if (row?.cardNumber === '6037991234567890') wrong.push(`personnel.view in ${where}: unmasked card number`);
       }
     }
 
@@ -104,7 +104,7 @@ export async function runPersonnelFieldScopeTests(shouldRun: (id: string, ...ext
     {
       const { listed, detail } = await read(await sessionWith(['piecework.view', 'piecework.payroll']));
       for (const [where, row] of [['فهرست', listed], ['جزئیات', detail]] as const) {
-        if (Number(row?.monthlySalary) !== 45000000 || row?.salaryType !== 'monthly_fixed') wrong.push(`piecework.payroll در ${where}: حقوق نیامد`);
+        if (Number(row?.monthlySalary) !== 45000000 || row?.salaryType !== 'monthly_fixed') wrong.push(`piecework.payroll in ${where}: the salary did not appear`);
         const keys = leaked(row, [...DOSSIER_KEYS, 'nobitexPassword']);
         if (keys.length > 0) wrong.push(`piecework.payroll در ${where}: ${keys.join('، ')}`);
       }
@@ -113,15 +113,15 @@ export async function runPersonnelFieldScopeTests(shouldRun: (id: string, ...ext
     // ۴) personnel.manage و مدیر سامانه: همه چیز؛ رمز نوبیتکس فقط در جزئیات
     for (const [label, s] of [['personnel.manage', await sessionWith(['personnel.manage'])], ['مدیر سامانه', admin]] as const) {
       const { listed, detail } = await read(s);
-      if (Number(listed?.monthlySalary) !== 45000000 || listed?.nationalId !== '0012345679' || listed?.cardNumber !== '6037991234567890') wrong.push(`${label}: پرونده و حقوق کامل در فهرست نیامد`);
-      if (listed && 'nobitexPassword' in listed) wrong.push(`${label}: رمز نوبیتکس در فهرست آمد`);
-      if (detail?.nobitexPassword !== 'Secret#434' || Number(detail?.monthlySalary) !== 45000000) wrong.push(`${label}: رمز نوبیتکس یا حقوق در جزئیات نیامد`);
+      if (Number(listed?.monthlySalary) !== 45000000 || listed?.nationalId !== '0012345679' || listed?.cardNumber !== '6037991234567890') wrong.push(`${label}: the full dossier and salary did not appear in the list`);
+      if (listed && 'nobitexPassword' in listed) wrong.push(`${label}: the Nobitex password appeared in the list`);
+      if (detail?.nobitexPassword !== 'Secret#434' || Number(detail?.monthlySalary) !== 45000000) wrong.push(`${label}: the Nobitex password or salary did not appear in the detail`);
     }
 
-    if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+    if (wrong.length > 0) throw new Error(wrong.join('; '));
     results.push(makeTestCase({
       id, name, layer: 'security', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'viewer و هفت نقش تک‌مجوز فقط فیلدهای انتخاب؛ personnel.view پرونده بی حقوق؛ piecework.payroll حقوق بی پرونده؛ personnel.manage و مدیر همه، رمز نوبیتکس فقط در جزئیات',
+      details: 'viewer and seven single-permission roles get only pick fields; personnel.view the dossier without salary; piecework.payroll the salary without dossier; personnel.manage and the admin everything, the Nobitex password only in the detail',
     }));
   } catch (err) {
     results.push(makeTestCase({

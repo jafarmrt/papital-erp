@@ -41,29 +41,29 @@ export async function checkPurchaseDiscountInCost(wh: string): Promise<string[]>
   const irrReceipt = await receipt(irr.id, 10, 100000, 100000, '2026-01-10');
   const irrPrice = await kardexInPrice(irrReceipt);
   const irrState = await itemState(irr.id);
-  if (!fin(irrPrice).equals(90000) || !fin(irrState.wac).equals(90000)) problems.push(`رسید ریالی با تخفیف: بهای کاردکس ${irrPrice} و WAC ${irrState.wac}، انتظار ۹۰٬۰۰۰`);
+  if (!fin(irrPrice).equals(90000) || !fin(irrState.wac).equals(90000)) problems.push(`IRR receipt with discount: Kardex cost ${irrPrice} and WAC ${irrState.wac}, expected 90,000`);
 
   // ارزی: ۱۰ × ۲ دلار با تخفیف ۲ دلار و نرخ ۶۰۰٬۰۰۰ ← خالص ۱٫۸ دلار = ۱٬۰۸۰٬۰۰۰ ریال
   await receipt(usd.id, 10, 2, 2, '2026-01-10', { currency: 'USD', exchangeRate: 600000 });
   const usdState = await itemState(usd.id);
-  if (!fin(usdState.wac).equals(1080000)) problems.push(`رسید ارزی با تخفیف: WAC ${usdState.wac}، انتظار ۱٬۰۸۰٬۰۰۰`);
+  if (!fin(usdState.wac).equals(1080000)) problems.push(`foreign-currency receipt with discount: WAC ${usdState.wac}, expected 1,080,000`);
   // ارزی با قیمت خالص غیرگرد: ۸ × ۰٫۴۷ − ۰٫۱۹ = ۳٫۵۷ دلار ← ۰٫۴۴۶۲۵ دلار = ۲۶۷٬۷۵۰ ریال (نه ۰٫۴۴۶۳ × ۶۰۰٬۰۰۰ = ۲۶۷٬۷۸۰)
   await receipt(usdRounding.id, 8, 0.47, 0.19, '2026-01-10', { currency: 'USD', exchangeRate: 600000 });
   const usdRoundingState = await itemState(usdRounding.id);
-  if (!fin(usdRoundingState.wac).equals(267750)) problems.push(`رسید ارزی با قیمت خالص غیرگرد: WAC ${usdRoundingState.wac}، انتظار ۲۶۷٬۷۵۰`);
+  if (!fin(usdRoundingState.wac).equals(267750)) problems.push(`foreign-currency receipt with an uneven net price: WAC ${usdRoundingState.wac}, expected 267,750`);
 
   // پیش‌نویس و نهایی‌سازی: ۴ × ۵۰٬۰۰۰ با تخفیف ۴۰٬۰۰۰ ← بهای واحد ۴۰٬۰۰۰
   const draft = await receipt(drafted.id, 4, 50000, 40000, '2026-01-11', { status: 'draft' });
   await DocumentService.finalizeDocument(draft, 'inv');
   const draftPrice = await kardexInPrice(draft);
-  if (!fin(draftPrice).equals(40000)) problems.push(`نهایی‌سازی رسید پیش‌نویس با تخفیف: بهای کاردکس ${draftPrice}، انتظار ۴۰٬۰۰۰`);
+  if (!fin(draftPrice).equals(40000)) problems.push(`finalizing a draft receipt with discount: Kardex cost ${draftPrice}, expected 40,000`);
 
-  problems.push(...await invariantProblems(scope, 'پس از رسیدهای با تخفیف'));
+  problems.push(...await invariantProblems(scope, 'after the discounted receipts'));
 
   await DocumentService.deleteDocument(irrReceipt, 'inv');
   const afterVoid = await itemState(irr.id);
-  if (afterVoid.stock !== 0) problems.push(`ابطال رسید با تخفیف موجودی را صفر نکرد: ${afterVoid.stock}`);
-  problems.push(...await invariantProblems(scope, 'پس از ابطال رسید با تخفیف'));
+  if (afterVoid.stock !== 0) problems.push(`voiding the discounted receipt did not bring stock to zero: ${afterVoid.stock}`);
+  problems.push(...await invariantProblems(scope, 'after voiding the discounted receipt'));
   return problems;
 }
 
@@ -104,13 +104,13 @@ export async function checkVoidOutflowRestoresCost(wh: string): Promise<string[]
     await DocumentService.deleteDocument(out, 'inv');
     const state = await itemState(item.id);
     if (state.stock !== 15 || fin(state.wac).subtract(fin('166666.6667')).abs().greaterThan(fin(0.01))) {
-      problems.push(`${label}: پس از ابطال خروج موجودی ${state.stock} و WAC ${state.wac}، انتظار ۱۵ و ۱۶۶٬۶۶۶٫۶۶۶۷`);
+      problems.push(`${label}: after voiding the outflow stock ${state.stock} and WAC ${state.wac}, expected 15 and 166,666.6667`);
     }
     // v9.0.90 (TD-487): بازسازی WAC را تغییر نمی‌دهد؛ WAC بازپخش کاردکس که گزارش می‌کند باید همان WAC زنده باشد
     const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(item.id, { user: 'inv' });
-    if (fin(rebuilt.replayWac).subtract(fin(state.wac)).abs().greaterThan(fin(0.01))) problems.push(`${label}: بازپخش کاردکس WAC را ${rebuilt.replayWac} داد، WAC زنده ${state.wac}`);
+    if (fin(rebuilt.replayWac).subtract(fin(state.wac)).abs().greaterThan(fin(0.01))) problems.push(`${label}: Kardex replay gave WAC ${rebuilt.replayWac}, live WAC ${state.wac}`);
   }
-  problems.push(...await invariantProblems(scope, 'پس از ابطال خروج‌ها'));
+  problems.push(...await invariantProblems(scope, 'after voiding the outflows'));
   return problems;
 }
 
@@ -142,23 +142,23 @@ export async function checkZeroPriceReceiptAtWac(wh: string): Promise<string[]> 
   await production([[single.id, 10, 100000]], '2026-04-01');
   const free = await production([[single.id, 10, 0]], '2026-04-02');
   const freePrice = await kardexInPrice(free);
-  if (!fin(freePrice).equals(100000)) problems.push(`ردیف کاردکس رسید تولید با قیمت صفر: ${freePrice}، انتظار WAC جاری ۱۰۰٬۰۰۰`);
-  problems.push(...await invariantProblems(scope, 'پس از رسید تولید با قیمت صفر'));
+  if (!fin(freePrice).equals(100000)) problems.push(`Kardex row of a production receipt at price zero: ${freePrice}, expected the current WAC 100,000`);
+  problems.push(...await invariantProblems(scope, 'after the production receipt at price zero'));
 
   await DocumentService.deleteDocument(free, 'inv');
   const afterVoid = await itemState(single.id);
   if (afterVoid.stock !== 10 || !fin(afterVoid.wac).equals(100000)) {
-    problems.push(`ابطال رسید با قیمت صفر: موجودی ${afterVoid.stock} و WAC ${afterVoid.wac}، انتظار ۱۰ و ۱۰۰٬۰۰۰`);
+    problems.push(`void of a receipt at price zero: stock ${afterVoid.stock} and WAC ${afterVoid.wac}, expected 10 and 100,000`);
   }
   const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(single.id, { user: 'inv' });
-  if (!fin(rebuilt.replayWac).equals(afterVoid.wac)) problems.push(`بازپخش کاردکس پس از ابطال رسید با قیمت صفر WAC را ${rebuilt.replayWac} داد، WAC زنده ${afterVoid.wac}`);
+  if (!fin(rebuilt.replayWac).equals(afterVoid.wac)) problems.push(`Kardex replay after voiding a receipt at price zero gave WAC ${rebuilt.replayWac}, live WAC ${afterVoid.wac}`);
 
   // یک رسید تولید با دو ردیف همان کالا: ۱۰ × ۰ (به WAC ۱۰۰٬۰۰۰) و ۵ × ۲۵۰٬۰۰۰ (WAC ← ۱۳۰٬۰۰۰) ← سند حسابداری ۲٬۲۵۰٬۰۰۰
   await production([[mixed.id, 10, 100000]], '2026-04-01');
   const mixedDoc = await production([[mixed.id, 10, 0], [mixed.id, 5, 250000]], '2026-04-03');
   const debit = await voucherInventoryDebit(mixedDoc);
-  if (!fin(debit).equals(2250000)) problems.push(`سند حسابداری رسید تولید با ردیف قیمت صفر و قیمت‌دار: ${debit}، انتظار ارزش کاردکس ۲٬۲۵۰٬۰۰۰`);
-  problems.push(...await invariantProblems(scope, 'پس از ابطال و رسید تولید ترکیبی'));
+  if (!fin(debit).equals(2250000)) problems.push(`journal voucher of a production receipt with zero-price and priced lines: ${debit}, expected Kardex value 2,250,000`);
+  problems.push(...await invariantProblems(scope, 'after the void and the mixed production receipt'));
   return problems;
 }
 
@@ -220,10 +220,10 @@ export async function checkFreeGoodsVoucherAtWac(wh: string): Promise<string[]> 
   const free = await receipt('receipt', [{ itemId: material.id, quantity: 5, unitPrice: 0 }], '2026-08-02');
   const freeLines = await voucherLines(free);
   if (!fin(creditOn(freeLines, '5204')).equals(500000) || freeLines.some(l => l.code === '3001')) {
-    problems.push(`رسید کالای رایگان: بستانکار ۵۲۰۴ ${creditOn(freeLines, '5204')} و سطرهای ${freeLines.map(l => l.code).join(',')}، انتظار ۵۰۰٬۰۰۰ بی‌سطر تأمین‌کننده`);
+    problems.push(`free goods receipt: credit on 5204 ${creditOn(freeLines, '5204')} and lines ${freeLines.map(l => l.code).join(',')}, expected 500,000 with no supplier line`);
   }
-  if (!fin((await itemState(material.id)).wac).equals(100000)) problems.push('کالای رایگان WAC را تغییر داد');
-  problems.push(...await invariantProblems(scope, 'پس از رسید کالای رایگان'));
+  if (!fin((await itemState(material.id)).wac).equals(100000)) problems.push('free goods changed the WAC');
+  problems.push(...await invariantProblems(scope, 'after the free goods receipt'));
 
   // خرید با ردیف بها‌دار (۴ × ۵۰٬۰۰۰ از کالای دیگر)، ردیف رایگان (۲ عدد) و ردیف با تخفیف کامل (۱ × ۱۰۰٬۰۰۰ − ۱۰۰٬۰۰۰)
   const mixed = await receipt('purchase', [
@@ -233,9 +233,9 @@ export async function checkFreeGoodsVoucherAtWac(wh: string): Promise<string[]> 
   ], '2026-08-03');
   const mixedLines = await voucherLines(mixed);
   if (!fin(creditOn(mixedLines, '3001')).equals(200000) || !fin(creditOn(mixedLines, '5204')).equals(300000)) {
-    problems.push(`خرید ترکیبی: بستانکار ۳۰۰۱ ${creditOn(mixedLines, '3001')} و ۵۲۰۴ ${creditOn(mixedLines, '5204')}، انتظار ۲۰۰٬۰۰۰ و ۳۰۰٬۰۰۰`);
+    problems.push(`mixed purchase: credit on 3001 ${creditOn(mixedLines, '3001')} and 5204 ${creditOn(mixedLines, '5204')}, expected 200,000 and 300,000`);
   }
-  problems.push(...await invariantProblems(scope, 'پس از خرید ترکیبی با کالای رایگان'));
+  problems.push(...await invariantProblems(scope, 'after the mixed purchase with free goods'));
 
   // رسید ارزی: ۲ × ۵۰۰ دلار (نرخ ۶۰۰٬۰۰۰، WAC ۳۰۰٬۰۰۰٬۰۰۰ ریال)، سپس ۱ عدد رایگان ← ۵۰۰ دلار بستانکار ۵۲۰۴
   const usd = { currency: 'USD', exchangeRate: 600000 };
@@ -243,14 +243,14 @@ export async function checkFreeGoodsVoucherAtWac(wh: string): Promise<string[]> 
   const usdFree = await receipt('receipt', [{ itemId: imported.id, quantity: 1, unitPrice: 0 }], '2026-08-05', usd);
   const usdLine = (await voucherLines(usdFree)).find(l => l.code === '5204');
   if (!usdLine || usdLine.currency !== 'USD' || !fin(usdLine.credit).equals(500) || !fin(usdLine.rate).equals(600000)) {
-    problems.push(`رسید ارزی کالای رایگان: سطر ۵۲۰۴ ${JSON.stringify(usdLine ?? null)}، انتظار ۵۰۰ دلار با نرخ ۶۰۰٬۰۰۰`);
+    problems.push(`foreign-currency free goods receipt: 5204 line ${JSON.stringify(usdLine ?? null)}, expected 500 USD at rate 600,000`);
   }
-  problems.push(...await invariantProblems(scope, 'پس از رسید ارزی کالای رایگان'));
+  problems.push(...await invariantProblems(scope, 'after the foreign-currency free goods receipt'));
 
   // ابطال رسید کالای رایگان: سند پیش‌نویس حذف و موجودی برمی‌گردد؛ WAC و ارزش انبار با دفتر کل یکی می‌مانند
   await DocumentService.deleteDocument(free, 'inv');
-  if ((await voucherLines(free)).length > 0) problems.push('ابطال رسید کالای رایگان سند حسابداری را حذف نکرد');
-  if (!fin((await itemState(material.id)).wac).equals(100000)) problems.push('ابطال کالای رایگان WAC را تغییر داد');
-  problems.push(...await invariantProblems(scope, 'پس از ابطال رسید کالای رایگان'));
+  if ((await voucherLines(free)).length > 0) problems.push('voiding the free goods receipt did not delete the journal voucher');
+  if (!fin((await itemState(material.id)).wac).equals(100000)) problems.push('voiding the free goods changed the WAC');
+  problems.push(...await invariantProblems(scope, 'after voiding the free goods receipt'));
   return problems;
 }

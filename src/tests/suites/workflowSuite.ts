@@ -27,21 +27,21 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
       results.push(makeTestCase({
         id: 'wf_unauthorized_access',
         scenarioId: 'unauthorized_workflow_access',
-        name: 'جلوگیری از دسترسی غیرمجاز به نمونه ورکفلو (Unauthorized workflow access)',
+        name: 'Unauthorized access to a workflow instance is blocked (Unauthorized workflow access)',
         layer: 'workflow',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t1Start,
-        details: 'دسترسی کاربر عادی با نقش OPERATOR به فرآیند مدیریت مالی با موفقیت بلاک گردید.'
+        details: 'Access of a regular user with role OPERATOR to the financial management process was blocked.'
       }));
     } else {
-      throw new Error('کاربر غیرمجاز توانست دسترسی پیدا کند');
+      throw new Error('An unauthorized user gained access');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_unauthorized_access',
       scenarioId: 'unauthorized_workflow_access',
-      name: 'جلوگیری از دسترسی غیرمجاز به نمونه ورکفلو (Unauthorized workflow access)',
+      name: 'Unauthorized access to a workflow instance is blocked (Unauthorized workflow access)',
       layer: 'workflow',
       executionType: 'simulation_logic',
       passed: false,
@@ -61,21 +61,21 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
       results.push(makeTestCase({
         id: 'wf_unauthorized_approval',
         scenarioId: 'unauthorized_approval',
-        name: 'جلوگیری از تایید غیرمجاز گام ورکفلو (Unauthorized approval)',
+        name: 'Unauthorized approval of a workflow step is blocked (Unauthorized approval)',
         layer: 'workflow',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t2Start,
-        details: 'امکان تایید گام توسط کاربر بدون نقش سرپرست (SUPERVISOR) به درستی مسدود شد.'
+        details: 'Approval of a step by a user without the SUPERVISOR role was blocked as expected.'
       }));
     } else {
-      throw new Error('تایید غیرمجاز ثبت گردید');
+      throw new Error('An unauthorized approval was recorded');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_unauthorized_approval',
       scenarioId: 'unauthorized_approval',
-      name: 'جلوگیری از تایید غیرمجاز گام ورکفلو (Unauthorized approval)',
+      name: 'Unauthorized approval of a workflow step is blocked (Unauthorized approval)',
       layer: 'workflow',
       executionType: 'simulation_logic',
       passed: false,
@@ -99,21 +99,21 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
       results.push(makeTestCase({
         id: 'wf_rejected',
         scenarioId: 'workflow_rejected',
-        name: 'پردازش عدم تایید و رد ورکفلو (Workflow rejected)',
+        name: 'Workflow rejection is processed (Workflow rejected)',
         layer: 'workflow',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t3Start,
-        details: 'انتقال وضعیت فرآیند به حالت REJECTED همراه با ثبت علت رد در تاریخچه تایید شد.'
+        details: 'Process status moved to REJECTED with the rejection reason recorded in the history, verified.'
       }));
     } else {
-      throw new Error('پردازش رد منطقی انجام نشد');
+      throw new Error('Rejection was not processed');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_rejected',
       scenarioId: 'workflow_rejected',
-      name: 'پردازش عدم تایید و رد ورکفلو (Workflow rejected)',
+      name: 'Workflow rejection is processed (Workflow rejected)',
       layer: 'workflow',
       executionType: 'simulation_logic',
       passed: false,
@@ -153,22 +153,22 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
       reason: 'workflow suite fixture',
       createdByName: 'workflow-suite'
     });
-    if (!created || created.isActive !== 1) throw new Error('تفویض واقعی ایجاد نشد یا غیرفعال بود');
+    if (!created || created.isActive !== 1) throw new Error('The real delegation was not created or was inactive');
 
     const listed = await WorkflowDelegationService.getDelegations({ userId: fromUser.id });
     const mine = listed.find(r => r.id === created.id);
     if (!mine || mine.status !== 'active' || !String(mine.toUserName).includes('جانشین')) {
-      throw new Error(`تفویض واقعی بازیابی نشد: status=${mine?.status}, to=${mine?.toUserName}`);
+      throw new Error(`the real delegation was not read back: status=${mine?.status}, to=${mine?.toUserName}`);
     }
     results.push(makeTestCase({
       id: 'wf_delegated',
       scenarioId: 'workflow_delegated',
-      name: 'تفویض اختیار تایید فرآیند (Workflow delegated)',
+      name: 'Delegation of process approval authority (Workflow delegated)',
       layer: 'workflow',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t4Start,
-      details: 'تفویض واقعی روی دیتابیس ایجاد شد (بازه ±۱ ساعت) و getDelegations آن را با وضعیت active و جانشین صحیح بازگرداند.'
+      details: 'A real delegation was created in the database (window +-1 hour) and getDelegations returned it with status active and the correct deputy.'
     }));
     try {
       await orm.delete(workflowDelegations).where(eq(workflowDelegations.id, created.id));
@@ -178,7 +178,7 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
     results.push(makeTestCase({
       id: 'wf_delegated',
       scenarioId: 'workflow_delegated',
-      name: 'تفویض اختیار تایید فرآیند (Workflow delegated)',
+      name: 'Delegation of process approval authority (Workflow delegated)',
       layer: 'workflow',
       executionType: 'real_database',
       passed: false,
@@ -237,21 +237,21 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
       results.push(makeTestCase({
         id: 'wf_task_ownership_delegation_window',
         scenarioId: 'workflow_delegated',
-        name: 'قفل مالکیت وظیفه و اعتبارسنجی بازه و حوزه تفویض اختیار (Task Ownership & Delegation Scope)',
+        name: 'Task ownership lock and delegation window and scope validation (Task Ownership & Delegation Scope)',
         layer: 'workflow',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t41Start,
-        details: 'دسترسی مهاجم صرفاً با داشتن شناسه taskId مسدود شد و تنها جانشین با تفویض معتبر در پنجره زمانی مجاز شناخته شد.'
+        details: 'Attacker access with only the taskId was blocked, and only the deputy with a valid delegation within its time window was allowed.'
       }));
     } else {
-      throw new Error('اعتبارسنجی مالکیت وظیفه یا تفویض با شکست مواجه شد');
+      throw new Error('Task ownership or delegation validation failed');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_task_ownership_delegation_window',
       scenarioId: 'workflow_delegated',
-      name: 'قفل مالکیت وظیفه و اعتبارسنجی بازه و حوزه تفویض اختیار (Task Ownership & Delegation Scope)',
+      name: 'Task ownership lock and delegation window and scope validation (Task Ownership & Delegation Scope)',
       layer: 'workflow',
       executionType: 'simulation_logic',
       passed: false,
@@ -292,21 +292,21 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
       results.push(makeTestCase({
         id: 'wf_rule_condition_server_context_isolation',
         scenarioId: 'rule_condition_failure',
-        name: 'ایزوله‌سازی کانتکست قوانین از متغیرهای کلاینت (Authoritative Server Context Isolation)',
+        name: 'Rule context is isolated from client variables (Authoritative Server Context Isolation)',
         layer: 'workflow',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t42Start,
-        details: 'تلاش کلاینت برای دور زدن سقف مبلغ ۵۰ میلیون ریال با دستکاری snapshotData خنثی شد و کانتکست دیتابیس (۱۵۰ میلیون ریال) انتقال را با شکست مواجه کرد.'
+        details: 'A client attempt to bypass the 50 million rial amount limit by tampering with snapshotData was neutralized, and the database context (150 million rials) made the transition fail.'
       }));
     } else {
-      throw new Error('کانتکست سرور به درستی ایزوله نگردید یا ارزیابی شروط با خطا مواجه شد');
+      throw new Error('The server context was not isolated correctly or condition evaluation failed');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_rule_condition_server_context_isolation',
       scenarioId: 'rule_condition_failure',
-      name: 'ایزوله‌سازی کانتکست قوانین از متغیرهای کلاینت (Authoritative Server Context Isolation)',
+      name: 'Rule context is isolated from client variables (Authoritative Server Context Isolation)',
       layer: 'workflow',
       executionType: 'simulation_logic',
       passed: false,
@@ -348,21 +348,21 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
       results.push(makeTestCase({
         id: 'wf_parallel_approval',
         scenarioId: 'parallel_approval',
-        name: 'تایید موازی چندامضایی (Parallel approval - AND_ALL / OR_ANY & Duplicate Conflict)',
+        name: 'Parallel multi-signature approval (Parallel approval - AND_ALL / OR_ANY & Duplicate Conflict)',
         layer: 'workflow',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t5Start,
-        details: 'منطق AND_ALL (۲ از ۳ امضا، عدم تکمیل حدنصاب)، OR_ANY (تک امضا، تکمیل) و شناسایی تضاد امضای تکراری با موفقیت صحه‌گذاری شد.'
+        details: 'AND_ALL logic (2 of 3 signatures, quorum not met), OR_ANY (single signature, complete) and duplicate signature conflict detection verified.'
       }));
     } else {
-      throw new Error('ارزیابی امضاهای موازی یا تضاد امضای تکراری دقیق نبود');
+      throw new Error('Parallel signature evaluation or duplicate signature conflict was not accurate');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_parallel_approval',
       scenarioId: 'parallel_approval',
-      name: 'تایید موازی چندامضایی (Parallel approval - AND_ALL / OR_ANY & Duplicate Conflict)',
+      name: 'Parallel multi-signature approval (Parallel approval - AND_ALL / OR_ANY & Duplicate Conflict)',
       layer: 'workflow',
       executionType: 'simulation_logic',
       passed: false,
@@ -387,21 +387,21 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
       results.push(makeTestCase({
         id: 'wf_k_of_n_approval',
         scenarioId: 'k_of_n_approval',
-        name: 'حد حدنصاب K از N امضا (K-of-N approval)',
+        name: 'K of N signature quorum (K-of-N approval)',
         layer: 'workflow',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t6Start,
-        details: 'احراز حدنصاب ۲ امضا از کل اعضای کمیته (K-of-N) با موفقیت تکمیل حدنصاب فرآیند را اعلام کرد.'
+        details: 'A quorum of 2 signatures out of all committee members (K-of-N) completed the process quorum.'
       }));
     } else {
-      throw new Error('تایید حدنصاب K از N شکست خورد');
+      throw new Error('K of N quorum approval failed');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_k_of_n_approval',
       scenarioId: 'k_of_n_approval',
-      name: 'حد حدنصاب K از N امضا (K-of-N approval)',
+      name: 'K of N signature quorum (K-of-N approval)',
       layer: 'workflow',
       executionType: 'simulation_logic',
       passed: false,
@@ -425,12 +425,12 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
       results.push(makeTestCase({
         id: 'wf_version_change',
         scenarioId: 'workflow_version_change',
-        name: 'ارتقای نسخه فرآیند و حفاظت از Snapshot دست‌نخورده (Workflow version change)',
+        name: 'Process version upgrade keeps the snapshot untouched (Workflow version change)',
         layer: 'workflow',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t7Start,
-        details: 'هیچ instance فعال یافت نشد — راستی‌آزمایی snapshot صادقانه skip شد (پوشش واقعی snapshot در e2eSuite Journey 3 نیز وجود دارد).'
+        details: 'No active instance found; the snapshot check was honestly skipped (real snapshot coverage also exists in e2eSuite Journey 3).'
       }));
     } else {
       wfSnapInstanceId.push(snapInstance.id);
@@ -440,27 +440,27 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
       const dslVersion = Number(dsl.version ?? dsl.definitionVersion ?? 0);
       const storedVersion = Number(snapInstance.definitionVersion || 0);
       if (!dslVersion || !storedVersion) {
-        throw new Error(`Snapshot ناقص: definitionVersion=${storedVersion}, dsl.version=${dslVersion}`);
+        throw new Error(`incomplete snapshot: definitionVersion=${storedVersion}, dsl.version=${dslVersion}`);
       }
       if (dslVersion !== storedVersion) {
-        throw new Error(`ناهمگامی snapshot: definitionVersion=${storedVersion} ولی dsl.version=${dslVersion}`);
+        throw new Error(`snapshot mismatch: definitionVersion=${storedVersion} but dsl.version=${dslVersion}`);
       }
       results.push(makeTestCase({
         id: 'wf_version_change',
         scenarioId: 'workflow_version_change',
-        name: 'ارتقای نسخه فرآیند و حفاظت از Snapshot دست‌نخورده (Workflow version change)',
+        name: 'Process version upgrade keeps the snapshot untouched (Workflow version change)',
         layer: 'workflow',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t7Start,
-        details: `instance واقعی #${snapInstance.id}: snapshotDsl ذخیره‌شده (نسخه ${dslVersion}) با definitionVersion (${storedVersion}) همگام و مستقل است — ایزوله‌سازی نسخه واقعی است.`
+        details: `real instance #${snapInstance.id}: the stored snapshotDsl (version ${dslVersion}) matches definitionVersion (${storedVersion}) and is independent; version isolation is real.`
       }));
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_version_change',
       scenarioId: 'workflow_version_change',
-      name: 'ارتقای نسخه فرآیند و حفاظت از Snapshot دست‌نخورده (Workflow version change)',
+      name: 'Process version upgrade keeps the snapshot untouched (Workflow version change)',
       layer: 'workflow',
       executionType: 'real_database',
       passed: false,
@@ -477,23 +477,23 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
     const analytics = await WorkflowSlaEvaluator.getSlaAnalytics();
     const overdueCount = Array.isArray(analytics.overdueInstances) ? analytics.overdueInstances.length : 0;
     if (typeof analytics.kpi?.slaComplianceRate !== 'number') {
-      throw new Error('خروجی SLA Evaluator فاقد شاخص عددی compliance است');
+      throw new Error('SLA Evaluator output has no numeric compliance indicator');
     }
     results.push(makeTestCase({
       id: 'wf_task_model_idempotency',
       scenarioId: 'task_model_idempotency',
-      name: 'ارزیابی مدل وظیفه، سررسید SLA و اجرای مجدد Idempotent (Task Model & Idempotency)',
+      name: 'Task model, SLA due date and idempotent re-execution (Task Model & Idempotency)',
       layer: 'workflow',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t8Start,
-      details: `ارسال واقعی WorkflowSlaEvaluator روی workflow_history_logs/instances: شاخص compliance=${analytics.kpi.slaComplianceRate}٪، نمونه‌های overdue=${overdueCount} (شامل پنجره سررسید SLA واقعی).`
+      details: `real WorkflowSlaEvaluator run over workflow_history_logs/instances: compliance=${analytics.kpi.slaComplianceRate}%, overdue instances=${overdueCount} (including the real SLA due window).`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_task_model_idempotency',
       scenarioId: 'task_model_idempotency',
-      name: 'ارزیابی مدل وظیفه، سررسید SLA و اجرای مجدد Idempotent (Task Model & Idempotency)',
+      name: 'Task model, SLA due date and idempotent re-execution (Task Model & Idempotency)',
       layer: 'workflow',
       executionType: 'real_database',
       passed: false,
@@ -510,7 +510,7 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
     const analytics = await WorkflowSlaEvaluator.getSlaAnalytics();
     const report = Array.isArray(analytics.stateSlaReport) ? analytics.stateSlaReport : [];
     if (report.length === 0) {
-      throw new Error('گزارش SLA خالی است — حداقل یک state برای تحلیل وجود ندارد');
+      throw new Error('SLA report is empty; there is not even one state to analyse');
     }
     const malformed = report.filter(s =>
       typeof s.stateId !== 'number' ||
@@ -518,27 +518,27 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
       typeof s.isBottleneck !== 'boolean'
     );
     if (malformed.length > 0) {
-      throw new Error(`${malformed.length} ردیف گزارش SLA ناقص است (stateId/violationRate/isBottleneck)`);
+      throw new Error(`${malformed.length} SLA report rows are incomplete (stateId/violationRate/isBottleneck)`);
     }
     const bottlenecks = report.filter(s => s.isBottleneck);
     if (bottlenecks.length > report.length) {
-      throw new Error('بیش از همه ردیف‌ها گلوگاه شناسایی شد — محاسبه نادرست');
+      throw new Error('More bottlenecks than rows were detected; wrong calculation');
     }
     results.push(makeTestCase({
       id: 'wf_sla_bottleneck_analytics',
       scenarioId: 'sla_bottleneck_analytics',
-      name: 'تحلیل گلوگاه‌ها و شاخص نرخ پایبندی به SLA (SLA & Bottleneck Analytics)',
+      name: 'Bottleneck analysis and SLA compliance rate (SLA & Bottleneck Analytics)',
       layer: 'workflow',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t9Start,
-      details: `تحلیل واقعی روی ${report.length} state اجرا شد؛ گلوگاه‌های شناسایی‌شده: ${bottlenecks.length} (slaComplianceRate=${analytics.kpi.slaComplianceRate}).`
+      details: `real analysis ran over ${report.length} states; bottlenecks detected: ${bottlenecks.length} (slaComplianceRate=${analytics.kpi.slaComplianceRate}).`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_sla_bottleneck_analytics',
       scenarioId: 'sla_bottleneck_analytics',
-      name: 'تحلیل گلوگاه‌ها و شاخص نرخ پایبندی به SLA (SLA & Bottleneck Analytics)',
+      name: 'Bottleneck analysis and SLA compliance rate (SLA & Bottleneck Analytics)',
       layer: 'workflow',
       executionType: 'real_database',
       passed: false,
@@ -553,33 +553,33 @@ export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[
     // Test 10.1: getDefinitions batches counts without N+1 loops
     const definitions = await WorkflowDefinitionService.getDefinitions();
     if (!Array.isArray(definitions)) {
-      throw new Error('خروجی getDefinitions آرایه نیست');
+      throw new Error('getDefinitions output is not an array');
     }
     for (const d of definitions) {
       if (typeof d.stateCount !== 'number' || typeof d.transitionCount !== 'number' || typeof d.activeInstancesCount !== 'number') {
-        throw new Error(`تعریف فرآیند #${d.id} شامل آمار عددی معتبر نیست`);
+        throw new Error(`process definition #${d.id} has no valid numeric stats`);
       }
     }
 
     // Test 10.2: getTaskStats executes direct counts without entity context N+1 loading
     const stats = await WorkflowTaskService.getTaskStats({ userId: 1, userRole: 'admin' });
     if (typeof stats.pendingCount !== 'number' || typeof stats.overdueCount !== 'number') {
-      throw new Error('خروجی getTaskStats ساختار عددی معتبر ندارد');
+      throw new Error('getTaskStats output has no valid numeric structure');
     }
 
     results.push(makeTestCase({
       id: 'wf_query_batching_n_plus_one_elimination',
-      name: 'بهینه‌سازی کوئری‌های فرآیند کاری و حذف N+1 (Workflow Query Batching & Task Stats)',
+      name: 'Workflow query optimization and N+1 elimination (Workflow Query Batching & Task Stats)',
       layer: 'workflow',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t10Start,
-      details: `${definitions.length} فرآیند با شمارش تجمیعی بچ‌شده واکشی شدند و آمار وظایف (pending=${stats.pendingCount}, overdue=${stats.overdueCount}) بدون کوئری‌های N+1 مستقیماً محاسبه گردید.`
+      details: `${definitions.length} processes fetched with batched aggregate counts, and task stats (pending=${stats.pendingCount}, overdue=${stats.overdueCount}) computed directly without N+1 queries.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_query_batching_n_plus_one_elimination',
-      name: 'بهینه‌سازی کوئری‌های فرآیند کاری و حذف N+1 (Workflow Query Batching & Task Stats)',
+      name: 'Workflow query optimization and N+1 elimination (Workflow Query Batching & Task Stats)',
       layer: 'workflow',
       executionType: 'real_database',
       passed: false,

@@ -41,20 +41,20 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     if (evalRes.passed) {
       results.push(makeTestCase({
         id: 'unit_rule_engine_pass',
-        name: 'ارزیابی صحیح قوانین موتور ارزیابی (Rule Engine)',
+        name: 'Rule engine evaluates rules correctly',
         layer: 'unit',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t1Start,
-        details: 'شرایط قوانین مالی به درستی صادق ارزیابی شد.'
+        details: 'Financial rule conditions evaluated true as expected.'
       }));
     } else {
-      throw new Error('قوانین با وجود تطابق مقدار مردود ارزیابی شدند');
+      throw new Error('Rules were evaluated as failed even though the value matched');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_rule_engine_pass',
-      name: 'ارزیابی صحیح قوانین موتور ارزیابی (Rule Engine)',
+      name: 'Rule engine evaluates rules correctly',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -76,21 +76,21 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'unit_rule_engine_fail',
         scenarioId: 'rule_condition_failure',
-        name: 'ارزیابی خطای عدم تحقق شروط در Rule Engine',
+        name: 'Rule engine reports unmet conditions',
         layer: 'unit',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t2Start,
-        details: 'عدم صدق شرط مبلغ در موتور ارزیابی قوانین به درستی تشخیص داده شد (Rule condition failure).'
+        details: 'Rule engine correctly detected the failed amount condition (Rule condition failure).'
       }));
     } else {
-      throw new Error('شرط غیرصادق به اشتباه قبول شد');
+      throw new Error('A false condition was wrongly accepted');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_rule_engine_fail',
       scenarioId: 'rule_condition_failure',
-      name: 'ارزیابی خطای عدم تحقق شروط در Rule Engine',
+      name: 'Rule engine reports unmet conditions',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -109,20 +109,20 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     if (computedHmac && computedHmac.length === 64) {
       results.push(makeTestCase({
         id: 'unit_hmac_signature',
-        name: 'تولید و اعتبارسنجی امضای دیجیتال HMAC-SHA256 وب‌هوک‌ها',
+        name: 'Webhook HMAC-SHA256 signature generation and verification',
         layer: 'unit',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t3Start,
-        details: 'امضای HMAC-SHA256 خروجی ۶۴ کاراکتری معتبر تولید کرد.'
+        details: 'HMAC-SHA256 signature produced a valid 64-character output.'
       }));
     } else {
-      throw new Error('امضای HMAC نا معتبر است');
+      throw new Error('HMAC signature is invalid');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_hmac_signature',
-      name: 'تولید و اعتبارسنجی امضای دیجیتال HMAC-SHA256 وب‌هوک‌ها',
+      name: 'Webhook HMAC-SHA256 signature generation and verification',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -140,20 +140,20 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     if (normalized.statusCode === 409) {
       results.push(makeTestCase({
         id: 'unit_error_normalization',
-        name: 'استانداردسازی و نگاشت خطاهای دیتابیس به AppError',
+        name: 'Database errors are normalized and mapped to AppError',
         layer: 'unit',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t4Start,
-        details: 'خطای کد 23505 دیتابیس به درستی به ConflictError با کد 409 تبدیل شد.'
+        details: 'Database error code 23505 was correctly converted to ConflictError with status 409.'
       }));
     } else {
-      throw new Error(`موقعیت خطا کد ${normalized.statusCode} بازگرداند`);
+      throw new Error(`normalized error returned status code ${normalized.statusCode}`);
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_error_normalization',
-      name: 'استانداردسازی و نگاشت خطاهای دیتابیس به AppError',
+      name: 'Database errors are normalized and mapped to AppError',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -168,35 +168,35 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     // 0.1 + 0.2 floating point precision test
     const sum = fin('0.1').add('0.2');
     if (!sum.equals('0.3')) {
-      throw new Error(`خطای ممیز شناور در جمع دسیمل: ${sum.toString()} به جای 0.3`);
+      throw new Error(`floating-point error in decimal sum: ${sum.toString()} instead of 0.3`);
     }
 
     // WAC Calculation: 10 units @ 1000 + 5 units @ 1300 = (10000 + 6500) / 15 = 1100
     const wac = FinancialMath.calculateWAC(10, 1000, 5, 1300);
     if (!wac.equals(1100)) {
-      throw new Error(`خطای محاسبه میانگین موزون: ${wac.toString()} به جای 1100`);
+      throw new Error(`weighted average cost calculation error: ${wac.toString()} instead of 1100`);
     }
 
     // Currency Rounding
     const rialRounded = FinancialMath.roundCurrency('1250000.75', 'IRR');
     if (!rialRounded.equals('1250001')) {
-      throw new Error(`خطای گردکردن ریال: ${rialRounded.toString()}`);
+      throw new Error(`rial rounding error: ${rialRounded.toString()}`);
     }
 
     results.push(makeTestCase({
       id: 'unit_financial_decimal_precision',
       scenarioId: 'inventory_rebuild',
-      name: 'صحت محاسبات دسیمل با دقت بالا و میانگین موزون انبار (Financial Decimal & WAC)',
+      name: 'High-precision decimal arithmetic and warehouse weighted average cost are correct (Financial Decimal & WAC)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t5Start,
-      details: 'عدم وجود خطای ممیز شناور (0.1+0.2=0.3)، دقت اعشاری و محاسبه میانگین موزون WAC تایید گردید.'
+      details: 'No floating-point error (0.1+0.2=0.3); decimal precision and weighted average cost (WAC) calculation verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_financial_decimal_precision',
-      name: 'صحت محاسبات دسیمل با دقت بالا و میانگین موزون انبار (Financial Decimal & WAC)',
+      name: 'High-precision decimal arithmetic and warehouse weighted average cost are correct (Financial Decimal & WAC)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -242,20 +242,20 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     if (evalRes.passed && evalRes.trace && evalRes.trace.passed) {
       results.push(makeTestCase({
         id: 'unit_nested_rule_expression_evaluation',
-        name: 'ارزیابی ساختار شروط ترکیبی و تو در تو (Nested AND/OR/NOT Expression Engine)',
+        name: 'Nested and compound conditions are evaluated (Nested AND/OR/NOT Expression Engine)',
         layer: 'unit',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t6Start,
-        details: 'شروط ترکیبی (AND/OR/NOT) و مسیرهای نقطه‌ای (Dot Notation) با موفقیت صحه‌گذاری شدند.'
+        details: 'Compound conditions (AND/OR/NOT) and dot paths (Dot Notation) verified.'
       }));
     } else {
-      throw new Error('ارزیابی شروط ترکیبی با شکست مواجه شد');
+      throw new Error('Compound condition evaluation failed');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_nested_rule_expression_evaluation',
-      name: 'ارزیابی ساختار شروط ترکیبی و تو در تو (Nested AND/OR/NOT Expression Engine)',
+      name: 'Nested and compound conditions are evaluated (Nested AND/OR/NOT Expression Engine)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -310,21 +310,21 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'unit_domain_event_contract',
         scenarioId: 'domain_event_contract',
-        name: 'ارزیابی و اعتبارسنجی قرارداد استاندارد رویدادهای دامنه (Domain Event Contract)',
+        name: 'Standard domain event contract is validated (Domain Event Contract)',
         layer: 'unit',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t7Start,
-        details: 'تولید استاندارد eventId، تبدیل aggregateId به رشته، بررسی فیلدهای اجباری و تشخیص رویدادهای نامعتبر با موفقیت صحه‌گذاری شد.'
+        details: 'Standard eventId generation, aggregateId conversion to string, required field checks and detection of invalid events verified.'
       }));
     } else {
-      throw new Error('اعتبارسنجی قرارداد رویدادهای دامنه ناموفق بود');
+      throw new Error('Domain event contract validation failed');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_domain_event_contract',
       scenarioId: 'domain_event_contract',
-      name: 'ارزیابی و اعتبارسنجی قرارداد استاندارد رویدادهای دامنه (Domain Event Contract)',
+      name: 'Standard domain event contract is validated (Domain Event Contract)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -361,21 +361,21 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'unit_transactional_outbox',
         scenarioId: 'transactional_outbox',
-        name: 'ارزیابی صندوق ارسال تراکنشی و قفل ادعای همزمان (Transactional Outbox & Claim Locking)',
+        name: 'Transactional outbox and concurrent claim locking (Transactional Outbox & Claim Locking)',
         layer: 'unit',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t8Start,
-        details: 'ثبت اتمیک رویداد در outbox_events، ادعای انحصاری (Atomic Claim) و ارسال غیرهمزمان با موفقیت صحه‌گذاری شد.'
+        details: 'Atomic event recording in outbox_events, exclusive claim (Atomic Claim) and asynchronous dispatch verified.'
       }));
     } else {
-      throw new Error('پردازش آوتباکس یا استعلام آمار موفقیت‌آمیز نبود');
+      throw new Error('Outbox processing or the stats query did not succeed');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_transactional_outbox',
       scenarioId: 'transactional_outbox',
-      name: 'ارزیابی صندوق ارسال تراکنشی و قفل ادعای همزمان (Transactional Outbox & Claim Locking)',
+      name: 'Transactional outbox and concurrent claim locking (Transactional Outbox & Claim Locking)',
       layer: 'unit',
       executionType: 'real_database',
       passed: false,
@@ -445,21 +445,21 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       results.push(makeTestCase({
         id: 'unit_action_handlers',
         scenarioId: 'action_handlers',
-        name: 'ارزیابی اکشن‌هندلرهای یکبارپذیر، قابل ردیابی و مشاهده‌پذیر (Idempotent & Auditable Action Handlers)',
+        name: 'Action handlers are idempotent, traceable and observable (Idempotent & Auditable Action Handlers)',
         layer: 'unit',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t9Start,
-        details: 'خاصیت یکبارپذیری (Idempotency)، ردیابی لاگ حسابرسی، و آمار مشاهده‌پذیری (Observability) اکشن‌هندلرها با موفقیت صحه‌گذاری شد.'
+        details: 'Action handler idempotency, audit log tracing and observability stats verified.'
       }));
     } else {
-      throw new Error('خاصیت یکبارپذیری یا ثبت آمار اکشن‌هندلر به درستی عمل نکرد');
+      throw new Error('Action handler idempotency or stats recording did not work correctly');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_action_handlers',
       scenarioId: 'action_handlers',
-      name: 'ارزیابی اکشن‌هندلرهای یکبارپذیر، قابل ردیابی و مشاهده‌پذیر (Idempotent & Auditable Action Handlers)',
+      name: 'Action handlers are idempotent, traceable and observable (Idempotent & Auditable Action Handlers)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -476,41 +476,41 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     // 1. Acceptance Criteria verification: fin(1_000_000_000).multiply(0.1).divide(3).round(4)
     const testResult1 = finLib(1_000_000_000).multiply(0.1).divide(3).round(4);
     if (testResult1.toNumber() !== 33333333.3333 || testResult1.toString() !== '33333333.3333') {
-      throw new Error(`محاسبه میلیارد تومانی دقت ۴ رقم اعشار نادرست است: ${testResult1.toString()} (انتظار: 33333333.3333)`);
+      throw new Error(`billion-toman calculation with 4 decimal places is wrong: ${testResult1.toString()} (expected: 33333333.3333)`);
     }
 
     // 2. Floating point drift prevention: 0.1 + 0.2 === 0.3
     const sumDec = finLib(0.1).add(0.2);
     if (!sumDec.equals(0.3) || sumDec.toNumber() !== 0.3) {
-      throw new Error(`خطای ممیز شناور در جمع ۰.۱ و ۰.۲ رخ داده است: ${sumDec.toNumber()}`);
+      throw new Error(`floating-point error in the sum of 0.1 and 0.2: ${sumDec.toNumber()}`);
     }
 
     // 3. WAC calculation with large numbers
     const wac = FMLib.calculateWAC(100, 50000000, 50, 80000000);
     // (100 * 50M + 50 * 80M) / 150 = (5,000M + 4,000M) / 150 = 9,000M / 150 = 60,000,000
     if (wac.toNumber() !== 60000000) {
-      throw new Error(`محاسبه میانگین موزون بها نادرست است: ${wac.toNumber()}`);
+      throw new Error(`weighted average cost calculation is wrong: ${wac.toNumber()}`);
     }
 
     // 4. Verification of FinancialMath calculation utilities
     const fmAdd = FMLib.add(0.1, 0.2);
     if (fmAdd !== 0.3) {
-      throw new Error(`متد FinancialMath.add خروجی ناصحیح دارد: ${fmAdd}`);
+      throw new Error(`FinancialMath.add returns a wrong result: ${fmAdd}`);
     }
 
     results.push(makeTestCase({
       id: 'unit_financial_decimal_migration',
-      name: 'یکپارچه‌سازی FinancialDecimal و دقت محاسبات مالی با decimal.js (DB-007)',
+      name: 'FinancialDecimal integration and financial calculation precision with decimal.js (DB-007)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t10Start,
-      details: 'مهاجرت به decimal.js، حذف کامل خطای ممیز شناور، یکپارچه‌سازی ماژول‌ها و صحت محاسبات چند میلیاردی با دقت ۴ رقم اعشار با موفقیت تأیید شد.'
+      details: 'Migration to decimal.js, removal of floating-point errors, module integration and correct multi-billion calculations at 4 decimal places verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_financial_decimal_migration',
-      name: 'یکپارچه‌سازی FinancialDecimal و دقت محاسبات مالی با decimal.js (DB-007)',
+      name: 'FinancialDecimal integration and financial calculation precision with decimal.js (DB-007)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -523,30 +523,30 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
   const t11Start = Date.now();
   try {
     if (!BUILD_INFO.version || typeof BUILD_INFO.version !== 'string') {
-      throw new Error('مقدار BUILD_INFO.version معتبر نیست');
+      throw new Error('BUILD_INFO.version is not valid');
     }
 
     if (!/^\d+\.\d+\.\d+/.test(BUILD_INFO.version)) {
-      throw new Error(`فرمت نسخه مطابق با استاندارد SemVer نیست: ${BUILD_INFO.version}`);
+      throw new Error(`version format does not follow SemVer: ${BUILD_INFO.version}`);
     }
 
     if (BUILD_INFO.version !== APP_VERSION) {
-      throw new Error(`واگرایی میان BUILD_INFO.version (${BUILD_INFO.version}) و APP_VERSION (${APP_VERSION})`);
+      throw new Error(`mismatch between BUILD_INFO.version (${BUILD_INFO.version}) and APP_VERSION (${APP_VERSION})`);
     }
 
     results.push(makeTestCase({
       id: 'unit_version_ssot_invariant',
-      name: 'صحت منبع واحد شماره نسخه (Version SSOT) و متادیتای بیلد سامانه',
+      name: 'Single source of truth for the version number (Version SSOT) and build metadata',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t11Start,
-      details: `نسخه یکپارچه سامانه (${BUILD_INFO.version}) با استانداردهای SemVer، ماژول متمرکز و مانیفست بیلد با موفقیت تأیید شد.`
+      details: `System version (${BUILD_INFO.version}) verified against SemVer, the central module and the build manifest.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_version_ssot_invariant',
-      name: 'صحت منبع واحد شماره نسخه (Version SSOT) و متادیتای بیلد سامانه',
+      name: 'Single source of truth for the version number (Version SSOT) and build metadata',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -565,12 +565,12 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const installment1 = fin(4000000);
     const remaining1 = netPayable.subtract(currentPaid);
     if (installment1.greaterThan(remaining1)) {
-      throw new Error('مبلغ بیش از مانده مجاز شناخته شد');
+      throw new Error('An amount above the remaining balance was accepted');
     }
     currentPaid = currentPaid.add(installment1);
     const statusAfter1 = currentPaid.greaterThanOrEqual(netPayable) ? 'paid' : 'partially_paid';
     if (statusAfter1 !== 'partially_paid' || !currentPaid.equals(fin(4000000))) {
-      throw new Error(`وضعیت پس از پرداخت جزئی نادرست است: ${statusAfter1}`);
+      throw new Error(`status after partial payment is wrong: ${statusAfter1}`);
     }
 
     // مرحله ۲: جلوگیری از پرداخت مازاد (۷,۰۰۰,۰۰۰ در حالی که مانده ۶,۰۰۰,۰۰۰ است)
@@ -578,7 +578,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const remaining2 = netPayable.subtract(currentPaid);
     const isOverpaymentBlocked = overpaymentAttempt.greaterThan(remaining2);
     if (!isOverpaymentBlocked) {
-      throw new Error('سیستم پرداخت مازاد بر مانده فیش را مسدود نکرد');
+      throw new Error('The system did not block a payment above the payslip remaining balance');
     }
 
     // مرحله ۳: تسویه باقیمانده (۶,۰۰۰,۰۰۰)
@@ -586,22 +586,22 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     currentPaid = currentPaid.add(installment2);
     const statusAfter2 = currentPaid.greaterThanOrEqual(netPayable) ? 'paid' : 'partially_paid';
     if (statusAfter2 !== 'paid' || !currentPaid.equals(netPayable)) {
-      throw new Error(`وضعیت پس از تسویه کامل نادرست است: ${statusAfter2}`);
+      throw new Error(`status after full settlement is wrong: ${statusAfter2}`);
     }
 
     results.push(makeTestCase({
       id: 'unit_multistage_payroll_payment',
-      name: 'محاسبات اعشاری دقیق و انطباق وضعیت‌های پرداخت چندمرحله‌ای حقوق (V4.0.33)',
+      name: 'Exact decimal arithmetic and status transitions of multi-stage payroll payments (V4.0.33)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t12Start,
-      details: 'منطق پرداخت قسطی، مسدودسازی پرداخت مازاد و گذار وضعیت به partially_paid و paid با موفقیت آزموده شد.'
+      details: 'Installment payment logic, blocking overpayment and status transitions to partially_paid and paid tested successfully.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_multistage_payroll_payment',
-      name: 'محاسبات اعشاری دقیق و انطباق وضعیت‌های پرداخت چندمرحله‌ای حقوق (V4.0.33)',
+      name: 'Exact decimal arithmetic and status transitions of multi-stage payroll payments (V4.0.33)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -617,21 +617,21 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const validId = '0010000038';
     const valRes = validateIranianNationalId(validId);
     if (!valRes.isValid) {
-      throw new Error(`کد ملی معتبر ${validId} به اشتباه مردود شد: ${valRes.error}`);
+      throw new Error(`valid national ID ${validId} was wrongly rejected: ${valRes.error}`);
     }
 
     // تست ارقام تکراری ساختگی
     const repeatedId = '1111111111';
     const repRes = validateIranianNationalId(repeatedId);
     if (repRes.isValid) {
-      throw new Error('کد ملی با ارقام تکراری باید رد شود');
+      throw new Error('A national ID with repeated digits must be rejected');
     }
 
     // تست رقم کنترلی نادرست
     const invalidChecksumId = '0010000039';
     const invRes = validateIranianNationalId(invalidChecksumId);
     if (invRes.isValid) {
-      throw new Error('کد ملی با رقم کنترلی اشتباه باید رد شود');
+      throw new Error('A national ID with a wrong check digit must be rejected');
     }
 
     // v9.0.248 (TD-673): فرم صفر نمی‌افزاید؛ فقط ورود اکسل ۸ یا ۹ رقم را با صفر به ۱۰ می‌رساند و گزارش می‌کند
@@ -646,17 +646,17 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'unit_iranian_national_id_validation',
-      name: 'الگوریتم اعتبارسنجی کد ملی و پد خودکار صفرها (الگوی وایب فارسی - فاز ۱)',
+      name: 'National ID validation algorithm and automatic zero padding (Vibe Farsi pattern - phase 1)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t13Start,
-      details: 'فرمول Mod 11، رد ارقام تکراری و نرمال‌سازی با موفقیت ارزیابی شد.'
+      details: 'Mod 11 formula, rejection of repeated digits and normalization verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_iranian_national_id_validation',
-      name: 'الگوریتم اعتبارسنجی کد ملی و پد خودکار صفرها (الگوی وایب فارسی - فاز ۱)',
+      name: 'National ID validation algorithm and automatic zero padding (Vibe Farsi pattern - phase 1)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -671,57 +671,57 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     // همراه اول
     const mciInfo = getIranianPhoneOperatorInfo('09121234567');
     if (!mciInfo.isValid || mciInfo.operatorKey !== 'mci' || mciInfo.operatorName !== 'همراه اول') {
-      throw new Error(`تشخیص همراه اول با خطا مواجه شد: ${JSON.stringify(mciInfo)}`);
+      throw new Error(`Hamrah-e Aval (MCI) detection failed: ${JSON.stringify(mciInfo)}`);
     }
 
     // تبدیل پیشوند بین‌المللی +98 و تشخیص ایرانسل
     const normalizedIrancell = normalizePhoneNumber('+989351234567');
     const irancellInfo = getIranianPhoneOperatorInfo(normalizedIrancell);
     if (!irancellInfo.isValid || irancellInfo.operatorKey !== 'irancell' || irancellInfo.operatorName !== 'ایرانسل') {
-      throw new Error(`تشخیص ایرانسل با تبدیل +98 با خطا مواجه شد: ${JSON.stringify(irancellInfo)}`);
+      throw new Error(`Irancell detection with +98 conversion failed: ${JSON.stringify(irancellInfo)}`);
     }
 
     // رایتل
     const rightelInfo = getIranianPhoneOperatorInfo('09211234567');
     if (!rightelInfo.isValid || rightelInfo.operatorKey !== 'rightel') {
-      throw new Error(`تشخیص رایتل با خطا مواجه شد: ${JSON.stringify(rightelInfo)}`);
+      throw new Error(`Rightel detection failed: ${JSON.stringify(rightelInfo)}`);
     }
 
     // تلفن ثابت تهران
     const tehranLandline = getIranianPhoneOperatorInfo('02188776655');
     if (!tehranLandline.isValid || tehranLandline.type !== 'landline' || tehranLandline.provinceName !== 'تهران') {
-      throw new Error(`تشخیص تلفن ثابت تهران با خطا مواجه شد: ${JSON.stringify(tehranLandline)}`);
+      throw new Error(`Tehran landline detection failed: ${JSON.stringify(tehranLandline)}`);
     }
 
     // تلفن ثابت اصفهان
     const isfahanLandline = getIranianPhoneOperatorInfo('03133221100');
     if (!isfahanLandline.isValid || isfahanLandline.type !== 'landline' || isfahanLandline.provinceName !== 'اصفهان') {
-      throw new Error(`تشخیص تلفن ثابت اصفهان با خطا مواجه شد: ${JSON.stringify(isfahanLandline)}`);
+      throw new Error(`Isfahan landline detection failed: ${JSON.stringify(isfahanLandline)}`);
     }
 
     // تست اعتبارسنجی کلی شماره تلفن ایرانی
     const validPhoneRes = validateIranianPhoneNumber('09121234567');
     if (!validPhoneRes.isValid) {
-      throw new Error(`شماره معتبر مردود شد: ${validPhoneRes.error}`);
+      throw new Error(`valid number was rejected: ${validPhoneRes.error}`);
     }
     const invalidPhoneRes = validateIranianPhoneNumber('0912123');
     if (invalidPhoneRes.isValid) {
-      throw new Error('شماره کوتاه‌تر از ۱۱ رقم باید نامعتبر باشد');
+      throw new Error('A number shorter than 11 digits must be invalid');
     }
 
     results.push(makeTestCase({
       id: 'unit_iranian_phone_operator_detection',
-      name: 'شناسایی هوشمند اپراتورهای موبایل و تلفن ثابت ایران (الگوی وایب فارسی - فاز ۱)',
+      name: 'Detection of Iranian mobile operators and landlines (Vibe Farsi pattern - phase 1)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t14Start,
-      details: 'همراه اول، ایرانسل، رایتل و پیش‌شماره‌های استانی با تبدیل خودکار +98 با موفقیت تایید شدند.'
+      details: 'Hamrah-e Aval, Irancell, Rightel and provincial area codes with automatic +98 conversion verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_iranian_phone_operator_detection',
-      name: 'شناسایی هوشمند اپراتورهای موبایل و تلفن ثابت ایران (الگوی وایب فارسی - فاز ۱)',
+      name: 'Detection of Iranian mobile operators and landlines (Vibe Farsi pattern - phase 1)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -737,55 +737,55 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const validMelliCard = '6037991234567893';
     const melliValidation = validateBankCardNumber(validMelliCard);
     if (!melliValidation.isValid) {
-      throw new Error(`کارت معتبر بانک ملی تایید نشد: ${melliValidation.error}`);
+      throw new Error(`valid Bank Melli card was not accepted: ${melliValidation.error}`);
     }
     if (melliValidation.shortName !== 'ملی') {
-      throw new Error(`نام اختصاری بانک ملی درست تشخیص داده نشد: ${melliValidation.shortName}`);
+      throw new Error(`Bank Melli short name was not detected correctly: ${melliValidation.shortName}`);
     }
 
     // کارت بانک ملت با پیش‌شماره 610433
     const bankFromCard = getIranianBankFromCard('6104330000000000');
     if (!bankFromCard || bankFromCard.shortName !== 'ملت') {
-      throw new Error(`تشخیص پیش‌شماره کارت بانک ملت با شکست مواجه شد: ${JSON.stringify(bankFromCard)}`);
+      throw new Error(`Bank Mellat card prefix detection failed: ${JSON.stringify(bankFromCard)}`);
     }
 
     // کارت با رقم کنترلی نامعتبر (تغییر رقم آخر)
     const invalidCard = '6037991234567894';
     const invalidRes = validateBankCardNumber(invalidCard);
     if (invalidRes.isValid) {
-      throw new Error('کارت با رقم کنترلی نادرست نباید معتبر شناخته شود');
+      throw new Error('A card with a wrong check digit must not be valid');
     }
 
     // کارت کمتر از ۱۶ رقم
     const shortCard = validateBankCardNumber('60379912345');
     if (shortCard.isValid) {
-      throw new Error('کارت ۱۱ رقمی نباید معتبر باشد');
+      throw new Error('An 11-digit card must not be valid');
     }
 
     // تست فرمت‌بندی نمایشی و نرمال‌سازی
     const normalizedCard = normalizeBankCard('۶۰۳۷-۹۹۱۲-۳۴۵۶-۷۸۹۳');
     if (normalizedCard !== '6037991234567893') {
-      throw new Error(`نرمال‌سازی شماره کارت با ارقام فارسی نادرست است: ${normalizedCard}`);
+      throw new Error(`card number normalization with Persian digits is wrong: ${normalizedCard}`);
     }
 
     const formatted = formatBankCard('6037991234567893', ' - ');
     if (formatted !== '6037 - 9912 - 3456 - 7893') {
-      throw new Error(`فرمت کارت نادرست است: ${formatted}`);
+      throw new Error(`card format is wrong: ${formatted}`);
     }
 
     results.push(makeTestCase({
       id: 'unit_bank_card_luhn_and_iin',
-      name: 'اعتبارسنجی الگوریتم لان (Luhn) و شناسایی هوشمند بانک عضو شتاب (الگوی وایب فارسی - فاز ۲)',
+      name: 'Luhn algorithm validation and detection of the Shetab member bank (Vibe Farsi pattern - phase 2)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t15Start,
-      details: 'الگوریتم Luhn، تشخیص هوشمند بانک از روی ۶ رقم اول (BIN) و فرمت‌بندی ۴ رقمی با موفقیت تایید شدند.'
+      details: 'Luhn algorithm, bank detection from the first 6 digits (BIN) and 4-digit grouping verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_bank_card_luhn_and_iin',
-      name: 'اعتبارسنجی الگوریتم لان (Luhn) و شناسایی هوشمند بانک عضو شتاب (الگوی وایب فارسی - فاز ۲)',
+      name: 'Luhn algorithm validation and detection of the Shetab member bank (Vibe Farsi pattern - phase 2)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -801,50 +801,50 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const validSheba = 'IR160120000000001234567890';
     const shebaValidation = validateIranianSheba(validSheba);
     if (!shebaValidation.isValid) {
-      throw new Error(`شماره شبای معتبر بانک ملت تایید نشد: ${shebaValidation.error}`);
+      throw new Error(`valid Bank Mellat Sheba number was not accepted: ${shebaValidation.error}`);
     }
     if (shebaValidation.shortName !== 'ملت') {
-      throw new Error(`شناسایی بانک از روی شبا با شکست مواجه شد: ${shebaValidation.shortName}`);
+      throw new Error(`bank detection from Sheba failed: ${shebaValidation.shortName}`);
     }
 
     // شناسایی بانک صادرات از روی کد 019
     const saderatBank = getIranianBankFromSheba('IR000190000000000000000000');
     if (!saderatBank || saderatBank.shortName !== 'صادرات') {
-      throw new Error(`تشخیص بانک صادرات از شبا ناموفق بود: ${JSON.stringify(saderatBank)}`);
+      throw new Error(`Bank Saderat detection from Sheba failed: ${JSON.stringify(saderatBank)}`);
     }
 
     // شبا با رقم کنترلی نادرست (مثلاً IR17 به جای IR16)
     const invalidCheckDigitsSheba = 'IR170120000000001234567890';
     const invalidShebaRes = validateIranianSheba(invalidCheckDigitsSheba);
     if (invalidShebaRes.isValid) {
-      throw new Error('شبای با رقم کنترل اشتباه نباید معتبر شناخته شود');
+      throw new Error('A Sheba number with a wrong check digit must not be valid');
     }
 
     // تست استانداردسازی ۲۴ رقم بدون IR
     const normalizedWithoutIR = normalizeSheba('160120000000001234567890');
     if (normalizedWithoutIR !== validSheba) {
-      throw new Error(`استانداردسازی ۲۴ رقم بدون IR ناموفق بود: ${normalizedWithoutIR}`);
+      throw new Error(`normalizing 24 digits without IR failed: ${normalizedWithoutIR}`);
     }
 
     // تست فرمت‌بندی ۴ رقمی شبا
     const formattedSheba = formatIranianSheba(validSheba, ' ');
     if (formattedSheba !== 'IR16 0120 0000 0000 1234 5678 90') {
-      throw new Error(`فرمت‌بندی شبا ناموفق بود: ${formattedSheba}`);
+      throw new Error(`Sheba formatting failed: ${formattedSheba}`);
     }
 
     results.push(makeTestCase({
       id: 'unit_sheba_iso_7064_mod_97',
-      name: 'اعتبارسنجی رسمی شماره شبا بر پایه استاندارد ISO 7064 Mod 97-10 (الگوی وایب فارسی - فاز ۲)',
+      name: 'Official Sheba number validation based on ISO 7064 Mod 97-10 (Vibe Farsi pattern - phase 2)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t16Start,
-      details: 'اعتبارسنجی ریاضی ISO 7064 Mod 97-10، تفکیک پیشوند IR و استخراج نام بانک با موفقیت ارزیابی شد.'
+      details: 'ISO 7064 Mod 97-10 check, IR prefix separation and bank name extraction verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_sheba_iso_7064_mod_97',
-      name: 'اعتبارسنجی رسمی شماره شبا بر پایه استاندارد ISO 7064 Mod 97-10 (الگوی وایب فارسی - فاز ۲)',
+      name: 'Official Sheba number validation based on ISO 7064 Mod 97-10 (Vibe Farsi pattern - phase 2)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -858,61 +858,61 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
   try {
     // ۱. تست تبدیل عدد ساده
     if (numberToPersianWords(0) !== 'صفر') {
-      throw new Error(`عدد صفر اشتباه تبدیل شد: ${numberToPersianWords(0)}`);
+      throw new Error(`zero was converted wrongly: ${numberToPersianWords(0)}`);
     }
     if (numberToPersianWords(12) !== 'دوازده') {
-      throw new Error(`عدد ۱۲ اشتباه تبدیل شد: ${numberToPersianWords(12)}`);
+      throw new Error(`12 was converted wrongly: ${numberToPersianWords(12)}`);
     }
     if (numberToPersianWords(315) !== 'سیصد و پانزده') {
-      throw new Error(`عدد ۳۱۵ اشتباه تبدیل شد: ${numberToPersianWords(315)}`);
+      throw new Error(`315 was converted wrongly: ${numberToPersianWords(315)}`);
     }
     if (numberToPersianWords(1000) !== 'یک هزار') {
-      throw new Error(`عدد ۱۰۰۰ اشتباه تبدیل شد: ${numberToPersianWords(1000)}`);
+      throw new Error(`1000 was converted wrongly: ${numberToPersianWords(1000)}`);
     }
 
     // ۲. تست مبالغ بزرگ با ارقام انگلیسی و فارسی و کاما
     const largeWords = numberToPersianWords('45,000,000');
     if (largeWords !== 'چهل و پنج میلیون') {
-      throw new Error(`مبلغ ۴۵ میلیون اشتباه تبدیل شد: ${largeWords}`);
+      throw new Error(`45 million was converted wrongly: ${largeWords}`);
     }
 
     // ۳. تست تبدیل مالی ریال و معادل تومان
     const rialRes = financialAmountToPersianWords(45000000, 'IRR');
     if (rialRes.words !== 'چهل و پنج میلیون ریال') {
-      throw new Error(`متن ریالی اشتباه است: ${rialRes.words}`);
+      throw new Error(`rial text is wrong: ${rialRes.words}`);
     }
     if (rialRes.tomanEquivalent !== 'چهار میلیون و پانصد هزار تومان') {
-      throw new Error(`معادل تومان اشتباه است: ${rialRes.tomanEquivalent}`);
+      throw new Error(`toman equivalent is wrong: ${rialRes.tomanEquivalent}`);
     }
     if (!rialRes.fullDescription.includes('معادل چهار میلیون و پانصد هزار تومان')) {
-      throw new Error(`توضیحات کامل ریال و تومان اشتباه است: ${rialRes.fullDescription}`);
+      throw new Error(`full rial and toman description is wrong: ${rialRes.fullDescription}`);
     }
 
     // ۴. تست ریال دارای باقیمانده تک رقمی
     const rialWithRemainder = financialAmountToPersianWords(1250005, 'IRR');
     if (!rialWithRemainder.tomanEquivalent.includes('پنج ریال')) {
-      throw new Error(`باقیمانده ریال در معادل تومان لحاظ نشد: ${rialWithRemainder.tomanEquivalent}`);
+      throw new Error(`rial remainder was not included in the toman equivalent: ${rialWithRemainder.tomanEquivalent}`);
     }
 
     // ۵. تست ارزهای غیر ریال (مانند دلار)
     const usdRes = financialAmountToPersianWords(2500, 'USD');
     if (usdRes.words !== 'دو هزار و پانصد دلار') {
-      throw new Error(`مبلغ ارزی دلار اشتباه است: ${usdRes.words}`);
+      throw new Error(`US dollar amount is wrong: ${usdRes.words}`);
     }
 
     results.push(makeTestCase({
       id: 'unit_financial_number_to_persian_words',
-      name: 'موتور تبدیل اعداد مالی به حروف فارسی و تفکیک ریال/تومان (الگوی وایب فارسی - فاز ۳)',
+      name: 'Financial number-to-Persian-words engine with rial/toman split (Vibe Farsi pattern - phase 3)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t17Start,
-      details: 'تبدیل مبالغ بزرگ تا مقیاس‌های کلان، تفکیک همگام ریال و تومان، و مدیریت ارزهای خارجی با موفقیت تایید شد.'
+      details: 'Conversion of large amounts up to high scales, simultaneous rial and toman split and handling of foreign currencies verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_financial_number_to_persian_words',
-      name: 'موتور تبدیل اعداد مالی به حروف فارسی و تفکیک ریال/تومان (الگوی وایب فارسی - فاز ۳)',
+      name: 'Financial number-to-Persian-words engine with rial/toman split (Vibe Farsi pattern - phase 3)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -926,35 +926,35 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
   try {
     // ۱. ارزیابی فرمت‌بندی بومی حجم فایل‌ها به فارسی
     if (formatFileSize(0) !== '۰ بایت') {
-      throw new Error(`حجم صفر بایت نادرست است: ${formatFileSize(0)}`);
+      throw new Error(`size of zero bytes is wrong: ${formatFileSize(0)}`);
     }
     if (formatFileSize(500) !== '۵۰۰ بایت') {
-      throw new Error(`حجم ۵۰۰ بایت نادرست است: ${formatFileSize(500)}`);
+      throw new Error(`size of 500 bytes is wrong: ${formatFileSize(500)}`);
     }
     if (formatFileSize(1024) !== '۱ کیلوبایت') {
-      throw new Error(`حجم ۱۰۲۴ بایت نادرست است: ${formatFileSize(1024)}`);
+      throw new Error(`size of 1024 bytes is wrong: ${formatFileSize(1024)}`);
     }
     if (formatFileSize(200 * 1024) !== '۲۰۰ کیلوبایت') {
-      throw new Error(`حجم ۲۰۰ کیلوبایت نادرست است: ${formatFileSize(200 * 1024)}`);
+      throw new Error(`size of 200 KB is wrong: ${formatFileSize(200 * 1024)}`);
     }
     const twoMb = formatFileSize(2.5 * 1024 * 1024);
     if (!twoMb.includes('مگابایت')) {
-      throw new Error(`حجم مگابایتی نادرست است: ${twoMb}`);
+      throw new Error(`megabyte size is wrong: ${twoMb}`);
     }
 
     results.push(makeTestCase({
       id: 'unit_file_size_persian_formatter',
-      name: 'فرمت‌بندی بومی و ارگونومیک اندازه پیوست‌ها و مدارک (الگوی وایب فارسی - فاز ۴)',
+      name: 'Localized formatting of attachment and document sizes (Vibe Farsi pattern - phase 4)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t18Start,
-      details: 'تبدیل بایت، کیلوبایت و مگابایت به همراه ارقام فارسی با موفقیت ارزیابی شد.'
+      details: 'Conversion to bytes, kilobytes and megabytes with Persian digits verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_file_size_persian_formatter',
-      name: 'فرمت‌بندی بومی و ارگونومیک اندازه پیوست‌ها و مدارک (الگوی وایب فارسی - فاز ۴)',
+      name: 'Localized formatting of attachment and document sizes (Vibe Farsi pattern - phase 4)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -982,28 +982,28 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     // سناریو ۱: نزدیک سقف صفحه (باید جهت به bottom تغییر کند)
     const resTop = checkCollision(10, 100, 200, 40, 1200, 800);
     if (resTop.resolvedPos !== 'bottom') {
-      throw new Error(`جهت تولتیپ در نزدیکی سقف صفحه باید bottom باشد اما ${resTop.resolvedPos} شد`);
+      throw new Error(`tooltip near the top of the page must open at the bottom but opened at ${resTop.resolvedPos}`);
     }
 
     // سناریو ۲: نزدیک لبه راست صفحه در نمایشگر کوچک (باید سرریز راست مهار شود)
     const resRight = checkCollision(300, 380, 150, 40, 400, 800);
     if (resRight.left + 150 > 400) {
-      throw new Error('تولتیپ از لبه مانیتور بیرون زد');
+      throw new Error('Tooltip overflowed the screen edge');
     }
 
     results.push(makeTestCase({
       id: 'unit_rtl_micro_interactions_tooltip',
-      name: 'منطق بازخورد تعاملی، راهنماها و مهار سرریز تولتیپ فارسی (الگوی وایب فارسی - فاز ۵)',
+      name: 'Interactive feedback, hints and Persian tooltip overflow containment (Vibe Farsi pattern - phase 5)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t19Start,
-      details: 'انطباق هوشمند موقعیت‌دهی دیداری و مهار سرریز کادر راهنما در ویوپورت‌های RTL تایید شد.'
+      details: 'Adaptive visual positioning and tooltip overflow containment in RTL viewports verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_rtl_micro_interactions_tooltip',
-      name: 'منطق بازخورد تعاملی، راهنماها و مهار سرریز تولتیپ فارسی (الگوی وایب فارسی - فاز ۵)',
+      name: 'Interactive feedback, hints and Persian tooltip overflow containment (Vibe Farsi pattern - phase 5)',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -1028,7 +1028,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     })).filter(g => g.items.length > 0);
 
     if (filtered.length !== 1 || filtered[0].id !== 'accounting' || filtered[0].items[0].name !== 'چک صیادی') {
-      throw new Error('فیلتر سرچ زیرمنوها دچار خطا شد');
+      throw new Error('Submenu search filter failed');
     }
 
     // ۲. ارزیابی قانون Single-Accordion
@@ -1039,27 +1039,27 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
 
     toggleGroup('accounting');
     if ((state.activeGroupId as string) !== 'accounting') {
-      throw new Error(`شاخه فعال باید accounting باشد اما ${state.activeGroupId} شد`);
+      throw new Error(`active group must be accounting but was ${state.activeGroupId}`);
     }
 
     toggleGroup('accounting');
     if (Boolean(state.activeGroupId)) {
-      throw new Error(`کلیک مجدد روی همان شاخه باید آن را ببندد`);
+      throw new Error(`clicking the same group again must close it`);
     }
 
     results.push(makeTestCase({
       id: 'unit_sidebar_accordion_and_search',
-      name: 'پیمایش ارگونومیک منو، رفتار آکاردئونی اختصاصی (Single Accordion) و جستجوی زیرمنوها',
+      name: 'Ergonomic menu navigation, single accordion behaviour (Single Accordion) and submenu search',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t20Start,
-      details: 'فیلتر هوشمند زیرمنوها، بستن خودکار سایر شاخه‌ها و مدیریت برگزیده‌ها با موفقیت ارزیابی شد.'
+      details: 'Submenu filtering, automatic closing of the other groups and favourites management verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_sidebar_accordion_and_search',
-      name: 'پیمایش ارگونومیک منو، رفتار آکاردئونی اختصاصی (Single Accordion) و جستجوی زیرمنوها',
+      name: 'Ergonomic menu navigation, single accordion behaviour (Single Accordion) and submenu search',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -1074,27 +1074,27 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const rawRial = 5500000; // ۵,۵۰۰,۰۰۰ ریال
     const toman = Math.floor(rawRial / 10); // ۵۵۰,۰۰۰ تومان
     if (toman !== 550000) {
-      throw new Error(`محاسبه معادل تومان نادرست است: ${toman}`);
+      throw new Error(`toman equivalent calculation is wrong: ${toman}`);
     }
 
     const formattedRial = rawRial.toLocaleString('en-US');
     if (formattedRial !== '5,500,000') {
-      throw new Error(`جداسازی ۳ رقمی ریال نادرست است: ${formattedRial}`);
+      throw new Error(`rial thousands grouping is wrong: ${formattedRial}`);
     }
 
     results.push(makeTestCase({
       id: 'unit_item_initial_cost_financial_formatting',
-      name: 'جداسازی ۳ رقمی ارقام بهای تمام‌شده کالا و نمایش معادل تومانی در فرم کالا',
+      name: 'Item cost digits are grouped in thousands and the toman equivalent is shown in the item form',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t21Start,
-      details: 'انطباق بهای تمام‌شده اولیه با کامپوننت مالی استاندارد FinancialAmountInput و تفکیک ریال/تومان تایید شد.'
+      details: 'Initial cost uses the standard FinancialAmountInput component with the rial/toman split, verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_item_initial_cost_financial_formatting',
-      name: 'جداسازی ۳ رقمی ارقام بهای تمام‌شده کالا و نمایش معادل تومانی در فرم کالا',
+      name: 'Item cost digits are grouped in thousands and the toman equivalent is shown in the item form',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -1124,27 +1124,27 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const requestedQty = 2;
 
     if (warehouseStock >= requestedQty) {
-      throw new Error(`اعتبارسنجی موجودی انبار خاص با شکست مواجه شد؛ انبار خالی موجودی معتبر گزارش کرد!`);
+      throw new Error(`stock validation for the specific warehouse failed; the empty warehouse reported enough stock!`);
     }
 
     const mainWarehouseStock = mockItem.stock_main;
     if (mainWarehouseStock < 10) {
-      throw new Error(`موجودی انبار مرکزی نادرست است: ${mainWarehouseStock}`);
+      throw new Error(`central warehouse stock is wrong: ${mainWarehouseStock}`);
     }
 
     results.push(makeTestCase({
       id: 'unit_invoice_warehouse_stock_validation',
-      name: 'اعتبارسنجی انبارمحور موجودی اقلام در صدور فاکتور و جلوگیری از خطای کمبود موجودی سرور',
+      name: 'Per-warehouse item stock validation when issuing an invoice prevents server insufficient-stock errors',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t22Start,
-      details: 'انطباق اعتبارسنجی کلاینت با موجودی انبار انتخابی (stock_location) و گارد پیش از ارسال فاکتور تایید شد.'
+      details: 'Client validation against the selected warehouse stock (stock_location) and the guard before sending the invoice verified.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_invoice_warehouse_stock_validation',
-      name: 'اعتبارسنجی انبارمحور موجودی اقلام در صدور فاکتور و جلوگیری از خطای کمبود موجودی سرور',
+      name: 'Per-warehouse item stock validation when issuing an invoice prevents server insufficient-stock errors',
       layer: 'unit',
       executionType: 'simulation_logic',
       passed: false,
@@ -1160,21 +1160,21 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const { findCompactRuleViolations } = await import('../../data/changelogs/compactRule.js');
     const violations = findCompactRuleViolations(ACTIVE_CHANGELOG.updates);
     if (violations.length > 0) {
-      throw new Error(`${violations.length} مورد نقض قاعده چنج‌لاگ کوتاه، از جمله: ${violations.slice(0, 3).join(' | ')}`);
+      throw new Error(`${violations.length} violations of the short changelog rule, including: ${violations.slice(0, 3).join(' | ')}`);
     }
     results.push(makeTestCase({
       id: 'unit_changelog_compact_rule',
-      name: 'v7.0.54: مدخل‌های چنج‌لاگ فعال کوتاه و فقط شامل تغییرات و باگ‌های مهم هستند',
+      name: 'v7.0.54: active changelog entries are short and hold only important changes and bugs',
       layer: 'unit',
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - tChangelogStart,
-      details: `${ACTIVE_CHANGELOG.updates.length} مدخل ${ACTIVE_CHANGELOG.file} در محدوده قاعده compactRule.ts`
+      details: `${ACTIVE_CHANGELOG.updates.length} entries of ${ACTIVE_CHANGELOG.file} within the compactRule.ts limits`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_changelog_compact_rule',
-      name: 'v7.0.54: مدخل‌های چنج‌لاگ فعال کوتاه و فقط شامل تغییرات و باگ‌های مهم هستند',
+      name: 'v7.0.54: active changelog entries are short and hold only important changes and bugs',
       layer: 'unit',
       executionType: 'real_code',
       passed: false,
@@ -1185,7 +1185,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
 
   // v9.0.0: سری‌های ۷ و ۸ بسته و منجمدند و تغییرات تازه فقط در سری فعال ۹ (9.ts) ثبت می‌شوند
   const tSeriesStart = Date.now();
-  const seriesTestName = 'v9.0.0: سری فعال چنج‌لاگ ۹ است، نسخه package.json در آن است و سری‌های بسته‌شده ۷ (v7.0.140) و ۸ (v8.0.128) دست‌نخورده‌اند';
+  const seriesTestName = 'v9.0.0: the active changelog series is 9, the package.json version is in it, and the closed series 7 (v7.0.140) and 8 (v8.0.128) are untouched';
   try {
     const fs = await import('fs');
     const path = await import('path');
@@ -1194,13 +1194,13 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const pkgVersion = String(JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')).version || '');
     const violations: string[] = [];
     if (ACTIVE_CHANGELOG.series !== 9 || ACTIVE_CHANGELOG.file !== 'src/data/changelogs/9.ts') {
-      violations.push(`سری فعال باید ۹ (9.ts) باشد، اما ${ACTIVE_CHANGELOG.series} (${ACTIVE_CHANGELOG.file}) است`);
+      violations.push(`active series must be 9 (9.ts), but is ${ACTIVE_CHANGELOG.series} (${ACTIVE_CHANGELOG.file})`);
     }
     const expectedClosed: Array<[number, string]> = [[7, 'v7.0.140'], [8, 'v8.0.128']];
     for (const [series, finalVersion] of expectedClosed) {
       const closed = CLOSED_CHANGELOG_SERIES.find(c => c.series === series);
       if (!closed || closed.finalVersion !== finalVersion) {
-        violations.push(`سری ${series} با نسخه پایانی ${finalVersion} در فهرست سری‌های بسته‌شده نیست`);
+        violations.push(`series ${series} with final version ${finalVersion} is not in the closed series list`);
         continue;
       }
       // گارد باید نسخه تازه در هر سری بسته‌شده و ویرایش مدخل منجمد آن را رد کند
@@ -1208,11 +1208,11 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       const nextVersion = `${major}.${minor}.${patch + 1}`;
       const tampered = CLOSED_CHANGELOG_SERIES.map(c => (c.series === series ? { ...c, updates: [{ ...c.updates[0], version: `v${nextVersion}` }, ...c.updates] } : c));
       if (findChangelogSeriesViolations(nextVersion, ACTIVE_CHANGELOG, tampered).length < 3) {
-        violations.push(`گارد سری‌ها نسخه v${nextVersion} در سری بسته‌شده ${series} را رد نکرد`);
+        violations.push(`series guard did not reject version v${nextVersion} in closed series ${series}`);
       }
       const edited = CLOSED_CHANGELOG_SERIES.map(c => (c.series === series ? { ...c, updates: c.updates.map((u, i) => (i === 5 ? { ...u, title: `${u.title}.` } : u)) } : c));
-      if (!findChangelogSeriesViolations(pkgVersion, ACTIVE_CHANGELOG, edited).some(v => v.includes(`سری بسته‌شده ${series} تغییر کرده است`))) {
-        violations.push(`گارد سری‌ها ویرایش مدخل سری بسته‌شده ${series} را رد نکرد`);
+      if (!findChangelogSeriesViolations(pkgVersion, ACTIVE_CHANGELOG, edited).some(v => v.includes(`closed series ${series} has changed`))) {
+        violations.push(`series guard did not reject an edited entry of closed series ${series}`);
       }
     }
     violations.push(...findChangelogSeriesViolations(pkgVersion, ACTIVE_CHANGELOG, CLOSED_CHANGELOG_SERIES));
@@ -1247,9 +1247,9 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const path = await import('path');
     const roots = ['src/routes', 'src/services', 'src/lib', 'src/db'].map(d => path.join(process.cwd(), d));
     const forbidden: Array<[RegExp, string]> = [
-      [/`%\$\{/, 'الگوی `%${…}%`'],
-      [/'%'\s*\+/, "الحاق '%' + …"],
-      [/\bi?like\(\s*[\w.]+\s*,\s*`/, 'template literal مستقیم در like / ilike'],
+      [/`%\$\{/, 'pattern `%${…}%`'],
+      [/'%'\s*\+/, "concatenation '%' + …"],
+      [/\bi?like\(\s*[\w.]+\s*,\s*`/, 'template literal passed straight to like / ilike'],
     ];
     const offenders: string[] = [];
     const walk = (dir: string) => {
@@ -1267,21 +1267,21 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     };
     roots.filter(r => fs.existsSync(r)).forEach(walk);
     if (offenders.length > 0) {
-      throw new Error(`${offenders.length} الگوی LIKE بدون escape: ${offenders.slice(0, 5).join('، ')}`);
+      throw new Error(`${offenders.length} LIKE patterns without escaping: ${offenders.slice(0, 5).join(', ')}`);
     }
     results.push(makeTestCase({
       id: 'unit_like_patterns_escaped_td_222',
-      name: 'v7.0.57: هیچ الگوی LIKE / ILIKE مستقیم از ورودی ساخته نمی‌شود (TD-222)',
+      name: 'v7.0.57: no LIKE / ILIKE pattern is built directly from input (TD-222)',
       layer: 'unit',
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - tLikeStart,
-      details: 'routes، services، lib و db بدون الگوی %${…} یا الحاق \'%\''
+      details: 'routes, services, lib and db have no %${…} pattern or \'%\' concatenation'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_like_patterns_escaped_td_222',
-      name: 'v7.0.57: هیچ الگوی LIKE / ILIKE مستقیم از ورودی ساخته نمی‌شود (TD-222)',
+      name: 'v7.0.57: no LIKE / ILIKE pattern is built directly from input (TD-222)',
       layer: 'unit',
       executionType: 'real_code',
       passed: false,
@@ -1300,13 +1300,13 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const lib: any = (XLSX as any).version ? XLSX : ((XLSX as any).default ?? XLSX);
     const [major, minor, patch] = String(lib.version || '0.0.0').split('.').map(Number);
     if (major === 0 && (minor < 20 || (minor === 20 && patch < 2))) {
-      throw new Error(`نسخه xlsx (${lib.version}) آسیب‌پذیر است (GHSA-4r6h-8v6p-xvw6، GHSA-5pgg-2g8v-p4x9)؛ حداقل 0.20.2 لازم است`);
+      throw new Error(`xlsx version (${lib.version}) is vulnerable (GHSA-4r6h-8v6p-xvw6, GHSA-5pgg-2g8v-p4x9); at least 0.20.2 is required`);
     }
     const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
     // v7.0.84 (TD-177): xlsx فقط در باندل فرانت است و در devDependencies قرار دارد
     const spec = String(pkg.devDependencies?.xlsx || pkg.dependencies?.xlsx || '');
     if (!spec.startsWith('file:vendor/') || !fs.existsSync(path.join(process.cwd(), spec.slice('file:'.length)))) {
-      throw new Error(`وابستگی xlsx باید از فایل vendor مخزن نصب شود (اکنون: ${spec || 'ندارد'})`);
+      throw new Error(`the xlsx dependency must be installed from the repository's vendor file (now: ${spec || 'none'})`);
     }
     const rows = [{ کد: 'N-101', نام: 'گردنبند نقره', موجودی: 12.5 }, { کد: 'B-C-7', نام: 'مهره کریستالی', موجودی: 0 }];
     const workbook = lib.utils.book_new();
@@ -1314,21 +1314,21 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const buffer = lib.write(workbook, { type: 'buffer', bookType: 'xlsx' });
     const readBack = lib.utils.sheet_to_json(lib.read(buffer, { type: 'buffer' }).Sheets['کالاها']);
     if (JSON.stringify(readBack) !== JSON.stringify(rows)) {
-      throw new Error(`ساخت و خواندن دوباره فایل اکسل نتیجه متفاوت داد: ${JSON.stringify(readBack)}`);
+      throw new Error(`writing and reading back the Excel file gave a different result: ${JSON.stringify(readBack)}`);
     }
     results.push(makeTestCase({
       id: 'unit_xlsx_patched_build_td_173',
-      name: 'v7.0.58: کتابخانه xlsx نسخه اصلاح‌شده (≥ 0.20.2) از vendor و ساخت/خواندن اکسل فارسی (TD-173)',
+      name: 'v7.0.58: patched xlsx library (>= 0.20.2) from vendor builds and reads Persian Excel files (TD-173)',
       layer: 'unit',
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - tXlsxStart,
-      details: `xlsx ${lib.version} از ${spec}`
+      details: `xlsx ${lib.version} from ${spec}`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'unit_xlsx_patched_build_td_173',
-      name: 'v7.0.58: کتابخانه xlsx نسخه اصلاح‌شده (≥ 0.20.2) از vendor و ساخت/خواندن اکسل فارسی (TD-173)',
+      name: 'v7.0.58: patched xlsx library (>= 0.20.2) from vendor builds and reads Persian Excel files (TD-173)',
       layer: 'unit',
       executionType: 'real_code',
       passed: false,
@@ -1339,7 +1339,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
 
   // v7.0.61 (audit P3-9): تشخیص مسیر عمومی در fetchJson با تطبیق دقیق مسیر، نه includes
   const tPublicStart = Date.now();
-  const publicTestName = 'v7.0.61: فقط مسیرهای دقیق ورود و نشست در fetchJson عمومی‌اند؛ /menu-visibility نه (P3-9)';
+  const publicTestName = 'v7.0.61: only the exact login and session routes are public in fetchJson; /menu-visibility is not (P3-9)';
   const g = globalThis as any;
   const originalFetch = g.fetch;
   const originalWindow = g.window;
@@ -1366,16 +1366,16 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       return unauthorizedEvents > before;
     };
     const violations: string[] = [];
-    if (!(await unauthorizedAfter('/menu-visibility'))) violations.push('401 از /menu-visibility باید کاربر را خارج کند');
-    if (!(await unauthorizedAfter('/global-search?q=/me'))) violations.push('401 از جستجویی که «/me» در عبارتش است باید کاربر را خارج کند');
-    if (await unauthorizedAfter('/auth/me')) violations.push('401 از /auth/me نباید رویداد خروج بفرستد');
+    if (!(await unauthorizedAfter('/menu-visibility'))) violations.push('401 from /menu-visibility must log the user out');
+    if (!(await unauthorizedAfter('/global-search?q=/me'))) violations.push('401 from a search whose query contains "/me" must log the user out');
+    if (await unauthorizedAfter('/auth/me')) violations.push('401 from /auth/me must not send a logout event');
 
     nextStatus = 200;
     requests.length = 0;
     await api.fetchJson('/customers?source=/setup', { method: 'POST', body: '{}' }, 0);
     const mutation = requests.find(r => r.url.startsWith('/api/customers'));
     if (!mutation?.headers['Idempotency-Key'] || mutation.headers['X-CSRF-Token'] !== 'unit-csrf') {
-      violations.push(`درخواست تغییر با «/setup» در رشته پرس‌وجو باید توکن CSRF و کلید Idempotency بگیرد: ${JSON.stringify(mutation?.headers)}`);
+      violations.push(`a mutation with "/setup" in the query string must get the CSRF token and an Idempotency key: ${JSON.stringify(mutation?.headers)}`);
     }
     if (violations.length > 0) throw new Error(violations.join(' | '));
     results.push(makeTestCase({
@@ -1385,7 +1385,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - tPublicStart,
-      details: '401 از /menu-visibility و جستجوی دارای «/me» رویداد خروج فرستاد، /auth/me نفرستاد؛ درخواست تغییر با «/setup» در پرس‌وجو توکن CSRF و کلید Idempotency گرفت.'
+      details: '401 from /menu-visibility and from a search containing "/me" sent a logout event, /auth/me did not; a mutation with "/setup" in the query got the CSRF token and an Idempotency key.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
@@ -1404,7 +1404,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
 
   // v7.0.64 (audit P3-12): سازگاری اسناد حاکمیتی با کد و رجیستری بدهی
   const tGovStart = Date.now();
-  const govTestName = 'v7.0.64: جدول‌های نام‌برده در AGENTS.md و ARCHITECTURE_RULES.md وجود دارند و برچسب‌ها و آمار TECH_DEBT.md درست است (P3-12)';
+  const govTestName = 'v7.0.64: the tables named in AGENTS.md and ARCHITECTURE_RULES.md exist, and the TECH_DEBT.md labels and counts are correct (P3-12)';
   try {
     const fs = await import('fs');
     const path = await import('path');
@@ -1420,7 +1420,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     }
     for (const doc of ['AGENTS.md', 'ARCHITECTURE_RULES.md']) {
       for (const m of read(doc).matchAll(/`([a-z][a-z0-9_]*_(?:counters|stocks|periods|attachments|corrections|anomalies|vouchers|transactions|logs))`/g)) {
-        if (!tableNames.has(m[1])) violations.push(`${doc}: جدول «${m[1]}» در اسکیما وجود ندارد`);
+        if (!tableNames.has(m[1])) violations.push(`${doc}: table "${m[1]}" does not exist in the schema`);
       }
     }
 
@@ -1431,10 +1431,10 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     for (const row of rows) {
       const cells = row.split(' | ');
       const status = cells[cells.length - 1].replace(/\|\s*$/, '').trim();
-      if (!/^(open|in_progress|scheduled:فاز ۳ ممیزی)/.test(status)) violations.push(`${cells[0].replace('| ', '')}: وضعیت نامعتبر «${status.slice(0, 40)}»`);
+      if (!/^(open|in_progress|scheduled:فاز ۳ ممیزی)/.test(status)) violations.push(`${cells[0].replace('| ', '')}: invalid status "${status.slice(0, 40)}"`);
     }
     const activeStat = debt.match(/\*\*فعال:\*\*\s*([۰-۹0-9]+)\s*ردیف/);
-    if (!activeStat || Number(toLatin(activeStat[1])) !== rows.length) violations.push(`آمار ردیف‌های فعال (${activeStat?.[1]}) با تعداد ردیف‌ها (${rows.length}) یکی نیست`);
+    if (!activeStat || Number(toLatin(activeStat[1])) !== rows.length) violations.push(`active row count (${activeStat?.[1]}) does not match the number of rows (${rows.length})`);
 
     if (violations.length > 0) throw new Error(violations.join(' | '));
     results.push(makeTestCase({
@@ -1444,7 +1444,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - tGovStart,
-      details: `${tableNames.size} جدول اسکیما؛ ${rows.length} ردیف فعال رجیستری بدهی با وضعیت جاری`
+      details: `${tableNames.size} schema tables; ${rows.length} active debt registry rows with a current status`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
@@ -1460,7 +1460,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
 
   // v7.0.65 (audit P3-4): ESLint قواعد Promise رهاشده، any و وابستگی hook را می‌گیرد و گیت ratchet افزایش را رد می‌کند
   const tEslintStart = Date.now();
-  const eslintTestName = 'v7.0.65: ESLint Promise رهاشده، any و وابستگی ناقص hook را می‌گیرد و گیت فایل پایه افزایش تخلف را رد می‌کند (P3-4)';
+  const eslintTestName = 'v7.0.65: ESLint catches a floating Promise, any and a missing hook dependency, and the baseline gate refuses a higher violation count (P3-4)';
   try {
     const { ESLint } = await import('eslint');
     const ratchet = await import('../../../scripts/eslint-ratchet.js');
@@ -1472,26 +1472,26 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       { filePath: 'src/lib/sqlLike.ts' }
     );
     const tsRules = tsProbe[0].messages.map(m => m.ruleId);
-    if (!tsRules.includes('@typescript-eslint/no-floating-promises')) violations.push(`Promise رهاشده گرفته نشد: ${JSON.stringify(tsRules)}`);
-    if (!tsRules.includes('@typescript-eslint/no-explicit-any')) violations.push(`any گرفته نشد: ${JSON.stringify(tsRules)}`);
+    if (!tsRules.includes('@typescript-eslint/no-floating-promises')) violations.push(`floating Promise was not caught: ${JSON.stringify(tsRules)}`);
+    if (!tsRules.includes('@typescript-eslint/no-explicit-any')) violations.push(`any was not caught: ${JSON.stringify(tsRules)}`);
     const tsxProbe = await eslint.lintText(
       "import { useEffect, useState } from 'react';\nexport function Probe({ id }: { id: number }) {\n  const [v, setV] = useState(0);\n  useEffect(() => { setV(id); }, []);\n  return <span>{v}</span>;\n}\n",
       { filePath: 'src/components/documents/ExchangeRateField.tsx' }
     );
-    if (!tsxProbe[0].messages.some(m => m.ruleId === 'react-hooks/exhaustive-deps')) violations.push(`وابستگی ناقص useEffect گرفته نشد: ${JSON.stringify(tsxProbe[0].messages.map(m => m.ruleId))}`);
+    if (!tsxProbe[0].messages.some(m => m.ruleId === 'react-hooks/exhaustive-deps')) violations.push(`missing useEffect dependency was not caught: ${JSON.stringify(tsxProbe[0].messages.map(m => m.ruleId))}`);
 
     const cmp = ratchet.compareWithBaseline({ 'max-lines': 3, 'no-x': 1 }, { 'max-lines': 2, 'no-x': 2 });
-    if (cmp.increased.length !== 1 || cmp.increased[0].rule !== 'max-lines' || cmp.decreased.length !== 1) violations.push(`مقایسه با فایل پایه نادرست است: ${JSON.stringify(cmp)}`);
+    if (cmp.increased.length !== 1 || cmp.increased[0].rule !== 'max-lines' || cmp.decreased.length !== 1) violations.push(`comparison with the baseline file is wrong: ${JSON.stringify(cmp)}`);
     const fs = await import('fs');
     const baseline = JSON.parse(fs.readFileSync(ratchet.BASELINE_FILE, 'utf8')) as Record<string, number>;
     for (const rule of ['@typescript-eslint/no-misused-promises', 'react-hooks/exhaustive-deps', 'max-lines']) {
-      if (typeof baseline[rule] !== 'number') violations.push(`قاعده ${rule} در فایل پایه نیست`);
+      if (typeof baseline[rule] !== 'number') violations.push(`rule ${rule} is not in the baseline file`);
     }
     // v8.0.46: Promise رهاشده صفر است و error؛ در فایل پایه ردیف ندارد و گیت آن را بدون توجه به فایل پایه رد می‌کند
-    if (baseline['@typescript-eslint/no-floating-promises'] !== undefined) violations.push('no-floating-promises باید از فایل پایه حذف شده باشد');
-    if (!tsProbe[0].messages.some(m => m.ruleId === '@typescript-eslint/no-floating-promises' && m.severity === 2)) violations.push('Promise رهاشده باید خطا (error) باشد');
+    if (baseline['@typescript-eslint/no-floating-promises'] !== undefined) violations.push('no-floating-promises must be removed from the baseline file');
+    if (!tsProbe[0].messages.some(m => m.ruleId === '@typescript-eslint/no-floating-promises' && m.severity === 2)) violations.push('A floating Promise must be an error');
     // v7.0.106 (TD-106): any به تفکیک فایل در فایل پایه جدا شمرده می‌شود
-    if (!fs.existsSync(ratchet.ANY_BASELINE_FILE)) violations.push(`فایل پایه any (${ratchet.ANY_BASELINE_FILE}) نیست`);
+    if (!fs.existsSync(ratchet.ANY_BASELINE_FILE)) violations.push(`any baseline file (${ratchet.ANY_BASELINE_FILE}) is missing`);
 
     if (violations.length > 0) throw new Error(violations.join(' | '));
     results.push(makeTestCase({
@@ -1501,7 +1501,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - tEslintStart,
-      details: `فایل پایه: ${JSON.stringify(baseline)}`
+      details: `baseline file: ${JSON.stringify(baseline)}`
     }));
   } catch (err) {
     results.push(makeTestCase({
@@ -1518,7 +1518,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
   // v7.0.66 (TD-229): هر هندلر و میدل‌ور async روت‌ها از asyncHandler عبور می‌کند (AGENTS.md §20، OBS-002)؛
   // رد شدن Promise به next و پاسخ خطای یکسان می‌رسد و به وصله سراسری express-async-errors وابسته نیست.
   const tAsyncStart = Date.now();
-  const asyncTestName = 'v7.0.66: هیچ هندلر یا میدل‌ور async خامی در روت‌ها ثبت نشده و رد Promise به next می‌رسد (TD-229)';
+  const asyncTestName = 'v7.0.66: no raw async handler or middleware is registered on the routes and a rejected Promise reaches next (TD-229)';
   try {
     const fs = await import('fs');
     const path = await import('path');
@@ -1570,16 +1570,16 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       ['idempotency', idempotency()],
     ];
     for (const [name, mw] of factories) {
-      if ((mw as { constructor: { name: string } }).constructor.name === 'AsyncFunction') violations.push(`میدل‌ور ${name} تابع async خام برمی‌گرداند`);
+      if ((mw as { constructor: { name: string } }).constructor.name === 'AsyncFunction') violations.push(`middleware ${name} returns a raw async function`);
     }
 
     const failure = new Error('probe failure');
     const forwarded = await new Promise<unknown>((resolve) => {
       const handler = asyncHandler(async () => { throw failure; });
       const ret = handler({} as never, {} as never, (e?: unknown) => resolve(e));
-      if (ret !== undefined) violations.push('asyncHandler نباید Promise برگرداند');
+      if (ret !== undefined) violations.push('asyncHandler must not return a Promise');
     });
-    if (forwarded !== failure) violations.push('رد Promise هندلر به next نرسید');
+    if (forwarded !== failure) violations.push('The handler Promise rejection did not reach next');
 
     if (violations.length > 0) throw new Error(violations.join(' | '));
     results.push(makeTestCase({
@@ -1589,7 +1589,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - tAsyncStart,
-      details: `${routeFiles.length} فایل روت بدون هندلر async خام؛ authorize/authorizePermission/validate/idempotency هندلر هم‌زمان برمی‌گردانند`
+      details: `${routeFiles.length} route files without a raw async handler; authorize/authorizePermission/validate/idempotency return a synchronous handler`
     }));
   } catch (err) {
     results.push(makeTestCase({

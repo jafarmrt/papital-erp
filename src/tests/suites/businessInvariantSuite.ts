@@ -164,7 +164,7 @@ async function checkVoidDraftVoucher(wh: string): Promise<string[]> {
   });
   await DocumentService.deleteDocument(draftInvoice, 'inv');
   const a = await vouchersOfSource('source_document_id', draftInvoice);
-  if (a.length !== 1 || a[0].is_deleted !== 1) problems.push(`فاکتور با سند پیش‌نویس: سند حذف نرم نشد یا سند معکوس گرفت (${JSON.stringify(a)})`);
+  if (a.length !== 1 || a[0].is_deleted !== 1) problems.push(`invoice with a draft voucher: the voucher was not soft-deleted, or a reversal was issued (${JSON.stringify(a)})`);
 
   // ب) فاکتور با سند تأییدشده → ابطال → سند اصلی فعال + سند معکوس تأییدشده
   const approvedInvoice = await DocumentService.createDocument({
@@ -178,7 +178,7 @@ async function checkVoidDraftVoucher(wh: string): Promise<string[]> {
   const bOriginal = b.find(v => v.id === before[0]?.id);
   const bReversal = b.find(v => String(v.reference_number ?? '').startsWith('REV-V'));
   if (!bOriginal || bOriginal.is_deleted !== 0 || bOriginal.status !== 'approved' || !bReversal || bReversal.status !== 'approved') {
-    problems.push(`فاکتور با سند تأییدشده باید سند معکوس تأییدشده بگیرد (${JSON.stringify(b)})`);
+    problems.push(`invoice with an approved voucher must get an approved reversal voucher (${JSON.stringify(b)})`);
   }
 
   // ج) تراکنش خزانه با سند پیش‌نویس → ابطال → سند حذف نرم، بدون سند معکوس
@@ -192,11 +192,11 @@ async function checkVoidDraftVoucher(wh: string): Promise<string[]> {
     partyType: 'customer', partyName: 'ERP-TEST-MARKER مشتری خزانه', username: 'inv',
   });
   if (!receipt.voucherId) {
-    problems.push('تراکنش خزانه سند حسابداری نگرفت');
+    problems.push('treasury transaction got no journal voucher');
   } else {
     await TreasuryTransactionService.voidTreasuryTransaction(receipt.id, { reason: 'آزمون v8.0.2', username: 'inv' });
     const c = await vouchersOfSource('id', receipt.voucherId);
-    if (c.length !== 1 || c[0].is_deleted !== 1) problems.push(`تراکنش خزانه با سند پیش‌نویس: سند حذف نرم نشد یا سند معکوس گرفت (${JSON.stringify(c)})`);
+    if (c.length !== 1 || c[0].is_deleted !== 1) problems.push(`treasury transaction with a draft voucher: the voucher was not soft-deleted, or a reversal was issued (${JSON.stringify(c)})`);
   }
   return problems;
 }
@@ -218,7 +218,7 @@ async function checkClosingRefusesDrafts(wh: string): Promise<string[]> {
   const draftIds = (preview.draftVouchers ?? []).map(v => v.id);
   const [invoiceVoucher] = await vouchersOfSource('source_document_id', invoiceId);
   if ((preview.draftVoucherCount ?? 0) < 2 || !invoiceVoucher || !draftIds.includes(invoiceVoucher.id)) {
-    problems.push(`پیش‌نمایش بستن سال اسناد پیش‌نویس سال را فهرست نکرد (${preview.draftVoucherCount ?? 'بدون شمارش'})`);
+    problems.push(`the year closing preview did not list the draft vouchers of the year (${preview.draftVoucherCount ?? 'no count'})`);
   }
   let refused = false;
   try {
@@ -226,14 +226,14 @@ async function checkClosingRefusesDrafts(wh: string): Promise<string[]> {
   } catch (err) {
     refused = getErrorMessage(err).includes('پیش‌نویس');
   }
-  if (!refused) problems.push('بستن سال با سند حسابداری پیش‌نویس رد نشد');
+  if (!refused) problems.push('year closing was not refused with a draft journal voucher');
 
   await VoucherService.approveJournalVouchers(draftIds, undefined, 'inv');
   try {
     const closed = await FiscalYearService.executeFiscalYearClosing({ year, createOpeningVoucher: false, username: 'inv' });
-    if (fin(closed.netProfit).isZero()) problems.push('بستن سال پس از تأیید اسناد، سود فروش را نیاورد');
+    if (fin(closed.netProfit).isZero()) problems.push('year closing after approving the vouchers did not show the sales profit');
   } catch (err) {
-    problems.push(`بستن سال پس از تأیید اسناد پیش‌نویس رد شد: ${getErrorMessage(err)}`);
+    problems.push(`year closing after approving the draft vouchers was refused: ${getErrorMessage(err)}`);
   }
   return problems;
 }
@@ -267,137 +267,137 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     // ── v8.0.47 به بعد: حوزه I، مرز تاریخ و شماره‌گذاری (TD-310 تا TD-317) ──
     ...DATE_BOUNDARY_CHECKS,
     ...DOMAIN_CHECKS, // حوزه J همزمانی، حوزه L فرانت و سرور، حسابداری و بهای تمام‌شده (v8.0.67 به بعد)
-    ['inv_td_255_stock_count_voucher', 'v8.0.3: انبارگردانی سند پیش‌نویس «کسری و اضافات انبار» با بهای کاردکس می‌گیرد، اضافی بدون WAC با بهای صفر و ابطال آن سند را حذف می‌کند (TD-255)',
-      checkStockCountVoucher, 'سند ۷۰۱۲ با بهای کاردکس، اضافی بدون WAC با بهای صفر، ابطال سند پیش‌نویس را حذف کرد'],
-    ['inv_td_262_excel_adjustment_voucher', 'v8.0.3: اصلاح موجودی از اکسل سند «کسری و اضافات انبار» و کالای تازه اکسل سند افتتاحیه می‌گیرد (TD-262)',
-      checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
-    ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
-      checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    ['inv_td_255_stock_count_voucher', 'v8.0.3: a stock count gets a draft "inventory count differences" voucher at Kardex cost, a surplus without WAC is valued at zero, and voiding the count deletes that voucher (TD-255)',
+      checkStockCountVoucher, '7012 voucher at Kardex cost, surplus without WAC at zero cost, void deleted the draft voucher'],
+    ['inv_td_262_excel_adjustment_voucher', 'v8.0.3: an Excel stock adjustment gets an "inventory count differences" voucher and a new Excel item gets an opening voucher (TD-262)',
+      checkExcelAdjustmentVoucher, 'Excel adjustment voucher and new item opening voucher issued; warehouse value = general ledger'],
+    ['inv_td_263_audit_must_be_final', 'v8.0.3: a stock count is recorded only as final, an old draft is not finalized, and voiding it restores the stock (TD-263)',
+      checkAuditMustBeFinal, 'draft refused, finalize refused, void restored the stock'],
     // ── v8.0.44: TD-293 ──
-    ['inv_td_293_woo_shop_warehouse', 'v8.0.44: «انبار فروشگاه اینترنتی»: فاکتور سفارش ووکامرس از همان انبار کم می‌کند و همگام‌سازی موجودی، موجودی قابل فروش همان انبار (منهای رزرو) را می‌فرستد (TD-293، گزینه الف)',
-      () => checkWooShopWarehouse(), 'سفارش کالای انبار فروشگاه فاکتور شد؛ ارسال ۳ (۵ − ۲ رزرو) و ۱ (نه جمع ۷)، در همگام‌سازی تک‌کالا و دسته‌ای'],
+    ['inv_td_293_woo_shop_warehouse', 'v8.0.44: "online shop warehouse": a WooCommerce order invoice draws from that warehouse and the stock sync sends the sellable stock of that warehouse (minus reservations) (TD-293, option A)',
+      () => checkWooShopWarehouse(), 'order of a shop warehouse item invoiced; sends 3 (5 − 2 reserved) and 1 (not the total 7), in single-item and bulk sync'],
     // ── v8.0.43: TD-294 ──
-    ['inv_td_294_woo_changed_order_flagged', 'v8.0.43: سفارشِ فاکتورشده‌ای که در فروشگاه ویرایش شود یا استرداد جزئی بگیرد «نیازمند بررسی» می‌شود و پیام تفاوت را می‌گوید؛ فاکتور دست نمی‌خورد (TD-294، گزینه الف)',
-      () => checkWooChangedOrderFlagged(), 'بی‌تغییر processed ماند؛ ویرایش ۲ ← ۳ و استرداد ۱۰۰۰ هر دو needs_review با پیام تفاوت؛ فاکتور ۲ عدد ماند'],
+    ['inv_td_294_woo_changed_order_flagged', 'v8.0.43: an invoiced order edited in the shop or partially refunded becomes "needs review" and the message states the difference; the invoice is untouched (TD-294, option A)',
+      () => checkWooChangedOrderFlagged(), 'unchanged order stays processed; edit 2 -> 3 and refund 1000 both needs_review with a difference message; invoice stays at 2 units'],
     // ── v8.0.42: TD-295 ──
-    ['inv_td_295_woo_negative_fee_as_line_discount', 'v8.0.42: کارمزد منفی (تخفیف) سفارش ووکامرس به نسبت مبلغ سطرها تخفیف سطر می‌شود و سفارش رد نمی‌شود؛ تخفیفِ بیش از جمع اقلام رد می‌شود (TD-295، گزینه الف)',
-      () => checkWooNegativeFeeAsLineDiscount(), '۴۰۰ ← ۱۰۰ و ۳۰۰ (بدهکار ۳۶۰۰)؛ کنار ارسال ۲۰۰ ارسال کامل ماند؛ ۱۰۰ ← ۳۳ و ۶۷؛ تخفیف ۶۰۰ روی ۵۰۰ رد شد'],
+    ['inv_td_295_woo_negative_fee_as_line_discount', 'v8.0.42: a negative fee (discount) on a WooCommerce order becomes line discounts in proportion to line amounts and the order is not refused; a discount above the item total is refused (TD-295, option A)',
+      () => checkWooNegativeFeeAsLineDiscount(), '400 -> 100 and 300 (debit 3600); with shipping 200 the shipping stays whole; 100 -> 33 and 67; discount 600 on 500 refused'],
     // ── v8.0.41: TD-297 ──
-    ['inv_td_297_woo_exact_line_totals', 'v8.0.41: جمع ردیف سفارش ووکامرس در فاکتور دقیق می‌ماند؛ ردیف بخش‌ناپذیر به دو سطر با فی بی‌کسر شکسته می‌شود و بدهکار مشتری برابر مبلغ پرداختی است (TD-297)',
-      () => checkWooExactLineTotals(), '۱۰۰۰ برای ۳ = ۲×۳۳۳ + ۱×۳۳۴؛ ۱۰۰٬۰۰۰ برای ۷ = ۶×۱۴۲۸۵ + ۱×۱۴۲۹۰؛ با ارسال و مالیات ۱۱۹۰؛ ۱۰۰۰ برای ۴ یک سطر ۲۵۰'],
+    ['inv_td_297_woo_exact_line_totals', 'v8.0.41: a WooCommerce order line total stays exact on the invoice; an indivisible line is split into two lines with whole unit prices and the customer debit equals the amount paid (TD-297)',
+      () => checkWooExactLineTotals(), '1000 for 3 = 2×333 + 1×334; 100,000 for 7 = 6×14285 + 1×14290; with shipping and tax 1190; 1000 for 4 is one line of 250'],
     // ── v8.0.40: TD-296 ──
-    ['inv_td_296_woo_phone_matches_customer', 'v8.0.40: سفارش ووکامرس مشتری موجود را با تلفن در هر قالبی (‎+۹۸، ۰۰۹۸، بی‌صفر، با فاصله، ارقام فارسی) می‌یابد و مشتری تکراری نمی‌سازد (TD-296)',
-      () => checkWooPhoneMatchesCustomer(), 'پنج قالب تلفن به همان مشتری رسید، مشتری تکراری ساخته نشد و تلفن دیگر مشتری تازه گرفت'],
+    ['inv_td_296_woo_phone_matches_customer', 'v8.0.40: a WooCommerce order finds the existing customer by phone in any format (+98, 0098, no leading zero, with spaces, Persian digits) and creates no duplicate customer (TD-296)',
+      () => checkWooPhoneMatchesCustomer(), 'five phone formats reached the same customer, no duplicate customer created, and another phone got a new customer'],
     // ── v8.0.39: TD-292 ──
-    ['inv_td_292_woo_rial_units', 'v8.0.39: سفارش ووکامرس با واحد هزار تومان (IRHT) یا هزار ریال (IRHR) به ریال تبدیل و فاکتور ریالی می‌شود (TD-292)',
-      () => checkWooRialUnits(), 'IRHT ۱۰۰ = ۱٬۰۰۰٬۰۰۰، IRHR ۲۵۰ = ۲۵۰٬۰۰۰ و IRT ۳۰۰ = ۳٬۰۰۰ ریال بدهکار مشتری'],
+    ['inv_td_292_woo_rial_units', 'v8.0.39: a WooCommerce order in thousand toman (IRHT) or thousand rial (IRHR) is converted to rial and the invoice is in rial (TD-292)',
+      () => checkWooRialUnits(), 'IRHT 100 = 1,000,000, IRHR 250 = 250,000 and IRT 300 = 3,000 rial debited to the customer'],
     // ── v8.0.38: TD-289 ──
-    ['inv_td_289_requisition_over_order_needs_reason', 'v8.0.38: سفارش بیش از درخواست خرید فقط با دلیل ثبت می‌شود و دلیل روی ردیف، یادداشت درخواست و سند سفارش می‌نشیند؛ تبدیل یک‌جاست (TD-289، گزینه ب)',
-      () => checkRequisitionOverOrderNeedsReason(wh), 'بی‌دلیل رد شد (سرویس و فرم ۴۲۲)؛ با دلیل ۴ اضافه ثبت شد؛ ۷ برای ۵ فقط ۲ اضافه؛ شکست بسته دوم چیزی باقی نگذاشت'],
+    ['inv_td_289_requisition_over_order_needs_reason', 'v8.0.38: an order above the purchase requisition is recorded only with a reason, which goes on the row, the requisition notes and the order document; the conversion is all-or-nothing (TD-289, option B)',
+      () => checkRequisitionOverOrderNeedsReason(wh), 'without a reason refused (service and form 422); with a reason 4 extra recorded; 7 for 5 only 2 extra; a failed second package left nothing behind'],
     // ── v8.0.37: TD-291 ──
-    ['inv_td_291_split_order_form_accepted', 'v8.0.37: مسیر تبدیل درخواست به سفارش بدنه فرم «تقسیم سفارش» را می‌پذیرد و انبار مقصد و وضعیت بسته را نگه می‌دارد (TD-291)',
-      () => checkSplitOrderFormAccepted(), 'فرم پذیرفته شد؛ سفارش پیش‌نویس در انبار مقصد ساخته شد و سفارش‌شده درخواست ۵ شد'],
+    ['inv_td_291_split_order_form_accepted', 'v8.0.37: the requisition-to-order route accepts the "split order" form body and keeps the target warehouse and package status (TD-291)',
+      () => checkSplitOrderFormAccepted(), 'form accepted; draft order created in the target warehouse and the requisition ordered quantity became 5'],
     // ── v8.0.36: TD-290 ──
-    ['inv_td_290_requisition_receipt_sums_lines', 'v8.0.36: تحویل سفارش خرید مقدار دریافتی درخواست را از جمع همه سطرهای هر کالا می‌شمارد و میان ردیف‌های همان کالا پر می‌کند؛ به‌روزرسانی درخواست در تراکنش تحویل و زیر قفل است و تحویل هم‌زمان نوشته دیگری را گم نمی‌کند (TD-290)',
-      () => checkRequisitionReceiptSumsLines(wh), 'دو سطر ۲ و ۳ = ۵ و received؛ تحویل دوباره بی‌اثر؛ ۵ میان ردیف‌های ۳ و ۲ پر شد؛ نوشتن هم‌زمان ۴ + تحویل ۵ = ۹'],
+    ['inv_td_290_requisition_receipt_sums_lines', 'v8.0.36: purchase order delivery counts the requisition received quantity from the sum of all lines of each item and fills it across the rows of that item; the requisition update runs in the delivery transaction under a lock, and a concurrent delivery loses no other write (TD-290)',
+      () => checkRequisitionReceiptSumsLines(wh), 'two lines 2 and 3 = 5 and received; repeated delivery has no effect; 5 filled across rows of 3 and 2; concurrent write 4 + delivery 5 = 9'],
     // ── v8.0.35: TD-285 ──
-    ['inv_td_285_project_delivery_posts_voucher', 'v8.0.35: «ورود به انبار» پروژه سند «رسید تولید» نهایی با پیوند پروژه صادر می‌کند که بدهکار کالای ساخته‌شده / بستانکار کالای در جریان ساخت پروژه است؛ تحویل بی‌بها به میانگین موزون (TD-285، گزینه الف)',
-      () => checkProjectDeliveryPostsVoucher(wh), 'رسید تولید با یک سند حسابداری صادر شد؛ ۱۴۰۲ پروژه صفر و پس از تحویل بی‌بها −۲۰۰٬۰۰۰ شد؛ اختلاف انبار و دفتر صفر ماند'],
+    ['inv_td_285_project_delivery_posts_voucher', 'v8.0.35: project "deliver to warehouse" issues a final "production receipt" document linked to the project that debits finished goods / credits the project work in progress; an unpriced delivery is at weighted average cost (TD-285, option A)',
+      () => checkProjectDeliveryPostsVoucher(wh), 'production receipt issued with one journal voucher; project 1402 was zero and became −200,000 after the unpriced delivery; the warehouse vs ledger difference stayed zero'],
     // ── v8.0.34: TD-286 ──
-    ['inv_td_286_bom_allocation_posts_voucher', 'v8.0.34: تخصیص مواد BOM سند بدهکار کالای در جریان ساخت / بستانکار موجودی به بهای کاردکس می‌گیرد و آزادسازی آن را باطل می‌کند؛ ارزش انبار با دفتر کل یکی می‌ماند (TD-286، گزینه الف)',
-      () => checkBomAllocationPostsVoucher(wh), '۱۴۰۲ پروژه ۷۰۰٬۰۰۰ شد و با دو آزادسازی (پیش‌نویس و تأییدشده) صفر شد؛ اختلاف انبار و دفتر صفر ماند'],
+    ['inv_td_286_bom_allocation_posts_voucher', 'v8.0.34: a BOM material allocation gets a voucher debiting work in progress / crediting inventory at Kardex cost, and its release voids it; warehouse value stays equal to the general ledger (TD-286, option A)',
+      () => checkBomAllocationPostsVoucher(wh), 'project 1402 became 700,000 and returned to zero after two releases (draft and approved); the warehouse vs ledger difference stayed zero'],
     // ── v8.0.33: TD-288 ──
-    ['inv_td_288_bom_release_at_own_cost', 'v8.0.33: آزادسازی تخصیص مواد به بهای کاردکس خروج همان تخصیص برمی‌گردد و ارزش از هیچ نمی‌سازد؛ تخصیصِ رسیدِ پیشین موجودی اضافه نمی‌کند (TD-288)',
-      () => checkBomReleaseAtOwnCost(wh), 'بازگشت به ۱۰۰٬۰۰۰، میانگین موزون ۱۵۰٬۰۰۰ و ارزش انبار ۳٬۰۰۰٬۰۰۰؛ آزادسازی تخصیصِ رسیدِ پیشین موجودی را ۲۰ نگه داشت'],
+    ['inv_td_288_bom_release_at_own_cost', 'v8.0.33: releasing a material allocation returns at the Kardex outflow cost of that same allocation and creates no value from nothing; an allocation of an older receipt adds no stock (TD-288)',
+      () => checkBomReleaseAtOwnCost(wh), 'returned at 100,000, weighted average cost 150,000 and warehouse value 3,000,000; releasing the older receipt allocation kept the stock at 20'],
     // ── v8.0.32: TD-287 ──
-    ['inv_td_287_bom_receipt_allocation_needs_receipt', 'v8.0.32: تخصیص «رسید مستقیم BOM» بی‌رسید ثبت‌شده رد می‌شود؛ تخصیص از رسید ثبت‌شده مواد را از انبار خارج می‌کند و آزادسازی آن موجودی را دقیقاً برمی‌گرداند (TD-287، گزینه الف)',
-      () => checkBomReceiptAllocationNeedsReceipt(wh), 'بی‌رسید رد شد و موجودی ساخته نشد؛ تخصیص از رسید ۴ واحد را خارج و آزادسازی همان ۴ را برگرداند'],
+    ['inv_td_287_bom_receipt_allocation_needs_receipt', 'v8.0.32: a "direct BOM receipt" allocation without a registered receipt is refused; an allocation from a registered receipt moves the materials out of the warehouse and its release restores exactly that stock (TD-287, option A)',
+      () => checkBomReceiptAllocationNeedsReceipt(wh), 'without a receipt refused and no stock created; the allocation from the receipt moved 4 units out and the release brought the same 4 back'],
     // ── v8.0.31: TD-283 ──
-    ['inv_td_283_payroll_payment_voidable', 'v8.0.31: پرداخت فیش حقوق ابطال‌پذیر است؛ مانده بانک، سند پرداخت، مبلغ پرداخت‌شده و وضعیت فیش برمی‌گردند و فیش بی‌پرداخت حذف می‌شود (TD-283، گزینه الف)',
-      () => checkPayrollPaymentVoidable(), 'دو پرداخت ابطال شد و همه چیز برگشت؛ ابطال تکراری رد شد؛ فیش حذف و حقوق پرداختنی صفر شد'],
+    ['inv_td_283_payroll_payment_voidable', 'v8.0.31: a payslip payment is voidable; bank balance, payment voucher, paid amount and payslip status are restored, and a payslip without payments is deleted (TD-283, option A)',
+      () => checkPayrollPaymentVoidable(), 'two payments voided and everything restored; repeated void refused; payslip deleted and wages payable became zero'],
     // ── v8.0.30: TD-284 ──
-    ['inv_td_284_fixed_salary_prorated_by_month', 'v8.0.30: حقوق ثابت برای هر ماه شمسیِ بازه فیش، ماه ناقص به نسبت روزها؛ فیش پیشین ماه شروعش را کامل حساب می‌کند (TD-284، گزینه ب)',
-      () => checkFixedSalaryProratedByMonth(), 'فیش دوماهه دو ماه و دو فیش نیم‌ماهه دقیقاً یک ماه حقوق گرفتند؛ فیش پیشین ماه شروعش را پوشاند'],
+    ['inv_td_284_fixed_salary_prorated_by_month', 'v8.0.30: fixed salary for each Jalali month of the payslip period, a partial month pro rata by days; an earlier payslip counts its start month as full (TD-284, option B)',
+      () => checkFixedSalaryProratedByMonth(), 'a two-month payslip got two months and two half-month payslips exactly one month of salary; the earlier payslip covered its start month'],
     // ── v8.0.29: TD-282 ──
-    ['inv_td_282_advance_deduction_within_balance', 'v8.0.29: کسر مساعده بیش از مانده مساعده تسویه‌نشده پرسنل رد می‌شود؛ کسر تا سقف مانده پذیرفته می‌شود (TD-282، گزینه الف)',
-      () => checkAdvanceDeductionWithinBalance(), 'کسر بی‌مساعده و بیش از مانده رد شد و اثری نگذاشت؛ کسر تا سقف مانده حساب مساعده را صفر کرد'],
+    ['inv_td_282_advance_deduction_within_balance', 'v8.0.29: an advance deduction above the outstanding personnel advance is refused; a deduction up to the balance is accepted (TD-282, option A)',
+      () => checkAdvanceDeductionWithinBalance(), 'deduction without an advance and above the balance refused with no effect; a deduction up to the balance cleared the advance account'],
     // ── v8.0.28: TD-281 ──
-    ['inv_td_281_payroll_status_keeps_lifecycle', 'v8.0.28: وضعیت فیش فقط پیش‌نویس/تأییدشده دستی تنظیم می‌شود، فیش پرداخت‌دار وضعیت دستی نمی‌گیرد و کارکرد فیش زنده دوباره شمرده نمی‌شود (TD-281)',
-      () => checkPayrollStatusKeepsLifecycle(), 'وضعیت غیرمجاز و برگرداندن فیش پرداخت‌شده رد شد؛ هر کارکرد فقط یک بار در فیش آمد'],
+    ['inv_td_281_payroll_status_keeps_lifecycle', 'v8.0.28: payslip status is set by hand only to draft/approved, a payslip with payments takes no manual status, and a work log of a live payslip is not counted again (TD-281)',
+      () => checkPayrollStatusKeepsLifecycle(), 'invalid status and reverting a paid payslip refused; each work log appeared on a payslip only once'],
     // ── v8.0.27: TD-280 ──
-    ['inv_td_280_cheque_reconciliation_matches_ledger', 'v8.0.27: آشتی دفتر چک با دفاتر در صدور، برگشت و عودت چک پرداختی و در دریافت، واگذاری، برگشت و عودت چک دریافتی بی‌مغایرت می‌ماند (TD-280)',
-      () => checkChequeReconciliationMatchesLedger(), 'هیچ گذار چکی مغایرت آشتی دفتر چک را تغییر نداد؛ چک پرداختی برگشتی در «چک‌های پرداختی باز» شمرده نشد'],
+    ['inv_td_280_cheque_reconciliation_matches_ledger', 'v8.0.27: cheque book reconciliation with the ledgers shows no difference on issue, bounce and return of a paid cheque and on receipt, collection, bounce and return of a received cheque (TD-280)',
+      () => checkChequeReconciliationMatchesLedger(), 'no cheque transition changed the cheque book reconciliation difference; a bounced paid cheque was not counted in "open paid cheques"'],
     // ── v8.0.26: TD-278 ──
-    ['inv_td_278_treasury_cheque_method_refused', 'v8.0.26: روش «چک» در فرم خزانه رد می‌شود (چک فقط از دفتر چک)؛ تراکنش چکی پیشین مانده خزانه حساب را تغییر نمی‌دهد و ابطال‌پذیر است (TD-278، گزینه الف)',
-      () => checkTreasuryChequeMethodRefused(), 'روش چک رد شد و اثری نگذاشت؛ تراکنش چکی پیشین حساب را مغایر نکرد و ابطال شد'],
+    ['inv_td_278_treasury_cheque_method_refused', 'v8.0.26: the "cheque" method is refused in the treasury form (cheques only from the cheque book); an earlier cheque-method transaction does not change the account treasury balance and is voidable (TD-278, option A)',
+      () => checkTreasuryChequeMethodRefused(), 'cheque method refused with no effect; the earlier cheque-method transaction left the account consistent and was voided'],
     // ── v8.0.25: TD-277 ──
-    ['inv_td_277_cheque_clearing_needs_ledger_account', 'v8.0.25: وصول چک به حساب بانکی بدون سرفصل معین رد می‌شود و اثری نمی‌گذارد؛ وصول به حساب سرفصل‌دار سند می‌گیرد (TD-277)',
-      () => checkChequeClearingNeedsLedgerAccount(), 'وصول به حساب بی‌سرفصل رد شد؛ وصول به حساب سرفصل‌دار اسناد دریافتنی را بست'],
+    ['inv_td_277_cheque_clearing_needs_ledger_account', 'v8.0.25: clearing a cheque into a bank account without a subsidiary ledger account is refused with no effect; clearing into an account with one gets a voucher (TD-277)',
+      () => checkChequeClearingNeedsLedgerAccount(), 'clearing into the account without a ledger account refused; clearing into the account with one closed notes receivable'],
     // ── v8.0.24: TD-276 ──
-    ['inv_td_276_cleared_cheque_keeps_bank_synced', 'v8.0.24: چک وصول‌شده در مانده خزانه حساب بانکی شمرده می‌شود و حساب پس از وصول «هم‌خوان» می‌ماند (TD-276)',
-      () => checkClearedChequeKeepsBankSynced(), 'مانده خزانه و دفتر پس از وصول چک دریافتی و پرداختی یکی و حساب هم‌خوان ماند'],
+    ['inv_td_276_cleared_cheque_keeps_bank_synced', 'v8.0.24: a cleared cheque counts in the bank account treasury balance and the account stays "in sync" after clearing (TD-276)',
+      () => checkClearedChequeKeepsBankSynced(), 'treasury and ledger balances stayed equal and the account stayed in sync after clearing received and paid cheques'],
     // ── v8.0.23: TD-275 ──
-    ['inv_td_275_foreign_cheque_refused', 'v8.0.23: چک ارزی پذیرفته نمی‌شود (نه رکورد چک، نه سند حسابداری)؛ چک ریالی مثل قبل ثبت می‌شود (TD-275، گزینه ج)',
-      () => checkForeignChequeRefused(), 'چک دلاری رد شد و اثری نگذاشت؛ چک ریالی سند ثبت گرفت'],
+    ['inv_td_275_foreign_cheque_refused', 'v8.0.23: a foreign-currency cheque is not accepted (no cheque record, no journal voucher); a rial cheque is recorded as before (TD-275, option C)',
+      () => checkForeignChequeRefused(), 'dollar cheque refused with no effect; rial cheque got its registration voucher'],
     // ── v8.0.22: TD-273 ──
-    ['inv_td_273_returned_cheque_moves_to_customer', 'v8.0.22: عودت چک برگشتی به صادرکننده مطالبه را از اسناد واخواستی به حساب مشتری برمی‌گرداند (TD-273، گزینه الف)',
-      () => checkReturnedChequeMovesToCustomer(), 'عودت چک برگشتی (مستقیم و در جریان وصول) اسناد واخواستی را بست و مطالبه را به حساب مشتری برد؛ حذف آن دفتر را صفر کرد'],
+    ['inv_td_273_returned_cheque_moves_to_customer', 'v8.0.22: returning a bounced cheque to its drawer moves the claim from protested cheques back to the customer account (TD-273, option A)',
+      () => checkReturnedChequeMovesToCustomer(), 'returning the bounced cheque (direct and in collection) closed protested cheques and moved the claim to the customer account; deleting it brought the ledger back to zero'],
     // ── v8.0.21: TD-272 ──
-    ['inv_td_272_paid_cheque_bounce_restores_supplier', 'v8.0.21: برگشت چک پرداختی سند می‌گیرد (بدهکار اسناد پرداختنی، بستانکار تأمین‌کننده)؛ عودت و حذف آن دفتر را درست نگه می‌دارند (TD-272)',
-      () => checkPaidChequeBounceRestoresSupplier(), 'برگشت، عودت و حذف چک پرداختی اسناد پرداختنی و حساب تأمین‌کننده را درست گذاشتند'],
+    ['inv_td_272_paid_cheque_bounce_restores_supplier', 'v8.0.21: a bounced paid cheque gets a voucher (debit notes payable, credit the supplier); its return and delete keep the ledger correct (TD-272)',
+      () => checkPaidChequeBounceRestoresSupplier(), 'bounce, return and delete of a paid cheque left notes payable and the supplier account correct'],
     // ── v8.0.20: TD-274 ──
-    ['inv_td_274_foreign_treasury_uses_rate', 'v8.0.20: دریافت، پرداخت و انتقال ارزی خزانه با نرخ تسعیر (صریح یا نرخ فاکتور تسویه‌شده) در سند ثبت می‌شوند و بدون نرخ رد می‌شوند (TD-274)',
-      checkForeignTreasuryUsesRate, 'دریافت با نرخ صریح، تسویه فاکتور با نرخ فاکتور، رد بدون نرخ و انتقال ارزی درست به ریال ثبت شدند'],
+    ['inv_td_274_foreign_treasury_uses_rate', 'v8.0.20: foreign-currency treasury receipts, payments and transfers are posted at an exchange rate (explicit, or the rate of the settled invoice) and are refused without a rate (TD-274)',
+      checkForeignTreasuryUsesRate, 'receipt at an explicit rate, invoice settlement at the invoice rate, refusal without a rate and the foreign-currency transfer were posted correctly in rial'],
     // ── v8.0.19: TD-271 (حوزه C) ──
-    ['inv_td_271_cheque_delete_keeps_other_cheques', 'v8.0.19: حذف چک فقط اسناد همان چک را باطل می‌کند، نه اسناد چک دیگری با همان شماره؛ سند قدیمی بی‌پیوند شماره مشترک حذف را رد می‌کند (TD-271)',
-      () => checkChequeDeleteKeepsOtherCheques(), 'اسناد چک دیگر با همان شماره ماندند؛ دفتر کل درست ماند؛ حذف با سند قدیمی مبهم رد شد'],
+    ['inv_td_271_cheque_delete_keeps_other_cheques', 'v8.0.19: deleting a cheque voids only the vouchers of that cheque, not those of another cheque with the same number; an old unlinked voucher of a shared number refuses the delete (TD-271)',
+      () => checkChequeDeleteKeepsOtherCheques(), 'vouchers of the other cheque with the same number kept; general ledger stayed correct; delete with an ambiguous old voucher refused'],
     // ── v8.0.18: TD-261 ──
-    ['inv_td_261_foreign_cost_rows_exact_in_irr', 'v8.0.18: ردیف‌های بهای تمام‌شده و موجودی سند ارزی با نرخ همان ردیف دقیقاً برابر بهای ریالی کاردکس‌اند و سند ارزی تراز می‌ماند (TD-261)',
-      checkForeignCostRowsExactInIrr, 'فروش، برگشت، کالای رایگان و خرید ترکیبی دلاری دقیقاً برابر کاردکس به ریال ثبت شدند'],
+    ['inv_td_261_foreign_cost_rows_exact_in_irr', 'v8.0.18: cost of sales and inventory rows of a foreign-currency voucher, at their own row rate, equal the rial Kardex cost exactly and the foreign-currency voucher stays balanced (TD-261)',
+      checkForeignCostRowsExactInIrr, 'dollar sale, return, free goods and mixed purchase posted exactly equal to the Kardex in rial'],
     // ── v8.0.17: TD-268 ──
-    ['inv_td_268_free_goods_voucher_at_wac', 'v8.0.17: کالای رایگان رسید و خرید به میانگین موزون وارد انبار و بستانکار «درآمد کالای اهدایی» می‌شود؛ تأمین‌کننده فقط ردیف‌های بها‌دار را بستانکار می‌شود (TD-268)',
-      checkFreeGoodsVoucherAtWac, 'رسید رایگان، خرید ترکیبی، تخفیف کامل و رسید ارزی سند ۵۲۰۴ درست گرفتند؛ ابطال و ارزش انبار با دفتر کل همخوان ماندند'],
+    ['inv_td_268_free_goods_voucher_at_wac', 'v8.0.17: free goods on a receipt and purchase enter the warehouse at weighted average cost and credit "donated goods income"; the supplier is credited only with the priced lines (TD-268)',
+      checkFreeGoodsVoucherAtWac, 'free receipt, mixed purchase, full discount and foreign-currency receipt got the correct 5204 voucher; void and warehouse value stayed consistent with the general ledger'],
     // ── v8.0.16: TD-260 ──
-    ['inv_td_260_reports_convert_foreign_rows', 'v8.0.16: کارت حساب، صورت‌حساب طرف‌حساب و بررسی سلامت مالی ردیف ارزی را در نمای همه ارزها با نرخ همان ردیف به ریال تبدیل می‌کنند (TD-260)',
-      checkReportsConvertForeignRows, 'کارت حساب و صورت‌حساب طرف‌حساب (همه ارزها، دلاری، ریالی، مانده ابتدای دوره) و مانده دفتر کل موجودی درست تسعیر شدند'],
+    ['inv_td_260_reports_convert_foreign_rows', 'v8.0.16: the account card, party statement and financial health check convert a foreign-currency row to rial at its own row rate in the all-currencies view (TD-260)',
+      checkReportsConvertForeignRows, 'account card and party statement (all currencies, dollar, rial, opening balance) and the inventory general ledger balance were converted correctly'],
     // ── v8.0.15: TD-270 ──
-    ['inv_td_270_reports_ignore_deleted_voucher_items', 'v8.0.15: بررسی سلامت مالی و گزارش پروژه ردیف‌های حذف‌شده سند حسابداری (پس از همگام‌سازی دوباره پیش‌نویس) را نمی‌شمارند (TD-270)',
-      checkReportsIgnoreDeletedVoucherItems, 'مانده دفتر کل موجودی در بررسی سلامت و گزارش پروژه فقط ردیف‌های فعال را شمردند'],
+    ['inv_td_270_reports_ignore_deleted_voucher_items', 'v8.0.15: the financial health check and the project report do not count deleted journal voucher rows (after a draft re-sync) (TD-270)',
+      checkReportsIgnoreDeletedVoucherItems, 'the inventory general ledger balance in the health check and the project report counted only active rows'],
     // ── v8.0.14: TD-259 ──
-    ['inv_td_259_vouchers_follow_account_mapping', 'v8.0.14: سند رسید خرید، رسید تولید و برگشت از فروش حساب‌های موجودی، بستانکاران و بدهکاران را از نگاشت حساب‌ها می‌گیرند (TD-259)',
-      checkVouchersFollowAccountMapping, 'با نگاشت سفارشی، همه سطرها به حساب‌های نگاشت‌شده رفتند و ارزش انبار با دفتر کل یکی ماند'],
+    ['inv_td_259_vouchers_follow_account_mapping', 'v8.0.14: purchase receipt, production receipt and sales return vouchers take the inventory, payables and receivables accounts from the account mapping (TD-259)',
+      checkVouchersFollowAccountMapping, 'with a custom mapping all lines went to the mapped accounts and warehouse value stayed equal to the general ledger'],
     // ── v8.0.13: TD-269 ──
-    ['inv_td_269_replay_starts_at_zero_wac', 'v8.0.13: بازپخش WAC کاردکس از WAC صفر شروع می‌شود؛ کالایی که نخست با قیمت صفر وارد شده پس از بازسازی همان WAC زنده را دارد (TD-269)',
-      checkReplayStartsAtZeroWac, 'بازسازی سه کالا (ورود نخست رایگان، WAC اولیه با ورود رایگان، بی‌گردش) WAC زنده را نگه داشت'],
+    ['inv_td_269_replay_starts_at_zero_wac', 'v8.0.13: Kardex WAC replay starts from WAC zero; an item first received at price zero has the same live WAC after the rebuild (TD-269)',
+      checkReplayStartsAtZeroWac, 'rebuild of three items (free first receipt, initial WAC with a free receipt, no movements) kept the live WAC'],
     // ── v8.0.12: TD-256 ──
-    ['inv_td_256_zero_price_receipt_at_wac', 'v8.0.12: ورود با قیمت صفر در کاردکس به WAC جاری ثبت می‌شود؛ ابطالش WAC را تغییر نمی‌دهد و سند رسید تولید با ارزش کاردکس یکی است (TD-256)',
-      checkZeroPriceReceiptAtWac, 'ردیف کاردکس به WAC ثبت شد؛ ابطال و بازسازی WAC را نگه داشتند؛ سند رسید تولید ترکیبی = ارزش کاردکس'],
+    ['inv_td_256_zero_price_receipt_at_wac', 'v8.0.12: a receipt at price zero is recorded in the Kardex at the current WAC; voiding it does not change WAC, and the production receipt voucher equals the Kardex value (TD-256)',
+      checkZeroPriceReceiptAtWac, 'Kardex row recorded at WAC; void and rebuild kept WAC; mixed production receipt voucher = Kardex value'],
     // ── v8.0.11: TD-254 ──
-    ['inv_td_254_void_outflow_restores_cost', 'v8.0.11: ابطال خروج پس از تغییر WAC کالا را با بهای همان خروج برمی‌گرداند و WAC را بازمحاسبه می‌کند (TD-254)',
-      checkVoidOutflowRestoresCost, 'ابطال فروش (پیش‌نویس و تأییدشده) و حواله WAC را درست بازمحاسبه کرد؛ بازسازی و دفتر کل همخوان ماندند'],
+    ['inv_td_254_void_outflow_restores_cost', 'v8.0.11: voiding an outflow after the item WAC changed returns it at that outflow own cost and recalculates WAC (TD-254)',
+      checkVoidOutflowRestoresCost, 'void of a sale (draft and approved) and of a remittance recalculated WAC correctly; rebuild and general ledger stayed consistent'],
     // ── v8.0.10: TD-267 ──
-    ['inv_td_267_procurement_delivery_incoming_only', 'v8.0.10: تحویل تدارکات فقط سند ورودی خرید را نهایی می‌کند و پیش‌فاکتور خرید هنگام تحویل وارد انبار می‌شود، نه فروش (TD-267)',
-      checkProcurementDeliveryIncomingOnly, 'پیش‌فاکتور فروش رد شد؛ پیش‌فاکتور خرید رسید ماند و تحویلش کالا را وارد کرد؛ سند purchase ورود بود'],
+    ['inv_td_267_procurement_delivery_incoming_only', 'v8.0.10: procurement delivery finalizes only an incoming purchase document, and a purchase proforma enters the warehouse on delivery, not as a sale (TD-267)',
+      checkProcurementDeliveryIncomingOnly, 'sales proforma refused; purchase proforma stayed a receipt and its delivery brought the items in; the purchase document was an inflow'],
     // ── v8.0.9: TD-250 ──
-    ['inv_td_250_purchase_discount_in_cost', 'v8.0.9: کالای خرید با تخفیف ردیف با قیمت خالص پس از تخفیف وارد انبار می‌شود و WAC با دفتر کل یکی می‌ماند (TD-250)',
-      checkPurchaseDiscountInCost, 'رسید ریالی، ارزی و پیش‌نویس نهایی‌شده با قیمت خالص وارد شدند؛ ارزش انبار با دفتر کل یکی ماند'],
+    ['inv_td_250_purchase_discount_in_cost', 'v8.0.9: a purchased item with a line discount enters the warehouse at the net price after discount and WAC stays equal to the general ledger (TD-250)',
+      checkPurchaseDiscountInCost, 'rial, foreign-currency and finalized draft receipts entered at net price; warehouse value stayed equal to the general ledger'],
     // ── v8.0.8: TD-253 ──
-    ['inv_td_253_return_within_sold', 'v8.0.8: برگشت از فروش با فاکتور مرجع از مانده قابل برگشت آن فاکتور بیشتر نمی‌شود (TD-253)',
-      checkReturnWithinSold, 'برگشت تا سقف فروخته‌شده پذیرفته و بیش از آن (یک‌جا، چندباره، نهایی‌سازی) رد شد؛ ابطال برگشت سقف را آزاد کرد'],
+    ['inv_td_253_return_within_sold', 'v8.0.8: a sales return against an original invoice does not exceed the returnable remainder of that invoice (TD-253)',
+      checkReturnWithinSold, 'return up to the sold quantity accepted and above it (at once, in parts, on finalize) refused; voiding a return freed the cap'],
     // ── v8.0.7: TD-266 ──
-    ['inv_td_266_running_kardex_shows_voided', 'v8.0.7: کاردکس تفصیلی کالا سند ابطال‌شده را با برچسب نشان می‌دهد و مانده جاری آن با موجودی یکی است (TD-266)',
-      checkRunningKardexShowsVoided, 'ردیف باطل‌شده و معکوس با برچسب آمدند؛ مانده جاری، جمع گردش و WAC درست بود'],
+    ['inv_td_266_running_kardex_shows_voided', 'v8.0.7: the detailed item Kardex shows a voided document with a label and its running balance equals the stock (TD-266)',
+      checkRunningKardexShowsVoided, 'voided row and reversal shown with labels; running balance, movement totals and WAC were correct'],
     // ── v8.0.6: TD-265 ──
-    ['inv_td_265_void_consumed_receipt_refused', 'v8.0.6: ابطال سند ورودی‌ای که موجودی‌اش با خروج‌های بعدی مصرف شده با نام اسناد مصرف‌کننده رد می‌شود (TD-265)',
-      checkVoidConsumedReceiptRefused, 'ابطال رسیدِ مصرف‌شده رد شد و اثری نگذاشت؛ رسید مصرف‌نشده و فاکتور فروش ابطال شدند'],
+    ['inv_td_265_void_consumed_receipt_refused', 'v8.0.6: voiding an incoming document whose stock was consumed by later outflows is refused, naming the consuming documents (TD-265)',
+      checkVoidConsumedReceiptRefused, 'void of the consumed receipt refused with no effect; the unconsumed receipt and the sales invoice were voided'],
     // ── v8.0.5: TD-264 ──
-    ['inv_td_264_excel_wac_change_refused', 'v8.0.5: درون‌ریزی اکسل WAC کالای دارای موجودی را تغییر نمی‌دهد و ردیف را با پیام روشن رد می‌کند (TD-264)',
-      checkExcelWacChangeRefused, 'ردیف تغییر WAC کالای دارای موجودی رد شد؛ کالای بدون موجودی و مقدار برابر WAC فعلی آزاد ماندند'],
+    ['inv_td_264_excel_wac_change_refused', 'v8.0.5: Excel import does not change the WAC of an item with stock and refuses the row with a clear message (TD-264)',
+      checkExcelWacChangeRefused, 'row changing the WAC of an item with stock refused; an item without stock and a value equal to the current WAC stayed allowed'],
     // ── v8.0.4: TD-257 و TD-258 ──
-    ['inv_td_257_backdated_stock_movement', 'v8.0.4: گردش انبار با تاریخ پیش از آخرین گردش کالا بی‌مجوز رد و با مجوز فقط با موجودی کافی تا آن تاریخ پذیرفته می‌شود (TD-257)',
-      checkBackdatedStockMovement, 'فاکتور، نهایی‌سازی و انتقال با تاریخ گذشته بی‌مجوز رد شد؛ با مجوز فقط با موجودی کافی تا آن تاریخ؛ هم‌روز و ثبت دوباره پس از ابطال آزاد'],
-    ['inv_td_258_rebuild_matches_live_engine', 'v8.0.4: بازسازی کاردکس WAC همخوان با موتور زنده را تغییر نمی‌دهد (ابطال رسید فروخته‌شده، رسید با تاریخ گذشته) (TD-258)',
-      checkRebuildMatchesLiveEngine, 'بازسازی کاردکس WAC و موجودی را دست‌نخورده گذاشت و ارزش انبار با دفتر کل یکی ماند'],
+    ['inv_td_257_backdated_stock_movement', 'v8.0.4: a stock movement dated before the item last movement is refused without the permission and, with it, accepted only with enough stock up to that date (TD-257)',
+      checkBackdatedStockMovement, 'backdated invoice, finalize and transfer refused without the permission; with it only with enough stock up to that date; same day and re-recording after a void allowed'],
+    ['inv_td_258_rebuild_matches_live_engine', 'v8.0.4: the Kardex rebuild does not change a WAC consistent with the live engine (void of a sold receipt, backdated receipt) (TD-258)',
+      checkRebuildMatchesLiveEngine, 'Kardex rebuild left WAC and stock untouched and warehouse value stayed equal to the general ledger'],
   ];
   for (const [id, name, check, okInfo] of v803) {
     const started = Date.now();

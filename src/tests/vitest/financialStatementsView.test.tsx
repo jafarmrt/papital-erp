@@ -53,7 +53,7 @@ describe('financial statements read the server keys (TD-563)', () => {
     expect(costBox.textContent).toContain('۶۰۰٬۰۰۰٬۰۰۰');
   });
 
-  it('income statement without revenue shows no margin instead of ۰٪', () => {
+  it('income statement without revenue shows no margin instead of 0%', () => {
     render(<IncomeStatementView incomeStatement={{ ...incomeStatement, revenues: [], totalRevenue: 0, netProfit: -150_000_000 }} startDate="" endDate="" onPeriodChange={() => {}} onApplyIncomeFilter={() => {}} />);
     expect(screen.getByText('حاشیه سود خالص:').parentElement!.textContent).not.toContain('٪');
   });

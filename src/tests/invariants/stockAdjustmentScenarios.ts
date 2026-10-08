@@ -21,13 +21,13 @@ async function mappedAccounts(): Promise<{ diff: number; raw: number; finished: 
   const diff = await AccountMappingService.getInventoryCountDifferenceAccount();
   const raw = await AccountMappingService.getInventoryRawMaterialsAccount();
   const finished = await AccountMappingService.getInventoryFinishedGoodsAccount();
-  if (!diff || !raw || !finished) throw new Error('حساب «کسری و اضافات انبار» یا حساب‌های موجودی در نگاشت حساب‌ها یافت نشد');
+  if (!diff || !raw || !finished) throw new Error('The "inventory shortage and surplus" account or the inventory accounts were not found in the account mapping');
   return { diff: diff.id, raw: raw.id, finished: finished.id, diffCode: diff.code };
 }
 
 function expectNet(problems: string[], net: Map<number, string>, accountId: number, expected: number, label: string): void {
   const actual = net.get(accountId) ?? '0';
-  if (!fin(actual).equals(expected)) problems.push(`${label}: گردش خالص ${actual}، انتظار ${expected}`);
+  if (!fin(actual).equals(expected)) problems.push(`${label}: net turnover ${actual}, expected ${expected}`);
 }
 
 /**
@@ -37,7 +37,7 @@ function expectNet(problems: string[], net: Map<number, string>, accountId: numb
 export async function checkStockCountVoucher(wh: string): Promise<string[]> {
   const problems: string[] = [];
   const acc = await mappedAccounts();
-  if (acc.diffCode !== '7012') problems.push(`سرفصل نگاشت «کسری و اضافات انبار» ۷۰۱۲ نیست: ${acc.diffCode}`);
+  if (acc.diffCode !== '7012') problems.push(`The mapped "inventory shortage and surplus" account is not 7012: ${acc.diffCode}`);
   const mark = await watermarks();
   const raw = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
@@ -59,28 +59,28 @@ export async function checkStockCountVoucher(wh: string): Promise<string[]> {
   const vouchers = await pool.query<{ id: number; status: string; voucher_type: string }>(
     `SELECT id, status, voucher_type FROM journal_vouchers WHERE source_document_id = $1 AND is_deleted = 0`, [auditId]);
   if (vouchers.rows.length !== 1) {
-    problems.push(`انبارگردانی باید دقیقاً یک سند حسابداری فعال داشته باشد: ${vouchers.rows.length}`);
+    problems.push(`A stock count must have exactly one active journal voucher: ${vouchers.rows.length}`);
   } else {
-    if (vouchers.rows[0].status !== 'draft') problems.push(`سند انبارگردانی باید پیش‌نویس باشد: ${vouchers.rows[0].status}`);
+    if (vouchers.rows[0].status !== 'draft') problems.push(`The stock count voucher must be draft: ${vouchers.rows[0].status}`);
     const net = await netByAccount([vouchers.rows[0].id]);
-    expectNet(problems, net, acc.diff, 150000 - 240000, 'کسری و اضافات انبار');
-    expectNet(problems, net, acc.raw, -150000, 'موجودی مواد اولیه');
-    expectNet(problems, net, acc.finished, 240000, 'موجودی کالای ساخته‌شده');
+    expectNet(problems, net, acc.diff, 150000 - 240000, 'inventory shortage and surplus account');
+    expectNet(problems, net, acc.raw, -150000, 'raw materials inventory');
+    expectNet(problems, net, acc.finished, 240000, 'finished goods inventory');
   }
   const noCostState = await itemState(noCost.id);
   if (noCostState.stock !== 4 || !fin(noCostState.wac).isZero()) {
-    problems.push(`اضافی کالای بدون WAC باید با بهای صفر وارد شود (نه قیمت فهرست ۷۰٬۰۰۰): ${JSON.stringify(noCostState)}`);
+    problems.push(`The surplus of an item without WAC must enter at cost zero (not the price list 70,000): ${JSON.stringify(noCostState)}`);
   }
-  problems.push(...await invariantProblems(scope, 'پس از انبارگردانی'));
+  problems.push(...await invariantProblems(scope, 'after the stock count'));
 
   await DocumentService.deleteDocument(auditId, 'inv');
   const after = await pool.query<{ is_deleted: number }>(`SELECT is_deleted FROM journal_vouchers WHERE source_document_id = $1`, [auditId]);
   if (after.rows.length !== 1 || after.rows[0].is_deleted !== 1) {
-    problems.push(`ابطال انبارگردانی باید سند پیش‌نویسش را حذف نرم کند: ${JSON.stringify(after.rows)}`);
+    problems.push(`Voiding the stock count must soft-delete its draft voucher: ${JSON.stringify(after.rows)}`);
   }
   const states = [await itemState(raw.id), await itemState(product.id), await itemState(noCost.id)].map(s => s.stock);
-  if (states.join(',') !== '10,5,0') problems.push(`ابطال انبارگردانی موجودی را برنگرداند: ${states.join(',')}`);
-  problems.push(...await invariantProblems(scope, 'پس از ابطال انبارگردانی'));
+  if (states.join(',') !== '10,5,0') problems.push(`Voiding the stock count did not restore stock: ${states.join(',')}`);
+  problems.push(...await invariantProblems(scope, 'after voiding the stock count'));
   return problems;
 }
 
@@ -103,7 +103,7 @@ export async function checkExcelAdjustmentVoucher(wh: string): Promise<string[]>
     { 'کد کالا': existing.code, 'نام کالا': existing.name, 'نوع کالا': 'ماده اولیه', 'موجودی کل': 6 },
     { 'کد کالا': newCode, 'نام کالا': withTestMarker(`کالای تازه اکسل ${stamp}`), 'نوع کالا': 'ماده اولیه', 'موجودی کل': 5, 'قیمت میانگین خرید (WAC)': 20000 },
   ], undefined, { user: { username: 'inv' } }, ALL_ITEM_IMPORT_PERMISSIONS);
-  if (result.errors.length > 0) problems.push(`خطای درون‌ریزی: ${JSON.stringify(result.errors)}`);
+  if (result.errors.length > 0) problems.push(`Import error: ${JSON.stringify(result.errors)}`);
   const created = await pool.query<{ id: number }>(`SELECT id FROM items WHERE code = $1 AND is_deleted = 0`, [newCode]);
   const newItemId = created.rows[0]?.id;
   if (!newItemId) return [...problems, 'کالای تازه از اکسل ساخته نشد'];
@@ -112,23 +112,23 @@ export async function checkExcelAdjustmentVoucher(wh: string): Promise<string[]>
     `SELECT id, status FROM journal_vouchers
       WHERE id > $1 AND is_deleted = 0 AND reference_module = 'inventory' AND reference_number = 'درون‌ریزی اکسل'`, [mark.voucherIdAfter]);
   if (adjustment.rows.length !== 1) {
-    problems.push(`اصلاح موجودی از اکسل باید دقیقاً یک سند «کسری و اضافات انبار» بگیرد: ${adjustment.rows.length}`);
+    problems.push(`An Excel stock adjustment must get exactly one "inventory shortage and surplus" voucher: ${adjustment.rows.length}`);
   } else {
-    if (adjustment.rows[0].status !== 'draft') problems.push(`سند اصلاح اکسل باید پیش‌نویس باشد: ${adjustment.rows[0].status}`);
+    if (adjustment.rows[0].status !== 'draft') problems.push(`The Excel adjustment voucher must be draft: ${adjustment.rows[0].status}`);
     const net = await netByAccount([adjustment.rows[0].id]);
-    expectNet(problems, net, acc.diff, 120000, 'کسری و اضافات انبار (کسری ۴ × ۳۰٬۰۰۰)');
-    expectNet(problems, net, acc.raw, -120000, 'موجودی مواد اولیه');
+    expectNet(problems, net, acc.diff, 120000, 'inventory shortage and surplus account (shortage 4 x 30,000)');
+    expectNet(problems, net, acc.raw, -120000, 'raw materials inventory');
   }
   const opening = await pool.query<{ id: number }>(
     `SELECT jv.id FROM item_opening_voucher_items l JOIN journal_vouchers jv ON jv.id = l.voucher_id AND jv.is_deleted = 0
       WHERE l.item_id = $1`, [newItemId]);
   if (opening.rows.length !== 1) {
-    problems.push(`کالای تازه با موجودی باید سند افتتاحیه بگیرد: ${opening.rows.length}`);
+    problems.push(`A new item with stock must get an opening voucher: ${opening.rows.length}`);
   } else {
     const net = await netByAccount([opening.rows[0].id]);
-    expectNet(problems, net, acc.raw, 100000, 'موجودی اولیه کالای تازه (۵ × ۲۰٬۰۰۰)');
+    expectNet(problems, net, acc.raw, 100000, 'opening stock of the new item (5 x 20,000)');
   }
-  problems.push(...await invariantProblems({ ...mark, itemIds: [existing.id, newItemId] }, 'پس از درون‌ریزی اکسل'));
+  problems.push(...await invariantProblems({ ...mark, itemIds: [existing.id, newItemId] }, 'after the Excel import'));
   return problems;
 }
 
@@ -171,9 +171,9 @@ export async function checkAuditMustBeFinal(wh: string): Promise<string[]> {
   } catch (err) {
     draftRejected = getErrorMessage(err).includes('نهایی');
   }
-  if (!draftRejected) problems.push('انبارگردانی پیش‌نویس رد نشد');
+  if (!draftRejected) problems.push('A draft stock count was not refused');
   const afterDraft = await itemState(item.id);
-  if (afterDraft.stock !== 6) problems.push(`انبارگردانی پیش‌نویس ردشده موجودی را تغییر داد: ${afterDraft.stock}`);
+  if (afterDraft.stock !== 6) problems.push(`The refused draft stock count changed stock: ${afterDraft.stock}`);
 
   // انبارگردانی پیش‌نویس قدیمی: موجودی ۶ ← ۲ اعمال شده و سند در وضعیت پیش‌نویس مانده (بدون سند حسابداری)
   const legacyId = await audit('final', true);
@@ -184,14 +184,14 @@ export async function checkAuditMustBeFinal(wh: string): Promise<string[]> {
   } catch (err) {
     finalizeRejected = getErrorMessage(err).includes('انبارگردانی');
   }
-  if (!finalizeRejected) problems.push('نهایی‌سازی انبارگردانی پیش‌نویس رد نشد');
+  if (!finalizeRejected) problems.push('Finalizing a draft stock count was not refused');
   const afterFinalize = await itemState(item.id);
-  if (afterFinalize.stock !== 2) problems.push(`نهایی‌سازی انبارگردانی پیش‌نویس موجودی را دوباره تغییر داد: ${afterFinalize.stock}`);
+  if (afterFinalize.stock !== 2) problems.push(`Finalizing a draft stock count changed stock again: ${afterFinalize.stock}`);
 
   await DocumentService.deleteDocument(legacyId, 'inv');
   const afterVoid = await itemState(item.id);
-  if (afterVoid.stock !== 6) problems.push(`ابطال انبارگردانی پیش‌نویس قدیمی موجودی را برنگرداند: ${afterVoid.stock}`);
-  problems.push(...await invariantProblems(scope, 'پس از ابطال انبارگردانی پیش‌نویس'));
+  if (afterVoid.stock !== 6) problems.push(`Voiding the legacy draft stock count did not restore stock: ${afterVoid.stock}`);
+  problems.push(...await invariantProblems(scope, 'after voiding the draft stock count'));
   return problems;
 }
 
@@ -218,14 +218,14 @@ export async function checkExcelWacChangeRefused(wh: string): Promise<string[]> 
     { 'کد کالا': empty.code, 'نام کالا': empty.name, 'نوع کالا': 'ماده اولیه', 'نقطه سفارش': 8, 'قیمت میانگین خرید (WAC)': 25000 },
   ], undefined, { user: { username: 'inv' } }, ALL_ITEM_IMPORT_PERMISSIONS);
   const rowError = refused.errors.find(e => e.code === stocked.code);
-  if (!rowError || !rowError.message.includes('WAC')) problems.push(`ردیف تغییر WAC کالای دارای موجودی در فهرست خطاها نیامد: ${JSON.stringify(refused.errors)}`);
+  if (!rowError || !rowError.message.includes('WAC')) problems.push(`The WAC change row of an item with stock did not appear in the error list: ${JSON.stringify(refused.errors)}`);
   const afterRefused = await itemState(stocked.id);
   if (!fin(afterRefused.wac).equals(30000) || await reorderOf(stocked.id) !== 3) {
-    problems.push(`ردیف ردشده نباید ثبت شود: WAC ${afterRefused.wac}، نقطه سفارش ${await reorderOf(stocked.id)}`);
+    problems.push(`The refused row must not be saved: WAC ${afterRefused.wac}, reorder point ${await reorderOf(stocked.id)}`);
   }
   const emptyState = await itemState(empty.id);
   if (!fin(emptyState.wac).equals(25000) || await reorderOf(empty.id) !== 8) {
-    problems.push(`کالای بدون موجودی باید WAC و نقطه سفارش فایل را بگیرد: WAC ${emptyState.wac}، نقطه سفارش ${await reorderOf(empty.id)}`);
+    problems.push(`An item without stock must take the WAC and reorder point of the file: WAC ${emptyState.wac}, reorder point ${await reorderOf(empty.id)}`);
   }
 
   const sameValue = await ItemCatalogService.processUnifiedImport([
@@ -233,8 +233,8 @@ export async function checkExcelWacChangeRefused(wh: string): Promise<string[]> 
   ], undefined, { user: { username: 'inv' } }, ALL_ITEM_IMPORT_PERMISSIONS);
   const afterSame = await itemState(stocked.id);
   if (sameValue.errors.length > 0 || !fin(afterSame.wac).equals(30000) || await reorderOf(stocked.id) !== 9) {
-    problems.push(`WAC برابر مقدار فعلی (با کمتر از ۱ ریال اختلاف) باید بی‌خطا بماند و WAC فعلی حفظ شود: ${JSON.stringify(sameValue.errors)}، WAC ${afterSame.wac}`);
+    problems.push(`A WAC equal to the current value (less than 1 rial apart) must stay error-free and keep the current WAC: ${JSON.stringify(sameValue.errors)}, WAC ${afterSame.wac}`);
   }
-  problems.push(...await invariantProblems({ ...mark, itemIds: [stocked.id, empty.id] }, 'پس از درون‌ریزی'));
+  problems.push(...await invariantProblems({ ...mark, itemIds: [stocked.id, empty.id] }, 'after the import'));
   return problems;
 }

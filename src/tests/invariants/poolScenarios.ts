@@ -86,30 +86,30 @@ export async function checkNoSecondConnectionInTransactions(wh: string): Promise
   const newYear = await withOneFreeConnection(() => VoucherService.createJournalVoucher({
     date: newYearDate, status: 'draft', description: 'آزمون TD-324 سال مالی تازه', items: lines,
   }));
-  problems.push(...waitProblems('سند اول سال مالی تازه', newYear));
+  problems.push(...waitProblems('first voucher of a new fiscal year', newYear));
   const [period] = await orm.select({ status: fiscalPeriods.status }).from(fiscalPeriods)
     .where(eq(fiscalPeriods.fiscalYear, FiscalPeriodService.yearOf(newYearDate)));
-  if (newYear.ok && period?.status !== 'open') problems.push(`ردیف سال مالی تازه ساخته نشد (${period?.status ?? 'نیست'})`);
+  if (newYear.ok && period?.status !== 'open') problems.push(`the new fiscal year row was not created (${period?.status ?? 'missing'})`);
   if (newYear.ok) await orm.update(journalVouchers).set({ isDeleted: 1 }).where(eq(journalVouchers.id, newYear.value.id));
 
   // ۲) ابطال سند با کش کهنه منطقه زمانی؛ ممیزی در همان تراکنش
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const docId = await receive(item.id, 2, 1000, wh, await businessTodayIsoDate());
   const voided = await withStaleTimezoneCache(() => withOneFreeConnection(() => DocumentService.deleteDocument(docId, 'inv')));
-  problems.push(...waitProblems('ابطال سند با کش کهنه منطقه زمانی', voided));
-  if (voided.ok && await auditRows('اسناد انبار', docId, 'DELETE') !== 1) problems.push('ردیف ممیزی ابطال سند ثبت نشد');
+  problems.push(...waitProblems('voiding a document with a stale time zone cache', voided));
+  if (voided.ok && await auditRows('اسناد انبار', docId, 'DELETE') !== 1) problems.push('The audit row of the document void was not recorded');
 
   // ۳) درخواست خرید: گردش‌کار و ممیزی در همان تراکنش
   const requisition = await withOneFreeConnection(() => ProcurementService.createRequisition({
     title: 'درخواست آزمون TD-324',
     items: [{ itemId: item.id, itemCode: item.code, itemName: item.name, unit: 'عدد', requestedQty: 1, unitPriceEstimate: 1000 }],
   }, ADMIN));
-  problems.push(...waitProblems('ثبت درخواست خرید', requisition));
+  problems.push(...waitProblems('creating a purchase requisition', requisition));
   if (requisition.ok) {
     const [row] = await orm.select({ wf: purchaseRequisitions.workflowInstanceId }).from(purchaseRequisitions)
       .where(eq(purchaseRequisitions.id, requisition.value.id));
-    if (!row?.wf) problems.push('گردش‌کار درخواست خرید شروع نشد');
-    if (await auditRows('درخواست خرید', requisition.value.id, 'CREATE') !== 1) problems.push('ردیف ممیزی ثبت درخواست خرید ثبت نشد');
+    if (!row?.wf) problems.push('The purchase requisition workflow did not start');
+    if (await auditRows('درخواست خرید', requisition.value.id, 'CREATE') !== 1) problems.push('The audit row of the purchase requisition create was not recorded');
   }
 
   // ۴) حساب بانکی با مانده اول دوره: گردش‌کار شرطی و سند افتتاحیه در همان تراکنش
@@ -121,12 +121,12 @@ export async function checkNoSecondConnectionInTransactions(wh: string): Promise
   const bank = await withOneFreeConnection(() => BankAccountService.createBankAccount({
     title: 'بانک آزمون TD-324', type: 'bank', accountId: ledger.id, initialBalance: 5000, currency: 'IRR', username: 'inv',
   }));
-  problems.push(...waitProblems('حساب بانکی با مانده اول دوره', bank));
+  problems.push(...waitProblems('bank account with an opening balance', bank));
 
   // ۵) خطای ثبت ممیزی درون تراکنش بلعیده نمی‌شود (وگرنه COMMIT بی‌صدا ROLLBACK می‌شود و فراخواننده موفقیت می‌بیند)
   const swallowed = await orm.transaction(async (tx) => {
     await logActivity({ tx, userId: 2147483000, action: 'VIEW', entity: 'آزمون TD-324', description: 'کاربر ناموجود' });
   }).then(() => true, () => false);
-  if (swallowed) problems.push('خطای ثبت ممیزی درون تراکنش بلعیده شد و تراکنش موفق گزارش شد');
+  if (swallowed) problems.push('An audit write error inside the transaction was swallowed and the transaction was reported as successful');
   return problems;
 }

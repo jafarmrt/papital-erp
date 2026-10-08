@@ -13,7 +13,7 @@ export async function runCrmFollowupActionTests(shouldRun: (id: string, ...extra
   const id = 'reg_crm_followup_explicit_actions_td_430';
   if (!shouldRun(id, 'td430', 'crm', 'followup', 'package9')) return results;
 
-  const name = 'v9.0.19: «انجام» و «بازگشایی» پیگیری عمل صریح با وضعیت هدف‌اند؛ تکرار یا ارسال هم‌زمان پیگیری را دوباره باز نمی‌کند و نتیجه را دوباره نمی‌افزاید؛ هر تغییر یک لاگ ممیزی دارد (TD-430)';
+  const name = 'v9.0.19: completing and reopening a follow-up are explicit actions with a target state; a repeat or concurrent request does not reopen it or add the result again; each change has one audit row (TD-430)';
   const tStart = Date.now();
   const activityIds: number[] = [];
   try {
@@ -45,32 +45,32 @@ export async function runCrmFollowupActionTests(shouldRun: (id: string, ...extra
     let s = await state();
     const notes = (s.description?.match(new RegExp(`نتیجه ${tag}`, 'g')) ?? []).length;
     if (first.status !== 200 || repeat.status !== 200 || s.done !== 1 || notes !== 1 || s.result !== 'توافق شد') {
-      wrong.push(`انجام تکراری: ${first.status}/${repeat.status}، وضعیت ${s.done}، نتیجه ${notes} بار`);
+      wrong.push(`repeated complete: ${first.status}/${repeat.status}, status ${s.done}, result ${notes} times`);
     }
-    if (repeat.body?.changed !== false) wrong.push('پاسخ «انجام» تکراری changed=false ندارد');
-    if (await auditCount() !== 1) wrong.push(`پس از دو «انجام» ${await auditCount()} لاگ ممیزی هست، نه ۱`);
+    if (repeat.body?.changed !== false) wrong.push('the repeated "complete" response does not have changed=false');
+    if (await auditCount() !== 1) wrong.push(`after two "complete" actions there are ${await auditCount()} audit log rows, not 1`);
 
     // ۲) «بازگشایی» هم‌زمان دوبار: باز می‌ماند و یک لاگ دیگر
     const reopened = await Promise.all([put(reopen), put(reopen)]);
     s = await state();
-    if (reopened.some(r => r.status !== 200) || s.done !== 0) wrong.push(`بازگشایی هم‌زمان: ${reopened.map(r => r.status).join('/')}، وضعیت ${s.done}`);
-    if (await auditCount() !== 2) wrong.push(`پس از بازگشایی ${await auditCount()} لاگ ممیزی هست، نه ۲`);
+    if (reopened.some(r => r.status !== 200) || s.done !== 0) wrong.push(`concurrent reopen: ${reopened.map(r => r.status).join('/')}, status ${s.done}`);
+    if (await auditCount() !== 2) wrong.push(`after reopen there are ${await auditCount()} audit log rows, not 2`);
 
     // ۳) «انجام» هم‌زمان دوبار: انجام می‌ماند، نه برگشت به باز
     await Promise.all([put(complete), put(complete)]);
     s = await state();
-    if (s.done !== 1 || await auditCount() !== 3) wrong.push(`انجام هم‌زمان: وضعیت ${s.done}، ${await auditCount()} لاگ`);
+    if (s.done !== 1 || await auditCount() !== 3) wrong.push(`concurrent complete: status ${s.done}, ${await auditCount()} log rows`);
 
     // ۴) کلید دوطرفه دیگر نیست؛ اقدام ناموجود ۴۰۴
     const legacy = await put(`/api/crm/activities/${act.id}/toggle-followup`);
-    if (legacy.status !== 404) wrong.push(`toggle-followup هنوز پاسخ ${legacy.status} می‌دهد`);
+    if (legacy.status !== 404) wrong.push(`toggle-followup still responds ${legacy.status}`);
     const missing = await put(`/api/crm/activities/${act.id + 1_000_000}/complete-followup`);
-    if (missing.status !== 404) wrong.push(`اقدام ناموجود ${missing.status} داد`);
+    if (missing.status !== 404) wrong.push(`a missing activity returned ${missing.status}`);
 
-    if (wrong.length > 0) throw new Error(wrong.join('، '));
+    if (wrong.length > 0) throw new Error(wrong.join(', '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'دو «انجام» یک تغییر و یک لاگ؛ بازگشایی و انجام هم‌زمان هرکدام یک تغییر؛ toggle-followup حذف شد',
+      details: 'two "complete" actions make one change and one log row; concurrent reopen and complete each make one change; toggle-followup is removed',
     }));
   } catch (err) {
     results.push(makeTestCase({

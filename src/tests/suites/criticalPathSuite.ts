@@ -73,7 +73,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
   // 1. Concurrent voucher inserts → PostgreSQL SEQUENCE uniqueness (DB-001)
   // ===============================================================
   await runCase(results, 'cp_voucher_concurrent_unique', 'concurrent_voucher_unique_postgres',
-    'یکپارچگی: درج همزمان اسناد حسابداری باید شمارههای یکتا تولید کند',
+    'integrity: concurrent journal voucher inserts must produce unique numbers',
     async () => {
       if (!session.cookie) throw new Error('admin session in hand nist');
 
@@ -85,7 +85,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
         ORDER BY a.id LIMIT 2
       `);
       const accountRows: any[] = (accountsRes as any).rows || [];
-      if (accountRows.length < 2) throw new Error('حداقل دو سرفصل برای آزمون لازم است');
+      if (accountRows.length < 2) throw new Error('at least two ledger accounts are needed for the test');
       const accA = accountRows[0].id;
       const accB = accountRows[1].id;
 
@@ -111,13 +111,13 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
       const responses = await Promise.all(promises);
       const okResponses = responses.filter(r => r.status >= 200 && r.status < 300);
       if (okResponses.length < 2) {
-        throw new Error(`فقط ${okResponses.length} سند از ۸ موفق شد: ${responses.map(r => r.status).join(',')}`);
+        throw new Error(`only ${okResponses.length} of 8 vouchers succeeded: ${responses.map(r => r.status).join(',')}`);
       }
 
       const numbers = okResponses.map(r => String(extractVoucherNumber(r.body)));
       const uniqueNumbers = new Set(numbers);
       if (uniqueNumbers.size !== numbers.length) {
-        throw new Error(`شماره سند تکراری تولید شد! ${numbers.join(' , ')}`);
+        throw new Error(`a duplicate voucher number was produced! ${numbers.join(' , ')}`);
       }
 
       // Cleanup created vouchers
@@ -134,7 +134,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
   // 2. Concurrent finalize race → single stock deduction (DB-002 / DB-005)
   // ===============================================================
   await runCase(results, 'cp_finalize_race_single_deduction', 'finalize_race_single_deduction',
-    'یکپارچگی: نهاییسازی همزمان سند باید موجودی را دقیقا یکبار کسر کند',
+    'integrity: concurrent document finalization must deduct stock exactly once',
     async () => {
       if (!session.cookie) throw new Error('admin session in hand nist');
 
@@ -156,10 +156,10 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
         });
 
       if (createRes.status !== 200 && createRes.status !== 201) {
-        throw new Error(`ایجاد سند شکست خورد (${createRes.status}): ${JSON.stringify(createRes.body).slice(0, 250)}`);
+        throw new Error(`document creation failed (${createRes.status}): ${JSON.stringify(createRes.body).slice(0, 250)}`);
       }
       const docId = extractId(createRes.body);
-      if (!docId) throw new Error('شناسه سند بازنگشت');
+      if (!docId) throw new Error('document id was not returned');
 
       // 10 concurrent finalize requests — only one must apply the stock movement
       const promises: any[] = [];
@@ -173,7 +173,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
       const responses = await Promise.all(promises);
       const successCount = responses.filter(r => r.status >= 200 && r.status < 300).length;
       if (successCount < 1) {
-        throw new Error(`هیچ finalizeای موفق نشد: ${responses.map(r => r.status).join(',')}`);
+        throw new Error(`no finalize succeeded: ${responses.map(r => r.status).join(',')}`);
       }
 
       // Verify stock deducted exactly once (read directly from DB — items API
@@ -192,11 +192,11 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
 
       if (!Number.isFinite(finalStock)) {
         await cleanup();
-        throw new Error('موجودی نهایی از دیتابیس خوانده نشد');
+        throw new Error('final stock was not read from the database');
       }
       if (Math.abs(finalStock - (initialStock - qty)) > 0.0001) {
         await cleanup();
-        throw new Error(`موجودی نهایی ${finalStock} بجای ${initialStock - qty} — کسر ${successCount > 1 ? 'چندباره' : 'نادرست'} رخ داد`);
+        throw new Error(`final stock is ${finalStock} instead of ${initialStock - qty}: ${successCount > 1 ? 'repeated' : 'wrong'} deduction`);
       }
       await cleanup();
 
@@ -207,7 +207,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
   // 3. Cheque lifecycle state machine → invalid transition rejected
   // ===============================================================
   await runCase(results, 'cp_cheque_invalid_transition', 'cheque_invalid_transition',
-    'یکپارچگی: گذار نامعتبر چک (بدون واریز به حساب) باید رد شود',
+    'integrity: an invalid cheque transition (without a deposit account) must be refused',
     async () => {
       if (!session.cookie) throw new Error('admin session in hand nist');
 
@@ -232,7 +232,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
           .send({ status: 'passed' });
 
         if (transitionRes.status >= 200 && transitionRes.status < 300) {
-          throw new Error('گذار غیرمجاز received→passed بدون حساب بانکی پذیرفته شد!');
+          throw new Error('invalid transition received→passed without a bank account was accepted!');
         }
         return `گذار نامعتبر با ${transitionRes.status} رد شد.`;
       } finally {
@@ -246,7 +246,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
   // 4. Idempotent duplicate document creation returns cached response
   // ===============================================================
   await runCase(results, 'cp_idempotent_duplicate_document', 'idempotent_duplicate_request',
-    'یکپارچگی: درخواست تکراری با همان Idempotency-Key باید پاسخ کششده برگرداند',
+    'integrity: a repeated request with the same Idempotency-Key must return the cached response',
     async () => {
       if (!session.cookie) throw new Error('admin session in hand nist');
 
@@ -267,7 +267,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
         .set('Idempotency-Key', key)
         .send(payload);
       if (res1.status !== 200 && res1.status !== 201) {
-        throw new Error(`درخواست اول شکست خورد (${res1.status})`);
+        throw new Error(`first request failed (${res1.status})`);
       }
       const id1 = extractId(res1.body);
 
@@ -291,10 +291,10 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
       }
 
       if (hitHeader !== 'true') {
-        throw new Error(`هدر X-Idempotency-Hit صادر نشد (status=${res2.status})`);
+        throw new Error(`header X-Idempotency-Hit was not sent (status=${res2.status})`);
       }
       if (!id1 || !id2 || id1 !== id2) {
-        throw new Error(`پاسخ کششده همان سند را برنگرداند (${id1} vs ${id2})`);
+        throw new Error(`cached response did not return the same document (${id1} vs ${id2})`);
       }
       return `درخواست تکراری با پاسخ کششده همان سند ${id1} را برگرداند (X-Idempotency-Hit=true).`;
     });

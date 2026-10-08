@@ -12,13 +12,13 @@ import { AttachmentStorageService } from '../src/services/attachments/attachment
 async function main(): Promise<void> {
   const apply = process.argv.includes('--apply');
   const report = await AttachmentStorageService.migrateInlineAttachments({ apply, actor: 'cli:attachments-migrate' });
-  console.log(apply ? '✅ انتقال پیوست‌ها انجام شد' : '🔎 اجرای آزمایشی (بدون تغییر) — برای انتقال واقعی: npm run attachments:migrate -- --apply');
-  console.log(`   رکوردها: ${report.records}   فایل‌ها: ${report.files}   حجم: ${(report.bytes / 1024 / 1024).toFixed(2)} MB`);
+  console.log(apply ? '✅ Attachment migration done' : '🔎 Dry run (no changes); for a real migration: npm run attachments:migrate -- --apply');
+  console.log(`   Records: ${report.records}   files: ${report.files}   size: ${(report.bytes / 1024 / 1024).toFixed(2)} MB`);
   for (const [entity, b] of Object.entries(report.byEntity)) {
-    if (b.files > 0) console.log(`   - ${entity}: ${b.records} رکورد، ${b.files} فایل`);
+    if (b.files > 0) console.log(`   - ${entity}: ${b.records} records, ${b.files} files`);
   }
   if (report.failures.length > 0) {
-    console.error(`❌ ${report.failures.length} رکورد منتقل نشد (بدون تغییر ماند):`);
+    console.error(`❌ ${report.failures.length} records were not migrated (left unchanged):`);
     for (const f of report.failures) console.error(`   - ${f.entityType} #${f.entityId}: ${f.error}`);
     process.exitCode = 1;
   }

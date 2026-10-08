@@ -218,12 +218,12 @@ async function lineNumbersCase(h: Harness, wrong: string[]): Promise<string> {
   // 2) Persian digits and thousands separators are read
   const persian = await h.post('/api/documents', f.doc('receipt', 'final', lineOf({ quantity: '۲', unit_price: '1,000', discount: '۱۰۰' })));
   const docId = Number((persian.body as { docId?: unknown })?.docId);
-  if (persian.status !== 200 || !docId) wrong.push(`a receipt with quantity ۲, price 1,000 and discount ۱۰۰ answered ${brief(persian)}, expected 200`);
+  if (persian.status !== 200 || !docId) wrong.push(`a receipt with quantity 2 in Persian digits, price 1,000 and discount 100 in Persian digits answered ${brief(persian)}, expected 200`);
   else {
     const [stored] = await h.q('SELECT quantity::float8 AS q, unit_price::float8 AS p, discount::float8 AS d FROM document_items WHERE document_id = $1 AND is_deleted = 0', [docId]);
     if (Number(stored?.q) !== 2 || Number(stored?.p) !== 1000 || Number(stored?.d) !== 100) wrong.push(`the line was stored as ${JSON.stringify(stored)}, expected quantity 2, price 1000, discount 100`);
   }
-  if (await f.stock(a) !== 12) wrong.push(`the stock is ${await f.stock(a)} after a receipt of ۲, expected 12`);
+  if (await f.stock(a) !== 12) wrong.push(`the stock is ${await f.stock(a)} after a receipt of 2 (Persian digits), expected 12`);
 
   // 3) a line without a price is still accepted (price 0), as before
   const noPrice = await h.post('/api/documents', f.doc('remittance', 'final', [{ itemId: a, quantity: 1, location: f.wh }]));

@@ -53,6 +53,10 @@ const createAccount = () => {
 beforeEach(() => { fetchJson.mockReset(); toastFn.success.mockReset(); toastFn.error.mockReset(); confirmAction.mockReset(); });
 afterEach(() => cleanup());
 
+/** Server error messages that the page shows as they are */
+const CODE_TAKEN = 'کد ۱۱۰۵ را حساب «صندوق دوم» دارد؛ کد دیگری انتخاب کنید.';
+const NO_ACCESS = 'شما دسترسی لازم را ندارید';
+
 describe('chart of accounts messages (TD-576)', () => {
   it('a saved account shows one success message and a refused one one error message', async () => {
     server();
@@ -63,11 +67,11 @@ describe('chart of accounts messages (TD-576)', () => {
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(toastFn.success).toHaveBeenCalledTimes(1);
 
-    server(() => { throw new Error('کد ۱۱۰۵ را حساب «صندوق دوم» دارد؛ کد دیگری انتخاب کنید.'); });
+    server(() => { throw new Error(CODE_TAKEN); });
     createAccount();
     await waitFor(() => expect(toastFn.error).toHaveBeenCalled());
     await new Promise(resolve => setTimeout(resolve, 20));
-    expect(toastFn.error.mock.calls.map(c => c[0])).toEqual(['کد ۱۱۰۵ را حساب «صندوق دوم» دارد؛ کد دیگری انتخاب کنید.']);
+    expect(toastFn.error.mock.calls.map(c => c[0])).toEqual([CODE_TAKEN]);
   });
 
   it('a refused seed shows its error once and leaves no unhandled rejection', async () => {
@@ -75,11 +79,11 @@ describe('chart of accounts messages (TD-576)', () => {
     const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
     process.on('unhandledRejection', onUnhandled);
     try {
-      server(() => { throw new Error('شما دسترسی لازم را ندارید'); });
+      server(() => { throw new Error(NO_ACCESS); });
       renderTab();
       await screen.findByText('صندوق');
       await act(async () => { fireEvent.click(screen.getByText('همگام‌سازی کدینگ پیش‌فرض')); });
-      await waitFor(() => expect(toastFn.error).toHaveBeenCalledWith('شما دسترسی لازم را ندارید'));
+      await waitFor(() => expect(toastFn.error).toHaveBeenCalledWith(NO_ACCESS));
       await new Promise(resolve => setTimeout(resolve, 20));
       expect(toastFn.error).toHaveBeenCalledTimes(1);
       expect(unhandled).toEqual([]);

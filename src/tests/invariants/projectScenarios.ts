@@ -66,19 +66,19 @@ export async function checkBomReceiptAllocationNeedsReceipt(wh: string): Promise
   const refused = await refusalOf(() => ProjectBomAllocationService.allocateReceiptItemsForProjectBom({
     projectId, allocations: [{ itemId, quantity: 3, location: wh }], username: 'inv',
   }));
-  if (!refused?.includes('رسید ثبت‌شده')) problems.push(`تخصیص رسید مستقیم بی‌رسید رد نشد (${refused ?? 'پذیرفته شد'})`);
-  if (!fin(await stockOf(itemId)).equals(10)) problems.push(`موجودی پس از تخصیص ردشده ${await stockOf(itemId)}، انتظار ۱۰`);
+  if (!refused?.includes('رسید ثبت‌شده')) problems.push(`direct receipt allocation without a receipt was not refused (${refused ?? 'accepted'})`);
+  if (!fin(await stockOf(itemId)).equals(10)) problems.push(`stock after the refused allocation ${await stockOf(itemId)}, expected 10`);
 
   const allocated = await ProjectBomAllocationService.allocateReceiptItemsForProjectBom({
     projectId, allocations: [{ itemId, quantity: 4, location: wh, documentId }], username: 'inv',
   });
-  if (!fin(await stockOf(itemId)).equals(6)) problems.push(`تخصیص از رسید ثبت‌شده موجودی را برنداشت (${await stockOf(itemId)}، انتظار ۶)`);
+  if (!fin(await stockOf(itemId)).equals(6)) problems.push(`allocation from a registered receipt did not take the stock (${await stockOf(itemId)}, expected 6)`);
   const sourceId = allocated.allocations[0]?.sourceTransactionId ?? 0;
   const [source] = await orm.select({ type: transactions.type }).from(transactions).where(eq(transactions.id, sourceId));
-  if (source?.type !== 'out') problems.push(`حرکت منبع تخصیص ${source?.type ?? 'ندارد'}، انتظار out`);
+  if (source?.type !== 'out') problems.push(`allocation source movement is ${source?.type ?? 'missing'}, expected out`);
 
   await ProjectBomAllocationService.releaseAllocation(allocated.allocations[0].id, { username: 'inv' });
-  if (!fin(await stockOf(itemId)).equals(10)) problems.push(`آزادسازی تخصیص رسید موجودی را ${await stockOf(itemId)} کرد، انتظار ۱۰`);
+  if (!fin(await stockOf(itemId)).equals(10)) problems.push(`releasing the receipt allocation made the stock ${await stockOf(itemId)}, expected 10`);
   return problems;
 }
 
@@ -97,11 +97,11 @@ export async function checkBomReleaseAtOwnCost(wh: string): Promise<string[]> {
   await ProjectBomAllocationService.releaseAllocation(allocated.allocations[0].id, { username: 'inv' });
   const [back] = await orm.select({ unitPrice: transactions.unitPrice }).from(transactions)
     .where(and(eq(transactions.itemId, itemId), eq(transactions.type, 'in'), eq(transactions.documentType, 'آزادسازی تخصیص BOM')));
-  if (!back || !fin(back.unitPrice ?? 0).equals(100000)) problems.push(`بهای بازگشت آزادسازی ${back?.unitPrice ?? 'ندارد'}، انتظار ۱۰۰٬۰۰۰ (بهای خروج تخصیص)`);
+  if (!back || !fin(back.unitPrice ?? 0).equals(100000)) problems.push(`release return cost is ${back?.unitPrice ?? 'missing'}, expected 100,000 (the allocation's outflow cost)`);
   const [item] = await orm.select({ wac: items.weightedAverageCost, stock: items.currentStock }).from(items).where(eq(items.id, itemId));
-  if (!fin(item?.wac ?? 0).equals(150000)) problems.push(`میانگین موزون پس از آزادسازی ${item?.wac}، انتظار ۱۵۰٬۰۰۰`);
+  if (!fin(item?.wac ?? 0).equals(150000)) problems.push(`weighted average cost after release ${item?.wac}, expected 150,000`);
   const value = fin(item?.stock ?? 0).multiply(item?.wac ?? 0);
-  if (!value.equals(3000000)) problems.push(`ارزش انبار ${value}، انتظار ۳٬۰۰۰٬۰۰۰ (جمع دو رسید)`);
+  if (!value.equals(3000000)) problems.push(`warehouse value ${value}, expected 3,000,000 (sum of the two receipts)`);
 
   // تخصیصِ رسیدِ پیش از v8.0.32: حرکت منبع «ورود» است و موجودی از انبار خارج نشده بود
   const [receiptIn] = await orm.select({ id: transactions.id }).from(transactions)
@@ -110,7 +110,7 @@ export async function checkBomReleaseAtOwnCost(wh: string): Promise<string[]> {
     projectId, projectCode: 'LEGACY', itemId, itemCode: 'LEGACY', itemName: 'LEGACY', quantity: 2, sourceTransactionId: receiptIn.id, sourceLocation: wh, status: 'allocated',
   }).returning({ id: projectBomAllocations.id });
   await ProjectBomAllocationService.releaseAllocation(legacy.id, { username: 'inv' });
-  if (!fin(await stockOf(itemId)).equals(20)) problems.push(`آزادسازی تخصیصِ رسیدِ پیشین موجودی را ${await stockOf(itemId)} کرد، انتظار ۲۰`);
+  if (!fin(await stockOf(itemId)).equals(20)) problems.push(`releasing the older receipt allocation made the stock ${await stockOf(itemId)}, expected 20`);
   return problems;
 }
 
@@ -140,26 +140,26 @@ export async function checkBomAllocationPostsVoucher(wh: string): Promise<string
   const projectId = await newProject('پروژه آزمون سند تخصیص');
   const gapIsZero = async (label: string) => {
     const { gap } = await inventoryValueGap(scope);
-    if (!gap.isZero()) problems.push(`${label}: اختلاف ارزش انبار و دفتر کل ${gap}`);
+    if (!gap.isZero()) problems.push(`${label}: warehouse value vs general ledger difference ${gap}`);
   };
 
   const first = await ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId: raw.itemId, quantity: 4, location: wh }, { itemId: product.id, quantity: 1, location: wh }], username: 'inv' });
   const wip = await projectNet('1402', projectId);
-  if (!fin(wip).equals(700000)) problems.push(`کالای در جریان ساخت پروژه ${wip}، انتظار ۷۰۰٬۰۰۰ (۴ × ۱۰۰٬۰۰۰ + ۳۰۰٬۰۰۰)`);
+  if (!fin(wip).equals(700000)) problems.push(`project work in progress ${wip}, expected 700,000 (4 × 100,000 + 300,000)`);
   const linked = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM journal_vouchers WHERE is_deleted = 0 AND source_bom_allocation_id = ANY($1::int[])', [first.allocations.map(a => a.id)]);
-  if (Number(linked.rows[0].n) !== 2) problems.push(`سند پیوندخورده به تخصیص‌ها ${linked.rows[0].n}، انتظار ۲`);
+  if (Number(linked.rows[0].n) !== 2) problems.push(`vouchers linked to the allocations ${linked.rows[0].n}, expected 2`);
   await gapIsZero('پس از تخصیص');
 
   // آزادسازی تخصیص مواد با سند پیش‌نویس ← سند حذف نرم
   await ProjectBomAllocationService.releaseAllocation(first.allocations[0].id, { username: 'inv' });
-  if (!fin(await projectNet('1402', projectId)).equals(300000)) problems.push(`۱۴۰۲ پروژه پس از آزادسازی مواد ${await projectNet('1402', projectId)}، انتظار ۳۰۰٬۰۰۰`);
+  if (!fin(await projectNet('1402', projectId)).equals(300000)) problems.push(`project 1402 after releasing the materials ${await projectNet('1402', projectId)}, expected 300,000`);
   await gapIsZero('پس از آزادسازی سند پیش‌نویس');
 
   // آزادسازی تخصیص کالا با سند تأییدشده ← سند معکوس
   const [productVoucher] = (await pool.query<{ id: number }>('SELECT id FROM journal_vouchers WHERE is_deleted = 0 AND source_bom_allocation_id = $1', [first.allocations[1].id])).rows;
   if (productVoucher) await VoucherService.approveJournalVouchers([productVoucher.id], undefined, 'inv');
   await ProjectBomAllocationService.releaseAllocation(first.allocations[1].id, { username: 'inv' });
-  if (!fin(await projectNet('1402', projectId)).isZero()) problems.push(`۱۴۰۲ پروژه پس از آزادسازی کالا ${await projectNet('1402', projectId)}، انتظار ۰`);
+  if (!fin(await projectNet('1402', projectId)).isZero()) problems.push(`project 1402 after releasing the goods ${await projectNet('1402', projectId)}, expected 0`);
   await gapIsZero('پس از آزادسازی سند تأییدشده');
   return problems;
 }
@@ -183,22 +183,22 @@ export async function checkProjectDeliveryPostsVoucher(wh: string): Promise<stri
     ? await orm.select({ type: documents.type, status: documents.status, projectId: documents.projectId }).from(documents).where(eq(documents.id, delivered.documentId))
     : [];
   if (doc?.type !== 'production_receipt' || doc.status !== 'final' || doc.projectId !== projectId) {
-    problems.push(`تحویل سند رسید تولید نهایی با پیوند پروژه نساخت (${doc ? `${doc.type}/${doc.status}/${doc.projectId}` : 'سندی ندارد'})`);
+    problems.push(`delivery did not create a final production receipt document linked to the project (${doc ? `${doc.type}/${doc.status}/${doc.projectId}` : 'no document'})`);
   }
   const linked = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM journal_vouchers WHERE is_deleted = 0 AND source_document_id = $1', [delivered.documentId ?? 0]);
-  if (Number(linked.rows[0].n) !== 1) problems.push(`سند حسابداری رسید تولید ${linked.rows[0].n}، انتظار ۱`);
-  if (!fin(await stockOf(product.id)).equals(2)) problems.push(`موجودی محصول پس از تحویل ${await stockOf(product.id)}، انتظار ۲`);
+  if (Number(linked.rows[0].n) !== 1) problems.push(`production receipt journal vouchers ${linked.rows[0].n}, expected 1`);
+  if (!fin(await stockOf(product.id)).equals(2)) problems.push(`product stock after delivery ${await stockOf(product.id)}, expected 2`);
   const wip = await projectNet('1402', projectId);
-  if (!fin(wip).isZero()) problems.push(`۱۴۰۲ پروژه پس از تحویل ${wip}، انتظار ۰ (۴۰۰٬۰۰۰ تخصیص − ۴۰۰٬۰۰۰ تحویل)`);
+  if (!fin(wip).isZero()) problems.push(`project 1402 after delivery ${wip}, expected 0 (400,000 allocation − 400,000 delivery)`);
   const afterFirst = await inventoryValueGap(scope);
-  if (!afterFirst.gap.isZero()) problems.push(`پس از تحویل: اختلاف ارزش انبار و دفتر کل ${afterFirst.gap}`);
+  if (!afterFirst.gap.isZero()) problems.push(`after delivery: warehouse value vs general ledger difference ${afterFirst.gap}`);
 
   // تحویل بی‌بها: به میانگین موزون فعلی (۲۰۰٬۰۰۰) ثبت می‌شود
   await ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product.id, quantity: 1, location: wh }], currentUser: 'inv' });
   const wipAfter = await projectNet('1402', projectId);
-  if (!fin(wipAfter).equals(-200000)) problems.push(`۱۴۰۲ پروژه پس از تحویل بی‌بها ${wipAfter}، انتظار −۲۰۰٬۰۰۰ (به میانگین موزون)`);
+  if (!fin(wipAfter).equals(-200000)) problems.push(`project 1402 after the unpriced delivery ${wipAfter}, expected −200,000 (at weighted average cost)`);
   const afterSecond = await inventoryValueGap(scope);
-  if (!afterSecond.gap.isZero()) problems.push(`پس از تحویل بی‌بها: اختلاف ارزش انبار و دفتر کل ${afterSecond.gap}`);
+  if (!afterSecond.gap.isZero()) problems.push(`after the unpriced delivery: warehouse value vs general ledger difference ${afterSecond.gap}`);
   return problems;
 }
 
@@ -230,9 +230,9 @@ export async function checkRequisitionReceiptSumsLines(wh: string): Promise<stri
   const order = await orderOf(req.id, wh, [{ itemId: item.id, quantity: 2 }, { itemId: item.id, quantity: 3 }]);
   await ProcurementService.deliverOrderToWarehouse(order, USER);
   const [row] = await requisitionRows(req.id);
-  if (row?.receivedQty !== 5 || row.status !== 'received') problems.push(`دو سطر ۲ و ۳: دریافتی ${row?.receivedQty} با وضعیت ${row?.status}، انتظار ۵ و received`);
+  if (row?.receivedQty !== 5 || row.status !== 'received') problems.push(`two lines 2 and 3: received ${row?.receivedQty} with status ${row?.status}, expected 5 and received`);
   await ProcurementService.deliverOrderToWarehouse(order, USER);
-  if ((await requisitionRows(req.id))[0]?.receivedQty !== 5) problems.push(`تحویل دوباره همان سفارش دریافتی را ${(await requisitionRows(req.id))[0]?.receivedQty} کرد، انتظار ۵`);
+  if ((await requisitionRows(req.id))[0]?.receivedQty !== 5) problems.push(`delivering the same order again made received ${(await requisitionRows(req.id))[0]?.receivedQty}, expected 5`);
 
   // دو ردیف از یک کالا در درخواست
   const split = await ProcurementService.createRequisition({ title: 'درخواست آزمون دو ردیف', items: [
@@ -240,7 +240,7 @@ export async function checkRequisitionReceiptSumsLines(wh: string): Promise<stri
   ] as never }, USER);
   await ProcurementService.deliverOrderToWarehouse(await orderOf(split.id, wh, [{ itemId: item.id, quantity: 5 }]), USER);
   const splitRows = (await requisitionRows(split.id)).map(r => r.receivedQty);
-  if (splitRows.join(',') !== '3,2') problems.push(`ردیف‌های ۳ و ۲ با تحویل ۵: دریافتی ${splitRows.join(' و ')}، انتظار ۳ و ۲`);
+  if (splitRows.join(',') !== '3,2') problems.push(`rows of 3 and 2 with a delivery of 5: received ${splitRows.join(' and ')}, expected 3 and 2`);
 
   // نوشتن هم‌زمان روی همان درخواست (مانند تحویل سفارشی دیگر): تحویل منتظر قفل می‌ماند و مقدار تازه را می‌خواند
   const racing = await ProcurementService.createRequisition({ title: 'درخواست آزمون هم‌زمانی', items: [{ itemId: item.id, requestedQty: 10, unitPriceEstimate: 1000 } as never] }, USER);
@@ -262,9 +262,9 @@ export async function checkRequisitionReceiptSumsLines(wh: string): Promise<stri
     other.release();
   }
   const outcome = await delivering;
-  if (outcome instanceof Error) problems.push(`تحویل هم‌زمان خطا داد: ${getErrorMessage(outcome)}`);
+  if (outcome instanceof Error) problems.push(`concurrent delivery failed: ${getErrorMessage(outcome)}`);
   const raced = (await requisitionRows(racing.id))[0]?.receivedQty;
-  if (raced !== 9) problems.push(`نوشتن هم‌زمان: دریافتی ${raced}، انتظار ۹ (۴ نوشته‌شده + ۵ تحویل)`);
+  if (raced !== 9) problems.push(`concurrent write: received ${raced}, expected 9 (4 written + 5 delivered)`);
   return problems;
 }
 
@@ -351,16 +351,16 @@ export async function checkProjectDeleteNeedsReleasedAllocations(wh: string): Pr
   const isDeleted = async () => Number((await pool.query<{ d: number }>('SELECT is_deleted AS d FROM production_projects WHERE id = $1', [projectId])).rows[0]?.d ?? -1);
 
   const refused = await refusalOf(() => ProjectService.deleteProject(projectId));
-  if (!refused?.includes('تخصیص مواد باز')) problems.push(`حذف پروژه با تخصیص باز رد نشد (${refused ?? 'پذیرفته شد'})`);
-  if (await isDeleted() !== 0) problems.push('پروژه با تخصیص باز حذف شد');
-  if (await projectNet('1402', projectId) !== wipBefore) problems.push('حذف ردشده گردش کالای در جریان ساخت پروژه را تغییر داد');
+  if (!refused?.includes('تخصیص مواد باز')) problems.push(`deleting a project with an open allocation was not refused (${refused ?? 'accepted'})`);
+  if (await isDeleted() !== 0) problems.push('project with an open allocation was deleted');
+  if (await projectNet('1402', projectId) !== wipBefore) problems.push('the refused delete changed the project work in progress balance');
 
   await ProjectBomAllocationService.releaseAllocation(allocated.allocations[0].id, { username: 'inv' });
   const afterRelease = await refusalOf(() => ProjectService.deleteProject(projectId));
-  if (afterRelease) problems.push(`حذف پروژه پس از آزادسازی تخصیص رد شد (${afterRelease})`);
-  if (await isDeleted() !== 1) problems.push('پروژه پس از آزادسازی تخصیص حذف نشد');
-  if (!fin(await projectNet('1402', projectId)).isZero()) problems.push(`گردش ۱۴۰۲ پروژه حذف‌شده ${await projectNet('1402', projectId)}، انتظار صفر`);
+  if (afterRelease) problems.push(`deleting the project after releasing the allocation was refused (${afterRelease})`);
+  if (await isDeleted() !== 1) problems.push('project was not deleted after releasing the allocation');
+  if (!fin(await projectNet('1402', projectId)).isZero()) problems.push(`1402 balance of the deleted project ${await projectNet('1402', projectId)}, expected zero`);
   const late = await refusalOf(() => ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId, quantity: 1, location: wh }], username: 'inv' }));
-  if (!late) problems.push('تخصیص مواد به پروژه حذف‌شده پذیرفته شد');
+  if (!late) problems.push('material allocation to a deleted project was accepted');
   return problems;
 }

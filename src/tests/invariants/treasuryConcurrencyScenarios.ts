@@ -55,29 +55,30 @@ export async function checkDeletedChequeFrozen(): Promise<string[]> {
   } catch (err) {
     refused = getErrorMessage(err);
   }
-  if (!refused.includes('یافت نشد')) problems.push(`وصول چک حذف‌شده رد نشد (${refused || 'پذیرفته شد'})`);
+  if (!refused.includes('یافت نشد')) problems.push(`clearing a deleted cheque was not refused (${refused || 'accepted'})`);
   let removedAgain = '';
   try {
     await remove(deleted);
   } catch (err) {
     removedAgain = getErrorMessage(err);
   }
-  if (!removedAgain.includes('یافت نشد')) problems.push(`حذف دوباره چک حذف‌شده رد نشد (${removedAgain || 'پذیرفته شد'})`);
-  if (await bankBalance(bank.id) !== '0') problems.push(`مانده بانک پس از وصول چک حذف‌شده ${await bankBalance(bank.id)} است، نه صفر`);
+  if (!removedAgain.includes('یافت نشد')) problems.push(`deleting a deleted cheque again was not refused (${removedAgain || 'accepted'})`);
+  if (await bankBalance(bank.id) !== '0') problems.push(`Bank balance after clearing a deleted cheque is ${await bankBalance(bank.id)}, not zero`);
 
   // حذف و وصول هم‌زمان: فقط یکی پذیرفته می‌شود و چک یا حذف‌شده و وصول‌نشده است یا وصول‌شده و حذف‌نشده
   for (let run = 0; run < 3; run++) {
     const raced = await receivedCheque(500);
     const before = Number(await bankBalance(bank.id));
     const outcomes = await raceBehindRowLock<unknown>('cheques', [raced], [() => remove(raced), () => clear(raced)]);
-    problems.push(...outcomeProblems(['حذف چک', 'وصول چک'], outcomes,
-      (label, message) => (label === 'وصول چک' && message.includes('یافت نشد')) || (label === 'حذف چک' && message.includes('وصول'))));
+    const expectedRefusal = (label: string, message: string) =>
+      (label === 'cheque clearing' && message.includes('یافت نشد')) || (label === 'cheque delete' && message.includes('وصول'));
+    problems.push(...outcomeProblems(['cheque delete', 'cheque clearing'], outcomes, expectedRefusal));
     const accepted = outcomes.filter(o => o.status === 'fulfilled').length;
     const row = await chequeRow(raced);
     const delta = Number(await bankBalance(bank.id)) - before;
-    if (accepted !== 1) problems.push(`دور ${run + 1}: از حذف و وصول هم‌زمان ${accepted} پذیرفته شد، نه یکی`);
-    if (row.isDeleted === 1 && (row.status === 'passed' || delta !== 0)) problems.push(`دور ${run + 1}: چک حذف‌شده وصول شد (وضعیت ${row.status}، تغییر مانده ${delta})`);
-    if (row.isDeleted === 0 && (row.status !== 'passed' || delta !== 500)) problems.push(`دور ${run + 1}: چک حذف‌نشده وصول نشد (وضعیت ${row.status}، تغییر مانده ${delta})`);
+    if (accepted !== 1) problems.push(`Round ${run + 1}: ${accepted} of the concurrent delete and clearing were accepted, not one`);
+    if (row.isDeleted === 1 && (row.status === 'passed' || delta !== 0)) problems.push(`Round ${run + 1}: a deleted cheque was cleared (status ${row.status}, balance change ${delta})`);
+    if (row.isDeleted === 0 && (row.status !== 'passed' || delta !== 500)) problems.push(`Round ${run + 1}: a cheque that was not deleted was not cleared (status ${row.status}, balance change ${delta})`);
   }
   return problems;
 }
@@ -117,10 +118,10 @@ export async function checkTransferVoidedTogether(): Promise<string[]> {
   };
   const expectRestored = async (label: string, fromId: number, toId: number, voucherId: number) => {
     const [from, to] = [await bankBalance(fromId), await bankBalance(toId)];
-    if (from !== '5000' || to !== '0') problems.push(`${label}: مانده مبدأ ${from} و مقصد ${to}، نه ۵۰۰۰ و صفر`);
+    if (from !== '5000' || to !== '0') problems.push(`${label}: source balance ${from} and destination ${to}, not 5000 and zero`);
     const active = (await transferRows(voucherId)).filter(r => r.status !== 'voided');
-    if (active.length > 0) problems.push(`${label}: ${active.length} طرف انتقال باطل نشد`);
-    if (!await voucherNeutralized(voucherId)) problems.push(`${label}: سند مشترک انتقال بی‌اثر نشد`);
+    if (active.length > 0) problems.push(`${label}: ${active.length} transfer sides were not voided`);
+    if (!await voucherNeutralized(voucherId)) problems.push(`${label}: the shared transfer voucher was not neutralized`);
   };
 
   // ۱) ابطال طرف پرداخت (سند پیش‌نویس) و سپس طرف دریافت
@@ -128,27 +129,28 @@ export async function checkTransferVoidedTogether(): Promise<string[]> {
   const b = await newBank(0);
   const first = await transfer(a.id, b.id);
   await voidSide(first.payId);
-  await expectRestored('ابطال طرف پرداخت', a.id, b.id, first.voucherId);
+  await expectRestored('payment side void', a.id, b.id, first.voucherId);
   let again = '';
   try {
     await voidSide(first.recId);
   } catch (err) {
     again = getErrorMessage(err);
   }
-  if (!again.includes('قبلاً ابطال')) problems.push(`ابطال طرف دیگرِ انتقال باطل‌شده رد نشد (${again || 'پذیرفته شد'})`);
+  if (!again.includes('قبلاً ابطال')) problems.push(`voiding the other side of a voided transfer was not refused (${again || 'accepted'})`);
 
   // ۲) سند تأییدشده، ابطال طرف دریافت
   const second = await transfer(a.id, b.id);
   await VoucherService.setVoucherStatus(second.voucherId, 'approved');
   await voidSide(second.recId);
-  await expectRestored('ابطال طرف دریافت (سند تأییدشده)', a.id, b.id, second.voucherId);
+  await expectRestored('receipt side void (approved voucher)', a.id, b.id, second.voucherId);
 
   // ۳) ابطال هم‌زمان هر دو طرف: یکی پذیرفته و دیگری «قبلاً ابطال»
   const third = await transfer(a.id, b.id);
   const outcomes = await raceBehindRowLock<unknown>('bank_accounts', [a.id, b.id], [() => voidSide(third.payId), () => voidSide(third.recId)]);
-  problems.push(...outcomeProblems(['ابطال طرف پرداخت', 'ابطال طرف دریافت'], outcomes, (_label, message) => message.includes('قبلاً ابطال')));
-  if (outcomes.filter(o => o.status === 'fulfilled').length !== 1) problems.push('از ابطال هم‌زمان دو طرف انتقال یکی پذیرفته نشد');
-  await expectRestored('ابطال هم‌زمان دو طرف', a.id, b.id, third.voucherId);
+  const alreadyVoided = (_label: string, message: string) => message.includes('قبلاً ابطال');
+  problems.push(...outcomeProblems(['payment side void', 'receipt side void'], outcomes, alreadyVoided));
+  if (outcomes.filter(o => o.status === 'fulfilled').length !== 1) problems.push('Of the concurrent voids of both transfer sides, not exactly one was accepted');
+  await expectRestored('concurrent void of both sides', a.id, b.id, third.voucherId);
 
   // ۴) انتقالی که پیش از v8.0.73 نیمه‌باطل شده (طرف پرداخت و سند مشترک باطل، بانک مقصد با مبلغ): طرف دریافت باطل‌شدنی است
   const legacy = await transfer(a.id, b.id);
@@ -162,8 +164,8 @@ export async function checkTransferVoidedTogether(): Promise<string[]> {
   } catch (err) {
     repaired = getErrorMessage(err);
   }
-  if (repaired) problems.push(`ابطال طرف باقی‌مانده انتقال نیمه‌باطل رد شد: ${repaired}`);
-  await expectRestored('ترمیم انتقال نیمه‌باطل', a.id, b.id, legacy.voucherId);
+  if (repaired) problems.push(`Voiding the remaining side of a half-voided transfer was refused: ${repaired}`);
+  await expectRestored('repair of a half-voided transfer', a.id, b.id, legacy.voucherId);
   return problems;
 }
 
@@ -191,19 +193,19 @@ export async function checkBankSyncFromTransactions(): Promise<string[]> {
   if (received.voucherId) await VoucherService.setVoucherStatus(received.voucherId, 'approved');
   await move(x.id, 'payment', 300);
   const report = await sync();
-  if (await bankBalance(x.id) !== '700') problems.push(`مانده پس از همگام‌سازی ${await bankBalance(x.id)} است، نه ۷۰۰ (پرداخت پیش‌نویس)`);
+  if (await bankBalance(x.id) !== '700') problems.push(`Balance after sync is ${await bankBalance(x.id)}, not 700 (draft payment)`);
   const reported = report.accounts.find(a => a.id === x.id);
-  if (Number(reported?.treasuryBalance) !== 700) problems.push(`گزارش همگام‌سازی مانده خزانه را ${reported?.treasuryBalance} نشان داد، نه ۷۰۰`);
+  if (Number(reported?.treasuryBalance) !== 700) problems.push(`The sync report showed the treasury balance as ${reported?.treasuryBalance}, not 700`);
 
   // ۲) پرداخت ۴۰۰ هم‌زمان با همگام‌سازی: پرداخت گم نمی‌شود
   const outcomes = await raceBehindRowLock<unknown>('bank_accounts', [x.id], [() => move(x.id, 'payment', 400), () => sync()]);
-  problems.push(...outcomeProblems(['پرداخت ۴۰۰', 'همگام‌سازی'], outcomes, () => false));
-  if (await bankBalance(x.id) !== '300') problems.push(`مانده پس از پرداخت هم‌زمان با همگام‌سازی ${await bankBalance(x.id)} است، نه ۳۰۰`);
+  problems.push(...outcomeProblems(['payment 400', 'sync'], outcomes, () => false));
+  if (await bankBalance(x.id) !== '300') problems.push(`Balance after a payment concurrent with the sync is ${await bankBalance(x.id)}, not 300`);
 
   // ۳) مانده اول دوره ۶۰۰۰ با سند افتتاحیه پیش‌نویس و دریافت ۱۰۰۰: مانده ۷۰۰۰ می‌ماند
   const w = await newBank(6000);
   await move(w.id, 'receipt', 1000);
   await sync();
-  if (await bankBalance(w.id) !== '7000') problems.push(`مانده حساب با افتتاحیه پیش‌نویس پس از همگام‌سازی ${await bankBalance(w.id)} است، نه ۷۰۰۰`);
+  if (await bankBalance(w.id) !== '7000') problems.push(`Balance of the account with a draft opening voucher after sync is ${await bankBalance(w.id)}, not 7000`);
   return problems;
 }

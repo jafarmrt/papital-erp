@@ -57,10 +57,10 @@ export async function checkClosingCoversLeapLastDay(): Promise<string[]> {
 
   const preview = await FiscalYearService.getFiscalYearClosingPreview({ year: LEAP_CLOSING_YEAR });
   if (preview.closingDate !== LEAP_LAST_DAY || preview.openingDateNewYear !== NEXT_FIRST_DAY) {
-    problems.push(`تاریخ‌های پیش‌نمایش ${preview.closingDate} و ${preview.openingDateNewYear} است؛ انتظار ${LEAP_LAST_DAY} و ${NEXT_FIRST_DAY}`);
+    problems.push(`preview dates are ${preview.closingDate} and ${preview.openingDateNewYear}; expected ${LEAP_LAST_DAY} and ${NEXT_FIRST_DAY}`);
   }
   if (!fin(preview.netProfit).equals(1500000)) {
-    problems.push(`سود پیش‌نمایش ${preview.netProfit} است؛ فروش ۳۰ اسفند (۵۰۰٬۰۰۰) باید در سود ۱٬۵۰۰٬۰۰۰ باشد`);
+    problems.push(`preview profit is ${preview.netProfit}; the 30 Esfand sale (500,000) must be in the profit of 1,500,000`);
   }
 
   let refused = '';
@@ -69,21 +69,21 @@ export async function checkClosingCoversLeapLastDay(): Promise<string[]> {
   } catch (err) {
     refused = getErrorMessage(err);
   }
-  if (!refused.includes('آخرین روز')) problems.push('تاریخ اختتامیه ۲۹ اسفند در سال کبیسه پذیرفته شد');
+  if (!refused.includes('آخرین روز')) problems.push('closing date 29 Esfand was accepted in a leap year');
 
   try {
     const closed = await FiscalYearService.executeFiscalYearClosing({ year: LEAP_CLOSING_YEAR, createOpeningVoucher: true, username: 'inv' });
     const byRef = new Map(closed.closingVouchers.map(v => [v.referenceNumber, v.date]));
     if (byRef.get(`CLOSE-TEMP-${LEAP_CLOSING_YEAR}`) !== LEAP_LAST_DAY || byRef.get(`CLOSING-${LEAP_CLOSING_YEAR}`) !== LEAP_LAST_DAY) {
-      problems.push(`اسناد بستن به تاریخ ${byRef.get(`CLOSE-TEMP-${LEAP_CLOSING_YEAR}`)} / ${byRef.get(`CLOSING-${LEAP_CLOSING_YEAR}`)} صادر شدند؛ انتظار ${LEAP_LAST_DAY}`);
+      problems.push(`closing vouchers issued dated ${byRef.get(`CLOSE-TEMP-${LEAP_CLOSING_YEAR}`)} / ${byRef.get(`CLOSING-${LEAP_CLOSING_YEAR}`)}; expected ${LEAP_LAST_DAY}`);
     }
     if (byRef.get(`OPENING-${LEAP_CLOSING_YEAR + 1}`) !== NEXT_FIRST_DAY) {
-      problems.push(`سند افتتاحیه به تاریخ ${byRef.get(`OPENING-${LEAP_CLOSING_YEAR + 1}`)} صادر شد؛ انتظار ${NEXT_FIRST_DAY}`);
+      problems.push(`opening voucher issued dated ${byRef.get(`OPENING-${LEAP_CLOSING_YEAR + 1}`)}; expected ${NEXT_FIRST_DAY}`);
     }
     const left = await revenueOfYear(revenue.id);
-    if (!fin(left).isZero()) problems.push(`پس از بستن سال ${LEAP_CLOSING_YEAR} مانده درآمد ${left} باقی ماند`);
+    if (!fin(left).isZero()) problems.push(`after closing year ${LEAP_CLOSING_YEAR} a revenue balance of ${left} remained`);
   } catch (err) {
-    problems.push(`بستن سال ${LEAP_CLOSING_YEAR} رد شد: ${getErrorMessage(err)}`);
+    problems.push(`closing year ${LEAP_CLOSING_YEAR} was refused: ${getErrorMessage(err)}`);
   }
   return problems;
 }
@@ -118,13 +118,13 @@ export async function checkDocumentDatesStrict(wh: string): Promise<string[]> {
     } catch (err) {
       message = getErrorMessage(err);
     }
-    if (!message.includes('معتبر نیست')) problems.push(`تاریخ «${bad}» رد نشد: ${message.slice(0, 120)}`);
+    if (!message.includes('معتبر نیست')) problems.push(`date "${bad}" was not refused: ${message.slice(0, 120)}`);
   }
 
   const nowruzId = await draft('1397/01/01 00:15');
   const nowruz = await documentRow(nowruzId);
   if (nowruz?.date !== '2018-03-21 00:15:00' || nowruz.refFiscalYear !== 1397) {
-    problems.push(`سند ۰۰:۱۵ نوروز ۱۳۹۷ با تاریخ ${nowruz?.date} و سال شماره ${nowruz?.refFiscalYear} ثبت شد`);
+    problems.push(`the 00:15 Nowruz 1397 document was recorded with date ${nowruz?.date} and numbering year ${nowruz?.refFiscalYear}`);
   }
 
   const movedId = await draft('1396/12/29');
@@ -132,13 +132,13 @@ export async function checkDocumentDatesStrict(wh: string): Promise<string[]> {
   await DocumentService.updateDocument(movedId, { date: '1397/01/05', refNumber: before?.refNumber });
   const after = await documentRow(movedId);
   if (after?.refFiscalYear !== 1397 || after.date !== '2018-03-25 00:00:00') {
-    problems.push(`پیش‌نویس منتقل‌شده به ۵ فروردین ۱۳۹۷ سال شماره ${after?.refFiscalYear} و تاریخ ${after?.date} دارد`);
+    problems.push(`the draft moved to 5 Farvardin 1397 has numbering year ${after?.refFiscalYear} and date ${after?.date}`);
   }
   const dup = await pool.query<{ n: string }>(
     `SELECT COUNT(*)::text AS n FROM documents WHERE type = 'invoice' AND ref_fiscal_year = 1397 AND ref_number = $1 AND is_deleted = 0`,
     [after?.refNumber ?? '']);
   if (Number(dup.rows[0]?.n ?? 0) !== 1 || after?.refNumber === nowruz?.refNumber) {
-    problems.push(`شماره پیش‌نویس منتقل‌شده (${after?.refNumber}) در سری ۱۳۹۷ یکتا نیست`);
+    problems.push(`number of the moved draft (${after?.refNumber}) is not unique in the 1397 series`);
   }
   return problems;
 }
@@ -174,14 +174,14 @@ export async function checkProformaTakesInvoiceNumber(wh: string): Promise<strin
   const res = await pool.query<{ type: string; ref_number: string; ref_fiscal_year: number; notes: string | null }>(
     'SELECT type, ref_number, ref_fiscal_year, notes FROM documents WHERE id = $1', [proformaId]);
   const after = res.rows[0];
-  if (after?.type !== 'invoice' || after.ref_fiscal_year !== invoice?.refFiscalYear) problems.push(`فاکتور حاصل نوع ${after?.type} و سال ${after?.ref_fiscal_year} دارد؛ انتظار سال ${invoice?.refFiscalYear}`);
+  if (after?.type !== 'invoice' || after.ref_fiscal_year !== invoice?.refFiscalYear) problems.push(`resulting invoice has type ${after?.type} and year ${after?.ref_fiscal_year}; expected year ${invoice?.refFiscalYear}`);
   if (after?.ref_number !== String(Number(invoice?.refNumber) + 1)) {
-    problems.push(`فاکتور حاصل شماره ${after?.ref_number} گرفت؛ انتظار شماره بعدی سری فاکتور (${Number(invoice?.refNumber) + 1})`);
+    problems.push(`resulting invoice got number ${after?.ref_number}; expected the next number of the invoice series (${Number(invoice?.refNumber) + 1})`);
   }
-  if (!String(after?.notes ?? '').includes(`پیش‌فاکتور شماره ${proforma?.refNumber}`)) problems.push('شماره پیش‌فاکتور در یادداشت فاکتور نیامد');
+  if (!String(after?.notes ?? '').includes(`پیش‌فاکتور شماره ${proforma?.refNumber}`)) problems.push('proforma number did not appear in the invoice notes');
   const kardex = await pool.query<{ document_ref: string }>(
     `SELECT DISTINCT document_ref FROM transactions WHERE document_id = $1 AND is_deleted = 0`, [proformaId]);
-  if (kardex.rows.some(r => r.document_ref !== after?.ref_number)) problems.push(`ردیف کاردکس شماره ${kardex.rows.map(r => r.document_ref).join('،')} دارد`);
+  if (kardex.rows.some(r => r.document_ref !== after?.ref_number)) problems.push(`Kardex rows carry number ${kardex.rows.map(r => r.document_ref).join(', ')}`);
   return problems;
 }
 
@@ -213,14 +213,14 @@ export async function checkProformaInvoiceTakesFinalizeDate(wh: string): Promise
        FROM documents d WHERE d.id = $1`, [proformaId]);
   const row = res.rows[0];
   const invoiceDay = invoice?.date.slice(0, 10) ?? '';
-  if (!today.has(invoiceDay)) problems.push(`تاریخ فاکتور ${invoice?.date}، انتظار امروز ${after}`);
+  if (!today.has(invoiceDay)) problems.push(`invoice date ${invoice?.date}, expected today ${after}`);
   const expectedYear = Number(isoToJalaliDate(invoiceDay).slice(0, 4));
-  if (invoice?.refFiscalYear !== expectedYear) problems.push(`سال شماره‌گذاری فاکتور ${invoice?.refFiscalYear}، انتظار ${expectedYear}`);
-  if (row?.k !== invoiceDay) problems.push(`تاریخ ردیف کاردکس ${row?.k}، انتظار ${invoiceDay}`);
-  if (row?.v !== invoiceDay) problems.push(`تاریخ سند حسابداری فاکتور ${row?.v ?? 'ندارد'}، انتظار ${invoiceDay}`);
+  if (invoice?.refFiscalYear !== expectedYear) problems.push(`invoice numbering year ${invoice?.refFiscalYear}, expected ${expectedYear}`);
+  if (row?.k !== invoiceDay) problems.push(`Kardex row date ${row?.k}, expected ${invoiceDay}`);
+  if (row?.v !== invoiceDay) problems.push(`invoice journal voucher date ${row?.v ?? 'missing'}, expected ${invoiceDay}`);
   const notes = String(row?.notes ?? '');
   if (!notes.includes(`پیش‌فاکتور شماره ${proforma?.refNumber}`) || !notes.includes('1398/03/12')) {
-    problems.push(`یادداشت فاکتور شماره و تاریخ پیش‌فاکتور (۱۳۹۸/۰۳/۱۲) را ندارد: «${notes.slice(0, 120)}»`);
+    problems.push(`invoice notes lack the proforma number and date (1398/03/12): "${notes.slice(0, 120)}"`);
   }
   return problems;
 }
@@ -234,7 +234,7 @@ export async function checkSessionClockUtc(): Promise<string[]> {
   const problems: string[] = [];
   const own = await pool.query<{ setting: string; source: string }>(`SELECT setting, source FROM pg_settings WHERE name = 'TimeZone'`);
   if (own.rows[0]?.setting !== 'UTC' || own.rows[0]?.source !== 'client') {
-    problems.push(`منطقه زمانی جلسه استخر ${own.rows[0]?.setting} (منبع ${own.rows[0]?.source}) است، نه UTC از پارامترهای راه‌اندازی`);
+    problems.push(`pool session time zone is ${own.rows[0]?.setting} (source ${own.rows[0]?.source}), not UTC from the startup parameters`);
   }
   const tehranDefault = new pg.Client({ ...pool.options, options: `-c TimeZone=Asia/Tehran ${pool.options.options ?? ''}` });
   await tehranDefault.connect();
@@ -243,7 +243,7 @@ export async function checkSessionClockUtc(): Promise<string[]> {
     const codeNow = new Date().toISOString().slice(0, 19);
     const gapMinutes = Math.abs(Date.parse(`${res.rows[0]?.db_now}Z`) - Date.parse(`${codeNow}Z`)) / 60000;
     if (!(gapMinutes < 2)) {
-      problems.push(`روی پایگاه‌داده‌ای به وقت تهران، defaultNow() مقدار ${res.rows[0]?.db_now} و toISOString مقدار ${codeNow} نوشت`);
+      problems.push(`on a database in Tehran time, defaultNow() wrote ${res.rows[0]?.db_now} and toISOString wrote ${codeNow}`);
     }
   } finally {
     await tehranDefault.end();
@@ -265,9 +265,9 @@ export async function checkActivityLogTehranDay(): Promise<string[]> {
   const { data } = await ActivityLogQueryService.listLogs({ search: marker, startDate: '2026-10-05', endDate: '2026-10-05' }, 10, 0);
   const found = data.map(r => `${r.description} @ ${r.timestamp}`);
   if (data.length !== 1 || !String(data[0]?.description).includes('همان روز')) {
-    problems.push(`فیلتر روز ۱۳ مهر ۱۴۰۵ این فعالیت‌ها را آورد: ${found.join('؛ ') || 'هیچ'}`);
+    problems.push(`the day filter for 13 Mehr 1405 (2026-10-05) returned these activities: ${found.join('; ') || 'none'}`);
   }
-  if (data[0] && data[0].timestamp !== '2026-10-04T20:45:00Z') problems.push(`زمان ثبت بی‌نشانه UTC برگشت: ${data[0].timestamp}`);
+  if (data[0] && data[0].timestamp !== '2026-10-04T20:45:00Z') problems.push(`registration time came back without the UTC marker: ${data[0].timestamp}`);
   return problems;
 }
 
@@ -314,16 +314,16 @@ export async function checkMovementTrendJalaliMonths(wh: string): Promise<string
 
 /** آزمون‌های سخت‌گیرانه حوزه I برای سوئیت business_invariants: [شناسه، نام، بررسی، پیام قبولی]؛ جدیدترین اول */
 export const DATE_BOUNDARY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
-  ['inv_td_316_movement_trend_jalali_months', 'v8.0.54: نمودار گردش کالا به ماه شمسی است؛ ورود آخرین روز ماه قبل و نخستین روز ماه جاری در دو ماه جدا می‌آیند (TD-316)',
-    checkMovementTrendJalaliMonths, 'ورود ۳ در ماه شمسی قبل و ۵ در ماه شمسی جاری'],
-  ['inv_td_315_activity_log_tehran_day', 'v8.0.53: گزارش فعالیت‌ها زمان ثبت UTC را با Z برمی‌گرداند و فیلتر روز، روز منطقه زمانی توافقی (تهران) است (TD-315)',
-    () => checkActivityLogTehranDay(), 'فعالیت ۰۰:۱۵ تهران در همان روز آمد، ۰۰:۳۰ روز بعد نیامد؛ زمان با Z'],
-  ['inv_td_314_session_clock_utc', 'v8.0.52: جلسه پایگاه‌داده با پارامترهای راه‌اندازی استخر UTC است، حتی وقتی پیش‌فرض پایگاه‌داده تهران باشد؛ defaultNow() هم‌وقتِ toISOString کد است (TD-314)',
-    () => checkSessionClockUtc(), 'استخر TimeZone=UTC از پارامترهای راه‌اندازی؛ جلسه با پیش‌فرض تهران now() را به UTC نوشت'],
-  ['inv_td_317_proforma_takes_invoice_number', 'v8.0.51: پیش‌فاکتور نهایی‌شده شماره بعدی سری فاکتور سال خودش را می‌گیرد، حتی وقتی شماره‌اش در فاکتورها هست؛ شماره پیش‌فاکتور در یادداشت می‌ماند (TD-317، گزینه الف)',
-    checkProformaTakesInvoiceNumber, 'پیش‌فاکتور هم‌شماره فاکتور نهایی شد و شماره بعدی سری فاکتور سال جاری را گرفت؛ کاردکس و یادداشت درست'],
-  ['inv_td_313_document_dates_strict', 'v8.0.50: تاریخ ناموجود یا غیرتاریخ سند رد می‌شود، سال شماره‌گذاری از تاریخ ذخیره‌شده است و پیش‌نویسی که به سال دیگر برود شماره همان سال را می‌گیرد (TD-313، گزینه الف)',
-    checkDocumentDatesStrict, '۳۰ اسفند ۱۳۹۶، ۳۰ فوریه و متن غیرتاریخ رد شدند؛ سند ۰۰:۱۵ نوروز در ۱۳۹۷؛ پیش‌نویس منتقل‌شده شماره یکتای ۱۳۹۷ گرفت'],
-  ['inv_td_310_closing_covers_leap_last_day', 'v8.0.47: بستن سال مالی کبیسه سند ۳۰ اسفند را هم می‌بندد؛ اسناد اختتامیه به آخرین روز سال و افتتاحیه به ۱ فروردین صادر می‌شوند و تاریخ دیگر رد می‌شود (TD-310، گزینه الف)',
-    () => checkClosingCoversLeapLastDay(), 'سود ۱٬۵۰۰٬۰۰۰ با فروش ۳۰ اسفند؛ اسناد به 2009-03-20 و 2009-03-21؛ ۲۹ اسفند رد شد؛ مانده درآمد سال صفر'],
+  ['inv_td_316_movement_trend_jalali_months', 'v8.0.54: the item movement chart is by Jalali month; receipts on the last day of the previous month and the first day of the current month fall in two separate months (TD-316)',
+    checkMovementTrendJalaliMonths, 'receipt of 3 in the previous Jalali month and 5 in the current Jalali month'],
+  ['inv_td_315_activity_log_tehran_day', 'v8.0.53: the activity log returns the UTC registration time with Z and the day filter is the day of the agreed time zone (Tehran) (TD-315)',
+    () => checkActivityLogTehranDay(), 'Tehran 00:15 activity appeared on the same day, 00:30 of the next day did not; time with Z'],
+  ['inv_td_314_session_clock_utc', 'v8.0.52: the database session is UTC through the pool startup parameters, even when the database default is Tehran; defaultNow() matches the code toISOString (TD-314)',
+    () => checkSessionClockUtc(), 'pool TimeZone=UTC from the startup parameters; a session with the Tehran default wrote now() in UTC'],
+  ['inv_td_317_proforma_takes_invoice_number', 'v8.0.51: a finalized proforma takes the next number of the invoice series of its own year, even when its number exists among invoices; the proforma number stays in the notes (TD-317, option A)',
+    checkProformaTakesInvoiceNumber, 'proforma with the same number as an invoice was finalized and got the next number of the current year invoice series; Kardex and notes correct'],
+  ['inv_td_313_document_dates_strict', 'v8.0.50: a non-existent date or non-date on a document is refused, the numbering year comes from the stored date, and a draft moved to another year takes a number of that year (TD-313, option A)',
+    checkDocumentDatesStrict, '30 Esfand 1396, 30 February and non-date text refused; the 00:15 Nowruz document in 1397; the moved draft got a unique 1397 number'],
+  ['inv_td_310_closing_covers_leap_last_day', 'v8.0.47: closing a leap fiscal year also closes the 30 Esfand document; closing vouchers are issued on the last day of the year and the opening voucher on 1 Farvardin, and another date is refused (TD-310, option A)',
+    () => checkClosingCoversLeapLastDay(), 'profit 1,500,000 with the 30 Esfand sale; vouchers dated 2009-03-20 and 2009-03-21; 29 Esfand refused; year revenue balance zero'],
 ];

@@ -54,7 +54,7 @@ describe('Personnel UI wording (TD-440)', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('has no «اکانت» or «کلیپ‌بورد» in personnel UI text', () => {
+  it('has no transliterated "account" or "clipboard" in personnel UI text', () => {
     const offenders = files.flatMap(f => persianTexts(f).filter(t => TRANSLITERATION.test(t.text)).map(t => `${relative(ROOT, f)}:${t.line}: ${t.text}`));
     expect(offenders).toEqual([]);
   });

@@ -255,24 +255,24 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
       const textMessage = JSON.stringify(text.body);
       if (text.status < 400 || text.status >= 500 || !textMessage.includes('مبلغ تراکنش') || /Invalid input|NaN/.test(textMessage)) problems.push(`receipt amount as words returned ${text.status} ${textMessage.slice(0, 200)}, expected a Persian message naming the amount`);
       const zero = await admin.post('/api/accounting/treasury', { ...receipt, amount: '۰' });
-      if (zero.status < 400 || zero.status >= 500) problems.push(`receipt amount ۰ returned ${zero.status}, expected a 4xx`);
+      if (zero.status < 400 || zero.status >= 500) problems.push(`receipt amount 0 in Persian digits returned ${zero.status}, expected a 4xx`);
 
       const transfer = await admin.post('/api/accounting/treasury/transfer', { amount: '۱٬۰۰۰', fromBankAccountId: bank.id, toBankAccountId: other.id });
-      if (transfer.status !== 201 && transfer.status !== 200) problems.push(`transfer amount ۱٬۰۰۰ returned ${transfer.status}: ${JSON.stringify(transfer.body).slice(0, 200)}`);
+      if (transfer.status !== 201 && transfer.status !== 200) problems.push(`transfer amount 1,000 in Persian digits returned ${transfer.status}: ${JSON.stringify(transfer.body).slice(0, 200)}`);
 
       const cheque = await admin.post('/api/accounting/cheques', {
         type: 'received', chequeNumber: `N${tagOf()}`, bankName: 'ملت', amount: '۱٬۰۰۰٬۰۰۰', issueDate: '1405/07/01', dueDate: '1405/09/01',
         partyType: 'other', partyName: 'misc drawer', contraAccountId: await accountId('4101'),
       });
-      if (cheque.status !== 201 || Number(cheque.body?.amount) !== 1_000_000) problems.push(`cheque amount ۱٬۰۰۰٬۰۰۰ returned ${cheque.status} ${cheque.body?.amount}, expected 201 1000000`);
+      if (cheque.status !== 201 || Number(cheque.body?.amount) !== 1_000_000) problems.push(`cheque amount 1,000,000 in Persian digits returned ${cheque.status} ${cheque.body?.amount}, expected 201 1000000`);
 
       const opened = await admin.post('/api/accounting/bank-accounts', { title: `Decimal opening ${tagOf()}`, type: 'bank', initialBalance: '۵۰۰۰', accountId: bank.ledgerId });
-      if (opened.status !== 201 || Number(opened.body?.initialBalance) !== 5000) problems.push(`bank initial balance ۵۰۰۰ returned ${opened.status} ${opened.body?.initialBalance}, expected 201 5000`);
+      if (opened.status !== 201 || Number(opened.body?.initialBalance) !== 5000) problems.push(`bank initial balance 5000 in Persian digits returned ${opened.status} ${opened.body?.initialBalance}, expected 201 5000`);
 
       const lower = await admin.post('/api/accounting/treasury', { ...receipt, amount: 1000, currency: 'usd', exchangeRate: '۱٬۰۰۰٬۰۰۰' });
       if (lower.status !== 422 || !JSON.stringify(lower.body).includes('(USD)')) problems.push(`receipt currency usd on a rial bank returned ${lower.status} ${JSON.stringify(lower.body).slice(0, 160)}, expected the currency mismatch naming USD (before: «usd»)`);
       const odd = await admin.post('/api/accounting/treasury', { ...receipt, amount: 1000, currency: 'XYZ' });
-      if (odd.status < 400 || odd.status >= 500 || !JSON.stringify(odd.body).includes('ارز پشتیبانی نمی‌شود')) problems.push(`receipt currency XYZ returned ${odd.status} ${JSON.stringify(odd.body).slice(0, 160)}, expected «ارز پشتیبانی نمی‌شود»`);
+      if (odd.status < 400 || odd.status >= 500 || !JSON.stringify(odd.body).includes('ارز پشتیبانی نمی‌شود')) problems.push(`receipt currency XYZ returned ${odd.status} ${JSON.stringify(odd.body).slice(0, 160)}, expected the "currency is not supported" message`);
       assertNoProblems(problems);
       return 'receipt ۲۵۰۰۰۰۰ / 2,500,000: 201 2500000; ۱٬۲۵۰٫۵: 1250.5; words: Persian message; transfer ۱٬۰۰۰: 201; cheque ۱٬۰۰۰٬۰۰۰: 201 1000000; opening ۵۰۰۰: 5000; usd: mismatch names USD; XYZ: «ارز پشتیبانی نمی‌شود»';
     });

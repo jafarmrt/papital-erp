@@ -1,4 +1,5 @@
 import type { SimulationFinding } from './businessYearSimulator.js';
+import { I13_NEGATIVE_HISTORY, I13_VOIDED_INCOMING } from '../invariants/kardexRebuildInvariant.js';
 
 /**
  * v8.0.1 — خط پایه یافته‌های شناخته‌شده ارزیابی صحت منطق کاری (docs/audit/BUSINESS_LOGIC_AUDIT_V8.md).
@@ -75,8 +76,8 @@ export function classifyFinding(f: SimulationFinding): string | null {
     case 'I6_void_trial_balance':
       return 'I6:void-draft-reversal-approved';
     case 'I13_kardex_rebuild_wac':
-      if (f.message.includes('ابطال')) return 'I13:void-in-leaves-negative-history';
-      return f.message.includes('مانده منفی') ? 'I13:backdated-out-before-stock' : 'I13:rebuild-wac-diverges';
+      if (f.message.includes(I13_VOIDED_INCOMING)) return 'I13:void-in-leaves-negative-history';
+      return f.message.includes(I13_NEGATIVE_HISTORY) ? 'I13:backdated-out-before-stock' : 'I13:rebuild-wac-diverges';
     case 'I14_return_within_sold':
       return 'I14:over-return';
     default:

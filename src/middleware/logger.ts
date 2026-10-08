@@ -78,6 +78,22 @@ const sanitizeFormat = winston.format((info) => {
   return sanitizeObject(info);
 });
 
+/** Persian or Arabic letters: text a terminal shows badly (owner rule t9) */
+const PERSIAN_TEXT = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+/** A run of Persian text with the spaces, digits and punctuation inside it; it stops at the next Latin letter */
+const PERSIAN_RUN = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF«»][\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF«»\u200c\s\d.,:;!?()\-]*/g;
+export const PERSIAN_TERMINAL_MARKER = '[Persian text in the log file]';
+
+/**
+ * v9.0.450 (TD-625, B01-45, owner rule t9): a log line printed on the terminal carries no Persian. A message built from
+ * a Persian value (a business error, a skipped item's reason) prints each Persian run as a short English marker; the
+ * JSON log files keep the full message, since their format serializes the entry itself, not this line.
+ */
+export function terminalLine(line: string): string {
+  if (!PERSIAN_TEXT.test(line)) return line;
+  return line.replace(PERSIAN_RUN, run => PERSIAN_TERMINAL_MARKER + (/\s$/.test(run) ? ' ' : ''));
+}
+
 // Custom log format string builder
 const logFormat = printf(({ level, message, timestamp, stack, requestId, correlationId, userId, entityId, workflowId, transactionId }) => {
   const cleanMessage = typeof message === 'object' ? JSON.stringify(message) : message;
@@ -90,7 +106,7 @@ const logFormat = printf(({ level, message, timestamp, stack, requestId, correla
   if (transactionId) ctxParts.push(`tx:${transactionId}`);
 
   const ctxPrefix = ctxParts.length > 0 ? ` [${ctxParts.join(' | ')}]` : '';
-  return `${timestamp} ${level}${ctxPrefix}: ${stack || cleanMessage}`;
+  return terminalLine(`${timestamp} ${level}${ctxPrefix}: ${stack || cleanMessage}`);
 });
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -202,6 +218,36 @@ export const morganMiddleware = morgan(
 
 import { normalizeError } from '../errors/customErrors.js';
 
+/**
+ * v9.0.450 (TD-625, B01-45, owner rule t9): the terminal line of an error is English. It names the status, the error
+ * code and the route, plus the message only when it has no Persian; the message for the user goes into `userMessage`,
+ * which the console format never prints and the JSON log files keep (searchable by `traceId`). A 5xx keeps its stack on
+ * the terminal with the message line replaced the same way; the full stack stays in `errorStack` for the log files.
+ */
+export function errorLogEntry(
+  normalized: { message: string; statusCode: number; code?: string; stack?: string },
+  req: { method?: string; url?: string; originalUrl?: string; user?: { id?: number } },
+  traceId?: string,
+): Record<string, unknown> {
+  const code = normalized.code || 'UNKNOWN_ERROR';
+  const route = String(req.originalUrl ?? req.url ?? '').split('?')[0];
+  const englishMessage = normalized.message && !PERSIAN_TEXT.test(normalized.message) ? `: ${normalized.message}` : '';
+  const name = /^([A-Za-z_$][\w$]*)/.exec(normalized.stack ?? '')?.[1] ?? 'Error';
+  const frames = (normalized.stack ?? '').split('\n').filter(l => /^\s+at /.test(l));
+  return {
+    message: [`HTTP ${normalized.statusCode} ${code}`, req.method, route].filter(Boolean).join(' ') + englishMessage,
+    traceId,
+    userId: req.user?.id,
+    method: req.method,
+    url: req.url,
+    statusCode: normalized.statusCode,
+    code: normalized.code,
+    userMessage: normalized.message,
+    ...(normalized.statusCode >= 500 && frames.length > 0 ? { stack: [`${name} (${code})${englishMessage}`, ...frames].join('\n') } : {}),
+    errorStack: normalized.stack,
+  };
+}
+
 // Global Error Handler Middleware
 export const errorHandler = (err: any, req: any, res: any, next: any) => {
   // 1. If headers already sent, delegate to default express error handler
@@ -217,16 +263,7 @@ export const errorHandler = (err: any, req: any, res: any, next: any) => {
   const traceId = req.requestId || getRequestContext()?.requestId || acceptedTraceId(req.headers?.['x-request-id']);
 
   // 4. Log error with trace context
-  logger.error({
-    message: normalized.message,
-    traceId,
-    userId: req.user?.id,
-    method: req.method,
-    url: req.url,
-    stack: normalized.stack,
-    statusCode: normalized.statusCode,
-    code: normalized.code,
-  });
+  logger.error(errorLogEntry(normalized, req, traceId));
 
   // 5. Response payload with traceId and sanitized error message
   const isProduction = process.env.NODE_ENV === 'production';

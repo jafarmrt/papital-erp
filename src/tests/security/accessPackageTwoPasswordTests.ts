@@ -152,7 +152,7 @@ export async function runAccessPackageTwoPasswordTests(shouldRun: ShouldRun): Pr
     await runCase(results, {
       id: 'sec_login_lockout_answer_td_539',
       name: 'v9.0.220: every login lock answers locked and its minutes, with a Persian message (TD-539)',
-      details: 'B02-24: the username lock said «1 دقیقه» in Latin digits and the login limiter answered only a text with a fixed «۱۵ دقیقه», so the login page read the minutes out of the text; now both 429 answers carry locked: true and remainingMinutes, and their messages name this user name or this device in Persian digits',
+      details: 'B02-24: the username lock said "1 minute" in Latin digits and the login limiter answered only a text with a fixed "15 minutes", so the login page read the minutes out of the text; now both 429 answers carry locked: true and remainingMinutes, and their messages name this user name or this device in Persian digits',
     }, async (h, wrong) => {
       const { resetLoginRateLimiter } = await import('../../app.js');
       const { resetPhantomLockouts } = await import('../../services/auth/loginSecurity.service.js');

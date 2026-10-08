@@ -94,48 +94,48 @@ export async function checkPayrollStatusKeepsLifecycle(): Promise<string[]> {
   const w1 = await newWorker('کارگر آزمون وضعیت');
   await addLog(w1, task, '2026-04-05', 1000000);
   const first = await generate(w1);
-  if (!first.payroll) return [`صدور فیش آزمون ناموفق بود (${first.error})`];
+  if (!first.payroll) return [`issuing the test payslip failed (${first.error})`];
   const refusal = await refusalOf(() => PieceworkPayrollService.updatePayrollStatus(first.payroll!.id, { status: 'pending', username: 'inv' }));
-  if (!refusal?.includes('مجاز نیست')) problems.push(`وضعیت «pending» برای فیش رد نشد (${refusal ?? 'پذیرفته شد'})`);
+  if (!refusal?.includes('مجاز نیست')) problems.push(`status "pending" for a payslip was not refused (${refusal ?? 'accepted'})`);
   const toggle = await refusalOf(async () => {
     await PieceworkPayrollService.updatePayrollStatus(first.payroll!.id, { status: 'draft', username: 'inv' });
     await PieceworkPayrollService.updatePayrollStatus(first.payroll!.id, { status: 'approved', username: 'inv' });
   });
-  if (toggle) problems.push(`گذار پیش‌نویس ← تأییدشده رد شد (${toggle})`);
+  if (toggle) problems.push(`transition draft -> approved was refused (${toggle})`);
 
   // ب) کارکرد «pending» پیوندخورده به فیش زنده (داده نسخه‌های پیشین) در فیش تازه شمرده نمی‌شود
   await orm.update(pieceworkLogs).set({ status: 'pending' }).where(eq(pieceworkLogs.payrollId, first.payroll.id));
   const second = await generate(w1);
-  if (second.payroll) problems.push(`کارکرد فیش زنده دوباره در فیش ${second.payroll.payrollNumber} شمرده شد (${second.payroll.totalPieceworkAmount})`);
+  if (second.payroll) problems.push(`work log of a live payslip was counted again in payslip ${second.payroll.payrollNumber} (${second.payroll.totalPieceworkAmount})`);
   const owed = await personNet('3201', w1);
-  if (!fin(owed).equals(-1000000)) problems.push(`حقوق پرداختنی کارگر ${owed}، انتظار ۱٬۰۰۰٬۰۰۰− (یک بار)`);
+  if (!fin(owed).equals(-1000000)) problems.push(`worker wages payable ${owed}, expected -1,000,000 (once)`);
 
   // ج) کارکرد فیش حذف‌شده (پیوند باقی‌مانده از نسخه‌های پیشین) آزاد است و فقط یک بار دوباره پیوند می‌خورد
   const w2 = await newWorker('کارگر آزمون فیش حذف‌شده');
   await addLog(w2, task, '2026-04-06', 600000);
   const orphaned = await generate(w2);
-  if (!orphaned.payroll) return [...problems, `صدور فیش آزمون ناموفق بود (${orphaned.error})`];
+  if (!orphaned.payroll) return [...problems, `issuing the test payslip failed (${orphaned.error})`];
   await orm.update(pieceworkPayrolls).set({ isDeleted: 1 }).where(eq(pieceworkPayrolls.id, orphaned.payroll.id));
   const reissued = await generate(w2);
   if (!reissued.payroll || !fin(reissued.payroll.totalPieceworkAmount).equals(600000)) {
-    problems.push(`کارکرد فیش حذف‌شده در فیش تازه شمرده نشد (${reissued.payroll?.totalPieceworkAmount ?? reissued.error})`);
+    problems.push(`work log of a deleted payslip was not counted in the new payslip (${reissued.payroll?.totalPieceworkAmount ?? reissued.error})`);
   } else {
     const third = await generate(w2);
-    if (third.payroll) problems.push(`کارکرد دوباره‌پیوندخورده در فیش سوم هم شمرده شد (${third.payroll.totalPieceworkAmount})`);
+    if (third.payroll) problems.push(`relinked work log was counted in a third payslip too (${third.payroll.totalPieceworkAmount})`);
   }
 
   // د) فیش پرداخت‌شده وضعیت دستی نمی‌گیرد و حذفش رد می‌شود
   const w3 = await newWorker('کارگر آزمون فیش پرداخت‌شده');
   await addLog(w3, task, '2026-04-07', 800000);
   const paid = await generate(w3);
-  if (!paid.payroll) return [...problems, `صدور فیش آزمون ناموفق بود (${paid.error})`];
+  if (!paid.payroll) return [...problems, `issuing the test payslip failed (${paid.error})`];
   await PayrollPaymentService.registerPayrollPayment({ payrollId: paid.payroll.id, bankAccountId: await fundedBank(), paymentDate: '2026-05-01', username: 'inv' });
   const back = await refusalOf(() => PieceworkPayrollService.updatePayrollStatus(paid.payroll!.id, { status: 'approved', username: 'inv' }));
-  if (!back?.includes('پرداخت ثبت‌شده')) problems.push(`فیش پرداخت‌شده به «approved» برگشت (${back ?? 'پذیرفته شد'})`);
+  if (!back?.includes('پرداخت ثبت‌شده')) problems.push(`a paid payslip went back to "approved" (${back ?? 'accepted'})`);
   const removed = await refusalOf(() => PieceworkPayrollService.deletePayroll(paid.payroll!.id, { username: 'inv' }));
-  if (!removed) problems.push('فیش پرداخت‌شده حذف شد');
+  if (!removed) problems.push('paid payslip was deleted');
   const settled = await personNet('3201', w3);
-  if (!fin(settled).isZero()) problems.push(`حقوق پرداختنی فیش پرداخت‌شده ${settled}، انتظار ۰`);
+  if (!fin(settled).isZero()) problems.push(`wages payable of the paid payslip ${settled}, expected 0`);
   return problems;
 }
 
@@ -150,9 +150,9 @@ export async function checkAdvanceDeductionWithinBalance(): Promise<string[]> {
   await addLog(worker, task, '2026-04-05', 1000000);
 
   const refused = await generate(worker, { advanceDeduction: 300000 });
-  if (refused.status !== 400 || !refused.error?.includes('مانده مساعده')) problems.push(`کسر مساعده بی‌مساعده رد نشد (${refused.status} ${refused.error ?? ''})`);
-  if (await payrollCount(worker) !== 0) problems.push('برای کسر مساعده ردشده فیش ساخته شد');
-  if (!fin(await personNet('1301', worker)).isZero()) problems.push('کسر مساعده ردشده حساب مساعده را بستانکار کرد');
+  if (refused.status !== 400 || !refused.error?.includes('مانده مساعده')) problems.push(`advance deduction without an advance was not refused (${refused.status} ${refused.error ?? ''})`);
+  if (await payrollCount(worker) !== 0) problems.push('a payslip was created for a refused advance deduction');
+  if (!fin(await personNet('1301', worker)).isZero()) problems.push('the refused advance deduction credited the advance account');
 
   // مساعده ۲۰۰٬۰۰۰ از خزانه؛ کسر همان مبلغ پذیرفته می‌شود و حساب مساعده صفر می‌ماند
   const workerName = (await orm.select({ fullName: personnel.fullName }).from(personnel).where(eq(personnel.id, worker)))[0]?.fullName ?? 'کارگر';
@@ -161,15 +161,15 @@ export async function checkAdvanceDeductionWithinBalance(): Promise<string[]> {
     purpose: 'advance', date: '2026-04-02', username: 'inv',
   });
   const over = await generate(worker, { advanceDeduction: 200001 });
-  if (over.status !== 400) problems.push(`کسر مساعده یک ریال بیش از مانده رد نشد (${over.status})`);
+  if (over.status !== 400) problems.push(`advance deduction one rial above the balance was not refused (${over.status})`);
   const accepted = await generate(worker, { advanceDeduction: 200000 });
   if (!accepted.payroll) {
-    problems.push(`کسر مساعده تا سقف مانده رد شد (${accepted.error})`);
+    problems.push(`advance deduction up to the balance was refused (${accepted.error})`);
   } else if (!fin(accepted.payroll.netPayable).equals(800000)) {
-    problems.push(`خالص فیش ${accepted.payroll.netPayable}، انتظار ۸۰۰٬۰۰۰`);
+    problems.push(`payslip net ${accepted.payroll.netPayable}, expected 800,000`);
   }
   const advance = await personNet('1301', worker);
-  if (!fin(advance).isZero()) problems.push(`مانده مساعده پرسنل پس از کسر ${advance}، انتظار ۰`);
+  if (!fin(advance).isZero()) problems.push(`personnel advance balance after deduction ${advance}, expected 0`);
   return problems;
 }
 
@@ -186,18 +186,18 @@ export async function checkFixedSalaryProratedByMonth(): Promise<string[]> {
   // الف) ۱۴۰۵/۰۱/۰۱ تا ۱۴۰۵/۰۲/۳۱ ← دو ماه
   const w1 = await newWorker('کارمند آزمون دوماهه', salary);
   const two = await issue(w1, '2026-03-21', '2026-05-21');
-  if (!two.payroll || !fin(two.payroll.totalFixedAmount).equals(20000000)) problems.push(`فیش دوماهه ${fixedOf(two)}، انتظار ۲۰٬۰۰۰٬۰۰۰`);
-  else if ((two.payroll.fixedSalaryMonths ?? []).length !== 2) problems.push(`تفکیک ماهانه فیش دوماهه ${JSON.stringify(two.payroll.fixedSalaryMonths)}`);
+  if (!two.payroll || !fin(two.payroll.totalFixedAmount).equals(20000000)) problems.push(`two-month payslip ${fixedOf(two)}, expected 20,000,000`);
+  else if ((two.payroll.fixedSalaryMonths ?? []).length !== 2) problems.push(`monthly split of the two-month payslip ${JSON.stringify(two.payroll.fixedSalaryMonths)}`);
 
   // ب) ۱۴۰۵/۰۴/۰۱ تا ۱۵ و ۱۶ تا ۳۱ ← ۴٬۸۳۸٬۷۱۰ + ۵٬۱۶۱٬۲۹۰ = یک ماه
   const w2 = await newWorker('کارمند آزمون نیم‌ماهه', salary);
   const firstHalf = await issue(w2, '2026-06-22', '2026-07-06');
-  if (!firstHalf.payroll || !fin(firstHalf.payroll.totalFixedAmount).equals(4838710)) problems.push(`نیمه اول ماه ${fixedOf(firstHalf)}، انتظار ۴٬۸۳۸٬۷۱۰`);
-  else if (!String(firstHalf.payroll.notes ?? '').includes('1405/04 — ۱۵ از ۳۱ روز')) problems.push(`یادداشت فیش نیم‌ماهه تفکیک ماهانه ندارد (${firstHalf.payroll.notes})`);
+  if (!firstHalf.payroll || !fin(firstHalf.payroll.totalFixedAmount).equals(4838710)) problems.push(`first half of the month ${fixedOf(firstHalf)}, expected 4,838,710`);
+  else if (!String(firstHalf.payroll.notes ?? '').includes('1405/04 — ۱۵ از ۳۱ روز')) problems.push(`half-month payslip notes have no monthly split (${firstHalf.payroll.notes})`);
   const secondHalf = await issue(w2, '2026-07-07', '2026-07-22');
-  if (!secondHalf.payroll || !fin(secondHalf.payroll.totalFixedAmount).equals(5161290)) problems.push(`نیمه دوم ماه ${fixedOf(secondHalf)}، انتظار ۵٬۱۶۱٬۲۹۰`);
+  if (!secondHalf.payroll || !fin(secondHalf.payroll.totalFixedAmount).equals(5161290)) problems.push(`second half of the month ${fixedOf(secondHalf)}, expected 5,161,290`);
   const owed = await personNet('3201', w2);
-  if (!fin(owed).equals(-10000000)) problems.push(`حقوق پرداختنی ماه با دو فیش ${owed}، انتظار ۱۰٬۰۰۰٬۰۰۰−`);
+  if (!fin(owed).equals(-10000000)) problems.push(`wages payable for the month with two payslips ${owed}, expected -10,000,000`);
 
   // ج) فیش پیشین بی‌تفکیک (۱۴۰۵/۰۳) ماه کامل شمرده می‌شود؛ ماه بعد کامل داده می‌شود
   const w3 = await newWorker('کارمند آزمون فیش پیشین', salary);
@@ -206,9 +206,9 @@ export async function checkFixedSalaryProratedByMonth(): Promise<string[]> {
     totalFixedAmount: money(10000000), netPayable: money(10000000), status: 'approved',
   });
   const sameMonth = await issue(w3, '2026-06-07', '2026-06-21');
-  if (sameMonth.payroll) problems.push(`ماه فیش پیشین دوباره حقوق گرفت (${fixedOf(sameMonth)})`);
+  if (sameMonth.payroll) problems.push(`the month of the earlier payslip got salary again (${fixedOf(sameMonth)})`);
   const nextMonth = await issue(w3, '2026-06-22', '2026-07-22');
-  if (!nextMonth.payroll || !fin(nextMonth.payroll.totalFixedAmount).equals(10000000)) problems.push(`ماه پس از فیش پیشین ${fixedOf(nextMonth)}، انتظار ۱۰٬۰۰۰٬۰۰۰`);
+  if (!nextMonth.payroll || !fin(nextMonth.payroll.totalFixedAmount).equals(10000000)) problems.push(`month after the earlier payslip ${fixedOf(nextMonth)}, expected 10,000,000`);
   return problems;
 }
 
@@ -222,7 +222,7 @@ export async function checkPayrollPaymentVoidable(): Promise<string[]> {
   const worker = await newWorker('کارگر آزمون ابطال پرداخت');
   await addLog(worker, await newTask(), '2026-04-05', 1000000);
   const issued = await generate(worker);
-  if (!issued.payroll) return [`صدور فیش آزمون ناموفق بود (${issued.error})`];
+  if (!issued.payroll) return [`issuing the test payslip failed (${issued.error})`];
   const payrollId = issued.payroll.id;
   const bankId = await fundedBank();
   const mark = (await pool.query<{ m: string }>('SELECT COALESCE(MAX(id), 0)::text AS m FROM journal_vouchers')).rows[0].m;
@@ -240,30 +240,30 @@ export async function checkPayrollPaymentVoidable(): Promise<string[]> {
   };
   const expectState = async (label: string, expected: { status: string; paid: number; bank: number; owed: number; logs: string }) => {
     const s = await state();
-    if (s.status !== expected.status) problems.push(`${label}: وضعیت فیش ${s.status}، انتظار ${expected.status}`);
-    if (!s.paid.equals(expected.paid)) problems.push(`${label}: پرداخت‌شده ${s.paid}، انتظار ${expected.paid}`);
-    if (!s.bank.equals(expected.bank)) problems.push(`${label}: مانده حساب بانکی ${s.bank}، انتظار ${expected.bank}`);
-    if (!s.owed.equals(expected.owed)) problems.push(`${label}: حقوق پرداختنی ${s.owed}، انتظار ${expected.owed}`);
-    if (!s.logs.every(l => l === expected.logs)) problems.push(`${label}: وضعیت کارکردها ${s.logs.join('،')}، انتظار ${expected.logs}`);
+    if (s.status !== expected.status) problems.push(`${label}: payslip status ${s.status}, expected ${expected.status}`);
+    if (!s.paid.equals(expected.paid)) problems.push(`${label}: paid ${s.paid}, expected ${expected.paid}`);
+    if (!s.bank.equals(expected.bank)) problems.push(`${label}: bank account balance ${s.bank}, expected ${expected.bank}`);
+    if (!s.owed.equals(expected.owed)) problems.push(`${label}: wages payable ${s.owed}, expected ${expected.owed}`);
+    if (!s.logs.every(l => l === expected.logs)) problems.push(`${label}: work log statuses ${s.logs.join(', ')}, expected ${expected.logs}`);
   };
-  await expectState('پس از دو پرداخت', { status: 'paid', paid: 1000000, bank: 4000000, owed: 0, logs: 'paid' });
+  await expectState('after two payments', { status: 'paid', paid: 1000000, bank: 4000000, owed: 0, logs: 'paid' });
 
   await PayrollPaymentVoidService.voidPayrollPayment({ payrollId, transactionId: second.transactionId, reason: 'آزمون ابطال پرداخت دوم', username: 'inv' });
-  await expectState('پس از ابطال پرداخت دوم', { status: 'partially_paid', paid: 600000, bank: 4400000, owed: -400000, logs: 'approved' });
+  await expectState('after voiding the second payment', { status: 'partially_paid', paid: 600000, bank: 4400000, owed: -400000, logs: 'approved' });
   const again = await refusalOf(() => PayrollPaymentVoidService.voidPayrollPayment({ payrollId, transactionId: second.transactionId, reason: 'تکرار', username: 'inv' }));
-  if (!again?.includes('قبلاً ابطال')) problems.push(`ابطال دوباره پرداخت رد نشد (${again ?? 'پذیرفته شد'})`);
+  if (!again?.includes('قبلاً ابطال')) problems.push(`voiding the payment again was not refused (${again ?? 'accepted'})`);
   const foreign = await refusalOf(() => PayrollPaymentVoidService.voidPayrollPayment({ payrollId: payrollId + 100000, transactionId: first.transactionId, reason: 'فیش دیگر', username: 'inv' }));
-  if (!foreign) problems.push('ابطال پرداخت با شناسه فیش دیگر پذیرفته شد');
+  if (!foreign) problems.push('void of a payment with another payslip id was accepted');
 
   await PayrollPaymentVoidService.voidPayrollPayment({ payrollId, transactionId: first.transactionId, reason: 'آزمون ابطال پرداخت اول', username: 'inv' });
-  await expectState('پس از ابطال هر دو پرداخت', { status: 'approved', paid: 0, bank: 5000000, owed: -1000000, logs: 'approved' });
+  await expectState('after voiding both payments', { status: 'approved', paid: 0, bank: 5000000, owed: -1000000, logs: 'approved' });
   const listed = (await BankAccountService.getBankAccounts()).find(b => b.id === bankId);
-  if (!fin(listed?.treasuryBalance ?? -1).equals(5000000)) problems.push(`مانده خزانه حساب بانکی ${listed?.treasuryBalance}، انتظار ۵٬۰۰۰٬۰۰۰`);
+  if (!fin(listed?.treasuryBalance ?? -1).equals(5000000)) problems.push(`bank account treasury balance ${listed?.treasuryBalance}, expected 5,000,000`);
 
   const removed = await refusalOf(() => PieceworkPayrollService.deletePayroll(payrollId, { username: 'inv' }));
-  if (removed) problems.push(`فیش بی‌پرداخت حذف نشد (${removed})`);
+  if (removed) problems.push(`payslip without payments was not deleted (${removed})`);
   const owedAfterDelete = await personNet('3201', worker);
-  if (!fin(owedAfterDelete).isZero()) problems.push(`حقوق پرداختنی پس از حذف فیش ${owedAfterDelete}، انتظار ۰`);
+  if (!fin(owedAfterDelete).isZero()) problems.push(`wages payable after deleting the payslip ${owedAfterDelete}, expected 0`);
   return problems;
 }
 
@@ -326,21 +326,21 @@ export async function checkPayrollChequeMethodRefused(): Promise<string[]> {
   const worker = await newWorker('کارگر آزمون پرداخت چکی');
   await addLog(worker, await newTask(), '2026-04-06', 700000);
   const issued = await generate(worker);
-  if (!issued.payroll) return [`صدور فیش آزمون ناموفق بود (${issued.error})`];
+  if (!issued.payroll) return [`issuing the test payslip failed (${issued.error})`];
   const payrollId = issued.payroll.id;
   const bankId = await fundedBank();
   const paymentsOf = async () => Number((await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM treasury_transactions WHERE payroll_id = $1', [payrollId])).rows[0].n);
 
   const refused = await refusalOf(() => PayrollPaymentService.registerPayrollPayment({ payrollId, bankAccountId: bankId, method: 'cheque', paymentDate: '2026-05-01', username: 'inv' }));
-  if (!refused?.includes('چک')) problems.push(`پرداخت حقوق با روش چک رد نشد (${refused ?? 'پذیرفته شد'})`);
+  if (!refused?.includes('چک')) problems.push(`payroll payment by cheque was not refused (${refused ?? 'accepted'})`);
   const [bank] = await orm.select({ currentBalance: bankAccounts.currentBalance }).from(bankAccounts).where(eq(bankAccounts.id, bankId));
-  if (!fin(bank?.currentBalance ?? 0).equals(5000000)) problems.push(`مانده بانک پس از پرداخت چکی ردشده ${bank?.currentBalance}، انتظار ۵٬۰۰۰٬۰۰۰`);
-  if (await paymentsOf() !== 0) problems.push('پرداخت چکی ردشده تراکنش خزانه ساخت');
+  if (!fin(bank?.currentBalance ?? 0).equals(5000000)) problems.push(`bank balance after the refused cheque payment ${bank?.currentBalance}, expected 5,000,000`);
+  if (await paymentsOf() !== 0) problems.push('the refused cheque payment created a treasury transaction');
   const [payroll] = await orm.select({ status: pieceworkPayrolls.status, paidAmount: pieceworkPayrolls.paidAmount }).from(pieceworkPayrolls).where(eq(pieceworkPayrolls.id, payrollId));
-  if (!fin(payroll?.paidAmount ?? 0).isZero()) problems.push(`پرداخت‌شده فیش پس از پرداخت چکی ردشده ${payroll?.paidAmount}`);
+  if (!fin(payroll?.paidAmount ?? 0).isZero()) problems.push(`paid amount of the payslip after the refused cheque payment ${payroll?.paidAmount}`);
 
   const bankTransfer = await refusalOf(() => PayrollPaymentService.registerPayrollPayment({ payrollId, bankAccountId: bankId, method: 'bank_transfer', paymentDate: '2026-05-01', username: 'inv' }));
-  if (bankTransfer) problems.push(`پرداخت حقوق با انتقال بانکی رد شد (${bankTransfer})`);
-  if (await paymentsOf() !== 1) problems.push('پرداخت با انتقال بانکی تراکنش خزانه نساخت');
+  if (bankTransfer) problems.push(`payroll payment by bank transfer was refused (${bankTransfer})`);
+  if (await paymentsOf() !== 1) problems.push('the bank transfer payment did not create a treasury transaction');
   return problems;
 }

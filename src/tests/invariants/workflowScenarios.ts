@@ -36,11 +36,11 @@ export async function checkTaskRunsItsOwnTransition(): Promise<string[]> {
   for (const [user, label] of [[admin, 'مدیر'], [clerk, 'کاربر عادی']] as const) {
     const instanceId = await startWf(wf);
     const submitTask = (await tasksOf(instanceId)).find(t => t.transition_id === wf.transitionId.submit);
-    if (!submitTask) { problems.push(`کار «ارسال برای بررسی» برای ${label} ساخته نشد`); continue; }
+    if (!submitTask) { problems.push(`task "submit for review" was not created for ${label}`); continue; }
     const error = await refusal(() => runTask(submitTask.id, user));
     const row = await instanceRow(instanceId);
-    if (error) problems.push(`اجرای کار «ارسال برای بررسی» توسط ${label} رد شد: ${error}`);
-    else if (row.currentStateId !== wf.stateId.review) problems.push(`کار «ارسال برای بررسی» ${label} فرایند را به مرحله دیگری برد (${row.status})، نه «بررسی»`);
+    if (error) problems.push(`running the "submit for review" task by ${label} was refused: ${error}`);
+    else if (row.currentStateId !== wf.stateId.review) problems.push(`the "submit for review" task of ${label} moved the workflow to another step (${row.status}), not "review"`);
   }
 
   // گام بی‌انتقال رد: «رد» پذیرفته نمی‌شود و فرایند و کار سر جایشان می‌مانند
@@ -49,9 +49,9 @@ export async function checkTaskRunsItsOwnTransition(): Promise<string[]> {
   const [reviewTask] = await tasksOf(instanceId);
   const rejectError = await refusal(() => runTask(reviewTask.id, clerk, 'reject'));
   const afterReject = await instanceRow(instanceId);
-  if (!rejectError) problems.push('«رد» در گامی که انتقال رد ندارد پذیرفته شد');
-  if (afterReject.currentStateId !== wf.stateId.review) problems.push(`«رد» در گام بی‌انتقال رد فرایند را جابه‌جا کرد (${afterReject.status})`);
-  if ((await tasksOf(instanceId)).length !== 1) problems.push('کار گام بی‌انتقال رد پس از «رد» ناموفق در انتظار نماند');
+  if (!rejectError) problems.push('"reject" was accepted on a step without a reject transition');
+  if (afterReject.currentStateId !== wf.stateId.review) problems.push(`"reject" on a step without a reject transition moved the workflow (${afterReject.status})`);
+  if ((await tasksOf(instanceId)).length !== 1) problems.push('the task of a step without a reject transition did not stay pending after a failed "reject"');
 
   // گام دارای انتقال رد: «رد» فرایند را رد می‌کند
   const withReject = await defineWorkflow({
@@ -67,7 +67,7 @@ export async function checkTaskRunsItsOwnTransition(): Promise<string[]> {
   const [task] = await tasksOf(second);
   const error = await refusal(() => runTask(task.id, clerk, 'reject'));
   const rejected = await instanceRow(second);
-  if (error || rejected.status !== 'REJECTED') problems.push(`«رد» گام دارای انتقال رد فرایند را رد نکرد (${error ?? rejected.status})`);
+  if (error || rejected.status !== 'REJECTED') problems.push(`"reject" on a step with a reject transition did not reject the workflow (${error ?? rejected.status})`);
   return problems;
 }
 
@@ -92,17 +92,17 @@ export async function checkMultiSignTaskStaysOpen(): Promise<string[]> {
 
   await runTask(task.id, first);
   const again = await runTask(task.id, first) as { alreadySigned?: boolean };
-  if (!again.alreadySigned) problems.push('امضای دوباره همان کاربر از کارتابل «امضای تکراری» شناخته نشد');
-  if ((await tasksOf(instanceId)).length !== 1) problems.push('کار پس از امضای اول از ۲ امضای لازم بسته شد');
+  if (!again.alreadySigned) problems.push('a second signature by the same user from the inbox was not recognized as "duplicate signature"');
+  if ((await tasksOf(instanceId)).length !== 1) problems.push('the task closed after the first of 2 required signatures');
   const half = await instanceRow(instanceId);
   const signatures = half.progress[String(wf.transitionId.approve)]?.signatures?.length ?? 0;
-  if (signatures !== 1) problems.push(`پس از امضای اول و تکرار آن ${signatures} امضا ثبت شد، نه ۱`);
+  if (signatures !== 1) problems.push(`after the first signature and its repeat ${signatures} signatures were recorded, not 1`);
 
   const error = await refusal(() => runTask(task.id, second));
   const done = await instanceRow(instanceId);
-  if (error || done.status !== 'COMPLETED') problems.push(`امضای دوم از کارتابل حدنصاب را کامل نکرد (${error ?? done.status})`);
+  if (error || done.status !== 'COMPLETED') problems.push(`the second signature from the inbox did not complete the quorum (${error ?? done.status})`);
   const closed = await pool.query<{ status: string }>('SELECT status FROM workflow_tasks WHERE id = $1', [task.id]);
-  if (closed.rows[0]?.status !== 'approved') problems.push(`کار پس از رسیدن حدنصاب «${closed.rows[0]?.status}» است، نه «approved»`);
+  if (closed.rows[0]?.status !== 'approved') problems.push(`the task after reaching the quorum is "${closed.rows[0]?.status}", not "approved"`);
   return problems;
 }
 
@@ -122,19 +122,19 @@ export async function checkRunningInstanceKeepsTasksAfterEdit(): Promise<string[
 
   const [first] = await tasksOf(instanceId);
   const error = await refusal(() => runTask(first.id, admin));
-  if (error) return [`کار گام اول پس از ویرایش طرح اجرا نشد: ${error}`];
+  if (error) return [`the first step task did not run after the design edit: ${error}`];
   const atB = await instanceRow(instanceId);
-  if (atB.currentStateId !== wf.stateId.b) problems.push('فرایند به گام دوم نسخه خودش نرفت');
+  if (atB.currentStateId !== wf.stateId.b) problems.push('the workflow did not move to the second step of its own version');
   const next = await tasksOf(instanceId);
   if (next.length !== 1 || next[0].transition_id !== wf.transitionId.to_c) {
-    problems.push(`پس از ویرایش طرح، گام دوم فرایند در جریان ${next.length} کار گرفت (انتقال ${next.map(t => t.transition_id).join('،') || '-'})، نه کار انتقال نسخه خودش`);
+    problems.push(`after the design edit, the second step of the running workflow got ${next.length} tasks (transition ${next.map(t => t.transition_id).join(', ') || '-'}), not the task of its own version's transition`);
     return problems;
   }
   const hours = next[0].due_at ? (new Date(next[0].due_at).getTime() - Date.now()) / 3600000 : null;
-  if (hours === null || hours < 4.5 || hours > 5.5) problems.push(`مهلت کار گام دوم ${hours === null ? 'خالی' : hours.toFixed(1) + ' ساعت'} است، نه ۵ ساعت مرحله`);
+  if (hours === null || hours < 4.5 || hours > 5.5) problems.push(`the second step task deadline is ${hours === null ? 'empty' : hours.toFixed(1) + ' hours'}, not the step's 5 hours`);
   const last = await refusal(() => runTask(next[0].id, admin));
   const done = await instanceRow(instanceId);
-  if (last || done.status !== 'COMPLETED') problems.push(`کار گام دوم فرایند را تمام نکرد (${last ?? done.status})`);
+  if (last || done.status !== 'COMPLETED') problems.push(`the second step task did not finish the workflow (${last ?? done.status})`);
   return problems;
 }
 
@@ -156,7 +156,7 @@ export async function checkSignaturesResetOnReentry(): Promise<string[]> {
   });
   const instanceId = await startWf(wf);
   const steps = [
-    ['submit', c, 'ارسال', 'review'], ['approve', a, 'امضای اول دور اول', 'review'], ['reject_to_draft', c, 'بازگشت به پیش‌نویس', 'draft'],
+    ['submit', c, 'ارسال', 'review'], ['approve', a, 'امضای اول دور اول', 'review'], ['reject_to_draft', c, 'return to draft', 'draft'],
     ['submit', c, 'ارسال دوباره همان کاربر', 'review'], ['approve', a, 'امضای دوباره عضو اول', 'review'],
   ] as const;
   for (const [action, user, label, expected] of steps) {
@@ -166,9 +166,9 @@ export async function checkSignaturesResetOnReentry(): Promise<string[]> {
     if (row.currentStateId !== wf.stateId[expected]) return [...problems, `پس از «${label}» فرایند در گام «${expected}» نیست (${row.status})`];
   }
   const signatures = (await instanceRow(instanceId)).progress[String(wf.transitionId.approve)]?.signatures ?? [];
-  if (signatures.length !== 1) problems.push(`پس از بازگشت و امضای دوباره عضو اول ${signatures.length} امضا شمرده شد، نه ۱`);
+  if (signatures.length !== 1) problems.push(`after the return and the first member signing again ${signatures.length} signatures were counted, not 1`);
   await transit(instanceId, wf.transitionId.approve, b);
-  if ((await instanceRow(instanceId)).status !== 'COMPLETED') problems.push('دو امضای تازه دور دوم حدنصاب را کامل نکرد');
+  if ((await instanceRow(instanceId)).status !== 'COMPLETED') problems.push('two fresh signatures of the second round did not complete the quorum');
   return problems;
 }
 
@@ -181,28 +181,28 @@ export async function checkViewPermissionCannotApprove(): Promise<string[]> {
   const problems: string[] = [];
   const match = WorkflowTransitionExecutor.checkUserRoleMatch.bind(WorkflowTransitionExecutor);
   const refused: Array<[string, string, string]> = [
-    ['sales_manager', 'warehouse', 'مدیر فروش گام انبار'],
+    ['sales_manager', 'warehouse', 'sales manager on the warehouse step'],
     ['viewer', 'warehouse_keeper', 'بیننده گام انباردار'],
     ['treasurer', 'accountant', 'خزانه‌دار گام حسابدار'],
-    ['production_manager', 'manager', 'مدیر تولید گام مدیر'],
-    ['sales_manager', 'manager', 'مدیر فروش گام مدیر'],
-    ['production_manager', 'warehouse', 'نقش دیگر گام انبار'],
-    ['cfo_accountant', 'accounting', 'مدیر مالی گام نقش «accounting»'],
-    ['cfo_accountant', 'accountant', 'مدیر مالی گام حسابدار'],
-    ['wfg_any', 'accountant', 'نقش سفارشی گام حسابدار'],
+    ['production_manager', 'manager', 'production manager on the manager step'],
+    ['sales_manager', 'manager', 'sales manager on the manager step'],
+    ['production_manager', 'warehouse', 'another role on the warehouse step'],
+    ['cfo_accountant', 'accounting', 'CFO on the "accounting" role step'],
+    ['cfo_accountant', 'accountant', 'CFO on the accountant step'],
+    ['wfg_any', 'accountant', 'custom role on the accountant step'],
   ];
   for (const [role, required, label] of refused) {
-    if (match(role, required)) problems.push(`${label} را اجرا می‌کند`);
+    if (match(role, required)) problems.push(`${label}: allowed to run`);
   }
   const allowed: Array<[string, string, string]> = [
-    ['warehouse_keeper', 'warehouse_keeper', 'انباردار گام انباردار'],
+    ['warehouse_keeper', 'warehouse_keeper', 'warehouse keeper on the warehouse keeper step'],
     ['accountant', 'accountant', 'حسابدار گام حسابدار'],
     ['manager', 'manager', 'مدیر گام مدیر'],
     ['admin', 'manager', 'مدیر سیستم گام مدیر'],
-    ['wfg_any', '', 'هر نقش گام بی‌نقش'],
+    ['wfg_any', '', 'any role on a step without a role'],
   ];
   for (const [role, required, label] of allowed) {
-    if (!match(role, required)) problems.push(`${label} را اجرا نمی‌کند`);
+    if (!match(role, required)) problems.push(`${label}: not allowed to run`);
   }
 
   // سرتاسری: مدیر فروش با warehouse.view گام انبار را از API انتقال اجرا نمی‌کند
@@ -213,7 +213,7 @@ export async function checkViewPermissionCannotApprove(): Promise<string[]> {
   });
   const instanceId = await startWf(wf);
   const error = await refusal(() => transit(instanceId, wf.transitionId.approve_warehouse, sales));
-  if (!error) problems.push('مدیر فروش با warehouse.view گام انبار را از API انتقال اجرا کرد');
+  if (!error) problems.push('sales manager with warehouse.view ran the warehouse step through the transition API');
   return problems;
 }
 
@@ -235,13 +235,13 @@ export async function checkTaskAndTransitionNoDeadlock(): Promise<string[]> {
       () => transit(instanceId, wf.transitionId.submit, direct),
       () => runTask(task.id, inbox),
     ], { staggered: true });
-    problems.push(...outcomeProblems([`دور ${round}: اجرای مستقیم`, `دور ${round}: اجرای کار`], outcomes,
-      (_label, message) => message.includes('مطابقت ندارد')));
+    const staleRefusal = (_label: string, message: string) => message.includes('مطابقت ندارد');
+    problems.push(...outcomeProblems([`round ${round}: direct run`, `round ${round}: task run`], outcomes, staleRefusal));
     const moves = await pool.query<{ n: number }>(
       `SELECT COUNT(*)::int AS n FROM workflow_history_logs WHERE instance_id = $1 AND action_key = 'submit'`, [instanceId]);
-    if (moves.rows[0].n !== 1) problems.push(`دور ${round}: گام «ارسال» ${moves.rows[0].n} بار اجرا شد، نه یک بار`);
+    if (moves.rows[0].n !== 1) problems.push(`round ${round}: step "submit" ran ${moves.rows[0].n} times, not once`);
     const row = await instanceRow(instanceId);
-    if (row.currentStateId !== wf.stateId.review) problems.push(`دور ${round}: فرایند در گام «بررسی» نیست`);
+    if (row.currentStateId !== wf.stateId.review) problems.push(`round ${round}: the workflow is not on the "review" step`);
   }
   return problems;
 }

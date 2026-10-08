@@ -318,7 +318,7 @@ export async function runTreasuryListTests(shouldRun: ShouldRun): Promise<TestCa
       const change = await lastAudit(moving, 'UPDATE');
       const before = change?.details?.before as State | undefined;
       const after = change?.details?.after as State | undefined;
-      if (before?.status !== 'received' || before?.statusLabel !== 'دریافت شده') problems.push(`status audit before ${JSON.stringify(before)}, expected received «دریافت شده» (before the fix: only {"status":"in_collection"})`);
+      if (before?.status !== 'received' || before?.statusLabel !== 'دریافت شده') problems.push(`status audit before ${JSON.stringify(before)}, expected received with its Persian label (before the fix: only {"status":"in_collection"})`);
       if (after?.status !== 'in_collection' || after?.bankAccountId !== bank.id || after?.statusLabel !== 'در جریان وصول (خوابانده به حساب)') problems.push(`status audit after ${JSON.stringify(after)}, expected in_collection at bank ${bank.id} with its Persian label`);
       if (issued.length !== 1 || JSON.stringify(change?.details?.issuedVoucherIds) !== JSON.stringify(issued)) problems.push(`status audit issued vouchers ${JSON.stringify(change?.details?.issuedVoucherIds)}, expected ${JSON.stringify(issued)}`);
       if (!change || /[a-z_]{4,}/.test(change.description)) problems.push(`status audit description «${change?.description}» has an English status code`);
@@ -350,14 +350,14 @@ export async function runTreasuryListTests(shouldRun: ShouldRun): Promise<TestCa
       const id = Number(created.body.id);
       const moved = await admin.patch(`/api/accounting/cheques/${id}/status`, { status: 'in_collection', bankAccountId: bank.id });
       const note = (moved.body?.statusHistory ?? []).at(-1)?.notes;
-      if (note !== 'تغییر وضعیت به «در جریان وصول (خوابانده به حساب)»') problems.push(`default history note «${note}», expected «تغییر وضعیت به «در جریان وصول (خوابانده به حساب)»» (before: «تغییر وضعیت به in_collection»)`);
+      if (note !== 'تغییر وضعیت به «در جریان وصول (خوابانده به حساب)»') problems.push(`default history note "${note}", expected "status changed to" with the Persian label of in_collection (before: "status changed to in_collection")`);
       const bounced = await admin.patch(`/api/accounting/cheques/${id}/status`, { status: 'bounced' });
       if (bounced.status !== 200) throw new Error(`bounce returned ${bounced.status}: ${JSON.stringify(bounced.body).slice(0, 200)}`);
       const refused = await admin.patch(`/api/accounting/cheques/${id}/status`, { status: 'passed', bankAccountId: bank.id });
       const message = String(refused.body?.message ?? '');
       if (refused.status !== 422) problems.push(`bounced → passed returned ${refused.status}, expected 422`);
       if (/[a-z]+_?[a-z]+/.test(message) || !message.includes('«واخواست / برگشت خورده» به «وصول شده (پاس شده)»') || !message.includes('عودت داده شده به مشتری')) {
-        problems.push(`refused-transition message «${message}», expected Persian status names (before: «bounced» به «passed» … returned)`);
+        problems.push(`refused-transition message "${message}", expected Persian status names (before: "bounced" to "passed" … returned)`);
       }
       assertNoProblems(problems);
       return `note «${note}»; message «${message}»`;

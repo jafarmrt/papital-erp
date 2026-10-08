@@ -28,7 +28,7 @@ export async function runCrmStatsCurrencyTests(shouldRun: (id: string, ...extra:
   const id = 'reg_crm_stats_by_currency_td_422';
   if (!shouldRun(id, 'td422', 'crm', 'stats', 'currency', 'package9')) return results;
 
-  const name = 'v9.0.11: آمار ارتباط با مشتری ارزش قیف، فروش موفق و هر مرحله را به تفکیک ارز می‌دهد؛ پرونده ۱٬۰۰۰ دلاری با ۲٬۰۰۰٬۰۰۰ ریالی جمع نمی‌شود (TD-422)';
+  const name = 'v9.0.11: CRM stats give the pipeline value, won sales and each stage per currency; a 1,000 dollar lead is not added to a 2,000,000 rial one (TD-422)';
   const tStart = Date.now();
   const leadIds: number[] = [];
   try {
@@ -37,7 +37,7 @@ export async function runCrmStatsCurrencyTests(shouldRun: (id: string, ...extra:
     const admin = await getAdminSession();
     const readStats = async (): Promise<Stats> => {
       const res = await request(app).get('/api/crm/stats').set('Cookie', admin.cookie);
-      if (res.status !== 200) throw new Error(`/api/crm/stats پاسخ ${res.status} داد`);
+      if (res.status !== 200) throw new Error(`/api/crm/stats returned ${res.status}`);
       return res.body as Stats;
     };
 
@@ -53,29 +53,29 @@ export async function runCrmStatsCurrencyTests(shouldRun: (id: string, ...extra:
 
     const wrong: string[] = [];
     const expect = (label: string, got: { count: number; value: string }, count: number, value: string) => {
-      if (got.count !== count || !fin(got.value).equals(value)) wrong.push(`${label}: ${got.count} پرونده به ارزش ${got.value} افزوده شد، نه ${count} به ارزش ${value}`);
+      if (got.count !== count || !fin(got.value).equals(value)) wrong.push(`${label}: ${got.count} sales files worth ${got.value} were added, not ${count} worth ${value}`);
     };
     if (!Array.isArray(after.pipelineByCurrency)) {
-      wrong.push(`pipelineByCurrency در پاسخ نیست؛ totalPipelineValue به اندازه ${fin(Number(after.totalPipelineValue ?? 0)).subtract(Number(before.totalPipelineValue ?? 0)).toString()} بالا رفت (دلار و ریال با هم)`);
+      wrong.push(`pipelineByCurrency is not in the response; totalPipelineValue rose by ${fin(Number(after.totalPipelineValue ?? 0)).subtract(Number(before.totalPipelineValue ?? 0)).toString()} (dollars and rials together)`);
     } else {
-      expect('قیف دلاری', delta(totalOf(after.pipelineByCurrency, 'USD'), totalOf(before.pipelineByCurrency, 'USD')), 1, '1000');
-      expect('قیف ریالی', delta(totalOf(after.pipelineByCurrency, 'IRR'), totalOf(before.pipelineByCurrency, 'IRR')), 1, '2000000');
-      expect('فروش موفق دلاری (کد « usd »)', delta(totalOf(after.wonByCurrency, 'USD'), totalOf(before.wonByCurrency, 'USD')), 1, '250.5');
-      expect('فروش موفق ریالی', delta(totalOf(after.wonByCurrency, 'IRR'), totalOf(before.wonByCurrency, 'IRR')), 0, '0');
+      expect('dollar funnel', delta(totalOf(after.pipelineByCurrency, 'USD'), totalOf(before.pipelineByCurrency, 'USD')), 1, '1000');
+      expect('rial funnel', delta(totalOf(after.pipelineByCurrency, 'IRR'), totalOf(before.pipelineByCurrency, 'IRR')), 1, '2000000');
+      expect('dollar won sales (code " usd ")', delta(totalOf(after.wonByCurrency, 'USD'), totalOf(before.wonByCurrency, 'USD')), 1, '250.5');
+      expect('rial won sales', delta(totalOf(after.wonByCurrency, 'IRR'), totalOf(before.wonByCurrency, 'IRR')), 0, '0');
       const stageBefore = before.stageCounts?.proposal?.byCurrency;
       const stageAfter = after.stageCounts?.proposal?.byCurrency;
-      expect('مرحله پیشنهاد دلاری', delta(totalOf(stageAfter, 'USD'), totalOf(stageBefore, 'USD')), 1, '1000');
-      expect('مرحله پیشنهاد ریالی', delta(totalOf(stageAfter, 'IRR'), totalOf(stageBefore, 'IRR')), 1, '2000000');
-      if ((after.stageCounts?.proposal?.count ?? 0) - (before.stageCounts?.proposal?.count ?? 0) !== 2) wrong.push('شمار مرحله پیشنهاد ۲ تا بالا نرفت');
-      if (Number(after.activeLeadsCount) - Number(before.activeLeadsCount) !== 2) wrong.push('شمار پرونده‌های فعال ۲ تا بالا نرفت');
-      if (after.pipelineByCurrency[0]?.currency !== 'IRR') wrong.push(`ارز نخست قیف ${after.pipelineByCurrency[0]?.currency} است، نه ریال`);
-      for (const key of ['totalPipelineValue', 'wonTotalValue']) if (key in after) wrong.push(`پاسخ هنوز ${key} (جمع همه ارزها) دارد`);
+      expect('dollar proposal stage', delta(totalOf(stageAfter, 'USD'), totalOf(stageBefore, 'USD')), 1, '1000');
+      expect('rial proposal stage', delta(totalOf(stageAfter, 'IRR'), totalOf(stageBefore, 'IRR')), 1, '2000000');
+      if ((after.stageCounts?.proposal?.count ?? 0) - (before.stageCounts?.proposal?.count ?? 0) !== 2) wrong.push('The proposal stage count did not rise by 2');
+      if (Number(after.activeLeadsCount) - Number(before.activeLeadsCount) !== 2) wrong.push('The active sales file count did not rise by 2');
+      if (after.pipelineByCurrency[0]?.currency !== 'IRR') wrong.push(`the first funnel currency is ${after.pipelineByCurrency[0]?.currency}, not rial`);
+      for (const key of ['totalPipelineValue', 'wonTotalValue']) if (key in after) wrong.push(`the response still has ${key} (sum of all currencies)`);
     }
 
-    if (wrong.length > 0) throw new Error(wrong.join('، '));
+    if (wrong.length > 0) throw new Error(wrong.join(', '));
     results.push(makeTestCase({
       id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
-      details: 'قیف: ۱۰۰۰ دلار و ۲٬۰۰۰٬۰۰۰ ریال جدا؛ فروش موفق ۲۵۰٫۵ دلار؛ مرحله پیشنهاد به تفکیک ارز',
+      details: 'Funnel: 1000 dollars and 2,000,000 rials kept separate; won sales 250.5 dollars; proposal stage split by currency',
     }));
   } catch (err) {
     results.push(makeTestCase({

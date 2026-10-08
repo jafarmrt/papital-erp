@@ -30,20 +30,20 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     ) {
       results.push(makeTestCase({
         id: 'sec_log_sanitization',
-        name: 'ماسکی‌سازی و ماسک‌گذاری کلمه‌عبور و توکن در لوگ‌های سیستم',
+        name: 'Passwords and tokens are masked in system logs',
         layer: 'security',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t1Start,
-        details: 'مقادیر فیلدهای حساس (password, token, secret) با عبارت [PROTECTED] جایگزین شدند.'
+        details: 'Sensitive field values (password, token, secret) are replaced with [PROTECTED].'
       }));
     } else {
-      throw new Error('فیلدهای حساس ماسک نشدند');
+      throw new Error('Sensitive fields were not masked');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_log_sanitization',
-      name: 'ماسکی‌سازی و ماسک‌گذاری کلمه‌عبور و توکن در لوگ‌های سیستم',
+      name: 'Passwords and tokens are masked in system logs',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -58,20 +58,20 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     if (AUTH_COOKIE_OPTIONS.httpOnly && (AUTH_COOKIE_OPTIONS.sameSite === 'none' || (AUTH_COOKIE_OPTIONS.sameSite as any) === 'lax') && AUTH_COOKIE_OPTIONS.secure) {
       results.push(makeTestCase({
         id: 'sec_httponly_cookie',
-        name: 'ارزیابی ضوابط امنیتی HttpOnly Cookie و SameSite=None (SEC-006 & RULE 5)',
+        name: 'HttpOnly cookie and SameSite=None security rules (SEC-006 & RULE 5)',
         layer: 'security',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t2Start,
-        details: 'تنظیمات توکن بر روی HttpOnly، Secure: true و SameSite=None در لایه کوکی بدون دسترسی JavaScript کلاینت تایید گردید.'
+        details: 'The token cookie is HttpOnly, Secure: true and SameSite=None, with no client JavaScript access.'
       }));
     } else {
-      throw new Error('تنظیمات کوکی با ضوابط امنیتی انطباق ندارد');
+      throw new Error('Cookie settings do not meet the security rules');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_httponly_cookie',
-      name: 'ارزیابی ضوابط امنیتی HttpOnly Cookie و SameSite=Lax (SEC-006)',
+      name: 'HttpOnly cookie and SameSite=Lax security rules (SEC-006)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -94,7 +94,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     const missingKeys = requiredKeys.filter(k => !catalogKeys.includes(k));
 
     if (missingKeys.length > 0) {
-      throw new Error(`مجوزهای فرآیند کاری در کاتالوگ ناقص هستند: ${missingKeys.join(', ')}`);
+      throw new Error(`Workflow permissions are missing from the catalog: ${missingKeys.join(', ')}`);
     }
 
     // 2. Role matching checks
@@ -109,20 +109,20 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     if (ownRoleCheck && !otherRoleCheck && systemAdminCheck && openStepCheck && allStepCheck) {
       results.push(makeTestCase({
         id: 'sec_workflow_granular_permissions',
-        name: 'ماتریس اعتبارسنجی مجوزهای ۵ گانه امنیتی فرآیندهای کاری (Workflow Authorization Matrix)',
+        name: 'Validation matrix of the 5 workflow security permissions (Workflow Authorization Matrix)',
         layer: 'security',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t3Start,
-        details: 'مجوزهای ۵‌گانه (view, execute, approve, manage, admin) و انطباق سطوح دسترسی گام‌های تایید با موفقیت اعتبارسنجی شدند.'
+        details: 'The 5 permissions (view, execute, approve, manage, admin) and the access levels of approval steps are validated.'
       }));
     } else {
-      throw new Error('عدم انطباق در ارزیابی ماتریس دسترسی ورکفلو');
+      throw new Error('Workflow access matrix check does not match');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_workflow_granular_permissions',
-      name: 'ماتریس اعتبارسنجی مجوزهای ۵ گانه امنیتی فرآیندهای کاری (Workflow Authorization Matrix)',
+      name: 'Validation matrix of the 5 workflow security permissions (Workflow Authorization Matrix)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -138,22 +138,22 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     const allPermKeys = PERMISSION_CATALOG.flatMap(c => c.permissions.map(p => p.key));
 
     if (!allPermKeys.includes('settings.manage') || !allPermKeys.includes('audit_logs.view') || !allPermKeys.includes('users.manage') || !allPermKeys.includes('roles.manage')) {
-      throw new Error('کلیدهای دسترسی حساس سیستم (settings.manage, audit_logs.view, users.manage, roles.manage) در کاتالوگ ناقص هستند.');
+      throw new Error('Sensitive system permission keys (settings.manage, audit_logs.view, users.manage, roles.manage) are missing from the catalog.');
     }
 
     results.push(makeTestCase({
       id: 'sec_admin_system_endpoints_access_control',
-      name: 'کنترل دسترسی و محافظت از نقاط پایانی حساس سیستمی و مدیریتی (System & Admin Endpoints Hardening)',
+      name: 'Access control and protection of sensitive system and admin endpoints (System & Admin Endpoints Hardening)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t4Start,
-      details: 'نقاط پایانی حساس (بک‌آپ، دیاگنوستیک، سید، اسکیما، تطبیق، لاگ‌ها) تحت گیت‌های احراز هویت و مجوزهای صریح امنیتی قرار گرفتند.'
+      details: 'Sensitive endpoints (backup, diagnostics, seed, schema, reconciliation, logs) are behind authentication gates and explicit security permissions.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_admin_system_endpoints_access_control',
-      name: 'کنترل دسترسی و محافظت از نقاط پایانی حساس سیستمی و مدیریتی (System & Admin Endpoints Hardening)',
+      name: 'Access control and protection of sensitive system and admin endpoints (System & Admin Endpoints Hardening)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -174,17 +174,17 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     
     results.push(makeTestCase({
       id: 'sec_backup_export_audit_trail',
-      name: 'ثبت ردپای ممیزی (Audit Trail) برای استخراج نسخه پشتیبان، ارزیابی سلامت و بازسازی اسکیما',
+      name: 'Audit Trail for backup export, health check and schema rebuild',
       layer: 'security',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t5Start,
-      details: `مکانیزم ثبت ردپای عملیات‌های سیستمی حساس (Export, Diagnostics, Schema Check, Seed) در جدول activityLogs فعال و ممیزی‌پذیر است (لاگ‌های اخیر: ${recentLogs.length}).`
+      details: `Sensitive system operations (Export, Diagnostics, Schema Check, Seed) are logged in the activityLogs table and auditable (recent logs: ${recentLogs.length}).`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_backup_export_audit_trail',
-      name: 'ثبت ردپای ممیزی (Audit Trail) برای استخراج نسخه پشتیبان، ارزیابی سلامت و بازسازی اسکیما',
+      name: 'Audit Trail for backup export, health check and schema rebuild',
       layer: 'security',
       executionType: 'real_database',
       passed: false,
@@ -209,22 +209,22 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     const hasLeak = nonPublicSubsystems.some(ns => publicAllowedEndpoints.includes(ns));
 
     if (hasLeak) {
-      throw new Error('نقاط پایانی حساس غیرعمومی در لیست معافیت عمومی قرار گرفته‌اند');
+      throw new Error('Sensitive non-public endpoints are in the public exemption list');
     }
 
     results.push(makeTestCase({
       id: 'sec_public_route_isolation',
-      name: 'جداسازی و ایزولاسیون دقیق نقاط پایانی عمومی و محافظت از مرزهای وب‌هوک و احراز هویت',
+      name: 'Strict isolation of public endpoints and protection of webhook and authentication boundaries',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t6Start,
-      details: 'تنها وب‌هوک‌های تعریف‌شده و گیت‌های احراز هویت اولیه مجاز به دسترسی بدون کوکی احراز هویت هستند.'
+      details: 'Only defined webhooks and initial authentication gates may be accessed without an auth cookie.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_public_route_isolation',
-      name: 'جداسازی و ایزولاسیون دقیق نقاط پایانی عمومی و محافظت از مرزهای وب‌هوک و احراز هویت',
+      name: 'Strict isolation of public endpoints and protection of webhook and authentication boundaries',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -293,20 +293,20 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     if (threwOnMissing && threwOnShort && passedValid && threwOnProdDefault) {
       results.push(makeTestCase({
         id: 'sec_jwt_secret_enforcement',
-        name: 'ارزیابی الزامی بودن و حداقل طول (۳۲ کاراکتر) کلید محرمانه JWT (JWT_SECRET Enforcement)',
+        name: 'JWT_SECRET is required with a minimum length of 32 characters (JWT_SECRET Enforcement)',
         layer: 'security',
         executionType: 'simulation_logic',
         passed: true,
         durationMs: Date.now() - t7Start,
-        details: 'عدم وجود کلید محرمانه یا طول کمتر از ۳۲ کاراکتر به‌درستی شناسایی شده و مانع از اجرای سیستم گردید.'
+        details: 'A missing secret key or one shorter than 32 characters is detected and stops the system from starting.'
       }));
     } else {
-      throw new Error('اعتبارسنجی JWT_SECRET در حالت فقدان یا طول کوتاه ناموفق بود');
+      throw new Error('JWT_SECRET validation failed for the missing or short case');
     }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_jwt_secret_enforcement',
-      name: 'ارزیابی الزامی بودن و حداقل طول (۳۲ کاراکتر) کلید محرمانه JWT (JWT_SECRET Enforcement)',
+      name: 'JWT_SECRET is required with a minimum length of 32 characters (JWT_SECRET Enforcement)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -322,22 +322,22 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     const token = await EventActionEngineService.getWebhookSecretToken();
 
     if (!token || typeof token !== 'string' || token.length < 16) {
-      throw new Error('توکن امنیتی وب‌هوک معتبر از دیتابیس/محیط دریافت نشد');
+      throw new Error('No valid webhook security token was read from the database/environment');
     }
 
     results.push(makeTestCase({
       id: 'sec_dynamic_webhook_secret_enforcement',
-      name: 'پویاسازی و حذف کلید هاردکدشده توکن امضای وب‌هوک (Dynamic Webhook Secret Token - SEC-004)',
+      name: 'Webhook signing token is dynamic and the hardcoded key is removed (Dynamic Webhook Secret Token - SEC-004)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t8Start,
-      details: 'توکن امنیتی وب‌هوک به‌صورت پویا از appSettings/محیط بازخوانی شده و کلید هاردکدشده حذف گردید.'
+      details: 'The webhook security token is read dynamically from appSettings/the environment and the hardcoded key is removed.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_dynamic_webhook_secret_enforcement',
-      name: 'پویاسازی و حذف کلید هاردکدشده توکن امضای وب‌هوک (Dynamic Webhook Secret Token - SEC-004)',
+      name: 'Webhook signing token is dynamic and the hardcoded key is removed (Dynamic Webhook Secret Token - SEC-004)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -352,7 +352,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     // 1. Prod mode with empty ALLOWED_ORIGINS and no APP_URL -> should reject as fatal misconfiguration
     const prodEmpty = validateCorsOrigin('https://malicious.com', { nodeEnv: 'production', allowedOrigins: '' });
     if (prodEmpty.allowed || !prodEmpty.fatal) {
-      throw new Error('در حالت Production بدون ALLOWED_ORIGINS، بایستی CORS با خطای کانفیگ ریجکت شود');
+      throw new Error('In Production without ALLOWED_ORIGINS, CORS must be rejected with a configuration error');
     }
 
     // 2. Specified ALLOWED_ORIGINS -> allowed origin passes, disallowed origin fails
@@ -366,7 +366,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     });
 
     if (!prodSetAllowed.allowed || prodSetDisallowed.allowed) {
-      throw new Error('محدودیت ALLOWED_ORIGINS به‌درستی مبداهای غیرمجاز را ریجکت نکرد');
+      throw new Error('The ALLOWED_ORIGINS restriction did not reject disallowed origins');
     }
 
     // 3. S-1 Finding Verification: In Production, arbitrary Cloud Run / googleusercontent domains MUST be rejected
@@ -380,7 +380,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     });
 
     if (prodCloudRunAttacker.allowed || prodGoogleUserContentAttacker.allowed) {
-      throw new Error('حفره S-1: دامنه‌های دلخواه Cloud Run یا googleusercontent در پروداکشن ریجکت نشدند!');
+      throw new Error('Hole S-1: arbitrary Cloud Run or googleusercontent domains were not rejected in production!');
     }
 
     // 4. Development mode: AI Studio and localhost preview origins are allowed
@@ -391,28 +391,28 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       nodeEnv: 'development'
     });
     if (!devAiStudioPreview.allowed || !devLocalhost.allowed) {
-      throw new Error('دامنه‌های توسعه و پیش‌نمایش در محیط development به اشتباه مسدود شدند');
+      throw new Error('Development and preview domains are wrongly blocked in the development environment');
     }
 
     // 5. Same-origin or non-browser requests (no Origin header) always pass
     const sameOrigin = validateCorsOrigin(undefined, { nodeEnv: 'production' });
     if (!sameOrigin.allowed) {
-      throw new Error('درخواست‌های هم‌مبدا (فاقد هدر Origin) باید همیشه مجاز باشند');
+      throw new Error('Same-origin requests (without an Origin header) must always be allowed');
     }
 
     results.push(makeTestCase({
       id: 'sec_cors_allowlist_enforcement',
-      name: 'اجباری‌سازی CORS Allowlist و انسداد حفره S-1 در محیط Production (SEC-005 / S-1)',
+      name: 'CORS allowlist is enforced and hole S-1 is closed in Production (SEC-005 / S-1)',
       layer: 'security',
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - t9Start,
-      details: 'ارزیابی پایداری CORS در محیط Production و مسدودسازی قطعی دامنه‌های متفرقه Cloud Run و googleusercontent تایید گردید.'
+      details: 'CORS in Production is stable and unrelated Cloud Run and googleusercontent domains are blocked.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_cors_allowlist_enforcement',
-      name: 'اجباری‌سازی CORS Allowlist و انسداد حفره S-1 در محیط Production (SEC-005 / S-1)',
+      name: 'CORS allowlist is enforced and hole S-1 is closed in Production (SEC-005 / S-1)',
       layer: 'security',
       executionType: 'real_code',
       passed: false,
@@ -426,19 +426,19 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   try {
     // 1. Verify Cookie Security options
     if (AUTH_COOKIE_OPTIONS.sameSite !== 'none' && (AUTH_COOKIE_OPTIONS.sameSite as any) !== 'lax') {
-      throw new Error(`sameSite باید مقدار 'none' یا 'lax' داشته باشد، مقدار فعلی: ${AUTH_COOKIE_OPTIONS.sameSite}`);
+      throw new Error(`sameSite must be 'none' or 'lax', current value: ${AUTH_COOKIE_OPTIONS.sameSite}`);
     }
     if (!AUTH_COOKIE_OPTIONS.httpOnly) {
-      throw new Error('کوکی احراز هویت باید حتما httpOnly: true باشد');
+      throw new Error('The auth cookie must be httpOnly: true');
     }
     if (!AUTH_COOKIE_OPTIONS.secure) {
-      throw new Error('کوکی احراز هویت باید حتما secure: true باشد');
+      throw new Error('The auth cookie must be secure: true');
     }
 
     // 2. Verify CSRF Token generation
     const sampleCsrf = generateCsrfToken();
     if (!sampleCsrf || sampleCsrf.length !== 64) {
-      throw new Error('توکن CSRF باید ۶۴ کاراکتر هگزادسیمال باشد');
+      throw new Error('The CSRF token must be 64 hexadecimal characters');
     }
 
     // 3. Verify CSRF Protection Middleware logic
@@ -451,7 +451,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     const resGet: any = { status: () => ({ json: () => {} }) };
     csrfProtection(reqGet, resGet, () => { passedGet = true; });
     if (!passedGet) {
-      throw new Error('درخواست‌های GET نباید مسدود شوند');
+      throw new Error('GET requests must not be blocked');
     }
 
     // Case B: POST request with matching X-CSRF-Token -> Must pass
@@ -464,7 +464,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     };
     csrfProtection(reqValidPost, resGet, () => { passedValidPost = true; });
     if (!passedValidPost) {
-      throw new Error('درخواست POST با توکن CSRF معتبر باید تایید شود');
+      throw new Error('A POST request with a valid CSRF token must be accepted');
     }
 
     // Case C: POST request with missing/invalid X-CSRF-Token -> Must reject (403)
@@ -488,7 +488,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     };
     csrfProtection(reqInvalidPost, resInvalidPost, () => {});
     if (!rejectedInvalidPost || statusCode !== 403) {
-      throw new Error('درخواست POST با توکن CSRF نامعتبر باید با وضعیت ۴۰۳ ریجکت شود');
+      throw new Error('A POST request with an invalid CSRF token must be rejected with status 403');
     }
 
     // Case D: Pure Bearer API client (no cookies) -> Must pass
@@ -501,22 +501,22 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     };
     csrfProtection(reqBearer, resGet, () => { passedBearer = true; });
     if (!passedBearer) {
-      throw new Error('کلاینت‌های بدون کوکی بر پایه Bearer نباید توسط CSRF مسدود شوند');
+      throw new Error('Cookieless Bearer clients must not be blocked by CSRF');
     }
 
     results.push(makeTestCase({
       id: 'sec_cookie_csrf_protection',
-      name: 'امنیت کوکی SameSite=Lax و مکانیزم محافظت CSRF (SEC-006)',
+      name: 'SameSite=Lax cookie security and CSRF protection (SEC-006)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t10Start,
-      details: 'پیکربندی SameSite=Lax، اعتبارسنجی هدر X-CSRF-Token برای درخواست‌های جهش وضعیت و پشتیبانی کلاینت‌های Bearer تایید شد.'
+      details: 'SameSite=Lax configuration, X-CSRF-Token header validation for state-changing requests and Bearer client support are confirmed.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_cookie_csrf_protection',
-      name: 'امنیت کوکی SameSite=Lax و مکانیزم محافظت CSRF (SEC-006)',
+      name: 'SameSite=Lax cookie security and CSRF protection (SEC-006)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -548,22 +548,22 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       !cspDirectives.formAction.includes("'self'") ||
       cspDirectives.frameAncestors.length < 2
     ) {
-      throw new Error('دایرکتیوهای CSP با الزامات امنیتی SEC-007 مطابقت ندارند');
+      throw new Error('CSP directives do not meet the SEC-007 security requirements');
     }
 
     results.push(makeTestCase({
       id: 'sec_helmet_csp_hsts',
-      name: 'ارزیابی هدرهای امنیتی Helmet، سیاست CSP و HSTS (SEC-007)',
+      name: 'Helmet security headers, CSP policy and HSTS (SEC-007)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t11Start,
-      details: 'پیکربندی دایرکتیوهای CSP شامل default-src, object-src=none, base-uri=self, frame-ancestors و HSTS تایید گردید.'
+      details: 'CSP directives including default-src, object-src=none, base-uri=self, frame-ancestors and HSTS are confirmed.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_helmet_csp_hsts',
-      name: 'ارزیابی هدرهای امنیتی Helmet، سیاست CSP و HSTS (SEC-007)',
+      name: 'Helmet security headers, CSP policy and HSTS (SEC-007)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -583,40 +583,40 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     // Verify hash format is valid bcrypt ($2a$, $2b$, or $2y$)
     const isBcrypt = hash.startsWith('$2a$') || hash.startsWith('$2b$') || hash.startsWith('$2y$');
     if (!isBcrypt) {
-      throw new Error('فرمت هش تولیدی bcrypt معتبر نیست');
+      throw new Error('The generated bcrypt hash format is invalid');
     }
 
     // Verify correct password matches
     const isMatch = bcrypt.compareSync(plainTextPassword, hash);
     if (!isMatch) {
-      throw new Error('رمز عبور صحیح با هش bcrypt مطابقت نیافت');
+      throw new Error('The correct password does not match the bcrypt hash');
     }
 
     // Verify wrong password fails
     const isWrongMatch = bcrypt.compareSync('WrongPassword', hash);
     if (isWrongMatch) {
-      throw new Error('رمز عبور اشتباه نباید با هش مطابقت داشته باشد');
+      throw new Error('A wrong password must not match the hash');
     }
 
     // Verify plain-text equality fallback is rejected
     const plainComparisonAllowed = false;
     if (plainComparisonAllowed) {
-      throw new Error('مقایسه مستقیم رشته رمز عبور متن‌ساده مجاز نیست');
+      throw new Error('Direct comparison of plain-text password strings is not allowed');
     }
 
     results.push(makeTestCase({
       id: 'sec_password_hashing_migration',
-      name: 'ارزیابی رمزنگاری اجباری پسوردها با Bcrypt و حذف مقایسه متن‌ساده (SEC-008)',
+      name: 'Passwords are always hashed with Bcrypt and plain-text comparison is removed (SEC-008)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t12Start,
-      details: 'تولید و اعتبارسنجی هش‌های Bcrypt ($2a$/$2b$)، ممانعت از تطبیق متن‌ساده و مکانیزم مهاجرت دیتابیس تایید شد.'
+      details: 'Generation and validation of Bcrypt hashes ($2a$/$2b$), refusal of plain-text matching and the database migration mechanism are confirmed.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_password_hashing_migration',
-      name: 'ارزیابی رمزنگاری اجباری پسوردها با Bcrypt و حذف مقایسه متن‌ساده (SEC-008)',
+      name: 'Passwords are always hashed with Bcrypt and plain-text comparison is removed (SEC-008)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -653,7 +653,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       // 1. Initial status should be unlocked
       const initStatus = await checkAccountLockout(testUsername, ip);
       if (initStatus.isLocked) {
-        throw new Error('کاربر جدید نباید قفل باشد');
+        throw new Error('A new user must not be locked');
       }
 
       // 2. Simulate 4 failed attempts -> still unlocked
@@ -661,39 +661,39 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       for (let i = 1; i <= 4; i++) {
         lastFail = await recordFailedAttempt(testUsername, ip);
         if (lastFail.locked) {
-          throw new Error(`تلاش شماره ${i} نباید حساب را قفل کند`);
+          throw new Error(`Attempt number ${i} must not lock the account`);
         }
       }
       if (lastFail.remainingAttempts !== 1) {
-        throw new Error(`تعداد تلاش‌های باقی‌مانده پس از ۴ خطا باید ۱ باشد، مقدار دریافت شده: ${lastFail.remainingAttempts}`);
+        throw new Error(`Remaining attempts after 4 failures must be 1, got: ${lastFail.remainingAttempts}`);
       }
 
       // 3. 5th attempt -> account locked (v7.0.28 / TD-186: progressive lock — 1 minute first)
       const fifthFail = await recordFailedAttempt(testUsername, ip);
       if (!fifthFail.locked || fifthFail.remainingMinutes !== 1) {
-        throw new Error(`تلاش پنجم باید حساب کاربری را ۱ دقیقه قفل کند (مقدار: ${fifthFail.remainingMinutes})`);
+        throw new Error(`The fifth attempt must lock the account for 1 minute (value: ${fifthFail.remainingMinutes})`);
       }
 
       // 3.1 Each further failure doubles the lock (2, 4, ... capped at 30 minutes)
       const sixthFail = await recordFailedAttempt(testUsername, ip);
       if (!sixthFail.locked || sixthFail.remainingMinutes !== 2) {
-        throw new Error(`تلاش ششم باید قفل را به ۲ دقیقه افزایش دهد (مقدار: ${sixthFail.remainingMinutes})`);
+        throw new Error(`The sixth attempt must raise the lock to 2 minutes (value: ${sixthFail.remainingMinutes})`);
       }
       const { lockMinutesForFailureCount } = await import('../../services/auth/loginSecurity.service.js');
       if (lockMinutesForFailureCount(4) !== 0 || lockMinutesForFailureCount(7) !== 4 || lockMinutesForFailureCount(20) !== 30) {
-        throw new Error('جدول قفل تدریجی باید ۰، ۴ و حداکثر ۳۰ دقیقه را برای ۴، ۷ و ۲۰ تلاش ناموفق برگرداند.');
+        throw new Error('The progressive lock table must return 0, 4 and at most 30 minutes for 4, 7 and 20 failed attempts.');
       }
 
       // 4. Verify lockout check reports locked
       const lockedCheck = await checkAccountLockout(testUsername, ip);
       if (!lockedCheck.isLocked) {
-        throw new Error('بررسی وضعیت قفل باید مقدار isLocked: true برگرداند');
+        throw new Error('The lock status check must return isLocked: true');
       }
 
       // 4.1 v7.0.70 (TD-187): قفل فقط برای همان (نام کاربری + IP) است؛ صاحب حساب از نشانی دیگر وارد می‌شود
       const otherIpCheck = await checkAccountLockout(testUsername, '203.0.113.11');
       if (otherIpCheck.isLocked) {
-        throw new Error('قفل ۶ تلاش ناموفق از یک نشانی نباید ورود همان کاربر از نشانی دیگر را ببندد (TD-187)');
+        throw new Error('A lock after 6 failed attempts from one address must not block the same user from another address (TD-187)');
       }
 
       // 4.2 قفل کل حساب فقط پس از ACCOUNT_LOCKOUT_THRESHOLD (۵۰) تلاش ناموفق از همه نشانی‌ها
@@ -701,23 +701,23 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       resetPhantomLockouts();
       for (let i = 1; i < ACCOUNT_LOCKOUT_THRESHOLD; i++) {
         const spread = await recordFailedAttempt(testUsername, `198.18.${Math.floor(i / 200)}.${i % 200}`);
-        if (spread.locked) throw new Error(`تلاش ${i} از نشانی‌های پراکنده نباید حساب را قفل کند`);
+        if (spread.locked) throw new Error(`Attempt ${i} from scattered addresses must not lock the account`);
       }
       const freshIp = '203.0.113.12';
       if ((await checkAccountLockout(testUsername, freshIp)).isLocked) {
-        throw new Error(`پیش از ${ACCOUNT_LOCKOUT_THRESHOLD} تلاش، حساب از نشانی تازه نباید قفل باشد`);
+        throw new Error(`Before ${ACCOUNT_LOCKOUT_THRESHOLD} attempts, the account must not be locked from a fresh address`);
       }
       const accountFail = await recordFailedAttempt(testUsername, '198.18.9.9');
       const accountCheck = await checkAccountLockout(testUsername, freshIp);
       if (!accountFail.locked || accountFail.remainingMinutes !== 1 || !accountCheck.isLocked) {
-        throw new Error(`تلاش ${ACCOUNT_LOCKOUT_THRESHOLD}ام باید کل حساب را ۱ دقیقه از هر نشانی قفل کند: ${JSON.stringify({ accountFail, accountCheck })}`);
+        throw new Error(`Attempt ${ACCOUNT_LOCKOUT_THRESHOLD} must lock the whole account for 1 minute from any address: ${JSON.stringify({ accountFail, accountCheck })}`);
       }
 
       // 5. Reset failed attempts
       await resetFailedAttempts(createdUser.id);
       const postResetCheck = await checkAccountLockout(testUsername, freshIp);
       if (postResetCheck.isLocked) {
-        throw new Error('پس از ریست، حساب باید از حالت قفل خارج شود');
+        throw new Error('After a reset, the account must be unlocked');
       }
     } finally {
       // Cleanup test user
@@ -727,17 +727,17 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
 
     results.push(makeTestCase({
       id: 'sec_rate_limiting_account_lockout',
-      name: 'مکانیزم قفل تدریجی حساب کاربری پس از ۵ تلاش ناموفق و Rate Limiting و قفل (نام کاربری + IP) با قفل کل حساب پس از ۵۰ تلاش (SEC-009 / TD-186 / TD-187)',
+      name: 'Progressive account lock after 5 failed attempts, rate limiting and a (username + IP) lock, with a whole-account lock after 50 attempts (SEC-009 / TD-186 / TD-187)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t13Start,
-      details: 'قفل تدریجی (۱، ۲، ... حداکثر ۳۰ دقیقه) پس از ۵ خطای متوالی و بازیابی پس از ورود موفق/ریست تایید گردید.'
+      details: 'Progressive lock (1, 2, ... at most 30 minutes) after 5 consecutive failures and recovery after a successful login/reset are confirmed.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_rate_limiting_account_lockout',
-      name: 'مکانیزم قفل تدریجی حساب کاربری پس از ۵ تلاش ناموفق و Rate Limiting و قفل (نام کاربری + IP) با قفل کل حساب پس از ۵۰ تلاش (SEC-009 / TD-186 / TD-187)',
+      name: 'Progressive account lock after 5 failed attempts, rate limiting and a (username + IP) lock, with a whole-account lock after 50 attempts (SEC-009 / TD-186 / TD-187)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -758,7 +758,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       !isPrivateOrReservedIp('10.0.0.1') ||
       !isPrivateOrReservedIp('192.168.1.100')
     ) {
-      throw new Error('آدرس‌های IP خصوصی یا محلی به عنوان رزرو شده تشخیص داده نشدند');
+      throw new Error('Private or local IP addresses were not detected as reserved');
     }
 
     // 2. S-2: IPv4-mapped IPv6 addresses detection (e.g. ::ffff:169.254.169.254, ::ffff:127.0.0.1, hex forms)
@@ -768,7 +768,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       !isPrivateOrReservedIp('::ffff:a9fe:a9fe') ||
       !isPrivateOrReservedIp('::ffff:7f00:1')
     ) {
-      throw new Error('حفره S-2: آدرس‌های ترکیبی IPv4-mapped IPv6 برای متادیتا یا لوپ‌بک شناسایی نشدند');
+      throw new Error('Hole S-2: IPv4-mapped IPv6 addresses for metadata or loopback were not detected');
     }
 
     // 3. S-2: IPv6 loopback, ULA, and link-local detection
@@ -779,15 +779,15 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       !isPrivateOrReservedIp('fe80::1') ||
       !isPrivateOrReservedIp('fc00::1')
     ) {
-      throw new Error('آدرس‌های محلی و رزرو شده IPv6 مسدود نشدند');
+      throw new Error('Local and reserved IPv6 addresses were not blocked');
     }
 
     // 4. S-2: Carrier-Grade NAT (CGNAT RFC 6598 100.64.0.0/10) detection & public boundary verification
     if (!isPrivateOrReservedIp('100.64.0.1') || !isPrivateOrReservedIp('100.127.255.255')) {
-      throw new Error('بازه شبکه اختصاصی CGNAT (100.64.0.0/10) به عنوان رزرو شده شناسایی نشد');
+      throw new Error('The CGNAT shared network range (100.64.0.0/10) was not detected as reserved');
     }
     if (isPrivateOrReservedIp('100.128.0.1')) {
-      throw new Error('آدرس عمومی 100.128.0.1 خارج از بازه CGNAT به اشتباه خصوصی اعلام شد');
+      throw new Error('The public address 100.128.0.1 outside the CGNAT range was wrongly reported as private');
     }
 
     // 5. Test rejection of database port SSRF (e.g. 127.0.0.1:5432)
@@ -798,7 +798,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       rejectedDbPort = true;
     }
     if (!rejectedDbPort) {
-      throw new Error('آدرس http://127.0.0.1:5432 باید مسدود گردد');
+      throw new Error('The address http://127.0.0.1:5432 must be blocked');
     }
 
     // 6. Test rejection of cloud metadata (169.254.169.254)
@@ -809,7 +809,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       rejectedMetadata = true;
     }
     if (!rejectedMetadata) {
-      throw new Error('آدرس متادیتای کلود (169.254.169.254) باید مسدود گردد');
+      throw new Error('The cloud metadata address (169.254.169.254) must be blocked');
     }
 
     // 7. S-2: Test rejection of IPv4-mapped IPv6 cloud metadata ([::ffff:169.254.169.254])
@@ -820,7 +820,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       rejectedMappedMetadata = true;
     }
     if (!rejectedMappedMetadata) {
-      throw new Error('حفره S-2: درخواست متادیتا از طریق [::ffff:169.254.169.254] باید مسدود گردد');
+      throw new Error('Hole S-2: a metadata request through [::ffff:169.254.169.254] must be blocked');
     }
 
     // 8. S-2: Test rejection of IPv4-mapped IPv6 loopback ([::ffff:127.0.0.1])
@@ -831,7 +831,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       rejectedMappedLoopback = true;
     }
     if (!rejectedMappedLoopback) {
-      throw new Error('حفره S-2: درخواست لوپ‌بک از طریق [::ffff:127.0.0.1] باید مسدود گردد');
+      throw new Error('Hole S-2: a loopback request through [::ffff:127.0.0.1] must be blocked');
     }
 
     // 9. S-2: Test rejection of IPv6 loopback ([::1])
@@ -842,7 +842,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       rejectedIpv6Loopback = true;
     }
     if (!rejectedIpv6Loopback) {
-      throw new Error('درخواست به لوپ‌بک IPv6 [::1] باید مسدود گردد');
+      throw new Error('A request to the IPv6 loopback [::1] must be blocked');
     }
 
     // 10. S-2: Test rejection of CGNAT target (100.64.0.0/10)
@@ -853,7 +853,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       rejectedCgnat = true;
     }
     if (!rejectedCgnat) {
-      throw new Error('درخواست به بازه CGNAT (100.64.1.20) باید مسدود گردد');
+      throw new Error('A request to the CGNAT range (100.64.1.20) must be blocked');
     }
 
     // 11. Test rejection of internal redis/database port
@@ -864,7 +864,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       rejectedRedisPort = true;
     }
     if (!rejectedRedisPort) {
-      throw new Error('پورت حساس 6379 بر روی شبکه خصوصی باید مسدود گردد');
+      throw new Error('The sensitive port 6379 on a private network must be blocked');
     }
 
     // 12. Test valid external URL passes
@@ -872,17 +872,17 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
 
     results.push(makeTestCase({
       id: 'sec_ssrf_protection_guard',
-      name: 'محافظت جامع در برابر حملات جعل درخواست سرور و انسداد حفره S-2 (SSRF Guard / S-2)',
+      name: 'Full protection against server-side request forgery and closing of hole S-2 (SSRF Guard / S-2)',
       layer: 'security',
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - t14Start,
-      details: 'مسدودسازی درخواست به IPهای خصوصی، متادیتای ابری (169.254)، آدرس‌های ترکیبی IPv4-mapped IPv6، بازه CGNAT و پورت‌های دیتابیس با موفقیت تایید شد.'
+      details: 'Requests to private IPs, cloud metadata (169.254), IPv4-mapped IPv6 addresses, the CGNAT range and database ports are blocked.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_ssrf_protection_guard',
-      name: 'محافظت جامع در برابر حملات جعل درخواست سرور و انسداد حفره S-2 (SSRF Guard / S-2)',
+      name: 'Full protection against server-side request forgery and closing of hole S-2 (SSRF Guard / S-2)',
       layer: 'security',
       executionType: 'real_code',
       passed: false,
@@ -901,19 +901,19 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     // 1. Verify PostgreSQL SSL configuration enforces strict rejectUnauthorized
     const drizzleModule = await fs.promises.readFile(path.join(process.cwd(), 'src/db/drizzle.ts'), 'utf8');
     if (drizzleModule.includes('rejectUnauthorized: false')) {
-      throw new Error('src/db/drizzle.ts هنوز دارای rejectUnauthorized: false است');
+      throw new Error('src/db/drizzle.ts still has rejectUnauthorized: false');
     }
     if (!drizzleModule.includes('POSTGRES_SSL_CA_PATH')) {
-      throw new Error('src/db/drizzle.ts از متغیر POSTGRES_SSL_CA_PATH استفاده نمی‌کند');
+      throw new Error('src/db/drizzle.ts does not use the POSTGRES_SSL_CA_PATH variable');
     }
 
     // 2. Verify WooCommerce SSL configuration enforces strict rejectUnauthorized
     const wooModule = await fs.promises.readFile(path.join(process.cwd(), 'src/routes/woocommerce.routes.ts'), 'utf8');
     if (wooModule.includes('rejectUnauthorized: false')) {
-      throw new Error('src/routes/woocommerce.routes.ts دارای rejectUnauthorized: false است');
+      throw new Error('src/routes/woocommerce.routes.ts has rejectUnauthorized: false');
     }
     if (!wooModule.includes('WOOCOMMERCE_SSL_CA_PATH')) {
-      throw new Error('src/routes/woocommerce.routes.ts از متغیر WOOCOMMERCE_SSL_CA_PATH استفاده نمی‌کند');
+      throw new Error('src/routes/woocommerce.routes.ts does not use the WOOCOMMERCE_SSL_CA_PATH variable');
     }
 
     // 3. Verify HTTPS agent instantiation works with strict validation
@@ -924,17 +924,17 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
 
     results.push(makeTestCase({
       id: 'sec_tls_ssl_strict_verification',
-      name: 'اعتبارسنجی سخت‌گیرانه گواهینامه‌های SSL/TLS در PostgreSQL و WooCommerce (SEC-011)',
+      name: 'Strict SSL/TLS certificate verification in PostgreSQL and WooCommerce (SEC-011)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t15Start,
-      details: 'عدم استفاده از rejectUnauthorized: false و پشتیبانی از گواهی‌های سفارشی CA برای دیتابیس و ووکامرس تایید شد.'
+      details: 'No use of rejectUnauthorized: false and support for custom CA certificates for the database and WooCommerce are confirmed.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_tls_ssl_strict_verification',
-      name: 'اعتبارسنجی سخت‌گیرانه گواهینامه‌های SSL/TLS در PostgreSQL و WooCommerce (SEC-011)',
+      name: 'Strict SSL/TLS certificate verification in PostgreSQL and WooCommerce (SEC-011)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -955,7 +955,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     const lock1Acquired = Boolean(rows1[0]?.acquired === true || rows1[0]?.acquired === 't');
 
     if (!lock1Acquired) {
-      throw new Error('دریافت اولیه Advisory Lock 79234 با خطا مواجه شد');
+      throw new Error('Initial acquisition of Advisory Lock 79234 failed');
     }
 
     // Try acquiring the same lock from a second logical attempt (must fail / return false)
@@ -983,13 +983,13 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       const invalidToken = 'wrong_token';
       const isMatch = invalidToken === process.env.ERP_SETUP_TOKEN;
       if (isMatch) {
-        throw new Error('توکن نامعتبر نباید با توکن محیطی یکسان شناخته شود');
+        throw new Error('An invalid token must not be treated as equal to the environment token');
       }
 
       const validToken = testSecret;
       const isValidMatch = validToken === process.env.ERP_SETUP_TOKEN;
       if (!isValidMatch) {
-        throw new Error('توکن معتبر باید تایید گردد');
+        throw new Error('A valid token must be accepted');
       }
 
       // Sub-test 2b: Production environment setup token hardening (S-4)
@@ -999,14 +999,14 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       const checkInsecureToken = (token: string) => !token || token === 'papital_erp_setup_token_2026' || token.length < 16;
       const isDefaultInsecure = checkInsecureToken('papital_erp_setup_token_2026');
       if (!isDefaultInsecure) {
-        throw new Error('توکن پیش‌فرض نباید در محیط عملیاتی معتبر شناخته شود');
+        throw new Error('The default token must not be accepted in the production environment');
       }
 
       // Sub-test 2c: In production, default password admin123456 must be rejected (S-4)
       const checkWeakPassword = (password: string) => password === 'admin123456' || password.length < 8;
       const isWeakOrBanned = checkWeakPassword('admin123456');
       if (!isWeakOrBanned) {
-        throw new Error('رمز پیش‌فرض admin123456 باید در پروداکشن مسدود گردد');
+        throw new Error('The default password admin123456 must be blocked in production');
       }
     } finally {
       process.env.NODE_ENV = oldNodeEnv;
@@ -1019,17 +1019,17 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
 
     results.push(makeTestCase({
       id: 'sec_setup_token_and_advisory_lock',
-      name: 'محافظت از راه‌اندازی اولیه با ERP_SETUP_TOKEN و Advisory Lock دیتابیس (SEC-012 / S-4)',
+      name: 'Initial setup is protected with ERP_SETUP_TOKEN and a database Advisory Lock (SEC-012 / S-4)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t16Start,
-      details: 'اعتبارسنجی هدر X-Setup-Token، جلوگیری از Race condition با pg_try_advisory_lock(79234)، حذف پسورد پیش‌فرض admin123456 و اعتبارسنجی توکن در پروداکشن تایید گردید.'
+      details: 'X-Setup-Token header validation, race condition prevention with pg_try_advisory_lock(79234), removal of the default password admin123456 and token validation in production are confirmed.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_setup_token_and_advisory_lock',
-      name: 'محافظت از راه‌اندازی اولیه با ERP_SETUP_TOKEN و Advisory Lock دیتابیس (SEC-012)',
+      name: 'Initial setup is protected with ERP_SETUP_TOKEN and a database Advisory Lock (SEC-012)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -1089,33 +1089,33 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     });
 
     if (!nextCalled || nextError) {
-      throw new Error(`میدل‌ور اعتبارسنجی باید برای ورودی معتبر تابع next را بدون خطا فراخوانی کند: ${nextError?.message}`);
+      throw new Error(`The validation middleware must call next without an error for valid input: ${nextError?.message}`);
     }
 
     // بررسی اینکه فیلدهای اضافه و ناخواسته توسط Zod حذف شده و داده‌های پالایش‌شده جایگزین req.body شده‌اند
     if (mockReq.body.maliciousUnsanitizedField !== undefined || mockReq.body.extraField !== undefined) {
-      throw new Error('فیلدهای غیرمجاز و ناشناخته باید پس از اعتبارسنجی Zod از req.body حذف شوند (جایگزینی داده تمیز S-6).');
+      throw new Error('Unknown and disallowed fields must be removed from req.body after Zod validation (clean data replacement S-6).');
     }
 
     if (mockReq.body.name !== 'کالای تستی Zod' || mockReq.body.count !== 5) {
-      throw new Error('فیلدهای معتبر ارسالی باید به درستی در req.body نگهداری و جایگزین شوند.');
+      throw new Error('Valid submitted fields must be kept and replaced correctly in req.body.');
     }
 
     results.push(makeTestCase({
       id: 'sec_runtime_validation_middleware_guard',
       scenarioId: 'v4_runtime_validation_middleware_guard',
-      name: 'سنگربندی میدل‌ور اعتبارسنجی Zod و جایگزینی داده‌های تمیز در req.body (یافته S-6)',
+      name: 'Zod validation middleware hardening and clean data replacement in req.body (finding S-6)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t17Start,
-      details: 'تضمین شد که خروجی اعتبارسنجی و پالایش‌شده Zod مستقیماً در req.body/query/params جایگزین شده و فیلدهای ناخواسته حذف می‌گردند.'
+      details: 'The validated and sanitized Zod output replaces req.body/query/params directly and unwanted fields are removed.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_runtime_validation_middleware_guard',
       scenarioId: 'v4_runtime_validation_middleware_guard',
-      name: 'سنگربندی میدل‌ور اعتبارسنجی Zod و جایگزینی داده‌های تمیز در req.body (یافته S-6)',
+      name: 'Zod validation middleware hardening and clean data replacement in req.body (finding S-6)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,
@@ -1133,13 +1133,13 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
 
     // 1. Check safeCompareTokens behavior
     if (!safeCompareTokens('super-secret-token-123', 'super-secret-token-123')) {
-      throw new Error('safeCompareTokens باید برای دو توکن یکسان مقدار true برگرداند.');
+      throw new Error('safeCompareTokens must return true for two identical tokens.');
     }
     if (safeCompareTokens('super-secret-token-123', 'wrong-token-abc')) {
-      throw new Error('safeCompareTokens باید برای دو توکن نامطابق مقدار false برگرداند.');
+      throw new Error('safeCompareTokens must return false for two different tokens.');
     }
     if (safeCompareTokens('', 'token') || safeCompareTokens('token', '')) {
-      throw new Error('safeCompareTokens برای مقادیر تهی باید false برگرداند.');
+      throw new Error('safeCompareTokens must return false for empty values.');
     }
 
     // Helper function to run middleware
@@ -1168,7 +1168,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     // Test Case A: No token or cookie -> 401
     const resA = await runMiddleware({ headers: {}, cookies: {} });
     if (resA.statusCode !== 401 || resA.nextCalled) {
-      throw new Error('درخواست بدون هدر و کوکی باید با وضعیت 401 مسدود شود.');
+      throw new Error('A request without a header or cookie must be blocked with status 401.');
     }
 
     // Test Case B (S-3 Critical): Random unverified Bearer string -> MUST BE 401, NOT PASSED!
@@ -1177,7 +1177,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       cookies: {}
     });
     if (resB.statusCode !== 401 || resB.nextCalled) {
-      throw new Error('هدر Authorization با توکن رندوم و امضانشده (حفره S-3) باید با وضعیت 401 رد شود.');
+      throw new Error('An Authorization header with a random unsigned token (hole S-3) must be rejected with status 401.');
     }
 
     // Test Case C: Valid JWT with non-admin role ('personnel') -> 403 Forbidden
@@ -1195,7 +1195,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       cookies: {}
     });
     if (resC.statusCode !== 403 || resC.nextCalled) {
-      throw new Error('کاربر لاگین‌شده با نقش غیر مدیر (پرسنل) نباید به متریک‌های پرومتئوس دسترسی داشته باشد (403 Forbidden).');
+      throw new Error('A logged-in user with a non-admin role (personnel) must not access Prometheus metrics (403 Forbidden).');
     }
     await metricsOrm.update(metricsUsers).set({ isDeleted: 1 }).where(metricsEq(metricsUsers.id, metricsOperator.id));
 
@@ -1208,7 +1208,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     };
     const resD = await runMiddleware(mockAdminReq);
     if (!resD.nextCalled || mockAdminReq.user?.role !== 'admin') {
-      throw new Error('کاربر با نقش معتبر admin باید مجاز به مشاهده متریک‌ها باشد.');
+      throw new Error('A user with a valid admin role must be allowed to view the metrics.');
     }
 
     // Test Case E: METRICS_TOKEN authentication
@@ -1221,7 +1221,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       };
       const resE = await runMiddleware(mockScrapeReq);
       if (!resE.nextCalled) {
-        throw new Error('اسکرپر پرومتئوس با هدر معتبر METRICS_TOKEN باید مجاز باشد.');
+        throw new Error('A Prometheus scraper with a valid METRICS_TOKEN header must be allowed.');
       }
 
       // Test with X-Metrics-Token header as well
@@ -1231,7 +1231,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       };
       const resE2 = await runMiddleware(mockHeaderReq);
       if (!resE2.nextCalled) {
-        throw new Error('اسکرپر با هدر X-Metrics-Token معتبر باید مجاز باشد.');
+        throw new Error('A scraper with a valid X-Metrics-Token header must be allowed.');
       }
 
       // Test with wrong scrape token
@@ -1241,7 +1241,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       };
       const resWrong = await runMiddleware(mockWrongReq);
       if (resWrong.statusCode !== 401 || resWrong.nextCalled) {
-        throw new Error('اسکرپر با توکن اسکرپ اشتباه باید با 401 مسدود شود.');
+        throw new Error('A scraper with a wrong scrape token must be blocked with 401.');
       }
     } finally {
       if (originalMetricsToken !== undefined) {
@@ -1253,17 +1253,17 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
 
     results.push(makeTestCase({
       id: 'sec_metrics_authentication_guard',
-      name: 'احراز هویت و اعتبارسنجی قطعی توکن در روت‌های متریک پرومتئوس (یافته S-3 / زیرفاز ۲.۳)',
+      name: 'Authentication and strict token validation on Prometheus metrics routes (finding S-3 / sub-phase 2.3)',
       layer: 'security',
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - t18Start,
-      details: 'تضمین شد که هدرهای رندوم امضانشده (S-3) مسدود شده، توکن‌های JWT مدیران اعتبارسنجی گشته و اسکرپ پرومتئوس با METRICS_TOKEN به صورت ایمن احراز هویت می‌شود.'
+      details: 'Random unsigned headers (S-3) are blocked, admin JWT tokens are validated and Prometheus scraping is safely authenticated with METRICS_TOKEN.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_metrics_authentication_guard',
-      name: 'احراز هویت و اعتبارسنجی قطعی توکن در روت‌های متریک پرومتئوس (یافته S-3 / زیرفاز ۲.۳)',
+      name: 'Authentication and strict token validation on Prometheus metrics routes (finding S-3 / sub-phase 2.3)',
       layer: 'security',
       executionType: 'real_code',
       passed: false,
@@ -1289,25 +1289,25 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     const rawCard = '6037991234567890';
     const maskedCard = maskCardNumber(rawCard);
     if (!maskedCard.startsWith('6037') || !maskedCard.endsWith('7890') || !maskedCard.includes('****')) {
-      throw new Error(`ماسک شماره کارت نامعتبر است: ${maskedCard}`);
+      throw new Error(`Card number mask is invalid: ${maskedCard}`);
     }
 
     const rawSheba = 'IR120120000000001234567890';
     const maskedSheba = maskShebaNumber(rawSheba);
     if (!maskedSheba.startsWith('IR12') || !maskedSheba.endsWith('7890') || !maskedSheba.includes('***')) {
-      throw new Error(`ماسک شماره شبا نامعتبر است: ${maskedSheba}`);
+      throw new Error(`Sheba number mask is invalid: ${maskedSheba}`);
     }
 
     const rawAcc = '123456789';
     const maskedAcc = maskAccountNumber(rawAcc);
     if (!maskedAcc.endsWith('6789') || !maskedAcc.startsWith('*****')) {
-      throw new Error(`ماسک شماره حساب نامعتبر است: ${maskedAcc}`);
+      throw new Error(`Account number mask is invalid: ${maskedAcc}`);
     }
 
     const rawUser = 'mycrypto_user';
     const maskedUser = maskNobitexUsername(rawUser);
     if (!maskedUser.includes('***')) {
-      throw new Error(`ماسک نام کاربری صرافی نامعتبر است: ${maskedUser}`);
+      throw new Error(`Exchange username mask is invalid: ${maskedUser}`);
     }
 
     // 2. Validate sanitizePersonnelRecord
@@ -1327,12 +1327,12 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
       sanitizedForRegular.shebaNumber === rawSheba ||
       sanitizedForRegular.nobitexPassword !== ''
     ) {
-      throw new Error('اطلاعات حساس بانکی یا رمز صرافی برای کاربر عادی ماسک/حذف نشده است.');
+      throw new Error('Sensitive bank data or the exchange password is not masked/removed for a regular user.');
     }
 
     const sanitizedForAdmin = sanitizePersonnelRecord(sensitivePersonnel, true);
     if (sanitizedForAdmin.cardNumber !== rawCard || sanitizedForAdmin.nobitexPassword !== 'super_secret_password') {
-      throw new Error('اطلاعات حساس برای کاربر مجاز (مدیر) مخدوش شده است.');
+      throw new Error('Sensitive data is corrupted for an authorized user (admin).');
     }
 
     // 3. Validate sanitizePayrollRecord
@@ -1345,32 +1345,32 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     };
     const payrollMasked = sanitizePayrollRecord(sensitivePayroll, false);
     if (payrollMasked.cardNumber === rawCard || payrollMasked.shebaNumber === rawSheba) {
-      throw new Error('اطلاعات کارت/شبا در فیش حقوقی برای کاربر غیرمجاز ماسک نشده است.');
+      throw new Error('Card/Sheba data in the payslip is not masked for an unauthorized user.');
     }
 
     // 4. Validate Access Permissions
     const adminAccess = await canAccessSensitivePersonnelData({ id: 1, role: 'admin' });
-    if (!adminAccess) throw new Error('نقش admin باید دسترسی کامل به داده‌های مالی حساس داشته باشد.');
+    if (!adminAccess) throw new Error('The admin role must have full access to sensitive financial data.');
 
     const ownerAccess = await canAccessSensitivePersonnelData({ id: 42, role: 'personnel' }, 42);
-    if (!ownerAccess) throw new Error('کاربر مالک رکورد باید به اطلاعات خودش دسترسی داشته باشد.');
+    if (!ownerAccess) throw new Error('The record owner must have access to their own data.');
 
     const strangerAccess = await canAccessSensitivePersonnelData({ id: 99, role: 'normal_user' }, 42);
-    if (strangerAccess) throw new Error('کاربر غریبه نباید به اطلاعات حساس پرسنل دسترسی داشته باشد.');
+    if (strangerAccess) throw new Error('An unrelated user must not access sensitive personnel data.');
 
     results.push(makeTestCase({
       id: 'sec_personnel_pii_masking_and_guard',
-      name: 'ماسک‌سازی اطلاعات حساس مالی پرسنل و صیانت از PII (یافته S-5 / زیرفاز ۲.۵ / TD-090)',
+      name: 'Masking of sensitive personnel financial data and PII protection (finding S-5 / sub-phase 2.5 / TD-090)',
       layer: 'security',
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - t19Start,
-      details: 'تضمین شد که شماره کارت، شماره شبا، شماره حساب، نام کاربری و پسورد صرافی برای کاربران غیرمجاز ماسک و ایمن‌سازی شده و فقط با گارد مجوزهای مالی اختصاصی یا دسترسی خود پرسنل قابل مشاهده است.'
+      details: 'Card number, Sheba number, account number, exchange username and password are masked for unauthorized users and visible only through the dedicated financial permission guard or to the personnel themselves.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_personnel_pii_masking_and_guard',
-      name: 'ماسک‌سازی اطلاعات حساس مالی پرسنل و صیانت از PII (یافته S-5 / زیرفاز ۲.۵ / TD-090)',
+      name: 'Masking of sensitive personnel financial data and PII protection (finding S-5 / sub-phase 2.5 / TD-090)',
       layer: 'security',
       executionType: 'real_code',
       passed: false,

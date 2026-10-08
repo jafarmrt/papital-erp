@@ -46,14 +46,14 @@ function persianTexts(file: string): Array<{ line: number; text: string }> {
 const files = sourceFiles(ROOT);
 
 describe('CRM wording in the Persian UI (TD-432)', () => {
-  it('uses «ارتباط با مشتری» instead of «CRM» in Persian UI text', () => {
+  it('uses "customer relations" (the Persian term) instead of "CRM" in Persian UI text', () => {
     const offenders = files.flatMap(f => persianTexts(f)
       .filter(t => t.text.includes('CRM') && !STORED_KEYS.has(t.text))
       .map(t => `${relative(ROOT, f)}:${t.line}: ${t.text}`));
     expect(offenders).toEqual([]);
   });
 
-  it('has no «تسک»، «لید»، «منشن» or «کانبان» in package 9 text', () => {
+  it('has no transliterated "task", "lead", "mention" or "kanban" in package 9 text', () => {
     const offenders = files
       .filter(f => PACKAGE_9.some(p => relative(ROOT, f).replace(/\\/g, '/').startsWith(p)))
       .flatMap(f => persianTexts(f).filter(t => TRANSLITERATION.test(t.text)).map(t => `${relative(ROOT, f)}:${t.line}: ${t.text}`));

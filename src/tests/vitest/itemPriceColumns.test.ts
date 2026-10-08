@@ -6,7 +6,7 @@ const STRATEGIES = ['فروشگاه', 'مصرف‌کننده', 'عمده'];
 
 // v9.0.152 (TD-647): only configured price lists are prices; the cost and stock columns of an export never become prices
 describe('Excel price columns', () => {
-  it('reads configured price lists only and reports other «قیمت …» columns', () => {
+  it('reads configured price lists only and reports other "price ..." columns', () => {
     const r = extractRowPriceColumns({
       'کد کالا': '1404-N-101-01', 'موجودی کل': 12, [ITEM_WAC_COLUMN]: 700000, 'قیمت میانگین خرید (WAC)': 700000,
       'قیمت عمده': 950000, 'قیمت - فروشگاه': 1200000, 'قیمت ویژه': 5, 'واحد ارز': 'USD',

@@ -33,7 +33,7 @@ export async function runRecordGuardTests(shouldRun: (id: string, ...extra: stri
   const cases: Array<{ id: string; name: string; run: () => Promise<string> }> = [
     {
       id: 'sec_customer_version_lock_td_403',
-      name: 'v8.0.122: ویرایش طرف حساب با نسخه کهنه یا بی نسخه رد می‌شود و درون‌ریزی اکسل ردیف شناسه‌دار را فقط با نسخه خودش به‌روز می‌کند (TD-403)',
+      name: 'v8.0.122: editing a party with a stale or missing version is refused and the Excel import updates a row with an id only at its own version (TD-403)',
       run: async () => {
         const editor = await userWith(['customers.view', 'customers.manage']);
         const cust = await createTestCustomer({ city: 'تهران', phone: `0912${String(Date.now()).slice(-7)}` });
@@ -41,13 +41,13 @@ export async function runRecordGuardTests(shouldRun: (id: string, ...extra: stri
           const body = { name: cust.name, phone: cust.phone ?? '', city: 'شیراز' };
           const wrong: string[] = [];
           const first = await send(editor.session, 'put', `/api/customers/${cust.id}`, { ...body, version: cust.version });
-          if (first.status !== 200) wrong.push(`ویرایش با نسخه درست ${first.status} شد (${JSON.stringify(first.body).slice(0, 200)})`);
+          if (first.status !== 200) wrong.push(`edit with the right version returned ${first.status} (${JSON.stringify(first.body).slice(0, 200)})`);
           const stale = await send(editor.session, 'put', `/api/customers/${cust.id}`, { ...body, city: 'تبریز', version: cust.version });
-          if (stale.status !== 409) wrong.push(`ویرایش با نسخه کهنه ${stale.status} شد، نه ۴۰۹`);
+          if (stale.status !== 409) wrong.push(`edit with a stale version returned ${stale.status}, not 409`);
           const missing = await send(editor.session, 'put', `/api/customers/${cust.id}`, { ...body, city: 'یزد' });
-          if (missing.status !== 400) wrong.push(`ویرایش بی نسخه ${missing.status} شد، نه ۴۰۰`);
+          if (missing.status !== 400) wrong.push(`edit without a version returned ${missing.status}, not 400`);
           const [afterEdits] = await orm.select().from(customers).where(eq(customers.id, cust.id));
-          if (afterEdits.city !== 'شیراز') wrong.push(`شهر پس از ویرایش‌ها «${afterEdits.city}» است، نه «شیراز»`);
+          if (afterEdits.city !== 'شیراز') wrong.push(`city after the edits is "${afterEdits.city}", not "Shiraz"`);
 
           // درون‌ریزی: ردیف شناسه‌دار بی نسخه یا با نسخه کهنه اعمال نمی‌شود؛ با نسخه کنونی اعمال می‌شود
           const row = { id: cust.id, name: cust.name, phone: cust.phone ?? '' };
@@ -57,13 +57,13 @@ export async function runRecordGuardTests(shouldRun: (id: string, ...extra: stri
           });
           const [afterStale] = await orm.select().from(customers).where(eq(customers.id, cust.id));
           if (imported.status !== 200 || Number(imported.body?.updatedCount) !== 0 || (imported.body?.errors ?? []).length !== 2) {
-            wrong.push(`درون‌ریزی بی نسخه و با نسخه کهنه: ${imported.status}، ${Number(imported.body?.updatedCount)} به‌روزرسانی، ${(imported.body?.errors ?? []).length} خطا (انتظار ۰ و ۲)`);
+            wrong.push(`import without a version and with a stale version: ${imported.status}, ${Number(imported.body?.updatedCount)} updated, ${(imported.body?.errors ?? []).length} errors (expected 0 and 2)`);
           }
-          if (afterStale.city !== 'شیراز') wrong.push(`درون‌ریزی کهنه شهر را «${afterStale.city}» کرد`);
+          if (afterStale.city !== 'شیراز') wrong.push(`stale import set the city to "${afterStale.city}"`);
           const fresh = await send(editor.session, 'post', '/api/customers/bulk-import', { updateIfExists: true, rows: [{ ...row, city: 'رشت', version: afterStale.version }] });
           const [afterFresh] = await orm.select().from(customers).where(eq(customers.id, cust.id));
-          if (fresh.status !== 200 || afterFresh.city !== 'رشت') wrong.push(`درون‌ریزی با نسخه کنونی اعمال نشد (${fresh.status}، شهر «${afterFresh.city}»)`);
-          if (wrong.length > 0) throw new Error(wrong.join('، '));
+          if (fresh.status !== 200 || afterFresh.city !== 'رشت') wrong.push(`import with the current version was not applied (${fresh.status}, city "${afterFresh.city}")`);
+          if (wrong.length > 0) throw new Error(wrong.join(', '));
           return 'نسخه درست ۲۰۰، کهنه ۴۰۹، بی نسخه ۴۰۰؛ درون‌ریزی کهنه و بی نسخه رد و با نسخه کنونی اعمال شد';
         } finally {
           await orm.delete(customers).where(eq(customers.id, cust.id));
@@ -72,7 +72,7 @@ export async function runRecordGuardTests(shouldRun: (id: string, ...extra: stri
     },
     {
       id: 'sec_daily_log_stats_visibility_td_406',
-      name: 'v8.0.125: آمار گزارش کار فقط گزارش‌هایی را می‌شمارد که کاربر در فهرست می‌بیند، نه گزارش محرمانه دیگران (TD-406)',
+      name: 'v8.0.125: daily work log statistics count only the logs the user sees in the list, not private logs of others (TD-406)',
       run: async () => {
         const author = await userWith(['daily_logs.view', 'daily_logs.create']);
         const viewer = await userWith(['daily_logs.view']);
@@ -90,13 +90,13 @@ export async function runRecordGuardTests(shouldRun: (id: string, ...extra: stri
           const rows: Array<{ title?: string; work_mode?: string }> = Array.isArray(list.body?.data) ? list.body.data : [];
           const visible = typeof list.body?.total === 'number' ? list.body.total : -1;
           const wrong: string[] = [];
-          if (stats.status !== 200) throw new Error(`آمار ${stats.status} داد`);
-          if (stats.body.total_logs !== visible) wrong.push(`شمار کل آمار ${stats.body.total_logs} است و فهرست ${visible}`);
+          if (stats.status !== 200) throw new Error(`statistics returned ${stats.status}`);
+          if (stats.body.total_logs !== visible) wrong.push(`statistics total count is ${stats.body.total_logs} and the list has ${visible}`);
           const remoteVisible = rows.filter(l => String(l.title).startsWith('td406') && l.work_mode === 'remote').length;
-          if (remoteVisible !== 0) wrong.push(`گزارش محرمانه در فهرست بیننده آمد (${remoteVisible})`);
-          if (stats.body.my_mentions_count !== 1) wrong.push(`«اشاره به من» ${stats.body.my_mentions_count} است، نه ۱ (گزارش محرمانه شمرده شد)`);
-          if (authorStats.body.my_total_logs !== 3) wrong.push(`نویسنده ${authorStats.body.my_total_logs} گزارش خود را شمرد، نه ۳`);
-          if (wrong.length > 0) throw new Error(wrong.join('، '));
+          if (remoteVisible !== 0) wrong.push(`a private log appeared in the viewer list (${remoteVisible})`);
+          if (stats.body.my_mentions_count !== 1) wrong.push(`"mentions me" is ${stats.body.my_mentions_count}, not 1 (a private log was counted)`);
+          if (authorStats.body.my_total_logs !== 3) wrong.push(`the author counted ${authorStats.body.my_total_logs} of their own logs, not 3`);
+          if (wrong.length > 0) throw new Error(wrong.join(', '));
           return `شمار کل ${visible} برابر فهرست؛ اشاره ۱؛ نویسنده ۳ گزارش خود را شمرد`;
         } finally {
           await orm.delete(dailyWorkLogs).where(inArray(dailyWorkLogs.id, inserted.map(r => r.id)));

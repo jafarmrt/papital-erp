@@ -14,24 +14,24 @@ async function main(): Promise<void> {
     console.log(JSON.stringify(report, null, 2));
     return;
   }
-  console.log('🔎 گزارش تقویم ستون‌های تاریخ متنی (فقط خواندنی)');
-  console.log('   قالب نهایی ذخیره: میلادی ISO (YYYY-MM-DD)؛ نمایش همه‌جا شمسی\n');
+  console.log('🔎 Calendar report of text date columns (read-only)');
+  console.log('   Final storage format: Gregorian ISO (YYYY-MM-DD); shown as Jalali everywhere\n');
   console.table(report.columns.map(c => ({
-    'ستون': `${c.table}.${c.column}`,
-    'قاعده': c.rule === 'iso' ? 'ISO' : c.rule === 'isots' ? 'زمان میلادی' : c.rule === 'any' ? 'آزاد' : '—',
-    'معتبر': c.ruleValidated ? '✓' : '✗',
-    'کل': c.total,
-    'خالی': c.empty,
+    'Column': `${c.table}.${c.column}`,
+    'Rule': c.rule === 'iso' ? 'ISO' : c.rule === 'isots' ? 'Gregorian timestamp' : c.rule === 'any' ? 'Any' : '—',
+    'Validated': c.ruleValidated ? '✓' : '✗',
+    'Total': c.total,
+    'Empty': c.empty,
     'ISO': c.iso,
-    'میلادی دیگر': c.gregorian,
-    'شمسی': c.jalali,
-    'نامعتبر': c.invalid,
+    'Other Gregorian': c.gregorian,
+    'Jalali': c.jalali,
+    'Invalid': c.invalid,
   })));
   for (const c of report.columns.filter(col => col.invalidSamples.length > 0)) {
-    console.log(`⚠️ ${c.table}.${c.column} — نمونه مقادیر نامعتبر: ${c.invalidSamples.map(v => `«${v}»`).join('، ')}`);
+    console.log(`⚠️ ${c.table}.${c.column}: sample invalid values: ${c.invalidSamples.map(v => `"${v}"`).join(', ')}`);
   }
   const t = report.totals;
-  console.log(`\nجمع: ISO ${t.iso} — میلادی با قالب دیگر ${t.gregorian} — شمسی ${t.jalali} — نامعتبر ${t.invalid}`);
+  console.log(`\nTotal: ISO ${t.iso}, Gregorian in another format ${t.gregorian}, Jalali ${t.jalali}, invalid ${t.invalid}`);
 }
 
 main()

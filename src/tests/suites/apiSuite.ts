@@ -27,7 +27,7 @@ export async function runApiTests(): Promise<TestCaseResult[]> {
     // 1.2 — real endpoint data shape: settings list must return an actual array
     const settingsRows = await orm.select({ key: appSettings.key }).from(appSettings).limit(5);
     if (!Array.isArray(settingsRows)) {
-      throw new Error('خروجی واقعی ORM برای فهرست تنظیمات آرایه نیست');
+      throw new Error('The real ORM output for the settings list is not an array');
     }
     const extractSafe = (res: unknown) => Array.isArray((res as { data?: unknown[] })?.data)
       ? (res as { data: unknown[] }).data
@@ -35,22 +35,22 @@ export async function runApiTests(): Promise<TestCaseResult[]> {
 
     const safe = extractSafe({ data: settingsRows });
     if (safe.length !== settingsRows.length) {
-      throw new Error('استخراج ایمن از شکل واقعی پاسخ settings شکست خورد');
+      throw new Error('Safe extraction from the real shape of the settings response failed');
     }
 
     results.push(makeTestCase({
       id: 'api_array_safety_guard',
-      name: 'استخراج ایمن آرایه‌ها در پاسخ‌های API (Array Safety Guard)',
+      name: 'Safe extraction of arrays from API responses (Array Safety Guard)',
       layer: 'api',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t1Start,
-      details: `parsePagination واقعی با ورودی‌های مخرب (99999999999/NaN) سقف‌گذاری امن شد و شکل آرایه‌ای واقعی ${settingsRows.length} رکورد تنظیمات تأیید گردید.`
+      details: `The real parsePagination safely capped malicious inputs (99999999999/NaN) and the real array shape of ${settingsRows.length} settings records is confirmed.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'api_array_safety_guard',
-      name: 'استخراج ایمن آرایه‌ها در پاسخ‌های API (Array Safety Guard)',
+      name: 'Safe extraction of arrays from API responses (Array Safety Guard)',
       layer: 'api',
       executionType: 'real_database',
       passed: false,
@@ -64,7 +64,7 @@ export async function runApiTests(): Promise<TestCaseResult[]> {
   try {
     const initialStats = getUserAuthCacheStats();
     if (typeof initialStats.size !== 'number' || typeof initialStats.maxSize !== 'number') {
-      throw new Error('آمار کش احراز هویت نامعتبر است');
+      throw new Error('Auth cache statistics are invalid');
     }
 
     // Invalidate a specific user cache entry
@@ -74,22 +74,22 @@ export async function runApiTests(): Promise<TestCaseResult[]> {
     invalidateUserAuthCache();
     const clearedStats = getUserAuthCacheStats();
     if (clearedStats.size !== 0) {
-      throw new Error('کش احراز هویت پس از پاک‌سازی خالی نشد');
+      throw new Error('The auth cache was not empty after clearing');
     }
 
     results.push(makeTestCase({
       id: 'api_auth_token_cache_invalidation',
-      name: 'کش بهینه احراز هویت و مکانیزم ابطال نشست (In-Memory Auth Cache & Invalidation)',
+      name: 'Optimized auth cache and session invalidation (In-Memory Auth Cache & Invalidation)',
       layer: 'api',
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - t2Start,
-      details: `سیستم کش حافظه‌ای احراز هویت (TTL=30s, MaxSize=${initialStats.maxSize}) و توابع ابطال تکی و سراسری با موفقیت اعتبارسنجی شدند.`
+      details: `The in-memory auth cache (TTL=30s, MaxSize=${initialStats.maxSize}) and the single and global invalidation functions are validated.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'api_auth_token_cache_invalidation',
-      name: 'کش بهینه احراز هویت و مکانیزم ابطال نشست (In-Memory Auth Cache & Invalidation)',
+      name: 'Optimized auth cache and session invalidation (In-Memory Auth Cache & Invalidation)',
       layer: 'api',
       executionType: 'real_code',
       passed: false,
@@ -103,28 +103,28 @@ export async function runApiTests(): Promise<TestCaseResult[]> {
   try {
     const pageParams = parsePagination({ page: '1', limit: '25' }, { page: 1, limit: 50 });
     if (pageParams.page !== 1 || pageParams.limit !== 25 || pageParams.offset !== 0) {
-      throw new Error(`محاسبه صفحه‌بندی ترنسفرها نادرست است: ${JSON.stringify(pageParams)}`);
+      throw new Error(`Transfers pagination is computed wrongly: ${JSON.stringify(pageParams)}`);
     }
 
     // Verify DB transfers table query compatibility
     const transfersCount = await orm.select({ id: transfers.id }).from(transfers).limit(10);
     if (!Array.isArray(transfersCount)) {
-      throw new Error('کوئری ترنسفرها آرایه معتبر بازنگرداند');
+      throw new Error('The transfers query did not return a valid array');
     }
 
     results.push(makeTestCase({
       id: 'api_transfers_pagination_and_guard',
-      name: 'اعتبارسنجی صفحه‌بندی و کنترل بار اندپوینت ترنسفرها (Transfers Pagination & Query Guard)',
+      name: 'Pagination and load control of the transfers endpoint (Transfers Pagination & Query Guard)',
       layer: 'api',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t3Start,
-      details: `صفحه‌بندی اندپوینت /api/transfers با پارامترهای پیش‌فرض و انتخابی اعتبارسنجی شد و کوئری پایگاه داده با موفقیت اجرا گردید.`
+      details: `Pagination of the /api/transfers endpoint with default and chosen parameters is validated and the database query ran.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'api_transfers_pagination_and_guard',
-      name: 'اعتبارسنجی صفحه‌بندی و کنترل بار اندپوینت ترنسفرها (Transfers Pagination & Query Guard)',
+      name: 'Pagination and load control of the transfers endpoint (Transfers Pagination & Query Guard)',
       layer: 'api',
       executionType: 'real_database',
       passed: false,

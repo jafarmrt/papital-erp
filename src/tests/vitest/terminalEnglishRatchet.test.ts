@@ -64,6 +64,33 @@ describe('terminal_english_ratchet_td_625: Persian terminal output may only shri
       await createItem({ code: 'P01', name: '${FA}' });
     `;
     expect(countFileSites('src/tests/suites/x.ts', runner)).toBe(3);
+    // v9.0.450 (TD-625): a runner test name held in a constant counts once, at its declaration; test data does not
+    const named = `
+      const testName = 'v7.0.60: ${FA}';
+      const label = '${FA}';
+      results.push(makeTestCase({ id: 'reg_td_4_w', name: testName, layer: 'regression' }));
+      results.push(makeTestCase({ id: 'reg_td_4_w', name: testName, layer: 'regression', error: label }));
+      const title = '${FA}';
+      results.push({ id: 'unit_td_5_v', title, layer: 'unit' });
+      const importId = 'reg_td_6_u';
+      await runCase(results, importId, '${FA}', fn);
+      await createItem(results, label, '${FA}');
+    `;
+    expect(countFileSites('src/tests/suites/x.ts', named)).toBe(3);
+  });
+
+  it('counts the labels of assertion helpers in runner tests, not Vitest assertions or named constants', () => {
+    // v9.0.450 (TD-625): a failing check prints its message on the terminal
+    const runner = `
+      check(res.status === 200, '${FA}');
+      expectStatus('${FA}', res.status, 422);
+      await assertInvariant(itemId, \`\${x} ${FA}\`, {});
+      const REFUSAL = '${FA}';
+      check(res.body.message === REFUSAL, 'refused with the server message');
+      checkout('${FA}');
+    `;
+    expect(countFileSites('src/tests/suites/x.ts', runner)).toBe(3);
+    expect(countFileSites('src/tests/vitest/x.test.ts', `expect(screen.getByText('${FA}')).toBeTruthy(); check('${FA}');`)).toBe(0);
   });
 
   it('ignores the changelog data files', () => {

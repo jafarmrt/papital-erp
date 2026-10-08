@@ -16,18 +16,18 @@ if [ ! -d node_modules ] || [ ! -f node_modules/.package-lock.json ] || [ packag
   echo "[session-start] npm ci"
   npm ci --no-audit --no-fund
 else
-  echo "[session-start] node_modules با package-lock.json هم‌خوان است"
+  echo "[session-start] node_modules matches package-lock.json"
 fi
 
 # ── ۲. PostgreSQL 16 ──────────────────────────────────────────
 if ! command -v pg_ctlcluster >/dev/null 2>&1; then
-  echo "[session-start] PostgreSQL محلی نصب نیست؛ آزمون‌های پایگاه‌داده اجرا نمی‌شوند" >&2
+  echo "[session-start] local PostgreSQL is not installed; database tests will not run" >&2
   exit 0
 fi
 
 status="$(pg_lsclusters 16 main 2>/dev/null | awk 'NR>1 {print $4}')"
 if [ "$status" != "online" ]; then
-  echo "[session-start] روشن کردن PostgreSQL 16"
+  echo "[session-start] starting PostgreSQL 16"
   pg_ctlcluster 16 main start
 fi
 
@@ -40,9 +40,9 @@ as_postgres() { runuser -u postgres -- psql -v ON_ERROR_STOP=1 -qtA "$@"; }
 as_postgres -c "ALTER USER postgres PASSWORD 'test'"
 for db in erp_test erp_e2e; do
   if [ "$(as_postgres -c "SELECT 1 FROM pg_database WHERE datname = '$db'")" != "1" ]; then
-    echo "[session-start] ساخت پایگاه‌داده $db"
+    echo "[session-start] creating database $db"
     as_postgres -c "CREATE DATABASE $db"
   fi
 done
 
-echo "[session-start] آماده: node_modules و PostgreSQL 16 (erp_test، erp_e2e)"
+echo "[session-start] ready: node_modules and PostgreSQL 16 (erp_test, erp_e2e)"

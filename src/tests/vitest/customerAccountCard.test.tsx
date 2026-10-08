@@ -51,7 +51,7 @@ afterEach(() => {
 
 // v9.0.4 (TD-416، تصمیم مالک محصول ت۱ الف): کارت حساب طرف حساب با شناسه او از سرور گرفته می‌شود، نه با نام «شامل»
 describe('party account card by id (TD-416)', () => {
-  it('the customers page «تراز مالی» card asks for the party by id, never by name', async () => {
+  it('the customers page "financial balance" card asks for the party by id, never by name', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>

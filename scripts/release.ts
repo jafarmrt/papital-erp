@@ -65,7 +65,7 @@ const rowId = (row: string) => row.match(/^\| (TD-\d+) \|/)?.[1];
 function edit(files: ReleaseFiles, p: string, oldText: string, newText: string): void {
   const s = files.read(p);
   const count = s.split(oldText).length - 1;
-  if (count !== 1) throw new Error(`${p}: متن قدیم باید دقیقاً یک بار باشد (${count} بار): ${oldText.slice(0, 90)}`);
+  if (count !== 1) throw new Error(`${p}: the old text must occur exactly once (found ${count} times): ${oldText.slice(0, 90)}`);
   files.write(p, s.replace(oldText, () => newText));
 }
 
@@ -73,15 +73,15 @@ function edit(files: ReleaseFiles, p: string, oldText: string, newText: string):
 export function closeRowsOf(spec: ReleaseSpec): CloseRow[] {
   const rows = [...(spec.closes ?? [])];
   if (spec.td) {
-    if (!spec.archiveRow) throw new Error('archiveRow برای td الزامی است');
+    if (!spec.archiveRow) throw new Error('archiveRow is required with td');
     rows.push({ td: spec.td, archiveRow: spec.archiveRow, knownClass: spec.knownClass, testId: spec.testId });
   } else if (spec.knownClass) {
-    throw new Error('knownClass به td و testId نیاز دارد');
+    throw new Error('knownClass needs td and testId');
   }
   for (const r of rows) {
-    if (!/^TD-\d+$/.test(r.td)) throw new Error(`شناسه نامعتبر «${r.td}»`);
-    if (!r.archiveRow?.startsWith(`| ${r.td} |`)) throw new Error(`archiveRow باید با «| ${r.td} |» شروع شود`);
-    if (r.knownClass && !r.testId) throw new Error(`knownClass ردیف ${r.td} به testId نیاز دارد`);
+    if (!/^TD-\d+$/.test(r.td)) throw new Error(`invalid id "${r.td}"`);
+    if (!r.archiveRow?.startsWith(`| ${r.td} |`)) throw new Error(`archiveRow must start with "| ${r.td} |"`);
+    if (r.knownClass && !r.testId) throw new Error(`knownClass of row ${r.td} needs testId`);
   }
   return rows;
 }
@@ -100,19 +100,19 @@ export function updateTechDebt(files: ReleaseFiles, spec: ReleaseSpec, active: A
   const known = new Set([...lines, ...archive.split('\n')].map(rowId).filter(Boolean));
 
   for (const r of closes) {
-    if (!lines.some(l => l.startsWith(`| ${r.td} |`))) throw new Error(`ردیف ${r.td} در TECH_DEBT.md نیست`);
+    if (!lines.some(l => l.startsWith(`| ${r.td} |`))) throw new Error(`row ${r.td} is not in TECH_DEBT.md`);
     lines = lines.filter(l => !l.startsWith(`| ${r.td} |`));
   }
   for (const row of openRows) {
     const id = rowId(row);
-    if (!id || !row.trimEnd().endsWith('|')) throw new Error(`ردیف باز باید «| TD-### | … |» باشد: ${row.slice(0, 60)}`);
-    if (known.has(id)) throw new Error(`شناسه ${id} از پیش در TECH_DEBT.md یا آرشیو هست`);
+    if (!id || !row.trimEnd().endsWith('|')) throw new Error(`an open row must look like "| TD-### | … |": ${row.slice(0, 60)}`);
+    if (known.has(id)) throw new Error(`id ${id} is already in TECH_DEBT.md or the archive`);
     known.add(id);
   }
 
   lines = lines.filter(l => l !== EMPTY_ROW);
   const header = lines.indexOf(TABLE_SEP);
-  if (header < 0) throw new Error('جدول فعال TECH_DEBT.md پیدا نشد');
+  if (header < 0) throw new Error('the active table of TECH_DEBT.md was not found');
   let at = header + 1;
   while (at < lines.length && rowId(lines[at])) at++;
   lines.splice(at, 0, ...openRows);
@@ -121,7 +121,7 @@ export function updateTechDebt(files: ReleaseFiles, spec: ReleaseSpec, active: A
 
   let s = lines.join('\n');
   const m = s.match(/- \*\*آرشیو شده \(resolved\):\*\* ([۰-۹0-9]+) ردیف/);
-  if (!m) throw new Error('شمارنده آرشیو در TECH_DEBT.md پیدا نشد');
+  if (!m) throw new Error('the archived-row count line was not found in TECH_DEBT.md');
   const archived = toEn(m[1]) + closes.length;
   s = s.replace(/- \*\*فعال:\*\* [۰-۹0-9]+ ردیف/, `- **فعال:** ${toFa(activeCount)} ردیف`);
   s = s.replace(m[0], `- **آرشیو شده (resolved):** ${toFa(archived)} ردیف`);
@@ -129,7 +129,7 @@ export function updateTechDebt(files: ReleaseFiles, spec: ReleaseSpec, active: A
 
   if (closes.length > 0) {
     const section = archive.split('\n').find(l => l.startsWith('## ') && l.includes(`نسخه ${toFa(active.series)} —`));
-    if (!section) throw new Error(`بخش «نسخه ${toFa(active.series)}» در TECH_DEBT_ARCHIVE.md نیست`);
+    if (!section) throw new Error(`TECH_DEBT_ARCHIVE.md has no section for series ${active.series}`);
     const sep = `${TABLE_SEP}\n`;
     const pos = archive.indexOf(sep, archive.indexOf(section)) + sep.length;
     files.write('TECH_DEBT_ARCHIVE.md', archive.slice(0, pos) + closes.map(r => `${r.archiveRow}\n`).join('') + archive.slice(pos));
@@ -155,10 +155,10 @@ export function changelogEntry(spec: ReleaseSpec): string {
 /** همه کارهای دفتری یک انتشار؛ خطا پیش از نوشتن هر فایلی که ورودی را رد کند */
 export function applyRelease(files: ReleaseFiles, spec: ReleaseSpec, active: ActiveSeries): { active: number; archived: number } {
   const versionRe = new RegExp(`^v${active.series}\\.\\d+\\.\\d+$`);
-  if (!versionRe.test(spec.version)) throw new Error(`version باید در سری فعال ${active.series} باشد (v${active.series}.x.y)`);
-  if (!/^v\d+\.\d+\.\d+$/.test(spec.prev)) throw new Error('prev باید vX.Y.Z باشد');
-  if (!spec.entry?.changes?.length) throw new Error('entry.changes دست‌کم یک مورد لازم دارد');
-  if (!spec.mdLine?.trim() || /^\s*-/.test(spec.mdLine)) throw new Error('mdLine نباید خالی باشد یا با «-» شروع شود (خط فهرست را ابزار می‌سازد)');
+  if (!versionRe.test(spec.version)) throw new Error(`version must be in the active series ${active.series} (v${active.series}.x.y)`);
+  if (!/^v\d+\.\d+\.\d+$/.test(spec.prev)) throw new Error('prev must be vX.Y.Z');
+  if (!spec.entry?.changes?.length) throw new Error('entry.changes needs at least one item');
+  if (!spec.mdLine?.trim() || /^\s*-/.test(spec.mdLine)) throw new Error('mdLine must not be empty or start with "-" (the tool writes the list dash)');
   const closes = closeRowsOf(spec);
 
   for (const r of closes) {
@@ -170,7 +170,7 @@ export function applyRelease(files: ReleaseFiles, spec: ReleaseSpec, active: Act
   if (spec.lastReview) {
     const s = files.read('TECH_DEBT.md');
     const re = /\*آخرین بازبینی: v\d+\.\d+\.\d+.*\*/;
-    if (!re.test(s)) throw new Error('خط «آخرین بازبینی» در TECH_DEBT.md پیدا نشد');
+    if (!re.test(s)) throw new Error('the "last review" line was not found in TECH_DEBT.md');
     files.write('TECH_DEBT.md', s.replace(re, () => `*${spec.lastReview}*`));
   }
   for (const [p, oldText, newText] of spec.edits ?? []) edit(files, p, oldText, newText);
@@ -188,7 +188,7 @@ export function applyRelease(files: ReleaseFiles, spec: ReleaseSpec, active: Act
   edit(files, 'package.json', `"version": "${prev}"`, `"version": "${next}"`);
   const lock = files.read('package-lock.json');
   const occurrences = lock.split(`"version": "${prev}"`).length - 1;
-  if (occurrences < 2) throw new Error(`package-lock.json: نسخه ${prev} دو بار (ریشه و بسته ریشه) لازم است`);
+  if (occurrences < 2) throw new Error(`package-lock.json: version ${prev} must occur twice (the root and the root package)`);
   let replaced = 0;
   files.write('package-lock.json', lock.replace(new RegExp(`"version": "${prev.replace(/\./g, '\\.')}"`, 'g'), m => (replaced++ < 2 ? `"version": "${next}"` : m)));
   return counts;
@@ -196,9 +196,9 @@ export function applyRelease(files: ReleaseFiles, spec: ReleaseSpec, active: Act
 
 async function main(): Promise<void> {
   const specPath = process.argv[2];
-  if (!specPath) throw new Error('استفاده: npm run release -- <spec.json>');
+  if (!specPath) throw new Error('usage: npm run release -- <spec.json>');
   const root = process.cwd();
-  if (!fs.existsSync(path.join(root, 'package.json'))) throw new Error('از ریشه مخزن اجرا کنید');
+  if (!fs.existsSync(path.join(root, 'package.json'))) throw new Error('run it from the repository root');
   const spec = JSON.parse(fs.readFileSync(specPath, 'utf8')) as ReleaseSpec;
   const { ACTIVE_CHANGELOG } = await import('../src/data/changelogs/index.js');
 
@@ -210,7 +210,7 @@ async function main(): Promise<void> {
   };
   const counts = applyRelease(files, spec, { series: ACTIVE_CHANGELOG.series, file: ACTIVE_CHANGELOG.file });
   for (const [rel, content] of pending) fs.writeFileSync(path.join(root, rel), content);
-  console.log(`✅ ${spec.version} — فعال ${counts.active}، آرشیو ${counts.archived}. اکنون npm run check:version`);
+  console.log(`✅ ${spec.version}: ${counts.active} active rows, ${counts.archived} archived. Now run npm run check:version`);
 }
 
 if (process.argv[1]?.endsWith('release.ts') || process.argv[1]?.endsWith('release.js')) {

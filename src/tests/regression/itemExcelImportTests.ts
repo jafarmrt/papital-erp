@@ -34,7 +34,7 @@ export async function runItemExcelImportTests(shouldRun: ShouldRun): Promise<Tes
       'v9.0.156: the Excel import finds items by code only; a name used by another item is refused and the code never changes (TD-651)',
       ['td651', 'excel', 'package5'], codeOnlyMatchCase],
     ['inv_excel_total_stock_column_no_phantom_surplus_td_649',
-      'v9.0.157: «موجودی کل» alone changes only an item whose stock is all in the default warehouse; otherwise per-warehouse columns are required and must add up (TD-649)',
+      'v9.0.157: the "total stock" column alone changes only an item whose stock is all in the default warehouse; otherwise per-warehouse columns are required and must add up (TD-649)',
       ['td649', 'excel', 'stock', 'inventory', 'package5'], totalStockCase],
     ['reg_excel_import_audit_snapshots_td_655',
       'v9.0.158: every item the Excel import creates or changes gets an audit row with before / after fields, stock and prices, plus one summary row, inside the import transaction (TD-655)',
@@ -372,9 +372,9 @@ async function priceListColumnsCase(ctx: Ctx): Promise<string> {
   const quick = buildQuickPriceUpdates([{ 'کد کالا': it.code, 'موجودی کل': 12, 'میانگین بهای خرید': 700000, 'قیمت عمده': 950000 }], [{ id: it.id, code: it.code }], ['فروشگاه', 'مصرف‌کننده', 'عمده']);
   if (quick.updates.length !== 1 || quick.updates[0].title !== 'عمده') wrong.push(`quick import updates ${JSON.stringify(quick.updates)}`);
   const stockAsPrice = await ctx.post('/api/items/prices/batch-update', { updates: [{ itemId: it.id, title: 'موجودی کل', price: 12 }] });
-  if (stockAsPrice.status !== 422 || stockAsPrice.body?.code !== 'PRICE_LIST_NOT_CONFIGURED') wrong.push(`batch-update «موجودی کل» answered ${stockAsPrice.status} ${stockAsPrice.body?.code}`);
+  if (stockAsPrice.status !== 422 || stockAsPrice.body?.code !== 'PRICE_LIST_NOT_CONFIGURED') wrong.push(`batch-update with the "total stock" title answered ${stockAsPrice.status} ${stockAsPrice.body?.code}`);
   const single = await ctx.post(`/api/items/${it.id}/prices`, { title: 'میانگین خرید (WAC)', price: 1250000 });
-  if (single.status !== 422) wrong.push(`POST /items/:id/prices «میانگین خرید (WAC)» answered ${single.status}`);
+  if (single.status !== 422) wrong.push(`POST /items/:id/prices with the "purchase average (WAC)" title answered ${single.status}`);
 
   // d) legacy rows: hidden from the invoice price list, cleaned by migration 0068 or listed by the health check
   const legacy = await orm.insert(itemPrices).values([
