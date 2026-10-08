@@ -18,6 +18,7 @@ import {
 } from '../components/project/projectInventoryUtils';
 import { errorMessageOf } from '../utils';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
+import { directConversionRate } from '../lib/projects/unitConversion';
 
 /** پاسخ PUT /projects/:id؛ رزرو پروژه را سرور می‌نویسد (v8.0.58، TD-306) */
 interface SavedProjectInventory {
@@ -606,7 +607,8 @@ export function useProjectInventory(
       finalConvertedQty = roundToOneDecimal(originalQty / finalRate);
     } else {
       finalConvertedQty = directConvertedQty;
-      finalRate = originalQty > 0 ? roundToOneDecimal(originalQty / directConvertedQty) : 1;
+      // v9.0.350 (TD-820): the rate is not rounded; the server converts the requirement with it
+      finalRate = directConversionRate(originalQty, directConvertedQty);
     }
 
     if (prodId) {

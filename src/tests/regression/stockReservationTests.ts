@@ -16,6 +16,9 @@ export async function runStockReservationTests(shouldRun: ShouldRun): Promise<Te
     ['reg_reservation_finalized_project_only_td_817',
       'v9.0.349: only the stored reservation of a finalized project reserves stock; a draft or unfrozen project reserves nothing and a consumed reservation stays consumed (TD-817)',
       ['td817', 'reservation', 'project', 'package7'], finalizedProjectOnlyCase],
+    ['reg_reservation_unit_conversion_td_820',
+      'v9.0.350: a project reserves its need converted to the item unit with the row\'s conversion rate; a row in another unit without a conversion refuses finalizing with 422 (TD-820)',
+      ['td820', 'reservation', 'project', 'unit', 'package7'], unitConversionCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -161,4 +164,77 @@ async function finalizedProjectOnlyCase(h: Harness, wrong: string[]): Promise<st
   if (kindOf(pc) !== '') wrong.push(`the health check lists the consumed project as «${kindOf(pc)}», expected nothing`);
   await h.q(`UPDATE production_projects SET is_deleted = 1 WHERE id = ANY($1::int[])`, [[Number(legacyDraft.id), Number(legacyFinal.id)]]);
   return 'a draft, an unfrozen and a consumed project reserve nothing, so 5, 5 and the last 2 units sell; legacy projects are listed by the health check only';
+}
+
+/** B07-04 (TD-820): the reservation took the requirement in the row's unit as if it were the item's unit */
+async function unitConversionCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const unitItem = async (stock: number, unit: string) => {
+    const id = await f.item(stock);
+    await h.q(`UPDATE items SET unit = $1 WHERE id = $2`, [unit, id]);
+    const [it] = await h.q(`SELECT code, name FROM items WHERE id = $1`, [id]);
+    return { id, code: String(it.code), name: String(it.name) };
+  };
+
+  // (a) 100 metres at 5 metres a string = 20 strings of an item kept in strings (stock 30): 20 reserved, so 10 sell
+  const a = await unitItem(30, 'ریسه');
+  const pa = await createProject(h, { isFinalized: true, manualPurchaseItems: [], sections: globalSection([
+    { itemCode: a.code, name: a.name, unit: 'متر', requiredQty: 100, convertedUnit: 'ریسه', conversionRate: 5, convertedQty: 20 },
+  ]) });
+  const va = await reservedOf(a.id);
+  if (va.project !== 20) wrong.push(`100 metres at 5 metres a string reserve ${va.project} strings, expected 20`);
+  const rowA = (await storedReservation(h, pa))[0] ?? {};
+  if (Number(rowA.itemId) !== a.id || rowA.unit !== 'ریسه' || 'convertedQty' in rowA || Number(rowA.conversionRate) !== 5) {
+    wrong.push(`the stored reservation row is ${JSON.stringify(rowA)}, expected item ${a.id} in strings with its conversion rate and no convertedQty`);
+  }
+  const saleA = await postDoc(h, f, 'invoice', 'final', a.id, 10);
+  if (saleA.status !== 200) wrong.push(`a final invoice of the 10 free strings answered ${brief(saleA)}, expected 200`);
+
+  // (b) 2 kilograms of an item kept in grams (stock 5,000) at 0.001 kilogram a gram = 2,000 grams reserved
+  const b = await unitItem(5_000, 'گرم');
+  await createProject(h, { isFinalized: true, manualPurchaseItems: [], sections: globalSection([
+    { itemCode: b.code, name: b.name, unit: 'کیلوگرم', requiredQty: 2, convertedUnit: 'گرم', conversionRate: 0.001 },
+  ]) });
+  if ((await reservedOf(b.id)).project !== 2_000) wrong.push(`2 kilograms reserve ${(await reservedOf(b.id)).project} grams, expected 2000`);
+  const bigSale = await postDoc(h, f, 'invoice', 'final', b.id, 4_900);
+  if (bigSale.status !== 400) wrong.push(`a final invoice of 4,900 grams with 2,000 reserved answered ${brief(bigSale)}, expected 400`);
+  const freeSale = await postDoc(h, f, 'invoice', 'final', b.id, 3_000);
+  if (freeSale.status !== 200) wrong.push(`a final invoice of the 3,000 free grams answered ${brief(freeSale)}, expected 200`);
+
+  // (c) a row in kilograms without a conversion: finalizing is refused and nothing is reserved
+  const c = await unitItem(5_000, 'گرم');
+  const invC = { manualPurchaseItems: [], sections: globalSection([{ itemCode: c.code, name: c.name, unit: 'کیلوگرم', requiredQty: 2 }]) };
+  const createFinal = await h.post('/api/projects', { title: `P7 unit ${h.tag}`, products: [], inventory_control: { ...invC, isFinalized: true } });
+  if (createFinal.status !== 422 || (createFinal.body as { code?: string })?.code !== 'PROJECT_RESERVATION_UNIT_MISMATCH') {
+    wrong.push(`creating a finalized project with 2 kilograms of a gram item and no conversion answered ${brief(createFinal)}, expected 422 PROJECT_RESERVATION_UNIT_MISMATCH`);
+  }
+  const pc = await createProject(h, { ...invC, isFinalized: false });
+  const finalizeC = await h.put(`/api/projects/${pc}`, { inventory_control: { ...invC, isFinalized: true } });
+  if (finalizeC.status !== 422 || (finalizeC.body as { code?: string })?.code !== 'PROJECT_RESERVATION_UNIT_MISMATCH') {
+    wrong.push(`finalizing it answered ${brief(finalizeC)}, expected 422 PROJECT_RESERVATION_UNIT_MISMATCH`);
+  }
+  const [storedC] = await h.q(`SELECT inventory_control->'isFinalized' AS fz FROM production_projects WHERE id = $1`, [pc]);
+  if (storedC?.fz === true) wrong.push('the refused finalize was stored');
+  if ((await reservedOf(c.id)).total !== 0) wrong.push(`the refused project reserves ${(await reservedOf(c.id)).total} grams, expected nothing`);
+
+  // (d) two rows of one item in two units are summed after conversion: 100 metres (20 strings) + 3 strings = 23
+  const d = await unitItem(30, 'ریسه');
+  const pd = await createProject(h, { isFinalized: true, manualPurchaseItems: [], sections: [
+    ...globalSection([{ itemCode: d.code, name: d.name, unit: 'متر', requiredQty: 100, convertedUnit: 'ریسه', conversionRate: 5 }]),
+    { id: 'sec-2', title: 'مواد ۲', checkType: 'global', globalItems: [{ itemCode: d.code.toLowerCase(), name: d.name, unit: ' ریسه ', requiredQty: 3 }] },
+  ] });
+  const rowsD = await storedReservation(h, pd);
+  if (rowsD.length !== 1 || Number(rowsD[0].reservedQty) !== 23) wrong.push(`100 metres and 3 strings of one item are stored as ${JSON.stringify(rowsD)}, expected one row of 23 strings`);
+
+  // (e) a reservation stored before the conversion (row unit kept as originalUnit, no rate) is only listed by the health check
+  const { findProjectReservationIssues } = await import('../../services/projects/projectReservationHealth.js');
+  const [legacy] = await h.q(
+    `INSERT INTO production_projects (project_code, title, status, version, inventory_control)
+     VALUES ($1, 'P7 legacy unit', 'in_progress', 1, $2::jsonb) RETURNING id`,
+    [`P7-LU-${h.tag}-${c.id}`, JSON.stringify({ isFinalized: true, finalizedAt: '2026-01-01T00:00:00Z', reservedItems: [{ itemId: c.id, reservedQty: 2, originalQty: 2, unit: 'گرم', originalUnit: 'کیلوگرم' }] })],
+  );
+  const kinds = (await findProjectReservationIssues()).filter(i => i.projectId === Number(legacy.id) || i.projectId === pa).map(i => `${i.projectId}:${i.kind}`);
+  if (kinds.join(',') !== `${legacy.id}:reservation_unit_unconverted`) wrong.push(`the health check lists ${JSON.stringify(kinds)}, expected only the legacy project as reservation_unit_unconverted`);
+  await h.q(`UPDATE production_projects SET is_deleted = 1 WHERE id = $1`, [legacy.id]);
+  return 'a project reserves 20 strings for 100 metres, 2,000 grams for 2 kilograms and 23 strings for 100 metres plus 3 strings; a row in kilograms of a gram item without a conversion refuses finalizing with 422; a legacy unconverted reservation is listed by the health check';
 }

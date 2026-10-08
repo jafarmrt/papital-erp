@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.350 — Project Reservations Convert Units
+- **Reservations (TD-820, B07-04, decision t4):** a project need is converted to the item unit with the row's own conversion rate before it is reserved and summed per item; a row in another unit without a valid conversion refuses the finalize with 422 PROJECT_RESERVATION_UNIT_MISMATCH; a directly entered conversion rate is no longer rounded to zero.
+
 ### v9.0.349 — Only Finalized Projects Reserve Stock
 - **Reservations (TD-817, B07-01, decision t2):** only the stored reservation of a finalized project reserves stock; the reader no longer rebuilds an empty reservation from the sections or the purchase list, so a draft or unfrozen project reserves nothing and a consumed reservation stays consumed; legacy projects are listed by the health check.
 

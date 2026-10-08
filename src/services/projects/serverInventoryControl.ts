@@ -2,7 +2,8 @@ import { eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { items } from '../../db/schema.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
-import { buildProjectReservation } from '../../lib/projects/projectReservation.js';
+import { planProjectReservation, type ReservationUnitMismatch } from '../../lib/projects/projectReservation.js';
+import { ValidationError } from '../../errors/customErrors.js';
 
 type InventoryControl = Record<string, unknown>;
 
@@ -15,7 +16,18 @@ const asObject = (v: unknown): InventoryControl => (v && typeof v === 'object' &
  * - ذخیره پروژه نهایی‌شده: رزرو فعلی (پس از کسرهای حواله خروج) همان می‌ماند.
  * - خروج از ثبت نهایی: رزرو خالی می‌شود.
  * - پروژه نهایی‌نشده: رزرو قبلی دست نمی‌خورد.
+ * v9.0.350 (TD-820): ردیفی که واحدش با واحد کالا فرق دارد و تبدیل واحد معتبر ندارد، ثبت نهایی را با ۴۲۲
+ * `PROJECT_RESERVATION_UNIT_MISMATCH` رد می‌کند.
  */
+function unitMismatchError(rows: ReservationUnitMismatch[]): ValidationError {
+  const list = rows.map(r => `«${r.itemName || r.itemCode}» (کنترل موجودی: ${r.rowUnit}، کالا: ${r.itemUnit})`).join('؛ ');
+  return new ValidationError(
+    `واحد این مواد با واحد کالای انبار فرق دارد و تبدیل واحد ندارد: ${list}. پیش از ثبت نهایی، تبدیل واحد هر ردیف را در کنترل موجودی ثبت کنید.`,
+    { unitMismatches: rows },
+    'PROJECT_RESERVATION_UNIT_MISMATCH',
+  );
+}
+
 export async function resolveServerInventoryControl(
   incoming: unknown,
   previous: unknown,
@@ -36,13 +48,16 @@ export async function resolveServerInventoryControl(
       .from(items)
       .where(eq(items.isDeleted, 0));
     finalizedAt = systemNowUtcIso();
-    reservedItems = buildProjectReservation(
+    const plan = planProjectReservation(
       rest.sections,
       products,
       stockItems.map(i => ({ ...i, currentStock: Number(i.currentStock) || 0 })),
       rest.manualPurchaseItems,
       String(finalizedAt)
     );
+    // v9.0.350 (TD-820، تصمیم ت۴): ردیف با واحد دیگر و بی تبدیل، ثبت نهایی را رد می‌کند
+    if (plan.unitMismatches.length > 0) throw unitMismatchError(plan.unitMismatches);
+    reservedItems = plan.reserved;
   } else if (!nowFinal && wasFinal) {
     reservedItems = [];
     finalizedAt = undefined;
