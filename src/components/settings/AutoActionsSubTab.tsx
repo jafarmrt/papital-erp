@@ -13,6 +13,7 @@ import {
 } from '../../hooks/queries/useEventQueries';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { ruleActionTypeLabel } from '../../lib/events/ruleActionTypes';
+import { eventTypeLabel, isSubscribableEventPattern } from '../../lib/events/eventTypeCatalog';
 
 export function AutoActionsSubTab() {
   const queryClient = useQueryClient();
@@ -155,7 +156,8 @@ export function AutoActionsSubTab() {
       return (
         r.name?.toLowerCase().includes(q) ||
         r.description?.toLowerCase().includes(q) ||
-        r.eventType?.toLowerCase().includes(q)
+        r.eventType?.toLowerCase().includes(q) ||
+        eventTypeLabel(r.eventType || '').toLowerCase().includes(q)
       );
     }
     return true;
@@ -371,8 +373,9 @@ export function AutoActionsSubTab() {
                               {rule.name}
                             </span>
                             {getActionBadge(rule.actionType)}
-                            <span className="text-[11px] font-mono px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md">
-                              {rule.eventType}
+                            {/* v9.0.381 (TD-726): the event's Persian label; a type nothing publishes is marked */}
+                            <span title={rule.eventType} className={`text-[11px] px-2 py-0.5 rounded-md ${isSubscribableEventPattern(rule.eventType) ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'}`}>
+                              {isSubscribableEventPattern(rule.eventType) ? eventTypeLabel(rule.eventType) : `${rule.eventType} (منتشر نمی‌شود)`}
                             </span>
                           </div>
 

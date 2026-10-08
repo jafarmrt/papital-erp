@@ -10764,6 +10764,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 15 PR d (v9.0.380+): the event contract
   const { runWebhookEventPatternTests } = await import('../regression/webhookEventPatternTests.js');
   results.push(...await runWebhookEventPatternTests(shouldRun));
+  const { runRuleEventTypeTests } = await import('../regression/ruleEventTypeTests.js');
+  results.push(...await runRuleEventTypeTests(shouldRun));
 
   // Package 10 PR B (v9.0.347+): procurement order link, duplicate submissions, consolidation, receiving
   const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');

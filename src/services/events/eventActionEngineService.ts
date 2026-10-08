@@ -16,7 +16,7 @@ import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { assertNotificationPermission, permissionHolderUserIds, roleMemberUserIds } from '../notifications/notificationRecipients.js';
 import { resolveRuleConfigSecrets } from './integrationSecrets.js';
 import { type RuleActionType } from '../../lib/events/ruleActionTypes.js';
-import { assertRuleActionTypeAllowed } from './ruleActionTypeGuard.js';
+import { assertRuleActionTypeAllowed, assertRuleEventTypeAllowed } from './ruleActionTypeGuard.js';
 import { ruleSampleEvent } from './ruleSampleEvent.js';
 import { IntegrationDeliveryService, RULE_ACTION_MAX_ATTEMPTS, type DeliveryAttemptContext, type DeliveryAttemptOutcome } from './integrationDelivery.service.js';
 
@@ -588,6 +588,7 @@ export class EventActionEngineService {
    */
   public static async createRule(data: CreateRuleInput, userId?: number) {
     assertRuleActionTypeAllowed(data.actionType, { active: (data.isActive ?? 1) === 1, changingType: true });
+    assertRuleEventTypeAllowed(data.eventType, { active: (data.isActive ?? 1) === 1, changingType: true });
     if (data.actionType === 'in_app_notification') assertNotificationPermission((data.actionConfigJson as InAppNotificationConfig | undefined)?.targetPermission);
     const [newRule] = await orm.insert(eventActionRules).values({
       name: data.name,
@@ -617,6 +618,8 @@ export class EventActionEngineService {
       // v9.0.377 (TD-712): a rule of a removed action type stays inactive until its action type is changed
       const nextActive = data.isActive !== undefined ? Number(data.isActive) === 1 : current.isActive === 1;
       assertRuleActionTypeAllowed(data.actionType ?? current.actionType, { active: nextActive, changingType: data.actionType !== undefined && data.actionType !== current.actionType });
+      // v9.0.381 (TD-726): a rule is saved active only with an event type the server publishes
+      assertRuleEventTypeAllowed(data.eventType ?? current.eventType, { active: nextActive, changingType: data.eventType !== undefined && data.eventType !== current.eventType });
     }
     const updatePayload: Record<string, unknown> = {
       updatedAt: new Date().toISOString()
@@ -658,6 +661,7 @@ export class EventActionEngineService {
 
     const newActive = rule.isActive === 1 ? 0 : 1;
     assertRuleActionTypeAllowed(rule.actionType, { active: newActive === 1, changingType: false });
+    assertRuleEventTypeAllowed(rule.eventType, { active: newActive === 1, changingType: false });
     const [updated] = await orm.update(eventActionRules)
       .set({
         isActive: newActive,

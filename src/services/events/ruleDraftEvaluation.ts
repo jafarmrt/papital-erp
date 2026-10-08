@@ -4,7 +4,7 @@ import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { isRetiredRuleActionType, isRuleActionType, retiredRuleActionMessage } from '../../lib/events/ruleActionTypes.js';
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
 import { assertNotificationPermission, permissionHolderUserIds, roleMemberUserIds } from '../notifications/notificationRecipients.js';
-import { DomainEventType } from './domainEvents.js';
+import { isSubscribableEventPattern } from '../../lib/events/eventTypeCatalog.js';
 import { EventActionEngineService } from './eventActionEngineService.js';
 import { ruleSampleEvent } from './ruleSampleEvent.js';
 
@@ -24,8 +24,6 @@ export interface RuleDraftEvaluation {
   sampleRuleName: string;
 }
 
-const KNOWN_EVENT_TYPES = new Set<string>([...Object.values(DomainEventType), '*']);
-
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -40,7 +38,8 @@ export async function evaluateRuleDraft(draft: unknown): Promise<RuleDraftEvalua
 
   const eventType = text(rule.eventType);
   if (!eventType) errors.push('نوع رویداد قانون تعیین نشده است.');
-  else if (!KNOWN_EVENT_TYPES.has(eventType)) errors.push(`نوع رویداد «${eventType}» در سامانه تعریف نشده است.`);
+  // v9.0.381 (TD-726): only «*» and the event types the server publishes; a declared but never published type never fires
+  else if (!isSubscribableEventPattern(eventType)) errors.push(`رویداد «${eventType}» در سامانه منتشر نمی‌شود و قانون آن هرگز اجرا نمی‌شود.`);
 
   const actionType = rule.actionType;
   if (isRetiredRuleActionType(actionType)) errors.push(retiredRuleActionMessage(actionType));
@@ -51,7 +50,7 @@ export async function evaluateRuleDraft(draft: unknown): Promise<RuleDraftEvalua
   if (!conditionCheck.valid) errors.push(`شرط‌های قانون نامعتبر است: ${conditionCheck.error}`);
 
   const config = asRecord(rule.actionConfigJson);
-  const sample = ruleSampleEvent(eventType && KNOWN_EVENT_TYPES.has(eventType) ? eventType : '*');
+  const sample = ruleSampleEvent(isSubscribableEventPattern(eventType) ? eventType : '*');
   const preview: Record<string, unknown> = { actionType };
 
   if (actionType === 'webhook') {

@@ -49,6 +49,16 @@ export function eventTypeLabel(value: string): string {
   return PUBLISHED_EVENT_TYPES.find(t => t.value === value)?.label ?? value;
 }
 
+/** نوع‌های منتشرشونده به ترتیب دسته، برای گروه‌های فهرست انتخاب (v9.0.381، TD-726) */
+export function publishedEventTypesByCategory(): { category: string; types: EventTypeOption[] }[] {
+  const groups: { category: string; types: EventTypeOption[] }[] = [];
+  for (const t of PUBLISHED_EVENT_TYPES) {
+    const group = groups.find(g => g.category === t.category);
+    if (group) group.types.push(t); else groups.push({ category: t.category, types: [t] });
+  }
+  return groups;
+}
+
 /** الگوهای نادرست یک فهرست (نه «*» و نه نوع منتشرشونده) */
 export function unknownEventPatterns(patterns: readonly unknown[]): string[] {
   return patterns.filter(p => !isSubscribableEventPattern(p)).map(p => String(p));

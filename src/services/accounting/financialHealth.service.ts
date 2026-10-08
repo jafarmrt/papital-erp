@@ -41,6 +41,7 @@ import { buildProjectStageHealthTest, findProjectStageIntegrity } from '../proje
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
+import { buildUnpublishedRuleEventHealthTest, findRulesWithUnpublishedEvent } from '../events/unpublishedRuleEventHealth.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
 import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
@@ -1226,6 +1227,10 @@ export class FinancialHealthService {
     const retiredRuleTest = buildRetiredRuleActionHealthTest(await findRetiredActionRules());
     overallScore += retiredRuleTest.scoreImpact;
     tests.push(retiredRuleTest);
+    // آزمون ۴۸: v9.0.381 (TD-726) قانون‌های خودکار با رویدادی که سامانه منتشر نمی‌کند (هرگز اجرا نشده‌اند؛ فقط فهرست)
+    const unpublishedEventRuleTest = buildUnpublishedRuleEventHealthTest(await findRulesWithUnpublishedEvent());
+    overallScore += unpublishedEventRuleTest.scoreImpact;
+    tests.push(unpublishedEventRuleTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

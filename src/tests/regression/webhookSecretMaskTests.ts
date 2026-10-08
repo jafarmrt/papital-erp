@@ -102,7 +102,7 @@ export async function runWebhookSecretMaskTests(shouldRun: (id: string, ...extra
     // 4. rules: token and header values masked for every reader, a masked save keeps them only for the same address
     const ruleUrl = 'https://rules-td710.example.com/in';
     const ruleCreated = await send(admin, 'post', '/api/events/action-rules', {
-      name: 'td710 rule', eventType: 'Td710Event', actionType: 'webhook', isActive: 0,
+      name: 'td710 rule', eventType: 'InvoiceApproved', actionType: 'webhook', isActive: 0,
       actionConfigJson: { url: ruleUrl, secretToken: RULE_TOKEN, headers: { Authorization: RULE_HEADER } },
     });
     const ruleId = Number(ruleCreated.body?.data?.id);
@@ -114,7 +114,7 @@ export async function runWebhookSecretMaskTests(shouldRun: (id: string, ...extra
       if (res.status !== 200 && res.status !== 201) wrong.push(`${label}: ${res.status}`);
       leaks(label, res.body, [RULE_TOKEN, RULE_HEADER]);
     }
-    const replay = await send(manager, 'post', '/api/events/timeline/simulate-replay', { eventType: 'Td710Event', aggregateType: 'Document', aggregateId: '1', dryRun: true });
+    const replay = await send(manager, 'post', '/api/events/timeline/simulate-replay', { eventType: 'InvoiceApproved', aggregateType: 'Document', aggregateId: '1', dryRun: true });
     if (replay.status !== 200 || !JSON.stringify(replay.body).includes('td710 rule')) wrong.push(`replay simulation: ${replay.status} ${JSON.stringify(replay.body).slice(0, 120)}`);
     leaks('replay simulation', replay.body, [RULE_TOKEN, RULE_HEADER]);
     const masked = ruleViewer.body?.data?.actionConfigJson;

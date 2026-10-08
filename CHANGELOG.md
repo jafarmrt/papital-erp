@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.381 — Rules Trigger Only on Published Event Types
+- **Rule trigger events (TD-726):** the rule editor offered InvoiceCancelled, ChequeStatusChanged, ProjectStageCompleted and CustomerCreated, which nothing publishes, so such a rule was saved active and never ran; the editor now offers the published types with Persian labels and «همه رویدادها», the server refuses another type on create, switch, activation and active save (422), and stored rules of such types are listed by the health check.
+
 ### v9.0.380 — Webhook Subscriptions Use the Published Event Types
 - **Webhook event patterns (TD-707):** the webhook form offered dotted patterns (document.invoiced, inventory.*) that matched no event the server publishes, so such subscriptions received nothing; the form now offers only the published types with Persian labels and «همه رویدادها», the server refuses any other pattern (422), stored subscriptions were converted with a mapping table (old lists recorded, unmappable or example.com ones deactivated), and the two demo subscriptions are no longer seeded.
 
