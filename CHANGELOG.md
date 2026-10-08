@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.394 — Paused and Cancelled Projects on the Kanban
+- **Paused and Cancelled Projects on the Kanban (TD-761):** the kanban had three columns, so paused and cancelled projects were hidden in the default view, and the status filter had no cancelled option; a fourth column and the full status list fix both.
+
 ### v9.0.393 — Project Buttons by Their API Keys
 - **Project Buttons by Their API Keys (TD-752):** no project screen asked a permission, so a user holding only `projects.view` filled forms and got 403; the project list, detail, inventory control, delivery, progress matrix, workshop schedule and material allocation buttons now follow the keys their routes ask, defined once in `projectPermissions.ts`.
 

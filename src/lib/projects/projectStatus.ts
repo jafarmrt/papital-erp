@@ -21,6 +21,25 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
 export const projectStatusLabel = (status: string | null | undefined): string =>
   (PROJECT_STATUS_LABELS as Record<string, string>)[String(status ?? '')] ?? String(status ?? '');
 
+/**
+ * v9.0.394 (TD-761): ستون کانبان هر وضعیت؛ «متوقف‌شده» و «لغوشده» ستون «متوقف / لغوشده» دارند و وضعیت ناشناخته قدیمی در
+ * «برنامه‌ریزی‌شده» می‌آید (همان نشان پیش‌فرض). پیش‌تر کانبان فقط سه ستون داشت و این پروژه‌ها در نمای پیش‌فرض دیده نمی‌شدند.
+ */
+export const PROJECT_KANBAN_COLUMNS = ['planned', 'in_progress', 'completed', 'stopped'] as const;
+export type ProjectKanbanColumn = typeof PROJECT_KANBAN_COLUMNS[number];
+
+export function projectKanbanColumn(status: string | null | undefined): ProjectKanbanColumn {
+  if (status === 'paused' || status === 'cancelled') return 'stopped';
+  if (status === 'in_progress' || status === 'completed') return status;
+  return 'planned';
+}
+
+export function groupProjectsForKanban<T extends { status?: string | null }>(projects: readonly T[]): Record<ProjectKanbanColumn, T[]> {
+  const groups: Record<ProjectKanbanColumn, T[]> = { planned: [], in_progress: [], completed: [], stopped: [] };
+  for (const p of projects) groups[projectKanbanColumn(p.status)].push(p);
+  return groups;
+}
+
 /** اولویت‌های پروژه (همان گزینه‌های فرم پروژه؛ v9.0.380، TD-754) */
 export const PROJECT_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 export type ProjectPriority = typeof PROJECT_PRIORITIES[number];
