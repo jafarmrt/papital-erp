@@ -29,6 +29,7 @@ import { buildPayslipDeductionsHealthTest, findPayslipDeductionsInPrepayments } 
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildProcurementOrderLinkHealthTest, findUnresolvedProcurementOrderLinks } from '../procurement/procurementOrderLinks.js';
 import { buildConsolidationSourcesHealthTest, findOpenLegacyConsolidationSources } from '../procurement/consolidationSourceHealth.js';
+import { buildConditionalConstraintsHealthTest, findMissingConditionalConstraints } from '../system/conditionalConstraints.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildUnlinkedPartyDocumentHealthTest, findUnlinkedPartyDocuments } from '../documents/documentParty.js';
 import { buildDocumentIntegrityHealthTest, findDocumentIntegrityGaps } from '../documents/documentConstraintHealth.js';
@@ -1231,6 +1232,8 @@ export class FinancialHealthService {
     const projectValueTest = buildProjectValueHealthTest(await findProjectFreeTextValues(PROJECT_STATUSES, PROJECT_PRIORITIES, STAGE_STATUSES));
     overallScore += projectValueTest.scoreImpact;
     tests.push(projectValueTest);
+    // آزمون ۴۹: v9.0.396 (TD-589) قید و ایندکس یکتای شرطی مهاجرت‌ها که روی داده ناپاک ساخته نشده (فهرست با علت؛ ساختن دستی)
+    tests.push(buildConditionalConstraintsHealthTest(await findMissingConditionalConstraints()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

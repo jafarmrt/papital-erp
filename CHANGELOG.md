@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.396 — Skipped Migration Constraints Are Reported and Built by Hand
+- **Fix (TD-589, B01-09):** the migrator reports a constraint or index a migration left out, the financial health check lists each missing one with its cause, and the system admin builds it once the data is clean.
+
 ### v9.0.395 — Migrations Check Objects in Their Own Schema
 - **Fix (TD-610, B01-30):** every existence check of the migrations looks only in the current schema, so a test schema built beside a migrated one gets every constraint, index and trigger, among them the non-negative stock guard.
 

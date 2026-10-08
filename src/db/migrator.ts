@@ -10,6 +10,7 @@ import { logger } from '../middleware/logger.js';
 import { ADVISORY_LOCK_KEYS } from '../lib/advisoryLock.js';
 import { planMigrations, type AppliedMigrationRow, type MigrationJournalEntry } from './migrationPlan.js';
 import { previousMigrationHashes } from './migrationAmendments.js';
+import { migrationNoticeWarning, type MigrationNotice } from './migrationNotices.js';
 
 export interface MigrationResult {
   success: boolean;
@@ -124,6 +125,12 @@ export async function runMigrations(options: RunMigrationsOptions = {}): Promise
 
   let client: pkg.PoolClient | undefined;
   let locked = false;
+  // v9.0.396 (TD-589): constraints and indexes a migration left out raise notices; they go into `warnings` and the log
+  const noticeWarnings: string[] = [];
+  const onNotice = (notice: MigrationNotice) => {
+    const warning = migrationNoticeWarning(notice);
+    if (warning) noticeWarnings.push(warning);
+  };
   try {
     if (!fs.existsSync(migrationsFolder)) {
       throw new Error(`Migrations directory not found at ${migrationsFolder}`);
@@ -136,6 +143,7 @@ export async function runMigrations(options: RunMigrationsOptions = {}): Promise
 
     const entries = readMigrationJournal(migrationsFolder);
     client = await pool.connect();
+    client.on('notice', onNotice);
     await client.query(`SET statement_timeout = ${migrationStatementTimeoutMs()}`);
     await client.query('SET idle_in_transaction_session_timeout = 0');
     await client.query('SELECT pg_advisory_lock($1::bigint)', [ADVISORY_LOCK_KEYS.MIGRATIONS]);
@@ -155,12 +163,13 @@ export async function runMigrations(options: RunMigrationsOptions = {}): Promise
     const after = (await readAppliedMigrations(client)).length;
 
     logger.info(`[Migrator] Drizzle database migrations completed successfully. ${applied.length} → ${after} applied.`);
+    for (const warning of noticeWarnings) logger.warn(`[Migrator] A migration left a constraint or index out: ${warning}`);
 
     return {
       success: true,
       appliedCount: after,
       errors: [],
-      warnings: plan.warnings,
+      warnings: [...plan.warnings, ...noticeWarnings],
     };
   } catch (err: any) {
     const errorMsg = `[Migrator] Migration execution error: ${err.message}`;
@@ -172,6 +181,7 @@ export async function runMigrations(options: RunMigrationsOptions = {}): Promise
     };
   } finally {
     if (client) {
+      client.removeListener('notice', onNotice);
       if (locked) await client.query('SELECT pg_advisory_unlock($1::bigint)', [ADVISORY_LOCK_KEYS.MIGRATIONS]).catch(() => undefined);
       await client.query('RESET statement_timeout').catch(() => undefined);
       await client.query('RESET idle_in_transaction_session_timeout').catch(() => undefined);

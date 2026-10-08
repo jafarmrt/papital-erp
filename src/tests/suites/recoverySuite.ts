@@ -4,7 +4,7 @@ import { orm } from '../../db/drizzle.js';
 import { outboxEvents } from '../../db/schema.js';
 import { OutboxService } from '../../services/events/outboxService.js';
 import { runBackupRestoreChecks, type RecoveryCheckOutcome } from '../recovery/backupRestoreChecks.js';
-import { checkMigrationSession, checkSkippedMigrationRefused, checkUpgradeFromV70137 } from '../recovery/migrationChecks.js';
+import { checkMigrationNoticesReported, checkMigrationSession, checkSkippedMigrationRefused, checkUpgradeFromV70137 } from '../recovery/migrationChecks.js';
 import { checkUpdateWaitsForStartup } from '../recovery/updateScriptChecks.js';
 import { runDeploySafetyChecks } from '../recovery/deploySafetyChecks.js';
 import { runToolingChecks } from '../recovery/toolingChecks.js';
@@ -25,6 +25,8 @@ async function runMigrationAndBackupChecks(results: TestCaseResult[]): Promise<v
       checkTestSchemaKeepsPublic, 'Every public index and function named by a migration DROP survived a nested test schema'],
     ['rec_td_610_nested_schema_complete', 'v9.0.395: a test schema built beside a migrated one has every constraint, index and trigger the migrations name (TD-610)',
       checkNestedSchemaComplete, 'The nested test schema has every migration-named object of the suite schema and every index public also holds'],
+    ['rec_td_589_migration_notices_reported', 'v9.0.396: a migration that leaves a constraint or index out says so in the migrator warnings and log (TD-589)',
+      checkMigrationNoticesReported, 'The SKIPPED warning and the "not created" notice are in warnings; an ordinary notice is not'],
   ];
   const outcomes: RecoveryCheckOutcome[] = [];
   for (const [id, name, fn, info] of single) {
