@@ -156,8 +156,8 @@ describe('CreateInvoicePage — cancelling an edit puts every field back to its 
     fireEvent.click(await screen.findByText(/^P-3 - گردنبند نقره/, {}, { timeout: 2000 }));
     const inputOf = (label: string) => screen.getByText(label).parentElement!.querySelector('input') as HTMLInputElement;
     fireEvent.change(inputOf('تعداد'), { target: { value: '2' } });
-    fireEvent.change(inputOf('مبلغ واحد (IRR)'), { target: { value: '1000000' } });
-    fireEvent.click(screen.getByText('افزودن به لیست'));
+    fireEvent.change(inputOf('مبلغ واحد (ریال)'), { target: { value: '1000000' } });
+    fireEvent.click(screen.getByText('افزودن به فهرست'));
     fireEvent.click(screen.getByRole('button', { name: 'ثبت و صدور فاکتور' }));
     await waitFor(() => expect(bodiesOf('POST', '/documents')).toHaveLength(1));
     const body = bodiesOf('POST', '/documents')[0];

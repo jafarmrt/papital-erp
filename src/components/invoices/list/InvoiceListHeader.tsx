@@ -19,7 +19,7 @@ export function InvoiceListHeader({ totalItems, loading, loadData, pageSize, set
         </div>
         <div>
           <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-            لیست اسناد، فاکتورها و رسیدهای انبار
+            فهرست اسناد، فاکتورها و رسیدهای انبار
           </h3>
           <p className="text-[11px] text-slate-500">
             مشاهده، پیگیری و گزارش‌گیری عددی و ریالی کلیه اسناد خرید، فروش و انبارداری

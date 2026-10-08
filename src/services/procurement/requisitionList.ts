@@ -78,7 +78,7 @@ export async function requisitionDtos(db: DbExecutor, rows: Array<typeof purchas
 }
 
 /**
- * v9.0.346 (TD-697، B10-10): فهرست درخواست‌های خرید با فیلتر وضعیت گروهی، جست‌وجو در کالاهای درخواست و شمار سفارش‌های
+ * v9.0.353 (TD-697، B10-10): فهرست درخواست‌های خرید با فیلتر وضعیت گروهی، جست‌وجو در کالاهای درخواست و شمار سفارش‌های
  * هر درخواست، همه در SQL؛ سقف صفحه همان `PROCUREMENT_LIST_MAX_LIMIT` Zod است و پاسخ صفحه و سقف به‌کاررفته را برمی‌گرداند.
  */
 export async function listRequisitions(

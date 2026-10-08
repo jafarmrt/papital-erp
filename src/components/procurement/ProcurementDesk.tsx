@@ -24,7 +24,7 @@ const countText = (n: number | undefined): string => (n === undefined ? '—' : 
 type DeskTab = 'requisitions' | 'active_orders' | 'delivered_receipts';
 
 export function ProcurementDesk() {
-  // v9.0.345 (TD-702، B10-15): هر بخش جدا بارگذاری می‌شود و هر دکمه با مجوز API خودش نشان داده می‌شود
+  // v9.0.352 (TD-702، B10-15): هر بخش جدا بارگذاری می‌شود و هر دکمه با مجوز API خودش نشان داده می‌شود
   const { summary, version, reload: loadData } = useProcurementDeskData();
   const access = useProcurementAccess();
   const [activeMainTab, setActiveMainTab] = useState<DeskTab>('requisitions');
@@ -34,7 +34,7 @@ export function ProcurementDesk() {
   const [requisitionToDelete, setRequisitionToDelete] = useState<{ id: number; code: string } | null>(null);
   const [isDeletingRequisition, setIsDeletingRequisition] = useState(false);
 
-  // v9.0.346 (TD-697، B10-10): فیلترها، جست‌وجو و صفحه در سرور؛ هر تغییر فیلتر به صفحه ۱ برمی‌گردد
+  // v9.0.353 (TD-697، B10-10): فیلترها، جست‌وجو و صفحه در سرور؛ هر تغییر فیلتر به صفحه ۱ برمی‌گردد
   const [filters, setFilters] = useState<RequisitionListFilters>({ status: 'all', priority: 'all', search: '', page: 1 });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderPage, setOrderPage] = useState(1);
@@ -66,7 +66,7 @@ export function ProcurementDesk() {
 
   const changeFilters = (change: Partial<RequisitionListFilters>) => setFilters(prev => ({ ...prev, ...change }));
 
-  // v9.0.344 (TD-701): فقط سفارشی که سرور فرستاده تأیید می‌شود؛ پیش‌تر سفارش پیدانشده با تأمین‌کننده و انبار ساختگی نمایش داده می‌شد
+  // v9.0.351 (TD-701): فقط سفارشی که سرور فرستاده تأیید می‌شود؛ پیش‌تر سفارش پیدانشده با تأمین‌کننده و انبار ساختگی نمایش داده می‌شد
   const handleDeliverOrder = (orderId: number) => {
     const found = orderList.rows.find(o => o.id === orderId);
     if (found) setDeliveryModalOrder(found);
@@ -112,7 +112,7 @@ export function ProcurementDesk() {
 
   const handleSelectAll = (select: boolean) => {
     if (select) {
-      // v9.0.342 (TD-694): فقط درخواست تأییدنشده و بی سفارش تجمیع می‌شود؛ انتخاب صفحه‌های دیگر می‌ماند
+      // v9.0.349 (TD-694): فقط درخواست تأییدنشده و بی سفارش تجمیع می‌شود؛ انتخاب صفحه‌های دیگر می‌ماند
       setSelected(prev => [...prev, ...requisitionList.rows.filter(r => canConsolidateRequisition(r) && !prev.some(p => p.id === r.id))]);
     } else {
       setSelected([]);

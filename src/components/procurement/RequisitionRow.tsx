@@ -20,7 +20,7 @@ interface RequisitionRowProps {
 /** یک ردیف فهرست درخواست‌های میز تدارکات */
 export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView, onSplit, onDelete, onShowOrders }: RequisitionRowProps) {
   const itemsCount = Array.isArray(req.items) ? req.items.length : 0;
-  // v9.0.346 (TD-697): شمار سفارش‌ها از سرور (SQL)؛ پیش‌تر از سفارش‌های بارگذاری‌شده در مرورگر شمرده می‌شد
+  // v9.0.353 (TD-697): شمار سفارش‌ها از سرور (SQL)؛ پیش‌تر از سفارش‌های بارگذاری‌شده در مرورگر شمرده می‌شد
   const ordersCount = req.ordersCount ?? 0;
   const pendingOrdersCount = req.pendingDeliveryOrdersCount ?? 0;
   const consolidatable = canConsolidateRequisition(req);
@@ -115,7 +115,7 @@ export function RequisitionRow({ req, access, isSelected, onToggleSelect, onView
             <Eye className="w-4 h-4" />
           </button>
 
-          {/* v9.0.345 (TD-702): صدور سفارش با procurement.order، و پیش از تأیید فقط با حق تأیید (TD-689) */}
+          {/* v9.0.352 (TD-702): صدور سفارش با procurement.order، و پیش از تأیید فقط با حق تأیید (TD-689) */}
           {canOrderRequisition(req, access) && (
             <button
               type="button"

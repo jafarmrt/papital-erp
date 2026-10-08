@@ -47,13 +47,13 @@ export function canEditRequisition(req: { status?: string | null; items?: Requis
   return EDITABLE_REQUISITION_STATUSES.has(String(req.status)) && !requisitionHasOrders(req);
 }
 
-/** v9.0.342 (TD-694، ت۳): وضعیت درخواستی که در درخواست دیگری تجمیع شده است؛ بسته است و هیچ اقدامی نمی‌پذیرد */
+/** v9.0.349 (TD-694، ت۳): وضعیت درخواستی که در درخواست دیگری تجمیع شده است؛ بسته است و هیچ اقدامی نمی‌پذیرد */
 export const CONSOLIDATED_REQUISITION_STATUS = 'consolidated';
 
 /** گام‌های پیش از تأیید درخواست خرید (گام‌های `pending`، `procurement_review` و `manager_approval` گردش کار) */
 export const OPEN_REQUISITION_STATUSES: ReadonlySet<string> = new Set(['pending', 'under_review', 'manager_approval']);
 
-/** v9.0.342 (TD-694، B10-07، ت۳ الف): وضعیت‌های پیش از تأیید که درخواست در آن‌ها تجمیع می‌شود */
+/** v9.0.349 (TD-694، B10-07، ت۳ الف): وضعیت‌های پیش از تأیید که درخواست در آن‌ها تجمیع می‌شود */
 export const CONSOLIDATABLE_REQUISITION_STATUSES: ReadonlySet<string> = OPEN_REQUISITION_STATUSES;
 
 /** درخواست فقط پیش از تأیید و وقتی هیچ ردیفش سفارش نشده تجمیع می‌شود؛ کادر انتخاب میز تدارکات همین را می‌خواند */
@@ -62,7 +62,7 @@ export function canConsolidateRequisition(req: { status?: string | null; items?:
 }
 
 /** v9.0.318 (TD-695، B10-08): درخواستی که سفارش یا دریافت شده حذف نمی‌شود؛ دکمه حذف میز تدارکات همین را می‌خواند.
- *  v9.0.342 (TD-694): درخواستِ تجمیع‌شده هم حذف نمی‌شود تا پیوندش به درخواست تجمیعی بماند. */
+ *  v9.0.349 (TD-694): درخواستِ تجمیع‌شده هم حذف نمی‌شود تا پیوندش به درخواست تجمیعی بماند. */
 const UNDELETABLE_REQUISITION_STATUSES: ReadonlySet<string> = new Set(['ordered', 'received', 'completed', CONSOLIDATED_REQUISITION_STATUS]);
 
 export function canDeleteRequisition(req: { status?: string | null; items?: RequisitionRowLike[] | null }): boolean {
@@ -76,7 +76,7 @@ interface OrderableRowLike extends RequisitionRowLike {
 }
 
 /**
- * v9.0.345 (TD-702، B10-15): دکمه «تفکیک و صدور سفارش» میز و جزئیات درخواست، با همان قاعده سرور (TD-689، ت۱): درخواست
+ * v9.0.352 (TD-702، B10-15): دکمه «تفکیک و صدور سفارش» میز و جزئیات درخواست، با همان قاعده سرور (TD-689، ت۱): درخواست
  * تأییدشده (`ordered`) که ردیف باز با مانده دارد برای دارنده `procurement.order`، و درخواست پیش از تأیید فقط وقتی کاربر
  * حق تأیید هم دارد (سرور نخست انتقال تأیید را به نام او اجرا می‌کند).
  */
@@ -96,7 +96,7 @@ export function canOrderRequisition(
 }
 
 /**
- * v9.0.348 (TD-901، ت۵): نام فارسی اقدام‌های گردش کار درخواست خرید (عنوان انتقال‌های گردش کار پیش‌فرض). پیام خطا نام
+ * v9.0.355 (TD-901، ت۵): نام فارسی اقدام‌های گردش کار درخواست خرید (عنوان انتقال‌های گردش کار پیش‌فرض). پیام خطا نام
  * اقدام را نشان می‌دهد، نه کلیدش؛ پیش‌تر «اقدام «cancel_order» … مجاز نیست» نمایش داده می‌شد.
  */
 export const REQUISITION_ACTION_LABELS: Readonly<Record<string, string>> = {
@@ -127,7 +127,7 @@ interface RequisitionFormRow {
 }
 
 /**
- * v9.0.348 (TD-901، ت۵): خطاهای فرم ثبت درخواست خرید به تفکیک فیلد، با همان پیام و کلید Zod سرور (`createRequisitionSchema`)
+ * v9.0.355 (TD-901، ت۵): خطاهای فرم ثبت درخواست خرید به تفکیک فیلد، با همان پیام و کلید Zod سرور (`createRequisitionSchema`)
  * تا فرم هر پیام را زیر همان فیلد نشان دهد. کلید: `title`، `items` و `items.<ردیف>.<فیلد>`.
  */
 export function requisitionFormErrors(title: string, rows: RequisitionFormRow[]): Record<string, string> {

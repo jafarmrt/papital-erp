@@ -60,7 +60,7 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
         </div>
 
         <div>
-          <label className="block text-xs font-bold mb-1.5 text-slate-700">شماره سند / رفرنس</label>
+          <label className="block text-xs font-bold mb-1.5 text-slate-700">شماره سند / شماره عطف</label>
           {/* v9.0.327 (TD-783، تصمیم ت۹ الف): شماره برگشت از فروش فقط از سری سرور است */}
           <input 
             required 
@@ -68,7 +68,7 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
             value={refNumber} 
             onChange={e => setRefNumber(e.target.value)} 
             readOnly={isServerSeriesDocumentType(docType)}
-            title={isServerSeriesDocumentType(docType) ? 'شماره هنگام ثبت از سری سرور داده می‌شود' : undefined}
+            title={isServerSeriesDocumentType(docType) ? 'شماره هنگام ثبت از سری سامانه داده می‌شود' : undefined}
             className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 text-left font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all read-only:text-slate-500" 
             dir="ltr" 
           />
@@ -83,11 +83,11 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
               onChange={e => setCurrency(e.target.value)}
               disabled={returnTermsLocked}
             >
-              <option value="IRR">ریال (IRR)</option>
-              <option value="USD">دلار (USD)</option>
-              <option value="EUR">یورو (EUR)</option>
-              <option value="AED">درهم (AED)</option>
-              <option value="GBP">پوند (GBP)</option>
+              <option value="IRR">ریال</option>
+              <option value="USD">دلار</option>
+              <option value="EUR">یورو</option>
+              <option value="AED">درهم</option>
+              <option value="GBP">پوند</option>
             </select>
             <ExchangeRateField currency={currency} value={exchangeRate} onChange={setExchangeRate} disabled={returnTermsLocked} />
           </div>

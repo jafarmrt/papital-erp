@@ -18,12 +18,14 @@ import { useHasPermission } from '../../contexts/AuthContext';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../lib/noVoucherPermission';
 import { toast } from 'react-hot-toast';
 import { 
+  formatCurrencyLabel,
   formatPersianPrice, 
   getTodayJalaliDate, 
   toPersianDigits, 
   toEnglishDigits 
 } from '../../utils';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
+import { accountCurrencyOf, defaultSettlementAccountId, settlementAccountsFor } from '../../lib/invoices/settlementAccounts';
 
 interface BankAccount {
   id: number;
@@ -120,17 +122,14 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
     // v9.0.97 (TD-505، ت۷): فهرست انتخاب، بی شماره حساب و مانده
     fetchJson('/accounting/bank-accounts/options')
       .then((res: any) => {
-        const list = Array.isArray(res) ? res : (res?.data || []);
+        const list: BankAccount[] = Array.isArray(res) ? res : (res?.data || []);
         setBankAccounts(list);
-        if (list.length > 0) {
-          // Select default account: prefer POS or Bank
-          const defaultAcc = list.find((a: BankAccount) => a.type === 'pos' || a.type === 'bank') || list[0];
-          setSelectedAccountId(defaultAcc.id);
-        }
+        // v9.0.345 (TD-802): پیش‌فرض از حساب‌های هم‌ارز فاکتور (بانک یا کارت‌خوان مقدم)
+        setSelectedAccountId(defaultSettlementAccountId(list, doc.currency || 'IRR'));
       })
       .catch((err) => {
         console.error('Failed to load bank accounts', err);
-        toast.error('خطا در دریافت لیست حساب‌های بانکی و صندوق‌ها');
+        toast.error('خطا در دریافت فهرست حساب‌های بانکی و صندوق‌ها');
       })
       .finally(() => {
         setIsLoadingAccounts(false);
@@ -143,6 +142,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
   const paidAmount = Number(doc.paidAmount ?? 0);
   const remainingAmount = Math.max(0, doc.remainingAmount !== undefined ? doc.remainingAmount : (totalAmount - paidAmount));
   const currency = doc.currency || 'IRR';
+  const usableAccounts = settlementAccountsFor(bankAccounts, currency);
   const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(doc.type || '');
   const docRef = doc.refNumber || doc.ref_number || '';
   const partyName = doc.buyerName || doc.buyer_name || (isPurchase ? 'تامین‌کننده' : 'مشتری');
@@ -283,7 +283,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                 <Banknote size={15} className="text-emerald-600" />
-                <span>مبلغ پرداختی این نوبت ({currency === 'IRR' ? 'ریال' : currency})</span>
+                <span>مبلغ پرداختی این نوبت ({formatCurrencyLabel(currency)})</span>
                 <span className="text-rose-500">*</span>
               </label>
 
@@ -389,12 +389,17 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
                   required
                 >
                   <option value="">انتخاب حساب / صندوق...</option>
-                  {bankAccounts.map((acc) => (
+                  {usableAccounts.map((acc) => (
                     <option key={acc.id} value={acc.id}>
-                      {acc.title} {acc.bankName ? `(${acc.bankName})` : ''} - کد {toPersianDigits(acc.code)}
+                      {acc.title} {acc.bankName ? `(${acc.bankName})` : ''} - کد {toPersianDigits(acc.code)} - {formatCurrencyLabel(accountCurrencyOf(acc))}
                     </option>
                   ))}
                 </select>
+              )}
+              {!isLoadingAccounts && usableAccounts.length === 0 && (
+                <p className="text-[11px] text-rose-600 mt-1.5">
+                  حساب بانکی یا صندوقی با ارز {formatCurrencyLabel(currency)} تعریف نشده است؛ نخست در خزانه حسابی با این ارز بسازید.
+                </p>
               )}
             </div>
 

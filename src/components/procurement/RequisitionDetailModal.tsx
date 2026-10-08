@@ -33,7 +33,7 @@ export function RequisitionDetailModal({
   const [deliveryModalOrder, setDeliveryModalOrder] = useState<ProcurementOrder | null>(null);
   const [bulkDeliveryOrders, setBulkDeliveryOrders] = useState<ProcurementOrder[] | null>(null);
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
-  // v9.0.345 (TD-702، B10-15): هر دکمه با مجوز API خودش؛ پیش‌تر همه دکمه‌ها برای هر بیننده‌ای نشان داده می‌شد
+  // v9.0.352 (TD-702، B10-15): هر دکمه با مجوز API خودش؛ پیش‌تر همه دکمه‌ها برای هر بیننده‌ای نشان داده می‌شد
   const access = useProcurementAccess();
 
   const loadLinkedOrders = useCallback(async () => {
@@ -386,7 +386,7 @@ export function RequisitionDetailModal({
                     >
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          {/* v9.0.344 (TD-701): شماره و تاریخ سفارش از refNumber و date پاسخ سرور */}
+                          {/* v9.0.351 (TD-701): شماره و تاریخ سفارش از refNumber و date پاسخ سرور */}
                           <span className="font-mono font-bold text-xs text-slate-900">
                             فاکتور خرید {order.refNumber}
                           </span>
@@ -546,7 +546,7 @@ export function RequisitionDetailModal({
                 </div>
               )}
 
-              {/* v9.0.342 (TD-694): consolidated into another requisition; closed, no action */}
+              {/* v9.0.349 (TD-694): consolidated into another requisition; closed, no action */}
               {isConsolidated && (
                 <div className="w-full p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-900 font-bold flex items-center gap-2">
                   <Layers className="w-4 h-4 text-violet-600 shrink-0" />

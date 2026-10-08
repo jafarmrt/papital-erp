@@ -34,13 +34,6 @@
 | TD-623 | زیرساخت (بسته ۱) | P3 (B01-43) — «بازیابی صف DLQ» و «بازنشانی Outbox» با یک کلیک و بی پرسش همه رویدادهای ناموفق را دوباره اجرا می‌کنند (وب‌هوک طرف سوم، اعلان، گردش کار) و حتی با صف خالی نشان داده می‌شوند | SystemHealthDiagnostic.tsx، system.routes.ts | open (P3، تصمیم ت۸) |
 | TD-624 | زیرساخت (بسته ۱) | P3 (B01-44) — خروجی داده جدول‌هایی را که متن رابط وعده می‌دهد ندارد: پروژه و تخصیص، کارمزدی، دوره مالی، فراداده پیوست، گردش کار و قاعده رویداد | services/system/dataExport.service.ts، GeneralSettingsTab.tsx | open (P3، تصمیم ت۷ الف) |
 | TD-625 | زیرساخت (بسته ۱)؛ اثر روی همه بسته‌ها | P3 (B01-45) — خروجی ترمینال فارسی است: ۵ پیام hook آغاز جلسه، ۱۱۷ خط در ۱۲ اسکریپت CLI و ۱۳ پیام `check:version`، لاگ پیام فارسی هر خطای کسب‌وکار در `errorHandler`، حدود ۸۰۱ خط نام آزمون در ۶۸ فایل و ۱۲ نام آزمون Vitest | .claude/hooks/session-start.sh، scripts/*.ts، middleware/logger.ts، src/tests/** | open (P3، قاعده ت۹؛ قاعده در AGENTS.md §6 و ratchet فقط کاهشی `ratchet:terminal-english` از v9.0.211؛ ترجمه باز) |
-| TD-795 | اسناد (بسته ۸) | P3 (B08-26) — دکمه‌های «تسویه سریع»، «چرخه تأییدات»، «ابطال» و یادداشت ردیف فهرست فاکتورها مجوز را نمی‌سنجند؛ خطای یادداشت همیشه «خطا در بروزرسانی توضیحات» است | InvoiceRowActions.tsx، InvoiceRowNotesCell.tsx، useInvoiceListActions.ts | open (P3) |
-| TD-796 | اسناد (بسته ۸) | P3 (B08-27) — ثبت سند انبار، ابطال و تسویه کالاها، کاردکس، اسناد حسابداری، پیشخوان، پرونده‌های فروش، رزرو، حساب‌های بانکی و خزانه را باطل نمی‌کنند و تا ۵ دقیقه کهنه می‌مانند | useStockDocumentSubmit.ts، useInvoiceListActions.ts، useInvoiceListQuery.ts | open (P3) |
-| TD-797 | اسناد (بسته ۸) | P3 (B08-28) — پاسخ ۴۰۳ یا ۵۰۰ فهرست فاکتورها «سندی مطابق فیلترهای انتخابی یافت نشد» نشان داده می‌شود | useInvoiceListQuery.ts، InvoiceListTable.tsx | open (P3) |
-| TD-798 | اسناد (بسته ۸) | P3 (B08-29) — جمع کارت‌های بالای فهرست فاکتورها خالص اقلام است (فاکتور با ۱۰٪ مالیات: کارت ۱٬۰۰۰٬۰۰۰، ردیف ۱٬۱۰۰٬۰۰۰) | invoiceListDocuments.ts | open (P3) |
-| TD-800 | اسناد (بسته ۸) | P3 (B08-31) — نوع‌های `remittance`، `proforma`، `return`، `waste` و `production_receipt` در جزئیات و گردش‌کار خام نمایش داده می‌شوند؛ صافی «پیش‌فاکتور فروش» پیش‌فاکتور نوع `invoice` را نمی‌بیند | invoiceListDocuments.ts، InvoiceListFilters.tsx | open (P3) |
-| TD-802 | اسناد (بسته ۸) | P3 (B08-33) — فرم تسویه نخستین حساب بانکی را بی توجه به ارز فاکتور برمی‌گزیند و ارز حساب را نشان نمی‌دهد؛ فاکتور دلاری با حساب ریالی رد می‌شود | InvoiceSettlementModal.tsx | open (P3) |
-| TD-803 | اسناد (بسته ۸) | P3 (B08-34) — حدود ۱۷ پیام با رقم لاتین («(1 کالا)»، «(4 عدد)»)، متن رسید «پس از تایید مدیر مالی… ورکفلو» برای سندی که قطعی ثبت می‌شود، ۱۸ آوانویسی، ۱۵ واژه لاتین و ۸ «لیست» | CreateInvoicePage.tsx، stockDocumentItemActions.ts، StockDocumentHeader.tsx، DocItemsTable.tsx | open (P3) |
 | TD-704 | امنیت رویدادها (بسته ۱۵) | P2 (B15-02) — نگهبان SSRF دور زده می‌شود: «آزمایش اتصال» وب‌هوک (`pingTest`) redirect را بی `redirect: 'manual'` دنبال می‌کند و ۵۰۰ نویسه پاسخ را برمی‌گرداند: نشانی مجازی که با 302 به سرویس داخلی برمی‌گردد ← `success: true, responseBody: "TOP-SECRET-INTERNAL-DATA (db password=hunter2)"`؛ استثنای «شبیه‌ساز محلی» (`allowLocalEcho`، ۵ محل) هر `127.0.0.1` / `localhost` / `::1` را روی هر درگاه با مسیر شامل `/webhook-echo` و بی شرط محیط می‌پذیرد | webhookSubscriptionService.ts، ssrfGuard.ts، eventActionEngineService.ts | open (P2، تصمیم ت۴ الف) |
 | TD-705 | رویدادها و وب‌هوک (بسته ۱۵) | P2 (B15-03) — شکست وب‌هوک و اقدام قانون هرگز به تلاش دوباره outbox یا صف خطا نمی‌رسد و تلاش دوباره فقط سه `setTimeout` در حافظه است: با گیرنده‌ای که همیشه ۵۰۰ می‌دهد، outbox بلافاصله `completed` با `completed_handlers: [event-action-engine, webhook-subscriptions, domain-audit-log]` شد، ۳ ردیف `failed / 500` در `webhook_deliveries` و صف خطا ۰ ردیف؛ اقدام شکست‌خورده قانون هرگز دوباره اجرا نمی‌شود (خلاف AGENTS §15) | webhookSubscriptionService.ts، eventActionEngineService.ts | open (P2، تصمیم ت۲ الف) |
 | TD-706 | رویدادها و وب‌هوک (بسته ۱۵) | P2 (B15-04) — اقدام وب‌هوک به نشانی دردسترس‌نبودنی «موفق» ثبت می‌شود: اگر `fetch` شکست بخورد و نشانی هرجای خود `webhook-echo`، `httpbin.org`، `example.com`، `localhost`، `127.0.0.1` یا `webhook.site` را داشته باشد، نتیجه ساختگی `200 OK (Simulated Fallback)` برمی‌گردد: سه قانون (درگاه بسته، `/webhook-echo/fail` و `https://erp-hooks.example.com/orders` بی DNS) هر سه `status: success` گرفتند و ۰ درخواست به جایی رسید | eventActionEngineService.ts | open (P2، تصمیم ت۴ الف) |
@@ -75,8 +68,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۵۴ ردیف
-- **آرشیو شده (resolved):** ۶۹۹ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۴۷ ردیف
+- **آرشیو شده (resolved):** ۷۰۶ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -85,5 +78,5 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.339 — TD-787 (صفحه‌بندی فهرست اسناد، P3) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.346 — TD-803 (متن رابط فاکتور و سند انبار، رقم فارسی، P3) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
 *v9.0.313 — نسخه مستند بسته ۱۰ (خرید و تدارکات): TD-688 تا TD-702 و TD-901 (تصمیم ت۵) باز شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

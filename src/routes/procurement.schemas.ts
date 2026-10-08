@@ -11,7 +11,7 @@ import {
 // ==========================================
 
 /**
- * v9.0.346 (TD-697، B10-10): وضعیت از فیلترهای `REQUISITION_STATUS_FILTERS` (وضعیت‌هایی که نوشته می‌شوند و گروه‌ها)، اولویت
+ * v9.0.353 (TD-697، B10-10): وضعیت از فیلترهای `REQUISITION_STATUS_FILTERS` (وضعیت‌هایی که نوشته می‌شوند و گروه‌ها)، اولویت
  * از `REQUISITION_PRIORITIES` و سقف صفحه `PROCUREMENT_LIST_MAX_LIMIT`، همان که سرویس به کار می‌برد. پیش‌تر وضعیت‌های
  * نوشته‌نشده پذیرفته و `under_review` / `received` رد می‌شدند، و اولویت‌های فرم (`urgent`، `normal`) ۴۰۰ می‌گرفتند.
  */
@@ -41,7 +41,7 @@ export const requisitionRowSchema = z.object({
   itemName: z.string().max(300).optional(),
   category: z.string().max(200).optional(),
   unit: z.string().max(50).optional(),
-  // v9.0.348 (TD-901، ت۵): مقدار نیامده یا خالی پیام خودش را دارد؛ پیش‌تر «مقدار مقدار درخواستی درست نیست» می‌آمد
+  // v9.0.355 (TD-901، ت۵): مقدار نیامده یا خالی پیام خودش را دارد؛ پیش‌تر «مقدار مقدار درخواستی درست نیست» می‌آمد
   requestedQty: z.preprocess(v => v ?? '', decimalInput('مقدار درخواستی'))
     .refine(v => v !== undefined, 'مقدار درخواستی را وارد کنید')
     .refine(v => v === undefined || fin(v).isPositive(), 'مقدار درخواستی باید بیشتر از صفر باشد'),

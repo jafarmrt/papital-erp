@@ -14,22 +14,22 @@ export async function runProcurementOrderTests(shouldRun: ShouldRun): Promise<Te
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_procurement_orders_linked_only_td_691',
-      'v9.0.340: the procurement order list, the desk summary and delivery see only documents linked to a requisition; a plain warehouse receipt is neither listed nor delivered and a sales proforma is not counted (TD-691)',
+      'v9.0.347: the procurement order list, the desk summary and delivery see only documents linked to a requisition; a plain warehouse receipt is neither listed nor delivered and a sales proforma is not counted (TD-691)',
       ['td691', 'procurement', 'orders', 'security', 'package10'], linkedOrdersCase],
     ['reg_procurement_orders_paged_in_sql_td_698',
-      'v9.0.340: the procurement order list filters, counts and pages in SQL and reads only the rows of the requested page (TD-698)',
+      'v9.0.347: the procurement order list filters, counts and pages in SQL and reads only the rows of the requested page (TD-698)',
       ['td698', 'procurement', 'orders', 'performance', 'package10'], pagedOrdersCase],
     ['reg_procurement_double_submit_td_693',
-      'v9.0.341: a repeated procurement submission with the same Idempotency-Key (create requisition, convert to orders, consolidate, deliver) replays the first response and creates nothing new (TD-693)',
+      'v9.0.348: a repeated procurement submission with the same Idempotency-Key (create requisition, convert to orders, consolidate, deliver) replays the first response and creates nothing new (TD-693)',
       ['td693', 'procurement', 'idempotency', 'concurrency', 'package10'], doubleSubmitCase],
     ['reg_procurement_consolidation_closes_sources_td_694',
-      'v9.0.342: consolidation takes only unapproved requisitions without orders, refuses a missing id, and in one transaction closes the sources as consolidated with a link and a terminated workflow; a closed source takes no action (TD-694)',
+      'v9.0.349: consolidation takes only unapproved requisitions without orders, refuses a missing id, and in one transaction closes the sources as consolidated with a link and a terminated workflow; a closed source takes no action (TD-694)',
       ['td694', 'procurement', 'consolidation', 'concurrency', 'package10'], consolidationCase],
     ['reg_procurement_consolidation_legacy_sources_td_694',
-      'v9.0.342: the financial health check lists the still-open sources of a consolidation made before the fix and changes nothing (TD-694)',
+      'v9.0.349: the financial health check lists the still-open sources of a consolidation made before the fix and changes nothing (TD-694)',
       ['td694', 'procurement', 'consolidation', 'health', 'package10'], legacyConsolidationHealthCase],
     ['reg_procurement_receive_never_ordered_td_699',
-      'v9.0.343: "receive items" refuses a row that was never ordered (order with a supplier and a price first) instead of a final receipt from the generic procurement supplier at the estimate, which posted donated-goods income (TD-699)',
+      'v9.0.350: "receive items" refuses a row that was never ordered (order with a supplier and a price first) instead of a final receipt from the generic procurement supplier at the estimate, which posted donated-goods income (TD-699)',
       ['td699', 'procurement', 'receive', 'accounting', 'package10'], neverOrderedReceiveCase],
   ];
   for (const [id, name, tags, run] of cases) {
