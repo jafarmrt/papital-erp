@@ -1,5 +1,5 @@
 /**
- * v9.0.349 (TD-817، یافته B07-01، تصمیم ت۲ بسته ۷): رزرو پروژه فقط ردیف‌های ذخیره‌شده `inventory_control.reservedItems`
+ * v9.0.371 (TD-817، یافته B07-01، تصمیم ت۲ بسته ۷): رزرو پروژه فقط ردیف‌های ذخیره‌شده `inventory_control.reservedItems`
  * پروژه‌ای است که ثبت نهایی شده است (`isFinalized === true`). سرور این ردیف‌ها را هنگام ثبت نهایی می‌سازد، با حواله خروج
  * پروژه کم می‌کند و با خروج از ثبت نهایی خالی می‌کند (TD-306)؛ هیچ خواننده‌ای رزرو را از بخش‌های کنترل موجودی، فهرست خرید
  * یا اقلام دستی دوباره نمی‌سازد، پس پروژه پیش‌نویس رزرو ندارد و رزرو مصرف‌شده دوباره زنده نمی‌شود.
@@ -28,7 +28,7 @@ export function reservingProjectRows<T = Record<string, unknown>>(inventoryContr
 }
 
 /**
- * v9.0.351 (TD-819، تصمیم ت۳): کمبود رزرو پروژه که سرور هنگام ثبت نهایی نوشته است (`inventory_control.reservationShortages`):
+ * v9.0.373 (TD-819، تصمیم ت۳): کمبود رزرو پروژه که سرور هنگام ثبت نهایی نوشته است (`inventory_control.reservationShortages`):
  * کالاهایی که موجودی آزادشان (کل − رزرو دیگران) کمتر از نیاز پروژه بود
  */
 export function storedReservationShortages(inventoryControl: unknown): ReservationShortage[] {

@@ -4,7 +4,7 @@ import { planProjectReservation } from '../../lib/projects/projectReservation';
 import { storedReservationShortages } from '../../lib/projects/projectReservationState';
 import { ReservationShortageList } from '../../components/project/ReservationShortageList';
 
-// v9.0.351 (TD-819, B07-03): finalizing reserves only the stock others do not hold and records the shortage
+// v9.0.373 (TD-819, B07-03): finalizing reserves only the stock others do not hold and records the shortage
 describe('project reservation of free stock (TD-819)', () => {
   const items = [
     { id: 1, code: 'A-1', name: 'سنگ', unit: 'عدد', currentStock: 30 },

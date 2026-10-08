@@ -181,7 +181,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         } />
         <Route path="/procurement" element={
           <ProtectedRoute page="/procurement" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
-            <ProcurementPage user={user} />
+            <ProcurementPage />
           </ProtectedRoute>
         } />
         <Route path="/reserved-items" element={

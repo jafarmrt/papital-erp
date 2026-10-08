@@ -99,7 +99,7 @@ export function buildGlobalReservations(
   }
 
   // Fallback if reserved-items endpoint not ready yet.
-  // v9.0.349 (TD-817): only the stored reservation of a finalized project reserves, the server's own rule
+  // v9.0.371 (TD-817): only the stored reservation of a finalized project reserves, the server's own rule
   projectsList.forEach(p => {
     const reservedItems = reservingProjectRows<StoredReservedItem>(p.inventory_control ?? p.inventoryControl);
     if (reservedItems.length > 0) {

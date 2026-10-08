@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { planProjectReservation } from '../../lib/projects/projectReservation';
 import { directConversionRate } from '../../lib/projects/unitConversion';
 
-// v9.0.350 (TD-820, B07-04): a project's need is converted to the item unit before it is reserved
+// v9.0.372 (TD-820, B07-04): a project's need is converted to the item unit before it is reserved
 describe('project reservation units (TD-820)', () => {
   const items = [
     { id: 1, code: 'ST-1', name: 'نخ', unit: 'ریسه', currentStock: 30 },

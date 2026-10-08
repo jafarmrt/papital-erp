@@ -2,6 +2,7 @@ import { inArray } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { appSettings } from '../../db/schema.js';
 import type { WcConnectionFields } from '../../lib/woocommerce/wcConnectionTest.js';
+import { openSettingSecret } from '../settings/settingSecrets.js';
 
 const CONNECTION_KEYS = ['wc_store_url', 'wc_consumer_key', 'wc_consumer_secret'] as const;
 
@@ -16,7 +17,8 @@ export async function readWcConnectionSettings(executor: DbExecutor = orm): Prom
   const valueOf = (key: string) => rows.find(r => r.key === key)?.value ?? '';
   return {
     url: valueOf('wc_store_url'),
-    consumerKey: valueOf('wc_consumer_key'),
-    consumerSecret: valueOf('wc_consumer_secret'),
+    // v9.0.361 (TD-898): stored encrypted; a key the current ERP_SECRETS_KEY cannot decrypt is 503, never sent
+    consumerKey: openSettingSecret('wc_consumer_key', valueOf('wc_consumer_key')),
+    consumerSecret: openSettingSecret('wc_consumer_secret', valueOf('wc_consumer_secret')),
   };
 }

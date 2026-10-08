@@ -38,7 +38,7 @@ describe('buildGlobalReservations', () => {
       { id: 8, inventoryControl: { isFinalized: true, reservedItems: [{ itemCode: 'RM-4', reservedQty: '3' }] } },
       { id: 9, project_code: 'PRJ-9', inventory_control: { isFinalized: true, reservedItems: [] } },
       { id: 10, project_code: 'PRJ-10' },
-      // v9.0.349 (TD-817): a stored reservation of a project that is not finalized reserves nothing
+      // v9.0.371 (TD-817): a stored reservation of a project that is not finalized reserves nothing
       { id: 11, project_code: 'PRJ-11', inventory_control: { isFinalized: false, reservedItems: [{ itemCode: 'RM-5', reservedQty: 2 }] } },
       { id: 12, project_code: 'PRJ-12', inventory_control: { reservedItems: [{ itemCode: 'RM-6', reservedQty: 2 }] } },
     ];

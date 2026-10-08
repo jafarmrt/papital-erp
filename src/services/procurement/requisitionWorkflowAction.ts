@@ -46,7 +46,7 @@ export async function applyRequisitionTransition(tx: DbExecutor, event: Workflow
   if (!req) return;
   const status = requisitionStatusOfStep(event.toStateKey, req.status);
   const items = status === 'received' && !RECEIVED_REQUISITION_STATUSES.has(req.status)
-    ? await receiveRequisitionItems(tx, { code: req.code, projectName: req.projectName, items: req.items as RequisitionItemWithReceipt[] }, {
+    ? await receiveRequisitionItems(tx, { id: req.id, code: req.code, projectName: req.projectName, items: req.items as RequisitionItemWithReceipt[] }, {
       username: event.performedByName || 'کارشناس تدارکات',
       allowBackdate: event.allowBackdate,
       assertIncoming: assertProcurementIncomingDocument,

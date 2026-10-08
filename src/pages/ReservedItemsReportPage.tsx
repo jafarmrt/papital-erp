@@ -442,7 +442,7 @@ export default function ReservedItemsReportPage() {
                   </tr>
                 ) : (
                   filteredItemSummaries.map((summary) => {
-                    // v9.0.352 (TD-822): each summary is one item, keyed by its id
+                    // v9.0.374 (TD-822): each summary is one item, keyed by its id
                     const rowKey = summary.itemId ? `id:${summary.itemId}` : `code:${summary.itemCode}`;
                     const isExpanded = expandedItemCode === rowKey;
                     return (

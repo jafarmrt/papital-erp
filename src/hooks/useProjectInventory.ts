@@ -41,7 +41,7 @@ export function useProjectInventory(
   const [isFinalized, setIsFinalized] = useState<boolean>(!!project.inventory_control?.isFinalized);
   const [finalizedAt, setFinalizedAt] = useState<string | undefined>(project.inventory_control?.finalizedAt);
   const [reservedItems, setReservedItems] = useState<any[]>(() => Array.isArray(project.inventory_control?.reservedItems) ? project.inventory_control.reservedItems : []);
-  // v9.0.351 (TD-819): کمبود رزرو هنگام ثبت نهایی، نوشته سرور
+  // v9.0.373 (TD-819): کمبود رزرو هنگام ثبت نهایی، نوشته سرور
   const [reservationShortages, setReservationShortages] = useState<ReservationShortage[]>(() => storedReservationShortages(project.inventory_control));
 
   // Unit Conversion Modal state
@@ -612,7 +612,7 @@ export function useProjectInventory(
       finalConvertedQty = roundToOneDecimal(originalQty / finalRate);
     } else {
       finalConvertedQty = directConvertedQty;
-      // v9.0.350 (TD-820): the rate is not rounded; the server converts the requirement with it
+      // v9.0.372 (TD-820): the rate is not rounded; the server converts the requirement with it
       finalRate = directConversionRate(originalQty, directConvertedQty);
     }
 

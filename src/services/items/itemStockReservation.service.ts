@@ -104,7 +104,7 @@ export function reservationQtyField(row: Partial<Record<ReservationQtyField, unk
   return RESERVATION_QTY_FIELDS.find(f => Number(row[f] || 0) > 0) ?? null;
 }
 
-/** کنترل موجودی پروژه (JSONB فرم پروژه): فقط رزرو ذخیره‌شده خوانده می‌شود (v9.0.349، TD-817) */
+/** کنترل موجودی پروژه (JSONB فرم پروژه): فقط رزرو ذخیره‌شده خوانده می‌شود (v9.0.371، TD-817) */
 interface InventoryControlData {
   isFinalized?: boolean;
   isReserved?: boolean;
@@ -132,7 +132,7 @@ export interface ReservationScope {
   itemIds: number[];
 }
 
-/** v9.0.352 (TD-822): کلید خلاصه رزرو؛ شناسه کالا، وگرنه (ردیف بی کالای شناخته‌شده) کد بزرگ‌شده */
+/** v9.0.374 (TD-822): کلید خلاصه رزرو؛ شناسه کالا، وگرنه (ردیف بی کالای شناخته‌شده) کد بزرگ‌شده */
 function reservationSummaryKey(itemId: unknown, code: unknown): string {
   const id = Number(itemId);
   return Number.isInteger(id) && id > 0 ? `id:${id}` : `code:${String(code ?? '').trim().toUpperCase()}`;
@@ -204,7 +204,7 @@ export class ItemStockReservationService {
     });
 
     const invControl = (proj.inventoryControl as InventoryControlData) || {};
-    // v9.0.349 (TD-817): فقط رزرو ذخیره‌شده کم می‌شود؛ رزرو خالی (مصرف‌شده یا هرگز ساخته‌نشده) از بخش‌ها دوباره ساخته نمی‌شود
+    // v9.0.371 (TD-817): فقط رزرو ذخیره‌شده کم می‌شود؛ رزرو خالی (مصرف‌شده یا هرگز ساخته‌نشده) از بخش‌ها دوباره ساخته نمی‌شود
     const reservedList: InventoryControlItem[] = [...storedReservationRows<InventoryControlItem>(invControl)];
 
     // 3. مپینگ اقلام سند
@@ -406,7 +406,7 @@ export class ItemStockReservationService {
         .from(documents)
         .where(and(
           eq(documents.isDeleted, 0),
-          // v9.0.348 (TD-818، تصمیم ت۱): فقط پیش‌فاکتور فروش؛ پیش‌فاکتور خرید و پیش‌نویس رزرو نمی‌کنند
+          // v9.0.370 (TD-818، تصمیم ت۱): فقط پیش‌فاکتور فروش؛ پیش‌فاکتور خرید و پیش‌نویس رزرو نمی‌کنند
           inArray(documents.type, [...RESERVING_DOCUMENT_TYPES]),
           eq(documents.status, RESERVING_DOCUMENT_STATUS)
         ));
@@ -507,7 +507,7 @@ export class ItemStockReservationService {
       }
 
       for (const proj of activeProjs) {
-        // v9.0.349 (TD-817، تصمیم ت۲): فقط رزرو ذخیره‌شده پروژه ثبت نهایی‌شده؛ پیش‌نویس، خارج‌شده از ثبت نهایی و رزرو مصرف‌شده هیچ
+        // v9.0.371 (TD-817، تصمیم ت۲): فقط رزرو ذخیره‌شده پروژه ثبت نهایی‌شده؛ پیش‌نویس، خارج‌شده از ثبت نهایی و رزرو مصرف‌شده هیچ
         const itemsList = reservingProjectRows<InventoryControlItem>(proj.inventoryControl);
         if (itemsList.length === 0) continue;
 
@@ -519,7 +519,7 @@ export class ItemStockReservationService {
           if (reservedQty <= 0) continue;
 
           const rowName = item.itemName || item.name;
-          // v9.0.352 (TD-822): شناسه کالا بر کد و نام مقدم است (ردیف رزرو سرور همیشه شناسه دارد)
+          // v9.0.374 (TD-822): شناسه کالا بر کد و نام مقدم است (ردیف رزرو سرور همیشه شناسه دارد)
           const matchedDbItem = (item.itemId ? itemsByIdMap.get(Number(item.itemId)) : null)
             || (code ? itemsByCodeMap.get(code.toUpperCase()) : null)
             || (rowName ? itemsByNameMap.get(rowName.trim().toLowerCase()) : null);
@@ -548,7 +548,7 @@ export class ItemStockReservationService {
       }
 
       // 3. Group by Item
-      // v9.0.352 (TD-822): خلاصه با شناسه کالا کلید می‌خورد؛ پیش‌تر کد بزرگ‌شده کلید بود و دو کالا با کدهای هم‌حرف
+      // v9.0.374 (TD-822): خلاصه با شناسه کالا کلید می‌خورد؛ پیش‌تر کد بزرگ‌شده کلید بود و دو کالا با کدهای هم‌حرف
       // (یا «ß» و «SS») یک خلاصه داشتند و رزرو یکی به دیگری می‌رسید
       const itemSummariesMap = new Map<string, ItemReservedReportSummary>();
 
@@ -642,7 +642,7 @@ export class ItemStockReservationService {
   }
 
   /**
-   * رزرو هر کالا (پیش‌فاکتور فروش و پروژه ثبت نهایی‌شده)، با شناسه کالا کلید خورده (v9.0.352، TD-822؛ پیش‌تر کد بزرگ‌شده).
+   * رزرو هر کالا (پیش‌فاکتور فروش و پروژه ثبت نهایی‌شده)، با شناسه کالا کلید خورده (v9.0.374، TD-822؛ پیش‌تر کد بزرگ‌شده).
    */
   static async getReservedStocksMap(scope?: ReservationScope): Promise<Record<string, ReservedStockInfo>> {
     try {

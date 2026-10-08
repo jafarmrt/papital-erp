@@ -20,9 +20,9 @@ const asObject = (v: unknown): InventoryControl => (v && typeof v === 'object' &
  * - ذخیره پروژه نهایی‌شده: رزرو فعلی (پس از کسرهای حواله خروج) همان می‌ماند.
  * - خروج از ثبت نهایی: رزرو خالی می‌شود.
  * - پروژه نهایی‌نشده: رزرو قبلی دست نمی‌خورد.
- * v9.0.350 (TD-820): ردیفی که واحدش با واحد کالا فرق دارد و تبدیل واحد معتبر ندارد، ثبت نهایی را با ۴۲۲
+ * v9.0.372 (TD-820): ردیفی که واحدش با واحد کالا فرق دارد و تبدیل واحد معتبر ندارد، ثبت نهایی را با ۴۲۲
  * `PROJECT_RESERVATION_UNIT_MISMATCH` رد می‌کند.
- * v9.0.351 (TD-819): ثبت نهایی فقط موجودی آزاد (کل − رزرو دیگران) را رزرو می‌کند و کمبود را در
+ * v9.0.373 (TD-819): ثبت نهایی فقط موجودی آزاد (کل − رزرو دیگران) را رزرو می‌کند و کمبود را در
  * `reservationShortages` می‌نویسد؛ کمبود بدنه درخواست نادیده گرفته و با خروج از ثبت نهایی پاک می‌شود.
  */
 function unitMismatchError(rows: ReservationUnitMismatch[]): ValidationError {
@@ -46,7 +46,7 @@ async function planWithOthersReservations(
   executor: DbExecutor,
 ): Promise<ProjectReservationPlan> {
   const draft = planProjectReservation(ic.sections, products, stockItems, ic.manualPurchaseItems, reservedAt);
-  // v9.0.350 (TD-820، تصمیم ت۴): ردیف با واحد دیگر و بی تبدیل، ثبت نهایی را رد می‌کند
+  // v9.0.372 (TD-820، تصمیم ت۴): ردیف با واحد دیگر و بی تبدیل، ثبت نهایی را رد می‌کند
   if (draft.unitMismatches.length > 0) throw unitMismatchError(draft.unitMismatches);
   const itemIds = draft.reserved.map(r => Number(r.itemId)).filter(id => Number.isInteger(id) && id > 0);
   if (itemIds.length === 0) return draft;
@@ -76,7 +76,7 @@ export async function resolveServerInventoryControl(
   let finalizedAt: unknown = prev.finalizedAt;
   let shortages: unknown = prev.reservationShortages;
   if (nowFinal && !wasFinal) {
-    // v9.0.351 (TD-819): ثبت نهایی‌های هم‌زمان پشت سر هم رزرو دیگران را می‌خوانند
+    // v9.0.373 (TD-819): ثبت نهایی‌های هم‌زمان پشت سر هم رزرو دیگران را می‌خوانند
     await executor.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.PROJECT_RESERVATION_FINALIZE}::bigint)`);
     const stockItems = await executor
       .select({ id: items.id, code: items.code, name: items.name, category: items.category, unit: items.unit, currentStock: items.currentStock })

@@ -7,6 +7,7 @@ import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { EventActionEngineService } from './eventActionEngineService.js';
 import { RuleExpression } from '../ruleEngine.service.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { actionRuleView } from './integrationSecrets.js';
 
 export interface TimelineEventItem {
   id: string | number;
@@ -350,7 +351,8 @@ export class EventSourcingReplayService {
         actionType: rule.actionType,
         conditions: rule.conditionsJson,
         matched: isMatched,
-        actionConfig: rule.actionConfigJson,
+        // v9.0.360 (TD-710): the rule token and header values are masked here too
+        actionConfig: actionRuleView(rule).actionConfigJson,
         simulatedOutcome: isMatched
           ? `قانون با موفقیت منطبق شد و اکشن ${rule.actionType} ${dryRun ? 'شبیه‌سازی' : 'اجرا'} گردید.`
           : 'شروط قانون منطبق نشد و اکشن نادیده گرفته شد.'

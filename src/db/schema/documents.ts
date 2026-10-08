@@ -20,6 +20,9 @@ export const documents = pgTable('documents', {
   projectId: integer('project_id').references(baseRelations.productionProjectsId),
   // v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش؛ بهای ورود کالای برگشتی از گردش خروج همان فاکتور خوانده می‌شود
   returnOfDocumentId: integer('return_of_document_id').references((): AnyPgColumn => documents.id),
+  // v9.0.347 (TD-691، تصمیم ت۲ بسته ۱۰): درخواست خریدی که «تبدیل به سفارش» این سفارش را برایش صادر کرده است؛ فهرست،
+  // خلاصه و تحویل سفارش‌های تدارکات فقط سندهای دارای این پیوند را می‌بینند (مهاجرت 0082)
+  procurementRequisitionId: integer('procurement_requisition_id').references(baseRelations.purchaseRequisitionsId),
   user: text('user'),
   notes: text('notes'),
   // v9.0.336 (TD-778، تصمیم ت۶ الف بسته ۸): طرف حساب سند فروش و خرید با شناسه (مهاجرت 0080)؛ نام خریدار فقط برای نمایش است
@@ -49,6 +52,7 @@ export const documents = pgTable('documents', {
   idx_buyer_name: index('idx_docs_buyer_name').on(table.buyerName),
   idx_docs_project: index('idx_docs_project').on(table.projectId),
   idx_docs_return_of_document: index('idx_docs_return_of_document').on(table.returnOfDocumentId),
+  idx_docs_procurement_requisition: index('idx_docs_procurement_requisition').on(table.procurementRequisitionId).where(sql`procurement_requisition_id IS NOT NULL`),
 }));
 registerColumnRef('documents.id', () => documents.id);
 

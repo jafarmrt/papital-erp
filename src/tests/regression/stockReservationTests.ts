@@ -11,19 +11,19 @@ export async function runStockReservationTests(shouldRun: ShouldRun): Promise<Te
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_reservation_sales_proforma_only_td_818',
-      'v9.0.348: only a sales proforma (invoice or proforma type in proforma status) reserves stock; a purchase proforma and a draft do not (TD-818)',
+      'v9.0.370: only a sales proforma (invoice or proforma type in proforma status) reserves stock; a purchase proforma and a draft do not (TD-818)',
       ['td818', 'reservation', 'proforma', 'package7'], salesProformaOnlyCase],
     ['reg_reservation_finalized_project_only_td_817',
-      'v9.0.349: only the stored reservation of a finalized project reserves stock; a draft or unfrozen project reserves nothing and a consumed reservation stays consumed (TD-817)',
+      'v9.0.371: only the stored reservation of a finalized project reserves stock; a draft or unfrozen project reserves nothing and a consumed reservation stays consumed (TD-817)',
       ['td817', 'reservation', 'project', 'package7'], finalizedProjectOnlyCase],
     ['reg_reservation_unit_conversion_td_820',
-      'v9.0.350: a project reserves its need converted to the item unit with the row\'s conversion rate; a row in another unit without a conversion refuses finalizing with 422 (TD-820)',
+      'v9.0.372: a project reserves its need converted to the item unit with the row\'s conversion rate; a row in another unit without a conversion refuses finalizing with 422 (TD-820)',
       ['td820', 'reservation', 'project', 'unit', 'package7'], unitConversionCase],
     ['reg_reservation_free_stock_at_finalize_td_819',
-      'v9.0.351: finalizing a project reserves only the stock no one else holds and stores the shortage; concurrent finalizes never reserve the same stock twice (TD-819)',
+      'v9.0.373: finalizing a project reserves only the stock no one else holds and stores the shortage; concurrent finalizes never reserve the same stock twice (TD-819)',
       ['td819', 'reservation', 'project', 'shortage', 'package7'], freeStockAtFinalizeCase],
     ['reg_reservation_keyed_by_item_td_822',
-      'v9.0.352: the reservation summary is keyed by item id, so two items whose codes fold to one key keep their own reservations in the report, the item list and the exit gate (TD-822)',
+      'v9.0.374: the reservation summary is keyed by item id, so two items whose codes fold to one key keep their own reservations in the report, the item list and the exit gate (TD-822)',
       ['td822', 'reservation', 'summary', 'package7'], keyedByItemCase],
   ];
   for (const [id, name, tags, run] of cases) {

@@ -3,7 +3,7 @@ import type { ReservationShortage } from '../../lib/projects/projectReservation'
 import { formatPersianNumber } from '../../utils';
 
 /**
- * v9.0.351 (TD-819، تصمیم ت۳ بسته ۷): کالاهایی که ثبت نهایی کمتر از نیاز پروژه رزرو کرد، چون بقیه موجودی را پیش‌فاکتورها یا
+ * v9.0.373 (TD-819، تصمیم ت۳ بسته ۷): کالاهایی که ثبت نهایی کمتر از نیاز پروژه رزرو کرد، چون بقیه موجودی را پیش‌فاکتورها یا
  * پروژه‌های دیگر رزرو کرده بودند (یا موجودی نبود). سرور این فهرست را هنگام ثبت نهایی می‌نویسد.
  */
 export function ReservationShortageList({ shortages }: { shortages: ReservationShortage[] }) {

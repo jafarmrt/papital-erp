@@ -7,6 +7,7 @@ import { formatPersianPrice, getTodayJalaliDate } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
+import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 
 interface CreatePurchaseOrderModalProps {
   isOpen: boolean;
@@ -59,10 +60,7 @@ export function CreatePurchaseOrderModal({
 
     return shortfalls.map((item): OrderItemRow => {
       // Find matching item in warehouseItems
-      const matched = warehouseItems.find(w => 
-        (item.itemCode && w.code === item.itemCode) ||
-        (w.name && w.name.trim().toLowerCase() === item.itemName.trim().toLowerCase())
-      );
+      const matched = findProjectItemMatch({ code: item.itemCode, name: item.itemName }, warehouseItems);
 
       const qty = item.convertedToPurchaseQty !== undefined && item.convertedToPurchaseQty > 0
         ? item.convertedToPurchaseQty
@@ -143,7 +141,7 @@ export function CreatePurchaseOrderModal({
       if (orderMode === 'requisition') {
         // Submit official Purchase Requisition to Procurement Desk & Workflow Engine
         const payload = {
-          title: `کسری متریال پروژه ${project.project_code || project.title}`.trim(),
+          title: `کسری مواد پروژه ${project.project_code || project.title}`.trim(),
           projectId: project.id,
           projectCode: project.project_code,
           projectName: project.title,
@@ -434,7 +432,7 @@ export function CreatePurchaseOrderModal({
                     <tr>
                       <th className="p-2.5 text-center w-12">انتخاب</th>
                       <th className="p-2.5">عنوان قلم نیازمندی</th>
-                      <th className="p-2.5">تطبیق با کاتالوگ انبار</th>
+                      <th className="p-2.5">تطبیق با فهرست کالا</th>
                       <th className="p-2.5 text-center">مقدار کسری</th>
                       <th className="p-2.5 text-center">قیمت واحد تخمینی</th>
                       <th className="p-2.5 text-center">مبلغ کل</th>

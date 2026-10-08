@@ -19,23 +19,89 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.352 — Reservations Keyed by Item Id
+### v9.0.374 — Reservations Keyed by Item Id
 - **Reservations (TD-822, B07-06):** reservation summaries, the reserved stock map and the item list key reservations by item id instead of the upper-cased code, so two items whose codes differ only in case keep their own reservations.
 
-### v9.0.351 — Project Finalize Reserves Free Stock Only
+### v9.0.373 — Project Finalize Reserves Free Stock Only
 - **Reservations (TD-819, B07-03, decision t3):** finalizing a project reserves min(need, stock minus the reservations of others) under a new advisory lock (91011), stores the shortage in reservationShortages (shown on the purchase tab), and the health check lists items reserved above their stock.
 
-### v9.0.350 — Project Reservations Convert Units
+### v9.0.372 — Project Reservations Convert Units
 - **Reservations (TD-820, B07-04, decision t4):** a project need is converted to the item unit with the row's own conversion rate before it is reserved and summed per item; a row in another unit without a valid conversion refuses the finalize with 422 PROJECT_RESERVATION_UNIT_MISMATCH; a directly entered conversion rate is no longer rounded to zero.
 
-### v9.0.349 — Only Finalized Projects Reserve Stock
+### v9.0.371 — Only Finalized Projects Reserve Stock
 - **Reservations (TD-817, B07-01, decision t2):** only the stored reservation of a finalized project reserves stock; the reader no longer rebuilds an empty reservation from the sections or the purchase list, so a draft or unfrozen project reserves nothing and a consumed reservation stays consumed; legacy projects are listed by the health check.
 
-### v9.0.348 — Only Sales Proformas Reserve Stock
+### v9.0.370 — Only Sales Proformas Reserve Stock
 - **Reservations (TD-818, B07-02, decision t1):** only a sales proforma (type invoice or proforma in proforma status) reserves stock; a purchase proforma (receipt in proforma status) and any draft reserve nothing, so a purchase order no longer blocks the sale of free stock.
 
-### v9.0.347 — Package 7 Inventory Planning Audit
+### v9.0.369 — Package 7 Inventory Planning Audit
 - **Audit (package 7):** inventory planning section of the stability audit report: 15 proven findings opened as TD-817..TD-831 plus TD-843 (decision t7) with the product-owner decisions t1-t8; documentation only.
+
+### v9.0.368 — v9.0.368 — Stage Number and Percent Input
+- **Stage Number and Percent Input (TD-755):** a text stage number or percent answered 500 with the SQL text and a manual duplicate number was stored; the stage route now reads them with `decimalInput` (a positive whole number, a whole percent 0 to 100, Persian digits accepted), a number another stage holds is 409 `STAGE_ORDER_TAKEN`, and a renumbered stage carries its matrix ticks.
+
+### v9.0.367 — v9.0.367 — Stage Numbers Never Reused
+- **Stage Numbers Never Reused (TD-737, TD-753):** a new stage took «live stages + 1», so after a deletion it reused a number and inherited the deleted stage's ticks (a project stayed completed with no work) and two stages could share a number; numbering now follows every number the project used under the project lock, a deleted stage drops its ticks, and migration 0084 adds a partial unique index and a foreign key to the project.
+
+### v9.0.366 — v9.0.366 — Manual Stage Status Only Without Products
+- **Manual Stage Status Only Without Products (TD-758, decision 1a):** in a project with a progress matrix a manual stage status or percent answered 200 and was silently reverted by the sync; it is now refused with 422 `STAGE_STATUS_FROM_MATRIX`, and the stage form asks for status and percent only in a project without products.
+
+### v9.0.365 — v9.0.365 — Project Status Only on Writes
+- **Project Status Only on Writes (TD-738, decision 1a):** reading a project ran the progress sync without a lock or audit row, so a cancelled project with a full matrix became completed on one GET by a warehouse reader and its delivery was accepted; the sync now runs only inside the tick, stage and project-edit transactions under the project row lock, never changes a cancelled or paused project, and audits each status change.
+
+### v9.0.364 — v9.0.364 — One Progress Matrix Rule
+- **One Progress Matrix Rule (TD-739):** the product × stage progress matrix had three copies that disagreed: a project defined by its main item showed no matrix row and its ticks were skipped, yet its completion was refused as «0 of 3»; the view, the ticks, the completion check (now 422 `PROJECT_MATRIX_INCOMPLETE` inside the project save) and the status sync share `computeProgressMatrix`.
+
+### v9.0.363 — v9.0.363 — One Item-Matching Rule for Project Materials
+- **One Item-Matching Rule for Project Materials (TD-749, TD-768):** the project purchase list matched a material to a warehouse item by part of its name («کارتن» took the stock of «کارتن بسته‌بندی بزرگ» and left the purchase list) while the server reserved by exact name, and the rule was copied in ten places; the screens and the reservation now share `findProjectItemMatch` (item id, then code, then exact name; never a substring or an empty name).
+
+### v9.0.362 — v9.0.362 — Package 11 Project Control Audit
+- **Audit (package 11):** project control and production section of the stability audit report: 35 proven findings, 30 of them opened as TD-737..TD-769 (TD-735, TD-736 and TD-747 were closed in package 12; B11-10 and B11-12 were fixed by TD-888 and TD-688) with the product-owner decisions t1-t10; documentation only.
+
+### v9.0.361 — WooCommerce and Webhook Keys Encrypted at Rest
+- **Integration secrets at rest (TD-898):** the WooCommerce consumer key and secret, the WooCommerce webhook secret and every webhook subscription's signing key and custom header values are now stored with `encryptSecret` (`ERP_SECRETS_KEY`) and decrypted only inside the server; a value that cannot be decrypted is never sent, and legacy plain values are encrypted with `npm run secrets:encrypt -- --apply`.
+
+### v9.0.360 — Webhook Keys and Partner Tokens Masked in Every Answer
+- **Webhook secrets (TD-710):** the webhook toggle and edit answers returned the full signing key to a non-admin manager, and any events viewer saw the partner API token in custom headers and the token of webhook rules; the key, rule token and header values are now masked in every answer for every user, and the key is shown once, after create or rotation.
+
+### v9.0.359 — Server-Made Webhook Key and Entered Timeout
+- **Webhook key and timeout (TD-720):** the webhook form made the signing key in the browser with Math.random (about 16 base-36 characters), so the server's CSPRNG key never ran, and the create route read only timeoutSeconds, so every entered timeout became 10 seconds; the server now makes the key and stores the entered timeout of 1 to 30 seconds.
+
+### v9.0.358 — Webhook Edit Keeps the Signing Key
+- **Webhook edit and ping (TD-719):** the edit form took the masked signing key from the list and every save, even a rename, stored the mask in place of the real key, breaking every receiver's HMAC check; an empty or masked key now keeps the stored one and a saved webhook is pinged with its own stored key.
+
+### v9.0.357 — Server Start No Longer Rewrites Webhook Rules
+- **Webhook rules at start (TD-715):** every server start turned a webhook rule URL containing «example.com» into the local echo simulator and put the system's echo token into every webhook rule without one, which then sent it to the external address; saved rules are now left as they are and the system token goes only to the server's own echo simulator.
+
+### v9.0.356 — Webhook Connection Test Never Reaches an Internal Service
+- **Webhook SSRF guard (TD-704):** the webhook connection test followed redirects and showed the internal service's answer, and the local echo exception opened any loopback port in production too; the test no longer follows a redirect, and the echo simulator passes only in test and development, on the server's own port and exact path.
+
+### v9.0.355 — Persian Procurement Wording and Field Errors
+- **Fix (TD-901, decision ت۵):** procurement UI says «مواد», «فهرست کالا», «سند حسابداری», «بسته» and «اقدام» (no «(Requisitions)»); requisition form and server Zod errors show under their field (`apiFieldErrors`), and server messages name actions in Persian (`requisitionActionLabel`) with Persian digits.
+
+### v9.0.354 — Requisition Item Picker With Server Search
+- **Fix (TD-700, B10-13):** the requisition form picks items with `SearchableSelect` over the item pick list (`/items/options`, server search) instead of a plain `<select>` of the items the desk had loaded; the desk no longer preloads items.
+
+### v9.0.353 — Procurement Desk Pages and Server Filters
+- **Fix (TD-697, B10-10):** the requisition list takes the statuses it writes and their groups (`REQUISITION_STATUS_FILTERS`: open, ordered, received, rejected, consolidated), the form priorities, item-name search in SQL and one shared limit (`PROCUREMENT_LIST_MAX_LIMIT`, answered as used); each requisition carries its order counts; the desk pages requisitions and orders on the server.
+
+### v9.0.352 — Procurement Desk Sections and Buttons by Permission
+- **Fix (TD-702, B10-15):** the procurement desk loads its summary, requisitions, orders and items one by one (`useProcurementDeskData`), so one refused or failed section shows its own error and the others still show; `GET /procurement/inbox/summary` opens for both page keys (`READ_PERMISSIONS.purchaseRequisitions`) and is listed among the page's APIs; each button follows the permission of its API (`useProcurementAccess`).
+
+### v9.0.351 — Order Number and Supplier in Procurement Dialogs
+- **Fix (TD-701, B10-14):** the delivery confirmation and the requisition detail read `refNumber`, `date` and `supplierName` of `GET /procurement/orders` instead of `orderNumber`, `orderDate` and `buyerName`, which the server never sends; the confirmation no longer shows «تامین‌کننده تدارکات» for every order.
+
+### v9.0.350 — Receive Items Needs an Order
+- **Fix (TD-699, B10-12, decision t4):** `receive_items` of a purchase requisition refuses a catalog row that was never ordered (409 REQUISITION_ROWS_NOT_ORDERED, «ابتدا سفارش خرید با تأمین‌کننده و قیمت صادر کنید») instead of a final receipt from the generic procurement supplier at the estimate, which posted donated-goods income (5204) with no supplier debt.
+
+### v9.0.349 — Requisition Consolidation Closes Its Sources
+- **Fix (TD-694, B10-07, decision t3):** `POST /procurement/consolidate` locks its sources in id order in one transaction, refuses a missing id (404 REQUISITION_NOT_FOUND) or a source that is approved, ordered, received, rejected or consolidated (409 REQUISITION_NOT_CONSOLIDATABLE), creates the consolidated requisition and marks each source `consolidated` with `consolidated_into_id` (migration 0083) and a terminated workflow; a consolidated requisition takes no action (409 REQUISITION_CONSOLIDATED).
+
+### v9.0.348 — Procurement Double Submission
+- **Fix (TD-693, B10-06):** `POST /procurement/requisitions`, `/requisitions/:id/convert-to-orders`, `/consolidate` and `/orders/:id/deliver` use `idempotency({ scope: 'procurement' })`, so a repeated submission with the browser's Idempotency-Key replays the first response instead of creating a second order or requisition.
+
+### v9.0.347 — Procurement Orders Linked to Requisitions
+- **Fix (TD-691 / TD-698, B10-04 / B10-11):** a procurement order is a document with `documents.procurement_requisition_id` (migration 0082, backfilled only from an unambiguous requisition tag; the rest is listed by the health check `procurement_order_link_unresolved`); the order list, the desk summary and delivery read only linked documents (else 422 PROCUREMENT_ORDER_NOT_LINKED), and the list filters, counts and pages in SQL.
 
 ### v9.0.346 — Persian Digits and Wording in Invoices and Stock Documents
 - **Wording:** invoice and stock document messages show numbers in Persian digits and currency names instead of codes, the receipt summary no longer claims stock waits for a finance approval, and the screens drop transliterations and English words (TD-803).
