@@ -19,7 +19,7 @@ export async function runProjectPurchaseAllocationTests(shouldRun: ShouldRun): P
 
   const closedId = 'reg_project_allocation_closed_td_759';
   if (shouldRun(closedId, 'td759', 'projects', 'package11')) {
-    await runCase(results, closedId, 'v9.0.386: materials are not allocated to a cancelled or completed project (422 PROJECT_CLOSED_FOR_ALLOCATION, no stock moved), releasing earlier allocations stays possible, and a project with an open allocation is not cancelled (TD-759)', async () => inFiscalSandbox(async () => {
+    await runCase(results, closedId, 'v9.0.410: materials are not allocated to a cancelled or completed project (422 PROJECT_CLOSED_FOR_ALLOCATION, no stock moved), releasing earlier allocations stays possible, and a project with an open allocation is not cancelled (TD-759)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const wh = await defaultWarehouse();
@@ -66,7 +66,7 @@ export async function runProjectPurchaseAllocationTests(shouldRun: ShouldRun): P
 
   const listId = 'reg_project_list_paged_td_743';
   if (shouldRun(listId, 'td743', 'projects', 'package11')) {
-    await runCase(results, listId, 'v9.0.388: GET /projects answers one summary page {data, total, page, limit, statusCounts} filtered in SQL by search, status and priority; a row carries only the summary fields and its stages, never the inventory control, schedule, description or attachments (TD-743)', async () => inFiscalSandbox(async () => {
+    await runCase(results, listId, 'v9.0.412: GET /projects answers one summary page {data, total, page, limit, statusCounts} filtered in SQL by search, status and priority; a row carries only the summary fields and its stages, never the inventory control, schedule, description or attachments (TD-743)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const tag = `TD743-${Date.now().toString(36)}`;
@@ -143,7 +143,7 @@ export async function runProjectPurchaseAllocationTests(shouldRun: ShouldRun): P
 
   const presetId = 'reg_project_preset_sections_td_748';
   if (shouldRun(presetId, 'td748', 'projects', 'package11')) {
-    await runCase(results, presetId, 'v9.0.389: inventory control sections in the preset shape (materials in items) are stored as project rows, per product for a code-by-code check and global otherwise, and finalizing reserves their materials (TD-748)', async () => inFiscalSandbox(async () => {
+    await runCase(results, presetId, 'v9.0.413: inventory control sections in the preset shape (materials in items) are stored as project rows, per product for a code-by-code check and global otherwise, and finalizing reserves their materials (TD-748)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const held = await createTestItem({ type: 'raw_material', currentStock: 30 });

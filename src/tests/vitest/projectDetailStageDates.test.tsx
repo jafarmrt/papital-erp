@@ -45,7 +45,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); puts.length = 0; });
 
 const renderModal = () => render(<ProjectDetailModal projectId={7} isOpen onClose={vi.fn()} onUpdate={vi.fn()} />);
 
-// v9.0.395 (TD-763): stage dates were free text with a 1403 sample; the shortage badge read a field nobody writes
+// v9.0.419 (TD-763): stage dates were free text with a 1403 sample; the shortage badge read a field nobody writes
 describe('project detail stage dates and shortage badge (TD-763)', () => {
   it('counts the reservation shortages the server wrote at finalize', async () => {
     renderModal();

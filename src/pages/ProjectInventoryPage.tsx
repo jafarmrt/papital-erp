@@ -101,7 +101,7 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
     setSearchParams({ projectId: String(id) });
   };
 
-  // v9.0.399 (TD-767): انتخاب پروژه با فهرست جست‌وجوپذیر؛ برچسب وضعیت از فهرست بسته وضعیت‌ها
+  // v9.0.423 (TD-767): انتخاب پروژه با فهرست جست‌وجوپذیر؛ برچسب وضعیت از فهرست بسته وضعیت‌ها
   const projectOptions = projects.map(p => ({
     value: p.id,
     label: `[${p.project_code}] ${p.title} - مشتری: ${p.customer_name || 'عمومی'} (${projectStatusLabel(p.status)})`,

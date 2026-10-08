@@ -171,9 +171,12 @@ export const pendingMaterials = pgTable('pending_materials', {
   image: text('image').default(''),
   thumbnail: text('thumbnail').default(''),
   rejectionReason: text('rejection_reason').default(''),
+  // v9.0.397 (TD-825): the item an approval made (migration 0087); null while pending, rejected, or approved before v9.0.397
+  itemId: integer('item_id').references(baseRelations.itemsId),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
+  idx_pmat_item: index('idx_pmat_item').on(table.itemId),
   idx_pmat_status: index('idx_pmat_status').on(table.status),
   idx_pmat_code: index('idx_pmat_code').on(table.code),
   idx_pmat_deleted: index('idx_pmat_deleted').on(table.isDeleted),

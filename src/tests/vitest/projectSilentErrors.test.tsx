@@ -51,7 +51,7 @@ const filesUnder = (path: string): string[] => {
   return statSync(full).isDirectory() ? readdirSync(full).flatMap(name => filesUnder(join(path, name))) : [full];
 };
 
-// v9.0.398 (TD-766): package 11 catch blocks only logged, so a failed read looked like empty data
+// v9.0.422 (TD-766): package 11 catch blocks only logged, so a failed read looked like empty data
 describe('package 11 read failures are shown (TD-766)', () => {
   it('reads error text with errorMessageOf, never err.message', () => {
     const offenders = PACKAGE_11.flatMap(filesUnder).filter(f => /\.tsx?$/.test(f) && /\berr\.message\b/.test(readFileSync(f, 'utf8')));

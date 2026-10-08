@@ -16,7 +16,7 @@ export const roundToOneDecimal = (val: number | undefined | null): number => {
 };
 
 /**
- * v9.0.390 (TD-750، B11-16): شناسه ردیف فهرست خرید از کد ماده، وگرنه نام آن؛ ردیف‌های بخش‌ها با کد یا نام یکسان یک ردیف‌اند.
+ * v9.0.414 (TD-750، B11-16): شناسه ردیف فهرست خرید از کد ماده، وگرنه نام آن؛ ردیف‌های بخش‌ها با کد یا نام یکسان یک ردیف‌اند.
  * تغییر وضعیت تدارکات ردیف با همین شناسه به همه ردیف‌های آن در بخش‌ها می‌رسد (`withProcurementStatus`).
  */
 export const purchaseRowKey = (code: string | undefined, name: string | undefined): string =>

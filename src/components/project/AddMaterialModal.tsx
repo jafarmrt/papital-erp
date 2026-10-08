@@ -6,6 +6,8 @@ import { Item, Category, ProjectInventoryControlSectionData } from '../../types'
 import { formatPersianNumber, toPersianDigits } from '../../utils';
 import { COMMON_UNITS } from './projectInventoryUtils';
 import { MaterialNameField, MaterialUnitSelect, MaterialNumberField, MaterialAttributeFields } from './materialFormFields';
+import { useHasPermission } from '../../contexts/AuthContext';
+import type { CustomMaterialForm } from '../../lib/pendingMaterials/customMaterialRequest';
 
 interface AddMaterialModalProps {
   isOpen: boolean;
@@ -19,22 +21,8 @@ interface AddMaterialModalProps {
   setWarehouseSearchQuery: (query: string) => void;
   currentModalSection: ProjectInventoryControlSectionData | undefined;
   handleSelectWarehouseItem: (whItem: Item) => void;
-  customMaterialForm: {
-    name: string;
-    category: string;
-    itemCode: string;
-    unit: string;
-    stockQty: number;
-    requiredQty: number;
-    weightedAverageCost: number;
-    reorderPoint: number;
-    color: string;
-    material: string;
-    size: string;
-    weight: number;
-    notes: string;
-  };
-  setCustomMaterialForm: React.Dispatch<React.SetStateAction<any>>;
+  customMaterialForm: CustomMaterialForm;
+  setCustomMaterialForm: React.Dispatch<React.SetStateAction<CustomMaterialForm>>;
   allCategories: Category[];
   codePrefix: string;
   handleCategoryChangeForCustom: (catName: string) => Promise<void>;
@@ -60,6 +48,8 @@ export function AddMaterialModal({
   handleCategoryChangeForCustom,
   handleAddCustomMaterial
 }: AddMaterialModalProps) {
+  // v9.0.398 (TD-826): a new material is only a request to the warehouse queue, offered by the key its route asks
+  const canRequestMaterial = useHasPermission('pending_materials.create');
   if (!isOpen) return null;
 
   return (
@@ -97,7 +87,7 @@ export function AddMaterialModal({
             انتخاب از انبار ({toPersianDigits(filteredWarehouseItems.length)} ماده اولیه موجود)
           </button>
 
-          <button
+          {canRequestMaterial && <button
             type="button"
             onClick={() => setMaterialModalTab('custom')}
             className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all flex-1 justify-center cursor-pointer ${
@@ -107,13 +97,13 @@ export function AddMaterialModal({
             }`}
           >
             <Plus className="w-4 h-4" />
-            ثبت ماده اولیه جدید (خارج از انبار)
-          </button>
+            درخواست ماده اولیه جدید
+          </button>}
         </div>
 
         {/* Modal Content */}
         <div className="p-5 max-h-[60vh] overflow-y-auto">
-          {materialModalTab === 'warehouse' ? (
+          {materialModalTab === 'warehouse' || !canRequestMaterial ? (
             <div className="space-y-4">
               {/* Filter Restriction Alert if Active */}
               {currentModalSection && currentModalSection.filterType && currentModalSection.filterType !== 'all' && (
@@ -196,7 +186,7 @@ export function AddMaterialModal({
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
                 <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <span>
-                  کدهایی که از این بخش ثبت می‌شوند پس از ثبت، جهت مرور و رسمیت به صف تأیید انباردار منتقل می‌گردند.
+                  این درخواست به صف «مواد اولیه در انتظار تأیید» می‌رود و کالا فقط با تأیید انباردار ساخته می‌شود. موجودی تنها با رسید خرید وارد انبار می‌شود.
                 </span>
               </div>
 
@@ -241,24 +231,13 @@ export function AddMaterialModal({
                   placeholder="مثلاً: کاغذ ترنسفر سفارشی ۷۰x۱۰۰"
                 />
                 <MaterialUnitSelect value={customMaterialForm.unit} onChange={(v) => setCustomMaterialForm({ ...customMaterialForm, unit: v })} units={COMMON_UNITS} />
-                <MaterialNumberField label="موجودی اولیه (در صورت وجود)" value={customMaterialForm.stockQty} onChange={(v) => setCustomMaterialForm({ ...customMaterialForm, stockQty: v })} />
+                <MaterialNumberField label="نقطه سفارش" value={customMaterialForm.reorderPoint} onChange={(v) => setCustomMaterialForm({ ...customMaterialForm, reorderPoint: v })} />
                 <MaterialNumberField label="قیمت تخمینی / هزینه واحد" value={customMaterialForm.weightedAverageCost} onChange={(v) => setCustomMaterialForm({ ...customMaterialForm, weightedAverageCost: v })} />
                 <MaterialAttributeFields
                   color={customMaterialForm.color}
                   material={customMaterialForm.material}
                   size={customMaterialForm.size}
                   onChange={(field, v) => setCustomMaterialForm({ ...customMaterialForm, [field]: v })}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 text-xs">توضیحات و نیازمندی‌ها (اختیاری)</label>
-                <input
-                  type="text"
-                  value={customMaterialForm.notes}
-                  onChange={(e) => setCustomMaterialForm({ ...customMaterialForm, notes: e.target.value })}
-                  placeholder="توضیحات تکمیلی تامین کالا..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
                 />
               </div>
 
@@ -274,7 +253,7 @@ export function AddMaterialModal({
                   type="submit"
                   className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
-                  ثبت ماده اولیه و ارسال به انباردار
+                  ارسال درخواست به انباردار
                 </button>
               </div>
             </form>

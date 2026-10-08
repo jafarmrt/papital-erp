@@ -56,7 +56,7 @@ const KANBAN_COLUMNS = [
   { status: 'completed', title: 'تکمیل شده', icon: CheckCircle2, iconClassName: 'text-emerald-600',
     columnClassName: 'bg-emerald-50/60 border-emerald-200/70', headerBorderClassName: 'border-emerald-200',
     titleClassName: 'text-emerald-900', countClassName: 'bg-emerald-200 text-emerald-900' },
-  // v9.0.394 (TD-761): پروژه متوقف‌شده یا لغوشده در نمای پیش‌فرض دیده می‌شود
+  // v9.0.418 (TD-761): پروژه متوقف‌شده یا لغوشده در نمای پیش‌فرض دیده می‌شود
   { status: 'stopped', title: 'متوقف / لغوشده', icon: Ban, iconClassName: 'text-rose-600',
     columnClassName: 'bg-rose-50/50 border-rose-200/70', headerBorderClassName: 'border-rose-200',
     titleClassName: 'text-rose-900', countClassName: 'bg-rose-200 text-rose-900' },
@@ -72,7 +72,7 @@ export default function ProjectsPage() {
   const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'gantt'>('kanban');
   const [page, setPage] = useState(1);
 
-  // v9.0.388 (TD-743): صافی‌ها و صفحه‌بندی در سرور؛ صافی تازه از صفحه نخست
+  // v9.0.412 (TD-743): صافی‌ها و صفحه‌بندی در سرور؛ صافی تازه از صفحه نخست
   const filters = useMemo<ProjectListFilters>(
     () => ({ search: debouncedSearchQuery, status: statusFilter, priority: priorityFilter }),
     [debouncedSearchQuery, statusFilter, priorityFilter],
@@ -83,7 +83,7 @@ export default function ProjectsPage() {
   const customersQuery = useCustomerOptionsQuery();
   const itemsQuery = useAllItemsQuery();
   const deleteProjectMutation = useDeleteProjectMutation();
-  // v9.0.393 (TD-752): تعریف، ویرایش و حذف فقط با کلید API خودشان
+  // v9.0.417 (TD-752): تعریف، ویرایش و حذف فقط با کلید API خودشان
   const { canCreate, canEdit, canDelete } = useProjectPermissions();
 
   const projects = useMemo(() => projectsQuery.data?.data ?? [], [projectsQuery.data]);
@@ -121,7 +121,7 @@ export default function ProjectsPage() {
     setIsModalOpen(true);
   };
 
-  // v9.0.388 (TD-743): فهرست خلاصه است؛ فرم ویرایش با پرونده کامل و تازه پروژه باز می‌شود
+  // v9.0.412 (TD-743): فهرست خلاصه است؛ فرم ویرایش با پرونده کامل و تازه پروژه باز می‌شود
   const handleEditFromList = async (projectId: number) => {
     try {
       handleOpenEditModal(await fetchProjectRecord(queryClient, projectId));
@@ -141,7 +141,7 @@ export default function ProjectsPage() {
     await deleteProjectMutation.mutateAsync(id);
   };
 
-  // Summary Statistics (v9.0.388, TD-743): شمار هر وضعیت از سرور، با صافی‌های جستجو و اولویت
+  // Summary Statistics (v9.0.412, TD-743): شمار هر وضعیت از سرور، با صافی‌های جستجو و اولویت
   const totalCount = projectStatusCountTotal(statusCounts);
   const inProgressCount = statusCounts.in_progress ?? 0;
   const plannedCount = statusCounts.planned ?? 0;
@@ -241,7 +241,7 @@ export default function ProjectsPage() {
             className="px-3 py-2 border border-slate-200 rounded-xl bg-slate-50/50 font-bold text-slate-700 text-xs focus:outline-none"
           >
             <option value="all">همه وضعیت‌ها</option>
-            {/* v9.0.394 (TD-761): همه وضعیت‌های فهرست بسته، «لغوشده» هم */}
+            {/* v9.0.418 (TD-761): همه وضعیت‌های فهرست بسته، «لغوشده» هم */}
             {PROJECT_STATUSES.map(s => <option key={s} value={s}>{PROJECT_STATUS_LABELS[s]}</option>)}
           </select>
 

@@ -26,7 +26,7 @@ const header = () => render(
   <InventoryAuditHeader activeTab="new_audit" onTabChange={() => undefined} discrepancyItems={0} onOpenRebuild={() => undefined} onOpenTransfer={() => undefined} />,
 );
 
-// v9.0.391 (TD-760): a refused allocation read looked like an empty list, and the tab showed for audit.view, which the API refuses
+// v9.0.415 (TD-760): a refused allocation read looked like an empty list, and the tab showed for audit.view, which the API refuses
 describe('project material allocations tab (TD-760)', () => {
   it('shows the read error with a retry instead of an empty list', async () => {
     // the server's Persian 403 message for the user (test data, not terminal output)

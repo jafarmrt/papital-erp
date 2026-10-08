@@ -68,7 +68,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); toastError.mockReset(); toastSuccess.mockReset(); onOrderCreated.mockReset(); });
 
-// v9.0.392 (TD-745، B11-11، تصمیم ت۸ ب): سفارش مستقیم صفحه پروژه فقط سفارش پیش‌نویس تدارکات با شماره سامانه
+// v9.0.416 (TD-745، B11-11، تصمیم ت۸ ب): سفارش مستقیم صفحه پروژه فقط سفارش پیش‌نویس تدارکات با شماره سامانه
 describe('direct purchase order from a project (TD-745)', () => {
   it('records a draft procurement order with the server number, a listed supplier and a listed warehouse', async () => {
     ALL_KEYS.forEach(k => granted.add(k));
@@ -86,7 +86,7 @@ describe('direct purchase order from a project (TD-745)', () => {
     const [requisition, order] = calls();
     expect(requisition.url).toBe('/api/procurement/requisitions');
     expect(requisition.body).toMatchObject({ projectId: 7, items: [{ itemId: 9, requestedQty: 10, unitPriceEstimate: 1000 }] });
-    // v9.0.396 (TD-764): the required date is picked on the Jalali calendar and sent as ISO (it was Jalali text)
+    // v9.0.420 (TD-764): the required date is picked on the Jalali calendar and sent as ISO (it was Jalali text)
     expect(requisition.body.requiredDate).toBe(getTodayIsoDate());
     expect(order.url).toBe('/api/procurement/requisitions/41/convert-to-orders');
     expect(order.body).toEqual({

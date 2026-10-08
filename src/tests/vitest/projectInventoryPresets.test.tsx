@@ -28,7 +28,7 @@ const project = (inventoryControl?: ProductionProject['inventory_control']): Pro
 
 const presetMaterialCount = DEFAULT_INVENTORY_CONTROL_SECTIONS.reduce((n, s) => n + s.items.length, 0);
 
-// v9.0.389 (TD-748): preset sections keep their materials in `items`, which the project inventory screens never read
+// v9.0.413 (TD-748): preset sections keep their materials in `items`, which the project inventory screens never read
 describe('inventory control presets in a project (TD-748)', () => {
   it('puts every material of the default preset on the purchase list with zero material progress', async () => {
     const p = project();

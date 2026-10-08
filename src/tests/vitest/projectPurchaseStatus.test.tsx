@@ -36,7 +36,7 @@ const project = {
   inventory_control: { sections: sections() },
 } as unknown as ProductionProject;
 
-// v9.0.390 (TD-750): the purchase list row id (code_… / name_…) never matched a section row, so a status change was lost
+// v9.0.414 (TD-750): the purchase list row id (code_… / name_…) never matched a section row, so a status change was lost
 describe('purchase list procurement status (TD-750)', () => {
   it('keeps the status chosen on a code row and a name row, also for two rows changed one after the other', async () => {
     const { result } = renderHook(() => useProjectInventory(project));

@@ -8,7 +8,7 @@ interface ProjectListPagerProps {
   onPageChange: (page: number) => void;
 }
 
-/** v9.0.388 (TD-743): پایین فهرست پروژه‌ها، «x تا y از total پروژه» و صفحه قبل و بعد */
+/** v9.0.412 (TD-743): پایین فهرست پروژه‌ها، «x تا y از total پروژه» و صفحه قبل و بعد */
 export function ProjectListPager({ page, limit, total, onPageChange }: ProjectListPagerProps) {
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const first = total === 0 ? 0 : (page - 1) * limit + 1;

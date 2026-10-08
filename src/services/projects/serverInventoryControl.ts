@@ -77,7 +77,7 @@ export async function resolveServerInventoryControl(
   const finalizing = nowFinal && !wasFinal;
   // v9.0.373 (TD-819): ثبت نهایی‌های هم‌زمان پشت سر هم رزرو دیگران را می‌خوانند
   if (finalizing) await executor.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.PROJECT_RESERVATION_FINALIZE}::bigint)`);
-  // v9.0.389 (TD-748): بخش الگو (مواد در `items`) با ردیف‌های پروژه ذخیره می‌شود تا رزرو و صفحه‌ها همان ردیف‌ها را بخوانند
+  // v9.0.413 (TD-748): بخش الگو (مواد در `items`) با ردیف‌های پروژه ذخیره می‌شود تا رزرو و صفحه‌ها همان ردیف‌ها را بخوانند
   const presetShaped = hasPresetShapedSections(rest.sections);
   const stockItems: ReservationStockItem[] = finalizing || presetShaped
     ? (await executor

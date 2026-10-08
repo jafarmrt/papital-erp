@@ -57,7 +57,7 @@ export class WorkflowEventPublisher {
   static async publishWorkflowCompleted(payload: WorkflowEventPayload): Promise<void> {
     try {
       const event = domainEventBus.createEvent(
-        'WORKFLOW_COMPLETED',
+        DomainEventType.WORKFLOW_COMPLETED,
         toAggregateType(payload.entityType),
         String(payload.entityId || payload.instanceId),
         payload,
@@ -76,7 +76,7 @@ export class WorkflowEventPublisher {
   static async publishWorkflowRejected(payload: WorkflowEventPayload): Promise<void> {
     try {
       const event = domainEventBus.createEvent(
-        'WORKFLOW_REJECTED',
+        DomainEventType.WORKFLOW_REJECTED,
         toAggregateType(payload.entityType),
         String(payload.entityId || payload.instanceId),
         payload,

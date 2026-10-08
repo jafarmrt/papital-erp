@@ -22,7 +22,7 @@ export const projectStatusLabel = (status: string | null | undefined): string =>
   (PROJECT_STATUS_LABELS as Record<string, string>)[String(status ?? '')] ?? String(status ?? '');
 
 /**
- * v9.0.394 (TD-761): ستون کانبان هر وضعیت؛ «متوقف‌شده» و «لغوشده» ستون «متوقف / لغوشده» دارند و وضعیت ناشناخته قدیمی در
+ * v9.0.418 (TD-761): ستون کانبان هر وضعیت؛ «متوقف‌شده» و «لغوشده» ستون «متوقف / لغوشده» دارند و وضعیت ناشناخته قدیمی در
  * «برنامه‌ریزی‌شده» می‌آید (همان نشان پیش‌فرض). پیش‌تر کانبان فقط سه ستون داشت و این پروژه‌ها در نمای پیش‌فرض دیده نمی‌شدند.
  */
 export const PROJECT_KANBAN_COLUMNS = ['planned', 'in_progress', 'completed', 'stopped'] as const;
@@ -72,7 +72,7 @@ export const stageStatusLabel = (status: string | null | undefined): string =>
 export const MAX_STAGE_ORDER = 10000;
 
 /**
- * v9.0.386 (TD-759، تصمیم ت۹ الف): پروژه لغوشده یا تکمیل‌شده مواد تازه نمی‌گیرد (آزادسازی تخصیص‌های پیشین آزاد است) و
+ * v9.0.410 (TD-759، تصمیم ت۹ الف): پروژه لغوشده یا تکمیل‌شده مواد تازه نمی‌گیرد (آزادسازی تخصیص‌های پیشین آزاد است) و
  * فرم تخصیص آن را پیشنهاد نمی‌کند
  */
 export const ALLOCATION_CLOSED_PROJECT_STATUSES: readonly string[] = ['completed', 'cancelled'];

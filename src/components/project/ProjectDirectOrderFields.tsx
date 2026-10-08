@@ -18,7 +18,7 @@ interface ProjectDirectOrderFieldsProps {
 const fieldClass = 'w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none';
 
 /**
- * v9.0.392 (TD-745، تصمیم ت۸ ب): فیلدهای «سفارش مستقیم» صفحه پروژه؛ تأمین‌کننده و انبار مقصد فقط از فهرست، بی شماره دستی و
+ * v9.0.416 (TD-745، تصمیم ت۸ ب): فیلدهای «سفارش مستقیم» صفحه پروژه؛ تأمین‌کننده و انبار مقصد فقط از فهرست، بی شماره دستی و
  * بی گزینه رسید قطعی. شماره سفارش را سامانه می‌دهد و کالا با «تحویل به انبار» تدارکات وارد انبار می‌شود.
  */
 export function ProjectDirectOrderFields(props: ProjectDirectOrderFieldsProps) {

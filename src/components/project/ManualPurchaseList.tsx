@@ -36,7 +36,7 @@ export function ManualPurchaseList({
   handleUpdateProcurementStatus
 }: ManualPurchaseListProps) {
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
-  // v9.0.393 (TD-752): خرید کسری فقط با کلید ثبت درخواست خرید
+  // v9.0.417 (TD-752): خرید کسری فقط با کلید ثبت درخواست خرید
   const { canRequestPurchase } = useProjectPermissions();
   const [lastCreatedOrderDoc, setLastCreatedOrderDoc] = useState<any>(null);
 

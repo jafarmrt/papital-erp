@@ -56,7 +56,7 @@ export default function ProjectScheduleTab({
   const [logDate, setLogDate] = useState<string>(() => getTodayIsoDate());
   // v9.0.320 (TD-805): «ثبت کارمزد» همان کلید API ثبت کارکرد را می‌پرسد
   const { canLog: holdsPieceworkLog } = usePieceworkPermissions();
-  // v9.0.393 (TD-752): برنامه با `PUT /projects/:id` (`projects.edit`) ذخیره می‌شود و «ثبت کارمزد» پیش از ثبت کارکرد برنامه را ذخیره می‌کند
+  // v9.0.417 (TD-752): برنامه با `PUT /projects/:id` (`projects.edit`) ذخیره می‌شود و «ثبت کارمزد» پیش از ثبت کارکرد برنامه را ذخیره می‌کند
   const { canEdit } = useProjectPermissions();
   const canLog = holdsPieceworkLog && canEdit;
 
@@ -69,7 +69,7 @@ export default function ProjectScheduleTab({
           fetchJson('/settings', { signal: controller.signal }).catch((err) => {
             if (err?.name === 'AbortError') throw err;
             console.error('Failed to load settings in schedule tab:', err);
-            // v9.0.398 (TD-766): شکست خواندن دیگر مثل «بی الگو» دیده نمی‌شود
+            // v9.0.422 (TD-766): شکست خواندن دیگر مثل «بی الگو» دیده نمی‌شود
             toast.error('الگوهای گردش کار از تنظیمات دریافت نشد؛ الگوی پیش‌فرض به کار رفت');
             return [];
           }),
@@ -369,7 +369,7 @@ export default function ProjectScheduleTab({
       setRecordedLogs(list);
     } catch (err) {
       console.error('Failed to load project piecework logs:', err);
-      // v9.0.398 (TD-766): فهرست خالی کارکردها با شکست خواندن یکی نیست
+      // v9.0.422 (TD-766): فهرست خالی کارکردها با شکست خواندن یکی نیست
       toast.error(errorMessageOf(err) || 'خطا در دریافت کارکردهای ثبت‌شده پروژه');
     } finally {
       setLoadingLogs(false);
@@ -759,7 +759,7 @@ export default function ProjectScheduleTab({
                                 <div key={task.id || tIdx} className="p-2.5 bg-white border border-slate-200 rounded-xl grid grid-cols-1 sm:grid-cols-12 gap-2 items-center shadow-2xs hover:border-slate-300 transition-colors">
                                   {/* Piecework Task Select / Custom Input */}
                                   <div className="sm:col-span-4 flex items-center gap-1">
-                                    {/* v9.0.399 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه عناوین کارمزدی */}
+                                    {/* v9.0.423 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه عناوین کارمزدی */}
                                     <SearchableSelect
                                       className="w-full"
                                       disabled={!canEdit}

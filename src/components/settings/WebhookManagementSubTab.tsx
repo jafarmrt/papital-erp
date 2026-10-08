@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ALL_EVENTS_LABEL, ALL_EVENTS_PATTERN, PUBLISHED_EVENT_TYPES, eventTypeLabel } from '../../lib/events/eventTypeCatalog';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Trash2, Edit3, Shield, Activity } from 'lucide-react';
 import { formatPersianDate, errorMessageOf } from '../../utils';
@@ -58,17 +59,11 @@ interface WebhookStats {
   successRate: number;
 }
 
+// v9.0.405 (TD-707, decision t3 a): only the event types the server publishes, with Persian labels, plus «همه رویدادها»;
+// the dotted presets (document.invoiced, inventory.* …) matched no event
 const AVAILABLE_EVENT_PRESETS = [
-  { pattern: '*', label: 'تمام رویدادهای سیستم (*)' },
-  { pattern: 'document.*', label: 'تمام رویدادهای اسناد و فاکتورها' },
-  { pattern: 'document.invoiced', label: 'صدور قطعی فاکتور فروش' },
-  { pattern: 'document.settled', label: 'تسویه کامل فاکتور' },
-  { pattern: 'inventory.*', label: 'تمام رویدادهای انبارداری' },
-  { pattern: 'inventory.stock_in', label: 'ورود کالا به انبار' },
-  { pattern: 'inventory.stock_out', label: 'خروج کالا از انبار' },
-  { pattern: 'inventory.stock_alert', label: 'هشدار کسر و نقطه سفارش کالا' },
-  { pattern: 'treasury.*', label: 'تمام رویدادهای خزانه‌داری و چک‌ها' },
-  { pattern: 'workflow.*', label: 'گردش کار و تاییدیه‌ها' }
+  { pattern: ALL_EVENTS_PATTERN, label: ALL_EVENTS_LABEL },
+  ...PUBLISHED_EVENT_TYPES.map(t => ({ pattern: t.value, label: `${t.category}: ${t.label}` })),
 ];
 
 export function WebhookManagementSubTab() {
@@ -541,9 +536,10 @@ export function WebhookManagementSubTab() {
                     {sub.eventPatterns.map((p, idx) => (
                       <span
                         key={idx}
-                        className="font-mono text-[10px] px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 shrink-0"
+                        title={p}
+                        className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 shrink-0"
                       >
-                        {p}
+                        {eventTypeLabel(p)}
                       </span>
                     ))}
                   </div>
@@ -604,7 +600,7 @@ export function WebhookManagementSubTab() {
                 deliveries.map(deliv => (
                   <tr key={deliv.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
                     <td className="p-2.5 font-medium text-slate-900 dark:text-white">{deliv.subscriptionName}</td>
-                    <td className="p-2.5 font-mono text-[11px] text-indigo-600 dark:text-indigo-400">{deliv.eventType}</td>
+                    <td className="p-2.5 font-mono text-[11px] text-indigo-600 dark:text-indigo-400">{eventTypeLabel(deliv.eventType)}</td>
                     <td className="p-2.5 font-mono font-bold">
                       <span
                         className={
@@ -730,7 +726,6 @@ export function WebhookManagementSubTab() {
                         }`}
                       >
                         <span className="text-[11px]">{preset.label}</span>
-                        <span className="font-mono text-[10px] opacity-70">[{preset.pattern}]</span>
                       </button>
                     );
                   })}

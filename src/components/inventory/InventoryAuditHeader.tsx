@@ -21,7 +21,7 @@ interface InventoryAuditHeaderProps {
   onOpenTransfer: () => void;
 }
 
-/** v9.0.391 (TD-760): زبانه تخصیص مواد فقط برای کسی که API آن (`GET /inventory/allocations`) را می‌خواند */
+/** v9.0.415 (TD-760): زبانه تخصیص مواد فقط برای کسی که API آن (`GET /inventory/allocations`) را می‌خواند */
 export const useCanSeeBomAllocations = () => useHasAnyPermission(READ_PERMISSIONS.bomAllocations);
 
 export function InventoryAuditHeader({ activeTab, onTabChange, discrepancyItems, onOpenRebuild, onOpenTransfer }: InventoryAuditHeaderProps) {

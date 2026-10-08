@@ -47,7 +47,7 @@ export function CreatePurchaseOrderModal({
 }: CreatePurchaseOrderModalProps) {
   const [orderMode, setOrderMode] = useState<'requisition' | 'direct_document'>('requisition');
   const [priority, setPriority] = useState<RequisitionPriority>('normal');
-  // v9.0.396 (TD-764): تاریخ نیاز ISO است و با تقویم شمسی انتخاب می‌شود (پیش‌تر متن آزاد با نمونه 1405/01/01)
+  // v9.0.420 (TD-764): تاریخ نیاز ISO است و با تقویم شمسی انتخاب می‌شود (پیش‌تر متن آزاد با نمونه 1405/01/01)
   const [orderDate, setOrderDate] = useState<string>(() => getTodayIsoDate());
   const [supplierId, setSupplierId] = useState('');
   const [targetWarehouse, setTargetWarehouse] = useState('');
@@ -55,7 +55,7 @@ export function CreatePurchaseOrderModal({
     `کسری‌های مواد اولیه پروژه ${project.project_code || project.title}`
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // v9.0.392 (TD-745، ت۸ ب): تأمین‌کننده با شناسه و انبار مقصد با کد، هر دو از فهرست
+  // v9.0.416 (TD-745، ت۸ ب): تأمین‌کننده با شناسه و انبار مقصد با کد، هر دو از فهرست
   const { suppliers } = useSupplierSelectOptions();
   const supplierOptions = useMemo(() => supplierPickOptions(Array.isArray(suppliers) ? suppliers : []), [suppliers]);
   const { data: warehouses = [] } = useWarehousesQuery();
@@ -417,7 +417,7 @@ export function CreatePurchaseOrderModal({
                           ) : (
                             <div className="flex items-center gap-1.5">
                               <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                              {/* v9.0.399 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه کالاهای انبار */}
+                              {/* v9.0.423 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه کالاهای انبار */}
                               <SearchableSelect
                                 className="min-w-[180px]"
                                 value=""

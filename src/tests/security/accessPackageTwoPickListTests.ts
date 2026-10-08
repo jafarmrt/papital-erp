@@ -188,7 +188,7 @@ export async function runAccessPackageTwoPickListTests(shouldRun: ShouldRun): Pr
 
         const viewer = await h.sessionWith(['projects.view']);
         const fullList = await h.get(`/api/projects?${search}`, viewer);
-        // v9.0.388 (TD-743): the list is a summary page; the inventory control comes with the project record
+        // v9.0.412 (TD-743): the list is a summary page; the inventory control comes with the project record
         const viewerRecord = await h.get(`/api/projects/${project.id}`, viewer);
         const reserved = ((viewerRecord.body as Row | undefined)?.inventory_control as { reservedItems?: unknown[] } | undefined)?.reservedItems;
         if (fullList.status !== 200 || !rowOf(fullList.body) || viewerRecord.status !== 200 || !Array.isArray(reserved) || reserved.length !== 1) {

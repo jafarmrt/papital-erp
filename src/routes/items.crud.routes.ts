@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sql, eq, and, desc, ilike, or, gt, inArray } from 'drizzle-orm';
+import { sql, eq, and, desc, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { items, transactions, documentItems } from '../db/schema.js';
 import { authorizePermission } from '../middleware/authorize.js';
@@ -15,75 +15,20 @@ import { WorkflowEngineService } from '../services/workflow/workflowEngineServic
 import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js';
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
-import { containsLikePattern } from '../lib/sqlLike.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { itemListConditions, listItemPicks } from '../services/items/itemPickList.js';
+import { listReorderAlerts } from '../services/items/reorderAlerts.service.js';
 
 const router = Router();
 
 // GET /items/reorder-alerts
+// v9.0.404 (TD-843): free stock (stock − reservations) against the reorder point, with the open purchases shown as «در راه»
 router.get('/items/reorder-alerts', authorizePermission(...READ_PERMISSIONS.itemReorderAlerts), asyncHandler(async (req, res) => {
-  try {
-    const type = req.query.type as string;
-    const search = req.query.search as string;
-    const isZeroStock = req.query.zero_stock === 'true';
-
-    const conditions = [
-      eq(items.isDeleted, 0),
-      sql`${items.currentStock} <= ${items.reorderPoint}`,
-      gt(items.reorderPoint, 0)
-    ];
-
-    if (type === 'product' || type === 'raw_material') {
-      conditions.push(eq(items.type, type));
-    }
-
-    if (isZeroStock) {
-      conditions.push(sql`${items.currentStock} <= 0`);
-    }
-
-    if (search) {
-      conditions.push(or(
-        ilike(items.name, containsLikePattern(search)),
-        ilike(items.code, containsLikePattern(search)),
-        ilike(items.category, containsLikePattern(search))
-      )!);
-    }
-
-    const fetchedItems = await orm.select().from(items)
-      .where(and(...conditions))
-      .orderBy(items.currentStock);
-    // v7.0.48 (TD-214): موجودی هر انبار از جدول نرمال (ستون JSONB حذف شد)
-    const alertStockMap = await ItemWarehouseStockService.getStocksForItems(orm, fetchedItems.map(it => it.id));
-
-    const mapped = fetchedItems.map(it => {
-      const curStock = Number(it.currentStock || 0);
-      const reorderPt = Number(it.reorderPoint || 0);
-      const wac = Number(it.weightedAverageCost || 0);
-      const deficit = Math.max(0, reorderPt - curStock);
-
-      const st = alertStockMap.get(it.id)?.byCode ?? {};
-      const obj: Record<string, unknown> = {
-        ...it,
-        stocks: st,
-        current_stock: curStock,
-        reorder_point: reorderPt,
-        weighted_average_cost: wac,
-        deficit,
-        deficit_value: deficit * wac,
-        is_zero_stock: curStock <= 0
-      };
-
-      for (const k of Object.keys(st)) {
-        obj[`stock_${k}`] = Number(st[k] || 0);
-      }
-      return obj;
-    });
-
-    res.json(mapped);
-  } catch (err) {
-    throw err;
-  }
+  res.json(await listReorderAlerts({
+    type: typeof req.query.type === 'string' ? req.query.type : undefined,
+    search: typeof req.query.search === 'string' ? req.query.search : undefined,
+    zeroStock: req.query.zero_stock === 'true',
+  }));
 }));
 
 const itemPickListValidation = z.object({

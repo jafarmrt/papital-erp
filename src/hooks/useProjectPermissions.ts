@@ -6,7 +6,7 @@ import {
 import { DIRECT_ORDER_PERMISSIONS } from '../lib/projects/projectPurchaseOrder';
 
 /**
- * v9.0.393 (TD-752، B11-18): هر دکمه تغییردهنده بسته کنترل پروژه با کلیدهای گارد API خودش نشان داده می‌شود (مدیر همیشه).
+ * v9.0.417 (TD-752، B11-18): هر دکمه تغییردهنده بسته کنترل پروژه با کلیدهای گارد API خودش نشان داده می‌شود (مدیر همیشه).
  * فقط برای نمایش است؛ سرور همان کلیدها را خودش می‌سنجد.
  */
 export function useProjectPermissions() {

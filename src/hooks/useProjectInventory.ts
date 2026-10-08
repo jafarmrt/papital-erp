@@ -25,13 +25,14 @@ import { storedReservationShortages } from '../lib/projects/projectReservationSt
 import type { ReservationShortage } from '../lib/projects/projectReservation';
 import { hasPresetShapedSections, projectSectionsFromPreset, type MaterialStockLookup } from '../lib/projects/inventoryControlSections';
 import { findProjectItemMatch } from '../lib/projects/projectItemMatch';
+import { EMPTY_CUSTOM_MATERIAL_FORM, pendingMaterialRequestOf, type CustomMaterialForm } from '../lib/pendingMaterials/customMaterialRequest';
 
 /** پاسخ PUT /projects/:id؛ رزرو پروژه را سرور می‌نویسد (v8.0.58، TD-306) */
 interface SavedProjectInventory {
   inventory_control?: { finalizedAt?: string; reservedItems?: unknown[]; reservationShortages?: unknown[] };
 }
 
-/** v9.0.389 (TD-748): موجودی ماده الگو با قاعده مشترک تطبیق کالا */
+/** v9.0.413 (TD-748): موجودی ماده الگو با قاعده مشترک تطبیق کالا */
 const materialStockLookup = (warehouseItems: readonly Item[]): MaterialStockLookup => material =>
   findProjectItemMatch({ code: material.code, name: material.name }, warehouseItems)?.current_stock;
 
@@ -119,7 +120,7 @@ export function useProjectInventory(
   }, [project]);
 
   // Main sections state
-  // v9.0.389 (TD-748): بخش الگو (مواد در items) به ردیف‌های پروژه برده می‌شود تا فهرست خرید، پیشرفت و رزرو آن را ببینند
+  // v9.0.413 (TD-748): بخش الگو (مواد در items) به ردیف‌های پروژه برده می‌شود تا فهرست خرید، پیشرفت و رزرو آن را ببینند
   const [sections, setSections] = useState<ProjectInventoryControlSectionData[]>(() => {
     const stored = project.inventory_control?.sections;
     const source = Array.isArray(stored) && stored.length > 0 ? stored : DEFAULT_INVENTORY_CONTROL_SECTIONS;
@@ -149,21 +150,7 @@ export function useProjectInventory(
   const [codePrefix, setCodePrefix] = useState<string>('');
   const [codeNumber, setCodeNumber] = useState<string>('');
 
-  const [customMaterialForm, setCustomMaterialForm] = useState({
-    name: '',
-    category: '',
-    itemCode: '',
-    unit: 'عدد',
-    stockQty: 0,
-    requiredQty: 1,
-    weightedAverageCost: 0,
-    reorderPoint: 5,
-    color: '',
-    material: '',
-    size: '',
-    weight: 0,
-    notes: ''
-  });
+  const [customMaterialForm, setCustomMaterialForm] = useState<CustomMaterialForm>(EMPTY_CUSTOM_MATERIAL_FORM);
 
   // Fetch items & categories on mount
   useEffect(() => {
@@ -175,7 +162,7 @@ export function useProjectInventory(
           fetchJson<any>('/api/categories', { signal: controller.signal }),
           fetchJson<any>('/api/settings', { signal: controller.signal }).catch((err) => {
             if (err?.name === 'AbortError') throw err;
-            // v9.0.398 (TD-766): شکست خواندن تنظیمات گفته می‌شود و الگوی پیش‌فرض به کار می‌رود
+            // v9.0.422 (TD-766): شکست خواندن تنظیمات گفته می‌شود و الگوی پیش‌فرض به کار می‌رود
             toast.error('الگوی بخش‌های کنترل موجودی از تنظیمات دریافت نشد؛ الگوی پیش‌فرض به کار رفت');
             return null;
           })
@@ -211,7 +198,7 @@ export function useProjectInventory(
           }
         }
 
-        // v9.0.389 (TD-748): پروژه بی بخش الگوی تنظیمات (یا پیش‌فرض) را می‌گیرد و بخش الگوی ذخیره‌شده ردیف پروژه؛ وضعیت هر ماده از موجودی
+        // v9.0.413 (TD-748): پروژه بی بخش الگوی تنظیمات (یا پیش‌فرض) را می‌گیرد و بخش الگوی ذخیره‌شده ردیف پروژه؛ وضعیت هر ماده از موجودی
         const stored = project.inventory_control?.sections;
         const hasStored = Array.isArray(stored) && stored.length > 0;
         if (!hasStored || hasPresetShapedSections(stored)) {
@@ -260,7 +247,7 @@ export function useProjectInventory(
         setCustomMaterialForm(prev => ({ ...prev, category: catName, itemCode: `${prefix}001` }));
       }
     } catch (err) {
-      // v9.0.398 (TD-766): پیش‌تر بی‌صدا «پیشوند۰۰۱» گذاشته می‌شد که شاید کد کالای دیگری باشد
+      // v9.0.422 (TD-766): پیش‌تر بی‌صدا «پیشوند۰۰۱» گذاشته می‌شد که شاید کد کالای دیگری باشد
       console.error('Failed to generate item code for custom material:', err);
       setCustomMaterialForm(prev => ({ ...prev, category: catName, itemCode: '' }));
       toast.error(`${errorMessageOf(err) || 'کد پیشنهادی کالا دریافت نشد'}؛ کد را دستی وارد کنید`);
@@ -462,52 +449,19 @@ export function useProjectInventory(
       return;
     }
 
+    // v9.0.398 (TD-826): a request to the warehouse review queue, not an item; the item exists only after approval
     try {
-      const newItemPayload = {
-        name: customMaterialForm.name,
-        category: customMaterialForm.category,
-        code: customMaterialForm.itemCode,
-        type: 'raw_material',
-        unit: customMaterialForm.unit,
-        current_stock: customMaterialForm.stockQty || 0,
-        weighted_average_cost: customMaterialForm.weightedAverageCost || 0,
-        reorder_point: customMaterialForm.reorderPoint || 5,
-        color: customMaterialForm.color,
-        material: customMaterialForm.material,
-        size: customMaterialForm.size,
-        notes: customMaterialForm.notes,
-        is_active: 1
-      };
-
-      const res = await fetchJson<any>('/api/items', {
+      await fetchJson('/api/pending-materials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newItemPayload)
+        body: JSON.stringify(pendingMaterialRequestOf(customMaterialForm, project.id))
       });
-
-      const createdItem: Item = res.data || res;
-      setWarehouseItems(prev => [createdItem, ...prev]);
-
-      handleSelectWarehouseItem(createdItem);
-
-      setCustomMaterialForm({
-        name: '',
-        category: '',
-        itemCode: '',
-        unit: 'عدد',
-        stockQty: 0,
-        requiredQty: 1,
-        weightedAverageCost: 0,
-        reorderPoint: 5,
-        color: '',
-        material: '',
-        size: '',
-        weight: 0,
-        notes: ''
-      });
+      toast.success('درخواست ماده اولیه به صف بررسی انبار رفت. پس از تأیید انباردار، آن را از «انتخاب از انبار» برگزینید.');
+      setCustomMaterialForm(EMPTY_CUSTOM_MATERIAL_FORM);
+      setMaterialModalTab('warehouse');
     } catch (err) {
-      console.error('Error creating custom raw material:', err);
-      toast.error(errorMessageOf(err) || 'خطا در ثبت ماده اولیه جدید');
+      console.error('Error sending custom raw material request:', err);
+      toast.error(errorMessageOf(err) || 'خطا در ارسال درخواست ماده اولیه');
     }
   };
 
@@ -653,7 +607,7 @@ export function useProjectInventory(
     toast.success(`ضریب تبدیل واحد ثبت شد: ${toPersianDigits(originalQty)} ${conversionTarget.originalUnit} ➔ ${toPersianDigits(finalConvertedQty)} ${targetUnit}`);
   };
 
-  // v9.0.390 (TD-750): شناسه ردیف فهرست خرید (`code_…` / `name_…`) به ردیف‌های بخش‌ها می‌رسد و state درجا تغییر نمی‌کند؛
+  // v9.0.414 (TD-750): شناسه ردیف فهرست خرید (`code_…` / `name_…`) به ردیف‌های بخش‌ها می‌رسد و state درجا تغییر نمی‌کند؛
   // به‌روزرسانی تابعی است تا چند ردیف سفارش‌داده‌شده پشت سر هم یکدیگر را پاک نکنند
   const handleUpdateItemProcurementStatus = (rowKey: string, newStatus: NonNullable<PurchaseListItem['procurementStatus']>) => {
     setSections(prev => withProcurementStatus(prev, rowKey, newStatus));

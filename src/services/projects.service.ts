@@ -279,7 +279,7 @@ export class ProjectService {
     if (input.startDate !== undefined) updateData.startDate = optionalStorageDate(input.startDate, 'تاریخ شروع پروژه');
     if (input.endDate !== undefined) updateData.endDate = optionalStorageDate(input.endDate, 'تاریخ پایان پروژه');
     if (input.status !== undefined) updateData.status = input.status;
-    // v9.0.386 (TD-759، تصمیم ت۹ الف): پروژه‌ای که تخصیص مواد باز دارد مثل حذف (TD-412) لغو نمی‌شود
+    // v9.0.410 (TD-759، تصمیم ت۹ الف): پروژه‌ای که تخصیص مواد باز دارد مثل حذف (TD-412) لغو نمی‌شود
     if (input.status === 'cancelled' && existing.status !== 'cancelled') await assertNoOpenAllocations(executor, existing, 'لغو نمی‌شود');
     if (input.priority !== undefined) updateData.priority = input.priority;
     if (input.description !== undefined) updateData.description = input.description;

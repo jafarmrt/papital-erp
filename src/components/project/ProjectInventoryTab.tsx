@@ -29,7 +29,7 @@ export function ProjectInventoryTab({
 
   // Active Main Tab: 'control' (Tree View + Global Supplies) vs 'purchase' (Consolidated Purchase List)
   const [activeMainTab, setActiveMainTab] = useState<'control' | 'purchase'>('control');
-  // v9.0.393 (TD-752): ذخیره و ثبت نهایی با `projects.edit` (کلید `PUT /projects/:id`)، خرید کسری با کلید درخواست خرید
+  // v9.0.417 (TD-752): ذخیره و ثبت نهایی با `projects.edit` (کلید `PUT /projects/:id`)، خرید کسری با کلید درخواست خرید
   const { canEdit, canRequestPurchase } = useProjectPermissions();
 
   const {

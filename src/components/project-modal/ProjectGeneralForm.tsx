@@ -13,7 +13,7 @@ interface ProjectGeneralFormProps {
   selectedCustomerId: number | null;
   selectedCustomer: Customer | undefined;
   activeCustomersList: Customer[];
-  /** v9.0.396 (TD-764): تاریخ ISO؛ کاربر تقویم شمسی می‌بیند */
+  /** v9.0.420 (TD-764): تاریخ ISO؛ کاربر تقویم شمسی می‌بیند */
   startDate: string;
   setStartDate: (iso: string) => void;
   endDate: string;

@@ -50,7 +50,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); granted.clear(); });
 const withQuery = (node: ReactElement) => <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{node}</QueryClientProvider>;
 const grant = (...keys: string[]) => keys.forEach(k => granted.add(k));
 
-// v9.0.393 (TD-752): no project button asked a permission, so a user holding only projects.view filled forms and got 403
+// v9.0.417 (TD-752): no project button asked a permission, so a user holding only projects.view filled forms and got 403
 describe('project buttons follow the project API keys (TD-752)', () => {
   it('shows create, edit and delete on the project list only with their keys', async () => {
     grant('projects.view');

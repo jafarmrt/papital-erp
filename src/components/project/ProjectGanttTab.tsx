@@ -96,7 +96,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
       });
     });
 
-    // v9.0.397 (TD-765): بی هیچ تاریخ شروع، محور از امروز آغاز می‌شود، در همان واحد «روز از ۱۹۷۰»؛
+    // v9.0.421 (TD-765): بی هیچ تاریخ شروع، محور از امروز آغاز می‌شود، در همان واحد «روز از ۱۹۷۰»؛
     // پیش‌تر ۱۴۰۴×۳۶۵ بود و محور با تاریخ‌های واقعی هزاران سال فاصله می‌گرفت
     if (!minDay) minDay = parseDateToTimestamp(getTodayIsoDate()) ?? 0;
     if (!maxDay || maxDay <= minDay) maxDay = minDay + 30; // fallback 30 days span

@@ -35,7 +35,7 @@ const filesUnder = (path: string): string[] => {
   return statSync(full).isDirectory() ? readdirSync(full).flatMap(name => filesUnder(join(path, name))) : [full];
 };
 
-// v9.0.399 (TD-767): package 11 picked projects, items and piecework tasks from native selects over the whole list
+// v9.0.423 (TD-767): package 11 picked projects, items and piecework tasks from native selects over the whole list
 describe('package 11 entity pickers are searchable (TD-767)', () => {
   it('has no native select over a project, item, personnel or task list', () => {
     const offenders = PACKAGE_11.flatMap(filesUnder).filter(f => /\.tsx$/.test(f)).flatMap(f => {

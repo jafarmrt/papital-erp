@@ -15,7 +15,7 @@ interface ProjectStockEntryTabProps {
 }
 
 export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate }: ProjectStockEntryTabProps) {
-  // v9.0.393 (TD-752): ورود به انبار با `projects.edit`، کلید `POST /projects/:id/add-to-inventory`
+  // v9.0.417 (TD-752): ورود به انبار با `projects.edit`، کلید `POST /projects/:id/add-to-inventory`
   const { canEdit } = useProjectPermissions();
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [batchSubmitting, setBatchSubmitting] = useState<boolean>(false);
@@ -75,7 +75,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
         });
       }
     } catch (err) {
-      // v9.0.398 (TD-766): شکست خواندن ماتریس پیشرفت گفته می‌شود، نه مثل ماتریس ناتمام
+      // v9.0.422 (TD-766): شکست خواندن ماتریس پیشرفت گفته می‌شود، نه مثل ماتریس ناتمام
       setMatrixStatus(prev => ({ ...prev, loading: false }));
       toast.error(errorMessageOf(err) || 'خطا در دریافت ماتریس پیشرفت پروژه');
     }

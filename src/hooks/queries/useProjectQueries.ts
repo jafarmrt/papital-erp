@@ -12,7 +12,7 @@ import {
 } from '../../lib/projects/projectList';
 
 /**
- * v9.0.388 (TD-743): یک صفحه از فهرست پروژه‌ها با صافی‌های سرور (`GET /projects`)؛ پیش‌تر همه پروژه‌ها با همه JSONها
+ * v9.0.412 (TD-743): یک صفحه از فهرست پروژه‌ها با صافی‌های سرور (`GET /projects`)؛ پیش‌تر همه پروژه‌ها با همه JSONها
  * خوانده و در مرورگر صافی می‌شدند.
  */
 export function useProjectListQuery(filters: ProjectListFilters, page: number, limit: number = PROJECT_LIST_PAGE_SIZE) {

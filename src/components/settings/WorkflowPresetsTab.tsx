@@ -49,7 +49,7 @@ export function WorkflowPresetsTab({
         }
       } catch (err) {
         console.error('Failed to load piecework tasks:', err);
-        // v9.0.398 (TD-766): فهرست خالی عناوین کارمزدی با شکست خواندن یکی نیست
+        // v9.0.422 (TD-766): فهرست خالی عناوین کارمزدی با شکست خواندن یکی نیست
         if (isMounted) toast.error(errorMessageOf(err) || 'خطا در دریافت عناوین کارمزدی');
       } finally {
         if (isMounted) setLoadingTasks(false);
@@ -396,7 +396,7 @@ export function WorkflowPresetsTab({
                               {/* Task Selector from Piecework Tasks */}
                               <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-amber-200">
                                 <span className="text-xs font-semibold text-slate-600 shrink-0">افزودن عنوان کاری:</span>
-                                {/* v9.0.399 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه عناوین کاری */}
+                                {/* v9.0.423 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه عناوین کاری */}
                                 <SearchableSelect
                                   className="flex-1"
                                   value=""

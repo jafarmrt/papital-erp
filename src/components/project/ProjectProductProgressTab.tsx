@@ -58,7 +58,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<ProductProgressResponse | null>(null);
-  // v9.0.393 (TD-752): تیک ماتریس با `PUT /projects/:id/product-progress` و کلید `projects.edit` ثبت می‌شود
+  // v9.0.417 (TD-752): تیک ماتریس با `PUT /projects/:id/product-progress` و کلید `projects.edit` ثبت می‌شود
   const { canEdit } = useProjectPermissions();
 
   // Search & Filter state

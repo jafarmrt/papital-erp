@@ -334,7 +334,7 @@ export function formatProject(
 ) {
   if (!p) return null;
   const stages = (rawStages || []).map(formatStage).filter((s): s is FormattedStage => s !== null);
-  // v9.0.388 (TD-743): همان قاعده پیشرفت فهرست پروژه‌ها
+  // v9.0.412 (TD-743): همان قاعده پیشرفت فهرست پروژه‌ها
   const { totalStages, completedStages, progressPercent: overallProgress } = projectStageProgress(stages);
 
   const projectCode = p.projectCode ?? p.project_code ?? '';
@@ -438,7 +438,7 @@ const projectListValidation = z.object({
   }),
 });
 
-// v9.0.388 (TD-743): یک صفحه خلاصه با صافی‌های SQL؛ پرونده کامل فقط در GET /projects/:id
+// v9.0.412 (TD-743): یک صفحه خلاصه با صافی‌های SQL؛ پرونده کامل فقط در GET /projects/:id
 router.get('/projects', authorizePermission(...READ_PERMISSIONS.projects), validate(projectListValidation), asyncHandler(async (req, res) => {
   const query = req.query as { page?: number; limit?: number; search?: string; status?: string; priority?: string };
   res.json(await listProjectPage(query));

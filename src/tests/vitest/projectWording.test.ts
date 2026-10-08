@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-// v9.0.400 (TD-769 / B11-35, owner decision t10 A of package 11): Persian text of the project and production screens and
+// v9.0.424 (TD-769 / B11-35, owner decision t10 A of package 11): Persian text of the project and production screens and
 // of the project server messages has no English word and none of the replaced loanwords.
 
 const ROOT = join(__dirname, '..', '..');

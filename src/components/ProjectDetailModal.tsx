@@ -64,7 +64,7 @@ export default function ProjectDetailModal({
   // V3.1.0: initialTab صریح پیش‌فرض است — باگ ریست تب حذف شد (useEffect دوم
   // قبلاً به اجبار تب را به overview برمی‌گرداند و درخواست کاربر نادیده گرفته می‌شد)
   const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' | 'product_progress'>(initialTab);
-  // v9.0.393 (TD-752): ویرایش مرحله و پیوست فقط با `projects.edit`، کلید `PUT /projects/:id`
+  // v9.0.417 (TD-752): ویرایش مرحله و پیوست فقط با `projects.edit`، کلید `PUT /projects/:id`
   const { canEdit } = useProjectPermissions();
 
   useEffect(() => {
@@ -161,7 +161,7 @@ export default function ProjectDetailModal({
     setStageTitle(stg.title);
     setStageStatus(stg.status);
     setStageProgress(stg.progress_percent || 0);
-    // v9.0.395 (TD-763): تاریخ مرحله در فرم ISO است و با تقویم شمسی انتخاب می‌شود (پیش‌تر متن آزاد با نمونه ۱۴۰۳)
+    // v9.0.419 (TD-763): تاریخ مرحله در فرم ISO است و با تقویم شمسی انتخاب می‌شود (پیش‌تر متن آزاد با نمونه ۱۴۰۳)
     setStageStartDate(toStorageDate(stg.start_date || '') || '');
     setStageEndDate(toStorageDate(stg.end_date || '') || '');
     setPersonnelInput(Array.isArray(stg.assigned_personnel) ? stg.assigned_personnel.join(', ') : '');
@@ -243,7 +243,7 @@ export default function ProjectDetailModal({
 
   // Dynamic indicators for tab badges
   const reservedCount = project?.inventory_control?.reservedItems?.length || 0;
-  // v9.0.395 (TD-763): «قلم کسری» کمبود رزروی است که سرور هنگام ثبت نهایی نوشته (پیش‌تر فیلدی را می‌خواند که کسی نمی‌نوشت)
+  // v9.0.419 (TD-763): «قلم کسری» کمبود رزروی است که سرور هنگام ثبت نهایی نوشته (پیش‌تر فیلدی را می‌خواند که کسی نمی‌نوشت)
   const purchaseCount = storedReservationShortages(project?.inventory_control).length;
   const stagesCount = project?.stages?.length || 0;
   const completedStagesCount = project?.stages?.filter(s => s.status === 'completed').length || project?.completed_stages || 0;

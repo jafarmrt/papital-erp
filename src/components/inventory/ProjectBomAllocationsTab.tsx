@@ -22,11 +22,11 @@ interface ProjectBomAllocationsTabProps {
 export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps) {
   // تخصیص، مصرف و آزادسازی موجودی را تغییر می‌دهند: کش صفحات دیگر (کالاها، کاردکس، داشبورد، رزروها) باطل می‌شود
   const queryClient = useQueryClient();
-  // v9.0.393 (TD-752): تخصیص، مصرف و آزادسازی هر کدام با کلیدهای گارد API خودشان نشان داده می‌شوند
+  // v9.0.417 (TD-752): تخصیص، مصرف و آزادسازی هر کدام با کلیدهای گارد API خودشان نشان داده می‌شوند
   const { canAllocate, canConsumeAllocation, canReleaseAllocation } = useProjectPermissions();
   const [allocations, setAllocations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  // v9.0.391 (TD-760): خطای خواندن تخصیص‌ها (مثلاً ۴۰۳) پیام خودش را دارد، نه جدول خالی «هیچ تخصیصی یافت نشد»
+  // v9.0.415 (TD-760): خطای خواندن تخصیص‌ها (مثلاً ۴۰۳) پیام خودش را دارد، نه جدول خالی «هیچ تخصیصی یافت نشد»
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -85,7 +85,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
       ]);
       const rawProjs = Array.isArray(projRes?.data) ? projRes.data : (Array.isArray(projRes) ? projRes : []);
       const rawItems = Array.isArray(itemsRes?.data) ? itemsRes.data : (Array.isArray(itemsRes) ? itemsRes : []);
-      // v9.0.386 (TD-759، تصمیم ت۹ الف): پروژه لغوشده یا تکمیل‌شده مواد تازه نمی‌گیرد و پیشنهاد نمی‌شود
+      // v9.0.410 (TD-759، تصمیم ت۹ الف): پروژه لغوشده یا تکمیل‌شده مواد تازه نمی‌گیرد و پیشنهاد نمی‌شود
       setProjectsList(rawProjs.filter((p: { status?: string }) => isProjectOpenForAllocation(p.status)));
       setItemsList(rawItems);
     } catch (err) {
@@ -107,7 +107,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
     setSelectedProjectId(projectsList[0]?.id || '');
     setSelectedItemId(itemsList[0]?.id || '');
     setAllocateQty('1');
-    // v9.0.387 (TD-751): انبار پیش‌فرض همان انبار فعال با کمترین شناسه (اولین ردیف فهرست، TD-203)، نه «main» که فهرست نشان نمی‌داد
+    // v9.0.411 (TD-751): انبار پیش‌فرض همان انبار فعال با کمترین شناسه (اولین ردیف فهرست، TD-203)، نه «main» که فهرست نشان نمی‌داد
     setSelectedLocation(warehousesList[0]?.code ?? '');
     setAllocateNotes('');
     setShowAllocateModal(true);
@@ -657,7 +657,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
               {/* Project Select */}
               <div>
                 <label className="block text-slate-700 font-bold mb-1">پروژه تولید مقصد:</label>
-                {/* v9.0.399 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه پروژه‌ها */}
+                {/* v9.0.423 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه پروژه‌ها */}
                 <SearchableSelect
                   value={selectedProjectId}
                   onChange={(value) => setSelectedProjectId(value ? Number(value) : '')}

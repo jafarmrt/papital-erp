@@ -1,4 +1,5 @@
 import { logger } from '../middleware/logger.js';
+import { numericRuleEquality, ruleComparableNumber } from '../lib/events/ruleConditionValue.js';
 
 export interface SingleRuleCondition {
   field: string;
@@ -113,38 +114,41 @@ export class RuleEngineService {
       case '==':
       case 'eq':
       case 'equal':
-        passed = String(actualValue ?? '') === String(targetValue ?? '');
+        // v9.0.409 (TD-727): a number equals a value typed with Persian digits or thousands separators
+        passed = numericRuleEquality(actualValue, targetValue) ?? String(actualValue ?? '') === String(targetValue ?? '');
         reason = passed ? `مقدار ${actualValue} برابر با ${targetValue} است` : `مقدار واقعی (${actualValue}) برابر با (${targetValue}) نیست`;
         break;
 
       case '!=':
       case 'neq':
       case 'not_equal':
-        passed = String(actualValue ?? '') !== String(targetValue ?? '');
+        passed = !(numericRuleEquality(actualValue, targetValue) ?? String(actualValue ?? '') === String(targetValue ?? ''));
         reason = passed ? `مقدار ${actualValue} مخالف ${targetValue} است` : `مقدار واقعی (${actualValue}) برابر با (${targetValue}) است`;
         break;
 
+      // v9.0.409 (TD-727, B15-25): both sides are read with Persian / Arabic digits and thousands separators
+      // (`ruleComparableNumber`); `Number('۱۰۰۰۰۰۰')` and `Number('1,000,000')` were NaN, so the rule never matched
       case '>':
       case 'gt':
-        passed = Number(actualValue ?? 0) > Number(targetValue ?? 0);
+        passed = ruleComparableNumber(actualValue) > ruleComparableNumber(targetValue);
         reason = passed ? `مقدار ${actualValue} بزرگتر از ${targetValue} است` : `مقدار واقعی (${actualValue}) بزرگتر از (${targetValue}) نیست`;
         break;
 
       case '>=':
       case 'gte':
-        passed = Number(actualValue ?? 0) >= Number(targetValue ?? 0);
+        passed = ruleComparableNumber(actualValue) >= ruleComparableNumber(targetValue);
         reason = passed ? `مقدار ${actualValue} بزرگتر یا مساوی ${targetValue} است` : `مقدار واقعی (${actualValue}) کوچکتر از (${targetValue}) است`;
         break;
 
       case '<':
       case 'lt':
-        passed = Number(actualValue ?? 0) < Number(targetValue ?? 0);
+        passed = ruleComparableNumber(actualValue) < ruleComparableNumber(targetValue);
         reason = passed ? `مقدار ${actualValue} کوچکتر از ${targetValue} است` : `مقدار واقعی (${actualValue}) کوچکتر از (${targetValue}) نیست`;
         break;
 
       case '<=':
       case 'lte':
-        passed = Number(actualValue ?? 0) <= Number(targetValue ?? 0);
+        passed = ruleComparableNumber(actualValue) <= ruleComparableNumber(targetValue);
         reason = passed ? `مقدار ${actualValue} کوچکتر یا مساوی ${targetValue} است` : `مقدار واقعی (${actualValue}) بزرگتر از (${targetValue}) است`;
         break;
 

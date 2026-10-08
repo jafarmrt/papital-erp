@@ -19,7 +19,7 @@ const fetchJson = vi.fn(async (url: string, _opts?: FetchOpts): Promise<unknown>
 });
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
-// v9.0.393 (TD-752): buttons follow the project API keys; these tests act as a user who holds them
+// v9.0.417 (TD-752): buttons follow the project API keys; these tests act as a user who holds them
 vi.mock('../../hooks/useProjectPermissions', () => ({
   useProjectPermissions: () => ({
     canCreate: true, canEdit: true, canDelete: true, canAllocate: true, canConsumeAllocation: true, canReleaseAllocation: true, canRequestPurchase: true,
@@ -40,7 +40,7 @@ const openForm = async () => {
   return screen.getByText('پروژه تولید مقصد:').parentElement as HTMLElement;
 };
 
-/** v9.0.399 (TD-767): the project and material pickers are SearchableSelect lists; open one and read its rows */
+/** v9.0.423 (TD-767): the project and material pickers are SearchableSelect lists; open one and read its rows */
 const openPicker = (field: HTMLElement) => {
   fireEvent.click(within(field).getByRole('button'));
   return screen.getAllByRole('listitem').map(li => li.textContent ?? '');
@@ -55,7 +55,7 @@ const pick = (field: HTMLElement, label: string) => {
   chooseRow(label);
 };
 
-// v9.0.386 (TD-759, owner decision t9 A): a cancelled or completed project takes no new material
+// v9.0.410 (TD-759, owner decision t9 A): a cancelled or completed project takes no new material
 describe('material allocation form (TD-759)', () => {
   it('offers only projects that may take material', async () => {
     const field = await openForm();
@@ -66,7 +66,7 @@ describe('material allocation form (TD-759)', () => {
   });
 });
 
-// v9.0.387 (TD-751): the form draws from the warehouse it shows, the default (active, lowest id), never «main»
+// v9.0.411 (TD-751): the form draws from the warehouse it shows, the default (active, lowest id), never «main»
 describe('material allocation warehouse (TD-751)', () => {
   it('allocates from the warehouse shown first', async () => {
     const field = await openForm();

@@ -17,7 +17,7 @@ const filesUnder = (path: string): string[] => {
 const sources = () => PACKAGE_11.flatMap(filesUnder).filter(f => /\.tsx?$/.test(f)).map(f => ({ file: relative(ROOT, f), text: readFileSync(f, 'utf8') }));
 const offending = (pattern: RegExp) => sources().filter(s => pattern.test(s.text)).map(s => s.file);
 
-// v9.0.396 (TD-764): package 11 used react-multi-date-picker directly, Jalali text fields and toLocaleDateString
+// v9.0.420 (TD-764): package 11 used react-multi-date-picker directly, Jalali text fields and toLocaleDateString
 describe('package 11 date inputs follow the date rule (TD-764)', () => {
   it('picks dates only through JalaliDateInput', () => {
     expect(offending(/from ['"]react-multi-date-picker['"]/)).toEqual([]);

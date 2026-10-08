@@ -134,7 +134,7 @@ async function lockProjectForAllocation(txEngine: DbExecutor, projectId: number,
   if (!project) {
     throw new NotFoundError(`پروژه تولید با شناسه ${projectId} یافت نشد.`);
   }
-  // v9.0.386 (TD-759، تصمیم ت۹ الف): پروژه لغوشده یا تکمیل‌شده مواد تازه نمی‌گیرد؛ پیش‌تر ۴ واحد به پروژه لغوشده ۲۰۰ می‌گرفت و
+  // v9.0.410 (TD-759، تصمیم ت۹ الف): پروژه لغوشده یا تکمیل‌شده مواد تازه نمی‌گیرد؛ پیش‌تر ۴ واحد به پروژه لغوشده ۲۰۰ می‌گرفت و
   // سند ۱۴۰۲ صادر می‌شد. آزادسازی تخصیص‌های پیشین آزاد است
   if (!isProjectOpenForAllocation(project.status)) {
     throw new ValidationError(

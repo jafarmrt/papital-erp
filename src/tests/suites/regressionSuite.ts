@@ -677,13 +677,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       category: 'عمومی',
       unit: 'عدد',
       currentStock: 5,
-      buyPrice: 1000,
-      sellPrice: 1500,
+      weightedAverageCost: 1000,
       proformaReservedQty: 1,
       projectReservedQty: 1,
       totalReservedQty: 2,
       availableStock: 3,
-      totalReservedValue: 3000,
+      totalReservedCost: 2000,
       reservations: [
         {
           id: 'proforma-999-1',
@@ -698,8 +697,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           category: 'عمومی',
           unit: 'عدد',
           reservedQty: 1,
-          unitPrice: 1500,
-          totalValue: 1500,
+          unitCost: 1000,
+          totalCost: 1000,
           date: '2026-09-25'
         },
         {
@@ -715,8 +714,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           category: 'عمومی',
           unit: 'عدد',
           reservedQty: 1,
-          unitPrice: 1500,
-          totalValue: 1500,
+          unitCost: 1000,
+          totalCost: 1000,
           date: '2026-09-25'
         }
       ]
@@ -9336,7 +9335,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const { createTestItem, createTestDocument } = await import('../fixtures/factories.js');
       const { ProcurementService } = await import('../../services/procurement.service.js');
       const { ItemStockReservationService } = await import('../../services/items/itemStockReservation.service.js');
-      const item = await createTestItem({ name: `ERP-TEST-MARKER کالای اعشاری TD-239 ${suffix}`, code: `ITEM_TD239_${suffix}`, stocks: { '': 10 } });
+      const item = await createTestItem({ name: `ERP-TEST-MARKER کالای اعشاری TD-239 ${suffix}`, code: `ITEM_TD239_${suffix}`, stocks: { '': 10 }, weightedAverageCost: 0.1 });
       itemId = item.id;
       const violations: string[] = [];
       // 3 × 0.1 در عدد JS برابر 0.30000000000000004 است
@@ -9364,7 +9363,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const report = await ItemStockReservationService.getReservedStockDetails(undefined, true);
       const entry = report.allReservationEntries.find(e => e.sourceType === 'proforma' && Number(e.sourceId) === proforma.document.id);
       if (!entry) violations.push('رزرو پیش‌فاکتور آزمایشی در گزارش نیامد');
-      else if (entry.totalValue !== 0.3) violations.push(`ارزش رزرو پیش‌فاکتور: ${entry.totalValue} (باید 0.3)`);
+      // v9.0.399 (TD-823): the reservation is valued at the item's cost (WAC 0.1), never the proforma's price
+      else if (entry.totalCost !== 0.3) violations.push(`ارزش رزرو پیش‌فاکتور: ${entry.totalCost} (باید 0.3)`);
       if (violations.length > 0) throw new Error(violations.join(' | '));
       results.push(makeTestCase({
         id: 'reg_procurement_reservation_decimal_td_239', scenarioId: 'multi_currency_financials_and_ratios', name: testName, layer: 'regression',
@@ -10118,8 +10118,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       type Scan = { checks?: Array<{ id: string; details: string }> };
       const health = async () => { const r = await get('/api/system/health'); return { status: r.status, body: r.body as Health }; };
       const scan = async () => { const r = await get('/api/system/reconciliation-check'); return { status: r.status, body: r.body as Scan }; };
+      // v9.0.392 (TD-622): the details print counts in Persian digits; an ok check names no count
       const scanNumber = (s: Scan, id: string, re: RegExp) => {
-        const details = s.checks?.find(c => c.id === id)?.details ?? '';
+        const details = (s.checks?.find(c => c.id === id)?.details ?? '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
         const m = details.match(re);
         return m ? Number(m[1]) : 0;
       };
@@ -10147,7 +10148,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       check(h1.status === 200 && h1.body.outbox?.dlqCount === wantUnresolved,
         `dlqCount صفحه سلامت باید فقط ردیف‌های حل‌نشده (${wantUnresolved}) را بشمارد (وضعیت ${h1.status}، دریافتی ${h1.body.outbox?.dlqCount})`);
       const s1 = await scan();
-      check(s1.status === 200 && scanNumber(s1.body, 'outbox_dlq', /تعداد (\d+) رویداد/) === wantUnresolved,
+      check(s1.status === 200 && scanNumber(s1.body, 'outbox_dlq', /(\d+) رویداد ناموفق/) === wantUnresolved,
         `ممیزی یکپارچگی باید ${wantUnresolved} رویداد حل‌نشده DLQ گزارش کند (دریافتی ${s1.body.checks?.find(c => c.id === 'outbox_dlq')?.details})`);
 
       const requeueRes = await post('/api/system/reconciliation-fix', { action: 'requeue_dlq' });
@@ -10192,7 +10193,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       // (ب) تراز اسناد: حذف‌شده نرم ناتراز، اختلاف ۰٫۰۰۵، ردیف حذف‌شده نرم و اختلاف ۰٫۰۲ — فقط آخری ناتراز است
       const baseHealth = await health();
       const baseScan = await scan();
-      const baseUnbalanced = scanNumber(baseScan.body, 'accounting_vouchers', /تعداد (\d+) سند/);
+      const baseUnbalanced = scanNumber(baseScan.body, 'accounting_vouchers', /(\d+) سند حسابداری/);
       const baseTotal = baseHealth.body.accounting?.totalVouchers ?? -1;
       const account = await AccountingService.createAccount({
         code: `9245${suffix}`, name: `ERP-TEST-MARKER حساب TD-245 ${suffix}`, level: 'detailed', parentId: null,
@@ -10216,7 +10217,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       await addVoucher([[100.02, 0], [0, 100]]);
       const vScan = await scan();
       const vHealth = await health();
-      const scanUnbalanced = scanNumber(vScan.body, 'accounting_vouchers', /تعداد (\d+) سند/);
+      const scanUnbalanced = scanNumber(vScan.body, 'accounting_vouchers', /(\d+) سند حسابداری/);
       check(scanUnbalanced === baseUnbalanced + 1,
         `ممیزی یکپارچگی فقط سند با اختلاف ۰٫۰۲ را باید ناتراز بداند (پایه ${baseUnbalanced}، دریافتی ${scanUnbalanced}: ${vScan.body.checks?.find(c => c.id === 'accounting_vouchers')?.details})`);
       check(vHealth.body.accounting?.unbalancedVouchers === scanUnbalanced,
@@ -10280,7 +10281,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         globalThis.Date = RealDate;
         invalidateTimezoneCache();
       }
-      check(exportStatus === 200 && disposition.includes(`erp-data-export-${tehranDay}.json`),
+      check(exportStatus === 200 && disposition.includes(`erp-data-export-${tehranDay}.zip`),
         `نام فایل خروجی باید تاریخ کسب‌وکار ${tehranDay} (نه تاریخ UTC ${utcDay}) باشد (وضعیت ${exportStatus}، دریافتی ${disposition})`);
 
       // (و) Zod: بدنه / کوئری واقعی رابط کاربری می‌گذرد، ورودی نامعتبر 400
@@ -10628,7 +10629,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 11 PR b (v9.0.380 on): project edit and input — status lists, delivery input, stage clock, audit, version (TD-754 ...)
   const { runProjectEditTests } = await import('../regression/projectEditTests.js');
   results.push(...await runProjectEditTests(shouldRun));
-  // Package 11 PR c (v9.0.386 on): project list, purchase document and material allocation
+  // Package 11 PR c (v9.0.410 on): project list, purchase document and material allocation
   const { runProjectPurchaseAllocationTests } = await import('../regression/projectPurchaseAllocationTests.js');
   results.push(...await runProjectPurchaseAllocationTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
@@ -10767,6 +10768,14 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runIntegrationCounterLockTests } = await import('../regression/integrationCounterLockTests.js');
   results.push(...await runIntegrationCounterLockTests(shouldRun));
 
+  // Package 15 PR d (v9.0.405+): the event contract
+  const { runWebhookEventPatternTests } = await import('../regression/webhookEventPatternTests.js');
+  results.push(...await runWebhookEventPatternTests(shouldRun));
+  const { runRuleEventTypeTests } = await import('../regression/ruleEventTypeTests.js');
+  results.push(...await runRuleEventTypeTests(shouldRun));
+  const { runDocumentEventAmountTests } = await import('../regression/documentEventAmountTests.js');
+  results.push(...await runDocumentEventAmountTests(shouldRun));
+
   // Package 10 PR B (v9.0.347+): procurement order link, duplicate submissions, consolidation, receiving
   const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');
   results.push(...await runProcurementOrderTests(shouldRun));
@@ -10775,9 +10784,25 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runProcurementDeskTests } = await import('../regression/procurementDeskTests.js');
   results.push(...await runProcurementDeskTests(shouldRun));
 
-  // Package 7 PR A (v9.0.370+): which documents and projects reserve stock, and how much
+  // Package 7 PR A (v9.0.370+): which documents and projects reserve stock, and how much; PR B (v9.0.394+): how they are read
   const { runStockReservationTests } = await import('../regression/stockReservationTests.js');
   results.push(...await runStockReservationTests(shouldRun));
+  const { runStockReservationReadTests } = await import('../regression/stockReservationReadTests.js');
+  results.push(...await runStockReservationReadTests(shouldRun));
+  // Package 7 PR C (v9.0.396+): the raw material request queue
+  const { runPendingMaterialTests } = await import('../regression/pendingMaterialTests.js');
+  results.push(...await runPendingMaterialTests(shouldRun));
+  // Package 7 PR D (v9.0.399+): the reserved items report and the reorder alerts
+  const { runReservedItemsReportTests } = await import('../regression/reservedItemsReportTests.js');
+  results.push(...await runReservedItemsReportTests(shouldRun));
+
+  // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
+  const { runDataExportTests } = await import('../regression/dataExportTests.js');
+  results.push(...await runDataExportTests(shouldRun));
+  const { runSystemHealthTests } = await import('../regression/systemHealthTests.js');
+  results.push(...await runSystemHealthTests(shouldRun));
+  const { runFactoryResetTests } = await import('../regression/factoryResetTests.js');
+  results.push(...await runFactoryResetTests(shouldRun));
 
   return results;
 }

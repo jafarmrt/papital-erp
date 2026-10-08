@@ -30,7 +30,7 @@ const renderPage = () => render(
   </QueryClientProvider>,
 );
 
-// v9.0.394 (TD-761): the kanban had three columns, so paused and cancelled projects were hidden, and the filter had no cancelled
+// v9.0.418 (TD-761): the kanban had three columns, so paused and cancelled projects were hidden, and the filter had no cancelled
 describe('project kanban (TD-761)', () => {
   it('shows paused and cancelled projects in their own column', async () => {
     renderPage();

@@ -2,6 +2,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { and, eq, inArray, like } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
+import { setProbeEventPatterns } from '../fixtures/eventProbe.js';
 import { orm, pool } from '../../db/drizzle.js';
 import { eventActionLogs, eventActionRules, webhookDeliveries, webhookSubscriptions } from '../../db/schema.js';
 
@@ -54,8 +55,9 @@ export async function runIntegrationDeliveryRetryTests(shouldRun: (id: string, .
 
     for (const sub of ['fail', 'ok']) {
       const created = await WebhookSubscriptionService.createSubscription({
-        name: `${tag} ${sub}`, targetUrl: target, eventPatterns: [eventType], customHeaders: { 'X-Test-Sub': sub }, retryLimit: 3, timeoutMs: 3000,
+        name: `${tag} ${sub}`, targetUrl: target, eventPatterns: ['*'], customHeaders: { 'X-Test-Sub': sub }, retryLimit: 3, timeoutMs: 3000,
       });
+      await setProbeEventPatterns(created.id, [eventType]);
       subIds.push(created.id);
     }
     const [failSubId, okSubId] = subIds;

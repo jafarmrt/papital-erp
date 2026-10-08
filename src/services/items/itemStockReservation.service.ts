@@ -1,7 +1,6 @@
-import { sql, eq, and, inArray } from 'drizzle-orm';
+import { sql, eq, and, or, asc, inArray, type SQL } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, productionProjects, documents, documentItems } from '../../db/schema.js';
-import { logger } from '../../middleware/logger.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
@@ -10,60 +9,15 @@ import { fin } from '../../lib/financialDecimal.js';
 import { RESERVING_DOCUMENT_STATUS, RESERVING_DOCUMENT_TYPES } from '../../lib/documents/reservingDocuments.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { reservingProjectRows, storedReservationRows } from '../../lib/projects/projectReservationState.js';
+import { findProjectItemMatch, itemCodeKey, itemNameKey } from '../../lib/projects/projectItemMatch.js';
+import { proformaSourceTitle, type ItemReservedReportSummary, type ReservedItemDetail, type ReservedItemsFullReport } from '../../lib/inventory/reservedItemsReport.js';
 
-export interface ReservedItemDetail {
-  id: string;
-  sourceType: 'proforma' | 'project';
-  sourceLabel: string;
-  sourceId: number;
-  sourceRef: string;
-  sourceTitle: string;
-  buyerOrCustomer: string;
-  itemId?: number;
-  itemCode: string;
-  itemName: string;
-  category: string;
-  unit: string;
-  reservedQty: number;
-  unitPrice: number;
-  totalValue: number;
-  date: string;
-}
+export type { ItemReservedReportSummary, ReservedItemDetail, ReservedItemsFullReport };
 
 export interface SellableStockContext {
   location: string;            // کد انبار (پس از resolveWarehouseCode)
   excludeDocumentId?: number;  // سندی که در حال نهایی‌شدن است (رزرو خودش حساب نشود)
   projectId?: number | null;   // رزرو همین پروژه آزاد است
-}
-
-export interface ItemReservedReportSummary {
-  itemId?: number;
-  itemCode: string;
-  itemName: string;
-  category: string;
-  unit: string;
-  currentStock: number;
-  stocks?: Record<string, number>;
-  buyPrice: number;
-  sellPrice: number;
-  proformaReservedQty: number;
-  projectReservedQty: number;
-  totalReservedQty: number;
-  availableStock: number;
-  totalReservedValue: number;
-  reservations: ReservedItemDetail[];
-}
-
-export interface ReservedItemsFullReport {
-  summaryMetrics: {
-    totalReservedItemsCount: number;
-    totalReservedQty: number;
-    totalReservedValue: number;
-    proformaReservationsCount: number;
-    projectReservationsCount: number;
-  };
-  itemSummaries: ItemReservedReportSummary[];
-  allReservationEntries: ReservedItemDetail[];
 }
 
 export interface ReservedStockInfo {
@@ -138,9 +92,132 @@ function reservationSummaryKey(itemId: unknown, code: unknown): string {
   return Number.isInteger(id) && id > 0 ? `id:${id}` : `code:${String(code ?? '').trim().toUpperCase()}`;
 }
 
+/** ستون‌های کالا که گزارش رزرو می‌خواند */
+const RESERVATION_ITEM_COLUMNS = {
+  id: items.id,
+  code: items.code,
+  name: items.name,
+  category: items.category,
+  unit: items.unit,
+  currentStock: items.currentStock,
+  weightedAverageCost: items.weightedAverageCost,
+};
+type ReservationItemRow = Pick<typeof items.$inferSelect, 'id' | 'code' | 'name' | 'category' | 'unit' | 'currentStock' | 'weightedAverageCost'>;
+
+/** v9.0.394 (TD-821): متن یک مقدار ذخیره‌شده در JSONB؛ عدد متن می‌شود و هر چیز دیگر (شیء، آرایه، null) خالی است */
+const rowText = (v: unknown): string => (typeof v === 'string' ? v.trim() : typeof v === 'number' && Number.isFinite(v) ? String(v) : '');
+
+/** شناسه کالای ردیف ذخیره‌شده: عدد صحیح مثبت یا متن رقمی، وگرنه هیچ */
+const refItemId = (v: unknown): number | null => {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN;
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+};
+
+/** یک ردیف رزرو ذخیره‌شده پروژه ثبت نهایی‌شده با مقدار مثبت */
+interface ProjectReservationRowRef {
+  projectId: number;
+  projectCode: string | null;
+  projectTitle: string | null;
+  createdAt: string | null;
+  index: number;
+  itemId: number | null;
+  code: string;
+  name: string;
+  qty: number;
+  raw: InventoryControlItem;
+}
+
+/** v9.0.394 (TD-821): ردیف رزرو پروژه‌ای که به هیچ کالای فعالی نمی‌رسد */
+export interface UnmatchedProjectReservationRow {
+  projectId: number;
+  projectCode: string | null;
+  projectTitle: string | null;
+  index: number;
+  code: string;
+  name: string;
+  qty: number;
+}
+
+/**
+ * v9.0.395 (TD-831): فقط پروژه‌های فعال ثبت نهایی‌شده با آرایه رزرو ناخالی خوانده می‌شوند؛ قاعده خود رزرو همان
+ * `reservingProjectRows` است (TD-817).
+ */
+async function readReservingProjectRows(client: DbExecutor): Promise<ProjectReservationRowRef[]> {
+  const projects = await client
+    .select({
+      id: productionProjects.id,
+      projectCode: productionProjects.projectCode,
+      title: productionProjects.title,
+      inventoryControl: productionProjects.inventoryControl,
+      createdAt: productionProjects.createdAt,
+    })
+    .from(productionProjects)
+    .where(and(
+      eq(productionProjects.isDeleted, 0),
+      sql`${productionProjects.status} NOT IN ('completed', 'cancelled')`,
+      sql`${productionProjects.inventoryControl} -> 'isFinalized' = 'true'::jsonb`,
+      sql`jsonb_typeof(${productionProjects.inventoryControl} -> 'reservedItems') = 'array'`,
+      sql`jsonb_array_length(${productionProjects.inventoryControl} -> 'reservedItems') > 0`
+    ))
+    .orderBy(asc(productionProjects.id));
+
+  const rows: ProjectReservationRowRef[] = [];
+  for (const proj of projects) {
+    // v9.0.371 (TD-817، تصمیم ت۲): فقط رزرو ذخیره‌شده پروژه ثبت نهایی‌شده؛ پیش‌نویس، خارج‌شده از ثبت نهایی و رزرو مصرف‌شده هیچ
+    reservingProjectRows<InventoryControlItem>(proj.inventoryControl).forEach((raw, index) => {
+      const qtyField = reservationQtyField(raw);
+      const qty = qtyField ? Number(raw[qtyField]) : 0;
+      if (!(qty > 0) || !Number.isFinite(qty)) return;
+      rows.push({
+        projectId: proj.id,
+        projectCode: proj.projectCode ?? null,
+        projectTitle: proj.title ?? null,
+        createdAt: proj.createdAt ?? null,
+        index,
+        itemId: refItemId(raw.itemId),
+        code: rowText(raw.itemCode) || rowText(raw.code),
+        name: rowText(raw.itemName) || rowText(raw.name),
+        qty,
+        raw,
+      });
+    });
+  }
+  return rows;
+}
+
+/** کلیدهای تطبیق کالاها: شناسه، کلید کد و کلید نام (همان کلیدهای findProjectItemMatch) */
+function reservationItemKeys(list: ReadonlyArray<{ id: number; code?: unknown; name?: unknown }>): { ids: Set<number>; codes: Set<string>; names: Set<string> } {
+  const keys = { ids: new Set<number>(), codes: new Set<string>(), names: new Set<string>() };
+  for (const it of list) {
+    keys.ids.add(it.id);
+    if (itemCodeKey(it.code)) keys.codes.add(itemCodeKey(it.code));
+    if (itemNameKey(it.name)) keys.names.add(itemNameKey(it.name));
+  }
+  return keys;
+}
+
+/** ردیفی که شناسه، کلید کد یا کلید نامش با یکی از کالاهای scope برابر است */
+function refMayMatch(row: ProjectReservationRowRef, keys: { ids: Set<number>; codes: Set<string>; names: Set<string> }): boolean {
+  return (row.itemId !== null && keys.ids.has(row.itemId)) || keys.codes.has(itemCodeKey(row.code)) || keys.names.has(itemNameKey(row.name));
+}
+
+/** v9.0.395 (TD-831): فقط کالاهای فعالی که ردیف‌ها به آن‌ها اشاره می‌کنند، با نمایه‌های کلید کد و نام (TD-653) */
+async function readItemsForProjectRows(client: DbExecutor, rows: ProjectReservationRowRef[]): Promise<ReservationItemRow[]> {
+  const ids = [...new Set(rows.map(r => r.itemId).filter((id): id is number => id !== null))];
+  const codes = [...new Set(rows.map(r => itemCodeKey(r.code)).filter(Boolean))];
+  const names = [...new Set(rows.map(r => itemNameKey(r.name)).filter(Boolean))];
+  const conditions = [
+    ids.length > 0 ? inArray(items.id, ids) : undefined,
+    codes.length > 0 ? inArray(sql`upper(btrim(${items.code}))`, codes) : undefined,
+    names.length > 0 ? inArray(sql`lower(btrim(${items.name}))`, names) : undefined,
+  ].filter((c): c is SQL => c !== undefined);
+  if (conditions.length === 0) return [];
+  return client.select(RESERVATION_ITEM_COLUMNS).from(items).where(and(eq(items.isDeleted, 0), or(...conditions))).orderBy(asc(items.id));
+}
+
 function emptyReservationReport(): ReservedItemsFullReport {
   return {
-    summaryMetrics: { totalReservedItemsCount: 0, totalReservedQty: 0, totalReservedValue: 0, proformaReservationsCount: 0, projectReservationsCount: 0 },
+    summaryMetrics: { totalReservedItemsCount: 0, totalReservedQty: 0, totalReservedCost: 0, proformaReservationsCount: 0, projectReservationsCount: 0 },
     itemSummaries: [],
     allReservationEntries: [],
   };
@@ -381,294 +458,217 @@ export class ItemStockReservationService {
   /**
    * Comprehensive calculation of reserved items across active Proforma Invoices AND Project Control.
    *
-   * v9.0.206 (TD-663، B05-17): با `scope.itemIds` فقط رزرو همان کالاها ساخته می‌شود (فهرست کالا یک صفحه را می‌خواهد):
-   * ردیف‌های پیش‌فاکتور همان کالاها، موجودی انبار و خلاصه همان کالاها، و ردیف‌های پروژه‌ای که به همان کالاها می‌رسند.
-   * همه کالاها فقط وقتی (و فقط با ستون‌های تطبیق) خوانده می‌شوند که پروژه فعالی کنترل موجودی دارد. پیش‌تر هر صفحه ۵۰ کالایی
-   * گزارش همه کالاها را با موجودی همه انبارها می‌ساخت (۷۵ از ۹۳ میلی‌ثانیه با ۵٬۰۰۰ کالا).
+   * v9.0.206 (TD-663، B05-17): با `scope.itemIds` فقط رزرو همان کالاها ساخته می‌شود (فهرست کالا یک صفحه را می‌خواهد).
+   *
+   * v9.0.394 (TD-821، یافته B07-05): این گزارش همیشه fail-closed است (`throwOnError` فقط `true` می‌پذیرد): خطای ساختن آن به
+   * فراخواننده می‌رسد و هیچ‌جا «بی رزرو» خوانده نمی‌شود. پیش‌تر فهرست کالا، فروشگاه اینترنتی و گزارش رزروها خطا را می‌بلعیدند و
+   * رزرو صفر می‌دیدند، در حالی که یک ردیف ذخیره‌شده با کد یا نام عددی (`.trim` روی عدد) هر حواله و فاکتور خروجی را با ۵۰۰ رد
+   * می‌کرد. ردیف پروژه با متن امن خوانده می‌شود (`rowText`) و ردیفی که به هیچ کالای فعالی نمی‌رسد کنار گذاشته و در بررسی سلامت
+   * مالی فهرست می‌شود (`unmatchedProjectReservationRows`)؛ دیگر به نام «کالای سفارشی» با کد خودش رزرو نمی‌سازد.
+   *
+   * v9.0.395 (TD-831، یافته B07-15): خواندن‌ها به اندازه پرسش است: ردیف‌های پیش‌فاکتور با یک پرس‌وجوی پیوندی (و با scope فقط
+   * کالاهای آن)، پروژه‌ها فقط آن‌ها که ثبت نهایی شده‌اند و رزرو ذخیره‌شده دارند، و کالاها فقط آن‌ها که ردیف‌ها به آن‌ها اشاره
+   * می‌کنند (شناسه، کلید کد، کلید نام) — هرگز همه کالاها؛ با scope فقط ردیف‌هایی که می‌توانند به کالاهای scope برسند. بی scope
+   * خلاصه فقط برای کالاهای رزروشده ساخته می‌شود. پیش‌تر هر حواله خروجی همه پیش‌فاکتورها، همه پروژه‌ها و (با هر پروژه رزروی)
+   * همه کالاها را می‌خواند.
    */
-  static async getReservedStockDetails(executor?: DbExecutor, throwOnError: boolean = false, scope?: ReservationScope): Promise<ReservedItemsFullReport> {
-    try {
-      const client = executor || orm;
-      const allReservationEntries: ReservedItemDetail[] = [];
-      const scopeIds = scope ? new Set(scope.itemIds.filter(id => Number.isInteger(id) && id > 0)) : null;
-      if (scopeIds && scopeIds.size === 0) return emptyReservationReport();
+  static async getReservedStockDetails(executor?: DbExecutor, throwOnError: true = true, scope?: ReservationScope): Promise<ReservedItemsFullReport> {
+    const client = executor || orm;
+    const allReservationEntries: ReservedItemDetail[] = [];
+    const scopeIds = scope ? new Set(scope.itemIds.filter(id => Number.isInteger(id) && id > 0)) : null;
+    if (scopeIds && scopeIds.size === 0) return emptyReservationReport();
 
-      // 1. Fetch active proforma documents
-      const activeProformas = await client
-        .select({
-          id: documents.id,
-          refNumber: documents.refNumber,
-          buyerName: documents.buyerName,
-          date: documents.date,
-          status: documents.status,
-          type: documents.type,
-        })
-        .from(documents)
-        .where(and(
-          eq(documents.isDeleted, 0),
-          // v9.0.370 (TD-818، تصمیم ت۱): فقط پیش‌فاکتور فروش؛ پیش‌فاکتور خرید و پیش‌نویس رزرو نمی‌کنند
-          inArray(documents.type, [...RESERVING_DOCUMENT_TYPES]),
-          eq(documents.status, RESERVING_DOCUMENT_STATUS)
-        ));
+    const scopeItems = scopeIds
+      ? await client.select(RESERVATION_ITEM_COLUMNS).from(items).where(and(eq(items.isDeleted, 0), inArray(items.id, [...scopeIds])))
+      : null;
+    const summaryItems = new Map<number, ReservationItemRow>((scopeItems ?? []).map(it => [it.id, it]));
 
-      if (activeProformas.length > 0) {
-        const proformaIds = activeProformas.map(p => p.id);
-        const proformaLines = await client
-          .select({
-            documentId: documentItems.documentId,
-            itemId: documentItems.itemId,
-            quantity: documentItems.quantity,
-            unitPrice: documentItems.unitPrice,
-            code: items.code,
-            name: items.name,
-            unit: items.unit,
-            category: items.category,
-          })
-          .from(documentItems)
-          .innerJoin(items, eq(documentItems.itemId, items.id))
-          .where(and(
-            inArray(documentItems.documentId, proformaIds),
-            eq(documentItems.isDeleted, 0),
-            eq(items.isDeleted, 0),
-            scopeIds ? inArray(documentItems.itemId, [...scopeIds]) : undefined
-          ));
+    // 1. ردیف‌های پیش‌فاکتور فروش با سند و کالا در یک پرس‌وجو
+    const proformaLines = await client
+      .select({
+        documentId: documents.id,
+        refNumber: documents.refNumber,
+        buyerName: documents.buyerName,
+        date: documents.date,
+        quantity: documentItems.quantity,
+        item: RESERVATION_ITEM_COLUMNS,
+      })
+      .from(documentItems)
+      .innerJoin(documents, eq(documentItems.documentId, documents.id))
+      .innerJoin(items, eq(documentItems.itemId, items.id))
+      .where(and(
+        eq(documents.isDeleted, 0),
+        // v9.0.370 (TD-818، تصمیم ت۱): فقط پیش‌فاکتور فروش؛ پیش‌فاکتور خرید و پیش‌نویس رزرو نمی‌کنند
+        inArray(documents.type, [...RESERVING_DOCUMENT_TYPES]),
+        eq(documents.status, RESERVING_DOCUMENT_STATUS),
+        eq(documentItems.isDeleted, 0),
+        eq(items.isDeleted, 0),
+        scopeIds ? inArray(documentItems.itemId, [...scopeIds]) : undefined
+      ));
 
-        const proformaMap = new Map(activeProformas.map(p => [p.id, p]));
-
-        for (const line of proformaLines) {
-          const doc = proformaMap.get(line.documentId);
-          if (!doc) continue;
-          const qty = Number(line.quantity || 0);
-          if (qty <= 0) continue;
-
-          // v7.0.113 (TD-239): ارزش رزرو با FinancialDecimal (AGENTS §1.8)
-          const price = fin(line.unitPrice);
-          allReservationEntries.push({
-            id: `proforma-${doc.id}-${line.itemId}`,
-            sourceType: 'proforma',
-            sourceLabel: 'پیش‌فاکتور فروش',
-            sourceId: doc.id,
-            sourceRef: doc.refNumber || `PRO-${doc.id}`,
-            sourceTitle: doc.buyerName ? `پیش‌فاکتور ${doc.refNumber} (${doc.buyerName})` : `پیش‌فاکتور ${doc.refNumber}`,
-            buyerOrCustomer: doc.buyerName || 'مشتری',
-            itemId: line.itemId,
-            itemCode: (line.code || '').trim(),
-            itemName: line.name || '',
-            category: line.category || 'عمومی',
-            unit: line.unit || 'عدد',
-            reservedQty: qty,
-            unitPrice: price.toNumber(),
-            totalValue: price.multiply(qty).toNumber(),
-            date: doc.date || new Date().toISOString()
-          });
-        }
-      }
-
-      // 2. Fetch active production projects
-      const activeProjs = await client
-        .select({
-          id: productionProjects.id,
-          projectCode: productionProjects.projectCode,
-          title: productionProjects.title,
-          inventoryControl: productionProjects.inventoryControl,
-          createdAt: productionProjects.createdAt,
-        })
-        .from(productionProjects)
-        .where(and(
-          eq(productionProjects.isDeleted, 0),
-          sql`${productionProjects.status} NOT IN ('completed', 'cancelled')`
-        ));
-
-      // v9.0.206 (TD-663): با scope، همه کالاها فقط برای تطبیق ردیف‌های پروژه لازم‌اند؛ بی پروژه فعال فقط کالاهای scope
-      const needsAllItems = !scopeIds || activeProjs.some(p => reservingProjectRows(p.inventoryControl).length > 0);
-      const allItems = await client
-        .select({
-          id: items.id,
-          code: items.code,
-          name: items.name,
-          category: items.category,
-          unit: items.unit,
-          currentStock: items.currentStock,
-          weightedAverageCost: items.weightedAverageCost,
-        })
-        .from(items)
-        .where(and(eq(items.isDeleted, 0), needsAllItems ? undefined : inArray(items.id, [...(scopeIds ?? [])])));
-      const summaryItems = scopeIds ? allItems.filter(i => scopeIds.has(i.id)) : allItems;
-      // v7.0.48 (TD-214): موجودی هر انبار از جدول نرمال (ستون JSONB حذف شد)
-      const tableStockMap = await ItemWarehouseStockService.getStocksForItems(client, summaryItems.map(i => i.id));
-
-      const itemsByCodeMap = new Map<string, typeof allItems[0]>();
-      const itemsByIdMap = new Map<number, typeof allItems[0]>();
-      const itemsByNameMap = new Map<string, typeof allItems[0]>();
-      for (const it of allItems) {
-        if (it.code) itemsByCodeMap.set(it.code.trim().toUpperCase(), it);
-        if (it.name) itemsByNameMap.set(it.name.trim().toLowerCase(), it);
-        itemsByIdMap.set(it.id, it);
-      }
-
-      for (const proj of activeProjs) {
-        // v9.0.371 (TD-817، تصمیم ت۲): فقط رزرو ذخیره‌شده پروژه ثبت نهایی‌شده؛ پیش‌نویس، خارج‌شده از ثبت نهایی و رزرو مصرف‌شده هیچ
-        const itemsList = reservingProjectRows<InventoryControlItem>(proj.inventoryControl);
-        if (itemsList.length === 0) continue;
-
-        for (let idx = 0; idx < itemsList.length; idx++) {
-          const item = itemsList[idx];
-          const code = (item.itemCode || item.code || '').trim();
-          const qtyField = reservationQtyField(item);
-          const reservedQty = qtyField ? Number(item[qtyField]) : 0;
-          if (reservedQty <= 0) continue;
-
-          const rowName = item.itemName || item.name;
-          // v9.0.374 (TD-822): شناسه کالا بر کد و نام مقدم است (ردیف رزرو سرور همیشه شناسه دارد)
-          const matchedDbItem = (item.itemId ? itemsByIdMap.get(Number(item.itemId)) : null)
-            || (code ? itemsByCodeMap.get(code.toUpperCase()) : null)
-            || (rowName ? itemsByNameMap.get(rowName.trim().toLowerCase()) : null);
-          if (scopeIds && !(matchedDbItem && scopeIds.has(matchedDbItem.id))) continue;
-          const price = fin(matchedDbItem ? matchedDbItem.weightedAverageCost : item.unitPrice);
-
-          allReservationEntries.push({
-            id: `project-${proj.id}-${matchedDbItem?.id || idx}-${code || idx}`,
-            sourceType: 'project',
-            sourceLabel: 'کنترل پروژه',
-            sourceId: proj.id,
-            sourceRef: proj.projectCode || `PRJ-${proj.id}`,
-            sourceTitle: proj.title || `پروژه ${proj.id}`,
-            buyerOrCustomer: proj.title || 'پروژه تولید',
-            itemId: matchedDbItem?.id || (item.itemId ? Number(item.itemId) : undefined),
-            itemCode: code || matchedDbItem?.code || '',
-            itemName: item.itemName || item.name || matchedDbItem?.name || 'کالای سفارشی',
-            category: item.category || matchedDbItem?.category || 'عمومی',
-            unit: item.convertedUnit || item.warehouseUnit || item.unit || matchedDbItem?.unit || 'عدد',
-            reservedQty,
-            unitPrice: price.toNumber(),
-            totalValue: price.multiply(reservedQty).toNumber(),
-            date: proj.createdAt || new Date().toISOString()
-          });
-        }
-      }
-
-      // 3. Group by Item
-      // v9.0.374 (TD-822): خلاصه با شناسه کالا کلید می‌خورد؛ پیش‌تر کد بزرگ‌شده کلید بود و دو کالا با کدهای هم‌حرف
-      // (یا «ß» و «SS») یک خلاصه داشتند و رزرو یکی به دیگری می‌رسید
-      const itemSummariesMap = new Map<string, ItemReservedReportSummary>();
-
-      for (const it of summaryItems) {
-        itemSummariesMap.set(reservationSummaryKey(it.id, it.code), {
-          itemId: it.id,
-          itemCode: it.code,
-          itemName: it.name,
-          category: it.category || 'عمومی',
-          unit: it.unit || 'عدد',
-          currentStock: Number(it.currentStock || 0),
-          stocks: tableStockMap.get(it.id)?.byCode ?? {},
-          buyPrice: fin(it.weightedAverageCost).toNumber(),
-          sellPrice: fin(it.weightedAverageCost).toNumber(),
-          proformaReservedQty: 0,
-          projectReservedQty: 0,
-          totalReservedQty: 0,
-          availableStock: Number(it.currentStock || 0),
-          totalReservedValue: 0,
-          reservations: []
-        });
-      }
-
-      let proformaCount = 0;
-      let projectCount = 0;
-
-      for (const entry of allReservationEntries) {
-        if (entry.sourceType === 'proforma') proformaCount++;
-        if (entry.sourceType === 'project') projectCount++;
-
-        const summaryKey = reservationSummaryKey(entry.itemId, entry.itemCode);
-        let summary = itemSummariesMap.get(summaryKey);
-
-        if (!summary) {
-          summary = {
-            itemId: entry.itemId,
-            itemCode: entry.itemCode,
-            itemName: entry.itemName,
-            category: entry.category,
-            unit: entry.unit,
-            currentStock: 0,
-            buyPrice: 0,
-            sellPrice: entry.unitPrice,
-            proformaReservedQty: 0,
-            projectReservedQty: 0,
-            totalReservedQty: 0,
-            availableStock: 0,
-            totalReservedValue: 0,
-            reservations: []
-          };
-          itemSummariesMap.set(summaryKey, summary);
-        }
-
-        if (entry.sourceType === 'proforma') {
-          summary.proformaReservedQty += entry.reservedQty;
-        } else {
-          summary.projectReservedQty += entry.reservedQty;
-        }
-
-        summary.totalReservedQty += entry.reservedQty;
-        summary.availableStock = Math.max(0, summary.currentStock - summary.totalReservedQty);
-        const val = entry.totalValue || fin(summary.sellPrice).multiply(entry.reservedQty).toNumber();
-        summary.totalReservedValue = fin(summary.totalReservedValue).add(val).toNumber();
-        summary.reservations.push(entry);
-      }
-
-      const itemSummaries = Array.from(itemSummariesMap.values()).filter(s => s.totalReservedQty > 0 || s.reservations.length > 0);
-
-      const totalReservedItemsCount = itemSummaries.filter(s => s.totalReservedQty > 0).length;
-      const totalReservedQty = allReservationEntries.reduce((sum, e) => sum + e.reservedQty, 0);
-      const totalReservedValue = allReservationEntries.reduce((sum, e) => sum.add(e.totalValue), fin(0)).toNumber();
-
-      return {
-        summaryMetrics: {
-          totalReservedItemsCount,
-          totalReservedQty,
-          totalReservedValue,
-          proformaReservationsCount: proformaCount,
-          projectReservationsCount: projectCount
-        },
-        itemSummaries,
-        allReservationEntries
-      };
-    } catch (err) {
-      logger.error({ message: 'Error generating reserved stock details', error: err });
-      if (throwOnError) {
-        throw err;
-      }
-      return emptyReservationReport();
+    for (const line of proformaLines) {
+      const qty = Number(line.quantity || 0);
+      if (qty <= 0) continue;
+      if (!summaryItems.has(line.item.id)) summaryItems.set(line.item.id, line.item);
+      // v9.0.399 (TD-823): the reservation is valued at the item's cost in IRR, never at the proforma's sale price and currency
+      const cost = fin(line.item.weightedAverageCost);
+      allReservationEntries.push({
+        id: `proforma-${line.documentId}-${line.item.id}`,
+        sourceType: 'proforma',
+        sourceLabel: 'پیش‌فاکتور فروش',
+        sourceId: line.documentId,
+        sourceRef: line.refNumber || `PRO-${line.documentId}`,
+        sourceTitle: proformaSourceTitle(line.refNumber || `PRO-${line.documentId}`, line.buyerName),
+        buyerOrCustomer: line.buyerName || 'مشتری',
+        itemId: line.item.id,
+        itemCode: (line.item.code || '').trim(),
+        itemName: line.item.name || '',
+        category: line.item.category || 'عمومی',
+        unit: line.item.unit || 'عدد',
+        reservedQty: qty,
+        unitCost: cost.toNumber(),
+        totalCost: cost.multiply(qty).toNumber(),
+        date: line.date || new Date().toISOString()
+      });
     }
+
+    // 2. ردیف‌های رزرو پروژه‌های ثبت نهایی‌شده؛ با scope فقط ردیف‌هایی که می‌توانند به کالاهای scope برسند
+    const projectRows = await readReservingProjectRows(client);
+    const scopeKeys = scopeItems ? reservationItemKeys(scopeItems) : null;
+    const candidates = scopeKeys ? projectRows.filter(r => refMayMatch(r, scopeKeys)) : projectRows;
+    const rowItems = await readItemsForProjectRows(client, candidates);
+
+    for (const row of candidates) {
+      // v9.0.374 (TD-822): شناسه کالا بر کد و نام مقدم است (ردیف رزرو سرور همیشه شناسه دارد)
+      const matched = findProjectItemMatch({ itemId: row.itemId, code: row.code, name: row.name }, rowItems);
+      // v9.0.394 (TD-821): ردیفی که به کالای فعالی نمی‌رسد رزرو نمی‌کند و در بررسی سلامت فهرست می‌شود
+      if (!matched || (scopeIds && !scopeIds.has(matched.id))) continue;
+      if (!summaryItems.has(matched.id)) summaryItems.set(matched.id, matched);
+      const cost = fin(matched.weightedAverageCost);
+      allReservationEntries.push({
+        id: `project-${row.projectId}-${matched.id}-${row.index}`,
+        sourceType: 'project',
+        sourceLabel: 'کنترل پروژه',
+        sourceId: row.projectId,
+        sourceRef: row.projectCode || `PRJ-${row.projectId}`,
+        sourceTitle: row.projectTitle || `پروژه ${row.projectId}`,
+        buyerOrCustomer: row.projectTitle || 'پروژه تولید',
+        itemId: matched.id,
+        itemCode: (matched.code || '').trim(),
+        itemName: matched.name || '',
+        category: rowText(row.raw.category) || matched.category || 'عمومی',
+        unit: rowText(row.raw.convertedUnit) || rowText(row.raw.warehouseUnit) || rowText(row.raw.unit) || matched.unit || 'عدد',
+        reservedQty: row.qty,
+        unitCost: cost.toNumber(),
+        totalCost: cost.multiply(row.qty).toNumber(),
+        date: row.createdAt || new Date().toISOString()
+      });
+    }
+
+    // 3. Group by Item
+    // v9.0.374 (TD-822): خلاصه با شناسه کالا کلید می‌خورد؛ پیش‌تر کد بزرگ‌شده کلید بود و دو کالا با کدهای هم‌حرف
+    // (یا «ß» و «SS») یک خلاصه داشتند و رزرو یکی به دیگری می‌رسید
+    // v7.0.48 (TD-214): موجودی هر انبار از جدول نرمال (ستون JSONB حذف شد)
+    const tableStockMap = await ItemWarehouseStockService.getStocksForItems(client, [...summaryItems.keys()]);
+    const itemSummariesMap = new Map<string, ItemReservedReportSummary>();
+
+    for (const it of summaryItems.values()) {
+      itemSummariesMap.set(reservationSummaryKey(it.id, it.code), {
+        itemId: it.id,
+        itemCode: it.code,
+        itemName: it.name,
+        category: it.category || 'عمومی',
+        unit: it.unit || 'عدد',
+        currentStock: Number(it.currentStock || 0),
+        stocks: tableStockMap.get(it.id)?.byCode ?? {},
+        weightedAverageCost: fin(it.weightedAverageCost).toNumber(),
+        proformaReservedQty: 0,
+        projectReservedQty: 0,
+        totalReservedQty: 0,
+        availableStock: Number(it.currentStock || 0),
+        totalReservedCost: 0,
+        reservations: []
+      });
+    }
+
+    let proformaCount = 0;
+    let projectCount = 0;
+
+    for (const entry of allReservationEntries) {
+      if (entry.sourceType === 'proforma') proformaCount++;
+      if (entry.sourceType === 'project') projectCount++;
+
+      const summary = itemSummariesMap.get(reservationSummaryKey(entry.itemId, entry.itemCode));
+      if (!summary) continue;
+
+      if (entry.sourceType === 'proforma') {
+        summary.proformaReservedQty += entry.reservedQty;
+      } else {
+        summary.projectReservedQty += entry.reservedQty;
+      }
+
+      summary.totalReservedQty += entry.reservedQty;
+      summary.availableStock = Math.max(0, summary.currentStock - summary.totalReservedQty);
+      summary.totalReservedCost = fin(summary.totalReservedCost).add(entry.totalCost ?? 0).toNumber();
+      summary.reservations.push(entry);
+    }
+
+    const itemSummaries = Array.from(itemSummariesMap.values()).filter(s => s.totalReservedQty > 0 || s.reservations.length > 0);
+
+    const totalReservedItemsCount = itemSummaries.filter(s => s.totalReservedQty > 0).length;
+    const totalReservedQty = allReservationEntries.reduce((sum, e) => sum + e.reservedQty, 0);
+    const totalReservedCost = allReservationEntries.reduce((sum, e) => sum.add(e.totalCost ?? 0), fin(0)).toNumber();
+
+    return {
+      summaryMetrics: {
+        totalReservedItemsCount,
+        totalReservedQty,
+        totalReservedCost,
+        proformaReservationsCount: proformaCount,
+        projectReservationsCount: projectCount
+      },
+      itemSummaries,
+      allReservationEntries
+    };
+  }
+
+  /**
+   * v9.0.394 (TD-821): ردیف‌های رزرو پروژه‌های ثبت نهایی‌شده که مقدار مثبت دارند ولی به هیچ کالای فعالی (شناسه، کلید کد،
+   * کلید نام) نمی‌رسند. گزارش رزروها آن‌ها را کنار می‌گذارد؛ بررسی سلامت مالی فهرستشان می‌کند و هیچ‌کدام خودکار تغییر نمی‌کند.
+   */
+  static async unmatchedProjectReservationRows(executor?: DbExecutor): Promise<UnmatchedProjectReservationRow[]> {
+    const client = executor || orm;
+    const rows = await readReservingProjectRows(client);
+    const rowItems = await readItemsForProjectRows(client, rows);
+    return rows
+      .filter(r => !findProjectItemMatch({ itemId: r.itemId, code: r.code, name: r.name }, rowItems))
+      .map(r => ({ projectId: r.projectId, projectCode: r.projectCode, projectTitle: r.projectTitle, index: r.index, code: r.code, name: r.name, qty: r.qty }));
   }
 
   /**
    * رزرو هر کالا (پیش‌فاکتور فروش و پروژه ثبت نهایی‌شده)، با شناسه کالا کلید خورده (v9.0.374، TD-822؛ پیش‌تر کد بزرگ‌شده).
+   * v9.0.394 (TD-821): خطای خواندن رزرو به فراخواننده می‌رسد (فهرست کالا خطا می‌دهد، نه رزرو صفر).
    */
   static async getReservedStocksMap(scope?: ReservationScope): Promise<Record<string, ReservedStockInfo>> {
-    try {
-      const report = await ItemStockReservationService.getReservedStockDetails(undefined, false, scope);
-      const map: Record<string, ReservedStockInfo> = {};
+    const report = await ItemStockReservationService.getReservedStockDetails(undefined, true, scope);
+    const map: Record<string, ReservedStockInfo> = {};
 
-      for (const summary of report.itemSummaries) {
-        const itemId = Number(summary.itemId);
-        if (!Number.isInteger(itemId) || itemId <= 0) continue;
-        map[String(itemId)] = {
-          totalReserved: summary.totalReservedQty,
-          reservations: summary.reservations.map(r => ({
-            projectId: r.sourceId,
-            projectCode: r.sourceRef,
-            projectTitle: r.sourceTitle,
-            reservedQty: r.reservedQty,
-            unit: r.unit
-          }))
-        };
-      }
-
-      return map;
-    } catch (e) {
-      logger.error({ message: 'Error computing reserved stocks map', error: e });
-      return {};
+    for (const summary of report.itemSummaries) {
+      const itemId = Number(summary.itemId);
+      if (!Number.isInteger(itemId) || itemId <= 0) continue;
+      map[String(itemId)] = {
+        totalReserved: summary.totalReservedQty,
+        reservations: summary.reservations.map(r => ({
+          projectId: r.sourceId,
+          projectCode: r.sourceRef,
+          projectTitle: r.sourceTitle,
+          reservedQty: r.reservedQty,
+          unit: r.unit
+        }))
+      };
     }
+
+    return map;
   }
 
   /**
