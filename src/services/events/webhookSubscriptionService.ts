@@ -4,6 +4,7 @@ import { eq, desc, count } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { BaseDomainEvent } from './domainEvents.js';
 import { assertSafeExternalUrl } from '../../lib/ssrfGuard.js';
+import { isEnteredSecret } from '../../lib/secrets/maskedSecret.js';
 import crypto from 'crypto';
 
 export interface CreateWebhookSubDTO {
@@ -180,7 +181,9 @@ export class WebhookSubscriptionService {
       await assertSafeExternalUrl(targetUrl, { allowLocalEcho: true });
       updateFields.targetUrl = targetUrl;
     }
-    if (data.secretKey !== undefined && data.secretKey.trim() !== '') updateFields.secretKey = data.secretKey.trim();
+    // v9.0.337 (TD-719): an empty or masked key («****…abcd», «********») keeps the stored key; the edit form used to send the
+    // masked key back and every save replaced the real signing key with the mask
+    if (isEnteredSecret(data.secretKey)) updateFields.secretKey = data.secretKey.trim();
     if (data.eventPatterns !== undefined) updateFields.eventPatterns = data.eventPatterns;
     if (data.customHeaders !== undefined) updateFields.customHeaders = data.customHeaders;
     if (data.isActive !== undefined) updateFields.isActive = data.isActive;

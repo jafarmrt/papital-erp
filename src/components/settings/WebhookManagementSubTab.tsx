@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Copy, Check, Trash2, Edit3, Shield, Activity } from 'lucide-react';
-import { formatPersianDate } from '../../utils';
+import { formatPersianDate, errorMessageOf } from '../../utils';
 import { fetchJson } from '../../api';
 import { copyToClipboard } from '../../utils/clipboard';
 
@@ -22,6 +22,12 @@ interface WebhookSubscription {
   lastStatus?: string;
   lastError?: string;
   createdAt: string;
+}
+
+interface WebhookPingRequest {
+  targetUrl?: string;
+  secretKey?: string;
+  subscriptionId?: number;
 }
 
 interface WebhookDeliveryLog {
@@ -161,7 +167,8 @@ export function WebhookManagementSubTab() {
     setFormData({
       name: sub.name,
       targetUrl: sub.targetUrl,
-      secretKey: sub.secretKey,
+      // v9.0.337 (TD-719): the stored key never enters the form; an empty field keeps it on save
+      secretKey: '',
       eventPatterns: sub.eventPatterns || ['*'],
       customHeadersJson: JSON.stringify(sub.customHeaders || {}, null, 2),
       isActive: sub.isActive,
@@ -192,7 +199,7 @@ export function WebhookManagementSubTab() {
     const payload = {
       name: formData.name.trim(),
       targetUrl: formData.targetUrl.trim(),
-      secretKey: formData.secretKey.trim(),
+      ...(formData.secretKey.trim() ? { secretKey: formData.secretKey.trim() } : {}),
       eventPatterns: formData.eventPatterns,
       customHeaders: parsedHeaders,
       isActive: formData.isActive,
@@ -218,7 +225,7 @@ export function WebhookManagementSubTab() {
         showToast(data?.message || 'خطا در ذخیره‌سازی وب‌هوک', 'error');
       }
     } catch (err) {
-      showToast('خطای شبکه در ذخیره‌سازی', 'error');
+      showToast(errorMessageOf(err) || 'خطای شبکه در ذخیره‌سازی', 'error');
     }
   };
 
@@ -253,22 +260,24 @@ export function WebhookManagementSubTab() {
     }
   };
 
-  const handlePingTest = async (targetUrl: string, secretKey: string, subId?: number) => {
+  /** v9.0.337 (TD-719): a saved webhook is pinged by its id, so the server signs with the stored key, never the masked one */
+  const handlePingTest = async (request: WebhookPingRequest, subId?: number) => {
     if (subId) setPingTestingId(subId);
     setPingResult(null);
     try {
-      const data = await fetchJson<{ success?: boolean; statusCode?: number; durationMs?: number; message?: string }>('/events/webhooks/ping', {
+      const data = await fetchJson<{ success?: boolean; statusCode?: number; durationMs?: number; message?: string; keySource?: string }>('/events/webhooks/ping', {
         method: 'POST',
-        body: JSON.stringify({ targetUrl, secretKey })
+        body: JSON.stringify(request)
       });
       setPingResult(data);
+      const keyNote = data?.keySource === 'temporary' ? ' (امضا با کلید موقت؛ کلید درگاه پس از ذخیره ساخته می‌شود)' : '';
       if (data?.success) {
-        showToast(`تست پینگ موفق (${data.statusCode} OK) - تاخیر: ${data.durationMs}ms`, 'success');
+        showToast(`تست پینگ موفق (${data.statusCode} OK) - تاخیر: ${data.durationMs}ms${keyNote}`, 'success');
       } else {
-        showToast(data?.message || 'خطا در تست پینگ وب‌هوک', 'error');
+        showToast(`${data?.message || 'خطا در تست پینگ وب‌هوک'}${keyNote}`, 'error');
       }
     } catch (err) {
-      showToast('خطای ارتباط در تست پینگ', 'error');
+      showToast(errorMessageOf(err) || 'خطای ارتباط در تست پینگ', 'error');
     } finally {
       if (subId) setPingTestingId(null);
     }
@@ -452,7 +461,7 @@ export function WebhookManagementSubTab() {
                   {/* Actions & Buttons */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
-                      onClick={() => handlePingTest(sub.targetUrl, sub.secretKey, sub.id)}
+                      onClick={() => handlePingTest({ subscriptionId: sub.id }, sub.id)}
                       disabled={isTestingPing}
                       className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
                     >
@@ -649,7 +658,8 @@ export function WebhookManagementSubTab() {
                   <div className="relative">
                     <input
                       type="text"
-                      required
+                      required={!editingSub}
+                      placeholder={editingSub ? 'کلید ذخیره‌شده بی‌تغییر می‌ماند؛ برای تغییر، کلید تازه وارد کنید' : undefined}
                       value={formData.secretKey}
                       onChange={e => setFormData({ ...formData, secretKey: e.target.value })}
                       className="w-full font-mono text-[11px] bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3.5 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500 dir-ltr text-left"
@@ -683,7 +693,11 @@ export function WebhookManagementSubTab() {
                   />
                   <button
                     type="button"
-                    onClick={() => handlePingTest(formData.targetUrl, formData.secretKey)}
+                    onClick={() => handlePingTest({
+                      targetUrl: formData.targetUrl.trim(),
+                      ...(formData.secretKey.trim() ? { secretKey: formData.secretKey.trim() } : {}),
+                      ...(editingSub ? { subscriptionId: editingSub.id } : {})
+                    })}
                     className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-medium"
                   >
                     تست اتصال

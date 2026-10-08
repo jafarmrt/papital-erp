@@ -13,11 +13,22 @@ import { logActivity } from '../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { z } from 'zod';
 import { errorMessageOf } from '../utils.js';
+import { NotFoundError } from '../errors/customErrors.js';
+import { isEnteredSecret } from '../lib/secrets/maskedSecret.js';
 
 const eventIdParamSchema = z.object({
   params: z.object({
     eventId: z.string().min(1, 'شناسه رویداد الزامی است')
   })
+});
+
+const webhookPingSchema = z.object({
+  body: z.object({
+    targetUrl: z.string().max(2000).optional(),
+    secretKey: z.string().max(500).optional(),
+    customHeaders: z.record(z.string(), z.coerce.string()).optional(),
+    subscriptionId: z.coerce.number().int().positive().optional(),
+  }),
 });
 
 const router = Router();
@@ -805,23 +816,27 @@ router.post('/webhooks/:id/toggle', authorizePermission('events.manage'), valida
   }
 }));
 
-router.post('/webhooks/ping', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
-  try {
-    const { targetUrl, secretKey, customHeaders } = req.body;
-    if (!targetUrl) {
-      return res.status(400).json({ success: false, message: 'آدرس مقصد برای ارسال پینگ آزمایشی الزامی است.' });
-    }
-
-    const pingResult = await WebhookSubscriptionService.pingTest(
-      targetUrl,
-      secretKey || 'test_secret_key',
-      customHeaders
-    );
-
-    res.json(pingResult);
-  } catch (error) {
-    throw error;
+router.post('/webhooks/ping', authorizePermission('events.manage'), validate(webhookPingSchema), asyncHandler(async (req, res) => {
+  // v9.0.337 (TD-719): a saved webhook is pinged with its stored signing key (`subscriptionId`), never with the masked key
+  // the browser holds; a draft without an entered key is signed with a one-time key, never a fixed 'test_secret_key'
+  const { targetUrl, secretKey, customHeaders, subscriptionId } = req.body as z.infer<typeof webhookPingSchema>['body'];
+  const stored = subscriptionId ? await WebhookSubscriptionService.getSubscriptionById(subscriptionId) : null;
+  if (subscriptionId && !stored) {
+    throw new NotFoundError('اشتراک وب‌هوک یافت نشد.', undefined, 'WEBHOOK_NOT_FOUND');
   }
+  const url = (targetUrl || stored?.targetUrl || '').trim();
+  if (!url) {
+    return res.status(400).json({ success: false, message: 'آدرس مقصد برای ارسال پینگ آزمایشی الزامی است.' });
+  }
+  const keySource = isEnteredSecret(secretKey) ? 'entered' : stored ? 'stored' : 'temporary';
+  const signingKey = keySource === 'entered' ? String(secretKey).trim()
+    : keySource === 'stored' ? stored!.secretKey
+      : WebhookSubscriptionService.generateSecretKey();
+  // the stored custom headers go only to the stored address
+  const headers = customHeaders ?? (stored && url === stored.targetUrl ? (stored.customHeaders as Record<string, string>) : undefined);
+
+  const pingResult = await WebhookSubscriptionService.pingTest(url, signingKey, headers);
+  res.json({ ...pingResult, keySource });
 }));
 
 router.get(['/webhooks/deliveries/list', '/webhooks/deliveries'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
