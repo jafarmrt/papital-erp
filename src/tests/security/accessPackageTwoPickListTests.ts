@@ -149,7 +149,7 @@ export async function runAccessPackageTwoPickListTests(shouldRun: ShouldRun): Pr
     await runCase(results, {
       id: 'sec_project_options_td_889',
       name: 'v9.0.122: forms of other sections read the project pick list; the full project list opens only with projects.view (TD-889)',
-      details: 'for each form key of another section (documents.view, documents.create, warehouse.view, warehouse.in, warehouse.out, piecework.view, piecework.log, daily_logs.view, daily_logs.create): GET /api/projects is 403 and GET /api/projects/options returns the project with exactly the pick fields (code, title, status, customer name); projects.view reads the full list with inventory control; the status filter and limit work; a key of no picking form gets 403; a project record opens for projects.view and warehouse.view (project inventory page) and no longer for document keys',
+      details: 'for each form key of another section (documents.view, documents.create, warehouse.view, warehouse.in, warehouse.out, piecework.view, piecework.log, daily_logs.view, daily_logs.create): GET /api/projects is 403 and GET /api/projects/options returns the project with exactly the pick fields (code, title, status, customer name); projects.view reads the project list and the project record with inventory control; the status filter and limit work; a key of no picking form gets 403; a project record opens for projects.view and warehouse.view (project inventory page) and no longer for document keys',
     }, async (h, wrong) => {
       const { PROJECT_PICK_FIELDS } = await import('../../lib/permissions/pickLists.js');
       const [project] = await orm.insert(productionProjects).values({
@@ -188,10 +188,11 @@ export async function runAccessPackageTwoPickListTests(shouldRun: ShouldRun): Pr
 
         const viewer = await h.sessionWith(['projects.view']);
         const fullList = await h.get(`/api/projects?${search}`, viewer);
-        const fullRow = rowOf(fullList.body);
-        const reserved = (fullRow?.inventory_control as { reservedItems?: unknown[] } | undefined)?.reservedItems;
-        if (fullList.status !== 200 || !Array.isArray(reserved) || reserved.length !== 1) {
-          wrong.push(`projects.view: full list returned ${fullList.status} with reservations ${JSON.stringify(reserved)}`);
+        // v9.0.412 (TD-743): the list is a summary page; the inventory control comes with the project record
+        const viewerRecord = await h.get(`/api/projects/${project.id}`, viewer);
+        const reserved = ((viewerRecord.body as Row | undefined)?.inventory_control as { reservedItems?: unknown[] } | undefined)?.reservedItems;
+        if (fullList.status !== 200 || !rowOf(fullList.body) || viewerRecord.status !== 200 || !Array.isArray(reserved) || reserved.length !== 1) {
+          wrong.push(`projects.view: list returned ${fullList.status}, record ${viewerRecord.status} with reservations ${JSON.stringify(reserved)}`);
         }
         checkPick('projects.view', rowOf((await h.get(`/api/projects/options?${search}`, viewer)).body));
 

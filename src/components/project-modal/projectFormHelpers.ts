@@ -88,8 +88,8 @@ export function buildProjectPayload({
   selectedCustomerId: number | null;
   activeCustomersList: Customer[];
   productsList: ProductRow[];
-  startDate: any;
-  endDate: any;
+  startDate: string;
+  endDate: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   description: string;
   stages: ProjectStage[];

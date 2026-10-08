@@ -1,13 +1,20 @@
-import React , { useState, useMemo } from 'react';
+import React , { useState, useMemo, useEffect } from 'react';
 import { ShoppingCart, FileText, CheckCircle2, AlertCircle, X, Loader2, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { ProductionProject, PurchaseListItem, Item } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, getTodayJalaliDate } from '../../utils';
-import { SearchableSelect } from '../SearchableSelect';
+import { errorMessageOf, formatPersianPrice, getTodayIsoDate, toPersianDigits } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
+import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
+import { useHasAnyPermission } from '../../contexts/AuthContext';
+import {
+  DIRECT_ORDER_PERMISSIONS, draftOrderBody, projectRequisitionBody, supplierPickOptions, type ProjectOrderLine, type RequisitionPriority,
+} from '../../lib/projects/projectPurchaseOrder';
+import { ProjectDirectOrderFields } from './ProjectDirectOrderFields';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
+import { SearchableSelect } from '../SearchableSelect';
 
 interface CreatePurchaseOrderModalProps {
   isOpen: boolean;
@@ -39,17 +46,28 @@ export function CreatePurchaseOrderModal({
   onOrderCreated
 }: CreatePurchaseOrderModalProps) {
   const [orderMode, setOrderMode] = useState<'requisition' | 'direct_document'>('requisition');
-  const [priority, setPriority] = useState<'urgent' | 'high' | 'normal' | 'low'>('normal');
-  const [docStatus, setDocStatus] = useState<'draft' | 'proforma' | 'final'>('draft');
-  const [orderDate, setOrderDate] = useState<string>(() => getTodayJalaliDate());
-  const [refNumber, setRefNumber] = useState<string>(() => `PO-${project.project_code || project.id || 'PRJ'}-${Math.floor(1000 + Math.random() * 9000)}`);
-  const [supplierName, setSupplierName] = useState('');
+  const [priority, setPriority] = useState<RequisitionPriority>('normal');
+  // v9.0.420 (TD-764): تاریخ نیاز ISO است و با تقویم شمسی انتخاب می‌شود (پیش‌تر متن آزاد با نمونه 1405/01/01)
+  const [orderDate, setOrderDate] = useState<string>(() => getTodayIsoDate());
+  const [supplierId, setSupplierId] = useState('');
   const [targetWarehouse, setTargetWarehouse] = useState('');
   const [notes, setNotes] = useState(
     `کسری‌های مواد اولیه پروژه ${project.project_code || project.title}`
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { options: supplierOptions } = useSupplierSelectOptions();
+  // v9.0.416 (TD-745، ت۸ ب): تأمین‌کننده با شناسه و انبار مقصد با کد، هر دو از فهرست
+  const { suppliers } = useSupplierSelectOptions();
+  const supplierOptions = useMemo(() => supplierPickOptions(Array.isArray(suppliers) ? suppliers : []), [suppliers]);
+  const { data: warehouses = [] } = useWarehousesQuery();
+  useEffect(() => {
+    if (!targetWarehouse && warehouses.length > 0) setTargetWarehouse(warehouses[0].code);
+  }, [warehouses, targetWarehouse]);
+  // سفارش مستقیم فقط برای کسی که درخواست را ثبت، تأیید و سفارش می‌کند؛ دیگران فقط درخواست خرید می‌فرستند
+  const mayCreateRequisition = useHasAnyPermission(DIRECT_ORDER_PERMISSIONS.requisition);
+  const mayOrder = useHasAnyPermission(DIRECT_ORDER_PERMISSIONS.order);
+  const mayApprove = useHasAnyPermission(DIRECT_ORDER_PERMISSIONS.approve);
+  const canOrderDirect = mayCreateRequisition && mayOrder && mayApprove;
+  const mode = canOrderDirect ? orderMode : 'requisition';
 
   // Filter items that actually have shortfalls
   const initialRows = useMemo(() => {
@@ -134,87 +152,70 @@ export function CreatePurchaseOrderModal({
       return;
     }
 
+    const supplier = supplierOptions.find(o => o.value === supplierId)?.supplier;
+    if (mode === 'direct_document' && !supplier) {
+      toast.error('تأمین‌کننده سفارش را از فهرست انتخاب کنید.');
+      return;
+    }
+    if (mode === 'direct_document' && !targetWarehouse) {
+      toast.error('انبار مقصد سفارش را از فهرست انتخاب کنید.');
+      return;
+    }
+
     setIsSubmitting(true);
+    const lines: ProjectOrderLine[] = selectedRows.map(r => ({
+      itemId: r.matchedItemId!,
+      itemCode: r.itemCode || '',
+      itemName: r.matchedItemName || r.itemName,
+      unit: r.unit,
+      quantity: Number(r.quantity),
+      unitPrice: Number(r.unitPrice || 0),
+    }));
+    const orderedIds = selectedRows.map(r => r.id);
+    const projectLabel = project.project_code || project.title;
     try {
-      const cleanDate = orderDate.trim() || getTodayJalaliDate();
-
-      if (orderMode === 'requisition') {
-        // Submit official Purchase Requisition to Procurement Desk & Workflow Engine
-        const payload = {
-          title: `کسری مواد پروژه ${project.project_code || project.title}`.trim(),
-          projectId: project.id,
-          projectCode: project.project_code,
-          projectName: project.title,
+      // درخواست خرید پروژه در کارتابل تدارکات و گردش کار آن؛ در سفارش مستقیم همان درخواست بی‌درنگ سفارش داده می‌شود
+      const res = await fetchJson<{ success: boolean; data?: any; message?: string }>('/api/procurement/requisitions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(projectRequisitionBody(project.id, lines, {
+          title: `${mode === 'direct_document' ? 'سفارش مستقیم' : 'کسری'} مواد پروژه ${projectLabel}`.trim(),
           priority,
-          requiredDate: cleanDate,
+          requiredDate: orderDate || getTodayIsoDate(),
           notes: notes.trim(),
-          items: selectedRows.map(r => ({
-            itemId: r.matchedItemId!,
-            itemCode: r.itemCode,
-            itemName: r.matchedItemName || r.itemName,
-            unit: r.unit,
-            requestedQty: Number(r.quantity),
-            unitPriceEstimate: Number(r.unitPrice || 0),
-            notes: ''
-          }))
-        };
+        })),
+      });
+      const prData = res?.data || res;
 
-        const res = await fetchJson<{ success: boolean; data?: any; message?: string }>('/api/procurement/requisitions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        const prData = res?.data || res;
+      if (mode === 'requisition') {
         toast.success(`درخواست خرید ${prData.code || ''} در کارتابل مسئول خرید و تدارکات ثبت و وارد گردش کار شد.`);
-
-        const orderedIds = selectedRows.map(r => r.id);
         onOrderCreated(prData, orderedIds);
         onClose();
         return;
       }
 
-      // Direct Document Creation (Emergency / Cash purchase)
-      const docType = docStatus === 'proforma' ? 'proforma' : 'receipt';
-      const cleanRefNumber = refNumber.trim() || `PO-${project.project_code || project.id}-${Date.now().toString().slice(-4)}`;
-
-      const payload = {
-        docType,
-        refNumber: cleanRefNumber,
-        date: cleanDate,
-        status: docStatus, // 'draft', 'proforma', 'final'
-        buyer_name: supplierName.trim() || 'تامین‌کننده تدارکات',
-        notes: notes.trim(),
-        location: targetWarehouse.trim() || undefined,
-        inOut: 'in',
-        projectId: project.id,
-        items: selectedRows.map(r => ({
-          itemId: r.matchedItemId!,
-          quantity: Number(r.quantity),
-          unit_price: Number(r.unitPrice || 0),
-          discount: 0,
-          location: targetWarehouse.trim() || undefined
-        }))
-      };
-
-      const res = await fetchJson<{ success: boolean; data?: any; message?: string }>('/api/documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const docData = res?.data || res;
-      const createdRef = docData?.ref_number || docData?.refNumber || cleanRefNumber;
-
-      toast.success(
-        `سند ${docStatus === 'draft' ? 'سفارش خرید' : docStatus === 'proforma' ? 'پیش‌فاکتور خرید' : 'رسید خرید'} به شماره ${createdRef} با موفقیت ثبت شد.`
-      );
-
-      const orderedIds = selectedRows.map(r => r.id);
-      onOrderCreated(docData, orderedIds);
+      try {
+        const converted = await fetchJson<{ data?: { createdDocuments?: Array<{ refNumber?: string; ref_number?: string }> } }>(
+          `/api/procurement/requisitions/${prData.id}/convert-to-orders`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(draftOrderBody(lines, supplier!, targetWarehouse, notes.trim())),
+          },
+        );
+        const order = converted?.data?.createdDocuments?.[0];
+        const orderRef = order?.refNumber || order?.ref_number || '';
+        toast.success(
+          `سفارش خرید پیش‌نویس ${orderRef} برای ${supplier!.name} از درخواست ${prData.code || ''} صادر شد؛ کالا با «تحویل به انبار» در تدارکات وارد انبار می‌شود.`,
+        );
+      } catch (orderErr: unknown) {
+        // درخواست ثبت شده است و در کارتابل تدارکات می‌ماند؛ فقط سفارش صادر نشد
+        toast.error(`درخواست خرید ${prData.code || ''} ثبت شد ولی سفارش صادر نشد: ${errorMessageOf(orderErr)} سفارش را از کارتابل تدارکات صادر کنید.`);
+      }
+      onOrderCreated(prData, orderedIds);
       onClose();
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در ثبت درخواست یا سفارش خرید');
+    } catch (err: unknown) {
+      toast.error(errorMessageOf(err) || 'خطا در ثبت درخواست یا سفارش خرید');
     } finally {
       setIsSubmitting(false);
     }
@@ -252,36 +253,38 @@ export function CreatePurchaseOrderModal({
 
         {/* Modal Form Content */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-5">
-          {/* Mode Selector Tabs */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <button
-              type="button"
-              onClick={() => setOrderMode('requisition')}
-              className={`flex-1 py-2.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                orderMode === 'requisition'
-                  ? 'bg-amber-500 text-slate-950 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              ارسال درخواست خرید به کارتابل تدارکات (استاندارد گردش کار سازمانی)
-            </button>
-            <button
-              type="button"
-              onClick={() => setOrderMode('direct_document')}
-              className={`flex-1 py-2.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                orderMode === 'direct_document'
-                  ? 'bg-amber-500 text-slate-950 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <ShoppingCart className="w-4 h-4" />
-              صدور مستقیم سند خرید در انبارداری (سریع / اضطراری)
-            </button>
-          </div>
+          {/* Mode Selector Tabs: سفارش مستقیم فقط برای دارنده هر سه مجوز (TD-745) */}
+          {canOrderDirect && (
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setOrderMode('requisition')}
+                className={`flex-1 py-2.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  mode === 'requisition'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                ارسال درخواست خرید به کارتابل تدارکات (استاندارد گردش کار سازمانی)
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderMode('direct_document')}
+                className={`flex-1 py-2.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  mode === 'direct_document'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <ShoppingCart className="w-4 h-4" />
+                سفارش خرید پیش‌نویس به تأمین‌کننده (سریع)
+              </button>
+            </div>
+          )}
 
           {/* Settings / Meta based on Mode */}
-          {orderMode === 'requisition' ? (
+          {mode === 'requisition' ? (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-amber-50/50 p-4 rounded-xl border border-amber-200 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">اولویت درخواست خرید:</label>
@@ -299,11 +302,10 @@ export function CreatePurchaseOrderModal({
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
-                <input
-                  type="text"
-                  placeholder="1405/01/01"
+                <JalaliDateInput
                   value={orderDate}
-                  onChange={e => setOrderDate(e.target.value)}
+                  onChange={setOrderDate}
+                  placeholder="انتخاب تاریخ"
                   className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono focus:ring-2 focus:ring-amber-400 focus:outline-none"
                 />
               </div>
@@ -320,86 +322,31 @@ export function CreatePurchaseOrderModal({
               </div>
 
               <div className="sm:col-span-3 text-[11px] text-amber-800 bg-amber-100/60 p-2.5 rounded-lg">
-                💡 این درخواست در کارتابل مسئول خرید و تدارکات ثبت شده و پس از استعلام قیمت و تایید مدیر وارد فاز سفارش‌گذاری و خرید خواهد شد.
+                💡 این درخواست در کارتابل مسئول خرید و تدارکات ثبت شده و پس از استعلام قیمت و تایید مدیر وارد مرحله سفارش‌گذاری و خرید خواهد شد.
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">شماره مرجع / سفارش خرید:</label>
-                <input
-                  type="text"
-                  placeholder="مثلاً: PO-102-5421"
-                  value={refNumber}
-                  onChange={e => setRefNumber(e.target.value)}
-                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">تاریخ سند:</label>
-                <input
-                  type="text"
-                  placeholder="1405/01/01"
-                  value={orderDate}
-                  onChange={e => setOrderDate(e.target.value)}
-                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">نوع وضعیت سند:</label>
-                <select
-                  value={docStatus}
-                  onChange={e => setDocStatus(e.target.value as any)}
-                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                >
-                  <option value="draft">پیش‌نویس سفارش خرید (تدارکات - بدون تغییر موجودی)</option>
-                  <option value="final">رسید خرید قطعی (افزایش آنی موجودی انبار)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">نام تأمین‌کننده / فروشنده:</label>
-                <SearchableSelect
-                  value={supplierName}
-                  onChange={(val) => setSupplierName(val)}
-                  placeholder="-- انتخاب یا جستجوی تامین‌کننده --"
-                  options={supplierOptions}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="sm:col-span-2 lg:col-span-1">
-                <label className="block font-bold text-slate-700 mb-1">انبار مقصد ورود کالا:</label>
-                <input
-                  type="text"
-                  placeholder="انبار پیش‌فرض سیستم"
-                  value={targetWarehouse}
-                  onChange={e => setTargetWarehouse(e.target.value)}
-                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                />
-              </div>
-
-              <div className="sm:col-span-2 lg:col-span-3">
-                <label className="block font-bold text-slate-700 mb-1">یادداشت و توضیحات سند:</label>
-                <input
-                  type="text"
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                />
-              </div>
-            </div>
+            <ProjectDirectOrderFields
+              supplierId={supplierId}
+              onSupplierChange={setSupplierId}
+              supplierOptions={supplierOptions}
+              warehouses={warehouses}
+              targetWarehouse={targetWarehouse}
+              onWarehouseChange={setTargetWarehouse}
+              requiredDate={orderDate}
+              onRequiredDateChange={setOrderDate}
+              notes={notes}
+              onNotesChange={setNotes}
+            />
           )}
 
           {/* Items Table Section */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-800 text-sm">اقلام قابل سفارش ({orderRows.length} مورد کسری)</span>
+                <span className="font-bold text-slate-800 text-sm">اقلام قابل سفارش ({toPersianDigits(orderRows.length)} مورد کسری)</span>
                 <span className="text-xs text-slate-500">
-                  ({selectedRows.length} قلم انتخاب شده)
+                  ({toPersianDigits(selectedRows.length)} قلم انتخاب شده)
                 </span>
               </div>
               <div className="flex items-center gap-2 text-xs">
@@ -470,18 +417,14 @@ export function CreatePurchaseOrderModal({
                           ) : (
                             <div className="flex items-center gap-1.5">
                               <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                              <select
-                                className="p-1 border border-amber-300 rounded text-[11px] bg-amber-50 text-amber-950 font-bold focus:outline-none"
-                                onChange={e => handleAssignWarehouseItem(idx, Number(e.target.value))}
-                                defaultValue=""
-                              >
-                                <option value="" disabled>انتخاب کالای انبار...</option>
-                                {warehouseItems.map(w => (
-                                  <option key={w.id} value={w.id}>
-                                    {w.name} ({w.code})
-                                  </option>
-                                ))}
-                              </select>
+                              {/* v9.0.423 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه کالاهای انبار */}
+                              <SearchableSelect
+                                className="min-w-[180px]"
+                                value=""
+                                onChange={value => { if (value) handleAssignWarehouseItem(idx, Number(value)); }}
+                                options={warehouseItems.map(w => ({ value: w.id, label: `${w.name} (${w.code})` }))}
+                                placeholder="انتخاب کالای انبار"
+                              />
                             </div>
                           )}
                         </td>
@@ -526,7 +469,7 @@ export function CreatePurchaseOrderModal({
             <div className="flex items-center gap-2 text-amber-900">
               <span className="font-bold">مجموع اقلام انتخابی:</span>
               <span className="px-2 py-0.5 bg-amber-200 text-amber-950 font-bold rounded-md font-mono">
-                {selectedRows.length} قلم
+                {toPersianDigits(selectedRows.length)} قلم
               </span>
             </div>
             <div className="flex items-center gap-2 text-amber-950">
@@ -559,7 +502,7 @@ export function CreatePurchaseOrderModal({
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  {orderMode === 'requisition' ? 'ثبت و ارسال درخواست به کارتابل تدارکات' : 'صدور قطعی سفارش خرید در سیستم'}
+                  {mode === 'requisition' ? 'ثبت و ارسال درخواست به کارتابل تدارکات' : 'صدور سفارش خرید پیش‌نویس'}
                 </>
               )}
             </button>

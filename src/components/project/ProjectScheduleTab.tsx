@@ -1,19 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Users, Calendar, Plus, Trash2, Check, RefreshCw, Wrench, Tag, Calculator, Sparkles, Search, UserCheck, X, CheckCircle2, Coins, Briefcase } from 'lucide-react';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 import { 
   ProductionProject, ProjectStage, ProjectProductItem, 
   TaskAssignmentItem, ProductStageSchedule, ProjectStageSchedulesMap 
 } from '../../types';
 import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
-import { extractDateString, errorMessageOf, isoToJalaliDate, formatPersianDate, getTodayIsoDate } from '../../utils';
+import { errorMessageOf, formatPersianDate, getTodayIsoDate, toPersianDigits, toStorageDate } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
+import { SearchableSelect } from '../SearchableSelect';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
 import { useProjectVersion } from '../../hooks/useProjectVersion';
+import { useProjectPermissions } from '../../hooks/useProjectPermissions';
 import {
   isScheduleRowLogged, scheduleLogItem, withPieceworkTask, withScheduleLogLink, withScheduleRowIds,
   type ScheduleLogItem, type ScheduleRowRef
@@ -56,7 +55,10 @@ export default function ProjectScheduleTab({
   // v9.0.283 (TD-747، تصمیم ت۶ الف بسته ۱۱): روز کارکرد «ثبت کارمزد»، پیش‌فرض امروز در منطقه زمانی نمایش؛ نه تاریخ شروع کار یا پروژه
   const [logDate, setLogDate] = useState<string>(() => getTodayIsoDate());
   // v9.0.320 (TD-805): «ثبت کارمزد» همان کلید API ثبت کارکرد را می‌پرسد
-  const { canLog } = usePieceworkPermissions();
+  const { canLog: holdsPieceworkLog } = usePieceworkPermissions();
+  // v9.0.417 (TD-752): برنامه با `PUT /projects/:id` (`projects.edit`) ذخیره می‌شود و «ثبت کارمزد» پیش از ثبت کارکرد برنامه را ذخیره می‌کند
+  const { canEdit } = useProjectPermissions();
+  const canLog = holdsPieceworkLog && canEdit;
 
   // Load latest presets and personnel if missing
   useEffect(() => {
@@ -67,6 +69,8 @@ export default function ProjectScheduleTab({
           fetchJson('/settings', { signal: controller.signal }).catch((err) => {
             if (err?.name === 'AbortError') throw err;
             console.error('Failed to load settings in schedule tab:', err);
+            // v9.0.422 (TD-766): شکست خواندن دیگر مثل «بی الگو» دیده نمی‌شود
+            toast.error('الگوهای گردش کار از تنظیمات دریافت نشد؛ الگوی پیش‌فرض به کار رفت');
             return [];
           }),
           initialPersonnelList.length === 0
@@ -97,6 +101,7 @@ export default function ProjectScheduleTab({
               }
             } catch (e) {
               console.error('Error parsing workflow presets setting', e);
+              toast.error('الگوهای گردش کار در تنظیمات خوانا نیستند؛ الگوی پیش‌فرض به کار رفت');
             }
           }
         }
@@ -266,7 +271,7 @@ export default function ProjectScheduleTab({
       addedCount += newTasksToAdd.length;
     });
 
-    toast.success(`الگوی «${stageTitle}» با موفقیت اعمال شد (${addedCount} عنوان کاری جدید اضافه شد).`);
+    toast.success(`الگوی «${stageTitle}» با موفقیت اعمال شد (${toPersianDigits(addedCount)} عنوان کاری جدید اضافه شد).`);
   };
 
   // Add a task under a specific stage & product
@@ -364,6 +369,8 @@ export default function ProjectScheduleTab({
       setRecordedLogs(list);
     } catch (err) {
       console.error('Failed to load project piecework logs:', err);
+      // v9.0.422 (TD-766): فهرست خالی کارکردها با شکست خواندن یکی نیست
+      toast.error(errorMessageOf(err) || 'خطا در دریافت کارکردهای ثبت‌شده پروژه');
     } finally {
       setLoadingLogs(false);
     }
@@ -487,7 +494,7 @@ export default function ProjectScheduleTab({
       });
 
       const ids = await postScheduleLogs(itemsToLog);
-      toast.success(`تعداد ${itemsToLog.length} رکورد کارکرد برای مرحله «${stageTitle}» با موفقیت ثبت شد.`);
+      toast.success(`تعداد ${toPersianDigits(itemsToLog.length)} رکورد کارکرد برای مرحله «${stageTitle}» با موفقیت ثبت شد.`);
       markRowsLogged(refs.map((ref, i) => ({ ref, logId: ids[i] })).filter(l => Boolean(l.logId)));
       void fetchProjectPieceworkLogs();
     } catch (err) {
@@ -535,7 +542,7 @@ export default function ProjectScheduleTab({
         toast.error(res?.error || 'خطا در ذخیره‌سازی برنامه‌ریزی');
       }
     } catch (err) {
-      toast.error(errorMessageOf(err) || 'خطا در ارتباط با سرور');
+      toast.error(errorMessageOf(err) || 'خطا در ارتباط با سامانه');
     } finally {
       setSaving(false);
     }
@@ -575,14 +582,18 @@ export default function ProjectScheduleTab({
             </span>
           </div>
 
-          <button
-            onClick={handleSaveSchedules}
-            disabled={saving}
-            className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md disabled:opacity-50 shrink-0 cursor-pointer"
-          >
-            {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            ذخیره برنامه‌ریزی
-          </button>
+          {canEdit ? (
+            <button
+              onClick={handleSaveSchedules}
+              disabled={saving}
+              className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md disabled:opacity-50 shrink-0 cursor-pointer"
+            >
+              {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              ذخیره برنامه‌ریزی
+            </button>
+          ) : (
+            <span className="text-[11px] font-bold text-amber-300 shrink-0">فقط مشاهده: ویرایش برنامه مجوز «ویرایش پروژه و مراحل تولید» می‌خواهد.</span>
+          )}
         </div>
       </div>
 
@@ -623,7 +634,7 @@ export default function ProjectScheduleTab({
                   </div>
                   <h4 className="font-bold text-slate-900 text-xs">{stg.title}</h4>
                   <span className="text-[11px] text-slate-500 font-semibold bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                    {products.length} محصول
+                    {toPersianDigits(products.length)} محصول
                   </span>
                 </div>
 
@@ -647,15 +658,17 @@ export default function ProjectScheduleTab({
                   )}
 
                   {/* Preset Template Apply Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleApplyStagePreset(stg.id, stg.title)}
-                    className="px-2.5 py-1 text-[11px] font-bold text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
-                    title="اعمال الگو و عناوین کاری تعریف‌شده در تنظیمات برای این مرحله"
-                  >
-                    <Sparkles className="w-3 h-3 text-indigo-600" />
-                    بارگذاری الگوی عناوین کاری {defaultTasksForStage.length > 0 ? `(${defaultTasksForStage.length} کار)` : ''}
-                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => handleApplyStagePreset(stg.id, stg.title)}
+                      className="px-2.5 py-1 text-[11px] font-bold text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                      title="اعمال الگو و عناوین کاری تعریف‌شده در تنظیمات برای این مرحله"
+                    >
+                      <Sparkles className="w-3 h-3 text-indigo-600" />
+                      بارگذاری الگوی عناوین کاری {defaultTasksForStage.length > 0 ? `(${toPersianDigits(defaultTasksForStage.length)} کار)` : ''}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -695,34 +708,24 @@ export default function ProjectScheduleTab({
                           <div className="flex items-center gap-1 text-[11px] text-slate-600">
                             <Calendar className="w-3.5 h-3.5 text-blue-600" />
                             <span>از:</span>
-                            <DatePicker
-                              value={isoToJalaliDate(sched.startDate) || sched.startDate || ''}
-                              onChange={(val: any) => {
-                                const formatted = extractDateString(val);
-                                updateProductSchedule(stg.id, p.id, prev => ({ ...prev, startDate: formatted }));
-                              }}
-                              calendar={persian}
-                              locale={persian_fa}
-                              calendarPosition="bottom-right"
+                            <JalaliDateInput
+                              value={toStorageDate(sched.startDate || '') || ''}
+                              onChange={iso => updateProductSchedule(stg.id, p.id, prev => ({ ...prev, startDate: iso }))}
+                              disabled={!canEdit}
                               placeholder="شروع..."
-                              inputClass="w-26 px-2 py-0.5 border border-slate-300 rounded-lg font-mono text-center text-xs bg-white cursor-pointer focus:ring-1 focus:ring-amber-500"
+                              className="w-26 px-2 py-0.5 border border-slate-300 rounded-lg font-mono text-center text-xs bg-white cursor-pointer focus:ring-1 focus:ring-amber-500"
                               containerClassName="inline-block"
                             />
                           </div>
 
                           <div className="flex items-center gap-1 text-[11px] text-slate-600">
                             <span>تا:</span>
-                            <DatePicker
-                              value={isoToJalaliDate(sched.endDate) || sched.endDate || ''}
-                              onChange={(val: any) => {
-                                const formatted = extractDateString(val);
-                                updateProductSchedule(stg.id, p.id, prev => ({ ...prev, endDate: formatted }));
-                              }}
-                              calendar={persian}
-                              locale={persian_fa}
-                              calendarPosition="bottom-right"
+                            <JalaliDateInput
+                              value={toStorageDate(sched.endDate || '') || ''}
+                              onChange={iso => updateProductSchedule(stg.id, p.id, prev => ({ ...prev, endDate: iso }))}
+                              disabled={!canEdit}
                               placeholder="تحویل..."
-                              inputClass="w-26 px-2 py-0.5 border border-slate-300 rounded-lg font-mono text-center text-xs bg-white cursor-pointer focus:ring-1 focus:ring-amber-500"
+                              className="w-26 px-2 py-0.5 border border-slate-300 rounded-lg font-mono text-center text-xs bg-white cursor-pointer focus:ring-1 focus:ring-amber-500"
                               containerClassName="inline-block"
                             />
                           </div>
@@ -734,16 +737,18 @@ export default function ProjectScheduleTab({
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-slate-700 text-[11px] flex items-center gap-1">
                             <Wrench className="w-3.5 h-3.5 text-amber-600" />
-                            عناوین کاری و پرسنل مجری ({sched.tasks?.length || 0} آیتم)
+                            عناوین کاری و پرسنل مجری ({toPersianDigits(sched.tasks?.length || 0)} مورد)
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleAddTask(stg.id, p.id)}
-                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[10px] rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
-                          >
-                            <Plus className="w-3 h-3" />
-                            افزودن کار دستی
-                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => handleAddTask(stg.id, p.id)}
+                              className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[10px] rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" />
+                              افزودن کار دستی
+                            </button>
+                          )}
                         </div>
 
                         {sched.tasks && sched.tasks.length > 0 ? (
@@ -754,21 +759,19 @@ export default function ProjectScheduleTab({
                                 <div key={task.id || tIdx} className="p-2.5 bg-white border border-slate-200 rounded-xl grid grid-cols-1 sm:grid-cols-12 gap-2 items-center shadow-2xs hover:border-slate-300 transition-colors">
                                   {/* Piecework Task Select / Custom Input */}
                                   <div className="sm:col-span-4 flex items-center gap-1">
-                                    <select
+                                    {/* v9.0.423 (TD-767): فهرست جست‌وجوپذیر به جای select بومی روی همه عناوین کارمزدی */}
+                                    <SearchableSelect
+                                      className="w-full"
+                                      disabled={!canEdit}
                                       value={task.taskId ? String(task.taskId) : ''}
-                                      onChange={(e) => handleUpdateTask(stg.id, p.id, tIdx, 'taskId', e.target.value)}
-                                      className="w-full px-2 py-1 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-amber-500 bg-white"
-                                    >
-                                      <option value="">-- انتخاب از عناوین کارمزدی --</option>
-                                      {pieceworkTasksList.map((pt) => (
-                                        <option key={pt.id} value={pt.id}>
-                                          {pt.title} 
-                                        </option>
-                                      ))}
-                                    </select>
+                                      onChange={(value) => handleUpdateTask(stg.id, p.id, tIdx, 'taskId', value)}
+                                      options={pieceworkTasksList.map((pt) => ({ value: pt.id, label: pt.title }))}
+                                      placeholder="انتخاب از عناوین کارمزدی"
+                                    />
                                     {!task.taskId && (
                                       <input
                                         type="text"
+                                        disabled={!canEdit}
                                         value={task.taskTitle || ''}
                                         onChange={(e) => handleUpdateTask(stg.id, p.id, tIdx, 'taskTitle', e.target.value)}
                                         placeholder="یا عنوان دستی..."
@@ -781,6 +784,7 @@ export default function ProjectScheduleTab({
                                   <div className="sm:col-span-3">
                                     <button
                                       type="button"
+                                      disabled={!canEdit}
                                       onClick={() => {
                                         setPickingTarget({ stageId: stg.id, productId: p.id, taskIdx: tIdx });
                                         setPersonnelSearch('');
@@ -806,6 +810,7 @@ export default function ProjectScheduleTab({
                                     <input
                                       type="number"
                                       min="1"
+                                      disabled={!canEdit}
                                       value={task.quantity}
                                       onChange={(e) => handleUpdateTask(stg.id, p.id, tIdx, 'quantity', Number(e.target.value) || 0)}
                                       placeholder="تعداد"
@@ -846,7 +851,7 @@ export default function ProjectScheduleTab({
 
                                   {/* Delete (v9.0.282، TD-736: ردیف ثبت‌شده حذف نمی‌شود تا پیوند کارکردش نماند) */}
                                   <div className="sm:col-span-1 text-center">
-                                    {!isScheduleRowLogged(task) && <button
+                                    {canEdit && !isScheduleRowLogged(task) && <button
                                       type="button"
                                       onClick={() => handleRemoveTask(stg.id, p.id, tIdx)}
                                       className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
@@ -885,7 +890,7 @@ export default function ProjectScheduleTab({
               <h4 className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-2">
                 کارمزدهای قطعی ثبت‌شده برای این پروژه در ماژول حقوق و دستمزد
                 <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[11px] font-mono font-bold">
-                  {recordedLogs.length} رکورد
+                  {toPersianDigits(recordedLogs.length)} رکورد
                 </span>
               </h4>
               <p className="text-[11px] text-slate-500 mt-0.5">
@@ -1083,7 +1088,7 @@ export default function ProjectScheduleTab({
 
             {/* Modal Footer */}
             <div className="p-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-slate-500 text-[11px]">
-              <span>مجموع پرسنل فعال: {personnelList.length} نفر</span>
+              <span>مجموع پرسنل فعال: {toPersianDigits(personnelList.length)} نفر</span>
               <button
                 type="button"
                 onClick={() => setPickingTarget(null)}

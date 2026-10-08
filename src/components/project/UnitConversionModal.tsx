@@ -1,6 +1,7 @@
 import React from 'react';
 import { Scale, X } from 'lucide-react';
 import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
+import { toPersianDigits } from '../../utils';
 
 interface UnitConversionModalProps {
   isOpen: boolean;
@@ -66,7 +67,7 @@ export function UnitConversionModal({
               نام کالا: {conversionTarget.itemName} {conversionTarget.itemCode ? `(${conversionTarget.itemCode})` : ''}
             </p>
             <p className="text-amber-900">
-              مقدار مورد نیاز پروژه: <strong className="font-mono text-sm">{conversionTarget.originalQty} {conversionTarget.originalUnit}</strong>
+              مقدار مورد نیاز پروژه: <strong className="font-mono text-sm">{toPersianDigits(conversionTarget.originalQty)} {conversionTarget.originalUnit}</strong>
             </p>
             <p className="text-amber-800 text-[11px]">
               واحد موجود در انبار: <strong>{conversionTarget.warehouseUnit}</strong>

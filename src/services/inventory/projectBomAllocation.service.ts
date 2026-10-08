@@ -17,6 +17,7 @@ import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../errors/customErrors.js';
 
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { isProjectOpenForAllocation, projectStatusLabel } from '../../lib/projects/projectStatus.js';
 export interface BomAllocationItemInput {
   itemId: number;
   quantity: number;
@@ -132,6 +133,14 @@ async function lockProjectForAllocation(txEngine: DbExecutor, projectId: number,
 
   if (!project) {
     throw new NotFoundError(`پروژه تولید با شناسه ${projectId} یافت نشد.`);
+  }
+  // v9.0.410 (TD-759، تصمیم ت۹ الف): پروژه لغوشده یا تکمیل‌شده مواد تازه نمی‌گیرد؛ پیش‌تر ۴ واحد به پروژه لغوشده ۲۰۰ می‌گرفت و
+  // سند ۱۴۰۲ صادر می‌شد. آزادسازی تخصیص‌های پیشین آزاد است
+  if (!isProjectOpenForAllocation(project.status)) {
+    throw new ValidationError(
+      `پروژه «${project.projectCode}» ${projectStatusLabel(project.status)} است و مواد تازه به آن تخصیص نمی‌یابد؛ تخصیص‌های پیشین آن آزادشدنی است.`,
+      { projectId, status: project.status }, 'PROJECT_CLOSED_FOR_ALLOCATION'
+    );
   }
 
   const activeWHs = await txEngine

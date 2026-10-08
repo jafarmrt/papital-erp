@@ -1,13 +1,16 @@
 import { Router } from 'express';
-import { eq, desc, and, asc } from 'drizzle-orm';
+import { eq, and, asc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { productionProjects, projectStages, items } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { READ_PERMISSIONS, RECORD_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { PROJECT_CREATE_PERMISSIONS, PROJECT_DELETE_PERMISSIONS, PROJECT_EDIT_PERMISSIONS } from '../lib/permissions/projectPermissions.js';
 import { parsePickListLimit } from '../lib/pagination.js';
 import { listProjectPicks } from '../services/projects/projectPickList.js';
+import { listProjectPage } from '../services/projects/projectList.js';
+import { PROJECT_LIST_MAX_LIMIT, PROJECT_LIST_PRIORITY_FILTERS, PROJECT_LIST_STATUS_FILTERS, projectStageProgress } from '../lib/projects/projectList.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
@@ -331,14 +334,8 @@ export function formatProject(
 ) {
   if (!p) return null;
   const stages = (rawStages || []).map(formatStage).filter((s): s is FormattedStage => s !== null);
-  const totalStages = stages.length;
-  const completedStages = stages.filter((s) => s.status === 'completed').length;
-  
-  let overallProgress = 0;
-  if (totalStages > 0) {
-    const sumProgress = stages.reduce((acc: number, s) => acc + (s.progressPercent || (s.status === 'completed' ? 100 : 0)), 0);
-    overallProgress = Math.round(sumProgress / totalStages);
-  }
+  // v9.0.412 (TD-743): همان قاعده پیشرفت فهرست پروژه‌ها
+  const { totalStages, completedStages, progressPercent: overallProgress } = projectStageProgress(stages);
 
   const projectCode = p.projectCode ?? p.project_code ?? '';
   const customerId = p.customerId ?? p.customer_id ?? null;
@@ -431,69 +428,20 @@ router.get('/projects/options', authorizePermission(...READ_PERMISSIONS.projectO
   res.json({ success: true, data: await listProjectPicks({ status: query.status, search: query.search, limit: parsePickListLimit(query.limit) }) });
 }));
 
-// GET /api/projects - List all production projects with summary progress
-router.get('/projects', authorizePermission(...READ_PERMISSIONS.projects), asyncHandler(async (req, res) => {
-  try {
-    const { status, priority, search } = req.query;
+const projectListValidation = z.object({
+  query: z.object({
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(PROJECT_LIST_MAX_LIMIT).optional(),
+    search: z.string().max(200).optional(),
+    status: z.enum(PROJECT_LIST_STATUS_FILTERS).optional(),
+    priority: z.enum(PROJECT_LIST_PRIORITY_FILTERS).optional(),
+  }),
+});
 
-    const allProjects = await orm
-      .select({
-        project: productionProjects,
-        itemImage: items.image,
-        itemThumbnail: items.thumbnail,
-      })
-      .from(productionProjects)
-      .leftJoin(items, eq(productionProjects.itemId, items.id))
-      .where(eq(productionProjects.isDeleted, 0))
-      .orderBy(desc(productionProjects.createdAt));
-
-    // Fetch all active stages to calculate progress
-    const allStages = await orm
-      .select()
-      .from(projectStages)
-      .where(eq(projectStages.isDeleted, 0))
-      .orderBy(asc(projectStages.stageOrder));
-
-    // Map stages to projects
-    const stagesByProjectMap = new Map<number, StageLike[]>();
-    for (const stage of allStages) {
-      if (!stagesByProjectMap.has(stage.projectId)) {
-        stagesByProjectMap.set(stage.projectId, []);
-      }
-      stagesByProjectMap.get(stage.projectId)!.push(stage);
-    }
-
-    const result = allProjects.map(({ project, itemImage, itemThumbnail }) => {
-      const rawStages = stagesByProjectMap.get(project.id) || [];
-      return formatProject(project, rawStages, { itemImage, itemThumbnail });
-    });
-
-    // Apply optional client filters
-    let filtered = result.filter((p): p is NonNullable<typeof p> => p !== null);
-
-    if (status && typeof status === 'string' && status !== 'all') {
-      filtered = filtered.filter(p => p.status === status);
-    }
-
-    if (priority && typeof priority === 'string' && priority !== 'all') {
-      filtered = filtered.filter(p => p.priority === priority);
-    }
-
-    if (search && typeof search === 'string' && search.trim()) {
-      const q = search.trim().toLowerCase();
-      filtered = filtered.filter(p => 
-        (p.project_code && p.project_code.toLowerCase().includes(q)) ||
-        (p.title && p.title.toLowerCase().includes(q)) ||
-        (p.customer_name && p.customer_name.toLowerCase().includes(q)) ||
-        (p.item_name && p.item_name.toLowerCase().includes(q)) ||
-        (p.item_code && p.item_code.toLowerCase().includes(q))
-      );
-    }
-
-    res.json(filtered);
-  } catch (err) {
-    throw err;
-  }
+// v9.0.412 (TD-743): یک صفحه خلاصه با صافی‌های SQL؛ پرونده کامل فقط در GET /projects/:id
+router.get('/projects', authorizePermission(...READ_PERMISSIONS.projects), validate(projectListValidation), asyncHandler(async (req, res) => {
+  const query = req.query as { page?: number; limit?: number; search?: string; status?: string; priority?: string };
+  res.json(await listProjectPage(query));
 }));
 
 // GET /api/projects/:id - Get single project details with stages
@@ -533,7 +481,7 @@ router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.produ
 }));
 
 // POST /api/projects - Create a new production project with stages
-router.post('/projects', authorizePermission('projects.create'), validate(createProjectSchema), asyncHandler(async (req, res) => {
+router.post('/projects', authorizePermission(...PROJECT_CREATE_PERMISSIONS), validate(createProjectSchema), asyncHandler(async (req, res) => {
   try {
     const { 
       title, customer_id, customer_name, item_id, item_code, item_name, 
@@ -585,7 +533,7 @@ router.post('/projects', authorizePermission('projects.create'), validate(create
 }));
 
 // PUT /api/projects/:id - Edit project details
-router.put('/projects/:id', authorizePermission('projects.edit'), validate(updateProjectSchema), asyncHandler(async (req, res) => {
+router.put('/projects/:id', authorizePermission(...PROJECT_EDIT_PERMISSIONS), validate(updateProjectSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
@@ -637,7 +585,7 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
 }));
 
 // POST /api/projects/:id/add-to-inventory - Add produced project products to warehouse stock
-router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit'), idempotency({ scope: 'project_delivery' }), validate(addProjectToInventorySchema), asyncHandler(async (req, res) => {
+router.post('/projects/:id/add-to-inventory', authorizePermission(...PROJECT_EDIT_PERMISSIONS), idempotency({ scope: 'project_delivery' }), validate(addProjectToInventorySchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { itemsToAdd, markCompleted, overDeliveryReason } = req.body;
@@ -659,7 +607,7 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
       action: 'UPDATE',
       entity: 'پروژه تولید',
       entityId: String(id),
-      description: `افزایش موجودی انبار بابت تحویل ${result.addedCount} قلم محصول از پروژه ${result.projectCode}${result.refNumber ? ` با رسید تولید ${result.refNumber}` : ''}${result.overDeliveries.length > 0 ? ` (تحویل بیش از برنامه با دلیل: ${overDeliveryReason})` : ''}`,
+      description: `افزایش موجودی انبار بابت تحویل ${toPersianDigits(result.addedCount)} قلم محصول از پروژه ${result.projectCode}${result.refNumber ? ` با رسید تولید ${result.refNumber}` : ''}${result.overDeliveries.length > 0 ? ` (تحویل بیش از برنامه با دلیل: ${overDeliveryReason})` : ''}`,
       ...(result.overDeliveries.length > 0 ? { details: { overDeliveries: result.overDeliveries, overDeliveryReason } } : {})
     });
 
@@ -676,7 +624,7 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
 }));
 
 // DELETE /api/projects/:id - Soft delete project and stages
-router.delete('/projects/:id', authorizePermission('projects.delete'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/projects/:id', authorizePermission(...PROJECT_DELETE_PERMISSIONS), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
@@ -701,7 +649,7 @@ router.delete('/projects/:id', authorizePermission('projects.delete'), validate(
 }));
 
 // POST /api/projects/:id/stages - Add a stage to project
-router.post('/projects/:id/stages', authorizePermission('projects.edit'), validate(createProjectStageSchema), asyncHandler(async (req, res) => {
+router.post('/projects/:id/stages', authorizePermission(...PROJECT_EDIT_PERMISSIONS), validate(createProjectStageSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     const { title, status, start_date, end_date, assigned_personnel, required_resources, notes } = req.body;
@@ -723,7 +671,7 @@ router.post('/projects/:id/stages', authorizePermission('projects.edit'), valida
 }));
 
 // PUT /api/projects/:id/stages/:stageId - Update a stage
-router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit'), validate(updateProjectStageSchema), asyncHandler(async (req, res) => {
+router.put('/projects/:id/stages/:stageId', authorizePermission(...PROJECT_EDIT_PERMISSIONS), validate(updateProjectStageSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     const stageId = parseInt(req.params.stageId, 10);
@@ -756,7 +704,7 @@ router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit')
 }));
 
 // DELETE /api/projects/:id/stages/:stageId - Delete a stage
-router.delete('/projects/:id/stages/:stageId', authorizePermission('projects.edit'), validate(deleteProjectStageSchema), asyncHandler(async (req, res) => {
+router.delete('/projects/:id/stages/:stageId', authorizePermission(...PROJECT_EDIT_PERMISSIONS), validate(deleteProjectStageSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     const stageId = parseInt(req.params.stageId, 10);
@@ -804,7 +752,7 @@ const updateProductProgressSchema = z.object({
   })
 });
 
-router.put('/projects/:id/product-progress', authorizePermission('projects.edit'), validate(updateProductProgressSchema), asyncHandler(async (req, res) => {
+router.put('/projects/:id/product-progress', authorizePermission(...PROJECT_EDIT_PERMISSIONS), validate(updateProductProgressSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
