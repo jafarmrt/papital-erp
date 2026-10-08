@@ -3,11 +3,11 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
-/** System health page findings of package 1 (B01-13, B01-39, B01-43) */
+/** System health page and setup findings of package 1 (B01-13, B01-39, B01-42, B01-43) */
 export async function runSystemHealthTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return [
     ...await runUnknownSubsystemTest(shouldRun), ...await runStorageDirectoriesTest(shouldRun),
-    ...await runStuckOutboxCountTest(shouldRun),
+    ...await runStuckOutboxCountTest(shouldRun), ...await runServerWordingTest(shouldRun),
   ];
 }
 
@@ -217,6 +217,89 @@ async function runStuckOutboxCountTest(shouldRun: ShouldRun): Promise<TestCaseRe
       error: err instanceof Error ? err.message : String(err),
     })];
   } finally {
+    await pool.query(`DELETE FROM outbox_events WHERE event_id = $1`, [eventId]);
+  }
+}
+
+/**
+ * Package 1 finding B01-42, TD-622 (decision t8): the server texts of the health page and the setup wizard. v9.0.361
+ * answered «پایگاه‌داده PostgreSQL متصل و آماده است», «…در حالت Processing با موفقیت بازنشانی شدند» with Latin digits,
+ * integrity checks naming «Schema», «Outbox / DLQ», «Replay» and «SLA», accepted a setup without a company name (which
+ * then printed «سامانه جامع ERP پاپیتال» on invoices) and refused a concurrent setup with
+ * «Another setup is in progress. Please wait.».
+ */
+async function runServerWordingTest(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
+  const id = 'reg_setup_health_server_wording_td_622';
+  if (!shouldRun(id, 'td622', 'b01-42', 'health', 'setup', 'package1')) return [];
+  const name = 'v9.0.362: health, integrity check, queue reset and setup messages are Persian with Persian digits; setup needs a company name (TD-622)';
+  const tStart = Date.now();
+  const { pool } = await import('../../db/drizzle.js');
+  const eventId = `td622-${Date.now()}`;
+  const lockClient = await pool.connect();
+  let locked = false;
+  try {
+    const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+    const app = await getTestApp();
+    const admin = await getAdminSession();
+    const wrong: string[] = [];
+    const latin = (text: unknown) => /[A-Za-z0-9]/.test(String(text ?? ''));
+
+    const health = await request(app).get('/api/system/health').set('Cookie', admin.cookie);
+    const dbMessage = (health.body as { database?: { message?: string } }).database?.message;
+    if (health.status !== 200 || !dbMessage || latin(dbMessage)) wrong.push(`database message ${JSON.stringify(dbMessage)}`);
+
+    const check = await request(app).get('/api/system/reconciliation-check').set('Cookie', admin.cookie);
+    const checks = ((check.body as { checks?: Array<Record<string, string>> }).checks) || [];
+    if (check.status !== 200 || checks.length === 0) wrong.push(`integrity check answered ${check.status}`);
+    for (const c of checks) {
+      for (const field of ['category', 'title', 'details'] as const) {
+        if (latin(c[field])) wrong.push(`integrity check ${c.id} ${field}: ${JSON.stringify(c[field])}`);
+      }
+    }
+
+    await pool.query(
+      `INSERT INTO outbox_events (event_id, event_type, aggregate_type, aggregate_id, status, occurred_at)
+       VALUES ($1, 'td622.test', 'test', 'td622', 'processing', now() - interval '10 minutes')`, [eventId]);
+    const reset = await request(app).post('/api/system/reconciliation-fix').set('Cookie', admin.cookie)
+      .set('x-csrf-token', admin.csrfToken).send({ action: 'clear_stuck_outbox' });
+    const resetMessage = String((reset.body as { message?: string }).message ?? '');
+    if (reset.status !== 200 || latin(resetMessage) || !/[۰-۹]/.test(resetMessage)) wrong.push(`queue reset message ${JSON.stringify(resetMessage)}`);
+    const reconciliation: { requeueResultMessage?: (n: number) => string } = await import('../../services/system/systemReconciliation.service.js');
+    if (typeof reconciliation.requeueResultMessage !== 'function') wrong.push('no shared message for the replay of failed events');
+    for (const n of [0, 3]) {
+      const text = reconciliation.requeueResultMessage?.(n);
+      if (text !== undefined && latin(text)) wrong.push(`replay message for ${n}: ${JSON.stringify(text)}`);
+    }
+
+    const token = (process.env.ERP_SETUP_TOKEN || 'papital_erp_setup_token_2026').trim();
+    const setupBody = { username: 'td622_owner', password: 'abcd12345678', fullName: 'مدیر آزمون' };
+    const noCompany = await request(app).post('/api/setup').set('x-setup-token', token).send(setupBody);
+    const noCompanyText = JSON.stringify(noCompany.body);
+    const { SETUP_COMPANY_NAME_REQUIRED_MESSAGE } = await import('../../lib/auth/setupRules.js');
+    if (noCompany.status !== 400 || !noCompanyText.includes(SETUP_COMPANY_NAME_REQUIRED_MESSAGE)) {
+      wrong.push(`setup without a company name answered ${noCompany.status} ${noCompanyText.slice(0, 160)}`);
+    }
+
+    await lockClient.query('SELECT pg_advisory_lock(79234)');
+    locked = true;
+    const busy = await request(app).post('/api/setup').set('x-setup-token', token).send({ ...setupBody, companyName: 'کارگاه آزمون' });
+    const busyBody = busy.body as { message?: string; code?: string; error?: { message?: string; code?: string } };
+    const busyMessage = busyBody.message ?? busyBody.error?.message;
+    if (busy.status !== 409 || !busyMessage || latin(busyMessage)) wrong.push(`concurrent setup answered ${busy.status} ${JSON.stringify(busy.body).slice(0, 160)}`);
+
+    if (wrong.length > 0) throw new Error(wrong.join('; '));
+    return [makeTestCase({
+      id, name, layer: 'regression', executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+      details: `database «${dbMessage}», ${checks.length} integrity checks without Latin text, reset «${resetMessage}», setup without company 400, concurrent setup 409 «${busyMessage}»`,
+    })];
+  } catch (err) {
+    return [makeTestCase({
+      id, name, layer: 'regression', executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+      error: err instanceof Error ? err.message : String(err),
+    })];
+  } finally {
+    if (locked) await lockClient.query('SELECT pg_advisory_unlock(79234)').catch(() => undefined);
+    lockClient.release();
     await pool.query(`DELETE FROM outbox_events WHERE event_id = $1`, [eventId]);
   }
 }

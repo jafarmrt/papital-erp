@@ -10118,8 +10118,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       type Scan = { checks?: Array<{ id: string; details: string }> };
       const health = async () => { const r = await get('/api/system/health'); return { status: r.status, body: r.body as Health }; };
       const scan = async () => { const r = await get('/api/system/reconciliation-check'); return { status: r.status, body: r.body as Scan }; };
+      // v9.0.362 (TD-622): the details print counts in Persian digits; an ok check names no count
       const scanNumber = (s: Scan, id: string, re: RegExp) => {
-        const details = s.checks?.find(c => c.id === id)?.details ?? '';
+        const details = (s.checks?.find(c => c.id === id)?.details ?? '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
         const m = details.match(re);
         return m ? Number(m[1]) : 0;
       };
@@ -10147,7 +10148,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       check(h1.status === 200 && h1.body.outbox?.dlqCount === wantUnresolved,
         `dlqCount صفحه سلامت باید فقط ردیف‌های حل‌نشده (${wantUnresolved}) را بشمارد (وضعیت ${h1.status}، دریافتی ${h1.body.outbox?.dlqCount})`);
       const s1 = await scan();
-      check(s1.status === 200 && scanNumber(s1.body, 'outbox_dlq', /تعداد (\d+) رویداد/) === wantUnresolved,
+      check(s1.status === 200 && scanNumber(s1.body, 'outbox_dlq', /(\d+) رویداد ناموفق/) === wantUnresolved,
         `ممیزی یکپارچگی باید ${wantUnresolved} رویداد حل‌نشده DLQ گزارش کند (دریافتی ${s1.body.checks?.find(c => c.id === 'outbox_dlq')?.details})`);
 
       const requeueRes = await post('/api/system/reconciliation-fix', { action: 'requeue_dlq' });
@@ -10192,7 +10193,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       // (ب) تراز اسناد: حذف‌شده نرم ناتراز، اختلاف ۰٫۰۰۵، ردیف حذف‌شده نرم و اختلاف ۰٫۰۲ — فقط آخری ناتراز است
       const baseHealth = await health();
       const baseScan = await scan();
-      const baseUnbalanced = scanNumber(baseScan.body, 'accounting_vouchers', /تعداد (\d+) سند/);
+      const baseUnbalanced = scanNumber(baseScan.body, 'accounting_vouchers', /(\d+) سند حسابداری/);
       const baseTotal = baseHealth.body.accounting?.totalVouchers ?? -1;
       const account = await AccountingService.createAccount({
         code: `9245${suffix}`, name: `ERP-TEST-MARKER حساب TD-245 ${suffix}`, level: 'detailed', parentId: null,
@@ -10216,7 +10217,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       await addVoucher([[100.02, 0], [0, 100]]);
       const vScan = await scan();
       const vHealth = await health();
-      const scanUnbalanced = scanNumber(vScan.body, 'accounting_vouchers', /تعداد (\d+) سند/);
+      const scanUnbalanced = scanNumber(vScan.body, 'accounting_vouchers', /(\d+) سند حسابداری/);
       check(scanUnbalanced === baseUnbalanced + 1,
         `ممیزی یکپارچگی فقط سند با اختلاف ۰٫۰۲ را باید ناتراز بداند (پایه ${baseUnbalanced}، دریافتی ${scanUnbalanced}: ${vScan.body.checks?.find(c => c.id === 'accounting_vouchers')?.details})`);
       check(vHealth.body.accounting?.unbalancedVouchers === scanUnbalanced,

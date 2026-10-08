@@ -8,7 +8,7 @@ import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { logger } from '../../middleware/logger.js';
 import { errorMessageOf } from '../../utils.js';
 import {
-  SUBSYSTEM_UNKNOWN_MESSAGES, type SubsystemStatus, type OutboxHealth, type AccountingHealth, type WorkflowHealth,
+  DATABASE_HEALTH_MESSAGES, SUBSYSTEM_UNKNOWN_MESSAGES, type SubsystemStatus, type OutboxHealth, type AccountingHealth, type WorkflowHealth,
   type SubsystemHealth,
 } from '../../lib/system/subsystemHealth.js';
 import {
@@ -130,14 +130,16 @@ export class SystemHealthService {
 
   /** 1. Check DB Connection & Latency */
   static async checkDatabase(): Promise<DatabaseHealth> {
-    const dbStatus = { status: 'ok', latencyMs: 0, message: 'پایگاه‌داده PostgreSQL متصل و آماده است' };
+    // v9.0.362 (TD-622): Persian message without «PostgreSQL»; the raw error goes only to the server log
+    const dbStatus: DatabaseHealth = { status: 'ok', latencyMs: 0, message: DATABASE_HEALTH_MESSAGES.ok };
     try {
       const dbStart = Date.now();
       await orm.execute(sql`SELECT 1`);
       dbStatus.latencyMs = Date.now() - dbStart;
     } catch (e) {
+      logger.warn('Health check of the database failed', { error: errorMessageOf(e) });
       dbStatus.status = 'error';
-      dbStatus.message = `خطا در اتصال به پایگاه‌داده: ${errorMessageOf(e)}`;
+      dbStatus.message = DATABASE_HEALTH_MESSAGES.error;
     }
     return dbStatus;
   }

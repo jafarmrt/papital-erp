@@ -28,10 +28,19 @@ export const SUBSYSTEM_UNKNOWN_LABEL = 'نامعلوم';
 
 /** Persian messages of a subsystem whose own query failed (the error itself goes only to the server log) */
 export const SUBSYSTEM_UNKNOWN_MESSAGES: Readonly<Record<keyof SubsystemHealth, string>> = {
-  outbox: 'وضعیت صف رویدادها خوانده نشد؛ لاگ کارساز را ببینید.',
-  accounting: 'تراز اسناد حسابداری خوانده نشد؛ لاگ کارساز را ببینید.',
-  workflow: 'وضعیت گردش کار خوانده نشد؛ لاگ کارساز را ببینید.',
+  outbox: 'وضعیت صف رویدادها خوانده نشد؛ جزئیات در گزارش خطاهای کارساز ثبت شده است.',
+  accounting: 'تراز اسناد حسابداری خوانده نشد؛ جزئیات در گزارش خطاهای کارساز ثبت شده است.',
+  workflow: 'وضعیت گردش کار خوانده نشد؛ جزئیات در گزارش خطاهای کارساز ثبت شده است.',
 };
+
+/**
+ * v9.0.362 (TD-622، B01-42، تصمیم ت۸): پیام کارت پایگاه‌داده، بی «PostgreSQL» و بی متن خام خطا (خطا فقط در گزارش خطاهای
+ * کارساز، به انگلیسی).
+ */
+export const DATABASE_HEALTH_MESSAGES = {
+  ok: 'پایگاه‌داده متصل و آماده است.',
+  error: 'پایگاه‌داده پاسخ نداد؛ جزئیات در گزارش خطاهای کارساز ثبت شده است.',
+} as const;
 
 /** A subsystem missing from an older server's answer is unknown too, never healthy */
 export function subsystemStatusOf(health: { status?: string } | undefined): SubsystemStatus {

@@ -29,11 +29,11 @@ export const STORAGE_LOCATION_LABELS: Readonly<Record<StorageLocationKind, strin
 export const STORAGE_LOCATION_MESSAGES: Readonly<Record<StorageLocationKind, { ok: string; error: string }>> = {
   attachments: {
     ok: 'پوشه پیوست‌ها قابل نوشتن است.',
-    error: 'پوشه پیوست‌ها قابل نوشتن نیست؛ پیوست تازه ذخیره نمی‌شود. لاگ کارساز را ببینید.',
+    error: 'پوشه پیوست‌ها قابل نوشتن نیست؛ پیوست تازه ذخیره نمی‌شود. جزئیات در گزارش خطاهای کارساز ثبت شده است.',
   },
   images: {
     ok: 'پوشه تصویرها قابل نوشتن است.',
-    error: 'پوشه تصویرها قابل نوشتن نیست؛ تصویر و نشان‌واره تازه ذخیره نمی‌شود. لاگ کارساز را ببینید.',
+    error: 'پوشه تصویرها قابل نوشتن نیست؛ تصویر و نشان‌واره تازه ذخیره نمی‌شود. جزئیات در گزارش خطاهای کارساز ثبت شده است.',
   },
 };
 

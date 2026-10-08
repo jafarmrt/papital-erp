@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.362 — Setup Wizard and Health Page in Persian
+- **Fix (TD-622, B01-42, decision ت۸):** the setup wizard, the health page, its integrity check and the reset dialog show no English word or Latin digit; the company name has no default and is required by `POST /setup`, and the factory reset is confirmed by typing «حذف همه».
+
 ### v9.0.361 — Event Queue Replay Asks First
 - **Fix (TD-623, B01-43, decision ت۸):** replaying the failed events or the events stuck in the send queue asks «… دوباره اجرا شوند؟» first, and each button shows only when its queue has events; the health answer carries `outbox.stuckCount`, counted with the reset's own condition.
 

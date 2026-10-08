@@ -26,6 +26,10 @@ import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/pas
 import { FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE } from '../lib/users/profileFields.js';
 import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 import { normalizeRialDisplayUnit } from '../lib/rialDisplay.js';
+import {
+  SETUP_USERNAME_MIN_LENGTH, SETUP_USERNAME_TOO_SHORT_MESSAGE, SETUP_COMPANY_NAME_REQUIRED_MESSAGE, SETUP_IN_PROGRESS_MESSAGE,
+  SETUP_TOKEN_NOT_CONFIGURED_MESSAGE, SETUP_ALREADY_DONE_MESSAGE, SETUP_DEFAULT_PASSWORD_MESSAGE,
+} from '../lib/auth/setupRules.js';
 
 const router = Router();
 
@@ -98,10 +102,11 @@ router.get('/public-settings', asyncHandler(async (req, res) => {
 
 const setupSchema = z.object({
   body: z.object({
-    username: z.string().min(3, 'نام کاربری باید حداقل ۳ کاراکتر باشد'),
+    username: z.string().trim().min(SETUP_USERNAME_MIN_LENGTH, SETUP_USERNAME_TOO_SHORT_MESSAGE),
     password: z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE),
     fullName: z.string().min(1, 'نام و نام خانوادگی الزامی است').max(FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE),
-    companyName: z.string().optional().default(''),
+    // v9.0.362 (TD-622، تصمیم ت۸): نام شرکت روی سربرگ فاکتور چاپ می‌شود؛ پیش‌فرض ندارد و اجباری است
+    companyName: z.string({ error: SETUP_COMPANY_NAME_REQUIRED_MESSAGE }).trim().min(1, SETUP_COMPANY_NAME_REQUIRED_MESSAGE),
     warehouseName: z.string().optional().default('انبار مرکزی'),
     phone: z.string().optional().default(''),
     address: z.string().optional().default(''),
@@ -120,7 +125,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
   if (isProduction) {
     if (!configuredSetupToken || configuredSetupToken.trim() === 'papital_erp_setup_token_2026' || configuredSetupToken.trim().length < 16) {
       logger.error(`[Setup] ERP_SETUP_TOKEN is not securely configured in production environment (IP: ${req.ip})`);
-      throw new UnauthorizedError('راه‌اندازی اولیه در محیط عملیاتی مستلزم پیکربندی متغیر محیطی امن ERP_SETUP_TOKEN (حداقل ۱۶ کاراکتر) است');
+      throw new UnauthorizedError(SETUP_TOKEN_NOT_CONFIGURED_MESSAGE);
     }
   }
 
@@ -141,7 +146,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
   const isAcquired = Boolean(rows[0]?.acquired === true || rows[0]?.acquired === 't');
 
   if (!isAcquired) {
-    throw new ConflictError('Another setup is in progress. Please wait.');
+    throw new ConflictError(SETUP_IN_PROGRESS_MESSAGE, undefined, 'SETUP_IN_PROGRESS');
   }
 
   try {
@@ -151,7 +156,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
       .where(notSyntheticTestUsername(users.username));
     
     if (Number(count) > 0) {
-      throw new BadRequestError('سیستم قبلاً راه اندازی شده است');
+      throw new BadRequestError(SETUP_ALREADY_DONE_MESSAGE);
     }
 
     // Clean up any residual test artifacts before creating initial admin
@@ -166,7 +171,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
 
     const { username, password, fullName, companyName, warehouseName, phone, address, logo, currency } = req.body;
     if (isProduction && (password === 'admin123456' || password.length < MIN_PASSWORD_LENGTH)) {
-      throw new ValidationError('رمز عبور مدیر در محیط عملیاتی باید حداقل ۸ کاراکتر بوده و نمی‌تواند رمزهای پیش‌فرض باشد');
+      throw new ValidationError(password === 'admin123456' ? SETUP_DEFAULT_PASSWORD_MESSAGE : PASSWORD_TOO_SHORT_MESSAGE);
     }
     const tUsername = (username || '').trim();
     // v9.0.76 (TD-521): مدیر نخست با پیشوند کاربران آزمون شمرده نمی‌شد و راه‌اندازی دوباره باز می‌ماند
@@ -196,7 +201,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
 
     // Save company business settings
     const companySettings = [
-      { key: 'company_name', value: companyName || 'سامانه جامع ERP پاپیتال' },
+      { key: 'company_name', value: companyName },
       { key: 'company_phone', value: phone || '' },
       { key: 'company_address', value: address || '' },
       { key: 'company_logo', value: logoPath || '' },

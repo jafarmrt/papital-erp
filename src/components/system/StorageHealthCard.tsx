@@ -40,7 +40,7 @@ export function StorageHealthCard({ storage }: { storage?: StorageHealth }) {
               <span>{STORAGE_LOCATION_LABELS[location.kind] ?? location.kind}</span>
             </div>
             <p className={location.writable ? 'text-slate-600 dark:text-slate-300' : 'text-rose-700 font-bold'}>{location.message}</p>
-            <p className="text-[10px] text-slate-500 truncate" dir="ltr" title={location.path}>{location.path}</p>
+            <p className="text-[10px] text-slate-500 truncate" dir="ltr" title={location.path} data-technical>{location.path}</p>
           </li>
         ))}
       </ul>

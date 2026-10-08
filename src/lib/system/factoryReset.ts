@@ -17,3 +17,13 @@ export const FACTORY_RESET_RESTORED = [
 
 /** What the reset keeps */
 export const FACTORY_RESET_KEPT = 'نقش‌ها و مجوزهای آن‌ها';
+
+/**
+ * v9.0.362 (TD-622، B01-42، تصمیم ت۸): برای بازنشانی کامل کاربر عبارت «حذف همه» را می‌نویسد (پیش‌تر «DELETE» با حروف
+ * بزرگ لاتین). فاصله‌های دو سر و فاصله‌های تکراری میان دو واژه نادیده گرفته می‌شوند.
+ */
+export const FACTORY_RESET_CONFIRM_WORD = 'حذف همه';
+
+export function isFactoryResetConfirmed(text: string): boolean {
+  return String(text ?? '').trim().replace(/\s+/g, ' ') === FACTORY_RESET_CONFIRM_WORD;
+}

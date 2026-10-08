@@ -6,6 +6,7 @@ import { movementDaysError } from '../lib/settings/settingValues';
 import { wcTestConnectionBody } from '../lib/woocommerce/wcConnectionTest';
 import { stockSyncOutcome } from '../lib/woocommerce/stockSyncOutcome';
 import { errorMessageOf } from '../utils/formatters';
+import { FACTORY_RESET_CONFIRM_WORD, isFactoryResetConfirmed } from '../lib/system/factoryReset';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset } from '../constants/presets';
 import { DEFAULT_INVENTORY_CONTROL_SECTIONS, InventoryControlPresetSection } from '../constants/inventoryControlPresets';
 import {
@@ -381,15 +382,15 @@ export function useSettings() {
   };
 
   const handleClearData = async () => {
-    if (deleteConfirmText !== 'DELETE') {
-      return toast.error('کلمه DELETE اشتباه وارد شده است. عملیات لغو شد');
+    if (!isFactoryResetConfirmed(deleteConfirmText)) {
+      return toast.error(`برای پاک‌سازی همه اطلاعات، عبارت «${FACTORY_RESET_CONFIRM_WORD}» را بنویسید.`);
     }
     try {
       const res = await fetchJson<{ success?: boolean; isSetup?: boolean; message?: string }>('/admin/clear-data', {
         method: 'POST',
         body: JSON.stringify({ mode: 'all' })
       });
-      toast.success(res?.message || 'کلیه اطلاعات و کاربران با موفقیت پاکسازی شدند. در حال هدایت به صفحه راه‌اندازی اولیه...');
+      toast.success(res?.message || 'همه اطلاعات و کاربران پاک شدند. در حال رفتن به صفحه راه‌اندازی اولیه…');
       setShowClearModal(false);
       setDeleteConfirmText('');
       setTimeout(() => {

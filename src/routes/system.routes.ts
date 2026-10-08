@@ -16,7 +16,7 @@ import { DataExportService, type DataExportOptions } from '../services/system/da
 import { ActivityLogQueryService } from '../services/system/activityLogQuery.service.js';
 import { FactoryResetService } from '../services/system/factoryReset.service.js';
 import { SystemHealthService } from '../services/system/systemHealth.service.js';
-import { SystemReconciliationService } from '../services/system/systemReconciliation.service.js';
+import { SystemReconciliationService, requeueResultMessage, stuckResetResultMessage } from '../services/system/systemReconciliation.service.js';
 import { GlobalSearchService } from '../services/system/globalSearch.service.js';
 import { DateCalendarReportService } from '../services/system/dateCalendarReport.service.js';
 
@@ -310,11 +310,11 @@ router.post('/system/reconciliation-fix', requireSystemAdmin, validate(reconcili
 
   if (action === 'requeue_dlq') {
     const requeuedCount = await SystemReconciliationService.requeueDeadLetterEvents(actor);
-    return res.json({ success: true, requeuedCount, message: `تعداد ${requeuedCount} رویداد از صف قرنطینه به صف پردازش Outbox منتقل شدند.` });
+    return res.json({ success: true, requeuedCount, message: requeueResultMessage(requeuedCount) });
   }
 
   const resetCount = await SystemReconciliationService.resetStuckOutboxEvents(actor);
-  return res.json({ success: true, resetCount, message: `تعداد ${resetCount} رویداد متوقف‌شده در حالت Processing با موفقیت بازنشانی شدند.` });
+  return res.json({ success: true, resetCount, message: stuckResetResultMessage(resetCount) });
 }));
 
 // (v4.0.29) توابع assertTestEndpointsAllowed/assertTestEndpointsEnabled حذف شدند —

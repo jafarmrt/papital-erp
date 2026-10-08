@@ -5,7 +5,9 @@ import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';
 import { formatPersianNumber } from '../../utils';
 import { MIN_AUDIT_RETENTION_DAYS, PURGEABLE_AUDIT_ENTITY_LABELS } from '../../lib/audit/auditRetention';
-import { FACTORY_RESET_ERASED, FACTORY_RESET_KEPT, FACTORY_RESET_RESTORED } from '../../lib/system/factoryReset';
+import {
+  FACTORY_RESET_CONFIRM_WORD, FACTORY_RESET_ERASED, FACTORY_RESET_KEPT, FACTORY_RESET_RESTORED, isFactoryResetConfirmed,
+} from '../../lib/system/factoryReset';
 
 /** v9.0.212 (TD-522، تصمیم ت۴ الف): بخش‌هایی که پاک‌سازی سجلشان را پاک می‌کند، از همان فهرست سرور */
 const PURGEABLE_SECTIONS_TEXT = Object.values(PURGEABLE_AUDIT_ENTITY_LABELS).join('، ');
@@ -227,7 +229,7 @@ export function ClearDataModal({
         <div className="px-6 py-4 border-b border-red-200 bg-red-50 text-red-700 flex items-center gap-2.5">
           <AlertTriangle size={22} className="shrink-0 text-red-600" />
           <div>
-            <h3 className="font-bold text-base border-0 p-0 m-0">تایید نهایی پاکسازی کامل اطلاعات سیستم</h3>
+            <h3 className="font-bold text-base border-0 p-0 m-0">همه اطلاعات سامانه پاک شود؟</h3>
             <p className="text-[11px] text-red-600/80 mt-0.5">بازنشانی به وضعیت اولیه کارخانه</p>
           </div>
         </div>
@@ -242,7 +244,7 @@ export function ClearDataModal({
               <li>کلیه حساب‌های کاربری و دسترسی‌های کاربران (سامانه بدون کاربر خواهد شد)</li>
               <li>کلیه کالاها، موجودی انبارها، قیمت‌ها و فایل‌های پیوست</li>
               <li>کلیه فاکتورها، اسناد انبارداری و پیش‌فاکتورها</li>
-              <li>اسناد حسابداری دوبل روزنامه، خزانه‌داری، دریافت/پرداخت‌ها و چک‌های صیادی</li>
+              <li>اسناد حسابداری دوطرفه روزنامه، خزانه‌داری، دریافت‌ها و پرداخت‌ها و چک‌های صیادی</li>
               <li>پروژه‌ها و مراحل تولید کارگاهی، کنترل موجودی پروژه و قطعات</li>
               <li>پرونده‌های پرسنل، کارمزدها، کارکردهای ثبت‌شده و تسویه‌حساب‌ها</li>
               <li>مشتریان، پرونده‌های فروش، اقدام‌ها و پیگیری‌ها</li>
@@ -253,24 +255,24 @@ export function ClearDataModal({
           <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-200 space-y-1 text-emerald-800">
             <div className="font-bold flex items-center gap-1.5">
               <CheckCircle2 size={14} className="text-emerald-600" />
-              <span>ساختارهای اولیه‌ای که خودکار بازنشانی و آماده‌سازی می‌شوند:</span>
+              <span>پیش‌فرض‌هایی که دوباره ساخته می‌شوند:</span>
             </div>
             <p className="text-[11px] text-emerald-700 leading-relaxed pr-1">
-              ۲۲ دسته‌بندی استاندارد کارگاه، انبار اصلی، کدینگ استاندارد حسابداری و نقش‌های سیستمی بازنشانی شده و سامانه بلافاصله شما را به صفحه راه‌اندازی اولیه برای تعریف حساب مدیر ارشد هدایت می‌کند.
+              {FACTORY_RESET_RESTORED.join('، ')}. {FACTORY_RESET_KEPT} پاک نمی‌شوند. سپس سامانه شما را به صفحه راه‌اندازی اولیه می‌برد تا حساب مدیر ارشد و انبار پیش‌فرض را بسازید.
             </p>
           </div>
 
           <div className="pt-2 border-t border-slate-100">
             <label className="block font-medium mb-1.5 text-slate-700">
-              برای تایید حذف غیرقابل بازگشت، کلمه <span className="font-mono text-red-600 font-bold select-all bg-red-50 px-1.5 py-0.5 rounded border border-red-200">DELETE</span> را با حروف بزرگ وارد کنید:
+              این کار برگشت‌پذیر نیست. برای ادامه، عبارت <span className="text-red-600 font-bold select-all bg-red-50 px-1.5 py-0.5 rounded border border-red-200">{FACTORY_RESET_CONFIRM_WORD}</span> را بنویسید:
             </label>
             <input
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
-              className="w-full border border-red-300 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none font-mono text-left tracking-wider"
-              dir="ltr"
-              placeholder="DELETE"
+              className="w-full border border-red-300 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none"
+              placeholder={FACTORY_RESET_CONFIRM_WORD}
+              aria-label="عبارت تأیید پاک‌سازی همه اطلاعات"
               autoFocus
             />
           </div>
@@ -285,18 +287,18 @@ export function ClearDataModal({
             </button>
             <button
               onClick={onConfirmClear}
-              disabled={deleteConfirmText !== 'DELETE' || isSaving}
+              disabled={!isFactoryResetConfirmed(deleteConfirmText) || isSaving}
               className="px-5 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed font-bold transition-all shadow-sm cursor-pointer flex items-center gap-2"
             >
               {isSaving ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>در حال پاکسازی کامل سیستم...</span>
+                  <span>در حال پاک‌سازی همه اطلاعات…</span>
                 </>
               ) : (
                 <>
                   <Trash2 size={16} />
-                  <span>تایید و پاکسازی کامل اطلاعات</span>
+                  <span>پاک‌سازی همه اطلاعات</span>
                 </>
               )}
             </button>
