@@ -17,7 +17,7 @@ describe('browser today in the business time zone', () => {
   it('dates a stock count saved on Nowruz night in the new year', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-20T21:00:00Z'));
-    const payload = buildAuditPayload([], { nextRef: 'AUD-1', location: 'main', notes: '', user: null });
+    const payload = buildAuditPayload([], { location: 'main', notes: '', user: null });
     expect(payload.date).toBe('2026-03-21');
   });
 });

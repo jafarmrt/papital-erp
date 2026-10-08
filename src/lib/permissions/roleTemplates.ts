@@ -72,7 +72,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
   {
     code: 'production_manager',
     name: 'مدیر تولید و کارگاه',
-    description: 'مدیریت پروژه‌های تولید، مراحل ساخت، تأیید خط تولید، کارهای پرکیسی و درخواست‌های مواد اولیه',
+    description: 'مدیریت پروژه‌های تولید، مراحل ساخت، تأیید خط تولید، کارهای کارمزدی و درخواست‌های مواد اولیه',
     permissions: [
       'products.view', 'products.create', 'products.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out',
       'projects.view', 'projects.create', 'projects.edit', 'projects.delete', 'workflow.view', 'workflow.approve',
@@ -148,7 +148,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
   {
     code: 'workshop_operator',
     name: 'متصدی ثبت کارکرد کارگاه',
-    description: 'ثبت کارکرد پرکیسی پرسنل و گزارش کار روزانه کارگاه',
+    description: 'ثبت کارکرد کارمزدی پرسنل و گزارش کار روزانه کارگاه',
     permissions: [
       'piecework.view', 'piecework.log', 'daily_logs.view', 'daily_logs.create',
     ],

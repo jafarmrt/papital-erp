@@ -8,7 +8,7 @@ import { PayrollPaymentService } from '../services/accounting/payrollPayment.ser
 import { PayrollPaymentVoidService } from '../services/accounting/payrollPaymentVoid.service.js';
 import { PieceworkService, PieceworkReadService, PayrollReadService, PieceworkPayrollService } from '../services/piecework.service.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, decimalInput, storageDateParam } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
@@ -16,6 +16,9 @@ import { PIECEWORK_LOG_PERMISSION, PIECEWORK_PAY_PERMISSION, PIECEWORK_PAYROLL_P
 import { ForbiddenError } from '../errors/customErrors.js';
 import { fin } from '../lib/financialDecimal.js';
 import { parseWorkQuantity } from '../lib/piecework/workQuantity.js';
+import { WORK_LOG_PAGE_SIZE } from '../lib/piecework/workLogList.js';
+import { parsePagination } from '../lib/pagination.js';
+import { pageWorkLogs, workLogSummary } from '../services/piecework/workLogList.js';
 
 const router = Router();
 
@@ -32,7 +35,7 @@ const nonNegativeAmount = (label: string) =>
 const createPieceworkTaskSchema = z.object({
   body: z.object({
     code: z.string().optional(),
-    title: z.string().min(1, 'عنوان کاری پرکیسی الزامی است'),
+    title: z.string().min(1, 'عنوان کاری کارمزدی الزامی است'),
     category: z.string().optional(),
     defaultRate: nonNegativeAmount('نرخ پایه').optional(),
     unit: z.string().optional(),
@@ -44,7 +47,7 @@ const updatePieceworkTaskSchema = z.object({
   body: z.object({
     // TD-246: کد جدید (خالی = کد فعلی بماند)؛ کد عنوان فعال دیگر با خطای ۴۰۹ رد می‌شود
     code: z.string().optional(),
-    title: z.string().min(1, 'عنوان کاری پرکیسی الزامی است').optional(),
+    title: z.string().min(1, 'عنوان کاری کارمزدی الزامی است').optional(),
     category: z.string().optional(),
     defaultRate: nonNegativeAmount('نرخ پایه').optional(),
     unit: z.string().optional(),
@@ -141,6 +144,25 @@ const updatePieceworkLogSchema = z.object({
   })
 });
 
+/**
+ * v9.0.330 (TD-811، B12P-08): فیلترهای فهرست کارکرد در SQL. `page` که بیاید یک صفحه با شمار و جمع همه منطبق‌ها
+ * برمی‌گردد (صفحه کارمزدی)؛ بی آن همه منطبق‌ها، مثل پیش (کارکردهای یک پروژه، پیش‌نمایش صدور فیش).
+ */
+const listPieceworkLogsSchema = z.object({
+  query: z.object({
+    personnelId: z.string().trim().regex(/^(all|[1-9]\d*)$/i, 'پرسنل فیلتر باید شناسه عددی یا «all» باشد').optional(),
+    projectId: z.string().trim().regex(/^(all|none|[1-9]\d*)$/i, 'پروژه فیلتر باید شناسه عددی، «none» یا «all» باشد').optional(),
+    status: z.string().trim().max(30).optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
+    search: z.string().max(100, 'عبارت جستجو حداکثر ۱۰۰ نویسه است').optional(),
+    page: z.string().regex(/^[1-9]\d*$/, 'شماره صفحه باید عدد صحیح مثبت باشد').optional(),
+    limit: z.string().regex(/^[1-9]\d*$/, 'اندازه صفحه باید عدد صحیح مثبت باشد').optional(),
+  }).passthrough(),
+}).passthrough();
+
+type ListPieceworkLogsQuery = z.infer<typeof listPieceworkLogsSchema>['query'];
+
 const generatePieceworkPayrollSchema = z.object({
   body: z.object({
     personnelId: z.union([z.number(), z.string()]),
@@ -151,6 +173,8 @@ const generatePieceworkPayrollSchema = z.object({
     totalBonuses: nonNegativeAmount('پاداش').optional(),
     deductions: nonNegativeAmount('کسورات').optional(),
     totalDeductions: nonNegativeAmount('کسورات').optional(),
+    // v9.0.329 (TD-861): شرح «سایر کسورات»؛ با کسورات بالای صفر الزامی است (سرویس، ۴۲۲)
+    deductionsDescription: z.string().max(500, 'شرح سایر کسورات حداکثر ۵۰۰ نویسه است').optional(),
     advanceDeduction: nonNegativeAmount('کسر مساعده').optional(),
     notes: z.string().optional(),
   })
@@ -265,7 +289,7 @@ router.post('/piecework/tasks', requirePermission(PIECEWORK_TASKS_PERMISSION), v
       action: 'CREATE',
       entity: 'عنوان پرکیسی',
       entityId: newTask.id,
-      description: `تعریف عنوان کاری پرکیسی جدید «${newTask.title}» با کد «${newTask.code}»`
+      description: `تعریف عنوان کاری کارمزدی جدید «${newTask.title}» با کد «${newTask.code}»`
     });
 
     res.status(201).json(newTask);
@@ -295,7 +319,7 @@ router.post('/piecework/tasks/import-excel', requirePermission(PIECEWORK_TASKS_P
       username: req.user?.username || 'سیستم',
       action: 'IMPORT',
       entity: 'عناوین پرکیسی',
-      description: `واردات اکسل عناوین کاری پرکیسی (${result.createdCount} عنوان جدید، ${result.updatedCount} عنوان ویرایش‌شده، شیوه: ${mode})`
+      description: `ورود اکسل عناوین کاری کارمزدی (${result.createdCount} عنوان جدید، ${result.updatedCount} عنوان ویرایش‌شده، شیوه: ${mode})`
     });
 
     // v9.0.279 (TD-813): ردیف‌های ثبت‌نشده (نرخ متن یا منفی) با شماره ردیف و دلیل در `errors`
@@ -327,7 +351,7 @@ router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], r
       username: req.user?.username || 'سیستم',
       action: 'DELETE',
       entity: 'عناوین پرکیسی',
-      description: `پاکسازی کلی عناوین کاری پرکیسی (${count} مورد حذف شدند)`
+      description: `پاکسازی کلی عناوین کاری کارمزدی (${count} مورد حذف شدند)`
     });
 
     res.json({
@@ -366,7 +390,7 @@ router.put('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSION)
       action: 'UPDATE',
       entity: 'عنوان پرکیسی',
       entityId: id,
-      description: `ویرایش عنوان کاری پرکیسی «${existing.title}»${current.code !== existing.code ? ` (کد «${existing.code}» به «${current.code}»)` : ''}`
+      description: `ویرایش عنوان کاری کارمزدی «${existing.title}»${current.code !== existing.code ? ` (کد «${existing.code}» به «${current.code}»)` : ''}`
     });
 
     res.json({ status: 'ok', message: 'عنوان کاری با موفقیت به‌روزرسانی شد' });
@@ -391,7 +415,7 @@ router.delete('/piecework/tasks/:id', requirePermission(PIECEWORK_TASKS_PERMISSI
       action: 'DELETE',
       entity: 'عنوان پرکیسی',
       entityId: id,
-      description: `حذف عنوان کاری پرکیسی «${existing.title}»`
+      description: `حذف عنوان کاری کارمزدی «${existing.title}»`
     });
 
     res.json({ status: 'ok', message: 'عنوان کاری حذف شد' });
@@ -416,7 +440,7 @@ router.post('/piecework/tasks/:id/restore', requirePermission(PIECEWORK_TASKS_PE
       action: 'UPDATE',
       entity: 'عنوان پرکیسی',
       entityId: id,
-      description: `بازیابی عنوان کاری پرکیسی «${existing.title}» از بایگانی`
+      description: `بازیابی عنوان کاری کارمزدی «${existing.title}» از بایگانی`
     });
 
     res.json({ status: 'ok', message: 'عنوان کاری با موفقیت بازیابی شد' });
@@ -545,22 +569,30 @@ router.post(['/piecework/personnel-rates', '/piecework/rates'], requirePermissio
 
 // GET /api/piecework/logs - List work logs
 // v9.0.142 (TD-892، ت۱۰ الف): کارکرد همه پرسنل فقط با مجوز کارمزدی؛ مشاهده پروژه فقط کارکردهای یک پروژه را می‌خواند
-router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkLogs, ...READ_PERMISSIONS.projectPieceworkLogs), asyncHandler(async (req, res) => {
-  const { personnelId, projectId, startDate, endDate, status } = req.query;
+router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkLogs, ...READ_PERMISSIONS.projectPieceworkLogs), validate(listPieceworkLogsSchema), asyncHandler(async (req, res) => {
+  const { personnelId, projectId, startDate, endDate, status, search, page } = req.query as ListPieceworkLogsQuery;
   if (!(await can(req.user, ...READ_PERMISSIONS.pieceworkLogs))) {
     const projId = Number(projectId);
     if (!Number.isInteger(projId) || projId <= 0) {
       throw new ForbiddenError('کارکرد همه پرسنل مجوز کارمزدی را می‌خواهد؛ مشاهده پروژه فقط کارکردهای یک پروژه را نشان می‌دهد.', undefined, 'PIECEWORK_LOGS_PROJECT_ONLY');
     }
   }
+  const filters = { personnelId, projectId, startDate, endDate, status, search };
   try {
-    const rows = await PieceworkReadService.listWorkLogs({ personnelId, projectId, startDate, endDate, status });
-
-    res.json(rows);
+    if (page !== undefined) {
+      const paging = parsePagination(req.query as Record<string, unknown>, { limit: WORK_LOG_PAGE_SIZE });
+      return res.json(await pageWorkLogs(filters, paging.page, Math.max(1, paging.limit)));
+    }
+    res.json(await PieceworkReadService.listWorkLogs(filters));
   } catch (err) {
     logger.error({ message: 'Error fetching piecework logs', error: err });
     throw err;
   }
+}));
+
+// GET /api/piecework/logs/summary - v9.0.330 (TD-811): کارت‌های صفحه و «هزینه پروژه‌ها»، جمع SQL روی همه کارکردهای زنده
+router.get('/piecework/logs/summary', authorizePermission(...READ_PERMISSIONS.pieceworkLogs), asyncHandler(async (_req, res) => {
+  res.json(await workLogSummary());
 }));
 
 // POST /api/piecework/logs - Record work logs (Supports single or batch array)
@@ -696,7 +728,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
-    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, advanceDeduction: reqAdvanceDeduction, notes } = req.body;
+    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, deductionsDescription, advanceDeduction: reqAdvanceDeduction, notes } = req.body;
 
     const result = await PieceworkPayrollService.generatePayroll({
       personnelId,
@@ -707,6 +739,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], requirePerm
       totalBonuses,
       deductions,
       totalDeductions,
+      deductionsDescription,
       advanceDeduction: reqAdvanceDeduction,
       notes,
       userId: currentUserId,

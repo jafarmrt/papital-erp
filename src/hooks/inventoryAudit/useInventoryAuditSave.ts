@@ -25,8 +25,8 @@ export async function invalidateAfterStockAdjustment(queryClient: QueryClient): 
 export function useInventoryAuditSave() {
   const queryClient = useQueryClient();
 
-  return useMutation<unknown, unknown, AuditSavePayload>({
-    mutationFn: (payload) => fetchJson('/documents', {
+  return useMutation<{ refNumber?: string | null } | null, unknown, AuditSavePayload>({
+    mutationFn: (payload) => fetchJson<{ refNumber?: string | null } | null>('/documents', {
       method: 'POST',
       body: JSON.stringify(payload)
     }),

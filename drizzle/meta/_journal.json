@@ -554,6 +554,13 @@
       "when": 1793130000000,
       "tag": "0078_piecework_action_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1793140000000,
+      "tag": "0079_payroll_deductions_description",
+      "breakpoints": true
     }
   ]
 }

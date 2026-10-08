@@ -67,7 +67,7 @@ export function buildPieceworkTaskCodeHealthTest(
   return {
     id: 'piecework_task_code_uniqueness',
     category: 'system',
-    title: 'یکتایی کد عناوین کاری پرکیسی',
+    title: 'یکتایی کد عناوین کاری کارمزدی',
     description: 'دو عنوان کاری فعال نباید کد یکسان داشته باشند (بدون توجه به حروف بزرگ/کوچک و فاصله)؛ پایگاه‌داده با ایندکس یکتا از کد تکراری جلوگیری می‌کند',
     status: duplicateCodeCount > 0 || !uniqueIndexPresent ? 'warning' : 'healthy',
     scoreImpact: -penalty,

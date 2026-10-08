@@ -6,6 +6,7 @@ vi.mock('../../hooks/useAppCurrency', async () => {
   const { rialDisplayOf } = await vi.importActual<typeof import('../../lib/rialDisplay')>('../../lib/rialDisplay');
   return { useAppCurrency: () => 'IRR', useRialDisplay: () => rialDisplayOf('IRR') };
 });
+vi.mock('../../hooks/useCompanyName', () => ({ useCompanyName: () => '' }));
 vi.mock('../../hooks/usePieceworkPermissions', () => ({
   usePieceworkPermissions: () => ({ canManageTasks: true, canLog: true, canIssuePayroll: true, canPay: true }),
 }));

@@ -5,6 +5,8 @@ import {
 } from '../../lib/permissions/documentPermissions.js';
 import { documentStockDirection, isRecordableDocumentType } from '../../lib/documents/documentDirection.js';
 import { ValidationError } from '../../errors/customErrors.js';
+import { isAutoRefNumber, isServerSeriesDocumentType } from '../../lib/documents/documentRefRules.js';
+import { documentTypeTitle } from '../../lib/documents/documentTypeTitles.js';
 
 /**
  * v9.0.125 (TD-541 / TD-771): وضعیت و جهت سندی که ثبت یا نهایی می‌شود، با همان قاعده‌ای که `createDocumentWithDetails` و
@@ -47,6 +49,34 @@ export function assertRecordableDocument(docType: string, inOut?: string | null,
       'DOCUMENT_DIRECTION_MISMATCH',
     );
   }
+}
+
+/**
+ * v9.0.327 (TD-783، یافته B08-14، تصمیم ت۹ «الف» بسته ۸): شماره فاکتور فروش و برگشت از فروش فقط از سری سرور است؛ شماره
+ * دستی برای این دو نوع در ثبت و ویرایش ۴۲۲ `DOCUMENT_REF_SERVER_SERIES` است (`refNumber` باید خالی یا «auto» باشد).
+ */
+export function assertManualRefAllowed(docType: string, requested: unknown): void {
+  if (!isServerSeriesDocumentType(docType) || isAutoRefNumber(requested)) return;
+  throw new ValidationError(
+    `شماره ${documentTypeTitle(docType)} فقط از سری فاکتورهای سرور داده می‌شود و دستی نوشته یا عوض نمی‌شود؛ شماره را خالی بگذارید.`,
+    { docType, refNumber: requested ?? null },
+    'DOCUMENT_REF_SERVER_SERIES',
+  );
+}
+
+/**
+ * v9.0.325 (TD-780، یافته B08-11، تصمیم ت۷ «الف» بسته ۸): رسید تولید فقط از «ورود به انبار» پروژه ثبت می‌شود
+ * (`ProjectService.addProjectToInventory`، TD-285)، جایی که پروژه، سقف مقدار برنامه با دلیل (TD-327) و بهای تحویل سنجیده
+ * می‌شود. `POST /documents` و نهایی‌سازی رسید تولید پیش‌نویس آن را ۴۲۲ می‌دهند؛ پیش‌تر از این مسیر رسید تولید بی پروژه،
+ * فراتر از برنامه و روی پروژه لغوشده ثبت می‌شد و کالای در جریان ساخت بی پروژه بستانکار می‌شد.
+ */
+export function assertNotProjectDelivery(docType: string, refNumber?: string | null): void {
+  if (docType !== 'production_receipt') return;
+  throw new ValidationError(
+    `${refNumber ? `رسید تولید «${refNumber}» قطعی نمی‌شود؛ ` : ''}رسید تولید فقط از «ورود به انبار» همان پروژه ثبت می‌شود تا پروژه، سقف مقدار برنامه و بهای تحویل سنجیده شود.`,
+    { docType },
+    'PRODUCTION_RECEIPT_PROJECT_ONLY',
+  );
 }
 
 /**

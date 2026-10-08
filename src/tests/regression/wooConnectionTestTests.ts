@@ -6,7 +6,7 @@ import { appSettings } from '../../db/schema.js';
 
 /**
  * Package 15 (events and integrations), TD-723 / B15-21: the WooCommerce «test connection» route takes a missing or masked
- * key from the stored settings, and then only at the stored store address. On v9.0.324 the route required both keys in the
+ * key from the stored settings, and then only at the stored store address. On v9.0.332 the route required both keys in the
  * body, so a non-admin (who sees «********») always tested the mask, and nothing stopped stored keys from being sent to an
  * address the caller chose once a fallback existed. Only refusals are exercised here, so no request leaves the test.
  */
@@ -15,7 +15,7 @@ export async function runWooConnectionTestTests(shouldRun: (id: string, ...extra
   const id = 'reg_woocommerce_test_connection_stored_keys_td_723';
   if (!shouldRun(id, 'td723', 'b15-21', 'woocommerce', 'package15')) return results;
 
-  const name = 'v9.0.325: WooCommerce test connection uses the stored keys only at the stored address and refuses incomplete settings (TD-723)';
+  const name = 'v9.0.333: WooCommerce test connection uses the stored keys only at the stored address and refuses incomplete settings (TD-723)';
   const tStart = Date.now();
   const keys = ['wc_store_url', 'wc_consumer_key', 'wc_consumer_secret'];
   const saved = await orm.select().from(appSettings).where(inArray(appSettings.key, keys));

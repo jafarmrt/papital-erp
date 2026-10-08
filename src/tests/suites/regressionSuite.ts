@@ -10599,6 +10599,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR v (v9.0.294 on): automatic vouchers and the journal voucher page (TD-552 ...)
   const { runVoucherPageTests } = await import('../regression/voucherPageTests.js');
   results.push(...await runVoucherPageTests(shouldRun));
+  // Package 12 payroll PR d (v9.0.330 on): the work log list is filtered, paged and summed in SQL (TD-811)
+  const { runWorkLogListTests } = await import('../regression/workLogListTests.js');
+  results.push(...await runWorkLogListTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
@@ -10676,6 +10679,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 8 PR B (v9.0.270+): zero-price invoices, voids with dependents, sales return VAT and amounts
   const { runSalesDocumentTests } = await import('../regression/salesDocumentTests.js');
   results.push(...await runSalesDocumentTests(shouldRun));
+  // Package 8 PR D (v9.0.323+): lead link of a document edit, stock count lines, production receipts, return lookup, numbers
+  const { runDocumentIntegrityTests } = await import('../regression/documentIntegrityTests.js');
+  results.push(...await runDocumentIntegrityTests(shouldRun));
 
   // Package 13 PR B (v9.0.249+): reading daily work logs (list, statistics, timestamps)
   const { runDailyLogReadTests } = await import('../regression/dailyLogReadTests.js');
@@ -10700,7 +10706,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runProcurementRequisitionTests } = await import('../regression/procurementRequisitionTests.js');
   results.push(...await runProcurementRequisitionTests(shouldRun));
 
-  // Package 15 PR a (v9.0.324+): WooCommerce
+  // Package 15 PR a (v9.0.332+): WooCommerce
   const { runWooNamesakeCustomerTests } = await import('../regression/wooNamesakeCustomerTests.js');
   results.push(...await runWooNamesakeCustomerTests(shouldRun));
   const { runWooConnectionTestTests } = await import('../regression/wooConnectionTestTests.js');

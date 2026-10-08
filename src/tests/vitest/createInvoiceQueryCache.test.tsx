@@ -82,6 +82,8 @@ describe('CreateInvoicePage — React Query cache', () => {
     fireEvent.click(await screen.findByText('بازیابی پیش‌نویس'));
     expect(await screen.findByText('گردنبند نقره')).toBeTruthy();
     await waitFor(() => expect(screen.getByDisplayValue('INV-1001')).toBeTruthy());
+    // v9.0.327 (TD-783): the invoice number only comes from the server series
+    expect((screen.getByDisplayValue('INV-1001') as HTMLInputElement).readOnly).toBe(true);
     otherPages.forEach(key => expect(client.getQueryState(key)?.isInvalidated).toBe(false));
 
     fireEvent.click(screen.getByRole('button', { name: 'ثبت و صدور فاکتور' }));
@@ -89,7 +91,7 @@ describe('CreateInvoicePage — React Query cache', () => {
 
     const post = fetchJson.mock.calls.find(([url, init]) => url === '/documents' && init?.method === 'POST');
     const body = JSON.parse(String(post?.[1].body));
-    expect(body).toMatchObject({ docType: 'invoice', status: 'proforma', refNumber: 'INV-1001', location: 'WH1', buyer_name: 'مشتری تست', inOut: 'out' });
+    expect(body).toMatchObject({ docType: 'invoice', status: 'proforma', refNumber: 'auto', location: 'WH1', buyer_name: 'مشتری تست', inOut: 'out' });
     // v9.0.39 (TD-446): گردش کار تأیید پیش‌فاکتور را سرور در تراکنش ثبت شروع می‌کند، نه مرورگر
     expect(fetchJson).not.toHaveBeenCalledWith('/workflow/start', expect.anything());
 

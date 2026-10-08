@@ -16,6 +16,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { workLogFreeOfLivePayroll } from './workLogPayrollLink.js';
 import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './pieceworkAudit.js';
+import { payrollStatusLabel } from '../../lib/payroll/payrollStatusLabels.js';
 
 /**
  * چرخه عمر فیش حقوقی پرکیسی: صدور، تغییر وضعیت، همگام‌سازی سند و ابطال.
@@ -40,6 +41,8 @@ export interface GeneratePayrollInput {
   totalBonuses?: AmountInput;
   deductions?: AmountInput;
   totalDeductions?: AmountInput;
+  /** شرح «سایر کسورات»؛ با کسورات بالای صفر الزامی (TD-861) */
+  deductionsDescription?: string;
   advanceDeduction?: AmountInput;
   notes?: string;
   userId?: number;
@@ -59,7 +62,7 @@ export interface UpdatePayrollStatusInput {
 export class PieceworkPayrollService {
   /** صدور فیش حقوقی جدید برای یک پرسنل در بازه تاریخ. */
   static async generatePayroll(input: GeneratePayrollInput) {
-    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, advanceDeduction: reqAdvanceDeduction, notes } = input;
+    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, deductionsDescription, advanceDeduction: reqAdvanceDeduction, notes } = input;
     const currentUserId = input.userId;
     const currentUsername = input.username;
 
@@ -92,6 +95,16 @@ export class PieceworkPayrollService {
         `${negativeParts.join('، ')} فیش نمی‌تواند منفی باشد؛ کاهش حقوق را در «کسورات» و افزایش را در «پاداش» وارد کنید.`,
         undefined,
         'PAYROLL_NEGATIVE_COMPONENT'
+      );
+    }
+    // v9.0.329 (TD-861، تصمیم ت۵ الف): «سایر کسورات» بی شرح صادر نمی‌شود. پیش‌تر کادر «(بیمه/مالیات...)» نام داشت ولی چیزی
+    // حساب نمی‌کرد، و مبلغ بی هیچ توضیحی به حساب ۳۲۰۲ می‌رفت.
+    const deductionsNote = totDeductionsFin.isPositive() ? String(deductionsDescription ?? '').trim() : '';
+    if (totDeductionsFin.isPositive() && !deductionsNote) {
+      throw new ValidationError(
+        'برای «سایر کسورات» شرح بنویسید، مثلاً بابت چه چیزی کسر می‌شود.',
+        undefined,
+        'PAYROLL_DEDUCTIONS_DESCRIPTION_REQUIRED'
       );
     }
 
@@ -223,6 +236,7 @@ export class PieceworkPayrollService {
         totalFixedAmount: fixedPortion,
         totalBonuses: totBonuses,
         totalDeductions: totDeductions,
+        deductionsDescription: deductionsNote,
         advanceDeduction,
         netPayable: net,
         fixedSalaryMonths,
@@ -280,7 +294,8 @@ export class PieceworkPayrollService {
     const targetStatus = status ? String(status).trim().toLowerCase() : '';
     if (targetStatus && !MANUAL_PAYROLL_STATUSES.has(targetStatus)) {
       throw new ValidationError(
-        `وضعیت «${status}» برای فیش حقوقی مجاز نیست؛ فقط «پیش‌نویس» (draft) و «تأییدشده» (approved) دستی تنظیم می‌شوند. پرداخت از «ثبت پرداخت» و ابطال از «حذف فیش» انجام می‌شود.`
+        // v9.0.328 (TD-815): پیام وضعیت را با برچسب فارسی می‌گوید، نه کد آن
+        `وضعیت «${payrollStatusLabel(targetStatus)}» برای فیش حقوقی مجاز نیست؛ فقط «پیش‌نویس» و «تأییدشده» دستی تنظیم می‌شوند. پرداخت از «ثبت پرداخت» و ابطال از «ابطال فیش» انجام می‌شود.`
       );
     }
 

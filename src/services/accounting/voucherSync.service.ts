@@ -1301,7 +1301,7 @@ export class VoucherSyncService {
         debit: pieceworkAmount,
         credit: 0,
         currency: 'IRR',
-        description: `هزینه دستمزد تولیدی پرکیسی فیش ${pay.payrollNumber}`
+        description: `هزینه دستمزد تولیدی کارمزدی فیش ${pay.payrollNumber}`
       });
     }
     // سهم هزینه حقوق ثابت (+ پاداش/اضافه‌کار)
@@ -1357,7 +1357,8 @@ export class VoucherSyncService {
           debit: 0,
           credit: otherDeductions,
           currency: 'IRR',
-          description: `سایر کسورات فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})`
+          // v9.0.329 (TD-861): شرح کسورات فیش در ردیف کسورات حقوق پرداختنی می‌آید (فیش پیش از آن شرح ندارد)
+          description: `سایر کسورات فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})${pay.deductionsDescription ? `: ${pay.deductionsDescription}` : ''}`
         });
         allocatedCredits = allocatedCredits.add(otherDeductions);
       } else if (isStrict) {
@@ -1389,7 +1390,7 @@ export class VoucherSyncService {
       date: pay.endDate || await businessTodayIsoDate(),
       voucherType: 'payroll',
       status: 'draft',
-      description: `ثبت هزینه و محاسبه حقوق و کارمزد پرکیسی ${pay.title} - پرسنل: ${pers?.fullName || 'پرسنل'} (${pay.payrollNumber})`,
+      description: `ثبت هزینه و محاسبه حقوق و کارمزد ${pay.title} - پرسنل: ${pers?.fullName || 'پرسنل'} (${pay.payrollNumber})`,
       referenceModule: 'payroll',
       referenceId: pay.id,
       referenceNumber: pay.payrollNumber,

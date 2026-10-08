@@ -7,10 +7,13 @@ import { SearchableSelect } from '../SearchableSelect';
 import { formatQuantityOrTime, formatPersianDate, extractDateString } from '../../utils';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { usePieceworkPermissions } from '../../hooks/usePieceworkPermissions';
+import { PieceworkLogsPagination, type PieceworkLogsPaginationState } from './PieceworkLogsPagination';
 
 interface PieceworkLogsTabProps {
   logsList: PieceworkLog[];
   loading: boolean;
+  /** v9.0.330 (TD-811): یک صفحه از کارکردهای فیلترشده در سرور */
+  pagination?: PieceworkLogsPaginationState;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   selectedPersonnelFilter: string | number;
@@ -33,6 +36,7 @@ interface PieceworkLogsTabProps {
 export function PieceworkLogsTab({
   logsList,
   loading,
+  pagination,
   searchQuery,
   onSearchChange,
   selectedPersonnelFilter,
@@ -268,6 +272,7 @@ export function PieceworkLogsTab({
             </tbody>
           </table>
         </div>
+        {pagination && <PieceworkLogsPagination state={pagination} loading={loading} />}
       </div>
     </div>
   );

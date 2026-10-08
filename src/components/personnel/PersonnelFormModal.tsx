@@ -277,15 +277,15 @@ export function PersonnelFormModal({
                   onChange={(e) => setFormData((prev) => ({ ...prev, salaryType: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
                 >
-                  <option value="piecework">پرکیسی — کارمزد بر اساس عناوین کاری</option>
+                  <option value="piecework">کارمزدی — کارمزد بر اساس عناوین کاری</option>
                   <option value="monthly_fixed">حقوق ثابت ماهانه — بدون کارمزد</option>
-                  <option value="mixed">ترکیبی — حقوق ثابت + کارمزد پرکیسی</option>
+                  <option value="mixed">ترکیبی — حقوق ثابت + کارمزد عناوین کاری</option>
                 </select>
                 <p className="text-[10px] text-slate-500 mt-1 leading-5">
                   {formData.salaryType === 'monthly_fixed'
-                    ? 'این شخص فقط حقوق ماهانه ثابت می‌گیرد؛ فیش او صرفاً بابت حقوق پایه صادر می‌شود و ردیف کارکرد پرکیسی ندارد.'
+                    ? 'این شخص فقط حقوق ماهانه ثابت می‌گیرد؛ فیش او صرفاً بابت حقوق پایه صادر می‌شود و ردیف کارکرد کارمزدی ندارد.'
                     : formData.salaryType === 'mixed'
-                      ? 'فیش این شخص = حقوق ماهانه ثابت + جمع کارکرد پرکیسی همان دوره (دو ردیف جدا در فیش).'
+                      ? 'فیش این شخص = حقوق ماهانه ثابت + جمع کارکرد کارمزدی همان دوره (دو ردیف جدا در فیش).'
                       : 'فیش این شخص فقط بر اساس نرخ عناوین کاری و مقدار کارکرد ثبت‌شده محاسبه می‌شود؛ حقوق پایه ثابت ندارد.'}
                 </p>
               </div>
@@ -304,7 +304,7 @@ export function PersonnelFormModal({
                     dir="ltr"
                   />
                   {formData.salaryType === 'mixed' && (
-                    <p className="text-[10px] text-slate-500 mt-1">در فیش‌های ترکیبی، سهم ثابت به کارکرد پرکیسی دوره اضافه می‌شود.</p>
+                    <p className="text-[10px] text-slate-500 mt-1">در فیش‌های ترکیبی، سهم ثابت به کارکرد کارمزدی دوره اضافه می‌شود.</p>
                   )}
                 </div>
               )}

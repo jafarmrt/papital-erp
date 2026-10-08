@@ -75,7 +75,7 @@ describe('payroll buttons follow their API keys (TD-805)', () => {
     expect(screen.getByText('ثبت سند دوبل')).toBeTruthy();
     expect(screen.getAllByTitle('ابطال فیش').length).toBe(2);
     expect(screen.queryByText('ثبت پرداخت')).toBeNull();
-    expect(screen.getByText('در انتظار پرداخت')).toBeTruthy();
+    expect(screen.getByText('تأییدشده')).toBeTruthy();
   });
 
   it('a custom rate is saved only with piecework.manage_tasks', () => {
