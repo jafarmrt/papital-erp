@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.7 — Stock vs Ledger Health Check Leaves Work in Progress Out
+- **TD-964:** the financial health check compares the warehouse value with account 14 without the work in progress account (1402), shows the work in progress balance apart and reports the share of draft vouchers.
+
 ### v10.0.6 — هشدار خودکار از کار افتادن برنامه، دیسک، پشتیبان و صف رویدادها
 - `scripts/monitor.sh` هر پنج دقیقه سلامت، دیسک، سن پشتیبان و صف رویدادها را می‌سنجد و با ربات بله یا تلگرام یا ایمیل هشدار می‌دهد (TD-1021).
 
