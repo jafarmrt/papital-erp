@@ -1,6 +1,7 @@
 import { Boxes, Plus, Trash2, Scale, AlertCircle, CheckCircle2, FilePlus } from 'lucide-react';
 import { ProjectInventoryControlSectionData, Item } from '../../types';
 import { COMMON_UNITS } from './projectInventoryUtils';
+import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { formatPersianNumber } from '../../utils';
 import { MaterialNameCell, CurrentStockCell, ProcurementStatusCell, NotesCell, type OpenUnitConversionModalHandler } from './inventoryRowCells';
 
@@ -102,10 +103,7 @@ export function GlobalInventoryControlSection({
             items.forEach(item => {
               const effectiveCode = item.itemCode || '';
               const effectiveName = item.name || '';
-              const matchWh = warehouseItems.find(i => 
-                (effectiveCode && i.code === effectiveCode) ||
-                (effectiveName && i.name.toLowerCase() === effectiveName.toLowerCase())
-              );
+              const matchWh = findProjectItemMatch({ code: effectiveCode, name: effectiveName }, warehouseItems);
               const currentStock = matchWh ? matchWh.current_stock : (item.stockQty ?? 0);
               const reqQty = Number(item.requiredQty || 1);
               const shortfall = Math.max(0, reqQty - currentStock);
@@ -219,10 +217,7 @@ export function GlobalInventoryControlSection({
                           const effectiveCode = item.itemCode || '';
                           const effectiveName = item.name || 'ماده مصرفی';
 
-                          const matchWh = warehouseItems.find(i => 
-                            (effectiveCode && i.code === effectiveCode) ||
-                            (effectiveName && i.name.toLowerCase() === effectiveName.toLowerCase())
-                          );
+                          const matchWh = findProjectItemMatch({ code: effectiveCode, name: item.name }, warehouseItems);
 
                           const currentStock = matchWh ? matchWh.current_stock : (item.stockQty ?? 0);
                           const effectiveWarehouseUnit = matchWh?.unit || item.warehouseUnit;

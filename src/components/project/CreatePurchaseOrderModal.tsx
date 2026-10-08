@@ -7,6 +7,7 @@ import { formatPersianPrice, getTodayJalaliDate } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
+import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 
 interface CreatePurchaseOrderModalProps {
   isOpen: boolean;
@@ -59,10 +60,7 @@ export function CreatePurchaseOrderModal({
 
     return shortfalls.map((item): OrderItemRow => {
       // Find matching item in warehouseItems
-      const matched = warehouseItems.find(w => 
-        (item.itemCode && w.code === item.itemCode) ||
-        (w.name && w.name.trim().toLowerCase() === item.itemName.trim().toLowerCase())
-      );
+      const matched = findProjectItemMatch({ code: item.itemCode, name: item.itemName }, warehouseItems);
 
       const qty = item.convertedToPurchaseQty !== undefined && item.convertedToPurchaseQty > 0
         ? item.convertedToPurchaseQty

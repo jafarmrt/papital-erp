@@ -5,7 +5,9 @@
  * می‌شود، حداکثر تا موجودی کل کالا.
  */
 
-/** کالای انبار برای تطبیق ردیف‌های کنترل موجودی (کد بی حساسیت به حروف، سپس نام) */
+import { findProjectItemMatch } from './projectItemMatch.js';
+
+/** کالای انبار برای تطبیق ردیف‌های کنترل موجودی (findProjectItemMatch: کد، سپس نام دقیق) */
 export interface ReservationStockItem {
   id: number;
   code?: string | null;
@@ -90,10 +92,8 @@ export function buildProjectReservation(
 
   const reserved: ProjectReservedItem[] = [];
   for (const tot of totals.values()) {
-    const match = stockItems.find(i =>
-      (tot.itemCode && i.code && i.code.trim().toUpperCase() === tot.itemCode.toUpperCase()) ||
-      (tot.itemName && i.name && i.name.trim().toLowerCase() === tot.itemName.toLowerCase())
-    );
+    // v9.0.332 (TD-749، TD-768): قاعده مشترک تطبیق با مرورگر؛ کد کالا بر نام کالای دیگر مقدم است
+    const match = findProjectItemMatch({ code: tot.itemCode, name: tot.itemName }, stockItems);
     const stock = match ? Number(match.currentStock) || 0 : 0;
     if (!match || stock <= 0) continue;
     const reservedQty = Math.min(stock, tot.totalRequiredQty);

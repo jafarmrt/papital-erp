@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.332 — v9.0.332 — One Item-Matching Rule for Project Materials
+- **One Item-Matching Rule for Project Materials (TD-749, TD-768):** the project purchase list matched a material to a warehouse item by part of its name («کارتن» took the stock of «کارتن بسته‌بندی بزرگ» and left the purchase list) while the server reserved by exact name, and the rule was copied in ten places; the screens and the reservation now share `findProjectItemMatch` (item id, then code, then exact name; never a substring or an empty name).
+
 ### v9.0.331 — v9.0.331 — Package 11 Project Control Audit
 - **Audit (package 11):** project control and production section of the stability audit report: 35 proven findings, 30 of them opened as TD-737..TD-769 (TD-735, TD-736 and TD-747 were closed in package 12; B11-10 and B11-12 were fixed by TD-888 and TD-688) with the product-owner decisions t1-t10; documentation only.
 

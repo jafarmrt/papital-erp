@@ -6,6 +6,7 @@ import {
   Item 
 } from '../../types';
 import { COMMON_UNITS } from './projectInventoryUtils';
+import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
 import { formatPersianNumber } from '../../utils';
 import { MaterialNameCell, CurrentStockCell, ProcurementStatusCell, NotesCell, type OpenUnitConversionModalHandler } from './inventoryRowCells';
 
@@ -130,11 +131,7 @@ export function ProductTreeInventoryCards({
             const isExpanded = !!expandedProductIds[prod.id];
 
             // Match product image from warehouse items or product props
-            const matchingItem = warehouseItems.find(i => 
-              (prod.item_id && i.id === prod.item_id) || 
-              (prod.item_code && i.code === prod.item_code) ||
-              (prod.item_name && i.name.toLowerCase() === prod.item_name.toLowerCase())
-            );
+            const matchingItem = findProjectItemMatch({ itemId: prod.item_id, code: prod.item_code, name: prod.item_name }, warehouseItems);
             const prodImage = (prod as any).image || (prod as any).thumbnail || matchingItem?.image || matchingItem?.thumbnail;
 
             // Compute overall status for this product across all per_item stages
@@ -149,10 +146,7 @@ export function ProductTreeInventoryCards({
                   totalMaterialsCount++;
                   const effectiveCode = mat.itemCode || '';
                   const effectiveName = mat.name || '';
-                  const matchWh = warehouseItems.find(i => 
-                    (effectiveCode && i.code === effectiveCode) ||
-                    (effectiveName && i.name.toLowerCase() === effectiveName.toLowerCase())
-                  );
+                  const matchWh = findProjectItemMatch({ code: effectiveCode, name: effectiveName }, warehouseItems);
                   const currentStock = matchWh ? matchWh.current_stock : (mat.stockQty ?? 0);
                   const reqQty = Number(mat.requiredQty !== undefined ? mat.requiredQty : 1);
                   const shortfall = Math.max(0, reqQty - currentStock);
@@ -366,10 +360,7 @@ export function ProductTreeInventoryCards({
                                       const effectiveCode = mat.itemCode || '';
                                       const effectiveName = mat.name || 'ماده اولیه';
 
-                                      const matchWh = warehouseItems.find(i => 
-                                        (effectiveCode && i.code === effectiveCode) ||
-                                        (effectiveName && i.name.toLowerCase() === effectiveName.toLowerCase())
-                                      );
+                                      const matchWh = findProjectItemMatch({ code: effectiveCode, name: mat.name }, warehouseItems);
 
                                       const currentStock = matchWh ? matchWh.current_stock : (mat.stockQty ?? 0);
                                       const effectiveWarehouseUnit = matchWh?.unit || mat.warehouseUnit;
