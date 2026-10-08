@@ -52,6 +52,15 @@ export const stageStatusLabel = (status: string | null | undefined): string =>
 /** بزرگ‌ترین شماره مرحله (ستون integer؛ v9.0.368، TD-755) */
 export const MAX_STAGE_ORDER = 10000;
 
+/**
+ * v9.0.386 (TD-759، تصمیم ت۹ الف): پروژه لغوشده یا تکمیل‌شده مواد تازه نمی‌گیرد (آزادسازی تخصیص‌های پیشین آزاد است) و
+ * فرم تخصیص آن را پیشنهاد نمی‌کند
+ */
+export const ALLOCATION_CLOSED_PROJECT_STATUSES: readonly string[] = ['completed', 'cancelled'];
+
+export const isProjectOpenForAllocation = (status: string | null | undefined): boolean =>
+  !ALLOCATION_CLOSED_PROJECT_STATUSES.includes(String(status ?? ''));
+
 /** وضعیت‌هایی که فقط کاربر تعیین می‌کند و همگام‌ساز ماتریس تغییر نمی‌دهد */
 export const MATRIX_HELD_PROJECT_STATUSES: readonly string[] = ['paused', 'cancelled'];
 

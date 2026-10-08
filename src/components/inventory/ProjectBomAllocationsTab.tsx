@@ -10,6 +10,7 @@ import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useIn
 import { formatPersianDate, formatPersianNumber, parseCleanNumber, errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { bomAllocationsExportFileName } from '../../lib/inventoryAudit/exportFileNames';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
+import { isProjectOpenForAllocation } from '../../lib/projects/projectStatus';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -75,7 +76,8 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
       ]);
       const rawProjs = Array.isArray(projRes?.data) ? projRes.data : (Array.isArray(projRes) ? projRes : []);
       const rawItems = Array.isArray(itemsRes?.data) ? itemsRes.data : (Array.isArray(itemsRes) ? itemsRes : []);
-      setProjectsList(rawProjs);
+      // v9.0.386 (TD-759، تصمیم ت۹ الف): پروژه لغوشده یا تکمیل‌شده مواد تازه نمی‌گیرد و پیشنهاد نمی‌شود
+      setProjectsList(rawProjs.filter((p: { status?: string }) => isProjectOpenForAllocation(p.status)));
       setItemsList(rawItems);
     } catch (err) {
       console.error('Error loading metadata for allocation:', err);

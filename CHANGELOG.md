@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.386 — No Material for a Closed Project
+- **No Material for a Closed Project (TD-759, decision t9 A):** material was allocated to a cancelled project; allocating to a cancelled or completed project is now 422 `PROJECT_CLOSED_FOR_ALLOCATION` with no stock moved, releasing earlier allocations stays possible, a project with an open allocation is not cancelled (like delete, TD-412), and the allocation form offers only open projects.
+
 ### v9.0.385 — Project Optimistic Lock
 - **Project Optimistic Lock (TD-742, decision t3 A):** two users saving one project overwrote each other silently; `PUT /projects/:id` now requires the `version` the form was built from (400 without it), refuses a stale one with 409 `OCC_CONFLICT`, and every save, matrix status change and delivery completion raises the version; the edit form and the project tabs send and track it.
 

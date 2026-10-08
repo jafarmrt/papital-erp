@@ -10628,6 +10628,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 11 PR b (v9.0.380 on): project edit and input — status lists, delivery input, stage clock, audit, version (TD-754 ...)
   const { runProjectEditTests } = await import('../regression/projectEditTests.js');
   results.push(...await runProjectEditTests(shouldRun));
+  // Package 11 PR c (v9.0.386 on): project list, purchase document and material allocation
+  const { runProjectPurchaseAllocationTests } = await import('../regression/projectPurchaseAllocationTests.js');
+  results.push(...await runProjectPurchaseAllocationTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));

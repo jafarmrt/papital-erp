@@ -1,7 +1,7 @@
 import { eq, and, asc, ne, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { productionProjects, projectStages, items, customers, projectProductStageProgress, documents, projectBomAllocations } from '../db/schema.js';
-import { AppError, BusinessLogicError, ConflictError, NotFoundError, ValidationError } from '../errors/customErrors.js';
+import { productionProjects, projectStages, items, customers, projectProductStageProgress, documents } from '../db/schema.js';
+import { AppError, ConflictError, NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { deliveredProjectQuantities, describeOverDeliveries, findOverDeliveries, plannedProjectProducts, type ProjectOverDelivery } from './projects/projectDeliveryCap.js';
 import { withOrderedLocks } from '../lib/lockOrder.js';
 import { DocumentService } from './document.service.js';
@@ -21,6 +21,7 @@ import { toPersianDigits } from '../utils/persianNumber.js';
 import { normalizeDecimalString } from '../lib/numericInput.js';
 import { nextVersion } from '../lib/occHelper.js';
 import { assertProjectVersion, projectVersionConflict } from './projects/projectVersion.js';
+import { assertNoOpenAllocations } from './projects/projectOpenAllocations.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -278,6 +279,8 @@ export class ProjectService {
     if (input.startDate !== undefined) updateData.startDate = optionalStorageDate(input.startDate, 'تاریخ شروع پروژه');
     if (input.endDate !== undefined) updateData.endDate = optionalStorageDate(input.endDate, 'تاریخ پایان پروژه');
     if (input.status !== undefined) updateData.status = input.status;
+    // v9.0.386 (TD-759، تصمیم ت۹ الف): پروژه‌ای که تخصیص مواد باز دارد مثل حذف (TD-412) لغو نمی‌شود
+    if (input.status === 'cancelled' && existing.status !== 'cancelled') await assertNoOpenAllocations(executor, existing, 'لغو نمی‌شود');
     if (input.priority !== undefined) updateData.priority = input.priority;
     if (input.description !== undefined) updateData.description = input.description;
     if (input.products !== undefined) updateData.products = Array.isArray(input.products) ? input.products : [];
@@ -315,26 +318,14 @@ export class ProjectService {
    */
   static async deleteProject(id: number, executor: DbExecutor = orm): Promise<typeof productionProjects.$inferSelect> {
     return executor.transaction(async (tx) => {
-      // v8.0.121 (TD-412، تصمیم مالک محصول — گزینه الف): پروژه‌ای که تخصیص مواد باز دارد حذف نمی‌شود تا تخصیص‌ها آزاد
-      // شوند. پیش‌تر حذف پذیرفته می‌شد و بهای مواد تخصیص‌یافته در کالای در جریان ساخت (۱۴۰۲) زیر تفصیلی پروژه حذف‌شده
-      // می‌ماند و دیگر از صفحه پروژه آزاد نمی‌شد. تخصیص هم ردیف پروژه را قفل می‌کند، پس حذف و تخصیص هم‌زمان پشت هم‌اند.
+      // v8.0.121 (TD-412): پروژه‌ای که تخصیص مواد باز دارد حذف نمی‌شود (assertNoOpenAllocations)
       const [existing] = await tx.select().from(productionProjects)
         .where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0)))
         .for('update');
       if (!existing) {
         throw new NotFoundError('پروژه یافت نشد');
       }
-      const open = await tx.select({ itemCode: projectBomAllocations.itemCode, itemName: projectBomAllocations.itemName, quantity: projectBomAllocations.quantity, unit: projectBomAllocations.unit })
-        .from(projectBomAllocations)
-        .where(and(eq(projectBomAllocations.projectId, id), eq(projectBomAllocations.status, 'allocated'), eq(projectBomAllocations.isDeleted, 0)))
-        .orderBy(asc(projectBomAllocations.id));
-      if (open.length > 0) {
-        const list = open.slice(0, 5).map(a => `«${a.itemName}» (${a.itemCode}) ${a.quantity} ${a.unit || 'عدد'}`).join('، ');
-        throw new BusinessLogicError(
-          `پروژه «${existing.projectCode}» ${open.length} تخصیص مواد باز دارد (${list}${open.length > 5 ? '، …' : ''}) و حذف نمی‌شود؛ ابتدا تخصیص‌ها را از زبانه مواد پروژه آزاد کنید.`,
-          { code: 'PROJECT_HAS_OPEN_ALLOCATIONS', openAllocations: open.length }
-        );
-      }
+      await assertNoOpenAllocations(tx, existing, 'حذف نمی‌شود');
 
       await tx.update(productionProjects).set({ isDeleted: 1 }).where(eq(productionProjects.id, id));
       await tx.update(projectStages).set({ isDeleted: 1 }).where(eq(projectStages.projectId, id));
