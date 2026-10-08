@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.388 — Paged Project List
+- **Paged Project List (TD-743):** `GET /projects` returned every project with every JSON field twice (312 projects, 9.1 MB) and ignored `page`; it is now one summary page `{ data, total, page, limit, statusCounts }` filtered in SQL, details only in `GET /projects/:id`, and the projects page pages, filters on the server and opens the edit form with the fresh record.
+
 ### v9.0.387 — Allocation From the Warehouse Shown
 - **Allocation From the Warehouse Shown (TD-751):** the material allocation form showed the first warehouse but sent `main`; it now opens on the default warehouse (active, lowest id, TD-203) and sends it.
 

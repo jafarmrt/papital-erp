@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { 
@@ -8,18 +8,22 @@ import {
   Paperclip
 } from 'lucide-react';
 import { ProductionProject } from '../types';
-import { formatPersianNumber } from '../utils';
+import { errorMessageOf, formatPersianNumber } from '../utils';
+import { toast } from 'react-hot-toast';
 import ProjectModal from '../components/ProjectModal';
 import ProjectDetailModal from '../components/ProjectDetailModal';
 import { SectionErrorBoundary } from '../components/common';
 import { useSearch } from '../SearchContext';
 import {
-  useProjectsQuery,
+  fetchProjectRecord,
+  useProjectListQuery,
   useCustomerOptionsQuery,
   useAllItemsQuery,
   useDeleteProjectMutation,
 } from '../hooks/queries';
 import { QUERY_KEYS } from '../lib/queryKeys';
+import { PROJECT_LIST_PAGE_SIZE, projectStatusCountTotal, type ProjectListFilters, type ProjectListRow } from '../lib/projects/projectList';
+import { ProjectListPager } from '../components/project/ProjectListPager';
 import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../components/common/PillBadge';
 
 // v7.0.86 (TD-108): نشان اولویت و وضعیت پروژه
@@ -53,21 +57,38 @@ const KANBAN_COLUMNS = [
 
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
-  const projectsQuery = useProjectsQuery();
-  const customersQuery = useCustomerOptionsQuery();
-  const itemsQuery = useAllItemsQuery();
-  const deleteProjectMutation = useDeleteProjectMutation();
-
-  const projects = projectsQuery.data ?? [];
-  const customersList = customersQuery.data ?? [];
-  const itemsList = itemsQuery.data ?? [];
-  const loading = projectsQuery.isFetching || customersQuery.isFetching || itemsQuery.isFetching;
 
   // Filters
   const { searchQuery, debouncedSearchQuery, setSearchQuery } = useSearch();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'gantt'>('kanban');
+  const [page, setPage] = useState(1);
+
+  // v9.0.388 (TD-743): صافی‌ها و صفحه‌بندی در سرور؛ صافی تازه از صفحه نخست
+  const filters = useMemo<ProjectListFilters>(
+    () => ({ search: debouncedSearchQuery, status: statusFilter, priority: priorityFilter }),
+    [debouncedSearchQuery, statusFilter, priorityFilter],
+  );
+  useEffect(() => { setPage(1); }, [filters]);
+
+  const projectsQuery = useProjectListQuery(filters, page, PROJECT_LIST_PAGE_SIZE);
+  const customersQuery = useCustomerOptionsQuery();
+  const itemsQuery = useAllItemsQuery();
+  const deleteProjectMutation = useDeleteProjectMutation();
+
+  const projects = useMemo(() => projectsQuery.data?.data ?? [], [projectsQuery.data]);
+  const projectTotal = projectsQuery.data?.total ?? 0;
+  const statusCounts = projectsQuery.data?.statusCounts ?? {};
+  const customersList = customersQuery.data ?? [];
+  const itemsList = itemsQuery.data ?? [];
+  const loading = projectsQuery.isPending || customersQuery.isPending || itemsQuery.isPending;
+
+  // صفحه‌ای که پس از حذف یا صافی دیگر پروژه‌ای ندارد به صفحه آخر برمی‌گردد
+  const lastPage = Math.max(1, Math.ceil(projectTotal / PROJECT_LIST_PAGE_SIZE));
+  useEffect(() => {
+    if (!projectsQuery.isFetching && page > lastPage) setPage(lastPage);
+  }, [projectsQuery.isFetching, page, lastPage]);
 
   // Modals
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -91,6 +112,15 @@ export default function ProjectsPage() {
     setIsModalOpen(true);
   };
 
+  // v9.0.388 (TD-743): فهرست خلاصه است؛ فرم ویرایش با پرونده کامل و تازه پروژه باز می‌شود
+  const handleEditFromList = async (projectId: number) => {
+    try {
+      handleOpenEditModal(await fetchProjectRecord(queryClient, projectId));
+    } catch (err) {
+      toast.error(errorMessageOf(err) || 'پرونده پروژه خوانده نشد');
+    }
+  };
+
   const handleOpenDetailModal = (projId: number, tab: 'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' | 'product_progress' = 'overview') => {
     setSelectedProjectId(projId);
     setDetailInitialTab(tab);
@@ -102,40 +132,17 @@ export default function ProjectsPage() {
     await deleteProjectMutation.mutateAsync(id);
   };
 
-  // Filter calculation
-  // V3.2.3 (Playbook Scenario 5) & V4 Phase 6.2 (U-1): فیلتر با debouncedSearchQuery — حذف محاسبات مکرر در هر کی‌استروک
-  const filteredProjects = React.useMemo(() => projects.filter(p => {
-    if (!p) return false;
-    const q = debouncedSearchQuery.trim().toLowerCase();
-    const code = String(p.project_code || p.projectCode || '').toLowerCase();
-    const title = String(p.title || '').toLowerCase();
-    const custName = String(p.customer_name || p.customerName || '').toLowerCase();
-    const itmName = String(p.item_name || p.itemName || '').toLowerCase();
-    const itmCode = String(p.item_code || p.itemCode || '').toLowerCase();
-
-    const matchesSearch = !q ||
-      code.includes(q) ||
-      title.includes(q) ||
-      custName.includes(q) ||
-      itmName.includes(q) ||
-      itmCode.includes(q);
-
-    const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
-    const matchesPriority = priorityFilter === 'all' || p.priority === priorityFilter;
-
-    return matchesSearch && matchesStatus && matchesPriority;
-  }), [projects, debouncedSearchQuery, statusFilter, priorityFilter]);
-
-  // Summary Statistics
-  const totalCount = projects.length;
-  const inProgressCount = React.useMemo(() => projects.filter(p => p.status === 'in_progress').length, [projects]);
-  const plannedCount = React.useMemo(() => projects.filter(p => p.status === 'planned').length, [projects]);
-  const completedCount = React.useMemo(() => projects.filter(p => p.status === 'completed').length, [projects]);
-  const filteredByStatus = React.useMemo(() => ({
-    planned: filteredProjects.filter(p => p.status === 'planned'),
-    in_progress: filteredProjects.filter(p => p.status === 'in_progress'),
-    completed: filteredProjects.filter(p => p.status === 'completed'),
-  }), [filteredProjects]);
+  // Summary Statistics (v9.0.388, TD-743): شمار هر وضعیت از سرور، با صافی‌های جستجو و اولویت
+  const totalCount = projectStatusCountTotal(statusCounts);
+  const inProgressCount = statusCounts.in_progress ?? 0;
+  const plannedCount = statusCounts.planned ?? 0;
+  const completedCount = statusCounts.completed ?? 0;
+  const filteredProjects = projects;
+  const filteredByStatus = useMemo(() => ({
+    planned: projects.filter(p => p.status === 'planned'),
+    in_progress: projects.filter(p => p.status === 'in_progress'),
+    completed: projects.filter(p => p.status === 'completed'),
+  }), [projects]);
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 text-xs animate-fadeIn">
@@ -335,7 +342,7 @@ export default function ProjectsPage() {
                     onDetail={() => handleOpenDetailModal(p.id, 'overview')}
                     onInventory={() => handleOpenDetailModal(p.id, 'inventory')}
                     onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
-                    onEdit={() => handleOpenEditModal(p)}
+                    onEdit={() => { void handleEditFromList(p.id); }}
                     onDelete={() => handleDeleteProject(p.id, p.project_code)}
                     priorityBadge={<PillBadge variants={PROJECT_PRIORITY_BADGES} value={p.priority} fallback={PROJECT_PRIORITY_FALLBACK} />}
                   />
@@ -367,13 +374,13 @@ export default function ProjectsPage() {
                     <td className="p-3.5 font-bold text-slate-900">
                       <div className="flex items-center gap-1.5">
                         <span>{p.title}</span>
-                        {p.attachments && p.attachments.length > 0 && (
+                        {p.attachments_count > 0 && (
                           <span 
                             className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold flex items-center gap-0.5 shrink-0"
-                            title={`${formatPersianNumber(p.attachments.length)} فایل ضمیمه`}
+                            title={`${formatPersianNumber(p.attachments_count)} فایل ضمیمه`}
                           >
                             <Paperclip className="w-2.5 h-2.5" />
-                            <span>{formatPersianNumber(p.attachments.length)}</span>
+                            <span>{formatPersianNumber(p.attachments_count)}</span>
                           </span>
                         )}
                       </div>
@@ -417,7 +424,7 @@ export default function ProjectsPage() {
                           پیشرفت کدها
                         </button>
                         <button
-                          onClick={() => handleOpenEditModal(p)}
+                          onClick={() => { void handleEditFromList(p.id); }}
                           className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
                           title="ویرایش پروژه"
                         >
@@ -506,6 +513,10 @@ export default function ProjectsPage() {
       )}
       </SectionErrorBoundary>
 
+      {!loading && projectTotal > 0 && (
+        <ProjectListPager page={page} limit={PROJECT_LIST_PAGE_SIZE} total={projectTotal} onPageChange={setPage} />
+      )}
+
       {/* Project Create/Edit Modal */}
       <ProjectModal
         isOpen={isModalOpen}
@@ -549,8 +560,8 @@ function ProjectKanbanCard({
   onDelete,
   priorityBadge
 }: {
-  key?: any;
-  project: ProductionProject;
+  key?: React.Key;
+  project: ProjectListRow;
   onDetail: () => void;
   onInventory?: () => void;
   onProductProgress?: () => void;
@@ -563,15 +574,15 @@ function ProjectKanbanCard({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <span className="font-mono font-bold text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60">
-            {project.project_code || project.projectCode}
+            {project.project_code}
           </span>
-          {project.attachments && project.attachments.length > 0 && (
+          {project.attachments_count > 0 && (
             <span 
               className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold flex items-center gap-1"
-              title={`${formatPersianNumber(project.attachments.length)} فایل ضمیمه`}
+              title={`${formatPersianNumber(project.attachments_count)} فایل ضمیمه`}
             >
               <Paperclip className="w-2.5 h-2.5" />
-              <span>{formatPersianNumber(project.attachments.length)}</span>
+              <span>{formatPersianNumber(project.attachments_count)}</span>
             </span>
           )}
         </div>

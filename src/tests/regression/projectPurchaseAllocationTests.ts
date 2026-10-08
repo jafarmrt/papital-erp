@@ -1,7 +1,8 @@
+import { PROJECT_LIST_ROW_FIELDS, PROJECT_LIST_STAGE_FIELDS } from '../../lib/projects/projectList.js';
 import { createTestItem } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
-import { brief, editProject, newProject, projectStatus, q } from './projectStageIntegrityTests.js';
+import { type Row, brief, editProject, newProject, projectStatus, q } from './projectStageIntegrityTests.js';
 
 /**
  * Package 11 (project control and production), PR «ج»: lists, purchase and material allocation — the project list,
@@ -60,6 +61,83 @@ export async function runProjectPurchaseAllocationTests(shouldRun: ShouldRun): P
       if (releaseDone.status !== 200) problems.push(`releasing an allocation of the completed project answered ${releaseDone.status} ${brief(releaseDone.body)}, expected 200`);
       assertNoProblems(problems);
       return 'closed projects take no material; earlier allocations release; an open allocation blocks the cancel';
+    }));
+  }
+
+  const listId = 'reg_project_list_paged_td_743';
+  if (shouldRun(listId, 'td743', 'projects', 'package11')) {
+    await runCase(results, listId, 'v9.0.388: GET /projects answers one summary page {data, total, page, limit, statusCounts} filtered in SQL by search, status and priority; a row carries only the summary fields and its stages, never the inventory control, schedule, description or attachments (TD-743)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const tag = `TD743-${Date.now().toString(36)}`;
+      const ids: number[] = [];
+      for (let i = 0; i < 3; i++) ids.push((await newProject(api, { stages: ['cut', 'assemble'] })).id);
+      const heavy = JSON.stringify({ reservedItems: Array.from({ length: 200 }, (_, i) => ({ itemId: i + 1, qty: 1, note: 'x'.repeat(40) })) });
+      const attachments = JSON.stringify([{ id: 'a1', name: 'a.pdf', url: '/api/attachments/1' }, { id: 'a2', name: 'b.pdf', url: '/api/attachments/2' }]);
+      const setProject = (id: number, title: string, customer: string, itemCode: string, status: string, priority: string) => q(
+        `UPDATE production_projects SET title = $2, customer_name = $3, item_code = $4, status = $5, priority = $6, inventory_control = $7::jsonb,
+           stage_schedules = $7::jsonb, description = $8, attachments = $9::jsonb WHERE id = $1`,
+        [id, title, customer, itemCode, status, priority, heavy, 'y'.repeat(2000), attachments],
+      );
+      await setProject(ids[0], `${tag} first`, 'customer one', 'SKU-1', 'in_progress', 'urgent');
+      await setProject(ids[1], `${tag} second`, 'customer two', 'SKU-2', 'planned', 'medium');
+      await setProject(ids[2], 'other title', `${tag} customer`, `${tag}-SKU`, 'planned', 'urgent');
+      await q(`UPDATE project_stages SET status = 'completed', progress_percent = 100
+               WHERE id = (SELECT id FROM project_stages WHERE project_id = $1 AND is_deleted = 0 ORDER BY stage_order LIMIT 1)`, [ids[0]]);
+
+      type Page = { data?: Row[]; total?: number; page?: number; limit?: number; statusCounts?: Record<string, number> };
+      const list = async (params: string) => {
+        const res = await api.get(`/api/projects?${params}`);
+        return { status: res.status, body: (res.body ?? {}) as Page };
+      };
+      const idsOf = (body: Page) => (Array.isArray(body.data) ? body.data : []).map(r => Number(r.id));
+      const counts = (body: Page) => JSON.stringify(Object.entries(body.statusCounts ?? {}).sort());
+      const search = `search=${encodeURIComponent(tag)}`;
+
+      // paging over the three projects of the search: 2 + 1 distinct rows, the counts of the whole search on each page
+      const first = await list(`${search}&limit=2&page=1`);
+      const second = await list(`${search}&limit=2&page=2`);
+      if (first.status !== 200 || idsOf(first.body).length !== 2 || first.body.total !== 3 || first.body.page !== 1 || first.body.limit !== 2) {
+        problems.push(`page 1 of 2 answered ${first.status} with ${idsOf(first.body).length} rows ${brief({ ...first.body, data: undefined })}, expected 2 rows of total 3`);
+      }
+      if (second.status !== 200 || idsOf(second.body).length !== 1 || second.body.page !== 2) problems.push(`page 2 answered ${second.status} with ${idsOf(second.body).length} rows, expected 1`);
+      const paged = [...idsOf(first.body), ...idsOf(second.body)].sort((a, b) => a - b);
+      if (JSON.stringify(paged) !== JSON.stringify([...ids].sort((a, b) => a - b))) problems.push(`the two pages hold ${paged.join(',')}, expected ${ids.join(',')}`);
+      if (counts(first.body) !== JSON.stringify([['in_progress', 1], ['planned', 2]])) problems.push(`status counts of the search are ${counts(first.body)}`);
+
+      // a row is the summary only
+      const row = (first.body.data ?? []).concat(second.body.data ?? []).find(r => Number(r.id) === ids[0]);
+      const extra = Object.keys(row ?? {}).filter(k => !(PROJECT_LIST_ROW_FIELDS as readonly string[]).includes(k));
+      const missing = PROJECT_LIST_ROW_FIELDS.filter(k => !(k in (row ?? {})));
+      if (!row || extra.length > 0 || missing.length > 0) problems.push(`the list row carries ${extra.join(', ') || '-'} and lacks ${missing.join(', ') || '-'}`);
+      const stages = Array.isArray(row?.stages) ? row.stages as Row[] : [];
+      const stageExtra = stages.flatMap(st => Object.keys(st).filter(k => !(PROJECT_LIST_STAGE_FIELDS as readonly string[]).includes(k)));
+      if (stages.length !== 2 || stageExtra.length > 0) problems.push(`the row has ${stages.length} stages with extra keys ${stageExtra.join(', ') || '-'}, expected 2 summary stages`);
+      if (row && (row.progress_percent !== 50 || row.completed_stages !== 1 || row.total_stages !== 2 || row.attachments_count !== 2 || row.status !== 'in_progress' || row.priority !== 'urgent')) {
+        problems.push(`the row summary is ${brief({ ...row, stages: undefined })}, expected progress 50, 1 of 2 stages, 2 attachments`);
+      }
+      if (row && JSON.stringify(row).length > 1500) problems.push(`the list row is ${JSON.stringify(row).length} characters long`);
+
+      // filters run in SQL, and the status counts ignore only the status filter
+      const running = await list(`${search}&status=in_progress`);
+      if (JSON.stringify(idsOf(running.body)) !== JSON.stringify([ids[0]]) || running.body.total !== 1 || counts(running.body) !== counts(first.body)) {
+        problems.push(`status=in_progress gave ${idsOf(running.body).join(',')} of total ${running.body.total} with counts ${counts(running.body)}`);
+      }
+      const urgent = await list(`${search}&priority=urgent`);
+      if (JSON.stringify(idsOf(urgent.body).sort((a, b) => a - b)) !== JSON.stringify([ids[0], ids[2]].sort((a, b) => a - b)) || counts(urgent.body) !== JSON.stringify([['in_progress', 1], ['planned', 1]])) {
+        problems.push(`priority=urgent gave ${idsOf(urgent.body).join(',')} with counts ${counts(urgent.body)}`);
+      }
+      const bySku = await list(`search=${encodeURIComponent(`${tag}-sku`)}`);
+      if (JSON.stringify(idsOf(bySku.body)) !== JSON.stringify([ids[2]])) problems.push(`searching the item code gave ${idsOf(bySku.body).join(',') || 'nothing'}`);
+
+      const defaults = await list('');
+      if (defaults.status !== 200 || defaults.body.limit !== 50 || defaults.body.page !== 1 || idsOf(defaults.body).length > 50) problems.push(`the list without paging answered ${defaults.status} ${brief({ ...defaults.body, data: undefined })}, expected page 1 of 50`);
+      for (const bad of ['status=unknown', 'priority=critical', 'limit=500', 'page=0']) {
+        const res = await list(bad);
+        if (res.status !== 400) problems.push(`${bad} answered ${res.status}, expected 400`);
+      }
+      assertNoProblems(problems);
+      return 'one summary page with SQL filters, counts of the other filters and summary stages; malformed filters 400';
     }));
   }
 
