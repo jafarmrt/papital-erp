@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.313 — v9.0.313 — Package 15 Events and Integrations Audit Documentation
+- **Package 15 Audit:** section 14 of the V9 stability audit records the events, webhooks, automatic rules, dead-letter queue, notifications and WooCommerce package: 32 proven findings (one P1, a WooCommerce order of a namesake posted to the existing customer's receivable, and eighteen P2, among them a webhook test that follows redirects to internal addresses and delivery failures that never retry) opened as TD-703..TD-734 with the product-owner decisions. Documentation only.
+
 ### v9.0.312 — v9.0.312 — Production Error Answers Keep 4xx Details
 - **Production error details (TD-594):** in production a 4xx answer keeps its details, so the over-delivery and over-order prompts list their items, and a broken request body gets a Persian message with its own code.
 
