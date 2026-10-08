@@ -30,6 +30,8 @@ export interface InvoiceListDocument {
   currency?: string;
   user?: string;
   buyer_name?: string | null;
+  /** v9.0.336 (TD-778): طرف حساب سند با شناسه؛ فرم تسویه آن را می‌فرستد (v9.0.459، TD-907) */
+  partyId?: number | null;
   buyer_phone?: string | null;
   buyer_city?: string | null;
   notes?: string;

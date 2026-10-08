@@ -19,6 +19,15 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.461 — Payroll Payments Follow the Treasury Date Rule
+- **Fix (TD-927, P5-W04):** a payroll payment dated after the business today is refused with 422 `TREASURY_DATE_IN_FUTURE` and nothing is written, like every other treasury write; the payment form sends an ISO date from the Jalali picker.
+
+### v9.0.460 — Treasury Rows Link Only to Documents of Their Currency
+- **Fix (TD-908, P5-P08 / P5-S-06):** a new receipt or payment is linked only to a document in its own currency (422 `TREASURY_DOCUMENT_CURRENCY_MISMATCH`, nothing written), the same rule the relink already had; a rial row no longer settles a foreign-currency document.
+
+### v9.0.459 — Settlement Receipts and Payments Carry the Document's Party
+- **Fix (TD-907, P5-S-01 / P5-P06):** a receipt or payment recorded against a document without a party id takes the document's party id and current name, so the party's account card and delete guard still see it after a rename; the invoice settlement form sends the party id too.
+
 ### v9.0.458 — Procurement Finalizes Write the Document Audit Row
 - **Fix (TD-917, P5-P10):** order delivery and receive items write, in their transaction, one finalize audit row per order with the document id and the stored document before and after, like PUT /documents/:id/finalize, so the document timeline shows them.
 

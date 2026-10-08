@@ -1,8 +1,8 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { Request } from 'express';
 import { orm } from '../../../db/drizzle.js';
-import { bankAccounts, documents, treasuryTransactions } from '../../../db/schema.js';
-import { ConflictError, NotFoundError, ValidationError } from '../../../errors/customErrors.js';
+import { bankAccounts, treasuryTransactions } from '../../../db/schema.js';
+import { ConflictError, NotFoundError } from '../../../errors/customErrors.js';
 import { logActivity } from '../../../lib/auditLogger.js';
 import { LockHierarchyLevel, validateLockOrder } from '../../../lib/lockOrder.js';
 import { assertTreasuryDocumentLink, resolveTreasuryPartyName } from './treasuryLinks.js';
@@ -14,7 +14,8 @@ import { assertTreasuryDocumentLink, resolveTreasuryPartyName } from './treasury
  * و این مسیر راه کاربر برای جدا کردن آن دریافت است.
  *
  * قفل‌ها به ترتیب سطح: حساب بانکی (۱۰)، سند تازه `FOR SHARE` (۶۰، در `assertTreasuryDocumentLink`)، ردیف خزانه (۸۰).
- * سند تازه همان قاعده ثبت دریافت را دارد (TD-501): فعال، هم‌سو، با همان طرف حساب؛ و ارز آن همان ارز ردیف است.
+ * سند تازه همان قاعده ثبت دریافت را دارد (TD-501): فعال، هم‌سو، با همان طرف حساب؛ و ارز آن همان ارز ردیف است (از v9.0.460،
+ * TD-908، همین سنجش در `assertTreasuryDocumentLink` و برای ثبت هم).
  */
 
 export interface TreasuryDocumentRelinkResult {
@@ -56,17 +57,9 @@ export async function relinkTreasuryDocument(params: {
         partyType: before.partyType || 'other',
         partyId: before.partyId ?? null,
         partyName: partyName ?? before.partyName,
+        // v9.0.460 (TD-908): سنجش ارز همان قاعده ثبت است (`assertTreasuryDocumentLink`)
+        currency: before.currency,
       });
-      // جمع تسویه سند فقط ردیف‌های ارز خودش را معنادار می‌شمارد
-      const [doc] = await tx.select({ currency: documents.currency, refNumber: documents.refNumber }).from(documents)
-        .where(eq(documents.id, params.documentId));
-      if ((doc?.currency || 'IRR').toUpperCase() !== (before.currency || 'IRR').toUpperCase()) {
-        throw new ValidationError(
-          `ارز سند «${doc?.refNumber ?? params.documentId}» (${doc?.currency || 'IRR'}) با ارز تراکنش (${before.currency || 'IRR'}) یکی نیست.`,
-          undefined,
-          'TREASURY_DOCUMENT_CURRENCY_MISMATCH',
-        );
-      }
     }
 
     const [row] = await tx.select().from(treasuryTransactions)

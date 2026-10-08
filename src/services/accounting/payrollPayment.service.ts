@@ -20,9 +20,8 @@ import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
-import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { isoToJalaliDate } from '../../utils.js';
-import { requireStorageDate } from '../../lib/storageDate.js';
+import { resolveTreasuryWriteDate } from './treasury/treasuryDate.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 
 // V4.0.33: سرویس جامع و واحد ثبت پرداخت حقوق — پشتیبانی کامل از پرداخت‌های چندمرحله‌ای (قسطی / جزئی)
@@ -109,6 +108,10 @@ export class PayrollPaymentService {
     if (input.method === 'cheque') {
       throw new ValidationError('روش «چک» در پرداخت حقوق پذیرفته نمی‌شود؛ حقوق را با انتقال بانکی، نقدی یا کارتخوان پرداخت کنید.');
     }
+    // v9.0.461 (TD-927، P5-W04): تاریخ پرداخت حقوق همان قاعده تاریخ نوشتن خزانه را دارد (`resolveTreasuryWriteDate`):
+    // خالی ← امروز کسب‌وکار، روز ناموجود ← 422 و تاریخ پس از امروز ← 422 `TREASURY_DATE_IN_FUTURE`، پیش از هر نوشتن.
+    // پیش‌تر فقط `requireStorageDate` بود و پرداخت آینده‌دار مانده بانک، ردیف خزانه و سند حسابداری را با تاریخ آینده می‌نوشت.
+    const payIso = await resolveTreasuryWriteDate(input.paymentDate, 'تاریخ پرداخت');
     return await orm.transaction(async (tx) => {
       // V1.4.0: ترتیب واقعی قفل: بانک (سطح ۱۰) اول، سپس فیش حقوقی (سطح ۳۰)
       await withOrderedLocks(tx, [
@@ -223,8 +226,8 @@ export class PayrollPaymentService {
       const newTotalPaid = alreadyPaid.add(payAmount).round(4);
       const isFullyPaid = newTotalPaid.greaterThanOrEqual(netPayable);
       const nextStatus = isFullyPaid ? 'paid' : 'partially_paid';
-      // v7.0.134 (TD-232): تاریخ پرداخت فیش و تراکنش خزانه میلادی ISO (سند حسابداری هم تاریخ را ISO می‌کند)
-      const payIso = requireStorageDate(input.paymentDate, 'تاریخ پرداخت') || await businessTodayIsoDate();
+      // v7.0.134 (TD-232): تاریخ پرداخت فیش و تراکنش خزانه میلادی ISO (سند حسابداری هم تاریخ را ISO می‌کند)؛
+      // از v9.0.461 (TD-927) پیش از تراکنش با `resolveTreasuryWriteDate` خوانده می‌شود.
 
       const descText = isFullyPaid
         ? `تسویه نهایی ${input.method === 'cash' ? 'نقدی' : input.method === 'pos' ? 'کارتخوان' : 'بانکی'} حقوق ${pers?.fullName || ''} فیش ${payroll.payrollNumber}`
