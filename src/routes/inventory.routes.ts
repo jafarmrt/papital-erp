@@ -397,7 +397,7 @@ router.put(
 // GET /api/inventory/allocations
 router.get(
   '/allocations',
-  authorizePermission('warehouse.view', 'projects.view'),
+  authorizePermission(...READ_PERMISSIONS.bomAllocations),
   validate(allocationsQuerySchema),
   asyncHandler(async (req, res) => {
     const projectId = req.query.projectId ? parseInt(req.query.projectId as string, 10) : undefined;

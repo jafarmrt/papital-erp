@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.391 — Allocation Read Errors and Tab Access
+- **Allocation Read Errors and Tab Access (TD-760):** a refused allocation read (403) showed as an empty list and the tab opened for `audit.view`, which the API refuses; the tab now shows the error with a retry and appears only for `READ_PERMISSIONS.bomAllocations`, the keys of `GET /inventory/allocations`.
+
 ### v9.0.390 — Purchase Row Status Kept
 - **Purchase Row Status Kept (TD-750):** the purchase list row id (`code_…` / `name_…`) never matched a section row, so a chosen procurement status was lost and state was changed in place; `withProcurementStatus` now updates every section row of that code or name immutably with a functional update.
 

@@ -125,6 +125,8 @@ export const READ_PERMISSIONS = {
   transfers: ['products.view'],
   pendingMaterials: ['pending_materials.view', 'products.view'],
   reservedItems: ['products.view', 'reports.view', 'warehouse.view', 'warehouse.in', 'documents.view', 'documents.create'],
+  /** تخصیص‌های مواد اولیه به پروژه (`GET /inventory/allocations`)؛ زبانه «تخصیص مواد به پروژه‌ها» هم با همین‌ها دیده می‌شود (v9.0.391، TD-760) */
+  bomAllocations: ['warehouse.view', 'projects.view'],
   /** فهرست کامل کاربران و نقش‌ها (فهرست ساده نام‌ها /users/list-simple برای همه باز است) */
   userDirectory: ['users.manage', 'roles.manage', 'personnel.manage', 'workflow.manage', 'settings.manage'],
   permissionCatalog: ['roles.manage', 'users.manage'],

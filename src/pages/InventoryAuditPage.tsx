@@ -11,7 +11,7 @@ import { PhysicalAuditSheetTab } from '../components/inventory/PhysicalAuditShee
 import { PastAuditReportsTab } from '../components/inventory/PastAuditReportsTab';
 import { WarehouseTransfersListTab } from '../components/inventory/WarehouseTransfersListTab';
 import { ProjectBomAllocationsTab } from '../components/inventory/ProjectBomAllocationsTab';
-import { InventoryAuditHeader } from '../components/inventory/InventoryAuditHeader';
+import { InventoryAuditHeader, useCanSeeBomAllocations } from '../components/inventory/InventoryAuditHeader';
 import { AuditConfirmSummaryModal } from '../components/inventory/AuditConfirmSummaryModal';
 import { AuditDocumentDetailModal, TransferDocumentDetailModal } from '../components/inventory/InventoryDocumentDetailModals';
 
@@ -41,6 +41,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
   const queryClient = useQueryClient();
   // Navigation
   const [activeTab, setActiveTab] = useState<InventoryAuditTab>('new_audit');
+  const canSeeAllocations = useCanSeeBomAllocations();
 
   // Modal States
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -166,7 +167,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
         />
       )}
 
-      {activeTab === 'bom_allocations' && (
+      {activeTab === 'bom_allocations' && canSeeAllocations && (
         <ProjectBomAllocationsTab user={user} />
       )}
 

@@ -11,6 +11,7 @@ import { formatPersianDate, formatPersianNumber, parseCleanNumber, errorMessageO
 import { bomAllocationsExportFileName } from '../../lib/inventoryAudit/exportFileNames';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 import { isProjectOpenForAllocation } from '../../lib/projects/projectStatus';
+import { ErrorStateView } from '../common/ErrorStateView';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -21,6 +22,8 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
   const queryClient = useQueryClient();
   const [allocations, setAllocations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  // v9.0.391 (TD-760): خطای خواندن تخصیص‌ها (مثلاً ۴۰۳) پیام خودش را دارد، نه جدول خالی «هیچ تخصیصی یافت نشد»
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -61,8 +64,10 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
       const res = await fetchJson(`/inventory/allocations?${queryParams.toString()}`);
       setAllocations(res?.allocations || []);
+      setLoadError(null);
     } catch (err) {
-      console.error('Error loading allocations:', err);
+      setAllocations([]);
+      setLoadError(errorMessageOf(err) || 'خواندن تخصیص‌های مواد اولیه ممکن نشد.');
     } finally {
       setLoading(false);
     }
@@ -366,6 +371,12 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                   <td colSpan={9} className="py-8 text-center text-slate-400">
                     <RefreshCw className="animate-spin inline-block mr-2" size={16} />
                     در حال بارگذاری تخصیص‌های مواد اولیه…
+                  </td>
+                </tr>
+              ) : loadError ? (
+                <tr>
+                  <td colSpan={9} className="py-4">
+                    <ErrorStateView compact title={`تخصیص‌های مواد اولیه خوانده نشد: ${loadError}`} onRetry={loadAllocations} />
                   </td>
                 </tr>
               ) : allocations.length === 0 ? (
