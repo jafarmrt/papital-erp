@@ -1,16 +1,25 @@
 import fs from 'fs';
 import path from 'path';
-import { sql, eq, and } from 'drizzle-orm';
+import { sql, eq, and, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { outboxEvents, deadLetterEvents, journalVouchers, journalVoucherItems, workflowInstances, workflowTasks } from '../../db/schema.js';
 import { unresolvedDeadLetterCondition } from '../events/deadLetterQueueService.js';
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { logger } from '../../middleware/logger.js';
 import { errorMessageOf } from '../../utils.js';
+import {
+  DATABASE_HEALTH_MESSAGES, SUBSYSTEM_UNKNOWN_MESSAGES, type SubsystemStatus, type OutboxHealth, type AccountingHealth, type WorkflowHealth,
+  type SubsystemHealth,
+} from '../../lib/system/subsystemHealth.js';
+import {
+  STORAGE_LOCATION_MESSAGES, STORAGE_SUMMARY_MESSAGES, type StorageHealth, type StorageLocationHealth, type StorageLocationKind,
+} from '../../lib/system/storageHealth.js';
+import { getAttachmentsRoot } from '../attachments/attachmentStorage.service.js';
+import { getImageUploadsDir } from '../../lib/storage.js';
 
 /**
  * V3.0.7 (TD-065): بررسی سلامت زیرساخت برای صفحه وضعیت سیستم (GET /system/health، فقط ادمین):
- * اتصال و تأخیر پایگاه‌داده، قابلیت نوشتن پوشه uploads، شاخص‌های صف رویداد / اسناد / فرآیند و حافظه.
+ * اتصال و تأخیر پایگاه‌داده، قابلیت نوشتن پوشه‌های پیوست و تصویر (v9.0.389)، شاخص‌های صف رویداد / اسناد / فرآیند و حافظه.
  * شمارنده‌های DLQ و وظایف معوق SLA با ممیزی یکپارچگی (SystemReconciliationService) مشترک‌اند.
  */
 
@@ -20,17 +29,67 @@ export interface DatabaseHealth {
   message: string;
 }
 
-export interface StorageHealth {
-  status: string;
-  writable: boolean;
-  uploadsPath: string;
-  message: string;
+export type { StorageHealth };
+
+/**
+ * v9.0.388 (TD-593): هر زیرسامانه جدا سنجیده می‌شود (قرارداد مشترک `src/lib/system/subsystemHealth.ts`)؛ پرس‌وجوی
+ * شکست‌خورده `status: 'unknown'`، شمارنده‌های null و پیام فارسی می‌دهد، نه صفر و «سالم». متن خطا فقط در لاگ می‌آید.
+ */
+export type { SubsystemStatus, OutboxHealth, AccountingHealth, WorkflowHealth, SubsystemHealth };
+
+/** Runs one subsystem check; a failed query becomes `unknown` with a Persian message, never zeros and `ok` */
+async function measureSubsystem<T extends { status: SubsystemStatus }>(
+  subsystem: string, check: () => Promise<T>, unknown: T
+): Promise<T> {
+  try {
+    return await check();
+  } catch (err) {
+    logger.warn('Health check of a subsystem failed', { subsystem, error: errorMessageOf(err) });
+    return unknown;
+  }
 }
 
-export interface SubsystemHealth {
-  outbox: { pendingCount: number; dlqCount: number; status: string };
-  accounting: { totalVouchers: number; unbalancedVouchers: number; status: string };
-  workflow: { activeInstances: number; overdueSlaTasks: number; status: string };
+/**
+ * Whether the app can write into `dir`: the directory itself, or (when it does not exist yet, since the app creates it
+ * with mkdir -p) its nearest existing ancestor must be a writable directory. Nothing is created or written.
+ */
+export function directoryWriteProblem(dir: string): string | null {
+  let current = path.resolve(dir);
+  for (;;) {
+    let stat: fs.Stats | null = null;
+    try {
+      stat = fs.statSync(current);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') return errorMessageOf(err);
+    }
+    if (stat) {
+      if (!stat.isDirectory()) return `${current} is not a directory`;
+      try {
+        fs.accessSync(current, fs.constants.W_OK | fs.constants.X_OK);
+        return null;
+      } catch (err) {
+        return errorMessageOf(err);
+      }
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return `no existing directory above ${dir}`;
+    current = parent;
+  }
+}
+
+function storageLocationHealth(kind: StorageLocationKind, dir: string): StorageLocationHealth {
+  const problem = directoryWriteProblem(dir);
+  if (problem) logger.warn('Storage directory is not writable', { kind, path: dir, error: problem });
+  return { kind, path: dir, writable: !problem, message: STORAGE_LOCATION_MESSAGES[kind][problem ? 'error' : 'ok'] };
+}
+
+/**
+ * v9.0.391 (TD-623): an outbox event stuck in `processing` for more than five minutes. Shared by the count on the health
+ * page and the reset action (`SystemReconciliationService.resetStuckOutboxEvents`), so the page offers the reset only
+ * when it would reset something.
+ */
+export function stuckOutboxCondition(): SQL {
+  return and(eq(outboxEvents.status, 'processing'), sql`${outboxEvents.occurredAt} < now() - interval '5 minutes'`) as SQL;
 }
 
 export class SystemHealthService {
@@ -56,6 +115,12 @@ export class SystemHealthService {
       .orderBy(journalVouchers.id);
   }
 
+  /** v9.0.391 (TD-623): outbox events stuck in processing (what «اجرای دوباره رویدادهای مانده» would reset) */
+  static async countStuckOutboxEvents(): Promise<number> {
+    const [res] = await orm.select({ count: sql<number>`count(*)::int` }).from(outboxEvents).where(stuckOutboxCondition());
+    return res?.count || 0;
+  }
+
   /** تعداد وظایف در انتظاری که مهلت SLA آن‌ها گذشته است */
   static async countOverdueSlaTasks(): Promise<number> {
     const [overdueRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(workflowTasks)
@@ -65,67 +130,61 @@ export class SystemHealthService {
 
   /** 1. Check DB Connection & Latency */
   static async checkDatabase(): Promise<DatabaseHealth> {
-    const dbStatus = { status: 'ok', latencyMs: 0, message: 'پایگاه‌داده PostgreSQL متصل و آماده است' };
+    // v9.0.392 (TD-622): Persian message without «PostgreSQL»; the raw error goes only to the server log
+    const dbStatus: DatabaseHealth = { status: 'ok', latencyMs: 0, message: DATABASE_HEALTH_MESSAGES.ok };
     try {
       const dbStart = Date.now();
       await orm.execute(sql`SELECT 1`);
       dbStatus.latencyMs = Date.now() - dbStart;
     } catch (e) {
+      logger.warn('Health check of the database failed', { error: errorMessageOf(e) });
       dbStatus.status = 'error';
-      dbStatus.message = `خطا در اتصال به پایگاه‌داده: ${errorMessageOf(e)}`;
+      dbStatus.message = DATABASE_HEALTH_MESSAGES.error;
     }
     return dbStatus;
   }
 
-  /** 2. Check Write Permissions on public/uploads */
+  /**
+   * 2. Storage: the directories the app writes to (attachments root and image uploads), read-only.
+   * v9.0.389 (TD-619): checked public/uploads only (not ATTACHMENTS_DIR) and wrote a test file on every call.
+   */
   static checkStorage(): StorageHealth {
-    const storageStatus = { status: 'ok', writable: true, uploadsPath: '', message: 'پوشه ذخیره‌سازی تصاویر قابل نوشتن است' };
-    try {
-      const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-      storageStatus.uploadsPath = uploadsDir;
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-      const testFile = path.join(uploadsDir, `.test-write-${Date.now()}`);
-      fs.writeFileSync(testFile, 'write-test');
-      fs.unlinkSync(testFile);
-    } catch (e) {
-      storageStatus.status = 'error';
-      storageStatus.writable = false;
-      storageStatus.message = `خطای دسترسی نوشتن به پوشه تصاویر: ${errorMessageOf(e)}`;
-    }
-    return storageStatus;
+    const locations = ([
+      ['attachments', getAttachmentsRoot()],
+      ['images', getImageUploadsDir()],
+    ] as Array<[StorageLocationKind, string]>).map(([kind, dir]) => storageLocationHealth(kind, dir));
+    const writable = locations.every(l => l.writable);
+    return {
+      status: writable ? 'ok' : 'error',
+      writable,
+      locations,
+      message: writable ? STORAGE_SUMMARY_MESSAGES.ok : STORAGE_SUMMARY_MESSAGES.error,
+    };
   }
 
-  /** 3. Subsystem Health Checks (Outbox, DLQ, Vouchers, Workflow) */
+  /** 3. Subsystem Health Checks (Outbox, DLQ, Vouchers, Workflow), each with its own failure state */
   static async collectSubsystemMetrics(): Promise<SubsystemHealth> {
-    const outboxMetrics = { pendingCount: 0, dlqCount: 0, status: 'ok' };
-    const accountingMetrics = { totalVouchers: 0, unbalancedVouchers: 0, status: 'ok' };
-    const workflowMetrics = { activeInstances: 0, overdueSlaTasks: 0, status: 'ok' };
-
-    try {
+    const outbox = await measureSubsystem<OutboxHealth>('outbox', async () => {
       const [pendingRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(outboxEvents).where(eq(outboxEvents.status, 'pending'));
       const dlqCount = await this.countDeadLetterEvents();
-      outboxMetrics.pendingCount = pendingRes?.count || 0;
-      outboxMetrics.dlqCount = dlqCount;
-      if (outboxMetrics.dlqCount > 0) outboxMetrics.status = 'warning';
+      const stuckCount = await this.countStuckOutboxEvents();
+      return { pendingCount: pendingRes?.count || 0, dlqCount, stuckCount, status: dlqCount > 0 || stuckCount > 0 ? 'warning' : 'ok' };
+    }, { pendingCount: null, dlqCount: null, stuckCount: null, status: 'unknown', message: SUBSYSTEM_UNKNOWN_MESSAGES.outbox });
 
+    const accounting = await measureSubsystem<AccountingHealth>('accounting', async () => {
       const [vouchersRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(journalVouchers)
         .where(eq(journalVouchers.isDeleted, 0));
-      accountingMetrics.totalVouchers = vouchersRes?.count || 0;
-      accountingMetrics.unbalancedVouchers = (await this.findUnbalancedVouchers()).length;
-      if (accountingMetrics.unbalancedVouchers > 0) accountingMetrics.status = 'error';
+      const unbalancedVouchers = (await this.findUnbalancedVouchers()).length;
+      return { totalVouchers: vouchersRes?.count || 0, unbalancedVouchers, status: unbalancedVouchers > 0 ? 'error' : 'ok' };
+    }, { totalVouchers: null, unbalancedVouchers: null, status: 'unknown', message: SUBSYSTEM_UNKNOWN_MESSAGES.accounting });
 
+    const workflow = await measureSubsystem<WorkflowHealth>('workflow', async () => {
       const [wfRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(workflowInstances).where(eq(workflowInstances.status, 'IN_PROGRESS'));
       const overdueSlaTasks = await this.countOverdueSlaTasks();
-      workflowMetrics.activeInstances = wfRes?.count || 0;
-      workflowMetrics.overdueSlaTasks = overdueSlaTasks;
-      if (workflowMetrics.overdueSlaTasks > 0) workflowMetrics.status = 'warning';
-    } catch (err) {
-      logger.warn({ message: 'Health Check Subsystems Warning', error: err });
-    }
+      return { activeInstances: wfRes?.count || 0, overdueSlaTasks, status: overdueSlaTasks > 0 ? 'warning' : 'ok' };
+    }, { activeInstances: null, overdueSlaTasks: null, status: 'unknown', message: SUBSYSTEM_UNKNOWN_MESSAGES.workflow });
 
-    return { outbox: outboxMetrics, accounting: accountingMetrics, workflow: workflowMetrics };
+    return { outbox, accounting, workflow };
   }
 
   /** 5. Memory & Runtime */

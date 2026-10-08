@@ -19,6 +19,30 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.393 — Setup Token Checked on Step 1
+- **Fix (TD-621, B01-41):** step 1 of the setup wizard needs the setup token, and a wrong token takes the wizard back to step 1 with the message under the token field; the password half was fixed by TD-532.
+
+### v9.0.392 — Setup Wizard and Health Page in Persian
+- **Fix (TD-622, B01-42, decision ت۸):** the setup wizard, the health page, its integrity check and the reset dialog show no English word or Latin digit; the company name has no default and is required by `POST /setup`, and the factory reset is confirmed by typing «حذف همه».
+
+### v9.0.391 — Event Queue Replay Asks First
+- **Fix (TD-623, B01-43, decision ت۸):** replaying the failed events or the events stuck in the send queue asks «… دوباره اجرا شوند؟» first, and each button shows only when its queue has events; the health answer carries `outbox.stuckCount`, counted with the reset's own condition.
+
+### v9.0.390 — Factory Reset Restores Event Rules and Subscriptions
+- **Fix (TD-620, B01-40):** after a factory reset the default workflows, event rules and webhook subscriptions are seeded again with the boot's `seedDefaultEngines`, so the low-stock alert works without a restart; the reset card names what is erased, what comes back and that roles are kept.
+
+### v9.0.389 — Storage Card Checks the Attachment Directory
+- **Fix (TD-619, B01-39):** the health page's storage card checks the attachment root (`ATTACHMENTS_DIR`) and the image uploads directory, each with its path, by permission only; it no longer writes a test file into `public/uploads` on every call or reports «writable» while attachments cannot be saved.
+
+### v9.0.388 — Health Page Reports a Failed Check as Unknown
+- **Fix (TD-593, B01-13):** the system health page measures the event queue, voucher balance and workflow separately; a failed query is `unknown` with null counts and a Persian message instead of zeros and `ok`, the constant `observability` field is gone, and the page shows «نامعلوم» with its own color.
+
+### v9.0.387 — Data Export Holds Every Promised Table
+- **Fix (TD-624, B01-44, decision ت۷):** the export reads one table list shared with the settings card (`DATA_EXPORT_TABLES`): project allocations and stage progress, pending materials, piecework tasks and rates, fiscal periods, item opening rows, attachment metadata, workflow tables and event rules were added; every other table is left out with a reason in the manifest, and Vitest fails on an unclassified table.
+
+### v9.0.386 — Streamed Zip Data Export
+- **Fix (TD-592, B01-12, decision ت۷):** the data export streams a zip with one NDJSON file per table, read in primary-key batches with back-pressure, and a manifest of row counts; the audit log comes only with `activityLogs=1` and a business-day range. Before, one unbounded `SELECT *` per table and one `res.json` (950,000 audit rows: 3 GiB of memory, `/health/live` waited 13 s).
+
 ### v9.0.385 — Project Optimistic Lock
 - **Project Optimistic Lock (TD-742, decision t3 A):** two users saving one project overwrote each other silently; `PUT /projects/:id` now requires the `version` the form was built from (400 without it), refuses a stale one with 409 `OCC_CONFLICT`, and every save, matrix status change and delivery completion raises the version; the edit form and the project tabs send and track it.
 

@@ -20,9 +20,17 @@ export async function prepareDatabaseAtBoot(): Promise<void> {
   const seed = await runSeedWithLock();
   if (!seed.success) throw new Error(`Base data seed failed: ${seed.message}`);
   await migratePlainPasswords();
+  await seedDefaultEngines();
+  // v8.0.77 (TD-324): کش منطقه زمانی پیش از اولین درخواست، بیرون از هر تراکنش پر می‌شود
+  await warmDisplayTimezone();
+}
+
+/**
+ * v9.0.390 (TD-620، B01-40): گردش کارها، قاعده‌های رویداد و اشتراک‌های پیش‌فرض، هر کدام فقط وقتی نیست. هم در بوت و هم
+ * پس از بازنشانی کارخانه اجرا می‌شود که همین‌ها را پاک می‌کند، تا بازنشانی همان پیش‌فرض‌های نصب تازه را بگذارد.
+ */
+export async function seedDefaultEngines(): Promise<void> {
   await WorkflowEngineService.seedDefaultWorkflows();
   await EventActionEngineService.seedDefaultRules();
   await WebhookSubscriptionService.seedDefaultSubscriptions();
-  // v8.0.77 (TD-324): کش منطقه زمانی پیش از اولین درخواست، بیرون از هر تراکنش پر می‌شود
-  await warmDisplayTimezone();
 }
