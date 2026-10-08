@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.363 — Setup Token Checked on Step 1
+- **Fix (TD-621, B01-41):** step 1 of the setup wizard needs the setup token, and a wrong token takes the wizard back to step 1 with the message under the token field; the password half was fixed by TD-532.
+
 ### v9.0.362 — Setup Wizard and Health Page in Persian
 - **Fix (TD-622, B01-42, decision ت۸):** the setup wizard, the health page, its integrity check and the reset dialog show no English word or Latin digit; the company name has no default and is required by `POST /setup`, and the factory reset is confirmed by typing «حذف همه».
 

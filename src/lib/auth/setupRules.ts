@@ -16,6 +16,9 @@ export const SETUP_IN_PROGRESS_MESSAGE = 'راه‌اندازی اولیه هم�
 export const SETUP_TOKEN_NOT_CONFIGURED_MESSAGE =
   'رمز راه‌اندازی در کارساز تعیین نشده یا کوتاه‌تر از ۱۶ نویسه است. مدیر کارساز باید آن را تعیین کند؛ راهنمای زیر فیلد «رمز راه‌اندازی» را ببینید.';
 
+/** v9.0.363 (TD-621، B01-41): گام ۱ جادوگر بی رمز راه‌اندازی پیش نمی‌رود */
+export const SETUP_TOKEN_REQUIRED_MESSAGE = 'رمز راه‌اندازی را وارد کنید.';
+
 export const SETUP_ALREADY_DONE_MESSAGE = 'سامانه پیش‌تر راه‌اندازی شده است.';
 
 export const SETUP_DEFAULT_PASSWORD_MESSAGE = 'رمز عبور مدیر نمی‌تواند رمز پیش‌فرض باشد.';

@@ -79,6 +79,8 @@ describe('password minimum length (TD-532)', () => {
   it('the setup page stops a seven-character admin password with the same message', async () => {
     stubFetch();
     render(<SetupPage onLogin={() => {}} />);
+    // v9.0.363 (TD-621): step 1 needs the setup token first
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'test_setup_token_at_least_16_chars_long' } });
     fireEvent.change(screen.getByPlaceholderText('مثال: علی رضایی'), { target: { value: 'مدیر سامانه' } });
     for (const input of Array.from(document.querySelectorAll('input[type="password"]')) as HTMLInputElement[]) {
       fireEvent.change(input, { target: { value: SEVEN } });

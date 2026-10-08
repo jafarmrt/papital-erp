@@ -7,7 +7,8 @@ import { compressTo300KB } from '../utils/imageCompression';
 import { MIN_PASSWORD_LENGTH, passwordLengthError } from '../lib/auth/passwordPolicy';
 import { FULL_NAME_MAX_LENGTH } from '../lib/users/profileFields';
 import { RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../lib/rialDisplay';
-import { SETUP_USERNAME_MIN_LENGTH, SETUP_USERNAME_TOO_SHORT_MESSAGE, setupCompanyNameError } from '../lib/auth/setupRules';
+import { SETUP_TOKEN_REQUIRED_MESSAGE, SETUP_USERNAME_MIN_LENGTH, SETUP_USERNAME_TOO_SHORT_MESSAGE, setupCompanyNameError } from '../lib/auth/setupRules';
+import { errorMessageOf } from '../utils';
 
 interface SetupPageProps {
   onLogin: (user: User, token: string) => void;
@@ -17,6 +18,8 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  // v9.0.363 (TD-621، B01-41): خطای رمز راه‌اندازی زیر همان فیلد در گام ۱ نشان داده می‌شود
+  const [tokenError, setTokenError] = useState('');
 
   // Step 1: Admin Account State & Setup Security Token (SEC-012)
   const [setupToken, setSetupToken] = useState(() => {
@@ -63,7 +66,11 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
   const handleNextStep = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
+    if (!setupToken.trim()) {
+      setTokenError(SETUP_TOKEN_REQUIRED_MESSAGE);
+      return;
+    }
     if (!fullName.trim()) {
       setError('لطفاً نام و نام خانوادگی مدیر را وارد کنید');
       return;
@@ -122,8 +129,15 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
         toast.success('سامانه راه‌اندازی شد. خوش آمدید.');
         onLogin(res.user, res.token);
       }
-    } catch (err: any) {
-      setError(err.message || 'راه‌اندازی اولیه انجام نشد. دوباره تلاش کنید.');
+    } catch (err) {
+      const message = errorMessageOf(err) || 'راه‌اندازی اولیه انجام نشد. دوباره تلاش کنید.';
+      // رمز راه‌اندازی نادرست یا تعیین‌نشده (۴۰۱): بازگشت به گام ۱ و پیام زیر فیلد رمز، نه در گامی که این فیلد را ندارد
+      if ((err as { status?: unknown } | null)?.status === 401) {
+        setTokenError(message);
+        setStep(1);
+      } else {
+        setError(message);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -209,12 +223,19 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                     required
                     type="text"
                     value={setupToken}
-                    onChange={e => setSetupToken(e.target.value)}
+                    onChange={e => { setSetupToken(e.target.value); setTokenError(''); }}
                     dir="ltr"
                     placeholder="رمزی که در کارساز تعیین شده است"
-                    className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    aria-invalid={tokenError ? true : undefined}
+                    aria-describedby={tokenError ? 'setup-token-error' : undefined}
+                    className={`w-full pr-10 pl-3 py-2.5 bg-white border rounded-xl text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
+                      tokenError ? 'border-red-400' : 'border-slate-300'
+                    }`}
                   />
                 </div>
+                {tokenError && (
+                  <p id="setup-token-error" role="alert" className="text-xs text-red-600 font-medium mt-1">{tokenError}</p>
+                )}
                 <p className="text-xs text-slate-500 mt-1">
                   برای حفاظت از راه‌اندازی اولیه، رمزی را که در کارساز تعیین شده است وارد کنید. این رمز مقدار{' '}
                   <code dir="ltr" className="font-mono bg-slate-100 px-1 rounded">ERP_SETUP_TOKEN</code> در پرونده{' '}
