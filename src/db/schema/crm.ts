@@ -61,6 +61,9 @@ export const crmLeads = pgTable('crm_leads', {
   idx_crm_assigned: index('idx_crm_assigned').on(table.assignedTo),
   idx_crm_deleted: index('idx_crm_deleted').on(table.isDeleted),
   idx_crm_proforma: index('idx_crm_proforma').on(table.proformaId),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_crm_leads_assigned_personnel_id: index('idx_crm_leads_assigned_personnel_id').on(table.assignedPersonnelId).where(sql`${table.assignedPersonnelId} IS NOT NULL`),
+  idx_crm_leads_customer_id: index('idx_crm_leads_customer_id').on(table.customerId).where(sql`${table.customerId} IS NOT NULL`),
 }));
 registerColumnRef('crmLeads.id', () => crmLeads.id);
 
@@ -92,6 +95,8 @@ export const crmActivities = pgTable('crm_activities', {
   idx_crm_act_date_iso: index('idx_crm_act_date_iso').on(table.activityDateIso),
   idx_crm_act_next_iso: index('idx_crm_act_next_iso').on(table.nextFollowUpDateIso),
   idx_crm_act_deleted: index('idx_crm_act_deleted').on(table.isDeleted),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_crm_activities_assigned_personnel_id: index('idx_crm_activities_assigned_personnel_id').on(table.assignedPersonnelId).where(sql`${table.assignedPersonnelId} IS NOT NULL`),
 }));
 
 export const transfers = pgTable('transfers', {

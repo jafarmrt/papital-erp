@@ -652,6 +652,13 @@
       "when": 1793880000000,
       "tag": "0092_stage_progress_not_null",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1793890000000,
+      "tag": "0093_foreign_key_indexes",
+      "breakpoints": true
     }
   ]
 }

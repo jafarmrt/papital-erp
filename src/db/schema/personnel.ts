@@ -105,6 +105,8 @@ export const pieceworkTaskRateHistory = pgTable('piecework_task_rate_history', {
   idx_ptrh_created: index('idx_ptrh_created').on(table.createdAt),
   // v9.0.434 (TD-613): index of migration 0076, declared so the schema matches the database
   idx_ptrh_personnel: index('idx_ptrh_personnel').on(table.personnelId).where(sql`${table.personnelId} IS NOT NULL`),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_piecework_task_rate_history_changed_by_user_id: index('idx_piecework_task_rate_history_changed_by_user_id').on(table.changedByUserId).where(sql`${table.changedByUserId} IS NOT NULL`),
 }));
 
 export const pieceworkPersonnelRates = pgTable('piecework_personnel_rates', {
@@ -156,6 +158,8 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   idx_ppay_number: index('idx_ppay_number').on(table.payrollNumber),
   idx_ppay_status: index('idx_ppay_status').on(table.status),
   idx_ppay_deleted: index('idx_ppay_deleted').on(table.isDeleted),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_piecework_payrolls_created_by_id: index('idx_piecework_payrolls_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
 }));
 registerColumnRef('pieceworkPayrolls.id', () => pieceworkPayrolls.id);
 
@@ -184,4 +188,6 @@ export const pieceworkLogs = pgTable('piecework_logs', {
   idx_plog_date_iso: index('idx_plog_date_iso').on(table.dateIso),
   idx_plog_payroll: index('idx_plog_payroll').on(table.payrollId),
   idx_plog_deleted: index('idx_plog_deleted').on(table.isDeleted),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_piecework_logs_created_by_id: index('idx_piecework_logs_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
 }));

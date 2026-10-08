@@ -1,4 +1,5 @@
 import { pgTable, text, serial, integer, jsonb, timestamp, index, unique } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { users } from './auth';
 
 export const outboxEvents = pgTable('outbox_events', {
@@ -40,7 +41,9 @@ export const eventActionRules = pgTable('event_action_rules', {
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
 }, (table) => ({
-  idx_action_rules_event_active: index('idx_action_rules_event_active').on(table.eventType, table.isActive)
+  idx_action_rules_event_active: index('idx_action_rules_event_active').on(table.eventType, table.isActive),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_event_action_rules_created_by: index('idx_event_action_rules_created_by').on(table.createdBy).where(sql`${table.createdBy} IS NOT NULL`),
 }));
 
 export const eventActionLogs = pgTable('event_action_logs', {
@@ -126,7 +129,9 @@ export const deadLetterEvents = pgTable('dead_letter_events', {
 }, (table) => ({
   idx_dlq_status: index('idx_dlq_status').on(table.status),
   idx_dlq_event_type: index('idx_dlq_event_type').on(table.eventType),
-  idx_dlq_aggregate: index('idx_dlq_aggregate').on(table.aggregateType, table.aggregateId)
+  idx_dlq_aggregate: index('idx_dlq_aggregate').on(table.aggregateType, table.aggregateId),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_dead_letter_events_resolved_by: index('idx_dead_letter_events_resolved_by').on(table.resolvedBy).where(sql`${table.resolvedBy} IS NOT NULL`),
 }));
 
 export const webhookSubscriptions = pgTable('webhook_subscriptions', {
@@ -149,7 +154,9 @@ export const webhookSubscriptions = pgTable('webhook_subscriptions', {
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
 }, (table) => ({
-  idx_webhook_subs_active: index('idx_webhook_subs_active').on(table.isActive)
+  idx_webhook_subs_active: index('idx_webhook_subs_active').on(table.isActive),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_webhook_subscriptions_created_by: index('idx_webhook_subscriptions_created_by').on(table.createdBy).where(sql`${table.createdBy} IS NOT NULL`),
 }));
 
 export const webhookDeliveries = pgTable('webhook_deliveries', {

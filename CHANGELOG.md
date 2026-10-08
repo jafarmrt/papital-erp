@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.435 — Every Foreign Key Column Has an Index
+- **Fix (TD-614, B01-34):** the 41 foreign key columns without an index leading with them get one (partial on IS NOT NULL when nullable), so a parent's rows and the delete check are read without a table scan; a test refuses a new unindexed key.
+
 ### v9.0.434 — The Drizzle Schema Matches the Database
 - **Fix (TD-613, B01-33):** the Drizzle schema declares the ON DELETE actions, NOT NULL columns, indexes and unique indexes the migrations built, and a drift test refuses any new difference; four stage progress columns become NOT NULL on clean data.
 

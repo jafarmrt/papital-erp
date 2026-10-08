@@ -63,6 +63,8 @@ export const inventoryReconciliationAnomalies = pgTable('inventory_reconciliatio
 }, (table) => ({
   idxRun: index('idx_inv_recon_anomalies_run').on(table.runId),
   idxItem: index('idx_inv_recon_anomalies_item').on(table.itemId),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_inventory_reconciliation_anomalies_warehouse_id: index('idx_inventory_reconciliation_anomalies_warehouse_id').on(table.warehouseId).where(sql`${table.warehouseId} IS NOT NULL`),
 }));
 
 export const items = pgTable('items', {

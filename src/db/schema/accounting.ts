@@ -87,6 +87,11 @@ export const journalVouchers = pgTable('journal_vouchers', {
   idx_jv_status: index('idx_jv_status').on(table.status),
   idx_jv_module: index('idx_jv_module').on(table.referenceModule),
   idx_jv_deleted: index('idx_jv_deleted').on(table.isDeleted),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_journal_vouchers_approved_by_id: index('idx_journal_vouchers_approved_by_id').on(table.approvedById).where(sql`${table.approvedById} IS NOT NULL`),
+  idx_journal_vouchers_created_by_id: index('idx_journal_vouchers_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
+  idx_journal_vouchers_source_document_id: index('idx_journal_vouchers_source_document_id').on(table.sourceDocumentId).where(sql`${table.sourceDocumentId} IS NOT NULL`),
+  idx_journal_vouchers_source_payroll_id: index('idx_journal_vouchers_source_payroll_id').on(table.sourcePayrollId).where(sql`${table.sourcePayrollId} IS NOT NULL`),
 }));
 
 /**
@@ -101,7 +106,10 @@ export const fiscalPeriods = pgTable('fiscal_periods', {
   closedBy: text('closed_by'),
   closingVoucherId: integer('closing_voucher_id').references(() => journalVouchers.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-});
+}, (table) => ({
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_fiscal_periods_closing_voucher_id: index('idx_fiscal_periods_closing_voucher_id').on(table.closingVoucherId).where(sql`${table.closingVoucherId} IS NOT NULL`),
+}));
 
 /**
  * v7.0.82 (TD-231): پشتیبان و گزارش اصلاح تاریخ‌های قدیمی «07-10-1405 AP» (مهاجرت 0030)؛ مقدار قبلی و جدید هر ردیف
@@ -181,6 +189,8 @@ export const bankAccounts = pgTable('bank_accounts', {
   idx_bank_code: index('idx_bank_code').on(table.code),
   idx_bank_type: index('idx_bank_type').on(table.type),
   idx_bank_deleted: index('idx_bank_deleted').on(table.isDeleted),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_bank_accounts_account_id: index('idx_bank_accounts_account_id').on(table.accountId).where(sql`${table.accountId} IS NOT NULL`),
 }));
 
 export const cheques = pgTable('cheques', {
@@ -222,6 +232,11 @@ export const cheques = pgTable('cheques', {
   // v9.0.434 (TD-613): built by migration 0012 only on data without duplicates; declared so the schema matches the database
   uq_cheques_sayad_number_active: uniqueIndex('uq_cheques_sayad_number_active').on(table.sayadNumber)
     .where(sql`${table.isDeleted} = 0 AND ${table.sayadNumber} IS NOT NULL AND ${table.sayadNumber} <> ''`),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_cheques_bank_account_id: index('idx_cheques_bank_account_id').on(table.bankAccountId).where(sql`${table.bankAccountId} IS NOT NULL`),
+  idx_cheques_created_by_id: index('idx_cheques_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
+  idx_cheques_party_account_id: index('idx_cheques_party_account_id').on(table.partyAccountId).where(sql`${table.partyAccountId} IS NOT NULL`),
+  idx_cheques_voucher_id: index('idx_cheques_voucher_id').on(table.voucherId).where(sql`${table.voucherId} IS NOT NULL`),
 }));
 registerColumnRef('cheques.id', () => cheques.id);
 
@@ -268,6 +283,13 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
   idx_tt_date: index('idx_tt_date').on(table.date),
   idx_tt_bank: index('idx_tt_bank').on(table.bankAccountId),
   idx_tt_deleted: index('idx_tt_deleted').on(table.isDeleted),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_treasury_transactions_cheque_id: index('idx_treasury_transactions_cheque_id').on(table.chequeId).where(sql`${table.chequeId} IS NOT NULL`),
+  idx_treasury_transactions_contra_account_id: index('idx_treasury_transactions_contra_account_id').on(table.contraAccountId).where(sql`${table.contraAccountId} IS NOT NULL`),
+  idx_treasury_transactions_created_by_id: index('idx_treasury_transactions_created_by_id').on(table.createdById).where(sql`${table.createdById} IS NOT NULL`),
+  idx_treasury_transactions_document_id: index('idx_treasury_transactions_document_id').on(table.documentId).where(sql`${table.documentId} IS NOT NULL`),
+  idx_treasury_transactions_payroll_id: index('idx_treasury_transactions_payroll_id').on(table.payrollId).where(sql`${table.payrollId} IS NOT NULL`),
+  idx_treasury_transactions_voucher_id: index('idx_treasury_transactions_voucher_id').on(table.voucherId).where(sql`${table.voucherId} IS NOT NULL`),
 }));
 
 export const accountingSettings = pgTable('accounting_settings', {
@@ -276,4 +298,7 @@ export const accountingSettings = pgTable('accounting_settings', {
   accountId: integer('account_id').references(() => accounts.id),
   description: text('description').default(''),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
-});
+}, (table) => ({
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_accounting_settings_account_id: index('idx_accounting_settings_account_id').on(table.accountId).where(sql`${table.accountId} IS NOT NULL`),
+}));

@@ -49,6 +49,9 @@ export const workflowTransitions = pgTable('workflow_transitions', {
   isInitiatorExcluded: integer('is_initiator_excluded').notNull().default(0),
 }, (table) => ({
   idx_wftr_definition: index('idx_wftr_definition').on(table.workflowDefinitionId),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_workflow_transitions_from_state_id: index('idx_workflow_transitions_from_state_id').on(table.fromStateId),
+  idx_workflow_transitions_to_state_id: index('idx_workflow_transitions_to_state_id').on(table.toStateId),
 }));
 
 export const workflowInstances = pgTable('workflow_instances', {
@@ -70,6 +73,8 @@ export const workflowInstances = pgTable('workflow_instances', {
   idx_wfi_entity: index('idx_wfi_entity').on(table.entityType, table.entityId),
   // v9.0.434 (TD-613): built by migration 0056 only on data without duplicates; declared so the schema matches the database
   uq_workflow_instances_open_entity: uniqueIndex('uq_workflow_instances_open_entity').on(table.entityType, table.entityId).where(sql`${table.status} = 'IN_PROGRESS'`),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_workflow_instances_workflow_definition_id: index('idx_workflow_instances_workflow_definition_id').on(table.workflowDefinitionId),
 }));
 
 export const workflowPendingApprovals = pgTable('workflow_pending_approvals', {

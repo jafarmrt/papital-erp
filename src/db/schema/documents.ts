@@ -59,6 +59,8 @@ export const documents = pgTable('documents', {
   uq_documents_type_fy_ref_active: uniqueIndex('uq_documents_type_fy_ref_active').on(table.type, table.refFiscalYear, table.refNumber)
     .where(sql`${table.isDeleted} = 0 AND length(${table.refNumber}) > 0`),
   idx_documents_party_id: index('idx_documents_party_id').on(table.partyId).where(sql`${table.partyId} IS NOT NULL`),
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_documents_crm_lead_id: index('idx_documents_crm_lead_id').on(table.crmLeadId).where(sql`${table.crmLeadId} IS NOT NULL`),
 }));
 registerColumnRef('documents.id', () => documents.id);
 
@@ -73,7 +75,10 @@ export const refFiscalYearCorrections = pgTable('ref_fiscal_year_corrections', {
   newFiscalYear: integer('new_fiscal_year').notNull(),
   status: text('status').notNull(), // 'corrected' | 'conflict'
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
-});
+}, (table) => ({
+  // v9.0.435 (TD-614): an index leading with each foreign key column (migration 0093)
+  idx_ref_fiscal_year_corrections_document_id: index('idx_ref_fiscal_year_corrections_document_id').on(table.documentId),
+}));
 
 export const documentRefCounters = pgTable('document_ref_counters', {
   docType: varchar('doc_type', { length: 20 }).notNull(),
