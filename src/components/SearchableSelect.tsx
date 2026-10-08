@@ -23,6 +23,20 @@ interface SearchableSelectProps {
   fetchUrl?: string; // e.g. "/items"
   mapResultToOption?: (item: any) => Option; // Function to convert response to Option
   maxResults?: number;
+  /** v9.0.309 (TD-680): برچسب مقدار ازپیش‌انتخاب‌شده‌ای که هنوز در نتایج `fetchUrl` نیامده است (مثلاً نام خریدار) */
+  valueLabel?: string;
+}
+
+/**
+ * v9.0.309 (TD-680، B16-16): نشانی جست‌وجوی فهرست انتخاب؛ `search` و `limit` جایگزین همان پارامترهای `fetchUrl` می‌شوند،
+ * نه افزوده (پیش‌تر `/customers?limit=1000&search=&limit=50` ساخته می‌شد و سرور ۱٬۰۰۰ ردیف می‌خواند).
+ */
+export function pickListRequestUrl(fetchUrl: string, search: string, limit: number): string {
+  const [path, query = ''] = fetchUrl.split('?');
+  const params = new URLSearchParams(query);
+  params.set('search', search);
+  params.set('limit', String(limit));
+  return `${path}?${params.toString()}`;
 }
 
 export function SearchableSelect({
@@ -34,13 +48,14 @@ export function SearchableSelect({
   disabled,
   fetchUrl,
   mapResultToOption,
-  maxResults = 50
+  maxResults = 50,
+  valueLabel
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [asyncResults, setAsyncResults] = useState<unknown[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selectedLabel, setSelectedLabel] = useState<string>('');
+  const [chosen, setChosen] = useState<{ value: string; label: string } | null>(null);
   
   const wrapperRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -103,8 +118,7 @@ export function SearchableSelect({
     const delayDebounceFn = setTimeout(() => {
       setLoading(true);
       const limit = maxResults || 4;
-      const url = `${fetchUrl}${fetchUrl.includes('?') ? '&' : '?'}search=${encodeURIComponent(search)}&limit=${limit}`;
-      fetchJson(url, { signal: controller.signal })
+      fetchJson(pickListRequestUrl(fetchUrl, search, limit), { signal: controller.signal })
         .then((res: any) => {
           if (controller.signal.aborted) return;
           const data = res.data || res;
@@ -176,8 +190,9 @@ export function SearchableSelect({
 
   const displayOptions = fetchUrl ? asyncOptions : filteredPropOptions;
   const valStr = safeStr(value);
-  const foundOpt = propOptions.find(o => safeStr(o?.value) === valStr);
-  const currentLabel = foundOpt ? foundOpt.label : (valStr ? selectedLabel : placeholder);
+  // v9.0.309 (TD-680): مقدار ازپیش‌انتخاب‌شده برچسبش را از نتایج `fetchUrl` هم می‌گیرد، سپس از `valueLabel`؛ هرگز متن خالی
+  const foundOpt = propOptions.find(o => safeStr(o?.value) === valStr) ?? asyncOptions.find(o => safeStr(o?.value) === valStr);
+  const currentLabel = !valStr ? placeholder : (foundOpt?.label || (chosen?.value === valStr ? chosen.label : '') || valueLabel || placeholder);
 
   return (
     <div className={cn("relative", className)} ref={wrapperRef}>
@@ -224,7 +239,7 @@ export function SearchableSelect({
               className="px-3 py-2 text-slate-500 hover:bg-slate-100 cursor-pointer font-medium"
               onClick={() => {
                 onChange('');
-                setSelectedLabel('');
+                setChosen(null);
                 setIsOpen(false);
                 setSearch('');
               }}
@@ -243,7 +258,7 @@ export function SearchableSelect({
                   onClick={() => {
                     if (opt.disabled) return;
                     onChange(String(opt.value), opt._raw);
-                    setSelectedLabel(opt.label);
+                    setChosen({ value: String(opt.value), label: opt.label });
                     setIsOpen(false);
                     setSearch('');
                   }}

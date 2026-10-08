@@ -10689,5 +10689,13 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runDailyLogWorkTimeTests } = await import('../regression/dailyLogWorkTimeTests.js');
   results.push(...await runDailyLogWorkTimeTests(shouldRun));
 
+  // Package 16 PR d (v9.0.305+): drafts routes and expiry
+  const { runFormDraftRouteErrorsTests } = await import('../regression/formDraftRouteErrorsTests.js');
+  results.push(...await runFormDraftRouteErrorsTests(shouldRun));
+  const { runFormDraftExpiryTests } = await import('../regression/formDraftExpiryTests.js');
+  results.push(...await runFormDraftExpiryTests(shouldRun));
+  const { runProductionErrorDetailsTests } = await import('../regression/productionErrorDetailsTests.js');
+  results.push(...await runProductionErrorDetailsTests(shouldRun));
+
   return results;
 }

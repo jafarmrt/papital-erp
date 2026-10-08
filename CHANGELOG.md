@@ -19,6 +19,30 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.312 — v9.0.312 — Production Error Answers Keep 4xx Details
+- **Production error details (TD-594):** in production a 4xx answer keeps its details, so the over-delivery and over-order prompts list their items, and a broken request body gets a Persian message with its own code.
+
+### v9.0.311 — v9.0.311 — Print Cleanup Runs Once
+- **Print cleanup (TD-684):** printing cleans up once, keeps the print window's own state while it is open and no longer overwrites a newer page title, so the next Ctrl+P still prints only the document.
+
+### v9.0.310 — v9.0.310 — Card and Sheba Fields Keep the Caret After Backspace
+- **Card and Sheba caret (TD-682):** Backspace on a separator removes the digit before it and leaves the caret there instead of moving it to the end of the field.
+
+### v9.0.309 — v9.0.309 — Searchable Select Shows the Label of a Preselected Value
+- **Preselected picker label (TD-680):** a searchable picker filled from a draft, a sales file or a name match shows the chosen buyer instead of an empty box, and its search request no longer sends `limit` twice.
+
+### v9.0.308 — v9.0.308 — Idempotency Key Kept While the Server Still Runs a Save
+- **Idempotency key kept (TD-679):** when the browser stops waiting for a save the server is still running, it keeps the key, so a resend gets that save's result instead of starting a second, unguarded one.
+
+### v9.0.307 — v9.0.307 — Saves Are Not Resent Automatically After a Lost Connection
+- **No automatic resend of saves (TD-670):** after a network error only reads are retried automatically; a save tells the user to check whether it was recorded, and a resend by the user carries the same idempotency key.
+
+### v9.0.306 — v9.0.306 — Form Drafts Expire
+- **Form draft expiry (TD-676):** a draft lives 1 to 90 days, an expired draft no longer offers «restore», and a daily job soft-deletes expired drafts.
+
+### v9.0.305 — v9.0.305 — Draft Routes Validate Their Input and Hide Database Errors
+- **Form draft errors (TD-677):** a draft's type and key are checked against a pattern and a length cap, and a database error goes to the global error handler instead of returning the raw SQL text with status 400.
+
 ### v9.0.304 — Editing a Proforma Does Not Offer to Finalize It
 - **Sales:** while a proforma is edited, «فاکتور نهایی» is closed with the reason that a proforma is finalized by its approval, and the item codes of its lines are shown; before, the option led to a false stock shortage message and the codes were empty (TD-801).
 
