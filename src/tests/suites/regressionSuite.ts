@@ -10280,7 +10280,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         globalThis.Date = RealDate;
         invalidateTimezoneCache();
       }
-      check(exportStatus === 200 && disposition.includes(`erp-data-export-${tehranDay}.json`),
+      check(exportStatus === 200 && disposition.includes(`erp-data-export-${tehranDay}.zip`),
         `نام فایل خروجی باید تاریخ کسب‌وکار ${tehranDay} (نه تاریخ UTC ${utcDay}) باشد (وضعیت ${exportStatus}، دریافتی ${disposition})`);
 
       // (و) Zod: بدنه / کوئری واقعی رابط کاربری می‌گذرد، ورودی نامعتبر 400
@@ -10741,6 +10741,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 10 PR C (v9.0.351+): what the procurement desk reads and shows
   const { runProcurementDeskTests } = await import('../regression/procurementDeskTests.js');
   results.push(...await runProcurementDeskTests(shouldRun));
+
+  // Package 1 second half PR 1 (v9.0.356+): data export, system health page, factory reset, setup wizard
+  const { runDataExportTests } = await import('../regression/dataExportTests.js');
+  results.push(...await runDataExportTests(shouldRun));
 
   return results;
 }

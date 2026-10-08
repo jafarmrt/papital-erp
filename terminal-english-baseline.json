@@ -98,7 +98,7 @@
   "src/tests/suites/documentIntegritySuite.ts": 44,
   "src/tests/suites/e2eSuite.ts": 30,
   "src/tests/suites/integrationSuite.ts": 80,
-  "src/tests/suites/penetrationSuite.ts": 71,
+  "src/tests/suites/penetrationSuite.ts": 66,
   "src/tests/suites/recoverySuite.ts": 5,
   "src/tests/suites/regressionSuite.ts": 658,
   "src/tests/suites/securitySuite.ts": 120,

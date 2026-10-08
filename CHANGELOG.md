@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.356 — Streamed Zip Data Export
+- **Fix (TD-592, B01-12, decision ت۷):** the data export streams a zip with one NDJSON file per table, read in primary-key batches with back-pressure, and a manifest of row counts; the audit log comes only with `activityLogs=1` and a business-day range. Before, one unbounded `SELECT *` per table and one `res.json` (950,000 audit rows: 3 GiB of memory, `/health/live` waited 13 s).
+
 ### v9.0.355 — Persian Procurement Wording and Field Errors
 - **Fix (TD-901, decision ت۵):** procurement UI says «مواد», «فهرست کالا», «سند حسابداری», «بسته» and «اقدام» (no «(Requisitions)»); requisition form and server Zod errors show under their field (`apiFieldErrors`), and server messages name actions in Persian (`requisitionActionLabel`) with Persian digits.
 
