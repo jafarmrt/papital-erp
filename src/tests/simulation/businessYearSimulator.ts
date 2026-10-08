@@ -5,6 +5,10 @@ import { getErrorMessage } from '../../utils/formatters.js';
 import { createTestCustomer, createTestItem, createTestWarehouse } from '../fixtures/factories.js';
 import { checkBusinessInvariants, inventoryValueGap, InvariantScope, InvariantViolation } from '../invariants/businessInvariants.js';
 import { fin, FinancialDecimal } from '../../lib/financialDecimal.js';
+import { checkReservationWithinStock } from '../invariants/reservationInvariants.js';
+import { createFinanceOperations, setupFinance } from './simulationFinanceOperations.js';
+import { closeSimulatedYear } from './simulationFiscalClose.js';
+import { createProjectOperations, setupProjectWorld } from './simulationProjectOperations.js';
 import { createSimulationOperations, isoDay, OpOutcome, SimDoc, SimItem, YEAR_DAYS } from './simulationOperations.js';
 
 /**
@@ -29,7 +33,24 @@ export type SimOperation =
   | 'void'
   | 'production_receipt'
   | 'backdated_purchase'
-  | 'backdated_sale';
+  | 'backdated_sale'
+  // v10.0.11 (TD-982, I-01): treasury, cheques, payroll, purchasing, material allocation and approval
+  | 'treasury_receipt'
+  | 'treasury_payment'
+  | 'treasury_void'
+  | 'cheque_received'
+  | 'cheque_step'
+  | 'payroll'
+  | 'payroll_payment_void'
+  | 'procurement'
+  | 'bom_allocation'
+  | 'bom_release'
+  | 'proforma_approval';
+
+/** Operations whose path passes the sellable gate, after which reservations must stay within stock (I19, TD-819) */
+const RESERVATION_GUARDED: ReadonlySet<SimOperation> = new Set<SimOperation>([
+  'sale', 'backdated_sale', 'remittance', 'waste', 'transfer', 'bom_allocation', 'proforma_approval',
+]);
 
 export interface SimulationOptions {
   seed: number;
@@ -45,6 +66,12 @@ export interface SimulationOptions {
   /** ویژگی‌هایی که عملیات می‌توانند داشته باشند (پیش‌فرض همه روشن) */
   features?: { discounts?: boolean; foreignCurrency?: boolean; zeroPriceReceipts?: boolean };
   log?: (line: string) => void;
+  /**
+   * v10.0.11 (TD-982): after the last step approve the simulator's draft vouchers and close the simulated year (1404) with
+   * its opening voucher, then check I11. Only for a schema of its own (`npm run simulate:year`): in the shared suite
+   * database other tests keep vouchers in 1404.
+   */
+  closeFiscalYear?: boolean;
 }
 
 export interface SimStepRecord {
@@ -93,6 +120,17 @@ export const DEFAULT_WEIGHTS: Record<SimOperation, number> = {
   production_receipt: 6,
   backdated_purchase: 4,
   backdated_sale: 3,
+  treasury_receipt: 5,
+  treasury_payment: 4,
+  treasury_void: 2,
+  cheque_received: 3,
+  cheque_step: 4,
+  payroll: 3,
+  payroll_payment_void: 1,
+  procurement: 3,
+  bom_allocation: 3,
+  bom_release: 2,
+  proforma_approval: 3,
 };
 
 /** mulberry32 — PRNG کوچک و قطعی */
@@ -112,7 +150,7 @@ const GAP_STEP_TOLERANCE = 5;
 /** بیشترین اختلاف گرد کردن یک عملیات ارزی (چند ردیف × نرخ/۲۰۰۰۰) */
 const USD_ROUNDING_TOLERANCE = 200;
 
-async function maxId(table: 'documents' | 'journal_vouchers' | 'transactions'): Promise<number> {
+async function maxId(table: 'documents' | 'journal_vouchers' | 'transactions' | 'treasury_transactions' | 'cheques' | 'piecework_payrolls'): Promise<number> {
   const res = await pool.query<{ m: number | null }>(`SELECT MAX(id) AS m FROM ${table}`);
   return Number(res.rows[0]?.m ?? 0);
 }
@@ -143,6 +181,9 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
     itemIds: [],
     documentIdAfter: await maxId('documents'),
     voucherIdAfter: await maxId('journal_vouchers'),
+    treasuryIdAfter: await maxId('treasury_transactions'),
+    chequeIdAfter: await maxId('cheques'),
+    payrollIdAfter: await maxId('piecework_payrolls'),
   };
 
   // ---- داده پایه شبیه‌سازی ----
@@ -161,7 +202,12 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
     const it = await createTestItem({ type: 'product', code: `${tag}_P${i}`, category: 'دستبند', stocks: {}, weightedAverageCost: 0 });
     items.push({ id: it.id, type: 'product' });
   }
+  // project items are made by the first purchases of the project operations (`purchaseItem`) and join the scope then
+  const projectItems: SimItem[] = [];
   scope.itemIds = items.map(i => i.id);
+  const finance = await setupFinance(tag);
+  const projectWorld = await setupProjectWorld(tag);
+  Object.assign(scope, { bankAccountIds: [finance.bankAccountId], partyIds: [customer.id], projectIds: [projectWorld.projectId] });
 
   const docs: SimDoc[] = [];
   const ops = createSimulationOperations(
@@ -169,6 +215,9 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
     { scope, items, warehouses, mainWh, customer, supplier, docs, features: { allowDiscount, allowForeign, allowZeroPrice } }
   );
   const { snapshot, purchase, sale, salesReturn, issue, stockCount, transfer, voidDoc, productionReceipt } = ops;
+  const random = { rng, pick, between, chance };
+  const fin10 = createFinanceOperations(random, { tag, customer, supplier, treasuryIds: [], chequeIds: [], payrollPayments: [] }, finance);
+  const proj = createProjectOperations(random, { tag, onItem: id => { scope.itemIds = [...(scope.itemIds ?? []), id]; }, projectItems, mainWh, customer, supplier, allocationIds: [] }, projectWorld);
   const steps: SimStepRecord[] = [];
   const findings = new Map<string, SimulationFinding>();
   let day = 0;
@@ -178,6 +227,7 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
     if (!findings.has(k)) findings.set(k, { ...v, firstStep: step, firstOp: op });
   };
 
+  await ops.openingReceipt();
   for (const v of await checkBusinessInvariants(scope)) addFinding(v, 0, 'setup');
   let lastGap: FinancialDecimal = (await inventoryValueGap(scope)).gap;
   const gapBySignature = new Map<string, { count: number; total: FinancialDecimal; firstStep: number }>();
@@ -206,6 +256,17 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
         case 'transfer': outcome = await transfer(day); break;
         case 'void': outcome = await voidDoc(); break;
         case 'production_receipt': outcome = await productionReceipt(day); break;
+        case 'treasury_receipt': outcome = await fin10.treasuryReceipt(day); break;
+        case 'treasury_payment': outcome = await fin10.treasuryPayment(day); break;
+        case 'treasury_void': outcome = await fin10.treasuryVoid(); break;
+        case 'cheque_received': outcome = await fin10.chequeReceived(day); break;
+        case 'cheque_step': outcome = await fin10.chequeStep(day); break;
+        case 'payroll': outcome = await fin10.payroll(day); break;
+        case 'payroll_payment_void': outcome = await fin10.payrollPaymentVoid(); break;
+        case 'procurement': outcome = await proj.procurement(); break;
+        case 'bom_allocation': outcome = await proj.bomAllocation(); break;
+        case 'bom_release': outcome = await proj.bomRelease(); break;
+        case 'proforma_approval': outcome = await proj.proformaApproval(); break;
       }
       const tags = op.startsWith('backdated_') ? [...outcome.tags, 'backdated', ...(backdatePermitted ? ['permitted'] : [])] : outcome.tags;
       record = { step, op, date: isoDay(day), outcome: outcome.detail.startsWith('skip:') ? 'skipped' : 'ok', detail: outcome.detail, tags };
@@ -221,6 +282,9 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
           gapBySignature.set(sig, { count: agg.count + 1, total: agg.total.add(delta), firstStep: agg.firstStep });
         }
         lastGap = now.gap;
+      }
+      if (RESERVATION_GUARDED.has(op) && record.outcome === 'ok') {
+        for (const v of await checkReservationWithinStock(scope.itemIds)) addFinding(v, step, op);
       }
       if (op === 'over_return' && record.outcome === 'ok') {
         addFinding({
@@ -259,6 +323,10 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
       for (const v of violations) addFinding(v, step, op);
       if (options.stopOnFirstViolation && findings.size > 0) break;
     }
+  }
+
+  if (options.closeFiscalYear) {
+    for (const v of await closeSimulatedYear(scope)) addFinding(v, options.steps, 'setup');
   }
 
   // I3 به تفکیک علت: هر امضای عملیاتی که اختلاف ارزش انبار و دفتر کل را تغییر داد یک یافته جداست

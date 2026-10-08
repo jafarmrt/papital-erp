@@ -50,7 +50,8 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
     const res = await pool.query<StockRow>(
       `SELECT item_id, warehouse_code, current_stock::text AS current_stock FROM item_warehouse_stocks
         WHERE item_id = ANY($1::int[]) AND current_stock > 0 ORDER BY item_id, warehouse_id`,
-      [scope.itemIds]
+      // v10.0.11 (TD-982): only the dated operations' own items; the project items move on business today
+      [items.map(i => i.id)]
     );
     return res.rows;
   };
@@ -95,6 +96,15 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
     docs.push({ id, type: input.docType, dayIndex: input.dayIndex });
     return id;
   };
+
+  /**
+   * v10.0.12 (TD-982): the year opens with one receipt of every simulator item on the first day, so no item of the run is
+   * an unreferenced marker row however few steps run (`db:cleanup-test` would remove it, TD-581 check)
+   */
+  const openingReceipt = async (): Promise<number> => createDoc({
+    docType: 'receipt', inOut: 'in', dayIndex: 0, buyerName: supplier.name,
+    lines: items.map(it => ({ itemId: it.id, quantity: 5, unitPrice: 100000, discount: 0, location: mainWh })),
+  });
 
   const purchase = async (dayIndex: number, allowBackdate = false): Promise<OpOutcome> => {
     const lines: DocumentLineItemInput[] = [];
@@ -257,5 +267,5 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
     return { detail: `production receipt #${id} item ${product.id} x${quantity} @${unitPrice}`, tags: [unitPrice === 0 ? 'zero-price' : 'priced'] };
   };
 
-  return { snapshot, purchase, sale, salesReturn, issue, stockCount, transfer, voidDoc, productionReceipt };
+  return { snapshot, openingReceipt, purchase, sale, salesReturn, issue, stockCount, transfer, voidDoc, productionReceipt };
 }

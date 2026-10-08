@@ -20,6 +20,15 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.12 — Foreign sale and purchase vouchers balance in rials, so their year closes (TD-1030)
+- Cost rows of a foreign-currency voucher take the 4-decimal rate that reaches their rial value exactly and the opposite row their sum, so the voucher balances in rials and the fiscal-year closing no longer refuses it by one rial.
+
+### v10.0.11 — Simulator runs treasury, cheques, payroll, purchasing, allocation, approval and year closing (TD-982, I-01)
+- The business-year simulator gains eleven operations through the application services and a `--close-year` option; TD-982 is resolved and the first year closing of a simulated year found TD-1030 (a foreign sale voucher off by one rial).
+
+### v10.0.10 — Business invariants I7, I8, I9, I11, I12 and I17–I20 (TD-982, I-01)
+- Nine new read-only business invariants (project reservation, party receivable, cheque transitions, closed fiscal year, unique numbers, rial balance, posting accounts, reservation within stock, VAT payable) with checks that break a row and expect it reported; TD-982 stays open for the simulator operations.
+
 ### v10.0.9 — End-to-End Tests for Four Business Flows
 - **I-02:** Playwright tests drive purchase, project production and delivery, payslip and payment, and treasury and cheque from the browser down to stock, Kardex and voucher rows.
 
