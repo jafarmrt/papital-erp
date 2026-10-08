@@ -44,7 +44,7 @@ export default function InvoicesListPage() {
         <InvoiceListFilters query={query} />
 
         {/* Table Content */}
-        <InvoiceListTable safeDocs={query.safeDocs} loading={query.loading} actions={actions} />
+        <InvoiceListTable safeDocs={query.safeDocs} loading={query.loading} actions={actions} loadError={query.loadError} onRetry={query.retryLoad} />
 
         {/* Pagination Bar */}
         <InvoiceListPagination query={query} />
@@ -58,6 +58,7 @@ export default function InvoicesListPage() {
           setSettlementDoc={actions.setSettlementDoc}
           printFromDetails={actions.printFromDetails}
           loadData={loadData}
+          canSettle={actions.access.settle}
         />
       )}
 

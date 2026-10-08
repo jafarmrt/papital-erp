@@ -154,20 +154,6 @@ export class FactoryResetService {
       await wipe('legacy_date_repairs', legacyDateRepairs);
       await wipe('workflow_task_reopen_log', workflowTaskReopenLog);
 
-      // 1.5. Purchase Requisitions (Must be deleted BEFORE workflowInstances, productionProjects, and users)
-      await wipe('purchase_requisitions', purchaseRequisitions);
-
-      // 2. Workflow Tasks, Delegations, Instances, History & Definitions
-      await wipe('workflow_history_logs', workflowHistoryLogs);
-      await wipe('workflow_tasks', workflowTasks);
-      await wipe('workflow_pending_approvals', workflowPendingApprovals);
-      await wipe('workflow_instances', workflowInstances);
-      await wipe('workflow_delegations', workflowDelegations);
-      await wipe('workflow_definition_versions', workflowDefinitionVersions);
-      await wipe('workflow_transitions', workflowTransitions);
-      await wipe('workflow_states', workflowStates);
-      await wipe('workflow_definitions', workflowDefinitions);
-
       // 3. Fiscal Periods, Treasury & Accounting (fiscal_periods.closing_voucher_id references journal_vouchers)
       await wipe('fiscal_periods', fiscalPeriods);
       await wipe('treasury_transactions', treasuryTransactions);
@@ -188,6 +174,21 @@ export class FactoryResetService {
       await wipe('documents', documents);
       await wipe('document_ref_counters', documentRefCounters);
       await wipe('item_code_counters', itemCodeCounters);
+
+      // 4.5. Purchase Requisitions (AFTER documents: documents.procurement_requisition_id references them, v9.0.347 / TD-691;
+      //      BEFORE workflowInstances, productionProjects and users)
+      await wipe('purchase_requisitions', purchaseRequisitions);
+
+      // 4.6. Workflow Tasks, Delegations, Instances, History & Definitions
+      await wipe('workflow_history_logs', workflowHistoryLogs);
+      await wipe('workflow_tasks', workflowTasks);
+      await wipe('workflow_pending_approvals', workflowPendingApprovals);
+      await wipe('workflow_instances', workflowInstances);
+      await wipe('workflow_delegations', workflowDelegations);
+      await wipe('workflow_definition_versions', workflowDefinitionVersions);
+      await wipe('workflow_transitions', workflowTransitions);
+      await wipe('workflow_states', workflowStates);
+      await wipe('workflow_definitions', workflowDefinitions);
 
       // 5. Project Dependencies & Allocations (Must be deleted BEFORE items)
       await wipe('piecework_logs', pieceworkLogs);

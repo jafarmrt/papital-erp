@@ -143,7 +143,18 @@ export const READ_PERMISSIONS = {
   ],
   /** درخواست‌های خرید (بی کد نقش؛ مدل مجوز بسته ۲) */
   purchaseRequisitions: ['procurement.view', 'projects.view'],
+  /**
+   * سفارش‌های خرید تدارکات (`GET /procurement/orders`): همان خوانندگان درخواست خرید، چون فهرست فقط سفارش‌هایی را دارد که
+   * برای درخواستی صادر شده‌اند (v9.0.347، TD-691، ت۲)؛ پیش‌تر هر رسید انبار با قیمت و تأمین‌کننده در آن بود
+   */
+  procurementOrders: ['procurement.view', 'projects.view'],
 } as const satisfies Record<string, readonly string[]>;
+
+/**
+ * v9.0.340 (TD-795): گارد ویجت گردش کار یک موجودیت (`GET /workflow/instance/:entityType/:entityId`)؛ دکمه «چرخه تأییدات و
+ * گردش کار» فهرست اسناد با همین کلیدها نمایش داده می‌شود.
+ */
+export const WORKFLOW_WIDGET_PERMISSIONS = ['workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'] as const;
 
 /**
  * v9.0.38 (TD-458، تصمیم مالک محصول ت۹ الف): ویجت گردش کار (`GET /workflow/instance/:entityType/:entityId`) داده و

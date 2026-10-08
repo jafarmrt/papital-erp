@@ -9,7 +9,7 @@ import type { Item, ProjectInventoryControlSectionData, ProjectProductItem } fro
 const item = (id: number, code: string, name: string, stock: number): Item =>
   ({ id, code, name, current_stock: stock, unit: 'عدد', type: 'raw_material' }) as Item;
 
-// v9.0.332 (TD-749, TD-768): one item-matching rule for the server reservation and the browser inventory screens
+// v9.0.363 (TD-749, TD-768): one item-matching rule for the server reservation and the browser inventory screens
 describe('project item matching (TD-749, TD-768)', () => {
   const stock = [item(1, 'BX-90', 'کارتن بسته‌بندی بزرگ', 50), item(2, 'mt-1', 'مهره طلایی', 7), item(3, 'CH-5', 'زنجیر', 4)];
 

@@ -191,6 +191,7 @@
 | DELETE | `/api/events/webhooks/:id` | events.manage |
 | GET | `/api/events/webhooks/:id` | events.view |
 | PUT | `/api/events/webhooks/:id` | events.manage |
+| POST | `/api/events/webhooks/:id/rotate-secret` | events.manage |
 | POST | `/api/events/webhooks/:id/toggle` | events.manage |
 | GET | `/api/events/webhooks/deliveries` | events.view |
 | GET | `/api/events/webhooks/deliveries/list` | events.view |
@@ -295,7 +296,7 @@
 | POST | `/api/piecework/tasks/clear-defaults` | piecework.manage_tasks |
 | POST | `/api/piecework/tasks/import-excel` | piecework.manage_tasks |
 | POST | `/api/procurement/consolidate` | procurement.manage |
-| GET | `/api/procurement/inbox/summary` | procurement.view |
+| GET | `/api/procurement/inbox/summary` | procurement.view \| projects.view |
 | GET | `/api/procurement/orders` | procurement.view \| projects.view |
 | POST | `/api/procurement/orders/:id/deliver` | procurement.order \| procurement.manage |
 | GET | `/api/procurement/requisitions` | procurement.view \| projects.view |

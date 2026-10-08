@@ -1,3 +1,5 @@
+import { formatPersianNumber } from '../../utils';
+
 
 export interface GlobalReservationRow {
   sourceType?: 'proforma' | 'project';
@@ -33,8 +35,8 @@ export function GlobalReservationsPanel({ isOpen, onClose, reservations }: Globa
             🔒
           </div>
           <div>
-            <h3 className="font-bold text-purple-950 text-sm">لیست جامع اقلام رزرو شده انبار (پروژه‌های تولید و پیش‌فاکتورها)</h3>
-            <p className="text-xs text-purple-700">این کالاها در کنترل پروژه‌ها یا پیش‌فاکتورهای فعال رزرو شده‌اند و سیستم مانع از خروج غیرمجاز آن‌ها برای سایر مصارف می‌شود.</p>
+            <h3 className="font-bold text-purple-950 text-sm">فهرست جامع اقلام رزرو شده انبار (پروژه‌های تولید و پیش‌فاکتورها)</h3>
+            <p className="text-xs text-purple-700">این کالاها در کنترل پروژه‌ها یا پیش‌فاکتورهای فعال رزرو شده‌اند و سامانه مانع از خروج غیرمجاز آن‌ها برای سایر مصارف می‌شود.</p>
           </div>
         </div>
         <button
@@ -76,7 +78,7 @@ export function GlobalReservationsPanel({ isOpen, onClose, reservations }: Globa
                   </td>
                   <td className="p-2.5 text-center font-mono font-bold text-emerald-800">
                     <span className="px-2 py-0.5 bg-emerald-100 border border-emerald-300 rounded-md">
-                      {res.reservedQty} {res.unit}
+                      {formatPersianNumber(res.reservedQty)} {res.unit}
                     </span>
                   </td>
                   <td className="p-2.5 text-center font-bold text-[11px] text-amber-900">

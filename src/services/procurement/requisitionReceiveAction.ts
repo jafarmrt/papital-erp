@@ -1,10 +1,8 @@
-import { and, eq, ilike, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, or } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents } from '../../db/schema.js';
-import { businessTodayIsoDate } from '../../lib/businessClock.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
 import { DocumentService } from '../document.service.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { applyDeliveredLines, isClosedRequisitionRow, type RequisitionItemWithReceipt } from './requisitionReceipt.js';
 
 /** v8.0.10 (TD-267): انواع سندی که مسیر تحویل تدارکات به انبار نهایی می‌کند (فقط ورود کالا) */
@@ -24,6 +22,7 @@ export function assertProcurementIncomingDocument(doc: { id: number; type: strin
 }
 
 interface ReceivedRequisition {
+  id: number;
   code: string;
   projectName?: string | null;
   items?: RequisitionItemWithReceipt[] | null;
@@ -35,7 +34,7 @@ interface ReceiveOptions {
   assertIncoming: (doc: { id: number; type: string | null; refNumber: string | null }) => void;
 }
 
-/** برچسب یادداشت سفارش‌هایی که «تبدیل به سفارش» برای درخواست می‌سازد */
+/** برچسب یادداشت سفارش‌هایی که «تبدیل به سفارش» برای درخواست می‌سازد (فقط برای خواندن کاربر؛ پیوند در ستون است) */
 export function requisitionOrderTag(code: string): string {
   return `[تدارکات: درخواست ${code}]`;
 }
@@ -48,13 +47,13 @@ export interface RequisitionOrderDocument {
 }
 
 /**
- * سندهای زنده سفارش یک درخواست خرید: سندهایی که ردیف‌های درخواست به آن‌ها پیوند دارند، و سند ورودی خریدی که برچسب
- * `[تدارکات: درخواست <کد>]` را در یادداشت دارد. v9.0.316 (TD-690): برچسب کامل جست‌وجو می‌شود، نه هر یادداشتی که کد
- * درخواست را دارد.
+ * سندهای زنده سفارش یک درخواست خرید: سندهایی که ستون پیوند `documents.procurement_requisition_id` آن‌ها همین درخواست
+ * است، و سندهایی که ردیف‌های درخواست به آن‌ها پیوند دارند (`linkedDocumentIds`). v9.0.347 (TD-691، ت۲): پیوند از ستون
+ * خوانده می‌شود؛ پیش‌تر هر سند ورودی که برچسب درخواست را در یادداشت داشت سفارش آن شمرده می‌شد (O28).
  */
 export async function requisitionOrderDocuments(
   tx: DbExecutor,
-  req: { code: string; items?: RequisitionItemWithReceipt[] | null },
+  req: { id: number; items?: RequisitionItemWithReceipt[] | null },
 ): Promise<RequisitionOrderDocument[]> {
   const linkedIds = new Set<number>();
   for (const row of Array.isArray(req.items) ? req.items : []) {
@@ -62,25 +61,20 @@ export async function requisitionOrderDocuments(
       if (Number(id) > 0) linkedIds.add(Number(id));
     }
   }
-  const columns = { id: documents.id, type: documents.type, refNumber: documents.refNumber, status: documents.status };
-  const linkedDocs = linkedIds.size === 0 ? [] : await tx.select(columns).from(documents)
-    .where(and(inArray(documents.id, [...linkedIds]), eq(documents.isDeleted, 0)));
-  // سفارش‌هایی که برچسب درخواست را در یادداشت دارند ولی به ردیفی پیوند نخورده‌اند (فقط سند ورودی خرید)
-  const notedDocs = await tx.select(columns).from(documents)
+  const byLink = eq(documents.procurementRequisitionId, req.id);
+  return tx.select({ id: documents.id, type: documents.type, refNumber: documents.refNumber, status: documents.status })
+    .from(documents)
     .where(and(
-      ilike(documents.notes, containsLikePattern(requisitionOrderTag(req.code))),
-      inArray(documents.type, PROCUREMENT_INCOMING_TYPES),
+      linkedIds.size === 0 ? byLink : or(byLink, inArray(documents.id, [...linkedIds])),
       eq(documents.isDeleted, 0)
-    ));
-  const byId = new Map<number, RequisitionOrderDocument>();
-  for (const doc of [...linkedDocs, ...notedDocs]) byId.set(doc.id, doc);
-  return [...byId.values()].sort((a, b) => a.id - b.id);
+    ))
+    .orderBy(asc(documents.id));
 }
 
 /**
  * v8.0.71 (TD-326): «دریافت کالا»ی درخواست خرید (اقدام گردش‌کار receive_items)، درون تراکنش فراخواننده و زیر قفل ردیف
- * درخواست. سفارش‌های پیش‌نویس یا پیش‌فاکتورِ درخواست نهایی می‌شوند و کالایی که هرگز سفارش نشده با یک رسید قطعی وارد
- * انبار می‌شود؛ خطای هر کدام کل اقدام را برمی‌گرداند. مقدار دریافتی هر ردیف دوباره از سطرهای فعال اسناد قطعی درخواست
+ * درخواست. سفارش‌های پیش‌نویس یا پیش‌فاکتورِ درخواست نهایی می‌شوند؛ کالایی که هرگز سفارش نشده اقدام را رد می‌کند
+ * (v9.0.350، TD-699، ت۴) و خطای هر کدام کل اقدام را برمی‌گرداند. مقدار دریافتی هر ردیف دوباره از سطرهای فعال اسناد قطعی درخواست
  * ساخته می‌شود (applyDeliveredLines)، نه برابر مقدار درخواست.
  *
  * پیش‌تر این شاخه بی‌تراکنش و بی‌قفل بود: هم‌زمان با «تبدیل به سفارش»، یا پیش از تبدیل و تحویل، کالا دو بار وارد انبار
@@ -92,9 +86,9 @@ export async function receiveRequisitionItems(
   req: ReceivedRequisition,
   opts: ReceiveOptions
 ): Promise<RequisitionItemWithReceipt[]> {
-  let rows = (Array.isArray(req.items) ? req.items : []).map(row => ({ ...row }));
+  const rows = (Array.isArray(req.items) ? req.items : []).map(row => ({ ...row }));
 
-  const orderDocs = await requisitionOrderDocuments(tx, { code: req.code, items: rows });
+  const orderDocs = await requisitionOrderDocuments(tx, { id: req.id, items: rows });
   for (const doc of orderDocs) {
     if (doc.status === 'final') continue;
     opts.assertIncoming(doc);
@@ -102,37 +96,19 @@ export async function receiveRequisitionItems(
   }
   const requisitionDocIds = new Set(orderDocs.map(doc => doc.id));
 
-  // v9.0.316 (TD-690): ردیفی که هنگام صدور سفارش بسته شد بی سفارش وارد انبار نمی‌شود. v9.0.317 (TD-692): ردیفی هم که
-  // سفارش ردیف دیگری از همان کالا پرش کرده است (applyDeliveredLines) دوباره دریافت نمی‌شود؛ تحویل اکنون همین اقدام را
-  // در تراکنش خود اجرا می‌کند
+  // v9.0.350 (TD-699، B10-12، تصمیم ت۴ الف): کالای ردیفی که هرگز سفارش نشده وارد انبار نمی‌شود؛ ورود کالا فقط از راه سفارش
+  // با تأمین‌کننده و قیمت و تحویل آن است. پیش‌تر این ردیف‌ها با یک رسید قطعی به نام «تامین‌کننده تدارکات» و به برآورد قیمت
+  // (پیش‌فرض ۰) وارد انبار می‌شدند: کالای بی میانگین موزون بی سند حسابداری، و با میانگین موزون به‌صورت «درآمد کالای
+  // اهدایی» (TD-268) بی بدهی به تأمین‌کننده. ردیفی که بسته شده (TD-690) یا سفارش ردیف دیگری از همان کالا پرش کرده
+  // (TD-692) سفارش‌نشده شمرده نمی‌شود.
   const neverOrdered = rows.filter(row =>
     !(Array.isArray(row.linkedDocumentIds) && row.linkedDocumentIds.length > 0) && row.itemId && Number(row.requestedQty || 0) > 0
     && !isClosedRequisitionRow(row) && Number(row.receivedQty || 0) < Number(row.requestedQty));
   if (neverOrdered.length > 0) {
-    const receiptId = await DocumentService.createDocument({
-      docType: 'receipt',
-      date: await businessTodayIsoDate(),
-      status: 'final',
-      buyer_name: 'تامین‌کننده تدارکات',
-      notes: `[تدارکات: تحویل مستقیم به انبار] درخواست ${req.code} ${req.projectName ? `[پروژه: ${req.projectName}]` : ''}`.trim(),
-      location: '',
-      inOut: 'in',
-      currency: 'IRR',
-      user: opts.username,
-      items: neverOrdered.map(row => ({
-        itemId: Number(row.itemId) || 0,
-        quantity: Number(row.requestedQty),
-        unit_price: Number(row.unitPriceEstimate || 0),
-        discount: 0,
-        location: '',
-      })),
-      externalTx: tx,
-    });
-    requisitionDocIds.add(receiptId);
-    const neverOrderedIds = new Set(neverOrdered.map(row => row.id));
-    rows = rows.map(row => neverOrderedIds.has(row.id)
-      ? { ...row, linkedDocumentIds: [...(Array.isArray(row.linkedDocumentIds) ? row.linkedDocumentIds : []), receiptId] }
-      : row);
+    throw new ConflictError(
+      `کالای ${neverOrdered.map(row => `«${row.itemName || row.itemCode || row.itemId}»`).join('، ')} در درخواست خرید ${req.code} هنوز سفارش داده نشده است. ابتدا سفارش خرید با تأمین‌کننده و قیمت صادر کنید.`,
+      { rowIds: neverOrdered.map(row => row.id) }, 'REQUISITION_ROWS_NOT_ORDERED',
+    );
   }
 
   // مقدار دریافتی از نو: جمع سطرهای فعال همه اسناد قطعی درخواست، میان ردیف‌های هر کالا به ترتیب

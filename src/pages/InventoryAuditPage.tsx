@@ -150,6 +150,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
           auditDocsLoading={data.auditDocsLoading}
           auditDocs={data.auditDocs}
           handleViewAudit={setViewAuditId}
+          pager={data.auditDocsPager}
         />
       )}
 
@@ -161,6 +162,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
           onOpenTransferModal={() => setShowTransferModal(true)}
           onVoidTransfer={(t) => { void transferVoid.voidTransfer(t); }}
           voidingId={transferVoid.voidingId}
+          pager={data.transfersPager}
         />
       )}
 

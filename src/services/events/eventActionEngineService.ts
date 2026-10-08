@@ -11,9 +11,10 @@ import { BaseDomainEvent, DomainEventType } from './domainEvents.js';
 import { logger } from '../../middleware/logger.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
-import { assertSafeExternalUrl } from '../../lib/ssrfGuard.js';
+import { LOCAL_ECHO_PATH, assertSafeExternalUrl, isEchoSimulatorEnvironment, isLocalEchoTarget } from '../../lib/ssrfGuard.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { assertNotificationPermission, permissionHolderUserIds, roleMemberUserIds } from '../notifications/notificationRecipients.js';
+import { resolveRuleConfigSecrets } from './integrationSecrets.js';
 
 export interface RuleCondition {
   field: string; // e.g. 'payload.totalAmount', 'payload.newStock', 'metadata.userRole', 'aggregateType'
@@ -119,7 +120,8 @@ export class EventActionEngineService {
 
     let targetUrl = this.interpolateTemplate(webhookConfig.url, event);
     if (targetUrl.startsWith('/')) {
-      targetUrl = `http://127.0.0.1:3000${targetUrl}`;
+      // v9.0.356 (TD-704): this server's own port, the only port the echo exception of the SSRF guard accepts
+      targetUrl = `http://127.0.0.1:${process.env.PORT || 3000}${targetUrl}`;
     }
 
     await assertSafeExternalUrl(targetUrl, { allowLocalEcho: true });
@@ -135,8 +137,16 @@ export class EventActionEngineService {
       ...(webhookConfig.headers || {})
     };
 
+    // v9.0.357 (TD-715): the system's own echo token authenticates only this server's echo simulator; a rule that holds it
+    // (boot used to copy it into every webhook rule without a token) never sends it to another address
+    let systemTokenWithheld = false;
     if (webhookConfig.secretToken) {
-      headers['X-ERP-Signature-Token'] = webhookConfig.secretToken;
+      const systemToken = await this.readWebhookSecretToken();
+      if (systemToken && webhookConfig.secretToken === systemToken && !isLocalEchoTarget(new URL(targetUrl))) {
+        systemTokenWithheld = true;
+      } else {
+        headers['X-ERP-Signature-Token'] = webhookConfig.secretToken;
+      }
     }
 
     const controller = new AbortController();
@@ -185,7 +195,8 @@ export class EventActionEngineService {
         httpStatus: response.status,
         httpStatusText: response.statusText,
         ok: response.ok,
-        responseBody: resBody
+        responseBody: resBody,
+        ...(systemTokenWithheld ? { systemTokenWithheld: true } : {})
       };
 
       if (!response.ok) {
@@ -462,6 +473,13 @@ export class EventActionEngineService {
     }
   }
 
+  /** The system's webhook echo token without generating one (env, else the stored setting, else empty) */
+  private static async readWebhookSecretToken(): Promise<string> {
+    if (process.env.ERP_WEBHOOK_SECRET_TOKEN) return process.env.ERP_WEBHOOK_SECRET_TOKEN;
+    const [row] = await orm.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, 'erp_webhook_secret_token'));
+    return row?.value ?? '';
+  }
+
   /**
    * Retrieves or generates a secure dynamic webhook secret token stored in appSettings (SEC-004)
    */
@@ -501,29 +519,11 @@ export class EventActionEngineService {
     try {
       const webhookSecret = await EventActionEngineService.getWebhookSecretToken();
 
-      const existing = await orm.select().from(eventActionRules).limit(1);
-      if (existing.length > 0) {
-        // Migrate any existing webhook rules targeting httpbin.org or hardcoded legacy secrets
-        const webhookRules = await orm.select().from(eventActionRules).where(eq(eventActionRules.actionType, 'webhook'));
-        for (const rule of webhookRules) {
-          const cfg = (rule.actionConfigJson as Record<string, unknown>) || {};
-          let updated = false;
-          if (typeof cfg.url === 'string' && (cfg.url.includes('httpbin.org') || cfg.url.includes('example.com'))) {
-            cfg.url = 'http://127.0.0.1:3000/api/events/webhook-echo';
-            updated = true;
-          }
-          if (cfg.secretToken === 'erp_wh_secret_key_prod_v7' || !cfg.secretToken) {
-            cfg.secretToken = webhookSecret;
-            updated = true;
-          }
-          if (updated) {
-            await orm.update(eventActionRules)
-              .set({ actionConfigJson: cfg, updatedAt: new Date().toISOString() })
-              .where(eq(eventActionRules.id, rule.id));
-          }
-        }
-        return;
-      }
+      // v9.0.357 (TD-715، تصمیم ت۴ الف): قانون‌های موجود هرگز در راه‌اندازی بازنویسی نمی‌شوند. پیش‌تر نشانی هر قانونی که
+      // `example.com` یا `httpbin.org` را جایی در خود داشت به شبیه‌ساز محلی تغییر می‌کرد و توکن سامانه در هر قانون وب‌هوک
+      // بی توکن گذاشته می‌شد و به نشانی بیرونی آن فرستاده می‌شد
+      const existing = await orm.select({ id: eventActionRules.id }).from(eventActionRules).limit(1);
+      if (existing.length > 0) return;
 
       logger.info('[EventActionEngine] Seeding standard enterprise event automation rules...');
 
@@ -560,7 +560,8 @@ export class EventActionEngineService {
           },
           isActive: 1
         },
-        {
+        // v9.0.357 (TD-715): the echo simulator answers only in test / development (TD-704), so only there is its rule seeded
+        ...(isEchoSimulatorEnvironment() ? [{
           name: 'وب‌هوک تایید فاکتور فروش (شبیه‌ساز یکپارچگی)',
           description: 'ارسال وب‌هوک HTTP POST به سرور بیرونی / اتوماسیون سازمانی هنگام تایید نهایی فاکتور فروش',
           eventType: DomainEventType.INVOICE_APPROVED,
@@ -569,14 +570,14 @@ export class EventActionEngineService {
           ],
           actionType: 'webhook',
           actionConfigJson: {
-            url: 'http://127.0.0.1:3000/api/events/webhook-echo',
+            url: `http://127.0.0.1:${process.env.PORT || 3000}${LOCAL_ECHO_PATH}`,
             method: 'POST',
             timeoutMs: 5000,
             includeMetadata: true,
             secretToken: webhookSecret
           },
           isActive: 1
-        },
+        } satisfies CreateRuleInput] : []),
         {
           name: 'ثبت ممیزی تراکنش‌های کلان خزانه‌داری',
           description: 'ثبت لاگ ممیزی امنیتی اختصاصی برای کلیه تراکنش‌های واریز یا برداشت بالای ۵۰۰ میلیون ریال',
@@ -656,7 +657,8 @@ export class EventActionEngineService {
       eventType: data.eventType,
       conditionsJson: data.conditionsJson || [],
       actionType: data.actionType,
-      actionConfigJson: data.actionConfigJson || {},
+      // v9.0.360 (TD-710): a masked token or header value of a new rule has no stored value to stand for
+      actionConfigJson: resolveRuleConfigSecrets(data.actionConfigJson || {}, {}) as CreateRuleInput['actionConfigJson'],
       isActive: data.isActive ?? 1,
       executionCount: 0,
       createdBy: userId || null,
@@ -681,7 +683,11 @@ export class EventActionEngineService {
     if (data.eventType !== undefined) updatePayload.eventType = data.eventType;
     if (data.conditionsJson !== undefined) updatePayload.conditionsJson = data.conditionsJson;
     if (data.actionType !== undefined) updatePayload.actionType = data.actionType;
-    if (data.actionConfigJson !== undefined) updatePayload.actionConfigJson = data.actionConfigJson;
+    if (data.actionConfigJson !== undefined) {
+      // v9.0.360 (TD-710): responses mask the token and header values; «********» keeps the stored value for the same address
+      const current = await this.getRuleById(id);
+      updatePayload.actionConfigJson = resolveRuleConfigSecrets(data.actionConfigJson, current?.actionConfigJson);
+    }
     if (data.isActive !== undefined) updatePayload.isActive = data.isActive;
 
     const [updated] = await orm.update(eventActionRules)

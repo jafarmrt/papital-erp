@@ -1,5 +1,5 @@
--- Drizzle Migration 0080: one live stage per project and stage number, and stages only of existing projects
--- (v9.0.336 / TD-737 and TD-753, findings B11-03 and B11-19 of package 11)
+-- Drizzle Migration 0084: one live stage per project and stage number, and stages only of existing projects
+-- (v9.0.367 / TD-737 and TD-753, findings B11-03 and B11-19 of package 11)
 --
 -- A new stage took "number of live stages + 1": after a stage was deleted the new stage reused a number and inherited the
 -- deleted stage's progress ticks (a project became completed with no work done), and two stages could share a number

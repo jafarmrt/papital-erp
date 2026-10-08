@@ -103,7 +103,7 @@ export const buildConsolidatedPurchaseList = (
       });
     } else if (sec.checkType === 'global' && sec.globalItems) {
       sec.globalItems.forEach(gItem => {
-        // v9.0.332 (TD-749): نام دقیق، نه زیررشته؛ نام خالی هیچ کالایی را نمی‌گیرد
+        // v9.0.363 (TD-749): نام دقیق، نه زیررشته؛ نام خالی هیچ کالایی را نمی‌گیرد
         const matchWh = findProjectItemMatch({ code: gItem.itemCode, name: gItem.name }, warehouseItems);
         const stQty = matchWh ? matchWh.current_stock : (gItem.stockQty ?? 0);
         const reqQty = Number(gItem.requiredQty) || 0;

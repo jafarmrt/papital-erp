@@ -9,7 +9,7 @@ interface StageStatusFieldProps {
 }
 
 /**
- * v9.0.335 (TD-758، تصمیم ت۱ الف): وضعیت و درصد دستی مرحله، فقط برای پروژه بی محصول. در پروژه دارای ماتریس پیشرفت
+ * v9.0.366 (TD-758، تصمیم ت۱ الف): وضعیت و درصد دستی مرحله، فقط برای پروژه بی محصول. در پروژه دارای ماتریس پیشرفت
  * فرم مرحله این فیلدها را نشان نمی‌دهد و نمی‌فرستد، چون ماتریس آن‌ها را تعیین می‌کند.
  */
 export function StageStatusField({ status, progress, onStatusChange, onProgressChange }: StageStatusFieldProps) {

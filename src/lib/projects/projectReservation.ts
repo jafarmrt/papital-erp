@@ -92,7 +92,7 @@ export function buildProjectReservation(
 
   const reserved: ProjectReservedItem[] = [];
   for (const tot of totals.values()) {
-    // v9.0.332 (TD-749، TD-768): قاعده مشترک تطبیق با مرورگر؛ کد کالا بر نام کالای دیگر مقدم است
+    // v9.0.363 (TD-749، TD-768): قاعده مشترک تطبیق با مرورگر؛ کد کالا بر نام کالای دیگر مقدم است
     const match = findProjectItemMatch({ code: tot.itemCode, name: tot.itemName }, stockItems);
     const stock = match ? Number(match.currentStock) || 0 : 0;
     if (!match || stock <= 0) continue;

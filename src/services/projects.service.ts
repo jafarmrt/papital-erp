@@ -245,12 +245,12 @@ export class ProjectService {
 
     const [current] = await executor.update(productionProjects).set(updateData).where(eq(productionProjects.id, id)).returning();
 
-    // v9.0.333 (TD-739): تکمیل دستی پروژه با همان قاعده ماتریس، درون همین تراکنش و روی ردیف ذخیره‌شده
+    // v9.0.364 (TD-739): تکمیل دستی پروژه با همان قاعده ماتریس، درون همین تراکنش و روی ردیف ذخیره‌شده
     if (input.status === 'completed' && existing.status !== 'completed') {
       ProjectService.assertMatrixCompleted(progressMatrixStatus(await loadProjectProgressMatrix(executor, current)));
     }
 
-    // v9.0.334 (TD-738): ویرایش پروژه (محصولات، کالای اصلی) مراحل و وضعیت را زیر همین قفل با ماتریس همگام می‌کند
+    // v9.0.365 (TD-738): ویرایش پروژه (محصولات، کالای اصلی) مراحل و وضعیت را زیر همین قفل با ماتریس همگام می‌کند
     const synced = await syncProjectFromMatrix(executor, current, actor);
     return { previous: existing, current: synced.project };
   }
@@ -391,7 +391,7 @@ export class ProjectService {
 
   /**
    * Adds a stage to a project
-   * v9.0.334 (TD-738): زیر قفل ردیف پروژه و با همگام‌سازی مراحل و وضعیت در همان تراکنش (مرحله تازه خانه‌های تازه دارد)
+   * v9.0.365 (TD-738): زیر قفل ردیف پروژه و با همگام‌سازی مراحل و وضعیت در همان تراکنش (مرحله تازه خانه‌های تازه دارد)
    */
   static async addStage(
     projectId: number,
@@ -431,7 +431,7 @@ export class ProjectService {
   }
 
   /**
-   * v9.0.336 (TD-737): شماره مرحله تازه پس از هر شماره‌ای که پروژه به کار برده است (مراحل حذف‌شده و ردیف‌های پیشرفت هم
+   * v9.0.367 (TD-737): شماره مرحله تازه پس از هر شماره‌ای که پروژه به کار برده است (مراحل حذف‌شده و ردیف‌های پیشرفت هم
    * شمرده می‌شوند)، زیر قفل ردیف پروژه. پیش‌تر «تعداد مراحل زنده + ۱» بود: مرحله تازه شماره مرحله حذف‌شده و تیک‌هایش را
    * می‌گرفت و افزودن هم‌زمان یا پس از حذف مرحله میانی دو مرحله با یک شماره می‌ساخت.
    */
@@ -446,7 +446,7 @@ export class ProjectService {
   }
 
   /**
-   * v9.0.337 (TD-755): شماره تازه مرحله، زیر قفل ردیف پروژه. شماره‌ای که مرحله زنده دیگری دارد یا ردیف پیشرفت مرحله‌ای
+   * v9.0.368 (TD-755): شماره تازه مرحله، زیر قفل ردیف پروژه. شماره‌ای که مرحله زنده دیگری دارد یا ردیف پیشرفت مرحله‌ای
    * حذف‌شده روی آن مانده است با ۴۰۹ `STAGE_ORDER_TAKEN` رد می‌شود (پیش‌تر دو مرحله شماره ۱ می‌گرفتند)، و تیک‌های زنده
    * مرحله با آن جابه‌جا می‌شوند، مگر مرحله زنده دیگری (داده قدیمی) شماره پیشین را هم دارد.
    */
@@ -477,7 +477,7 @@ export class ProjectService {
   }
 
   /**
-   * v9.0.333 (TD-739): وضعیت ماتریس پیشرفت با قاعده مشترک (محصولات پروژه، وگرنه کالای اصلی)
+   * v9.0.364 (TD-739): وضعیت ماتریس پیشرفت با قاعده مشترک (محصولات پروژه، وگرنه کالای اصلی)
    */
   static async getProgressMatrixStatus(projectId: number, executor: DbExecutor = orm): Promise<ProgressMatrixStatus> {
     const [project] = await executor.select().from(productionProjects)
@@ -507,7 +507,7 @@ export class ProjectService {
 
   /**
    * Updates a project stage and syncs status
-   * v9.0.334 (TD-738): ویرایش و همگام‌سازی در یک تراکنش زیر قفل ردیف پروژه
+   * v9.0.365 (TD-738): ویرایش و همگام‌سازی در یک تراکنش زیر قفل ردیف پروژه
    */
   static async updateStage(
     projectId: number,
@@ -537,7 +537,7 @@ export class ProjectService {
         throw new NotFoundError('مرحله یافت نشد');
       }
 
-      // v9.0.335 (TD-758، تصمیم ت۱ الف): در پروژه دارای ماتریس پیشرفت وضعیت و درصد مرحله را فقط ماتریس تعیین می‌کند؛
+      // v9.0.366 (TD-758، تصمیم ت۱ الف): در پروژه دارای ماتریس پیشرفت وضعیت و درصد مرحله را فقط ماتریس تعیین می‌کند؛
       // مقدار دستی متفاوت رد می‌شود (پیش‌تر ۲۰۰ می‌گرفت و همگام‌ساز بی‌صدا برش می‌گرداند) و مقدار برابر نادیده می‌ماند
       if (hasMatrixProducts(project)) {
         const statusChanged = data.status !== undefined && data.status !== existing.status;
@@ -600,7 +600,7 @@ export class ProjectService {
 
   /**
    * Soft deletes a stage from a project
-   * v9.0.334 (TD-738): حذف و همگام‌سازی در یک تراکنش زیر قفل ردیف پروژه
+   * v9.0.365 (TD-738): حذف و همگام‌سازی در یک تراکنش زیر قفل ردیف پروژه
    */
   static async deleteStage(
     projectId: number,
@@ -620,7 +620,7 @@ export class ProjectService {
       }
 
       await tx.update(projectStages).set({ isDeleted: 1 }).where(eq(projectStages.id, stageId));
-      // v9.0.336 (TD-737): تیک‌های مرحله حذف‌شده هم حذف نرم می‌شوند، مگر مرحله زنده دیگری (داده قدیمی) همان شماره را دارد
+      // v9.0.367 (TD-737): تیک‌های مرحله حذف‌شده هم حذف نرم می‌شوند، مگر مرحله زنده دیگری (داده قدیمی) همان شماره را دارد
       const [sameOrder] = await tx.select({ id: projectStages.id }).from(projectStages)
         .where(and(eq(projectStages.projectId, projectId), eq(projectStages.stageOrder, existing.stageOrder), eq(projectStages.isDeleted, 0), ne(projectStages.id, stageId)))
         .limit(1);
@@ -635,7 +635,7 @@ export class ProjectService {
 
   /**
    * Bulk updates product physical progress matrix
-   * v9.0.334 (TD-738): تیک‌ها، ردیف ممیزی و همگام‌سازی مراحل و وضعیت در یک تراکنش زیر قفل ردیف پروژه
+   * v9.0.365 (TD-738): تیک‌ها، ردیف ممیزی و همگام‌سازی مراحل و وضعیت در یک تراکنش زیر قفل ردیف پروژه
    */
   static async updateProductProgress(
     projectId: number,
@@ -652,7 +652,7 @@ export class ProjectService {
       const project = await lockLiveProject(tx, projectId);
       const currentUser = actorName(actor);
 
-      // v9.0.333 (TD-739): محصولات ماتریس با همان قاعده نمایش و بررسی تکمیل (پروژه تک‌کالایی: کالای اصلی)
+      // v9.0.364 (TD-739): محصولات ماتریس با همان قاعده نمایش و بررسی تکمیل (پروژه تک‌کالایی: کالای اصلی)
       const productByItemId = new Map<number, ReturnType<typeof matrixProducts>[number]>();
       for (const p of matrixProducts(project)) {
         if (p.itemId !== null && !productByItemId.has(p.itemId)) productByItemId.set(p.itemId, p);
@@ -675,7 +675,7 @@ export class ProjectService {
           continue;
         }
         const product = productByItemId.get(itemId);
-        // v9.0.336 (TD-737): تیک فقط برای مرحله زنده؛ تیک شماره‌ای بی مرحله بعدها به مرحله تازه به ارث نمی‌رسد
+        // v9.0.367 (TD-737): تیک فقط برای مرحله زنده؛ تیک شماره‌ای بی مرحله بعدها به مرحله تازه به ارث نمی‌رسد
         const stageTitle = stageTitles.get(stageOrder);
         if (!product || stageTitle === undefined) {
           skippedInvalid++;

@@ -134,7 +134,7 @@ const createProjectStageSchema = z.object({
   })
 });
 
-// v9.0.337 (TD-755): شماره مرحله عدد صحیح مثبت و درصد پیشرفت عدد صحیح ۰ تا ۱۰۰؛ پیش‌تر متن نامعتبر ۵۰۰ با متن SQL می‌داد
+// v9.0.368 (TD-755): شماره مرحله عدد صحیح مثبت و درصد پیشرفت عدد صحیح ۰ تا ۱۰۰؛ پیش‌تر متن نامعتبر ۵۰۰ با متن SQL می‌داد
 const stageOrderInput = decimalInput('شماره مرحله')
   .refine(v => v === undefined || (/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= MAX_STAGE_ORDER), `شماره مرحله باید عدد صحیح ۱ تا ${toPersianDigits(MAX_STAGE_ORDER)} باشد`);
 const stagePercentInput = decimalInput('درصد پیشرفت مرحله')
@@ -487,7 +487,7 @@ router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.produ
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
 
-    // v9.0.334 (TD-738): خواندن پروژه هرگز وضعیت آن یا مراحلش را نمی‌نویسد؛ همگام‌سازی فقط در مسیرهای نوشتن است
+    // v9.0.365 (TD-738): خواندن پروژه هرگز وضعیت آن یا مراحلش را نمی‌نویسد؛ همگام‌سازی فقط در مسیرهای نوشتن است
     const [projData] = await orm
       .select({
         project: productionProjects,
@@ -582,7 +582,7 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
       custom_stages, customStages, attachments, project_code
     } = req.body;
 
-    // v9.0.333 (TD-739): بررسی تکمیل با قاعده مشترک ماتریس درون تراکنش updateProject است
+    // v9.0.364 (TD-739): بررسی تکمیل با قاعده مشترک ماتریس درون تراکنش updateProject است
     const { current: updated } = await ProjectService.updateProject(id, {
       title,
       projectCode: project_code,
@@ -724,7 +724,7 @@ router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit')
       assigned_personnel, required_resources, progress_percent, notes 
     } = req.body;
 
-    // v9.0.334 (TD-738): ویرایش مرحله و همگام‌سازی مراحل و وضعیت پروژه در یک تراکنش زیر قفل پروژه
+    // v9.0.365 (TD-738): ویرایش مرحله و همگام‌سازی مراحل و وضعیت پروژه در یک تراکنش زیر قفل پروژه
     const updatedStage = await ProjectService.updateStage(projectId, stageId, {
       title,
       stageOrder: stage_order === undefined ? undefined : Number(stage_order),
@@ -763,8 +763,8 @@ router.get('/projects/:id/product-progress', authorizePermission('projects.view'
     const projectId = parseInt(req.params.id, 10);
     if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
 
-    // v9.0.334 (TD-738): فقط خواندن؛ وضعیت مراحل و پروژه را مسیرهای نوشتن همگام می‌کنند
-    // v9.0.333 (TD-739): ماتریس با قاعده مشترک (پروژه تک‌کالایی: کالای اصلی)
+    // v9.0.365 (TD-738): فقط خواندن؛ وضعیت مراحل و پروژه را مسیرهای نوشتن همگام می‌کنند
+    // v9.0.364 (TD-739): ماتریس با قاعده مشترک (پروژه تک‌کالایی: کالای اصلی)
     const view = await ProjectService.getProductProgressView(projectId);
     if (!view) return res.status(404).json({ error: 'پروژه یافت نشد' });
 
@@ -799,7 +799,7 @@ router.put('/projects/:id/product-progress', authorizePermission('projects.edit'
 
     const updates = req.body.items as Array<{ item_id: number | string; stage_order: number | string; stage_title?: string; status: ProductProgressStatus }>;
 
-    // v9.0.334 (TD-738): تیک‌ها، ردیف ممیزی و همگام‌سازی مراحل و وضعیت در یک تراکنش زیر قفل پروژه
+    // v9.0.365 (TD-738): تیک‌ها، ردیف ممیزی و همگام‌سازی مراحل و وضعیت در یک تراکنش زیر قفل پروژه
     const { applied, skippedInvalid, projectStatus, weightedProgress } = await ProjectService.updateProductProgress(
       projectId,
       updates.map(u => ({

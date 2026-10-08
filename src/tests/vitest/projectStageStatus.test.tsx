@@ -4,7 +4,7 @@ import { hasMatrixProducts } from '../../lib/projects/progressMatrix';
 import { matrixProjectStatus } from '../../lib/projects/projectStatus';
 import { StageStatusField } from '../../components/project/StageStatusField';
 
-// v9.0.334 (TD-738) and v9.0.335 (TD-758): who sets a project's and a stage's status
+// v9.0.365 (TD-738) and v9.0.366 (TD-758): who sets a project's and a stage's status
 describe('project status from the progress matrix (TD-738)', () => {
   it('never changes a paused or cancelled project', () => {
     expect(matrixProjectStatus('cancelled', { allDone: true, anyProgress: true })).toBe('cancelled');

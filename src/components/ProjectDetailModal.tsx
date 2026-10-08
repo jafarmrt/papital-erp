@@ -160,7 +160,7 @@ export default function ProjectDetailModal({
     setStageNotes(stg.notes || '');
   };
 
-  // v9.0.335 (TD-758): وضعیت و درصد مرحله پروژه دارای ماتریس پیشرفت را فقط ماتریس تعیین می‌کند
+  // v9.0.366 (TD-758): وضعیت و درصد مرحله پروژه دارای ماتریس پیشرفت را فقط ماتریس تعیین می‌کند
   const stagesFromMatrix = project ? hasMatrixProducts({ products: project.products, itemId: project.item_id }) : true;
 
   const handleSaveStage = async (stageId: number) => {

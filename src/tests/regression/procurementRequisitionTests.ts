@@ -51,9 +51,9 @@ export async function runProcurementRequisitionTests(shouldRun: ShouldRun): Prom
   return results;
 }
 
-interface ReqRow { id: string; itemId: number | null; itemName: string; requestedQty: number; orderedQty?: number; receivedQty?: number; linkedDocumentIds?: number[]; status?: string }
+export interface ReqRow { id: string; itemId: number | null; itemName: string; requestedQty: number; orderedQty?: number; receivedQty?: number; linkedDocumentIds?: number[]; status?: string }
 
-interface Fixture {
+export interface Fixture {
   wh: string;
   jalaliDate: string;
   item(): Promise<{ id: number; code: string; name: string }>;
@@ -67,7 +67,7 @@ interface Fixture {
   docStatus(docId: number): Promise<string | undefined>;
 }
 
-async function fixture(h: Harness): Promise<Fixture> {
+export async function fixture(h: Harness): Promise<Fixture> {
   const { createTestItem } = await import('../fixtures/factories.js');
   const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
   const { isoToJalaliDate } = await import('../../utils/calendarDate.js');
@@ -140,11 +140,11 @@ async function fixture(h: Harness): Promise<Fixture> {
 }
 
 /** One row of a requisition as the three forms build it */
-function formRow(item: { id: number; code: string; name: string }, requestedQty: number, unitPriceEstimate: number, notes = '') {
+export function formRow(item: { id: number; code: string; name: string }, requestedQty: number, unitPriceEstimate: number, notes = '') {
   return { itemId: item.id, itemCode: item.code, itemName: item.name, unit: 'عدد', requestedQty, unitPriceEstimate, notes };
 }
 
-async function approvedRequisition(h: Harness, f: Fixture, rows: Array<Record<string, unknown>>): Promise<{ id: number; code: string }> {
+export async function approvedRequisition(h: Harness, f: Fixture, rows: Array<Record<string, unknown>>): Promise<{ id: number; code: string }> {
   const created = await f.create({ title: `درخواست بسته ۱۰ ${h.tag}`, priority: 'normal', requiredDate: f.jalaliDate, notes: '', items: rows });
   if (created.status !== 201) throw new Error(`create requisition: ${created.status} ${JSON.stringify(created.body).slice(0, 200)}`);
   const approved = await f.action(created.id, 'approve_request');
@@ -329,6 +329,8 @@ async function deliveryWorkflowCase(h: Harness, wrong: string[]): Promise<string
   } as never));
   const rows = (await f.requisition(legacy.id)).items.map(r => ({ ...r, orderedQty: 2, remainingQty: 0, status: 'ordered', linkedDocumentIds: [legacyDoc] }));
   await h.q(`UPDATE purchase_requisitions SET items = $2::jsonb, status = 'under_review' WHERE id = $1`, [legacy.id, JSON.stringify(rows)]);
+  // v9.0.347 (TD-691): the order is linked to its requisition, as migration 0082 links a tagged legacy order
+  await h.q(`UPDATE documents SET procurement_requisition_id = $2 WHERE id = $1`, [legacyDoc, legacy.id]);
   const legacyDelivery = await f.deliver(legacyDoc, withoutWarehouse);
   if (legacyDelivery.status !== 409 || legacyDelivery.body.code !== 'REQUISITION_NOT_APPROVED') wrong.push(`order of an unapproved requisition: ${legacyDelivery.status} ${String(legacyDelivery.body.code)}`);
   if (await f.docStatus(legacyDoc) !== 'draft') wrong.push('the order of the unapproved requisition was finalized');

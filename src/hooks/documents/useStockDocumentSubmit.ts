@@ -3,10 +3,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { User } from '../../types';
-import { extractDateString, errorMessageOf, getTodayJalaliDate } from '../../utils';
+import { extractDateString, errorMessageOf, formatPersianNumber, getTodayJalaliDate } from '../../utils';
 import { exchangeRateError } from '../../components/documents/ExchangeRateField';
-import { QUERY_KEYS } from '../../lib/queryKeys';
+import { invalidatePreset } from '../../lib/queryInvalidation';
 import { refNumberToSend } from '../../lib/documents/documentRefRules';
+import { selectedPartyId } from '../../lib/documents/partySelection';
 import type { StockDocumentForm } from './useStockDocumentForm';
 import type { StockDocumentReferenceData } from './useStockDocumentReferenceData';
 
@@ -25,24 +26,22 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
   const { warehouses } = refData;
   const {
     actionType, docType, refNumber, suggestedRef, date, location, buyerName, currency, exchangeRate, returnInvoiceId, returnVatPercent, setReturnVatPercent,
-    notes, docItems, selectedProjectId, selectedProjectObj, attachments, getItemReservationSummary,
+    notes, docItems, selectedProjectId, selectedProjectObj, attachments, getItemReservationSummary, selectedSupplierObj,
     setIsSaving, setDocItems, fetchNextRef, changeReturnInvoiceRef, setBuyerName,
     setSelectedSupplierObj, setNotes, setUnitPrice, setQuantity, setSelectedProjectId,
     setSelectedProjectObj, setAttachments, setCurrency, setExchangeRate,
   } = form;
 
-  // بازخوانی لیست پروژه‌ها پس از عملیات تخصیص
+  // v9.0.341 (TD-796، یافته B08-27): همان فهرست‌هایی که ثبت فاکتور باطل می‌کند (اسناد، کاردکس، سند حسابداری، کالاها، پیشخوان،
+  // رزروها، پروژه، پرونده فروش و طرف حساب)؛ پیش‌تر فقط پروژه، طرف حساب، کالا و رزرو تازه می‌شدند
   const reloadReferenceLists = () => {
-    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
-    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.customers.all });
-    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.items.all });
-    void queryClient.invalidateQueries({ queryKey: ['inventory', 'reserved-items'] });
+    void invalidatePreset(queryClient, 'documentChange');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (warehouses.length === 0) {
-      toast.error('هیچ انباری در سیستم تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > انبارها، حداقل یک انبار تعریف نمایید.');
+      toast.error('هیچ انباری در سامانه تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > انبارها، حداقل یک انبار تعریف نمایید.');
       return;
     }
     if (docItems.length === 0) {
@@ -64,7 +63,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
             .map(r => `«${r.projectCode || r.projectTitle}»`)
             .join('، ');
 
-          toast.error(`خطا در کالا «${d.item.name}»: مقدار درخواستی (${d.quantity}) بیش از حد مجاز خروج (${maxAllowedForExit}) است. (${reservedForOtherProjects} ${d.item.unit} برای ${otherProjTitles} رزرو است)`);
+          toast.error(`خطا در کالا «${d.item.name}»: مقدار درخواستی (${formatPersianNumber(d.quantity)}) بیش از حد مجاز خروج (${formatPersianNumber(maxAllowedForExit)}) است. (${formatPersianNumber(reservedForOtherProjects)} ${d.item.unit} برای ${otherProjTitles} رزرو است)`);
           return;
         }
       }
@@ -101,6 +100,8 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
           date: formattedDate,
           user: currentUser.full_name || currentUser.username,
           location,
+          // v9.0.336 (TD-778): طرف حساب ورود با شناسه انتخابگر؛ برگشت با فاکتور مرجع طرف حساب فاکتور را از سرور می‌گیرد
+          partyId: actionType === 'in' && returnInvoiceId === null ? selectedPartyId(selectedSupplierObj?.id) : undefined,
           buyer_name: buyerName,
           notes: finalNotes,
           inOut: actionType,
@@ -122,15 +123,16 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
       if (actionType === 'out' && selectedProjectObj) {
         const releasedQty = Number(created?.projectReservation?.releasedQuantity || 0);
         if (releasedQty > 0) {
-          toast.success(`سند خروج با موفقیت ثبت شد و تعداد ${releasedQty} عدد از اقلام رزرو شده پروژه «${selectedProjectObj.project_code || selectedProjectObj.title}» کسر گردید.`);
+          toast.success(`سند خروج با موفقیت ثبت شد و تعداد ${formatPersianNumber(releasedQty)} عدد از اقلام رزرو شده پروژه «${selectedProjectObj.project_code || selectedProjectObj.title}» کسر گردید.`);
         } else {
-          toast.success('سند حواله خروج با موفقیت ثبت شد و فرآیند تایید در ورکفلو آغاز گردید.');
+          // v9.0.346 (TD-803): سند انبار نهایی ثبت می‌شود و گردش کاری آغاز نمی‌شود
+          toast.success('سند حواله خروج ثبت و موجودی انبار به‌روزرسانی شد.');
         }
       } else {
         if (actionType === 'in' && docType === 'receipt') {
-          toast.success('رسید خرید با موفقیت ثبت شد و گردش کار تاییدات مالی و انبار آغاز گردید.');
+          toast.success('رسید خرید ثبت و موجودی انبار به‌روزرسانی شد؛ سند حسابداری تا تأیید حسابدار پیش‌نویس است.');
         } else {
-          toast.success('سند با موفقیت در سیستم ثبت گردید!');
+          toast.success('سند با موفقیت در سامانه ثبت شد.');
         }
       }
 

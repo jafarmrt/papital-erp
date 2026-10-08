@@ -22,6 +22,7 @@ import { currencyChangeError, lineDiscountError, pricesForCurrency } from '../li
 import { printLineAmounts } from '../lib/invoices/invoicePrintTotals';
 import { amountDecimalsOf } from '../lib/invoices/invoiceListDocuments';
 import { addInvoiceLine, customerLocationLabel, EDIT_FINAL_REFUSED, finalStatusOptionNote, invoiceFormFromDocument, invoiceLineLocations, isSalesFormDocType, lineLocationOf, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
+import { selectedPartyId } from '../lib/documents/partySelection';
 import type { InvoiceListDocument } from '../lib/invoices/invoiceListDocuments';
 import { Sparkles } from 'lucide-react';
 import { ExchangeRateField, exchangeRateError } from '../components/documents/ExchangeRateField';
@@ -156,6 +157,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       setRefNumber(form.refNumber);
       if (form.date) setDate(form.date);
       buyer.setBuyer(form);
+      // v9.0.336 (TD-778): انتخابگر خریدار از شناسه طرف حساب سند، نه تطبیق نام
+      if (form.partyId) setSelectedCustomerId(String(form.partyId));
       setNotes(form.notes);
       setCurrency(form.currency);
       setExchangeRate(form.exchangeRate);
@@ -224,6 +227,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       const s = locationState.state as Record<string, string | number | undefined>;
       const str = (v: string | number | undefined) => (v === undefined ? '' : String(v));
       if (s.buyerName) setBuyerName(str(s.buyerName));
+      if (selectedPartyId(s.customerId)) setSelectedCustomerId(str(s.customerId));
       if (s.buyerPhone) setBuyerPhone(str(s.buyerPhone));
       if (s.buyerAddress) setBuyerAddress(str(s.buyerAddress));
       const uniqueLoc = customerLocationLabel({ province: str(s.buyerProvince || s.province), city: str(s.buyerCity || s.city) });
@@ -238,7 +242,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       // v9.0.299 (TD-789): وضعیت مسیریابی یک بار خوانده می‌شود تا پرونده فروش به سندهای بعدی این صفحه نرسد
       void navigate(locationState.pathname, { replace: true, state: null });
     }
-  }, [locationState.state, locationState.pathname, navigate, canFinalizeSales, setBuyerName, setBuyerPhone, setBuyerAddress, setBuyerCity]);
+  }, [locationState.state, locationState.pathname, navigate, canFinalizeSales, setBuyerName, setSelectedCustomerId, setBuyerPhone, setBuyerAddress, setBuyerCity]);
 
   const handleItemSelect = (val: string, rawItem?: Item) => {
     setSelectedItem(val);
@@ -272,7 +276,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
 
       if (sellable < totalRequestedQty) {
         const whName = warehouses.find(w => w.code === location)?.name || location || 'انبار انتخابی';
-        toast.error(`عدم موجودی کافی قابل فروش! موجودی ${whName}: ${loc}، رزرو سایر مصارف: ${reserved}، قابل فروش: ${sellable} ${it.unit} (مجموع درخواستی: ${totalRequestedQty} ${it.unit})`);
+        toast.error(`عدم موجودی کافی قابل فروش! موجودی ${whName}: ${formatPersianNumber(loc)}، رزرو سایر مصارف: ${formatPersianNumber(reserved)}، قابل فروش: ${formatPersianNumber(sellable)} ${it.unit} (مجموع درخواستی: ${formatPersianNumber(totalRequestedQty)} ${it.unit})`);
         return;
       }
     }
@@ -310,7 +314,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!buyerName || !buyerName.trim()) {
-      toast.error('لطفاً خریدار / طرف حساب فاکتور را حتماً از لیست طرفین حساب انتخاب کنید.');
+      toast.error('لطفاً خریدار / طرف حساب فاکتور را حتماً از فهرست طرفین حساب انتخاب کنید.');
       return;
     }
     if (docItems.length === 0) {
@@ -337,7 +341,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     }
 
     if (status === 'final' && warehouses.length === 0) {
-      toast.error('هیچ انباری در سیستم تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
+      toast.error('هیچ انباری در سامانه تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
       return;
     }
 
@@ -351,7 +355,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
         const { loc, reserved, sellable } = getSellableStock(it, lineLocationOf(d, location));
 
         if (sellable < d.quantity) {
-          toast.error(`موجودی قابل فروش کالا «${it.name}» (${it.code}) در «${whName}» کافی نیست! موجودی انبار: ${loc}، رزرو سایر مصارف: ${reserved}، قابل فروش: ${sellable} ${it.unit}، درخواستی: ${d.quantity} ${it.unit}`);
+          toast.error(`موجودی قابل فروش کالا «${it.name}» (${it.code}) در «${whName}» کافی نیست! موجودی انبار: ${formatPersianNumber(loc)}، رزرو سایر مصارف: ${formatPersianNumber(reserved)}، قابل فروش: ${formatPersianNumber(sellable)} ${it.unit}، درخواستی: ${formatPersianNumber(d.quantity)} ${it.unit}`);
           return;
         }
       }
@@ -367,6 +371,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       date: formattedDate,
       user: currentUser.full_name,
       inOut: 'out' as const,
+      // v9.0.336 (TD-778، تصمیم ت۶ الف): طرف حساب با شناسه انتخابگر؛ نام فقط نمایش است
+      partyId: selectedPartyId(selectedCustomerId),
       buyer_name: buyerName,
       buyer_city: buyerCity,
       buyer_phone: buyerPhone,
@@ -403,7 +409,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       <div className="space-y-6">
         <div className="flex gap-4 mb-4 print:hidden">
           <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-2 font-bold">
-            <Printer size={18} /> چاپ فاکتور (A4)
+            <Printer size={18} /> چاپ فاکتور
           </button>
           <button onClick={() => setPrintedDoc(null)} className="border px-4 py-2 rounded hover:bg-slate-50 font-medium">
             بازگشت به فرم ثبت
@@ -434,7 +440,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
           <div className="bg-blue-50 border-b border-blue-200 px-4 py-2.5 flex items-center justify-between gap-3 text-xs text-blue-900">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
-              <span>یک پیش‌نویس ذخیره‌شده در سرور برای فاکتور فروش وجود دارد. مایل به بازیابی اقلام و مشخصات هستید؟</span>
+              <span>یک پیش‌نویس ذخیره‌شده در سامانه برای فاکتور فروش وجود دارد. مایل به بازیابی اقلام و مشخصات هستید؟</span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button
@@ -471,10 +477,10 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               <label className="block text-xs font-medium mb-1 text-slate-500">واحد پول (ارز)</label>
               <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={currency} onChange={e => handleCurrencyChange(e.target.value)}>
                 <option value="IRR">ریال</option>
-                <option value="USD">دلار (USD)</option>
-                <option value="EUR">یورو (EUR)</option>
-                <option value="AED">درهم (AED)</option>
-                <option value="GBP">پوند (GBP)</option>
+                <option value="USD">دلار</option>
+                <option value="EUR">یورو</option>
+                <option value="AED">درهم</option>
+                <option value="GBP">پوند</option>
               </select>
               <ExchangeRateField currency={currency} value={exchangeRate} onChange={setExchangeRate} />
             </div>
@@ -499,8 +505,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
             </div>
             <div>
               {/* v9.0.327 (TD-783، تصمیم ت۹ الف): شماره فقط از سری سرور؛ سند تازه شماره را هنگام ثبت می‌گیرد */}
-              <label className="block text-xs font-medium mb-1 text-slate-500">شماره سند (از سری سرور)</label>
-              <input type="text" value={refNumber} readOnly title="شماره هنگام ثبت از سری فاکتورهای سرور داده می‌شود" className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-left font-mono text-slate-500 bg-slate-50 focus:outline-none" dir="ltr" />
+              <label className="block text-xs font-medium mb-1 text-slate-500">شماره سند (از سری سامانه)</label>
+              <input type="text" value={refNumber} readOnly title="شماره هنگام ثبت از سری فاکتورهای سامانه داده می‌شود" className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-left font-mono text-slate-500 bg-slate-50 focus:outline-none" dir="ltr" />
             </div>
             <div>
               <label className="block text-xs font-medium mb-1 text-slate-500">تاریخ</label>
@@ -525,7 +531,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
               <div className="col-span-1 md:col-span-4 bg-blue-50/80 p-3 rounded-xl border border-blue-100 flex flex-col md:flex-row md:items-center gap-3">
-                <label className="text-sm font-bold text-blue-900 shrink-0 min-w-[170px]">انتخاب خریدار از لیست طرفین حساب:*</label>
+                <label className="text-sm font-bold text-blue-900 shrink-0 min-w-[170px]">انتخاب خریدار از فهرست طرفین حساب:*</label>
                 <SearchableSelect 
                   className="w-full"
                   fetchUrl={PICK_LIST_URLS.customers}
@@ -549,7 +555,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                   type="text" 
                   value={buyerName} 
                   readOnly 
-                  placeholder={selectedCustomerId ? (buyerName || 'بدون نام') : 'از لیست طرفین حساب انتخاب کنید'} 
+                  placeholder={selectedCustomerId ? (buyerName || 'بدون نام') : 'از فهرست طرفین حساب انتخاب کنید'} 
                   className="w-full border rounded text-sm px-3 py-1.5 bg-slate-100/90 text-slate-800 font-bold cursor-not-allowed border-slate-200 shadow-2xs" 
                 />
               </div>
@@ -601,8 +607,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                     const whName = warehouses.find(w => w.code === location)?.name || location || 'انبار انتخابی';
 
                     const stockLabel = location 
-                      ? `${whName}: ${loc} | رزرو: ${reserved} | قابل فروش: ${sellable} ${it.unit}` 
-                      : `کل: ${total} | رزرو: ${reserved} | قابل فروش: ${sellable} ${it.unit}`;
+                      ? `${whName}: ${formatPersianNumber(loc)} | رزرو: ${formatPersianNumber(reserved)} | قابل فروش: ${formatPersianNumber(sellable)} ${it.unit}` 
+                      : `کل: ${formatPersianNumber(total)} | رزرو: ${formatPersianNumber(reserved)} | قابل فروش: ${formatPersianNumber(sellable)} ${it.unit}`;
 
                     return {
                       value: it.id.toString(),
@@ -625,7 +631,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 >
                   <option value="">-- ورود دستی قیمت --</option>
                   {pricesForCurrency(itemPrices, currency).map((p, pIdx) => (
-                    <option key={`price-opt-${p.id || pIdx}-${pIdx}`} value={p.price}>{p.title} - {formatPersianPrice(p.price)} {p.currency}</option>
+                    <option key={`price-opt-${p.id || pIdx}-${pIdx}`} value={p.price}>{p.title} - {formatPersianPrice(p.price)} {formatCurrencyLabel(p.currency)}</option>
                   ))}
                 </select>
               </div>
@@ -634,15 +640,15 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <input type="number" min="0" step="any" value={quantity} onChange={e => setQuantity(e.target.value ? Number(e.target.value) : '')} className="w-full shadow-sm border rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
               </div>
               <div className="w-32">
-                <label className="block text-xs mb-1 text-slate-500">مبلغ واحد ({currency})</label>
+                <label className="block text-xs mb-1 text-slate-500">مبلغ واحد ({formatCurrencyLabel(currency)})</label>
                 <input type="number" min="0" value={unitPrice} onChange={e => setUnitPrice(e.target.value ? Number(e.target.value) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
               </div>
               <div className="w-32">
-                <label className="block text-xs mb-1 text-slate-500">تخفیف کلی ردیف ({currency})</label>
+                <label className="block text-xs mb-1 text-slate-500">تخفیف کلی ردیف ({formatCurrencyLabel(currency)})</label>
                 <input type="number" min="0" value={discount} onChange={e => setDiscount(e.target.value ? Number(e.target.value) : '')} className="w-full border shadow-sm rounded text-sm px-3 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
               </div>
               <button type="button" onClick={handleAddItem} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded flex items-center gap-1 text-sm h-[34px] transition-colors shadow-sm">
-                <Plus size={16} /> افزودن به لیست
+                <Plus size={16} /> افزودن به فهرست
               </button>
             </div>
           </div>
@@ -655,10 +661,10 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                     <th className="p-3 font-medium">کد</th>
                     <th className="p-3 font-medium text-right">شرح کالا</th>
                     <th className="p-3 font-medium text-center">تعداد / مقدار</th>
-                    <th className="p-3 font-medium text-center">مبلغ واحد ({currency})</th>
-                    <th className="p-3 font-medium text-center">مبلغ کل ({currency})</th>
-                    <th className="p-3 font-medium text-center">تخفیف ({currency})</th>
-                    <th className="p-3 font-medium text-center">مبلغ نهایی ({currency})</th>
+                    <th className="p-3 font-medium text-center">مبلغ واحد ({formatCurrencyLabel(currency)})</th>
+                    <th className="p-3 font-medium text-center">مبلغ کل ({formatCurrencyLabel(currency)})</th>
+                    <th className="p-3 font-medium text-center">تخفیف ({formatCurrencyLabel(currency)})</th>
+                    <th className="p-3 font-medium text-center">مبلغ نهایی ({formatCurrencyLabel(currency)})</th>
                     <th className="p-3 font-medium text-center">حذف</th>
                   </tr>
                 </thead>
@@ -697,7 +703,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                       onChange={e => setApplyVat(e.target.checked)} 
                       className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer" 
                     />
-                    <span>محاسبه مالیات بر ارزش افزوده (VAT)</span>
+                    <span>محاسبه مالیات بر ارزش افزوده</span>
                   </label>
                   {applyVat && (
                     <div className="flex items-center gap-1.5 border-r pr-3 mr-1">
@@ -727,7 +733,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                   </div>
                   {applyVat && (
                     <div className="text-center font-medium text-slate-500 text-xs">
-                      ارزش افزوده ({vatRate}٪): 
+                      ارزش افزوده ({formatPersianNumber(vatRate)}٪): 
                       <span className="text-amber-700 font-bold block mt-0.5 text-base">{formatPersianPrice(vatAmount, undefined, amountDecimals)}</span>
                     </div>
                   )}
@@ -748,7 +754,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
           <div className="border-t pt-4 flex items-center justify-between">
             {editingDocId ? (
               <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 text-xs font-bold">
-                <span>در حال ویرایش پیش‌فاکتور کد {refNumber}</span>
+                <span>در حال ویرایش پیش‌فاکتور کد {formatPersianCode(refNumber)}</span>
                 <button type="button" onClick={handleCancelEdit} className="text-slate-600 hover:text-slate-900 bg-white border px-2 py-0.5 rounded text-xs flex items-center gap-1 font-normal">
                   <X size={12} /> انصراف
                 </button>

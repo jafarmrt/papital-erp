@@ -141,7 +141,7 @@ export function CreatePurchaseOrderModal({
       if (orderMode === 'requisition') {
         // Submit official Purchase Requisition to Procurement Desk & Workflow Engine
         const payload = {
-          title: `کسری متریال پروژه ${project.project_code || project.title}`.trim(),
+          title: `کسری مواد پروژه ${project.project_code || project.title}`.trim(),
           projectId: project.id,
           projectCode: project.project_code,
           projectName: project.title,
@@ -432,7 +432,7 @@ export function CreatePurchaseOrderModal({
                     <tr>
                       <th className="p-2.5 text-center w-12">انتخاب</th>
                       <th className="p-2.5">عنوان قلم نیازمندی</th>
-                      <th className="p-2.5">تطبیق با کاتالوگ انبار</th>
+                      <th className="p-2.5">تطبیق با فهرست کالا</th>
                       <th className="p-2.5 text-center">مقدار کسری</th>
                       <th className="p-2.5 text-center">قیمت واحد تخمینی</th>
                       <th className="p-2.5 text-center">مبلغ کل</th>
