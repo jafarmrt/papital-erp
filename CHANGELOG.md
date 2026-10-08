@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.454 — Warehouse Keys for Project Stock Paths
+- **Fix (TD-923, P5-M08):** allocating material to a project asks `warehouse.out`, and releasing an allocation or delivering a project to stock asks `warehouse.in` as well, like the stock documents; `projects.edit` alone no longer moves stock.
+
 ### v9.0.453 — No Zero-Cost Entry for an Item Without Cost
 - **Fix (TD-906, TD-916, P5-M04 / P5-P09):** a final receipt, its finalize, a procurement delivery and a project delivery refuse a zero-cost line of an item that has no weighted average cost yet (422), so such an item never enters stock unsellable.
 

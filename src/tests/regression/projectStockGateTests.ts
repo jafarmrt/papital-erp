@@ -19,6 +19,9 @@ export async function runProjectStockGateTests(shouldRun: ShouldRun): Promise<Te
     ['reg_incoming_without_cost_td_906',
       'v9.0.453: an item without a weighted average cost never enters stock at zero cost: a final receipt, its finalize, a procurement delivery and a project delivery without a price are 422; a priced line and a zero-price line of an item with a cost pass (TD-906, TD-916)',
       ['td906', 'td916', 'receipt', 'procurement', 'projects', 'cost', 'phase5'], incomingWithoutCostCase],
+    ['reg_project_stock_warehouse_permissions_td_923',
+      'v9.0.454: allocating material asks warehouse.out and releasing an allocation or delivering a project asks warehouse.in too, like the stock documents; without it nothing moves (TD-923, decision t3 option A)',
+      ['td923', 'allocation', 'projects', 'permissions', 'phase5'], warehousePermissionCase],
   ]);
 }
 
@@ -205,4 +208,63 @@ async function incomingWithoutCostCase(h: Harness, wrong: string[]): Promise<str
   const pricedDelivery = await h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 5, unitPrice: 400_000, location: f.wh }] });
   if (pricedDelivery.status !== 200 || await wacOf(h, product) !== 400_000) wrong.push(`a priced project delivery answered ${brief(pricedDelivery)} with WAC ${await wacOf(h, product)}, expected 200 and 400000`);
   return 'zero-cost entry of an item without cost refused on create, finalize, procurement delivery and project delivery; priced and donated lines pass';
+}
+
+/**
+ * P5-M08 (TD-923, decision ت۳ الف): a user holding only `projects.edit` moved stock out by allocating material, back in by
+ * releasing it and into stock by delivering the project (a final production receipt and its voucher), while
+ * `POST /documents` refused the same user a remittance and a receipt; `warehouse.out` alone also released an allocation (stock
+ * in). Each path now asks the stock document's warehouse key as well.
+ */
+async function warehousePermissionCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const a = await f.item(10);
+  const product = await f.item(0, 0);
+  const projectRes = await h.post('/api/projects', {
+    title: `P5 permissions ${h.tag} ${Math.floor(Math.random() * 1e6)}`, start_date: f.today, end_date: f.today, quantity: 5,
+    products: [{ item_id: product, item_code: '', item_name: '', quantity: 5, unit: 'عدد' }],
+  });
+  const projectId = Number((projectRes.body as { id?: unknown }).id);
+  if (projectRes.status !== 201) throw new Error(`setup: project create answered ${brief(projectRes)}`);
+
+  const projectEditor = await h.sessionWith(['projects.view', 'projects.edit']);
+  const warehouseOut = await h.sessionWith(['warehouse.view', 'warehouse.out']);
+  const warehouseIn = await h.sessionWith(['warehouse.view', 'warehouse.in']);
+  const editorWithIn = await h.sessionWith(['projects.view', 'projects.edit', 'warehouse.in']);
+  const keeper = await h.sessionWith(['warehouse.view', 'warehouse.out', 'warehouse.in']);
+
+  const allocate = (s: Awaited<ReturnType<Harness['sessionWith']>>) =>
+    h.post('/api/inventory/allocations/allocate', { projectId, allocations: [{ itemId: a, quantity: 4, location: f.wh }] }, s);
+  const release = (allocationId: number, s: Awaited<ReturnType<Harness['sessionWith']>>) =>
+    h.post(`/api/inventory/allocations/${allocationId}/release`, { reason: 'TD-923' }, s);
+  const deliver = (s: Awaited<ReturnType<Harness['sessionWith']>>) =>
+    h.post(`/api/projects/${projectId}/add-to-inventory`, { itemsToAdd: [{ itemId: product, quantity: 5, unitPrice: 400_000, location: f.wh }] }, s);
+  const expectForbidden = (label: string, res: { status: number; body?: unknown }) => {
+    if (res.status !== 403) wrong.push(`${label} answered ${brief(res)}, expected 403`);
+  };
+
+  // 1) allocation moves stock out: warehouse.out, not projects.edit alone
+  expectForbidden('allocating with projects.edit only', await allocate(projectEditor));
+  if (await f.stock(a) !== 10 || await allocationRows(h, projectId, a) !== 0) wrong.push(`the refused allocation left stock ${await f.stock(a)} and ${await allocationRows(h, projectId, a)} allocations`);
+  const allocated = await allocate(warehouseOut);
+  const allocationId = Number((allocated.body as { data?: { allocations?: Array<{ id?: unknown }> } })?.data?.allocations?.[0]?.id);
+  if (allocated.status !== 200 || !Number.isInteger(allocationId)) throw new Error(`setup: allocating with warehouse.out answered ${brief(allocated)}`);
+
+  // 2) the release brings stock back in: warehouse.in as well as a project or warehouse key
+  expectForbidden('releasing with projects.edit only', await release(allocationId, projectEditor));
+  expectForbidden('releasing with warehouse.out only', await release(allocationId, warehouseOut));
+  expectForbidden('releasing with warehouse.in only', await release(allocationId, warehouseIn));
+  const [stillAllocated] = await h.q('SELECT status FROM project_bom_allocations WHERE id = $1', [allocationId]);
+  if (stillAllocated?.status !== 'allocated' || await f.stock(a) !== 6) wrong.push(`the refused releases left the allocation ${String(stillAllocated?.status)} with stock ${await f.stock(a)}, expected allocated and 6`);
+  const released = await release(allocationId, keeper);
+  if (released.status !== 200 || await f.stock(a) !== 10) wrong.push(`releasing with warehouse.out and warehouse.in answered ${brief(released)} with stock ${await f.stock(a)}, expected 200 and 10`);
+
+  // 3) the project delivery brings finished goods into stock: warehouse.in as well as projects.edit
+  const receiptsOf = async () => Number((await h.q(`SELECT count(*)::int AS n FROM documents WHERE project_id = $1 AND type = 'production_receipt' AND is_deleted = 0`, [projectId]))[0]?.n);
+  expectForbidden('delivering the project with projects.edit only', await deliver(projectEditor));
+  expectForbidden('delivering the project with warehouse.in only', await deliver(warehouseIn));
+  if (await f.stock(product) !== 0 || await receiptsOf() !== 0) wrong.push(`the refused deliveries left stock ${await f.stock(product)} and ${await receiptsOf()} production receipts`);
+  const delivered = await deliver(editorWithIn);
+  if (delivered.status !== 200 || await f.stock(product) !== 5 || await receiptsOf() !== 1) wrong.push(`delivering with projects.edit and warehouse.in answered ${brief(delivered)} with stock ${await f.stock(product)} and ${await receiptsOf()} production receipts, expected 200, 5 and 1`);
+  return 'allocation asks warehouse.out, release and project delivery ask warehouse.in as well; refused calls move nothing';
 }

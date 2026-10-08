@@ -15,8 +15,8 @@ interface ProjectStockEntryTabProps {
 }
 
 export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate }: ProjectStockEntryTabProps) {
-  // v9.0.417 (TD-752): ورود به انبار با `projects.edit`، کلید `POST /projects/:id/add-to-inventory`
-  const { canEdit } = useProjectPermissions();
+  // v9.0.417 (TD-752): ورود به انبار با کلیدهای `POST /projects/:id/add-to-inventory`؛ از v9.0.454 (TD-923) `projects.edit` و `warehouse.in`
+  const { canDeliver } = useProjectPermissions();
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [batchSubmitting, setBatchSubmitting] = useState<boolean>(false);
   // v8.0.72 (TD-327): تحویلی که سرور به‌خاطر بیش از برنامه بودن رد کرده و دلیلش
@@ -513,9 +513,9 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
           </div>
 
           <div className="flex items-center gap-2">
-            {!canEdit ? (
+            {!canDeliver ? (
               <span className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-bold text-[11px]">
-                فقط مشاهده؛ ورود به انبار مجوز «ویرایش پروژه و مراحل تولید» می‌خواهد
+                فقط مشاهده؛ ورود به انبار مجوز «ویرایش پروژه و مراحل تولید» و «ثبت ورود کالا (رسید)» می‌خواهد
               </span>
             ) : selectedIds.size > 0 ? (
               <button
@@ -696,7 +696,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                   </div>
 
                   {/* Single Delivery Button */}
-                  {canEdit && (
+                  {canDeliver && (
                     <button
                       type="button"
                       onClick={() => handleAddToInventory(p)}

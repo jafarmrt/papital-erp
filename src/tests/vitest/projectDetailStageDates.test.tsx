@@ -28,7 +28,7 @@ vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetc
 vi.mock('react-hot-toast', () => ({ default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
 vi.mock('../../hooks/useProjectPermissions', () => ({
   useProjectPermissions: () => ({
-    canCreate: true, canEdit: true, canDelete: true, canAllocate: true, canConsumeAllocation: true, canReleaseAllocation: true, canRequestPurchase: true,
+    canCreate: true, canEdit: true, canDelete: true, canAllocate: true, canConsumeAllocation: true, canReleaseAllocation: true, canDeliver: true, canRequestPurchase: true,
   }),
 }));
 vi.mock('../../components/project/ProjectInventoryTab', () => ({ default: () => null }));
