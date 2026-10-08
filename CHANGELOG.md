@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.390 — Events Page by Permission
+- **Events page access (TD-722):** the events page was guarded by the role codes admin / manager while its menu entry and route asked `events.view`, so a holder of events.view with another role got «عدم دسترسی»; the page now opens with `events.view` and every change button of its sub-tabs (rules, outbox, dead letters, timeline replay, webhooks, event simulation) shows only for `events.manage`, the key each change route asks.
+
 ### v9.0.389 — Dismissed Notifications Stay Dismissed
 - **Notification dismissal (TD-717):** deleting a notification removed its row and the due reminder was made by read-then-write on every bell and counter request, so a deleted reminder came back and concurrent requests made two; «حذف» now sets `dismissed_at` (migration 0088), the bell and its counter skip dismissed rows, and the reminder insert is ON CONFLICT DO NOTHING on the partial unique index `uq_notifications_due_reminder` (created only on clean data; older duplicates listed by the financial health check).
 

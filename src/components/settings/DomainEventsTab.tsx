@@ -15,6 +15,7 @@ import {
   useRetrySingleOutboxEventMutation,
 } from '../../hooks/queries/useEventQueries';
 import { PillBadge, type PillBadgeVariants } from '../common/PillBadge';
+import { useHasPermission } from '../../contexts/AuthContext';
 
 // v7.0.86 (TD-108): نشان وضعیت رویداد صندوق خروجی
 const OUTBOX_BADGE_BASE = 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border';
@@ -26,6 +27,8 @@ const OUTBOX_STATUS_BADGES: PillBadgeVariants = {
 };
 
 export function DomainEventsTab() {
+  // v9.0.390 (TD-722): every change in this page asks events.manage on the server, so only its holders see the buttons
+  const canManage = useHasPermission('events.manage');
   const [activeSubTab, setActiveSubTab] = useState<'rules' | 'outbox' | 'dlq' | 'replay' | 'webhooks' | 'events'>('rules');
   
   // Live Domain Events state & query
@@ -336,6 +339,7 @@ export function DomainEventsTab() {
                 <span>تازه‌سازی</span>
               </button>
 
+              {canManage && (
               <button
                 onClick={handleProcessOutboxNow}
                 disabled={processOutboxMutation.isPending}
@@ -344,8 +348,9 @@ export function DomainEventsTab() {
                 <Play className={`w-3.5 h-3.5 ${processOutboxMutation.isPending ? 'animate-spin' : ''}`} />
                 <span>{processOutboxMutation.isPending ? 'در حال اجرا...' : 'پردازش دستی دسته'}</span>
               </button>
+              )}
 
-              {(outboxStats?.failed || 0) > 0 && (
+              {canManage && (outboxStats?.failed || 0) > 0 && (
                 <button
                   onClick={handleRetryAllFailed}
                   disabled={retryFailedMutation.isPending}
@@ -426,7 +431,7 @@ export function DomainEventsTab() {
                         </div>
 
                         <div className="flex items-center gap-3 self-end md:self-auto">
-                          {evt.status === 'failed' && (
+                          {canManage && evt.status === 'failed' && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -563,7 +568,7 @@ export function DomainEventsTab() {
           </div>
 
           {/* v9.0.385 (TD-708): a simulation with no effect replaces «انتشار رویداد آزمایشی» */}
-          <EventSimulationPanel />
+          {canManage && <EventSimulationPanel />}
 
           {/* Events List */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">

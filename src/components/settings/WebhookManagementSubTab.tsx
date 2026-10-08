@@ -4,6 +4,7 @@ import { confirmAction } from '../ConfirmDialogHost';
 import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Trash2, Edit3, Shield, Activity } from 'lucide-react';
 import { formatPersianDate, errorMessageOf } from '../../utils';
 import { fetchJson } from '../../api';
+import { useHasPermission } from '../../contexts/AuthContext';
 import { isEnteredSecret } from '../../lib/secrets/maskedSecret';
 import { WebhookSecretRevealPanel, type RevealedWebhookSecret } from './WebhookSecretRevealPanel';
 import { WEBHOOK_TIMEOUT_DEFAULT_MS, WEBHOOK_TIMEOUT_MAX_MS, WEBHOOK_TIMEOUT_MIN_MS } from '../../lib/events/webhookTimeout';
@@ -67,6 +68,8 @@ const AVAILABLE_EVENT_PRESETS = [
 ];
 
 export function WebhookManagementSubTab() {
+  // v9.0.390 (TD-722): create, edit, delete, toggle, ping and key rotation are guarded by events.manage
+  const canManage = useHasPermission('events.manage');
   const [subscriptions, setSubscriptions] = useState<WebhookSubscription[]>([]);
   const [deliveries, setDeliveries] = useState<WebhookDeliveryLog[]>([]);
   const [stats, setStats] = useState<WebhookStats | null>(null);
@@ -423,13 +426,15 @@ export function WebhookManagementSubTab() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
 
-          <button
-            onClick={openCreateModal}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-md transition-all flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            <span>تعریف وب‌هوک جدید</span>
-          </button>
+          {canManage && (
+            <button
+              onClick={openCreateModal}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-md transition-all flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>تعریف وب‌هوک جدید</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -455,7 +460,8 @@ export function WebhookManagementSubTab() {
                       <span className="text-sm font-bold text-slate-900 dark:text-white">{sub.name}</span>
                       <button
                         onClick={() => handleToggleActive(sub)}
-                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 transition-all ${
+                        disabled={!canManage}
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 transition-all disabled:cursor-default ${
                           sub.isActive === 1
                             ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
                             : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
@@ -473,14 +479,16 @@ export function WebhookManagementSubTab() {
 
                   {/* Actions & Buttons */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={() => handlePingTest({ subscriptionId: sub.id }, sub.id)}
-                      disabled={isTestingPing}
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
-                    >
-                      <Send className={`w-3.5 h-3.5 ${isTestingPing ? 'animate-spin' : ''}`} />
-                      <span>تست پینگ و امضا</span>
-                    </button>
+                    {canManage && (
+                      <button
+                        onClick={() => handlePingTest({ subscriptionId: sub.id }, sub.id)}
+                        disabled={isTestingPing}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
+                      >
+                        <Send className={`w-3.5 h-3.5 ${isTestingPing ? 'animate-spin' : ''}`} />
+                        <span>تست پینگ و امضا</span>
+                      </button>
+                    )}
 
                     <button
                       onClick={() => {
@@ -493,21 +501,25 @@ export function WebhookManagementSubTab() {
                       <span>لاگ تحویل ({sub.totalDeliveries || 0})</span>
                     </button>
 
-                    <button
-                      onClick={() => openEditModal(sub)}
-                      className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl"
-                      title="ویرایش تنظیمات"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
+                    {canManage && (
+                      <>
+                        <button
+                          onClick={() => openEditModal(sub)}
+                          className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl"
+                          title="ویرایش تنظیمات"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
 
-                    <button
-                      onClick={() => handleDeleteSubscription(sub.id)}
-                      className="p-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-xl"
-                      title="حذف درگاه"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                        <button
+                          onClick={() => handleDeleteSubscription(sub.id)}
+                          className="p-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-xl"
+                          title="حذف درگاه"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -521,13 +533,15 @@ export function WebhookManagementSubTab() {
                         {sub.secretKey}
                       </span>
                     </div>
-                    <button
-                      onClick={() => void handleRotateSecret(sub)}
-                      className="p-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline rounded shrink-0"
-                      title="ساخت کلید امضای تازه"
-                    >
-                      ساخت کلید تازه
-                    </button>
+                    {canManage && (
+                      <button
+                        onClick={() => void handleRotateSecret(sub)}
+                        className="p-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline rounded shrink-0"
+                        title="ساخت کلید امضای تازه"
+                      >
+                        ساخت کلید تازه
+                      </button>
+                    )}
                   </div>
 
                   {/* Patterns */}

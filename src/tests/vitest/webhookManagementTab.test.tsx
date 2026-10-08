@@ -12,6 +12,8 @@ import { RuleEditorModal } from '../../components/settings/RuleEditorModal';
 
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn(async () => true) }));
 
+// v9.0.390 (TD-722): the change buttons show only for holders of events.manage
+vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
 vi.mock('../../api', async () => {
   const actual = await vi.importActual<typeof import('../../api')>('../../api');
   return { ...actual, fetchJson: vi.fn() };

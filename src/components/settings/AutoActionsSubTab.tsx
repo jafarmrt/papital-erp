@@ -16,9 +16,12 @@ import { ruleActionTypeLabel } from '../../lib/events/ruleActionTypes';
 import { actionPreviewLines } from '../../lib/events/eventSimulationContract';
 import { eventTypeLabel, isSubscribableEventPattern } from '../../lib/events/eventTypeCatalog';
 import { actionLogStatusLabel } from '../../lib/events/actionLogContract';
+import { useHasPermission } from '../../contexts/AuthContext';
 
 export function AutoActionsSubTab() {
   const queryClient = useQueryClient();
+  // v9.0.390 (TD-722): adding, editing, deleting, switching and testing a rule ask events.manage on the server
+  const canManage = useHasPermission('events.manage');
   const { data: rules = [], isLoading: isLoadingRules, refetch: refetchRules } = useActionRulesQuery();
   const { data: stats = null, refetch: refetchStats } = useActionStatsQuery();
   const { data: logPage, isLoading: isLoadingLogs, refetch: refetchLogs } = useActionLogsQuery(50);
@@ -285,6 +288,7 @@ export function AutoActionsSubTab() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            {canManage && (
             <button
               onClick={() => {
                 setSelectedRule(null);
@@ -295,6 +299,7 @@ export function AutoActionsSubTab() {
               <Plus className="w-4 h-4" />
               <span>افزودن قانون اکشن جدید</span>
             </button>
+            )}
           </div>
 
         </div>
@@ -356,6 +361,15 @@ export function AutoActionsSubTab() {
                       {/* Left: Info */}
                       <div className="flex items-start gap-3.5">
                         <div className="mt-1">
+                          {!canManage ? (
+                            <span title={rule.isActive === 1 ? 'فعال' : 'غیرفعال'}>
+                              {rule.isActive === 1 ? (
+                                <ToggleRight className="w-7 h-7 text-indigo-600" />
+                              ) : (
+                                <ToggleLeft className="w-7 h-7 text-slate-300 dark:text-slate-600" />
+                              )}
+                            </span>
+                          ) : (
                           <button
                             onClick={() => handleToggleRule(rule.id)}
                             className="text-slate-400 hover:text-indigo-600 transition-colors"
@@ -367,6 +381,7 @@ export function AutoActionsSubTab() {
                               <ToggleLeft className="w-7 h-7 text-slate-300 dark:text-slate-600" />
                             )}
                           </button>
+                          )}
                         </div>
 
                         <div>
@@ -402,6 +417,7 @@ export function AutoActionsSubTab() {
                       </div>
 
                       {/* Right: Actions */}
+                      {canManage && (
                       <div className="flex items-center gap-2 self-end md:self-center">
                         <button
                           onClick={() => handleTestRule(rule)}
@@ -431,6 +447,7 @@ export function AutoActionsSubTab() {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
+                      )}
 
                     </div>
                   );

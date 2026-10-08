@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { History, Play, RotateCcw, Search, CheckCircle2, AlertTriangle, FileText, Package, Users, Landmark, Layers, GitBranch, Clock, ShieldCheck, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react';
 import { formatPersianDate } from '../../utils';
 import { fetchJson } from '../../api';
+import { useHasPermission } from '../../contexts/AuthContext';
 
 interface AggregateTypeOption {
   type: string;
@@ -26,6 +27,8 @@ interface TimelineItem {
 }
 
 export function EventSourcingReplaySubTab() {
+  // v9.0.390 (TD-722): the replay simulation route is guarded by events.manage
+  const canManage = useHasPermission('events.manage');
   const [types, setTypes] = useState<AggregateTypeOption[]>([]);
   const [selectedType, setSelectedType] = useState<string>('document');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
@@ -341,17 +344,19 @@ export function EventSourcingReplaySubTab() {
                           {formatPersianDate(item.occurredAt)}
                         </span>
 
-                        <button
-                          onClick={() => {
-                            setSelectedEventForReplay(item);
-                            setSimulationResult(null);
-                          }}
-                          className="px-2.5 py-1 text-[11px] font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition-all flex items-center gap-1"
-                          title="شبیه‌سازی و بازپخش رویداد"
-                        >
-                          <Play className="w-3 h-3" />
-                          <span>بازپخش</span>
-                        </button>
+                        {canManage && (
+                          <button
+                            onClick={() => {
+                              setSelectedEventForReplay(item);
+                              setSimulationResult(null);
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition-all flex items-center gap-1"
+                            title="شبیه‌سازی و بازپخش رویداد"
+                          >
+                            <Play className="w-3 h-3" />
+                            <span>بازپخش</span>
+                          </button>
+                        )}
 
                         <button
                           onClick={() => setExpandedTimelineId(isExpanded ? null : item.id)}

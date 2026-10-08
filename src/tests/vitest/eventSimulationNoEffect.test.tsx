@@ -12,6 +12,8 @@ import { EventSourcingReplaySubTab } from '../../components/settings/EventSourci
 import { EventSimulationPanel } from '../../components/settings/EventSimulationPanel';
 import { AutoActionsSubTab } from '../../components/settings/AutoActionsSubTab';
 
+// v9.0.390 (TD-722): the change buttons show only for holders of events.manage
+vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
 vi.mock('../../api', async () => {
   const actual = await vi.importActual<typeof import('../../api')>('../../api');
   return { ...actual, fetchJson: vi.fn() };

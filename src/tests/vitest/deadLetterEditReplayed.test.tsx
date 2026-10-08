@@ -7,6 +7,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { fetchJson } from '../../api';
 import { DeadLetterQueueSubTab } from '../../components/settings/DeadLetterQueueSubTab';
 
+// v9.0.390 (TD-722): the change buttons show only for holders of events.manage
+vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'events.manage' }));
 vi.mock('../../api', async () => {
   const actual = await vi.importActual<typeof import('../../api')>('../../api');
   return { ...actual, fetchJson: vi.fn() };
