@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ALL_EVENTS_LABEL, ALL_EVENTS_PATTERN, PUBLISHED_EVENT_TYPES, eventTypeLabel } from '../../lib/events/eventTypeCatalog';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Trash2, Edit3, Shield, Activity } from 'lucide-react';
@@ -94,6 +94,9 @@ export function WebhookManagementSubTab() {
 
   // Ping Test State
   const [pingTestingId, setPingTestingId] = useState<number | null>(null);
+  // v9.0.392 (TD-728): the form is sent once; a second click while it is saving does nothing
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
   const [, setPingResult] = useState<any | null>(null);
 
   // Toast
@@ -198,6 +201,10 @@ export function WebhookManagementSubTab() {
       return;
     }
 
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setIsSaving(true);
+
     const payload = {
       name: formData.name.trim(),
       targetUrl: formData.targetUrl.trim(),
@@ -231,6 +238,9 @@ export function WebhookManagementSubTab() {
       }
     } catch (err) {
       showToast(errorMessageOf(err) || 'خطای شبکه در ذخیره‌سازی', 'error');
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
   };
 
@@ -814,9 +824,10 @@ export function WebhookManagementSubTab() {
 
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md font-semibold transition-all"
+                  disabled={isSaving}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md font-semibold transition-all disabled:opacity-50"
                 >
-                  {editingSub ? 'ذخیره تغییرات درگاه' : 'ایجاد و فعال‌سازی درگاه وب‌هوک'}
+                  {isSaving ? 'در حال ذخیره…' : (editingSub ? 'ذخیره تغییرات درگاه' : 'ایجاد و فعال‌سازی درگاه وب‌هوک')}
                 </button>
               </div>
             </form>

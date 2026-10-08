@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.392 — Webhook Form Saves Once
+- **Webhook form double submit (TD-728):** the webhook form's submit button was never disabled, so a double click made two subscriptions and every event was delivered twice; the form now sends once (`isSaving` with a ref guard) and the button stays disabled until the answer.
+
 ### v9.0.391 — Event, Notification and WooCommerce Log Times in UTC
 - **Server times of package 15 (TD-725):** the events routes, the notification list and the WooCommerce order log sent zone-less UTC timestamps, so a Tehran browser showed them 3.5 hours early (the previous day before 03:30) and a new notification said «3 ساعت پیش»; they now carry a Z (`utcTimestampResponses` / `withUtcTimestampKeys`), stored event payloads are sent as stored, and the bell prints its relative time from UTC with Persian digits.
 
