@@ -20,7 +20,7 @@ vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() },
 // v9.0.417 (TD-752): buttons follow the project API keys; these tests act as a user who holds them
 vi.mock('../../hooks/useProjectPermissions', () => ({
   useProjectPermissions: () => ({
-    canCreate: true, canEdit: true, canDelete: true, canAllocate: true, canConsumeAllocation: true, canReleaseAllocation: true, canRequestPurchase: true,
+    canCreate: true, canEdit: true, canDelete: true, canAllocate: true, canConsumeAllocation: true, canReleaseAllocation: true, canDeliver: true, canRequestPurchase: true,
   }),
 }));
 vi.mock('../../components/ProjectModal', () => ({

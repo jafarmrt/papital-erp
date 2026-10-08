@@ -52,9 +52,9 @@ export const CLOSED_CHANGELOG_SERIES = [
   },
   {
     series: 9,
-    finalVersion: 'v9.0.450',
-    entryCount: 451,
-    sha256: 'c77954715ec498803e3b539cfdfb16fb3c5607be6ec0a96cecfcbd89b0d307de',
+    finalVersion: 'v9.0.461',
+    entryCount: 462,
+    sha256: 'c1a79c201cdb1dd6b3317ed690dbb770d09338fa53dbff42bf453dbb9784bda2',
     updates: v9Updates,
   },
 ];

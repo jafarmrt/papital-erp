@@ -115,10 +115,12 @@ export const projectBomAllocations = pgTable('project_bom_allocations', {
 registerColumnRef('projectBomAllocations.id', () => projectBomAllocations.id);
 
 // v7.0.105 (TD-237): هر کسر رزرو پروژه بابت حواله خروج نهایی با ردیف رزرو پیش از کسر ثبت می‌شود تا ابطال حواله
-// همان مقدار را به همان پروژه برگرداند (restored_at).
+// همان مقدار را به همان پروژه برگرداند (restored_at). v9.0.452 (TD-918): کسر تخصیص مواد هم، تا آزادسازی آن برگرداند.
 export const projectReservationReleases = pgTable('project_reservation_releases', {
   id: serial('id').primaryKey(),
-  documentId: integer('document_id').notNull().references(baseRelations.documentsId, { onDelete: 'cascade' }),
+  // v9.0.452 (TD-918، مهاجرت 0095): هر کسر یک منبع دارد، سند یا تخصیص مواد (قید chk_project_reservation_releases_source)
+  documentId: integer('document_id').references(baseRelations.documentsId, { onDelete: 'cascade' }),
+  bomAllocationId: integer('bom_allocation_id').references(() => projectBomAllocations.id, { onDelete: 'cascade' }),
   projectId: integer('project_id').notNull().references(() => productionProjects.id, { onDelete: 'cascade' }),
   itemId: integer('item_id'),
   qtyField: text('qty_field').notNull(),
@@ -130,4 +132,5 @@ export const projectReservationReleases = pgTable('project_reservation_releases'
   idx_prr_document: index('idx_prr_document').on(table.documentId),
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)
   idx_project_reservation_releases_project_id: index('idx_project_reservation_releases_project_id').on(table.projectId),
+  idx_project_reservation_releases_bom_allocation_id: index('idx_project_reservation_releases_bom_allocation_id').on(table.bomAllocationId).where(sql`${table.bomAllocationId} IS NOT NULL`),
 }));

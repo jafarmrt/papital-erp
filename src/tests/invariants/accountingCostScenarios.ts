@@ -9,7 +9,7 @@ import { VoucherSyncService } from '../../services/accounting/voucherSync.servic
 import { DocumentService } from '../../services/document.service.js';
 import { createTestItem } from '../fixtures/factories.js';
 import type { InvariantScope } from './businessInvariants.js';
-import { invariantProblems, receive, watermarks } from './scenarioHelpers.js';
+import { invariantProblems, legacyZeroCostEntry, receive, watermarks } from './scenarioHelpers.js';
 
 /**
  * v8.0.114 — سناریوهای سخت‌گیرانه گروه حسابداری و بهای تمام‌شده (TD-413، TD-400، TD-401، TD-402) برای سوئیت
@@ -119,7 +119,8 @@ export async function checkOutflowVoucherAtKardexCost(wh: string): Promise<strin
 export async function checkHealthValuationAtWacOnly(wh: string): Promise<string[]> {
   const problems: string[] = [];
   const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
-  await receive(item.id, 5, 0, wh, '2026-06-15');
+  // v9.0.453 (TD-906): a receipt document refuses this line now; the stock without cost is a legacy entry
+  await legacyZeroCostEntry(item.id, 5, wh, '2026-06-15');
   const metricsOf = async () => {
     const report = await FinancialHealthService.runHealthCheck();
     const test = report.tests.find(t => t.id === 'inventory_reconciliation');

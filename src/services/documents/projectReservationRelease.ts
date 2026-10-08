@@ -24,18 +24,49 @@ export async function releaseReservationsForDocument(
   username: string | undefined,
   userId?: number
 ): Promise<ProjectReservationRelease> {
+  return releaseReservations(tx, projectId, { documentId: docId }, docLines, username, userId);
+}
+
+/**
+ * v9.0.452 (TD-918، یافته P5-M02/M01 فاز ۵): تخصیص مواد به پروژه، مانند حواله خروج همان پروژه (TD-233)، رزرو پروژه را در
+ * تراکنش تخصیص کم می‌کند و هر کسر را با شماره تخصیص در project_reservation_releases ثبت می‌کند تا آزادسازی آن برگرداند.
+ */
+export async function releaseReservationsForAllocation(
+  tx: DbClient,
+  projectId: number,
+  allocationId: number,
+  lines: Array<{ itemId: unknown; quantity: unknown }>,
+  username: string | undefined,
+  userId?: number
+): Promise<ProjectReservationRelease> {
+  return releaseReservations(tx, projectId, { bomAllocationId: allocationId }, lines, username, userId);
+}
+
+/** منبع یک کسر رزرو: سند خروج یا تخصیص مواد (قید chk_project_reservation_releases_source) */
+type ReleaseSource = { documentId: number; bomAllocationId?: undefined } | { bomAllocationId: number; documentId?: undefined };
+
+async function releaseReservations(
+  tx: DbClient,
+  projectId: number,
+  source: ReleaseSource,
+  lines: Array<{ itemId: unknown; quantity: unknown }>,
+  username: string | undefined,
+  userId?: number
+): Promise<ProjectReservationRelease> {
   const result = await ItemStockReservationService.releaseProjectReservations(tx, {
     projectId,
-    docItems: docLines
+    docItems: lines
       .map(l => ({ itemId: l.itemId, quantity: Number(l.quantity || 0) }))
       .filter(l => l.quantity > 0),
-    docId,
+    docId: source.documentId ?? null,
+    bomAllocationId: source.bomAllocationId ?? null,
     userId,
     username: username || undefined,
   });
   if (result.deductions.length > 0) {
     await tx.insert(projectReservationReleases).values(result.deductions.map(d => ({
-      documentId: docId,
+      documentId: source.documentId ?? null,
+      bomAllocationId: source.bomAllocationId ?? null,
       projectId,
       itemId: d.itemId,
       qtyField: d.qtyField,
@@ -57,8 +88,33 @@ export async function restoreReservationsForDocument(
   username: string | undefined,
   userId?: number
 ): Promise<number> {
+  return restoreReservations(tx, { documentId: docId }, username, userId);
+}
+
+/**
+ * v9.0.452 (TD-918): آزادسازی تخصیص مواد، رزرو کسرشده همان تخصیص را (طبق project_reservation_releases) به همان پروژه
+ * برمی‌گرداند؛ تخصیص‌های پیش از v9.0.452 رزروی کم نکرده‌اند و چیزی برنمی‌گردانند.
+ */
+export async function restoreReservationsForAllocation(
+  tx: DbClient,
+  allocationId: number,
+  username: string | undefined,
+  userId?: number
+): Promise<number> {
+  return restoreReservations(tx, { bomAllocationId: allocationId }, username, userId);
+}
+
+async function restoreReservations(
+  tx: DbClient,
+  source: ReleaseSource,
+  username: string | undefined,
+  userId?: number
+): Promise<number> {
+  const sourceCondition = source.documentId !== undefined
+    ? eq(projectReservationReleases.documentId, source.documentId)
+    : eq(projectReservationReleases.bomAllocationId, source.bomAllocationId);
   const records = await tx.select().from(projectReservationReleases)
-    .where(and(eq(projectReservationReleases.documentId, docId), isNull(projectReservationReleases.restoredAt)))
+    .where(and(sourceCondition, isNull(projectReservationReleases.restoredAt)))
     .orderBy(asc(projectReservationReleases.id))
     .for('update');
   if (records.length === 0) return 0;
@@ -74,7 +130,8 @@ export async function restoreReservationsForDocument(
         quantity: Number(r.quantity),
         row: r.reservationRow as InventoryControlItem,
       })),
-      docId,
+      docId: source.documentId ?? null,
+      bomAllocationId: source.bomAllocationId ?? null,
       userId,
       username,
     });

@@ -1184,9 +1184,9 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
   }
 
   // v10.0.0: سری‌های ۷، ۸ و ۹ بسته و منجمدند و تغییرات تازه فقط در سری فعال ۱۰ (10.ts) ثبت می‌شوند
-  // (جانشین unit_changelog_series_closure_v9؛ روی v9.0.450 قرمز است، چون سری فعال ۹ است و سری ۹ بسته نیست)
+  // (جانشین unit_changelog_series_closure_v9؛ روی v9.0.461 قرمز است، چون سری فعال ۹ است و سری ۹ بسته نیست)
   const tSeriesStart = Date.now();
-  const seriesTestName = 'v10.0.0: the active changelog series is 10, the package.json version is in it, and the closed series 7 (v7.0.140), 8 (v8.0.128) and 9 (v9.0.450) are untouched';
+  const seriesTestName = 'v10.0.0: the active changelog series is 10, the package.json version is in it, and the closed series 7 (v7.0.140), 8 (v8.0.128) and 9 (v9.0.461) are untouched';
   try {
     const fs = await import('fs');
     const path = await import('path');
@@ -1197,7 +1197,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     if (ACTIVE_CHANGELOG.series !== 10 || ACTIVE_CHANGELOG.file !== 'src/data/changelogs/10.ts') {
       violations.push(`active series must be 10 (10.ts), but is ${ACTIVE_CHANGELOG.series} (${ACTIVE_CHANGELOG.file})`);
     }
-    const expectedClosed: Array<[number, string]> = [[7, 'v7.0.140'], [8, 'v8.0.128'], [9, 'v9.0.450']];
+    const expectedClosed: Array<[number, string]> = [[7, 'v7.0.140'], [8, 'v8.0.128'], [9, 'v9.0.461']];
     for (const [series, finalVersion] of expectedClosed) {
       const closed = CLOSED_CHANGELOG_SERIES.find(c => c.series === series);
       if (!closed || closed.finalVersion !== finalVersion) {

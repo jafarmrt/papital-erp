@@ -27,6 +27,7 @@ const fetchJson = vi.fn(async (url: string, _opts?: FetchOpts): Promise<unknown>
   if (url.startsWith('/projects?')) return { data: [listRow(5)], total: 1, page: 1, limit: 50, statusCounts: { in_progress: 1 } };
   if (/^\/projects\/\d+\/product-progress$/.test(url)) return progress;
   if (url.startsWith('/inventory/allocations?')) return { allocations: [allocation] };
+  if (url.endsWith('/product-progress')) return progress;
   return [];
 });
 vi.mock('../../api', () => ({ fetchJson: (url: string, opts?: FetchOpts) => fetchJson(url, opts) }));
@@ -44,6 +45,8 @@ import { SearchProvider } from '../../SearchContext';
 import ProjectsPage from '../../pages/ProjectsPage';
 import ProjectProductProgressTab from '../../components/project/ProjectProductProgressTab';
 import { ProjectBomAllocationsTab } from '../../components/inventory/ProjectBomAllocationsTab';
+import ProjectStockEntryTab from '../../components/project/ProjectStockEntryTab';
+import type { ProductionProject } from '../../types';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); granted.clear(); });
 
@@ -95,16 +98,50 @@ describe('project buttons follow the project API keys (TD-752)', () => {
     expect(screen.queryByText('آزادسازی')).toBeNull();
     cleanup();
 
-    grant('warehouse.out');
+    // v9.0.454 (TD-923): allocation asks warehouse.out only; the release brings stock back in and asks warehouse.in as well
+    grant('projects.edit');
+    render(withQuery(<ProjectBomAllocationsTab />));
+    expect(await screen.findByText('سنگ')).toBeTruthy();
+    expect(screen.queryByText('تخصیص مواد به پروژه')).toBeNull();
+    expect(screen.getByText('مصرف شد')).toBeTruthy();
+    expect(screen.queryByText('آزادسازی')).toBeNull();
+    cleanup();
+    granted.clear();
+
+    grant('warehouse.view', 'warehouse.out');
     render(withQuery(<ProjectBomAllocationsTab />));
     expect(await screen.findByText('سنگ')).toBeTruthy();
     expect(screen.getByText('تخصیص مواد به پروژه')).toBeTruthy();
     expect(screen.queryByText('مصرف شد')).toBeNull();
+    expect(screen.queryByText('آزادسازی')).toBeNull();
+    cleanup();
+
+    grant('warehouse.in');
+    render(withQuery(<ProjectBomAllocationsTab />));
+    expect(await screen.findByText('سنگ')).toBeTruthy();
     expect(screen.getByText('آزادسازی')).toBeTruthy();
     cleanup();
 
     grant('inventory.reconcile');
     render(withQuery(<ProjectBomAllocationsTab />));
     await waitFor(() => expect(screen.getByText('مصرف شد')).toBeTruthy());
+  });
+
+  // v9.0.454 (TD-923): the delivery is a final production receipt, so its button asks projects.edit and warehouse.in
+  it('offers the project delivery only to holders of projects.edit and warehouse.in', async () => {
+    const project = {
+      id: 5, project_code: 'PRJ-5', status: 'in_progress', item_id: 9, item_name: 'گردنبند', quantity: 3, unit: 'عدد',
+      products: [{ id: 'prod-9', item_id: 9, item_code: 'NK-1', item_name: 'گردنبند', customer_code: '', quantity: 3, unit: 'عدد', needs_assembly: false }],
+    } as unknown as ProductionProject;
+    grant('projects.view', 'projects.edit');
+    render(<ProjectStockEntryTab project={project} onUpdate={vi.fn()} />);
+    expect(await screen.findByText(/فقط مشاهده؛ ورود به انبار مجوز/)).toBeTruthy();
+    expect(screen.queryByText('ورود به انبار')).toBeNull();
+    cleanup();
+
+    grant('warehouse.in');
+    render(<ProjectStockEntryTab project={project} onUpdate={vi.fn()} />);
+    expect(await screen.findByText('ورود به انبار')).toBeTruthy();
+    expect(screen.queryByText(/فقط مشاهده؛ ورود به انبار مجوز/)).toBeNull();
   });
 });

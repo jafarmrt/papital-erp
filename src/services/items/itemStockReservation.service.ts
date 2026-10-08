@@ -215,6 +215,19 @@ async function readItemsForProjectRows(client: DbExecutor, rows: ProjectReservat
   return client.select(RESERVATION_ITEM_COLUMNS).from(items).where(and(eq(items.isDeleted, 0), or(...conditions))).orderBy(asc(items.id));
 }
 
+/**
+ * v9.0.452 (TD-918): منبع کسر یا بازگرداندن رزرو در شرح ممیزی؛ تخصیص مواد با شماره تخصیص، وگرنه حواله خروج با شماره سند.
+ * `allocationText` شرح منبع تخصیص است (کسر: «بابت تخصیص مواد»، بازگرداندن: «بابت آزادسازی تخصیص مواد»).
+ */
+function reservationSourceText(
+  params: { docId?: number | null; bomAllocationId?: number | null },
+  documentText: string,
+  allocationText = 'بابت تخصیص مواد'
+): string {
+  if (params.bomAllocationId) return `${allocationText} شماره ${params.bomAllocationId}`;
+  return `${documentText}${params.docId ? ` سند #${params.docId}` : ''}`;
+}
+
 function emptyReservationReport(): ReservedItemsFullReport {
   return {
     summaryMetrics: { totalReservedItemsCount: 0, totalReservedQty: 0, totalReservedCost: 0, proformaReservationsCount: 0, projectReservationsCount: 0 },
@@ -237,6 +250,8 @@ export class ItemStockReservationService {
       docItems: Array<{ itemId?: unknown; itemCode?: unknown; itemName?: unknown; quantity: number }>;
       expectedVersion?: number;
       docId?: number | null;
+      /** v9.0.452 (TD-918): کسر بابت تخصیص مواد این شماره، نه حواله خروج */
+      bomAllocationId?: number | null;
       userId?: number;
       username?: string;
     }
@@ -367,12 +382,13 @@ export class ItemStockReservationService {
         action: 'UPDATE',
         entity: 'کنترل موجودی پروژه',
         entityId: String(proj.id),
-        description: `آزادسازی رزرو ${releasedItemIds.length} قلم کالای پروژه «${proj.title || proj.projectCode || proj.id}» بابت حواله خروج${params.docId ? ` سند #${params.docId}` : ''}`,
+        description: `آزادسازی رزرو ${releasedItemIds.length} قلم کالای پروژه «${proj.title || proj.projectCode || proj.id}» ${reservationSourceText(params, 'بابت حواله خروج')}`,
         details: {
           before: { reservedItems: invControl.reservedItems || [], version: proj.version },
           after: { reservedItems: reservedList, version: nextVersion(proj.version) },
           releasedItemIds,
-          documentId: params.docId ?? null
+          documentId: params.docId ?? null,
+          bomAllocationId: params.bomAllocationId ?? null
         },
         tx
       });
@@ -396,7 +412,10 @@ export class ItemStockReservationService {
    */
   static async restoreProjectReservations(
     tx: DbExecutor,
-    params: { projectId: number; deductions: ProjectReservationDeduction[]; docId?: number | null; userId?: number; username?: string }
+    params: {
+      projectId: number; deductions: ProjectReservationDeduction[]; docId?: number | null; bomAllocationId?: number | null;
+      userId?: number; username?: string;
+    }
   ): Promise<{ restored: boolean; restoredQuantity: number; restoredItemIds: number[] }> {
     const [proj] = await tx.select()
       .from(productionProjects)
@@ -435,12 +454,13 @@ export class ItemStockReservationService {
       action: 'UPDATE',
       entity: 'کنترل موجودی پروژه',
       entityId: String(proj.id),
-      description: `بازگرداندن رزرو ${params.deductions.length} ردیف کالای پروژه «${proj.title || proj.projectCode || proj.id}» بابت ابطال حواله خروج${params.docId ? ` سند #${params.docId}` : ''}`,
+      description: `بازگرداندن رزرو ${params.deductions.length} ردیف کالای پروژه «${proj.title || proj.projectCode || proj.id}» ${reservationSourceText(params, 'بابت ابطال حواله خروج', 'بابت آزادسازی تخصیص مواد')}`,
       details: {
         before: { reservedItems: invControl.reservedItems || [], version: proj.version },
         after: { reservedItems: reservedList, version: nextVersion(proj.version) },
         restoredItemIds,
-        documentId: params.docId ?? null
+        documentId: params.docId ?? null,
+        bomAllocationId: params.bomAllocationId ?? null
       },
       tx
     });
