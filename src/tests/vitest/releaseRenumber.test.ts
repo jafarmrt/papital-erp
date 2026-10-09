@@ -217,6 +217,32 @@ describe('scripts/release-renumber.ts keeps archived debt rows archived (TD-981)
   });
 });
 
+/** OT-A-01: a branch version in an added test name, string, trailing or JSX comment follows the renumbering too. */
+describe('scripts/release-renumber.ts renumbers versions in added code lines (OT-A-01)', () => {
+  it('rewrites a branch version anywhere in an added line and leaves numbers in code alone', () => {
+    const t = mergedTree();
+    const kept = "const masterCase = 'v9.0.52: master case';";
+    t.base.set('src/tests/x.ts', `${kept}\n`);
+    t.current.set('src/tests/x.ts', [
+      kept,
+      "const name = 'v9.0.52: branch case (TD-473)';",
+      'run(0060); // v9.0.53 trailing',
+      '<p>{/* v9.0.52 */}</p>',
+      "const fa = 'نسخه v۹.۰.۵۲';",
+      '',
+    ].join('\n'));
+    const out = planRenumber(input(t)).writes.get('src/tests/x.ts')!;
+    expect(out.split('\n')).toEqual([
+      kept,
+      "const name = 'v9.0.53: branch case (TD-473)';",
+      'run(0060); // v9.0.54 trailing',
+      '<p>{/* v9.0.53 */}</p>',
+      "const fa = 'نسخه v۹.۰.۵۳';",
+      '',
+    ]);
+  });
+});
+
 /** v10.0.0: series 10 is active; the tool reads a two-digit series from 10.ts and the «Version 10.x» section. */
 describe('scripts/release-renumber.ts with series 10 (v10.0.0)', () => {
   const ACTIVE_10 = 'src/data/changelogs/10.ts';

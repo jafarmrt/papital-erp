@@ -5,10 +5,12 @@
  * Only text the branch itself added (lines not in <ref>, found with a line diff) is renumbered:
  *  - versions: active changelog entries that are not in <ref> move, in order, to the free versions after the
  *    highest version of <ref>; every added line in the changed files follows (CHANGELOG.md, TECH_DEBT rows,
- *    AGENTS.md, roadmap, audit report; in other files only comment lines). The active changelog and the active CHANGELOG.md section are
+ *    AGENTS.md, roadmap, audit report, and in code files too: test names, strings, trailing and JSX comments, also
+ *    written with Persian digits; v10.0.22, OT-A-01). The active changelog and the active CHANGELOG.md section are
  *    sorted newest first, and package.json, package-lock.json, k8s and README get the top version;
  *  - migrations: journal entries whose tag is not in <ref> move after the migrations of <ref> (file renamed, idx,
- *    tag, strictly increasing `when`) and added lines follow (the tag and the bare four-digit number);
+ *    tag, strictly increasing `when`) and added lines follow (the tag and the bare four-digit number; in code files
+ *    only comment lines, since a four-digit number in code is usually data);
  *  - audit report: a package section the branch added («## N.») whose number <ref> already uses takes the next free
  *    number, with its subsections, and added «STABILITY_AUDIT_V9.md` §N» references follow;
  *  - TECH_DEBT.md drops every row whose id the merged TECH_DEBT_ARCHIVE.md holds (a row either side archived is
@@ -196,8 +198,19 @@ export function planSections(baseSrc: string | null, curSrc: string | null): Map
 
 interface LineMaps { versions: Map<string, string>; numbers: Map<string, string>; sections: Map<number, number> }
 
+const toLatinDigits = (s: string) => s.replace(/[۰-۹]/g, d => String(FA.indexOf(d)));
+
+/** A branch version, with Latin or Persian digits (v10.0.22, OT-A-01). */
+function rewriteVersions(line: string, maps: LineMaps): string {
+  const out = line.replace(/\bv\d+\.\d+\.\d+(?![\d])/g, v => maps.versions.get(v) ?? v);
+  return out.replace(/v[۰-۹]+\.[۰-۹]+\.[۰-۹]+(?![۰-۹])/g, v => {
+    const to = maps.versions.get(toLatinDigits(v));
+    return to === undefined ? v : to.replace(/\d/g, d => FA[Number(d)]);
+  });
+}
+
 function rewriteLine(line: string, file: string, maps: LineMaps): string {
-  let out = line.replace(/\bv\d+\.\d+\.\d+(?![\d])/g, v => maps.versions.get(v) ?? v);
+  let out = rewriteVersions(line, maps);
   // one pass over four-digit numbers also renames tags («0060_x» → «0061_x») without shifting a number twice
   if (maps.numbers.size > 0) out = out.replace(/(?<![\d.])\d{4}(?![\d])/g, n => maps.numbers.get(n) ?? n);
   if (maps.sections.size > 0) {
@@ -211,15 +224,19 @@ function rewriteLine(line: string, file: string, maps: LineMaps): string {
 const COMMENT_LINE = /^\s*(\/\/|\/\*|\*|#|--)/;
 
 /**
- * Applies the maps to the lines of `cur` the branch added (relative to `base`): every added line of a Markdown file,
- * only comment lines elsewhere (a version or number in code or test data is never touched).
+ * Applies the maps to the lines of `cur` the branch added (relative to `base`): every added line of a Markdown file
+ * and of a comment line elsewhere; in other added code lines only the branch's own versions (test names, strings,
+ * trailing and JSX comments; v10.0.22, OT-A-01), never a migration or section number. Lines of the base are never touched.
  */
 export function rewriteAddedLines(base: string | null, cur: string, file: string, maps: LineMaps): string {
   const curLines = cur.split('\n');
   const added = addedLineIndexes((base ?? '').split('\n'), curLines);
   if (base === null) curLines.forEach((_, k) => added.add(k));
   const doc = file.endsWith('.md');
-  return curLines.map((l, k) => (added.has(k) && (doc || COMMENT_LINE.test(l)) ? rewriteLine(l, file, maps) : l)).join('\n');
+  return curLines.map((l, k) => {
+    if (!added.has(k)) return l;
+    return doc || COMMENT_LINE.test(l) ? rewriteLine(l, file, maps) : rewriteVersions(l, maps);
+  }).join('\n');
 }
 
 /** Sorts the blocks of the active series section of CHANGELOG.md newest first. */
