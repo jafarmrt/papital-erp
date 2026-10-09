@@ -137,7 +137,9 @@ export class DocumentLifecycleService {
           const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
           // v8.0.51 / v8.0.119 (TD-317 / TD-410، تصمیم مالک محصول): فاکتورِ حاصل از پیش‌فاکتور شماره بعدی سری فاکتور و
           // تاریخ روز نهایی‌سازی را می‌گیرد؛ شماره و تاریخ پیش‌فاکتور در یادداشت می‌ماند (proformaInvoice.ts)
-          const isProformaToInvoice = doc.type === 'proforma';
+          // v10.0.x (TD-910، تصمیم ت۷ الف): هر سند در وضعیت پیش‌فاکتور، چه نوع `proforma` چه `invoice` (پیش‌فاکتوری که دارنده
+          // documents.finalize ثبت کرده)، همین قاعده را دارد؛ پیش‌تر نوع `invoice` تاریخ و شماره پیش‌فاکتور را نگه می‌داشت
+          const isProformaToInvoice = doc.type === 'proforma' || (doc.type === 'invoice' && doc.status === 'proforma');
           const proformaTarget = isProformaToInvoice ? await proformaInvoiceTarget(doc, tx) : null;
           const finalDate = proformaTarget?.date ?? doc.date;
           const finalRefNumber = proformaTarget?.refNumber ?? doc.refNumber;

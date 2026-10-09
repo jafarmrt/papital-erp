@@ -185,6 +185,8 @@ export interface FormattedDocument {
   totalDiscount: number;
   grossAmount: number;
   paidAmount?: number;
+  /** v10.0.x (TD-909): جمع مرجوعی‌های قطعی فاکتور که از مانده کم شده است */
+  returnedAmount?: number;
   remainingAmount?: number;
   settlementStatus?: 'unpaid' | 'partially_paid' | 'fully_paid';
   settlements?: Array<{

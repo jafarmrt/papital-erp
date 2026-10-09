@@ -81,6 +81,11 @@ export async function fixture(h: Harness): Promise<Fixture> {
   };
 }
 
+/** v10.0.x (TD-972): the stored version of a document, which an edit through PUT /documents/:id must send */
+export async function docVersion(h: Harness, id: number): Promise<number> {
+  return Number((await h.q(`SELECT version FROM documents WHERE id = $1`, [id]))[0]?.version);
+}
+
 export const brief = (res: { status: number; body?: unknown }) => `${res.status} ${JSON.stringify(res.body ?? null).slice(0, 180)}`;
 
 /** B08-01 (TD-770): «رسید» با inOut: out، فاکتور با inOut: in، پیش‌فاکتور با inOut: in و transfer از POST /documents */
