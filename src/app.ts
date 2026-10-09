@@ -281,7 +281,7 @@ export async function createApp(): Promise<express.Express> {
         });
       }
 
-      // v10.0.22 (TD-958): names of the startup steps the server left out after their attempts (the errors stay in the log)
+      // v10.0.25 (TD-958): names of the startup steps the server left out after their attempts (the errors stay in the log)
       const degradedSteps = bootDegradedSteps().map(s => s.step);
       res.status(200).json({
         status: 'ready',

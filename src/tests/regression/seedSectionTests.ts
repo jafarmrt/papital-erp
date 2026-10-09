@@ -3,7 +3,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
 /**
- * v10.0.22 (TD-959, OBS-R1-08): the seed logged each failed base data section and still answered `success: true`,
+ * v10.0.25 (TD-959, OBS-R1-08): the seed logged each failed base data section and still answered `success: true`,
  * so the boot and the factory reset never knew a section was missing. Here one section's table is hidden in an
  * isolated schema; the seed must name that section in `failedSections`, answer `success: false` and still run the rest.
  */

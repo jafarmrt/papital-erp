@@ -7,7 +7,7 @@ import type { BootStep } from './bootSequence.js';
 
 /**
  * v9.0.133 (TD-591): کارهای داده‌ای بوت، به همان ترتیب `server.ts`، تا آزمون نصب تازه همان مسیر را روی پایگاه‌داده جدا اجرا کند.
- * v10.0.22 (TD-958): گام‌ها جدا شدند؛ فقط مهاجرت ضروری است و `server.ts` آن‌ها را با `runBootSequence` اجرا می‌کند.
+ * v10.0.25 (TD-958): گام‌ها جدا شدند؛ فقط مهاجرت ضروری است و `server.ts` آن‌ها را با `runBootSequence` اجرا می‌کند.
  */
 export function bootDataSteps(): BootStep[] {
   return [

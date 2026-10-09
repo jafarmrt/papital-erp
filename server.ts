@@ -58,7 +58,7 @@ async function startServer() {
   (async () => {
     registerWorkflowDomainActions();
     registerDomainEventHandlers();
-    // v10.0.22 (TD-958): only the migrations are essential; a non-essential step that keeps failing is left out and
+    // v10.0.25 (TD-958): only the migrations are essential; a non-essential step that keeps failing is left out and
     // listed by /health/ready instead of stopping the whole process
     const report = await runBootSequence(bootDataSteps());
     // v7.0.40 (audit P2-11): in every environment the server never answers without its schema

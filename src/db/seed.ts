@@ -16,7 +16,7 @@ import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../lib/advisoryLock.js';
  * v7.0.39 (TD-194): قفل و آزادسازی روی همان اتصال اختصاصی (withAdvisoryLock)؛ پیش‌تر دو کوئری جدای orm
  * ممکن بود روی دو اتصال متفاوت استخر اجرا شوند و قفل روی اتصال اول باقی بماند.
  */
-/** v10.0.22 (TD-959): `failedSections` names every base data section that failed; `success` is false when one did. */
+/** v10.0.25 (TD-959): `failedSections` names every base data section that failed; `success` is false when one did. */
 export interface SeedResult { success: boolean; message: string; failedSections: string[] }
 
 export async function runSeedWithLock(): Promise<SeedResult> {
@@ -49,7 +49,7 @@ export async function runSeed(
   options: { migrate?: () => Promise<MigrationResult> } = {}
 ): Promise<SeedResult> {
   logger.info('[Seeder] Starting system master data seed process...');
-  // v10.0.22 (TD-959): a failed section is still logged and the others still run (each is insert-only, so the next
+  // v10.0.25 (TD-959): a failed section is still logged and the others still run (each is insert-only, so the next
   // boot retries it), but the result says which failed instead of always reporting success
   const failedSections: string[] = [];
 

@@ -9,7 +9,7 @@ const noSleep = { sleep: async () => {}, attempts: 3 };
 const step = (name: string, essential: boolean, run: () => Promise<void>): BootStep => ({ name, essential, run });
 
 /**
- * v10.0.22 (TD-958, OBS-R1-01): before, `server.ts` ran every boot data step in one five-attempt loop, so a
+ * v10.0.25 (TD-958, OBS-R1-01): before, `server.ts` ran every boot data step in one five-attempt loop, so a
  * non-essential step that kept failing (base data, default engines, the time zone cache) stopped the whole process.
  */
 describe('startup sequence: essential and non-essential steps (TD-958)', () => {
