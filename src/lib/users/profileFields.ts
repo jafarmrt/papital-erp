@@ -27,3 +27,21 @@ export function isImageDataUrl(value: string): boolean {
 export function isAcceptableAvatar(value: string): boolean {
   return value === '' || isImageDataUrl(value) || isStoredAvatarPath(value);
 }
+
+/**
+ * v10.0.38 (TD-1161): the profile picture picker, its check and its hint name the formats the server stores
+ * (`uploadBase64ToStorage`: JPG, PNG, WEBP, GIF). The picture is shrunk in the browser before it is sent
+ * (`compressTo300KB`), so the hint names no size limit; it used to say «۵ مگابایت» while the picker left out GIF.
+ */
+export const PROFILE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
+
+export const PROFILE_IMAGE_ACCEPT = PROFILE_IMAGE_TYPES.join(', ');
+
+export const PROFILE_IMAGE_HINT = 'قالب‌های مجاز: PNG، JPG، WEBP و GIF. تصویر بزرگ پیش از ارسال کوچک می‌شود.';
+
+export const PROFILE_IMAGE_TYPE_MESSAGE = 'یک فایل تصویری انتخاب کنید (PNG، JPG، WEBP یا GIF).';
+
+/** Whether a picked file is one of the formats the profile picture accepts */
+export function isProfileImageType(type: string): boolean {
+  return (PROFILE_IMAGE_TYPES as readonly string[]).includes(type.toLowerCase());
+}
