@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FolderTree, ShoppingBag, Copy, Check, RefreshCw, Key, ShieldCheck, Database, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { formatPersianDateTime, formatPersianDate, formatPersianNumber } from '../../utils';
@@ -33,7 +33,7 @@ interface WooCommerceTabProps {
   /** v9.0.334 (TD-730): خطای خواندن هر فهرست؛ خالی یعنی خوانده شد */
   syncedWcOrdersError?: string;
   wcOrderLogsError?: string;
-  loadSyncedWcOrders: () => void;
+  loadSyncedWcOrders: (signal?: AbortSignal) => void;
   handleSyncAllStocks: () => void;
   isSyncingAllStocks: boolean;
   /** v9.0.131 (TD-668): هر بخش فقط برای کسی که API آن را می‌پذیرد فعال است (پیش‌فرض: همه، برای مدیر سیستم) */
@@ -81,6 +81,14 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
   access = FULL_ACCESS,
 }) => {
   const [copiedWebhook, setCopiedWebhook] = useState(false);
+  // v10.0.32 (OBS-PR-17): فهرست سفارش‌ها و گزارش ووکامرس فقط وقتی این زبانه باز می‌شود خوانده می‌شوند
+  const loadListsRef = useRef(loadSyncedWcOrders);
+  loadListsRef.current = loadSyncedWcOrders;
+  useEffect(() => {
+    const controller = new AbortController();
+    loadListsRef.current(controller.signal);
+    return () => controller.abort();
+  }, []);
   const [activeLogSubTab, setActiveLogSubTab] = useState<'audit_logs' | 'invoices'>('audit_logs');
 
   // Generate public webhook URL
@@ -336,7 +344,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
           </div>
 
           <button
-            onClick={loadSyncedWcOrders}
+            onClick={() => loadSyncedWcOrders()}
             className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 bg-white px-2.5 py-1 rounded border border-slate-200 shadow-2xs"
           >
             <RefreshCw size={12} />

@@ -501,7 +501,8 @@ export class EventActionEngineService {
         // v9.0.357 (TD-715): the echo simulator answers only in test / development (TD-704), so only there is its rule seeded
         ...(isEchoSimulatorEnvironment() ? [{
           name: 'وب‌هوک تایید فاکتور فروش (شبیه‌ساز یکپارچگی)',
-          description: 'ارسال وب‌هوک HTTP POST به سرور بیرونی / اتوماسیون سازمانی هنگام تایید نهایی فاکتور فروش',
+          // v10.0.31 (OBS-R2-88): واژه‌نامه رویدادها («کارساز»، «خودکارسازی»)
+          description: 'ارسال وب‌هوک به کارساز بیرونی یا خودکارسازی سازمانی هنگام تأیید نهایی فاکتور فروش',
           eventType: DomainEventType.INVOICE_APPROVED,
           conditionsJson: [
             { field: 'payload.totalAmount', operator: 'gt', value: 0 }
@@ -558,7 +559,7 @@ export class EventActionEngineService {
   /**
    * Get list of rules with filtering
    */
-  public static async getRules(filter?: { isActive?: boolean; eventType?: string }) {
+  public static async getRules(filter?: { isActive?: boolean; eventType?: string; includeWildcard?: boolean }) {
     const query = orm.select().from(eventActionRules);
     const conditions: SQL[] = [];
 
@@ -566,7 +567,10 @@ export class EventActionEngineService {
       conditions.push(eq(eventActionRules.isActive, filter.isActive ? 1 : 0));
     }
     if (filter?.eventType) {
-      conditions.push(eq(eventActionRules.eventType, filter.eventType));
+      // v10.0.30 (OBS-R2-84): قانون «همه رویدادها» (`*`) هم برای هر نوع رویداد اجرا می‌شود، همان قاعده موتور
+      conditions.push(filter.includeWildcard
+        ? sql`(${eventActionRules.eventType} = ${filter.eventType} OR ${eventActionRules.eventType} = '*')`
+        : eq(eventActionRules.eventType, filter.eventType));
     }
 
     if (conditions.length > 0) {

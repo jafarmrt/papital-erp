@@ -333,8 +333,9 @@ export class EventSourcingReplayService {
       payload: params.payload || {},
       metadata: {
         timestamp: nowIso,
-        userId: params.userId || 1,
-        userName: params.userName || 'مدیر سیستم',
+        // v10.0.30 (OBS-R2-84): کاربر ناشناس «سامانه» است، نه کاربر شماره ۱
+        userId: params.userId,
+        userName: params.userName || 'سامانه',
         isSimulation: dryRun,
         idempotencyKey,
         replayedAt: nowIso
@@ -344,7 +345,7 @@ export class EventSourcingReplayService {
 
     // 1. Fetch active Action Rules matching this event
     const simulationResults: any[] = [];
-    const rules = await EventActionEngineService.getRules({ eventType: params.eventType, isActive: true });
+    const rules = await EventActionEngineService.getRules({ eventType: params.eventType, isActive: true, includeWildcard: true });
 
     for (const rule of rules) {
       const isMatched = EventActionEngineService.evaluateConditions(rule.conditionsJson as RuleExpression, syntheticEvent);

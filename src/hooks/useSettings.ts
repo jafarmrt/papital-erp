@@ -216,11 +216,7 @@ export function useSettings() {
     loadWcList('/woocommerce/order-logs', setWcOrderLogs, setWcOrderLogsError, signal);
   };
 
-  useEffect(() => {
-    const controller = new AbortController();
-    loadSyncedWcOrders(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // v10.0.32 (OBS-PR-17): فهرست‌های ووکامرس را خود زبانه ووکامرس هنگام باز شدن می‌خواند، نه هر زبانه تنظیمات برای هر کاربر
 
   const handleSyncAllStocks = async () => {
     setIsSyncingAllStocks(true);

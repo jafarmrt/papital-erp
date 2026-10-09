@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 391
+تعداد مسیرها: 389
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -152,7 +152,6 @@
 | PUT | `/api/events/action-rules/:id` | events.manage |
 | POST | `/api/events/action-rules/:id/test` | events.manage |
 | POST | `/api/events/action-rules/:id/toggle` | events.manage |
-| GET | `/api/events/action-rules/logs` | events.view |
 | GET | `/api/events/action-rules/stats` | events.view |
 | POST | `/api/events/action-rules/test-draft` | events.manage |
 | GET | `/api/events/dlq` | events.view |
@@ -193,7 +192,6 @@
 | PUT | `/api/events/webhooks/:id` | events.manage |
 | POST | `/api/events/webhooks/:id/rotate-secret` | events.manage |
 | POST | `/api/events/webhooks/:id/toggle` | events.manage |
-| GET | `/api/events/webhooks/deliveries` | events.view |
 | GET | `/api/events/webhooks/deliveries/list` | events.view |
 | POST | `/api/events/webhooks/ping` | events.manage |
 | GET | `/api/events/webhooks/stats` | events.view |

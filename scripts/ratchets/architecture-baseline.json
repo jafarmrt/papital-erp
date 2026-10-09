@@ -80,7 +80,7 @@
     "src/routes/attachments.routes.ts": 1,
     "src/routes/auth.routes.ts": 4,
     "src/routes/customers.routes.ts": 1,
-    "src/routes/events.routes.ts": 10,
+    "src/routes/events.routes.ts": 8,
     "src/routes/media.routes.ts": 1,
     "src/routes/personnel.routes.ts": 4,
     "src/routes/piecework.routes.ts": 3,

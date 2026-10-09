@@ -22,6 +22,7 @@ import { assertWebhookSecretsReadable } from '../services/events/webhookSecretSt
 import { utcTimestampResponses } from '../middleware/utcTimestampResponses.js';
 import { EVENT_OPAQUE_KEYS, EVENT_TIMESTAMP_KEYS } from '../services/events/eventTimestamps.js';
 import { setRuleActive } from '../services/events/ruleActiveState.js';
+import { webhookEchoAnswer } from '../services/events/webhookEcho.js';
 
 const eventIdParamSchema = z.object({
   params: z.object({
@@ -40,53 +41,9 @@ const webhookPingSchema = z.object({
 
 const router = Router();
 
-// Public Webhook Simulator Echo Endpoint (exempt from auth, but validates signature token)
+// v10.0.28 (OBS-R2-80): شبیه‌ساز echo بی ورود، فقط در آزمون و توسعه؛ در تولید 404
 router.all('/webhook-echo', asyncHandler(async (req, res) => {
-  try {
-    const receivedToken = (req.headers['x-erp-signature-token'] || req.headers['X-ERP-Signature-Token']) as string | undefined;
-    const expectedToken = await EventActionEngineService.getWebhookSecretToken();
-
-    // V9-2.2 (Fail-Closed): در غیاب توکن امضا، اندپوینت اکوی هدرها (شامل کوکی‌ها) کاملاً غیرفعال است
-    if (!expectedToken) {
-      return res.status(403).json({
-        success: false,
-        message: 'توکن امضای وب‌هوک (ERP_WEBHOOK_SECRET_TOKEN) در تنظیمات سیستم تعیین نشده و اندپوینت شبیه‌ساز غیرفعال است.',
-        error: 'Webhook echo simulator disabled: ERP_WEBHOOK_SECRET_TOKEN is not configured'
-      });
-    }
-
-    if (receivedToken !== expectedToken) {
-      return res.status(401).json({
-        success: false,
-        message: 'توکن امضای وب‌هوک معتبر نیست (Unauthorized)',
-        error: 'Invalid or missing X-ERP-Signature-Token header'
-      });
-    }
-
-    // پاسخ اکو فقط هدرهای غیرحساس را بازمی‌گرداند — کوکی احراز هویت هرگز اکو نمی‌شود
-    const safeHeaders: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(req.headers)) {
-      const k = key.toLowerCase();
-      if (k === 'cookie' || k === 'authorization' || k === 'x-csrf-token' || k === 'x-xsrf-token') {
-        safeHeaders[k] = '[PROTECTED]';
-      } else {
-        safeHeaders[k] = value;
-      }
-    }
-
-    res.json({
-      success: true,
-      message: 'وب‌هوک شبیه‌ساز با موفقیت در هدرها و محتوا دریافت شد.',
-      echoed: {
-        method: req.method,
-        headers: safeHeaders,
-        body: req.body
-      },
-      timestamp: new Date().toISOString()
-    });
-  } catch (err) {
-    throw err;
-  }
+  res.json(await webhookEchoAnswer({ method: req.method, headers: req.headers, body: req.body }));
 }));
 
 // Enforce authentication on all event routes
@@ -383,7 +340,8 @@ router.post('/action-rules/test-draft', authorizePermission('events.manage'), as
   res.json({ success: true, ...evaluation, evaluatedConditions: evaluation.conditionMatches });
 }));
 
-router.get(['/action-logs', '/action-rules/logs'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
+// v10.0.29 (OBS-R2-79): نام دوم `/action-rules/logs` زیر `/action-rules/:id` می‌ماند و هرگز پاسخ نمی‌داد؛ برداشته شد
+router.get('/action-logs', authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const ruleId = req.query.ruleId ? parseInt(req.query.ruleId as string, 10) : undefined;
     const status = req.query.status as string | undefined;
@@ -842,7 +800,8 @@ router.post('/webhooks/ping', authorizePermission('events.manage'), validate(web
   res.json({ ...pingResult, keySource });
 }));
 
-router.get(['/webhooks/deliveries/list', '/webhooks/deliveries'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
+// v10.0.29 (OBS-R2-79): نام دوم `/webhooks/deliveries` زیر `/webhooks/:id` می‌ماند و هرگز پاسخ نمی‌داد؛ برداشته شد
+router.get('/webhooks/deliveries/list', authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
     const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;

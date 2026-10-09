@@ -10883,5 +10883,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
   results.push(...await runVoucherApprovalDutiesTests(shouldRun));
 
+  // Phase 3 lane L2 (v10.0.29+): package 15 ledger, events and integrations (TD-997)
+  const { runEventsLedgerTests } = await import('../regression/eventsLedgerTests.js');
+  results.push(...await runEventsLedgerTests(shouldRun));
+
   return results;
 }
