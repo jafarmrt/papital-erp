@@ -119,7 +119,7 @@ const followupActionSchema = z.object({
 });
 
 // V10-4.1: resolve مسئول از پرسنل — id معتبر => snapshot نام؛ نام بدون id => best-effort اتصال
-async function resolveAssignee(input: { name?: string | null; personnelId?: number | string | null }, db: DbExecutor = orm): Promise<{ name: string; id: number | null }> {
+async function resolveAssignee(input: { name?: string | null; personnelId?: number | string | null }, db: DbExecutor): Promise<{ name: string; id: number | null }> {
   const nameStr = String(input.name ?? '').trim();
 
   if (input.personnelId !== undefined && input.personnelId !== null && String(input.personnelId).trim() !== '') {
@@ -401,7 +401,7 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
 
   // V10-4.1: فروشنده مسئول = پرسنل (id) + snapshot نام
-  const assignee = await resolveAssignee({ name: assignedTo, personnelId: assignedPersonnelId });
+  const assignee = await resolveAssignee({ name: assignedTo, personnelId: assignedPersonnelId }, orm);
 
   // v9.0.5 (TD-418): پیوند به طرف حساب یا ساخت طرف حساب تازه؛ طرف حساب موجود عوض نمی‌شود و اختلاف به یادداشت می‌رود
   const party = await linkCustomerForLead({ customerId, customerName, phone, company, title });
@@ -819,7 +819,7 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
   const taskAssignee = await resolveAssignee({
     name: assignedTo || authorName,
     personnelId: assignedPersonnelId
-  });
+  }, orm);
   // v9.0.17 (TD-426): پرونده و طرف حساب ناموجود یا حذف‌شده با ۴۲۲ رد می‌شوند (`resolveActivityParents`)
   // v10.0.34 (TD-976): ثبت اقدام، اعلان‌ها، زمان پرونده و ممیزی در یک تراکنش؛ اشاره فقط شناسه کاربر زنده است و اعلان آن
   // فقط به اشاره‌شده‌ای می‌رود که اقدام‌های ارتباط با مشتری را می‌خواند (`notifyActivityMentions`)
