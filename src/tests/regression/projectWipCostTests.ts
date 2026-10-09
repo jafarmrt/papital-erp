@@ -16,6 +16,9 @@ export async function runProjectWipCostTests(shouldRun: ShouldRun): Promise<Test
     ['reg_closed_project_wip_listed_td_919',
       'v10.0.25: the financial health check lists the work-in-progress balance of a completed or deleted project and not of an open one (TD-919)',
       ['td919', 'p5-m03', 'projects', 'health', 'package11'], closedProjectWipCase],
+    ['reg_remittance_without_project_not_wip_td_948',
+      'v10.0.27: a remittance without a project debits the unassigned consumption account (6003), never work in progress; a project remittance still debits 1402 with the project detail (TD-948)',
+      ['td948', 'p5-m15', 'projects', 'vouchers', 'package11'], remittanceWithoutProjectCase],
   ]);
 }
 
@@ -31,6 +34,13 @@ async function remittance(h: Harness, f: Awaited<ReturnType<typeof fixture>>, it
   const id = Number((res.body as { docId?: unknown })?.docId);
   if (res.status !== 200 || !Number.isInteger(id)) throw new Error(`setup: the remittance answered ${brief(res)}`);
   return id;
+}
+
+/** Debit rows of the document's live voucher: account code, detailed type and id */
+async function voucherDebits(h: Harness, documentId: number) {
+  return h.q(`SELECT a.code, i.detailed_type, i.detailed_id, i.debit::float8 AS debit
+    FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
+    WHERE v.source_document_id = $1 AND v.is_deleted = 0 AND i.is_deleted = 0 AND i.debit > 0`, [documentId]);
 }
 
 /** P5-M07 (TD-922): the delete guard saw only open allocations, so the 1402 balance stayed on a deleted project */
@@ -73,4 +83,18 @@ async function closedProjectWipCase(h: Harness, wrong: string[]): Promise<string
   if (!row || !String(row.details).includes('۳٬۰۰۰')) wrong.push(`the completed project is listed as ${JSON.stringify(row ?? null)}, expected its 3000 balance`);
   if (items.some(i => Number(i.id) === open)) wrong.push('the open project with a 1402 balance is listed');
   return 'the completed project is listed with its 1402 balance; the open one is not';
+}
+
+/** P5-M15 (TD-948): a remittance without a project debited 1402 «other», which no production receipt ever credits */
+async function remittanceWithoutProjectCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const material = await f.item(10, 1_000);
+  const plain = await voucherDebits(h, await remittance(h, f, material, 2));
+  if (plain.length !== 1 || plain[0].code !== '6003') wrong.push(`the remittance without a project debits ${JSON.stringify(plain)}, expected one row on 6003`);
+  const projectId = await newProject(h, 'remit');
+  const onProject = await voucherDebits(h, await remittance(h, f, material, 1, projectId));
+  if (onProject.length !== 1 || onProject[0].code !== '1402' || onProject[0].detailed_type !== 'project' || Number(onProject[0].detailed_id) !== projectId) {
+    wrong.push(`the project remittance debits ${JSON.stringify(onProject)}, expected 1402 with the project detail`);
+  }
+  return 'a remittance without a project debits 6003; a project remittance debits 1402 on the project';
 }

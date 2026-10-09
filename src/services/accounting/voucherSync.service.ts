@@ -838,9 +838,16 @@ export class VoucherSyncService {
       const productCostNum = outCost.finished.round(4);
       const totalCost = fin(rawMatCostNum).add(productCostNum).round(4);
       if (!totalCost.isPositive()) return null;
-      if (!wipAcc) {
+      // v10.0.27 (TD-948، تصمیم ت۴ ب فاز ۵): فقط حواله پروژه به کالای در جریان ساخت (۱۴۰۲) می‌رود؛ حواله بی پروژه هزینه
+      // «مصرف مواد بی پروژه» است. پیش‌تر بدهکار ۱۴۰۲ با تفصیلی «other» می‌ساخت که هیچ رسید تولیدی بستانکارش نمی‌کرد.
+      const debitAcc = matchedProjectId
+        ? wipAcc
+        : (await AccountMappingService.getUnassignedConsumptionAccount(tx)) || allAccs.find(a => a.code === '6003');
+      if (!debitAcc) {
         if (isStrict) {
-          throw new ValidationError('سرفصل حسابداری کالای در جریان ساخت (۱۴۰۲) در تنظیمات حسابداری یافت نشد.');
+          throw new ValidationError(matchedProjectId
+            ? 'سرفصل حسابداری کالای در جریان ساخت (۱۴۰۲) در تنظیمات حسابداری یافت نشد.'
+            : 'سرفصل حسابداری مصرف مواد بی پروژه (۶۰۰۳) در تنظیمات حسابداری یافت نشد.');
         }
         return null;
       }
@@ -849,7 +856,7 @@ export class VoucherSyncService {
       voucherDescription = `حواله خروج از انبار شماره ${doc.refNumber} - بابت مصرف/تولید${matchedProjectName ? ` (پروژه: ${matchedProjectName})` : ''}`;
 
       voucherItems.push({
-        accountId: wipAcc.id,
+        accountId: debitAcc.id,
         detailedType: matchedProjectId ? 'project' : 'other',
         detailedId: matchedProjectId || undefined,
         detailedName: matchedProjectName || (doc.buyerName || 'مصرف خط تولید / پروژه'),
