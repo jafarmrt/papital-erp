@@ -195,6 +195,12 @@ export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] 
     parent: 'project_bom_allocations', onDelete: 'CASCADE', migration: '0095',
     label: 'پیوند کسر رزرو پروژه به تخصیص مواد', blockerUnit: 'ردیف کسر با تخصیص ناموجود',
   }),
+  // v10.0.27 (TD-965): the last editor of a voucher; the column is new, so 0098 validates it at once
+  notValidForeignKey({
+    name: 'fk_journal_vouchers_updated_by_id', table: 'journal_vouchers', column: 'updated_by_id',
+    parent: 'users', onDelete: 'NO ACTION', migration: '0098',
+    label: 'آخرین ویرایشگر سند حسابداری', blockerUnit: 'ردیف با کاربر ناموجود',
+  }),
   // v9.0.446 (TD-902): user columns (users are only soft-deleted); the workflow engine's user columns stay without a key
   ...USER_FOREIGN_KEYS.map(([table, column, label]) => notValidForeignKey({
     name: `fk_${table}_${column}`, table, column, parent: 'users', onDelete: table === 'form_drafts' ? 'CASCADE' : 'NO ACTION',
