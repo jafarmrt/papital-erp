@@ -10599,6 +10599,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.0.30 (TD-932): linking a document to a sales lead needs crm.manage and never reopens a closed lead
   const { runLeadProformaLinkGuardTests } = await import('../regression/leadProformaLinkGuardTests.js');
   results.push(...await runLeadProformaLinkGuardTests(shouldRun));
+  // v10.0.32 (OBS-R2-29): a sales lead detail opens for the same keys as the lead list
+  const { runCrmLeadDetailReadTests } = await import('../regression/crmLeadDetailReadTests.js');
+  results.push(...await runCrmLeadDetailReadTests(shouldRun));
   // بسته ۹ (v9.0.18، TD-427): اعتبارسنجی ورودی پرونده فروش
   const { runCrmLeadInputTests } = await import('../regression/crmLeadInputTests.js');
   results.push(...await runCrmLeadInputTests(shouldRun));

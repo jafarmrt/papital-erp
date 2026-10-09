@@ -328,7 +328,8 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
 }));
 
 // GET /api/crm/leads/:id - Single lead detail with activities
-router.get('/crm/leads/:id', authorizePermission('crm.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+// v10.0.32 (OBS-R2-29): همان مجوزهای فهرست پرونده‌ها؛ پیش‌تر فقط `crm.view` و خواننده مشتریان کشوی پرونده را ۴۰۳ می‌گرفت
+router.get('/crm/leads/:id', authorizePermission('crm.view', 'customers.view', 'customers.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const [lead] = await orm.select().from(crmLeads).where(and(eq(crmLeads.id, id), eq(crmLeads.isDeleted, 0)));
   if (!lead) {
