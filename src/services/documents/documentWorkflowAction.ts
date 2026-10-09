@@ -8,6 +8,8 @@ import {
 import { SALES_FINALIZE_PERMISSION } from '../../lib/permissions/documentPermissions.js';
 import { permissionToFinalizeDocument } from './documentRecordRule.js';
 import { DocumentLifecycleService } from './documentLifecycle.service.js';
+import { documentAuditDetails } from './documentAudit.js';
+import { logActivity } from '../../lib/auditLogger.js';
 
 /**
  * v9.0.2 (TD-415): تأیید نهایی گردش‌کار سند (گام «approved» یا اقدام خودکار POST_INVOICE) سند را در همان تراکنش انتقال
@@ -19,7 +21,22 @@ export async function finalizeApprovedDocument(tx: DbExecutor, event: WorkflowTr
   const documentId = Number(event.entityId);
   // شناسه غیرعددی، نمونه‌ای بی سند واقعی است (مانند پیش)
   if (!Number.isInteger(documentId) || documentId <= 0) return;
-  await DocumentLifecycleService.finalizeDocument(documentId, event.performedByName || 'تایید خودکار گردش‌کار', tx, { allowBackdate: event.allowBackdate });
+  const user = event.performedByName || 'تایید خودکار گردش‌کار';
+  const change = await DocumentLifecycleService.finalizeDocument(documentId, user, tx, { allowBackdate: event.allowBackdate });
+  // v10.0.41 (TD-929، P5-S-05): ردیف ممیزی نهایی‌سازی با سند پیش و پس، با همین تراکنش، همان ردیف `PUT /documents/:id/finalize`
+  // (TD-785)؛ پیش‌تر سندی که گردش کار قطعی می‌کرد در خط زمانی ممیزی دیده نمی‌شد. سند از پیش قطعی ردیفی نمی‌گیرد.
+  if (change) {
+    await logActivity({
+      tx,
+      userId: event.performedBy,
+      username: user,
+      action: 'UPDATE',
+      entity: 'اسناد انبار',
+      entityId: documentId,
+      description: `نهایی‌سازی سند شماره "${change.after?.refNumber || change.before?.refNumber || documentId}" با تأیید گردش کار`,
+      details: { ...documentAuditDetails(change.before, change.after), operation: 'WORKFLOW_APPROVAL', workflowInstanceId: event.instanceId },
+    });
+  }
 }
 
 /** v9.0.33 (TD-443): سند هست و حذف نشده است */
