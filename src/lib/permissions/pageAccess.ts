@@ -70,6 +70,9 @@ export const PAGE_ACCESS = {
   '/inventory-status': { gate: anyOf('reports.view', 'warehouse.view'), api: ['GET /api/stats', 'GET /api/dashboard-bi-stats'] },
   '/products': { gate: anyOf('products.view'), api: ['GET /api/items'] },
   '/gallery': { gate: anyOf('products.view'), api: ['GET /api/items'] },
+  // v10.0.16 (N-05 PR 2): کتابخانه تصاویر و فیلم‌ها و نمای یک محصول آن
+  '/media-library': { gate: anyOf('media.view'), api: ['GET /api/media/products', 'GET /api/media/products/filters'] },
+  '/media-library/products/:itemId': { gate: anyOf('media.view'), api: ['GET /api/media/products/:itemId'] },
   // v9.0.277 (TD-668 باقی‌مانده، B16-04 با بسته ۸ TD-791): صفحه را کسی باز می‌کند که یکی از نوع‌های آن را ثبت می‌کند
   '/receipts': { gate: anyOf('warehouse.in', 'warehouse.out', 'documents.finalize'), api: ['GET /api/documents/next-ref', 'GET /api/customers/options', 'GET /api/items/options', 'GET /api/projects/options', 'POST /api/documents'] },
   '/pending-materials': { gate: anyOf('pending_materials.view', 'products.view'), api: ['GET /api/pending-materials'] },

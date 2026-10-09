@@ -30,7 +30,8 @@ import {
   Workflow,
   Zap,
   Compass,
-  Calculator
+  Calculator,
+  Images
 } from 'lucide-react';
 import { User } from '../../types';
 import { canOpenPage } from '../../lib/permissions/pageAccess';
@@ -81,6 +82,7 @@ export function getMenuGroups(
         { name: 'هشدار نقطه سفارش', path: '/reorder-alerts', icon: AlertTriangle, visible: open('/reorder-alerts') },
         { name: 'قیمت‌گذاری اقلام', path: '/pricing', icon: DollarSign, visible: open('/pricing') },
         { name: 'گالری تصویری', path: '/gallery', icon: Image, visible: open('/gallery') },
+        { name: 'کتابخانه تصاویر و فیلم‌ها', path: '/media-library', icon: Images, visible: open('/media-library') },
         { name: 'انبارگردانی دوره‌ای', path: '/audit', icon: ClipboardList, visible: open('/audit') },
       ]
     },

@@ -84,6 +84,12 @@ export const items = pgTable('items', {
   weight: numeric('weight', { precision: 18, scale: 4, mode: 'number' }),
   material: text('material'),
   size: text('size'),
+  // v10.0.17 (N-05, migration 0097): the product card of the media library; collections is a tag list (decision ت۲)
+  collections: text('collections').array().notNull().default(sql`'{}'::text[]`),
+  designYear: integer('design_year'),
+  transferCode: text('transfer_code'),
+  productDescription: text('product_description'),
+  technicalNotes: text('technical_notes'),
   lastKardexRebuildAt: timestamp('last_kardex_rebuild_at', { mode: 'string' }),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),
@@ -95,6 +101,9 @@ export const items = pgTable('items', {
   // v9.0.448 (TD-613): built by migration 0070 only on data without duplicates; declared so the schema matches the database
   uq_items_code_active: uniqueIndex('uq_items_code_active').on(sql`upper(btrim(${table.code}))`).where(sql`${table.isDeleted} = 0`),
   uq_items_name_active: uniqueIndex('uq_items_name_active').on(sql`lower(btrim(${table.name}))`).where(sql`${table.isDeleted} = 0`),
+  idx_collections: index('idx_items_collections').using('gin', table.collections),
+  idx_design_year: index('idx_items_design_year').on(table.designYear).where(sql`${table.designYear} IS NOT NULL`),
+  idx_transfer_code: index('idx_items_transfer_code').on(table.transferCode).where(sql`${table.transferCode} IS NOT NULL`),
 }));
 registerColumnRef('items.id', () => items.id);
 
