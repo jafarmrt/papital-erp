@@ -1,7 +1,7 @@
 import { Category, Item } from '../../types';
 import { PreviewRow } from './types';
-import { newItemTypeOf, parseItemTypeCell, parseNumberCell, stockColumnsOf } from '../../lib/items/itemExcelCells';
-import { WAC_COLUMNS } from '../../lib/items/excelPriceColumns';
+import { newItemStockWithoutCost, newItemTypeOf, parseItemTypeCell, parseNumberCell, stockColumnsOf } from '../../lib/items/itemExcelCells';
+import { ITEM_WAC_COLUMN, WAC_COLUMNS } from '../../lib/items/excelPriceColumns';
 import { REORDER_POINT_COLUMNS } from '../../lib/items/itemExcelColumns';
 import { PRODUCT_CODE_FORMAT_HINT, PRODUCT_CODE_PATTERN, RAW_MATERIAL_CODE_FORMAT_HINT, RAW_MATERIAL_CODE_PATTERN } from '../../lib/items/itemCodeFormat';
 
@@ -18,6 +18,11 @@ export interface ParsedExcelItem {
 function numberCellErrors(raw: Record<string, unknown>): Array<string | undefined> {
   const groups: Array<readonly string[]> = [WAC_COLUMNS, REORDER_POINT_COLUMNS, ['وزن', 'weight'], ...stockColumnsOf(raw).map(h => [h])];
   return groups.map(headers => parseNumberCell(raw, headers).error);
+}
+
+function cleanCodeIsNew(code: string, dbCodes: Set<string>): boolean {
+  const clean = code.trim();
+  return clean !== '' && !dbCodes.has(clean);
 }
 
 export function validateExcelRows(
@@ -67,6 +72,10 @@ export function validateExcelRows(
     // خوانده می‌شد و پیش‌نمایش کدی را درست می‌دید که سرور با قالب نوع دیگر رد می‌کرد
     const typeCell = parseItemTypeCell(r.raw ?? {});
     const cellErrors = [typeCell.error, ...numberCellErrors(r.raw ?? {})].filter((e): e is string => !!e);
+    // v10.0.13 (TD-1012): کالای تازه با موجودی و بی میانگین موزون بها، مثل سرور
+    if (cleanCodeIsNew(r.code, dbCodes) && newItemStockWithoutCost(r.raw ?? {}, WAC_COLUMNS)) {
+      cellErrors.push(`کالای تازه موجودی دارد ولی «${ITEM_WAC_COLUMN}» ندارد؛ موجودی بی‌بها وارد انبار نمی‌شود.`);
+    }
     issues.push(...cellErrors);
     const itemType = newItemTypeOf(typeCell.value, typeFilter);
 

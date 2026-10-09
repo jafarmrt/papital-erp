@@ -20,6 +20,9 @@ export async function runItemExcelCellTests(shouldRun: ShouldRun): Promise<TestC
     ['reg_excel_text_numbers_td_1011',
       'v10.0.2: the Excel import reads stock and cost written as text with Persian digits or thousands separators and refuses text that is not a number (TD-1011)',
       ['td1011', 'excel', 'migration'], textNumbersCase],
+    ['reg_excel_stock_without_cost_td_1012',
+      'v10.0.13: the Excel import refuses stock for an item that would have no weighted average cost (TD-1012)',
+      ['td1012', 'excel', 'migration'], stockWithoutCostCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -129,4 +132,36 @@ async function textNumbersCase(ctx: Ctx): Promise<string> {
   if (errors.some(e => e.code === readable)) wrong.push(`readable numbers got row errors: ${JSON.stringify(errors)}`);
   if (wrong.length > 0) throw new Error(wrong.join('; '));
   return 'text numbers with Persian digits and separators are read; text that is not a number is a row error naming the column';
+}
+
+/**
+ * TD-1012: on v10.0.12 a new item with stock and an empty cost column was created with WAC 0, so its opening voucher
+ * was zero and every later sale or remittance of it was refused; an existing item without WAC took a stock increase at
+ * cost 0 the same way. Both rows must be refused, while stock with a cost and an item without stock still import.
+ */
+async function stockWithoutCostCase(ctx: Ctx): Promise<string> {
+  const s = ctx.serial();
+  const noCost = `B-C-${s}`;
+  const withCost = `B-D-${s}`;
+  const noStock = `B-E-${s}`;
+  const first = await ctx.importRows([
+    { [CODE]: noCost, [NAME]: withTestMarker(`stock no cost ${s}`), [TYPE]: 'ماده اولیه', [TOTAL_STOCK]: 5 },
+    { [CODE]: withCost, [NAME]: withTestMarker(`stock with cost ${s}`), [TYPE]: 'ماده اولیه', [WAC]: 1000, [TOTAL_STOCK]: 5 },
+    { [CODE]: noStock, [NAME]: withTestMarker(`no stock ${s}`), [TYPE]: 'ماده اولیه' },
+  ]);
+  const second = await ctx.importRows([{ [CODE]: noStock, [NAME]: withTestMarker(`no stock ${s}`), [TOTAL_STOCK]: 4 }]);
+  const wrong: string[] = [];
+  if (first.status !== 200 || second.status !== 200) wrong.push(`import answered ${first.status} / ${second.status}`);
+  const rows = await orm.select({ code: items.code, wac: items.weightedAverageCost, stock: items.currentStock, isDeleted: items.isDeleted })
+    .from(items).where(inArray(items.code, [noCost, withCost, noStock]));
+  const live = new Map(rows.filter(r => r.isDeleted === 0).map(r => [r.code, r]));
+  if (live.has(noCost)) wrong.push(`a new item with stock and no cost was created with stock ${Number(live.get(noCost)?.stock)}`);
+  if (Number(live.get(withCost)?.stock) !== 5) wrong.push('a new item with stock and a cost was not created with its stock');
+  if (!live.has(noStock)) wrong.push('a new item without stock or cost was not created');
+  else if (Number(live.get(noStock)?.stock) !== 0) wrong.push(`an existing item without cost took a stock increase to ${Number(live.get(noStock)?.stock)}`);
+  if (!errorsOf(first).some(e => e.code === noCost && e.message.includes(WAC))) wrong.push(`no row error naming the cost column for the new item: ${JSON.stringify(errorsOf(first))}`);
+  if (!errorsOf(second).some(e => e.code === noStock && e.message.includes(WAC))) wrong.push(`no row error naming the cost column for the existing item: ${JSON.stringify(errorsOf(second))}`);
+  if (errorsOf(first).some(e => e.code === withCost || e.code === noStock)) wrong.push(`valid rows got errors: ${JSON.stringify(errorsOf(first))}`);
+  if (wrong.length > 0) throw new Error(wrong.join('; '));
+  return 'stock is refused for an item that would have no weighted average cost, new or existing';
 }

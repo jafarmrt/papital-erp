@@ -74,3 +74,13 @@ export function parseNumberCell(row: Record<string, unknown>, headers: readonly 
 export function stockColumnsOf(row: Record<string, unknown>): string[] {
   return Object.keys(row).filter(h => h === 'موجودی' || h.startsWith('موجودی ') || h.startsWith('stock_'));
 }
+
+/**
+ * v10.0.13 (TD-1012): پیش‌نمایش کالای تازه‌ای را که از اکسل موجودی می‌گیرد ولی «میانگین موزون بها» ندارد خطا نشان می‌دهد؛
+ * سرور همان ردیف را رد می‌کند (`stockWithoutCostError`). ستون‌های بها همان سرستون‌های سرورند و از فراخواننده می‌آیند.
+ */
+export function newItemStockWithoutCost(row: Record<string, unknown>, wacHeaders: readonly string[]): boolean {
+  const wac = parseNumberCell(row, wacHeaders).value;
+  if (wac !== undefined && wac > 0) return false;
+  return stockColumnsOf(row).some(h => (parseNumberCell(row, [h]).value ?? 0) > 0);
+}

@@ -60,9 +60,23 @@ describe('item Excel number cells (TD-1011)', () => {
 
   it('marks a stock or cost cell the server refuses in the preview', () => {
     const base = row('B-H-103', 'مهره نو', 'ماده اولیه');
-    expect(validateExcelRows([{ ...base, raw: { ...base.raw, [STOCK_COLUMN]: '۱٬۲۰۰' } }], [], [])[0].hasCellError).toBe(false);
+    expect(validateExcelRows([{ ...base, raw: { ...base.raw, [STOCK_COLUMN]: '۱٬۲۰۰', [WAC_COLUMN]: '۵۰۰' } }], [], [])[0].hasCellError).toBe(false);
     const bad = validateExcelRows([{ ...base, raw: { ...base.raw, [STOCK_COLUMN]: 'ده' } }], [], [])[0];
     expect(bad.hasCellError).toBe(true);
     expect(bad.issues.join(' ')).toContain(STOCK_COLUMN);
+  });
+});
+
+describe('new item stock without cost in the preview (TD-1012)', () => {
+  it('marks a new item with stock and no cost, and leaves stock with a cost or an existing item alone', () => {
+    const base = row('B-H-104', 'مهره بی‌بها', 'ماده اولیه');
+    const noCost = validateExcelRows([{ ...base, raw: { ...base.raw, [STOCK_COLUMN]: '۵' } }], [], [])[0];
+    expect(noCost.hasCellError).toBe(true);
+    expect(noCost.issues.join(' ')).toContain(WAC_COLUMN);
+    expect(validateExcelRows([{ ...base, raw: { ...base.raw, [STOCK_COLUMN]: '۵', [WAC_COLUMN]: 0 } }], [], [])[0].hasCellError).toBe(true);
+    expect(validateExcelRows([{ ...base, raw: { ...base.raw, [STOCK_COLUMN]: '۵', [WAC_COLUMN]: 1000 } }], [], [])[0].hasCellError).toBe(false);
+    expect(validateExcelRows([{ ...base, raw: { ...base.raw, [STOCK_COLUMN]: 0 } }], [], [])[0].hasCellError).toBe(false);
+    const existing = { id: 9, code: 'B-H-104', name: 'مهره بی‌بها' } as unknown as Item;
+    expect(validateExcelRows([{ ...base, raw: { ...base.raw, [STOCK_COLUMN]: '۵' } }], [], [existing])[0].hasCellError).toBe(false);
   });
 });
