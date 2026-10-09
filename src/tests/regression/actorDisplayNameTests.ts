@@ -14,7 +14,7 @@ export async function runActorDisplayNameTests(shouldRun: (id: string, ...extra:
   const id = 'reg_actor_full_name_on_records_td_1132';
   if (!shouldRun(id, 'td1132', 'procurement', 'inventory', 'pending_materials', 'package6', 'package10')) return results;
 
-  const name = 'v10.0.39: transfers, purchase requisitions, their orders and raw material requests record the user\'s full name, not the username (TD-1132)';
+  const name = 'v10.0.40: transfers, purchase requisitions, their orders and raw material requests record the user\'s full name, not the username (TD-1132)';
   const tStart = Date.now();
   const docIds: number[] = [];
   const requisitionIds: number[] = [];

@@ -1,5 +1,5 @@
 /**
- * v10.0.39 (TD-1132): the name a record shows for the signed-in user who wrote it: the user's full name, else the
+ * v10.0.40 (TD-1132): the name a record shows for the signed-in user who wrote it: the user's full name, else the
  * username, else the caller's fallback. `req.user.full_name` always carries the live full name (authenticateToken);
  * `name` is a legacy field no token carries.
  */
