@@ -680,6 +680,20 @@
       "when": 1794000000000,
       "tag": "0096_media_library",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1794000001000,
+      "tag": "0097_item_media_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1794100000000,
+      "tag": "0098_voucher_approve_permission",
+      "breakpoints": true
     }
   ]
 }

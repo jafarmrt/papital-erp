@@ -12,6 +12,7 @@ export const PARTY_BANK_INFO_PERMISSIONS = [
   'accounting.view',
   'accounting.reports',
   'accounting.vouchers',
+  'accounting.vouchers_approve',
   'accounting.treasury',
   'accounting.treasury_no_voucher',
   'accounting.cheques',

@@ -10,6 +10,8 @@ import { voucherLockNote, voucherRowActions, type VoucherRowAction } from '../..
 interface VoucherRowMenuProps {
   voucher: JournalVoucher;
   onAction: (action: VoucherRowAction, voucher: JournalVoucher) => void;
+  /** v10.0.27 (TD-965): بازگشت به پیش‌نویس فقط برای دارنده «تأیید و قطعی کردن سند حسابداری» */
+  canApprove?: boolean;
 }
 
 const ITEM = 'w-full flex items-center gap-2 px-3 py-2 text-xs transition cursor-pointer';
@@ -23,8 +25,8 @@ const ACTION_VIEW: Record<VoucherRowAction, { label: string; className: string; 
   workflow: { label: 'گردش کار تأیید سند', className: 'text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40', icon: <GitFork className="w-3.5 h-3.5 text-indigo-500" /> },
 };
 
-export function VoucherRowMenu({ voucher, onAction }: VoucherRowMenuProps) {
-  const actions = voucherRowActions(voucher);
+export function VoucherRowMenu({ voucher, onAction, canApprove = true }: VoucherRowMenuProps) {
+  const actions = voucherRowActions(voucher, { canApprove });
   const changes = actions.filter(a => a !== 'workflow');
   const lockNote = voucherLockNote(voucher);
   return (

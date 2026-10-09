@@ -193,11 +193,11 @@ async function reorderMonitorFreeStock(): Promise<string> {
 export async function runDocumentAuditEventTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], () => Promise<string>]> = [
-    ['reg_document_audit_workflow_woo_td_929', 'v10.0.22: a document finalized by its workflow and a WooCommerce invoice write their audit rows (TD-929)', ['td929', 'p5-s-05'], workflowAndWooAuditRows],
-    ['reg_document_party_kind_td_939', 'v10.0.25: a purchase document takes only a supplier party and a sales document only a customer (TD-939)', ['td939', 'p5-p12'], purchasePartyKind],
-    ['reg_requisition_workflow_start_td_940', 'v10.0.26: a purchase requisition whose workflow cannot start is refused, not created without one (TD-940)', ['td940', 'p5-p13', 'obs-r2-34'], requisitionWorkflowStart],
-    ['reg_reorder_monitor_free_stock_td_937', 'v10.0.24: the stock-issue reorder monitor compares free stock like the reorder page (TD-937)', ['td937', 'p5-s-14', 'obs-r2-17'], reorderMonitorFreeStock],
-    ['reg_stock_event_kardex_cost_td_930', 'v10.0.23: stock events carry the Kardex cost, not the sale price (TD-930)', ['td930', 'p5-s-07'], stockEventCost],
+    ['reg_document_audit_workflow_woo_td_929', 'v10.0.38: a document finalized by its workflow and a WooCommerce invoice write their audit rows (TD-929)', ['td929', 'p5-s-05'], workflowAndWooAuditRows],
+    ['reg_document_party_kind_td_939', 'v10.0.41: a purchase document takes only a supplier party and a sales document only a customer (TD-939)', ['td939', 'p5-p12'], purchasePartyKind],
+    ['reg_requisition_workflow_start_td_940', 'v10.0.42: a purchase requisition whose workflow cannot start is refused, not created without one (TD-940)', ['td940', 'p5-p13', 'obs-r2-34'], requisitionWorkflowStart],
+    ['reg_reorder_monitor_free_stock_td_937', 'v10.0.40: the stock-issue reorder monitor compares free stock like the reorder page (TD-937)', ['td937', 'p5-s-14', 'obs-r2-17'], reorderMonitorFreeStock],
+    ['reg_stock_event_kardex_cost_td_930', 'v10.0.39: stock events carry the Kardex cost, not the sale price (TD-930)', ['td930', 'p5-s-07'], stockEventCost],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, 'package8', 'b4', ...tags)) continue;

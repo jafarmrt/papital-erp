@@ -16,7 +16,7 @@ interface StockCounterpartyFieldProps {
  */
 export function StockCounterpartyField({ form, personnelList, suppliersList }: StockCounterpartyFieldProps) {
   const { actionType, docType, buyerName, setBuyerName, selectedSupplierObj, setSelectedSupplierObj, selectedPersonnelObj } = form;
-  // v10.0.25 (TD-939): رسید و خرید فقط تأمین‌کننده، برگشت از فروش فقط مشتری (یا «هر دو»)؛ همان قاعده سرور
+  // v10.0.41 (TD-939): رسید و خرید فقط تأمین‌کننده، برگشت از فروش فقط مشتری (یا «هر دو»)؛ همان قاعده سرور
   const partyOptions = (Array.isArray(suppliersList) ? suppliersList : []).filter(s => partyFitsDocument(docType, s.partyType));
 
   return (

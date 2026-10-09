@@ -39,6 +39,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
     if (isSystemAdminViewer(viewer)) return true;
     return Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes(perm) || false;
   };
+  const canApproveVoucher = hasPerm('accounting.vouchers_approve');
 
   const {
     activeTab,
@@ -251,11 +252,12 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               onPrintVoucher={v => setPrintingVoucher(v)}
               onReverseVoucher={handleReverseVoucher}
               onCorrectVoucher={handleCorrectVoucher}
-              onFinalizeVoucher={handleFinalizeVoucher}
-              onApproveVoucher={(id) => handleSetVoucherStatus(id, 'approved')}
-              onSetVoucherStatus={handleSetVoucherStatus}
-              onBatchFinalizeVouchers={handleBatchFinalizeVouchers}
-              onBatchApproveVouchers={handleBatchApproveVouchers}
+              // v10.0.27 (TD-965): تأیید، قطعی کردن و بازگشت به پیش‌نویس فقط با «تأیید و قطعی کردن سند حسابداری»
+              onFinalizeVoucher={canApproveVoucher ? handleFinalizeVoucher : undefined}
+              onApproveVoucher={canApproveVoucher ? (id) => handleSetVoucherStatus(id, 'approved') : undefined}
+              onSetVoucherStatus={canApproveVoucher ? handleSetVoucherStatus : undefined}
+              onBatchFinalizeVouchers={canApproveVoucher ? handleBatchFinalizeVouchers : undefined}
+              onBatchApproveVouchers={canApproveVoucher ? handleBatchApproveVouchers : undefined}
             />
           )}
 

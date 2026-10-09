@@ -23,7 +23,7 @@ export async function finalizeApprovedDocument(tx: DbExecutor, event: WorkflowTr
   if (!Number.isInteger(documentId) || documentId <= 0) return;
   const user = event.performedByName || 'تایید خودکار گردش‌کار';
   const change = await DocumentLifecycleService.finalizeDocument(documentId, user, tx, { allowBackdate: event.allowBackdate });
-  // v10.0.22 (TD-929، P5-S-05): ردیف ممیزی نهایی‌سازی با سند پیش و پس، با همین تراکنش، همان ردیف `PUT /documents/:id/finalize`
+  // v10.0.38 (TD-929، P5-S-05): ردیف ممیزی نهایی‌سازی با سند پیش و پس، با همین تراکنش، همان ردیف `PUT /documents/:id/finalize`
   // (TD-785)؛ پیش‌تر سندی که گردش کار قطعی می‌کرد در خط زمانی ممیزی دیده نمی‌شد. سند از پیش قطعی ردیفی نمی‌گیرد.
   if (change) {
     await logActivity({
