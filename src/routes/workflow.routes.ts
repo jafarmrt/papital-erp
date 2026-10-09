@@ -12,13 +12,7 @@ import { z } from 'zod';
 import { MY_TASK_FILTERS } from '../services/workflow/workflowTaskService.js';
 import { withUtcTimestamps } from '../services/workflow/workflowTimestamps.js';
 import { isSystemAdminRole } from '../lib/permissions/permissionCatalog.js';
-import { canvasPositionsSchema, createDelegationSchema, executeTransitionSchema, saveDefinitionSchema } from './workflowRouteSchemas.js';
-
-const taskIdParamSchema = z.object({
-  params: z.object({
-    taskId: numericIdString,
-  })
-});
+import { canvasPositionsSchema, createDelegationSchema, executeTaskSchema, executeTransitionSchema, saveDefinitionSchema } from './workflowRouteSchemas.js';
 
 const entityParamSchema = z.object({
   params: z.object({
@@ -117,7 +111,7 @@ router.get('/tasks/stats', authorizePermission('workflow.view', 'workflow.approv
  * POST /api/workflow/tasks/:taskId/execute
  * Execute a workflow task directly by task ID
  */
-router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(taskIdParamSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(executeTaskSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const taskId = Number(req.params.taskId);
     const { comment, snapshotData, action, transitionId } = req.body;
@@ -138,8 +132,8 @@ router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'w
       userPermissions,
       action: action === 'reject' ? 'reject' : 'approve',
       transitionId: Number(transitionId) > 0 ? Number(transitionId) : undefined,
-      comment,
-      snapshotData
+      comment: comment ?? undefined,
+      snapshotData: snapshotData ?? undefined
     });
 
     // v8.0.91 (TD-371): امضایی که حدنصاب را کامل نکرده کار را باز می‌گذارد و پیام شمار امضاها را برمی‌گرداند
@@ -227,8 +221,8 @@ router.post('/transition', authorizePermission('workflow.approve', 'workflow.exe
       userName: req.user?.fullName || req.user?.username,
       userRole: req.user?.role,
       userPermissions: req.user?.permissions || [],
-      comment,
-      snapshotData
+      comment: comment ?? undefined,
+      snapshotData: snapshotData ?? undefined
     });
 
     res.json({ success: true, data: updatedInstance });

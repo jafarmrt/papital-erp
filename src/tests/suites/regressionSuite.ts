@@ -10893,6 +10893,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Payroll duties plan PR 1 (v10.0.21+): voucher approval permission and maker-checker
   const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
   results.push(...await runVoucherApprovalDutiesTests(shouldRun));
+  const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
+  results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
+
+  // Series 10 phase 3 lane L2 (v10.0.35+): writer routes read their bodies through Zod
+  const { runWriterRouteZodTests } = await import('../regression/writerRouteZodTests.js');
+  results.push(...await runWriterRouteZodTests(shouldRun));
 
   return results;
 }

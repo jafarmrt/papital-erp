@@ -26,6 +26,8 @@ export type InvariantId =
   | 'I0_unexpected_error'
   /** شبیه‌ساز: عملیات ردشده اثر نیمه‌کاره به جا گذاشت */
   | 'I0_atomic_rejection'
+  // v10.0.36 (I-03): an operation of a concurrent simulator round failed with a deadlock
+  | 'I0_deadlock'
   | 'I1_voucher_balanced'
   | 'I2_three_way_stock'
   | 'I2_warehouse_stock'
