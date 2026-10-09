@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
+import { assertProjectNotCancelled } from '../projects/projectCancelledGuard.js';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { personnel, pieceworkTasks, productionProjects } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
@@ -125,6 +126,9 @@ export async function assertWorkLogParentsLive(tx: DbExecutor, entries: readonly
     if (missing.length > 0) {
       throw new ValidationError(`پروژه با شناسه ${idList(missing)} وجود ندارد یا حذف شده است؛ کارکردی ثبت نشد.`, { projectIds: missing }, 'PIECEWORK_LOG_PROJECT_INVALID');
     }
+    // v10.0.28 (TD-921): کارکرد تازه یا جابه‌جاشده روی پروژه لغوشده ثبت نمی‌شود
+    for (const id of projectIds) await assertProjectNotCancelled(tx, id, 'کارکرد');
   }
   return names;
 }
+

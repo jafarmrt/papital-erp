@@ -10847,6 +10847,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runProjectEventTests(shouldRun));
   const { runProjectWipCostTests } = await import('../regression/projectWipCostTests.js');
   results.push(...await runProjectWipCostTests(shouldRun));
+  const { runProjectClosedWorkTests } = await import('../regression/projectClosedWorkTests.js');
+  results.push(...await runProjectClosedWorkTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');

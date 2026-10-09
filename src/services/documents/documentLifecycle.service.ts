@@ -1,4 +1,5 @@
 import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
+import { assertProjectNotCancelled } from '../projects/projectCancelledGuard.js';
 import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, journalVouchers, productionProjects } from '../../db/schema.js';
@@ -129,6 +130,8 @@ export class DocumentLifecycleService {
             logger.info({ message: `[DocumentLifecycleService.finalizeDocument] Document #${id} already finalized — skipping (concurrent call prevention)`, documentId: id });
             return;
           }
+          // v10.0.28 (TD-921): پیش‌نویس روی پروژه‌ای که پس از آن لغو شد نهایی نمی‌شود
+          if (doc.projectId) await assertProjectNotCancelled(tx, Number(doc.projectId), 'سند');
           auditBefore = await documentAuditSnapshot(tx, id);
 
           const docLines = await tx.select().from(documentItems)
