@@ -1,0 +1,41 @@
+import type { TestCaseResult } from '../types.js';
+import type { Harness, ShouldRun } from '../security/workflowTestHarness.js';
+import { brief, fixture } from './documentEntryTests.js';
+import { runReservationCases } from './stockReservationTests.js';
+import { ALLOCATION_RELEASE_PLACE } from '../../lib/projects/allocationLabels.js';
+
+/**
+ * Series 10 phase 3, lane L3 (package 11): gaps of the project screens found while writing the role guide. Through the
+ * real Express routes; each case is red on the code before its fix.
+ */
+export async function runProjectScreenGapsTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
+  return runReservationCases(shouldRun, [
+    ['reg_open_allocation_refusal_names_release_place_td_1143',
+      'v10.0.38: deleting or cancelling a project with an open allocation names the stock count page tab where it is released, not a project tab that does not exist (TD-1143)',
+      ['td1143', 'projects', 'allocation', 'package11'], openAllocationRefusalCase],
+  ]);
+}
+
+async function projectWithAllocation(h: Harness): Promise<{ projectId: number; allocationId: number }> {
+  const f = await fixture(h);
+  const material = await f.item(10, 1_000);
+  const res = await h.post('/api/projects', { title: `P3 gaps ${h.tag} ${Math.floor(Math.random() * 1e6)}`, products: [] });
+  if (res.status !== 201) throw new Error(`setup: project create answered ${brief(res)}`);
+  const projectId = Number((res.body as { id?: unknown }).id);
+  const allocated = await h.post('/api/inventory/allocations/allocate', { projectId, allocations: [{ itemId: material, quantity: 4, location: f.wh }] });
+  const allocationId = Number((allocated.body as { data?: { allocations?: Array<{ id?: unknown }> } })?.data?.allocations?.[0]?.id);
+  if (allocated.status !== 200 || !Number.isInteger(allocationId)) throw new Error(`setup: the allocation answered ${brief(allocated)}`);
+  return { projectId, allocationId };
+}
+
+const messageOf = (res: { body: unknown }): string => String((res.body as { error?: unknown; message?: unknown })?.error ?? (res.body as { message?: unknown })?.message ?? '');
+
+async function openAllocationRefusalCase(h: Harness, wrong: string[]): Promise<string> {
+  const { projectId } = await projectWithAllocation(h);
+  const deleted = await h.del(`/api/projects/${projectId}`);
+  if (deleted.status < 400 || !messageOf(deleted).includes(ALLOCATION_RELEASE_PLACE)) wrong.push(`delete answered ${brief(deleted)}, expected a refusal naming the allocation tab of the stock count page`);
+  const [row] = await h.q('SELECT version FROM production_projects WHERE id = $1', [projectId]);
+  const cancelled = await h.put(`/api/projects/${projectId}`, { status: 'cancelled', version: Number(row?.version) });
+  if (cancelled.status < 400 || !messageOf(cancelled).includes(ALLOCATION_RELEASE_PLACE)) wrong.push(`cancel answered ${brief(cancelled)}, expected a refusal naming the allocation tab of the stock count page`);
+  return 'both refusals name where the allocation is released';
+}
