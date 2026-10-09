@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { productionProjects } from '../../db/schema.js';
+import { personnel, productionProjects } from '../../db/schema.js';
+import { money } from '../../lib/money.js';
+import { TERMINATED_EMPLOYMENT_STATUS } from '../../lib/payroll/payrollPeriod.js';
 import type { TestCaseResult } from '../types.js';
 import type { Harness, ShouldRun } from '../security/workflowTestHarness.js';
 import { newWorker } from '../invariants/payrollScenarios.js';
@@ -20,6 +22,9 @@ export async function runProjectClosedWorkTests(shouldRun: ShouldRun): Promise<T
     ['reg_schedule_log_within_row_quantity_td_955',
       'v10.0.29: a work log from a workshop schedule row may not exceed the row quantity (422 PIECEWORK_SCHEDULE_ROW_QUANTITY_EXCEEDED); the row quantity itself is saved (TD-955)',
       ['td955', 'p5-w11', 'projects', 'piecework', 'schedule', 'package11'], scheduleQuantityCase],
+    ['reg_work_log_within_service_td_956',
+      'v10.0.30: a work log after the personnel\'s service end, a log moved past it, or a log of a terminated personnel without an end date is refused (422 PIECEWORK_LOG_AFTER_SERVICE_END); a log on the end day is saved (TD-956)',
+      ['td956', 'p5-w12', 'piecework', 'personnel', 'package12'], serviceEndCase],
   ]);
 }
 
@@ -89,4 +94,28 @@ async function scheduleQuantityCase(h: Harness, wrong: string[]): Promise<string
   const exact = await h.post('/api/piecework/logs', { items: [item(5)] });
   if (exact.status !== 201) wrong.push(`a log of 5 on a row of 5 answered ${brief(exact)}, expected 201`);
   return 'a schedule log above its row quantity is refused; the row quantity is saved';
+}
+
+/** P5-W12 (TD-956): a terminated personnel still took work logs after the end date, paid on the next payslip */
+async function serviceEndCase(h: Harness, wrong: string[]): Promise<string> {
+  await fixture(h);
+  const task = await newTaskId(h);
+  const ended = await newWorker('TD-956 ended');
+  await orm.update(personnel).set({ employmentStatus: TERMINATED_EMPLOYMENT_STATUS, endDate: '2026-03-10', monthlySalary: money(0) }).where(eq(personnel.id, ended));
+  const after = await h.post('/api/piecework/logs', { personnelId: ended, taskId: task, date: '2026-03-11', quantity: 1 });
+  if (after.status !== 422 || codeOf(after) !== 'PIECEWORK_LOG_AFTER_SERVICE_END') wrong.push(`a log the day after the service end answered ${brief(after)}, expected 422 PIECEWORK_LOG_AFTER_SERVICE_END`);
+  const onEnd = await h.post('/api/piecework/logs', { personnelId: ended, taskId: task, date: '2026-03-10', quantity: 1 });
+  const logId = Number((onEnd.body as { insertedIds?: unknown[] })?.insertedIds?.[0]);
+  if (onEnd.status !== 201 || !Number.isInteger(logId)) wrong.push(`a log on the service end day answered ${brief(onEnd)}, expected 201`);
+  else {
+    const moved = await h.put(`/api/piecework/logs/${logId}`, { date: '2026-04-01' });
+    if (moved.status !== 422 || codeOf(moved) !== 'PIECEWORK_LOG_AFTER_SERVICE_END') wrong.push(`moving the log past the service end answered ${brief(moved)}, expected 422 PIECEWORK_LOG_AFTER_SERVICE_END`);
+  }
+  if (await logCount(h, ended) !== 1) wrong.push(`the ended personnel has ${await logCount(h, ended)} logs, expected 1`);
+
+  const noEnd = await newWorker('TD-956 no end');
+  await orm.update(personnel).set({ employmentStatus: TERMINATED_EMPLOYMENT_STATUS, endDate: '' }).where(eq(personnel.id, noEnd));
+  const unknown = await h.post('/api/piecework/logs', { personnelId: noEnd, taskId: task, date: '2026-03-01', quantity: 1 });
+  if (unknown.status !== 422 || codeOf(unknown) !== 'PIECEWORK_LOG_AFTER_SERVICE_END') wrong.push(`a log of a terminated personnel without an end date answered ${brief(unknown)}, expected 422 PIECEWORK_LOG_AFTER_SERVICE_END`);
+  return 'no work log after the service end or without an end date; the end day is still logged';
 }

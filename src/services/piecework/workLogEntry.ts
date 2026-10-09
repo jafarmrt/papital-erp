@@ -6,6 +6,8 @@ import { ValidationError } from '../../errors/customErrors.js';
 import { parsePieceworkRate } from '../../lib/piecework/pieceworkRate.js';
 import { parseWorkQuantity } from '../../lib/piecework/workQuantity.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
+import { serviceEndOf } from '../../lib/payroll/payrollPeriod.js';
+import { isoToJalaliDate } from '../../utils/calendarDate.js';
 import type { ScheduleRowRef } from '../../lib/projects/scheduleWorkLog.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
 
@@ -132,3 +134,28 @@ export async function assertWorkLogParentsLive(tx: DbExecutor, entries: readonly
   return names;
 }
 
+/**
+ * v10.0.30 (TD-956، تصمیم ت۱۰ مالک محصول): کارکرد پرسنلی که همکاری‌اش تمام شده، پس از روز پایان همکاری ثبت یا به آن جابه‌جا
+ * نمی‌شود، و پرسنل «قطع همکاری» بی تاریخ پایان معتبر کارکرد تازه نمی‌گیرد (۴۲۲)؛ همان قاعده `serviceEndOf` که حقوق ثابت را
+ * محدود می‌کند (TD-808). پیش‌تر کارکرد پس از پایان همکاری پذیرفته می‌شد و در فیش بعدی مبلغ می‌گرفت.
+ */
+export async function assertWorkLogsWithinService(tx: DbExecutor, entries: readonly Pick<NormalizedWorkLogEntry, 'personnelId' | 'isoDate'>[]): Promise<void> {
+  const personnelIds = sortedUnique(entries.map(e => e.personnelId));
+  if (personnelIds.length === 0) return;
+  const rows = await tx.select({ id: personnel.id, fullName: personnel.fullName, employmentStatus: personnel.employmentStatus, endDate: personnel.endDate })
+    .from(personnel).where(inArray(personnel.id, personnelIds));
+  for (const row of rows) {
+    const end = serviceEndOf(row);
+    if (end.kind === 'open') continue;
+    const name = row.fullName ?? '';
+    if (end.kind === 'unknown') {
+      throw new ValidationError(`همکاری «${name}» قطع شده و تاریخ پایان همکاری معتبر ندارد؛ کارکردی ثبت نشد.`, { personnelId: row.id }, 'PIECEWORK_LOG_AFTER_SERVICE_END');
+    }
+    const late = entries.filter(e => e.personnelId === row.id && e.isoDate > end.endIso);
+    if (late.length > 0) {
+      throw new ValidationError(
+        `تاریخ کارکرد «${name}» (${toPersianDigits(isoToJalaliDate(late[0].isoDate))}) پس از پایان همکاری (${toPersianDigits(isoToJalaliDate(end.endIso))}) است؛ کارکردی ثبت نشد.`,
+        { personnelId: row.id, endDate: end.endIso, dates: late.map(e => e.isoDate) }, 'PIECEWORK_LOG_AFTER_SERVICE_END');
+    }
+  }
+}
