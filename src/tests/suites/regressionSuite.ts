@@ -10892,5 +10892,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
   results.push(...await runVoucherApprovalDutiesTests(shouldRun));
 
+  // Series 10 phase 3 lane L2 (v10.0.35+): writer routes read their bodies through Zod
+  const { runWriterRouteZodTests } = await import('../regression/writerRouteZodTests.js');
+  results.push(...await runWriterRouteZodTests(shouldRun));
+
   return results;
 }
