@@ -30,7 +30,7 @@ function assertKnownNewPermissions(requested: string[], existing: string[] = [])
 }
 
 /**
- * v10.0.28 (series 10 phase 3, L5 E7; part of TD-960): a role is created, edited and deleted in one transaction under
+ * v10.0.35 (series 10 phase 3, L5 E7; part of TD-960): a role is created, edited and deleted in one transaction under
  * its row lock, with its audit row written with the same `tx`. Before, the routes wrote the role on the pool and then
  * logged the audit row outside it, so a failed audit write left a role change without its record.
  */

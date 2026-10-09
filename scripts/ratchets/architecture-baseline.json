@@ -1,7 +1,7 @@
 {
   "routeWrites": {
     "src/routes/auth.routes.ts": 4,
-    "src/routes/crm.routes.ts": 11,
+    "src/routes/crm.routes.ts": 10,
     "src/routes/notifications.routes.ts": 3,
     "src/routes/personnel.routes.ts": 5,
     "src/routes/users.routes.ts": 5

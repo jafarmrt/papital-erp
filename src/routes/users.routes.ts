@@ -230,7 +230,7 @@ router.get('/roles', authorizePermission(...READ_PERMISSIONS.userDirectory), asy
 }));
 
 router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSchema), asyncHandler(async (req, res) => {
-  // v10.0.28 (L5 E7): the role and its audit row are written in one transaction by the role service
+  // v10.0.35 (L5 E7): the role and its audit row are written in one transaction by the role service
   const { name, code, description, permissions } = req.body;
   res.json(await createRole(req, { name, code, description, permissions }));
 }));

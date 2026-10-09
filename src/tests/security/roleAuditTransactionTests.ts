@@ -2,7 +2,7 @@ import { TestCaseResult } from '../types.js';
 import { runCase, type ShouldRun } from './workflowTestHarness.js';
 
 /**
- * v10.0.28 (series 10 phase 3, L5 E7; part of TD-960): the role routes wrote the role on the pool and logged its audit
+ * v10.0.35 (series 10 phase 3, L5 E7; part of TD-960): the role routes wrote the role on the pool and logged its audit
  * row afterwards outside the write, swallowing an audit error, so a role could be created or deleted with no record.
  * A trigger refuses the audit rows of this test's roles: the create and the delete must fail and change nothing.
  * On v10.0.26 the role is created (200) and deleted (200) with no audit row.
@@ -13,7 +13,7 @@ export async function runRoleAuditTransactionTests(shouldRun: ShouldRun): Promis
   if (shouldRun('sec_role_write_with_audit_in_tx_td_960', 'security', 'td960', 'roles', 'audit', 'package2')) {
     await runCase(results, {
       id: 'sec_role_write_with_audit_in_tx_td_960',
-      name: 'v10.0.28: a role create, edit or delete whose audit row fails changes nothing (TD-960)',
+      name: 'v10.0.35: a role create, edit or delete whose audit row fails changes nothing (TD-960)',
       details: 'roles are written with their audit row in one transaction: a refused audit row rolls back the role create, edit and delete',
     }, async (h, wrong) => {
       const blocked = `td960blk${h.tag}`;
