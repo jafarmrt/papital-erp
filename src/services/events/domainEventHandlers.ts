@@ -6,19 +6,49 @@ import {
   PurchaseEventPayload, 
   StockMovementEventPayload, 
   WorkflowEventPayload,
-  TreasuryEventPayload 
+  TreasuryEventPayload,
+  InventoryReorderAlertPayload
 } from './domainEvents.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { logger } from '../../middleware/logger.js';
 import { orm } from '../../db/drizzle.js';
 import { items } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
+import { fin } from '../../lib/financialDecimal.js';
+import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { EventActionEngineService } from './eventActionEngineService.js';
 import { WebhookSubscriptionService } from './webhookSubscriptionService.js';
 
 /**
  * Register core system listeners for enterprise domain events
  */
+/**
+ * هشدار نقطه سفارش پس از خروج کالا، یا `null`. v10.0.24 (TD-937، P5-S-14 / OBS-R2-17): موجودی آزاد (موجودی کل منهای رزروها،
+ * همان `listReorderAlerts` صفحه هشدار، TD-843) با نقطه سفارش سنجیده می‌شود؛ پیش‌تر موجودی کل سنجیده می‌شد و کالایی که صفحه
+ * هشدار «زیر نقطه سفارش» نشان می‌داد هشدار رویدادی نمی‌گرفت. خطای خواندن رزروها رویداد را برای تلاش دوباره برمی‌گرداند.
+ */
+export async function reorderAlertForIssue(payload: StockMovementEventPayload): Promise<InventoryReorderAlertPayload | null> {
+  const { itemId, itemCode, itemName, warehouseLocation } = payload;
+  const [item] = await orm.select({ reorderPoint: items.reorderPoint, currentStock: items.currentStock, isDeleted: items.isDeleted })
+    .from(items).where(eq(items.id, itemId));
+  const threshold = fin(item?.reorderPoint ?? 0);
+  if (!item || item.isDeleted !== 0 || !threshold.isPositive()) return null;
+  const reserved = await ItemStockReservationService.getReservedStocksMap({ itemIds: [itemId] });
+  const stock = fin(item.currentStock);
+  const free = stock.subtract(fin(reserved[String(itemId)]?.totalReserved ?? 0));
+  if (free.greaterThan(threshold)) return null;
+  return {
+    itemId,
+    itemCode,
+    itemName,
+    currentStock: stock.toNumber(),
+    freeStock: free.toNumber(),
+    reorderPoint: threshold.toNumber(),
+    warehouseLocation,
+    alertMessage: `موجودی آزاد کالای ${itemName} (${itemCode}) به نقطه سفارش مجدد (${threshold.toNumber().toLocaleString('fa-IR')}) رسیده است.`,
+  };
+}
+
 export function registerDomainEventHandlers(): void {
   logger.info('[DomainEventHandlers] Registering domain event subscribers...');
 
@@ -107,29 +137,10 @@ export function registerDomainEventHandlers(): void {
   // -------------------------------------------------------------
   domainEventBus.subscribe<StockMovementEventPayload>(DomainEventType.STOCK_ISSUED, async (event) => {
     try {
-      const { itemId, itemCode, itemName, newStock, warehouseLocation } = event.payload;
-
-      // Check item's minimum stock threshold / reorder point
-      const [item] = await orm.select().from(items).where(eq(items.id, itemId));
-      const threshold = item?.reorderPoint || 0;
-      if (item && threshold > 0 && newStock <= threshold) {
-        logger.warn(`[Inventory Alert] Item ${itemCode} (${itemName}) in ${warehouseLocation} dropped to ${newStock} (Reorder Point: ${threshold})`);
-
-        await domainEventBus.publishEvent(
-          DomainEventType.INVENTORY_REORDER_ALERT,
-          'Item',
-          String(itemId),
-          {
-            itemId,
-            itemCode,
-            itemName,
-            currentStock: newStock,
-            reorderPoint: threshold,
-            warehouseLocation,
-            alertMessage: `موجودی کالای ${itemName} (${itemCode}) به نقطه سفارش مجدد (${threshold}) رسیده است.`
-          },
-          { correlationId: event.eventId }
-        );
+      const alert = await reorderAlertForIssue(event.payload);
+      if (alert) {
+        logger.warn(`[Inventory Alert] Item ${alert.itemCode} reached its reorder point (${alert.reorderPoint})`);
+        await domainEventBus.publishEvent(DomainEventType.INVENTORY_REORDER_ALERT, 'Item', String(alert.itemId), alert, { correlationId: event.eventId });
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);

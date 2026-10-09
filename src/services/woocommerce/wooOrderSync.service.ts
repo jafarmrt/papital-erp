@@ -8,6 +8,8 @@ import { businessTodayIsoDate, systemNowUtcIso } from '../../lib/businessClock.j
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { logger } from '../../middleware/logger.js';
+import { logActivity } from '../../lib/auditLogger.js';
+import { documentAuditSnapshot, documentLineSummary } from '../documents/documentAudit.js';
 import { resolveWooOrderCustomer, type WooOrderBuyer } from './wooOrderCustomer.js';
 import { currencyScale, exactLineSplit } from './exactLineTotal.js';
 import { allocateFeeDiscount } from './feeDiscount.js';
@@ -441,6 +443,17 @@ export class WooOrderSyncService {
           items: docLines,
           location: targetLoc,
           externalTx: tx,
+        });
+        // v10.0.22 (TD-929، P5-S-05): ردیف ممیزی ثبت فاکتور با سند ذخیره‌شده، با همین تراکنش (همان ردیف `POST /documents`، TD-785)
+        const stored = await documentAuditSnapshot(tx, newDocId);
+        await logActivity({
+          tx,
+          username: WC_BOT_USER,
+          action: 'CREATE',
+          entity: 'فاکتور فروش',
+          entityId: newDocId,
+          description: `ثبت فاکتور فروش شماره "${stored?.refNumber ?? nextRef}" از سفارش ووکامرس #${wcOrderId}`,
+          details: { after: stored, wcOrderId, ...documentLineSummary(stored) },
         });
 
         await tx.update(woocommerceOrderLogs).set({

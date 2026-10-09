@@ -10876,5 +10876,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runTreasuryPayrollPhase5Tests } = await import('../regression/treasuryPayrollPhase5Tests.js');
   results.push(...await runTreasuryPayrollPhase5Tests(shouldRun));
 
+  // Series 10 phase 3 lane L2, package B4 (v10.0.22+): document audit rows, stock event cost, reorder monitor, purchase party, requisition workflow
+  const { runDocumentAuditEventTests } = await import('../regression/documentAuditEventTests.js');
+  results.push(...await runDocumentAuditEventTests(shouldRun));
+
   return results;
 }

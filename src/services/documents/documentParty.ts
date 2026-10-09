@@ -4,6 +4,7 @@ import { customers, documents } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import type { HealthCheckTestResult } from '../../types.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
+import { DOCUMENT_PARTY_SIDE_LABELS, documentPartySide, partyFitsDocument } from '../../lib/documents/documentPartyKind.js';
 
 /**
  * v9.0.336 (TD-778، یافته B08-09، تصمیم ت۶ الف بسته ۸): سند فروش و خرید طرف حسابش را با شناسه (`documents.party_id`) نگه
@@ -52,18 +53,33 @@ export async function resolveDocumentParty(tx: DbExecutor, input: {
   }
   if (input.partyId === null) return { partyId: null, buyerName };
   if (input.partyId !== undefined) {
-    const [row] = await tx.select({ id: customers.id, name: customers.name }).from(customers)
+    const [row] = await tx.select({ id: customers.id, name: customers.name, partyType: customers.partyType }).from(customers)
       .where(and(eq(customers.id, input.partyId), eq(customers.isDeleted, 0)))
       .for('key share');
     if (!row) {
       throw new ValidationError(`طرف حساب شماره ${input.partyId} یافت نشد یا حذف شده است.`, undefined, 'DOCUMENT_PARTY_INVALID');
     }
+    // v10.0.25 (TD-939): سند خرید فقط تأمین‌کننده و سند فروش فقط مشتری (یا «هر دو») می‌گیرد
+    if (!partyFitsDocument(input.docType, row.partyType)) {
+      const side = DOCUMENT_PARTY_SIDE_LABELS[documentPartySide(input.docType) ?? 'customer'];
+      throw new ValidationError(
+        `طرف حساب «${row.name}» ${side} نیست؛ این سند فقط طرف حساب از نوع «${side}» یا «هر دو» می‌گیرد. نوع طرف حساب را در پرونده‌اش اصلاح کنید یا طرف حساب دیگری برگزینید.`,
+        undefined,
+        'DOCUMENT_PARTY_KIND_MISMATCH',
+      );
+    }
     return { partyId: row.id, buyerName: buyerName.trim() ? buyerName : row.name };
   }
   const name = buyerName.trim();
   if (!name) return { partyId: null, buyerName };
+  // v10.0.25 (TD-939): تطبیق نام فقط میان طرف حساب‌های هم‌نوع سند
+  const side = documentPartySide(input.docType) ?? 'customer';
   const matches = await tx.select({ id: customers.id }).from(customers)
-    .where(and(eq(customers.isDeleted, 0), sql`btrim(${customers.name}) = ${name}::text`))
+    .where(and(
+      eq(customers.isDeleted, 0),
+      sql`btrim(${customers.name}) = ${name}::text`,
+      sql`coalesce(nullif(btrim(${customers.partyType}), ''), 'customer') IN (${side}::text, 'both')`,
+    ))
     .orderBy(asc(customers.id))
     .limit(2)
     .for('key share');

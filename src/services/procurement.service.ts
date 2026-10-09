@@ -6,7 +6,6 @@ import { businessFiscalYear, businessTodayIsoDate } from '../lib/businessClock.j
 import { requireStorageDate } from '../lib/storageDate.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { documentAuditDetails } from './documents/documentAudit.js';
-import { logger } from '../middleware/logger.js';
 import { AppError, ValidationError, NotFoundError, ConflictError } from '../errors/customErrors.js';
 import { WorkflowTransitionExecutor } from './workflow/workflowTransitionExecutor.js';
 import { hasWorkflowTransitionAction } from './workflow/workflowTransitionActions.js';
@@ -217,27 +216,21 @@ export class ProcurementService {
       isDeleted: 0
     }).returning();
 
-    // Start workflow instance if definition exists
-    // v8.0.77 (TD-324): در همان تراکنش، درون savepoint — شکست گردش‌کار فقط همان را برمی‌گرداند، نه درخواست را
-    try {
-      const wfInstance = await tx.transaction((sp) => WorkflowTransitionExecutor.startInstance({
-        workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
-        entityType: 'purchase_requisition',
-        entityId: String(inserted.id),
-        userId: user.id,
-        userName: user.username,
-        tx: sp
-      }));
-
-      if (wfInstance && wfInstance.id) {
-        await tx.update(purchaseRequisitions)
-          .set({ workflowInstanceId: wfInstance.id })
-          .where(eq(purchaseRequisitions.id, inserted.id));
-        inserted.workflowInstanceId = wfInstance.id;
-      }
-    } catch (err: unknown) {
-      logger.warn(`[ProcurementService] Workflow start warning for PR ${inserted.id}: ${String(err)}`);
-    }
+    // v10.0.26 (TD-940، P5-P13 / OBS-R2-34): گردش کار درخواست در همین تراکنش آغاز می‌شود و خطای آغاز (فرایند غیرفعال یا
+    // طرح ناسالم) ثبت درخواست را رد می‌کند، همان قاعده TD-451. پیش‌تر خطا فقط در گزارش کارساز می‌آمد و درخواست بی گردش کار
+    // ساخته می‌شد: در کارتابل هیچ تأییدکننده‌ای نمی‌آمد و فقط هنگام سفارش یا تحویل گردش کار می‌گرفت.
+    const wfInstance = await WorkflowTransitionExecutor.startInstance({
+      workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
+      entityType: 'purchase_requisition',
+      entityId: String(inserted.id),
+      userId: user.id,
+      userName: user.username,
+      tx,
+    });
+    await tx.update(purchaseRequisitions)
+      .set({ workflowInstanceId: wfInstance.id })
+      .where(eq(purchaseRequisitions.id, inserted.id));
+    inserted.workflowInstanceId = wfInstance.id;
 
     await logActivity({
       tx,

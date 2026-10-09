@@ -2,6 +2,7 @@ import { Users } from 'lucide-react';
 import { Customer, Personnel } from '../../../types';
 import { SearchableSelect } from '../../SearchableSelect';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
+import { partyFitsDocument } from '../../../lib/documents/documentPartyKind';
 
 interface StockCounterpartyFieldProps {
   form: StockDocumentForm;
@@ -14,7 +15,9 @@ interface StockCounterpartyFieldProps {
  * استخراج‌شده از DocumentsPage.
  */
 export function StockCounterpartyField({ form, personnelList, suppliersList }: StockCounterpartyFieldProps) {
-  const { actionType, buyerName, setBuyerName, selectedSupplierObj, setSelectedSupplierObj, selectedPersonnelObj } = form;
+  const { actionType, docType, buyerName, setBuyerName, selectedSupplierObj, setSelectedSupplierObj, selectedPersonnelObj } = form;
+  // v10.0.25 (TD-939): رسید و خرید فقط تأمین‌کننده، برگشت از فروش فقط مشتری (یا «هر دو»)؛ همان قاعده سرور
+  const partyOptions = (Array.isArray(suppliersList) ? suppliersList : []).filter(s => partyFitsDocument(docType, s.partyType));
 
   return (
     <div>
@@ -68,12 +71,11 @@ export function StockCounterpartyField({ form, personnelList, suppliersList }: S
             value={buyerName}
             onChange={(val) => {
               setBuyerName(val);
-              const list = Array.isArray(suppliersList) ? suppliersList : [];
-              const found = list.find(s => s.name.trim().toLowerCase() === val.trim().toLowerCase());
+              const found = partyOptions.find(s => s.name.trim().toLowerCase() === val.trim().toLowerCase());
               setSelectedSupplierObj(found || null);
             }}
             placeholder="انتخاب طرف‌حساب..."
-            options={(Array.isArray(suppliersList) ? suppliersList : []).map((s) => ({
+            options={partyOptions.map((s) => ({
               value: s.name,
               label: `${s.name}${s.supplierCategory ? ` (${s.supplierCategory})` : ''}${s.phone ? ` - ${s.phone}` : ''}`
             }))}
