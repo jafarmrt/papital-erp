@@ -41,7 +41,7 @@ describe('v10.0.44 (TD-1145): a new project form applies no stage template until
     expect(result.current.getOptionalStageNames()).toEqual([]);
   });
 
-  it('offers a «بدون الگو» choice in the template picker', () => {
+  it('offers an empty (no template) choice in the template picker', () => {
     render(
       <ProjectStagesForm stages={[{ title: NEW_PROJECT_STAGE_TITLE, assigned_personnel: [], required_resources: [] }]} preset=""
         availablePresets={presets} onSelectPreset={vi.fn()} onAddStage={vi.fn()} onRemoveStage={vi.fn()}
