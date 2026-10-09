@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { transfers, activityLogs } from '../db/schema.js';
+import { transfers } from '../db/schema.js';
 import { isDataUrl, uploadBase64ToStorage } from '../lib/storage.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
 import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
@@ -106,7 +106,9 @@ export class TransferService {
   }
 
   /**
-   * Soft deletes a transfer by code (RULE 09 compliant)
+   * Soft deletes a transfer by code (RULE 09 compliant). v10.0.22 (TD-963): the delete and its audit row run in one
+   * transaction through `logActivity` (its own when the caller passes none), so an audit insert error refuses the
+   * delete instead of being swallowed, and the row carries the request's trace id.
    */
   static async deleteTransfer(
     code: string,
@@ -118,29 +120,29 @@ export class TransferService {
       throw new BadRequestError('کد ترنسفر الزامی است');
     }
 
-    const existing = await executor.select().from(transfers).where(and(eq(transfers.code, cleanCode), eq(transfers.isDeleted, 0))).limit(1);
-    if (existing.length === 0) {
-      throw new NotFoundError('ترنسفر یافت نشد');
-    }
-
-    const now = systemNowUtcIso();
-    await executor.update(transfers).set({ isDeleted: 1, updatedAt: now }).where(eq(transfers.code, cleanCode));
-
-    if (user) {
-      try {
-        await executor.insert(activityLogs).values({
-          userId: user.id || null,
-          username: user.username || 'سیستم',
-          userFullName: user.full_name || '',
-          action: 'DELETE',
-          entity: 'ترنسفر',
-          entityId: cleanCode,
-          description: `حذف نرم (Soft-Delete) ترنسفر کد ${cleanCode}`,
-          details: { code: cleanCode, title: existing[0].title }
-        });
-      } catch {
-        // Safe logging fallback
+    const run = async (tx: DbExecutor): Promise<void> => {
+      const existing = await tx.select().from(transfers)
+        .where(and(eq(transfers.code, cleanCode), eq(transfers.isDeleted, 0))).limit(1).for('update');
+      if (existing.length === 0) {
+        throw new NotFoundError('ترنسفر یافت نشد');
       }
-    }
+
+      const now = systemNowUtcIso();
+      await tx.update(transfers).set({ isDeleted: 1, updatedAt: now }).where(eq(transfers.code, cleanCode));
+
+      await logActivity({
+        tx,
+        userId: user?.id,
+        username: user?.username,
+        userFullName: user?.full_name,
+        action: 'DELETE',
+        entity: 'ترنسفر',
+        entityId: cleanCode,
+        description: `حذف نرم (Soft-Delete) ترنسفر کد ${cleanCode}`,
+        details: { before: { code: cleanCode, title: existing[0].title } },
+      });
+    };
+    if (executor === orm) await orm.transaction(tx => run(tx));
+    else await run(executor);
   }
 }

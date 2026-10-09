@@ -4,6 +4,7 @@ import { logger } from '../middleware/logger.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
 import { sql, lt, and, inArray, notInArray, count, not, type SQL } from 'drizzle-orm';
 import type { Request } from 'express';
+import { getRequestContext } from './requestContext.js';
 import { ValidationError } from '../errors/customErrors.js';
 import { toPersianDigits } from '../utils/persianNumber.js';
 import { CRITICAL_AUDIT_ACTIONS, MIN_AUDIT_RETENTION_DAYS, PURGEABLE_AUDIT_ENTITIES } from './audit/auditRetention.js';
@@ -118,6 +119,8 @@ export async function logActivity(params: AuditLogParams): Promise<AuditLogResul
   // Guarantee full sanitization on all recorded metadata
   const sanitizedDetails = sanitizeSensitiveData(params.details || {});
   const nowTimestamp = systemNowUtcIso();
+  // v10.0.22 (TD-963): the request's trace id (the one in the error answer and the log files), else none
+  const traceId = String(params.req?.requestId || getRequestContext()?.requestId || '');
 
   try {
     const executor = params.tx || orm;
@@ -131,7 +134,8 @@ export async function logActivity(params: AuditLogParams): Promise<AuditLogResul
       description: params.description,
       details: sanitizedDetails,
       ipAddress: ipAddress || '',
-      timestamp: nowTimestamp
+      timestamp: nowTimestamp,
+      traceId,
     }).returning({ id: activityLogs.id });
 
     return {
