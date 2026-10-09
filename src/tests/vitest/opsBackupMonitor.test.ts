@@ -153,10 +153,10 @@ describe('offsite_backup_carries_secrets_key_td_957: the daily backup and the .e
 
 // ---------- O-03: the monitor ----------
 
-interface FakeServer { url: string; ready: number; metrics: string; sent: string[]; close: () => Promise<void> }
+interface FakeServer { url: string; ready: number; metrics: string; sent: string[]; sent2: string[]; close: () => Promise<void> }
 
 async function fakeServer(): Promise<FakeServer> {
-  const state = { ready: 200, metrics: '', sent: [] as string[] };
+  const state = { ready: 200, metrics: '', sent: [] as string[], sent2: [] as string[] };
   const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', c => { body += String(c); });
@@ -171,6 +171,12 @@ async function fakeServer(): Promise<FakeServer> {
         if (params.get('chat_id') === '42') state.sent.push(String(params.get('text')));
         res.writeHead(200); res.end('{"ok":true}'); return;
       }
+      if (req.url === '/botBT-2/sendMessage') {
+        const params = new URLSearchParams(body);
+        if (params.get('chat_id') === '77') state.sent2.push(String(params.get('text')));
+        res.writeHead(200); res.end('{"ok":true}'); return;
+      }
+      if (req.url === '/botBT-DOWN/sendMessage') { res.writeHead(500); res.end(); return; }
       res.writeHead(404); res.end();
     });
   });
@@ -218,6 +224,7 @@ describe('monitor_alerts_td_1021: the server monitor alerts once on app, disk, b
     srv.ready = 200;
     srv.metrics = GOOD_METRICS;
     srv.sent.length = 0;
+    srv.sent2.length = 0;
   };
   const monitor = (extra: Record<string, string> = {}) => new Promise<{ code: number | null; out: string }>(resolve => {
     const child = spawn('bash', [path.join(ROOT, 'scripts/monitor.sh')], {
@@ -312,6 +319,27 @@ describe('monitor_alerts_td_1021: the server monitor alerts once on app, disk, b
     await monitor();
     expect(srv.sent).toHaveLength(1);
     expect(srv.sent[0]).toContain(alertText('app_down', 'HTTP 503'));
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('second_alert_bot_td_1001: a second bot (Bale and Telegram together) gets the same alert, and one bot failing does not stop the other', async () => {
+    fresh(`ALERT_BOT2_TOKEN=BT-2\nALERT_BOT2_CHAT_ID=77\nALERT_BOT2_API=${srv.url}\n`);
+    srv.ready = 503;
+    expect((await monitor()).code).toBe(1);
+    expect(srv.sent).toHaveLength(1);
+    expect(srv.sent2).toEqual(srv.sent);
+    fs.rmSync(dir, { recursive: true, force: true });
+    fresh(`ALERT_BOT2_TOKEN=BT-2\nALERT_BOT2_CHAT_ID=77\nALERT_BOT2_API=${srv.url}\n`);
+    fs.writeFileSync(path.join(dir, '.env'), fs.readFileSync(path.join(dir, '.env'), 'utf8').replace('ALERT_BOT_TOKEN=BT-1', 'ALERT_BOT_TOKEN=BT-DOWN'));
+    srv.ready = 503;
+    const r = await monitor();
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('WARNING: the bot alert could not be sent (bot 1)');
+    expect(srv.sent2).toHaveLength(1);
+    expect(srv.sent2[0]).toContain(alertText('app_down', 'HTTP 503'));
+    // the failure was delivered through bot 2, so it is not sent again within the repeat window
+    await monitor();
+    expect(srv.sent2).toHaveLength(1);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
