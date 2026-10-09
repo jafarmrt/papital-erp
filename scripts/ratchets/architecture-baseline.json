@@ -4,7 +4,7 @@
     "src/routes/crm.routes.ts": 11,
     "src/routes/notifications.routes.ts": 3,
     "src/routes/personnel.routes.ts": 5,
-    "src/routes/users.routes.ts": 8
+    "src/routes/users.routes.ts": 5
   },
   "ormFallback": {
     "src/lib/auditLogger.ts": 2,
@@ -86,7 +86,7 @@
     "src/routes/piecework.routes.ts": 3,
     "src/routes/projects.routes.ts": 8,
     "src/routes/transfers.routes.ts": 1,
-    "src/routes/users.routes.ts": 26,
+    "src/routes/users.routes.ts": 15,
     "src/routes/woocommerce.routes.ts": 9,
     "src/routes/workflow.routes.ts": 3
   },
