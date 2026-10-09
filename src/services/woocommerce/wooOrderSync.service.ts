@@ -443,7 +443,7 @@ export class WooOrderSyncService {
           location: targetLoc,
           externalTx: tx,
         });
-        // v10.0.38 (TD-929، P5-S-05): ردیف ممیزی ثبت فاکتور با سند ذخیره‌شده، با همین تراکنش (همان ردیف `POST /documents`، TD-785)
+        // v10.0.41 (TD-929، P5-S-05): ردیف ممیزی ثبت فاکتور با سند ذخیره‌شده، با همین تراکنش (همان ردیف `POST /documents`، TD-785)
         const stored = await DocumentService.documentAuditSnapshot(tx, newDocId);
         await logActivity({
           tx,

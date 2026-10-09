@@ -20,6 +20,6 @@ export function registerWorkflowDomainActions(): void {
   registerRequisitionWorkflowAction();
   // v9.0.398 (TD-826): approve or reject a raw material request
   registerPendingMaterialWorkflowAction();
-  // v10.0.40 (TD-937): the reorder alert event compares free stock, so it reads the reservations through this root
+  // v10.0.43 (TD-937): the reorder alert event compares free stock, so it reads the reservations through this root
   registerReservedStocksReader(itemIds => ItemStockReservationService.getReservedStocksMap({ itemIds }));
 }

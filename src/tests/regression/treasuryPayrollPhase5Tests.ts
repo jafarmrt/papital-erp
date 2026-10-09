@@ -169,7 +169,7 @@ export async function runTreasuryPayrollPhase5Tests(shouldRun: ShouldRun): Promi
 
       // 4) a sales document whose party is a supplier record: the receipt keeps the name rule instead of being refused
       const supplierBuyer = await createTestCustomer({ name: `TD-907 supplier buyer ${tagOf()}`, partyType: 'supplier' });
-      // since v10.0.41 (TD-939) a new sales document refuses a supplier-only party, so this legacy row gets its party id directly
+      // since v10.0.44 (TD-939) a new sales document refuses a supplier-only party, so this legacy row gets its party id directly
       const mixedId = await createDoc({ docType: 'invoice', status: 'final', buyer_name: supplierBuyer.name, items: [{ itemId: item.id, quantity: 1, unit_price: 300_000 }] }, 'invoice of a supplier record');
       await orm.update(documents).set({ partyId: supplierBuyer.id }).where(eq(documents.id, mixedId));
       const mixed = await settle('receipt', mixedId, supplierBuyer.name, 300_000);

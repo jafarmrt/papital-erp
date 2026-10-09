@@ -11,7 +11,7 @@
 # dedicated stage from the tracked package-lock.json (TD-172) and copied into runtime.
 
 # ---------- Stage 1: production dependencies only ----------
-FROM node:22-alpine AS prod-deps
+FROM public.ecr.aws/docker/library/node:22-alpine AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 # v7.0.58 (TD-173): SheetJS (xlsx) از فایل داخل مخزن نصب می‌شود (نسخه رسمی فقط روی cdn.sheetjs.com منتشر می‌شود)
@@ -19,7 +19,7 @@ COPY vendor ./vendor
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
 # ---------- Stage 2: build ----------
-FROM node:22-alpine AS build
+FROM public.ecr.aws/docker/library/node:22-alpine AS build
 WORKDIR /app
 
 # All dependencies (dev deps required for vite/esbuild build), reproducible from the lockfile.
@@ -34,7 +34,7 @@ ARG GIT_COMMIT_SHA
 RUN npm run build
 
 # ---------- Stage 3: runtime ----------
-FROM node:22-alpine AS runtime
+FROM public.ecr.aws/docker/library/node:22-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 

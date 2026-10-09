@@ -102,7 +102,7 @@ export class DocumentService {
     return DocumentQueryService.getDocuments(typeOrFilter);
   }
 
-  /** v10.0.38 (TD-929): the stored document for an audit row of another package (WooCommerce invoice) */
+  /** v10.0.41 (TD-929): the stored document for an audit row of another package (WooCommerce invoice) */
   static documentAuditSnapshot = documentAuditSnapshot;
   static documentLineSummary = documentLineSummary;
 

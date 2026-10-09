@@ -59,7 +59,7 @@ export async function resolveDocumentParty(tx: DbExecutor, input: {
     if (!row) {
       throw new ValidationError(`طرف حساب شماره ${input.partyId} یافت نشد یا حذف شده است.`, undefined, 'DOCUMENT_PARTY_INVALID');
     }
-    // v10.0.41 (TD-939): سند خرید فقط تأمین‌کننده و سند فروش فقط مشتری (یا «هر دو») می‌گیرد
+    // v10.0.44 (TD-939): سند خرید فقط تأمین‌کننده و سند فروش فقط مشتری (یا «هر دو») می‌گیرد
     if (!partyFitsDocument(input.docType, row.partyType)) {
       const side = DOCUMENT_PARTY_SIDE_LABELS[documentPartySide(input.docType) ?? 'customer'];
       throw new ValidationError(
@@ -72,7 +72,7 @@ export async function resolveDocumentParty(tx: DbExecutor, input: {
   }
   const name = buyerName.trim();
   if (!name) return { partyId: null, buyerName };
-  // v10.0.41 (TD-939): تطبیق نام فقط میان طرف حساب‌های هم‌نوع سند
+  // v10.0.44 (TD-939): تطبیق نام فقط میان طرف حساب‌های هم‌نوع سند
   const side = documentPartySide(input.docType) ?? 'customer';
   const matches = await tx.select({ id: customers.id }).from(customers)
     .where(and(
