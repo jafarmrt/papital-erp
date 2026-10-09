@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { isAbortError } from '../api';
@@ -8,7 +8,7 @@ import { MediaProductInfoCard } from '../components/media/MediaProductInfoCard';
 import { MediaGallery } from '../components/media/MediaGallery';
 import { MediaUploadBox } from '../components/media/MediaUploadBox';
 import { getMediaProduct, mediaErrorMessage, type MediaAssetView, type MediaProductDetail } from '../lib/media/mediaApi';
-import { MEDIA_INFO_EDIT_KEYS, MEDIA_MANAGE_KEY, MEDIA_UPLOAD_KEYS } from '../lib/media/mediaAccess';
+import { MEDIA_INFO_EDIT_KEYS, MEDIA_ITEM_IMAGE_KEYS, MEDIA_MANAGE_KEY, MEDIA_UPLOAD_KEYS } from '../lib/media/mediaAccess';
 
 /** v10.0.25 (N-05 PR 2): one product of the media library: its card, gallery and upload box */
 export default function MediaProductPage({ user }: { user?: User | null }) {
@@ -17,6 +17,7 @@ export default function MediaProductPage({ user }: { user?: User | null }) {
   const canUpload = useHasAnyPermission(MEDIA_UPLOAD_KEYS);
   const canManage = useHasPermission(MEDIA_MANAGE_KEY);
   const canEditInfo = useHasAnyPermission(MEDIA_INFO_EDIT_KEYS);
+  const canItemImage = useHasAnyPermission(MEDIA_ITEM_IMAGE_KEYS);
   const [detail, setDetail] = useState<MediaProductDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +45,14 @@ export default function MediaProductPage({ user }: { user?: User | null }) {
   const onDeleted = useCallback((id: number) => {
     setDetail(prev => (prev ? { ...prev, assets: prev.assets.filter(a => a.id !== id) } : prev));
   }, []);
+  const onListReplaced = useCallback((assets: MediaAssetView[]) => {
+    setDetail(prev => (prev ? { ...prev, assets } : prev));
+  }, []);
+  const itemVersion = detail?.item.version;
+  const itemImage = useMemo(() => (canItemImage && itemVersion !== undefined ? {
+    version: itemVersion,
+    onVersion: (version: number) => setDetail(prev => (prev ? { ...prev, item: { ...prev.item, version } } : prev)),
+  } : null), [canItemImage, itemVersion]);
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -61,6 +70,11 @@ export default function MediaProductPage({ user }: { user?: User | null }) {
             rights={{ canUpload, canManage, username: user?.username }}
             onChanged={onChanged}
             onDeleted={onDeleted}
+            sectionId={detail.productsSectionId}
+            itemId={detail.item.id}
+            onListReplaced={onListReplaced}
+            canReorder
+            itemImage={itemImage}
           />
         </>
       )}

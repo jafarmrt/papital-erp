@@ -687,6 +687,13 @@
       "when": 1794000001000,
       "tag": "0097_item_media_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1794000002000,
+      "tag": "0098_media_tags_cover",
+      "breakpoints": true
     }
   ]
 }

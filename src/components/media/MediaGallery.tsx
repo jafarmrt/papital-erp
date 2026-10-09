@@ -9,16 +9,28 @@ import { canChangeAsset, type MediaViewerRights } from '../../lib/media/mediaAcc
 import { MediaAssetTile } from './MediaAssetTile';
 import { MediaLightbox } from './MediaLightbox';
 import { MediaAssetEditModal } from './MediaAssetEditModal';
+import { MediaAssetTileActions } from './MediaAssetTileActions';
+import { useMediaGalleryActions, type MediaItemImageTarget } from './useMediaGalleryActions';
 
 interface Props {
   assets: MediaAssetView[];
   rights: MediaViewerRights;
   onChanged: (asset: MediaAssetView) => void;
   onDeleted: (id: number) => void;
+  /** v10.0.27 (N-05 PR 3): the section (and product) the files belong to, for the order and cover routes */
+  sectionId: number;
+  itemId: number | null;
+  /** the answer of an order or cover change: every live file of the section (or product) */
+  onListReplaced: (assets: MediaAssetView[]) => void;
+  /** the page holds every file of the section with no search condition, so a manager may change the order */
+  canReorder: boolean;
+  /** given only to holders of the item-picture keys on a product page */
+  itemImage?: MediaItemImageTarget | null;
+  emptyText?: string;
 }
 
-/** Files of one product grouped by shot type, with group download, lightbox, edit and delete */
-export function MediaGallery({ assets, rights, onChanged, onDeleted }: Props) {
+/** Files of one product or section grouped by shot type, with group download, lightbox, edit, delete and manager actions */
+export function MediaGallery({ assets, rights, onChanged, onDeleted, sectionId, itemId, onListReplaced, canReorder, itemImage, emptyText }: Props) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [editing, setEditing] = useState<MediaAssetView | null>(null);
@@ -29,6 +41,8 @@ export function MediaGallery({ assets, rights, onChanged, onDeleted }: Props) {
     .filter(g => g.items.length > 0), [assets]);
   const ordered = useMemo(() => groups.flatMap(g => g.items), [groups]);
   const liveSelected = ordered.filter(a => selected.has(a.id)).map(a => a.id);
+  const actions = useMediaGalleryActions({ ordered, sectionId, itemId, onListReplaced, onChanged, itemImage });
+  const canMove = rights.canManage && canReorder;
 
   const toggle = (id: number) => setSelected(prev => {
     const next = new Set(prev);
@@ -71,7 +85,7 @@ export function MediaGallery({ assets, rights, onChanged, onDeleted }: Props) {
   };
 
   if (assets.length === 0) {
-    return <div className="py-10 text-center text-sm text-slate-500 bg-white border border-slate-200 rounded-xl">هنوز تصویر یا فیلمی برای این محصول بارگذاری نشده است.</div>;
+    return <div className="py-10 text-center text-sm text-slate-500 bg-white border border-slate-200 rounded-xl">{emptyText ?? 'هنوز تصویر یا فیلمی برای این محصول بارگذاری نشده است.'}</div>;
   }
 
   return (
@@ -93,7 +107,7 @@ export function MediaGallery({ assets, rights, onChanged, onDeleted }: Props) {
         <div key={group.type} className="space-y-2">
           <h2 className="text-sm font-black text-slate-700">{MEDIA_SHOT_TYPE_LABELS[group.type]} <span className="text-slate-400 font-semibold">({formatPersianNumber(group.items.length)})</span></h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3">
-            {group.items.map(asset => (
+            {group.items.map((asset, index) => (
               <MediaAssetTile
                 key={asset.id}
                 asset={asset}
@@ -103,12 +117,30 @@ export function MediaGallery({ assets, rights, onChanged, onDeleted }: Props) {
                 onOpen={() => setOpenIndex(ordered.indexOf(asset))}
                 onEdit={() => setEditing(asset)}
                 onDelete={() => void remove(asset)}
+                extraActions={(
+                  <MediaAssetTileActions
+                    asset={asset}
+                    busy={actions.busyId === asset.id}
+                    flags={{
+                      canMoveEarlier: canMove && index > 0,
+                      canMoveLater: canMove && index < group.items.length - 1,
+                      canCover: rights.canManage && itemId !== null && asset.kind === 'image' && asset.hasThumb,
+                      canReplace: canChangeAsset(asset, rights),
+                      canItemImage: Boolean(itemImage) && asset.kind === 'image' && asset.hasLight,
+                    }}
+                    onMove={step => void actions.move(asset, step)}
+                    onCover={() => void actions.toggleCover(asset)}
+                    onReplace={() => actions.startReplace(asset)}
+                    onItemImage={() => void actions.copyToItem(asset)}
+                  />
+                )}
               />
             ))}
           </div>
         </div>
       ))}
 
+      <input ref={actions.replaceInputRef} type="file" className="hidden" data-testid="media-replace-input" onChange={e => void actions.onReplaceFile(e)} />
       {openIndex !== null && <MediaLightbox assets={ordered} index={openIndex} onIndex={setOpenIndex} onClose={() => setOpenIndex(null)} />}
       {editing && (
         <MediaAssetEditModal asset={editing} onClose={() => setEditing(null)} onSaved={(saved) => { setEditing(null); onChanged(saved); }} />

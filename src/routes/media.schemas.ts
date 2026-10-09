@@ -29,6 +29,7 @@ export const mediaListSchema = z.object({
     kind: z.enum(['image', 'video']).optional(),
     shotType: shotType.optional(),
     lowQuality: z.enum(['1', 'true']).optional(),
+    tag: z.string().max(40).optional(),
     search: z.string().max(200).optional(),
     page: positiveId('صفحه').optional(),
     limit: positiveId('اندازه صفحه').refine(n => n <= 200, 'اندازه صفحه حداکثر ۲۰۰ است').optional(),
@@ -51,6 +52,8 @@ export const mediaUpdateSchema = z.object({
     description: z.string().max(5000, 'توضیح حداکثر ۵۰۰۰ نویسه است').optional(),
     shotType: shotType.optional(),
     sortOrder: z.number().int().min(0).max(100000).optional(),
+    // v10.0.27 (N-05 PR 3): read by `normalizeMediaTags` (422 MEDIA_TAGS_INVALID beyond its limits)
+    tags: z.array(z.string().max(200)).max(100).optional(),
   }).strict(),
 });
 
@@ -95,4 +98,54 @@ export const mediaZipSchema = z.object({
       .refine(ids => ids.length <= 500, 'حداکثر ۵۰۰ فایل در یک بار'),
     variant: z.enum(['original', 'light']).default('original'),
   }).strict(),
+});
+
+const idList = (label: string) => z.array(z.number().int().positive(`${label} نامعتبر است`)).min(1, `${label} لازم است`).max(2000);
+
+/** v10.0.27 (N-05 PR 3): the sections of the library and the arranging of its files */
+export const mediaTagsSchema = z.object({
+  query: z.object({ sectionId: positiveId('بخش').optional() }).strict(),
+});
+
+export const mediaSectionCreateSchema = z.object({
+  body: z.object({
+    title: z.string().max(200, 'عنوان بخش حداکثر ۱۰۰ نویسه است'),
+    description: z.string().max(2000).optional(),
+  }).strict(),
+});
+
+export const mediaSectionUpdateSchema = z.object({
+  params: z.object({ id: numericIdString }).passthrough(),
+  body: z.object({
+    version: z.number().int().positive('نسخه بخش لازم است'),
+    title: z.string().max(200, 'عنوان بخش حداکثر ۱۰۰ نویسه است').optional(),
+    description: z.string().max(2000).optional(),
+  }).strict(),
+});
+
+export const mediaSectionOrderSchema = z.object({
+  body: z.object({ ids: idList('فهرست بخش‌ها') }).strict(),
+});
+
+export const mediaAssetOrderSchema = z.object({
+  body: z.object({
+    sectionId: z.number().int().positive('بخش نامعتبر است'),
+    itemId: z.number().int().positive('کالا نامعتبر است').nullable().optional(),
+    ids: idList('فهرست فایل‌ها'),
+  }).strict(),
+});
+
+export const mediaCoverSchema = z.object({
+  params: z.object({ id: numericIdString }).passthrough(),
+  body: z.object({ cover: z.boolean({ error: 'وضعیت تصویر شاخص لازم است' }) }).strict(),
+});
+
+export const mediaReplaceSchema = z.object({
+  params: z.object({ id: numericIdString }).passthrough(),
+  query: z.object({}).strict(),
+});
+
+export const mediaItemImageSchema = z.object({
+  params: z.object({ id: numericIdString }).passthrough(),
+  body: z.object({ version: z.number().int().positive('نسخه کالا لازم است') }).strict(),
 });

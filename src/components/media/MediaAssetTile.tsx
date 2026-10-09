@@ -1,9 +1,11 @@
-import { AlertTriangle, Download, Film, Image as ImageIcon, Loader2, Pencil, Trash2 } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { AlertTriangle, Download, Film, Image as ImageIcon, Loader2, Pencil, Star, Trash2 } from 'lucide-react';
 import { formatPersianNumber } from '../../utils';
 import { mediaFileUrl, type MediaAssetView } from '../../lib/media/mediaApi';
 
 export const PREPARING_TEXT = 'در حال آماده‌سازی';
 export const LIGHT_FAILED_TEXT = 'ساخت نسخه سبک ناموفق بود';
+export const COVER_BADGE_TEXT = 'شاخص';
 
 interface Props {
   asset: MediaAssetView;
@@ -13,6 +15,8 @@ interface Props {
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  /** v10.0.27 (N-05 PR 3): order, cover, replacement and item-picture buttons */
+  extraActions?: ReactNode;
 }
 
 function sizeText(bytes: number): string {
@@ -22,7 +26,7 @@ function sizeText(bytes: number): string {
 const actionClass = 'inline-flex items-center gap-1 px-2 h-7 rounded-md text-[11px] font-bold border border-slate-200 text-slate-700 hover:bg-slate-50';
 
 /** One file of the product gallery with its downloads and, for its uploader or a manager, edit and delete */
-export function MediaAssetTile({ asset, selected, canChange, onToggle, onOpen, onEdit, onDelete }: Props) {
+export function MediaAssetTile({ asset, selected, canChange, onToggle, onOpen, onEdit, onDelete, extraActions }: Props) {
   const preparing = asset.kind === 'image' && !asset.hasThumb && !asset.lightFailed;
   const name = asset.title || asset.originalName;
   return (
@@ -48,11 +52,21 @@ export function MediaAssetTile({ asset, selected, canChange, onToggle, onOpen, o
             <AlertTriangle size={11} /> کیفیت پایین
           </span>
         )}
+        {asset.isCover && (
+          <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5" data-testid="media-cover-badge">
+            <Star size={11} /> {COVER_BADGE_TEXT}
+          </span>
+        )}
       </div>
       <div className="p-2 space-y-1.5 flex-1 flex flex-col">
         <span className="text-xs font-bold text-slate-800 truncate" title={name}>{name}</span>
         <span className="text-[11px] text-slate-500">{sizeText(asset.sizeBytes)}</span>
         {asset.lightFailed && <span className="text-[11px] font-semibold text-rose-600">{LIGHT_FAILED_TEXT}</span>}
+        {(asset.tags ?? []).length > 0 && (
+          <ul className="flex flex-wrap gap-1" aria-label="برچسب‌ها">
+            {asset.tags.map(tag => <li key={tag} className="rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold px-2 py-0.5">{tag}</li>)}
+          </ul>
+        )}
         <div className="mt-auto flex flex-wrap gap-1">
           {asset.kind === 'image' && asset.hasLight && (
             <a href={mediaFileUrl(asset.id, 'light', true)} className={actionClass}><Download size={12} /> دانلود نسخه سبک</a>
@@ -64,6 +78,7 @@ export function MediaAssetTile({ asset, selected, canChange, onToggle, onOpen, o
               <button type="button" onClick={onDelete} className={`${actionClass} text-rose-600`}><Trash2 size={12} /> حذف</button>
             </>
           )}
+          {extraActions}
         </div>
       </div>
     </div>
