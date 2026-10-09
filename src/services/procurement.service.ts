@@ -31,6 +31,7 @@ import {
 import { buildRequisitionRows, resolveRequisitionProject, type RequisitionRowFields } from './procurement/requisitionRows.js';
 import { listProcurementOrders, procurementOrderCounts, type ProcurementOrderListParams } from './procurement/procurementOrderList.js';
 import { listRequisitions, requisitionDtos, toRequisitionDto, type GetRequisitionsFilter } from './procurement/requisitionList.js';
+import { withRowCurrentStock } from './procurement/requisitionRowStock.js';
 
 export type { GetRequisitionsFilter };
 import {
@@ -282,7 +283,7 @@ export class ProcurementService {
     }
 
     const [dto] = await requisitionDtos(orm, [req]);
-    return dto;
+    return withRowCurrentStock(orm, dto);
   }
 
   /**

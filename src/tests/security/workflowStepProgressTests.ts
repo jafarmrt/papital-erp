@@ -6,7 +6,7 @@ import { runCase, type ShouldRun } from './workflowTestHarness.js';
 /**
  * Phase 3, lane L4 (guide finding, TD-1172): the instance answer carries only the signature progress of the current
  * step's actions, so the stepper never lists the previous step's signer under the step being signed. Test names and
- * failure messages are English (terminal output).
+ * failure messages are English (terminal output). TD-1173: the requisition the approval inbox previews carries its rows' stock.
  */
 export async function runWorkflowStepProgressTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -61,6 +61,35 @@ export async function runWorkflowStepProgressTests(shouldRun: ShouldRun): Promis
           await h.q(`DELETE FROM workflow_definitions WHERE id = ANY($1::int[])`, [ids]);
         }
       }
+    });
+  }
+
+  if (shouldRun('sec_requisition_detail_current_stock_td_1173', 'security', 'td1173', 'procurement', 'package10')) {
+    await runCase(results, {
+      id: 'sec_requisition_detail_current_stock_td_1173',
+      name: 'A purchase requisition read for approval carries each catalog row\'s current stock (TD-1173)',
+      details: 'an item with 1,300 in stock and a free-text row: the detail answer has currentStock 1300 on the item row and none on the free-text row',
+    }, async (h, wrong) => {
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const item = await createTestItem({ type: 'raw_material', code: `L4ST-${h.tag}`, stocks: { '': 1300 } } as never);
+      const created = await h.post('/api/procurement/requisitions', {
+        title: `درخواست موجودی ${h.tag}`,
+        items: [
+          { itemId: item.id, itemName: item.name, requestedQty: 5, unit: 'عدد' },
+          { itemName: `کالای بی کد ${h.tag}`, requestedQty: 1, unit: 'عدد' },
+        ],
+      });
+      const id = Number(created.body?.id ?? created.body?.data?.id);
+      if (!(id > 0)) {
+        wrong.push(`creating the requisition returned ${created.status}: ${JSON.stringify(created.body).slice(0, 160)}`);
+        return;
+      }
+      const res = await h.get(`/api/procurement/requisitions/${id}`);
+      const rows = ((res.body?.data?.items ?? []) as Array<{ itemId?: number | null; currentStock?: number | null }>);
+      const catalogRow = rows.find(r => Number(r.itemId) === item.id);
+      const freeRow = rows.find(r => !r.itemId);
+      if (Number(catalogRow?.currentStock) !== 1300) wrong.push(`the catalog row has currentStock ${String(catalogRow?.currentStock)}, expected 1300`);
+      if (freeRow && freeRow.currentStock !== null && freeRow.currentStock !== undefined) wrong.push(`the free-text row has currentStock ${String(freeRow.currentStock)}`);
     });
   }
 
