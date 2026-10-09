@@ -218,9 +218,11 @@ export const paramsRefSchema = z.object({
   }).passthrough(),
 });
 
-export const paramsDocIdOrRefSchema = z.object({
+// v10.0.37 (TD-990، OBS-R1-93): فقط شناسه سند؛ جست‌وجوی شماره عطف با نوع و سال از `/documents/by-ref/:ref` است.
+// پیش‌تر ورودی ناشناس با شماره عطف، بی پالایه نوع، سال و ابطال، جست‌وجو می‌شد
+export const paramsDocIdSchema = z.object({
   params: z.object({
-    id: z.string().min(1, 'شناسه یا شماره سند الزامی است')
+    id: z.string().regex(/^[1-9]\d*$/, 'شناسه سند باید عدد صحیح مثبت باشد؛ سند را با شماره عطف از جست‌وجوی شماره و نوع سند بیابید')
   })
 });
 
@@ -413,11 +415,10 @@ router.get('/documents/audit-items', authorizePermission(...READ_PERMISSIONS.sto
   res.json(await getStockCountSheetItems(orm, req.query.location));
 }));
 
-router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documentRecord, ...READ_PERMISSIONS.stockCountDocuments), validate(paramsDocIdOrRefSchema), asyncHandler(async (req, res) => {
-  const rawId = req.params.id;
+router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documentRecord, ...READ_PERMISSIONS.stockCountDocuments), validate(paramsDocIdSchema), asyncHandler(async (req, res) => {
   const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documentRecord);
-  const doc = await DocumentService.getDocumentByIdOrRef(rawId);
-  if (!doc) throw new NotFoundError(`سند با شناسه یا عطف ${rawId} یافت نشد`);
+  const doc = await DocumentService.getDocumentById(Number(req.params.id));
+  if (!doc) throw new NotFoundError(`سند با شناسه ${req.params.id} یافت نشد`);
   assertDocumentTypeReadable(readable, doc.type);
   // v9.0.335 (TD-781): ردیف‌های خزانه فقط برای خوانندگان خزانه
   res.json(await documentForReader(req.user, doc));
