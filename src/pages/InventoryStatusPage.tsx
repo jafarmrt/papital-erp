@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import {
   Package, Box, AlertTriangle, TrendingUp, DollarSign,
-  Warehouse, RefreshCw, ArrowLeft, ShoppingCart,
+  Warehouse, RefreshCw,
   PlusCircle, FileText, Layers, Sparkles, LayoutDashboard
 } from 'lucide-react';
 import { formatPersianNumber } from '../utils';
@@ -11,6 +11,9 @@ import { ErrorStateView } from '../components/common/ErrorStateView';
 import { useViewerAccess } from '../contexts/AuthContext';
 import { canOpenPage } from '../lib/permissions/pageAccess';
 import { inventoryStatusShortcutsFor, type InventoryStatusShortcutIcon } from '../lib/inventory/inventoryStatusShortcuts';
+import { canSeeInventoryStatusAlarms, inventoryStatusAlarmsOf } from '../lib/reorderAlerts/inventoryStatusAlarms';
+import { useReorderAlertsQuery } from '../hooks/reorderAlerts/useReorderAlertsQueries';
+import { ReorderAlarmBanner, ReorderAlarmCard } from '../components/inventory/InventoryStatusReorderAlarms';
 
 /** TD-1157: icon and colour of each quick link */
 const SHORTCUT_ICONS: Record<InventoryStatusShortcutIcon, { Icon: typeof Package; className: string }> = {
@@ -27,6 +30,10 @@ export default function InventoryStatusPage() {
   const rial = useRialDisplay();
   const viewer = useViewerAccess();
   const shortcuts = inventoryStatusShortcutsFor(viewer);
+  const showAlarms = canSeeInventoryStatusAlarms(viewer);
+  const reorder = useReorderAlertsQuery({ enabled: showAlarms });
+  const alarms = inventoryStatusAlarmsOf(reorder.items);
+  const openReorderPage = () => navigate('/reorder-alerts');
   const { 
     data: stats, 
     isLoading: isStatsLoading, 
@@ -50,6 +57,7 @@ export default function InventoryStatusPage() {
   const loadData = () => {
     void refetchStats();
     void refetchBi();
+    if (showAlarms) reorder.reload();
   };
 
   let locationTotal: number = 0;
@@ -167,34 +175,8 @@ export default function InventoryStatusPage() {
               </div>
             </div>
 
-            {/* KPI 2: Reorder alerts */}
-            <div className={`bg-white p-5 border rounded-2xl shadow-xs flex flex-col justify-between transition-colors ${biStats && biStats.reorderAlarms.length > 0 ? "border-r-4 border-r-rose-500 bg-rose-50/20" : ""}`}>
-              <div>
-                <p className="text-xs text-slate-500 font-bold flex items-center gap-1">
-                  <AlertTriangle size={14} className={biStats && biStats.reorderAlarms.length > 0 ? "text-rose-500" : "text-slate-400"} />
-                  اقلام نیازمند سفارش (هشدار)
-                </p>
-                <div className="flex items-end justify-between mt-2">
-                  <span className={`text-2xl font-black ${biStats && biStats.reorderAlarms.length > 0 ? "text-rose-600" : "text-slate-800"}`}>
-                    {biStats ? formatPersianNumber(biStats.reorderAlarms.length) : '۰'} <span className="text-xs font-sans text-slate-500">قلم</span>
-                  </span>
-                  {biStats && biStats.reorderAlarms.length > 0 && (
-                    <span className="text-[10px] bg-rose-100 text-rose-700 font-bold px-2.5 py-1 rounded-full flex items-center gap-1 animate-pulse">
-                      اقدام فوری
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="mt-4 pt-3 border-t flex justify-between items-center text-xs">
-                <span className="text-slate-400">زیر نقطه بحرانی</span>
-                <button 
-                  onClick={() => navigate('/reorder-alerts')}
-                  className="text-rose-600 font-bold hover:underline flex items-center gap-1 text-xs"
-                >
-                  مشاهده لیست <ArrowLeft size={12} />
-                </button>
-              </div>
-            </div>
+            {/* KPI 2: Reorder alerts (TD-1158: the reorder page's list, only for its readers) */}
+            {showAlarms && <ReorderAlarmCard alarms={alarms} onOpen={openReorderPage} />}
 
             {/* KPI 3: Products & Materials */}
             <div className="bg-white p-5 border rounded-2xl shadow-xs flex flex-col justify-between hover:border-indigo-300 transition-colors">
@@ -289,70 +271,8 @@ export default function InventoryStatusPage() {
             </div>
           </div>
 
-          {/* Section: Reorder point active warning summary banner */}
-          {biStats && biStats.reorderAlarms.length > 0 && (
-            <div className="bg-white border rounded-2xl overflow-hidden shadow-xs border-rose-200">
-              <div className="p-4 bg-gradient-to-r from-rose-600 to-rose-500 text-white flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <span className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold shrink-0">
-                    <AlertTriangle size={20} className="animate-pulse text-amber-200" />
-                  </span>
-                  <div>
-                    <h3 className="font-bold text-base flex items-center gap-2">
-                      هشدار آستانه موجودی انبار: {formatPersianNumber(biStats.reorderAlarms.length)} قلم کالا نیازمند سفارش
-                    </h3>
-                    <p className="text-xs text-rose-100 mt-0.5">
-                      جهت جلوگیری از توقف خط تولید یا اتمام موجودی فروش، اقلام زیر باید در سریع‌ترین زمان تامین گردند.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => navigate('/reorder-alerts')}
-                  className="px-4 py-2.5 bg-white text-rose-700 hover:bg-rose-50 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 shrink-0"
-                >
-                  <ShoppingCart size={15} />
-                  مدیریت و چاپ کامل لیست تامین ({formatPersianNumber(biStats.reorderAlarms.length)} قلم)
-                  <ArrowLeft size={14} />
-                </button>
-              </div>
-
-              {/* Preview top 3 critical items */}
-              <div className="p-4 bg-rose-50/20 divide-y divide-rose-100">
-                <div className="text-xs font-bold text-slate-500 mb-2 flex justify-between items-center">
-                  <span>پیش‌نمایش مهم‌ترین اقلام دارای کسری (۳ مورد از {formatPersianNumber(biStats.reorderAlarms.length)} مورد):</span>
-                  <button 
-                    onClick={() => navigate('/reorder-alerts')}
-                    className="text-rose-600 hover:underline font-bold text-xs"
-                  >
-                    مشاهده همه موارد ←
-                  </button>
-                </div>
-                {biStats.reorderAlarms.slice(0, 3).map((item) => (
-                  <div key={item.id} className="py-2.5 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px]">{item.code}</span>
-                      <span className="font-bold text-slate-800 truncate">{item.name}</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.type === 'product' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'}`}>
-                        {item.type === 'product' ? 'محصول' : 'ماده اولیه'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-xs font-mono shrink-0">
-                      <div>
-                        <span className="text-slate-400 text-[10px] block font-sans">موجودی فعلی:</span>
-                        <span className="font-bold text-rose-600">{formatPersianNumber(item.current_stock)} {item.unit}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 text-[10px] block font-sans">نقطه سفارش:</span>
-                        <span className="font-bold text-slate-700">{formatPersianNumber(item.reorder_point)} {item.unit}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Reorder alerts banner (TD-1158) */}
+          {showAlarms && <ReorderAlarmBanner alarms={alarms} onOpen={openReorderPage} />}
         </>
       )}
     </div>
