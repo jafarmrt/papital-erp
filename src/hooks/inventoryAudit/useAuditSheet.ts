@@ -5,6 +5,7 @@ import {
   auditCategories,
   buildAuditPayload,
   filterAuditItems,
+  invalidAuditCounts,
   summarizeAudit,
   withPhysicalStock,
   type AuditedItemsMap,
@@ -100,6 +101,12 @@ export function useAuditSheet({ serverItems, selectedLocation, locationLabel, ne
     const auditedList = Object.values(auditedItemsMap);
     if (auditedList.length === 0) {
       setErrorMsg('هیچ کالایی جهت ثبت انبارگردانی مقداردهی نشده است.');
+      return;
+    }
+    // v10.0.19 (D-11): شماری که عدد نیست هرگز صفر شمرده و ثبت نمی‌شود
+    const invalid = invalidAuditCounts(auditedList);
+    if (invalid.length > 0) {
+      setErrorMsg(`شمار این کالاها عدد نیست: ${invalid.map(i => i.name || i.code).join('، ')}`);
       return;
     }
     // V10-3.4: نمایش مودال تایید — ثبت واقعی فقط پس از تایید کاربر
