@@ -1432,7 +1432,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // Package 2, password group (from TD-532): password policy
   const { runAccessPackageTwoPasswordTests } = await import('../security/accessPackageTwoPasswordTests.js');
   results.push(...await runAccessPackageTwoPasswordTests(shouldRunAccess));
-  // v10.0.22 (TD-963): audit rows carry the request's trace id
+  // v10.0.25 (TD-963): audit rows carry the request's trace id
   const { runAuditTraceTests } = await import('../security/auditTraceTests.js');
   results.push(...await runAuditTraceTests(shouldRunAccess));
   const { runAccessPackageTwoQualityTests } = await import('../security/accessPackageTwoQualityTests.js');

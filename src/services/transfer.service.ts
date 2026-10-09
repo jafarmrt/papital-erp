@@ -106,7 +106,7 @@ export class TransferService {
   }
 
   /**
-   * Soft deletes a transfer by code (RULE 09 compliant). v10.0.22 (TD-963): the delete and its audit row run in one
+   * Soft deletes a transfer by code (RULE 09 compliant). v10.0.25 (TD-963): the delete and its audit row run in one
    * transaction through `logActivity` (its own when the caller passes none), so an audit insert error refuses the
    * delete instead of being swallowed, and the row carries the request's trace id.
    */

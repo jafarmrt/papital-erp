@@ -40,7 +40,7 @@ export const activityLogs = pgTable('activity_logs', {
   details: jsonb('details').default({}),
   ipAddress: text('ip_address').default(''),
   timestamp: timestamp('timestamp', { mode: 'string' }).defaultNow(),
-  // v10.0.22 (TD-963): trace id of the request that wrote the row (migration 0097)
+  // v10.0.25 (TD-963): trace id of the request that wrote the row (migration 0097)
   traceId: text('trace_id').default(''),
 }, (table) => ({
   idx_username: index('activity_logs_username').on(table.username),

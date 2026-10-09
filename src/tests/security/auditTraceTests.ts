@@ -3,7 +3,7 @@ import { TestCaseResult } from '../types.js';
 import { runCase, type ShouldRun } from './workflowTestHarness.js';
 
 /**
- * v10.0.22 (TD-963, OBS-R2-07): an audit row had no trace id, so the audit rows of one request could not be found
+ * v10.0.25 (TD-963, OBS-R2-07): an audit row had no trace id, so the audit rows of one request could not be found
  * from the id its error answer and the log files carry, and the transfer delete inserted its audit row directly
  * with an empty `catch {}`, outside `logActivity`. Both fail on v10.0.21.
  */

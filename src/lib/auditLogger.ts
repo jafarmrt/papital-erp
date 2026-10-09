@@ -119,7 +119,7 @@ export async function logActivity(params: AuditLogParams): Promise<AuditLogResul
   // Guarantee full sanitization on all recorded metadata
   const sanitizedDetails = sanitizeSensitiveData(params.details || {});
   const nowTimestamp = systemNowUtcIso();
-  // v10.0.22 (TD-963): the request's trace id (the one in the error answer and the log files), else none
+  // v10.0.25 (TD-963): the request's trace id (the one in the error answer and the log files), else none
   const traceId = String(params.req?.requestId || getRequestContext()?.requestId || '');
 
   try {
