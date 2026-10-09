@@ -3,7 +3,7 @@ import path from 'path';
 import { SYSTEM_UPDATES, ACTIVE_CHANGELOG, CLOSED_CHANGELOG_SERIES } from '../src/data/changelogs/index.js';
 import { findCompactRuleViolations } from '../src/data/changelogs/compactRule.js';
 import { findChangelogSeriesViolations } from '../src/data/changelogs/seriesGuard.js';
-import { findDebtRegistryViolations } from './governance/releaseGuards.js';
+import { findDebtRegistryViolations, findMissingNpmScripts, npmScriptDocs } from './governance/releaseGuards.js';
 
 /**
  * TD-111 (v7.0.0) — گیت همگام‌سازی جامع نسخه (fail-fast)
@@ -87,6 +87,13 @@ function main(): void {
   );
   if (debtViolations.length > 0) {
     fail(`The debt registry is inconsistent (archived rows win; remove them from TECH_DEBT.md):\n   - ${debtViolations.slice(0, 15).join('\n   - ')}`);
+  }
+
+  // 6) v10.0.23 (OT-A-03): every npm script the documents, CI and shell scripts name still exists (a merge once dropped one)
+  const pkgScripts = (JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { scripts?: Record<string, string> }).scripts ?? {};
+  const missingScripts = findMissingNpmScripts(npmScriptDocs(process.cwd()), pkgScripts);
+  if (missingScripts.length > 0) {
+    fail(`package.json lost npm scripts that are still in use (restore them):\n   - ${missingScripts.slice(0, 15).join('\n   - ')}`);
   }
 
   console.log(`✅ Version Sync OK (TD-111): package.json == SYSTEM_UPDATES[0] == k8s (image + APP_VERSION) == README == v${pkgVersion}`);

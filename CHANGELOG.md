@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.23 — بررسی نسخه اسکریپت npm افتاده در ادغام را می‌گیرد
+- `check:version` هر `npm run` نام‌برده در AGENTS.md، مستندها، CI و اسکریپت‌های پوسته را در package.json می‌جوید (OT-A-03، TD-983).
+
 ### v10.0.22 — شماره‌گذاری ادغام نسخه نام آزمون‌ها را هم جابه‌جا می‌کند
 - `release:renumber` نسخه شاخه را در نام آزمون، رشته، توضیح پایان خط و JSX و با رقم فارسی هم جابه‌جا می‌کند (OT-A-01، TD-999).
 

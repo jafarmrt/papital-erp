@@ -8,6 +8,16 @@ import { AIUpdateLog } from './types';
  */
 export const v10Updates: AIUpdateLog[] = [
   {
+    version: 'v10.0.23',
+    date: '۱۸ مهر ۱۴۰۵',
+    title: 'بررسی نسخه اسکریپت npm افتاده در ادغام را می‌گیرد',
+    summary: 'یک بار ادغام master اسکریپت ratchet:permissions را از package.json انداخت و هیچ بررسی آن را نگرفت. اکنون بررسی نسخه، که ابزار شماره‌گذاری ادغام هم اجرا می‌کند، هر اسکریپت npm را که مستندها، CI یا اسکریپت‌های پوسته نام می‌برند در package.json می‌جوید.',
+    changes: [
+      'بررسی نسخه اسکریپت npm نام‌برده در AGENTS.md، مستندها، CI و اسکریپت‌های پوسته را که در package.json نیست رد می‌کند'
+    ],
+    fixes: []
+  },
+  {
     version: 'v10.0.22',
     date: '۱۸ مهر ۱۴۰۵',
     title: 'شماره‌گذاری ادغام نسخه نام آزمون‌ها را هم جابه‌جا می‌کند',
