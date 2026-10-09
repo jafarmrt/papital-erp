@@ -160,6 +160,8 @@ G  scripts/check-version-sync.ts
 
 # ───────── ۵ کالا و قیمت‌گذاری ─────────
 5  src/routes/items*.ts
+5  src/routes/media*.ts
+5  src/services/media/**
 5  src/routes/categories.routes.ts
 5  src/services/items.service.ts
 5  src/services/items/**
