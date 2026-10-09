@@ -1,5 +1,6 @@
 import type { User } from '../../types';
 import { getTodayIsoDate, parseCleanNumber } from '../../utils';
+import { DECIMAL_PATTERN, normalizeDecimalString } from '../numericInput';
 
 /**
  * صفحه انبارگردانی: انواع داده و محاسبات خالص برگه شمارش و گزارش سلامت موجودی.
@@ -66,6 +67,24 @@ export function withPhysicalStock(items: AuditItemRow[], audited: AuditedItemsMa
   return items.map(i => ({ ...i, physical_stock: audited[i.id]?.physical_stock || '' }));
 }
 
+/**
+ * v10.0.19 (D-11): شمار واردشده برای یک کالا روی گوشی یا رایانه؛ رقم فارسی و عربی، «٫» و جداکننده هزارگان پذیرفته‌اند.
+ * خالی یعنی کالا شمرده نشده؛ متنی که عدد نیست یا عدد منفی هرگز صفر شمرده نمی‌شود و جلوی ثبت را می‌گیرد.
+ */
+export function auditCountError(raw: string | null | undefined): string | null {
+  const text = String(raw ?? '').trim();
+  if (text === '') return null;
+  const normalized = normalizeDecimalString(text);
+  if (!DECIMAL_PATTERN.test(normalized)) return 'شمار باید عدد باشد.';
+  if (normalized.startsWith('-')) return 'شمار منفی پذیرفته نیست.';
+  return null;
+}
+
+/** کالاهای شمرده‌شده‌ای که شمارشان عدد معتبر نیست */
+export function invalidAuditCounts(list: AuditSheetItem[]): AuditSheetItem[] {
+  return list.filter(i => auditCountError(i.physical_stock) !== null);
+}
+
 /** خلاصه شمارش برای مودال تایید پیش از ثبت نهایی (V10-3.4) */
 export function summarizeAudit(list: AuditSheetItem[]): AuditSummary {
   let matched = 0;
@@ -74,7 +93,8 @@ export function summarizeAudit(list: AuditSheetItem[]): AuditSummary {
   let surplusQty = 0;
   let shortageQty = 0;
   for (const it of list) {
-    const phys = Number(it.physical_stock) || 0;
+    // v10.0.19 (D-11): شمار با رقم فارسی («۱۲») همان ۱۲ است، نه صفر
+    const phys = parseCleanNumber(it.physical_stock, 0);
     const sys = Number(it.system_stock_computed) || 0;
     const variance = phys - sys;
     if (Math.abs(variance) < 1e-9) {
