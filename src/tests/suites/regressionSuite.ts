@@ -10590,6 +10590,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.17، TD-426): اقدام CRM با پرونده یا طرف حساب ناموجود رد می‌شود
   const { runCrmActivityParentsTests } = await import('../regression/crmActivityParentsTests.js');
   results.push(...await runCrmActivityParentsTests(shouldRun));
+  // Package 9 (v10.0.33, TD-975): a partial party edit keeps the fields it does not send
+  const { runCustomerPartialEditTests } = await import('../regression/customerPartialEditTests.js');
+  results.push(...await runCustomerPartialEditTests(shouldRun));
+  // Package 9 (v10.0.34, TD-976): CRM activity mentions are live user ids and notify only CRM readers
+  const { runCrmActivityMentionTests } = await import('../regression/crmActivityMentionTests.js');
+  results.push(...await runCrmActivityMentionTests(shouldRun));
   // بسته ۹ (v9.0.18، TD-427): اعتبارسنجی ورودی پرونده فروش
   const { runCrmLeadInputTests } = await import('../regression/crmLeadInputTests.js');
   results.push(...await runCrmLeadInputTests(shouldRun));
