@@ -1,7 +1,7 @@
 import type { RouteGuardRow } from '../../lib/routeGuardTable.js';
 
 /**
- * v10.0.22 (TD-979، OBS-R2-06): هر route نویسنده ورودی‌اش را با Zod می‌خواند (`validate`، AGENTS.md و نقشه راه V7).
+ * v10.0.35 (TD-979، OBS-R2-06): هر route نویسنده ورودی‌اش را با Zod می‌خواند (`validate`، AGENTS.md و نقشه راه V7).
  * POST / PUT / PATCH اسکیمای `body` دارد و DELETE دست‌کم `validate` پارامترهایش را. تنها استثنا routeهای بی‌بدنه زیرند؛
  * هندلر هر کدام بازبینی شده و `req.body` را نمی‌خواند. فهرست فقط کوتاه می‌شود: route تازه بی اسکیما و ردیفی که دیگر
  * لازم نیست هر دو آزمون را قرمز می‌کنند.

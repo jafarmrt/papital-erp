@@ -70,7 +70,7 @@ export const paramsItemIdSchema = createParamsIdSchema('id', 'شناسه کال�
 export const paramsPersonnelIdSchema = createParamsIdSchema('id', 'شناسه پرسنل');
 
 /**
- * v10.0.22 (TD-979): نشان میدل‌ور اعتبارسنجی؛ جدول مسیرها (`buildRouteGuardTable`) با آن می‌فهمد کدام route نویسنده
+ * v10.0.35 (TD-979): نشان میدل‌ور اعتبارسنجی؛ جدول مسیرها (`buildRouteGuardTable`) با آن می‌فهمد کدام route نویسنده
  * ورودی‌اش را با Zod می‌خواند.
  */
 export const VALIDATES = '__erpRouteValidates';

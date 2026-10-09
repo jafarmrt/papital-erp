@@ -15,7 +15,7 @@ export async function runWriterRouteZodTests(shouldRun: (id: string, ...extra: s
   const id = 'reg_writer_route_bodies_zod_td_979';
   if (!shouldRun(id, 'td979', 'obs-r2-06', 'zod', 'package15')) return results;
 
-  const name = 'v10.0.22: writer routes refuse a malformed body with 400 before any write (TD-979)';
+  const name = 'v10.0.35: writer routes refuse a malformed body with 400 before any write (TD-979)';
   const tStart = Date.now();
   const tag = `td979-${Date.now()}`;
   try {

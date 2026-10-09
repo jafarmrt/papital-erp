@@ -10590,6 +10590,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.17، TD-426): اقدام CRM با پرونده یا طرف حساب ناموجود رد می‌شود
   const { runCrmActivityParentsTests } = await import('../regression/crmActivityParentsTests.js');
   results.push(...await runCrmActivityParentsTests(shouldRun));
+  // Package 9 (v10.0.33, TD-975): a partial party edit keeps the fields it does not send
+  const { runCustomerPartialEditTests } = await import('../regression/customerPartialEditTests.js');
+  results.push(...await runCustomerPartialEditTests(shouldRun));
+  // Package 9 (v10.0.34, TD-976): CRM activity mentions are live user ids and notify only CRM readers
+  const { runCrmActivityMentionTests } = await import('../regression/crmActivityMentionTests.js');
+  results.push(...await runCrmActivityMentionTests(shouldRun));
   // بسته ۹ (v9.0.18، TD-427): اعتبارسنجی ورودی پرونده فروش
   const { runCrmLeadInputTests } = await import('../regression/crmLeadInputTests.js');
   results.push(...await runCrmLeadInputTests(shouldRun));
@@ -10845,6 +10851,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 N-05 PR 1 (v10.0.21+): the media library infrastructure
   const { runMediaLibraryTests } = await import('../regression/mediaLibraryTests.js');
   results.push(...await runMediaLibraryTests(shouldRun));
+  // Series 10 N-05 PR 2 (v10.0.25+): product card, product grid and zip download of the media library
+  const { runMediaProductTests } = await import('../regression/mediaProductTests.js');
+  results.push(...await runMediaProductTests(shouldRun));
+  // Series 10 phase 3 lane L3 (v10.0.29+): the events of the project stock paths
+  const { runProjectEventTests } = await import('../regression/projectEventTests.js');
+  results.push(...await runProjectEventTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
@@ -10876,7 +10888,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runTreasuryPayrollPhase5Tests } = await import('../regression/treasuryPayrollPhase5Tests.js');
   results.push(...await runTreasuryPayrollPhase5Tests(shouldRun));
 
-  // Series 10 phase 3 lane L2 (v10.0.22+): writer routes read their bodies through Zod
+  // Payroll duties plan PR 1 (v10.0.21+): voucher approval permission and maker-checker
+  const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
+  results.push(...await runVoucherApprovalDutiesTests(shouldRun));
+
+  // Series 10 phase 3 lane L2 (v10.0.35+): writer routes read their bodies through Zod
   const { runWriterRouteZodTests } = await import('../regression/writerRouteZodTests.js');
   results.push(...await runWriterRouteZodTests(shouldRun));
 

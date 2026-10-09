@@ -191,6 +191,58 @@ describe('scripts/release-renumber.ts (TD-473)', () => {
   });
 });
 
+/** TD-981: a parallel merge never brings back a debt row that either side archived. */
+describe('scripts/release-renumber.ts keeps archived debt rows archived (TD-981)', () => {
+  it('drops an active row whose id the merged archive holds and recounts', () => {
+    const t = mergedTree();
+    // master archived TD-500; the TECH_DEBT.md conflict was resolved by keeping both sides, so TD-500 came back
+    t.base.set('TECH_DEBT.md', debt([], '۰', '۳'));
+    t.base.set('TECH_DEBT_ARCHIVE.md', '| TD-500 | a | resolved (v9.0.52) |\n| TD-461 | x | resolved (v9.0.51) |\n| TD-480 | y | resolved (v9.0.52) |\n');
+    t.current.set('TECH_DEBT_ARCHIVE.md', `| TD-473 | z | resolved (v9.0.53) |\n${t.base.get('TECH_DEBT_ARCHIVE.md')!}`);
+    const plan = planRenumber(input(t));
+    const active = plan.writes.get('TECH_DEBT.md')!;
+    expect(active).not.toContain('| TD-500 |');
+    expect(active).toContain('| TD-581 | b |');
+    expect(active).toContain('- **فعال:** ۱ ردیف');
+    expect(active).toContain('- **آرشیو شده (resolved):** ۴ ردیف');
+  });
+
+  it('keeps one copy of a row both sides of a conflict hold', () => {
+    const conflict = '<<<<<<< HEAD\n| TD-581 | b |\n| TD-500 | a |\n=======\n| TD-500 | a |\n| TD-480 | c |\n>>>>>>> m\n';
+    expect(resolveReleaseConflict('TECH_DEBT.md', conflict, { ours: '', theirs: '' }, ACTIVE)).toBe('| TD-581 | b |\n| TD-500 | a |\n| TD-480 | c |\n');
+    const archive = '<<<<<<< HEAD\n| TD-473 | z |\n| TD-461 | x |\n=======\n| TD-461 | x |\n>>>>>>> m\n';
+    expect(resolveReleaseConflict('TECH_DEBT_ARCHIVE.md', archive, { ours: '', theirs: '' }, ACTIVE)).toBe('| TD-473 | z |\n| TD-461 | x |\n');
+    const edited = '<<<<<<< HEAD\n| TD-500 | a (branch note) |\n=======\n| TD-500 | a (master note) |\n>>>>>>> m\n';
+    expect(resolveReleaseConflict('TECH_DEBT.md', edited, { ours: '', theirs: '' }, ACTIVE)).toBeNull();
+  });
+});
+
+/** OT-A-01: a branch version in an added test name, string, trailing or JSX comment follows the renumbering too. */
+describe('scripts/release-renumber.ts renumbers versions in added code lines (OT-A-01)', () => {
+  it('rewrites a branch version anywhere in an added line and leaves numbers in code alone', () => {
+    const t = mergedTree();
+    const kept = "const masterCase = 'v9.0.52: master case';";
+    t.base.set('src/tests/x.ts', `${kept}\n`);
+    t.current.set('src/tests/x.ts', [
+      kept,
+      "const name = 'v9.0.52: branch case (TD-473)';",
+      'run(0060); // v9.0.53 trailing',
+      '<p>{/* v9.0.52 */}</p>',
+      "const fa = 'نسخه v۹.۰.۵۲';",
+      '',
+    ].join('\n'));
+    const out = planRenumber(input(t)).writes.get('src/tests/x.ts')!;
+    expect(out.split('\n')).toEqual([
+      kept,
+      "const name = 'v9.0.53: branch case (TD-473)';",
+      'run(0060); // v9.0.54 trailing',
+      '<p>{/* v9.0.53 */}</p>',
+      "const fa = 'نسخه v۹.۰.۵۳';",
+      '',
+    ]);
+  });
+});
+
 /** v10.0.0: series 10 is active; the tool reads a two-digit series from 10.ts and the «Version 10.x» section. */
 describe('scripts/release-renumber.ts with series 10 (v10.0.0)', () => {
   const ACTIVE_10 = 'src/data/changelogs/10.ts';

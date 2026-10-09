@@ -125,7 +125,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       if (violations.length > 0) throw new Error(`${violations.length} violations: ${violations.join(' | ')}`);
       return `${rows.length} مسیر بی‌تخلف`;
     }),
-    record('sec_writer_routes_validated_td_979', 'v10.0.22: every writer route reads its input through Zod; only reviewed body-less routes are listed (TD-979)', 'real_code', async () => {
+    record('sec_writer_routes_validated_td_979', 'v10.0.35: every writer route reads its input through Zod; only reviewed body-less routes are listed (TD-979)', 'real_code', async () => {
       const { writerRouteValidationViolations, WRITER_ROUTES_WITHOUT_BODY } = await import('./writerRouteValidation.js');
       const violations = writerRouteValidationViolations(buildRouteGuardTable(app));
       if (violations.length > 0) throw new Error(`${violations.length} writer routes without Zod: ${violations.join(' | ')}`);
@@ -299,24 +299,33 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         await orm.update(items).set({ isDeleted: 1 }).where(eq(items.id, item.id));
       }
     }),
-    record('sec_voucher_approved_on_create_td_308', 'area H: a journal voucher created as approved has an approver (TD-308)', 'real_database', async () => {
-      const accountant = await userWith(['accounting.view', 'accounting.vouchers']);
+    record('sec_voucher_approved_on_create_td_308', 'area H: a journal voucher created as approved has an approver; only the system admin records one (TD-308, TD-965)', 'real_database', async () => {
+      const accountant = await userWith(['accounting.view', 'accounting.vouchers', 'accounting.vouchers_approve']);
+      // v10.0.27 (TD-965): a manual voucher recorded as approved is approved by its maker, so only the system admin records one
+      const adminUser = await createTestUser({ role: SYSTEM_ADMIN_ROLE });
+      createdUserIds.push(adminUser.id);
+      const admin = { id: adminUser.id, session: await loginTestUserWithSession(app, adminUser.username) };
       // v9.0.198 (TD-549): a manual voucher row goes only on a posting account (active subsidiary or detailed, no active sub-account)
       const accountRows = await orm.select({ id: accounts.id }).from(accounts)
         .where(and(eq(accounts.isDeleted, 0), eq(accounts.isActive, 1), inArray(accounts.level, ['subsidiary', 'detailed']),
           sql`NOT EXISTS (SELECT 1 FROM accounts c WHERE c.parent_id = ${accounts.id} AND c.is_deleted = 0 AND c.is_active = 1)`))
         .orderBy(asc(accounts.id)).limit(2);
       if (accountRows.length < 2) throw new Error('at least two ledger accounts are needed');
-      const res = await send(accountant.session, 'post', '/api/accounting/vouchers', {
+      const body = () => ({
         date: new Date().toISOString().split('T')[0], voucherType: 'general', status: 'approved', description: `TD308-${Date.now()}`,
         items: [{ accountId: accountRows[0].id, debit: 1000, credit: 0 }, { accountId: accountRows[1].id, debit: 0, credit: 1000 }]
       });
+      const refused = await send(accountant.session, 'post', '/api/accounting/vouchers', body());
+      const res = await send(admin.session, 'post', '/api/accounting/vouchers', body());
       const voucherId = Number(res.body?.id);
       try {
+        if (refused.status !== 403 || refused.body?.code !== 'VOUCHER_MAKER_CANNOT_APPROVE') {
+          throw new Error(`an accountant recording an approved voucher returned ${refused.status}, not 403 VOUCHER_MAKER_CANNOT_APPROVE`);
+        }
         if (res.status !== 201) throw new Error(`document save failed (${res.status}): ${JSON.stringify(res.body).slice(0, 200)}`);
         const [row] = await orm.select({ approvedById: journalVouchers.approvedById }).from(journalVouchers).where(eq(journalVouchers.id, voucherId));
-        if (row?.approvedById !== accountant.id) throw new Error(`approver is ${row?.approvedById ?? 'empty'}, expected ${accountant.id}`);
-        return 'approver = recorder';
+        if (row?.approvedById !== admin.id) throw new Error(`approver is ${row?.approvedById ?? 'empty'}, expected ${admin.id}`);
+        return 'approver = recorder (system admin); accountant refused';
       } finally {
         if (voucherId) {
           await orm.delete(journalVoucherItems).where(eq(journalVoucherItems.voucherId, voucherId));
