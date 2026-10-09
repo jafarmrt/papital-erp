@@ -17,7 +17,7 @@ import {
 } from './media.schemas.js';
 
 /**
- * v10.0.16 (N-05): the media library. Files are uploaded as the raw request body (not base64 JSON, which caps at 14 MB),
+ * v10.0.21 (N-05): the media library. Files are uploaded as the raw request body (not base64 JSON, which caps at 14 MB),
  * with the file name in `X-File-Name` (URI-encoded) and its type in `Content-Type`; the JSON body parser leaves such a
  * body alone. Files are read only through `GET /media/assets/:id/file`, which needs a session and supports ranges.
  */
@@ -26,7 +26,7 @@ const router = Router();
 export const MEDIA_VIEW_PERMISSION = 'media.view';
 export const MEDIA_UPLOAD_PERMISSION = 'media.upload';
 export const MEDIA_MANAGE_PERMISSION = 'media.manage';
-/** v10.0.17 (N-05 PR 2): the product card is item data, so the item editor's key opens it too */
+/** v10.0.22 (N-05 PR 2): the product card is item data, so the item editor's key opens it too */
 export const MEDIA_PRODUCT_INFO_PERMISSIONS = [MEDIA_MANAGE_PERMISSION, 'products.edit'] as const;
 
 async function actorOf(req: Request): Promise<MediaActor> {

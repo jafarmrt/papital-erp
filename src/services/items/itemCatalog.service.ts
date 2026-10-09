@@ -66,7 +66,7 @@ export interface ItemWriteBody {
   weight?: string | number | null;
   material?: string;
   size?: string;
-  /** v10.0.17 (N-05): the media library product card; a missing key keeps the stored value */
+  /** v10.0.22 (N-05): the media library product card; a missing key keeps the stored value */
   collections?: unknown;
   design_year?: unknown;
   transfer_code?: unknown;
@@ -399,7 +399,7 @@ export class ItemCatalogService {
       row['سایز'] = it.size || '';
       row['وزن'] = it.weight ? Number(it.weight) : '';
       row['جنس'] = it.material || '';
-      // v10.0.17 (N-05): product card of the media library
+      // v10.0.22 (N-05): product card of the media library
       row[PRODUCT_CARD_COLUMNS.collections] = (it.collections ?? []).join('، ');
       row[PRODUCT_CARD_COLUMNS.designYear] = it.designYear ?? '';
       row[PRODUCT_CARD_COLUMNS.transferCode] = it.transferCode || '';

@@ -2,7 +2,7 @@ import { API_URL, ApiError, fetchJson, getAuthToken, getCsrfToken, setCsrfToken 
 import type { MediaKind, MediaShotType, MediaVariant, MediaWarning } from './mediaRules';
 
 /**
- * v10.0.16 (N-05 PR 2): the browser side of the media library API. Reads go through `fetchJson`; the zip download reads a
+ * v10.0.22 (N-05 PR 2): the browser side of the media library API. Reads go through `fetchJson`; the zip download reads a
  * binary answer, so it uses `fetch` with the session cookie and the CSRF header itself.
  */
 

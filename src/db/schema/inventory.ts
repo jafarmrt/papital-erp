@@ -84,7 +84,7 @@ export const items = pgTable('items', {
   weight: numeric('weight', { precision: 18, scale: 4, mode: 'number' }),
   material: text('material'),
   size: text('size'),
-  // v10.0.17 (N-05, migration 0097): the product card of the media library; collections is a tag list (decision ت۲)
+  // v10.0.22 (N-05, migration 0097): the product card of the media library; collections is a tag list (decision ت۲)
   collections: text('collections').array().notNull().default(sql`'{}'::text[]`),
   designYear: integer('design_year'),
   transferCode: text('transfer_code'),

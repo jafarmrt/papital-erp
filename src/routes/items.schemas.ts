@@ -52,7 +52,7 @@ const itemBodyFields = z.object({
   weight: nonNegativeDecimal('وزن').nullable().optional(),
   material: z.string().optional(),
   size: z.string().optional(),
-  // v10.0.17 (N-05): کارت محصول کتابخانه تصاویر؛ مقدار را productCardValues می‌خواند و نادرست را با ۴۲۲ رد می‌کند
+  // v10.0.22 (N-05): کارت محصول کتابخانه تصاویر؛ مقدار را productCardValues می‌خواند و نادرست را با ۴۲۲ رد می‌کند
   collections: z.union([z.array(z.string()), z.string()]).nullable().optional(),
   design_year: z.union([z.number(), z.string()]).nullable().optional(),
   transfer_code: z.string().nullable().optional(),

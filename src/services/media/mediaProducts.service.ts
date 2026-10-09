@@ -10,7 +10,7 @@ import { assetView, MediaAssetService, type MediaAssetView } from './mediaAsset.
 import { productCardValues, type ProductCardInput } from './productCardWrite.js';
 
 /**
- * v10.0.17 (N-05 PR 2): the product side of the media library. The grid lists live products (`items.type = 'product'`)
+ * v10.0.22 (N-05 PR 2): the product side of the media library. The grid lists live products (`items.type = 'product'`)
  * with the counts of their files in the «محصولات» section, filtered and paged in SQL; the product page reads one product
  * with its card and files; the card is edited with the item's own version (OCC, TD-654) and audited under «کالا».
  */

@@ -11,7 +11,7 @@ import { createTestItem } from '../fixtures/factories.js';
 import { binaryParser, readZipEntries } from '../fixtures/zipReader.js';
 
 /**
- * Series 10, N-05 PR 2 (v10.0.17+): the product side of the media library — the product card of an item (form, Excel
+ * Series 10, N-05 PR 2 (v10.0.22+): the product side of the media library — the product card of an item (form, Excel
  * import, the library's product page), the product grid filtered in SQL and the zip download.
  */
 export async function runMediaProductTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {

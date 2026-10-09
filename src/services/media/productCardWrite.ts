@@ -5,7 +5,7 @@ import {
 } from '../../lib/media/productCard.js';
 
 /**
- * v10.0.17 (N-05 PR 2): the product card fields of an item write (item form, Excel import, media library product page).
+ * v10.0.22 (N-05 PR 2): the product card fields of an item write (item form, Excel import, media library product page).
  * A key missing from the input keeps the stored value; an empty value clears it; an invalid value refuses the write with
  * 422 `PRODUCT_CARD_INVALID` naming the field, before anything is written.
  */

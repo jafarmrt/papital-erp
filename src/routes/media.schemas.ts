@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { numericIdString } from '../middleware/validate.js';
 import { MEDIA_SHOT_TYPES, MEDIA_VARIANTS } from '../lib/media/mediaRules.js';
 
-/** v10.0.16 (N-05): query and body shapes of the media library routes (`media.routes.ts`) */
+/** v10.0.21 (N-05): query and body shapes of the media library routes (`media.routes.ts`) */
 
 const positiveId = (label: string) => z.string().regex(/^[1-9]\d*$/, `${label} باید عدد صحیح مثبت باشد`).transform(Number);
 const shotType = z.enum(MEDIA_SHOT_TYPES, { error: 'نوع نما نامعتبر است' });
@@ -54,7 +54,7 @@ export const mediaUpdateSchema = z.object({
   }).strict(),
 });
 
-/** v10.0.17 (N-05 PR 2): the product grid of the library; every condition is applied in SQL */
+/** v10.0.22 (N-05 PR 2): the product grid of the library; every condition is applied in SQL */
 export const mediaProductListSchema = z.object({
   query: z.object({
     search: z.string().max(200).optional(),

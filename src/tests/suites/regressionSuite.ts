@@ -10842,10 +10842,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 9 phase 5 PR «الف» (v9.0.451+): the side paths that move project stock follow the stock document rules
   const { runProjectStockGateTests } = await import('../regression/projectStockGateTests.js');
   results.push(...await runProjectStockGateTests(shouldRun));
-  // Series 10 N-05 PR 1 (v10.0.16+): the media library infrastructure
+  // Series 10 N-05 PR 1 (v10.0.21+): the media library infrastructure
   const { runMediaLibraryTests } = await import('../regression/mediaLibraryTests.js');
   results.push(...await runMediaLibraryTests(shouldRun));
-  // Series 10 N-05 PR 2 (v10.0.17+): product card, product grid and zip download of the media library
+  // Series 10 N-05 PR 2 (v10.0.22+): product card, product grid and zip download of the media library
   const { runMediaProductTests } = await import('../regression/mediaProductTests.js');
   results.push(...await runMediaProductTests(shouldRun));
 

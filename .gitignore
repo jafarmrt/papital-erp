@@ -22,5 +22,5 @@ papital-erp-source-*.zip
 test-results/
 playwright-report/
 
-# v10.0.16 (N-05): media library files (MEDIA_DIR default)
+# v10.0.21 (N-05): media library files (MEDIA_DIR default)
 /media-library/

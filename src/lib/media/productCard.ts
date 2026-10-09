@@ -1,7 +1,7 @@
 import { normalizeDecimalString } from '../numericInput';
 
 /**
- * v10.0.17 (N-05 PR 2): the product card of the media library — the item fields collections (a tag list, product-owner
+ * v10.0.22 (N-05 PR 2): the product card of the media library — the item fields collections (a tag list, product-owner
  * decision ت۲), design year, transfer code, description and technical notes. Shared by the server (item form, Excel import,
  * `PUT /media/products/:itemId/info`) and the browser forms, so both read a value the same way. Migration 0097 holds the
  * same limits as CHECK constraints (design year, number of collections).

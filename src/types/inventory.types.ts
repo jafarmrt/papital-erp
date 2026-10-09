@@ -26,7 +26,7 @@ export interface Item {
   can_set_opening_balance?: boolean;
   /** v9.0.171 (TD-654): نسخه رکورد برای قفل خوش‌بینانه ویرایش */
   version?: number;
-  /** v10.0.17 (N-05): کارت محصول کتابخانه تصاویر */
+  /** v10.0.22 (N-05): کارت محصول کتابخانه تصاویر */
   collections?: string[];
   designYear?: number | null;
   transferCode?: string | null;

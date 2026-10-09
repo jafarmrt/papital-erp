@@ -1,8 +1,12 @@
 import { useEffect } from 'react';
-import { ClipboardCheck, Search } from 'lucide-react';
-import { formatPersianNumber, parseCleanNumber } from '../../utils';
+import { Search } from 'lucide-react';
+import { formatPersianNumber } from '../../utils';
 import toast from 'react-hot-toast';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
+import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
+import { usePhoneWidth } from '../../lib/pwa/usePhoneWidth';
+import { auditCountError } from '../../lib/inventoryAudit/auditSheet';
+import { AuditCountInput, AuditSheetCardList, AuditSubmitButton, AuditVariance } from './AuditSheetCards';
 
 interface AuditItemInput {
   id: number;
@@ -64,6 +68,11 @@ export function PhysicalAuditSheetTab({
   handleSubmitAudit
 }: PhysicalAuditSheetTabProps) {
   const auditedCount = Object.keys(auditedItemsMap).length;
+  // v10.0.19 (D-11): بی اتصال یا با شماری که عدد نیست، ثبت نهایی غیرفعال است
+  const online = useOnlineStatus();
+  const phone = usePhoneWidth();
+  const hasInvalid = Object.values(auditedItemsMap).some(i => auditCountError(i.physical_stock) !== null);
+  const submitProps = { auditedCount, submitting, online, hasInvalid, onSubmit: handleSubmitAudit };
   // فهرست انبارها از کش مشترک React Query (همان GET /warehouses، در صفحه خوانده می‌شود)
   useEffect(() => {
     if (!warehousesFailed) return;
@@ -128,14 +137,14 @@ export function PhysicalAuditSheetTab({
         {/* Filter & Mass Actions Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative min-w-[200px]">
+            <div className="relative w-full sm:w-auto sm:min-w-[200px]">
               <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
               <input
                 type="text"
                 placeholder="جستجوی کد یا نام کالا..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs outline-none"
+                className="w-full min-h-11 sm:min-h-0 pl-3 pr-9 py-2 bg-slate-50 border border-slate-300 rounded-xl text-base sm:text-xs outline-none"
               />
             </div>
 
@@ -151,30 +160,26 @@ export function PhysicalAuditSheetTab({
             </select>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={handleApplyCurrentStockAsPhysical}
-              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              className="hidden md:inline-flex px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
             >
               کپی موجودی دفتری به موجودی فیزیکی برای همه اقلام
             </button>
 
-            <button
-              type="button"
-              disabled={submitting || auditedCount === 0}
-              onClick={handleSubmitAudit}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
-            >
-              <ClipboardCheck size={16} />
-              <span>{submitting ? 'در حال ثبت...' : `ثبت نهایی سند انبارگردانی (${formatPersianNumber(auditedCount)} کالا)`}</span>
-            </button>
+            <AuditSubmitButton {...submitProps} />
           </div>
         </div>
       </div>
 
+      {/* v10.0.19 (D-11): روی گوشی هر کالا یک کارت، از ۷۶۸ پیکسل جدول */}
+      {phone && <AuditSheetCardList items={filteredItems} onChange={handlePhysicalChange} />}
+      {phone && auditedCount > 0 && <AuditSubmitButton {...submitProps} className="w-full" />}
+
       {/* Items Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      {!phone && <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
             <thead>
@@ -200,53 +205,31 @@ export function PhysicalAuditSheetTab({
                   </td>
                 </tr>
               ) : (
-                filteredItems.map((item, idx) => {
-                  const hasInput = item.physical_stock !== null && item.physical_stock !== undefined && String(item.physical_stock).trim() !== '';
-                  const physVal = hasInput ? parseCleanNumber(item.physical_stock, 0) : NaN;
-                  const hasVal = !isNaN(physVal);
-                  const diff = hasVal ? physVal - item.system_stock_computed : 0;
-
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-3 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
-                      <td className="py-3 px-3 font-mono font-bold text-slate-800">{item.code}</td>
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-slate-900">{item.name}</div>
-                        <div className="text-[11px] text-slate-500">{item.category}</div>
-                      </td>
-                      <td className="py-3 px-3 text-center text-slate-600">{item.unit || 'عدد'}</td>
-                      <td className="py-3 px-3 text-center font-mono font-bold bg-blue-50/40 text-blue-900 border-x border-blue-100">
-                        {formatPersianNumber(item.system_stock_computed)}
-                      </td>
-                      <td className="py-3 px-3 bg-emerald-50/40 border-x border-emerald-100">
-                        <input
-                          type="number"
-                          step="any"
-                          placeholder="عدد شمارش شده..."
-                          value={item.physical_stock}
-                          onChange={(e) => handlePhysicalChange(item.id, e.target.value)}
-                          className="w-full p-2 bg-white border border-emerald-300 rounded-xl text-center font-mono font-bold text-emerald-900 outline-none focus:ring-2 focus:ring-emerald-500"
-                        />
-                      </td>
-                      <td className="py-3 px-3 text-center font-mono font-bold">
-                        {!hasVal ? (
-                          <span className="text-slate-300">-</span>
-                        ) : diff === 0 ? (
-                          <span className="text-emerald-600">بدون مغایرت (۰)</span>
-                        ) : diff > 0 ? (
-                          <span className="text-blue-600 font-bold dir-ltr inline-block">+{formatPersianNumber(diff)} (اضافی)</span>
-                        ) : (
-                          <span className="text-rose-600 font-bold dir-ltr inline-block">−{formatPersianNumber(Math.abs(diff))} (کسری)</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
+                filteredItems.map((item, idx) => (
+                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-3 px-3 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
+                    <td className="py-3 px-3 font-mono font-bold text-slate-800">{item.code}</td>
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-slate-900">{item.name}</div>
+                      <div className="text-[11px] text-slate-500">{item.category}</div>
+                    </td>
+                    <td className="py-3 px-3 text-center text-slate-600">{item.unit || 'عدد'}</td>
+                    <td className="py-3 px-3 text-center font-mono font-bold bg-blue-50/40 text-blue-900 border-x border-blue-100">
+                      {formatPersianNumber(item.system_stock_computed)}
+                    </td>
+                    <td className="py-3 px-3 bg-emerald-50/40 border-x border-emerald-100">
+                      <AuditCountInput item={item} onChange={handlePhysicalChange} />
+                    </td>
+                    <td className="py-3 px-3 text-center font-mono font-bold">
+                      <AuditVariance item={item} />
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
