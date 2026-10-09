@@ -16,6 +16,9 @@ export async function runProjectReservationIssueTests(shouldRun: ShouldRun): Pro
     ['reg_sales_invoice_keeps_project_reservation_td_947',
       'v10.0.32: a final sales invoice with a projectId neither consumes the project\'s reservation nor sells it (400 INSUFFICIENT_STOCK beyond free stock); a remittance of the project still consumes it (TD-947)',
       ['td947', 'p5-m14', 'projects', 'reservation', 'documents', 'package8', 'package11'], salesInvoiceCase],
+    ['reg_project_procurement_order_carries_project_td_946',
+      'v10.0.33: the procurement order of a project requisition is linked to the project (documents.project_id); an order of a requisition without a project has none (TD-946)',
+      ['td946', 'p5-m13', 'projects', 'procurement', 'package10', 'package11'], procurementOrderCase],
   ]);
 }
 
@@ -68,4 +71,32 @@ async function salesInvoiceCase(h: Harness, wrong: string[]): Promise<string> {
   const rem = await h.post('/api/documents', f.doc('remittance', 'final', [{ itemId: b, quantity: 3, unit_price: 0, location: f.wh }], { projectId: project }));
   if (rem.status !== 200 || await storedQty(h, project, b) !== 5) wrong.push(`a project remittance of 3 answered ${brief(rem)} leaving ${await storedQty(h, project, b)} reserved, expected 200 and 5`);
   return 'a sales invoice with a projectId keeps the project reservation; a remittance consumes it';
+}
+
+/** P5-M13 (TD-946): the receipt order of a project requisition had no project_id */
+async function procurementOrderCase(h: Harness, wrong: string[]): Promise<string> {
+  const { fixture: procurementFixture, formRow } = await import('./procurementRequisitionTests.js');
+  const pf = await procurementFixture(h);
+  const raw = await pf.item();
+  const project = await createProject(h, { sections: [], manualPurchaseItems: [], isFinalized: false });
+  const [p] = await h.q('SELECT project_code, title FROM production_projects WHERE id = $1', [project]);
+  const orderOf = async (body: Record<string, unknown>) => {
+    const created = await pf.create({ title: `P3 t10 ${h.tag}`, priority: 'normal', requiredDate: pf.jalaliDate, notes: '', items: [formRow(raw, 4, 1_500)], ...body });
+    if (created.status !== 201) throw new Error(`setup: the requisition answered ${created.status} ${JSON.stringify(created.body).slice(0, 160)}`);
+    const approved = await pf.action(created.id, 'approve_request');
+    if (approved.status !== 200) throw new Error(`setup: approve answered ${approved.status}`);
+    const converted = await h.post(`/api/procurement/requisitions/${created.id}/convert-to-orders`, {
+      orderGroups: [{ supplierName: `P3 supplier ${h.tag}`, targetWarehouse: pf.wh, docType: 'receipt', status: 'draft',
+        items: [{ itemId: raw.id, quantity: 4, unitPrice: 1_500, unit: 'عدد' }] }],
+    });
+    const orderId = Number(((converted.body as { data?: { createdDocuments?: Array<{ id?: unknown }> } })?.data?.createdDocuments ?? [])[0]?.id);
+    if (converted.status !== 200 || !Number.isInteger(orderId)) throw new Error(`setup: convert to orders answered ${brief(converted)}`);
+    const [doc] = await h.q('SELECT project_id FROM documents WHERE id = $1', [orderId]);
+    return doc?.project_id == null ? null : Number(doc.project_id);
+  };
+  const linked = await orderOf({ projectId: project, projectCode: p.project_code, projectName: p.title });
+  if (linked !== project) wrong.push(`the order of the project requisition has project_id ${String(linked)}, expected ${project}`);
+  const plain = await orderOf({});
+  if (plain !== null) wrong.push(`the order of a requisition without a project has project_id ${plain}, expected none`);
+  return 'a project requisition\'s procurement order carries the project; another order has none';
 }
