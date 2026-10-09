@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { pool } from '../src/db/drizzle.js';
 import { AttachmentStorageService } from '../src/services/attachments/attachmentStorage.service.js';
+import { terminalLine } from '../src/lib/terminalText.js';
 
 /**
  * v7.0.56 (audit P2-9): انتقال پیوست‌های قدیمی (Base64 داخل پایگاه‌داده) به دیسک.
@@ -19,14 +20,14 @@ async function main(): Promise<void> {
   }
   if (report.failures.length > 0) {
     console.error(`❌ ${report.failures.length} records were not migrated (left unchanged):`);
-    for (const f of report.failures) console.error(`   - ${f.entityType} #${f.entityId}: ${f.error}`);
+    for (const f of report.failures) console.error(terminalLine(`   - ${f.entityType} #${f.entityId}: ${f.error}`));
     process.exitCode = 1;
   }
 }
 
 main()
   .catch((err) => {
-    console.error(`❌ ${err instanceof Error ? err.message : String(err)}`);
+    console.error(terminalLine(`❌ ${err instanceof Error ? err.message : String(err)}`));
     process.exitCode = 1;
   })
   .finally(() => pool.end());

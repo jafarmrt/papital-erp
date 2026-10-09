@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { pool } from '../src/db/drizzle.js';
 import { AttachmentOrphanCleanupService } from '../src/services/attachments/attachmentOrphanCleanup.service.js';
+import { terminalLine } from '../src/lib/terminalText.js';
 
 /**
  * v7.0.83 (TD-224): پاک‌سازی فایل‌های پیوست بدون ثبت (فایلی که تراکنش ذخیره‌اش برگشته و ردیف file_attachments ندارد).
@@ -20,14 +21,14 @@ async function main(): Promise<void> {
   if (report.missingOnDisk > 0) console.log(`   ⚠️ Registered rows without a file on disk: ${report.missingOnDisk}`);
   if (report.failures.length > 0) {
     console.error(`❌ ${report.failures.length} files were not removed:`);
-    for (const f of report.failures) console.error(`   - ${f.path}: ${f.error}`);
+    for (const f of report.failures) console.error(terminalLine(`   - ${f.path}: ${f.error}`));
     process.exitCode = 1;
   }
 }
 
 main()
   .catch((err) => {
-    console.error(`❌ ${err instanceof Error ? err.message : String(err)}`);
+    console.error(terminalLine(`❌ ${err instanceof Error ? err.message : String(err)}`));
     process.exitCode = 1;
   })
   .finally(() => pool.end());
