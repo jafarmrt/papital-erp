@@ -381,7 +381,7 @@ export function useCRMData(user: any) {
 
     setIsSavingActivity(true);
     try {
-      // v10.0.25 (TD-973): an activity without a lead keeps the party the form was opened for
+      // v10.0.26 (TD-973): an activity without a lead keeps the party the form was opened for
       const payload = activityPayload(activityForm, selectedLeadForActivity);
 
       await fetchJson('/crm/activities', {

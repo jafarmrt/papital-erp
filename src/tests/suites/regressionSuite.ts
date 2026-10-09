@@ -10590,10 +10590,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.17، TD-426): اقدام CRM با پرونده یا طرف حساب ناموجود رد می‌شود
   const { runCrmActivityParentsTests } = await import('../regression/crmActivityParentsTests.js');
   results.push(...await runCrmActivityParentsTests(shouldRun));
-  // Package 9 (v10.0.27, TD-975): a partial party edit keeps the fields it does not send
+  // Package 9 (v10.0.28, TD-975): a partial party edit keeps the fields it does not send
   const { runCustomerPartialEditTests } = await import('../regression/customerPartialEditTests.js');
   results.push(...await runCustomerPartialEditTests(shouldRun));
-  // Package 9 (v10.0.28, TD-976): CRM activity mentions are live user ids and notify only CRM readers
+  // Package 9 (v10.0.29, TD-976): CRM activity mentions are live user ids and notify only CRM readers
   const { runCrmActivityMentionTests } = await import('../regression/crmActivityMentionTests.js');
   results.push(...await runCrmActivityMentionTests(shouldRun));
   // بسته ۹ (v9.0.18، TD-427): اعتبارسنجی ورودی پرونده فروش
@@ -10851,6 +10851,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 N-05 PR 1 (v10.0.21+): the media library infrastructure
   const { runMediaLibraryTests } = await import('../regression/mediaLibraryTests.js');
   results.push(...await runMediaLibraryTests(shouldRun));
+  // Series 10 N-05 PR 2 (v10.0.25+): product card, product grid and zip download of the media library
+  const { runMediaProductTests } = await import('../regression/mediaProductTests.js');
+  results.push(...await runMediaProductTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');

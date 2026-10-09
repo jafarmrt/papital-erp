@@ -1,3 +1,4 @@
+import type { ProductCardFormData } from '../../../lib/media/productCardForm';
 import { Item, Category } from '../../../types';
 import { WarehouseItem } from '../../../hooks/queries/useSettingsQueries';
 
@@ -30,7 +31,10 @@ export interface ItemFormData {
   weight: string;
   size: string;
   stocks: Record<string, number>;
+  /** v10.0.25 (N-05): کارت محصول؛ کالکشن‌ها با «،» جدا می‌شوند */
+  card: ProductCardFormData;
 }
+
 
 export const PREDEFINED_COLORS = [
   'طلایی', 'نقره‌ای', 'برنزی', 'مشکی', 'سفید', 'قرمز', 'آبی',
