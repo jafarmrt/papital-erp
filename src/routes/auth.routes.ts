@@ -148,7 +148,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
     throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
   }
 
-  // v10.0.27 (L5 E7, TD-960): admin, default warehouse, company settings and the audit row in one transaction under
+  // v10.0.28 (L5 E7, TD-960): admin, default warehouse, company settings and the audit row in one transaction under
   // the transaction advisory lock 79234 (SEC-012); the company logo stays a data URL in app_settings (V3.1.11)
   const user = await runInitialSetup({
     username: tUsername, password, fullName, companyName, warehouseName, phone, address, logo: logo || '', currency,
@@ -322,7 +322,7 @@ const logoutHandler = asyncHandler(async (req, res) => {
       targetUsername = targetUsername || payload?.username;
 
       if (targetUserId) {
-        // v10.0.27 (L5 E7): the token version is raised under the user row lock in a service
+        // v10.0.28 (L5 E7): the token version is raised under the user row lock in a service
         const revoked = await revokeUserSessions(targetUserId);
         if (revoked) {
           targetUsername = targetUsername || revoked.username;

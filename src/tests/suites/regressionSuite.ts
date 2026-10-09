@@ -10881,5 +10881,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runTreasuryPayrollPhase5Tests } = await import('../regression/treasuryPayrollPhase5Tests.js');
   results.push(...await runTreasuryPayrollPhase5Tests(shouldRun));
 
+  // Payroll duties plan PR 1 (v10.0.21+): voucher approval permission and maker-checker
+  const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
+  results.push(...await runVoucherApprovalDutiesTests(shouldRun));
+
   return results;
 }
