@@ -374,6 +374,8 @@ G  scripts/check-version-sync.ts
 7  src/routes/pendingMaterials.schemas.ts
 10 src/routes/procurement.schemas.ts
 14 src/routes/workflowRouteSchemas.ts
+15 src/routes/events.schemas.ts
+1  src/routes/importRows.schemas.ts
 9  src/services/crm/**
 9  src/services/customers/**
 13 src/services/dailyLogs/**
