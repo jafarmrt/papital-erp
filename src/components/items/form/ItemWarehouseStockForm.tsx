@@ -45,12 +45,13 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
                   type="number"
                   min="0"
                   step="any"
-                  value={form.stocks[w.code] ?? form.stocks[w.id] ?? ''}
+                  value={form.stocks[w.code] ?? ''}
                   onChange={e => {
                     const val = parseCleanNumber(e.target.value, 0);
+                    // v10.0.29 (OBS-R1-77): فقط کلید کد انبار؛ پیش‌تر شناسه انبار هم کلید می‌شد و جمع موجودی دو برابر می‌شد
                     setForm({
                       ...form,
-                      stocks: { ...form.stocks, [w.code]: val, [w.id]: val }
+                      stocks: { ...form.stocks, [w.code]: val }
                     });
                   }}
                   className="w-full border border-slate-300/80 rounded-xl px-2.5 py-1.5 text-xs font-mono text-left bg-white outline-none focus:ring-1 focus:ring-blue-500"

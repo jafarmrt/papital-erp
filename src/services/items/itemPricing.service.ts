@@ -6,6 +6,8 @@ import type { DecimalValue } from '../../lib/financialDecimal.js';
 import { money, type Money } from '../../lib/money.js';
 import { priceListMatcher } from '../../lib/items/excelPriceColumns.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
+import { readPricingStrategies } from '../../lib/items/pricingStrategies.js';
+import { ConflictError } from '../../errors/customErrors.js';
 
 export interface PriceItemRecord {
   id?: number | string;
@@ -56,23 +58,11 @@ export class ItemPricingService {
    * v9.0.175 (TD-660): درون تراکنش با همان `tx` خوانده می‌شود (AGENTS §19).
    */
   static async getPricingStrategies(executor: DbExecutor = orm): Promise<string[]> {
-    try {
-      const [row] = await executor.select().from(appSettings).where(eq(appSettings.key, 'pricing_strategies'));
-      if (row && row.value) {
-        if (row.value.trim().startsWith('[')) {
-          const parsed = JSON.parse(row.value);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed.map((s: unknown) => String(s).trim()).filter(Boolean);
-          }
-        } else {
-          const parsed = row.value.split(',').map((s: string) => String(s).trim()).filter(Boolean);
-          if (parsed.length > 0) return parsed;
-        }
-      }
-    } catch {
-      // fallback
-    }
-    return ['فروشگاه', 'مصرف‌کننده', 'عمده'];
+    // v10.0.27 (OBS-R1-72): خطای خواندن یا مقدار ناخوانا دیگر بلعیده نمی‌شود و به فهرست پیش‌فرض نمی‌رسد
+    const [row] = await executor.select().from(appSettings).where(eq(appSettings.key, 'pricing_strategies'));
+    const read = readPricingStrategies(row?.value);
+    if ('error' in read) throw new ConflictError(read.error, undefined, 'PRICING_STRATEGIES_UNREADABLE');
+    return read.titles;
   }
 
   /**

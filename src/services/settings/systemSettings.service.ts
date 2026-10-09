@@ -10,6 +10,7 @@ import { invalidateSettingsCache, appSettingsCache } from '../../lib/memoryCache
 import {
   MOVEMENT_DAY_KEYS, currencySettingError, isMovementDayKey, movementDaysError, readMovementDays
 } from '../../lib/settings/settingValues.js';
+import { pricingStrategiesSettingError } from '../../lib/items/pricingStrategies.js';
 
 /**
  * v7.0.26 (TD-184 / audit P1-3) — ذخیره امن تنظیمات سیستم با مجوز سطح کلید
@@ -87,6 +88,11 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
   if (key === 'currency') {
     const error = currencySettingError(value);
     if (error) throw new ValidationError(error, { key, value }, 'SETTING_CURRENCY_INVALID');
+  }
+  // v10.0.27 (OBS-R1-71): فهرست‌های قیمت آرایه JSON از عنوان‌هاست، نه متن جداشده با کاما
+  if (key === 'pricing_strategies') {
+    const error = pricingStrategiesSettingError(value);
+    if (error) throw new ValidationError(error, { key }, 'SETTING_PRICING_STRATEGIES_INVALID');
   }
   if (key === 'wc_shop_warehouse' && value.trim() !== '') {
     const [wh] = await orm.select({ id: warehouses.id }).from(warehouses)

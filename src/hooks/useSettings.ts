@@ -22,6 +22,7 @@ import {
   WarehouseItem
 } from './queries/useSettingsQueries';
 import { settingsKeys } from '../lib/queryKeys';
+import { readPricingStrategies, serializePricingStrategies } from '../lib/items/pricingStrategies';
 
 /** مقدار ماسک کلیدهای محرمانه در پاسخ GET /settings برای غیرادمین (هم‌راستا با systemSettings.service.ts) */
 const MASKED_SETTING_VALUE = '********';
@@ -146,7 +147,9 @@ export function useSettings() {
     if (deadDaysSetting) setDeadStockDays(deadDaysSetting.value);
 
     const strategies = data.find((s) => s.key === 'pricing_strategies');
-    if (strategies) setPricingStrategies(strategies.value.split(',').filter(Boolean));
+    // v10.0.27 (OBS-R1-71): آرایه JSON (مقدار کهنه با کاما هم خوانده می‌شود)
+    const readStrategies = strategies ? readPricingStrategies(strategies.value) : null;
+    if (readStrategies && 'titles' in readStrategies) setPricingStrategies(readStrategies.titles);
 
     const compName = data.find((s) => s.key === 'company_name');
     if (compName) setCompanyName(compName.value);
@@ -304,7 +307,7 @@ export function useSettings() {
         { key: 'fast_moving_days', value: fastMovingDays },
         { key: 'slow_moving_days', value: slowMovingDays },
         { key: 'dead_stock_days', value: deadStockDays },
-        { key: 'pricing_strategies', value: pricingStrategies.filter((s: string) => s.trim() !== '').join(',') },
+        { key: 'pricing_strategies', value: serializePricingStrategies(pricingStrategies) },
         { key: 'company_name', value: companyName },
         { key: 'company_phone', value: companyPhone },
         { key: 'company_address', value: companyAddress },

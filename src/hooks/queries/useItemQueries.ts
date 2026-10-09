@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { Item } from '../../types';
@@ -107,4 +108,10 @@ export function useSyncItemMutation() {
       toast.error(err?.message || 'خطا در همگام‌سازی کالا با ووکامرس');
     },
   });
+}
+
+/** v10.0.30 (OBS-R1-75): پس از ذخیره کالا یا ورود اکسل همه کش‌های کالا و قیمت باطل می‌شوند، نه فقط صفحه جاری */
+export function useItemChangeRefresh(): () => void {
+  const queryClient = useQueryClient();
+  return useCallback(() => { void invalidatePreset(queryClient, 'itemChange'); }, [queryClient]);
 }

@@ -44,6 +44,10 @@ export const INVALIDATION_PRESETS = {
   // Triggered when raw materials or inventory items change
   inventoryChange: ['items', 'dashboard', 'transfers', 'pendingMaterials'] as QueryDomain[],
 
+  // v10.0.30 (OBS-R1-75): ذخیره کالا یا ورود اکسل کالا: فهرست و جزئیات کالا، صفحه قیمت‌گذاری (کالا و قیمت)، طرح‌های
+  // ترنسفر (کالاهای متصل) و پیشخوان؛ پیش‌تر فقط همان صفحه فهرست کالا دوباره خوانده می‌شد
+  itemChange: ['items', 'prices', 'transfers', 'dashboard'] as QueryDomain[],
+
   // Triggered when customers or sales leads are modified
   customerChange: ['customers', 'crm', 'dashboard'] as QueryDomain[],
 
