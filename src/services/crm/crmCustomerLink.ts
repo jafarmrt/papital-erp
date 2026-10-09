@@ -76,14 +76,15 @@ export async function linkCustomerForLead(input: CrmLeadPartyInput, db: DbExecut
   const byName = await findActiveCustomerByName(primaryCustomerName, db);
   if (byName) return linkTo(byName, [phoneDifference(byName, cPhone)]);
 
-  const [created] = await db.insert(customers).values({
+  // v10.0.33 (OBS-R2-33): درج درون savepoint، تا درون تراکنش ویرایش یا تبدیل پرونده هم پس از تکرار نام، خواندن برنده ممکن باشد
+  const [created] = await db.transaction(sp => sp.insert(customers).values({
     name: primaryCustomerName,
     contactName: contactPersonName || cName,
     phone: cPhone,
     notes: 'ثبت خودکار از پرونده فروش',
     createdAt: systemNowUtcIso(),
     isDeleted: 0,
-  }).returning({ id: customers.id }).catch(async (err: unknown) => {
+  }).returning({ id: customers.id })).catch(async (err: unknown) => {
     // درخواست هم‌زمان همین نام را ساخت: به همان طرف حساب پیوند می‌دهد
     const winner = isCustomerNameUniqueViolation(err) ? await findActiveCustomerByName(primaryCustomerName, db) : undefined;
     if (!winner) throw err;

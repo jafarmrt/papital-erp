@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { sql, or, and, eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
+import { systemNowUtcIso } from '../lib/businessClock.js';
 import { customers } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
@@ -408,7 +409,7 @@ router.delete('/customers/:id', authorizePermission('customers.manage'), validat
     description: `حذف مشتری "${delCust.name}" (تلفن: ${delCust.phone || '—'})`,
     details: {
       before: delCust,
-      deletedAt: new Date().toISOString()
+      deletedAt: systemNowUtcIso()
     }
   });
 

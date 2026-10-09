@@ -10602,6 +10602,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // v10.0.32 (OBS-R2-29): a sales lead detail opens for the same keys as the lead list
   const { runCrmLeadDetailReadTests } = await import('../regression/crmLeadDetailReadTests.js');
   results.push(...await runCrmLeadDetailReadTests(shouldRun));
+  // v10.0.33 (OBS-R2-33): lead edit and conversion audit rows; a converted lost lead stays lost
+  const { runCrmLeadEditAuditTests } = await import('../regression/crmLeadEditAuditTests.js');
+  results.push(...await runCrmLeadEditAuditTests(shouldRun));
   // بسته ۹ (v9.0.18، TD-427): اعتبارسنجی ورودی پرونده فروش
   const { runCrmLeadInputTests } = await import('../regression/crmLeadInputTests.js');
   results.push(...await runCrmLeadInputTests(shouldRun));
