@@ -97,7 +97,7 @@ const createCustomerValidation = z.object({
 const recordVersion = z.coerce.number().int('نسخه رکورد باید عدد صحیح باشد').positive('نسخه رکورد باید مثبت باشد');
 
 /**
- * v10.0.24 (TD-975): بدنه ویرایش پیش‌فرض ندارد؛ فیلدی که فرستاده نشود `undefined` می‌ماند و سرویس مقدار کنونی را نگه
+ * v10.0.27 (TD-975): بدنه ویرایش پیش‌فرض ندارد؛ فیلدی که فرستاده نشود `undefined` می‌ماند و سرویس مقدار کنونی را نگه
  * می‌دارد. پیش‌تر همان طرح ساخت با `.default('')` به کار می‌رفت، پس ویرایشی که فقط تلفن را می‌فرستاد نشانی، یادداشت،
  * نوع طرف حساب، اطلاعات بانکی و افراد رابط را خالی یا «مشتری» می‌کرد.
  */
@@ -316,7 +316,7 @@ router.post('/customers', authorizePermission('customers.manage'), validate(crea
   req.body = sanitizeCustomerPayload(req.body);
   const { name, country, province, city, address, notes, contacts } = req.body;
   const { contactName, phone } = req.body;
-  // v10.0.24 (TD-975): فیلد نفرستاده undefined می‌ماند تا سرویس مقدار کنونی را نگه دارد
+  // v10.0.27 (TD-975): فیلد نفرستاده undefined می‌ماند تا سرویس مقدار کنونی را نگه دارد
   const partyType = req.body.partyType ?? req.body.party_type;
   const supplierCategory = req.body.supplierCategory ?? req.body.supplier_category;
   const bankInfo = req.body.bankInfo ?? req.body.bank_info;
@@ -355,7 +355,7 @@ router.put('/customers/:id', authorizePermission('customers.manage'), validate(u
   const customerId = Number(req.params.id);
   const { name, country, province, city, address, notes, contacts } = req.body;
   const { contactName, phone } = req.body;
-  // v10.0.24 (TD-975): فیلد نفرستاده undefined می‌ماند تا سرویس مقدار کنونی را نگه دارد
+  // v10.0.27 (TD-975): فیلد نفرستاده undefined می‌ماند تا سرویس مقدار کنونی را نگه دارد
   const partyType = req.body.partyType ?? req.body.party_type;
   const supplierCategory = req.body.supplierCategory ?? req.body.supplier_category;
   const bankInfo = req.body.bankInfo ?? req.body.bank_info;

@@ -100,7 +100,7 @@ const createCrmActivitySchema = z.object({
     nextFollowUpTask: z.string().optional(),
     assignedTo: z.string().optional(),
     assignedPersonnelId: z.union([z.number(), z.string(), z.null()]).optional(),
-    // v10.0.25 (TD-976): the mentioned users are positive user ids, checked against live users in the service
+    // v10.0.28 (TD-976): the mentioned users are positive user ids, checked against live users in the service
     mentions: z.array(z.coerce.number().int('شناسه کاربر اشاره‌شده باید عدد صحیح باشد').positive('شناسه کاربر اشاره‌شده باید مثبت باشد'))
       .max(100, 'اقدام حداکثر ۱۰۰ اشاره دارد').optional(),
   })
@@ -800,7 +800,7 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
     personnelId: assignedPersonnelId
   });
   // v9.0.17 (TD-426): پرونده و طرف حساب ناموجود یا حذف‌شده با ۴۲۲ رد می‌شوند (`resolveActivityParents`)
-  // v10.0.25 (TD-976): ثبت اقدام، اعلان‌ها، زمان پرونده و ممیزی در یک تراکنش؛ اشاره فقط شناسه کاربر زنده است و اعلان آن
+  // v10.0.28 (TD-976): ثبت اقدام، اعلان‌ها، زمان پرونده و ممیزی در یک تراکنش؛ اشاره فقط شناسه کاربر زنده است و اعلان آن
   // فقط به اشاره‌شده‌ای می‌رود که اقدام‌های ارتباط با مشتری را می‌خواند (`notifyActivityMentions`)
   const newAct = await orm.transaction(async (tx) => {
     const parents = await resolveActivityParents(tx, { leadId, customerId });

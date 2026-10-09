@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as xlsx from 'xlsx';
 import { bankNumberCell, phoneCellText } from '../../lib/customers/customerExcelCells';
 
-// v10.0.23 (TD-974): the party Excel import keeps the leading zero of a phone and never accepts a bank number Excel truncated
+// v10.0.26 (TD-974): the party Excel import keeps the leading zero of a phone and never accepts a bank number Excel truncated
 function rowsOf(cells: Record<string, unknown>): Record<string, unknown> {
   const ws = xlsx.utils.aoa_to_sheet([Object.keys(cells), Object.values(cells)]);
   const wb = xlsx.utils.book_new();

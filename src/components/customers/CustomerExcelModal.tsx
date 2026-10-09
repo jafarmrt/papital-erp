@@ -233,7 +233,7 @@ export function CustomerExcelModal({
           const version = excelRowVersion(getField(row, ['نسخه', 'version']));
           const name = getField(row, ['نام طرف حساب', 'نام', 'طرف حساب', 'نام مشتری', 'نام تامین کننده', 'نام شرکت', 'عنوان', 'name']);
           const contactName = getField(row, ['شخص رابط', 'مدیر', 'نام رابط', 'رابط', 'contact', 'contactname']);
-          // v10.0.23 (TD-974): a numeric phone cell gets its leading zero back
+          // v10.0.26 (TD-974): a numeric phone cell gets its leading zero back
           const phone = phoneCellText(getRawField(row, ['شماره تماس', 'تلفن', 'موبایل', 'تلفن همراه', 'phone', 'mobile']));
 
           const partyType = parsePartyTypeCell(getField(row, ['نوع طرف حساب', 'نوع', 'نقش', 'نوع شخص', 'partytype', 'type']));
@@ -243,7 +243,7 @@ export function CustomerExcelModal({
           const city = getField(row, ['شهر', 'city']);
           const address = getField(row, ['آدرس کامل', 'آدرس', 'نشانی', 'address']);
           const bankName = getField(row, ['نام بانک', 'بانک', 'bank', 'bankname']);
-          // v10.0.23 (TD-974): a bank number Excel stored as a number longer than 15 digits has lost digits: row error
+          // v10.0.26 (TD-974): a bank number Excel stored as a number longer than 15 digits has lost digits: row error
           const accountCell = bankNumberCell(getRawField(row, ['شماره حساب', 'حساب', 'accountnumber']), 'شماره حساب');
           const cardCell = bankNumberCell(getRawField(row, ['شماره کارت', 'کارت', 'cardnumber']), 'شماره کارت');
           const shabaCell = bankNumberCell(getRawField(row, ['شماره شبا', 'شبا', 'sheba', 'shaba']), 'شماره شبا');
