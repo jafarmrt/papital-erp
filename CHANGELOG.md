@@ -20,6 +20,9 @@ going forward.
 
 ## Version 10.x Series (Active — see `src/data/changelogs/10.ts`)
 
+### v10.0.13 — موجودی بی‌بها در ورود اکسل کالا
+- ورود اکسل کالا به کالایی که میانگین موزون بها ندارد موجودی نمی‌دهد و ردیف را خطا می‌کند (TD-1012).
+
 ### v10.0.12 — Foreign sale and purchase vouchers balance in rials, so their year closes (TD-1030)
 - Cost rows of a foreign-currency voucher take the 4-decimal rate that reaches their rial value exactly and the opposite row their sum, so the voucher balances in rials and the fiscal-year closing no longer refuses it by one rial.
 

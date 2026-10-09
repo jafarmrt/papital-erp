@@ -16,7 +16,7 @@ import { nextVersion } from '../../lib/occHelper.js';
 import { ITEM_IMPORT_DENIED_MESSAGES, type ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import {
   EXCEL_DOCUMENT_REF, ITEM_FIELD_KEYS, applyStockChange, changedRowPrices, codeFormatError, deniedStockPermissions,
-  newItemType, planStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue,
+  newItemType, planStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue, stockWithoutCostError,
   type ItemRow, type Row, type RowFields, type RowStock, type Warehouse,
 } from './itemExcelRow.js';
 
@@ -188,6 +188,11 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
     push(plan.error);
     return null;
   }
+  const noCost = stockWithoutCostError(matchedItem, plan.changes, itemWac);
+  if (noCost) {
+    push(noCost);
+    return null;
+  }
 
   const updateSet = {
     name: name || matchedItem.name,
@@ -239,6 +244,11 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
     return null;
   }
   const itemWac = money(fields.weightedAverageCost);
+  const noCost = stockWithoutCostError({ name, code }, plan.changes, itemWac);
+  if (noCost) {
+    input.push(noCost);
+    return null;
+  }
   const [newItem] = await guardItemIdentity(name, () => tx.insert(items).values({
     name,
     code,

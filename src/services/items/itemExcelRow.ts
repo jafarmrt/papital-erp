@@ -4,7 +4,7 @@ import { items, itemPrices, warehouses } from '../../db/schema.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { DocumentService } from '../document.service.js';
 import { money, Money } from '../../lib/money.js';
-import { WAC_COLUMNS, extractRowPriceColumns, unknownPriceColumnMessage } from '../../lib/items/excelPriceColumns.js';
+import { ITEM_WAC_COLUMN, WAC_COLUMNS, extractRowPriceColumns, unknownPriceColumnMessage } from '../../lib/items/excelPriceColumns.js';
 import { REORDER_POINT_COLUMNS } from '../../lib/items/itemExcelColumns.js';
 import { parsePriceAmount, priceCurrencyOf } from '../../lib/items/priceInput.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
@@ -119,6 +119,17 @@ export function readRowStock(row: Row, whs: Warehouse[]): RowStock {
 export interface StockChange {
   whCode: string;
   diff: number;
+}
+
+/**
+ * v10.0.13 (TD-1012، تصمیم مالک محصول در D-01): کالایی که پس از این ردیف میانگین موزون بها ندارد موجودی تازه از اکسل
+ * نمی‌گیرد؛ پیش‌تر با بهای صفر وارد می‌شد، سند افتتاحیه‌اش صفر بود و هیچ فروش یا حواله‌ای را نمی‌پذیرفت (TD-214 / P2-4).
+ * کاهش موجودی (شمارش) همچنان با بهای صفر ثبت می‌شود.
+ */
+export function stockWithoutCostError(item: { name: string; code: string }, changes: readonly StockChange[], itemWac: Money): string | null {
+  if (itemWac.isPositive() || !changes.some(c => c.diff > 0)) return null;
+  return `کالای «${item.name}» (${item.code}) میانگین موزون بها ندارد و موجودی بی‌بها وارد انبار نمی‌شود، ` +
+    `چون چنین کالایی هیچ فروش یا حواله‌ای را نمی‌پذیرد. ستون «${ITEM_WAC_COLUMN}» را پر کنید. ردیف ثبت نشد.`;
 }
 
 const QTY_EPSILON = 1e-6;
