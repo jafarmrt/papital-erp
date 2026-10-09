@@ -320,7 +320,7 @@ router.get('/items/next-code', authorizePermission(...READ_PERMISSIONS.items), a
 
 router.post('/items/next-code', authorizePermission('products.create', 'products.edit'), validate(consumeNextItemCodeSchema), asyncHandler(async (req, res) => {
   const { type, year, prefix, transfer } = req.body;
-  // v10.0.21 (TD-979): the body is read through Zod and the audit row is written in the counter's transaction
+  // v10.0.22 (TD-979): the body is read through Zod and the audit row is written in the counter's transaction
   const result = await ItemCatalogService.consumeNextItemCode({ type, year, prefix, transfer }, (reserved, tx) => logActivity({
     req,
     tx,

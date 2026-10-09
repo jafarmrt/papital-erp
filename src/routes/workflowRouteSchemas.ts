@@ -89,7 +89,7 @@ export const createDelegationSchema = z.object({
   }),
 });
 
-/** v10.0.21 (TD-979): انجام کار کارتابل؛ پیش‌تر بدنه بی Zod خوانده می‌شد */
+/** v10.0.22 (TD-979): انجام کار کارتابل؛ پیش‌تر بدنه بی Zod خوانده می‌شد */
 export const executeTaskSchema = z.object({
   params: z.object({ taskId: z.string().regex(/^[1-9]\d*$/, 'شناسه کار باید عدد صحیح مثبت باشد') }),
   body: z.object({

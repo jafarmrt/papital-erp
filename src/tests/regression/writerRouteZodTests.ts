@@ -6,7 +6,7 @@ import { customers, eventActionRules, webhookSubscriptions } from '../../db/sche
 
 /**
  * Phase 3 lane L2 (TD-979, OBS-R2-06): the writer routes that read their body without Zod now refuse a malformed body
- * with 400 VALIDATION_ERROR before any write. On v10.0.20 each of these requests reached the service: the customer import
+ * with 400 VALIDATION_ERROR before any write. On v10.0.21 each of these requests reached the service: the customer import
  * took any number of rows, a rule or a webhook took a non-text name, the task import took an unknown mode, and the item
  * code counter took an unknown item type as a product and moved the product series.
  */
@@ -15,7 +15,7 @@ export async function runWriterRouteZodTests(shouldRun: (id: string, ...extra: s
   const id = 'reg_writer_route_bodies_zod_td_979';
   if (!shouldRun(id, 'td979', 'obs-r2-06', 'zod', 'package15')) return results;
 
-  const name = 'v10.0.21: writer routes refuse a malformed body with 400 before any write (TD-979)';
+  const name = 'v10.0.22: writer routes refuse a malformed body with 400 before any write (TD-979)';
   const tStart = Date.now();
   const tag = `td979-${Date.now()}`;
   try {

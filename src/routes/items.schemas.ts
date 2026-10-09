@@ -75,7 +75,7 @@ export const itemUpdateSchema = z.object({
   })
 });
 
-/** v10.0.21 (TD-979): گرفتن شماره سری بعدی کد کالا؛ قالب سال، حرف دسته و پیشوند را سرویس می‌سنجد (422) */
+/** v10.0.22 (TD-979): گرفتن شماره سری بعدی کد کالا؛ قالب سال، حرف دسته و پیشوند را سرویس می‌سنجد (422) */
 export const consumeNextItemCodeSchema = z.object({
   body: z.object({
     type: z.enum(['product', 'raw_material']).optional(),

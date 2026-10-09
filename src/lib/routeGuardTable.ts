@@ -15,9 +15,9 @@ export interface RouteGuardRow {
   path: string;
   authenticated: boolean;
   guards: string[][];
-  /** v10.0.21 (TD-979): خود route میدل‌ور `validate` دارد */
+  /** v10.0.22 (TD-979): خود route میدل‌ور `validate` دارد */
   validated: boolean;
-  /** v10.0.21 (TD-979): اسکیمای `validate` آن کلید `body` دارد */
+  /** v10.0.22 (TD-979): اسکیمای `validate` آن کلید `body` دارد */
   validatesBody: boolean;
 }
 

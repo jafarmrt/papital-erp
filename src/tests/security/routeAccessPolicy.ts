@@ -125,7 +125,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       if (violations.length > 0) throw new Error(`${violations.length} violations: ${violations.join(' | ')}`);
       return `${rows.length} مسیر بی‌تخلف`;
     }),
-    record('sec_writer_routes_validated_td_979', 'v10.0.21: every writer route reads its input through Zod; only reviewed body-less routes are listed (TD-979)', 'real_code', async () => {
+    record('sec_writer_routes_validated_td_979', 'v10.0.22: every writer route reads its input through Zod; only reviewed body-less routes are listed (TD-979)', 'real_code', async () => {
       const { writerRouteValidationViolations, WRITER_ROUTES_WITHOUT_BODY } = await import('./writerRouteValidation.js');
       const violations = writerRouteValidationViolations(buildRouteGuardTable(app));
       if (violations.length > 0) throw new Error(`${violations.length} writer routes without Zod: ${violations.join(' | ')}`);

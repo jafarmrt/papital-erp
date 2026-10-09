@@ -215,7 +215,7 @@ export class ItemCatalogService {
     const itemType = input.type === 'raw_material' ? 'raw_material' : 'product';
 
     // نرمال‌سازی بیرون از tx تا خطاهای validation قبل از باز کردن تراکنش پرتاب شوند
-    // v10.0.21 (TD-979، OBS-R1-73): ردیف ممیزی فراخواننده (`onReserved`) در همان تراکنش شمارنده نوشته می‌شود
+    // v10.0.22 (TD-979، OBS-R1-73): ردیف ممیزی فراخواننده (`onReserved`) در همان تراکنش شمارنده نوشته می‌شود
     if (itemType === 'product') {
       const ctx = ItemCatalogService.resolveProductContext(input);
       return orm.transaction(async (tx: DbLike) => {
