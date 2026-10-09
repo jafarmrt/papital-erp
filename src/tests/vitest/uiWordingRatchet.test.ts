@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * v10.0.39 (TD-1168): user-facing text never says the three forbidden loanwords of the glossary. The ratchet in
+ * v10.0.39 (TD-1168): user-facing text never says the forbidden loanwords of the glossary. The ratchet in
  * scripts/ui-wording-ratchet.ts counts, per browser source file, the string literals, template parts and JSX texts that
  * hold one of them, against ui-wording-baseline.json; no file may gain one and the baseline may only shrink.
  */
@@ -19,6 +19,7 @@ import {
 const SYSTEM = String.fromCodePoint(0x633, 0x6cc, 0x633, 0x62a, 0x645);
 const CATALOG = String.fromCodePoint(0x6a9, 0x627, 0x62a, 0x627, 0x644, 0x648, 0x6af);
 const FILTER = String.fromCodePoint(0x641, 0x6cc, 0x644, 0x62a, 0x631);
+const DOUBLE = String.fromCodePoint(0x62f, 0x648, 0x628, 0x644);
 const HA = String.fromCodePoint(0x647, 0x627);
 const YEH = String.fromCodePoint(0x6cc);
 const ZWNJ = '‌';
@@ -39,6 +40,7 @@ describe('ui_wording_ratchet_td_1168', () => {
     expect(countFileSites(`const a = '${SYSTEM}${YEH}';`, 'a.ts')).toBe(1);
     expect(countFileSites(`const a = '${FILTER}${ZWNJ}${HA}${YEH}';`, 'a.ts')).toBe(1);
     expect(countFileSites(`const a = '${FILTER}${HA}:';`, 'a.ts')).toBe(1);
+    expect(countFileSites(`const a = 'x ${DOUBLE} y';`, 'a.ts')).toBe(1);
     expect(countFileSites(`const a = '${SYSTEM}${String.fromCodePoint(0x627, 0x62a, 0x6cc, 0x6a9)}';`, 'a.ts')).toBe(0);
   });
 

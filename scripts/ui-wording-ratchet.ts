@@ -3,8 +3,9 @@ import path from 'path';
 import ts from 'typescript';
 
 /**
- * v10.0.39 (TD-1168, product-owner glossary of packages 2, 8, 11 and 16): user-facing text says «سامانه», «فهرست» and
- * «پالایش» / «شرط‌های جستجو», never «سیستم», «کاتالوگ» or «فیلتر». The per-package wording tests cover only their own
+ * v10.0.39 (TD-1168, product-owner glossary of packages 2, 8, 11 and 16): user-facing text says «سامانه», «فهرست», «دوطرفه» and
+ * «پالایش» / «شرط‌های جستجو», never «سیستم», «کاتالوگ», «فیلتر» or «دوبل» (owner rule: only «کاردکس»,
+ * «ترنسفر» and «وب‌هوک» stay transliterated). The per-package wording tests cover only their own
  * files, so these words were still shown on other screens. This ratchet counts, per browser source file, the user-facing
  * texts (string and template literals and JSX text, never comments) that hold one of these words, and fails when a file
  * gains one:
@@ -18,8 +19,8 @@ export const BASELINE_FILE = 'ui-wording-baseline.json';
 /** Browser code: pages, components, hooks, contexts and the shared lib (whose messages the screens show) */
 const ROOTS = ['src/pages', 'src/components', 'src/hooks', 'src/contexts', 'src/lib'];
 const LETTER = '[\\u0621-\\u064A\\u067E\\u0686\\u0698\\u06A9\\u06AF\\u06CC]';
-/** «سیستم» (and «سیستمی»), «کاتالوگ», «فیلتر» (and «فیلترها»); a longer word that only starts with one is not matched */
-export const FORBIDDEN = new RegExp(`(?<!${LETTER})((?:سیستم|کاتالوگ|فیلتر)(?:‌?(?:هایی|های|ها)|ی)?)(?!${LETTER})`);
+/** «سیستم» (and «سیستمی»), «کاتالوگ», «فیلتر» (and «فیلترها»), «دوبل»; a longer word that only starts with one is not matched */
+export const FORBIDDEN = new RegExp(`(?<!${LETTER})((?:سیستم|کاتالوگ|فیلتر|دوبل)(?:‌?(?:هایی|های|ها)|ی)?)(?!${LETTER})`);
 
 export type Baseline = Record<string, number>;
 
