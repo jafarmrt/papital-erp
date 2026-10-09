@@ -686,7 +686,7 @@ export class WorkflowDefinitionService {
               positionY: 340
             }
           ],
-          // v10.0.22 (TD-965): نگهبان گام‌ها از JOURNAL_VOUCHER_STEP_GUARDS (تأیید با accounting.vouchers_approve)
+          // v10.0.27 (TD-965): نگهبان گام‌ها از JOURNAL_VOUCHER_STEP_GUARDS (تأیید با accounting.vouchers_approve)
           transitions: JOURNAL_VOUCHER_STEP_GUARDS.map(g => ({ ...g }))
         });
         logger.info('[WorkflowDefinitionService] Seeded simplified JOURNAL_VOUCHER_WORKFLOW successfully.');

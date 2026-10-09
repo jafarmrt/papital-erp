@@ -14,7 +14,7 @@ import { TestCaseResult } from '../types.js';
 import { type ShouldRun, accountIdsByCode, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
 
 /**
- * Payroll duties plan PR 1 (v10.0.22 on, TD-965, OBS-R1-44, decisions t9 / t10 / t3 «الف»): approving a voucher is
+ * Payroll duties plan PR 1 (v10.0.27 on, TD-965, OBS-R1-44, decisions t9 / t10 / t3 «الف»): approving a voucher is
  * its own permission and the maker of a manual voucher does not approve it. Red on v10.0.21, where accounting.vouchers
  * alone recorded and approved.
  */
@@ -143,7 +143,7 @@ export async function runVoucherApprovalDutiesTests(shouldRun: ShouldRun): Promi
       expect(seeded.approve_voucher === 'accounting.vouchers_approve' && seeded.finalize_voucher === 'accounting.vouchers_approve'
         && seeded.revert_to_draft === 'accounting.vouchers_approve' && seeded.reject_voucher === 'accounting.vouchers', `new seed guards ${JSON.stringify(seeded)}`);
 
-      // back to the seed before v10.0.22, as an existing install holds it
+      // back to the seed before v10.0.27, as an existing install holds it
       await orm.update(workflowTransitions).set({ requiredPermission: 'accounting.vouchers' })
         .where(and(eq(workflowTransitions.workflowDefinitionId, def.id), sql`${workflowTransitions.actionKey} <> 'reopen_voucher'`));
       expect(await upgradeLegacySeedGuards(JOURNAL_VOUCHER_GUARD_UPGRADE) === true, 'untouched old seed was not upgraded');
@@ -171,10 +171,10 @@ export async function runVoucherApprovalDutiesTests(shouldRun: ShouldRun): Promi
   }
 
   if (shouldRun('reg_voucher_approve_migration_td_965', 'td-965', 'migration')) {
-    await runCase(results, 'reg_voucher_approve_migration_td_965', 'TD-965: migration 0097 gives the approve key to every role holding accounting.vouchers, once', () => inFiscalSandbox(async () => {
+    await runCase(results, 'reg_voucher_approve_migration_td_965', 'TD-965: migration 0098 gives the approve key to every role holding accounting.vouchers, once', () => inFiscalSandbox(async () => {
       const holder = await createTestRole({ permissions: RECORD });
       const other = await createTestRole({ permissions: ['accounting.view'] });
-      const file = path.join(process.cwd(), 'drizzle', '0097_voucher_approve_permission.sql');
+      const file = path.join(process.cwd(), 'drizzle', '0098_voucher_approve_permission.sql');
       const statements = fs.readFileSync(file, 'utf8').split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean);
       const run = () => orm.transaction(async (tx) => { for (const s of statements) await tx.execute(sql.raw(s)); });
       await run();

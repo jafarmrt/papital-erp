@@ -206,7 +206,7 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
       const { createTestVoucher } = await import('../fixtures/factories.js');
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
       const today = await businessTodayIsoDate();
-      // v10.0.22 (TD-965): the journal voucher steps ask accounting.vouchers_approve, which the accountant template lacks
+      // v10.0.27 (TD-965): the journal voucher steps ask accounting.vouchers_approve, which the accountant template lacks
       const accountant = await h.sessionWith(['accounting.view', 'accounting.vouchers', 'accounting.vouchers_approve', 'workflow.view', 'workflow.approve', 'workflow.execute']);
       const deputy = await h.sessionWith(['workflow.view', 'workflow.approve']);
       const startVoucherWorkflow = async () => {

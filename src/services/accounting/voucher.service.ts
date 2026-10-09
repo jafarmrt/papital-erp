@@ -312,7 +312,7 @@ export class VoucherService {
       await this.checkFiscalPeriodOpen(voucherDate, tx);
       // v9.0.198 (TD-549، B03-07): ردیف سند دستی فقط روی حساب فعال معین یا تفصیلیِ بی زیرحساب فعال
       if (data.manualEntry) await assertPostingAccounts(tx, items.map(item => item.accountId));
-      // v10.0.22 (TD-965): سند دستی تأییدشده یعنی ثبت‌کننده‌اش آن را تأیید کرده است
+      // v10.0.27 (TD-965): سند دستی تأییدشده یعنی ثبت‌کننده‌اش آن را تأیید کرده است
       if (data.manualEntry && data.status === 'approved') await assertManualApprovedCreateAllowed(tx, data.userId);
 
       const voucherNum = await this.getNextVoucherNumber(tx);
@@ -379,7 +379,7 @@ export class VoucherService {
     manualEntry?: boolean;
     /** v9.0.295 (TD-555، B03-13): نسخه‌ای که ویرایشگر خوانده است؛ مسیر اسناد آن را الزامی می‌خواهد */
     expectedVersion?: number;
-    /** v10.0.22 (TD-965): ویرایشگر؛ ثبت‌کننده سند دستی آن را تأیید نمی‌کند */
+    /** v10.0.27 (TD-965): ویرایشگر؛ ثبت‌کننده سند دستی آن را تأیید نمی‌کند */
     userId?: number;
     items?: {
       accountId: number;
@@ -1068,7 +1068,7 @@ export class VoucherService {
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
       if (existing.isDeleted === 1) throw new NotFoundError('سند حذف شده است');
       if (existing.status === 'permanent') return; // Already permanent
-      await assertNotApprovedByMaker(tx, existing, 'permanent', userId); // v10.0.22 (TD-965)
+      await assertNotApprovedByMaker(tx, existing, 'permanent', userId); // v10.0.27 (TD-965)
 
       await this.checkFiscalPeriodOpen(existing.date, tx);
 
@@ -1106,7 +1106,7 @@ export class VoucherService {
         const refuse = (reason: string) => refused.push({ id, voucherNumber: existing.voucherNumber, reason });
         if (existing.isDeleted !== 0) { refuse('سند حذف شده است'); continue; }
         if (existing.status === 'permanent') { refuse('سند پیش‌تر قطعی شده است'); continue; }
-        const makerRefusal = await makerApprovalRefusal(tx, existing, 'permanent', userId); // v10.0.22 (TD-965)
+        const makerRefusal = await makerApprovalRefusal(tx, existing, 'permanent', userId); // v10.0.27 (TD-965)
         if (makerRefusal) { refuse(makerRefusal); continue; }
         if (await this.isPeriodClosed(existing.date, tx)) { refuse('سال مالی سند بسته است'); continue; }
         await this.checkFiscalPeriodOpen(existing.date, tx);
@@ -1138,7 +1138,7 @@ export class VoucherService {
       for (const id of sortedIds) {
         const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
         if (existing && existing.isDeleted === 0 && existing.status === 'draft') {
-          // v10.0.22 (TD-965): ثبت‌کننده سند دستی آن را تأیید نمی‌کند؛ سند او کنار گذاشته و با دلیل گزارش می‌شود
+          // v10.0.27 (TD-965): ثبت‌کننده سند دستی آن را تأیید نمی‌کند؛ سند او کنار گذاشته و با دلیل گزارش می‌شود
           const makerRefusal = await makerApprovalRefusal(tx, existing, 'approved', userId);
           if (makerRefusal) { refused.push({ id, voucherNumber: existing.voucherNumber, reason: makerRefusal }); continue; }
           await this.checkFiscalPeriodOpen(existing.date, tx);
@@ -1176,7 +1176,7 @@ export class VoucherService {
       throw new BusinessLogicError('اسناد دائم و قطعی‌شده قابل تغییر وضعیت به پیش‌نویس یا تایید نشده نیستند. لطفاً از گزینه «صدور سند برگشتی (ابطال سند)» یا «سند اصلاحی» استفاده فرمایید.');
     }
 
-    await assertNotApprovedByMaker(tx, existing, status, userId); // v10.0.22 (TD-965)
+    await assertNotApprovedByMaker(tx, existing, status, userId); // v10.0.27 (TD-965)
     await this.checkFiscalPeriodOpen(existing.date, tx);
 
     if (status === 'permanent') {

@@ -10,7 +10,7 @@ import { voucherLockNote, voucherRowActions, type VoucherRowAction } from '../..
 interface VoucherRowMenuProps {
   voucher: JournalVoucher;
   onAction: (action: VoucherRowAction, voucher: JournalVoucher) => void;
-  /** v10.0.22 (TD-965): بازگشت به پیش‌نویس فقط برای دارنده «تأیید و قطعی کردن سند حسابداری» */
+  /** v10.0.27 (TD-965): بازگشت به پیش‌نویس فقط برای دارنده «تأیید و قطعی کردن سند حسابداری» */
   canApprove?: boolean;
 }
 

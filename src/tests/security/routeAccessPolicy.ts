@@ -295,7 +295,7 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
     }),
     record('sec_voucher_approved_on_create_td_308', 'area H: a journal voucher created as approved has an approver; only the system admin records one (TD-308, TD-965)', 'real_database', async () => {
       const accountant = await userWith(['accounting.view', 'accounting.vouchers', 'accounting.vouchers_approve']);
-      // v10.0.22 (TD-965): a manual voucher recorded as approved is approved by its maker, so only the system admin records one
+      // v10.0.27 (TD-965): a manual voucher recorded as approved is approved by its maker, so only the system admin records one
       const adminUser = await createTestUser({ role: SYSTEM_ADMIN_ROLE });
       createdUserIds.push(adminUser.id);
       const admin = { id: adminUser.id, session: await loginTestUserWithSession(app, adminUser.username) };

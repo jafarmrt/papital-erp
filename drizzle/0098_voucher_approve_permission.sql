@@ -1,8 +1,8 @@
--- Drizzle Migration 0097: approving an accounting voucher is its own permission (v10.0.22 / TD-965, OBS-R1-44,
+-- Drizzle Migration 0098: approving an accounting voucher is its own permission (v10.0.27 / TD-965, OBS-R1-44,
 -- payroll duties plan decisions t9 and t10 «الف», segregation of duties D-14)
 --
 -- Until v10.0.21 accounting.vouchers alone recorded, edited, approved, put back to draft and finalized a voucher, so one
--- person did both sides of the check. From v10.0.22 the new key accounting.vouchers_approve approves, puts back to draft
+-- person did both sides of the check. From v10.0.27 the new key accounting.vouchers_approve approves, puts back to draft
 -- and finalizes, and accounting.vouchers keeps recording and editing drafts, reversals and corrections. So that no role
 -- loses anything on the day of release, every role holding accounting.vouchers gets accounting.vouchers_approve; the
 -- system admin separates them in role management. The system admin role is skipped (its permissions are computed). Every
@@ -29,7 +29,7 @@ SELECT 'system', 'سیستم', 'UPDATE', 'نقش و دسترسی', c.id::text,
   format('مهاجرت تفکیک وظایف: نقش "%s" که سند حسابداری را ثبت و تأیید می‌کرد، کلید «تأیید و قطعی کردن سند حسابداری» را به‌صورت تیک گرفت', c.name),
   jsonb_build_object('roleId', c.id, 'roleName', c.name, 'roleCode', c.code,
     'beforePermissions', c.before, 'afterPermissions', c.before || '["accounting.vouchers_approve"]'::jsonb,
-    'addedPermissions', '["accounting.vouchers_approve"]'::jsonb, 'migration', '0097_voucher_approve_permission'),
+    'addedPermissions', '["accounting.vouchers_approve"]'::jsonb, 'migration', '0098_voucher_approve_permission'),
   '', now() AT TIME ZONE 'UTC'
 FROM tmp_voucher_approve_roles c
 ORDER BY c.id;
