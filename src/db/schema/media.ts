@@ -33,7 +33,10 @@ export const mediaAssets = pgTable('media_assets', {
   title: text('title').notNull().default(''),
   description: text('description').notNull().default(''),
   sortOrder: integer('sort_order').notNull().default(0),
+  /** v10.0.27 (N-05 PR 3, migration 0098): at most one live file per item is its cover (`uq_media_assets_cover_item`) */
   isCover: integer('is_cover').notNull().default(0),
+  /** v10.0.27 (migration 0098): the file's tags, at most 20 (`normalizeMediaTags` in src/lib/media/mediaTags.ts) */
+  tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
   originalName: text('original_name').notNull().default(''),
   mimeType: text('mime_type').notNull(),
   sizeBytes: integer('size_bytes').notNull(),
@@ -58,4 +61,7 @@ export const mediaAssets = pgTable('media_assets', {
   idx_media_assets_section_id: index('idx_media_assets_section_id').on(table.sectionId, table.isDeleted, table.sortOrder),
   idx_media_assets_item_id: index('idx_media_assets_item_id').on(table.itemId).where(sql`${table.itemId} IS NOT NULL`),
   idx_media_assets_sha256: index('idx_media_assets_sha256').on(table.sha256),
+  idx_media_assets_tags: index('idx_media_assets_tags').using('gin', table.tags),
+  uq_media_assets_cover_item: uniqueIndex('uq_media_assets_cover_item').on(table.itemId)
+    .where(sql`${table.isCover} = 1 AND ${table.isDeleted} = 0 AND ${table.itemId} IS NOT NULL`),
 }));

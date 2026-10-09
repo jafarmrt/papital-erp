@@ -2,7 +2,7 @@ import fs from 'fs';
 import type { Request } from 'express';
 import type { Readable } from 'stream';
 import { and, asc, count, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
-import { orm, type DbTransaction } from '../../db/drizzle.js';
+import { orm, type DbExecutor, type DbTransaction } from '../../db/drizzle.js';
 import { items, mediaAssets, mediaSections } from '../../db/schema.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -19,6 +19,7 @@ import {
   assertContentMatches, buildImageVariants, buildPosterThumb, extensionOfType, kindOfType, mediaFilePath, placeOriginal,
   readImageFacts, receiveToTemp,
 } from './mediaStorage.js';
+import { normalizeMediaTags } from '../../lib/media/mediaTags.js';
 
 /**
  * v10.0.21 (N-05): records of the media library. Every write runs in one transaction with its «کتابخانه تصاویر» audit row
@@ -59,6 +60,7 @@ export interface MediaAssetView {
   description: string;
   sortOrder: number;
   isCover: boolean;
+  tags: string[];
   originalName: string;
   mimeType: string;
   sizeBytes: number;
@@ -88,6 +90,7 @@ export function assetView(row: AssetRow): MediaAssetView {
     description: row.description,
     sortOrder: row.sortOrder,
     isCover: row.isCover === 1,
+    tags: row.tags ?? [],
     originalName: row.originalName,
     mimeType: row.mimeType,
     sizeBytes: row.sizeBytes,
@@ -105,10 +108,10 @@ export function assetView(row: AssetRow): MediaAssetView {
   };
 }
 
-const auditSnapshot = (row: AssetRow) => ({
+export const auditSnapshot = (row: AssetRow) => ({
   sectionId: row.sectionId, itemId: row.itemId, kind: row.kind, shotType: row.shotType, title: row.title,
-  description: row.description, sortOrder: row.sortOrder, originalName: row.originalName, mimeType: row.mimeType,
-  sizeBytes: row.sizeBytes, sha256: row.sha256,
+  description: row.description, tags: row.tags ?? [], sortOrder: row.sortOrder, isCover: row.isCover, originalName: row.originalName,
+  mimeType: row.mimeType, sizeBytes: row.sizeBytes, sha256: row.sha256,
 });
 
 async function lockLiveSection(tx: DbTransaction, sectionId: number) {
@@ -131,7 +134,7 @@ async function resolveItemLink(tx: DbTransaction, sectionKind: string, itemId: n
   return item.id;
 }
 
-function resolveMediaType(fileName: string, declaredType: string): string {
+export function resolveMediaType(fileName: string, declaredType: string): string {
   if (isHeicName(fileName) || /^image\/hei[cf]$/i.test(declaredType.trim())) {
     throw new ValidationError(MEDIA_HEIC_TEXT, undefined, 'MEDIA_FORMAT_HEIC');
   }
@@ -153,6 +156,27 @@ export async function refreshImageVariants(row: Pick<AssetRow, 'id' | 'sha256' |
   }
 }
 
+export interface MediaSectionView {
+  id: number;
+  kind: string;
+  title: string;
+  description: string;
+  sortOrder: number;
+  version: number;
+  assetCount: number;
+}
+
+/** Live sections in display order with the number of their live files (v10.0.27, N-05 PR 3) */
+export async function listLiveSections(db: DbExecutor): Promise<MediaSectionView[]> {
+  const rows = await db.select({
+    id: mediaSections.id, kind: mediaSections.kind, title: mediaSections.title, description: mediaSections.description,
+    sortOrder: mediaSections.sortOrder, version: mediaSections.version,
+    assetCount: sql<number>`(SELECT count(*)::int FROM ${mediaAssets} WHERE ${mediaAssets.sectionId} = ${mediaSections.id} AND ${mediaAssets.isDeleted} = 0)`,
+  }).from(mediaSections).where(eq(mediaSections.isDeleted, 0))
+    .orderBy(asc(mediaSections.sortOrder), asc(mediaSections.id));
+  return rows.map(r => ({ ...r, assetCount: Number(r.assetCount ?? 0) }));
+}
+
 export const MediaAssetService = {
   async productsSectionId(): Promise<number> {
     const [row] = await orm.select({ id: mediaSections.id }).from(mediaSections)
@@ -162,9 +186,17 @@ export const MediaAssetService = {
   },
 
   async listSections() {
-    const rows = await orm.select().from(mediaSections).where(eq(mediaSections.isDeleted, 0))
-      .orderBy(asc(mediaSections.sortOrder), asc(mediaSections.id));
-    return rows.map(s => ({ id: s.id, kind: s.kind, title: s.title, description: s.description, sortOrder: s.sortOrder, version: s.version }));
+    return listLiveSections(orm);
+  },
+
+  /** v10.0.27 (N-05 PR 3): the tags of live files, of one section or all, each once (letter case ignored) */
+  async listTags(sectionId?: number): Promise<string[]> {
+    const sectionCondition = sectionId ? sql`AND ${mediaAssets.sectionId} = ${sectionId}` : sql``;
+    const result = await orm.execute(sql`
+      SELECT min(t.tag) AS tag FROM ${mediaAssets}, unnest(${mediaAssets.tags}) AS t(tag)
+       WHERE ${mediaAssets.isDeleted} = 0 ${sectionCondition}
+       GROUP BY lower(t.tag) ORDER BY lower(t.tag)`);
+    return (result.rows as Array<{ tag: string }>).map(r => r.tag);
   },
 
   /**
@@ -246,16 +278,22 @@ export const MediaAssetService = {
     }
   },
 
-  async list(filters: { sectionId?: number; itemId?: number; kind?: string; shotType?: string; lowQuality?: boolean; search?: string; page: number; limit: number }) {
+  async list(filters: { sectionId?: number; itemId?: number; kind?: string; shotType?: string; lowQuality?: boolean; tag?: string; search?: string; page: number; limit: number }) {
     const conditions: SQL[] = [eq(mediaAssets.isDeleted, 0)];
     if (filters.sectionId) conditions.push(eq(mediaAssets.sectionId, filters.sectionId));
     if (filters.itemId) conditions.push(eq(mediaAssets.itemId, filters.itemId));
     if (filters.kind) conditions.push(eq(mediaAssets.kind, filters.kind));
     if (filters.shotType) conditions.push(eq(mediaAssets.shotType, filters.shotType));
     if (filters.lowQuality) conditions.push(eq(mediaAssets.isLowQuality, 1));
+    if (filters.tag?.trim()) {
+      conditions.push(sql`EXISTS (SELECT 1 FROM unnest(${mediaAssets.tags}) AS t(tag) WHERE lower(t.tag) = ${filters.tag.trim().toLowerCase()})`);
+    }
     if (filters.search?.trim()) {
       const pattern = containsLikePattern(filters.search.trim());
-      conditions.push(or(ilike(mediaAssets.title, pattern), ilike(mediaAssets.description, pattern), ilike(mediaAssets.originalName, pattern))!);
+      conditions.push(or(
+        ilike(mediaAssets.title, pattern), ilike(mediaAssets.description, pattern), ilike(mediaAssets.originalName, pattern),
+        sql`EXISTS (SELECT 1 FROM unnest(${mediaAssets.tags}) AS t(tag) WHERE t.tag ILIKE ${pattern})`,
+      )!);
     }
     const where = and(...conditions);
     const [{ total }] = await orm.select({ total: count() }).from(mediaAssets).where(where);
@@ -269,7 +307,9 @@ export const MediaAssetService = {
     return assetView(await liveAsset(id));
   },
 
-  async update(id: number, input: { version: number; title?: string; description?: string; shotType?: MediaShotType; sortOrder?: number }, actor: MediaActor): Promise<MediaAssetView> {
+  async update(id: number, input: { version: number; title?: string; description?: string; shotType?: MediaShotType; sortOrder?: number; tags?: string[] }, actor: MediaActor): Promise<MediaAssetView> {
+    const tags = input.tags === undefined ? undefined : normalizeMediaTags(input.tags);
+    if (tags && !tags.ok) throw new ValidationError(tags.error, undefined, 'MEDIA_TAGS_INVALID');
     return orm.transaction(async (tx) => {
       const before = await lockOwnAsset(tx, id, actor);
       if (before.version !== input.version) {
@@ -283,6 +323,7 @@ export const MediaAssetService = {
         description: input.description !== undefined ? input.description.trim() : before.description,
         shotType: input.shotType ?? before.shotType,
         sortOrder: input.sortOrder ?? before.sortOrder,
+        tags: tags?.ok ? tags.value : before.tags,
         version: before.version + 1,
         updatedAt: sql`now()`,
       }).where(and(eq(mediaAssets.id, id), eq(mediaAssets.version, before.version))).returning();
@@ -335,14 +376,14 @@ export const MediaAssetService = {
   },
 };
 
-async function liveAsset(id: number): Promise<AssetRow> {
+export async function liveAsset(id: number): Promise<AssetRow> {
   const [row] = await orm.select().from(mediaAssets).where(and(eq(mediaAssets.id, id), eq(mediaAssets.isDeleted, 0)));
   if (!row) throw new NotFoundError('فایل یافت نشد.', undefined, 'MEDIA_NOT_FOUND');
   return row;
 }
 
 /** Locks a live file for a change; without `media.manage` only the uploader may change it */
-async function lockOwnAsset(tx: DbTransaction, id: number, actor: MediaActor): Promise<AssetRow> {
+export async function lockOwnAsset(tx: DbTransaction, id: number, actor: MediaActor): Promise<AssetRow> {
   const [row] = await tx.select().from(mediaAssets).where(and(eq(mediaAssets.id, id), eq(mediaAssets.isDeleted, 0))).for('update');
   if (!row) throw new NotFoundError('فایل یافت نشد.', undefined, 'MEDIA_NOT_FOUND');
   const own = actor.userId !== undefined && row.createdByUserId === actor.userId;

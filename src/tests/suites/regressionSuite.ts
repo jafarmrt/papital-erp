@@ -10848,6 +10848,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 N-05 PR 2 (v10.0.25+): product card, product grid and zip download of the media library
   const { runMediaProductTests } = await import('../regression/mediaProductTests.js');
   results.push(...await runMediaProductTests(shouldRun));
+  // Series 10 N-05 PR 3 (v10.0.27+): sections, tags, order, cover, replace and the item picture of the media library
+  const { runMediaArrangeTests } = await import('../regression/mediaArrangeTests.js');
+  results.push(...await runMediaArrangeTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');

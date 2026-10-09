@@ -10,10 +10,13 @@ import { MediaAssetService, type MediaActor } from '../services/media/mediaAsset
 import { mediaTooLarge } from '../services/media/mediaStorage.js';
 import { MediaProductService } from '../services/media/mediaProducts.service.js';
 import { planMediaZip, writeMediaZip } from '../services/media/mediaZip.js';
+import { MediaSectionService } from '../services/media/mediaSections.service.js';
+import { MediaArrangeService } from '../services/media/mediaArrange.service.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import {
-  mediaFileSchema, mediaListSchema, mediaPosterSchema, mediaProductInfoSchema, mediaProductListSchema, mediaProductParamsSchema,
-  mediaUpdateSchema, mediaUploadSchema, mediaZipSchema,
+  mediaAssetOrderSchema, mediaCoverSchema, mediaFileSchema, mediaItemImageSchema, mediaListSchema, mediaPosterSchema,
+  mediaProductInfoSchema, mediaProductListSchema, mediaProductParamsSchema, mediaReplaceSchema, mediaSectionCreateSchema,
+  mediaSectionOrderSchema, mediaSectionUpdateSchema, mediaTagsSchema, mediaUpdateSchema, mediaUploadSchema, mediaZipSchema,
 } from './media.schemas.js';
 
 /**
@@ -57,11 +60,35 @@ router.get('/media/sections', authenticateToken, requirePermission(MEDIA_VIEW_PE
   res.json({ data: await MediaAssetService.listSections() });
 }));
 
+// v10.0.27 (N-05 PR 3): sections are created, renamed, reordered and deleted with media.manage; the order route comes
+// before `/:id` so its path is not read as an id
+router.post('/media/sections', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(mediaSectionCreateSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ success: true, data: await MediaSectionService.create(req.body, await actorOf(req)) });
+}));
+
+router.put('/media/sections/order', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(mediaSectionOrderSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await MediaSectionService.reorder((req.body as { ids: number[] }).ids, await actorOf(req)) });
+}));
+
+router.put('/media/sections/:id', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(mediaSectionUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await MediaSectionService.update(Number(req.params.id), req.body, await actorOf(req)) });
+}));
+
+router.delete('/media/sections/:id', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req: Request, res: Response) => {
+  await MediaSectionService.remove(Number(req.params.id), await actorOf(req));
+  res.json({ success: true });
+}));
+
+router.get('/media/tags', authenticateToken, requirePermission(MEDIA_VIEW_PERMISSION), validate(mediaTagsSchema), asyncHandler(async (req: Request, res: Response) => {
+  const q = req.query as unknown as { sectionId?: number };
+  res.json({ data: await MediaAssetService.listTags(q.sectionId) });
+}));
+
 router.get('/media/assets', authenticateToken, requirePermission(MEDIA_VIEW_PERMISSION), validate(mediaListSchema), asyncHandler(async (req: Request, res: Response) => {
-  const q = req.query as unknown as { sectionId?: number; itemId?: number; kind?: string; shotType?: string; lowQuality?: string; search?: string; page?: number; limit?: number };
+  const q = req.query as unknown as { sectionId?: number; itemId?: number; kind?: string; shotType?: string; lowQuality?: string; tag?: string; search?: string; page?: number; limit?: number };
   res.json(await MediaAssetService.list({
     sectionId: q.sectionId, itemId: q.itemId, kind: q.kind, shotType: q.shotType, lowQuality: q.lowQuality !== undefined,
-    search: q.search, page: q.page ?? 1, limit: q.limit ?? 48,
+    tag: q.tag, search: q.search, page: q.page ?? 1, limit: q.limit ?? 48,
   }));
 }));
 
@@ -100,6 +127,32 @@ router.post('/media/assets', authenticateToken, requirePermission(MEDIA_UPLOAD_P
     shotType: q.shotType,
   }, await actorOf(req));
   res.status(201).json({ success: true, data: result.asset, warnings: result.warnings });
+}));
+
+// v10.0.27 (N-05 PR 3): the order of a section's (or one product's) files, before `/media/assets/:id`
+router.put('/media/assets/order', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(mediaAssetOrderSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await MediaArrangeService.reorder(req.body, await actorOf(req)) });
+}));
+
+router.put('/media/assets/:id/cover', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(mediaCoverSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await MediaArrangeService.setCover(Number(req.params.id), (req.body as { cover: boolean }).cover, await actorOf(req)) });
+}));
+
+/** Replaces the file with a better version; the body is the raw file, like an upload */
+router.put('/media/assets/:id/content', authenticateToken, requirePermission(MEDIA_UPLOAD_PERMISSION, MEDIA_MANAGE_PERMISSION), validate(mediaReplaceSchema), asyncHandler(async (req: Request, res: Response) => {
+  assertDeclaredLength(req, MEDIA_MAX_BYTES);
+  const result = await MediaArrangeService.replaceContent(Number(req.params.id), {
+    body: req, fileName: fileNameOf(req), declaredType: String(req.headers['content-type'] ?? ''),
+  }, await actorOf(req));
+  res.json({ success: true, data: result.asset, warnings: result.warnings });
+}));
+
+/** The item's picture from a product image of the library: item data, so the product card's keys open it */
+router.post('/media/assets/:id/item-image', authenticateToken, requirePermission(...MEDIA_PRODUCT_INFO_PERMISSIONS), validate(mediaItemImageSchema), asyncHandler(async (req: Request, res: Response) => {
+  const data = await MediaArrangeService.useAsItemImage(Number(req.params.id), (req.body as { version: number }).version, {
+    req, userId: req.user?.id, username: req.user?.username ?? '',
+  });
+  res.json({ success: true, data });
 }));
 
 router.put('/media/assets/:id/poster', authenticateToken, requirePermission(MEDIA_UPLOAD_PERMISSION, MEDIA_MANAGE_PERMISSION), validate(mediaPosterSchema), asyncHandler(async (req: Request, res: Response) => {
