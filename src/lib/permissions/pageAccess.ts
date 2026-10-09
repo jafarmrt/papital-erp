@@ -78,7 +78,7 @@ export const PAGE_ACCESS = {
   '/pending-materials': { gate: anyOf('pending_materials.view', 'products.view'), api: ['GET /api/pending-materials'] },
   '/transfers': { gate: anyOf('products.view'), api: ['GET /api/transfers', 'GET /api/items/options'] },
   '/reorder-alerts': { gate: anyOf('products.view', 'warehouse.view'), api: ['GET /api/items/reorder-alerts'] },
-  '/pricing': { gate: anyOf('products.edit_price', 'products.view'), api: ['GET /api/items', 'GET /api/items/prices/all'] },
+  '/pricing': { gate: anyOf('products.edit_price', 'products.view'), api: ['GET /api/items/pricing-page'] },
   '/audit': { gate: anyOf('audit.view'), api: ['GET /api/documents/audit-items', 'GET /api/documents', 'GET /api/documents/:id', 'GET /api/documents/next-ref', 'GET /api/items/options'] },
   '/crm': { gate: anyOf('crm.view'), api: ['GET /api/crm/leads', 'GET /api/items/options', 'GET /api/customers/:id/documents'] },
   '/customers': { gate: anyOf('customers.view'), api: ['GET /api/customers', 'GET /api/customers/:id/documents'] },

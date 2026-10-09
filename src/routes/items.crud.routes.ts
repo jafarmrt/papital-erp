@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sql, eq, and, desc, inArray } from 'drizzle-orm';
+import { sql, eq, and, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { items, transactions, documentItems } from '../db/schema.js';
 import { authorizePermission } from '../middleware/authorize.js';
@@ -16,7 +16,8 @@ import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js';
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { itemListConditions, listItemPicks } from '../services/items/itemPickList.js';
+import { itemListConditions, itemListOrder, itemListStats, listItemPicks } from '../services/items/itemPickList.js';
+import { parseItemListSort } from '../lib/items/itemListSort.js';
 import { listReorderAlerts } from '../services/items/reorderAlerts.service.js';
 
 const router = Router();
@@ -59,9 +60,11 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
     const search = req.query.search as string;
     const isExport = req.query.export === 'true';
 
-    const whereClause = itemListConditions(type, search);
+    const whereClause = itemListConditions(type, search, { withCategory: true });
+    // v10.0.32 (OBS-R1-74): مرتب‌سازی در پایگاه‌داده روی همه کالاهای پالایش
+    const sort = parseItemListSort(req.query.sort, req.query.direction);
 
-    let query = orm.select().from(items).where(whereClause).orderBy(desc(items.id)).$dynamic();
+    let query = orm.select().from(items).where(whereClause).orderBy(...itemListOrder(sort)).$dynamic();
 
     if (!isExport && limit > 0) {
       query = query.limit(limit).offset(offset);
@@ -160,6 +163,7 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
     res.json({
       data: mapped,
       total,
+      stats: await itemListStats(whereClause),
       page,
       limit,
       totalPages: limit > 0 ? Math.ceil(total / limit) : 1

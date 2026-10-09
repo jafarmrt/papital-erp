@@ -5,6 +5,7 @@ import { Item } from '../../types';
 import { toast } from 'react-hot-toast';
 import { QUERY_KEYS, itemKeys } from '../../lib/queryKeys';
 import { invalidateDomain, invalidatePreset } from '../../lib/queryInvalidation';
+import type { ItemListSort, ItemListStats } from '../../lib/items/itemListSort';
 
 export { itemKeys };
 
@@ -13,6 +14,8 @@ export interface ItemsResponse {
   total: number;
   page: number;
   totalPages: number;
+  /** v10.0.32 (OBS-R1-74): آمار روی همه کالاهای پالایش */
+  stats: ItemListStats;
 }
 
 export function useAllItemsQuery(type?: 'product' | 'raw_material') {
@@ -30,10 +33,12 @@ export function useAllItemsQuery(type?: 'product' | 'raw_material') {
 /**
  * Hook to query items (products / raw materials) with pagination and search
  */
-export function useItemsQuery(type: 'product' | 'raw_material' = 'product', page: number = 1, limit: number = 50, search?: string) {
+export function useItemsQuery(
+  type: 'product' | 'raw_material' = 'product', page: number = 1, limit: number = 50, search?: string, sort: ItemListSort | null = null,
+) {
   return useQuery<ItemsResponse>({
-    queryKey: QUERY_KEYS.items.list({ type, page, limit, search: search?.trim() || '' }),
-    queryFn: async () => {
+    queryKey: QUERY_KEYS.items.list({ type, page, limit, search: search?.trim() || '', sort: sort ? `${sort.key}:${sort.direction}` : '' }),
+    queryFn: async ({ signal }) => {
       const query = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
@@ -42,24 +47,23 @@ export function useItemsQuery(type: 'product' | 'raw_material' = 'product', page
       if (search && search.trim()) {
         query.append('search', search.trim());
       }
-      const res = await fetchJson(`/items?${query.toString()}`);
+      // v10.0.32 (OBS-R1-74): مرتب‌سازی در سرور روی همه کالاها
+      if (sort) {
+        query.append('sort', sort.key);
+        query.append('direction', sort.direction);
+      }
+      const res = await fetchJson(`/items?${query.toString()}`, { signal });
+      const lowStock = Number(res?.stats?.lowStock) || 0;
       if (res && Array.isArray(res.data)) {
         return {
           data: res.data,
           total: res.total || 0,
           page: res.page || page,
           totalPages: res.totalPages || 1,
+          stats: { lowStock },
         };
       }
-      if (Array.isArray(res)) {
-        return {
-          data: res,
-          total: res.length,
-          page: 1,
-          totalPages: Math.ceil(res.length / limit) || 1,
-        };
-      }
-      return { data: [], total: 0, page: 1, totalPages: 1 };
+      return { data: [], total: 0, page: 1, totalPages: 1, stats: { lowStock } };
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,

@@ -10882,6 +10882,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 3 lane L2 (v10.0.27+): package 5 ledger, items and pricing (TD-987)
   const { runItemPricingLedgerTests } = await import('../regression/itemPricingLedgerTests.js');
   results.push(...await runItemPricingLedgerTests(shouldRun));
+  const { runItemListLedgerTests } = await import('../regression/itemListLedgerTests.js');
+  results.push(...await runItemListLedgerTests(shouldRun));
 
   return results;
 }
