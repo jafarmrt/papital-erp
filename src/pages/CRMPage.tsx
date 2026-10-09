@@ -15,6 +15,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { CRMLeadModal } from '../components/crm/CRMLeadModal';
 import { CRMLeadDrawer } from '../components/crm/CRMLeadDrawer';
 import { JalaliDateInput } from '../components/common/JalaliDateInput';
+import { leadProformaState } from '../lib/crm/leadProformaState';
 
 export default function CRMPage({ user }: { user: any }) {
   const crm = useCRMData(user);
@@ -64,19 +65,8 @@ export default function CRMPage({ user }: { user: any }) {
       void crm.loadAllData();
 
       // Navigate to create invoice page with pre-filled buyer details
-      void navigate('/remittances', {
-        state: {
-          crmLeadId: lead.id,
-          // v9.0.336 (TD-778): پیش‌فاکتور به همان مشتری با شناسه وصل می‌شود
-          customerId: res.customer?.id,
-          buyerName: res.customer?.name || lead.customerName || lead.company || lead.title,
-          buyerPhone: res.customer?.phone || lead.phone || '',
-          buyerAddress: res.customer?.address || lead.notes || '',
-          notes: `صادره از پرونده فروش #${lead.id} - ${lead.title}`,
-          status: 'proforma',
-          currency: lead.currency || 'IRR'
-        }
-      });
+      // v10.0.31 (OBS-R2-30): نشانی خریدار فقط از مشتری، نه یادداشت پرونده
+      void navigate('/remittances', { state: leadProformaState(lead, res.customer) });
     } catch (err: any) {
       toast.dismiss('convert-lead');
       toast.error(err.message || 'خطا در تبدیل پرونده فروش به مشتری');
