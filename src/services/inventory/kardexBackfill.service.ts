@@ -6,6 +6,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { logger } from '../../middleware/logger.js';
 import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
+import { lockStockItems } from './stockItemLocks.js';
 import { money } from '../../lib/money.js';
 
 export const KARDEX_BACKFILL_REF = 'موجودی اولیه (تطبیق سیستم)';
@@ -38,6 +39,7 @@ export class KardexBackfillService {
         GROUP BY item_id
       ) t ON i.id = t.item_id
       WHERE i.is_deleted = 0 AND i.current_stock > 0 AND COALESCE(t.total_in, 0) = 0
+      ORDER BY i.id
     `);
 
     const candidateRows = Array.isArray(candidates?.rows) ? candidates.rows : [];
@@ -46,6 +48,9 @@ export class KardexBackfillService {
     let zeroWacItems = 0;
 
     await orm.transaction(async (tx) => {
+      // v10.0.22 (OBS-R1-80): همه کالاها یک‌جا، به ترتیب شناسه و با `FOR NO KEY UPDATE` (TD-320)، همان قفل مسیرهای سند؛
+      // پیش‌تر هر کالا جدا با `FOR UPDATE` و به ترتیب دلخواه پرس‌وجو قفل می‌شد و با ثبت هم‌زمان سند بن‌بست می‌ساخت
+      await lockStockItems(tx, candidateRows.map(row => Number(row.id)));
       for (const row of candidateRows) {
         const itemId = Number(row.id);
         const wacRaw = (row.weighted_average_cost ?? 0) as DecimalValue;
@@ -54,8 +59,7 @@ export class KardexBackfillService {
         const [lockedItem] = await tx
           .select({ id: items.id, weightedAverageCost: items.weightedAverageCost })
           .from(items)
-          .where(and(eq(items.id, itemId), eq(items.isDeleted, 0)))
-          .for('update');
+          .where(and(eq(items.id, itemId), eq(items.isDeleted, 0)));
 
         if (!lockedItem) continue;
 

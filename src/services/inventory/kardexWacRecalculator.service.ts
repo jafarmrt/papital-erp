@@ -5,7 +5,6 @@ import { fin } from '../../lib/financialDecimal.js';
 import { OutboxService } from '../events/outboxService.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
-import { NegativeStockPolicyService } from './negativeStockPolicy.service.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { logger } from '../../middleware/logger.js';
@@ -97,7 +96,8 @@ export class KardexWacRecalculatorService {
         .select()
         .from(items)
         .where(and(eq(items.id, itemId), eq(items.isDeleted, 0)))
-        .for('update');
+        // v10.0.22 (OBS-R1-80): همان قفل مسیرهای گردش انبار (TD-320)، نه `FOR UPDATE` که درج ردیف کاردکس سند هم‌زمان را می‌بندد
+        .for('no key update');
 
       if (!item) {
         // v9.0.81 (TD-494): کالای ناموجود ۴۰۴، نه ۵۰۰
@@ -126,7 +126,6 @@ export class KardexWacRecalculatorService {
       const qtyByWarehouseId = new Map<number, number>();
       const unresolvedByLocation = new Map<string, number>();
 
-      const policy = await NegativeStockPolicyService.getPolicy(txEngine);
 
       for (const tx of itemTxs) {
         const qty = fin(tx.quantity);
@@ -146,7 +145,7 @@ export class KardexWacRecalculatorService {
 
       // v8.0.13 (TD-269): بازپخش از WAC صفر شروع می‌شود؛ WAC کنونی فقط جایگزین نتیجه غیرمثبت است
       const replay = replayKardexWac(allItemTxs, item.weightedAverageCost);
-      if (replay.firstNegativeRowId !== null && policy === 'forbidden') {
+      if (replay.firstNegativeRowId !== null) {
         // v9.0.81 (TD-494): خطای کاری با پیام فارسی و ۴۲۲ (پیش‌تر Error انگلیسی و ۵۰۰)
         throw new ValidationError(
           `بازسازی کاردکس کالای «${item.name}» (${item.code}) انجام نشد: مانده کاردکس به ترتیب ثبت در ردیف #${replay.firstNegativeRowId} ` +

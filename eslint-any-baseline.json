@@ -172,7 +172,7 @@
   "src/tests/suites/databaseSuite.ts": 22,
   "src/tests/suites/documentIntegritySuite.ts": 27,
   "src/tests/suites/e2eSuite.ts": 5,
-  "src/tests/suites/integrationSuite.ts": 26,
+  "src/tests/suites/integrationSuite.ts": 25,
   "src/tests/suites/penetrationSuite.ts": 9,
   "src/tests/suites/regressionSuite.ts": 162,
   "src/tests/suites/securitySuite.ts": 44,

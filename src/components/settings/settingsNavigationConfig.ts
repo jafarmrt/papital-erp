@@ -9,7 +9,6 @@ import {
   FolderTree, 
   Tags, 
   ShoppingBag, 
-  ShieldCheck, 
   Activity,
   LucideIcon
 } from 'lucide-react';
@@ -99,13 +98,6 @@ export const SETTINGS_GROUPS: SettingCategoryGroup[] = [
         shortDesc: 'تعریف انبارهای فیزیکی، کد انبار و وضعیت فعالیت',
         icon: Building2,
         keywords: ['انبار', 'محل نگهداری', 'کد انبار', 'انبارها', 'سوله', 'موجودی انبار']
-      },
-      {
-        id: 'inventory_integrity',
-        label: 'سیاست کنترل موجودی منفی',
-        shortDesc: 'قوانین یکپارچگی انبار، جلوگیری از کسری و قفل صدور کالا',
-        icon: ShieldCheck,
-        keywords: ['موجودی منفی', 'کنترل موجودی', 'قفل', 'انبارگردانی', 'یکپارچگی', 'کسری', 'عدم موجودی']
       },
       {
         id: 'inventory_control',

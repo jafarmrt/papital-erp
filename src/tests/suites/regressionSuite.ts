@@ -107,7 +107,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   try {
     const {
       transferStockSchema,
-      negativeStockPolicySchema,
       projectAllocateSchema,
       allocationsQuerySchema
     } = await import('../../routes/inventory.routes.js');
@@ -160,26 +159,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
     if (!negativeQtyThrew) {
       throw new Error('transfer schema must reject negative or zero quantities.');
-    }
-
-    // Case 4: اعتبارسنجی سیاست موجودی منفی (فقط forbidden, warning, allowed)
-    const validPolicy = await negativeStockPolicySchema.parseAsync({
-      body: { policy: 'forbidden' }
-    });
-    if (validPolicy.body.policy !== 'forbidden') {
-      throw new Error('negative stock policy schema must accept a valid value.');
-    }
-
-    let invalidPolicyThrew = false;
-    try {
-      await negativeStockPolicySchema.parseAsync({
-        body: { policy: 'unlimited_dangerous' }
-      });
-    } catch {
-      invalidPolicyThrew = true;
-    }
-    if (!invalidPolicyThrew) {
-      throw new Error('negative stock policy schema must reject unknown values.');
     }
 
     // Case 5: اعتبارسنجی تخصیص به پروژه و ممانعت از آرایه خالی اقلام
