@@ -224,7 +224,8 @@ async function recordAllocation(txEngine: DbExecutor, params: {
   const domainEvent = domainEventBus.createEvent(
     DomainEventType.STOCK_ADJUSTED,
     'Project',
-    String(allocRecord.id),
+    // v10.0.30 (TD-944): the event belongs to the project (its timeline), not to the allocation id
+    String(project.id),
     {
       allocationId: allocRecord.id,
       projectId: project.id,

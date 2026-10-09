@@ -1,7 +1,7 @@
 import { toLatinDigits } from '../numericInput';
 
 /**
- * v10.0.27 (TD-974): reading the phone and bank number cells of the party Excel import (preview and upload).
+ * v10.0.32 (TD-974): reading the phone and bank number cells of the party Excel import (preview and upload).
  *
  * Excel stores a typed number as a number: «09121234567» becomes 9121234567 and a 16-digit card number keeps only 15
  * significant digits (6037991234567891 is stored as 6037991234567890). Before, the modal read every cell with

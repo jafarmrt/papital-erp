@@ -42,7 +42,7 @@ export interface CreateCustomerInput {
 
 /**
  * v8.0.122 (TD-403): ویرایش همیشه نسخه رکوردی را که از آن ساخته شده همراه دارد (version یا expectedVersion).
- * v10.0.28 (TD-975): هر فیلدی که در بدنه نیست مقدار کنونی‌اش را نگه می‌دارد.
+ * v10.0.33 (TD-975): هر فیلدی که در بدنه نیست مقدار کنونی‌اش را نگه می‌دارد.
  */
 export type UpdateCustomerInput = Partial<CreateCustomerInput> & ({ version: number; expectedVersion?: number } | { version?: number; expectedVersion: number });
 
@@ -175,7 +175,7 @@ export class CustomerService {
     const expectedVersion = Number(data.expectedVersion ?? data.version);
     checkOccVersion(prevCust, { entityType: 'Customer', entityId: customerId, expectedVersion });
 
-    // v10.0.28 (TD-975): فیلد نفرستاده مقدار کنونی را نگه می‌دارد (پیش‌تر پیش‌فرض‌های Zod آن را خالی می‌کردند)
+    // v10.0.33 (TD-975): فیلد نفرستاده مقدار کنونی را نگه می‌دارد (پیش‌تر پیش‌فرض‌های Zod آن را خالی می‌کردند)
     const keep = (sent: string | undefined, current: string | null): string => (sent === undefined ? (current ?? '') : sent.trim());
     const name = data.name === undefined ? prevCust.name : data.name.trim();
     let contactName = keep(data.contactName, prevCust.contactName);

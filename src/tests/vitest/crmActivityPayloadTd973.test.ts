@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { activityPayload } from '../../lib/crm/activityPayload';
 
-// v10.0.26 (TD-973): recording an activity keeps its party
+// v10.0.31 (TD-973): recording an activity keeps its party
 describe('CRM activity payload keeps the party (TD-973)', () => {
   const form = { title: 'call', customerId: 42 as number | null };
 
