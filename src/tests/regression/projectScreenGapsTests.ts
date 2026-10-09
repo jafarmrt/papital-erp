@@ -73,5 +73,11 @@ async function projectWorkflowStartableCase(h: Harness, wrong: string[]): Promis
   const viewer = await h.sessionWith(['workflow.view']);
   const denied = await h.get(`/api/workflow/instance/project/${projectId}`, viewer);
   if (denied.status !== 403) wrong.push(`a workflow viewer without a project read key answered ${denied.status}, expected 403`);
-  return `no instance, startable ${expected}; a viewer without a project key is refused`;
+  // The pending raw material review window showed the same dead «آغاز گردش کار» box (role guide S2-08): it reads the same answer.
+  const [pm] = await h.q(`SELECT count(*)::int AS n FROM workflow_definitions WHERE entity_type = 'pending_material' AND is_active = 1`);
+  const pmExpected = Number(pm?.n) > 0;
+  const pmRead = await h.get('/api/workflow/instance/pending_material/987654321');
+  const pmBody = pmRead.body as { instance?: unknown; startable?: unknown };
+  if (pmRead.status !== 200 || pmBody.instance !== null || pmBody.startable !== pmExpected) wrong.push(`the pending material widget read answered ${brief(pmRead)}, expected no instance and startable ${pmExpected}`);
+  return `no instance, startable ${expected} (pending material ${pmExpected}); a viewer without a project key is refused`;
 }
