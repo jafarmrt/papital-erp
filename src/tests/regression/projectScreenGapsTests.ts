@@ -2,7 +2,7 @@ import type { TestCaseResult } from '../types.js';
 import type { Harness, ShouldRun } from '../security/workflowTestHarness.js';
 import { brief, fixture } from './documentEntryTests.js';
 import { runReservationCases } from './stockReservationTests.js';
-import { ALLOCATION_RELEASE_PLACE } from '../../lib/projects/allocationLabels.js';
+import { ALLOCATION_RELEASE_PLACE, allocationStatusLabel } from '../../lib/projects/allocationLabels.js';
 
 /**
  * Series 10 phase 3, lane L3 (package 11): gaps of the project screens found while writing the role guide. Through the
@@ -13,6 +13,9 @@ export async function runProjectScreenGapsTests(shouldRun: ShouldRun): Promise<T
     ['reg_open_allocation_refusal_names_release_place_td_1143',
       'v10.0.38: deleting or cancelling a project with an open allocation names the stock count page tab where it is released, not a project tab that does not exist (TD-1143)',
       ['td1143', 'projects', 'allocation', 'package11'], openAllocationRefusalCase],
+    ['reg_allocation_refusal_status_label_td_1144',
+      'v10.0.39: consuming or releasing an allocation that is no longer open says its status in Persian, never the status code (TD-1144)',
+      ['td1144', 'projects', 'allocation', 'package11'], allocationStatusRefusalCase],
   ]);
 }
 
@@ -38,4 +41,19 @@ async function openAllocationRefusalCase(h: Harness, wrong: string[]): Promise<s
   const cancelled = await h.put(`/api/projects/${projectId}`, { status: 'cancelled', version: Number(row?.version) });
   if (cancelled.status < 400 || !messageOf(cancelled).includes(ALLOCATION_RELEASE_PLACE)) wrong.push(`cancel answered ${brief(cancelled)}, expected a refusal naming the allocation tab of the stock count page`);
   return 'both refusals name where the allocation is released';
+}
+
+async function allocationStatusRefusalCase(h: Harness, wrong: string[]): Promise<string> {
+  const { allocationId } = await projectWithAllocation(h);
+  const released = await h.post(`/api/inventory/allocations/${allocationId}/release`, {});
+  if (released.status !== 200) throw new Error(`setup: the release answered ${brief(released)}`);
+  const releasedLabel = allocationStatusLabel('released');
+  for (const action of ['release', 'consume']) {
+    const again = await h.post(`/api/inventory/allocations/${allocationId}/${action}`, {});
+    const text = messageOf(again);
+    if (again.status !== 409) wrong.push(`${action} of a released allocation answered ${brief(again)}, expected 409`);
+    if (/allocated|released|consumed/.test(text)) wrong.push(`${action} refusal prints a status code (${brief(again)})`);
+    if (!text.includes(releasedLabel)) wrong.push(`${action} refusal does not name the released status in Persian (${brief(again)})`);
+  }
+  return 'both refusals name the allocation status in Persian';
 }
