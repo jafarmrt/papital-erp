@@ -31,7 +31,7 @@ export async function runDocumentIntegrityTests(shouldRun: ShouldRun): Promise<T
       'v9.0.327: a sales document number comes only from the server series (manual 422), a taken warehouse number is 409 instead of a silent swap, a manual number does not move the series, and the audit log keeps the stored number (TD-783)',
       ['td783', 'documents', 'ref_number', 'package8'], documentRefNumberRulesCase],
     ['reg_document_read_by_id_only_td_990',
-      'v10.0.39: GET /documents/:id reads only a positive whole id: a voided id is 404 even when another document carries that number, and a number is 400 pointing to by-ref instead of an unfiltered lookup across types, years and voided rows (TD-990, OBS-R1-93)',
+      'v10.0.46: GET /documents/:id reads only a positive whole id: a voided id is 404 even when another document carries that number, and a number is 400 pointing to by-ref instead of an unfiltered lookup across types, years and voided rows (TD-990, OBS-R1-93)',
       ['td990', 'documents', 'by_id', 'package8'], documentReadByIdOnlyCase],
   ];
   for (const [id, name, tags, run] of cases) {

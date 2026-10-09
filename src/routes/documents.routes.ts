@@ -218,7 +218,7 @@ export const paramsRefSchema = z.object({
   }).passthrough(),
 });
 
-// v10.0.39 (TD-990، OBS-R1-93): فقط شناسه سند؛ جست‌وجوی شماره عطف با نوع و سال از `/documents/by-ref/:ref` است.
+// v10.0.46 (TD-990، OBS-R1-93): فقط شناسه سند؛ جست‌وجوی شماره عطف با نوع و سال از `/documents/by-ref/:ref` است.
 // پیش‌تر ورودی ناشناس با شماره عطف، بی پالایه نوع، سال و ابطال، جست‌وجو می‌شد
 export const paramsDocIdSchema = z.object({
   params: z.object({
