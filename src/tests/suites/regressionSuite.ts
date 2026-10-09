@@ -10853,6 +10853,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runSystemHealthTests(shouldRun));
   const { runFactoryResetTests } = await import('../regression/factoryResetTests.js');
   results.push(...await runFactoryResetTests(shouldRun));
+  const { runInitialSetupTests } = await import('../regression/initialSetupTests.js');
+  results.push(...await runInitialSetupTests(shouldRun));
 
   // Package 1 second half PR 3 (v9.0.444+): foreign keys of the schema and the database
   const { runForeignKeyPolicyTests } = await import('../regression/foreignKeyPolicyTests.js');

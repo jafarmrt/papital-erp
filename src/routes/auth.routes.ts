@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
@@ -10,8 +9,9 @@ import { validate } from '../middleware/validate.js';
 import { logActivity, extractClientIp } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { UnauthorizedError, BadRequestError, ConflictError, ValidationError } from '../errors/customErrors.js';
+import { UnauthorizedError, ValidationError } from '../errors/customErrors.js';
 import { safeCompareTokens } from '../lib/timingSafeCompare.js';
+import { revokeUserSessions, runInitialSetup } from '../services/auth/initialSetup.service.js';
 import {
   checkAccountLockout,
   recordFailedAttempt,
@@ -21,14 +21,13 @@ import {
   GENERIC_LOGIN_FAILURE_MESSAGE
 } from '../services/auth/loginSecurity.service.js';
 import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
-import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
 import { FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE } from '../lib/users/profileFields.js';
 import { roleDisplayName } from '../lib/users/roleDisplayName.js';
 import { normalizeRialDisplayUnit } from '../lib/rialDisplay.js';
 import {
-  SETUP_USERNAME_MIN_LENGTH, SETUP_USERNAME_TOO_SHORT_MESSAGE, SETUP_COMPANY_NAME_REQUIRED_MESSAGE, SETUP_IN_PROGRESS_MESSAGE,
-  SETUP_TOKEN_NOT_CONFIGURED_MESSAGE, SETUP_ALREADY_DONE_MESSAGE, SETUP_DEFAULT_PASSWORD_MESSAGE,
+  SETUP_USERNAME_MIN_LENGTH, SETUP_USERNAME_TOO_SHORT_MESSAGE, SETUP_COMPANY_NAME_REQUIRED_MESSAGE,
+  SETUP_TOKEN_NOT_CONFIGURED_MESSAGE, SETUP_DEFAULT_PASSWORD_MESSAGE,
 } from '../lib/auth/setupRules.js';
 
 const router = Router();
@@ -139,104 +138,47 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
     throw new UnauthorizedError('رمز راه‌اندازی نادرست است');
   }
 
-  // 2. PostgreSQL advisory lock (79234) to prevent race conditions (SEC-012)
-  const { sql } = await import('drizzle-orm');
-  const lockResult = (await orm.execute(sql`SELECT pg_try_advisory_lock(79234) AS acquired`)) as unknown as { rows?: Array<{ acquired?: boolean | string }> } | Array<{ acquired?: boolean | string }>;
-  const rows = (lockResult as { rows?: Array<{ acquired?: boolean | string }> })?.rows || (Array.isArray(lockResult) ? lockResult : []);
-  const isAcquired = Boolean(rows[0]?.acquired === true || rows[0]?.acquired === 't');
-
-  if (!isAcquired) {
-    throw new ConflictError(SETUP_IN_PROGRESS_MESSAGE, undefined, 'SETUP_IN_PROGRESS');
+  const { username, password, fullName, companyName, warehouseName, phone, address, logo, currency } = req.body;
+  if (isProduction && (password === 'admin123456' || password.length < MIN_PASSWORD_LENGTH)) {
+    throw new ValidationError(password === 'admin123456' ? SETUP_DEFAULT_PASSWORD_MESSAGE : PASSWORD_TOO_SHORT_MESSAGE);
+  }
+  const tUsername = (username || '').trim();
+  // v9.0.76 (TD-521): مدیر نخست با پیشوند کاربران آزمون شمرده نمی‌شد و راه‌اندازی دوباره باز می‌ماند
+  if (isSyntheticTestUsername(tUsername)) {
+    throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
   }
 
+  // v10.0.25 (L5 E7, TD-960): admin, default warehouse, company settings and the audit row in one transaction under
+  // the transaction advisory lock 79234 (SEC-012); the company logo stays a data URL in app_settings (V3.1.11)
+  const user = await runInitialSetup({
+    username: tUsername, password, fullName, companyName, warehouseName, phone, address, logo: logo || '', currency,
+    ipAddress: extractClientIp(req),
+  });
+
+  // Clean up residual test artifacts once the setup has run (only a setup that created the admin gets here)
+  // TST-001: computed specifier keeps src/tests out of the production bundle
   try {
-    // 3. Race-safe check for existing admin users
-    const [{ count }] = await orm.select({ count: sql<number>`count(*)` })
-      .from(users)
-      .where(notSyntheticTestUsername(users.username));
-    
-    if (Number(count) > 0) {
-      throw new BadRequestError(SETUP_ALREADY_DONE_MESSAGE);
-    }
-
-    // Clean up any residual test artifacts before creating initial admin
-    // TST-001: computed specifier keeps src/tests out of the production bundle
-    try {
-      const spec = ['..', 'tests', 'fixtures', 'dbTestHelper.js'].join('/');
-      const { cleanupAllTestFixtures } = await import(/* @vite-ignore */ spec);
-      await cleanupAllTestFixtures();
-    } catch {
-      // Non-blocking
-    }
-
-    const { username, password, fullName, companyName, warehouseName, phone, address, logo, currency } = req.body;
-    if (isProduction && (password === 'admin123456' || password.length < MIN_PASSWORD_LENGTH)) {
-      throw new ValidationError(password === 'admin123456' ? SETUP_DEFAULT_PASSWORD_MESSAGE : PASSWORD_TOO_SHORT_MESSAGE);
-    }
-    const tUsername = (username || '').trim();
-    // v9.0.76 (TD-521): مدیر نخست با پیشوند کاربران آزمون شمرده نمی‌شد و راه‌اندازی دوباره باز می‌ماند
-    if (isSyntheticTestUsername(tUsername)) {
-      throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
-    }
-    const hash = await bcrypt.hash(password, 10);
-
-    let logoPath = logo || '';
-    // V3.1.11: لوگوی شرکت مستقیماً به‌صورت Data URL متنی در دیتابیس (appSettings) ذخیره می‌شود
-    // تا در محیط‌های Containerized و Cloud Run با ری‌استارت کانتاینر از بین نرود.
-
-    const [user] = await orm.insert(users).values({
-      username: tUsername,
-      password: hash,
-      fullName,
-      role: SYSTEM_ADMIN_ROLE,
-    }).returning();
-
-    // Create the default warehouse from setup
-    const { warehouses } = await import('../db/schema.js');
-    await orm.insert(warehouses).values({
-      name: warehouseName || 'انبار مرکزی',
-      code: 'main',
-      isActive: 1
-    }).onConflictDoNothing();
-
-    // Save company business settings
-    const companySettings = [
-      { key: 'company_name', value: companyName },
-      { key: 'company_phone', value: phone || '' },
-      { key: 'company_address', value: address || '' },
-      { key: 'company_logo', value: logoPath || '' },
-      { key: 'currency', value: currency || 'IRR' },
-      { key: 'display_timezone', value: process.env.DISPLAY_TIMEZONE || 'Asia/Tehran' }
-    ];
-
-    for (const item of companySettings) {
-      await orm.insert(appSettings).values(item)
-        .onConflictDoUpdate({ target: appSettings.key, set: { value: item.value } });
-    }
-
-    const csrfToken = generateCsrfToken();
-    const token = generateToken({ id: user.id, username: user.username, role: user.role, csrfToken, tokenVersion: user.tokenVersion || 0 });
-    const { password: _, ...userWithoutPassword } = user;
-    
-    // Set secure HttpOnly cookie
-    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
-
-    // V3.0.6 (BUG-08) / v7.0.27 (TD-185): توکن فقط در کوکی HttpOnly؛ فیلد token تنها با EXPOSE_TOKEN_IN_BODY=true
-    res.json({ 
-      success: true, 
-      user: { ...userWithoutPassword, full_name: user.fullName || user.username },
-      ...(shouldExposeTokenInBody() ? { token } : {}),
-      csrfToken
-    });
-  } finally {
-    // 4. Always release the advisory lock
-    try {
-      await orm.execute(sql`SELECT pg_advisory_unlock(79234)`);
-    } catch (unlockErr) {
-      const errMsg = unlockErr instanceof Error ? unlockErr.message : String(unlockErr);
-      logger.warn(`[Setup] Error releasing advisory lock 79234: ${errMsg}`);
-    }
+    const spec = ['..', 'tests', 'fixtures', 'dbTestHelper.js'].join('/');
+    const { cleanupAllTestFixtures } = await import(/* @vite-ignore */ spec);
+    await cleanupAllTestFixtures();
+  } catch {
+    // Non-blocking
   }
+
+  const csrfToken = generateCsrfToken();
+  const token = generateToken({ id: user.id, username: user.username, role: user.role, csrfToken, tokenVersion: user.tokenVersion || 0 });
+  const { password: _, ...userWithoutPassword } = user;
+
+  // Set secure HttpOnly cookie
+  res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+
+  // V3.0.6 (BUG-08) / v7.0.27 (TD-185): توکن فقط در کوکی HttpOnly؛ فیلد token تنها با EXPOSE_TOKEN_IN_BODY=true
+  res.json({
+    success: true,
+    user: { ...userWithoutPassword, full_name: user.fullName || user.username },
+    ...(shouldExposeTokenInBody() ? { token } : {}),
+    csrfToken
+  });
 }));
 
 router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async (req, res) => {
@@ -380,13 +322,11 @@ const logoutHandler = asyncHandler(async (req, res) => {
       targetUsername = targetUsername || payload?.username;
 
       if (targetUserId) {
-        const [row] = await orm.select().from(users).where(eq(users.id, targetUserId)).limit(1);
-        if (row) {
-          targetUsername = targetUsername || row.username;
-          targetFullName = targetFullName || row.fullName || row.username;
-          await orm.update(users)
-            .set({ tokenVersion: (row.tokenVersion || 0) + 1 })
-            .where(eq(users.id, targetUserId));
+        // v10.0.25 (L5 E7): the token version is raised under the user row lock in a service
+        const revoked = await revokeUserSessions(targetUserId);
+        if (revoked) {
+          targetUsername = targetUsername || revoked.username;
+          targetFullName = targetFullName || revoked.fullName;
           invalidateUserAuthCache(targetUserId);
         }
       }
