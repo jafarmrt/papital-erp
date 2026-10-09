@@ -98,6 +98,8 @@ export interface ProcurementOrderItem {
   unitPrice: number;
   totalPrice: number;
   location?: string;
+  /** نام انبار ردیف (v10.0.47، TD-1131) */
+  locationName?: string;
 }
 
 /** سفارش تدارکات، همان شکل پاسخ `GET /procurement/orders` (`listProcurementOrders`)؛ شماره در refNumber و تأمین‌کننده در supplierName */
@@ -113,6 +115,8 @@ export interface ProcurementOrder {
   requisitionCode?: string | null;
   projectName?: string | null;
   location?: string;
+  /** نام انبار مقصد (v10.0.47، TD-1131) */
+  locationName?: string;
   totalAmount: number;
   itemsCount: number;
   items: ProcurementOrderItem[];
