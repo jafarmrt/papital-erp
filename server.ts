@@ -17,6 +17,7 @@ import { WorkflowSlaReminderService } from './src/services/workflow/workflowSlaR
 import { FormDraftService } from './src/services/drafts/formDraft.service.js';
 import { pool, getDatabaseMode } from './src/db/drizzle.js';
 import { decideProcessErrorAction, processErrorMessage } from './src/lib/processErrorPolicy.js';
+import { REQUEST_TIMEOUT_MS } from './src/lib/media/mediaRules.js';
 
 async function startServer() {
   // TST-001: production startup assertion — abort if test code leaked into bundle
@@ -57,7 +58,7 @@ async function startServer() {
   (async () => {
     registerWorkflowDomainActions();
     registerDomainEventHandlers();
-    // v10.0.21 (TD-958): only the migrations are essential; a non-essential step that keeps failing is left out and
+    // v10.0.22 (TD-958): only the migrations are essential; a non-essential step that keeps failing is left out and
     // listed by /health/ready instead of stopping the whole process
     const report = await runBootSequence(bootDataSteps());
     // v7.0.40 (audit P2-11): in every environment the server never answers without its schema
@@ -117,6 +118,8 @@ async function startServer() {
   const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`Server running on port ${PORT}`);
   });
+  // v10.0.21 (N-05): a media library upload of up to 50 MB on a slow line outlasts Node's 5-minute request timeout
+  server.requestTimeout = REQUEST_TIMEOUT_MS;
 
   let isShuttingDown = false;
   function gracefulShutdown(exitCode: number = 0): void {

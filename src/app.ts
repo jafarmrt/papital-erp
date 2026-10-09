@@ -35,6 +35,7 @@ import woocommerceRoutes from './routes/woocommerce.routes.js';
 import personnelRoutes from './routes/personnel.routes.js';
 import pieceworkRoutes from './routes/piecework.routes.js';
 import pendingMaterialsRoutes from './routes/pendingMaterials.routes.js';
+import mediaRoutes from './routes/media.routes.js';
 import accountingRoutes from './routes/accounting.routes.js';
 import workflowRoutes from './routes/workflow.routes.js';
 import inventoryRoutes from './routes/inventory.routes.js';
@@ -280,7 +281,7 @@ export async function createApp(): Promise<express.Express> {
         });
       }
 
-      // v10.0.21 (TD-958): names of the startup steps the server left out after their attempts (the errors stay in the log)
+      // v10.0.22 (TD-958): names of the startup steps the server left out after their attempts (the errors stay in the log)
       const degradedSteps = bootDegradedSteps().map(s => s.step);
       res.status(200).json({
         status: 'ready',
@@ -347,6 +348,7 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api', documentsRoutes);
   app.use('/api', projectsRoutes);
   app.use('/api', transfersRoutes);
+  app.use('/api', mediaRoutes);
   app.use('/api', dailyLogsRoutes);
   app.use('/api', notificationsRoutes);
   app.use('/api', crmRoutes);

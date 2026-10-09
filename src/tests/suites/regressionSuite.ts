@@ -10842,6 +10842,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 9 phase 5 PR «الف» (v9.0.451+): the side paths that move project stock follow the stock document rules
   const { runProjectStockGateTests } = await import('../regression/projectStockGateTests.js');
   results.push(...await runProjectStockGateTests(shouldRun));
+  // Series 10 N-05 PR 1 (v10.0.21+): the media library infrastructure
+  const { runMediaLibraryTests } = await import('../regression/mediaLibraryTests.js');
+  results.push(...await runMediaLibraryTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
@@ -10850,7 +10853,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runSystemHealthTests(shouldRun));
   const { runFactoryResetTests } = await import('../regression/factoryResetTests.js');
   results.push(...await runFactoryResetTests(shouldRun));
-  // v10.0.21 (TD-959): the seed names its failed sections
+  // v10.0.22 (TD-959): the seed names its failed sections
   const { runSeedSectionTests } = await import('../regression/seedSectionTests.js');
   results.push(...await runSeedSectionTests(shouldRun));
 
