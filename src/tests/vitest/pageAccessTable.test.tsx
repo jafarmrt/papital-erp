@@ -48,7 +48,7 @@ describe('one page-access table for menu, routes, shortcuts and settings tabs (T
     const routes = [...source.matchAll(/<Route path="([^"]+)" element=\{\s*(<ProtectedRoute page="([^"]+)")?/g)];
     const routed = new Set<string>();
     for (const [, routePath, guarded, page] of routes) {
-      if (routePath === '/materials') continue; // redirect
+      if (routePath === '/materials' || routePath === '/remittances') continue; // redirects
       const expected = routePath === '/accounting/:tab' ? '/accounting' : routePath;
       expect(PAGE_ACCESS, `route ${routePath} has no page-access row`).toHaveProperty([expected]);
       const rule = PAGE_ACCESS[expected as keyof typeof PAGE_ACCESS];

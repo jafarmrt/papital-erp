@@ -19,8 +19,8 @@ export function useStockDocumentReferenceData() {
   const personnelQuery = usePersonnelListQuery();
   const projectsQuery = useQuery<StockDocProject[]>({
     queryKey: QUERY_KEYS.projects.options(),
-    queryFn: async () => {
-      const res = await fetchJson(PICK_LIST_URLS.projects);
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson(PICK_LIST_URLS.projects, { signal });
       return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
     },
     staleTime: 5 * 60 * 1000,
@@ -28,8 +28,8 @@ export function useStockDocumentReferenceData() {
   });
   const suppliersQuery = useQuery<Customer[]>({
     queryKey: QUERY_KEYS.customers.options({ scope: 'doc-suppliers' }),
-    queryFn: async () => {
-      const res = await fetchJson(PICK_LIST_URLS.customers);
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson(PICK_LIST_URLS.customers, { signal });
       return Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
     },
     staleTime: 2 * 60 * 1000,
@@ -38,8 +38,8 @@ export function useStockDocumentReferenceData() {
 
   const itemsQuery = useQuery<Item[]>({
     queryKey: QUERY_KEYS.items.list({ scope: 'doc-items-all' }),
-    queryFn: async () => {
-      const res = await fetchJson(PICK_LIST_URLS.items);
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson(PICK_LIST_URLS.items, { signal });
       return Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
     },
     staleTime: 2 * 60 * 1000,
@@ -48,8 +48,8 @@ export function useStockDocumentReferenceData() {
 
   const reservedStockQuery = useQuery<ReservedItemsResponse>({
     queryKey: ['inventory', 'reserved-items'],
-    queryFn: async () => {
-      const res = await fetchJson('/inventory/reserved-items');
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson('/inventory/reserved-items', { signal });
       return res;
     },
     staleTime: 30 * 1000,

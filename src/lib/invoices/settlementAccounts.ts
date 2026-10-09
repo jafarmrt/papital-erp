@@ -1,3 +1,5 @@
+import { fin } from '../financialDecimal';
+import { currencyScale } from '../currencyScale';
 /**
  * v9.0.345 (TD-802، یافته B08-33): حساب تسویه فاکتور به ارز همان فاکتور. سرور تراکنش خزانه‌ای را که ارزش با ارز حساب
  * فرق کند رد می‌کند (`createTreasuryTransaction`)، پس فرم تسویه فقط حساب‌های هم‌ارز را نشان می‌دهد و از میان آن‌ها
@@ -20,4 +22,12 @@ export function defaultSettlementAccountId(accounts: readonly SettlementAccountC
   const usable = settlementAccountsFor(accounts, currency);
   const preferred = usable.find(account => account.type === 'pos' || account.type === 'bank') ?? usable[0];
   return preferred ? preferred.id : '';
+}
+
+/**
+ * v10.0.27 (OBS-R1-100): «نصف مانده» با مقیاس ارز سند گرد می‌شود (ریال بی‌اعشار، ارز خارجی دو رقم)؛ پیش‌تر
+ * `Math.round` سنت‌های ارز خارجی را می‌انداخت (۱۰٫۰۵ دلار → ۵).
+ */
+export function halfRemainingAmount(remaining: number, currency: string | null | undefined): string {
+  return fin(remaining).divide(2, currencyScale(currency)).toString();
 }

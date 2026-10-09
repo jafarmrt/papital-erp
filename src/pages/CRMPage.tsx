@@ -64,7 +64,7 @@ export default function CRMPage({ user }: { user: any }) {
       void crm.loadAllData();
 
       // Navigate to create invoice page with pre-filled buyer details
-      void navigate('/remittances', {
+      void navigate('/invoices/create', {
         state: {
           crmLeadId: lead.id,
           // v9.0.336 (TD-778): پیش‌فاکتور به همان مشتری با شناسه وصل می‌شود

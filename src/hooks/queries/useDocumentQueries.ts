@@ -14,10 +14,11 @@ export interface DocumentFilters {
   limit?: number;
 }
 
+// v10.0.31 (OBS-R1-97): درخواست فهرست اسناد و داده‌های پایه صفحه اسناد انبار با ترک صفحه لغو می‌شود (`signal`)
 export function useDocumentsQuery(filters: DocumentFilters) {
   return useQuery({
     queryKey: QUERY_KEYS.documents.list(filters),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = new URLSearchParams();
       if (filters.type && filters.type !== 'all') params.set('type', filters.type);
       if (filters.types) params.set('types', filters.types);
@@ -28,7 +29,7 @@ export function useDocumentsQuery(filters: DocumentFilters) {
       if (filters.page) params.set('page', String(filters.page));
       if (filters.limit) params.set('limit', String(filters.limit));
 
-      const res = await fetchJson(`/documents${params.toString() ? `?${params.toString()}` : ''}`);
+      const res = await fetchJson(`/documents${params.toString() ? `?${params.toString()}` : ''}`, { signal });
       return res ?? null;
     },
     staleTime: 60 * 1000,

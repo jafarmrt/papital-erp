@@ -13,7 +13,7 @@ import {
   type StockDocProject,
 } from '../../lib/documents/stockReservations';
 import type { StockDocumentReferenceData } from './useStockDocumentReferenceData';
-import { invoiceReturnTerms } from '../../lib/documents/returnUnitPrice';
+import { personnelById, returnRowsFromInvoice } from '../../lib/documents/stockDocumentParties';
 import { returnInvoiceLookupError, returnInvoiceLookupUrl, type ReturnInvoiceCandidate } from '../../lib/documents/returnInvoiceLookup';
 import { toPersianDigits } from '../../utils/persianNumber';
 
@@ -42,7 +42,7 @@ interface ReturnInvoiceDocument {
  */
 export function useStockDocumentForm(currentUser: User, refData: StockDocumentReferenceData) {
   const queryClient = useQueryClient();
-  const { warehouses, personnelList, projectsList, reservedItemsData } = refData;
+  const { warehouses, personnelList, projectsList, reservedItemsData, itemsList } = refData;
 
   const [actionType, setActionType] = useState<'in' | 'out'>('in');
   const [docType, setDocType] = useState('receipt');
@@ -52,6 +52,8 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const [date, setDate] = useState<string>(() => getTodayJalaliDate());
   const [location, setLocation] = useState('');
   const [buyerName, setBuyerName] = useState('');
+  // v10.0.30 (OBS-R1-99): تحویل‌گیرنده حواله با شناسه پرسنل
+  const [receiverPersonnelId, setReceiverPersonnelId] = useState<number | null>(null);
   const [selectedSupplierObj, setSelectedSupplierObj] = useState<Customer | null>(null);
   const [currency, setCurrency] = useState('IRR');
   const [exchangeRate, setExchangeRate] = useState(0);
@@ -98,10 +100,10 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     }
   }, [warehouses, location]);
 
-  const selectedPersonnelObj = useMemo(() => {
-    if (!buyerName || actionType !== 'out') return null;
-    return personnelList.find(p => (p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim()) === buyerName.trim()) || null;
-  }, [buyerName, personnelList, actionType]);
+  const selectedPersonnelObj = useMemo(
+    () => (actionType === 'out' ? personnelById(personnelList, receiverPersonnelId) : null),
+    [receiverPersonnelId, personnelList, actionType],
+  );
 
   /** شماره فاکتور مرجع عوض شد: فاکتور و سال‌های پیشین دیگر به آن تعلق ندارند */
   const changeReturnInvoiceRef = (ref: string) => {
@@ -121,17 +123,10 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
         setBuyerName(doc.buyer_name || '');
         // v9.0.273 (TD-788، تصمیم ت۱۰ الف): ارز، نرخ و قیمت خالص هر واحد (پس از تخفیف ردیف، میانگین وزنی ردیف‌های یک کالا)
         // از فاکتور؛ همان تابعی که سرور با آن می‌سنجد. پیش‌تر فقط قیمت پیش از تخفیف کپی می‌شد و ارز صفحه (ریال) فرستاده می‌شد
-        const invoiceLines = doc.items;
-        const terms = invoiceReturnTerms(invoiceLines.map(i => ({ itemId: Number(i.item_id), quantity: i.quantity, unitPrice: i.unit_price, discount: i.discount })));
-        const newDocItems: DocItemRow[] = [];
-        for (const [itemId, t] of terms) {
-          const i = invoiceLines.find(line => Number(line.item_id) === itemId);
-          newDocItems.push({
-            item: { id: itemId, name: i?.name ?? '', code: i?.code ?? '', unit: i?.unit ?? '' } as Item,
-            quantity: t.quantity.toNumber(),
-            unitPrice: t.netUnitPrice.toNumber(),
-          });
-        }
+        const newDocItems: DocItemRow[] = returnRowsFromInvoice(doc.items.map(i => ({
+          itemId: Number(i.item_id), quantity: i.quantity, unitPrice: i.unit_price ?? 0, discount: i.discount ?? 0,
+          name: i.name, code: i.code, unit: i.unit,
+        })), itemsList);
         setCurrency(doc.currency || 'IRR');
         setExchangeRate(doc.currency && doc.currency !== 'IRR' ? Number(doc.exchangeRate) || 0 : 0);
         setDocItems(newDocItems);
@@ -171,6 +166,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     setDocType(actionType === 'in' ? 'receipt' : 'remittance');
     setDocItems([]);
     setBuyerName('');
+    setReceiverPersonnelId(null);
     setSelectedSupplierObj(null);
     setUnitPrice('');
     setQuantity('');
@@ -228,6 +224,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     date, setDate,
     location, setLocation,
     buyerName, setBuyerName,
+    receiverPersonnelId, setReceiverPersonnelId,
     selectedSupplierObj, setSelectedSupplierObj,
     currency, setCurrency,
     exchangeRate, setExchangeRate,

@@ -83,7 +83,6 @@ export const PAGE_ACCESS = {
   '/crm': { gate: anyOf('crm.view'), api: ['GET /api/crm/leads', 'GET /api/items/options', 'GET /api/customers/:id/documents'] },
   '/customers': { gate: anyOf('customers.view'), api: ['GET /api/customers', 'GET /api/customers/:id/documents'] },
   '/invoices/create': { gate: anyOf('documents.create'), api: DOCUMENT_ENTRY },
-  '/remittances': { gate: anyOf('documents.create'), api: DOCUMENT_ENTRY },
   '/projects': { gate: anyOf('projects.view'), api: ['GET /api/projects', 'GET /api/items/options'] },
   '/project-inventory': { gate: anyOf('projects.view', 'warehouse.view'), api: ['GET /api/projects/options', 'GET /api/projects/:id', 'GET /api/items/options'] },
   '/procurement': { gate: anyOf('procurement.view', 'projects.view'), api: ['GET /api/procurement/inbox/summary', 'GET /api/procurement/requisitions', 'GET /api/procurement/orders', 'GET /api/items/options'] },

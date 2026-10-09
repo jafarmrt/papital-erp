@@ -1,6 +1,7 @@
 import { Users } from 'lucide-react';
 import { Customer, Personnel } from '../../../types';
 import { SearchableSelect } from '../../SearchableSelect';
+import { personnelById, personnelDisplayName } from '../../../lib/documents/stockDocumentParties';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
 
 interface StockCounterpartyFieldProps {
@@ -14,7 +15,7 @@ interface StockCounterpartyFieldProps {
  * استخراج‌شده از DocumentsPage.
  */
 export function StockCounterpartyField({ form, personnelList, suppliersList }: StockCounterpartyFieldProps) {
-  const { actionType, buyerName, setBuyerName, selectedSupplierObj, setSelectedSupplierObj, selectedPersonnelObj } = form;
+  const { actionType, buyerName, setBuyerName, selectedSupplierObj, setSelectedSupplierObj, selectedPersonnelObj, setReceiverPersonnelId } = form;
 
   return (
     <div>
@@ -37,17 +38,22 @@ export function StockCounterpartyField({ form, personnelList, suppliersList }: S
       {actionType === 'out' ? (
         personnelList.length > 0 ? (
           <SearchableSelect
-            value={buyerName}
-            onChange={(val) => setBuyerName(val)}
+            value={selectedPersonnelObj ? String(selectedPersonnelObj.id) : ''}
+            onChange={(val) => {
+              // v10.0.30 (OBS-R1-99): انتخاب با شناسه پرسنل؛ نام او در سند ثبت می‌شود
+              const picked = personnelById(personnelList, val ? Number(val) : null);
+              setReceiverPersonnelId(picked ? Number(picked.id) : null);
+              setBuyerName(picked ? personnelDisplayName(picked) : '');
+            }}
             placeholder="جستجو و انتخاب پرسنل کارگاه..."
             maxResults={100}
-            options={personnelList.map((p, idx) => {
-              const name = p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'پرسنل';
+            options={personnelList.map((p) => {
+              const name = personnelDisplayName(p);
               const code = p.personnelCode ? `[کد: ${p.personnelCode}]` : '';
               const title = p.jobTitle ? `- ${p.jobTitle}` : '';
               const status = p.employmentStatus && p.employmentStatus !== 'فعال' ? `(${p.employmentStatus})` : '';
               return {
-                value: name,
+                value: String(p.id),
                 label: `👤 ${name} ${code} ${title} ${status}`.trim().replace(/\s+/g, ' ')
               };
             })}
