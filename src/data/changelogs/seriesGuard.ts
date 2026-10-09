@@ -34,7 +34,7 @@ export function fingerprintChangelog(updates: AIUpdateLog[]): string {
 /**
  * ناسازگاری‌های سری‌ها را برمی‌گرداند (خالی = سالم):
  * ۱) شماره اصلی package.json همان سری فعال است؛
- * ۲) همه مدخل‌های فایل فعال در همان سری‌اند و نسخه تکراری ندارند؛
+ * ۲) همه مدخل‌های فایل فعال در همان سری‌اند و نسخه یا عنوان تکراری ندارند (عنوان از v10.0.21، TD-981)؛
  * ۳) هر سری بسته‌شده دست‌نخورده است (نسخه پایانی، تعداد مدخل و اثر انگشت).
  */
 export function findChangelogSeriesViolations(
@@ -49,11 +49,18 @@ export function findChangelogSeriesViolations(
   }
 
   const seen = new Set<string>();
+  // v10.0.21 (TD-981): a parallel merge may keep one entry twice under two versions; titles are unique in the active file
+  const titles = new Map<string, string[]>();
   for (const u of active.updates) {
     const v = stripV(u?.version);
     if (majorOf(v) !== active.series) violations.push(`entry "${v}" in the active file ${active.file} is not in series ${active.series}`);
     if (seen.has(v)) violations.push(`duplicate version "${v}" in ${active.file}`);
     seen.add(v);
+    const title = String(u?.title ?? '').trim();
+    titles.set(title, [...(titles.get(title) ?? []), `v${v}`]);
+  }
+  for (const [title, versions] of titles) {
+    if (versions.length > 1) violations.push(`entry "${title}" appears twice in ${active.file} (${versions.join(', ')})`);
   }
 
   for (const c of closed) {

@@ -11,7 +11,8 @@
  *    tag, strictly increasing `when`) and added lines follow (the tag and the bare four-digit number);
  *  - audit report: a package section the branch added («## N.») whose number <ref> already uses takes the next free
  *    number, with its subsections, and added «STABILITY_AUDIT_V9.md` §N» references follow;
- *  - TECH_DEBT.md counters are recounted from both tables.
+ *  - TECH_DEBT.md drops every row whose id the merged TECH_DEBT_ARCHIVE.md holds (a row either side archived is
+ *    closed; v10.0.21, TD-981), and its counters are recounted from both tables.
  */
 
 export interface RenumberInput {
@@ -258,12 +259,21 @@ function setVersionLocations(input: RenumberInput, writes: Map<string, string>, 
   if (readme) writes.set('README.md', readme.replace(/نسخه مستقر: `v\d+\.\d+\.\d+`/, `نسخه مستقر: \`${top}\``));
 }
 
+const debtIdOf = (line: string) => line.match(/^\| (TD-\d+) \|/)?.[1];
+
+/** v10.0.21 (TD-981): TECH_DEBT.md without the rows whose id `archive` holds. */
+export function dropArchivedDebtRows(debt: string, archive: string): string {
+  const archived = new Set(archive.split('\n').map(debtIdOf).filter((id): id is string => !!id));
+  return debt.split('\n').filter(l => { const id = debtIdOf(l); return !id || !archived.has(id); }).join('\n');
+}
+
 function recountTechDebt(input: RenumberInput, writes: Map<string, string>): void {
   const get = (rel: string) => writes.get(rel) ?? input.current(rel);
-  const debt = get('TECH_DEBT.md');
   const archive = get('TECH_DEBT_ARCHIVE.md');
-  if (!debt || !archive) return;
-  const rows = (s: string) => s.split('\n').filter(l => /^\| TD-\d+ \|/.test(l)).length;
+  const current = get('TECH_DEBT.md');
+  if (!current || !archive) return;
+  const debt = dropArchivedDebtRows(current, archive);
+  const rows = (s: string) => s.split('\n').filter(l => debtIdOf(l) !== undefined).length;
   writes.set('TECH_DEBT.md', debt
     .replace(/- \*\*فعال:\*\* [۰-۹0-9]+ ردیف/, `- **فعال:** ${toFa(rows(debt))} ردیف`)
     .replace(/- \*\*آرشیو شده \(resolved\):\*\* [۰-۹0-9]+ ردیف/, `- **آرشیو شده (resolved):** ${toFa(rows(archive))} ردیف`));
