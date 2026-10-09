@@ -59,7 +59,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
   const saveMutation = useSaveWorkflowDefinitionMutation();
   const updatePositionsMutation = useUpdateCanvasPositionsMutation();
 
-  // v10.0.26 (TD-978): the role list comes from GET /api/roles (the users router has no /users/roles)
+  // v10.0.28 (TD-978): the role list comes from GET /api/roles (the users router has no /users/roles)
   const { data: dbRoles } = useRolesQuery() as { data?: { id: number; name: string; code: string; isSystem?: number; permissions?: unknown }[] };
 
   const roleOptions = (Array.isArray(dbRoles) ? dbRoles : []).map(r => ({ code: r.code, name: r.name }));
