@@ -17,19 +17,19 @@ import { binaryParser, readZipEntries } from '../fixtures/zipReader.js';
 export async function runMediaProductTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_media_product_card_item_form_n05',
-      'v10.0.17: the item form saves collections, design year and transfer code; a new product takes year and transfer code from its code; an invalid year is 422 (N-05)',
+      'v10.0.22: the item form saves collections, design year and transfer code; a new product takes year and transfer code from its code; an invalid year is 422 (N-05)',
       ['n05', 'media', 'items'], itemFormCase],
     ['reg_media_product_card_excel_n05',
-      'v10.0.17: the Excel import reads the product card columns, keeps them on a blank cell and refuses a row with an invalid design year (N-05)',
+      'v10.0.22: the Excel import reads the product card columns, keeps them on a blank cell and refuses a row with an invalid design year (N-05)',
       ['n05', 'media', 'items'], excelCase],
     ['reg_media_product_info_occ_n05',
-      'v10.0.17: the library edits the product card with media.manage or products.edit at the item version, with a «کالا» audit row (N-05)',
+      'v10.0.22: the library edits the product card with media.manage or products.edit at the item version, with an item audit row (N-05)',
       ['n05', 'media', 'permissions'], infoCase],
     ['reg_media_product_grid_filters_n05',
-      'v10.0.17: the product grid filters by collection, design year, transfer code and missing images in SQL, with file counts and a cover (N-05)',
+      'v10.0.22: the product grid filters by collection, design year, transfer code and missing images in SQL, with file counts and a cover (N-05)',
       ['n05', 'media'], gridCase],
     ['reg_media_zip_download_n05',
-      'v10.0.17: several files download as one zip in their original or light version; an unknown id is 422 (N-05)',
+      'v10.0.22: several files download as one zip in their original or light version; an unknown id is 422 (N-05)',
       ['n05', 'media'], zipCase],
   ]);
 }
@@ -134,7 +134,7 @@ async function infoCase(h: Harness, wrong: string[]): Promise<string> {
   }
   if (Number(row.version) !== 3) wrong.push(`item version ${row.version}, expected 3 (each edit advances it)`);
   const audit = await h.q(`SELECT action FROM activity_logs WHERE entity = 'کالا' AND entity_id = $1 AND action = 'UPDATE'`, [String(item.id)]);
-  if (audit.length !== 2) wrong.push(`${audit.length} «کالا» audit rows, expected 2`);
+  if (audit.length !== 2) wrong.push(`${audit.length} item audit rows, expected 2`);
   const detail = await h.get(`/api/media/products/${item.id}`, viewer);
   const card = (detail.body as { item?: { version?: number; collections?: string[] } }).item;
   if (detail.status !== 200 || card?.version !== 3) wrong.push(`the product page answered ${brief(detail)}`);
