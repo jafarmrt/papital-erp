@@ -1,73 +1,26 @@
 import { Router, Request, Response } from 'express';
-import { orm } from '../db/drizzle.js';
-import { pendingMaterials } from '../db/schema.js';
-import { eq, and, desc } from 'drizzle-orm';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
-import { logger } from '../middleware/logger.js';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
-import { approvePendingMaterialSchema, createPendingMaterialSchema, rejectPendingMaterialSchema, updatePendingMaterialSchema } from './pendingMaterials.schemas.js';
+import { approvePendingMaterialSchema, createPendingMaterialSchema, listPendingMaterialsSchema, rejectPendingMaterialSchema, updatePendingMaterialSchema } from './pendingMaterials.schemas.js';
 import { PendingMaterialsService, type PendingMaterialActor } from '../services/pendingMaterials.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import type { PendingMaterialStatusFilter } from '../lib/pendingMaterials/pendingMaterialList.js';
 
 const router = Router();
 
 /** v9.0.397 (TD-825): the reviewer or sender whose name the service writes into the audit row, inside its transaction */
 const actorOf = (req: Request): PendingMaterialActor => ({ req, userId: req.user?.id, username: req.user?.username });
 
-// GET /api/pending-materials - List pending raw materials
-router.get('/pending-materials', authenticateToken, authorizePermission(...READ_PERMISSIONS.pendingMaterials), asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const { status } = req.query;
-    const conditions = [eq(pendingMaterials.isDeleted, 0)];
-
-    if (status && status !== 'all') {
-      conditions.push(eq(pendingMaterials.status, String(status)));
-    }
-
-    const rows = await orm.select().from(pendingMaterials)
-      .where(and(...conditions))
-      .orderBy(desc(pendingMaterials.id));
-
-    // Map rows to camelCase & snake_case for frontend consistency
-    const result = rows.map(r => ({
-      id: r.id,
-      code: r.code,
-      name: r.name,
-      unit: r.unit,
-      category: r.category,
-      type: r.type,
-      projectId: r.projectId,
-      project_id: r.projectId,
-      projectTitle: r.projectTitle,
-      project_title: r.projectTitle,
-      requestedBy: r.requestedBy,
-      requested_by: r.requestedBy,
-      status: r.status,
-      reorderPoint: r.reorderPoint,
-      reorder_point: r.reorderPoint,
-      weightedAverageCost: r.weightedAverageCost,
-      weighted_average_cost: r.weightedAverageCost,
-      color: r.color,
-      weight: r.weight,
-      material: r.material,
-      size: r.size,
-      image: r.image,
-      thumbnail: r.thumbnail,
-      rejectionReason: r.rejectionReason,
-      rejection_reason: r.rejectionReason,
-      itemId: r.itemId,
-      createdAt: r.createdAt,
-      created_at: r.createdAt
-    }));
-
-    res.json(result);
-  } catch (err) {
-    logger.error({ message: 'Error fetching pending materials', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
-    throw err;
-  }
+// GET /api/pending-materials - one page of the queue
+// v10.0.27 (OBS-R1-90): filtered, counted and paged in SQL by the service (`{ data, total, page, limit, statusCounts }`)
+router.get('/pending-materials', authenticateToken, authorizePermission(...READ_PERMISSIONS.pendingMaterials), validate(listPendingMaterialsSchema), asyncHandler(async (req: Request, res: Response) => {
+  const q = req.query as { status?: PendingMaterialStatusFilter; category?: string; search?: string; page?: string; limit?: string };
+  res.json(await PendingMaterialsService.listRequests({
+    status: q.status, category: q.category, search: q.search,
+    page: q.page ? Number(q.page) : undefined, limit: q.limit ? Number(q.limit) : undefined,
+  }));
 }));
 
 // POST /api/pending-materials - Submit a new pending material (from project inventory control)
