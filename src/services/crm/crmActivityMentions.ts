@@ -10,7 +10,7 @@ type Tx = Parameters<Parameters<typeof orm.transaction>[0]>[0];
 export const CRM_ACTIVITY_READ_PERMISSIONS = ['crm.view', 'customers.view', 'customers.manage'] as const;
 
 /**
- * v10.0.29 (TD-976): the users mentioned in a CRM activity are positive ids of existing, non-deleted users, the same
+ * v10.0.34 (TD-976): the users mentioned in a CRM activity are positive ids of existing, non-deleted users, the same
  * rule as a daily work log (TD-629). Before, any value was accepted, a text was matched by username or full name, and
  * the description was scanned for «@name» with `includes`, so «@علی» also mentioned «علی رضایی». The browser sends the
  * ids the text names (`detectMentionedUserIds`, TD-628). An unknown id refuses the save with 422.

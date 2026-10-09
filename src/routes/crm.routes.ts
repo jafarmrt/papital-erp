@@ -102,7 +102,7 @@ const createCrmActivitySchema = z.object({
     nextFollowUpTask: z.string().optional(),
     assignedTo: z.string().optional(),
     assignedPersonnelId: z.union([z.number(), z.string(), z.null()]).optional(),
-    // v10.0.29 (TD-976): the mentioned users are positive user ids, checked against live users in the service
+    // v10.0.34 (TD-976): the mentioned users are positive user ids, checked against live users in the service
     mentions: z.array(z.coerce.number().int('شناسه کاربر اشاره‌شده باید عدد صحیح باشد').positive('شناسه کاربر اشاره‌شده باید مثبت باشد'))
       .max(100, 'اقدام حداکثر ۱۰۰ اشاره دارد').optional(),
   })
@@ -330,7 +330,7 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
 }));
 
 // GET /api/crm/leads/:id - Single lead detail with activities
-// v10.0.32 (OBS-R2-29): همان مجوزهای فهرست پرونده‌ها؛ پیش‌تر فقط `crm.view` و خواننده مشتریان کشوی پرونده را ۴۰۳ می‌گرفت
+// v10.0.37 (OBS-R2-29): همان مجوزهای فهرست پرونده‌ها؛ پیش‌تر فقط `crm.view` و خواننده مشتریان کشوی پرونده را ۴۰۳ می‌گرفت
 router.get('/crm/leads/:id', authorizePermission('crm.view', 'customers.view', 'customers.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const [lead] = await orm.select().from(crmLeads).where(and(eq(crmLeads.id, id), eq(crmLeads.isDeleted, 0)));
@@ -468,7 +468,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
   const currentUser = req.user;
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
 
-  // v10.0.33 (OBS-R2-33): ویرایش زیر قفل ردیف پرونده و در یک تراکنش با یادداشت تغییر مرحله و ردیف ممیزی پیش و پس؛
+  // v10.0.38 (OBS-R2-33): ویرایش زیر قفل ردیف پرونده و در یک تراکنش با یادداشت تغییر مرحله و ردیف ممیزی پیش و پس؛
   // پیش‌تر بی قفل و تراکنش، و ممیزی بی پیش و پس
   const { existing, updated } = await orm.transaction(async (tx) => {
   const [existing] = await tx.select().from(crmLeads).where(and(eq(crmLeads.id, id), eq(crmLeads.isDeleted, 0))).for('update');
@@ -603,7 +603,7 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
   const currentUser = req.user;
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
 
-  // v10.0.33 (OBS-R2-33): تبدیل زیر قفل ردیف پرونده و در یک تراکنش با یادداشت و ردیف ممیزی پیش و پس؛ پرونده بسته
+  // v10.0.38 (OBS-R2-33): تبدیل زیر قفل ردیف پرونده و در یک تراکنش با یادداشت و ردیف ممیزی پیش و پس؛ پرونده بسته
   // («موفق» یا «از دست رفته») مرحله و وضعیتش را نگه می‌دارد. پیش‌تر پرونده از دست رفته به «پیش‌فاکتور و پیشنهاد» برمی‌گشت
   // و تبدیل ممیزی نداشت
   const { updated, resolvedCustomerId } = await orm.transaction(async (tx) => {
@@ -821,7 +821,7 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
     personnelId: assignedPersonnelId
   });
   // v9.0.17 (TD-426): پرونده و طرف حساب ناموجود یا حذف‌شده با ۴۲۲ رد می‌شوند (`resolveActivityParents`)
-  // v10.0.29 (TD-976): ثبت اقدام، اعلان‌ها، زمان پرونده و ممیزی در یک تراکنش؛ اشاره فقط شناسه کاربر زنده است و اعلان آن
+  // v10.0.34 (TD-976): ثبت اقدام، اعلان‌ها، زمان پرونده و ممیزی در یک تراکنش؛ اشاره فقط شناسه کاربر زنده است و اعلان آن
   // فقط به اشاره‌شده‌ای می‌رود که اقدام‌های ارتباط با مشتری را می‌خواند (`notifyActivityMentions`)
   const newAct = await orm.transaction(async (tx) => {
     const parents = await resolveActivityParents(tx, { leadId, customerId });

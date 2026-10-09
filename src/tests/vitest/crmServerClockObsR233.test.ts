@@ -1,4 +1,4 @@
-// v10.0.33 (OBS-R2-33, TD-991): the customer and sales lead server code takes server timestamps only from businessClock
+// v10.0.38 (OBS-R2-33, TD-991): the customer and sales lead server code takes server timestamps only from businessClock
 // (`systemNowUtcIso`), never from `new Date()` (AGENTS §6 and §23 business clock invariant).
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';

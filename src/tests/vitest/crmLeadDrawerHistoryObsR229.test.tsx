@@ -1,4 +1,4 @@
-// v10.0.32 (OBS-R2-29, TD-991): the sales lead drawer never shows another lead's history: opening lead B clears lead A's
+// v10.0.37 (OBS-R2-29, TD-991): the sales lead drawer never shows another lead's history: opening lead B clears lead A's
 // history at once, and a late answer for A does not land on B.
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';

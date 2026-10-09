@@ -7,14 +7,14 @@ import { crmActivities, crmLeads, documents, roles, users } from '../../db/schem
 /**
  * Packages 8 and 9, TD-932 (CRM plan decision ت۱۴): linking a document to a sales lead (`crmLeadId` on POST or PUT
  * /documents) needs `crm.manage`, and a proforma is never linked to a closed lead (won or lost), which it used to reopen
- * to «proposal». Red on v10.0.29.
+ * to «proposal». Red on v10.0.34.
  */
 export async function runLeadProformaLinkGuardTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const id = 'reg_lead_proforma_link_guard_td_932';
   if (!shouldRun(id, 'td932', 'crm', 'proforma', 'documents', 'package9')) return results;
 
-  const name = 'v10.0.30: a document is linked to a sales lead only with crm.manage (403, nothing written), and a proforma never links to or reopens a won or lost lead (422 CRM_LEAD_CLOSED) on create or edit (TD-932)';
+  const name = 'v10.0.35: a document is linked to a sales lead only with crm.manage (403, nothing written), and a proforma never links to or reopens a won or lost lead (422 CRM_LEAD_CLOSED) on create or edit (TD-932)';
   const tStart = Date.now();
   const tag = `TD932-${String(Date.now()).slice(-6)}`;
   const leadIds: number[] = [];

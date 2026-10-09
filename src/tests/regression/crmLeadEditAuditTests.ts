@@ -7,14 +7,14 @@ import { activityLogs, crmActivities, crmLeads, customers } from '../../db/schem
 /**
  * Package 9, OBS-R2-33 (TD-991): a sales lead edit and «convert to customer» each write an audit row with before, after
  * and the changed fields, in the transaction of the change, and converting a lost lead keeps it lost instead of moving it
- * back to «proposal». Red on v10.0.32.
+ * back to «proposal». Red on v10.0.37.
  */
 export async function runCrmLeadEditAuditTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const id = 'reg_crm_lead_edit_audit_obs_r2_33';
   if (!shouldRun(id, 'obs_r2_33', 'td991', 'crm', 'lead', 'audit', 'package9')) return results;
 
-  const name = 'v10.0.33: a sales lead edit and its conversion to a customer write audit rows with before, after and changes, and converting a lost lead keeps it lost (OBS-R2-33)';
+  const name = 'v10.0.38: a sales lead edit and its conversion to a customer write audit rows with before, after and changes, and converting a lost lead keeps it lost (OBS-R2-33)';
   const tStart = Date.now();
   const tag = `R233-${String(Date.now()).slice(-6)}`;
   const leadIds: number[] = [];

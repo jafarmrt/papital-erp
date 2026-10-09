@@ -7,14 +7,14 @@ import { crmLeads, roles, users } from '../../db/schema.js';
 /**
  * Package 9, OBS-R2-29 (TD-991): a sales lead's detail (`GET /crm/leads/:id`) opens for the same keys as the lead list
  * (`crm.view`, `customers.view`, `customers.manage`); it asked `crm.view` only, so a customers reader saw the lead in the
- * list and got 403 on its drawer. Red on v10.0.31.
+ * list and got 403 on its drawer. Red on v10.0.36.
  */
 export async function runCrmLeadDetailReadTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const id = 'reg_crm_lead_detail_read_keys_obs_r2_29';
   if (!shouldRun(id, 'obs_r2_29', 'td991', 'crm', 'lead', 'package9')) return results;
 
-  const name = 'v10.0.32: a sales lead detail opens for every key the lead list accepts (customers.view reads both), and a user with none of them gets 403 on both (OBS-R2-29)';
+  const name = 'v10.0.37: a sales lead detail opens for every key the lead list accepts (customers.view reads both), and a user with none of them gets 403 on both (OBS-R2-29)';
   const tStart = Date.now();
   const tag = `R229-${String(Date.now()).slice(-6)}`;
   const roleIds: number[] = [];

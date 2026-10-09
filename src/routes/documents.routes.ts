@@ -273,7 +273,7 @@ router.get('/documents/next-ref', authorizePermission(...READ_PERMISSIONS.docume
 const docTypeTitles = DOCUMENT_TYPE_TITLES;
 
 /** v9.0.125 (TD-541 / TD-771): کاربر مجوز این کار را دارد، وگرنه ۴۰۳ با نام فارسی مجوز */
-/** v10.0.30 (TD-932، تصمیم ت۱۴): پیوند یا قطع پیوند سند با پرونده فروش فقط با مجوز مدیریت پرونده‌ها، پیش از هر نوشتن */
+/** v10.0.35 (TD-932، تصمیم ت۱۴): پیوند یا قطع پیوند سند با پرونده فروش فقط با مجوز مدیریت پرونده‌ها، پیش از هر نوشتن */
 async function assertMayLinkLead(user: AuthUserPayload | undefined, crmLeadId: unknown): Promise<void> {
   const permission = CRM_LEAD_LINK_PERMISSION;
   if (crmLeadId === undefined || await can(user, permission)) return;

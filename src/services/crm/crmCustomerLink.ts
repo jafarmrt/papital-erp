@@ -76,7 +76,7 @@ export async function linkCustomerForLead(input: CrmLeadPartyInput, db: DbExecut
   const byName = await findActiveCustomerByName(primaryCustomerName, db);
   if (byName) return linkTo(byName, [phoneDifference(byName, cPhone)]);
 
-  // v10.0.33 (OBS-R2-33): درج درون savepoint، تا درون تراکنش ویرایش یا تبدیل پرونده هم پس از تکرار نام، خواندن برنده ممکن باشد
+  // v10.0.38 (OBS-R2-33): درج درون savepoint، تا درون تراکنش ویرایش یا تبدیل پرونده هم پس از تکرار نام، خواندن برنده ممکن باشد
   const [created] = await db.transaction(sp => sp.insert(customers).values({
     name: primaryCustomerName,
     contactName: contactPersonName || cName,

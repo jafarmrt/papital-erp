@@ -10590,19 +10590,19 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.17، TD-426): اقدام CRM با پرونده یا طرف حساب ناموجود رد می‌شود
   const { runCrmActivityParentsTests } = await import('../regression/crmActivityParentsTests.js');
   results.push(...await runCrmActivityParentsTests(shouldRun));
-  // Package 9 (v10.0.28, TD-975): a partial party edit keeps the fields it does not send
+  // Package 9 (v10.0.33, TD-975): a partial party edit keeps the fields it does not send
   const { runCustomerPartialEditTests } = await import('../regression/customerPartialEditTests.js');
   results.push(...await runCustomerPartialEditTests(shouldRun));
-  // Package 9 (v10.0.29, TD-976): CRM activity mentions are live user ids and notify only CRM readers
+  // Package 9 (v10.0.34, TD-976): CRM activity mentions are live user ids and notify only CRM readers
   const { runCrmActivityMentionTests } = await import('../regression/crmActivityMentionTests.js');
   results.push(...await runCrmActivityMentionTests(shouldRun));
-  // v10.0.30 (TD-932): linking a document to a sales lead needs crm.manage and never reopens a closed lead
+  // v10.0.35 (TD-932): linking a document to a sales lead needs crm.manage and never reopens a closed lead
   const { runLeadProformaLinkGuardTests } = await import('../regression/leadProformaLinkGuardTests.js');
   results.push(...await runLeadProformaLinkGuardTests(shouldRun));
-  // v10.0.32 (OBS-R2-29): a sales lead detail opens for the same keys as the lead list
+  // v10.0.37 (OBS-R2-29): a sales lead detail opens for the same keys as the lead list
   const { runCrmLeadDetailReadTests } = await import('../regression/crmLeadDetailReadTests.js');
   results.push(...await runCrmLeadDetailReadTests(shouldRun));
-  // v10.0.33 (OBS-R2-33): lead edit and conversion audit rows; a converted lost lead stays lost
+  // v10.0.38 (OBS-R2-33): lead edit and conversion audit rows; a converted lost lead stays lost
   const { runCrmLeadEditAuditTests } = await import('../regression/crmLeadEditAuditTests.js');
   results.push(...await runCrmLeadEditAuditTests(shouldRun));
   // بسته ۹ (v9.0.18، TD-427): اعتبارسنجی ورودی پرونده فروش
@@ -10863,6 +10863,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 N-05 PR 2 (v10.0.25+): product card, product grid and zip download of the media library
   const { runMediaProductTests } = await import('../regression/mediaProductTests.js');
   results.push(...await runMediaProductTests(shouldRun));
+  // Series 10 phase 3 lane L3 (v10.0.29+): the events of the project stock paths
+  const { runProjectEventTests } = await import('../regression/projectEventTests.js');
+  results.push(...await runProjectEventTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
@@ -10893,6 +10896,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 5 PR «ج» (v9.0.459+): treasury rows linked to documents and payroll payment dates
   const { runTreasuryPayrollPhase5Tests } = await import('../regression/treasuryPayrollPhase5Tests.js');
   results.push(...await runTreasuryPayrollPhase5Tests(shouldRun));
+
+  // Payroll duties plan PR 1 (v10.0.21+): voucher approval permission and maker-checker
+  const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
+  results.push(...await runVoucherApprovalDutiesTests(shouldRun));
 
   return results;
 }

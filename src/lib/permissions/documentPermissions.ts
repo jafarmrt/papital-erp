@@ -30,7 +30,7 @@ export const SALES_FINALIZE_PERMISSION = 'documents.finalize';
 export const STOCK_BACKDATE_PERMISSION = 'warehouse.backdate';
 
 /**
- * v10.0.30 (TD-932، تصمیم ت۱۴ برنامه ارتباط با مشتری): پیوند سند به پرونده فروش (`crmLeadId` در ثبت یا ویرایش سند)
+ * v10.0.35 (TD-932، تصمیم ت۱۴ برنامه ارتباط با مشتری): پیوند سند به پرونده فروش (`crmLeadId` در ثبت یا ویرایش سند)
  * مرحله پرونده را عوض می‌کند، پس همان مجوز مدیریت پرونده‌ها را می‌خواهد.
  */
 export const CRM_LEAD_LINK_PERMISSION = 'crm.manage';
