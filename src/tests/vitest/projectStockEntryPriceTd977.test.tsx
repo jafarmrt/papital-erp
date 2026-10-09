@@ -18,6 +18,7 @@ vi.mock('../../hooks/useProjectPermissions', () => ({
 
 import ProjectStockEntryTab from '../../components/project/ProjectStockEntryTab';
 import type { Item, ProductionProject } from '../../types';
+import { DELIVERY_MATERIALS_ONLY_NOTE } from '../../lib/projects/deliveryCost';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
@@ -63,5 +64,13 @@ describe('project stock entry price and quantity (TD-977)', () => {
     await Promise.resolve();
     expect(deliveryCalls()).toHaveLength(0);
     expect(toast.error).toHaveBeenCalledWith(ZERO_QTY_MESSAGE);
+  });
+});
+
+// v10.0.26 (TD-920, decision t4 b of phase 5): labour is a period expense, so the delivery price is materials only
+describe('project stock entry says the unit price is materials only (TD-920)', () => {
+  it('shows the materials-only note above the delivery lines', async () => {
+    render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
+    expect((await screen.findByTestId('delivery-materials-only')).textContent).toBe(DELIVERY_MATERIALS_ONLY_NOTE);
   });
 });
