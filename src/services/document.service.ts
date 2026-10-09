@@ -1,6 +1,7 @@
 import type { DbExecutor } from '../db/drizzle.js';
 import type { DecimalValue } from '../lib/financialDecimal.js';
 import type { DocumentAuditChange, DocumentVoidAudit } from './documents/documentAudit.js';
+import type { StockReversalResult } from './documents/documentStockEngine.service.js';
 import { 
   DocumentRefNumberService, 
   DocumentStockEngine, 
@@ -157,7 +158,7 @@ export class DocumentService {
       unitPrice: number;
       location: string;
     }
-  ): Promise<void> {
+  ): Promise<StockReversalResult> {
     return DocumentStockEngine.applyStockReversal(tx, params);
   }
 
