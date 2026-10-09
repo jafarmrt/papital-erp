@@ -8,7 +8,7 @@ type ShouldRun = (id: string, ...extra: string[]) => boolean;
  * each company setting one by one on the pool, so a failed settings write left the admin behind and the setup could not
  * be run again («راه‌اندازی قبلاً انجام شده»). Runs in its own isolated schema without users: a trigger refuses the
  * company logo setting, the setup must answer an error and leave no user; after the trigger is dropped the setup runs
- * and writes its audit row. On v10.0.24 the admin stays after the failed setup.
+ * and writes its audit row. On v10.0.25 the admin stays after the failed setup.
  */
 export async function runInitialSetupTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const id = 'reg_initial_setup_one_transaction_td_960';
