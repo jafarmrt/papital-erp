@@ -15,7 +15,7 @@ export interface ProcurementAccess {
   canOrder: boolean;
   /**
    * تأیید، رد و لغو درخواست (`POST /requisitions/:id/workflow-action`)؛ تأیید هنگام صدور سفارش هم همین را می‌خواهد (TD-689).
-   * از v10.0.38 (TD-1126) فقط `procurement.approve`، گارد این سه اقدام در گردش کار (OBS-R2-36)
+   * از v10.0.39 (TD-1126) فقط `procurement.approve`، گارد این سه اقدام در گردش کار (OBS-R2-36)
    */
   canApprove: boolean;
   /** بازگشایی درخواست ردشده: گارد مسیر (`procurement.approve` / `procurement.manage`) و گارد گام (`procurement.create`) */
