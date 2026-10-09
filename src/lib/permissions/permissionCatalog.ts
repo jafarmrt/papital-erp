@@ -39,6 +39,14 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     ]
   },
   {
+    category: 'کتابخانه تصاویر و فیلم‌ها',
+    permissions: [
+      { key: 'media.view', title: 'مشاهده کتابخانه تصاویر', description: 'دیدن تصویرها و فیلم‌های محصولات و بخش‌های دیگر و دانلود نسخه سبک و اصلی آن‌ها' },
+      { key: 'media.upload', title: 'بارگذاری در کتابخانه تصاویر', description: 'بارگذاری تصویر و فیلم و ویرایش و حذف فایل‌هایی که خود کاربر فرستاده', requires: ['media.view'] },
+      { key: 'media.manage', title: 'مدیریت کتابخانه تصاویر', description: 'ویرایش و حذف همه فایل‌ها و ساخت دوباره نسخه سبک تصویرها', requires: ['media.view'] },
+    ],
+  },
+  {
     category: 'انبارداری و جابجایی',
     permissions: [
       { key: 'warehouse.view', title: 'مشاهده انبارها', description: 'مشاهده لیست انبارها و موجودی تفکیکی' },

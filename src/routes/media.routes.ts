@@ -1,0 +1,118 @@
+import { Router, type Request, type Response } from 'express';
+import { authenticateToken } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
+import { can, requirePermission } from '../middleware/authorize.js';
+import { validate, paramsIdSchema } from '../middleware/validate.js';
+import { logger } from '../middleware/logger.js';
+import { errorMessageOf } from '../utils/index.js';
+import { MEDIA_MAX_BYTES, MEDIA_POSTER_MAX_BYTES, type MediaShotType, type MediaVariant } from '../lib/media/mediaRules.js';
+import { MediaAssetService, type MediaActor } from '../services/media/mediaAsset.service.js';
+import { mediaTooLarge } from '../services/media/mediaStorage.js';
+import { mediaFileSchema, mediaListSchema, mediaPosterSchema, mediaUpdateSchema, mediaUploadSchema } from './media.schemas.js';
+
+/**
+ * v10.0.16 (N-05): the media library. Files are uploaded as the raw request body (not base64 JSON, which caps at 14 MB),
+ * with the file name in `X-File-Name` (URI-encoded) and its type in `Content-Type`; the JSON body parser leaves such a
+ * body alone. Files are read only through `GET /media/assets/:id/file`, which needs a session and supports ranges.
+ */
+const router = Router();
+
+export const MEDIA_VIEW_PERMISSION = 'media.view';
+export const MEDIA_UPLOAD_PERMISSION = 'media.upload';
+export const MEDIA_MANAGE_PERMISSION = 'media.manage';
+
+async function actorOf(req: Request): Promise<MediaActor> {
+  return {
+    req,
+    userId: req.user?.id,
+    username: req.user?.username ?? '',
+    canManage: await can(req.user, MEDIA_MANAGE_PERMISSION),
+  };
+}
+
+/** A declared length above the limit is refused before the body is read */
+function assertDeclaredLength(req: Request, maxBytes: number): void {
+  const declared = Number(req.headers['content-length']);
+  if (Number.isFinite(declared) && declared > maxBytes) throw mediaTooLarge();
+}
+
+function fileNameOf(req: Request): string {
+  const raw = String(req.headers['x-file-name'] ?? '');
+  try {
+    return decodeURIComponent(raw).slice(0, 255);
+  } catch {
+    return raw.slice(0, 255);
+  }
+}
+
+router.get('/media/sections', authenticateToken, requirePermission(MEDIA_VIEW_PERMISSION), asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ data: await MediaAssetService.listSections() });
+}));
+
+router.get('/media/assets', authenticateToken, requirePermission(MEDIA_VIEW_PERMISSION), validate(mediaListSchema), asyncHandler(async (req: Request, res: Response) => {
+  const q = req.query as unknown as { sectionId?: number; itemId?: number; kind?: string; shotType?: string; lowQuality?: string; search?: string; page?: number; limit?: number };
+  res.json(await MediaAssetService.list({
+    sectionId: q.sectionId, itemId: q.itemId, kind: q.kind, shotType: q.shotType, lowQuality: q.lowQuality !== undefined,
+    search: q.search, page: q.page ?? 1, limit: q.limit ?? 48,
+  }));
+}));
+
+router.get('/media/assets/:id', authenticateToken, requirePermission(MEDIA_VIEW_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ data: await MediaAssetService.get(Number(req.params.id)) });
+}));
+
+router.get('/media/assets/:id/file', authenticateToken, requirePermission(MEDIA_VIEW_PERMISSION), validate(mediaFileSchema), asyncHandler(async (req: Request, res: Response) => {
+  const q = req.query as unknown as { variant: MediaVariant; download?: string };
+  const file = await MediaAssetService.fileOf(Number(req.params.id), q.variant);
+  const disposition = q.download !== undefined ? 'attachment' : 'inline';
+  const asciiName = file.downloadName.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '');
+  res.setHeader('Content-Disposition', `${disposition}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(file.downloadName)}`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  await new Promise<void>((resolve) => {
+    res.sendFile(file.path, { headers: { 'Content-Type': file.mimeType }, dotfiles: 'deny' }, (err) => {
+      if (err && !res.headersSent) {
+        logger.warn(`[media] file of asset ${req.params.id} (${q.variant}) could not be read: ${errorMessageOf(err)}`);
+        res.status(404).json({ success: false, code: 'MEDIA_FILE_MISSING', message: 'فایل روی دیسک یافت نشد.' });
+      }
+      resolve();
+    });
+  });
+}));
+
+router.post('/media/assets', authenticateToken, requirePermission(MEDIA_UPLOAD_PERMISSION), validate(mediaUploadSchema), asyncHandler(async (req: Request, res: Response) => {
+  assertDeclaredLength(req, MEDIA_MAX_BYTES);
+  const q = req.query as unknown as { sectionId: number; itemId?: number; shotType: MediaShotType };
+  const result = await MediaAssetService.upload({
+    body: req,
+    fileName: fileNameOf(req),
+    declaredType: String(req.headers['content-type'] ?? ''),
+    sectionId: q.sectionId,
+    itemId: q.itemId ?? null,
+    shotType: q.shotType,
+  }, await actorOf(req));
+  res.status(201).json({ success: true, data: result.asset, warnings: result.warnings });
+}));
+
+router.put('/media/assets/:id/poster', authenticateToken, requirePermission(MEDIA_UPLOAD_PERMISSION, MEDIA_MANAGE_PERMISSION), validate(mediaPosterSchema), asyncHandler(async (req: Request, res: Response) => {
+  assertDeclaredLength(req, MEDIA_POSTER_MAX_BYTES);
+  const q = req.query as unknown as { durationSeconds?: number };
+  const data = await MediaAssetService.setVideoPoster(Number(req.params.id), req, q.durationSeconds ?? null, await actorOf(req));
+  res.json({ success: true, data });
+}));
+
+router.put('/media/assets/:id', authenticateToken, requirePermission(MEDIA_UPLOAD_PERMISSION, MEDIA_MANAGE_PERMISSION), validate(mediaUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
+  const data = await MediaAssetService.update(Number(req.params.id), req.body, await actorOf(req));
+  res.json({ success: true, data });
+}));
+
+router.delete('/media/assets/:id', authenticateToken, requirePermission(MEDIA_UPLOAD_PERMISSION, MEDIA_MANAGE_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req: Request, res: Response) => {
+  await MediaAssetService.remove(Number(req.params.id), await actorOf(req));
+  res.json({ success: true });
+}));
+
+router.post('/media/assets/:id/rebuild-light', authenticateToken, requirePermission(MEDIA_MANAGE_PERMISSION), validate(paramsIdSchema), asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await MediaAssetService.rebuildLight(Number(req.params.id)) });
+}));
+
+export default router;
