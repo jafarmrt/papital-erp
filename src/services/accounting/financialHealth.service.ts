@@ -42,7 +42,7 @@ import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../
 import { buildProjectStageHealthTest, buildProjectValueHealthTest, findProjectFreeTextValues, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
 import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/projects/projectStatus.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
-import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from '../workflow/purchaseWorkflowGuards.js';
+import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from './unguardedPurchaseActionHealth.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
 import { buildUnpublishedRuleEventHealthTest, findRulesWithUnpublishedEvent } from '../events/unpublishedRuleEventHealth.js';
@@ -1126,8 +1126,8 @@ export class FinancialHealthService {
     overallScore += unguardedApprovalTest.scoreImpact;
     tests.push(unguardedApprovalTest);
 
-    // آزمون ۱۷الف: v10.0.23 (OBS-R2-36) اقدام بی نقش و بی مجوز در گردش کار فعال درخواست خرید
-    const unguardedPurchaseTest = buildUnguardedPurchaseActionHealthTest(await findUnguardedPurchaseActions());
+    // آزمون ۱۷الف: v10.0.28 (OBS-R2-36) اقدام بی نقش و بی مجوز در گردش کار فعال درخواست خرید
+    const unguardedPurchaseTest = buildUnguardedPurchaseActionHealthTest(await findUnguardedPurchaseActions(orm));
     overallScore += unguardedPurchaseTest.scoreImpact;
     tests.push(unguardedPurchaseTest);
 

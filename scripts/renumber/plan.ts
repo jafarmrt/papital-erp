@@ -5,13 +5,16 @@
  * Only text the branch itself added (lines not in <ref>, found with a line diff) is renumbered:
  *  - versions: active changelog entries that are not in <ref> move, in order, to the free versions after the
  *    highest version of <ref>; every added line in the changed files follows (CHANGELOG.md, TECH_DEBT rows,
- *    AGENTS.md, roadmap, audit report; in other files only comment lines). The active changelog and the active CHANGELOG.md section are
+ *    AGENTS.md, roadmap, audit report, and in code files too: test names, strings, trailing and JSX comments, also
+ *    written with Persian digits; v10.0.23, OT-A-01). The active changelog and the active CHANGELOG.md section are
  *    sorted newest first, and package.json, package-lock.json, k8s and README get the top version;
  *  - migrations: journal entries whose tag is not in <ref> move after the migrations of <ref> (file renamed, idx,
- *    tag, strictly increasing `when`) and added lines follow (the tag and the bare four-digit number);
+ *    tag, strictly increasing `when`) and added lines follow (the tag and the bare four-digit number; in code files
+ *    only comment lines, since a four-digit number in code is usually data);
  *  - audit report: a package section the branch added («## N.») whose number <ref> already uses takes the next free
  *    number, with its subsections, and added «STABILITY_AUDIT_V9.md` §N» references follow;
- *  - TECH_DEBT.md counters are recounted from both tables.
+ *  - TECH_DEBT.md drops every row whose id the merged TECH_DEBT_ARCHIVE.md holds (a row either side archived is
+ *    closed; v10.0.22, TD-981), and its counters are recounted from both tables.
  */
 
 export interface RenumberInput {
@@ -195,8 +198,19 @@ export function planSections(baseSrc: string | null, curSrc: string | null): Map
 
 interface LineMaps { versions: Map<string, string>; numbers: Map<string, string>; sections: Map<number, number> }
 
+const toLatinDigits = (s: string) => s.replace(/[۰-۹]/g, d => String(FA.indexOf(d)));
+
+/** A branch version, with Latin or Persian digits (v10.0.23, OT-A-01). */
+function rewriteVersions(line: string, maps: LineMaps): string {
+  const out = line.replace(/\bv\d+\.\d+\.\d+(?![\d])/g, v => maps.versions.get(v) ?? v);
+  return out.replace(/v[۰-۹]+\.[۰-۹]+\.[۰-۹]+(?![۰-۹])/g, v => {
+    const to = maps.versions.get(toLatinDigits(v));
+    return to === undefined ? v : to.replace(/\d/g, d => FA[Number(d)]);
+  });
+}
+
 function rewriteLine(line: string, file: string, maps: LineMaps): string {
-  let out = line.replace(/\bv\d+\.\d+\.\d+(?![\d])/g, v => maps.versions.get(v) ?? v);
+  let out = rewriteVersions(line, maps);
   // one pass over four-digit numbers also renames tags («0060_x» → «0061_x») without shifting a number twice
   if (maps.numbers.size > 0) out = out.replace(/(?<![\d.])\d{4}(?![\d])/g, n => maps.numbers.get(n) ?? n);
   if (maps.sections.size > 0) {
@@ -210,15 +224,19 @@ function rewriteLine(line: string, file: string, maps: LineMaps): string {
 const COMMENT_LINE = /^\s*(\/\/|\/\*|\*|#|--)/;
 
 /**
- * Applies the maps to the lines of `cur` the branch added (relative to `base`): every added line of a Markdown file,
- * only comment lines elsewhere (a version or number in code or test data is never touched).
+ * Applies the maps to the lines of `cur` the branch added (relative to `base`): every added line of a Markdown file
+ * and of a comment line elsewhere; in other added code lines only the branch's own versions (test names, strings,
+ * trailing and JSX comments; v10.0.23, OT-A-01), never a migration or section number. Lines of the base are never touched.
  */
 export function rewriteAddedLines(base: string | null, cur: string, file: string, maps: LineMaps): string {
   const curLines = cur.split('\n');
   const added = addedLineIndexes((base ?? '').split('\n'), curLines);
   if (base === null) curLines.forEach((_, k) => added.add(k));
   const doc = file.endsWith('.md');
-  return curLines.map((l, k) => (added.has(k) && (doc || COMMENT_LINE.test(l)) ? rewriteLine(l, file, maps) : l)).join('\n');
+  return curLines.map((l, k) => {
+    if (!added.has(k)) return l;
+    return doc || COMMENT_LINE.test(l) ? rewriteLine(l, file, maps) : rewriteVersions(l, maps);
+  }).join('\n');
 }
 
 /** Sorts the blocks of the active series section of CHANGELOG.md newest first. */
@@ -258,12 +276,21 @@ function setVersionLocations(input: RenumberInput, writes: Map<string, string>, 
   if (readme) writes.set('README.md', readme.replace(/نسخه مستقر: `v\d+\.\d+\.\d+`/, `نسخه مستقر: \`${top}\``));
 }
 
+const debtIdOf = (line: string) => line.match(/^\| (TD-\d+) \|/)?.[1];
+
+/** v10.0.22 (TD-981): TECH_DEBT.md without the rows whose id `archive` holds. */
+export function dropArchivedDebtRows(debt: string, archive: string): string {
+  const archived = new Set(archive.split('\n').map(debtIdOf).filter((id): id is string => !!id));
+  return debt.split('\n').filter(l => { const id = debtIdOf(l); return !id || !archived.has(id); }).join('\n');
+}
+
 function recountTechDebt(input: RenumberInput, writes: Map<string, string>): void {
   const get = (rel: string) => writes.get(rel) ?? input.current(rel);
-  const debt = get('TECH_DEBT.md');
   const archive = get('TECH_DEBT_ARCHIVE.md');
-  if (!debt || !archive) return;
-  const rows = (s: string) => s.split('\n').filter(l => /^\| TD-\d+ \|/.test(l)).length;
+  const current = get('TECH_DEBT.md');
+  if (!current || !archive) return;
+  const debt = dropArchivedDebtRows(current, archive);
+  const rows = (s: string) => s.split('\n').filter(l => debtIdOf(l) !== undefined).length;
   writes.set('TECH_DEBT.md', debt
     .replace(/- \*\*فعال:\*\* [۰-۹0-9]+ ردیف/, `- **فعال:** ${toFa(rows(debt))} ردیف`)
     .replace(/- \*\*آرشیو شده \(resolved\):\*\* [۰-۹0-9]+ ردیف/, `- **آرشیو شده (resolved):** ${toFa(rows(archive))} ردیف`));

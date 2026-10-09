@@ -4,16 +4,15 @@ import { orm } from '../../db/drizzle.js';
 import { purchaseRequisitions, workflowDefinitions, workflowInstances, workflowStates, workflowTransitions } from '../../db/schema.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
 import { upgradeLegacySeedGuards } from '../../services/workflow/seedGuardUpgrade.js';
-import {
-  PURCHASE_REQUISITION_GUARD_UPGRADE, buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions,
-} from '../../services/workflow/purchaseWorkflowGuards.js';
+import { PURCHASE_REQUISITION_GUARD_UPGRADE } from '../../services/workflow/purchaseWorkflowGuards.js';
+import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from '../../services/accounting/unguardedPurchaseActionHealth.js';
 import { createTestRole, createTestUser } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
 import { type ShouldRun, inFiscalSandbox, runCase } from './fiscalClosingTests.js';
 
 /**
- * Payroll duties plan PR 2 (v10.0.23 on, OBS-R2-36 of TD-992, decision t11 «الف»): the default purchase requisition
- * workflow asks a permission on every action and its creator does not approve it. Red on v10.0.22, where no action of
+ * Payroll duties plan PR 2 (v10.0.28 on, OBS-R2-36 of TD-992, decision t11 «الف»): the default purchase requisition
+ * workflow asks a permission on every action and its creator does not approve it. Red on v10.0.27, where no action of
  * the seed had a role or a permission and the creator approved their own requisition.
  */
 
@@ -60,13 +59,13 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
       expect(seeded.approve_request?.perm === 'procurement.approve' && seeded.approve_request.excluded === 1
         && seeded.receive_items?.perm === 'warehouse.in' && seeded.reject_request?.perm === 'procurement.approve'
         && seeded.cancel_order?.perm === 'procurement.approve' && seeded.reopen?.perm === 'procurement.create', `new seed guards ${JSON.stringify(seeded)}`);
-      expect((await findUnguardedPurchaseActions()).length === 0, 'fresh seed is listed as unguarded');
+      expect((await findUnguardedPurchaseActions(orm)).length === 0, 'fresh seed is listed as unguarded');
 
-      // back to the seed before v10.0.23, as an existing install holds it
+      // back to the seed before v10.0.28, as an existing install holds it
       const toLegacy = () => orm.update(workflowTransitions).set({ requiredPermission: '', isInitiatorExcluded: 0 })
         .where(eq(workflowTransitions.workflowDefinitionId, def.id));
       await toLegacy();
-      expect((await findUnguardedPurchaseActions()).length === 5, 'legacy seed actions are not listed');
+      expect((await findUnguardedPurchaseActions(orm)).length === 5, 'legacy seed actions are not listed');
       expect(await upgradeLegacySeedGuards(PURCHASE_REQUISITION_GUARD_UPGRADE) === true, 'untouched old seed was not upgraded');
       const upgraded = await guardsOf(def.id);
       expect(upgraded.approve_request?.perm === 'procurement.approve' && upgraded.approve_request.excluded === 1
@@ -79,7 +78,7 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
         .where(and(eq(workflowTransitions.workflowDefinitionId, def.id), eq(workflowTransitions.actionKey, 'reopen')));
       expect(await upgradeLegacySeedGuards(PURCHASE_REQUISITION_GUARD_UPGRADE) === false, 'edited definition was upgraded');
       expect((await guardsOf(def.id)).approve_request?.perm === '', 'edited definition guards changed');
-      const health = buildUnguardedPurchaseActionHealthTest(await findUnguardedPurchaseActions());
+      const health = buildUnguardedPurchaseActionHealthTest(await findUnguardedPurchaseActions(orm));
       expect(health.status === 'warning' && health.count === 5, `health check ${health.status} / ${health.count}`);
       return 'seed guards every action; upgrade runs once and only on the untouched old seed; an edited one is listed';
     }));

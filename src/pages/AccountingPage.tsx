@@ -252,7 +252,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               onPrintVoucher={v => setPrintingVoucher(v)}
               onReverseVoucher={handleReverseVoucher}
               onCorrectVoucher={handleCorrectVoucher}
-              // v10.0.22 (TD-965): تأیید، قطعی کردن و بازگشت به پیش‌نویس فقط با «تأیید و قطعی کردن سند حسابداری»
+              // v10.0.27 (TD-965): تأیید، قطعی کردن و بازگشت به پیش‌نویس فقط با «تأیید و قطعی کردن سند حسابداری»
               onFinalizeVoucher={canApproveVoucher ? handleFinalizeVoucher : undefined}
               onApproveVoucher={canApproveVoucher ? (id) => handleSetVoucherStatus(id, 'approved') : undefined}
               onSetVoucherStatus={canApproveVoucher ? handleSetVoucherStatus : undefined}

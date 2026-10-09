@@ -42,7 +42,7 @@ export async function runAccessPackageTwoWorkflowTests(shouldRun: ShouldRun): Pr
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
 
       // ۱) گردش کار پیش‌فرض سند حسابداری فقط مجوز می‌خواهد: نقش سفارشی با accounting.vouchers_approve تأیید می‌کند
-      //    (v10.0.22، TD-965: تأیید سند حسابداری مجوز جدای خود را دارد)
+      //    (v10.0.27، TD-965: تأیید سند حسابداری مجوز جدای خود را دارد)
       const seeded = await h.q(`SELECT t.required_role, t.required_permission FROM workflow_transitions t
         JOIN workflow_definitions d ON d.id = t.workflow_definition_id WHERE d.code = 'JOURNAL_VOUCHER_WORKFLOW' AND t.action_key = 'approve_voucher'`);
       if (seeded.length === 0 || seeded.some(t => String(t.required_role ?? '') !== '' || t.required_permission !== 'accounting.vouchers_approve')) {
