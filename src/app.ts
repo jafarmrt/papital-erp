@@ -48,6 +48,7 @@ import { startupGate, isStarting, isStartupComplete } from './middleware/startup
 import { orm, isMockDatabase } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
 import { BUILD_INFO } from './lib/version.js';
+import { bootDegradedSteps } from './services/system/bootSequence.js';
 import { resolveTrustProxySetting } from './lib/trustProxy.js';
 import { addressLockoutMessage, minutesUntil } from './lib/auth/loginLockout.js';
 
@@ -279,8 +280,11 @@ export async function createApp(): Promise<express.Express> {
         });
       }
 
+      // v10.0.21 (TD-958): names of the startup steps the server left out after their attempts (the errors stay in the log)
+      const degradedSteps = bootDegradedSteps().map(s => s.step);
       res.status(200).json({
         status: 'ready',
+        ...(degradedSteps.length > 0 ? { degradedSteps } : {}),
         // v9.0.428 (TD-616): the in-memory demo database says so, so a probe never mistakes it for PostgreSQL
         database: isMockDatabase() ? 'in_memory_demo' : 'postgresql',
         pool: { total, idle, waiting },
@@ -299,7 +303,8 @@ export async function createApp(): Promise<express.Express> {
   // 3. Startup probe (200 if background migrations/seeds completed)
   app.get(['/api/health/startup', '/health/startup'], (_req, res) => {
     if (isStartupComplete()) {
-      res.status(200).json({ status: 'started', timestamp: new Date().toISOString() });
+      const degradedSteps = bootDegradedSteps().map(s => s.step);
+      res.status(200).json({ status: 'started', ...(degradedSteps.length > 0 ? { degradedSteps } : {}), timestamp: new Date().toISOString() });
     } else {
       res.status(503).json({ status: 'starting', timestamp: new Date().toISOString() });
     }

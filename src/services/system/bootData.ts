@@ -3,25 +3,41 @@ import { runSeedWithLock } from '../../db/seed.js';
 import { warmDisplayTimezone } from '../../lib/businessClock.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { EventActionEngineService } from '../events/eventActionEngineService.js';
+import type { BootStep } from './bootSequence.js';
 
 /**
- * v9.0.133 (TD-591): کارهای داده‌ای بوت، به همان ترتیب `server.ts`، در یک تابع تا آزمون نصب تازه همان مسیر را روی
- * پایگاه‌داده جدا اجرا کند. خطا برانداخته می‌شود و `server.ts` تا پنج بار دوباره می‌کوشد.
+ * v9.0.133 (TD-591): کارهای داده‌ای بوت، به همان ترتیب `server.ts`، تا آزمون نصب تازه همان مسیر را روی پایگاه‌داده جدا اجرا کند.
+ * v10.0.21 (TD-958): گام‌ها جدا شدند؛ فقط مهاجرت ضروری است و `server.ts` آن‌ها را با `runBootSequence` اجرا می‌کند.
  */
+export function bootDataSteps(): BootStep[] {
+  return [
+    {
+      name: 'migrations',
+      essential: true,
+      run: async () => {
+        const migResult = await runMigrations();
+        if (!migResult.success) throw new Error(`Migration failed: ${migResult.errors.join(', ')}`);
+      },
+    },
+    {
+      // v9.0.134 (TD-526): base data in every environment, production too, insert-only (TD-591), no role
+      name: 'base data seed',
+      essential: false,
+      run: async () => {
+        const seed = await runSeedWithLock();
+        if (!seed.success) throw new Error(`Base data seed failed: ${seed.message}`);
+      },
+    },
+    // v9.0.429 (TD-617): the boot never touches passwords (`npm run users:lock-plain-passwords` does)
+    { name: 'default workflows and event rules', essential: false, run: seedDefaultEngines },
+    // v8.0.77 (TD-324): the display time zone cache is filled before the first request, outside any transaction
+    { name: 'display time zone cache', essential: false, run: warmDisplayTimezone },
+  ];
+}
+
+/** Every boot data step in order; any failure is thrown (fresh-install test path). */
 export async function prepareDatabaseAtBoot(): Promise<void> {
-  const migResult = await runMigrations();
-  if (!migResult.success) {
-    throw new Error(`Migration failed: ${migResult.errors.join(', ')}`);
-  }
-  // v9.0.134 (TD-526، تصمیم ت۶ بازنگری‌شده الف): داده پایه در هر محیط، تولید هم، فقط «درج آنچه نیست» (TD-591) و بی هیچ نقشی؛
-  // متغیر ALLOW_SEED_IN_PRODUCTION بازنشسته شد
-  const seed = await runSeedWithLock();
-  if (!seed.success) throw new Error(`Base data seed failed: ${seed.message}`);
-  // v9.0.429 (TD-617, decision t4 «الف»): the boot never touches passwords; non-bcrypt values are locked by the one-off
-  // `npm run users:lock-plain-passwords`, never turned into working passwords
-  await seedDefaultEngines();
-  // v8.0.77 (TD-324): کش منطقه زمانی پیش از اولین درخواست، بیرون از هر تراکنش پر می‌شود
-  await warmDisplayTimezone();
+  for (const step of bootDataSteps()) await step.run();
 }
 
 /**

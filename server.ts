@@ -7,7 +7,8 @@ import 'dotenv/config';
 
 import { logger } from './src/middleware/logger.js';
 import { createApp, beginStartup, markStartupComplete } from './src/app.js';
-import { prepareDatabaseAtBoot } from './src/services/system/bootData.js';
+import { bootDataSteps } from './src/services/system/bootData.js';
+import { runBootSequence } from './src/services/system/bootSequence.js';
 import { registerWorkflowDomainActions } from './src/services/system/workflowDomainActions.js';
 import { registerDomainEventHandlers } from './src/services/events/domainEventHandlers.js';
 import { OutboxService } from './src/services/events/outboxService.js';
@@ -56,37 +57,27 @@ async function startServer() {
   (async () => {
     registerWorkflowDomainActions();
     registerDomainEventHandlers();
-    let migrationSucceeded = false;
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      try {
-        // v9.0.133 (TD-591): مهاجرت، داده پایه و موتورهای پیش‌فرض در prepareDatabaseAtBoot
-        await prepareDatabaseAtBoot();
-        logger.info('Database schema verified, migrated, seeded, passwords checked and workflow/event action/webhook engines initialized successfully');
-        // v7.0.31 (TD-193 / audit P1-8): همگام‌سازی کامل اسناد حسابداری و پرکردن موجودی اولیه کاردکس از مسیر
-        // بوت حذف شدند (زمان آماده‌شدن Pod با رشد داده خطی بود و چند Pod همزمان اسناد تکراری می‌ساختند).
-        // اجرای دستی با قفل مشورتی: POST /api/accounting/quick-fix/sync-all-vouchers و POST /api/inventory/kardex-initial-backfill
-        OutboxService.startOutboxWorker(3000);
-        // v9.0.378 (TD-705): retries of failed webhook and rule action deliveries, then the dead letter queue
-        IntegrationDeliveryService.startWorker(5000);
-        // v7.0.101 (TD-085 بند ۴): یادآوری یک‌باره مهلت کارهای تاییدی به مسئول کار
-        WorkflowSlaReminderService.start(60_000);
-        // v9.0.306 (TD-676): daily soft cleanup of expired form drafts
-        FormDraftService.startCleanup();
-        markStartupComplete();
-        migrationSucceeded = true;
-        break;
-      } catch (error) {
-        logger.error(`Error migrating/seeding database (attempt ${attempt}/5):`, error);
-        if (attempt < 5) {
-          await new Promise(resolve => setTimeout(resolve, 1500));
-        }
-      }
-    }
-    // v7.0.40 (audit P2-11): در همه محیط‌ها؛ سرور بدون اسکیما نباید به پاسخ‌دادن ادامه دهد
-    if (!migrationSucceeded) {
-      logger.error('FATAL: Database migrations failed after 5 attempts. Aborting process.');
+    // v10.0.21 (TD-958): only the migrations are essential; a non-essential step that keeps failing is left out and
+    // listed by /health/ready instead of stopping the whole process
+    const report = await runBootSequence(bootDataSteps());
+    // v7.0.40 (audit P2-11): in every environment the server never answers without its schema
+    if (report.fatal) {
+      logger.error(`FATAL: startup step "${report.fatal.step}" failed after 5 attempts. Aborting process.`);
       process.exit(1);
     }
+    logger.info(report.ok
+      ? 'Database schema verified, migrated, seeded and workflow/event action engines initialized successfully'
+      : `Server started without: ${report.degraded.map(d => d.step).join(', ')}`);
+    // v7.0.31 (TD-193 / audit P1-8): no bulk voucher sync or Kardex backfill at boot; run them by hand with their
+    // advisory locks: POST /api/accounting/quick-fix/sync-all-vouchers and POST /api/inventory/kardex-initial-backfill
+    OutboxService.startOutboxWorker(3000);
+    // v9.0.378 (TD-705): retries of failed webhook and rule action deliveries, then the dead letter queue
+    IntegrationDeliveryService.startWorker(5000);
+    // v7.0.101 (TD-085): one reminder per overdue approval task to its assignee
+    WorkflowSlaReminderService.start(60_000);
+    // v9.0.306 (TD-676): daily soft cleanup of expired form drafts
+    FormDraftService.startCleanup();
+    markStartupComplete();
   })().catch(err => {
     logger.error('Unhandled error in background migration/seed runner:', err);
     process.exit(1);

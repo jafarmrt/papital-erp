@@ -10850,6 +10850,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runSystemHealthTests(shouldRun));
   const { runFactoryResetTests } = await import('../regression/factoryResetTests.js');
   results.push(...await runFactoryResetTests(shouldRun));
+  // v10.0.21 (TD-959): the seed names its failed sections
+  const { runSeedSectionTests } = await import('../regression/seedSectionTests.js');
+  results.push(...await runSeedSectionTests(shouldRun));
 
   // Package 1 second half PR 3 (v9.0.444+): foreign keys of the schema and the database
   const { runForeignKeyPolicyTests } = await import('../regression/foreignKeyPolicyTests.js');
