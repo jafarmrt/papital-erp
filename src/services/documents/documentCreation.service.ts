@@ -655,7 +655,7 @@ export class DocumentCreationService {
         );
         await OutboxService.saveToOutbox(tx, invEvent);
       } else if (docType === 'receipt' || docType === 'purchase') {
-        // v10.0.22 (TD-942): a production receipt (project delivery) is not a purchase and publishes no purchase event with an
+        // v10.0.29 (TD-942): a production receipt (project delivery) is not a purchase and publishes no purchase event with an
         // empty supplier; its stock entry is published as StockReceived by the stock engine
         const purchEvent = domainEventBus.createEvent<PurchaseEventPayload>(
           isApproved ? DomainEventType.PURCHASE_APPROVED : DomainEventType.PURCHASE_CREATED,

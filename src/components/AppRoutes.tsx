@@ -47,6 +47,8 @@ const InventoryStatusPage = lazyWithRetry(() => import('../pages/InventoryStatus
 const CustomersPage = lazyWithRetry(() => import('../pages/CustomersPage'));
 const PricingPage = lazyWithRetry(() => import('../pages/PricingPage'));
 const GalleryPage = lazyWithRetry(() => import('../pages/GalleryPage'));
+const MediaLibraryPage = lazyWithRetry(() => import('../pages/MediaLibraryPage'));
+const MediaProductPage = lazyWithRetry(() => import('../pages/MediaProductPage'));
 const DocumentsPage = lazyWithRetry(() => import('../pages/DocumentsPage'));
 const CreateInvoicePage = lazyWithRetry(() => import('../pages/CreateInvoicePage'));
 const InvoicesListPage = lazyWithRetry(() => import('../pages/InvoicesListPage'));
@@ -132,6 +134,16 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         <Route path="/gallery" element={
           <ProtectedRoute page="/gallery" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <GalleryPage user={user} />
+          </ProtectedRoute>
+        } />
+        <Route path="/media-library" element={
+          <ProtectedRoute page="/media-library" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+            <MediaLibraryPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/media-library/products/:itemId" element={
+          <ProtectedRoute page="/media-library/products/:itemId" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+            <MediaProductPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/pricing" element={

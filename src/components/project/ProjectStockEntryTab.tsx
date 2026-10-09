@@ -117,7 +117,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
   }, [project]);
 
   // Initial produced quantities & optional unit cost overrides
-  // v10.0.21 (TD-977): مقدار پیش‌فرض همان مقدار برنامه است؛ بی برنامه خالی می‌ماند و هیچ عدد ساختگی (۱۰۰) فرستاده نمی‌شود
+  // v10.0.28 (TD-977): مقدار پیش‌فرض همان مقدار برنامه است؛ بی برنامه خالی می‌ماند و هیچ عدد ساختگی (۱۰۰) فرستاده نمی‌شود
   const [producedQuantities, setProducedQuantities] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {};
     products.forEach(p => {
@@ -126,7 +126,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     return init;
   });
 
-  // v10.0.21 (TD-977): بهای واحد فقط وقتی فرستاده می‌شود که کاربر آن را وارد کند؛ میانگین موزون کش‌شده مرورگر فقط راهنمای خانه است
+  // v10.0.28 (TD-977): بهای واحد فقط وقتی فرستاده می‌شود که کاربر آن را وارد کند؛ میانگین موزون کش‌شده مرورگر فقط راهنمای خانه است
   // و کارساز بی بهای واردشده میانگین موزون جاری کالا را زیر قفل برمی‌دارد
   const [unitCosts, setUnitCosts] = useState<Record<string, number>>({});
 

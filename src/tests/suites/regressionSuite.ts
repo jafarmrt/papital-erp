@@ -10842,7 +10842,13 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 9 phase 5 PR «الف» (v9.0.451+): the side paths that move project stock follow the stock document rules
   const { runProjectStockGateTests } = await import('../regression/projectStockGateTests.js');
   results.push(...await runProjectStockGateTests(shouldRun));
-  // Series 10 phase 3 lane L3 (v10.0.22+): the events of the project stock paths
+  // Series 10 N-05 PR 1 (v10.0.21+): the media library infrastructure
+  const { runMediaLibraryTests } = await import('../regression/mediaLibraryTests.js');
+  results.push(...await runMediaLibraryTests(shouldRun));
+  // Series 10 N-05 PR 2 (v10.0.25+): product card, product grid and zip download of the media library
+  const { runMediaProductTests } = await import('../regression/mediaProductTests.js');
+  results.push(...await runMediaProductTests(shouldRun));
+  // Series 10 phase 3 lane L3 (v10.0.29+): the events of the project stock paths
   const { runProjectEventTests } = await import('../regression/projectEventTests.js');
   results.push(...await runProjectEventTests(shouldRun));
 
@@ -10875,6 +10881,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Phase 5 PR «ج» (v9.0.459+): treasury rows linked to documents and payroll payment dates
   const { runTreasuryPayrollPhase5Tests } = await import('../regression/treasuryPayrollPhase5Tests.js');
   results.push(...await runTreasuryPayrollPhase5Tests(shouldRun));
+
+  // Payroll duties plan PR 1 (v10.0.21+): voucher approval permission and maker-checker
+  const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
+  results.push(...await runVoucherApprovalDutiesTests(shouldRun));
 
   return results;
 }

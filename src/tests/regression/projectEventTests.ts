@@ -10,10 +10,10 @@ import { runReservationCases } from './stockReservationTests.js';
 export async function runProjectEventTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_production_receipt_no_purchase_event_td_942',
-      'v10.0.22: a project delivery records its production receipt without a purchase event (no PurchaseApproved with an empty supplier); its stock entry event stays (TD-942)',
+      'v10.0.29: a project delivery records its production receipt without a purchase event (no PurchaseApproved with an empty supplier); its stock entry event stays (TD-942)',
       ['td942', 'p5-m09', 'events', 'projects', 'package11'], productionReceiptEventCase],
     ['reg_allocation_event_project_aggregate_td_944',
-      'v10.0.23: the allocation event is recorded on the project (aggregate id = project id), so the project timeline shows it (TD-944)',
+      'v10.0.30: the allocation event is recorded on the project (aggregate id = project id), so the project timeline shows it (TD-944)',
       ['td944', 'p5-m11', 'events', 'projects', 'allocation', 'package11'], allocationEventCase],
   ]);
 }

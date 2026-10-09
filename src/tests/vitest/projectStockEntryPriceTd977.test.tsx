@@ -36,7 +36,7 @@ const deliveryCalls = () => fetchJson.mock.calls.filter(([url]) => url.endsWith(
 const sentLine = (call = 0) => JSON.parse(deliveryCalls()[call][1]?.body ?? '{}').itemsToAdd[0];
 const inputAfter = async (label: string) => (await screen.findByText(label)).parentElement?.querySelector('input') as HTMLInputElement;
 
-// v10.0.21 (TD-977): the browser's cached average cost is never sent as an entered price, and no quantity is invented
+// v10.0.28 (TD-977): the browser's cached average cost is never sent as an entered price, and no quantity is invented
 describe('project stock entry price and quantity (TD-977)', () => {
   it('sends no unit price when the user typed none, so the server uses the current average cost', async () => {
     render(<ProjectStockEntryTab project={PROJECT} itemsList={ITEMS} onUpdate={vi.fn()} />);
