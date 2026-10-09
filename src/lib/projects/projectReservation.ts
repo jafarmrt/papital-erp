@@ -78,6 +78,8 @@ export interface ProjectReservationPlan {
 export interface ProjectReservationOptions {
   /** رزرو دیگران به ازای شناسه کالا (پیش‌فاکتورهای فروش و پروژه‌های ثبت نهایی‌شده دیگر) */
   reservedByOthers?: ReadonlyMap<number, number>;
+  /** v10.0.31 (TD-945): مقدار هر کالا که تاکنون به همین پروژه داده شده؛ از نیاز کم می‌شود */
+  issuedToProject?: ReadonlyMap<number, number>;
 }
 
 type Row = Record<string, unknown>;
@@ -204,7 +206,10 @@ export function planProjectReservation(
   const shortages: ReservationShortage[] = [];
   for (const need of needs.values()) {
     const { item } = need;
-    const required = need.qty.round(4).toNumber();
+    // v10.0.31 (TD-945): ثبت نهایی دوباره فقط نیاز باقی‌مانده را رزرو می‌کند (مقدار صادرشده به پروژه کم می‌شود)
+    const issued = Math.max(0, Number(options.issuedToProject?.get(item.id)) || 0);
+    const required = Math.max(0, need.qty.subtract(issued).round(4).toNumber());
+    if (!(required > 0)) continue;
     const stock = Number(item.currentStock) || 0;
     const others = Math.max(0, Number(options.reservedByOthers?.get(item.id)) || 0);
     const free = Math.max(0, fin(stock).subtract(others).toNumber());
