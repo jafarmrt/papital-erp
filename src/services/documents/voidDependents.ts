@@ -1,8 +1,12 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { documents, treasuryTransactions } from '../../db/schema.js';
+import { documentItems, documents, treasuryTransactions } from '../../db/schema.js';
 import { ConflictError } from '../../errors/customErrors.js';
 import { formatPersianNumber } from '../../utils/persianNumber.js';
+import { domainEventBus } from '../events/domainEventBus.js';
+import { DomainEventType, type InvoiceEventPayload } from '../events/domainEvents.js';
+import { OutboxService } from '../events/outboxService.js';
+import { documentEventAmounts } from './documentEventAmount.js';
 
 /**
  * v9.0.271 (TD-773، تصمیم ت۴ «الف» بسته ۸): سندی که وابسته زنده دارد باطل نمی‌شود و پاسخ ۴۰۹ وابسته‌ها را نام می‌برد.
@@ -88,4 +92,42 @@ export async function assertVoidHasNoTreasuryRows(tx: DbExecutor, doc: { id: num
     { treasuryRows: rows.map(r => ({ ...r, amount: Number(r.amount) || 0 })) },
     'DOCUMENT_HAS_TREASURY_ROWS',
   );
+}
+
+/** v10.0.36 (TD-931): نوع و شماره سند و کاربر ابطال برای رویداد گردش معکوس انبار */
+export interface VoidReversalContext { documentType?: string; documentRef: string; user: string }
+
+/**
+ * v10.0.36 (TD-931، P5-S-08، تصمیم ت۱۱ «بله»): ابطال فاکتور یا پیش‌فاکتور فروش رویداد `InvoiceVoided` را در outbox همان
+ * تراکنش ابطال می‌نویسد، با مبلغ‌های سند پیش از ابطال (سطرها هنوز زنده‌اند) و نام ذخیره‌شده خریدار. پیش‌تر ابطال هیچ
+ * رویدادی نمی‌نوشت، پس قانون یا وب‌هوکی که ثبت فاکتور را می‌شنید از ابطال آن بی‌خبر می‌ماند. نوع و شماره (`REV-…`) سند و کاربر
+ * ابطال را برای رویداد گردش معکوس هر ردیف کاردکس (`applyStockReversal`) برمی‌گرداند.
+ */
+export async function recordVoidEvents(
+  tx: DbExecutor,
+  doc: { id: number; type: string | null; status: string | null; refNumber: string | null; buyerName: string | null; currency: string | null },
+  user: string,
+): Promise<VoidReversalContext> {
+  const context = { documentType: doc.type ?? undefined, documentRef: `REV-${doc.refNumber || doc.id}`, user };
+  if (doc.type !== 'invoice' && doc.type !== 'proforma') return context;
+  const lines = await tx.select({ id: documentItems.id }).from(documentItems)
+    .where(and(eq(documentItems.documentId, doc.id), eq(documentItems.isDeleted, 0)));
+  const event = domainEventBus.createEvent<InvoiceEventPayload>(
+    DomainEventType.INVOICE_VOIDED,
+    'Document',
+    String(doc.id),
+    {
+      documentId: doc.id,
+      refNumber: String(doc.refNumber ?? doc.id),
+      docType: doc.type,
+      ...await documentEventAmounts(tx, doc.id),
+      buyerName: doc.buyerName || '',
+      currency: doc.currency || 'IRR',
+      itemCount: lines.length,
+      status: doc.status || '',
+    },
+    { userName: user },
+  );
+  await OutboxService.saveToOutbox(tx, event);
+  return context;
 }
