@@ -30,6 +30,7 @@ import { workflowEntityTypeLabel } from '../lib/workflow/workflowEntityLabels';
 import TaskExecuteModal, { type ApprovalRejectOption } from '../components/approval/TaskExecuteModal';
 import PrintDocModal from '../components/approval/PrintDocModal';
 import type { ApprovalDocumentDetails } from '../components/approval/DocumentDetailsPreview';
+import { PHONE_TAP_TARGET } from '../lib/pwa/phoneLayout';
 import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../components/common/PillBadge';
 
 type DocumentDetails = ApprovalDocumentDetails;
@@ -316,7 +317,7 @@ export function ApprovalInboxPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="جستجو بر اساس شماره یا عنوان..."
-              className="w-full pl-3 pr-9 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-3 pr-9 py-2.5 sm:py-1.5 text-sm sm:text-xs rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
         </div>
@@ -477,7 +478,7 @@ export function ApprovalInboxPage() {
                     <div className="pt-3 border-t border-gray-100 dark:border-gray-700 flex justify-end">
                       <button
                         onClick={() => openTask(t)}
-                        className={`flex items-center gap-1 px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${
+                        className={`w-full sm:w-auto ${PHONE_TAP_TARGET} flex items-center justify-center gap-1 px-4 py-2 text-sm sm:text-xs font-bold rounded-xl transition-all shadow-sm ${
                           isCompletedTask
                             ? 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
                             : 'bg-indigo-600 hover:bg-indigo-700 text-white'
