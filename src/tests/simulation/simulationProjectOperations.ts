@@ -48,17 +48,24 @@ export function createProjectOperations(
    * The project items are made by the first purchases (at most PROJECT_ITEM_COUNT), so every one carries a document line
    * and none is an unreferenced marker row that `db:cleanup-test` would remove (TD-581 check on a simulated year)
    */
+  const pendingItems: Promise<SimItem>[] = [];
   const purchaseItem = async (): Promise<SimItem> => {
-    if (projectItems.length < PROJECT_ITEM_COUNT) {
-      const it = await createTestItem({
-        type: 'raw_material', code: `${world.tag}_PJ${projectItems.length}`, category: 'مواد اولیه', stocks: {}, weightedAverageCost: 0,
-      });
-      const item: SimItem = { id: it.id, type: 'raw_material' };
-      projectItems.push(item);
-      world.onItem(item.id);
-      return item;
+    // the slot is taken before the first await, so concurrent rounds (--users) never make the same code twice
+    if (pendingItems.length < PROJECT_ITEM_COUNT) {
+      const index = pendingItems.length;
+      const made = (async (): Promise<SimItem> => {
+        const it = await createTestItem({
+          type: 'raw_material', code: `${world.tag}_PJ${index}`, category: 'مواد اولیه', stocks: {}, weightedAverageCost: 0,
+        });
+        const item: SimItem = { id: it.id, type: 'raw_material' };
+        projectItems.push(item);
+        world.onItem(item.id);
+        return item;
+      })();
+      pendingItems.push(made);
+      return made;
     }
-    return pick(projectItems);
+    return projectItems.length > 0 ? pick(projectItems) : pendingItems[0];
   };
 
   /** Stock of the main warehouse less every reservation of the item (sales proformas left open by a stuck approval) */
