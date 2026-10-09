@@ -1,5 +1,6 @@
 import type pkg from 'pg';
 import type { FinancialHealthReport, HealthCheckStatus } from '../types.js';
+import { terminalLine } from '../lib/terminalText.js';
 
 /**
  * v8.0.88 (TD-367): تمرین ارتقا روی رونوشت داده. `scripts/upgrade-rehearsal.sh` آخرین پشتیبان را در پایگاه‌داده تمرین
@@ -27,8 +28,8 @@ export interface RehearsalSnapshot {
   unavailable: string[];
 }
 
+/** v10.0.14 (TD-1000): the health check is named by its id on the terminal, never by its Persian title */
 export interface HealthStatus {
-  title: string;
   status: HealthCheckStatus;
   count: number;
 }
@@ -67,7 +68,7 @@ async function readSection(
     }
     snapshot.sections.add(section);
   } catch (err: unknown) {
-    snapshot.unavailable.push(`${section}: ${err instanceof Error ? err.message : String(err)}`);
+    snapshot.unavailable.push(`${section}: ${rehearsalErrorCause(err)}`);
   }
 }
 
@@ -140,7 +141,7 @@ export async function snapshotBusinessData(db: Queryable): Promise<RehearsalSnap
       snapshot.rowCounts.set(name, Number(n.rows[0]?.n ?? 0));
     }
   } catch (err: unknown) {
-    snapshot.unavailable.push(`row counts: ${err instanceof Error ? err.message : String(err)}`);
+    snapshot.unavailable.push(`row counts: ${rehearsalErrorCause(err)}`);
   }
 
   try {
@@ -157,7 +158,7 @@ export async function snapshotBusinessData(db: Queryable): Promise<RehearsalSnap
       if (count > 0) snapshot.notValid.set(c.name, count);
     }
   } catch (err: unknown) {
-    snapshot.unavailable.push(`NOT VALID constraints: ${err instanceof Error ? err.message : String(err)}`);
+    snapshot.unavailable.push(`NOT VALID constraints: ${rehearsalErrorCause(err)}`);
   }
   return snapshot;
 }
@@ -168,7 +169,7 @@ export function healthStatuses(report: FinancialHealthReport): Map<string, Healt
     const previous = map.get(t.id);
     // چند ردیف با یک شناسه (مثلاً موجودی) : بدترین وضعیت و جمع شمار
     if (!previous || STATUS_RANK[t.status] > STATUS_RANK[previous.status]) {
-      map.set(t.id, { title: t.title, status: t.status, count: (previous?.count ?? 0) + t.count });
+      map.set(t.id, { status: t.status, count: (previous?.count ?? 0) + t.count });
     } else {
       previous.count += t.count;
     }
@@ -218,20 +219,44 @@ export function compareRehearsal(
     for (const [id, now] of healthAfter) {
       const was = healthBefore.get(id);
       if (!was) {
-        if (now.status !== 'healthy') notices.push(`health check "${now.title}" (new): ${now.status}, ${now.count} issue(s)`);
+        if (now.status !== 'healthy') notices.push(`health check ${id} (new): ${now.status}, ${now.count} issue(s)`);
         continue;
       }
       const worse = STATUS_RANK[now.status] > STATUS_RANK[was.status]
         || (now.status !== 'healthy' && now.status === was.status && now.count > was.count);
-      if (worse) problems.push(`health check "${now.title}": ${was.status} (${was.count}) → ${now.status} (${now.count})`);
+      if (worse) problems.push(`health check ${id}: ${was.status} (${was.count}) → ${now.status} (${now.count})`);
     }
   } else if (healthAfter) {
-    for (const now of healthAfter.values()) {
-      if (now.status !== 'healthy') notices.push(`health check "${now.title}" after the upgrade: ${now.status}, ${now.count} issue(s)`);
+    for (const [id, now] of healthAfter) {
+      if (now.status !== 'healthy') notices.push(`health check ${id} after the upgrade: ${now.status}, ${now.count} issue(s)`);
     }
   }
 
   for (const u of before.unavailable) notices.push(`not compared (before): ${u}`);
   for (const u of after.unavailable) notices.push(`not compared (after): ${u}`);
   return { problems, notices };
+}
+
+const FAILED_QUERY = /^Failed query:/;
+const CAUSE_MAX_LENGTH = 300;
+
+/**
+ * v10.0.14 (TD-1000, owner rule t9): the reason a rehearsal step could not run, for the terminal. A Drizzle error
+ * carries the whole SQL text (with Persian literals) in its message, so the database's own cause is taken instead;
+ * an older schema missing a table the current code reads says so. Persian runs become an English marker.
+ */
+export function rehearsalErrorCause(err: unknown): string {
+  let current: unknown = err;
+  for (let depth = 0; depth < 5 && current instanceof Error && FAILED_QUERY.test(current.message) && current.cause; depth++) {
+    current = current.cause;
+  }
+  const message = current instanceof Error ? current.message : String(current);
+  const code = (current as { code?: unknown } | null)?.code;
+  const text = FAILED_QUERY.test(message)
+    ? 'a database query failed'
+    : code === '42P01' || code === '42703'
+      ? `${message} (the schema before the migrations lacks what the current code reads)`
+      : message;
+  const firstLine = terminalLine(text.split('\n')[0] ?? '');
+  return firstLine.length > CAUSE_MAX_LENGTH ? `${firstLine.slice(0, CAUSE_MAX_LENGTH)}…` : firstLine;
 }

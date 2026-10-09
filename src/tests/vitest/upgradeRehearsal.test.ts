@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
-  checkExpression, compareRehearsal, isRehearsalDatabase, type HealthStatus, type RehearsalSnapshot, type TotalsSection,
+  checkExpression, compareRehearsal, isRehearsalDatabase, rehearsalErrorCause, type HealthStatus, type RehearsalSnapshot, type TotalsSection,
 } from '../../db/upgradeRehearsal';
 
 /**
@@ -35,7 +35,7 @@ describe('upgrade rehearsal comparison (TD-367)', () => {
   });
 
   it('flags a health check that got worse but not one that improved', () => {
-    const h = (status: HealthStatus['status'], count: number): HealthStatus => ({ title: 't', status, count });
+    const h = (status: HealthStatus['status'], count: number): HealthStatus => ({ status, count });
     const before = new Map([['a', h('healthy', 0)], ['b', h('error', 3)], ['c', h('warning', 1)]]);
     const after = new Map([['a', h('error', 1)], ['b', h('warning', 1)], ['c', h('warning', 2)]]);
     expect(compareRehearsal(snapshot({}), snapshot({}), before, after).problems).toHaveLength(2);
@@ -54,5 +54,39 @@ describe('upgrade rehearsal comparison (TD-367)', () => {
     expect(checkExpression('CHECK ((qty >= (0)::numeric))')).toBe('(qty >= (0)::numeric)');
     expect(isRehearsalDatabase('erp_restore_drill_20261005_120000')).toBe(true);
     expect(isRehearsalDatabase('papital_erp')).toBe(false);
+  });
+});
+
+/** Persian a check prints from data (titles, query text, a business message) */
+const PERSIAN_QUERY = "select 'ثبت اولیه کالا' from item_opening_voucher_items";
+const PERSIAN_MESSAGE = 'موجودی منفی';
+const PERSIAN = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+
+describe('upgrade rehearsal terminal output is English (TD-1000)', () => {
+  it('names a health check by its id, never its Persian title', () => {
+    const before = new Map<string, HealthStatus>([['inventory_reconciliation', { status: 'healthy', count: 0 }]]);
+    const after = new Map<string, HealthStatus>([
+      ['inventory_reconciliation', { status: 'error', count: 1 }],
+      ['stock_reservation_exceeds_stock', { status: 'warning', count: 16 }],
+    ]);
+    const withBefore = compareRehearsal(snapshot({}), snapshot({}), before, after);
+    const afterOnly = compareRehearsal(snapshot({}), snapshot({}), null, after);
+    const lines = [...withBefore.problems, ...withBefore.notices, ...afterOnly.notices];
+    expect(lines).toHaveLength(4);
+    for (const line of lines) expect(line).not.toMatch(PERSIAN);
+    expect(withBefore.problems[0]).toContain('inventory_reconciliation');
+    expect(afterOnly.notices.join('\n')).toContain('stock_reservation_exceeds_stock');
+  });
+
+  it('gives the cause of a failed query, never its SQL text', () => {
+    const query = PERSIAN_QUERY;
+    const cause = Object.assign(new Error('relation "item_opening_voucher_items" does not exist'), { code: '42P01' });
+    const failed = Object.assign(new Error(`Failed query: ${query}\nparams: `), { cause });
+    const text = rehearsalErrorCause(failed);
+    expect(text).not.toMatch(PERSIAN);
+    expect(text).not.toContain('Failed query');
+    expect(text).toContain('item_opening_voucher_items');
+    expect(rehearsalErrorCause(new Error(`Failed query: ${query}`))).not.toMatch(PERSIAN);
+    expect(rehearsalErrorCause(new Error(PERSIAN_MESSAGE))).not.toMatch(PERSIAN);
   });
 });

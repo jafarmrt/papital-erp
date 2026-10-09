@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { pool } from '../src/db/drizzle.js';
 import { DateCalendarReportService } from '../src/services/system/dateCalendarReport.service.js';
+import { terminalLine } from '../src/lib/terminalText.js';
 
 /**
  * v7.0.131 (TD-232): گزارش فقط‌خواندنی تقویم ستون‌های تاریخ متنی (هیچ داده‌ای تغییر نمی‌کند).
@@ -28,7 +29,7 @@ async function main(): Promise<void> {
     'Invalid': c.invalid,
   })));
   for (const c of report.columns.filter(col => col.invalidSamples.length > 0)) {
-    console.log(`⚠️ ${c.table}.${c.column}: sample invalid values: ${c.invalidSamples.map(v => `"${v}"`).join(', ')}`);
+    console.log(terminalLine(`⚠️ ${c.table}.${c.column}: sample invalid values: ${c.invalidSamples.map(v => `"${v}"`).join(', ')}`));
   }
   const t = report.totals;
   console.log(`\nTotal: ISO ${t.iso}, Gregorian in another format ${t.gregorian}, Jalali ${t.jalali}, invalid ${t.invalid}`);
@@ -36,7 +37,7 @@ async function main(): Promise<void> {
 
 main()
   .catch((err) => {
-    console.error(`❌ ${err instanceof Error ? err.message : String(err)}`);
+    console.error(terminalLine(`❌ ${err instanceof Error ? err.message : String(err)}`));
     process.exitCode = 1;
   })
   .finally(() => pool.end());

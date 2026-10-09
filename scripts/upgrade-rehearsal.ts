@@ -3,8 +3,9 @@ import 'dotenv/config';
 import { pool } from '../src/db/drizzle.js';
 import { runMigrations } from '../src/db/migrator.js';
 import {
-  compareRehearsal, healthStatuses, isRehearsalDatabase, REHEARSAL_DATABASE_PREFIX, snapshotBusinessData, type HealthStatus,
+  compareRehearsal, healthStatuses, isRehearsalDatabase, REHEARSAL_DATABASE_PREFIX, rehearsalErrorCause, snapshotBusinessData, type HealthStatus,
 } from '../src/db/upgradeRehearsal.js';
+import { terminalLine } from '../src/lib/terminalText.js';
 import { FinancialHealthService } from '../src/services/accounting/financialHealth.service.js';
 
 /**
@@ -19,7 +20,7 @@ async function health(label: string): Promise<Map<string, HealthStatus> | null> 
   try {
     return healthStatuses(await FinancialHealthService.runHealthCheck());
   } catch (err: unknown) {
-    console.log(`  ! financial health check ${label} not available: ${err instanceof Error ? err.message : String(err)}`);
+    console.log(`  ! financial health check ${label} not available: ${rehearsalErrorCause(err)}`);
     return null;
   }
 }
@@ -34,7 +35,7 @@ async function appliedMigrations(): Promise<number> {
 function list(title: string, lines: string[]): void {
   if (lines.length === 0) return;
   console.log(title);
-  for (const line of lines.slice(0, SHOW)) console.log(`    ${line}`);
+  for (const line of lines.slice(0, SHOW)) console.log(terminalLine(`    ${line}`));
   if (lines.length > SHOW) console.log(`    … and ${lines.length - SHOW} more`);
 }
 
@@ -50,7 +51,7 @@ async function main(): Promise<number> {
   const healthBefore = await health('before the migrations');
 
   const result = await runMigrations();
-  for (const warning of result.warnings ?? []) console.log(`  ! ${warning}`);
+  for (const warning of result.warnings ?? []) console.log(terminalLine(`  ! ${warning}`));
   if (!result.success) {
     list('✗ migrations FAILED on this data: the service would stop at startup after this update', result.errors);
     return 1;
@@ -75,7 +76,7 @@ main()
     process.exit(code);
   })
   .catch(async (err: unknown) => {
-    console.error('REHEARSAL ERROR', err);
+    console.error(`REHEARSAL ERROR: ${rehearsalErrorCause(err)}`);
     await pool.end().catch(() => undefined);
     process.exit(1);
   });
