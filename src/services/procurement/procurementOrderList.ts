@@ -78,7 +78,7 @@ export async function listProcurementOrders(
   const catalog = itemIds.length === 0 ? [] : await db.select({ id: items.id, code: items.code, name: items.name, unit: items.unit })
     .from(items).where(inArray(items.id, itemIds));
   const catalogById = new Map(catalog.map(item => [item.id, item]));
-  // v10.0.47 (TD-1131): نام انبار مقصد کنار کدش؛ پیش‌تر تحویل سفارش کد خام انبار («raw») را نشان می‌داد
+  // v10.0.48 (TD-1131): نام انبار مقصد کنار کدش؛ پیش‌تر تحویل سفارش کد خام انبار («raw») را نشان می‌داد
   const resolveWarehouse = createLedgerLocationResolver(await db.select({
     id: warehouses.id, code: warehouses.code, name: warehouses.name, isActive: warehouses.isActive,
   }).from(warehouses));

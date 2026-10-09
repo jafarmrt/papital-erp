@@ -16,7 +16,7 @@ export function documentTypeTitle(docType: string | null | undefined, fallback =
 }
 
 /**
- * v10.0.47 (TD-1131): نوع سند یک ردیف کاردکس برای نمایش؛ کد نوع (`remittance`، `audit`) نام فارسی‌اش را می‌گیرد،
+ * v10.0.48 (TD-1131): نوع سند یک ردیف کاردکس برای نمایش؛ کد نوع (`remittance`، `audit`) نام فارسی‌اش را می‌گیرد،
  * متن فارسی ثبت‌شده ردیف‌های قدیمی همان‌طور می‌ماند، و کد لاتین ناشناخته «سند» خوانده می‌شود، هرگز خود کد.
  */
 export function kardexDocumentTypeLabel(docType: string | null | undefined): string {

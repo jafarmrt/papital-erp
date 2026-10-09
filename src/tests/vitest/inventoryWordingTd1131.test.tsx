@@ -6,7 +6,7 @@ import { ConfirmWarehouseDeliveryModal } from '../../components/procurement/Conf
 afterEach(cleanup);
 
 /**
- * v10.0.47 (TD-1131): the Kardex shows a document type by its Persian name, never its code, and the delivery window
+ * v10.0.48 (TD-1131): the Kardex shows a document type by its Persian name, never its code, and the delivery window
  * names the destination warehouse instead of its code.
  */
 describe('Kardex document type label (TD-1131)', () => {

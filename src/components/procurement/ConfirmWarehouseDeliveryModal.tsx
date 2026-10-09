@@ -17,7 +17,7 @@ export interface ConfirmWarehouseDeliveryModalProps {
     refNumber?: string | null;
     supplierName?: string | null;
     location?: string | null;
-    /** نام انبار مقصد که سرور کنار کدش می‌فرستد (v10.0.47، TD-1131) */
+    /** نام انبار مقصد که سرور کنار کدش می‌فرستد (v10.0.48، TD-1131) */
     locationName?: string | null;
     totalAmount?: number | null;
     itemsCount?: number | null;
