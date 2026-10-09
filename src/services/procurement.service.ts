@@ -449,8 +449,7 @@ export class ProcurementService {
       }
       // v8.0.124 (TD-405): کالای درخواستِ دریافت‌شده وارد انبار شده است؛ هیچ اقدام گردش‌کاری آن را برنمی‌گرداند، هر گامی
       // که نمونه گردش‌کار داشته باشد (پیش‌تر «خودترمیمی» گام را به «دریافت‌شده» می‌برد و همین جلوی اقدام را می‌گرفت)
-      // v10.0.39 (TD-912): درخواستی که ابطال سفارش تحویل‌شده‌اش ردیفی را باز کرده دوباره سفارش داده می‌شود
-      if (RECEIVED_REQUISITION_STATUSES.has(req.status) && (req.items || []).every(isSettledRequisitionRow)) {
+      if (RECEIVED_REQUISITION_STATUSES.has(req.status)) {
         throw new ConflictError(`درخواست خرید ${req.code} دریافت شده است و اقدام «${requisitionActionLabel(actionKey)}» روی آن اجرا نمی‌شود.`, undefined, 'WF_ACTION_NOT_IN_STEP');
       }
       if (isReceive && CLOSED_REQUISITION_STATUSES.has(req.status)) {

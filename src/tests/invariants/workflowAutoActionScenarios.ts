@@ -17,8 +17,6 @@ import { refusal } from './workflowScenarioHelpers.js';
 
 const ADMIN = { username: 'wf415', role: 'admin', permissions: [] as string[] };
 /** سال جلالی بسته‌ای که سفارش ماندهٔ آزمون در آن تاریخ دارد (۱۳۹۰/۰۳/۱۱) */
-const CLOSED_YEAR = 1390;
-const CLOSED_YEAR_DATE = '2011-06-01 10:00:00';
 
 /** پیش از v9.0.2 شنونده‌های گردش‌کار پس از پاسخ، روی اتصال جدای استخر کار می‌کردند؛ این مکث فرصت آن کار را می‌دهد */
 const settle = () => new Promise<void>(resolve => setTimeout(resolve, 1500));
@@ -81,17 +79,6 @@ async function inProcessWorkflowEvents<T>(instanceId: number, run: () => Promise
   }
 }
 
-/** سال جلالی را بسته علامت می‌زند و تابعی برمی‌گرداند که وضعیت پیشین آن را برمی‌گرداند */
-async function closeFiscalYear(year: number): Promise<() => Promise<void>> {
-  const before = await pool.query<{ status: string }>('SELECT status FROM fiscal_periods WHERE fiscal_year = $1', [year]);
-  await pool.query(`INSERT INTO fiscal_periods (fiscal_year, status, closed_by) VALUES ($1, 'closed', 'wf415')
-    ON CONFLICT (fiscal_year) DO UPDATE SET status = 'closed'`, [year]);
-  return async () => {
-    if (before.rows.length === 0) await pool.query('DELETE FROM fiscal_periods WHERE fiscal_year = $1', [year]);
-    else await pool.query('UPDATE fiscal_periods SET status = $2 WHERE fiscal_year = $1', [year, before.rows[0].status]);
-  };
-}
-
 /**
  * سناریوی R گزارش معماری: «دریافت کالا»ی درخواستی با دو سفارش پیش‌نویس که سفارش دوم در سال مالی بسته مانده است. اقدام
  * رد و کامل برگشت می‌خورد. پیش‌تر شنونده گردش‌کار که پیش از commit پرتاب شده بود پس از برگشت سفارش اول را جدا قطعی
@@ -104,13 +91,14 @@ export async function checkRefusedReceiveLeavesNoTrace(): Promise<string[]> {
   const reqId = await requisition([[x.id, 10], [y.id, 5]]);
   await ProcurementService.executeWorkflowAction(reqId, 'approve_request', ADMIN);
   const [orderA, orderB] = await draftOrders(reqId, [[[x.id, 10]], [[y.id, 5]]]);
-  await pool.query('UPDATE documents SET date = $2 WHERE id = $1', [orderB, CLOSED_YEAR_DATE]);
+  // v10.0.38 (TD-914): an order is received on the receipt day, so an old order date no longer refuses it; the second order's
+  // line at price 0 for an item without a weighted average cost does (INCOMING_LINE_WITHOUT_COST, TD-906), after the first order
+  await pool.query('UPDATE document_items SET unit_price = 0 WHERE document_id = $1', [orderB]);
 
-  const reopen = await closeFiscalYear(CLOSED_YEAR);
-  try {
+  {
     const error = await refusal(() => ProcurementService.executeWorkflowAction(reqId, 'receive_items', ADMIN));
     await settle();
-    if (!error) problems.push(`"Receive goods" with an order left in the closed fiscal year ${CLOSED_YEAR} was accepted`);
+    if (!error) problems.push('"Receive goods" with an order line without cost was accepted');
     const after = await requisitionState(reqId);
     if (after.status !== 'ordered' || after.stateKey !== 'ordered') problems.push(`After the refused receipt the requisition is "${after.status}" and the step "${after.stateKey}", not "ordered"`);
     for (const [label, id] of [['اول', orderA], ['دوم', orderB]] as const) {
@@ -123,8 +111,6 @@ export async function checkRefusedReceiveLeavesNoTrace(): Promise<string[]> {
     if (kardex !== 0) problems.push(`The item of the first order has ${kardex} Kardex rows after the refused receipt`);
     const vouchers = await documentVouchers(orderA);
     if (vouchers !== 0) problems.push(`The first order has ${vouchers} journal vouchers after the refused receipt`);
-  } finally {
-    await reopen();
   }
   return problems;
 }

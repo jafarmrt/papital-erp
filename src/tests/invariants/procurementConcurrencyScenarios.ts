@@ -1,12 +1,11 @@
 import { pool } from '../../db/drizzle.js';
-import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { ProcurementService } from '../../services/procurement.service.js';
 import { REQUISITION_UNSETTLED_HINT } from '../../services/procurement/requisitionReceiveAction.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 import { createTestItem } from '../fixtures/factories.js';
 import type { InvariantScope } from './businessInvariants.js';
 import { outcomeProblems, raceBehindRowLock } from './concurrencyHarness.js';
-import { invariantProblems, itemState, receive, watermarks } from './scenarioHelpers.js';
+import { invariantProblems, itemState, watermarks } from './scenarioHelpers.js';
 
 /**
  * v8.0.71 — سناریوهای سخت‌گیرانه درخواست خرید حوزه J برای سوئیت business_invariants.
@@ -138,20 +137,18 @@ export async function checkRequisitionReceivedOnce(wh: string): Promise<string[]
   if ((instances.rows[0]?.n ?? 0) !== 1) problems.push(`requisition without an instance has ${instances.rows[0]?.n ?? 0} workflow instances after two concurrent receipts, not one`);
   await expectStock(legacyItem, legacy, 10, 'two concurrent receipts');
 
-  // ۵) نهایی‌سازی سفارش رد شود (تاریخ گذشته بی‌مجوز): دریافت کالا رد می‌شود و درخواست «دریافت‌شده» نمی‌شود
+  // ۵) نهایی‌سازی سفارش رد شود: دریافت کالا رد می‌شود و درخواست «دریافت‌شده» نمی‌شود. v10.0.38 (TD-914): سفارش به تاریخ روز
+  // دریافت ثبت می‌شود و تاریخ کهنه دیگر ردش نمی‌کند؛ سطر بی‌بها برای کالای بی میانگین موزون بها ردش می‌کند (TD-906)
   const backItem = await newItem();
   const back = await requisition(backItem, 10);
   const backOrder = await order(back, backItem, 10, wh);
-  // v10.0.10 (TD-982): the draft moves to 1404 with a number of that year, as the edit route would number it (TD-313);
-  // the invariant I12 refuses a document numbered in another year than its date
-  await pool.query(`UPDATE documents SET date = '2026-01-01', ref_fiscal_year = 1404, ref_number = 'TD326-' || id WHERE id = $1`, [backOrder]);
-  await receive(backItem, 1, 1000, wh, await businessTodayIsoDate());
+  await pool.query('UPDATE document_items SET unit_price = 0 WHERE document_id = $1', [backOrder]);
   const refused = await rejection(() => receiveItems(back, CLERK));
   if (refused === null) problems.push('receiving items with an order that was not finalized was accepted');
   const { status } = await requisitionRow(back);
   if (status === 'received') problems.push('a requisition whose order was not finalized stayed "received"');
   const { stock } = await itemState(backItem);
-  if (stock !== 1) problems.push(`stock after the refused receipt is ${stock}, not 1`);
+  if (stock !== 0) problems.push(`stock after the refused receipt is ${stock}, not 0`);
 
   const scope: InvariantScope = { ...mark, itemIds };
   problems.push(...await invariantProblems(scope, 'after receiving the purchase requisition items'));
