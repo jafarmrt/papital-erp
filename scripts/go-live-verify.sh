@@ -180,10 +180,10 @@ if [ -n "$(env_val BACKUP_RCLONE_REMOTE)" ]; then
 else
   warnc "No off-server backup copy: BACKUP_RCLONE_REMOTE is empty (docs/OFFSITE_BACKUP.md)"
 fi
-if { [ -n "$(env_val ALERT_BOT_TOKEN)" ] && [ -n "$(env_val ALERT_CHAT_ID)" ]; } || { [ -n "$(env_val ALERT_SMTP_URL)" ] && [ -n "$(env_val ALERT_EMAIL_TO)" ]; }; then
+if { [ -n "$(env_val ALERT_BOT_TOKEN)" ] && [ -n "$(env_val ALERT_CHAT_ID)" ]; } || { [ -n "$(env_val ALERT_BOT2_TOKEN)" ] && [ -n "$(env_val ALERT_BOT2_CHAT_ID)" ]; } || { [ -n "$(env_val ALERT_SMTP_URL)" ] && [ -n "$(env_val ALERT_EMAIL_TO)" ]; }; then
   ok "Alert channel configured for scripts/monitor.sh"
 else
-  warnc "No alert channel for scripts/monitor.sh (ALERT_BOT_TOKEN/ALERT_CHAT_ID or ALERT_SMTP_URL/ALERT_EMAIL_TO)"
+  warnc "No alert channel for scripts/monitor.sh (ALERT_BOT_TOKEN/ALERT_CHAT_ID, ALERT_BOT2_TOKEN/ALERT_BOT2_CHAT_ID or ALERT_SMTP_URL/ALERT_EMAIL_TO)"
 fi
 if [ -e /etc/cron.d ] && grep -rqs "monitor.sh" /etc/cron.d 2>/dev/null; then
   ok "Monitor cron entry found"

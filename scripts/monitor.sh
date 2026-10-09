@@ -16,6 +16,8 @@
 # Alert channels (from the environment or APP_DIR/.env; any that is configured is used):
 #   ALERT_BOT_TOKEN + ALERT_CHAT_ID [+ ALERT_BOT_API]   a bot of a Telegram-style API: Bale by default
 #                                                       (https://tapi.bale.ai), or https://api.telegram.org
+#   ALERT_BOT2_TOKEN + ALERT_BOT2_CHAT_ID [+ ALERT_BOT2_API]   v10.0.15 (TD-1001): a second bot with the same
+#                                                       rules, e.g. Telegram besides Bale; each bot is sent on its own
 #   ALERT_SMTP_URL + ALERT_SMTP_USER + ALERT_SMTP_PASSWORD + ALERT_EMAIL_TO   e-mail through an SMTP server,
 #                                                       e.g. smtps://smtp.gmail.com:465 with an app password
 # With no channel configured the alerts are only printed (and the run exits 2 so the cron log shows it).
@@ -54,6 +56,9 @@ STATE_DIR="$(setting MONITOR_STATE_DIR "$APP_DIR/logs/monitor-state")"
 BOT_TOKEN="$(setting ALERT_BOT_TOKEN)"
 BOT_CHAT="$(setting ALERT_CHAT_ID)"
 BOT_API="$(setting ALERT_BOT_API https://tapi.bale.ai)"
+BOT2_TOKEN="$(setting ALERT_BOT2_TOKEN)"
+BOT2_CHAT="$(setting ALERT_BOT2_CHAT_ID)"
+BOT2_API="$(setting ALERT_BOT2_API https://tapi.bale.ai)"
 SMTP_URL="$(setting ALERT_SMTP_URL)"
 SMTP_USER="$(setting ALERT_SMTP_USER)"
 SMTP_PASSWORD="$(setting ALERT_SMTP_PASSWORD)"
@@ -196,15 +201,19 @@ MESSAGE="$(text title "$HOST")"
 for l in "${LINES[@]}"; do MESSAGE+=$'\n'"• $l"; done
 
 SENT=0; CHANNELS=0
-if [ -n "$BOT_TOKEN" ] && [ -n "$BOT_CHAT" ]; then
+# send_bot TOKEN CHAT API NAME: one Telegram-style bot; a failure is logged and the other channels still run
+send_bot() {
+  [ -n "$1" ] && [ -n "$2" ] || return 0
   CHANNELS=$((CHANNELS + 1))
-  if curl -fsS -m 20 -o /dev/null -X POST "${BOT_API%/}/bot${BOT_TOKEN}/sendMessage" \
-      --data-urlencode "chat_id=${BOT_CHAT}" --data-urlencode "text=${MESSAGE}"; then
+  if curl -fsS -m 20 -o /dev/null -X POST "${3%/}/bot${1}/sendMessage" \
+      --data-urlencode "chat_id=${2}" --data-urlencode "text=${MESSAGE}"; then
     SENT=1
   else
-    log "WARNING: the bot alert could not be sent"
+    log "WARNING: the bot alert could not be sent ($4)"
   fi
-fi
+}
+send_bot "$BOT_TOKEN" "$BOT_CHAT" "$BOT_API" "bot 1"
+send_bot "$BOT2_TOKEN" "$BOT2_CHAT" "$BOT2_API" "bot 2"
 if [ -n "$SMTP_URL" ] && [ -n "$EMAIL_TO" ]; then
   CHANNELS=$((CHANNELS + 1))
   MAIL_FILE="$(mktemp)"
@@ -228,7 +237,7 @@ if [ -n "$SMTP_URL" ] && [ -n "$EMAIL_TO" ]; then
 fi
 
 if [ "$CHANNELS" -eq 0 ]; then
-  log "WARNING: no alert channel configured (ALERT_BOT_TOKEN/ALERT_CHAT_ID or ALERT_SMTP_URL/ALERT_EMAIL_TO); ${#LINES[@]} alert line(s) not sent"
+  log "WARNING: no alert channel configured (ALERT_BOT_TOKEN/ALERT_CHAT_ID, ALERT_BOT2_TOKEN/ALERT_BOT2_CHAT_ID or ALERT_SMTP_URL/ALERT_EMAIL_TO); ${#LINES[@]} alert line(s) not sent"
   exit 2
 fi
 if [ "$SENT" -eq 1 ]; then
