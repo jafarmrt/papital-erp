@@ -31,9 +31,17 @@ const item = {
   current_stock: 4, reorder_point: 0, weighted_average_cost: 1500000, stocks: {}, version: 1,
 };
 
+function pricingPage(price: number, currency: string) {
+  return {
+    data: [item], prices: { 11: [{ id: 1, itemId: 11, title: 'عمده', price, currency }] }, strategies: ['عمده'],
+    total: 1, page: 1, limit: 50, totalPages: 1,
+  };
+}
+
 function apiResponse(url: string): unknown {
   if (url.startsWith('/items?')) return { data: [item], total: 1, page: 1, totalPages: 1 };
-  if (url === '/items/prices/all') return { 11: [{ id: 1, itemId: 11, title: 'عمده', price: 2000000, currency: 'IRR' }] };
+  // v10.0.33 (OBS-R1-79): صفحه قیمت‌گذاری یک صفحه از کالاها را با قیمت‌ها و فهرست‌های قیمت از سرور می‌خواند
+  if (url.startsWith('/items/pricing-page?')) return pricingPage(2000000, 'IRR');
   if (url === '/settings') return [{ key: 'pricing_strategies', value: 'عمده' }];
   if (url === '/categories') return [{ id: 1, name: 'گردنبند', prefix: 'N', type: 'product', defaultUnit: 'عدد' }];
   if (url === '/warehouses') return [{ id: 1, name: 'انبار مرکزی', code: 'WH1', is_active: 1 }];
@@ -109,8 +117,8 @@ describe('Pricing page price fields by permission (O14)', () => {
 describe('Pricing margin against the rial average cost (O10)', () => {
   it('shows no margin for a dollar price and the markup buttons write a rial price', async () => {
     granted.add('products.edit_price');
-    fetchJson.mockImplementation((url: string) => Promise.resolve(url === '/items/prices/all'
-      ? { 11: [{ id: 1, itemId: 11, title: 'عمده', price: 20, currency: 'USD' }] }
+    fetchJson.mockImplementation((url: string) => Promise.resolve(url.startsWith('/items/pricing-page?')
+      ? pricingPage(20, 'USD')
       : apiResponse(url)));
     render(withClient(<PricingPage />));
     await screen.findByText('گردنبند لوتوس');

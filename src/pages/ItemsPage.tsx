@@ -1,10 +1,11 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Item } from '../types';
 import { useHasPermission } from '../contexts/AuthContext';
 import { Search, Plus, FileSpreadsheet, CheckSquare, Package, Box, AlertTriangle, Layers, Tag } from 'lucide-react';
 import { useSearch } from '../SearchContext';
 import { cn, formatPersianNumber } from '../utils';
+import { parseItemListSort, type ItemListSort } from '../lib/items/itemListSort';
 import ConfirmModal from '../components/ConfirmModal';
 import ImagePreviewModal from '../components/items/ImagePreviewModal';
 import ItemsTable from '../components/items/ItemsTable';
@@ -42,7 +43,7 @@ export default function ItemsPage() {
     setEditingItem(null);
     setSearchParams(nextType === 'raw_material' ? { type: nextType } : {});
   };
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<ItemListSort | null>(null);
 
   const [showModal, setShowModal] = useState(false);
   const [showExcelModal, setShowExcelModal] = useState(false);
@@ -53,7 +54,7 @@ export default function ItemsPage() {
   const [editingItem, setEditingItem] = useState<Item | null>(null);
 
   // React Query Hooks (V4 Phase 6.2 U-1: اتصال به debouncedSearchQuery برای حذف بار شبکه غیرضروری)
-  const { data: itemsResponse, isLoading: loading } = useItemsQuery(type, page, 50, debouncedSearchQuery);
+  const { data: itemsResponse, isLoading: loading } = useItemsQuery(type, page, 50, debouncedSearchQuery, sortConfig);
   const refreshAfterItemChange = useItemChangeRefresh();
   const { data: allCategories = [] } = useCategoriesQuery(type);
   const { data: warehouses = [] } = useWarehousesQuery();
@@ -70,36 +71,13 @@ export default function ItemsPage() {
     setPage(1);
   }, [debouncedSearchQuery]);
 
-  const sortedItems = React.useMemo(() => {
-    let sortableItems = [...items];
-    if (sortConfig !== null) {
-      sortableItems.sort((a: any, b: any) => {
-        let aVal = a[sortConfig.key];
-        let bVal = b[sortConfig.key];
-        
-        if (sortConfig.key === 'current_stock') {
-           aVal = a.current_stock;
-           bVal = b.current_stock;
-        }
-        
-        if (aVal < bVal) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
-        }
-        if (aVal > bVal) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-    return sortableItems;
-  }, [items, sortConfig]);
-
+  // v10.0.32 (OBS-R1-74): ستون و جهت به سرور می‌رود و همه کالاهای پالایش مرتب می‌شوند، نه فقط صفحه جاری
   const requestSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
+    const direction = sortConfig && sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc';
+    const next = parseItemListSort(key, direction);
+    if (!next) return;
+    setSortConfig(next);
+    setPage(1);
   };
 
   const executeArchive = async () => {
@@ -127,9 +105,7 @@ export default function ItemsPage() {
     setShowModal(true);
   };
 
-  // Calculate stats
-  const safeItemsList = Array.isArray(items) ? items : [];
-  const lowStockCount = safeItemsList.filter(i => (i.reorder_point || 0) > 0 && i.current_stock <= (i.reorder_point || 0)).length;
+  const lowStockCount = itemsResponse?.stats?.lowStock ?? 0;
 
   return (
     <div className="space-y-6">
@@ -255,12 +231,12 @@ export default function ItemsPage() {
           </div>
 
           <div className="text-xs font-bold text-slate-500 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
-            نمایش {formatPersianNumber(sortedItems.length)} از {formatPersianNumber(totalItems || items.length)} قلم
+            نمایش {formatPersianNumber(items.length)} از {formatPersianNumber(totalItems || items.length)} قلم
           </div>
         </div>
 
         <ItemsTable
-          sortedItems={sortedItems}
+          sortedItems={items}
           warehouses={warehouses}
           sortConfig={sortConfig}
           requestSort={requestSort}

@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
-import { Item, ItemPrice } from '../types';
+import { Item } from '../types';
 import { 
   Search, Save, LayoutGrid, List,
   Download, Upload, AlertCircle, Check, RefreshCw, FileSpreadsheet, Tag
@@ -21,13 +21,13 @@ import { useHasPermission } from '../contexts/AuthContext';
 import { QUERY_KEYS } from '../lib/queryKeys';
 import PriceHistoryModal from '../components/pricing/PriceHistoryModal';
 import { PricingGridView, PricingTableView } from '../components/pricing/PricingViews';
-import * as xlsx from 'xlsx';
-import UnifiedExcelModal from '../components/UnifiedExcelModal';
+// v10.0.33 (OBS-R1-79): کتابخانه اکسل و پنجره جامع اکسل فقط هنگام نیاز بارگذاری می‌شوند
+const UnifiedExcelModal = lazy(() => import('../components/UnifiedExcelModal'));
 import { buildQuickPriceUpdates } from '../lib/items/quickPriceImport';
 import { priceSaveUpdates, type PriceFieldEdit } from '../lib/items/priceInput';
 import { ITEM_WAC_COLUMN, priceExportCells } from '../lib/items/excelPriceColumns';
 import { priceMarginPercent } from '../lib/items/priceMargin';
-import { readPricingStrategies } from '../lib/items/pricingStrategies';
+import { PRICING_PAGE_SIZE, pricingPageUrl, type PricingPage, type PricingPageQuery, type PricingPagePrice } from '../lib/items/pricingPage';
 
 export default function PricingPage() {
   // v9.0.209 (O14): ورود سریع، فیلدهای قیمت و ذخیره فقط با مجوز مسیرهای ذخیره قیمت سرور، نه نقش «viewer»
@@ -40,7 +40,6 @@ export default function PricingPage() {
   const [showExcelModal, setShowExcelModal] = useState(false);
   
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 50;
 
   const excelInputRef = useRef<HTMLInputElement>(null);
 
@@ -62,22 +61,24 @@ export default function PricingPage() {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [isSavingAll, setIsSavingAll] = useState<boolean>(false);
 
-  // آیتم‌ها بر اساس تب محصول/ماده اولیه
-  const itemsQuery = useQuery<Item[]>({
-    queryKey: QUERY_KEYS.items.list({ scope: 'pricing', type: tab }),
-    queryFn: async () => {
-      const res = await fetchJson(`/items?type=${tab}&limit=0`);
-      return Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-    },
-    staleTime: 60 * 1000,
+  // v10.0.33 (OBS-R1-79): یک صفحه از کالاها با قیمت‌ها و فهرست‌های قیمتشان از سرور؛ پالایش، شمارش و صفحه‌بندی در سرور
+  const pageQueryInput: PricingPageQuery = {
+    type: tab, search: debouncedSearchQuery, category: selectedCategory, priceFilter, page: currentPage, limit: PRICING_PAGE_SIZE,
+  };
+  const pageQueryKey = [...QUERY_KEYS.items.list({ scope: 'pricing-page', ...pageQueryInput }), 'pricing-page'];
+  const pageQuery = useQuery<PricingPage>({
+    queryKey: pageQueryKey,
+    queryFn: ({ signal }) => fetchJson(pricingPageUrl(pageQueryInput), { signal }),
+    staleTime: 30 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
+    placeholderData: prev => prev,
   });
 
   const categoriesQuery = useQuery<any[]>({
     queryKey: QUERY_KEYS.categories.list('all'),
-    queryFn: async () => {
-      const cats = await fetchJson('/categories');
+    queryFn: async ({ signal }) => {
+      const cats = await fetchJson('/categories', { signal });
       return Array.isArray(cats) ? cats : [];
     },
     staleTime: 5 * 60 * 1000,
@@ -85,49 +86,30 @@ export default function PricingPage() {
     refetchOnWindowFocus: false,
   });
 
-  const pricesQuery = useQuery<Record<number, ItemPrice[]>>({
-    queryKey: QUERY_KEYS.prices.byItem(null),
-    queryFn: async () => {
-      const allPrices = await fetchJson('/items/prices/all');
-      return allPrices && typeof allPrices === 'object' && !Array.isArray(allPrices) ? allPrices : {};
-    },
-    staleTime: 30 * 1000,
-    gcTime: 30 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
-
-  const strategiesQuery = useQuery<string[]>({
-    queryKey: [...QUERY_KEYS.settings.list(), 'pricing-strategies'],
-    queryFn: async () => {
-      const settings = await fetchJson('/settings');
-      // v10.0.27 (OBS-R1-71 / OBS-R1-72): همان خواننده سرور؛ تنظیم ناخوانا خطاست، نه فهرست پیش‌فرض
-      const st = Array.isArray(settings) ? settings.find((s: { key?: string }) => s.key === 'pricing_strategies') : undefined;
-      const read = readPricingStrategies(st?.value);
-      if ('error' in read) throw new Error(read.error);
-      const strats = read.titles.map(formatStrategyDisplayTitle).filter(Boolean);
-      return strats;
-    },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
-
-  const items = itemsQuery.data ?? [];
+  const items = pageQuery.data?.data ?? [];
   const categories = categoriesQuery.data ?? [];
-  const prices = pricesQuery.data ?? {};
-  const strategies = strategiesQuery.data ?? [];
+  const prices = pageQuery.data?.prices ?? {};
+  const strategies = (pageQuery.data?.strategies ?? []).map(formatStrategyDisplayTitle).filter(Boolean);
+  const totalItems = pageQuery.data?.total ?? 0;
+  const totalPages = pageQuery.data?.totalPages ?? 1;
+
+  /** همه کالاهای پالایش جاری (یا همه کالاهای این نوع) با قیمت‌هایشان، برای خروجی و ورود سریع اکسل */
+  const fetchAllForExcel = (filtered: boolean): Promise<PricingPage> => fetchJson(pricingPageUrl(filtered
+    ? { ...pageQueryInput, all: true }
+    : { type: tab, all: true }));
 
   const loadData = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.items.all }),
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.prices.all }),
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.categories.all }),
-      queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.settings.list(), 'pricing-strategies'] }),
     ]);
   };
 
   // Get effective price and currency for an item and strategy
-  const getFieldValue = (itemId: number, strategyTitle: string): { price: string; currency: string } => {
+  const getFieldValue = (
+    itemId: number, strategyTitle: string, savedPrices: Record<number, PricingPagePrice[]> = prices,
+  ): { price: string; currency: string } => {
     const targetCanonical = getStrategyCanonicalKey(strategyTitle);
 
     // Check local unsaved edits first
@@ -142,7 +124,7 @@ export default function PricingPage() {
     }
 
     // Check existing prices loaded from DB
-    const itemPricesList = prices[itemId] || [];
+    const itemPricesList = savedPrices[itemId] || [];
     const existing = itemPricesList.find(p => getStrategyCanonicalKey(p.title) === targetCanonical);
 
     if (existing) {
@@ -220,9 +202,9 @@ export default function PricingPage() {
       }
 
       const currentPrices = await fetchJson(`/items/${itemId}/prices`);
-      queryClient.setQueryData<Record<number, ItemPrice[]>>(QUERY_KEYS.prices.byItem(null), (prev) => ({
-        ...(prev || {}),
-        [itemId]: Array.isArray(currentPrices) ? currentPrices : [],
+      queryClient.setQueryData<PricingPage>(pageQueryKey, (prev) => prev && ({
+        ...prev,
+        prices: { ...prev.prices, [itemId]: Array.isArray(currentPrices) ? currentPrices : [] },
       }));
 
       setLocalEdits(prev => {
@@ -270,9 +252,11 @@ export default function PricingPage() {
   };
 
   // Dedicated Fast Excel Export
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
-      const exportData = filtered.map(item => {
+      const [xlsx, all] = await Promise.all([import('xlsx'), fetchAllForExcel(true)]);
+      const allStrategies = all.strategies.map(formatStrategyDisplayTitle).filter(Boolean);
+      const exportData = all.data.map(item => {
         const row: Record<string, any> = {
           'کد کالا': item.code,
           'نام کالا': item.name,
@@ -284,7 +268,7 @@ export default function PricingPage() {
         };
 
         // v9.0.207 (O12): ارز هر فهرست در ستون خودش؛ ورود سریع همان ستون را می‌خواند
-        Object.assign(row, priceExportCells(strategies.map(st => formatStrategyDisplayTitle(st)), title => getFieldValue(item.id, title)));
+        Object.assign(row, priceExportCells(allStrategies, title => getFieldValue(item.id, title, all.prices)));
         return row;
       });
 
@@ -294,9 +278,9 @@ export default function PricingPage() {
       xlsx.utils.book_append_sheet(wb, ws, sheetTitle);
       xlsx.writeFile(wb, `${sheetTitle}.xlsx`);
       toast.success('فایل اکسل قیمت‌ها با موفقیت دانلود شد.');
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      toast.error('خطا در ایجاد فایل اکسل: ' + err.message);
+      toast.error('خطا در ایجاد فایل اکسل: ' + errorMessageOf(err));
     }
   };
 
@@ -306,8 +290,14 @@ export default function PricingPage() {
     if (!file) return;
 
     const reader = new FileReader();
+    // v10.0.34 (OBS-R1-78): پرونده‌ای که خوانده نشود پیام می‌دهد
+    reader.onerror = () => {
+      toast.error('پرونده اکسل خوانده نشد؛ دوباره انتخابش کنید.');
+      if (e.target) e.target.value = '';
+    };
     reader.onload = async (evt) => {
       try {
+        const [xlsx, all] = await Promise.all([import('xlsx'), fetchAllForExcel(false)]);
         const bstr = evt.target?.result;
         const wb = xlsx.read(bstr, { type: 'binary' });
         const wsName = wb.SheetNames[0];
@@ -320,7 +310,7 @@ export default function PricingPage() {
         }
 
         // v9.0.152 (TD-647): فقط ستون‌های فهرست‌های قیمت تنظیم‌شده؛ ستون دیگرِ «قیمت …» نادیده گرفته و گزارش می‌شود
-        const { updates, unknownColumns, invalidCells } = buildQuickPriceUpdates(rawData, Array.isArray(items) ? items : [], strategies);
+        const { updates, unknownColumns, invalidCells } = buildQuickPriceUpdates(rawData, all.data, all.strategies.map(formatStrategyDisplayTitle).filter(Boolean));
         if (unknownColumns.length > 0) {
           toast.error(`این ستون‌ها فهرست قیمت تنظیم‌شده‌ای نیستند و نادیده گرفته شدند: ${unknownColumns.join('، ')}`);
         }
@@ -353,17 +343,30 @@ export default function PricingPage() {
     reader.readAsBinaryString(file);
   };
 
+  // v10.0.34 (OBS-R1-78): تاریخچه قیمت کالای پیشین با باز شدن کالای دیگر یا بستن پنجره لغو می‌شود و پاسخ دیررس نمی‌نشیند
+  const historyAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => historyAbortRef.current?.abort(), []);
   const handleOpenHistory = async (item: Item) => {
+    historyAbortRef.current?.abort();
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
     setHistoryItem(item);
     setLoadingHistory(true);
     setHistoryData([]);
     setHistoryStrategyFilter('all');
     try {
-      const data = await fetchJson(`/items/${item.id}/prices/history`);
+      const data = await fetchJson(`/items/${item.id}/prices/history`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       setHistoryData(Array.isArray(data) ? data : []);
-    } catch(err: any) {
-      toast.error(err.message || 'خطا در دریافت تاریخچه قیمت');
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      toast.error(errorMessageOf(err) || 'خطا در دریافت تاریخچه قیمت');
     }
+    setLoadingHistory(false);
+  };
+  const closeHistory = () => {
+    historyAbortRef.current?.abort();
+    setHistoryItem(null);
     setLoadingHistory(false);
   };
 
@@ -393,51 +396,13 @@ export default function PricingPage() {
     }
   };
 
-  const safeItems = Array.isArray(items) ? items : [];
-  // V4 Phase 6.2 (U-1): فیلتر محصولات قیمت‌گذاری با useMemo و debouncedSearchQuery
-  const filtered = React.useMemo(() => {
-    const q = debouncedSearchQuery.trim().toLowerCase();
-    return safeItems.filter(item => {
-      // Text search
-      const matchesSearch = !q ||
-        item.name.toLowerCase().includes(q) || 
-        item.code.toLowerCase().includes(q) || 
-        (item.category && item.category.toLowerCase().includes(q));
-
-      if (!matchesSearch) return false;
-
-      // Category filter
-      if (selectedCategory && item.category !== selectedCategory) return false;
-
-      // Price completeness filter
-      if (priceFilter === 'missing_price') {
-        const hasAllStrategies = strategies.every(st => {
-          const val = getFieldValue(item.id, st);
-          return val.price !== '' && Number(val.price) > 0;
-        });
-        return !hasAllStrategies;
-      } else if (priceFilter === 'has_price') {
-        const hasAllStrategies = strategies.every(st => {
-          const val = getFieldValue(item.id, st);
-          return val.price !== '' && Number(val.price) > 0;
-        });
-        return hasAllStrategies;
-      }
-
-      return true;
-    });
-  }, [safeItems, debouncedSearchQuery, selectedCategory, priceFilter, strategies, prices, localEdits]);
-  
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginatedItems = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
   const totalLocalEditsCount = Object.values(localEdits).reduce<number>((sum, map) => sum + Object.keys(map).length, 0);
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50 space-y-6 p-4 md:p-6 max-w-[1700px] mx-auto text-right font-farsi">
-      {strategiesQuery.isError && (
+      {pageQuery.isError && (
         <div role="alert" className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs">
-          {errorMessageOf(strategiesQuery.error) || 'فهرست‌های قیمت خوانده نشد.'}
+          {errorMessageOf(pageQuery.error) || 'کالاها و فهرست‌های قیمت خوانده نشد.'}
         </div>
       )}
       {/* Top Header Banner */}
@@ -515,7 +480,7 @@ export default function PricingPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5 mt-5 pt-5 border-t border-slate-800/80">
           <div className="bg-slate-800/50 backdrop-blur-xs border border-slate-700/60 rounded-xl p-3 flex items-center gap-3">
             <span className="text-xs text-slate-400 font-medium">کل اقلام فهرست:</span>
-            <strong className="text-sm font-black text-white font-mono">{formatPersianNumber(filtered.length)} مورد</strong>
+            <strong className="text-sm font-black text-white font-mono">{formatPersianNumber(totalItems)} مورد</strong>
           </div>
 
           <div className="bg-slate-800/50 backdrop-blur-xs border border-slate-700/60 rounded-xl p-3 flex items-center gap-3">
@@ -614,7 +579,7 @@ export default function PricingPage() {
       <div className="flex-1 overflow-auto pb-16">
         {viewMode === 'grid' ? (
           <PricingGridView
-            items={paginatedItems}
+            items={items}
             strategies={strategies}
             localEdits={localEdits}
             savingId={savingId}
@@ -631,7 +596,7 @@ export default function PricingPage() {
         ) : (
           /* Table View */
           <PricingTableView
-            items={paginatedItems}
+            items={items}
             strategies={strategies}
             localEdits={localEdits}
             savingId={savingId}
@@ -703,7 +668,7 @@ export default function PricingPage() {
       {/* V9 Phase 5.2: مودال تاریخچه قیمت استخراج‌شده */}
       <PriceHistoryModal
         historyItem={historyItem}
-        onClose={() => setHistoryItem(null)}
+        onClose={closeHistory}
         historyData={historyData}
         loadingHistory={loadingHistory}
         strategyFilter={historyStrategyFilter}
@@ -714,13 +679,17 @@ export default function PricingPage() {
       />
 
 
-      <UnifiedExcelModal
-        isOpen={showExcelModal}
-        onClose={() => setShowExcelModal(false)}
-        onSuccess={loadData}
-        typeFilter={tab}
-        title="مدیریت اکسل قیمت‌گذاری‌ها و کالاها"
-      />
+      {showExcelModal && (
+        <Suspense fallback={null}>
+          <UnifiedExcelModal
+            isOpen={showExcelModal}
+            onClose={() => setShowExcelModal(false)}
+            onSuccess={loadData}
+            typeFilter={tab}
+            title="مدیریت اکسل قیمت‌گذاری‌ها و کالاها"
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

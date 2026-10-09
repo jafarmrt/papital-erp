@@ -14,6 +14,8 @@ import { ItemPricingService } from '../services/items/itemPricing.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { priceListMatcher } from '../lib/items/excelPriceColumns.js';
 import { NotFoundError, ValidationError } from '../errors/customErrors.js';
+import { listPricingPage } from '../services/items/pricingPage.js';
+import { PRICING_PAGE_MAX_LIMIT, PRICING_PAGE_SIZE, PRICING_PRICE_FILTERS } from '../lib/items/pricingPage.js';
 
 const router = Router();
 
@@ -66,6 +68,32 @@ export const batchPriceUpdateSchema = z.object({
     updates: z.array(batchPriceUpdate).min(1, 'فهرست تغییرات قیمت خالی است')
   })
 });
+
+// v10.0.33 (OBS-R1-79): یک صفحه از کالاهای صفحه قیمت‌گذاری با قیمت‌ها و فهرست‌های قیمت
+const pricingPageSchema = z.object({
+  query: z.object({
+    type: z.enum(['product', 'raw_material']),
+    search: z.string().max(200).optional(),
+    category: z.string().max(200).optional(),
+    priceFilter: z.enum(PRICING_PRICE_FILTERS).optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(PRICING_PAGE_MAX_LIMIT).optional(),
+    all: z.enum(['true', 'false']).optional(),
+  }),
+});
+
+router.get('/items/pricing-page', authorizePermission(...READ_PERMISSIONS.itemPrices), validate(pricingPageSchema), asyncHandler(async (req, res) => {
+  const q = req.query as unknown as z.infer<typeof pricingPageSchema>['query'];
+  res.json(await listPricingPage({
+    type: q.type,
+    search: q.search,
+    category: q.category,
+    priceFilter: q.priceFilter,
+    page: q.page ? Number(q.page) : 1,
+    limit: q.limit ? Number(q.limit) : PRICING_PAGE_SIZE,
+    all: q.all === 'true',
+  }));
+}));
 
 // GET /items/prices/all
 router.get('/items/prices/all', authorizePermission(...READ_PERMISSIONS.itemPrices), asyncHandler(async (req, res) => {

@@ -1,8 +1,9 @@
-import { and, desc, eq, ilike, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, ilike, lte, or, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { items } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import type { ItemPick } from '../../lib/permissions/pickLists.js';
+import type { ItemListSort, ItemListStats } from '../../lib/items/itemListSort.js';
 import { can } from '../../middleware/authorize.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 
@@ -14,14 +15,43 @@ import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.servi
  */
 
 /** شرط نوع و جست‌وجوی کالا، مشترک فهرست کامل و فهرست انتخاب */
-export function itemListConditions(type: string | undefined, search: string | undefined): SQL {
+export function itemListConditions(
+  type: string | undefined, search: string | undefined, options: { withCategory?: boolean } = {},
+): SQL {
   const conditions: SQL[] = [eq(items.isDeleted, 0)];
   if (type === 'product' || type === 'raw_material') conditions.push(eq(items.type, type));
   if (search) {
     const pattern = containsLikePattern(search);
-    conditions.push(or(ilike(items.name, pattern), ilike(items.code, pattern)) as SQL);
+    // v10.0.32 (OBS-R1-74): فهرست کامل در دسته‌بندی هم جست‌وجو می‌کند، همان که جعبه جست‌وجوی صفحه کالاها می‌گوید
+    const fields = [ilike(items.name, pattern), ilike(items.code, pattern)];
+    if (options.withCategory) fields.push(ilike(items.category, pattern));
+    conditions.push(or(...fields) as SQL);
   }
   return and(...conditions) as SQL;
+}
+
+const SORT_COLUMNS = {
+  category: items.category,
+  code: items.code,
+  name: items.name,
+  reorder_point: items.reorderPoint,
+  weighted_average_cost: items.weightedAverageCost,
+  current_stock: items.currentStock,
+} as const;
+
+/** v10.0.32 (OBS-R1-74): ترتیب فهرست کامل؛ بی ستون تازه‌ترین کالا، و شناسه برای ترتیب پایدار میان صفحه‌ها */
+export function itemListOrder(sort: ItemListSort | null): SQL[] {
+  if (!sort) return [desc(items.id)];
+  const column = SORT_COLUMNS[sort.key];
+  return [sort.direction === 'desc' ? desc(column) : asc(column), desc(items.id)];
+}
+
+/** v10.0.32 (OBS-R1-74): آمار روی همه کالاهای پالایش، نه فقط ردیف‌های صفحه */
+export async function itemListStats(where: SQL): Promise<ItemListStats> {
+  const [row] = await orm.select({ lowStock: sql<number>`count(*)`.mapWith(Number) })
+    .from(items)
+    .where(and(where, gt(items.reorderPoint, 0), lte(items.currentStock, items.reorderPoint)));
+  return { lowStock: Number(row?.lowStock) || 0 };
 }
 
 export interface ItemPickListQuery {
