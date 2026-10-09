@@ -91,7 +91,7 @@ async function bankBalances(): Promise<Json> {
 }
 
 async function changeChequeStatus(page: Page, chequeNumber: string, current: string, next: string, nextLabel: string): Promise<void> {
-  const row = page.locator('tr', { hasText: chequeNumber });
+  const row = page.locator('tr', { hasText: toPersianDigits(chequeNumber) });
   await row.getByRole('button', { name: current, exact: true }).click();
   const form = page.locator('form', { has: page.getByRole('button', { name: TEXT.statusSubmit }) });
   await form.locator('select').first().selectOption(next);
