@@ -27,7 +27,7 @@ export interface InitialSetupInput {
 export type SetupAdmin = typeof users.$inferSelect;
 
 /**
- * v10.0.39 (series 10 phase 3, L5 E7; part of TD-960): the initial setup writes the first system admin, the default
+ * v10.0.46 (series 10 phase 3, L5 E7; part of TD-960): the initial setup writes the first system admin, the default
  * warehouse and the company settings in ONE transaction under the transaction advisory lock 79234, with its audit row.
  * Before, the route wrote them one by one on the pool: a failed settings write left an admin behind, so the setup could
  * not be run again, and the session lock could be taken and released on two different pool connections.
@@ -88,7 +88,7 @@ export async function runInitialSetup(input: InitialSetupInput): Promise<SetupAd
 }
 
 /**
- * v10.0.39 (L5 E7): logout ends every session of the user by raising the token version, read and written under the
+ * v10.0.46 (L5 E7): logout ends every session of the user by raising the token version, read and written under the
  * user row lock in one transaction (AGENTS.md §1.2-1.3); a user that is gone is skipped.
  */
 export async function revokeUserSessions(userId: number): Promise<{ username: string; fullName: string } | null> {
