@@ -10,6 +10,7 @@ import type { CrmStats } from '../lib/crm/leadCurrencyTotals';
 import { CRM_FOLLOWUPS_QUERY_KEY } from '../lib/crm/crmFollowupsQuery';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { useHasPermission } from '../contexts/AuthContext';
+import { activityPayload } from '../lib/crm/activityPayload';
 
 export const STAGES = [
   { key: 'lead', title: 'مخاطب اولیه', color: 'bg-slate-100 border-slate-300 text-slate-700', badge: 'bg-slate-200 text-slate-800' },
@@ -380,11 +381,8 @@ export function useCRMData(user: any) {
 
     setIsSavingActivity(true);
     try {
-      const payload = {
-        ...activityForm,
-        leadId: selectedLeadForActivity?.id || null,
-        customerId: selectedLeadForActivity?.customerId || null
-      };
+      // v10.0.21 (TD-973): an activity without a lead keeps the party the form was opened for
+      const payload = activityPayload(activityForm, selectedLeadForActivity);
 
       await fetchJson('/crm/activities', {
         method: 'POST',
