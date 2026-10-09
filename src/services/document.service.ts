@@ -1,6 +1,6 @@
 import type { DbExecutor } from '../db/drizzle.js';
 import type { DecimalValue } from '../lib/financialDecimal.js';
-import type { DocumentAuditChange, DocumentVoidAudit } from './documents/documentAudit.js';
+import { documentAuditSnapshot, documentLineSummary, type DocumentAuditChange, type DocumentVoidAudit } from './documents/documentAudit.js';
 import { 
   DocumentRefNumberService, 
   DocumentStockEngine, 
@@ -101,6 +101,10 @@ export class DocumentService {
   ): Promise<FormattedDocument[] | PaginatedDocumentsResult> {
     return DocumentQueryService.getDocuments(typeOrFilter);
   }
+
+  /** v10.0.38 (TD-929): the stored document for an audit row of another package (WooCommerce invoice) */
+  static documentAuditSnapshot = documentAuditSnapshot;
+  static documentLineSummary = documentLineSummary;
 
   /**
    * Retrieves a document by its ID, with its associated items.

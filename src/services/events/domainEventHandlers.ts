@@ -15,13 +15,20 @@ import { orm } from '../../db/drizzle.js';
 import { items } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { fin } from '../../lib/financialDecimal.js';
-import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { EventActionEngineService } from './eventActionEngineService.js';
 import { WebhookSubscriptionService } from './webhookSubscriptionService.js';
 
 /**
  * Register core system listeners for enterprise domain events
  */
+/** رزروهای هر کالا (کلید شناسه)؛ بسته رویدادها بسته کالا را import نمی‌کند و ریشه ترکیب (`registerWorkflowDomainActions`) آن را ثبت می‌کند */
+export type ReservedStocksReader = (itemIds: number[]) => Promise<Record<string, { totalReserved?: number | string } | undefined>>;
+let readReservedStocks: ReservedStocksReader = async () => ({});
+
+export function registerReservedStocksReader(reader: ReservedStocksReader): void {
+  readReservedStocks = reader;
+}
+
 /**
  * هشدار نقطه سفارش پس از خروج کالا، یا `null`. v10.0.40 (TD-937، P5-S-14 / OBS-R2-17): موجودی آزاد (موجودی کل منهای رزروها،
  * همان `listReorderAlerts` صفحه هشدار، TD-843) با نقطه سفارش سنجیده می‌شود؛ پیش‌تر موجودی کل سنجیده می‌شد و کالایی که صفحه
@@ -33,7 +40,7 @@ export async function reorderAlertForIssue(payload: StockMovementEventPayload): 
     .from(items).where(eq(items.id, itemId));
   const threshold = fin(item?.reorderPoint ?? 0);
   if (!item || item.isDeleted !== 0 || !threshold.isPositive()) return null;
-  const reserved = await ItemStockReservationService.getReservedStocksMap({ itemIds: [itemId] });
+  const reserved = await readReservedStocks([itemId]);
   const stock = fin(item.currentStock);
   const free = stock.subtract(fin(reserved[String(itemId)]?.totalReserved ?? 0));
   if (free.greaterThan(threshold)) return null;
