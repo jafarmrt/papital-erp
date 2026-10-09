@@ -7,7 +7,7 @@ import type { SimOperation, SimStepRecord } from './businessYearSimulator.js';
 import { isoDay, type OpOutcome } from './simulationOperations.js';
 
 /**
- * v10.0.21 (I-03): the simulator's steps run in rounds of `users` operations at once, as that many people using the
+ * v10.0.36 (I-03): the simulator's steps run in rounds of `users` operations at once, as that many people using the
  * workshop at the same moment would. A round's operations are picked with the seed, then started together; their order
  * on the database is not fixed. A business refusal (`AppError`) is an allowed outcome, a deadlock or any other error is a
  * finding, and reservations stay within stock after every round with a sellable-gated operation (I19). The invariants

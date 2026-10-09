@@ -74,7 +74,7 @@ export interface SimulationOptions {
    */
   closeFiscalYear?: boolean;
   /**
-   * v10.0.21 (I-03): how many operations run at once, as that many users would (default 1, one after another). Above 1 the
+   * v10.0.36 (I-03): how many operations run at once, as that many users would (default 1, one after another). Above 1 the
    * steps run in rounds of `users` concurrent operations (`runConcurrentRounds`); the per-step atomicity and stock-value gap
    * checks need a quiet database and are skipped, the invariants run after every `checkEvery` rounds and a deadlock or a
    * non-business error is a finding. The order of the interleaving is not fixed by the seed.

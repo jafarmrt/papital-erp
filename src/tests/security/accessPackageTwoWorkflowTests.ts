@@ -36,25 +36,26 @@ export async function runAccessPackageTwoWorkflowTests(shouldRun: ShouldRun): Pr
     await runCase(results, {
       id: 'sec_workflow_role_exact_match_td_542',
       name: 'v9.0.111: a workflow step with a role is signed only by that role and the system admin; who signs is the required permission (TD-542)',
-      details: 'a custom role with accounting.vouchers approves a journal voucher through the seeded workflow; cfo_accountant no longer signs an accountant step and a warehouse.out holder no longer signs a warehouse_keeper step (inbox and transition); the role itself and the system admin do; a deputy of a permission holder signs a permission-only step in the holder\'s name',
+      details: 'a custom role with accounting.vouchers_approve approves a journal voucher through the seeded workflow; cfo_accountant no longer signs an accountant step and a warehouse.out holder no longer signs a warehouse_keeper step (inbox and transition); the role itself and the system admin do; a deputy of a permission holder signs a permission-only step in the holder\'s name',
     }, async (h, wrong) => {
       const { createTestVoucher } = await import('../fixtures/factories.js');
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
 
-      // ۱) گردش کار پیش‌فرض سند حسابداری فقط مجوز می‌خواهد: نقش سفارشی با accounting.vouchers تأیید می‌کند
+      // ۱) گردش کار پیش‌فرض سند حسابداری فقط مجوز می‌خواهد: نقش سفارشی با accounting.vouchers_approve تأیید می‌کند
+      //    (v10.0.27، TD-965: تأیید سند حسابداری مجوز جدای خود را دارد)
       const seeded = await h.q(`SELECT t.required_role, t.required_permission FROM workflow_transitions t
         JOIN workflow_definitions d ON d.id = t.workflow_definition_id WHERE d.code = 'JOURNAL_VOUCHER_WORKFLOW' AND t.action_key = 'approve_voucher'`);
-      if (seeded.length === 0 || seeded.some(t => String(t.required_role ?? '') !== '' || t.required_permission !== 'accounting.vouchers')) {
-        wrong.push(`seeded journal voucher approval guard is ${JSON.stringify(seeded)}, not permission accounting.vouchers without a role`);
+      if (seeded.length === 0 || seeded.some(t => String(t.required_role ?? '') !== '' || t.required_permission !== 'accounting.vouchers_approve')) {
+        wrong.push(`seeded journal voucher approval guard is ${JSON.stringify(seeded)}, not permission accounting.vouchers_approve without a role`);
       }
-      const branch = await h.sessionWith(['accounting.view', 'accounting.vouchers', 'workflow.view', 'workflow.approve', 'workflow.execute']);
+      const branch = await h.sessionWith(['accounting.view', 'accounting.vouchers', 'accounting.vouchers_approve', 'workflow.view', 'workflow.approve', 'workflow.execute']);
       const { voucher } = await createTestVoucher({ status: 'draft', date: await businessTodayIsoDate(), totalDebit: 1500000, totalCredit: 1500000 } as never);
       const started = await h.post('/api/workflow/start', { workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
       const voucherInstance = Number(started.body?.data?.id);
       if (!(voucherInstance > 0)) throw new Error(`starting the journal voucher workflow returned ${started.status}`);
-      if ((await tasksOf(h, branch, voucherInstance)).length === 0) wrong.push('a custom role with accounting.vouchers did not see the journal voucher task');
+      if ((await tasksOf(h, branch, voucherInstance)).length === 0) wrong.push('a custom role with accounting.vouchers_approve did not see the journal voucher task');
       const branchWalk = await h.walk(voucherInstance, ['approve_voucher'], branch);
-      if (branchWalk[0] !== 200) wrong.push(`a custom role with accounting.vouchers approving a journal voucher returned ${branchWalk.join(',')}, not 200`);
+      if (branchWalk[0] !== 200) wrong.push(`a custom role with accounting.vouchers_approve approving a journal voucher returned ${branchWalk.join(',')}, not 200`);
 
       // ۲) گام نقش «accountant»: مدیر مالی دیگر هم‌ارز نیست
       const accountantStep = await guardedInstance(h, 'acc', 'accountant', '');

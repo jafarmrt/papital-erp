@@ -45,13 +45,13 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     () => checkIdempotencyKeyContract(), 'the refused payment ran after the deposit; the repeated key with another body and path was refused; the long request ran once'],
   ['inv_td_350_project_code_atomic', 'v8.0.80: the automatic project code comes from the atomic year counter; concurrent projects get unique codes and a concurrent manual code or a taken next number gives no uniqueness error (TD-350)',
     () => checkProjectCodesAtomic(), 'five concurrent projects got five unique codes; the concurrent manual code got a suffix; the taken number was skipped'],
-  // v10.0.21 (I-03): races between two different paths over the same rows
-  ['inv_i03_delivery_and_receive_share_item', 'v10.0.21: a project delivery and a purchase requisition receive of the same item at the same moment are both recorded, without deadlock, and the weighted average cost holds both entries (I-03)',
+  // v10.0.36 (I-03): races between two different paths over the same rows
+  ['inv_i03_delivery_and_receive_share_item', 'v10.0.36: a project delivery and a purchase requisition receive of the same item at the same moment are both recorded, without deadlock, and the weighted average cost holds both entries (I-03)',
     checkDeliveryAndReceiveShareItem, 'both entries recorded; stock 9 and WAC 200,000; invariants hold'],
-  ['inv_i03_allocation_and_remittance_share_stock', 'v10.0.21: a material allocation and a remittance drawing on the same stock at the same moment never both leave it, and a project allocates its own reserved stock while a remittance is refused (I-03)',
+  ['inv_i03_allocation_and_remittance_share_stock', 'v10.0.36: a material allocation and a remittance drawing on the same stock at the same moment never both leave it, and a project allocates its own reserved stock while a remittance is refused (I-03)',
     checkAllocationAndRemittanceShareStock, 'one of allocation and remittance accepted over 10 units; the reserved units went to the project only; invariants hold'],
-  ['inv_i03_concurrent_settlements', 'v10.0.21: two receipts settling one invoice through two banks at the same moment are both recorded, and of a receipt and the invoice void exactly one wins (I-03)',
+  ['inv_i03_concurrent_settlements', 'v10.0.36: two receipts settling one invoice through two banks at the same moment are both recorded, and of a receipt and the invoice void exactly one wins (I-03)',
     checkConcurrentSettlements, 'both receipts recorded in their banks; one of receipt and void accepted; invariants hold'],
-  ['inv_i03_simulator_concurrent_users', 'v10.0.21: the business-year simulator with twelve concurrent users runs 144 operations in rounds without a deadlock or a non-business error and keeps every invariant (I-03)',
+  ['inv_i03_simulator_concurrent_users', 'v10.0.36: the business-year simulator with twelve concurrent users runs 144 operations in rounds without a deadlock or a non-business error and keeps every invariant (I-03)',
     () => checkSimulatorWithConcurrentUsers(), '144 operations in 12 rounds of 12; no deadlock, no unexpected error, no violation'],
 ];

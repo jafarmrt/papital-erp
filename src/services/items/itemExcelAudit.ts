@@ -30,6 +30,11 @@ export async function itemAuditSnapshot(tx: DbExecutor, itemId: number): Promise
     weight: it.weight,
     material: it.material,
     image: it.image,
+    collections: it.collections,
+    designYear: it.designYear,
+    transferCode: it.transferCode,
+    productDescription: it.productDescription,
+    technicalNotes: it.technicalNotes,
   };
   for (const [code, qty] of Object.entries(stock.byCode)) {
     if (qty !== 0) snap[`موجودی ${code}`] = qty;

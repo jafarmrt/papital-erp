@@ -11,7 +11,7 @@ import { runBusinessYearSimulation, SimulationResult } from '../src/tests/simula
  *
  *   npm run simulate:year -- --seeds=1,2,3 --steps=400 [--check-every=10] [--users=12] [--verbose] [--close-year] [--report=dist/sim.json]
  *
- * v10.0.21 (I-03): `--users=N` runs the steps in rounds of N concurrent operations (`--check-every` then counts rounds).
+ * v10.0.36 (I-03): `--users=N` runs the steps in rounds of N concurrent operations (`--check-every` then counts rounds).
  *
  * همان محیط تست CI لازم است (DATABASE_URL واقعی، NODE_ENV=test). هر بذر اسکیمای خودش را می‌سازد و در پایان حذف می‌کند،
  * پس ناوردایی‌ها روی پایگاه‌داده‌ای بررسی می‌شوند که فقط داده همین شبیه‌سازی را دارد. کد خروج ۱ یعنی دست‌کم یک نقض.

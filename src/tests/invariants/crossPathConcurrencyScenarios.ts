@@ -13,7 +13,7 @@ import { accountIdByCode, outcomeProblems, raceBehindRowLock } from './concurren
 import { invariantProblems, itemState, receive, watermarks } from './scenarioHelpers.js';
 
 /**
- * v10.0.21 (I-03, series 10 phase 3 lane L3): races between two different paths that touch the same rows. The existing
+ * v10.0.36 (I-03, series 10 phase 3 lane L3): races between two different paths that touch the same rows. The existing
  * concurrency checks race one path against itself (two voids, two deliveries, two receipts); these race a project
  * delivery with a purchase requisition's «دریافت کالا», a material allocation with a remittance, and two invoice
  * settlements (and a settlement with the invoice's void). Every operation queues behind one held row lock and then runs
