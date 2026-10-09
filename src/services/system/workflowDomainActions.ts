@@ -1,6 +1,8 @@
 import { registerBankAccountWorkflowAction } from '../accounting/treasury/bankAccountWorkflowAction.js';
 import { registerVoucherWorkflowAction } from '../accounting/voucherWorkflowAction.js';
 import { registerDocumentWorkflowAction } from '../documents/documentWorkflowAction.js';
+import { registerReservedStocksReader } from '../events/domainEventHandlers.js';
+import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { registerItemOpeningWorkflowAction } from '../inventory/itemOpeningWorkflowAction.js';
 import { registerPendingMaterialWorkflowAction } from '../inventory/pendingMaterialWorkflowAction.js';
 import { registerRequisitionWorkflowAction } from '../procurement/requisitionWorkflowAction.js';
@@ -18,4 +20,6 @@ export function registerWorkflowDomainActions(): void {
   registerRequisitionWorkflowAction();
   // v9.0.398 (TD-826): approve or reject a raw material request
   registerPendingMaterialWorkflowAction();
+  // v10.0.43 (TD-937): the reorder alert event compares free stock, so it reads the reservations through this root
+  registerReservedStocksReader(itemIds => ItemStockReservationService.getReservedStocksMap({ itemIds }));
 }
