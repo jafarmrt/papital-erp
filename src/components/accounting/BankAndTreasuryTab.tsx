@@ -212,7 +212,7 @@ export function BankAndTreasuryTab({
     }
   };
 
-  // v10.0.40 (TD-1122): انتقال دریافت یا پرداخت به سند فعال دیگر همان طرف حساب
+  // v10.0.41 (TD-1122): انتقال دریافت یا پرداخت به سند فعال دیگر همان طرف حساب
   const relinkDocument = useTreasuryDocumentRelink();
   const [relinkTarget, setRelinkTarget] = useState<TreasuryTransaction | null>(null);
   const handleRelinkDocument = async (id: number, documentId: number) => {

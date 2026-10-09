@@ -5,7 +5,7 @@ import type { TreasuryTransaction } from '../../../types';
 import { useTreasuryRelinkOptionsQuery } from '../../../hooks/accounting/useTreasuryQueries';
 
 /**
- * v10.0.40 (TD-1122): «انتقال به سند دیگر». سرور از v9.0.272 (TD-779) انتقال دریافت یا پرداخت به سند فعال دیگر را
+ * v10.0.41 (TD-1122): «انتقال به سند دیگر». سرور از v9.0.272 (TD-779) انتقال دریافت یا پرداخت به سند فعال دیگر را
  * می‌پذیرد ولی صفحه فقط «علی‌الحساب» داشت. پنجره فقط سندهایی را نشان می‌دهد که سرور می‌پذیرد (هم‌سو، هم‌ارز، هم‌طرف).
  */
 export const TreasuryRelinkModal: React.FC<{

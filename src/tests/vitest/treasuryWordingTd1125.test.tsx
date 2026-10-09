@@ -32,8 +32,8 @@ describe('treasury health banner (TD-1125)', () => {
   });
 });
 
-describe('«سند حسابداری», not «سند دوبل», and cheque numbers in Persian digits (TD-1125)', () => {
-  it('has no «دوبل» outside comments', () => {
+describe('accounting voucher wording instead of the double-entry loanword, and cheque numbers in Persian digits (TD-1125)', () => {
+  it('has no double-entry loanword outside comments', () => {
     const offenders = FILES.flatMap(f => readFileSync(join(ROOT, f), 'utf8').split('\n')
       .map((l, i) => ({ l: l.trim(), at: `${f}:${i + 1}` }))
       .filter(({ l }) => !/^(\/\/|\*|\/\*|\{\/\*)/.test(l) && l.includes('دوبل')).map(x => x.at));

@@ -1,7 +1,7 @@
 import { CheckCircle2, Lock, ShieldCheck } from 'lucide-react';
 import { voucherPrimaryAction } from '../../../lib/accounting/voucherRowActions';
 
-/** v10.0.38 (TD-1120): دکمه اصلی ردیف سند؛ «قفل دفاتر» فقط برای سند دائم (استخراج‌شده از JournalVouchersTab) */
+/** v10.0.39 (TD-1120): دکمه اصلی ردیف سند؛ «قفل دفاتر» فقط برای سند دائم (استخراج‌شده از JournalVouchersTab) */
 export function VoucherPrimaryActionCell({ status, onApprove, onFinalize }: {
   status: string;
   onApprove?: () => void;

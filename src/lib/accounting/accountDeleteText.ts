@@ -9,7 +9,7 @@ export function accountDeleteConfirmText(account: { name: string; code: string }
 }
 
 /**
- * v10.0.41 (TD-1123): غیرفعال کردن و فعال کردن دوباره حساب. سرور (`PUT /accounting/accounts/:id` با `isActive`) از
+ * v10.0.42 (TD-1123): غیرفعال کردن و فعال کردن دوباره حساب. سرور (`PUT /accounting/accounts/:id` با `isActive`) از
  * v9.0.200 آن را می‌پذیرد و پیام حذف کاربر را به غیرفعال کردن می‌فرستاد، ولی صفحه چنین دکمه‌ای نداشت. حساب سیستمی
  * غیرفعال نمی‌شود (۴۰۹ `ACCOUNT_IS_SYSTEM`)، پس دکمه‌ای هم ندارد.
  */

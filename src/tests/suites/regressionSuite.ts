@@ -10893,7 +10893,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runVoucherApprovalDutiesTests(shouldRun));
   const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
   results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
-  // Lane L1 guide findings (v10.0.40+): move a treasury row to another document
+  // Lane L1 guide findings (v10.0.41+): move a treasury row to another document
   const { runTreasuryRelinkOptionsTests } = await import('../regression/treasuryRelinkOptionsTests.js');
   results.push(...await runTreasuryRelinkOptionsTests(shouldRun));
   const { runAccountingGuideFindingsTests } = await import('../regression/accountingGuideFindingsTests.js');

@@ -18,7 +18,7 @@ interface AccountingDashboardProps {
   canRecordTreasury: boolean;
   canRecordCheque: boolean;
   /**
-   * v10.0.39 (TD-1121): کارت‌های مطالبات، بدهی‌ها و سود خالص فقط برای دارنده `accounting.reports` (کلید برگه گزارش‌ها)
+   * v10.0.40 (TD-1121): کارت‌های مطالبات، بدهی‌ها و سود خالص فقط برای دارنده `accounting.reports` (کلید برگه گزارش‌ها)
    * به گزارش می‌روند و کارت موجودی نقد فقط برای دارنده `accounting.treasury` به خزانه؛ پیش‌تر خزانه‌دار با کلیک به
    * صفحه‌ای می‌رسید که اجازه‌اش را نداشت
    */

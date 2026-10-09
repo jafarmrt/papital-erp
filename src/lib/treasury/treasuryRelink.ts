@@ -1,5 +1,5 @@
 /**
- * v10.0.40 (TD-1122): گزینه انتقال دریافت یا پرداخت به سند دیگر (`GET /accounting/treasury/:id/document-options`)،
+ * v10.0.41 (TD-1122): گزینه انتقال دریافت یا پرداخت به سند دیگر (`GET /accounting/treasury/:id/document-options`)،
  * مشترک سرور و پنجره «انتقال به سند دیگر».
  */
 export interface TreasuryRelinkOption {
