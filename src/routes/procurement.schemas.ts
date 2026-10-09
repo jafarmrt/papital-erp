@@ -127,10 +127,11 @@ export const convertToOrdersSchema = z.object({
         unitPrice: z.number().nonnegative(),
         location: z.string().optional(),
         notes: z.string().max(500).optional()
-      })).min(1, 'حداقل یک قلم برای گروه سفارش الزامی است'),
+        // v10.0.37 (TD-941، تصمیم ت۹ ب): سفارش تدارکات ریالی و بی تخفیف ردیف است؛ کلید دیگری (مانند `discount`) ۴۰۰ می‌گیرد
+      }).strict()).min(1, 'حداقل یک قلم برای گروه سفارش الزامی است'),
       notes: z.string().max(1000).optional(),
-      currency: z.string().default('IRR').optional()
-    })).min(1, 'حداقل یک گروه سفارش خرید الزامی است'),
+      // v10.0.37 (TD-941): فیلد ارز حذف شد؛ پیش‌تر ارز فرستاده‌شده دور ریخته و سفارش ریالی ثبت می‌شد
+    }).strict()).min(1, 'حداقل یک گروه سفارش خرید الزامی است'),
     closeRequisition: z.boolean().optional(),
     closureReason: z.string().max(500).optional(),
     // v8.0.38 (TD-289): دلیل سفارش بیش از درخواست (بی آن، سفارش بیش از مانده درخواست رد می‌شود)

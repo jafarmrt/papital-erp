@@ -187,6 +187,8 @@ export const documentUpdateSchema = z.object({
     vatAmount: vatAmountInput,
     exchangeRate: exchangeRateInput,
     location: z.string().max(100).nullable().optional(),
+    // v10.0.40 (TD-913): دلیل سفارش بیش از درخواست در ویرایش سفارش تدارکات (بی آن، ۴۲۲ OVER_ORDER_REASON_REQUIRED)
+    overOrderReason: z.string().max(500).optional(),
     // V10-4.3: پذیرش لینک رسمی CRM در ویرایش سند
     crmLeadId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     // v9.0.336 (TD-778): طرف حساب سند فروش و خرید از انتخابگر (شناسه `customers`)

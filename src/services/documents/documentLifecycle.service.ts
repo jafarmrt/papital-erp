@@ -13,10 +13,6 @@ import { resolveReturnVatFromInvoice } from './salesReturnVat.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
-import { domainEventBus } from '../events/domainEventBus.js';
-import { DomainEventType, type InvoiceEventPayload, type PurchaseEventPayload } from '../events/domainEvents.js';
-import { documentEventAmounts } from './documentEventAmount.js';
-import { OutboxService } from '../events/outboxService.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { VoucherService } from '../accounting/voucher.service.js';
 import { resolveWarehouseCode } from '../inventory/warehouseResolver.js';
@@ -29,7 +25,9 @@ import { releaseReservationsForDocument, restoreReservationsForDocument } from '
 import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
 import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows } from './voidDependents.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
-import { proformaInvoiceTarget } from './proformaInvoice.js';
+import { finalizeDayTarget, proformaInvoiceTarget } from './proformaInvoice.js';
+import { recordFinalizeEvent } from './documentFinalizeEvents.js';
+import { lockLinkedRequisition, voidLinkedOrder } from './linkedOrderHooks.js';
 import { assertNotProjectDelivery, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
@@ -49,7 +47,7 @@ export class DocumentLifecycleService {
     id: number,
     user?: string,
     externalTx?: DbExecutor,
-    options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number; allowBackdate?: boolean }
+    options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number; allowBackdate?: boolean; atFinalizeDay?: boolean }
   ): Promise<DocumentAuditChange | null> {
     const isStrict = options?.strict !== false;
     // v9.0.337 (TD-785): سند پیش از نهایی‌سازی (زیر قفل) و پس از آن برای ردیف ممیزی؛ `null` اگر سند از پیش قطعی بود
@@ -138,7 +136,8 @@ export class DocumentLifecycleService {
           // v8.0.51 / v8.0.119 (TD-317 / TD-410، تصمیم مالک محصول): فاکتورِ حاصل از پیش‌فاکتور شماره بعدی سری فاکتور و
           // تاریخ روز نهایی‌سازی را می‌گیرد؛ شماره و تاریخ پیش‌فاکتور در یادداشت می‌ماند (proformaInvoice.ts)
           const isProformaToInvoice = doc.type === 'proforma';
-          const proformaTarget = isProformaToInvoice ? await proformaInvoiceTarget(doc, tx) : null;
+          // v10.0.38 (TD-914، تصمیم ت۹ الف): سفارش تدارکات روز تحویل را می‌گیرد (`atFinalizeDay`)، مانند پیش‌فاکتور
+          const proformaTarget = isProformaToInvoice ? await proformaInvoiceTarget(doc, tx) : (options?.atFinalizeDay ? await finalizeDayTarget(doc, tx) : null);
           const finalDate = proformaTarget?.date ?? doc.date;
           const finalRefNumber = proformaTarget?.refNumber ?? doc.refNumber;
           // v8.0.10 (TD-267): سند خرید (purchase) هم ورودی است، همان قاعده ثبت سند (documentCreation)
@@ -230,7 +229,7 @@ export class DocumentLifecycleService {
           await tx.update(documents).set({ 
             status: 'final',
             type: targetType,
-            ...(isProformaToInvoice ? {
+            ...(proformaTarget ? {
               date: finalDate,
               refNumber: finalRefNumber,
               refFiscalYear: resolveJalaliFiscalYear(finalDate),
@@ -246,43 +245,8 @@ export class DocumentLifecycleService {
           const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(targetType);
           const safeUser = user || doc.user || 'system';
 
-          if (isSales) {
-            const invEvent = domainEventBus.createEvent<InvoiceEventPayload>(
-              DomainEventType.INVOICE_APPROVED,
-              'Document',
-              String(id),
-              {
-                documentId: id,
-                refNumber: finalRefNumber,
-                docType: targetType,
-                // v9.0.407 (TD-713): the payable amount of the finalized document (the event used to carry no amount)
-                ...await documentEventAmounts(tx, id),
-                buyerName: doc.buyerName || '',
-                currency: doc.currency || 'IRR',
-                itemCount: docLines.length,
-                status: 'final'
-              },
-              { userName: safeUser }
-            );
-            await OutboxService.saveToOutbox(tx, invEvent);
-          } else if (isPurchase) {
-            const purchEvent = domainEventBus.createEvent<PurchaseEventPayload>(
-              DomainEventType.PURCHASE_APPROVED,
-              'Document',
-              String(id),
-              {
-                documentId: id,
-                refNumber: doc.refNumber,
-                ...await documentEventAmounts(tx, id),
-                supplierName: doc.buyerName || '',
-                currency: doc.currency || 'IRR',
-                itemCount: docLines.length,
-                status: 'final'
-              },
-              { userName: safeUser }
-            );
-            await OutboxService.saveToOutbox(tx, purchEvent);
-          }
+          // v9.0.407 (TD-713): رویداد نهایی‌سازی با مبلغ قابل پرداخت و شماره نهایی سند (documentFinalizeEvents.ts)
+          await recordFinalizeEvent(tx, { id, type: targetType, refNumber: finalRefNumber, buyerName: doc.buyerName, currency: doc.currency, itemCount: docLines.length, user: safeUser });
 
           // Step 4: Auto-generate double-entry accounting voucher (Rule DB-008, Strict Mode)
           if (isSales) {
@@ -327,6 +291,8 @@ export class DocumentLifecycleService {
         .where(and(eq(transactions.documentId, id), eq(transactions.isDeleted, 0)));
       const lineItems = await tx.select({ itemId: documentItems.itemId }).from(documentItems)
         .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
+      // v10.0.39 (TD-912): درخواست خرید سفارش پیش از کالاها قفل می‌شود (همان ترتیب تحویل) و پس از ابطال به‌روز می‌شود
+      const orderRequisitionId = await lockLinkedRequisition(tx, id);
       await lockStockItems(tx, [...kardexItems, ...lineItems].map(r => r.itemId));
       // v7.0.105 (TD-237): پروژه پیش از سند قفل می‌شود (سلسله‌مراتب PRODUCTION → DOCUMENTS)، چون رزرو کسرشده حواله نهایی
       // در همین تراکنش برمی‌گردد؛ از v8.0.67 بی‌توجه به وضعیت پیش از قفل، چون نهایی‌سازی هم‌زمان می‌تواند آن را نهایی کند
@@ -513,6 +479,7 @@ export class DocumentLifecycleService {
           deletedBy: deletedByUser
         }
       });
+      await voidLinkedOrder(tx, { documentId: id, requisitionId: orderRequisitionId, user: deletedByUser });
     };
 
     if (externalTx) {

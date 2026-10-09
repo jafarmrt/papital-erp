@@ -168,7 +168,7 @@ export class DocumentService {
     id: number,
     user?: string,
     externalTx?: DbExecutor,
-    options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number; allowBackdate?: boolean }
+    options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number; allowBackdate?: boolean; atFinalizeDay?: boolean }
   ): Promise<DocumentAuditChange | null> {
     return DocumentLifecycleService.finalizeDocument(id, user, externalTx, options);
   }

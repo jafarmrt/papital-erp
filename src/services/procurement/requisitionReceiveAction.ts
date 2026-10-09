@@ -114,7 +114,8 @@ export async function receiveRequisitionItems(
   for (const doc of orderDocs) {
     if (doc.status === 'final') continue;
     opts.assertIncoming(doc);
-    const change = await DocumentService.finalizeDocument(doc.id, opts.username, tx, { allowBackdate: opts.allowBackdate });
+    // v10.0.38 (TD-914): سفارش تاریخ روز دریافت را می‌گیرد
+    const change = await DocumentService.finalizeDocument(doc.id, opts.username, tx, { allowBackdate: opts.allowBackdate, atFinalizeDay: true });
     // v9.0.458 (TD-917، یافته P5-P10): ردیف ممیزی نهایی‌سازی هر سفارش با شناسه سند و سند پیش و پس از آن، با همین تراکنش،
     // همان ردیف `PUT /documents/:id/finalize` (TD-785). پیش‌تر «دریافت کالا» هیچ ردیفی نمی‌نوشت و خط زمانی سند آن را نمی‌دید.
     if (change) {
