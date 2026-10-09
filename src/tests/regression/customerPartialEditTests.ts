@@ -7,14 +7,14 @@ import { customers } from '../../db/schema.js';
 /**
  * Package 9 (customers and CRM), TD-975: `PUT /customers/:id` changes only the fields it is sent. Before, the edit body
  * used the create schema with `.default('')`, so an edit sending only the phone emptied the address, notes, bank details
- * and contacts and set the party type back to «customer». Red on v10.0.22.
+ * and contacts and set the party type back to «customer». Red on v10.0.23.
  */
 export async function runCustomerPartialEditTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const id = 'reg_customer_partial_edit_keeps_fields_td_975';
   if (!shouldRun(id, 'td975', 'customers', 'package9')) return results;
 
-  const name = 'v10.0.23: a party edit that sends only some fields keeps every other field (address, notes, type, bank details, contacts) (TD-975)';
+  const name = 'v10.0.24: a party edit that sends only some fields keeps every other field (address, notes, type, bank details, contacts) (TD-975)';
   const tStart = Date.now();
   let customerId: number | null = null;
   try {

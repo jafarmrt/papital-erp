@@ -7,14 +7,14 @@ import { containsLikePattern } from '../../lib/sqlLike.js';
 
 /**
  * Package 9 (customers and CRM), TD-976: a CRM activity mentions live users by id only, notifies only mentioned users
- * who may read CRM activities, and never matches «@name» inside the description by substring. Red on v10.0.23.
+ * who may read CRM activities, and never matches «@name» inside the description by substring. Red on v10.0.24.
  */
 export async function runCrmActivityMentionTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const id = 'reg_crm_activity_mentions_td_976';
   if (!shouldRun(id, 'td976', 'crm', 'mention', 'package9')) return results;
 
-  const name = 'v10.0.24: a CRM activity mention is a live user id (unknown id 422, nothing saved), the description is never scanned for «@name», and only mentioned users who may read CRM activities are notified (TD-976)';
+  const name = 'v10.0.25: a CRM activity mention is a live user id (unknown id 422, nothing saved), the description is never scanned for «@name», and only mentioned users who may read CRM activities are notified (TD-976)';
   const tStart = Date.now();
   const tag = `TD976-${String(Date.now()).slice(-6)}`;
   const roleIds: number[] = [];
