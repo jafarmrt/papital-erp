@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { projectStatusLabel } from '../lib/projects/projectStatus';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, Package, Box, UsersRound, ClipboardList, Layers, ArrowLeft, Loader2 } from 'lucide-react';
 import { useSearch } from '../SearchContext';
@@ -330,7 +331,7 @@ export default function GlobalHeaderSearch() {
                             [{proj.project_code}] {proj.title}
                           </p>
                           <p className="text-[10px] text-slate-400 truncate">
-                            مشتری: {proj.customer_name || 'عام'} • وضعیت: {proj.status}
+                            مشتری: {proj.customer_name || 'عام'} • وضعیت: {projectStatusLabel(proj.status)}
                           </p>
                         </div>
                       </div>
