@@ -10845,6 +10845,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 phase 3 lane L3 (v10.0.22+): the events of the project stock paths
   const { runProjectEventTests } = await import('../regression/projectEventTests.js');
   results.push(...await runProjectEventTests(shouldRun));
+  const { runProjectWipCostTests } = await import('../regression/projectWipCostTests.js');
+  results.push(...await runProjectWipCostTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
