@@ -21,6 +21,7 @@ import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { useProjectVersion } from '../hooks/useProjectVersion';
 import { useProjectPermissions } from '../hooks/useProjectPermissions';
 import { ProjectStatusActions } from './project/ProjectStatusActions';
+import { AddStageForm, DeleteStageButton } from './project/ProjectStageActions';
 
 interface ProjectDetailModalProps {
   projectId: number | null;
@@ -665,6 +666,10 @@ export default function ProjectDetailModal({
                                       <span>ویرایش زمان‌بندی و پرسنل</span>
                                     </button>
                                   )}
+                                  {/* v10.0.42 (TD-1140): حذف مرحله */}
+                                  {canEdit && (
+                                    <DeleteStageButton projectId={project.id} stage={stg} onChanged={() => { void loadProjectData(); onUpdate(); }} />
+                                  )}
                                 </div>
                               </div>
                             ) : (
@@ -805,6 +810,11 @@ export default function ProjectDetailModal({
                         );
                       })}
                     </div>
+
+                    {/* v10.0.42 (TD-1140): افزودن مرحله پس از ثبت پروژه */}
+                    {canEdit && (
+                      <AddStageForm projectId={project.id} onChanged={() => { void loadProjectData(); onUpdate(); }} />
+                    )}
                   </div>
 
                   {/* Attachments Section */}
