@@ -20,6 +20,7 @@ import { WorkflowStepperWidget } from './workflow/WorkflowStepperWidget';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { useProjectVersion } from '../hooks/useProjectVersion';
 import { useProjectPermissions } from '../hooks/useProjectPermissions';
+import { ProjectStatusActions } from './project/ProjectStatusActions';
 
 interface ProjectDetailModalProps {
   projectId: number | null;
@@ -343,6 +344,16 @@ export default function ProjectDetailModal({
               {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-amber-400" /> : <Maximize2 className="w-3.5 h-3.5 text-amber-400" />}
               <span className="hidden sm:inline">{isFullscreen ? 'پنجره‌ای' : 'تمام‌صفحه'}</span>
             </button>
+
+            {/* v10.0.41 (TD-1141): توقف، ادامه و لغو پروژه */}
+            {canEdit && project && (
+              <ProjectStatusActions
+                projectId={project.id}
+                status={project.status}
+                version={projectVersion.version}
+                onSaved={(res) => { projectVersion.remember(res); void loadProjectData(); onUpdate(); }}
+              />
+            )}
 
             {onEditProject && project && (
               <button
