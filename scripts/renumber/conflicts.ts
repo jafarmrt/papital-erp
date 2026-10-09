@@ -104,7 +104,7 @@ const DEBT_ROW = /^\| TD-\d+ \|/;
 const rowIds = (lines: string[]) => new Map(lines.map(l => [l.match(/^\| (TD-\d+) \|/)?.[1], l] as const).filter(([id]) => id));
 
 function unionRows(merged: string): string | null {
-  // v10.0.21 (TD-981): a row both sides of a hunk hold is kept once; one row both sides edited differently is left
+  // v10.0.22 (TD-981): a row both sides of a hunk hold is kept once; one row both sides edited differently is left
   // to the operator (keeping both would list the id twice)
   const resolved = resolveHunks(merged, h => {
     const ours = rowIds(h.ours);

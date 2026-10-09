@@ -80,7 +80,7 @@ function main(): void {
     fail(`The changelog ${ACTIVE_CHANGELOG.file} breaks the short entry rule (src/data/changelogs/compactRule.ts):\n   - ${compactViolations.slice(0, 15).join('\n   - ')}`);
   }
 
-  // 5) v10.0.21 (TD-981): no debt row is both active and archived or listed twice (parallel merges brought them back)
+  // 5) v10.0.22 (TD-981): no debt row is both active and archived or listed twice (parallel merges brought them back)
   const debtViolations = findDebtRegistryViolations(
     fs.readFileSync(path.resolve(process.cwd(), 'TECH_DEBT.md'), 'utf-8'),
     fs.readFileSync(path.resolve(process.cwd(), 'TECH_DEBT_ARCHIVE.md'), 'utf-8')
@@ -89,7 +89,7 @@ function main(): void {
     fail(`The debt registry is inconsistent (archived rows win; remove them from TECH_DEBT.md):\n   - ${debtViolations.slice(0, 15).join('\n   - ')}`);
   }
 
-  // 6) v10.0.23 (OT-A-03): every npm script the documents, CI and shell scripts name still exists (a merge once dropped one)
+  // 6) v10.0.24 (OT-A-03): every npm script the documents, CI and shell scripts name still exists (a merge once dropped one)
   const pkgScripts = (JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { scripts?: Record<string, string> }).scripts ?? {};
   const missingScripts = findMissingNpmScripts(npmScriptDocs(process.cwd()), pkgScripts);
   if (missingScripts.length > 0) {

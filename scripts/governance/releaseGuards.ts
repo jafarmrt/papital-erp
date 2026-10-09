@@ -2,9 +2,9 @@
  * Release governance gates run by `npm run check:version` (scripts/check-version-sync.ts), so every
  * `npm run release:renumber` merge checks them too. Terminal output is English (AGENTS.md, owner rule t9).
  *
- * v10.0.21 (TD-981): a debt row is never both active (TECH_DEBT.md) and archived (TECH_DEBT_ARCHIVE.md), and no id
+ * v10.0.22 (TD-981): a debt row is never both active (TECH_DEBT.md) and archived (TECH_DEBT_ARCHIVE.md), and no id
  * is listed twice in one of them; parallel merges used to bring archived rows back unnoticed.
- * v10.0.23 (OT-A-03): every `npm run <script>` the governance documents, CI and the shell scripts name exists in
+ * v10.0.24 (OT-A-03): every `npm run <script>` the governance documents, CI and the shell scripts name exists in
  * package.json; a master merge once dropped `ratchet:permissions` and nothing noticed.
  */
 import fs from 'fs';
