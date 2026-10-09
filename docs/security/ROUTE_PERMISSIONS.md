@@ -74,11 +74,11 @@
 | GET | `/api/accounting/vouchers/:id` | accounting.vouchers \| accounting.reports \| accounting.view |
 | PUT | `/api/accounting/vouchers/:id` | accounting.vouchers |
 | POST | `/api/accounting/vouchers/:id/correct` | accounting.vouchers |
-| POST | `/api/accounting/vouchers/:id/finalize` | accounting.vouchers |
+| POST | `/api/accounting/vouchers/:id/finalize` | accounting.vouchers_approve |
 | POST | `/api/accounting/vouchers/:id/reverse` | accounting.vouchers |
-| PUT | `/api/accounting/vouchers/:id/status` | accounting.vouchers |
-| POST | `/api/accounting/vouchers/batch-approve` | accounting.vouchers |
-| POST | `/api/accounting/vouchers/batch-finalize` | accounting.vouchers |
+| PUT | `/api/accounting/vouchers/:id/status` | accounting.vouchers_approve |
+| POST | `/api/accounting/vouchers/batch-approve` | accounting.vouchers_approve |
+| POST | `/api/accounting/vouchers/batch-finalize` | accounting.vouchers_approve |
 | GET | `/api/activity-logs` | audit_logs.view |
 | GET | `/api/activity-logs/filters` | audit_logs.view |
 | GET | `/api/activity-logs/integrity` | audit_logs.view |
