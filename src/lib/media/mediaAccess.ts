@@ -1,5 +1,5 @@
 /**
- * v10.0.22 (N-05 PR 2): which media library actions the browser offers, by the keys the server routes ask
+ * v10.0.25 (N-05 PR 2): which media library actions the browser offers, by the keys the server routes ask
  * (`media.routes.ts`, `/media/products/:itemId/info`). Display only; the server checks the same rule itself.
  */
 

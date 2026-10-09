@@ -10,7 +10,7 @@ import { mediaDownloadName, type MediaShotType } from '../../lib/media/mediaRule
 import { extensionOfType, mediaFilePath } from './mediaStorage.js';
 
 /**
- * v10.0.22 (N-05 PR 2): several library files in one zip, streamed from disk (`ZipStreamWriter`, no file held in memory).
+ * v10.0.25 (N-05 PR 2): several library files in one zip, streamed from disk (`ZipStreamWriter`, no file held in memory).
  * The light variant of an image is its webp light version; a video, or an image whose light version is missing, goes in
  * its original. The whole zip is planned before the first byte: an unknown or deleted id is 422 and a zip above
  * `MEDIA_ZIP_MAX_BYTES` 422 `MEDIA_ZIP_TOO_LARGE`, so the browser gets a real error instead of a broken download.

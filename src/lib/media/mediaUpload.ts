@@ -6,7 +6,7 @@ import {
 import { ensureCsrfToken, type MediaAssetView } from './mediaApi';
 
 /**
- * v10.0.22 (N-05 PR 2): checks a file before upload with the server's rules (`mediaRules.ts`) and sends it as the raw
+ * v10.0.25 (N-05 PR 2): checks a file before upload with the server's rules (`mediaRules.ts`) and sends it as the raw
  * request body with `XMLHttpRequest`, so each file shows its own progress. A video gets a poster made in the browser.
  */
 

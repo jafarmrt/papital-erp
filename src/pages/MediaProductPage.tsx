@@ -10,7 +10,7 @@ import { MediaUploadBox } from '../components/media/MediaUploadBox';
 import { getMediaProduct, mediaErrorMessage, type MediaAssetView, type MediaProductDetail } from '../lib/media/mediaApi';
 import { MEDIA_INFO_EDIT_KEYS, MEDIA_MANAGE_KEY, MEDIA_UPLOAD_KEYS } from '../lib/media/mediaAccess';
 
-/** v10.0.22 (N-05 PR 2): one product of the media library: its card, gallery and upload box */
+/** v10.0.25 (N-05 PR 2): one product of the media library: its card, gallery and upload box */
 export default function MediaProductPage({ user }: { user?: User | null }) {
   const { itemId: itemIdParam } = useParams();
   const itemId = Number(itemIdParam);

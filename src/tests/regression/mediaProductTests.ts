@@ -11,25 +11,25 @@ import { createTestItem } from '../fixtures/factories.js';
 import { binaryParser, readZipEntries } from '../fixtures/zipReader.js';
 
 /**
- * Series 10, N-05 PR 2 (v10.0.22+): the product side of the media library — the product card of an item (form, Excel
+ * Series 10, N-05 PR 2 (v10.0.25+): the product side of the media library — the product card of an item (form, Excel
  * import, the library's product page), the product grid filtered in SQL and the zip download.
  */
 export async function runMediaProductTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_media_product_card_item_form_n05',
-      'v10.0.22: the item form saves collections, design year and transfer code; a new product takes year and transfer code from its code; an invalid year is 422 (N-05)',
+      'v10.0.25: the item form saves collections, design year and transfer code; a new product takes year and transfer code from its code; an invalid year is 422 (N-05)',
       ['n05', 'media', 'items'], itemFormCase],
     ['reg_media_product_card_excel_n05',
-      'v10.0.22: the Excel import reads the product card columns, keeps them on a blank cell and refuses a row with an invalid design year (N-05)',
+      'v10.0.25: the Excel import reads the product card columns, keeps them on a blank cell and refuses a row with an invalid design year (N-05)',
       ['n05', 'media', 'items'], excelCase],
     ['reg_media_product_info_occ_n05',
-      'v10.0.22: the library edits the product card with media.manage or products.edit at the item version, with an item audit row (N-05)',
+      'v10.0.25: the library edits the product card with media.manage or products.edit at the item version, with an item audit row (N-05)',
       ['n05', 'media', 'permissions'], infoCase],
     ['reg_media_product_grid_filters_n05',
-      'v10.0.22: the product grid filters by collection, design year, transfer code and missing images in SQL, with file counts and a cover (N-05)',
+      'v10.0.25: the product grid filters by collection, design year, transfer code and missing images in SQL, with file counts and a cover (N-05)',
       ['n05', 'media'], gridCase],
     ['reg_media_zip_download_n05',
-      'v10.0.22: several files download as one zip in their original or light version; an unknown id is 422 (N-05)',
+      'v10.0.25: several files download as one zip in their original or light version; an unknown id is 422 (N-05)',
       ['n05', 'media'], zipCase],
   ]);
 }

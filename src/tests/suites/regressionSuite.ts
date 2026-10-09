@@ -10845,7 +10845,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 N-05 PR 1 (v10.0.21+): the media library infrastructure
   const { runMediaLibraryTests } = await import('../regression/mediaLibraryTests.js');
   results.push(...await runMediaLibraryTests(shouldRun));
-  // Series 10 N-05 PR 2 (v10.0.22+): product card, product grid and zip download of the media library
+  // Series 10 N-05 PR 2 (v10.0.25+): product card, product grid and zip download of the media library
   const { runMediaProductTests } = await import('../regression/mediaProductTests.js');
   results.push(...await runMediaProductTests(shouldRun));
 

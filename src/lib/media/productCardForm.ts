@@ -1,6 +1,6 @@
 
 /**
- * v10.0.22 (N-05 PR 2): the item form's product card. The form holds text; the payload sends every card key, so an emptied
+ * v10.0.25 (N-05 PR 2): the item form's product card. The form holds text; the payload sends every card key, so an emptied
  * field clears its value, and a new product left without a design year or transfer code takes the ones its code carries
  * (the server's `withCodeCard`).
  */

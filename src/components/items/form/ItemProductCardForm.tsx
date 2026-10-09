@@ -10,7 +10,7 @@ interface ItemProductCardFormProps {
 
 const inputClass = 'w-full px-3 py-2 border border-slate-300/80 rounded-xl bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30';
 
-/** v10.0.22 (N-05): کارت محصول کتابخانه تصاویر در فرم کالا (فقط محصول نهایی) */
+/** v10.0.25 (N-05): کارت محصول کتابخانه تصاویر در فرم کالا (فقط محصول نهایی) */
 export const ItemProductCardForm: React.FC<ItemProductCardFormProps> = ({ form, setForm, isNew }) => {
   const set = (key: keyof ProductCardFormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const value = e.target.value;

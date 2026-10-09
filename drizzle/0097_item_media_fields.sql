@@ -1,4 +1,4 @@
--- Drizzle Migration 0097: product fields of the media library (v10.0.22, N-05 PR 2)
+-- Drizzle Migration 0097: product fields of the media library (v10.0.25, N-05 PR 2)
 --
 -- Adds to items the product card of the media library: its collections (a tag list, product-owner decision ت۲: a product
 -- may be in several collections), design year, transfer code, description and technical notes. The new columns start

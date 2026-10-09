@@ -31,7 +31,7 @@ export interface ItemFormData {
   weight: string;
   size: string;
   stocks: Record<string, number>;
-  /** v10.0.22 (N-05): کارت محصول؛ کالکشن‌ها با «،» جدا می‌شوند */
+  /** v10.0.25 (N-05): کارت محصول؛ کالکشن‌ها با «،» جدا می‌شوند */
   card: ProductCardFormData;
 }
 

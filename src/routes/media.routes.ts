@@ -26,7 +26,7 @@ const router = Router();
 export const MEDIA_VIEW_PERMISSION = 'media.view';
 export const MEDIA_UPLOAD_PERMISSION = 'media.upload';
 export const MEDIA_MANAGE_PERMISSION = 'media.manage';
-/** v10.0.22 (N-05 PR 2): the product card is item data, so the item editor's key opens it too */
+/** v10.0.25 (N-05 PR 2): the product card is item data, so the item editor's key opens it too */
 export const MEDIA_PRODUCT_INFO_PERMISSIONS = [MEDIA_MANAGE_PERMISSION, 'products.edit'] as const;
 
 async function actorOf(req: Request): Promise<MediaActor> {

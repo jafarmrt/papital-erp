@@ -40,7 +40,7 @@ export interface RowFields {
   size?: string;
   weight?: number;
   material?: string;
-  /** v10.0.22 (N-05): product card cells; a blank cell is missing here and keeps the stored value */
+  /** v10.0.25 (N-05): product card cells; a blank cell is missing here and keeps the stored value */
   card: ProductCardValues;
   /** v10.0.1 (TD-1010) / v10.0.2 (TD-1011): خطای نخستین سلول نادرست ردیف؛ آن‌گاه هیچ بخشی از ردیف ثبت نمی‌شود */
   cellError?: string;
@@ -73,7 +73,7 @@ function numberCell(row: Row, headers: readonly string[], errors: string[]): num
   return parsed.value;
 }
 
-/** v10.0.22 (N-05): the product card cells of a row, read with the item form's rules; an invalid cell is a row error */
+/** v10.0.25 (N-05): the product card cells of a row, read with the item form's rules; an invalid cell is a row error */
 function readRowProductCard(row: Row, errors: string[]): ProductCardValues {
   const C = PRODUCT_CARD_COLUMNS;
   const input = {

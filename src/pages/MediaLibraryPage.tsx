@@ -12,7 +12,7 @@ import {
 
 export const MEDIA_LIBRARY_TITLE = 'کتابخانه تصاویر و فیلم‌ها';
 
-/** v10.0.22 (N-05 PR 2): the media library's product grid; search conditions live in the page address */
+/** v10.0.25 (N-05 PR 2): the media library's product grid; search conditions live in the page address */
 export default function MediaLibraryPage() {
   const [params, setParams] = useSearchParams();
   const paramsText = params.toString();

@@ -54,7 +54,7 @@ export const mediaUpdateSchema = z.object({
   }).strict(),
 });
 
-/** v10.0.22 (N-05 PR 2): the product grid of the library; every condition is applied in SQL */
+/** v10.0.25 (N-05 PR 2): the product grid of the library; every condition is applied in SQL */
 export const mediaProductListSchema = z.object({
   query: z.object({
     search: z.string().max(200).optional(),

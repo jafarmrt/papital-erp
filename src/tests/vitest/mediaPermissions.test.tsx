@@ -5,7 +5,7 @@ import type { MediaAssetView, MediaProductDetail } from '../../lib/media/mediaAp
 import { canChangeAsset } from '../../lib/media/mediaAccess';
 import { canOpenPage } from '../../lib/permissions/pageAccess';
 
-// v10.0.22 (N-05 PR 2): the product view of the media library shows each button by the key its route asks: upload by
+// v10.0.25 (N-05 PR 2): the product view of the media library shows each button by the key its route asks: upload by
 // media.upload or media.manage, a file's edit and delete by media.manage or its own uploader, the product card edit by
 // media.manage or products.edit.
 

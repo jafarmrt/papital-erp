@@ -6,7 +6,7 @@ import {
 import { DEFAULT_SHOT_TYPE, MediaUploadError, checkMediaFile, posterDuration, uploadMediaFile, uploadUrl } from '../../lib/media/mediaUpload';
 import { downloadMediaZip, fileNameFromDisposition, mediaProductQueryFrom, mediaProductQueryParams } from '../../lib/media/mediaApi';
 
-// v10.0.22 (N-05 PR 2): the upload box checks a file with the server's rules before sending it, and sends the raw file
+// v10.0.25 (N-05 PR 2): the upload box checks a file with the server's rules before sending it, and sends the raw file
 // with its name, type, the CSRF header and the session cookie.
 
 const MB = 1024 * 1024;
