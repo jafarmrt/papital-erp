@@ -13,6 +13,9 @@ export async function runProjectWipCostTests(shouldRun: ShouldRun): Promise<Test
     ['reg_project_delete_refused_with_wip_or_documents_td_922',
       'v10.0.24: a project with a live document or a work-in-progress balance is not deleted (409 PROJECT_HAS_LEDGER_ITEMS); once the document is voided it is (TD-922)',
       ['td922', 'p5-m07', 'projects', 'delete', 'package11'], deleteGuardCase],
+    ['reg_closed_project_wip_listed_td_919',
+      'v10.0.25: the financial health check lists the work-in-progress balance of a completed or deleted project and not of an open one (TD-919)',
+      ['td919', 'p5-m03', 'projects', 'health', 'package11'], closedProjectWipCase],
   ]);
 }
 
@@ -46,4 +49,28 @@ async function deleteGuardCase(h: Harness, wrong: string[]): Promise<string> {
   const deleted = await h.del(`/api/projects/${projectId}`);
   if (deleted.status !== 200) wrong.push(`deleting the project after the void answered ${brief(deleted)}, expected 200`);
   return 'a project with a live document or a 1402 balance is refused; after the void it is deleted';
+}
+
+/** P5-M03 (TD-919): a closed project's 1402 balance was listed nowhere (invariant I3 leaves 1402 out) */
+async function closedProjectWipCase(h: Harness, wrong: string[]): Promise<string> {
+  const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
+  const f = await fixture(h);
+  const material = await f.item(20, 1_000);
+  const open = await newProject(h, 'open');
+  const completed = await newProject(h, 'completed');
+  await remittance(h, f, material, 2, open);
+  await remittance(h, f, material, 3, completed);
+  // a completed project (the matrix and delivery rules are not under test here)
+  await h.q(`UPDATE production_projects SET status = 'completed' WHERE id = $1`, [completed]);
+  const report = await FinancialHealthService.runHealthCheck();
+  const test = report.tests.find(t => t.id === 'project_wip_closed_balance');
+  if (!test) {
+    wrong.push('the financial health check has no project_wip_closed_balance check');
+    return 'no check';
+  }
+  const items = test.items ?? [];
+  const row = items.find(i => Number(i.id) === completed);
+  if (!row || !String(row.details).includes('۳٬۰۰۰')) wrong.push(`the completed project is listed as ${JSON.stringify(row ?? null)}, expected its 3000 balance`);
+  if (items.some(i => Number(i.id) === open)) wrong.push('the open project with a 1402 balance is listed');
+  return 'the completed project is listed with its 1402 balance; the open one is not';
 }
