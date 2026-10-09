@@ -1,4 +1,5 @@
 import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -38,13 +39,16 @@ export const activityLogs = pgTable('activity_logs', {
   description: text('description').notNull(),
   details: jsonb('details').default({}),
   ipAddress: text('ip_address').default(''),
-  timestamp: timestamp('timestamp', { mode: 'string' }).defaultNow()
+  timestamp: timestamp('timestamp', { mode: 'string' }).defaultNow(),
+  // v10.0.25 (TD-963): trace id of the request that wrote the row (migration 0097)
+  traceId: text('trace_id').default(''),
 }, (table) => ({
   idx_username: index('activity_logs_username').on(table.username),
   idx_action: index('activity_logs_action').on(table.action),
   idx_entity: index('activity_logs_entity').on(table.entity),
   idx_timestamp: index('activity_logs_timestamp').on(table.timestamp),
   idx_act_log_user: index('idx_act_log_user').on(table.userId),
+  idx_trace_id: index('activity_logs_trace_id').on(table.traceId).where(sql`${table.traceId} <> ''`),
 }));
 
 export const migrationsLog = pgTable('migrations_log', {
