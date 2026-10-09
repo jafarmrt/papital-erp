@@ -3,7 +3,7 @@
 > ساخته‌شده با `npm run routes:permissions` از روترهای Express. `public` = بدون ورود؛ `login-only` = فقط ورود
 > (مجوز درون هندلر یا داده خود کاربر)؛ «a \| b» یعنی یکی کافی است و «&» یعنی هر دو گارد لازم است. `admin` همیشه می‌گذرد.
 
-تعداد مسیرها: 386
+تعداد مسیرها: 391
 
 | متد | مسیر | مجوز |
 |---|---|---|
@@ -248,7 +248,12 @@
 | GET | `/api/media/assets/:id/file` | media.view |
 | PUT | `/api/media/assets/:id/poster` | media.upload \| media.manage |
 | POST | `/api/media/assets/:id/rebuild-light` | media.manage |
+| GET | `/api/media/products` | media.view |
+| GET | `/api/media/products/:itemId` | media.view |
+| PUT | `/api/media/products/:itemId/info` | media.manage \| products.edit |
+| GET | `/api/media/products/filters` | media.view |
 | GET | `/api/media/sections` | media.view |
+| GET | `/api/media/zip` | media.view |
 | GET | `/api/metrics` | public |
 | GET | `/api/notifications` | login-only |
 | DELETE | `/api/notifications/:id` | login-only |

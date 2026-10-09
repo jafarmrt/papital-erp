@@ -51,7 +51,13 @@ const itemBodyFields = z.object({
   // null وزن را پاک می‌کند؛ نیامدن آن در ویرایش وزن فعلی را نگه می‌دارد
   weight: nonNegativeDecimal('وزن').nullable().optional(),
   material: z.string().optional(),
-  size: z.string().optional()
+  size: z.string().optional(),
+  // v10.0.25 (N-05): کارت محصول کتابخانه تصاویر؛ مقدار را productCardValues می‌خواند و نادرست را با ۴۲۲ رد می‌کند
+  collections: z.union([z.array(z.string()), z.string()]).nullable().optional(),
+  design_year: z.union([z.number(), z.string()]).nullable().optional(),
+  transfer_code: z.string().nullable().optional(),
+  product_description: z.string().nullable().optional(),
+  technical_notes: z.string().nullable().optional()
 }).passthrough();
 
 export const itemCreateUpdateSchema = z.object({
