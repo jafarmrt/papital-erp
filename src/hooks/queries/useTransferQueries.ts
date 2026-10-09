@@ -1,8 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { invalidatePreset } from '../../lib/queryInvalidation';
+import { TransferCodeListFilters, TransferCodePage, transferCodeListUrl } from '../../lib/transfers/transferCodeList';
 
 export interface LinkedProduct {
   id: number;
@@ -32,14 +33,12 @@ export interface TransferItem {
   products: LinkedProduct[];
 }
 
-export function useTransfersQuery() {
-  return useQuery<TransferItem[]>({
-    queryKey: QUERY_KEYS.transfers.list(),
-    queryFn: async () => {
-      // TD-493: the page lists every code, not the server's default page of 50
-      const res = await fetchJson('/transfers?all=true');
-      return Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-    },
+/** v10.0.26 (OBS-R1-82): یک صفحه از کدهای ترنسفر با خلاصه همه کدها؛ جست‌وجو و پالایش در سرور */
+export function useTransfersQuery(filters: TransferCodeListFilters) {
+  return useQuery<TransferCodePage<TransferItem>>({
+    queryKey: [...QUERY_KEYS.transfers.list(), filters],
+    queryFn: ({ signal }) => fetchJson<TransferCodePage<TransferItem>>(transferCodeListUrl(filters), { signal }),
+    placeholderData: keepPreviousData,
     staleTime: 1000 * 30,
   });
 }

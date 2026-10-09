@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useDeferredValue } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { toast } from 'react-hot-toast';
 import { User } from '../types';
@@ -13,9 +13,9 @@ import { compressTo300KB } from '../utils/imageCompression';
 import { DocPrintModal } from '../components/print/DocPrintModal';
 import { SafeImage } from '../components/SafeImage';
 import { useTransfersQuery, useSaveTransferMutation, useDeleteTransferMutation, TransferItem } from '../hooks/queries';
+import { TRANSFER_CODE_PAGE_SIZE } from '../lib/transfers/transferCodeList';
 
 export default function TransfersPage({ user }: { user?: User }) {
-  const { data: transfers = [], isLoading: loading, refetch } = useTransfersQuery();
   const saveMutation = useSaveTransferMutation();
   const deleteMutation = useDeleteTransferMutation();
 
@@ -24,7 +24,14 @@ export default function TransfersPage({ user }: { user?: User }) {
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(12);
+  const [pageSize, setPageSize] = useState<number>(TRANSFER_CODE_PAGE_SIZE);
+  // v10.0.26 (OBS-R1-82): یک صفحه از سرور؛ جست‌وجو، پالایش تصویر و شمارها در پایگاه‌داده
+  const deferredSearch = useDeferredValue(search.trim());
+  const { data: listPage, isLoading: loading, isFetching, refetch } = useTransfersQuery({
+    page: currentPage, limit: pageSize, search: deferredSearch, image: filterType,
+  });
+  const paginatedTransfers = listPage?.data ?? [];
+  const summary = listPage?.summary ?? { totalCodes: 0, withImage: 0, linkedProducts: 0 };
   const gridTopRef = useRef<HTMLDivElement>(null);
 
   // Modal states
@@ -175,33 +182,12 @@ export default function TransfersPage({ user }: { user?: User }) {
     });
   };
 
-  // Filter transfers
-  const filteredTransfers = transfers.filter(item => {
-    // Filter by text
-    const matchesSearch = 
-      item.code.toLowerCase().includes(search.toLowerCase()) ||
-      item.title.toLowerCase().includes(search.toLowerCase()) ||
-      item.products.some(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase()));
-
-    if (!matchesSearch) return false;
-
-    // Filter by image presence
-    if (filterType === 'with_image') return !!item.image;
-    if (filterType === 'without_image') return !item.image;
-
-    return true;
-  });
-
-  const totalWithImage = transfers.filter(t => !!t.image).length;
-  const totalProductsLinked = transfers.reduce((sum, t) => sum + t.productCount, 0);
-
   // Pagination computations
-  const totalItems = filteredTransfers.length;
+  const totalItems = listPage?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
   const startIndex = (safeCurrentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalItems);
-  const paginatedTransfers = filteredTransfers.slice(startIndex, endIndex);
+  const endIndex = Math.min(startIndex + paginatedTransfers.length, totalItems);
 
   const handlePageChange = (newPage: number) => {
     const target = Math.min(Math.max(newPage, 1), totalPages);
@@ -243,7 +229,7 @@ export default function TransfersPage({ user }: { user?: User }) {
               onClick={loadTransfers}
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md shadow-blue-600/30 active:scale-95 cursor-pointer"
             >
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={16} className={loading || isFetching ? "animate-spin" : ""} />
               بروزرسانی داده‌ها
             </button>
           </div>
@@ -256,7 +242,7 @@ export default function TransfersPage({ user }: { user?: User }) {
           <div>
             <p className="text-xs text-slate-500 font-bold">تعداد کدهای ترنسفر در سامانه</p>
             <h3 className="text-2xl font-black text-slate-800 mt-1 font-mono">
-              {formatPersianNumber(transfers.length)} <span className="text-xs font-sans font-normal text-slate-500">کد طرح</span>
+              {formatPersianNumber(summary.totalCodes)} <span className="text-xs font-sans font-normal text-slate-500">کد طرح</span>
             </h3>
           </div>
           <div className="w-11 h-11 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center font-bold">
@@ -268,7 +254,7 @@ export default function TransfersPage({ user }: { user?: User }) {
           <div>
             <p className="text-xs text-slate-500 font-bold">طرح‌های دارای تصویر ثبت‌شده</p>
             <h3 className="text-2xl font-black text-emerald-600 mt-1 font-mono">
-              {formatPersianNumber(totalWithImage)} <span className="text-xs font-sans font-normal text-slate-500">طرح مصور</span>
+              {formatPersianNumber(summary.withImage)} <span className="text-xs font-sans font-normal text-slate-500">طرح مصور</span>
             </h3>
           </div>
           <div className="w-11 h-11 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center font-bold">
@@ -280,7 +266,7 @@ export default function TransfersPage({ user }: { user?: User }) {
           <div>
             <p className="text-xs text-slate-500 font-bold">مجموع محصولات مرتبط با ترنسفرها</p>
             <h3 className="text-2xl font-black text-purple-600 mt-1 font-mono">
-              {formatPersianNumber(totalProductsLinked)} <span className="text-xs font-sans font-normal text-slate-500">کالا</span>
+              {formatPersianNumber(summary.linkedProducts)} <span className="text-xs font-sans font-normal text-slate-500">کالا</span>
             </h3>
           </div>
           <div className="w-11 h-11 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center font-bold">
@@ -316,7 +302,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            همه موارد ({formatPersianNumber(transfers.length)})
+            همه موارد ({formatPersianNumber(summary.totalCodes)})
           </button>
           <button
             onClick={() => setFilterType('with_image')}
@@ -326,7 +312,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            دارای تصویر ({formatPersianNumber(totalWithImage)})
+            دارای تصویر ({formatPersianNumber(summary.withImage)})
           </button>
           <button
             onClick={() => setFilterType('without_image')}
@@ -336,7 +322,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            بدون تصویر ({formatPersianNumber(transfers.length - totalWithImage)})
+            بدون تصویر ({formatPersianNumber(summary.totalCodes - summary.withImage)})
           </button>
         </div>
       </div>
@@ -352,7 +338,7 @@ export default function TransfersPage({ user }: { user?: User }) {
             </div>
           ))}
         </div>
-      ) : filteredTransfers.length === 0 ? (
+      ) : paginatedTransfers.length === 0 ? (
         <div className="bg-white p-12 border rounded-2xl text-center space-y-4">
           <AlertCircle size={40} className="mx-auto text-slate-300" />
           <h3 className="font-bold text-slate-700">هیچ کد ترنسفری مطابق با جستجوی شما یافت نشد.</h3>

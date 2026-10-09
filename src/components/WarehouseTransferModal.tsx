@@ -11,18 +11,36 @@ interface WarehouseTransferModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  defaultItemId?: number;
+}
+
+/** کالای انتخاب‌شده، همان ردیف `GET /items/options` */
+interface TransferPickItem {
+  id: number;
+  name: string;
+  code: string;
+  unit: string;
+  current_stock?: number;
+  currentStock?: number;
+  stocks?: Record<string, number>;
+}
+
+/** v10.0.27 (OBS-R1-86): برچسب کالا در انتخابگر انتقال */
+export function transferItemOption(it: TransferPickItem) {
+  return {
+    value: it.id,
+    label: `${it.name} (کد: ${it.code}) - موجودی کل: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`,
+  };
 }
 
 export default function WarehouseTransferModal({
   isOpen,
   onClose,
-  onSuccess,
-  defaultItemId
+  onSuccess
 }: WarehouseTransferModalProps) {
-  const [items, setItems] = useState<any[]>([]);
+  // v10.0.27 (OBS-R1-86): کالا با جست‌وجوی سرور انتخاب می‌شود؛ فهرست کامل کالاها خوانده نمی‌شود
+  const [selectedItem, setSelectedItem] = useState<TransferPickItem | null>(null);
   const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [selectedItemId, setSelectedItemId] = useState<number | null>(defaultItemId || null);
+  const selectedItemId = selectedItem?.id ?? null;
   const [fromLocation, setFromLocation] = useState<string>('');
   const [toLocation, setToLocation] = useState<string>('');
   const [quantity, setQuantity] = useState<string>('');
@@ -45,14 +63,10 @@ export default function WarehouseTransferModal({
       setSuccessMsg(null);
 
       Promise.all([
-        fetchJson(PICK_LIST_URLS.items),
         fetchJson('/warehouses'),
         fetchJson('/documents/next-ref?type=transfer')
       ])
-        .then(([itemsRes, whsRes, nextRefRes]) => {
-          const rawItems = Array.isArray(itemsRes?.data) ? itemsRes.data : (Array.isArray(itemsRes) ? itemsRes : []);
-          setItems(rawItems);
-          
+        .then(([whsRes, nextRefRes]) => {
           const rawWhs = Array.isArray(whsRes) ? whsRes : [];
           setWarehouses(rawWhs);
           
@@ -67,10 +81,6 @@ export default function WarehouseTransferModal({
             setRefNumber(String(nextRefRes.nextRef));
             setSuggestedRef(String(nextRefRes.nextRef));
           }
-
-          if (defaultItemId) {
-            setSelectedItemId(defaultItemId);
-          }
         })
         .catch(err => {
           console.error(err);
@@ -80,10 +90,9 @@ export default function WarehouseTransferModal({
           setLoadingInit(false);
         });
     }
-  }, [isOpen, defaultItemId]);
+  }, [isOpen]);
 
-  const selectedItem = items.find(i => i.id === selectedItemId);
-  const selectedItemStocks = (selectedItem?.stocks as Record<string, number>) || {};
+  const selectedItemStocks = selectedItem?.stocks || {};
   const availableSourceStock = Number(selectedItemStocks[fromLocation] || 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -197,12 +206,12 @@ export default function WarehouseTransferModal({
                   انتخاب کالا جهت انتقال <span className="text-rose-500">*</span>
                 </label>
                 <SearchableSelect
-                  options={items.map(it => ({
-                    value: it.id,
-                    label: `${it.name} (کد: ${it.code}) - موجودی کل: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`
-                  }))}
+                  fetchUrl={PICK_LIST_URLS.items}
+                  mapResultToOption={transferItemOption}
+                  maxResults={20}
                   value={selectedItemId || ''}
-                  onChange={(val) => setSelectedItemId(Number(val) || null)}
+                  valueLabel={selectedItem ? transferItemOption(selectedItem).label : undefined}
+                  onChange={(val, raw) => setSelectedItem(Number(val) && raw ? raw as TransferPickItem : null)}
                   placeholder="جستجو و انتخاب کالا..."
                 />
               </div>

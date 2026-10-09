@@ -1,12 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { orm } from '../db/drizzle.js';
-import { transfers, items } from '../db/schema.js';
-import { eq, and } from 'drizzle-orm';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
-import { parsePagination } from '../lib/pagination.js';
+import { listTransferCodes, getTransferCode } from '../services/transfers/transferCodeList.js';
+import { TRANSFER_CODE_MAX_PAGE_SIZE, TRANSFER_IMAGE_FILTERS, TransferImageFilter } from '../lib/transfers/transferCodeList.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
@@ -35,167 +33,32 @@ export const deleteTransferSchema = z.object({
   })
 });
 
-// Helper to extract transfer code from item product code
-function extractTransferCode(code: string): string | null {
-  if (!code) return null;
-  const parts = code.split('-');
-  // Code format: Year-Category-TransferCode-Serial (e.g. 1403-B-003-01)
-  if (parts.length >= 3 && parts[2]) {
-    const tr = parts[2].trim();
-    if (tr) return tr;
-  }
-  return null;
-}
+export const listTransfersSchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(TRANSFER_CODE_MAX_PAGE_SIZE).optional(),
+    search: z.string().max(200).optional(),
+    image: z.enum(TRANSFER_IMAGE_FILTERS).optional(),
+  }),
+});
 
-// GET /api/transfers - Get all transfer codes and their linked products with pagination & search
-router.get('/transfers', authenticateToken, authorizePermission(...READ_PERMISSIONS.transfers), asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const { page, limit, offset } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
-    const isAll = req.query.all === 'true' || limit === 0;
-    const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
-
-    // 1. Fetch saved transfer details
-    const savedTransfers = await orm.select().from(transfers).where(eq(transfers.isDeleted, 0));
-    const savedMap = new Map<string, typeof transfers.$inferSelect>();
-    for (const tr of savedTransfers) {
-      savedMap.set(tr.code, tr);
-    }
-
-    // 2. Fetch all active products
-    const allProducts = await orm.select({
-      id: items.id,
-      name: items.name,
-      code: items.code,
-      type: items.type,
-      category: items.category,
-      unit: items.unit,
-      currentStock: items.currentStock,
-      image: items.image,
-      thumbnail: items.thumbnail,
-      weightedAverageCost: items.weightedAverageCost,
-      color: items.color,
-      weight: items.weight,
-      material: items.material,
-      size: items.size
-    })
-    .from(items)
-    .where(and(eq(items.type, 'product'), eq(items.isDeleted, 0)));
-
-    // 3. Map products to transfer codes
-    const transferProductsMap = new Map<string, typeof allProducts>();
-    for (const prod of allProducts) {
-      const trCode = extractTransferCode(prod.code);
-      if (trCode) {
-        if (!transferProductsMap.has(trCode)) {
-          transferProductsMap.set(trCode, []);
-        }
-        transferProductsMap.get(trCode)!.push(prod);
-      }
-    }
-
-    // 4. Combine all known transfer codes (saved in DB or present in product codes)
-    const allTransferCodes = new Set<string>([
-      ...Array.from(savedMap.keys()),
-      ...Array.from(transferProductsMap.keys())
-    ]);
-
-    let resultList: Array<Record<string, unknown>> = [];
-    for (const code of Array.from(allTransferCodes)) {
-      const saved = savedMap.get(code);
-      const linkedProds = transferProductsMap.get(code) || [];
-
-      resultList.push({
-        id: saved ? saved.id : null,
-        code: code,
-        title: saved?.title || `ترنسفر کد ${code}`,
-        image: saved?.image || '',
-        thumbnail: saved?.thumbnail || '',
-        notes: saved?.notes || '',
-        createdAt: saved?.createdAt || null,
-        updatedAt: saved?.updatedAt || null,
-        productCount: linkedProds.length,
-        products: linkedProds
-      });
-    }
-
-    // Filter by search query if provided
-    if (search) {
-      resultList = resultList.filter(t =>
-        String(t.code || '').toLowerCase().includes(search) ||
-        String(t.title || '').toLowerCase().includes(search) ||
-        String(t.notes || '').toLowerCase().includes(search)
-      );
-    }
-
-    // Sort transfer codes naturally (e.g. 001, 002, 003...)
-    resultList.sort((a, b) => (a.code as string).localeCompare(b.code as string, undefined, { numeric: true, sensitivity: 'base' }));
-
-    const total = resultList.length;
-    const effectiveLimit = limit || 50;
-    const totalPages = Math.ceil(total / effectiveLimit) || 1;
-    const pagedList = isAll ? resultList : resultList.slice(offset, offset + effectiveLimit);
-
-    res.json({
-      data: pagedList,
-      total,
-      page: isAll ? 1 : page,
-      limit: isAll ? total : effectiveLimit,
-      totalPages
-    });
-  } catch (error) {
-    logger.error({ message: 'Error fetching transfers', error });
-    throw error;
-  }
+// GET /api/transfers — v10.0.26 (OBS-R1-82): یک صفحه از کدها با کالاهای همان صفحه و خلاصه همه کدها، در پایگاه‌داده
+router.get('/transfers', authenticateToken, authorizePermission(...READ_PERMISSIONS.transfers), validate(listTransfersSchema), asyncHandler(async (req: Request, res: Response) => {
+  const query = req.query as unknown as { page?: number; limit?: number; search?: string; image?: TransferImageFilter };
+  res.json(await listTransferCodes({
+    page: query.page === undefined ? undefined : Number(query.page),
+    limit: query.limit === undefined ? undefined : Number(query.limit),
+    search: query.search,
+    image: query.image,
+  }));
 }));
 
 // GET /api/transfers/:code - Get single transfer code details and products
 router.get('/transfers/:code', authenticateToken, authorizePermission(...READ_PERMISSIONS.transfers), validate(deleteTransferSchema), asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const code = req.params.code;
-    const [saved] = await orm.select().from(transfers).where(and(eq(transfers.code, code), eq(transfers.isDeleted, 0))).limit(1);
-
-    // Fetch linked products with light projection
-    const allProducts = await orm.select({
-      id: items.id,
-      name: items.name,
-      code: items.code,
-      type: items.type,
-      category: items.category,
-      unit: items.unit,
-      currentStock: items.currentStock,
-      image: items.image,
-      thumbnail: items.thumbnail,
-      weightedAverageCost: items.weightedAverageCost,
-      color: items.color,
-      weight: items.weight,
-      material: items.material,
-      size: items.size
-    })
-    .from(items)
-    .where(and(eq(items.type, 'product'), eq(items.isDeleted, 0)));
-
-    const linkedProds = allProducts.filter(p => extractTransferCode(p.code) === code);
-    // TD-493: a deleted design with no product using its code is gone
-    if (!saved && linkedProds.length === 0) throw new NotFoundError('ترنسفر یافت نشد');
-
-    res.json({
-      data: {
-        id: saved ? saved.id : null,
-        code: code,
-        title: saved?.title || `ترنسفر کد ${code}`,
-        image: saved?.image || '',
-        thumbnail: saved?.thumbnail || '',
-        notes: saved?.notes || '',
-        createdAt: saved?.createdAt || null,
-        updatedAt: saved?.updatedAt || null,
-        productCount: linkedProds.length,
-        products: linkedProds
-      }
-    });
-  } catch (error) {
-    logger.error({ message: 'Error fetching transfer details', error });
-    throw error;
-  }
+  const transfer = await getTransferCode(req.params.code);
+  // TD-493: a deleted design with no product using its code is gone
+  if (!transfer) throw new NotFoundError('ترنسفر یافت نشد');
+  res.json({ data: transfer });
 }));
 
 // POST /api/transfers - Create or Update transfer image/details
