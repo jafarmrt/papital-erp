@@ -62,7 +62,9 @@ async function startServer() {
     const report = await runBootSequence(bootDataSteps());
     // v7.0.40 (audit P2-11): in every environment the server never answers without its schema
     if (report.fatal) {
-      logger.error(`FATAL: startup step "${report.fatal.step}" failed after 5 attempts. Aborting process.`);
+      logger.error(report.fatal.step === 'migrations'
+        ? 'FATAL: Database migrations failed after 5 attempts. Aborting process.'
+        : `FATAL: startup step "${report.fatal.step}" failed after 5 attempts. Aborting process.`);
       process.exit(1);
     }
     logger.info(report.ok
