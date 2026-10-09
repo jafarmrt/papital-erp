@@ -22,6 +22,8 @@ export const RECEIVED_STEP_KEY = 'received';
 export interface RequisitionActor {
   id?: number;
   username?: string;
+  /** v10.0.39 (TD-1132): shown on the orders a conversion writes */
+  fullName?: string;
   role?: string;
   permissions?: string[];
 }

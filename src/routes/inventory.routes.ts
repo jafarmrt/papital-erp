@@ -17,6 +17,7 @@ import { BOM_ALLOCATE_PERMISSIONS, BOM_CONSUME_PERMISSIONS, BOM_RELEASE_PERMISSI
 import { WAC_CORRECTION_PERMISSION } from '../lib/inventoryAudit/wacCorrection.js';
 import { ITEM_COST_READ_PERMISSIONS, RESERVATION_BUYER_READ_PERMISSIONS, reservedItemsReportForAccess } from '../lib/inventory/reservedItemsReport.js';
 import type { AuthUserPayload } from '../types.js';
+import { actorDisplayName } from '../lib/auth/actorDisplayName.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -25,7 +26,6 @@ router.use(authenticateToken);
  * کاربر جاری برای نام لاگ. فیلد قدیمی `name` در payload توکن‌های فعلی وجود ندارد
  * (generateToken آن را نمی‌نویسد)، پس عملاً همیشه username استفاده می‌شود؛ برای حفظ رفتار نگه داشته شده است.
  */
-type LegacyNamedUser = AuthUserPayload & { name?: string };
 
 export const paramsItemIdSchema = z.object({
   params: z.object({
@@ -250,8 +250,8 @@ router.post(
   validate(rebuildStockSchema),
   asyncHandler(async (req, res) => {
     const { itemId } = req.body || {};
-    const user: LegacyNamedUser | undefined = req.user;
-    const userName = user?.name || user?.username || 'مدیر سیستم';
+    const user: AuthUserPayload | undefined = req.user;
+    const userName = actorDisplayName(user, 'مدیر سیستم');
     const userId = user?.id;
 
     if (itemId) {
@@ -306,10 +306,10 @@ router.post(
   authorizePermission(WAC_CORRECTION_PERMISSION),
   validate(correctWacSchema),
   asyncHandler(async (req, res) => {
-    const user: LegacyNamedUser | undefined = req.user;
+    const user: AuthUserPayload | undefined = req.user;
     const result = await InventoryIntegrityService.correctItemWacFromLedger(Number(req.body.itemId), {
       userId: user?.id,
-      user: user?.name || user?.username || 'مدیر سیستم',
+      user: actorDisplayName(user, 'مدیر سیستم'),
     });
     res.json({
       success: true,
@@ -327,8 +327,8 @@ router.post(
   idempotency({ scope: 'inventory' }),
   validate(transferStockSchema),
   asyncHandler(async (req, res) => {
-    const user: LegacyNamedUser | undefined = req.user;
-    const userName = user?.name || user?.username || 'مدیر سیستم';
+    const user: AuthUserPayload | undefined = req.user;
+    const userName = actorDisplayName(user, 'مدیر سیستم');
     const result = await InventoryIntegrityService.executeWarehouseTransfer({
       ...req.body,
       user: userName,
@@ -432,12 +432,12 @@ router.post(
   validate(projectAllocateSchema),
   asyncHandler(async (req, res) => {
     const { projectId, allocations } = req.body;
-    const user: LegacyNamedUser | undefined = req.user;
+    const user: AuthUserPayload | undefined = req.user;
     const result = await InventoryIntegrityService.allocateMaterialsForProject({
       projectId: Number(projectId),
       allocations,
       userId: user?.id,
-      username: user?.name || user?.username || 'مدیر سیستم'
+      username: actorDisplayName(user, 'مدیر سیستم')
     });
 
     await logActivity({
@@ -469,10 +469,10 @@ router.post(
       throw new BadRequestError('شناسه تخصیص نامعتبر است.');
     }
 
-    const user: LegacyNamedUser | undefined = req.user;
+    const user: AuthUserPayload | undefined = req.user;
     const updated = await InventoryIntegrityService.consumeAllocation(id, {
       userId: user?.id,
-      username: user?.name || user?.username || 'سیستم'
+      username: actorDisplayName(user)
     });
 
     await logActivity({
@@ -507,11 +507,11 @@ router.post(
     }
 
     const { reason } = req.body || {};
-    const user: LegacyNamedUser | undefined = req.user;
+    const user: AuthUserPayload | undefined = req.user;
     const updated = await InventoryIntegrityService.releaseAllocation(id, {
       reason,
       userId: user?.id,
-      username: user?.name || user?.username || 'سیستم'
+      username: actorDisplayName(user)
     });
 
     await logActivity({
