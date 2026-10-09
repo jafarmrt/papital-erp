@@ -107,6 +107,8 @@ export interface UpdateDocumentInput {
   /** v7.0.63 (TD-198): نرخ تسعیر سند غیرریالی */
   exchangeRate?: number | string | null;
   exchange_rate?: number | string | null;
+  /** v10.0.40 (TD-913): دلیل سفارش بیش از درخواست، برای ویرایش سفارش تدارکات */
+  overOrderReason?: string;
   /** v9.0.323 (TD-776): پرونده فروش سند (`null` یا رشته خالی: قطع پیوند)؛ درون تراکنش ویرایش و زیر قفل پرونده */
   crmLeadId?: number | string | null;
   /** v9.0.336 (TD-778): طرف حساب (`null` یا رشته خالی: بی طرف حساب)؛ فرستاده نشود، با نام خریدار تازه دوباره یافته می‌شود */

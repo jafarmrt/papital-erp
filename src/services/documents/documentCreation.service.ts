@@ -17,6 +17,7 @@ import { sortIdsForLocking } from '../../lib/lockOrder.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { DocumentRefNumberService } from './documentRefNumber.service.js';
 import { assertManualRefAllowed } from './documentRecordRule.js';
+import { editLinkedOrder, lockLinkedRequisition } from './linkedOrderHooks.js';
 import { isAutoRefNumber } from '../../lib/documents/documentRefRules.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
@@ -86,6 +87,8 @@ export class DocumentCreationService {
     const requestedPartyId = parseDocumentPartyId(body.partyId);
 
     const execute = async (tx: DbExecutor): Promise<DocumentAuditChange> => {
+      // v10.0.40 (TD-913): درخواست خرید سفارشی که سطرهایش ویرایش می‌شود پیش از ردیف سند قفل می‌شود (ترتیب تبدیل و تحویل)
+      const orderRequisitionId = Array.isArray(docLines) ? await lockLinkedRequisition(tx, id) : null;
       // v9.0.323 (TD-776): پیوند پرونده فروش درون همین تراکنش؛ پرونده‌ها پیش از ردیف سند قفل و سنجیده می‌شوند (۴۲۲ پیش از
       // هر نوشتن). پیش‌فاکتور بودن از نوع سند و وضعیت پس از این ویرایش است.
       let leadLock: LockedDocumentLeads | null = null;
@@ -217,6 +220,16 @@ export class DocumentCreationService {
         : { partyId: existingDoc.partyId ?? null, buyerName: existingDoc.buyerName ?? '' };
       if (returnInvoiceId !== null && requestedPartyId !== undefined) await assertReturnPartyOfInvoice(tx, returnInvoiceId, party.partyId);
 
+      // v10.0.40 (TD-913، تصمیم ت۹ الف): ویرایش سفارش وصل همان قاعده «سفارش بیش از درخواست با دلیل» را دارد و مقدار
+      // سفارش‌شده درخواست را با سطرهای تازه دوباره می‌سازد؛ دلیل در یادداشت سند هم می‌ماند
+      const orderEdit = orderRequisitionId !== null && Array.isArray(lines)
+        ? await editLinkedOrder(tx, {
+          documentId: id, requisitionId: orderRequisitionId, newLines: lines.map(l => ({ itemId: Number(l.itemId), quantity: String(l.quantity) })),
+          overOrderReason: body.overOrderReason, user: user || existingDoc.user || 'سیستم',
+        })
+        : null;
+      const nextNotes = notes !== undefined ? notes : existingDoc.notes;
+
       // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
       const storedAttachments = body.attachments !== undefined
         ? await AttachmentStorageService.normalizeForRecord(tx, 'document', id, body.attachments, user || existingDoc.user || '')
@@ -228,7 +241,7 @@ export class DocumentCreationService {
         ...(nextRefFiscalYear !== undefined ? { refFiscalYear: nextRefFiscalYear } : {}),
         date: newDocDate ?? existingDoc.date,
         user: user || existingDoc.user,
-        notes: notes !== undefined ? notes : existingDoc.notes,
+        notes: orderEdit?.note ? [nextNotes, orderEdit.note].filter(Boolean).join('\n') : nextNotes,
         partyId: party.partyId,
         buyerName: party.buyerName,
         buyerCity: buyer_city !== undefined ? buyer_city : existingDoc.buyerCity,
