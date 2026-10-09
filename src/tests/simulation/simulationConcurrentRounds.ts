@@ -11,7 +11,7 @@ import { isoDay, type OpOutcome } from './simulationOperations.js';
  * v10.0.36 (I-03): the simulator's steps run in rounds of `users` operations at once, as that many people using the
  * workshop at the same moment would. A round's operations are picked with the seed, then started together; their order
  * on the database is not fixed. A business refusal (`AppError`) is an allowed outcome, a deadlock or any other error is a
- * finding, and reservations stay within stock after every round with a sellable-gated operation (I19; since v10.0.39,
+ * finding, and reservations stay within stock after every round with a sellable-gated operation (I19; since v10.0.40,
  * TD-1146, only an excess the round itself created or raised, in a round without a stock count or a void). The invariants
  * run after every `checkEvery` rounds and after the last one.
  */
@@ -36,7 +36,7 @@ export interface ConcurrentRoundsContext {
 interface PlannedStep { step: number; op: SimOperation; day: number; backDay: number; permitted: boolean }
 
 /**
- * v10.0.39 (TD-1146): operations that may lower stock below a reservation without the sellable gate (TD-819). A round in
+ * v10.0.40 (TD-1146): operations that may lower stock below a reservation without the sellable gate (TD-819). A round in
  * which one of them succeeds is not checked for I19, because its order against the round's guarded operations is not
  * fixed; the excess it leaves is the baseline of the next round.
  */

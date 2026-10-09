@@ -37,7 +37,7 @@ async function run(rounds: Array<{ ops: SimOperation[]; leaves: Array<{ itemId: 
   return findings;
 }
 
-describe('v10.0.39 (TD-1146): the concurrent simulator reports I19 only for a reservation the round itself pushed over stock', () => {
+describe('v10.0.40 (TD-1146): the concurrent simulator reports I19 only for a reservation the round itself pushed over stock', () => {
   it('does not report a round whose stock count or void lowered stock below a reservation (TD-819)', async () => {
     over.now = [];
     expect(await run([{ ops: ['remittance', 'stock_count'], leaves: [{ itemId: 1, stock: '2', reserved: '3' }] }])).toEqual([]);
