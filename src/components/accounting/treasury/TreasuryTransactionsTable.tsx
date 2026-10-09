@@ -8,6 +8,7 @@ import {
   Check,
   Paperclip,
   AlertTriangle,
+  Link2,
   ChevronRight,
   ChevronLeft,
   ArrowDownLeft,
@@ -20,6 +21,7 @@ import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { treasuryMethodLabel, treasuryPartyTypeLabel } from '../../../lib/treasury/treasuryExport';
 import type { BankAccount, TreasuryTransaction, FinancialAttachment } from '../../../types';
 import { personnelPurposeLabel } from '../../../lib/treasury/partyPurpose';
+import { canRelinkTreasuryRow } from '../../../lib/treasury/treasuryRelink';
 
 interface TreasuryTransactionsTableProps {
   transactions: TreasuryTransaction[];
@@ -49,6 +51,8 @@ interface TreasuryTransactionsTableProps {
   onVoidTransaction: (tx: TreasuryTransaction) => void;
   /** v9.0.272 (TD-779): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») */
   onDetachDocument?: (tx: TreasuryTransaction) => void;
+  /** v10.0.40 (TD-1122): انتقال دریافت یا پرداخت به سند فعال دیگر همان طرف حساب */
+  onRelinkDocument?: (tx: TreasuryTransaction) => void;
 }
 
 export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps> = React.memo(({
@@ -78,6 +82,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
   onViewAttachments,
   onVoidTransaction,
   onDetachDocument,
+  onRelinkDocument,
 }) => {
   const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
@@ -367,6 +372,19 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                               className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition cursor-pointer"
                             >
                               <Unlink size={14} />
+                            </button>
+                          ) : null}
+                          {onRelinkDocument && canRelinkTreasuryRow({
+                            type: tx.type, partyType: tx.partyType ?? tx.party_type, status: tx.status,
+                            reversalOfId: tx.reversalOfId ?? tx.reversal_of_id, payrollId: tx.payrollId ?? tx.payroll_id,
+                          }) ? (
+                            <button
+                              onClick={() => onRelinkDocument(tx)}
+                              title="انتقال به سند دیگر"
+                              aria-label="انتقال به سند دیگر"
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition cursor-pointer"
+                            >
+                              <Link2 size={14} />
                             </button>
                           ) : null}
                           <button

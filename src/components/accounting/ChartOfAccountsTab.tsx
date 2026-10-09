@@ -5,7 +5,8 @@ import { formatPersianPrice, errorMessageOf } from '../../utils';
 import type { Account, AccountLevel, AccountType, AccountNature } from '../../types';
 import toast from 'react-hot-toast';
 import { ACCOUNT_CODE_FORMAT_MESSAGE, isValidAccountCode, normalizeAccountCode } from '../../lib/accounting/accountCode';
-import { accountDeleteConfirmText } from '../../lib/accounting/accountDeleteText';
+import { accountActiveConfirmText, accountDeleteConfirmText } from '../../lib/accounting/accountDeleteText';
+import { AccountActiveToggle, InactiveAccountBadge } from './AccountActiveToggle';
 import { useIsSystemAdmin } from '../../contexts/AuthContext';
 
 interface ChartOfAccountsTabProps {
@@ -154,6 +155,17 @@ export function ChartOfAccountsTab({
     }
   };
 
+  // v10.0.41 (TD-1123): کنار گذاشتن حساب سندخورده با غیرفعال کردن، و بازگرداندن آن
+  const handleToggleActive = async (acc: Account, next: boolean) => {
+    if (!(await confirmAction({ title: next ? 'فعال کردن حساب' : 'غیرفعال کردن حساب', message: accountActiveConfirmText(acc, next) }))) return;
+    try {
+      await onUpdateAccount(acc.id, { isActive: next });
+      toast.success(next ? 'حساب دوباره فعال شد' : 'حساب غیرفعال شد');
+    } catch (err) {
+      toast.error(errorMessageOf(err) || 'خطا در تغییر وضعیت حساب');
+    }
+  };
+
   // Filtered accounts for table view & search
   const filteredAccounts = useMemo(() => {
     return safeAccounts.filter(acc => {
@@ -228,6 +240,7 @@ export function ChartOfAccountsTab({
             <span className="text-slate-800 dark:text-slate-200 font-medium">
               {node.name}
             </span>
+            <InactiveAccountBadge account={node} />
 
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${levelLabels[node.level].badge}`}>
               {levelLabels[node.level].label}
@@ -261,6 +274,7 @@ export function ChartOfAccountsTab({
               >
                 <Edit3 className="w-4 h-4" />
               </button>
+              <AccountActiveToggle account={node} onToggle={(a, next) => { void handleToggleActive(a, next); }} />
               {node.isSystem !== 1 && (
                 <button
                   onClick={() => handleDelete(node)}
@@ -442,7 +456,7 @@ export function ChartOfAccountsTab({
                         {acc.code}
                       </td>
                       <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200">
-                        {acc.name}
+                        {acc.name} <InactiveAccountBadge account={acc} />
                       </td>
                       <td className="py-3 px-4">
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${levelLabels[acc.level].badge}`}>
@@ -480,6 +494,7 @@ export function ChartOfAccountsTab({
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
+                          <AccountActiveToggle account={acc} small onToggle={(a, next) => { void handleToggleActive(a, next); }} />
                           {acc.isSystem !== 1 && (
                             <button
                               onClick={() => handleDelete(acc)}

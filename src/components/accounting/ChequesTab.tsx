@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3 } from 'lucide-react';
 import * as xlsx from 'xlsx';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits, toPersianDigits } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
 import { useRialDisplay } from '../../hooks/useAppCurrency';
@@ -246,7 +246,7 @@ export function ChequesTab({
   };
 
   const handleDelete = async (cheque: Cheque) => {
-    if (!(await confirmAction({ title: 'حذف چک', message: `آیا از حذف چک شماره ${cheque.chequeNumber} (${cheque.bankName}) اطمینان دارید؟` }))) return;
+    if (!(await confirmAction({ title: 'حذف چک', message: `آیا از حذف چک شماره ${toPersianDigits(cheque.chequeNumber)} (${cheque.bankName}) اطمینان دارید؟` }))) return;
     try {
       await onDeleteCheque(cheque.id);
       toast.success('چک حذف شد');
@@ -406,7 +406,7 @@ export function ChequesTab({
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-teal-200 dark:border-teal-800 p-4 space-y-2">
           <h4 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
             <ShieldCheck size={14} className="text-teal-600" />
-            آشتی‌سنجی دفتر چک با دفاتر دوبل
+            آشتی‌سنجی دفتر چک با دفاتر حسابداری
           </h4>
           <table className="w-full text-right border-collapse text-[11px]">
             <thead className="bg-slate-50 dark:bg-slate-700/50">
@@ -548,13 +548,13 @@ export function ChequesTab({
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <div className="font-mono font-bold text-slate-900 dark:text-white">
-                            {c.chequeNumber}
+                            {toPersianDigits(c.chequeNumber)}
                           </div>
                           {c.attachments && c.attachments.length > 0 && (
                             <FinancialAttachmentBadge
                               count={c.attachments.length}
                               onClick={() => setViewingAttachments({
-                                title: `تصاویر و مدارک پیوست چک شماره ${c.chequeNumber} (${c.bankName})`,
+                                title: `تصاویر و مدارک پیوست چک شماره ${toPersianDigits(c.chequeNumber)} (${c.bankName})`,
                                 attachments: c.attachments || []
                               })}
                             />
@@ -562,7 +562,7 @@ export function ChequesTab({
                         </div>
                         {c.sayadNumber && (
                           <div className="text-[10px] font-mono text-slate-400 tracking-wider mt-0.5">
-                            صیاد: {c.sayadNumber}
+                            صیاد: {toPersianDigits(c.sayadNumber)}
                           </div>
                         )}
                       </td>
@@ -966,7 +966,7 @@ export function ChequesTab({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold text-slate-900 dark:text-white text-base mb-1">
-              تغییر وضعیت چک شماره {statusModalCheque.chequeNumber}
+              تغییر وضعیت چک شماره {toPersianDigits(statusModalCheque.chequeNumber)}
             </h3>
             <p className="text-xs text-slate-500 mb-4">
               مبلغ: {rial.money(statusModalCheque.amount, statusModalCheque.currency)} • سررسید: {formatPersianDate(statusModalCheque.dueDate)}
@@ -1080,7 +1080,7 @@ export function ChequesTab({
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-slate-900 dark:text-white text-base">
-                سجل و تاریخچه گردش چک {historyModalCheque.chequeNumber}
+                سجل و تاریخچه گردش چک {toPersianDigits(historyModalCheque.chequeNumber)}
               </h3>
               <button
                 onClick={() => setHistoryModalCheque(null)}

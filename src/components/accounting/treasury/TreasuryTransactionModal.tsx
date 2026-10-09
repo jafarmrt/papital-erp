@@ -283,7 +283,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
             <div>
               <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 <span>حساب بانکی / صندوق مرتبط *</span>
-                <HelpBadge text="حساب یا صندوقی که وجه از آن کسر یا به آن واریز می‌شود. برای صدور سند دوبل باید به حساب معین چارت متصل باشد." />
+                <HelpBadge text="حساب یا صندوقی که وجه از آن کسر یا به آن واریز می‌شود. برای صدور سند حسابداری باید به حساب معین چارت متصل باشد." />
               </label>
               <select
                 required
@@ -476,8 +476,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
               />
               <label htmlFor="createVoucher" className="text-xs text-slate-700 dark:text-slate-300 font-medium cursor-pointer flex items-center gap-1.5">
-                <span>صدور خودکار سند حسابداری دوبل برای این تراکنش</span>
-                <HelpBadge text="با فعال بودن این گزینه، یک سند دوبل حسابداری متوازن با سرفصل بانک/صندوق و طرف‌حساب ایجاد می‌گردد. بدون سند فقط برای مانده‌های افتتاحیه است و در بررسی سلامت مالی فهرست می‌شود." />
+                <span>صدور خودکار سند حسابداری برای این تراکنش</span>
+                <HelpBadge text="با فعال بودن این گزینه، یک سند حسابداری متوازن با سرفصل بانک/صندوق و طرف‌حساب ایجاد می‌گردد. بدون سند فقط برای مانده‌های افتتاحیه است و در بررسی سلامت مالی فهرست می‌شود." />
               </label>
             </div>
             )}
@@ -498,7 +498,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[11px] font-black text-indigo-800 dark:text-indigo-300 flex items-center gap-1">
                     <ShieldCheck size={13} />
-                    پیش‌نمایش سند دوبل (همان چیزی که صادر می‌شود)
+                    پیش‌نمایش سند حسابداری (همان چیزی که صادر می‌شود)
                   </span>
                   {isPreviewLoading && <span className="text-[10px] text-slate-400">در حال محاسبه...</span>}
                 </div>

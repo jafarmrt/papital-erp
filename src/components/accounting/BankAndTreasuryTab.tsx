@@ -14,7 +14,7 @@ import { errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { treasuryExportFileName, treasuryExportRows } from '../../lib/treasury/treasuryExport';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { useDebounce } from '../../hooks/useDebounce';
-import { fetchTreasuryTransactions, useTreasuryDocumentDetach, useTreasuryTransactionPageQuery, type TreasuryListFilters } from '../../hooks/accounting/useTreasuryQueries';
+import { fetchTreasuryTransactions, useTreasuryDocumentDetach, useTreasuryDocumentRelink, useTreasuryTransactionPageQuery, type TreasuryListFilters } from '../../hooks/accounting/useTreasuryQueries';
 import { BankReconciliationModal } from './reconciliation/BankReconciliationModal';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
 
@@ -27,6 +27,7 @@ import { BankAccountModal } from './treasury/BankAccountModal';
 import { TreasuryTransactionModal } from './treasury/TreasuryTransactionModal';
 import { TreasuryTransferModal } from './treasury/TreasuryTransferModal';
 import { TreasuryVoidModal } from './treasury/TreasuryVoidModal';
+import { TreasuryRelinkModal } from './treasury/TreasuryRelinkModal';
 import { CashFlowModal } from './treasury/CashFlowModal';
 
 import type { 
@@ -176,7 +177,7 @@ export function BankAndTreasuryTab({
   const handleSaveTransfer = async (data: any) => {
     try {
       await onCreateTreasuryTransfer(data);
-      toast.success('انتقال بین‌بانکی با سند دوبل ثبت شد');
+      toast.success('انتقال بین‌بانکی با سند حسابداری ثبت شد');
       setIsTransferModalOpen(false);
     } catch (err: any) {
       toast.error(err?.message || 'خطا در ثبت انتقال');
@@ -211,6 +212,19 @@ export function BankAndTreasuryTab({
     }
   };
 
+  // v10.0.40 (TD-1122): انتقال دریافت یا پرداخت به سند فعال دیگر همان طرف حساب
+  const relinkDocument = useTreasuryDocumentRelink();
+  const [relinkTarget, setRelinkTarget] = useState<TreasuryTransaction | null>(null);
+  const handleRelinkDocument = async (id: number, documentId: number) => {
+    try {
+      await relinkDocument.mutateAsync({ id, documentId });
+      toast.success('تراکنش به سند انتخابی منتقل شد');
+    } catch (err: unknown) {
+      toast.error(errorMessageOf(err) || 'خطا در انتقال تراکنش به سند دیگر');
+      throw err;
+    }
+  };
+
   const handleExportExcel = useCallback(async () => {
     let rows: TreasuryTransaction[];
     try {
@@ -240,7 +254,7 @@ export function BankAndTreasuryTab({
             بانک، صندوق و خزانه‌داری
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            مدیریت جامع حساب‌های بانکی، صندوق نقد کارگاه، دستگاه‌های کارتخوان و جریان وجوه نقد با تطبیق دوبل لحظه‌ای
+            مدیریت جامع حساب‌های بانکی، صندوق نقد کارگاه، دستگاه‌های کارتخوان و جریان وجوه نقد با تطبیق با دفاتر حسابداری لحظه‌ای
           </p>
         </div>
 
@@ -341,6 +355,7 @@ export function BankAndTreasuryTab({
         onViewAttachments={(info) => setViewingAttachments(info)}
         onVoidTransaction={(tx) => setVoidTarget(tx)}
         onDetachDocument={(tx) => { void handleDetachDocument(tx); }}
+        onRelinkDocument={setRelinkTarget}
       />
 
       {/* Bank Reconciliation Modal */}
@@ -375,6 +390,8 @@ export function BankAndTreasuryTab({
         onClose={() => setVoidTarget(null)}
         onConfirm={handleConfirmVoid}
       />
+
+      <TreasuryRelinkModal target={relinkTarget} onClose={() => setRelinkTarget(null)} onConfirm={handleRelinkDocument} />
 
       {/* Define / Edit Bank Account Modal */}
       <BankAccountModal

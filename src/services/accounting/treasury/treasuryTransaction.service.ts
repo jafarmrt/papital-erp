@@ -130,7 +130,7 @@ export class TreasuryTransactionService {
     if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
 
     if (!bank.accountId) {
-      warnings.push('این حساب بانکی/صندوق به چارت حساب‌ها متصل نیست — سند دوبل صادر نخواهد شد. از ویرایش حساب، کدینگ معین را متصل کنید.');
+      warnings.push('این حساب بانکی/صندوق به چارت حساب‌ها متصل نیست — سند حسابداری صادر نخواهد شد. از ویرایش حساب، کدینگ معین را متصل کنید.');
     }
 
     if (bank.currency && (data.currency || bank.currency) !== bank.currency) {

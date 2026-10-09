@@ -458,7 +458,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
             <div className="flex items-center gap-2">
               <ShieldCheck size={18} className="text-emerald-600" />
               <div>
-                <span className="text-xs font-bold text-slate-700 block">صدور خودکار سند حسابداری دوبل</span>
+                <span className="text-xs font-bold text-slate-700 block">صدور خودکار سند حسابداری</span>
                 <span className="text-[11px] text-slate-500">
                   ثبت همزمان سند بستانکاری مشتری/فروشنده و بدهکاری بانک یا صندوق
                 </span>

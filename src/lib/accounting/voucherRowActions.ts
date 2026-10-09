@@ -81,3 +81,16 @@ export function voucherConfirmTexts(kind: VoucherConfirmKind, v: VoucherRowFacts
       };
   }
 }
+
+/**
+ * v10.0.38 (TD-1120): کار اصلی ستون اقدام ردیف سند. نشان «قفل دفاتر» فقط برای سند دائم است؛ پیش‌تر هر سندی که دکمه
+ * تأیید یا قطعی‌سازی نداشت (پیش‌نویس یا تأییدشده برای کاربری بی آن مجوز) هم «قفل دفاتر» و «سند دائم» نشان می‌داد.
+ */
+export type VoucherPrimaryAction = 'approve' | 'finalize' | 'locked' | null;
+
+export function voucherPrimaryAction(status: string, access: { canApprove: boolean; canFinalize: boolean }): VoucherPrimaryAction {
+  if (status === 'permanent') return 'locked';
+  if (status === 'draft') return access.canApprove ? 'approve' : null;
+  if (status === 'approved') return access.canFinalize ? 'finalize' : null;
+  return null;
+}

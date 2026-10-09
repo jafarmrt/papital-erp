@@ -148,7 +148,7 @@ export const createVoucherSchema = z.object({
     referenceNumber: z.string().optional().refine(ref => !isReservedVoucherReference(ref), RESERVED_REFERENCE_MESSAGE),
     currency: manualVoucherCurrency,
     attachments: z.array(z.any()).optional(),
-    items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است')
+    items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند حسابداری الزامی است')
   }).refine((data) => isVoucherBalanced(data.items, data.currency), {
     message: 'سند حسابداری تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
     path: ['items']
@@ -166,7 +166,7 @@ export const updateVoucherSchema = z.object({
     voucherType: manualVoucherType.optional(),
     currency: manualVoucherCurrency,
     attachments: z.array(z.any()).optional(),
-    items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است').optional(),
+    items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند حسابداری الزامی است').optional(),
     // v9.0.295 (TD-555، B03-13): نسخه‌ای که ویرایشگر خوانده است؛ نسخه کهنه ۴۰۹ OCC_CONFLICT. پیش‌تر ذخیره دوم دو حسابدار
     // ذخیره اول را بی‌صدا پاک می‌کرد
     version: z.coerce.number({ message: 'نسخه سند حسابداری ارسال نشده است؛ صفحه را بازخوانی کنید و دوباره ویرایش کنید.' })
@@ -388,6 +388,13 @@ export const reconcileSchema = z.object({
 
 // V1.4.0: ابطال تراکنش خزانه با سند معکوس (DB-009)
 /** v9.0.272 (TD-779): سند دریافت یا پرداخت خزانه؛ null یعنی «علی‌الحساب» */
+/** v10.0.40 (TD-1122): سندهایی که ردیف خزانه به آن‌ها منتقل می‌شود */
+export const treasuryRelinkOptionsSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, 'شناسه تراکنش باید عددی باشد')
+  }),
+});
+
 export const relinkTreasuryDocumentSchema = z.object({
   params: z.object({
     id: z.string().regex(/^\d+$/, 'شناسه تراکنش باید عددی باشد')

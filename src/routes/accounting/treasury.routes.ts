@@ -9,6 +9,7 @@ import { AccountingService } from '../../services/accounting.service.js';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../services/accounting/treasury/noVoucherTreasury.js';
 import { getBankAccountOptions } from '../../services/accounting/treasury/bankAccountOptions.js';
 import { relinkTreasuryDocument } from '../../services/accounting/treasury/treasuryDocumentRelink.js';
+import { listTreasuryRelinkOptions } from '../../services/accounting/treasury/treasuryRelinkOptions.js';
 import { choosableContraAccounts } from '../../services/accounting/treasury/partyContraAccount.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
@@ -25,6 +26,7 @@ import {
   reconcileSchema,
   voidTreasuryTxSchema,
   relinkTreasuryDocumentSchema,
+  treasuryRelinkOptionsSchema,
   chequesQuerySchema,
   createChequeSchema,
   updateChequeStatusSchema,
@@ -260,6 +262,11 @@ router.post('/accounting/treasury/:id/void', authorizePermission('accounting.tre
     ipAddress: req.ip || '',
   });
   res.json(reversal);
+}));
+
+// v10.0.40 (TD-1122): سندهای هم‌طرف، هم‌سو و هم‌ارزی که دریافت یا پرداخت به آن‌ها منتقل می‌شود (پنجره «انتقال به سند دیگر»)
+router.get('/accounting/treasury/:id/document-options', authorizePermission('accounting.treasury'), validate(treasuryRelinkOptionsSchema), asyncHandler(async (req, res) => {
+  res.json(await listTreasuryRelinkOptions(Number(req.params.id)));
 }));
 
 // v9.0.272 (TD-779، ت۴ الف): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») یا وصل کردن به سند فعال دیگر
