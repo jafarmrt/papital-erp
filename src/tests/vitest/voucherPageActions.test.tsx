@@ -62,6 +62,13 @@ describe('voucher row menu follows the server rules (TD-568, B03-26)', () => {
     expect(onAction).toHaveBeenCalledWith('reverse', expect.objectContaining({ id: 5 }));
   });
 
+  it('offers back to draft only to a holder of the approve key (TD-965)', () => {
+    expect(voucherRowActions({ status: 'approved' }, { canApprove: false })).toEqual(['reverse', 'correct', 'workflow']);
+    expect(voucherRowActions({ status: 'approved' }, { canApprove: true })).toEqual(['revert_to_draft', 'reverse', 'correct', 'workflow']);
+    render(<VoucherRowMenu voucher={voucher({ status: 'approved' })} onAction={vi.fn()} canApprove={false} />);
+    expect(screen.getAllByRole('menuitem').map(b => b.textContent)).not.toContain('بازگشت به پیش‌نویس');
+  });
+
   it('shows only the lock note and the workflow for an invoice voucher', () => {
     render(<VoucherRowMenu voucher={voucher({ status: 'draft', sourceKind: 'document' })} onAction={vi.fn()} />);
     expect(screen.getAllByRole('menuitem').map(b => b.textContent)).toEqual(['گردش کار تأیید سند']);
