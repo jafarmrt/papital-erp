@@ -4,6 +4,8 @@ import { journalVouchers } from '../../db/schema.js';
 import { registerWorkflowTransitionAction, workflowEntityNumericId, type WorkflowTransitionEvent } from '../workflow/workflowTransitionActions.js';
 import { VoucherService } from './voucher.service.js';
 
+export const VOUCHER_APPROVE_PERMISSION = 'accounting.vouchers_approve';
+
 const VOUCHER_STATUS_OF_STEP = new Map<string, 'draft' | 'approved' | 'permanent'>([
   ['draft', 'draft'],
   ['approved', 'approved'],
@@ -31,11 +33,25 @@ async function voucherExists(tx: DbExecutor, entityId: string): Promise<boolean>
   return !!row;
 }
 
+/**
+ * v10.0.21 (TD-965، طرح حقوق ت۹): تأیید، قطعی کردن و برگرداندن سند تأییدشده به پیش‌نویس `accounting.vouchers_approve`
+ * می‌خواهد، مثل مسیرهای صفحه اسناد؛ بازگشایی سند ردشده به پیش‌نویس همان `accounting.vouchers` ثبت و ویرایش است
+ */
+export async function voucherStepPermissions(toStateKey: string, tx: DbExecutor, entityId: string): Promise<string[]> {
+  const status = VOUCHER_STATUS_OF_STEP.get(toStateKey);
+  if (!status) return [];
+  if (status !== 'draft') return [VOUCHER_APPROVE_PERMISSION];
+  const id = workflowEntityNumericId(entityId);
+  if (id === undefined) return ['accounting.vouchers'];
+  const [row] = await tx.select({ status: journalVouchers.status }).from(journalVouchers).where(eq(journalVouchers.id, id));
+  return row && row.status !== 'draft' ? [VOUCHER_APPROVE_PERMISSION] : ['accounting.vouchers'];
+}
+
 export function registerVoucherWorkflowAction(): void {
   registerWorkflowTransitionAction(['journal_voucher', 'voucher'], {
     run: applyVoucherWorkflowStep,
     entityExists: voucherExists,
     // v9.0.35 (TD-445، ت۳): تغییر وضعیت سند حسابداری همان مجوز `PUT /accounting/vouchers/:id/status` را می‌خواهد
-    requiredPermissions: (t) => (VOUCHER_STATUS_OF_STEP.has(t.toStateKey) ? ['accounting.vouchers'] : []),
+    requiredPermissions: (t, entity) => voucherStepPermissions(t.toStateKey, entity.tx, entity.entityId),
   });
 }

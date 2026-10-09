@@ -19,13 +19,15 @@ export interface VoucherRowFacts {
   referenceNumber?: string | null;
 }
 
-export function voucherRowActions(v: VoucherRowFacts): VoucherRowAction[] {
+/** v10.0.21 (TD-965): `canApprove` = دارنده `accounting.vouchers_approve`؛ بی آن بازگشت به پیش‌نویس پیشنهاد نمی‌شود */
+export function voucherRowActions(v: VoucherRowFacts, access: { canApprove?: boolean } = {}): VoucherRowAction[] {
+  const canApprove = access.canApprove ?? true;
   const locked = Boolean(voucherSourceLabel(v.sourceKind)) || (v.sourceFiscalYear !== null && v.sourceFiscalYear !== undefined);
   const reversal = isReversalReference(v.referenceNumber);
   const actions: VoucherRowAction[] = [];
   if (!locked) {
     if (v.status === 'draft') actions.push('edit', 'delete');
-    if (v.status === 'approved') actions.push('revert_to_draft');
+    if (v.status === 'approved' && canApprove) actions.push('revert_to_draft');
     if (!reversal && (v.status === 'approved' || v.status === 'permanent')) actions.push('reverse');
     if (!reversal && v.status === 'approved') actions.push('correct');
   }

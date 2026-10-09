@@ -31,7 +31,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'personnel.view', 'personnel.manage', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll',
       'piecework.pay', 'personnel.view_sensitive', 'payroll.view_sensitive', 'pending_materials.view', 'pending_materials.create', 'pending_materials.approve', 'pending_materials.delete', 'procurement.view',
       'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve', 'accounting.view', 'accounting.vouchers',
-      'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports', 'woocommerce.view', 'woocommerce.manage',
+      'accounting.vouchers_approve', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports', 'woocommerce.view', 'woocommerce.manage',
       'audit_logs.view', 'settings.manage',
     ],
   },
@@ -40,7 +40,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     name: 'مدیر ارشد مالی',
     description: 'دسترسی کامل به کدینگ حساب‌ها، اسناد دوبل، خزانه‌داری، چک‌های صیادی، صورت‌های مالی، قیمت‌گذاری و حقوق پرسنل',
     permissions: [
-      'accounting.view', 'accounting.vouchers', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
+      'accounting.view', 'accounting.vouchers', 'accounting.vouchers_approve', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
       'products.view', 'products.edit_price', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
       'documents.finalize', 'customers.view', 'customers.manage', 'workflow.view', 'workflow.approve', 'events.view',
       'personnel.view', 'piecework.view', 'piecework.payroll', 'daily_logs.view', 'daily_logs.create', 'reports.view',

@@ -166,7 +166,9 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     category: 'حسابداری، اسناد مالی و خزانه‌داری',
     permissions: [
       { key: 'accounting.view', title: 'مشاهده اسناد و دفاتر حسابداری', description: 'دسترسی به اسناد دوبل، دفتر روزنامه، کل، معین و گزارش‌ها' },
-      { key: 'accounting.vouchers', title: 'صدور و ویرایش اسناد حسابداری', description: 'امکان ثبت اسناد دوبل مالی، اصلاح و تأیید اسناد', requires: ['accounting.view'] },
+      { key: 'accounting.vouchers', title: 'صدور و ویرایش اسناد حسابداری', description: 'ثبت، ویرایش و حذف پیش‌نویس، سند برگشتی و سند اصلاحی', requires: ['accounting.view'] },
+      // v10.0.21 (TD-965، طرح حقوق ت۹): تأیید جدا از ثبت؛ مهاجرت 0096 آن را به هر نقش دارای accounting.vouchers داد
+      { key: 'accounting.vouchers_approve', title: 'تأیید و قطعی کردن سند حسابداری', description: 'تأیید سند پیش‌نویس، بازگرداندن سند تأییدشده به پیش‌نویس و قطعی کردن سند؛ ثبت‌کننده سند دستی آن را تأیید نمی‌کند', requires: ['accounting.vouchers'] },
       { key: 'accounting.coa', title: 'مدیریت کدینگ حساب‌ها', description: 'تعریف، ویرایش و حذف حساب‌های گروه، کل، معین و تفصیلی', requires: ['accounting.view'] },
       { key: 'accounting.treasury', title: 'عملیات خزانه‌داری (دریافت و پرداخت)', description: 'ثبت و پیگیری نقدینگی، حساب‌های بانکی، پوز و حواله‌ها', requires: ['accounting.view'] },
       { key: 'accounting.cheques', title: 'مدیریت دفتر چک صیادی', description: 'ثبت چک‌های دریافتی/پرداختی، تغییر وضعیت وصول، برگشت و واگذاری', requires: ['accounting.view'] },
