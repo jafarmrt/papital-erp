@@ -3,12 +3,34 @@ import { WorkflowPreset } from '../../constants/presets';
 import { ProductRow, ProjectStage } from './types';
 import { extractDateString } from '../../utils';
 
+/**
+ * v10.0.44 (TD-1145): فرم پروژه تازه بی الگو و با یک مرحله باز می‌شود و الگوی مراحل فقط با انتخاب کاربر اعمال می‌شود؛
+ * پیش‌تر نخستین الگوی تنظیمات خودبه‌خود اعمال می‌شد و گزینه «بدون الگو» هم نبود.
+ */
+export const NEW_PROJECT_STAGE_TITLE = 'مرحله اول تولید';
+
+export function newProjectStages(): ProjectStage[] {
+  return [{ title: NEW_PROJECT_STAGE_TITLE, assigned_personnel: [], required_resources: [] }];
+}
+
+/** مراحل الگوی انتخاب‌شده؛ برای «بدون الگو» یا الگوی ناموجود null، یعنی مراحل فعلی فرم دست نمی‌خورند. */
+export function presetStages(presetId: string, availablePresets: WorkflowPreset[]): ProjectStage[] | null {
+  const found = presetId ? availablePresets.find(p => p.id === presetId) : undefined;
+  if (!found) return null;
+  return found.stages.map(stg => ({
+    title: typeof stg === 'string' ? stg : stg.title,
+    assigned_personnel: [],
+    required_resources: []
+  }));
+}
+
 export function getOptionalStageNamesForPreset(
   presetId: string,
   availablePresets: WorkflowPreset[],
   defaultPreset?: WorkflowPreset
 ): string[] {
-  const currentPresetObj = availablePresets.find(p => p.id === presetId) || availablePresets[0] || defaultPreset;
+  if (!presetId) return [];
+  const currentPresetObj = availablePresets.find(p => p.id === presetId) || defaultPreset;
   if (!currentPresetObj || !currentPresetObj.stages) return [];
 
   const optionalNames: string[] = [];
