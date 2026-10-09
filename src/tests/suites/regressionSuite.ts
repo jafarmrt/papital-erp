@@ -10842,6 +10842,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 9 phase 5 PR «الف» (v9.0.451+): the side paths that move project stock follow the stock document rules
   const { runProjectStockGateTests } = await import('../regression/projectStockGateTests.js');
   results.push(...await runProjectStockGateTests(shouldRun));
+  // Series 10 phase 3 lane L3 (v10.0.22+): the events of the project stock paths
+  const { runProjectEventTests } = await import('../regression/projectEventTests.js');
+  results.push(...await runProjectEventTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
