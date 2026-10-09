@@ -37,3 +37,11 @@ export function workHoursBetween(start: string, end: string): number | null {
   if (workTimeError(start, end) !== null) return null;
   return Math.round(((minutesOfDay(end)! - minutesOfDay(start)!) / 60) * 100) / 100;
 }
+
+/**
+ * v10.0.44 (TD-1171): a stored «HH:MM» shown to the user, 24-hour with Persian digits («۰۸:۳۰»); the browser's time
+ * input showed «08:30 AM» by its own locale
+ */
+export function timeOfDayLabel(value: string | null | undefined): string {
+  return String(value ?? '').trim().replace(/\d/g, (d) => PERSIAN_DIGITS[Number(d)]);
+}
