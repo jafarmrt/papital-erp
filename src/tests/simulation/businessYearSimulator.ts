@@ -10,6 +10,7 @@ import { createFinanceOperations, setupFinance } from './simulationFinanceOperat
 import { closeSimulatedYear } from './simulationFiscalClose.js';
 import { createProjectOperations, setupProjectWorld } from './simulationProjectOperations.js';
 import { createSimulationOperations, isoDay, OpOutcome, SimDoc, SimItem, YEAR_DAYS } from './simulationOperations.js';
+import { runConcurrentRounds } from './simulationConcurrentRounds.js';
 
 /**
  * v8.0.1 — شبیه‌ساز «یک سال کاری» با بذر ثابت (V8_MASTER_ROADMAP.md فاز ۳).
@@ -72,6 +73,13 @@ export interface SimulationOptions {
    * database other tests keep vouchers in 1404.
    */
   closeFiscalYear?: boolean;
+  /**
+   * v10.0.21 (I-03): how many operations run at once, as that many users would (default 1, one after another). Above 1 the
+   * steps run in rounds of `users` concurrent operations (`runConcurrentRounds`); the per-step atomicity and stock-value gap
+   * checks need a quiet database and are skipped, the invariants run after every `checkEvery` rounds and a deadlock or a
+   * non-business error is a finding. The order of the interleaving is not fixed by the seed.
+   */
+  users?: number;
 }
 
 export interface SimStepRecord {
@@ -227,47 +235,60 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
     if (!findings.has(k)) findings.set(k, { ...v, firstStep: step, firstOp: op });
   };
 
+  const runOp = async (op: SimOperation, opDay: number, backDay: number, backdatePermitted: boolean): Promise<OpOutcome> => {
+    switch (op) {
+      case 'purchase': return purchase(opDay);
+      case 'backdated_purchase': return purchase(backDay, backdatePermitted);
+      case 'sale': return sale(opDay);
+      case 'backdated_sale': return sale(backDay, backdatePermitted);
+      case 'sales_return': return salesReturn(opDay, false);
+      case 'over_return': return salesReturn(opDay, true);
+      case 'remittance': return issue(opDay, 'remittance');
+      case 'waste': return issue(opDay, 'waste');
+      case 'stock_count': return stockCount(opDay);
+      case 'transfer': return transfer(opDay);
+      case 'void': return voidDoc();
+      case 'production_receipt': return productionReceipt(opDay);
+      case 'treasury_receipt': return fin10.treasuryReceipt(opDay);
+      case 'treasury_payment': return fin10.treasuryPayment(opDay);
+      case 'treasury_void': return fin10.treasuryVoid();
+      case 'cheque_received': return fin10.chequeReceived(opDay);
+      case 'cheque_step': return fin10.chequeStep(opDay);
+      case 'payroll': return fin10.payroll(opDay);
+      case 'payroll_payment_void': return fin10.payrollPaymentVoid();
+      case 'procurement': return proj.procurement();
+      case 'bom_allocation': return proj.bomAllocation();
+      case 'bom_release': return proj.bomRelease();
+      case 'proforma_approval': return proj.proformaApproval();
+    }
+  };
+
   await ops.openingReceipt();
   for (const v of await checkBusinessInvariants(scope)) addFinding(v, 0, 'setup');
   let lastGap: FinancialDecimal = (await inventoryValueGap(scope)).gap;
   const gapBySignature = new Map<string, { count: number; total: FinancialDecimal; firstStep: number }>();
 
-  for (let step = 1; step <= options.steps; step++) {
-    day = Math.min(YEAR_DAYS - 1, day + (chance(0.6) ? 1 : 0) + (chance(0.1) ? 2 : 0));
+  const nextDay = () => { day = Math.min(YEAR_DAYS - 1, day + (chance(0.6) ? 1 : 0) + (chance(0.1) ? 2 : 0)); return day; };
+  const backDayOf = (d: number) => Math.max(0, d - between(5, 40));
+  const users = Math.max(1, Math.floor(options.users ?? 1));
+  if (users > 1) {
+    await runConcurrentRounds({
+      users, steps: options.steps, checkEvery, stopOnFirstViolation: options.stopOnFirstViolation, scope, reservationGuarded: RESERVATION_GUARDED,
+      nextDay, backDayOf, pickOp, chance, runOp, records: steps, addFinding, log,
+    });
+  }
+  const sequentialSteps = users > 1 ? 0 : options.steps;
+  for (let step = 1; step <= sequentialSteps; step++) {
+    nextDay();
     const op = pickOp();
-    const backDay = Math.max(0, day - between(5, 40));
+    const backDay = backDayOf(day);
     // v8.0.4 (TD-257): نیمی از عملیات‌های با تاریخ گذشته با مجوز «ثبت سند انبار با تاریخ گذشته» اجرا می‌شوند؛ بی‌مجوز
     // رد می‌شوند و با مجوز فقط وقتی پذیرفته می‌شوند که موجودی تا آن تاریخ و پس از آن منفی نشود
     const backdatePermitted = op.startsWith('backdated_') && chance(0.5);
     const before = await snapshot();
     let record: SimStepRecord;
     try {
-      let outcome: OpOutcome;
-      switch (op) {
-        case 'purchase': outcome = await purchase(day); break;
-        case 'backdated_purchase': outcome = await purchase(backDay, backdatePermitted); break;
-        case 'sale': outcome = await sale(day); break;
-        case 'backdated_sale': outcome = await sale(backDay, backdatePermitted); break;
-        case 'sales_return': outcome = await salesReturn(day, false); break;
-        case 'over_return': outcome = await salesReturn(day, true); break;
-        case 'remittance': outcome = await issue(day, 'remittance'); break;
-        case 'waste': outcome = await issue(day, 'waste'); break;
-        case 'stock_count': outcome = await stockCount(day); break;
-        case 'transfer': outcome = await transfer(day); break;
-        case 'void': outcome = await voidDoc(); break;
-        case 'production_receipt': outcome = await productionReceipt(day); break;
-        case 'treasury_receipt': outcome = await fin10.treasuryReceipt(day); break;
-        case 'treasury_payment': outcome = await fin10.treasuryPayment(day); break;
-        case 'treasury_void': outcome = await fin10.treasuryVoid(); break;
-        case 'cheque_received': outcome = await fin10.chequeReceived(day); break;
-        case 'cheque_step': outcome = await fin10.chequeStep(day); break;
-        case 'payroll': outcome = await fin10.payroll(day); break;
-        case 'payroll_payment_void': outcome = await fin10.payrollPaymentVoid(); break;
-        case 'procurement': outcome = await proj.procurement(); break;
-        case 'bom_allocation': outcome = await proj.bomAllocation(); break;
-        case 'bom_release': outcome = await proj.bomRelease(); break;
-        case 'proforma_approval': outcome = await proj.proformaApproval(); break;
-      }
+      const outcome = await runOp(op, day, backDay, backdatePermitted);
       const tags = op.startsWith('backdated_') ? [...outcome.tags, 'backdated', ...(backdatePermitted ? ['permitted'] : [])] : outcome.tags;
       record = { step, op, date: isoDay(day), outcome: outcome.detail.startsWith('skip:') ? 'skipped' : 'ok', detail: outcome.detail, tags };
       if (record.outcome === 'ok') {
@@ -318,7 +339,7 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
     steps.push(record);
     log(`#${step} ${record.date} ${opSignature(op, record.tags)} ${record.outcome}: ${record.detail}${record.inventoryGapDelta ? `  ⚠ gap Δ ${record.inventoryGapDelta}` : ""}`);
 
-    if (step % checkEvery === 0 || step === options.steps) {
+    if (step % checkEvery === 0 || step === sequentialSteps) {
       const violations = await checkBusinessInvariants(scope);
       for (const v of violations) addFinding(v, step, op);
       if (options.stopOnFirstViolation && findings.size > 0) break;
