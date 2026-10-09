@@ -143,7 +143,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     description: 'مدیریت مشتریان، پرونده‌های فروش، پیش‌فاکتورها و مشاهده سفارش‌های فروشگاه اینترنتی',
     permissions: [
       'crm.view', 'crm.manage', 'customers.view', 'customers.manage', 'documents.view', 'documents.create',
-      'woocommerce.view', 'media.view',
+      'woocommerce.view', 'media.view', 'workflow.view',
     ],
   },
   {
