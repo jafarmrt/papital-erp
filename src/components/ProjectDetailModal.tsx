@@ -546,7 +546,7 @@ export default function ProjectDetailModal({
                         <thead>
                           <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold">
                             <th className="p-2.5">#</th>
-                            <th className="p-2.5">کالای انبار (سیستم)</th>
+                            <th className="p-2.5">کالای انبار</th>
                             <th className="p-2.5">کد اختصاصی مشتری</th>
                             <th className="p-2.5 text-center">تیراژ هدف</th>
                             <th className="p-2.5 text-center">مرحله مونتاژ</th>
