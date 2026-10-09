@@ -74,6 +74,8 @@ export interface WorkflowHistoryLog {
 
 export interface WorkflowInstanceData {
   instance: WorkflowInstance | null;
+  /** v10.0.40 (TD-1142): without an instance, whether an active definition exists for the entity type */
+  startable?: boolean;
   definition?: {
     id: number;
     code: string;

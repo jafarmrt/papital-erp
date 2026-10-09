@@ -16,6 +16,9 @@ export async function runProjectScreenGapsTests(shouldRun: ShouldRun): Promise<T
     ['reg_allocation_refusal_status_label_td_1144',
       'v10.0.39: consuming or releasing an allocation that is no longer open says its status in Persian, never the status code (TD-1144)',
       ['td1144', 'projects', 'allocation', 'package11'], allocationStatusRefusalCase],
+    ['reg_project_workflow_widget_startable_td_1142',
+      'v10.0.40: the workflow widget learns there is no project workflow to start, and a project workflow is read only with the project read keys (TD-1142)',
+      ['td1142', 'projects', 'workflow', 'package11'], projectWorkflowStartableCase],
   ]);
 }
 
@@ -56,4 +59,19 @@ async function allocationStatusRefusalCase(h: Harness, wrong: string[]): Promise
     if (!text.includes(releasedLabel)) wrong.push(`${action} refusal does not name the released status in Persian (${brief(again)})`);
   }
   return 'both refusals name the allocation status in Persian';
+}
+
+async function projectWorkflowStartableCase(h: Harness, wrong: string[]): Promise<string> {
+  const res = await h.post('/api/projects', { title: `P3 workflow ${h.tag} ${Math.floor(Math.random() * 1e6)}`, products: [] });
+  if (res.status !== 201) throw new Error(`setup: project create answered ${brief(res)}`);
+  const projectId = Number((res.body as { id?: unknown }).id);
+  const [def] = await h.q(`SELECT count(*)::int AS n FROM workflow_definitions WHERE entity_type = 'project' AND is_active = 1`);
+  const expected = Number(def?.n) > 0;
+  const read = await h.get(`/api/workflow/instance/project/${projectId}`);
+  const body = read.body as { instance?: unknown; startable?: unknown };
+  if (read.status !== 200 || body.instance !== null || body.startable !== expected) wrong.push(`the project widget read answered ${brief(read)}, expected no instance and startable ${expected}`);
+  const viewer = await h.sessionWith(['workflow.view']);
+  const denied = await h.get(`/api/workflow/instance/project/${projectId}`, viewer);
+  if (denied.status !== 403) wrong.push(`a workflow viewer without a project read key answered ${denied.status}, expected 403`);
+  return `no instance, startable ${expected}; a viewer without a project key is refused`;
 }

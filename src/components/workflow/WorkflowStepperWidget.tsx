@@ -51,6 +51,8 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
   }
 
   const instance = wfData?.instance;
+  // v10.0.40 (TD-1142): no instance and no active definition → nothing to start, so the widget is not shown
+  if (!instance && wfData?.startable === false) return null;
   const currentState = wfData?.currentState;
   const allStates = wfData?.allStates || [];
   const availableTransitions = wfData?.availableTransitions || [];
