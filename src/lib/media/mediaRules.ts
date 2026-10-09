@@ -1,5 +1,5 @@
 /**
- * v10.0.18 (N-05, media library): the size, format and quality rules of a media library file, shared by the server
+ * v10.0.21 (N-05, media library): the size, format and quality rules of a media library file, shared by the server
  * (`src/services/media/`) and the upload box, so the warnings the browser shows before sending are the ones the server
  * stores. Product-owner rules (2026-10-08): an image above 10 MB is warned, any file above 50 MB is refused, an image
  * below 200 KB is warned as possibly low quality; a short side of pixels is warned the same way.

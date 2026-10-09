@@ -1,4 +1,4 @@
--- Drizzle Migration 0096: the media library (v10.0.18, N-05)
+-- Drizzle Migration 0096: the media library (v10.0.21, N-05)
 --
 -- New tables only. media_sections holds the system section «محصولات» (kind 'products', one live row) and the sections
 -- users create; media_assets holds the metadata of each image or video, whose files live on disk under MEDIA_DIR. Every

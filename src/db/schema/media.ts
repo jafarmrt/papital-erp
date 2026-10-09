@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { items } from './inventory';
 
 /**
- * v10.0.18 (N-05): the media library (migration 0096). A section groups files: the one system section «محصولات»
+ * v10.0.21 (N-05): the media library (migration 0096). A section groups files: the one system section «محصولات»
  * (`kind = 'products'`, every file linked to an item) and the sections users create (`custom`). A file keeps its original
  * unchanged on disk under `MEDIA_DIR`, named by its SHA-256, plus a light version and a thumbnail the server makes
  * (`src/services/media/mediaStorage.ts`); the database holds only metadata.

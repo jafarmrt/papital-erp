@@ -11,25 +11,25 @@ import { runReservationCases } from './stockReservationTests.js';
 import { createTestItem } from '../fixtures/factories.js';
 
 /**
- * Series 10, N-05 PR 1 (v10.0.18+): the media library infrastructure. Uploads go through the real Express route as a raw
+ * Series 10, N-05 PR 1 (v10.0.21+): the media library infrastructure. Uploads go through the real Express route as a raw
  * body with a real session and CSRF token; files land in a temporary MEDIA_DIR.
  */
 export async function runMediaLibraryTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_media_upload_original_and_light_n05',
-      'v10.0.18: an uploaded image keeps its original byte for byte, gets a light version and a thumbnail, and downloads in each variant (N-05)',
+      'v10.0.21: an uploaded image keeps its original byte for byte, gets a light version and a thumbnail, and downloads in each variant (N-05)',
       ['n05', 'media'], uploadCase],
     ['reg_media_size_and_quality_rules_n05',
-      'v10.0.18: a file above 50 MB is refused before any row, a small image is stored with the low quality warning (N-05)',
+      'v10.0.21: a file above 50 MB is refused before any row, a small image is stored with the low quality warning (N-05)',
       ['n05', 'media'], sizeRulesCase],
     ['reg_media_format_duplicate_and_section_n05',
-      'v10.0.18: content that is not the declared type, a HEIC photo, a second copy of a file and a product file without an item are refused (N-05)',
+      'v10.0.21: content that is not the declared type, a HEIC photo, a second copy of a file and a product file without an item are refused (N-05)',
       ['n05', 'media'], formatCase],
     ['reg_media_permissions_and_ownership_n05',
-      'v10.0.18: viewing, uploading and changing files follow media.view / media.upload / media.manage, an uploader changes only own files, with audit rows (N-05)',
+      'v10.0.21: viewing, uploading and changing files follow media.view / media.upload / media.manage, an uploader changes only own files, with audit rows (N-05)',
       ['n05', 'media', 'permissions'], permissionCase],
     ['reg_media_video_poster_and_range_n05',
-      'v10.0.18: a video keeps only its original, takes a poster thumbnail from the browser and streams with byte ranges (N-05)',
+      'v10.0.21: a video keeps only its original, takes a poster thumbnail from the browser and streams with byte ranges (N-05)',
       ['n05', 'media'], videoCase],
   ]);
 }

@@ -125,7 +125,7 @@ async function startServer() {
   const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`Server running on port ${PORT}`);
   });
-  // v10.0.18 (N-05): a media library upload of up to 50 MB on a slow line outlasts Node's 5-minute request timeout
+  // v10.0.21 (N-05): a media library upload of up to 50 MB on a slow line outlasts Node's 5-minute request timeout
   server.requestTimeout = REQUEST_TIMEOUT_MS;
 
   let isShuttingDown = false;

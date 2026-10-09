@@ -11,7 +11,7 @@ import { mediaTooLarge } from '../services/media/mediaStorage.js';
 import { mediaFileSchema, mediaListSchema, mediaPosterSchema, mediaUpdateSchema, mediaUploadSchema } from './media.schemas.js';
 
 /**
- * v10.0.18 (N-05): the media library. Files are uploaded as the raw request body (not base64 JSON, which caps at 14 MB),
+ * v10.0.21 (N-05): the media library. Files are uploaded as the raw request body (not base64 JSON, which caps at 14 MB),
  * with the file name in `X-File-Name` (URI-encoded) and its type in `Content-Type`; the JSON body parser leaves such a
  * body alone. Files are read only through `GET /media/assets/:id/file`, which needs a session and supports ranges.
  */
