@@ -51,7 +51,7 @@ interface TreasuryTransactionsTableProps {
   onVoidTransaction: (tx: TreasuryTransaction) => void;
   /** v9.0.272 (TD-779): جدا کردن دریافت یا پرداخت از سندش («علی‌الحساب») */
   onDetachDocument?: (tx: TreasuryTransaction) => void;
-  /** v10.0.41 (TD-1122): انتقال دریافت یا پرداخت به سند فعال دیگر همان طرف حساب */
+  /** v10.0.48 (TD-1122): انتقال دریافت یا پرداخت به سند فعال دیگر همان طرف حساب */
   onRelinkDocument?: (tx: TreasuryTransaction) => void;
 }
 

@@ -6,7 +6,7 @@ import { TestCaseResult } from '../types.js';
 import { type ShouldRun, accountIdsByCode, inFiscalSandbox, runCase } from './fiscalClosingTests.js';
 
 /**
- * Lane L1 guide findings (v10.0.43 on). TD-1124: the detailed level of the trial balance grouped voucher rows by the
+ * Lane L1 guide findings (v10.0.50 on). TD-1124: the detailed level of the trial balance grouped voucher rows by the
  * detailed name only, so two parties of one name were one row and a renamed party was two rows with one code. Red before.
  */
 export async function runAccountingGuideFindingsTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {

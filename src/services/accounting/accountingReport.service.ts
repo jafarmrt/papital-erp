@@ -188,7 +188,7 @@ export class AccountingReportService {
 
       // Detailed Tracking
       const dName = (it.detailedName && it.detailedName.trim()) ? it.detailedName.trim() : 'سایر / عمومی';
-      // v10.0.43 (TD-1124): کلید ردیف تفصیلی نوع و شناسه است؛ پیش‌تر نام بود و دو طرف هم‌نام یک ردیف و طرف تغییرنام‌داده دو ردیف
+      // v10.0.50 (TD-1124): کلید ردیف تفصیلی نوع و شناسه است؛ پیش‌تر نام بود و دو طرف هم‌نام یک ردیف و طرف تغییرنام‌داده دو ردیف
       // با یک کد می‌شد. ردیف پیشین بی شناسه با نامش جدا می‌ماند
       const dKey = it.detailedId ? `${accId}__${it.detailedType || 'other'}#${it.detailedId}` : `${accId}__name:${dName}`;
       let det = detailedMap.get(dKey);

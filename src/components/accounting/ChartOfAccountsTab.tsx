@@ -155,7 +155,7 @@ export function ChartOfAccountsTab({
     }
   };
 
-  // v10.0.42 (TD-1123): کنار گذاشتن حساب سندخورده با غیرفعال کردن، و بازگرداندن آن
+  // v10.0.49 (TD-1123): کنار گذاشتن حساب سندخورده با غیرفعال کردن، و بازگرداندن آن
   const handleToggleActive = async (acc: Account, next: boolean) => {
     if (!(await confirmAction({ title: next ? 'فعال کردن حساب' : 'غیرفعال کردن حساب', message: accountActiveConfirmText(acc, next) }))) return;
     try {

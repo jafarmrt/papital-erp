@@ -10893,7 +10893,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runVoucherApprovalDutiesTests(shouldRun));
   const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
   results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
-  // Lane L1 guide findings (v10.0.41+): move a treasury row to another document
+  // Lane L1 guide findings (v10.0.48+): move a treasury row to another document
   const { runTreasuryRelinkOptionsTests } = await import('../regression/treasuryRelinkOptionsTests.js');
   results.push(...await runTreasuryRelinkOptionsTests(shouldRun));
   const { runAccountingGuideFindingsTests } = await import('../regression/accountingGuideFindingsTests.js');
@@ -10902,6 +10902,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 phase 3 lane L2 (v10.0.35+): writer routes read their bodies through Zod
   const { runWriterRouteZodTests } = await import('../regression/writerRouteZodTests.js');
   results.push(...await runWriterRouteZodTests(shouldRun));
+
+  // Series 10 phase 3 lane L2, package B4 (v10.0.41+): document audit rows, stock event cost, reorder monitor, purchase party, requisition workflow
+  const { runDocumentAuditEventTests } = await import('../regression/documentAuditEventTests.js');
+  results.push(...await runDocumentAuditEventTests(shouldRun));
 
   return results;
 }
