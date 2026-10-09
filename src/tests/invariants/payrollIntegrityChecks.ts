@@ -86,10 +86,14 @@ export async function checkAdvanceBalanceFromLedgerOnly(): Promise<string[]> {
   const worker = await newWorker('TD-807 worker');
   await addLog(worker, await newTask(), '2026-04-07', 3000000);
   const [{ fullName }] = await orm.select({ fullName: personnel.fullName }).from(personnel).where(eq(personnel.id, worker));
-  await TreasuryTransactionService.createTreasuryTransaction({
-    type: 'payment', method: 'bank_transfer', amount: 2000000, bankAccountId: await fundedBank(), partyType: 'personnel', partyId: worker, partyName: fullName,
+  // v10.0.22 (TD-925): a treasury settlement payment is refused now (salary is settled through the payslip payment), so it
+  // cannot be counted as an advance either
+  const bankId = await fundedBank();
+  const settlement = await refusalOf(() => TreasuryTransactionService.createTreasuryTransaction({
+    type: 'payment', method: 'bank_transfer', amount: 2000000, bankAccountId: bankId, partyType: 'personnel', partyId: worker, partyName: fullName,
     purpose: 'settlement', date: '2026-04-03', username: 'inv',
-  });
+  }));
+  if (settlement === null) problems.push('a treasury settlement payment to personnel was accepted');
   const balance = await PayrollPaymentService.getPersonnelAdvanceBalance(worker);
   if (balance.outstandingAdvance !== 0 || balance.totalAdvances !== 0) problems.push(`advance balance after a settlement payment: ${balance.outstandingAdvance} (total ${balance.totalAdvances}), expected 0`);
   const issued = await PieceworkPayrollService.generatePayroll({ personnelId: worker, ...PERIOD, advanceDeduction: 2000000 });
