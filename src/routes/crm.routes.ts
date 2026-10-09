@@ -22,6 +22,7 @@ import { listFollowups, liveLeadActivityCondition, type FollowupStatus } from '.
 import { deleteLead } from '../services/crm/crmLeadDelete.js';
 import { setFollowupCompleted } from '../services/crm/crmFollowupStatus.js';
 import { resolveActivityParents } from '../services/crm/crmActivityParents.js';
+import { notifyActivityMentions, resolveActivityMentions } from '../services/crm/crmActivityMentions.js';
 import { CRM_LEAD_CURRENCIES, CRM_LEAD_STAGES, CRM_LEAD_STATUSES, isLeadProbability, normalizeLeadCurrency } from '../lib/crm/leadFields.js';
 import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
 import { canSeePartyBankInfo, withoutBankInfo } from '../services/customers/partyBankInfoAccess.js';
@@ -99,7 +100,9 @@ const createCrmActivitySchema = z.object({
     nextFollowUpTask: z.string().optional(),
     assignedTo: z.string().optional(),
     assignedPersonnelId: z.union([z.number(), z.string(), z.null()]).optional(),
-    mentions: z.array(z.any()).optional(),
+    // v10.0.24 (TD-976): the mentioned users are positive user ids, checked against live users in the service
+    mentions: z.array(z.coerce.number().int('شناسه کاربر اشاره‌شده باید عدد صحیح باشد').positive('شناسه کاربر اشاره‌شده باید مثبت باشد'))
+      .max(100, 'اقدام حداکثر ۱۰۰ اشاره دارد').optional(),
   })
 });
 
@@ -796,127 +799,84 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
     name: assignedTo || authorName,
     personnelId: assignedPersonnelId
   });
-  const mentionsList = Array.isArray(mentions) ? mentions : [];
   // v9.0.17 (TD-426): پرونده و طرف حساب ناموجود یا حذف‌شده با ۴۲۲ رد می‌شوند (`resolveActivityParents`)
-  const parents = await resolveActivityParents(orm, { leadId, customerId });
+  // v10.0.24 (TD-976): ثبت اقدام، اعلان‌ها، زمان پرونده و ممیزی در یک تراکنش؛ اشاره فقط شناسه کاربر زنده است و اعلان آن
+  // فقط به اشاره‌شده‌ای می‌رود که اقدام‌های ارتباط با مشتری را می‌خواند (`notifyActivityMentions`)
+  const newAct = await orm.transaction(async (tx) => {
+    const parents = await resolveActivityParents(tx, { leadId, customerId });
+    const mentionIds = await resolveActivityMentions(tx, mentions);
 
-  const [newAct] = await orm.insert(crmActivities).values({
-    leadId: parents.leadId,
-    customerId: parents.customerId,
-    type: type || 'call',
-    title: title.trim(),
-    description: description || '',
-    result: result || '',
-    loggedBy: authorName,
-    assignedTo: taskAssignee.name,
-    assignedPersonnelId: taskAssignee.id,
-    mentions: mentionsList,
-    activityDate: actDateIso,
-    activityDateIso: actDateIso,
-    nextFollowUpDate: nextFollowIso,
-    nextFollowUpDateIso: nextFollowIso,
-    nextFollowUpTask: nextFollowUpTask || '',
-    isFollowUpCompleted: 0,
-    createdAt: nowIso,
-    isDeleted: 0
-  }).returning();
+    const [act] = await tx.insert(crmActivities).values({
+      leadId: parents.leadId,
+      customerId: parents.customerId,
+      type: type || 'call',
+      title: title.trim(),
+      description: description || '',
+      result: result || '',
+      loggedBy: authorName,
+      assignedTo: taskAssignee.name,
+      assignedPersonnelId: taskAssignee.id,
+      mentions: mentionIds,
+      activityDate: actDateIso,
+      activityDateIso: actDateIso,
+      nextFollowUpDate: nextFollowIso,
+      nextFollowUpDateIso: nextFollowIso,
+      nextFollowUpTask: nextFollowUpTask || '',
+      isFollowUpCompleted: 0,
+      createdAt: nowIso,
+      isDeleted: 0
+    }).returning();
 
-  // Send notifications to mentioned users
-  try {
-    const targetUserIds = new Set<number>();
-    if (Array.isArray(mentions)) {
-      for (const item of mentions) {
-        if (typeof item === 'number' && item > 0) targetUserIds.add(item);
-        else if (typeof item === 'string' && item.trim()) {
-          const [u] = await orm.select({ id: users.id }).from(users).where(
-            or(eq(users.username, item.trim()), eq(users.fullName, item.trim()))
-          );
-          if (u) targetUserIds.add(u.id);
-        }
-      }
-    }
+    await notifyActivityMentions(tx, { id: act.id, title: act.title, mentions: mentionIds }, { id: currentUser?.id, name: authorName });
 
-    // Check description for @mentions as well
-    if (description) {
-      // v9.0.76 (TD-521): همه کاربران حذف‌نشده، با پیشوند آزمون یا بی آن
-      const allSysUsers = await orm.select({ id: users.id, username: users.username, fullName: users.fullName })
-        .from(users)
-        .where(eq(users.isDeleted, 0));
-      for (const u of allSysUsers) {
-        if (u.username && description.includes(`@${u.username}`)) targetUserIds.add(u.id);
-        if (u.fullName && description.includes(`@${u.fullName}`)) targetUserIds.add(u.id);
-      }
-    }
-
-    for (const targetId of targetUserIds) {
-      if (targetId !== currentUser?.id) {
-        await orm.insert(notifications).values({
-          userId: targetId,
-          senderId: currentUser?.id,
-          senderName: authorName,
-          type: 'mention',
-          title: 'اشاره به شما در اقدام ارتباط با مشتری',
-          message: `${authorName} در اقدام «${title}» به شما اشاره کرد.`,
-          link: `/crm?activityId=${newAct.id}`,
-          isRead: 0
-        });
-      }
-    }
-  } catch (notifErr) {
-    logger.error({ message: 'Error sending CRM mention notifications', error: notifErr });
-  }
-
-  // Send notification for task/follow-up assignment
-  if (nextFollowUpTask || nextFollowUpDate) {
-    try {
-      // V10-4.1: اولویت اطلاع‌رسانی با لینک personnel.userId، سپس تطابق نام
+    // Notification for the follow-up assignee (linked personnel user first, then the exact name)
+    if (nextFollowUpTask || nextFollowUpDate) {
       let targetUserId: number | null | undefined = null;
-      if (newAct.assignedPersonnelId) {
-        const [pRow] = await orm.select({ userId: personnel.userId })
+      if (act.assignedPersonnelId) {
+        const [pRow] = await tx.select({ userId: personnel.userId })
           .from(personnel)
-          .where(eq(personnel.id, Number(newAct.assignedPersonnelId)));
+          .where(eq(personnel.id, Number(act.assignedPersonnelId)));
         targetUserId = pRow?.userId ?? null;
       }
       if (!targetUserId && taskAssignee.name) {
-        const [assignedUser] = await orm.select().from(users).where(
-          or(eq(users.fullName, taskAssignee.name), eq(users.username, taskAssignee.name))
+        const [assignedUser] = await tx.select({ id: users.id }).from(users).where(
+          and(eq(users.isDeleted, 0), or(eq(users.fullName, taskAssignee.name), eq(users.username, taskAssignee.name)))
         );
         targetUserId = assignedUser?.id ?? null;
       }
       const notifUserId = targetUserId || currentUser?.id;
       if (notifUserId) {
-        await orm.insert(notifications).values({
+        await tx.insert(notifications).values({
           userId: notifUserId,
           senderId: currentUser?.id,
           senderName: authorName,
           type: 'task',
           title: 'پیگیری تازه ارتباط با مشتری',
           message: `${authorName} پیگیری تازه‌ای برای شما ثبت کرد: "${nextFollowUpTask || title}" (تاریخ سررسید: ${toPersianDigits(isoToJalaliDate(nextFollowIso || actDateIso))})`,
-          link: `/crm?activityId=${newAct.id}`,
+          link: `/crm?activityId=${act.id}`,
           isRead: 0
         });
       }
-    } catch (taskNotifErr) {
-      logger.error({ message: 'Error sending task assignment notification', error: taskNotifErr });
     }
-  }
 
-  // Update lead's updatedAt timestamp
-  if (parents.leadId) {
-    await orm.update(crmLeads)
-      .set({ updatedAt: nowIso })
-      .where(eq(crmLeads.id, parents.leadId));
-  }
+    if (parents.leadId) {
+      await tx.update(crmLeads)
+        .set({ updatedAt: nowIso })
+        .where(eq(crmLeads.id, parents.leadId));
+    }
 
-  await logActivity({
-    userId: currentUser?.id,
-    username: currentUser?.username || 'user',
-    userFullName: authorName,
-    action: 'CREATE',
-    entity: 'اقدام و تماس CRM',
-    entityId: String(newAct.id),
-    description: `ثبت ${type === 'call' ? 'تماس' : 'اقدام'} "${title}"`,
-    ipAddress: req.ip || ''
+    await logActivity({
+      userId: currentUser?.id,
+      username: currentUser?.username || 'user',
+      userFullName: authorName,
+      action: 'CREATE',
+      entity: 'اقدام و تماس CRM',
+      entityId: String(act.id),
+      description: `ثبت ${type === 'call' ? 'تماس' : 'اقدام'} "${title}"`,
+      ipAddress: req.ip || '',
+      tx,
+    });
+    return act;
   });
 
   res.status(201).json(formatActivity(newAct));

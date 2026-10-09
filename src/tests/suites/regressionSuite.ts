@@ -10593,6 +10593,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 9 (v10.0.23, TD-975): a partial party edit keeps the fields it does not send
   const { runCustomerPartialEditTests } = await import('../regression/customerPartialEditTests.js');
   results.push(...await runCustomerPartialEditTests(shouldRun));
+  // Package 9 (v10.0.24, TD-976): CRM activity mentions are live user ids and notify only CRM readers
+  const { runCrmActivityMentionTests } = await import('../regression/crmActivityMentionTests.js');
+  results.push(...await runCrmActivityMentionTests(shouldRun));
   // بسته ۹ (v9.0.18، TD-427): اعتبارسنجی ورودی پرونده فروش
   const { runCrmLeadInputTests } = await import('../regression/crmLeadInputTests.js');
   results.push(...await runCrmLeadInputTests(shouldRun));
