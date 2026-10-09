@@ -331,7 +331,7 @@ export function Sidebar({
           </div>
         )}
 
-        {/* لیست گروه‌ها */}
+        {/* فهرست گروه‌ها */}
         {filteredGroups.map((group, idx) => {
           const visibleItems = group.items.filter(item => item.visible);
           if (visibleItems.length === 0) return null;
