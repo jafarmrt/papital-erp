@@ -23,6 +23,8 @@ export interface ReturnItemTerms {
   quantity: FinancialDecimal;
   /** قیمت خالص هر واحد، گرد به چهار رقم */
   netUnitPrice: FinancialDecimal;
+  /** v10.0.39 (TD-933): جمع خالص دقیق کالا در فاکتور (بی گرد کردن) */
+  net: FinancialDecimal;
 }
 
 /** قیمت خالص هر واحد هر کالای فاکتور (به ترتیب نخستین ردیف هر کالا) */
@@ -37,7 +39,7 @@ export function invoiceReturnTerms(lines: readonly ReturnSourceLine[]): Map<numb
   }
   const terms = new Map<number, ReturnItemTerms>();
   for (const [itemId, s] of sums) {
-    terms.set(itemId, { quantity: s.qty, netUnitPrice: s.net.divide(s.qty, RETURN_UNIT_PRICE_SCALE) });
+    terms.set(itemId, { quantity: s.qty, netUnitPrice: s.net.divide(s.qty, RETURN_UNIT_PRICE_SCALE), net: s.net });
   }
   return terms;
 }

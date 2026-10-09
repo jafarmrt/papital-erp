@@ -121,6 +121,7 @@ const WOO_VOIDED_LABELS: Record<string, string> = {
 const PAYLOAD_LABELS_BY_EVENT: Record<string, Record<string, string>> = {
   InvoiceCreated: INVOICE_LABELS,
   InvoiceApproved: INVOICE_LABELS,
+  InvoiceVoided: INVOICE_LABELS,
   PurchaseCreated: PURCHASE_LABELS,
   PurchaseApproved: PURCHASE_LABELS,
   StockReceived: STOCK_LABELS,

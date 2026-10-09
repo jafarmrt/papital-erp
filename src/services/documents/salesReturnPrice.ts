@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
+import { completeReturnLines, type EarlierReturnLine } from './salesReturnCompletion.js';
 import { documentItems, documents, items } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
@@ -106,9 +107,16 @@ export async function enforceReturnInvoiceTerms<T extends DocumentLineItemInput>
     return `«${it?.name ?? id}» (${it?.code ?? '-'})`;
   };
 
+  // v10.0.39 (TD-933، تصمیم ب): برگشتی که مقدار کالا را کامل برمی‌گرداند باقی‌مانده دقیق خالص آن را برمی‌گرداند
+  const earlierLines = await earlierFinalReturnLines(tx, invoiceId);
+  const completionPrices = new Map<number, ReturnType<typeof fin>>();
+  for (const [itemId, price] of completeReturnLines(input.lines.map(l => ({ itemId: Number(l.itemId), quantity: l.quantity as DecimalValue })), terms, earlierLines).completionPrices) {
+    completionPrices.set(itemId, price);
+  }
+
   const problems: string[] = [];
   const details: Array<Record<string, unknown>> = [];
-  const lines = input.lines.map((line: T) => {
+  const priced = input.lines.map((line: T) => {
     const itemId = Number(line.itemId);
     const itemTerms = terms.get(itemId);
     if (!itemTerms) {
@@ -118,7 +126,9 @@ export async function enforceReturnInvoiceTerms<T extends DocumentLineItemInput>
     }
     const priceLine = line as LinePriceInput;
     const sentPrice = sentValue(priceLine.unit_price, priceLine.unitPrice, priceLine.price);
-    if (sentPrice !== undefined && !isInvoiceNetUnitPrice(sentPrice, itemTerms.netUnitPrice)) {
+    // v10.0.39 (TD-933): ردیف تکمیلی برگشت کامل (یک واحد با باقی‌مانده دقیق) که پیش‌نویس ذخیره کرده هم پذیرفته است
+    const completion = completionPrices.get(itemId);
+    if (sentPrice !== undefined && !isInvoiceNetUnitPrice(sentPrice, itemTerms.netUnitPrice) && !(completion && isInvoiceNetUnitPrice(sentPrice, completion))) {
       problems.push(`قیمت کالای ${itemLabel(itemId)} ${amountText(sentPrice)} است، ولی قیمت خالص هر واحد آن در فاکتور ${amountText(itemTerms.netUnitPrice)} ${currency}`);
       details.push({ itemId, reason: 'price', sent: fin(sentPrice).toNumber(), netUnitPrice: itemTerms.netUnitPrice.toNumber() });
     }
@@ -136,5 +146,21 @@ export async function enforceReturnInvoiceTerms<T extends DocumentLineItemInput>
       'RETURN_PRICE_MISMATCH',
     );
   }
+  const lines = completeReturnLines(priced, terms, earlierLines).lines;
   return { currency, exchangeRate, lines };
+}
+
+/** ردیف‌های زنده برگشت‌های قطعی و ابطال‌نشده پیشین همان فاکتور */
+async function earlierFinalReturnLines(tx: DbClient, invoiceId: number): Promise<EarlierReturnLine[]> {
+  return tx
+    .select({ itemId: documentItems.itemId, quantity: documentItems.quantity, unitPrice: documentItems.unitPrice, discount: documentItems.discount })
+    .from(documentItems)
+    .innerJoin(documents, eq(documents.id, documentItems.documentId))
+    .where(and(
+      eq(documents.returnOfDocumentId, invoiceId),
+      eq(documents.type, 'return'),
+      eq(documents.status, 'final'),
+      eq(documents.isDeleted, 0),
+      eq(documentItems.isDeleted, 0),
+    ));
 }

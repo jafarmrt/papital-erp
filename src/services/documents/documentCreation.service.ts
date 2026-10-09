@@ -653,6 +653,10 @@ export class DocumentCreationService {
           },
           { userName: user }
         );
+        // v10.0.37 (TD-935، تصمیم ت۱۱): ثبت مستقیم قطعی (و فاکتور ووکامرس) هم «ثبت فاکتور» را پیش از «صدور قطعی» می‌نویسد
+        if (isApproved) {
+          await OutboxService.saveToOutbox(tx, domainEventBus.createEvent<InvoiceEventPayload>(DomainEventType.INVOICE_CREATED, 'Document', String(docId), invEvent.payload, { userName: user }));
+        }
         await OutboxService.saveToOutbox(tx, invEvent);
       } else if (docType === 'receipt' || docType === 'purchase') {
         // v10.0.29 (TD-942): a production receipt (project delivery) is not a purchase and publishes no purchase event with an

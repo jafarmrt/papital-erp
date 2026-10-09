@@ -30,6 +30,7 @@ import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
 import { assertVoidHasNoReturns, assertVoidHasNoTreasuryRows } from './voidDependents.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { proformaInvoiceTarget } from './proformaInvoice.js';
+import { recordInvoiceVoided } from './documentVoidEvents.js';
 import { assertNotProjectDelivery, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
@@ -352,6 +353,8 @@ export class DocumentLifecycleService {
       const auditBefore = await documentAuditSnapshot(tx, id);
 
       const deletedByUser = user || doc.user || 'system';
+      // v10.0.36 (TD-931): رویداد ابطال فاکتور فروش با مبلغ‌های پیش از ابطال
+      await recordInvoiceVoided(tx, doc, deletedByUser);
       // V10-1.1: زمان حذف/برگشت‌ها از ساعت توافقی (بدون Z تا مقایسه لغوی ستون date سازگار بماند)
       const nowIso = await businessNowIsoDateTime();
 
@@ -429,6 +432,7 @@ export class DocumentLifecycleService {
                 location: targetLoc,
                 // v9.0.80 (TD-489): حواله انتقال بین انبارها فقط مقدار را جابه‌جا کرده بود؛ ابطالش هم WAC را تغییر نمی‌دهد
                 quantityOnly: orig.documentType === 'transfer',
+                documentType: orig.documentType || doc.type, documentRef: `REV-${orig.documentRef || doc.refNumber || id}`, user: deletedByUser,
               });
             }
           }
@@ -445,7 +449,8 @@ export class DocumentLifecycleService {
               // برمی‌گردد تا WAC مثل قبل بی‌تغییر بماند
               unitPrice: docDirection === 'out' ? 0
                 : (fin(doc.exchangeRate).isPositive() ? stockUnitPriceInIrr(item.unitPrice ?? 0, doc.currency, doc.exchangeRate) : (item.unitPrice ?? 0)),
-              location: targetLoc
+              location: targetLoc,
+              documentType: doc.type, documentRef: `REV-${doc.refNumber || id}`, user: deletedByUser,
             });
           }
         }

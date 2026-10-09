@@ -8,6 +8,8 @@ export enum DomainEventType {
   INVOICE_CREATED = 'InvoiceCreated',
   INVOICE_APPROVED = 'InvoiceApproved',
   INVOICE_CANCELLED = 'InvoiceCancelled',
+  // v10.0.36 (TD-931): ابطال فاکتور یا پیش‌فاکتور فروش
+  INVOICE_VOIDED = 'InvoiceVoided',
 
   // 2. Purchases & Procurement
   PURCHASE_CREATED = 'PurchaseCreated',
