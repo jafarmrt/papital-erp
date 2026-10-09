@@ -61,6 +61,13 @@ jobs:
         # تعداد تخلف هر قاعده نباید از eslint-baseline.json و any هر فایل نباید از eslint-any-baseline.json بیشتر شود (scripts/eslint-ratchet.ts)
         run: npm run lint:eslint
 
+      # v10.0.28 (I-06, OBS-R1-19, product-owner decision): every tracked shell script passes shellcheck at error level
+      # (shellcheck ships with the Ubuntu runner image; warnings are not gated yet)
+      - name: Shell Script Gate (shellcheck, errors only)
+        run: |
+          shellcheck --version
+          git ls-files -z '*.sh' | xargs -0 shellcheck --severity=error
+
       - name: Frontend & Unit Tests (Vitest, v7.0.76 / audit P3-6)
         # فقط تست‌های تازه واحد و فرانت (src/tests/vitest)؛ مجموعه‌های پایگاه‌داده با رانر قبلی در job بعدی
         run: npm run test:vitest

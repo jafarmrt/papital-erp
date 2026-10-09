@@ -38,3 +38,10 @@ describe('ci_job_timeouts_ot_b_05: every CI job has its own time limit (OT-B-05)
     expect(installSteps.filter(s => !/timeout-minutes:\s*\d+/.test(s))).toEqual([]);
   });
 });
+
+describe('ci_shellcheck_gate_obs_r1_19: shell scripts pass shellcheck in CI (OBS-R1-19)', () => {
+  it('the lint job runs shellcheck at error level over every tracked shell script', () => {
+    const lint = ciJobs().find(j => j.name === 'lint-and-typecheck');
+    expect(lint?.body ?? '').toMatch(/git ls-files -z '\*\.sh' \| xargs -0 shellcheck --severity=error/);
+  });
+});
