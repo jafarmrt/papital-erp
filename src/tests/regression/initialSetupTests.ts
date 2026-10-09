@@ -4,7 +4,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
 /**
- * v10.0.25 (series 10 phase 3, L5 E7, part of TD-960): `POST /setup` wrote the first admin, the default warehouse and
+ * v10.0.26 (series 10 phase 3, L5 E7, part of TD-960): `POST /setup` wrote the first admin, the default warehouse and
  * each company setting one by one on the pool, so a failed settings write left the admin behind and the setup could not
  * be run again («راه‌اندازی قبلاً انجام شده»). Runs in its own isolated schema without users: a trigger refuses the
  * company logo setting, the setup must answer an error and leave no user; after the trigger is dropped the setup runs
@@ -13,7 +13,7 @@ type ShouldRun = (id: string, ...extra: string[]) => boolean;
 export async function runInitialSetupTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const id = 'reg_initial_setup_one_transaction_td_960';
   if (!shouldRun(id, 'td960', 'setup', 'e7', 'package2')) return [];
-  const name = 'v10.0.25: the initial setup writes the admin, warehouse and settings in one transaction (TD-960)';
+  const name = 'v10.0.26: the initial setup writes the admin, warehouse and settings in one transaction (TD-960)';
   const tStart = Date.now();
   const { pool } = await import('../../db/drizzle.js');
   let inner: { schema: string; teardown: () => Promise<void> } | null = null;
