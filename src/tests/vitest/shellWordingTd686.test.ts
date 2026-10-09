@@ -38,7 +38,7 @@ describe('Shell UI wording (TD-686)', () => {
     expect(lines.filter(l => REPLACED.test(l.text)).map(l => `${l.where}: ${l.text}`)).toEqual([]);
   });
 
-  it('uses the accounting glossary in the menu and shell: no «دوبل» or «لیست» (TD-1159)', () => {
+  it('uses the accounting glossary words in the menu and shell (TD-1159)', () => {
     expect(lines.filter(l => ACCOUNTING_GLOSSARY.test(l.text)).map(l => `${l.where}: ${l.text}`)).toEqual([]);
   });
 
