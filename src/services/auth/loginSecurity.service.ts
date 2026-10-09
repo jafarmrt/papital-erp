@@ -4,7 +4,8 @@ import { eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { users } from '../../db/schema.js';
 import { logger } from '../../middleware/logger.js';
-import { usernameLockoutMessage } from '../../lib/auth/loginLockout.js';
+import { AppError } from '../../errors/customErrors.js';
+import { passwordChangeLockoutMessage, usernameLockoutMessage } from '../../lib/auth/loginLockout.js';
 
 /**
  * v7.0.28 (TD-186 / audit P1-5) — Login hardening
@@ -101,6 +102,36 @@ function activeMemoryLock(map: Map<string, FailureState>, key: string): number {
 export function resetPhantomLockouts(): void {
   pairFailures.clear();
   phantomAccountFailures.clear();
+  passwordChangeFailures.clear();
+}
+
+// --- v10.0.21 (TD-961, OBS-R1-29): wrong «current password» answers of the profile password change ---------
+// A signed-in session (or a stolen cookie) could guess the current password without limit: only the general
+// limiter (10,000 requests a minute) applied. The same progressive lock as the login pair applies per user.
+const passwordChangeFailures = new Map<string, FailureState>();
+const passwordChangeKey = (userId: number) => `user:${userId}`;
+
+/** Minutes left on the user's password change lock, or null when a current password may be tried. */
+export function passwordChangeLockMinutes(userId: number): number | null {
+  const until = activeMemoryLock(passwordChangeFailures, passwordChangeKey(userId));
+  return until > 0 ? remainingMinutes(until) : null;
+}
+
+/** Records one wrong current password; returns the lock it causes in minutes (0 = none yet). */
+export function recordPasswordChangeFailure(userId: number): number {
+  const { count, lockMinutes } = bumpMemoryCounter(passwordChangeFailures, passwordChangeKey(userId), LOCKOUT_THRESHOLD);
+  if (lockMinutes > 0) logger.warn(`[Password Change Lockout] user ID ${userId} locked for ${lockMinutes} minute(s) after ${count} wrong current passwords`);
+  return lockMinutes;
+}
+
+/** A correct current password ends the failure streak. */
+export function resetPasswordChangeFailures(userId: number): void {
+  passwordChangeFailures.delete(passwordChangeKey(userId));
+}
+
+/** The 429 error of a locked password change; `details` carries `locked` and `remainingMinutes`, as the login lock does. */
+export function passwordChangeLockedError(minutes: number): AppError {
+  return new AppError(passwordChangeLockoutMessage(minutes), 429, 'PASSWORD_CHANGE_LOCKED', { locked: true, remainingMinutes: minutes });
 }
 
 /**
