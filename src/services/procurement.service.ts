@@ -15,7 +15,7 @@ import { userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from './inventory/stockMovementDate.js';
 
 /**
- * v9.0.315 (TD-689): مجوزی که درخواست خرید را تأیید می‌کند. از v10.0.39 (TD-1126) فقط `procurement.approve`، همان گارد
+ * v9.0.315 (TD-689): مجوزی که درخواست خرید را تأیید می‌کند. از v10.0.41 (TD-1126) فقط `procurement.approve`، همان گارد
  * گام تأیید گردش کار (OBS-R2-36)؛ پیش‌تر `procurement.manage` هم بود و صدور سفارش تأییدی را می‌آزمود که انتقال رد می‌کرد
  */
 const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve'];
