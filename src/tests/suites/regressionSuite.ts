@@ -10848,6 +10848,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 N-05 PR 2 (v10.0.25+): product card, product grid and zip download of the media library
   const { runMediaProductTests } = await import('../regression/mediaProductTests.js');
   results.push(...await runMediaProductTests(shouldRun));
+  // Series 10 phase 3 lane L3 (v10.0.29+): the events of the project stock paths
+  const { runProjectEventTests } = await import('../regression/projectEventTests.js');
+  results.push(...await runProjectEventTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
