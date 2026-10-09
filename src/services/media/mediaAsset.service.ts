@@ -21,7 +21,7 @@ import {
 } from './mediaStorage.js';
 
 /**
- * v10.0.16 (N-05): records of the media library. Every write runs in one transaction with its «کتابخانه تصاویر» audit row
+ * v10.0.18 (N-05): records of the media library. Every write runs in one transaction with its «کتابخانه تصاویر» audit row
  * (`tx`); the original is placed on disk before the row is written, and the light version of an image is made right
  * after the commit (a failure is recorded on the row and can be rebuilt, the original stays).
  */

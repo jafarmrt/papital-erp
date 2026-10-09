@@ -12,7 +12,7 @@ import {
 } from '../../lib/media/mediaRules.js';
 
 /**
- * v10.0.16 (N-05): files of the media library on disk. The root is `MEDIA_DIR` (default `<app>/media-library`), never under
+ * v10.0.18 (N-05): files of the media library on disk. The root is `MEDIA_DIR` (default `<app>/media-library`), never under
  * `public/uploads`, so the static route never serves it and the daily backup archive of the uploads stays small. Layout:
  * `originals/<aa>/<sha256>.<ext>` (the file as sent, never changed), `light/<aa>/<sha256>.webp`, `thumbs/<aa>/<sha256>.webp`
  * and `tmp/` for uploads in progress. A file named by its content is written once and shared by every row holding it.

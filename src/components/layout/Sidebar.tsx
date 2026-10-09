@@ -18,6 +18,7 @@ import { getMenuGroups, MenuItem } from './menuConfig';
 import { useAppFavicon } from '../../hooks/useAppFavicon';
 import { SidebarSearch } from './SidebarSearch';
 import { useSidebarFavorites } from './useSidebarFavorites';
+import { InstallAppButton } from '../pwa/InstallAppButton';
 
 export interface SidebarProps {
   user: User;
@@ -216,8 +217,9 @@ export function Sidebar({
 
   return (
     <aside className={cn(
-      "bg-slate-900 text-slate-300 flex flex-col shrink-0 h-screen print:hidden transition-all duration-300 ease-in-out z-30 select-none",
-      isCollapsed ? "w-16" : "w-64"
+      "bg-slate-900 text-slate-300 flex-col shrink-0 h-screen print:hidden transition-all duration-300 ease-in-out z-30 select-none",
+      // v10.0.17 (D-11): on a phone the collapsed menu is hidden (the bottom bar replaces it) and the open one covers the page
+      isCollapsed ? "hidden md:flex w-16" : "flex w-64 fixed inset-y-0 right-0 z-50 md:static md:z-30"
     )}>
       {/* Header with Logo and Collapse button */}
       <div className={cn("border-b border-slate-800 flex items-center transition-all", isCollapsed ? "p-3 justify-center" : "p-3.5 justify-between")}>
@@ -483,6 +485,7 @@ export function Sidebar({
 
       {/* Footer Profile & Logout */}
       <div className={cn("bg-slate-950 text-xs flex flex-col gap-2 border-t border-slate-800 transition-all", isCollapsed ? "p-2 items-center" : "p-3")}>
+        <InstallAppButton compact={isCollapsed} />
         <button 
           onClick={onOpenProfile} 
           className={cn("flex items-center gap-2 text-slate-300 hover:text-white transition-colors rounded-lg hover:bg-slate-900 cursor-pointer", isCollapsed ? "p-2 justify-center" : "px-2 py-1.5")}
