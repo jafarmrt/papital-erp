@@ -3,6 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { warehouses } from '../../db/schema.js';
 import { ITEM_WAC_COLUMN, priceExportCells, priceListMatcher } from '../../lib/items/excelPriceColumns.js';
 import { ITEM_REORDER_POINT_COLUMN } from '../../lib/items/itemExcelColumns.js';
+import { PRODUCT_CARD_COLUMNS } from '../../lib/media/productCard.js';
 import { ItemPricingService } from './itemPricing.service.js';
 
 /** کد نمونه الگو: محصول نهایی دسته «گردنبند» (پیشوند N) با قالب `PRODUCT_CODE_PATTERN` */
@@ -36,6 +37,11 @@ export async function buildItemExcelTemplate(): Promise<{ rows: Array<Record<str
   row['سایز'] = 'استاندارد';
   row['وزن'] = 15;
   row['جنس'] = 'استیل';
+  row[PRODUCT_CARD_COLUMNS.collections] = 'لوتوس، بهار';
+  row[PRODUCT_CARD_COLUMNS.designYear] = 1404;
+  row[PRODUCT_CARD_COLUMNS.transferCode] = '101';
+  row[PRODUCT_CARD_COLUMNS.productDescription] = '';
+  row[PRODUCT_CARD_COLUMNS.technicalNotes] = '';
   Object.assign(row, priceExportCells(titles, () => ({ price: 2500000, currency: 'IRR' })));
   return { rows: [row] };
 }
