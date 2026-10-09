@@ -17,6 +17,9 @@ export async function runProjectClosedWorkTests(shouldRun: ShouldRun): Promise<T
     ['reg_cancelled_project_refuses_documents_and_logs_td_921',
       'v10.0.28: a final remittance, the finalize of a draft remittance and a work log on a cancelled project are refused with 422 PROJECT_CANCELLED; an open project still takes them (TD-921)',
       ['td921', 'p5-m06', 'projects', 'documents', 'piecework', 'package11'], cancelledProjectCase],
+    ['reg_schedule_log_within_row_quantity_td_955',
+      'v10.0.29: a work log from a workshop schedule row may not exceed the row quantity (422 PIECEWORK_SCHEDULE_ROW_QUANTITY_EXCEEDED); the row quantity itself is saved (TD-955)',
+      ['td955', 'p5-w11', 'projects', 'piecework', 'schedule', 'package11'], scheduleQuantityCase],
   ]);
 }
 
@@ -70,4 +73,20 @@ async function cancelledProjectCase(h: Harness, wrong: string[]): Promise<string
   const okLog = await h.post('/api/piecework/logs', { personnelId: worker, taskId: task, projectId: open, date: f.today, quantity: 1 });
   if (okLog.status !== 201) wrong.push(`a work log on an open project answered ${brief(okLog)}, expected 201`);
   return 'a cancelled project takes no remittance, finalize or work log; an open one does';
+}
+
+/** P5-W11 (TD-955): a schedule row of 5 accepted a log of 50 */
+async function scheduleQuantityCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const worker = await newWorker('TD-955');
+  const task = await newTaskId(h);
+  const tasks = [{ id: 'row-a', taskId: task, taskTitle: 'row', assignedPersonnelId: worker, quantity: 5, status: 'pending' }];
+  const project = await newProject({ 1: { 'prod-main': { productId: 'prod-main', assignedPersonnel: [], tasks } } });
+  const item = (quantity: number) => ({ personnelId: worker, taskId: task, projectId: project, date: f.today, quantity, scheduleRef: { stageId: 1, productId: 'prod-main', rowId: 'row-a' } });
+  const over = await h.post('/api/piecework/logs', { items: [item(6)] });
+  if (over.status !== 422 || codeOf(over) !== 'PIECEWORK_SCHEDULE_ROW_QUANTITY_EXCEEDED') wrong.push(`a log of 6 on a row of 5 answered ${brief(over)}, expected 422 PIECEWORK_SCHEDULE_ROW_QUANTITY_EXCEEDED`);
+  if (await logCount(h, worker) !== 0) wrong.push('the refused log over the row quantity was saved');
+  const exact = await h.post('/api/piecework/logs', { items: [item(5)] });
+  if (exact.status !== 201) wrong.push(`a log of 5 on a row of 5 answered ${brief(exact)}, expected 201`);
+  return 'a schedule log above its row quantity is refused; the row quantity is saved';
 }
