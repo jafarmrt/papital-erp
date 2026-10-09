@@ -1,7 +1,7 @@
 import { formatPersianNumber } from '../../utils/persianNumber';
 
 /**
- * v10.0.39 (TD-1139): what the item Excel import tells the user after the server answers. A row error is never reported as
+ * v10.0.40 (TD-1139): what the item Excel import tells the user after the server answers. A row error is never reported as
  * a plain success: some rows saved and some refused is a warning with the refused count, and nothing saved is an error.
  */
 export interface ItemImportCounts {

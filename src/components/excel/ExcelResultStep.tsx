@@ -9,7 +9,7 @@ interface ExcelResultStepProps {
 }
 
 export const ExcelResultStep: React.FC<ExcelResultStepProps> = ({ importResult }) => {
-  // v10.0.39 (TD-1139): the header says what happened, not «success» whatever the row errors
+  // v10.0.40 (TD-1139): the header says what happened, not «success» whatever the row errors
   const outcome = itemImportOutcome(importResult);
   return (
     <div className="border rounded-2xl p-6 bg-slate-50 space-y-4 animate-in fade-in">
