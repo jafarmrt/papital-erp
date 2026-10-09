@@ -19,6 +19,10 @@ import {
   assertContentMatches, extensionOfType, kindOfType, mediaFilePath, placeOriginal, readImageFacts, receiveToTemp,
 } from './mediaStorage.js';
 
+/** typed with its literal so the audit retention scan (TD-522) reads the entity name in this file */
+const AUDIT_ENTITY: 'کتابخانه تصاویر' = MEDIA_AUDIT_ENTITY;
+const ITEM_ENTITY: 'کالا' = ITEM_AUDIT_ENTITY;
+
 /**
  * v10.0.27 (N-05 PR 3): arranging the files of the media library — their order, the cover of a product, replacing a
  * file with a better version and using a product image as the item's picture. Each change runs in one transaction with
@@ -64,7 +68,7 @@ export const MediaArrangeService = {
           .where(eq(mediaAssets.id, id));
       }
       await logActivity({
-        tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: MEDIA_AUDIT_ENTITY,
+        tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: AUDIT_ENTITY,
         description: `تغییر ترتیب فایل‌های بخش «${section.title}»${itemId ? ` (کالای ${itemId})` : ''}`,
         details: { sectionId: section.id, itemId, before, after: ids.map((id, i) => ({ id, sortOrder: i + 1 })) },
       });
@@ -96,7 +100,7 @@ export const MediaArrangeService = {
         await tx.update(mediaAssets).set({ isCover: cover ? 1 : 0, version: current.version + 1, updatedAt: sql`now()` })
           .where(eq(mediaAssets.id, id));
         await logActivity({
-          tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: MEDIA_AUDIT_ENTITY,
+          tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: AUDIT_ENTITY,
           entityId: id, description: cover
             ? `تعیین فایل «${current.originalName}» به‌عنوان تصویر شاخص کالای ${target.itemId}`
             : `برداشتن تصویر شاخص «${current.originalName}» از کالای ${target.itemId}`,
@@ -155,7 +159,7 @@ export const MediaArrangeService = {
           updatedAt: sql`now()`,
         }).where(eq(mediaAssets.id, id)).returning();
         await logActivity({
-          tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: MEDIA_AUDIT_ENTITY,
+          tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: AUDIT_ENTITY,
           entityId: id, description: `جایگزینی فایل «${before.originalName}» با «${after.originalName}»`,
           details: { operation: 'replace', before: auditSnapshot(before), after: auditSnapshot(after) },
         });
@@ -199,7 +203,7 @@ export const MediaArrangeService = {
         const [after] = await tx.update(items).set({ image, thumbnail, version: before.version + 1 })
           .where(and(eq(items.id, before.id), eq(items.version, before.version))).returning({ version: items.version });
         await logActivity({
-          tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: ITEM_AUDIT_ENTITY,
+          tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: ITEM_ENTITY,
           entityId: before.id, description: `عکس کالای «${before.name}» (${before.code}) از کتابخانه تصاویر (فایل ${asset.id})`,
           details: {
             before: { image: before.image ?? '', thumbnail: before.thumbnail ?? '' },

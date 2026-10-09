@@ -1,59 +1,55 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Images } from 'lucide-react';
-import { isAbortError } from '../api';
-import { formatPersianNumber } from '../utils';
-import { MediaProductFiltersBar } from '../components/media/MediaProductFiltersBar';
-import { MediaPager, MediaProductCard } from '../components/media/MediaProductCard';
+import { useHasAnyPermission, useHasPermission } from '../contexts/AuthContext';
+import type { User } from '../types';
+import { MediaProductsGrid } from '../components/media/MediaProductsGrid';
+import { MediaSectionTabs } from '../components/media/MediaSectionTabs';
+import { MediaSectionsModal } from '../components/media/MediaSectionsModal';
+import { MediaSectionView } from '../components/media/MediaSectionView';
+import { useMediaSections } from '../components/media/useMediaSections';
+import { mediaProductQueryFrom, mediaProductQueryParams, type MediaProductQuery } from '../lib/media/mediaApi';
+import { MEDIA_MANAGE_KEY, MEDIA_UPLOAD_KEYS } from '../lib/media/mediaAccess';
 import {
-  getMediaProductFilters, listMediaProducts, mediaErrorMessage, mediaProductQueryFrom, mediaProductQueryParams,
-  type MediaProductFilterOptions, type MediaProductPage, type MediaProductQuery,
-} from '../lib/media/mediaApi';
+  EMPTY_SECTION_QUERY, mediaSectionQueryFrom, mediaSectionQueryParams, sectionIdFrom, type MediaSection, type MediaSectionQuery,
+} from '../lib/media/mediaSectionsApi';
 
 export const MEDIA_LIBRARY_TITLE = 'کتابخانه تصاویر و فیلم‌ها';
+export const SECTION_NOT_FOUND_TEXT = 'این بخش یافت نشد؛ شاید حذف شده باشد.';
 
-/** v10.0.25 (N-05 PR 2): the media library's product grid; search conditions live in the page address */
-export default function MediaLibraryPage() {
+/**
+ * v10.0.25 (N-05 PR 2): the media library; v10.0.27 (N-05 PR 3) adds its sections. «محصولات» shows the product grid,
+ * a custom section its files. The chosen section and its search conditions live in the page address (`?section=`).
+ */
+export default function MediaLibraryPage({ user }: { user?: User | null }) {
   const [params, setParams] = useSearchParams();
   const paramsText = params.toString();
-  const query = useMemo(() => mediaProductQueryFrom(new URLSearchParams(paramsText)), [paramsText]);
-  const [result, setResult] = useState<MediaProductPage | null>(null);
-  const [options, setOptions] = useState<MediaProductFilterOptions | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const canUpload = useHasAnyPermission(MEDIA_UPLOAD_KEYS);
+  const canManage = useHasPermission(MEDIA_MANAGE_KEY);
+  const { sections, error: sectionsError, reload, replace } = useMediaSections();
+  const [managing, setManaging] = useState(false);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    getMediaProductFilters(controller.signal)
-      .then(setOptions)
-      .catch((err: unknown) => {
-        if (!isAbortError(err)) setOptions(null);
-      });
-    return () => controller.abort();
-  }, []);
+  const sectionId = useMemo(() => sectionIdFrom(new URLSearchParams(paramsText)), [paramsText]);
+  const productQuery = useMemo(() => mediaProductQueryFrom(new URLSearchParams(paramsText)), [paramsText]);
+  const sectionQuery = useMemo(() => mediaSectionQueryFrom(new URLSearchParams(paramsText)), [paramsText]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    listMediaProducts(query, controller.signal)
-      .then(res => {
-        setResult({ ...res, data: Array.isArray(res?.data) ? res.data : [] });
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (isAbortError(err)) return;
-        setError(mediaErrorMessage(err, 'دریافت فهرست محصولات ناموفق بود.'));
-        setLoading(false);
-      });
-    return () => controller.abort();
-  }, [query]);
+  const list = sections ?? [];
+  const chosen = sectionId === null ? null : list.find(s => s.id === sectionId) ?? null;
+  const productsSection = list.find(s => s.kind === 'products') ?? null;
+  const showProducts = sectionId === null || chosen?.kind === 'products';
+  const activeId = showProducts ? productsSection?.id ?? null : chosen?.id ?? null;
 
-  const changeQuery = useCallback((next: MediaProductQuery) => {
+  const changeProductQuery = useCallback((next: MediaProductQuery) => {
     setParams(mediaProductQueryParams(next), { replace: true });
   }, [setParams]);
+  const changeSectionQuery = useCallback((next: MediaSectionQuery) => {
+    if (sectionId !== null) setParams(mediaSectionQueryParams(sectionId, next), { replace: true });
+  }, [sectionId, setParams]);
+  const select = useCallback((section: MediaSection) => {
+    setParams(section.kind === 'products' ? new URLSearchParams() : mediaSectionQueryParams(section.id, EMPTY_SECTION_QUERY));
+  }, [setParams]);
 
-  const rows = result?.data ?? [];
+  const rights = { canUpload, canManage, username: user?.username };
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -61,27 +57,26 @@ export default function MediaLibraryPage() {
         <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><Images size={20} /></div>
         <div>
           <h1 className="text-lg font-black text-slate-800">{MEDIA_LIBRARY_TITLE}</h1>
-          <p className="text-xs text-slate-500">
-            {result ? `${formatPersianNumber(result.total)} محصول` : 'تصویرها و فیلم‌های محصولات'}
-          </p>
+          <p className="text-xs text-slate-500">{chosen && !showProducts ? chosen.title : 'تصویرها و فیلم‌های محصولات و بخش‌های دیگر'}</p>
         </div>
       </header>
 
-      <MediaProductFiltersBar query={query} options={options} onChange={changeQuery} />
+      {sections && <MediaSectionTabs sections={list} activeId={activeId} canManage={canManage} onSelect={select} onManage={() => setManaging(true)} />}
+      {sectionsError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{sectionsError}</div>}
 
-      {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
-
-      {loading && !result ? (
+      {showProducts ? (
+        <MediaProductsGrid query={productQuery} onQuery={changeProductQuery} />
+      ) : chosen ? (
+        <MediaSectionView key={chosen.id} section={chosen} query={sectionQuery} rights={rights} onQuery={changeSectionQuery} onCountChanged={reload} />
+      ) : sections ? (
+        <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{SECTION_NOT_FOUND_TEXT}</div>
+      ) : !sectionsError && (
         <div className="py-16 text-center text-sm text-slate-400">در حال بارگذاری...</div>
-      ) : rows.length === 0 && !error ? (
-        <div className="py-16 text-center text-sm text-slate-500">محصولی با این شرط‌ها یافت نشد.</div>
-      ) : (
-        <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3 ${loading ? 'opacity-60' : ''}`}>
-          {rows.map(row => <MediaProductCard key={row.itemId} row={row} />)}
-        </div>
       )}
 
-      {result && <MediaPager page={result.page || query.page} total={result.total} limit={result.limit} onPage={p => changeQuery({ ...query, page: p })} />}
+      {managing && canManage && sections && (
+        <MediaSectionsModal sections={list} onClose={() => setManaging(false)} onReplace={replace} onReload={reload} />
+      )}
     </div>
   );
 }

@@ -183,3 +183,26 @@ export function uploadVideoPoster(assetId: number, poster: VideoPoster): Promise
     method: 'PUT', url: `${API_URL}/media/assets/${assetId}/poster${query}`, body: poster.blob, contentType: 'image/jpeg', fileName: `poster-${assetId}.jpg`,
   });
 }
+
+/**
+ * v10.0.27 (N-05 PR 3): replaces a file with a better version of the same kind (`PUT /media/assets/:id/content`, raw
+ * body like an upload); title, description, tags, order and cover are kept by the server.
+ */
+export function replaceMediaFileContent(assetId: number, file: File, type: string, onProgress?: (fraction: number) => void): Promise<UploadAnswer> {
+  return sendRawFile<UploadAnswer>({
+    method: 'PUT', url: `${API_URL}/media/assets/${assetId}/content`, body: file, contentType: type, fileName: file.name, onProgress,
+  });
+}
+
+export const MEDIA_REPLACE_KIND_TEXT: Readonly<Record<MediaKind, string>> = {
+  image: 'این فایل تصویر است؛ فقط با تصویر دیگری جایگزین می‌شود.',
+  video: 'این فایل فیلم است؛ فقط با فیلم دیگری جایگزین می‌شود.',
+};
+
+/** The accept attribute of a replacement file input: only files of the asset's own kind */
+export function replaceAcceptOf(kind: MediaKind): string {
+  return Object.entries(MEDIA_TYPES)
+    .filter(([, t]) => t.kind === kind)
+    .map(([mime, t]) => `${mime},.${t.ext}`)
+    .join(',') + (kind === 'image' ? ',.jpeg,.tiff' : ',.m4v');
+}

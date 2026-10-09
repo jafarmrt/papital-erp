@@ -5,6 +5,9 @@ import { ConflictError, NotFoundError, ValidationError } from '../../errors/cust
 import { logActivity } from '../../lib/auditLogger.js';
 import { listLiveSections, MEDIA_AUDIT_ENTITY, type MediaActor, type MediaSectionView } from './mediaAsset.service.js';
 
+/** typed with its literal so the audit retention scan (TD-522) reads the entity name in this file */
+const AUDIT_ENTITY: 'کتابخانه تصاویر' = MEDIA_AUDIT_ENTITY;
+
 /**
  * v10.0.27 (N-05 PR 3): the sections of the media library besides «محصولات» (approved plan, section 2). A section is
  * created, renamed, reordered and deleted by a holder of `media.manage`; the system section «محصولات» is never renamed
@@ -88,7 +91,7 @@ export const MediaSectionService = {
         kind: 'custom', title, description, sortOrder: Number(next), createdBy: actor.username,
       }).returning();
       await logActivity({
-        tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'CREATE', entity: MEDIA_AUDIT_ENTITY,
+        tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'CREATE', entity: AUDIT_ENTITY,
         entityId: row.id, description: `ساخت بخش «${row.title}» در کتابخانه تصاویر`, details: { after: snapshot(row) },
       });
       return viewOf(tx, row.id);
@@ -108,7 +111,7 @@ export const MediaSectionService = {
       const [after] = await tx.update(mediaSections).set({ title, description, version: before.version + 1, updatedAt: sql`now()` })
         .where(eq(mediaSections.id, id)).returning();
       await logActivity({
-        tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: MEDIA_AUDIT_ENTITY,
+        tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: AUDIT_ENTITY,
         entityId: id, description: `ویرایش بخش «${before.title}» کتابخانه تصاویر`, details: { before: snapshot(before), after: snapshot(after) },
       });
       return viewOf(tx, id);
@@ -129,7 +132,7 @@ export const MediaSectionService = {
         await tx.update(mediaSections).set({ sortOrder: index + 1, updatedAt: sql`now()` }).where(eq(mediaSections.id, id));
       }
       await logActivity({
-        tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: MEDIA_AUDIT_ENTITY,
+        tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'UPDATE', entity: AUDIT_ENTITY,
         description: 'تغییر ترتیب بخش‌های کتابخانه تصاویر', details: { before, after: ids.map((id, i) => ({ id, sortOrder: i + 1 })) },
       });
       return listLiveSections(tx);
@@ -148,7 +151,7 @@ export const MediaSectionService = {
       }
       await tx.update(mediaSections).set({ isDeleted: 1, version: before.version + 1, updatedAt: sql`now()` }).where(eq(mediaSections.id, id));
       await logActivity({
-        tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'DELETE', entity: MEDIA_AUDIT_ENTITY,
+        tx, req: actor.req, userId: actor.userId, username: actor.username, action: 'DELETE', entity: AUDIT_ENTITY,
         entityId: id, description: `حذف بخش «${before.title}» از کتابخانه تصاویر`, details: { before: snapshot(before) },
       });
     });

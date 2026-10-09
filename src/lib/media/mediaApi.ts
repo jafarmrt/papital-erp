@@ -30,6 +30,8 @@ export interface MediaAssetView {
   createdAt: string | null;
   version: number;
   warnings: MediaWarning[];
+  /** v10.0.27 (N-05 PR 3): free tags of the file, read with `normalizeMediaTags` */
+  tags: string[];
 }
 
 export interface MediaProductRow {
@@ -101,6 +103,7 @@ export interface MediaAssetEditInput {
   description?: string;
   shotType?: MediaShotType;
   sortOrder?: number;
+  tags?: string[];
 }
 
 /** Search conditions of the product grid; every one goes to the server, nothing is filtered in the browser */

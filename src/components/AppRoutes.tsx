@@ -138,7 +138,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         } />
         <Route path="/media-library" element={
           <ProtectedRoute page="/media-library" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
-            <MediaLibraryPage />
+            <MediaLibraryPage user={user} />
           </ProtectedRoute>
         } />
         <Route path="/media-library/products/:itemId" element={
