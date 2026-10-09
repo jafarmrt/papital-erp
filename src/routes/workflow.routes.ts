@@ -117,7 +117,7 @@ router.post('/tasks/:taskId/execute', authorizePermission(...WORKFLOW_EXECUTE_PE
     const taskId = Number(req.params.taskId);
     const { comment, snapshotData, action, transitionId } = req.body;
     const userId = req.user?.id;
-    const userName = req.user?.fullName || req.user?.username || '';
+    const userName = req.user?.full_name || req.user?.username || '';
     const userRole = req.user?.role || '';
     const userPermissions = req.user?.permissions || [];
 
@@ -196,7 +196,7 @@ router.post('/start', authorizePermission('workflow.execute', 'workflow.manage',
       entityType,
       entityId,
       userId: req.user?.id,
-      userName: req.user?.fullName || req.user?.username
+      userName: req.user?.full_name || req.user?.username
     });
 
     res.json({ success: true, data: instanceData });
@@ -219,7 +219,7 @@ router.post('/transition', authorizePermission(...WORKFLOW_EXECUTE_PERMISSIONS),
       instanceId,
       transitionId,
       userId: req.user?.id,
-      userName: req.user?.fullName || req.user?.username,
+      userName: req.user?.full_name || req.user?.username,
       userRole: req.user?.role,
       userPermissions: req.user?.permissions || [],
       comment: comment ?? undefined,
@@ -372,7 +372,7 @@ router.get('/delegations', authorizePermission('workflow.view', 'workflow.manage
 router.post('/delegations', authorizePermission('workflow.approve', 'workflow.manage', 'workflow.admin'), validate(createDelegationSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.id || 0;
-    const userName = req.user?.username || 'کاربر';
+    const userName = req.user?.full_name || req.user?.username || 'کاربر';
     const userRole = req.user?.role || 'user';
 
     const { fromUserId, toUserId, scope, startDate, endDate, reason } = req.body as z.infer<typeof createDelegationSchema>['body'];
@@ -408,7 +408,7 @@ router.post('/delegations/:id/revoke', authorizePermission('workflow.approve', '
     const id = Number(req.params.id);
     const userId = req.user?.id || 0;
     const userRole = req.user?.role || 'user';
-    const userName = req.user?.username || 'کاربر';
+    const userName = req.user?.full_name || req.user?.username || 'کاربر';
 
     const result = await WorkflowEngineService.revokeDelegation({
       id,
