@@ -33,6 +33,7 @@ import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { proformaInvoiceTarget } from './proformaInvoice.js';
 import { assertNotProjectDelivery, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
+import { consumesProjectReservation } from '../../lib/projects/projectIssueTypes.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
 
 export class DocumentLifecycleService {
@@ -152,7 +153,8 @@ export class DocumentLifecycleService {
           if (inOut === 'out') {
             await assertOutflowWithinSellable(tx, docLines, {
               excludeDocumentId: id,
-              projectId: doc.projectId ? Number(doc.projectId) : null,
+              // v10.0.32 (TD-947): رزرو پروژه فقط برای حواله و ضایعات همان پروژه آزاد است، نه فاکتور فروش
+              projectId: doc.projectId && consumesProjectReservation(targetType) ? Number(doc.projectId) : null,
             });
           }
 
@@ -209,7 +211,7 @@ export class DocumentLifecycleService {
           }
 
           // v7.0.102 (TD-233): کسر رزرو پروژه حواله خروج در همان تراکنش نهایی‌سازی؛ خطا نهایی‌سازی را برمی‌گرداند
-          if (inOut === 'out' && doc.projectId) {
+          if (inOut === 'out' && doc.projectId && consumesProjectReservation(targetType)) {
             await releaseReservationsForDocument(tx, Number(doc.projectId), id, docLines, user || doc.user || undefined);
           }
 

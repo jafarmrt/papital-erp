@@ -13,6 +13,9 @@ export async function runProjectReservationIssueTests(shouldRun: ShouldRun): Pro
     ['reg_project_refinalize_reserves_remaining_need_td_945',
       'v10.0.31: finalizing a project again reserves its need minus what its remittances and allocations already issued, never the whole need (TD-945)',
       ['td945', 'p5-m12', 'projects', 'reservation', 'package11'], refinalizeCase],
+    ['reg_sales_invoice_keeps_project_reservation_td_947',
+      'v10.0.32: a final sales invoice with a projectId neither consumes the project\'s reservation nor sells it (400 INSUFFICIENT_STOCK beyond free stock); a remittance of the project still consumes it (TD-947)',
+      ['td947', 'p5-m14', 'projects', 'reservation', 'documents', 'package8', 'package11'], salesInvoiceCase],
   ]);
 }
 
@@ -47,4 +50,22 @@ async function refinalizeCase(h: Harness, wrong: string[]): Promise<string> {
   const view = await reservedOf(a);
   if (view.project !== 4) wrong.push(`the reservation report shows ${view.project} for the project, expected 4`);
   return 'a project finalized again reserves only its remaining need';
+}
+
+/** P5-M14 (TD-947): a final sales invoice with projectId consumed the project's reservation (API only) */
+async function salesInvoiceCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const b = await f.item(10, 1_000);
+  const project = await createProject(h, { sections: globalSection([await materialRow(h, b, 8)]), manualPurchaseItems: [], isFinalized: true });
+  if (await storedQty(h, project, b) !== 8) throw new Error(`setup: the finalized project reserves ${await storedQty(h, project, b)}, expected 8`);
+  const sale = (qty: number) => h.post('/api/documents', f.doc('invoice', 'final', [{ itemId: b, quantity: qty, unit_price: 5_000, location: f.wh }], { projectId: project }));
+  const over = await sale(5);
+  const code = (over.body as { code?: unknown } | undefined)?.code;
+  if (over.status !== 400 || code !== 'INSUFFICIENT_STOCK') wrong.push(`a sales invoice of 5 with the project's id (2 free) answered ${brief(over)}, expected 400 INSUFFICIENT_STOCK`);
+  const within = await sale(2);
+  if (within.status !== 200) wrong.push(`a sales invoice of the 2 free units with the project's id answered ${brief(within)}, expected 200`);
+  if (await storedQty(h, project, b) !== 8) wrong.push(`after the sales invoices the project reserves ${await storedQty(h, project, b)}, expected 8`);
+  const rem = await h.post('/api/documents', f.doc('remittance', 'final', [{ itemId: b, quantity: 3, unit_price: 0, location: f.wh }], { projectId: project }));
+  if (rem.status !== 200 || await storedQty(h, project, b) !== 5) wrong.push(`a project remittance of 3 answered ${brief(rem)} leaving ${await storedQty(h, project, b)} reserved, expected 200 and 5`);
+  return 'a sales invoice with a projectId keeps the project reservation; a remittance consumes it';
 }
