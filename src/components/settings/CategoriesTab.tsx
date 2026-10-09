@@ -3,6 +3,7 @@ import { confirmAction } from '../ConfirmDialogHost';
 import { FolderTree, Plus, Edit2, Trash2, RotateCcw } from 'lucide-react';
 import { Category } from '../../types';
 import { cn } from '../../utils';
+import { useHasPermission } from '../../contexts/AuthContext';
 
 interface CategoriesTabProps {
   categories: Category[];
@@ -19,6 +20,10 @@ export function CategoriesTab({
   onDeleteCategory,
   onResetDefaults
 }: CategoriesTabProps) {
+  // v10.0.41 (TD-1163): each row button shows only with the key its route asks (PUT products.edit, DELETE products.delete);
+  // the tab opens with products.create too, which saved nothing but a 403
+  const canEdit = useHasPermission('products.edit');
+  const canDelete = useHasPermission('products.delete');
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-xs flex flex-col min-h-[400px] max-w-4xl mx-auto text-right font-farsi">
       <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-xl">
@@ -87,6 +92,7 @@ export function CategoriesTab({
                   <td className="p-3 text-slate-600">{c.defaultUnit || c.default_unit || 'عدد'}</td>
                   <td className="p-3 text-center">
                     <div className="flex items-center justify-center gap-2">
+                      {canEdit && (
                       <button
                         onClick={() => onOpenEditModal(c)}
                         className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded-lg transition-colors cursor-pointer"
@@ -94,6 +100,8 @@ export function CategoriesTab({
                       >
                         <Edit2 size={14} />
                       </button>
+                      )}
+                      {canDelete && (
                       <button
                         onClick={() => onDeleteCategory(c.id)}
                         className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg transition-colors cursor-pointer"
@@ -101,6 +109,7 @@ export function CategoriesTab({
                       >
                         <Trash2 size={14} />
                       </button>
+                      )}
                     </div>
                   </td>
                 </tr>

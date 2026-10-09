@@ -39,9 +39,12 @@ const STORED_KEYS = new Set(['پروفایل کاربر', 'صف خطاهای ق�
 const RECOGNISED_MESSAGES = new Set(['توکن امنیتی CSRF نامعتبر است یا ارسال نشده است']);
 /** نشانی IP (ت۸)، نام سامانه، قالب فایل و کد ارز */
 const ALLOWED_LATIN = new Set(['IP', 'ERP', 'PNG', 'JPG', 'JPEG', 'WEBP', 'GIF', 'PDF', 'XLSX', 'IRR', 'USD', 'EUR', 'AED', 'GBP']);
-const TRANSLITERATION = /(?<![؀-ۿ])(داشبورد|پروفایل|ماژول|آواتار|سایدبار|لاگ|لاگین|کلاینت|ویزارد|کانبان|اسنپ‌شات|توکن|اکانت)(?![؀-ۿ])/;
+// v10.0.37 (TD-1165): a word boundary is a Persian letter or the zero-width non-joiner, not Persian punctuation
+// («لاگ،» used to pass), and JSX text running into `{…}` is scanned too («لاگ امنیتی #{id}» used to pass).
+const PERSIAN_LETTER = '[\\u0621-\\u064A\\u067E\\u0686\\u0698\\u06A9\\u06AF\\u06CC\\u200C]';
+const TRANSLITERATION = new RegExp(`(?<!${PERSIAN_LETTER})(داشبورد|پروفایل|ماژول|آواتار|سایدبار|لاگ|لاگین|کلاینت|ویزارد|کانبان|اسنپ‌شات|توکن|اکانت)(?!${PERSIAN_LETTER})`);
 const PERSIAN = /[؀-ۿ]/;
-const LITERAL = /'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`|>[^<>{}]*</g;
+const LITERAL = /'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`|>[^<>{}]*(?=[<{])/g;
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {

@@ -5,16 +5,23 @@ import type { OutboxHealth } from '../../lib/system/subsystemHealth';
 
 /**
  * v9.0.391 (TD-623، B01-43، تصمیم ت۸): دکمه‌های صف رویدادها. هر دکمه فقط وقتی نشان داده می‌شود که چیزی برای اجرای
- * دوباره هست و پیش از ارسال می‌پرسد «… دوباره اجرا شوند؟» با «اجرای دوباره / انصراف»؛ اجرای دوباره رویدادهای ناموفق
- * وبهوک طرف سوم، اعلان و گردش کار آن‌ها را هم دوباره اجرا می‌کند. پیش‌تر یک کلیک بی پرسش و حتی با صف خالی می‌فرستاد.
+ * دوباره هست و پیش از ارسال می‌پرسد «… دوباره اجرا شوند؟» با «اجرای دوباره / انصراف». پیش‌تر یک کلیک بی پرسش و حتی با
+ * صف خالی می‌فرستاد.
  */
 
 export type EventQueueAction = 'requeue_dlq' | 'clear_stuck_outbox';
 
+/**
+ * v10.0.38 (TD-1166): the retry skips the handlers an event already completed (`outbox_events.completed_handlers`) and
+ * a webhook delivery that succeeded (one `integration_delivery_jobs` row per target and event); the confirmation used to
+ * say every webhook, notification and workflow of the event runs again.
+ */
+export const REQUEUE_SKIPS_DONE_WORK = 'فقط بخش‌های ناموفق هر رویداد دوباره اجرا می‌شوند؛ وبهوکی که با موفقیت ارسال شده دوباره فرستاده نمی‌شود.';
+
 export const EVENT_QUEUE_CONFIRMATIONS: Readonly<Record<EventQueueAction, (count: number) => { title: string; message: string }>> = {
   requeue_dlq: count => ({
     title: 'اجرای دوباره رویدادهای ناموفق',
-    message: `${formatPersianNumber(count)} رویداد ناموفق دوباره اجرا شوند؟ وبهوک‌ها، اعلان‌ها و گردش کارهای این رویدادها هم دوباره اجرا می‌شوند.`,
+    message: `${formatPersianNumber(count)} رویداد ناموفق دوباره اجرا شوند؟ ${REQUEUE_SKIPS_DONE_WORK}`,
   }),
   clear_stuck_outbox: count => ({
     title: 'اجرای دوباره رویدادهای مانده',
