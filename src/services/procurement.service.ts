@@ -691,6 +691,8 @@ export class ProcurementService {
           status: docStatus,
           // v9.0.336 (TD-778، O25 بسته ۱۰): سفارش به تأمین‌کننده انتخاب‌شده با شناسه وصل می‌شود؛ بی شناسه با نام یکتا
           partyId: group.supplierId ?? undefined,
+          // v10.0.33 (TD-946، تصمیم ت۱۰): سفارش درخواست خرید پروژه به همان پروژه پیوند دارد
+          projectId: req.projectId ?? undefined,
           buyer_name: supplierName,
           notes: docNotes,
           location: warehouseLoc,

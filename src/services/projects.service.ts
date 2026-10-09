@@ -287,7 +287,7 @@ export class ProjectService {
     if (input.products !== undefined) updateData.products = Array.isArray(input.products) ? input.products : [];
     if (input.inventoryControl !== undefined) {
       const products = input.products !== undefined ? updateData.products : existing.products;
-      updateData.inventoryControl = await resolveServerInventoryControl(input.inventoryControl, existing.inventoryControl, products, executor);
+      updateData.inventoryControl = await resolveServerInventoryControl(input.inventoryControl, existing.inventoryControl, products, executor, Number(existing.id));
     }
     // v9.0.282 (TD-736): پیوند کارکرد هر ردیف برنامه را فقط سرور (ثبت و حذف کارکرد) می‌نویسد
     if (input.stageSchedules !== undefined) updateData.stageSchedules = keepScheduleLogLinks(input.stageSchedules, existing.stageSchedules);

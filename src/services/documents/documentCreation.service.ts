@@ -37,6 +37,7 @@ import { money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { assertDocumentStatus, assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
+import { consumesProjectReservation } from '../../lib/projects/projectIssueTypes.js';
 import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
 import { documentAuditSnapshot, type DocumentAuditChange } from './documentAudit.js';
 
@@ -566,7 +567,8 @@ export class DocumentCreationService {
           await assertOutflowWithinSellable(tx, lines, {
             docLocation,
             excludeDocumentId: body.excludeDocumentId ? Number(body.excludeDocumentId) : null,
-            projectId: finalProjectId,
+            // v10.0.32 (TD-947): رزرو پروژه فقط برای حواله و ضایعات همان پروژه آزاد است، نه فاکتور فروش
+            projectId: consumesProjectReservation(docType) ? finalProjectId : null,
           });
         }
 
@@ -630,7 +632,7 @@ export class DocumentCreationService {
         await insertDocumentLines(tx, lineRows);
 
         // v7.0.102 (TD-233): کسر رزرو پروژه در همان تراکنش خروج قطعی؛ خطا کل سند را برمی‌گرداند
-        if (docStatus === 'final' && stockDirection === 'out' && finalProjectId !== null) {
+        if (docStatus === 'final' && stockDirection === 'out' && finalProjectId !== null && consumesProjectReservation(docType)) {
           projectReservation = await releaseReservationsForDocument(tx, finalProjectId, docId, lines, user, actor.userId);
         }
       }
