@@ -45,3 +45,18 @@ describe('ci_shellcheck_gate_obs_r1_19: shell scripts pass shellcheck in CI (OBS
     expect(lint?.body ?? '').toMatch(/git ls-files -z '\*\.sh' \| xargs -0 shellcheck --severity=error/);
   });
 });
+
+/** v10.0.35 (I-06, OBS-R1-19, product-owner decision): the coverage gate fails below its floors. */
+describe('ci_coverage_thresholds_obs_r1_19: the coverage gate has floors (OBS-R1-19)', () => {
+  it('test:coverage runs c8 with --check-coverage and a positive floor for each metric', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { scripts: Record<string, string> };
+    const script = pkg.scripts['test:coverage'] ?? '';
+    expect(script).toMatch(/^c8 .*--check-coverage/);
+    const floors = Object.fromEntries(
+      ['lines', 'statements', 'functions', 'branches'].map(k => [k, Number(new RegExp(`--${k} (\\d+)`).exec(script)?.[1] ?? 0)]),
+    );
+    expect(floors).toEqual({ lines: 90, statements: 90, functions: 88, branches: 73 });
+    const coverageJob = ciJobs().find(j => /npm run test:coverage/.test(j.body));
+    expect(coverageJob).toBeDefined();
+  });
+});
