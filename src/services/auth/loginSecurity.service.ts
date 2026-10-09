@@ -105,7 +105,7 @@ export function resetPhantomLockouts(): void {
   passwordChangeFailures.clear();
 }
 
-// --- v10.0.22 (TD-961, OBS-R1-29): wrong «current password» answers of the profile password change ---------
+// --- v10.0.25 (TD-961, OBS-R1-29): wrong «current password» answers of the profile password change ---------
 // A signed-in session (or a stolen cookie) could guess the current password without limit: only the general
 // limiter (10,000 requests a minute) applied. The same progressive lock as the login pair applies per user.
 const passwordChangeFailures = new Map<string, FailureState>();

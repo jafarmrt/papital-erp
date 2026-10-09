@@ -17,7 +17,7 @@ export function addressLockoutMessage(minutes: number): string {
   return `ورود از این دستگاه به دلیل تلاش‌های ناموفق پیاپی موقتاً بسته است؛ ${persianDigits(minutes)} دقیقه دیگر دوباره تلاش کنید.`;
 }
 
-/** v10.0.22 (TD-961): تغییر رمز از نمایه پس از چند رمز فعلی نادرست پیاپی */
+/** v10.0.25 (TD-961): تغییر رمز از نمایه پس از چند رمز فعلی نادرست پیاپی */
 export function passwordChangeLockoutMessage(minutes: number): string {
   return `تغییر رمز به دلیل واردکردن پیاپی رمز فعلی نادرست موقتاً بسته است؛ ${persianDigits(minutes)} دقیقه دیگر دوباره تلاش کنید.`;
 }
