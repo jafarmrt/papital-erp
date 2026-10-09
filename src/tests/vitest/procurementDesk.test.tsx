@@ -124,7 +124,8 @@ describe('procurement desk sections and buttons (TD-702)', () => {
   });
 
   it('each button follows the permission of its API', async () => {
-    for (const key of ['procurement.view', 'procurement.create', 'procurement.manage', 'procurement.order']) granted.add(key);
+    // v10.0.38 (TD-1126): the approval permission is procurement.approve only, as the workflow approve step asks
+    for (const key of ['procurement.view', 'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve']) granted.add(key);
     deskApi();
     await deskRendered();
     expect(screen.queryByText('ثبت درخواست خرید جدید')).not.toBeNull();
