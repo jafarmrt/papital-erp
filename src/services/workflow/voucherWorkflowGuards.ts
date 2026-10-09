@@ -1,7 +1,7 @@
 import type { SeedGuardUpgrade, SeedStepGuard } from './seedGuardUpgrade.js';
 
 /**
- * v10.0.21 (TD-965، طرح حقوق ت۹): نگهبان گام‌های گردش کار پیش‌فرض سند حسابداری. تأیید، قطعی کردن و برگرداندن سند
+ * v10.0.22 (TD-965، طرح حقوق ت۹): نگهبان گام‌های گردش کار پیش‌فرض سند حسابداری. تأیید، قطعی کردن و برگرداندن سند
  * تأییدشده به پیش‌نویس `accounting.vouchers_approve` می‌خواهند؛ رد پیش‌نویس همان `accounting.vouchers` ثبت و ویرایش است و
  * بازگشایی سند ردشده آزاد. پیش‌تر هر چهار گام فقط `accounting.vouchers` را می‌خواستند (v9.0.128، TD-542).
  */
@@ -15,7 +15,7 @@ export const JOURNAL_VOUCHER_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = [
   { from: 'rejected', to: 'draft', actionKey: 'reopen_voucher', title: 'بازگشایی و اصلاح سند', requiredRole: '', requiredPermission: '' },
 ];
 
-/** seed پیش از v10.0.21 */
+/** seed پیش از v10.0.22 */
 const LEGACY_JOURNAL_VOUCHER_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = JOURNAL_VOUCHER_STEP_GUARDS.map(g => ({
   ...g, requiredPermission: g.actionKey === 'reopen_voucher' ? '' : 'accounting.vouchers',
 }));

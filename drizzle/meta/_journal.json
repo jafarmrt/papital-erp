@@ -678,7 +678,14 @@
       "idx": 96,
       "version": "7",
       "when": 1794000000000,
-      "tag": "0096_voucher_approve_permission",
+      "tag": "0096_media_library",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1794100000000,
+      "tag": "0097_voucher_approve_permission",
       "breakpoints": true
     }
   ]

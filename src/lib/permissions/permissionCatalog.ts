@@ -39,6 +39,14 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     ]
   },
   {
+    category: 'کتابخانه تصاویر و فیلم‌ها',
+    permissions: [
+      { key: 'media.view', title: 'مشاهده کتابخانه تصاویر', description: 'دیدن تصویرها و فیلم‌های محصولات و بخش‌های دیگر و دانلود نسخه سبک و اصلی آن‌ها' },
+      { key: 'media.upload', title: 'بارگذاری در کتابخانه تصاویر', description: 'بارگذاری تصویر و فیلم و ویرایش و حذف فایل‌هایی که خود کاربر فرستاده', requires: ['media.view'] },
+      { key: 'media.manage', title: 'مدیریت کتابخانه تصاویر', description: 'ویرایش و حذف همه فایل‌ها و ساخت دوباره نسخه سبک تصویرها', requires: ['media.view'] },
+    ],
+  },
+  {
     category: 'انبارداری و جابجایی',
     permissions: [
       { key: 'warehouse.view', title: 'مشاهده انبارها', description: 'مشاهده لیست انبارها و موجودی تفکیکی' },
@@ -167,7 +175,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     permissions: [
       { key: 'accounting.view', title: 'مشاهده اسناد و دفاتر حسابداری', description: 'دسترسی به اسناد دوبل، دفتر روزنامه، کل، معین و گزارش‌ها' },
       { key: 'accounting.vouchers', title: 'صدور و ویرایش اسناد حسابداری', description: 'ثبت، ویرایش و حذف پیش‌نویس، سند برگشتی و سند اصلاحی', requires: ['accounting.view'] },
-      // v10.0.21 (TD-965، طرح حقوق ت۹): تأیید جدا از ثبت؛ مهاجرت 0096 آن را به هر نقش دارای accounting.vouchers داد
+      // v10.0.22 (TD-965، طرح حقوق ت۹): تأیید جدا از ثبت؛ مهاجرت 0097 آن را به هر نقش دارای accounting.vouchers داد
       { key: 'accounting.vouchers_approve', title: 'تأیید و قطعی کردن سند حسابداری', description: 'تأیید سند پیش‌نویس، بازگرداندن سند تأییدشده به پیش‌نویس و قطعی کردن سند؛ ثبت‌کننده سند دستی آن را تأیید نمی‌کند', requires: ['accounting.vouchers'] },
       { key: 'accounting.coa', title: 'مدیریت کدینگ حساب‌ها', description: 'تعریف، ویرایش و حذف حساب‌های گروه، کل، معین و تفصیلی', requires: ['accounting.view'] },
       { key: 'accounting.treasury', title: 'عملیات خزانه‌داری (دریافت و پرداخت)', description: 'ثبت و پیگیری نقدینگی، حساب‌های بانکی، پوز و حواله‌ها', requires: ['accounting.view'] },

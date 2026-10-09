@@ -34,7 +34,7 @@ async function voucherExists(tx: DbExecutor, entityId: string): Promise<boolean>
 }
 
 /**
- * v10.0.21 (TD-965، طرح حقوق ت۹): تأیید، قطعی کردن و برگرداندن سند تأییدشده به پیش‌نویس `accounting.vouchers_approve`
+ * v10.0.22 (TD-965، طرح حقوق ت۹): تأیید، قطعی کردن و برگرداندن سند تأییدشده به پیش‌نویس `accounting.vouchers_approve`
  * می‌خواهد، مثل مسیرهای صفحه اسناد؛ بازگشایی سند ردشده به پیش‌نویس همان `accounting.vouchers` ثبت و ویرایش است
  */
 export async function voucherStepPermissions(toStateKey: string, tx: DbExecutor, entityId: string): Promise<string[]> {

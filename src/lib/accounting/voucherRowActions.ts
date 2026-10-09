@@ -19,7 +19,7 @@ export interface VoucherRowFacts {
   referenceNumber?: string | null;
 }
 
-/** v10.0.21 (TD-965): `canApprove` = دارنده `accounting.vouchers_approve`؛ بی آن بازگشت به پیش‌نویس پیشنهاد نمی‌شود */
+/** v10.0.22 (TD-965): `canApprove` = دارنده `accounting.vouchers_approve`؛ بی آن بازگشت به پیش‌نویس پیشنهاد نمی‌شود */
 export function voucherRowActions(v: VoucherRowFacts, access: { canApprove?: boolean } = {}): VoucherRowAction[] {
   const canApprove = access.canApprove ?? true;
   const locked = Boolean(voucherSourceLabel(v.sourceKind)) || (v.sourceFiscalYear !== null && v.sourceFiscalYear !== undefined);
