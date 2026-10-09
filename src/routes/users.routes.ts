@@ -160,7 +160,7 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
       if (!current_password) {
         return res.status(400).json({ error: 'جهت تغییر کلمه عبور، وارد کردن کلمه عبور فعلی الزامی است' });
       }
-      // v10.0.21 (TD-961): wrong current passwords lock the change progressively, like the login pair
+      // v10.0.22 (TD-961): wrong current passwords lock the change progressively, like the login pair
       const lockedFor = passwordChangeLockMinutes(userId);
       if (lockedFor !== null) throw passwordChangeLockedError(lockedFor);
       const isMatch = await verifyPasswordConstantWork(current_password, u.password);
