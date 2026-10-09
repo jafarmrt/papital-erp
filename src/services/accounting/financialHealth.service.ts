@@ -1126,7 +1126,7 @@ export class FinancialHealthService {
     overallScore += unguardedApprovalTest.scoreImpact;
     tests.push(unguardedApprovalTest);
 
-    // آزمون ۱۷الف: v10.0.28 (OBS-R2-36) اقدام بی نقش و بی مجوز در گردش کار فعال درخواست خرید
+    // آزمون ۱۷الف: v10.0.37 (OBS-R2-36) اقدام بی نقش و بی مجوز در گردش کار فعال درخواست خرید
     const unguardedPurchaseTest = buildUnguardedPurchaseActionHealthTest(await findUnguardedPurchaseActions(orm));
     overallScore += unguardedPurchaseTest.scoreImpact;
     tests.push(unguardedPurchaseTest);

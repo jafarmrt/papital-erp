@@ -4,7 +4,7 @@ import { workflowDefinitions, workflowTransitions } from '../../db/schema.js';
 import type { HealthCheckTestResult } from '../../types.js';
 
 /**
- * v10.0.28 (OBS-R2-36): بررسی سلامت اقدام‌های بی نقش و بی مجوز گردش کار درخواست خرید. فقط جدول‌های گردش کار را می‌خواند
+ * v10.0.37 (OBS-R2-36): بررسی سلامت اقدام‌های بی نقش و بی مجوز گردش کار درخواست خرید. فقط جدول‌های گردش کار را می‌خواند
  * و از بسته گردش کار import نمی‌کند، تا بررسی سلامت حسابداری جهت بسته‌ها را نگه دارد (تصمیم ت۳ الف).
  */
 export interface UnguardedPurchaseActionRow {

@@ -11,7 +11,7 @@ import { TestCaseResult } from '../types.js';
 import { type ShouldRun, inFiscalSandbox, runCase } from './fiscalClosingTests.js';
 
 /**
- * Payroll duties plan PR 2 (v10.0.28 on, OBS-R2-36 of TD-992, decision t11 «الف»): the default purchase requisition
+ * Payroll duties plan PR 2 (v10.0.37 on, OBS-R2-36 of TD-992, decision t11 «الف»): the default purchase requisition
  * workflow asks a permission on every action and its creator does not approve it. Red on v10.0.27, where no action of
  * the seed had a role or a permission and the creator approved their own requisition.
  */
@@ -61,7 +61,7 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
         && seeded.cancel_order?.perm === 'procurement.approve' && seeded.reopen?.perm === 'procurement.create', `new seed guards ${JSON.stringify(seeded)}`);
       expect((await findUnguardedPurchaseActions(orm)).length === 0, 'fresh seed is listed as unguarded');
 
-      // back to the seed before v10.0.28, as an existing install holds it
+      // back to the seed before v10.0.37, as an existing install holds it
       const toLegacy = () => orm.update(workflowTransitions).set({ requiredPermission: '', isInitiatorExcluded: 0 })
         .where(eq(workflowTransitions.workflowDefinitionId, def.id));
       await toLegacy();

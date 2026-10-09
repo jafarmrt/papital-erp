@@ -1,7 +1,7 @@
 import type { SeedGuardUpgrade, SeedStepGuard } from './seedGuardUpgrade.js';
 
 /**
- * v10.0.28 (OBS-R2-36 از TD-992، طرح حقوق و تفکیک وظایف ت۱۱ «الف»): نگهبان گام‌های گردش کار پیش‌فرض درخواست خرید.
+ * v10.0.37 (OBS-R2-36 از TD-992، طرح حقوق و تفکیک وظایف ت۱۱ «الف»): نگهبان گام‌های گردش کار پیش‌فرض درخواست خرید.
  * «تأیید و صدور دستور خرید» `procurement.approve` می‌خواهد و آغازکننده درخواست آن را تأیید نمی‌کند (TD-392؛ مدیر سیستم
  * مستثناست)؛ «تحویل و ورود به انبار» `warehouse.in` (همان کلیدی که اقدام دامنه از TD-904 می‌خواهد)؛ رد و لغو
  * `procurement.approve`؛ بازگشایی `procurement.create`. پیش‌تر هیچ اقدامی نقش یا مجوز نداشت و هر کاربر گردش کار درخواست
@@ -17,7 +17,7 @@ export const PURCHASE_REQUISITION_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = [
   { from: 'rejected', to: 'pending', actionKey: 'reopen', title: 'بازگشایی و بررسی مجدد', requiredRole: '', requiredPermission: 'procurement.create' },
 ];
 
-/** seed پیش از v10.0.28: هیچ اقدامی نقش و مجوز نداشت */
+/** seed پیش از v10.0.37: هیچ اقدامی نقش و مجوز نداشت */
 const LEGACY_PURCHASE_REQUISITION_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = PURCHASE_REQUISITION_STEP_GUARDS.map(g => ({
   ...g, requiredPermission: '', isInitiatorExcluded: false,
 }));
