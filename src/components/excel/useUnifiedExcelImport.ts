@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import toast from 'react-hot-toast';
+import { itemImportOutcome } from '../../lib/items/itemImportOutcome';
 import { fetchJson } from '../../api';
 import { formatPersianNumber, errorMessageOf } from '../../utils';
 import { Category, Item } from '../../types';
@@ -221,14 +222,19 @@ export function useUnifiedExcelImport({
       });
 
       if (res && res.success) {
-        setImportResult({
+        const result = {
           createdCount: res.createdCount || 0,
           updatedCount: res.updatedCount || 0,
           pricesCount: res.pricesCount || 0,
-          errors: res.errors || []
-        });
+          errors: Array.isArray(res.errors) ? res.errors : []
+        };
+        setImportResult(result);
         setStep('result');
-        toast.success('ورود داده‌های اکسل با موفقیت انجام شد!');
+        // v10.0.39 (TD-1139): a row error is never reported as a plain success
+        const outcome = itemImportOutcome(result);
+        if (outcome.tone === 'success') toast.success(outcome.message);
+        else if (outcome.tone === 'error') toast.error(outcome.message);
+        else toast(outcome.message, { icon: '⚠️' });
         onSuccess();
       }
     } catch (err) {
