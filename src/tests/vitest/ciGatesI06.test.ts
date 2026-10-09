@@ -16,7 +16,7 @@ function ciJobs(): { name: string; body: string }[] {
   }));
 }
 
-/** v10.0.28 (I-06): no CI job may hang until GitHub's 360-minute default. */
+/** v10.0.35 (I-06): no CI job may hang until GitHub's 360-minute default. */
 describe('ci_job_timeouts_ot_b_05: every CI job has its own time limit (OT-B-05)', () => {
   it('every job sets timeout-minutes of at most 60', () => {
     const jobs = ciJobs();

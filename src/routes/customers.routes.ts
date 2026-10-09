@@ -97,11 +97,47 @@ const createCustomerValidation = z.object({
 const recordVersion = z.coerce.number().int('نسخه رکورد باید عدد صحیح باشد').positive('نسخه رکورد باید مثبت باشد');
 
 /**
+ * v10.0.33 (TD-975): بدنه ویرایش پیش‌فرض ندارد؛ فیلدی که فرستاده نشود `undefined` می‌ماند و سرویس مقدار کنونی را نگه
+ * می‌دارد. پیش‌تر همان طرح ساخت با `.default('')` به کار می‌رفت، پس ویرایشی که فقط تلفن را می‌فرستاد نشانی، یادداشت،
+ * نوع طرف حساب، اطلاعات بانکی و افراد رابط را خالی یا «مشتری» می‌کرد.
+ */
+const contactPersonPatchSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().max(100).optional().default(''),
+  role: z.string().max(100).optional().default(''),
+  phone: z.string().max(200).optional().default(''),
+  isPrimary: z.boolean().optional().default(false),
+});
+const bankInfoPatchSchema = z.object({
+  bankName: z.string().max(100).optional(),
+  accountNumber: z.string().max(100).optional(),
+  shaba: z.string().max(100).optional(),
+  cardNumber: z.string().max(100).optional(),
+}).optional();
+const customerPatchSchema = z.object({
+  name: z.string().min(1, 'نام طرف حساب الزامی است').max(150).optional(),
+  contactName: z.string().max(100).optional(),
+  country: z.string().max(100).optional(),
+  province: z.string().max(100).optional(),
+  city: z.string().max(100).optional(),
+  phone: z.string().max(500).optional(),
+  address: z.string().max(500).optional(),
+  notes: z.string().max(1000).optional(),
+  partyType: z.enum(['customer', 'supplier', 'both']).optional(),
+  party_type: z.enum(['customer', 'supplier', 'both']).optional(),
+  supplierCategory: z.string().max(200).optional(),
+  supplier_category: z.string().max(200).optional(),
+  bankInfo: bankInfoPatchSchema,
+  bank_info: bankInfoPatchSchema,
+  contacts: z.array(contactPersonPatchSchema).optional(),
+});
+
+/**
  * v8.0.122 (TD-403): ویرایش طرف حساب نسخه رکوردی را که فرم از آن ساخته شده می‌فرستد و قفل خوش‌بینانه همیشه اجرا می‌شود.
  * پیش‌تر طرح Zod فیلد version را نداشت و حذفش می‌کرد، پس ویرایش دو کاربر هم‌زمان بی‌خطا روی هم نوشته می‌شد.
  */
 const updateCustomerValidation = z.object({
-  body: customerSchema.extend({
+  body: customerPatchSchema.extend({
     version: recordVersion.optional(),
     expectedVersion: recordVersion.optional(),
   }).refine(b => b.version !== undefined || b.expectedVersion !== undefined, {
@@ -280,9 +316,10 @@ router.post('/customers', authorizePermission('customers.manage'), validate(crea
   req.body = sanitizeCustomerPayload(req.body);
   const { name, country, province, city, address, notes, contacts } = req.body;
   const { contactName, phone } = req.body;
-  const partyType = req.body.partyType || req.body.party_type || 'customer';
-  const supplierCategory = req.body.supplierCategory || req.body.supplier_category || '';
-  const bankInfo = req.body.bankInfo || req.body.bank_info || {};
+  // v10.0.33 (TD-975): فیلد نفرستاده undefined می‌ماند تا سرویس مقدار کنونی را نگه دارد
+  const partyType = req.body.partyType ?? req.body.party_type;
+  const supplierCategory = req.body.supplierCategory ?? req.body.supplier_category;
+  const bankInfo = req.body.bankInfo ?? req.body.bank_info;
 
   const created = await CustomerService.createCustomer({
     name,
@@ -318,9 +355,10 @@ router.put('/customers/:id', authorizePermission('customers.manage'), validate(u
   const customerId = Number(req.params.id);
   const { name, country, province, city, address, notes, contacts } = req.body;
   const { contactName, phone } = req.body;
-  const partyType = req.body.partyType || req.body.party_type || 'customer';
-  const supplierCategory = req.body.supplierCategory || req.body.supplier_category || '';
-  const bankInfo = req.body.bankInfo || req.body.bank_info || {};
+  // v10.0.33 (TD-975): فیلد نفرستاده undefined می‌ماند تا سرویس مقدار کنونی را نگه دارد
+  const partyType = req.body.partyType ?? req.body.party_type;
+  const supplierCategory = req.body.supplierCategory ?? req.body.supplier_category;
+  const bankInfo = req.body.bankInfo ?? req.body.bank_info;
 
   const { previous: prevCust, current: currentCust } = await CustomerService.updateCustomer(customerId, {
     name,
@@ -344,9 +382,9 @@ router.put('/customers/:id', authorizePermission('customers.manage'), validate(u
   await logActivity({
     req,
     action: 'UPDATE',
-    entity: partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
+    entity: currentCust.partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
     entityId: customerId,
-    description: `ویرایش اطلاعات طرف حساب "${name}"`,
+    description: `ویرایش اطلاعات طرف حساب "${currentCust.name}"`,
     details: {
       before: prevCust,
       after: currentCust,
