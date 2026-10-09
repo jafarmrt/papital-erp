@@ -80,7 +80,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
 
   const [docItems, setDocItems] = useState<InvoiceDocItem[]>([]);
   const [editingDocId, setEditingDocId] = useState<number | null>(null);
-  // v10.0.x (TD-972): نسخه پیش‌فاکتوری که در حال ویرایش است؛ ذخیره آن را می‌فرستد و سرور نسخه کهنه را ۴۰۹ می‌دهد
+  // v10.0.38 (TD-972): نسخه پیش‌فاکتوری که در حال ویرایش است؛ ذخیره آن را می‌فرستد و سرور نسخه کهنه را ۴۰۹ می‌دهد
   const [editingVersion, setEditingVersion] = useState<number | null>(null);
   const isEditing = editingDocId !== null;
   const finalOptionNote = finalStatusOptionNote(canFinalizeSales, isEditing);

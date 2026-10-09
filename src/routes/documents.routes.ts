@@ -200,7 +200,7 @@ export const documentUpdateSchema = z.object({
     if (body.items) {
       refineDocumentItems(ctx, body.items as unknown as Array<Record<string, unknown>>, false);
     }
-    // v10.0.x (TD-972، OBS-R1-96): ویرایش سند نسخه‌ای را که از آن ساخته شده می‌فرستد، مانند TD-403
+    // v10.0.38 (TD-972، OBS-R1-96): ویرایش سند نسخه‌ای را که از آن ساخته شده می‌فرستد، مانند TD-403
     if (body.version === undefined && body.expectedVersion === undefined) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['version'], message: DOCUMENT_VERSION_REQUIRED });
     }
