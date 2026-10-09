@@ -252,7 +252,7 @@ export class WorkflowTransitionExecutor {
       }
     }
     if (ownRole) {
-      throw new ForbiddenError(`اقدام «${transition.title}» مجوز «${transition.requiredPermission}» را می‌خواهد.`, undefined, 'WF_PERMISSION_REQUIRED');
+      throw new ForbiddenError(`اقدام «${transition.title}» مجوز «${requiredPermissionTitle(transition)}» را می‌خواهد.`, { permission: transition.requiredPermission }, 'WF_PERMISSION_REQUIRED');
     }
     throw new ForbiddenError(`نقش شما اجازه اقدام «${transition.title}» را ندارد؛ از دارنده نقش این گام بخواهید آن را انجام دهد.`);
   }
@@ -605,7 +605,7 @@ export class WorkflowTransitionExecutor {
         ? { role: actingFor.fromRole, ownPermissions: false }
         : { role: params.userRole, permissions: userPermissions, ownPermissions: true }, tx);
       if (!signerHoldsPermission) {
-        throw new ForbiddenError(`اقدام «${transition.title}» مجوز «${transition.requiredPermission}» را می‌خواهد.`, undefined, 'WF_PERMISSION_REQUIRED');
+        throw new ForbiddenError(`اقدام «${transition.title}» مجوز «${requiredPermissionTitle(transition)}» را می‌خواهد.`, { permission: transition.requiredPermission }, 'WF_PERMISSION_REQUIRED');
       }
       if (WorkflowTransitionExecutor.initiatorExcluded(transition, instance.startedBy, {
         userId: actingFor ? actingFor.fromUserId : params.userId, actorId: params.userId, role: params.userRole,
@@ -1041,4 +1041,10 @@ export class WorkflowTransitionExecutor {
   static async getWorkflowHistory(instanceId: number) {
     return await orm.select().from(workflowHistoryLogs).where(eq(workflowHistoryLogs.instanceId, instanceId)).orderBy(workflowHistoryLogs.createdAt);
   }
+}
+
+/** TD-1152: the Persian name of a step's required permission in a refusal; its key stays in the error details */
+function requiredPermissionTitle(transition: { requiredPermission?: string | null }): string {
+  const key = (transition.requiredPermission || '').trim();
+  return permissionDefinition(key)?.title ?? key;
 }
