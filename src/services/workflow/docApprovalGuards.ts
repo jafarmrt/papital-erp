@@ -4,19 +4,23 @@ import { workflowDefinitions, workflowStates, workflowTransitions } from '../../
 import type { HealthCheckTestResult } from '../../types.js';
 import { recordDefinitionVersion } from './workflowSnapshot.js';
 import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
+import type { SeedGuardUpgrade, SeedStepGuard } from './seedGuardUpgrade.js';
 
 /**
  * v9.0.35 (TD-445، یافته B14-03، تصمیم مالک محصول ت۲ «فقط مجوز»): گام‌های گردش‌کار پیش‌فرض اسناد با مجوز بسته می‌شوند،
  * نه با کد نقش (مدل مجوز بسته ۲): بررسی انبار و رد آن `warehouse.out`، بررسی مالی و رد آن `accounting.vouchers`،
- * تأیید مستقیم `workflow.admin`؛ ارسال به انبار و بازگشایی برای همه. پیش‌تر هر سه گام بی نقش و بی مجوز بود و فروشنده
+ * تأیید مستقیم `workflow.admin`؛ ارسال به انبار و بازگشایی برای همه (از v10.0.85 نگهبان دارند، پایین‌تر). پیش‌تر هر سه گام بی نقش و بی مجوز بود و فروشنده
  * پیش‌فاکتور خودش را از هر سه گام می‌گذراند و قطعی می‌کرد.
  */
 export const DOC_APPROVAL_WORKFLOW_CODE = 'DOC_APPROVAL_WORKFLOW';
 
 interface StepGuard { from: string; to: string; actionKey: string; title: string; requiredRole: string; requiredPermission: string }
 
-/** نگهبان گام‌ها در seed تازه (from، to و کلید اقدام همان seed پیشین است) */
-export const DOC_APPROVAL_STEP_GUARDS: ReadonlyArray<StepGuard> = [
+/**
+ * نگهبان گام‌ها در seed از v9.0.35 تا v10.0.84 (from، to و کلید اقدام همان seed پیشین است): ارسال به انبار و بازگشایی
+ * برای همه
+ */
+const DOC_APPROVAL_GUARDS_V9035: ReadonlyArray<StepGuard> = [
   { from: 'draft', to: 'warehouse_review', actionKey: 'submit_to_warehouse', title: 'ارسال به انبار جهت تایید اقلام', requiredRole: '', requiredPermission: '' },
   { from: 'warehouse_review', to: 'accounting_review', actionKey: 'approve_warehouse', title: 'تایید انبارداری و تحویل کالا', requiredRole: '', requiredPermission: 'warehouse.out' },
   { from: 'accounting_review', to: 'approved', actionKey: 'approve_accounting', title: 'تایید نهایی واحد مالی و صدور سند', requiredRole: '', requiredPermission: 'accounting.vouchers' },
@@ -26,8 +30,28 @@ export const DOC_APPROVAL_STEP_GUARDS: ReadonlyArray<StepGuard> = [
   { from: 'draft', to: 'approved', actionKey: 'direct_approve', title: 'تایید مستقیم مدیریتی', requiredRole: '', requiredPermission: 'workflow.admin' },
 ];
 
+/**
+ * v10.0.85 (TD-1220، یافته B-01 آزمون راهنما، ت۳): نگهبان گام‌ها در seed تازه. «ارسال به انبار» `documents.create` (همان
+ * مجوز ثبت پیش‌نویس و پیش‌فاکتور فروش) و «فقط آغازکننده اجرا کند» می‌خواهد، پس فروشنده فقط پیش‌فاکتور خودش را می‌فرستد و
+ * خریدار با documents.create سند خرید، پیش‌فاکتور دیگری را نمی‌فرستد؛ «بازگشایی» `documents.edit`. پیش‌تر هر دو برای
+ * همه باز بودند.
+ */
+export const DOC_APPROVAL_STEP_GUARDS: ReadonlyArray<SeedStepGuard> = DOC_APPROVAL_GUARDS_V9035.map(g => {
+  if (g.actionKey === 'submit_to_warehouse') return { ...g, requiredPermission: 'documents.create', isInitiatorOnly: true };
+  if (g.actionKey === 'reopen') return { ...g, requiredPermission: 'documents.edit' };
+  return { ...g };
+});
+
+export const DOC_APPROVAL_SUBMIT_GUARD_UPGRADE: SeedGuardUpgrade = {
+  code: DOC_APPROVAL_WORKFLOW_CODE,
+  stateKeys: ['accounting_review', 'approved', 'draft', 'rejected', 'warehouse_review'],
+  legacy: DOC_APPROVAL_GUARDS_V9035,
+  next: DOC_APPROVAL_STEP_GUARDS,
+  versionDescription: 'ارسال به انبار با «ثبت سند فروش» و فقط برای سازنده سند؛ بازگشایی با «ویرایش سند»',
+};
+
 /** نگهبان گام‌ها در seed پیش از v9.0.35؛ فقط تعریفی که دقیقاً همین است (دست‌نخورده) خودکار به‌روز می‌شود */
-const LEGACY_DOC_APPROVAL_GUARDS: ReadonlyArray<StepGuard> = DOC_APPROVAL_STEP_GUARDS.map(g => ({
+const LEGACY_DOC_APPROVAL_GUARDS: ReadonlyArray<StepGuard> = DOC_APPROVAL_GUARDS_V9035.map(g => ({
   ...g,
   requiredRole: g.actionKey === 'direct_approve' ? SYSTEM_ADMIN_ROLE : '',
   requiredPermission: g.actionKey === 'direct_approve' ? 'workflow.approve' : '',
@@ -65,12 +89,13 @@ export async function upgradeLegacyDocApprovalGuards(): Promise<boolean> {
       const untouched = legacy && !seen.has(key)
         && (t.title ?? '') === legacy.title && (t.requiredRole ?? '') === legacy.requiredRole && (t.requiredPermission ?? '') === legacy.requiredPermission
         && (t.approvalRuleType ?? 'SINGLE') === 'SINGLE' && rules.length === 0 && !(t.autoActionKey ?? '')
-        && Number(t.isInitiatorExcluded ?? 0) === 0;
+        && Number(t.isInitiatorExcluded ?? 0) === 0 && Number(t.isInitiatorOnly ?? 0) === 0;
       if (!untouched) return false;
       seen.add(key);
     }
 
-    const guardByKey = new Map(DOC_APPROVAL_STEP_GUARDS.map(g => [guardKey(g), g]));
+    // به نگهبان‌های v9.0.35؛ گام بعدی راه‌اندازی (DOC_APPROVAL_SUBMIT_GUARD_UPGRADE) آن را به نگهبان‌های امروز می‌برد
+    const guardByKey = new Map(DOC_APPROVAL_GUARDS_V9035.map(g => [guardKey(g), g]));
     for (const t of transitions) {
       const guard = guardByKey.get(guardKey({ from: keyOf.get(t.fromStateId) ?? '', to: keyOf.get(t.toStateId) ?? '', actionKey: t.actionKey }));
       if (!guard) return false;

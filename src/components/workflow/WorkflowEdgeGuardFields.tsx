@@ -2,7 +2,7 @@ import React from 'react';
 import { PERMISSION_CATALOG, isCatalogPermission } from '../../lib/permissions/permissionCatalog';
 
 /**
- * فیلدهای نگهبان انتقال در طراح گردش‌کار: «مجوز لازم» (v8.0.100، TD-391)، «نقش مشخص» و «آغازکننده تأیید نکند»
+ * فیلدهای نگهبان انتقال در طراح گردش‌کار: «مجوز لازم» (v8.0.100، TD-391)، «نقش مشخص»، «آغازکننده تأیید نکند»
  * (جداسازی وظایف؛ v8.0.102، TD-392). v9.0.128 (TD-542، مدل مجوز §۴.۲): مجوز از فهرست مشترک مجوزها برگزیده می‌شود و نقش
  * فقط از نقش‌های تعریف‌شده؛ پیش‌تر مجوز متن آزاد بود و طراح در نصب بی نقش پنج کد نقش ثابت پیشنهاد می‌داد.
  */
@@ -10,6 +10,8 @@ export interface WorkflowEdgeGuard {
   requiredRole: string;
   requiredPermission: string;
   isInitiatorExcluded: number;
+  /** v10.0.85 (TD-1220): «فقط آغازکننده اجرا کند» */
+  isInitiatorOnly: number;
 }
 
 export interface WorkflowRoleOption {
@@ -74,13 +76,27 @@ export const WorkflowEdgeGuardFields: React.FC<WorkflowEdgeGuardFieldsProps> = (
         <input
           type="checkbox"
           checked={value.isInitiatorExcluded === 1}
-          onChange={(e) => onChange({ isInitiatorExcluded: e.target.checked ? 1 : 0 })}
+          onChange={(e) => onChange(e.target.checked ? { isInitiatorExcluded: 1, isInitiatorOnly: 0 } : { isInitiatorExcluded: 0 })}
           className="mt-0.5"
         />
         <span>
           آغازکننده تأیید نکند
           <span className="block text-[10px] text-gray-500 dark:text-gray-400">
             کسی که فرایند را آغاز کرده (یا جانشینش) این گام را برای سند خودش اجرا نمی‌کند؛ مدیر سیستم مستثناست.
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={value.isInitiatorOnly === 1}
+          onChange={(e) => onChange(e.target.checked ? { isInitiatorOnly: 1, isInitiatorExcluded: 0 } : { isInitiatorOnly: 0 })}
+          className="mt-0.5"
+        />
+        <span>
+          فقط آغازکننده اجرا کند
+          <span className="block text-[10px] text-gray-500 dark:text-gray-400">
+            فقط کسی که فرایند را آغاز کرده (یا جانشینش) این گام را اجرا می‌کند، مانند ارسال پیش‌فاکتور خود به انبار؛ مدیر سامانه مستثناست.
           </span>
         </span>
       </label>
