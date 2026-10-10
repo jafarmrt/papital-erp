@@ -328,7 +328,7 @@ export function useSettings() {
       toast.error(daysError);
       return;
     }
-    // v10.0.90 (TD-1192): نام فهرست قیمت بی ویرگول لاتین و یکتا، با همان قاعده کارساز
+    // v10.0.95 (TD-1192): نام فهرست قیمت بی ویرگول لاتین و یکتا، با همان قاعده کارساز
     const priceListError = priceListNamesError(pricingStrategies);
     if (priceListError) return void toast.error(priceListError);
     const changedSettings = candidateSettings.filter(
