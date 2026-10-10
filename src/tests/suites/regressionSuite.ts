@@ -10900,6 +10900,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runVoucherApprovalDutiesTests(shouldRun));
   const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
   results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
+  // Lane L1 guide findings (v10.0.123+): move a treasury row to another document
+  const { runTreasuryRelinkOptionsTests } = await import('../regression/treasuryRelinkOptionsTests.js');
+  results.push(...await runTreasuryRelinkOptionsTests(shouldRun));
+  const { runAccountingGuideFindingsTests } = await import('../regression/accountingGuideFindingsTests.js');
+  results.push(...await runAccountingGuideFindingsTests(shouldRun));
 
   // Series 10 phase 3 lane L2 (v10.0.35+): writer routes read their bodies through Zod
   const { runWriterRouteZodTests } = await import('../regression/writerRouteZodTests.js');
