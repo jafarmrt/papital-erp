@@ -9,7 +9,6 @@ import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
-import { KardexWacRecalculatorService } from '../inventory/kardexWacRecalculator.service.js';
 import { assertStockMovementDate } from '../inventory/stockMovementDate.js';
 import type { DbClient } from './types.js';
 
@@ -281,28 +280,5 @@ export class DocumentStockEngine {
       })
       .where(eq(items.id, itemId));
     return { itemType: itemData.type ?? null, residue };
-  }
-
-  /**
-   * Reconciles and rebuilds inventory stocks directly from the transaction ledger (Event Sourcing).
-   * V6.0.5: Unified with KardexWacRecalculatorService to eliminate divergence and preserve WAC.
-   */
-  static async reconcileAndRebuildStock(targetItemId?: number): Promise<{
-    reconciledCount: number;
-    discrepanciesFixed: number;
-  }> {
-    if (targetItemId) {
-      const result = await KardexWacRecalculatorService.rebuildItemFromLedger(targetItemId);
-      const isFixed = result.beforeStock !== result.afterStock || result.oldWac !== result.newWac;
-      return {
-        reconciledCount: 1,
-        discrepanciesFixed: isFixed ? 1 : 0
-      };
-    }
-    const rebuildSummary = await KardexWacRecalculatorService.rebuildAllFromLedger();
-    return {
-      reconciledCount: rebuildSummary.totalItemsChecked || rebuildSummary.rebuiltCount,
-      discrepanciesFixed: rebuildSummary.discrepanciesFixed
-    };
   }
 }

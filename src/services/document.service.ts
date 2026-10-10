@@ -43,7 +43,7 @@ export {
  * Unified Facade for Document operations.
  * Binds and delegates to specialized sub-services:
  * - DocumentRefNumberService: Atomic reference numbering and peeking
- * - DocumentStockEngine: Inventory stock movements, reversals, and ledger reconciliation
+ * - DocumentStockEngine: Inventory stock movements and reversals
  * - DocumentCreationService: Creation, updating, and note management
  * - DocumentLifecycleService: Strict 4-step finalization and cascade soft-deletion
  * - DocumentQueryService: Document retrieval, pagination, and settlement calculation
@@ -176,15 +176,5 @@ export class DocumentService {
    */
   static async deleteDocument(id: number, user?: string, externalTx?: DbExecutor, audit?: DocumentVoidAudit): Promise<void> {
     return DocumentLifecycleService.deleteDocument(id, user, externalTx, audit);
-  }
-
-  /**
-   * Reconciles and rebuilds inventory stocks directly from the transaction ledger (Event Sourcing).
-   */
-  static async reconcileAndRebuildStock(targetItemId?: number): Promise<{
-    reconciledCount: number;
-    discrepanciesFixed: number;
-  }> {
-    return DocumentStockEngine.reconcileAndRebuildStock(targetItemId);
   }
 }
