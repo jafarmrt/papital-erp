@@ -29,7 +29,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 const DELETE_TITLE = 'حذف';
 
-// v10.0.92 (TD-1216): a refused project delete is shown once and leaves no page error
+// v10.0.147 (TD-1216): a refused project delete is shown once and leaves no page error
 describe('project form fixes (TD-1216)', () => {
   it('TD-1216: a refused project delete shows its error and leaves no unhandled rejection', async () => {
     const unhandled: unknown[] = [];

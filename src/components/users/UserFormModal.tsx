@@ -185,7 +185,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 onChange={(e) => { setUserForm({ ...userForm, username: e.target.value }); setDeletedMatch(null); }}
                 className="w-full border rounded-lg px-3 py-2 text-sm font-mono text-left focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
                 dir="ltr"
-                placeholder="e.g. user123"
+                placeholder="مثلاً ali_rezaei"
               />
             </div>
 

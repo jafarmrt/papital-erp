@@ -85,7 +85,7 @@ export function ProcurementStatusCell({ status, onChange, shortfall, unit }: {
   shortfall: number;
   unit: string;
 }) {
-  // v10.0.91 (TD-1214): a row short of stock needs procurement whatever was stored, so the list never says «موجود» beside a shortfall
+  // v10.0.146 (TD-1214): a row short of stock needs procurement whatever was stored, so the list never says «موجود» beside a shortfall
   const shown = shortfall > 0 ? 'needs_procurement' : status;
   return (
     <td className="p-2.5 border-l border-slate-100 align-middle min-w-[190px]">

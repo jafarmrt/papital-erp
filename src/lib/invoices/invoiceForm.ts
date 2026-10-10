@@ -58,6 +58,8 @@ export interface InvoiceDocumentDetails {
   crmLeadId?: number | null;
   /** v9.0.336 (TD-778): طرف حساب سند با شناسه */
   partyId?: number | null;
+  /** v10.0.108 (TD-972): نسخه سند که ویرایش آن را می‌فرستد */
+  version?: number | null;
   items?: InvoiceDocumentLine[];
 }
 
@@ -96,6 +98,8 @@ export interface InvoiceSavePayload {
   exchangeRate: number | null;
   crmLeadId: number | undefined;
   vatPercent: number;
+  /** v10.0.108 (TD-972): ویرایش نسخه‌ای را می‌فرستد که فرم از آن ساخته شده است */
+  version?: number;
   items: Array<{ itemId: number; quantity: number; unit_price: number; discount: number; location: string }>;
 }
 
@@ -174,6 +178,8 @@ export interface InvoiceFormValues extends BuyerFields {
   crmLeadId: number | null;
   /** v9.0.336 (TD-778): طرف حساب ذخیره‌شده سند؛ انتخابگر خریدار با آن پر می‌شود، نه با تطبیق نام */
   partyId: number | null;
+  /** v10.0.108 (TD-972): نسخه سند بارشده؛ ویرایش بدون آن ۴۰۰ و با نسخه کهنه ۴۰۹ می‌گیرد */
+  version: number | null;
   docItems: InvoiceDocItem[] | null;
 }
 
@@ -194,6 +200,7 @@ export function invoiceFormFromDocument(doc: InvoiceDocumentDetails, fallbackRef
     vatPercent: Number(doc.vatPercent ?? doc.vat_percent ?? 0) || 0,
     crmLeadId: Number(doc.crmLeadId) > 0 ? Number(doc.crmLeadId) : null,
     partyId: Number(doc.partyId) > 0 ? Number(doc.partyId) : null,
+    version: Number(doc.version) > 0 ? Number(doc.version) : null,
     docItems: Array.isArray(doc.items)
       ? doc.items.map(it => ({
         item: {

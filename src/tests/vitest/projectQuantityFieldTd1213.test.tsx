@@ -21,7 +21,7 @@ function ProductsHarness() {
 
 const quantityInput = () => (screen.getByText(QTY_LABEL).parentElement?.parentElement?.querySelector('input') as HTMLInputElement);
 
-// v10.0.90 (TD-1213): the project quantity field shows what the user types
+// v10.0.145 (TD-1213): the project quantity field shows what the user types
 describe('project form fixes (TD-1213)', () => {
   it('TD-1213: the quantity field can be emptied and then takes the typed number', () => {
     render(<ProductsHarness />);

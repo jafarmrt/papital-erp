@@ -1,6 +1,6 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
-import { brief, fixture } from './documentEntryTests.js';
+import { brief, docVersion, fixture } from './documentEntryTests.js';
 
 /**
  * Package 8 (documents and invoices), PR B: the money of sales documents (zero-price invoices, voiding an invoice that has
@@ -292,9 +292,9 @@ async function returnPriceFromInvoiceCase(h: Harness, wrong: string[]): Promise<
   if (draft.status !== 200 || draftHead?.currency !== 'USD' || Number(draftHead?.rate) !== 600_000 || draftLines[0]?.price !== 90) {
     wrong.push(`a draft return without currency or price answered ${brief(draft)} and stored ${JSON.stringify({ head: draftHead, lines: draftLines })}, expected USD at 600,000 and price 90`);
   }
-  const edited = await h.put(`/api/documents/${draftId}`, { currency: 'IRR', items: [{ itemId: b, quantity: 2, unit_price: 100, location: f.wh }] });
+  const edited = await h.put(`/api/documents/${draftId}`, { version: await docVersion(h, draftId), currency: 'IRR', items: [{ itemId: b, quantity: 2, unit_price: 100, location: f.wh }] });
   if (edited.status !== 422 || codeOf(edited) !== 'RETURN_CURRENCY_MISMATCH') wrong.push(`editing the draft return to IRR answered ${brief(edited)}, expected 422 RETURN_CURRENCY_MISMATCH`);
-  const editedPrice = await h.put(`/api/documents/${draftId}`, { items: [{ itemId: b, quantity: 1, unit_price: 100, location: f.wh }] });
+  const editedPrice = await h.put(`/api/documents/${draftId}`, { version: await docVersion(h, draftId), items: [{ itemId: b, quantity: 1, unit_price: 100, location: f.wh }] });
   if (editedPrice.status !== 422 || codeOf(editedPrice) !== 'RETURN_PRICE_MISMATCH') wrong.push(`editing the draft return price answered ${brief(editedPrice)}, expected 422 RETURN_PRICE_MISMATCH`);
   // a draft stored before this version with the gross price is not finalized until it is edited
   await h.q(`UPDATE document_items SET unit_price = 100 WHERE document_id = $1 AND is_deleted = 0`, [draftId]);
@@ -302,7 +302,7 @@ async function returnPriceFromInvoiceCase(h: Harness, wrong: string[]): Promise<
   if (legacyFinalize.status !== 422 || codeOf(legacyFinalize) !== 'RETURN_PRICE_MISMATCH' || (await headOf(draftId))?.status !== 'draft') {
     wrong.push(`finalizing a draft return stored at the gross price answered ${brief(legacyFinalize)}, expected 422 RETURN_PRICE_MISMATCH and a draft`);
   }
-  const fixed = await h.put(`/api/documents/${draftId}`, { items: [{ itemId: b, quantity: 2, location: f.wh }] });
+  const fixed = await h.put(`/api/documents/${draftId}`, { version: await docVersion(h, draftId), items: [{ itemId: b, quantity: 2, location: f.wh }] });
   const finalized = await h.put(`/api/documents/${draftId}/finalize`, {});
   if (fixed.status !== 200 || finalized.status !== 200) wrong.push(`editing and finalizing the draft return answered ${brief(fixed)} and ${brief(finalized)}, expected 200 and 200`);
   else await expectCredit('the finalized USD return', draftId, 180, 'USD', 600_000);

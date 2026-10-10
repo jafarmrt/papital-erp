@@ -138,7 +138,7 @@ export default function ProjectsPage() {
 
   const handleDeleteProject = async (id: number, code: string) => {
     if (!(await confirmAction({ title: 'حذف پروژه تولید', message: `آیا از حذف پروژه تولید با کد ${code} مطمئن هستید؟` }))) return;
-    // v10.0.92 (TD-1216): the mutation's onError shows a refusal (422); the rejection is not passed on to the click handler
+    // v10.0.147 (TD-1216): the mutation's onError shows a refusal (422); the rejection is not passed on to the click handler
     deleteProjectMutation.mutate(id);
   };
 

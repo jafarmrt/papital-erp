@@ -4,7 +4,7 @@ import { ProcurementStatusCell } from '../../components/project/inventoryRowCell
 
 afterEach(() => { cleanup(); });
 
-// v10.0.91 (TD-1214): the status of a row short of stock is never «available»
+// v10.0.146 (TD-1214): the status of a row short of stock is never «available»
 describe('project form fixes (TD-1214)', () => {
   it('TD-1214: a short row does not show «available» in its status', () => {
     render(<table><tbody><tr><ProcurementStatusCell status="available" onChange={() => undefined} shortfall={3} unit="pcs" /></tr></tbody></table>);

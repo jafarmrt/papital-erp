@@ -134,8 +134,12 @@ async function purchasePartyKind(): Promise<string> {
       const got = await codeOf(docType, partyId);
       if (got !== expected) wrong.push(`${docType} with party ${partyId}: ${got}, expected ${expected}`);
     }
-    const byName = await resolveDocumentParty(tx, { docType: 'receipt', partyId: undefined, buyerName: customerOnly.name });
-    if (byName.partyId !== null) wrong.push(`a receipt named after a customer-only party was linked to ${byName.partyId}`);
+    // since v10.0.98 (TD-1194) a receipt named after a customer-only party is refused, never recorded without a party
+    await tx.execute(sql`SAVEPOINT td939name`);
+    const byName = await resolveDocumentParty(tx, { docType: 'receipt', partyId: undefined, buyerName: customerOnly.name })
+      .then(r => `linked to ${r.partyId}`, (err: { code?: string }) => err.code ?? String(err));
+    await tx.execute(sql`ROLLBACK TO SAVEPOINT td939name`);
+    if (byName !== 'DOCUMENT_PARTY_KIND_MISMATCH') wrong.push(`a receipt named after a customer-only party: ${byName}, expected DOCUMENT_PARTY_KIND_MISMATCH`);
     const supplierByName = await resolveDocumentParty(tx, { docType: 'receipt', partyId: undefined, buyerName: supplier.name });
     if (supplierByName.partyId !== supplier.id) wrong.push(`a receipt named after a supplier was linked to ${supplierByName.partyId}`);
     if (wrong.length > 0) throw new Error(wrong.join('; '));

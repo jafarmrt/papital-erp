@@ -172,7 +172,7 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
 };
 
 /**
- * v10.0.90 (TD-1213): the field shows what the user types. Before, every change went through `Math.max(1, …)`, so an
+ * v10.0.145 (TD-1213): the field shows what the user types. Before, every change went through `Math.max(1, …)`, so an
  * emptied field became 1 at once and typing «20» after it gave 120. Each change is passed on as a number, an empty
  * field as 0; the field is required with a minimum of 1, so the form is not sent empty or zero.
  */
