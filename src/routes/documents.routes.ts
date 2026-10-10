@@ -10,6 +10,7 @@ import { recordedSalesType } from '../lib/documents/recordedSalesType.js';
 import { DOCUMENT_TYPE_TITLES } from '../lib/documents/documentTypeTitles.js';
 import { isAutoRefNumber } from '../lib/documents/documentRefRules.js';
 import { DOCUMENT_LIST_PAGE_SIZE } from '../lib/documents/documentListPage.js';
+import { DOCUMENT_VERSION_REQUIRED } from '../lib/documents/documentVersion.js';
 import { assertManualRefAllowed, assertNotProjectDelivery, assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
@@ -200,6 +201,10 @@ export const documentUpdateSchema = z.object({
   }).superRefine((body, ctx) => {
     if (body.items) {
       refineDocumentItems(ctx, body.items as unknown as Array<Record<string, unknown>>, false);
+    }
+    // v10.0.108 (TD-972، OBS-R1-96): ویرایش سند نسخه‌ای را که از آن ساخته شده می‌فرستد، مانند TD-403
+    if (body.version === undefined && body.expectedVersion === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['version'], message: DOCUMENT_VERSION_REQUIRED });
     }
   }),
   params: z.object({

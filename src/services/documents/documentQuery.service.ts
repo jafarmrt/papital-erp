@@ -12,6 +12,7 @@ import { stockCountVariances } from '../inventory/stockCountSheet.js';
 import { createLedgerLocationResolver } from '../inventory/warehouseResolver.js';
 import { fetchSettlementRows, settledAmount } from './documentSettlement.js';
 import type { SettlementRow } from './documentSettlement.js';
+import { fetchReturnCredits } from './documentReturnCredit.js';
 import { documentPartyCondition } from './documentParty.js';
 import { rejectedWorkflowDocumentIds } from './rejectedDraftDocuments.js';
 import type { 
@@ -109,6 +110,7 @@ export class DocumentQueryService {
       category: string | null;
     }> = [];
     let treasurySettlements: SettlementRow[] = [];
+    let returnCredits = new Map<number, FinancialDecimal>();
 
     if (docIds.length > 0) {
       allItems = await orm.select({
@@ -128,6 +130,7 @@ export class DocumentQueryService {
       .where(and(inArray(documentItems.documentId, docIds), eq(documentItems.isDeleted, 0)));
 
       treasurySettlements = await fetchSettlementRows(docIds);
+      returnCredits = await fetchReturnCredits(docIds);
     }
 
     const formattedDocs: FormattedDocument[] = docs.map(d => {
@@ -142,7 +145,8 @@ export class DocumentQueryService {
         dItems.map(i => ({ quantity: i.quantity, unitPrice: i.unit_price, discount: i.discount })),
         d.vatAmount,
         settledAmount(docSettlements, isPurchase),
-        d.serviceChargeAmount
+        d.serviceChargeAmount,
+        returnCredits.get(d.id)
       );
 
       return {
@@ -165,6 +169,7 @@ export class DocumentQueryService {
         exchangeRate: d.exchangeRate?.toNumber() ?? null,
         payableAmount: amounts.payableAmount,
         paidAmount: amounts.paidAmount,
+        returnedAmount: amounts.returnedAmount,
         remainingAmount: amounts.remainingAmount,
         settlementStatus: amounts.settlementStatus,
         items: dItems.map(i => ({
@@ -283,6 +288,7 @@ export class DocumentQueryService {
     ));
     // v9.0.68 (TD-500): جمع تسویه ردیف باطلِ معکوس‌شده را هم می‌خواند؛ فهرست نمایش همان ردیف‌های کامل است
     const settlementRows = await fetchSettlementRows([doc.id]);
+    const returnCredit = (await fetchReturnCredits([doc.id])).get(doc.id);
 
     const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(doc.type);
     // v7.0.32 (TD-197): مبلغ قابل وصول = جمع خالص اقلام + مالیات ساختاریافته
@@ -291,7 +297,8 @@ export class DocumentQueryService {
       rows.map(row => ({ quantity: row.quantity as DecimalValue, unitPrice: row.unit_price as DecimalValue, discount: row.discount as DecimalValue })),
       doc.vatAmount,
       settledAmount(settlementRows, isPurchase),
-      doc.serviceChargeAmount
+      doc.serviceChargeAmount,
+      returnCredit
     );
 
     return {
@@ -325,6 +332,7 @@ export class DocumentQueryService {
       payableAmount: amounts.payableAmount,
       payable_amount: amounts.payableAmount,
       paidAmount: amounts.paidAmount,
+      returnedAmount: amounts.returnedAmount,
       remainingAmount: amounts.remainingAmount,
       settlementStatus: amounts.settlementStatus,
       // قرارداد API: مبلغ عدد (P2-6)
@@ -353,6 +361,7 @@ export class DocumentQueryService {
       vatAmount: doc.vatAmount ?? 0,
       payableAmount: doc.payableAmount ?? doc.totalAmount,
       paidAmount: doc.paidAmount || 0,
+      returnedAmount: doc.returnedAmount || 0,
       remainingAmount: doc.remainingAmount || 0,
       settlementStatus: doc.settlementStatus || 'unpaid',
       settlements: doc.settlements || []
@@ -364,12 +373,15 @@ export class DocumentQueryService {
 /**
  * v7.0.68 (P2-6): جمع‌های سند (ناخالص، تخفیف، خالص، قابل پرداخت، پرداخت‌شده، مانده) با Decimal؛ خروجی عدد برای API.
  * پرداخت منفی صفر و مانده منفی صفر حساب می‌شود؛ تسویه کامل با آستانه ۰٫۰۱.
+ * v10.0.106 (TD-909، تصمیم ت۶ الف): مرجوعی‌های قطعی فاکتور (`returned`) از مانده قابل وصول کم می‌شوند و در وضعیت تسویه
+ * شمرده می‌شوند، همان‌طور که سند مرجوعی از حساب مشتری کم می‌کند.
  */
 function documentAmounts(
   lines: Array<{ quantity: DecimalValue; unitPrice: DecimalValue; discount: DecimalValue }>,
   vatAmount: DecimalValue,
   paid: FinancialDecimal,
-  serviceChargeAmount: DecimalValue | null | undefined = 0
+  serviceChargeAmount: DecimalValue | null | undefined = 0,
+  returned: FinancialDecimal = fin(0)
 ) {
   let quantity = fin(0);
   let gross = fin(0);
@@ -383,10 +395,11 @@ function documentAmounts(
   // v7.0.103 (TD-191): هزینه ارسال و کارمزد ساختاریافته فاکتور جزء مبلغ قابل وصول است
   const payable = total.add(vatAmount).add(serviceChargeAmount ?? 0);
   const safePaid = paid.isNegative() ? fin(0) : paid;
-  const remaining = payable.subtract(safePaid);
+  const settled = safePaid.add(returned);
+  const remaining = payable.subtract(settled);
   const settlementStatus: 'unpaid' | 'partially_paid' | 'fully_paid' =
-    payable.isPositive() && safePaid.greaterThanOrEqual(payable.subtract(0.01)) ? 'fully_paid'
-      : safePaid.isPositive() ? 'partially_paid' : 'unpaid';
+    payable.isPositive() && settled.greaterThanOrEqual(payable.subtract(0.01)) ? 'fully_paid'
+      : settled.isPositive() ? 'partially_paid' : 'unpaid';
   return {
     totalQuantity: quantity.toNumber(),
     grossAmount: gross.toNumber(),
@@ -396,6 +409,7 @@ function documentAmounts(
     serviceChargeAmount: fin(serviceChargeAmount ?? 0).toNumber(),
     payableAmount: payable.toNumber(),
     paidAmount: safePaid.toNumber(),
+    returnedAmount: returned.toNumber(),
     remainingAmount: remaining.isNegative() ? 0 : remaining.toNumber(),
     settlementStatus,
   };
