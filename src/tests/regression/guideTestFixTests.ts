@@ -2,7 +2,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 
 /**
  * Phase 3 lane L2 (TD-1190..TD-1193): app bugs the fresh-eyes guide test found. Server-side cases only; the browser
- * cases are Vitest files. Each case fails on v10.0.85.
+ * cases are Vitest files. Each case fails on v10.0.86.
  */
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
@@ -26,7 +26,7 @@ async function priceListDuplicateRefused(): Promise<string> {
 export async function runGuideTestFixTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], () => Promise<string>]> = [
-    ['reg_price_list_names_unique_td_1192', 'v10.0.88: a repeated price list name is refused (TD-1192)', ['td1192'], priceListDuplicateRefused],
+    ['reg_price_list_names_unique_td_1192', 'v10.0.90: a repeated price list name is refused (TD-1192)', ['td1192'], priceListDuplicateRefused],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, 'package16', ...tags)) continue;
