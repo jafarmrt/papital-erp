@@ -61,11 +61,7 @@ export class DocumentLifecycleService {
     const execute = async (tx: DbExecutor): Promise<DocumentAuditChange | null> => {
       // Step 1: Pre-flight lookup & validation without holding locks
       const [docPeek] = await tx.select({
-        id: documents.id,
-        status: documents.status,
-        type: documents.type,
-        refNumber: documents.refNumber,
-        projectId: documents.projectId,
+        id: documents.id, status: documents.status, type: documents.type, refNumber: documents.refNumber, projectId: documents.projectId,
       }).from(documents)
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
 
@@ -366,11 +362,7 @@ export class DocumentLifecycleService {
       const docLines = await tx.select().from(documentItems).where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
       // 1. Soft-delete document with deletedAt & deletedBy
-      await tx.update(documents).set({
-        isDeleted: 1,
-        deletedAt: nowIso,
-        deletedBy: deletedByUser,
-      }).where(eq(documents.id, id));
+      await tx.update(documents).set({ isDeleted: 1, deletedAt: nowIso, deletedBy: deletedByUser }).where(eq(documents.id, id));
 
       // v9.0.40 (TD-447، ت۵): فرایند تأیید در جریان سند در همان تراکنش ابطال بسته می‌شود (سند پیش از نمونه قفل شده است)
       await terminateOpenWorkflows(tx, { entityType: 'document', entityId: id, actionKey: 'terminate', actionTitle: 'بستن فرایند با ابطال سند', comment: 'ابطال سند', userName: deletedByUser });
