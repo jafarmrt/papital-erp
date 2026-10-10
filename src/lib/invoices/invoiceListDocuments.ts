@@ -25,6 +25,8 @@ export interface InvoiceListDocument {
   id: number;
   type?: string;
   status?: string;
+  /** v10.0.103 (TD-1197): پیش‌نویسی که آخرین گردش کارش رد شده است */
+  workflowRejected?: boolean;
   ref_number?: string;
   date?: string;
   currency?: string;

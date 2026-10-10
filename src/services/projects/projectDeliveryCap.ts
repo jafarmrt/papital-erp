@@ -97,6 +97,6 @@ export function findOverDeliveries(
 
 export function describeOverDeliveries(over: ProjectOverDelivery[]): string {
   const n = (value: number) => toPersianDigits(value, 4);
-  // v10.0.92 (TD-1188): ارقام پیام فارسی است
+  // v10.0.110 (TD-1188): ارقام پیام فارسی است
   return over.map(o => `«${o.itemName || n(o.itemId)}» ${n(o.excess)} ${o.unit} بیش از برنامه (برنامه ${n(o.planned)}، تحویل‌شده ${n(o.delivered)}، این تحویل ${n(o.requested)})`).join('؛ ');
 }
