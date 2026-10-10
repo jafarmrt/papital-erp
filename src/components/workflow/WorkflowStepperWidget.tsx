@@ -17,6 +17,15 @@ import {
 import { formatPersianDate, formatPersianPrice } from '../../utils';
 import { toPersianDigits } from '../../utils/persianNumber';
 import { WorkflowActionConditionList, WorkflowBlockedActions } from './WorkflowActionConditions';
+import { stepperStepStatus, workflowTakesActions, type StepperStepStatus } from '../../lib/workflow/stepperStepStatus';
+
+const STEP_STATUS_VIEW: Record<Exclude<StepperStepStatus, 'current'>, { label: string; className: string }> = {
+  pending: { label: 'در انتظار', className: 'bg-gray-50 text-gray-400 border-gray-200 dark:bg-gray-800 dark:text-gray-500 dark:border-gray-700 opacity-70' },
+  unreached: { label: 'نرسیده', className: 'bg-gray-50 text-gray-400 border-gray-200 dark:bg-gray-800 dark:text-gray-500 dark:border-gray-700 opacity-60' },
+  rejected: { label: 'ردشده', className: 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800 font-bold' },
+  skipped: { label: 'عبورکرده', className: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 opacity-80' },
+  completed: { label: 'تکمیل‌شده', className: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800 font-medium' },
+};
 
 interface WorkflowStepperWidgetProps {
   entityType: string;
@@ -51,6 +60,8 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
   }
 
   const instance = wfData?.instance;
+  // v10.0.65 (TD-1142): no instance and no active definition → nothing to start, so the widget is not shown
+  if (!instance && wfData?.startable === false) return null;
   const currentState = wfData?.currentState;
   const allStates = wfData?.allStates || [];
   const availableTransitions = wfData?.availableTransitions || [];
@@ -158,36 +169,18 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
         <div>
           {/* Stepper Graph Visualizer */}
           <div className="mb-4">
-            <div className="flex items-center justify-between overflow-x-auto py-2 px-1 gap-2 border-b border-gray-100 dark:border-gray-700/40 pb-4">
+            {/* v10.0.101 (TD-1227): گام‌ها در پنجره باریک به سطر بعد می‌روند؛ پیش‌تر گام چهارم بریده و پنجم پنهان می‌شد */}
+            <div data-stepper-steps className="flex flex-wrap items-center gap-x-2 gap-y-3 py-2 px-1 border-b border-gray-100 dark:border-gray-700/40 pb-4">
               {allStates.map((st, idx) => {
-                let statusType: 'completed' | 'current' | 'pending' | 'rejected' | 'skipped' = 'pending';
-                let statusLabel = 'در انتظار';
-                let statusColorClass = 'bg-gray-50 text-gray-400 border-gray-200 dark:bg-gray-800 dark:text-gray-500 dark:border-gray-700 opacity-70';
-
-                if (instance.status === 'REJECTED' && currentState?.id === st.id) {
-                  statusType = 'rejected';
-                  statusLabel = 'ردشده';
-                  statusColorClass = 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800 font-bold';
-                } else if (currentState?.id === st.id && instance.status === 'IN_PROGRESS') {
-                  statusType = 'current';
-                  statusLabel = 'گام جاری';
-                  statusColorClass = `${getStateColorClass(st.color)} ring-2 ring-offset-1 ring-indigo-500 dark:ring-offset-gray-800 shadow-sm font-semibold`;
-                } else if (instance.status === 'COMPLETED' || (st.stepOrder < (currentState?.stepOrder || 0))) {
-                  const visited = history.some(h => h.toStateId === st.id || h.fromStateId === st.id);
-                  if (!visited && st.stepOrder < (currentState?.stepOrder || 0)) {
-                    statusType = 'skipped';
-                    statusLabel = 'عبورکرده';
-                    statusColorClass = 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 opacity-80';
-                  } else {
-                    statusType = 'completed';
-                    statusLabel = 'تکمیل‌شده';
-                    statusColorClass = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800 font-medium';
-                  }
-                }
+                // v10.0.100 (TD-1221): گام نرسیده فرایند ردشده «نرسیده» است، نه «عبورکرده»
+                const statusType = stepperStepStatus(st, instance.status, currentState, history);
+                const { label: statusLabel, className: statusColorClass } = statusType === 'current'
+                  ? { label: 'گام جاری', className: `${getStateColorClass(st.color)} ring-2 ring-offset-1 ring-indigo-500 dark:ring-offset-gray-800 shadow-sm font-semibold` }
+                  : STEP_STATUS_VIEW[statusType];
 
                 return (
                   <div key={st.id} className="flex items-center gap-2 shrink-0">
-                    <div className="flex flex-col items-center gap-1">
+                    <div className="flex flex-col items-center gap-1" data-step-key={st.stateKey}>
                       <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all ${statusColorClass}`}>
                         {statusType === 'completed' ? (
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -273,7 +266,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
           )}
 
           {/* Available Actions Bar */}
-          {instance.status === 'IN_PROGRESS' && (availableTransitions.length > 0 || blockedTransitions.length > 0) && (
+          {workflowTakesActions(instance.status) && (availableTransitions.length > 0 || blockedTransitions.length > 0) && (
             <div className="bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-xl p-3 mb-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">

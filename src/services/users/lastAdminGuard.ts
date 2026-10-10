@@ -25,6 +25,6 @@ export async function assertAnotherActiveAdmin(tx: DbTransaction, userId: number
     .limit(1);
   if (others.length > 0) return;
   throw new ConflictError(action === 'delete'
-    ? 'آخرین مدیر سیستم قابل حذف نیست؛ ابتدا باید مدیر دیگری تعریف شود.'
-    : 'نقش آخرین مدیر سیستم را نمی‌توان تغییر داد؛ ابتدا مدیر سیستم دیگری تعریف کنید.', { code: 'LAST_SYSTEM_ADMIN' });
+    ? 'آخرین مدیر سامانه قابل حذف نیست؛ ابتدا باید مدیر دیگری تعریف شود.'
+    : 'نقش آخرین مدیر سامانه را نمی‌توان تغییر داد؛ ابتدا مدیر سامانه دیگری تعریف کنید.', { code: 'LAST_SYSTEM_ADMIN' });
 }

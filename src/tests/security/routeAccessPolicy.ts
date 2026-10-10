@@ -125,6 +125,12 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       if (violations.length > 0) throw new Error(`${violations.length} violations: ${violations.join(' | ')}`);
       return `${rows.length} مسیر بی‌تخلف`;
     }),
+    record('sec_writer_routes_validated_td_979', 'v10.0.35: every writer route reads its input through Zod; only reviewed body-less routes are listed (TD-979)', 'real_code', async () => {
+      const { writerRouteValidationViolations, WRITER_ROUTES_WITHOUT_BODY } = await import('./writerRouteValidation.js');
+      const violations = writerRouteValidationViolations(buildRouteGuardTable(app));
+      if (violations.length > 0) throw new Error(`${violations.length} writer routes without Zod: ${violations.join(' | ')}`);
+      return `${WRITER_ROUTES_WITHOUT_BODY.size} body-less routes listed`;
+    }),
     record('sec_view_permission_cannot_mutate_td_298', 'area H: a view permission does not open BOM material allocation or workflow start (TD-298)', 'real_database', async () => {
       const viewer = await userWith(['warehouse.view', 'projects.view', 'workflow.view', 'products.view']);
       const allocate = await send(viewer.session, 'post', '/api/inventory/allocations/allocate', { projectId: 999999999, allocations: [{ itemId: 999999999, quantity: 1 }] });

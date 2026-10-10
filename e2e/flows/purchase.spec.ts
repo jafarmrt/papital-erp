@@ -54,7 +54,7 @@ test.afterAll(async () => {
 async function createSupplier(suffix: string): Promise<{ id: number; name: string }> {
   const name = `${DATA.supplierName} ${suffix}`;
   const created = dataOf<Json>(await api.send('post', '/api/customers', {
-    name, phone: `0935${String(Date.now()).slice(-7)}`, type: 'supplier',
+    name, phone: `0935${String(Date.now()).slice(-7)}`, partyType: 'supplier',
   }));
   return { id: Number(created.id), name };
 }
@@ -170,10 +170,10 @@ test('procurement order with a line discount delivered from the procurement desk
 
   // The order forms take no discount; the draft order is edited through the document API to carry one.
   const [stored] = await db(
-    `SELECT di.location, d.date::date::text AS day FROM documents d JOIN document_items di ON di.document_id = d.id
+    `SELECT di.location, d.date::date::text AS day, d.version FROM documents d JOIN document_items di ON di.document_id = d.id
       WHERE d.id = $1 AND di.is_deleted = 0 LIMIT 1`, [order.id]);
   await api.send('put', `/api/documents/${order.id}`, {
-    docType: 'receipt', status: 'draft', inOut: 'in', partyId: supplier.id, buyer_name: supplier.name,
+    docType: 'receipt', status: 'draft', inOut: 'in', version: Number(stored.version), partyId: supplier.id, buyer_name: supplier.name,
     location: stored.location, currency: 'IRR', date: stored.day,
     items: lines.map(l => ({ itemId: l.itemId, quantity: l.quantity, unit_price: l.unitPrice, discount: l.discount, location: stored.location })),
   });

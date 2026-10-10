@@ -16,7 +16,7 @@ function ciJobs(): { name: string; body: string }[] {
   }));
 }
 
-/** v10.0.35 (I-06): no CI job may hang until GitHub's 360-minute default. */
+/** v10.0.152 (I-06): no CI job may hang until GitHub's 360-minute default. */
 describe('ci_job_timeouts_ot_b_05: every CI job has its own time limit (OT-B-05)', () => {
   it('every job sets timeout-minutes of at most 60', () => {
     const jobs = ciJobs();
@@ -46,7 +46,7 @@ describe('ci_shellcheck_gate_obs_r1_19: shell scripts pass shellcheck in CI (OBS
   });
 });
 
-/** v10.0.35 (I-06, OBS-R1-19, product-owner decision): the coverage gate fails below its floors. */
+/** v10.0.152 (I-06, OBS-R1-19, product-owner decision): the coverage gate fails below its floors. */
 describe('ci_coverage_thresholds_obs_r1_19: the coverage gate has floors (OBS-R1-19)', () => {
   it('test:coverage runs c8 with --check-coverage and a positive floor for each metric', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { scripts: Record<string, string> };
