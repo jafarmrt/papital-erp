@@ -546,7 +546,7 @@ export default function CustomersPage({ user }: { user: User }) {
                       <button
                         onClick={() => handleOpenLedger(c)}
                         className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold cursor-pointer"
-                        title="مشاهده کاردکس و تراز مالی تفصیلی این شخص در دفاتر دوبل"
+                        title="مشاهده کاردکس و تراز مالی تفصیلی این شخص در دفاتر حسابداری"
                       >
                         <FileText size={12} />
                         تراز مالی
@@ -652,7 +652,7 @@ export default function CustomersPage({ user }: { user: User }) {
                     کارت حساب و تراز تفصیلی: {selectedLedgerCustomer.name}
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    سوابق اسناد دوبل خرید، فاکتورها و پرداخت‌های تسویه ثبت شده
+                    سوابق اسناد حسابداری خرید، فاکتورها و پرداخت‌های تسویه ثبت شده
                   </p>
                 </div>
               </div>
@@ -669,7 +669,7 @@ export default function CustomersPage({ user }: { user: User }) {
               {loadingLedger ? (
                 <div className="p-12 flex flex-col items-center justify-center gap-2 text-slate-400">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
-                  <span>در حال محاسبه تراز و بارگذاری اسناد دوبل...</span>
+                  <span>در حال محاسبه تراز و بارگذاری اسناد حسابداری...</span>
                 </div>
               ) : ledgerData && ledgerData.items && ledgerData.items.length > 0 ? (
                 <>
@@ -710,7 +710,7 @@ export default function CustomersPage({ user }: { user: User }) {
                         <tr>
                           <th className="p-2.5 w-10">ردیف</th>
                           <th className="p-2.5 w-24">تاریخ</th>
-                          <th className="p-2.5 w-20">سند دوبل</th>
+                          <th className="p-2.5 w-20">سند حسابداری</th>
                           <th className="p-2.5 text-right">شرح سند</th>
                           <th className="p-2.5 text-left w-28">{`بدهکار (${curLbl})`}</th>
                           <th className="p-2.5 text-left w-28">{`بستانکار (${curLbl})`}</th>
@@ -737,8 +737,8 @@ export default function CustomersPage({ user }: { user: User }) {
                 </>
               ) : (
                 <div className="p-10 text-center text-slate-500 border border-dashed border-slate-200 rounded-xl">
-                  <p className="font-bold text-sm text-slate-600">هنوز هیچ تراکنش یا سند دوبل مالی برای این شخص ثبت نشده است.</p>
-                  <p className="text-xs text-slate-400 mt-1">با ثبت رسید خرید کالا یا فاکتور فروش، اسناد دوبل به صورت خودکار در این کارت نمایش می‌یابند.</p>
+                  <p className="font-bold text-sm text-slate-600">هنوز هیچ تراکنش یا سند حسابداری برای این شخص ثبت نشده است.</p>
+                  <p className="text-xs text-slate-400 mt-1">با ثبت رسید خرید کالا یا فاکتور فروش، اسناد حسابداری به صورت خودکار در این کارت نمایش می‌یابند.</p>
                 </div>
               )}
             </div>

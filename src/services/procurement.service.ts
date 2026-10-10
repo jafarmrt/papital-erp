@@ -13,8 +13,11 @@ import { DocumentService } from './document.service.js';
 import { userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from './inventory/stockMovementDate.js';
 
-/** v9.0.315 (TD-689): مجوزهایی که درخواست خرید را تأیید می‌کنند (همان گارد مسیر اقدام گردش‌کار) */
-const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve', 'procurement.manage'];
+/**
+ * v9.0.315 (TD-689): مجوزی که درخواست خرید را تأیید می‌کند. از v10.0.48 (TD-1126) فقط `procurement.approve`، همان گارد
+ * گام تأیید گردش کار (OBS-R2-36)؛ پیش‌تر `procurement.manage` هم بود و صدور سفارش تأییدی را می‌آزمود که انتقال رد می‌کرد
+ */
+const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve'];
 /** v8.0.71 (TD-326): درخواست ردشده دریافت یا سفارش داده نمی‌شود، مگر پس از بازگشایی */
 const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
 import type { PurchaseRequisition, ProcurementOrder } from '../types.js';
