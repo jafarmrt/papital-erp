@@ -6,7 +6,7 @@ export const users = pgTable('users', {
   username: text('username').notNull().unique(),
   password: text('password').notNull(),
   fullName: text('full_name').notNull(),
-  // v10.0.52 (TD-962، مهاجرت 0099): کد نقش با کلید خارجی به roles.code؛ فقط کاربر حذف‌شده ممکن است نقش نداشته باشد
+  // v10.0.164 (TD-962، مهاجرت 0100): کد نقش با کلید خارجی به roles.code؛ فقط کاربر حذف‌شده ممکن است نقش نداشته باشد
   // (chk_users_role_active)، چون حذف نقش نقش کاربران حذف‌شده‌اش را پاک می‌کند و بازگرداندن کاربر نقش تازه می‌خواهد
   role: text('role').references((): AnyPgColumn => roles.code, { onUpdate: 'cascade' }),
   avatarUrl: text('avatar_url').default(''),

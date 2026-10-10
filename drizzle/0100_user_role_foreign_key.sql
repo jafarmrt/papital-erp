@@ -1,4 +1,4 @@
--- Drizzle Migration 0099: users.role references roles.code (v10.0.52 / TD-962, OBS-R1-31, product-owner decision of
+-- Drizzle Migration 0100: users.role references roles.code (v10.0.164 / TD-962, OBS-R1-31, product-owner decision of
 -- 10-09 item 7: each user's role is linked to the roles table and a role is deleted safely)
 --
 -- users.role held a role code with no database constraint, so a user row could name a role no role has, and deleting a

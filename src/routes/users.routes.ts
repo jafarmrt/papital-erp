@@ -377,7 +377,7 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     if (role !== SYSTEM_ADMIN_ROLE) {
       const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, role)).limit(1);
       if (!roleRecord) {
-        return res.status(400).json({ error: 'نقش انتخاب‌شده در سیستم معتبر نیست' });
+        return res.status(400).json({ error: 'نقش انتخاب‌شده در سامانه معتبر نیست' });
       }
     }
 
@@ -460,7 +460,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
       if (role && role !== SYSTEM_ADMIN_ROLE) {
         const [roleRecord] = await tx.select().from(roles).where(eq(roles.code, role)).limit(1);
         if (!roleRecord) {
-          throw new BadRequestError('نقش انتخاب‌شده در سیستم معتبر نیست');
+          throw new BadRequestError('نقش انتخاب‌شده در سامانه معتبر نیست');
         }
       }
 
@@ -563,7 +563,7 @@ router.post('/users/:id/restore', authorizePermission('users.manage'), validate(
     if (role !== SYSTEM_ADMIN_ROLE) {
       const [roleRecord] = await tx.select({ id: roles.id }).from(roles).where(eq(roles.code, role)).limit(1);
       if (!roleRecord) {
-        throw new BadRequestError('نقش انتخاب‌شده در سیستم معتبر نیست');
+        throw new BadRequestError('نقش انتخاب‌شده در سامانه معتبر نیست');
       }
     }
 

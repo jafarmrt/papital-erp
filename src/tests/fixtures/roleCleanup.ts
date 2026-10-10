@@ -3,7 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { roles, users } from '../../db/schema.js';
 
 /**
- * v10.0.52 (TD-962): users.role references roles.code, so a test role is deleted only after its test users let go of
+ * v10.0.164 (TD-962): users.role references roles.code, so a test role is deleted only after its test users let go of
  * it. The users holding the roles are soft-deleted and left without a role (an active user must hold one), then the
  * roles are deleted. For test cleanup only.
  */

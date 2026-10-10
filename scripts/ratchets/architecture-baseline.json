@@ -34,7 +34,6 @@
     "src/services/inventory/futureStockMovements.ts": 1,
     "src/services/inventory/itemOpening.service.ts": 1,
     "src/services/inventory/itemOpeningValue.ts": 1,
-    "src/services/inventory/negativeStockPolicy.service.ts": 3,
     "src/services/inventory/reservedWarehouseCode.ts": 1,
     "src/services/inventory/transferDocumentLocations.ts": 1,
     "src/services/items/itemCatalog.service.ts": 1,

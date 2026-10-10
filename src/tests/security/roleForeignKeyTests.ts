@@ -2,7 +2,7 @@ import { TestCaseResult } from '../types.js';
 import { runCase, type ShouldRun } from './workflowTestHarness.js';
 
 /**
- * v10.0.52 (series 10 phase 3, L5 E6; TD-962, OBS-R1-31, Jafar 10-09 18:43 item 7): `users.role` had no foreign key,
+ * v10.0.164 (series 10 phase 3, L5 E6; TD-962, OBS-R1-31, Jafar 10-09 18:43 item 7): `users.role` had no foreign key,
  * so a user row could hold a role code that no role has, and deleting a role left its soft-deleted users pointing to
  * a missing role. Now the column references `roles.code` (ON UPDATE CASCADE), only a soft-deleted user may hold no
  * role, and a role delete clears the role of its soft-deleted users in the delete transaction.
@@ -14,7 +14,7 @@ export async function runRoleForeignKeyTests(shouldRun: ShouldRun): Promise<Test
   if (shouldRun('sec_user_role_foreign_key_td_962', 'security', 'td962', 'roles', 'package2')) {
     await runCase(results, {
       id: 'sec_user_role_foreign_key_td_962',
-      name: 'v10.0.52: users.role references roles.code; a role delete clears its deleted users (TD-962)',
+      name: 'v10.0.164: users.role references roles.code; a role delete clears its deleted users (TD-962)',
       details: 'a user row with a missing role code or an active user without a role is refused; deleting a role whose only user is soft-deleted leaves that user without a role',
     }, async (h, wrong) => {
       const code = `td962r${h.tag}`;

@@ -20,6 +20,7 @@ import { releaseReservationsForAllocation, restoreReservationsForAllocation } fr
 
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { isProjectOpenForAllocation, projectStatusLabel } from '../../lib/projects/projectStatus.js';
+import { allocationStatusLabel } from '../../lib/projects/allocationLabels.js';
 export interface BomAllocationItemInput {
   itemId: number;
   quantity: number;
@@ -54,6 +55,8 @@ export interface ProjectBomAllocationRecord {
   allocatedAt: string | null;
   consumedAt: string | null;
   releasedAt: string | null;
+  /** v10.0.130 (TD-1210): بهای کاردکس خروج تخصیص به ریال (همان مبلغ سند ۱۴۰۲)؛ null وقتی حرکت منبع خروج نیست */
+  cost?: number | null;
   transactionDetails?: {
     date: string;
     documentType: string;
@@ -96,6 +99,7 @@ function toAllocationRecord(alloc: AllocationRow, tx?: TransactionRow | null): P
   if (tx === undefined) return record;
   return {
     ...record,
+    cost: tx && tx.type === 'out' ? fin(tx.unitPrice ?? 0).multiply(tx.quantity ?? 0).toNumber() : null,
     transactionDetails: tx
       ? {
           date: tx.date || '',
@@ -462,7 +466,7 @@ export class ProjectBomAllocationService {
       }
 
       if (alloc.status !== 'allocated') {
-        throw new ConflictError(`رکورد تخصیص در وضعیت '${alloc.status}' قرار دارد و قابل مصرف نیست.`);
+        throw new ConflictError(`این تخصیص «${allocationStatusLabel(alloc.status)}» است و فقط تخصیص «${allocationStatusLabel('allocated')}» مصرف می‌شود.`, { status: alloc.status }, 'ALLOCATION_NOT_OPEN');
       }
 
       const consumedAt = new Date().toISOString();
@@ -527,7 +531,7 @@ export class ProjectBomAllocationService {
       }
 
       if (alloc.status !== 'allocated') {
-        throw new ConflictError(`فقط رکوردهای در وضعیت 'allocated' قابل آزادسازی به انبار هستند.`);
+        throw new ConflictError(`این تخصیص «${allocationStatusLabel(alloc.status)}» است و فقط تخصیص «${allocationStatusLabel('allocated')}» به انبار آزاد می‌شود.`, { status: alloc.status }, 'ALLOCATION_NOT_OPEN');
       }
 
       const qty = fin(alloc.quantity).toNumber();

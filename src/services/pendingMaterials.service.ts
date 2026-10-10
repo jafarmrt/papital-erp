@@ -7,6 +7,7 @@ import { moneyOr } from '../lib/money.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { isDataUrl, uploadBase64ToStorage } from '../lib/storage.js';
 import { ItemCatalogService } from './items/itemCatalog.service.js';
+import { assertApprovableMaterial } from './pendingMaterialCode.js';
 import { WorkflowEngineService } from './workflow/workflowEngineService.js';
 import { terminateOpenWorkflows } from './workflow/workflowTermination.js';
 
@@ -249,6 +250,7 @@ export class PendingMaterialsService {
       const name = (overrides.name || existing.name).trim();
       const unit = (overrides.unit || existing.unit).trim();
       const category = (overrides.category || existing.category || 'عمومی').trim();
+      await assertApprovableMaterial(tx, code, category);
 
       const { item } = await ItemCatalogService.createItem({
         type: 'raw_material',

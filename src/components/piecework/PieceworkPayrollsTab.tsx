@@ -42,7 +42,7 @@ export function PieceworkPayrollsTab({
         method: 'POST'
       });
       if (res && res.voucher) {
-        toast.success(`سند دوبل حسابداری به شماره ${res.voucher.voucherNumber} با موفقیت ثبت/همگام شد.`);
+        toast.success(`سند حسابداری به شماره ${res.voucher.voucherNumber} با موفقیت ثبت/همگام شد.`);
         window.location.reload();
       }
     } catch (err: any) {
@@ -59,7 +59,7 @@ export function PieceworkPayrollsTab({
         <div>
           <h3 className="text-xs font-black text-slate-900">لیست فیش‌های حقوقی و تسویه‌های دوره‌ای</h3>
           <p className="text-[11px] text-slate-500">
-            فیش‌های رسمی صادرشده بر اساس تجمیع ردیف‌های کارکرد پرسنل و صدور خودکار سند حسابداری دوبل
+            فیش‌های رسمی صادرشده بر اساس تجمیع ردیف‌های کارکرد پرسنل و صدور خودکار سند حسابداری
           </p>
         </div>
 
@@ -90,7 +90,7 @@ export function PieceworkPayrollsTab({
                 <th className="p-3 text-center">{`کسر مساعده (${curLbl})`}</th>
                 <th className="p-3 text-center">{`خالص پرداختی (${curLbl})`}</th>
                 <th className="p-3 text-center">وضعیت پرداخت</th>
-                <th className="p-3 text-center">سند حسابداری دوبل</th>
+                <th className="p-3 text-center">سند حسابداری</th>
                 <th className="p-3 text-center">عملیات</th>
               </tr>
             </thead>
@@ -207,7 +207,7 @@ export function PieceworkPayrollsTab({
                             title="صدور یا همگام‌سازی سند حسابداری"
                           >
                             <RefreshCw size={11} className={isSyncing ? 'animate-spin' : ''} />
-                            <span>{isSyncing ? 'در حال ثبت...' : 'ثبت سند دوبل'}</span>
+                            <span>{isSyncing ? 'در حال ثبت...' : 'ثبت سند حسابداری'}</span>
                           </button>
                         )}
                       </td>

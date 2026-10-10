@@ -201,9 +201,9 @@ export const CONDITIONAL_CONSTRAINT_RULES: readonly ConditionalConstraintRule[] 
     parent: 'users', onDelete: 'NO ACTION', migration: '0098',
     label: 'آخرین ویرایشگر سند حسابداری', blockerUnit: 'ردیف با کاربر ناموجود',
   }),
-  // v10.0.52 (TD-962): a user's role code points to its role; 0099 validates it only when no user names a missing role
+  // v10.0.164 (TD-962): a user's role code points to its role; 0100 validates it only when no user names a missing role
   {
-    name: 'fk_users_role', kind: 'foreign_key', table: 'users', migration: '0099',
+    name: 'fk_users_role', kind: 'foreign_key', table: 'users', migration: '0100',
     label: 'پیوند نقش کاربر به جدول نقش‌ها', blockerUnit: 'کاربر با نقش ناموجود',
     blockerCount: 'SELECT COUNT(*)::int AS n FROM users u WHERE u.role IS NOT NULL AND NOT EXISTS (SELECT 1 FROM roles r WHERE r.code = u.role)',
     addedNotValid: true,

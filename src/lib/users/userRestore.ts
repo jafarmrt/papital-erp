@@ -21,3 +21,10 @@ export function deletedUserOf(details: unknown): DeletedUserMatch | null {
   if (!match || typeof match.id !== 'number' || typeof match.username !== 'string') return null;
   return { id: match.id, username: match.username, fullName: typeof match.fullName === 'string' ? match.fullName : null };
 }
+
+/**
+ * v10.0.75 (TD-1162): a user is only soft-deleted and comes back through `POST /users/:id/restore`, which the user form
+ * offers when a new user takes a deleted user's username (TD-519); the delete confirmation used to say it cannot be undone.
+ */
+export const DELETE_USER_CONFIRM_MESSAGE =
+  'آیا از حذف این کاربر اطمینان دارید؟ او دیگر نمی‌تواند وارد سامانه شود. برای بازگرداندنش، کاربری تازه با همان نام کاربری بسازید تا فرم، بازگردانی را پیشنهاد دهد.';
