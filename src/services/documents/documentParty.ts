@@ -60,14 +60,7 @@ export async function resolveDocumentParty(tx: DbExecutor, input: {
       throw new ValidationError(`طرف حساب شماره ${input.partyId} یافت نشد یا حذف شده است.`, undefined, 'DOCUMENT_PARTY_INVALID');
     }
     // v10.0.44 (TD-939): سند خرید فقط تأمین‌کننده و سند فروش فقط مشتری (یا «هر دو») می‌گیرد
-    if (!partyFitsDocument(input.docType, row.partyType)) {
-      const side = DOCUMENT_PARTY_SIDE_LABELS[documentPartySide(input.docType) ?? 'customer'];
-      throw new ValidationError(
-        `طرف حساب «${row.name}» ${side} نیست؛ این سند فقط طرف حساب از نوع «${side}» یا «هر دو» می‌گیرد. نوع طرف حساب را در پرونده‌اش اصلاح کنید یا طرف حساب دیگری برگزینید.`,
-        undefined,
-        'DOCUMENT_PARTY_KIND_MISMATCH',
-      );
-    }
+    if (!partyFitsDocument(input.docType, row.partyType)) throw partyKindMismatch(input.docType, row.name);
     return { partyId: row.id, buyerName: buyerName.trim() ? buyerName : row.name };
   }
   const name = buyerName.trim();
@@ -83,7 +76,31 @@ export async function resolveDocumentParty(tx: DbExecutor, input: {
     .orderBy(asc(customers.id))
     .limit(2)
     .for('key share');
+  if (matches.length === 0) await assertNameNotOtherKind(tx, input.docType, name);
   return { partyId: matches.length === 1 ? matches[0].id : null, buyerName };
+}
+
+function partyKindMismatch(docType: string, name: string): ValidationError {
+  const side = DOCUMENT_PARTY_SIDE_LABELS[documentPartySide(docType) ?? 'customer'];
+  return new ValidationError(
+    `طرف حساب «${name}» ${side} نیست؛ این سند فقط طرف حساب از نوع «${side}» یا «هر دو» می‌گیرد. نوع طرف حساب را در پرونده‌اش اصلاح کنید یا طرف حساب دیگری برگزینید.`,
+    undefined,
+    'DOCUMENT_PARTY_KIND_MISMATCH',
+  );
+}
+
+/**
+ * v10.0.98 (TD-1194): سند بی شناسه طرف حساب با نام طرف حسابی از نوع دیگر (رسید خرید یا سفارش تدارکات با نام یک مشتری) رد
+ * می‌شود. پیش‌تر چنین سندی بی شناسه ثبت می‌شد و سند حسابداری خرید با تطبیق نام، بستانکاری تفصیلی «تأمین‌کننده» را با شناسه
+ * همان مشتری می‌ساخت. ثبت، ویرایش و نهایی‌سازی (تحویل سفارش، رسید قطعی) همین را می‌خوانند؛ نام بی طرف حساب آزاد است.
+ */
+export async function assertNameNotOtherKind(tx: DbExecutor, docType: string, buyerName: string | null | undefined): Promise<void> {
+  const name = String(buyerName ?? '').trim();
+  if (!name || !documentHasParty(docType)) return;
+  const rows = await tx.select({ name: customers.name, partyType: customers.partyType }).from(customers)
+    .where(and(eq(customers.isDeleted, 0), sql`btrim(${customers.name}) = ${name}::text`))
+    .limit(2);
+  if (rows.length > 0 && !rows.some(r => partyFitsDocument(docType, r.partyType))) throw partyKindMismatch(docType, name);
 }
 
 /** طرف حساب فاکتور مرجع برگشت (بی شناسه: `undefined`، تا برگشت با قاعده نام پیدا شود) */

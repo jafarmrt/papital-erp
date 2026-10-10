@@ -3,7 +3,7 @@ import { finalizeReservationOutcome, reservationShortageMessage } from '../../li
 
 const shortage = { itemId: 1, itemCode: 'A', itemName: 'مهره', unit: 'عدد', requiredQty: 5, reservedQty: 0, shortQty: 5, stock: 0, reservedByOthers: 0 };
 
-describe('v10.0.90 (TD-1149): the finalize message says what was really reserved', () => {
+describe('v10.0.116 (TD-1149): the finalize message says what was really reserved', () => {
   it('nothing matched a warehouse item: no reservation is claimed', () => {
     const outcome = finalizeReservationOutcome([], []);
     expect(outcome.kind).toBe('warning');
@@ -31,7 +31,7 @@ const LOW_STOCK = 'موجودی انبار کمتر از نیاز است';
 const EITHER = 'موجودی انبار کم است یا';
 
 // roles-c Rc13: the shortage message names the real cause instead of always blaming other reservations
-describe('v10.0.90 (TD-1149): the shortage message says why an item was reserved below its need', () => {
+describe('v10.0.116 (TD-1149): the shortage message says why an item was reserved below its need', () => {
   it('no shortage: no message', () => {
     expect(reservationShortageMessage([])).toBeNull();
   });

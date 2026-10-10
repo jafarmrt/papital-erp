@@ -2,7 +2,7 @@ import { formatPersianNumber } from '../../utils/persianNumber';
 import type { ReservationShortage } from './projectReservation.js';
 
 /**
- * v10.0.90 (TD-1149): the message after «ثبت نهایی و رزرو انبار» says what the server really reserved. The server keeps
+ * v10.0.116 (TD-1149): the message after «ثبت نهایی و رزرو انبار» says what the server really reserved. The server keeps
  * only rows with a positive reserved quantity (`planProjectReservation`), so an empty list means nothing was reserved:
  * no control row reached a warehouse item, or none had free stock (then the purchase list names the shortages).
  */
