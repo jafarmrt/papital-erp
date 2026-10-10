@@ -14,6 +14,7 @@ import { OpenProformasPanel } from '../components/invoices/create/OpenProformasP
 import { useServerDraft } from '../hooks/useServerDraft';
 import { isEmptyInvoiceDraft } from '../lib/invoices/invoiceForm';
 import { useInvoiceReferenceData, useItemPricesQuery } from '../hooks/invoices/useInvoiceReferenceData';
+import { recordedSalesType } from '../lib/documents/recordedSalesType';
 import { useInvoiceBuyer } from '../hooks/invoices/useInvoiceBuyer';
 import { useInvoiceSave } from '../hooks/invoices/useInvoiceSave';
 import { getSellableStock } from '../lib/stockAvailability';
@@ -45,8 +46,9 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   const initialStatus = canFinalizeSales ? 'final' : 'proforma';
   const [status, setStatus] = useState(initialStatus); // 'proforma' or 'final'
 
-  // خواندنی‌های صفحه با React Query (انبارها، مشتریان، پیش‌فاکتورهای باز، شماره بعدی سند)
-  const { warehouses, customersList, proformas, proformasTotal, proformasPage, setProformasPage, nextRef, loadDocument, refreshProformas, refetchNextRef } = useInvoiceReferenceData(docType);
+  // خواندنی‌های صفحه با React Query (انبارها، مشتریان، پیش‌فاکتورهای باز، شماره بعدی سند). v10.0.93 (TD-1190): شماره بعدی
+  // از سری نوعی که سند واقعاً با آن ذخیره می‌شود (پیش‌فاکتور فروشنده‌ای که قطعی نمی‌کند: سری پیش‌فاکتور)
+  const { warehouses, customersList, proformas, proformasTotal, proformasPage, setProformasPage, nextRef, loadDocument, refreshProformas, refetchNextRef } = useInvoiceReferenceData(recordedSalesType(docType, status, canFinalizeSales));
 
   // انبار پیش‌فرض = اولین انبار برگشتی (مثل قبل) تا وقتی کاربر، پیش‌نویس یا سند ویرایشی انبار دیگری انتخاب نکرده باشد
   const [locationOverride, setLocation] = useState<string | null>(null);

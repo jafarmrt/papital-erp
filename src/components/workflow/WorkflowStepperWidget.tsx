@@ -169,10 +169,10 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
         <div>
           {/* Stepper Graph Visualizer */}
           <div className="mb-4">
-            {/* v10.0.88 (TD-1227): گام‌ها در پنجره باریک به سطر بعد می‌روند؛ پیش‌تر گام چهارم بریده و پنجم پنهان می‌شد */}
+            {/* v10.0.101 (TD-1227): گام‌ها در پنجره باریک به سطر بعد می‌روند؛ پیش‌تر گام چهارم بریده و پنجم پنهان می‌شد */}
             <div data-stepper-steps className="flex flex-wrap items-center gap-x-2 gap-y-3 py-2 px-1 border-b border-gray-100 dark:border-gray-700/40 pb-4">
               {allStates.map((st, idx) => {
-                // v10.0.86 (TD-1221): گام نرسیده فرایند ردشده «نرسیده» است، نه «عبورکرده»
+                // v10.0.100 (TD-1221): گام نرسیده فرایند ردشده «نرسیده» است، نه «عبورکرده»
                 const statusType = stepperStepStatus(st, instance.status, currentState, history);
                 const { label: statusLabel, className: statusColorClass } = statusType === 'current'
                   ? { label: 'گام جاری', className: `${getStateColorClass(st.color)} ring-2 ring-offset-1 ring-indigo-500 dark:ring-offset-gray-800 shadow-sm font-semibold` }

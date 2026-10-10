@@ -11,7 +11,7 @@ afterEach(() => {
   fetchJson.mockReset();
 });
 
-// v10.0.88 (TD-1227, fresh-eyes workmap B-09): the steps wrap onto a second line instead of being clipped in a narrow window
+// v10.0.101 (TD-1227, fresh-eyes workmap B-09): the steps wrap onto a second line instead of being clipped in a narrow window
 const states = [1, 2, 3, 4, 5].map(id => ({ id, stateKey: `s${id}`, title: `step ${id}`, stateType: id === 1 ? 'initial' : id > 3 ? 'terminal' : 'normal', color: 'gray', stepOrder: id }));
 const response = {
   instance: { id: 7, workflowDefinitionId: 2, entityType: 'document', entityId: '9', currentStateId: 2, status: 'IN_PROGRESS' },

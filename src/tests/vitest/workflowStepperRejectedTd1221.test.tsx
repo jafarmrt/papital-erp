@@ -11,7 +11,7 @@ afterEach(() => {
   fetchJson.mockReset();
 });
 
-// v10.0.86 (TD-1221): a proforma the warehouse rejected; the seller is offered «بازگشایی مجدد جهت اصلاح»
+// v10.0.100 (TD-1221): a proforma the warehouse rejected; the seller is offered «بازگشایی مجدد جهت اصلاح»
 const states = [
   { id: 1, stateKey: 'draft', title: 'پیش‌نویس', stateType: 'initial', color: 'gray', stepOrder: 1 },
   { id: 2, stateKey: 'warehouse_review', title: 'بررسی انبار', stateType: 'normal', color: 'amber', stepOrder: 2 },
