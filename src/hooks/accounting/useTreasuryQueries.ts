@@ -261,7 +261,7 @@ export function useCashFlowReport() {
 }
 
 
-/** v10.0.48 (TD-1122): سندهایی که ردیف خزانه به آن‌ها منتقل می‌شود؛ فقط وقتی پنجره باز است خوانده می‌شود */
+/** v10.0.123 (TD-1122): سندهایی که ردیف خزانه به آن‌ها منتقل می‌شود؛ فقط وقتی پنجره باز است خوانده می‌شود */
 export function useTreasuryRelinkOptionsQuery(id: number | null) {
   return useQuery<TreasuryRelinkOption[]>({
     queryKey: QUERY_KEYS.accounting.treasuryRelinkOptions(id ?? 0),
@@ -271,7 +271,7 @@ export function useTreasuryRelinkOptionsQuery(id: number | null) {
   });
 }
 
-/** v10.0.48 (TD-1122): انتقال دریافت یا پرداخت به سند فعال دیگر هم‌طرف (همان مسیر TD-779) */
+/** v10.0.123 (TD-1122): انتقال دریافت یا پرداخت به سند فعال دیگر هم‌طرف (همان مسیر TD-779) */
 export function useTreasuryDocumentRelink() {
   const queryClient = useQueryClient();
   return useMutation<unknown, unknown, { id: number; documentId: number }>({

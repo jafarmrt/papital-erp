@@ -414,6 +414,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               purpose={formData.purpose}
               contraAccountId={formData.contraAccountId}
               isReceipt={isReceipt}
+              settlementViaPayslipOnly
               onChange={patch => setFormData(prev => ({ ...prev, ...patch }))}
             />
 

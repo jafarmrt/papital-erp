@@ -1399,7 +1399,7 @@ export class VoucherSyncService {
     }, tx);
 
     if (!createdVoucher && isStrict) {
-      throw new ValidationError(`ثبت سند حسابداری برای فیش ${pay.payrollNumber} ناموفق بود.`);
+      throw new ValidationError(`ثبت سند حسابداری دوطرفه برای فیش ${pay.payrollNumber} ناموفق بود.`);
     }
 
     return createdVoucher;

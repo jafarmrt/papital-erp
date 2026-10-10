@@ -2,7 +2,7 @@ import { Power } from 'lucide-react';
 import type { Account } from '../../types';
 import { accountActiveAction } from '../../lib/accounting/accountDeleteText';
 
-/** v10.0.49 (TD-1123): دکمه غیرفعال یا فعال کردن دوباره حساب در درخت و جدول سرفصل‌ها */
+/** v10.0.124 (TD-1123): دکمه غیرفعال یا فعال کردن دوباره حساب در درخت و جدول سرفصل‌ها */
 export function AccountActiveToggle({ account, onToggle, small }: {
   account: Account;
   onToggle: (account: Account, next: boolean) => void;

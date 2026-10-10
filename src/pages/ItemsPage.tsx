@@ -7,7 +7,6 @@ import { useSearch } from '../SearchContext';
 import { cn, formatPersianNumber } from '../utils';
 import ConfirmModal from '../components/ConfirmModal';
 import ImagePreviewModal from '../components/items/ImagePreviewModal';
-import ImportErrorsModal from '../components/items/ImportErrorsModal';
 import ItemsTable from '../components/items/ItemsTable';
 import ItemFormModal from '../components/items/ItemFormModal';
 
@@ -43,7 +42,6 @@ export default function ItemsPage() {
     setSearchParams(nextType === 'raw_material' ? { type: nextType } : {});
   };
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
-  const [importErrors, setImportErrors] = useState<any[]>([]);
 
   const [showModal, setShowModal] = useState(false);
   const [showExcelModal, setShowExcelModal] = useState(false);
@@ -313,14 +311,6 @@ export default function ItemsPage() {
         onCancel={() => setConfirmState({ isOpen: false, itemId: 0 })}
         confirmText="بله، انتقال به بایگانی"
         cancelText="انصراف"
-      />
-
-      <ImportErrorsModal
-        importErrors={importErrors}
-        setImportErrors={setImportErrors}
-        allCategories={allCategories}
-        type={type}
-        onSuccessRefresh={loadItems}
       />
 
       {showExcelModal && (

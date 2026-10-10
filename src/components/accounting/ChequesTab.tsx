@@ -195,7 +195,7 @@ export function ChequesTab({
         purpose: newFormData.partyType === 'personnel' ? newFormData.purpose : undefined,
         contraAccountId: needsContra ? newFormData.contraAccountId : null,
       });
-      toast.success('چک با موفقیت در سیستم ثبت شد');
+      toast.success('چک با موفقیت در سامانه ثبت شد');
       setIsNewModalOpen(false);
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ثبت چک');

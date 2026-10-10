@@ -723,7 +723,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                   تایید اجرای عملیات بستن سال مالی {toPersianDigits(selectedYear)}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  اقدامات زیر به صورت خودکار در سیستم ثبت خواهند شد:
+                  اقدامات زیر به صورت خودکار در سامانه ثبت خواهند شد:
                 </p>
               </div>
             </div>

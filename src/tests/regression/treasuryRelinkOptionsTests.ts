@@ -3,7 +3,7 @@ import { createHarness, type Harness, type ShouldRun } from '../security/workflo
 import { brief, fixture } from './documentEntryTests.js';
 
 /**
- * Lane L1 guide finding TD-1122 (v10.0.48 on): the treasury page could only move a receipt on account; the server move to
+ * Lane L1 guide finding TD-1122 (v10.0.123 on): the treasury page could only move a receipt on account; the server move to
  * another document (TD-779) had no screen. GET /accounting/treasury/:id/document-options lists exactly the documents the
  * move accepts: live, same side, same currency, same party, the current one left out. Red before: the route was 404.
  */

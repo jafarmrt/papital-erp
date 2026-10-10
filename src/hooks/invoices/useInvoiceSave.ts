@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { invalidatePreset } from '../../lib/queryInvalidation';
-import type { InvoiceDocumentDetails, InvoiceSavePayload, InvoiceSaveResponse } from '../../lib/invoices/invoiceForm';
+import { proformaStockWarningText, type InvoiceDocumentDetails, type InvoiceSavePayload, type InvoiceSaveResponse } from '../../lib/invoices/invoiceForm';
 
 /**
  * صفحه صدور فاکتور: ثبت/ویرایش فاکتور و پیش‌فاکتور با useMutation — همان درخواست‌ها، بدنه‌ها و پیام‌های
@@ -84,6 +84,10 @@ export function useInvoiceSave({ loadDocument, discardDraft }: InvoiceSaveDeps) 
         // v9.0.39 (TD-446): گردش کار تأیید پیش‌فاکتور را خود سرور در تراکنش ثبت شروع می‌کند
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflow.all });
       }
+
+      // v10.0.86 (TD-1138، ت۱۴): کمبود قابل فروش پیش‌فاکتور ذخیره را رد نکرده، فقط هشدار است
+      const stockWarning = proformaStockWarningText(res);
+      if (stockWarning) toast(stockWarning, { icon: '⚠️', duration: 10000 });
 
       const targetDocId = editingDocId || res?.docId;
       const printedDoc = targetDocId ? await loadPrintCopy(loadDocument, targetDocId) : null;

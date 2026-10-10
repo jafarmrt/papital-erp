@@ -488,7 +488,7 @@ export function CustomerDossierDrawer({
                   کارت تفصیلی و گردش مالی حسابداری (Double-Entry Ledger)
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  اطلاعات مستقیم و بدون واسطه از دفتر کل و اسناد حسابداری دوبل صادرشده
+                  اطلاعات مستقیم و بدون واسطه از دفتر کل و اسناد حسابداری صادرشده
                 </p>
               </div>
             </div>
@@ -663,7 +663,7 @@ export function CustomerDossierDrawer({
                       )}
                     </div>
                     <div className="text-xs text-slate-600 flex items-center gap-2">
-                      <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded text-[10px] font-bold">{contact.role || 'مدیر خرید'}</span>
+                      {contact.role && <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded text-[10px] font-bold">{contact.role}</span>}
                       <span dir="ltr" className="font-mono font-bold text-slate-800">
                         {contact.phone ? formatPersianPhone(contact.phone) : '-'}
                       </span>

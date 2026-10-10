@@ -63,7 +63,7 @@ async function filterPage() {
   renderPage();
   await screen.findByText('رویداد 1');
   fireEvent.change(screen.getByDisplayValue('همه بخش‌ها / موجودیت‌ها'), { target: { value: ENTITY } });
-  fireEvent.change(screen.getByPlaceholderText(/جستجو در شرح لاگ/), { target: { value: 'تسویه' } });
+  fireEvent.change(screen.getByPlaceholderText(/جستجو در شرح رویداد/), { target: { value: 'تسویه' } });
   await waitFor(() => expect(fetchJson.mock.calls.some(c => String(c[0]).includes(`search=${encodeURIComponent('تسویه')}`))).toBe(true));
 }
 

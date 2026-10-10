@@ -18,7 +18,7 @@ vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) =
 function respond(url: string): unknown {
   if (url === '/warehouses') return [{ id: 1, name: 'انبار مرکزی', code: 'WH1', is_active: 1 }];
   if (url === '/customers?limit=1000') return { data: [] };
-  if (url === '/documents?status=proforma&types=invoice,proforma&page=1&limit=20') return { data: [] };
+  if (url === '/documents?statuses=proforma,draft&types=invoice,proforma&page=1&limit=20') return { data: [] };
   if (url === '/documents/next-ref?type=invoice') return { nextRef: 'INV-1001' };
   if (url.startsWith('/drafts/')) return { draft: null };
   return [];

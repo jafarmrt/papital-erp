@@ -18,7 +18,7 @@ interface AccountingDashboardProps {
   canRecordTreasury: boolean;
   canRecordCheque: boolean;
   /**
-   * v10.0.47 (TD-1121): کارت‌های مطالبات، بدهی‌ها و سود خالص فقط برای دارنده `accounting.reports` (کلید برگه گزارش‌ها)
+   * v10.0.122 (TD-1121): کارت‌های مطالبات، بدهی‌ها و سود خالص فقط برای دارنده `accounting.reports` (کلید برگه گزارش‌ها)
    * به گزارش می‌روند و کارت موجودی نقد فقط برای دارنده `accounting.treasury` به خزانه؛ پیش‌تر خزانه‌دار با کلیک به
    * صفحه‌ای می‌رسید که اجازه‌اش را نداشت
    */
@@ -205,7 +205,7 @@ export function AccountingDashboard({
 
         <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">کل اسناد ثبت‌شده در سیستم</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">کل اسناد ثبت‌شده در سامانه</div>
             <div className="text-base font-bold text-slate-800 dark:text-slate-200 mt-0.5">
               {formatPersianNumber(stats?.totalVouchersCount || 0)} سند مالی
             </div>
@@ -253,7 +253,7 @@ export function AccountingDashboard({
                         {v.description}
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
-                        {formatPersianDate(v.date)} • {v.createdByUsername || 'کاربر سیستم'}
+                        {formatPersianDate(v.date)} • {v.createdByUsername || 'سامانه'}
                       </div>
                     </div>
                   </div>

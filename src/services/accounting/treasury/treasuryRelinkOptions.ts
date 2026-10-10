@@ -6,7 +6,7 @@ import { PAYMENT_DOCUMENT_TYPES, RECEIPT_DOCUMENT_TYPES, resolveTreasuryPartyNam
 import type { TreasuryRelinkOption } from '../../../lib/treasury/treasuryRelink.js';
 
 /**
- * v10.0.48 (TD-1122): سندهایی که یک دریافت یا پرداخت ثبت‌شده به آن‌ها منتقل می‌شود، با همان قاعده
+ * v10.0.123 (TD-1122): سندهایی که یک دریافت یا پرداخت ثبت‌شده به آن‌ها منتقل می‌شود، با همان قاعده
  * `assertTreasuryDocumentLink` (TD-501 / TD-778 / TD-908): سند فعال هم‌سو (دریافت ← فروش، پرداخت ← خرید)، همان ارز و همان
  * طرف حساب (شناسه طرف، سند پیشین بی شناسه با نام دقیق)؛ سند فعلی ردیف بیرون است. فقط خواندن است و سرور هنگام انتقال
  * همه را دوباره زیر قفل می‌سنجد.

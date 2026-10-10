@@ -26,6 +26,7 @@ import {
 } from '../../utils';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { accountCurrencyOf, defaultSettlementAccountId, settlementAccountsFor } from '../../lib/invoices/settlementAccounts';
+import { settlementDefaultDescription } from '../../lib/invoices/settlementDescription';
 
 interface BankAccount {
   id: number;
@@ -113,11 +114,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
     const buyer = doc.buyerName || doc.buyer_name || '';
     const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(doc.type || '');
     
-    setDescription(
-      isPurchase 
-        ? `پرداخت بابت فاکتور خرید ${docRef} به ${buyer}`
-        : `تسویه فاکتور فروش شماره ${docRef}${buyer ? ` - ${buyer}` : ''}`
-    );
+    setDescription(settlementDefaultDescription({ refNumber: docRef, buyerName: buyer, isPurchase }));
 
     // Fetch active bank accounts and cash funds
     setIsLoadingAccounts(true);

@@ -264,7 +264,7 @@ router.post('/accounting/treasury/:id/void', authorizePermission('accounting.tre
   res.json(reversal);
 }));
 
-// v10.0.48 (TD-1122): سندهای هم‌طرف، هم‌سو و هم‌ارزی که دریافت یا پرداخت به آن‌ها منتقل می‌شود (پنجره «انتقال به سند دیگر»)
+// v10.0.123 (TD-1122): سندهای هم‌طرف، هم‌سو و هم‌ارزی که دریافت یا پرداخت به آن‌ها منتقل می‌شود (پنجره «انتقال به سند دیگر»)
 router.get('/accounting/treasury/:id/document-options', authorizePermission('accounting.treasury'), validate(treasuryRelinkOptionsSchema), asyncHandler(async (req, res) => {
   res.json(await listTreasuryRelinkOptions(Number(req.params.id)));
 }));

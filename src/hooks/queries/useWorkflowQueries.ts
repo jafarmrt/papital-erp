@@ -24,6 +24,7 @@ export interface WorkflowTransition {
   requiredRole?: string;
   requiredPermission?: string;
   isInitiatorExcluded?: number;
+  isInitiatorOnly?: number;
   approvalRuleType?: string;
   kValue?: number;
   autoActionKey?: string;
@@ -74,6 +75,8 @@ export interface WorkflowHistoryLog {
 
 export interface WorkflowInstanceData {
   instance: WorkflowInstance | null;
+  /** v10.0.65 (TD-1142): without an instance, whether an active definition exists for the entity type */
+  startable?: boolean;
   definition?: {
     id: number;
     code: string;
