@@ -1127,7 +1127,7 @@ export class FinancialHealthService {
     overallScore += unguardedApprovalTest.scoreImpact;
     tests.push(unguardedApprovalTest);
 
-    // آزمون ۱۷ج: v10.0.85 (TD-1220) اقدام دیگر بی نقش و بی مجوز در گردش کار فعال اسناد (ارسال به انبار، بازگشایی)
+    // آزمون ۱۷ج: v10.0.120 (TD-1220) اقدام دیگر بی نقش و بی مجوز در گردش کار فعال اسناد (ارسال به انبار، بازگشایی)
     const unguardedDocumentStepTest = buildUnguardedDocumentStepHealthTest(await findUnguardedDocumentSteps(orm));
     overallScore += unguardedDocumentStepTest.scoreImpact;
     tests.push(unguardedDocumentStepTest);

@@ -384,7 +384,7 @@ export class WorkflowTaskService {
     signer: { userId?: number; actorId?: number; role?: string }
   ): boolean {
     const transition = snapshotTransitionsOf(instance.snapshotDsl)?.find(t => t.id === task.transitionId);
-    // v10.0.85 (TD-1220): کار گام «فقط آغازکننده» فقط در کارتابل آغازکننده (و جانشین او) می‌آید
+    // v10.0.120 (TD-1220): کار گام «فقط آغازکننده» فقط در کارتابل آغازکننده (و جانشین او) می‌آید
     return !!transition && (WorkflowTransitionExecutor.initiatorExcluded(transition, instance.startedBy, signer)
       || WorkflowTransitionExecutor.initiatorOnlyRefused(transition, instance.startedBy, signer));
   }

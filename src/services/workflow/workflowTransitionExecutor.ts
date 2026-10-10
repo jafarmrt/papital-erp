@@ -158,7 +158,7 @@ export class WorkflowTransitionExecutor {
     }
     filtered = permitted;
     // v8.0.102 (TD-392): انتقالی که آغازکننده را کنار می‌گذارد به آغازکننده پیشنهاد نمی‌شود
-    // v10.0.85 (TD-1220): انتقال «فقط آغازکننده» فقط به آغازکننده پیشنهاد می‌شود
+    // v10.0.120 (TD-1220): انتقال «فقط آغازکننده» فقط به آغازکننده پیشنهاد می‌شود
     if (filtered.some(t => Number(t.isInitiatorExcluded) === 1 || Number(t.isInitiatorOnly) === 1)) {
       const [inst] = await txExecutor.select({ startedBy: workflowInstances.startedBy }).from(workflowInstances).where(eq(workflowInstances.id, instanceId));
       const signer = { userId, actorId: userId, role: userRole };
@@ -229,7 +229,7 @@ export class WorkflowTransitionExecutor {
   }
 
   /**
-   * v10.0.85 (TD-1220، یافته B-01): انتقالی که تیک «فقط آغازکننده اجرا کند» دارد فقط برای آغازکننده فرایند باز است، به نام
+   * v10.0.120 (TD-1220، یافته B-01): انتقالی که تیک «فقط آغازکننده اجرا کند» دارد فقط برای آغازکننده فرایند باز است، به نام
    * خودش یا از راه جانشینی که به جای او امضا می‌کند (امضای به نام تفویض‌کننده، TD-377)؛ فرایند بی آغازکننده فقط برای مدیر
    * سیستم. خروجی true یعنی این امضاکننده رد می‌شود.
    */
@@ -659,7 +659,7 @@ export class WorkflowTransitionExecutor {
         const ruleEval = WorkflowRuleEngine.evaluateRuleBreakdown(transition.ruleConditionsJson, authoritativeContext);
         if (!ruleEval.passed) {
           const failedRules = ruleEval.breakdown.filter(b => !b.passed).map(b => describeUnmetWorkflowRule(b.rule, b.actualValue));
-          throw new ValidationError(`شرایط سیستمی لازم برای اجرای این مرحله احراز نشد: ${failedRules.join('، ')}`);
+          throw new ValidationError(`شرایط سامانه لازم برای اجرای این مرحله احراز نشد: ${failedRules.join('، ')}`);
         }
       }
 

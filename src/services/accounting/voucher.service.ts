@@ -293,7 +293,7 @@ export class VoucherService {
     }[];
   }, externalTx?: DbExecutor): Promise<JournalVoucher> {
     if (!data.items || data.items.length < 2) {
-      throw new ValidationError('سند دوبل حسابداری باید حداقل شامل دو ردیف (بدهکار و بستانکار) باشد');
+      throw new ValidationError('سند حسابداری دوطرفه باید حداقل شامل دو ردیف (بدهکار و بستانکار) باشد');
     }
 
     // Verify double-entry balance — v7.0.49 (audit P2-5): آستانه واحد VOUCHER_BALANCE_TOLERANCE در ثبت و قطعی‌سازی؛

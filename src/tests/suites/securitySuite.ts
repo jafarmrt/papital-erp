@@ -1397,7 +1397,7 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۱۴ (از v9.0.33، TD-443 به بعد): دسترسی و یکپارچگی موتور گردش‌کار از مسیرهای واقعی
   const { runWorkflowAccessTests } = await import('../security/workflowAccessTests.js');
   results.push(...await runWorkflowAccessTests(shouldRunAccess));
-  // v10.0.85 (TD-1220): ارسال سند فروش به انبار فقط با سازنده آن و بازگشایی با documents.edit
+  // v10.0.120 (TD-1220): ارسال سند فروش به انبار فقط با سازنده آن و بازگشایی با documents.edit
   const { runDocSubmitGuardTests } = await import('../security/docSubmitGuardTests.js');
   results.push(...await runDocSubmitGuardTests(shouldRunAccess));
   // بسته ۱۴، PR ب (از v9.0.39، TD-446 به بعد): چرخه عمر فرایند و کارتابل

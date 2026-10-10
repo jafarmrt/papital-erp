@@ -183,7 +183,7 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
       // ۲) خزانه‌دار: گام انبار ۴۰۳؛ در گردش کار ویرایش‌شده بی نگهبان هم قطعی‌سازی مجوز سند را می‌خواهد (ت۳)
       const treasurer = await h.sessionWith('treasurer');
       const draftA = await draftSalesDocument(h);
-      // v10.0.85 (TD-1220): ارسال به انبار فقط با سازنده (این‌جا مدیر سیستم که فرایند را آغاز کرده)
+      // v10.0.120 (TD-1220): ارسال به انبار فقط با سازنده (این‌جا مدیر سیستم که فرایند را آغاز کرده)
       const instanceA = await startDoc('DOC_APPROVAL_WORKFLOW', draftA);
       await h.walk(instanceA, ['submit_to_warehouse'], h.admin);
       const treasurerWalk = [0, ...await h.walk(instanceA, ['approve_warehouse'], treasurer)];

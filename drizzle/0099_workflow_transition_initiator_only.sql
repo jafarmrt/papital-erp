@@ -1,4 +1,4 @@
--- Drizzle Migration 0099: a transition only the instance initiator may run (v10.0.85 / TD-1220, guide test finding B-01)
+-- Drizzle Migration 0099: a transition only the instance initiator may run (v10.0.120 / TD-1220, guide test finding B-01)
 --
 -- The default document workflow let anyone holding a workflow key send a sales document to the warehouse, so a buyer
 -- with documents.create sent a seller's proforma. The designer gets a per-transition flag «فقط آغازکننده اجرا کند»: when

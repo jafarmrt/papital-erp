@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { WorkflowEdgeGuardFields, type WorkflowEdgeGuard } from '../../components/workflow/WorkflowEdgeGuardFields';
 import { workflowDesignErrors } from '../../lib/workflow/workflowDesignRules';
 
-// v10.0.85 (TD-1220): the designer sets «فقط آغازکننده اجرا کند» per action and never together with «آغازکننده تأیید نکند»
+// v10.0.120 (TD-1220): the designer sets «فقط آغازکننده اجرا کند» per action and never together with «آغازکننده تأیید نکند»
 function renderFields(value: Partial<WorkflowEdgeGuard>) {
   const onChange = vi.fn();
   render(<WorkflowEdgeGuardFields value={{ requiredRole: '', requiredPermission: '', isInitiatorExcluded: 0, isInitiatorOnly: 0, ...value }} onChange={onChange} roles={[]} />);

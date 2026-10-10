@@ -133,7 +133,7 @@ export function workflowDesignErrors(states: unknown, transitions: unknown): str
     if (permission && !isCatalogPermission(permission)) {
       errors.push(`مجوز لازم اقدام ${transitionLabel(tr, i)} («${permission}») در فهرست مجوزها نیست؛ آن را از فهرست برگزینید.`);
     }
-    // v10.0.85 (TD-1220): «فقط آغازکننده» و «آغازکننده تأیید نکند» با هم اقدام را برای همه می‌بندند
+    // v10.0.120 (TD-1220): «فقط آغازکننده» و «آغازکننده تأیید نکند» با هم اقدام را برای همه می‌بندند
     if (flagOn(tr.isInitiatorOnly) && flagOn(tr.isInitiatorExcluded)) {
       errors.push(`اقدام ${transitionLabel(tr, i)} هم «فقط آغازکننده اجرا کند» دارد و هم «آغازکننده تأیید نکند»؛ یکی را بردارید.`);
     }

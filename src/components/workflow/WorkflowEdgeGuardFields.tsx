@@ -10,7 +10,7 @@ export interface WorkflowEdgeGuard {
   requiredRole: string;
   requiredPermission: string;
   isInitiatorExcluded: number;
-  /** v10.0.85 (TD-1220): «فقط آغازکننده اجرا کند» */
+  /** v10.0.120 (TD-1220): «فقط آغازکننده اجرا کند» */
   isInitiatorOnly: number;
 }
 

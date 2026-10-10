@@ -2,7 +2,7 @@ import { TestCaseResult } from '../types.js';
 import { draftSalesDocument, runCase, type Row, type Session, type ShouldRun } from './workflowTestHarness.js';
 
 /**
- * v10.0.85 (TD-1220، یافته B-01 آزمون راهنما): «ارسال به انبار جهت تایید اقلام» و «بازگشایی مجدد جهت اصلاح» در گردش کار
+ * v10.0.120 (TD-1220، یافته B-01 آزمون راهنما): «ارسال به انبار جهت تایید اقلام» و «بازگشایی مجدد جهت اصلاح» در گردش کار
  * پیش‌فرض اسناد نگهبان نداشتند؛ خریدار (دارنده documents.create برای سند خرید) پیش‌فاکتور فروشنده دیگر را به انبار
  * می‌فرستاد و هر کاربر گردش کار سند ردشده را باز می‌کرد. ارسال حالا documents.create و «فقط آغازکننده» می‌خواهد
  * (فروشنده پیش‌فاکتور خودش را می‌فرستد، ت۳) و بازگشایی documents.edit.
@@ -13,7 +13,7 @@ export async function runDocSubmitGuardTests(shouldRun: ShouldRun): Promise<Test
   if (shouldRun('sec_doc_submit_initiator_only_td_1220', 'security', 'td1220', 'workflow', 'package14')) {
     await runCase(results, {
       id: 'sec_doc_submit_initiator_only_td_1220',
-      name: 'v10.0.85: only the creator of a sales document sends it to the warehouse and reopening a rejected one needs documents.edit; an untouched installed definition is upgraded (TD-1220)',
+      name: 'v10.0.120: only the creator of a sales document sends it to the warehouse and reopening a rejected one needs documents.edit; an untouched installed definition is upgraded (TD-1220)',
       details: 'A buyer holding documents.create gets 403 on another user\'s proforma and is not offered the action; the creator sends it; reopen without documents.edit is 403, with it 200; an edited definition stays and is listed by the health check',
     }, async (h, wrong) => {
       const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');

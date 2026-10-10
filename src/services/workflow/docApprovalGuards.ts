@@ -9,7 +9,7 @@ import type { SeedGuardUpgrade, SeedStepGuard } from './seedGuardUpgrade.js';
 /**
  * v9.0.35 (TD-445، یافته B14-03، تصمیم مالک محصول ت۲ «فقط مجوز»): گام‌های گردش‌کار پیش‌فرض اسناد با مجوز بسته می‌شوند،
  * نه با کد نقش (مدل مجوز بسته ۲): بررسی انبار و رد آن `warehouse.out`، بررسی مالی و رد آن `accounting.vouchers`،
- * تأیید مستقیم `workflow.admin`؛ ارسال به انبار و بازگشایی برای همه (از v10.0.85 نگهبان دارند، پایین‌تر). پیش‌تر هر سه گام بی نقش و بی مجوز بود و فروشنده
+ * تأیید مستقیم `workflow.admin`؛ ارسال به انبار و بازگشایی برای همه (از v10.0.120 نگهبان دارند، پایین‌تر). پیش‌تر هر سه گام بی نقش و بی مجوز بود و فروشنده
  * پیش‌فاکتور خودش را از هر سه گام می‌گذراند و قطعی می‌کرد.
  */
 export const DOC_APPROVAL_WORKFLOW_CODE = 'DOC_APPROVAL_WORKFLOW';
@@ -17,7 +17,7 @@ export const DOC_APPROVAL_WORKFLOW_CODE = 'DOC_APPROVAL_WORKFLOW';
 interface StepGuard { from: string; to: string; actionKey: string; title: string; requiredRole: string; requiredPermission: string }
 
 /**
- * نگهبان گام‌ها در seed از v9.0.35 تا v10.0.84 (from، to و کلید اقدام همان seed پیشین است): ارسال به انبار و بازگشایی
+ * نگهبان گام‌ها در seed از v9.0.35 تا v10.0.119 (from، to و کلید اقدام همان seed پیشین است): ارسال به انبار و بازگشایی
  * برای همه
  */
 const DOC_APPROVAL_GUARDS_V9035: ReadonlyArray<StepGuard> = [
@@ -31,7 +31,7 @@ const DOC_APPROVAL_GUARDS_V9035: ReadonlyArray<StepGuard> = [
 ];
 
 /**
- * v10.0.85 (TD-1220، یافته B-01 آزمون راهنما، ت۳): نگهبان گام‌ها در seed تازه. «ارسال به انبار» `documents.create` (همان
+ * v10.0.120 (TD-1220، یافته B-01 آزمون راهنما، ت۳): نگهبان گام‌ها در seed تازه. «ارسال به انبار» `documents.create` (همان
  * مجوز ثبت پیش‌نویس و پیش‌فاکتور فروش) و «فقط آغازکننده اجرا کند» می‌خواهد، پس فروشنده فقط پیش‌فاکتور خودش را می‌فرستد و
  * خریدار با documents.create سند خرید، پیش‌فاکتور دیگری را نمی‌فرستد؛ «بازگشایی» `documents.edit`. پیش‌تر هر دو برای
  * همه باز بودند.

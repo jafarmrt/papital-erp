@@ -551,7 +551,7 @@ export class WorkflowDefinitionService {
         if (await upgradeLegacyDocApprovalGuards()) {
           logger.info('[WorkflowDefinitionService] DOC_APPROVAL_WORKFLOW step permissions upgraded (TD-445).');
         }
-        // v10.0.85 (TD-1220): ارسال به انبار فقط برای سازنده سند و بازگشایی با ویرایش سند
+        // v10.0.120 (TD-1220): ارسال به انبار فقط برای سازنده سند و بازگشایی با ویرایش سند
         if (await upgradeLegacySeedGuards(DOC_APPROVAL_SUBMIT_GUARD_UPGRADE)) {
           logger.info('[WorkflowDefinitionService] DOC_APPROVAL_WORKFLOW send and reopen guards upgraded (TD-1220).');
         }
