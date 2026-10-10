@@ -1,7 +1,8 @@
-import { pool } from '../../db/drizzle.js';
+import { orm, pool } from '../../db/drizzle.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { DocumentService } from '../../services/document.service.js';
 import { ItemStockReservationService } from '../../services/items/itemStockReservation.service.js';
+import { lockStockItems } from '../../services/inventory/stockItemLocks.js';
 import { ProjectBomAllocationService } from '../../services/inventory/projectBomAllocation.service.js';
 import { ProcurementService } from '../../services/procurement.service.js';
 import { ProjectService } from '../../services/projects.service.js';
@@ -124,13 +125,22 @@ export function createProjectOperations(
     if (approverId === null) return { detail: 'skip:no-approver', tags: [] };
     if (projectItems.length === 0) return { detail: 'skip:no-project-item', tags: [] };
     const item = pick(projectItems);
-    const available = await freeStock(item.id);
-    if (available < 1) return { detail: 'skip:no-stock', tags: [] };
-    const quantity = between(1, Math.min(available, 4));
-    const docId = await DocumentService.createDocument({
-      docType: 'invoice', inOut: 'out', status: 'proforma', date: await businessTodayIsoDate(), user: 'sim', partyId: customer.id,
-      items: [{ itemId: item.id, quantity, unitPrice: between(100, 500) * 1000, location: mainWh }],
+    const date = await businessTodayIsoDate();
+    // v10.0.86 (TD-1148): saving a proforma passes no sellable gate (decision ت۱۴), so the free stock is read and the proforma
+    // saved under the item's row lock, the lock every gated outflow takes: two concurrent steps never size their proformas
+    // from the same free stock. The read goes through the pool, which sees only committed reservations, so the lock is held
+    // until the proforma commits; one extra connection per waiting step stays within the pool (12 users, 20 connections).
+    const docId = await orm.transaction(async (tx): Promise<number | null> => {
+      await lockStockItems(tx, [item.id]);
+      const available = await freeStock(item.id);
+      if (available < 1) return null;
+      const quantity = between(1, Math.min(available, 4));
+      return DocumentService.createDocument({
+        docType: 'invoice', inOut: 'out', status: 'proforma', date, user: 'sim', partyId: customer.id,
+        items: [{ itemId: item.id, quantity, unitPrice: between(100, 500) * 1000, location: mainWh }], externalTx: tx,
+      });
     });
+    if (docId === null) return { detail: 'skip:no-stock', tags: [] };
     // as POST /documents does for a sales proforma (TD-446): the active document definition, if any
     await WorkflowEngineService.maybeStartWorkflow({ entityType: 'document', entityId: docId, userId: approverId, userName: 'sim' });
     for (let n = 0; n < MAX_APPROVAL_STEPS; n++) {
