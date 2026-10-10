@@ -251,7 +251,7 @@ export const documentsQuerySchema = z.object({
       { message: 'فهرست نوع سند (types) فقط نوع‌های تعریف‌شده سند را می‌پذیرد، جدا شده با ویرگول.' },
     ).optional(),
     status: z.enum(['draft', 'proforma', 'final']).optional(),
-    // v10.0.96 (TD-1197): `statuses=proforma,draft` چند وضعیت با هم
+    // v10.0.103 (TD-1197): `statuses=proforma,draft` چند وضعیت با هم
     statuses: z.string().max(40).refine(
       raw => (documentListTypes(raw) ?? []).every(s => ['draft', 'proforma', 'final'].includes(s)),
       { message: 'فهرست وضعیت سند (statuses) فقط پیش‌نویس، پیش‌فاکتور و نهایی را می‌پذیرد، جدا شده با ویرگول.' },
@@ -302,7 +302,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
     `ثبت ${docTypeTitles[requestedType] ?? 'سند'}${recordStatus === 'final' ? ' به‌صورت قطعی' : ''}`);
   // پیش‌فاکتورِ کسی که سند فروش را قطعی نمی‌کند، مانند پیش، نوع «پیش‌فاکتور» می‌گیرد (شماره و تاریخش هنگام نهایی‌سازی
   // از سری فاکتور، TD-317 و TD-410). یکی شدن دو شکل پیش‌فاکتور کار B08-31 است؛ پیش‌نویس همیشه پیش‌نویس می‌ماند
-  // v10.0.88 (TD-1190): the same rule the invoice form reads its number series with (`recordedSalesType`)
+  // v10.0.93 (TD-1190): the same rule the invoice form reads its number series with (`recordedSalesType`)
   if (requestedType === 'invoice' && recordStatus === 'proforma') {
     req.body.docType = recordedSalesType(requestedType, recordStatus, await can(req.user, SALES_FINALIZE_PERMISSION));
   }

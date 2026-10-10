@@ -26,7 +26,7 @@ async function priceListDuplicateRefused(): Promise<string> {
 export async function runGuideTestFixTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], () => Promise<string>]> = [
-    ['reg_price_list_names_unique_td_1192', 'v10.0.90: a repeated price list name is refused (TD-1192)', ['td1192'], priceListDuplicateRefused],
+    ['reg_price_list_names_unique_td_1192', 'v10.0.95: a repeated price list name is refused (TD-1192)', ['td1192'], priceListDuplicateRefused],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, 'package16', ...tags)) continue;

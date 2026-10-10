@@ -5,7 +5,7 @@ import { openProformaBadge, openProformasUrl } from '../../lib/invoices/openProf
 
 vi.mock('../../components/workflow/WorkflowStepperWidget', () => ({ WorkflowStepperWidget: () => null }));
 
-// v10.0.96 (TD-1197): a rejected sales proforma is a draft (TD-1137) and stays in the open proformas box, marked, with edit
+// v10.0.103 (TD-1197): a rejected sales proforma is a draft (TD-1137) and stays in the open proformas box, marked, with edit
 const REJECTED_BADGE = 'ردشده؛ اصلاح و ارسال دوباره';
 const DRAFT_BADGE = 'پیش‌نویس';
 

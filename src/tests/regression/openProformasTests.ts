@@ -4,13 +4,13 @@ import { createHarness, draftSalesDocument, type Harness, type Row, type ShouldR
 /**
  * Phase 3 lane L2, fresh-eyes guide test (roles-a): after the warehouse keeper rejects a sales proforma it is a draft
  * (TD-1137), and the seller must still find it in the open proformas box of the invoice page with an edit action. Through
- * the real routes; fails on v10.0.95, where the box asked only for proformas.
+ * the real routes; fails on v10.0.102, where the box asked only for proformas.
  */
 export async function runOpenProformasTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const id = 'reg_rejected_proforma_open_box_td_1197';
   if (!shouldRun(id, 'td1197', 'proforma', 'workflow')) return results;
-  const name = 'v10.0.96: a rejected sales proforma, back to draft, stays in the open proformas box marked rejected (TD-1197)';
+  const name = 'v10.0.103: a rejected sales proforma, back to draft, stays in the open proformas box marked rejected (TD-1197)';
   const tStart = Date.now();
   let h: Harness | undefined;
   try {

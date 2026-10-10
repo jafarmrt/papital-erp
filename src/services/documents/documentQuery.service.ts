@@ -49,7 +49,7 @@ export class DocumentQueryService {
     if (filter.status && filter.status !== 'all') {
       conditions.push(eq(documents.status, filter.status));
     }
-    // v10.0.96 (TD-1197): چند وضعیت با هم (پیش‌فاکتورها و پیش‌نویس‌های فروش جعبه «پیش فاکتورهای باز»)
+    // v10.0.103 (TD-1197): چند وضعیت با هم (پیش‌فاکتورها و پیش‌نویس‌های فروش جعبه «پیش فاکتورهای باز»)
     if (filter.statuses && filter.statuses.length > 0) conditions.push(inArray(documents.status, filter.statuses));
     // V3.1.46 (TD-070): فیلتر پروژه‌محور اسناد
     if (filter.projectId !== undefined && filter.projectId !== null && String(filter.projectId).trim() !== '' && String(filter.projectId) !== 'all') {

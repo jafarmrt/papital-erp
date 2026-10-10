@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { priceListNamesError } from '../../lib/settings/settingValues';
 
-// v10.0.90 (TD-1192): a price list name with a Latin comma or a repeated name is refused, not saved as extra lists
+// v10.0.95 (TD-1192): a price list name with a Latin comma or a repeated name is refused, not saved as extra lists
 const RETAIL = 'قیمت خرده‌فروشی';
 
 describe('priceListNamesError (TD-1192)', () => {

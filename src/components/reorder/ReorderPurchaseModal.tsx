@@ -65,7 +65,7 @@ export function ReorderPurchaseModal({
     setDonatedConfirmed(false);
   }, [isOpen, selectedItems]);
 
-  // v10.0.93 (TD-1194): فقط تأمین‌کننده یا «هر دو»
+  // v10.0.98 (TD-1194): فقط تأمین‌کننده یا «هر دو»
   const supplierOptions = useMemo(() => supplierNameOptions(suppliers), [suppliers]);
 
   if (!isOpen) return null;
