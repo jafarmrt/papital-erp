@@ -39,6 +39,7 @@ import {
   assertRequisitionNotConsolidated, closeConsolidationSources, consolidationHeader, lockConsolidationSources,
   mergeConsolidationRows,
 } from './procurement/requisitionConsolidation.js';
+import { actorDisplayName } from '../lib/auth/actorDisplayName.js';
 
 type DbClient = DbExecutor;
 
@@ -169,7 +170,7 @@ export class ProcurementService {
    */
   static async createRequisition(
     input: CreateRequisitionInput,
-    user: { id?: number; username?: string; role?: string }
+    user: { id?: number; username?: string; fullName?: string; role?: string }
   ): Promise<PurchaseRequisition> {
     return orm.transaction(async (tx) => toRequisitionDto(await this.insertRequisition(tx, input, user)));
   }
@@ -181,7 +182,7 @@ export class ProcurementService {
   static async insertRequisition(
     tx: DbClient,
     input: CreateRequisitionInput,
-    user: { id?: number; username?: string; role?: string },
+    user: { id?: number; username?: string; fullName?: string; role?: string },
     auditDetails: Record<string, unknown> = {},
   ): Promise<typeof purchaseRequisitions.$inferSelect> {
     if (!input.title || input.title.trim() === '') {
@@ -212,7 +213,7 @@ export class ProcurementService {
       // v7.0.135 (TD-232): تاریخ نیاز میلادی ISO (پیش‌فرض امروز کسب‌وکار)
       requiredDate: requireStorageDate(input.requiredDate, 'تاریخ نیاز') || await businessTodayIsoDate(),
       requestedById: user.id || null,
-      requestedByName: user.username || 'سیستم',
+      requestedByName: actorDisplayName(user),
       notes: input.notes || '',
       totalEstimatedAmount: money(totalEst),
       items: sanitizedItems,
@@ -618,7 +619,7 @@ export class ProcurementService {
       throw new ValidationError('حداقل یک گروه سفارش خرید باید تعیین شود.');
     }
     const overOrderReason = params.overOrderReason?.trim() || '';
-    const username = user.username || 'کارشناس تدارکات';
+    const username = actorDisplayName(user, 'کارشناس تدارکات');
     const today = await businessTodayIsoDate();
     // v9.0.315 (TD-689، ت۱): حق تأیید پیش از تراکنش سنجیده می‌شود (TD-324: بی اتصال دوم درون تراکنش)
     const mayApprove = await userHasRoleOrPermission(user, ...REQUISITION_APPROVE_PERMISSIONS);
@@ -805,7 +806,7 @@ export class ProcurementService {
   static async consolidateRequisitions(
     requisitionIds: number[],
     newTitle: string | undefined,
-    user: { id?: number; username?: string }
+    user: { id?: number; username?: string; fullName?: string }
   ): Promise<PurchaseRequisition> {
     // v9.0.349 (TD-694، B10-07، ت۳ الف): قفل منبع‌ها به ترتیب شناسه، ساخت درخواست تجمیعی و بستن منبع‌ها با پیوند و خاتمه
     // گردش کار، همه در یک تراکنش. پیش‌تر تجمیع بی تراکنش و قفل بود، منبع‌ها (حتی دریافت‌شده) باز می‌ماندند و شناسه

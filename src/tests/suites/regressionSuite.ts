@@ -10902,6 +10902,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 phase 3 lane L2 (v10.0.35+): writer routes read their bodies through Zod
   const { runWriterRouteZodTests } = await import('../regression/writerRouteZodTests.js');
   results.push(...await runWriterRouteZodTests(shouldRun));
+  // TD-1132: records name the user by full name
+  const { runActorDisplayNameTests } = await import('../regression/actorDisplayNameTests.js');
+  results.push(...await runActorDisplayNameTests(shouldRun));
 
   // Series 10 phase 3 lane L2, package B4 (v10.0.41+): document audit rows, stock event cost, reorder monitor, purchase party, requisition workflow
   const { runDocumentAuditEventTests } = await import('../regression/documentAuditEventTests.js');
