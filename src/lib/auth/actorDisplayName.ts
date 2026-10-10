@@ -9,7 +9,7 @@ export interface ActorNameSource {
   username?: string | null;
 }
 
-export function actorDisplayName(user: ActorNameSource | null | undefined, fallback = 'سیستم'): string {
+export function actorDisplayName(user: ActorNameSource | null | undefined, fallback = 'سامانه'): string {
   const fullName = (user?.full_name ?? user?.fullName ?? '').trim();
   if (fullName) return fullName;
   const username = (user?.username ?? '').trim();
