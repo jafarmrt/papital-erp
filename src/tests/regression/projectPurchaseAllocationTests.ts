@@ -1,7 +1,7 @@
 import { PROJECT_LIST_ROW_FIELDS, PROJECT_LIST_STAGE_FIELDS } from '../../lib/projects/projectList.js';
 import { createTestItem } from '../fixtures/factories.js';
 import { TestCaseResult } from '../types.js';
-import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient } from './fiscalClosingTests.js';
+import { type ShouldRun, assertNoProblems, inFiscalSandbox, runCase, sandboxAdminClient, sandboxClientWith } from './fiscalClosingTests.js';
 import { type Row, brief, editProject, newProject, projectStatus, q } from './projectStageIntegrityTests.js';
 
 /**
@@ -172,6 +172,36 @@ export async function runProjectPurchaseAllocationTests(shouldRun: ShouldRun): P
       if (heldReserved !== 2 || reserved.some(row => Number(row.itemId) === missing.id)) problems.push(`the reservation is ${brief(reserved)}, expected 2 of the held material (one per product and one global) and nothing of the missing one`);
       assertNoProblems(problems);
       return 'preset sections stored as project rows with stock status; finalizing reserves their materials';
+    }));
+  }
+
+  const costId = 'reg_project_material_cost_td_1210';
+  if (shouldRun(costId, 'td1210', 'projects', 'package11')) {
+    await runCase(results, costId, 'v10.0.90: the project allocation list carries each allocation cost at its Kardex outflow, equal to its work-in-progress voucher, only for item cost readers (TD-1210)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const api = await sandboxAdminClient();
+      const wh = await defaultWarehouse();
+      const raw = await createTestItem({ type: 'raw_material' });
+      const project = await newProject(api, {});
+      const allocated = await api.post('/api/inventory/allocations/allocate', { projectId: project.id, allocations: [{ itemId: raw.id, quantity: 3, location: wh }] });
+      const allocationId = Number(allocated.body?.data?.allocations?.[0]?.id);
+      if (allocated.status !== 200 || !Number.isInteger(allocationId)) throw new Error(`allocating answered ${allocated.status} ${brief(allocated.body)}`);
+      const voucher = Number((await q(`SELECT COALESCE(SUM(i.debit), 0)::text AS d FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id
+        WHERE v.source_bom_allocation_id = $1 AND v.is_deleted = 0 AND i.is_deleted = 0`, [allocationId]))[0]?.d);
+      if (!(voucher > 0)) problems.push(`the allocation voucher debit is ${voucher}, expected above zero`);
+      const list = await api.get(`/api/inventory/allocations?projectId=${project.id}`);
+      const row = (list.body?.allocations ?? list.body?.data?.allocations ?? [])[0] as Row | undefined;
+      if (list.status !== 200 || Number(row?.cost) !== voucher) problems.push(`the admin list answered ${list.status} with cost ${brief(row?.cost)}, expected the voucher amount ${voucher}`);
+      const viewer = await sandboxClientWith(['projects.view']);
+      const viewed = await viewer.get(`/api/inventory/allocations?projectId=${project.id}`);
+      const viewedRow = (viewed.body?.allocations ?? viewed.body?.data?.allocations ?? [])[0] as Row | undefined;
+      if (viewed.status !== 200 || !viewedRow || 'cost' in viewedRow) problems.push(`a projects.view reader got ${viewed.status} ${brief(viewedRow)}, expected the row without its cost`);
+      const keeper = await sandboxClientWith(['warehouse.in', 'projects.view']);
+      const kept = await keeper.get(`/api/inventory/allocations?projectId=${project.id}`);
+      const keptRow = (kept.body?.allocations ?? kept.body?.data?.allocations ?? [])[0] as Row | undefined;
+      if (Number(keptRow?.cost) !== voucher) problems.push(`a warehouse.in reader got cost ${brief(keptRow?.cost)}, expected ${voucher}`);
+      assertNoProblems(problems);
+      return 'allocation cost equals its voucher and is shown only to item cost readers';
     }));
   }
 

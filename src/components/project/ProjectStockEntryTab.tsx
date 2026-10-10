@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { toPersianDigits, errorMessageOf } from '../../utils';
 import { ProjectOverDeliveryPrompt, overDeliveriesOf, type ProjectOverDeliveryView } from './ProjectOverDeliveryPrompt';
 import { useProjectPermissions } from '../../hooks/useProjectPermissions';
+import { ProjectMaterialCostNote } from './ProjectMaterialCostNote';
 
 interface ProjectStockEntryTabProps {
   project: ProductionProject;
@@ -464,6 +465,8 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
             </div>
           </div>
         </div>
+
+        {canDeliver && <ProjectMaterialCostNote projectId={project.id} singleProductQuantity={products.length === 1 && Number(products[0].quantity) > 0 ? Number(products[0].quantity) : null} />}
 
         {/* Quick Stats & Controls Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
