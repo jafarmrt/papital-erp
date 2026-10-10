@@ -85,19 +85,21 @@ export function ProcurementStatusCell({ status, onChange, shortfall, unit }: {
   shortfall: number;
   unit: string;
 }) {
+  // v10.0.91 (TD-1214): a row short of stock needs procurement whatever was stored, so the list never says «موجود» beside a shortfall
+  const shown = shortfall > 0 ? 'needs_procurement' : status;
   return (
     <td className="p-2.5 border-l border-slate-100 align-middle min-w-[190px]">
       <div className="flex flex-col gap-1">
         <select
-          value={status}
+          value={shown}
           onChange={(e) => onChange(e.target.value)}
           className={`px-2 py-1 rounded-xl font-bold text-xs border focus:outline-none cursor-pointer w-full ${
-            status === 'available'
+            shown === 'available'
               ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
               : 'bg-amber-100 text-amber-950 border-amber-400'
           }`}
         >
-          <option value="available">✓ موجود در انبار</option>
+          <option value="available" disabled={shortfall > 0}>✓ موجود در انبار</option>
           <option value="needs_procurement">⚠ نیاز به تامین / خرید</option>
         </select>
         {shortfall > 0 && (
