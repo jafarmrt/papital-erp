@@ -44,7 +44,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); writes.length = 0; project = { 
 
 const renderModal = () => render(<ProjectDetailModal projectId={7} isOpen onClose={vi.fn()} onUpdate={vi.fn()} />);
 
-// v10.0.41 (TD-1141): a project could not be paused, resumed or cancelled from any screen
+// v10.0.66 (TD-1141): a project could not be paused, resumed or cancelled from any screen
 describe('project pause, resume and cancel (TD-1141)', () => {
   it('pauses with the project version', async () => {
     renderModal();

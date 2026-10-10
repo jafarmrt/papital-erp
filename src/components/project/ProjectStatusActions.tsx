@@ -13,7 +13,7 @@ interface ProjectStatusActionsProps {
 }
 
 /**
- * v10.0.41 (TD-1141): توقف، ادامه و لغو پروژه از پنجره جزئیات، با `PUT /projects/:id` و نسخه پروژه (TD-742). فراخواننده
+ * v10.0.66 (TD-1141): توقف، ادامه و لغو پروژه از پنجره جزئیات، با `PUT /projects/:id` و نسخه پروژه (TD-742). فراخواننده
  * آن را فقط برای دارنده `projects.edit` نشان می‌دهد؛ پیام رد سرور (مثلاً تخصیص مواد باز هنگام لغو) همان‌طور نشان داده می‌شود.
  */
 export function ProjectStatusActions({ projectId, status, version, onSaved }: ProjectStatusActionsProps) {

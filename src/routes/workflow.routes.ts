@@ -173,7 +173,7 @@ router.get('/instance/:entityType/:entityId', authorizePermission(...WORKFLOW_WI
       userPermissions
     );
 
-    // v10.0.40 (TD-1142): بی نمونه، `startable` می‌گوید آغاز گردش کار ممکن است (تعریف فعالی برای این نوع موجودیت هست)
+    // v10.0.65 (TD-1142): بی نمونه، `startable` می‌گوید آغاز گردش کار ممکن است (تعریف فعالی برای این نوع موجودیت هست)
     res.json(instanceData || { instance: null, startable: await WorkflowEngineService.hasActiveDefinition(String(entityType)) });
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);

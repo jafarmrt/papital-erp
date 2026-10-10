@@ -10857,7 +10857,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 phase 3 lane L3 (v10.0.29+): the events of the project stock paths
   const { runProjectEventTests } = await import('../regression/projectEventTests.js');
   results.push(...await runProjectEventTests(shouldRun));
-  // Series 10 phase 3 lane L3 (v10.0.38+): gaps of the project screens (TD-1140..TD-1144)
+  // Series 10 phase 3 lane L3 (v10.0.63+): gaps of the project screens (TD-1140..TD-1144)
   const { runProjectScreenGapsTests } = await import('../regression/projectScreenGapsTests.js');
   results.push(...await runProjectScreenGapsTests(shouldRun));
 
@@ -10868,6 +10868,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runSystemHealthTests(shouldRun));
   const { runFactoryResetTests } = await import('../regression/factoryResetTests.js');
   results.push(...await runFactoryResetTests(shouldRun));
+  const { runInitialSetupTests } = await import('../regression/initialSetupTests.js');
+  results.push(...await runInitialSetupTests(shouldRun));
 
   // Package 1 second half PR 3 (v9.0.444+): foreign keys of the schema and the database
   const { runForeignKeyPolicyTests } = await import('../regression/foreignKeyPolicyTests.js');
@@ -10894,10 +10896,16 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Payroll duties plan PR 1 (v10.0.21+): voucher approval permission and maker-checker
   const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
   results.push(...await runVoucherApprovalDutiesTests(shouldRun));
+  const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
+  results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
 
   // Series 10 phase 3 lane L2 (v10.0.35+): writer routes read their bodies through Zod
   const { runWriterRouteZodTests } = await import('../regression/writerRouteZodTests.js');
   results.push(...await runWriterRouteZodTests(shouldRun));
+
+  // Series 10 phase 3 lane L2, package B4 (v10.0.41+): document audit rows, stock event cost, reorder monitor, purchase party, requisition workflow
+  const { runDocumentAuditEventTests } = await import('../regression/documentAuditEventTests.js');
+  results.push(...await runDocumentAuditEventTests(shouldRun));
 
   return results;
 }

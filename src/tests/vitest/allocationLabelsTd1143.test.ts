@@ -5,7 +5,7 @@ import { ALLOCATION_RELEASE_PLACE, BOM_ALLOCATIONS_TAB_LABEL, STOCK_COUNT_PAGE_L
 
 const source = (file: string) => readFileSync(resolve(process.cwd(), 'src', file), 'utf8');
 
-// v10.0.38 (TD-1143): the refusal pointed to «زبانه مواد پروژه», which no project screen has
+// v10.0.63 (TD-1143): the refusal pointed to «زبانه مواد پروژه», which no project screen has
 describe('where an open allocation is released (TD-1143)', () => {
   it('names the stock count page and its allocation tab, as the menu and the tab show them', () => {
     expect(ALLOCATION_RELEASE_PLACE).toContain(STOCK_COUNT_PAGE_LABEL);

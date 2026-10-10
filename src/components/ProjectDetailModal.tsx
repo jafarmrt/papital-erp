@@ -346,7 +346,7 @@ export default function ProjectDetailModal({
               <span className="hidden sm:inline">{isFullscreen ? 'پنجره‌ای' : 'تمام‌صفحه'}</span>
             </button>
 
-            {/* v10.0.41 (TD-1141): توقف، ادامه و لغو پروژه */}
+            {/* v10.0.66 (TD-1141): توقف، ادامه و لغو پروژه */}
             {canEdit && project && (
               <ProjectStatusActions
                 projectId={project.id}
@@ -666,7 +666,7 @@ export default function ProjectDetailModal({
                                       <span>ویرایش زمان‌بندی و پرسنل</span>
                                     </button>
                                   )}
-                                  {/* v10.0.42 (TD-1140): حذف مرحله */}
+                                  {/* v10.0.67 (TD-1140): حذف مرحله */}
                                   {canEdit && (
                                     <DeleteStageButton projectId={project.id} stage={stg} onChanged={() => { void loadProjectData(); onUpdate(); }} />
                                   )}
@@ -811,7 +811,7 @@ export default function ProjectDetailModal({
                       })}
                     </div>
 
-                    {/* v10.0.42 (TD-1140): افزودن مرحله پس از ثبت پروژه */}
+                    {/* v10.0.67 (TD-1140): افزودن مرحله پس از ثبت پروژه */}
                     {canEdit && (
                       <AddStageForm projectId={project.id} onChanged={() => { void loadProjectData(); onUpdate(); }} />
                     )}

@@ -18,7 +18,7 @@ function renderWidget() {
   );
 }
 
-// v10.0.40 (TD-1142): the project window offered «آغاز گردش کار» for PROJECT_WORKFLOW, which no install defines
+// v10.0.65 (TD-1142): the project window offered «آغاز گردش کار» for PROJECT_WORKFLOW, which no install defines
 describe('workflow widget without a definition to start (TD-1142)', () => {
   it('shows nothing when the entity has no instance and no active definition', async () => {
     fetchJson.mockResolvedValue({ instance: null, startable: false });

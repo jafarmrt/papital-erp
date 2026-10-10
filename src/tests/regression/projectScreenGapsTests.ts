@@ -11,13 +11,13 @@ import { ALLOCATION_RELEASE_PLACE, allocationStatusLabel } from '../../lib/proje
 export async function runProjectScreenGapsTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   return runReservationCases(shouldRun, [
     ['reg_open_allocation_refusal_names_release_place_td_1143',
-      'v10.0.38: deleting or cancelling a project with an open allocation names the stock count page tab where it is released, not a project tab that does not exist (TD-1143)',
+      'v10.0.63: deleting or cancelling a project with an open allocation names the stock count page tab where it is released, not a project tab that does not exist (TD-1143)',
       ['td1143', 'projects', 'allocation', 'package11'], openAllocationRefusalCase],
     ['reg_allocation_refusal_status_label_td_1144',
-      'v10.0.39: consuming or releasing an allocation that is no longer open says its status in Persian, never the status code (TD-1144)',
+      'v10.0.64: consuming or releasing an allocation that is no longer open says its status in Persian, never the status code (TD-1144)',
       ['td1144', 'projects', 'allocation', 'package11'], allocationStatusRefusalCase],
     ['reg_project_workflow_widget_startable_td_1142',
-      'v10.0.40: the workflow widget learns there is no project workflow to start, and a project workflow is read only with the project read keys (TD-1142)',
+      'v10.0.65: the workflow widget learns there is no project workflow to start, and a project workflow is read only with the project read keys (TD-1142)',
       ['td1142', 'projects', 'workflow', 'package11'], projectWorkflowStartableCase],
   ]);
 }

@@ -43,7 +43,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); writes.length = 0; project = { 
 
 const renderModal = () => render(<ProjectDetailModal projectId={7} isOpen onClose={vi.fn()} onUpdate={vi.fn()} />);
 
-// v10.0.42 (TD-1140): after a project was created no screen added or deleted a stage, although both routes exist
+// v10.0.67 (TD-1140): after a project was created no screen added or deleted a stage, although both routes exist
 describe('project stages after creation (TD-1140)', () => {
   it('adds a stage through POST /projects/:id/stages', async () => {
     renderModal();

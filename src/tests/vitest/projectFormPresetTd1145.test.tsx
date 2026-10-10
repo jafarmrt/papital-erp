@@ -19,7 +19,7 @@ const titles = (stages: Array<{ title: string }>) => stages.map(s => s.title);
 
 afterEach(() => cleanup());
 
-describe('v10.0.44 (TD-1145): a new project form applies no stage template until the user picks one', () => {
+describe('v10.0.69 (TD-1145): a new project form applies no stage template until the user picks one', () => {
   it('opens without a template and with one default stage, even when templates exist', async () => {
     const { result } = renderHook(() => useProjectForm(props as never));
     await waitFor(() => expect(result.current.availablePresets).toHaveLength(2));
