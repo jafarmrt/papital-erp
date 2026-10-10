@@ -207,3 +207,11 @@ export function useViewerAccess(): ViewerAccess | null {
   if (!ctx) return null;
   return { permissions: ctx.userPermissions.permissions, isAdmin: ctx.userPermissions.isAdmin, role: ctx.user?.role };
 }
+
+/** TD-1231: the current user's id and admin flag for maker-checker hints; outside AuthProvider or before login null */
+export function useViewerIdentity(): { id: number; isAdmin: boolean } | null {
+  const ctx = useContext(AuthContext);
+  const id = Number(ctx?.user?.id);
+  if (!ctx || !Number.isInteger(id) || id <= 0) return null;
+  return { id, isAdmin: isSystemAdminViewer({ isAdmin: ctx.userPermissions.isAdmin, role: ctx.user?.role }) };
+}

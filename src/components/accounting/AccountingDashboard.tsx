@@ -1,6 +1,7 @@
 import { ArrowUpRight, ArrowDownLeft, Wallet, Building2, CreditCard, FileText, TrendingUp, TrendingDown, PlusCircle } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 import type { FinancialSummaryStats, JournalVoucher, Cheque } from '../../types';
+import { voucherMakerName } from '../../lib/accounting/voucherListViewer';
 
 interface AccountingDashboardProps {
   stats: FinancialSummaryStats | null;
@@ -237,7 +238,7 @@ export function AccountingDashboard({
                         {v.description}
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
-                        {formatPersianDate(v.date)} • {v.createdByUsername || 'سامانه'}
+                        {formatPersianDate(v.date)} • {voucherMakerName(v, 'سامانه')}
                       </div>
                     </div>
                   </div>

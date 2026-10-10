@@ -19,6 +19,8 @@ import { voucherTypeLabel } from '../../lib/accounting/voucherTypes';
 import { voucherConfirmTexts, type VoucherRowAction } from '../../lib/accounting/voucherRowActions';
 import { VoucherRowMenu } from './vouchers/VoucherRowMenu';
 import { voucherSourceLabel } from '../../lib/accounting/voucherSource';
+import { isViewerVoucherMaker, voucherMakerName, voucherReferenceText } from '../../lib/accounting/voucherListViewer';
+import { useViewerIdentity } from '../../contexts/AuthContext';
 
 interface JournalVouchersTabProps {
   accounts?: Account[];
@@ -56,6 +58,7 @@ export function JournalVouchersTab({
   onBatchApproveVouchers,
 }: JournalVouchersTabProps) {
   const rial = useRialDisplay();
+  const viewer = useViewerIdentity();
   // v9.0.115 (TD-565): صفحه، جست‌وجو، نوع، وضعیت و تاریخ به سرور می‌روند و شمارنده‌ها و `total` از سرورند؛
   // پیش‌تر صفحه فقط ۲۰ سند آخر را داشت و همه صافی‌ها و شمارنده‌ها روی همان ۲۰ کار می‌کردند
   const [filters, setFilters] = useState<VoucherListFilters>({ status: 'all', voucherType: 'all', search: '', startDate: '', endDate: '' });
@@ -433,7 +436,7 @@ export function JournalVouchersTab({
                           </div>
                           {voucher.referenceNumber && (
                             <div className="text-[10px] text-slate-400 mt-0.5">
-                              ارجاع: {voucher.referenceModule} ({voucher.referenceNumber})
+                              ارجاع: {voucherReferenceText(voucher.referenceModule, voucher.referenceNumber)}
                             </div>
                           )}
                         </td>
@@ -443,7 +446,7 @@ export function JournalVouchersTab({
                         </td>
 
                         <td className="py-3 px-3 text-center text-slate-500 dark:text-slate-400">
-                          {voucher.createdByUsername || 'کاربر'}
+                          {voucherMakerName(voucher)}
                         </td>
 
                         {/* Decluttered Actions Column (قانون طلایی ۱: خلوت‌سازی دکمه‌ها و منوی کشویی) */}
@@ -459,7 +462,7 @@ export function JournalVouchersTab({
                             </button>
 
                             {/* اقدام متنی اصلی */}
-                            {voucher.status === 'draft' && onApproveVoucher ? (
+                            {voucher.status === 'draft' && onApproveVoucher && !isViewerVoucherMaker(voucher, viewer) ? (
                               <button
                                 onClick={() => handleApprove(voucher)}
                                 title="تایید حسابداری سند و انتقال به دفاتر رسمی"
@@ -468,6 +471,14 @@ export function JournalVouchersTab({
                                 <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
                                 <span>تایید سند</span>
                               </button>
+                            ) : voucher.status === 'draft' && isViewerVoucherMaker(voucher, viewer) ? (
+                              <span
+                                title="سازنده یا آخرین ویرایشگر سند دستی آن را تأیید نمی‌کند؛ کاربر دیگری باید تأیید کند"
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50/60 dark:bg-amber-950/30 rounded-lg border border-amber-200/60 dark:border-amber-800/60"
+                              >
+                                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                <span>در انتظار تأیید دیگری</span>
+                              </span>
                             ) : voucher.status === 'approved' && onFinalizeVoucher ? (
                               <button
                                 onClick={() => handleFinalize(voucher)}

@@ -107,6 +107,10 @@ export interface JournalVoucher {
   created_by_id?: number | null;
   createdByUsername?: string | null;
   created_by_username?: string | null;
+  /** TD-1230: the maker's full name (`users.full_name`), shown in the voucher list */
+  createdByName?: string | null;
+  /** TD-1231: the last editor of a manual voucher (maker-checker, TD-965) */
+  updatedById?: number | null;
   approvedById?: number | null;
   approved_by_id?: number | null;
   isDeleted?: number | null;
