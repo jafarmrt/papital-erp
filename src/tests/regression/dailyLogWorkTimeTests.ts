@@ -17,7 +17,7 @@ export async function runDailyLogWorkTimeTests(shouldRun: ShouldRun): Promise<Te
       'v9.0.260: a daily log is onsite or remote; a legacy leave log is neither onsite nor work hours in the summary and statistics (TD-635)',
       ['td635', 'daily_log', 'work_mode', 'package13'], workModeCase],
     ['reg_daily_log_no_overlap_td_1225',
-      'v10.0.91: two live daily logs of one author on one day never overlap in time, on create and on edit, so a day never holds more than 24 hours (TD-1225)',
+      'v10.0.137: two live daily logs of one author on one day never overlap in time, on create and on edit, so a day never holds more than 24 hours (TD-1225)',
       ['td1225', 'daily_log', 'work_hours', 'package13'], overlapCase],
   ];
   for (const [id, name, tags, run] of cases) {

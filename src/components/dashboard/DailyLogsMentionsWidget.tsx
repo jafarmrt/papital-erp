@@ -14,7 +14,7 @@ interface DailyLogsMentionsWidgetProps {
     my_total_logs?: number;
   };
   loading?: boolean;
-  /** v10.0.88 (TD-1223): فقط دارنده daily_logs.create دکمه «ثبت گزارش» را می‌بیند */
+  /** v10.0.134 (TD-1223): فقط دارنده daily_logs.create دکمه «ثبت گزارش» را می‌بیند */
   canCreate?: boolean;
 }
 

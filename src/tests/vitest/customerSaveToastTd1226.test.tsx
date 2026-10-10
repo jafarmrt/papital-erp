@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useSaveCustomerMutation } from '../../hooks/queries/useCustomerQueries';
 
-// v10.0.89 (TD-1226): saving a customer shows one success message, the page's; the hook adds none
+// v10.0.135 (TD-1226): saving a customer shows one success message, the page's; the hook adds none
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
 const toastFn = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));

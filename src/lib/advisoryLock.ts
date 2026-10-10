@@ -57,7 +57,7 @@ export const ROW_ADVISORY_LOCK_NAMESPACES = {
    */
   MEDIA_FILE_CONTENT: 91050,
   /**
-   * v10.0.91 (TD-1225): the daily logs of one author on one work day; transaction lock keyed by hashtext(user:date), so
+   * v10.0.137 (TD-1225): the daily logs of one author on one work day; transaction lock keyed by hashtext(user:date), so
    * two logs saved at once never overlap in time
    */
   DAILY_LOG_AUTHOR_DAY: 91060,

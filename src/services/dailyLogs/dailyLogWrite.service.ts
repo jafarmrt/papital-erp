@@ -36,7 +36,7 @@ function requireWorkHours(startTime: string, endTime: string): number {
 }
 
 /**
- * v10.0.91 (TD-1225, finding B12 of the fresh-eyes guide test): two live logs of one author on one work day never
+ * v10.0.137 (TD-1225, finding B12 of the fresh-eyes guide test): two live logs of one author on one work day never
  * overlap in time (one may start where the other ends), so a day never holds more than 24 hours. Checked under the
  * author-day transaction lock; a legacy log without valid times is not compared.
  */

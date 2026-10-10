@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { documentItems, documents, items } from '../../db/schema.js';
+import { documentItems, documents, items, warehouses } from '../../db/schema.js';
 import { isReservingDocument } from '../../lib/documents/reservingDocuments.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { InsufficientStockError, NotFoundError } from '../../errors/customErrors.js';
@@ -41,6 +41,8 @@ interface Shortage {
   code: string;
   name: string;
   location: string;
+  /** v10.0.114 (TD-1199): نام انبار برای پیام؛ کد انبار در `location` می‌ماند */
+  locationName: string;
   requested: number;
   sellable: number;
   locationStock: number;
@@ -99,8 +101,13 @@ async function findSellableShortages(tx: DbExecutor, lines: OutflowLine[], ctx: 
         .filter(r => !(r.sourceType === 'proforma' && ctx.excludeDocumentId && Number(r.sourceId) === ctx.excludeDocumentId))
         .filter(r => !(r.sourceType === 'project' && ctx.projectId && Number(r.sourceId) === ctx.projectId))
         .map(r => `«${r.sourceRef || r.sourceTitle}» (${fa(Number(r.reservedQty) || 0)})`);
-      shortages.push({ itemId, code: row.code, name: row.name, location, requested: qty.toNumber(), holders, ...info });
+      shortages.push({ itemId, code: row.code, name: row.name, location, locationName: location, requested: qty.toNumber(), holders, ...info });
     }
+  }
+  if (shortages.length > 0) {
+    const names = new Map((await tx.select({ code: warehouses.code, name: warehouses.name }).from(warehouses))
+      .map(w => [w.code, w.name] as const));
+    for (const s of shortages) s.locationName = names.get(s.location)?.trim() || s.location;
   }
   return { shortages, units };
 }
@@ -111,7 +118,7 @@ export async function assertOutflowWithinSellable(tx: DbExecutor, lines: Outflow
 
   const sentences = shortages.map(s => {
     const unit = units.get(s.itemId) ?? 'عدد';
-    return `امکان خروج بیش از ${fa(s.sellable)} ${unit} برای کالا «${s.name}» (${s.code}) از انبار «${s.location}» وجود ندارد؛ `
+    return `امکان خروج بیش از ${fa(s.sellable)} ${unit} برای کالا «${s.name}» (${s.code}) از انبار «${s.locationName}» وجود ندارد؛ `
       + `این سند ${fa(s.requested)} ${unit} می‌خواهد. موجودی انبار: ${fa(s.locationStock)}، رزرو سایر مصارف: ${fa(s.reservedForOthers)}`
       + `${s.holders.length > 0 ? ` (${s.holders.join('، ')})` : ''}، قابل فروش: ${fa(s.sellable)}.`;
   });
@@ -134,7 +141,7 @@ export async function proformaStockWarnings(tx: DbExecutor, documentId: number):
   const { shortages, units } = await findSellableShortages(tx, lines, { excludeDocumentId: documentId });
   return shortages.map(s => {
     const unit = units.get(s.itemId) ?? 'عدد';
-    return `کالای «${s.name}» (${s.code}) در انبار «${s.location}»: این پیش‌فاکتور ${fa(s.requested)} ${unit} می‌خواهد و قابل فروش `
+    return `کالای «${s.name}» (${s.code}) در انبار «${s.locationName}»: این پیش‌فاکتور ${fa(s.requested)} ${unit} می‌خواهد و قابل فروش `
       + `${fa(s.sellable)} ${unit} است (موجودی انبار: ${fa(s.locationStock)}، رزرو سایر مصارف: ${fa(s.reservedForOthers)}`
       + `${s.holders.length > 0 ? `؛ ${s.holders.join('، ')}` : ''}).`;
   });

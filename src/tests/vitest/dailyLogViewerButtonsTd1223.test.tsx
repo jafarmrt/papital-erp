@@ -9,7 +9,7 @@ afterEach(cleanup);
 
 const CREATE_BUTTON = 'ثبت گزارش';
 
-// v10.0.88 (TD-1223): a reader of daily logs without daily_logs.create is offered no «ثبت» on the dashboard
+// v10.0.134 (TD-1223): a reader of daily logs without daily_logs.create is offered no «ثبت» on the dashboard
 describe('daily log create entry points follow daily_logs.create (TD-1223)', () => {
   const me = { id: 7, username: 'ali', full_name: 'علی', role: 'viewer' } as unknown as User;
 

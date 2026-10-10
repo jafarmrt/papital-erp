@@ -15,9 +15,10 @@ import { customerSaveBody } from '../lib/customers/customerVersion';
 import { customerAccountCardUrl } from '../lib/customers/customerAccountCard';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
-import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate } from '../utils';
+import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate, formatPersianNumber } from '../utils';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useHasPermission } from '../contexts/AuthContext';
+import { blankContactPerson } from '../lib/customers/contactPerson';
 
 export default function CustomersPage({ user }: { user: User }) {
   const rial = useRialDisplay();
@@ -113,7 +114,7 @@ export default function CustomersPage({ user }: { user: User }) {
   });
 
   const [contacts, setContacts] = useState<FormContactPerson[]>([
-    { id: '1', name: '', role: 'مدیر خرید', phone: '', isPrimary: true }
+    blankContactPerson('1', true)
   ]);
 
   useEffect(() => {
@@ -124,7 +125,7 @@ export default function CustomersPage({ user }: { user: User }) {
     const newId = Date.now().toString();
     setContacts(prev => [
       ...prev,
-      { id: newId, name: '', role: form.partyType === 'supplier' ? 'مدیر فروش' : 'حسابدار', phone: '', isPrimary: prev.length === 0 }
+      blankContactPerson(newId, prev.length === 0)
     ]);
   };
 
@@ -134,7 +135,7 @@ export default function CustomersPage({ user }: { user: User }) {
       if (filtered.length > 0 && !filtered.some(c => c.isPrimary)) {
         filtered[0].isPrimary = true;
       }
-      return filtered.length ? filtered : [{ id: Date.now().toString(), name: '', role: 'رابط اصلی', phone: '', isPrimary: true }];
+      return filtered.length ? filtered : [blankContactPerson(Date.now().toString(), true)];
     });
   };
 
@@ -212,7 +213,7 @@ export default function CustomersPage({ user }: { user: User }) {
         cardNumber: ''
       }
     });
-    setContacts([{ id: Date.now().toString(), name: '', role: activeTab === 'supplier' ? 'مدیر فروش' : 'مدیر خرید', phone: '', isPrimary: true }]);
+    setContacts([blankContactPerson(Date.now().toString(), true)]);
   };
 
   const handleEdit = useCallback((c: Customer) => {
@@ -240,7 +241,7 @@ export default function CustomersPage({ user }: { user: User }) {
       setContacts(c.contacts.map((contact, idx) => ({
         id: contact.id || `${idx}-${Date.now()}`,
         name: contact.name || '',
-        role: contact.role || (rawPartyType === 'supplier' ? 'مدیر فروش' : 'مدیر خرید'),
+        role: contact.role || '',
         phone: contact.phone || '',
         isPrimary: contact.isPrimary ?? (idx === 0)
       })));
@@ -248,7 +249,7 @@ export default function CustomersPage({ user }: { user: User }) {
       setContacts([{
         id: '1',
         name: c.contactName || '',
-        role: 'رابط اصلی',
+        role: '',
         phone: c.phone || '',
         isPrimary: true
       }]);
@@ -597,7 +598,7 @@ export default function CustomersPage({ user }: { user: User }) {
       {/* Pagination Footer */}
       <div className="p-3.5 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between mt-auto shrink-0">
         <span className="text-xs text-slate-500 font-medium">
-          نمایش {customers.length} مورد {totalItems > 0 ? `از کل ${totalItems} طرف حساب` : ''}
+          نمایش {formatPersianNumber(customers.length)} مورد {totalItems > 0 ? `از کل ${formatPersianNumber(totalItems)} طرف حساب` : ''}
         </span>
         {totalPages > 1 && (
           <div className="flex items-center gap-1.5">

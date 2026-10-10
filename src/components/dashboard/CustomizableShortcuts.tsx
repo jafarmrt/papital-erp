@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Settings2, Package, Box, FileText, Target, CalendarCheck, Layers, CheckSquare, FileInput, Warehouse, UsersRound, DollarSign, Sparkles, AlertTriangle, Users, Calculator, Landmark, ClipboardList, Check, X, ArrowUpRight, ShoppingBag } from 'lucide-react';
 import { User } from '../../types';
 import { canOpenPage, type ViewerAccess } from '../../lib/permissions/pageAccess';
+import { formatPersianNumber } from '../../utils';
 
 export interface ShortcutItemDef {
   id: string;
@@ -13,7 +14,7 @@ export interface ShortcutItemDef {
   color: string;
   bgColor: string;
   borderColor: string;
-  /** v10.0.88 (TD-1223): میانبری که کاری را ثبت می‌کند، افزون بر صفحه یکی از این مجوزها را می‌خواهد */
+  /** v10.0.134 (TD-1223): میانبری که کاری را ثبت می‌کند، افزون بر صفحه یکی از این مجوزها را می‌خواهد */
   requiresAnyOf?: readonly string[];
 }
 
@@ -380,7 +381,7 @@ export function CustomizableShortcuts({ user, userPermissions }: CustomizableSho
             {/* Footer actions */}
             <div className="flex items-center justify-between border-t border-slate-100 pt-3">
               <span className="text-xs text-slate-500">
-                {tempSelectedIds.length} مورد انتخاب شده
+                {formatPersianNumber(tempSelectedIds.length)} مورد انتخاب‌شده
               </span>
               <div className="flex items-center gap-2">
                 <button

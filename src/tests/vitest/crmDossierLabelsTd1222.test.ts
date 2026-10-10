@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// v10.0.90 (TD-1222): the customer dossier has no English label and the party card totals name both sides of a party
+// v10.0.136 (TD-1222): the customer dossier has no English label and the party card totals name both sides of a party
 const read = (p: string) => readFileSync(resolve(process.cwd(), 'src', p), 'utf8');
 const DEBIT_LABEL = 'مجموع بدهکار (فروش به شخص و پرداخت به او)';
 const CREDIT_LABEL = 'مجموع بستانکار (دریافت از شخص و خرید از او)';

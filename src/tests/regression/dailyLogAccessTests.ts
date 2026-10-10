@@ -174,7 +174,7 @@ async function privateMentionCase(ctx: Ctx): Promise<string> {
   const notified = async () => (await orm.select().from(notifications).where(eq(notifications.userId, reader.id))).length;
   const body = { start_time: '08:00', end_time: '16:00', work_mode: 'onsite', content: 'p13 mention', mentions: [reader.id] };
 
-  // v10.0.91 (TD-1225): logs of one author on one day take separate times
+  // v10.0.137 (TD-1225): logs of one author on one day take separate times
   for (const [visibility, start_time, end_time] of [['private', '08:00', '10:00'], ['managers', '10:00', '12:00']]) {
     const before = await notified();
     const res = await ctx.send(author, 'post', '/api/daily-logs', { ...body, title: `p13 ${visibility} title`, visibility, start_time, end_time });

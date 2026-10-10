@@ -13,7 +13,7 @@ import { ConflictError, NotFoundError, ValidationError } from '../../errors/cust
 import { workflowDesignErrors } from '../../lib/workflow/workflowDesignRules.js';
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
 import { recordDefinitionVersion } from './workflowSnapshot.js';
-import { DOC_APPROVAL_STEP_GUARDS, upgradeLegacyDocApprovalGuards } from './docApprovalGuards.js';
+import { DOC_APPROVAL_STEP_GUARDS, DOC_APPROVAL_SUBMIT_GUARD_UPGRADE, upgradeLegacyDocApprovalGuards } from './docApprovalGuards.js';
 import { upgradeLegacySeedGuards } from './seedGuardUpgrade.js';
 import { JOURNAL_VOUCHER_GUARD_UPGRADE, JOURNAL_VOUCHER_STEP_GUARDS } from './voucherWorkflowGuards.js';
 import { PURCHASE_REQUISITION_GUARD_UPGRADE, PURCHASE_REQUISITION_STEP_GUARDS } from './purchaseWorkflowGuards.js';
@@ -82,6 +82,7 @@ export interface SaveWorkflowDefinitionPayload {
     autoActionKey?: string;
     /** v8.0.102 (TD-392): آغازکننده فرایند این انتقال را اجرا نمی‌کند */
     isInitiatorExcluded?: number | boolean;
+    isInitiatorOnly?: number | boolean;
     [key: string]: unknown;
   }>;
   [key: string]: unknown;
@@ -356,7 +357,8 @@ export class WorkflowDefinitionService {
               kValue: Number(tr.kValue) || 1,
               ruleConditionsJson: tr.ruleConditionsJson || [],
               autoActionKey: tr.autoActionKey || '',
-              isInitiatorExcluded: tr.isInitiatorExcluded === true || Number(tr.isInitiatorExcluded) === 1 ? 1 : 0
+              isInitiatorExcluded: tr.isInitiatorExcluded === true || Number(tr.isInitiatorExcluded) === 1 ? 1 : 0,
+              isInitiatorOnly: tr.isInitiatorOnly === true || Number(tr.isInitiatorOnly) === 1 ? 1 : 0
             });
           }
         }
@@ -545,8 +547,14 @@ export class WorkflowDefinitionService {
           ]
         });
         logger.info('[WorkflowDefinitionService] Seeded default DOC_APPROVAL_WORKFLOW successfully.');
-      } else if (await upgradeLegacyDocApprovalGuards()) {
-        logger.info('[WorkflowDefinitionService] DOC_APPROVAL_WORKFLOW step permissions upgraded (TD-445).');
+      } else {
+        if (await upgradeLegacyDocApprovalGuards()) {
+          logger.info('[WorkflowDefinitionService] DOC_APPROVAL_WORKFLOW step permissions upgraded (TD-445).');
+        }
+        // v10.0.120 (TD-1220): ارسال به انبار فقط برای سازنده سند و بازگشایی با ویرایش سند
+        if (await upgradeLegacySeedGuards(DOC_APPROVAL_SUBMIT_GUARD_UPGRADE)) {
+          logger.info('[WorkflowDefinitionService] DOC_APPROVAL_WORKFLOW send and reopen guards upgraded (TD-1220).');
+        }
       }
 
       // Seed PURCHASE_REQUISITION_WORKFLOW (سیستم ساده‌سازی شده ۳ مرحله‌ای خرید و تدارکات کارگاه)

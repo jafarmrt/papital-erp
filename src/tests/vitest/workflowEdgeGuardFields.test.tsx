@@ -8,7 +8,7 @@ const roles = [{ code: 'branch_accountant', name: 'حسابدار شعبه' }];
 
 function renderFields(value: Partial<WorkflowEdgeGuard>) {
   const onChange = vi.fn();
-  render(<WorkflowEdgeGuardFields value={{ requiredRole: '', requiredPermission: '', isInitiatorExcluded: 0, ...value }} onChange={onChange} roles={roles} />);
+  render(<WorkflowEdgeGuardFields value={{ requiredRole: '', requiredPermission: '', isInitiatorExcluded: 0, isInitiatorOnly: 0, ...value }} onChange={onChange} roles={roles} />);
   return onChange;
 }
 

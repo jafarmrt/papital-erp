@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "10.0.91",
+  "version": "10.0.137",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",

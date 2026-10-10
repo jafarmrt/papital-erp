@@ -24,6 +24,7 @@ export interface WorkflowTransition {
   requiredRole?: string;
   requiredPermission?: string;
   isInitiatorExcluded?: number;
+  isInitiatorOnly?: number;
   approvalRuleType?: string;
   kValue?: number;
   autoActionKey?: string;
@@ -285,7 +286,7 @@ export function useTaskStatsQuery() {
   });
 }
 
-/** v10.0.87 (TD-1224) */
+/** v10.0.133 (TD-1224) */
 export const TASK_ALREADY_DONE_MESSAGE = 'این کار را کاربر دیگری پیش‌تر انجام داده است؛ کارتابل تازه شد.';
 
 export function useExecuteTaskMutation() {
@@ -301,7 +302,7 @@ export function useExecuteTaskMutation() {
     onSuccess: (res: { message?: string; data?: { code?: string; task?: { status?: string } } }) => {
       void invalidatePreset(queryClient, 'workflowChange');
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
-      // v10.0.87 (TD-1224): کاری که دیگری پیش‌تر انجام داده، کار این کاربر نیست؛ پیام سبز «کار انجام شد» نمی‌گیرد
+      // v10.0.133 (TD-1224): کاری که دیگری پیش‌تر انجام داده، کار این کاربر نیست؛ پیام سبز «کار انجام شد» نمی‌گیرد
       if (res?.data?.code === 'WF_TASK_ALREADY_COMPLETED') {
         toast(TASK_ALREADY_DONE_MESSAGE, { icon: 'ℹ️' });
         return;

@@ -78,7 +78,7 @@ export function useSaveCustomerMutation() {
         body: JSON.stringify(payload),
       });
     },
-    // v10.0.89 (TD-1226): پیام موفقیت را صفحه می‌دهد؛ پیش‌تر هوک هم پیام می‌داد و دو پیام دیده می‌شد
+    // v10.0.135 (TD-1226): پیام موفقیت را صفحه می‌دهد؛ پیش‌تر هوک هم پیام می‌داد و دو پیام دیده می‌شد
     onSuccess: () => {
       void invalidateDomain(queryClient, 'customers');
     },
