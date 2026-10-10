@@ -17,12 +17,12 @@ import {
   roundToOneDecimal,
   withProcurementStatus
 } from '../components/project/projectInventoryUtils';
-import { errorMessageOf, formatPersianNumber, toPersianDigits } from '../utils';
+import { errorMessageOf, toPersianDigits } from '../utils';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { useProjectVersion } from './useProjectVersion';
 import { directConversionRate } from '../lib/projects/unitConversion';
 import { storedReservationShortages } from '../lib/projects/projectReservationState';
-import { finalizeReservationOutcome } from '../lib/projects/reservationOutcome';
+import { finalizeReservationOutcome, reservationShortageMessage } from '../lib/projects/reservationOutcome';
 import type { ReservationShortage } from '../lib/projects/projectReservation';
 import { hasPresetShapedSections, projectSectionsFromPreset, type MaterialStockLookup } from '../lib/projects/inventoryControlSections';
 import { findProjectItemMatch } from '../lib/projects/projectItemMatch';
@@ -664,9 +664,8 @@ export function useProjectInventory(
       const outcome = finalizeReservationOutcome(reserved, shortages);
       if (outcome.kind === 'success') toast.success(outcome.message);
       else toast(outcome.message, { icon: '⚠️' });
-      if (shortages.length > 0 && reserved.length > 0) {
-        toast(`${formatPersianNumber(shortages.length)} کالا کمتر از نیاز رزرو شد، چون بقیه موجودی را دیگران رزرو کرده‌اند؛ فهرست کمبود در «فهرست خرید» آمده است.`, { icon: '⚠️' });
-      }
+      const shortageMessage = reserved.length > 0 ? reservationShortageMessage(shortages) : null;
+      if (shortageMessage) toast(shortageMessage, { icon: '⚠️' });
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('Error finalizing inventory reservation:', err);

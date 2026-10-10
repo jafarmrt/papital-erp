@@ -27,3 +27,19 @@ export function finalizeReservationOutcome(reservedItems: readonly unknown[], sh
     message: 'کنترل موجودی ثبت نهایی شد، ولی هیچ قلمی رزرو نشد، چون هیچ ردیفی به کالای انبار نرسید؛ کد یا نام اقلام را بررسی کنید.',
   };
 }
+
+/**
+ * The second message, for items reserved below their need. Its cause comes from each shortage's `reservedByOthers`
+ * (roles-c Rc13): before, it always said others had reserved the stock, also when the warehouse simply held too little.
+ */
+export function reservationShortageMessage(shortages: readonly ReservationShortage[]): string | null {
+  if (shortages.length === 0) return null;
+  const count = formatPersianNumber(shortages.length);
+  const byOthers = shortages.filter(s => Number(s.reservedByOthers) > 0).length;
+  const cause = byOthers === shortages.length
+    ? 'چون بخشی از موجودی را پیش‌فاکتورها یا پروژه‌های دیگر رزرو کرده‌اند'
+    : byOthers === 0
+      ? 'چون موجودی انبار کمتر از نیاز است'
+      : 'چون موجودی انبار کم است یا بخشی از آن را پیش‌فاکتورها یا پروژه‌های دیگر رزرو کرده‌اند';
+  return `${count} کالا کمتر از نیاز رزرو شد، ${cause}؛ فهرست کمبود در «فهرست خرید» آمده است.`;
+}
