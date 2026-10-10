@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { TaskExecuteModal } from '../../components/approval/TaskExecuteModal';
 
-// v10.0.89 (TD-1179): the task window's comment field says a reason is required when rejecting, and optional otherwise
+// v10.0.148 (TD-1179): the task window's comment field says a reason is required when rejecting, and optional otherwise
 const OPTIONAL_LABEL = 'دستور / توضیحات مدیر (اختیاری):';
 const REJECT_LABEL = 'دلیل رد (الزامی):';
 

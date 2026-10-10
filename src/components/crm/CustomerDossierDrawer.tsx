@@ -176,7 +176,7 @@ export function CustomerDossierDrawer({
           </div>
 
           <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-3">
-            <span className="text-[10px] font-bold text-emerald-800 block mb-1">معاملات موفق (Won)</span>
+            <span className="text-[10px] font-bold text-emerald-800 block mb-1">معاملات موفق</span>
             <div className="flex items-start gap-1.5">
               <Award size={16} className="text-emerald-600 mt-1" />
               <div>
@@ -485,7 +485,7 @@ export function CustomerDossierDrawer({
               <div>
                 <h3 className="font-black text-xs text-slate-900 flex items-center gap-1.5">
                   <BookOpen size={16} className="text-blue-600" />
-                  کارت تفصیلی و گردش مالی حسابداری (Double-Entry Ledger)
+                  کارت تفصیلی و گردش مالی حسابداری
                 </h3>
                 <p className="text-[11px] text-slate-500">
                   اطلاعات مستقیم و بدون واسطه از دفتر کل و اسناد حسابداری صادرشده
@@ -663,7 +663,7 @@ export function CustomerDossierDrawer({
                       )}
                     </div>
                     <div className="text-xs text-slate-600 flex items-center gap-2">
-                      <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded text-[10px] font-bold">{contact.role || 'مدیر خرید'}</span>
+                      {contact.role && <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded text-[10px] font-bold">{contact.role}</span>}
                       <span dir="ltr" className="font-mono font-bold text-slate-800">
                         {contact.phone ? formatPersianPhone(contact.phone) : '-'}
                       </span>

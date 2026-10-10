@@ -224,7 +224,7 @@ export async function runWorkflowInboxTests(shouldRun: ShouldRun): Promise<TestC
   if (shouldRun('sec_workflow_inbox_requisition_card_td_1178', 'security', 'td1178', 'workflow', 'package14')) {
     await runCase(results, {
       id: 'sec_workflow_inbox_requisition_card_td_1178',
-      name: 'v10.0.90: a purchase requisition inbox row carries its own code and priority, and the starter\'s full name even when a user name was stored (TD-1178)',
+      name: 'v10.0.149: a purchase requisition inbox row carries its own code and priority, and the starter\'s full name even when a user name was stored (TD-1178)',
       details: 'the row of a new requisition has refNumber = the requisition code, priority = its priority and instance.startedByName = the starter\'s full name; a raw user name stored on the instance is shown as the full name',
     }, async (h, wrong) => {
       const { createTestItem } = await import('../fixtures/factories.js');

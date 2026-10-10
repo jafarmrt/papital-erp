@@ -184,7 +184,7 @@ export async function getEntityContext(entityType: string, entityId: string, txE
         context.source = lead.source || '';
       }
     } else if (entityType === 'purchase_requisition') {
-      // v10.0.90 (TD-1178): the inbox card shows the requisition's own code and priority, never its row id
+      // v10.0.149 (TD-1178): the inbox card shows the requisition's own code and priority, never its row id
       const [req] = await txExecutor.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, numericId));
       if (req) {
         context.code = req.code;

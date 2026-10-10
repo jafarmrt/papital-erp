@@ -74,7 +74,7 @@ export function useApprovalTaskEntity(task: ApprovalTaskEntityRef | null): Appro
     } else if (['document', 'doc', 'invoice', 'proforma', ''].includes(entityType)) {
       const fromRow = documentFromRow(task, entityId);
       setState({ ...EMPTY, docDetails: fromRow, isLoadingDoc: true });
-      // v10.0.92 (TD-1175): the outgoing lines' warehouse and sellable stock beside the document; its error only hides them
+      // v10.0.151 (TD-1175): the outgoing lines' warehouse and sellable stock beside the document; its error only hides them
       const lineStock = fetchJson<{ data?: DocumentLineStock[] }>(`/documents/${entityId}/line-stock`, { signal: controller.signal })
         .then(res => (Array.isArray(res?.data) ? res.data : []))
         .catch(() => [] as DocumentLineStock[]);

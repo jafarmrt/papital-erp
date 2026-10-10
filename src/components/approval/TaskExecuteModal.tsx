@@ -190,7 +190,7 @@ export function TaskExecuteModal({
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
               <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
-              {/* v10.0.89 (TD-1179): رد بی دلیل ثبت نمی‌شود؛ برچسب دیگر «اختیاری» نمی‌گوید */}
+              {/* v10.0.148 (TD-1179): رد بی دلیل ثبت نمی‌شود؛ برچسب دیگر «اختیاری» نمی‌گوید */}
               {taskAction === 'reject' ? 'دلیل رد (الزامی):' : 'دستور / توضیحات مدیر (اختیاری):'}
             </label>
             <textarea

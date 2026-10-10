@@ -1,7 +1,7 @@
 import { REQUISITION_ACTION_LABELS } from '../procurement/requisitionFields';
 
 /**
- * v10.0.91 (TD-1177, finding roles-b #4 of the fresh-eyes guide test): the inbox task window names the task's own
+ * v10.0.150 (TD-1177, finding roles-b #4 of the fresh-eyes guide test): the inbox task window names the task's own
  * action (a task's title is its transition's title). The keeper's «تحویل و ورود به انبار» task was offered the
  * manager's «تایید درخواست جهت خرید اقلام» / «تایید نهایی و صدور مجوز خرید», whatever the step.
  */

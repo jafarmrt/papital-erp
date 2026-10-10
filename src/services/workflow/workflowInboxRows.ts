@@ -18,7 +18,7 @@ async function currentStepTitleOf(instance: typeof workflowInstances.$inferSelec
 }
 
 /**
- * v10.0.90 (TD-1178): the starter's display name is the user's full name, read from the user row; an instance whose
+ * v10.0.149 (TD-1178): the starter's display name is the user's full name, read from the user row; an instance whose
  * route stored the user name (no full name in the session) showed «kharid» on the card
  */
 async function starterDisplayName(instance: typeof workflowInstances.$inferSelect): Promise<string> {
@@ -52,7 +52,7 @@ export async function inboxEntityFields(instance: typeof workflowInstances.$infe
     },
     refNumber: context.refNumber || context.code || instance.entityId,
     buyerName: context.buyerName || '',
-    // v10.0.90 (TD-1178): the entity's own priority (requisition, project) for the card badge
+    // v10.0.149 (TD-1178): the entity's own priority (requisition, project) for the card badge
     ...(typeof context.priority === 'string' && context.priority ? { priority: context.priority } : {}),
     amount: Number(context.amount || context.totalAmount || 0),
     currentStepTitle: await currentStepTitleOf(instance),

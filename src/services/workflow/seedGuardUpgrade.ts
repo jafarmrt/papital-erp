@@ -14,6 +14,8 @@ export interface SeedStepGuard {
   requiredPermission: string;
   /** «آغازکننده تأیید نکند» (TD-392)؛ پیش‌فرض خاموش */
   isInitiatorExcluded?: boolean;
+  /** «فقط آغازکننده اجرا کند» (TD-1220)؛ پیش‌فرض خاموش */
+  isInitiatorOnly?: boolean;
 }
 
 export interface SeedGuardUpgrade {
@@ -61,7 +63,8 @@ export async function upgradeLegacySeedGuards(upgrade: SeedGuardUpgrade): Promis
         && (t.title ?? '') === legacy.title && (t.requiredRole ?? '') === legacy.requiredRole
         && (t.requiredPermission ?? '') === legacy.requiredPermission
         && (t.approvalRuleType ?? 'SINGLE') === 'SINGLE' && rules.length === 0 && !(t.autoActionKey ?? '')
-        && Number(t.isInitiatorExcluded ?? 0) === (legacy.isInitiatorExcluded ? 1 : 0);
+        && Number(t.isInitiatorExcluded ?? 0) === (legacy.isInitiatorExcluded ? 1 : 0)
+        && Number(t.isInitiatorOnly ?? 0) === (legacy.isInitiatorOnly ? 1 : 0);
       if (!untouched) return false;
       seen.add(key);
     }
@@ -70,7 +73,10 @@ export async function upgradeLegacySeedGuards(upgrade: SeedGuardUpgrade): Promis
       const guard = nextByKey.get(guardKey({ from: keyOf.get(t.fromStateId) ?? '', to: keyOf.get(t.toStateId) ?? '', actionKey: t.actionKey }));
       if (!guard) return false;
       await tx.update(workflowTransitions)
-        .set({ requiredRole: guard.requiredRole, requiredPermission: guard.requiredPermission, isInitiatorExcluded: guard.isInitiatorExcluded ? 1 : 0 })
+        .set({
+          requiredRole: guard.requiredRole, requiredPermission: guard.requiredPermission,
+          isInitiatorExcluded: guard.isInitiatorExcluded ? 1 : 0, isInitiatorOnly: guard.isInitiatorOnly ? 1 : 0,
+        })
         .where(eq(workflowTransitions.id, t.id));
     }
     const version = await recordDefinitionVersion(tx, def.id, { title: def.title, description: upgrade.versionDescription });
@@ -79,8 +85,8 @@ export async function upgradeLegacySeedGuards(upgrade: SeedGuardUpgrade): Promis
       description: `ارتقای نگهبان گام‌های گردش کار پیش‌فرض «${def.title}»: ${upgrade.versionDescription}`,
       details: {
         code: upgrade.code, version,
-        before: upgrade.legacy.map(g => ({ actionKey: g.actionKey, from: g.from, to: g.to, requiredPermission: g.requiredPermission, isInitiatorExcluded: !!g.isInitiatorExcluded })),
-        after: upgrade.next.map(g => ({ actionKey: g.actionKey, from: g.from, to: g.to, requiredPermission: g.requiredPermission, isInitiatorExcluded: !!g.isInitiatorExcluded })),
+        before: upgrade.legacy.map(g => ({ actionKey: g.actionKey, from: g.from, to: g.to, requiredPermission: g.requiredPermission, isInitiatorExcluded: !!g.isInitiatorExcluded, isInitiatorOnly: !!g.isInitiatorOnly })),
+        after: upgrade.next.map(g => ({ actionKey: g.actionKey, from: g.from, to: g.to, requiredPermission: g.requiredPermission, isInitiatorExcluded: !!g.isInitiatorExcluded, isInitiatorOnly: !!g.isInitiatorOnly })),
       },
     });
     return true;

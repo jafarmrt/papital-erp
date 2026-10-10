@@ -37,7 +37,7 @@ export interface ApprovalDocumentDetails extends PayableAmountFields {
   currency?: string;
   notes?: string;
   items?: ApprovalDocumentItemRow[];
-  /** v10.0.92 (TD-1175): `GET /documents/:id/line-stock`, only for an outgoing document */
+  /** v10.0.151 (TD-1175): `GET /documents/:id/line-stock`, only for an outgoing document */
   lineStock?: DocumentLineStock[];
 }
 

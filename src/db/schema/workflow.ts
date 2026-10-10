@@ -47,6 +47,8 @@ export const workflowTransitions = pgTable('workflow_transitions', {
   autoActionKey: text('auto_action_key').default(''),
   // v8.0.102 (TD-392): آغازکننده فرایند این انتقال را اجرا نمی‌کند (جداسازی وظایف، تیک طراح)
   isInitiatorExcluded: integer('is_initiator_excluded').notNull().default(0),
+  // v10.0.120 (TD-1220): فقط آغازکننده فرایند (یا جانشین او) این انتقال را اجرا می‌کند؛ مدیر سیستم مستثناست
+  isInitiatorOnly: integer('is_initiator_only').notNull().default(0),
 }, (table) => ({
   idx_wftr_definition: index('idx_wftr_definition').on(table.workflowDefinitionId),
   // v9.0.449 (TD-614): an index leading with each foreign key column (migration 0094)

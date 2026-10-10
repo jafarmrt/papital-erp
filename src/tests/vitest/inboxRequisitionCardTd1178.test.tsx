@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
-// v10.0.90 (TD-1178): an inbox card names its entity by the entity's own number and shows the requisition priority
+// v10.0.149 (TD-1178): an inbox card names its entity by the entity's own number and shows the requisition priority
 const task = {
   id: 51, title: 'requisition approval', status: 'pending', createdAt: '2026-10-01T08:00:00Z', priority: 'normal', refNumber: 'PR-1405-0006',
   instance: { id: 9, entityType: 'purchase_requisition', entityId: 6, startedByName: 'Buyer Full Name' },

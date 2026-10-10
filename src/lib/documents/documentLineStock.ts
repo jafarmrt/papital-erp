@@ -1,5 +1,5 @@
 /**
- * v10.0.92 (TD-1175): one outgoing (item, warehouse) of a document with its stock and sellable quantity, shared by
+ * v10.0.151 (TD-1175): one outgoing (item, warehouse) of a document with its stock and sellable quantity, shared by
  * `GET /documents/:id/line-stock` and the warehouse approval task window
  */
 export interface DocumentLineStock {

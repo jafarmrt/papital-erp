@@ -38,11 +38,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           >
             <X size={13} />
           </button>
-        ) : (
-          <kbd className="absolute left-2 hidden xl:inline-flex items-center gap-0.5 px-1 py-0.2 text-[9px] font-mono text-slate-500 bg-slate-900/80 rounded border border-slate-700/60 pointer-events-none">
-            Ctrl+K
-          </kbd>
-        )}
+        ) : null}
       </div>
 
       {query.trim() && (

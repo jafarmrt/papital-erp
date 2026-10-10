@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { DocumentDetailsPreview } from '../../components/approval/DocumentDetailsPreview';
 
-// v10.0.92 (TD-1175): the warehouse approval window shows each outgoing line's source warehouse, stock and sellable quantity
+// v10.0.151 (TD-1175): the warehouse approval window shows each outgoing line's source warehouse, stock and sellable quantity
 const WAREHOUSE_NAME = 'انبار مرکزی';
 const SOURCE_HEADER = 'انبار مبدأ';
 const STOCK_CELL = '۵ / ۳';

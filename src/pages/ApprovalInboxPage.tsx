@@ -96,7 +96,7 @@ const APPROVAL_PRIORITY_BADGES: PillBadgeVariants = {
   critical: approvalCritical, 'خیلی زیاد': approvalCritical,
   high: approvalHigh, 'بالا': approvalHigh, 'زیاد': approvalHigh,
   low: approvalLow, 'پایین': approvalLow, 'کم': approvalLow,
-  // v10.0.90 (TD-1178): the purchase requisition priorities (REQUISITION_PRIORITIES); «normal» showed as «متوسط»
+  // v10.0.149 (TD-1178): the purchase requisition priorities (REQUISITION_PRIORITIES); «normal» showed as «متوسط»
   urgent: approvalUrgent, 'فوری': approvalUrgent,
   normal: approvalNormal, 'عادی': approvalNormal,
 };
@@ -417,7 +417,7 @@ export function ApprovalInboxPage() {
                       <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${typeMeta.color}`}>
                           <TypeIcon className="w-3.5 h-3.5" />
-                          {/* v10.0.90 (TD-1178): the entity's own number from the row, never its database id */}
+                          {/* v10.0.149 (TD-1178): the entity's own number from the row, never its database id */}
                           <span>{typeMeta.label} {inboxEntityRef(t.refNumber, t.instance?.entityId)}</span>
                         </span>
 

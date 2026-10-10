@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CheckCircle2, AlertCircle, CreditCard, Package, RefreshCw, FileText } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CheckCircle2, AlertCircle, CreditCard, Package, RefreshCw, FileText, Factory } from 'lucide-react';
 import { formatPersianNumber, formatPersianCode, formatPersianPrice, formatCurrencyLabel, formatPersianDate } from '../../../utils';
 import {
   amountDecimalsOf, INVOICE_TYPE_BADGES, partyLabelOf, resolveInvoiceRowFigures,
@@ -19,6 +19,7 @@ const TYPE_BADGE_ICONS: Record<InvoiceTypeBadgeKind, ReactElement> = {
   remittance: <ArrowUpRight size={13} className="shrink-0 text-purple-600" />,
   return: <RefreshCw size={13} className="shrink-0 text-orange-600" />,
   waste: <AlertCircle size={13} className="shrink-0 text-rose-600" />,
+  production_receipt: <Factory size={13} className="shrink-0 text-teal-600" />,
 };
 
 /** TD-080 (بخش ۳): یک ردیف جدول لیست اسناد */

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { TaskExecuteModal } from '../../components/approval/TaskExecuteModal';
 
-// v10.0.91 (TD-1177): the task window names the task's own action; the keeper's receive task was offered the manager's
+// v10.0.150 (TD-1177): the task window names the task's own action; the keeper's receive task was offered the manager's
 // «approve the purchase» labels, and it says that rows without a warehouse item are received without a stock document
 const RECEIVE_TITLE = 'تحویل و ورود به انبار';
 const MANAGER_APPROVE_LABEL = 'تایید درخواست جهت خرید اقلام';

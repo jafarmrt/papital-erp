@@ -62,7 +62,7 @@ export async function runDocumentLineStockTests(shouldRun: ShouldRun): Promise<T
   const results: TestCaseResult[] = [];
   const id = 'reg_document_line_stock_td_1175';
   if (!shouldRun(id, 'td1175', 'documents', 'workflow', 'package14')) return results;
-  const name = 'v10.0.92: an outgoing document answers each line\'s source warehouse, its stock, the reservations of others and the sellable quantity (TD-1175)';
+  const name = 'v10.0.151: an outgoing document answers each line\'s source warehouse, its stock, the reservations of others and the sellable quantity (TD-1175)';
   const tStart = Date.now();
   try {
     const details = await lineStockCase();
