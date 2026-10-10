@@ -2,8 +2,12 @@ import { RefreshCw } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber } from '../../utils';
 import { fin } from '../../lib/financialDecimal';
 import { serverPayableOf, payableDecimalsOf, type PayableAmountFields } from '../../lib/invoices/documentPayable';
+import { lineStockOf, type DocumentLineStock } from '../../lib/documents/documentLineStock';
 
 export interface ApprovalDocumentItemRow {
+  item_id?: number;
+  itemId?: number;
+  location?: string;
   code?: string;
   item_code?: string;
   name?: string;
@@ -33,6 +37,8 @@ export interface ApprovalDocumentDetails extends PayableAmountFields {
   currency?: string;
   notes?: string;
   items?: ApprovalDocumentItemRow[];
+  /** v10.0.92 (TD-1175): `GET /documents/:id/line-stock`, only for an outgoing document */
+  lineStock?: DocumentLineStock[];
 }
 
 interface DocumentDetailsPreviewProps {
@@ -45,6 +51,7 @@ interface DocumentDetailsPreviewProps {
  * (نوار اطلاعات خریدار + جدول اقلام + یادداشت) — قبلاً دو بار تکرار شده بود.
  */
 export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDetailsPreviewProps) {
+  const hasLineStock = (docDetails?.lineStock?.length ?? 0) > 0;
   if (isLoadingDoc) {
     return (
       <div className="p-6 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
@@ -96,6 +103,8 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
                 <th className="p-2">#</th>
                 <th className="p-2">نام کالا / محصول</th>
                 <th className="p-2 text-center">تعداد / مقدار</th>
+                {hasLineStock && <th className="p-2">انبار مبدأ</th>}
+                {hasLineStock && <th className="p-2 text-center">موجودی / قابل فروش</th>}
                 <th className="p-2 text-left">قیمت واحد</th>
                 <th className="p-2 text-left">مبلغ کل سطر</th>
               </tr>
@@ -105,11 +114,19 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
                 const lineQty = Number(it.quantity || 0);
                 const linePrice = Number(it.unit_price || it.unitPrice || 0);
                 const lineTotal = fin(lineQty).multiply(linePrice).subtract(it.discount || 0).toNumber();
+                const stock = hasLineStock ? lineStockOf(docDetails.lineStock ?? [], it.item_id ?? it.itemId, it.location) : undefined;
                 return (
                   <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                     <td className="p-2 text-gray-400 font-mono">{idx + 1}</td>
                     <td className="p-2 font-medium text-gray-900 dark:text-gray-100">{it.item_name || it.itemName || it.code || 'کالا'}</td>
                     <td className="p-2 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400">{formatPersianNumber(lineQty)} <span className="text-[10px] text-gray-400 font-normal">{it.unit || 'عدد'}</span></td>
+                    {hasLineStock && <td className="p-2 text-gray-700 dark:text-gray-200">{stock?.warehouseName ?? '—'}</td>}
+                    {hasLineStock && (
+                      <td className={`p-2 text-center font-mono ${stock && stock.requested > stock.sellable ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-emerald-700 dark:text-emerald-400'}`}
+                        title={stock && stock.reservedForOthers > 0 ? `رزرو سایر مصارف: ${formatPersianNumber(stock.reservedForOthers)}` : undefined}>
+                        {stock ? `${formatPersianNumber(stock.locationStock)} / ${formatPersianNumber(stock.sellable)}` : '—'}
+                      </td>
+                    )}
                     <td className="p-2 text-left font-mono text-gray-600 dark:text-gray-300">{formatPersianPrice(linePrice, undefined, decimals)}</td>
                     <td className="p-2 text-left font-mono font-bold text-gray-800 dark:text-gray-200">{formatPersianPrice(lineTotal, undefined, decimals)}</td>
                   </tr>

@@ -10761,6 +10761,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 13 PR D (v9.0.259+): work time and work mode of a daily log
   const { runDailyLogWorkTimeTests } = await import('../regression/dailyLogWorkTimeTests.js');
   results.push(...await runDailyLogWorkTimeTests(shouldRun));
+  const { runDocumentLineStockTests } = await import('../regression/documentLineStockTests.js');
+  results.push(...await runDocumentLineStockTests(shouldRun));
 
   // Package 16 PR d (v9.0.305+): drafts routes and expiry
   const { runFormDraftRouteErrorsTests } = await import('../regression/formDraftRouteErrorsTests.js');
