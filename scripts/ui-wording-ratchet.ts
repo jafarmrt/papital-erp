@@ -19,7 +19,7 @@ export const BASELINE_FILE = 'ui-wording-baseline.json';
 /** Browser code: pages, components, hooks, contexts and the shared lib (whose messages the screens show) */
 const ROOTS = ['src/pages', 'src/components', 'src/hooks', 'src/contexts', 'src/lib'];
 /**
- * v10.0.83 (TD-1182): server code whose error messages reach the user as they are; only the literals inside
+ * v10.0.117 (TD-1182): server code whose error messages reach the user as they are; only the literals inside
  * `new …Error(…)` count there, never logs or stored names
  */
 const SERVER_ROOTS = ['src/services', 'src/routes', 'src/middleware', 'src/errors'];

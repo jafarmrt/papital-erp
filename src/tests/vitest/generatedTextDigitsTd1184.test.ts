@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * v10.0.85 (TD-1184): text the app writes for the user prints its numbers in Persian digits: the note of an invoice
+ * v10.0.119 (TD-1184): text the app writes for the user prints its numbers in Persian digits: the note of an invoice
  * finalized from a proforma and the default description of a quick settlement held Latin digits («شماره 1 به تاریخ
  * 1405/07/18», «شماره 1000»), found by the user guide test.
  */

@@ -73,7 +73,7 @@ describe('ui_wording_ratchet_td_1168', () => {
 });
 
 /**
- * v10.0.83 (TD-1182): an error message the server sends is shown to the user as it is, so the same words are counted in
+ * v10.0.117 (TD-1182): an error message the server sends is shown to the user as it is, so the same words are counted in
  * the messages of `new …Error(…)` in the server code (services, routes, middleware, errors); other server strings (logs,
  * stored names) are not user-facing text and are not counted.
  */

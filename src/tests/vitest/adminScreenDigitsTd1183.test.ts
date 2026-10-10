@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * v10.0.84 (TD-1183): admin screens print their counts in Persian digits and have no English placeholder. The user
+ * v10.0.118 (TD-1183): admin screens print their counts in Persian digits and have no English placeholder. The user
  * guide test found «مجموع بخش‌ها: 14 سربرگ», «2 ستونی / 4 ستونی», «تعداد انبارهای فعال: 3», «100٪» and the
  * placeholders «e.g. user123» / «e.g. warehouse_assistant». Each of these places shows a bare number expression in JSX
  * text, so the check reads the source: the expression next to the word goes through a Persian number formatter.

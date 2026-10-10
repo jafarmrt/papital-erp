@@ -6,7 +6,7 @@ export interface SettlementDescriptionInput {
   isPurchase: boolean;
 }
 
-/** Default description of a quick settlement of a sales or purchase invoice, numbers in Persian digits (v10.0.85, TD-1184) */
+/** Default description of a quick settlement of a sales or purchase invoice, numbers in Persian digits (v10.0.119, TD-1184) */
 export function settlementDefaultDescription({ refNumber, buyerName, isPurchase }: SettlementDescriptionInput): string {
   const ref = toPersianDigits(refNumber);
   return isPurchase
