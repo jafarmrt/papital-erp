@@ -88,7 +88,7 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
     const error = currencySettingError(value);
     if (error) throw new ValidationError(error, { key, value }, 'SETTING_CURRENCY_INVALID');
   }
-  // v10.0.90 (TD-1192): نام‌های فهرست قیمت یکتا
+  // v10.0.95 (TD-1192): نام‌های فهرست قیمت یکتا
   if (key === 'pricing_strategies') {
     const error = priceListNamesError(value.split(','));
     if (error) throw new ValidationError(error, { key }, 'SETTING_PRICE_LIST_NAMES_INVALID');

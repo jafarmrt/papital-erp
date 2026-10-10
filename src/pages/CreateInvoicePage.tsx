@@ -46,7 +46,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   const initialStatus = canFinalizeSales ? 'final' : 'proforma';
   const [status, setStatus] = useState(initialStatus); // 'proforma' or 'final'
 
-  // خواندنی‌های صفحه با React Query (انبارها، مشتریان، پیش‌فاکتورهای باز، شماره بعدی سند). v10.0.88 (TD-1190): شماره بعدی
+  // خواندنی‌های صفحه با React Query (انبارها، مشتریان، پیش‌فاکتورهای باز، شماره بعدی سند). v10.0.93 (TD-1190): شماره بعدی
   // از سری نوعی که سند واقعاً با آن ذخیره می‌شود (پیش‌فاکتور فروشنده‌ای که قطعی نمی‌کند: سری پیش‌فاکتور)
   const { warehouses, customersList, proformas, proformasTotal, proformasPage, setProformasPage, nextRef, loadDocument, refreshProformas, refetchNextRef } = useInvoiceReferenceData(recordedSalesType(docType, status, canFinalizeSales));
 

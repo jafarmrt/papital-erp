@@ -72,7 +72,7 @@ export function WorkflowPresetsTab({
 
   const handleAddNewPreset = () => {
     const newId = `preset_${Date.now()}`;
-    // v10.0.91 (TD-1193): عنوان با رقم فارسی و شرح خالی (راهنمای خانه، نه مقدار)
+    // v10.0.96 (TD-1193): عنوان با رقم فارسی و شرح خالی (راهنمای خانه، نه مقدار)
     const newPreset: WorkflowPreset = newWorkflowPreset(newId, cleanPresets.length + 1);
     setWorkflowPresets((prev) => {
       const current = Array.isArray(prev) ? prev.filter(p => p.id !== 'tile_transfer' && p.id !== 'general_assembly') : [];
