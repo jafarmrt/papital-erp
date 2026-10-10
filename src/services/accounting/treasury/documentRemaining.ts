@@ -1,12 +1,9 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../../db/drizzle.js';
-import { documents, treasuryTransactions } from '../../../db/schema.js';
-import { ValidationError } from '../../../errors/customErrors.js';
-import { fin } from '../../../lib/financialDecimal.js';
+import { documents } from '../../../db/schema.js';
+import { BusinessLogicError, ValidationError } from '../../../errors/customErrors.js';
+import { fin, type FinancialDecimal } from '../../../lib/financialDecimal.js';
 import { formatPersianNumber } from '../../../utils/persianNumber.js';
-import { documentEventAmounts } from '../../documents/documentEventAmount.js';
-import { settledAmount } from '../../documents/documentSettlement.js';
-import { PAYMENT_DOCUMENT_TYPES } from './treasuryLinks.js';
 
 /**
  * v10.0.59 (TD-938، P5-P11، تصمیم ت۸ الف بازبینی فاز ۵): دریافت یا پرداخت وصل به سند حداکثر مانده آن سند است، در ثبت و در
@@ -26,22 +23,22 @@ export async function lockSettlementDocument(tx: DbExecutor, documentId: number)
     .for('no key update');
 }
 
+/** مبلغ قابل پرداخت و جمع تسویه سند؛ بسته خزانه بسته اسناد را import نمی‌کند و ریشه ترکیب (`registerWorkflowDomainActions`) آن را ثبت می‌کند */
+export type DocumentRemainingReader = (tx: DbExecutor, documentId: number) =>
+  Promise<{ refNumber: string | null; payable: FinancialDecimal; settled: FinancialDecimal } | null>;
+
+let readDocumentRemaining: DocumentRemainingReader = async () => {
+  throw new BusinessLogicError('مانده سند خوانده نشد؛ سامانه کامل راه‌اندازی نشده است.');
+};
+
+export function registerDocumentRemainingReader(reader: DocumentRemainingReader): void {
+  readDocumentRemaining = reader;
+}
+
 export async function assertWithinDocumentRemaining(tx: DbExecutor, link: { documentId: number; amount: number | string }): Promise<void> {
-  const [doc] = await tx.select({ type: documents.type, refNumber: documents.refNumber, currency: documents.currency })
-    .from(documents).where(eq(documents.id, link.documentId));
+  const doc = await readDocumentRemaining(tx, link.documentId);
   if (!doc) return;
-  const payable = fin((await documentEventAmounts(tx, link.documentId)).totalAmount);
-  const rows = await tx.select({
-    id: treasuryTransactions.id, documentId: treasuryTransactions.documentId, amount: treasuryTransactions.amount,
-    type: treasuryTransactions.type, status: treasuryTransactions.status, reversalOfId: treasuryTransactions.reversalOfId,
-  }).from(treasuryTransactions)
-    .where(and(
-      eq(treasuryTransactions.documentId, link.documentId),
-      eq(treasuryTransactions.isDeleted, 0),
-      inArray(treasuryTransactions.status, ['completed', 'voided']),
-    ));
-  const isPurchase = (PAYMENT_DOCUMENT_TYPES as readonly string[]).includes(doc.type);
-  const settled = settledAmount(rows, isPurchase);
+  const { payable, settled } = doc;
   const remaining = payable.subtract(settled.isNegative() ? 0 : settled);
   if (fin(link.amount).greaterThan(remaining.add(0.01))) {
     const left = remaining.isNegative() ? fin(0) : remaining;

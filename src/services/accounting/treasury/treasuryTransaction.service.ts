@@ -482,7 +482,9 @@ export class TreasuryTransactionService {
         throw new ConflictError('این ردیف ابطالِ تراکنش دیگری است و ابطال نمی‌شود؛ برای ثبت دوباره، تراکنش تازه ثبت کنید.');
       }
       // v10.0.58 (TD-926، ت۸ الف): مساعده‌ای که فیش زنده کسر کرده باطل نمی‌شود (مانده مساعده منفی می‌شد)
-      if (isAdvancePayment(original)) await assertAdvanceVoidKeepsBalance(txEngine, original);
+      if (isAdvancePayment(original)) {
+        await assertAdvanceVoidKeepsBalance(txEngine, original, await AccountMappingService.getEmployeeAdvanceAccount(txEngine));
+      }
       // طرفی که پیش‌تر جدا باطل شده (پیش از v8.0.73) سند مشترک را هم باطل کرده است؛ این طرف فقط مانده و ردیف خودش را برمی‌گرداند
       const partner = sides.find(t => t.id !== id && t.status !== 'voided');
       const isTransfer = sideIds.length > 1;

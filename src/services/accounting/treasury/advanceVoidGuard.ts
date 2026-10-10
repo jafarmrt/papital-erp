@@ -4,7 +4,6 @@ import { journalVoucherItems, journalVouchers, personnel } from '../../../db/sch
 import { ConflictError } from '../../../errors/customErrors.js';
 import { fin, type FinancialDecimal } from '../../../lib/financialDecimal.js';
 import { formatPersianNumber } from '../../../utils/persianNumber.js';
-import { AccountMappingService } from '../accountMapping.service.js';
 
 /**
  * v10.0.58 (TD-926، P5-W03، تصمیم ت۸ الف بازبینی فاز ۵): مساعده‌ای که فیش زنده کسر کرده باطل نمی‌شود. پیش‌تر ابطال آن آزاد
@@ -41,14 +40,14 @@ async function advanceNet(tx: DbExecutor, accountId: number, personnelId: number
   return rows.reduce((sum, r) => sum.add(r.debit).subtract(r.credit), fin(0));
 }
 
+/** The caller passes the mapped employee advance account, so this core file imports no other core (package boundary). */
 export async function assertAdvanceVoidKeepsBalance(tx: DbExecutor, row: {
   transactionNumber: string;
   partyId: number | null;
   partyName: string | null;
   voucherId: number | null;
-}): Promise<void> {
+}, advanceAccount: { id: number } | null | undefined): Promise<void> {
   if (!row.partyId || !row.voucherId) return;
-  const advanceAccount = await AccountMappingService.getEmployeeAdvanceAccount(tx);
   if (!advanceAccount) return;
   const outstanding = await advanceNet(tx, advanceAccount.id, row.partyId);
   const own = await advanceNet(tx, advanceAccount.id, row.partyId, row.voucherId);
