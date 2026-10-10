@@ -21,7 +21,7 @@ const SUPPLIERS_KEY = QUERY_KEYS.customers.options({ scope: 'reorder-suppliers' 
 const NO_ITEMS: ReorderItem[] = [];
 const NO_SUPPLIERS: Customer[] = [];
 
-/** v10.0.42 (TD-1158): `enabled: false` sends no request (the «وضعیت انبار» page for a viewer who may not open the reorder page) */
+/** v10.0.71 (TD-1158): `enabled: false` sends no request (the «وضعیت انبار» page for a viewer who may not open the reorder page) */
 export function useReorderAlertsQuery({ enabled = true }: { enabled?: boolean } = {}) {
   const query = useQuery<ReorderItem[]>({
     queryKey: REORDER_ALERTS_KEY,

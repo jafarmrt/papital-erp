@@ -3,7 +3,7 @@ import { formatPersianNumber } from '../../utils';
 import type { InventoryStatusAlarm } from '../../lib/reorderAlerts/inventoryStatusAlarms';
 
 /**
- * v10.0.42 (TD-1158): the reorder alarm card and banner of the «وضعیت انبار» page. They show the reorder page's own list
+ * v10.0.71 (TD-1158): the reorder alarm card and banner of the «وضعیت انبار» page. They show the reorder page's own list
  * (free stock against the reorder point); the page renders them only for a viewer who may open that page.
  */
 
