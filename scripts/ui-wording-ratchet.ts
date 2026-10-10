@@ -3,7 +3,7 @@ import path from 'path';
 import ts from 'typescript';
 
 /**
- * v10.0.39 (TD-1168, product-owner glossary of packages 2, 8, 11 and 16): user-facing text says «سامانه», «فهرست», «دوطرفه» and
+ * v10.0.51 (TD-1168, product-owner glossary of packages 2, 8, 11 and 16): user-facing text says «سامانه», «فهرست», «دوطرفه» and
  * «پالایش» / «شرط‌های جستجو», never «سیستم», «کاتالوگ», «فیلتر» or «دوبل» (owner rule: only «کاردکس»,
  * «ترنسفر» and «وب‌هوک» stay transliterated). The per-package wording tests cover only their own
  * files, so these words were still shown on other screens. This ratchet counts, per browser source file, the user-facing

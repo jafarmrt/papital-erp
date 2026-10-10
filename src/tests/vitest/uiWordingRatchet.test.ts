@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * v10.0.39 (TD-1168): user-facing text never says the forbidden loanwords of the glossary. The ratchet in
+ * v10.0.51 (TD-1168): user-facing text never says the forbidden loanwords of the glossary. The ratchet in
  * scripts/ui-wording-ratchet.ts counts, per browser source file, the string literals, template parts and JSX texts that
  * hold one of them, against ui-wording-baseline.json; no file may gain one and the baseline may only shrink.
  */

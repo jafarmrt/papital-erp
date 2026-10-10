@@ -10865,6 +10865,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   results.push(...await runSystemHealthTests(shouldRun));
   const { runFactoryResetTests } = await import('../regression/factoryResetTests.js');
   results.push(...await runFactoryResetTests(shouldRun));
+  const { runInitialSetupTests } = await import('../regression/initialSetupTests.js');
+  results.push(...await runInitialSetupTests(shouldRun));
 
   // Package 1 second half PR 3 (v9.0.444+): foreign keys of the schema and the database
   const { runForeignKeyPolicyTests } = await import('../regression/foreignKeyPolicyTests.js');
@@ -10897,6 +10899,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 phase 3 lane L2 (v10.0.35+): writer routes read their bodies through Zod
   const { runWriterRouteZodTests } = await import('../regression/writerRouteZodTests.js');
   results.push(...await runWriterRouteZodTests(shouldRun));
+
+  // Series 10 phase 3 lane L2, package B4 (v10.0.41+): document audit rows, stock event cost, reorder monitor, purchase party, requisition workflow
+  const { runDocumentAuditEventTests } = await import('../regression/documentAuditEventTests.js');
+  results.push(...await runDocumentAuditEventTests(shouldRun));
 
   return results;
 }
