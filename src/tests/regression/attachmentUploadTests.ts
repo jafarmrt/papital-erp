@@ -176,7 +176,8 @@ async function lengthCapsCase(ctx: DailyLogTestCtx): Promise<string> {
     ...base, title: 't'.repeat(200), content: 'c'.repeat(20_000), tags: Array.from({ length: 20 }, (_, i) => `${i}`.padEnd(50, 'g')),
   });
   if (atCap.status !== 201 && atCap.status !== 200) wrong.push(`a log at every cap answered ${atCap.status}`);
-  const created = await ctx.send(author, 'post', '/api/daily-logs', base);
+  // v10.0.91 (TD-1225): a second log of the same day takes a separate time
+  const created = await ctx.send(author, 'post', '/api/daily-logs', { ...base, start_time: '13:00', end_time: '15:00' });
   const id = Number(created.body?.id ?? created.body?.data?.id);
   if (Number.isSafeInteger(id) && id > 0) {
     const edit = await ctx.send(author, 'put', `/api/daily-logs/${id}`, { content: 'c'.repeat(20_001) });
