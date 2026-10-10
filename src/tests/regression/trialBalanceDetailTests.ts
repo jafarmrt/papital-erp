@@ -25,7 +25,7 @@ export async function runTrialBalanceDetailTests(shouldRun: ShouldRun): Promise<
 
   const id = 'reg_trial_balance_detail_one_row_td_1128';
   if (shouldRun(id, 'td1128', 'trial', 'balance', 'detail', 'accounting')) {
-    await runCase(results, id, 'v10.0.85: the level-4 trial balance shows one row per detail account (type and id) under its current name, whatever name each voucher stored, groups rows without a detail id of automatic vouchers by their cheque or opening item, else on the account general row and keeps a name typed on a manual voucher (TD-1128)', async () => inFiscalSandbox(async () => {
+    await runCase(results, id, 'v10.0.139: the level-4 trial balance shows one row per detail account (type and id) under its current name, whatever name each voucher stored, groups rows without a detail id of automatic vouchers by their cheque or opening item, else on the account general row and keeps a name typed on a manual voucher (TD-1128)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const today = await businessTodayIsoDate();
       const acc = await accountIdsByCode('1402', '1101', '1001', '1401', '4001');

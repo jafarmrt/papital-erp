@@ -98,7 +98,7 @@ export class AccountingReportService {
     // v8.0.16 (TD-260): ارز و نرخ ردیف از همان قاعده کارت حساب و صورت‌حساب طرف‌حساب (voucherItemAmount.ts)
     const itemCurrencyExpr = voucherItemCurrencySql;
     const rateExpr = voucherItemRateSql;
-    // v10.0.85 (TD-1128): an item opening voucher's id, so its rows can be keyed by their item
+    // v10.0.139 (TD-1128): an item opening voucher's id, so its rows can be keyed by their item
     const itemOpeningVoucherIdSql = sql<number | null>`CASE WHEN ${journalVouchers.referenceModule} = 'item_opening' THEN ${journalVouchers.id} END`;
     const groupedItems = await executor.select({
       voucherDate: journalVouchers.date,
@@ -145,7 +145,7 @@ export class AccountingReportService {
     // AccountId => turnover
     const accountTurnover = new Map<number, TurnoverAccumulator>();
 
-    // v10.0.85 (TD-1128): one detail per account, type and id (trialBalanceDetailKey), not per stored name
+    // v10.0.139 (TD-1128): one detail per account, type and id (trialBalanceDetailKey), not per stored name
     interface DetailedAccumulator extends TurnoverAccumulator {
       accountId: number;
       ref: DetailRef;

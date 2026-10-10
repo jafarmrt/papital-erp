@@ -4,7 +4,7 @@ import { bankAccounts, cheques, customers, itemOpeningVoucherItems, items, perso
 import { voucherProjectLabel } from '../../lib/accounting/voucherDetailedTypes.js';
 
 /**
- * v10.0.85 (TD-1128): the detail of a level-4 trial balance row. A detail with an id (customer, supplier, personnel,
+ * v10.0.139 (TD-1128): the detail of a level-4 trial balance row. A detail with an id (customer, supplier, personnel,
  * project, bank account) is one row per account, type and id, whatever name each voucher stored; a legacy party row
  * without an id keeps its exact name (TD-416), and so does a row without an id that a person typed on a manual voucher;
  * a row without an id of an automatic voucher is grouped by the voucher's stable reference when it has one (the cheque
