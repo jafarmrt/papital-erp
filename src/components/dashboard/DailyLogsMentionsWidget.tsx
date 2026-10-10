@@ -14,13 +14,16 @@ interface DailyLogsMentionsWidgetProps {
     my_total_logs?: number;
   };
   loading?: boolean;
+  /** v10.0.88 (TD-1223): فقط دارنده daily_logs.create دکمه «ثبت گزارش» را می‌بیند */
+  canCreate?: boolean;
 }
 
 export function DailyLogsMentionsWidget({
   user,
   logs = [],
   stats,
-  loading = false
+  loading = false,
+  canCreate = false
 }: DailyLogsMentionsWidgetProps) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -98,6 +101,7 @@ export function DailyLogsMentionsWidget({
           </div>
         </div>
 
+        {canCreate && (
         <button
           onClick={() => navigate('/daily-logs')}
           className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0 flex items-center gap-1"
@@ -105,6 +109,7 @@ export function DailyLogsMentionsWidget({
           <Plus size={13} />
           <span>ثبت گزارش</span>
         </button>
+        )}
       </div>
 
       {/* Search filter if mentions > 3 */}

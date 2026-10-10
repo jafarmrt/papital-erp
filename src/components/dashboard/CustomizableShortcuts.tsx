@@ -13,6 +13,8 @@ export interface ShortcutItemDef {
   color: string;
   bgColor: string;
   borderColor: string;
+  /** v10.0.88 (TD-1223): میانبری که کاری را ثبت می‌کند، افزون بر صفحه یکی از این مجوزها را می‌خواهد */
+  requiresAnyOf?: readonly string[];
 }
 
 export const ALL_SHORTCUTS: ShortcutItemDef[] = [
@@ -35,6 +37,7 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     color: 'text-blue-600',
     bgColor: 'bg-blue-50 hover:bg-blue-100/80',
     borderColor: 'border-blue-200/80',
+    requiresAnyOf: ['daily_logs.create'],
   },
   {
     id: 'approval_inbox',
@@ -200,7 +203,8 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
 
 /** v9.0.131 (TD-668، ت۲ بسته ۱۶): میانبری که صفحه‌اش برای کاربر باز است، از همان جدول دسترسی منو و مسیر */
 export function accessibleShortcutsFor(viewer: ViewerAccess): ShortcutItemDef[] {
-  return ALL_SHORTCUTS.filter((s) => canOpenPage(s.path, viewer));
+  const held = (keys: readonly string[]) => viewer.isAdmin === true || keys.some(k => (viewer.permissions ?? []).includes(k));
+  return ALL_SHORTCUTS.filter((s) => canOpenPage(s.path, viewer) && (!s.requiresAnyOf || held(s.requiresAnyOf)));
 }
 
 const DEFAULT_SELECTED_SHORTCUTS = ['crm', 'daily_logs', 'approval_inbox', 'create_invoice', 'products', 'projects'];
