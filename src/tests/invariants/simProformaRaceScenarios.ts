@@ -6,7 +6,7 @@ import { overReservedItems } from './reservationInvariants.js';
 import { receive } from './scenarioHelpers.js';
 
 /**
- * v10.0.86 (TD-1148): the simulator's proforma step reads the item's free stock and then saves a sales proforma sized to
+ * v10.0.88 (TD-1148): the simulator's proforma step reads the item's free stock and then saves a sales proforma sized to
  * it. Saving a proforma passes no sellable gate (product-owner decision ت۱۴: a warning only), so two concurrent steps on
  * one item that both read the same free stock reserved up to twice it, and the concurrent rounds reported I19. The step
  * now reads free stock and saves the proforma under the item's row lock, as one simulated user would.
@@ -37,6 +37,6 @@ export async function checkConcurrentProformaSteps(wh: string): Promise<string[]
 }
 
 export const SIM_PROFORMA_RACE_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
-  ['inv_td_1148_concurrent_proforma_steps', 'v10.0.86: two concurrent simulator proforma steps on one item keep its reservations within stock (TD-1148)',
+  ['inv_td_1148_concurrent_proforma_steps', 'v10.0.88: two concurrent simulator proforma steps on one item keep its reservations within stock (TD-1148)',
     checkConcurrentProformaSteps, 'the second step sees the first proforma reservation and asks only for what is left'],
 ];

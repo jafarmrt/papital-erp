@@ -5,6 +5,7 @@ import { permissionDefinition } from '../lib/permissions/permissionCatalog.js';
 import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
 import { findFinalDocumentIdByRef } from '../services/documents/documentRefLookup.js';
 import { documentAuditDetails, documentAuditSnapshot, documentLineSummary } from '../services/documents/documentAudit.js';
+import { proformaStockWarnings } from '../services/documents/documentSellableGate.js';
 import { DOCUMENT_TYPE_TITLES } from '../lib/documents/documentTypeTitles.js';
 import { isAutoRefNumber } from '../lib/documents/documentRefRules.js';
 import { DOCUMENT_LIST_PAGE_SIZE } from '../lib/documents/documentListPage.js';
@@ -319,7 +320,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
   const allowBackdate = await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION);
   // v9.0.13 (TD-424): «یک پیش‌فاکتور برای هر پرونده» زیر قفل ردیف پرونده و پیوند و علامت پرونده در همان تراکنش سند
   // (پیش‌تر بررسی بی قفل پیش از تراکنش و علامت‌گذاری پس از commit؛ پیش‌فاکتورهای هم‌زمان همه ثبت می‌شدند)
-  const { docId: newDocId, projectReservation, stored } = await orm.transaction(async (tx) => {
+  const { docId: newDocId, projectReservation, stored, stockWarnings } = await orm.transaction(async (tx) => {
     const lead = isProforma && targetLeadId ? await lockLeadForNewProforma(tx, targetLeadId) : null;
     // V10-4.3 / v9.0.323 (TD-776): پیوند رسمی سند به پرونده فروش همراه درج سند در سرویس (نه نوشتن جدا از route)
     const created = await DocumentService.createDocumentWithDetails({ ...req.body, crmLeadId: targetLeadId, user: sessionUserLabel(req.user), externalTx: tx }, { userId: req.user?.id, allowBackdate });
@@ -353,10 +354,11 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
         ...summary,
       },
     });
-    return { ...created, stored: after };
+    // v10.0.86 (TD-1138، ت۱۴ «هشدار»): کمبود قابل فروش پیش‌فاکتور فروش ذخیره را رد نمی‌کند و فقط به فرم می‌رسد
+    return { ...created, stored: after, stockWarnings: await proformaStockWarnings(tx, created.docId) };
   });
 
-  res.json({ success: true, docId: newDocId, refNumber: stored?.refNumber ?? null, projectReservation });
+  res.json({ success: true, docId: newDocId, refNumber: stored?.refNumber ?? null, projectReservation, stockWarnings });
 }));
 
 // v9.0.140 (TD-890، ت۱۰ الف): فهرست کامل با مجوز بخش اسناد؛ مجوز انبارگردانی فقط فهرست سندهای شمارش و انتقال
@@ -480,7 +482,7 @@ router.put('/documents/:id', authorizePermission('documents.edit'), validate(doc
   // ویرایش، بی قفل و بی قاعده «یک پیش‌فاکتور برای هر پرونده» نوشته می‌شد
   // v9.0.337 (TD-785): ویرایش و ردیف ممیزی‌اش در یک تراکنش، با سند پیش (زیر قفل ردیف) و پس از ویرایش از پایگاه‌داده؛
   // پیش‌تر پس از commit و بی «پیش از»، با نام و یادداشت بدنه درخواست
-  await orm.transaction(async (tx) => {
+  const stockWarnings = await orm.transaction(async (tx) => {
     const change = await DocumentService.updateDocument(docId, { ...req.body, user: sessionUserLabel(req.user) }, tx);
     await logActivity({
       req,
@@ -491,9 +493,11 @@ router.put('/documents/:id', authorizePermission('documents.edit'), validate(doc
       description: `ویرایش پیش‌فاکتور/سند شماره "${change.after?.refNumber ?? docId}"`,
       details: documentAuditDetails(change.before, change.after),
     });
+    // v10.0.86 (TD-1138، ت۱۴): همان هشدار کمبود ثبت
+    return proformaStockWarnings(tx, docId);
   });
 
-  res.json({ success: true, docId });
+  res.json({ success: true, docId, stockWarnings });
 }));
 
 router.put('/documents/:id/notes', authorizePermission('documents.edit'), validate(updateDocumentNotesSchema), asyncHandler(async (req, res) => {

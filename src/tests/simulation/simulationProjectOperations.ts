@@ -126,7 +126,7 @@ export function createProjectOperations(
     if (projectItems.length === 0) return { detail: 'skip:no-project-item', tags: [] };
     const item = pick(projectItems);
     const date = await businessTodayIsoDate();
-    // v10.0.86 (TD-1148): saving a proforma passes no sellable gate (decision ت۱۴), so the free stock is read and the proforma
+    // v10.0.88 (TD-1148): saving a proforma passes no sellable gate (decision ت۱۴), so the free stock is read and the proforma
     // saved under the item's row lock, the lock every gated outflow takes: two concurrent steps never size their proformas
     // from the same free stock. The read goes through the pool, which sees only committed reservations, so the lock is held
     // until the proforma commits; one extra connection per waiting step stays within the pool (12 users, 20 connections).

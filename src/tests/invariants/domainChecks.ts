@@ -30,5 +30,5 @@ export const DOMAIN_CHECKS: Array<[string, string, (wh: string) => Promise<strin
   ...FOREIGN_ROUNDING_CHECKS, // TD-1030 (v10.0.12): foreign sale vouchers balance in rials
   ...SIMULATOR_COVERAGE_CHECKS, // I-01 (v10.0.11): the simulator's treasury, payroll, purchasing, allocation and approval operations
   ...VOID_RESIDUE_CHECKS, // TD-1147 (v10.0.84): a receipt void posts the inventory value it leaves behind
-  ...SIM_PROFORMA_RACE_CHECKS, // TD-1148 (v10.0.86): the simulator's proforma step reads free stock under the item lock
+  ...SIM_PROFORMA_RACE_CHECKS, // TD-1148 (v10.0.88): the simulator's proforma step reads free stock under the item lock
 ];
