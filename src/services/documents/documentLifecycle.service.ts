@@ -19,6 +19,7 @@ import { documentEventAmounts } from './documentEventAmount.js';
 import { OutboxService } from '../events/outboxService.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { VoucherService } from '../accounting/voucher.service.js';
+import { postVoidResidueVoucher, type VoidResidueLine } from '../accounting/voidResidueVoucher.js';
 import { resolveWarehouseCode } from '../inventory/warehouseResolver.js';
 import { LockHierarchyLevel, sortIdsForLocking, withOrderedLocks } from '../../lib/lockOrder.js';
 import { logger } from '../../middleware/logger.js';
@@ -375,9 +376,7 @@ export class DocumentLifecycleService {
       await terminateOpenWorkflows(tx, { entityType: 'document', entityId: id, actionKey: 'terminate', actionTitle: 'بستن فرایند با ابطال سند', comment: 'ابطال سند', userName: deletedByUser });
 
       // 2. Cascade soft-delete document_items
-      await tx.update(documentItems).set({
-        isDeleted: 1,
-      }).where(eq(documentItems.documentId, id));
+      await tx.update(documentItems).set({ isDeleted: 1 }).where(eq(documentItems.documentId, id));
       await releaseVoidedProcurementOrder(tx, { ...doc, lineItemIds: docLines.map(l => l.itemId) }, deletedByUser);
 
       // 3. Cascade soft-delete transactions + ثبت تراکنش‌های معکوس مطابق الگوی DB-009
@@ -386,9 +385,7 @@ export class DocumentLifecycleService {
       // ردیف کاردکسی که پس از خواندن بالا (پیش از قفل سند) ثبت شده باشد هم پیش از درج معکوس قفل می‌شود (بی‌اثر اگر قفل باشد)
       await lockStockItems(tx, originalTxs.map(t => t.itemId));
 
-      await tx.update(transactions).set({
-        isDeleted: 1,
-      }).where(eq(transactions.documentId, doc.id));
+      await tx.update(transactions).set({ isDeleted: 1 }).where(eq(transactions.documentId, doc.id));
 
       // v9.0.110 (TD-482): a reversal of a row without a warehouse names the warehouse its stock comes back to (the
       // default one, as in step 4), never the ledger alias 'default' that a warehouse code could also be
@@ -420,6 +417,8 @@ export class DocumentLifecycleService {
       // (پیش‌تر فقط کاردکس معکوس می‌شد و موجودی انبار با کاردکس ناهمخوان می‌ماند)
       if (doc.status === 'final' || (doc.type === 'audit' && originalTxs.length > 0)) {
         const defaultWh = await resolveWarehouseCode(tx, '');
+        // v10.0.84 (TD-1147): what each reversal leaves in the inventory accounts with no stock behind it
+        const residues: VoidResidueLine[] = [];
 
         // C-01 & F3: موجودی انبار منحصراً بر اساس گردش واقعی تراکنش‌های ثبت‌شده (originalTxs) معکوس می‌شود؛
         // در اسناد انبارگردانی فقط انحراف (variance) ثبت شده بود و نباید کل physical_stock برگشت داده شود.
@@ -428,7 +427,7 @@ export class DocumentLifecycleService {
             const origQty = Number(orig.quantity) || 0;
             if (origQty > 0) {
               const targetLoc = (orig.location || '').trim() || defaultWh;
-              await DocumentStockEngine.applyStockReversal(tx, {
+              residues.push(await DocumentStockEngine.applyStockReversal(tx, {
                 itemId: orig.itemId,
                 quantity: origQty,
                 originalDirection: orig.type as 'in' | 'out',
@@ -436,14 +435,14 @@ export class DocumentLifecycleService {
                 location: targetLoc,
                 // v9.0.80 (TD-489): حواله انتقال بین انبارها فقط مقدار را جابه‌جا کرده بود؛ ابطالش هم WAC را تغییر نمی‌دهد
                 quantityOnly: orig.documentType === 'transfer',
-              });
+              }));
             }
           }
         } else if (doc.type !== 'audit') {
           const docDirection: 'in' | 'out' = (doc.type === 'receipt' || doc.type === 'production_receipt' || doc.type === 'return') ? 'in' : 'out';
           for (const item of docLines) {
             const targetLoc = (item.location || '').trim() || defaultWh;
-            await DocumentStockEngine.applyStockReversal(tx, {
+            residues.push(await DocumentStockEngine.applyStockReversal(tx, {
               itemId: item.itemId,
               quantity: item.quantity,
               originalDirection: docDirection,
@@ -453,7 +452,7 @@ export class DocumentLifecycleService {
               unitPrice: docDirection === 'out' ? 0
                 : (fin(doc.exchangeRate).isPositive() ? stockUnitPriceInIrr(item.unitPrice ?? 0, doc.currency, doc.exchangeRate) : (item.unitPrice ?? 0)),
               location: targetLoc
-            });
+            }));
           }
         }
 
@@ -497,6 +496,10 @@ export class DocumentLifecycleService {
             externalTx: tx,
           });
         }
+        // v10.0.84 (TD-1147, ت۱۵ الف): the value left behind goes to «کسری و اضافات انبار» as a draft voucher
+        await postVoidResidueVoucher({
+          documentId: id, refNumber: doc.refNumber || String(id), date: await businessTodayIsoDate(), username: deletedByUser,
+        }, residues, tx);
       }
 
       // 5. Audit log — v8.0.77 (TD-324): در همان تراکنش (پیش‌تر اتصال دوم استخر و ردیف ممیزی ماندگار حتی با برگشت ابطال)

@@ -297,7 +297,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
     `ثبت ${docTypeTitles[requestedType] ?? 'سند'}${recordStatus === 'final' ? ' به‌صورت قطعی' : ''}`);
   // پیش‌فاکتورِ کسی که سند فروش را قطعی نمی‌کند، مانند پیش، نوع «پیش‌فاکتور» می‌گیرد (شماره و تاریخش هنگام نهایی‌سازی
   // از سری فاکتور، TD-317 و TD-410). یکی شدن دو شکل پیش‌فاکتور کار B08-31 است؛ پیش‌نویس همیشه پیش‌نویس می‌ماند
-  // v10.0.86 (TD-1190): the same rule the invoice form reads its number series with (`recordedSalesType`)
+  // v10.0.88 (TD-1190): the same rule the invoice form reads its number series with (`recordedSalesType`)
   if (requestedType === 'invoice' && recordStatus === 'proforma') {
     req.body.docType = recordedSalesType(requestedType, recordStatus, await can(req.user, SALES_FINALIZE_PERMISSION));
   }
@@ -356,7 +356,7 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
         ...summary,
       },
     });
-    // v10.0.84 (TD-1138، ت۱۴ «هشدار»): کمبود قابل فروش پیش‌فاکتور فروش ذخیره را رد نمی‌کند و فقط به فرم می‌رسد
+    // v10.0.86 (TD-1138، ت۱۴ «هشدار»): کمبود قابل فروش پیش‌فاکتور فروش ذخیره را رد نمی‌کند و فقط به فرم می‌رسد
     return { ...created, stored: after, stockWarnings: await proformaStockWarnings(tx, created.docId) };
   });
 
@@ -495,7 +495,7 @@ router.put('/documents/:id', authorizePermission('documents.edit'), validate(doc
       description: `ویرایش پیش‌فاکتور/سند شماره "${change.after?.refNumber ?? docId}"`,
       details: documentAuditDetails(change.before, change.after),
     });
-    // v10.0.84 (TD-1138، ت۱۴): همان هشدار کمبود ثبت
+    // v10.0.86 (TD-1138، ت۱۴): همان هشدار کمبود ثبت
     return proformaStockWarnings(tx, docId);
   });
 

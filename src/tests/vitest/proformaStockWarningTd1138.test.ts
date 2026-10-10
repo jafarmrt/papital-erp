@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { proformaStockWarningText } from '../../lib/invoices/invoiceForm';
 
-// v10.0.84 (TD-1138, decision 14): the invoice form warns about a saved proforma above the sellable stock
+// v10.0.86 (TD-1138, decision 14): the invoice form warns about a saved proforma above the sellable stock
 const ITEM_WARNING = 'کالای «مهره» (R-1) در انبار «main»: این پیش‌فاکتور ۵ عدد می‌خواهد و قابل فروش ۲ عدد است.';
 
 describe('proformaStockWarningText (TD-1138)', () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { recordedSalesType } from '../../lib/documents/recordedSalesType';
 
-// v10.0.86 (TD-1190): the invoice form shows the number of the series the document is really saved in
+// v10.0.88 (TD-1190): the invoice form shows the number of the series the document is really saved in
 describe('recordedSalesType (TD-1190)', () => {
   it('stores a proforma of a user who cannot finalize as type proforma', () => {
     expect(recordedSalesType('invoice', 'proforma', false)).toBe('proforma');

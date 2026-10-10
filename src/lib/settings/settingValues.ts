@@ -87,7 +87,7 @@ export function currencySettingError(value: unknown): string | null {
 }
 
 /**
- * v10.0.88 (TD-1192): price list names (`pricing_strategies`, stored joined with «,») are checked before they are saved,
+ * v10.0.90 (TD-1192): price list names (`pricing_strategies`, stored joined with «,») are checked before they are saved,
  * by the settings form on each name and by the server on the stored list. A name with a Latin comma would be split into two
  * lists, and two names that differ only in spaces or letter case would be two lists of one price; both are refused with a
  * message that names them. Empty names are dropped. Before, «قیمت خرده‌فروشی, ویژه» was saved as two lists and a second
