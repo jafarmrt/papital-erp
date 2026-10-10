@@ -5,7 +5,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { rebuildOrderedRows, type OrderedRow } from '../../lib/documents/procurementOrderVoid.js';
 
 /**
- * v10.0.93 (TD-1195): درخواست خرید سفارشی که ابطال می‌شود، پیش از کالاها و سند قفل می‌شود (همان ترتیب تحویل سفارش که
+ * v10.0.94 (TD-1195): درخواست خرید سفارشی که ابطال می‌شود، پیش از کالاها و سند قفل می‌شود (همان ترتیب تحویل سفارش که
  * درخواست را پیش از سند قفل می‌کند)، تا ابطال و تحویل هم‌زمان یک سفارش به بن‌بست نرسند.
  */
 export async function lockRequisitionOfOrder(tx: DbExecutor, requisitionId: number | null | undefined): Promise<void> {

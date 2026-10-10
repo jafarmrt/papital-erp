@@ -5,16 +5,16 @@ import { approvedRequisition, fixture, formRow, type ReqRow } from './procuremen
 /**
  * Phase 3 lane L2, fresh-eyes guide test (warehouse and purchasing roles, roles-b bugs 1 and 2): a customer is never the
  * supplier of a purchase document on any path, and voiding an undelivered procurement order gives its quantity back to
- * the requisition. Through the real Express routes; each case fails on v10.0.91.
+ * the requisition. Through the real Express routes; each case fails on v10.0.92.
  */
 export async function runRolesBGuideFixTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (h: Harness, wrong: string[]) => Promise<string>]> = [
     ['reg_purchase_party_customer_refused_td_1194',
-      'v10.0.92: a purchase order, a direct receipt and the delivery of an unlinked draft order refuse a customer as supplier with 422 DOCUMENT_PARTY_KIND_MISMATCH (TD-1194)',
+      'v10.0.93: a purchase order, a direct receipt and the delivery of an unlinked draft order refuse a customer as supplier with 422 DOCUMENT_PARTY_KIND_MISMATCH (TD-1194)',
       ['td1194', 'procurement', 'party'], customerAsSupplierCase],
     ['reg_void_order_releases_ordered_qty_td_1195',
-      'v10.0.93: voiding an undelivered procurement order gives its ordered quantity back to the requisition (TD-1195)',
+      'v10.0.94: voiding an undelivered procurement order gives its ordered quantity back to the requisition (TD-1195)',
       ['td1195', 'procurement', 'void'], voidOrderCase],
   ];
   for (const [id, name, tags, run] of cases) {
