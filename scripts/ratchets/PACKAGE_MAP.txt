@@ -205,6 +205,7 @@ G  scripts/check-version-sync.ts
 # ───────── ۷ برنامه‌ریزی موجودی ─────────
 7  src/routes/pendingMaterials.routes.ts
 7  src/services/pendingMaterials.service.ts
+7  src/services/pendingMaterialCode.ts
 7  src/pages/ReorderAlertsPage.tsx
 7  src/pages/ReservedItemsReportPage.tsx
 7  src/pages/PendingMaterialsPage.tsx

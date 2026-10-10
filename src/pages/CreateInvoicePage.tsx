@@ -83,6 +83,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
 
   const [docItems, setDocItems] = useState<InvoiceDocItem[]>([]);
   const [editingDocId, setEditingDocId] = useState<number | null>(null);
+  // v10.0.108 (TD-972): نسخه پیش‌فاکتوری که در حال ویرایش است؛ ذخیره آن را می‌فرستد و سرور نسخه کهنه را ۴۰۹ می‌دهد
+  const [editingVersion, setEditingVersion] = useState<number | null>(null);
   const isEditing = editingDocId !== null;
   const finalOptionNote = finalStatusOptionNote(canFinalizeSales, isEditing);
 
@@ -154,6 +156,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       }
       resetForm();
       setEditingDocId(p.id);
+      setEditingVersion(form.version);
       setDocType(form.docType);
       setStatus(form.status);
       setCrmLeadId(form.crmLeadId);
@@ -194,6 +197,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   // پیش‌تر نوع، وضعیت و پرونده فروش سند قبلی می‌ماند و فاکتور بعدی با نوع «رسید» یا به پرونده دیگری ثبت می‌شد
   const resetForm = () => {
     setEditingDocId(null);
+    setEditingVersion(null);
     setDocType('invoice');
     setStatus(initialStatus);
     setLocation(null);
@@ -389,6 +393,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       crmLeadId: !editingDocId && crmLeadId ? Number(crmLeadId) : undefined,
       // v8.0.104 (TD-381): فقط درصد؛ مبلغ مالیات را سرور با همان قاعده جمع‌های فرم حساب می‌کند
       vatPercent: applyVat ? vatRate : 0,
+      ...(editingDocId && editingVersion ? { version: editingVersion } : {}),
       items: docItems.map(d => ({ itemId: d.item.id, quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount, location: lineLocationOf(d, location) }))
     };
 

@@ -6,10 +6,12 @@ import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermission
 import { findFinalDocumentIdByRef } from '../services/documents/documentRefLookup.js';
 import { documentAuditDetails, documentAuditSnapshot, documentLineSummary } from '../services/documents/documentAudit.js';
 import { proformaStockWarnings } from '../services/documents/documentSellableGate.js';
+import { documentLineStock } from '../services/documents/documentSellableGate.js';
 import { recordedSalesType } from '../lib/documents/recordedSalesType.js';
 import { DOCUMENT_TYPE_TITLES } from '../lib/documents/documentTypeTitles.js';
 import { isAutoRefNumber } from '../lib/documents/documentRefRules.js';
 import { DOCUMENT_LIST_PAGE_SIZE } from '../lib/documents/documentListPage.js';
+import { DOCUMENT_VERSION_REQUIRED } from '../lib/documents/documentVersion.js';
 import { assertManualRefAllowed, assertNotProjectDelivery, assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
@@ -201,6 +203,10 @@ export const documentUpdateSchema = z.object({
     if (body.items) {
       refineDocumentItems(ctx, body.items as unknown as Array<Record<string, unknown>>, false);
     }
+    // v10.0.108 (TD-972، OBS-R1-96): ویرایش سند نسخه‌ای را که از آن ساخته شده می‌فرستد، مانند TD-403
+    if (body.version === undefined && body.expectedVersion === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['version'], message: DOCUMENT_VERSION_REQUIRED });
+    }
   }),
   params: z.object({
     id: numericIdString
@@ -251,6 +257,11 @@ export const documentsQuerySchema = z.object({
       { message: 'فهرست نوع سند (types) فقط نوع‌های تعریف‌شده سند را می‌پذیرد، جدا شده با ویرگول.' },
     ).optional(),
     status: z.enum(['draft', 'proforma', 'final']).optional(),
+    // v10.0.103 (TD-1197): `statuses=proforma,draft` چند وضعیت با هم
+    statuses: z.string().max(40).refine(
+      raw => (documentListTypes(raw) ?? []).every(s => ['draft', 'proforma', 'final'].includes(s)),
+      { message: 'فهرست وضعیت سند (statuses) فقط پیش‌نویس، پیش‌فاکتور و نهایی را می‌پذیرد، جدا شده با ویرگول.' },
+    ).optional(),
     search: z.string().max(100).optional(),
     startDate: storageDateParam,
     endDate: storageDateParam,
@@ -387,6 +398,7 @@ router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...R
     type,
     types,
     status,
+    statuses: documentListTypes(req.query.statuses),
     search,
     startDate,
     endDate,
@@ -426,6 +438,15 @@ router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documentRec
   assertDocumentTypeReadable(readable, doc.type);
   // v9.0.335 (TD-781): ردیف‌های خزانه فقط برای خوانندگان خزانه
   res.json(await documentForReader(req.user, doc));
+}));
+
+// v10.0.151 (TD-1175): انبار مبدأ، موجودی و قابل فروش هر ردیف خروجی برای پنجره تأیید انبار؛ همان خوانندگان سند
+router.get('/documents/:id/line-stock', authorizePermission(...READ_PERMISSIONS.documentRecord, ...READ_PERMISSIONS.stockCountDocuments), validate(paramsDocIdSchema), asyncHandler(async (req, res) => {
+  const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documentRecord);
+  const doc = await DocumentService.getDocumentById(Number(req.params.id));
+  if (!doc) throw new NotFoundError(`سند با شناسه ${req.params.id} یافت نشد`);
+  assertDocumentTypeReadable(readable, doc.type);
+  res.json({ data: await documentLineStock(orm, Number(req.params.id)) });
 }));
 
 // v9.0.125 (TD-541 / TD-771): نهایی‌سازی همان مجوز ثبت قطعی همان نوع سند را می‌خواهد (پیش‌تر «ویرایش فاکتورها» بس بود و

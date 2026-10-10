@@ -59,7 +59,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
     );
   }
 
-  // v10.0.102 (TD-1228): a refused or failed read is not «not started»; no start button is offered for it
+  // v10.0.163 (TD-1228): a refused or failed read is not «not started»; no start button is offered for it
   if (readError) {
     const forbidden = (readError as { status?: number }).status === 403;
     return (

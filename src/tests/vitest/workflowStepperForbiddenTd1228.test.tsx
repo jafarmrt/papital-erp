@@ -11,7 +11,7 @@ afterEach(() => {
   fetchJson.mockReset();
 });
 
-// v10.0.102 (TD-1228): a refused or failed workflow read is not «not started»; the start button is not offered
+// v10.0.163 (TD-1228): a refused or failed workflow read is not «not started»; the start button is not offered
 const NOT_STARTED = 'چرخه گردش کار برای این سند فعال نشده است.';
 const FORBIDDEN = 'شما اجازه دیدن گردش کار این سند را ندارید.';
 const LOAD_FAILED = 'گردش کار این سند بارگذاری نشد.';

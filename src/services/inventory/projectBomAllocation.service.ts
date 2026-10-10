@@ -55,6 +55,8 @@ export interface ProjectBomAllocationRecord {
   allocatedAt: string | null;
   consumedAt: string | null;
   releasedAt: string | null;
+  /** v10.0.130 (TD-1210): بهای کاردکس خروج تخصیص به ریال (همان مبلغ سند ۱۴۰۲)؛ null وقتی حرکت منبع خروج نیست */
+  cost?: number | null;
   transactionDetails?: {
     date: string;
     documentType: string;
@@ -97,6 +99,7 @@ function toAllocationRecord(alloc: AllocationRow, tx?: TransactionRow | null): P
   if (tx === undefined) return record;
   return {
     ...record,
+    cost: tx && tx.type === 'out' ? fin(tx.unitPrice ?? 0).multiply(tx.quantity ?? 0).toNumber() : null,
     transactionDetails: tx
       ? {
           date: tx.date || '',

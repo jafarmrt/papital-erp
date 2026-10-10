@@ -64,7 +64,7 @@ describe('payroll buttons follow their API keys (TD-805)', () => {
     renderPayrolls();
     expect(screen.queryByText('صدور فیش حقوقی جدید')).toBeNull();
     expect(screen.queryByText('تأیید فیش')).toBeNull();
-    expect(screen.queryByText('ثبت سند دوبل')).toBeNull();
+    expect(screen.queryByText('ثبت سند حسابداری')).toBeNull();
     expect(screen.queryByTitle('ابطال فیش')).toBeNull();
     expect(screen.getByText('ثبت پرداخت')).toBeTruthy();
     cleanup();
@@ -72,7 +72,7 @@ describe('payroll buttons follow their API keys (TD-805)', () => {
     renderPayrolls();
     expect(screen.getByText('صدور فیش حقوقی جدید')).toBeTruthy();
     expect(screen.getByText('تأیید فیش')).toBeTruthy();
-    expect(screen.getByText('ثبت سند دوبل')).toBeTruthy();
+    expect(screen.getByText('ثبت سند حسابداری')).toBeTruthy();
     expect(screen.getAllByTitle('ابطال فیش').length).toBe(2);
     expect(screen.queryByText('ثبت پرداخت')).toBeNull();
     expect(screen.getByText('تأییدشده')).toBeTruthy();
