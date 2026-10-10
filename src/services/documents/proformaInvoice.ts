@@ -1,6 +1,7 @@
 import type { DbExecutor } from '../../db/drizzle.js';
 import { resolveDocumentTimestamp } from '../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
+import { proformaInvoiceNote } from '../../lib/documents/proformaInvoiceNote.js';
 import { DocumentRefNumberService } from './documentRefNumber.service.js';
 
 export interface ProformaInvoiceTarget {
@@ -27,9 +28,6 @@ export async function proformaInvoiceTarget(
   const date = await resolveDocumentTimestamp(undefined, 'تاریخ فاکتور');
   const refNumber = await DocumentRefNumberService.getNextRef('invoice', date, tx);
   const proformaDate = isoToJalaliDate(String(proforma.date ?? '').slice(0, 10));
-  const note = [
-    proforma.refNumber ? `صادرشده از پیش‌فاکتور شماره ${proforma.refNumber}` : 'صادرشده از پیش‌فاکتور',
-    proformaDate ? `به تاریخ ${proformaDate}` : '',
-  ].filter(Boolean).join(' ');
+  const note = proformaInvoiceNote(proforma.refNumber, proformaDate);
   return { date, refNumber, note };
 }

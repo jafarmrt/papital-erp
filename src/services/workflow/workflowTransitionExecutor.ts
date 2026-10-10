@@ -635,7 +635,7 @@ export class WorkflowTransitionExecutor {
         const ruleEval = WorkflowRuleEngine.evaluateRuleBreakdown(transition.ruleConditionsJson, authoritativeContext);
         if (!ruleEval.passed) {
           const failedRules = ruleEval.breakdown.filter(b => !b.passed).map(b => describeUnmetWorkflowRule(b.rule, b.actualValue));
-          throw new ValidationError(`شرایط سیستمی لازم برای اجرای این مرحله احراز نشد: ${failedRules.join('، ')}`);
+          throw new ValidationError(`شرایط سامانه لازم برای اجرای این مرحله احراز نشد: ${failedRules.join('، ')}`);
         }
       }
 
