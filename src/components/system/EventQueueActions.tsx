@@ -12,7 +12,7 @@ import type { OutboxHealth } from '../../lib/system/subsystemHealth';
 export type EventQueueAction = 'requeue_dlq' | 'clear_stuck_outbox';
 
 /**
- * v10.0.38 (TD-1166): the retry skips the handlers an event already completed (`outbox_events.completed_handlers`) and
+ * v10.0.74 (TD-1166): the retry skips the handlers an event already completed (`outbox_events.completed_handlers`) and
  * a webhook delivery that succeeded (one `integration_delivery_jobs` row per target and event); the confirmation used to
  * say every webhook, notification and workflow of the event runs again.
  */

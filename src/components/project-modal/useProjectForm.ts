@@ -10,6 +10,8 @@ import {
   formatPickerDate,
   mapProjectProductsToRows,
   createInitialProductRow,
+  newProjectStages,
+  presetStages,
   buildProjectPayload
 } from './projectFormHelpers';
 import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
@@ -139,20 +141,8 @@ export function useProjectForm({
           ? `پروژه تولید تعریف‌شده جهت جبران کسری نقطه سفارش محصولات در انبار (${toPersianDigits(initialProducts.length)} قلم محصول)` 
           : '');
         setAttachments([]);
-        const initialPreset = availablePresets[0];
-        if (initialPreset) {
-          setPreset(initialPreset.id);
-          setStages(initialPreset.stages.map(stg => ({
-            title: typeof stg === 'string' ? stg : stg.title,
-            assigned_personnel: [],
-            required_resources: []
-          })));
-        } else {
-          setPreset('');
-          setStages([
-            { title: 'مرحله اول تولید', assigned_personnel: [], required_resources: [] }
-          ]);
-        }
+        setPreset('');
+        setStages(newProjectStages());
       }
     }
   }, [isOpen, projectToEdit, workflowPresets, initialProducts, initialTitle]);
@@ -192,14 +182,8 @@ export function useProjectForm({
 
   const handleSelectPreset = (presetId: string) => {
     setPreset(presetId);
-    const found = availablePresets.find(p => p.id === presetId) || availablePresets[0];
-    if (found) {
-      setStages(found.stages.map(stg => ({
-        title: typeof stg === 'string' ? stg : stg.title,
-        assigned_personnel: [],
-        required_resources: []
-      })));
-    }
+    const chosen = presetStages(presetId, availablePresets);
+    if (chosen) setStages(chosen);
   };
 
   const handleAddStage = () => {

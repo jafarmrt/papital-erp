@@ -1418,9 +1418,11 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   results.push(...await runAccessPackageTwoUserTests(shouldRunAccess));
   const { runAccessPackageTwoPageTests } = await import('../security/accessPackageTwoPageTests.js');
   results.push(...await runAccessPackageTwoPageTests(shouldRunAccess));
+  const { runRoleAuditTransactionTests } = await import('../security/roleAuditTransactionTests.js');
+  results.push(...await runRoleAuditTransactionTests(shouldRunAccess));
   const { runAccessPackageTwoInstallTests } = await import('../security/accessPackageTwoInstallTests.js');
   results.push(...await runAccessPackageTwoInstallTests(shouldRunAccess));
-  // v10.0.40 (TD-1167): req.user carries fullName, the key routes read for the actor's name
+  // v10.0.76 (TD-1167): req.user carries fullName, the key routes read for the actor's name
   const { runRequestUserFullNameTests } = await import('../security/requestUserFullNameTests.js');
   results.push(...await runRequestUserFullNameTests(shouldRunAccess));
   // Package 1 second half (v9.0.429, TD-617): the boot leaves passwords alone, the one-off script locks non-bcrypt values

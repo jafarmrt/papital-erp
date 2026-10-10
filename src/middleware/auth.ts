@@ -211,7 +211,7 @@ export async function resolveLiveSession(payload: AuthUserPayload): Promise<Live
 
     // نقش، نام کامل و توکن CSRF همیشه از وضعیت معتبر دیتابیس/کش بازخوانی می‌شوند
     // یک موجودیت هویت کاربر: full_name همیشه در req.user موجود است
-    // v10.0.40 (TD-1167): fullName too, the key the routes read for the actor's name (they stamped the username or '')
+    // v10.0.76 (TD-1167): fullName too, the key the routes read for the actor's name (they stamped the username or '')
     const fullName = liveUser.fullName || (payload as any).full_name || payload.username;
     return {
       ok: true,

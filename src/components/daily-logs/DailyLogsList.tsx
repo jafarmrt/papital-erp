@@ -19,7 +19,8 @@ interface DailyLogsListProps {
   limit: number;
   user: User;
   systemUsers: SimpleUserOption[];
-  onOpenCreateModal: () => void;
+  /** TD-1156: given only to holders of daily_logs.create */
+  onOpenCreateModal?: () => void;
   onOpenEditModal: (log: DailyWorkLog) => void;
   onDeleteLog: (logId: number) => void;
   onOpenReviewModal: (log: DailyWorkLog) => void;
@@ -103,13 +104,17 @@ export function DailyLogsList({
       <div className="bg-white rounded-2xl p-10 text-center text-slate-400 text-xs flex flex-col items-center gap-2.5 border border-slate-200 font-farsi">
         <Clock className="w-10 h-10 text-slate-300 stroke-1" />
         <p className="font-bold text-slate-700 text-sm">هیچ گزارش کاری در این بخش یافت نشد</p>
-        <p className="text-slate-400">می‌توانید نخستین گزارش کار روزانه خود را ثبت نمایید</p>
-        <button
-          onClick={onOpenCreateModal}
-          className="mt-1 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 transition-colors cursor-pointer"
-        >
-          ثبت گزارش کار جدید
-        </button>
+        {onOpenCreateModal && (
+          <>
+            <p className="text-slate-400">می‌توانید نخستین گزارش کار روزانه خود را ثبت نمایید</p>
+            <button
+              onClick={onOpenCreateModal}
+              className="mt-1 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 transition-colors cursor-pointer"
+            >
+              ثبت گزارش کار جدید
+            </button>
+          </>
+        )}
       </div>
     );
   }

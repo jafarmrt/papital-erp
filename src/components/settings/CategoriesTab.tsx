@@ -20,7 +20,7 @@ export function CategoriesTab({
   onDeleteCategory,
   onResetDefaults
 }: CategoriesTabProps) {
-  // v10.0.41 (TD-1163): each row button shows only with the key its route asks (PUT products.edit, DELETE products.delete);
+  // v10.0.77 (TD-1163): each row button shows only with the key its route asks (PUT products.edit, DELETE products.delete);
   // the tab opens with products.create too, which saved nothing but a 403
   const canEdit = useHasPermission('products.edit');
   const canDelete = useHasPermission('products.delete');

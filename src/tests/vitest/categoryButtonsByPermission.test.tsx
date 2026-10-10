@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { CategoriesTab } from '../../components/settings/CategoriesTab';
 import type { Category } from '../../types';
 
-// v10.0.41 (TD-1163): the categories tab opens with products.create, but editing needs products.edit and deleting
+// v10.0.77 (TD-1163): the categories tab opens with products.create, but editing needs products.edit and deleting
 // products.delete; the row buttons used to show to every reader of the tab.
 const granted = new Set<string>();
 vi.mock('../../contexts/AuthContext', () => ({

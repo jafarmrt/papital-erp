@@ -2,7 +2,7 @@ import { TestCaseResult } from '../types.js';
 import { runCase, type ShouldRun } from './workflowTestHarness.js';
 
 /**
- * v10.0.40 (TD-1167): routes stamp the actor's full name from `req.user.fullName` (vouchers, item export and others), but
+ * v10.0.76 (TD-1167): routes stamp the actor's full name from `req.user.fullName` (vouchers, item export and others), but
  * `authenticateToken` set only `full_name`, so they wrote the username or an empty name. Red on v10.0.36.
  */
 export async function runRequestUserFullNameTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
