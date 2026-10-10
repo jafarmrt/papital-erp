@@ -20,7 +20,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
   // V10-6.2: تاییدکنندگان سند از تاریخچه ورکفلو (برای بخش امضای چاپ)
   const [workflowSignatures, setWorkflowSignatures] = useState<Array<{ name: string; roleTitle: string; date: string }>>([]);
 
-  // v10.0.90 (TD-1200): نام و نشان از `/public-settings`، ولی تلفن و نشانی فروشنده فقط در فهرست تنظیمات (`/settings`، با ورود)
+  // v10.0.128 (TD-1200): نام و نشان از `/public-settings`، ولی تلفن و نشانی فروشنده فقط در فهرست تنظیمات (`/settings`، با ورود)
   // هستند؛ پیش‌تر هر دو از مسیر عمومی خوانده می‌شدند که آن‌ها را ندارد و چاپ «-» نشان می‌داد
   useEffect(() => {
     type SettingRow = { key: string; value: string };

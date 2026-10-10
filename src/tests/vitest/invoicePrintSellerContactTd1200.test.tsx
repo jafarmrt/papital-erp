@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import InvoicePrintView from '../../components/InvoicePrintView';
 
-// v10.0.90 (TD-1200, fresh-eyes guide test roles-c Rc9): the seller's phone and address come from the login-only settings
+// v10.0.128 (TD-1200, fresh-eyes guide test roles-c Rc9): the seller's phone and address come from the login-only settings
 // list; `/public-settings` carries only the name, logo and currency, so the print showed «-» for both
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
