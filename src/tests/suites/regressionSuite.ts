@@ -10883,6 +10883,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Payroll duties plan PR 1 (v10.0.21+): voucher approval permission and maker-checker
   const { runVoucherApprovalDutiesTests } = await import('../regression/voucherApprovalDutiesTests.js');
   results.push(...await runVoucherApprovalDutiesTests(shouldRun));
+  // TD-1239: a reversed voucher names its reversal; a reversal voucher stays out of draft
+  const { runVoucherReversalLockTests } = await import('../regression/voucherReversalLockTests.js');
+  results.push(...await runVoucherReversalLockTests(shouldRun));
   const { runPurchaseWorkflowGuardTests } = await import('../regression/purchaseWorkflowGuardTests.js');
   results.push(...await runPurchaseWorkflowGuardTests(shouldRun));
   // Lane L1 guide findings (v10.0.123+): move a treasury row to another document

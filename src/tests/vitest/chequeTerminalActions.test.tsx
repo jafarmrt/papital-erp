@@ -22,7 +22,7 @@ const menuOf = (chequeNumber: string): string[] => {
   const row = screen.getAllByText(toPersianDigits(chequeNumber))[0].closest('tr');
   if (!row) throw new Error(`no row for cheque ${chequeNumber}`);
   fireEvent.click(row.querySelector('button[title="عملیات بیشتر"]') as HTMLButtonElement);
-  const labels = Array.from(row.querySelectorAll('div.absolute button')).map(b => (b.textContent ?? '').trim());
+  const labels = Array.from(document.querySelectorAll('[role="menu"] button')).map(b => (b.textContent ?? '').trim());
   fireEvent.keyDown(document, { key: 'Escape' });
   return labels;
 };

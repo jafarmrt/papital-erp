@@ -13,6 +13,7 @@ import { useHasPermission } from '../../../contexts/AuthContext';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../../lib/noVoucherPermission';
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../../lib/treasury/partyPurpose';
 import { PartyPurposeFields } from './PartyPurposeFields';
+import { readTreasuryVoucherPreview, type TreasuryVoucherPreview } from '../../../lib/treasury/treasuryVoucherPreview';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 
 interface TreasuryTransactionModalProps {
@@ -60,7 +61,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   });
 
   const [isSaving, setIsSaving] = useState(false);
-  const [voucherPreview, setVoucherPreview] = useState<any>(null);
+  const [voucherPreview, setVoucherPreview] = useState<TreasuryVoucherPreview | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   // TD-105: تاریخ پیش‌فرض از سرور (ساعت توافقی) — نه ساعت مرورگر کلاینت
@@ -108,7 +109,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     const timer = setTimeout(async () => {
       setIsPreviewLoading(true);
       try {
-        const res = await fetchJson<{ success: boolean; data: any }>(
+        // v10.0.x (TD-1237): سرور خود پیش‌نمایش را می‌فرستد، نه { success, data }
+        const res = await fetchJson<unknown>(
           '/api/accounting/treasury/preview-voucher',
           {
             method: 'POST',
@@ -126,11 +128,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
             signal: controller.signal,
           }
         );
-        if (res?.success && res.data) {
-          setVoucherPreview(res.data);
-        } else {
-          setVoucherPreview(null);
-        }
+        setVoucherPreview(readTreasuryVoucherPreview(res));
       } catch (err: any) {
         if (err.name !== 'AbortError') {
           setVoucherPreview(null);
@@ -531,9 +529,9 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 ) : !isPreviewLoading ? (
                   <p className="text-[10px] font-bold text-slate-400">برای مشاهده پیش‌نمایش، مبلغ را وارد کنید.</p>
                 ) : null}
-                {voucherPreview?.warnings?.length > 0 && (
+                {voucherPreview && voucherPreview.warnings.length > 0 && (
                   <div className="mt-2 space-y-1">
-                    {voucherPreview.warnings.map((w: string, i: number) => (
+                    {voucherPreview.warnings.map((w, i) => (
                       <p key={i} className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-5">⚠️ {w}</p>
                     ))}
                   </div>

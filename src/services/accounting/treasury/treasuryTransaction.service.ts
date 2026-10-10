@@ -22,6 +22,7 @@ import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { reconcileTreasuryRows, type ReconcileParams, type ReconcileResult } from './bankReconciliation.js';
+import type { TreasuryVoucherPreview } from '../../../lib/treasury/treasuryVoucherPreview.js';
 import { listTreasuryTransactions, pageTreasuryTransactions, type TreasuryListFilters, type TreasuryTransactionPage } from './treasuryTransactionList.js';
 
 /**
@@ -115,12 +116,7 @@ export class TreasuryTransactionService {
     partyId?: number | null;
     partyName?: string;
     contraAccountId?: number | null;
-  }): Promise<{
-    debit: { accountId: number; accountCode: string; accountName: string; detailedName: string; amount: number } | null;
-    credit: { accountId: number; accountCode: string; accountName: string; detailedName: string; amount: number } | null;
-    warnings: string[];
-    contraConceptLabel: string;
-  }> {
+  }): Promise<TreasuryVoucherPreview> {
     const amount = Number(data.amount) || 0;
     const warnings: string[] = [];
     // v8.0.26 (TD-278): روش «چک» در فرم خزانه ثبت نمی‌شود؛ پیش‌نمایش سندی برای آن ساخته نمی‌شود
