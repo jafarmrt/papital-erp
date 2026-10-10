@@ -33,6 +33,8 @@ import { proformaInvoiceTarget } from './proformaInvoice.js';
 import { assertNotProjectDelivery, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
 import { documentAuditSnapshot, type DocumentAuditChange, type DocumentAuditSnapshot, type DocumentVoidAudit } from './documentAudit.js';
+import { assertNameNotOtherKind } from './documentParty.js';
+import { lockRequisitionOfOrder, releaseVoidedProcurementOrder } from './procurementOrderVoid.js';
 
 export class DocumentLifecycleService {
   /**
@@ -135,6 +137,8 @@ export class DocumentLifecycleService {
             .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
           const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
+          // v10.0.92 (TD-1194): پیش‌نویس بی شناسه طرف حساب با نام طرف حسابی از نوع دیگر نهایی نمی‌شود
+          if (!doc.partyId) await assertNameNotOtherKind(tx, targetType, doc.buyerName);
           // v8.0.51 / v8.0.119 (TD-317 / TD-410، تصمیم مالک محصول): فاکتورِ حاصل از پیش‌فاکتور شماره بعدی سری فاکتور و
           // تاریخ روز نهایی‌سازی را می‌گیرد؛ شماره و تاریخ پیش‌فاکتور در یادداشت می‌ماند (proformaInvoice.ts)
           const isProformaToInvoice = doc.type === 'proforma';
@@ -316,9 +320,11 @@ export class DocumentLifecycleService {
    */
   static async deleteDocument(id: number, user?: string, externalTx?: DbExecutor, audit?: DocumentVoidAudit): Promise<void> {
     const execute = async (tx: DbExecutor): Promise<void> => {
-      const [peek] = await tx.select({ projectId: documents.projectId }).from(documents)
+      const [peek] = await tx.select({ projectId: documents.projectId, procurementRequisitionId: documents.procurementRequisitionId }).from(documents)
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
       if (!peek) return;
+      // v10.0.93 (TD-1195): درخواست خرید سفارش پیش از کالاها و سند، همان ترتیب تحویل سفارش
+      await lockRequisitionOfOrder(tx, peek.procurementRequisitionId);
 
       // v8.0.67 (TD-320): قفل‌ها به همان ترتیب نهایی‌سازی — کالاها (یک‌جا، به ترتیب شناسه) ← پروژه ← سند — و پیش از درج
       // ردیف کاردکس معکوس. پیش‌تر سند اول قفل می‌شد، ردیف معکوس درج می‌شد و کالاها به ترتیب ردیف‌های کاردکس قفل می‌شدند؛
@@ -372,6 +378,7 @@ export class DocumentLifecycleService {
       await tx.update(documentItems).set({
         isDeleted: 1,
       }).where(eq(documentItems.documentId, id));
+      await releaseVoidedProcurementOrder(tx, { ...doc, lineItemIds: docLines.map(l => l.itemId) }, deletedByUser);
 
       // 3. Cascade soft-delete transactions + ثبت تراکنش‌های معکوس مطابق الگوی DB-009
       const originalTxs = await tx.select().from(transactions)

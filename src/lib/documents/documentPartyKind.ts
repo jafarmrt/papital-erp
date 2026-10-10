@@ -38,3 +38,30 @@ export function documentPartyPickListUrl(docType: string | null | undefined): st
   const side = documentPartySide(docType);
   return side ? `${PICK_LIST_URLS.customers}?partyType=${side}` : PICK_LIST_URLS.customers;
 }
+
+export interface SupplierPartyRow {
+  id?: number;
+  name: string;
+  partyType?: string | null;
+  supplierCategory?: string | null;
+  phone?: string | null;
+}
+
+/**
+ * v10.0.92 (TD-1194): گزینه‌های تأمین‌کننده فرم‌های خرید (تقسیم سفارش میز کار تدارکات، صدور مستقیم سند هشدار نقطه سفارش):
+ * فقط طرف حساب «تأمین‌کننده» یا «هر دو»، همان قاعده سرور (`partyFitsDocument` رسید). پیش‌تر هر دو فرم مشتری را هم با
+ * نشان «👤 مشتری» فهرست می‌کردند و رسید با نام مشتری ثبت می‌شد.
+ */
+export function supplierNameOptions<T extends SupplierPartyRow>(parties: readonly T[]): Array<{ value: string; label: string; _raw: T }> {
+  return parties
+    .filter(p => !!p && !!String(p.name ?? '').trim() && partyFitsDocument('receipt', p.partyType))
+    .map(p => ({
+      value: p.name,
+      label: [
+        `${p.partyType === 'supplier' ? '🏭 تأمین‌کننده' : '🤝 هر دو'}: ${p.name}`,
+        p.supplierCategory ? `(${p.supplierCategory})` : '',
+        p.phone ? `- ${p.phone}` : '',
+      ].filter(Boolean).join(' '),
+      _raw: p,
+    }));
+}

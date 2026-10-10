@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { formatPersianPrice, formatPersianNumber, getTodayIsoDate, errorMessageOf } from '../../utils';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
+import { supplierNameOptions } from '../../lib/documents/documentPartyKind';
 import { useReorderSuppliersQuery } from '../../hooks/reorderAlerts/useReorderAlertsQueries';
 import { useReorderPurchaseSubmit, type ReorderPurchaseVariables } from '../../hooks/reorderAlerts/useReorderAlertsMutations';
 import { receiptNeedsDonatedConfirmation, reorderPurchaseReceiptPayload, reorderReceiptPriceError } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
@@ -64,13 +65,8 @@ export function ReorderPurchaseModal({
     setDonatedConfirmed(false);
   }, [isOpen, selectedItems]);
 
-  const supplierOptions = useMemo(() => {
-    return suppliers.map(s => ({
-      value: s.name,
-      label: `${s.partyType === 'supplier' ? '🏭 تامین‌کننده' : s.partyType === 'customer' ? '👤 مشتری' : '🤝 طرف‌حساب'}: ${s.name} ${s.supplierCategory ? `(${s.supplierCategory})` : ''} ${s.phone ? `- ${s.phone}` : ''}`,
-      _raw: s
-    }));
-  }, [suppliers]);
+  // v10.0.92 (TD-1194): فقط تأمین‌کننده یا «هر دو»
+  const supplierOptions = useMemo(() => supplierNameOptions(suppliers), [suppliers]);
 
   if (!isOpen) return null;
 
