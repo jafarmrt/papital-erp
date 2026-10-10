@@ -15,7 +15,7 @@ import {
   ArrowUpRight,
   Unlink,
 } from 'lucide-react';
-import { formatPersianPrice, formatPersianDate } from '../../../utils';
+import { formatPersianPrice, formatPersianDate, formatPersianNumber } from '../../../utils';
 import { isRialCurrency, rialDisplayOf } from '../../../lib/rialDisplay';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { treasuryMethodLabel, treasuryPartyTypeLabel } from '../../../lib/treasury/treasuryExport';
@@ -99,7 +99,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
               گردش اسناد دریافت و پرداخت خزانه‌داری
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              نمایش {pagedTransactions.length} از {totalFilteredCount} تراکنش منطبق با فیلترها
+              نمایش {formatPersianNumber(pagedTransactions.length)} از {formatPersianNumber(totalFilteredCount)} تراکنش منطبق با فیلترها
             </p>
           </div>
 
