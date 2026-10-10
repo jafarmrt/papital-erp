@@ -483,7 +483,7 @@ export function SplitOrderModal({
                       statusBadge = (
                         <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md font-bold text-[11px] flex items-center justify-center gap-1">
                           <AlertCircle className="w-3 h-3 text-amber-600" />
-                          مازاد: +{formatPersianNumber(Math.abs(liveRem))} {item.unit}
+                          مازاد: {formatPersianNumber(Math.abs(liveRem))} {item.unit}
                         </span>
                       );
                     }

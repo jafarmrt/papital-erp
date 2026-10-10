@@ -2,7 +2,7 @@ import { canOpenPage, type ViewerAccess } from '../permissions/pageAccess';
 import { freeStockOf, type ReorderItem } from './reorderItems';
 
 /**
- * v10.0.42 (TD-1158): the reorder alarm of the «وضعیت انبار» page is the reorder page's own list (GET /items/reorder-alerts:
+ * v10.0.71 (TD-1158): the reorder alarm of the «وضعیت انبار» page is the reorder page's own list (GET /items/reorder-alerts:
  * free stock = stock − reservations against the reorder point, TD-843), so both pages show the same items. It is shown only
  * to a viewer who may open the reorder page (`products.view` / `warehouse.view`); a `reports.view`-only viewer sees the
  * page without the alarm, never a refused request.

@@ -2,7 +2,7 @@ import { useId } from 'react';
 import { normalizeTimeOfDay, timeOfDayLabel } from '../../lib/dailyLogs/workHours';
 
 /**
- * v10.0.44 (TD-1171): a 24-hour time of day typed with Persian or Latin digits and shown with Persian digits. It stores
+ * v10.0.79 (TD-1171): a 24-hour time of day typed with Persian or Latin digits and shown with Persian digits. It stores
  * Latin «HH:MM» (the rule of `workHours.ts`), so the form and the server read one format; never `type="time"`, whose
  * display follows the browser's locale («08:30 AM»).
  */

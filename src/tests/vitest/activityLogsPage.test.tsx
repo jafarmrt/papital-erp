@@ -63,7 +63,7 @@ describe('audit log page (TD-537)', () => {
     fireEvent.click(next);
     await waitFor(() => expect(listCalls().some(url => url.includes('page=2'))).toBe(true));
 
-    const input = screen.getByPlaceholderText(/جستجو در شرح لاگ/);
+    const input = screen.getByPlaceholderText(/جستجو در شرح رویداد/);
     for (const text of ['ع', 'عل', 'علی']) fireEvent.change(input, { target: { value: text } });
     const typed = encodeURIComponent('علی');
     await waitFor(() => expect(listCalls().some(url => url.includes(`search=${typed}`))).toBe(true));

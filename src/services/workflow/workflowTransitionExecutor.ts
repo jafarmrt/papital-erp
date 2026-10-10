@@ -1022,7 +1022,7 @@ export class WorkflowTransitionExecutor {
       [currentState] = await txExecutor.select().from(workflowStates).where(eq(workflowStates.id, inst.currentStateId));
     }
 
-    // v10.0.45 (TD-1172): only the progress of the current step's actions; a finished step's signatures stay stored (history,
+    // v10.0.80 (TD-1172): only the progress of the current step's actions; a finished step's signatures stay stored (history,
     // TD-373) but the stepper showed them under the step being signed
     const currentStepTransitionIds = new Set(
       (await WorkflowTransitionExecutor.transitionsFromState(inst, inst.currentStateId, txExecutor)).map(t => String(t.id))

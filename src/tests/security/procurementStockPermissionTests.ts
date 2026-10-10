@@ -46,8 +46,10 @@ export async function runProcurementStockPermissionTests(shouldRun: ShouldRun): 
       const viaAction = await orderedRequisition(h, f, 5);
       await refusedThenAccepted(h, f, wrong, 'receive items action', viaAction, async (s) => {
         const res = await f.action(viaAction.reqId, 'receive_items', s);
-        // the refusal names the permission by its title, the key only in the details
-        if (res.status === 403 && (res.code !== 'WF_ENTITY_PERMISSION_REQUIRED' || String(res.error ?? res.message ?? '').includes('warehouse.in'))) {
+        // the refusal names the permission by its title, the key only in the details; since v10.0.23 (OBS-R2-36) the
+        // seeded receive action asks warehouse.in itself, so the transition guard (WF_PERMISSION_REQUIRED) refuses first
+        const entityRefusal = res.code === 'WF_ENTITY_PERMISSION_REQUIRED' && !String(res.error ?? res.message ?? '').includes('warehouse.in');
+        if (res.status === 403 && !entityRefusal && res.code !== 'WF_PERMISSION_REQUIRED') {
           wrong.push(`receive items refusal: ${String(res.code)} ${String(res.error ?? res.message ?? '').slice(0, 160)}`);
         }
         return res.status;

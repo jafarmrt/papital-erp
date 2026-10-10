@@ -4,7 +4,7 @@ import { items } from '../../db/schema.js';
 import type { PurchaseRequisition } from '../../types.js';
 
 /**
- * v10.0.46 (TD-1173): the requisition the approval inbox previews carries each catalog row's current stock (the item's
+ * v10.0.81 (TD-1173): the requisition the approval inbox previews carries each catalog row's current stock (the item's
  * total stock, `items.current_stock`, kept by the database), so the approver sees «موجودی فعلی انبار» instead of «نامشخص».
  * A free-text row (no item id) or a deleted item gets none. Only the detail read fills it; nothing is stored.
  */
