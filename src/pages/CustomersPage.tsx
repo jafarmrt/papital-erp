@@ -15,7 +15,7 @@ import { customerSaveBody } from '../lib/customers/customerVersion';
 import { customerAccountCardUrl } from '../lib/customers/customerAccountCard';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
-import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate } from '../utils';
+import { formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate, formatPersianNumber } from '../utils';
 import { useRialDisplay } from '../hooks/useAppCurrency';
 import { useHasPermission } from '../contexts/AuthContext';
 
@@ -597,7 +597,7 @@ export default function CustomersPage({ user }: { user: User }) {
       {/* Pagination Footer */}
       <div className="p-3.5 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between mt-auto shrink-0">
         <span className="text-xs text-slate-500 font-medium">
-          نمایش {customers.length} مورد {totalItems > 0 ? `از کل ${totalItems} طرف حساب` : ''}
+          نمایش {formatPersianNumber(customers.length)} مورد {totalItems > 0 ? `از کل ${formatPersianNumber(totalItems)} طرف حساب` : ''}
         </span>
         {totalPages > 1 && (
           <div className="flex items-center gap-1.5">
