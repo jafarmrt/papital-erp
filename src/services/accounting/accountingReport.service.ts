@@ -26,6 +26,7 @@ import { yearEndClosingCutoff, yearEndClosingVoucherSql } from './yearEndClosing
 import { accountCardHasFilter, type AccountCardReport } from '../../lib/accounting/accountCard.js';
 import { JOURNAL_BOOK_MAX_PAGE_SIZE, JOURNAL_BOOK_PAGE_SIZE, type JournalBookReport, type JournalBookRow } from '../../lib/accounting/journalBook.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { currentDetailNames, detailDisplayName, isManualReferenceModule, trialBalanceDetailKey, type DetailRef } from './trialBalanceDetail.js';
 
 /** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
 function foreignOrigin(allCurrencies: boolean, row: {
@@ -105,6 +106,7 @@ export class AccountingReportService {
       detailedType: journalVoucherItems.detailedType,
       detailedId: journalVoucherItems.detailedId,
       detailedName: journalVoucherItems.detailedName,
+      referenceModule: journalVouchers.referenceModule,
       debit: sql<string>`COALESCE(SUM(${journalVoucherItems.debit}), 0)::text`,
       credit: sql<string>`COALESCE(SUM(${journalVoucherItems.credit}), 0)::text`,
       debitIrr: sql<string>`COALESCE(SUM(ROUND(${journalVoucherItems.debit} * ${rateExpr}, 0)), 0)::text`,
@@ -115,7 +117,7 @@ export class AccountingReportService {
     .where(and(...baseConditions))
     .groupBy(
       journalVouchers.date, yearEndClosingVoucherSql, itemCurrencyExpr, journalVoucherItems.accountId,
-      journalVoucherItems.detailedType, journalVoucherItems.detailedId, journalVoucherItems.detailedName
+      journalVoucherItems.detailedType, journalVoucherItems.detailedId, journalVoucherItems.detailedName, journalVouchers.referenceModule
     );
 
     interface TurnoverAccumulator {
@@ -138,11 +140,11 @@ export class AccountingReportService {
     // AccountId => turnover
     const accountTurnover = new Map<number, TurnoverAccumulator>();
 
-    // Detailed entities map: key = `${accountId}__${detailedName || 'عام'}`
+    // v10.0.85 (TD-1128): one detail per account, type and id (trialBalanceDetailKey), not per stored name
     interface DetailedAccumulator extends TurnoverAccumulator {
       accountId: number;
-      detailedType?: string;
-      detailedId?: number | null;
+      ref: DetailRef;
+      detailedId: number | null;
       detailedName: string;
     }
     const detailedMap = new Map<string, DetailedAccumulator>();
@@ -187,15 +189,14 @@ export class AccountingReportService {
       addTurnover(accTurnover, isBeforeStart, d, c);
 
       // Detailed Tracking
-      const dName = (it.detailedName && it.detailedName.trim()) ? it.detailedName.trim() : 'سایر / عمومی';
-      const dKey = `${accId}__${dName}`;
+      const { key: dKey, ref } = trialBalanceDetailKey(accId, it, isManualReferenceModule(it.referenceModule));
       let det = detailedMap.get(dKey);
       if (!det) {
         det = {
           accountId: accId,
-          detailedType: it.detailedType || 'other',
-          detailedId: it.detailedId,
-          detailedName: dName,
+          ref,
+          detailedId: ref.detailedId,
+          detailedName: ref.storedName,
           ...emptyTurnover(),
         };
         detailedMap.set(dKey, det);
@@ -205,6 +206,10 @@ export class AccountingReportService {
 
     const allAccs = await ChartOfAccountsService.getAllAccounts(tx);
     const accMap = new Map(allAccs.map(a => [a.id, a]));
+    if (targetLevel === 'detailed' || targetLevel === 'all' || targetLevel === 'tree') {
+      const names = await currentDetailNames(executor, Array.from(detailedMap.values(), d => d.ref));
+      for (const det of detailedMap.values()) det.detailedName = detailDisplayName(det.ref, names);
+    }
 
     // Aggregate from subsidiary up to general and group accounts
     const aggTurnover = new Map<number, TurnoverAccumulator>();
