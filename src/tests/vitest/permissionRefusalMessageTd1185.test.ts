@@ -15,6 +15,8 @@ import { permissionDefinition } from '../../lib/permissions/permissionCatalog';
 import { permissionRequiredMessage } from '../../lib/permissions/permissionMessages';
 
 const KEY_PATTERN = /\b[a-z_]+\.[a-z_]+\b/;
+/** The Persian «or» that joins two permission titles in the message */
+const OR = ' یا ';
 
 async function refusalOf(...keys: string[]): Promise<{ status: number; body: { error: string; permissions?: string[] } }> {
   const guard = requirePermission(...keys);
@@ -41,9 +43,9 @@ describe('permission_refusal_message_td_1185', () => {
     expect(body.permissions).toEqual(['documents.delete']);
   });
 
-  it('several keys are joined with «یا»', () => {
+  it('several keys are joined with the Persian or', () => {
     const message = permissionRequiredMessage(['documents.view', 'customers.view']);
-    expect(message).toContain(`«${permissionDefinition('documents.view')?.title}» یا «${permissionDefinition('customers.view')?.title}»`);
+    expect(message).toContain(`«${permissionDefinition('documents.view')?.title}»${OR}«${permissionDefinition('customers.view')?.title}»`);
     expect(message).not.toMatch(KEY_PATTERN);
   });
 });
