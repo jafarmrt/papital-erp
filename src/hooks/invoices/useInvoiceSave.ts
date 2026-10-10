@@ -85,7 +85,7 @@ export function useInvoiceSave({ loadDocument, discardDraft }: InvoiceSaveDeps) 
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflow.all });
       }
 
-      // v10.0.84 (TD-1138، ت۱۴): کمبود قابل فروش پیش‌فاکتور ذخیره را رد نکرده، فقط هشدار است
+      // v10.0.86 (TD-1138، ت۱۴): کمبود قابل فروش پیش‌فاکتور ذخیره را رد نکرده، فقط هشدار است
       const stockWarning = proformaStockWarningText(res);
       if (stockWarning) toast(stockWarning, { icon: '⚠️', duration: 10000 });
 

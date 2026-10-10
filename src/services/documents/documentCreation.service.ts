@@ -114,7 +114,7 @@ export class DocumentCreationService {
       if (existingDoc.status === 'final') {
         throw new ValidationError('امکان ویرایش مستقیم سند نهایی‌شده وجود ندارد.');
       }
-      // v10.0.84 (TD-1138، ت۱۳): سندی که در گام بازبینی گردش کار است تا پایان بازبینی ویرایش نمی‌شود
+      // v10.0.86 (TD-1138، ت۱۳): سندی که در گام بازبینی گردش کار است تا پایان بازبینی ویرایش نمی‌شود
       await assertDocumentNotInReview(tx, id);
       const before = await documentAuditSnapshot(tx, id);
 

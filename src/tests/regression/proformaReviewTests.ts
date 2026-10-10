@@ -6,7 +6,7 @@ import { activityLogs, documents, workflowInstances } from '../../db/schema.js';
 /**
  * Phase 3 lane L2 (TD-1137, TD-1138; product-owner decisions 12, 13 and 14): a sales proforma whose approval workflow is
  * rejected goes back to draft and stops reserving, a document in a review step of its workflow is not edited, and a saved
- * proforma above the sellable stock is kept with one warning per item. Each case fails on v10.0.82.
+ * proforma above the sellable stock is kept with one warning per item. Each case fails on v10.0.84.
  */
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
@@ -132,9 +132,9 @@ async function proformaStockWarning(): Promise<string> {
 export async function runProformaReviewTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], () => Promise<string>]> = [
-    ['reg_proforma_reject_to_draft_td_1137', 'v10.0.83: a rejected sales proforma returns to draft and stops reserving (TD-1137)', ['td1137'], rejectedProformaToDraft],
-    ['reg_document_locked_in_review_td_1138', 'v10.0.84: a document in a workflow review step is not edited (TD-1138)', ['td1138'], documentLockedInReview],
-    ['reg_proforma_stock_warning_td_1138', 'v10.0.84: a saved proforma above the sellable stock gets a warning per item (TD-1138)', ['td1138'], proformaStockWarning],
+    ['reg_proforma_reject_to_draft_td_1137', 'v10.0.85: a rejected sales proforma returns to draft and stops reserving (TD-1137)', ['td1137'], rejectedProformaToDraft],
+    ['reg_document_locked_in_review_td_1138', 'v10.0.86: a document in a workflow review step is not edited (TD-1138)', ['td1138'], documentLockedInReview],
+    ['reg_proforma_stock_warning_td_1138', 'v10.0.86: a saved proforma above the sellable stock gets a warning per item (TD-1138)', ['td1138'], proformaStockWarning],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, 'package8', ...tags)) continue;
