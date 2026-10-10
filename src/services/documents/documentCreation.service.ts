@@ -36,6 +36,7 @@ import { money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { assertDocumentStatus, assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
 import { assertOutflowWithinSellable } from './documentSellableGate.js';
+import { assertDocumentNotInReview } from './documentReviewLock.js';
 import { assertReturnPartyOfInvoice, parseDocumentPartyId, resolveDocumentParty, returnInvoicePartyId } from './documentParty.js';
 import { documentAuditSnapshot, type DocumentAuditChange } from './documentAudit.js';
 
@@ -113,6 +114,8 @@ export class DocumentCreationService {
       if (existingDoc.status === 'final') {
         throw new ValidationError('امکان ویرایش مستقیم سند نهایی‌شده وجود ندارد.');
       }
+      // v10.0.84 (TD-1138، ت۱۳): سندی که در گام بازبینی گردش کار است تا پایان بازبینی ویرایش نمی‌شود
+      await assertDocumentNotInReview(tx, id);
       const before = await documentAuditSnapshot(tx, id);
 
       if (status === 'final') {

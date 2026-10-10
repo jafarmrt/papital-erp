@@ -1,6 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { items } from '../../db/schema.js';
+import { documentItems, documents, items } from '../../db/schema.js';
+import { isReservingDocument } from '../../lib/documents/reservingDocuments.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { InsufficientStockError, NotFoundError } from '../../errors/customErrors.js';
 import { formatPersianNumber } from '../../utils/persianNumber.js';
@@ -50,7 +51,12 @@ interface Shortage {
 
 const fa = (n: number) => formatPersianNumber(n, 4);
 
-export async function assertOutflowWithinSellable(tx: DbExecutor, lines: OutflowLine[], ctx: OutflowContext = {}): Promise<void> {
+interface ShortageReport {
+  shortages: Shortage[];
+  units: Map<number, string>;
+}
+
+async function findSellableShortages(tx: DbExecutor, lines: OutflowLine[], ctx: OutflowContext): Promise<ShortageReport> {
   const resolveWh = await createWarehouseResolver(tx);
   const requested = new Map<string, { itemId: number; location: string; qty: FinancialDecimal }>();
   for (const line of lines) {
@@ -63,7 +69,7 @@ export async function assertOutflowWithinSellable(tx: DbExecutor, lines: Outflow
     const prev = requested.get(key);
     requested.set(key, { itemId, location, qty: prev ? prev.qty.add(qty) : qty });
   }
-  if (requested.size === 0) return;
+  if (requested.size === 0) return { shortages: [], units: new Map() };
 
   const itemIds = Array.from(new Set(Array.from(requested.values(), r => r.itemId))).sort((a, b) => a - b);
   const itemRows = await tx
@@ -96,6 +102,11 @@ export async function assertOutflowWithinSellable(tx: DbExecutor, lines: Outflow
       shortages.push({ itemId, code: row.code, name: row.name, location, requested: qty.toNumber(), holders, ...info });
     }
   }
+  return { shortages, units };
+}
+
+export async function assertOutflowWithinSellable(tx: DbExecutor, lines: OutflowLine[], ctx: OutflowContext = {}): Promise<void> {
+  const { shortages, units } = await findSellableShortages(tx, lines, ctx);
   if (shortages.length === 0) return;
 
   const sentences = shortages.map(s => {
@@ -105,4 +116,26 @@ export async function assertOutflowWithinSellable(tx: DbExecutor, lines: Outflow
       + `${s.holders.length > 0 ? ` (${s.holders.join('، ')})` : ''}، قابل فروش: ${fa(s.sellable)}.`;
   });
   throw new InsufficientStockError(sentences.join(' '), { shortages });
+}
+
+/**
+ * v10.0.84 (TD-1138، تصمیم مالک محصول ت۱۴ «هشدار»): پیش‌فاکتور فروش ذخیره‌شده با همان قاعده قابل فروش سنجیده می‌شود، ولی
+ * کمبود ذخیره را رد نمی‌کند: هر کالایی که بیش از قابل فروش انبارش خواسته شده یک جمله هشدار می‌گیرد و پاسخ ثبت و ویرایش آن
+ * را به فرم می‌رساند. رزرو خود همین پیش‌فاکتور از رزرو دیگران کم می‌شود. سند دیگری (پیش‌نویس، قطعی، خرید) هشداری ندارد.
+ * پیش‌تر پیش‌فاکتور بی هیچ سنجشی ذخیره می‌شد و کمبود فقط هنگام قطعی شدن دیده می‌شد.
+ */
+export async function proformaStockWarnings(tx: DbExecutor, documentId: number): Promise<string[]> {
+  const [doc] = await tx.select({ type: documents.type, status: documents.status }).from(documents)
+    .where(and(eq(documents.id, documentId), eq(documents.isDeleted, 0)));
+  if (!doc || !isReservingDocument(doc.type, doc.status)) return [];
+  const lines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity, location: documentItems.location })
+    .from(documentItems)
+    .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
+  const { shortages, units } = await findSellableShortages(tx, lines, { excludeDocumentId: documentId });
+  return shortages.map(s => {
+    const unit = units.get(s.itemId) ?? 'عدد';
+    return `کالای «${s.name}» (${s.code}) در انبار «${s.location}»: این پیش‌فاکتور ${fa(s.requested)} ${unit} می‌خواهد و قابل فروش `
+      + `${fa(s.sellable)} ${unit} است (موجودی انبار: ${fa(s.locationStock)}، رزرو سایر مصارف: ${fa(s.reservedForOthers)}`
+      + `${s.holders.length > 0 ? `؛ ${s.holders.join('، ')}` : ''}).`;
+  });
 }
