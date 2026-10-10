@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { fetchJson } from '../api';
 import type { ApprovalDocumentDetails } from '../components/approval/DocumentDetailsPreview';
 import type { PurchaseRequisition } from '../types';
+import type { DocumentLineStock } from '../lib/documents/documentLineStock';
 
 /** فیلدهای ردیف کارتابل که برای خواندن موجودیت کار لازم است */
 export interface ApprovalTaskEntityRef {
@@ -73,11 +74,16 @@ export function useApprovalTaskEntity(task: ApprovalTaskEntityRef | null): Appro
     } else if (['document', 'doc', 'invoice', 'proforma', ''].includes(entityType)) {
       const fromRow = documentFromRow(task, entityId);
       setState({ ...EMPTY, docDetails: fromRow, isLoadingDoc: true });
+      // v10.0.151 (TD-1175): the outgoing lines' warehouse and sellable stock beside the document; its error only hides them
+      const lineStock = fetchJson<{ data?: DocumentLineStock[] }>(`/documents/${entityId}/line-stock`, { signal: controller.signal })
+        .then(res => (Array.isArray(res?.data) ? res.data : []))
+        .catch(() => [] as DocumentLineStock[]);
       fetchJson<{ data?: ApprovalDocumentDetails } & ApprovalDocumentDetails>(`/documents/${entityId}`, { signal: controller.signal })
-        .then((res) => {
-          if (!live()) return;
+        .then(async (res) => {
           const doc = (res?.data ?? res) as ApprovalDocumentDetails | undefined;
-          setState({ ...EMPTY, docDetails: doc && (doc.id || doc.refNumber || doc.ref_number) ? doc : fromRow });
+          const stock = await lineStock;
+          if (!live()) return;
+          setState({ ...EMPTY, docDetails: doc && (doc.id || doc.refNumber || doc.ref_number) ? { ...doc, lineStock: stock } : fromRow });
         })
         .catch((err: unknown) => {
           if (!live()) return;

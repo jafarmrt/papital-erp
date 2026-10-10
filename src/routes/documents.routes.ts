@@ -6,6 +6,7 @@ import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermission
 import { findFinalDocumentIdByRef } from '../services/documents/documentRefLookup.js';
 import { documentAuditDetails, documentAuditSnapshot, documentLineSummary } from '../services/documents/documentAudit.js';
 import { proformaStockWarnings } from '../services/documents/documentSellableGate.js';
+import { documentLineStock } from '../services/documents/documentSellableGate.js';
 import { recordedSalesType } from '../lib/documents/recordedSalesType.js';
 import { DOCUMENT_TYPE_TITLES } from '../lib/documents/documentTypeTitles.js';
 import { isAutoRefNumber } from '../lib/documents/documentRefRules.js';
@@ -437,6 +438,15 @@ router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documentRec
   assertDocumentTypeReadable(readable, doc.type);
   // v9.0.335 (TD-781): ردیف‌های خزانه فقط برای خوانندگان خزانه
   res.json(await documentForReader(req.user, doc));
+}));
+
+// v10.0.151 (TD-1175): انبار مبدأ، موجودی و قابل فروش هر ردیف خروجی برای پنجره تأیید انبار؛ همان خوانندگان سند
+router.get('/documents/:id/line-stock', authorizePermission(...READ_PERMISSIONS.documentRecord, ...READ_PERMISSIONS.stockCountDocuments), validate(paramsDocIdSchema), asyncHandler(async (req, res) => {
+  const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documentRecord);
+  const doc = await DocumentService.getDocumentById(Number(req.params.id));
+  if (!doc) throw new NotFoundError(`سند با شناسه ${req.params.id} یافت نشد`);
+  assertDocumentTypeReadable(readable, doc.type);
+  res.json({ data: await documentLineStock(orm, Number(req.params.id)) });
 }));
 
 // v9.0.125 (TD-541 / TD-771): نهایی‌سازی همان مجوز ثبت قطعی همان نوع سند را می‌خواهد (پیش‌تر «ویرایش فاکتورها» بس بود و

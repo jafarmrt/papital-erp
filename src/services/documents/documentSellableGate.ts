@@ -2,6 +2,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents, items, warehouses } from '../../db/schema.js';
 import { isReservingDocument } from '../../lib/documents/reservingDocuments.js';
+import { documentStockDirection } from '../../lib/documents/documentDirection.js';
+import type { DocumentLineStock } from '../../lib/documents/documentLineStock.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { InsufficientStockError, NotFoundError } from '../../errors/customErrors.js';
 import { formatPersianNumber } from '../../utils/persianNumber.js';
@@ -144,5 +146,53 @@ export async function proformaStockWarnings(tx: DbExecutor, documentId: number):
     return `کالای «${s.name}» (${s.code}) در انبار «${s.locationName}»: این پیش‌فاکتور ${fa(s.requested)} ${unit} می‌خواهد و قابل فروش `
       + `${fa(s.sellable)} ${unit} است (موجودی انبار: ${fa(s.locationStock)}، رزرو سایر مصارف: ${fa(s.reservedForOthers)}`
       + `${s.holders.length > 0 ? `؛ ${s.holders.join('، ')}` : ''}).`;
+  });
+}
+
+/**
+ * v10.0.151 (TD-1175, fresh-eyes guide finding B8 / roles-b R2 #4): what the warehouse approver needs to decide on an
+ * outgoing document. Each (item, warehouse) of its live lines with the quantity asked, the warehouse stock, the
+ * reservations of others and the sellable quantity, by the sellable gate's rule (`computeSellable`; the document's own
+ * proforma reservation and its project's reservation are not counted against it). Read only; an incoming document has
+ * none. The task window showed only names and quantities, so the keeper approved without seeing the source warehouse.
+ */
+export async function documentLineStock(tx: DbExecutor, documentId: number): Promise<DocumentLineStock[]> {
+  const [doc] = await tx.select({ type: documents.type, projectId: documents.projectId }).from(documents)
+    .where(and(eq(documents.id, documentId), eq(documents.isDeleted, 0)));
+  if (!doc || documentStockDirection(doc.type) !== 'out') return [];
+  const lines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity, location: documentItems.location })
+    .from(documentItems)
+    .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
+
+  const resolveWh = await createWarehouseResolver(tx);
+  const requested = new Map<string, { itemId: number; location: string; qty: FinancialDecimal }>();
+  for (const line of lines) {
+    const itemId = Number(line.itemId);
+    const qty = fin((line.quantity ?? 0) as DecimalValue);
+    if (!Number.isInteger(itemId) || itemId <= 0 || !qty.isPositive()) continue;
+    const location = resolveWh(line.location ? String(line.location).trim() : '');
+    const key = `${itemId}|${location}`;
+    const prev = requested.get(key);
+    requested.set(key, { itemId, location, qty: prev ? prev.qty.add(qty) : qty });
+  }
+  if (requested.size === 0) return [];
+
+  const itemIds = Array.from(new Set(Array.from(requested.values(), r => r.itemId))).sort((a, b) => a - b);
+  const codes = Array.from(new Set(Array.from(requested.values(), r => r.location)));
+  const [stocks, report, whRows] = await Promise.all([
+    ItemWarehouseStockService.getStocksForItems(tx, itemIds),
+    ItemStockReservationService.getReservedStockDetails(tx, true, { itemIds }),
+    tx.select({ code: warehouses.code, name: warehouses.name }).from(warehouses).where(inArray(warehouses.code, codes)),
+  ]);
+  const summaryById = new Map(report.itemSummaries.map(s => [Number(s.itemId), s]));
+  const nameByCode = new Map(whRows.map(w => [w.code, w.name]));
+
+  return Array.from(requested.values(), ({ itemId, location, qty }) => {
+    const info = ItemStockReservationService.computeSellable(summaryById.get(itemId), stocks.get(itemId)?.byCode ?? {}, {
+      location,
+      excludeDocumentId: documentId,
+      projectId: doc.projectId ?? null,
+    });
+    return { itemId, location, warehouseName: nameByCode.get(location) ?? location, requested: qty.toNumber(), ...info };
   });
 }
