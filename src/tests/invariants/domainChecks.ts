@@ -6,6 +6,7 @@ import { FRONTEND_SERVER_CHECKS } from './frontendServerChecks.js';
 import { INVARIANT_CATALOG_CHECKS } from './invariantCatalogScenarios.js';
 import { SIMULATOR_COVERAGE_CHECKS } from './simulatorCoverageChecks.js';
 import { PAYROLL_INTEGRITY_CHECKS } from './payrollIntegrityChecks.js';
+import { PAYROLL_SETTLEMENT_CHECKS } from './payrollSettlementChecks.js';
 import { VOID_RESIDUE_CHECKS } from './voidResidueScenarios.js';
 import { TREASURY_BANK_CHECKS } from './treasuryBankChecks.js';
 import { WOO_DELETED_ORDER_CHECKS } from './wooDeletedOrderChecks.js';
@@ -23,8 +24,9 @@ export const DOMAIN_CHECKS: Array<[string, string, (wh: string) => Promise<strin
   ...WOO_DELETED_ORDER_CHECKS,
   ...TREASURY_BANK_CHECKS, // package 4, series 9 (v9.0.67 on)
   ...PAYROLL_INTEGRITY_CHECKS, // package 12 payroll, series 9 (v9.0.266 on)
+  ...PAYROLL_SETTLEMENT_CHECKS, // phase 3 lane L1 (v10.0.22 on): salary settlement, deducted advances, document remainder
   ...INVARIANT_CATALOG_CHECKS, // I-01, series 10 (v10.0.10 on): each new invariant catches a broken row
   ...FOREIGN_ROUNDING_CHECKS, // TD-1030 (v10.0.12): foreign sale vouchers balance in rials
   ...SIMULATOR_COVERAGE_CHECKS, // I-01 (v10.0.11): the simulator's treasury, payroll, purchasing, allocation and approval operations
-  ...VOID_RESIDUE_CHECKS, // TD-1147 (v10.0.42): a receipt void posts the inventory value it leaves behind
+  ...VOID_RESIDUE_CHECKS, // TD-1147 (v10.0.84): a receipt void posts the inventory value it leaves behind
 ];

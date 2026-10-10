@@ -8,7 +8,7 @@ import type { InvariantScope } from './businessInvariants.js';
 import { invariantProblems, itemState, receive, watermarks } from './scenarioHelpers.js';
 
 /**
- * v10.0.42 (TD-1147): voiding a receipt whose removal empties the item's stock, or leaves a negative remaining value, keeps
+ * v10.0.84 (TD-1147): voiding a receipt whose removal empties the item's stock, or leaves a negative remaining value, keeps
  * the item's weighted average cost (the same formula the Kardex replay uses), while the receipt's voucher is voided at its
  * full value. Before this fix the difference stayed in the inventory accounts with no stock behind it (I3). The void now
  * posts that difference in its own transaction as a draft voucher against «کسری و اضافات انبار» (7012).
@@ -109,6 +109,6 @@ export async function checkVoidReceiptResidue(wh: string): Promise<string[]> {
 }
 
 export const VOID_RESIDUE_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
-  ['inv_td_1147_void_receipt_residue', 'v10.0.42: voiding a receipt that empties stock or leaves a negative remaining value posts the leftover inventory value to inventory count differences (TD-1147)',
+  ['inv_td_1147_void_receipt_residue', 'v10.0.84: voiding a receipt that empties stock or leaves a negative remaining value posts the leftover inventory value to inventory count differences (TD-1147)',
     checkVoidReceiptResidue, 'draft 7012 voucher for emptied stock (draft and approved receipt voucher) and for a negative remaining value; none when WAC is recalculated; I3 held'],
 ];

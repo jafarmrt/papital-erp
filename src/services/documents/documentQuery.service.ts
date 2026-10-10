@@ -354,21 +354,6 @@ export class DocumentQueryService {
     };
   }
 
-  /**
-   * Retrieves a document by its ID or reference number (refNumber).
-   */
-  static async getDocumentByIdOrRef(idOrRef: string | number): Promise<FormattedDocument | null> {
-    const numericId = Number(idOrRef);
-    if (!isNaN(numericId) && numericId > 0) {
-      const doc = await this.getDocumentById(numericId);
-      if (doc) return doc;
-    }
-    const [docByRef] = await orm.select().from(documents).where(eq(documents.refNumber, String(idOrRef)));
-    if (docByRef) {
-      return await this.getDocumentById(docByRef.id);
-    }
-    return null;
-  }
 }
 
 /**

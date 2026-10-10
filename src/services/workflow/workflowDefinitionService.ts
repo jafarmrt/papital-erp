@@ -110,6 +110,16 @@ function assertSavableWorkflowDesign(payload: SaveWorkflowDefinitionPayload): vo
 
 export class WorkflowDefinitionService {
   /**
+   * v10.0.65 (TD-1142): whether an entity type has an active definition, so the widget offers «آغاز گردش کار» only when a
+   * start can succeed (the project window showed it for PROJECT_WORKFLOW, which no install has).
+   */
+  static async hasActiveDefinition(entityType: string): Promise<boolean> {
+    const [row] = await orm.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
+      .where(and(eq(workflowDefinitions.entityType, entityType), eq(workflowDefinitions.isActive, 1))).limit(1);
+    return Boolean(row);
+  }
+
+  /**
    * List workflow definitions with optional filters
    */
   static async getDefinitions(filter?: { isActive?: boolean; entityType?: string }): Promise<WorkflowDefinitionWithStats[]> {

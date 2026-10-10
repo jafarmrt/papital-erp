@@ -6,7 +6,7 @@ import { VoucherService } from './voucher.service.js';
 import type { JournalVoucher } from '../../types.js';
 
 /**
- * v10.0.42 (TD-1147, product-owner decision ت۱۵ الف): the inventory value a void leaves behind.
+ * v10.0.84 (TD-1147, product-owner decision ت۱۵ الف): the inventory value a void leaves behind.
  *
  * Voiding a receipt whose removal empties the item's stock, or leaves a negative remaining value, keeps the item's WAC
  * (the same formula the Kardex replay uses) while the receipt's voucher is voided at its full value. Before this voucher

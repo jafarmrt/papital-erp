@@ -44,7 +44,7 @@ export interface ApplyStockReversalParams {
 }
 
 /**
- * v10.0.42 (TD-1147): what a reversal leaves in the inventory accounts with no stock behind it. Voiding a receipt keeps the
+ * v10.0.84 (TD-1147): what a reversal leaves in the inventory accounts with no stock behind it. Voiding a receipt keeps the
  * WAC when the stock left is zero or its remaining value would be negative (the formula the Kardex replay uses too), while
  * the receipt's voucher is voided at its full value; `residue` is that difference in rials (ledger value left minus stock
  * value left: positive means the ledger holds more than the stock), zero for every other reversal.
@@ -201,7 +201,8 @@ export class DocumentStockEngine {
         itemName: itemData.name,
         movementType: inOut,
         quantity: qty,
-        unitPrice: priceDec.toNumber(),
+        // v10.0.42 (TD-930): بهای کاردکس همین ردیف به ریال، نه قیمت فروش سند
+        unitPrice: txUnitPrice.toNumber(),
         warehouseLocation: finalTargetLoc,
         previousStock: oldTotalStock,
         newStock: newTotalStock,
@@ -261,7 +262,7 @@ export class DocumentStockEngine {
       if (newTotalStock > 0 && !remainingVal.isNegative()) {
         newWAC = remainingVal.divide(newTotalStock).round(4);
       } else {
-        // v10.0.42 (TD-1147): WAC stays; the value the voided voucher leaves behind is posted by the void (voidResidueVoucher)
+        // v10.0.84 (TD-1147): WAC stays; the value the voided voucher leaves behind is posted by the void (voidResidueVoucher)
         residue = remainingVal.subtract(fin(Math.max(newTotalStock, 0)).multiply(oldWAC));
       }
     } else if (originalDirection === 'out') {

@@ -109,5 +109,25 @@ export async function runPurchaseWorkflowGuardTests(shouldRun: ShouldRun): Promi
     }));
   }
 
+  if (shouldRun('reg_procurement_manage_not_approver_td_1126', 'td-1126', 'obs-r2-36', 'workflow', 'procurement')) {
+    await runCase(results, 'reg_procurement_manage_not_approver_td_1126', 'TD-1126: procurement.manage does not approve a requisition on convert; only procurement.approve runs the approval, else 409 REQUISITION_NOT_APPROVED', () => inFiscalSandbox(async () => {
+      await WorkflowEngineService.seedDefaultWorkflows();
+      const maker = await clientWith(['procurement.view', 'procurement.create']);
+      const manager = await clientWith(['procurement.view', 'procurement.order', 'procurement.manage']);
+      const created = await maker.post('/api/procurement/requisitions', {
+        title: 'Duties test manager convert', priority: 'normal',
+        items: [{ itemName: 'Duties test service', unit: 'عدد', requestedQty: 1, unitPriceEstimate: 1000 }],
+      });
+      expect(created.status === 201, `requisition create returned ${brief(created)}`);
+      const id = Number(created.body?.data?.id);
+      const converted = await manager.post(`/api/procurement/requisitions/${id}/convert-to-orders`, {
+        orderGroups: [{ supplierName: 'Duties test supplier', docType: 'receipt', status: 'draft', items: [{ itemId: 1, quantity: 1, unitPrice: 1000 }] }],
+      });
+      expect(converted.status === 409 && converted.body?.code === 'REQUISITION_NOT_APPROVED', `manager converting a pending requisition returned ${brief(converted)}`);
+      expect(await stepOf(id) === 'pending', 'refused convert moved the requisition');
+      return 'a procurement.manage holder without procurement.approve gets REQUISITION_NOT_APPROVED, not a refused self-approval';
+    }));
+  }
+
   return results;
 }

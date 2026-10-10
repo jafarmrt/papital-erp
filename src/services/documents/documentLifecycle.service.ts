@@ -410,7 +410,7 @@ export class DocumentLifecycleService {
       // (پیش‌تر فقط کاردکس معکوس می‌شد و موجودی انبار با کاردکس ناهمخوان می‌ماند)
       if (doc.status === 'final' || (doc.type === 'audit' && originalTxs.length > 0)) {
         const defaultWh = await resolveWarehouseCode(tx, '');
-        // v10.0.42 (TD-1147): what each reversal leaves in the inventory accounts with no stock behind it
+        // v10.0.84 (TD-1147): what each reversal leaves in the inventory accounts with no stock behind it
         const residues: VoidResidueLine[] = [];
 
         // C-01 & F3: موجودی انبار منحصراً بر اساس گردش واقعی تراکنش‌های ثبت‌شده (originalTxs) معکوس می‌شود؛
@@ -489,7 +489,7 @@ export class DocumentLifecycleService {
             externalTx: tx,
           });
         }
-        // v10.0.42 (TD-1147, ت۱۵ الف): the value left behind goes to «کسری و اضافات انبار» as a draft voucher
+        // v10.0.84 (TD-1147, ت۱۵ الف): the value left behind goes to «کسری و اضافات انبار» as a draft voucher
         await postVoidResidueVoucher({
           documentId: id, refNumber: doc.refNumber || String(id), date: await businessTodayIsoDate(), username: deletedByUser,
         }, residues, tx);

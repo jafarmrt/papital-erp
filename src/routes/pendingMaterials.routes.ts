@@ -10,6 +10,7 @@ import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { approvePendingMaterialSchema, createPendingMaterialSchema, rejectPendingMaterialSchema, updatePendingMaterialSchema } from './pendingMaterials.schemas.js';
 import { PendingMaterialsService, type PendingMaterialActor } from '../services/pendingMaterials.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { actorDisplayName } from '../lib/auth/actorDisplayName.js';
 
 const router = Router();
 
@@ -76,7 +77,7 @@ router.get('/pending-materials', authenticateToken, authorizePermission(...READ_
 router.post('/pending-materials', authenticateToken, authorizePermission('pending_materials.create'), validate(createPendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
   const inserted = await PendingMaterialsService.submitPendingMaterial({
     ...req.body,
-    requestedBy: req.user?.username || req.user?.full_name || 'کاربر سامانه'
+    requestedBy: actorDisplayName(req.user, 'کاربر سامانه')
   }, actorOf(req));
 
   res.status(201).json({
