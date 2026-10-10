@@ -24,7 +24,7 @@ const fieldOf = (label: string): HTMLInputElement => {
   return input;
 };
 
-const request = { id: 7, code: 'PM-7', name: 'سنگ نمونه', unit: 'عدد', category: 'سنگ', status: 'pending', weightedAverageCost: 1000, reorderPoint: 0, projectTitle: 'پروژه', requestedBy: 'کاربر' };
+const request = { id: 7, code: 'S-107', name: 'سنگ نمونه', unit: 'عدد', category: 'سنگ', status: 'pending', weightedAverageCost: 1000, reorderPoint: 0, projectTitle: 'پروژه', requestedBy: 'کاربر' };
 
 // v9.0.396 (TD-824، یافته B07-08): «تأیید و افزودن به انبار» بها و نقطه سفارشی را می‌فرستد که بررسی‌کننده وارد کرده است، با همان
 // کلیدهایی که طرح سرور می‌خواند. پیش‌تر بدنه `weighted_average_cost` و `reorder_point` داشت و سرور آن‌ها را دور می‌ریخت.
@@ -34,7 +34,7 @@ describe('pending material approval body (TD-824)', () => {
     fetchJson.mockImplementation((url: string, init?: RequestInit) => {
       if (init?.method === 'PUT') { puts.push({ url, body: JSON.parse(String(init.body)) }); return Promise.resolve({ message: 'ok' }); }
       if (url.startsWith('/pending-materials')) return Promise.resolve({ data: [request], total: 1, page: 1, limit: 50, statusCounts: { pending: 1, approved: 0, rejected: 0 } });
-      if (url.startsWith('/categories')) return Promise.resolve([{ id: 1, name: 'سنگ' }]);
+      if (url.startsWith('/categories')) return Promise.resolve([{ id: 1, name: 'سنگ', prefix: 'S', type: 'raw_material' }]);
       return Promise.resolve({});
     });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

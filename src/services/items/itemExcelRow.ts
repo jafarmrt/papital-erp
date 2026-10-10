@@ -9,6 +9,9 @@ import { REORDER_POINT_COLUMNS } from '../../lib/items/itemExcelColumns.js';
 import { parsePriceAmount, priceCurrencyOf } from '../../lib/items/priceInput.js';
 import type { ItemImportPermissions } from '../../lib/items/itemImportPermissions.js';
 import { newItemTypeOf, parseItemTypeCell, parseNumberCell } from '../../lib/items/itemExcelCells.js';
+import { PRODUCT_CARD_COLUMNS } from '../../lib/media/productCard.js';
+import { productCardValues, type ProductCardValues } from '../media/productCardWrite.js';
+import { errorMessageOf } from '../../utils.js';
 export { codeFormatError } from '../../lib/items/itemCodeFormat.js';
 
 /**
@@ -37,6 +40,8 @@ export interface RowFields {
   size?: string;
   weight?: number;
   material?: string;
+  /** v10.0.25 (N-05): product card cells; a blank cell is missing here and keeps the stored value */
+  card: ProductCardValues;
   /** v10.0.1 (TD-1010) / v10.0.2 (TD-1011): خطای نخستین سلول نادرست ردیف؛ آن‌گاه هیچ بخشی از ردیف ثبت نمی‌شود */
   cellError?: string;
 }
@@ -68,6 +73,24 @@ function numberCell(row: Row, headers: readonly string[], errors: string[]): num
   return parsed.value;
 }
 
+/** v10.0.25 (N-05): the product card cells of a row, read with the item form's rules; an invalid cell is a row error */
+function readRowProductCard(row: Row, errors: string[]): ProductCardValues {
+  const C = PRODUCT_CARD_COLUMNS;
+  const input = {
+    collections: cell(row, [C.collections, 'collections']),
+    design_year: cell(row, [C.designYear, 'design_year']),
+    transfer_code: textCell(row, [C.transferCode, 'transfer_code']),
+    product_description: textCell(row, [C.productDescription, 'product_description']),
+    technical_notes: textCell(row, [C.technicalNotes, 'technical_notes']),
+  };
+  try {
+    return productCardValues(input);
+  } catch (err) {
+    errors.push(errorMessageOf(err));
+    return {};
+  }
+}
+
 export function readRowFields(row: Row): RowFields {
   // v10.0.1 (TD-1010): «مواد اولیه» و «محصول» هم خوانده می‌شوند و نوشته ناشناخته خطای ردیف است، نه «محصول» بی‌صدا
   const type = parseItemTypeCell(row);
@@ -83,6 +106,7 @@ export function readRowFields(row: Row): RowFields {
     size: textCell(row, ['سایز', 'size']),
     weight: numberCell(row, ['وزن', 'weight'], errors),
     material: textCell(row, ['جنس', 'material']),
+    card: readRowProductCard(row, errors),
   };
   return { ...fields, cellError: errors[0] };
 }
@@ -206,7 +230,10 @@ export function deniedStockPermissions(changes: StockChange[], perms: ItemImport
   return denied;
 }
 
-export const ITEM_FIELD_KEYS = ['name', 'type', 'unit', 'category', 'reorderPoint', 'weightedAverageCost', 'color', 'size', 'weight', 'material', 'image'] as const;
+export const ITEM_FIELD_KEYS = [
+  'name', 'type', 'unit', 'category', 'reorderPoint', 'weightedAverageCost', 'color', 'size', 'weight', 'material', 'image',
+  'collections', 'designYear', 'transferCode', 'productDescription', 'technicalNotes',
+] as const;
 
 export function sameFieldValue(a: unknown, b: unknown): boolean {
   if (a instanceof Money || b instanceof Money) return money(a as number).equals(money(b as number));

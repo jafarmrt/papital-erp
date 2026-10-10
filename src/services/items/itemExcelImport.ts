@@ -19,6 +19,7 @@ import {
   newItemType, planStockChanges, readRowFields, readRowPrices, readRowStock, saveRowPrices, sameFieldValue, stockWithoutCostError,
   type ItemRow, type Row, type RowFields, type RowStock, type Warehouse,
 } from './itemExcelRow.js';
+import { withCodeCard } from '../media/productCardWrite.js';
 
 /** v8.0.5 (TD-264): اختلاف کمتر از ۱ ریال میان WAC فایل اکسل و WAC فعلی «همان مقدار» شمرده می‌شود (WAC فعلی می‌ماند) */
 export const EXCEL_WAC_TOLERANCE = 1;
@@ -207,6 +208,11 @@ async function updateExistingItem(ctx: ImportContext, matchedItem: ItemRow, inpu
     weight: fields.weight ?? matchedItem.weight,
     material: fields.material ?? matchedItem.material,
     image: fields.image ?? matchedItem.image,
+    collections: fields.card.collections ?? matchedItem.collections,
+    designYear: fields.card.designYear !== undefined ? fields.card.designYear : matchedItem.designYear,
+    transferCode: fields.card.transferCode !== undefined ? fields.card.transferCode : matchedItem.transferCode,
+    productDescription: fields.card.productDescription !== undefined ? fields.card.productDescription : matchedItem.productDescription,
+    technicalNotes: fields.card.technicalNotes !== undefined ? fields.card.technicalNotes : matchedItem.technicalNotes,
   };
   const fieldsChange = ITEM_FIELD_KEYS.some(k => !sameFieldValue(matchedItem[k], updateSet[k]));
   if (fieldsChange && !perms.editItems) {
@@ -249,10 +255,12 @@ async function createNewItem(ctx: ImportContext, input: RowInput): Promise<numbe
     input.push(noCost);
     return null;
   }
+  const type = newItemType(fields, ctx.typeFilter);
   const [newItem] = await guardItemIdentity(name, () => tx.insert(items).values({
+    ...withCodeCard(type, code, fields.card),
     name,
     code,
-    type: newItemType(fields, ctx.typeFilter),
+    type,
     unit: fields.unit || 'عدد',
     category: fields.category ?? '',
     reorderPoint: fields.reorderPoint ?? 0,

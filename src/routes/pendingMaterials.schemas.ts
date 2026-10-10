@@ -86,7 +86,7 @@ export const updatePendingMaterialSchema = z.object({
   })
 });
 
-/** v10.0.27 (OBS-R1-90): پرسمان فهرست صف؛ وضعیت، دسته، جست‌وجو و صفحه در SQL اعمال می‌شوند */
+/** v10.0.171 (OBS-R1-90): پرسمان فهرست صف؛ وضعیت، دسته، جست‌وجو و صفحه در SQL اعمال می‌شوند */
 export const listPendingMaterialsSchema = z.object({
   query: z.object({
     status: z.enum(['all', ...PENDING_MATERIAL_STATUSES]).optional(),

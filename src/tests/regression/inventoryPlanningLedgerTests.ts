@@ -26,7 +26,7 @@ export async function runInventoryPlanningLedgerTests(shouldRun: (id: string, ..
   if (shouldRun('reg_reservation_date_server_clock_obs_r1_88', 'td989', 'obs-r1-88', 'reservation', 'package7')) {
     await record(
       'reg_reservation_date_server_clock_obs_r1_88',
-      'v10.0.25: a project reservation is dated by its UTC registration time, never the server clock (OBS-R1-88)',
+      'v10.0.169: a project reservation is dated by its UTC registration time, never the server clock (OBS-R1-88)',
       'a finalized project reservation row carries the project registration time as UTC ISO with Z',
       async () => {
         const { ItemStockReservationService } = await import('../../services/items/itemStockReservation.service.js');
@@ -54,7 +54,7 @@ export async function runInventoryPlanningLedgerTests(shouldRun: (id: string, ..
   if (shouldRun('reg_sellable_default_warehouse_obs_r1_89', 'td989', 'obs-r1-89', 'sellable', 'package7')) {
     await record(
       'reg_sellable_default_warehouse_obs_r1_89',
-      'v10.0.26: sellable stock is never computed for a guessed «main» warehouse (OBS-R1-89)',
+      'v10.0.170: sellable stock is never computed for a guessed «main» warehouse (OBS-R1-89)',
       'computeSellable without a warehouse is refused with SELLABLE_LOCATION_REQUIRED instead of reading «main»',
       async () => {
         const { ItemStockReservationService } = await import('../../services/items/itemStockReservation.service.js');
@@ -73,7 +73,7 @@ export async function runInventoryPlanningLedgerTests(shouldRun: (id: string, ..
   if (shouldRun('reg_pending_material_list_paged_obs_r1_90', 'td989', 'obs-r1-90', 'pending', 'package7')) {
     await record(
       'reg_pending_material_list_paged_obs_r1_90',
-      'v10.0.27: the raw material request queue answers one page with its status counts (OBS-R1-90)',
+      'v10.0.171: the raw material request queue answers one page with its status counts (OBS-R1-90)',
       'GET /pending-materials filters by status and search, pages with limit and counts every status in SQL',
       async () => {
         const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');

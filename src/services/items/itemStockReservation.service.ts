@@ -550,7 +550,7 @@ export class ItemStockReservationService {
         reservedQty: qty,
         unitCost: cost.toNumber(),
         totalCost: cost.multiply(qty).toNumber(),
-        // v10.0.25 (OBS-R1-88): تاریخ خود سند (ستون اجباری)؛ هرگز ساعت کارساز به جای آن
+        // v10.0.169 (OBS-R1-88): تاریخ خود سند (ستون اجباری)؛ هرگز ساعت کارساز به جای آن
         date: line.date
       });
     }
@@ -584,7 +584,7 @@ export class ItemStockReservationService {
         reservedQty: row.qty,
         unitCost: cost.toNumber(),
         totalCost: cost.multiply(row.qty).toNumber(),
-        // v10.0.25 (OBS-R1-88): زمان ثبت پروژه زمان کارساز به UTC است و با Z می‌رود؛ بی آن خالی («-»)، نه اکنون
+        // v10.0.169 (OBS-R1-88): زمان ثبت پروژه زمان کارساز به UTC است و با Z می‌رود؛ بی آن خالی («-»)، نه اکنون
         date: serverTimestampToUtcIso(row.createdAt) ?? ''
       });
     }
@@ -706,7 +706,7 @@ export class ItemStockReservationService {
     ctx: SellableStockContext
   ): { locationStock: number; reservedForOthers: number; sellable: number } {
     const rawStocks = (stocks || summary?.stocks || {}) as Record<string, number>;
-    // v10.0.26 (OBS-R1-89): انبار پیش‌فرض را فراخوان با TD-203 پیدا می‌کند؛ بی محل، «main» حدس زده نمی‌شود
+    // v10.0.170 (OBS-R1-89): انبار پیش‌فرض را فراخوان با TD-203 پیدا می‌کند؛ بی محل، «main» حدس زده نمی‌شود
     const locKey = ctx.location ? ctx.location.trim() : '';
     if (!locKey) throw new ValidationError('انبار برای محاسبه موجودی قابل فروش مشخص نیست.', undefined, 'SELLABLE_LOCATION_REQUIRED');
     const locationStock = fin(rawStocks[locKey] || 0).toNumber();

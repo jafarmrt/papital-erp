@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Layers, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import { SearchableSelect } from '../SearchableSelect';
 import { Item } from '../../types';
@@ -111,14 +111,7 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
                   <label className="block text-2xs font-bold text-slate-600 mb-1">
                     تعداد / تیراژ <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={product.quantity}
-                    onChange={(e) => onUpdateProductRow(idx, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
-                  />
+                  <ProductQuantityInput value={product.quantity} onChange={(qty) => onUpdateProductRow(idx, 'quantity', qty)} />
                 </div>
                 <div className="w-20">
                   <label className="block text-2xs font-bold text-slate-600 mb-1">واحد</label>
@@ -177,3 +170,29 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
     </div>
   );
 };
+
+/**
+ * v10.0.145 (TD-1213): the field shows what the user types. Before, every change went through `Math.max(1, …)`, so an
+ * emptied field became 1 at once and typing «20» after it gave 120. Each change is passed on as a number, an empty
+ * field as 0; the field is required with a minimum of 1, so the form is not sent empty or zero.
+ */
+function ProductQuantityInput({ value, onChange }: { value: number; onChange: (quantity: number) => void }) {
+  const [text, setText] = useState<string>(String(value ?? ''));
+  useEffect(() => {
+    setText(current => (Number(current) === Number(value) ? current : String(value ?? '')));
+  }, [value]);
+  return (
+    <input
+      type="number"
+      min="1"
+      required
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const parsed = Number(e.target.value);
+        onChange(Number.isFinite(parsed) ? parsed : 0);
+      }}
+      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
+    />
+  );
+}

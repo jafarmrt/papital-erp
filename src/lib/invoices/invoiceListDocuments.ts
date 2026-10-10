@@ -25,6 +25,8 @@ export interface InvoiceListDocument {
   id: number;
   type?: string;
   status?: string;
+  /** v10.0.103 (TD-1197): پیش‌نویسی که آخرین گردش کارش رد شده است */
+  workflowRejected?: boolean;
   ref_number?: string;
   date?: string;
   currency?: string;
@@ -175,7 +177,7 @@ export function invoiceListTypeFilter(filterType: string, filterStatus: string):
   return { type: filterType, status: filterStatus };
 }
 
-export type InvoiceTypeBadgeKind = 'stock' | 'receipt' | 'invoice' | 'proforma' | 'remittance' | 'return' | 'waste';
+export type InvoiceTypeBadgeKind = 'stock' | 'receipt' | 'invoice' | 'proforma' | 'remittance' | 'return' | 'waste' | 'production_receipt';
 
 export interface InvoiceRowFigures {
   isReceipt: boolean;
@@ -206,6 +208,8 @@ export function resolveInvoiceRowFigures(doc: InvoiceListDocument): InvoiceRowFi
   else if (isRemittance) badgeKind = 'remittance';
   else if (isReturn) badgeKind = 'return';
   else if (isWaste) badgeKind = 'waste';
+  // v10.0.141 (TD-1203): رسید تولید پروژه نام خودش را دارد، نه «سند انبار»
+  else if (doc.type === 'production_receipt') badgeKind = 'production_receipt';
 
   // Numerical Calculations
   const itemsCount = doc.itemsCount !== undefined ? doc.itemsCount : (doc.items?.length || 0);
@@ -233,6 +237,7 @@ export const INVOICE_TYPE_BADGES: Record<InvoiceTypeBadgeKind, { label: string; 
   remittance: { label: 'حواله خروج / مصرف', bg: 'bg-purple-50 text-purple-800 border-purple-200 font-bold' },
   return: { label: 'برگشت از فروش', bg: 'bg-orange-50 text-orange-800 border-orange-200 font-bold' },
   waste: { label: 'حواله ضایعات', bg: 'bg-rose-50 text-rose-800 border-rose-200 font-bold' },
+  production_receipt: { label: 'رسید تولید', bg: 'bg-teal-50 text-teal-800 border-teal-200 font-bold' },
 };
 
 /** متن طرف حساب در ردیف جدول */
@@ -253,7 +258,7 @@ export function detailsTitleOf(type: string | undefined): string {
  */
 function documentTypeLabelOf(type: string): string {
   const badge = (INVOICE_TYPE_BADGES as Record<string, { label: string } | undefined>)[type];
-  return type !== 'stock' && badge ? badge.label : documentTypeTitle(type);
+  return type !== 'stock' && type !== 'production_receipt' && badge ? badge.label : documentTypeTitle(type);
 }
 
 /** «نوع سند» در کارت اطلاعات مودال جزئیات */

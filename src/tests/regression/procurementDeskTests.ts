@@ -20,6 +20,9 @@ export async function runProcurementDeskTests(shouldRun: ShouldRun): Promise<Tes
     ['reg_procurement_messages_td_901',
       'v9.0.355: procurement errors name a workflow action by its Persian title, never its key, and a requisition row without a quantity gets its own Persian message on that field (TD-901)',
       ['td901', 'procurement', 'wording', 'package10'], messagesCase],
+    ['reg_procurement_order_warehouse_name_td_1131',
+      'v10.0.61: the procurement order list names the destination warehouse of an order and of each line next to its code; the delivery window showed the raw code (TD-1131)',
+      ['td1131', 'procurement', 'wording', 'package10'], warehouseNameCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -144,4 +147,24 @@ async function messagesCase(h: Harness, wrong: string[]): Promise<string> {
   if (action.status !== 409) wrong.push(`cancel_order on a pending requisition answered ${action.status}`);
   if (message.includes('cancel_order') || !message.includes('لغو یا رد سفارش')) wrong.push(`the refusal names the action as: ${message}`);
   return 'a missing quantity is reported on its field in Persian; a refused cancel_order names the action by its Persian title';
+}
+
+/** v10.0.61 (TD-1131): the order list carries the warehouse name the delivery window and the order list show */
+async function warehouseNameCase(h: Harness, wrong: string[]): Promise<string> {
+  const prefix = `P10W-${h.tag}-${Math.floor(Math.random() * 1e5)}`;
+  const [req] = await h.q(
+    `INSERT INTO purchase_requisitions (code, title, status, priority, items)
+     VALUES ($1, 'انبار سفارش', 'ordered', 'normal', $2::jsonb) RETURNING id`,
+    [prefix, JSON.stringify([{ id: 'item-1', itemId: null, itemName: `کالا ${prefix}`, unit: 'عدد', requestedQty: 1, orderedQty: 0, remainingQty: 1 }])],
+  );
+  const item = await createTestItem({ type: 'raw_material', code: `${prefix}-RM`, name: `مواد ${prefix}`, stocks: {}, weightedAverageCost: 0 } as never);
+  await legacyRequisitionOrder(Number(req.id), Number(item.id), 1);
+  const [wh] = await h.q(`SELECT code, name FROM warehouses WHERE is_active = 1 ORDER BY id LIMIT 1`);
+  const listed = await h.get(`/api/procurement/orders?requisitionId=${Number(req.id)}`);
+  const order = ((listed.body as ListBody)?.data ?? [])[0] as { location?: string; locationName?: string; items?: Array<{ locationName?: string }> } | undefined;
+  if (listed.status !== 200 || !order) wrong.push(`order list answered ${listed.status} without the order`);
+  if (order?.location !== wh.code) wrong.push(`order location ${String(order?.location)}, expected the code ${String(wh.code)}`);
+  if (order?.locationName !== wh.name) wrong.push(`order locationName ${String(order?.locationName)}, expected ${String(wh.name)}`);
+  if (order?.items?.[0]?.locationName !== wh.name) wrong.push(`line locationName ${String(order?.items?.[0]?.locationName)}, expected ${String(wh.name)}`);
+  return 'the order and its line carry the destination warehouse name next to its code';
 }

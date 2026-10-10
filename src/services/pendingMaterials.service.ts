@@ -7,6 +7,7 @@ import { moneyOr } from '../lib/money.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { isDataUrl, uploadBase64ToStorage } from '../lib/storage.js';
 import { ItemCatalogService } from './items/itemCatalog.service.js';
+import { assertApprovableMaterial } from './pendingMaterialCode.js';
 import { WorkflowEngineService } from './workflow/workflowEngineService.js';
 import { terminateOpenWorkflows } from './workflow/workflowTermination.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
@@ -212,7 +213,7 @@ export class PendingMaterialsService {
   }
 
   /**
-   * v10.0.27 (OBS-R1-90): one page of the queue, filtered, counted and paged in SQL; `statusCounts` counts every status
+   * v10.0.171 (OBS-R1-90): one page of the queue, filtered, counted and paged in SQL; `statusCounts` counts every status
    * under the category and search filters, so the status cards stay right whatever status is shown.
    */
   static async listRequests(filters: PendingMaterialListFilters): Promise<PendingMaterialPage<PendingMaterialListRow>> {
@@ -325,6 +326,7 @@ export class PendingMaterialsService {
       const name = (overrides.name || existing.name).trim();
       const unit = (overrides.unit || existing.unit).trim();
       const category = (overrides.category || existing.category || 'عمومی').trim();
+      await assertApprovableMaterial(tx, code, category);
 
       const { item } = await ItemCatalogService.createItem({
         type: 'raw_material',

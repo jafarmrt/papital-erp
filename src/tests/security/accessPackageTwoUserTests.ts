@@ -3,6 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { roles, users } from '../../db/schema.js';
 import { TestCaseResult } from '../types.js';
 import { runCase, type Harness, type ShouldRun } from './workflowTestHarness.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * بسته ۲ (مدل مجوز)، M4 — دارنده غیرمدیر «مدیریت کاربران» و «مدیریت نقش‌ها» دسترسی خودش را بالا نمی‌برد (TD-520،
@@ -57,7 +58,7 @@ export async function runAccessPackageTwoUserTests(shouldRun: ShouldRun): Promis
         const byAdmin = await h.put(`/api/roles/${other.id}`, { permissions: ['accounting.vouchers'] });
         if (byAdmin.status !== 200) wrong.push(`the system admin adding accounting.vouchers returned ${byAdmin.status}, not 200`);
       } finally {
-        await orm.delete(roles).where(like(roles.code, `${prefix}%`));
+        await deleteTestRoles(like(roles.code, `${prefix}%`));
       }
     });
   }
@@ -113,7 +114,7 @@ export async function runAccessPackageTwoUserTests(shouldRun: ShouldRun): Promis
       } finally {
         await orm.delete(users).where(like(users.username, `${prefix}%`));
         if (createdUsers.length > 0) await orm.delete(users).where(inArray(users.id, createdUsers));
-        await orm.delete(roles).where(like(roles.code, `${prefix}%`));
+        await deleteTestRoles(like(roles.code, `${prefix}%`));
       }
     });
   }
@@ -174,7 +175,7 @@ export async function runAccessPackageTwoUserTests(shouldRun: ShouldRun): Promis
         if (within.status !== 200) wrong.push(`restoring with a role within its keys returned ${within.status}, not 200`);
       } finally {
         await orm.delete(users).where(like(users.username, `${prefix}%`));
-        await orm.delete(roles).where(like(roles.code, `${prefix}%`));
+        await deleteTestRoles(like(roles.code, `${prefix}%`));
       }
     });
   }
@@ -206,7 +207,7 @@ export async function runAccessPackageTwoUserTests(shouldRun: ShouldRun): Promis
         if (back?.role !== next.code || Number(back?.is_deleted) !== 0) wrong.push(`the restored user is ${String(back?.role)} / ${String(back?.is_deleted)}`);
       } finally {
         await orm.delete(users).where(like(users.username, `${prefix}%`));
-        await orm.delete(roles).where(like(roles.code, `${prefix}%`));
+        await deleteTestRoles(like(roles.code, `${prefix}%`));
       }
     });
   }

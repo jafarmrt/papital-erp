@@ -7,7 +7,7 @@ import { invalidateDomain, invalidatePreset } from '../../lib/queryInvalidation'
 import type { PendingMaterialForm } from '../../lib/pendingMaterials/pendingMaterialForm';
 import { pendingMaterialListUrl, type PendingMaterialListFilters, type PendingMaterialPage } from '../../lib/pendingMaterials/pendingMaterialList';
 
-/** v10.0.27 (OBS-R1-90): one page of the queue from the server, with its status counts; categories for the filter */
+/** v10.0.171 (OBS-R1-90): one page of the queue from the server, with its status counts; categories for the filter */
 export function usePendingMaterialsQuery(filters: PendingMaterialListFilters) {
   return useQuery<{ page: PendingMaterialPage<PendingMaterial>; categories: Category[] }>({
     queryKey: [...QUERY_KEYS.pendingMaterials.list(), filters],

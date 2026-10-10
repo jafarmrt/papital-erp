@@ -7,6 +7,7 @@ import { approvePendingMaterialSchema, createPendingMaterialSchema, listPendingM
 import { PendingMaterialsService, type PendingMaterialActor } from '../services/pendingMaterials.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import type { PendingMaterialStatusFilter } from '../lib/pendingMaterials/pendingMaterialList.js';
+import { actorDisplayName } from '../lib/auth/actorDisplayName.js';
 
 const router = Router();
 
@@ -14,7 +15,7 @@ const router = Router();
 const actorOf = (req: Request): PendingMaterialActor => ({ req, userId: req.user?.id, username: req.user?.username });
 
 // GET /api/pending-materials - one page of the queue
-// v10.0.27 (OBS-R1-90): filtered, counted and paged in SQL by the service (`{ data, total, page, limit, statusCounts }`)
+// v10.0.171 (OBS-R1-90): filtered, counted and paged in SQL by the service (`{ data, total, page, limit, statusCounts }`)
 router.get('/pending-materials', authenticateToken, authorizePermission(...READ_PERMISSIONS.pendingMaterials), validate(listPendingMaterialsSchema), asyncHandler(async (req: Request, res: Response) => {
   const q = req.query as { status?: PendingMaterialStatusFilter; category?: string; search?: string; page?: string; limit?: string };
   res.json(await PendingMaterialsService.listRequests({
@@ -29,7 +30,7 @@ router.get('/pending-materials', authenticateToken, authorizePermission(...READ_
 router.post('/pending-materials', authenticateToken, authorizePermission('pending_materials.create'), validate(createPendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
   const inserted = await PendingMaterialsService.submitPendingMaterial({
     ...req.body,
-    requestedBy: req.user?.username || req.user?.full_name || 'کاربر سامانه'
+    requestedBy: actorDisplayName(req.user, 'کاربر سامانه')
   }, actorOf(req));
 
   res.status(201).json({

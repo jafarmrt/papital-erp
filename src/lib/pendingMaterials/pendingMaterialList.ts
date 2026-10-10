@@ -1,5 +1,5 @@
 /**
- * v10.0.27 (OBS-R1-90): one page of «مواد اولیه در انتظار تأیید». The server filters, counts and pages in SQL
+ * v10.0.171 (OBS-R1-90): one page of «مواد اولیه در انتظار تأیید». The server filters, counts and pages in SQL
  * (`PendingMaterialsService.listRequests`) and the page reads only this shape; before, the route sent every request.
  */
 export const PENDING_MATERIAL_PAGE_SIZE = 50;
