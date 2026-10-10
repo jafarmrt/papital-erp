@@ -13,8 +13,11 @@ import { DocumentService } from './document.service.js';
 import { userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from './inventory/stockMovementDate.js';
 
-/** v9.0.315 (TD-689): مجوزهایی که درخواست خرید را تأیید می‌کنند (همان گارد مسیر اقدام گردش‌کار) */
-const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve', 'procurement.manage'];
+/**
+ * v9.0.315 (TD-689): مجوزی که درخواست خرید را تأیید می‌کند. از v10.0.48 (TD-1126) فقط `procurement.approve`، همان گارد
+ * گام تأیید گردش کار (OBS-R2-36)؛ پیش‌تر `procurement.manage` هم بود و صدور سفارش تأییدی را می‌آزمود که انتقال رد می‌کرد
+ */
+const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve'];
 /** v8.0.71 (TD-326): درخواست ردشده دریافت یا سفارش داده نمی‌شود، مگر پس از بازگشایی */
 const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
 import type { PurchaseRequisition, ProcurementOrder } from '../types.js';
@@ -30,12 +33,14 @@ import {
 import { buildRequisitionRows, resolveRequisitionProject, type RequisitionRowFields } from './procurement/requisitionRows.js';
 import { listProcurementOrders, procurementOrderCounts, type ProcurementOrderListParams } from './procurement/procurementOrderList.js';
 import { listRequisitions, requisitionDtos, toRequisitionDto, type GetRequisitionsFilter } from './procurement/requisitionList.js';
+import { withRowCurrentStock } from './procurement/requisitionRowStock.js';
 
 export type { GetRequisitionsFilter };
 import {
   assertRequisitionNotConsolidated, closeConsolidationSources, consolidationHeader, lockConsolidationSources,
   mergeConsolidationRows,
 } from './procurement/requisitionConsolidation.js';
+import { actorDisplayName } from '../lib/auth/actorDisplayName.js';
 
 type DbClient = DbExecutor;
 
@@ -166,7 +171,7 @@ export class ProcurementService {
    */
   static async createRequisition(
     input: CreateRequisitionInput,
-    user: { id?: number; username?: string; role?: string }
+    user: { id?: number; username?: string; fullName?: string; role?: string }
   ): Promise<PurchaseRequisition> {
     return orm.transaction(async (tx) => toRequisitionDto(await this.insertRequisition(tx, input, user)));
   }
@@ -178,7 +183,7 @@ export class ProcurementService {
   static async insertRequisition(
     tx: DbClient,
     input: CreateRequisitionInput,
-    user: { id?: number; username?: string; role?: string },
+    user: { id?: number; username?: string; fullName?: string; role?: string },
     auditDetails: Record<string, unknown> = {},
   ): Promise<typeof purchaseRequisitions.$inferSelect> {
     if (!input.title || input.title.trim() === '') {
@@ -209,7 +214,7 @@ export class ProcurementService {
       // v7.0.135 (TD-232): تاریخ نیاز میلادی ISO (پیش‌فرض امروز کسب‌وکار)
       requiredDate: requireStorageDate(input.requiredDate, 'تاریخ نیاز') || await businessTodayIsoDate(),
       requestedById: user.id || null,
-      requestedByName: user.username || 'سیستم',
+      requestedByName: actorDisplayName(user),
       notes: input.notes || '',
       totalEstimatedAmount: money(totalEst),
       items: sanitizedItems,
@@ -275,7 +280,7 @@ export class ProcurementService {
     }
 
     const [dto] = await requisitionDtos(orm, [req]);
-    return dto;
+    return withRowCurrentStock(orm, dto);
   }
 
   /**
@@ -615,7 +620,7 @@ export class ProcurementService {
       throw new ValidationError('حداقل یک گروه سفارش خرید باید تعیین شود.');
     }
     const overOrderReason = params.overOrderReason?.trim() || '';
-    const username = user.username || 'کارشناس تدارکات';
+    const username = actorDisplayName(user, 'کارشناس تدارکات');
     const today = await businessTodayIsoDate();
     // v9.0.315 (TD-689، ت۱): حق تأیید پیش از تراکنش سنجیده می‌شود (TD-324: بی اتصال دوم درون تراکنش)
     const mayApprove = await userHasRoleOrPermission(user, ...REQUISITION_APPROVE_PERMISSIONS);
@@ -802,7 +807,7 @@ export class ProcurementService {
   static async consolidateRequisitions(
     requisitionIds: number[],
     newTitle: string | undefined,
-    user: { id?: number; username?: string }
+    user: { id?: number; username?: string; fullName?: string }
   ): Promise<PurchaseRequisition> {
     // v9.0.349 (TD-694، B10-07، ت۳ الف): قفل منبع‌ها به ترتیب شناسه، ساخت درخواست تجمیعی و بستن منبع‌ها با پیوند و خاتمه
     // گردش کار، همه در یک تراکنش. پیش‌تر تجمیع بی تراکنش و قفل بود، منبع‌ها (حتی دریافت‌شده) باز می‌ماندند و شناسه

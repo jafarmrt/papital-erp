@@ -10857,6 +10857,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 phase 3 lane L3 (v10.0.29+): the events of the project stock paths
   const { runProjectEventTests } = await import('../regression/projectEventTests.js');
   results.push(...await runProjectEventTests(shouldRun));
+  // Series 10 phase 3 lane L3 (v10.0.63+): gaps of the project screens (TD-1140..TD-1144)
+  const { runProjectScreenGapsTests } = await import('../regression/projectScreenGapsTests.js');
+  results.push(...await runProjectScreenGapsTests(shouldRun));
 
   // Package 1 second half PR 1 (v9.0.386+): data export, system health page, factory reset, setup wizard
   const { runDataExportTests } = await import('../regression/dataExportTests.js');
@@ -10899,6 +10902,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Series 10 phase 3 lane L2 (v10.0.35+): writer routes read their bodies through Zod
   const { runWriterRouteZodTests } = await import('../regression/writerRouteZodTests.js');
   results.push(...await runWriterRouteZodTests(shouldRun));
+  // TD-1132: records name the user by full name
+  const { runActorDisplayNameTests } = await import('../regression/actorDisplayNameTests.js');
+  results.push(...await runActorDisplayNameTests(shouldRun));
 
   // Series 10 phase 3 lane L2, package B4 (v10.0.41+): document audit rows, stock event cost, reorder monitor, purchase party, requisition workflow
   const { runDocumentAuditEventTests } = await import('../regression/documentAuditEventTests.js');

@@ -230,7 +230,7 @@ export function useUnifiedExcelImport({
         };
         setImportResult(result);
         setStep('result');
-        // v10.0.48 (TD-1139): a row error is never reported as a plain success
+        // v10.0.82 (TD-1139): a row error is never reported as a plain success
         const outcome = itemImportOutcome(result);
         if (outcome.tone === 'success') toast.success(outcome.message);
         else if (outcome.tone === 'error') toast.error(outcome.message);

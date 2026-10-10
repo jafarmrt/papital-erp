@@ -121,13 +121,6 @@ export class DocumentService {
   }
 
   /**
-   * Retrieves a document by its ID or reference number (refNumber).
-   */
-  static async getDocumentByIdOrRef(idOrRef: string | number): Promise<FormattedDocument | null> {
-    return DocumentQueryService.getDocumentByIdOrRef(idOrRef);
-  }
-
-  /**
    * Applies stock movement for a single document item (creates transaction and updates item stocks/WAC).
    */
   static async applyStockMovement(
