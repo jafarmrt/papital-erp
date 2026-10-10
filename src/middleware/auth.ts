@@ -182,7 +182,7 @@ export async function resolveLiveSession(payload: AuthUserPayload): Promise<Live
       if (dbUser) {
         liveUser = {
           id: dbUser.id,
-          role: dbUser.role,
+          role: dbUser.role ?? '',
           isDeleted: dbUser.isDeleted ?? 0,
           tokenVersion: dbUser.tokenVersion ?? 0,
           fullName: dbUser.fullName,

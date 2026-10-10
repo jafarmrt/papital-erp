@@ -166,7 +166,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
   }
 
   const csrfToken = generateCsrfToken();
-  const token = generateToken({ id: user.id, username: user.username, role: user.role, csrfToken, tokenVersion: user.tokenVersion || 0 });
+  const token = generateToken({ id: user.id, username: user.username, role: user.role ?? '', csrfToken, tokenVersion: user.tokenVersion || 0 });
   const { password: _, ...userWithoutPassword } = user;
 
   // Set secure HttpOnly cookie
@@ -218,14 +218,14 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
     await resetFailedAttempts(activeUser.id, { username: tUsername, ip: clientIp });
 
     const csrfToken = generateCsrfToken();
-    const token = generateToken({ id: activeUser.id, username: activeUser.username, role: activeUser.role, csrfToken, tokenVersion: activeUser.tokenVersion || 0 });
+    const token = generateToken({ id: activeUser.id, username: activeUser.username, role: activeUser.role ?? '', csrfToken, tokenVersion: activeUser.tokenVersion || 0 });
     const { password: _, ...userWithoutPassword } = activeUser;
 
     // Set secure HttpOnly cookie
     res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
 
     // v9.0.224 (TD-540): سجل ورود نام نقش را هم نگه می‌دارد تا جزئیات رویداد کد نقش نشان ندهد
-    const [roleRow] = await orm.select({ name: roles.name }).from(roles).where(eq(roles.code, activeUser.role)).limit(1);
+    const [roleRow] = await orm.select({ name: roles.name }).from(roles).where(eq(roles.code, activeUser.role ?? '')).limit(1);
     await logActivity({
       userId: activeUser.id,
       username: activeUser.username,
@@ -386,7 +386,7 @@ const meHandler = asyncHandler(async (req, res) => {
     const token = generateToken({
       id: user.id,
       username: user.username,
-      role: user.role,
+      role: user.role ?? '',
       csrfToken,
       tokenVersion: user.tokenVersion || 0
     });
@@ -427,7 +427,7 @@ const csrfHandler = asyncHandler(async (req, res) => {
       const token = generateToken({
         id: user.id,
         username: user.username,
-        role: user.role,
+        role: user.role ?? '',
         csrfToken,
         tokenVersion: user.tokenVersion || 0
       });

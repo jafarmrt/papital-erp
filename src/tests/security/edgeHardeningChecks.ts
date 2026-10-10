@@ -9,6 +9,7 @@ import { orm } from '../../db/drizzle.js';
 import { users } from '../../db/schema.js';
 import { generateToken, invalidateUserAuthCache } from '../../middleware/auth.js';
 import { getTestApp, ensureAdminTestUser } from '../fixtures/httpTestHelper.js';
+import { ensureTestRole } from '../fixtures/factories.js';
 
 /**
  * Package 1, PR «ب» (lane 4): the HTTP edge of the real Express app (metrics labels and guard, global rate
@@ -121,6 +122,7 @@ async function checkMetricsLiveSession(): Promise<string[]> {
     const live = await scrape(token);
     if (live.status !== 200) v.push(`live admin: /metrics answered ${live.status} (expected 200)`);
 
+    await ensureTestRole('p01_metrics_viewer');
     await orm.update(users).set({ role: 'p01_metrics_viewer' }).where(eq(users.id, admin.id));
     invalidateUserAuthCache(admin.id);
     const demotedSameVersion = await scrape(token);

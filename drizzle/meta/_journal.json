@@ -694,6 +694,13 @@
       "when": 1794100000000,
       "tag": "0098_voucher_approve_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1794200000000,
+      "tag": "0099_user_role_foreign_key",
+      "breakpoints": true
     }
   ]
 }

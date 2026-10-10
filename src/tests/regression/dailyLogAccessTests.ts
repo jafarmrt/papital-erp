@@ -6,6 +6,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm, pool } from '../../db/drizzle.js';
 import { activityLogs, dailyWorkLogs, notifications, productionProjects, roles, users } from '../../db/schema.js';
 import { invalidateRoleCache } from '../../lib/memoryCache.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 type ShouldRun = (id: string, ...extra: string[]) => boolean;
 
@@ -104,7 +105,7 @@ export async function makeCtx(): Promise<Ctx> {
         await orm.delete(dailyWorkLogs).where(inArray(dailyWorkLogs.id, logIds)).catch(() => undefined);
       }
       if (userIds.length > 0) await orm.update(users).set({ isDeleted: 1 }).where(inArray(users.id, userIds)).catch(() => undefined);
-      if (roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, roleIds)).catch(() => undefined);
+      if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
     },
   };
   return ctx;
