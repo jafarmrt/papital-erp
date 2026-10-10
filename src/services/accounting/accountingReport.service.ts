@@ -26,6 +26,7 @@ import { yearEndClosingCutoff, yearEndClosingVoucherSql } from './yearEndClosing
 import { accountCardHasFilter, type AccountCardReport } from '../../lib/accounting/accountCard.js';
 import { JOURNAL_BOOK_MAX_PAGE_SIZE, JOURNAL_BOOK_PAGE_SIZE, type JournalBookReport, type JournalBookRow } from '../../lib/accounting/journalBook.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { currentDetailNames, detailDisplayName, isManualReferenceModule, itemOfOpeningRow, openingVoucherItems, trialBalanceDetailKey, type DetailRef, type StableRef } from './trialBalanceDetail.js';
 
 /** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
 function foreignOrigin(allCurrencies: boolean, row: {
@@ -97,6 +98,8 @@ export class AccountingReportService {
     // v8.0.16 (TD-260): ارز و نرخ ردیف از همان قاعده کارت حساب و صورت‌حساب طرف‌حساب (voucherItemAmount.ts)
     const itemCurrencyExpr = voucherItemCurrencySql;
     const rateExpr = voucherItemRateSql;
+    // v10.0.139 (TD-1128): an item opening voucher's id, so its rows can be keyed by their item
+    const itemOpeningVoucherIdSql = sql<number | null>`CASE WHEN ${journalVouchers.referenceModule} = 'item_opening' THEN ${journalVouchers.id} END`;
     const groupedItems = await executor.select({
       voucherDate: journalVouchers.date,
       isYearEndClosing: yearEndClosingVoucherSql,
@@ -105,6 +108,9 @@ export class AccountingReportService {
       detailedType: journalVoucherItems.detailedType,
       detailedId: journalVoucherItems.detailedId,
       detailedName: journalVoucherItems.detailedName,
+      referenceModule: journalVouchers.referenceModule,
+      sourceChequeId: journalVouchers.sourceChequeId,
+      openingVoucherId: itemOpeningVoucherIdSql,
       debit: sql<string>`COALESCE(SUM(${journalVoucherItems.debit}), 0)::text`,
       credit: sql<string>`COALESCE(SUM(${journalVoucherItems.credit}), 0)::text`,
       debitIrr: sql<string>`COALESCE(SUM(ROUND(${journalVoucherItems.debit} * ${rateExpr}, 0)), 0)::text`,
@@ -115,7 +121,8 @@ export class AccountingReportService {
     .where(and(...baseConditions))
     .groupBy(
       journalVouchers.date, yearEndClosingVoucherSql, itemCurrencyExpr, journalVoucherItems.accountId,
-      journalVoucherItems.detailedType, journalVoucherItems.detailedId, journalVoucherItems.detailedName
+      journalVoucherItems.detailedType, journalVoucherItems.detailedId, journalVoucherItems.detailedName, journalVouchers.referenceModule,
+      journalVouchers.sourceChequeId, itemOpeningVoucherIdSql
     );
 
     interface TurnoverAccumulator {
@@ -138,11 +145,11 @@ export class AccountingReportService {
     // AccountId => turnover
     const accountTurnover = new Map<number, TurnoverAccumulator>();
 
-    // Detailed entities map: key = `${accountId}__${detailedName || 'عام'}`
+    // v10.0.139 (TD-1128): one detail per account, type and id (trialBalanceDetailKey), not per stored name
     interface DetailedAccumulator extends TurnoverAccumulator {
       accountId: number;
-      detailedType?: string;
-      detailedId?: number | null;
+      ref: DetailRef;
+      detailedId: number | null;
       detailedName: string;
     }
     const detailedMap = new Map<string, DetailedAccumulator>();
@@ -151,6 +158,7 @@ export class AccountingReportService {
     const normStartDate = normalizeDateToIso(params.startDate);
     const normEndDate = normalizeDateToIso(params.endDate);
     const isBaseView = !params.currency || params.currency === 'all';
+    const openingItems = await openingVoucherItems(executor, groupedItems.flatMap(g => g.openingVoucherId ? [Number(g.openingVoucherId)] : []));
     const closingCutoff = yearEndClosingCutoff(params.includeClosing, (params.closingFromStart ? normStartDate : undefined) ?? normEndDate);
 
     for (const it of groupedItems) {
@@ -187,17 +195,17 @@ export class AccountingReportService {
       addTurnover(accTurnover, isBeforeStart, d, c);
 
       // Detailed Tracking
-      const dName = (it.detailedName && it.detailedName.trim()) ? it.detailedName.trim() : 'سایر / عمومی';
-      // v10.0.125 (TD-1124): کلید ردیف تفصیلی نوع و شناسه است؛ پیش‌تر نام بود و دو طرف هم‌نام یک ردیف و طرف تغییرنام‌داده دو ردیف
-      // با یک کد می‌شد. ردیف پیشین بی شناسه با نامش جدا می‌ماند
-      const dKey = it.detailedId ? `${accId}__${it.detailedType || 'other'}#${it.detailedId}` : `${accId}__name:${dName}`;
+      const openingItemId = it.openingVoucherId ? itemOfOpeningRow(openingItems.get(Number(it.openingVoucherId)), it.detailedName ?? '') : null;
+      const stable: StableRef | null = it.sourceChequeId ? { kind: 'cheque', id: it.sourceChequeId }
+        : openingItemId ? { kind: 'item', id: openingItemId } : null;
+      const { key: dKey, ref } = trialBalanceDetailKey(accId, it, isManualReferenceModule(it.referenceModule), stable);
       let det = detailedMap.get(dKey);
       if (!det) {
         det = {
           accountId: accId,
-          detailedType: it.detailedType || 'other',
-          detailedId: it.detailedId,
-          detailedName: dName,
+          ref,
+          detailedId: ref.detailedId,
+          detailedName: ref.storedName,
           ...emptyTurnover(),
         };
         detailedMap.set(dKey, det);
@@ -207,6 +215,10 @@ export class AccountingReportService {
 
     const allAccs = await ChartOfAccountsService.getAllAccounts(tx);
     const accMap = new Map(allAccs.map(a => [a.id, a]));
+    if (targetLevel === 'detailed' || targetLevel === 'all' || targetLevel === 'tree') {
+      const names = await currentDetailNames(executor, Array.from(detailedMap.values(), d => d.ref));
+      for (const det of detailedMap.values()) det.detailedName = detailDisplayName(det.ref, names);
+    }
 
     // Aggregate from subsidiary up to general and group accounts
     const aggTurnover = new Map<number, TurnoverAccumulator>();

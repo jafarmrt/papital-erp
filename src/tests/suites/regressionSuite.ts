@@ -10630,6 +10630,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 3 PR e: the chart of accounts and the account mapping (TD-546 ...)
   const { runChartOfAccountsTests } = await import('../regression/chartOfAccountsTests.js');
   results.push(...await runChartOfAccountsTests(shouldRun));
+  const { runTrialBalanceDetailTests } = await import('../regression/trialBalanceDetailTests.js');
+  results.push(...await runTrialBalanceDetailTests(shouldRun));
   // Package 1 PR d: conditional migration constraints listed and built by hand (TD-589)
   const { runConditionalConstraintTests } = await import('../regression/conditionalConstraintTests.js');
   results.push(...await runConditionalConstraintTests(shouldRun));
