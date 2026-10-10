@@ -138,7 +138,8 @@ export default function ProjectsPage() {
 
   const handleDeleteProject = async (id: number, code: string) => {
     if (!(await confirmAction({ title: 'حذف پروژه تولید', message: `آیا از حذف پروژه تولید با کد ${code} مطمئن هستید؟` }))) return;
-    await deleteProjectMutation.mutateAsync(id);
+    // v10.0.92 (TD-1216): the mutation's onError shows a refusal (422); the rejection is not passed on to the click handler
+    deleteProjectMutation.mutate(id);
   };
 
   // Summary Statistics (v9.0.412, TD-743): شمار هر وضعیت از سرور، با صافی‌های جستجو و اولویت
