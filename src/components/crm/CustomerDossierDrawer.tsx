@@ -488,7 +488,7 @@ export function CustomerDossierDrawer({
                   کارت تفصیلی و گردش مالی حسابداری (Double-Entry Ledger)
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  اطلاعات مستقیم و بدون واسطه از دفتر کل و اسناد حسابداری دوبل صادرشده
+                  اطلاعات مستقیم و بدون واسطه از دفتر کل و اسناد حسابداری صادرشده
                 </p>
               </div>
             </div>

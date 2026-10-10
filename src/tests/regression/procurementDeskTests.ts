@@ -21,7 +21,7 @@ export async function runProcurementDeskTests(shouldRun: ShouldRun): Promise<Tes
       'v9.0.355: procurement errors name a workflow action by its Persian title, never its key, and a requisition row without a quantity gets its own Persian message on that field (TD-901)',
       ['td901', 'procurement', 'wording', 'package10'], messagesCase],
     ['reg_procurement_order_warehouse_name_td_1131',
-      'v10.0.48: the procurement order list names the destination warehouse of an order and of each line next to its code; the delivery window showed the raw code (TD-1131)',
+      'v10.0.61: the procurement order list names the destination warehouse of an order and of each line next to its code; the delivery window showed the raw code (TD-1131)',
       ['td1131', 'procurement', 'wording', 'package10'], warehouseNameCase],
   ];
   for (const [id, name, tags, run] of cases) {
@@ -149,7 +149,7 @@ async function messagesCase(h: Harness, wrong: string[]): Promise<string> {
   return 'a missing quantity is reported on its field in Persian; a refused cancel_order names the action by its Persian title';
 }
 
-/** v10.0.48 (TD-1131): the order list carries the warehouse name the delivery window and the order list show */
+/** v10.0.61 (TD-1131): the order list carries the warehouse name the delivery window and the order list show */
 async function warehouseNameCase(h: Harness, wrong: string[]): Promise<string> {
   const prefix = `P10W-${h.tag}-${Math.floor(Math.random() * 1e5)}`;
   const [req] = await h.q(

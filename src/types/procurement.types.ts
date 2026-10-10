@@ -98,7 +98,7 @@ export interface ProcurementOrderItem {
   unitPrice: number;
   totalPrice: number;
   location?: string;
-  /** نام انبار ردیف (v10.0.48، TD-1131) */
+  /** نام انبار ردیف (v10.0.61، TD-1131) */
   locationName?: string;
 }
 
@@ -115,7 +115,7 @@ export interface ProcurementOrder {
   requisitionCode?: string | null;
   projectName?: string | null;
   location?: string;
-  /** نام انبار مقصد (v10.0.48، TD-1131) */
+  /** نام انبار مقصد (v10.0.61، TD-1131) */
   locationName?: string;
   totalAmount: number;
   itemsCount: number;

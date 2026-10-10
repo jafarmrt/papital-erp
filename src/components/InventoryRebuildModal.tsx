@@ -188,7 +188,7 @@ export default function InventoryRebuildModal({
                         : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <div className="font-bold text-xs text-slate-800">تمام کاتالوگ انبار (توصیه‌شده)</div>
+                    <div className="font-bold text-xs text-slate-800">همه کالاهای انبار (توصیه‌شده)</div>
                     <div className="text-[11px] text-slate-500 mt-1">
                       بررسی و تطبیق همزمان کلیه کالاها و اصلاح مغایرت‌های سراسری
                     </div>
