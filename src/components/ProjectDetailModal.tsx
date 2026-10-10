@@ -17,6 +17,8 @@ import ProjectProductProgressTab from './project/ProjectProductProgressTab';
 import { StageStatusField } from './project/StageStatusField';
 import { hasMatrixProducts } from '../lib/projects/progressMatrix';
 import { WorkflowStepperWidget } from './workflow/WorkflowStepperWidget';
+import { useHasAnyPermission } from '../contexts/AuthContext';
+import { WORKFLOW_WIDGET_PERMISSIONS } from '../lib/recordReadPermissions';
 import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 import { useProjectVersion } from '../hooks/useProjectVersion';
 import { useProjectPermissions } from '../hooks/useProjectPermissions';
@@ -76,6 +78,7 @@ export default function ProjectDetailModal({
   }, [initialTab, isOpen]);
 
   // Backend metadata state
+  const canSeeWorkflow = useHasAnyPermission(WORKFLOW_WIDGET_PERMISSIONS);
   const [itemsList, setItemsList] = useState<Item[]>([]);
   const [personnelList, setPersonnelList] = useState<any[]>([]);
   const [pieceworkTasksList, setPieceworkTasksList] = useState<any[]>([]);
@@ -501,13 +504,16 @@ export default function ProjectDetailModal({
               {activeTab === 'overview' && (
                 <div className="space-y-6 text-xs animate-fadeIn">
                   {/* Workflow Engine Stepper Widget */}
-                  <WorkflowStepperWidget
-                    entityType="project"
-                    entityId={project.id}
-                    workflowCode="PROJECT_WORKFLOW"
-                    title={`چرخه و تاییدات پروژه شماره ${project.project_code || project.id}`}
-                    onStateChange={loadProjectData}
-                  />
+                  {/* v10.0.90 (TD-1211): the widget's API asks a workflow key; without one it would show «آغاز گردش کار» and a false «not active» */}
+                  {canSeeWorkflow && (
+                    <WorkflowStepperWidget
+                      entityType="project"
+                      entityId={project.id}
+                      workflowCode="PROJECT_WORKFLOW"
+                      title={`چرخه و تاییدات پروژه شماره ${project.project_code || project.id}`}
+                      onStateChange={loadProjectData}
+                    />
+                  )}
 
                   {/* Top Stats Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
