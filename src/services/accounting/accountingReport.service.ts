@@ -26,7 +26,7 @@ import { yearEndClosingCutoff, yearEndClosingVoucherSql } from './yearEndClosing
 import { accountCardHasFilter, type AccountCardReport } from '../../lib/accounting/accountCard.js';
 import { JOURNAL_BOOK_MAX_PAGE_SIZE, JOURNAL_BOOK_PAGE_SIZE, type JournalBookReport, type JournalBookRow } from '../../lib/accounting/journalBook.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
-import { currentDetailNames, detailDisplayName, isManualReferenceModule, trialBalanceDetailKey, type DetailRef } from './trialBalanceDetail.js';
+import { currentDetailNames, detailDisplayName, isManualReferenceModule, itemOfOpeningRow, openingVoucherItems, trialBalanceDetailKey, type DetailRef, type StableRef } from './trialBalanceDetail.js';
 
 /** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
 function foreignOrigin(allCurrencies: boolean, row: {
@@ -98,6 +98,8 @@ export class AccountingReportService {
     // v8.0.16 (TD-260): ارز و نرخ ردیف از همان قاعده کارت حساب و صورت‌حساب طرف‌حساب (voucherItemAmount.ts)
     const itemCurrencyExpr = voucherItemCurrencySql;
     const rateExpr = voucherItemRateSql;
+    // v10.0.85 (TD-1128): an item opening voucher's id, so its rows can be keyed by their item
+    const itemOpeningVoucherIdSql = sql<number | null>`CASE WHEN ${journalVouchers.referenceModule} = 'item_opening' THEN ${journalVouchers.id} END`;
     const groupedItems = await executor.select({
       voucherDate: journalVouchers.date,
       isYearEndClosing: yearEndClosingVoucherSql,
@@ -107,6 +109,8 @@ export class AccountingReportService {
       detailedId: journalVoucherItems.detailedId,
       detailedName: journalVoucherItems.detailedName,
       referenceModule: journalVouchers.referenceModule,
+      sourceChequeId: journalVouchers.sourceChequeId,
+      openingVoucherId: itemOpeningVoucherIdSql,
       debit: sql<string>`COALESCE(SUM(${journalVoucherItems.debit}), 0)::text`,
       credit: sql<string>`COALESCE(SUM(${journalVoucherItems.credit}), 0)::text`,
       debitIrr: sql<string>`COALESCE(SUM(ROUND(${journalVoucherItems.debit} * ${rateExpr}, 0)), 0)::text`,
@@ -117,7 +121,8 @@ export class AccountingReportService {
     .where(and(...baseConditions))
     .groupBy(
       journalVouchers.date, yearEndClosingVoucherSql, itemCurrencyExpr, journalVoucherItems.accountId,
-      journalVoucherItems.detailedType, journalVoucherItems.detailedId, journalVoucherItems.detailedName, journalVouchers.referenceModule
+      journalVoucherItems.detailedType, journalVoucherItems.detailedId, journalVoucherItems.detailedName, journalVouchers.referenceModule,
+      journalVouchers.sourceChequeId, itemOpeningVoucherIdSql
     );
 
     interface TurnoverAccumulator {
@@ -153,6 +158,7 @@ export class AccountingReportService {
     const normStartDate = normalizeDateToIso(params.startDate);
     const normEndDate = normalizeDateToIso(params.endDate);
     const isBaseView = !params.currency || params.currency === 'all';
+    const openingItems = await openingVoucherItems(executor, groupedItems.flatMap(g => g.openingVoucherId ? [Number(g.openingVoucherId)] : []));
     const closingCutoff = yearEndClosingCutoff(params.includeClosing, (params.closingFromStart ? normStartDate : undefined) ?? normEndDate);
 
     for (const it of groupedItems) {
@@ -189,7 +195,10 @@ export class AccountingReportService {
       addTurnover(accTurnover, isBeforeStart, d, c);
 
       // Detailed Tracking
-      const { key: dKey, ref } = trialBalanceDetailKey(accId, it, isManualReferenceModule(it.referenceModule));
+      const openingItemId = it.openingVoucherId ? itemOfOpeningRow(openingItems.get(Number(it.openingVoucherId)), it.detailedName ?? '') : null;
+      const stable: StableRef | null = it.sourceChequeId ? { kind: 'cheque', id: it.sourceChequeId }
+        : openingItemId ? { kind: 'item', id: openingItemId } : null;
+      const { key: dKey, ref } = trialBalanceDetailKey(accId, it, isManualReferenceModule(it.referenceModule), stable);
       let det = detailedMap.get(dKey);
       if (!det) {
         det = {
