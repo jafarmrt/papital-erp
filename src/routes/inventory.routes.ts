@@ -16,6 +16,7 @@ import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { BOM_ALLOCATE_PERMISSIONS, BOM_CONSUME_PERMISSIONS, BOM_RELEASE_PERMISSIONS, PROJECT_STOCK_IN_PERMISSIONS } from '../lib/permissions/projectPermissions.js';
 import { WAC_CORRECTION_PERMISSION } from '../lib/inventoryAudit/wacCorrection.js';
 import { ITEM_COST_READ_PERMISSIONS, RESERVATION_BUYER_READ_PERMISSIONS, reservedItemsReportForAccess } from '../lib/inventory/reservedItemsReport.js';
+import { allocationsForCostAccess } from '../lib/inventory/projectMaterialCost.js';
 import type { AuthUserPayload } from '../types.js';
 import { actorDisplayName } from '../lib/auth/actorDisplayName.js';
 
@@ -418,7 +419,9 @@ router.get(
       search
     });
 
-    res.json({ allocations, total: allocations.length });
+    // v10.0.130 (TD-1210): بهای تخصیص فقط برای خوانندگان بهای کالا
+    const canReadCost = await can(req.user, ...ITEM_COST_READ_PERMISSIONS);
+    res.json({ allocations: allocationsForCostAccess(allocations, canReadCost), total: allocations.length });
   })
 );
 

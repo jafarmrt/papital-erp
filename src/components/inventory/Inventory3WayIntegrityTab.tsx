@@ -45,7 +45,7 @@ export function Inventory3WayIntegrityTab({
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900 font-mono">
-              {integrityReport?.summary?.healthScorePercentage ?? 100}٪
+              {formatPersianNumber(integrityReport?.summary?.healthScorePercentage ?? 100)}٪
             </span>
             <span className="text-xs text-slate-500 font-medium">انطباق ریاضی</span>
           </div>
@@ -133,7 +133,7 @@ export function Inventory3WayIntegrityTab({
             <span className="text-sm">توزیع موجودی در انبارها و انطباق با کاردکس</span>
           </div>
           <span className="text-slate-400 text-xs">
-            تعداد انبارهای فعال: {integrityReport?.warehouses?.length || 0}
+            تعداد انبارهای فعال: {formatPersianNumber(integrityReport?.warehouses?.length || 0)}
           </span>
         </div>
 

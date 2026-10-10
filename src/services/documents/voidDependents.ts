@@ -3,6 +3,7 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { documents, treasuryTransactions } from '../../db/schema.js';
 import { ConflictError } from '../../errors/customErrors.js';
 import { formatPersianNumber } from '../../utils/persianNumber.js';
+import { formatCurrencyLabel } from '../../utils/formatters.js';
 
 /**
  * v9.0.271 (TD-773، تصمیم ت۴ «الف» بسته ۸): سندی که وابسته زنده دارد باطل نمی‌شود و پاسخ ۴۰۹ وابسته‌ها را نام می‌برد.
@@ -77,12 +78,19 @@ export async function liveTreasuryRowsOf(tx: DbExecutor, documentId: number): Pr
     .orderBy(asc(treasuryTransactions.id));
 }
 
+/**
+ * v10.0.141 (TD-1203): فهرست ردیف‌های خزانه در پیام رد ابطال؛ ارز با نام فارسی (`formatCurrencyLabel`)، نه کد خام «IRR».
+ */
+export function treasuryRowsListText(rows: ReadonlyArray<Pick<VoidDependentTreasuryRow, 'transactionNumber' | 'type' | 'amount' | 'currency'>>): string {
+  return rows
+    .map(r => `«${r.transactionNumber}» (${r.type === 'payment' ? 'پرداخت' : 'دریافت'} ${formatPersianNumber(Number(r.amount) || 0, 4)} ${formatCurrencyLabel(r.currency || 'IRR')})`)
+    .join('، ');
+}
+
 export async function assertVoidHasNoTreasuryRows(tx: DbExecutor, doc: { id: number; refNumber: string | null }): Promise<void> {
   const rows = await liveTreasuryRowsOf(tx, doc.id);
   if (rows.length === 0) return;
-  const listed = rows
-    .map(r => `«${r.transactionNumber}» (${r.type === 'payment' ? 'پرداخت' : 'دریافت'} ${formatPersianNumber(Number(r.amount) || 0, 4)} ${r.currency || 'IRR'})`)
-    .join('، ');
+  const listed = treasuryRowsListText(rows);
   throw new ConflictError(
     `سند «${doc.refNumber || doc.id}» دریافت یا پرداخت خزانه دارد و باطل نمی‌شود: ${listed}. اول هر کدام را در خزانه «علی‌الحساب» کنید، به سند دیگری وصل کنید یا باطل کنید.`,
     { treasuryRows: rows.map(r => ({ ...r, amount: Number(r.amount) || 0 })) },

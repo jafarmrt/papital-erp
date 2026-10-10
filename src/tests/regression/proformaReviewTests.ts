@@ -129,11 +129,37 @@ async function proformaStockWarning(): Promise<string> {
   });
 }
 
+/** TD-1199: a shortage names the warehouse by its name, never by its code */
+async function shortageNamesWarehouse(): Promise<string> {
+  const { proformaStockWarnings, assertOutflowWithinSellable } = await import('../../services/documents/documentSellableGate.js');
+  const { getDefaultWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
+  const { warehouses } = await import('../../db/schema.js');
+  return inRolledBackTx(async (tx) => {
+    const code = await getDefaultWarehouseCode(tx) ?? '';
+    const whName = `انبار نمایش ${Date.now() % 100000}`;
+    await tx.update(warehouses).set({ name: whName }).where(eq(warehouses.code, code));
+    const short = await salesProforma(tx, 2, 5);
+    const [warning] = await proformaStockWarnings(tx, short.document.id);
+    if (!warning?.includes(`«${whName}»`)) throw new Error(`the proforma warning does not name the warehouse "${whName}": ${warning}`);
+    if (warning.includes(`«${code}»`)) throw new Error(`the proforma warning names the warehouse code "${code}"`);
+    let message = '';
+    try {
+      await assertOutflowWithinSellable(tx, [{ itemId: short.item.id, quantity: 5, location: code }]);
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    if (!message.includes(`«${whName}»`)) throw new Error(`the shortage error does not name the warehouse "${whName}"`);
+    if (message.includes(`«${code}»`)) throw new Error(`the shortage error names the warehouse code "${code}"`);
+    return 'proforma warning and shortage error name the warehouse';
+  });
+}
+
 export async function runProformaReviewTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], () => Promise<string>]> = [
     ['reg_proforma_reject_to_draft_td_1137', 'v10.0.85: a rejected sales proforma returns to draft and stops reserving (TD-1137)', ['td1137'], rejectedProformaToDraft],
     ['reg_document_locked_in_review_td_1138', 'v10.0.86: a document in a workflow review step is not edited (TD-1138)', ['td1138'], documentLockedInReview],
+    ['reg_shortage_warehouse_name_td_1199', 'v10.0.114: a stock shortage names the warehouse by its name, not its code (TD-1199)', ['td1199'], shortageNamesWarehouse],
     ['reg_proforma_stock_warning_td_1138', 'v10.0.86: a saved proforma above the sellable stock gets a warning per item (TD-1138)', ['td1138'], proformaStockWarning],
   ];
   for (const [id, name, tags, run] of cases) {

@@ -35,9 +35,12 @@ export interface WorkflowDesignTransition {
   kValue?: unknown;
   requiredRole?: unknown;
   requiredPermission?: unknown;
+  isInitiatorExcluded?: unknown;
+  isInitiatorOnly?: unknown;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const flagOn = (v: unknown): boolean => v === true || Number(v) === 1;
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
 export function designStateKey(state: WorkflowDesignState): string {
@@ -129,6 +132,10 @@ export function workflowDesignErrors(states: unknown, transitions: unknown): str
     const permission = text(tr.requiredPermission);
     if (permission && !isCatalogPermission(permission)) {
       errors.push(`مجوز لازم اقدام ${transitionLabel(tr, i)} («${permission}») در فهرست مجوزها نیست؛ آن را از فهرست برگزینید.`);
+    }
+    // v10.0.120 (TD-1220): «فقط آغازکننده» و «آغازکننده تأیید نکند» با هم اقدام را برای همه می‌بندند
+    if (flagOn(tr.isInitiatorOnly) && flagOn(tr.isInitiatorExcluded)) {
+      errors.push(`اقدام ${transitionLabel(tr, i)} هم «فقط آغازکننده اجرا کند» دارد و هم «آغازکننده تأیید نکند»؛ یکی را بردارید.`);
     }
     if (text(tr.requiredRole).includes('.')) {
       errors.push(`نقش اقدام ${transitionLabel(tr, i)} کلید مجوز است؛ آن را در «مجوز لازم» بگذارید و نقش را از فهرست نقش‌ها برگزینید.`);
