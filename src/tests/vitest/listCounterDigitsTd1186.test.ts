@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * v10.0.86 (TD-1186): list counters print their counts in Persian digits. The user guide test found «نمایش 8 مورد» on
+ * v10.0.132 (TD-1186): list counters print their counts in Persian digits. The user guide test found «نمایش 8 مورد» on
  * the parties list and «6 مورد انتخاب شده» in the shortcut settings window; the treasury table counted the same way.
  * Each place showed a bare number expression in JSX text, so the check reads the source.
  */

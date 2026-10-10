@@ -100,7 +100,7 @@ export class DocumentStockEngine {
       .for('no key update'); // v8.0.67 (TD-320): هم‌حالت lockStockItems، بی ارتقای قفل
 
     if (!itemData) {
-      throw new NotFoundError(`کالای مورد نظر با شناسه ${itemId} در سیستم یافت نشد.`);
+      throw new NotFoundError(`کالای مورد نظر با شناسه ${itemId} در سامانه یافت نشد.`);
     }
 
     // v7.0.45 (audit P2-1): موجودی پیش از حرکت از جدول نرمال (منبع حقیقت)، نه از کش JSONB

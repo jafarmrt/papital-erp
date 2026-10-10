@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * v10.0.85 (TD-1185): the route guard's 403 named the permission by its key («شما مجوز لازم (documents.delete) …»),
+ * v10.0.131 (TD-1185): the route guard's 403 named the permission by its key («شما مجوز لازم (documents.delete) …»),
  * which the browser shows as a toast. The message now names the catalog's Persian title; the keys stay only in the
  * answer's `permissions` field (finding #7 of the user guide test).
  */

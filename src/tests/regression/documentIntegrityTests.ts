@@ -3,7 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { crmLeads } from '../../db/schema.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
-import { brief, fixture } from './documentEntryTests.js';
+import { brief, docVersion, fixture } from './documentEntryTests.js';
 import { createTestWarehouse } from '../fixtures/factories.js';
 import { DocumentService } from '../../services/document.service.js';
 
@@ -88,11 +88,11 @@ async function documentLeadLinkInEditCase(h: Harness, wrong: string[]): Promise<
   const before = await docRow(p2Id);
 
   // 1) a lead that already has another proforma: 422 before any write
-  const taken = await h.put(`/api/documents/${p2Id}`, { notes: 'P8D taken', crmLeadId: leadA });
+  const taken = await h.put(`/api/documents/${p2Id}`, { version: await docVersion(h, p2Id), notes: 'P8D taken', crmLeadId: leadA });
   if (taken.status !== 422 || codeOf(taken) !== 'CRM_LEAD_HAS_PROFORMA') wrong.push(`linking proforma 2 to lead A (proforma 1) answered ${brief(taken)}, expected 422 CRM_LEAD_HAS_PROFORMA`);
 
   // 2) a lead that does not exist: 422 before any write (was 409 after the notes and version were saved)
-  const missing = await h.put(`/api/documents/${p2Id}`, { notes: 'P8D missing', crmLeadId: 99_999_999 });
+  const missing = await h.put(`/api/documents/${p2Id}`, { version: await docVersion(h, p2Id), notes: 'P8D missing', crmLeadId: 99_999_999 });
   if (missing.status !== 422 || codeOf(missing) !== 'CRM_LEAD_NOT_FOUND') wrong.push(`linking a missing lead answered ${brief(missing)}, expected 422 CRM_LEAD_NOT_FOUND`);
   const afterRefusals = await docRow(p2Id);
   if (afterRefusals.crm_lead_id !== null || afterRefusals.notes !== before.notes || Number(afterRefusals.version) !== Number(before.version)) {
@@ -101,7 +101,7 @@ async function documentLeadLinkInEditCase(h: Harness, wrong: string[]): Promise<
   if (await leadOf(leadA) !== `1/${p1Id}`) wrong.push(`lead A is ${await leadOf(leadA)} after the refused link, expected 1/${p1Id}`);
 
   // 3) a free lead: linked and marked in the same edit
-  const linked = await h.put(`/api/documents/${p2Id}`, { notes: 'P8D linked', crmLeadId: leadB });
+  const linked = await h.put(`/api/documents/${p2Id}`, { version: await docVersion(h, p2Id), notes: 'P8D linked', crmLeadId: leadB });
   const afterLink = await docRow(p2Id);
   if (linked.status !== 200 || Number(afterLink.crm_lead_id) !== leadB || await leadOf(leadB) !== `1/${p2Id}`) {
     wrong.push(`linking the free lead B answered ${brief(linked)} with document lead ${afterLink.crm_lead_id} and lead B ${await leadOf(leadB)}, expected 200, ${leadB} and 1/${p2Id}`);
@@ -110,7 +110,7 @@ async function documentLeadLinkInEditCase(h: Harness, wrong: string[]): Promise<
   if (Number(quotes[0]?.n) !== 1) wrong.push(`lead B has ${quotes[0]?.n} proforma activities after the link, expected 1`);
 
   // 4) unlinking releases the lead for a new proforma
-  const unlinked = await h.put(`/api/documents/${p2Id}`, { crmLeadId: null });
+  const unlinked = await h.put(`/api/documents/${p2Id}`, { version: await docVersion(h, p2Id), crmLeadId: null });
   const afterUnlink = await docRow(p2Id);
   if (unlinked.status !== 200 || afterUnlink.crm_lead_id !== null || await leadOf(leadB) !== '0/null') {
     wrong.push(`unlinking answered ${brief(unlinked)} with document lead ${afterUnlink.crm_lead_id} and lead B ${await leadOf(leadB)}, expected 200, null and 0/null`);
@@ -269,8 +269,8 @@ async function documentRefNumberRulesCase(h: Harness, wrong: string[]): Promise<
     wrong.push(`the create log says ${JSON.stringify(log?.description)} with ${JSON.stringify(after ?? null)}, expected the stored number ${invoiceRef} and status draft`);
   }
   // editing keeps the invoice number: the same number passes, another is 422
-  const same = await h.put(`/api/documents/${docIdOf(invoice)}`, { refNumber: invoiceRef, notes: 'P8D same number' });
-  const other = await h.put(`/api/documents/${docIdOf(invoice)}`, { refNumber: '900000', notes: 'P8D other number' });
+  const same = await h.put(`/api/documents/${docIdOf(invoice)}`, { version: await docVersion(h, docIdOf(invoice)), refNumber: invoiceRef, notes: 'P8D same number' });
+  const other = await h.put(`/api/documents/${docIdOf(invoice)}`, { version: await docVersion(h, docIdOf(invoice)), refNumber: '900000', notes: 'P8D other number' });
   if (same.status !== 200 || other.status !== 422 || codeOf(other) !== 'DOCUMENT_REF_SERVER_SERIES' || await storedRef(docIdOf(invoice)) !== invoiceRef) {
     wrong.push(`editing the invoice number answered ${brief(same)} (same) and ${brief(other)} (other) leaving ${await storedRef(docIdOf(invoice))}, expected 200, 422 DOCUMENT_REF_SERVER_SERIES and ${invoiceRef}`);
   }
@@ -283,7 +283,7 @@ async function documentRefNumberRulesCase(h: Harness, wrong: string[]): Promise<
   if (second.status !== 409 || codeOf(second) !== 'DOCUMENT_REF_TAKEN') wrong.push(`a second receipt with ${manual} answered ${brief(second)}, expected 409 DOCUMENT_REF_TAKEN`);
   // editing another receipt to that number: the same 409 with its own code (was: a generic duplicate error)
   const third = await h.post('/api/documents', f.doc('receipt', 'draft', lines));
-  const moved = await h.put(`/api/documents/${docIdOf(third)}`, { refNumber: manual });
+  const moved = await h.put(`/api/documents/${docIdOf(third)}`, { version: await docVersion(h, docIdOf(third)), refNumber: manual });
   if (moved.status !== 409 || codeOf(moved) !== 'DOCUMENT_REF_TAKEN') wrong.push(`editing a receipt to the taken number answered ${brief(moved)}, expected 409 DOCUMENT_REF_TAKEN`);
 
   // 3) a manual number ahead of the series does not move it, and the series skips it
