@@ -22,6 +22,7 @@ import { isReversalReference } from '../../lib/accounting/voucherSource.js';
 import { assertVoucherWithoutSource, voucherActiveReversals, voucherSourceKinds } from './voucherSource.js';
 import { assertManualApprovedCreateAllowed, assertNotApprovedByMaker, makerApprovalRefusal } from './voucherMakerChecker.js';
 import { checkOccVersion } from '../../lib/occHelper.js';
+import { voucherMakerNames } from './voucherMakerNames.js';
 import type { BatchFinalizeResult } from '../../lib/accounting/voucherBatch.js';
 export { VOUCHER_BALANCE_TOLERANCE };
 
@@ -173,10 +174,12 @@ export class VoucherService {
 
     const sourceKinds = await voucherSourceKinds(orm, voucherIds); // v9.0.294 (TD-552، ت۸)
     const reversals = await voucherActiveReversals(orm, rawList); // v10.0.x (TD-1239)
+    const makerNames = await voucherMakerNames(orm, rawList.map(v => v.createdById)); // TD-1230
     const data: JournalVoucher[] = rawList.map(v => ({
       ...v,
       sourceKind: sourceKinds.get(v.id) ?? null,
       reversedByVoucherNumber: reversals.get(v.id) ?? null,
+      createdByName: (v.createdById && makerNames.get(v.createdById)) || null,
       voucher_number: v.voucherNumber,
       manual_voucher_number: v.manualVoucherNumber || '',
       voucher_type: v.voucherType as JournalVoucher['voucherType'],
@@ -226,11 +229,13 @@ export class VoucherService {
     .orderBy(asc(journalVoucherItems.rowOrder));
     const sourceKind = (await voucherSourceKinds(executor, [id])).get(id) ?? null; // v9.0.294 (TD-552، ت۸)
     const reversedByVoucherNumber = (await voucherActiveReversals(executor, [v])).get(id) ?? null; // v10.0.x (TD-1239)
+    const makerNames = await voucherMakerNames(executor, [v.createdById]); // TD-1230
 
     return {
       ...v,
       sourceKind,
       reversedByVoucherNumber,
+      createdByName: (v.createdById && makerNames.get(v.createdById)) || null,
       attachments: (Array.isArray(v.attachments) ? v.attachments : []) as FinancialAttachment[],
       description: v.description || '',
       voucher_number: v.voucherNumber,
@@ -298,7 +303,7 @@ export class VoucherService {
     }[];
   }, externalTx?: DbExecutor): Promise<JournalVoucher> {
     if (!data.items || data.items.length < 2) {
-      throw new ValidationError('سند دوبل حسابداری باید حداقل شامل دو ردیف (بدهکار و بستانکار) باشد');
+      throw new ValidationError('سند حسابداری دوطرفه باید حداقل شامل دو ردیف (بدهکار و بستانکار) باشد');
     }
 
     // Verify double-entry balance — v7.0.49 (audit P2-5): آستانه واحد VOUCHER_BALANCE_TOLERANCE در ثبت و قطعی‌سازی؛

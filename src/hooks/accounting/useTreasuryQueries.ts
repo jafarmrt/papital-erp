@@ -7,6 +7,7 @@ import type { BankAccount, BankAccountOption, BankReconciliationReport, Treasury
 import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError } from './accountingQueryConfig';
 import { invalidateAfterReconciliation, invalidateAfterTreasuryChange } from './accountingInvalidation';
 import { useOnDemandReport, type OnDemandReportSpec } from './useOnDemandReport';
+import type { TreasuryRelinkOption } from '../../lib/treasury/treasuryRelink';
 
 /**
  * خزانه‌داری: حساب‌های بانکی و تراکنش‌های خزانه با useQuery؛ حساب بانکی، دریافت/پرداخت، ابطال، انتقال بین‌بانکی،
@@ -259,3 +260,26 @@ export function useCashFlowReport() {
   return useOnDemandReport(CASH_FLOW_REPORT);
 }
 
+
+/** v10.0.123 (TD-1122): سندهایی که ردیف خزانه به آن‌ها منتقل می‌شود؛ فقط وقتی پنجره باز است خوانده می‌شود */
+export function useTreasuryRelinkOptionsQuery(id: number | null) {
+  return useQuery<TreasuryRelinkOption[]>({
+    queryKey: QUERY_KEYS.accounting.treasuryRelinkOptions(id ?? 0),
+    queryFn: ({ signal }) => fetchJson(`/accounting/treasury/${id}/document-options`, { signal }).then(r => safeExtractArray<TreasuryRelinkOption>(r)),
+    enabled: id !== null,
+    staleTime: 0,
+  });
+}
+
+/** v10.0.123 (TD-1122): انتقال دریافت یا پرداخت به سند فعال دیگر هم‌طرف (همان مسیر TD-779) */
+export function useTreasuryDocumentRelink() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, unknown, { id: number; documentId: number }>({
+    mutationFn: ({ id, documentId }) => fetchJson(`/accounting/treasury/${id}/document`, { method: 'PUT', body: JSON.stringify({ documentId }) }),
+    onSuccess: () => {
+      void invalidateAfterTreasuryChange(queryClient);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documents.all });
+    },
+    onError: silentMutationError,
+  });
+}

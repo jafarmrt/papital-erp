@@ -3,6 +3,7 @@ import { inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm, pool } from '../../db/drizzle.js';
 import { roles, users } from '../../db/schema.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * ابزار مشترک آزمون‌های بسته ۱۴ (گردش کار): مسیرهای واقعی Express با ورود واقعی (کوکی و CSRF) و نقش‌های seed یا تازه.
@@ -78,7 +79,7 @@ export async function createHarness(): Promise<Harness> {
     },
     async cleanup() {
       if (userIds.length > 0) await orm.delete(users).where(inArray(users.id, userIds)).catch(() => undefined);
-      if (roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, roleIds)).catch(() => undefined);
+      if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
     },
   };
   return h;

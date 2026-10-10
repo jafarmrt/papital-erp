@@ -191,7 +191,7 @@ router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (
     let session: { token: string; csrfToken: string } | null = null;
     if (passwordChanged) {
       const csrfToken = req.user?.csrfToken || generateCsrfToken();
-      const token = generateToken({ id: updatedUser.id, username: updatedUser.username, role: updatedUser.role, csrfToken, tokenVersion: updatedUser.tokenVersion || 0 });
+      const token = generateToken({ id: updatedUser.id, username: updatedUser.username, role: updatedUser.role ?? '', csrfToken, tokenVersion: updatedUser.tokenVersion || 0 });
       res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
       session = { token, csrfToken };
     }
@@ -377,7 +377,7 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     if (role !== SYSTEM_ADMIN_ROLE) {
       const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, role)).limit(1);
       if (!roleRecord) {
-        return res.status(400).json({ error: 'نقش انتخاب‌شده در سیستم معتبر نیست' });
+        return res.status(400).json({ error: 'نقش انتخاب‌شده در سامانه معتبر نیست' });
       }
     }
 
@@ -450,7 +450,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
       // v9.0.129 (TD-520، ت۳): حساب قوی‌تر از ویرایشگر دست نمی‌خورد، نقش حساب خودش عوض نمی‌شود و نقش تازه در مرز
       // مجوزهای اوست
       const grantor = await grantorPermissions(req.user?.role, tx);
-      await assertManageableAccount(tx, grantor, prevUser.role);
+      await assertManageableAccount(tx, grantor, prevUser.role ?? '');
       if (role && role !== prevUser.role) {
         assertNotOwnAccountRole(req.user, targetUserId);
         await assertAssignableRole(tx, grantor, role);
@@ -460,7 +460,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
       if (role && role !== SYSTEM_ADMIN_ROLE) {
         const [roleRecord] = await tx.select().from(roles).where(eq(roles.code, role)).limit(1);
         if (!roleRecord) {
-          throw new BadRequestError('نقش انتخاب‌شده در سیستم معتبر نیست');
+          throw new BadRequestError('نقش انتخاب‌شده در سامانه معتبر نیست');
         }
       }
 
@@ -558,12 +558,12 @@ router.post('/users/:id/restore', authorizePermission('users.manage'), validate(
       throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
     }
     const grantor = await grantorPermissions(req.user?.role, tx);
-    await assertManageableAccount(tx, grantor, target.role);
+    await assertManageableAccount(tx, grantor, target.role ?? '');
     await assertAssignableRole(tx, grantor, role);
     if (role !== SYSTEM_ADMIN_ROLE) {
       const [roleRecord] = await tx.select({ id: roles.id }).from(roles).where(eq(roles.code, role)).limit(1);
       if (!roleRecord) {
-        throw new BadRequestError('نقش انتخاب‌شده در سیستم معتبر نیست');
+        throw new BadRequestError('نقش انتخاب‌شده در سامانه معتبر نیست');
       }
     }
 
@@ -623,7 +623,7 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
         throw new ForbiddenError(ONLY_ADMIN_MANAGES_ADMINS);
       }
       // v9.0.129 (TD-520، ت۳): حسابی که نقشش مجوزی بیش از حذف‌کننده دارد حذف نمی‌شود
-      await assertManageableAccount(tx, await grantorPermissions(req.user?.role, tx), delUser.role);
+      await assertManageableAccount(tx, await grantorPermissions(req.user?.role, tx), delUser.role ?? '');
 
       // ممنوعیت حذف آخرین مدیر فعال سیستم (قفل‌شدن سامانه)
       if (delUser.role === SYSTEM_ADMIN_ROLE) {
@@ -636,7 +636,7 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
         tokenVersion: (delUser.tokenVersion || 0) + 1
       }).where(eq(users.id, targetUserId));
 
-      deletedUserInfo = { fullName: delUser.fullName, username: delUser.username, role: delUser.role };
+      deletedUserInfo = { fullName: delUser.fullName, username: delUser.username, role: delUser.role ?? '' };
     });
 
     const finalInfo = deletedUserInfo!;

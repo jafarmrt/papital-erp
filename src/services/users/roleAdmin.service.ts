@@ -89,10 +89,10 @@ export async function updateRole(req: Request, roleId: number, input: RoleUpdate
     // v9.0.136 (TD-886، قاعده ۳ مدل مجوز): نقش ثابت «مدیر سیستم» را فقط مدیر سیستم ویرایش می‌کند، و فقط نام و توضیح آن را
     if (isSystemAdminRole(targetRole.code)) {
       if (!isSystemAdminRole(req.user?.role)) {
-        throw new ForbiddenError('نقش «مدیر سیستم» را فقط مدیر سیستم ویرایش می‌کند', undefined, 'SYSTEM_ADMIN_ROLE_FIXED');
+        throw new ForbiddenError('نقش مدیر سامانه را فقط مدیر سامانه ویرایش می‌کند', undefined, 'SYSTEM_ADMIN_ROLE_FIXED');
       }
       if (input.permissions !== undefined) {
-        throw new ConflictError('مجوزهای نقش «مدیر سیستم» ویرایش نمی‌شود؛ این نقش همیشه همه مجوزها را دارد', undefined, 'SYSTEM_ADMIN_ROLE_FIXED');
+        throw new ConflictError('مجوزهای نقش مدیر سامانه ویرایش نمی‌شود؛ این نقش همیشه همه مجوزها را دارد', undefined, 'SYSTEM_ADMIN_ROLE_FIXED');
       }
     }
 
@@ -144,7 +144,7 @@ export async function deleteRole(req: Request, roleId: number, workflowsRequirin
     if (!targetRole) throw new NotFoundError(ROLE_NOT_FOUND);
 
     // v9.0.135 (TD-885، تصمیم ت۹ الف): فقط نقش ثابت «مدیر سیستم» حذف نمی‌شود؛ نقش‌های پیش‌فرض قدیمی نقش عادی‌اند
-    if (isSystemAdminRole(targetRole.code)) throw new BadRequestError('نقش «مدیر سیستم» حذف نمی‌شود');
+    if (isSystemAdminRole(targetRole.code)) throw new BadRequestError('نقش مدیر سامانه حذف نمی‌شود');
 
     // v9.0.179 (TD-535، یافته B02-20): فقط کاربران حذف‌نشده نقش را نگه می‌دارند؛ کاربر حذف‌شده با بازگرداندن نقش تازه می‌گیرد
     const assignedUsers = await tx.select({ id: users.id }).from(users)
@@ -162,6 +162,11 @@ export async function deleteRole(req: Request, roleId: number, workflowsRequirin
       );
     }
 
+    // v10.0.164 (TD-962، مهاجرت 0100): users.role به roles.code کلید خارجی دارد؛ کاربر حذف‌شده‌ای که این نقش را داشت بی نقش
+    // می‌ماند (با بازگرداندن نقش تازه می‌گیرد) و شناسه‌اش در ردیف ممیزی می‌آید
+    const cleared = await tx.update(users).set({ role: null })
+      .where(and(eq(users.role, targetRole.code), eq(users.isDeleted, 1)))
+      .returning({ id: users.id });
     await tx.delete(roles).where(eq(roles.id, roleId));
     await logActivity({
       tx,
@@ -170,7 +175,11 @@ export async function deleteRole(req: Request, roleId: number, workflowsRequirin
       entity: ROLE_ENTITY,
       entityId: roleId,
       description: `حذف نقش "${targetRole.name}" (کد: ${targetRole.code})`,
-      details: { before: targetRole, deletedAt: new Date().toISOString() },
+      details: {
+        before: targetRole,
+        clearedDeletedUserIds: cleared.map(u => u.id).sort((x, y) => x - y),
+        deletedAt: new Date().toISOString(),
+      },
     });
     return targetRole.code;
   });

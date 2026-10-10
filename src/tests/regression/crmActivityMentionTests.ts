@@ -4,6 +4,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { crmActivities, notifications, roles, users } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * Package 9 (customers and CRM), TD-976: a CRM activity mentions live users by id only, notifies only mentioned users
@@ -76,7 +77,7 @@ export async function runCrmActivityMentionTests(shouldRun: (id: string, ...extr
       await orm.delete(notifications).where(inArray(notifications.userId, userIds)).catch(() => undefined);
       await orm.update(users).set({ isDeleted: 1 }).where(inArray(users.id, userIds)).catch(() => undefined);
     }
-    if (roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, roleIds)).catch(() => undefined);
+    if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
   }
   return results;
 }

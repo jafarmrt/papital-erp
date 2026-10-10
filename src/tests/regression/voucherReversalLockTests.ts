@@ -8,7 +8,7 @@ import { type ShouldRun, accountIdsByCode, inFiscalSandbox, runCase, sandboxAdmi
 
 /**
  * TD-1239 (roles-c Rc3): a reversed voucher reports its active reversal, so the row menu stops offering reverse and
- * correct again, and a reversal voucher does not go back to draft. Red on v10.0.90, where the list carried no reversal
+ * correct again, and a reversal voucher does not go back to draft. Red on v10.0.166, where the list carried no reversal
  * and PUT /status moved a reversal voucher back to draft.
  */
 

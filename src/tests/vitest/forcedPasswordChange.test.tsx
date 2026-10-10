@@ -27,7 +27,7 @@ let meUser: Record<string, unknown> = {};
 const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-function stubServer() {
+function stubServer(profileDelayMs = 0) {
   calls = [];
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -37,6 +37,7 @@ function stubServer() {
     if (url === '/api/users/my-permissions') return reply(200, { permissions: ['documents.view'], isAdmin: false, roleName: 'حسابدار' });
     if (url === '/api/auth/logout') return reply(200, { success: true });
     if (url === '/api/users/profile' && method === 'PUT') {
+      if (profileDelayMs > 0) await new Promise(r => setTimeout(r, profileDelayMs));
       return reply(200, { success: true, user: { ...meUser, mustResetPassword: false, must_reset_password: false }, csrfToken: 'c2' });
     }
     if (url === '/api/documents') return reply(403, { error: 'رمز موقت', code: PASSWORD_RESET_REQUIRED });
@@ -61,6 +62,26 @@ function renderApp() {
 const pathOf = (url: string) => url.split('?')[0];
 const passwordInputs = () => Array.from(document.querySelectorAll('input[type="password"]')) as HTMLInputElement[];
 const passwordFormShown = () => waitFor(() => expect(passwordInputs()).toHaveLength(3));
+/**
+ * TD-1189: after the change the application loads its shell (lazy chunks) and closes the form; on a busy
+ * runner that took longer than `waitFor`'s default 1 s, so the wait follows the real steps with its own limit.
+ */
+const APP_OPEN_TIMEOUT_MS = 10_000;
+
+async function changePasswordAndOpenApp(profileDelayMs = 0) {
+  meUser = temporaryUser;
+  stubServer(profileDelayMs);
+  renderApp();
+  await passwordFormShown();
+  const [current, next, confirm] = passwordInputs();
+  fireEvent.change(current, { target: { value: 'Tempor4ry!' } });
+  fireEvent.change(next, { target: { value: 'N3w-passw0rd' } });
+  fireEvent.change(confirm, { target: { value: 'N3w-passw0rd' } });
+  fireEvent.submit(next.closest('form')!);
+  await waitFor(() => expect(calls.some(c => c.url === '/api/users/profile' && c.method === 'PUT')).toBe(true));
+  await waitFor(() => expect(passwordInputs()).toHaveLength(0), { timeout: APP_OPEN_TIMEOUT_MS });
+  await waitFor(() => expect(document.querySelector('aside')).not.toBeNull(), { timeout: APP_OPEN_TIMEOUT_MS });
+}
 
 afterEach(() => {
   cleanup();
@@ -99,18 +120,12 @@ describe('temporary password (TD-523)', () => {
   });
 
   it('after the password change the application opens', async () => {
-    meUser = temporaryUser;
-    stubServer();
-    renderApp();
-    await passwordFormShown();
-    const [current, next, confirm] = passwordInputs();
-    fireEvent.change(current, { target: { value: 'Tempor4ry!' } });
-    fireEvent.change(next, { target: { value: 'N3w-passw0rd' } });
-    fireEvent.change(confirm, { target: { value: 'N3w-passw0rd' } });
-    fireEvent.submit(next.closest('form')!);
-    await waitFor(() => expect(passwordInputs()).toHaveLength(0));
-    await waitFor(() => expect(document.querySelector('aside')).not.toBeNull());
+    await changePasswordAndOpenApp();
   });
+
+  it('after the password change the application opens even when it takes longer than a second (TD-1189)', async () => {
+    await changePasswordAndOpenApp(1500);
+  }, 20_000);
 
   it('a PASSWORD_RESET_REQUIRED answer from the server switches the session to the password form', async () => {
     meUser = { id: 5, username: 'ali', full_name: 'علی رضایی', role: 'accountant' };
