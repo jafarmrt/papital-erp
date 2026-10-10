@@ -5,10 +5,10 @@ import {
   ProjectProductItem 
 } from '../../types';
 import { findProjectItemMatch } from '../../lib/projects/projectItemMatch';
+import { MATERIAL_UNITS } from '../../lib/pendingMaterials/materialRequestRules';
 
-export const COMMON_UNITS = [
-  'عدد', 'ریسه', 'برگ', 'کیلوگرم', 'متر', 'کارتن', 'ورق', 'رول', 'پک', 'لیتر', 'پارت', 'بسته', 'شاخه', 'طغره'
-];
+/** v10.0.103 (TD-1202): the same unit list as the keeper's approval window (`MATERIAL_UNITS`) */
+export const COMMON_UNITS = MATERIAL_UNITS;
 
 export const roundToOneDecimal = (val: number | undefined | null): number => {
   if (val === undefined || val === null || isNaN(val)) return 0;
