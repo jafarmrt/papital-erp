@@ -70,7 +70,6 @@
   "src/lib/auditLogger.ts": 3,
   "src/lib/permissions/permissionCatalog.ts": 2,
   "src/lib/permissions/roleTemplates.ts": 2,
-  "src/lib/secretBox.ts": 1,
   "src/lib/users/roleDisplayName.ts": 1,
   "src/lib/woocommerce/wcConnectionTest.ts": 1,
   "src/pages/AccountingPage.tsx": 1,

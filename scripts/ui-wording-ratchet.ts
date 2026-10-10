@@ -18,6 +18,11 @@ export const BASELINE_FILE = 'ui-wording-baseline.json';
 
 /** Browser code: pages, components, hooks, contexts and the shared lib (whose messages the screens show) */
 const ROOTS = ['src/pages', 'src/components', 'src/hooks', 'src/contexts', 'src/lib'];
+/**
+ * v10.0.83 (TD-1182): server code whose error messages reach the user as they are; only the literals inside
+ * `new …Error(…)` count there, never logs or stored names
+ */
+const SERVER_ROOTS = ['src/services', 'src/routes', 'src/middleware', 'src/errors'];
 const LETTER = '[\\u0621-\\u064A\\u067E\\u0686\\u0698\\u06A9\\u06AF\\u06CC]';
 /** «سیستم» (and «سیستمی»), «کاتالوگ», «فیلتر» (and «فیلترها»), «دوبل»; a longer word that only starts with one is not matched */
 export const FORBIDDEN = new RegExp(`(?<!${LETTER})((?:سیستم|کاتالوگ|فیلتر|دوبل)(?:‌?(?:هایی|های|ها)|ی)?)(?!${LETTER})`);
@@ -41,6 +46,23 @@ export function countFileSites(source: string, fileName = 'file.tsx'): number {
   return count;
 }
 
+const isTextNode = (node: ts.Node): boolean =>
+  ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node)
+  || ts.isTemplateMiddle(node) || ts.isTemplateTail(node);
+
+/** Number of texts inside an error constructor's arguments (`new XxxError(…)`) that hold a forbidden word */
+export function countServerMessageSites(source: string, fileName = 'file.ts'): number {
+  const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  let count = 0;
+  const visit = (node: ts.Node, inError: boolean): void => {
+    const insideError = inError || (ts.isNewExpression(node) && /Error$/.test(node.expression.getText(sf)));
+    if (insideError && isTextNode(node) && FORBIDDEN.test((node as ts.LiteralLikeNode).text)) count++;
+    ts.forEachChild(node, child => visit(child, insideError));
+  };
+  visit(sf, false);
+  return count;
+}
+
 function sourceFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -56,6 +78,14 @@ export function currentState(root = process.cwd()): Baseline {
     for (const file of sourceFiles(path.join(root, dir))) {
       const rel = path.relative(root, file).split(path.sep).join('/');
       const count = countFileSites(fs.readFileSync(file, 'utf8'), rel);
+      if (count > 0) state[rel] = count;
+    }
+  }
+  for (const dir of SERVER_ROOTS) {
+    for (const file of sourceFiles(path.join(root, dir))) {
+      const rel = path.relative(root, file).split(path.sep).join('/');
+      if (rel.includes('/tests/')) continue;
+      const count = countServerMessageSites(fs.readFileSync(file, 'utf8'), rel);
       if (count > 0) state[rel] = count;
     }
   }
