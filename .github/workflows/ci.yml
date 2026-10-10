@@ -25,6 +25,8 @@ jobs:
   lint-and-typecheck:
     name: Lint & Type Check
     runs-on: ubuntu-24.04
+    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
+    timeout-minutes: 20
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v7
@@ -59,6 +61,13 @@ jobs:
         # تعداد تخلف هر قاعده نباید از eslint-baseline.json و any هر فایل نباید از eslint-any-baseline.json بیشتر شود (scripts/eslint-ratchet.ts)
         run: npm run lint:eslint
 
+      # v10.0.152 (I-06, OBS-R1-19, product-owner decision): every tracked shell script passes shellcheck at error level
+      # (shellcheck ships with the Ubuntu runner image; warnings are not gated yet)
+      - name: Shell Script Gate (shellcheck, errors only)
+        run: |
+          shellcheck --version
+          git ls-files -z '*.sh' | xargs -0 shellcheck --severity=error
+
       - name: Frontend & Unit Tests (Vitest, v7.0.76 / audit P3-6)
         # فقط تست‌های تازه واحد و فرانت (src/tests/vitest)؛ مجموعه‌های پایگاه‌داده با رانر قبلی در job بعدی
         run: npm run test:vitest
@@ -67,6 +76,8 @@ jobs:
     name: Database & Domain Test Suites
     needs: lint-and-typecheck
     runs-on: ubuntu-24.04
+    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
+    timeout-minutes: 40
     services:
       postgres:
         image: public.ecr.aws/docker/library/postgres:16-alpine
@@ -127,6 +138,8 @@ jobs:
     name: Code Coverage Hard Gate (TD-129)
     needs: lint-and-typecheck
     runs-on: ubuntu-24.04
+    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
+    timeout-minutes: 45
     services:
       postgres:
         image: public.ecr.aws/docker/library/postgres:16-alpine
@@ -205,6 +218,8 @@ jobs:
     name: Client & Server Production Build
     needs: [test, coverage-gate, e2e]
     runs-on: ubuntu-24.04
+    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
+    timeout-minutes: 20
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging' || github.event_name == 'pull_request'
     steps:
       - name: Checkout Source Code
@@ -233,6 +248,8 @@ jobs:
     name: End-to-End Critical Path (Playwright, v7.0.77 / audit P3-7)
     needs: lint-and-typecheck
     runs-on: ubuntu-24.04
+    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
+    timeout-minutes: 20
     services:
       postgres:
         image: public.ecr.aws/docker/library/postgres:16-alpine
@@ -263,8 +280,24 @@ jobs:
       - name: Build Application (production bundle served to the browser)
         run: npm run build
 
+      # v10.0.152 (I-06, OT-B-05): the browser comes from the cache keyed by the Playwright version in the lock file;
+      # on a hit only the system libraries are installed, so a slow download no longer holds the job
+      - name: Cache Playwright Browsers
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 10
         run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright System Libraries (browser from the cache)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        timeout-minutes: 10
+        run: npx playwright install-deps chromium
 
       - name: Critical Path, Fresh Install and the Four Business Flows (purchase, production, payroll, treasury)
         # dist/server.cjs on an empty database; migrations and seed at start, admin from the setup route.
@@ -272,6 +305,11 @@ jobs:
         env:
           E2E_DATABASE_URL: postgresql://postgres:test@localhost:5432/erp_e2e
         run: npm run test:e2e
+
+      # v10.0.152 (I-06): the page snapshot of each failed test goes to the log too, readable without the artifact
+      - name: Print Failed Page Snapshots
+        if: failure()
+        run: find test-results -name error-context.md -exec sh -c 'echo "=== $1"; cat "$1"' _ {} \; 2>/dev/null || true
 
       - name: Upload Playwright Report
         if: failure()
@@ -287,6 +325,8 @@ jobs:
     name: Docker Container Build Verification
     needs: build
     runs-on: ubuntu-24.04
+    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
+    timeout-minutes: 20
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
       - name: Checkout Source Code
@@ -335,6 +375,8 @@ jobs:
     name: Deploy to Staging Environment
     needs: build
     runs-on: ubuntu-24.04
+    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
+    timeout-minutes: 10
     if: github.ref == 'refs/heads/staging'
     environment: staging
     steps:
@@ -346,6 +388,8 @@ jobs:
     name: Staging Post-Deployment Smoke Tests
     needs: deploy-staging
     runs-on: ubuntu-24.04
+    # v10.0.152 (I-06, OT-B-05): a hung job stops here instead of after GitHub's 360-minute default
+    timeout-minutes: 10
     if: github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout Source Code

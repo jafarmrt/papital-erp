@@ -8,7 +8,7 @@ import { MaterialNameCell, CurrentStockCell, ProcurementStatusCell, NotesCell, t
 interface GlobalInventoryControlSectionProps {
   sections: ProjectInventoryControlSectionData[];
   warehouseItems: Item[];
-  /** v10.0.90 (TD-1211): left out for a reader without `projects.edit`, so the add buttons are not shown */
+  /** v10.0.162 (TD-1211): left out for a reader without `projects.edit`, so the add buttons are not shown */
   handleOpenAddMaterialModal?: (secIdx: number, prodId?: string) => void;
   handleOpenChangeMaterialModal: (secIdx: number, itemId: string, prodId?: string, gIdx?: number) => void;
   handleOpenUnitConversionModal: OpenUnitConversionModalHandler;

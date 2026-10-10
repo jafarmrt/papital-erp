@@ -61,7 +61,7 @@ const KANBAN_COLUMNS = [
     titleClassName: 'text-rose-900', countClassName: 'bg-rose-200 text-rose-900' },
 ] as const;
 
-// v10.0.90 (TD-1211): the project form reads its items from the item pick list itself; the page reads no full item list,
+// v10.0.162 (TD-1211): the project form reads its items from the item pick list itself; the page reads no full item list,
 // which needs products.view and answered 403 to a projects.view reader
 const NO_PRELOADED_ITEMS: Item[] = [];
 
@@ -139,7 +139,8 @@ export default function ProjectsPage() {
 
   const handleDeleteProject = async (id: number, code: string) => {
     if (!(await confirmAction({ title: 'حذف پروژه تولید', message: `آیا از حذف پروژه تولید با کد ${code} مطمئن هستید؟` }))) return;
-    await deleteProjectMutation.mutateAsync(id);
+    // v10.0.147 (TD-1216): the mutation's onError shows a refusal (422); the rejection is not passed on to the click handler
+    deleteProjectMutation.mutate(id);
   };
 
   // Summary Statistics (v9.0.412, TD-743): شمار هر وضعیت از سرور، با صافی‌های جستجو و اولویت

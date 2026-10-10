@@ -504,7 +504,7 @@ export default function ProjectDetailModal({
               {activeTab === 'overview' && (
                 <div className="space-y-6 text-xs animate-fadeIn">
                   {/* Workflow Engine Stepper Widget */}
-                  {/* v10.0.90 (TD-1211): the widget's API asks a workflow key; without one it would show «آغاز گردش کار» and a false «not active» */}
+                  {/* v10.0.162 (TD-1211): the widget's API asks a workflow key; without one it would show «آغاز گردش کار» and a false «not active» */}
                   {canSeeWorkflow && (
                     <WorkflowStepperWidget
                       entityType="project"

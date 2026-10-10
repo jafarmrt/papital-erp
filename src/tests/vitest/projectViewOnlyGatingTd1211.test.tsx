@@ -55,7 +55,7 @@ const inventoryProject = {
   inventory_control: { sections: SECTIONS },
 } as unknown as ProductionProject;
 
-// v10.0.90 (TD-1211): a reader with projects.view only saw buttons whose API refused them with 403
+// v10.0.162 (TD-1211): a reader with projects.view only saw buttons whose API refused them with 403
 describe('project screens for a projects.view reader (TD-1211)', () => {
   it('shows no workflow widget without a workflow key, and shows it with one', async () => {
     const { unmount } = render(<ProjectDetailModal projectId={7} isOpen onClose={vi.fn()} onUpdate={vi.fn()} />);

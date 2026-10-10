@@ -19,7 +19,7 @@ interface ProductTreeInventoryCardsProps {
   handleOpenChangeMaterialModal: (secIdx: number, itemId: string, prodId?: string, gIdx?: number) => void;
   handleOpenUnitConversionModal: OpenUnitConversionModalHandler;
   handleRemoveItemFromSection: (secIdx: number, itemId: string, prodId?: string, itemIdx?: number) => void;
-  /** v10.0.90 (TD-1211): left out for a reader without `projects.edit`, so the add button is not shown */
+  /** v10.0.162 (TD-1211): left out for a reader without `projects.edit`, so the add button is not shown */
   handleOpenAddMaterialModal?: (secIdx: number, prodId?: string) => void;
 }
 
