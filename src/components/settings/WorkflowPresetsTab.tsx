@@ -6,6 +6,7 @@ import { errorMessageOf, formatPersianNumber, toPersianDigits } from '../../util
 import { useRialDisplay } from '../../hooks/useAppCurrency';
 import { SearchableSelect } from '../SearchableSelect';
 import { toast } from 'react-hot-toast';
+import { newWorkflowPreset } from '../../lib/settings/workflowPresetDraft';
 
 interface PieceworkTask {
   id: number;
@@ -71,20 +72,8 @@ export function WorkflowPresetsTab({
 
   const handleAddNewPreset = () => {
     const newId = `preset_${Date.now()}`;
-    const newNum = cleanPresets.length + 1;
-    const newPreset: WorkflowPreset = {
-      id: newId,
-      title: `الگوی مراحل تولید ${newNum}`,
-      description: 'شرح مختصر فرآیند تولید...',
-      isArchived: false,
-      stages: [
-        {
-          title: 'مرحله اول تولید',
-          isOptionalPerProduct: false,
-          defaultTasks: []
-        }
-      ]
-    };
+    // v10.0.89 (TD-1193): عنوان با رقم فارسی و شرح خالی (راهنمای خانه، نه مقدار)
+    const newPreset: WorkflowPreset = newWorkflowPreset(newId, cleanPresets.length + 1);
     setWorkflowPresets((prev) => {
       const current = Array.isArray(prev) ? prev.filter(p => p.id !== 'tile_transfer' && p.id !== 'general_assembly') : [];
       return [...current, newPreset];
@@ -122,7 +111,7 @@ export function WorkflowPresetsTab({
             <Layers size={18} className="text-amber-500" /> مدیریت و ویرایش الگوهای مراحل تولید
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            تعریف الگوهای مراحل تولید کارگاهی. عناوین کاری و نرخ‌های پایه مستقیماً از بخش حقوق و دستمزد خوانده می‌شوند.
+            تعریف الگوهای مراحل تولید کارگاهی. عناوین کاری و نرخ‌های پایه از «تنظیمات › عناوین و دسته‌بندی‌های کاری» خوانده می‌شوند.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -155,7 +144,7 @@ export function WorkflowPresetsTab({
           <Layers size={36} className="mx-auto text-slate-400" />
           <h4 className="text-sm font-bold text-slate-700">هیچ الگوی تولیدی تعریف نشده است</h4>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            برای تسریع در تعریف پروژه‌ها در ماژول کنترل پروژه، می‌توانید یک یا چند الگوی اختصاصی فرآیند کارگاه خود را بسازید.
+            برای تسریع در تعریف پروژه‌ها در بخش کنترل پروژه، می‌توانید یک یا چند الگوی اختصاصی فرآیند کارگاه خود را بسازید.
           </p>
           <button
             type="button"
@@ -210,13 +199,13 @@ export function WorkflowPresetsTab({
                         <label className="block text-xs font-bold text-slate-700 mb-1">توضیحات خلاصه:</label>
                         <input
                           type="text"
-                          value={p.description}
+                          value={p.description ?? ''}
                           onChange={(e) => {
                             const copy = [...workflowPresets];
                             copy[pIdx].description = e.target.value;
                             setWorkflowPresets(copy);
                           }}
-                          placeholder="توضیح کوتاه درباره این فرآیند..."
+                          placeholder="شرح مختصر فرآیند تولید"
                           className="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
@@ -388,7 +377,7 @@ export function WorkflowPresetsTab({
                                     عناوین کاری / کارمزدهای الگوی این مرحله ({toPersianDigits(stgTasks.length)} مورد)
                                   </span>
                                   <span className="text-[10px] text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200">
-                                    خوانده‌شده از ماژول حقوق و دستمزد
+                                    از عناوین و دسته‌بندی‌های کاری
                                   </span>
                                 </div>
                               </div>
@@ -435,7 +424,7 @@ export function WorkflowPresetsTab({
                                     value: t.id,
                                     label: `${t.title} (${t.category} - واحد: ${t.unit || 'عدد'} - نرخ پایه: ${rial.amount(t.defaultRate)})`,
                                   }))}
-                                  placeholder="انتخاب از عناوین کاری تعریف‌شده در حقوق و دستمزد"
+                                  placeholder="انتخاب از عناوین کاری تعریف‌شده در تنظیمات"
                                 />
                               </div>
 
@@ -493,7 +482,7 @@ export function WorkflowPresetsTab({
                                 </div>
                               ) : (
                                 <div className="text-[11px] text-slate-500 italic py-1 px-2 bg-amber-50/30 rounded border border-dashed border-amber-200">
-                                  عنوان کاری برای این مرحله انتخاب نشده است. برای تخصیص کارمزد اتوماتیک در پروژه، از منوی بالا عنوان کاری مورد نظر را انتخاب کنید.
+                                  عنوان کاری برای این مرحله انتخاب نشده است. برای تخصیص خودکار کارمزد در پروژه، از منوی بالا عنوان کاری مورد نظر را انتخاب کنید.
                                 </div>
                               )}
                             </div>
