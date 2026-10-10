@@ -701,6 +701,13 @@
       "when": 1794200000000,
       "tag": "0099_workflow_transition_initiator_only",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1794210000000,
+      "tag": "0100_user_role_foreign_key",
+      "breakpoints": true
     }
   ]
 }

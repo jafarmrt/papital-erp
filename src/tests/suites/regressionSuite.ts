@@ -41,6 +41,7 @@ import { seedFixtureItemStocks } from '../fixtures/factories.js';
 import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
 import type { CreateDocumentInput } from '../../services/documents/types.js';
 import { miscContraAccountId } from '../fixtures/treasuryParty.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 export async function runRegressionTests(filter?: string): Promise<TestCaseResult[]> {
   const normalizedFilter = filter?.toLowerCase().replace(/[-_]/g, "").trim();
@@ -4630,7 +4631,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     } finally {
       if (createdRoleIds.length > 0) {
         const { roles } = await import('../../db/schema.js');
-        await orm.delete(roles).where(inArray(roles.id, createdRoleIds));
+        await deleteTestRoles(inArray(roles.id, createdRoleIds));
       }
     }
   }
@@ -4829,7 +4830,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     } finally {
       if (createdRoleIds.length > 0) {
         const { roles } = await import('../../db/schema.js');
-        await orm.delete(roles).where(inArray(roles.id, createdRoleIds));
+        await deleteTestRoles(inArray(roles.id, createdRoleIds));
       }
     }
   }
@@ -4930,7 +4931,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         anonymous: (await request(app).get(pngItem.url)).status,
         publicUploads: (await request(app).get(`/uploads/.attachments/${pngRow.storagePath}`)).status,
       };
-      await orm.delete(roles).where(inArray(roles.id, [noPermRole.id, accountingRole.id]));
+      await deleteTestRoles(inArray(roles.id, [noPermRole.id, accountingRole.id]));
       if (statuses.noPermission !== 403 || statuses.accounting !== 200 || statuses.anonymous !== 401 || statuses.publicUploads !== 404) {
         throw new Error(`attachment download access control is wrong: ${JSON.stringify(statuses)}`);
       }
@@ -5166,7 +5167,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const attTreasurer = await status(treasurer, stored.url);
       if (attLogger !== 403) wrong.push(`document attachment for the report-entry user: ${attLogger} (expected 403)`);
       if (attTreasurer !== 200) wrong.push(`document attachment for a holder of documents.view: ${attTreasurer} (expected 200)`);
-      await orm.delete(roles).where(inArray(roles.id, createdRoleIds));
+      await deleteTestRoles(inArray(roles.id, createdRoleIds));
       createdRoleIds.length = 0;
 
       if (wrong.length > 0) {
@@ -5196,7 +5197,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     } finally {
       if (createdRoleIds.length > 0) {
         const { roles } = await import('../../db/schema.js');
-        await orm.delete(roles).where(inArray(roles.id, createdRoleIds));
+        await deleteTestRoles(inArray(roles.id, createdRoleIds));
       }
       if (previousAttachmentsDir === undefined) delete process.env.ATTACHMENTS_DIR;
       else process.env.ATTACHMENTS_DIR = previousAttachmentsDir;
@@ -8651,6 +8652,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const violations: string[] = [];
       // v9.0.128 (TD-542): نقش گام باید تعریف شده باشد
       await orm.insert(roles).values({ code: role, name: `نقش آزمون مهلت ${suffix}`, permissions: [] });
+      await orm.insert(roles).values({ code: `reg_other_${suffix}`, name: `نقش دیگر آزمون مهلت ${suffix}`, permissions: [] });
       for (const [name, userRole] of [['a', role], ['b', role], ['other', `reg_other_${suffix}`]] as const) {
         const [u] = await orm.insert(users).values({
           username: `reg_sla_${name}_${suffix}`, password: 'x', fullName: `کاربر آزمون مهلت ${name}`, role: userRole,
@@ -8726,7 +8728,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
       }
       if (userIds.length > 0) await orm.delete(users).where(inArray(users.id, userIds));
-      await orm.delete(roles).where(eq(roles.code, role));
+      await deleteTestRoles(eq(roles.code, role));
     }
   }
 
@@ -8856,7 +8858,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
       }
       if (userId) await orm.delete(users).where(eq(users.id, userId));
-      await orm.delete(roles).where(eq(roles.code, role));
+      await deleteTestRoles(eq(roles.code, role));
     }
   }
 

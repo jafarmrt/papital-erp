@@ -162,6 +162,11 @@ export async function deleteRole(req: Request, roleId: number, workflowsRequirin
       );
     }
 
+    // v10.0.164 (TD-962، مهاجرت 0100): users.role به roles.code کلید خارجی دارد؛ کاربر حذف‌شده‌ای که این نقش را داشت بی نقش
+    // می‌ماند (با بازگرداندن نقش تازه می‌گیرد) و شناسه‌اش در ردیف ممیزی می‌آید
+    const cleared = await tx.update(users).set({ role: null })
+      .where(and(eq(users.role, targetRole.code), eq(users.isDeleted, 1)))
+      .returning({ id: users.id });
     await tx.delete(roles).where(eq(roles.id, roleId));
     await logActivity({
       tx,
@@ -170,7 +175,11 @@ export async function deleteRole(req: Request, roleId: number, workflowsRequirin
       entity: ROLE_ENTITY,
       entityId: roleId,
       description: `حذف نقش "${targetRole.name}" (کد: ${targetRole.code})`,
-      details: { before: targetRole, deletedAt: new Date().toISOString() },
+      details: {
+        before: targetRole,
+        clearedDeletedUserIds: cleared.map(u => u.id).sort((x, y) => x - y),
+        deletedAt: new Date().toISOString(),
+      },
     });
     return targetRole.code;
   });

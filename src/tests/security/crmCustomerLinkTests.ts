@@ -4,6 +4,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { crmActivities, crmLeads, customers, roles, users } from '../../db/schema.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * بسته ۹ (مشتریان و CRM) — گارد داده پایه طرف حساب در مسیرهای واقعی Express؛ هر آزمون روی کد پیشین قرمز است.
@@ -124,7 +125,7 @@ export async function runCrmCustomerLinkTests(shouldRun: (id: string, ...extra: 
     }
     if (customerIds.length > 0) await orm.delete(customers).where(inArray(customers.id, customerIds)).catch(() => undefined);
     if (userIds.length > 0) await orm.delete(users).where(inArray(users.id, userIds)).catch(() => undefined);
-    if (roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, roleIds)).catch(() => undefined);
+    if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
   }
   return results;
 }

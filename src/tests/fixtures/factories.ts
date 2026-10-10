@@ -49,8 +49,23 @@ export async function createTestUser(overrides: Partial<typeof users.$inferInser
     ...overrides
   };
 
+  if (userData.role) await ensureTestRole(userData.role, db);
   const [inserted] = await db.insert(users).values(userData).returning();
   return inserted;
+}
+
+/**
+ * TD-962: a user's role points to `roles.code` (fk_users_role), so a test that
+ * names a role code gets that role row first; an existing role is left as is.
+ */
+export async function ensureTestRole(code: string, db: typeof orm = orm) {
+  await db.insert(roles).values({
+    name: withTestMarker(`نقش آزمایشی ${code}`),
+    code,
+    description: withTestMarker('نقش ساخته‌شده برای کاربر آزمایشی'),
+    permissions: [],
+    isSystem: 0
+  }).onConflictDoNothing({ target: roles.code });
 }
 
 /**

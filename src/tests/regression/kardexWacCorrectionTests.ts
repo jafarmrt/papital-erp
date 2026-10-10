@@ -4,6 +4,7 @@ import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { accounts, items, journalVoucherItems, journalVouchers, roles, users } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
+import { deleteTestRoles } from '../fixtures/roleCleanup.js';
 
 /**
  * Package 6 (inventory and Kardex), TD-487 / B06-08 (decision t3): the Kardex rebuild only rebuilds quantities and
@@ -101,7 +102,7 @@ export async function runKardexWacCorrectionTests(shouldRun: (id: string, ...ext
   } finally {
     if (itemIds.length > 0) await orm.update(items).set({ isDeleted: 1 }).where(inArray(items.id, itemIds)).catch(() => undefined);
     if (userIds.length > 0) await orm.update(users).set({ isDeleted: 1 }).where(inArray(users.id, userIds)).catch(() => undefined);
-    if (roleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, roleIds)).catch(() => undefined);
+    if (roleIds.length > 0) await deleteTestRoles(inArray(roles.id, roleIds)).catch(() => undefined);
   }
   return results;
 }
