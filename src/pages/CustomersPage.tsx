@@ -677,14 +677,14 @@ export default function CustomersPage({ user }: { user: User }) {
                   {/* Balance Summary Header Cards */}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl">
-                      <span className="text-[11px] font-bold text-blue-800">مجموع بدهکار (پرداخت‌ها / فاکتور فروش)</span>
+                      <span className="text-[11px] font-bold text-blue-800">مجموع بدهکار (فروش به شخص و پرداخت به او)</span>
                       <p className="text-sm font-bold font-mono text-blue-900 mt-1">
                         {rial.amount(ledgerData.totalDebit || 0)}
                       </p>
                     </div>
 
                     <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
-                      <span className="text-[11px] font-bold text-amber-800">مجموع بستانکار (رسیدهای خرید)</span>
+                      <span className="text-[11px] font-bold text-amber-800">مجموع بستانکار (دریافت از شخص و خرید از او)</span>
                       <p className="text-sm font-bold font-mono text-amber-900 mt-1">
                         {rial.amount(ledgerData.totalCredit || 0)}
                       </p>
