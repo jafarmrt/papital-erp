@@ -221,5 +221,39 @@ export async function runWorkflowInboxTests(shouldRun: ShouldRun): Promise<TestC
     });
   }
 
+  if (shouldRun('sec_workflow_inbox_requisition_card_td_1178', 'security', 'td1178', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_inbox_requisition_card_td_1178',
+      name: 'v10.0.90: a purchase requisition inbox row carries its own code and priority, and the starter\'s full name even when a user name was stored (TD-1178)',
+      details: 'the row of a new requisition has refNumber = the requisition code, priority = its priority and instance.startedByName = the starter\'s full name; a raw user name stored on the instance is shown as the full name',
+    }, async (h, wrong) => {
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const item = await createTestItem({ type: 'raw_material', code: `WF1178-${h.tag}` } as never);
+      const created = await h.post('/api/procurement/requisitions', { title: `requisition 1178 ${h.tag}`, items: [{ itemId: item.id, itemName: item.name, requestedQty: 2, unit: 'عدد' }] });
+      const reqId = Number(created.body?.id ?? created.body?.data?.id);
+      if (!(reqId > 0)) {
+        wrong.push(`Creating the purchase requisition returned ${created.status}: ${JSON.stringify(created.body).slice(0, 160)}`);
+        return;
+      }
+      const [req] = await h.q(`SELECT code, priority FROM purchase_requisitions WHERE id = $1`, [reqId]);
+      const [inst] = await h.q(`SELECT id FROM workflow_instances WHERE entity_type = 'purchase_requisition' AND entity_id = $1 AND status = 'IN_PROGRESS'`, [String(reqId)]);
+      if (!inst) {
+        wrong.push('the requisition started no workflow');
+        return;
+      }
+      const [admin] = await h.q(`SELECT username, full_name FROM users WHERE username = 'pen_admin' AND is_deleted = 0`);
+      await h.q(`UPDATE workflow_instances SET started_by_name = $2 WHERE id = $1`, [inst.id, admin?.username]);
+      const row = await inboxRowOf(h, Number(inst.id));
+      if (!row) {
+        wrong.push('the admin inbox has no row for the requisition');
+        return;
+      }
+      if (row.refNumber !== req?.code) wrong.push(`refNumber is ${JSON.stringify(row.refNumber)}, not the requisition code ${JSON.stringify(req?.code)}`);
+      if (row.priority !== req?.priority) wrong.push(`priority is ${JSON.stringify(row.priority)}, not the requisition priority ${JSON.stringify(req?.priority)}`);
+      const startedByName = (row.instance as Row | undefined)?.startedByName;
+      if (startedByName !== admin?.full_name) wrong.push(`instance.startedByName is ${JSON.stringify(startedByName)}, not ${JSON.stringify(admin?.full_name)}`);
+    });
+  }
+
   return results;
 }

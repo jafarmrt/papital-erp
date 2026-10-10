@@ -1,6 +1,6 @@
 import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { workflowHistoryLogs, workflowInstances, workflowStates } from '../../db/schema.js';
+import { users, workflowHistoryLogs, workflowInstances, workflowStates } from '../../db/schema.js';
 import { getEntityContext } from './workflowDslParser.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl } from './workflowTransitionExecutor.js';
 import { isUsableSnapshot } from './workflowSnapshot.js';
@@ -15,6 +15,17 @@ async function currentStepTitleOf(instance: typeof workflowInstances.$inferSelec
   if (isUsableSnapshot(snapshot)) return snapshot.states?.find(st => st.id === instance.currentStateId)?.title ?? '';
   const [state] = await orm.select({ title: workflowStates.title }).from(workflowStates).where(eq(workflowStates.id, instance.currentStateId));
   return state?.title ?? '';
+}
+
+/**
+ * v10.0.90 (TD-1178): the starter's display name is the user's full name, read from the user row; an instance whose
+ * route stored the user name (no full name in the session) showed «kharid» on the card
+ */
+async function starterDisplayName(instance: typeof workflowInstances.$inferSelect): Promise<string> {
+  const stored = instance.startedByName || '';
+  if (!instance.startedBy) return stored;
+  const [user] = await orm.select({ fullName: users.fullName, username: users.username }).from(users).where(eq(users.id, instance.startedBy));
+  return user?.fullName?.trim() || stored || user?.username || '';
 }
 
 /**
@@ -35,12 +46,14 @@ export async function inboxEntityFields(instance: typeof workflowInstances.$infe
       currentStateId: instance.currentStateId,
       status: instance.status,
       startedBy: instance.startedBy,
-      startedByName: instance.startedByName || '',
+      startedByName: await starterDisplayName(instance),
       createdAt: instance.createdAt,
       updatedAt: instance.updatedAt
     },
     refNumber: context.refNumber || context.code || instance.entityId,
     buyerName: context.buyerName || '',
+    // v10.0.90 (TD-1178): the entity's own priority (requisition, project) for the card badge
+    ...(typeof context.priority === 'string' && context.priority ? { priority: context.priority } : {}),
     amount: Number(context.amount || context.totalAmount || 0),
     currentStepTitle: await currentStepTitleOf(instance),
   };
