@@ -658,7 +658,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                   <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/40 rounded-xl flex items-center gap-3 text-xs text-emerald-800 dark:text-emerald-300">
                     <Check className="w-5 h-5 shrink-0 text-emerald-600" />
                     <span>
-                      سند افتتاحیه با تاریخ {toPersianDigits(openingDateNewYear)} و با شرح «سند افتتاحیه سال مالی {toPersianDigits(Number(selectedYear) + 1)}» به عنوان سند شماره ۱ سال جدید ثبت خواهد شد.
+                      سند افتتاحیه با تاریخ {toPersianDigits(openingDateNewYear)} و با شرح «سند افتتاحیه سال مالی {toPersianDigits(Number(selectedYear) + 1)}» با شماره بعدی رشته اسناد حسابداری ثبت خواهد شد (شماره سند در سال تازه از ۱ آغاز نمی‌شود).
                     </span>
                   </div>
                 ) : (

@@ -20,6 +20,8 @@ import { voucherConfirmTexts, type VoucherRowAction } from '../../lib/accounting
 import { VoucherRowMenu } from './vouchers/VoucherRowMenu';
 import { VoucherPrimaryActionCell } from './vouchers/VoucherPrimaryActionCell';
 import { voucherSourceLabel } from '../../lib/accounting/voucherSource';
+import { isViewerVoucherMaker, voucherMakerName, voucherReferenceText } from '../../lib/accounting/voucherListViewer';
+import { useViewerIdentity } from '../../contexts/AuthContext';
 
 interface JournalVouchersTabProps {
   accounts?: Account[];
@@ -57,6 +59,7 @@ export function JournalVouchersTab({
   onBatchApproveVouchers,
 }: JournalVouchersTabProps) {
   const rial = useRialDisplay();
+  const viewer = useViewerIdentity();
   // v9.0.115 (TD-565): صفحه، جست‌وجو، نوع، وضعیت و تاریخ به سرور می‌روند و شمارنده‌ها و `total` از سرورند؛
   // پیش‌تر صفحه فقط ۲۰ سند آخر را داشت و همه صافی‌ها و شمارنده‌ها روی همان ۲۰ کار می‌کردند
   const [filters, setFilters] = useState<VoucherListFilters>({ status: 'all', voucherType: 'all', search: '', startDate: '', endDate: '' });
@@ -434,7 +437,7 @@ export function JournalVouchersTab({
                           </div>
                           {voucher.referenceNumber && (
                             <div className="text-[10px] text-slate-400 mt-0.5">
-                              ارجاع: {voucher.referenceModule} ({voucher.referenceNumber})
+                              ارجاع: {voucherReferenceText(voucher.referenceModule, voucher.referenceNumber)}
                             </div>
                           )}
                         </td>
@@ -444,7 +447,7 @@ export function JournalVouchersTab({
                         </td>
 
                         <td className="py-3 px-3 text-center text-slate-500 dark:text-slate-400">
-                          {voucher.createdByUsername || 'کاربر'}
+                          {voucherMakerName(voucher)}
                         </td>
 
                         {/* Decluttered Actions Column (قانون طلایی ۱: خلوت‌سازی دکمه‌ها و منوی کشویی) */}
@@ -462,6 +465,7 @@ export function JournalVouchersTab({
                             {/* اقدام متنی اصلی */}
                             <VoucherPrimaryActionCell
                               status={voucher.status}
+                              makerOfVoucher={isViewerVoucherMaker(voucher, viewer)}
                               onApprove={onApproveVoucher ? () => handleApprove(voucher) : undefined}
                               onFinalize={onFinalizeVoucher ? () => handleFinalize(voucher) : undefined}
                             />

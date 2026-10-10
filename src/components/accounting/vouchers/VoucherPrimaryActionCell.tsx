@@ -1,12 +1,25 @@
-import { CheckCircle2, Lock, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Clock, Lock, ShieldCheck } from 'lucide-react';
 import { voucherPrimaryAction } from '../../../lib/accounting/voucherRowActions';
 
 /** v10.0.121 (TD-1120): دکمه اصلی ردیف سند؛ «قفل دفاتر» فقط برای سند دائم (استخراج‌شده از JournalVouchersTab) */
-export function VoucherPrimaryActionCell({ status, onApprove, onFinalize }: {
+export function VoucherPrimaryActionCell({ status, makerOfVoucher = false, onApprove, onFinalize }: {
   status: string;
+  /** v10.0.27 (TD-965): the viewer made or last edited this manual draft, so another user approves it */
+  makerOfVoucher?: boolean;
   onApprove?: () => void;
   onFinalize?: () => void;
 }) {
+  if (status === 'draft' && makerOfVoucher) {
+    return (
+      <span
+        title="سازنده یا آخرین ویرایشگر سند دستی آن را تأیید نمی‌کند؛ کاربر دیگری باید تأیید کند"
+        className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50/60 dark:bg-amber-950/30 rounded-lg border border-amber-200/60 dark:border-amber-800/60"
+      >
+        <Clock className="w-3.5 h-3.5 text-amber-600" />
+        <span>در انتظار تأیید دیگری</span>
+      </span>
+    );
+  }
   const action = voucherPrimaryAction(status, { canApprove: Boolean(onApprove), canFinalize: Boolean(onFinalize) });
   if (action === 'approve' && onApprove) {
     return (
