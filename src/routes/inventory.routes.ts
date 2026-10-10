@@ -419,7 +419,7 @@ router.get(
       search
     });
 
-    // v10.0.90 (TD-1210): بهای تخصیص فقط برای خوانندگان بهای کالا
+    // v10.0.130 (TD-1210): بهای تخصیص فقط برای خوانندگان بهای کالا
     const canReadCost = await can(req.user, ...ITEM_COST_READ_PERMISSIONS);
     res.json({ allocations: allocationsForCostAccess(allocations, canReadCost), total: allocations.length });
   })

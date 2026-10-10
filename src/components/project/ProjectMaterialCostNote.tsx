@@ -12,7 +12,7 @@ interface ProjectMaterialCostNoteProps {
 }
 
 /**
- * v10.0.90 (TD-1210): جمع بهای مواد تخصیص‌یافته به پروژه در زبانه «ورود به انبار»، تا بهای واحد محصول از همین زبانه
+ * v10.0.130 (TD-1210): جمع بهای مواد تخصیص‌یافته به پروژه در زبانه «ورود به انبار»، تا بهای واحد محصول از همین زبانه
  * نوشته شود. فقط برای کسی نشان داده می‌شود که ورود به انبار را دارد (`warehouse.in`، خواننده بهای کالا).
  */
 export function ProjectMaterialCostNote({ projectId, singleProductQuantity }: ProjectMaterialCostNoteProps) {

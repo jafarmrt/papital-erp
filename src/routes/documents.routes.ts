@@ -6,9 +6,11 @@ import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermission
 import { findFinalDocumentIdByRef } from '../services/documents/documentRefLookup.js';
 import { documentAuditDetails, documentAuditSnapshot, documentLineSummary } from '../services/documents/documentAudit.js';
 import { proformaStockWarnings } from '../services/documents/documentSellableGate.js';
+import { recordedSalesType } from '../lib/documents/recordedSalesType.js';
 import { DOCUMENT_TYPE_TITLES } from '../lib/documents/documentTypeTitles.js';
 import { isAutoRefNumber } from '../lib/documents/documentRefRules.js';
 import { DOCUMENT_LIST_PAGE_SIZE } from '../lib/documents/documentListPage.js';
+import { DOCUMENT_VERSION_REQUIRED } from '../lib/documents/documentVersion.js';
 import { assertManualRefAllowed, assertNotProjectDelivery, assertRecordableDocument, createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
@@ -200,6 +202,10 @@ export const documentUpdateSchema = z.object({
     if (body.items) {
       refineDocumentItems(ctx, body.items as unknown as Array<Record<string, unknown>>, false);
     }
+    // v10.0.108 (TD-972، OBS-R1-96): ویرایش سند نسخه‌ای را که از آن ساخته شده می‌فرستد، مانند TD-403
+    if (body.version === undefined && body.expectedVersion === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['version'], message: DOCUMENT_VERSION_REQUIRED });
+    }
   }),
   params: z.object({
     id: numericIdString
@@ -250,6 +256,11 @@ export const documentsQuerySchema = z.object({
       { message: 'فهرست نوع سند (types) فقط نوع‌های تعریف‌شده سند را می‌پذیرد، جدا شده با ویرگول.' },
     ).optional(),
     status: z.enum(['draft', 'proforma', 'final']).optional(),
+    // v10.0.103 (TD-1197): `statuses=proforma,draft` چند وضعیت با هم
+    statuses: z.string().max(40).refine(
+      raw => (documentListTypes(raw) ?? []).every(s => ['draft', 'proforma', 'final'].includes(s)),
+      { message: 'فهرست وضعیت سند (statuses) فقط پیش‌نویس، پیش‌فاکتور و نهایی را می‌پذیرد، جدا شده با ویرگول.' },
+    ).optional(),
     search: z.string().max(100).optional(),
     startDate: storageDateParam,
     endDate: storageDateParam,
@@ -296,8 +307,9 @@ router.post('/documents', authorizePermission('documents.create', 'documents.fin
     `ثبت ${docTypeTitles[requestedType] ?? 'سند'}${recordStatus === 'final' ? ' به‌صورت قطعی' : ''}`);
   // پیش‌فاکتورِ کسی که سند فروش را قطعی نمی‌کند، مانند پیش، نوع «پیش‌فاکتور» می‌گیرد (شماره و تاریخش هنگام نهایی‌سازی
   // از سری فاکتور، TD-317 و TD-410). یکی شدن دو شکل پیش‌فاکتور کار B08-31 است؛ پیش‌نویس همیشه پیش‌نویس می‌ماند
-  if (requestedType === 'invoice' && recordStatus === 'proforma' && !await can(req.user, SALES_FINALIZE_PERMISSION)) {
-    req.body.docType = 'proforma';
+  // v10.0.93 (TD-1190): the same rule the invoice form reads its number series with (`recordedSalesType`)
+  if (requestedType === 'invoice' && recordStatus === 'proforma') {
+    req.body.docType = recordedSalesType(requestedType, recordStatus, await can(req.user, SALES_FINALIZE_PERMISSION));
   }
 
   // V10-4.3: اتصال سند به پرونده CRM فقط با فیلد صریح crmLeadId — حذف اتکا به تگ متنی «CRM #n»
@@ -385,6 +397,7 @@ router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...R
     type,
     types,
     status,
+    statuses: documentListTypes(req.query.statuses),
     search,
     startDate,
     endDate,

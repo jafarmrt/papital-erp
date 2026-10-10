@@ -177,7 +177,7 @@ export async function runProjectPurchaseAllocationTests(shouldRun: ShouldRun): P
 
   const costId = 'reg_project_material_cost_td_1210';
   if (shouldRun(costId, 'td1210', 'projects', 'package11')) {
-    await runCase(results, costId, 'v10.0.90: the project allocation list carries each allocation cost at its Kardex outflow, equal to its work-in-progress voucher, only for item cost readers (TD-1210)', async () => inFiscalSandbox(async () => {
+    await runCase(results, costId, 'v10.0.130: the project allocation list carries each allocation cost at its Kardex outflow, equal to its work-in-progress voucher, only for item cost readers (TD-1210)', async () => inFiscalSandbox(async () => {
       const problems: string[] = [];
       const api = await sandboxAdminClient();
       const wh = await defaultWarehouse();

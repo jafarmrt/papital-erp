@@ -18,7 +18,7 @@ const TOTAL_TEXT = '۱٬۶۶۰٬۰۰۰ ریال';
 const PER_UNIT_TEXT = '۸۳٬۰۰۰ ریال';
 const LEGACY_TEXT = 'تخصیص قدیمی بها ندارد';
 
-// v10.0.90 (TD-1210): the delivery tab shows the project's material cost so the unit cost is written from the same tab
+// v10.0.130 (TD-1210): the delivery tab shows the project's material cost so the unit cost is written from the same tab
 describe('project material cost (TD-1210)', () => {
   it('sums the cost of allocations that are not released and counts those without a cost', () => {
     const summary = projectMaterialCost([

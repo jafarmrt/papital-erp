@@ -55,7 +55,7 @@ export interface ProjectBomAllocationRecord {
   allocatedAt: string | null;
   consumedAt: string | null;
   releasedAt: string | null;
-  /** v10.0.90 (TD-1210): بهای کاردکس خروج تخصیص به ریال (همان مبلغ سند ۱۴۰۲)؛ null وقتی حرکت منبع خروج نیست */
+  /** v10.0.130 (TD-1210): بهای کاردکس خروج تخصیص به ریال (همان مبلغ سند ۱۴۰۲)؛ null وقتی حرکت منبع خروج نیست */
   cost?: number | null;
   transactionDetails?: {
     date: string;
