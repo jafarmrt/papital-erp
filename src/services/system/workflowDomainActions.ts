@@ -1,6 +1,8 @@
 import { registerBankAccountWorkflowAction } from '../accounting/treasury/bankAccountWorkflowAction.js';
+import { registerDocumentRemainingReader } from '../accounting/treasury/documentRemaining.js';
 import { registerVoucherWorkflowAction } from '../accounting/voucherWorkflowAction.js';
 import { registerDocumentWorkflowAction } from '../documents/documentWorkflowAction.js';
+import { readDocumentPayableAndSettled } from '../documents/documentRemainingAmount.js';
 import { registerReservedStocksReader } from '../events/domainEventHandlers.js';
 import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { registerItemOpeningWorkflowAction } from '../inventory/itemOpeningWorkflowAction.js';
@@ -22,4 +24,6 @@ export function registerWorkflowDomainActions(): void {
   registerPendingMaterialWorkflowAction();
   // v10.0.43 (TD-937): the reorder alert event compares free stock, so it reads the reservations through this root
   registerReservedStocksReader(itemIds => ItemStockReservationService.getReservedStocksMap({ itemIds }));
+  // v10.0.59 (TD-938): a linked receipt or payment is capped at the document's remaining amount, read through this root
+  registerDocumentRemainingReader(readDocumentPayableAndSettled);
 }
