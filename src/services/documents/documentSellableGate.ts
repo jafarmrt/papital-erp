@@ -41,7 +41,7 @@ interface Shortage {
   code: string;
   name: string;
   location: string;
-  /** v10.0.90 (TD-1199): نام انبار برای پیام؛ کد انبار در `location` می‌ماند */
+  /** v10.0.114 (TD-1199): نام انبار برای پیام؛ کد انبار در `location` می‌ماند */
   locationName: string;
   requested: number;
   sellable: number;

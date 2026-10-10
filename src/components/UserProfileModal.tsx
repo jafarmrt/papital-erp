@@ -10,7 +10,7 @@ import toast from 'react-hot-toast';
 import { errorMessageOf } from '../utils';
 import { PASSWORD_LENGTH_HINT, passwordLengthError } from '../lib/auth/passwordPolicy';
 import { mustChangePassword } from '../lib/auth/passwordReset';
-import { FULL_NAME_MAX_LENGTH } from '../lib/users/profileFields';
+import { FULL_NAME_MAX_LENGTH, isProfileImageType, PROFILE_IMAGE_ACCEPT, PROFILE_IMAGE_HINT, PROFILE_IMAGE_TYPE_MESSAGE } from '../lib/users/profileFields';
 
 interface UserProfileModalProps {
   user: User;
@@ -62,8 +62,8 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('یک فایل تصویری انتخاب کنید (PNG، JPG، WEBP یا GIF).');
+    if (!isProfileImageType(file.type)) {
+      toast.error(PROFILE_IMAGE_TYPE_MESSAGE);
       return;
     }
 
@@ -267,7 +267,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/png, image/jpeg, image/webp"
+                  accept={PROFILE_IMAGE_ACCEPT}
                   onChange={handleImageChange}
                   className="hidden"
                 />
@@ -292,7 +292,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate, 
                     </button>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-400">قالب‌های مجاز: PNG، JPG، WEBP و GIF (حداکثر ۵ مگابایت)</p>
+                <p className="text-[11px] text-slate-400">{PROFILE_IMAGE_HINT}</p>
               </div>
 
               {/* Form Inputs */}

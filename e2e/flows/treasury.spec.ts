@@ -25,7 +25,7 @@ const TEXT = {
   pickerSearch: 'جستجو...',
   amount: '50000000',
   chequeSubmit: 'ثبت قطعی چک',
-  chequeCreated: 'چک با موفقیت در سیستم ثبت شد',
+  chequeCreated: 'چک با موفقیت در سامانه ثبت شد',
   chequeSearch: 'جستجو در شماره چک، شناسه صیاد ۱۶ رقمی، طرف حساب یا بانک...',
   statusReceived: 'دریافت شده',
   statusInCollection: 'در جریان وصول (خوابانده به حساب)',
