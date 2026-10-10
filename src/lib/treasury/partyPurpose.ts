@@ -19,3 +19,15 @@ export function needsChosenContraAccount(partyType: string | null | undefined, p
 export function personnelPurposeLabel(purpose: string | null | undefined): string {
   return purpose && purpose in PERSONNEL_PURPOSE_LABELS ? PERSONNEL_PURPOSE_LABELS[purpose as PersonnelPurpose] : '';
 }
+
+/**
+ * v10.0.57 (TD-925، P5-W02، تصمیم ت۸ الف بازبینی فاز ۵): تسویه حقوق پرسنل فقط از «پرداخت فیش» است. پرداخت خزانه به پرسنل
+ * با هدف «تسویه حقوق» و پرداخت فیش هر دو «حقوق پرداختنی» را بدهکار می‌کردند و یک خالص دو بار از بانک می‌رفت. دریافت از
+ * پرسنل با هدف تسویه (پس دادن پول) پذیرفته می‌ماند. سرور و فرم خزانه همین را می‌خوانند.
+ */
+export function isSalarySettlementPayment(type: string | null | undefined, partyType: string | null | undefined, purpose: string | null | undefined): boolean {
+  return type === 'payment' && partyType === 'personnel' && purpose === 'settlement';
+}
+
+export const SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE =
+  'تسویه حقوق پرسنل فقط از «پرداخت فیش» در صفحه کارمزد ثبت می‌شود تا یک فیش دو بار پرداخت نشود؛ برای مساعده «مساعده و وام» و برای پرداخت دیگر «سایر» را انتخاب کنید.';
