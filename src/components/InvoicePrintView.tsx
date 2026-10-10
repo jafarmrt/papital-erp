@@ -20,16 +20,26 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
   // V10-6.2: تاییدکنندگان سند از تاریخچه ورکفلو (برای بخش امضای چاپ)
   const [workflowSignatures, setWorkflowSignatures] = useState<Array<{ name: string; roleTitle: string; date: string }>>([]);
 
+  // v10.0.90 (TD-1200): نام و نشان از `/public-settings`، ولی تلفن و نشانی فروشنده فقط در فهرست تنظیمات (`/settings`، با ورود)
+  // هستند؛ پیش‌تر هر دو از مسیر عمومی خوانده می‌شدند که آن‌ها را ندارد و چاپ «-» نشان می‌داد
   useEffect(() => {
-    fetchJson('/public-settings')
-      .then((res: any) => {
-        const rawSettings: { key: string; value: string }[] = Array.isArray(res?.settings)
-          ? res.settings
-          : (Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []));
-        const name = res?.companyName || rawSettings.find(s => s.key === 'company_name')?.value || 'سامانه جامع مدیریت کارگاه پاپیتال';
+    type SettingRow = { key: string; value: string };
+    type SettingsAnswer = { settings?: SettingRow[]; data?: SettingRow[]; companyName?: string; companyLogo?: string } | SettingRow[] | null;
+    const listOf = (res: SettingsAnswer): SettingRow[] => {
+      if (Array.isArray(res)) return res;
+      return Array.isArray(res?.settings) ? res.settings : (Array.isArray(res?.data) ? res.data : []);
+    };
+    void Promise.all([
+      fetchJson('/public-settings') as Promise<SettingsAnswer>,
+      (fetchJson('/settings') as Promise<SettingsAnswer>).catch(() => [] as SettingRow[]),
+    ])
+      .then(([pubAnswer, all]) => {
+        const pub = Array.isArray(pubAnswer) ? null : pubAnswer;
+        const rawSettings = [...listOf(all), ...listOf(pub)];
+        const name = pub?.companyName || rawSettings.find(s => s.key === 'company_name')?.value || 'سامانه جامع مدیریت کارگاه پاپیتال';
         const phone = rawSettings.find(s => s.key === 'company_phone')?.value || '';
         const address = rawSettings.find(s => s.key === 'company_address')?.value || '';
-        const logo = res?.companyLogo || rawSettings.find(s => s.key === 'company_logo')?.value || '';
+        const logo = pub?.companyLogo || rawSettings.find(s => s.key === 'company_logo')?.value || '';
         setCompanyInfo({ name, phone, address, logo });
       })
       .catch(err => console.error('Failed to load company settings for print', err));
