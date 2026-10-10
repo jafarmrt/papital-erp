@@ -6,6 +6,7 @@ import RequisitionDetailsPreview from './RequisitionDetailsPreview';
 import { useOnlineStatus } from '../../lib/pwa/useOnlineStatus';
 import { OFFLINE_SUBMIT_TITLE, PHONE_SHEET_FOOTER_SAFE_AREA, PHONE_SHEET_OVERLAY, PHONE_SHEET_PANEL, PHONE_TAP_TARGET } from '../../lib/pwa/phoneLayout';
 import { PurchaseRequisition } from '../../types';
+import { FREE_TEXT_RECEIVE_HINT, isRequisitionReceiveTask, taskApproveLabel, taskApproveSubmitLabel } from '../../lib/workflow/taskActionLabel';
 
 export type ApprovalTaskAction = 'approve' | 'reject';
 export interface ApprovalRejectOption { id: number; title: string }
@@ -144,7 +145,7 @@ export function TaskExecuteModal({
                 }`}
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>{isRequisition ? 'تایید درخواست جهت خرید اقلام' : 'تایید و موافقت با درخواست'}</span>
+                <span>{taskApproveLabel(selectedTask.title, isRequisition)}</span>
               </button>
               <button
                 type="button"
@@ -160,6 +161,12 @@ export function TaskExecuteModal({
               </button>
             </div>
           </div>
+
+          {taskAction === 'approve' && isRequisitionReceiveTask(selectedTask.title, isRequisition) && (
+            <p className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+              {FREE_TEXT_RECEIVE_HINT}
+            </p>
+          )}
 
           {needsRejectChoice && (
             <fieldset>
@@ -220,7 +227,7 @@ export function TaskExecuteModal({
               {isExecuting 
                 ? 'در حال ثبت در گردش‌کار...' 
                 : taskAction === 'approve' 
-                ? (isRequisition ? 'تایید نهایی و صدور مجوز خرید' : 'تایید و ثبت نهایی وظیفه') 
+                ? taskApproveSubmitLabel(selectedTask.title, isRequisition)
                 : (comment.trim() ? 'رد و عودت وظیفه' : 'رد و عودت (نیازمند دلیل)')}
             </span>
           </button>
