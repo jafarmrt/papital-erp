@@ -1,6 +1,7 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { createHarness, type Harness, type ShouldRun } from '../security/workflowTestHarness.js';
 import { brief, docVersion, fixture } from './documentEntryTests.js';
+import { proformaInvoiceNote } from '../../lib/documents/proformaInvoiceNote.js';
 
 /**
  * Series 10 phase 3, lane L2 PR B2 (owner decisions ت۶ الف, ت۷ الف and TD-972 «بله»): the balance of an invoice with
@@ -141,7 +142,7 @@ async function proformaInvoiceFinalizeDateCase(h: Harness, wrong: string[]): Pro
   if (finalized.status !== 200) wrong.push(`finalizing the proforma answered ${brief(finalized)}, expected 200`);
   if (after.day !== f.today) wrong.push(`the finalized invoice is dated ${after.day}, expected the finalize day ${f.today} (proforma date ${before.day})`);
   if (after.ref_number === before.ref_number) wrong.push(`the finalized invoice kept the proforma number ${before.ref_number}, expected the next invoice number`);
-  if (!String(after.notes ?? '').includes(`پیش‌فاکتور شماره ${before.ref_number}`)) wrong.push(`the invoice notes do not name the proforma number: ${after.notes}`);
+  if (!String(after.notes ?? '').includes(proformaInvoiceNote(before.ref_number, null))) wrong.push(`the invoice notes do not name the proforma number: ${after.notes}`);
   const kardexDays = await h.q(`SELECT DISTINCT date::date::text AS day FROM transactions WHERE document_id = $1 AND is_deleted = 0`, [id]);
   if (kardexDays.length !== 1 || kardexDays[0]?.day !== f.today) wrong.push(`the Kardex rows are dated ${JSON.stringify(kardexDays)}, expected ${f.today}`);
   return `a proforma of type invoice dated ${before.day} (number ${before.ref_number}) is finalized as invoice ${after.ref_number} dated ${after.day}, its Kardex on the same day, with the proforma number in its notes`;
