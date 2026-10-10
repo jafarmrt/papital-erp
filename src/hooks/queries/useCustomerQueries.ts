@@ -78,9 +78,9 @@ export function useSaveCustomerMutation() {
         body: JSON.stringify(payload),
       });
     },
-    onSuccess: (_, variables) => {
+    // v10.0.89 (TD-1226): پیام موفقیت را صفحه می‌دهد؛ پیش‌تر هوک هم پیام می‌داد و دو پیام دیده می‌شد
+    onSuccess: () => {
       void invalidateDomain(queryClient, 'customers');
-      toast.success(variables.id ? 'اطلاعات مشتری با موفقیت ویرایش شد' : 'حساب شخص جدید با موفقیت ثبت شد');
     },
     onError: (err: any) => {
       toast.error(err?.message || 'خطا در ذخیره اطلاعات مشتری');
