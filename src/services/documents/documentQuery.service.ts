@@ -13,6 +13,7 @@ import { createLedgerLocationResolver } from '../inventory/warehouseResolver.js'
 import { fetchSettlementRows, settledAmount } from './documentSettlement.js';
 import type { SettlementRow } from './documentSettlement.js';
 import { documentPartyCondition } from './documentParty.js';
+import { rejectedWorkflowDocumentIds } from './rejectedDraftDocuments.js';
 import type { 
   GetDocumentsFilter, 
   FormattedDocument, 
@@ -48,6 +49,8 @@ export class DocumentQueryService {
     if (filter.status && filter.status !== 'all') {
       conditions.push(eq(documents.status, filter.status));
     }
+    // v10.0.103 (TD-1197): چند وضعیت با هم (پیش‌فاکتورها و پیش‌نویس‌های فروش جعبه «پیش فاکتورهای باز»)
+    if (filter.statuses && filter.statuses.length > 0) conditions.push(inArray(documents.status, filter.statuses));
     // V3.1.46 (TD-070): فیلتر پروژه‌محور اسناد
     if (filter.projectId !== undefined && filter.projectId !== null && String(filter.projectId).trim() !== '' && String(filter.projectId) !== 'all') {
       const projId = Number(filter.projectId);
@@ -179,6 +182,8 @@ export class DocumentQueryService {
       const loc = transferLocations.get(d.id);
       if (loc) Object.assign(d, loc);
     }
+    const rejected = await rejectedWorkflowDocumentIds(docs.filter(d => d.status === 'draft').map(d => d.id));
+    for (const d of formattedDocs) if (rejected.has(d.id)) d.workflowRejected = true;
 
     if (filter.isExport || (filter.limit === undefined && filter.page === undefined && typeof typeOrFilter === 'string')) {
       return formattedDocs;

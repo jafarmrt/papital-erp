@@ -27,7 +27,7 @@ const project = {
 
 const submit = { preventDefault: () => undefined } as unknown as React.FormEvent;
 
-// v10.0.90 (TD-1212): applying a unit conversion keeps all three fields, so the finalize converts the requirement
+// v10.0.105 (TD-1212): applying a unit conversion keeps all three fields, so the finalize converts the requirement
 describe('project unit conversion keeps every field (TD-1212)', () => {
   it('stores the converted unit, the rate and the converted quantity on a per-item row', async () => {
     const { result } = renderHook(() => useProjectInventory(project));

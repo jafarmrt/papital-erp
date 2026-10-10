@@ -260,7 +260,7 @@ export function useProjectInventory(
     setSections(updated);
   };
 
-  // v10.0.90 (TD-1212): updates read the latest sections (functional update), so several fields set one after another
+  // v10.0.105 (TD-1212): updates read the latest sections (functional update), so several fields set one after another
   // all survive; before, each call copied the same stale sections and only the last field (convertedQty) was kept
   const updatePerItemFields = (secIdx: number, prodId: string, itemId: string, patch: Record<string, unknown>) => {
     setSections(prev => {

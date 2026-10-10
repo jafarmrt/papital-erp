@@ -10912,6 +10912,14 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // TD-1137 / TD-1138: a rejected proforma returns to draft, review locks edits, proforma stock warning
   const { runProformaReviewTests } = await import('../regression/proformaReviewTests.js');
   results.push(...await runProformaReviewTests(shouldRun));
+  // TD-1190..TD-1193: app bugs found by the fresh-eyes guide test
+  const { runGuideTestFixTests } = await import('../regression/guideTestFixTests.js');
+  results.push(...await runGuideTestFixTests(shouldRun));
+  const { runRolesBGuideFixTests } = await import('../regression/rolesBGuideFixTests.js');
+  results.push(...await runRolesBGuideFixTests(shouldRun));
+  // TD-1197: a rejected proforma stays in the open proformas box of the invoice page
+  const { runOpenProformasTests } = await import('../regression/openProformasTests.js');
+  results.push(...await runOpenProformasTests(shouldRun));
 
   return results;
 }
