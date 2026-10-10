@@ -179,7 +179,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
           <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-1.5 text-[11px] text-emerald-950">
             <div className="font-bold flex items-center gap-1.5 text-emerald-900 text-xs">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>عملیات خودکار سیستمی با تایید این رسید:</span>
+              <span>عملیات خودکار سامانه با تأیید این رسید:</span>
             </div>
             <ul className="list-disc list-inside space-y-1 pr-1 text-emerald-900/90 leading-relaxed">
               <li>ثبت رسمی وضعیت سند به عنوان <strong>رسید قطعی ورود کالا به انبار</strong>.</li>
