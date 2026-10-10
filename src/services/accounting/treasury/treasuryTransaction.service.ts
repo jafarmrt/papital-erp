@@ -243,7 +243,7 @@ export class TreasuryTransactionService {
     // v9.0.82 (TD-507، ت۴ الف): پرسنل هدف می‌خواهد و «متفرقه» و «سایر» سرفصل طرف مقابل؛ هر دو روی ردیف ذخیره می‌شوند
     const partyType = data.partyType || 'other';
     const party = normalizePartyPurpose(partyType, data.purpose, data.contraAccountId);
-    // v10.0.22 (TD-925، ت۸ الف): تسویه حقوق فقط از «پرداخت فیش»؛ پرداخت خزانه «تسویه حقوق» همان فیش را دو بار می‌پرداخت
+    // v10.0.57 (TD-925، ت۸ الف): تسویه حقوق فقط از «پرداخت فیش»؛ پرداخت خزانه «تسویه حقوق» همان فیش را دو بار می‌پرداخت
     if (isSalarySettlementPayment(data.type, partyType, party.purpose)) {
       throw new ValidationError(SALARY_SETTLEMENT_VIA_PAYSLIP_MESSAGE, undefined, 'TREASURY_PAYROLL_SETTLEMENT_VIA_PAYSLIP');
     }
@@ -262,7 +262,7 @@ export class TreasuryTransactionService {
         .where(and(eq(bankAccounts.id, data.bankAccountId), eq(bankAccounts.isDeleted, 0)))
         .for('update');
       if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
-      // v10.0.24 (TD-938): سند پیش از هر خواندن قفل می‌شود تا دو پرداخت همزمان مانده آن را پشت سر هم بسنجند
+      // v10.0.59 (TD-938): سند پیش از هر خواندن قفل می‌شود تا دو پرداخت همزمان مانده آن را پشت سر هم بسنجند
       if (data.documentId) await lockSettlementDocument(txEngine, data.documentId);
       // v9.0.459 (TD-907): ردیف وصل به سند بی شناسه طرف حساب (فرم تسویه فاکتور) شناسه طرف حساب سند و نام کنونی او را
       // می‌گیرد تا ردیف سند حسابداری و ردیف خزانه با تغییر نام از کارت حساب و نگهبان حذف طرف حساب بیرون نیفتند
@@ -279,7 +279,7 @@ export class TreasuryTransactionService {
         await assertTreasuryDocumentLink(txEngine, {
           type: data.type, documentId: data.documentId, partyType, partyId, partyName: partyCurrentName ?? partyName, currency: txCurrency,
         });
-        // v10.0.24 (TD-938، ت۸ الف): بیش از مانده سند وصل نمی‌شود؛ مازاد علی‌الحساب است
+        // v10.0.59 (TD-938، ت۸ الف): بیش از مانده سند وصل نمی‌شود؛ مازاد علی‌الحساب است
         await assertWithinDocumentRemaining(txEngine, { documentId: data.documentId, amount });
       }
 
@@ -457,7 +457,7 @@ export class TreasuryTransactionService {
         .where(and(inArray(bankAccounts.id, bankIds), eq(bankAccounts.isDeleted, 0)))
         .orderBy(asc(bankAccounts.id))
         .for('update');
-      // v10.0.23 (TD-926): پرداخت مساعده ردیف پرسنل را پس از بانک و پیش از ردیف خزانه قفل می‌کند، همان قفل صدور فیش
+      // v10.0.58 (TD-926): پرداخت مساعده ردیف پرسنل را پس از بانک و پیش از ردیف خزانه قفل می‌کند، همان قفل صدور فیش
       const [advancePeek] = await txEngine.select({
         type: treasuryTransactions.type, partyType: treasuryTransactions.partyType, purpose: treasuryTransactions.purpose, partyId: treasuryTransactions.partyId,
       }).from(treasuryTransactions).where(eq(treasuryTransactions.id, id));
@@ -481,7 +481,7 @@ export class TreasuryTransactionService {
       if (original.reversalOfId !== null) {
         throw new ConflictError('این ردیف ابطالِ تراکنش دیگری است و ابطال نمی‌شود؛ برای ثبت دوباره، تراکنش تازه ثبت کنید.');
       }
-      // v10.0.23 (TD-926، ت۸ الف): مساعده‌ای که فیش زنده کسر کرده باطل نمی‌شود (مانده مساعده منفی می‌شد)
+      // v10.0.58 (TD-926، ت۸ الف): مساعده‌ای که فیش زنده کسر کرده باطل نمی‌شود (مانده مساعده منفی می‌شد)
       if (isAdvancePayment(original)) await assertAdvanceVoidKeepsBalance(txEngine, original);
       // طرفی که پیش‌تر جدا باطل شده (پیش از v8.0.73) سند مشترک را هم باطل کرده است؛ این طرف فقط مانده و ردیف خودش را برمی‌گرداند
       const partner = sides.find(t => t.id !== id && t.status !== 'voided');

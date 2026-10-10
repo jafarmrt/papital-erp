@@ -7,7 +7,7 @@ interface PartyPurposeFieldsProps {
   purpose: PersonnelPurpose | '';
   contraAccountId: number | null;
   isReceipt: boolean;
-  /** v10.0.22 (TD-925): فرم خزانه پرداخت «تسویه حقوق» را پیشنهاد نمی‌کند؛ تسویه حقوق فقط از «پرداخت فیش» است */
+  /** v10.0.57 (TD-925): فرم خزانه پرداخت «تسویه حقوق» را پیشنهاد نمی‌کند؛ تسویه حقوق فقط از «پرداخت فیش» است */
   settlementViaPayslipOnly?: boolean;
   onChange: (patch: { purpose?: PersonnelPurpose | ''; contraAccountId: number | null }) => void;
 }

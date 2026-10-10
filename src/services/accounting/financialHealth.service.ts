@@ -42,6 +42,7 @@ import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../
 import { buildProjectStageHealthTest, buildProjectValueHealthTest, findProjectFreeTextValues, findProjectStageIntegrity } from '../projects/projectStageHealth.js';
 import { PROJECT_PRIORITIES, PROJECT_STATUSES, STAGE_STATUSES } from '../../lib/projects/projectStatus.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
+import { buildUnguardedPurchaseActionHealthTest, findUnguardedPurchaseActions } from './unguardedPurchaseActionHealth.js';
 import { buildWorkflowRoleReviewHealthTest, findWorkflowRoleReviews } from '../workflow/workflowRoleReview.js';
 import { buildRetiredRuleActionHealthTest, findRetiredActionRules } from '../events/retiredRuleActionHealth.js';
 import { buildUnpublishedRuleEventHealthTest, findRulesWithUnpublishedEvent } from '../events/unpublishedRuleEventHealth.js';
@@ -1124,6 +1125,11 @@ export class FinancialHealthService {
     const unguardedApprovalTest = buildUnguardedDocumentApprovalHealthTest(await findUnguardedDocumentApprovals());
     overallScore += unguardedApprovalTest.scoreImpact;
     tests.push(unguardedApprovalTest);
+
+    // آزمون ۱۷الف: v10.0.37 (OBS-R2-36) اقدام بی نقش و بی مجوز در گردش کار فعال درخواست خرید
+    const unguardedPurchaseTest = buildUnguardedPurchaseActionHealthTest(await findUnguardedPurchaseActions(orm));
+    overallScore += unguardedPurchaseTest.scoreImpact;
+    tests.push(unguardedPurchaseTest);
 
     // آزمون ۱۷ب: v9.0.128 (TD-542) گام‌های گردش کاری که مهاجرت 0065 برای بازبینی نقش فهرست کرد
     const workflowRoleReviewTest = buildWorkflowRoleReviewHealthTest(await findWorkflowRoleReviews());

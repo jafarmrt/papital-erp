@@ -86,7 +86,7 @@ export async function checkAdvanceBalanceFromLedgerOnly(): Promise<string[]> {
   const worker = await newWorker('TD-807 worker');
   await addLog(worker, await newTask(), '2026-04-07', 3000000);
   const [{ fullName }] = await orm.select({ fullName: personnel.fullName }).from(personnel).where(eq(personnel.id, worker));
-  // v10.0.22 (TD-925): a treasury settlement payment is refused now (salary is settled through the payslip payment), so it
+  // v10.0.57 (TD-925): a treasury settlement payment is refused now (salary is settled through the payslip payment), so it
   // cannot be counted as an advance either
   const bankId = await fundedBank();
   const settlement = await refusalOf(() => TreasuryTransactionService.createTreasuryTransaction({

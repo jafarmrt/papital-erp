@@ -501,7 +501,7 @@ export function JournalVouchersTab({
                               </button>
 
                               {openMenuVoucherId === voucher.id && (
-                                <VoucherRowMenu voucher={voucher} onAction={handleRowAction} />
+                                <VoucherRowMenu voucher={voucher} onAction={handleRowAction} canApprove={Boolean(onSetVoucherStatus)} />
                               )}
                             </div>
                           </div>

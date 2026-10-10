@@ -14,6 +14,9 @@ import { workflowDesignErrors } from '../../lib/workflow/workflowDesignRules.js'
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
 import { recordDefinitionVersion } from './workflowSnapshot.js';
 import { DOC_APPROVAL_STEP_GUARDS, upgradeLegacyDocApprovalGuards } from './docApprovalGuards.js';
+import { upgradeLegacySeedGuards } from './seedGuardUpgrade.js';
+import { JOURNAL_VOUCHER_GUARD_UPGRADE, JOURNAL_VOUCHER_STEP_GUARDS } from './voucherWorkflowGuards.js';
+import { PURCHASE_REQUISITION_GUARD_UPGRADE, PURCHASE_REQUISITION_STEP_GUARDS } from './purchaseWorkflowGuards.js';
 import { resolveTransitionRoles, storedTransitionRole } from './transitionRoles.js';
 import { 
   CreateWorkflowDefinitionInput, 
@@ -587,50 +590,12 @@ export class WorkflowDefinitionService {
               positionY: 340
             }
           ],
-          transitions: [
-            {
-              from: 'pending',
-              to: 'ordered',
-              actionKey: 'approve_request',
-              title: 'تایید و صدور دستور خرید',
-              requiredRole: '',
-              requiredPermission: ''
-            },
-            {
-              from: 'ordered',
-              to: 'received',
-              actionKey: 'receive_items',
-              title: 'تحویل و ورود به انبار',
-              requiredRole: '',
-              requiredPermission: ''
-            },
-            {
-              from: 'pending',
-              to: 'rejected',
-              actionKey: 'reject_request',
-              title: 'رد درخواست خرید',
-              requiredRole: '',
-              requiredPermission: ''
-            },
-            {
-              from: 'ordered',
-              to: 'rejected',
-              actionKey: 'cancel_order',
-              title: 'لغو یا رد سفارش',
-              requiredRole: '',
-              requiredPermission: ''
-            },
-            {
-              from: 'rejected',
-              to: 'pending',
-              actionKey: 'reopen',
-              title: 'بازگشایی و بررسی مجدد',
-              requiredRole: '',
-              requiredPermission: ''
-            }
-          ]
+          // v10.0.23 (OBS-R2-36): نگهبان گام‌ها از PURCHASE_REQUISITION_STEP_GUARDS
+          transitions: PURCHASE_REQUISITION_STEP_GUARDS.map(g => ({ ...g }))
         });
         logger.info('[WorkflowDefinitionService] Seeded simplified 3-stage PURCHASE_REQUISITION_WORKFLOW successfully.');
+      } else if (await upgradeLegacySeedGuards(PURCHASE_REQUISITION_GUARD_UPGRADE)) {
+        logger.info('[WorkflowDefinitionService] PURCHASE_REQUISITION_WORKFLOW step permissions upgraded (OBS-R2-36).');
       }
 
       // Seed JOURNAL_VOUCHER_WORKFLOW (گردش‌کار تایید و ثبت اسناد حسابداری کارگاه)
@@ -684,52 +649,12 @@ export class WorkflowDefinitionService {
               positionY: 340
             }
           ],
-          // v9.0.128 (TD-542، مدل مجوز §۴.۲): گام‌ها فقط مجوز «accounting.vouchers» را می‌خواهند؛ پیش‌تر نقش «accountant» هم
-          // می‌خواستند و نقش سفارشی با همان مجوز تأیید نمی‌کرد، و در نصب خام نقشی که این کد را داشته باشد نیست
-          transitions: [
-            {
-              from: 'draft',
-              to: 'approved',
-              actionKey: 'approve_voucher',
-              title: 'تایید حسابداری و ثبت در دفاتر',
-              requiredRole: '',
-              requiredPermission: 'accounting.vouchers'
-            },
-            {
-              from: 'approved',
-              to: 'permanent',
-              actionKey: 'finalize_voucher',
-              title: 'قطعی‌سازی و قفل سند',
-              requiredRole: '',
-              requiredPermission: 'accounting.vouchers'
-            },
-            {
-              from: 'draft',
-              to: 'rejected',
-              actionKey: 'reject_voucher',
-              title: 'رد پیش‌نویس جهت اصلاح',
-              requiredRole: '',
-              requiredPermission: 'accounting.vouchers'
-            },
-            {
-              from: 'approved',
-              to: 'draft',
-              actionKey: 'revert_to_draft',
-              title: 'بازگشت به پیش‌نویس',
-              requiredRole: '',
-              requiredPermission: 'accounting.vouchers'
-            },
-            {
-              from: 'rejected',
-              to: 'draft',
-              actionKey: 'reopen_voucher',
-              title: 'بازگشایی و اصلاح سند',
-              requiredRole: '',
-              requiredPermission: ''
-            }
-          ]
+          // v10.0.27 (TD-965): نگهبان گام‌ها از JOURNAL_VOUCHER_STEP_GUARDS (تأیید با accounting.vouchers_approve)
+          transitions: JOURNAL_VOUCHER_STEP_GUARDS.map(g => ({ ...g }))
         });
         logger.info('[WorkflowDefinitionService] Seeded simplified JOURNAL_VOUCHER_WORKFLOW successfully.');
+      } else if (await upgradeLegacySeedGuards(JOURNAL_VOUCHER_GUARD_UPGRADE)) {
+        logger.info('[WorkflowDefinitionService] JOURNAL_VOUCHER_WORKFLOW step permissions upgraded (TD-965).');
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);

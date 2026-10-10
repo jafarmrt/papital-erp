@@ -110,57 +110,25 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
           item_code: project.item_code || '',
           item_name: project.item_name || '',
           customer_code: '',
-          quantity: project.quantity || 100,
+          quantity: project.quantity,
           unit: project.unit || 'عدد',
           needs_assembly: true
         }] : [];
   }, [project]);
 
   // Initial produced quantities & optional unit cost overrides
+  // v10.0.28 (TD-977): مقدار پیش‌فرض همان مقدار برنامه است؛ بی برنامه خالی می‌ماند و هیچ عدد ساختگی (۱۰۰) فرستاده نمی‌شود
   const [producedQuantities, setProducedQuantities] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {};
     products.forEach(p => {
-      init[p.id] = p.quantity || 100;
+      init[p.id] = Number(p.quantity) > 0 ? Number(p.quantity) : 0;
     });
     return init;
   });
 
-  const [unitCosts, setUnitCosts] = useState<Record<string, number>>(() => {
-    const init: Record<string, number> = {};
-    products.forEach(p => {
-      const itmId = p.item_id || project.item_id;
-      if (itmId && catalogMap.has(Number(itmId))) {
-        const catItem = catalogMap.get(Number(itmId));
-        const wac = Number(catItem?.weightedAverageCost || catItem?.costPrice || 0);
-        if (wac > 0) init[p.id] = wac;
-      }
-    });
-    return init;
-  });
-
-  // Keep unit costs populated if catalogMap loads after initial render
-  useEffect(() => {
-    if (catalogMap.size > 0) {
-      setUnitCosts(prev => {
-        const next = { ...prev };
-        let changed = false;
-        products.forEach(p => {
-          if (next[p.id] === undefined) {
-            const itmId = p.item_id || project.item_id;
-            if (itmId && catalogMap.has(Number(itmId))) {
-              const catItem = catalogMap.get(Number(itmId));
-              const wac = Number(catItem?.weightedAverageCost || catItem?.costPrice || 0);
-              if (wac > 0) {
-                next[p.id] = wac;
-                changed = true;
-              }
-            }
-          }
-        });
-        return changed ? next : prev;
-      });
-    }
-  }, [catalogMap, products, project.item_id]);
+  // v10.0.28 (TD-977): بهای واحد فقط وقتی فرستاده می‌شود که کاربر آن را وارد کند؛ میانگین موزون کش‌شده مرورگر فقط راهنمای خانه است
+  // و کارساز بی بهای واردشده میانگین موزون جاری کالا را زیر قفل برمی‌دارد
+  const [unitCosts, setUnitCosts] = useState<Record<string, number>>({});
 
   const handleQtyChange = (prodId: string, val: number) => {
     setProducedQuantities(prev => ({ ...prev, [prodId]: val }));
@@ -209,7 +177,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     }
 
     // v9.0.381 (TD-741): مقدار صفر خطاست و به مقدار برنامه پروژه برنمی‌گردد
-    const qty = producedQuantities[product.id] ?? product.quantity ?? 1;
+    const qty = producedQuantities[product.id] ?? 0;
     if (!(qty > 0)) {
       toast.error('مقدار تحویل باید بزرگتر از صفر باشد');
       return;
@@ -258,7 +226,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
   // Batch Delivery for selected items or all valid items
   const handleBatchAddToInventory = async (targetProducts: ProjectProductItem[]) => {
     // v9.0.381 (TD-741): محصول با مقدار صفر یا نامعتبر کل تحویل را نگه می‌دارد و بی‌صدا کنار گذاشته نمی‌شود
-    const zeroQty = targetProducts.find(p => !((producedQuantities[p.id] ?? p.quantity ?? 1) > 0));
+    const zeroQty = targetProducts.find(p => !((producedQuantities[p.id] ?? 0) > 0));
     if (zeroQty) {
       toast.error(`مقدار تحویل «${zeroQty.item_name}» باید بزرگ‌تر از صفر باشد`);
       return;
@@ -266,7 +234,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     const validItems = targetProducts
       .map(p => {
         const itemId = p.item_id || project.item_id;
-        const qty = producedQuantities[p.id] ?? p.quantity ?? 1;
+        const qty = producedQuantities[p.id] ?? 0;
         const cost = unitCosts[p.id];
         return {
           itemId: Number(itemId),
@@ -672,7 +640,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                     <input
                       type="number"
                       min="1"
-                      value={producedQuantities[p.id] ?? p.quantity}
+                      value={producedQuantities[p.id] ? producedQuantities[p.id] : ''}
                       onChange={(e) => handleQtyChange(p.id, Number(e.target.value) || 0)}
                       className="w-20 px-1.5 py-1 bg-white border border-slate-300 rounded-lg text-center font-mono font-bold text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none"
                     />
@@ -687,7 +655,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                       type="number"
                       min="0"
                       step="any"
-                      placeholder={defaultWac > 0 ? String(defaultWac) : 'میانگین جاری'}
+                      placeholder={defaultWac > 0 ? `میانگین موزون بها: ${toPersianDigits(defaultWac)}` : 'میانگین موزون بها'}
                       value={enteredCost !== undefined && enteredCost > 0 ? enteredCost : ''}
                       onChange={(e) => handleCostChange(p.id, Number(e.target.value) || 0)}
                       className="w-24 px-1.5 py-1 bg-white border border-slate-300 rounded-lg text-center font-mono font-bold text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-slate-400"

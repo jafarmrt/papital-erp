@@ -190,7 +190,8 @@ export class DocumentStockEngine {
         itemName: itemData.name,
         movementType: inOut,
         quantity: qty,
-        unitPrice: priceDec.toNumber(),
+        // v10.0.42 (TD-930): بهای کاردکس همین ردیف به ریال، نه قیمت فروش سند
+        unitPrice: txUnitPrice.toNumber(),
         warehouseLocation: finalTargetLoc,
         previousStock: oldTotalStock,
         newStock: newTotalStock,

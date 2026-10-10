@@ -51,7 +51,7 @@ export async function relinkTreasuryDocument(params: {
     if (!before) throw new NotFoundError('تراکنش خزانه یافت نشد');
 
     if (params.documentId !== null) {
-      // v10.0.24 (TD-938): سند پیش از قفل `FOR SHARE` همان سند و جمع تسویه‌اش قفل می‌شود
+      // v10.0.59 (TD-938): سند پیش از قفل `FOR SHARE` همان سند و جمع تسویه‌اش قفل می‌شود
       await lockSettlementDocument(tx, params.documentId);
       const partyName = await resolveTreasuryPartyName(tx, before.partyType || 'other', before.partyId);
       await assertTreasuryDocumentLink(tx, {
@@ -79,7 +79,7 @@ export async function relinkTreasuryDocument(params: {
     if (previousDocumentId === params.documentId) {
       return { id: row.id, documentId: previousDocumentId, previousDocumentId, changed: false };
     }
-    // v10.0.24 (TD-938، ت۸ الف): ردیف به سندی وصل نمی‌شود که مانده‌اش کمتر از مبلغ آن است
+    // v10.0.59 (TD-938، ت۸ الف): ردیف به سندی وصل نمی‌شود که مانده‌اش کمتر از مبلغ آن است
     if (params.documentId !== null) await assertWithinDocumentRemaining(tx, { documentId: params.documentId, amount: row.amount.toString() });
 
     await tx.update(treasuryTransactions)

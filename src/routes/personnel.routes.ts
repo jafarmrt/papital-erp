@@ -9,6 +9,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { personnelAuditChanges, personnelAuditSnapshot } from '../services/personnel/personnelAudit.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
+import { personnelBulkImportSchema } from './importRows.schemas.js';
 import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
 import { normalizePhoneNumber, normalizeNationalId, isoToJalaliDate } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
@@ -223,7 +224,7 @@ router.get('/personnel/export', authorizePermission('personnel.manage'), asyncHa
 }));
 
 // POST /api/personnel/bulk-import - Bulk import personnel from Excel
-router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), asyncHandler(async (req, res) => {
+router.post('/personnel/bulk-import', authorizePermission('personnel.manage'), validate(personnelBulkImportSchema), asyncHandler(async (req, res) => {
   try {
     const { rows = [], updateIfExists = true } = req.body;
 

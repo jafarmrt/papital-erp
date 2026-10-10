@@ -11,7 +11,7 @@ const fields = (isReceipt: boolean) => render(
   <PartyPurposeFields partyType="personnel" purpose="" contraAccountId={null} isReceipt={isReceipt} settlementViaPayslipOnly onChange={() => undefined} />,
 );
 
-// v10.0.22 (TD-925, decision t8 «الف»): salary is settled only through the payslip payment
+// v10.0.57 (TD-925, decision t8 «الف»): salary is settled only through the payslip payment
 describe('salary settlement only through the payslip (TD-925)', () => {
   it('the treasury payment form offers no salary settlement and says where it is paid', () => {
     fields(false);
